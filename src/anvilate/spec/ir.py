@@ -12,7 +12,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from ..tolerance import (
     ResolvedTolerance,
@@ -169,6 +169,17 @@ class DimensionChain(_Base):
     links: list[ChainLink] = Field(min_length=1)
     required_min: Length
     required_max: Length
+
+    @model_validator(mode="after")
+    def _ordered_requirement(self) -> DimensionChain:
+        lo = self.required_min.to("mm").magnitude
+        hi = self.required_max.to("mm").magnitude
+        if hi < lo:
+            raise ValueError(
+                f"chain {self.name!r} requires a clearance band with required_max "
+                f"({self.required_max}) below required_min ({self.required_min})"
+            )
+        return self
 
     def build(self, dimensions: list[ToleranceDimension]) -> StackUp:
         """Resolve this chain against ``dimensions`` into a stack-up.

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from anvilate.spec import (
     SCHEMA_VERSION,
@@ -446,6 +447,18 @@ def test_spec_analyze_chains_rolls_up_every_declared_chain():
     assert analyses[0].passes is True
     # A spec with no chains rolls up to an empty list, not an error.
     assert spec.model_copy(update={"chains": []}).analyze_chains() == []
+
+
+def test_chain_rejects_inverted_required_band():
+    # An inverted clearance band (max below min) is nonsensical and is rejected
+    # at construction, naming the chain — no silently-unsatisfiable requirement.
+    with pytest.raises(ValidationError, match="required_max"):
+        DimensionChain(
+            name="bad_gap",
+            links=[ChainLink(dimension="mount_face", direction=1)],
+            required_min=Quantity.parse("0.5 mm"),
+            required_max=Quantity.parse("0.1 mm"),
+        )
 
 
 def test_chain_round_trips_through_yaml():
