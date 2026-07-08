@@ -315,6 +315,37 @@ def test_clearance_letter_smallest_size_range() -> None:
     assert d.size_range == "up to 3 mm"
 
 
+# --- ISO 286 symmetric zones (js/JS = +/- IT/2) ---
+
+
+def test_js6_shaft_is_symmetric_at_22mm() -> None:
+    # js6 at 18-30 mm straddles the basic size: +/- IT6/2 = +/- 6.5 um.
+    d = zone_limits("js6", _mm(22))
+    assert d.hole is False
+    assert d.upper.to("um").magnitude == pytest.approx(6.5)
+    assert d.lower.to("um").magnitude == pytest.approx(-6.5)
+    assert d.width.to("um").magnitude == pytest.approx(13)
+
+
+def test_uppercase_JS_hole_matches_shaft() -> None:
+    # JS is the hole spelling; the symmetric zone is identical, only the role flips.
+    hole = zone_limits("JS7", _mm(22))
+    shaft = zone_limits("js7", _mm(22))
+    assert hole.hole is True and shaft.hole is False
+    assert hole.upper == shaft.upper and hole.lower == shaft.lower
+    # IT7 = 21 um at 18-30 mm, so +/- 10.5 um.
+    assert hole.upper.to("um").magnitude == pytest.approx(10.5)
+
+
+def test_h7js6_transition_fit_at_22mm() -> None:
+    # H7/js6 at 22 mm: hole 0..+21 um, shaft +/-6.5 um. Min clearance 0 - 6.5 =
+    # -6.5 um (slight interference); max clearance 21 - (-6.5) = +27.5 um.
+    f = fit("H7/js6", _mm(22))
+    assert f.kind == "transition"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(-6.5)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(27.5)
+
+
 # --- ISO 286 fits (hole/shaft pairs) ---
 
 

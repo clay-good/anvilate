@@ -132,11 +132,13 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
 # fundamental deviation is exactly zero by definition. The clearance letters
 # d/e/f/g carry a negative shaft deviation `es` (drawn from the encoded table),
 # and their uppercase holes mirror it through the ISO 286 general rule EI = -es.
-# Transition and interference letters (j..zc) land as that table grows.
+# The js/JS zones straddle the basic size symmetrically (±IT/2). The remaining
+# transition and interference letters (j, k..zc) land as the table grows.
 
 _BASIS_LETTERS = {"h"}  # zero fundamental deviation; no table lookup needed
 _CLEARANCE_LETTERS = {"d", "e", "f", "g"}  # negative shaft `es`, encoded below
-_ENCODED_LETTERS = _BASIS_LETTERS | _CLEARANCE_LETTERS
+_SYMMETRIC_LETTERS = {"js"}  # zone centered on the basic size, ±IT/2
+_ENCODED_LETTERS = _BASIS_LETTERS | _CLEARANCE_LETTERS | _SYMMETRIC_LETTERS
 
 
 _DEVIATIONS: dict | None = None
@@ -234,26 +236,32 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
     """Resolve the limit deviations for an ISO 286 tolerance zone at ``nominal``.
 
     ``designation`` is a fundamental-deviation letter plus an IT grade, e.g.
-    ``"H7"`` (hole), ``"h6"`` (shaft), or ``"g6"``. The H/h basis zones and the
-    clearance letters d/e/f/g (both cases) are encoded; any other letter raises
-    :class:`ToleranceRangeError`. Raises :class:`ValueError` for a malformed
-    designation, and :class:`ToleranceRangeError` for an out-of-range nominal or
-    ungraded IT grade (via :func:`standard_tolerance`).
+    ``"H7"`` (hole), ``"h6"`` (shaft), ``"g6"``, or the symmetric ``"js6"``. The
+    H/h basis zones, the clearance letters d/e/f/g, and js/JS (all both cases) are
+    encoded; any other letter raises :class:`ToleranceRangeError`. Raises
+    :class:`ValueError` for a malformed designation, and
+    :class:`ToleranceRangeError` for an out-of-range nominal or ungraded IT grade
+    (via :func:`standard_tolerance`).
     """
     letter, grade = _parse_designation(designation)
     base = letter.lower()
     if base not in _ENCODED_LETTERS:
         raise ToleranceRangeError(
             f"fundamental deviation for zone '{letter}' is not yet encoded; "
-            "the H/h basis and clearance letters d/e/f/g are supported so far"
+            "the H/h basis, clearance letters d/e/f/g, and js/JS are supported so far"
         )
     grade_tol = standard_tolerance(nominal, grade)
     hole = letter.isupper()
     it = grade_tol.width.to("mm").magnitude
-    es = 0.0 if base in _BASIS_LETTERS else _fundamental_es(base, abs(nominal.to("mm").magnitude))
-    # Shaft: es is the upper deviation, ei = es - IT. Hole (general rule): the
-    # fundamental deviation EI = -es, and ES = EI + IT.
-    upper_mm, lower_mm = (-es + it, -es) if hole else (es, es - it)
+    if base in _SYMMETRIC_LETTERS:
+        # js/JS: the zone straddles the basic size, es = +IT/2, ei = -IT/2.
+        upper_mm, lower_mm = it / 2.0, -it / 2.0
+    else:
+        nominal_mm = abs(nominal.to("mm").magnitude)
+        es = 0.0 if base in _BASIS_LETTERS else _fundamental_es(base, nominal_mm)
+        # Shaft: es is the upper deviation, ei = es - IT. Hole (general rule): the
+        # fundamental deviation EI = -es, and ES = EI + IT.
+        upper_mm, lower_mm = (-es + it, -es) if hole else (es, es - it)
     # Adding 0.0 collapses the -0.0 that -es yields when es == 0 (the H/h basis),
     # so a zero deviation renders "+0.000", not "-0.000".
     upper = Quantity(magnitude=upper_mm + 0.0, unit="mm")
