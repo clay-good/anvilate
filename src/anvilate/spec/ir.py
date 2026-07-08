@@ -329,6 +329,11 @@ class GeometricTolerance(_Base):
             )
         if self.characteristic in _DATUM_REQUIRED and not self.datums:
             raise ValueError(f"{self.characteristic.value} requires at least one datum reference")
+        if len(set(self.datums)) != len(self.datums):
+            raise ValueError(
+                f"a datum reference repeats in the frame {self.datums}; each datum is "
+                "referenced at most once (primary, secondary, tertiary)"
+            )
         return self
 
     def __str__(self) -> str:

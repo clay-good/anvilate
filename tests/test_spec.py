@@ -504,6 +504,17 @@ def test_perpendicularity_requires_a_datum():
         )
 
 
+def test_geometric_tolerance_rejects_repeated_datum():
+    # A datum letter is referenced at most once in a feature control frame.
+    with pytest.raises(ValidationError, match="repeats"):
+        GeometricTolerance(
+            characteristic=GeometricCharacteristic.POSITION,
+            tolerance=Quantity.parse("0.1 mm"),
+            feature="mounting_holes",
+            datums=["A", "B", "A"],
+        )
+
+
 def test_geometric_tolerance_rejects_non_positive_zone():
     with pytest.raises(ValidationError, match="must be positive"):
         GeometricTolerance(
