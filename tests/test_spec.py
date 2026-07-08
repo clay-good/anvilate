@@ -15,6 +15,8 @@ from anvilate.spec import (
     Constraints,
     DesignSpec,
     DimensionChain,
+    GeometricCharacteristic,
+    GeometricTolerance,
     HolePattern,
     InterfaceContract,
     LoadCase,
@@ -466,6 +468,69 @@ def test_chain_round_trips_through_yaml():
     reloaded = load_spec_yaml(dump_spec_yaml(spec))
     assert reloaded == spec
     assert reloaded.chains[0].links[1].direction == -1
+
+
+def test_geometric_tolerance_position_with_datums():
+    # Scenario: a position tolerance on the mating hole pattern references datums.
+    gt = GeometricTolerance(
+        characteristic=GeometricCharacteristic.POSITION,
+        tolerance=Quantity.parse("0.1 mm"),
+        feature="mounting_holes",
+        datums=["A", "B", "C"],
+        diametral=True,
+    )
+    assert gt.datums == ["A", "B", "C"]
+    assert "⌀" in str(gt)
+    assert "A|B|C" in str(gt)
+
+
+def test_flatness_rejects_datum_reference():
+    # Flatness is a form control and references no datum.
+    with pytest.raises(ValidationError, match="form control"):
+        GeometricTolerance(
+            characteristic=GeometricCharacteristic.FLATNESS,
+            tolerance=Quantity.parse("0.05 mm"),
+            feature="base_face",
+            datums=["A"],
+        )
+
+
+def test_perpendicularity_requires_a_datum():
+    with pytest.raises(ValidationError, match="requires at least one datum"):
+        GeometricTolerance(
+            characteristic=GeometricCharacteristic.PERPENDICULARITY,
+            tolerance=Quantity.parse("0.05 mm"),
+            feature="side_wall",
+        )
+
+
+def test_geometric_tolerance_rejects_non_positive_zone():
+    with pytest.raises(ValidationError, match="must be positive"):
+        GeometricTolerance(
+            characteristic=GeometricCharacteristic.FLATNESS,
+            tolerance=Quantity.parse("0 mm"),
+            feature="base_face",
+        )
+
+
+def test_geometric_tolerances_round_trip_through_yaml():
+    spec = _bracket_with_chain().model_copy(
+        update={
+            "geometric_tolerances": [
+                GeometricTolerance(
+                    characteristic=GeometricCharacteristic.PERPENDICULARITY,
+                    tolerance=Quantity.parse("0.05 mm"),
+                    feature="pilot_seat",
+                    datums=["A"],
+                )
+            ]
+        }
+    )
+    reloaded = load_spec_yaml(dump_spec_yaml(spec))
+    assert reloaded == spec
+    assert reloaded.geometric_tolerances[0].characteristic is (
+        GeometricCharacteristic.PERPENDICULARITY
+    )
 
 
 def test_valid_dimension_graph_passes():

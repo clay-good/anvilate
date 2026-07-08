@@ -38,6 +38,8 @@ __all__ = [
     "ChainLink",
     "DimensionChain",
     "ChainAnalysis",
+    "GeometricCharacteristic",
+    "GeometricTolerance",
     "LoadCase",
     "LoadKind",
     "Constraints",
@@ -280,6 +282,63 @@ class ChainAnalysis(_Base):
         return f"{self.name}: {verdict} — need {lo:.3f}..{hi:.3f} mm; {self.worst_case}"
 
 
+# --- Geometric tolerances (GD&T) ---
+
+
+class GeometricCharacteristic(StrEnum):
+    """The geometric characteristics this slice supports (ISO 1101 / ASME Y14.5)."""
+
+    FLATNESS = "flatness"  # a form control — references no datum
+    PERPENDICULARITY = "perpendicularity"  # an orientation control — needs a datum
+    POSITION = "position"  # a location control — needs a datum
+
+
+# Form controls reference no datum; orientation/location controls require one.
+_FORM_CHARACTERISTICS = frozenset({GeometricCharacteristic.FLATNESS})
+_DATUM_REQUIRED = frozenset(
+    {GeometricCharacteristic.PERPENDICULARITY, GeometricCharacteristic.POSITION}
+)
+
+
+class GeometricTolerance(_Base):
+    """A geometric tolerance (GD&T feature control frame) on a tagged feature.
+
+    ``tolerance`` is the tolerance-zone width, or its diameter when ``diametral``
+    (the ⌀ modifier, used for a hole axis under a position control). ``feature``
+    is the semantic tag the control applies to; ``datums`` are the ordered datum
+    references (primary, secondary, tertiary). Whether a ``feature`` or ``datum``
+    tag names a real geometry feature is checked by the tag-graph layer, not here.
+    """
+
+    characteristic: GeometricCharacteristic
+    tolerance: Length  # the tolerance-zone width (or diameter, if diametral)
+    feature: str  # semantic tag of the controlled feature
+    datums: list[str] = Field(default_factory=list)  # ordered datum references
+    diametral: bool = False  # a cylindrical (⌀) zone rather than a width
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> GeometricTolerance:
+        if self.tolerance.to("mm").magnitude <= 0:
+            raise ValueError(
+                f"{self.characteristic.value} tolerance must be positive; got {self.tolerance}"
+            )
+        if self.characteristic in _FORM_CHARACTERISTICS and self.datums:
+            raise ValueError(
+                f"{self.characteristic.value} is a form control and references no datum; "
+                f"got {self.datums}"
+            )
+        if self.characteristic in _DATUM_REQUIRED and not self.datums:
+            raise ValueError(f"{self.characteristic.value} requires at least one datum reference")
+        return self
+
+    def __str__(self) -> str:
+        zone = f"⌀{self.tolerance}" if self.diametral else f"{self.tolerance}"
+        frame = f"{self.characteristic.value} {zone}"
+        if self.datums:
+            frame += " to " + "|".join(self.datums)
+        return f"{frame} on {self.feature}"
+
+
 # --- Load cases ---
 
 
@@ -352,6 +411,7 @@ class DesignSpec(_Base):
     interfaces: list[Interface] = Field(default_factory=list)
     dimensions: list[ToleranceDimension] = Field(default_factory=list)
     chains: list[DimensionChain] = Field(default_factory=list)
+    geometric_tolerances: list[GeometricTolerance] = Field(default_factory=list)
     load_cases: list[LoadCase] = Field(default_factory=list)
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria
