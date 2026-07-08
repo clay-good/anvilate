@@ -227,6 +227,16 @@ def test_h7_hole_limits_at_22mm() -> None:
     assert "ISO 286-1" in d.source
 
 
+def test_zone_limits_resolved_feature_sizes() -> None:
+    # The deviations become the actual bore/shaft bounds a drawing states.
+    bore = zone_limits("H7", _mm(22))
+    assert bore.min_size.to("mm").magnitude == pytest.approx(22.000)
+    assert bore.max_size.to("mm").magnitude == pytest.approx(22.021)
+    shaft = zone_limits("h6", _mm(22))
+    assert shaft.min_size.to("mm").magnitude == pytest.approx(21.987)
+    assert shaft.max_size.to("mm").magnitude == pytest.approx(22.000)
+
+
 def test_h6_shaft_limits_at_22mm() -> None:
     # h shaft: es = 0, ei = -IT6 = -0.013 mm at 18-30 mm.
     d = zone_limits("h6", _mm(22))

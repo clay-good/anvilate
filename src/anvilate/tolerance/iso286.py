@@ -163,6 +163,22 @@ class LimitDeviations(BaseModel):
             unit="mm",
         )
 
+    @property
+    def min_size(self) -> Quantity:
+        """The smallest permitted feature size (``nominal + lower``)."""
+        return Quantity(
+            magnitude=self.nominal.to("mm").magnitude + self.lower.to("mm").magnitude,
+            unit="mm",
+        )
+
+    @property
+    def max_size(self) -> Quantity:
+        """The largest permitted feature size (``nominal + upper``)."""
+        return Quantity(
+            magnitude=self.nominal.to("mm").magnitude + self.upper.to("mm").magnitude,
+            unit="mm",
+        )
+
     def __str__(self) -> str:
         u = self.upper.to("mm").magnitude
         low = self.lower.to("mm").magnitude
