@@ -8,12 +8,12 @@ transition/interference shaft letters m/n/p — so the common hole-basis fits
 (H7/g6, H8/f7, H9/d9, H7/js6, H7/n6, H7/p6, ...) resolve to limit deviations. It
 also ships the three explicit per-dimension tolerance forms a spec can declare —
 symmetric ±, asymmetric limits, and an ISO 286 fit — each resolving to a common
-feature-size band, and 1D tolerance stack-up analysis (worst-case and
-root-sum-square) over a chain of those bands with ranked per-contributor
-sensitivities. The grade-dependent j/k letters, the finer-stepped r/s/t/u, the
-delta-corrected uppercase interference holes, wiring explicit tolerances onto the
-Spec IR, and Monte Carlo stack-up simulation land here as they are built out (see
-openspec/specs/tolerance-management/).
+feature-size band, and 1D tolerance stack-up analysis (worst-case,
+root-sum-square, and Monte Carlo) over a chain of those bands with ranked
+per-contributor sensitivities and predicted yield. The grade-dependent j/k
+letters, the finer-stepped r/s/t/u, the delta-corrected uppercase interference
+holes, and wiring explicit tolerances onto the Spec IR land here as they are
+built out (see openspec/specs/tolerance-management/).
 """
 
 from __future__ import annotations
@@ -44,6 +44,7 @@ from .iso286 import (
 )
 from .stackup import (
     Contribution,
+    MonteCarloResult,
     StackContributor,
     StackResult,
     StackUp,
@@ -71,5 +72,6 @@ __all__ = [
     "StackContributor",
     "Contribution",
     "StackResult",
+    "MonteCarloResult",
     "StackUp",
 ]

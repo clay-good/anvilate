@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from math import sqrt
+
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
@@ -13,6 +15,7 @@ from anvilate.tolerance import (
     GeneralTolerance,
     LimitDeviations,
     LimitTolerance,
+    MonteCarloResult,
     ResolvedTolerance,
     StackContributor,
     StackResult,
@@ -651,3 +654,107 @@ def test_stackup_satisfies_rejects_non_length_requirement() -> None:
 def test_stackup_result_str_renders_band() -> None:
     stack = StackUp(contributors=(_contributor("pin", 10.0, 0.02),))
     assert "worst_case" in str(stack.worst_case())
+
+
+def _interface_stack() -> StackUp:
+    return StackUp(
+        contributors=(
+            _contributor("mount face", 20.0, 0.05, direction=1),
+            _contributor("flange thickness", 12.0, 0.03, direction=-1),
+            _contributor("pilot seat", 7.7, 0.02, direction=-1),
+        )
+    )
+
+
+def test_monte_carlo_normal_matches_rss_band() -> None:
+    # Scenario: with every dimension normal and the band read as ±3σ, the central
+    # 99.73% Monte Carlo band should reproduce the analytic RSS gap.
+    stack = _interface_stack()
+    mc = stack.monte_carlo(20000, seed=7)
+    rss = stack.rss()
+
+    assert isinstance(mc, MonteCarloResult)
+    assert mc.method == "monte_carlo"
+    assert mc.samples == 20000
+    # Analytic nominal gap is exact; the sampled mean lands near it.
+    assert mc.nominal.to("mm").magnitude == pytest.approx(0.3)
+    assert mc.mean.to("mm").magnitude == pytest.approx(0.3, abs=0.002)
+    # Sampled std ≈ RSS half-width / 3, and the ±3σ band ≈ the RSS band.
+    assert mc.std.to("mm").magnitude == pytest.approx(0.0616441 / 3.0, rel=0.03)
+    assert mc.lower.to("mm").magnitude == pytest.approx(rss.lower.to("mm").magnitude, abs=0.004)
+    assert mc.upper.to("mm").magnitude == pytest.approx(rss.upper.to("mm").magnitude, abs=0.004)
+
+
+def test_monte_carlo_is_deterministic_for_a_seed() -> None:
+    stack = _interface_stack()
+    a = stack.monte_carlo(5000, seed=42)
+    b = stack.monte_carlo(5000, seed=42)
+    assert a.mean.to("mm").magnitude == b.mean.to("mm").magnitude
+    assert a.sorted_gaps_mm == b.sorted_gaps_mm
+    # A different seed shifts the sampled mean.
+    c = stack.monte_carlo(5000, seed=43)
+    assert c.mean.to("mm").magnitude != a.mean.to("mm").magnitude
+
+
+def test_monte_carlo_predicts_yield_against_a_band() -> None:
+    stack = _interface_stack()
+    mc = stack.monte_carlo(20000, seed=11)
+    # The worst-case gap [0.20, 0.40] fully contains the spread: yield ≈ 1.
+    assert mc.yield_fraction(_mm(0.1), _mm(0.5)) == pytest.approx(1.0, abs=1e-3)
+    # Scoring the reported coverage band recovers the coverage fraction.
+    assert mc.yield_fraction(mc.lower, mc.upper) == pytest.approx(mc.coverage, abs=0.01)
+    # A band clipped around the mean passes only part of the run.
+    partial = mc.yield_fraction(_mm(0.30), _mm(0.5))
+    assert 0.4 < partial < 0.6
+
+
+def test_monte_carlo_uniform_spreads_wider_than_normal() -> None:
+    resolved = SymmetricTolerance(plus_minus=_mm(0.05)).resolve(_mm(10.0))
+    normal = StackUp(
+        contributors=(StackContributor(name="pin", tolerance=resolved, distribution="normal"),)
+    )
+    uniform = StackUp(
+        contributors=(StackContributor(name="pin", tolerance=resolved, distribution="uniform"),)
+    )
+    # Uniform std = half/sqrt(3) ≈ 0.577·half; normal (±3σ) std = half/3 ≈ 0.333·half.
+    assert normal.monte_carlo(20000, seed=3).std.to("mm").magnitude == pytest.approx(
+        0.05 / 3.0, rel=0.03
+    )
+    assert uniform.monte_carlo(20000, seed=3).std.to("mm").magnitude == pytest.approx(
+        0.05 / sqrt(3.0), rel=0.03
+    )
+
+
+def test_monte_carlo_contributions_rank_by_variance() -> None:
+    mc = _interface_stack().monte_carlo(2000, seed=1)
+    # Variance shares match RSS's squared-half-width split (sigma_level cancels).
+    assert mc.contributions[0].name == "mount face"
+    assert mc.contributions[0].share == pytest.approx(0.0025 / 0.0038)
+    assert sum(c.share for c in mc.contributions) == pytest.approx(1.0)
+
+
+def test_monte_carlo_str_renders_band_and_coverage() -> None:
+    mc = _interface_stack().monte_carlo(1000, seed=5)
+    text = str(mc)
+    assert "monte_carlo" in text
+    assert "99.73%" in text
+
+
+def test_monte_carlo_yield_rejects_non_length_requirement() -> None:
+    mc = _interface_stack().monte_carlo(1000, seed=5)
+    with pytest.raises(ValueError, match="must be a length"):
+        mc.yield_fraction(Quantity(magnitude=1, unit="deg"), _mm(0.5))
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"samples": 1, "seed": 0},
+        {"samples": 100, "seed": 0, "sigma_level": 0.0},
+        {"samples": 100, "seed": 0, "coverage": 0.0},
+        {"samples": 100, "seed": 0, "coverage": 1.0},
+    ],
+)
+def test_monte_carlo_rejects_bad_arguments(kwargs: dict) -> None:
+    with pytest.raises(ValueError):
+        _interface_stack().monte_carlo(**kwargs)
