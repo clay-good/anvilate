@@ -1,0 +1,125 @@
+# Anvilate seed materials database (schema: standards-data).
+#
+# Nominal engineering property values for the golden-path materials, each tagged
+# with the class of source it is drawn from and the condition it applies to.
+# These are widely published handbook/specification-minimum values suitable for
+# screening; they are NOT a substitute for a certified material certificate and
+# the source standards themselves are not redistributed — only the values.
+#
+# Dataset-level `license` and `retrieved` fill any property citation that omits
+# them (see materials.py::_load_bundle).
+dataset:
+  name: anvilate-materials-seed
+  version: "0.1.0"
+  license: "CC0-1.0 (property values only; source standards not redistributed)"
+  retrieved: "2026-07-08"
+
+materials:
+  AA-6061-T6:
+    name: "Aluminum 6061-T6"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 68.9, unit: GPa}
+      citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "T6 temper, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 2.70, unit: g/cm**3}
+      citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 276.0, unit: MPa}
+      citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "T6 temper, 0.2% offset"}
+    ultimate_strength:
+      quantity: {magnitude: 310.0, unit: MPa}
+      citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "T6 temper"}
+
+  AA-7075-T6:
+    name: "Aluminum 7075-T6"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 71.7, unit: GPa}
+      citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "T6 temper, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 2.81, unit: g/cm**3}
+      citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 503.0, unit: MPa}
+      citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "T6 temper, 0.2% offset"}
+    ultimate_strength:
+      quantity: {magnitude: 572.0, unit: MPa}
+      citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "T6 temper"}
+
+  ASTM-A36:
+    name: "ASTM A36 structural steel"
+    category: carbon_steel
+    elastic_modulus:
+      quantity: {magnitude: 200.0, unit: GPa}
+      citation: {source: "AISC Steel Construction Manual", condition: "room temperature"}
+    poisson_ratio:
+      value: 0.30
+      citation: {source: "AISC Steel Construction Manual", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 7.85, unit: g/cm**3}
+      citation: {source: "AISC Steel Construction Manual", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 250.0, unit: MPa}
+      citation: {source: "ASTM A36 specified minimum", condition: "as-rolled, min. specified yield"}
+    ultimate_strength:
+      quantity: {magnitude: 400.0, unit: MPa}
+      citation: {source: "ASTM A36 specified minimum", condition: "as-rolled, min. specified tensile"}
+    endurance_limit:
+      quantity: {magnitude: 200.0, unit: MPa}
+      citation:
+        source: "derived from ultimate strength"
+        condition: "fully reversed bending, screening estimate"
+        estimated: true
+        method: "0.5 x ultimate strength (Shigley screening estimate)"
+
+  ASTM-A992:
+    name: "ASTM A992 structural steel"
+    category: carbon_steel
+    elastic_modulus:
+      quantity: {magnitude: 200.0, unit: GPa}
+      citation: {source: "AISC Steel Construction Manual", condition: "room temperature"}
+    poisson_ratio:
+      value: 0.30
+      citation: {source: "AISC Steel Construction Manual", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 7.85, unit: g/cm**3}
+      citation: {source: "AISC Steel Construction Manual", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 345.0, unit: MPa}
+      citation: {source: "ASTM A992 specified minimum", condition: "min. specified yield (50 ksi)"}
+    ultimate_strength:
+      quantity: {magnitude: 450.0, unit: MPa}
+      citation: {source: "ASTM A992 specified minimum", condition: "min. specified tensile (65 ksi)"}
+    endurance_limit:
+      quantity: {magnitude: 225.0, unit: MPa}
+      citation:
+        source: "derived from ultimate strength"
+        condition: "fully reversed bending, screening estimate"
+        estimated: true
+        method: "0.5 x ultimate strength (Shigley screening estimate)"
+
+  SS-304:
+    name: "Stainless steel 304 (annealed)"
+    category: stainless_steel
+    elastic_modulus:
+      quantity: {magnitude: 193.0, unit: GPa}
+      citation: {source: "ASM — AISI 304 annealed", condition: "annealed, room temperature"}
+    poisson_ratio:
+      value: 0.29
+      citation: {source: "ASM — AISI 304 annealed", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 8.00, unit: g/cm**3}
+      citation: {source: "ASM — AISI 304 annealed", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 205.0, unit: MPa}
+      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified yield (30 ksi)"}
+    ultimate_strength:
+      quantity: {magnitude: 515.0, unit: MPa}
+      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified tensile (75 ksi)"}
