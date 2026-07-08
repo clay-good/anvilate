@@ -23,6 +23,7 @@ from .ir import (
     ManufacturingProcess,
     MaterialRef,
     StandardComponentInterface,
+    ToleranceDimension,
     ValidationTier,
 )
 from .provenance import Origin, Provenanced
@@ -52,6 +53,7 @@ __all__ = [
     "ImportedInterface",
     "InterfaceContract",
     "HolePattern",
+    "ToleranceDimension",
     "LoadCase",
     "LoadKind",
     "Constraints",

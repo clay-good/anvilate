@@ -14,6 +14,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
+from ..tolerance import ResolvedTolerance, Tolerance
 from ..units import Quantity, UnitSystem, require_dimension
 from .provenance import Provenanced
 
@@ -27,6 +28,7 @@ __all__ = [
     "Interface",
     "InterfaceContract",
     "HolePattern",
+    "ToleranceDimension",
     "LoadCase",
     "LoadKind",
     "Constraints",
@@ -112,6 +114,28 @@ Interface = Annotated[
 ]
 
 
+# --- Toleranced dimensions ---
+
+
+class ToleranceDimension(_Base):
+    """An explicitly-toleranced dimension declared on the spec.
+
+    ``tolerance`` is the typed :data:`~anvilate.tolerance.Tolerance` union —
+    symmetric ±, asymmetric limits, or an ISO 286 fit — and overrides the general
+    class for the feature at ``tag``. :meth:`resolve` yields the common
+    :class:`~anvilate.tolerance.ResolvedTolerance` band the drawing, DFM, and
+    stack-up layers read.
+    """
+
+    tag: str  # semantic tag of the feature the dimension measures
+    nominal: Length
+    tolerance: Tolerance
+
+    def resolve(self) -> ResolvedTolerance:
+        """The resolved band for this dimension (its tolerance at its nominal)."""
+        return self.tolerance.resolve(self.nominal)
+
+
 # --- Load cases ---
 
 
@@ -182,6 +206,7 @@ class DesignSpec(_Base):
     material: MaterialRef
     manufacturing: Manufacturing
     interfaces: list[Interface] = Field(default_factory=list)
+    dimensions: list[ToleranceDimension] = Field(default_factory=list)
     load_cases: list[LoadCase] = Field(default_factory=list)
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria

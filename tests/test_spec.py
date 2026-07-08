@@ -22,6 +22,7 @@ from anvilate.spec import (
     Provenanced,
     SpecValidationError,
     StandardComponentInterface,
+    ToleranceDimension,
     UnknownReferenceError,
     UnsupportedSchemaVersion,
     ValidationTier,
@@ -31,6 +32,7 @@ from anvilate.spec import (
     parse_spec,
     validate_references,
 )
+from anvilate.tolerance import FitTolerance, SymmetricTolerance
 from anvilate.units import Quantity, UnitSystem
 
 
@@ -221,6 +223,85 @@ def test_interface_contract_publishable():
     )
     reloaded = load_spec_yaml(dump_spec_yaml(spec))
     assert reloaded.exports[0].name == "mount_pattern"
+
+
+# --- Requirement: Typed explicit tolerances and fits on the IR ---
+
+
+def test_spec_carries_typed_toleranced_dimensions():
+    # A spec declares explicit per-dimension tolerances as typed fields; each
+    # resolves to the common band the drawing and DFM layers read.
+    spec = golden_bracket().model_copy(
+        update={
+            "dimensions": [
+                ToleranceDimension(
+                    tag="motor_pilot_bore",
+                    nominal=Quantity.parse("22 mm"),
+                    tolerance=FitTolerance(designation="H7"),
+                ),
+                ToleranceDimension(
+                    tag="mount_face_thickness",
+                    nominal=Quantity.parse("6 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.1 mm")),
+                ),
+            ]
+        }
+    )
+    # The fit resolves through the encoded ISO 286 tables, with its citation.
+    bore = spec.dimensions[0].resolve()
+    assert bore.label == "H7"
+    assert bore.source is not None
+    assert bore.lower.to("mm").magnitude == pytest.approx(0.0)
+    # The symmetric band resolves to ±0.1 mm.
+    face = spec.dimensions[1].resolve()
+    assert face.upper.to("mm").magnitude == pytest.approx(0.1)
+    assert face.lower.to("mm").magnitude == pytest.approx(-0.1)
+
+
+def test_toleranced_dimensions_round_trip_through_yaml():
+    spec = golden_bracket().model_copy(
+        update={
+            "dimensions": [
+                ToleranceDimension(
+                    tag="motor_pilot_bore",
+                    nominal=Quantity.parse("22 mm"),
+                    tolerance=FitTolerance(designation="H7"),
+                ),
+            ]
+        }
+    )
+    reloaded = load_spec_yaml(dump_spec_yaml(spec))
+    assert reloaded == spec
+    assert isinstance(reloaded.dimensions[0].tolerance, FitTolerance)
+
+
+def test_toleranced_dimension_rejects_unknown_key():
+    data = dump_and_load_dict(
+        golden_bracket().model_copy(
+            update={
+                "dimensions": [
+                    ToleranceDimension(
+                        tag="motor_pilot_bore",
+                        nominal=Quantity.parse("22 mm"),
+                        tolerance=FitTolerance(designation="H7"),
+                    ),
+                ]
+            }
+        )
+    )
+    data["dimensions"][0]["bogus"] = 1
+    with pytest.raises(SpecValidationError) as exc:
+        parse_spec(data)
+    assert any("dimensions" in e["loc"] for e in exc.value.errors)
+
+
+def test_toleranced_dimension_rejects_non_length_nominal():
+    with pytest.raises(Exception, match="length"):
+        ToleranceDimension(
+            tag="bad",
+            nominal=Quantity.parse("22 kg"),
+            tolerance=FitTolerance(designation="H7"),
+        )
 
 
 # --- Committed example stays loadable ---
