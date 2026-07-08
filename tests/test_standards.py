@@ -358,3 +358,35 @@ def test_clearance_hole_unknown_size_surfaces_gap(clearance) -> None:
 
     with pytest.raises(UnknownThreadSizeError):
         clearance.get("M7")  # not a preferred size; no record rather than a guess
+
+
+# --- Metric thread pitch and tap drill (ISO 261 / 724) ---
+
+
+@pytest.fixture(scope="module")
+def threads():
+    from anvilate.standards import default_thread_table
+
+    return default_thread_table()
+
+
+def test_thread_pitch_and_tap_drill_lookup(threads) -> None:
+    m5 = threads.get("M5")
+    assert m5.pitch.quantity.to("mm").magnitude == pytest.approx(0.8)
+    assert m5.tap_drill.quantity.to("mm").magnitude == pytest.approx(4.2)
+    assert "ISO 261" in m5.pitch.citation.source
+    assert m5.tap_drill.citation.license
+
+
+def test_thread_dimensions_are_length(threads) -> None:
+    for size in threads.sizes():
+        rec = threads.get(size)
+        assert rec.pitch.quantity.has_dimension("[length]"), size
+        assert rec.tap_drill.quantity.has_dimension("[length]"), size
+
+
+def test_thread_unknown_size_surfaces_gap(threads) -> None:
+    from anvilate.standards import UnknownThreadSizeError
+
+    with pytest.raises(UnknownThreadSizeError):
+        threads.get("M7")

@@ -28,8 +28,11 @@ from .resolver import StandardsResolver, default_standards_resolver
 from .threads import (
     ClearanceHoleTable,
     Fit,
+    MetricThread,
+    MetricThreadTable,
     UnknownThreadSizeError,
     default_clearance_table,
+    default_thread_table,
 )
 
 __all__ = [
@@ -47,8 +50,11 @@ __all__ = [
     "default_components_db",
     "Fit",
     "ClearanceHoleTable",
+    "MetricThread",
+    "MetricThreadTable",
     "UnknownThreadSizeError",
     "default_clearance_table",
+    "default_thread_table",
     "StandardsResolver",
     "default_standards_resolver",
 ]
