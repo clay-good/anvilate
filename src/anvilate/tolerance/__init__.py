@@ -19,8 +19,10 @@ from .general import (
     general_tolerance,
 )
 from .iso286 import (
+    Fit,
     LimitDeviations,
     StandardTolerance,
+    fit,
     standard_tolerance,
     zone_limits,
 )
@@ -36,4 +38,6 @@ __all__ = [
     "standard_tolerance",
     "LimitDeviations",
     "zone_limits",
+    "Fit",
+    "fit",
 ]

@@ -6,11 +6,13 @@ import pytest
 
 from anvilate.tolerance import (
     AngularTolerance,
+    Fit,
     GeneralTolerance,
     LimitDeviations,
     StandardTolerance,
     ToleranceClass,
     ToleranceRangeError,
+    fit,
     general_angular_tolerance,
     general_tolerance,
     standard_tolerance,
@@ -244,3 +246,42 @@ def test_zone_limits_propagates_grade_errors() -> None:
     # A nominal beyond the table surfaces as a range error from standard_tolerance.
     with pytest.raises(ToleranceRangeError, match="maximum"):
         zone_limits("H7", _mm(600))
+
+
+# --- ISO 286 fits (hole/shaft pairs) ---
+
+
+def test_h7h6_slip_fit_at_22mm() -> None:
+    # H7/h6 at 22 mm is a clearance fit with zero minimum: hole 0..+21 um,
+    # shaft -13..0 um. Min clearance 0, max clearance 34 um.
+    f = fit("H7/h6", _mm(22))
+    assert isinstance(f, Fit)
+    assert f.kind == "clearance"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(0)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(34)
+    assert f.designation == "H7/h6"
+    assert f.hole.hole is True and f.shaft.hole is False
+
+
+def test_fit_str_renders_range() -> None:
+    assert str(fit("H7/h6", _mm(22))) == "22 mm H7/h6 clearance (+0.000 to +0.034 mm)"
+
+
+def test_fit_requires_hole_then_shaft() -> None:
+    # Two shafts, or shaft-then-hole, are not a valid fit ordering.
+    with pytest.raises(ValueError, match="hole/shaft"):
+        fit("h7/h6", _mm(22))
+    with pytest.raises(ValueError, match="hole/shaft"):
+        fit("h6/H7", _mm(22))
+
+
+def test_fit_malformed_designation_rejected() -> None:
+    with pytest.raises(ValueError, match="malformed fit"):
+        fit("H7", _mm(22))
+    with pytest.raises(ValueError, match="malformed fit"):
+        fit("H7/h6/x5", _mm(22))
+
+
+def test_fit_propagates_unencoded_zone() -> None:
+    with pytest.raises(ToleranceRangeError, match="not yet encoded"):
+        fit("H7/g6", _mm(22))

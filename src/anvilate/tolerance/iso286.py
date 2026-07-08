@@ -11,6 +11,8 @@ deviations) build on this table (see openspec/specs/tolerance-management/).
 
 from __future__ import annotations
 
+from typing import Literal
+
 import yaml
 from pydantic import BaseModel, ConfigDict
 
@@ -22,6 +24,8 @@ __all__ = [
     "standard_tolerance",
     "LimitDeviations",
     "zone_limits",
+    "Fit",
+    "fit",
 ]
 
 
@@ -212,4 +216,80 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
         lower=lower,
         size_range=grade_tol.size_range,
         source=grade_tol.source,
+    )
+
+
+# --- Fits: a hole zone mated with a shaft zone ---
+
+
+class Fit(BaseModel):
+    """A resolved ISO 286 fit: a hole zone mated with a shaft zone.
+
+    Clearance is measured as hole size minus shaft size, so a positive value is
+    a gap and a negative value is interference. ``min_clearance`` pairs the
+    smallest hole with the largest shaft; ``max_clearance`` the largest hole with
+    the smallest shaft.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    nominal: Quantity
+    designation: str  # e.g. "H7/h6"
+    hole: LimitDeviations
+    shaft: LimitDeviations
+    min_clearance: Quantity  # signed; negative => interference
+    max_clearance: Quantity  # signed
+    kind: Literal["clearance", "transition", "interference"]
+    source: str
+
+    def __str__(self) -> str:
+        lo = self.min_clearance.to("mm").magnitude
+        hi = self.max_clearance.to("mm").magnitude
+        return f"{self.nominal} {self.designation} {self.kind} ({lo:+.3f} to {hi:+.3f} mm)"
+
+
+def _clearance(hole_dev: Quantity, shaft_dev: Quantity) -> Quantity:
+    return Quantity(
+        magnitude=hole_dev.to("mm").magnitude - shaft_dev.to("mm").magnitude,
+        unit="mm",
+    )
+
+
+def fit(designation: str, nominal: Quantity) -> Fit:
+    """Resolve an ISO 286 fit ``"H7/h6"`` at ``nominal`` into its clearance range.
+
+    ``designation`` is a hole zone and a shaft zone separated by ``/``. Both
+    zones must resolve (see :func:`zone_limits`; only H/h basis zones are encoded
+    so far). Raises :class:`ValueError` if the designation is malformed or the
+    hole/shaft roles are swapped, and propagates :class:`ToleranceRangeError`
+    from the zone lookups.
+    """
+    parts = [p for p in designation.split("/") if p.strip()]
+    if len(parts) != 2:
+        raise ValueError(
+            f"malformed fit {designation!r}; expected a hole and shaft zone, e.g. 'H7/h6'"
+        )
+    hole = zone_limits(parts[0].strip(), nominal)
+    shaft = zone_limits(parts[1].strip(), nominal)
+    if not hole.hole or shaft.hole:
+        raise ValueError(
+            f"fit {designation!r} must be hole/shaft (uppercase then lowercase), e.g. 'H7/h6'"
+        )
+    min_clearance = _clearance(hole.lower, shaft.upper)
+    max_clearance = _clearance(hole.upper, shaft.lower)
+    if min_clearance.magnitude >= 0:
+        kind: Literal["clearance", "transition", "interference"] = "clearance"
+    elif max_clearance.magnitude <= 0:
+        kind = "interference"
+    else:
+        kind = "transition"
+    return Fit(
+        nominal=nominal,
+        designation=f"{hole.designation}/{shaft.designation}",
+        hole=hole,
+        shaft=shaft,
+        min_clearance=min_clearance,
+        max_clearance=max_clearance,
+        kind=kind,
+        source=hole.source,
     )
