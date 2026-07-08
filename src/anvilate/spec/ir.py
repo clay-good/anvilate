@@ -14,7 +14,12 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-from ..tolerance import ResolvedTolerance, Tolerance
+from ..tolerance import (
+    ResolvedTolerance,
+    StackContributor,
+    StackUp,
+    Tolerance,
+)
 from ..units import Quantity, UnitSystem, require_dimension
 from .provenance import Provenanced
 
@@ -29,6 +34,8 @@ __all__ = [
     "InterfaceContract",
     "HolePattern",
     "ToleranceDimension",
+    "ChainLink",
+    "DimensionChain",
     "LoadCase",
     "LoadKind",
     "Constraints",
@@ -136,6 +143,56 @@ class ToleranceDimension(_Base):
         return self.tolerance.resolve(self.nominal)
 
 
+class ChainLink(_Base):
+    """One dimension in a stack-up chain, referenced by its tag.
+
+    ``direction`` is ``+1`` when the dimension growing widens the resulting gap
+    and ``-1`` when it narrows it.
+    """
+
+    dimension: str  # tag of a ToleranceDimension declared on the spec
+    direction: Literal[1, -1] = 1
+
+
+class DimensionChain(_Base):
+    """A user-declared 1D stack-up chain and the clearance it must hold.
+
+    The chain names dimensions (by tag) and sums their directed sizes into a gap
+    that must land within ``required_min``..``required_max``. :meth:`build`
+    resolves it against the spec's dimensions into a
+    :class:`~anvilate.tolerance.StackUp` for worst-case / RSS analysis.
+    """
+
+    name: str
+    links: list[ChainLink] = Field(min_length=1)
+    required_min: Length
+    required_max: Length
+
+    def build(self, dimensions: list[ToleranceDimension]) -> StackUp:
+        """Resolve this chain against ``dimensions`` into a stack-up.
+
+        Raises :class:`KeyError` if a link references a tag no declared dimension
+        carries.
+        """
+        by_tag = {d.tag: d for d in dimensions}
+        contributors = []
+        for link in self.links:
+            dim = by_tag.get(link.dimension)
+            if dim is None:
+                raise KeyError(
+                    f"stack-up chain {self.name!r} references dimension "
+                    f"{link.dimension!r}, which no declared dimension carries"
+                )
+            contributors.append(
+                StackContributor(
+                    name=link.dimension,
+                    tolerance=dim.resolve(),
+                    direction=link.direction,
+                )
+            )
+        return StackUp(contributors=tuple(contributors))
+
+
 # --- Load cases ---
 
 
@@ -207,6 +264,7 @@ class DesignSpec(_Base):
     manufacturing: Manufacturing
     interfaces: list[Interface] = Field(default_factory=list)
     dimensions: list[ToleranceDimension] = Field(default_factory=list)
+    chains: list[DimensionChain] = Field(default_factory=list)
     load_cases: list[LoadCase] = Field(default_factory=list)
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria

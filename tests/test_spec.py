@@ -9,8 +9,10 @@ import pytest
 from anvilate.spec import (
     SCHEMA_VERSION,
     AcceptanceCriteria,
+    ChainLink,
     Constraints,
     DesignSpec,
+    DimensionChain,
     HolePattern,
     InterfaceContract,
     LoadCase,
@@ -301,6 +303,86 @@ def test_toleranced_dimension_rejects_non_length_nominal():
             tag="bad",
             nominal=Quantity.parse("22 kg"),
             tolerance=FitTolerance(designation="H7"),
+        )
+
+
+# --- Requirement: One-dimensional tolerance stack-up over a declared chain ---
+
+
+def _bracket_with_chain() -> DesignSpec:
+    # Scenario: a chain from the mount face (+) through the flange thickness (-)
+    # to the motor pilot seat (-), required clearance 0.1-0.5 mm.
+    return golden_bracket().model_copy(
+        update={
+            "dimensions": [
+                ToleranceDimension(
+                    tag="mount_face",
+                    nominal=Quantity.parse("20 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.05 mm")),
+                ),
+                ToleranceDimension(
+                    tag="flange_thickness",
+                    nominal=Quantity.parse("12 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.03 mm")),
+                ),
+                ToleranceDimension(
+                    tag="pilot_seat",
+                    nominal=Quantity.parse("7.7 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.02 mm")),
+                ),
+            ],
+            "chains": [
+                DimensionChain(
+                    name="motor_seat_gap",
+                    links=[
+                        ChainLink(dimension="mount_face", direction=1),
+                        ChainLink(dimension="flange_thickness", direction=-1),
+                        ChainLink(dimension="pilot_seat", direction=-1),
+                    ],
+                    required_min=Quantity.parse("0.1 mm"),
+                    required_max=Quantity.parse("0.5 mm"),
+                ),
+            ],
+        }
+    )
+
+
+def test_declared_chain_builds_and_analyzes():
+    spec = _bracket_with_chain()
+    chain = spec.chains[0]
+    stack = chain.build(spec.dimensions)
+
+    wc = stack.worst_case()
+    assert wc.nominal.to("mm").magnitude == pytest.approx(0.3)
+    # Worst-case gap [0.20, 0.40] satisfies the required 0.1-0.5 mm clearance.
+    assert wc.satisfies(chain.required_min, chain.required_max) is True
+    # Ranked widest-share first — the mount face carries the widest tolerance.
+    assert wc.contributions[0].name == "mount_face"
+
+
+def test_declared_chain_rejects_unknown_dimension_tag():
+    spec = _bracket_with_chain()
+    broken = spec.chains[0].model_copy(
+        update={"links": [ChainLink(dimension="does_not_exist", direction=1)]}
+    )
+    with pytest.raises(KeyError, match="does_not_exist"):
+        broken.build(spec.dimensions)
+
+
+def test_chain_round_trips_through_yaml():
+    spec = _bracket_with_chain()
+    reloaded = load_spec_yaml(dump_spec_yaml(spec))
+    assert reloaded == spec
+    assert reloaded.chains[0].links[1].direction == -1
+
+
+def test_chain_requires_at_least_one_link():
+    with pytest.raises(Exception):  # noqa: B017 - pydantic min_length ValidationError
+        DimensionChain(
+            name="empty",
+            links=[],
+            required_min=Quantity.parse("0.1 mm"),
+            required_max=Quantity.parse("0.5 mm"),
         )
 
 
