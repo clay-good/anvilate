@@ -1,0 +1,40 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+.python-version
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ---- Node / frontend (anvilate-ui) ----
+node_modules/
+.vite/
+.turbo/
+frontend/dist/
+
+# ---- Engineering / solver scratch ----
+# Solver run directories and their intermediate decks/results are build
+# artifacts, never source. Golden fixtures live under tests/ or patterns/
+# and are committed explicitly, so they are not matched here.
+scratch/
+*.frd
+*.dat
+*.cvg
+*.sta
+run_*/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+*.swp

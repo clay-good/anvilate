@@ -1,0 +1,53 @@
+# Golden-path example Design Spec (schema 1.0.0).
+# Regenerate: see tests/test_spec.py::golden_bracket. Loads via anvilate.spec.load_spec_yaml.
+anvilate_spec: 1.0.0
+name: nema23_bracket
+description: Aluminum bracket mounting a NEMA 23 stepper to a 4040 extrusion.
+units:
+  value: SI
+  origin: default
+  rationale: defaulted from user preference
+material:
+  ref: AA-6061-T6
+manufacturing:
+  process: cnc_milling
+  tolerance_class: medium
+interfaces:
+- type: standard_component
+  ref: NEMA23
+  tag: motor_pilot_bore
+- type: standard_component
+  ref: EXT-4040
+  tag: extrusion_mount_face
+load_cases:
+- name: cantilevered_motor
+  kind: remote_mass
+  applied_to: motor_pilot_bore
+  remote_mass:
+    magnitude: 1.1
+    unit: kg
+constraints:
+  max_mass:
+    value:
+      magnitude: 150.0
+      unit: g
+    origin: user_stated
+  min_safety_factor:
+    value: 2.0
+    origin: default
+    rationale: standard screening default; edit to override
+acceptance:
+  tiers:
+  - T0_geometry
+  - T1_analytical
+exports:
+- name: mount_pattern
+  mating_plane: extrusion_mount_face
+  pattern:
+    diameter:
+      magnitude: 40.0
+      unit: mm
+    hole_count: 4
+    hole_size:
+      magnitude: 5.0
+      unit: mm

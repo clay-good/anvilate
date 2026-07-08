@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "openlore": "^2.1.5"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "^1.5.0"
+  }
+}
