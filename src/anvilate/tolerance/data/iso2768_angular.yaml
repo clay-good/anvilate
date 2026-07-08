@@ -1,0 +1,19 @@
+# ISO 2768-1 general tolerances for angular dimensions (schema: tolerance-mgmt).
+#
+# Permissible ± deviations (arcminutes) by the shorter leg length of the angle
+# and tolerance class (f fine, m medium, c coarse, v very coarse). The fine and
+# medium classes share the same angular values in ISO 2768-1. The source
+# standard is not redistributed — only the tolerance table.
+dataset:
+  source: "ISO 2768-1 general tolerances (angular dimensions)"
+  license: "CC0-1.0 (tolerance values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+# Each range covers a shorter-leg length up to and including `leg_up_to_mm`
+# (a null bound is the open top range). Deviations are the ± value in arcminutes.
+ranges:
+  - {leg_up_to_mm: 10, f: 60, m: 60, c: 90, v: 180}
+  - {leg_up_to_mm: 50, f: 30, m: 30, c: 60, v: 120}
+  - {leg_up_to_mm: 120, f: 20, m: 20, c: 30, v: 60}
+  - {leg_up_to_mm: 400, f: 10, m: 10, c: 15, v: 30}
+  - {leg_up_to_mm: null, f: 5, m: 5, c: 10, v: 20}

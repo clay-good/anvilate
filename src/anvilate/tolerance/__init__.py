@@ -10,15 +10,19 @@ out (see openspec/specs/tolerance-management/).
 from __future__ import annotations
 
 from .general import (
+    AngularTolerance,
     GeneralTolerance,
     ToleranceClass,
     ToleranceRangeError,
+    general_angular_tolerance,
     general_tolerance,
 )
 
 __all__ = [
     "ToleranceClass",
     "GeneralTolerance",
+    "AngularTolerance",
     "ToleranceRangeError",
     "general_tolerance",
+    "general_angular_tolerance",
 ]

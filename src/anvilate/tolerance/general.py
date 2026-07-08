@@ -19,8 +19,10 @@ from ..units import Quantity
 __all__ = [
     "ToleranceClass",
     "GeneralTolerance",
+    "AngularTolerance",
     "ToleranceRangeError",
     "general_tolerance",
+    "general_angular_tolerance",
 ]
 
 
@@ -152,3 +154,80 @@ def general_tolerance(
     raise ToleranceRangeError(
         f"{nominal} exceeds ISO 2768-1's {low:g} mm maximum; needs an explicit tolerance"
     )
+
+
+# --- Angular general tolerances (ISO 2768-1) ---
+
+
+class AngularTolerance(BaseModel):
+    """A resolved angular general tolerance: the permissible ± angular deviation
+    (keyed by the shorter leg length) and its source."""
+
+    model_config = ConfigDict(frozen=True)
+
+    shorter_leg: Quantity
+    tolerance_class: ToleranceClass
+    deviation: Quantity  # the permissible ± deviation, an angle (arcminutes)
+    leg_range: str  # the shorter-leg length range applied
+    source: str
+
+    def __str__(self) -> str:
+        return f"±{self.deviation} (ISO 2768 {self.tolerance_class.letter})"
+
+
+_ANGULAR_TABLE: dict | None = None
+
+
+def _angular_table() -> dict:
+    global _ANGULAR_TABLE
+    if _ANGULAR_TABLE is None:
+        from importlib.resources import files
+
+        text = (files("anvilate.tolerance") / "data" / "iso2768_angular.yaml").read_text(
+            encoding="utf-8"
+        )
+        _ANGULAR_TABLE = yaml.safe_load(text)
+    return _ANGULAR_TABLE
+
+
+def _leg_label(low: float, up_to: float | None, first: bool) -> str:
+    if up_to is None:
+        return f"over {low:g} mm shorter leg"
+    if first:
+        return f"up to {up_to:g} mm shorter leg"
+    return f"over {low:g} up to {up_to:g} mm shorter leg"
+
+
+def general_angular_tolerance(
+    shorter_leg: Quantity, tolerance_class: ToleranceClass | str = ToleranceClass.MEDIUM
+) -> AngularTolerance:
+    """Resolve the ISO 2768-1 general angular tolerance for an angle whose
+    shorter leg is ``shorter_leg`` long, under a class (default medium).
+
+    The deviation is returned in arcminutes. ``shorter_leg`` must be a length.
+    """
+    if not shorter_leg.has_dimension("[length]"):
+        raise ToleranceRangeError(
+            f"angular tolerance is keyed by the shorter leg length; "
+            f"got {shorter_leg.dimensionality} ({shorter_leg})"
+        )
+    cls = (
+        tolerance_class
+        if isinstance(tolerance_class, ToleranceClass)
+        else ToleranceClass.parse(tolerance_class)
+    )
+    doc = _angular_table()
+    magnitude = abs(shorter_leg.to("mm").magnitude)
+    low = 0.0
+    for index, row in enumerate(doc["ranges"]):
+        up_to = row["leg_up_to_mm"]
+        if up_to is None or magnitude <= float(up_to):
+            return AngularTolerance(
+                shorter_leg=shorter_leg,
+                tolerance_class=cls,
+                deviation=Quantity(magnitude=float(row[cls.letter]), unit="arcminute"),
+                leg_range=_leg_label(low, up_to, first=index == 0),
+                source=doc["dataset"]["source"],
+            )
+        low = float(up_to)
+    raise ToleranceRangeError("no ISO 2768-1 angular range matched")  # unreachable: open top

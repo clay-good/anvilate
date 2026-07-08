@@ -5,9 +5,11 @@ from __future__ import annotations
 import pytest
 
 from anvilate.tolerance import (
+    AngularTolerance,
     GeneralTolerance,
     ToleranceClass,
     ToleranceRangeError,
+    general_angular_tolerance,
     general_tolerance,
 )
 from anvilate.units import Quantity
@@ -82,3 +84,46 @@ def test_above_maximum_requires_explicit_tolerance() -> None:
 def test_non_length_nominal_rejected() -> None:
     with pytest.raises(ToleranceRangeError, match="length"):
         general_tolerance(Quantity(magnitude=5, unit="kg"), "m")
+
+
+# --- Angular general tolerances (ISO 2768-1) ---
+
+
+def test_angular_lookup_by_shorter_leg() -> None:
+    # A 30 mm shorter leg under class m falls in the 10-50 range: ±30'.
+    g = general_angular_tolerance(_mm(30), ToleranceClass.MEDIUM)
+    assert isinstance(g, AngularTolerance)
+    assert g.deviation.to("arcminute").magnitude == pytest.approx(30)
+    assert g.deviation.to("degree").magnitude == pytest.approx(0.5)
+    assert "10" in g.leg_range and "50" in g.leg_range
+    assert "ISO 2768-1" in g.source
+
+
+def test_angular_default_class_is_medium() -> None:
+    assert general_angular_tolerance(_mm(30)).tolerance_class is ToleranceClass.MEDIUM
+
+
+def test_angular_fine_and_medium_share_values() -> None:
+    # ISO 2768-1 gives f and m the same angular tolerance.
+    assert (
+        general_angular_tolerance(_mm(30), "f").deviation
+        == general_angular_tolerance(_mm(30), "m").deviation
+    )
+
+
+def test_angular_open_top_range() -> None:
+    # Any shorter leg over 400 mm resolves in the open-top range (±5' at m).
+    g = general_angular_tolerance(_mm(5000), "m")
+    assert g.deviation.to("arcminute").magnitude == pytest.approx(5)
+    assert "over 400" in g.leg_range
+
+
+def test_angular_coarse_below_10mm() -> None:
+    g = general_angular_tolerance(_mm(5), "c")
+    assert g.deviation.to("arcminute").magnitude == pytest.approx(90)
+    assert "up to 10" in g.leg_range
+
+
+def test_angular_non_length_leg_rejected() -> None:
+    with pytest.raises(ToleranceRangeError, match="shorter leg"):
+        general_angular_tolerance(Quantity(magnitude=5, unit="kg"), "m")
