@@ -8,6 +8,8 @@ from anvilate.evidence import SourceRecord, collect_provenance
 from anvilate.spec import (
     AcceptanceCriteria,
     DesignSpec,
+    GeometricCharacteristic,
+    GeometricTolerance,
     Manufacturing,
     ManufacturingProcess,
     MaterialRef,
@@ -25,7 +27,9 @@ from anvilate.tolerance import FitTolerance, SymmetricTolerance
 from anvilate.units import Quantity, UnitSystem
 
 
-def _spec(material: str = "AA-6061-T6", interfaces=None, dimensions=None) -> DesignSpec:
+def _spec(
+    material: str = "AA-6061-T6", interfaces=None, dimensions=None, geometric_tolerances=None
+) -> DesignSpec:
     return DesignSpec(
         name="probe",
         description="probe",
@@ -34,6 +38,7 @@ def _spec(material: str = "AA-6061-T6", interfaces=None, dimensions=None) -> Des
         manufacturing=Manufacturing(process=ManufacturingProcess.CNC_MILLING),
         interfaces=interfaces if interfaces is not None else [],
         dimensions=dimensions if dimensions is not None else [],
+        geometric_tolerances=geometric_tolerances if geometric_tolerances is not None else [],
         acceptance=AcceptanceCriteria(tiers=[ValidationTier.T0_GEOMETRY]),
     )
 
@@ -106,6 +111,29 @@ def test_iso286_fit_dimension_contributes_a_tolerance_source() -> None:
     assert fits[0].ref == "pilot_bore"
     assert fits[0].name == "H7"
     assert fits[0].sources and all(fits[0].sources)
+
+
+def test_declared_geometric_tolerance_cites_iso_1101() -> None:
+    spec = _spec(
+        geometric_tolerances=[
+            GeometricTolerance(
+                characteristic=GeometricCharacteristic.FLATNESS,
+                tolerance=Quantity.parse("0.05 mm"),
+                feature="base_face",
+            )
+        ]
+    )
+    records = collect_provenance(
+        spec, materials=default_materials_db(), components=default_components_db()
+    )
+    gdt = [r for r in records if r.ref == "geometric_tolerances"]
+    assert len(gdt) == 1
+    assert "1101" in gdt[0].sources[0]
+    # A spec with no geometric tolerances gets no such record.
+    plain = collect_provenance(
+        _spec(), materials=default_materials_db(), components=default_components_db()
+    )
+    assert not any(r.ref == "geometric_tolerances" for r in plain)
 
 
 def test_unknown_material_ref_raises() -> None:
