@@ -13,10 +13,10 @@ from enum import StrEnum
 from typing import Annotated
 
 import yaml
-from pydantic import AfterValidator, BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict
 
-from ..units import DimensionError, Quantity
-from .materials import PropertyCitation, QuantityProperty
+from ..units import Quantity
+from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
     "Fit",
@@ -113,19 +113,7 @@ def default_clearance_table() -> ClearanceHoleTable:
 # --- Coarse-thread pitch and tap drill (ISO 261 / 724) ---
 
 
-def _length(name: str) -> AfterValidator:
-    def _check(prop: QuantityProperty) -> QuantityProperty:
-        if not prop.quantity.has_dimension("[length]"):
-            raise DimensionError(
-                f"{name} expects a [length] quantity "
-                f"but received {prop.quantity.dimensionality} ({prop.quantity})"
-            )
-        return prop
-
-    return AfterValidator(_check)
-
-
-_Length = Annotated[QuantityProperty, _length("thread dimension")]
+_Length = Annotated[QuantityProperty, dimensioned("[length]", "thread dimension")]
 
 
 class MetricThread(BaseModel):

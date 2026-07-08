@@ -18,12 +18,10 @@ from .materials import (
     Material,
     MaterialPropertyUnavailable,
     MaterialsDatabase,
-    PropertyCitation,
-    QuantityProperty,
-    ScalarProperty,
     UnknownMaterialError,
     default_materials_db,
 )
+from .records import PropertyCitation, QuantityProperty, ScalarProperty
 from .resolver import StandardsResolver, default_standards_resolver
 from .threads import (
     ClearanceHoleTable,

@@ -16,10 +16,9 @@ import difflib
 from typing import Annotated
 
 import yaml
-from pydantic import AfterValidator, BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict
 
-from ..units import DimensionError
-from .materials import QuantityProperty
+from .records import QuantityProperty, dimensioned
 
 __all__ = [
     "NemaFrame",
@@ -33,21 +32,7 @@ class _Base(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-def _length(name: str) -> AfterValidator:
-    """Validator pinning a :class:`QuantityProperty` to a length dimension."""
-
-    def _check(prop: QuantityProperty) -> QuantityProperty:
-        if not prop.quantity.has_dimension("[length]"):
-            raise DimensionError(
-                f"{name} expects a [length] quantity "
-                f"but received {prop.quantity.dimensionality} ({prop.quantity})"
-            )
-        return prop
-
-    return AfterValidator(_check)
-
-
-Length = Annotated[QuantityProperty, _length("length")]
+Length = Annotated[QuantityProperty, dimensioned("[length]", "length")]
 
 
 class NemaFrame(_Base):
