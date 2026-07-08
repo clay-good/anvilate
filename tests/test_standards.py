@@ -317,3 +317,44 @@ def test_resolver_composes_component_db_and_seed() -> None:
     }
     assert resolver.has_component("NEMA23")  # from the components DB
     assert resolver.has_component("EXT-4040")  # from the static seed
+
+
+# --- Metric clearance holes (ISO 273) ---
+
+
+@pytest.fixture(scope="module")
+def clearance():
+    from anvilate.standards import default_clearance_table
+
+    return default_clearance_table()
+
+
+def test_clearance_hole_lookup_returns_diameter_and_citation(clearance) -> None:
+    # Scenario: clearance hole lookup — an M5 screw at normal fit returns the
+    # standard clearance diameter with its source citation.
+    from anvilate.standards import Fit
+
+    normal = clearance.get("M5", Fit.NORMAL)
+    assert normal.quantity.to("mm").magnitude == pytest.approx(5.5)
+    assert "ISO 273" in normal.citation.source
+    assert normal.citation.license
+    # Fit changes the diameter; normal is the default.
+    assert clearance.get("M5", Fit.CLOSE).quantity.to("mm").magnitude == pytest.approx(5.3)
+    assert clearance.get("M5").quantity == normal.quantity
+
+
+def test_clearance_holes_are_length_dimensioned(clearance) -> None:
+    for size in clearance.sizes():
+        assert clearance.get(size).quantity.has_dimension("[length]"), size
+
+
+def test_clearance_hole_ordering_is_numeric(clearance) -> None:
+    # M2.5 sorts between M2 and M3, not lexically after M2.
+    assert clearance.sizes()[:3] == ["M2", "M2.5", "M3"]
+
+
+def test_clearance_hole_unknown_size_surfaces_gap(clearance) -> None:
+    from anvilate.standards import UnknownThreadSizeError
+
+    with pytest.raises(UnknownThreadSizeError):
+        clearance.get("M7")  # not a preferred size; no record rather than a guess

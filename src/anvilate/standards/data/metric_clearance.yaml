@@ -1,0 +1,23 @@
+# Metric clearance holes per ISO 273 (schema: standards-data).
+#
+# Clearance-hole diameters (mm) for metric screws at the three standard fits.
+# These are the ISO 273 / DIN EN 20273 values; the source standard is not
+# redistributed — only the dimension table.
+dataset:
+  name: anvilate-metric-clearance-seed
+  version: "0.1.0"
+  source: "ISO 273 metric clearance holes"
+  license: "CC0-1.0 (dimension values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+# size: {fit: clearance diameter in mm}
+sizes:
+  M2: {close: 2.2, normal: 2.4, coarse: 2.6}
+  M2.5: {close: 2.7, normal: 2.9, coarse: 3.1}
+  M3: {close: 3.2, normal: 3.4, coarse: 3.6}
+  M4: {close: 4.3, normal: 4.5, coarse: 4.8}
+  M5: {close: 5.3, normal: 5.5, coarse: 5.8}
+  M6: {close: 6.4, normal: 6.6, coarse: 7.0}
+  M8: {close: 8.4, normal: 9.0, coarse: 10.0}
+  M10: {close: 10.5, normal: 11.0, coarse: 12.0}
+  M12: {close: 13.0, normal: 13.5, coarse: 14.5}

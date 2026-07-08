@@ -25,6 +25,12 @@ from .materials import (
     default_materials_db,
 )
 from .resolver import StandardsResolver, default_standards_resolver
+from .threads import (
+    ClearanceHoleTable,
+    Fit,
+    UnknownThreadSizeError,
+    default_clearance_table,
+)
 
 __all__ = [
     "Material",
@@ -39,6 +45,10 @@ __all__ = [
     "ComponentsDatabase",
     "UnknownComponentError",
     "default_components_db",
+    "Fit",
+    "ClearanceHoleTable",
+    "UnknownThreadSizeError",
+    "default_clearance_table",
     "StandardsResolver",
     "default_standards_resolver",
 ]
