@@ -183,7 +183,5 @@ def default_thread_table() -> MetricThreadTable:
     """The bundled ISO 261/724 coarse-thread pitch and tap-drill table."""
     from importlib.resources import files
 
-    text = (files("anvilate.standards") / "data" / "metric_thread.yaml").read_text(
-        encoding="utf-8"
-    )
+    text = (files("anvilate.standards") / "data" / "metric_thread.yaml").read_text(encoding="utf-8")
     return MetricThreadTable(_load_threads(text))
