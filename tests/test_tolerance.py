@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import TypeAdapter, ValidationError
 
 from anvilate.tolerance import (
     AngularTolerance,
     Fit,
+    FitTolerance,
     GeneralTolerance,
     LimitDeviations,
+    LimitTolerance,
+    ResolvedTolerance,
     StandardTolerance,
+    SymmetricTolerance,
+    Tolerance,
     ToleranceClass,
     ToleranceRangeError,
     fit,
@@ -474,3 +480,65 @@ def test_fit_satisfies_clearance_rejects_non_length() -> None:
     f = fit("H7/h6", _mm(22))
     with pytest.raises(ToleranceRangeError, match="length"):
         f.satisfies_clearance(Quantity(magnitude=1, unit="kg"), _mm(0.05))
+
+
+# --- Explicit per-dimension tolerances (symmetric / limits / fit) ---
+
+
+def test_symmetric_tolerance_resolves_to_band() -> None:
+    r = SymmetricTolerance(plus_minus=_mm(0.1)).resolve(_mm(35))
+    assert isinstance(r, ResolvedTolerance)
+    assert r.upper.to("mm").magnitude == pytest.approx(0.1)
+    assert r.lower.to("mm").magnitude == pytest.approx(-0.1)
+    assert r.min_size.to("mm").magnitude == pytest.approx(34.9)
+    assert r.max_size.to("mm").magnitude == pytest.approx(35.1)
+    assert r.width.to("mm").magnitude == pytest.approx(0.2)
+    assert r.source is None
+
+
+def test_symmetric_tolerance_rejects_negative() -> None:
+    with pytest.raises(ValidationError, match="non-negative"):
+        SymmetricTolerance(plus_minus=_mm(-0.1))
+
+
+def test_limit_tolerance_resolves_asymmetric_band() -> None:
+    r = LimitTolerance(upper=_mm(0.05), lower=_mm(-0.02)).resolve(_mm(10))
+    assert r.min_size.to("mm").magnitude == pytest.approx(9.98)
+    assert r.max_size.to("mm").magnitude == pytest.approx(10.05)
+    assert r.source is None
+
+
+def test_limit_tolerance_rejects_inverted_bounds() -> None:
+    with pytest.raises(ValidationError, match="at least the lower"):
+        LimitTolerance(upper=_mm(-0.05), lower=_mm(0.02))
+
+
+def test_fit_tolerance_resolves_through_iso286() -> None:
+    # An explicit `fit: H7` at 22 mm resolves the ISO 286 zone: 0..+0.021 mm,
+    # carrying the ISO citation. This is the spec's fit-resolution scenario.
+    r = FitTolerance(designation="H7").resolve(_mm(22))
+    assert r.label == "H7"
+    assert r.lower.to("mm").magnitude == pytest.approx(0.0)
+    assert r.upper.to("mm").magnitude == pytest.approx(0.021)
+    assert r.min_size.to("mm").magnitude == pytest.approx(22.0)
+    assert r.max_size.to("mm").magnitude == pytest.approx(22.021)
+    assert "ISO 286-1" in r.source
+
+
+def test_fit_tolerance_propagates_unencoded_zone() -> None:
+    with pytest.raises(ToleranceRangeError, match="not yet encoded"):
+        FitTolerance(designation="s6").resolve(_mm(22))
+
+
+def test_tolerance_union_discriminates_by_type() -> None:
+    # The Tolerance union is the field type a Spec IR dimension will carry; the
+    # `type` tag selects the variant when parsed from a spec's data.
+    adapter = TypeAdapter(Tolerance)
+    sym = adapter.validate_python(
+        {"type": "symmetric", "plus_minus": {"magnitude": 0.1, "unit": "mm"}}
+    )
+    assert isinstance(sym, SymmetricTolerance)
+    fit_t = adapter.validate_python({"type": "fit", "designation": "g6"})
+    assert isinstance(fit_t, FitTolerance)
+    with pytest.raises(ValidationError):
+        adapter.validate_python({"type": "nonsense"})
