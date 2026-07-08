@@ -41,6 +41,7 @@ from .validate import (
     json_schema,
     load_spec_yaml,
     parse_spec,
+    validate_dimension_graph,
     validate_references,
 )
 from .version import UnsupportedSchemaVersion, migrate_to_current
@@ -75,6 +76,7 @@ __all__ = [
     "load_spec_yaml",
     "dump_spec_yaml",
     "validate_references",
+    "validate_dimension_graph",
     "json_schema",
     "migrate_to_current",
     "UnsupportedSchemaVersion",

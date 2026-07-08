@@ -25,6 +25,7 @@ __all__ = [
     "load_spec_yaml",
     "dump_spec_yaml",
     "validate_references",
+    "validate_dimension_graph",
     "json_schema",
 ]
 
@@ -94,6 +95,42 @@ def validate_references(spec: DesignSpec, resolver: ReferenceResolver | None = N
                 "component",
                 difflib.get_close_matches(iface.ref, res.known_components(), n=3),
             )
+
+
+def validate_dimension_graph(spec: DesignSpec) -> None:
+    """Check the toleranced-dimension graph is internally consistent.
+
+    Validates that dimension tags are unique, stack-up chain names are unique,
+    and every chain link references a declared dimension. Reports every problem
+    at once (not just the first) via :class:`SpecValidationError`, so an author
+    fixes a whole spec in one pass. This is the structural counterpart to
+    :func:`validate_references`, which resolves external database identifiers.
+    """
+    errors: list[dict[str, Any]] = []
+    declared: set[str] = set()
+    for i, dim in enumerate(spec.dimensions):
+        if dim.tag in declared:
+            errors.append(
+                {"loc": f"dimensions.{i}.tag", "msg": f"duplicate dimension tag {dim.tag!r}"}
+            )
+        declared.add(dim.tag)
+    seen_chains: set[str] = set()
+    for i, chain in enumerate(spec.chains):
+        if chain.name in seen_chains:
+            errors.append(
+                {"loc": f"chains.{i}.name", "msg": f"duplicate chain name {chain.name!r}"}
+            )
+        seen_chains.add(chain.name)
+        for j, link in enumerate(chain.links):
+            if link.dimension not in declared:
+                errors.append(
+                    {
+                        "loc": f"chains.{i}.links.{j}.dimension",
+                        "msg": f"chain link references unknown dimension {link.dimension!r}",
+                    }
+                )
+    if errors:
+        raise SpecValidationError(errors)
 
 
 def json_schema() -> dict:

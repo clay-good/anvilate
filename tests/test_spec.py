@@ -32,6 +32,7 @@ from anvilate.spec import (
     json_schema,
     load_spec_yaml,
     parse_spec,
+    validate_dimension_graph,
     validate_references,
 )
 from anvilate.tolerance import FitTolerance, SymmetricTolerance
@@ -374,6 +375,43 @@ def test_chain_round_trips_through_yaml():
     reloaded = load_spec_yaml(dump_spec_yaml(spec))
     assert reloaded == spec
     assert reloaded.chains[0].links[1].direction == -1
+
+
+def test_valid_dimension_graph_passes():
+    validate_dimension_graph(_bracket_with_chain())  # no raise
+
+
+def test_dimension_graph_flags_unknown_link_and_duplicates_at_once():
+    spec = _bracket_with_chain().model_copy(
+        update={
+            "dimensions": [
+                ToleranceDimension(
+                    tag="mount_face",
+                    nominal=Quantity.parse("20 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.05 mm")),
+                ),
+                ToleranceDimension(  # duplicate tag
+                    tag="mount_face",
+                    nominal=Quantity.parse("21 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.05 mm")),
+                ),
+            ],
+            "chains": [
+                DimensionChain(
+                    name="motor_seat_gap",
+                    links=[ChainLink(dimension="ghost", direction=1)],  # unknown tag
+                    required_min=Quantity.parse("0.1 mm"),
+                    required_max=Quantity.parse("0.5 mm"),
+                ),
+            ],
+        }
+    )
+    with pytest.raises(SpecValidationError) as exc:
+        validate_dimension_graph(spec)
+    locs = [e["loc"] for e in exc.value.errors]
+    # Both problems are reported in one pass.
+    assert "dimensions.1.tag" in locs
+    assert "chains.0.links.0.dimension" in locs
 
 
 def test_chain_requires_at_least_one_link():
