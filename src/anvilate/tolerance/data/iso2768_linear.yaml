@@ -1,0 +1,25 @@
+# ISO 2768-1 general tolerances for linear dimensions (schema: tolerance-mgmt).
+#
+# Permissible ± deviations (mm) by nominal size range and tolerance class
+# (f fine, m medium, c coarse, v very coarse). A null entry means the class is
+# not defined for that range. Dimensions below the minimum nominal are not
+# covered by ISO 2768 and require an explicit tolerance. The source standard is
+# not redistributed — only the tolerance table.
+dataset:
+  source: "ISO 2768-1 general tolerances (linear dimensions)"
+  license: "CC0-1.0 (tolerance values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+min_nominal_mm: 0.5
+
+# Each range covers nominal lengths up to and including `up_to_mm`, above the
+# previous range's bound. Deviations are the ± permissible value in mm.
+ranges:
+  - {up_to_mm: 3, f: 0.05, m: 0.10, c: 0.20, v: null}
+  - {up_to_mm: 6, f: 0.05, m: 0.10, c: 0.30, v: 0.50}
+  - {up_to_mm: 30, f: 0.10, m: 0.20, c: 0.50, v: 1.00}
+  - {up_to_mm: 120, f: 0.15, m: 0.30, c: 0.80, v: 1.50}
+  - {up_to_mm: 400, f: 0.20, m: 0.50, c: 1.20, v: 2.50}
+  - {up_to_mm: 1000, f: 0.30, m: 0.80, c: 2.00, v: 4.00}
+  - {up_to_mm: 2000, f: 0.50, m: 1.20, c: 3.00, v: 6.00}
+  - {up_to_mm: 4000, f: null, m: 2.00, c: 4.00, v: 8.00}
