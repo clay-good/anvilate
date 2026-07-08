@@ -258,6 +258,23 @@ class Fit(BaseModel):
     kind: Literal["clearance", "transition", "interference"]
     source: str
 
+    def satisfies_clearance(self, min_required: Quantity, max_required: Quantity) -> bool:
+        """Whether the fit's whole clearance range falls within a required band.
+
+        Passes only when the worst cases both fit: the tightest clearance
+        (``min_clearance``) is at least ``min_required`` and the loosest
+        (``max_clearance``) is at most ``max_required``. Both bounds must be
+        lengths, else :class:`ToleranceRangeError`.
+        """
+        for bound in (min_required, max_required):
+            if not bound.has_dimension("[length]"):
+                raise ToleranceRangeError(
+                    f"clearance requirement must be a length; got {bound.dimensionality} ({bound})"
+                )
+        lo = self.min_clearance.to("mm").magnitude
+        hi = self.max_clearance.to("mm").magnitude
+        return min_required.to("mm").magnitude <= lo and hi <= max_required.to("mm").magnitude
+
     def __str__(self) -> str:
         lo = self.min_clearance.to("mm").magnitude
         hi = self.max_clearance.to("mm").magnitude

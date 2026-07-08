@@ -306,3 +306,18 @@ def test_fit_malformed_designation_rejected() -> None:
 def test_fit_propagates_unencoded_zone() -> None:
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
         fit("H7/g6", _mm(22))
+
+
+def test_fit_satisfies_clearance_requirement() -> None:
+    # H7/h6 at 22 mm gives clearance 0..0.034 mm. A required 0..0.05 mm band
+    # contains it; a required 0.01..0.05 mm band excludes the zero minimum.
+    f = fit("H7/h6", _mm(22))
+    assert f.satisfies_clearance(_mm(0.0), _mm(0.05)) is True
+    assert f.satisfies_clearance(_mm(0.01), _mm(0.05)) is False  # min clearance 0 < 0.01
+    assert f.satisfies_clearance(_mm(0.0), _mm(0.03)) is False  # max clearance 0.034 > 0.03
+
+
+def test_fit_satisfies_clearance_rejects_non_length() -> None:
+    f = fit("H7/h6", _mm(22))
+    with pytest.raises(ToleranceRangeError, match="length"):
+        f.satisfies_clearance(Quantity(magnitude=1, unit="kg"), _mm(0.05))
