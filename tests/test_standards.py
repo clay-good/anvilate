@@ -146,6 +146,45 @@ def test_bundled_records_marked_bundled(db: MaterialsDatabase) -> None:
     assert db.get("AA-6061-T6").bundled is True
 
 
+def test_standards_resolver_backs_spec_reference_validation() -> None:
+    # The materials database is the single source of truth for reference
+    # validation: a spec referencing a DB material validates, and an unknown
+    # one is rejected with a suggestion drawn from the database.
+    from anvilate.spec import (
+        AcceptanceCriteria,
+        DesignSpec,
+        Manufacturing,
+        ManufacturingProcess,
+        MaterialRef,
+        Provenanced,
+        StandardComponentInterface,
+        UnknownReferenceError,
+        ValidationTier,
+        validate_references,
+    )
+    from anvilate.standards import default_standards_resolver
+    from anvilate.units import UnitSystem
+
+    resolver = default_standards_resolver()
+
+    def _spec(material: str) -> DesignSpec:
+        return DesignSpec(
+            name="probe",
+            description="probe",
+            units=Provenanced.stated(UnitSystem.SI),
+            material=MaterialRef(ref=material),
+            manufacturing=Manufacturing(process=ManufacturingProcess.CNC_MILLING),
+            interfaces=[StandardComponentInterface(ref="NEMA23", tag="bore")],
+            acceptance=AcceptanceCriteria(tiers=[ValidationTier.T0_GEOMETRY]),
+        )
+
+    validate_references(_spec("AA-6061-T6"), resolver)  # resolves against the DB
+
+    with pytest.raises(UnknownReferenceError) as exc:
+        validate_references(_spec("AA-6061-T7"), resolver)
+    assert "AA-6061-T6" in exc.value.suggestions
+
+
 def _cite() -> dict:
     return {
         "source": "s",

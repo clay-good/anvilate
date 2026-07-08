@@ -9,13 +9,14 @@ meaningful diffs between revisions.
 
 from __future__ import annotations
 
+import difflib
 from typing import Any
 
 import yaml
 from pydantic import ValidationError
 
 from .ir import DesignSpec
-from .references import ReferenceResolver, StaticReferenceResolver, default_resolver
+from .references import ReferenceResolver, UnknownReferenceError, default_resolver
 from .version import migrate_to_current
 
 __all__ = [
@@ -74,15 +75,25 @@ def dump_spec_yaml(spec: DesignSpec) -> str:
 def validate_references(spec: DesignSpec, resolver: ReferenceResolver | None = None) -> None:
     """Check every material and standard-component reference resolves.
 
-    Raises :class:`~anvilate.spec.references.UnknownReferenceError` with
-    near-miss suggestions for the first unresolved identifier.
+    Validates against any :class:`~anvilate.spec.references.ReferenceResolver`
+    (the static seed, or a standards-database-backed resolver), raising
+    :class:`~anvilate.spec.references.UnknownReferenceError` with near-miss
+    suggestions for the first unresolved identifier.
     """
     res = resolver or default_resolver()
-    if isinstance(res, StaticReferenceResolver):
-        res.check_material(spec.material.ref)
-        for iface in spec.interfaces:
-            if iface.type == "standard_component":
-                res.check_component(iface.ref)
+    if not res.has_material(spec.material.ref):
+        raise UnknownReferenceError(
+            spec.material.ref,
+            "material",
+            difflib.get_close_matches(spec.material.ref, res.known_materials(), n=3),
+        )
+    for iface in spec.interfaces:
+        if iface.type == "standard_component" and not res.has_component(iface.ref):
+            raise UnknownReferenceError(
+                iface.ref,
+                "component",
+                difflib.get_close_matches(iface.ref, res.known_components(), n=3),
+            )
 
 
 def json_schema() -> dict:

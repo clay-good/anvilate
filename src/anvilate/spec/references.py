@@ -10,7 +10,6 @@ reference validation is exercisable before that database lands.
 
 from __future__ import annotations
 
-import difflib
 from typing import Protocol
 
 __all__ = [
@@ -67,18 +66,6 @@ class StaticReferenceResolver:
 
     def known_components(self) -> list[str]:
         return sorted(self._components)
-
-    def check_material(self, ref: str) -> None:
-        if not self.has_material(ref):
-            raise UnknownReferenceError(
-                ref, "material", difflib.get_close_matches(ref, self._materials, n=3)
-            )
-
-    def check_component(self, ref: str) -> None:
-        if not self.has_component(ref):
-            raise UnknownReferenceError(
-                ref, "component", difflib.get_close_matches(ref, self._components, n=3)
-            )
 
 
 def default_resolver() -> StaticReferenceResolver:

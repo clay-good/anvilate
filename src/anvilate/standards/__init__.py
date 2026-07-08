@@ -18,6 +18,7 @@ from .materials import (
     UnknownMaterialError,
     default_materials_db,
 )
+from .resolver import StandardsResolver, default_standards_resolver
 
 __all__ = [
     "Material",
@@ -28,4 +29,6 @@ __all__ = [
     "UnknownMaterialError",
     "MaterialPropertyUnavailable",
     "default_materials_db",
+    "StandardsResolver",
+    "default_standards_resolver",
 ]
