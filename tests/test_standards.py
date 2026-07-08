@@ -12,7 +12,7 @@ from anvilate.standards import (
     UnknownMaterialError,
     default_materials_db,
 )
-from anvilate.standards.materials import _load_bundle
+from anvilate.standards.materials import _load_records
 
 
 @pytest.fixture(scope="module")
@@ -133,7 +133,7 @@ materials:
       quantity: {magnitude: 400, unit: MPa}
       citation: {source: s, condition: c, license: "OVERRIDE"}
 """
-    mats = _load_bundle(text)
+    mats = _load_records(text, bundled=True)
     m = mats["X-1"]
     assert m.elastic_modulus.citation.license == "TEST-LICENSE"
     assert m.elastic_modulus.citation.retrieved == "2026-01-01"
@@ -144,6 +144,58 @@ materials:
 def test_bundled_records_marked_bundled(db: MaterialsDatabase) -> None:
     # Bundled records are distinguishable from user/team extension records.
     assert db.get("AA-6061-T6").bundled is True
+    assert db.extension_ids() == []
+
+
+_EXTENSION_YAML = """
+dataset:
+  name: acme-internal
+  version: "1"
+  license: "team-local"
+  retrieved: "2026-07-08"
+materials:
+  ACME-BRACKET-STOCK:
+    name: "Acme internal bracket stock"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 69, unit: GPa}
+      citation: {source: "internal cert", condition: "as-supplied"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "internal cert", condition: "as-supplied"}
+    density:
+      quantity: {magnitude: 2.70, unit: g/cm**3}
+      citation: {source: "internal cert", condition: "as-supplied"}
+    yield_strength:
+      quantity: {magnitude: 300, unit: MPa}
+      citation: {source: "internal cert", condition: "as-supplied"}
+    ultimate_strength:
+      quantity: {magnitude: 330, unit: MPa}
+      citation: {source: "internal cert", condition: "as-supplied"}
+"""
+
+
+def test_team_local_extension_record_referenced_like_bundled(db: MaterialsDatabase) -> None:
+    # Scenario: company part library — a team adds a local record, referenced
+    # like any bundled material, but marked as a team-local (non-bundled) record.
+    extended = db.extended(_EXTENSION_YAML)
+    stock = extended.get("ACME-BRACKET-STOCK")
+    assert stock.bundled is False
+    assert stock.yield_strength.quantity.to("MPa").magnitude == pytest.approx(300.0)
+    assert extended.extension_ids() == ["ACME-BRACKET-STOCK"]
+    # The bundled database is left unchanged.
+    assert not db.has_material("ACME-BRACKET-STOCK")
+
+
+def test_extension_overrides_bundled_record(db: MaterialsDatabase) -> None:
+    # An extension record supersedes a bundled record of the same ID and is
+    # still marked non-bundled, so a report can flag the override.
+    override = _EXTENSION_YAML.replace("ACME-BRACKET-STOCK", "AA-6061-T6")
+    extended = db.extended(override)
+    record = extended.get("AA-6061-T6")
+    assert record.bundled is False
+    assert record.yield_strength.quantity.to("MPa").magnitude == pytest.approx(300.0)
+    assert len(extended) == len(db)  # override, not addition
 
 
 def test_standards_resolver_backs_spec_reference_validation() -> None:

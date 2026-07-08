@@ -182,15 +182,30 @@ class MaterialsDatabase:
                 difflib.get_close_matches(material_id, self._materials, n=3),
             ) from None
 
+    def extension_ids(self) -> list[str]:
+        """IDs of extension (user/team-local) records — distinguishable in reports."""
+        return sorted(mid for mid, m in self._materials.items() if not m.bundled)
+
+    def extended(self, extension_text: str) -> MaterialsDatabase:
+        """Return a new database with ``extension_text``'s records overlaid.
+
+        Extension records are marked non-bundled and override any bundled record
+        of the same ID, so a team can add or supersede materials without forking
+        the bundled data. The bundled database is left unchanged.
+        """
+        overlay = _load_records(extension_text, bundled=False)
+        return MaterialsDatabase({**self._materials, **overlay})
+
     def __len__(self) -> int:
         return len(self._materials)
 
 
-def _load_bundle(text: str) -> dict[str, Material]:
-    """Parse the bundled materials YAML into :class:`Material` records.
+def _load_records(text: str, *, bundled: bool) -> dict[str, Material]:
+    """Parse a materials YAML document into :class:`Material` records.
 
     Dataset-level ``license`` and ``retrieved`` fill any citation that omits
-    them, so the data file states shared provenance once.
+    them, so a data file states shared provenance once. ``bundled`` tags the
+    records' origin (a bundled dataset vs a user/team extension).
     """
     doc = yaml.safe_load(text)
     dataset = doc.get("dataset", {})
@@ -210,7 +225,9 @@ def _load_bundle(text: str) -> dict[str, Material]:
     materials: dict[str, Material] = {}
     for material_id, record in doc["materials"].items():
         _fill_citations(record)
-        materials[material_id] = Material.model_validate({"id": material_id, **record})
+        materials[material_id] = Material.model_validate(
+            {"id": material_id, **record, "bundled": bundled}
+        )
     return materials
 
 
@@ -219,4 +236,4 @@ def default_materials_db() -> MaterialsDatabase:
     from importlib.resources import files
 
     text = (files("anvilate.standards") / "data" / "materials.yaml").read_text(encoding="utf-8")
-    return MaterialsDatabase(_load_bundle(text))
+    return MaterialsDatabase(_load_records(text, bundled=True))
