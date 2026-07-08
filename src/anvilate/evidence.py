@@ -3,9 +3,10 @@
 The evidence bundle an export ships must record where every number came from
 (see openspec/specs/artifact-export/). This module builds the "material and
 standards data provenance" slice of that bundle: given a :class:`DesignSpec` and
-the databases its references resolve against, it walks the spec's material and
-standard-component interfaces and collects each referenced record's distinct
-citation sources — the reproducibility trail an independent engineer follows.
+the databases its references resolve against, it walks the spec's material,
+standard-component interfaces, and the ISO 286 fit citations behind its
+toleranced dimensions, collecting each referenced record's distinct citation
+sources — the reproducibility trail an independent engineer follows.
 
 The scorecard, FEA imagery, solver decks, and iteration history join the bundle
 as those layers are built out.
@@ -32,9 +33,9 @@ class SourceRecord(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    ref: str  # the referenced database ID, e.g. "AA-6061-T6" or "NEMA23"
-    kind: Literal["material", "component"]
-    name: str
+    ref: str  # the referenced database ID or dimension tag, e.g. "AA-6061-T6"
+    kind: Literal["material", "component", "tolerance"]
+    name: str  # the record's name, or a fit designation for a tolerance
     sources: tuple[str, ...]
 
 
@@ -50,10 +51,13 @@ def collect_provenance(
 ) -> list[SourceRecord]:
     """Collect the provenance of the standards data ``spec`` references.
 
-    Returns one :class:`SourceRecord` for the spec's material, then one for each
-    standard-component interface, in declaration order. Imported interfaces
-    reference another spec rather than a standards record, so they are skipped.
-    Raises the database's unknown-reference error if a ref does not resolve — run
+    Returns one :class:`SourceRecord` for the spec's material, then one per
+    standard-component interface, then one per toleranced dimension whose
+    tolerance cites a standard (an ISO 286 fit designation carries its citation;
+    a user-declared ± or limit band does not, so it is skipped), all in
+    declaration order. Imported interfaces reference another spec rather than a
+    standards record, so they are skipped. Raises the database's
+    unknown-reference error if a material or component ref does not resolve — run
     reference validation first to surface every such problem at once.
     """
     material = materials.get(spec.material.ref)
@@ -74,6 +78,17 @@ def collect_provenance(
                     kind="component",
                     name=component.name,
                     sources=_distinct_sources(component.citations()),
+                )
+            )
+    for dimension in spec.dimensions:
+        resolved = dimension.resolve()
+        if resolved.source is not None:
+            records.append(
+                SourceRecord(
+                    ref=dimension.tag,
+                    kind="tolerance",
+                    name=resolved.label,
+                    sources=(resolved.source,),
                 )
             )
     return records
