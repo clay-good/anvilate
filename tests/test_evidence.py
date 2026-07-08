@@ -44,8 +44,9 @@ def test_collects_material_and_component_provenance() -> None:
         spec, materials=default_materials_db(), components=default_components_db()
     )
 
-    assert [r.ref for r in records] == ["AA-6061-T6", "NEMA23"]
-    assert [r.kind for r in records] == ["material", "component"]
+    # Material, component, then the always-present ISO 2768 general class.
+    assert [r.ref for r in records] == ["AA-6061-T6", "NEMA23", "general_tolerance"]
+    assert [r.kind for r in records] == ["material", "component", "tolerance"]
     for record in records:
         assert isinstance(record, SourceRecord)
         assert record.sources  # at least one cited source
@@ -53,12 +54,29 @@ def test_collects_material_and_component_provenance() -> None:
         assert list(record.sources) == sorted(set(record.sources))
 
 
-def test_material_only_spec_rolls_up_one_record() -> None:
+def test_material_only_spec_still_cites_the_general_class() -> None:
+    # Even with no components or dimensions, the ISO 2768 default class governs
+    # and appears in the trail — so the material and the general class both show.
     records = collect_provenance(
         _spec(), materials=default_materials_db(), components=default_components_db()
     )
-    assert len(records) == 1
-    assert records[0].kind == "material"
+    assert [r.kind for r in records] == ["material", "tolerance"]
+    general = records[1]
+    assert general.ref == "general_tolerance"
+    assert general.name == "ISO 2768-m"  # medium is the ISO default
+    assert general.sources and all(general.sources)
+
+
+def test_declared_general_class_is_reflected() -> None:
+    spec = _spec()
+    spec = spec.model_copy(
+        update={"manufacturing": spec.manufacturing.model_copy(update={"tolerance_class": "fine"})}
+    )
+    records = collect_provenance(
+        spec, materials=default_materials_db(), components=default_components_db()
+    )
+    general = next(r for r in records if r.ref == "general_tolerance")
+    assert general.name == "ISO 2768-f"
 
 
 def test_iso286_fit_dimension_contributes_a_tolerance_source() -> None:
@@ -82,11 +100,12 @@ def test_iso286_fit_dimension_contributes_a_tolerance_source() -> None:
         spec, materials=default_materials_db(), components=default_components_db()
     )
 
-    tolerance = [r for r in records if r.kind == "tolerance"]
-    assert len(tolerance) == 1
-    assert tolerance[0].ref == "pilot_bore"
-    assert tolerance[0].name == "H7"
-    assert tolerance[0].sources and all(tolerance[0].sources)
+    # The general class plus exactly one per-dimension fit (the ± band is skipped).
+    fits = [r for r in records if r.kind == "tolerance" and r.ref != "general_tolerance"]
+    assert len(fits) == 1
+    assert fits[0].ref == "pilot_bore"
+    assert fits[0].name == "H7"
+    assert fits[0].sources and all(fits[0].sources)
 
 
 def test_unknown_material_ref_raises() -> None:

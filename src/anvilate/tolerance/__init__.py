@@ -32,6 +32,7 @@ from .general import (
     ToleranceRangeError,
     general_angular_tolerance,
     general_tolerance,
+    general_tolerance_source,
     resolve_class,
 )
 from .iso286 import (
@@ -57,6 +58,7 @@ __all__ = [
     "ToleranceRangeError",
     "general_tolerance",
     "general_angular_tolerance",
+    "general_tolerance_source",
     "resolve_class",
     "StandardTolerance",
     "standard_tolerance",

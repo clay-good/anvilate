@@ -23,6 +23,7 @@ __all__ = [
     "ToleranceRangeError",
     "general_tolerance",
     "general_angular_tolerance",
+    "general_tolerance_source",
     "resolve_class",
 ]
 
@@ -190,6 +191,16 @@ def general_tolerance(
     raise ToleranceRangeError(
         f"{nominal} exceeds ISO 2768-1's {low:g} mm maximum; needs an explicit tolerance"
     )
+
+
+def general_tolerance_source() -> str:
+    """The ISO 2768-1 linear table's citation, independent of any nominal size.
+
+    The general-tolerance class governs every untoleranced dimension, so the
+    evidence bundle cites ISO 2768-1 for a spec's declared class without needing
+    a specific dimension to resolve.
+    """
+    return _table().source
 
 
 # --- Angular general tolerances (ISO 2768-1) ---
