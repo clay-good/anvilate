@@ -41,6 +41,14 @@ def test_default_class_is_medium() -> None:
     assert general_tolerance(_mm(35)).tolerance_class is ToleranceClass.MEDIUM
 
 
+def test_general_tolerance_resolved_feature_sizes() -> None:
+    # A 35 mm dimension under class m (±0.3 mm) permits 34.7-35.3 mm — the same
+    # min_size/max_size interface a fit's LimitDeviations exposes.
+    g = general_tolerance(_mm(35), "m")
+    assert g.min_size.to("mm").magnitude == pytest.approx(34.7)
+    assert g.max_size.to("mm").magnitude == pytest.approx(35.3)
+
+
 def test_range_boundary_is_inclusive_of_upper() -> None:
     # 30 mm belongs to the 6-30 range (±0.2), not the 30-120 range.
     g = general_tolerance(_mm(30), "m")

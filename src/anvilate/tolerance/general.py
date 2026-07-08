@@ -84,6 +84,22 @@ class GeneralTolerance(BaseModel):
     size_range: str  # the ISO 2768-1 range applied, e.g. "over 30 up to 120 mm"
     source: str
 
+    @property
+    def min_size(self) -> Quantity:
+        """The smallest permitted feature size (``nominal - deviation``)."""
+        return Quantity(
+            magnitude=self.nominal.to("mm").magnitude - self.deviation.to("mm").magnitude,
+            unit="mm",
+        )
+
+    @property
+    def max_size(self) -> Quantity:
+        """The largest permitted feature size (``nominal + deviation``)."""
+        return Quantity(
+            magnitude=self.nominal.to("mm").magnitude + self.deviation.to("mm").magnitude,
+            unit="mm",
+        )
+
     def __str__(self) -> str:
         return f"{self.nominal} ±{self.deviation} (ISO 2768 {self.tolerance_class.letter})"
 
