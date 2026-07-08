@@ -20,6 +20,8 @@ from .general import ToleranceRangeError
 __all__ = [
     "StandardTolerance",
     "standard_tolerance",
+    "LimitDeviations",
+    "zone_limits",
 ]
 
 
@@ -115,4 +117,99 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
     raise ToleranceRangeError(
         f"{nominal} exceeds ISO 286-1's {doc['max_nominal_mm']:g} mm maximum "
         "for this table; needs an explicit tolerance"
+    )
+
+
+# --- Limit deviations for the H/h basis tolerance zones ---
+#
+# A full ISO 286 zone designation (H7, g6, ...) is a fundamental-deviation letter
+# plus an IT grade. The letter fixes the deviation closest to the basic size; the
+# grade fixes the zone width. The H hole and h shaft are the basis zones of the
+# hole-basis and shaft-basis systems: their fundamental deviation is exactly zero
+# by definition, so their limits follow from the IT grade alone — no
+# fundamental-deviation table. Other letters land as that table is encoded.
+
+_BASIS_LETTERS = {"H", "h"}
+
+
+class LimitDeviations(BaseModel):
+    """Resolved limit deviations for an ISO 286 tolerance zone.
+
+    ``upper`` and ``lower`` are the signed deviations from the basic size (ES/EI
+    for a hole, es/ei for a shaft). The permitted feature size runs from
+    ``nominal + lower`` to ``nominal + upper``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    nominal: Quantity
+    designation: str  # the zone, e.g. "H7" or "h6"
+    hole: bool  # True for a hole (uppercase letter), False for a shaft
+    grade: int
+    upper: Quantity  # ES (hole) / es (shaft), signed, a length
+    lower: Quantity  # EI (hole) / ei (shaft), signed, a length
+    size_range: str
+    source: str
+
+    @property
+    def width(self) -> Quantity:
+        """The total width of the tolerance zone (``upper - lower``)."""
+        return Quantity(
+            magnitude=self.upper.to("mm").magnitude - self.lower.to("mm").magnitude,
+            unit="mm",
+        )
+
+    def __str__(self) -> str:
+        u = self.upper.to("mm").magnitude
+        low = self.lower.to("mm").magnitude
+        return f"{self.nominal} {self.designation} ({u:+.3f} / {low:+.3f} mm)"
+
+
+def _parse_designation(designation: str) -> tuple[str, str]:
+    """Split a zone designation into its letter(s) and grade, e.g. ``H7`` →
+    ``("H", "7")``. Raises :class:`ValueError` if either part is missing."""
+    token = designation.strip()
+    cut = 0
+    while cut < len(token) and token[cut].isalpha():
+        cut += 1
+    letter, grade = token[:cut], token[cut:]
+    if not letter or not grade:
+        raise ValueError(
+            f"malformed ISO 286 zone {designation!r}; expected a letter and grade, e.g. 'H7'"
+        )
+    return letter, grade
+
+
+def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
+    """Resolve the limit deviations for an ISO 286 tolerance zone at ``nominal``.
+
+    ``designation`` is a fundamental-deviation letter plus an IT grade, e.g.
+    ``"H7"`` (hole) or ``"h6"`` (shaft). Only the H/h basis zones — whose
+    fundamental deviation is zero — are encoded so far; any other letter raises
+    :class:`ToleranceRangeError`. Raises :class:`ValueError` for a malformed
+    designation, and :class:`ToleranceRangeError` for an out-of-range nominal or
+    ungraded IT grade (via :func:`standard_tolerance`).
+    """
+    letter, grade = _parse_designation(designation)
+    if letter not in _BASIS_LETTERS:
+        raise ToleranceRangeError(
+            f"fundamental deviation for zone '{letter}' is not yet encoded; "
+            "only the H/h basis zones are supported so far"
+        )
+    grade_tol = standard_tolerance(nominal, grade)
+    hole = letter.isupper()
+    width = grade_tol.width
+    zero = Quantity(magnitude=0.0, unit=width.unit)
+    negative = Quantity(magnitude=-width.magnitude, unit=width.unit)
+    # H hole: EI = 0, ES = +IT. h shaft: es = 0, ei = -IT.
+    upper, lower = (width, zero) if hole else (zero, negative)
+    return LimitDeviations(
+        nominal=nominal,
+        designation=f"{letter}{grade_tol.grade}",
+        hole=hole,
+        grade=grade_tol.grade,
+        upper=upper,
+        lower=lower,
+        size_range=grade_tol.size_range,
+        source=grade_tol.source,
     )

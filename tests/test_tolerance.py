@@ -7,12 +7,14 @@ import pytest
 from anvilate.tolerance import (
     AngularTolerance,
     GeneralTolerance,
+    LimitDeviations,
     StandardTolerance,
     ToleranceClass,
     ToleranceRangeError,
     general_angular_tolerance,
     general_tolerance,
     standard_tolerance,
+    zone_limits,
 )
 from anvilate.units import Quantity
 
@@ -194,3 +196,51 @@ def test_zero_and_oversize_nominal_rejected() -> None:
 def test_standard_tolerance_non_length_rejected() -> None:
     with pytest.raises(ToleranceRangeError, match="length"):
         standard_tolerance(Quantity(magnitude=5, unit="kg"), 7)
+
+
+# --- ISO 286 H/h basis limit deviations ---
+
+
+def test_h7_hole_limits_at_22mm() -> None:
+    # Scenario: `fit: H7` at 22 mm nominal (hole side). H hole has EI = 0 and
+    # ES = +IT7 = +0.021 mm; the bore runs 22.000-22.021 mm.
+    d = zone_limits("H7", _mm(22))
+    assert isinstance(d, LimitDeviations)
+    assert d.hole is True
+    assert d.grade == 7
+    assert d.lower.to("mm").magnitude == pytest.approx(0.0)
+    assert d.upper.to("mm").magnitude == pytest.approx(0.021)
+    assert d.width.to("um").magnitude == pytest.approx(21)
+    assert "ISO 286-1" in d.source
+
+
+def test_h6_shaft_limits_at_22mm() -> None:
+    # h shaft: es = 0, ei = -IT6 = -0.013 mm at 18-30 mm.
+    d = zone_limits("h6", _mm(22))
+    assert d.hole is False
+    assert d.upper.to("mm").magnitude == pytest.approx(0.0)
+    assert d.lower.to("mm").magnitude == pytest.approx(-0.013)
+    assert d.width.to("um").magnitude == pytest.approx(13)
+
+
+def test_zone_limits_designation_normalized() -> None:
+    assert zone_limits("H7", _mm(22)).designation == "H7"
+    assert str(zone_limits("H7", _mm(22))) == "22 mm H7 (+0.021 / +0.000 mm)"
+
+
+def test_unencoded_zone_letter_rejected() -> None:
+    with pytest.raises(ToleranceRangeError, match="not yet encoded"):
+        zone_limits("g6", _mm(22))
+
+
+def test_malformed_zone_designation_rejected() -> None:
+    with pytest.raises(ValueError, match="malformed"):
+        zone_limits("H", _mm(22))
+    with pytest.raises(ValueError, match="malformed"):
+        zone_limits("7", _mm(22))
+
+
+def test_zone_limits_propagates_grade_errors() -> None:
+    # A nominal beyond the table surfaces as a range error from standard_tolerance.
+    with pytest.raises(ToleranceRangeError, match="maximum"):
+        zone_limits("H7", _mm(600))
