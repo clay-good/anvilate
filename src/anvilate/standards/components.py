@@ -18,7 +18,7 @@ from typing import Annotated
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from .records import QuantityProperty, dimensioned
+from .records import PropertyCitation, QuantityProperty, dimensioned
 
 __all__ = [
     "NemaFrame",
@@ -51,6 +51,20 @@ class NemaFrame(_Base):
     bolt_spacing: Length
     pilot_diameter: Length
     mounting_hole: Length
+
+    def citations(self) -> dict[str, PropertyCitation]:
+        """Every dimension's citation, keyed by property name — the evidence trail.
+
+        Mirrors :meth:`anvilate.standards.Material.citations`, so a downstream
+        report or evidence bundle reads a component's provenance the same way it
+        reads a material's.
+        """
+        out: dict[str, PropertyCitation] = {}
+        for field in type(self).model_fields:
+            value = getattr(self, field)
+            if isinstance(value, QuantityProperty):
+                out[field] = value.citation
+        return out
 
 
 class UnknownComponentError(KeyError):

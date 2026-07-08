@@ -266,6 +266,20 @@ def test_nema23_mounting_geometry_from_database(cdb) -> None:
     assert frame.bolt_spacing.citation.license
 
 
+def test_component_citations_expose_the_evidence_trail(cdb) -> None:
+    # Mirrors Material.citations(): every recorded dimension carries its source.
+    citations = cdb.get("NEMA23").citations()
+    assert set(citations) == {
+        "faceplate_width",
+        "bolt_spacing",
+        "pilot_diameter",
+        "mounting_hole",
+    }
+    for name, cite in citations.items():
+        assert isinstance(cite, PropertyCitation), name
+        assert cite.source and cite.license, name
+
+
 def test_component_properties_are_length_dimensioned(cdb) -> None:
     for component_id in cdb.known_components():
         frame = cdb.get(component_id)
