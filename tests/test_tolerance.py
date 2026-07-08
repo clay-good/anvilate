@@ -7,12 +7,16 @@ from pydantic import TypeAdapter, ValidationError
 
 from anvilate.tolerance import (
     AngularTolerance,
+    Contribution,
     Fit,
     FitTolerance,
     GeneralTolerance,
     LimitDeviations,
     LimitTolerance,
     ResolvedTolerance,
+    StackContributor,
+    StackResult,
+    StackUp,
     StandardTolerance,
     SymmetricTolerance,
     Tolerance,
@@ -542,3 +546,108 @@ def test_tolerance_union_discriminates_by_type() -> None:
     assert isinstance(fit_t, FitTolerance)
     with pytest.raises(ValidationError):
         adapter.validate_python({"type": "nonsense"})
+
+
+def _contributor(name: str, nominal: float, pm: float, direction: int = 1) -> StackContributor:
+    # A symmetric ± dimension resolved onto a stack contributor, via the real
+    # SymmetricTolerance.resolve path.
+    resolved = SymmetricTolerance(plus_minus=_mm(pm)).resolve(_mm(nominal))
+    return StackContributor(name=name, tolerance=resolved, direction=direction)
+
+
+def test_stackup_interface_gap_worst_case_and_rss() -> None:
+    # Scenario: interface gap stack-up — a chain from a mount face (+) through a
+    # flange thickness (-) to a motor pilot seat (-) yields a nominal 0.3 mm gap.
+    stack = StackUp(
+        contributors=(
+            _contributor("mount face", 20.0, 0.05, direction=1),
+            _contributor("flange thickness", 12.0, 0.03, direction=-1),
+            _contributor("pilot seat", 7.7, 0.02, direction=-1),
+        )
+    )
+
+    wc = stack.worst_case()
+    assert isinstance(wc, StackResult)
+    assert wc.method == "worst_case"
+    assert wc.nominal.to("mm").magnitude == pytest.approx(0.3)
+    # Worst case adds every half-width: 0.05 + 0.03 + 0.02 = 0.10.
+    assert wc.lower.to("mm").magnitude == pytest.approx(0.20)
+    assert wc.upper.to("mm").magnitude == pytest.approx(0.40)
+    assert wc.width.to("mm").magnitude == pytest.approx(0.20)
+
+    rss = stack.rss()
+    assert rss.method == "rss"
+    assert rss.nominal.to("mm").magnitude == pytest.approx(0.3)
+    # RSS adds in quadrature: sqrt(0.05^2 + 0.03^2 + 0.02^2) = 0.0616441.
+    assert rss.upper.to("mm").magnitude == pytest.approx(0.3616441, abs=1e-6)
+    assert rss.lower.to("mm").magnitude == pytest.approx(0.2383559, abs=1e-6)
+    # RSS is always tighter than worst-case.
+    assert rss.width.to("mm").magnitude < wc.width.to("mm").magnitude
+
+
+def test_stackup_contributions_ranked_and_normalized() -> None:
+    stack = StackUp(
+        contributors=(
+            _contributor("mount face", 20.0, 0.05, direction=1),
+            _contributor("flange thickness", 12.0, 0.03, direction=-1),
+            _contributor("pilot seat", 7.7, 0.02, direction=-1),
+        )
+    )
+
+    wc = stack.worst_case()
+    assert all(isinstance(c, Contribution) for c in wc.contributions)
+    # Ranked widest-share first, and shares sum to 1.
+    assert [c.name for c in wc.contributions] == ["mount face", "flange thickness", "pilot seat"]
+    assert [c.share for c in wc.contributions] == pytest.approx([0.5, 0.3, 0.2])
+    assert sum(c.share for c in wc.contributions) == pytest.approx(1.0)
+
+    rss = stack.rss()
+    # RSS splits on squared half-widths, so the widest dimension dominates more.
+    assert rss.contributions[0].name == "mount face"
+    assert rss.contributions[0].share == pytest.approx(0.0025 / 0.0038)
+    assert sum(c.share for c in rss.contributions) == pytest.approx(1.0)
+
+
+def test_stackup_satisfies_required_gap_band() -> None:
+    stack = StackUp(
+        contributors=(
+            _contributor("mount face", 20.0, 0.05, direction=1),
+            _contributor("flange thickness", 12.0, 0.03, direction=-1),
+            _contributor("pilot seat", 7.7, 0.02, direction=-1),
+        )
+    )
+    # Worst-case gap [0.20, 0.40] fits the required 0.1-0.5 mm clearance.
+    assert stack.worst_case().satisfies(_mm(0.1), _mm(0.5)) is True
+    # Tighten the requirement past the worst-case lower bound and it fails.
+    assert stack.worst_case().satisfies(_mm(0.25), _mm(0.5)) is False
+    # RSS is tighter, so it can pass a requirement worst-case fails.
+    assert stack.rss().satisfies(_mm(0.23), _mm(0.37)) is True
+    assert stack.worst_case().satisfies(_mm(0.23), _mm(0.37)) is False
+
+
+def test_stackup_recentres_asymmetric_tolerance() -> None:
+    # An asymmetric zone (+0.02 / -0.06) recentres on its mean before stacking:
+    # mean size 9.98 mm, half-width 0.04 mm.
+    asym = LimitTolerance(upper=_mm(0.02), lower=_mm(-0.06)).resolve(_mm(10.0))
+    stack = StackUp(contributors=(StackContributor(name="pin", tolerance=asym, direction=1),))
+    wc = stack.worst_case()
+    assert wc.nominal.to("mm").magnitude == pytest.approx(9.98)
+    assert wc.lower.to("mm").magnitude == pytest.approx(9.94)
+    assert wc.upper.to("mm").magnitude == pytest.approx(10.02)
+    assert wc.contributions[0].half_width.to("mm").magnitude == pytest.approx(0.04)
+
+
+def test_stackup_rejects_empty_chain() -> None:
+    with pytest.raises(ValidationError):
+        StackUp(contributors=())
+
+
+def test_stackup_satisfies_rejects_non_length_requirement() -> None:
+    stack = StackUp(contributors=(_contributor("pin", 10.0, 0.02),))
+    with pytest.raises(ValueError, match="must be a length"):
+        stack.worst_case().satisfies(Quantity(magnitude=1, unit="deg"), _mm(0.5))
+
+
+def test_stackup_result_str_renders_band() -> None:
+    stack = StackUp(contributors=(_contributor("pin", 10.0, 0.02),))
+    assert "worst_case" in str(stack.worst_case())
