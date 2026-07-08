@@ -211,6 +211,26 @@ class DimensionChain(_Base):
             rss=stack.rss(),
         )
 
+    def predict_yield(
+        self,
+        dimensions: list[ToleranceDimension],
+        samples: int = 10000,
+        *,
+        seed: int,
+        sigma_level: float = 3.0,
+    ) -> float:
+        """The predicted fraction of assemblies meeting this chain's clearance.
+
+        Runs a Monte Carlo stack-up (see
+        :meth:`~anvilate.tolerance.StackUp.monte_carlo`) and scores the sampled
+        gaps against the chain's own ``required_min``..``required_max`` band —
+        the realistic pass rate, which the worst-case and RSS ranges cannot give.
+        ``seed`` is required so the estimate is reproducible. Raises
+        :class:`KeyError` for an unknown dimension tag.
+        """
+        mc = self.build(dimensions).monte_carlo(samples, seed=seed, sigma_level=sigma_level)
+        return mc.yield_fraction(self.required_min, self.required_max)
+
 
 class ChainAnalysis(_Base):
     """A declared chain's resolved stack-up judged against its requirement.

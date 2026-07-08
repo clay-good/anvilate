@@ -418,6 +418,26 @@ def test_chain_analyze_rejects_unknown_dimension_tag():
         broken.analyze(spec.dimensions)
 
 
+def test_chain_predict_yield_scores_against_requirement():
+    spec = _bracket_with_chain()
+    chain = spec.chains[0]
+    # Worst-case gap [0.20, 0.40] sits well inside 0.1-0.5 mm: ~all pass.
+    assert chain.predict_yield(spec.dimensions, 20000, seed=4) == pytest.approx(1.0, abs=1e-3)
+    # Tighten the floor above the mean gap and only part of the run passes.
+    tight = chain.model_copy(update={"required_min": Quantity.parse("0.30 mm")})
+    partial = tight.predict_yield(spec.dimensions, 20000, seed=4)
+    assert 0.4 < partial < 0.6
+
+
+def test_chain_predict_yield_rejects_unknown_dimension_tag():
+    spec = _bracket_with_chain()
+    broken = spec.chains[0].model_copy(
+        update={"links": [ChainLink(dimension="does_not_exist", direction=1)]}
+    )
+    with pytest.raises(KeyError, match="does_not_exist"):
+        broken.predict_yield(spec.dimensions, 100, seed=0)
+
+
 def test_spec_analyze_chains_rolls_up_every_declared_chain():
     spec = _bracket_with_chain()
     analyses = spec.analyze_chains()
