@@ -11,6 +11,7 @@ from __future__ import annotations
 from .ir import (
     SCHEMA_VERSION,
     AcceptanceCriteria,
+    ChainAnalysis,
     ChainLink,
     Constraints,
     DesignSpec,
@@ -59,6 +60,7 @@ __all__ = [
     "ToleranceDimension",
     "ChainLink",
     "DimensionChain",
+    "ChainAnalysis",
     "LoadCase",
     "LoadKind",
     "Constraints",

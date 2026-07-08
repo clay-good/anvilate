@@ -17,6 +17,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from ..tolerance import (
     ResolvedTolerance,
     StackContributor,
+    StackResult,
     StackUp,
     Tolerance,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "ToleranceDimension",
     "ChainLink",
     "DimensionChain",
+    "ChainAnalysis",
     "LoadCase",
     "LoadKind",
     "Constraints",
@@ -191,6 +193,60 @@ class DimensionChain(_Base):
                 )
             )
         return StackUp(contributors=tuple(contributors))
+
+    def analyze(self, dimensions: list[ToleranceDimension]) -> ChainAnalysis:
+        """Resolve and evaluate this chain against its own required clearance.
+
+        Builds the stack-up (see :meth:`build`), runs both the worst-case and RSS
+        analyses, and judges each against the chain's declared
+        ``required_min``..``required_max`` band — returning one
+        :class:`ChainAnalysis`. Raises :class:`KeyError` for an unknown tag.
+        """
+        stack = self.build(dimensions)
+        return ChainAnalysis(
+            name=self.name,
+            required_min=self.required_min,
+            required_max=self.required_max,
+            worst_case=stack.worst_case(),
+            rss=stack.rss(),
+        )
+
+
+class ChainAnalysis(_Base):
+    """A declared chain's resolved stack-up judged against its requirement.
+
+    Carries the worst-case and RSS gap ranges and the chain's required clearance
+    band. The worst-case range is the authoritative gate — a chain ``passes`` only
+    when its worst case fits — while the RSS range reports the realistic spread.
+    Each result already ranks its per-contributor sensitivities.
+    """
+
+    name: str
+    required_min: Length
+    required_max: Length
+    worst_case: StackResult
+    rss: StackResult
+
+    @property
+    def worst_case_passes(self) -> bool:
+        """Whether the worst-case gap range fits the required band."""
+        return self.worst_case.satisfies(self.required_min, self.required_max)
+
+    @property
+    def rss_passes(self) -> bool:
+        """Whether the RSS gap range fits the required band."""
+        return self.rss.satisfies(self.required_min, self.required_max)
+
+    @property
+    def passes(self) -> bool:
+        """The chain's pass/fail: the worst case must fit the requirement."""
+        return self.worst_case_passes
+
+    def __str__(self) -> str:
+        lo = self.required_min.to("mm").magnitude
+        hi = self.required_max.to("mm").magnitude
+        verdict = "PASS" if self.passes else "FAIL"
+        return f"{self.name}: {verdict} — need {lo:.3f}..{hi:.3f} mm; {self.worst_case}"
 
 
 # --- Load cases ---
