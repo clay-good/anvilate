@@ -124,16 +124,46 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
     )
 
 
-# --- Limit deviations for the H/h basis tolerance zones ---
+# --- Limit deviations for a tolerance zone ---
 #
 # A full ISO 286 zone designation (H7, g6, ...) is a fundamental-deviation letter
 # plus an IT grade. The letter fixes the deviation closest to the basic size; the
-# grade fixes the zone width. The H hole and h shaft are the basis zones of the
-# hole-basis and shaft-basis systems: their fundamental deviation is exactly zero
-# by definition, so their limits follow from the IT grade alone — no
-# fundamental-deviation table. Other letters land as that table is encoded.
+# grade fixes the zone width. The H hole and h shaft are the basis zones: their
+# fundamental deviation is exactly zero by definition. The clearance letters
+# d/e/f/g carry a negative shaft deviation `es` (drawn from the encoded table),
+# and their uppercase holes mirror it through the ISO 286 general rule EI = -es.
+# Transition and interference letters (j..zc) land as that table grows.
 
-_BASIS_LETTERS = {"H", "h"}
+_BASIS_LETTERS = {"h"}  # zero fundamental deviation; no table lookup needed
+_CLEARANCE_LETTERS = {"d", "e", "f", "g"}  # negative shaft `es`, encoded below
+_ENCODED_LETTERS = _BASIS_LETTERS | _CLEARANCE_LETTERS
+
+
+_DEVIATIONS: dict | None = None
+
+
+def _deviation_table() -> dict:
+    global _DEVIATIONS
+    if _DEVIATIONS is None:
+        from importlib.resources import files
+
+        text = (files("anvilate.tolerance") / "data" / "iso286_deviations.yaml").read_text(
+            encoding="utf-8"
+        )
+        _DEVIATIONS = yaml.safe_load(text)
+    return _DEVIATIONS
+
+
+def _fundamental_es(letter: str, nominal_mm: float) -> float:
+    """The shaft upper deviation ``es`` (mm, <= 0) for a clearance letter.
+
+    ``letter`` is a lowercase clearance letter (d/e/f/g); ``nominal_mm`` is the
+    basic size in mm, already validated in range by :func:`standard_tolerance`.
+    """
+    for row in _deviation_table()["ranges"]:
+        if nominal_mm <= float(row["up_to_mm"]):
+            return float(row["es"][letter]) / 1000.0
+    raise AssertionError("nominal beyond deviation table")  # pragma: no cover
 
 
 class LimitDeviations(BaseModel):
@@ -204,25 +234,30 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
     """Resolve the limit deviations for an ISO 286 tolerance zone at ``nominal``.
 
     ``designation`` is a fundamental-deviation letter plus an IT grade, e.g.
-    ``"H7"`` (hole) or ``"h6"`` (shaft). Only the H/h basis zones — whose
-    fundamental deviation is zero — are encoded so far; any other letter raises
+    ``"H7"`` (hole), ``"h6"`` (shaft), or ``"g6"``. The H/h basis zones and the
+    clearance letters d/e/f/g (both cases) are encoded; any other letter raises
     :class:`ToleranceRangeError`. Raises :class:`ValueError` for a malformed
     designation, and :class:`ToleranceRangeError` for an out-of-range nominal or
     ungraded IT grade (via :func:`standard_tolerance`).
     """
     letter, grade = _parse_designation(designation)
-    if letter not in _BASIS_LETTERS:
+    base = letter.lower()
+    if base not in _ENCODED_LETTERS:
         raise ToleranceRangeError(
             f"fundamental deviation for zone '{letter}' is not yet encoded; "
-            "only the H/h basis zones are supported so far"
+            "the H/h basis and clearance letters d/e/f/g are supported so far"
         )
     grade_tol = standard_tolerance(nominal, grade)
     hole = letter.isupper()
-    width = grade_tol.width
-    zero = Quantity(magnitude=0.0, unit=width.unit)
-    negative = Quantity(magnitude=-width.magnitude, unit=width.unit)
-    # H hole: EI = 0, ES = +IT. h shaft: es = 0, ei = -IT.
-    upper, lower = (width, zero) if hole else (zero, negative)
+    it = grade_tol.width.to("mm").magnitude
+    es = 0.0 if base in _BASIS_LETTERS else _fundamental_es(base, abs(nominal.to("mm").magnitude))
+    # Shaft: es is the upper deviation, ei = es - IT. Hole (general rule): the
+    # fundamental deviation EI = -es, and ES = EI + IT.
+    upper_mm, lower_mm = (-es + it, -es) if hole else (es, es - it)
+    # Adding 0.0 collapses the -0.0 that -es yields when es == 0 (the H/h basis),
+    # so a zero deviation renders "+0.000", not "-0.000".
+    upper = Quantity(magnitude=upper_mm + 0.0, unit="mm")
+    lower = Quantity(magnitude=lower_mm + 0.0, unit="mm")
     return LimitDeviations(
         nominal=nominal,
         designation=f"{letter}{grade_tol.grade}",

@@ -1,0 +1,50 @@
+# ISO 286-1 fundamental deviations — clearance shaft letters (schema: tolerance-mgmt).
+#
+# A tolerance zone is a fundamental-deviation letter (where the zone sits) plus an
+# IT grade (how wide it is). This table encodes the fundamental deviation for the
+# clearance letters d, e, f, g: the shaft upper deviation `es` in micrometres,
+# always <= 0, which pushes the zone below the basic size to leave a gap. The
+# corresponding uppercase holes (D, E, F, G) follow the ISO 286 general rule
+# EI = -es (a clean mirror for the A-H letters, no special-grade correction), so
+# one table serves both. The h/H basis letters have es = 0 by definition and need
+# no table entry. Transition and interference letters (j..zc), which carry the
+# grade-dependent delta correction, land in a later slice. Diameter steps match
+# the IT-grade table so a zone's width and deviation share one range. Values are
+# exact tabulated integers. The source standard is not redistributed.
+dataset:
+  source: "ISO 286-1 fundamental deviations (clearance letters d/e/f/g)"
+  license: "CC0-1.0 (deviation values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+max_nominal_mm: 500
+
+# Each range covers basic sizes over the previous range's bound up to and
+# including `up_to_mm`. `es` maps the clearance shaft letter to its fundamental
+# deviation (upper deviation, micrometres, negative) for that range.
+ranges:
+  - up_to_mm: 3
+    es: {d: -20, e: -14, f: -6, g: -2}
+  - up_to_mm: 6
+    es: {d: -30, e: -20, f: -10, g: -4}
+  - up_to_mm: 10
+    es: {d: -40, e: -25, f: -13, g: -5}
+  - up_to_mm: 18
+    es: {d: -50, e: -32, f: -16, g: -6}
+  - up_to_mm: 30
+    es: {d: -65, e: -40, f: -20, g: -7}
+  - up_to_mm: 50
+    es: {d: -80, e: -50, f: -25, g: -9}
+  - up_to_mm: 80
+    es: {d: -100, e: -60, f: -30, g: -10}
+  - up_to_mm: 120
+    es: {d: -120, e: -72, f: -36, g: -12}
+  - up_to_mm: 180
+    es: {d: -145, e: -85, f: -43, g: -14}
+  - up_to_mm: 250
+    es: {d: -170, e: -100, f: -50, g: -15}
+  - up_to_mm: 315
+    es: {d: -190, e: -110, f: -56, g: -17}
+  - up_to_mm: 400
+    es: {d: -210, e: -125, f: -62, g: -18}
+  - up_to_mm: 500
+    es: {d: -230, e: -135, f: -68, g: -20}

@@ -252,8 +252,9 @@ def test_zone_limits_designation_normalized() -> None:
 
 
 def test_unencoded_zone_letter_rejected() -> None:
+    # p is an interference letter, not yet encoded (only H/h and d/e/f/g are).
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
-        zone_limits("g6", _mm(22))
+        zone_limits("p6", _mm(22))
 
 
 def test_malformed_zone_designation_rejected() -> None:
@@ -267,6 +268,51 @@ def test_zone_limits_propagates_grade_errors() -> None:
     # A nominal beyond the table surfaces as a range error from standard_tolerance.
     with pytest.raises(ToleranceRangeError, match="maximum"):
         zone_limits("H7", _mm(600))
+
+
+# --- ISO 286 clearance-letter zones (d/e/f/g fundamental deviations) ---
+
+
+def test_g6_shaft_limits_at_22mm() -> None:
+    # g shaft at 18-30 mm: es = -7 um, ei = es - IT6 = -7 - 13 = -20 um.
+    d = zone_limits("g6", _mm(22))
+    assert d.hole is False
+    assert d.upper.to("um").magnitude == pytest.approx(-7)
+    assert d.lower.to("um").magnitude == pytest.approx(-20)
+    assert d.width.to("um").magnitude == pytest.approx(13)
+    assert d.max_size.to("mm").magnitude == pytest.approx(21.993)
+    assert d.min_size.to("mm").magnitude == pytest.approx(21.980)
+
+
+def test_f7_shaft_limits_at_20mm() -> None:
+    # f shaft at 18-30 mm: es = -20 um, ei = -20 - IT7(21) = -41 um.
+    d = zone_limits("f7", _mm(20))
+    assert d.upper.to("um").magnitude == pytest.approx(-20)
+    assert d.lower.to("um").magnitude == pytest.approx(-41)
+
+
+def test_g_hole_mirrors_shaft_via_general_rule() -> None:
+    # Uppercase G hole at 18-30 mm follows EI = -es(g) = +7 um, ES = EI + IT7 = +28.
+    d = zone_limits("G7", _mm(22))
+    assert d.hole is True
+    assert d.lower.to("um").magnitude == pytest.approx(7)
+    assert d.upper.to("um").magnitude == pytest.approx(28)
+    assert d.width.to("um").magnitude == pytest.approx(21)
+
+
+def test_f8_hole_at_22mm() -> None:
+    # F hole at 18-30 mm: EI = -es(f) = +20 um, ES = +20 + IT8(33) = +53 um.
+    d = zone_limits("F8", _mm(22))
+    assert d.lower.to("um").magnitude == pytest.approx(20)
+    assert d.upper.to("um").magnitude == pytest.approx(53)
+
+
+def test_clearance_letter_smallest_size_range() -> None:
+    # d shaft at <= 3 mm: es = -20 um, ei = -20 - IT9(25) = -45 um.
+    d = zone_limits("d9", _mm(2))
+    assert d.upper.to("um").magnitude == pytest.approx(-20)
+    assert d.lower.to("um").magnitude == pytest.approx(-45)
+    assert d.size_range == "up to 3 mm"
 
 
 # --- ISO 286 fits (hole/shaft pairs) ---
@@ -305,7 +351,26 @@ def test_fit_malformed_designation_rejected() -> None:
 
 def test_fit_propagates_unencoded_zone() -> None:
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
-        fit("H7/g6", _mm(22))
+        fit("H7/s6", _mm(22))
+
+
+def test_h7g6_sliding_fit_at_22mm() -> None:
+    # The spec's fit-resolution example. H7/g6 at 22 mm: hole 0..+21 um, shaft
+    # -20..-7 um. Min clearance 0 - (-7) = +7 um; max clearance 21 - (-20) = +41 um.
+    f = fit("H7/g6", _mm(22))
+    assert f.kind == "clearance"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(7)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(41)
+    assert f.designation == "H7/g6"
+
+
+def test_h8f7_running_fit_at_50mm() -> None:
+    # H8/f7 at 50 mm (30-50 range): hole 0..+39 um, shaft es=-25, ei=-25-25=-50 um.
+    # Min clearance 25 um; max clearance 39 - (-50) = 89 um.
+    f = fit("H8/f7", _mm(50))
+    assert f.kind == "clearance"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(25)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(89)
 
 
 def test_fit_satisfies_clearance_requirement() -> None:
