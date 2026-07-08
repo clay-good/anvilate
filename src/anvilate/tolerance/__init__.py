@@ -3,11 +3,12 @@ fits, and stack-up analysis.
 
 This slice ships ISO 2768-1 general tolerances (linear and angular), the
 ISO 286-1 standard tolerance grades (IT grades), and fit resolution for the
-H/h basis, the clearance letters d/e/f/g, and the symmetric js/JS zones — so the
-common clearance fits (H7/g6, H8/f7, H9/d9, ...) and the H7/js6 transition fit
-resolve to limit deviations. The remaining transition/interference letters and
-1D stack-up analysis land here as they are built out (see
-openspec/specs/tolerance-management/).
+H/h basis, the clearance letters d/e/f/g, the symmetric js/JS zones, and the
+transition/interference shaft letters m/n/p — so the common hole-basis fits
+(H7/g6, H8/f7, H9/d9, H7/js6, H7/n6, H7/p6, ...) resolve to limit deviations.
+The grade-dependent j/k letters, the finer-stepped r/s/t/u, the delta-corrected
+uppercase interference holes, and 1D stack-up analysis land here as they are
+built out (see openspec/specs/tolerance-management/).
 """
 
 from __future__ import annotations

@@ -252,9 +252,11 @@ def test_zone_limits_designation_normalized() -> None:
 
 
 def test_unencoded_zone_letter_rejected() -> None:
-    # p is an interference letter, not yet encoded (only H/h and d/e/f/g are).
+    # s is a finer-stepped interference letter, not yet encoded; k is grade-dependent.
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
-        zone_limits("p6", _mm(22))
+        zone_limits("s6", _mm(22))
+    with pytest.raises(ToleranceRangeError, match="not yet encoded"):
+        zone_limits("k6", _mm(22))
 
 
 def test_malformed_zone_designation_rejected() -> None:
@@ -344,6 +346,53 @@ def test_h7js6_transition_fit_at_22mm() -> None:
     assert f.kind == "transition"
     assert f.min_clearance.to("um").magnitude == pytest.approx(-6.5)
     assert f.max_clearance.to("um").magnitude == pytest.approx(27.5)
+
+
+# --- ISO 286 transition/interference shaft zones (m/n/p, positive ei) ---
+
+
+def test_p6_shaft_limits_at_22mm() -> None:
+    # p shaft at 18-30 mm: ei = +22 um, es = ei + IT6 = 22 + 13 = +35 um.
+    d = zone_limits("p6", _mm(22))
+    assert d.hole is False
+    assert d.lower.to("um").magnitude == pytest.approx(22)
+    assert d.upper.to("um").magnitude == pytest.approx(35)
+    assert d.min_size.to("mm").magnitude == pytest.approx(22.022)
+    assert d.max_size.to("mm").magnitude == pytest.approx(22.035)
+
+
+def test_n6_and_m6_shaft_ei_at_22mm() -> None:
+    # n shaft ei = +15, es = 15 + 13 = +28 um; m shaft ei = +8, es = 8 + 13 = +21.
+    n = zone_limits("n6", _mm(22))
+    assert n.lower.to("um").magnitude == pytest.approx(15)
+    assert n.upper.to("um").magnitude == pytest.approx(28)
+    m = zone_limits("m6", _mm(22))
+    assert m.lower.to("um").magnitude == pytest.approx(8)
+    assert m.upper.to("um").magnitude == pytest.approx(21)
+
+
+def test_interference_hole_needs_delta_correction() -> None:
+    # The uppercase P/N/M holes need the ISO 286 delta correction, not yet encoded.
+    with pytest.raises(ToleranceRangeError, match="delta correction"):
+        zone_limits("P6", _mm(22))
+
+
+def test_h7p6_interference_fit_at_22mm() -> None:
+    # H7/p6 at 22 mm: hole 0..+21 um, shaft +22..+35 um. Min clearance 0 - 35 =
+    # -35 um; max clearance 21 - 22 = -1 um. Both negative => interference.
+    f = fit("H7/p6", _mm(22))
+    assert f.kind == "interference"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(-35)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(-1)
+
+
+def test_h7n6_transition_fit_at_22mm() -> None:
+    # H7/n6 at 22 mm: hole 0..+21 um, shaft +15..+28 um. Min clearance -28 um;
+    # max clearance 21 - 15 = +6 um => transition.
+    f = fit("H7/n6", _mm(22))
+    assert f.kind == "transition"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(-28)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(6)
 
 
 # --- ISO 286 fits (hole/shaft pairs) ---
