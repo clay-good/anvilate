@@ -7,10 +7,12 @@ import pytest
 from anvilate.tolerance import (
     AngularTolerance,
     GeneralTolerance,
+    StandardTolerance,
     ToleranceClass,
     ToleranceRangeError,
     general_angular_tolerance,
     general_tolerance,
+    standard_tolerance,
 )
 from anvilate.units import Quantity
 
@@ -127,3 +129,68 @@ def test_angular_coarse_below_10mm() -> None:
 def test_angular_non_length_leg_rejected() -> None:
     with pytest.raises(ToleranceRangeError, match="shorter leg"):
         general_angular_tolerance(Quantity(magnitude=5, unit="kg"), "m")
+
+
+# --- ISO 286-1 standard tolerance grades (IT grades) ---
+
+
+def test_it7_at_22mm_with_citation() -> None:
+    # The grade half of the spec's `fit: H7` at 22 mm nominal: 22 mm is in the
+    # 18-30 mm range, where IT7 is 21 um.
+    t = standard_tolerance(_mm(22), 7)
+    assert isinstance(t, StandardTolerance)
+    assert t.width.to("um").magnitude == pytest.approx(21)
+    assert t.width.to("mm").magnitude == pytest.approx(0.021)
+    assert "18" in t.size_range and "30" in t.size_range
+    assert t.designation == "IT7"
+    assert "ISO 286-1" in t.source
+
+
+def test_grade_parses_from_int_or_string() -> None:
+    assert standard_tolerance(_mm(22), "IT7").grade == 7
+    assert standard_tolerance(_mm(22), "7").grade == 7
+    assert standard_tolerance(_mm(22), "it7").width == standard_tolerance(_mm(22), 7).width
+    with pytest.raises(ValueError, match="unrecognized IT grade"):
+        standard_tolerance(_mm(22), "H7")
+
+
+def test_grade_range_boundary_is_inclusive_of_upper() -> None:
+    # 30 mm belongs to the 18-30 range (IT7 = 21 um), not the 30-50 range (25 um).
+    assert standard_tolerance(_mm(30), 7).width.to("um").magnitude == pytest.approx(21)
+    assert standard_tolerance(_mm(50), 7).width.to("um").magnitude == pytest.approx(25)
+
+
+def test_first_range_label_and_smallest_size() -> None:
+    t = standard_tolerance(_mm(2), 6)
+    assert t.size_range == "up to 3 mm"
+    assert t.width.to("um").magnitude == pytest.approx(6)
+
+
+def test_coarse_grade_spans_range() -> None:
+    # IT16 at 400-500 mm is 4000 um (4 mm) — the widest encoded value.
+    t = standard_tolerance(_mm(450), 16)
+    assert t.width.to("mm").magnitude == pytest.approx(4.0)
+    assert "over 400 up to 500 mm" == t.size_range
+
+
+def test_grade_us_customary_nominal_is_converted() -> None:
+    # 1 in is 25.4 mm, landing in the 18-30 mm range: IT7 = 21 um.
+    t = standard_tolerance(Quantity(magnitude=1.0, unit="in"), 7)
+    assert t.width.to("um").magnitude == pytest.approx(21)
+
+
+def test_ungraded_grade_rejected() -> None:
+    with pytest.raises(ToleranceRangeError, match="not in the encoded"):
+        standard_tolerance(_mm(22), 3)
+
+
+def test_zero_and_oversize_nominal_rejected() -> None:
+    with pytest.raises(ToleranceRangeError, match="greater than 0"):
+        standard_tolerance(_mm(0), 7)
+    with pytest.raises(ToleranceRangeError, match="maximum"):
+        standard_tolerance(_mm(600), 7)
+
+
+def test_standard_tolerance_non_length_rejected() -> None:
+    with pytest.raises(ToleranceRangeError, match="length"):
+        standard_tolerance(Quantity(magnitude=5, unit="kg"), 7)

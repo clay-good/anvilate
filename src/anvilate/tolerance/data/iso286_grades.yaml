@@ -1,0 +1,48 @@
+# ISO 286-1 standard tolerance grades — IT grades (schema: tolerance-mgmt).
+#
+# The standard tolerance (total width of the tolerance zone, in micrometres) for
+# a nominal size range and IT grade. These widths are the grade half of every
+# ISO fit designation (e.g. the "7" in H7): the fundamental deviation fixes where
+# the zone sits, the IT grade fixes how wide it is. This table covers the common
+# machining grades IT5–IT16 for basic sizes over 0 up to and including 500 mm —
+# the range that spans essentially all fit work; finer gauge grades (IT01–IT4)
+# and sizes above 500 mm land later. Values are exact tabulated integers, not
+# recomputed from the tolerance-factor formula. The source standard is not
+# redistributed — only the tolerance table.
+dataset:
+  source: "ISO 286-1 standard tolerance grades (IT grades)"
+  license: "CC0-1.0 (tolerance values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+max_nominal_mm: 500
+
+# Each range covers basic sizes over the previous range's bound up to and
+# including `up_to_mm`. `it` maps the IT grade number to its standard tolerance
+# width in micrometres for that range.
+ranges:
+  - up_to_mm: 3
+    it: {5: 4, 6: 6, 7: 10, 8: 14, 9: 25, 10: 40, 11: 60, 12: 100, 13: 140, 14: 250, 15: 400, 16: 600}
+  - up_to_mm: 6
+    it: {5: 5, 6: 8, 7: 12, 8: 18, 9: 30, 10: 48, 11: 75, 12: 120, 13: 180, 14: 300, 15: 480, 16: 750}
+  - up_to_mm: 10
+    it: {5: 6, 6: 9, 7: 15, 8: 22, 9: 36, 10: 58, 11: 90, 12: 150, 13: 220, 14: 360, 15: 580, 16: 900}
+  - up_to_mm: 18
+    it: {5: 8, 6: 11, 7: 18, 8: 27, 9: 43, 10: 70, 11: 110, 12: 180, 13: 270, 14: 430, 15: 700, 16: 1100}
+  - up_to_mm: 30
+    it: {5: 9, 6: 13, 7: 21, 8: 33, 9: 52, 10: 84, 11: 130, 12: 210, 13: 330, 14: 520, 15: 840, 16: 1300}
+  - up_to_mm: 50
+    it: {5: 11, 6: 16, 7: 25, 8: 39, 9: 62, 10: 100, 11: 160, 12: 250, 13: 390, 14: 620, 15: 1000, 16: 1600}
+  - up_to_mm: 80
+    it: {5: 13, 6: 19, 7: 30, 8: 46, 9: 74, 10: 120, 11: 190, 12: 300, 13: 460, 14: 740, 15: 1200, 16: 1900}
+  - up_to_mm: 120
+    it: {5: 15, 6: 22, 7: 35, 8: 54, 9: 87, 10: 140, 11: 220, 12: 350, 13: 540, 14: 870, 15: 1400, 16: 2200}
+  - up_to_mm: 180
+    it: {5: 18, 6: 25, 7: 40, 8: 63, 9: 100, 10: 160, 11: 250, 12: 400, 13: 630, 14: 1000, 15: 1600, 16: 2500}
+  - up_to_mm: 250
+    it: {5: 20, 6: 29, 7: 46, 8: 72, 9: 115, 10: 185, 11: 290, 12: 460, 13: 720, 14: 1150, 15: 1850, 16: 2900}
+  - up_to_mm: 315
+    it: {5: 23, 6: 32, 7: 52, 8: 81, 9: 130, 10: 210, 11: 320, 12: 520, 13: 810, 14: 1300, 15: 2100, 16: 3200}
+  - up_to_mm: 400
+    it: {5: 25, 6: 36, 7: 57, 8: 89, 9: 140, 10: 230, 11: 360, 12: 570, 13: 890, 14: 1400, 15: 2300, 16: 3600}
+  - up_to_mm: 500
+    it: {5: 27, 6: 40, 7: 63, 8: 97, 9: 155, 10: 250, 11: 400, 12: 630, 13: 970, 14: 1550, 15: 2500, 16: 4000}
