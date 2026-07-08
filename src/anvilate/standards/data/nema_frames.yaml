@@ -1,0 +1,47 @@
+# NEMA stepper motor frame mounting geometry (schema: standards-data).
+#
+# Only the standardized mounting dimensions are recorded — the square
+# mounting-hole pattern, the pilot locating boss, the nominal faceplate, and the
+# clearance hole a bracket drills. Body length and shaft are manufacturer-
+# specific and deliberately omitted; a mating part designs against the mount,
+# not the body. The source standard is not redistributed — only the dimensions.
+#
+# Coverage: NEMA 17 and 23 (the golden-path frames). NEMA 8/11/14/34 are not yet
+# recorded; a reference to them surfaces as a coverage gap rather than a guess.
+dataset:
+  name: anvilate-nema-frames-seed
+  version: "0.1.0"
+  source: "NEMA ICS 16 stepper frame mounting dimensions"
+  license: "CC0-1.0 (dimension values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+frames:
+  NEMA17:
+    name: "NEMA 17 stepper frame"
+    faceplate_width:
+      quantity: {magnitude: 42.3, unit: mm}
+      citation: {condition: "nominal faceplate, varies by manufacturer"}
+    bolt_spacing:
+      quantity: {magnitude: 31.0, unit: mm}
+      citation: {condition: "square mounting-hole pattern pitch"}
+    pilot_diameter:
+      quantity: {magnitude: 22.0, unit: mm}
+      citation: {condition: "raised pilot boss diameter"}
+    mounting_hole:
+      quantity: {magnitude: 3.0, unit: mm}
+      citation: {condition: "M3 mounting screw"}
+
+  NEMA23:
+    name: "NEMA 23 stepper frame"
+    faceplate_width:
+      quantity: {magnitude: 56.4, unit: mm}
+      citation: {condition: "nominal faceplate, varies by manufacturer"}
+    bolt_spacing:
+      quantity: {magnitude: 47.14, unit: mm}
+      citation: {condition: "square mounting-hole pattern pitch (1.856 in)"}
+    pilot_diameter:
+      quantity: {magnitude: 38.1, unit: mm}
+      citation: {condition: "raised pilot boss diameter (1.500 in)"}
+    mounting_hole:
+      quantity: {magnitude: 5.0, unit: mm}
+      citation: {condition: "M5 mounting screw"}

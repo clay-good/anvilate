@@ -244,3 +244,76 @@ def _cite() -> dict:
         "license": "l",
         "retrieved": "2026-07-08",
     }
+
+
+# --- Components database (NEMA frames) ---
+
+
+@pytest.fixture(scope="module")
+def cdb():
+    from anvilate.standards import default_components_db
+
+    return default_components_db()
+
+
+def test_nema23_mounting_geometry_from_database(cdb) -> None:
+    # Scenario: NEMA 23 resolution — the mounting bolt-square and pilot bore come
+    # from the database record, each with a citation.
+    frame = cdb.get("NEMA23")
+    assert frame.bolt_spacing.quantity.to("mm").magnitude == pytest.approx(47.14)
+    assert frame.pilot_diameter.quantity.to("mm").magnitude == pytest.approx(38.1)
+    assert frame.bolt_spacing.citation.source
+    assert frame.bolt_spacing.citation.license
+
+
+def test_component_properties_are_length_dimensioned(cdb) -> None:
+    for component_id in cdb.known_components():
+        frame = cdb.get(component_id)
+        for field in ("faceplate_width", "bolt_spacing", "pilot_diameter", "mounting_hole"):
+            assert getattr(frame, field).quantity.has_dimension("[length]"), (component_id, field)
+
+
+def test_component_wrong_dimension_rejected() -> None:
+    from anvilate.standards import NemaFrame
+
+    record = {
+        "id": "BAD",
+        "name": "bad",
+        "faceplate_width": {"quantity": {"magnitude": 5, "unit": "kg"}, "citation": _cite()},
+        "bolt_spacing": {"quantity": {"magnitude": 31, "unit": "mm"}, "citation": _cite()},
+        "pilot_diameter": {"quantity": {"magnitude": 22, "unit": "mm"}, "citation": _cite()},
+        "mounting_hole": {"quantity": {"magnitude": 3, "unit": "mm"}, "citation": _cite()},
+    }
+    with pytest.raises(Exception) as exc:
+        NemaFrame.model_validate(record)
+    msg = str(exc.value)
+    assert "faceplate_width" in msg
+    assert "length" in msg
+
+
+def test_coverage_gap_surfaces_rather_than_guessing(cdb) -> None:
+    # Scenario: coverage gap surfaces to user — an un-recorded frame is unknown
+    # (with a near-miss), never silently estimated.
+    from anvilate.standards import UnknownComponentError, default_standards_resolver
+
+    assert not cdb.has_component("NEMA34")
+    with pytest.raises(UnknownComponentError) as exc:
+        cdb.get("NEMA34")
+    assert exc.value.suggestions  # offers the closest recorded frames
+    assert not default_standards_resolver().has_component("NEMA34")
+
+
+def test_resolver_composes_component_db_and_seed() -> None:
+    # The DB-backed frames and the not-yet-tabled seed IDs are one component set.
+    from anvilate.standards import default_standards_resolver
+
+    resolver = default_standards_resolver()
+    assert set(resolver.known_components()) == {
+        "NEMA17",
+        "NEMA23",
+        "EXT-4040",
+        "EXT-2020",
+        "ISO4762-M5",
+    }
+    assert resolver.has_component("NEMA23")  # from the components DB
+    assert resolver.has_component("EXT-4040")  # from the static seed

@@ -8,6 +8,12 @@ they are built out (see openspec/specs/standards-data/).
 
 from __future__ import annotations
 
+from .components import (
+    ComponentsDatabase,
+    NemaFrame,
+    UnknownComponentError,
+    default_components_db,
+)
 from .materials import (
     Material,
     MaterialPropertyUnavailable,
@@ -29,6 +35,10 @@ __all__ = [
     "UnknownMaterialError",
     "MaterialPropertyUnavailable",
     "default_materials_db",
+    "NemaFrame",
+    "ComponentsDatabase",
+    "UnknownComponentError",
+    "default_components_db",
     "StandardsResolver",
     "default_standards_resolver",
 ]
