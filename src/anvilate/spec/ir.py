@@ -327,3 +327,15 @@ class DesignSpec(_Base):
 
     # Interface contracts this part publishes for others to import against.
     exports: list[InterfaceContract] = Field(default_factory=list)
+
+    def analyze_chains(self) -> list[ChainAnalysis]:
+        """Analyze every declared stack-up chain against this spec's dimensions.
+
+        Returns one :class:`ChainAnalysis` per chain, in declaration order (empty
+        when none are declared); each carries its own pass/fail so a scorecard can
+        surface the failures. Raises :class:`KeyError` if a chain references an
+        undeclared dimension tag — run
+        :func:`~anvilate.spec.validate_dimension_graph` first to surface every
+        such problem at once.
+        """
+        return [chain.analyze(self.dimensions) for chain in self.chains]

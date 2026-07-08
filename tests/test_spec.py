@@ -418,6 +418,16 @@ def test_chain_analyze_rejects_unknown_dimension_tag():
         broken.analyze(spec.dimensions)
 
 
+def test_spec_analyze_chains_rolls_up_every_declared_chain():
+    spec = _bracket_with_chain()
+    analyses = spec.analyze_chains()
+    assert [a.name for a in analyses] == ["motor_seat_gap"]
+    assert all(isinstance(a, ChainAnalysis) for a in analyses)
+    assert analyses[0].passes is True
+    # A spec with no chains rolls up to an empty list, not an error.
+    assert spec.model_copy(update={"chains": []}).analyze_chains() == []
+
+
 def test_chain_round_trips_through_yaml():
     spec = _bracket_with_chain()
     reloaded = load_spec_yaml(dump_spec_yaml(spec))
