@@ -15,6 +15,7 @@ from anvilate.tolerance import (
     fit,
     general_angular_tolerance,
     general_tolerance,
+    resolve_class,
     standard_tolerance,
     zone_limits,
 )
@@ -45,6 +46,16 @@ def test_range_boundary_is_inclusive_of_upper() -> None:
     g = general_tolerance(_mm(30), "m")
     assert g.deviation.to("mm").magnitude == pytest.approx(0.2)
     assert "up to 30 mm" in g.size_range
+
+
+def test_resolve_class_defaults_to_medium_when_unset() -> None:
+    # Scenario: default class applied — a spec that omits tolerance info (None)
+    # is governed by the medium class; a present value is parsed.
+    assert resolve_class(None) is ToleranceClass.MEDIUM
+    assert resolve_class("fine") is ToleranceClass.FINE
+    assert resolve_class("c") is ToleranceClass.COARSE
+    with pytest.raises(ValueError):
+        resolve_class("nonsense")
 
 
 def test_class_parses_from_letter_or_word() -> None:

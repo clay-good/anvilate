@@ -23,6 +23,7 @@ __all__ = [
     "ToleranceRangeError",
     "general_tolerance",
     "general_angular_tolerance",
+    "resolve_class",
 ]
 
 
@@ -51,6 +52,25 @@ class ToleranceClass(StrEnum):
         if token in by_letter:
             return by_letter[token]
         return cls(token)
+
+
+# The ISO 2768 default: a spec that says nothing about tolerances is governed by
+# the medium class (see the tolerance-management spec, "Default class applied").
+DEFAULT_CLASS = ToleranceClass.MEDIUM
+
+
+def resolve_class(value: str | None) -> ToleranceClass:
+    """Resolve a spec's optional ``tolerance_class`` string to a typed class.
+
+    A missing value (the spec omitted tolerance information) governs by the
+    default class; a present value is parsed via :meth:`ToleranceClass.parse`,
+    raising :class:`ValueError` if it is unrecognized. This is the single point
+    where the default is applied, so the class stated on drawings and in the
+    evidence bundle is always well-defined.
+    """
+    if value is None:
+        return DEFAULT_CLASS
+    return ToleranceClass.parse(value)
 
 
 class GeneralTolerance(BaseModel):
