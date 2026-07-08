@@ -14,6 +14,7 @@ from anvilate.units import (
     UnitError,
     UnitSystem,
     render,
+    render_dual,
     require_dimension,
 )
 
@@ -111,6 +112,14 @@ def test_stable_round_trip():
     first = render(q)
     second = render(Quantity.parse("49.9992 ksi"))
     assert first == second  # character-identical, no jitter
+
+
+def test_render_dual_dimensioning():
+    # Scenario: dual dimensioning — the primary-system value with the secondary
+    # bracketed, each in its conventional unit and precision.
+    q = Quantity.parse("1 in")
+    assert render_dual(q, primary=UnitSystem.SI) == "25.40 mm [1.000 in]"
+    assert render_dual(q, primary=UnitSystem.US) == "1.000 in [25.40 mm]"
 
 
 def test_dimension_error_is_raised_directly_by_validator():

@@ -7,7 +7,7 @@ dimensionally checked wherever a field pins an expected dimension.
 
 from __future__ import annotations
 
-from .format import decimals_for, render
+from .format import decimals_for, render, render_dual
 from .quantity import (
     DimensionError,
     MissingUnitError,
@@ -27,5 +27,6 @@ __all__ = [
     "UnitSystem",
     "UREG",
     "render",
+    "render_dual",
     "decimals_for",
 ]

@@ -13,7 +13,7 @@ from .quantity import Quantity
 from .registry import UREG
 from .system import UnitSystem
 
-__all__ = ["render", "decimals_for"]
+__all__ = ["render", "render_dual", "decimals_for"]
 
 # Decimals by dimensionality string. Falls through to a per-unit override below
 # and then to a default.
@@ -56,6 +56,18 @@ def render(
     shown = quantity if target is None else quantity.to(target)
     places = decimals_for(shown.unit)
     return f"{shown.magnitude:.{places}f} {shown.unit}"
+
+
+def render_dual(quantity: Quantity, *, primary: UnitSystem) -> str:
+    """Render ``quantity`` in the ``primary`` system with the other bracketed.
+
+    Dual dimensioning shows the primary-system value and, in brackets, the same
+    value in the opposite system — the drafting convention for a drawing that
+    serves readers of both. Each side uses its system's conventional unit and
+    precision, e.g. ``"25.40 mm [1.000 in]"`` for an SI-primary length.
+    """
+    secondary = UnitSystem.US if primary is UnitSystem.SI else UnitSystem.SI
+    return f"{render(quantity, system=primary)} [{render(quantity, system=secondary)}]"
 
 
 def _system_unit(quantity: Quantity, system: UnitSystem) -> str | None:
