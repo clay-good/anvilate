@@ -318,9 +318,10 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
     letter, grade = _parse_designation(designation)
     base = letter.lower()
     if base not in _ENCODED_LETTERS:
+        encoded = ", ".join(sorted(_ENCODED_LETTERS))
         raise ToleranceRangeError(
             f"fundamental deviation for zone '{letter}' is not yet encoded; "
-            "the H/h basis, clearance letters d/e/f/g, and js/JS are supported so far"
+            f"the encoded letters are {encoded} (each with its uppercase hole form)"
         )
     grade_tol = standard_tolerance(nominal, grade)
     hole = letter.isupper()

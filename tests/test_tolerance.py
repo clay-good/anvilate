@@ -280,6 +280,17 @@ def test_unencoded_zone_letter_rejected() -> None:
         zone_limits("j6", _mm(22))
 
 
+def test_unencoded_message_lists_the_actual_encoded_letters() -> None:
+    # The supported-letters hint is derived from the encoded set, so it names the
+    # letters that are actually resolvable (k/n/p/r/s/u, added after d/e/f/g)
+    # rather than drifting out of date as more letters land.
+    with pytest.raises(ToleranceRangeError) as excinfo:
+        zone_limits("y6", _mm(22))
+    message = str(excinfo.value)
+    for letter in ("d", "g", "js", "k", "n", "p", "r", "s", "u"):
+        assert letter in message
+
+
 def test_malformed_zone_designation_rejected() -> None:
     with pytest.raises(ValueError, match="malformed"):
         zone_limits("H", _mm(22))
