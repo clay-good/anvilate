@@ -1,0 +1,26 @@
+# Hexagon nut dimensions (schema: standards-data).
+#
+# ISO 4032 style-1 hexagon nuts. A joint retrieves the width across flats s (the
+# wrench size and the pocket a design must clear) and the nut height m (which
+# adds to the stack). Keyed by the nominal thread size. Note the ISO 4032 widths
+# across flats differ from the older DIN 934 at M10 (16 vs 17) and M12 (18 vs 19)
+# — the values here are ISO 4032. The source standard is not redistributed, only
+# the dimension table.
+dataset:
+  name: anvilate-hex-nuts-seed
+  version: "0.1.0"
+  source: "ISO 4032 style-1 hexagon nut dimensions"
+  license: "CC0-1.0 (dimension values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+# nominal thread size: width_across_flats (s), height (m) in mm.
+nuts:
+  "ISO4032-M3": {width_across_flats: 5.5, height: 2.4}
+  "ISO4032-M4": {width_across_flats: 7, height: 3.2}
+  "ISO4032-M5": {width_across_flats: 8, height: 4.7}
+  "ISO4032-M6": {width_across_flats: 10, height: 5.2}
+  "ISO4032-M8": {width_across_flats: 13, height: 6.8}
+  "ISO4032-M10": {width_across_flats: 16, height: 8.4}
+  "ISO4032-M12": {width_across_flats: 18, height: 10.8}
+  "ISO4032-M16": {width_across_flats: 24, height: 14.8}
+  "ISO4032-M20": {width_across_flats: 30, height: 18.0}

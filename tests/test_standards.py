@@ -675,6 +675,75 @@ def test_washers_resolve_as_standard_components() -> None:
     assert not resolver.has_component("ISO7089-M7")
 
 
+# --- Hexagon nuts (ISO 4032) ---
+
+
+@pytest.fixture(scope="module")
+def hex_nuts():
+    from anvilate.standards import default_hex_nut_table
+
+    return default_hex_nut_table()
+
+
+def test_hex_nut_dimensions_with_citation(hex_nuts) -> None:
+    # An M6 hex nut: 10 mm across flats, 5.2 mm high; each dimension carries its
+    # ISO 4032 citation.
+    n6 = hex_nuts.get("ISO4032-M6")
+    assert n6.width_across_flats.quantity.to("mm").magnitude == pytest.approx(10.0)
+    assert n6.height.quantity.to("mm").magnitude == pytest.approx(5.2)
+    assert "ISO 4032" in n6.width_across_flats.citation.source
+    assert n6.width_across_flats.citation.license
+
+
+def test_hex_nut_dimensions_are_length(hex_nuts) -> None:
+    for designation in hex_nuts.designations():
+        rec = hex_nuts.get(designation)
+        for field in ("width_across_flats", "height"):
+            assert getattr(rec, field).quantity.has_dimension("[length]"), (designation, field)
+
+
+def test_hex_nut_citations_expose_the_evidence_trail(hex_nuts) -> None:
+    citations = hex_nuts.get("ISO4032-M8").citations()
+    assert set(citations) == {"width_across_flats", "height"}
+    for name, cite in citations.items():
+        assert isinstance(cite, PropertyCitation), name
+        assert cite.source and cite.license, name
+
+
+def test_hex_nut_ordering_is_numeric(hex_nuts) -> None:
+    designations = hex_nuts.designations()
+    assert designations.index("ISO4032-M4") < designations.index("ISO4032-M10")
+    assert designations.index("ISO4032-M10") < designations.index("ISO4032-M20")
+
+
+def test_hex_nut_uses_iso4032_width_not_din934(hex_nuts) -> None:
+    # ISO 4032 narrowed the M10 and M12 widths across flats from the old DIN 934
+    # sizes (17, 19) to 16 and 18 — the retrieved values must be the ISO ones.
+    assert hex_nuts.get("ISO4032-M10").width_across_flats.quantity.to(
+        "mm"
+    ).magnitude == pytest.approx(16.0)
+    assert hex_nuts.get("ISO4032-M12").width_across_flats.quantity.to(
+        "mm"
+    ).magnitude == pytest.approx(18.0)
+
+
+def test_hex_nut_unknown_designation_surfaces_gap(hex_nuts) -> None:
+    from anvilate.standards import UnknownHexNutError
+
+    with pytest.raises(UnknownHexNutError) as exc:
+        hex_nuts.get("ISO4032-M7")  # not a standard nut size
+    assert exc.value.suggestions
+
+
+def test_hex_nuts_resolve_as_standard_components() -> None:
+    from anvilate.standards import default_standards_resolver
+
+    resolver = default_standards_resolver()
+    assert resolver.has_component("ISO4032-M6")
+    assert "ISO4032-M8" in set(resolver.known_components())
+    assert not resolver.has_component("ISO4032-M7")
+
+
 # --- Metric clearance holes (ISO 273) ---
 
 

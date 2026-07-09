@@ -5,8 +5,8 @@ property values in the pipeline — the "retrieval, not recall" rule. This packa
 ships the materials database, the NEMA stepper-frame component database, the
 ISO 273 clearance-hole and ISO 261/724 metric-thread tables, the ISO 15 ball
 bearing boundary-dimension table, the ISO 2338 dowel-pin table, the ISO 4762
-socket-head cap screw head-geometry table, the ISO 7089 plain-washer table, and
-the DB-backed reference resolver. Further
+socket-head cap screw head-geometry table, the ISO 7089 plain-washer table, the
+ISO 4032 hex-nut table, and the DB-backed reference resolver. Further
 component families land here as they are built out (see
 openspec/specs/standards-data/).
 """
@@ -36,6 +36,12 @@ from .dowels import (
     DowelPinTable,
     UnknownDowelPinError,
     default_dowel_pin_table,
+)
+from .hexnuts import (
+    HexNut,
+    HexNutTable,
+    UnknownHexNutError,
+    default_hex_nut_table,
 )
 from .materials import (
     Material,
@@ -91,6 +97,10 @@ __all__ = [
     "WasherTable",
     "UnknownWasherError",
     "default_washer_table",
+    "HexNut",
+    "HexNutTable",
+    "UnknownHexNutError",
+    "default_hex_nut_table",
     "Fit",
     "ClearanceHoleTable",
     "MetricThread",
