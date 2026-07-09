@@ -7,6 +7,7 @@ import pytest
 from anvilate.analysis import (
     cantilever_end_load,
     rectangular_second_moment,
+    simply_supported_center_load,
 )
 from anvilate.units import Quantity
 
@@ -35,7 +36,7 @@ def test_cantilever_end_load_matches_worked_example():
         elastic_modulus=_q("200 GPa"),
     )
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
-    assert result.tip_deflection.to("mm").magnitude == pytest.approx(12.5, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(12.5, rel=1e-4)
 
 
 def test_cantilever_units_carry_through_customary_inputs():
@@ -50,7 +51,40 @@ def test_cantilever_units_carry_through_customary_inputs():
         elastic_modulus=_q("200 GPa"),
     )
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
-    assert result.tip_deflection.to("mm").magnitude == pytest.approx(12.5, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(12.5, rel=1e-4)
+
+
+def test_simply_supported_center_load_matches_worked_example():
+    # Same 500 mm, 20 x 10 mm steel beam, 100 N at mid-span, both ends supported.
+    # By hand: M = P*L/4 = 12500 N*mm, so sigma = M*c/I = 12500*5/1666.67 = 37.5 MPa;
+    #   delta = P*L^3/(48*E*I) = 100*500^3 / (48*200000*1666.67) = 0.78125 mm.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = simply_supported_center_load(
+        force=_q("100 N"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(37.5, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.78125, rel=1e-4)
+
+
+def test_simply_supported_is_stiffer_and_lower_stress_than_cantilever():
+    # For the same span, section, and load, a simply-supported beam carries far
+    # less stress and deflects far less than a cantilever — a sanity relation.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "force": _q("100 N"),
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    ss = simply_supported_center_load(**kw)
+    cant = cantilever_end_load(**kw)
+    assert ss.max_bending_stress.to("MPa").magnitude < cant.max_bending_stress.to("MPa").magnitude
+    assert ss.max_deflection.to("mm").magnitude < cant.max_deflection.to("mm").magnitude
 
 
 def test_bending_safety_factor_against_yield():

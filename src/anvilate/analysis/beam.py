@@ -1,11 +1,11 @@
 """T1 analytical beam checks (closed-form, no solver).
 
 The T1 validation tier screens a design with handbook closed-form solutions before
-any FEA. This module implements the classic cantilever case (a beam fixed at one
-end, loaded transversely at the free end) from Roark / Shigley: the maximum
-bending stress at the fixed end and the free-end deflection. Every input and
-output is a dimension-checked :class:`~anvilate.units.Quantity`, and the
-arithmetic runs through Pint so the units carry through and validate themselves.
+any FEA. This module implements the classic Roark / Shigley cases — a cantilever with an
+end load, and a simply-supported beam with a central load — reporting the maximum
+bending stress and the maximum deflection. Every input and output is a
+dimension-checked :class:`~anvilate.units.Quantity`, and the arithmetic runs
+through Pint so the units carry through and validate themselves.
 
 These are screening checks, not certified analysis — they assume a prismatic
 linear-elastic beam, small deflections, and no stress concentration.
@@ -18,8 +18,9 @@ from pydantic import BaseModel, ConfigDict
 from ..units import Quantity
 
 __all__ = [
-    "CantileverResult",
+    "BeamBendingResult",
     "cantilever_end_load",
+    "simply_supported_center_load",
     "rectangular_second_moment",
 ]
 
@@ -45,18 +46,19 @@ def rectangular_second_moment(width: Quantity, height: Quantity) -> Quantity:
     return _as_quantity(width.pint * height.pint**3 / 12, "mm**4")
 
 
-class CantileverResult(BaseModel):
-    """The result of the cantilever end-load check.
+class BeamBendingResult(BaseModel):
+    """The result of a closed-form beam bending check.
 
-    ``max_bending_stress`` is the peak bending stress at the fixed end;
-    ``tip_deflection`` is the free-end deflection. Both are screening estimates for
-    a prismatic linear-elastic beam under small deflections.
+    ``max_bending_stress`` is the peak bending stress; ``max_deflection`` is the
+    peak deflection (at the free end for a cantilever, at mid-span for a
+    simply-supported beam). Both are screening estimates for a prismatic
+    linear-elastic beam under small deflections.
     """
 
     model_config = ConfigDict(frozen=True)
 
     max_bending_stress: Quantity
-    tip_deflection: Quantity
+    max_deflection: Quantity
 
     def bending_safety_factor(self, yield_strength: Quantity) -> float:
         """The factor of safety against yielding: yield strength / peak stress.
@@ -71,8 +73,8 @@ class CantileverResult(BaseModel):
 
     def __str__(self) -> str:
         return (
-            f"cantilever: sigma_max {self.max_bending_stress.to('MPa')}, "
-            f"tip {self.tip_deflection.to('mm')}"
+            f"beam: sigma_max {self.max_bending_stress.to('MPa')}, "
+            f"delta_max {self.max_deflection.to('mm')}"
         )
 
 
@@ -83,7 +85,7 @@ def cantilever_end_load(
     second_moment: Quantity,
     extreme_fibre: Quantity,
     elastic_modulus: Quantity,
-) -> CantileverResult:
+) -> BeamBendingResult:
     """The Roark/Shigley cantilever-with-end-load check.
 
     A prismatic beam of length ``length`` and section second moment
@@ -112,7 +114,44 @@ def cantilever_end_load(
     moment = f * length_p
     stress = moment * c / inertia
     deflection = f * length_p**3 / (3 * e * inertia)
-    return CantileverResult(
+    return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
-        tip_deflection=_as_quantity(deflection, "mm"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def simply_supported_center_load(
+    *,
+    force: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The Roark/Shigley simply-supported-beam, central-load check.
+
+    A prismatic beam simply supported at both ends over a span ``length``, with a
+    transverse ``force`` at mid-span. Arguments match :func:`cantilever_end_load`.
+
+    Returns the peak bending stress at mid-span (σ = M·c/I with M = F·L/4) and the
+    mid-span deflection (δ = F·L³/(48·E·I)). Every argument is dimension-checked.
+    """
+    _require(force, "[force]", "force")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    f = force.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = f * length_p / 4
+    stress = moment * c / inertia
+    deflection = f * length_p**3 / (48 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
     )
