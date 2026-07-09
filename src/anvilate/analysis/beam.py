@@ -22,7 +22,15 @@ __all__ = [
     "cantilever_end_load",
     "simply_supported_center_load",
     "rectangular_second_moment",
+    "max_transverse_shear_stress",
+    "SHEAR_FORM_RECTANGULAR",
+    "SHEAR_FORM_CIRCULAR",
 ]
+
+# Peak-to-average transverse-shear form factors τ_max = k·V/A: 3/2 at the neutral
+# axis of a rectangular section, 4/3 for a solid circular one.
+SHEAR_FORM_RECTANGULAR = 1.5
+SHEAR_FORM_CIRCULAR = 4.0 / 3.0
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
@@ -44,6 +52,28 @@ def rectangular_second_moment(width: Quantity, height: Quantity) -> Quantity:
     _require(width, "[length]", "width")
     _require(height, "[length]", "height")
     return _as_quantity(width.pint * height.pint**3 / 12, "mm**4")
+
+
+def max_transverse_shear_stress(
+    *,
+    shear_force: Quantity,
+    area: Quantity,
+    form_factor: float = SHEAR_FORM_RECTANGULAR,
+) -> Quantity:
+    """The peak transverse shear stress τ_max = k·V/A in a beam cross-section.
+
+    The transverse shear peaks above the average V/A at the neutral axis; the
+    ``form_factor`` k captures the section shape — :data:`SHEAR_FORM_RECTANGULAR`
+    (1.5) or :data:`SHEAR_FORM_CIRCULAR` (4/3). Short, deep beams fail here rather
+    than in bending. ``shear_force`` must be a force and ``area`` an area;
+    ``form_factor`` must be positive. Returns the shear stress in MPa.
+    """
+    _require(shear_force, "[force]", "shear_force")
+    _require(area, "[length]**2", "area")
+    if form_factor <= 0:
+        raise ValueError(f"form_factor must be positive; got {form_factor}")
+    stress = form_factor * shear_force.pint / area.pint
+    return _as_quantity(stress, "MPa")
 
 
 class BeamBendingResult(BaseModel):

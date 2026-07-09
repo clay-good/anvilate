@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 
 from anvilate.analysis import (
+    SHEAR_FORM_CIRCULAR,
+    SHEAR_FORM_RECTANGULAR,
     ColumnEnd,
     axial_stress,
     bearing_stress,
@@ -13,6 +15,7 @@ from anvilate.analysis import (
     circular_area,
     euler_buckling_load,
     euler_critical_stress,
+    max_transverse_shear_stress,
     polar_second_moment_solid,
     radius_of_gyration,
     rectangular_second_moment,
@@ -102,6 +105,28 @@ def test_simply_supported_is_stiffer_and_lower_stress_than_cantilever():
     cant = cantilever_end_load(**kw)
     assert ss.max_bending_stress.to("MPa").magnitude < cant.max_bending_stress.to("MPa").magnitude
     assert ss.max_deflection.to("mm").magnitude < cant.max_deflection.to("mm").magnitude
+
+
+def test_max_transverse_shear_stress_rectangular_and_circular():
+    # 10 kN shear over a 200 mm^2 section: average V/A = 50 MPa; peak is 1.5x
+    # (rectangular) = 75 MPa or 4/3x (circular) = 66.67 MPa.
+    rect = max_transverse_shear_stress(
+        shear_force=_q("10 kN"), area=_q("200 mm**2"), form_factor=SHEAR_FORM_RECTANGULAR
+    )
+    assert rect.to("MPa").magnitude == pytest.approx(75.0, rel=1e-6)
+    circ = max_transverse_shear_stress(
+        shear_force=_q("10 kN"), area=_q("200 mm**2"), form_factor=SHEAR_FORM_CIRCULAR
+    )
+    assert circ.to("MPa").magnitude == pytest.approx(66.667, rel=1e-4)
+    # The rectangular default matches the explicit rectangular form factor.
+    assert max_transverse_shear_stress(shear_force=_q("10 kN"), area=_q("200 mm**2")).to(
+        "MPa"
+    ).magnitude == pytest.approx(75.0, rel=1e-6)
+
+
+def test_max_transverse_shear_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="form_factor must be positive"):
+        max_transverse_shear_stress(shear_force=_q("10 kN"), area=_q("200 mm**2"), form_factor=0.0)
 
 
 def test_bending_safety_factor_against_yield():

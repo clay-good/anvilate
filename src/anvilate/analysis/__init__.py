@@ -17,8 +17,11 @@ from __future__ import annotations
 
 from .axial import axial_stress, circular_area
 from .beam import (
+    SHEAR_FORM_CIRCULAR,
+    SHEAR_FORM_RECTANGULAR,
     BeamBendingResult,
     cantilever_end_load,
+    max_transverse_shear_stress,
     rectangular_second_moment,
     simply_supported_center_load,
 )
@@ -54,6 +57,9 @@ __all__ = [
     "cantilever_end_load",
     "simply_supported_center_load",
     "rectangular_second_moment",
+    "max_transverse_shear_stress",
+    "SHEAR_FORM_RECTANGULAR",
+    "SHEAR_FORM_CIRCULAR",
     "ColumnEnd",
     "euler_buckling_load",
     "radius_of_gyration",
