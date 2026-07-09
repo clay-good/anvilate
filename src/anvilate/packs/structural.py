@@ -54,9 +54,14 @@ __all__ = [
     "screen_bolted_connection",
     "WeldedConnection",
     "screen_welded_connection",
+    "BasePlate",
+    "screen_base_plate",
     "StructuralMember",
     "screen_structure",
 ]
+
+# AISC §J8 nominal concrete bearing on a plate is 0.85·f'c (no confinement bonus).
+_CONCRETE_BEARING_FRACTION = 0.85
 
 # The effective throat of a fillet weld is 0.707 (= 1/√2) of its leg size.
 _FILLET_THROAT_FACTOR = 0.707
@@ -74,6 +79,7 @@ _CLAUSE_COMPRESSION = "AISC 360-16 Ch. E"
 _CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
 _CLAUSE_BEARING = "AISC 360-16 §J3.10"
 _CLAUSE_WELD = "AISC 360-16 §J2.4"
+_CLAUSE_BEARING_CONCRETE = "AISC 360-16 §J8"
 
 
 class Support(StrEnum):
@@ -409,7 +415,65 @@ def screen_welded_connection(
     return Scorecard(entries=(entry,))
 
 
-StructuralMember = BeamMember | ColumnMember | BoltedConnection | WeldedConnection
+class BasePlate(BaseModel):
+    """A column base plate bearing on a concrete footing.
+
+    ``width`` B and ``depth`` N are the plate's plan dimensions, ``axial_load`` P
+    the column load it spreads, and ``concrete_strength`` the footing's f'c. The
+    bearing pressure P/(B·N) is screened against the concrete bearing capacity
+    0.85·f'c (AISC §J8, no confinement bonus). This first cut checks concrete
+    bearing only — the plate-bending thickness check is separate.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    width: Quantity
+    depth: Quantity
+    axial_load: Quantity
+    concrete_strength: Quantity
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> BasePlate:
+        for value, name in ((self.width, "width"), (self.depth, "depth")):
+            if not value.has_dimension("[length]"):
+                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+        if not self.axial_load.has_dimension("[force]"):
+            raise ValueError(f"axial_load must be a [force] quantity; got {self.axial_load}")
+        if not self.concrete_strength.has_dimension("[pressure]"):
+            raise ValueError(
+                f"concrete_strength must be a [pressure] quantity; got {self.concrete_strength}"
+            )
+        return self
+
+
+def screen_base_plate(
+    plate: BasePlate,
+    *,
+    required_safety_factor: float,
+) -> Scorecard:
+    """Screen a :class:`BasePlate`'s concrete bearing into a scorecard.
+
+    The bearing pressure P/(B·N) is screened against the concrete bearing capacity
+    0.85·f'c at ``required_safety_factor`` (AISC §J8). No material lookup is needed
+    — the footing strength is carried on the member.
+    """
+    area = plate.width.to("mm").magnitude * plate.depth.to("mm").magnitude
+    bearing = Quantity(magnitude=plate.axial_load.to("N").magnitude / area, unit="MPa")
+    capacity = Quantity(
+        magnitude=_CONCRETE_BEARING_FRACTION * plate.concrete_strength.to("MPa").magnitude,
+        unit="MPa",
+    )
+    entry = strength_scorecard(
+        f"{plate.name} concrete bearing",
+        stress=bearing,
+        allowable=capacity,
+        required=required_safety_factor,
+    ).model_copy(update={"reference": _CLAUSE_BEARING_CONCRETE})
+    return Scorecard(entries=(entry,))
+
+
+StructuralMember = BeamMember | ColumnMember | BoltedConnection | WeldedConnection | BasePlate
 
 
 def screen_structure(
@@ -442,7 +506,9 @@ def screen_structure(
             card = screen_bolted_connection(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
-        else:
+        elif isinstance(member, WeldedConnection):
             card = screen_welded_connection(member, required_safety_factor=required_safety_factor)
+        else:
+            card = screen_base_plate(member, required_safety_factor=required_safety_factor)
         entries.extend(card.entries)
     return Scorecard(entries=tuple(entries))

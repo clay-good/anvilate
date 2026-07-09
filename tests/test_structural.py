@@ -13,12 +13,14 @@ from anvilate.analysis import (
     simply_supported_uniform_load,
 )
 from anvilate.packs.structural import (
+    BasePlate,
     BeamMember,
     BoltedConnection,
     ColumnMember,
     LoadType,
     Support,
     WeldedConnection,
+    screen_base_plate,
     screen_beam_member,
     screen_bolted_connection,
     screen_column_member,
@@ -273,6 +275,50 @@ def test_screen_structure_includes_welds():
         required_safety_factor=2.0,
     )
     assert any("weld shear" in e.name for e in card.entries)
+    assert card.status is CheckStatus.PASS
+
+
+def _base_plate(load: str = "200 kN") -> BasePlate:
+    return BasePlate(
+        name="col_base",
+        width=_q("300 mm"),
+        depth=_q("300 mm"),
+        axial_load=_q(load),
+        concrete_strength=_q("25 MPa"),
+    )
+
+
+def test_base_plate_screens_concrete_bearing():
+    # 200 kN over a 300x300 plate: bearing = 200000/90000 = 2.22 MPa vs capacity
+    #   0.85*25 = 21.25 MPa -> SF 9.6 -> PASS, citing AISC J8.
+    card = screen_base_plate(_base_plate(), required_safety_factor=2.0)
+    assert card.status is CheckStatus.PASS
+    assert card.entries[0].name == "col_base concrete bearing"
+    assert card.entries[0].reference == "AISC 360-16 §J8"
+
+
+def test_overloaded_base_plate_fails():
+    card = screen_base_plate(_base_plate(load="2500 kN"), required_safety_factor=2.0)
+    assert card.status is CheckStatus.FAIL
+
+
+def test_base_plate_rejects_non_pressure_concrete_strength():
+    with pytest.raises(ValidationError, match="concrete_strength must be a"):
+        BasePlate(
+            name="b",
+            width=_q("300 mm"),
+            depth=_q("300 mm"),
+            axial_load=_q("200 kN"),
+            concrete_strength=_q("25 N"),
+        )
+
+
+def test_screen_structure_includes_base_plates():
+    card = screen_structure(
+        [_column("500 mm"), _base_plate()],
+        required_safety_factor=2.0,
+    )
+    assert any("concrete bearing" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
 
