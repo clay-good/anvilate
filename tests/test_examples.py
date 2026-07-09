@@ -119,6 +119,17 @@ def test_tolerance_stackup_example_worst_case_fails_but_yield_is_high():
     assert 0.98 < result["predicted_yield"] < 1.0
 
 
+def test_column_base_plate_example_governed_by_plate_bending():
+    namespace = runpy.run_path(str(_EXAMPLES / "column_base_plate.py"))
+    card = namespace["screen_base_plate_design"]()
+    # Bearing passes comfortably (SF 4.25) but the 25 mm plate's bending stress
+    # sits at yield -> plate bending governs and FAILs the 1.5 requirement.
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["col_base concrete bearing"].passed
+    assert not by_name["col_base plate bending"].passed
+
+
 def test_beam_column_example_passes_h1_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "beam_column_check.py"))
     card = namespace["screen_beam_column_post"]()
