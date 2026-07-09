@@ -125,13 +125,34 @@ def test_offset_cantilever_point_load_dispatches_to_the_offset_check():
     assert "3.33" in bending.detail
 
 
-def test_load_position_requires_a_point_member_with_a_free_position():
+def test_offset_fixed_fixed_point_load_dispatches_to_the_offset_check():
+    # A load_position off mid-span must route to fixed_fixed_offset_load: at the
+    # quarter point the nearer-wall moment M = F*a*b^2/L^2 = 7031.25 N*mm ->
+    # sigma 21.09 MPa (above the mid-span case's 18.75 — off-center is *worse*
+    # on a fixed-fixed beam), so the bending SF is the offset case's 11.85.
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.FIXED_FIXED,
+        load=_q("100 N"),
+        load_type=LoadType.POINT,
+        material="ASTM-A36",
+        load_position=_q("125 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.PASS
+    assert "11.85" in bending.detail
+
+
+def test_load_position_requires_a_point_load():
     for support, load_type, load in (
-        (Support.FIXED_FIXED, LoadType.POINT, "100 N"),
         (Support.SIMPLY_SUPPORTED, LoadType.DISTRIBUTED, "1 N/mm"),
         (Support.CANTILEVER, LoadType.DISTRIBUTED, "1 N/mm"),
+        (Support.FIXED_FIXED, LoadType.DISTRIBUTED, "1 N/mm"),
     ):
-        with pytest.raises(ValidationError, match="only supported for a simply-supported or"):
+        with pytest.raises(ValidationError, match="only supported for a point load"):
             BeamMember(
                 name="beam",
                 section=_section(),

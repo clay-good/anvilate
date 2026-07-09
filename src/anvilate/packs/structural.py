@@ -33,6 +33,7 @@ from ..analysis import (
     deflection_scorecard,
     euler_critical_stress,
     fixed_fixed_center_load,
+    fixed_fixed_offset_load,
     fixed_fixed_uniform_load,
     johnson_critical_stress,
     simply_supported_center_load,
@@ -143,6 +144,11 @@ _DISTRIBUTED_CHECKS = {
     Support.SIMPLY_SUPPORTED: simply_supported_uniform_load,
     Support.FIXED_FIXED: fixed_fixed_uniform_load,
 }
+_OFFSET_POINT_CHECKS = {
+    Support.CANTILEVER: cantilever_offset_load,
+    Support.SIMPLY_SUPPORTED: simply_supported_offset_load,
+    Support.FIXED_FIXED: fixed_fixed_offset_load,
+}
 
 
 class BeamMember(BaseModel):
@@ -152,9 +158,9 @@ class BeamMember(BaseModel):
     ``distributed`` one — the model validates the dimension matches ``load_type``.
     ``material`` is a database id (its E and yield drive the checks). An optional
     ``load_position`` places a point load away from its default position — off
-    mid-span on a simply-supported member (measured from either support), or
-    short of the tip on a cantilever (measured from the fixed end). Only those
-    two point-load cases support it.
+    mid-span on a simply-supported or fixed-fixed member (measured from either
+    support), or short of the tip on a cantilever (measured from the fixed end).
+    Only point loads support it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -190,10 +196,10 @@ class BeamMember(BaseModel):
                 raise ValueError(
                     f"load_position must be a [length] quantity; got {self.load_position}"
                 )
-            if self.support is Support.FIXED_FIXED or self.load_type is not LoadType.POINT:
+            if self.load_type is not LoadType.POINT:
                 raise ValueError(
-                    "load_position is only supported for a simply-supported or "
-                    f"cantilever point load; got {self.support.value}/{self.load_type.value}"
+                    "load_position is only supported for a point load; got "
+                    f"{self.support.value}/{self.load_type.value}"
                 )
         return self
 
@@ -226,12 +232,9 @@ def screen_beam_member(
         "elastic_modulus": record.elastic_modulus.quantity,
     }
     if member.load_position is not None:
-        offset_check = (
-            cantilever_offset_load
-            if member.support is Support.CANTILEVER
-            else simply_supported_offset_load
+        result = _OFFSET_POINT_CHECKS[member.support](
+            force=member.load, load_position=member.load_position, **common
         )
-        result = offset_check(force=member.load, load_position=member.load_position, **common)
     elif member.load_type is LoadType.POINT:
         result = _POINT_CHECKS[member.support](force=member.load, **common)
     else:
