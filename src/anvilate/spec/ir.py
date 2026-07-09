@@ -454,6 +454,18 @@ class Constraints(_Base):
     min_safety_factor: Provenanced[float] | None = None
     max_cost: Provenanced[float] | None = None  # currency handled by cost-estimation
 
+    @model_validator(mode="after")
+    def _positive_bounds(self) -> Constraints:
+        if self.max_mass is not None and self.max_mass.value.to("kg").magnitude <= 0:
+            raise ValueError(f"max_mass must be positive; got {self.max_mass.value}")
+        if self.min_safety_factor is not None and self.min_safety_factor.value <= 0:
+            raise ValueError(
+                f"min_safety_factor must be positive; got {self.min_safety_factor.value}"
+            )
+        if self.max_cost is not None and self.max_cost.value <= 0:
+            raise ValueError(f"max_cost must be positive; got {self.max_cost.value}")
+        return self
+
 
 class ValidationTier(StrEnum):
     T0_GEOMETRY = "T0_geometry"

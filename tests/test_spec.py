@@ -337,6 +337,17 @@ def test_envelope_rejects_non_positive_extent():
         Envelope(x=Quantity.parse("50 mm"), y=Quantity.parse("50 mm"), z=Quantity.parse("0 mm"))
 
 
+def test_constraints_reject_nonsensical_bounds():
+    # A non-positive safety factor, mass budget, or cost cap is not a satisfiable
+    # constraint — reject it at construction.
+    with pytest.raises(ValidationError, match="min_safety_factor must be positive"):
+        Constraints(min_safety_factor=Provenanced.stated(-1.0))
+    with pytest.raises(ValidationError, match="max_mass must be positive"):
+        Constraints(max_mass=Provenanced.stated(Quantity.parse("0 g")))
+    with pytest.raises(ValidationError, match="max_cost must be positive"):
+        Constraints(max_cost=Provenanced.stated(0.0))
+
+
 # --- Requirement: Typed explicit tolerances and fits on the IR ---
 
 
