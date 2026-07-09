@@ -299,15 +299,35 @@ class ChainAnalysis(_Base):
 class GeometricCharacteristic(StrEnum):
     """The geometric characteristics this slice supports (ISO 1101 / ASME Y14.5)."""
 
-    FLATNESS = "flatness"  # a form control — references no datum
-    PERPENDICULARITY = "perpendicularity"  # an orientation control — needs a datum
-    POSITION = "position"  # a location control — needs a datum
+    # Form controls — reference no datum.
+    FLATNESS = "flatness"
+    STRAIGHTNESS = "straightness"
+    CIRCULARITY = "circularity"  # roundness
+    CYLINDRICITY = "cylindricity"
+    # Orientation controls — need a datum.
+    PERPENDICULARITY = "perpendicularity"
+    PARALLELISM = "parallelism"
+    ANGULARITY = "angularity"
+    # Location control — needs a datum.
+    POSITION = "position"
 
 
 # Form controls reference no datum; orientation/location controls require one.
-_FORM_CHARACTERISTICS = frozenset({GeometricCharacteristic.FLATNESS})
+_FORM_CHARACTERISTICS = frozenset(
+    {
+        GeometricCharacteristic.FLATNESS,
+        GeometricCharacteristic.STRAIGHTNESS,
+        GeometricCharacteristic.CIRCULARITY,
+        GeometricCharacteristic.CYLINDRICITY,
+    }
+)
 _DATUM_REQUIRED = frozenset(
-    {GeometricCharacteristic.PERPENDICULARITY, GeometricCharacteristic.POSITION}
+    {
+        GeometricCharacteristic.PERPENDICULARITY,
+        GeometricCharacteristic.PARALLELISM,
+        GeometricCharacteristic.ANGULARITY,
+        GeometricCharacteristic.POSITION,
+    }
 )
 
 

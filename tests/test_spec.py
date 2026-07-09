@@ -589,6 +589,44 @@ def test_perpendicularity_requires_a_datum():
         )
 
 
+def test_cylindricity_is_a_form_control_rejecting_datums():
+    # Cylindricity, like flatness, controls form and references no datum.
+    gt = GeometricTolerance(
+        characteristic=GeometricCharacteristic.CYLINDRICITY,
+        tolerance=Quantity.parse("0.02 mm"),
+        feature="shaft_journal",
+    )
+    assert not gt.datums
+    with pytest.raises(ValidationError, match="form control"):
+        GeometricTolerance(
+            characteristic=GeometricCharacteristic.CYLINDRICITY,
+            tolerance=Quantity.parse("0.02 mm"),
+            feature="shaft_journal",
+            datums=["A"],
+        )
+
+
+def test_parallelism_and_angularity_require_a_datum():
+    # Both are orientation controls: legal with a datum, rejected without one.
+    for characteristic in (
+        GeometricCharacteristic.PARALLELISM,
+        GeometricCharacteristic.ANGULARITY,
+    ):
+        ok = GeometricTolerance(
+            characteristic=characteristic,
+            tolerance=Quantity.parse("0.1 mm"),
+            feature="top_face",
+            datums=["A"],
+        )
+        assert ok.datums == ["A"]
+        with pytest.raises(ValidationError, match="requires at least one datum"):
+            GeometricTolerance(
+                characteristic=characteristic,
+                tolerance=Quantity.parse("0.1 mm"),
+                feature="top_face",
+            )
+
+
 def test_geometric_tolerance_rejects_repeated_datum():
     # A datum letter is referenced at most once in a feature control frame.
     with pytest.raises(ValidationError, match="repeats"):
