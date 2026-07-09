@@ -29,6 +29,7 @@ from anvilate.analysis import (
     goodman_scorecard,
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
+    hollow_shaft_twist_angle,
     johnson_critical_stress,
     key_bearing_stress,
     key_shear_stress,
@@ -553,6 +554,27 @@ def test_polar_second_moment_hollow_and_stress():
     # A tube carries more stress than a solid shaft of the same OD (less material).
     solid = shaft_torsional_stress(torque=_q("50 N*m"), diameter=_q("20 mm"))
     assert tau.to("MPa").magnitude > solid.to("MPa").magnitude
+
+
+def test_hollow_shaft_twist_angle_matches_worked_example():
+    # 50 N*m over a 1 m, 20/10 mm steel tube, G=77 GPa: J = 14726 mm^4,
+    #   theta = T*L/(G*J) = 50 / (77e9 * 14726e-12) = 0.0441 rad = 2.527 deg.
+    theta = hollow_shaft_twist_angle(
+        torque=_q("50 N*m"),
+        length=_q("1 m"),
+        outer_diameter=_q("20 mm"),
+        inner_diameter=_q("10 mm"),
+        shear_modulus=_q("77 GPa"),
+    )
+    assert theta.to("degree").magnitude == pytest.approx(2.527, rel=1e-3)
+    # A tube twists more than a solid shaft of the same OD (less material).
+    solid = shaft_twist_angle(
+        torque=_q("50 N*m"),
+        length=_q("1 m"),
+        diameter=_q("20 mm"),
+        shear_modulus=_q("77 GPa"),
+    )
+    assert theta.to("degree").magnitude > solid.to("degree").magnitude
 
 
 def test_hollow_shaft_rejects_inner_ge_outer():

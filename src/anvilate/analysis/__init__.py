@@ -86,6 +86,7 @@ from .stress import (
 from .thermal import constrained_thermal_stress
 from .torsion import (
     hollow_shaft_torsional_stress,
+    hollow_shaft_twist_angle,
     polar_second_moment_hollow,
     polar_second_moment_solid,
     shaft_torsional_stress,
@@ -135,6 +136,7 @@ __all__ = [
     "shaft_torsional_stress",
     "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
+    "hollow_shaft_twist_angle",
     "ThinWallStress",
     "thin_wall_cylinder",
     "thin_wall_sphere_stress",

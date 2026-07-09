@@ -21,6 +21,7 @@ __all__ = [
     "shaft_torsional_stress",
     "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
+    "hollow_shaft_twist_angle",
 ]
 
 
@@ -113,5 +114,29 @@ def shaft_twist_angle(
     _require(diameter, "[length]", "diameter")
     _require(shear_modulus, "[pressure]", "shear_modulus")
     j = pi * diameter.pint**4 / 32
+    angle = torque.pint * length.pint / (shear_modulus.pint * j)
+    return _as_quantity(angle, "degree")
+
+
+def hollow_shaft_twist_angle(
+    *,
+    torque: Quantity,
+    length: Quantity,
+    outer_diameter: Quantity,
+    inner_diameter: Quantity,
+    shear_modulus: Quantity,
+) -> Quantity:
+    """The angle of twist θ = T·L/(G·J) of a hollow round shaft (tube).
+
+    Uses the hollow polar second moment J = π·(D⁴−d⁴)/32. ``length`` is the shaft
+    length, ``shear_modulus`` the material G; ``inner_diameter`` must be below
+    ``outer_diameter``. Returns the twist in degrees.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(length, "[length]", "length")
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    j = polar_second_moment_hollow(
+        outer_diameter=outer_diameter, inner_diameter=inner_diameter
+    ).pint
     angle = torque.pint * length.pint / (shear_modulus.pint * j)
     return _as_quantity(angle, "degree")
