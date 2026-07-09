@@ -130,6 +130,25 @@ def test_column_base_plate_example_governed_by_plate_bending():
     assert not by_name["col_base plate bending"].passed
 
 
+def test_coped_beam_web_example_is_governed_by_shear_rupture():
+    namespace = runpy.run_path(str(_EXAMPLES / "coped_beam_web_shear.py"))
+    card = namespace["screen_coped_web"]()
+    # Both §J4.2 limit states pass the Omega=2.00 requirement, but the three
+    # bolt-hole deductions make shear rupture (SF ~2.32) the tighter limit state
+    # over gross shear yielding (SF ~2.42).
+    assert card.status is CheckStatus.PASS
+    by_name = {e.name: e for e in card.entries}
+    yielding = by_name["coped web shear yielding"]
+    rupture = by_name["coped web shear rupture"]
+    assert yielding.passed and rupture.passed
+
+    def _sf(entry) -> float:
+        # detail reads "safety factor 2.32 vs required minimum 2.0"
+        return float(entry.detail.split("safety factor ")[1].split(" ")[0])
+
+    assert _sf(rupture) < _sf(yielding)
+
+
 def test_beam_column_example_passes_h1_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "beam_column_check.py"))
     card = namespace["screen_beam_column_post"]()
