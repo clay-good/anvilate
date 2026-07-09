@@ -724,6 +724,8 @@ def test_unachievable_tolerance_flagged_on_fdm() -> None:
     assert check.finest.to("mm").magnitude == pytest.approx(0.20)
     assert check.demanded.to("mm").magnitude == pytest.approx(0.02)
     assert check.source
+    # The screening-estimate caveat rides along, so the flag is not a hard limit.
+    assert check.note
     assert "UNACHIEVABLE" in str(check)
 
 

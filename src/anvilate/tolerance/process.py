@@ -42,7 +42,9 @@ class AchievabilityCheck(BaseModel):
 
     ``achievable`` is True when the demanded total tolerance band is at least the
     process's finest achievable band. ``demanded`` and ``finest`` are both total
-    bands (a length); ``source`` cites the capability estimate.
+    bands (a length); ``source`` cites the capability estimate and ``note`` carries
+    its caveat (the floor is a screening estimate that varies by machine and
+    setup), so a flag is never read as a hard limit.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -52,6 +54,7 @@ class AchievabilityCheck(BaseModel):
     finest: Quantity
     achievable: bool
     source: str
+    note: str
 
     def __str__(self) -> str:
         verdict = "achievable" if self.achievable else "UNACHIEVABLE"
@@ -119,6 +122,7 @@ def tolerance_is_achievable(process: str, demanded_width: Quantity) -> Achievabi
         finest=cap.finest_tolerance,
         achievable=demanded_mm >= finest_mm,
         source=cap.source,
+        note=cap.note,
     )
 
 
