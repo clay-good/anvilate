@@ -140,15 +140,17 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
 # carries a grade-banded `ei` (nonzero only for IT4–IT7, zero elsewhere), and its
 # K hole follows the same delta rule (capped at IT7). The finer-stepped
 # interference shafts r and s (and their R/S holes, via the delta rule capped at
-# IT7) resolve up to 50 mm, where the coarse diameter steps are exact. The
-# grade-dependent letter j and t/u (and r/s above 50 mm) land as the table grows.
+# IT7) resolve up to 50 mm, where the coarse diameter steps are exact; the heavier
+# interference shaft u (and its U hole) resolves the same way up to 18 mm, where
+# its coarse steps are still exact. The grade-dependent letter j and t (and r/s/u
+# above their exact bound) land as the table grows.
 
 _BASIS_LETTERS = {"h"}  # zero fundamental deviation; no table lookup needed
 _CLEARANCE_LETTERS = {"d", "e", "f", "g"}  # negative shaft `es`, encoded below
 _SYMMETRIC_LETTERS = {"js"}  # zone centered on the basic size, ±IT/2
 _INTERFERENCE_LETTERS = {"m", "n", "p"}  # positive shaft `ei`; holes via delta rule
 _GRADE_DEP_LETTERS = {"k"}  # grade-banded shaft `ei` (nonzero IT4–IT7 only); hole via delta
-_FINE_SHAFT_LETTERS = {"r", "s"}  # finer-stepped interference shafts; exact only <= 50 mm
+_FINE_SHAFT_LETTERS = {"r", "s", "u"}  # finer-stepped interference shafts; exact only to a bound
 _ENCODED_LETTERS = (
     _BASIS_LETTERS
     | _CLEARANCE_LETTERS
@@ -158,22 +160,25 @@ _ENCODED_LETTERS = (
     | _FINE_SHAFT_LETTERS
 )
 
-# Above 50 mm the r/s deviations split into finer diameter steps than the encoded
-# table carries; below it they are constant across each coarse step, so the
-# tabulated value is exact. Both the r/s shaft and its R/S hole resolve only
-# within that bound.
-_FINE_SHAFT_MAX_MM = 50.0
+# The finer-stepped interference shafts split into finer diameter steps than the
+# encoded table carries above a per-letter bound; below it their deviation is
+# constant across each coarse step, so the tabulated value is exact. r/s hold to
+# 50 mm; the heavier u holds only to 18 mm (it splits the 18-30 coarse step into
+# 18-24/24-30). Both the shaft and its uppercase hole resolve only within the
+# letter's bound.
+_FINE_SHAFT_MAX_MM = {"r": 50.0, "s": 50.0, "u": 18.0}
 
 # The k shaft carries its tabulated `ei` only for grades IT4 through IT7; for
 # every other grade its fundamental deviation is zero.
 _K_GRADE_BAND = range(4, 8)
 
 # The ISO 286 special rule ES = -ei + Δ holds for the M and N holes up to IT8 and
-# the K/P/R/S holes up to IT7. The K hole cap keeps its k-shaft ei inside the k
-# grade band (IT4–IT7); the R/S holes inherit the r/s shafts' <= 50 mm bound.
-# Below IT6 the correction Δ = IT_n − IT_(n−1) would need IT_(n−1) beneath the
-# encoded IT5, so IT6 is the finest hole grade resolved here.
-_HOLE_MAX_GRADE = {"m": 8, "n": 8, "p": 7, "k": 7, "r": 7, "s": 7}
+# the K/P/R/S/U holes up to IT7. The K hole cap keeps its k-shaft ei inside the k
+# grade band (IT4–IT7); the R/S/U holes inherit their shafts' diameter bound
+# (r/s <= 50 mm, u <= 18 mm). Below IT6 the correction Δ = IT_n − IT_(n−1) would
+# need IT_(n−1) beneath the encoded IT5, so IT6 is the finest hole grade resolved
+# here.
+_HOLE_MAX_GRADE = {"m": 8, "n": 8, "p": 7, "k": 7, "r": 7, "s": 7, "u": 7}
 _HOLE_MIN_GRADE = 6
 
 
@@ -302,9 +307,10 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
     IT8 and P up to IT7. The k transition shaft resolves at any grade (its
     grade-banded deviation collapsing to zero outside IT4–IT7), and its K hole
     resolves via the delta rule up to IT7. The r/s interference zones resolve up
-    to 50 mm nominal — the shaft at any grade, the R/S hole via the delta rule up
-    to IT7. Any other letter raises :class:`ToleranceRangeError`, as does a
-    delta-corrected hole outside its grade band or an r/s zone above 50 mm. Raises
+    to 50 mm nominal, and the heavier u zone up to 18 mm — the shaft at any grade,
+    the R/S/U hole via the delta rule up to IT7. Any other letter raises
+    :class:`ToleranceRangeError`, as does a delta-corrected hole outside its grade
+    band or an r/s/u zone above its exact bound. Raises
     :class:`ValueError` for a malformed
     designation, and :class:`ToleranceRangeError` for an out-of-range nominal or
     ungraded IT grade (via :func:`standard_tolerance`).
@@ -346,9 +352,10 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
             # Shaft: ei is the lower deviation, es = ei + IT.
             upper_mm, lower_mm = ei + it, ei
     elif base in _FINE_SHAFT_LETTERS:
-        if nominal_mm > _FINE_SHAFT_MAX_MM:
+        max_mm = _FINE_SHAFT_MAX_MM[base]
+        if nominal_mm > max_mm:
             raise ToleranceRangeError(
-                f"the r/s zones are encoded only up to {_FINE_SHAFT_MAX_MM:g} mm, "
+                f"the {base} zone is encoded only up to {max_mm:g} mm, "
                 f"where the coarse diameter steps are exact; {nominal} needs the "
                 "finer-stepped table"
             )

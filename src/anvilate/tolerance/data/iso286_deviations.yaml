@@ -18,15 +18,18 @@
 #     only up to 50 mm: below that bound their deviation is constant across each of
 #     these coarse diameter steps, so the values are exact. Above 50 mm r/s split
 #     into finer steps than this table carries, so no r/s entry appears there and
-#     the code rejects the lookup rather than reading a neighbouring step.
-# The R/S holes derive from these same r/s `ei` values by the delta rule (also
-# <= 50 mm). The h/H basis letters have zero fundamental deviation and need no
-# entry. The grade-dependent letter j and the finer-stepped t/u (and r/s above
-# 50 mm) land later.
+#     the code rejects the lookup rather than reading a neighbouring step. The
+#     heavy interference shaft u rides the same way but stays constant across the
+#     coarse steps only up to 18 mm (it splits the 18-30 step into 18-24/24-30),
+#     so u entries appear up to 18 mm and stop there.
+# The R/S/U holes derive from these same r/s/u `ei` values by the delta rule (R/S
+# also <= 50 mm, U <= 18 mm). The h/H basis letters have zero fundamental deviation
+# and need no entry. The grade-dependent letter j and the finer-stepped t (and
+# r/s/u above their exact bound) land later.
 # Diameter steps match the IT-grade table so a zone's width and deviation share
 # one range. Values are exact tabulated integers. The source is not redistributed.
 dataset:
-  source: "ISO 286-1 fundamental deviations (shaft letters d/e/f/g, k, m/n/p, and r/s <= 50 mm)"
+  source: "ISO 286-1 fundamental deviations (shaft letters d/e/f/g, k, m/n/p, r/s <= 50 mm, u <= 18 mm)"
   license: "CC0-1.0 (deviation values only; source standard not redistributed)"
   retrieved: "2026-07-08"
 
@@ -41,16 +44,16 @@ max_nominal_mm: 500
 ranges:
   - up_to_mm: 3
     es: {d: -20, e: -14, f: -6, g: -2}
-    ei: {m: 2, n: 4, p: 6, k: 0, r: 10, s: 14}
+    ei: {m: 2, n: 4, p: 6, k: 0, r: 10, s: 14, u: 18}
   - up_to_mm: 6
     es: {d: -30, e: -20, f: -10, g: -4}
-    ei: {m: 4, n: 8, p: 12, k: 1, r: 15, s: 19}
+    ei: {m: 4, n: 8, p: 12, k: 1, r: 15, s: 19, u: 23}
   - up_to_mm: 10
     es: {d: -40, e: -25, f: -13, g: -5}
-    ei: {m: 6, n: 10, p: 15, k: 1, r: 19, s: 23}
+    ei: {m: 6, n: 10, p: 15, k: 1, r: 19, s: 23, u: 28}
   - up_to_mm: 18
     es: {d: -50, e: -32, f: -16, g: -6}
-    ei: {m: 7, n: 12, p: 18, k: 1, r: 23, s: 28}
+    ei: {m: 7, n: 12, p: 18, k: 1, r: 23, s: 28, u: 33}
   - up_to_mm: 30
     es: {d: -65, e: -40, f: -20, g: -7}
     ei: {m: 8, n: 15, p: 22, k: 2, r: 28, s: 35}

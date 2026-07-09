@@ -495,6 +495,57 @@ def test_h7s6_interference_fit_at_22mm() -> None:
     assert f.max_clearance.to("um").magnitude == pytest.approx(-14)
 
 
+# --- ISO 286 heavy u interference shaft (<= 18 mm) ---
+
+
+def test_u6_shaft_at_15mm() -> None:
+    # At 10-18 mm: u ei = +33 um, es = 33 + IT6(11) = +44.
+    u6 = zone_limits("u6", _mm(15))
+    assert u6.hole is False
+    assert u6.lower.to("um").magnitude == pytest.approx(33)
+    assert u6.upper.to("um").magnitude == pytest.approx(44)
+    assert u6.min_size.to("mm").magnitude == pytest.approx(15.033)
+    assert u6.max_size.to("mm").magnitude == pytest.approx(15.044)
+
+
+def test_u_shaft_above_18mm_rejected() -> None:
+    # Above 18 mm u splits the 18-30 coarse step into 18-24/24-30, so its tabulated
+    # value is no longer exact and the lookup is rejected.
+    with pytest.raises(ToleranceRangeError, match="up to 18 mm"):
+        zone_limits("u6", _mm(22))
+
+
+def test_u_holes_delta_corrected_at_15mm() -> None:
+    # U holes via ES = -ei + Δ with the u shaft ei = +33 um at 10-18 mm.
+    # IT5=8, IT6=11, IT7=18 um.
+    # U7: Δ = IT7 - IT6 = 7, ES = -33 + 7 = -26, EI = -26 - 18 = -44.
+    u7 = zone_limits("U7", _mm(15))
+    assert u7.hole is True
+    assert u7.upper.to("um").magnitude == pytest.approx(-26)
+    assert u7.lower.to("um").magnitude == pytest.approx(-44)
+    # U6: Δ = IT6 - IT5 = 3, ES = -33 + 3 = -30, EI = -30 - 11 = -41.
+    u6 = zone_limits("U6", _mm(15))
+    assert u6.upper.to("um").magnitude == pytest.approx(-30)
+    assert u6.lower.to("um").magnitude == pytest.approx(-41)
+
+
+def test_u_hole_capped_at_it7_and_18mm() -> None:
+    with pytest.raises(ToleranceRangeError, match="out of range"):
+        zone_limits("U8", _mm(15))
+    with pytest.raises(ToleranceRangeError, match="up to 18 mm"):
+        zone_limits("U7", _mm(22))
+
+
+def test_h7u6_interference_fit_at_15mm() -> None:
+    # H7/u6 at 15 mm (a heavy press fit): hole 0..+18 um, shaft +33..+44 um.
+    # Min clearance 0 - 44 = -44 um; max clearance 18 - 33 = -15 um; both
+    # negative => interference.
+    f = fit("H7/u6", _mm(15))
+    assert f.kind == "interference"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(-44)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(-15)
+
+
 # --- ISO 286 delta-corrected interference/transition holes (M/N/P) ---
 
 
