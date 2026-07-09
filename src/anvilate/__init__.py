@@ -9,6 +9,10 @@ implemented layers everything else builds on:
 - :mod:`anvilate.standards` — cited, provenance-tagged reference data
   (materials, standard components, metric threads and clearance holes).
 - :mod:`anvilate.tolerance` — ISO 2768 general tolerances and ISO 286 fits.
+- :mod:`anvilate.analysis` — T1 closed-form analytical checks (beam, column,
+  torsion, pressure vessel, bolted joint, von Mises).
+- :mod:`anvilate.scorecard` — the tri-state check-result vocabulary
+  (pass / fail / not-evaluated).
 """
 
 from __future__ import annotations
