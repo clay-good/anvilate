@@ -84,6 +84,45 @@ def test_point_load_dispatches_to_the_matching_check():
     assert standalone.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
 
 
+def test_offset_point_load_dispatches_to_the_offset_check():
+    # A load_position off mid-span must route to simply_supported_offset_load:
+    # at the quarter point M = P*a*b/L = 9375 N*mm -> sigma 28.125 MPa (not the
+    # mid-span 37.5), so the bending SF is the offset case's.
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("100 N"),
+        load_type=LoadType.POINT,
+        material="ASTM-A36",
+        load_position=_q("125 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.PASS
+    # A36 yield 250 / 28.125 = 8.89, vs 6.67 for the mid-span case.
+    assert "8.89" in bending.detail
+
+
+def test_load_position_requires_a_simply_supported_point_member():
+    for support, load_type, load in (
+        (Support.CANTILEVER, LoadType.POINT, "100 N"),
+        (Support.SIMPLY_SUPPORTED, LoadType.DISTRIBUTED, "1 N/mm"),
+    ):
+        with pytest.raises(ValidationError, match="only supported for a simply-supported"):
+            BeamMember(
+                name="beam",
+                section=_section(),
+                length=_q("500 mm"),
+                support=support,
+                load=_q(load),
+                load_type=load_type,
+                material="ASTM-A36",
+                load_position=_q("125 mm"),
+            )
+
+
 def test_support_condition_changes_the_dispatch():
     # For the same load, a fixed-fixed beam is far less stressed than a cantilever,
     # confirming the support drives which check runs.

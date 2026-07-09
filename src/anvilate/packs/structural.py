@@ -35,6 +35,7 @@ from ..analysis import (
     fixed_fixed_uniform_load,
     johnson_critical_stress,
     simply_supported_center_load,
+    simply_supported_offset_load,
     simply_supported_uniform_load,
     slenderness_ratio,
     strength_scorecard,
@@ -143,7 +144,9 @@ class BeamMember(BaseModel):
 
     ``load`` is a force for a ``point`` member and a force-per-length for a
     ``distributed`` one — the model validates the dimension matches ``load_type``.
-    ``material`` is a database id (its E and yield drive the checks).
+    ``material`` is a database id (its E and yield drive the checks). An optional
+    ``load_position`` places a point load off mid-span (measured from either
+    support) — only a simply-supported point member supports it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -156,6 +159,7 @@ class BeamMember(BaseModel):
     load_type: LoadType
     material: str
     deflection_limit: Quantity | None = None  # a member may carry its own limit
+    load_position: Quantity | None = None  # a point load may sit off mid-span
 
     @model_validator(mode="after")
     def _well_formed(self) -> BeamMember:
@@ -173,6 +177,16 @@ class BeamMember(BaseModel):
                 f"a {self.load_type.value} load must be a {expected} quantity; got "
                 f"{self.load.dimensionality} ({self.load})"
             )
+        if self.load_position is not None:
+            if not self.load_position.has_dimension("[length]"):
+                raise ValueError(
+                    f"load_position must be a [length] quantity; got {self.load_position}"
+                )
+            if self.support is not Support.SIMPLY_SUPPORTED or self.load_type is not LoadType.POINT:
+                raise ValueError(
+                    "load_position is only supported for a simply-supported point load; "
+                    f"got {self.support.value}/{self.load_type.value}"
+                )
         return self
 
 
@@ -203,7 +217,11 @@ def screen_beam_member(
         "extreme_fibre": member.section.extreme_fibre,
         "elastic_modulus": record.elastic_modulus.quantity,
     }
-    if member.load_type is LoadType.POINT:
+    if member.load_position is not None:
+        result = simply_supported_offset_load(
+            force=member.load, load_position=member.load_position, **common
+        )
+    elif member.load_type is LoadType.POINT:
         result = _POINT_CHECKS[member.support](force=member.load, **common)
     else:
         result = _DISTRIBUTED_CHECKS[member.support](distributed_load=member.load, **common)
