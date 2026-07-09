@@ -82,6 +82,7 @@ _CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
 _CLAUSE_BEARING = "AISC 360-16 §J3.10"
 _CLAUSE_WELD = "AISC 360-16 §J2.4"
 _CLAUSE_BEARING_CONCRETE = "AISC 360-16 §J8"
+_CLAUSE_BASEPLATE_BENDING = "AISC Design Guide 1"
 _CLAUSE_LUG = "ASME BTH-1 §3-3"
 
 
@@ -424,8 +425,12 @@ class BasePlate(BaseModel):
     ``width`` B and ``depth`` N are the plate's plan dimensions, ``axial_load`` P
     the column load it spreads, and ``concrete_strength`` the footing's f'c. The
     bearing pressure P/(B·N) is screened against the concrete bearing capacity
-    0.85·f'c (AISC §J8, no confinement bonus). This first cut checks concrete
-    bearing only — the plate-bending thickness check is separate.
+    0.85·f'c (AISC §J8, no confinement bonus).
+
+    The plate-bending thickness check is added when the optional plate details are
+    given: ``plate_thickness`` t, ``cantilever`` l (the plate overhang beyond the
+    column), and ``plate_material`` (a database id). The cantilevered plate bends
+    under the bearing pressure, σ = 3·f_p·l²/t², screened against the plate yield.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -435,6 +440,9 @@ class BasePlate(BaseModel):
     depth: Quantity
     axial_load: Quantity
     concrete_strength: Quantity
+    plate_thickness: Quantity | None = None
+    cantilever: Quantity | None = None
+    plate_material: str | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> BasePlate:
@@ -447,6 +455,20 @@ class BasePlate(BaseModel):
             raise ValueError(
                 f"concrete_strength must be a [pressure] quantity; got {self.concrete_strength}"
             )
+        bending_fields = (self.plate_thickness, self.cantilever, self.plate_material)
+        if any(f is not None for f in bending_fields) and not all(
+            f is not None for f in bending_fields
+        ):
+            raise ValueError(
+                "the plate-bending check needs plate_thickness, cantilever, and "
+                "plate_material together, or none of them"
+            )
+        for value, name in (
+            (self.plate_thickness, "plate_thickness"),
+            (self.cantilever, "cantilever"),
+        ):
+            if value is not None and not value.has_dimension("[length]"):
+                raise ValueError(f"{name} must be a [length] quantity; got {value}")
         return self
 
 
@@ -454,26 +476,48 @@ def screen_base_plate(
     plate: BasePlate,
     *,
     required_safety_factor: float,
+    materials: MaterialsDatabase | None = None,
 ) -> Scorecard:
-    """Screen a :class:`BasePlate`'s concrete bearing into a scorecard.
+    """Screen a :class:`BasePlate`'s concrete bearing (and plate bending) into a card.
 
-    The bearing pressure P/(B·N) is screened against the concrete bearing capacity
-    0.85·f'c at ``required_safety_factor`` (AISC §J8). No material lookup is needed
-    — the footing strength is carried on the member.
+    The bearing pressure f_p = P/(B·N) is screened against the concrete bearing
+    capacity 0.85·f'c (AISC §J8). When the plate details are given, the cantilevered
+    plate's bending stress σ = 3·f_p·l²/t² is also screened against the plate yield
+    (AISC Design Guide 1). Both at ``required_safety_factor``; ``materials`` defaults
+    to the bundled database.
     """
     area = plate.width.to("mm").magnitude * plate.depth.to("mm").magnitude
-    bearing = Quantity(magnitude=plate.axial_load.to("N").magnitude / area, unit="MPa")
+    bearing_mpa = plate.axial_load.to("N").magnitude / area
+    bearing = Quantity(magnitude=bearing_mpa, unit="MPa")
     capacity = Quantity(
         magnitude=_CONCRETE_BEARING_FRACTION * plate.concrete_strength.to("MPa").magnitude,
         unit="MPa",
     )
-    entry = strength_scorecard(
-        f"{plate.name} concrete bearing",
-        stress=bearing,
-        allowable=capacity,
-        required=required_safety_factor,
-    ).model_copy(update={"reference": _CLAUSE_BEARING_CONCRETE})
-    return Scorecard(entries=(entry,))
+    entries = [
+        strength_scorecard(
+            f"{plate.name} concrete bearing",
+            stress=bearing,
+            allowable=capacity,
+            required=required_safety_factor,
+        ).model_copy(update={"reference": _CLAUSE_BEARING_CONCRETE})
+    ]
+    if plate.plate_thickness is not None:
+        materials = materials or default_materials_db()
+        plate_yield = materials.get(plate.plate_material).yield_strength.quantity
+        cantilever = plate.cantilever.to("mm").magnitude
+        thickness = plate.plate_thickness.to("mm").magnitude
+        plate_bending = Quantity(
+            magnitude=3 * bearing_mpa * cantilever**2 / thickness**2, unit="MPa"
+        )
+        entries.append(
+            strength_scorecard(
+                f"{plate.name} plate bending",
+                stress=plate_bending,
+                allowable=plate_yield,
+                required=required_safety_factor,
+            ).model_copy(update={"reference": _CLAUSE_BASEPLATE_BENDING})
+        )
+    return Scorecard(entries=tuple(entries))
 
 
 class LiftingLug(BaseModel):
@@ -591,7 +635,9 @@ def screen_structure(
         elif isinstance(member, WeldedConnection):
             card = screen_welded_connection(member, required_safety_factor=required_safety_factor)
         elif isinstance(member, BasePlate):
-            card = screen_base_plate(member, required_safety_factor=required_safety_factor)
+            card = screen_base_plate(
+                member, required_safety_factor=required_safety_factor, materials=materials
+            )
         else:
             card = screen_lifting_lug(
                 member, required_safety_factor=required_safety_factor, materials=materials

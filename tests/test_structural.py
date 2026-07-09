@@ -297,6 +297,41 @@ def test_base_plate_screens_concrete_bearing():
     assert card.status is CheckStatus.PASS
     assert card.entries[0].name == "col_base concrete bearing"
     assert card.entries[0].reference == "AISC 360-16 §J8"
+    # Bearing-only base plate: no plate-bending entry.
+    assert len(card.entries) == 1
+
+
+def test_base_plate_adds_plate_bending_when_details_given():
+    # f_p = 2.22 MPa, cantilever 75 mm, thickness 20 mm:
+    #   sigma = 3*f_p*l^2/t^2 = 3*2.22*75^2/20^2 = 93.7 MPa vs A36 250 -> SF 2.67.
+    plate = BasePlate(
+        name="col_base",
+        width=_q("300 mm"),
+        depth=_q("300 mm"),
+        axial_load=_q("200 kN"),
+        concrete_strength=_q("25 MPa"),
+        plate_thickness=_q("20 mm"),
+        cantilever=_q("75 mm"),
+        plate_material="ASTM-A36",
+    )
+    card = screen_base_plate(plate, required_safety_factor=2.0)
+    names = {e.name for e in card.entries}
+    assert names == {"col_base concrete bearing", "col_base plate bending"}
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.reference == "AISC Design Guide 1"
+    assert card.status is CheckStatus.PASS
+
+
+def test_base_plate_bending_rejects_partial_plate_details():
+    with pytest.raises(ValidationError, match="plate_thickness, cantilever, and"):
+        BasePlate(
+            name="b",
+            width=_q("300 mm"),
+            depth=_q("300 mm"),
+            axial_load=_q("200 kN"),
+            concrete_strength=_q("25 MPa"),
+            plate_thickness=_q("20 mm"),  # cantilever + plate_material missing
+        )
 
 
 def test_overloaded_base_plate_fails():
