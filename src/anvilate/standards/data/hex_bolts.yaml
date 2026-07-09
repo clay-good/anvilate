@@ -1,0 +1,26 @@
+# Hexagon-head bolt/screw head geometry (schema: standards-data).
+#
+# ISO 4014 (partially threaded bolts) and ISO 4017 (fully threaded screws) share
+# one hex head. A design retrieves the width across flats s (the wrench size and
+# the pocket to clear) and the head height k (which adds to the stack). Keyed by
+# the nominal thread size; the shank, length, and thread run are order-specific
+# and omitted, the same "mount, not body" rule the other tables follow. The
+# source standard is not redistributed, only the dimension table.
+dataset:
+  name: anvilate-hex-bolts-seed
+  version: "0.1.0"
+  source: "ISO 4014 / ISO 4017 hexagon-head bolt and screw head dimensions"
+  license: "CC0-1.0 (dimension values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+# nominal thread size: width_across_flats (s), head_height (k) in mm.
+bolts:
+  "ISO4014-M3": {width_across_flats: 5.5, head_height: 2.0}
+  "ISO4014-M4": {width_across_flats: 7, head_height: 2.8}
+  "ISO4014-M5": {width_across_flats: 8, head_height: 3.5}
+  "ISO4014-M6": {width_across_flats: 10, head_height: 4.0}
+  "ISO4014-M8": {width_across_flats: 13, head_height: 5.3}
+  "ISO4014-M10": {width_across_flats: 16, head_height: 6.4}
+  "ISO4014-M12": {width_across_flats: 18, head_height: 7.5}
+  "ISO4014-M16": {width_across_flats: 24, head_height: 10.0}
+  "ISO4014-M20": {width_across_flats: 30, head_height: 12.5}

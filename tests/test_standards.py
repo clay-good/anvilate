@@ -744,6 +744,76 @@ def test_hex_nuts_resolve_as_standard_components() -> None:
     assert not resolver.has_component("ISO4032-M7")
 
 
+# --- Hexagon-head bolts (ISO 4014 / 4017) ---
+
+
+@pytest.fixture(scope="module")
+def hex_bolts():
+    from anvilate.standards import default_hex_bolt_table
+
+    return default_hex_bolt_table()
+
+
+def test_hex_bolt_head_geometry_with_citation(hex_bolts) -> None:
+    # An M8 hex bolt head: 13 mm across flats, 5.3 mm high; each dimension carries
+    # its ISO 4014/4017 citation.
+    b8 = hex_bolts.get("ISO4014-M8")
+    assert b8.width_across_flats.quantity.to("mm").magnitude == pytest.approx(13.0)
+    assert b8.head_height.quantity.to("mm").magnitude == pytest.approx(5.3)
+    assert "ISO 4014" in b8.width_across_flats.citation.source
+    assert b8.width_across_flats.citation.license
+
+
+def test_hex_bolt_dimensions_are_length(hex_bolts) -> None:
+    for designation in hex_bolts.designations():
+        rec = hex_bolts.get(designation)
+        for field in ("width_across_flats", "head_height"):
+            assert getattr(rec, field).quantity.has_dimension("[length]"), (designation, field)
+
+
+def test_hex_bolt_citations_expose_the_evidence_trail(hex_bolts) -> None:
+    citations = hex_bolts.get("ISO4014-M6").citations()
+    assert set(citations) == {"width_across_flats", "head_height"}
+    for name, cite in citations.items():
+        assert isinstance(cite, PropertyCitation), name
+        assert cite.source and cite.license, name
+
+
+def test_hex_bolt_ordering_is_numeric(hex_bolts) -> None:
+    designations = hex_bolts.designations()
+    assert designations.index("ISO4014-M4") < designations.index("ISO4014-M10")
+    assert designations.index("ISO4014-M10") < designations.index("ISO4014-M20")
+
+
+def test_hex_bolt_head_shares_wrench_size_with_nut(hex_bolts) -> None:
+    # ISO 4014 bolt heads and ISO 4032 nuts take the same wrench: M10 is 16 mm
+    # across flats for both, so a joint's toolset is consistent.
+    from anvilate.standards import default_hex_nut_table
+
+    bolt_s = hex_bolts.get("ISO4014-M10").width_across_flats.quantity.to("mm").magnitude
+    nut_s = (
+        default_hex_nut_table().get("ISO4032-M10").width_across_flats.quantity.to("mm").magnitude
+    )
+    assert bolt_s == pytest.approx(nut_s)
+
+
+def test_hex_bolt_unknown_designation_surfaces_gap(hex_bolts) -> None:
+    from anvilate.standards import UnknownHexBoltError
+
+    with pytest.raises(UnknownHexBoltError) as exc:
+        hex_bolts.get("ISO4014-M7")  # not a standard bolt size
+    assert exc.value.suggestions
+
+
+def test_hex_bolts_resolve_as_standard_components() -> None:
+    from anvilate.standards import default_standards_resolver
+
+    resolver = default_standards_resolver()
+    assert resolver.has_component("ISO4014-M8")
+    assert "ISO4014-M6" in set(resolver.known_components())
+    assert not resolver.has_component("ISO4014-M7")
+
+
 # --- Metric clearance holes (ISO 273) ---
 
 
