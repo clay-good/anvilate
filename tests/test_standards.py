@@ -65,6 +65,18 @@ def test_mild_steel_1018_resolved_with_estimated_endurance(db: MaterialsDatabase
     assert se.citation.estimated is True and se.citation.method
 
 
+def test_alloy_steel_4140_resolved_with_new_category(db: MaterialsDatabase) -> None:
+    # 4140 is the DB's first heat-treatable alloy steel; annealed strengths are
+    # the Shigley Table A-21 values (60.5/95 kpsi) and it opens the alloy_steel
+    # category (a free string, no code change).
+    steel = db.get("AISI-4140")
+    assert steel.category == "alloy_steel"
+    assert steel.yield_strength.quantity.to("MPa").magnitude == pytest.approx(417.0)
+    assert steel.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(655.0)
+    assert "Table A-21" in steel.ultimate_strength.citation.source
+    assert steel.endurance_limit.quantity.to("MPa").magnitude == pytest.approx(327.5)
+
+
 def test_stainless_316_completes_the_austenitic_pair(db: MaterialsDatabase) -> None:
     # 316 is the molybdenum-bearing corrosion-resistant sibling of 304; the two
     # share the ASTM A240 annealed strength minima (30/75 ksi).

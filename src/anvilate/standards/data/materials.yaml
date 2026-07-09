@@ -131,6 +131,32 @@ materials:
         estimated: true
         method: "0.5 x ultimate strength (Shigley screening estimate)"
 
+  AISI-4140:
+    name: "AISI 4140 alloy steel (annealed)"
+    category: alloy_steel
+    elastic_modulus:
+      quantity: {magnitude: 205.0, unit: GPa}
+      citation: {source: "ASM — AISI 4140", condition: "annealed, room temperature"}
+    poisson_ratio:
+      value: 0.29
+      citation: {source: "ASM — AISI 4140", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 7.85, unit: g/cm**3}
+      citation: {source: "ASM — AISI 4140", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 417.0, unit: MPa}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 815 C (60.5 kpsi)"}
+    ultimate_strength:
+      quantity: {magnitude: 655.0, unit: MPa}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 815 C (95 kpsi)"}
+    endurance_limit:
+      quantity: {magnitude: 327.5, unit: MPa}
+      citation:
+        source: "derived from ultimate strength"
+        condition: "fully reversed bending, screening estimate"
+        estimated: true
+        method: "0.5 x ultimate strength (Shigley screening estimate)"
+
   SS-304:
     name: "Stainless steel 304 (annealed)"
     category: stainless_steel
