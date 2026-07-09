@@ -21,3 +21,6 @@ threads:
   M8: {pitch: 1.25, tap_drill: 6.80}
   M10: {pitch: 1.50, tap_drill: 8.50}
   M12: {pitch: 1.75, tap_drill: 10.20}
+  M14: {pitch: 2.00, tap_drill: 12.00}
+  M16: {pitch: 2.00, tap_drill: 14.00}
+  M20: {pitch: 2.50, tap_drill: 17.50}

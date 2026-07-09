@@ -404,3 +404,16 @@ def test_thread_unknown_size_surfaces_gap(threads) -> None:
 
     with pytest.raises(UnknownThreadSizeError):
         threads.get("M7")
+
+
+def test_larger_preferred_sizes_resolved(clearance, threads) -> None:
+    # M14/M16/M20 extend the ISO 273/261 coverage past M12.
+    from anvilate.standards import Fit
+
+    assert clearance.get("M16", Fit.NORMAL).quantity.to("mm").magnitude == pytest.approx(17.5)
+    assert clearance.get("M20", Fit.COARSE).quantity.to("mm").magnitude == pytest.approx(24.0)
+    assert clearance.get("M14", Fit.CLOSE).quantity.to("mm").magnitude == pytest.approx(15.0)
+    m20 = threads.get("M20")
+    assert m20.pitch.quantity.to("mm").magnitude == pytest.approx(2.5)
+    assert m20.tap_drill.quantity.to("mm").magnitude == pytest.approx(17.5)
+    assert threads.get("M16").pitch.quantity.to("mm").magnitude == pytest.approx(2.0)
