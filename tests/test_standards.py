@@ -31,6 +31,17 @@ def test_seed_covers_golden_path_materials(db: MaterialsDatabase) -> None:
     }
 
 
+def test_titanium_grade5_properties_resolved(db: MaterialsDatabase) -> None:
+    # Ti-6Al-4V (Grade 5) is a distinct, mechanically stiff/strong aerospace alloy.
+    ti = db.get("Ti-6Al-4V")
+    assert ti.category == "titanium"
+    assert ti.elastic_modulus.quantity.to("GPa").magnitude == pytest.approx(113.8)
+    assert ti.density.quantity.to("g/cm**3").magnitude == pytest.approx(4.43)
+    assert ti.yield_strength.quantity.to("MPa").magnitude == pytest.approx(880.0)
+    assert ti.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(950.0)
+    assert ti.poisson_ratio.value == pytest.approx(0.342)
+
+
 def test_yield_strength_carries_temper_and_citation(db: MaterialsDatabase) -> None:
     # Scenario: yield strength with temper — the T6 value with its citation.
     prop = db.get("AA-6061-T6").yield_strength

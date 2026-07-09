@@ -123,3 +123,22 @@ materials:
     ultimate_strength:
       quantity: {magnitude: 515.0, unit: MPa}
       citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified tensile (75 ksi)"}
+
+  Ti-6Al-4V:
+    name: "Titanium Ti-6Al-4V (Grade 5, annealed)"
+    category: titanium
+    elastic_modulus:
+      quantity: {magnitude: 113.8, unit: GPa}
+      citation: {source: "ASM — Ti-6Al-4V annealed", condition: "annealed, room temperature"}
+    poisson_ratio:
+      value: 0.342
+      citation: {source: "ASM — Ti-6Al-4V annealed", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 4.43, unit: g/cm**3}
+      citation: {source: "ASM — Ti-6Al-4V annealed", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 880.0, unit: MPa}
+      citation: {source: "ASM — Ti-6Al-4V annealed", condition: "annealed, 0.2% offset"}
+    ultimate_strength:
+      quantity: {magnitude: 950.0, unit: MPa}
+      citation: {source: "ASM — Ti-6Al-4V annealed", condition: "annealed"}
