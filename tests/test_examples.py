@@ -28,3 +28,11 @@ def test_bolted_joint_example_screens_to_a_passing_scorecard():
     assert card.status is CheckStatus.PASS
     assert {e.name for e in card.entries} == {"plate bearing", "bolt shear"}
     assert all(e.passed for e in card.entries)
+
+
+def test_motor_mount_example_flags_a_resonance():
+    namespace = runpy.run_path(str(_EXAMPLES / "motor_mount_resonance.py"))
+    card = namespace["screen_motor_mount"]()
+    # The flexible bracket resonates below the running speed -> FAIL.
+    assert card.status is CheckStatus.FAIL
+    assert [e.name for e in card.entries] == ["mount resonance"]
