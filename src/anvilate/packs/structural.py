@@ -64,6 +64,8 @@ __all__ = [
     "screen_tension_member",
     "BeamColumnMember",
     "screen_beam_column",
+    "ConcreteBearing",
+    "screen_concrete_bearing",
     "StructuralMember",
     "screen_structure",
 ]
@@ -96,6 +98,9 @@ _CLAUSE_LUG = "ASME BTH-1 §3-3"
 _CLAUSE_BLOCK_SHEAR = "AISC 360-16 §J4.3"
 _CLAUSE_TENSION = "AISC 360-16 §D2"
 _CLAUSE_INTERACTION = "AISC 360-16 §H1.1"
+_CLAUSE_CONCRETE_BEARING_ACI = "ACI 318-19 §22.8.3"
+_ACI_BEARING_FRACTION = 0.85  # bearing strength coefficient 0.85·f'c
+_ACI_CONFINEMENT_CAP = 2.0  # sqrt(A2/A1) is capped at 2 (ACI §22.8.3.2)
 
 
 class Support(StrEnum):
@@ -831,6 +836,71 @@ def screen_beam_column(
     return Scorecard(entries=(entry,))
 
 
+class ConcreteBearing(BaseModel):
+    """A plate bearing on concrete, checked by the ACI 318 confined-bearing rule.
+
+    When the loaded area ``bearing_area`` A₁ (a base plate or pedestal cap) is
+    smaller than the ``support_area`` A₂ of the concrete beneath it, the surrounding
+    concrete confines the bearing zone and raises its strength by √(A₂/A₁), capped
+    at 2. ``concrete_strength`` is the compressive strength f′c; ``load`` the force
+    delivered. The nominal bearing strength is 0.85·f′c·A₁·√(A₂/A₁).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    bearing_area: Quantity
+    support_area: Quantity
+    concrete_strength: Quantity
+    load: Quantity
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> ConcreteBearing:
+        for value, name in (
+            (self.bearing_area, "bearing_area"),
+            (self.support_area, "support_area"),
+        ):
+            if not value.has_dimension("[length]**2"):
+                raise ValueError(f"{name} must be an area ([length]**2); got {value}")
+        if not self.concrete_strength.has_dimension("[pressure]"):
+            raise ValueError(
+                f"concrete_strength must be a [pressure] quantity; got {self.concrete_strength}"
+            )
+        if not self.load.has_dimension("[force]"):
+            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+        if self.support_area.to("mm**2").magnitude < self.bearing_area.to("mm**2").magnitude:
+            raise ValueError(
+                f"support_area ({self.support_area}) cannot be smaller than the "
+                f"bearing_area ({self.bearing_area})"
+            )
+        return self
+
+
+def screen_concrete_bearing(
+    bearing: ConcreteBearing,
+    *,
+    required_safety_factor: float,
+) -> Scorecard:
+    """Screen a :class:`ConcreteBearing` by the ACI 318 §22.8.3 confined-bearing rule.
+
+    The nominal bearing strength Bn = 0.85·f′c·A₁·√(A₂/A₁), with the confinement
+    factor √(A₂/A₁) capped at 2, is compared to the delivered load; the safety
+    factor Bn/load is judged against ``required_safety_factor``.
+    """
+    a1 = bearing.bearing_area.to("mm**2").magnitude
+    a2 = bearing.support_area.to("mm**2").magnitude
+    fc = bearing.concrete_strength.to("MPa").magnitude
+    load_n = bearing.load.to("N").magnitude
+
+    confinement = min((a2 / a1) ** 0.5, _ACI_CONFINEMENT_CAP)
+    capacity_n = _ACI_BEARING_FRACTION * fc * a1 * confinement
+    safety = capacity_n / load_n if load_n > 0 else float("inf")
+    entry = ScorecardEntry.from_safety_factor(
+        f"{bearing.name} concrete bearing", computed=safety, required=required_safety_factor
+    ).model_copy(update={"reference": _CLAUSE_CONCRETE_BEARING_ACI})
+    return Scorecard(entries=(entry,))
+
+
 StructuralMember = (
     BeamMember
     | ColumnMember
@@ -841,6 +911,7 @@ StructuralMember = (
     | GussetPlate
     | TensionMember
     | BeamColumnMember
+    | ConcreteBearing
 )
 
 
@@ -892,9 +963,11 @@ def screen_structure(
             card = screen_tension_member(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
-        else:
+        elif isinstance(member, BeamColumnMember):
             card = screen_beam_column(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
+        else:
+            card = screen_concrete_bearing(member, required_safety_factor=required_safety_factor)
         entries.extend(card.entries)
     return Scorecard(entries=tuple(entries))

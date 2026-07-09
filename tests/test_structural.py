@@ -18,6 +18,7 @@ from anvilate.packs.structural import (
     BeamMember,
     BoltedConnection,
     ColumnMember,
+    ConcreteBearing,
     GussetPlate,
     LiftingLug,
     LoadType,
@@ -29,6 +30,7 @@ from anvilate.packs.structural import (
     screen_beam_member,
     screen_bolted_connection,
     screen_column_member,
+    screen_concrete_bearing,
     screen_gusset_plate,
     screen_lifting_lug,
     screen_structure,
@@ -564,6 +566,51 @@ def test_beam_column_rejects_non_moment():
 def test_screen_structure_includes_beam_columns():
     card = screen_structure([_beam_column()], required_safety_factor=1.5)
     assert any("interaction" in e.name for e in card.entries)
+    assert card.status is CheckStatus.PASS
+
+
+def _bearing(support: str = "250000 mm**2", load: str = "800 kN") -> ConcreteBearing:
+    return ConcreteBearing(
+        name="pedestal",
+        bearing_area=_q("40000 mm**2"),  # a 200x200 plate
+        support_area=_q(support),
+        concrete_strength=_q("25 MPa"),
+        load=_q(load),
+    )
+
+
+def test_concrete_bearing_confinement_is_capped_at_two():
+    # A2/A1 = 6.25 -> sqrt 2.5 capped at 2.0: Bn = 0.85*25*40000*2.0 = 1700 kN;
+    # vs 800 kN -> SF 2.12 (ACI 318 §22.8.3).
+    card = screen_concrete_bearing(_bearing(), required_safety_factor=2.0)
+    assert card.status is CheckStatus.PASS
+    assert card.entries[0].name == "pedestal concrete bearing"
+    assert card.entries[0].reference == "ACI 318-19 §22.8.3"
+    assert "2.12" in card.entries[0].detail
+
+
+def test_concrete_bearing_uses_partial_confinement():
+    # A2 = 90000 (300x300): sqrt(2.25) = 1.5 (below the cap); Bn = 1275 kN;
+    # vs 800 kN -> SF 1.59, below the 2.0 requirement -> FAIL.
+    card = screen_concrete_bearing(_bearing(support="90000 mm**2"), required_safety_factor=2.0)
+    assert card.status is CheckStatus.FAIL
+    assert "1.59" in card.entries[0].detail
+
+
+def test_concrete_bearing_rejects_support_below_bearing_area():
+    with pytest.raises(ValidationError, match="cannot be smaller than the"):
+        ConcreteBearing(
+            name="p",
+            bearing_area=_q("40000 mm**2"),
+            support_area=_q("30000 mm**2"),  # smaller than the plate
+            concrete_strength=_q("25 MPa"),
+            load=_q("800 kN"),
+        )
+
+
+def test_screen_structure_includes_concrete_bearing():
+    card = screen_structure([_bearing()], required_safety_factor=2.0)
+    assert any("concrete bearing" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
 
