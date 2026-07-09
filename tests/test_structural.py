@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from anvilate.analysis import (
+    ColumnEnd,
     CrossSection,
     cantilever_end_load,
     fixed_fixed_center_load,
@@ -13,9 +14,11 @@ from anvilate.analysis import (
 )
 from anvilate.packs.structural import (
     BeamMember,
+    ColumnMember,
     LoadType,
     Support,
     screen_beam_member,
+    screen_column_member,
 )
 from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
@@ -118,3 +121,46 @@ def test_point_member_rejects_a_distributed_load_dimension():
 def test_distributed_member_rejects_a_force():
     with pytest.raises(ValidationError, match="distributed load must be a"):
         _member(Support.SIMPLY_SUPPORTED, LoadType.DISTRIBUTED, "100 N")
+
+
+def _column(length: str, load: str = "5 kN") -> ColumnMember:
+    return ColumnMember(
+        name="col",
+        section=_section(),  # r = 2.887 mm about the weak axis
+        length=_q(length),
+        end_condition=ColumnEnd.PINNED_PINNED,
+        axial_load=_q(load),
+        material="ASTM-A36",
+    )
+
+
+def test_slender_column_uses_the_euler_regime():
+    # 500 mm pinned column, r = 2.887 -> lambda = 173 > lambda_1 (125.7) -> Euler;
+    # sigma_cr ~ 65.8 MPa vs 25 MPa applied (5 kN / 200 mm^2) -> SF ~ 2.6 -> PASS.
+    card = screen_column_member(_column("500 mm"), required_safety_factor=2.0)
+    assert card.status is CheckStatus.PASS
+    assert "Euler" in card.entries[0].name
+
+
+def test_stubby_column_uses_the_johnson_regime():
+    # 200 mm pinned column -> lambda = 69 < lambda_1 -> Johnson (inelastic).
+    card = screen_column_member(_column("200 mm"), required_safety_factor=2.0)
+    assert card.status is CheckStatus.PASS
+    assert "Johnson" in card.entries[0].name
+
+
+def test_overloaded_column_fails():
+    # A large axial load drops the buckling safety factor below the requirement.
+    card = screen_column_member(_column("500 mm", load="20 kN"), required_safety_factor=2.0)
+    assert card.status is CheckStatus.FAIL
+
+
+def test_column_rejects_non_force_axial_load():
+    with pytest.raises(ValidationError, match="axial_load must be a"):
+        ColumnMember(
+            name="col",
+            section=_section(),
+            length=_q("500 mm"),
+            axial_load=_q("5 MPa"),
+            material="ASTM-A36",
+        )

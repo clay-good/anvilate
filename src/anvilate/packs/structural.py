@@ -17,15 +17,21 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..analysis import (
+    ColumnEnd,
     CrossSection,
+    axial_stress,
     cantilever_end_load,
     cantilever_uniform_load,
     deflection_scorecard,
+    euler_critical_stress,
     fixed_fixed_center_load,
     fixed_fixed_uniform_load,
+    johnson_critical_stress,
     simply_supported_center_load,
     simply_supported_uniform_load,
+    slenderness_ratio,
     strength_scorecard,
+    transition_slenderness,
 )
 from ..scorecard import Scorecard
 from ..standards import MaterialsDatabase, default_materials_db
@@ -36,6 +42,8 @@ __all__ = [
     "LoadType",
     "BeamMember",
     "screen_beam_member",
+    "ColumnMember",
+    "screen_column_member",
 ]
 
 
@@ -143,3 +151,77 @@ def screen_beam_member(
             )
         )
     return Scorecard(entries=tuple(entries))
+
+
+class ColumnMember(BaseModel):
+    """A structural compression member and what a buckling screen needs.
+
+    ``section``'s ``second_moment`` should be the *least* (weak-axis) value, since
+    a column buckles about its weak axis. ``end_condition`` sets the effective-
+    length factor; ``axial_load`` is the compressive force; ``material`` a database
+    id (E and yield drive the screen).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    section: CrossSection
+    length: Quantity
+    end_condition: ColumnEnd = ColumnEnd.PINNED_PINNED
+    axial_load: Quantity
+    material: str
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> ColumnMember:
+        if not self.length.has_dimension("[length]"):
+            raise ValueError(f"length must be a [length] quantity; got {self.length}")
+        if not self.axial_load.has_dimension("[force]"):
+            raise ValueError(f"axial_load must be a [force] quantity; got {self.axial_load}")
+        return self
+
+
+def screen_column_member(
+    member: ColumnMember,
+    *,
+    required_safety_factor: float,
+    materials: MaterialsDatabase | None = None,
+) -> Scorecard:
+    """Screen a :class:`ColumnMember` for buckling and return its scorecard.
+
+    Computes the slenderness λ = K·L/r and picks the regime automatically: the
+    Euler elastic-buckling stress above the transition slenderness λ₁, the Johnson
+    parabola below it. The critical stress is screened against the applied axial
+    stress (load/area) at ``required_safety_factor``. ``materials`` defaults to the
+    bundled database.
+    """
+    materials = materials or default_materials_db()
+    record = materials.get(member.material)
+    modulus = record.elastic_modulus.quantity
+    yield_strength = record.yield_strength.quantity
+
+    effective_length = Quantity(
+        magnitude=member.end_condition.factor() * member.length.to("mm").magnitude,
+        unit="mm",
+    )
+    lam = slenderness_ratio(
+        effective_length=effective_length,
+        radius_of_gyration=member.section.radius_of_gyration,
+    )
+    lam_1 = transition_slenderness(yield_strength=yield_strength, elastic_modulus=modulus)
+    if lam >= lam_1:
+        critical = euler_critical_stress(elastic_modulus=modulus, slenderness_ratio=lam)
+        regime = "Euler"
+    else:
+        critical = johnson_critical_stress(
+            yield_strength=yield_strength, elastic_modulus=modulus, slenderness_ratio=lam
+        )
+        regime = "Johnson"
+
+    applied = axial_stress(force=member.axial_load, area=member.section.area)
+    entry = strength_scorecard(
+        f"{member.name} buckling ({regime})",
+        stress=applied,
+        allowable=critical,
+        required=required_safety_factor,
+    )
+    return Scorecard(entries=(entry,))
