@@ -89,6 +89,11 @@ _WELD_SHEAR_FRACTION = 0.6
 # Distortion-energy shear-yield fraction of tensile yield (τ_y ≈ 0.577·S_y).
 _SHEAR_YIELD_FRACTION = 0.577
 
+# AISC §J3.10 bolt-hole tear-out: R_n = 1.2·l_c·t·Fu on the clear distance to the
+# edge, capped by bearing deformation at 2.4·d·t·Fu.
+_TEAROUT_CLEAR_FRACTION = 1.2
+_TEAROUT_BEARING_CAP_FRACTION = 2.4
+
 # AISC 360-16 clauses each screen cites on its scorecard entry (the discipline
 # pack, not the code-agnostic analysis layer, owns these references).
 _CLAUSE_FLEXURE = "AISC 360-16 Ch. F"
@@ -328,6 +333,8 @@ class BoltedConnection(BaseModel):
     yield sets the shear allowable (0.577·S_y) and the plate's the bearing one.
     An optional ``tension`` (a hanger or prying pull along the bolt axis) adds a
     bolt tension check and the §J3.7 combined tension-plus-shear interaction.
+    An optional ``edge_distance`` (bolt center to the plate edge, in the load
+    direction) adds the §J3.10 bolt-hole tear-out check.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -340,6 +347,7 @@ class BoltedConnection(BaseModel):
     plate_material: str
     shear_planes: int = 1
     tension: Quantity | None = None
+    edge_distance: Quantity | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> BoltedConnection:
@@ -358,6 +366,16 @@ class BoltedConnection(BaseModel):
                 raise ValueError(f"tension must be non-negative; got {self.tension}")
         if self.shear_planes < 1:
             raise ValueError(f"shear_planes must be a positive integer; got {self.shear_planes}")
+        if self.edge_distance is not None:
+            if not self.edge_distance.has_dimension("[length]"):
+                raise ValueError(
+                    f"edge_distance must be a [length] quantity; got {self.edge_distance}"
+                )
+            if self.edge_distance.to("mm").magnitude <= self.bolt_diameter.to("mm").magnitude / 2:
+                raise ValueError(
+                    f"edge_distance ({self.edge_distance}) must exceed half the bolt "
+                    f"diameter ({self.bolt_diameter}) — the hole would break the edge"
+                )
         return self
 
 
@@ -371,9 +389,12 @@ def screen_bolted_connection(
 
     Screens the bolt shear stress against the bolt's shear yield (0.577·S_y) and
     the plate bearing stress against the plate's yield, both at
-    ``required_safety_factor``. If the connection declares a ``tension``, two more
-    entries follow: the bolt's direct tensile stress against its yield (§J3.6) and
-    the von Mises combined tension-plus-shear equivalent stress (§J3.7 combined
+    ``required_safety_factor``. If the connection declares an ``edge_distance``,
+    the §J3.10 bolt-hole tear-out follows: R_n = 1.2·l_c·t·Fu on the clear distance
+    l_c = edge_distance − d/2 (hole taken at the shank diameter), capped by bearing
+    deformation at 2.4·d·t·Fu. If it declares a ``tension``, two more entries
+    follow: the bolt's direct tensile stress against its yield (§J3.6) and the
+    von Mises combined tension-plus-shear equivalent stress (§J3.7 combined
     loading). ``materials`` defaults to the bundled database.
     """
     materials = materials or default_materials_db()
@@ -407,6 +428,24 @@ def screen_bolted_connection(
             required=required_safety_factor,
         ).model_copy(update={"reference": _CLAUSE_BEARING}),
     ]
+    if connection.edge_distance is not None:
+        d_mm = connection.bolt_diameter.to("mm").magnitude
+        t_mm = connection.plate_thickness.to("mm").magnitude
+        fu = plate.ultimate_strength.quantity.to("MPa").magnitude
+        clear = connection.edge_distance.to("mm").magnitude - d_mm / 2
+        capacity = min(
+            _TEAROUT_CLEAR_FRACTION * clear * t_mm * fu,
+            _TEAROUT_BEARING_CAP_FRACTION * d_mm * t_mm * fu,
+        )
+        load_n = connection.load.to("N").magnitude
+        tearout_sf = capacity / load_n if load_n > 0 else float("inf")
+        entries.append(
+            ScorecardEntry.from_safety_factor(
+                f"{connection.name} edge tear-out",
+                computed=tearout_sf,
+                required=required_safety_factor,
+            ).model_copy(update={"reference": _CLAUSE_BEARING})
+        )
     if connection.tension is not None:
         tensile = axial_stress(
             force=connection.tension, area=circular_area(connection.bolt_diameter)

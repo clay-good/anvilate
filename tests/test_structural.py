@@ -249,7 +249,9 @@ def test_screen_structure_fails_if_any_member_fails():
     assert card.status is CheckStatus.FAIL
 
 
-def _connection(load: str = "8 kN", tension: str | None = None) -> BoltedConnection:
+def _connection(
+    load: str = "8 kN", tension: str | None = None, edge_distance: str | None = None
+) -> BoltedConnection:
     return BoltedConnection(
         name="splice",
         bolt_diameter=_q("8 mm"),
@@ -258,6 +260,7 @@ def _connection(load: str = "8 kN", tension: str | None = None) -> BoltedConnect
         bolt_material="AISI-4140",
         plate_material="ASTM-A36",
         tension=_q(tension) if tension else None,
+        edge_distance=_q(edge_distance) if edge_distance else None,
     )
 
 
@@ -324,6 +327,45 @@ def test_bolted_connection_rejects_bad_tension():
         _connection(tension="4 MPa")
     with pytest.raises(ValidationError, match="tension must be non-negative"):
         _connection(tension="-4 kN")
+
+
+def test_bolted_connection_edge_distance_adds_tearout_check():
+    # 12 mm edge on the M8 in 6 mm A36: l_c = 12 - 4 = 8 mm, R_n = 1.2*8*6*400
+    # = 23.0 kN (SF 2.88 at 8 kN) -> passes at 1.5 alongside shear and bearing.
+    card = screen_bolted_connection(_connection(edge_distance="12 mm"), required_safety_factor=1.5)
+    assert card.status is CheckStatus.PASS
+    by_name = {e.name: e for e in card.entries}
+    assert set(by_name) == {"splice bolt shear", "splice plate bearing", "splice edge tear-out"}
+    assert by_name["splice edge tear-out"].reference == "AISC 360-16 §J3.10"
+
+
+def test_bolted_connection_tearout_governs_near_edge():
+    # At 8 mm edge distance l_c = 4 mm, R_n = 1.2*4*6*400 = 11.5 kN (SF 1.44) --
+    # tear-out fails at 1.5 while bolt shear (1.51) and bearing (1.50) still pass.
+    card = screen_bolted_connection(_connection(edge_distance="8 mm"), required_safety_factor=1.5)
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["splice bolt shear"].passed
+    assert by_name["splice plate bearing"].passed
+    assert not by_name["splice edge tear-out"].passed
+
+
+def test_bolted_connection_tearout_capped_by_bearing_deformation():
+    # A 30 mm edge gives 1.2*l_c*t*Fu = 74.9 kN, but the 2.4*d*t*Fu deformation
+    # cap holds R_n at 46.1 kN (SF 5.76) -- uncapped the SF would be 9.36.
+    card = screen_bolted_connection(_connection(edge_distance="30 mm"), required_safety_factor=6.0)
+    by_name = {e.name: e for e in card.entries}
+    assert not by_name["splice edge tear-out"].passed
+    card = screen_bolted_connection(_connection(edge_distance="30 mm"), required_safety_factor=5.7)
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["splice edge tear-out"].passed
+
+
+def test_bolted_connection_rejects_bad_edge_distance():
+    with pytest.raises(ValidationError, match="edge_distance must be a"):
+        _connection(edge_distance="12 MPa")
+    with pytest.raises(ValidationError, match="must exceed half the bolt"):
+        _connection(edge_distance="3 mm")
 
 
 def _weld(load: str = "20 kN") -> WeldedConnection:
