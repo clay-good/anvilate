@@ -411,7 +411,7 @@ def test_resolver_composes_component_db_and_seed() -> None:
     assert resolver.has_component("NEMA23")  # from the components DB
     assert resolver.has_component("6204")  # from the bearing table
     assert resolver.has_component("EXT-4040")  # from the extrusion table
-    assert not resolver.has_component("6207")  # a bearing not in the seed is unknown
+    assert not resolver.has_component("6211")  # a bearing not in the seed is unknown
 
 
 # --- Deep-groove ball bearing boundary dimensions (ISO 15) ---
@@ -473,11 +473,24 @@ def test_bearing_series_extends_to_40mm_bore(bearings) -> None:
     assert b6306.width.quantity.to("mm").magnitude == pytest.approx(19.0)
 
 
+def test_bearing_series_reach_50mm_bore(bearings) -> None:
+    # All three series now extend to a 50 mm bore: 6010 (50x80x16), the light
+    # 6210 (50x90x20), and the medium 6310 (50x110x27).
+    b6010 = bearings.get("6010")
+    assert b6010.bore.quantity.to("mm").magnitude == pytest.approx(50.0)
+    assert b6010.outer_diameter.quantity.to("mm").magnitude == pytest.approx(80.0)
+    b6210 = bearings.get("6210")
+    assert b6210.outer_diameter.quantity.to("mm").magnitude == pytest.approx(90.0)
+    b6310 = bearings.get("6310")
+    assert b6310.outer_diameter.quantity.to("mm").magnitude == pytest.approx(110.0)
+    assert b6310.width.quantity.to("mm").magnitude == pytest.approx(27.0)
+
+
 def test_bearing_unknown_designation_surfaces_gap(bearings) -> None:
     from anvilate.standards import UnknownBearingError
 
     with pytest.raises(UnknownBearingError) as exc:
-        bearings.get("6207")  # not in the seed; a gap, not a guess
+        bearings.get("6211")  # not in the seed; a gap, not a guess
     assert exc.value.suggestions
 
 
