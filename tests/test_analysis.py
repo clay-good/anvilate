@@ -6,10 +6,12 @@ import pytest
 
 from anvilate.analysis import (
     ColumnEnd,
+    bolt_preload_from_torque,
     cantilever_end_load,
     euler_buckling_load,
     rectangular_second_moment,
     simply_supported_center_load,
+    torque_for_preload,
 )
 from anvilate.units import Quantity
 
@@ -149,6 +151,34 @@ def test_euler_buckling_rejects_bad_inputs():
             length=_q("500 mm"),
             effective_length_factor=0.0,
         )
+
+
+def test_bolt_preload_from_torque_matches_worked_example():
+    # 10 N*m on an M8 (d=8 mm) at the as-received nut factor K=0.2:
+    #   F = T/(K*d) = 10 / (0.2 * 0.008) = 6250 N.
+    preload = bolt_preload_from_torque(
+        torque=_q("10 N*m"),
+        nominal_diameter=_q("8 mm"),
+    )
+    assert preload.to("N").magnitude == pytest.approx(6250.0, rel=1e-6)
+
+
+def test_torque_preload_round_trips():
+    # torque_for_preload inverts bolt_preload_from_torque exactly.
+    preload = _q("6250 N")
+    torque = torque_for_preload(preload=preload, nominal_diameter=_q("8 mm"))
+    assert torque.to("N*m").magnitude == pytest.approx(10.0, rel=1e-6)
+    back = bolt_preload_from_torque(torque=torque, nominal_diameter=_q("8 mm"))
+    assert back.to("N").magnitude == pytest.approx(6250.0, rel=1e-6)
+
+
+def test_bolt_torque_tension_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="torque must be a"):
+        bolt_preload_from_torque(
+            torque=_q("10 N"), nominal_diameter=_q("8 mm")
+        )  # force, not torque
+    with pytest.raises(ValueError, match="nut_factor must be positive"):
+        bolt_preload_from_torque(torque=_q("10 N*m"), nominal_diameter=_q("8 mm"), nut_factor=0.0)
 
 
 def test_cantilever_rejects_wrong_dimensions():
