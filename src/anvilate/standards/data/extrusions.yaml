@@ -1,0 +1,27 @@
+# T-slot aluminum extrusion profiles (schema: standards-data).
+#
+# Modular T-slot framing profiles, keyed by the square module width (the "series":
+# 20/30/40/45 mm). The two facts a mating bracket designs against are the profile
+# width (the face it bolts to, and the modular grid spacing) and the T-slot width
+# (the mouth a T-nut or bolt head engages).
+#
+# IMPORTANT — vendor variance: unlike ISO fasteners, T-slot cross-sections are NOT
+# covered by a single ISO/DIN dimension standard. Slot widths, core bores, and
+# rib patterns differ between Bosch Rexroth, item, Misumi, and 80/20. The slot
+# widths here (20->6, 30->8, 40->10, 45->10 mm) are the convention shared by Bosch
+# Rexroth strut profiles and the Misumi HFS series; other vendors and profile
+# variants differ, and a design against a specific vendor must confirm against
+# that vendor's datasheet. Only the module width is truly vendor-independent.
+dataset:
+  name: anvilate-extrusions-seed
+  version: "0.1.0"
+  source: "T-slot profile geometry (Bosch Rexroth / Misumi HFS common metric convention)"
+  license: "CC0-1.0 (dimension values only; vendor catalogs not redistributed)"
+  retrieved: "2026-07-08"
+
+# designation: {name, profile_width (square module), slot_width} in mm.
+profiles:
+  "EXT-2020": {name: "T-slot 20x20 (6 mm slot)", profile_width: 20, slot_width: 6}
+  "EXT-3030": {name: "T-slot 30x30 (8 mm slot)", profile_width: 30, slot_width: 8}
+  "EXT-4040": {name: "T-slot 40x40 (10 mm slot)", profile_width: 40, slot_width: 10}
+  "EXT-4545": {name: "T-slot 45x45 (10 mm slot)", profile_width: 45, slot_width: 10}

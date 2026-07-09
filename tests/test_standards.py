@@ -400,7 +400,7 @@ def test_coverage_gap_surfaces_rather_than_guessing(cdb) -> None:
 
 
 def test_resolver_composes_component_db_and_seed() -> None:
-    # The DB-backed frames, the bearing table, and the not-yet-tabled seed IDs
+    # The DB-backed frames, the bearing table, and the fastener/extrusion tables
     # are one component set.
     from anvilate.standards import default_standards_resolver
 
@@ -410,7 +410,7 @@ def test_resolver_composes_component_db_and_seed() -> None:
     assert "6204" in known  # bearings resolve as standard components too
     assert resolver.has_component("NEMA23")  # from the components DB
     assert resolver.has_component("6204")  # from the bearing table
-    assert resolver.has_component("EXT-4040")  # from the static seed
+    assert resolver.has_component("EXT-4040")  # from the extrusion table
     assert not resolver.has_component("6207")  # a bearing not in the seed is unknown
 
 
@@ -827,6 +827,74 @@ def test_hex_bolts_resolve_as_standard_components() -> None:
     assert resolver.has_component("ISO4014-M8")
     assert "ISO4014-M6" in set(resolver.known_components())
     assert not resolver.has_component("ISO4014-M7")
+
+
+# --- T-slot extrusion profiles ---
+
+
+@pytest.fixture(scope="module")
+def extrusions():
+    from anvilate.standards import default_extrusion_table
+
+    return default_extrusion_table()
+
+
+def test_extrusion_profile_dimensions_with_citation(extrusions) -> None:
+    # A 40x40 profile: 40 mm module, 10 mm T-slot; each dimension carries its
+    # (vendor-convention) citation.
+    p40 = extrusions.get("EXT-4040")
+    assert p40.profile_width.quantity.to("mm").magnitude == pytest.approx(40.0)
+    assert p40.slot_width.quantity.to("mm").magnitude == pytest.approx(10.0)
+    assert p40.profile_width.citation.source
+    assert p40.profile_width.citation.license
+
+
+def test_extrusion_dimensions_are_length(extrusions) -> None:
+    for designation in extrusions.designations():
+        rec = extrusions.get(designation)
+        for field in ("profile_width", "slot_width"):
+            assert getattr(rec, field).quantity.has_dimension("[length]"), (designation, field)
+
+
+def test_extrusion_series_ordering_is_numeric(extrusions) -> None:
+    # 20 series sorts before 40 series by module width, not lexically.
+    designations = extrusions.designations()
+    assert designations.index("EXT-2020") < designations.index("EXT-3030")
+    assert designations.index("EXT-3030") < designations.index("EXT-4545")
+
+
+def test_extrusion_slot_fits_within_its_module(extrusions) -> None:
+    # The T-slot is a mouth in the face, so it must be narrower than the module.
+    for designation in extrusions.designations():
+        rec = extrusions.get(designation)
+        width = rec.profile_width.quantity.to("mm").magnitude
+        slot = rec.slot_width.quantity.to("mm").magnitude
+        assert 0 < slot < width, designation
+
+
+def test_extrusion_provenance_flags_vendor_convention(extrusions) -> None:
+    # T-slot cross-sections are not an ISO standard; the citation must name the
+    # vendor convention so a report never presents the slot as a universal fact.
+    cite = extrusions.get("EXT-2020").slot_width.citation
+    assert "vendor" in cite.condition.lower()
+
+
+def test_extrusion_unknown_designation_surfaces_gap(extrusions) -> None:
+    from anvilate.standards import UnknownExtrusionError
+
+    with pytest.raises(UnknownExtrusionError) as exc:
+        extrusions.get("EXT-8080")  # not in the bundled convention
+    assert exc.value.suggestions
+
+
+def test_extrusions_resolve_as_standard_components() -> None:
+    # Extrusions now resolve from the table, retiring the old EXT-* seed stubs.
+    from anvilate.standards import default_standards_resolver
+
+    resolver = default_standards_resolver()
+    assert resolver.has_component("EXT-3030")
+    assert "EXT-4545" in set(resolver.known_components())
+    assert not resolver.has_component("EXT-8080")
 
 
 # --- Metric clearance holes (ISO 273) ---
