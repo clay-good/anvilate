@@ -51,6 +51,7 @@ from .column import (
 )
 from .dynamics import (
     STANDARD_GRAVITY,
+    frequency_scorecard,
     natural_frequency,
     natural_frequency_from_deflection,
 )
@@ -112,6 +113,7 @@ __all__ = [
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",
+    "frequency_scorecard",
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
     "torque_for_preload",

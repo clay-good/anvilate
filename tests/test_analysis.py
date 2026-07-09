@@ -23,6 +23,7 @@ from anvilate.analysis import (
     euler_critical_stress,
     fixed_fixed_center_load,
     fixed_fixed_uniform_load,
+    frequency_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
     hollow_circular_second_moment,
@@ -732,6 +733,20 @@ def test_rayleigh_frequency_from_self_weight_deflection():
     # fn = (1/2pi)*sqrt(g/delta); delta = 12.5 mm -> 4.458 Hz.
     fn = natural_frequency_from_deflection(_q("12.5 mm"))
     assert fn.to("Hz").magnitude == pytest.approx(4.458, rel=1e-3)
+
+
+def test_frequency_scorecard_resonance_screen():
+    from anvilate.scorecard import CheckStatus
+
+    fn = natural_frequency(stiffness=_q("8000 N/m"), mass=_q("1 kg"))  # 14.24 Hz
+    ok = frequency_scorecard("resonance", frequency=fn, min_frequency=_q("10 Hz"))
+    assert ok.status is CheckStatus.PASS
+    bad = frequency_scorecard("resonance", frequency=fn, min_frequency=_q("20 Hz"))
+    assert bad.status is CheckStatus.FAIL
+    # No silent green: no operating-frequency requirement -> NOT_EVALUATED.
+    none = frequency_scorecard("resonance", frequency=fn, min_frequency=None)
+    assert none.status is CheckStatus.NOT_EVALUATED
+    assert not none.passed
 
 
 def test_natural_frequency_rejects_bad_inputs():

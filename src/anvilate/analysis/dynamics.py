@@ -18,12 +18,14 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",
+    "frequency_scorecard",
 ]
 
 # Standard gravitational acceleration (m/s²), for the Rayleigh self-weight estimate.
@@ -71,3 +73,35 @@ def natural_frequency_from_deflection(
     if delta <= 0:
         raise ValueError(f"static_deflection must be positive; got {static_deflection}")
     return Quantity(magnitude=sqrt(g / delta) / (2 * pi), unit="Hz")
+
+
+def frequency_scorecard(
+    name: str,
+    *,
+    frequency: Quantity,
+    min_frequency: Quantity | None,
+) -> ScorecardEntry:
+    """Screen a fundamental ``frequency`` against a required minimum for resonance.
+
+    To avoid resonance a part's fundamental frequency should sit above the highest
+    operating excitation, so this is ``PASS`` when ``frequency`` is at least
+    ``min_frequency`` and ``FAIL`` below it. When ``min_frequency`` is ``None`` — no
+    excitation requirement was declared — the entry is ``NOT_EVALUATED`` rather than
+    a silent pass. Both quantities must be frequencies.
+    """
+    _require(frequency, "[frequency]", "frequency")
+    if min_frequency is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — minimum frequency unavailable",
+        )
+    _require(min_frequency, "[frequency]", "min_frequency")
+    fn = frequency.to("Hz").magnitude
+    floor = min_frequency.to("Hz").magnitude
+    status = CheckStatus.PASS if fn >= floor else CheckStatus.FAIL
+    return ScorecardEntry(
+        name=name,
+        status=status,
+        detail=f"fundamental {fn:.1f} Hz vs required minimum {floor:.1f} Hz",
+    )
