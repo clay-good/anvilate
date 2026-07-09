@@ -41,6 +41,34 @@ def test_export_lug_outline_round_trips(tmp_path):
     assert circle.dxf.radius == pytest.approx(12.5)
 
 
+def test_export_writes_an_optional_part_label(tmp_path):
+    ezdxf = pytest.importorskip("ezdxf")
+    out = export_plate_dxf(
+        width=_q("80 mm"),
+        height=_q("120 mm"),
+        holes=[],
+        path=tmp_path / "labelled.dxf",
+        label="PADEYE  ASTM-A36",
+    )
+    doc = ezdxf.readfile(out)
+    texts = list(doc.modelspace().query("TEXT"))
+    assert len(texts) == 1
+    assert texts[0].dxf.text == "PADEYE  ASTM-A36"
+    assert texts[0].dxf.layer == "TEXT"
+
+
+def test_export_omits_text_when_no_label(tmp_path):
+    ezdxf = pytest.importorskip("ezdxf")
+    out = export_plate_dxf(
+        width=_q("80 mm"),
+        height=_q("120 mm"),
+        holes=[],
+        path=tmp_path / "plain.dxf",
+    )
+    doc = ezdxf.readfile(out)
+    assert list(doc.modelspace().query("TEXT")) == []
+
+
 def test_export_rejects_hole_outside_the_plate(tmp_path):
     pytest.importorskip("ezdxf")
     with pytest.raises(ValueError, match="falls outside"):

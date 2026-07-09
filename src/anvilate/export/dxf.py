@@ -24,6 +24,11 @@ __all__ = ["Hole", "export_plate_dxf"]
 # them in differently. Distinct ACI colours make the two legible in any viewer.
 _OUTLINE_LAYER = "OUTLINE"
 _HOLE_LAYER = "HOLES"
+# An optional part mark (name, material) goes on its own TEXT layer, below the
+# plate, so a fabricator can identify the cut without it being mistaken for cut
+# geometry. Text height is a fixed fraction of the plate height.
+_TEXT_LAYER = "TEXT"
+_LABEL_HEIGHT_FRACTION = 0.06
 
 
 def _require_ezdxf():
@@ -58,15 +63,19 @@ def export_plate_dxf(
     height: Quantity,
     holes: list[Hole],
     path: str | Path,
+    label: str | None = None,
 ) -> Path:
     """Write a rectangular plate outline with ``holes`` to a DXF file.
 
     The plate spans (0, 0) to (``width``, ``height``) as a closed polyline; each
-    :class:`Hole` becomes a circle. All lengths are written in millimetres. Returns
-    the path written. Raises :class:`ValueError` for a non-positive plate or a hole
-    that falls outside it, and :class:`ImportError` if ezdxf is unavailable.
+    :class:`Hole` becomes a circle. An optional ``label`` (e.g. a part mark and
+    material) is written as text just below the plate on a separate ``TEXT`` layer.
+    All lengths are written in millimetres. Returns the path written. Raises
+    :class:`ValueError` for a non-positive plate or a hole that falls outside it,
+    and :class:`ImportError` if ezdxf is unavailable.
     """
     ezdxf = _require_ezdxf()
+    from ezdxf.enums import TextEntityAlignment
 
     w = _mm(width, "width")
     h = _mm(height, "height")
@@ -81,6 +90,12 @@ def export_plate_dxf(
     msp.add_lwpolyline(
         [(0, 0), (w, 0), (w, h), (0, h)], close=True, dxfattribs={"layer": _OUTLINE_LAYER}
     )
+
+    if label:
+        doc.layers.add(_TEXT_LAYER, color=7)
+        text_height = h * _LABEL_HEIGHT_FRACTION
+        text = msp.add_text(label, height=text_height, dxfattribs={"layer": _TEXT_LAYER})
+        text.set_placement((0, -1.5 * text_height), align=TextEntityAlignment.LEFT)
 
     for hole in holes:
         cx = _mm(hole.x, "hole x")

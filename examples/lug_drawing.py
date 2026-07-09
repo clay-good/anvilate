@@ -36,7 +36,13 @@ def check_and_draw_lug(dxf_path: str | Path) -> tuple[Scorecard, Path]:
         material="ASTM-A36",
     )
     card = screen_lifting_lug(lug, required_safety_factor=1.5)
-    path = export_plate_dxf(width=WIDTH, height=HEIGHT, holes=[HOLE], path=dxf_path)
+    path = export_plate_dxf(
+        width=WIDTH,
+        height=HEIGHT,
+        holes=[HOLE],
+        path=dxf_path,
+        label=f"{lug.name.upper()}  {lug.material}",
+    )
     return card, path
 
 
