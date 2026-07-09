@@ -26,6 +26,8 @@ __all__ = [
     "cantilever_uniform_load",
     "simply_supported_center_load",
     "simply_supported_uniform_load",
+    "fixed_fixed_center_load",
+    "fixed_fixed_uniform_load",
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",
@@ -319,6 +321,79 @@ def simply_supported_uniform_load(
     moment = w * length_p**2 / 8
     stress = moment * c / inertia
     deflection = 5 * w * length_p**4 / (384 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def fixed_fixed_center_load(
+    *,
+    force: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The fixed-fixed (both ends built-in) beam with a central point load.
+
+    A prismatic beam clamped at both ends over a span ``length`` with a transverse
+    ``force`` at mid-span. Returns the peak bending stress (σ = M·c/I with the
+    maximum moment M = F·L/8, at the ends and mid-span) and the mid-span deflection
+    (δ = F·L³/(192·E·I)) — far stiffer than the simply-supported case. Every
+    argument is dimension-checked.
+    """
+    _require(force, "[force]", "force")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    f = force.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = f * length_p / 8
+    stress = moment * c / inertia
+    deflection = f * length_p**3 / (192 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def fixed_fixed_uniform_load(
+    *,
+    distributed_load: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The fixed-fixed beam under a uniformly distributed load.
+
+    A prismatic beam clamped at both ends carrying a uniform ``distributed_load``
+    w (force per unit length). Returns the peak bending stress (σ = M·c/I with the
+    maximum moment M = w·L²/12, at the ends) and the mid-span deflection
+    (δ = w·L⁴/(384·E·I)). Every argument is dimension-checked.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w * length_p**2 / 12
+    stress = moment * c / inertia
+    deflection = w * length_p**4 / (384 * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
