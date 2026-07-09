@@ -46,6 +46,12 @@ from .iso286 import (
     standard_tolerance,
     zone_limits,
 )
+from .process import (
+    AchievabilityCheck,
+    ProcessCapability,
+    process_capability,
+    tolerance_is_achievable,
+)
 from .stackup import (
     Contribution,
     MonteCarloResult,
@@ -69,6 +75,10 @@ __all__ = [
     "zone_limits",
     "Fit",
     "fit",
+    "ProcessCapability",
+    "AchievabilityCheck",
+    "process_capability",
+    "tolerance_is_achievable",
     "ResolvedTolerance",
     "SymmetricTolerance",
     "LimitTolerance",

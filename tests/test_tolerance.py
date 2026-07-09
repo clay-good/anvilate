@@ -8,6 +8,7 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from anvilate.tolerance import (
+    AchievabilityCheck,
     AngularTolerance,
     Contribution,
     Fit,
@@ -16,6 +17,7 @@ from anvilate.tolerance import (
     LimitDeviations,
     LimitTolerance,
     MonteCarloResult,
+    ProcessCapability,
     ResolvedTolerance,
     StackContributor,
     StackResult,
@@ -28,8 +30,10 @@ from anvilate.tolerance import (
     fit,
     general_angular_tolerance,
     general_tolerance,
+    process_capability,
     resolve_class,
     standard_tolerance,
+    tolerance_is_achievable,
     zone_limits,
 )
 from anvilate.units import Quantity
@@ -703,6 +707,62 @@ def test_fit_satisfies_clearance_rejects_non_length() -> None:
     f = fit("H7/h6", _mm(22))
     with pytest.raises(ToleranceRangeError, match="length"):
         f.satisfies_clearance(Quantity(magnitude=1, unit="kg"), _mm(0.05))
+
+
+# --- Process capability screening (T2 DFM) ---
+
+
+def test_unachievable_tolerance_flagged_on_fdm() -> None:
+    # Scenario: a spec demands +/-0.01 mm (a 0.02 mm band) on an FDM feature; the
+    # FDM floor is a 0.20 mm band, so the tolerance is flagged unachievable with
+    # the capability source cited.
+    band = SymmetricTolerance(plus_minus=_mm(0.01)).resolve(_mm(10)).width
+    check = tolerance_is_achievable("fdm", band)
+    assert isinstance(check, AchievabilityCheck)
+    assert check.achievable is False
+    assert check.finest.to("mm").magnitude == pytest.approx(0.20)
+    assert check.demanded.to("mm").magnitude == pytest.approx(0.02)
+    assert check.source
+    assert "UNACHIEVABLE" in str(check)
+
+
+def test_achievable_tolerance_passes() -> None:
+    # A +/-0.2 mm (0.4 mm band) tolerance is within FDM's 0.20 mm floor.
+    band = SymmetricTolerance(plus_minus=_mm(0.2)).resolve(_mm(10)).width
+    assert tolerance_is_achievable("fdm", band).achievable is True
+
+
+def test_process_floor_differs_by_process() -> None:
+    # A 0.04 mm band (+/-0.02) is unachievable on milling (0.05 floor) but the
+    # tighter-holding turning floor (0.025) accepts it.
+    band = SymmetricTolerance(plus_minus=_mm(0.02)).resolve(_mm(10)).width
+    assert tolerance_is_achievable("cnc_milling", band).achievable is False
+    assert tolerance_is_achievable("cnc_turning", band).achievable is True
+
+
+def test_boundary_tolerance_equal_to_floor_is_achievable() -> None:
+    # Exactly at the floor counts as achievable (>=): a 0.05 mm band on milling.
+    band = SymmetricTolerance(plus_minus=_mm(0.025)).resolve(_mm(10)).width
+    assert tolerance_is_achievable("cnc_milling", band).achievable is True
+
+
+def test_process_capability_carries_note_and_source() -> None:
+    cap = process_capability("cnc_milling")
+    assert isinstance(cap, ProcessCapability)
+    assert cap.finest_tolerance.to("mm").magnitude == pytest.approx(0.05)
+    assert cap.note and cap.source
+
+
+def test_unknown_process_rejected() -> None:
+    with pytest.raises(ToleranceRangeError, match="no tolerance-capability record"):
+        process_capability("waterjet")
+    with pytest.raises(ToleranceRangeError, match="no tolerance-capability record"):
+        tolerance_is_achievable("waterjet", _mm(0.1))
+
+
+def test_achievability_rejects_non_length_band() -> None:
+    with pytest.raises(ToleranceRangeError, match="length"):
+        tolerance_is_achievable("fdm", Quantity(magnitude=1, unit="deg"))
 
 
 # --- Explicit per-dimension tolerances (symmetric / limits / fit) ---

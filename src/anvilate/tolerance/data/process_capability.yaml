@@ -1,0 +1,32 @@
+# Manufacturing process tolerance capability (schema: tolerance-mgmt).
+#
+# The finest total tolerance a process can reasonably hold under good conditions,
+# used to screen a demanded tolerance for manufacturability: a tolerance tighter
+# than this is flagged as unachievable for the process. These are SCREENING
+# ESTIMATES — real capability varies with machine, setup, feature size, and
+# material, and a shop may hold tighter or looser. Values are the total tolerance
+# band (mm), i.e. twice a symmetric +/- deviation. Deliberately conservative
+# (finest achievable, not typical) so the check only fails clearly-unachievable
+# tolerances rather than raising false alarms.
+dataset:
+  source: "DFM screening estimates (typical finest achievable tolerances)"
+  license: "CC0-1.0 (screening estimates; no standard redistributed)"
+  retrieved: "2026-07-08"
+
+# process: {finest_tolerance (total band, mm), note}
+processes:
+  cnc_milling:
+    finest_tolerance: 0.05
+    note: "precision CNC milling, general feature; tighter needs grinding/reaming"
+  cnc_turning:
+    finest_tolerance: 0.025
+    note: "precision CNC turning; diametral tolerances hold tighter than milling"
+  fdm:
+    finest_tolerance: 0.20
+    note: "fused deposition; strongly layer- and orientation-dependent"
+  sls:
+    finest_tolerance: 0.20
+    note: "selective laser sintering; powder-process shrinkage limits the floor"
+  sheet_metal:
+    finest_tolerance: 0.20
+    note: "sheet metal features; bend and form tolerances are coarser still"
