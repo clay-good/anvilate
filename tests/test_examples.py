@@ -79,6 +79,15 @@ def test_brace_tie_example_is_governed_by_net_rupture():
     assert _sf(net) < _sf(gross)
 
 
+def test_shrink_fit_example_passes_hub_yield():
+    namespace = runpy.run_path(str(_EXAMPLES / "shrink_fit_check.py"))
+    card = namespace["screen_shrink_fit"]()
+    # The Ø40 H7/s6 fit in a solid 80 mm steel hub develops a hub bore hoop stress
+    # well within 1045 steel's yield -> PASS (SF ~2.87 vs the 2.0 requirement).
+    assert card.status is CheckStatus.PASS
+    assert [e.name for e in card.entries] == ["hub bore hoop"]
+
+
 def test_lug_drawing_example_checks_and_draws(tmp_path):
     pytest.importorskip("ezdxf")
     namespace = runpy.run_path(str(_EXAMPLES / "lug_drawing.py"))
