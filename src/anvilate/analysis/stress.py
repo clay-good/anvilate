@@ -31,6 +31,7 @@ __all__ = [
     "strength_scorecard",
     "CombinedNormalStress",
     "combine_axial_bending",
+    "concentrated_stress",
 ]
 
 
@@ -88,6 +89,21 @@ def combine_axial_bending(
         tension_fibre=Quantity(magnitude=a + b, unit="MPa"),
         compression_fibre=Quantity(magnitude=a - b, unit="MPa"),
     )
+
+
+def concentrated_stress(*, nominal_stress: Quantity, kt: float) -> Quantity:
+    """The peak local stress σ_max = K_t·σ_nom at a geometric stress raiser.
+
+    A fillet, hole, groove, or notch amplifies the nominal (net-section) stress by
+    the geometric stress-concentration factor ``kt`` (read from a Peterson/Roark
+    chart for the feature — those charts are not bundled). ``nominal_stress`` must
+    be a stress and ``kt`` at least 1 (a raiser never reduces stress). Returns the
+    peak stress in MPa.
+    """
+    sigma = _require_stress(nominal_stress, "nominal_stress")
+    if kt < 1:
+        raise ValueError(f"kt must be at least 1 (a stress raiser); got {kt}")
+    return Quantity(magnitude=kt * sigma, unit="MPa")
 
 
 def von_mises_plane_stress(

@@ -17,6 +17,7 @@ from anvilate.analysis import (
     circular_area,
     circular_second_moment,
     combine_axial_bending,
+    concentrated_stress,
     constrained_thermal_stress,
     deflection_scorecard,
     euler_buckling_load,
@@ -763,6 +764,17 @@ def test_von_mises_plane_stress_worked_example():
     # sigma_x=100, sigma_y=0, tau=50 MPa: sqrt(100^2 + 3*50^2) = sqrt(17500) = 132.29.
     vm = von_mises_plane_stress(sigma_x=_q("100 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("50 MPa"))
     assert vm.to("MPa").magnitude == pytest.approx(132.288, rel=1e-4)
+
+
+def test_concentrated_stress_applies_kt():
+    # A Kt of 2.5 at a fillet raises a 100 MPa nominal stress to 250 MPa.
+    peak = concentrated_stress(nominal_stress=_q("100 MPa"), kt=2.5)
+    assert peak.to("MPa").magnitude == pytest.approx(250.0, rel=1e-9)
+
+
+def test_concentrated_stress_rejects_kt_below_one():
+    with pytest.raises(ValueError, match="kt must be at least 1"):
+        concentrated_stress(nominal_stress=_q("100 MPa"), kt=0.8)
 
 
 def test_principal_stresses_and_tresca_worked_example():

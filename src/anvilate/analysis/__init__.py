@@ -72,6 +72,7 @@ from .spring import spring_index, spring_shear_stress, wahl_factor
 from .stress import (
     CombinedNormalStress,
     combine_axial_bending,
+    concentrated_stress,
     max_shear_stress_plane,
     principal_stresses_plane,
     strength_scorecard,
@@ -144,5 +145,6 @@ __all__ = [
     "strength_scorecard",
     "CombinedNormalStress",
     "combine_axial_bending",
+    "concentrated_stress",
     "constrained_thermal_stress",
 ]
