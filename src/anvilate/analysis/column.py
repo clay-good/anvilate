@@ -23,6 +23,9 @@ from ..units import Quantity
 __all__ = [
     "ColumnEnd",
     "euler_buckling_load",
+    "radius_of_gyration",
+    "slenderness_ratio",
+    "euler_critical_stress",
 ]
 
 
@@ -80,3 +83,39 @@ def euler_buckling_load(
     p_cr = pi**2 * e * inertia / effective_length**2
     converted = p_cr.to("N")
     return Quantity(magnitude=float(converted.magnitude), unit="N")
+
+
+def radius_of_gyration(*, second_moment: Quantity, area: Quantity) -> Quantity:
+    """The radius of gyration r = √(I/A) of a section — the length that governs
+    slenderness. ``second_moment`` is the least I; ``area`` the cross-section."""
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(area, "[length]**2", "area")
+    r = (second_moment.pint / area.pint) ** 0.5
+    converted = r.to("mm")
+    return Quantity(magnitude=float(converted.magnitude), unit="mm")
+
+
+def slenderness_ratio(*, effective_length: Quantity, radius_of_gyration: Quantity) -> float:
+    """The slenderness ratio λ = K·L/r (dimensionless).
+
+    ``effective_length`` is the already-factored length K·L; ``radius_of_gyration``
+    is r. A high λ marks a long column that fails by Euler buckling; a low λ a
+    stubby one where inelastic (Johnson) failure governs instead.
+    """
+    _require(effective_length, "[length]", "effective_length")
+    _require(radius_of_gyration, "[length]", "radius_of_gyration")
+    return effective_length.to("mm").magnitude / radius_of_gyration.to("mm").magnitude
+
+
+def euler_critical_stress(*, elastic_modulus: Quantity, slenderness_ratio: float) -> Quantity:
+    """The Euler critical (buckling) stress σ_cr = π²·E/λ².
+
+    The critical load divided by the section area, expressed through the
+    slenderness ratio λ. ``slenderness_ratio`` must be positive. Returns a stress.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if slenderness_ratio <= 0:
+        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+    sigma = pi**2 * elastic_modulus.pint / slenderness_ratio**2
+    converted = sigma.to("MPa")
+    return Quantity(magnitude=float(converted.magnitude), unit="MPa")

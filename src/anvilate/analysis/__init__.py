@@ -22,7 +22,13 @@ from .beam import (
     rectangular_second_moment,
     simply_supported_center_load,
 )
-from .column import ColumnEnd, euler_buckling_load
+from .column import (
+    ColumnEnd,
+    euler_buckling_load,
+    euler_critical_stress,
+    radius_of_gyration,
+    slenderness_ratio,
+)
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
     bolt_preload_from_torque,
@@ -49,6 +55,9 @@ __all__ = [
     "rectangular_second_moment",
     "ColumnEnd",
     "euler_buckling_load",
+    "radius_of_gyration",
+    "slenderness_ratio",
+    "euler_critical_stress",
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
     "torque_for_preload",

@@ -11,11 +11,14 @@ from anvilate.analysis import (
     cantilever_end_load,
     circular_area,
     euler_buckling_load,
+    euler_critical_stress,
     polar_second_moment_solid,
+    radius_of_gyration,
     rectangular_second_moment,
     shaft_torsional_stress,
     shaft_twist_angle,
     simply_supported_center_load,
+    slenderness_ratio,
     thin_wall_cylinder,
     torque_for_preload,
     von_mises_bending_torsion,
@@ -160,6 +163,38 @@ def test_euler_buckling_rejects_bad_inputs():
             length=_q("500 mm"),
             effective_length_factor=0.0,
         )
+
+
+def test_radius_of_gyration_and_slenderness():
+    # 20 x 10 mm section: A = 200 mm^2, I = 1666.67 mm^4, r = sqrt(I/A) = 2.887 mm.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    r = radius_of_gyration(second_moment=inertia, area=_q("200 mm**2"))
+    assert r.to("mm").magnitude == pytest.approx(2.88675, rel=1e-4)
+    # A 500 mm pinned column: lambda = K*L/r = 500/2.887 = 173.2.
+    lam = slenderness_ratio(effective_length=_q("500 mm"), radius_of_gyration=r)
+    assert lam == pytest.approx(173.205, rel=1e-4)
+
+
+def test_euler_critical_stress_equals_load_over_area():
+    # sigma_cr = pi^2*E/lambda^2 must equal P_cr / A for the same column.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    area = _q("200 mm**2")
+    r = radius_of_gyration(second_moment=inertia, area=area)
+    lam = slenderness_ratio(effective_length=_q("500 mm"), radius_of_gyration=r)
+    sigma_cr = euler_critical_stress(elastic_modulus=_q("200 GPa"), slenderness_ratio=lam)
+    p_cr = euler_buckling_load(
+        elastic_modulus=_q("200 GPa"), second_moment=inertia, length=_q("500 mm")
+    )
+    # sigma_cr ~ 65.8 MPa; P_cr/A = 13159.5 N / 200 mm^2 = 65.8 MPa.
+    assert sigma_cr.to("MPa").magnitude == pytest.approx(65.797, rel=1e-3)
+    assert sigma_cr.to("MPa").magnitude == pytest.approx(
+        p_cr.to("N").magnitude / area.to("mm**2").magnitude, rel=1e-4
+    )
+
+
+def test_euler_critical_stress_rejects_bad_slenderness():
+    with pytest.raises(ValueError, match="slenderness_ratio must be positive"):
+        euler_critical_stress(elastic_modulus=_q("200 GPa"), slenderness_ratio=0.0)
 
 
 def test_bolt_preload_from_torque_matches_worked_example():
