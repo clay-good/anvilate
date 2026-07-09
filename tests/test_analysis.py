@@ -24,6 +24,7 @@ from anvilate.analysis import (
     goodman_scorecard,
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
+    johnson_critical_stress,
     max_transverse_shear_stress,
     polar_second_moment_hollow,
     polar_second_moment_solid,
@@ -40,6 +41,7 @@ from anvilate.analysis import (
     thin_wall_cylinder,
     thin_wall_sphere_stress,
     torque_for_preload,
+    transition_slenderness,
     von_mises_bending_torsion,
     von_mises_plane_stress,
     wahl_factor,
@@ -333,6 +335,29 @@ def test_euler_critical_stress_equals_load_over_area():
     assert sigma_cr.to("MPa").magnitude == pytest.approx(
         p_cr.to("N").magnitude / area.to("mm**2").magnitude, rel=1e-4
     )
+
+
+def test_johnson_and_euler_meet_at_transition_slenderness():
+    # Sy=250 MPa, E=200 GPa: transition lambda_1 = pi*sqrt(2E/Sy) = 125.66.
+    sy, e = _q("250 MPa"), _q("200 GPa")
+    lam1 = transition_slenderness(yield_strength=sy, elastic_modulus=e)
+    assert lam1 == pytest.approx(125.66, rel=1e-3)
+    # At lambda_1 the Johnson parabola meets Euler at exactly Sy/2 = 125 MPa.
+    johnson_at_transition = johnson_critical_stress(
+        yield_strength=sy, elastic_modulus=e, slenderness_ratio=lam1
+    )
+    assert johnson_at_transition.to("MPa").magnitude == pytest.approx(125.0, rel=1e-4)
+    euler_at_transition = euler_critical_stress(elastic_modulus=e, slenderness_ratio=lam1)
+    assert euler_at_transition.to("MPa").magnitude == pytest.approx(125.0, rel=1e-4)
+
+
+def test_johnson_critical_stress_worked_example():
+    # lambda=50 (an intermediate column): sigma_cr = Sy[1 - Sy*lambda^2/(4pi^2 E)]
+    #   = 250*[1 - 250*2500/(4pi^2*200000)] = 230.2 MPa (below Sy, above Euler's).
+    sigma = johnson_critical_stress(
+        yield_strength=_q("250 MPa"), elastic_modulus=_q("200 GPa"), slenderness_ratio=50.0
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(230.2, rel=1e-3)
 
 
 def test_euler_critical_stress_rejects_bad_slenderness():

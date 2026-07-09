@@ -1,16 +1,17 @@
-"""T1 analytical column-buckling check (Euler, closed-form).
+"""T1 analytical column-buckling checks (Euler + Johnson, closed-form).
 
 A slender compression member fails by elastic buckling well below its yield
 load. The Euler critical load ``P_cr = π²·E·I/(K·L)²`` is the classic screening
 check (Roark / Shigley): ``E`` the Young's modulus, ``I`` the least section
 second moment, ``L`` the unbraced length, and ``K`` the effective-length factor
-set by the end conditions. As with the beam checks, inputs and outputs are
+set by the end conditions. Intermediate (stubbier) columns, below the transition
+slenderness λ₁, fail inelastically and are screened with the J. B. Johnson
+parabola instead. As with the beam checks, inputs and outputs are
 dimension-checked :class:`~anvilate.units.Quantity` values and the arithmetic
 runs through Pint.
 
-This is a screening check — it assumes an ideal, initially-straight, concentrically-
-loaded prismatic column in the elastic range, and does not cover inelastic
-(Johnson) buckling of stubbier columns.
+These are screening checks — they assume an ideal, initially-straight,
+concentrically-loaded prismatic column.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ __all__ = [
     "radius_of_gyration",
     "slenderness_ratio",
     "euler_critical_stress",
+    "transition_slenderness",
+    "johnson_critical_stress",
 ]
 
 
@@ -119,3 +122,43 @@ def euler_critical_stress(*, elastic_modulus: Quantity, slenderness_ratio: float
     sigma = pi**2 * elastic_modulus.pint / slenderness_ratio**2
     converted = sigma.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def transition_slenderness(*, yield_strength: Quantity, elastic_modulus: Quantity) -> float:
+    """The Euler–Johnson transition slenderness λ₁ = π·√(2E/S_y).
+
+    Columns with slenderness above λ₁ buckle elastically (Euler); shorter ones
+    fail inelastically and are screened with the Johnson parabola
+    (:func:`johnson_critical_stress`). At λ₁ the two curves meet at σ = S_y/2.
+    """
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    sy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if sy <= 0:
+        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+    return pi * (2 * e / sy) ** 0.5
+
+
+def johnson_critical_stress(
+    *,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+    slenderness_ratio: float,
+) -> Quantity:
+    """The J. B. Johnson critical stress σ_cr = S_y·[1 − S_y·λ²/(4π²·E)] for an
+    intermediate column.
+
+    The parabolic inelastic-buckling curve tangent to the Euler curve at the
+    transition slenderness λ₁ (:func:`transition_slenderness`). Valid for
+    ``slenderness_ratio`` up to λ₁; above it, use :func:`euler_critical_stress`.
+    ``slenderness_ratio`` must be positive.
+    """
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if slenderness_ratio <= 0:
+        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+    sy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    sigma = sy * (1 - sy * slenderness_ratio**2 / (4 * pi**2 * e))
+    return Quantity(magnitude=sigma, unit="MPa")

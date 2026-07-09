@@ -36,8 +36,10 @@ from .column import (
     ColumnEnd,
     euler_buckling_load,
     euler_critical_stress,
+    johnson_critical_stress,
     radius_of_gyration,
     slenderness_ratio,
+    transition_slenderness,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -89,6 +91,8 @@ __all__ = [
     "radius_of_gyration",
     "slenderness_ratio",
     "euler_critical_stress",
+    "transition_slenderness",
+    "johnson_critical_stress",
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
     "torque_for_preload",
