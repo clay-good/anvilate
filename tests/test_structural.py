@@ -14,10 +14,12 @@ from anvilate.analysis import (
 )
 from anvilate.packs.structural import (
     BeamMember,
+    BoltedConnection,
     ColumnMember,
     LoadType,
     Support,
     screen_beam_member,
+    screen_bolted_connection,
     screen_column_member,
     screen_structure,
 )
@@ -190,6 +192,58 @@ def test_screen_structure_fails_if_any_member_fails():
     overloaded_column = _column("500 mm", load="20 kN")
     card = screen_structure([beam, overloaded_column], required_safety_factor=2.0)
     assert card.status is CheckStatus.FAIL
+
+
+def _connection(load: str = "8 kN") -> BoltedConnection:
+    return BoltedConnection(
+        name="splice",
+        bolt_diameter=_q("8 mm"),
+        plate_thickness=_q("6 mm"),
+        load=_q(load),
+        bolt_material="AISI-4140",
+        plate_material="ASTM-A36",
+    )
+
+
+def test_bolted_connection_screens_shear_and_bearing():
+    # M8 single shear, 8 kN, 6 mm A36 plate, 4140 bolt: shear 159 MPa vs 0.577*417
+    # = 241 (SF 1.51) and bearing 167 MPa vs 250 (SF 1.5) -> both just pass at 1.5.
+    card = screen_bolted_connection(_connection(), required_safety_factor=1.5)
+    assert card.status is CheckStatus.PASS
+    assert {e.name for e in card.entries} == {"splice bolt shear", "splice plate bearing"}
+
+
+def test_overloaded_bolted_connection_fails():
+    card = screen_bolted_connection(_connection(load="20 kN"), required_safety_factor=1.5)
+    assert card.status is CheckStatus.FAIL
+
+
+def test_bolted_connection_rejects_non_force_load():
+    with pytest.raises(ValidationError, match="load must be a"):
+        BoltedConnection(
+            name="c",
+            bolt_diameter=_q("8 mm"),
+            plate_thickness=_q("6 mm"),
+            load=_q("8 MPa"),
+            bolt_material="AISI-4140",
+            plate_material="ASTM-A36",
+        )
+
+
+def test_screen_structure_includes_connections():
+    # A beam, a column, and a bolted connection all roll into one scorecard.
+    card = screen_structure(
+        [
+            _member(Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N"),
+            _column("500 mm"),
+            _connection(),
+        ],
+        required_safety_factor=1.5,
+    )
+    names = [e.name for e in card.entries]
+    assert any("bolt shear" in n for n in names)
+    assert any("plate bearing" in n for n in names)
+    assert card.status is CheckStatus.PASS
 
 
 def test_column_rejects_non_force_axial_load():

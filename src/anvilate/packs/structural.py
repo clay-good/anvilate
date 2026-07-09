@@ -20,6 +20,8 @@ from ..analysis import (
     ColumnEnd,
     CrossSection,
     axial_stress,
+    bearing_stress,
+    bolt_shear_stress,
     cantilever_end_load,
     cantilever_uniform_load,
     deflection_scorecard,
@@ -44,9 +46,14 @@ __all__ = [
     "screen_beam_member",
     "ColumnMember",
     "screen_column_member",
+    "BoltedConnection",
+    "screen_bolted_connection",
     "StructuralMember",
     "screen_structure",
 ]
+
+# Distortion-energy shear-yield fraction of tensile yield (τ_y ≈ 0.577·S_y).
+_SHEAR_YIELD_FRACTION = 0.577
 
 
 class Support(StrEnum):
@@ -240,7 +247,88 @@ def screen_column_member(
     return Scorecard(entries=(entry,))
 
 
-StructuralMember = BeamMember | ColumnMember
+class BoltedConnection(BaseModel):
+    """A bolted lap/clevis connection transferring a transverse load.
+
+    ``bolt_diameter`` is the shank diameter, ``shear_planes`` 1 (single) or 2
+    (double), ``plate_thickness`` the bearing plate; ``load`` the transferred
+    force. ``bolt_material`` and ``plate_material`` are database ids — the bolt's
+    yield sets the shear allowable (0.577·S_y) and the plate's the bearing one.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    bolt_diameter: Quantity
+    plate_thickness: Quantity
+    load: Quantity
+    bolt_material: str
+    plate_material: str
+    shear_planes: int = 1
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> BoltedConnection:
+        for value, name in (
+            (self.bolt_diameter, "bolt_diameter"),
+            (self.plate_thickness, "plate_thickness"),
+        ):
+            if not value.has_dimension("[length]"):
+                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+        if not self.load.has_dimension("[force]"):
+            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+        if self.shear_planes < 1:
+            raise ValueError(f"shear_planes must be a positive integer; got {self.shear_planes}")
+        return self
+
+
+def screen_bolted_connection(
+    connection: BoltedConnection,
+    *,
+    required_safety_factor: float,
+    materials: MaterialsDatabase | None = None,
+) -> Scorecard:
+    """Screen a :class:`BoltedConnection`'s two failure modes into a scorecard.
+
+    Screens the bolt shear stress against the bolt's shear yield (0.577·S_y) and
+    the plate bearing stress against the plate's yield, both at
+    ``required_safety_factor``. ``materials`` defaults to the bundled database.
+    """
+    materials = materials or default_materials_db()
+    bolt = materials.get(connection.bolt_material)
+    plate = materials.get(connection.plate_material)
+
+    shear = bolt_shear_stress(
+        force=connection.load,
+        diameter=connection.bolt_diameter,
+        shear_planes=connection.shear_planes,
+    )
+    bolt_sy = bolt.yield_strength.quantity.to("MPa").magnitude
+    shear_yield = Quantity(magnitude=_SHEAR_YIELD_FRACTION * bolt_sy, unit="MPa")
+
+    bearing = bearing_stress(
+        force=connection.load,
+        diameter=connection.bolt_diameter,
+        thickness=connection.plate_thickness,
+    )
+    return Scorecard(
+        entries=(
+            strength_scorecard(
+                f"{connection.name} bolt shear",
+                stress=shear,
+                allowable=shear_yield,
+                required=required_safety_factor,
+            ),
+            strength_scorecard(
+                f"{connection.name} plate bearing",
+                stress=bearing,
+                allowable=plate.yield_strength.quantity,
+                required=required_safety_factor,
+            ),
+        )
+    )
+
+
+StructuralMember = BeamMember | ColumnMember | BoltedConnection
 
 
 def screen_structure(
@@ -249,11 +337,12 @@ def screen_structure(
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
 ) -> Scorecard:
-    """Screen a whole structure — a mix of beam and column members — into one card.
+    """Screen a whole structure — beams, columns, and bolted connections — into one card.
 
     Each member is dispatched to its own screen (beams by support/load, columns by
-    slenderness regime; a beam applies its own ``deflection_limit`` if set) and all
-    the entries are collected into a single :class:`~anvilate.scorecard.Scorecard`.
+    slenderness regime, connections by shear/bearing; a beam applies its own
+    ``deflection_limit`` if set) and all the entries are collected into a single
+    :class:`~anvilate.scorecard.Scorecard`.
     The roll-up honours No-silent-green: the structure passes only when every
     member's every check ran and passed.
     """
@@ -264,8 +353,12 @@ def screen_structure(
             card = screen_beam_member(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
-        else:
+        elif isinstance(member, ColumnMember):
             card = screen_column_member(
+                member, required_safety_factor=required_safety_factor, materials=materials
+            )
+        else:
+            card = screen_bolted_connection(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
         entries.extend(card.entries)
