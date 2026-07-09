@@ -45,8 +45,12 @@ and reuse it. The DXF example additionally needs the `export` extra
 |---|---|
 | `evidence_bundle.py` | Rolls every standards record a spec references (material, standard components, ISO 2768 / ISO 286 / ISO 1101) into an auditable, cited evidence trail. |
 
-## Design Spec file
+## Design Spec IR
 
-`nema23_bracket.spec.yaml` is a golden-path Design Spec IR (schema 1.0.0), loadable
-with `anvilate.spec.load_spec_yaml` — the typed, diffable representation a prompt
-compiles into.
+| Example | What it shows |
+|---|---|
+| `load_and_validate_spec.py` | Loads the golden Design Spec from YAML, validates its references and dimension graph against the bundled databases, and proves it round-trips unchanged — the spec is the source of truth. |
+
+`nema23_bracket.spec.yaml` is that golden-path Design Spec IR (schema 1.0.0),
+loadable with `anvilate.spec.load_spec_yaml` — the typed, diffable representation a
+prompt compiles into.

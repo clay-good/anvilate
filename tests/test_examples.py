@@ -79,6 +79,14 @@ def test_brace_tie_example_is_governed_by_net_rupture():
     assert _sf(net) < _sf(gross)
 
 
+def test_load_and_validate_spec_example_round_trips():
+    namespace = runpy.run_path(str(_EXAMPLES / "load_and_validate_spec.py"))
+    spec = namespace["load_and_validate"]()
+    # The golden NEMA 23 bracket spec loads, validates, and round-trips.
+    assert spec.name == "nema23_bracket"
+    assert spec.material.ref == "AA-6061-T6"
+
+
 def test_evidence_bundle_example_collects_a_cited_trail():
     namespace = runpy.run_path(str(_EXAMPLES / "evidence_bundle.py"))
     records = namespace["build_evidence"]()
