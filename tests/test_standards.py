@@ -337,16 +337,25 @@ def test_component_wrong_dimension_rejected() -> None:
     assert "length" in msg
 
 
+def test_nema34_mounting_geometry_from_database(cdb) -> None:
+    # NEMA 34 extends the golden-path frames: its 2.74 in bolt square and
+    # 2.875 in pilot boss are unambiguous NEMA standard values.
+    frame = cdb.get("NEMA34")
+    assert frame.bolt_spacing.quantity.to("mm").magnitude == pytest.approx(69.6)
+    assert frame.pilot_diameter.quantity.to("mm").magnitude == pytest.approx(73.025)
+    assert frame.mounting_hole.quantity.to("mm").magnitude == pytest.approx(5.0)
+
+
 def test_coverage_gap_surfaces_rather_than_guessing(cdb) -> None:
     # Scenario: coverage gap surfaces to user — an un-recorded frame is unknown
     # (with a near-miss), never silently estimated.
     from anvilate.standards import UnknownComponentError, default_standards_resolver
 
-    assert not cdb.has_component("NEMA34")
+    assert not cdb.has_component("NEMA42")
     with pytest.raises(UnknownComponentError) as exc:
-        cdb.get("NEMA34")
+        cdb.get("NEMA42")
     assert exc.value.suggestions  # offers the closest recorded frames
-    assert not default_standards_resolver().has_component("NEMA34")
+    assert not default_standards_resolver().has_component("NEMA42")
 
 
 def test_resolver_composes_component_db_and_seed() -> None:
@@ -357,6 +366,7 @@ def test_resolver_composes_component_db_and_seed() -> None:
     assert set(resolver.known_components()) == {
         "NEMA17",
         "NEMA23",
+        "NEMA34",
         "EXT-4040",
         "EXT-2020",
         "ISO4762-M5",

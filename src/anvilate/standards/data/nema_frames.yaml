@@ -6,8 +6,8 @@
 # specific and deliberately omitted; a mating part designs against the mount,
 # not the body. The source standard is not redistributed — only the dimensions.
 #
-# Coverage: NEMA 17 and 23 (the golden-path frames). NEMA 8/11/14/34 are not yet
-# recorded; a reference to them surfaces as a coverage gap rather than a guess.
+# Coverage: NEMA 17, 23, and 34. NEMA 8/11/14/42 are not yet recorded; a
+# reference to them surfaces as a coverage gap rather than a guess.
 dataset:
   name: anvilate-nema-frames-seed
   version: "0.1.0"
@@ -42,6 +42,21 @@ frames:
     pilot_diameter:
       quantity: {magnitude: 38.1, unit: mm}
       citation: {condition: "raised pilot boss diameter (1.500 in)"}
+    mounting_hole:
+      quantity: {magnitude: 5.0, unit: mm}
+      citation: {condition: "M5 mounting screw"}
+
+  NEMA34:
+    name: "NEMA 34 stepper frame"
+    faceplate_width:
+      quantity: {magnitude: 86.0, unit: mm}
+      citation: {condition: "nominal faceplate, varies by manufacturer"}
+    bolt_spacing:
+      quantity: {magnitude: 69.6, unit: mm}
+      citation: {condition: "square mounting-hole pattern pitch (2.74 in)"}
+    pilot_diameter:
+      quantity: {magnitude: 73.025, unit: mm}
+      citation: {condition: "raised pilot boss diameter (2.875 in)"}
     mounting_hole:
       quantity: {magnitude: 5.0, unit: mm}
       citation: {condition: "M5 mounting screw"}
