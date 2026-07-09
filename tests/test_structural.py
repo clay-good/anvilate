@@ -18,10 +18,12 @@ from anvilate.packs.structural import (
     ColumnMember,
     LoadType,
     Support,
+    WeldedConnection,
     screen_beam_member,
     screen_bolted_connection,
     screen_column_member,
     screen_structure,
+    screen_welded_connection,
 )
 from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
@@ -228,6 +230,50 @@ def test_bolted_connection_rejects_non_force_load():
             bolt_material="AISI-4140",
             plate_material="ASTM-A36",
         )
+
+
+def _weld(load: str = "20 kN") -> WeldedConnection:
+    return WeldedConnection(
+        name="fillet",
+        leg_size=_q("6 mm"),
+        weld_length=_q("100 mm"),
+        load=_q(load),
+        electrode_strength=_q("483 MPa"),  # E70 electrode
+    )
+
+
+def test_welded_connection_screens_throat_shear():
+    # F=20 kN on a 6 mm x 100 mm E70 fillet: throat = 0.707*6*100 = 424 mm^2,
+    #   tau = 20000/424 = 47.1 MPa vs allowable 0.6*483 = 290 -> SF 6.2 -> PASS.
+    card = screen_welded_connection(_weld(), required_safety_factor=2.0)
+    assert card.status is CheckStatus.PASS
+    assert card.entries[0].name == "fillet weld shear"
+    assert card.entries[0].reference == "AISC 360-16 §J2.4"
+
+
+def test_overloaded_weld_fails():
+    card = screen_welded_connection(_weld(load="150 kN"), required_safety_factor=2.0)
+    assert card.status is CheckStatus.FAIL
+
+
+def test_weld_rejects_non_pressure_electrode_strength():
+    with pytest.raises(ValidationError, match="electrode_strength must be a"):
+        WeldedConnection(
+            name="w",
+            leg_size=_q("6 mm"),
+            weld_length=_q("100 mm"),
+            load=_q("20 kN"),
+            electrode_strength=_q("483 N"),
+        )
+
+
+def test_screen_structure_includes_welds():
+    card = screen_structure(
+        [_member(Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N"), _weld()],
+        required_safety_factor=2.0,
+    )
+    assert any("weld shear" in e.name for e in card.entries)
+    assert card.status is CheckStatus.PASS
 
 
 def test_checks_cite_the_governing_aisc_clause():

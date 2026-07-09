@@ -52,9 +52,16 @@ __all__ = [
     "screen_column_member",
     "BoltedConnection",
     "screen_bolted_connection",
+    "WeldedConnection",
+    "screen_welded_connection",
     "StructuralMember",
     "screen_structure",
 ]
+
+# The effective throat of a fillet weld is 0.707 (= 1/√2) of its leg size.
+_FILLET_THROAT_FACTOR = 0.707
+# AISC allowable/nominal fillet-weld shear is 0.6 of the electrode strength F_EXX.
+_WELD_SHEAR_FRACTION = 0.6
 
 # Distortion-energy shear-yield fraction of tensile yield (τ_y ≈ 0.577·S_y).
 _SHEAR_YIELD_FRACTION = 0.577
@@ -66,6 +73,7 @@ _CLAUSE_DEFLECTION = "AISC 360-16 §L3"
 _CLAUSE_COMPRESSION = "AISC 360-16 Ch. E"
 _CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
 _CLAUSE_BEARING = "AISC 360-16 §J3.10"
+_CLAUSE_WELD = "AISC 360-16 §J2.4"
 
 
 class Support(StrEnum):
@@ -340,7 +348,68 @@ def screen_bolted_connection(
     )
 
 
-StructuralMember = BeamMember | ColumnMember | BoltedConnection
+class WeldedConnection(BaseModel):
+    """A fillet-welded connection carrying a load in shear on the weld throat.
+
+    ``leg_size`` is the fillet leg w (the effective throat is 0.707·w),
+    ``weld_length`` the total weld length L, ``load`` the transferred force, and
+    ``electrode_strength`` the weld-metal tensile strength F_EXX (e.g. 483 MPa for
+    an E70 electrode). The allowable weld shear is 0.6·F_EXX (AISC §J2.4).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    leg_size: Quantity
+    weld_length: Quantity
+    load: Quantity
+    electrode_strength: Quantity
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> WeldedConnection:
+        for value, name in ((self.leg_size, "leg_size"), (self.weld_length, "weld_length")):
+            if not value.has_dimension("[length]"):
+                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+        if not self.load.has_dimension("[force]"):
+            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+        if not self.electrode_strength.has_dimension("[pressure]"):
+            raise ValueError(
+                f"electrode_strength must be a [pressure] quantity; got {self.electrode_strength}"
+            )
+        return self
+
+
+def screen_welded_connection(
+    connection: WeldedConnection,
+    *,
+    required_safety_factor: float,
+) -> Scorecard:
+    """Screen a :class:`WeldedConnection`'s throat shear into a scorecard.
+
+    The shear on the effective throat is τ = F/(0.707·w·L); it is screened against
+    the allowable weld shear 0.6·F_EXX at ``required_safety_factor`` (AISC §J2.4).
+    No material lookup is needed — the electrode strength is carried on the member.
+    """
+    throat_area = (
+        _FILLET_THROAT_FACTOR
+        * connection.leg_size.to("mm").magnitude
+        * connection.weld_length.to("mm").magnitude
+    )
+    shear = Quantity(magnitude=connection.load.to("N").magnitude / throat_area, unit="MPa")
+    allowable = Quantity(
+        magnitude=_WELD_SHEAR_FRACTION * connection.electrode_strength.to("MPa").magnitude,
+        unit="MPa",
+    )
+    entry = strength_scorecard(
+        f"{connection.name} weld shear",
+        stress=shear,
+        allowable=allowable,
+        required=required_safety_factor,
+    ).model_copy(update={"reference": _CLAUSE_WELD})
+    return Scorecard(entries=(entry,))
+
+
+StructuralMember = BeamMember | ColumnMember | BoltedConnection | WeldedConnection
 
 
 def screen_structure(
@@ -349,12 +418,12 @@ def screen_structure(
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
 ) -> Scorecard:
-    """Screen a whole structure — beams, columns, and bolted connections — into one card.
+    """Screen a whole structure — beams, columns, and connections — into one card.
 
     Each member is dispatched to its own screen (beams by support/load, columns by
-    slenderness regime, connections by shear/bearing; a beam applies its own
-    ``deflection_limit`` if set) and all the entries are collected into a single
-    :class:`~anvilate.scorecard.Scorecard`.
+    slenderness regime, bolted connections by shear/bearing, welds by throat shear;
+    a beam applies its own ``deflection_limit`` if set) and all the entries are
+    collected into a single :class:`~anvilate.scorecard.Scorecard`.
     The roll-up honours No-silent-green: the structure passes only when every
     member's every check ran and passed.
     """
@@ -369,9 +438,11 @@ def screen_structure(
             card = screen_column_member(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
-        else:
+        elif isinstance(member, BoltedConnection):
             card = screen_bolted_connection(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
+        else:
+            card = screen_welded_connection(member, required_safety_factor=required_safety_factor)
         entries.extend(card.entries)
     return Scorecard(entries=tuple(entries))
