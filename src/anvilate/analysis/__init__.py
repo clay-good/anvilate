@@ -43,6 +43,7 @@ from .beam import (
     max_transverse_shear_stress,
     rectangular_second_moment,
     simply_supported_center_load,
+    simply_supported_offset_load,
     simply_supported_uniform_load,
 )
 from .column import (
@@ -117,6 +118,7 @@ __all__ = [
     "cantilever_end_load",
     "cantilever_uniform_load",
     "simply_supported_center_load",
+    "simply_supported_offset_load",
     "simply_supported_uniform_load",
     "fixed_fixed_center_load",
     "fixed_fixed_uniform_load",

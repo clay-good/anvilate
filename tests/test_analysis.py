@@ -51,6 +51,7 @@ from anvilate.analysis import (
     shaft_torsional_stress,
     shaft_twist_angle,
     simply_supported_center_load,
+    simply_supported_offset_load,
     simply_supported_uniform_load,
     slenderness_ratio,
     spring_index,
@@ -125,6 +126,75 @@ def test_simply_supported_center_load_matches_worked_example():
     )
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(37.5, rel=1e-4)
     assert result.max_deflection.to("mm").magnitude == pytest.approx(0.78125, rel=1e-4)
+
+
+def test_simply_supported_offset_load_matches_worked_example():
+    # Same 500 mm, 20 x 10 mm steel beam, 100 N at the quarter point (125 mm).
+    # By hand: M = P*a*b/L = 100*125*375/500 = 9375 N*mm -> sigma = 28.125 MPa;
+    #   delta_max = P*b*(L^2-b^2)^1.5/(9*sqrt(3)*L*E*I) with b = 125 -> 0.54592 mm.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = simply_supported_offset_load(
+        force=_q("100 N"),
+        load_position=_q("125 mm"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(28.125, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.54592, rel=1e-4)
+
+
+def test_simply_supported_offset_load_degenerates_to_the_center_case():
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    offset = simply_supported_offset_load(force=_q("100 N"), load_position=_q("250 mm"), **kw)
+    center = simply_supported_center_load(force=_q("100 N"), **kw)
+    assert offset.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        center.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    assert offset.max_deflection.to("mm").magnitude == pytest.approx(
+        center.max_deflection.to("mm").magnitude, rel=1e-9
+    )
+
+
+def test_simply_supported_offset_load_is_symmetric():
+    # Measuring the position from either support is the same physical case.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "force": _q("100 N"),
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    left = simply_supported_offset_load(load_position=_q("125 mm"), **kw)
+    right = simply_supported_offset_load(load_position=_q("375 mm"), **kw)
+    assert left.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        right.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    assert left.max_deflection.to("mm").magnitude == pytest.approx(
+        right.max_deflection.to("mm").magnitude, rel=1e-9
+    )
+
+
+def test_simply_supported_offset_load_rejects_positions_outside_the_span():
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "force": _q("100 N"),
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    for position in ("0 mm", "500 mm", "600 mm", "-10 mm"):
+        with pytest.raises(ValueError, match="strictly inside the span"):
+            simply_supported_offset_load(load_position=_q(position), **kw)
 
 
 def test_cantilever_uniform_load_matches_worked_example():

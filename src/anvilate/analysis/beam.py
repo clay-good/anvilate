@@ -25,6 +25,7 @@ __all__ = [
     "cantilever_end_load",
     "cantilever_uniform_load",
     "simply_supported_center_load",
+    "simply_supported_offset_load",
     "simply_supported_uniform_load",
     "fixed_fixed_center_load",
     "fixed_fixed_uniform_load",
@@ -284,6 +285,57 @@ def simply_supported_center_load(
     moment = f * length_p / 4
     stress = moment * c / inertia
     deflection = f * length_p**3 / (48 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def simply_supported_offset_load(
+    *,
+    force: Quantity,
+    load_position: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The simply-supported beam with a point load off mid-span (Roark/Shigley).
+
+    A prismatic beam simply supported over a span ``length``, with a transverse
+    ``force`` at ``load_position`` (measured from either support — the case is
+    symmetric) strictly inside the span. Other arguments match
+    :func:`simply_supported_center_load`, which this generalizes: at mid-span the
+    two agree exactly.
+
+    Returns the peak bending stress under the load (σ = M·c/I with M = F·a·b/L)
+    and the true maximum deflection δ = F·b·(L² − b²)^{3/2}/(9·√3·L·E·I), where b
+    is the load's distance to the nearer support — the maximum sits between the
+    load and mid-span, not under the load. Every argument is dimension-checked.
+    """
+    _require(force, "[force]", "force")
+    _require(load_position, "[length]", "load_position")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    f = force.pint
+    length_p = length.pint
+    position = load_position.pint.to(length_p.units)
+    if not 0 < position.magnitude < length_p.magnitude:
+        raise ValueError(
+            f"load_position must lie strictly inside the span (0, {length}); got {load_position}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    far = max(position, length_p - position)
+    near = length_p - far  # distance from the load to the nearer support
+    moment = f * far * near / length_p
+    stress = moment * c / inertia
+    deflection = f * near * (length_p**2 - near**2) ** 1.5 / (9 * 3**0.5 * length_p * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
