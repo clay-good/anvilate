@@ -26,6 +26,8 @@ from anvilate.analysis import (
     fixed_fixed_center_load,
     fixed_fixed_offset_load,
     fixed_fixed_uniform_load,
+    fixed_pinned_center_load,
+    fixed_pinned_uniform_load,
     frequency_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
@@ -402,6 +404,55 @@ def test_fixed_fixed_uniform_load_matches_worked_example():
     )
     assert ff.max_bending_stress.to("MPa").magnitude == pytest.approx(62.5, rel=1e-4)
     assert ff.max_deflection.to("mm").magnitude == pytest.approx(0.48828, rel=1e-4)
+
+
+def test_fixed_pinned_center_load_matches_worked_example():
+    # 100 N at mid-span of a propped-cantilever 500 mm 20x10 steel beam:
+    #   M_max = 3*F*L/16 = 9375 N*mm at the wall -> sigma = 9375*5/1666.67
+    #   = 28.125 MPa; delta = F*L^3/(48*sqrt(5)*E*I) = 0.34939 mm.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    fp = fixed_pinned_center_load(force=_q("100 N"), **kw)
+    assert fp.max_bending_stress.to("MPa").magnitude == pytest.approx(28.125, rel=1e-4)
+    assert fp.max_deflection.to("mm").magnitude == pytest.approx(0.34939, rel=1e-4)
+    # The propped cantilever sits between the two symmetric cases on both counts.
+    ss = simply_supported_center_load(force=_q("100 N"), **kw)
+    ff = fixed_fixed_center_load(force=_q("100 N"), **kw)
+    assert (
+        ff.max_deflection.to("mm").magnitude
+        < fp.max_deflection.to("mm").magnitude
+        < ss.max_deflection.to("mm").magnitude
+    )
+
+
+def test_fixed_pinned_uniform_load_matches_worked_example():
+    # 1 N/mm UDL on the same propped-cantilever beam:
+    #   M_max = w*L^2/8 = 31250 N*mm at the wall -> sigma = 93.75 MPa (the same
+    #   governing moment as simply-supported, but hogging);
+    #   delta = w*L^4/(185*E*I) = 1*500^4/(185*200000*1666.67) = 1.01351 mm.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    fp = fixed_pinned_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    assert fp.max_bending_stress.to("MPa").magnitude == pytest.approx(93.75, rel=1e-4)
+    assert fp.max_deflection.to("mm").magnitude == pytest.approx(1.01351, rel=1e-4)
+    # Deflection sits between the simply-supported (2.441) and fixed-fixed (0.488).
+    ss = simply_supported_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    ff = fixed_fixed_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    assert (
+        ff.max_deflection.to("mm").magnitude
+        < fp.max_deflection.to("mm").magnitude
+        < ss.max_deflection.to("mm").magnitude
+    )
 
 
 def test_simply_supported_uniform_load_matches_worked_example():

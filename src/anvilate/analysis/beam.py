@@ -428,6 +428,84 @@ def simply_supported_uniform_load(
     )
 
 
+def fixed_pinned_center_load(
+    *,
+    force: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The propped cantilever (fixed-pinned) beam with a central point load.
+
+    A prismatic beam clamped at one end and simply supported (propped) at the
+    other over a span ``length``, with a transverse ``force`` at mid-span (AISC
+    Table 3-23 case 13). Arguments match :func:`fixed_fixed_center_load`.
+
+    Returns the peak bending stress at the fixed end (σ = M·c/I with the maximum
+    moment M = 3·F·L/16) and the true maximum deflection δ = F·L³/(48·√5·E·I),
+    which sits 0.447·L from the propped end — between the simply-supported and
+    fixed-fixed cases on both counts. Every argument is dimension-checked.
+    """
+    _require(force, "[force]", "force")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    f = force.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = 3 * f * length_p / 16
+    stress = moment * c / inertia
+    deflection = f * length_p**3 / (48 * 5**0.5 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def fixed_pinned_uniform_load(
+    *,
+    distributed_load: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The propped cantilever (fixed-pinned) beam under a uniform load.
+
+    A prismatic beam clamped at one end and simply supported (propped) at the
+    other, carrying a uniform ``distributed_load`` w (AISC Table 3-23 case 12).
+    Returns the peak bending stress at the fixed end (σ = M·c/I with the maximum
+    moment M = w·L²/8 — the same governing moment as the simply-supported case,
+    but hogging at the wall) and the maximum deflection δ = w·L⁴/(185·E·I),
+    which sits 0.422·L from the propped end. Every argument is dimension-checked.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w * length_p**2 / 8
+    stress = moment * c / inertia
+    deflection = w * length_p**4 / (185 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
 def fixed_fixed_center_load(
     *,
     force: Quantity,
