@@ -1,18 +1,23 @@
 """Anvilate T1 analytical checks: closed-form, deterministic, no solver.
 
 The T1 validation tier screens a design with handbook closed-form solutions
-(Roark, Shigley) before any FEA — fast, deterministic, and unit-checked. This
-package holds those checks; :mod:`anvilate.analysis.axial` covers direct axial
-stress, :mod:`anvilate.analysis.beam` covers the cantilever
-and simply-supported bending cases, :mod:`anvilate.analysis.column` the Euler
-buckling load, :mod:`anvilate.analysis.fastener` the bolt torque-tension
-relation, :mod:`anvilate.analysis.torsion` the solid-shaft torsion check, and
-:mod:`anvilate.analysis.pressure_vessel` the thin-wall cylinder stresses, and
-:mod:`anvilate.analysis.stress` the von Mises combination of component stresses,
-and :mod:`anvilate.analysis.fatigue` the modified-Goodman fatigue screen, and
-:mod:`anvilate.analysis.spring` the helical-spring shear stress, and
-:mod:`anvilate.analysis.thermal` the constrained-thermal stress. Further
-analytical cases land here as they are built out (see
+(Roark, Shigley) before any FEA — fast, deterministic, and unit-checked. The
+modules:
+
+- :mod:`~anvilate.analysis.axial` — direct axial stress and section area
+- :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
+  fixed-fixed, point and distributed), transverse shear, section second moments
+- :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness
+- :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion and twist
+- :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere
+- :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
+- :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl)
+- :mod:`~anvilate.analysis.thermal` — constrained thermal stress
+- :mod:`~anvilate.analysis.dynamics` — fundamental-frequency (modal) screen
+- :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending
+- :mod:`~anvilate.analysis.fatigue` — modified-Goodman fatigue
+
+Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
 """
 
@@ -43,6 +48,11 @@ from .column import (
     radius_of_gyration,
     slenderness_ratio,
     transition_slenderness,
+)
+from .dynamics import (
+    STANDARD_GRAVITY,
+    natural_frequency,
+    natural_frequency_from_deflection,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -99,6 +109,9 @@ __all__ = [
     "euler_critical_stress",
     "transition_slenderness",
     "johnson_critical_stress",
+    "STANDARD_GRAVITY",
+    "natural_frequency",
+    "natural_frequency_from_deflection",
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
     "torque_for_preload",

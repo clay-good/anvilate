@@ -29,6 +29,8 @@ from anvilate.analysis import (
     hollow_shaft_torsional_stress,
     johnson_critical_stress,
     max_transverse_shear_stress,
+    natural_frequency,
+    natural_frequency_from_deflection,
     polar_second_moment_hollow,
     polar_second_moment_solid,
     radius_of_gyration,
@@ -702,6 +704,41 @@ def test_constrained_thermal_stress_rejects_bad_units():
             thermal_expansion_coefficient=_q("12 mm"),  # not 1/temperature
             temperature_change=_q("50 K"),
         )
+
+
+def test_natural_frequency_sdof():
+    # k = 8000 N/m, m = 1 kg: fn = (1/2pi)*sqrt(8000/1) = 14.24 Hz.
+    fn = natural_frequency(stiffness=_q("8000 N/m"), mass=_q("1 kg"))
+    assert fn.to("Hz").magnitude == pytest.approx(14.235, rel=1e-3)
+
+
+def test_natural_frequency_from_a_beam_stiffness():
+    # A beam with 100 N producing 12.5 mm deflection has k = F/delta = 8 N/mm =
+    # 8000 N/m; carrying a 1 kg mass it resonates at 14.24 Hz.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    beam = cantilever_end_load(
+        force=_q("100 N"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    k_n_per_mm = 100.0 / beam.max_deflection.to("mm").magnitude  # 8 N/mm
+    fn = natural_frequency(stiffness=_q(f"{k_n_per_mm} N/mm"), mass=_q("1 kg"))
+    assert fn.to("Hz").magnitude == pytest.approx(14.235, rel=1e-3)
+
+
+def test_rayleigh_frequency_from_self_weight_deflection():
+    # fn = (1/2pi)*sqrt(g/delta); delta = 12.5 mm -> 4.458 Hz.
+    fn = natural_frequency_from_deflection(_q("12.5 mm"))
+    assert fn.to("Hz").magnitude == pytest.approx(4.458, rel=1e-3)
+
+
+def test_natural_frequency_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="stiffness must be a"):
+        natural_frequency(stiffness=_q("100 N"), mass=_q("1 kg"))  # force, not stiffness
+    with pytest.raises(ValueError, match="static_deflection must be positive"):
+        natural_frequency_from_deflection(_q("0 mm"))
 
 
 def test_von_mises_plane_stress_worked_example():
