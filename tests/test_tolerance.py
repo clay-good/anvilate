@@ -31,6 +31,7 @@ from anvilate.tolerance import (
     general_angular_tolerance,
     general_tolerance,
     process_capability,
+    processes_that_can_hold,
     resolve_class,
     standard_tolerance,
     tolerance_is_achievable,
@@ -763,6 +764,23 @@ def test_unknown_process_rejected() -> None:
 def test_achievability_rejects_non_length_band() -> None:
     with pytest.raises(ToleranceRangeError, match="length"):
         tolerance_is_achievable("fdm", Quantity(magnitude=1, unit="deg"))
+
+
+def test_processes_that_can_hold_suggests_alternatives() -> None:
+    # A 0.1 mm band (±0.05) is held by milling (0.05) and turning (0.025) but not
+    # the 0.20 mm additive/sheet floors, coarsest-capable (milling) first.
+    holders = processes_that_can_hold(_mm(0.1))
+    assert holders == ["cnc_milling", "cnc_turning"]
+    # A 0.3 mm band is held by every process; the coarsest (0.20) floors lead.
+    assert processes_that_can_hold(_mm(0.3))[0] in {"fdm", "sls", "sheet_metal"}
+    # A 0.01 mm band is tighter than every floor — no process holds it, so the
+    # tolerance must be relaxed.
+    assert processes_that_can_hold(_mm(0.01)) == []
+
+
+def test_processes_that_can_hold_rejects_non_length() -> None:
+    with pytest.raises(ToleranceRangeError, match="length"):
+        processes_that_can_hold(Quantity(magnitude=1, unit="deg"))
 
 
 # --- Explicit per-dimension tolerances (symmetric / limits / fit) ---

@@ -21,6 +21,7 @@ __all__ = [
     "AchievabilityCheck",
     "process_capability",
     "tolerance_is_achievable",
+    "processes_that_can_hold",
 ]
 
 
@@ -119,3 +120,24 @@ def tolerance_is_achievable(process: str, demanded_width: Quantity) -> Achievabi
         achievable=demanded_mm >= finest_mm,
         source=cap.source,
     )
+
+
+def processes_that_can_hold(demanded_width: Quantity) -> list[str]:
+    """The known processes whose finest-achievable floor can hold ``demanded_width``.
+
+    Ordered coarsest-capable first — the least-precise (typically most economical)
+    process whose floor still meets the band comes first. Empty when no process
+    can hold the band, i.e. the tolerance must be relaxed. This is the "suggest
+    changing the process" half of the DFM scenario; :func:`tolerance_is_achievable`
+    is the flag. ``demanded_width`` must be a length, else
+    :class:`ToleranceRangeError`.
+    """
+    if not demanded_width.has_dimension("[length]"):
+        raise ToleranceRangeError(
+            f"a tolerance band must be a length; got {demanded_width.dimensionality} "
+            f"({demanded_width})"
+        )
+    demanded_mm = demanded_width.to("mm").magnitude
+    processes = _table()["processes"]
+    holders = [p for p, row in processes.items() if float(row["finest_tolerance"]) <= demanded_mm]
+    return sorted(holders, key=lambda p: float(processes[p]["finest_tolerance"]), reverse=True)

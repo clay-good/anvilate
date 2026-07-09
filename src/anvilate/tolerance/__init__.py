@@ -50,6 +50,7 @@ from .process import (
     AchievabilityCheck,
     ProcessCapability,
     process_capability,
+    processes_that_can_hold,
     tolerance_is_achievable,
 )
 from .stackup import (
@@ -79,6 +80,7 @@ __all__ = [
     "AchievabilityCheck",
     "process_capability",
     "tolerance_is_achievable",
+    "processes_that_can_hold",
     "ResolvedTolerance",
     "SymmetricTolerance",
     "LimitTolerance",
