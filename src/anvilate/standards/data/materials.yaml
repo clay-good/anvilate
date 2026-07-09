@@ -266,6 +266,28 @@ materials:
       quantity: {magnitude: 950.0, unit: MPa}
       citation: {source: "ASM — Ti-6Al-4V annealed", condition: "annealed"}
 
+  AA-A356-T6:
+    name: "Cast aluminum A356.0-T6"
+    category: aluminum
+    # The DB's first casting alloy (all others are wrought); common for cast
+    # brackets, housings, and wheels. Cast properties vary with process and
+    # section — these are the T6 permanent-mold values.
+    elastic_modulus:
+      quantity: {magnitude: 72.4, unit: GPa}
+      citation: {source: "ASM — A356.0-T6", condition: "T6, permanent mold, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "ASM — A356.0-T6", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 2.68, unit: g/cm**3}
+      citation: {source: "ASM — A356.0-T6", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 205.0, unit: MPa}
+      citation: {source: "ASM — A356.0-T6", condition: "T6, permanent mold, 0.2% offset (30 ksi)"}
+    ultimate_strength:
+      quantity: {magnitude: 283.0, unit: MPa}
+      citation: {source: "ASM — A356.0-T6", condition: "T6, permanent mold (41 ksi)"}
+
   AA-6063-T6:
     name: "Aluminum 6063-T6"
     category: aluminum
