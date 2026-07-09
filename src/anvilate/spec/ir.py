@@ -24,6 +24,7 @@ from ..tolerance import (
     ToleranceClass,
     general_tolerance,
     general_tolerance_source,
+    processes_that_can_hold,
     resolve_class,
     tolerance_is_achievable,
 )
@@ -484,6 +485,25 @@ class DesignSpec(_Base):
             dim.tag: tolerance_is_achievable(process, dim.resolve().width)
             for dim in self.dimensions
         }
+
+    def suggest_processes_for_tight_tolerances(self) -> dict[str, list[str]]:
+        """For each declared tolerance the chosen process cannot hold, the other
+        processes that could — the "change the process" half of the T2 DFM scenario
+        (:meth:`check_tolerances_manufacturable` is the flag half).
+
+        Keyed by dimension tag; only tolerances that fail on the declared process
+        appear. Each value is the alternative processes whose finest-achievable
+        floor can hold the band, coarsest-capable (most economical) first, with the
+        already-declared process removed. An empty list means no bundled process
+        can hold the band, so the tolerance must be relaxed instead.
+        """
+        process = self.manufacturing.process.value
+        suggestions: dict[str, list[str]] = {}
+        for dim in self.dimensions:
+            band = dim.resolve().width
+            if not tolerance_is_achievable(process, band).achievable:
+                suggestions[dim.tag] = [p for p in processes_that_can_hold(band) if p != process]
+        return suggestions
 
     def general_tolerance_class(self) -> ToleranceClass:
         """The ISO 2768 general class governing this spec's untoleranced dimensions.

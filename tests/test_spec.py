@@ -350,6 +350,52 @@ def test_check_tolerances_manufacturable_empty_without_declarations():
     assert golden_bracket().check_tolerances_manufacturable() == {}
 
 
+def test_suggest_processes_for_tight_tolerances_completes_the_dfm_scenario():
+    # Scenario: an unachievable milling tolerance suggests changing the process.
+    # A ±0.01 mm (0.02 band) press seat can't be milled but the finishing floors
+    # hold it; a ±0.1 mm slot is fine on milling and so raises no suggestion.
+    spec = golden_bracket().model_copy(
+        update={
+            "dimensions": [
+                ToleranceDimension(
+                    tag="loose_slot",
+                    nominal=Quantity.parse("20 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.1 mm")),
+                ),
+                ToleranceDimension(
+                    tag="press_seat",
+                    nominal=Quantity.parse("10 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.01 mm")),
+                ),
+            ]
+        }
+    )
+    suggestions = spec.suggest_processes_for_tight_tolerances()
+    # Only the failing tag appears; the achievable one raises no suggestion.
+    assert set(suggestions) == {"press_seat"}
+    holders = suggestions["press_seat"]
+    assert set(holders) == {"reaming", "grinding", "wire_edm"}
+    assert "cnc_milling" not in holders  # the already-declared process is excluded
+
+
+def test_suggest_processes_empty_when_tolerance_needs_relaxing():
+    # A ±0.001 mm (0.002 band) tolerance is below every process floor: the empty
+    # suggestion list means "relax the tolerance", the scenario's other branch.
+    spec = golden_bracket().model_copy(
+        update={
+            "dimensions": [
+                ToleranceDimension(
+                    tag="impossible",
+                    nominal=Quantity.parse("10 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.001 mm")),
+                ),
+            ]
+        }
+    )
+    suggestions = spec.suggest_processes_for_tight_tolerances()
+    assert suggestions == {"impossible": []}
+
+
 def test_toleranced_dimensions_round_trip_through_yaml():
     spec = golden_bracket().model_copy(
         update={
