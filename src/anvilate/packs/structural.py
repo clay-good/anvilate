@@ -28,6 +28,7 @@ from ..analysis import (
     bolt_shear_stress,
     cantilever_end_load,
     cantilever_uniform_load,
+    circular_area,
     deflection_scorecard,
     euler_critical_stress,
     fixed_fixed_center_load,
@@ -38,6 +39,7 @@ from ..analysis import (
     slenderness_ratio,
     strength_scorecard,
     transition_slenderness,
+    von_mises_plane_stress,
 )
 from ..scorecard import Scorecard, ScorecardEntry
 from ..standards import MaterialsDatabase, default_materials_db
@@ -92,6 +94,7 @@ _CLAUSE_FLEXURE = "AISC 360-16 Ch. F"
 _CLAUSE_DEFLECTION = "AISC 360-16 §L3"
 _CLAUSE_COMPRESSION = "AISC 360-16 Ch. E"
 _CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
+_CLAUSE_BOLT_COMBINED = "AISC 360-16 §J3.7"
 _CLAUSE_BEARING = "AISC 360-16 §J3.10"
 _CLAUSE_WELD = "AISC 360-16 §J2.4"
 _CLAUSE_BEARING_CONCRETE = "AISC 360-16 §J8"
@@ -305,6 +308,8 @@ class BoltedConnection(BaseModel):
     (double), ``plate_thickness`` the bearing plate; ``load`` the transferred
     force. ``bolt_material`` and ``plate_material`` are database ids — the bolt's
     yield sets the shear allowable (0.577·S_y) and the plate's the bearing one.
+    An optional ``tension`` (a hanger or prying pull along the bolt axis) adds a
+    bolt tension check and the §J3.7 combined tension-plus-shear interaction.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -316,6 +321,7 @@ class BoltedConnection(BaseModel):
     bolt_material: str
     plate_material: str
     shear_planes: int = 1
+    tension: Quantity | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> BoltedConnection:
@@ -327,6 +333,11 @@ class BoltedConnection(BaseModel):
                 raise ValueError(f"{name} must be a [length] quantity; got {value}")
         if not self.load.has_dimension("[force]"):
             raise ValueError(f"load must be a [force] quantity; got {self.load}")
+        if self.tension is not None:
+            if not self.tension.has_dimension("[force]"):
+                raise ValueError(f"tension must be a [force] quantity; got {self.tension}")
+            if self.tension.to("N").magnitude < 0:
+                raise ValueError(f"tension must be non-negative; got {self.tension}")
         if self.shear_planes < 1:
             raise ValueError(f"shear_planes must be a positive integer; got {self.shear_planes}")
         return self
@@ -338,11 +349,14 @@ def screen_bolted_connection(
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
 ) -> Scorecard:
-    """Screen a :class:`BoltedConnection`'s two failure modes into a scorecard.
+    """Screen a :class:`BoltedConnection`'s failure modes into a scorecard.
 
     Screens the bolt shear stress against the bolt's shear yield (0.577·S_y) and
     the plate bearing stress against the plate's yield, both at
-    ``required_safety_factor``. ``materials`` defaults to the bundled database.
+    ``required_safety_factor``. If the connection declares a ``tension``, two more
+    entries follow: the bolt's direct tensile stress against its yield (§J3.6) and
+    the von Mises combined tension-plus-shear equivalent stress (§J3.7 combined
+    loading). ``materials`` defaults to the bundled database.
     """
     materials = materials or default_materials_db()
     bolt = materials.get(connection.bolt_material)
@@ -361,22 +375,44 @@ def screen_bolted_connection(
         diameter=connection.bolt_diameter,
         thickness=connection.plate_thickness,
     )
-    return Scorecard(
-        entries=(
-            strength_scorecard(
-                f"{connection.name} bolt shear",
-                stress=shear,
-                allowable=shear_yield,
-                required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_BOLT_SHEAR}),
-            strength_scorecard(
-                f"{connection.name} plate bearing",
-                stress=bearing,
-                allowable=plate.yield_strength.quantity,
-                required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_BEARING}),
+    entries = [
+        strength_scorecard(
+            f"{connection.name} bolt shear",
+            stress=shear,
+            allowable=shear_yield,
+            required=required_safety_factor,
+        ).model_copy(update={"reference": _CLAUSE_BOLT_SHEAR}),
+        strength_scorecard(
+            f"{connection.name} plate bearing",
+            stress=bearing,
+            allowable=plate.yield_strength.quantity,
+            required=required_safety_factor,
+        ).model_copy(update={"reference": _CLAUSE_BEARING}),
+    ]
+    if connection.tension is not None:
+        tensile = axial_stress(
+            force=connection.tension, area=circular_area(connection.bolt_diameter)
         )
-    )
+        combined = von_mises_plane_stress(
+            sigma_x=tensile, sigma_y=Quantity(magnitude=0.0, unit="MPa"), tau_xy=shear
+        )
+        entries.append(
+            strength_scorecard(
+                f"{connection.name} bolt tension",
+                stress=tensile,
+                allowable=bolt.yield_strength.quantity,
+                required=required_safety_factor,
+            ).model_copy(update={"reference": _CLAUSE_BOLT_SHEAR})
+        )
+        entries.append(
+            strength_scorecard(
+                f"{connection.name} combined tension+shear",
+                stress=combined,
+                allowable=bolt.yield_strength.quantity,
+                required=required_safety_factor,
+            ).model_copy(update={"reference": _CLAUSE_BOLT_COMBINED})
+        )
+    return Scorecard(entries=tuple(entries))
 
 
 class WeldedConnection(BaseModel):

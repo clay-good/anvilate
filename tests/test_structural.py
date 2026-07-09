@@ -210,7 +210,7 @@ def test_screen_structure_fails_if_any_member_fails():
     assert card.status is CheckStatus.FAIL
 
 
-def _connection(load: str = "8 kN") -> BoltedConnection:
+def _connection(load: str = "8 kN", tension: str | None = None) -> BoltedConnection:
     return BoltedConnection(
         name="splice",
         bolt_diameter=_q("8 mm"),
@@ -218,6 +218,7 @@ def _connection(load: str = "8 kN") -> BoltedConnection:
         load=_q(load),
         bolt_material="AISI-4140",
         plate_material="ASTM-A36",
+        tension=_q(tension) if tension else None,
     )
 
 
@@ -244,6 +245,46 @@ def test_bolted_connection_rejects_non_force_load():
             bolt_material="AISI-4140",
             plate_material="ASTM-A36",
         )
+
+
+def test_bolted_connection_tension_adds_tension_and_combined_checks():
+    # 4 kN tension on the M8: sigma = 79.6 MPa (SF 5.24 vs 417) and the von Mises
+    # combined sqrt(79.6^2 + 3*159.2^2) = 287 MPa (SF 1.45) -> all pass at 1.4.
+    card = screen_bolted_connection(_connection(tension="4 kN"), required_safety_factor=1.4)
+    assert card.status is CheckStatus.PASS
+    by_name = {e.name: e for e in card.entries}
+    assert set(by_name) == {
+        "splice bolt shear",
+        "splice plate bearing",
+        "splice bolt tension",
+        "splice combined tension+shear",
+    }
+    assert by_name["splice bolt tension"].reference == "AISC 360-16 §J3.6"
+    assert by_name["splice combined tension+shear"].reference == "AISC 360-16 §J3.7"
+
+
+def test_bolted_connection_combined_interaction_governs():
+    # At 1.5 every individual check passes (shear SF 1.51, bearing 1.50, tension
+    # 5.24) but the combined tension+shear equivalent stress fails (SF 1.45) --
+    # the interaction catches what the one-axis checks miss.
+    card = screen_bolted_connection(_connection(tension="4 kN"), required_safety_factor=1.5)
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["splice bolt shear"].passed
+    assert by_name["splice bolt tension"].passed
+    assert not by_name["splice combined tension+shear"].passed
+
+
+def test_bolted_connection_without_tension_keeps_two_checks():
+    card = screen_bolted_connection(_connection(), required_safety_factor=1.5)
+    assert len(card.entries) == 2
+
+
+def test_bolted_connection_rejects_bad_tension():
+    with pytest.raises(ValidationError, match="tension must be a"):
+        _connection(tension="4 MPa")
+    with pytest.raises(ValidationError, match="tension must be non-negative"):
+        _connection(tension="-4 kN")
 
 
 def _weld(load: str = "20 kN") -> WeldedConnection:
