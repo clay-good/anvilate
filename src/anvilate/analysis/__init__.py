@@ -4,8 +4,9 @@ The T1 validation tier screens a design with handbook closed-form solutions
 (Roark, Shigley) before any FEA — fast, deterministic, and unit-checked. This
 package holds those checks; :mod:`anvilate.analysis.beam` covers the cantilever
 and simply-supported bending cases, :mod:`anvilate.analysis.column` the Euler
-buckling load, and :mod:`anvilate.analysis.fastener` the bolt torque-tension
-relation. Further analytical cases land here as they are built out (see
+buckling load, :mod:`anvilate.analysis.fastener` the bolt torque-tension
+relation, and :mod:`anvilate.analysis.torsion` the solid-shaft torsion check.
+Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
 """
 
@@ -23,6 +24,11 @@ from .fastener import (
     bolt_preload_from_torque,
     torque_for_preload,
 )
+from .torsion import (
+    polar_second_moment_solid,
+    shaft_torsional_stress,
+    shaft_twist_angle,
+)
 
 __all__ = [
     "BeamBendingResult",
@@ -34,4 +40,7 @@ __all__ = [
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
     "torque_for_preload",
+    "polar_second_moment_solid",
+    "shaft_torsional_stress",
+    "shaft_twist_angle",
 ]

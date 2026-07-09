@@ -9,7 +9,10 @@ from anvilate.analysis import (
     bolt_preload_from_torque,
     cantilever_end_load,
     euler_buckling_load,
+    polar_second_moment_solid,
     rectangular_second_moment,
+    shaft_torsional_stress,
+    shaft_twist_angle,
     simply_supported_center_load,
     torque_for_preload,
 )
@@ -179,6 +182,36 @@ def test_bolt_torque_tension_rejects_bad_inputs():
         )  # force, not torque
     with pytest.raises(ValueError, match="nut_factor must be positive"):
         bolt_preload_from_torque(torque=_q("10 N*m"), nominal_diameter=_q("8 mm"), nut_factor=0.0)
+
+
+def test_polar_second_moment_solid_matches_pi_d4_over_32():
+    # d=20 mm: J = pi*20^4/32 = 15708 mm^4.
+    j = polar_second_moment_solid(_q("20 mm"))
+    assert j.to("mm**4").magnitude == pytest.approx(15707.96, rel=1e-4)
+
+
+def test_shaft_torsional_stress_matches_worked_example():
+    # 50 N*m through a 20 mm solid shaft: tau = 16*T/(pi*d^3)
+    #   = 16*50 / (pi*0.02^3) = 31.83 MPa.
+    tau = shaft_torsional_stress(torque=_q("50 N*m"), diameter=_q("20 mm"))
+    assert tau.to("MPa").magnitude == pytest.approx(31.831, rel=1e-4)
+
+
+def test_shaft_twist_angle_matches_worked_example():
+    # 50 N*m over a 1 m, 20 mm steel shaft, G=77 GPa: theta = T*L/(G*J)
+    #   = 50*1 / (77e9 * 1.5708e-8) = 0.04134 rad = 2.368 deg.
+    theta = shaft_twist_angle(
+        torque=_q("50 N*m"),
+        length=_q("1 m"),
+        diameter=_q("20 mm"),
+        shear_modulus=_q("77 GPa"),
+    )
+    assert theta.to("degree").magnitude == pytest.approx(2.368, rel=1e-3)
+
+
+def test_shaft_torsion_rejects_wrong_dimensions():
+    with pytest.raises(ValueError, match="torque must be a"):
+        shaft_torsional_stress(torque=_q("50 N"), diameter=_q("20 mm"))  # force, not torque
 
 
 def test_cantilever_rejects_wrong_dimensions():
