@@ -66,6 +66,20 @@ def test_structural_extrusion_alloy_6082_resolved(db: MaterialsDatabase) -> None
     )
 
 
+def test_ductile_iron_resolved_with_new_category_and_no_fatigue_estimate(
+    db: MaterialsDatabase,
+) -> None:
+    # ASTM A536 65-45-12 opens the cast_iron category; its strengths are the
+    # grade-name minima (45 ksi yield / 65 ksi tensile). Endurance is absent, not
+    # a misleading 0.5*Su steel estimate.
+    di = db.get("ASTM-A536-65-45-12")
+    assert di.category == "cast_iron"
+    assert di.yield_strength.quantity.to("MPa").magnitude == pytest.approx(310.0)
+    assert di.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(448.0)
+    assert "A536" in di.yield_strength.citation.source
+    assert di.endurance_limit is None
+
+
 def test_mild_steel_1018_resolved_with_estimated_endurance(db: MaterialsDatabase) -> None:
     # 1018 CD is the reference general-purpose mild steel; its strengths are the
     # Shigley Table A-20 cold-drawn values, and the endurance limit is a labeled

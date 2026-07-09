@@ -251,3 +251,25 @@ materials:
     ultimate_strength:
       quantity: {magnitude: 290.0, unit: MPa}
       citation: {source: "EN 755-2 — EN AW-6082-T6 extrusions (thickness ≤5 mm)", condition: "T6 temper, Rm minimum"}
+
+  ASTM-A536-65-45-12:
+    name: "Ductile iron 65-45-12 (ASTM A536)"
+    category: cast_iron
+    # The grade name encodes the specified minima: 65 ksi tensile, 45 ksi yield,
+    # 12% elongation. Endurance is deliberately omitted rather than estimated —
+    # the 0.5*Su rule the steels use overstates cast-iron fatigue.
+    elastic_modulus:
+      quantity: {magnitude: 169.0, unit: GPa}
+      citation: {source: "ASM — ductile iron 65-45-12", condition: "as-cast, room temperature"}
+    poisson_ratio:
+      value: 0.28
+      citation: {source: "ASM — ductile iron", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 7.10, unit: g/cm**3}
+      citation: {source: "ASM — ductile iron", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 310.0, unit: MPa}
+      citation: {source: "ASTM A536 specified minimum", condition: "grade 65-45-12, min. specified yield (45 ksi)"}
+    ultimate_strength:
+      quantity: {magnitude: 448.0, unit: MPa}
+      citation: {source: "ASTM A536 specified minimum", condition: "grade 65-45-12, min. specified tensile (65 ksi)"}
