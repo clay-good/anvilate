@@ -2,7 +2,8 @@
 
 The T1 validation tier screens a design with handbook closed-form solutions
 (Roark, Shigley) before any FEA — fast, deterministic, and unit-checked. This
-package holds those checks; :mod:`anvilate.analysis.beam` covers the cantilever
+package holds those checks; :mod:`anvilate.analysis.axial` covers direct axial
+stress, :mod:`anvilate.analysis.beam` covers the cantilever
 and simply-supported bending cases, :mod:`anvilate.analysis.column` the Euler
 buckling load, :mod:`anvilate.analysis.fastener` the bolt torque-tension
 relation, :mod:`anvilate.analysis.torsion` the solid-shaft torsion check, and
@@ -14,6 +15,7 @@ openspec/specs/validation-gauntlet/).
 
 from __future__ import annotations
 
+from .axial import axial_stress, circular_area
 from .beam import (
     BeamBendingResult,
     cantilever_end_load,
@@ -39,6 +41,8 @@ from .torsion import (
 )
 
 __all__ = [
+    "axial_stress",
+    "circular_area",
     "BeamBendingResult",
     "cantilever_end_load",
     "simply_supported_center_load",

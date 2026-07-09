@@ -6,8 +6,10 @@ import pytest
 
 from anvilate.analysis import (
     ColumnEnd,
+    axial_stress,
     bolt_preload_from_torque,
     cantilever_end_load,
+    circular_area,
     euler_buckling_load,
     polar_second_moment_solid,
     rectangular_second_moment,
@@ -250,6 +252,27 @@ def test_thin_wall_cylinder_rejects_bad_inputs():
             radius=_q("100 mm"),
             wall_thickness=_q("0 mm"),
         )
+
+
+def test_circular_area_matches_pi_d2_over_4():
+    # d=20 mm: A = pi*20^2/4 = 314.16 mm^2.
+    area = circular_area(_q("20 mm"))
+    assert area.to("mm**2").magnitude == pytest.approx(314.159, rel=1e-4)
+
+
+def test_axial_stress_worked_example_and_sign():
+    # 10 kN tension over a 20 mm-diameter rod: sigma = F/A = 10000/314.16 = 31.83 MPa.
+    area = circular_area(_q("20 mm"))
+    tension = axial_stress(force=_q("10 kN"), area=area)
+    assert tension.to("MPa").magnitude == pytest.approx(31.831, rel=1e-4)
+    # Compression carries through as a negative stress.
+    compression = axial_stress(force=_q("-10 kN"), area=area)
+    assert compression.to("MPa").magnitude == pytest.approx(-31.831, rel=1e-4)
+
+
+def test_axial_stress_rejects_wrong_dimensions():
+    with pytest.raises(ValueError, match="area must be a"):
+        axial_stress(force=_q("10 kN"), area=_q("20 mm"))  # a length, not an area
 
 
 def test_von_mises_plane_stress_worked_example():
