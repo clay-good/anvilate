@@ -79,6 +79,17 @@ def test_brace_tie_example_is_governed_by_net_rupture():
     assert _sf(net) < _sf(gross)
 
 
+def test_evidence_bundle_example_collects_a_cited_trail():
+    namespace = runpy.run_path(str(_EXAMPLES / "evidence_bundle.py"))
+    records = namespace["build_evidence"]()
+    # Material, two standard components, the ISO 2768 general class, the ISO 286
+    # fit on the bore, and ISO 1101 for the geometric call-out -- each cited.
+    kinds = [r.kind for r in records]
+    assert kinds == ["material", "component", "component", "tolerance", "tolerance", "tolerance"]
+    assert {r.ref for r in records} >= {"AA-6061-T6", "NEMA23", "6204", "pilot_bore"}
+    assert all(r.sources and all(r.sources) for r in records)
+
+
 def test_dfm_process_example_flags_and_suggests():
     namespace = runpy.run_path(str(_EXAMPLES / "dfm_process_check.py"))
     result = namespace["screen_manufacturability"]()
