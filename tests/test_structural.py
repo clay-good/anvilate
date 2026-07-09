@@ -21,6 +21,7 @@ from anvilate.packs.structural import (
     LiftingLug,
     LoadType,
     Support,
+    TensionMember,
     WeldedConnection,
     screen_base_plate,
     screen_beam_member,
@@ -29,6 +30,7 @@ from anvilate.packs.structural import (
     screen_gusset_plate,
     screen_lifting_lug,
     screen_structure,
+    screen_tension_member,
     screen_welded_connection,
 )
 from anvilate.scorecard import CheckStatus
@@ -444,6 +446,72 @@ def test_gusset_rejects_non_area_inputs():
 def test_screen_structure_includes_gussets():
     card = screen_structure([_gusset()], required_safety_factor=2.0)
     assert any("block shear" in e.name for e in card.entries)
+    assert card.status is CheckStatus.PASS
+
+
+def _tension(load: str = "200 kN", shear_lag_factor: float = 1.0) -> TensionMember:
+    return TensionMember(
+        name="brace_tie",
+        gross_area=_q("2000 mm**2"),
+        net_area=_q("1500 mm**2"),
+        load=_q(load),
+        material="ASTM-A36",
+        shear_lag_factor=shear_lag_factor,
+    )
+
+
+def test_tension_member_screens_both_limit_states():
+    # A36 Fy=250, Fu=400. Gross: 200kN/2000mm2=100MPa -> SF 2.50 (§D2a).
+    # Net (U=1): Ae=1500mm2, 200kN/1500=133.3MPa -> SF 3.00 (§D2b). Gross governs.
+    card = screen_tension_member(_tension(), required_safety_factor=2.0)
+    assert card.status is CheckStatus.PASS
+    names = [e.name for e in card.entries]
+    assert names == ["brace_tie gross yielding", "brace_tie net rupture"]
+    assert all(e.reference == "AISC 360-16 §D2" for e in card.entries)
+    assert "2.50" in card.entries[0].detail
+    assert "3.00" in card.entries[1].detail
+
+
+def test_tension_member_shear_lag_reduces_net_rupture():
+    # U=0.8: Ae=1200mm2, 200kN/1200=166.7MPa -> SF 400/166.7=2.40, below gross 2.50.
+    card = screen_tension_member(_tension(shear_lag_factor=0.8), required_safety_factor=1.5)
+    assert card.status is CheckStatus.PASS
+    assert "2.40" in card.entries[1].detail
+
+
+def test_overloaded_tension_member_yields():
+    # 500kN/2000mm2=250MPa = Fy -> gross-yield SF 1.0, fails required 2.0.
+    card = screen_tension_member(_tension(load="500 kN"), required_safety_factor=2.0)
+    assert card.status is CheckStatus.FAIL
+
+
+def test_tension_member_rejects_net_area_above_gross():
+    with pytest.raises(ValidationError, match="cannot exceed gross_area"):
+        TensionMember(
+            name="t",
+            gross_area=_q("1000 mm**2"),
+            net_area=_q("1500 mm**2"),
+            load=_q("100 kN"),
+            material="ASTM-A36",
+        )
+
+
+def test_tension_member_rejects_out_of_range_shear_lag():
+    with pytest.raises(ValidationError, match="shear_lag_factor must be in"):
+        TensionMember(
+            name="t",
+            gross_area=_q("2000 mm**2"),
+            net_area=_q("1500 mm**2"),
+            load=_q("100 kN"),
+            material="ASTM-A36",
+            shear_lag_factor=1.5,
+        )
+
+
+def test_screen_structure_includes_tension_members():
+    card = screen_structure([_tension()], required_safety_factor=2.0)
+    assert any("gross yielding" in e.name for e in card.entries)
+    assert any("net rupture" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
 

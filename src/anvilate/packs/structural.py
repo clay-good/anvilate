@@ -60,6 +60,8 @@ __all__ = [
     "screen_lifting_lug",
     "GussetPlate",
     "screen_gusset_plate",
+    "TensionMember",
+    "screen_tension_member",
     "StructuralMember",
     "screen_structure",
 ]
@@ -90,6 +92,7 @@ _CLAUSE_BEARING_CONCRETE = "AISC 360-16 §J8"
 _CLAUSE_BASEPLATE_BENDING = "AISC Design Guide 1"
 _CLAUSE_LUG = "ASME BTH-1 §3-3"
 _CLAUSE_BLOCK_SHEAR = "AISC 360-16 §J4.3"
+_CLAUSE_TENSION = "AISC 360-16 §D2"
 
 
 class Support(StrEnum):
@@ -659,6 +662,85 @@ def screen_gusset_plate(
     return Scorecard(entries=(entry,))
 
 
+class TensionMember(BaseModel):
+    """An axially loaded tension member checked for the two AISC §D2 limit states.
+
+    A rod, angle, or plate carrying ``load`` in tension. ``gross_area`` A_g is the
+    full cross-section; ``net_area`` A_n is the area after deducting bolt holes.
+    ``shear_lag_factor`` U (default 1.0) reduces the net area to the effective net
+    area A_e = U·A_n where the load engages only part of the section (§D3). Two
+    limit states are screened: tensile yielding on the gross section (P/A_g vs Fy)
+    and tensile rupture on the effective net section (P/A_e vs Fu).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    gross_area: Quantity
+    net_area: Quantity
+    load: Quantity
+    material: str
+    shear_lag_factor: float = 1.0
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> TensionMember:
+        for value, name in (
+            (self.gross_area, "gross_area"),
+            (self.net_area, "net_area"),
+        ):
+            if not value.has_dimension("[length]**2"):
+                raise ValueError(f"{name} must be an area ([length]**2); got {value}")
+        if not self.load.has_dimension("[force]"):
+            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+        if self.net_area.to("mm**2").magnitude > self.gross_area.to("mm**2").magnitude:
+            raise ValueError(
+                f"net_area ({self.net_area}) cannot exceed gross_area ({self.gross_area})"
+            )
+        if not 0.0 < self.shear_lag_factor <= 1.0:
+            raise ValueError(f"shear_lag_factor must be in (0, 1]; got {self.shear_lag_factor}")
+        return self
+
+
+def screen_tension_member(
+    member: TensionMember,
+    *,
+    required_safety_factor: float,
+    materials: MaterialsDatabase | None = None,
+) -> Scorecard:
+    """Screen a :class:`TensionMember`'s gross-yield and net-rupture limit states.
+
+    Gross-section yielding screens P/A_g against the material yield Fy (§D2(a));
+    net-section rupture screens P/A_e against the ultimate Fu (§D2(b)) with the
+    effective net area A_e = U·A_n. The lesser safety factor governs the member.
+    ``materials`` defaults to the bundled database.
+    """
+    materials = materials or default_materials_db()
+    record = materials.get(member.material)
+
+    force = member.load.to("N").magnitude
+    gross = member.gross_area.to("mm**2").magnitude
+    effective_net = member.shear_lag_factor * member.net_area.to("mm**2").magnitude
+
+    gross_stress = Quantity(magnitude=force / gross, unit="MPa")
+    net_stress = Quantity(magnitude=force / effective_net, unit="MPa")
+    return Scorecard(
+        entries=(
+            strength_scorecard(
+                f"{member.name} gross yielding",
+                stress=gross_stress,
+                allowable=record.yield_strength.quantity,
+                required=required_safety_factor,
+            ).model_copy(update={"reference": _CLAUSE_TENSION}),
+            strength_scorecard(
+                f"{member.name} net rupture",
+                stress=net_stress,
+                allowable=record.ultimate_strength.quantity,
+                required=required_safety_factor,
+            ).model_copy(update={"reference": _CLAUSE_TENSION}),
+        )
+    )
+
+
 StructuralMember = (
     BeamMember
     | ColumnMember
@@ -667,6 +749,7 @@ StructuralMember = (
     | BasePlate
     | LiftingLug
     | GussetPlate
+    | TensionMember
 )
 
 
@@ -710,8 +793,12 @@ def screen_structure(
             card = screen_lifting_lug(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
-        else:
+        elif isinstance(member, GussetPlate):
             card = screen_gusset_plate(
+                member, required_safety_factor=required_safety_factor, materials=materials
+            )
+        else:
+            card = screen_tension_member(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
         entries.extend(card.entries)
