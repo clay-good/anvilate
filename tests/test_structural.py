@@ -17,6 +17,7 @@ from anvilate.packs.structural import (
     BeamMember,
     BoltedConnection,
     ColumnMember,
+    GussetPlate,
     LiftingLug,
     LoadType,
     Support,
@@ -25,6 +26,7 @@ from anvilate.packs.structural import (
     screen_beam_member,
     screen_bolted_connection,
     screen_column_member,
+    screen_gusset_plate,
     screen_lifting_lug,
     screen_structure,
     screen_welded_connection,
@@ -401,6 +403,47 @@ def test_lug_rejects_hole_wider_than_lug():
 def test_screen_structure_includes_lugs():
     card = screen_structure([_lug()], required_safety_factor=1.4)
     assert {e.name for e in card.entries} == {"pad_eye net tension", "pad_eye pin bearing"}
+    assert card.status is CheckStatus.PASS
+
+
+def _gusset(load: str = "200 kN") -> GussetPlate:
+    return GussetPlate(
+        name="brace_gusset",
+        net_shear_area=_q("1500 mm**2"),
+        net_tension_area=_q("500 mm**2"),
+        load=_q(load),
+        material="ASTM-A36",
+    )
+
+
+def test_gusset_block_shear_screen():
+    # A36 Fu = 400 MPa: R_n = 0.6*400*1500 + 400*500 = 560 kN; vs 200 kN -> SF 2.8.
+    card = screen_gusset_plate(_gusset(), required_safety_factor=2.0)
+    assert card.status is CheckStatus.PASS
+    assert card.entries[0].name == "brace_gusset block shear"
+    assert card.entries[0].reference == "AISC 360-16 §J4.3"
+    assert "2.80" in card.entries[0].detail
+
+
+def test_overloaded_gusset_fails():
+    card = screen_gusset_plate(_gusset(load="400 kN"), required_safety_factor=2.0)
+    assert card.status is CheckStatus.FAIL
+
+
+def test_gusset_rejects_non_area_inputs():
+    with pytest.raises(ValidationError, match="net_shear_area must be an area"):
+        GussetPlate(
+            name="g",
+            net_shear_area=_q("1500 mm"),  # a length, not an area
+            net_tension_area=_q("500 mm**2"),
+            load=_q("200 kN"),
+            material="ASTM-A36",
+        )
+
+
+def test_screen_structure_includes_gussets():
+    card = screen_structure([_gusset()], required_safety_factor=2.0)
+    assert any("block shear" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
 

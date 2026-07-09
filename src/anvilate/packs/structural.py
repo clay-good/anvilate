@@ -39,7 +39,7 @@ from ..analysis import (
     strength_scorecard,
     transition_slenderness,
 )
-from ..scorecard import Scorecard
+from ..scorecard import Scorecard, ScorecardEntry
 from ..standards import MaterialsDatabase, default_materials_db
 from ..units import Quantity
 
@@ -58,9 +58,14 @@ __all__ = [
     "screen_base_plate",
     "LiftingLug",
     "screen_lifting_lug",
+    "GussetPlate",
+    "screen_gusset_plate",
     "StructuralMember",
     "screen_structure",
 ]
+
+# AISC §J4.3 block-shear rupture: 0.6·Fu·Anv (shear) + Fu·Ant (tension), Ubs=1.
+_BLOCK_SHEAR_SHEAR_FRACTION = 0.6
 
 # AISC §J8 nominal concrete bearing on a plate is 0.85·f'c (no confinement bonus).
 _CONCRETE_BEARING_FRACTION = 0.85
@@ -84,6 +89,7 @@ _CLAUSE_WELD = "AISC 360-16 §J2.4"
 _CLAUSE_BEARING_CONCRETE = "AISC 360-16 §J8"
 _CLAUSE_BASEPLATE_BENDING = "AISC Design Guide 1"
 _CLAUSE_LUG = "ASME BTH-1 §3-3"
+_CLAUSE_BLOCK_SHEAR = "AISC 360-16 §J4.3"
 
 
 class Support(StrEnum):
@@ -597,8 +603,70 @@ def screen_lifting_lug(
     )
 
 
+class GussetPlate(BaseModel):
+    """A gusset (or connection element) checked for block-shear rupture.
+
+    ``net_shear_area`` A_nv and ``net_tension_area`` A_nt are the areas along the
+    tear-out failure path (from the bolt pattern geometry); ``load`` is the force
+    transferred. The block-shear capacity R_n = 0.6·Fu·A_nv + Fu·A_nt (AISC §J4.3,
+    Ubs = 1) uses the material's ultimate strength.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    net_shear_area: Quantity
+    net_tension_area: Quantity
+    load: Quantity
+    material: str
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> GussetPlate:
+        for value, name in (
+            (self.net_shear_area, "net_shear_area"),
+            (self.net_tension_area, "net_tension_area"),
+        ):
+            if not value.has_dimension("[length]**2"):
+                raise ValueError(f"{name} must be an area ([length]**2); got {value}")
+        if not self.load.has_dimension("[force]"):
+            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+        return self
+
+
+def screen_gusset_plate(
+    gusset: GussetPlate,
+    *,
+    required_safety_factor: float,
+    materials: MaterialsDatabase | None = None,
+) -> Scorecard:
+    """Screen a :class:`GussetPlate` for block-shear rupture into a scorecard.
+
+    The block-shear capacity R_n = 0.6·Fu·A_nv + Fu·A_nt is compared to the
+    transferred load; the safety factor is R_n / load, judged against
+    ``required_safety_factor`` (AISC §J4.3). ``materials`` defaults to the bundled
+    database.
+    """
+    materials = materials or default_materials_db()
+    ultimate = materials.get(gusset.material).ultimate_strength.quantity.to("MPa").magnitude
+    shear_area = gusset.net_shear_area.to("mm**2").magnitude
+    tension_area = gusset.net_tension_area.to("mm**2").magnitude
+    capacity_n = ultimate * (_BLOCK_SHEAR_SHEAR_FRACTION * shear_area + tension_area)
+    load_n = gusset.load.to("N").magnitude
+    safety = capacity_n / load_n if load_n > 0 else float("inf")
+    entry = ScorecardEntry.from_safety_factor(
+        f"{gusset.name} block shear", computed=safety, required=required_safety_factor
+    ).model_copy(update={"reference": _CLAUSE_BLOCK_SHEAR})
+    return Scorecard(entries=(entry,))
+
+
 StructuralMember = (
-    BeamMember | ColumnMember | BoltedConnection | WeldedConnection | BasePlate | LiftingLug
+    BeamMember
+    | ColumnMember
+    | BoltedConnection
+    | WeldedConnection
+    | BasePlate
+    | LiftingLug
+    | GussetPlate
 )
 
 
@@ -638,8 +706,12 @@ def screen_structure(
             card = screen_base_plate(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
-        else:
+        elif isinstance(member, LiftingLug):
             card = screen_lifting_lug(
+                member, required_safety_factor=required_safety_factor, materials=materials
+            )
+        else:
+            card = screen_gusset_plate(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
         entries.extend(card.entries)
