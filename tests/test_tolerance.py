@@ -273,9 +273,9 @@ def test_zone_limits_designation_normalized() -> None:
 
 
 def test_unencoded_zone_letter_rejected() -> None:
-    # s is a finer-stepped interference letter, not yet encoded; j is grade-dependent.
+    # t is a finer-stepped interference letter, not yet encoded; j is grade-dependent.
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
-        zone_limits("s6", _mm(22))
+        zone_limits("t6", _mm(22))
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
         zone_limits("j6", _mm(22))
 
@@ -443,6 +443,43 @@ def test_h7k6_transition_fit_at_22mm() -> None:
     assert f.max_clearance.to("um").magnitude == pytest.approx(19)
 
 
+# --- ISO 286 finer-stepped r/s interference shafts (<= 50 mm) ---
+
+
+def test_s6_and_r6_shaft_at_22mm() -> None:
+    # At 18-30 mm: s ei = +35 um, es = 35 + IT6(13) = +48; r ei = +28, es = +41.
+    s6 = zone_limits("s6", _mm(22))
+    assert s6.hole is False
+    assert s6.lower.to("um").magnitude == pytest.approx(35)
+    assert s6.upper.to("um").magnitude == pytest.approx(48)
+    r6 = zone_limits("r6", _mm(22))
+    assert r6.lower.to("um").magnitude == pytest.approx(28)
+    assert r6.upper.to("um").magnitude == pytest.approx(41)
+
+
+def test_rs_shaft_above_50mm_rejected() -> None:
+    # Above 50 mm r/s split into finer diameter steps this table does not carry.
+    with pytest.raises(ToleranceRangeError, match="up to 50 mm"):
+        zone_limits("s6", _mm(60))
+    with pytest.raises(ToleranceRangeError, match="up to 50 mm"):
+        zone_limits("r6", _mm(60))
+
+
+def test_rs_hole_not_yet_encoded() -> None:
+    with pytest.raises(ToleranceRangeError, match="not yet encoded"):
+        zone_limits("S6", _mm(22))
+
+
+def test_h7s6_interference_fit_at_22mm() -> None:
+    # H7/s6 at 22 mm (the standard drive/press fit): hole 0..+21 um, shaft
+    # +35..+48 um. Min clearance 0 - 48 = -48 um; max clearance 21 - 35 = -14 um;
+    # both negative => interference.
+    f = fit("H7/s6", _mm(22))
+    assert f.kind == "interference"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(-48)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(-14)
+
+
 # --- ISO 286 delta-corrected interference/transition holes (M/N/P) ---
 
 
@@ -554,7 +591,7 @@ def test_fit_malformed_designation_rejected() -> None:
 
 def test_fit_propagates_unencoded_zone() -> None:
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
-        fit("H7/s6", _mm(22))
+        fit("H7/t6", _mm(22))
 
 
 def test_h7g6_sliding_fit_at_22mm() -> None:
@@ -636,7 +673,7 @@ def test_fit_tolerance_resolves_through_iso286() -> None:
 
 def test_fit_tolerance_propagates_unencoded_zone() -> None:
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
-        FitTolerance(designation="s6").resolve(_mm(22))
+        FitTolerance(designation="t6").resolve(_mm(22))
 
 
 def test_tolerance_union_discriminates_by_type() -> None:
