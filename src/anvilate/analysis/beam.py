@@ -465,6 +465,59 @@ def fixed_fixed_center_load(
     )
 
 
+def fixed_fixed_offset_load(
+    *,
+    force: Quantity,
+    load_position: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The fixed-fixed beam with a point load off mid-span (Roark; AISC Table 3-23).
+
+    A prismatic beam clamped at both ends over a span ``length``, with a transverse
+    ``force`` at ``load_position`` (measured from either wall — the case is
+    symmetric) strictly inside the span. Other arguments match
+    :func:`fixed_fixed_center_load`, which this generalizes: at mid-span the two
+    agree exactly.
+
+    Returns the peak bending stress at the wall nearer the load (σ = M·c/I with
+    the hogging moment M = F·a·b²/L², a the near distance) and the true maximum
+    deflection δ = 2·F·b³·a²/(3·E·I·(3b + a)²), b the far distance. Unlike the
+    simply-supported case, mid-span is *not* the worst position: the wall moment
+    peaks at a = L/3 (M = 4·F·L/27, 18.5% above the mid-span F·L/8). Every
+    argument is dimension-checked.
+    """
+    _require(force, "[force]", "force")
+    _require(load_position, "[length]", "load_position")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    f = force.pint
+    length_p = length.pint
+    position = load_position.pint.to(length_p.units)
+    if not 0 < position.magnitude < length_p.magnitude:
+        raise ValueError(
+            f"load_position must lie strictly inside the span (0, {length}); got {load_position}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    far = max(position, length_p - position)
+    near = length_p - far  # distance from the load to the nearer wall
+    moment = f * near * far**2 / length_p**2
+    stress = moment * c / inertia
+    deflection = 2 * f * far**3 * near**2 / (3 * e * inertia * (3 * far + near) ** 2)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
 def fixed_fixed_uniform_load(
     *,
     distributed_load: Quantity,
