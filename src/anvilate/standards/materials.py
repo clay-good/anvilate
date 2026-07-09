@@ -16,6 +16,7 @@ from typing import Annotated
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, ScalarProperty, dimensioned
 
 __all__ = [
@@ -86,6 +87,18 @@ class Material(_Base):
         if value is None:
             raise MaterialPropertyUnavailable(self.id, prop)
         return value
+
+    def shear_modulus(self) -> Quantity:
+        """The isotropic shear modulus G = E/(2(1+ν)), derived from the elastic
+        modulus and Poisson ratio.
+
+        An exact relation for an isotropic material (not an estimate), so a
+        torsion check (:func:`anvilate.analysis.shaft_twist_angle`) can take G
+        directly from a database material even though only E and ν are stored.
+        """
+        nu = self.poisson_ratio.value
+        g = self.elastic_modulus.quantity.pint / (2 * (1 + nu))
+        return Quantity(magnitude=float(g.to("GPa").magnitude), unit="GPa")
 
     def citations(self) -> dict[str, PropertyCitation]:
         """Every property's citation, keyed by property name — the evidence trail."""

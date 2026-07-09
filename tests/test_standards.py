@@ -187,6 +187,33 @@ def test_stainless_316_completes_the_austenitic_pair(db: MaterialsDatabase) -> N
     assert "A240" in ss.yield_strength.citation.source
 
 
+def test_shear_modulus_derived_from_e_and_nu(db: MaterialsDatabase) -> None:
+    # G = E/(2(1+nu)). Steel A36 (200 GPa, 0.26) -> 79.4 GPa;
+    # aluminum 6061-T6 (68.9 GPa, 0.33) -> 25.9 GPa.
+    a36 = db.get("ASTM-A36")
+    expected = a36.elastic_modulus.quantity.to("GPa").magnitude / (
+        2 * (1 + a36.poisson_ratio.value)
+    )
+    assert a36.shear_modulus().to("GPa").magnitude == pytest.approx(expected, rel=1e-9)
+    al = db.get("AA-6061-T6")
+    assert al.shear_modulus().to("GPa").magnitude == pytest.approx(25.9, rel=1e-2)
+
+
+def test_shear_modulus_feeds_a_torsion_check(db: MaterialsDatabase) -> None:
+    # A DB material's derived G drives the shaft twist-angle check directly.
+    from anvilate.analysis import shaft_twist_angle
+    from anvilate.units import Quantity
+
+    g = db.get("ASTM-A36").shear_modulus()
+    theta = shaft_twist_angle(
+        torque=Quantity.parse("50 N*m"),
+        length=Quantity.parse("1 m"),
+        diameter=Quantity.parse("20 mm"),
+        shear_modulus=g,
+    )
+    assert theta.to("degree").magnitude > 0
+
+
 def test_yield_strength_carries_temper_and_citation(db: MaterialsDatabase) -> None:
     # Scenario: yield strength with temper — the T6 value with its citation.
     prop = db.get("AA-6061-T6").yield_strength
