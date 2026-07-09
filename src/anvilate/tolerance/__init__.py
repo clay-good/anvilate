@@ -3,17 +3,17 @@ fits, and stack-up analysis.
 
 This slice ships ISO 2768-1 general tolerances (linear and angular), the
 ISO 286-1 standard tolerance grades (IT grades), and fit resolution for the
-H/h basis, the clearance letters d/e/f/g, the symmetric js/JS zones, and the
-transition/interference shaft letters m/n/p — so the common hole-basis fits
-(H7/g6, H8/f7, H9/d9, H7/js6, H7/n6, H7/p6, ...) resolve to limit deviations. It
-also ships the three explicit per-dimension tolerance forms a spec can declare —
-symmetric ±, asymmetric limits, and an ISO 286 fit — each resolving to a common
-feature-size band, and 1D tolerance stack-up analysis (worst-case,
-root-sum-square, and Monte Carlo) over a chain of those bands with ranked
-per-contributor sensitivities and predicted yield. The grade-dependent j/k
-letters, the finer-stepped r/s/t/u, the delta-corrected uppercase interference
-holes, and wiring explicit tolerances onto the Spec IR land here as they are
-built out (see openspec/specs/tolerance-management/).
+H/h basis, the clearance letters d/e/f/g, the symmetric js/JS zones, the
+transition/interference shaft letters m/n/p, and their uppercase holes M/N/P via
+the ISO 286 delta rule — so the common hole-basis fits (H7/g6, H8/f7, H9/d9,
+H7/js6, H7/n6, H7/p6, ...) and the shaft-basis N7/h6, M7/h6, P7/h6 resolve to
+limit deviations. It also ships the three explicit per-dimension tolerance forms
+a spec can declare — symmetric ±, asymmetric limits, and an ISO 286 fit — each
+resolving to a common feature-size band, and 1D tolerance stack-up analysis
+(worst-case, root-sum-square, and Monte Carlo) over a chain of those bands with
+ranked per-contributor sensitivities and predicted yield. The grade-dependent
+j/k letters and the finer-stepped r/s/t/u land here as they are built out (see
+openspec/specs/tolerance-management/).
 """
 
 from __future__ import annotations

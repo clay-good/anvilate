@@ -134,15 +134,22 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
 # and their uppercase holes mirror it through the ISO 286 general rule EI = -es.
 # The js/JS zones straddle the basic size symmetrically (±IT/2). m/n/p carry a
 # positive shaft deviation `ei` that lifts the zone above the basic size (the
-# transition/interference side); their uppercase holes need the grade-dependent
-# delta correction, so only the shaft side is encoded. The grade-dependent
-# letters j and k and the finer-stepped r/s/t/u land as the table grows.
+# transition/interference side); their uppercase holes M/N/P take the ISO 286
+# special rule ES = -ei + Δ, where the grade-dependent delta correction
+# Δ = IT_n − IT_(n−1) is computed from the encoded IT-grade table. The grade-
+# dependent letters j and k and the finer-stepped r/s/t/u land as the table grows.
 
 _BASIS_LETTERS = {"h"}  # zero fundamental deviation; no table lookup needed
 _CLEARANCE_LETTERS = {"d", "e", "f", "g"}  # negative shaft `es`, encoded below
 _SYMMETRIC_LETTERS = {"js"}  # zone centered on the basic size, ±IT/2
-_INTERFERENCE_LETTERS = {"m", "n", "p"}  # positive shaft `ei`, shaft side only
+_INTERFERENCE_LETTERS = {"m", "n", "p"}  # positive shaft `ei`; holes via delta rule
 _ENCODED_LETTERS = _BASIS_LETTERS | _CLEARANCE_LETTERS | _SYMMETRIC_LETTERS | _INTERFERENCE_LETTERS
+
+# The ISO 286 special rule ES = -ei + Δ holds for the M and N holes up to IT8 and
+# the P holes up to IT7. Below IT6 the correction Δ = IT_n − IT_(n−1) would need
+# IT_(n−1) beneath the encoded IT5, so IT6 is the finest hole grade resolved here.
+_HOLE_MAX_GRADE = {"m": 8, "n": 8, "p": 7}
+_HOLE_MIN_GRADE = 6
 
 
 _DEVIATIONS: dict | None = None
@@ -172,6 +179,27 @@ def _fundamental_dev(key: str, letter: str, nominal_mm: float) -> float:
         if nominal_mm <= float(row["up_to_mm"]):
             return float(row[key][letter]) / 1000.0
     raise AssertionError("nominal beyond deviation table")  # pragma: no cover
+
+
+def _delta_correction(letter: str, grade: int, nominal: Quantity) -> float:
+    """The ISO 286 delta correction Δ = IT_n − IT_(n−1) (mm) for a special-rule hole.
+
+    The uppercase transition/interference holes M/N/P take their fundamental
+    deviation from the shaft's ``ei`` by the rule ES = -ei + Δ. That rule holds
+    for M/N up to IT8 and P up to IT7; finer than IT6 the correction would need
+    IT_(n−1) below the encoded IT5, and coarser than the letter's cap leaves the
+    rule's validity — both raise :class:`ToleranceRangeError`.
+    """
+    cap = _HOLE_MAX_GRADE[letter]
+    if grade < _HOLE_MIN_GRADE or grade > cap:
+        up = letter.upper()
+        raise ToleranceRangeError(
+            f"the delta-corrected hole '{up}{grade}' is out of range; the encoded "
+            f"ISO 286 special rule covers {up}{_HOLE_MIN_GRADE} through {up}{cap}"
+        )
+    it_n = standard_tolerance(nominal, grade).width.to("mm").magnitude
+    it_prev = standard_tolerance(nominal, grade - 1).width.to("mm").magnitude
+    return it_n - it_prev
 
 
 class LimitDeviations(BaseModel):
@@ -244,9 +272,11 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
     ``designation`` is a fundamental-deviation letter plus an IT grade, e.g.
     ``"H7"`` (hole), ``"h6"`` (shaft), ``"g6"``, ``"js6"``, or ``"p6"``. The H/h
     basis zones, the clearance letters d/e/f/g, and js/JS resolve in both cases;
-    the transition/interference letters m/n/p resolve on the shaft side only
-    (their holes need the delta correction). Any other letter raises
-    :class:`ToleranceRangeError`. Raises :class:`ValueError` for a malformed
+    the transition/interference letters m/n/p resolve on the shaft side at any
+    grade, and on the hole side (M/N/P) via the ISO 286 delta rule for M/N up to
+    IT8 and P up to IT7. Any other letter raises :class:`ToleranceRangeError`,
+    as does a delta-corrected hole outside that grade band. Raises
+    :class:`ValueError` for a malformed
     designation, and :class:`ToleranceRangeError` for an out-of-range nominal or
     ungraded IT grade (via :func:`standard_tolerance`).
     """
@@ -265,14 +295,15 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
         # js/JS: the zone straddles the basic size, es = +IT/2, ei = -IT/2.
         upper_mm, lower_mm = it / 2.0, -it / 2.0
     elif base in _INTERFERENCE_LETTERS:
-        if hole:
-            raise ToleranceRangeError(
-                f"the hole zone '{letter}' needs the ISO 286 delta correction, "
-                "which is not yet encoded; the m/n/p shaft zones are supported"
-            )
-        # Shaft: ei is the lower deviation, es = ei + IT.
         ei = _fundamental_dev("ei", base, nominal_mm)
-        upper_mm, lower_mm = ei + it, ei
+        if hole:
+            # Hole (ISO 286 special rule): ES = -ei + Δ, and EI = ES - IT.
+            delta = _delta_correction(base, grade_tol.grade, nominal)
+            es = -ei + delta
+            upper_mm, lower_mm = es, es - it
+        else:
+            # Shaft: ei is the lower deviation, es = ei + IT.
+            upper_mm, lower_mm = ei + it, ei
     else:
         es = 0.0 if base in _BASIS_LETTERS else _fundamental_dev("es", base, nominal_mm)
         # Shaft: es is the upper deviation, ei = es - IT. Hole (general rule): the

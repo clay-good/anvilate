@@ -10,8 +10,8 @@
 #     correction), so one row serves both.
 #   - `ei` — the lower deviation of the transition/interference shaft letters
 #     m, n, p (micrometres, >= 0), which pushes the zone above the basic size. The
-#     uppercase holes M, N, P need the grade-dependent delta correction and are
-#     handled in a later slice, so these serve the shaft side only for now.
+#     uppercase holes M, N, P are derived from this same `ei` by the ISO 286
+#     special rule ES = -ei + Δ, with Δ = IT_n − IT_(n−1) from the IT-grade table.
 # The h/H basis letters have zero fundamental deviation and need no entry. The
 # grade-dependent letters j and k, and the finer-stepped r/s/t/u, land later.
 # Diameter steps match the IT-grade table so a zone's width and deviation share

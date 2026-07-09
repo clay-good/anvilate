@@ -392,10 +392,61 @@ def test_n6_and_m6_shaft_ei_at_22mm() -> None:
     assert m.upper.to("um").magnitude == pytest.approx(21)
 
 
-def test_interference_hole_needs_delta_correction() -> None:
-    # The uppercase P/N/M holes need the ISO 286 delta correction, not yet encoded.
-    with pytest.raises(ToleranceRangeError, match="delta correction"):
-        zone_limits("P6", _mm(22))
+# --- ISO 286 delta-corrected interference/transition holes (M/N/P) ---
+
+
+def test_np_holes_delta_corrected_at_22mm() -> None:
+    # ISO 286 special rule ES = -ei + Δ, Δ = IT_n − IT_(n−1), at 18-30 mm.
+    # IT5=9, IT6=13, IT7=21 um; ei: m=8, n=15, p=22 um.
+    # N7: Δ = 21-13 = 8, ES = -15+8 = -7, EI = -7-21 = -28.
+    n7 = zone_limits("N7", _mm(22))
+    assert n7.hole is True
+    assert n7.upper.to("um").magnitude == pytest.approx(-7)
+    assert n7.lower.to("um").magnitude == pytest.approx(-28)
+    # P7: ES = -22+8 = -14, EI = -14-21 = -35.
+    p7 = zone_limits("P7", _mm(22))
+    assert p7.upper.to("um").magnitude == pytest.approx(-14)
+    assert p7.lower.to("um").magnitude == pytest.approx(-35)
+    # M7: ES = -8+8 = 0, EI = 0-21 = -21.
+    m7 = zone_limits("M7", _mm(22))
+    assert m7.upper.to("um").magnitude == pytest.approx(0)
+    assert m7.lower.to("um").magnitude == pytest.approx(-21)
+
+
+def test_mnp_holes_delta_corrected_at_it6() -> None:
+    # At IT6, Δ = IT6 − IT5 = 13 - 9 = 4 um (18-30 mm range).
+    # M6: ES = -8+4 = -4, EI = -4-13 = -17.
+    m6 = zone_limits("M6", _mm(22))
+    assert m6.upper.to("um").magnitude == pytest.approx(-4)
+    assert m6.lower.to("um").magnitude == pytest.approx(-17)
+    # N6: ES = -15+4 = -11, EI = -11-13 = -24.
+    n6 = zone_limits("N6", _mm(22))
+    assert n6.upper.to("um").magnitude == pytest.approx(-11)
+    assert n6.lower.to("um").magnitude == pytest.approx(-24)
+    # P6: ES = -22+4 = -18, EI = -18-13 = -31.
+    p6 = zone_limits("P6", _mm(22))
+    assert p6.upper.to("um").magnitude == pytest.approx(-18)
+    assert p6.lower.to("um").magnitude == pytest.approx(-31)
+
+
+def test_delta_hole_out_of_grade_band_rejected() -> None:
+    # The special rule caps at N8/M8 and P7; finer than IT6 needs IT below IT5.
+    with pytest.raises(ToleranceRangeError, match="out of range"):
+        zone_limits("P8", _mm(22))
+    with pytest.raises(ToleranceRangeError, match="out of range"):
+        zone_limits("N9", _mm(22))
+    with pytest.raises(ToleranceRangeError, match="out of range"):
+        zone_limits("M5", _mm(22))
+
+
+def test_n7h6_shaft_basis_transition_fit_at_22mm() -> None:
+    # N7/h6 at 22 mm: hole -7..-28 um, shaft 0..-13 um. Min clearance -28 - 0 =
+    # -28 um; max clearance -7 - (-13) = +6 um => transition (shaft-basis mirror
+    # of H7/n6).
+    f = fit("N7/h6", _mm(22))
+    assert f.kind == "transition"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(-28)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(6)
 
 
 def test_h7p6_interference_fit_at_22mm() -> None:
