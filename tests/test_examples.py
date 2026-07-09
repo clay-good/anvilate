@@ -5,6 +5,8 @@ from __future__ import annotations
 import runpy
 from pathlib import Path
 
+import pytest
+
 from anvilate.scorecard import CheckStatus
 
 _EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
@@ -57,3 +59,13 @@ def test_lifting_padeye_example_flags_pin_bearing():
     assert by_name["padeye net tension"].passed
     assert by_name["padeye_weld weld shear"].passed
     assert not by_name["padeye pin bearing"].passed
+
+
+def test_lug_drawing_example_checks_and_draws(tmp_path):
+    pytest.importorskip("ezdxf")
+    namespace = runpy.run_path(str(_EXAMPLES / "lug_drawing.py"))
+    card, path = namespace["check_and_draw_lug"](tmp_path / "padeye.dxf")
+    # The full white-space vertical: the lug passes its ASME BTH-1 checks and its
+    # DXF outline is written.
+    assert card.status is CheckStatus.PASS
+    assert path.exists()
