@@ -27,6 +27,7 @@ from anvilate.analysis import (
     fixed_fixed_offset_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
+    fixed_pinned_offset_load,
     fixed_pinned_uniform_load,
     frequency_scorecard,
     goodman_safety_factor,
@@ -428,6 +429,88 @@ def test_fixed_pinned_center_load_matches_worked_example():
         < fp.max_deflection.to("mm").magnitude
         < ss.max_deflection.to("mm").magnitude
     )
+
+
+def test_fixed_pinned_offset_load_matches_worked_examples_on_both_sides():
+    # Same 500 mm, 20x10 steel propped cantilever, 100 N. At a = 125 mm from the
+    # prop the moment under the load governs: M = F*a*b^2*(a+2L)/(2L^3) =
+    # 7910.16 N*mm -> sigma 23.73 MPa; delta (a < 0.414L branch) =
+    # F*a*(L^2-a^2)^3/(3*E*I*(3L^2-a^2)^2) = 0.29841 mm.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "force": _q("100 N"),
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    near_prop = fixed_pinned_offset_load(load_position=_q("125 mm"), **kw)
+    assert near_prop.max_bending_stress.to("MPa").magnitude == pytest.approx(23.7305, rel=1e-4)
+    assert near_prop.max_deflection.to("mm").magnitude == pytest.approx(0.29841, rel=1e-4)
+    # At a = 375 mm the wall moment governs: M = F*a*b*(a+L)/(2L^2) = 8203.1 N*mm
+    # -> sigma 24.61 MPa; delta (a > 0.414L branch) =
+    # F*a*b^2/(6*E*I)*sqrt(a/(2L+a)) = 0.15300 mm.
+    near_wall = fixed_pinned_offset_load(load_position=_q("375 mm"), **kw)
+    assert near_wall.max_bending_stress.to("MPa").magnitude == pytest.approx(24.6094, rel=1e-4)
+    assert near_wall.max_deflection.to("mm").magnitude == pytest.approx(0.15300, rel=1e-4)
+    # The case is asymmetric — mirrored positions are different physical cases.
+    assert near_prop.max_bending_stress.to("MPa").magnitude != pytest.approx(
+        near_wall.max_bending_stress.to("MPa").magnitude, rel=1e-3
+    )
+
+
+def test_fixed_pinned_offset_load_degenerates_to_the_center_case():
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    offset = fixed_pinned_offset_load(force=_q("100 N"), load_position=_q("250 mm"), **kw)
+    center = fixed_pinned_center_load(force=_q("100 N"), **kw)
+    assert offset.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        center.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    assert offset.max_deflection.to("mm").magnitude == pytest.approx(
+        center.max_deflection.to("mm").magnitude, rel=1e-9
+    )
+
+
+def test_fixed_pinned_offset_load_worst_position_is_l_over_sqrt3():
+    # The wall moment peaks at a = L/sqrt(3) from the prop: M = F*L/(3*sqrt(3)),
+    # 2.6% above the mid-span 3*F*L/16 — mid-span is not quite the worst case.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "force": _q("100 N"),
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    worst = fixed_pinned_offset_load(
+        load_position=Quantity(magnitude=500 / 3**0.5, unit="mm"), **kw
+    )
+    expected = 100 * 500 / (3 * 3**0.5) * 5 / 1666.6667  # M*c/I
+    assert worst.max_bending_stress.to("MPa").magnitude == pytest.approx(expected, rel=1e-4)
+    center = fixed_pinned_center_load(**kw)
+    assert (
+        worst.max_bending_stress.to("MPa").magnitude > center.max_bending_stress.to("MPa").magnitude
+    )
+
+
+def test_fixed_pinned_offset_load_rejects_positions_outside_the_span():
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "force": _q("100 N"),
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    for position in ("0 mm", "-10 mm", "500 mm", "600 mm"):
+        with pytest.raises(ValueError, match="load_position must lie strictly inside"):
+            fixed_pinned_offset_load(load_position=_q(position), **kw)
 
 
 def test_fixed_pinned_uniform_load_matches_worked_example():

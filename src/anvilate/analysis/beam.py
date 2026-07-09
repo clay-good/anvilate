@@ -468,6 +468,66 @@ def fixed_pinned_center_load(
     )
 
 
+def fixed_pinned_offset_load(
+    *,
+    force: Quantity,
+    load_position: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The propped cantilever with a point load anywhere on the span.
+
+    A prismatic beam clamped at one end and simply supported (propped) at the
+    other, with a transverse ``force`` at ``load_position`` a — measured from the
+    **propped** end (the case is not symmetric) — strictly inside the span (AISC
+    Table 3-23 case 26). Other arguments match :func:`fixed_pinned_center_load`,
+    which this generalizes: at mid-span the two agree exactly.
+
+    Returns the peak bending stress from whichever moment governs — under the
+    load (M = F·a·b²·(a+2L)/(2L³), governs near the prop) or hogging at the wall
+    (M = F·a·b·(a+L)/(2L²), governs elsewhere, peaking at a = L/√3) — and the
+    true maximum deflection, whose closed form is piecewise about a = 0.414·L.
+    Every argument is dimension-checked.
+    """
+    _require(force, "[force]", "force")
+    _require(load_position, "[length]", "load_position")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    f = force.pint
+    length_p = length.pint
+    position = load_position.pint.to(length_p.units)
+    if not 0 < position.magnitude < length_p.magnitude:
+        raise ValueError(
+            f"load_position must lie strictly inside the span (0, {length}), measured "
+            f"from the propped end; got {load_position}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    a = position
+    b = length_p - a  # distance from the load to the wall
+    under_load = f * a * b**2 * (a + 2 * length_p) / (2 * length_p**3)
+    at_wall = f * a * b * (a + length_p) / (2 * length_p**2)
+    moment = max(under_load, at_wall)
+    stress = moment * c / inertia
+    if a.magnitude < (2**0.5 - 1) * length_p.magnitude:
+        deflection = (
+            f * a * (length_p**2 - a**2) ** 3 / (3 * e * inertia * (3 * length_p**2 - a**2) ** 2)
+        )
+    else:
+        deflection = f * a * b**2 / (6 * e * inertia) * (a / (2 * length_p + a)) ** 0.5
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
 def fixed_pinned_uniform_load(
     *,
     distributed_load: Quantity,
