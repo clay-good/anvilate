@@ -38,3 +38,6 @@ run_*/
 Thumbs.db
 .idea/
 *.swp
+
+# openlore analysis artifacts
+.openlore/
