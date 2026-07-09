@@ -486,6 +486,16 @@ class AcceptanceCriteria(_Base):
     fea_convergence_tol: float | None = Field(default=None, gt=0)
     max_displacement: Length | None = None
 
+    @model_validator(mode="after")
+    def _well_formed(self) -> AcceptanceCriteria:
+        if len(set(self.tiers)) != len(self.tiers):
+            raise ValueError(
+                f"validation tiers must be unique; got {[t.value for t in self.tiers]}"
+            )
+        if self.max_displacement is not None and self.max_displacement.to("mm").magnitude <= 0:
+            raise ValueError(f"max_displacement must be positive; got {self.max_displacement}")
+        return self
+
 
 # --- The spec ---
 

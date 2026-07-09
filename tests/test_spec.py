@@ -337,6 +337,19 @@ def test_envelope_rejects_non_positive_extent():
         Envelope(x=Quantity.parse("50 mm"), y=Quantity.parse("50 mm"), z=Quantity.parse("0 mm"))
 
 
+def test_acceptance_criteria_rejects_duplicate_tiers():
+    with pytest.raises(ValidationError, match="tiers must be unique"):
+        AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL, ValidationTier.T1_ANALYTICAL])
+
+
+def test_acceptance_criteria_rejects_non_positive_max_displacement():
+    with pytest.raises(ValidationError, match="max_displacement must be positive"):
+        AcceptanceCriteria(
+            tiers=[ValidationTier.T3_FEA],
+            max_displacement=Quantity.parse("0 mm"),
+        )
+
+
 def test_constraints_reject_nonsensical_bounds():
     # A non-positive safety factor, mass budget, or cost cap is not a satisfiable
     # constraint — reject it at construction.
