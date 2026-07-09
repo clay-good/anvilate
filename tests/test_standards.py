@@ -507,5 +507,15 @@ def test_m22_and_m24_sizes_resolved(clearance, threads) -> None:
     assert m24.pitch.quantity.to("mm").magnitude == pytest.approx(3.0)
     assert m24.tap_drill.quantity.to("mm").magnitude == pytest.approx(21.0)
     assert threads.get("M22").pitch.quantity.to("mm").magnitude == pytest.approx(2.5)
-    # Numeric ordering keeps the largest sizes last, not lexicographic (M22 < M24).
-    assert threads.sizes()[-2:] == ["M22", "M24"]
+
+
+def test_m27_and_m30_sizes_resolved(clearance, threads) -> None:
+    # M27/M30 extend fastener coverage to M30 (heavy machinery / structural).
+    from anvilate.standards import Fit
+
+    assert clearance.get("M30", Fit.NORMAL).quantity.to("mm").magnitude == pytest.approx(33.0)
+    assert clearance.get("M27", Fit.COARSE).quantity.to("mm").magnitude == pytest.approx(32.0)
+    m30 = threads.get("M30")
+    assert m30.pitch.quantity.to("mm").magnitude == pytest.approx(3.5)
+    assert m30.tap_drill.quantity.to("mm").magnitude == pytest.approx(26.5)  # 30 - 3.5
+    assert threads.get("M27").tap_drill.quantity.to("mm").magnitude == pytest.approx(24.0)

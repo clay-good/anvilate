@@ -28,6 +28,8 @@ threads:
   M20: {pitch: 2.50, tap_drill: 17.50}
   M22: {pitch: 2.50, tap_drill: 19.50}
   M24: {pitch: 3.00, tap_drill: 21.00}
+  M27: {pitch: 3.00, tap_drill: 24.00}
+  M30: {pitch: 3.50, tap_drill: 26.50}
 
   # Common fine-pitch threads (ISO 261). Tap drill = major diameter - pitch.
   M8x1: {pitch: 1.00, tap_drill: 7.00}
