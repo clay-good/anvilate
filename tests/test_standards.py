@@ -51,6 +51,20 @@ def test_extrusion_alloy_6063_resolved(db: MaterialsDatabase) -> None:
     assert "T6" in al.yield_strength.citation.condition
 
 
+def test_mild_steel_1018_resolved_with_estimated_endurance(db: MaterialsDatabase) -> None:
+    # 1018 CD is the reference general-purpose mild steel; its strengths are the
+    # Shigley Table A-20 cold-drawn values, and the endurance limit is a labeled
+    # 0.5*Su screening estimate like the other steels.
+    steel = db.get("AISI-1018-CD")
+    assert steel.category == "carbon_steel"
+    assert steel.yield_strength.quantity.to("MPa").magnitude == pytest.approx(370.0)
+    assert steel.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(440.0)
+    assert "Shigley" in steel.ultimate_strength.citation.source
+    se = steel.endurance_limit
+    assert se.quantity.to("MPa").magnitude == pytest.approx(220.0)  # 0.5 * 440
+    assert se.citation.estimated is True and se.citation.method
+
+
 def test_stainless_316_completes_the_austenitic_pair(db: MaterialsDatabase) -> None:
     # 316 is the molybdenum-bearing corrosion-resistant sibling of 304; the two
     # share the ASTM A240 annealed strength minima (30/75 ksi).

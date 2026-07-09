@@ -105,6 +105,32 @@ materials:
         estimated: true
         method: "0.5 x ultimate strength (Shigley screening estimate)"
 
+  AISI-1018-CD:
+    name: "AISI 1018 steel (cold-drawn)"
+    category: carbon_steel
+    elastic_modulus:
+      quantity: {magnitude: 200.0, unit: GPa}
+      citation: {source: "ASM — AISI 1018", condition: "room temperature"}
+    poisson_ratio:
+      value: 0.29
+      citation: {source: "ASM — AISI 1018", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 7.87, unit: g/cm**3}
+      citation: {source: "ASM — AISI 1018", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 370.0, unit: MPa}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (54 kpsi)"}
+    ultimate_strength:
+      quantity: {magnitude: 440.0, unit: MPa}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (64 kpsi)"}
+    endurance_limit:
+      quantity: {magnitude: 220.0, unit: MPa}
+      citation:
+        source: "derived from ultimate strength"
+        condition: "fully reversed bending, screening estimate"
+        estimated: true
+        method: "0.5 x ultimate strength (Shigley screening estimate)"
+
   SS-304:
     name: "Stainless steel 304 (annealed)"
     category: stainless_steel
