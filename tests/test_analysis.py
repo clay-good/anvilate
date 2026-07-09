@@ -16,7 +16,9 @@ from anvilate.analysis import (
     deflection_scorecard,
     euler_buckling_load,
     euler_critical_stress,
+    hollow_shaft_torsional_stress,
     max_transverse_shear_stress,
+    polar_second_moment_hollow,
     polar_second_moment_solid,
     radius_of_gyration,
     rectangular_second_moment,
@@ -311,6 +313,25 @@ def test_shaft_twist_angle_matches_worked_example():
         shear_modulus=_q("77 GPa"),
     )
     assert theta.to("degree").magnitude == pytest.approx(2.368, rel=1e-3)
+
+
+def test_polar_second_moment_hollow_and_stress():
+    # D=20 mm, d=10 mm tube: J = pi*(20^4 - 10^4)/32 = 14726 mm^4.
+    j = polar_second_moment_hollow(outer_diameter=_q("20 mm"), inner_diameter=_q("10 mm"))
+    assert j.to("mm**4").magnitude == pytest.approx(14726.2, rel=1e-4)
+    # 50 N*m through the tube: tau = T*(D/2)/J = 50000*10/14726 = 33.95 MPa.
+    tau = hollow_shaft_torsional_stress(
+        torque=_q("50 N*m"), outer_diameter=_q("20 mm"), inner_diameter=_q("10 mm")
+    )
+    assert tau.to("MPa").magnitude == pytest.approx(33.95, rel=1e-3)
+    # A tube carries more stress than a solid shaft of the same OD (less material).
+    solid = shaft_torsional_stress(torque=_q("50 N*m"), diameter=_q("20 mm"))
+    assert tau.to("MPa").magnitude > solid.to("MPa").magnitude
+
+
+def test_hollow_shaft_rejects_inner_ge_outer():
+    with pytest.raises(ValueError, match="must be non-negative and below"):
+        polar_second_moment_hollow(outer_diameter=_q("20 mm"), inner_diameter=_q("20 mm"))
 
 
 def test_shaft_torsion_rejects_wrong_dimensions():

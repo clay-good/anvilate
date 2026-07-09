@@ -47,6 +47,8 @@ from .stress import (
     yield_safety_factor,
 )
 from .torsion import (
+    hollow_shaft_torsional_stress,
+    polar_second_moment_hollow,
     polar_second_moment_solid,
     shaft_torsional_stress,
     shaft_twist_angle,
@@ -73,7 +75,9 @@ __all__ = [
     "torque_for_preload",
     "bearing_stress",
     "polar_second_moment_solid",
+    "polar_second_moment_hollow",
     "shaft_torsional_stress",
+    "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
     "ThinWallStress",
     "thin_wall_cylinder",
