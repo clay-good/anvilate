@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
 
-__all__ = ["Hole", "export_plate_dxf"]
+__all__ = ["Hole", "Slot", "export_plate_dxf"]
 
 # A fabrication DXF separates the outer profile cut from the interior hole pierces
 # onto named layers so a CNC controller (plasma/laser/waterjet) can order and lead
@@ -51,10 +51,48 @@ class Hole(BaseModel):
     diameter: Quantity
 
 
+class Slot(BaseModel):
+    """A slotted (obround) hole: its centre (x, y), overall ``length``, ``width``,
+    and orientation. ``length`` is the overall dimension along the slot axis
+    (end-cap to end-cap), ``width`` the across-axis dimension (the end-cap
+    diameter). ``vertical`` runs the slot along Y instead of X."""
+
+    model_config = ConfigDict(frozen=True)
+
+    x: Quantity
+    y: Quantity
+    length: Quantity
+    width: Quantity
+    vertical: bool = False
+
+
 def _mm(value: Quantity, name: str) -> float:
     if not value.has_dimension("[length]"):
         raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
     return value.to("mm").magnitude
+
+
+def _slot_vertices(
+    cx: float, cy: float, length: float, width: float, vertical: bool
+) -> list[tuple[float, float, float]]:
+    """Obround corner vertices as (x, y, bulge) — two straight sides and two
+    semicircular end caps (bulge 1). ``length`` is the overall axis dimension,
+    ``width`` the end-cap diameter; ``vertical`` runs the axis along Y."""
+    radius = width / 2
+    straight = (length - width) / 2  # centre-to-centre of the two end caps, halved
+    if vertical:
+        return [
+            (cx - radius, cy - straight, 0),
+            (cx + radius, cy - straight, 1),
+            (cx + radius, cy + straight, 0),
+            (cx - radius, cy + straight, 1),
+        ]
+    return [
+        (cx - straight, cy - radius, 0),
+        (cx + straight, cy - radius, 1),
+        (cx + straight, cy + radius, 0),
+        (cx - straight, cy + radius, 1),
+    ]
 
 
 def export_plate_dxf(
@@ -63,16 +101,18 @@ def export_plate_dxf(
     height: Quantity,
     holes: list[Hole],
     path: str | Path,
+    slots: list[Slot] | None = None,
     label: str | None = None,
 ) -> Path:
-    """Write a rectangular plate outline with ``holes`` to a DXF file.
+    """Write a rectangular plate outline with ``holes`` and ``slots`` to a DXF file.
 
     The plate spans (0, 0) to (``width``, ``height``) as a closed polyline; each
-    :class:`Hole` becomes a circle. An optional ``label`` (e.g. a part mark and
-    material) is written as text just below the plate on a separate ``TEXT`` layer.
-    All lengths are written in millimetres. Returns the path written. Raises
-    :class:`ValueError` for a non-positive plate or a hole that falls outside it,
-    and :class:`ImportError` if ezdxf is unavailable.
+    :class:`Hole` becomes a circle and each :class:`Slot` an obround polyline, both
+    on the ``HOLES`` layer. An optional ``label`` (e.g. a part mark and material) is
+    written as text just below the plate on a separate ``TEXT`` layer. All lengths
+    are written in millimetres. Returns the path written. Raises :class:`ValueError`
+    for a non-positive plate or a feature that falls outside it, and
+    :class:`ImportError` if ezdxf is unavailable.
     """
     ezdxf = _require_ezdxf()
     from ezdxf.enums import TextEntityAlignment
@@ -107,6 +147,32 @@ def export_plate_dxf(
                 f"{width} x {height} plate"
             )
         msp.add_circle((cx, cy), radius, dxfattribs={"layer": _HOLE_LAYER})
+
+    for slot in slots or []:
+        cx = _mm(slot.x, "slot x")
+        cy = _mm(slot.y, "slot y")
+        length = _mm(slot.length, "slot length")
+        slot_width = _mm(slot.width, "slot width")
+        if slot_width <= 0 or length <= slot_width:
+            raise ValueError(
+                f"slot at ({slot.x}, {slot.y}) needs length > width > 0; "
+                f"got length={slot.length}, width={slot.width}"
+            )
+        half_len = length / 2
+        half_wid = slot_width / 2
+        ax = half_wid if slot.vertical else half_len  # half extent along X
+        ay = half_len if slot.vertical else half_wid  # half extent along Y
+        if not (0 <= cx - ax and cx + ax <= w and 0 <= cy - ay and cy + ay <= h):
+            raise ValueError(
+                f"slot at ({slot.x}, {slot.y}) {slot.length}x{slot.width} falls outside "
+                f"the {width} x {height} plate"
+            )
+        msp.add_lwpolyline(
+            _slot_vertices(cx, cy, length, slot_width, slot.vertical),
+            format="xyb",
+            close=True,
+            dxfattribs={"layer": _HOLE_LAYER},
+        )
 
     path = Path(path)
     doc.saveas(path)

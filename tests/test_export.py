@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from anvilate.export.dxf import Hole, export_plate_dxf
+from anvilate.export.dxf import Hole, Slot, export_plate_dxf
 from anvilate.units import Quantity
 
 
@@ -67,6 +67,52 @@ def test_export_omits_text_when_no_label(tmp_path):
     )
     doc = ezdxf.readfile(out)
     assert list(doc.modelspace().query("TEXT")) == []
+
+
+def test_export_draws_a_slotted_hole_as_an_obround(tmp_path):
+    ezdxf = pytest.importorskip("ezdxf")
+    # A 40 mm-long, 16 mm-wide horizontal slot centred at (40, 60).
+    out = export_plate_dxf(
+        width=_q("80 mm"),
+        height=_q("120 mm"),
+        holes=[],
+        slots=[Slot(x=_q("40 mm"), y=_q("60 mm"), length=_q("40 mm"), width=_q("16 mm"))],
+        path=tmp_path / "slot.dxf",
+    )
+    doc = ezdxf.readfile(out)
+    msp = doc.modelspace()
+    # The slot is a closed 4-vertex polyline on the HOLES layer with two arc caps.
+    obrounds = [p for p in msp.query("LWPOLYLINE") if p.dxf.layer == "HOLES"]
+    assert len(obrounds) == 1
+    verts = obrounds[0].get_points("xyb")
+    assert obrounds[0].closed
+    assert [round(b, 1) for _, _, b in verts] == [0.0, 1.0, 0.0, 1.0]  # two semicircle caps
+    xs = [round(x) for x, _, _ in verts]
+    assert min(xs) == 28 and max(xs) == 52  # straight run; caps add the 8 mm radius
+
+
+def test_export_rejects_slot_outside_the_plate(tmp_path):
+    pytest.importorskip("ezdxf")
+    with pytest.raises(ValueError, match="falls outside"):
+        export_plate_dxf(
+            width=_q("80 mm"),
+            height=_q("120 mm"),
+            holes=[],
+            slots=[Slot(x=_q("70 mm"), y=_q("60 mm"), length=_q("40 mm"), width=_q("16 mm"))],
+            path=tmp_path / "bad_slot.dxf",
+        )
+
+
+def test_export_rejects_slot_length_not_over_width(tmp_path):
+    pytest.importorskip("ezdxf")
+    with pytest.raises(ValueError, match="length > width"):
+        export_plate_dxf(
+            width=_q("80 mm"),
+            height=_q("120 mm"),
+            holes=[],
+            slots=[Slot(x=_q("40 mm"), y=_q("60 mm"), length=_q("16 mm"), width=_q("16 mm"))],
+            path=tmp_path / "bad_slot.dxf",
+        )
 
 
 def test_export_rejects_hole_outside_the_plate(tmp_path):
