@@ -1,12 +1,15 @@
-"""T1 analytical bolted-joint checks (torque-tension, closed-form).
+"""T1 analytical bolted/pinned-joint checks (closed-form).
 
 The workhorse relation for a bolted joint is ``T = K·F·d``: the tightening torque
 ``T`` produces a preload ``F`` in a thread of nominal diameter ``d``, scaled by
 the nut factor ``K`` (an empirical coefficient rolling up thread and under-head
 friction). It inverts to ``F = T/(K·d)``. Given a fastener's nominal diameter
-from the standards tables, these two functions convert between the torque a shop
+from the standards tables, those two functions convert between the torque a shop
 applies and the preload it develops — a screening estimate, since K varies
 widely with lubrication and surface finish.
+
+A separate failure mode is bearing (the fastener crushing the hole it passes
+through): ``σ_bearing = F/(d·t)`` over the projected pin-and-plate contact area.
 
 As with the beam and column checks, inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values and the arithmetic runs through Pint.
@@ -20,6 +23,7 @@ __all__ = [
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
     "torque_for_preload",
+    "bearing_stress",
 ]
 
 # Typical nut factor K for as-received (lightly-oiled) steel fasteners. Dry/rough
@@ -79,3 +83,27 @@ def torque_for_preload(
     torque = nut_factor * preload.pint * nominal_diameter.pint
     converted = torque.to("N*m")
     return Quantity(magnitude=float(converted.magnitude), unit="N*m")
+
+
+def bearing_stress(
+    *,
+    force: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+) -> Quantity:
+    """The bearing stress σ = F/(d·t) a fastener exerts on the hole it bears in.
+
+    ``force`` is the load transferred through the joint, ``diameter`` the pin or
+    bolt diameter, and ``thickness`` the bearing plate thickness — the projected
+    contact area is d·t. Returns the bearing stress in MPa; every quantity is
+    dimension-checked and ``diameter``/``thickness`` must be positive.
+    """
+    _require(force, "[force]", "force")
+    _require(diameter, "[length]", "diameter")
+    _require(thickness, "[length]", "thickness")
+    for value, name in ((diameter, "diameter"), (thickness, "thickness")):
+        if value.to("mm").magnitude <= 0:
+            raise ValueError(f"{name} must be positive; got {value}")
+    stress = force.pint / (diameter.pint * thickness.pint)
+    converted = stress.to("MPa")
+    return Quantity(magnitude=float(converted.magnitude), unit="MPa")

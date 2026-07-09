@@ -7,6 +7,7 @@ import pytest
 from anvilate.analysis import (
     ColumnEnd,
     axial_stress,
+    bearing_stress,
     bolt_preload_from_torque,
     cantilever_end_load,
     circular_area,
@@ -214,6 +215,20 @@ def test_torque_preload_round_trips():
     assert torque.to("N*m").magnitude == pytest.approx(10.0, rel=1e-6)
     back = bolt_preload_from_torque(torque=torque, nominal_diameter=_q("8 mm"))
     assert back.to("N").magnitude == pytest.approx(6250.0, rel=1e-6)
+
+
+def test_bearing_stress_matches_worked_example():
+    # 10 kN through an 8 mm pin bearing on a 5 mm plate: sigma = F/(d*t)
+    #   = 10000 / (8*5) = 250 MPa.
+    sigma = bearing_stress(force=_q("10 kN"), diameter=_q("8 mm"), thickness=_q("5 mm"))
+    assert sigma.to("MPa").magnitude == pytest.approx(250.0, rel=1e-6)
+
+
+def test_bearing_stress_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="thickness must be positive"):
+        bearing_stress(force=_q("10 kN"), diameter=_q("8 mm"), thickness=_q("0 mm"))
+    with pytest.raises(ValueError, match="force must be a"):
+        bearing_stress(force=_q("10 mm"), diameter=_q("8 mm"), thickness=_q("5 mm"))
 
 
 def test_bolt_torque_tension_rejects_bad_inputs():

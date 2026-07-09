@@ -31,6 +31,7 @@ from .column import (
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
+    bearing_stress,
     bolt_preload_from_torque,
     torque_for_preload,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
     "torque_for_preload",
+    "bearing_stress",
     "polar_second_moment_solid",
     "shaft_torsional_stress",
     "shaft_twist_angle",
