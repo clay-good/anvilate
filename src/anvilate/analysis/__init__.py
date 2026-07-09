@@ -7,6 +7,8 @@ modules:
 - :mod:`~anvilate.analysis.axial` — direct axial stress and section area
 - :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
   fixed-fixed, point and distributed), transverse shear, section second moments
+- :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
+  moment, extreme fibre, section modulus, and radius of gyration
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion and twist
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere
@@ -70,6 +72,7 @@ from .pressure_vessel import (
     thin_wall_cylinder,
     thin_wall_sphere_stress,
 )
+from .section import CrossSection
 from .spring import spring_index, spring_shear_stress, wahl_factor
 from .stress import (
     CombinedNormalStress,
@@ -106,6 +109,7 @@ __all__ = [
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",
+    "CrossSection",
     "max_transverse_shear_stress",
     "deflection_scorecard",
     "SHEAR_FORM_RECTANGULAR",
