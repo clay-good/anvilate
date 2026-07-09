@@ -17,6 +17,8 @@ from anvilate.analysis import (
     deflection_scorecard,
     euler_buckling_load,
     euler_critical_stress,
+    goodman_safety_factor,
+    goodman_scorecard,
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
     max_transverse_shear_stress,
@@ -418,6 +420,70 @@ def test_axial_stress_worked_example_and_sign():
 def test_axial_stress_rejects_wrong_dimensions():
     with pytest.raises(ValueError, match="area must be a"):
         axial_stress(force=_q("10 kN"), area=_q("20 mm"))  # a length, not an area
+
+
+def test_goodman_safety_factor_worked_example():
+    # sigma_a=100, sigma_m=50 MPa; Se=200, Su=400 MPa:
+    #   1/n = 100/200 + 50/400 = 0.5 + 0.125 = 0.625 -> n = 1.6.
+    n = goodman_safety_factor(
+        alternating_stress=_q("100 MPa"),
+        mean_stress=_q("50 MPa"),
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+    )
+    assert n == pytest.approx(1.6, rel=1e-6)
+
+
+def test_goodman_fully_reversed_reduces_to_endurance_ratio():
+    # Zero mean stress: n = Se / sigma_a (pure endurance screening).
+    n = goodman_safety_factor(
+        alternating_stress=_q("80 MPa"),
+        mean_stress=_q("0 MPa"),
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+    )
+    assert n == pytest.approx(200 / 80, rel=1e-9)
+
+
+def test_goodman_scorecard_uses_db_endurance_and_honours_no_silent_green():
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import default_materials_db
+
+    db = default_materials_db()
+    # A36 carries a labelled 0.5*Su endurance estimate -> the screen evaluates.
+    a36 = db.get("ASTM-A36")
+    evaluated = goodman_scorecard(
+        "fatigue",
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q("20 MPa"),
+        endurance_limit=a36.endurance_limit.quantity,
+        ultimate_strength=a36.ultimate_strength.quantity,
+        required=1.5,
+    )
+    assert evaluated.status in (CheckStatus.PASS, CheckStatus.FAIL)  # it ran
+    # SS-304 has no endurance limit -> NOT_EVALUATED, never a silent pass.
+    ss304 = db.get("SS-304")
+    assert ss304.endurance_limit is None
+    gap = goodman_scorecard(
+        "fatigue",
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q("20 MPa"),
+        endurance_limit=None,
+        ultimate_strength=ss304.ultimate_strength.quantity,
+        required=1.5,
+    )
+    assert gap.status is CheckStatus.NOT_EVALUATED
+    assert not gap.passed
+
+
+def test_goodman_rejects_negative_amplitude():
+    with pytest.raises(ValueError, match="amplitude"):
+        goodman_safety_factor(
+            alternating_stress=_q("-10 MPa"),
+            mean_stress=_q("0 MPa"),
+            endurance_limit=_q("200 MPa"),
+            ultimate_strength=_q("400 MPa"),
+        )
 
 
 def test_von_mises_plane_stress_worked_example():

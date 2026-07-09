@@ -8,8 +8,9 @@ and simply-supported bending cases, :mod:`anvilate.analysis.column` the Euler
 buckling load, :mod:`anvilate.analysis.fastener` the bolt torque-tension
 relation, :mod:`anvilate.analysis.torsion` the solid-shaft torsion check, and
 :mod:`anvilate.analysis.pressure_vessel` the thin-wall cylinder stresses, and
-:mod:`anvilate.analysis.stress` the von Mises combination of component stresses.
-Further analytical cases land here as they are built out (see
+:mod:`anvilate.analysis.stress` the von Mises combination of component stresses,
+and :mod:`anvilate.analysis.fatigue` the modified-Goodman fatigue screen. Further
+analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
 """
 
@@ -41,6 +42,7 @@ from .fastener import (
     bolt_preload_from_torque,
     torque_for_preload,
 )
+from .fatigue import goodman_safety_factor, goodman_scorecard
 from .pressure_vessel import ThinWallStress, thin_wall_cylinder
 from .stress import (
     strength_scorecard,
@@ -78,6 +80,8 @@ __all__ = [
     "bolt_preload_from_torque",
     "torque_for_preload",
     "bearing_stress",
+    "goodman_safety_factor",
+    "goodman_scorecard",
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",
