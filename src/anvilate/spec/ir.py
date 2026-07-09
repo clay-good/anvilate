@@ -20,6 +20,10 @@ from ..tolerance import (
     StackResult,
     StackUp,
     Tolerance,
+    ToleranceClass,
+    general_tolerance,
+    general_tolerance_source,
+    resolve_class,
 )
 from ..units import Quantity, UnitSystem, require_dimension
 from .provenance import Provenanced
@@ -435,3 +439,36 @@ class DesignSpec(_Base):
         such problem at once.
         """
         return [chain.analyze(self.dimensions) for chain in self.chains]
+
+    def general_tolerance_class(self) -> ToleranceClass:
+        """The ISO 2768 general class governing this spec's untoleranced dimensions.
+
+        Parsed from ``manufacturing.tolerance_class`` (a letter ``m`` or word
+        ``medium``), defaulting to the ISO 2768 medium class when the spec says
+        nothing. Raises :class:`ValueError` if the declared string is unrecognized.
+        """
+        return resolve_class(self.manufacturing.tolerance_class)
+
+    def effective_tolerance(self, tag: str, nominal: Quantity) -> ResolvedTolerance:
+        """The tolerance band that actually governs the feature at ``tag``.
+
+        An explicitly-declared :class:`ToleranceDimension` for ``tag`` overrides
+        the general class and resolves at its own declared nominal; otherwise this
+        spec's ISO 2768 general class resolves ``nominal`` into a symmetric band,
+        carrying the ISO 2768 citation. Either way the return is one
+        :class:`~anvilate.tolerance.ResolvedTolerance`, so the drawing and DFM
+        layers read a feature's permitted band the same way. ``nominal`` must be a
+        length; it is consulted only for the general fallback.
+        """
+        for dim in self.dimensions:
+            if dim.tag == tag:
+                return dim.resolve()
+        gt = general_tolerance(nominal, self.general_tolerance_class())
+        deviation_mm = gt.deviation.to("mm").magnitude
+        return ResolvedTolerance(
+            nominal=nominal,
+            upper=Quantity(magnitude=deviation_mm, unit="mm"),
+            lower=Quantity(magnitude=-deviation_mm, unit="mm"),
+            label=f"ISO 2768-{gt.tolerance_class.letter}",
+            source=general_tolerance_source(),
+        )

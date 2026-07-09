@@ -39,7 +39,7 @@ from anvilate.spec import (
     validate_dimension_graph,
     validate_references,
 )
-from anvilate.tolerance import FitTolerance, SymmetricTolerance
+from anvilate.tolerance import FitTolerance, SymmetricTolerance, ToleranceClass
 from anvilate.units import Quantity, UnitSystem
 
 
@@ -88,6 +88,58 @@ def test_golden_bracket_every_fact_has_a_typed_field():
     assert spec.constraints.max_mass.value.to("g").magnitude == pytest.approx(150)
     assert spec.constraints.min_safety_factor.value == 2.0
     assert ValidationTier.T1_ANALYTICAL in spec.acceptance.tiers
+
+
+# --- Requirement: General tolerances by default, explicit overrides ---
+
+
+def test_general_tolerance_class_parsed_from_manufacturing():
+    assert golden_bracket().general_tolerance_class() is ToleranceClass.MEDIUM
+    coarse = golden_bracket().model_copy(
+        update={
+            "manufacturing": Manufacturing(
+                process=ManufacturingProcess.CNC_MILLING, tolerance_class="c"
+            )
+        }
+    )
+    assert coarse.general_tolerance_class() is ToleranceClass.COARSE
+
+
+def test_general_tolerance_class_defaults_to_medium_when_unstated():
+    # A spec that says nothing about tolerances is governed by ISO 2768 medium.
+    unstated = golden_bracket().model_copy(
+        update={"manufacturing": Manufacturing(process=ManufacturingProcess.CNC_MILLING)}
+    )
+    assert unstated.general_tolerance_class() is ToleranceClass.MEDIUM
+
+
+def test_effective_tolerance_falls_back_to_general_class():
+    # An untoleranced feature is governed by the spec's general class, resolved at
+    # its nominal and carrying the ISO 2768 citation. 35 mm under medium => ±0.3 mm.
+    band = golden_bracket().effective_tolerance("untoleranced_face", Quantity.parse("35 mm"))
+    assert band.upper.to("mm").magnitude == pytest.approx(0.3)
+    assert band.lower.to("mm").magnitude == pytest.approx(-0.3)
+    assert band.label == "ISO 2768-m"
+    assert band.source and "2768" in band.source
+
+
+def test_effective_tolerance_explicit_overrides_general():
+    # A declared dimension wins over the general class for its tag.
+    spec = golden_bracket().model_copy(
+        update={
+            "dimensions": [
+                ToleranceDimension(
+                    tag="bore",
+                    nominal=Quantity.parse("22 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.05 mm")),
+                ),
+            ]
+        }
+    )
+    band = spec.effective_tolerance("bore", Quantity.parse("22 mm"))
+    assert band.upper.to("mm").magnitude == pytest.approx(0.05)
+    assert band.lower.to("mm").magnitude == pytest.approx(-0.05)
+    assert band.source is None  # a user-declared ± band cites no standard
 
 
 # --- Requirement: Typed, schema-validated document ---
