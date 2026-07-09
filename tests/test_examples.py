@@ -210,6 +210,19 @@ def test_i_beam_same_steel_example_shows_shape_beats_area():
     assert by_name["I-beam bending"].passed
 
 
+def test_monorail_trolley_example_fails_only_at_the_true_worst_spot():
+    namespace = runpy.run_path(str(_EXAMPLES / "monorail_trolley_sweep.py"))
+    card = namespace["screen_runway_beam"]()
+    # On a propped cantilever the wall moment peaks at L/sqrt(3) from the prop,
+    # 2.6% above mid-span — so mid-span passes at SF 2.03 while the true worst
+    # spot fails at 1.98. A mid-span-only screen would have missed it.
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["trolley at quarter point bending"].passed
+    assert by_name["trolley at mid-span bending"].passed
+    assert not by_name["trolley at worst spot bending"].passed
+
+
 def test_clip_angle_example_fails_only_the_relocated_tearout():
     namespace = runpy.run_path(str(_EXAMPLES / "clip_angle_edge_tearout.py"))
     card = namespace["screen_clip_bolt"]()
