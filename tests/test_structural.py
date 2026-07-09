@@ -19,6 +19,7 @@ from anvilate.packs.structural import (
     Support,
     screen_beam_member,
     screen_column_member,
+    screen_structure,
 )
 from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
@@ -152,6 +153,42 @@ def test_stubby_column_uses_the_johnson_regime():
 def test_overloaded_column_fails():
     # A large axial load drops the buckling safety factor below the requirement.
     card = screen_column_member(_column("500 mm", load="20 kN"), required_safety_factor=2.0)
+    assert card.status is CheckStatus.FAIL
+
+
+def test_member_carried_deflection_limit_is_applied():
+    # A beam declaring its own deflection_limit is screened against it without a
+    # max_deflection argument.
+    member = BeamMember(
+        name="joist",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("1 N/mm"),
+        load_type=LoadType.DISTRIBUTED,
+        material="ASTM-A36",
+        deflection_limit=_q("1 mm"),  # the 2.44 mm deflection exceeds this
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    assert {e.name for e in card.entries} == {"joist bending", "joist deflection"}
+    assert card.status is CheckStatus.FAIL
+
+
+def test_screen_structure_rolls_up_beams_and_columns():
+    beam = _member(Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N")
+    column = _column("500 mm")
+    card = screen_structure([beam, column], required_safety_factor=2.0)
+    # One card with entries from both members; both pass on A36 -> PASS.
+    names = [e.name for e in card.entries]
+    assert any("beam bending" == n for n in names)
+    assert any("buckling" in n for n in names)
+    assert card.status is CheckStatus.PASS
+
+
+def test_screen_structure_fails_if_any_member_fails():
+    beam = _member(Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N")
+    overloaded_column = _column("500 mm", load="20 kN")
+    card = screen_structure([beam, overloaded_column], required_safety_factor=2.0)
     assert card.status is CheckStatus.FAIL
 
 

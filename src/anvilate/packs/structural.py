@@ -44,6 +44,8 @@ __all__ = [
     "screen_beam_member",
     "ColumnMember",
     "screen_column_member",
+    "StructuralMember",
+    "screen_structure",
 ]
 
 
@@ -92,11 +94,18 @@ class BeamMember(BaseModel):
     load: Quantity
     load_type: LoadType
     material: str
+    deflection_limit: Quantity | None = None  # a member may carry its own limit
 
     @model_validator(mode="after")
     def _well_formed(self) -> BeamMember:
         if not self.length.has_dimension("[length]"):
             raise ValueError(f"length must be a [length] quantity; got {self.length}")
+        if self.deflection_limit is not None and not self.deflection_limit.has_dimension(
+            "[length]"
+        ):
+            raise ValueError(
+                f"deflection_limit must be a [length] quantity; got {self.deflection_limit}"
+            )
         expected = "[force]" if self.load_type is LoadType.POINT else "[force] / [length]"
         if not self.load.has_dimension(expected):
             raise ValueError(
@@ -117,10 +126,14 @@ def screen_beam_member(
 
     Dispatches on the member's support and load type to the matching closed-form
     beam check, then screens the peak bending stress against the material's yield
-    strength (at ``required_safety_factor``) and, when given, the peak deflection
-    against ``max_deflection``. ``materials`` defaults to the bundled database;
-    an unknown material id raises its lookup error.
+    strength (at ``required_safety_factor``) and, when a limit is set, the peak
+    deflection against it. The deflection limit is the ``max_deflection`` argument,
+    or the member's own ``deflection_limit`` when the argument is omitted.
+    ``materials`` defaults to the bundled database; an unknown material id raises
+    its lookup error.
     """
+    if max_deflection is None:
+        max_deflection = member.deflection_limit
     materials = materials or default_materials_db()
     record = materials.get(member.material)
     common = {
@@ -225,3 +238,35 @@ def screen_column_member(
         required=required_safety_factor,
     )
     return Scorecard(entries=(entry,))
+
+
+StructuralMember = BeamMember | ColumnMember
+
+
+def screen_structure(
+    members: list[StructuralMember],
+    *,
+    required_safety_factor: float,
+    materials: MaterialsDatabase | None = None,
+) -> Scorecard:
+    """Screen a whole structure — a mix of beam and column members — into one card.
+
+    Each member is dispatched to its own screen (beams by support/load, columns by
+    slenderness regime; a beam applies its own ``deflection_limit`` if set) and all
+    the entries are collected into a single :class:`~anvilate.scorecard.Scorecard`.
+    The roll-up honours No-silent-green: the structure passes only when every
+    member's every check ran and passed.
+    """
+    materials = materials or default_materials_db()
+    entries = []
+    for member in members:
+        if isinstance(member, BeamMember):
+            card = screen_beam_member(
+                member, required_safety_factor=required_safety_factor, materials=materials
+            )
+        else:
+            card = screen_column_member(
+                member, required_safety_factor=required_safety_factor, materials=materials
+            )
+        entries.extend(card.entries)
+    return Scorecard(entries=tuple(entries))
