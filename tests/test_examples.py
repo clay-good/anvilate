@@ -61,6 +61,24 @@ def test_lifting_padeye_example_flags_pin_bearing():
     assert not by_name["padeye pin bearing"].passed
 
 
+def test_brace_tie_example_is_governed_by_net_rupture():
+    namespace = runpy.run_path(str(_EXAMPLES / "brace_tie_check.py"))
+    card = namespace["screen_brace_tie"]()
+    # Both §D2 limit states pass, but shear lag makes net rupture the tighter one:
+    # a gross-area-only check would report the looser gross-yield safety factor.
+    assert card.status is CheckStatus.PASS
+    by_name = {e.name: e for e in card.entries}
+    gross = by_name["brace gross yielding"]
+    net = by_name["brace net rupture"]
+    assert gross.passed and net.passed
+
+    def _sf(entry) -> float:
+        # detail reads "safety factor 2.42 vs required minimum 1.67"
+        return float(entry.detail.split("safety factor ")[1].split(" ")[0])
+
+    assert _sf(net) < _sf(gross)
+
+
 def test_lug_drawing_example_checks_and_draws(tmp_path):
     pytest.importorskip("ezdxf")
     namespace = runpy.run_path(str(_EXAMPLES / "lug_drawing.py"))
