@@ -40,6 +40,7 @@ from .fastener import (
 )
 from .pressure_vessel import ThinWallStress, thin_wall_cylinder
 from .stress import (
+    strength_scorecard,
     von_mises_bending_torsion,
     von_mises_plane_stress,
     yield_safety_factor,
@@ -77,4 +78,5 @@ __all__ = [
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
     "yield_safety_factor",
+    "strength_scorecard",
 ]

@@ -16,12 +16,14 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..scorecard import ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
     "yield_safety_factor",
+    "strength_scorecard",
 ]
 
 
@@ -77,3 +79,29 @@ def yield_safety_factor(equivalent_stress: Quantity, yield_strength: Quantity) -
     sigma = _require_stress(equivalent_stress, "equivalent_stress")
     sy = _require_stress(yield_strength, "yield_strength")
     return sy / sigma
+
+
+def strength_scorecard(
+    name: str,
+    *,
+    stress: Quantity,
+    allowable: Quantity | None,
+    required: float,
+) -> ScorecardEntry:
+    """Screen a computed ``stress`` against a material ``allowable`` strength.
+
+    Builds a :class:`~anvilate.scorecard.ScorecardEntry`: the safety factor is
+    ``allowable``/|``stress``| (stress magnitude, so tension and compression are
+    treated alike), judged against the ``required`` minimum. When ``allowable`` is
+    ``None`` — a material property that is not in the database, such as an
+    unlisted endurance limit — the entry is ``NOT_EVALUATED`` rather than a silent
+    pass, honouring the No-silent-green rule. ``stress`` (and ``allowable`` when
+    given) must be stresses.
+    """
+    sigma = abs(_require_stress(stress, "stress"))
+    if allowable is None:
+        computed = None
+    else:
+        strength = _require_stress(allowable, "allowable")
+        computed = float("inf") if sigma == 0 else strength / sigma
+    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required)

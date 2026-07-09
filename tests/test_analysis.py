@@ -23,6 +23,7 @@ from anvilate.analysis import (
     shaft_twist_angle,
     simply_supported_center_load,
     slenderness_ratio,
+    strength_scorecard,
     thin_wall_cylinder,
     torque_for_preload,
     von_mises_bending_torsion,
@@ -376,6 +377,40 @@ def test_yield_safety_factor_from_equivalent_stress():
     vm = von_mises_bending_torsion(bending_stress=_q("100 MPa"), shear_stress=_q("50 MPa"))
     # 132.29 MPa equivalent against a 276 MPa yield → SF ~ 2.086.
     assert yield_safety_factor(vm, _q("276 MPa")) == pytest.approx(276 / 132.288, rel=1e-4)
+
+
+def test_strength_scorecard_ties_stress_material_and_scorecard():
+    # End-to-end: a computed stress screened against a material's yield strength
+    # from the database produces a pass/fail scorecard entry.
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import default_materials_db
+
+    db = default_materials_db()
+    yield_6061 = db.get("AA-6061-T6").yield_strength.quantity  # 276 MPa
+    # 100 MPa working stress vs 276 MPa yield -> SF 2.76 >= 2.0 required -> PASS.
+    ok = strength_scorecard("yield", stress=_q("100 MPa"), allowable=yield_6061, required=2.0)
+    assert ok.status is CheckStatus.PASS
+    # 200 MPa working stress -> SF 1.38 < 2.0 -> FAIL.
+    bad = strength_scorecard("yield", stress=_q("200 MPa"), allowable=yield_6061, required=2.0)
+    assert bad.status is CheckStatus.FAIL
+
+
+def test_strength_scorecard_not_evaluated_for_missing_property():
+    # No silent green: SS-304 has no listed endurance limit, so a fatigue screen
+    # against it is NOT_EVALUATED, never a silent pass.
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import default_materials_db
+
+    ss304 = default_materials_db().get("SS-304")
+    assert ss304.endurance_limit is None
+    entry = strength_scorecard(
+        "fatigue",
+        stress=_q("80 MPa"),
+        allowable=None,  # the absent endurance limit
+        required=1.5,
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert not entry.passed
 
 
 def test_von_mises_rejects_non_stress_inputs():
