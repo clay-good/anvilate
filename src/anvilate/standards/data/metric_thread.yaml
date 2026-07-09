@@ -1,16 +1,18 @@
-# Coarse metric thread pitch and tap drill (schema: standards-data).
+# Metric thread pitch and tap drill (schema: standards-data).
 #
-# Coarse-pitch (ISO 261) thread pitch and the standard 75%-thread tap-drill
-# diameter (ISO 724 basis) in mm. The source standards are not redistributed —
-# only the dimension table.
+# ISO 261 thread pitch and the standard 75%-thread tap-drill diameter (ISO 724
+# basis, tap drill ~= major diameter - pitch) in mm. Coarse threads are keyed by
+# size alone (M8); fine threads carry their pitch (M8x1). The source standards
+# are not redistributed — only the dimension table.
 dataset:
   name: anvilate-metric-thread-seed
   version: "0.1.0"
-  source: "ISO 261 / ISO 724 coarse metric threads"
+  source: "ISO 261 / ISO 724 metric threads"
   license: "CC0-1.0 (dimension values only; source standards not redistributed)"
   retrieved: "2026-07-08"
 
-# designation: {pitch (mm), tap_drill (mm) for ~75% thread}
+# designation: {pitch (mm), tap_drill (mm) for ~75% thread}. Coarse (M8) and
+# common fine-pitch (M8x1) threads share the table, keyed by designation.
 threads:
   M2: {pitch: 0.40, tap_drill: 1.60}
   M2.5: {pitch: 0.45, tap_drill: 2.05}
@@ -26,3 +28,10 @@ threads:
   M20: {pitch: 2.50, tap_drill: 17.50}
   M22: {pitch: 2.50, tap_drill: 19.50}
   M24: {pitch: 3.00, tap_drill: 21.00}
+
+  # Common fine-pitch threads (ISO 261). Tap drill = major diameter - pitch.
+  M8x1: {pitch: 1.00, tap_drill: 7.00}
+  M10x1.25: {pitch: 1.25, tap_drill: 8.75}
+  M10x1: {pitch: 1.00, tap_drill: 9.00}
+  M12x1.5: {pitch: 1.50, tap_drill: 10.50}
+  M12x1.25: {pitch: 1.25, tap_drill: 10.75}

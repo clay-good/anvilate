@@ -462,6 +462,27 @@ def test_thread_unknown_size_surfaces_gap(threads) -> None:
         threads.get("M7")
 
 
+def test_fine_pitch_thread_resolved_distinct_from_coarse(threads) -> None:
+    # A fine M8x1 is a distinct record from coarse M8; its 75% tap drill is the
+    # major diameter minus the finer pitch (8 - 1 = 7.0 mm vs 6.8 for coarse).
+    coarse = threads.get("M8")
+    fine = threads.get("M8x1")
+    assert coarse.pitch.quantity.to("mm").magnitude == pytest.approx(1.25)
+    assert fine.pitch.quantity.to("mm").magnitude == pytest.approx(1.0)
+    assert fine.tap_drill.quantity.to("mm").magnitude == pytest.approx(7.0)
+    assert "fine" in fine.pitch.citation.condition
+    assert "coarse" in coarse.pitch.citation.condition
+
+
+def test_fine_pitch_sorts_by_diameter_then_designation(threads) -> None:
+    # Fine threads sort by nominal diameter (M8x1 near M8), not lexically, and
+    # ties on diameter break on the designation string.
+    sizes = threads.sizes()
+    assert sizes.index("M8x1") == sizes.index("M8") + 1
+    assert sizes.index("M10x1") < sizes.index("M10x1.25")
+    assert sizes.index("M10x1.25") < sizes.index("M12")
+
+
 def test_larger_preferred_sizes_resolved(clearance, threads) -> None:
     # M14/M16/M20 extend the ISO 273/261 coverage past M12.
     from anvilate.standards import Fit
