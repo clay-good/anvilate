@@ -3,11 +3,12 @@ designs against.
 
 Following the same "retrieval, not recall" rule as the materials database, the
 standardized mounting dimensions of standard components come from here, never
-from a model's memory. This slice covers NEMA stepper motor frames; other
-component families (extrusions, fasteners, bearings) land here as they are
-built out. Only the *standardized* dimensions are recorded — the mounting
-bolt-square, pilot boss, and faceplate — not the manufacturer-specific body
-length.
+from a model's memory. This module covers NEMA stepper motor frames; sibling
+modules cover fastener (:mod:`~anvilate.standards.threads`) and bearing
+(:mod:`~anvilate.standards.bearings`) dimensions, and other component families
+land here as they are built out. Only the *standardized* dimensions are recorded
+— the mounting bolt-square, pilot boss, and faceplate — not the
+manufacturer-specific body length.
 """
 
 from __future__ import annotations

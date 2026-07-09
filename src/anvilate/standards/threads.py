@@ -1,9 +1,11 @@
-"""Metric fastener tables: clearance holes per ISO 273.
+"""Metric fastener tables: clearance holes (ISO 273) and thread pitch / tap
+drill (ISO 261/724).
 
-The clearance hole a pattern drills for a metric screw is retrieved from this
-table, not recalled: it returns the standardized diameter for a given thread
-size and fit, with its source citation, so a downstream hole feature and its
-evidence bundle both trace to ISO 273.
+Both are retrieved, not recalled. :class:`ClearanceHoleTable` returns the
+standardized clearance diameter for a thread size and fit; :class:`MetricThreadTable`
+returns the pitch and 75%-thread tap drill for a coarse (``M8``) or fine
+(``M8x1``) thread. Each dimension carries its source citation, so a downstream
+hole feature and its evidence bundle both trace to the standard.
 """
 
 from __future__ import annotations

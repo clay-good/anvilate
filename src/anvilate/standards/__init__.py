@@ -1,9 +1,12 @@
 """Anvilate standards & materials data: curated, provenance-tagged, offline.
 
 The bundled databases are the sole source of standard dimensions and material
-property values in the pipeline — the "retrieval, not recall" rule. This slice
-ships the materials database; standard-component dimension tables land here as
-they are built out (see openspec/specs/standards-data/).
+property values in the pipeline — the "retrieval, not recall" rule. This package
+ships the materials database, the NEMA stepper-frame component database, the
+ISO 273 clearance-hole and ISO 261/724 metric-thread tables, the ISO 15 ball
+bearing boundary-dimension table, and the DB-backed reference resolver. Further
+component families land here as they are built out (see
+openspec/specs/standards-data/).
 """
 
 from __future__ import annotations
