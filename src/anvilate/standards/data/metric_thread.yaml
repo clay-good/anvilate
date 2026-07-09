@@ -24,3 +24,5 @@ threads:
   M14: {pitch: 2.00, tap_drill: 12.00}
   M16: {pitch: 2.00, tap_drill: 14.00}
   M20: {pitch: 2.50, tap_drill: 17.50}
+  M22: {pitch: 2.50, tap_drill: 19.50}
+  M24: {pitch: 3.00, tap_drill: 21.00}

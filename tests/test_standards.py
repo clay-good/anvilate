@@ -437,3 +437,18 @@ def test_larger_preferred_sizes_resolved(clearance, threads) -> None:
     assert m20.pitch.quantity.to("mm").magnitude == pytest.approx(2.5)
     assert m20.tap_drill.quantity.to("mm").magnitude == pytest.approx(17.5)
     assert threads.get("M16").pitch.quantity.to("mm").magnitude == pytest.approx(2.0)
+
+
+def test_m22_and_m24_sizes_resolved(clearance, threads) -> None:
+    # M22/M24 extend the ISO 273/261 coverage past M20.
+    from anvilate.standards import Fit
+
+    assert clearance.get("M22", Fit.NORMAL).quantity.to("mm").magnitude == pytest.approx(24.0)
+    assert clearance.get("M24", Fit.CLOSE).quantity.to("mm").magnitude == pytest.approx(25.0)
+    assert clearance.get("M24", Fit.COARSE).quantity.to("mm").magnitude == pytest.approx(28.0)
+    m24 = threads.get("M24")
+    assert m24.pitch.quantity.to("mm").magnitude == pytest.approx(3.0)
+    assert m24.tap_drill.quantity.to("mm").magnitude == pytest.approx(21.0)
+    assert threads.get("M22").pitch.quantity.to("mm").magnitude == pytest.approx(2.5)
+    # Numeric ordering keeps the largest sizes last, not lexicographic (M22 < M24).
+    assert threads.sizes()[-2:] == ["M22", "M24"]
