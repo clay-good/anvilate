@@ -42,6 +42,15 @@ def test_titanium_grade5_properties_resolved(db: MaterialsDatabase) -> None:
     assert ti.poisson_ratio.value == pytest.approx(0.342)
 
 
+def test_extrusion_alloy_6063_resolved(db: MaterialsDatabase) -> None:
+    # 6063-T6 is the standard extrusion alloy (cf. the seed EXT-4040/EXT-2020).
+    al = db.get("AA-6063-T6")
+    assert al.category == "aluminum"
+    assert al.yield_strength.quantity.to("MPa").magnitude == pytest.approx(214.0)
+    assert al.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(241.0)
+    assert "T6" in al.yield_strength.citation.condition
+
+
 def test_yield_strength_carries_temper_and_citation(db: MaterialsDatabase) -> None:
     # Scenario: yield strength with temper — the T6 value with its citation.
     prop = db.get("AA-6061-T6").yield_strength

@@ -142,3 +142,22 @@ materials:
     ultimate_strength:
       quantity: {magnitude: 950.0, unit: MPa}
       citation: {source: "ASM — Ti-6Al-4V annealed", condition: "annealed"}
+
+  AA-6063-T6:
+    name: "Aluminum 6063-T6"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 68.9, unit: GPa}
+      citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "T6 temper, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 2.70, unit: g/cm**3}
+      citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 214.0, unit: MPa}
+      citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "T6 temper, 0.2% offset"}
+    ultimate_strength:
+      quantity: {magnitude: 241.0, unit: MPa}
+      citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "T6 temper"}
