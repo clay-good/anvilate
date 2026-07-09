@@ -94,6 +94,24 @@ def test_mild_steel_1018_resolved_with_estimated_endurance(db: MaterialsDatabase
     assert se.citation.estimated is True and se.citation.method
 
 
+def test_medium_carbon_1045_resolved_with_estimated_endurance(db: MaterialsDatabase) -> None:
+    # 1045 CD is the common medium-carbon shaft/gear steel, between mild 1018 and
+    # alloy 4140; Shigley Table A-20 cold-drawn values (77/91 kpsi) + a labeled
+    # 0.5*Su endurance estimate.
+    steel = db.get("AISI-1045-CD")
+    assert steel.category == "carbon_steel"
+    assert steel.yield_strength.quantity.to("MPa").magnitude == pytest.approx(530.0)
+    assert steel.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(630.0)
+    assert "Table A-20" in steel.ultimate_strength.citation.source
+    assert steel.endurance_limit.quantity.to("MPa").magnitude == pytest.approx(315.0)  # 0.5*630
+    assert steel.endurance_limit.citation.estimated is True
+    # Stronger than the mild 1018 it sits above.
+    assert (
+        steel.yield_strength.quantity.to("MPa").magnitude
+        > db.get("AISI-1018-CD").yield_strength.quantity.to("MPa").magnitude
+    )
+
+
 def test_alloy_steel_4140_resolved_with_new_category(db: MaterialsDatabase) -> None:
     # 4140 is the DB's first heat-treatable alloy steel; annealed strengths are
     # the Shigley Table A-21 values (60.5/95 kpsi) and it opens the alloy_steel
