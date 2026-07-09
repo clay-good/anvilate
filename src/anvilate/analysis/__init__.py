@@ -11,6 +11,7 @@ modules:
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion and twist
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
+- :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl)
 - :mod:`~anvilate.analysis.thermal` — constrained thermal stress
 - :mod:`~anvilate.analysis.dynamics` — fundamental-frequency (modal) screen
@@ -63,6 +64,7 @@ from .fastener import (
     torque_for_preload,
 )
 from .fatigue import goodman_safety_factor, goodman_scorecard
+from .keys import key_bearing_stress, key_shear_stress, key_tangential_force
 from .pressure_vessel import (
     ThinWallStress,
     thin_wall_cylinder,
@@ -125,6 +127,9 @@ __all__ = [
     "bolt_shear_stress",
     "goodman_safety_factor",
     "goodman_scorecard",
+    "key_tangential_force",
+    "key_shear_stress",
+    "key_bearing_stress",
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",

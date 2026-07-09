@@ -30,6 +30,9 @@ from anvilate.analysis import (
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
     johnson_critical_stress,
+    key_bearing_stress,
+    key_shear_stress,
+    key_tangential_force,
     max_shear_stress_plane,
     max_transverse_shear_stress,
     natural_frequency,
@@ -450,6 +453,30 @@ def test_spring_shear_stress_worked_example():
 def test_spring_rejects_wire_wider_than_coil():
     with pytest.raises(ValueError, match="must be positive and below"):
         spring_index(mean_coil_diameter=_q("5 mm"), wire_diameter=_q("5 mm"))
+
+
+def test_key_stresses_worked_example():
+    # 50 N*m through a 20 mm shaft, 6x6x25 mm key: F = 2T/d = 5000 N;
+    #   shear tau = F/(w*L) = 5000/(6*25) = 33.33 MPa;
+    #   bearing sigma = F/((h/2)*L) = 5000/(3*25) = 66.67 MPa (2x the shear).
+    torque, shaft = _q("50 N*m"), _q("20 mm")
+    assert key_tangential_force(torque=torque, shaft_diameter=shaft).to(
+        "N"
+    ).magnitude == pytest.approx(5000.0, rel=1e-6)
+    tau = key_shear_stress(
+        torque=torque, shaft_diameter=shaft, key_width=_q("6 mm"), key_length=_q("25 mm")
+    )
+    assert tau.to("MPa").magnitude == pytest.approx(33.333, rel=1e-4)
+    sigma = key_bearing_stress(
+        torque=torque, shaft_diameter=shaft, key_height=_q("6 mm"), key_length=_q("25 mm")
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(66.667, rel=1e-4)
+    assert sigma.to("MPa").magnitude == pytest.approx(2 * tau.to("MPa").magnitude, rel=1e-6)
+
+
+def test_key_stress_rejects_non_torque():
+    with pytest.raises(ValueError, match="torque must be a"):
+        key_tangential_force(torque=_q("50 N"), shaft_diameter=_q("20 mm"))
 
 
 def test_bolt_shear_stress_single_and_double():
