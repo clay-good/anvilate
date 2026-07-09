@@ -314,6 +314,29 @@ def test_interface_contract_publishable():
     assert reloaded.exports[0].name == "mount_pattern"
 
 
+def test_hole_pattern_rejects_non_positive_dimensions():
+    # A bolt-circle diameter or hole size of zero/negative is not real geometry.
+    with pytest.raises(ValidationError, match="hole-pattern hole_size must be positive"):
+        HolePattern(
+            diameter=Quantity.parse("40 mm"),
+            hole_count=4,
+            hole_size=Quantity.parse("0 mm"),
+        )
+    with pytest.raises(ValidationError, match="hole-pattern diameter must be positive"):
+        HolePattern(
+            diameter=Quantity.parse("-40 mm"),
+            hole_count=4,
+            hole_size=Quantity.parse("5 mm"),
+        )
+
+
+def test_envelope_rejects_non_positive_extent():
+    from anvilate.spec import Envelope
+
+    with pytest.raises(ValidationError, match="envelope z extent must be positive"):
+        Envelope(x=Quantity.parse("50 mm"), y=Quantity.parse("50 mm"), z=Quantity.parse("0 mm"))
+
+
 # --- Requirement: Typed explicit tolerances and fits on the IR ---
 
 

@@ -105,6 +105,14 @@ class HolePattern(_Base):
     hole_count: int = Field(ge=1)
     hole_size: Length
 
+    @model_validator(mode="after")
+    def _positive_dimensions(self) -> HolePattern:
+        for field in ("diameter", "hole_size"):
+            value: Quantity = getattr(self, field)
+            if value.to("mm").magnitude <= 0:
+                raise ValueError(f"hole-pattern {field} must be positive; got {value}")
+        return self
+
 
 class InterfaceContract(_Base):
     """A published, importable interface: the geometry a mating part designs against."""
@@ -428,6 +436,14 @@ class Envelope(_Base):
     x: Length
     y: Length
     z: Length
+
+    @model_validator(mode="after")
+    def _positive_extent(self) -> Envelope:
+        for axis in ("x", "y", "z"):
+            value: Quantity = getattr(self, axis)
+            if value.to("mm").magnitude <= 0:
+                raise ValueError(f"envelope {axis} extent must be positive; got {value}")
+        return self
 
 
 class Constraints(_Base):
