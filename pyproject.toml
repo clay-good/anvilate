@@ -29,7 +29,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+# DXF drawing export (ezdxf is MIT, pure-Python). The core stays dependency-light;
+# import anvilate.export.dxf only pulls ezdxf when this extra is installed.
+export = ["ezdxf>=1.1"]
+dev = ["pytest>=8.0", "ruff>=0.6", "ezdxf>=1.1"]
 
 [project.urls]
 Homepage = "https://github.com/clay-good/anvilate"
