@@ -124,6 +124,23 @@ def test_alloy_steel_4140_resolved_with_new_category(db: MaterialsDatabase) -> N
     assert steel.endurance_limit.quantity.to("MPa").magnitude == pytest.approx(327.5)
 
 
+def test_premium_alloy_steel_4340_resolved(db: MaterialsDatabase) -> None:
+    # 4340 is the premium high-strength alloy steel (landing gear, high-load
+    # shafts), stronger than 4140; Shigley Table A-21 annealed values (68.5/108
+    # kpsi) + a labeled 0.5*Su endurance estimate.
+    steel = db.get("AISI-4340")
+    assert steel.category == "alloy_steel"
+    assert steel.yield_strength.quantity.to("MPa").magnitude == pytest.approx(470.0)
+    assert steel.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(745.0)
+    assert "Table A-21" in steel.ultimate_strength.citation.source
+    assert steel.endurance_limit.quantity.to("MPa").magnitude == pytest.approx(372.5)
+    # Stronger than the 4140 it sits above.
+    assert (
+        steel.ultimate_strength.quantity.to("MPa").magnitude
+        > db.get("AISI-4140").ultimate_strength.quantity.to("MPa").magnitude
+    )
+
+
 def test_stainless_316_completes_the_austenitic_pair(db: MaterialsDatabase) -> None:
     # 316 is the molybdenum-bearing corrosion-resistant sibling of 304; the two
     # share the ASTM A240 annealed strength minima (30/75 ksi).
