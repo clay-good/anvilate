@@ -12,6 +12,7 @@ from anvilate.analysis import (
     bearing_stress,
     bolt_preload_from_torque,
     cantilever_end_load,
+    cantilever_uniform_load,
     circular_area,
     circular_second_moment,
     combine_axial_bending,
@@ -98,6 +99,34 @@ def test_simply_supported_center_load_matches_worked_example():
     )
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(37.5, rel=1e-4)
     assert result.max_deflection.to("mm").magnitude == pytest.approx(0.78125, rel=1e-4)
+
+
+def test_cantilever_uniform_load_matches_worked_example():
+    # 1 N/mm UDL over a 500 mm, 20x10 mm steel cantilever:
+    #   M_max = w*L^2/2 = 125000 N*mm -> sigma = M*c/I = 125000*5/1666.67 = 375 MPa;
+    #   delta = w*L^4/(8*E*I) = 1*500^4/(8*200000*1666.67) = 23.44 mm.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = cantilever_uniform_load(
+        distributed_load=_q("1 N/mm"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(375.0, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(23.4375, rel=1e-4)
+    # A cantilever under the same UDL is far more stressed than a simply-supported
+    # span (M = wL^2/2 vs wL^2/8 -> 4x).
+    ss = simply_supported_uniform_load(
+        distributed_load=_q("1 N/mm"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        4 * ss.max_bending_stress.to("MPa").magnitude, rel=1e-6
+    )
 
 
 def test_simply_supported_uniform_load_matches_worked_example():

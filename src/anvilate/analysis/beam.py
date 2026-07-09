@@ -23,6 +23,7 @@ from ..units import Quantity
 __all__ = [
     "BeamBendingResult",
     "cantilever_end_load",
+    "cantilever_uniform_load",
     "simply_supported_center_load",
     "simply_supported_uniform_load",
     "rectangular_second_moment",
@@ -208,6 +209,42 @@ def cantilever_end_load(
     moment = f * length_p
     stress = moment * c / inertia
     deflection = f * length_p**3 / (3 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def cantilever_uniform_load(
+    *,
+    distributed_load: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The cantilever under a uniformly distributed load (Roark/Shigley).
+
+    A prismatic beam fixed at one end and free at the other, carrying a uniform
+    ``distributed_load`` w (force per unit length — e.g. self-weight). Returns the
+    peak bending stress at the fixed end (σ = M·c/I with M = w·L²/2) and the
+    free-end deflection (δ = w·L⁴/(8·E·I)). Every argument is dimension-checked.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w * length_p**2 / 2
+    stress = moment * c / inertia
+    deflection = w * length_p**4 / (8 * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
