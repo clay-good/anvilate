@@ -19,6 +19,12 @@ from ..units import Quantity
 
 __all__ = ["Hole", "export_plate_dxf"]
 
+# A fabrication DXF separates the outer profile cut from the interior hole pierces
+# onto named layers so a CNC controller (plasma/laser/waterjet) can order and lead
+# them in differently. Distinct ACI colours make the two legible in any viewer.
+_OUTLINE_LAYER = "OUTLINE"
+_HOLE_LAYER = "HOLES"
+
 
 def _require_ezdxf():
     try:
@@ -69,8 +75,12 @@ def export_plate_dxf(
 
     doc = ezdxf.new()
     doc.units = ezdxf.units.MM
+    doc.layers.add(_OUTLINE_LAYER, color=7)  # white/black — the profile cut
+    doc.layers.add(_HOLE_LAYER, color=1)  # red — the interior pierces
     msp = doc.modelspace()
-    msp.add_lwpolyline([(0, 0), (w, 0), (w, h), (0, h)], close=True)
+    msp.add_lwpolyline(
+        [(0, 0), (w, 0), (w, h), (0, h)], close=True, dxfattribs={"layer": _OUTLINE_LAYER}
+    )
 
     for hole in holes:
         cx = _mm(hole.x, "hole x")
@@ -81,7 +91,7 @@ def export_plate_dxf(
                 f"hole at ({hole.x}, {hole.y}) d={hole.diameter} falls outside the "
                 f"{width} x {height} plate"
             )
-        msp.add_circle((cx, cy), radius)
+        msp.add_circle((cx, cy), radius, dxfattribs={"layer": _HOLE_LAYER})
 
     path = Path(path)
     doc.saveas(path)

@@ -29,6 +29,9 @@ def test_export_lug_outline_round_trips(tmp_path):
     circles = list(msp.query("CIRCLE"))
     assert len(polylines) == 1
     assert len(circles) == 1
+    # Profile and pierces land on separate named layers for the CNC controller.
+    assert polylines[0].dxf.layer == "OUTLINE"
+    assert circles[0].dxf.layer == "HOLES"
     # The plate outline is a closed 4-point rectangle spanning the plate.
     points = [(round(p[0]), round(p[1])) for p in polylines[0].get_points("xy")]
     assert points == [(0, 0), (80, 0), (80, 120), (0, 120)]
