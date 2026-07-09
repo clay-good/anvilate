@@ -14,6 +14,7 @@ from anvilate.analysis import (
     cantilever_end_load,
     circular_area,
     circular_second_moment,
+    combine_axial_bending,
     deflection_scorecard,
     euler_buckling_load,
     euler_critical_stress,
@@ -484,6 +485,22 @@ def test_goodman_rejects_negative_amplitude():
             endurance_limit=_q("200 MPa"),
             ultimate_strength=_q("400 MPa"),
         )
+
+
+def test_combine_axial_bending_extreme_fibres():
+    # 50 MPa tension axial + 150 MPa bending: tension fibre 200, compression -100.
+    combined = combine_axial_bending(axial_stress=_q("50 MPa"), bending_stress=_q("150 MPa"))
+    assert combined.tension_fibre.to("MPa").magnitude == pytest.approx(200.0, rel=1e-9)
+    assert combined.compression_fibre.to("MPa").magnitude == pytest.approx(-100.0, rel=1e-9)
+    assert combined.peak_magnitude.to("MPa").magnitude == pytest.approx(200.0, rel=1e-9)
+
+
+def test_combine_axial_bending_compression_governs():
+    # Axial compression -50 MPa + 30 MPa bending: fibres -20 and -80; peak = 80.
+    combined = combine_axial_bending(axial_stress=_q("-50 MPa"), bending_stress=_q("30 MPa"))
+    assert combined.tension_fibre.to("MPa").magnitude == pytest.approx(-20.0, rel=1e-9)
+    assert combined.compression_fibre.to("MPa").magnitude == pytest.approx(-80.0, rel=1e-9)
+    assert combined.peak_magnitude.to("MPa").magnitude == pytest.approx(80.0, rel=1e-9)
 
 
 def test_von_mises_plane_stress_worked_example():

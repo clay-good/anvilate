@@ -45,6 +45,8 @@ from .fastener import (
 from .fatigue import goodman_safety_factor, goodman_scorecard
 from .pressure_vessel import ThinWallStress, thin_wall_cylinder
 from .stress import (
+    CombinedNormalStress,
+    combine_axial_bending,
     strength_scorecard,
     von_mises_bending_torsion,
     von_mises_plane_stress,
@@ -93,4 +95,6 @@ __all__ = [
     "von_mises_bending_torsion",
     "yield_safety_factor",
     "strength_scorecard",
+    "CombinedNormalStress",
+    "combine_axial_bending",
 ]

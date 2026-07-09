@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from math import sqrt
 
+from pydantic import BaseModel, ConfigDict
+
 from ..scorecard import ScorecardEntry
 from ..units import Quantity
 
@@ -24,6 +26,8 @@ __all__ = [
     "von_mises_bending_torsion",
     "yield_safety_factor",
     "strength_scorecard",
+    "CombinedNormalStress",
+    "combine_axial_bending",
 ]
 
 
@@ -33,6 +37,54 @@ def _require_stress(value: Quantity, name: str) -> float:
             f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
         )
     return value.to("MPa").magnitude
+
+
+class CombinedNormalStress(BaseModel):
+    """The extreme-fibre normal stresses of combined axial + bending loading.
+
+    ``tension_fibre`` is the axial stress plus the bending stress (the most
+    tensile fibre); ``compression_fibre`` is the axial minus the bending (the most
+    compressive). ``peak_magnitude`` is the larger of the two in magnitude — the
+    stress that governs a yield check.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    tension_fibre: Quantity
+    compression_fibre: Quantity
+
+    @property
+    def peak_magnitude(self) -> Quantity:
+        t = abs(self.tension_fibre.to("MPa").magnitude)
+        c = abs(self.compression_fibre.to("MPa").magnitude)
+        return Quantity(magnitude=max(t, c), unit="MPa")
+
+    def __str__(self) -> str:
+        return (
+            f"combined: tension fibre {self.tension_fibre.to('MPa')}, "
+            f"compression fibre {self.compression_fibre.to('MPa')}"
+        )
+
+
+def combine_axial_bending(
+    *,
+    axial_stress: Quantity,
+    bending_stress: Quantity,
+) -> CombinedNormalStress:
+    """Superpose a uniform ``axial_stress`` and a ``bending_stress`` on a section.
+
+    Bending puts one fibre in tension and the opposite in compression; the axial
+    stress shifts both. Returns the two extreme-fibre stresses (axial ± |bending|)
+    — the governing normal stresses for an eccentrically-loaded member or a
+    beam-column. Both inputs must be stresses; a signed ``axial_stress`` (negative
+    for compression) carries through.
+    """
+    a = _require_stress(axial_stress, "axial_stress")
+    b = abs(_require_stress(bending_stress, "bending_stress"))
+    return CombinedNormalStress(
+        tension_fibre=Quantity(magnitude=a + b, unit="MPa"),
+        compression_fibre=Quantity(magnitude=a - b, unit="MPa"),
+    )
 
 
 def von_mises_plane_stress(
