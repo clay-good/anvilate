@@ -8,6 +8,12 @@ they are built out (see openspec/specs/standards-data/).
 
 from __future__ import annotations
 
+from .bearings import (
+    Bearing,
+    BearingTable,
+    UnknownBearingError,
+    default_bearing_table,
+)
 from .components import (
     ComponentsDatabase,
     NemaFrame,
@@ -46,6 +52,10 @@ __all__ = [
     "ComponentsDatabase",
     "UnknownComponentError",
     "default_components_db",
+    "Bearing",
+    "BearingTable",
+    "UnknownBearingError",
+    "default_bearing_table",
     "Fit",
     "ClearanceHoleTable",
     "MetricThread",

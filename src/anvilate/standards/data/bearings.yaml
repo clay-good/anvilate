@@ -1,0 +1,46 @@
+# Deep-groove ball bearing boundary dimensions (schema: standards-data).
+#
+# ISO 15 boundary dimensions — bore d, outer diameter D, width B (mm) — for the
+# common deep-groove ball bearing series. These are standardized across
+# manufacturers, so a shaft seat and a housing bore design against them directly.
+# Load ratings and internal geometry are manufacturer- and design-specific and
+# deliberately omitted. The source standard is not redistributed — only the
+# dimension table.
+dataset:
+  name: anvilate-bearings-seed
+  version: "0.1.0"
+  source: "ISO 15 deep-groove ball bearing boundary dimensions"
+  license: "CC0-1.0 (dimension values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+# designation: {bore (d), outer_diameter (D), width (B)} in mm.
+bearings:
+  # Miniature / instrument sizes
+  "623": {bore: 3, outer_diameter: 10, width: 4}
+  "625": {bore: 5, outer_diameter: 16, width: 5}
+  "626": {bore: 6, outer_diameter: 19, width: 6}
+  "608": {bore: 8, outer_diameter: 22, width: 7}
+
+  # 60-series (extra light)
+  "6000": {bore: 10, outer_diameter: 26, width: 8}
+  "6001": {bore: 12, outer_diameter: 28, width: 8}
+  "6002": {bore: 15, outer_diameter: 32, width: 9}
+  "6003": {bore: 17, outer_diameter: 35, width: 10}
+  "6004": {bore: 20, outer_diameter: 42, width: 12}
+  "6005": {bore: 25, outer_diameter: 47, width: 12}
+  "6006": {bore: 30, outer_diameter: 55, width: 13}
+
+  # 62-series (light)
+  "6200": {bore: 10, outer_diameter: 30, width: 9}
+  "6201": {bore: 12, outer_diameter: 32, width: 10}
+  "6202": {bore: 15, outer_diameter: 35, width: 11}
+  "6203": {bore: 17, outer_diameter: 40, width: 12}
+  "6204": {bore: 20, outer_diameter: 47, width: 14}
+  "6205": {bore: 25, outer_diameter: 52, width: 15}
+
+  # 63-series (medium)
+  "6300": {bore: 10, outer_diameter: 35, width: 11}
+  "6301": {bore: 12, outer_diameter: 37, width: 12}
+  "6302": {bore: 15, outer_diameter: 42, width: 13}
+  "6303": {bore: 17, outer_diameter: 47, width: 14}
+  "6304": {bore: 20, outer_diameter: 52, width: 15}

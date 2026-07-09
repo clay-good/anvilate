@@ -389,6 +389,62 @@ def test_resolver_composes_component_db_and_seed() -> None:
     assert resolver.has_component("EXT-4040")  # from the static seed
 
 
+# --- Deep-groove ball bearing boundary dimensions (ISO 15) ---
+
+
+@pytest.fixture(scope="module")
+def bearings():
+    from anvilate.standards import default_bearing_table
+
+    return default_bearing_table()
+
+
+def test_bearing_boundary_dimensions_with_citation(bearings) -> None:
+    # 608 (the ubiquitous skate bearing) is 8 x 22 x 7 mm; each dimension carries
+    # its ISO 15 citation.
+    b608 = bearings.get("608")
+    assert b608.bore.quantity.to("mm").magnitude == pytest.approx(8.0)
+    assert b608.outer_diameter.quantity.to("mm").magnitude == pytest.approx(22.0)
+    assert b608.width.quantity.to("mm").magnitude == pytest.approx(7.0)
+    assert "ISO 15" in b608.bore.citation.source
+    assert b608.bore.citation.license
+    # 6204: 20 x 47 x 14 mm, the light-series 20 mm-bore bearing.
+    b6204 = bearings.get("6204")
+    assert b6204.bore.quantity.to("mm").magnitude == pytest.approx(20.0)
+    assert b6204.outer_diameter.quantity.to("mm").magnitude == pytest.approx(47.0)
+    assert b6204.width.quantity.to("mm").magnitude == pytest.approx(14.0)
+
+
+def test_bearing_dimensions_are_length(bearings) -> None:
+    for designation in bearings.designations():
+        rec = bearings.get(designation)
+        for field in ("bore", "outer_diameter", "width"):
+            assert getattr(rec, field).quantity.has_dimension("[length]"), (designation, field)
+
+
+def test_bearing_citations_expose_the_evidence_trail(bearings) -> None:
+    citations = bearings.get("6000").citations()
+    assert set(citations) == {"bore", "outer_diameter", "width"}
+    for name, cite in citations.items():
+        assert isinstance(cite, PropertyCitation), name
+        assert cite.source and cite.license, name
+
+
+def test_bearing_ordering_is_numeric(bearings) -> None:
+    # 608 sorts before the 6000-series, not lexically after 6304.
+    designations = bearings.designations()
+    assert designations.index("608") < designations.index("6000")
+    assert designations.index("6000") < designations.index("6204")
+
+
+def test_bearing_unknown_designation_surfaces_gap(bearings) -> None:
+    from anvilate.standards import UnknownBearingError
+
+    with pytest.raises(UnknownBearingError) as exc:
+        bearings.get("6207")  # not in the seed; a gap, not a guess
+    assert exc.value.suggestions
+
+
 # --- Metric clearance holes (ISO 273) ---
 
 
