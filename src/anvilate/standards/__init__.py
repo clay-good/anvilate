@@ -4,8 +4,9 @@ The bundled databases are the sole source of standard dimensions and material
 property values in the pipeline — the "retrieval, not recall" rule. This package
 ships the materials database, the NEMA stepper-frame component database, the
 ISO 273 clearance-hole and ISO 261/724 metric-thread tables, the ISO 15 ball
-bearing boundary-dimension table, the ISO 2338 dowel-pin table, and the
-DB-backed reference resolver. Further
+bearing boundary-dimension table, the ISO 2338 dowel-pin table, the ISO 4762
+socket-head cap screw head-geometry table, and the DB-backed reference resolver.
+Further
 component families land here as they are built out (see
 openspec/specs/standards-data/).
 """
@@ -17,6 +18,12 @@ from .bearings import (
     BearingTable,
     UnknownBearingError,
     default_bearing_table,
+)
+from .capscrews import (
+    CapScrewTable,
+    SocketHeadCapScrew,
+    UnknownCapScrewError,
+    default_cap_screw_table,
 )
 from .components import (
     ComponentsDatabase,
@@ -70,6 +77,10 @@ __all__ = [
     "DowelPinTable",
     "UnknownDowelPinError",
     "default_dowel_pin_table",
+    "SocketHeadCapScrew",
+    "CapScrewTable",
+    "UnknownCapScrewError",
+    "default_cap_screw_table",
     "Fit",
     "ClearanceHoleTable",
     "MetricThread",

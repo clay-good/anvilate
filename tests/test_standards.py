@@ -537,6 +537,74 @@ def test_dowel_pins_resolve_as_standard_components() -> None:
     assert not resolver.has_component("ISO2338-7")
 
 
+# --- Socket-head cap screws (ISO 4762) ---
+
+
+@pytest.fixture(scope="module")
+def cap_screws():
+    from anvilate.standards import default_cap_screw_table
+
+    return default_cap_screw_table()
+
+
+def test_cap_screw_head_geometry_with_citation(cap_screws) -> None:
+    # An M5 socket-head cap screw: head 8.5 mm dia x 5 mm high, 4 mm hex key; each
+    # dimension carries its ISO 4762 citation.
+    m5 = cap_screws.get("ISO4762-M5")
+    assert m5.head_diameter.quantity.to("mm").magnitude == pytest.approx(8.5)
+    assert m5.head_height.quantity.to("mm").magnitude == pytest.approx(5.0)
+    assert m5.socket.quantity.to("mm").magnitude == pytest.approx(4.0)
+    assert "ISO 4762" in m5.head_diameter.citation.source
+    assert m5.head_diameter.citation.license
+
+
+def test_cap_screw_dimensions_are_length(cap_screws) -> None:
+    for designation in cap_screws.designations():
+        rec = cap_screws.get(designation)
+        for field in ("head_diameter", "head_height", "socket"):
+            assert getattr(rec, field).quantity.has_dimension("[length]"), (designation, field)
+
+
+def test_cap_screw_citations_expose_the_evidence_trail(cap_screws) -> None:
+    citations = cap_screws.get("ISO4762-M6").citations()
+    assert set(citations) == {"head_diameter", "head_height", "socket"}
+    for name, cite in citations.items():
+        assert isinstance(cite, PropertyCitation), name
+        assert cite.source and cite.license, name
+
+
+def test_cap_screw_ordering_is_numeric(cap_screws) -> None:
+    # M4 sorts before M10 by nominal thread diameter, not lexically.
+    designations = cap_screws.designations()
+    assert designations.index("ISO4762-M4") < designations.index("ISO4762-M10")
+    assert designations.index("ISO4762-M10") < designations.index("ISO4762-M20")
+
+
+def test_cap_screw_head_clears_its_thread(cap_screws) -> None:
+    # A head must be wider than its thread so a counterbore is a real feature: the
+    # M6 head (10 mm) is well over the 6 mm nominal.
+    m6 = cap_screws.get("ISO4762-M6")
+    assert m6.head_diameter.quantity.to("mm").magnitude > 6.0
+
+
+def test_cap_screw_unknown_designation_surfaces_gap(cap_screws) -> None:
+    from anvilate.standards import UnknownCapScrewError
+
+    with pytest.raises(UnknownCapScrewError) as exc:
+        cap_screws.get("ISO4762-M7")  # not a standard socket-head size
+    assert exc.value.suggestions
+
+
+def test_cap_screws_resolve_as_standard_components() -> None:
+    # Cap screws now resolve from the table, retiring the old ISO4762-M5 seed stub.
+    from anvilate.standards import default_standards_resolver
+
+    resolver = default_standards_resolver()
+    assert resolver.has_component("ISO4762-M5")
+    assert "ISO4762-M8" in set(resolver.known_components())
+    assert not resolver.has_component("ISO4762-M7")
+
+
 # --- Metric clearance holes (ISO 273) ---
 
 

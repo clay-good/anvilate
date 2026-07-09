@@ -1,0 +1,30 @@
+# Socket-head cap screw head geometry (schema: standards-data).
+#
+# ISO 4762 (DIN 912) hexagon socket-head cap screws. A design counterbores to
+# clear the head, so the standardized facts it retrieves are the head diameter
+# dk, the head height k, and the hex-key socket width across flats s. The thread
+# pitch and tap/clearance holes come from the ISO 261/724 and ISO 273 tables; the
+# screw length and shank are order-specific and omitted, the same "mount, not
+# body" rule the bearing and dowel tables follow. The source standard is not
+# redistributed, only the dimension table.
+dataset:
+  name: anvilate-cap-screws-seed
+  version: "0.1.0"
+  source: "ISO 4762 (DIN 912) socket-head cap screw head dimensions"
+  license: "CC0-1.0 (dimension values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+# thread designation: head_diameter (dk), head_height (k), socket (hex key s
+# across flats) in mm.
+screws:
+  "ISO4762-M2": {head_diameter: 3.8, head_height: 2.0, socket: 1.5}
+  "ISO4762-M2.5": {head_diameter: 4.5, head_height: 2.5, socket: 2.0}
+  "ISO4762-M3": {head_diameter: 5.5, head_height: 3.0, socket: 2.5}
+  "ISO4762-M4": {head_diameter: 7.0, head_height: 4.0, socket: 3.0}
+  "ISO4762-M5": {head_diameter: 8.5, head_height: 5.0, socket: 4.0}
+  "ISO4762-M6": {head_diameter: 10.0, head_height: 6.0, socket: 5.0}
+  "ISO4762-M8": {head_diameter: 13.0, head_height: 8.0, socket: 6.0}
+  "ISO4762-M10": {head_diameter: 16.0, head_height: 10.0, socket: 8.0}
+  "ISO4762-M12": {head_diameter: 18.0, head_height: 12.0, socket: 10.0}
+  "ISO4762-M16": {head_diameter: 24.0, head_height: 16.0, socket: 14.0}
+  "ISO4762-M20": {head_diameter: 30.0, head_height: 20.0, socket: 17.0}
