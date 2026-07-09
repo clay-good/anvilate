@@ -137,15 +137,15 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
 # transition/interference side); their uppercase holes M/N/P take the ISO 286
 # special rule ES = -ei + Δ, where the grade-dependent delta correction
 # Δ = IT_n − IT_(n−1) is computed from the encoded IT-grade table. The k shaft
-# carries a grade-banded `ei` (nonzero only for IT4–IT7, zero elsewhere), shaft
-# side only. The grade-dependent letter j and the finer-stepped r/s/t/u land as
-# the table grows.
+# carries a grade-banded `ei` (nonzero only for IT4–IT7, zero elsewhere), and its
+# K hole follows the same delta rule (capped at IT7). The grade-dependent letter
+# j and the finer-stepped r/s/t/u land as the table grows.
 
 _BASIS_LETTERS = {"h"}  # zero fundamental deviation; no table lookup needed
 _CLEARANCE_LETTERS = {"d", "e", "f", "g"}  # negative shaft `es`, encoded below
 _SYMMETRIC_LETTERS = {"js"}  # zone centered on the basic size, ±IT/2
 _INTERFERENCE_LETTERS = {"m", "n", "p"}  # positive shaft `ei`; holes via delta rule
-_GRADE_DEP_LETTERS = {"k"}  # grade-banded shaft `ei` (nonzero IT4–IT7 only), shaft side
+_GRADE_DEP_LETTERS = {"k"}  # grade-banded shaft `ei` (nonzero IT4–IT7 only); hole via delta
 _ENCODED_LETTERS = (
     _BASIS_LETTERS
     | _CLEARANCE_LETTERS
@@ -159,9 +159,11 @@ _ENCODED_LETTERS = (
 _K_GRADE_BAND = range(4, 8)
 
 # The ISO 286 special rule ES = -ei + Δ holds for the M and N holes up to IT8 and
-# the P holes up to IT7. Below IT6 the correction Δ = IT_n − IT_(n−1) would need
-# IT_(n−1) beneath the encoded IT5, so IT6 is the finest hole grade resolved here.
-_HOLE_MAX_GRADE = {"m": 8, "n": 8, "p": 7}
+# the P holes up to IT7. The K hole rides the same rule but is capped at IT7 so
+# its k-shaft ei stays inside the k grade band (IT4–IT7). Below IT6 the correction
+# Δ = IT_n − IT_(n−1) would need IT_(n−1) beneath the encoded IT5, so IT6 is the
+# finest hole grade resolved here.
+_HOLE_MAX_GRADE = {"m": 8, "n": 8, "p": 7, "k": 7}
 _HOLE_MIN_GRADE = 6
 
 
@@ -197,9 +199,9 @@ def _fundamental_dev(key: str, letter: str, nominal_mm: float) -> float:
 def _delta_correction(letter: str, grade: int, nominal: Quantity) -> float:
     """The ISO 286 delta correction Δ = IT_n − IT_(n−1) (mm) for a special-rule hole.
 
-    The uppercase transition/interference holes M/N/P take their fundamental
+    The uppercase transition/interference holes K/M/N/P take their fundamental
     deviation from the shaft's ``ei`` by the rule ES = -ei + Δ. That rule holds
-    for M/N up to IT8 and P up to IT7; finer than IT6 the correction would need
+    for M/N up to IT8 and K/P up to IT7; finer than IT6 the correction would need
     IT_(n−1) below the encoded IT5, and coarser than the letter's cap leaves the
     rule's validity — both raise :class:`ToleranceRangeError`.
     """
@@ -287,10 +289,11 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
     basis zones, the clearance letters d/e/f/g, and js/JS resolve in both cases;
     the transition/interference letters m/n/p resolve on the shaft side at any
     grade, and on the hole side (M/N/P) via the ISO 286 delta rule for M/N up to
-    IT8 and P up to IT7. The k transition shaft resolves (shaft side only), its
-    grade-banded deviation collapsing to zero outside IT4–IT7. Any other letter
-    raises :class:`ToleranceRangeError`, as does a delta-corrected hole outside
-    that grade band. Raises
+    IT8 and P up to IT7. The k transition shaft resolves at any grade (its
+    grade-banded deviation collapsing to zero outside IT4–IT7), and its K hole
+    resolves via the delta rule up to IT7. Any other letter raises
+    :class:`ToleranceRangeError`, as does a delta-corrected hole outside its
+    grade band. Raises
     :class:`ValueError` for a malformed
     designation, and :class:`ToleranceRangeError` for an out-of-range nominal or
     ungraded IT grade (via :func:`standard_tolerance`).
@@ -320,15 +323,17 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
             # Shaft: ei is the lower deviation, es = ei + IT.
             upper_mm, lower_mm = ei + it, ei
     elif base in _GRADE_DEP_LETTERS:
-        if hole:
-            raise ToleranceRangeError(
-                f"the hole zone '{letter}' is not yet encoded; the k transition "
-                "shaft resolves, its uppercase hole lands with the other grade-"
-                "dependent letters"
-            )
-        # k shaft: ei is tabulated only for grades IT4–IT7, else zero; es = ei + IT.
+        # k shaft: ei is tabulated only for grades IT4–IT7, else zero.
         ei = _fundamental_dev("ei", base, nominal_mm) if grade_tol.grade in _K_GRADE_BAND else 0.0
-        upper_mm, lower_mm = ei + it, ei
+        if hole:
+            # Hole (ISO 286 special rule): ES = -ei + Δ, EI = ES - IT. Capped at IT7
+            # (see _HOLE_MAX_GRADE), so the k shaft's ei is always in its nonzero band.
+            delta = _delta_correction(base, grade_tol.grade, nominal)
+            es = -ei + delta
+            upper_mm, lower_mm = es, es - it
+        else:
+            # Shaft: ei is the lower deviation, es = ei + IT.
+            upper_mm, lower_mm = ei + it, ei
     else:
         es = 0.0 if base in _BASIS_LETTERS else _fundamental_dev("es", base, nominal_mm)
         # Shaft: es is the upper deviation, ei = es - IT. Hole (general rule): the

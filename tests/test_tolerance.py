@@ -415,9 +415,23 @@ def test_k_shaft_zero_outside_grade_band() -> None:
     assert k8.upper.to("um").magnitude == pytest.approx(33)
 
 
-def test_k_hole_not_yet_encoded() -> None:
-    with pytest.raises(ToleranceRangeError, match="not yet encoded"):
-        zone_limits("K6", _mm(22))
+def test_k_hole_delta_corrected_at_22mm() -> None:
+    # K hole via ES = -ei + Δ with the k-shaft ei = +2 um at 18-30 mm.
+    # K7: Δ = IT7 - IT6 = 8, ES = -2 + 8 = +6, EI = +6 - 21 = -15.
+    k7 = zone_limits("K7", _mm(22))
+    assert k7.hole is True
+    assert k7.upper.to("um").magnitude == pytest.approx(6)
+    assert k7.lower.to("um").magnitude == pytest.approx(-15)
+    # K6: Δ = IT6 - IT5 = 4, ES = -2 + 4 = +2, EI = +2 - 13 = -11.
+    k6 = zone_limits("K6", _mm(22))
+    assert k6.upper.to("um").magnitude == pytest.approx(2)
+    assert k6.lower.to("um").magnitude == pytest.approx(-11)
+
+
+def test_k_hole_capped_at_it7() -> None:
+    # The K hole is capped at IT7 so its k-shaft ei stays inside the IT4-IT7 band.
+    with pytest.raises(ToleranceRangeError, match="out of range"):
+        zone_limits("K8", _mm(22))
 
 
 def test_h7k6_transition_fit_at_22mm() -> None:

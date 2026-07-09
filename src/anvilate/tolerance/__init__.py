@@ -5,9 +5,9 @@ This slice ships ISO 2768-1 general tolerances (linear and angular), the
 ISO 286-1 standard tolerance grades (IT grades), and fit resolution for the
 H/h basis, the clearance letters d/e/f/g, the symmetric js/JS zones, the
 transition/interference shaft letters m/n/p, the grade-banded k transition
-shaft, and the uppercase holes M/N/P via the ISO 286 delta rule — so the common
+shaft, and the uppercase holes K/M/N/P via the ISO 286 delta rule — so the common
 hole-basis fits (H7/g6, H8/f7, H9/d9, H7/js6, H7/k6, H7/n6, H7/p6, ...) and the
-shaft-basis N7/h6, M7/h6, P7/h6 resolve to limit deviations. It also ships the
+shaft-basis K7/h6, N7/h6, M7/h6, P7/h6 resolve to limit deviations. It also ships the
 three explicit per-dimension tolerance forms a spec can declare — symmetric ±,
 asymmetric limits, and an ISO 286 fit — each resolving to a common feature-size
 band, and 1D tolerance stack-up analysis (worst-case, root-sum-square, and Monte
