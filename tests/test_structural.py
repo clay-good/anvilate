@@ -165,20 +165,25 @@ def test_load_position_requires_a_point_load():
             )
 
 
-def test_load_position_rejects_the_fixed_pinned_support():
-    # No offset closed form is wired up for the propped cantilever, so declaring
-    # one must fail loudly instead of silently falling back to mid-span.
-    with pytest.raises(ValidationError, match="not supported for a fixed_pinned member"):
-        BeamMember(
-            name="beam",
-            section=_section(),
-            length=_q("500 mm"),
-            support=Support.FIXED_PINNED,
-            load=_q("100 N"),
-            load_type=LoadType.POINT,
-            material="ASTM-A36",
-            load_position=_q("125 mm"),
-        )
+def test_offset_fixed_pinned_point_load_dispatches_to_the_offset_check():
+    # A load_position on a propped cantilever must route to
+    # fixed_pinned_offset_load: 125 mm from the prop the moment under the load
+    # governs, M = 7910 N*mm -> sigma 23.73 MPa -> SF 250/23.73 = 10.53 (vs the
+    # mid-span case's 8.89).
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.FIXED_PINNED,
+        load=_q("100 N"),
+        load_type=LoadType.POINT,
+        material="ASTM-A36",
+        load_position=_q("125 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.PASS
+    assert "10.53" in bending.detail
 
 
 def test_fixed_pinned_member_dispatches_to_the_propped_checks():

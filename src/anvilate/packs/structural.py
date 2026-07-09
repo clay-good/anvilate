@@ -36,6 +36,7 @@ from ..analysis import (
     fixed_fixed_offset_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
+    fixed_pinned_offset_load,
     fixed_pinned_uniform_load,
     johnson_critical_stress,
     simply_supported_center_load,
@@ -153,6 +154,7 @@ _OFFSET_POINT_CHECKS = {
     Support.CANTILEVER: cantilever_offset_load,
     Support.SIMPLY_SUPPORTED: simply_supported_offset_load,
     Support.FIXED_FIXED: fixed_fixed_offset_load,
+    Support.FIXED_PINNED: fixed_pinned_offset_load,
 }
 
 
@@ -164,8 +166,9 @@ class BeamMember(BaseModel):
     ``material`` is a database id (its E and yield drive the checks). An optional
     ``load_position`` places a point load away from its default position — off
     mid-span on a simply-supported or fixed-fixed member (measured from either
-    support), or short of the tip on a cantilever (measured from the fixed end).
-    Only point loads on those three supports accept it.
+    support), short of the tip on a cantilever (measured from the fixed end), or
+    anywhere on a fixed-pinned member (measured from the propped end). Only
+    point loads accept it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -205,10 +208,6 @@ class BeamMember(BaseModel):
                 raise ValueError(
                     "load_position is only supported for a point load; got "
                     f"{self.support.value}/{self.load_type.value}"
-                )
-            if self.support not in _OFFSET_POINT_CHECKS:
-                raise ValueError(
-                    f"load_position is not supported for a {self.support.value} member"
                 )
         return self
 
