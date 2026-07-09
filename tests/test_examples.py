@@ -199,6 +199,17 @@ def test_walkway_beam_example_recovers_deflection_margin_from_end_fixity():
     assert by_name["wall end fixed deflection"].passed
 
 
+def test_i_beam_same_steel_example_shows_shape_beats_area():
+    namespace = runpy.run_path(str(_EXAMPLES / "i_beam_same_steel.py"))
+    card = namespace["screen_same_steel"]()
+    # Equal steel area, opposite verdicts: the square bar fails at SF 0.95 while
+    # the I-shape's 7.4x section modulus passes at 6.99.
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert not by_name["square bar bending"].passed
+    assert by_name["I-beam bending"].passed
+
+
 def test_clip_angle_example_fails_only_the_relocated_tearout():
     namespace = runpy.run_path(str(_EXAMPLES / "clip_angle_edge_tearout.py"))
     card = namespace["screen_clip_bolt"]()

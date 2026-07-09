@@ -23,6 +23,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `jib_boom_trolley.py` | A 10 kN hoist on a cantilever jib boom: assumed at the tip the boom fails at SF 1.33, but declaring the trolley's actual 750 mm end stop as the `load_position` passes at 1.78. |
 | `press_on_clamped_beam.py` | A 22 kN press at the third point of a fixed-fixed crossbeam — the inverse lesson: the wall moment peaks *off* mid-span (4·P·L/27 vs P·L/8), so the mid-span shortcut passes at SF 1.62 while the real position fails at 1.36. |
 | `walkway_beam_end_fixity.py` | A 6 kN/m walkway beam with one end in a wall embed: bending is identical either way (w·L²/8), but the pin-pin idealization fails L/360 at 11.6 mm while the propped cantilever it actually is deflects 4.8 mm and passes. |
+| `i_beam_same_steel.py` | The same ~3,080 mm² of A36 as a square bar and as an I-shape: the bar fails at SF 0.95, the I-beam passes at 6.99 — a 7.4× section modulus from shape alone, same weight per meter. |
 | `mezzanine_structure.py` | A whole structure — a floor beam on two posts — screened into one scorecard via `screen_structure`. |
 | `beam_column_check.py` | A round HSS pipe column under combined axial load and bending, screened by the AISC §H1.1 interaction equation (the case pure-beam and pure-column checks can't express). |
 | `brace_tie_check.py` | A bolted single-angle tension brace (AISC §D2): gross yielding passes comfortably, but shear lag makes net-section rupture govern. |
