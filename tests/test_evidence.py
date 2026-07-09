@@ -72,6 +72,30 @@ def test_bearing_interface_provenance_is_collected() -> None:
     assert any("ISO 15" in s for s in bearing.sources)
 
 
+def test_fastener_and_extrusion_interfaces_flow_into_provenance() -> None:
+    # Every bundled component family the resolver accepts must also cite into the
+    # evidence trail — the roll-up and reference validation cannot disagree.
+    spec = _spec(
+        interfaces=[
+            StandardComponentInterface(ref="ISO4762-M5", tag="mount_screw"),
+            StandardComponentInterface(ref="ISO7089-M5", tag="mount_washer"),
+            StandardComponentInterface(ref="ISO4032-M5", tag="mount_nut"),
+            StandardComponentInterface(ref="ISO2338-6", tag="locating_pin"),
+            StandardComponentInterface(ref="EXT-4040", tag="frame_rail"),
+        ]
+    )
+    records = collect_provenance(
+        spec, materials=default_materials_db(), components=default_components_db()
+    )
+    by_ref = {r.ref: r for r in records}
+    for ref in ("ISO4762-M5", "ISO7089-M5", "ISO4032-M5", "ISO2338-6", "EXT-4040"):
+        assert ref in by_ref, ref
+        assert by_ref[ref].kind == "component"
+        assert by_ref[ref].sources  # each carries at least one cited source
+    assert "ISO 4762" in " ".join(by_ref["ISO4762-M5"].sources)
+    assert "ISO 4032" in " ".join(by_ref["ISO4032-M5"].sources)
+
+
 def test_material_only_spec_still_cites_the_general_class() -> None:
     # Even with no components or dimensions, the ISO 2768 default class governs
     # and appears in the trail — so the material and the general class both show.

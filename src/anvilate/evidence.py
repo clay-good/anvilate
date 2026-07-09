@@ -26,6 +26,12 @@ from .standards import (
     MaterialsDatabase,
     PropertyCitation,
     default_bearing_table,
+    default_cap_screw_table,
+    default_dowel_pin_table,
+    default_extrusion_table,
+    default_hex_bolt_table,
+    default_hex_nut_table,
+    default_washer_table,
 )
 from .tolerance import general_tolerance_source, resolve_class
 
@@ -59,27 +65,59 @@ def _distinct_sources(citations: dict[str, PropertyCitation]) -> tuple[str, ...]
     return tuple(sorted({cite.source for cite in citations.values()}))
 
 
+def _component_providers(components: ComponentsDatabase, bearings: BearingTable) -> list[tuple]:
+    """The ordered set of component tables a ref is resolved against, each as a
+    ``(has, get, describe)`` triple where ``describe(record) -> (ref_id, name)``.
+
+    NEMA frames and bearings are the injected tables; the fastener and extrusion
+    families use their bundled defaults (built once here, not per lookup). Every
+    record type exposes ``citations()``, so the provenance walk is uniform.
+    """
+    dowels = default_dowel_pin_table()
+    cap_screws = default_cap_screw_table()
+    washers = default_washer_table()
+    hex_nuts = default_hex_nut_table()
+    hex_bolts = default_hex_bolt_table()
+    extrusions = default_extrusion_table()
+    return [
+        (components.has_component, components.get, lambda c: (c.id, c.name)),
+        (
+            bearings.has_bearing,
+            bearings.get,
+            lambda b: (b.designation, f"ball bearing {b.designation}"),
+        ),
+        (dowels.has_pin, dowels.get, lambda d: (d.designation, f"dowel pin {d.designation}")),
+        (
+            cap_screws.has_screw,
+            cap_screws.get,
+            lambda s: (s.designation, f"cap screw {s.designation}"),
+        ),
+        (washers.has_washer, washers.get, lambda w: (w.designation, f"washer {w.designation}")),
+        (hex_nuts.has_nut, hex_nuts.get, lambda n: (n.designation, f"hex nut {n.designation}")),
+        (hex_bolts.has_bolt, hex_bolts.get, lambda b: (b.designation, f"hex bolt {b.designation}")),
+        (extrusions.has_profile, extrusions.get, lambda p: (p.designation, p.name)),
+    ]
+
+
 def _component_source(
-    ref: str, components: ComponentsDatabase, bearings: BearingTable
+    ref: str, providers: list[tuple], components: ComponentsDatabase
 ) -> SourceRecord:
-    """Resolve a standard-component ref to its provenance, trying the components
-    database (NEMA frames) then the bearing table. An unrecorded ref raises the
-    components database's :class:`UnknownComponentError`."""
-    if bearings.has_bearing(ref) and not components.has_component(ref):
-        bearing = bearings.get(ref)
-        return SourceRecord(
-            ref=bearing.designation,
-            kind="component",
-            name=f"ball bearing {bearing.designation}",
-            sources=_distinct_sources(bearing.citations()),
-        )
-    component = components.get(ref)  # a NEMA frame, or raises UnknownComponentError
-    return SourceRecord(
-        ref=component.id,
-        kind="component",
-        name=component.name,
-        sources=_distinct_sources(component.citations()),
-    )
+    """Resolve a standard-component ref to its provenance against the ordered
+    component tables (NEMA frames, bearings, then the fastener and extrusion
+    families). An unrecorded ref raises the components database's
+    :class:`UnknownComponentError`."""
+    for has, get, describe in providers:
+        if has(ref):
+            record = get(ref)
+            ref_id, name = describe(record)
+            return SourceRecord(
+                ref=ref_id,
+                kind="component",
+                name=name,
+                sources=_distinct_sources(record.citations()),
+            )
+    components.get(ref)  # no table matched → raise UnknownComponentError with near-misses
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def collect_provenance(
@@ -101,11 +139,14 @@ def collect_provenance(
     order. Imported interfaces reference another spec rather than a standards
     record, so they are skipped. Raises the database's unknown-reference error if
     a material or component ref does not resolve — run reference validation first
-    to surface every such problem at once. A component interface may reference a
-    NEMA frame or a ball bearing; ``bearings`` defaults to the bundled table.
+    to surface every such problem at once. A component interface may reference any
+    bundled standard component (NEMA frame, ball bearing, dowel pin, cap screw,
+    washer, hex nut, hex bolt, or T-slot extrusion); ``bearings`` defaults to the
+    bundled table.
     """
     if bearings is None:
         bearings = default_bearing_table()
+    providers = _component_providers(components, bearings)
     material = materials.get(spec.material.ref)
     records = [
         SourceRecord(
@@ -117,7 +158,7 @@ def collect_provenance(
     ]
     for interface in spec.interfaces:
         if isinstance(interface, StandardComponentInterface):
-            records.append(_component_source(interface.ref, components, bearings))
+            records.append(_component_source(interface.ref, providers, components))
     # The ISO 2768 general class governs every untoleranced dimension — always,
     # via the default when the spec omits one — so it is always in the trail.
     general_class = resolve_class(spec.manufacturing.tolerance_class)
