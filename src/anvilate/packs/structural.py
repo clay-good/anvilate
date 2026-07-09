@@ -27,6 +27,7 @@ from ..analysis import (
     bearing_stress,
     bolt_shear_stress,
     cantilever_end_load,
+    cantilever_offset_load,
     cantilever_uniform_load,
     circular_area,
     deflection_scorecard,
@@ -150,8 +151,10 @@ class BeamMember(BaseModel):
     ``load`` is a force for a ``point`` member and a force-per-length for a
     ``distributed`` one — the model validates the dimension matches ``load_type``.
     ``material`` is a database id (its E and yield drive the checks). An optional
-    ``load_position`` places a point load off mid-span (measured from either
-    support) — only a simply-supported point member supports it.
+    ``load_position`` places a point load away from its default position — off
+    mid-span on a simply-supported member (measured from either support), or
+    short of the tip on a cantilever (measured from the fixed end). Only those
+    two point-load cases support it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -187,10 +190,10 @@ class BeamMember(BaseModel):
                 raise ValueError(
                     f"load_position must be a [length] quantity; got {self.load_position}"
                 )
-            if self.support is not Support.SIMPLY_SUPPORTED or self.load_type is not LoadType.POINT:
+            if self.support is Support.FIXED_FIXED or self.load_type is not LoadType.POINT:
                 raise ValueError(
-                    "load_position is only supported for a simply-supported point load; "
-                    f"got {self.support.value}/{self.load_type.value}"
+                    "load_position is only supported for a simply-supported or "
+                    f"cantilever point load; got {self.support.value}/{self.load_type.value}"
                 )
         return self
 
@@ -223,9 +226,12 @@ def screen_beam_member(
         "elastic_modulus": record.elastic_modulus.quantity,
     }
     if member.load_position is not None:
-        result = simply_supported_offset_load(
-            force=member.load, load_position=member.load_position, **common
+        offset_check = (
+            cantilever_offset_load
+            if member.support is Support.CANTILEVER
+            else simply_supported_offset_load
         )
+        result = offset_check(force=member.load, load_position=member.load_position, **common)
     elif member.load_type is LoadType.POINT:
         result = _POINT_CHECKS[member.support](force=member.load, **common)
     else:

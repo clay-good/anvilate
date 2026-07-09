@@ -105,12 +105,33 @@ def test_offset_point_load_dispatches_to_the_offset_check():
     assert "8.89" in bending.detail
 
 
-def test_load_position_requires_a_simply_supported_point_member():
+def test_offset_cantilever_point_load_dispatches_to_the_offset_check():
+    # A load_position short of the tip must route to cantilever_offset_load:
+    # at mid-length M = F*a = 25000 N*mm -> sigma 75 MPa (not the tip case's 150),
+    # so the bending SF is the offset case's 250/75 = 3.33 (vs 1.67 at the tip).
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.CANTILEVER,
+        load=_q("100 N"),
+        load_type=LoadType.POINT,
+        material="ASTM-A36",
+        load_position=_q("250 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.PASS
+    assert "3.33" in bending.detail
+
+
+def test_load_position_requires_a_point_member_with_a_free_position():
     for support, load_type, load in (
-        (Support.CANTILEVER, LoadType.POINT, "100 N"),
+        (Support.FIXED_FIXED, LoadType.POINT, "100 N"),
         (Support.SIMPLY_SUPPORTED, LoadType.DISTRIBUTED, "1 N/mm"),
+        (Support.CANTILEVER, LoadType.DISTRIBUTED, "1 N/mm"),
     ):
-        with pytest.raises(ValidationError, match="only supported for a simply-supported"):
+        with pytest.raises(ValidationError, match="only supported for a simply-supported or"):
             BeamMember(
                 name="beam",
                 section=_section(),
