@@ -36,6 +36,7 @@ from anvilate.analysis import (
     slenderness_ratio,
     strength_scorecard,
     thin_wall_cylinder,
+    thin_wall_sphere_stress,
     torque_for_preload,
     von_mises_bending_torsion,
     von_mises_plane_stress,
@@ -458,6 +459,17 @@ def test_thin_wall_cylinder_matches_worked_example():
     )
     # Governing (hoop) safety factor against a 250 MPa yield.
     assert result.bending_safety_factor(_q("250 MPa")) == pytest.approx(6.25, rel=1e-6)
+
+
+def test_thin_wall_sphere_is_half_the_cylinder_hoop():
+    # 2 MPa, 100 mm radius, 5 mm wall: sphere sigma = p*r/2t = 20 MPa, which is
+    # half the cylinder hoop (40 MPa) for the same geometry.
+    sphere = thin_wall_sphere_stress(
+        pressure=_q("2 MPa"), radius=_q("100 mm"), wall_thickness=_q("5 mm")
+    )
+    assert sphere.to("MPa").magnitude == pytest.approx(20.0, rel=1e-6)
+    cyl = thin_wall_cylinder(pressure=_q("2 MPa"), radius=_q("100 mm"), wall_thickness=_q("5 mm"))
+    assert sphere.to("MPa").magnitude == pytest.approx(cyl.hoop_stress.to("MPa").magnitude / 2)
 
 
 def test_thin_wall_cylinder_rejects_bad_inputs():

@@ -18,6 +18,7 @@ from ..units import Quantity
 __all__ = [
     "ThinWallStress",
     "thin_wall_cylinder",
+    "thin_wall_sphere_stress",
 ]
 
 
@@ -92,3 +93,26 @@ def thin_wall_cylinder(
         longitudinal_stress=_as_quantity(longitudinal, "MPa"),
         thin_wall_ratio=ratio,
     )
+
+
+def thin_wall_sphere_stress(
+    *,
+    pressure: Quantity,
+    radius: Quantity,
+    wall_thickness: Quantity,
+) -> Quantity:
+    """The membrane stress σ = p·r/(2·t) in a thin-wall spherical shell.
+
+    A sphere under internal pressure carries a uniform biaxial membrane stress in
+    every direction — half the hoop stress of a cylinder of the same radius and
+    wall, which is why spherical vessels are the most material-efficient shape.
+    ``pressure`` internal gauge pressure, ``radius`` the inner radius,
+    ``wall_thickness`` the wall. Returns the membrane stress in MPa.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(radius, "[length]", "radius")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    if wall_thickness.to("mm").magnitude <= 0:
+        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+    stress = pressure.pint * radius.pint / (2 * wall_thickness.pint)
+    return _as_quantity(stress, "MPa")

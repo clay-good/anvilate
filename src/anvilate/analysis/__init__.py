@@ -46,7 +46,11 @@ from .fastener import (
     torque_for_preload,
 )
 from .fatigue import goodman_safety_factor, goodman_scorecard
-from .pressure_vessel import ThinWallStress, thin_wall_cylinder
+from .pressure_vessel import (
+    ThinWallStress,
+    thin_wall_cylinder,
+    thin_wall_sphere_stress,
+)
 from .stress import (
     CombinedNormalStress,
     combine_axial_bending,
@@ -97,6 +101,7 @@ __all__ = [
     "shaft_twist_angle",
     "ThinWallStress",
     "thin_wall_cylinder",
+    "thin_wall_sphere_stress",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
     "yield_safety_factor",
