@@ -56,6 +56,8 @@ __all__ = [
     "screen_welded_connection",
     "BasePlate",
     "screen_base_plate",
+    "LiftingLug",
+    "screen_lifting_lug",
     "StructuralMember",
     "screen_structure",
 ]
@@ -80,6 +82,7 @@ _CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
 _CLAUSE_BEARING = "AISC 360-16 §J3.10"
 _CLAUSE_WELD = "AISC 360-16 §J2.4"
 _CLAUSE_BEARING_CONCRETE = "AISC 360-16 §J8"
+_CLAUSE_LUG = "ASME BTH-1 §3-3"
 
 
 class Support(StrEnum):
@@ -473,7 +476,86 @@ def screen_base_plate(
     return Scorecard(entries=(entry,))
 
 
-StructuralMember = BeamMember | ColumnMember | BoltedConnection | WeldedConnection | BasePlate
+class LiftingLug(BaseModel):
+    """A lifting lug (pad eye) loaded in tension through a pin hole.
+
+    ``width`` is the lug width across the hole, ``hole_diameter`` the pin hole,
+    ``thickness`` the plate thickness, and ``load`` the lifted force. Two limit
+    states are screened: net-section tension across the reduced width (W−d)·t and
+    bearing on the pin d·t, both against the lug material's yield (ASME BTH-1).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    width: Quantity
+    hole_diameter: Quantity
+    thickness: Quantity
+    load: Quantity
+    material: str
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> LiftingLug:
+        for value, name in (
+            (self.width, "width"),
+            (self.hole_diameter, "hole_diameter"),
+            (self.thickness, "thickness"),
+        ):
+            if not value.has_dimension("[length]"):
+                raise ValueError(f"{name} must be a [length] quantity; got {value}")
+        if not self.load.has_dimension("[force]"):
+            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+        if self.hole_diameter.to("mm").magnitude >= self.width.to("mm").magnitude:
+            raise ValueError(
+                f"hole_diameter ({self.hole_diameter}) must be below the lug width ({self.width})"
+            )
+        return self
+
+
+def screen_lifting_lug(
+    lug: LiftingLug,
+    *,
+    required_safety_factor: float,
+    materials: MaterialsDatabase | None = None,
+) -> Scorecard:
+    """Screen a :class:`LiftingLug`'s tension and bearing limit states.
+
+    Screens the net-section tension P/((W−d)·t) and the pin bearing P/(d·t), both
+    against the lug material's yield at ``required_safety_factor`` (ASME BTH-1).
+    ``materials`` defaults to the bundled database.
+    """
+    materials = materials or default_materials_db()
+    record = materials.get(lug.material)
+    yield_strength = record.yield_strength.quantity
+
+    width = lug.width.to("mm").magnitude
+    hole = lug.hole_diameter.to("mm").magnitude
+    thickness = lug.thickness.to("mm").magnitude
+    force = lug.load.to("N").magnitude
+
+    net_tension = Quantity(magnitude=force / ((width - hole) * thickness), unit="MPa")
+    bearing = bearing_stress(force=lug.load, diameter=lug.hole_diameter, thickness=lug.thickness)
+    return Scorecard(
+        entries=(
+            strength_scorecard(
+                f"{lug.name} net tension",
+                stress=net_tension,
+                allowable=yield_strength,
+                required=required_safety_factor,
+            ).model_copy(update={"reference": _CLAUSE_LUG}),
+            strength_scorecard(
+                f"{lug.name} pin bearing",
+                stress=bearing,
+                allowable=yield_strength,
+                required=required_safety_factor,
+            ).model_copy(update={"reference": _CLAUSE_LUG}),
+        )
+    )
+
+
+StructuralMember = (
+    BeamMember | ColumnMember | BoltedConnection | WeldedConnection | BasePlate | LiftingLug
+)
 
 
 def screen_structure(
@@ -508,7 +590,11 @@ def screen_structure(
             )
         elif isinstance(member, WeldedConnection):
             card = screen_welded_connection(member, required_safety_factor=required_safety_factor)
-        else:
+        elif isinstance(member, BasePlate):
             card = screen_base_plate(member, required_safety_factor=required_safety_factor)
+        else:
+            card = screen_lifting_lug(
+                member, required_safety_factor=required_safety_factor, materials=materials
+            )
         entries.extend(card.entries)
     return Scorecard(entries=tuple(entries))

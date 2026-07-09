@@ -17,6 +17,7 @@ from anvilate.packs.structural import (
     BeamMember,
     BoltedConnection,
     ColumnMember,
+    LiftingLug,
     LoadType,
     Support,
     WeldedConnection,
@@ -24,6 +25,7 @@ from anvilate.packs.structural import (
     screen_beam_member,
     screen_bolted_connection,
     screen_column_member,
+    screen_lifting_lug,
     screen_structure,
     screen_welded_connection,
 )
@@ -319,6 +321,51 @@ def test_screen_structure_includes_base_plates():
         required_safety_factor=2.0,
     )
     assert any("concrete bearing" in e.name for e in card.entries)
+    assert card.status is CheckStatus.PASS
+
+
+def _lug(load: str = "50 kN") -> LiftingLug:
+    return LiftingLug(
+        name="pad_eye",
+        width=_q("80 mm"),
+        hole_diameter=_q("25 mm"),
+        thickness=_q("12 mm"),
+        load=_q(load),
+        material="ASTM-A36",
+    )
+
+
+def test_lifting_lug_screens_tension_and_bearing():
+    # 50 kN through an 80 mm lug, 25 mm hole, 12 mm thick:
+    #   net tension = 50000/((80-25)*12) = 75.8 MPa; bearing = 50000/(25*12) = 166.7
+    #   MPa. Both pass vs A36 250 MPa (bearing governs at SF 1.5). Cites ASME BTH-1.
+    card = screen_lifting_lug(_lug(), required_safety_factor=1.4)
+    assert card.status is CheckStatus.PASS
+    names = {e.name for e in card.entries}
+    assert names == {"pad_eye net tension", "pad_eye pin bearing"}
+    assert all(e.reference == "ASME BTH-1 §3-3" for e in card.entries)
+
+
+def test_overloaded_lug_fails():
+    card = screen_lifting_lug(_lug(load="200 kN"), required_safety_factor=1.4)
+    assert card.status is CheckStatus.FAIL
+
+
+def test_lug_rejects_hole_wider_than_lug():
+    with pytest.raises(ValidationError, match="hole_diameter"):
+        LiftingLug(
+            name="l",
+            width=_q("25 mm"),
+            hole_diameter=_q("25 mm"),
+            thickness=_q("12 mm"),
+            load=_q("50 kN"),
+            material="ASTM-A36",
+        )
+
+
+def test_screen_structure_includes_lugs():
+    card = screen_structure([_lug()], required_safety_factor=1.4)
+    assert {e.name for e in card.entries} == {"pad_eye net tension", "pad_eye pin bearing"}
     assert card.status is CheckStatus.PASS
 
 
