@@ -30,7 +30,9 @@ from anvilate.analysis import (
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
+    interference_axial_capacity,
     interference_fit,
+    interference_torque_capacity,
     johnson_critical_stress,
     key_bearing_stress,
     key_shear_stress,
@@ -677,6 +679,33 @@ def test_interference_fit_hollow_shaft_lowers_pressure():
         shaft_bore_diameter=_q("30 mm"),
     )
     assert hollow.contact_pressure.to("MPa").magnitude < solid.contact_pressure.to("MPa").magnitude
+
+
+def test_interference_holding_capacity_matches_hand_calc():
+    # p=110 MPa on a Ø40 x 60 mm engagement, mu=0.15:
+    #   contact area = pi*d*L = pi*40*60 = 7539.82 mm^2; normal = 110*area = 829380 N;
+    #   axial push-out = mu*normal = 124407 N; torque = axial*(d/2) = 2488.1 N*m.
+    kw = {
+        "interface_diameter": _q("40 mm"),
+        "engagement_length": _q("60 mm"),
+        "friction_coefficient": 0.15,
+    }
+    axial = interference_axial_capacity(_q("110 MPa"), **kw)
+    torque = interference_torque_capacity(_q("110 MPa"), **kw)
+    assert axial.to("N").magnitude == pytest.approx(124407.0, rel=1e-4)
+    assert torque.to("N*m").magnitude == pytest.approx(2488.1, rel=1e-4)
+    # Torque is exactly the axial capacity acting at the shaft radius.
+    assert torque.to("N*m").magnitude == pytest.approx(axial.to("N").magnitude * 0.020, rel=1e-6)
+
+
+def test_interference_capacity_rejects_bad_friction():
+    with pytest.raises(ValueError, match="friction_coefficient must be positive"):
+        interference_axial_capacity(
+            _q("110 MPa"),
+            interface_diameter=_q("40 mm"),
+            engagement_length=_q("60 mm"),
+            friction_coefficient=0.0,
+        )
 
 
 def test_interference_fit_rejects_bad_geometry():

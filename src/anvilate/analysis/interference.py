@@ -17,6 +17,8 @@ other checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
+import math
+
 from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
@@ -24,6 +26,8 @@ from ..units import Quantity
 __all__ = [
     "InterferenceFit",
     "interference_fit",
+    "interference_axial_capacity",
+    "interference_torque_capacity",
 ]
 
 
@@ -124,3 +128,53 @@ def interference_fit(
         hub_hoop_stress=Quantity(magnitude=pressure * hub_ratio, unit="MPa"),
         shaft_hoop_stress=Quantity(magnitude=-pressure * shaft_ratio, unit="MPa"),
     )
+
+
+def interference_axial_capacity(
+    contact_pressure: Quantity,
+    *,
+    interface_diameter: Quantity,
+    engagement_length: Quantity,
+    friction_coefficient: float,
+) -> Quantity:
+    """The axial force a press fit can transmit before the shaft slips out.
+
+    Friction acts over the mating area π·d·L at the ``contact_pressure`` p, so the
+    push-out force is F = μ·p·π·d·L. ``contact_pressure`` comes from
+    :func:`interference_fit`, ``interface_diameter`` d is the mating diameter, and
+    ``engagement_length`` L the axial length in contact. Returns the force in N.
+    """
+    _require(contact_pressure, "[pressure]", "contact_pressure")
+    _require(interface_diameter, "[length]", "interface_diameter")
+    _require(engagement_length, "[length]", "engagement_length")
+    if friction_coefficient <= 0:
+        raise ValueError(f"friction_coefficient must be positive; got {friction_coefficient}")
+    force = (
+        friction_coefficient
+        * contact_pressure.pint
+        * (math.pi * interface_diameter.pint * engagement_length.pint)
+    )
+    return Quantity(magnitude=float(force.to("N").magnitude), unit="N")
+
+
+def interference_torque_capacity(
+    contact_pressure: Quantity,
+    *,
+    interface_diameter: Quantity,
+    engagement_length: Quantity,
+    friction_coefficient: float,
+) -> Quantity:
+    """The torque a press fit can transmit before the shaft slips in the hub.
+
+    The friction force μ·p·π·d·L acts at the shaft radius d/2, so the transmissible
+    torque is T = μ·p·π·d²·L/2 — the functional limit of a shrink-fit coupling.
+    Arguments as for :func:`interference_axial_capacity`. Returns the torque in N·m.
+    """
+    axial = interference_axial_capacity(
+        contact_pressure,
+        interface_diameter=interface_diameter,
+        engagement_length=engagement_length,
+        friction_coefficient=friction_coefficient,
+    )
+    torque = axial.pint * (interface_diameter.pint / 2)
+    return Quantity(magnitude=float(torque.to("N*m").magnitude), unit="N*m")

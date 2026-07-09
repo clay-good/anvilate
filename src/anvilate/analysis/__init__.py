@@ -69,7 +69,9 @@ from .fastener import (
 from .fatigue import goodman_safety_factor, goodman_scorecard
 from .interference import (
     InterferenceFit,
+    interference_axial_capacity,
     interference_fit,
+    interference_torque_capacity,
 )
 from .keys import key_bearing_stress, key_shear_stress, key_tangential_force
 from .pressure_vessel import (
@@ -151,6 +153,8 @@ __all__ = [
     "thin_wall_sphere_stress",
     "InterferenceFit",
     "interference_fit",
+    "interference_axial_capacity",
+    "interference_torque_capacity",
     "spring_index",
     "wahl_factor",
     "spring_shear_stress",
