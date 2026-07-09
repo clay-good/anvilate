@@ -149,6 +149,19 @@ def test_coped_beam_web_example_is_governed_by_shear_rupture():
     assert _sf(rupture) < _sf(yielding)
 
 
+def test_hanger_bracket_example_fails_only_the_combined_interaction():
+    namespace = runpy.run_path(str(_EXAMPLES / "hanger_bracket_bolt.py"))
+    card = namespace["screen_hanger_bolt"]()
+    # Shear (SF 2.72), bearing (2.40), and tension (2.62) each clear 2.0, but the
+    # §J3.7 combined tension+shear interaction fails at SF 1.89 -> overall FAIL.
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["bracket bolt shear"].passed
+    assert by_name["bracket plate bearing"].passed
+    assert by_name["bracket bolt tension"].passed
+    assert not by_name["bracket combined tension+shear"].passed
+
+
 def test_beam_column_example_passes_h1_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "beam_column_check.py"))
     card = namespace["screen_beam_column_post"]()
