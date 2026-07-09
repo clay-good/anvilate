@@ -584,6 +584,49 @@ def test_bearing_unknown_designation_surfaces_gap(bearings) -> None:
     assert exc.value.suggestions
 
 
+def test_bundled_bearings_marked_bundled(bearings) -> None:
+    # Bundled bearings are distinguishable from user/team extension records.
+    assert bearings.get("6204").bundled is True
+    assert bearings.extension_ids() == []
+
+
+_BEARING_EXTENSION_YAML = """
+dataset:
+  name: acme-internal-bearings
+  version: "1"
+  source: "Acme internal bearing spec"
+  license: "team-local"
+  retrieved: "2026-07-08"
+bearings:
+  "ACME-SPINDLE-1": {bore: 22, outer_diameter: 50, width: 14}
+"""
+
+
+def test_team_local_bearing_extension_referenced_like_bundled(bearings) -> None:
+    # Scenario: company part library — a team registers a special bearing,
+    # referenced like any bundled one but marked team-local (non-bundled).
+    extended = bearings.extended(_BEARING_EXTENSION_YAML)
+    special = extended.get("ACME-SPINDLE-1")
+    assert special.bundled is False
+    assert special.bore.quantity.to("mm").magnitude == pytest.approx(22.0)
+    assert extended.extension_ids() == ["ACME-SPINDLE-1"]
+    # The bundled table is left unchanged.
+    assert not bearings.has_bearing("ACME-SPINDLE-1")
+
+
+def test_bearing_extension_overrides_bundled_record(bearings) -> None:
+    # An extension record of the same designation supersedes the bundled one and
+    # is marked non-bundled.
+    override = _BEARING_EXTENSION_YAML.replace("ACME-SPINDLE-1", "6204")
+    extended = bearings.extended(override)
+    b = extended.get("6204")
+    assert b.bundled is False
+    assert b.outer_diameter.quantity.to("mm").magnitude == pytest.approx(50.0)
+    # The bundled table still holds the standardized ISO 15 value (47 mm OD).
+    assert bearings.get("6204").bundled is True
+    assert bearings.get("6204").outer_diameter.quantity.to("mm").magnitude == pytest.approx(47.0)
+
+
 # --- Parallel dowel pins (ISO 2338) ---
 
 

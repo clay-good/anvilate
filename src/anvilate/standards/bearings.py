@@ -46,6 +46,7 @@ class Bearing(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     designation: str
+    bundled: bool = True  # False marks a user- or team-local extension record
     bore: Length
     outer_diameter: Length
     width: Length
@@ -96,11 +97,30 @@ class BearingTable:
                 designation, difflib.get_close_matches(designation, self._bearings, n=3)
             ) from None
 
+    def extension_ids(self) -> list[str]:
+        """Designations of extension (user/team-local) records — distinguishable
+        in reports, mirroring :meth:`anvilate.standards.MaterialsDatabase.extension_ids`."""
+        return sorted(d for d, b in self._bearings.items() if not b.bundled)
+
+    def extended(self, extension_text: str) -> BearingTable:
+        """Return a new table with ``extension_text``'s records overlaid.
+
+        Extension records are marked non-bundled and override any bundled record
+        of the same designation, so a team can register a special or non-standard
+        bearing without forking the bundled table. The bundled table is left
+        unchanged — mirrors :meth:`anvilate.standards.MaterialsDatabase.extended`.
+        """
+        overlay = _load_bearings(extension_text, bundled=False)
+        return BearingTable({**self._bearings, **overlay})
+
     def __len__(self) -> int:
         return len(self._bearings)
 
 
-def _load_bearings(text: str) -> dict[str, Bearing]:
+def _load_bearings(text: str, *, bundled: bool = True) -> dict[str, Bearing]:
+    """Parse a bearing YAML document. ``bundled`` tags the records' origin (a
+    bundled dataset vs a user/team extension), so reports can distinguish
+    company-local records."""
     doc = yaml.safe_load(text)
     dataset = doc.get("dataset", {})
 
@@ -120,6 +140,7 @@ def _load_bearings(text: str) -> dict[str, Bearing]:
         bearings[designation] = Bearing.model_validate(
             {
                 "designation": designation,
+                "bundled": bundled,
                 "bore": _prop(row["bore"], "bore"),
                 "outer_diameter": _prop(row["outer_diameter"], "outer diameter"),
                 "width": _prop(row["width"], "width"),
