@@ -29,6 +29,8 @@ bearings:
   "6004": {bore: 20, outer_diameter: 42, width: 12}
   "6005": {bore: 25, outer_diameter: 47, width: 12}
   "6006": {bore: 30, outer_diameter: 55, width: 13}
+  "6007": {bore: 35, outer_diameter: 62, width: 14}
+  "6008": {bore: 40, outer_diameter: 68, width: 15}
 
   # 62-series (light)
   "6200": {bore: 10, outer_diameter: 30, width: 9}
@@ -37,6 +39,7 @@ bearings:
   "6203": {bore: 17, outer_diameter: 40, width: 12}
   "6204": {bore: 20, outer_diameter: 47, width: 14}
   "6205": {bore: 25, outer_diameter: 52, width: 15}
+  "6206": {bore: 30, outer_diameter: 62, width: 16}
 
   # 63-series (medium)
   "6300": {bore: 10, outer_diameter: 35, width: 11}
@@ -44,3 +47,5 @@ bearings:
   "6302": {bore: 15, outer_diameter: 42, width: 13}
   "6303": {bore: 17, outer_diameter: 47, width: 14}
   "6304": {bore: 20, outer_diameter: 52, width: 15}
+  "6305": {bore: 25, outer_diameter: 62, width: 17}
+  "6306": {bore: 30, outer_diameter: 72, width: 19}

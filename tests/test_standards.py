@@ -447,6 +447,17 @@ def test_bearing_ordering_is_numeric(bearings) -> None:
     assert designations.index("6000") < designations.index("6204")
 
 
+def test_bearing_series_extends_to_40mm_bore(bearings) -> None:
+    # The 60/62/63 series now reach a 30-40 mm bore: 6008 (40x68x15) and the
+    # medium 6306 (30x72x19).
+    b6008 = bearings.get("6008")
+    assert b6008.bore.quantity.to("mm").magnitude == pytest.approx(40.0)
+    assert b6008.outer_diameter.quantity.to("mm").magnitude == pytest.approx(68.0)
+    b6306 = bearings.get("6306")
+    assert b6306.outer_diameter.quantity.to("mm").magnitude == pytest.approx(72.0)
+    assert b6306.width.quantity.to("mm").magnitude == pytest.approx(19.0)
+
+
 def test_bearing_unknown_designation_surfaces_gap(bearings) -> None:
     from anvilate.standards import UnknownBearingError
 
