@@ -173,6 +173,18 @@ def test_jib_boom_example_recovers_margin_from_the_end_stop():
     assert by_name["at end stop bending"].passed
 
 
+def test_press_on_clamped_beam_example_shows_mid_span_is_unconservative():
+    namespace = runpy.run_path(str(_EXAMPLES / "press_on_clamped_beam.py"))
+    card = namespace["screen_clamped_beam"]()
+    # The opposite lesson of the floor-beam example: on a fixed-fixed beam the
+    # wall moment peaks at the third point (4*P*L/27 > P*L/8), so the assumed
+    # mid-span screen passes (SF 1.62) while the real position fails (SF 1.36).
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["assumed mid-span bending"].passed
+    assert not by_name["at third point bending"].passed
+
+
 def test_clip_angle_example_fails_only_the_relocated_tearout():
     namespace = runpy.run_path(str(_EXAMPLES / "clip_angle_edge_tearout.py"))
     card = namespace["screen_clip_bolt"]()

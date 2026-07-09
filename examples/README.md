@@ -21,6 +21,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `cantilever_bracket_check.py` | A cantilever bracket screened for bending yield *and* deflection — passes yield but fails the deflection limit, so the scorecard is FAIL (no silent green). |
 | `machine_on_floor_beam.py` | A 15 kN machine at the quarter point of a floor beam: the conservative assume-mid-span screen fails at SF 1.19, but declaring the actual `load_position` passes at 1.58 — margin a worst-case hand check throws away. |
 | `jib_boom_trolley.py` | A 10 kN hoist on a cantilever jib boom: assumed at the tip the boom fails at SF 1.33, but declaring the trolley's actual 750 mm end stop as the `load_position` passes at 1.78. |
+| `press_on_clamped_beam.py` | A 22 kN press at the third point of a fixed-fixed crossbeam — the inverse lesson: the wall moment peaks *off* mid-span (4·P·L/27 vs P·L/8), so the mid-span shortcut passes at SF 1.62 while the real position fails at 1.36. |
 | `mezzanine_structure.py` | A whole structure — a floor beam on two posts — screened into one scorecard via `screen_structure`. |
 | `beam_column_check.py` | A round HSS pipe column under combined axial load and bending, screened by the AISC §H1.1 interaction equation (the case pure-beam and pure-column checks can't express). |
 | `brace_tie_check.py` | A bolted single-angle tension brace (AISC §D2): gross yielding passes comfortably, but shear lag makes net-section rupture govern. |
