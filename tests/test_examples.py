@@ -79,6 +79,17 @@ def test_brace_tie_example_is_governed_by_net_rupture():
     assert _sf(net) < _sf(gross)
 
 
+def test_tolerance_stackup_example_worst_case_fails_but_yield_is_high():
+    namespace = runpy.run_path(str(_EXAMPLES / "tolerance_stackup.py"))
+    result = namespace["analyze_gap"]()
+    # Nominal 0.3 mm gap; worst-case floor 0.20 mm breaks the 0.25 mm minimum, yet
+    # the Monte Carlo yield shows almost every assembly clears it -- the classic
+    # statistical-tolerancing result.
+    assert result["worst_case"].nominal.to("mm").magnitude == pytest.approx(0.3)
+    assert result["worst_case_ok"] is False
+    assert 0.98 < result["predicted_yield"] < 1.0
+
+
 def test_shrink_fit_example_passes_hub_yield():
     namespace = runpy.run_path(str(_EXAMPLES / "shrink_fit_check.py"))
     card = namespace["screen_shrink_fit"]()
