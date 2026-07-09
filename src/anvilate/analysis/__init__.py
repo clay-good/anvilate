@@ -13,7 +13,7 @@ modules:
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion and twist
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
-- :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) contact
+- :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl)
@@ -54,7 +54,12 @@ from .column import (
     slenderness_ratio,
     transition_slenderness,
 )
-from .contact import HertzContact, hertz_sphere_contact
+from .contact import (
+    HertzContact,
+    HertzLineContact,
+    hertz_cylinder_contact,
+    hertz_sphere_contact,
+)
 from .dynamics import (
     STANDARD_GRAVITY,
     frequency_scorecard,
@@ -159,6 +164,8 @@ __all__ = [
     "interference_torque_capacity",
     "HertzContact",
     "hertz_sphere_contact",
+    "HertzLineContact",
+    "hertz_cylinder_contact",
     "spring_index",
     "wahl_factor",
     "spring_shear_stress",

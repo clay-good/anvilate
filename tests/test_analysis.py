@@ -27,6 +27,7 @@ from anvilate.analysis import (
     frequency_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
+    hertz_cylinder_contact,
     hertz_sphere_contact,
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
@@ -725,6 +726,66 @@ def test_hertz_sphere_on_flat_softens_the_contact():
     assert (
         flat.max_contact_pressure.to("MPa").magnitude < two.max_contact_pressure.to("MPa").magnitude
     )
+
+
+def test_hertz_cylinder_contact_matches_hand_calc():
+    # Two Ø20 mm steel cylinders (E=200 GPa, nu=0.3), 1000 N over 50 mm length:
+    #   1/E* = 2*(1-0.09)/200000 = 9.1e-6; 1/d1+1/d2 = 0.1 /mm;
+    #   b = sqrt((2*1000/(pi*50)) * 9.1e-6 / 0.1) = 0.034039 mm;
+    #   p_max = 2*1000/(pi*b*50) = 374.05 MPa.
+    c = hertz_cylinder_contact(
+        force=_q("1000 N"),
+        length=_q("50 mm"),
+        diameter1=_q("20 mm"),
+        diameter2=_q("20 mm"),
+        modulus1=_q("200 GPa"),
+        poisson1=0.3,
+        modulus2=_q("200 GPa"),
+        poisson2=0.3,
+    )
+    assert c.half_width.to("mm").magnitude == pytest.approx(0.0340389, rel=1e-4)
+    assert c.max_contact_pressure.to("MPa").magnitude == pytest.approx(374.05, rel=1e-4)
+    assert c.surface_safety_factor(_q("400 MPa")) == pytest.approx(400 / 374.05, rel=1e-4)
+
+
+def test_hertz_cylinder_on_flat_softens_the_contact():
+    # A cylinder on a flat (1/d2 -> 0) spreads the load wider than two equal
+    # cylinders, so the peak pressure is lower.
+    two = hertz_cylinder_contact(
+        force=_q("1000 N"),
+        length=_q("50 mm"),
+        diameter1=_q("20 mm"),
+        diameter2=_q("20 mm"),
+        modulus1=_q("200 GPa"),
+        poisson1=0.3,
+        modulus2=_q("200 GPa"),
+        poisson2=0.3,
+    )
+    flat = hertz_cylinder_contact(
+        force=_q("1000 N"),
+        length=_q("50 mm"),
+        diameter1=_q("20 mm"),
+        modulus1=_q("200 GPa"),
+        poisson1=0.3,
+        modulus2=_q("200 GPa"),
+        poisson2=0.3,
+    )
+    assert (
+        flat.max_contact_pressure.to("MPa").magnitude < two.max_contact_pressure.to("MPa").magnitude
+    )
+
+
+def test_hertz_cylinder_contact_rejects_nonpositive_length():
+    with pytest.raises(ValueError, match="length must be positive"):
+        hertz_cylinder_contact(
+            force=_q("1000 N"),
+            length=_q("0 mm"),
+            diameter1=_q("20 mm"),
+            modulus1=_q("200 GPa"),
+            poisson1=0.3,
+            modulus2=_q("200 GPa"),
+            poisson2=0.3,
+        )
 
 
 def test_hertz_sphere_contact_rejects_bad_inputs():
