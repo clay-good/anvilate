@@ -34,6 +34,15 @@ def test_missing_safety_factor_is_not_evaluated_not_a_silent_pass():
 def test_entry_is_frozen_and_renders():
     entry = ScorecardEntry.from_safety_factor("torsion", computed=3.1, required=2.0)
     assert str(entry).startswith("[PASS] torsion:")
+    assert entry.reference is None  # no clause by default
+
+
+def test_entry_renders_its_code_reference():
+    entry = ScorecardEntry.from_safety_factor("flexure", computed=2.0, required=1.5).model_copy(
+        update={"reference": "AISC 360-16 Ch. F"}
+    )
+    assert entry.reference == "AISC 360-16 Ch. F"
+    assert str(entry).endswith("[AISC 360-16 Ch. F]")
 
 
 def _entry(name: str, status: CheckStatus) -> ScorecardEntry:

@@ -230,6 +230,26 @@ def test_bolted_connection_rejects_non_force_load():
         )
 
 
+def test_checks_cite_the_governing_aisc_clause():
+    # The discipline pack cites the AISC 360-16 clause on each scorecard entry.
+    beam = screen_beam_member(
+        _member(Support.SIMPLY_SUPPORTED, LoadType.DISTRIBUTED, "1 N/mm"),
+        required_safety_factor=1.5,
+        max_deflection=_q("5 mm"),
+    )
+    refs = {e.name: e.reference for e in beam.entries}
+    assert refs["beam bending"] == "AISC 360-16 Ch. F"
+    assert refs["beam deflection"] == "AISC 360-16 §L3"
+
+    column = screen_column_member(_column("500 mm"), required_safety_factor=2.0)
+    assert column.entries[0].reference == "AISC 360-16 Ch. E"
+
+    conn = screen_bolted_connection(_connection(), required_safety_factor=1.5)
+    conn_refs = {e.name: e.reference for e in conn.entries}
+    assert conn_refs["splice bolt shear"] == "AISC 360-16 §J3.6"
+    assert conn_refs["splice plate bearing"] == "AISC 360-16 §J3.10"
+
+
 def test_screen_structure_includes_connections():
     # A beam, a column, and a bolted connection all roll into one scorecard.
     card = screen_structure(

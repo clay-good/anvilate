@@ -8,6 +8,10 @@ resulting stress and deflection against the material yield and an optional
 deflection limit, and returns a :class:`~anvilate.scorecard.Scorecard`. The
 "No silent green" rule carries through — an absent material property or limit
 surfaces as NOT_EVALUATED, never a silent pass.
+
+Every check cites the governing AISC 360-16 clause on its scorecard entry — the
+"cited clauses" the discipline-packs spec calls for. The code references live
+here in the discipline pack, not in the code-agnostic analysis layer.
 """
 
 from __future__ import annotations
@@ -54,6 +58,14 @@ __all__ = [
 
 # Distortion-energy shear-yield fraction of tensile yield (τ_y ≈ 0.577·S_y).
 _SHEAR_YIELD_FRACTION = 0.577
+
+# AISC 360-16 clauses each screen cites on its scorecard entry (the discipline
+# pack, not the code-agnostic analysis layer, owns these references).
+_CLAUSE_FLEXURE = "AISC 360-16 Ch. F"
+_CLAUSE_DEFLECTION = "AISC 360-16 §L3"
+_CLAUSE_COMPRESSION = "AISC 360-16 Ch. E"
+_CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
+_CLAUSE_BEARING = "AISC 360-16 §J3.10"
 
 
 class Support(StrEnum):
@@ -160,7 +172,7 @@ def screen_beam_member(
             stress=result.max_bending_stress,
             allowable=record.yield_strength.quantity,
             required=required_safety_factor,
-        )
+        ).model_copy(update={"reference": _CLAUSE_FLEXURE})
     ]
     if max_deflection is not None:
         entries.append(
@@ -168,7 +180,7 @@ def screen_beam_member(
                 f"{member.name} deflection",
                 deflection=result.max_deflection,
                 limit=max_deflection,
-            )
+            ).model_copy(update={"reference": _CLAUSE_DEFLECTION})
         )
     return Scorecard(entries=tuple(entries))
 
@@ -243,7 +255,7 @@ def screen_column_member(
         stress=applied,
         allowable=critical,
         required=required_safety_factor,
-    )
+    ).model_copy(update={"reference": _CLAUSE_COMPRESSION})
     return Scorecard(entries=(entry,))
 
 
@@ -317,13 +329,13 @@ def screen_bolted_connection(
                 stress=shear,
                 allowable=shear_yield,
                 required=required_safety_factor,
-            ),
+            ).model_copy(update={"reference": _CLAUSE_BOLT_SHEAR}),
             strength_scorecard(
                 f"{connection.name} plate bearing",
                 stress=bearing,
                 allowable=plate.yield_strength.quantity,
                 required=required_safety_factor,
-            ),
+            ).model_copy(update={"reference": _CLAUSE_BEARING}),
         )
     )
 

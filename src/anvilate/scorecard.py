@@ -42,6 +42,7 @@ class ScorecardEntry(BaseModel):
     name: str
     status: CheckStatus
     detail: str
+    reference: str | None = None  # the code/standard clause behind the check, if any
 
     @property
     def passed(self) -> bool:
@@ -86,7 +87,8 @@ class ScorecardEntry(BaseModel):
         )
 
     def __str__(self) -> str:
-        return f"[{self.status.value.upper()}] {self.name}: {self.detail}"
+        cite = f" [{self.reference}]" if self.reference else ""
+        return f"[{self.status.value.upper()}] {self.name}: {self.detail}{cite}"
 
 
 class Scorecard(BaseModel):
