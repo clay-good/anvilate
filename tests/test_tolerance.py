@@ -273,11 +273,11 @@ def test_zone_limits_designation_normalized() -> None:
 
 
 def test_unencoded_zone_letter_rejected() -> None:
-    # s is a finer-stepped interference letter, not yet encoded; k is grade-dependent.
+    # s is a finer-stepped interference letter, not yet encoded; j is grade-dependent.
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
         zone_limits("s6", _mm(22))
     with pytest.raises(ToleranceRangeError, match="not yet encoded"):
-        zone_limits("k6", _mm(22))
+        zone_limits("j6", _mm(22))
 
 
 def test_malformed_zone_designation_rejected() -> None:
@@ -390,6 +390,43 @@ def test_n6_and_m6_shaft_ei_at_22mm() -> None:
     m = zone_limits("m6", _mm(22))
     assert m.lower.to("um").magnitude == pytest.approx(8)
     assert m.upper.to("um").magnitude == pytest.approx(21)
+
+
+# --- ISO 286 grade-banded k transition shaft ---
+
+
+def test_k6_and_k7_shaft_at_22mm() -> None:
+    # k shaft ei = +2 um at 18-30 mm (grades IT4-IT7). k6: es = 2 + IT6(13) = +15;
+    # k7: es = 2 + IT7(21) = +23.
+    k6 = zone_limits("k6", _mm(22))
+    assert k6.hole is False
+    assert k6.lower.to("um").magnitude == pytest.approx(2)
+    assert k6.upper.to("um").magnitude == pytest.approx(15)
+    k7 = zone_limits("k7", _mm(22))
+    assert k7.lower.to("um").magnitude == pytest.approx(2)
+    assert k7.upper.to("um").magnitude == pytest.approx(23)
+
+
+def test_k_shaft_zero_outside_grade_band() -> None:
+    # Outside IT4-IT7 the k fundamental deviation collapses to zero, so k8 sits on
+    # the basic size like an h shaft: ei = 0, es = IT8(33) = +33 um.
+    k8 = zone_limits("k8", _mm(22))
+    assert k8.lower.to("um").magnitude == pytest.approx(0)
+    assert k8.upper.to("um").magnitude == pytest.approx(33)
+
+
+def test_k_hole_not_yet_encoded() -> None:
+    with pytest.raises(ToleranceRangeError, match="not yet encoded"):
+        zone_limits("K6", _mm(22))
+
+
+def test_h7k6_transition_fit_at_22mm() -> None:
+    # H7/k6 at 22 mm: hole 0..+21 um, shaft +2..+15 um. Min clearance 0 - 15 =
+    # -15 um; max clearance 21 - 2 = +19 um => transition.
+    f = fit("H7/k6", _mm(22))
+    assert f.kind == "transition"
+    assert f.min_clearance.to("um").magnitude == pytest.approx(-15)
+    assert f.max_clearance.to("um").magnitude == pytest.approx(19)
 
 
 # --- ISO 286 delta-corrected interference/transition holes (M/N/P) ---
