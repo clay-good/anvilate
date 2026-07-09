@@ -45,3 +45,15 @@ def test_mezzanine_structure_example_passes():
     assert card.status is CheckStatus.PASS
     assert len(card.entries) == 4
     assert all(e.passed for e in card.entries)
+
+
+def test_lifting_padeye_example_flags_pin_bearing():
+    namespace = runpy.run_path(str(_EXAMPLES / "lifting_padeye.py"))
+    card = namespace["screen_padeye"]()
+    # Net tension and weld pass, but the pin bearing is short of the 2.0 rigging
+    # safety factor -> the assembly FAILs, catching an under-sized pin/hole.
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["padeye net tension"].passed
+    assert by_name["padeye_weld weld shear"].passed
+    assert not by_name["padeye pin bearing"].passed
