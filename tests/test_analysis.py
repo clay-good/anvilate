@@ -13,6 +13,7 @@ from anvilate.analysis import (
     bolt_preload_from_torque,
     cantilever_end_load,
     circular_area,
+    deflection_scorecard,
     euler_buckling_load,
     euler_critical_stress,
     max_transverse_shear_stress,
@@ -128,6 +129,27 @@ def test_max_transverse_shear_stress_rectangular_and_circular():
 def test_max_transverse_shear_rejects_bad_inputs():
     with pytest.raises(ValueError, match="form_factor must be positive"):
         max_transverse_shear_stress(shear_force=_q("10 kN"), area=_q("200 mm**2"), form_factor=0.0)
+
+
+def test_deflection_scorecard_pass_fail_and_not_evaluated():
+    from anvilate.scorecard import CheckStatus
+
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = cantilever_end_load(
+        force=_q("100 N"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )  # 12.5 mm tip deflection
+    ok = deflection_scorecard("tip", deflection=result.max_deflection, limit=_q("15 mm"))
+    assert ok.status is CheckStatus.PASS
+    bad = deflection_scorecard("tip", deflection=result.max_deflection, limit=_q("10 mm"))
+    assert bad.status is CheckStatus.FAIL
+    # No silent green: no limit set -> NOT_EVALUATED, not a pass.
+    none = deflection_scorecard("tip", deflection=result.max_deflection, limit=None)
+    assert none.status is CheckStatus.NOT_EVALUATED
+    assert not none.passed
 
 
 def test_bending_safety_factor_against_yield():

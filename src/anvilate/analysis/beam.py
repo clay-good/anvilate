@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "simply_supported_center_load",
     "rectangular_second_moment",
     "max_transverse_shear_stress",
+    "deflection_scorecard",
     "SHEAR_FORM_RECTANGULAR",
     "SHEAR_FORM_CIRCULAR",
 ]
@@ -74,6 +76,39 @@ def max_transverse_shear_stress(
         raise ValueError(f"form_factor must be positive; got {form_factor}")
     stress = form_factor * shear_force.pint / area.pint
     return _as_quantity(stress, "MPa")
+
+
+def deflection_scorecard(
+    name: str,
+    *,
+    deflection: Quantity,
+    limit: Quantity | None,
+) -> ScorecardEntry:
+    """Screen a computed ``deflection`` against an acceptance ``limit``.
+
+    Builds a :class:`~anvilate.scorecard.ScorecardEntry`: ``PASS`` when the
+    deflection magnitude is within ``limit``, ``FAIL`` when it exceeds it. When
+    ``limit`` is ``None`` — no displacement limit was set on the spec — the entry
+    is ``NOT_EVALUATED`` rather than a silent pass, the stiffness-dimension
+    counterpart of :func:`anvilate.analysis.strength_scorecard`. Both quantities
+    must be lengths.
+    """
+    _require(deflection, "[length]", "deflection")
+    if limit is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — deflection limit unavailable",
+        )
+    _require(limit, "[length]", "limit")
+    measured = abs(deflection.to("mm").magnitude)
+    allowed = limit.to("mm").magnitude
+    status = CheckStatus.PASS if measured <= allowed else CheckStatus.FAIL
+    return ScorecardEntry(
+        name=name,
+        status=status,
+        detail=f"deflection {measured:.3f} mm vs limit {allowed:.3f} mm",
+    )
 
 
 class BeamBendingResult(BaseModel):
