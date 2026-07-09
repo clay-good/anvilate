@@ -77,6 +77,9 @@ class BearingTable:
     def __init__(self, bearings: dict[str, Bearing]) -> None:
         self._bearings = bearings
 
+    def has_bearing(self, designation: str) -> bool:
+        return designation in self._bearings
+
     def designations(self) -> list[str]:
         return sorted(self._bearings, key=_bearing_key)
 

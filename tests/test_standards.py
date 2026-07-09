@@ -385,20 +385,18 @@ def test_coverage_gap_surfaces_rather_than_guessing(cdb) -> None:
 
 
 def test_resolver_composes_component_db_and_seed() -> None:
-    # The DB-backed frames and the not-yet-tabled seed IDs are one component set.
+    # The DB-backed frames, the bearing table, and the not-yet-tabled seed IDs
+    # are one component set.
     from anvilate.standards import default_standards_resolver
 
     resolver = default_standards_resolver()
-    assert set(resolver.known_components()) == {
-        "NEMA17",
-        "NEMA23",
-        "NEMA34",
-        "EXT-4040",
-        "EXT-2020",
-        "ISO4762-M5",
-    }
+    known = set(resolver.known_components())
+    assert {"NEMA17", "NEMA23", "NEMA34", "EXT-4040", "EXT-2020", "ISO4762-M5"} <= known
+    assert "6204" in known  # bearings resolve as standard components too
     assert resolver.has_component("NEMA23")  # from the components DB
+    assert resolver.has_component("6204")  # from the bearing table
     assert resolver.has_component("EXT-4040")  # from the static seed
+    assert not resolver.has_component("6207")  # a bearing not in the seed is unknown
 
 
 # --- Deep-groove ball bearing boundary dimensions (ISO 15) ---
