@@ -20,7 +20,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from .spec import DesignSpec, StandardComponentInterface
-from .standards import ComponentsDatabase, MaterialsDatabase, PropertyCitation
+from .standards import (
+    BearingTable,
+    ComponentsDatabase,
+    MaterialsDatabase,
+    PropertyCitation,
+    default_bearing_table,
+)
 from .tolerance import general_tolerance_source, resolve_class
 
 __all__ = ["SourceRecord", "collect_provenance"]
@@ -53,11 +59,35 @@ def _distinct_sources(citations: dict[str, PropertyCitation]) -> tuple[str, ...]
     return tuple(sorted({cite.source for cite in citations.values()}))
 
 
+def _component_source(
+    ref: str, components: ComponentsDatabase, bearings: BearingTable
+) -> SourceRecord:
+    """Resolve a standard-component ref to its provenance, trying the components
+    database (NEMA frames) then the bearing table. An unrecorded ref raises the
+    components database's :class:`UnknownComponentError`."""
+    if bearings.has_bearing(ref) and not components.has_component(ref):
+        bearing = bearings.get(ref)
+        return SourceRecord(
+            ref=bearing.designation,
+            kind="component",
+            name=f"ball bearing {bearing.designation}",
+            sources=_distinct_sources(bearing.citations()),
+        )
+    component = components.get(ref)  # a NEMA frame, or raises UnknownComponentError
+    return SourceRecord(
+        ref=component.id,
+        kind="component",
+        name=component.name,
+        sources=_distinct_sources(component.citations()),
+    )
+
+
 def collect_provenance(
     spec: DesignSpec,
     *,
     materials: MaterialsDatabase,
     components: ComponentsDatabase,
+    bearings: BearingTable | None = None,
 ) -> list[SourceRecord]:
     """Collect the provenance of the standards data ``spec`` references.
 
@@ -71,8 +101,11 @@ def collect_provenance(
     order. Imported interfaces reference another spec rather than a standards
     record, so they are skipped. Raises the database's unknown-reference error if
     a material or component ref does not resolve — run reference validation first
-    to surface every such problem at once.
+    to surface every such problem at once. A component interface may reference a
+    NEMA frame or a ball bearing; ``bearings`` defaults to the bundled table.
     """
+    if bearings is None:
+        bearings = default_bearing_table()
     material = materials.get(spec.material.ref)
     records = [
         SourceRecord(
@@ -84,15 +117,7 @@ def collect_provenance(
     ]
     for interface in spec.interfaces:
         if isinstance(interface, StandardComponentInterface):
-            component = components.get(interface.ref)
-            records.append(
-                SourceRecord(
-                    ref=component.id,
-                    kind="component",
-                    name=component.name,
-                    sources=_distinct_sources(component.citations()),
-                )
-            )
+            records.append(_component_source(interface.ref, components, bearings))
     # The ISO 2768 general class governs every untoleranced dimension — always,
     # via the default when the spec omits one — so it is always in the trail.
     general_class = resolve_class(spec.manufacturing.tolerance_class)

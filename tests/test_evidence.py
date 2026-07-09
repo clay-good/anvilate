@@ -59,6 +59,19 @@ def test_collects_material_and_component_provenance() -> None:
         assert list(record.sources) == sorted(set(record.sources))
 
 
+def test_bearing_interface_provenance_is_collected() -> None:
+    # A bearing referenced as a standard component (now resolvable) flows into the
+    # provenance trail with its ISO 15 citation, just like a NEMA frame.
+    spec = _spec(interfaces=[StandardComponentInterface(ref="6204", tag="rotor_bearing")])
+    records = collect_provenance(
+        spec, materials=default_materials_db(), components=default_components_db()
+    )
+    bearing = next(r for r in records if r.ref == "6204")
+    assert bearing.kind == "component"
+    assert "6204" in bearing.name
+    assert any("ISO 15" in s for s in bearing.sources)
+
+
 def test_material_only_spec_still_cites_the_general_class() -> None:
     # Even with no components or dimensions, the ISO 2768 default class governs
     # and appears in the trail — so the material and the general class both show.
