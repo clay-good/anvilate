@@ -119,6 +119,15 @@ def test_tolerance_stackup_example_worst_case_fails_but_yield_is_high():
     assert 0.98 < result["predicted_yield"] < 1.0
 
 
+def test_beam_column_example_passes_h1_interaction():
+    namespace = runpy.run_path(str(_EXAMPLES / "beam_column_check.py"))
+    card = namespace["screen_beam_column_post"]()
+    # The pipe beam-column clears the AISC §H1.1 interaction (SF ~1.64 vs 1.5).
+    assert card.status is CheckStatus.PASS
+    assert card.entries[0].name == "frame_post interaction"
+    assert card.entries[0].reference == "AISC 360-16 §H1.1"
+
+
 def test_wheel_rail_contact_example_fails_on_soft_steel():
     namespace = runpy.run_path(str(_EXAMPLES / "wheel_rail_contact.py"))
     card = namespace["screen_wheel_contact"]()
