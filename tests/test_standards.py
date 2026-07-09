@@ -413,6 +413,64 @@ def test_coverage_gap_surfaces_rather_than_guessing(cdb) -> None:
     assert not default_standards_resolver().has_component("NEMA42")
 
 
+def test_bundled_frames_marked_bundled(cdb) -> None:
+    # Bundled frames are distinguishable from user/team extension records.
+    assert cdb.get("NEMA23").bundled is True
+    assert cdb.extension_ids() == []
+
+
+_COMPONENT_EXTENSION_YAML = """
+dataset:
+  name: acme-internal-components
+  version: "1"
+  source: "Acme internal engineering standard"
+  license: "team-local"
+  retrieved: "2026-07-08"
+frames:
+  ACME-MOUNT-1:
+    name: "Acme internal motor mount"
+    faceplate_width:
+      quantity: {magnitude: 60.0, unit: mm}
+      citation: {condition: "internal drawing"}
+    bolt_spacing:
+      quantity: {magnitude: 50.0, unit: mm}
+      citation: {condition: "internal drawing"}
+    pilot_diameter:
+      quantity: {magnitude: 40.0, unit: mm}
+      citation: {condition: "internal drawing"}
+    mounting_hole:
+      quantity: {magnitude: 5.0, unit: mm}
+      citation: {condition: "M5 mounting screw"}
+"""
+
+
+def test_team_local_component_extension_referenced_like_bundled(cdb) -> None:
+    # Scenario: company part library — a team adds a local component record,
+    # referenced like any bundled frame but marked team-local (non-bundled).
+    extended = cdb.extended(_COMPONENT_EXTENSION_YAML)
+    mount = extended.get("ACME-MOUNT-1")
+    assert mount.bundled is False
+    assert mount.bolt_spacing.quantity.to("mm").magnitude == pytest.approx(50.0)
+    assert extended.extension_ids() == ["ACME-MOUNT-1"]
+    # The team-local record's provenance is preserved end to end.
+    assert mount.pilot_diameter.citation.license == "team-local"
+    # The bundled database is left unchanged.
+    assert not cdb.has_component("ACME-MOUNT-1")
+
+
+def test_component_extension_overrides_bundled_record(cdb) -> None:
+    # An extension record of the same ID supersedes the bundled one and is marked
+    # non-bundled, so a team can correct a frame without forking the seed.
+    override = _COMPONENT_EXTENSION_YAML.replace("ACME-MOUNT-1", "NEMA23")
+    extended = cdb.extended(override)
+    frame = extended.get("NEMA23")
+    assert frame.bundled is False
+    assert frame.bolt_spacing.quantity.to("mm").magnitude == pytest.approx(50.0)
+    # The bundled database still holds the original standardized value.
+    assert cdb.get("NEMA23").bundled is True
+    assert cdb.get("NEMA23").bolt_spacing.quantity.to("mm").magnitude == pytest.approx(47.14)
+
+
 def test_resolver_composes_component_db_and_seed() -> None:
     # The DB-backed frames, the bearing table, and the fastener/extrusion tables
     # are one component set.

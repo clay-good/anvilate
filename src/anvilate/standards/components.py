@@ -102,12 +102,32 @@ class ComponentsDatabase:
                 difflib.get_close_matches(component_id, self._frames, n=3),
             ) from None
 
+    def extension_ids(self) -> list[str]:
+        """IDs of extension (user/team-local) records — distinguishable in reports,
+        mirroring :meth:`anvilate.standards.MaterialsDatabase.extension_ids`."""
+        return sorted(cid for cid, f in self._frames.items() if not f.bundled)
+
+    def extended(self, extension_text: str) -> ComponentsDatabase:
+        """Return a new database with ``extension_text``'s records overlaid.
+
+        Extension records are marked non-bundled and override any bundled record
+        of the same ID, so a team can add or supersede component records (a
+        company standard bracket insert, an in-house motor mount) without forking
+        the bundled data. The bundled database is left unchanged — mirrors
+        :meth:`anvilate.standards.MaterialsDatabase.extended`.
+        """
+        overlay = _load_frames(extension_text, bundled=False)
+        return ComponentsDatabase({**self._frames, **overlay})
+
     def __len__(self) -> int:
         return len(self._frames)
 
 
-def _load_frames(text: str) -> dict[str, NemaFrame]:
-    """Parse the NEMA frame YAML, filling shared dataset-level citation fields."""
+def _load_frames(text: str, *, bundled: bool = True) -> dict[str, NemaFrame]:
+    """Parse the NEMA frame YAML, filling shared dataset-level citation fields.
+
+    ``bundled`` tags the records' origin (a bundled dataset vs a user/team
+    extension), so reports can distinguish company-local records."""
     doc = yaml.safe_load(text)
     dataset = doc.get("dataset", {})
     fallback = {
@@ -127,7 +147,9 @@ def _load_frames(text: str) -> dict[str, NemaFrame]:
     frames: dict[str, NemaFrame] = {}
     for component_id, record in doc["frames"].items():
         _fill(record)
-        frames[component_id] = NemaFrame.model_validate({"id": component_id, **record})
+        frames[component_id] = NemaFrame.model_validate(
+            {"id": component_id, **record, "bundled": bundled}
+        )
     return frames
 
 
