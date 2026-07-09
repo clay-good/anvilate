@@ -161,6 +161,18 @@ def test_machine_on_floor_beam_example_recovers_margin_from_the_real_position():
     assert by_name["actual position bending"].passed
 
 
+def test_jib_boom_example_recovers_margin_from_the_end_stop():
+    namespace = runpy.run_path(str(_EXAMPLES / "jib_boom_trolley.py"))
+    card = namespace["screen_jib_boom"]()
+    # The assume-at-tip screen fails (M = P*L -> SF 1.33 < 1.5), but the trolley's
+    # 750 mm end stop caps the moment at 3/4 of that, so the actual-position
+    # screen passes (SF 1.78). Same boom, same hoist -- only the position differs.
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert not by_name["assumed at tip bending"].passed
+    assert by_name["at end stop bending"].passed
+
+
 def test_clip_angle_example_fails_only_the_relocated_tearout():
     namespace = runpy.run_path(str(_EXAMPLES / "clip_angle_edge_tearout.py"))
     card = namespace["screen_clip_bolt"]()
