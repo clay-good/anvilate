@@ -9,7 +9,8 @@ buckling load, :mod:`anvilate.analysis.fastener` the bolt torque-tension
 relation, :mod:`anvilate.analysis.torsion` the solid-shaft torsion check, and
 :mod:`anvilate.analysis.pressure_vessel` the thin-wall cylinder stresses, and
 :mod:`anvilate.analysis.stress` the von Mises combination of component stresses,
-and :mod:`anvilate.analysis.fatigue` the modified-Goodman fatigue screen. Further
+and :mod:`anvilate.analysis.fatigue` the modified-Goodman fatigue screen, and
+:mod:`anvilate.analysis.spring` the helical-spring shear stress. Further
 analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
 """
@@ -51,6 +52,7 @@ from .pressure_vessel import (
     thin_wall_cylinder,
     thin_wall_sphere_stress,
 )
+from .spring import spring_index, spring_shear_stress, wahl_factor
 from .stress import (
     CombinedNormalStress,
     combine_axial_bending,
@@ -102,6 +104,9 @@ __all__ = [
     "ThinWallStress",
     "thin_wall_cylinder",
     "thin_wall_sphere_stress",
+    "spring_index",
+    "wahl_factor",
+    "spring_shear_stress",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
     "yield_safety_factor",

@@ -34,12 +34,15 @@ from anvilate.analysis import (
     simply_supported_center_load,
     simply_supported_uniform_load,
     slenderness_ratio,
+    spring_index,
+    spring_shear_stress,
     strength_scorecard,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
     torque_for_preload,
     von_mises_bending_torsion,
     von_mises_plane_stress,
+    wahl_factor,
     yield_safety_factor,
 )
 from anvilate.units import Quantity
@@ -354,6 +357,27 @@ def test_torque_preload_round_trips():
     assert torque.to("N*m").magnitude == pytest.approx(10.0, rel=1e-6)
     back = bolt_preload_from_torque(torque=torque, nominal_diameter=_q("8 mm"))
     assert back.to("N").magnitude == pytest.approx(6250.0, rel=1e-6)
+
+
+def test_spring_index_and_wahl_factor():
+    # D=20 mm, d=2 mm: C = 10; Wahl Kw = (4*10-1)/(4*10-4) + 0.615/10 = 1.1448.
+    c = spring_index(mean_coil_diameter=_q("20 mm"), wire_diameter=_q("2 mm"))
+    assert c == pytest.approx(10.0)
+    assert wahl_factor(c) == pytest.approx(1.14483, rel=1e-4)
+
+
+def test_spring_shear_stress_worked_example():
+    # 100 N on the C=10 spring: tau = Kw*8*F*D/(pi*d^3)
+    #   = 1.14483 * 8*100*20 / (pi*2^3) = 728.8 MPa.
+    tau = spring_shear_stress(
+        force=_q("100 N"), mean_coil_diameter=_q("20 mm"), wire_diameter=_q("2 mm")
+    )
+    assert tau.to("MPa").magnitude == pytest.approx(728.8, rel=1e-3)
+
+
+def test_spring_rejects_wire_wider_than_coil():
+    with pytest.raises(ValueError, match="must be positive and below"):
+        spring_index(mean_coil_diameter=_q("5 mm"), wire_diameter=_q("5 mm"))
 
 
 def test_bolt_shear_stress_single_and_double():
