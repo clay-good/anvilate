@@ -13,9 +13,11 @@ from anvilate.analysis import (
     bolt_preload_from_torque,
     cantilever_end_load,
     circular_area,
+    circular_second_moment,
     deflection_scorecard,
     euler_buckling_load,
     euler_critical_stress,
+    hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
     max_transverse_shear_stress,
     polar_second_moment_hollow,
@@ -109,6 +111,30 @@ def test_simply_supported_is_stiffer_and_lower_stress_than_cantilever():
     cant = cantilever_end_load(**kw)
     assert ss.max_bending_stress.to("MPa").magnitude < cant.max_bending_stress.to("MPa").magnitude
     assert ss.max_deflection.to("mm").magnitude < cant.max_deflection.to("mm").magnitude
+
+
+def test_circular_second_moments_solid_and_hollow():
+    # Solid d=20 mm: I = pi*20^4/64 = 7854 mm^4 (half the polar J = 15708).
+    solid = circular_second_moment(_q("20 mm"))
+    assert solid.to("mm**4").magnitude == pytest.approx(7853.98, rel=1e-4)
+    # Hollow D=20, d=10: I = pi*(20^4-10^4)/64 = 7363 mm^4, less than solid.
+    hollow = hollow_circular_second_moment(outer_diameter=_q("20 mm"), inner_diameter=_q("10 mm"))
+    assert hollow.to("mm**4").magnitude == pytest.approx(7363.1, rel=1e-4)
+    assert hollow.to("mm**4").magnitude < solid.to("mm**4").magnitude
+
+
+def test_circular_second_moment_feeds_a_bending_check():
+    # A round-bar cantilever: I from the circular helper, c = radius = 10 mm.
+    inertia = circular_second_moment(_q("20 mm"))
+    result = cantilever_end_load(
+        force=_q("100 N"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("10 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    # sigma = M*c/I = (100*500)*10 / 7853.98 = 63.66 MPa.
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(63.662, rel=1e-4)
 
 
 def test_max_transverse_shear_stress_rectangular_and_circular():

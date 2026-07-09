@@ -13,6 +13,8 @@ linear-elastic beam, small deflections, and no stress concentration.
 
 from __future__ import annotations
 
+from math import pi
+
 from pydantic import BaseModel, ConfigDict
 
 from ..scorecard import CheckStatus, ScorecardEntry
@@ -23,6 +25,8 @@ __all__ = [
     "cantilever_end_load",
     "simply_supported_center_load",
     "rectangular_second_moment",
+    "circular_second_moment",
+    "hollow_circular_second_moment",
     "max_transverse_shear_stress",
     "deflection_scorecard",
     "SHEAR_FORM_RECTANGULAR",
@@ -54,6 +58,30 @@ def rectangular_second_moment(width: Quantity, height: Quantity) -> Quantity:
     _require(width, "[length]", "width")
     _require(height, "[length]", "height")
     return _as_quantity(width.pint * height.pint**3 / 12, "mm**4")
+
+
+def circular_second_moment(diameter: Quantity) -> Quantity:
+    """The area second moment I = π·d⁴/64 of a solid circular section about a
+    diameter — the bending stiffness of a round bar (half the polar J)."""
+    _require(diameter, "[length]", "diameter")
+    return _as_quantity(pi * diameter.pint**4 / 64, "mm**4")
+
+
+def hollow_circular_second_moment(
+    *, outer_diameter: Quantity, inner_diameter: Quantity
+) -> Quantity:
+    """The area second moment I = π·(D⁴−d⁴)/64 of a hollow circular (tube) section
+    about a diameter. ``inner_diameter`` must be below ``outer_diameter``."""
+    _require(outer_diameter, "[length]", "outer_diameter")
+    _require(inner_diameter, "[length]", "inner_diameter")
+    do = outer_diameter.to("mm").magnitude
+    di = inner_diameter.to("mm").magnitude
+    if not 0 <= di < do:
+        raise ValueError(
+            f"inner_diameter ({inner_diameter}) must be non-negative and below "
+            f"outer_diameter ({outer_diameter})"
+        )
+    return _as_quantity(pi * (outer_diameter.pint**4 - inner_diameter.pint**4) / 64, "mm**4")
 
 
 def max_transverse_shear_stress(
