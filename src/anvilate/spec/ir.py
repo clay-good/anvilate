@@ -386,7 +386,14 @@ class LoadKind(StrEnum):
 
 
 class LoadCase(_Base):
-    """A single load condition the part must survive."""
+    """A single load condition the part must survive.
+
+    Each ``kind`` carries its own magnitude: a ``static`` or ``quasi_static`` case
+    a ``force`` (quasi-static also a ``quasi_static_factor`` that scales it), a
+    ``remote_mass`` case an offset ``remote_mass``. A case missing its magnitude is
+    rejected at construction — a downstream analysis can never be handed a load
+    with nothing to apply.
+    """
 
     name: str
     kind: LoadKind
@@ -394,6 +401,22 @@ class LoadCase(_Base):
     force: Force | None = None
     remote_mass: Mass | None = None
     quasi_static_factor: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _kind_carries_its_magnitude(self) -> LoadCase:
+        if self.kind in (LoadKind.STATIC, LoadKind.QUASI_STATIC) and self.force is None:
+            raise ValueError(
+                f"a {self.kind.value} load case needs a force; none given on {self.name!r}"
+            )
+        if self.kind is LoadKind.QUASI_STATIC and self.quasi_static_factor is None:
+            raise ValueError(
+                f"a quasi_static load case needs a quasi_static_factor; none given on {self.name!r}"
+            )
+        if self.kind is LoadKind.REMOTE_MASS and self.remote_mass is None:
+            raise ValueError(
+                f"a remote_mass load case needs a remote_mass; none given on {self.name!r}"
+            )
+        return self
 
 
 # --- Constraints and acceptance ---

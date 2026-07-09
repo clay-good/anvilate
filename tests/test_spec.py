@@ -90,6 +90,36 @@ def test_golden_bracket_every_fact_has_a_typed_field():
     assert ValidationTier.T1_ANALYTICAL in spec.acceptance.tiers
 
 
+def test_static_load_case_requires_a_force():
+    with pytest.raises(ValidationError, match="needs a force"):
+        LoadCase(name="tip_push", kind=LoadKind.STATIC, applied_to="tip")
+
+
+def test_quasi_static_load_case_requires_force_and_factor():
+    # Force present but no factor is still incomplete.
+    with pytest.raises(ValidationError, match="quasi_static_factor"):
+        LoadCase(
+            name="shock",
+            kind=LoadKind.QUASI_STATIC,
+            applied_to="tip",
+            force=Quantity.parse("50 N"),
+        )
+    # Both present is well-formed.
+    ok = LoadCase(
+        name="shock",
+        kind=LoadKind.QUASI_STATIC,
+        applied_to="tip",
+        force=Quantity.parse("50 N"),
+        quasi_static_factor=2.5,
+    )
+    assert ok.quasi_static_factor == 2.5
+
+
+def test_remote_mass_load_case_requires_a_mass():
+    with pytest.raises(ValidationError, match="needs a remote_mass"):
+        LoadCase(name="motor", kind=LoadKind.REMOTE_MASS, applied_to="bore")
+
+
 # --- Requirement: General tolerances by default, explicit overrides ---
 
 
