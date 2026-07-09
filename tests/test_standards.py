@@ -605,6 +605,76 @@ def test_cap_screws_resolve_as_standard_components() -> None:
     assert not resolver.has_component("ISO4762-M7")
 
 
+# --- Plain washers (ISO 7089) ---
+
+
+@pytest.fixture(scope="module")
+def washers():
+    from anvilate.standards import default_washer_table
+
+    return default_washer_table()
+
+
+def test_washer_dimensions_with_citation(washers) -> None:
+    # An M6 plain washer: 6.4 mm bore, 12 mm outer, 1.6 mm thick; each dimension
+    # carries its ISO 7089 citation.
+    w6 = washers.get("ISO7089-M6")
+    assert w6.inner_diameter.quantity.to("mm").magnitude == pytest.approx(6.4)
+    assert w6.outer_diameter.quantity.to("mm").magnitude == pytest.approx(12.0)
+    assert w6.thickness.quantity.to("mm").magnitude == pytest.approx(1.6)
+    assert "ISO 7089" in w6.inner_diameter.citation.source
+    assert w6.inner_diameter.citation.license
+
+
+def test_washer_dimensions_are_length(washers) -> None:
+    for designation in washers.designations():
+        rec = washers.get(designation)
+        for field in ("inner_diameter", "outer_diameter", "thickness"):
+            assert getattr(rec, field).quantity.has_dimension("[length]"), (designation, field)
+
+
+def test_washer_citations_expose_the_evidence_trail(washers) -> None:
+    citations = washers.get("ISO7089-M5").citations()
+    assert set(citations) == {"inner_diameter", "outer_diameter", "thickness"}
+    for name, cite in citations.items():
+        assert isinstance(cite, PropertyCitation), name
+        assert cite.source and cite.license, name
+
+
+def test_washer_ordering_is_numeric(washers) -> None:
+    # M4 sorts before M10 by nominal thread size, not lexically.
+    designations = washers.designations()
+    assert designations.index("ISO7089-M4") < designations.index("ISO7089-M10")
+    assert designations.index("ISO7089-M10") < designations.index("ISO7089-M20")
+
+
+def test_washer_bore_clears_and_face_exceeds_its_thread(washers) -> None:
+    # The bore must clear the nominal thread and the outer face must exceed it, so
+    # the washer is a real bearing surface: M8 bore 8.4 > 8, outer 16 > 8.4.
+    w8 = washers.get("ISO7089-M8")
+    bore = w8.inner_diameter.quantity.to("mm").magnitude
+    outer = w8.outer_diameter.quantity.to("mm").magnitude
+    assert bore > 8.0
+    assert outer > bore
+
+
+def test_washer_unknown_designation_surfaces_gap(washers) -> None:
+    from anvilate.standards import UnknownWasherError
+
+    with pytest.raises(UnknownWasherError) as exc:
+        washers.get("ISO7089-M7")  # not a standard washer size
+    assert exc.value.suggestions
+
+
+def test_washers_resolve_as_standard_components() -> None:
+    from anvilate.standards import default_standards_resolver
+
+    resolver = default_standards_resolver()
+    assert resolver.has_component("ISO7089-M6")
+    assert "ISO7089-M8" in set(resolver.known_components())
+    assert not resolver.has_component("ISO7089-M7")
+
+
 # --- Metric clearance holes (ISO 273) ---
 
 
