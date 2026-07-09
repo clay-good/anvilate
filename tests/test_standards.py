@@ -88,6 +88,18 @@ def test_structural_extrusion_alloy_6082_resolved(db: MaterialsDatabase) -> None
     )
 
 
+def test_bearing_bronze_resolved_with_copper_alloy_category(db: MaterialsDatabase) -> None:
+    # C93200 (SAE 660) is the DB's first copper-family alloy, opening the
+    # copper_alloy category; the standard cast bushing bronze (CDA reference).
+    bronze = db.get("C93200-SAE660")
+    assert bronze.category == "copper_alloy"
+    assert bronze.elastic_modulus.quantity.to("GPa").magnitude == pytest.approx(100.0)
+    assert bronze.density.quantity.to("g/cm**3").magnitude == pytest.approx(8.93)
+    assert bronze.yield_strength.quantity.to("MPa").magnitude == pytest.approx(125.0)
+    assert bronze.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(240.0)
+    assert "Copper Development Association" in bronze.yield_strength.citation.source
+
+
 def test_ductile_iron_resolved_with_new_category_and_no_fatigue_estimate(
     db: MaterialsDatabase,
 ) -> None:

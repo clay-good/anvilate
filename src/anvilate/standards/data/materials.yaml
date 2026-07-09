@@ -307,6 +307,28 @@ materials:
       quantity: {magnitude: 283.0, unit: MPa}
       citation: {source: "ASM — A356.0-T6", condition: "T6, permanent mold (41 ksi)"}
 
+  C93200-SAE660:
+    name: "Bearing bronze C93200 (SAE 660)"
+    category: copper_alloy
+    # The DB's first copper-family alloy; the standard cast plain-bearing/bushing
+    # bronze. Cast properties are section-dependent — these are the CDA reference
+    # values for the as-cast condition.
+    elastic_modulus:
+      quantity: {magnitude: 100.0, unit: GPa}
+      citation: {source: "Copper Development Association — C93200", condition: "as-cast, room temperature"}
+    poisson_ratio:
+      value: 0.34
+      citation: {source: "Copper Development Association — C93200", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 8.93, unit: g/cm**3}
+      citation: {source: "Copper Development Association — C93200", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 125.0, unit: MPa}
+      citation: {source: "Copper Development Association — C93200", condition: "as-cast, 0.5% ext. under load (18 ksi)"}
+    ultimate_strength:
+      quantity: {magnitude: 240.0, unit: MPa}
+      citation: {source: "Copper Development Association — C93200", condition: "as-cast (35 ksi)"}
+
   AA-6063-T6:
     name: "Aluminum 6063-T6"
     category: aluminum
