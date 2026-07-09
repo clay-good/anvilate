@@ -317,6 +317,39 @@ def test_spec_carries_typed_toleranced_dimensions():
     assert face.lower.to("mm").magnitude == pytest.approx(-0.1)
 
 
+def test_check_tolerances_manufacturable_flags_the_unachievable_ones():
+    # Scenario: a tolerance tighter than the CNC-milling floor (0.05 mm band) is
+    # flagged; a looser one passes. The screen is keyed by dimension tag.
+    spec = golden_bracket().model_copy(
+        update={
+            "dimensions": [
+                ToleranceDimension(
+                    tag="loose_slot",
+                    nominal=Quantity.parse("20 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.1 mm")),
+                ),
+                ToleranceDimension(
+                    tag="press_seat",
+                    nominal=Quantity.parse("10 mm"),
+                    tolerance=SymmetricTolerance(plus_minus=Quantity.parse("0.01 mm")),
+                ),
+            ]
+        }
+    )
+    checks = spec.check_tolerances_manufacturable()
+    assert set(checks) == {"loose_slot", "press_seat"}
+    assert checks["loose_slot"].achievable is True
+    assert checks["press_seat"].achievable is False
+    # The scorecard failures are the un-achievable tags.
+    failures = {tag for tag, c in checks.items() if not c.achievable}
+    assert failures == {"press_seat"}
+
+
+def test_check_tolerances_manufacturable_empty_without_declarations():
+    # No explicit tolerances declared → nothing to screen.
+    assert golden_bracket().check_tolerances_manufacturable() == {}
+
+
 def test_toleranced_dimensions_round_trip_through_yaml():
     spec = golden_bracket().model_copy(
         update={

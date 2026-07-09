@@ -15,6 +15,7 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from ..tolerance import (
+    AchievabilityCheck,
     ResolvedTolerance,
     StackContributor,
     StackResult,
@@ -24,6 +25,7 @@ from ..tolerance import (
     general_tolerance,
     general_tolerance_source,
     resolve_class,
+    tolerance_is_achievable,
 )
 from ..units import Quantity, UnitSystem, require_dimension
 from .provenance import Provenanced
@@ -439,6 +441,24 @@ class DesignSpec(_Base):
         such problem at once.
         """
         return [chain.analyze(self.dimensions) for chain in self.chains]
+
+    def check_tolerances_manufacturable(self) -> dict[str, AchievabilityCheck]:
+        """Screen every explicitly-declared tolerance against the declared process.
+
+        Returns one :class:`~anvilate.tolerance.AchievabilityCheck` per declared
+        :class:`ToleranceDimension`, keyed by its tag — each says whether the
+        process can hold that tolerance band (a T2 DFM screen). General-class
+        dimensions are not screened here: the general class is chosen to be
+        process-appropriate, so only explicit tolerances can under-run the floor.
+        Filter for ``not check.achievable`` to get the scorecard failures. Raises
+        :class:`~anvilate.tolerance.ToleranceRangeError` if the process has no
+        capability record.
+        """
+        process = self.manufacturing.process.value
+        return {
+            dim.tag: tolerance_is_achievable(process, dim.resolve().width)
+            for dim in self.dimensions
+        }
 
     def general_tolerance_class(self) -> ToleranceClass:
         """The ISO 2768 general class governing this spec's untoleranced dimensions.
