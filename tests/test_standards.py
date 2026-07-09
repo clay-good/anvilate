@@ -576,6 +576,22 @@ def test_bearing_series_reach_50mm_bore(bearings) -> None:
     assert b6310.width.quantity.to("mm").magnitude == pytest.approx(27.0)
 
 
+def test_bearing_thin_section_68_series(bearings) -> None:
+    # The 68-series thin-section bearings share a bore with the 60-series but have
+    # a much smaller OD and width: 6804 is 20x32x7 (vs the 60-series 6004 42x12).
+    b6800 = bearings.get("6800")
+    assert b6800.bore.quantity.to("mm").magnitude == pytest.approx(10.0)
+    assert b6800.outer_diameter.quantity.to("mm").magnitude == pytest.approx(19.0)
+    assert b6800.width.quantity.to("mm").magnitude == pytest.approx(5.0)
+    b6804 = bearings.get("6804")
+    assert b6804.outer_diameter.quantity.to("mm").magnitude == pytest.approx(32.0)
+    # Thinner than the extra-light 60-series bearing of the same 20 mm bore.
+    assert (
+        b6804.outer_diameter.quantity.to("mm").magnitude
+        < bearings.get("6004").outer_diameter.quantity.to("mm").magnitude
+    )
+
+
 def test_bearing_unknown_designation_surfaces_gap(bearings) -> None:
     from anvilate.standards import UnknownBearingError
 

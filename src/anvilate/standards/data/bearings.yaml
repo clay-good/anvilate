@@ -21,6 +21,19 @@ bearings:
   "626": {bore: 6, outer_diameter: 19, width: 6}
   "608": {bore: 8, outer_diameter: 22, width: 7}
 
+  # 68-series (thin section) — compact/robotics designs where radial space is tight
+  "6800": {bore: 10, outer_diameter: 19, width: 5}
+  "6801": {bore: 12, outer_diameter: 21, width: 5}
+  "6802": {bore: 15, outer_diameter: 24, width: 5}
+  "6803": {bore: 17, outer_diameter: 26, width: 5}
+  "6804": {bore: 20, outer_diameter: 32, width: 7}
+  "6805": {bore: 25, outer_diameter: 37, width: 7}
+  "6806": {bore: 30, outer_diameter: 42, width: 7}
+  "6807": {bore: 35, outer_diameter: 47, width: 7}
+  "6808": {bore: 40, outer_diameter: 52, width: 7}
+  "6809": {bore: 45, outer_diameter: 58, width: 7}
+  "6810": {bore: 50, outer_diameter: 65, width: 7}
+
   # 60-series (extra light)
   "6000": {bore: 10, outer_diameter: 26, width: 8}
   "6001": {bore: 12, outer_diameter: 28, width: 8}
