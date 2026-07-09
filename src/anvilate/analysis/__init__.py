@@ -10,7 +10,8 @@ relation, :mod:`anvilate.analysis.torsion` the solid-shaft torsion check, and
 :mod:`anvilate.analysis.pressure_vessel` the thin-wall cylinder stresses, and
 :mod:`anvilate.analysis.stress` the von Mises combination of component stresses,
 and :mod:`anvilate.analysis.fatigue` the modified-Goodman fatigue screen, and
-:mod:`anvilate.analysis.spring` the helical-spring shear stress. Further
+:mod:`anvilate.analysis.spring` the helical-spring shear stress, and
+:mod:`anvilate.analysis.thermal` the constrained-thermal stress. Further
 analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
 """
@@ -63,6 +64,7 @@ from .stress import (
     von_mises_plane_stress,
     yield_safety_factor,
 )
+from .thermal import constrained_thermal_stress
 from .torsion import (
     hollow_shaft_torsional_stress,
     polar_second_moment_hollow,
@@ -117,4 +119,5 @@ __all__ = [
     "strength_scorecard",
     "CombinedNormalStress",
     "combine_axial_bending",
+    "constrained_thermal_stress",
 ]

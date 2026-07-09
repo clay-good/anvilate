@@ -17,6 +17,7 @@ from anvilate.analysis import (
     circular_area,
     circular_second_moment,
     combine_axial_bending,
+    constrained_thermal_stress,
     deflection_scorecard,
     euler_buckling_load,
     euler_critical_stress,
@@ -635,6 +636,33 @@ def test_combine_axial_bending_compression_governs():
     assert combined.tension_fibre.to("MPa").magnitude == pytest.approx(-20.0, rel=1e-9)
     assert combined.compression_fibre.to("MPa").magnitude == pytest.approx(-80.0, rel=1e-9)
     assert combined.peak_magnitude.to("MPa").magnitude == pytest.approx(80.0, rel=1e-9)
+
+
+def test_constrained_thermal_stress_worked_example():
+    # A fully-restrained steel bar heated 50 K: sigma = E*alpha*dT
+    #   = 200000 * 12e-6 * 50 = 120 MPa.
+    sigma = constrained_thermal_stress(
+        elastic_modulus=_q("200 GPa"),
+        thermal_expansion_coefficient=_q("12e-6 / K"),
+        temperature_change=_q("50 K"),
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(120.0, rel=1e-6)
+    # A temperature difference in delta_degC gives the same magnitude.
+    same = constrained_thermal_stress(
+        elastic_modulus=_q("200 GPa"),
+        thermal_expansion_coefficient=_q("12e-6 / delta_degC"),
+        temperature_change=_q("50 delta_degC"),
+    )
+    assert same.to("MPa").magnitude == pytest.approx(120.0, rel=1e-6)
+
+
+def test_constrained_thermal_stress_rejects_bad_units():
+    with pytest.raises(ValueError, match="thermal_expansion_coefficient"):
+        constrained_thermal_stress(
+            elastic_modulus=_q("200 GPa"),
+            thermal_expansion_coefficient=_q("12 mm"),  # not 1/temperature
+            temperature_change=_q("50 K"),
+        )
 
 
 def test_von_mises_plane_stress_worked_example():
