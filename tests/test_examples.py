@@ -79,6 +79,16 @@ def test_brace_tie_example_is_governed_by_net_rupture():
     assert _sf(net) < _sf(gross)
 
 
+def test_dfm_process_example_flags_and_suggests():
+    namespace = runpy.run_path(str(_EXAMPLES / "dfm_process_check.py"))
+    result = namespace["screen_manufacturability"]()
+    # FDM (0.20 mm floor) cannot hold a 0.02 mm band -> flagged, with tighter
+    # processes suggested finest-first.
+    assert result["check"].achievable is False
+    assert result["alternatives"]  # non-empty
+    assert "grinding" in result["alternatives"]
+
+
 def test_tolerance_stackup_example_worst_case_fails_but_yield_is_high():
     namespace = runpy.run_path(str(_EXAMPLES / "tolerance_stackup.py"))
     result = namespace["analyze_gap"]()
