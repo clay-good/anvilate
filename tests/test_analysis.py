@@ -5,7 +5,9 @@ from __future__ import annotations
 import pytest
 
 from anvilate.analysis import (
+    ColumnEnd,
     cantilever_end_load,
+    euler_buckling_load,
     rectangular_second_moment,
     simply_supported_center_load,
 )
@@ -98,6 +100,55 @@ def test_bending_safety_factor_against_yield():
     )
     # 150 MPa peak stress against 6061-T6's 276 MPa yield → SF ~ 1.84.
     assert result.bending_safety_factor(_q("276 MPa")) == pytest.approx(1.84, rel=1e-3)
+
+
+def test_euler_buckling_load_matches_worked_example():
+    # Pinned-pinned steel column: E=200 GPa, I=1666.67 mm^4, L=500 mm, K=1.
+    #   P_cr = pi^2 * E * I / (K*L)^2 = pi^2 * 200000 * 1666.67 / 500^2 ~ 13159 N.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    p_cr = euler_buckling_load(
+        elastic_modulus=_q("200 GPa"),
+        second_moment=inertia,
+        length=_q("500 mm"),
+        effective_length_factor=1.0,
+    )
+    assert p_cr.to("N").magnitude == pytest.approx(13159.5, rel=1e-4)
+
+
+def test_euler_buckling_scales_with_end_condition():
+    # A fixed-free column (K=2) buckles at 1/4 the pinned-pinned load (K squared).
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "elastic_modulus": _q("200 GPa"),
+        "second_moment": inertia,
+        "length": _q("500 mm"),
+    }
+    pinned = euler_buckling_load(**kw, effective_length_factor=ColumnEnd.PINNED_PINNED.factor())
+    fixed_free = euler_buckling_load(**kw, effective_length_factor=ColumnEnd.FIXED_FREE.factor())
+    assert fixed_free.to("N").magnitude == pytest.approx(pinned.to("N").magnitude / 4, rel=1e-6)
+
+
+def test_column_end_factors():
+    assert ColumnEnd.PINNED_PINNED.factor() == 1.0
+    assert ColumnEnd.FIXED_FIXED.factor() == 0.5
+    assert ColumnEnd.FIXED_FREE.factor() == 2.0
+
+
+def test_euler_buckling_rejects_bad_inputs():
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    with pytest.raises(ValueError, match="elastic_modulus must be a"):
+        euler_buckling_load(
+            elastic_modulus=_q("200 mm"),  # not a pressure
+            second_moment=inertia,
+            length=_q("500 mm"),
+        )
+    with pytest.raises(ValueError, match="effective_length_factor must be positive"):
+        euler_buckling_load(
+            elastic_modulus=_q("200 GPa"),
+            second_moment=inertia,
+            length=_q("500 mm"),
+            effective_length_factor=0.0,
+        )
 
 
 def test_cantilever_rejects_wrong_dimensions():
