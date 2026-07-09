@@ -66,6 +66,8 @@ __all__ = [
     "screen_beam_column",
     "ConcreteBearing",
     "screen_concrete_bearing",
+    "ShearPlate",
+    "screen_shear_plate",
     "StructuralMember",
     "screen_structure",
 ]
@@ -96,6 +98,8 @@ _CLAUSE_BEARING_CONCRETE = "AISC 360-16 §J8"
 _CLAUSE_BASEPLATE_BENDING = "AISC Design Guide 1"
 _CLAUSE_LUG = "ASME BTH-1 §3-3"
 _CLAUSE_BLOCK_SHEAR = "AISC 360-16 §J4.3"
+_CLAUSE_SHEAR = "AISC 360-16 §J4.2"
+_SHEAR_STRENGTH_FRACTION = 0.60  # 0.60·Fy (yield) / 0.60·Fu (rupture) on the shear area
 _CLAUSE_TENSION = "AISC 360-16 §D2"
 _CLAUSE_INTERACTION = "AISC 360-16 §H1.1"
 _CLAUSE_CONCRETE_BEARING_ACI = "ACI 318-19 §22.8.3"
@@ -901,6 +905,80 @@ def screen_concrete_bearing(
     return Scorecard(entries=(entry,))
 
 
+class ShearPlate(BaseModel):
+    """A plate element loaded in direct shear (a shear tab, coped-beam web, bracket).
+
+    Screened for the two AISC §J4.2 limit states: shear yielding on the gross shear
+    area ``gross_shear_area`` A_gv (0.60·Fy·A_gv) and shear rupture on the net shear
+    area ``net_shear_area`` A_nv after bolt-hole deductions (0.60·Fu·A_nv). ``load``
+    is the shear force transferred; ``material`` a database id (Fy and Fu drive the
+    two checks). This is the pure-shear limit state, distinct from block-shear
+    tear-out (§J4.3) and bolt shear (§J3.6).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    gross_shear_area: Quantity
+    net_shear_area: Quantity
+    load: Quantity
+    material: str
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> ShearPlate:
+        for value, name in (
+            (self.gross_shear_area, "gross_shear_area"),
+            (self.net_shear_area, "net_shear_area"),
+        ):
+            if not value.has_dimension("[length]**2"):
+                raise ValueError(f"{name} must be an area ([length]**2); got {value}")
+        if not self.load.has_dimension("[force]"):
+            raise ValueError(f"load must be a [force] quantity; got {self.load}")
+        if self.net_shear_area.to("mm**2").magnitude > self.gross_shear_area.to("mm**2").magnitude:
+            raise ValueError(
+                f"net_shear_area ({self.net_shear_area}) cannot exceed the "
+                f"gross_shear_area ({self.gross_shear_area})"
+            )
+        return self
+
+
+def screen_shear_plate(
+    plate: ShearPlate,
+    *,
+    required_safety_factor: float,
+    materials: MaterialsDatabase | None = None,
+) -> Scorecard:
+    """Screen a :class:`ShearPlate`'s two AISC §J4.2 shear limit states.
+
+    Shear yielding compares 0.60·Fy·A_gv to the load; shear rupture compares
+    0.60·Fu·A_nv. Each safety factor (capacity/load) is judged against
+    ``required_safety_factor``; the lesser governs. ``materials`` defaults to the
+    bundled database.
+    """
+    materials = materials or default_materials_db()
+    record = materials.get(plate.material)
+    fy = record.yield_strength.quantity.to("MPa").magnitude
+    fu = record.ultimate_strength.quantity.to("MPa").magnitude
+    gross = plate.gross_shear_area.to("mm**2").magnitude
+    net = plate.net_shear_area.to("mm**2").magnitude
+    load_n = plate.load.to("N").magnitude
+
+    yield_capacity = _SHEAR_STRENGTH_FRACTION * fy * gross
+    rupture_capacity = _SHEAR_STRENGTH_FRACTION * fu * net
+    yield_sf = yield_capacity / load_n if load_n > 0 else float("inf")
+    rupture_sf = rupture_capacity / load_n if load_n > 0 else float("inf")
+    return Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor(
+                f"{plate.name} shear yielding", computed=yield_sf, required=required_safety_factor
+            ).model_copy(update={"reference": _CLAUSE_SHEAR}),
+            ScorecardEntry.from_safety_factor(
+                f"{plate.name} shear rupture", computed=rupture_sf, required=required_safety_factor
+            ).model_copy(update={"reference": _CLAUSE_SHEAR}),
+        )
+    )
+
+
 StructuralMember = (
     BeamMember
     | ColumnMember
@@ -912,6 +990,7 @@ StructuralMember = (
     | TensionMember
     | BeamColumnMember
     | ConcreteBearing
+    | ShearPlate
 )
 
 
@@ -967,7 +1046,11 @@ def screen_structure(
             card = screen_beam_column(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
-        else:
+        elif isinstance(member, ConcreteBearing):
             card = screen_concrete_bearing(member, required_safety_factor=required_safety_factor)
+        else:
+            card = screen_shear_plate(
+                member, required_safety_factor=required_safety_factor, materials=materials
+            )
         entries.extend(card.entries)
     return Scorecard(entries=tuple(entries))

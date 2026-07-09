@@ -22,6 +22,7 @@ from anvilate.packs.structural import (
     GussetPlate,
     LiftingLug,
     LoadType,
+    ShearPlate,
     Support,
     TensionMember,
     WeldedConnection,
@@ -33,6 +34,7 @@ from anvilate.packs.structural import (
     screen_concrete_bearing,
     screen_gusset_plate,
     screen_lifting_lug,
+    screen_shear_plate,
     screen_structure,
     screen_tension_member,
     screen_welded_connection,
@@ -611,6 +613,51 @@ def test_concrete_bearing_rejects_support_below_bearing_area():
 def test_screen_structure_includes_concrete_bearing():
     card = screen_structure([_bearing()], required_safety_factor=2.0)
     assert any("concrete bearing" in e.name for e in card.entries)
+    assert card.status is CheckStatus.PASS
+
+
+def _shear_plate(load: str = "200 kN") -> ShearPlate:
+    return ShearPlate(
+        name="tab",
+        gross_shear_area=_q("2000 mm**2"),
+        net_shear_area=_q("1500 mm**2"),
+        load=_q(load),
+        material="ASTM-A36",
+    )
+
+
+def test_shear_plate_screens_yield_and_rupture():
+    # A36 Fy=250, Fu=400. Yield 0.6*250*2000=300 kN -> SF 1.50 (§J4.2);
+    # rupture 0.6*400*1500=360 kN -> SF 1.80. Yield governs.
+    card = screen_shear_plate(_shear_plate(), required_safety_factor=1.5)
+    assert card.status is CheckStatus.PASS
+    assert [e.name for e in card.entries] == ["tab shear yielding", "tab shear rupture"]
+    assert all(e.reference == "AISC 360-16 §J4.2" for e in card.entries)
+    assert "1.50" in card.entries[0].detail
+    assert "1.80" in card.entries[1].detail
+
+
+def test_overloaded_shear_plate_yields():
+    # 250 kN: yield SF 300/250 = 1.2 < 1.5 -> FAIL.
+    card = screen_shear_plate(_shear_plate(load="250 kN"), required_safety_factor=1.5)
+    assert card.status is CheckStatus.FAIL
+
+
+def test_shear_plate_rejects_net_above_gross():
+    with pytest.raises(ValidationError, match="cannot exceed the"):
+        ShearPlate(
+            name="t",
+            gross_shear_area=_q("1000 mm**2"),
+            net_shear_area=_q("1500 mm**2"),
+            load=_q("200 kN"),
+            material="ASTM-A36",
+        )
+
+
+def test_screen_structure_includes_shear_plates():
+    card = screen_structure([_shear_plate()], required_safety_factor=1.5)
+    assert any("shear yielding" in e.name for e in card.entries)
+    assert any("shear rupture" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
 
