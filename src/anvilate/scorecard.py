@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict
 __all__ = [
     "CheckStatus",
     "ScorecardEntry",
+    "Scorecard",
 ]
 
 
@@ -86,3 +87,41 @@ class ScorecardEntry(BaseModel):
 
     def __str__(self) -> str:
         return f"[{self.status.value.upper()}] {self.name}: {self.detail}"
+
+
+class Scorecard(BaseModel):
+    """A collection of check entries with a rolled-up overall status.
+
+    The roll-up honours No-silent-green: the scorecard :attr:`status` is ``FAIL``
+    if any check failed, else ``NOT_EVALUATED`` if any check could not run (or
+    there are no checks at all), and only ``PASS`` when every check ran and
+    passed. So :attr:`passed` is never true while a check is unevaluated.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    entries: tuple[ScorecardEntry, ...] = ()
+
+    @property
+    def status(self) -> CheckStatus:
+        if any(e.status is CheckStatus.FAIL for e in self.entries):
+            return CheckStatus.FAIL
+        if not self.entries or any(e.status is CheckStatus.NOT_EVALUATED for e in self.entries):
+            return CheckStatus.NOT_EVALUATED
+        return CheckStatus.PASS
+
+    @property
+    def passed(self) -> bool:
+        """True only when there is at least one check and every one ran and passed."""
+        return self.status is CheckStatus.PASS
+
+    def failures(self) -> tuple[ScorecardEntry, ...]:
+        """The checks that ran and failed — the blocking issues."""
+        return tuple(e for e in self.entries if e.status is CheckStatus.FAIL)
+
+    def not_evaluated(self) -> tuple[ScorecardEntry, ...]:
+        """The checks that could not run — the gaps, never silently passed."""
+        return tuple(e for e in self.entries if e.status is CheckStatus.NOT_EVALUATED)
+
+    def __str__(self) -> str:
+        return f"scorecard {self.status.value.upper()} ({len(self.entries)} checks)"
