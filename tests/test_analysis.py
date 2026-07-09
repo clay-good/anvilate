@@ -11,6 +11,7 @@ from anvilate.analysis import (
     axial_stress,
     bearing_stress,
     bolt_preload_from_torque,
+    bolt_shear_stress,
     cantilever_end_load,
     cantilever_uniform_load,
     circular_area,
@@ -352,6 +353,20 @@ def test_torque_preload_round_trips():
     assert torque.to("N*m").magnitude == pytest.approx(10.0, rel=1e-6)
     back = bolt_preload_from_torque(torque=torque, nominal_diameter=_q("8 mm"))
     assert back.to("N").magnitude == pytest.approx(6250.0, rel=1e-6)
+
+
+def test_bolt_shear_stress_single_and_double():
+    # 10 kN through an 8 mm bolt: A = pi*8^2/4 = 50.27 mm^2.
+    #   single shear tau = 10000/50.27 = 198.9 MPa; double shear halves it.
+    single = bolt_shear_stress(force=_q("10 kN"), diameter=_q("8 mm"))
+    assert single.to("MPa").magnitude == pytest.approx(198.94, rel=1e-4)
+    double = bolt_shear_stress(force=_q("10 kN"), diameter=_q("8 mm"), shear_planes=2)
+    assert double.to("MPa").magnitude == pytest.approx(single.to("MPa").magnitude / 2, rel=1e-9)
+
+
+def test_bolt_shear_rejects_bad_planes():
+    with pytest.raises(ValueError, match="shear_planes must be a positive integer"):
+        bolt_shear_stress(force=_q("10 kN"), diameter=_q("8 mm"), shear_planes=0)
 
 
 def test_bearing_stress_matches_worked_example():

@@ -17,6 +17,8 @@ As with the beam and column checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
+from math import pi
+
 from ..units import Quantity
 
 __all__ = [
@@ -24,6 +26,7 @@ __all__ = [
     "bolt_preload_from_torque",
     "torque_for_preload",
     "bearing_stress",
+    "bolt_shear_stress",
 ]
 
 # Typical nut factor K for as-received (lightly-oiled) steel fasteners. Dry/rough
@@ -105,5 +108,28 @@ def bearing_stress(
         if value.to("mm").magnitude <= 0:
             raise ValueError(f"{name} must be positive; got {value}")
     stress = force.pint / (diameter.pint * thickness.pint)
+    converted = stress.to("MPa")
+    return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def bolt_shear_stress(
+    *,
+    force: Quantity,
+    diameter: Quantity,
+    shear_planes: int = 1,
+) -> Quantity:
+    """The average shear stress τ = F/(n·A) across a bolt or pin in shear.
+
+    ``force`` is the transverse load, ``diameter`` the shank diameter (A = π·d²/4),
+    and ``shear_planes`` the number of shear planes — 1 for single shear (a lap
+    joint), 2 for double shear (a clevis). Returns the shear stress in MPa;
+    ``shear_planes`` must be a positive integer.
+    """
+    _require(force, "[force]", "force")
+    _require(diameter, "[length]", "diameter")
+    if shear_planes < 1:
+        raise ValueError(f"shear_planes must be a positive integer; got {shear_planes}")
+    area = pi * diameter.pint**2 / 4
+    stress = force.pint / (shear_planes * area)
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")

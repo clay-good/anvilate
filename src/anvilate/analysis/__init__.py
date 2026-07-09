@@ -42,6 +42,7 @@ from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
     bearing_stress,
     bolt_preload_from_torque,
+    bolt_shear_stress,
     torque_for_preload,
 )
 from .fatigue import goodman_safety_factor, goodman_scorecard
@@ -86,6 +87,7 @@ __all__ = [
     "bolt_preload_from_torque",
     "torque_for_preload",
     "bearing_stress",
+    "bolt_shear_stress",
     "goodman_safety_factor",
     "goodman_scorecard",
     "polar_second_moment_solid",
