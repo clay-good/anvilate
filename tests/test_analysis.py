@@ -29,11 +29,13 @@ from anvilate.analysis import (
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
     johnson_critical_stress,
+    max_shear_stress_plane,
     max_transverse_shear_stress,
     natural_frequency,
     natural_frequency_from_deflection,
     polar_second_moment_hollow,
     polar_second_moment_solid,
+    principal_stresses_plane,
     radius_of_gyration,
     rectangular_second_moment,
     shaft_torsional_stress,
@@ -48,6 +50,7 @@ from anvilate.analysis import (
     thin_wall_sphere_stress,
     torque_for_preload,
     transition_slenderness,
+    tresca_equivalent_stress,
     von_mises_bending_torsion,
     von_mises_plane_stress,
     wahl_factor,
@@ -760,6 +763,31 @@ def test_von_mises_plane_stress_worked_example():
     # sigma_x=100, sigma_y=0, tau=50 MPa: sqrt(100^2 + 3*50^2) = sqrt(17500) = 132.29.
     vm = von_mises_plane_stress(sigma_x=_q("100 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("50 MPa"))
     assert vm.to("MPa").magnitude == pytest.approx(132.288, rel=1e-4)
+
+
+def test_principal_stresses_and_tresca_worked_example():
+    # sigma_x=100, sigma_y=0, tau=50: centre 50, radius sqrt(50^2+50^2)=70.71;
+    #   sigma_1 = 120.71, sigma_2 = -20.71.
+    kw = {"sigma_x": _q("100 MPa"), "sigma_y": _q("0 MPa"), "tau_xy": _q("50 MPa")}
+    s1, s2 = principal_stresses_plane(**kw)
+    assert s1.to("MPa").magnitude == pytest.approx(120.711, rel=1e-4)
+    assert s2.to("MPa").magnitude == pytest.approx(-20.711, rel=1e-4)
+    # Tresca eq = sigma_max - sigma_min over {120.71, -20.71, 0} = 141.42 MPa;
+    # tau_max is half that.
+    tau_max = max_shear_stress_plane(**kw)
+    assert tau_max.to("MPa").magnitude == pytest.approx(70.711, rel=1e-4)
+    tresca = tresca_equivalent_stress(**kw)
+    assert tresca.to("MPa").magnitude == pytest.approx(141.421, rel=1e-4)
+
+
+def test_tresca_is_never_below_von_mises():
+    # Tresca is the conservative criterion: sigma_tresca >= sigma_vm always.
+    kw = {"sigma_x": _q("100 MPa"), "sigma_y": _q("0 MPa"), "tau_xy": _q("50 MPa")}
+    tresca = tresca_equivalent_stress(**kw).to("MPa").magnitude
+    vm = von_mises_plane_stress(**kw).to("MPa").magnitude
+    assert tresca >= vm
+    assert tresca == pytest.approx(141.421, rel=1e-4)
+    assert vm == pytest.approx(132.288, rel=1e-4)
 
 
 def test_von_mises_reduces_to_uniaxial_and_pure_shear():

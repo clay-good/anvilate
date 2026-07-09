@@ -24,6 +24,9 @@ from ..units import Quantity
 __all__ = [
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
+    "principal_stresses_plane",
+    "max_shear_stress_plane",
+    "tresca_equivalent_stress",
     "yield_safety_factor",
     "strength_scorecard",
     "CombinedNormalStress",
@@ -103,6 +106,62 @@ def von_mises_plane_stress(
     txy = _require_stress(tau_xy, "tau_xy")
     vm = sqrt(sx * sx - sx * sy + sy * sy + 3 * txy * txy)
     return Quantity(magnitude=vm, unit="MPa")
+
+
+def principal_stresses_plane(
+    *,
+    sigma_x: Quantity,
+    sigma_y: Quantity,
+    tau_xy: Quantity,
+) -> tuple[Quantity, Quantity]:
+    """The two in-plane principal stresses of a plane-stress state.
+
+    σ₁,₂ = (σx+σy)/2 ± √(((σx−σy)/2)² + τxy²). Returns ``(σ₁, σ₂)`` with σ₁ ≥ σ₂,
+    both in MPa. The out-of-plane principal is zero for plane stress.
+    """
+    sx = _require_stress(sigma_x, "sigma_x")
+    sy = _require_stress(sigma_y, "sigma_y")
+    txy = _require_stress(tau_xy, "tau_xy")
+    centre = (sx + sy) / 2
+    radius = sqrt(((sx - sy) / 2) ** 2 + txy * txy)
+    return (
+        Quantity(magnitude=centre + radius, unit="MPa"),
+        Quantity(magnitude=centre - radius, unit="MPa"),
+    )
+
+
+def max_shear_stress_plane(
+    *,
+    sigma_x: Quantity,
+    sigma_y: Quantity,
+    tau_xy: Quantity,
+) -> Quantity:
+    """The maximum shear stress τ_max of a plane-stress state.
+
+    τ_max = (σ_max − σ_min)/2 over the three principal stresses (the two in-plane
+    principals and the zero out-of-plane one) — the basis of the Tresca criterion.
+    Returns the shear stress in MPa.
+    """
+    s1, s2 = principal_stresses_plane(sigma_x=sigma_x, sigma_y=sigma_y, tau_xy=tau_xy)
+    principals = (s1.to("MPa").magnitude, s2.to("MPa").magnitude, 0.0)
+    return Quantity(magnitude=(max(principals) - min(principals)) / 2, unit="MPa")
+
+
+def tresca_equivalent_stress(
+    *,
+    sigma_x: Quantity,
+    sigma_y: Quantity,
+    tau_xy: Quantity,
+) -> Quantity:
+    """The Tresca (maximum-shear) equivalent stress of a plane-stress state.
+
+    σ_tresca = σ_max − σ_min over the three principal stresses (out-of-plane = 0),
+    i.e. twice :func:`max_shear_stress_plane`. The Tresca criterion is the more
+    conservative alternative to von Mises (σ_tresca ≥ σ_vm always), required by
+    some pressure-vessel and structural codes. Returns the equivalent stress in MPa.
+    """
+    tau_max = max_shear_stress_plane(sigma_x=sigma_x, sigma_y=sigma_y, tau_xy=tau_xy)
+    return Quantity(magnitude=2 * tau_max.to("MPa").magnitude, unit="MPa")
 
 
 def von_mises_bending_torsion(
