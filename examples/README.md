@@ -19,6 +19,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | Example | What it shows |
 |---|---|
 | `cantilever_bracket_check.py` | A cantilever bracket screened for bending yield *and* deflection — passes yield but fails the deflection limit, so the scorecard is FAIL (no silent green). |
+| `machine_on_floor_beam.py` | A 15 kN machine at the quarter point of a floor beam: the conservative assume-mid-span screen fails at SF 1.19, but declaring the actual `load_position` passes at 1.58 — margin a worst-case hand check throws away. |
 | `mezzanine_structure.py` | A whole structure — a floor beam on two posts — screened into one scorecard via `screen_structure`. |
 | `beam_column_check.py` | A round HSS pipe column under combined axial load and bending, screened by the AISC §H1.1 interaction equation (the case pure-beam and pure-column checks can't express). |
 | `brace_tie_check.py` | A bolted single-angle tension brace (AISC §D2): gross yielding passes comfortably, but shear lag makes net-section rupture govern. |

@@ -149,6 +149,18 @@ def test_coped_beam_web_example_is_governed_by_shear_rupture():
     assert _sf(rupture) < _sf(yielding)
 
 
+def test_machine_on_floor_beam_example_recovers_margin_from_the_real_position():
+    namespace = runpy.run_path(str(_EXAMPLES / "machine_on_floor_beam.py"))
+    card = namespace["screen_floor_beam"]()
+    # The assume-mid-span screen fails (M = P*L/4 -> SF 1.19 < 1.5), but the real
+    # quarter-point moment is 3/4 of that, so the actual-position screen passes
+    # (SF 1.58). Same beam, same load -- only the declared position differs.
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert not by_name["assumed mid-span bending"].passed
+    assert by_name["actual position bending"].passed
+
+
 def test_hanger_bracket_example_fails_only_the_combined_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "hanger_bracket_bolt.py"))
     card = namespace["screen_hanger_bolt"]()
