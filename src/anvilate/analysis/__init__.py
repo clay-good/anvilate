@@ -28,6 +28,7 @@ from .beam import (
     max_transverse_shear_stress,
     rectangular_second_moment,
     simply_supported_center_load,
+    simply_supported_uniform_load,
 )
 from .column import (
     ColumnEnd,
@@ -66,6 +67,7 @@ __all__ = [
     "BeamBendingResult",
     "cantilever_end_load",
     "simply_supported_center_load",
+    "simply_supported_uniform_load",
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",

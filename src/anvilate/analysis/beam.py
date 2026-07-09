@@ -24,6 +24,7 @@ __all__ = [
     "BeamBendingResult",
     "cantilever_end_load",
     "simply_supported_center_load",
+    "simply_supported_uniform_load",
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",
@@ -244,6 +245,43 @@ def simply_supported_center_load(
     moment = f * length_p / 4
     stress = moment * c / inertia
     deflection = f * length_p**3 / (48 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def simply_supported_uniform_load(
+    *,
+    distributed_load: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The simply-supported beam under a uniformly distributed load (Roark/Shigley).
+
+    A prismatic beam simply supported over a span ``length`` carrying a uniform
+    ``distributed_load`` w (force per unit length — self-weight, pressure on a
+    span). Returns the peak bending stress at mid-span (σ = M·c/I with the maximum
+    moment M = w·L²/8) and the mid-span deflection (δ = 5·w·L⁴/(384·E·I)). Every
+    argument is dimension-checked.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w * length_p**2 / 8
+    stress = moment * c / inertia
+    deflection = 5 * w * length_p**4 / (384 * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),

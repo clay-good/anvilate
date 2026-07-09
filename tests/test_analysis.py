@@ -30,6 +30,7 @@ from anvilate.analysis import (
     shaft_torsional_stress,
     shaft_twist_angle,
     simply_supported_center_load,
+    simply_supported_uniform_load,
     slenderness_ratio,
     strength_scorecard,
     thin_wall_cylinder,
@@ -97,6 +98,34 @@ def test_simply_supported_center_load_matches_worked_example():
     )
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(37.5, rel=1e-4)
     assert result.max_deflection.to("mm").magnitude == pytest.approx(0.78125, rel=1e-4)
+
+
+def test_simply_supported_uniform_load_matches_worked_example():
+    # 1 N/mm UDL over a 500 mm, 20x10 mm steel beam:
+    #   M_max = w*L^2/8 = 31250 N*mm -> sigma = M*c/I = 31250*5/1666.67 = 93.75 MPa;
+    #   delta = 5*w*L^4/(384*E*I) = 5*1*500^4/(384*200000*1666.67) = 2.441 mm.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = simply_supported_uniform_load(
+        distributed_load=_q("1 N/mm"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(93.75, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(2.4414, rel=1e-4)
+
+
+def test_simply_supported_uniform_load_rejects_point_load_units():
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    with pytest.raises(ValueError, match="distributed_load must be a"):
+        simply_supported_uniform_load(
+            distributed_load=_q("100 N"),  # a force, not force-per-length
+            length=_q("500 mm"),
+            second_moment=inertia,
+            extreme_fibre=_q("5 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_simply_supported_is_stiffer_and_lower_stress_than_cantilever():
