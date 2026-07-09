@@ -35,6 +35,8 @@ from ..analysis import (
     fixed_fixed_center_load,
     fixed_fixed_offset_load,
     fixed_fixed_uniform_load,
+    fixed_pinned_center_load,
+    fixed_pinned_uniform_load,
     johnson_critical_stress,
     simply_supported_center_load,
     simply_supported_offset_load,
@@ -124,6 +126,7 @@ class Support(StrEnum):
     CANTILEVER = "cantilever"
     SIMPLY_SUPPORTED = "simply_supported"
     FIXED_FIXED = "fixed_fixed"
+    FIXED_PINNED = "fixed_pinned"  # a propped cantilever: one wall, one prop
 
 
 class LoadType(StrEnum):
@@ -138,11 +141,13 @@ _POINT_CHECKS = {
     Support.CANTILEVER: cantilever_end_load,
     Support.SIMPLY_SUPPORTED: simply_supported_center_load,
     Support.FIXED_FIXED: fixed_fixed_center_load,
+    Support.FIXED_PINNED: fixed_pinned_center_load,
 }
 _DISTRIBUTED_CHECKS = {
     Support.CANTILEVER: cantilever_uniform_load,
     Support.SIMPLY_SUPPORTED: simply_supported_uniform_load,
     Support.FIXED_FIXED: fixed_fixed_uniform_load,
+    Support.FIXED_PINNED: fixed_pinned_uniform_load,
 }
 _OFFSET_POINT_CHECKS = {
     Support.CANTILEVER: cantilever_offset_load,
@@ -160,7 +165,7 @@ class BeamMember(BaseModel):
     ``load_position`` places a point load away from its default position — off
     mid-span on a simply-supported or fixed-fixed member (measured from either
     support), or short of the tip on a cantilever (measured from the fixed end).
-    Only point loads support it.
+    Only point loads on those three supports accept it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -200,6 +205,10 @@ class BeamMember(BaseModel):
                 raise ValueError(
                     "load_position is only supported for a point load; got "
                     f"{self.support.value}/{self.load_type.value}"
+                )
+            if self.support not in _OFFSET_POINT_CHECKS:
+                raise ValueError(
+                    f"load_position is not supported for a {self.support.value} member"
                 )
         return self
 

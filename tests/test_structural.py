@@ -165,6 +165,42 @@ def test_load_position_requires_a_point_load():
             )
 
 
+def test_load_position_rejects_the_fixed_pinned_support():
+    # No offset closed form is wired up for the propped cantilever, so declaring
+    # one must fail loudly instead of silently falling back to mid-span.
+    with pytest.raises(ValidationError, match="not supported for a fixed_pinned member"):
+        BeamMember(
+            name="beam",
+            section=_section(),
+            length=_q("500 mm"),
+            support=Support.FIXED_PINNED,
+            load=_q("100 N"),
+            load_type=LoadType.POINT,
+            material="ASTM-A36",
+            load_position=_q("125 mm"),
+        )
+
+
+def test_fixed_pinned_member_dispatches_to_the_propped_checks():
+    # A propped-cantilever point member must produce the fixed_pinned_center_load
+    # stress: M = 3*F*L/16 = 9375 N*mm -> sigma 28.125 MPa -> SF 250/28.125 = 8.89.
+    card = screen_beam_member(
+        _member(Support.FIXED_PINNED, LoadType.POINT, "100 N"), required_safety_factor=1.5
+    )
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.PASS
+    assert "8.89" in bending.detail
+    # And the distributed member the fixed_pinned_uniform_load stress: M = w*L^2/8
+    # = 31250 N*mm -> sigma 93.75 MPa -> SF 250/93.75 = 2.67.
+    card = screen_beam_member(
+        _member(Support.FIXED_PINNED, LoadType.DISTRIBUTED, "1 N/mm"),
+        required_safety_factor=1.5,
+    )
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.PASS
+    assert "2.67" in bending.detail
+
+
 def test_support_condition_changes_the_dispatch():
     # For the same load, a fixed-fixed beam is far less stressed than a cantilever,
     # confirming the support drives which check runs.
