@@ -14,6 +14,7 @@ from anvilate.analysis import (
 )
 from anvilate.packs.structural import (
     BasePlate,
+    BeamColumnMember,
     BeamMember,
     BoltedConnection,
     ColumnMember,
@@ -24,6 +25,7 @@ from anvilate.packs.structural import (
     TensionMember,
     WeldedConnection,
     screen_base_plate,
+    screen_beam_column,
     screen_beam_member,
     screen_bolted_connection,
     screen_column_member,
@@ -512,6 +514,56 @@ def test_screen_structure_includes_tension_members():
     card = screen_structure([_tension()], required_safety_factor=2.0)
     assert any("gross yielding" in e.name for e in card.entries)
     assert any("net rupture" in e.name for e in card.entries)
+    assert card.status is CheckStatus.PASS
+
+
+def _beam_column(axial: str = "200 kN", moment: str = "20 kN*m") -> BeamColumnMember:
+    return BeamColumnMember(
+        name="bc",
+        section=CrossSection.rectangular(width=_q("60 mm"), height=_q("100 mm")),
+        length=_q("2000 mm"),
+        axial_load=_q(axial),
+        moment=_q(moment),
+        material="ASTM-A992",
+        end_condition=ColumnEnd.PINNED_PINNED,
+    )
+
+
+def test_beam_column_interaction_low_axial_branch():
+    # A992: E=200 GPa, Fy=345. Section 60x100: A=6000, S=100000, r=28.868.
+    # lambda=2000/28.868=69.28 < lambda1=107 -> Johnson sigma_cr=272.6 MPa;
+    # Pc=1635.8 kN, Mc=Fy*S=34.5 kN*m. Pr/Pc=0.122 < 0.2 so H1.1(b):
+    # ratio = 0.122/2 + 20/34.5 = 0.0611 + 0.5797 = 0.6408 -> SF 1/ratio = 1.56.
+    card = screen_beam_column(_beam_column(), required_safety_factor=1.5)
+    assert card.status is CheckStatus.PASS
+    assert card.entries[0].name == "bc interaction"
+    assert card.entries[0].reference == "AISC 360-16 §H1.1"
+    assert "1.56" in card.entries[0].detail
+
+
+def test_beam_column_interaction_high_axial_branch_uses_8_9_form():
+    # Pr=500 kN -> Pr/Pc=0.306 >= 0.2 so H1.1(a):
+    # ratio = 0.306 + (8/9)*0.5797 = 0.306 + 0.5153 = 0.821 -> SF 1.218.
+    card = screen_beam_column(_beam_column(axial="500 kN"), required_safety_factor=1.5)
+    assert card.status is CheckStatus.FAIL  # 1.22 < 1.5
+    assert "1.22" in card.entries[0].detail
+
+
+def test_beam_column_rejects_non_moment():
+    with pytest.raises(ValidationError, match="moment must be a"):
+        BeamColumnMember(
+            name="bc",
+            section=CrossSection.rectangular(width=_q("60 mm"), height=_q("100 mm")),
+            length=_q("2000 mm"),
+            axial_load=_q("200 kN"),
+            moment=_q("20 kN"),  # a force, not a moment
+            material="ASTM-A992",
+        )
+
+
+def test_screen_structure_includes_beam_columns():
+    card = screen_structure([_beam_column()], required_safety_factor=1.5)
+    assert any("interaction" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
 

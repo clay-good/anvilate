@@ -62,6 +62,8 @@ __all__ = [
     "screen_gusset_plate",
     "TensionMember",
     "screen_tension_member",
+    "BeamColumnMember",
+    "screen_beam_column",
     "StructuralMember",
     "screen_structure",
 ]
@@ -93,6 +95,7 @@ _CLAUSE_BASEPLATE_BENDING = "AISC Design Guide 1"
 _CLAUSE_LUG = "ASME BTH-1 §3-3"
 _CLAUSE_BLOCK_SHEAR = "AISC 360-16 §J4.3"
 _CLAUSE_TENSION = "AISC 360-16 §D2"
+_CLAUSE_INTERACTION = "AISC 360-16 §H1.1"
 
 
 class Support(StrEnum):
@@ -741,6 +744,93 @@ def screen_tension_member(
     )
 
 
+class BeamColumnMember(BaseModel):
+    """A member carrying combined axial compression and bending (a beam-column).
+
+    Screened by the AISC §H1.1 interaction equation. ``section``'s ``second_moment``
+    is the buckling (weak) axis; ``end_condition`` sets the effective-length factor;
+    ``axial_load`` is the compression and ``moment`` the applied bending moment;
+    ``material`` a database id (E and yield drive both capacities).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    section: CrossSection
+    length: Quantity
+    axial_load: Quantity
+    moment: Quantity
+    material: str
+    end_condition: ColumnEnd = ColumnEnd.PINNED_PINNED
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> BeamColumnMember:
+        if not self.length.has_dimension("[length]"):
+            raise ValueError(f"length must be a [length] quantity; got {self.length}")
+        if not self.axial_load.has_dimension("[force]"):
+            raise ValueError(f"axial_load must be a [force] quantity; got {self.axial_load}")
+        if not self.moment.has_dimension("[force] * [length]"):
+            raise ValueError(
+                f"moment must be a [force]*[length] quantity; got {self.moment.dimensionality}"
+            )
+        return self
+
+
+def screen_beam_column(
+    member: BeamColumnMember,
+    *,
+    required_safety_factor: float,
+    materials: MaterialsDatabase | None = None,
+) -> Scorecard:
+    """Screen a :class:`BeamColumnMember` by the AISC §H1.1 interaction equation.
+
+    The available axial strength Pc is the buckling critical stress (Euler or
+    Johnson, chosen by slenderness, as in :func:`screen_column_member`) times the
+    area; the available flexural strength Mc is the first-yield moment Fy·S. The
+    §H1.1 interaction ratio — Pr/Pc + 8/9·Mr/Mc when Pr/Pc ≥ 0.2, else Pr/(2·Pc) +
+    Mr/Mc — is unity at capacity, so its reciprocal is the safety factor screened
+    against ``required_safety_factor``. ``materials`` defaults to the bundled
+    database.
+    """
+    materials = materials or default_materials_db()
+    record = materials.get(member.material)
+    modulus = record.elastic_modulus.quantity
+    yield_strength = record.yield_strength.quantity
+
+    effective_length = Quantity(
+        magnitude=member.end_condition.factor() * member.length.to("mm").magnitude,
+        unit="mm",
+    )
+    lam = slenderness_ratio(
+        effective_length=effective_length,
+        radius_of_gyration=member.section.radius_of_gyration,
+    )
+    lam_1 = transition_slenderness(yield_strength=yield_strength, elastic_modulus=modulus)
+    if lam >= lam_1:
+        critical = euler_critical_stress(elastic_modulus=modulus, slenderness_ratio=lam)
+    else:
+        critical = johnson_critical_stress(
+            yield_strength=yield_strength, elastic_modulus=modulus, slenderness_ratio=lam
+        )
+
+    axial_capacity = critical.to("MPa").magnitude * member.section.area.to("mm**2").magnitude
+    flexural_capacity = (
+        yield_strength.to("MPa").magnitude * member.section.section_modulus.to("mm**3").magnitude
+    )
+    pr_pc = member.axial_load.to("N").magnitude / axial_capacity
+    mr_mc = member.moment.to("N*mm").magnitude / flexural_capacity
+    if pr_pc >= 0.2:
+        interaction = pr_pc + (8.0 / 9.0) * mr_mc
+    else:
+        interaction = pr_pc / 2.0 + mr_mc
+
+    safety = float("inf") if interaction == 0 else 1.0 / interaction
+    entry = ScorecardEntry.from_safety_factor(
+        f"{member.name} interaction", computed=safety, required=required_safety_factor
+    ).model_copy(update={"reference": _CLAUSE_INTERACTION})
+    return Scorecard(entries=(entry,))
+
+
 StructuralMember = (
     BeamMember
     | ColumnMember
@@ -750,6 +840,7 @@ StructuralMember = (
     | LiftingLug
     | GussetPlate
     | TensionMember
+    | BeamColumnMember
 )
 
 
@@ -797,8 +888,12 @@ def screen_structure(
             card = screen_gusset_plate(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
-        else:
+        elif isinstance(member, TensionMember):
             card = screen_tension_member(
+                member, required_safety_factor=required_safety_factor, materials=materials
+            )
+        else:
+            card = screen_beam_column(
                 member, required_safety_factor=required_safety_factor, materials=materials
             )
         entries.extend(card.entries)
