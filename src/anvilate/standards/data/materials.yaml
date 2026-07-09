@@ -232,3 +232,22 @@ materials:
     ultimate_strength:
       quantity: {magnitude: 241.0, unit: MPa}
       citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "T6 temper"}
+
+  AA-6082-T6:
+    name: "Aluminum 6082-T6"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 70.0, unit: GPa}
+      citation: {source: "ASM — 6082-T6", condition: "T6 temper, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "ASM — 6082-T6", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 2.70, unit: g/cm**3}
+      citation: {source: "ASM — 6082-T6", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 250.0, unit: MPa}
+      citation: {source: "EN 755-2 — EN AW-6082-T6 extrusions (thickness ≤5 mm)", condition: "T6 temper, 0.2% proof, Rp0.2 minimum"}
+    ultimate_strength:
+      quantity: {magnitude: 290.0, unit: MPa}
+      citation: {source: "EN 755-2 — EN AW-6082-T6 extrusions (thickness ≤5 mm)", condition: "T6 temper, Rm minimum"}

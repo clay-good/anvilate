@@ -51,6 +51,21 @@ def test_extrusion_alloy_6063_resolved(db: MaterialsDatabase) -> None:
     assert "T6" in al.yield_strength.citation.condition
 
 
+def test_structural_extrusion_alloy_6082_resolved(db: MaterialsDatabase) -> None:
+    # 6082-T6 is the higher-strength structural extrusion alloy (vs the softer
+    # 6063); its strengths are the EN 755-2 extrusion minima (Rp0.2 250, Rm 290).
+    al = db.get("AA-6082-T6")
+    assert al.category == "aluminum"
+    assert al.yield_strength.quantity.to("MPa").magnitude == pytest.approx(250.0)
+    assert al.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(290.0)
+    assert "EN 755-2" in al.yield_strength.citation.source
+    # Distinctly stronger than the soft extrusion alloy it complements.
+    assert (
+        al.yield_strength.quantity.to("MPa").magnitude
+        > db.get("AA-6063-T6").yield_strength.quantity.to("MPa").magnitude
+    )
+
+
 def test_mild_steel_1018_resolved_with_estimated_endurance(db: MaterialsDatabase) -> None:
     # 1018 CD is the reference general-purpose mild steel; its strengths are the
     # Shigley Table A-20 cold-drawn values, and the endurance limit is a labeled
