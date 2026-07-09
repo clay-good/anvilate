@@ -716,6 +716,27 @@ def test_cylindricity_is_a_form_control_rejecting_datums():
         )
 
 
+def test_runout_controls_require_a_datum_axis():
+    # Circular and total runout are referenced to a datum axis (a rotating part).
+    for characteristic in (
+        GeometricCharacteristic.CIRCULAR_RUNOUT,
+        GeometricCharacteristic.TOTAL_RUNOUT,
+    ):
+        ok = GeometricTolerance(
+            characteristic=characteristic,
+            tolerance=Quantity.parse("0.02 mm"),
+            feature="shaft_journal",
+            datums=["A"],
+        )
+        assert ok.datums == ["A"]
+        with pytest.raises(ValidationError, match="requires at least one datum"):
+            GeometricTolerance(
+                characteristic=characteristic,
+                tolerance=Quantity.parse("0.02 mm"),
+                feature="shaft_journal",
+            )
+
+
 def test_parallelism_and_angularity_require_a_datum():
     # Both are orientation controls: legal with a datum, rejected without one.
     for characteristic in (

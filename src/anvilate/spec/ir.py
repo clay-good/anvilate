@@ -319,6 +319,9 @@ class GeometricCharacteristic(StrEnum):
     ANGULARITY = "angularity"
     # Location control — needs a datum.
     POSITION = "position"
+    # Runout controls — need a datum axis.
+    CIRCULAR_RUNOUT = "circular_runout"
+    TOTAL_RUNOUT = "total_runout"
 
 
 # Form controls reference no datum; orientation/location controls require one.
@@ -336,6 +339,8 @@ _DATUM_REQUIRED = frozenset(
         GeometricCharacteristic.PARALLELISM,
         GeometricCharacteristic.ANGULARITY,
         GeometricCharacteristic.POSITION,
+        GeometricCharacteristic.CIRCULAR_RUNOUT,
+        GeometricCharacteristic.TOTAL_RUNOUT,
     }
 )
 
