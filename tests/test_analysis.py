@@ -16,6 +16,9 @@ from anvilate.analysis import (
     simply_supported_center_load,
     thin_wall_cylinder,
     torque_for_preload,
+    von_mises_bending_torsion,
+    von_mises_plane_stress,
+    yield_safety_factor,
 )
 from anvilate.units import Quantity
 
@@ -247,6 +250,39 @@ def test_thin_wall_cylinder_rejects_bad_inputs():
             radius=_q("100 mm"),
             wall_thickness=_q("0 mm"),
         )
+
+
+def test_von_mises_plane_stress_worked_example():
+    # sigma_x=100, sigma_y=0, tau=50 MPa: sqrt(100^2 + 3*50^2) = sqrt(17500) = 132.29.
+    vm = von_mises_plane_stress(sigma_x=_q("100 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("50 MPa"))
+    assert vm.to("MPa").magnitude == pytest.approx(132.288, rel=1e-4)
+
+
+def test_von_mises_reduces_to_uniaxial_and_pure_shear():
+    # Uniaxial: von Mises equals the applied normal stress.
+    uni = von_mises_plane_stress(sigma_x=_q("100 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("0 MPa"))
+    assert uni.to("MPa").magnitude == pytest.approx(100.0, rel=1e-9)
+    # Pure shear: von Mises = sqrt(3) * tau ~ 173.2 MPa for tau = 100 MPa.
+    shear = von_mises_plane_stress(sigma_x=_q("0 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("100 MPa"))
+    assert shear.to("MPa").magnitude == pytest.approx(173.205, rel=1e-4)
+
+
+def test_von_mises_bending_torsion_matches_plane_stress():
+    # The bending+torsion convenience is the plane-stress form with sigma_y = 0.
+    combined = von_mises_bending_torsion(bending_stress=_q("100 MPa"), shear_stress=_q("50 MPa"))
+    plane = von_mises_plane_stress(sigma_x=_q("100 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("50 MPa"))
+    assert combined.to("MPa").magnitude == pytest.approx(plane.to("MPa").magnitude, rel=1e-9)
+
+
+def test_yield_safety_factor_from_equivalent_stress():
+    vm = von_mises_bending_torsion(bending_stress=_q("100 MPa"), shear_stress=_q("50 MPa"))
+    # 132.29 MPa equivalent against a 276 MPa yield → SF ~ 2.086.
+    assert yield_safety_factor(vm, _q("276 MPa")) == pytest.approx(276 / 132.288, rel=1e-4)
+
+
+def test_von_mises_rejects_non_stress_inputs():
+    with pytest.raises(ValueError, match="tau_xy must be a"):
+        von_mises_plane_stress(sigma_x=_q("100 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("50 mm"))
 
 
 def test_cantilever_rejects_wrong_dimensions():

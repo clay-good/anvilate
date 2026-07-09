@@ -6,8 +6,9 @@ package holds those checks; :mod:`anvilate.analysis.beam` covers the cantilever
 and simply-supported bending cases, :mod:`anvilate.analysis.column` the Euler
 buckling load, :mod:`anvilate.analysis.fastener` the bolt torque-tension
 relation, :mod:`anvilate.analysis.torsion` the solid-shaft torsion check, and
-:mod:`anvilate.analysis.pressure_vessel` the thin-wall cylinder stresses. Further
-analytical cases land here as they are built out (see
+:mod:`anvilate.analysis.pressure_vessel` the thin-wall cylinder stresses, and
+:mod:`anvilate.analysis.stress` the von Mises combination of component stresses.
+Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
 """
 
@@ -26,6 +27,11 @@ from .fastener import (
     torque_for_preload,
 )
 from .pressure_vessel import ThinWallStress, thin_wall_cylinder
+from .stress import (
+    von_mises_bending_torsion,
+    von_mises_plane_stress,
+    yield_safety_factor,
+)
 from .torsion import (
     polar_second_moment_solid,
     shaft_torsional_stress,
@@ -47,4 +53,7 @@ __all__ = [
     "shaft_twist_angle",
     "ThinWallStress",
     "thin_wall_cylinder",
+    "von_mises_plane_stress",
+    "von_mises_bending_torsion",
+    "yield_safety_factor",
 ]
