@@ -5,8 +5,9 @@ The T1 validation tier screens a design with handbook closed-form solutions
 package holds those checks; :mod:`anvilate.analysis.beam` covers the cantilever
 and simply-supported bending cases, :mod:`anvilate.analysis.column` the Euler
 buckling load, :mod:`anvilate.analysis.fastener` the bolt torque-tension
-relation, and :mod:`anvilate.analysis.torsion` the solid-shaft torsion check.
-Further analytical cases land here as they are built out (see
+relation, :mod:`anvilate.analysis.torsion` the solid-shaft torsion check, and
+:mod:`anvilate.analysis.pressure_vessel` the thin-wall cylinder stresses. Further
+analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
 """
 
@@ -24,6 +25,7 @@ from .fastener import (
     bolt_preload_from_torque,
     torque_for_preload,
 )
+from .pressure_vessel import ThinWallStress, thin_wall_cylinder
 from .torsion import (
     polar_second_moment_solid,
     shaft_torsional_stress,
@@ -43,4 +45,6 @@ __all__ = [
     "polar_second_moment_solid",
     "shaft_torsional_stress",
     "shaft_twist_angle",
+    "ThinWallStress",
+    "thin_wall_cylinder",
 ]

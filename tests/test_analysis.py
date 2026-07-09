@@ -14,6 +14,7 @@ from anvilate.analysis import (
     shaft_torsional_stress,
     shaft_twist_angle,
     simply_supported_center_load,
+    thin_wall_cylinder,
     torque_for_preload,
 )
 from anvilate.units import Quantity
@@ -212,6 +213,40 @@ def test_shaft_twist_angle_matches_worked_example():
 def test_shaft_torsion_rejects_wrong_dimensions():
     with pytest.raises(ValueError, match="torque must be a"):
         shaft_torsional_stress(torque=_q("50 N"), diameter=_q("20 mm"))  # force, not torque
+
+
+def test_thin_wall_cylinder_matches_worked_example():
+    # 2 MPa internal pressure, 100 mm radius, 5 mm wall:
+    #   hoop = p*r/t = 2*100/5 = 40 MPa; longitudinal = p*r/(2t) = 20 MPa; r/t = 20.
+    result = thin_wall_cylinder(
+        pressure=_q("2 MPa"),
+        radius=_q("100 mm"),
+        wall_thickness=_q("5 mm"),
+    )
+    assert result.hoop_stress.to("MPa").magnitude == pytest.approx(40.0, rel=1e-6)
+    assert result.longitudinal_stress.to("MPa").magnitude == pytest.approx(20.0, rel=1e-6)
+    assert result.thin_wall_ratio == pytest.approx(20.0)
+    # Hoop is exactly twice the longitudinal stress.
+    assert result.hoop_stress.to("MPa").magnitude == pytest.approx(
+        2 * result.longitudinal_stress.to("MPa").magnitude
+    )
+    # Governing (hoop) safety factor against a 250 MPa yield.
+    assert result.bending_safety_factor(_q("250 MPa")) == pytest.approx(6.25, rel=1e-6)
+
+
+def test_thin_wall_cylinder_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="pressure must be a"):
+        thin_wall_cylinder(
+            pressure=_q("2 mm"),  # not a pressure
+            radius=_q("100 mm"),
+            wall_thickness=_q("5 mm"),
+        )
+    with pytest.raises(ValueError, match="wall_thickness must be positive"):
+        thin_wall_cylinder(
+            pressure=_q("2 MPa"),
+            radius=_q("100 mm"),
+            wall_thickness=_q("0 mm"),
+        )
 
 
 def test_cantilever_rejects_wrong_dimensions():
