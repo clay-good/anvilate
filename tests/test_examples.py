@@ -19,3 +19,12 @@ def test_cantilever_bracket_example_screens_to_a_failing_scorecard():
     by_name = {e.name: e for e in card.entries}
     assert by_name["bending yield"].status is CheckStatus.PASS
     assert by_name["tip deflection"].status is CheckStatus.FAIL
+
+
+def test_bolted_joint_example_screens_to_a_passing_scorecard():
+    namespace = runpy.run_path(str(_EXAMPLES / "bolted_joint_check.py"))
+    card = namespace["screen_bolted_joint"]()
+    # The joint is sized so both bearing and shear pass -> overall PASS.
+    assert card.status is CheckStatus.PASS
+    assert {e.name for e in card.entries} == {"plate bearing", "bolt shear"}
+    assert all(e.passed for e in card.entries)
