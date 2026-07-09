@@ -51,6 +51,17 @@ def test_extrusion_alloy_6063_resolved(db: MaterialsDatabase) -> None:
     assert "T6" in al.yield_strength.citation.condition
 
 
+def test_aerospace_aluminum_2024_resolved(db: MaterialsDatabase) -> None:
+    # 2024-T3 is the classic aerospace structural aluminum (fuselage skins),
+    # distinct from the 7075 already in the DB; ASM T3 values.
+    al = db.get("AA-2024-T3")
+    assert al.category == "aluminum"
+    assert al.elastic_modulus.quantity.to("GPa").magnitude == pytest.approx(73.1)
+    assert al.yield_strength.quantity.to("MPa").magnitude == pytest.approx(345.0)
+    assert al.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(483.0)
+    assert "T3" in al.yield_strength.citation.condition
+
+
 def test_cast_aluminum_a356_resolved(db: MaterialsDatabase) -> None:
     # A356-T6 is the DB's first casting alloy (all others are wrought); common for
     # cast brackets, housings, and wheels. T6 permanent-mold values.

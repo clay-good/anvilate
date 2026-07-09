@@ -53,6 +53,25 @@ materials:
       quantity: {magnitude: 572.0, unit: MPa}
       citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "T6 temper"}
 
+  AA-2024-T3:
+    name: "Aluminum 2024-T3"
+    category: aluminum
+    elastic_modulus:
+      quantity: {magnitude: 73.1, unit: GPa}
+      citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "T3 temper, room temperature"}
+    poisson_ratio:
+      value: 0.33
+      citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 2.78, unit: g/cm**3}
+      citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 345.0, unit: MPa}
+      citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "T3 temper, 0.2% offset (50 ksi)"}
+    ultimate_strength:
+      quantity: {magnitude: 483.0, unit: MPa}
+      citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "T3 temper (70 ksi)"}
+
   ASTM-A36:
     name: "ASTM A36 structural steel"
     category: carbon_steel
