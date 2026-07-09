@@ -218,6 +218,55 @@ def cantilever_end_load(
     )
 
 
+def cantilever_offset_load(
+    *,
+    force: Quantity,
+    load_position: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The cantilever with a point load short of the tip (Roark/Shigley).
+
+    A prismatic beam fixed at one end and free at the other, carrying a
+    transverse ``force`` at ``load_position`` a, measured from the fixed end,
+    with 0 < a ≤ length. Other arguments match :func:`cantilever_end_load`,
+    which this generalizes: at the tip (a = L) the two agree exactly.
+
+    Returns the peak bending stress at the fixed end (σ = M·c/I with M = F·a)
+    and the free-tip deflection δ = F·a²·(3L − a)/(6·E·I) — the beam is straight
+    but rotated beyond the load, so the maximum is always at the tip. Every
+    argument is dimension-checked.
+    """
+    _require(force, "[force]", "force")
+    _require(load_position, "[length]", "load_position")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    f = force.pint
+    length_p = length.pint
+    position = load_position.pint.to(length_p.units)
+    if not 0 < position.magnitude <= length_p.magnitude:
+        raise ValueError(
+            f"load_position must lie on the beam (0, {length}], measured from the "
+            f"fixed end; got {load_position}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = f * position
+    stress = moment * c / inertia
+    deflection = f * position**2 * (3 * length_p - position) / (6 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
 def cantilever_uniform_load(
     *,
     distributed_load: Quantity,

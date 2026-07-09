@@ -13,6 +13,7 @@ from anvilate.analysis import (
     bolt_preload_from_torque,
     bolt_shear_stress,
     cantilever_end_load,
+    cantilever_offset_load,
     cantilever_uniform_load,
     circular_area,
     circular_second_moment,
@@ -110,6 +111,57 @@ def test_cantilever_units_carry_through_customary_inputs():
     )
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
     assert result.max_deflection.to("mm").magnitude == pytest.approx(12.5, rel=1e-4)
+
+
+def test_cantilever_offset_load_matches_worked_example():
+    # Same 500 mm, 20 x 10 mm steel cantilever, 100 N at mid-length (250 mm from
+    # the fixed end). By hand: M = F*a = 25000 N*mm -> sigma = 25000*5/1666.67
+    # = 75 MPa; delta_tip = F*a^2*(3L-a)/(6*E*I) = 100*250^2*1250/(6*200000*1666.67)
+    # = 3.90625 mm.
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = cantilever_offset_load(
+        force=_q("100 N"),
+        load_position=_q("250 mm"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(75.0, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(3.90625, rel=1e-4)
+
+
+def test_cantilever_offset_load_degenerates_to_the_end_case():
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "force": _q("100 N"),
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    offset = cantilever_offset_load(load_position=_q("500 mm"), **kw)
+    end = cantilever_end_load(**kw)
+    assert offset.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        end.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    assert offset.max_deflection.to("mm").magnitude == pytest.approx(
+        end.max_deflection.to("mm").magnitude, rel=1e-9
+    )
+
+
+def test_cantilever_offset_load_rejects_positions_off_the_beam():
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {
+        "force": _q("100 N"),
+        "length": _q("500 mm"),
+        "second_moment": inertia,
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    for position in ("0 mm", "-10 mm", "600 mm"):
+        with pytest.raises(ValueError, match="load_position must lie on the beam"):
+            cantilever_offset_load(load_position=_q(position), **kw)
 
 
 def test_simply_supported_center_load_matches_worked_example():
