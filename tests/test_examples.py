@@ -185,6 +185,20 @@ def test_press_on_clamped_beam_example_shows_mid_span_is_unconservative():
     assert not by_name["at third point bending"].passed
 
 
+def test_walkway_beam_example_recovers_deflection_margin_from_end_fixity():
+    namespace = runpy.run_path(str(_EXAMPLES / "walkway_beam_end_fixity.py"))
+    card = namespace["screen_walkway_beam"]()
+    # Bending passes identically both ways (M = w*L^2/8 either way, SF 3.0); only
+    # deflection separates them: pin-pin 11.57 mm fails L/360 = 11.11 mm, the
+    # propped cantilever's 4.81 mm passes.
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["assumed pin-pin bending"].passed
+    assert not by_name["assumed pin-pin deflection"].passed
+    assert by_name["wall end fixed bending"].passed
+    assert by_name["wall end fixed deflection"].passed
+
+
 def test_clip_angle_example_fails_only_the_relocated_tearout():
     namespace = runpy.run_path(str(_EXAMPLES / "clip_angle_edge_tearout.py"))
     card = namespace["screen_clip_bolt"]()
