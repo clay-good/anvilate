@@ -3,8 +3,9 @@
 The beam, column, and axial checks each need a section's area, second moment, and
 extreme-fibre distance. :class:`CrossSection` bundles them (plus the derived
 section modulus and radius of gyration) and builds them for the common shapes —
-rectangular, solid round, and hollow round — so a caller constructs the section
-once and hands its properties to any check.
+rectangular, solid round, hollow round, hollow rectangular, and the doubly
+symmetric I — so a caller constructs the section once and hands its properties
+to any check.
 """
 
 from __future__ import annotations
@@ -34,8 +35,8 @@ class CrossSection(BaseModel):
     ``area`` A, ``second_moment`` I, and ``extreme_fibre`` c (neutral axis to the
     outermost fibre) are the trio the stress checks consume;
     :attr:`section_modulus` (I/c) and :attr:`radius_of_gyration` (√(I/A)) derive
-    from them. Build one with :meth:`rectangular`, :meth:`solid_circular`, or
-    :meth:`hollow_circular`.
+    from them. Build one with :meth:`rectangular`, :meth:`solid_circular`,
+    :meth:`hollow_circular`, :meth:`hollow_rectangular`, or :meth:`i_section`.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -92,4 +93,60 @@ class CrossSection(BaseModel):
             area=Quantity(magnitude=pi * (do**2 - di**2) / 4, unit="mm**2"),
             second_moment=Quantity(magnitude=pi * (do**4 - di**4) / 64, unit="mm**4"),
             extreme_fibre=_mm(do / 2),
+        )
+
+    @classmethod
+    def hollow_rectangular(
+        cls, *, width: Quantity, height: Quantity, wall_thickness: Quantity
+    ) -> CrossSection:
+        """A rectangular box tube of uniform ``wall_thickness``, bending about the
+        axis normal to ``height``: A = b·h − (b−2t)·(h−2t),
+        I = (b·h³ − (b−2t)·(h−2t)³)/12, c = h/2."""
+        b = _require_length(width, "width")
+        h = _require_length(height, "height")
+        t = _require_length(wall_thickness, "wall_thickness")
+        if not 0 < 2 * t < min(b, h):
+            raise ValueError(
+                f"wall_thickness ({wall_thickness}) must be positive and below half "
+                f"the smaller outside dimension ({width} x {height})"
+            )
+        bi, hi = b - 2 * t, h - 2 * t
+        return cls(
+            area=Quantity(magnitude=b * h - bi * hi, unit="mm**2"),
+            second_moment=Quantity(magnitude=(b * h**3 - bi * hi**3) / 12, unit="mm**4"),
+            extreme_fibre=_mm(h / 2),
+        )
+
+    @classmethod
+    def i_section(
+        cls,
+        *,
+        depth: Quantity,
+        flange_width: Quantity,
+        flange_thickness: Quantity,
+        web_thickness: Quantity,
+    ) -> CrossSection:
+        """A doubly symmetric I-shape bending about its strong axis: overall
+        ``depth`` h, two ``flange_width`` × ``flange_thickness`` flanges, and a web
+        of ``web_thickness`` between them. A = 2·bf·tf + (h−2·tf)·tw,
+        I = (bf·h³ − (bf−tw)·(h−2·tf)³)/12, c = h/2."""
+        h = _require_length(depth, "depth")
+        bf = _require_length(flange_width, "flange_width")
+        tf = _require_length(flange_thickness, "flange_thickness")
+        tw = _require_length(web_thickness, "web_thickness")
+        if not 0 < 2 * tf < h:
+            raise ValueError(
+                f"flange_thickness ({flange_thickness}) must be positive and below "
+                f"half the depth ({depth})"
+            )
+        if not 0 < tw <= bf:
+            raise ValueError(
+                f"web_thickness ({web_thickness}) must be positive and at most the "
+                f"flange_width ({flange_width})"
+            )
+        hw = h - 2 * tf  # clear web height between the flanges
+        return cls(
+            area=Quantity(magnitude=2 * bf * tf + hw * tw, unit="mm**2"),
+            second_moment=Quantity(magnitude=(bf * h**3 - (bf - tw) * hw**3) / 12, unit="mm**4"),
+            extreme_fibre=_mm(h / 2),
         )

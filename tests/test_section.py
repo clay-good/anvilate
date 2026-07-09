@@ -42,6 +42,72 @@ def test_hollow_circular_section_properties_and_validation():
         CrossSection.hollow_circular(outer_diameter=_q("10 mm"), inner_diameter=_q("10 mm"))
 
 
+def test_hollow_rectangular_section_properties_and_validation():
+    # 80 x 120 box, t = 5: inner 70 x 110. A = 9600 - 7700 = 1900,
+    #   I = (80*120^3 - 70*110^3)/12 = 3,755,833, c = 60, Z = 62,597,
+    #   r = sqrt(I/A) = 44.46.
+    s = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    assert s.area.to("mm**2").magnitude == pytest.approx(1900.0)
+    assert s.second_moment.to("mm**4").magnitude == pytest.approx(3755833.3, rel=1e-4)
+    assert s.extreme_fibre.to("mm").magnitude == pytest.approx(60.0)
+    assert s.section_modulus.to("mm**3").magnitude == pytest.approx(62597.2, rel=1e-4)
+    assert s.radius_of_gyration.to("mm").magnitude == pytest.approx(44.4617, rel=1e-4)
+    # Walls that meet (or cross) in the middle are not a tube.
+    for t in ("40 mm", "50 mm", "0 mm"):
+        with pytest.raises(ValueError, match="must be positive and below half"):
+            CrossSection.hollow_rectangular(
+                width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q(t)
+            )
+
+
+def test_i_section_properties_and_validation():
+    # h = 200, bf = 100, tf = 10, tw = 6: A = 2*1000 + 180*6 = 3080,
+    #   I = (100*200^3 - 94*180^3)/12 = 20,982,667, c = 100, Z = 209,827,
+    #   r = sqrt(I/A) = 82.54.
+    s = CrossSection.i_section(
+        depth=_q("200 mm"),
+        flange_width=_q("100 mm"),
+        flange_thickness=_q("10 mm"),
+        web_thickness=_q("6 mm"),
+    )
+    assert s.area.to("mm**2").magnitude == pytest.approx(3080.0)
+    assert s.second_moment.to("mm**4").magnitude == pytest.approx(20982666.7, rel=1e-4)
+    assert s.extreme_fibre.to("mm").magnitude == pytest.approx(100.0)
+    assert s.section_modulus.to("mm**3").magnitude == pytest.approx(209826.7, rel=1e-4)
+    assert s.radius_of_gyration.to("mm").magnitude == pytest.approx(82.539, rel=1e-4)
+    with pytest.raises(ValueError, match="below half the depth"):
+        CrossSection.i_section(
+            depth=_q("200 mm"),
+            flange_width=_q("100 mm"),
+            flange_thickness=_q("100 mm"),
+            web_thickness=_q("6 mm"),
+        )
+    with pytest.raises(ValueError, match="at most the flange_width"):
+        CrossSection.i_section(
+            depth=_q("200 mm"),
+            flange_width=_q("100 mm"),
+            flange_thickness=_q("10 mm"),
+            web_thickness=_q("120 mm"),
+        )
+
+
+def test_i_section_degenerates_to_the_solid_rectangle():
+    # With tw = bf the "I" is just a solid bar, so I and A must match exactly.
+    i = CrossSection.i_section(
+        depth=_q("200 mm"),
+        flange_width=_q("100 mm"),
+        flange_thickness=_q("10 mm"),
+        web_thickness=_q("100 mm"),
+    )
+    rect = CrossSection.rectangular(width=_q("100 mm"), height=_q("200 mm"))
+    assert i.area.to("mm**2").magnitude == pytest.approx(rect.area.to("mm**2").magnitude)
+    assert i.second_moment.to("mm**4").magnitude == pytest.approx(
+        rect.second_moment.to("mm**4").magnitude
+    )
+
+
 def test_cross_section_feeds_a_beam_check():
     # The section's I and c drive a bending check directly, matching the
     # standalone helpers: a 20x10 cantilever -> 150 MPa at the tip load.
