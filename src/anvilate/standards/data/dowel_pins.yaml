@@ -1,0 +1,33 @@
+# Parallel (cylindrical) dowel-pin dimensions (schema: standards-data).
+#
+# ISO 2338 parallel pins of unhardened steel / austenitic stainless. The facts a
+# mating design retrieves are the nominal diameter d, its tolerance class (m6 is
+# the standard grade; h8 is the alternative), the end chamfer c, and the range of
+# commercial lengths l the pin is stocked in. The pin seats in a reamed hole
+# sized from d and the chosen class through the ISO 286 tables — so only the pin's
+# own standardized dimensions live here, not the mating fit. The source standard
+# is not redistributed, only the dimension table.
+dataset:
+  name: anvilate-dowel-pins-seed
+  version: "0.1.0"
+  source: "ISO 2338 parallel-pin dimensions"
+  license: "CC0-1.0 (dimension values only; source standard not redistributed)"
+  retrieved: "2026-07-08"
+
+# nominal_diameter (d), chamfer (c), length_min / length_max (l) in mm; the
+# standard tolerance class m6 applies to d unless a design selects h8.
+tolerance_class: m6
+pins:
+  "ISO2338-1": {nominal_diameter: 1, chamfer: 0.20, length_min: 4, length_max: 10}
+  "ISO2338-1.5": {nominal_diameter: 1.5, chamfer: 0.30, length_min: 4, length_max: 16}
+  "ISO2338-2": {nominal_diameter: 2, chamfer: 0.35, length_min: 6, length_max: 20}
+  "ISO2338-2.5": {nominal_diameter: 2.5, chamfer: 0.40, length_min: 6, length_max: 24}
+  "ISO2338-3": {nominal_diameter: 3, chamfer: 0.50, length_min: 8, length_max: 30}
+  "ISO2338-4": {nominal_diameter: 4, chamfer: 0.63, length_min: 8, length_max: 40}
+  "ISO2338-5": {nominal_diameter: 5, chamfer: 0.80, length_min: 10, length_max: 50}
+  "ISO2338-6": {nominal_diameter: 6, chamfer: 1.2, length_min: 12, length_max: 60}
+  "ISO2338-8": {nominal_diameter: 8, chamfer: 1.6, length_min: 14, length_max: 80}
+  "ISO2338-10": {nominal_diameter: 10, chamfer: 2.0, length_min: 18, length_max: 95}
+  "ISO2338-12": {nominal_diameter: 12, chamfer: 2.5, length_min: 22, length_max: 140}
+  "ISO2338-16": {nominal_diameter: 16, chamfer: 3.0, length_min: 26, length_max: 180}
+  "ISO2338-20": {nominal_diameter: 20, chamfer: 3.5, length_min: 35, length_max: 200}

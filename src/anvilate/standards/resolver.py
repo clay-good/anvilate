@@ -4,15 +4,16 @@ The spec layer validates material and component references against an injected
 resolver (its ``ReferenceResolver`` protocol). This module supplies one backed
 by the real databases, so "which references exist" has a single source of
 truth: materials from the materials database, NEMA frames from the components
-database, and ball bearings from the bearing table. Component families without a
-dimension table yet (extrusions, fasteners) are covered by a small static seed
-set until those tables land.
+database, ball bearings from the bearing table, and dowel pins from the dowel-pin
+table. Component families without a dimension table yet (extrusions, fasteners)
+are covered by a small static seed set until those tables land.
 """
 
 from __future__ import annotations
 
 from .bearings import BearingTable, default_bearing_table
 from .components import ComponentsDatabase, default_components_db
+from .dowels import DowelPinTable, default_dowel_pin_table
 from .materials import MaterialsDatabase, default_materials_db
 
 __all__ = ["StandardsResolver", "default_standards_resolver"]
@@ -25,19 +26,22 @@ _SEED_COMPONENTS = frozenset({"EXT-4040", "EXT-2020", "ISO4762-M5"})
 
 class StandardsResolver:
     """Resolves materials against the materials database and components against
-    the components database and bearing table (plus a static seed for families
-    without a table). Satisfies the spec layer's ``ReferenceResolver`` protocol."""
+    the components database, bearing table, and dowel-pin table (plus a static
+    seed for families without a table). Satisfies the spec layer's
+    ``ReferenceResolver`` protocol."""
 
     def __init__(
         self,
         materials: MaterialsDatabase,
         components: ComponentsDatabase,
         bearings: BearingTable,
+        dowels: DowelPinTable,
         extra_components: frozenset[str],
     ) -> None:
         self._materials = materials
         self._components = components
         self._bearings = bearings
+        self._dowels = dowels
         self._extra_components = extra_components
 
     def has_material(self, ref: str) -> bool:
@@ -47,6 +51,7 @@ class StandardsResolver:
         return (
             self._components.has_component(ref)
             or self._bearings.has_bearing(ref)
+            or self._dowels.has_pin(ref)
             or ref in self._extra_components
         )
 
@@ -57,6 +62,7 @@ class StandardsResolver:
         return sorted(
             set(self._components.known_components())
             | set(self._bearings.designations())
+            | set(self._dowels.designations())
             | self._extra_components
         )
 
@@ -67,5 +73,6 @@ def default_standards_resolver() -> StandardsResolver:
         default_materials_db(),
         default_components_db(),
         default_bearing_table(),
+        default_dowel_pin_table(),
         _SEED_COMPONENTS,
     )

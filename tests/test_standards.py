@@ -466,6 +466,77 @@ def test_bearing_unknown_designation_surfaces_gap(bearings) -> None:
     assert exc.value.suggestions
 
 
+# --- Parallel dowel pins (ISO 2338) ---
+
+
+@pytest.fixture(scope="module")
+def dowels():
+    from anvilate.standards import default_dowel_pin_table
+
+    return default_dowel_pin_table()
+
+
+def test_dowel_pin_dimensions_with_citation(dowels) -> None:
+    # A 6 mm ISO 2338 pin: diameter 6 mm at class m6, 1.2 mm chamfer, stocked
+    # 12-60 mm; each dimension carries its ISO 2338 citation.
+    p6 = dowels.get("ISO2338-6")
+    assert p6.nominal_diameter.quantity.to("mm").magnitude == pytest.approx(6.0)
+    assert p6.tolerance_class == "m6"
+    assert p6.chamfer.quantity.to("mm").magnitude == pytest.approx(1.2)
+    assert p6.length_min.quantity.to("mm").magnitude == pytest.approx(12.0)
+    assert p6.length_max.quantity.to("mm").magnitude == pytest.approx(60.0)
+    assert "ISO 2338" in p6.nominal_diameter.citation.source
+    assert p6.nominal_diameter.citation.license
+
+
+def test_dowel_pin_dimensions_are_length(dowels) -> None:
+    for designation in dowels.designations():
+        rec = dowels.get(designation)
+        for field in ("nominal_diameter", "chamfer", "length_min", "length_max"):
+            assert getattr(rec, field).quantity.has_dimension("[length]"), (designation, field)
+
+
+def test_dowel_pin_citations_expose_the_evidence_trail(dowels) -> None:
+    citations = dowels.get("ISO2338-3").citations()
+    assert set(citations) == {"nominal_diameter", "chamfer", "length_min", "length_max"}
+    for name, cite in citations.items():
+        assert isinstance(cite, PropertyCitation), name
+        assert cite.source and cite.license, name
+
+
+def test_dowel_pin_ordering_is_numeric(dowels) -> None:
+    # ISO2338-2 sorts before ISO2338-10 by nominal diameter, not lexically.
+    designations = dowels.designations()
+    assert designations.index("ISO2338-2") < designations.index("ISO2338-10")
+    assert designations.index("ISO2338-10") < designations.index("ISO2338-20")
+
+
+def test_dowel_pin_length_range_is_ordered(dowels) -> None:
+    for designation in dowels.designations():
+        rec = dowels.get(designation)
+        lo = rec.length_min.quantity.to("mm").magnitude
+        hi = rec.length_max.quantity.to("mm").magnitude
+        assert lo < hi, designation
+
+
+def test_dowel_pin_unknown_designation_surfaces_gap(dowels) -> None:
+    from anvilate.standards import UnknownDowelPinError
+
+    with pytest.raises(UnknownDowelPinError) as exc:
+        dowels.get("ISO2338-7")  # not a standard size; a gap, not a guess
+    assert exc.value.suggestions
+
+
+def test_dowel_pins_resolve_as_standard_components() -> None:
+    # Dowel pins join the one component set the resolver answers over.
+    from anvilate.standards import default_standards_resolver
+
+    resolver = default_standards_resolver()
+    assert resolver.has_component("ISO2338-6")
+    assert "ISO2338-6" in set(resolver.known_components())
+    assert not resolver.has_component("ISO2338-7")
+
+
 # --- Metric clearance holes (ISO 273) ---
 
 
