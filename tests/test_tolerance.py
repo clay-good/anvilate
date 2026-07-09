@@ -743,6 +743,24 @@ def test_process_floor_differs_by_process() -> None:
     assert tolerance_is_achievable("cnc_turning", band).achievable is True
 
 
+def test_precision_finishing_processes_hold_tight_tolerances() -> None:
+    # A 0.008 mm band (+/-0.004) is unachievable on milling and turning but the
+    # grinding and wire-EDM floors (0.005) accept it — the precision-finishing
+    # capability the DFM screen previously lacked.
+    band = SymmetricTolerance(plus_minus=_mm(0.004)).resolve(_mm(10)).width
+    assert tolerance_is_achievable("cnc_milling", band).achievable is False
+    assert tolerance_is_achievable("cnc_turning", band).achievable is False
+    assert tolerance_is_achievable("grinding", band).achievable is True
+    assert tolerance_is_achievable("wire_edm", band).achievable is True
+
+
+def test_molding_processes_are_screenable() -> None:
+    # Molding/casting floors sit between machining and additive: a 0.10 mm band is
+    # exactly at the injection-molding floor, a 0.05 mm band is below it.
+    assert tolerance_is_achievable("injection_molding", _mm(0.10)).achievable is True
+    assert tolerance_is_achievable("die_casting", _mm(0.05)).achievable is False
+
+
 def test_boundary_tolerance_equal_to_floor_is_achievable() -> None:
     # Exactly at the floor counts as achievable (>=): a 0.05 mm band on milling.
     band = SymmetricTolerance(plus_minus=_mm(0.025)).resolve(_mm(10)).width
@@ -769,15 +787,29 @@ def test_achievability_rejects_non_length_band() -> None:
 
 
 def test_processes_that_can_hold_suggests_alternatives() -> None:
-    # A 0.1 mm band (±0.05) is held by milling (0.05) and turning (0.025) but not
-    # the 0.20 mm additive/sheet floors, coarsest-capable (milling) first.
+    # A 0.1 mm band (±0.05) is held by every process with a floor ≤ 0.10 — the
+    # machining and molding floors — but not the 0.20 mm additive/sheet floors.
     holders = processes_that_can_hold(_mm(0.1))
-    assert holders == ["cnc_milling", "cnc_turning"]
+    assert set(holders) == {
+        "injection_molding",
+        "die_casting",
+        "cnc_milling",
+        "cnc_turning",
+        "reaming",
+        "grinding",
+        "wire_edm",
+    }
+    assert "fdm" not in holders and "sheet_metal" not in holders
+    # Suggestions lead coarsest-capable first (the least-precise, cheapest option).
+    assert process_capability(holders[0]).finest_tolerance.to("mm").magnitude == pytest.approx(0.10)
     # A 0.3 mm band is held by every process; the coarsest (0.20) floors lead.
     assert processes_that_can_hold(_mm(0.3))[0] in {"fdm", "sls", "sheet_metal"}
-    # A 0.01 mm band is tighter than every floor — no process holds it, so the
+    # A 0.01 mm band is now held by the precision finishing floors (reaming 0.01,
+    # grinding/wire EDM 0.005) — a tight tolerance is achievable, not impossible.
+    assert set(processes_that_can_hold(_mm(0.01))) == {"reaming", "grinding", "wire_edm"}
+    # A 0.002 mm band is tighter than every floor — no process holds it, so the
     # tolerance must be relaxed.
-    assert processes_that_can_hold(_mm(0.01)) == []
+    assert processes_that_can_hold(_mm(0.002)) == []
 
 
 def test_processes_that_can_hold_rejects_non_length() -> None:

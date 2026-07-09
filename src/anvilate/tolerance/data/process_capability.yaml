@@ -30,3 +30,18 @@ processes:
   sheet_metal:
     finest_tolerance: 0.20
     note: "sheet metal features; bend and form tolerances are coarser still"
+  grinding:
+    finest_tolerance: 0.005
+    note: "precision surface/cylindrical grinding; a finishing floor below milling"
+  wire_edm:
+    finest_tolerance: 0.005
+    note: "wire EDM; holds tight profile tolerances independent of material hardness"
+  reaming:
+    finest_tolerance: 0.01
+    note: "reamed holes; a finishing floor for bores below drilled/milled capability"
+  injection_molding:
+    finest_tolerance: 0.10
+    note: "molded thermoplastic; tighter than FDM but shrinkage- and tool-limited"
+  die_casting:
+    finest_tolerance: 0.10
+    note: "as-cast metal features; machined features on the casting hold tighter"

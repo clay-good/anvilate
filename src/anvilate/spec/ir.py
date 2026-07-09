@@ -76,9 +76,14 @@ class MaterialRef(_Base):
 class ManufacturingProcess(StrEnum):
     CNC_MILLING = "cnc_milling"
     CNC_TURNING = "cnc_turning"
+    GRINDING = "grinding"
+    WIRE_EDM = "wire_edm"
+    REAMING = "reaming"
     FDM = "fdm"
     SLS = "sls"
     SHEET_METAL = "sheet_metal"
+    INJECTION_MOLDING = "injection_molding"
+    DIE_CASTING = "die_casting"
 
 
 class Manufacturing(_Base):
