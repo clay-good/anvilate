@@ -25,6 +25,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `brace_tie_check.py` | A bolted single-angle tension brace (AISC §D2): gross yielding passes comfortably, but shear lag makes net-section rupture govern. |
 | `column_base_plate.py` | A column base plate sized for AISC concrete bearing (§J8) *and* cantilever plate bending (Design Guide 1) — bearing passes but the plate-bending check governs and fails, flagging a too-thin plate. |
 | `hanger_bracket_bolt.py` | A bracket bolt under combined tension and shear: every one-axis check clears SF 2.0, but the AISC §J3.7 combined interaction fails — the case one-axis-at-a-time checks miss. |
+| `clip_angle_edge_tearout.py` | A clip-angle bolt relocated toward the plate edge: bolt shear and bearing never see the move, but the AISC §J3.10 bolt-hole tear-out check drops from SF 6.4 to 1.28 and fails. |
 | `coped_beam_web_shear.py` | A coped beam web at a bolted end connection screened for both AISC §J4.2 shear limit states: bolt-hole deductions make shear rupture — not gross yielding — govern. |
 | `lifting_padeye.py` | A welded lifting padeye assembly (lug + fillet weld) screened together; flags an under-sized pin against the rigging safety factor. |
 | `lug_drawing.py` | The full white-space vertical: code-check a lifting lug (ASME BTH-1), then export its plan outline to a fabrication DXF. |

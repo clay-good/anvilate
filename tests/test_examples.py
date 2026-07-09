@@ -161,6 +161,19 @@ def test_machine_on_floor_beam_example_recovers_margin_from_the_real_position():
     assert by_name["actual position bending"].passed
 
 
+def test_clip_angle_example_fails_only_the_relocated_tearout():
+    namespace = runpy.run_path(str(_EXAMPLES / "clip_angle_edge_tearout.py"))
+    card = namespace["screen_clip_bolt"]()
+    # Shear (SF 1.57) and bearing (1.67) are identical at both positions, but the
+    # relocated bolt's clear distance drops to 4 mm and tear-out fails at SF 1.28.
+    assert card.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["as detailed edge tear-out"].passed
+    assert by_name["relocated bolt shear"].passed
+    assert by_name["relocated plate bearing"].passed
+    assert not by_name["relocated edge tear-out"].passed
+
+
 def test_hanger_bracket_example_fails_only_the_combined_interaction():
     namespace = runpy.run_path(str(_EXAMPLES / "hanger_bracket_bolt.py"))
     card = namespace["screen_hanger_bolt"]()
