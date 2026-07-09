@@ -27,6 +27,7 @@ from anvilate.analysis import (
     frequency_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
+    hertz_sphere_contact,
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
@@ -679,6 +680,72 @@ def test_interference_fit_hollow_shaft_lowers_pressure():
         shaft_bore_diameter=_q("30 mm"),
     )
     assert hollow.contact_pressure.to("MPa").magnitude < solid.contact_pressure.to("MPa").magnitude
+
+
+def test_hertz_sphere_contact_matches_hand_calc():
+    # Two Ø20 mm steel spheres (E=200 GPa, nu=0.3), 100 N:
+    #   1/E* = 2*(1-0.09)/200000 -> E* = 109890 MPa; R = 5 mm (1/R = 1/10 + 1/10);
+    #   a = (3*100*5/(4*109890))**(1/3) = 0.15055 mm; p_max = 3*100/(2*pi*a^2) = 2106 MPa.
+    c = hertz_sphere_contact(
+        force=_q("100 N"),
+        diameter1=_q("20 mm"),
+        diameter2=_q("20 mm"),
+        modulus1=_q("200 GPa"),
+        poisson1=0.3,
+        modulus2=_q("200 GPa"),
+        poisson2=0.3,
+    )
+    assert c.contact_radius.to("mm").magnitude == pytest.approx(0.150554, rel=1e-4)
+    assert c.max_contact_pressure.to("MPa").magnitude == pytest.approx(2106.5, rel=1e-4)
+    assert c.surface_safety_factor(_q("2000 MPa")) == pytest.approx(2000 / 2106.5, rel=1e-4)
+
+
+def test_hertz_sphere_on_flat_softens_the_contact():
+    # A sphere on a flat has R = R1 (the flat's 1/R2 -> 0), double the effective
+    # radius of two equal spheres, so the patch is larger and the peak pressure
+    # lower than the two-sphere case above.
+    two = hertz_sphere_contact(
+        force=_q("100 N"),
+        diameter1=_q("20 mm"),
+        diameter2=_q("20 mm"),
+        modulus1=_q("200 GPa"),
+        poisson1=0.3,
+        modulus2=_q("200 GPa"),
+        poisson2=0.3,
+    )
+    flat = hertz_sphere_contact(
+        force=_q("100 N"),
+        diameter1=_q("20 mm"),
+        modulus1=_q("200 GPa"),
+        poisson1=0.3,
+        modulus2=_q("200 GPa"),
+        poisson2=0.3,
+    )
+    assert flat.contact_radius.to("mm").magnitude > two.contact_radius.to("mm").magnitude
+    assert (
+        flat.max_contact_pressure.to("MPa").magnitude < two.max_contact_pressure.to("MPa").magnitude
+    )
+
+
+def test_hertz_sphere_contact_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="force must be a"):
+        hertz_sphere_contact(
+            force=_q("100 mm"),  # not a force
+            diameter1=_q("20 mm"),
+            modulus1=_q("200 GPa"),
+            poisson1=0.3,
+            modulus2=_q("200 GPa"),
+            poisson2=0.3,
+        )
+    with pytest.raises(ValueError, match="diameter1 must be positive"):
+        hertz_sphere_contact(
+            force=_q("100 N"),
+            diameter1=_q("0 mm"),
+            modulus1=_q("200 GPa"),
+            poisson1=0.3,
+            modulus2=_q("200 GPa"),
+            poisson2=0.3,
+        )
 
 
 def test_interference_holding_capacity_matches_hand_calc():
