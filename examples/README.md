@@ -31,6 +31,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `bolted_joint_check.py` | A bolted lap joint: preload from torque, plate bearing, and bolt shear, all from the materials DB. |
 | `motor_mount_resonance.py` | A cantilevered motor mount whose fundamental frequency falls below the running speed — a resonance FAIL. |
 | `shrink_fit_check.py` | An ISO 286 interference fit (Ø40 H7/s6) turned into a thick-wall contact pressure and hub bore hoop stress, screened against yield. Ties the tolerance, analysis, and materials layers together. |
+| `wheel_rail_contact.py` | A crane wheel on a rail screened for Hertzian line-contact surface pressure — annealed steel fails, the lesson that rolling-contact parts must be surface-hardened. |
 
 ## Tolerance & manufacturability
 

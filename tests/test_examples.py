@@ -119,6 +119,15 @@ def test_tolerance_stackup_example_worst_case_fails_but_yield_is_high():
     assert 0.98 < result["predicted_yield"] < 1.0
 
 
+def test_wheel_rail_contact_example_fails_on_soft_steel():
+    namespace = runpy.run_path(str(_EXAMPLES / "wheel_rail_contact.py"))
+    card = namespace["screen_wheel_contact"]()
+    # The ~600 MPa surface contact pressure exceeds annealed 4140's 417 MPa yield
+    # -> FAIL, the lesson that rolling-contact parts must be surface-hardened.
+    assert card.status is CheckStatus.FAIL
+    assert [e.name for e in card.entries] == ["wheel/rail surface contact"]
+
+
 def test_shrink_fit_example_passes_hub_yield():
     namespace = runpy.run_path(str(_EXAMPLES / "shrink_fit_check.py"))
     card = namespace["screen_shrink_fit"]()
