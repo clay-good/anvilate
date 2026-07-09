@@ -19,9 +19,10 @@
 #     these coarse diameter steps, so the values are exact. Above 50 mm r/s split
 #     into finer steps than this table carries, so no r/s entry appears there and
 #     the code rejects the lookup rather than reading a neighbouring step.
-# The h/H basis letters have zero fundamental deviation and need no entry. The
-# grade-dependent letter j, the r/s holes, and the finer-stepped t/u (and r/s
-# above 50 mm), land later.
+# The R/S holes derive from these same r/s `ei` values by the delta rule (also
+# <= 50 mm). The h/H basis letters have zero fundamental deviation and need no
+# entry. The grade-dependent letter j and the finer-stepped t/u (and r/s above
+# 50 mm) land later.
 # Diameter steps match the IT-grade table so a zone's width and deviation share
 # one range. Values are exact tabulated integers. The source is not redistributed.
 dataset:

@@ -465,9 +465,24 @@ def test_rs_shaft_above_50mm_rejected() -> None:
         zone_limits("r6", _mm(60))
 
 
-def test_rs_hole_not_yet_encoded() -> None:
-    with pytest.raises(ToleranceRangeError, match="not yet encoded"):
-        zone_limits("S6", _mm(22))
+def test_rs_holes_delta_corrected_at_22mm() -> None:
+    # R/S holes via ES = -ei + Δ with the r/s shaft ei at 18-30 mm (r=+28, s=+35).
+    # S7: Δ = IT7 - IT6 = 8, ES = -35 + 8 = -27, EI = -27 - 21 = -48.
+    s7 = zone_limits("S7", _mm(22))
+    assert s7.hole is True
+    assert s7.upper.to("um").magnitude == pytest.approx(-27)
+    assert s7.lower.to("um").magnitude == pytest.approx(-48)
+    # R6: Δ = IT6 - IT5 = 4, ES = -28 + 4 = -24, EI = -24 - 13 = -37.
+    r6 = zone_limits("R6", _mm(22))
+    assert r6.upper.to("um").magnitude == pytest.approx(-24)
+    assert r6.lower.to("um").magnitude == pytest.approx(-37)
+
+
+def test_rs_hole_capped_at_it7_and_50mm() -> None:
+    with pytest.raises(ToleranceRangeError, match="out of range"):
+        zone_limits("S8", _mm(22))
+    with pytest.raises(ToleranceRangeError, match="up to 50 mm"):
+        zone_limits("S7", _mm(60))
 
 
 def test_h7s6_interference_fit_at_22mm() -> None:
