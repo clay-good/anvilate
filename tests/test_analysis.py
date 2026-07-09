@@ -30,6 +30,7 @@ from anvilate.analysis import (
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
+    interference_fit,
     johnson_critical_stress,
     key_bearing_stress,
     key_shear_stress,
@@ -629,6 +630,65 @@ def test_thin_wall_cylinder_rejects_bad_inputs():
             pressure=_q("2 MPa"),
             radius=_q("100 mm"),
             wall_thickness=_q("0 mm"),
+        )
+
+
+def test_interference_fit_matches_hand_calc():
+    # Same-material solid shaft, E=200 GPa, d=50, D=100, radial interference 0.02 mm.
+    # Same material + solid shaft collapses Shigley's form to p = δ·E·(D²−d²)/(d·D²)
+    #   = 0.02*200000*7500/(50*10000) = 60 MPa;
+    # hub bore hoop = p·(D²+d²)/(D²−d²) = 60*1.6667 = 100 MPa (tensile);
+    # solid shaft surface hoop = −p = −60 MPa.
+    fit = interference_fit(
+        radial_interference=_q("0.02 mm"),
+        interface_diameter=_q("50 mm"),
+        hub_outer_diameter=_q("100 mm"),
+        hub_modulus=_q("200 GPa"),
+        hub_poisson=0.3,
+        shaft_modulus=_q("200 GPa"),
+        shaft_poisson=0.3,
+    )
+    assert fit.contact_pressure.to("MPa").magnitude == pytest.approx(60.0, rel=1e-6)
+    assert fit.hub_hoop_stress.to("MPa").magnitude == pytest.approx(100.0, rel=1e-6)
+    assert fit.shaft_hoop_stress.to("MPa").magnitude == pytest.approx(-60.0, rel=1e-6)
+    assert fit.hub_safety_factor(_q("250 MPa")) == pytest.approx(2.5, rel=1e-6)
+
+
+def test_interference_fit_hollow_shaft_lowers_pressure():
+    # Boring the shaft makes it more compliant, so the same interference develops
+    # a lower contact pressure than the solid shaft above.
+    solid = interference_fit(
+        radial_interference=_q("0.02 mm"),
+        interface_diameter=_q("50 mm"),
+        hub_outer_diameter=_q("100 mm"),
+        hub_modulus=_q("200 GPa"),
+        hub_poisson=0.3,
+        shaft_modulus=_q("200 GPa"),
+        shaft_poisson=0.3,
+    )
+    hollow = interference_fit(
+        radial_interference=_q("0.02 mm"),
+        interface_diameter=_q("50 mm"),
+        hub_outer_diameter=_q("100 mm"),
+        hub_modulus=_q("200 GPa"),
+        hub_poisson=0.3,
+        shaft_modulus=_q("200 GPa"),
+        shaft_poisson=0.3,
+        shaft_bore_diameter=_q("30 mm"),
+    )
+    assert hollow.contact_pressure.to("MPa").magnitude < solid.contact_pressure.to("MPa").magnitude
+
+
+def test_interference_fit_rejects_bad_geometry():
+    with pytest.raises(ValueError, match="hub_outer_diameter > interface_diameter"):
+        interference_fit(
+            radial_interference=_q("0.02 mm"),
+            interface_diameter=_q("100 mm"),  # not smaller than the hub OD
+            hub_outer_diameter=_q("100 mm"),
+            hub_modulus=_q("200 GPa"),
+            hub_poisson=0.3,
+            shaft_modulus=_q("200 GPa"),
+            shaft_poisson=0.3,
         )
 
 

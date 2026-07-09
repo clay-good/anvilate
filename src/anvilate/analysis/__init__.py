@@ -12,6 +12,7 @@ modules:
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion and twist
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere
+- :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl)
@@ -66,6 +67,10 @@ from .fastener import (
     torque_for_preload,
 )
 from .fatigue import goodman_safety_factor, goodman_scorecard
+from .interference import (
+    InterferenceFit,
+    interference_fit,
+)
 from .keys import key_bearing_stress, key_shear_stress, key_tangential_force
 from .pressure_vessel import (
     ThinWallStress,
@@ -144,6 +149,8 @@ __all__ = [
     "ThinWallStress",
     "thin_wall_cylinder",
     "thin_wall_sphere_stress",
+    "InterferenceFit",
+    "interference_fit",
     "spring_index",
     "wahl_factor",
     "spring_shear_stress",
