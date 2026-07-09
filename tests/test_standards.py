@@ -51,6 +51,18 @@ def test_extrusion_alloy_6063_resolved(db: MaterialsDatabase) -> None:
     assert "T6" in al.yield_strength.citation.condition
 
 
+def test_stainless_316_completes_the_austenitic_pair(db: MaterialsDatabase) -> None:
+    # 316 is the molybdenum-bearing corrosion-resistant sibling of 304; the two
+    # share the ASTM A240 annealed strength minima (30/75 ksi).
+    ss = db.get("SS-316")
+    assert ss.category == "stainless_steel"
+    assert ss.elastic_modulus.quantity.to("GPa").magnitude == pytest.approx(193.0)
+    assert ss.density.quantity.to("g/cm**3").magnitude == pytest.approx(8.00)
+    assert ss.yield_strength.quantity.to("MPa").magnitude == pytest.approx(205.0)
+    assert ss.ultimate_strength.quantity.to("MPa").magnitude == pytest.approx(515.0)
+    assert "A240" in ss.yield_strength.citation.source
+
+
 def test_yield_strength_carries_temper_and_citation(db: MaterialsDatabase) -> None:
     # Scenario: yield strength with temper — the T6 value with its citation.
     prop = db.get("AA-6061-T6").yield_strength

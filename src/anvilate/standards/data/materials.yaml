@@ -124,6 +124,25 @@ materials:
       quantity: {magnitude: 515.0, unit: MPa}
       citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified tensile (75 ksi)"}
 
+  SS-316:
+    name: "Stainless steel 316 (annealed)"
+    category: stainless_steel
+    elastic_modulus:
+      quantity: {magnitude: 193.0, unit: GPa}
+      citation: {source: "ASM — AISI 316 annealed", condition: "annealed, room temperature"}
+    poisson_ratio:
+      value: 0.30
+      citation: {source: "ASM — AISI 316 annealed", condition: "room temperature"}
+    density:
+      quantity: {magnitude: 8.00, unit: g/cm**3}
+      citation: {source: "ASM — AISI 316 annealed", condition: "room temperature"}
+    yield_strength:
+      quantity: {magnitude: 205.0, unit: MPa}
+      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified yield (30 ksi)"}
+    ultimate_strength:
+      quantity: {magnitude: 515.0, unit: MPa}
+      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified tensile (75 ksi)"}
+
   Ti-6Al-4V:
     name: "Titanium Ti-6Al-4V (Grade 5, annealed)"
     category: titanium
