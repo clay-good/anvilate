@@ -33,6 +33,7 @@ from anvilate.analysis import (
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
     fixed_pinned_offset_load,
+    fixed_pinned_partial_uniform_load,
     fixed_pinned_triangular_load,
     fixed_pinned_uniform_load,
     frequency_scorecard,
@@ -777,6 +778,113 @@ def test_fixed_pinned_uniform_load_matches_worked_example():
         < fp.max_deflection.to("mm").magnitude
         < ss.max_deflection.to("mm").magnitude
     )
+
+
+def test_fixed_pinned_partial_uniform_load_matches_worked_example():
+    # 10 N/mm over the first 1 m from the wall of a 2 m propped cantilever,
+    # 80x120x5 box (I = 3,755,833 mm^4, c = 60): the wall moment
+    # M = w*a^2*(2L - a)^2/(8L^2) = 2,812,500 N*mm -> sigma = M*c/I = 44.93 MPa
+    # (numerically equal to the simply-supported end-patch case — at a = L/2 the
+    # wall moment w*a^2*(2L-a)^2/(8L^2) coincides with that case's R1^2/(2w));
+    # delta_max = 0.45110 mm at 0.512*L from the wall, in the UNLOADED region
+    # (verified against an independent numeric double-integration of the beam
+    # ODE).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = fixed_pinned_partial_uniform_load(
+        distributed_load=_q("10 N/mm"),
+        loaded_length=_q("1 m"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(44.930, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.451104, rel=1e-4)
+
+
+def test_fixed_pinned_partial_uniform_load_with_a_long_patch():
+    # 10 N/mm over the first 1.6 m: the maximum deflection now sits INSIDE the
+    # loaded region, at the closed-form root 0.567*L of the loaded-region slope
+    # (verified against the same numeric integration). M = 4,608,000 N*mm ->
+    # sigma = 73.61 MPa.
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = fixed_pinned_partial_uniform_load(
+        distributed_load=_q("10 N/mm"),
+        loaded_length=_q("1600 mm"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(73.613, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(1.009978, rel=1e-4)
+
+
+def test_fixed_pinned_partial_uniform_load_degenerates_to_the_full_udl():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    partial = fixed_pinned_partial_uniform_load(
+        distributed_load=_q("1 N/mm"), loaded_length=_q("500 mm"), **kw
+    )
+    full = fixed_pinned_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    assert partial.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        full.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    # The full-UDL check uses the rounded handbook constant 185 (exact: 184.6),
+    # so the exact elastic-curve deflection agrees only to that rounding.
+    assert partial.max_deflection.to("mm").magnitude == pytest.approx(
+        full.max_deflection.to("mm").magnitude, rel=2.5e-3
+    )
+
+
+def test_fixed_pinned_partial_udl_sits_between_its_bracketing_end_fixities():
+    # For the same wall-adjacent patch, each added restraint stiffens the beam:
+    # fixed-fixed deflects least, the propped cantilever sits in the middle,
+    # simple supports deflect most.
+    kw = {
+        "distributed_load": _q("1 N/mm"),
+        "loaded_length": _q("1 m"),
+        "length": _q("2 m"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    ff = fixed_fixed_partial_uniform_load(**kw)
+    fp = fixed_pinned_partial_uniform_load(**kw)
+    ss = simply_supported_partial_uniform_load(**kw)
+    assert (
+        ff.max_deflection.to("mm").magnitude
+        < fp.max_deflection.to("mm").magnitude
+        < ss.max_deflection.to("mm").magnitude
+    )
+
+
+def test_fixed_pinned_partial_uniform_load_rejects_bad_inputs():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    for loaded_length in ("0 mm", "600 mm"):
+        with pytest.raises(ValueError, match="loaded_length must lie within the span"):
+            fixed_pinned_partial_uniform_load(
+                distributed_load=_q("1 N/mm"), loaded_length=_q(loaded_length), **kw
+            )
+    with pytest.raises(ValueError, match="distributed_load must be a"):
+        fixed_pinned_partial_uniform_load(
+            distributed_load=_q("100 N"),  # a force, not force-per-length
+            loaded_length=_q("250 mm"),
+            **kw,
+        )
 
 
 def test_simply_supported_uniform_load_matches_worked_example():

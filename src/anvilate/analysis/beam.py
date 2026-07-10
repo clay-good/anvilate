@@ -34,7 +34,9 @@ __all__ = [
     "simply_supported_triangular_load",
     "fixed_fixed_center_load",
     "fixed_fixed_uniform_load",
+    "fixed_fixed_partial_uniform_load",
     "fixed_fixed_triangular_load",
+    "fixed_pinned_partial_uniform_load",
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",
@@ -830,6 +832,78 @@ def fixed_pinned_uniform_load(
     moment = w * length_p**2 / 8
     stress = moment * c / inertia
     deflection = w * length_p**4 / (185 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def fixed_pinned_partial_uniform_load(
+    *,
+    distributed_load: Quantity,
+    loaded_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The propped cantilever uniformly loaded over a wall-adjacent patch (Roark).
+
+    A prismatic beam clamped at one end and simply supported (propped) at the
+    other over a span ``length``, carrying a uniform ``distributed_load`` w
+    (force per unit length) over ``loaded_length`` a measured from the **fixed**
+    end, unloaded toward the prop — equipment parked against the wall end of a
+    propped platform. Degenerates to :func:`fixed_pinned_uniform_load` at a = L
+    (the moment exactly; the deflection to the 0.2% rounding of that function's
+    handbook constant 185).
+
+    The hogging moment at the wall governs everywhere (σ = M·c/I with
+    M = w·a²·(2L − a)²/(8L²); the interior sagging peak R₁²/(2w) − M is always
+    smaller, R₁ = w·a − w·a³·(4L − a)/(8L³) the wall reaction). The true maximum
+    deflection comes from the piecewise elastic curve
+    EI·v = −M·x²/2 + R₁·x³/6 − w·x⁴/24 + w·⟨x−a⟩⁴/24, x from the wall — its
+    stationary point is closed-form in both regions: for long patches the
+    smaller root of x² − (3R₁/w)·x + 6M/w = 0 lands inside the loaded region;
+    for shorter ones that root turns complex or overshoots the patch and the
+    maximum sits at the rising root of the unloaded region's quadratic slope
+    (R₁ − w·a)·x²/2 + (w·a²/2 − M)·x − w·a³/6. Every argument is
+    dimension-checked; verified against an independent numeric integration of
+    the beam ODE.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(loaded_length, "[length]", "loaded_length")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    loaded = loaded_length.pint.to(length_p.units)
+    if not 0 < loaded.magnitude <= length_p.magnitude:
+        raise ValueError(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w * loaded**2 * (2 * length_p - loaded) ** 2 / (8 * length_p**2)
+    stress = moment * c / inertia
+
+    reaction = w * loaded - w * loaded**3 * (4 * length_p - loaded) / (8 * length_p**3)
+    half_sum = 3 * reaction / (2 * w)  # half the root sum of the loaded-region slope
+    disc = half_sum**2 - 6 * moment / w
+    if disc.magnitude >= 0 and (x := half_sum - disc**0.5) <= loaded:
+        deflection = (moment * x**2 / 2 - reaction * x**3 / 6 + w * x**4 / 24) / (e * inertia)
+    else:
+        quad = (reaction - w * loaded) / 2
+        lin = w * loaded**2 / 2 - moment
+        const = -w * loaded**3 / 6
+        x = (-lin + (lin**2 - 4 * quad * const) ** 0.5) / (2 * quad)
+        deflection = (
+            moment * x**2 / 2 - reaction * x**3 / 6 + w * x**4 / 24 - w * (x - loaded) ** 4 / 24
+        ) / (e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
