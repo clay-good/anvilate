@@ -447,6 +447,19 @@ def test_davit_example_flips_on_the_sheave_overhang_couple():
     assert card.status is CheckStatus.FAIL
 
 
+def test_flywheel_example_moves_the_twist_mode_with_shaft_diameter():
+    namespace = runpy.run_path(str(_EXAMPLES / "flywheel_torsional_mode.py"))
+    card = namespace["screen_flywheel_drive"]()
+    by_name = {e.name: e for e in card.entries}
+    # The as-drawn stub's twist mode sits dead on the 3000 rpm torque ripple;
+    # a 25% shaft upsize (J ~ d^4, f ~ d^2) moves it 56% and clears the floor.
+    assert by_name["Ø20 shaft as drawn"].status is CheckStatus.FAIL
+    assert "fundamental 50.5 Hz" in by_name["Ø20 shaft as drawn"].detail
+    assert by_name["Ø25 shaft upsized"].passed
+    assert "fundamental 78.8 Hz" in by_name["Ø25 shaft upsized"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_pump_beam_example_fails_only_the_modal_dimension():
     namespace = runpy.run_path(str(_EXAMPLES / "pump_mezzanine_beam.py"))
     card = namespace["screen_pump_beam"]()
