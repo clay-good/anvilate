@@ -64,6 +64,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `motor_mount_resonance.py` | A cantilevered motor mount whose fundamental frequency falls below the running speed — a resonance FAIL. |
 | `cam_return_spring.py` | A cam return spring whose wire stress (Wahl, SF 2.0) never changes with machine speed — but its own 99 g of coil surges at ½√(k/m) = 139.7 Hz, 28 cam orders up at 300 rpm and only 7 at 1200: the speed-up fails on surge alone, and thicker wire isn't the fix. |
 | `shrink_fit_check.py` | An ISO 286 interference fit (Ø40 H7/s6) turned into a thick-wall contact pressure and hub bore hoop stress, screened against yield. Ties the tolerance, analysis, and materials layers together. |
+| `hub_heating_for_assembly.py` | The same Ø40 H7/s6 fit, asked how it gets assembled: ΔT = (δ + slip)/(α·d) says a ~199 °C setpoint. A 150 °C bench oven opens the bore 61 µm — 2 µm past the raw interference, which is exactly how hubs seize half-way on; the 250 °C furnace clears it with the slip allowance intact. |
 | `wheel_rail_contact.py` | A crane wheel on a rail screened for Hertzian line-contact surface pressure — annealed steel fails, the lesson that rolling-contact parts must be surface-hardened. |
 
 ## Tolerance & manufacturability

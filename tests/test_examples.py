@@ -638,3 +638,20 @@ def test_cam_spring_example_fails_the_speed_up_on_surge_alone():
     assert by_name["coil surge at 1200 rpm"].status is CheckStatus.FAIL
     assert "fundamental 139.7 Hz" in by_name["coil surge at 1200 rpm"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_hub_heating_example_sizes_the_oven_not_just_the_fit():
+    namespace = runpy.run_path(str(_EXAMPLES / "hub_heating_for_assembly.py"))
+    card = namespace["screen_hub_heating"]()
+    by_name = {e.name: e for e in card.entries}
+    # The 150 degC bench oven opens the O40 bore 61 um — past the 59 um
+    # interference by 2 um, which is how hubs seize half-way on; the fit
+    # plus the 25 um slip allowance needs 84 um (a ~199 degC setpoint).
+    bench = by_name["bench oven at 150 degC bore opening"]
+    assert bench.status is CheckStatus.FAIL
+    assert "opens 61 um vs required 84 um" in bench.detail
+    furnace = by_name["furnace at 250 degC bore opening"]
+    assert furnace.passed
+    assert "opens 108 um" in furnace.detail
+    assert "setpoint needed 199 degC" in furnace.detail
+    assert card.status is CheckStatus.FAIL

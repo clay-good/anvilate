@@ -21,7 +21,8 @@ modules:
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl) and rate
-- :mod:`~anvilate.analysis.thermal` — constrained thermal stress
+- :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
+  stress, and shrink-fit assembly temperature
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, distributed-mass beam fundamentals, disc-on-shaft torsional mode
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending
@@ -156,7 +157,11 @@ from .stress import (
     von_mises_plane_stress,
     yield_safety_factor,
 )
-from .thermal import constrained_thermal_stress
+from .thermal import (
+    constrained_thermal_stress,
+    free_thermal_expansion,
+    shrink_fit_assembly_temperature,
+)
 from .torsion import (
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
@@ -288,4 +293,6 @@ __all__ = [
     "combine_axial_bending",
     "concentrated_stress",
     "constrained_thermal_stress",
+    "free_thermal_expansion",
+    "shrink_fit_assembly_temperature",
 ]

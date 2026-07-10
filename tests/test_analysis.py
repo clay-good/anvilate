@@ -55,6 +55,7 @@ from anvilate.analysis import (
     fixed_pinned_triangular_load,
     fixed_pinned_triangular_load_peak_at_prop,
     fixed_pinned_uniform_load,
+    free_thermal_expansion,
     frequency_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
@@ -85,6 +86,7 @@ from anvilate.analysis import (
     shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
+    shrink_fit_assembly_temperature,
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_annular_plate_uniform_load,
     simply_supported_center_load,
@@ -2816,6 +2818,70 @@ def test_constrained_thermal_stress_rejects_bad_units():
             elastic_modulus=_q("200 GPa"),
             thermal_expansion_coefficient=_q("12 mm"),  # not 1/temperature
             temperature_change=_q("50 K"),
+        )
+
+
+def test_free_thermal_expansion_is_signed_and_recovers_the_constrained_stress():
+    # A 1 m steel bar heated 50 K grows alpha*L*dT = 12e-6*1000*50 = 0.6 mm;
+    # cooled the same 50 K it SHRINKS 0.6 mm (the sign a clearance check
+    # needs). E times the denied strain delta/L is exactly the constrained
+    # thermal stress: 200000 * 0.6/1000 = 120 MPa.
+    kw = {
+        "length": _q("1 m"),
+        "thermal_expansion_coefficient": _q("12e-6 / K"),
+    }
+    grow = free_thermal_expansion(temperature_change=_q("50 K"), **kw)
+    shrink = free_thermal_expansion(temperature_change=_q("-50 K"), **kw)
+    assert grow.to("mm").magnitude == pytest.approx(0.6, rel=1e-9)
+    assert shrink.to("mm").magnitude == pytest.approx(-0.6, rel=1e-9)
+    sigma = constrained_thermal_stress(
+        elastic_modulus=_q("200 GPa"),
+        thermal_expansion_coefficient=_q("12e-6 / K"),
+        temperature_change=_q("50 K"),
+    )
+    denied_strain = grow.to("mm").magnitude / 1000.0
+    assert sigma.to("MPa").magnitude == pytest.approx(200000 * denied_strain, rel=1e-9)
+
+
+def test_shrink_fit_assembly_temperature_inverts_the_bore_growth():
+    # A O40 hub with 59 um of interference plus a 25 um slip allowance needs
+    # dT = (0.059 + 0.025)/(11.7e-6 * 40) = 179.5 K above the shaft. Heating
+    # the bore by exactly that dT must grow it by exactly delta + c.
+    dt = shrink_fit_assembly_temperature(
+        interface_diameter=_q("40 mm"),
+        diametral_interference=_q("0.059 mm"),
+        assembly_clearance=_q("0.025 mm"),
+        thermal_expansion_coefficient=_q("11.7e-6 / K"),
+    )
+    assert dt.to("K").magnitude == pytest.approx(179.49, rel=1e-3)
+    growth = free_thermal_expansion(
+        length=_q("40 mm"),
+        thermal_expansion_coefficient=_q("11.7e-6 / K"),
+        temperature_change=dt,
+    )
+    assert growth.to("mm").magnitude == pytest.approx(0.084, rel=1e-12)
+
+
+def test_thermal_expansion_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="length must be positive"):
+        free_thermal_expansion(
+            length=_q("0 mm"),
+            thermal_expansion_coefficient=_q("12e-6 / K"),
+            temperature_change=_q("50 K"),
+        )
+    with pytest.raises(ValueError, match="diametral_interference must be positive"):
+        shrink_fit_assembly_temperature(
+            interface_diameter=_q("40 mm"),
+            diametral_interference=_q("0 mm"),
+            assembly_clearance=_q("25 um"),
+            thermal_expansion_coefficient=_q("11.7e-6 / K"),
+        )
+    with pytest.raises(ValueError, match="assembly_clearance must be non-negative"):
+        shrink_fit_assembly_temperature(
+            interface_diameter=_q("40 mm"),
+            diametral_interference=_q("59 um"),
+            assembly_clearance=_q("-1 um"),
+            thermal_expansion_coefficient=_q("11.7e-6 / K"),
         )
 
 

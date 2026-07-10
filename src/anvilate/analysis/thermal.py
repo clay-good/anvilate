@@ -1,10 +1,13 @@
-"""T1 analytical thermal-stress check (closed-form).
+"""T1 analytical thermal expansion and stress checks (closed-form).
 
 A member that would expand or contract with a temperature change but is fully
 restrained develops a thermal stress with no mechanical load: ``σ = E·α·ΔT``,
 where ``E`` is the elastic modulus, ``α`` the coefficient of thermal expansion,
 and ``ΔT`` the temperature change. Compression on heating (positive ΔT), tension
-on cooling. Inputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+on cooling. Left free, the same member simply grows ``δ = α·L·ΔT`` — the number
+a clearance or slip-fit assembly check needs, and (inverted) the temperature
+rise that lets a hub slip over its shrink-fit shaft. Inputs are
+dimension-checked :class:`~anvilate.units.Quantity` values.
 
 ``ΔT`` is a temperature *difference* — pass it in kelvin or ``delta_degC``, not an
 absolute ``degC`` reading.
@@ -16,6 +19,8 @@ from ..units import Quantity
 
 __all__ = [
     "constrained_thermal_stress",
+    "free_thermal_expansion",
+    "shrink_fit_assembly_temperature",
 ]
 
 
@@ -50,3 +55,89 @@ def constrained_thermal_stress(
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_change.to("K").magnitude
     return Quantity(magnitude=abs(e * alpha * delta_t), unit="MPa")
+
+
+def free_thermal_expansion(
+    *,
+    length: Quantity,
+    thermal_expansion_coefficient: Quantity,
+    temperature_change: Quantity,
+) -> Quantity:
+    """The free (unrestrained) thermal growth δ = α·L·ΔT of a member.
+
+    ``length`` is the dimension that grows — a span, a diameter, a bolt
+    circle. The result is SIGNED: positive ΔT grows, negative shrinks, which
+    is what a clearance check needs. Dividing by L and multiplying by E
+    recovers :func:`constrained_thermal_stress` exactly (the fully-restrained
+    member develops the stress of the strain it was denied). ``length`` must
+    be positive; ``temperature_change`` is a difference (K or delta_degC).
+    """
+    if not length.has_dimension("[length]"):
+        raise ValueError(f"length must be a [length] quantity; got {length.dimensionality}")
+    if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            "thermal_expansion_coefficient must have units of 1/temperature; got "
+            f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not temperature_change.has_dimension("[temperature]"):
+        raise ValueError(
+            f"temperature_change must be a temperature difference; got "
+            f"{temperature_change.dimensionality}"
+        )
+    size = length.to("mm").magnitude
+    if size <= 0:
+        raise ValueError(f"length must be positive; got {length}")
+    alpha = thermal_expansion_coefficient.to("1/K").magnitude
+    delta_t = temperature_change.to("K").magnitude
+    return Quantity(magnitude=alpha * size * delta_t, unit="mm")
+
+
+def shrink_fit_assembly_temperature(
+    *,
+    interface_diameter: Quantity,
+    diametral_interference: Quantity,
+    assembly_clearance: Quantity,
+    thermal_expansion_coefficient: Quantity,
+) -> Quantity:
+    """The hub temperature RISE that opens a shrink fit for assembly.
+
+    Heating the hub grows its bore stress-free by α·d·ΔT; to slip it over the
+    shaft the bore must open by the fit's ``diametral_interference`` plus a
+    working ``assembly_clearance`` (the slip allowance that keeps it from
+    seizing half-way on), so ΔT = (δ + c)/(α·d). Exactly the inverse of
+    :func:`free_thermal_expansion` applied to the bore diameter. Returns the
+    temperature rise above the shaft's temperature (K); add it to ambient for
+    the oven setpoint, and mind the material's tempering limit. Interference
+    must be positive, the clearance non-negative.
+    """
+    if not interface_diameter.has_dimension("[length]"):
+        raise ValueError(
+            f"interface_diameter must be a [length] quantity; got "
+            f"{interface_diameter.dimensionality}"
+        )
+    if not diametral_interference.has_dimension("[length]"):
+        raise ValueError(
+            f"diametral_interference must be a [length] quantity; got "
+            f"{diametral_interference.dimensionality}"
+        )
+    if not assembly_clearance.has_dimension("[length]"):
+        raise ValueError(
+            f"assembly_clearance must be a [length] quantity; got "
+            f"{assembly_clearance.dimensionality}"
+        )
+    if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            "thermal_expansion_coefficient must have units of 1/temperature; got "
+            f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    d = interface_diameter.to("mm").magnitude
+    delta = diametral_interference.to("mm").magnitude
+    clearance = assembly_clearance.to("mm").magnitude
+    alpha = thermal_expansion_coefficient.to("1/K").magnitude
+    if d <= 0 or alpha <= 0:
+        raise ValueError("interface_diameter and the expansion coefficient must be positive")
+    if delta <= 0:
+        raise ValueError(f"diametral_interference must be positive; got {diametral_interference}")
+    if clearance < 0:
+        raise ValueError(f"assembly_clearance must be non-negative; got {assembly_clearance}")
+    return Quantity(magnitude=(delta + clearance) / (alpha * d), unit="K")
