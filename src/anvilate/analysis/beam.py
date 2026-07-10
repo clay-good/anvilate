@@ -30,6 +30,7 @@ __all__ = [
     "cantilever_triangular_load",
     "cantilever_triangular_load_peak_at_tip",
     "cantilever_end_moment",
+    "cantilever_offset_moment",
     "simply_supported_center_load",
     "simply_supported_offset_load",
     "simply_supported_symmetric_point_loads",
@@ -547,6 +548,59 @@ def cantilever_end_moment(
 
     stress = m0 * c / inertia
     deflection = m0 * length_p**2 / (2 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def cantilever_offset_moment(
+    *,
+    moment: Quantity,
+    load_position: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The cantilever with a couple applied short of the tip (Roark).
+
+    A prismatic beam fixed at one end and free at the other, carrying an
+    applied ``moment`` M₀ (a couple in the bending plane) at ``load_position``
+    a measured from the fixed end, 0 < a ≤ length — a bracket or hub welded
+    mid-span rather than at the tip. The wall reacts the couple directly (no
+    force anywhere), so the segment from the wall to the couple is in pure
+    bending at M₀ and the overhang beyond is straight, riding on the loaded
+    segment's end slope. Generalizes :func:`cantilever_end_moment`, which
+    this matches exactly at a = L.
+
+    Returns the peak bending stress (σ = M₀·c/I, uniform over [0, a]) and the
+    tip deflection δ = M₀·a·(2L − a)/(2·E·I) — the loaded segment's own
+    M₀·a²/2EI plus the overhang's rigid rotation. Every argument is
+    dimension-checked; verified against an independent numeric integration of
+    the beam ODE.
+    """
+    _require(moment, "[force] * [length]", "moment")
+    _require(load_position, "[length]", "load_position")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    m0 = moment.pint
+    length_p = length.pint
+    position = load_position.pint.to(length_p.units)
+    if not 0 < position.magnitude <= length_p.magnitude:
+        raise ValueError(
+            f"load_position must lie on the beam (0, {length}], measured from the "
+            f"fixed end; got {load_position}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    stress = m0 * c / inertia
+    deflection = m0 * position * (2 * length_p - position) / (2 * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),

@@ -17,6 +17,7 @@ from anvilate.analysis import (
     cantilever_end_load,
     cantilever_end_moment,
     cantilever_offset_load,
+    cantilever_offset_moment,
     cantilever_partial_uniform_load,
     cantilever_triangular_load,
     cantilever_triangular_load_peak_at_tip,
@@ -410,6 +411,57 @@ def test_fixed_pinned_end_moment_deflects_1_over_sqrt3_of_simply_supported():
     assert propped.max_deflection.to("mm").magnitude == pytest.approx(
         simple.max_deflection.to("mm").magnitude / 3**0.5, rel=1e-12
     )
+
+
+def test_cantilever_offset_moment_matches_worked_example():
+    # The 50 N*m couple moved to mid-length (a = 250 mm of the 500 mm beam):
+    # the wall-to-couple segment is in pure bending at sigma = 150 MPa (the
+    # peak stress does not drop with position — only the deflection does);
+    # delta_tip = M*a*(2L-a)/(2*E*I) = 50000*250*750/(2*200000*1666.67)
+    # = 14.0625 mm (verified against a numeric integration of the beam ODE).
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = cantilever_offset_moment(
+        moment=_q("50 N*m"),
+        load_position=_q("250 mm"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(14.0625, rel=1e-4)
+
+
+def test_cantilever_offset_moment_degenerates_to_the_end_case():
+    kw = {
+        "moment": _q("50 N*m"),
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    offset = cantilever_offset_moment(load_position=_q("500 mm"), **kw)
+    end = cantilever_end_moment(**kw)
+    assert offset.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        end.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert offset.max_deflection.to("mm").magnitude == pytest.approx(
+        end.max_deflection.to("mm").magnitude, rel=1e-12
+    )
+
+
+def test_cantilever_offset_moment_rejects_positions_off_the_beam():
+    kw = {
+        "moment": _q("50 N*m"),
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    with pytest.raises(ValueError, match="load_position must lie on the beam"):
+        cantilever_offset_moment(load_position=_q("600 mm"), **kw)
+    with pytest.raises(ValueError, match="load_position must lie on the beam"):
+        cantilever_offset_moment(load_position=_q("0 mm"), **kw)
 
 
 def test_end_moment_rejects_a_force_load():
