@@ -62,6 +62,7 @@ from .beam import (
     simply_supported_center_patch_load,
     simply_supported_offset_load,
     simply_supported_partial_uniform_load,
+    simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
 )
@@ -145,6 +146,7 @@ __all__ = [
     "simply_supported_center_patch_load",
     "simply_supported_offset_load",
     "simply_supported_partial_uniform_load",
+    "simply_supported_symmetric_point_loads",
     "simply_supported_triangular_load",
     "simply_supported_uniform_load",
     "fixed_fixed_center_load",

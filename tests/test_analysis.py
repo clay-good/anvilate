@@ -71,6 +71,7 @@ from anvilate.analysis import (
     simply_supported_center_patch_load,
     simply_supported_offset_load,
     simply_supported_partial_uniform_load,
+    simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
     slenderness_ratio,
@@ -232,6 +233,91 @@ def test_simply_supported_offset_load_degenerates_to_the_center_case():
     assert offset.max_deflection.to("mm").magnitude == pytest.approx(
         center.max_deflection.to("mm").magnitude, rel=1e-9
     )
+
+
+def test_symmetric_point_loads_match_worked_example():
+    # Four-point bending: 5 kN at 1 m from EACH support of a 3 m span, 80x120x5
+    # box (I = 3,755,833 mm^4, c = 60). M = F*a = 5e6 N*mm constant between the
+    # loads -> sigma = M*c/I = 79.876 MPa; delta_mid = F*a*(3L^2 - 4a^2)/(24*E*I)
+    # = 6.3790 mm (verified against a numeric double-integration of the beam ODE).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = simply_supported_symmetric_point_loads(
+        force=_q("5 kN"),
+        load_offset=_q("1 m"),
+        length=_q("3 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(79.8757, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(6.37899, rel=1e-4)
+
+
+def test_symmetric_point_loads_degenerate_to_a_doubled_center_load():
+    # At a = L/2 both loads coincide at mid-span: exactly a 2*F center load.
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    pair = simply_supported_symmetric_point_loads(
+        force=_q("100 N"), load_offset=_q("250 mm"), **kw
+    )
+    center = simply_supported_center_load(force=_q("200 N"), **kw)
+    assert pair.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        center.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert pair.max_deflection.to("mm").magnitude == pytest.approx(
+        center.max_deflection.to("mm").magnitude, rel=1e-12
+    )
+
+
+def test_symmetric_point_loads_beat_the_center_resultant_by_the_moment_ratio():
+    # Third-point rails: M = F*L/3, while the 2*F resultant at mid-span gives
+    # F*L/2 — modeling a two-footed machine as one center load overstates the
+    # moment by exactly 1.5x.
+    kw = {
+        "length": _q("600 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    pair = simply_supported_symmetric_point_loads(
+        force=_q("100 N"), load_offset=_q("200 mm"), **kw
+    )
+    resultant = simply_supported_center_load(force=_q("200 N"), **kw)
+    assert resultant.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        1.5 * pair.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+
+
+def test_symmetric_point_loads_reject_an_offset_beyond_the_half_span():
+    kw = {
+        "force": _q("100 N"),
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    with pytest.raises(ValueError, match="load_offset must lie within the half-span"):
+        simply_supported_symmetric_point_loads(load_offset=_q("300 mm"), **kw)
+    with pytest.raises(ValueError, match="load_offset must lie within the half-span"):
+        simply_supported_symmetric_point_loads(load_offset=_q("0 mm"), **kw)
+
+
+def test_symmetric_point_loads_reject_distributed_load_units():
+    with pytest.raises(ValueError, match="force must be a"):
+        simply_supported_symmetric_point_loads(
+            force=_q("1 N/mm"),  # a line load, not a point force
+            load_offset=_q("100 mm"),
+            length=_q("500 mm"),
+            second_moment=rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+            extreme_fibre=_q("5 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_simply_supported_offset_load_is_symmetric():
