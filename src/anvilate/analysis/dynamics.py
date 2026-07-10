@@ -1,14 +1,17 @@
 """T1 analytical modal screening (fundamental frequency, closed-form).
 
 Resonance is a screening concern: a part whose fundamental natural frequency sits
-near an operating excitation amplifies vibration. Two closed forms cover the
+near an operating excitation amplifies vibration. The closed forms cover the
 common cases:
 
 * a single-degree-of-freedom system (a mass ``m`` on a support of stiffness
   ``k``) resonates at ``f_n = (1/2π)·√(k/m)``;
 * a structure that deflects ``δ`` under its own weight has a fundamental frequency
   estimated by the Rayleigh relation ``f_n = (1/2π)·√(g/δ)`` — no separate mass or
-  stiffness needed.
+  stiffness needed;
+* a prismatic beam with distributed mass has the exact Euler-Bernoulli
+  fundamental ``f₁ = (λ₁²/2π)·√(E·I/(m̄·L⁴))``, one eigenvalue λ₁ per support
+  condition (Blevins/Roark).
 
 Inputs are dimension-checked :class:`~anvilate.units.Quantity` values; results are
 returned in hertz.
@@ -25,11 +28,24 @@ __all__ = [
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",
+    "cantilever_fundamental_frequency",
+    "simply_supported_fundamental_frequency",
+    "fixed_fixed_fundamental_frequency",
+    "fixed_pinned_fundamental_frequency",
     "frequency_scorecard",
 ]
 
 # Standard gravitational acceleration (m/s²), for the Rayleigh self-weight estimate.
 STANDARD_GRAVITY = Quantity(magnitude=9.80665, unit="m/s**2")
+
+# First-mode Euler-Bernoulli eigenvalues λ₁², one per support condition, each the
+# first root of the characteristic transcendental equation (verified by bisection
+# to machine precision): cantilever cos·cosh = −1, simply supported sin = 0 (π),
+# fixed-fixed cos·cosh = 1, fixed-pinned tan = tanh.
+_LAMBDA_SQ_CANTILEVER = 3.5160152685
+_LAMBDA_SQ_SIMPLY_SUPPORTED = pi**2
+_LAMBDA_SQ_FIXED_FIXED = 22.3732854481
+_LAMBDA_SQ_FIXED_PINNED = 15.4182057170
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
@@ -73,6 +89,120 @@ def natural_frequency_from_deflection(
     if delta <= 0:
         raise ValueError(f"static_deflection must be positive; got {static_deflection}")
     return Quantity(magnitude=sqrt(g / delta) / (2 * pi), unit="Hz")
+
+
+def _beam_fundamental(
+    lambda_sq: float,
+    *,
+    mass_per_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    _require(mass_per_length, "[mass] / [length]", "mass_per_length")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    m = mass_per_length.to("kg/m").magnitude
+    length_m = length.to("m").magnitude
+    inertia = second_moment.to("m**4").magnitude
+    e = elastic_modulus.to("Pa").magnitude
+    if m <= 0 or length_m <= 0 or inertia <= 0 or e <= 0:
+        raise ValueError("mass_per_length, length, second_moment, and E must be positive")
+    return Quantity(
+        magnitude=lambda_sq * sqrt(e * inertia / (m * length_m**4)) / (2 * pi), unit="Hz"
+    )
+
+
+def cantilever_fundamental_frequency(
+    *,
+    mass_per_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The fundamental frequency of a cantilever with distributed mass (Blevins).
+
+    Exact Euler-Bernoulli first mode f₁ = (λ₁²/2π)·√(E·I/(m̄·L⁴)) with
+    λ₁² = 3.51602 (the first root of cos λ·cosh λ = −1). ``mass_per_length``
+    m̄ is the beam's mass per unit length, self-weight plus any smeared
+    attachments. Returns hertz; every argument is dimension-checked.
+    """
+    return _beam_fundamental(
+        _LAMBDA_SQ_CANTILEVER,
+        mass_per_length=mass_per_length,
+        length=length,
+        second_moment=second_moment,
+        elastic_modulus=elastic_modulus,
+    )
+
+
+def simply_supported_fundamental_frequency(
+    *,
+    mass_per_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The fundamental frequency of a simply-supported beam with distributed mass.
+
+    Exact Euler-Bernoulli first mode f₁ = (π²/2π)·√(E·I/(m̄·L⁴)) — the one
+    support with a clean closed-form eigenvalue (λ₁ = π). Exceeds the Rayleigh
+    self-weight estimate from the mid-span deflection by exactly
+    π²/√(384/5) ≈ 1.126. Returns hertz; every argument is dimension-checked.
+    """
+    return _beam_fundamental(
+        _LAMBDA_SQ_SIMPLY_SUPPORTED,
+        mass_per_length=mass_per_length,
+        length=length,
+        second_moment=second_moment,
+        elastic_modulus=elastic_modulus,
+    )
+
+
+def fixed_fixed_fundamental_frequency(
+    *,
+    mass_per_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The fundamental frequency of a fixed-fixed beam with distributed mass.
+
+    Exact Euler-Bernoulli first mode with λ₁² = 22.37329 (the first root of
+    cos λ·cosh λ = 1) — building in both ends raises the fundamental 2.27×
+    over the simply-supported span. Returns hertz; every argument is
+    dimension-checked.
+    """
+    return _beam_fundamental(
+        _LAMBDA_SQ_FIXED_FIXED,
+        mass_per_length=mass_per_length,
+        length=length,
+        second_moment=second_moment,
+        elastic_modulus=elastic_modulus,
+    )
+
+
+def fixed_pinned_fundamental_frequency(
+    *,
+    mass_per_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The fundamental frequency of a propped cantilever with distributed mass.
+
+    Exact Euler-Bernoulli first mode with λ₁² = 15.41821 (the first root of
+    tan λ = tanh λ), between the simply-supported and fixed-fixed values.
+    Returns hertz; every argument is dimension-checked.
+    """
+    return _beam_fundamental(
+        _LAMBDA_SQ_FIXED_PINNED,
+        mass_per_length=mass_per_length,
+        length=length,
+        second_moment=second_moment,
+        elastic_modulus=elastic_modulus,
+    )
 
 
 def frequency_scorecard(

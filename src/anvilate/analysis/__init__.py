@@ -87,9 +87,13 @@ from .contact import (
 )
 from .dynamics import (
     STANDARD_GRAVITY,
+    cantilever_fundamental_frequency,
+    fixed_fixed_fundamental_frequency,
+    fixed_pinned_fundamental_frequency,
     frequency_scorecard,
     natural_frequency,
     natural_frequency_from_deflection,
+    simply_supported_fundamental_frequency,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -188,6 +192,10 @@ __all__ = [
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",
+    "cantilever_fundamental_frequency",
+    "simply_supported_fundamental_frequency",
+    "fixed_fixed_fundamental_frequency",
+    "fixed_pinned_fundamental_frequency",
     "frequency_scorecard",
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",

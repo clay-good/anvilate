@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from math import pi
+
 import pytest
 
 from anvilate.analysis import (
@@ -16,6 +18,7 @@ from anvilate.analysis import (
     cantilever_center_patch_load,
     cantilever_end_load,
     cantilever_end_moment,
+    cantilever_fundamental_frequency,
     cantilever_offset_load,
     cantilever_offset_moment,
     cantilever_partial_uniform_load,
@@ -32,6 +35,7 @@ from anvilate.analysis import (
     euler_critical_stress,
     fixed_fixed_center_load,
     fixed_fixed_center_patch_load,
+    fixed_fixed_fundamental_frequency,
     fixed_fixed_offset_load,
     fixed_fixed_partial_uniform_load,
     fixed_fixed_triangular_load,
@@ -39,6 +43,7 @@ from anvilate.analysis import (
     fixed_pinned_center_load,
     fixed_pinned_center_patch_load,
     fixed_pinned_end_moment,
+    fixed_pinned_fundamental_frequency,
     fixed_pinned_offset_load,
     fixed_pinned_partial_uniform_load,
     fixed_pinned_triangular_load,
@@ -73,6 +78,7 @@ from anvilate.analysis import (
     simply_supported_center_load,
     simply_supported_center_patch_load,
     simply_supported_end_moment,
+    simply_supported_fundamental_frequency,
     simply_supported_offset_load,
     simply_supported_partial_uniform_load,
     simply_supported_symmetric_point_loads,
@@ -2687,6 +2693,74 @@ def test_natural_frequency_rejects_bad_inputs():
         natural_frequency(stiffness=_q("100 N"), mass=_q("1 kg"))  # force, not stiffness
     with pytest.raises(ValueError, match="static_deflection must be positive"):
         natural_frequency_from_deflection(_q("0 mm"))
+
+
+_BEAM_MODAL_KW = {
+    "mass_per_length": _q("1.57 kg/m"),  # a 20x10 mm steel bar (7850 kg/m^3)
+    "length": _q("500 mm"),
+    "second_moment": _q("1666.6667 mm**4"),
+    "elastic_modulus": _q("200 GPa"),
+}
+
+
+def test_beam_fundamental_frequencies_match_worked_example():
+    # sqrt(E*I/(m*L^4)) = sqrt(333.333/(1.57*0.0625)) = 58.284 rad/s; f1 =
+    # lambda1^2 * 58.284 / (2*pi): cantilever 3.51602 -> 32.62 Hz, simply
+    # supported pi^2 -> 91.55, fixed-pinned 15.41821 -> 143.02, fixed-fixed
+    # 22.37329 -> 207.54 (Blevins Table 8-1 eigenvalues, verified against
+    # their characteristic equations by bisection).
+    assert cantilever_fundamental_frequency(**_BEAM_MODAL_KW).to("Hz").magnitude == pytest.approx(
+        32.615, rel=1e-4
+    )
+    assert simply_supported_fundamental_frequency(**_BEAM_MODAL_KW).to(
+        "Hz"
+    ).magnitude == pytest.approx(91.552, rel=1e-4)
+    assert fixed_pinned_fundamental_frequency(**_BEAM_MODAL_KW).to("Hz").magnitude == pytest.approx(
+        143.022, rel=1e-4
+    )
+    assert fixed_fixed_fundamental_frequency(**_BEAM_MODAL_KW).to("Hz").magnitude == pytest.approx(
+        207.539, rel=1e-4
+    )
+
+
+def test_beam_fundamentals_order_by_end_fixity():
+    # More fixity -> stiffer first mode: cantilever < ss < fixed-pinned < ff.
+    values = [
+        f(**_BEAM_MODAL_KW).to("Hz").magnitude
+        for f in (
+            cantilever_fundamental_frequency,
+            simply_supported_fundamental_frequency,
+            fixed_pinned_fundamental_frequency,
+            fixed_fixed_fundamental_frequency,
+        )
+    ]
+    assert values == sorted(values)
+
+
+def test_simply_supported_fundamental_exceeds_rayleigh_by_the_exact_ratio():
+    # The Rayleigh shortcut reads the mid-span self-weight deflection delta =
+    # 5*m*g*L^4/(384*E*I), so its estimate trails the exact pi^2 eigenvalue by
+    # exactly pi^2/sqrt(384/5) = 1.1262 — the shortcut is always conservative
+    # on a simply-supported span.
+    m = _BEAM_MODAL_KW["mass_per_length"].to("kg/m").magnitude
+    length_m = _BEAM_MODAL_KW["length"].to("m").magnitude
+    e_i = 200e9 * _BEAM_MODAL_KW["second_moment"].to("m**4").magnitude
+    g = 9.80665
+    delta = 5 * m * g * length_m**4 / (384 * e_i)
+    rayleigh = natural_frequency_from_deflection(Quantity(magnitude=delta, unit="m"))
+    exact = simply_supported_fundamental_frequency(**_BEAM_MODAL_KW)
+    ratio = exact.to("Hz").magnitude / rayleigh.to("Hz").magnitude
+    assert ratio == pytest.approx(pi**2 / (384 / 5) ** 0.5, rel=1e-9)
+
+
+def test_beam_fundamental_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="mass_per_length must be a"):
+        cantilever_fundamental_frequency(
+            mass_per_length=_q("5 kg"),  # a lumped mass, not a line density
+            length=_q("500 mm"),
+            second_moment=_q("1666.6667 mm**4"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_von_mises_plane_stress_worked_example():
