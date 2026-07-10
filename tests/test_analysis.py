@@ -83,6 +83,7 @@ from anvilate.analysis import (
     simply_supported_offset_load,
     simply_supported_offset_moment,
     simply_supported_partial_uniform_load,
+    simply_supported_plate_uniform_load,
     simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
@@ -2813,6 +2814,62 @@ def test_simply_supported_fundamental_exceeds_rayleigh_by_the_exact_ratio():
     exact = simply_supported_fundamental_frequency(**_BEAM_MODAL_KW)
     ratio = exact.to("Hz").magnitude / rayleigh.to("Hz").magnitude
     assert ratio == pytest.approx(pi**2 / (384 / 5) ** 0.5, rel=1e-9)
+
+
+def test_square_plate_reproduces_the_handbook_coefficients():
+    # A 500 x 500 x 6 mm simply-supported steel cover under 50 kPa: the exact
+    # Navier series must land on the classic Roark/Timoshenko coefficients
+    # (nu = 0.3): sigma = 0.2874*q*b^2/t^2 = 99.8 MPa and
+    # w = 0.0444*q*b^4/(E*t^3) = 3.21 mm.
+    result = simply_supported_plate_uniform_load(
+        pressure=_q("50 kPa"),
+        length=_q("500 mm"),
+        width=_q("500 mm"),
+        thickness=_q("6 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    q, b, t = 0.05, 500.0, 6.0
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        0.2874 * q * b**2 / t**2, rel=2e-3
+    )
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(
+        0.0444 * q * b**4 / (200000 * t**3), rel=2e-3
+    )
+
+
+def test_two_to_one_plate_matches_the_handbook_beta():
+    # Stretching the plate 2:1 raises the stress coefficient to beta = 0.6102
+    # (the short span carries the load); the result must also be orientation-
+    # blind (length/width swapped exactly).
+    kw = {
+        "pressure": _q("50 kPa"),
+        "thickness": _q("6 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    wide = simply_supported_plate_uniform_load(length=_q("1000 mm"), width=_q("500 mm"), **kw)
+    tall = simply_supported_plate_uniform_load(length=_q("500 mm"), width=_q("1000 mm"), **kw)
+    assert wide.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        0.6102 * 0.05 * 500.0**2 / 36.0, rel=2e-3
+    )
+    assert wide.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        tall.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert wide.max_deflection.to("mm").magnitude == pytest.approx(
+        tall.max_deflection.to("mm").magnitude, rel=1e-12
+    )
+
+
+def test_plate_rejects_bad_inputs():
+    kw = {
+        "length": _q("500 mm"),
+        "width": _q("500 mm"),
+        "thickness": _q("6 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    with pytest.raises(ValueError, match="pressure must be a"):
+        simply_supported_plate_uniform_load(pressure=_q("50 N"), **kw)
+    with pytest.raises(ValueError, match="poisson_ratio must lie in"):
+        simply_supported_plate_uniform_load(pressure=_q("50 kPa"), poisson_ratio=0.6, **kw)
 
 
 def test_torsional_natural_frequency_matches_worked_example():
