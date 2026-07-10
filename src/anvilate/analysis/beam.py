@@ -28,6 +28,7 @@ __all__ = [
     "cantilever_center_patch_load",
     "cantilever_triangular_load",
     "cantilever_triangular_load_peak_at_tip",
+    "cantilever_end_moment",
     "simply_supported_center_load",
     "simply_supported_offset_load",
     "simply_supported_symmetric_point_loads",
@@ -35,6 +36,7 @@ __all__ = [
     "simply_supported_partial_uniform_load",
     "simply_supported_center_patch_load",
     "simply_supported_triangular_load",
+    "simply_supported_end_moment",
     "fixed_fixed_center_load",
     "fixed_fixed_uniform_load",
     "fixed_fixed_partial_uniform_load",
@@ -501,6 +503,49 @@ def cantilever_triangular_load_peak_at_tip(
     )
 
 
+def cantilever_end_moment(
+    *,
+    moment: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The cantilever with a couple applied at the free end (Roark).
+
+    A prismatic beam fixed at one end and free at the other, carrying an
+    applied ``moment`` M₀ (a couple in the bending plane) at the tip — the
+    reaction a bracket, crank socket, or eccentric fitting hands the beam.
+    The bending moment is CONSTANT at M₀ over the whole span (pure bending):
+    unlike a tip force, whose moment falls linearly to zero at the tip, every
+    section is equally stressed — there is no lightly-loaded region to drill
+    or notch. For the same wall moment (M₀ = F·L) the couple also deflects
+    the tip 1.5× as far as the force (L²/2 vs L³/3 per unit wall moment).
+
+    Returns the peak bending stress (σ = M₀·c/I, everywhere) and the tip
+    deflection δ = M₀·L²/(2·E·I). Every argument is dimension-checked;
+    verified against an independent numeric integration of the beam ODE.
+    """
+    _require(moment, "[force] * [length]", "moment")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    m0 = moment.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    stress = m0 * c / inertia
+    deflection = m0 * length_p**2 / (2 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
 def simply_supported_center_load(
     *,
     force: Quantity,
@@ -849,6 +894,50 @@ def simply_supported_triangular_load(
         * (7 * length_p**4 - 10 * length_p**2 * x**2 + 3 * x**4)
         / (360 * length_p * e * inertia)
     )
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def simply_supported_end_moment(
+    *,
+    moment: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The simply-supported beam with a couple applied at one end (Roark).
+
+    A prismatic beam simply supported over a span ``length``, carrying an
+    applied ``moment`` M₀ (a couple in the bending plane) at one support — a
+    semi-rigid end connection's transferred moment, a brake or lever hub
+    clamped at the end of a shaft span. The reactions form the countering
+    couple M₀/L, so the bending moment falls linearly from M₀ at the loaded
+    end to zero at the far one.
+
+    Returns the peak bending stress at the loaded end (σ = M₀·c/I) and the
+    true maximum deflection from the elastic curve
+    EI·v = −M₀·(2ξ − 3ξ² + ξ³)·L²/6, ξ measured from the loaded end — its
+    slope vanishes inside the span exactly at ξ = 1 − 1/√3 ≈ 0.423, giving
+    δ_max = M₀·L²/(9·√3·E·I). Every argument is dimension-checked; verified
+    against an independent numeric integration of the beam ODE.
+    """
+    _require(moment, "[force] * [length]", "moment")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    m0 = moment.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    stress = m0 * c / inertia
+    deflection = m0 * length_p**2 / (9 * sqrt(3) * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),

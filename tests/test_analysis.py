@@ -15,6 +15,7 @@ from anvilate.analysis import (
     bolt_shear_stress,
     cantilever_center_patch_load,
     cantilever_end_load,
+    cantilever_end_moment,
     cantilever_offset_load,
     cantilever_partial_uniform_load,
     cantilever_triangular_load,
@@ -69,6 +70,7 @@ from anvilate.analysis import (
     shaft_twist_angle,
     simply_supported_center_load,
     simply_supported_center_patch_load,
+    simply_supported_end_moment,
     simply_supported_offset_load,
     simply_supported_partial_uniform_load,
     simply_supported_symmetric_point_loads,
@@ -314,6 +316,74 @@ def test_symmetric_point_loads_reject_distributed_load_units():
             extreme_fibre=_q("5 mm"),
             elastic_modulus=_q("200 GPa"),
         )
+
+
+def test_cantilever_end_moment_matches_worked_example():
+    # A 500 mm steel cantilever, 20 x 10 mm section, a 50 N*m couple at the tip.
+    # By hand: sigma = M*c/I = 50000 * 5 / 1666.67 = 150 MPa (constant over the
+    # whole span); delta = M*L^2/(2*E*I) = 50000*500^2 / (2*200000*1666.67)
+    # = 18.75 mm (verified against a numeric integration of the beam ODE).
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = cantilever_end_moment(
+        moment=_q("50 N*m"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(18.75, rel=1e-4)
+
+
+def test_cantilever_end_moment_deflects_1_5x_the_equivalent_tip_force():
+    # A couple M0 and a tip force F = M0/L produce the SAME wall moment (and so
+    # the same peak stress), but the couple's tip deflection M0*L^2/2EI is
+    # exactly 1.5x the force's F*L^3/3EI — constant moment bends the whole span.
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    couple = cantilever_end_moment(moment=_q("50 N*m"), **kw)
+    force = cantilever_end_load(force=_q("100 N"), **kw)  # 100 N * 500 mm = 50 N*m
+    assert couple.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        force.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert couple.max_deflection.to("mm").magnitude == pytest.approx(
+        1.5 * force.max_deflection.to("mm").magnitude, rel=1e-12
+    )
+
+
+def test_simply_supported_end_moment_matches_worked_example():
+    # A 500 mm simply-supported span, 20 x 10 mm section, a 50 N*m couple at one
+    # end. By hand: sigma = M*c/I = 150 MPa at the loaded end; delta_max =
+    # M*L^2/(9*sqrt(3)*E*I) = 50000*500^2 / (15.5885*200000*1666.67) = 2.40563 mm
+    # at (1 - 1/sqrt(3))*L from the loaded end (verified against a numeric
+    # integration of the beam ODE).
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = simply_supported_end_moment(
+        moment=_q("50 N*m"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(2.40563, rel=1e-4)
+
+
+def test_end_moment_rejects_a_force_load():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    with pytest.raises(ValueError, match="moment must be a"):
+        cantilever_end_moment(moment=_q("100 N"), **kw)
+    with pytest.raises(ValueError, match="moment must be a"):
+        simply_supported_end_moment(moment=_q("100 N"), **kw)
 
 
 def test_simply_supported_offset_load_is_symmetric():
