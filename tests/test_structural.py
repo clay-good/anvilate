@@ -574,6 +574,62 @@ def test_mirrored_triangle_rejects_symmetric_supports_and_other_load_types():
         )
 
 
+def test_pair_offset_dispatches_to_the_symmetric_pair_check():
+    # 100 N at 150 mm from EACH support of a 500 mm span: four-point bending
+    # carries a constant M = F*a = 15000 N*mm -> sigma 45 MPa -> SF 250/45 =
+    # 5.56, vs 3.33 had the 200 N total been lumped at mid-span (M = 25000).
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("100 N"),
+        load_type=LoadType.POINT,
+        material="ASTM-A36",
+        pair_offset=_q("150 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.PASS
+    assert "safety factor 5.56" in bending.detail
+
+
+def test_pair_offset_rejects_other_supports_load_types_and_load_position():
+    # The pair case is only encoded on a simply-supported point member, and a
+    # pair's position IS its offset — load_position has no meaning beside it.
+    common = {
+        "name": "beam",
+        "section": _section(),
+        "length": _q("500 mm"),
+        "material": "ASTM-A36",
+    }
+    with pytest.raises(ValidationError, match="pair_offset is only encoded"):
+        BeamMember(
+            support=Support.CANTILEVER,
+            load=_q("100 N"),
+            load_type=LoadType.POINT,
+            pair_offset=_q("150 mm"),
+            **common,
+        )
+    with pytest.raises(ValidationError, match="pair_offset is only encoded"):
+        BeamMember(
+            support=Support.SIMPLY_SUPPORTED,
+            load=_q("1 N/mm"),
+            load_type=LoadType.DISTRIBUTED,
+            pair_offset=_q("150 mm"),
+            **common,
+        )
+    with pytest.raises(ValidationError, match="mutually exclusive"):
+        BeamMember(
+            support=Support.SIMPLY_SUPPORTED,
+            load=_q("100 N"),
+            load_type=LoadType.POINT,
+            pair_offset=_q("150 mm"),
+            load_position=_q("125 mm"),
+            **common,
+        )
+
+
 def test_moment_load_dispatches_on_the_cantilever_member():
     # A 50 N*m couple at the tip: sigma = M*c/I = 150 MPa everywhere -> SF
     # 250/150 = 1.67, and the tip deflection M*L^2/2EI = 18.75 mm busts a 10 mm

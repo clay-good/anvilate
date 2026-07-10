@@ -57,6 +57,7 @@ from ..analysis import (
     simply_supported_end_moment,
     simply_supported_offset_load,
     simply_supported_partial_uniform_load,
+    simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
     slenderness_ratio,
@@ -238,7 +239,12 @@ class BeamMember(BaseModel):
     every support condition, but only for distributed loads. Setting
     ``patch_centered`` moves that patch to mid-span (a machine footprint in the
     middle of the member rather than parked against a support); it requires a
-    ``loaded_length``. Setting ``triangle_mirrored`` flips a triangular load
+    ``loaded_length``. An optional ``pair_offset`` splits a point load into TWO
+    equal loads of ``load`` each at that distance from EACH support of a
+    simply-supported member (four-point bending — a machine on two skid rails,
+    a spreader-beam lift; the only encoded pair case) — it excludes
+    ``load_position``, whose single-load meaning it replaces. Setting
+    ``triangle_mirrored`` flips a triangular load
     end-for-end so it peaks away from the wall — at the tip of a cantilever or
     the prop of a fixed-pinned member, the only supports where the orientation
     is distinct (simply-supported and fixed-fixed members are symmetric).
@@ -255,6 +261,7 @@ class BeamMember(BaseModel):
     material: str
     deflection_limit: Quantity | None = None  # a member may carry its own limit
     load_position: Quantity | None = None  # a point load may sit off mid-span
+    pair_offset: Quantity | None = None  # a point load may split into a symmetric pair
     loaded_length: Quantity | None = None  # a distributed load may cover a patch
     patch_centered: bool = False  # the patch may sit at mid-span instead of at a support
     triangle_mirrored: bool = False  # a triangle may peak at the tip/prop instead of the wall
@@ -295,6 +302,19 @@ class BeamMember(BaseModel):
                 raise ValueError(
                     "load_position is only supported for a point load; got "
                     f"{self.support.value}/{self.load_type.value}"
+                )
+        if self.pair_offset is not None:
+            if not self.pair_offset.has_dimension("[length]"):
+                raise ValueError(f"pair_offset must be a [length] quantity; got {self.pair_offset}")
+            if self.load_type is not LoadType.POINT or self.support is not Support.SIMPLY_SUPPORTED:
+                raise ValueError(
+                    "pair_offset is only encoded for a simply-supported point load; "
+                    f"got {self.support.value}/{self.load_type.value}"
+                )
+            if self.load_position is not None:
+                raise ValueError(
+                    "pair_offset and load_position are mutually exclusive — a pair "
+                    "sits at pair_offset from each support"
                 )
         if self.loaded_length is not None:
             if not self.loaded_length.has_dimension("[length]"):
@@ -346,7 +366,11 @@ def screen_beam_member(
         "extreme_fibre": member.section.extreme_fibre,
         "elastic_modulus": record.elastic_modulus.quantity,
     }
-    if member.load_position is not None:
+    if member.pair_offset is not None:
+        result = simply_supported_symmetric_point_loads(
+            force=member.load, load_offset=member.pair_offset, **common
+        )
+    elif member.load_position is not None:
         result = _OFFSET_POINT_CHECKS[member.support](
             force=member.load, load_position=member.load_position, **common
         )
