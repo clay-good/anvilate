@@ -356,6 +356,22 @@ def test_machine_skid_example_shows_the_stress_neutral_fixity_win():
     assert "deflection 0.285" in by_name["welded both ends deflection"].detail
 
 
+def test_skid_position_example_fails_the_mid_platform_placement():
+    namespace = runpy.run_path(str(_EXAMPLES / "skid_position_on_platform.py"))
+    card = namespace["screen_skid_positions"]()
+    by_name = {e.name: e for e in card.entries}
+    # Rolling the skid from the wall to mid-platform doubles the wall moment
+    # (w*a^2/2 -> w*a*L/2), halving the stress SF and tripling the tip
+    # deflection past L/180 — the placement alone flips the screen.
+    assert "safety factor 3.13" in by_name["parked at the wall bending"].detail
+    assert "safety factor 1.56" in by_name["parked mid-platform bending"].detail
+    assert by_name["parked at the wall deflection"].passed
+    assert "deflection 3.883" in by_name["parked at the wall deflection"].detail
+    assert by_name["parked mid-platform deflection"].status is CheckStatus.FAIL
+    assert "deflection 11.649" in by_name["parked mid-platform deflection"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_retaining_wall_example_catches_the_unconservative_shortcut():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_post.py"))
     card = namespace["screen_retaining_post"]()
