@@ -339,6 +339,23 @@ def test_tank_baffle_example_shows_partial_fixity_raising_the_stress():
     assert "deflection 1.000" in by_name["welded both ends deflection"].detail
 
 
+def test_machine_skid_example_shows_the_stress_neutral_fixity_win():
+    namespace = runpy.run_path(str(_EXAMPLES / "machine_skid_end_fixity.py"))
+    card = namespace["screen_machine_skid"]()
+    by_name = {e.name: e for e in card.entries}
+    assert card.status is CheckStatus.PASS
+    # Welding the end the skid parks against cuts deflection three-fold at ZERO
+    # stress cost — for a half-span end patch the wall moment w*a^2*(2L-a)^2/(8L^2)
+    # coincides exactly with the pinned case's sagging peak 9*w*L^2/128 — unlike
+    # the tank-baffle triangular case, where the same weld raised the stress.
+    assert "safety factor 5.56" in by_name["pinned both ends bending"].detail
+    assert "safety factor 5.56" in by_name["welded at the skid end bending"].detail
+    assert "safety factor 6.83" in by_name["welded both ends bending"].detail
+    assert "deflection 1.398" in by_name["pinned both ends deflection"].detail
+    assert "deflection 0.451" in by_name["welded at the skid end deflection"].detail
+    assert "deflection 0.285" in by_name["welded both ends deflection"].detail
+
+
 def test_retaining_wall_example_catches_the_unconservative_shortcut():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_post.py"))
     card = namespace["screen_retaining_post"]()
