@@ -323,6 +323,22 @@ def test_pallet_bay_example_brackets_the_patch_between_the_shortcuts():
     assert "safety factor 2.61" in by_name["total spread over the span bending"].detail
 
 
+def test_tank_baffle_example_shows_partial_fixity_raising_the_stress():
+    namespace = runpy.run_path(str(_EXAMPLES / "tank_baffle_end_fixity.py"))
+    card = namespace["screen_tank_baffle"]()
+    by_name = {e.name: e for e in card.entries}
+    assert card.status is CheckStatus.PASS
+    # Welding only the floor seam in CUTS deflection but RAISES the peak stress
+    # above the pinned idealization (w0*L^2/15 vs w0*L^2/(9*sqrt(3))); welding
+    # both ends recovers strength too.
+    assert "safety factor 2.66" in by_name["pinned both ends bending"].detail
+    assert "safety factor 2.55" in by_name["welded floor seam only bending"].detail
+    assert "safety factor 3.41" in by_name["welded both ends bending"].detail
+    assert "deflection 4.986" in by_name["pinned both ends deflection"].detail
+    assert "deflection 1.823" in by_name["welded floor seam only deflection"].detail
+    assert "deflection 1.000" in by_name["welded both ends deflection"].detail
+
+
 def test_retaining_wall_example_catches_the_unconservative_shortcut():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_post.py"))
     card = namespace["screen_retaining_post"]()

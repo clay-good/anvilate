@@ -35,6 +35,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `coped_beam_web_shear.py` | A coped beam web at a bolted end connection screened for both AISC §J4.2 shear limit states: bolt-hole deductions make shear rupture — not gross yielding — govern. |
 | `retaining_wall_post.py` | A retaining-wall soldier post under triangular soil load: the resultant-at-centroid shortcut nails the wall moment exactly but under-predicts tip deflection by 26% (w₀·L⁴/40.5EI vs /30EI) — a false serviceability green the declared triangle catches. |
 | `pallet_bay_floor_beam.py` | Pallets over half a floor beam's span, screened three ways: smearing the intensity over the span fails at SF 1.30, spreading the total reports margin that isn't there (2.61), and the declared `loaded_length` patch gets the true 2.32. |
+| `tank_baffle_end_fixity.py` | A tank baffle under hydrostatic triangular load at three end fixities: welding only the floor seam cuts deflection 4.99 → 1.82 mm but *raises* the peak stress (w₀·L²/15 vs the pinned w₀·L²/(9·√3)) — end fixity hands the strength problem to the weld unless both ends are fixed. |
 | `lifting_padeye.py` | A welded lifting padeye assembly (lug + fillet weld) screened together; flags an under-sized pin against the rigging safety factor. |
 | `lug_drawing.py` | The full white-space vertical: code-check a lifting lug (ASME BTH-1), then export its plan outline to a fabrication DXF. |
 
