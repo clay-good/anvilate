@@ -15,6 +15,7 @@ from anvilate.analysis import (
     bolt_shear_stress,
     cantilever_end_load,
     cantilever_offset_load,
+    cantilever_partial_uniform_load,
     cantilever_triangular_load,
     cantilever_uniform_load,
     circular_area,
@@ -283,6 +284,65 @@ def test_cantilever_uniform_load_matches_worked_example():
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(
         4 * ss.max_bending_stress.to("MPa").magnitude, rel=1e-6
     )
+
+
+def test_cantilever_partial_uniform_load_matches_worked_example():
+    # 10 N/mm over the first 1 m (from the wall) of a 2 m, 80x120x5 box cantilever
+    # (I = 3,755,833 mm^4, c = 60): M = w*a^2/2 = 5,000,000 N*mm -> sigma = M*c/I
+    # = 79.87 MPa; tip delta = w*a^3*(4L-a)/(24*E*I) = 3.8828 mm (verified against
+    # a numeric double-integration of the beam ODE).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = cantilever_partial_uniform_load(
+        distributed_load=_q("10 N/mm"),
+        loaded_length=_q("1 m"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(79.867, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(3.88285, rel=1e-4)
+
+
+def test_cantilever_partial_uniform_load_degenerates_to_the_full_udl():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    partial = cantilever_partial_uniform_load(
+        distributed_load=_q("1 N/mm"), loaded_length=_q("500 mm"), **kw
+    )
+    full = cantilever_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    assert partial.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        full.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    assert partial.max_deflection.to("mm").magnitude == pytest.approx(
+        full.max_deflection.to("mm").magnitude, rel=1e-9
+    )
+
+
+def test_cantilever_partial_uniform_load_rejects_bad_inputs():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    for loaded_length in ("0 mm", "600 mm"):
+        with pytest.raises(ValueError, match="loaded_length must lie within the span"):
+            cantilever_partial_uniform_load(
+                distributed_load=_q("1 N/mm"), loaded_length=_q(loaded_length), **kw
+            )
+    with pytest.raises(ValueError, match="distributed_load must be a"):
+        cantilever_partial_uniform_load(
+            distributed_load=_q("100 N"),  # a force, not force-per-length
+            loaded_length=_q("250 mm"),
+            **kw,
+        )
 
 
 def test_cantilever_triangular_load_matches_worked_example():

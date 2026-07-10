@@ -24,6 +24,7 @@ __all__ = [
     "BeamBendingResult",
     "cantilever_end_load",
     "cantilever_uniform_load",
+    "cantilever_partial_uniform_load",
     "cantilever_triangular_load",
     "simply_supported_center_load",
     "simply_supported_offset_load",
@@ -300,6 +301,55 @@ def cantilever_uniform_load(
     moment = w * length_p**2 / 2
     stress = moment * c / inertia
     deflection = w * length_p**4 / (8 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def cantilever_partial_uniform_load(
+    *,
+    distributed_load: Quantity,
+    loaded_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The cantilever uniformly loaded over part of its length (Roark).
+
+    A prismatic beam fixed at one end and free at the other, carrying a uniform
+    ``distributed_load`` w (force per unit length) over ``loaded_length`` a
+    measured from the fixed end, unloaded beyond — an equipment skid parked
+    against the wall end of a cantilevered platform. Degenerates exactly to
+    :func:`cantilever_uniform_load` at a = L.
+
+    Returns the peak bending stress at the fixed end (σ = M·c/I with M = w·a²/2)
+    and the free-end deflection δ = w·a³·(4L−a)/(24·E·I) — the loaded segment's
+    own deflection plus the rigid rotation it hands the unloaded overhang. Every
+    argument is dimension-checked.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(loaded_length, "[length]", "loaded_length")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    loaded = loaded_length.pint.to(length_p.units)
+    if not 0 < loaded.magnitude <= length_p.magnitude:
+        raise ValueError(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w * loaded**2 / 2
+    stress = moment * c / inertia
+    deflection = w * loaded**3 * (4 * length_p - loaded) / (24 * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
