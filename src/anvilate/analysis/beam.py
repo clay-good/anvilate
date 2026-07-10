@@ -39,6 +39,7 @@ __all__ = [
     "simply_supported_center_patch_load",
     "simply_supported_triangular_load",
     "simply_supported_end_moment",
+    "simply_supported_offset_moment",
     "fixed_fixed_center_load",
     "fixed_fixed_offset_load",
     "fixed_fixed_uniform_load",
@@ -999,6 +1000,81 @@ def simply_supported_end_moment(
 
     stress = m0 * c / inertia
     deflection = m0 * length_p**2 / (9 * sqrt(3) * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def simply_supported_offset_moment(
+    *,
+    moment: Quantity,
+    load_position: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The simply-supported beam with a couple applied inside the span (Roark).
+
+    A prismatic beam simply supported over a span ``length``, carrying an
+    applied ``moment`` M₀ (a couple in the bending plane) at ``load_position``
+    a from one support, strictly inside the span — a gearbox or brake hub
+    clamped mid-span on a shaft, a bracket that hands its beam a couple. The
+    reactions form the countering couple M₀/L, so the bending moment ramps
+    from zero at each support toward the couple and JUMPS by M₀ across it:
+    the peak |M| = M₀·max(a, b)/L sits just on the longer-segment side
+    (b = L − a). A mid-span couple therefore stresses the beam only half as
+    hard as the same couple at a support (M₀/2 vs M₀), the reverse of a point
+    load's preference; the ends of that range are
+    :func:`simply_supported_end_moment`.
+
+    Returns the peak bending stress (σ = M₀·max(a, b)·c/(L·I)) and the true
+    maximum deflection of the two-lobed elastic curve
+    EI·v = −M₀·x³/(6L) + M₀·⟨x−a⟩²/2 + C₁·x, C₁ = M₀·(L² − 3b²)/(6L) — each
+    lobe's stationary point is a closed-form quadratic root and the larger
+    |v| governs. Every argument is dimension-checked; verified against an
+    independent numeric integration of the beam ODE, and exactly symmetric
+    under a ↔ b.
+    """
+    _require(moment, "[force] * [length]", "moment")
+    _require(load_position, "[length]", "load_position")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    m0 = moment.pint
+    length_p = length.pint
+    position = load_position.pint.to(length_p.units)
+    if not 0 < position.magnitude < length_p.magnitude:
+        raise ValueError(
+            f"load_position must lie strictly inside the span (0, {length}); got {load_position}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    a = position
+    b = length_p - a
+    stress = m0 * max(a, b) / length_p * c / inertia
+
+    c1 = m0 * (length_p**2 - 3 * b**2) / (6 * length_p)
+
+    def _v(x, loaded: bool):
+        out = -m0 * x**3 / (6 * length_p) + c1 * x
+        if loaded:
+            out = out + m0 * (x - a) ** 2 / 2
+        return out
+
+    candidates = []
+    left_sq = (length_p**2 - 3 * b**2) / 3
+    if left_sq.magnitude > 0 and (x1 := left_sq**0.5) < a:
+        candidates.append(abs(_v(x1, loaded=False)))
+    right_rad = 2 * length_p * b - b**2 - 2 * length_p**2 / 3
+    if right_rad.magnitude >= 0 and (x2 := length_p - right_rad**0.5) > a:
+        candidates.append(abs(_v(x2, loaded=True)))
+    deflection = max(candidates) / (e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),

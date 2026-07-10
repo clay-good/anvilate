@@ -62,6 +62,7 @@ from ..analysis import (
     simply_supported_end_moment,
     simply_supported_fundamental_frequency,
     simply_supported_offset_load,
+    simply_supported_offset_moment,
     simply_supported_partial_uniform_load,
     simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
@@ -221,6 +222,13 @@ _MOMENT_CHECKS = {
     Support.SIMPLY_SUPPORTED: simply_supported_end_moment,
     Support.FIXED_PINNED: fixed_pinned_end_moment,
 }
+# A couple away from its default position: short of the tip on a cantilever,
+# inside the span on a simply-supported member. A wall absorbs an applied
+# couple, so fixed-fixed/fixed-pinned interior couples are not encoded.
+_OFFSET_MOMENT_CHECKS = {
+    Support.CANTILEVER: cantilever_offset_moment,
+    Support.SIMPLY_SUPPORTED: simply_supported_offset_moment,
+}
 # Distributed-mass fundamental frequency per support (exact Euler-Bernoulli
 # eigenvalues), for the optional resonance screen.
 _MODAL_CHECKS = {
@@ -247,9 +255,11 @@ class BeamMember(BaseModel):
     mid-span on a simply-supported or fixed-fixed member (measured from either
     support), short of the tip on a cantilever (measured from the fixed end), or
     anywhere on a fixed-pinned member (measured from the propped end). Point
-    loads accept it on every support; a moment load accepts it only on a
+    loads accept it on every support; a moment load accepts it on a
     cantilever (the couple moves short of the tip, measured from the fixed
-    end — the only encoded off-end couple). An optional ``loaded_length`` restricts a distributed
+    end) or a simply-supported member (the couple moves inside the span) —
+    a wall absorbs an applied couple, so the other supports reject it.
+    An optional ``loaded_length`` restricts a distributed
     load to a patch of that length adjacent to one support (the fixed end on a
     cantilever or fixed-pinned member) instead of the full span — encoded for
     every support condition, but only for distributed loads. Setting
@@ -321,9 +331,10 @@ class BeamMember(BaseModel):
                     f"load_position must be a [length] quantity; got {self.load_position}"
                 )
             if self.load_type is LoadType.MOMENT:
-                if self.support is not Support.CANTILEVER:
+                if self.support not in _OFFSET_MOMENT_CHECKS:
                     raise ValueError(
-                        "an off-end couple is only encoded on a cantilever; got "
+                        "an off-end couple is only encoded on a cantilever or "
+                        "simply-supported member; got "
                         f"{self.support.value}/{self.load_type.value}"
                     )
             elif self.load_type is not LoadType.POINT:
@@ -417,7 +428,7 @@ def screen_beam_member(
             force=member.load, load_offset=member.pair_offset, **common
         )
     elif member.load_position is not None and member.load_type is LoadType.MOMENT:
-        result = cantilever_offset_moment(
+        result = _OFFSET_MOMENT_CHECKS[member.support](
             moment=member.load, load_position=member.load_position, **common
         )
     elif member.load_position is not None:

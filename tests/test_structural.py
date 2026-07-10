@@ -797,13 +797,34 @@ def test_offset_moment_dispatches_on_the_cantilever_member():
     )
 
 
-def test_offset_moment_rejects_non_cantilever_supports():
+def test_offset_moment_dispatches_on_the_simply_supported_member():
+    # A 50 N*m couple at the quarter point of a simply-supported span: the
+    # moment peaks at M0*max(a,b)/L = 37500 N*mm just past the couple ->
+    # sigma 112.5 MPa -> SF 250/112.5 = 2.22 (vs 1.67 with the couple at a
+    # support — mid-span placement is the couple's mildest, not its worst).
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("50 N*m"),
+        load_type=LoadType.MOMENT,
+        material="ASTM-A36",
+        load_position=_q("125 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.PASS
+    assert "safety factor 2.22" in bending.detail
+
+
+def test_offset_moment_rejects_walled_supports():
     with pytest.raises(ValidationError, match="off-end couple is only encoded"):
         BeamMember(
             name="beam",
             section=_section(),
             length=_q("500 mm"),
-            support=Support.SIMPLY_SUPPORTED,
+            support=Support.FIXED_PINNED,
             load=_q("50 N*m"),
             load_type=LoadType.MOMENT,
             material="ASTM-A36",

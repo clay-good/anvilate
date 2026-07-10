@@ -80,6 +80,7 @@ from anvilate.analysis import (
     simply_supported_end_moment,
     simply_supported_fundamental_frequency,
     simply_supported_offset_load,
+    simply_supported_offset_moment,
     simply_supported_partial_uniform_load,
     simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
@@ -454,6 +455,64 @@ def test_cantilever_offset_moment_degenerates_to_the_end_case():
     assert offset.max_deflection.to("mm").magnitude == pytest.approx(
         end.max_deflection.to("mm").magnitude, rel=1e-12
     )
+
+
+def test_simply_supported_offset_moment_matches_worked_example():
+    # The 50 N*m couple at 125 mm of the 500 mm span: the moment jumps by M0
+    # across the couple, peaking at M0*max(a,b)/L = 50000*375/500 = 37500 N*mm
+    # -> sigma 112.5 MPa; the two-lobed curve's larger stationary value gives
+    # delta_max = 1.76183 mm (verified against a numeric integration of the
+    # beam ODE).
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = simply_supported_offset_moment(
+        moment=_q("50 N*m"),
+        load_position=_q("125 mm"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(112.5, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(1.76183, rel=1e-4)
+
+
+def test_simply_supported_offset_moment_is_symmetric_and_mildest_at_mid_span():
+    kw = {
+        "moment": _q("50 N*m"),
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    near = simply_supported_offset_moment(load_position=_q("125 mm"), **kw)
+    far = simply_supported_offset_moment(load_position=_q("375 mm"), **kw)
+    assert near.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        far.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert near.max_deflection.to("mm").magnitude == pytest.approx(
+        far.max_deflection.to("mm").magnitude, rel=1e-12
+    )
+    # A mid-span couple peaks at exactly M0/2 — half the end-moment case's M0,
+    # the reverse of a point load's worst position.
+    mid = simply_supported_offset_moment(load_position=_q("250 mm"), **kw)
+    end = simply_supported_end_moment(**kw)
+    assert mid.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        end.max_bending_stress.to("MPa").magnitude / 2, rel=1e-12
+    )
+
+
+def test_simply_supported_offset_moment_rejects_positions_off_the_span():
+    kw = {
+        "moment": _q("50 N*m"),
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    with pytest.raises(ValueError, match="strictly inside the span"):
+        simply_supported_offset_moment(load_position=_q("500 mm"), **kw)
+    with pytest.raises(ValueError, match="strictly inside the span"):
+        simply_supported_offset_moment(load_position=_q("0 mm"), **kw)
 
 
 def test_cantilever_offset_moment_rejects_positions_off_the_beam():
