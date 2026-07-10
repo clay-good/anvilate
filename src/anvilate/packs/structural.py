@@ -45,6 +45,7 @@ from ..analysis import (
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
     fixed_pinned_center_patch_load,
+    fixed_pinned_end_moment,
     fixed_pinned_offset_load,
     fixed_pinned_partial_uniform_load,
     fixed_pinned_triangular_load,
@@ -151,8 +152,9 @@ class LoadType(StrEnum):
     a linearly varying (triangular) one — zero at one support, peaking at the
     other (at the fixed end on a cantilever or fixed-pinned member), as
     hydrostatic pressure loads a stiffener — or an applied end moment (a couple
-    a bracket or hub hands the member at the tip of a cantilever or at one
-    support of a simply-supported span)."""
+    a bracket or hub hands the member at the tip of a cantilever, at one
+    support of a simply-supported span, or at the prop of a fixed-pinned
+    member)."""
 
     POINT = "point"
     DISTRIBUTED = "distributed"
@@ -204,11 +206,13 @@ _MIRRORED_TRIANGULAR_CHECKS = {
     Support.FIXED_PINNED: fixed_pinned_triangular_load_peak_at_prop,
 }
 # An applied end couple is encoded where an end is free to receive one: the tip
-# of a cantilever or a support of a simply-supported span. A built-in wall
-# absorbs an applied couple directly, so fixed-fixed/fixed-pinned are not cases.
+# of a cantilever, a support of a simply-supported span, or the prop of a
+# fixed-pinned member. A built-in wall absorbs an applied couple directly, so
+# fixed-fixed (both ends walls) is not a case.
 _MOMENT_CHECKS = {
     Support.CANTILEVER: cantilever_end_moment,
     Support.SIMPLY_SUPPORTED: simply_supported_end_moment,
+    Support.FIXED_PINNED: fixed_pinned_end_moment,
 }
 
 
@@ -220,9 +224,9 @@ class BeamMember(BaseModel):
     either support on a simply-supported member, at the fixed end on a
     cantilever or fixed-pinned member, where the wall moment governs), and a
     force-times-length couple for a ``moment`` one (applied at the tip of a
-    cantilever or at one support of a simply-supported member — the only
-    supports with an end free to receive a couple) — the model validates the
-    dimension matches ``load_type``.
+    cantilever, at one support of a simply-supported member, or at the prop of
+    a fixed-pinned one — every support with an end free to receive a couple) —
+    the model validates the dimension matches ``load_type``.
     ``material`` is a database id (its E and yield drive the checks). An optional
     ``load_position`` places a point load away from its default position — off
     mid-span on a simply-supported or fixed-fixed member (measured from either
@@ -278,8 +282,9 @@ class BeamMember(BaseModel):
             )
         if self.load_type is LoadType.MOMENT and self.support not in _MOMENT_CHECKS:
             raise ValueError(
-                "a moment load is only encoded for a cantilever or simply-supported "
-                f"member; got {self.support.value}/{self.load_type.value}"
+                "a moment load is only encoded for a member with an end free to "
+                "receive a couple (cantilever, simply-supported, or fixed-pinned); "
+                f"got {self.support.value}/{self.load_type.value}"
             )
         if self.load_position is not None:
             if not self.load_position.has_dimension("[length]"):
