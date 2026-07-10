@@ -391,6 +391,24 @@ def test_stiffener_weld_end_example_fails_opposite_criteria():
     assert card.status is CheckStatus.FAIL
 
 
+def test_genset_example_recovers_margin_from_the_declared_rails():
+    namespace = runpy.run_path(str(_EXAMPLES / "genset_on_two_rails.py"))
+    card = namespace["screen_genset_beam"]()
+    by_name = {e.name: e for e in card.entries}
+    # The lumped 10 kN mid-span resultant fails both screens; the declared
+    # third-point rails carry a constant M = F*a, 2/3 of the lumped moment,
+    # and pass both.
+    assert by_name["lumped mid-span resultant bending"].status is CheckStatus.FAIL
+    assert "safety factor 1.25" in by_name["lumped mid-span resultant bending"].detail
+    assert by_name["lumped mid-span resultant deflection"].status is CheckStatus.FAIL
+    assert "deflection 13.677" in by_name["lumped mid-span resultant deflection"].detail
+    assert by_name["declared skid rails bending"].passed
+    assert "safety factor 1.87" in by_name["declared skid rails bending"].detail
+    assert by_name["declared skid rails deflection"].passed
+    assert "deflection 11.650" in by_name["declared skid rails deflection"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_canopy_snow_drift_example_flips_on_the_drift_orientation():
     namespace = runpy.run_path(str(_EXAMPLES / "canopy_snow_drift.py"))
     card = namespace["screen_canopy_drift"]()
