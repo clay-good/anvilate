@@ -11,6 +11,7 @@ from anvilate.analysis import (
     cantilever_end_load,
     cantilever_triangular_load,
     fixed_fixed_center_load,
+    simply_supported_center_patch_load,
     simply_supported_partial_uniform_load,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
@@ -394,6 +395,76 @@ def test_loaded_length_rejects_non_distributed_loads():
                 material="ASTM-A36",
                 loaded_length=_q("250 mm"),
             )
+
+
+def test_patch_centered_dispatches_to_the_center_patch_case():
+    # A centered half-span patch on a simply-supported beam: M = w*a*(2L - a)/8
+    # = 23437.5 N*mm -> sigma 70.31 MPa -> SF 250/70.31 = 3.56 (vs 4.74 for the
+    # same patch parked against a support).
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("1 N/mm"),
+        load_type=LoadType.DISTRIBUTED,
+        material="ASTM-A36",
+        loaded_length=_q("250 mm"),
+        patch_centered=True,
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    standalone = simply_supported_center_patch_load(
+        distributed_load=_q("1 N/mm"),
+        loaded_length=_q("250 mm"),
+        length=_q("500 mm"),
+        second_moment=_section().second_moment,
+        extreme_fibre=_section().extreme_fibre,
+        elastic_modulus=Quantity.parse("200 GPa"),
+    )
+    expected_sf = 250 / standalone.max_bending_stress.to("MPa").magnitude
+    assert card.entries[0].passed
+    assert f"safety factor {expected_sf:.2f}" in card.entries[0].detail
+    assert "safety factor 3.56" in card.entries[0].detail
+
+
+def test_patch_centered_dispatches_on_every_support_condition():
+    # Wall moments for a centered half-span patch (w = 1 N/mm, a = 250, L = 500):
+    # cantilever M = w*a*L/2 = 62500 N*mm -> sigma 187.5 -> SF 1.33;
+    # fixed-fixed M = w*a*(3L^2 - a^2)/(24L) = 14323 -> sigma 42.97 -> SF 5.82;
+    # fixed-pinned M = w*a*(3L^2 - a^2)/(16L) = 21484 -> sigma 64.45 -> SF 3.88.
+    for support, expected_sf in (
+        (Support.CANTILEVER, "1.33"),
+        (Support.FIXED_FIXED, "5.82"),
+        (Support.FIXED_PINNED, "3.88"),
+    ):
+        member = BeamMember(
+            name="beam",
+            section=_section(),
+            length=_q("500 mm"),
+            support=support,
+            load=_q("1 N/mm"),
+            load_type=LoadType.DISTRIBUTED,
+            material="ASTM-A36",
+            loaded_length=_q("250 mm"),
+            patch_centered=True,
+        )
+        card = screen_beam_member(member, required_safety_factor=1.2)
+        assert card.entries[0].passed
+        assert f"safety factor {expected_sf}" in card.entries[0].detail
+
+
+def test_patch_centered_requires_a_loaded_length():
+    with pytest.raises(ValidationError, match="patch_centered requires a loaded_length"):
+        BeamMember(
+            name="beam",
+            section=_section(),
+            length=_q("500 mm"),
+            support=Support.SIMPLY_SUPPORTED,
+            load=_q("1 N/mm"),
+            load_type=LoadType.DISTRIBUTED,
+            material="ASTM-A36",
+            patch_centered=True,
+        )
 
 
 def test_triangular_load_dispatches_to_the_cantilever_case():

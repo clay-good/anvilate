@@ -26,6 +26,7 @@ from ..analysis import (
     axial_stress,
     bearing_stress,
     bolt_shear_stress,
+    cantilever_center_patch_load,
     cantilever_end_load,
     cantilever_offset_load,
     cantilever_partial_uniform_load,
@@ -35,17 +36,20 @@ from ..analysis import (
     deflection_scorecard,
     euler_critical_stress,
     fixed_fixed_center_load,
+    fixed_fixed_center_patch_load,
     fixed_fixed_offset_load,
     fixed_fixed_partial_uniform_load,
     fixed_fixed_triangular_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
+    fixed_pinned_center_patch_load,
     fixed_pinned_offset_load,
     fixed_pinned_partial_uniform_load,
     fixed_pinned_triangular_load,
     fixed_pinned_uniform_load,
     johnson_critical_stress,
     simply_supported_center_load,
+    simply_supported_center_patch_load,
     simply_supported_offset_load,
     simply_supported_partial_uniform_load,
     simply_supported_triangular_load,
@@ -180,6 +184,12 @@ _PARTIAL_UDL_CHECKS = {
     Support.FIXED_FIXED: fixed_fixed_partial_uniform_load,
     Support.FIXED_PINNED: fixed_pinned_partial_uniform_load,
 }
+_CENTER_PATCH_CHECKS = {
+    Support.CANTILEVER: cantilever_center_patch_load,
+    Support.SIMPLY_SUPPORTED: simply_supported_center_patch_load,
+    Support.FIXED_FIXED: fixed_fixed_center_patch_load,
+    Support.FIXED_PINNED: fixed_pinned_center_patch_load,
+}
 
 
 class BeamMember(BaseModel):
@@ -198,7 +208,10 @@ class BeamMember(BaseModel):
     point loads accept it. An optional ``loaded_length`` restricts a distributed
     load to a patch of that length adjacent to one support (the fixed end on a
     cantilever or fixed-pinned member) instead of the full span — encoded for
-    every support condition, but only for distributed loads.
+    every support condition, but only for distributed loads. Setting
+    ``patch_centered`` moves that patch to mid-span (a machine footprint in the
+    middle of the member rather than parked against a support); it requires a
+    ``loaded_length``.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -213,6 +226,7 @@ class BeamMember(BaseModel):
     deflection_limit: Quantity | None = None  # a member may carry its own limit
     load_position: Quantity | None = None  # a point load may sit off mid-span
     loaded_length: Quantity | None = None  # a distributed load may cover a patch
+    patch_centered: bool = False  # the patch may sit at mid-span instead of at a support
 
     @model_validator(mode="after")
     def _well_formed(self) -> BeamMember:
@@ -250,6 +264,8 @@ class BeamMember(BaseModel):
                     "loaded_length is only encoded for a distributed load; got "
                     f"{self.support.value}/{self.load_type.value}"
                 )
+        if self.patch_centered and self.loaded_length is None:
+            raise ValueError("patch_centered requires a loaded_length")
         return self
 
 
@@ -289,7 +305,8 @@ def screen_beam_member(
     elif member.load_type is LoadType.TRIANGULAR:
         result = _TRIANGULAR_CHECKS[member.support](peak_distributed_load=member.load, **common)
     elif member.loaded_length is not None:
-        result = _PARTIAL_UDL_CHECKS[member.support](
+        checks = _CENTER_PATCH_CHECKS if member.patch_centered else _PARTIAL_UDL_CHECKS
+        result = checks[member.support](
             distributed_load=member.load, loaded_length=member.loaded_length, **common
         )
     else:
