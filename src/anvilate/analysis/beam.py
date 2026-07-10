@@ -54,6 +54,8 @@ __all__ = [
     "fixed_pinned_triangular_load",
     "fixed_pinned_triangular_load_peak_at_prop",
     "fixed_pinned_end_moment",
+    "overhang_tip_load",
+    "overhang_uniform_load",
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",
@@ -1529,6 +1531,106 @@ def fixed_pinned_end_moment(
 
     stress = m0 * c / inertia
     deflection = m0 * length_p**2 / (27 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def overhang_tip_load(
+    *,
+    force: Quantity,
+    back_span: Quantity,
+    overhang: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The overhanging beam with a point load at its free tip (Roark).
+
+    A prismatic beam simply supported over a ``back_span`` L whose section
+    continues ``overhang`` c past one support, carrying a transverse ``force``
+    at the free tip — a loading-dock edge, a crane-runway end, a balcony
+    joist. The tip load hogs the beam over the inner support (|M|max = F·c
+    there, falling to zero at both free ends) and levers the back span UPWARD.
+
+    Returns the peak bending stress at the inner support (σ = F·c·cᶠ/I) and
+    the larger of the two deflection extremes — the tip drop
+    δ = F·c²·(L + c)/(3·E·I) or the back-span uplift F·c·L²/(9·√3·E·I) at
+    L/√3 from the far support (the uplift governs for short overhangs,
+    c ≲ 0.16·L). Every argument is dimension-checked; verified against an
+    independent numeric integration of the beam ODE.
+    """
+    _require(force, "[force]", "force")
+    _require(back_span, "[length]", "back_span")
+    _require(overhang, "[length]", "overhang")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    f = force.pint
+    span = back_span.pint
+    c_len = overhang.pint.to(span.units)
+    if c_len.magnitude <= 0 or span.magnitude <= 0:
+        raise ValueError(f"back_span ({back_span}) and overhang ({overhang}) must be positive")
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    stress = f * c_len * c / inertia
+    tip = f * c_len**2 * (span + c_len) / (3 * e * inertia)
+    uplift = f * c_len * span**2 / (9 * sqrt(3) * e * inertia)
+    deflection = max(tip, uplift)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def overhang_uniform_load(
+    *,
+    distributed_load: Quantity,
+    back_span: Quantity,
+    overhang: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The overhanging beam uniformly loaded over its overhang (Roark).
+
+    A prismatic beam simply supported over a ``back_span`` L whose section
+    continues ``overhang`` c past one support, carrying a uniform
+    ``distributed_load`` w (force per unit length) on the OVERHANG only —
+    pallets parked on a dock edge, snow on a canopy stub. The overhang load
+    hogs the inner support (|M|max = w·c²/2) and levers the back span upward.
+
+    Returns the peak bending stress at the inner support (σ = w·c²·cᶠ/(2·I))
+    and the larger of the tip drop δ = w·c³·(4L + 3c)/(24·E·I) or the
+    back-span uplift (w·c²/2)·L²/(9·√3·E·I) at L/√3 from the far support.
+    Every argument is dimension-checked; verified against an independent
+    numeric integration of the beam ODE.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(back_span, "[length]", "back_span")
+    _require(overhang, "[length]", "overhang")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    span = back_span.pint
+    c_len = overhang.pint.to(span.units)
+    if c_len.magnitude <= 0 or span.magnitude <= 0:
+        raise ValueError(f"back_span ({back_span}) and overhang ({overhang}) must be positive")
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w * c_len**2 / 2
+    stress = moment * c / inertia
+    tip = w * c_len**3 * (4 * span + 3 * c_len) / (24 * e * inertia)
+    uplift = moment * span**2 / (9 * sqrt(3) * e * inertia)
+    deflection = max(tip, uplift)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),

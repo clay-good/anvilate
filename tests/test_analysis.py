@@ -70,6 +70,8 @@ from anvilate.analysis import (
     max_transverse_shear_stress,
     natural_frequency,
     natural_frequency_from_deflection,
+    overhang_tip_load,
+    overhang_uniform_load,
     polar_second_moment_hollow,
     polar_second_moment_solid,
     principal_stresses_plane,
@@ -333,6 +335,55 @@ def test_symmetric_point_loads_reject_distributed_load_units():
             extreme_fibre=_q("5 mm"),
             elastic_modulus=_q("200 GPa"),
         )
+
+
+def test_overhang_tip_load_matches_worked_example():
+    # 100 N at the tip of a 250 mm overhang past a 500 mm back span (20x10
+    # steel): |M|max = F*c = 25000 N*mm at the inner support -> sigma 75 MPa;
+    # tip drop F*c^2*(L+c)/(3EI) = 4.6875 mm governs over the back-span
+    # uplift 1.2028 mm (verified against a numeric integration of the ODE).
+    kw = {
+        "back_span": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    result = overhang_tip_load(force=_q("100 N"), overhang=_q("250 mm"), **kw)
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(75.0, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(4.6875, rel=1e-4)
+    # A SHORT overhang is governed by the back-span uplift instead: at
+    # c = 50 mm the tip drops only 0.1375 mm but the span bows up 0.2406 mm.
+    short = overhang_tip_load(force=_q("100 N"), overhang=_q("50 mm"), **kw)
+    assert short.max_deflection.to("mm").magnitude == pytest.approx(0.24056, rel=1e-4)
+
+
+def test_overhang_uniform_load_matches_worked_example():
+    # 1 N/mm over the same 250 mm overhang: |M|max = w*c^2/2 = 31250 N*mm ->
+    # sigma 93.75 MPa; tip drop w*c^3*(4L+3c)/(24EI) = 5.3711 mm governs
+    # (verified against a numeric integration of the beam ODE).
+    result = overhang_uniform_load(
+        distributed_load=_q("1 N/mm"),
+        back_span=_q("500 mm"),
+        overhang=_q("250 mm"),
+        second_moment=rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(93.75, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(5.37109, rel=1e-4)
+
+
+def test_overhang_rejects_bad_inputs():
+    kw = {
+        "back_span": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    with pytest.raises(ValueError, match="must be positive"):
+        overhang_tip_load(force=_q("100 N"), overhang=_q("0 mm"), **kw)
+    with pytest.raises(ValueError, match="distributed_load must be a"):
+        overhang_uniform_load(distributed_load=_q("100 N"), overhang=_q("250 mm"), **kw)
 
 
 def test_cantilever_end_moment_matches_worked_example():
