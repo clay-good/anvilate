@@ -58,6 +58,8 @@ from ..analysis import (
     frequency_scorecard,
     johnson_critical_stress,
     max_transverse_shear_stress,
+    overhang_tip_load,
+    overhang_uniform_load,
     simply_supported_center_load,
     simply_supported_center_patch_load,
     simply_supported_end_moment,
@@ -155,6 +157,7 @@ class Support(StrEnum):
     SIMPLY_SUPPORTED = "simply_supported"
     FIXED_FIXED = "fixed_fixed"
     FIXED_PINNED = "fixed_pinned"  # a propped cantilever: one wall, one prop
+    OVERHANG = "overhang"  # simply supported with the section run past one support
 
 
 class LoadType(StrEnum):
@@ -299,6 +302,11 @@ class BeamMember(BaseModel):
     adds a resonance entry — the support's exact distributed-mass fundamental
     frequency screened against ``min_frequency``. The floor requires the mass;
     a declared mass with no floor surfaces NOT_EVALUATED, never a silent pass.
+    An ``overhang`` member is a simply-supported back span of ``length`` whose
+    section runs ``overhang_length`` past one support: a ``point`` load sits
+    at the free tip and a ``distributed`` one covers the overhang only (the
+    dock-edge cases); other load types, positions, patches, and the resonance
+    screen are not encoded for it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -314,6 +322,7 @@ class BeamMember(BaseModel):
     load_position: Quantity | None = None  # a point load may sit off mid-span
     pair_offset: Quantity | None = None  # a point load may split into a symmetric pair
     loaded_length: Quantity | None = None  # a distributed load may cover a patch
+    overhang_length: Quantity | None = None  # required for (and only for) OVERHANG
     mass_per_length: Quantity | None = None  # enables the resonance screen
     min_frequency: Quantity | None = None  # the resonance floor (needs mass_per_length)
     patch_centered: bool = False  # the patch may sit at mid-span instead of at a support
@@ -388,6 +397,37 @@ class BeamMember(BaseModel):
                 )
         if self.patch_centered and self.loaded_length is None:
             raise ValueError("patch_centered requires a loaded_length")
+        if self.support is Support.OVERHANG:
+            if self.overhang_length is None:
+                raise ValueError("an overhang member requires an overhang_length")
+            if not self.overhang_length.has_dimension("[length]"):
+                raise ValueError(
+                    f"overhang_length must be a [length] quantity; got {self.overhang_length}"
+                )
+            if self.load_type not in (LoadType.POINT, LoadType.DISTRIBUTED):
+                raise ValueError(
+                    "an overhang member is only encoded for a tip point load or a "
+                    f"distributed load on the overhang; got {self.load_type.value}"
+                )
+            if (
+                self.load_position is not None
+                or self.pair_offset is not None
+                or self.loaded_length is not None
+            ):
+                raise ValueError(
+                    "load_position, pair_offset, and loaded_length are not encoded "
+                    "for an overhang member"
+                )
+            if self.mass_per_length is not None:
+                raise ValueError(
+                    "the resonance screen is not encoded for an overhang member "
+                    "(no distributed-mass eigenvalue)"
+                )
+        elif self.overhang_length is not None:
+            raise ValueError(
+                f"overhang_length is only meaningful for an overhang member; got "
+                f"{self.support.value}"
+            )
         if self.mass_per_length is not None and not self.mass_per_length.has_dimension(
             "[mass] / [length]"
         ):
@@ -448,7 +488,19 @@ def screen_beam_member(
         "extreme_fibre": member.section.extreme_fibre,
         "elastic_modulus": record.elastic_modulus.quantity,
     }
-    if member.pair_offset is not None:
+    if member.support is Support.OVERHANG:
+        overhang_common = {
+            "back_span": member.length,
+            "overhang": member.overhang_length,
+            "second_moment": member.section.second_moment,
+            "extreme_fibre": member.section.extreme_fibre,
+            "elastic_modulus": record.elastic_modulus.quantity,
+        }
+        if member.load_type is LoadType.POINT:
+            result = overhang_tip_load(force=member.load, **overhang_common)
+        else:
+            result = overhang_uniform_load(distributed_load=member.load, **overhang_common)
+    elif member.pair_offset is not None:
         result = simply_supported_symmetric_point_loads(
             force=member.load, load_offset=member.pair_offset, **common
         )

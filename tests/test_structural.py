@@ -700,6 +700,76 @@ def test_min_frequency_requires_the_mass():
         )
 
 
+def test_overhang_member_dispatches_tip_and_overhang_loads():
+    # 100 N at the tip of a 250 mm overhang past a 500 mm back span: sigma =
+    # F*c*cf/I = 75 MPa -> SF 3.33; the 4.6875 mm tip drop busts a 4 mm limit.
+    common = {
+        "name": "dock edge",
+        "section": _section(),
+        "length": _q("500 mm"),
+        "support": Support.OVERHANG,
+        "material": "ASTM-A36",
+        "overhang_length": _q("250 mm"),
+        "deflection_limit": _q("4 mm"),
+    }
+    tip = screen_beam_member(
+        BeamMember(load=_q("100 N"), load_type=LoadType.POINT, **common),
+        required_safety_factor=1.5,
+    )
+    bending = next(e for e in tip.entries if "bending" in e.name)
+    assert bending.passed
+    assert "safety factor 3.33" in bending.detail
+    deflection = next(e for e in tip.entries if "deflection" in e.name)
+    assert deflection.status is CheckStatus.FAIL
+    assert "4.688 mm" in deflection.detail
+    # No shear entry: the overhang is not in the peak-shear table.
+    assert not any("shear" in e.name for e in tip.entries)
+    # The same overhang under 1 N/mm on the overhang only: w*c^2/2 -> 93.75
+    # MPa -> SF 2.67 (a distinct dispatch from the tip point load).
+    udl = screen_beam_member(
+        BeamMember(load=_q("1 N/mm"), load_type=LoadType.DISTRIBUTED, **common),
+        required_safety_factor=1.5,
+    )
+    bending = next(e for e in udl.entries if "bending" in e.name)
+    assert "safety factor 2.67" in bending.detail
+
+
+def test_overhang_member_validators():
+    common = {
+        "name": "beam",
+        "section": _section(),
+        "length": _q("500 mm"),
+        "material": "ASTM-A36",
+    }
+    with pytest.raises(ValidationError, match="requires an overhang_length"):
+        BeamMember(support=Support.OVERHANG, load=_q("100 N"), load_type=LoadType.POINT, **common)
+    with pytest.raises(ValidationError, match="only meaningful for an overhang member"):
+        BeamMember(
+            support=Support.SIMPLY_SUPPORTED,
+            load=_q("100 N"),
+            load_type=LoadType.POINT,
+            overhang_length=_q("250 mm"),
+            **common,
+        )
+    with pytest.raises(ValidationError, match="only encoded for a tip point load"):
+        BeamMember(
+            support=Support.OVERHANG,
+            load=_q("1 N/mm"),
+            load_type=LoadType.TRIANGULAR,
+            overhang_length=_q("250 mm"),
+            **common,
+        )
+    with pytest.raises(ValidationError, match="resonance screen is not encoded"):
+        BeamMember(
+            support=Support.OVERHANG,
+            load=_q("100 N"),
+            load_type=LoadType.POINT,
+            overhang_length=_q("250 mm"),
+            mass_per_length=_q("1.57 kg/m"),
+            **common,
+        )
+
+
 def test_shear_screen_uses_the_section_form_factor():
     # A short, heavily loaded span is where shear matters: 50 N/mm over
     # 200 mm simply supported -> V = wL/2 = 5000 N; the 20x10 bar's k = 1.5
