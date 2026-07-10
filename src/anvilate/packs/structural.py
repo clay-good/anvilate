@@ -31,6 +31,7 @@ from ..analysis import (
     cantilever_offset_load,
     cantilever_partial_uniform_load,
     cantilever_triangular_load,
+    cantilever_triangular_load_peak_at_tip,
     cantilever_uniform_load,
     circular_area,
     deflection_scorecard,
@@ -191,6 +192,12 @@ _CENTER_PATCH_CHECKS = {
     Support.FIXED_FIXED: fixed_fixed_center_patch_load,
     Support.FIXED_PINNED: fixed_pinned_center_patch_load,
 }
+# A triangle's mirror orientation (peak away from the wall) is only distinct on
+# the two supports with a wall; simply-supported and fixed-fixed are symmetric.
+_MIRRORED_TRIANGULAR_CHECKS = {
+    Support.CANTILEVER: cantilever_triangular_load_peak_at_tip,
+    Support.FIXED_PINNED: fixed_pinned_triangular_load_peak_at_prop,
+}
 
 
 class BeamMember(BaseModel):
@@ -212,10 +219,10 @@ class BeamMember(BaseModel):
     every support condition, but only for distributed loads. Setting
     ``patch_centered`` moves that patch to mid-span (a machine footprint in the
     middle of the member rather than parked against a support); it requires a
-    ``loaded_length``. Setting ``triangle_peak_at_prop`` mirrors a triangular
-    load on a fixed-pinned member so it peaks at the prop instead of the wall
-    (the only support where the orientation is both meaningful and encoded —
-    simply-supported and fixed-fixed members are symmetric).
+    ``loaded_length``. Setting ``triangle_mirrored`` flips a triangular load
+    end-for-end so it peaks away from the wall — at the tip of a cantilever or
+    the prop of a fixed-pinned member, the only supports where the orientation
+    is distinct (simply-supported and fixed-fixed members are symmetric).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -231,7 +238,7 @@ class BeamMember(BaseModel):
     load_position: Quantity | None = None  # a point load may sit off mid-span
     loaded_length: Quantity | None = None  # a distributed load may cover a patch
     patch_centered: bool = False  # the patch may sit at mid-span instead of at a support
-    triangle_peak_at_prop: bool = False  # a fixed-pinned triangle may peak at the prop
+    triangle_mirrored: bool = False  # a triangle may peak at the tip/prop instead of the wall
 
     @model_validator(mode="after")
     def _well_formed(self) -> BeamMember:
@@ -271,12 +278,13 @@ class BeamMember(BaseModel):
                 )
         if self.patch_centered and self.loaded_length is None:
             raise ValueError("patch_centered requires a loaded_length")
-        if self.triangle_peak_at_prop and (
-            self.load_type is not LoadType.TRIANGULAR or self.support is not Support.FIXED_PINNED
+        if self.triangle_mirrored and (
+            self.load_type is not LoadType.TRIANGULAR
+            or self.support not in _MIRRORED_TRIANGULAR_CHECKS
         ):
             raise ValueError(
-                "triangle_peak_at_prop is only encoded for a fixed-pinned triangular "
-                f"load; got {self.support.value}/{self.load_type.value}"
+                "triangle_mirrored is only encoded for a cantilever or fixed-pinned "
+                f"triangular load; got {self.support.value}/{self.load_type.value}"
             )
         return self
 
@@ -315,12 +323,8 @@ def screen_beam_member(
     elif member.load_type is LoadType.POINT:
         result = _POINT_CHECKS[member.support](force=member.load, **common)
     elif member.load_type is LoadType.TRIANGULAR:
-        check = (
-            fixed_pinned_triangular_load_peak_at_prop
-            if member.triangle_peak_at_prop
-            else _TRIANGULAR_CHECKS[member.support]
-        )
-        result = check(peak_distributed_load=member.load, **common)
+        checks = _MIRRORED_TRIANGULAR_CHECKS if member.triangle_mirrored else _TRIANGULAR_CHECKS
+        result = checks[member.support](peak_distributed_load=member.load, **common)
     elif member.loaded_length is not None:
         checks = _CENTER_PATCH_CHECKS if member.patch_centered else _PARTIAL_UDL_CHECKS
         result = checks[member.support](

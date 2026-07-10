@@ -508,7 +508,7 @@ def test_triangular_member_rejects_a_force():
         _member(Support.SIMPLY_SUPPORTED, LoadType.TRIANGULAR, "100 N")
 
 
-def test_triangle_peak_at_prop_dispatches_to_the_mirrored_case():
+def test_mirrored_triangle_dispatches_on_the_fixed_pinned_member():
     # The same fixed-pinned triangle mirrored to peak at the prop: the wall
     # moment drops from w0*L^2/15 to 7*w0*L^2/120 = 14583 N*mm -> sigma
     # 43.75 MPa -> SF 250/43.75 = 5.71 (vs 5.00 with the peak at the wall).
@@ -520,37 +520,56 @@ def test_triangle_peak_at_prop_dispatches_to_the_mirrored_case():
         load=_q("1 N/mm"),
         load_type=LoadType.TRIANGULAR,
         material="ASTM-A36",
-        triangle_peak_at_prop=True,
+        triangle_mirrored=True,
     )
     card = screen_beam_member(member, required_safety_factor=1.5)
     assert card.entries[0].passed
     assert "safety factor 5.71" in card.entries[0].detail
 
 
-def test_triangle_peak_at_prop_rejects_other_supports_and_load_types():
-    # The mirrored orientation is only encoded for a fixed-pinned triangle:
-    # simply-supported/fixed-fixed triangles are symmetric and the cantilever
-    # peak-at-tip form is not encoded.
+def test_mirrored_triangle_dispatches_on_the_cantilever_member():
+    # The same cantilever triangle mirrored to peak at the tip: the wall moment
+    # doubles (w0*L^2/6 -> w0*L^2/3 = 83333 N*mm) -> sigma 250 MPa, exactly at
+    # yield -> SF 1.00 FAILs where the peak-at-wall orientation screened 2.00.
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.CANTILEVER,
+        load=_q("1 N/mm"),
+        load_type=LoadType.TRIANGULAR,
+        material="ASTM-A36",
+        triangle_mirrored=True,
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    assert card.entries[0].status is CheckStatus.FAIL
+    assert "safety factor 1.00" in card.entries[0].detail
+
+
+def test_mirrored_triangle_rejects_symmetric_supports_and_other_load_types():
+    # The mirrored orientation is only distinct on the two supports with a wall:
+    # simply-supported/fixed-fixed triangles are symmetric, and it says nothing
+    # about a non-triangular load.
     common = {
         "name": "beam",
         "section": _section(),
         "length": _q("500 mm"),
         "material": "ASTM-A36",
     }
-    with pytest.raises(ValidationError, match="triangle_peak_at_prop is only encoded"):
+    with pytest.raises(ValidationError, match="triangle_mirrored is only encoded"):
         BeamMember(
-            support=Support.CANTILEVER,
+            support=Support.SIMPLY_SUPPORTED,
             load=_q("1 N/mm"),
             load_type=LoadType.TRIANGULAR,
-            triangle_peak_at_prop=True,
+            triangle_mirrored=True,
             **common,
         )
-    with pytest.raises(ValidationError, match="triangle_peak_at_prop is only encoded"):
+    with pytest.raises(ValidationError, match="triangle_mirrored is only encoded"):
         BeamMember(
             support=Support.FIXED_PINNED,
             load=_q("1 N/mm"),
             load_type=LoadType.DISTRIBUTED,
-            triangle_peak_at_prop=True,
+            triangle_mirrored=True,
             **common,
         )
 

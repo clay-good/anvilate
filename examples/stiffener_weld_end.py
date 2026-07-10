@@ -7,7 +7,7 @@ at the other, and screens both weld ends as one structure. Welding the sill
 puts the pressure peak at the wall (M = w₀·L²/15): the bar is stiff
 (2.469 mm, inside the L/500 = 3 mm seal limit) but overstressed (SF 1.36,
 FAIL at 1.5). Mirroring the fixity — weld at the top waler, prop at the sill
-(``triangle_peak_at_prop``) — trims the wall moment to 7·w₀·L²/120 and the
+(``triangle_mirrored``) — trims the wall moment to 7·w₀·L²/120 and the
 strength screen passes (SF 1.55), but the load now bears on the softer
 mid-span and the deflection grows 28% to 3.155 mm, past the seal limit. The
 two orientations fail OPPOSITE criteria: mirroring the weld trades strength
@@ -56,7 +56,7 @@ def screen_weld_ends() -> Scorecard:
             load_type=LoadType.TRIANGULAR,
             material="ASTM-A36",
             deflection_limit=DEFLECTION_LIMIT,
-            triangle_peak_at_prop=peak_at_prop,
+            triangle_mirrored=peak_at_prop,
         )
         for name, peak_at_prop in _WELD_ENDS
     ]
