@@ -46,6 +46,7 @@ __all__ = [
     "clamped_annular_plate_fundamental_frequency",
     "torsional_natural_frequency",
     "solid_disc_polar_mass_moment",
+    "spring_surge_frequency",
     "frequency_scorecard",
 ]
 
@@ -619,6 +620,26 @@ def torsional_natural_frequency(
     if k <= 0 or inertia <= 0:
         raise ValueError("torsional_stiffness and polar_mass_moment must be positive")
     return Quantity(magnitude=sqrt(k / inertia) / (2 * pi), unit="Hz")
+
+
+def spring_surge_frequency(*, spring_rate: Quantity, spring_mass: Quantity) -> Quantity:
+    """The spring surge (axial resonance) frequency f₁ = (1/2)·√(k/m).
+
+    A helical compression spring between parallel seats is a distributed
+    elastic rod fixed at both ends, so its first axial mode is exactly
+    f₁ = (1/2)·√(k/m) on its ``spring_rate`` k and its OWN ``spring_mass`` m —
+    exactly π× the SDOF (1/2π)·√(k/m) shortcut. A cam lobe or load pulsation
+    near f₁ (or a strong harmonic of the drive landing on it) makes the coils
+    surge and the spring momentarily lose control of what it holds. Returns
+    hertz; both arguments are dimension-checked and must be positive.
+    """
+    _require(spring_rate, "[force] / [length]", "spring_rate")
+    _require(spring_mass, "[mass]", "spring_mass")
+    k = spring_rate.to("N/m").magnitude
+    m = spring_mass.to("kg").magnitude
+    if k <= 0 or m <= 0:
+        raise ValueError("spring_rate and spring_mass must be positive")
+    return Quantity(magnitude=sqrt(k / m) / 2, unit="Hz")
 
 
 def frequency_scorecard(

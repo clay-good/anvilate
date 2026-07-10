@@ -20,7 +20,7 @@ modules:
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress
-- :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl)
+- :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl) and rate
 - :mod:`~anvilate.analysis.thermal` — constrained thermal stress
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, distributed-mass beam fundamentals, disc-on-shaft torsional mode
@@ -109,6 +109,7 @@ from .dynamics import (
     simply_supported_fundamental_frequency,
     simply_supported_plate_fundamental_frequency,
     solid_disc_polar_mass_moment,
+    spring_surge_frequency,
     torsional_natural_frequency,
 )
 from .fastener import (
@@ -142,7 +143,7 @@ from .pressure_vessel import (
     thin_wall_sphere_stress,
 )
 from .section import CrossSection
-from .spring import spring_index, spring_shear_stress, wahl_factor
+from .spring import helical_spring_rate, spring_index, spring_shear_stress, wahl_factor
 from .stress import (
     CombinedNormalStress,
     combine_axial_bending,
@@ -274,6 +275,8 @@ __all__ = [
     "spring_index",
     "wahl_factor",
     "spring_shear_stress",
+    "helical_spring_rate",
+    "spring_surge_frequency",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
     "principal_stresses_plane",

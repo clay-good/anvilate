@@ -58,6 +58,7 @@ from anvilate.analysis import (
     frequency_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
+    helical_spring_rate,
     hertz_cylinder_contact,
     hertz_sphere_contact,
     hollow_circular_second_moment,
@@ -105,6 +106,7 @@ from anvilate.analysis import (
     solid_disc_polar_mass_moment,
     spring_index,
     spring_shear_stress,
+    spring_surge_frequency,
     strength_scorecard,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
@@ -2254,6 +2256,51 @@ def test_spring_shear_stress_worked_example():
 def test_spring_rejects_wire_wider_than_coil():
     with pytest.raises(ValueError, match="must be positive and below"):
         spring_index(mean_coil_diameter=_q("5 mm"), wire_diameter=_q("5 mm"))
+
+
+def test_helical_spring_rate_matches_worked_example():
+    # d = 4 mm, D = 32 mm (C = 8), Na = 10, G = 79.3 GPa:
+    # k = G*d^4/(8*D^3*Na) = 79.3e9*2.56e-10/(8*3.2768e-5*10) = 7744 N/m.
+    rate = helical_spring_rate(
+        mean_coil_diameter=_q("32 mm"),
+        wire_diameter=_q("4 mm"),
+        active_coils=10,
+        shear_modulus=_q("79.3 GPa"),
+    )
+    assert rate.to("N/mm").magnitude == pytest.approx(7.7441, rel=1e-4)
+
+
+def test_spring_surge_is_exactly_pi_times_the_sdof_shortcut():
+    # A spring between its seats is a fixed-fixed elastic rod: f1 =
+    # (1/2)*sqrt(k/m) on its OWN mass — exactly pi x the SDOF
+    # (1/2pi)*sqrt(k/m) reading of the same numbers. The 7.744 N/mm coil at
+    # 100 g surges at 139.1 Hz.
+    k, m = _q("7.7441 N/mm"), _q("100 g")
+    surge = spring_surge_frequency(spring_rate=k, spring_mass=m)
+    sdof = natural_frequency(stiffness=k, mass=m)
+    assert surge.to("Hz").magnitude == pytest.approx(pi * sdof.to("Hz").magnitude, rel=1e-12)
+    assert surge.to("Hz").magnitude == pytest.approx(139.14, rel=1e-3)
+
+
+def test_spring_rate_and_surge_reject_bad_inputs():
+    with pytest.raises(ValueError, match="active_coils must be positive"):
+        helical_spring_rate(
+            mean_coil_diameter=_q("32 mm"),
+            wire_diameter=_q("4 mm"),
+            active_coils=0,
+            shear_modulus=_q("79.3 GPa"),
+        )
+    with pytest.raises(ValueError, match="shear_modulus must be a"):
+        helical_spring_rate(
+            mean_coil_diameter=_q("32 mm"),
+            wire_diameter=_q("4 mm"),
+            active_coils=10,
+            shear_modulus=_q("79.3 N"),
+        )
+    with pytest.raises(ValueError, match="spring_rate must be a"):
+        spring_surge_frequency(spring_rate=_q("7.7 N"), spring_mass=_q("100 g"))
+    with pytest.raises(ValueError, match="must be positive"):
+        spring_surge_frequency(spring_rate=_q("7.7 N/mm"), spring_mass=_q("0 g"))
 
 
 def test_key_stresses_worked_example():

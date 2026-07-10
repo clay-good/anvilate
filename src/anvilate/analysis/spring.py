@@ -1,10 +1,13 @@
-"""T1 analytical helical compression-spring check (closed-form).
+"""T1 analytical helical compression-spring checks (closed-form).
 
 A round-wire helical spring under an axial force ``F`` carries a torsional shear
 stress in the wire, ``τ = K_w · 8·F·D/(π·d³)``, where ``D`` is the mean coil
 diameter, ``d`` the wire diameter, and ``K_w`` the Wahl factor correcting for
 curvature and the direct shear (Shigley). The spring index ``C = D/d`` sets the
-correction. As with the other checks, inputs and outputs are dimension-checked
+correction. The same coil deflects at the rate ``k = G·d⁴/(8·D³·N_a)`` on its
+``N_a`` active coils (its surge mode lives in
+:func:`~anvilate.analysis.dynamics.spring_surge_frequency`). As with the other
+checks, inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
 """
 
@@ -18,6 +21,7 @@ __all__ = [
     "spring_index",
     "wahl_factor",
     "spring_shear_stress",
+    "helical_spring_rate",
 ]
 
 
@@ -74,3 +78,31 @@ def spring_shear_stress(
     stress = kw * 8 * force.pint * mean_coil_diameter.pint / (pi * wire_diameter.pint**3)
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def helical_spring_rate(
+    *,
+    mean_coil_diameter: Quantity,
+    wire_diameter: Quantity,
+    active_coils: float,
+    shear_modulus: Quantity,
+) -> Quantity:
+    """The helical-spring rate k = G·d⁴/(8·D³·N_a) of a round-wire coil.
+
+    ``active_coils`` N_a counts the coils free to deflect (total coils minus
+    the closed-and-ground end coils); ``shear_modulus`` G is the wire's, e.g.
+    a material record's. Returns newtons per millimetre; every quantity is
+    dimension-checked, the coil geometry is validated through the spring
+    index, and ``active_coils`` must be positive.
+    """
+    spring_index(mean_coil_diameter=mean_coil_diameter, wire_diameter=wire_diameter)
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    if active_coils <= 0:
+        raise ValueError(f"active_coils must be positive; got {active_coils}")
+    if shear_modulus.to("Pa").magnitude <= 0:
+        raise ValueError(f"shear_modulus must be positive; got {shear_modulus}")
+    rate = (
+        shear_modulus.pint * wire_diameter.pint**4 / (8 * mean_coil_diameter.pint**3 * active_coils)
+    )
+    converted = rate.to("N/mm")
+    return Quantity(magnitude=float(converted.magnitude), unit="N/mm")
