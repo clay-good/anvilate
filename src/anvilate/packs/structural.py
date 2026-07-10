@@ -40,6 +40,7 @@ from ..analysis import (
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
     fixed_pinned_offset_load,
+    fixed_pinned_triangular_load,
     fixed_pinned_uniform_load,
     johnson_critical_stress,
     simply_supported_center_load,
@@ -138,8 +139,8 @@ class Support(StrEnum):
 class LoadType(StrEnum):
     """How the member is loaded: a single point load, a uniform distributed load,
     or a linearly varying (triangular) one — zero at one support, peaking at the
-    other (at the fixed end on a cantilever), as hydrostatic pressure loads a
-    stiffener."""
+    other (at the fixed end on a cantilever or fixed-pinned member), as
+    hydrostatic pressure loads a stiffener."""
 
     POINT = "point"
     DISTRIBUTED = "distributed"
@@ -169,6 +170,7 @@ _TRIANGULAR_CHECKS = {
     Support.CANTILEVER: cantilever_triangular_load,
     Support.SIMPLY_SUPPORTED: simply_supported_triangular_load,
     Support.FIXED_FIXED: fixed_fixed_triangular_load,
+    Support.FIXED_PINNED: fixed_pinned_triangular_load,
 }
 _PARTIAL_UDL_CHECKS = {
     Support.CANTILEVER: cantilever_partial_uniform_load,
@@ -182,8 +184,8 @@ class BeamMember(BaseModel):
     ``load`` is a force for a ``point`` member and a force-per-length for a
     ``distributed`` or ``triangular`` one (the triangle's peak intensity — at
     either support on a simply-supported member, at the fixed end on a
-    cantilever) — the model validates the dimension matches ``load_type``, and
-    a triangular load is not encoded for a fixed-pinned member.
+    cantilever or fixed-pinned member, where the wall moment governs) — the
+    model validates the dimension matches ``load_type``.
     ``material`` is a database id (its E and yield drive the checks). An optional
     ``load_position`` places a point load away from its default position — off
     mid-span on a simply-supported or fixed-fixed member (measured from either
@@ -223,11 +225,6 @@ class BeamMember(BaseModel):
             raise ValueError(
                 f"a {self.load_type.value} load must be a {expected} quantity; got "
                 f"{self.load.dimensionality} ({self.load})"
-            )
-        if self.load_type is LoadType.TRIANGULAR and self.support not in _TRIANGULAR_CHECKS:
-            raise ValueError(
-                "a triangular load is only encoded for a cantilever, simply-supported, "
-                f"or fixed-fixed member; got {self.support.value}"
             )
         if self.load_position is not None:
             if not self.load_position.has_dimension("[length]"):
