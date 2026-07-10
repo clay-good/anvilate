@@ -447,6 +447,22 @@ def test_davit_example_flips_on_the_sheave_overhang_couple():
     assert card.status is CheckStatus.FAIL
 
 
+def test_pump_beam_example_fails_only_the_modal_dimension():
+    namespace = runpy.run_path(str(_EXAMPLES / "pump_mezzanine_beam.py"))
+    card = namespace["screen_pump_beam"]()
+    by_name = {e.name: e for e in card.entries}
+    # One declaration yields all three dimensions: statically bulletproof
+    # (SF 9.27, 2.1 mm inside L/360), yet the fundamental idles at ~80% of
+    # the 1450 rpm forcing frequency and the card fails on resonance alone.
+    assert by_name["pump beam bending"].passed
+    assert "safety factor 9.27" in by_name["pump beam bending"].detail
+    assert by_name["pump beam deflection"].passed
+    assert "deflection 2.106" in by_name["pump beam deflection"].detail
+    assert by_name["pump beam resonance"].status is CheckStatus.FAIL
+    assert "fundamental 23.9 Hz" in by_name["pump beam resonance"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_fan_deck_example_rescues_resonance_with_end_fixity():
     namespace = runpy.run_path(str(_EXAMPLES / "fan_deck_resonance.py"))
     card = namespace["screen_fan_deck"]()
