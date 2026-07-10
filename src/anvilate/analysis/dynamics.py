@@ -11,7 +11,12 @@ common cases:
   stiffness needed;
 * a prismatic beam with distributed mass has the exact Euler-Bernoulli
   fundamental ``f₁ = (λ₁²/2π)·√(E·I/(m̄·L⁴))``, one eigenvalue λ₁ per support
-  condition (Blevins/Roark).
+  condition (Blevins/Roark);
+* a thin flat plate has the Kirchhoff fundamental ``f₁ = (γ/2π)·√(D/(μ·L⁴))``
+  on the plate rigidity D and mass per area μ — γ exact for the
+  simply-supported rectangle, solved at runtime from the Bessel
+  characteristic equations for circles, and from a finite-difference-verified
+  table for the clamped rectangle.
 
 Inputs are dimension-checked :class:`~anvilate.units.Quantity` values; results are
 returned in hertz.
@@ -23,6 +28,7 @@ from math import pi, sqrt
 
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
+from .plate import DEFAULT_POISSON_RATIO
 
 __all__ = [
     "STANDARD_GRAVITY",
@@ -32,6 +38,10 @@ __all__ = [
     "simply_supported_fundamental_frequency",
     "fixed_fixed_fundamental_frequency",
     "fixed_pinned_fundamental_frequency",
+    "simply_supported_plate_fundamental_frequency",
+    "clamped_plate_fundamental_frequency",
+    "simply_supported_circular_plate_fundamental_frequency",
+    "clamped_circular_plate_fundamental_frequency",
     "torsional_natural_frequency",
     "solid_disc_polar_mass_moment",
     "frequency_scorecard",
@@ -205,6 +215,232 @@ def fixed_pinned_fundamental_frequency(
         second_moment=second_moment,
         elastic_modulus=elastic_modulus,
     )
+
+
+# Clamped-rectangle fundamental coefficients γ = ω·b²·√(μ/D), keyed by b/a
+# (short/long side, so 0 is the infinite strip — exactly the fixed-fixed beam
+# eigenvalue, the plate stiffening entering only through D's 1/(1−ν²)).
+# Interior values from our own finite-difference biharmonic eigensolve
+# (13-point stencil, ghost-point clamped edges, Richardson extrapolation over
+# paired grids; two independent grid pairs agree to ≤0.02%, and the square
+# matches the published Leissa value 35.992 to 0.03%). The knots are denser
+# at the slender end, where the approach to the strip limit is from above and
+# curved.
+_CLAMPED_PLATE_GAMMA = (
+    # (b/a, gamma)
+    (0.0, _LAMBDA_SQ_FIXED_FIXED),
+    (0.2, 22.632),
+    (0.25, 22.798),
+    (1 / 3.0, 23.196),
+    (0.4, 23.643),
+    (0.5, 24.577),
+    (1 / 1.8, 25.254),
+    (1 / 1.6, 26.282),
+    (1 / 1.4, 27.930),
+    (1 / 1.2, 30.751),
+    (1.0, 35.982),
+)
+
+
+def _bessel_j0_j1_i0_i1(x: float) -> tuple[float, float, float, float]:
+    """(J₀, J₁, I₀, I₁) by power series — machine-precision for the x ≲ 4 used here."""
+    j0 = j1 = i0 = i1 = 0.0
+    half = x / 2
+    term0 = 1.0  # (x/2)^(2k) / (k!)² at k = 0
+    for k in range(40):
+        term1 = term0 * half / (k + 1)  # (x/2)^(2k+1) / (k!·(k+1)!)
+        sign = -1.0 if k % 2 else 1.0
+        j0 += sign * term0
+        i0 += term0
+        j1 += sign * term1
+        i1 += term1
+        term0 *= half * half / (k + 1) ** 2
+    return j0, j1, i0, i1
+
+
+def _circular_plate_lambda_sq(*, clamped: bool, poisson_ratio: float) -> float:
+    """The first eigenvalue λ² = ω·R²·√(μ/D) of a circular plate, by bisection.
+
+    The mode shape A·J₀(λr/R) + B·I₀(λr/R) gives the exact characteristic
+    equations J₀(λ)·I₁(λ) + I₀(λ)·J₁(λ) = 0 for a clamped rim (first root
+    λ² = 10.2158, ν-independent) and J₁/J₀ + I₁/I₀ = 2λ/(1 − ν) for a simply
+    supported one (λ² = 4.935 at ν = 0.3) — solved here rather than read from
+    a table.
+    """
+    if clamped:
+
+        def f(lam: float) -> float:
+            j0, j1, i0, i1 = _bessel_j0_j1_i0_i1(lam)
+            return j0 * i1 + i0 * j1
+
+        lo, hi = 2.5, 3.5
+    else:
+        # The root always lies below J₀'s first zero (2.40483), where J₁/J₀
+        # blows up positive; at λ → 0⁺ the left side trails 2λ/(1 − ν).
+        def f(lam: float) -> float:
+            j0, j1, i0, i1 = _bessel_j0_j1_i0_i1(lam)
+            return j1 / j0 + i1 / i0 - 2 * lam / (1 - poisson_ratio)
+
+        lo, hi = 1e-6, 2.4048
+    f_lo = f(lo)
+    for _ in range(100):
+        mid = (lo + hi) / 2
+        f_mid = f(mid)
+        if f_lo * f_mid <= 0:
+            hi = mid
+        else:
+            lo, f_lo = mid, f_mid
+    return ((lo + hi) / 2) ** 2
+
+
+def _plate_mass_and_rigidity(
+    mass_per_area: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float,
+) -> tuple[float, float]:
+    """Validate the shared plate-modal arguments -> (μ kg/m², D N·m)."""
+    _require(mass_per_area, "[mass] / [length] ** 2", "mass_per_area")
+    _require(thickness, "[length]", "thickness")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not 0 < poisson_ratio < 0.5:
+        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+    mu = mass_per_area.to("kg/m**2").magnitude
+    t = thickness.to("m").magnitude
+    e = elastic_modulus.to("Pa").magnitude
+    if mu <= 0 or t <= 0 or e <= 0:
+        raise ValueError("mass_per_area, thickness, and E must be positive")
+    return mu, e * t**3 / (12 * (1 - poisson_ratio**2))
+
+
+def _rect_plate_sides(length: Quantity, width: Quantity) -> tuple[float, float]:
+    """Validate rectangular plan sides -> (a, b) in metres with b the short side."""
+    _require(length, "[length]", "length")
+    _require(width, "[length]", "width")
+    a = length.to("m").magnitude
+    b = width.to("m").magnitude
+    if a <= 0 or b <= 0:
+        raise ValueError("length and width must be positive")
+    return (a, b) if a >= b else (b, a)
+
+
+def simply_supported_plate_fundamental_frequency(
+    *,
+    mass_per_area: Quantity,
+    length: Quantity,
+    width: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> Quantity:
+    """The fundamental frequency of a simply-supported rectangular plate (exact).
+
+    A thin flat plate of plan ``length`` a × ``width`` b, simply supported on
+    all edges, with ``mass_per_area`` μ (self-weight ρ·t plus any smeared
+    attachments) — the one plate with a clean closed-form eigenvalue:
+    f₁ = (π/2)·(1/a² + 1/b²)·√(D/μ) on the rigidity D = E·t³/(12·(1 − ν²)).
+    A wide strip recovers the simply-supported beam's π² eigenvalue, stiffened
+    by exactly 1/√(1 − ν²) through D. Returns hertz; every quantity argument
+    is dimension-checked and ν must lie in (0, 0.5).
+    """
+    mu, rigidity = _plate_mass_and_rigidity(
+        mass_per_area, thickness, elastic_modulus, poisson_ratio
+    )
+    a, b = _rect_plate_sides(length, width)
+    return Quantity(magnitude=(pi / 2) * (1 / a**2 + 1 / b**2) * sqrt(rigidity / mu), unit="Hz")
+
+
+def clamped_plate_fundamental_frequency(
+    *,
+    mass_per_area: Quantity,
+    length: Quantity,
+    width: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> Quantity:
+    """The fundamental frequency of a rectangular plate with all edges clamped.
+
+    A thin flat plate of plan ``length`` × ``width`` with all four edges built
+    in and ``mass_per_area`` μ: f₁ = (γ/2π)·√(D/(μ·b⁴)) with b the short side
+    and γ interpolated from a finite-difference-verified eigenvalue table
+    (22.373, the exact fixed-fixed beam value, at the strip limit; 35.98 for
+    the square — clamping raises the square's fundamental 1.82× over simply
+    supported). Returns hertz; every quantity argument is dimension-checked
+    and ν must lie in (0, 0.5).
+    """
+    mu, rigidity = _plate_mass_and_rigidity(
+        mass_per_area, thickness, elastic_modulus, poisson_ratio
+    )
+    a, b = _rect_plate_sides(length, width)
+    ratio = b / a
+    for (r_lo, g_lo), (r_hi, g_hi) in zip(
+        _CLAMPED_PLATE_GAMMA, _CLAMPED_PLATE_GAMMA[1:], strict=False
+    ):
+        if ratio <= r_hi:
+            gamma = g_lo + (ratio - r_lo) / (r_hi - r_lo) * (g_hi - g_lo)
+            break
+    return Quantity(magnitude=gamma / (2 * pi) * sqrt(rigidity / (mu * b**4)), unit="Hz")
+
+
+def simply_supported_circular_plate_fundamental_frequency(
+    *,
+    mass_per_area: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> Quantity:
+    """The fundamental frequency of a circular plate simply supported at its rim.
+
+    A round plate of ``diameter`` 2R resting on a gasket or ledge, with
+    ``mass_per_area`` μ: f₁ = (λ²/2π)·√(D/(μ·R⁴)), λ² solved at runtime from
+    the exact Bessel characteristic equation J₁/J₀ + I₁/I₀ = 2λ/(1 − ν)
+    (λ² = 4.935 at ν = 0.3 — some handbooks print 4.977, which our Rayleigh
+    bound rules out). Returns hertz; every quantity argument is
+    dimension-checked and ν must lie in (0, 0.5).
+    """
+    mu, rigidity = _plate_mass_and_rigidity(
+        mass_per_area, thickness, elastic_modulus, poisson_ratio
+    )
+    radius = _positive_radius(diameter)
+    lam_sq = _circular_plate_lambda_sq(clamped=False, poisson_ratio=poisson_ratio)
+    return Quantity(magnitude=lam_sq / (2 * pi) * sqrt(rigidity / (mu * radius**4)), unit="Hz")
+
+
+def clamped_circular_plate_fundamental_frequency(
+    *,
+    mass_per_area: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> Quantity:
+    """The fundamental frequency of a circular plate clamped at its rim.
+
+    A round plate of ``diameter`` 2R welded or stiffly bolted all around, with
+    ``mass_per_area`` μ: f₁ = (λ²/2π)·√(D/(μ·R⁴)), λ² = 10.2158 solved at
+    runtime from the exact characteristic equation J₀·I₁ + I₀·J₁ = 0 — the
+    eigenvalue is ν-independent (ν enters only through D), and clamping the
+    rim raises the fundamental 2.07× over the gasketed plate at ν = 0.3.
+    Returns hertz; every quantity argument is dimension-checked and ν must
+    lie in (0, 0.5).
+    """
+    mu, rigidity = _plate_mass_and_rigidity(
+        mass_per_area, thickness, elastic_modulus, poisson_ratio
+    )
+    radius = _positive_radius(diameter)
+    lam_sq = _circular_plate_lambda_sq(clamped=True, poisson_ratio=poisson_ratio)
+    return Quantity(magnitude=lam_sq / (2 * pi) * sqrt(rigidity / (mu * radius**4)), unit="Hz")
+
+
+def _positive_radius(diameter: Quantity) -> float:
+    """Validate a plate diameter -> radius in metres."""
+    _require(diameter, "[length]", "diameter")
+    radius = diameter.to("m").magnitude / 2
+    if radius <= 0:
+        raise ValueError(f"diameter must be positive; got {diameter}")
+    return radius
 
 
 def solid_disc_polar_mass_moment(*, mass: Quantity, diameter: Quantity) -> Quantity:

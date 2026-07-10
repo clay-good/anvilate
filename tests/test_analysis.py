@@ -27,7 +27,9 @@ from anvilate.analysis import (
     cantilever_uniform_load,
     circular_area,
     circular_second_moment,
+    clamped_circular_plate_fundamental_frequency,
     clamped_circular_plate_uniform_load,
+    clamped_plate_fundamental_frequency,
     clamped_plate_uniform_load,
     combine_axial_bending,
     concentrated_stress,
@@ -82,6 +84,7 @@ from anvilate.analysis import (
     shaft_twist_angle,
     simply_supported_center_load,
     simply_supported_center_patch_load,
+    simply_supported_circular_plate_fundamental_frequency,
     simply_supported_circular_plate_uniform_load,
     simply_supported_end_moment,
     simply_supported_fundamental_frequency,
@@ -89,6 +92,7 @@ from anvilate.analysis import (
     simply_supported_offset_moment,
     simply_supported_partial_uniform_load,
     simply_supported_plate_center_patch_load,
+    simply_supported_plate_fundamental_frequency,
     simply_supported_plate_uniform_load,
     simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
@@ -2869,6 +2873,132 @@ def test_simply_supported_fundamental_exceeds_rayleigh_by_the_exact_ratio():
     exact = simply_supported_fundamental_frequency(**_BEAM_MODAL_KW)
     ratio = exact.to("Hz").magnitude / rayleigh.to("Hz").magnitude
     assert ratio == pytest.approx(pi**2 / (384 / 5) ** 0.5, rel=1e-9)
+
+
+# A 6 mm steel panel: mu = rho*t = 7850*0.006 = 47.1 kg/m^2, D = E*t^3/(12*(1-nu^2))
+# = 200e9*2.16e-7/10.92 = 3956.0 N*m, sqrt(D/mu) = 9.1648 m^2/s.
+_PLATE_MODAL_KW = {
+    "mass_per_area": _q("47.1 kg/m**2"),
+    "thickness": _q("6 mm"),
+    "elastic_modulus": _q("200 GPa"),
+}
+
+
+def _plate_gamma(frequency, side):
+    # Recover the nondimensional eigenvalue gamma = omega*L^2*sqrt(mu/D) from a
+    # returned frequency, with the same D the functions build at nu = 0.3.
+    mu = 47.1
+    rigidity = 200e9 * 0.006**3 / (12 * (1 - 0.3**2))
+    return frequency.to("Hz").magnitude * 2 * pi * side**2 * (mu / rigidity) ** 0.5
+
+
+def test_ss_plate_fundamental_is_the_exact_navier_eigenvalue():
+    # Square: gamma = 2*pi^2 exactly; the 500x500x6 panel lands at
+    # f = 4*pi*sqrt(D/mu)/b^2... = (pi/2)*(8/m^2)*9.1648 = 115.2 Hz.
+    f = simply_supported_plate_fundamental_frequency(
+        length=_q("500 mm"), width=_q("500 mm"), **_PLATE_MODAL_KW
+    )
+    assert _plate_gamma(f, 0.5) == pytest.approx(2 * pi**2, rel=1e-12)
+    assert f.to("Hz").magnitude == pytest.approx(115.17, rel=1e-3)
+
+
+def test_ss_plate_strip_recovers_the_beam_stiffened_by_the_rigidity_factor():
+    # A very wide SS plate is the SS beam per unit width, stiffer by exactly
+    # 1/sqrt(1-nu^2) through the plate rigidity — the classic plane-strain
+    # stiffening. (Rectangular orientation must not matter either.)
+    plate = simply_supported_plate_fundamental_frequency(
+        length=_q("500 m"), width=_q("500 mm"), **_PLATE_MODAL_KW
+    )
+    beam = simply_supported_fundamental_frequency(
+        mass_per_length=_q("47.1 kg/m"),  # a 1 m wide strip of the panel
+        length=_q("500 mm"),
+        second_moment=_q("1.8e-8 m**4"),  # t^3/12 per metre of width
+        elastic_modulus=_q("200 GPa"),
+    )
+    ratio = plate.to("Hz").magnitude / beam.to("Hz").magnitude
+    assert ratio == pytest.approx(1 / (1 - 0.3**2) ** 0.5, rel=1e-5)
+    swapped = simply_supported_plate_fundamental_frequency(
+        length=_q("500 mm"), width=_q("500 m"), **_PLATE_MODAL_KW
+    )
+    assert swapped.to("Hz").magnitude == pytest.approx(plate.to("Hz").magnitude, rel=1e-12)
+
+
+def test_clamped_plate_fundamental_pins_the_fd_verified_table():
+    # Square knot: gamma = 35.982 from our FD biharmonic eigensolve (Leissa
+    # publishes 35.992) — 1.82x the SS square. Strip limit: the fixed-fixed
+    # beam eigenvalue with the same 1/sqrt(1-nu^2) rigidity stiffening.
+    f_sq = clamped_plate_fundamental_frequency(
+        length=_q("500 mm"), width=_q("500 mm"), **_PLATE_MODAL_KW
+    )
+    assert _plate_gamma(f_sq, 0.5) == pytest.approx(35.982, rel=1e-9)
+    f_ss = simply_supported_plate_fundamental_frequency(
+        length=_q("500 mm"), width=_q("500 mm"), **_PLATE_MODAL_KW
+    )
+    assert f_sq.to("Hz").magnitude / f_ss.to("Hz").magnitude == pytest.approx(
+        35.982 / (2 * pi**2), rel=1e-9
+    )
+    strip = clamped_plate_fundamental_frequency(
+        length=_q("5000 m"), width=_q("500 mm"), **_PLATE_MODAL_KW
+    )
+    beam = fixed_fixed_fundamental_frequency(
+        mass_per_length=_q("47.1 kg/m"),
+        length=_q("500 mm"),
+        second_moment=_q("1.8e-8 m**4"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    ratio = strip.to("Hz").magnitude / beam.to("Hz").magnitude
+    assert ratio == pytest.approx(1 / (1 - 0.3**2) ** 0.5, rel=1e-4)
+
+
+def test_clamped_plate_interpolates_between_knots():
+    # b/a = 0.3 sits between the 0.25 (22.798) and 1/3 (23.196) knots; linear
+    # interpolation gives 22.798 + (0.05/(1/3-0.25))*(23.196-22.798) = 23.037.
+    f = clamped_plate_fundamental_frequency(
+        length=_q("1000 mm"), width=_q("300 mm"), **_PLATE_MODAL_KW
+    )
+    expected = 22.798 + (0.3 - 0.25) / (1 / 3 - 0.25) * (23.196 - 22.798)
+    assert _plate_gamma(f, 0.3) == pytest.approx(expected, rel=1e-9)
+
+
+def test_circular_plate_fundamentals_solve_the_characteristic_equations():
+    # Clamped rim: lambda^2 = 10.21583, the first root of J0*I1 + I0*J1 = 0 —
+    # nu-independent. Simply supported rim at nu = 0.3: lambda^2 = 4.93515
+    # from J1/J0 + I1/I0 = 2*lambda/(1-nu) (some handbooks print 4.977; our
+    # Rayleigh upper bound 4.947 from the exact static shape rules that out).
+    # Clamping the rim is worth exactly their ratio, 2.070.
+    kw = dict(diameter=_q("500 mm"), **_PLATE_MODAL_KW)
+    f_cl = clamped_circular_plate_fundamental_frequency(**kw)
+    f_ss = simply_supported_circular_plate_fundamental_frequency(**kw)
+    assert _plate_gamma(f_cl, 0.25) == pytest.approx(10.215826, rel=1e-5)
+    assert _plate_gamma(f_ss, 0.25) == pytest.approx(4.935149, rel=1e-5)
+    assert f_cl.to("Hz").magnitude / f_ss.to("Hz").magnitude == pytest.approx(
+        10.215826 / 4.935149, rel=1e-6
+    )
+
+
+def test_clamped_circular_eigenvalue_is_poisson_independent():
+    # nu enters the clamped circle's frequency only through the rigidity D:
+    # scaling out sqrt(1/(1-nu^2)) must leave the same eigenvalue.
+    f_02 = clamped_circular_plate_fundamental_frequency(
+        diameter=_q("500 mm"), poisson_ratio=0.2, **_PLATE_MODAL_KW
+    )
+    f_04 = clamped_circular_plate_fundamental_frequency(
+        diameter=_q("500 mm"), poisson_ratio=0.4, **_PLATE_MODAL_KW
+    )
+    ratio = f_04.to("Hz").magnitude / f_02.to("Hz").magnitude
+    assert ratio == pytest.approx(((1 - 0.2**2) / (1 - 0.4**2)) ** 0.5, rel=1e-9)
+
+
+def test_plate_fundamental_rejects_bad_inputs():
+    good = dict(length=_q("500 mm"), width=_q("500 mm"), **_PLATE_MODAL_KW)
+    with pytest.raises(ValueError, match="mass_per_area must be a"):
+        simply_supported_plate_fundamental_frequency(**{**good, "mass_per_area": _q("47.1 kg/m")})
+    with pytest.raises(ValueError, match="poisson_ratio must lie in"):
+        clamped_plate_fundamental_frequency(**good, poisson_ratio=0.5)
+    with pytest.raises(ValueError, match="length and width must be positive"):
+        simply_supported_plate_fundamental_frequency(**{**good, "width": _q("0 mm")})
+    with pytest.raises(ValueError, match="diameter must be positive"):
+        clamped_circular_plate_fundamental_frequency(diameter=_q("-500 mm"), **_PLATE_MODAL_KW)
 
 
 def test_square_plate_reproduces_the_handbook_coefficients():
