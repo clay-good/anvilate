@@ -295,3 +295,15 @@ def test_flat_bar_strut_example_buckles_about_the_weak_axis():
     assert by_name["as-drawn strong axis buckling (Johnson)"].passed
     assert by_name["governing weak axis buckling (Euler)"].status is CheckStatus.FAIL
     assert card.status is CheckStatus.FAIL
+
+
+def test_flood_barrier_example_recovers_margin_from_the_true_load_shape():
+    namespace = runpy.run_path(str(_EXAMPLES / "flood_barrier_stiffener.py"))
+    card = namespace["screen_flood_barrier_stiffener"]()
+    by_name = {e.name: e for e in card.entries}
+    # Smearing the peak hydrostatic pressure over the span as a UDL fails both
+    # checks; the actual triangular load passes both with room to spare.
+    assert by_name["peak smeared as UDL bending"].status is CheckStatus.FAIL
+    assert by_name["peak smeared as UDL deflection"].status is CheckStatus.FAIL
+    assert by_name["actual hydrostatic triangle bending"].passed
+    assert by_name["actual hydrostatic triangle deflection"].passed
