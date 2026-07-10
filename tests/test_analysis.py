@@ -263,9 +263,7 @@ def test_symmetric_point_loads_degenerate_to_a_doubled_center_load():
         "extreme_fibre": _q("5 mm"),
         "elastic_modulus": _q("200 GPa"),
     }
-    pair = simply_supported_symmetric_point_loads(
-        force=_q("100 N"), load_offset=_q("250 mm"), **kw
-    )
+    pair = simply_supported_symmetric_point_loads(force=_q("100 N"), load_offset=_q("250 mm"), **kw)
     center = simply_supported_center_load(force=_q("200 N"), **kw)
     assert pair.max_bending_stress.to("MPa").magnitude == pytest.approx(
         center.max_bending_stress.to("MPa").magnitude, rel=1e-12
@@ -285,9 +283,7 @@ def test_symmetric_point_loads_beat_the_center_resultant_by_the_moment_ratio():
         "extreme_fibre": _q("5 mm"),
         "elastic_modulus": _q("200 GPa"),
     }
-    pair = simply_supported_symmetric_point_loads(
-        force=_q("100 N"), load_offset=_q("200 mm"), **kw
-    )
+    pair = simply_supported_symmetric_point_loads(force=_q("100 N"), load_offset=_q("200 mm"), **kw)
     resultant = simply_supported_center_load(force=_q("200 N"), **kw)
     assert resultant.max_bending_stress.to("MPa").magnitude == pytest.approx(
         1.5 * pair.max_bending_stress.to("MPa").magnitude, rel=1e-12
