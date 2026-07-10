@@ -427,6 +427,24 @@ def test_canopy_snow_drift_example_flips_on_the_drift_orientation():
     assert card.status is CheckStatus.FAIL
 
 
+def test_davit_example_flips_on_the_sheave_overhang_couple():
+    namespace = runpy.run_path(str(_EXAMPLES / "davit_sheave_overhang.py"))
+    card = namespace["screen_davit_boom"]()
+    by_name = {e.name: e for e in card.entries}
+    # The hoist load idealized at the tip clears the rigging factor and L/180;
+    # the sheave bracket's true couple F*e grows the wall moment by e/L = 25%
+    # and adds M*L^2/2EI of tip deflection — both screens flip to FAIL.
+    assert by_name["boom (load at tip) bending"].passed
+    assert "safety factor 2.04" in by_name["boom (load at tip) bending"].detail
+    assert by_name["boom (load at tip) deflection"].passed
+    assert "deflection 5.870" in by_name["boom (load at tip) deflection"].detail
+    assert by_name["boom (sheave overhang) bending"].status is CheckStatus.FAIL
+    assert "safety factor 1.64" in by_name["boom (sheave overhang) bending"].detail
+    assert by_name["boom (sheave overhang) deflection"].status is CheckStatus.FAIL
+    assert "deflection 8.071" in by_name["boom (sheave overhang) deflection"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_retaining_wall_example_catches_the_unconservative_shortcut():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_post.py"))
     card = namespace["screen_retaining_post"]()
