@@ -25,6 +25,8 @@ from ..units import Quantity
 __all__ = [
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",
+    "simply_supported_circular_plate_uniform_load",
+    "clamped_circular_plate_uniform_load",
 ]
 
 # Odd-harmonic cap for the Navier series. Deflection terms fall off as 1/(mn)·
@@ -70,6 +72,91 @@ class PlateBendingResult(BaseModel):
             f"plate: sigma_max {self.max_bending_stress.to('MPa')}, "
             f"delta_max {self.max_deflection.to('mm')}"
         )
+
+
+def _circular_plate_inputs(
+    pressure: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float,
+) -> tuple[float, float, float, float]:
+    """Validate and unpack circular-plate arguments -> (q MPa, R mm, t mm, D N·mm)."""
+    _require(pressure, "[pressure]", "pressure")
+    _require(diameter, "[length]", "diameter")
+    _require(thickness, "[length]", "thickness")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not 0 < poisson_ratio < 0.5:
+        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+    q = pressure.to("MPa").magnitude
+    radius = diameter.to("mm").magnitude / 2
+    t = thickness.to("mm").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if min(q, radius, t, e) <= 0:
+        raise ValueError("pressure, diameter, thickness, and E must be positive")
+    rigidity = e * t**3 / (12 * (1 - poisson_ratio**2))
+    return q, radius, t, rigidity
+
+
+def simply_supported_circular_plate_uniform_load(
+    *,
+    pressure: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> PlateBendingResult:
+    """The simply-supported circular plate under uniform pressure (Timoshenko).
+
+    A round cover of ``diameter`` 2R and ``thickness`` t, simply supported at
+    its rim, under uniform ``pressure`` q — a round manway blank, a sight-glass
+    blank, a drum head. Exact thin-plate closed form: the centre carries the
+    peak stress σ = 3·(3 + ν)·q·R²/(8·t²) and deflects
+    w = (5 + ν)/(1 + ν)·q·R⁴/(64·D) — exactly (5 + ν)/(1 + ν) ≈ 4.08× the
+    clamped plate's, at (3 + ν)/2 ≈ 1.65× its stress. Thin-plate screening
+    limits apply (trustworthy while w ≲ t/2). Every quantity argument is
+    dimension-checked; ν must lie in (0, 0.5).
+    """
+    q, radius, t, rigidity = _circular_plate_inputs(
+        pressure, diameter, thickness, elastic_modulus, poisson_ratio
+    )
+    stress = 3 * (3 + poisson_ratio) * q * radius**2 / (8 * t**2)
+    deflection = (5 + poisson_ratio) / (1 + poisson_ratio) * q * radius**4 / (64 * rigidity)
+    return PlateBendingResult(
+        max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
+        max_deflection=Quantity(magnitude=deflection, unit="mm"),
+    )
+
+
+def clamped_circular_plate_uniform_load(
+    *,
+    pressure: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> PlateBendingResult:
+    """The clamped (built-in edge) circular plate under uniform pressure.
+
+    A round plate of ``diameter`` 2R and ``thickness`` t with its rim fully
+    fixed — welded all around, or bolted stiffly enough to hold the edge slope
+    — under uniform ``pressure`` q. Exact thin-plate closed form
+    w = q·(R² − r²)²/(64·D): the centre deflects w = q·R⁴/(64·D) and the peak
+    stress is the RADIAL bending at the clamped rim, σ = 3·q·R²/(4·t²) (the
+    centre carries only (1 + ν)/2 of it) — clamping trades deflection for an
+    edge stress the weld or bolt circle must carry. Thin-plate screening
+    limits apply (trustworthy while w ≲ t/2). Every quantity argument is
+    dimension-checked; ν must lie in (0, 0.5).
+    """
+    q, radius, t, rigidity = _circular_plate_inputs(
+        pressure, diameter, thickness, elastic_modulus, poisson_ratio
+    )
+    stress = 3 * q * radius**2 / (4 * t**2)
+    deflection = q * radius**4 / (64 * rigidity)
+    return PlateBendingResult(
+        max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
+        max_deflection=Quantity(magnitude=deflection, unit="mm"),
+    )
 
 
 def simply_supported_plate_uniform_load(

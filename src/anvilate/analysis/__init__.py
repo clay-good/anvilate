@@ -113,7 +113,12 @@ from .interference import (
     interference_torque_capacity,
 )
 from .keys import key_bearing_stress, key_shear_stress, key_tangential_force
-from .plate import PlateBendingResult, simply_supported_plate_uniform_load
+from .plate import (
+    PlateBendingResult,
+    clamped_circular_plate_uniform_load,
+    simply_supported_circular_plate_uniform_load,
+    simply_supported_plate_uniform_load,
+)
 from .pressure_vessel import (
     ThinWallStress,
     thin_wall_cylinder,
@@ -224,6 +229,8 @@ __all__ = [
     "shaft_torsional_stiffness",
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",
+    "simply_supported_circular_plate_uniform_load",
+    "clamped_circular_plate_uniform_load",
     "ThinWallStress",
     "thin_wall_cylinder",
     "thin_wall_sphere_stress",

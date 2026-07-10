@@ -27,6 +27,7 @@ from anvilate.analysis import (
     cantilever_uniform_load,
     circular_area,
     circular_second_moment,
+    clamped_circular_plate_uniform_load,
     combine_axial_bending,
     concentrated_stress,
     constrained_thermal_stress,
@@ -78,6 +79,7 @@ from anvilate.analysis import (
     shaft_twist_angle,
     simply_supported_center_load,
     simply_supported_center_patch_load,
+    simply_supported_circular_plate_uniform_load,
     simply_supported_end_moment,
     simply_supported_fundamental_frequency,
     simply_supported_offset_load,
@@ -2857,6 +2859,54 @@ def test_two_to_one_plate_matches_the_handbook_beta():
     assert wide.max_deflection.to("mm").magnitude == pytest.approx(
         tall.max_deflection.to("mm").magnitude, rel=1e-12
     )
+
+
+def test_circular_plate_matches_worked_example():
+    # An O500 x 6 mm simply-supported steel blank under 50 kPa (nu = 0.3,
+    # D = 3.956e6 N*mm): sigma = 3*(3.3)*0.05*250^2/(8*36) = 107.42 MPa;
+    # w = (5.3/1.3)*0.05*250^4/(64*D) = 3.145 mm. Both confirmed against a
+    # numeric check of the exact closed-form w(r) (moments + edge conditions).
+    result = simply_supported_circular_plate_uniform_load(
+        pressure=_q("50 kPa"),
+        diameter=_q("500 mm"),
+        thickness=_q("6 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(107.422, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(3.1451, rel=1e-4)
+
+
+def test_clamped_circular_plate_trades_deflection_for_edge_stress():
+    # Clamping the rim cuts the deflection by exactly (5+nu)/(1+nu) = 4.077
+    # and the peak stress by exactly (3+nu)/2 = 1.65 — the deflection win is
+    # bigger than the stress win, but the stress moves to the weld at the rim.
+    kw = {
+        "pressure": _q("50 kPa"),
+        "diameter": _q("500 mm"),
+        "thickness": _q("6 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    ss = simply_supported_circular_plate_uniform_load(**kw)
+    clamped = clamped_circular_plate_uniform_load(**kw)
+    nu = 0.3
+    assert ss.max_deflection.to("mm").magnitude == pytest.approx(
+        (5 + nu) / (1 + nu) * clamped.max_deflection.to("mm").magnitude, rel=1e-12
+    )
+    assert ss.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        (3 + nu) / 2 * clamped.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+
+
+def test_circular_plate_rejects_bad_inputs():
+    kw = {
+        "diameter": _q("500 mm"),
+        "thickness": _q("6 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    with pytest.raises(ValueError, match="pressure must be a"):
+        clamped_circular_plate_uniform_load(pressure=_q("50 N"), **kw)
+    with pytest.raises(ValueError, match="poisson_ratio must lie in"):
+        simply_supported_circular_plate_uniform_load(pressure=_q("50 kPa"), poisson_ratio=0.5, **kw)
 
 
 def test_plate_rejects_bad_inputs():
