@@ -57,6 +57,7 @@ from ..analysis import (
     fixed_pinned_uniform_load,
     frequency_scorecard,
     johnson_critical_stress,
+    max_transverse_shear_stress,
     simply_supported_center_load,
     simply_supported_center_patch_load,
     simply_supported_end_moment,
@@ -72,7 +73,7 @@ from ..analysis import (
     transition_slenderness,
     von_mises_plane_stress,
 )
-from ..scorecard import Scorecard, ScorecardEntry
+from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..standards import MaterialsDatabase, default_materials_db
 from ..units import Quantity
 
@@ -129,6 +130,7 @@ _TEAROUT_BEARING_CAP_FRACTION = 2.4
 _CLAUSE_FLEXURE = "AISC 360-16 Ch. F"
 _CLAUSE_DEFLECTION = "AISC 360-16 §L3"
 _CLAUSE_COMPRESSION = "AISC 360-16 Ch. E"
+_CLAUSE_BEAM_SHEAR = "AISC 360-16 Ch. G"
 _CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
 _CLAUSE_BOLT_COMBINED = "AISC 360-16 §J3.7"
 _CLAUSE_BEARING = "AISC 360-16 §J3.10"
@@ -229,6 +231,25 @@ _OFFSET_MOMENT_CHECKS = {
     Support.CANTILEVER: cantilever_offset_moment,
     Support.SIMPLY_SUPPORTED: simply_supported_offset_moment,
 }
+# Peak transverse shear V as a multiple of the load (F for a point load, w*L
+# for a distributed/triangular one), from the support reactions of the simple
+# full-span cases. Off-default positions, patches, pairs, and couples are not
+# tabled — those members get no shear entry rather than a wrong one.
+_PEAK_SHEAR_FACTORS = {
+    (Support.CANTILEVER, LoadType.POINT): 1.0,
+    (Support.SIMPLY_SUPPORTED, LoadType.POINT): 0.5,
+    (Support.FIXED_FIXED, LoadType.POINT): 0.5,
+    (Support.FIXED_PINNED, LoadType.POINT): 11.0 / 16.0,
+    (Support.CANTILEVER, LoadType.DISTRIBUTED): 1.0,
+    (Support.SIMPLY_SUPPORTED, LoadType.DISTRIBUTED): 0.5,
+    (Support.FIXED_FIXED, LoadType.DISTRIBUTED): 0.5,
+    (Support.FIXED_PINNED, LoadType.DISTRIBUTED): 5.0 / 8.0,
+    (Support.CANTILEVER, LoadType.TRIANGULAR): 0.5,
+    (Support.SIMPLY_SUPPORTED, LoadType.TRIANGULAR): 1.0 / 3.0,
+    (Support.FIXED_FIXED, LoadType.TRIANGULAR): 7.0 / 20.0,
+    (Support.FIXED_PINNED, LoadType.TRIANGULAR): 2.0 / 5.0,
+}
+
 # Distributed-mass fundamental frequency per support (exact Euler-Bernoulli
 # eigenvalues), for the optional resonance screen.
 _MODAL_CHECKS = {
@@ -410,6 +431,10 @@ def screen_beam_member(
     or the member's own ``deflection_limit`` when the argument is omitted. A
     member declaring a ``mass_per_length`` also gets its distributed-mass
     fundamental frequency screened against its ``min_frequency`` floor.
+    Simple full-span members whose section records a shear form factor also
+    get a transverse-shear entry (τ = k·V/A vs 0.577·Fy); a hand-built
+    section surfaces NOT_EVALUATED there, and off-default positions, patches,
+    pairs, and couples get no shear entry rather than a wrong one.
     ``materials`` defaults to the bundled database; an unknown material id raises
     its lookup error.
     """
@@ -480,7 +505,58 @@ def screen_beam_member(
                 min_frequency=member.min_frequency,
             )
         )
+    shear_entry = _shear_entry(member, record, required_safety_factor)
+    if shear_entry is not None:
+        entries.append(shear_entry)
     return Scorecard(entries=tuple(entries))
+
+
+def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntry | None:
+    """The transverse-shear entry for a simple full-span member, or None.
+
+    Only the tabled (support, load_type) cases at their default positions get
+    a shear entry — an off-default member gets none rather than a wrong one.
+    A tabled member whose section records no shear form factor (hand-built)
+    surfaces NOT_EVALUATED, never a silent pass.
+    """
+    off_default = (
+        member.load_position is not None
+        or member.pair_offset is not None
+        or member.loaded_length is not None
+        or member.triangle_mirrored
+    )
+    factor = _PEAK_SHEAR_FACTORS.get((member.support, member.load_type))
+    if off_default or factor is None:
+        return None
+    if member.section.shear_form_factor is None:
+        return ScorecardEntry(
+            name=f"{member.name} shear",
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — the section records no shear form factor",
+            reference=_CLAUSE_BEAM_SHEAR,
+        )
+    if member.load_type is LoadType.POINT:
+        peak_shear = Quantity(magnitude=factor * member.load.to("N").magnitude, unit="N")
+    else:
+        peak_shear = Quantity(
+            magnitude=factor * member.load.to("N/mm").magnitude * member.length.to("mm").magnitude,
+            unit="N",
+        )
+    shear = max_transverse_shear_stress(
+        shear_force=peak_shear,
+        area=member.section.area,
+        form_factor=member.section.shear_form_factor,
+    )
+    shear_yield = Quantity(
+        magnitude=_SHEAR_YIELD_FRACTION * record.yield_strength.quantity.to("MPa").magnitude,
+        unit="MPa",
+    )
+    return strength_scorecard(
+        f"{member.name} shear",
+        stress=shear,
+        allowable=shear_yield,
+        required=required_safety_factor,
+    ).model_copy(update={"reference": _CLAUSE_BEAM_SHEAR})
 
 
 class ColumnMember(BaseModel):

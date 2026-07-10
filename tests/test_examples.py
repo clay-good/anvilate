@@ -43,9 +43,10 @@ def test_motor_mount_example_flags_a_resonance():
 def test_mezzanine_structure_example_passes():
     namespace = runpy.run_path(str(_EXAMPLES / "mezzanine_structure.py"))
     card = namespace["screen_mezzanine"]()
-    # A well-sized mezzanine: the beam (bending + deflection) and both posts pass.
+    # A well-sized mezzanine: the beam (bending + deflection + shear) and both
+    # posts pass.
     assert card.status is CheckStatus.PASS
-    assert len(card.entries) == 4
+    assert len(card.entries) == 5
     assert all(e.passed for e in card.entries)
 
 

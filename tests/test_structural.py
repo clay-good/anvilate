@@ -240,7 +240,7 @@ def test_distributed_load_dispatches_and_screens_deflection():
     # exceeds the 1 mm limit -> the member FAILs overall.
     assert card.status is CheckStatus.FAIL
     names = {e.name for e in card.entries}
-    assert names == {"beam bending", "beam deflection"}
+    assert names == {"beam bending", "beam deflection", "beam shear"}
     ss = simply_supported_uniform_load(
         distributed_load=_q("1 N/mm"),
         length=_q("500 mm"),
@@ -255,7 +255,7 @@ def test_deflection_omitted_when_no_limit_given():
     card = screen_beam_member(
         _member(Support.CANTILEVER, LoadType.POINT, "100 N"), required_safety_factor=1.5
     )
-    assert [e.name for e in card.entries] == ["beam bending"]
+    assert [e.name for e in card.entries] == ["beam bending", "beam shear"]
 
 
 def test_point_member_rejects_a_distributed_load_dimension():
@@ -700,6 +700,68 @@ def test_min_frequency_requires_the_mass():
         )
 
 
+def test_shear_screen_uses_the_section_form_factor():
+    # A short, heavily loaded span is where shear matters: 50 N/mm over
+    # 200 mm simply supported -> V = wL/2 = 5000 N; the 20x10 bar's k = 1.5
+    # gives tau = 1.5*5000/200 = 37.5 MPa vs 0.577*250 = 144.25 -> SF 3.85.
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("200 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("50 N/mm"),
+        load_type=LoadType.DISTRIBUTED,
+        material="ASTM-A36",
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    shear = next(e for e in card.entries if "shear" in e.name)
+    assert shear.passed
+    assert "safety factor 3.85" in shear.detail
+    assert shear.reference == "AISC 360-16 Ch. G"
+
+
+def test_shear_screen_not_evaluated_for_a_hand_built_section():
+    # A raw section records no shear form factor, so the shear entry surfaces
+    # NOT_EVALUATED — never a silent pass.
+    raw = CrossSection(
+        area=_q("200 mm**2"),
+        second_moment=_q("1666.667 mm**4"),
+        extreme_fibre=_q("5 mm"),
+    )
+    member = BeamMember(
+        name="beam",
+        section=raw,
+        length=_q("500 mm"),
+        support=Support.CANTILEVER,
+        load=_q("100 N"),
+        load_type=LoadType.POINT,
+        material="ASTM-A36",
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    shear = next(e for e in card.entries if "shear" in e.name)
+    assert shear.status is CheckStatus.NOT_EVALUATED
+
+
+def test_shear_screen_skips_untabled_cases():
+    # Off-default positions and couples are not tabled: no shear entry rather
+    # than a wrong one.
+    offset = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("100 N"),
+        load_type=LoadType.POINT,
+        material="ASTM-A36",
+        load_position=_q("125 mm"),
+    )
+    card = screen_beam_member(offset, required_safety_factor=1.5)
+    assert not any("shear" in e.name for e in card.entries)
+    couple = _member(Support.CANTILEVER, LoadType.MOMENT, "50 N*m")
+    card = screen_beam_member(couple, required_safety_factor=1.5)
+    assert not any("shear" in e.name for e in card.entries)
+
+
 def test_moment_load_dispatches_on_the_cantilever_member():
     # A 50 N*m couple at the tip: sigma = M*c/I = 150 MPa everywhere -> SF
     # 250/150 = 1.67, and the tip deflection M*L^2/2EI = 18.75 mm busts a 10 mm
@@ -939,7 +1001,7 @@ def test_member_carried_deflection_limit_is_applied():
         deflection_limit=_q("1 mm"),  # the 2.44 mm deflection exceeds this
     )
     card = screen_beam_member(member, required_safety_factor=1.5)
-    assert {e.name for e in card.entries} == {"joist bending", "joist deflection"}
+    assert {e.name for e in card.entries} == {"joist bending", "joist deflection", "joist shear"}
     assert card.status is CheckStatus.FAIL
 
 
