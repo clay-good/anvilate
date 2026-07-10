@@ -6,11 +6,15 @@ modules:
 
 - :mod:`~anvilate.analysis.axial` — direct axial stress and section area
 - :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
-  fixed-fixed, point and distributed), transverse shear, section second moments
+  fixed-fixed / fixed-pinned; point, distributed, triangular, patch, and
+  applied-couple loads), transverse shear, section second moments
+- :mod:`~anvilate.analysis.plate` — flat-plate bending (simply-supported
+  rectangle via the exact Navier series; circular, simply-supported and clamped)
 - :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
   moment, extreme fibre, section modulus, and radius of gyration
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness
-- :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion and twist
+- :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
+  and torsional stiffness
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
@@ -18,7 +22,8 @@ modules:
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl)
 - :mod:`~anvilate.analysis.thermal` — constrained thermal stress
-- :mod:`~anvilate.analysis.dynamics` — fundamental-frequency (modal) screen
+- :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
+  estimates, distributed-mass beam fundamentals, disc-on-shaft torsional mode
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending
 - :mod:`~anvilate.analysis.fatigue` — modified-Goodman fatigue
 
