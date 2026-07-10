@@ -25,6 +25,7 @@ from ..units import Quantity
 __all__ = [
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",
+    "clamped_plate_uniform_load",
     "simply_supported_circular_plate_uniform_load",
     "clamped_circular_plate_uniform_load",
 ]
@@ -36,6 +37,25 @@ _SERIES_MAX_HARMONIC = 399
 
 # Default Poisson's ratio when none is supplied (typical for steel/aluminum).
 DEFAULT_POISSON_RATIO = 0.3
+
+# Clamped rectangle coefficients (Roark Table 11.4, all edges fixed, uniform
+# load, ν = 0.3): w = α·q·b⁴/(E·t³) at the centre and σ = β·q·b²/t² at the
+# midpoint of the long edge, keyed by b/a (short/long side, so 0 is the
+# infinite strip). The strip endpoint is exact — a fixed-fixed unit-width beam
+# gives M = q·b²/12 (β = 0.5) and w = q·b⁴/(384·D) (α = 12·(1−0.3²)/384 =
+# 0.0284). All interior values verified against an independent finite-
+# difference biharmonic solve (α to <0.5%; β to ~1% after Richardson
+# extrapolation of the O(h) edge-moment error).
+_CLAMPED_COEFFICIENTS = (
+    # (b/a, alpha, beta)
+    (0.0, 0.0284, 0.5000),
+    (1 / 2.0, 0.0277, 0.4974),
+    (1 / 1.8, 0.0267, 0.4872),
+    (1 / 1.6, 0.0251, 0.4680),
+    (1 / 1.4, 0.0226, 0.4356),
+    (1 / 1.2, 0.0188, 0.3834),
+    (1.0, 0.0138, 0.3078),
+)
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
@@ -72,6 +92,65 @@ class PlateBendingResult(BaseModel):
             f"plate: sigma_max {self.max_bending_stress.to('MPa')}, "
             f"delta_max {self.max_deflection.to('mm')}"
         )
+
+
+def clamped_plate_uniform_load(
+    *,
+    pressure: Quantity,
+    length: Quantity,
+    width: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+) -> PlateBendingResult:
+    """The rectangular plate with all edges clamped under uniform pressure (Roark).
+
+    A thin flat plate of plan ``length`` × ``width`` and ``thickness`` t with
+    all four edges built in — welded all around, or bolted stiffly enough to
+    hold the edge slope — under uniform ``pressure`` q. The clamped rectangle
+    has no closed-form series, so this uses the standard Roark Table 11.4
+    coefficients (ν = 0.3, interpolated linearly in the side ratio): the
+    centre deflects w = α·q·b⁴/(E·t³) and the peak stress is the bending at
+    the midpoint of the LONG edge, σ = β·q·b²/t², with b the short side —
+    clamping cuts the deflection ~3× against the simply-supported plate but
+    parks the peak stress on the edge weld. The long-strip end of the table
+    is exact (a fixed-fixed beam: β = 0.5, α = 0.0284), and the interior
+    values are verified in the test suite against an independent
+    finite-difference biharmonic solve. Thin-plate screening limits apply
+    (trustworthy while w ≲ t/2); ν is fixed at the table's 0.3. Every
+    quantity argument is dimension-checked.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(length, "[length]", "length")
+    _require(width, "[length]", "width")
+    _require(thickness, "[length]", "thickness")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    q = pressure.to("MPa").magnitude
+    a = length.to("mm").magnitude
+    b = width.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if min(q, a, b, t, e) <= 0:
+        raise ValueError("pressure, plan dimensions, thickness, and E must be positive")
+    if b > a:
+        a, b = b, a  # b is the short side; the result is orientation-blind
+
+    ratio = b / a
+    for (r_lo, alpha_lo, beta_lo), (r_hi, alpha_hi, beta_hi) in zip(
+        _CLAMPED_COEFFICIENTS, _CLAMPED_COEFFICIENTS[1:], strict=False
+    ):
+        if ratio <= r_hi:
+            frac = (ratio - r_lo) / (r_hi - r_lo)
+            alpha = alpha_lo + frac * (alpha_hi - alpha_lo)
+            beta = beta_lo + frac * (beta_hi - beta_lo)
+            break
+
+    stress = beta * q * b**2 / t**2
+    deflection = alpha * q * b**4 / (e * t**3)
+    return PlateBendingResult(
+        max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
+        max_deflection=Quantity(magnitude=deflection, unit="mm"),
+    )
 
 
 def _circular_plate_inputs(

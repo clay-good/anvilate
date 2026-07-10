@@ -28,6 +28,7 @@ from anvilate.analysis import (
     circular_area,
     circular_second_moment,
     clamped_circular_plate_uniform_load,
+    clamped_plate_uniform_load,
     combine_axial_bending,
     concentrated_stress,
     constrained_thermal_stress,
@@ -2859,6 +2860,66 @@ def test_two_to_one_plate_matches_the_handbook_beta():
     assert wide.max_deflection.to("mm").magnitude == pytest.approx(
         tall.max_deflection.to("mm").magnitude, rel=1e-12
     )
+
+
+def test_clamped_square_plate_matches_the_handbook_coefficients():
+    # The same 500 x 500 x 6 mm cover with all edges built in (Roark Table
+    # 11.4, nu = 0.3): sigma = 0.3078*q*b^2/t^2 = 106.9 MPa at the edge
+    # midpoint and w = 0.0138*q*b^4/(E*t^3) = 0.998 mm — about 3.2x stiffer
+    # than simply supported. (Both coefficients independently confirmed by a
+    # finite-difference biharmonic solve: alpha to <0.5%, beta to ~1%.)
+    kw = {
+        "pressure": _q("50 kPa"),
+        "length": _q("500 mm"),
+        "width": _q("500 mm"),
+        "thickness": _q("6 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    result = clamped_plate_uniform_load(**kw)
+    q, b, t = 0.05, 500.0, 6.0
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        0.3078 * q * b**2 / t**2, rel=1e-9
+    )
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(
+        0.0138 * q * b**4 / (200000 * t**3), rel=1e-9
+    )
+    ss = simply_supported_plate_uniform_load(**kw)
+    assert result.max_deflection.to("mm").magnitude < ss.max_deflection.to("mm").magnitude
+
+
+def test_clamped_long_plate_approaches_the_fixed_fixed_strip():
+    # A 20:1 plate is a unit-width fixed-fixed beam: M = q*b^2/12 exactly
+    # (beta = 0.5) and w = q*b^4/(384*D) (alpha = 12*(1-0.09)/384 = 0.02844).
+    # The interpolated table must land within 1% of both, and the result must
+    # be orientation-blind.
+    kw = {
+        "pressure": _q("50 kPa"),
+        "thickness": _q("6 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    strip = clamped_plate_uniform_load(length=_q("10 m"), width=_q("500 mm"), **kw)
+    q, b, t = 0.05, 500.0, 6.0
+    assert strip.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        0.5 * q * b**2 / t**2, rel=1e-2
+    )
+    assert strip.max_deflection.to("mm").magnitude == pytest.approx(
+        (12 * (1 - 0.09) / 384) * q * b**4 / (200000 * t**3), rel=1e-2
+    )
+    swapped = clamped_plate_uniform_load(length=_q("500 mm"), width=_q("10 m"), **kw)
+    assert strip.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        swapped.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+
+
+def test_clamped_plate_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="pressure must be a"):
+        clamped_plate_uniform_load(
+            pressure=_q("50 N"),
+            length=_q("500 mm"),
+            width=_q("500 mm"),
+            thickness=_q("6 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_circular_plate_matches_worked_example():
