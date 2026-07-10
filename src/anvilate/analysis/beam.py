@@ -35,6 +35,7 @@ __all__ = [
     "fixed_fixed_center_load",
     "fixed_fixed_uniform_load",
     "fixed_fixed_partial_uniform_load",
+    "fixed_fixed_center_patch_load",
     "fixed_fixed_triangular_load",
     "fixed_pinned_partial_uniform_load",
     "rectangular_second_moment",
@@ -1152,6 +1153,63 @@ def fixed_fixed_partial_uniform_load(
         half_sum = 3 * reaction / (2 * w)  # half the root sum of the loaded-region slope
         x = half_sum - (half_sum**2 - 6 * moment / w) ** 0.5
         deflection = (moment * x**2 / 2 - reaction * x**3 / 6 + w * x**4 / 24) / (e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def fixed_fixed_center_patch_load(
+    *,
+    distributed_load: Quantity,
+    loaded_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The fixed-fixed beam uniformly loaded over a centered patch (Roark).
+
+    A prismatic beam clamped at both ends over a span ``length``, carrying a
+    uniform ``distributed_load`` w (force per unit length) over ``loaded_length``
+    a centered on mid-span, unloaded toward both walls — a machine footprint in
+    the middle of a built-in floor beam. Degenerates exactly to
+    :func:`fixed_fixed_uniform_load` at a = L and to
+    :func:`fixed_fixed_center_load` as a → 0 at fixed total w·a; the
+    simply-supported counterpart is :func:`simply_supported_center_patch_load`
+    and the one-sided one :func:`fixed_fixed_partial_uniform_load`.
+
+    The hogging moment at the walls governs (σ = M·c/I with
+    M = w·a·(3L² − a²)/(24L), from integrating the point-load fixed-end-moment
+    influence over the patch; the mid-span sagging peak w·a·(3L² − 3aL + a²)/(24L)
+    trails it by w·a²·(3L − 2a)/(24L) for every patch length) and the maximum
+    deflection sits at mid-span by symmetry,
+    δ = w·a·(2L³ − 2La² + a³)/(384·E·I). Every argument is dimension-checked;
+    verified against an independent numeric integration of the beam ODE.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(loaded_length, "[length]", "loaded_length")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    loaded = loaded_length.pint.to(length_p.units)
+    if not 0 < loaded.magnitude <= length_p.magnitude:
+        raise ValueError(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w * loaded * (3 * length_p**2 - loaded**2) / (24 * length_p)
+    stress = moment * c / inertia
+    deflection = (
+        w * loaded * (2 * length_p**3 - 2 * length_p * loaded**2 + loaded**3) / (384 * e * inertia)
+    )
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
