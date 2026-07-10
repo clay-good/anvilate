@@ -15,8 +15,8 @@ common cases:
 * a thin flat plate has the Kirchhoff fundamental ``f₁ = (γ/2π)·√(D/(μ·L⁴))``
   on the plate rigidity D and mass per area μ — γ exact for the
   simply-supported rectangle, solved at runtime from the Bessel
-  characteristic equations for circles, and from a finite-difference-verified
-  table for the clamped rectangle.
+  characteristic equations for circles, and from finite-difference-verified
+  tables for the clamped rectangle and the free-holed annulus.
 
 Inputs are dimension-checked :class:`~anvilate.units.Quantity` values; results are
 returned in hertz.
@@ -42,6 +42,8 @@ __all__ = [
     "clamped_plate_fundamental_frequency",
     "simply_supported_circular_plate_fundamental_frequency",
     "clamped_circular_plate_fundamental_frequency",
+    "simply_supported_annular_plate_fundamental_frequency",
+    "clamped_annular_plate_fundamental_frequency",
     "torsional_natural_frequency",
     "solid_disc_polar_mass_moment",
     "frequency_scorecard",
@@ -441,6 +443,143 @@ def _positive_radius(diameter: Quantity) -> float:
     if radius <= 0:
         raise ValueError(f"diameter must be positive; got {diameter}")
     return radius
+
+
+# Annular-plate (free inner edge) fundamental coefficients γ = ω·R²·√(μ/D)
+# with R the OUTER radius, keyed by the hole ratio b/a, at ν = 0.3 (the free
+# inner edge's moment condition makes the eigenvalue ν-dependent, so the
+# table pins the same ν the static tables use). Values from our own
+# finite-difference eigensolve of the axisymmetric plate ODE (ghost-point
+# BCs, Richardson over paired grids; the n = 150/300 and n = 400/800 pairs
+# agree to ≤0.02%, and b/a → 0 approaches the exact solid-plate roots that
+# open each table). Both families are NON-monotonic near small holes — a
+# mid-size hole removes mass faster than stiffness and LOWERS the
+# simply-supported fundamental below the solid plate's.
+_ANNULAR_PLATE_GAMMA_SS = (
+    # (b/a, gamma)
+    (0.0, 4.9351),
+    (0.05, 4.912),
+    (0.1, 4.853),
+    (0.15, 4.782),
+    (0.2, 4.718),
+    (0.25, 4.675),
+    (0.3, 4.664),
+    (0.35, 4.692),
+    (0.4, 4.764),
+    (0.45, 4.889),
+    (0.5, 5.076),
+    (0.55, 5.344),
+    (0.6, 5.710),
+    (0.65, 6.220),
+    (0.7, 6.930),
+    (0.75, 7.962),
+    (0.8, 9.548),
+)
+_ANNULAR_PLATE_GAMMA_CLAMPED = (
+    (0.0, 10.2158),
+    (0.05, 10.189),
+    (0.1, 10.159),
+    (0.15, 10.210),
+    (0.2, 10.408),
+    (0.25, 10.799),
+    (0.3, 11.424),
+    (0.35, 12.334),
+    (0.4, 13.602),
+    (0.45, 15.339),
+    (0.5, 17.714),
+    (0.55, 21.006),
+    (0.6, 25.674),
+    (0.65, 32.537),
+    (0.7, 43.142),
+    (0.75, 60.730),
+    (0.8, 93.035),
+)
+
+
+def _annular_plate_fundamental(
+    table: tuple[tuple[float, float], ...],
+    *,
+    mass_per_area: Quantity,
+    diameter: Quantity,
+    hole_diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    # The table is computed at ν = 0.3, so the rigidity pins the same value.
+    mu, rigidity = _plate_mass_and_rigidity(
+        mass_per_area, thickness, elastic_modulus, DEFAULT_POISSON_RATIO
+    )
+    radius = _positive_radius(diameter)
+    _require(hole_diameter, "[length]", "hole_diameter")
+    hole_radius = hole_diameter.to("m").magnitude / 2
+    ratio = hole_radius / radius
+    if not 0 < ratio <= table[-1][0]:
+        raise ValueError(
+            f"the hole ratio {ratio:.2f} must lie in (0, {table[-1][0]}] — "
+            "the encoded eigenvalue range"
+        )
+    for (r_lo, g_lo), (r_hi, g_hi) in zip(table, table[1:], strict=False):
+        if ratio <= r_hi:
+            gamma = g_lo + (ratio - r_lo) / (r_hi - r_lo) * (g_hi - g_lo)
+            break
+    return Quantity(magnitude=gamma / (2 * pi) * sqrt(rigidity / (mu * radius**4)), unit="Hz")
+
+
+def simply_supported_annular_plate_fundamental_frequency(
+    *,
+    mass_per_area: Quantity,
+    diameter: Quantity,
+    hole_diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The fundamental frequency of a simply-supported annular plate (free hole).
+
+    A round plate of ``diameter`` 2R with a concentric free-edged hole of
+    ``hole_diameter`` 2b, simply supported at its rim, with ``mass_per_area``
+    μ: f₁ = (γ/2π)·√(D/(μ·R⁴)), γ interpolated from our
+    finite-difference-verified eigenvalue table (ν = 0.3, hole ratio up to
+    0.8). Counter-intuitively a mid-size hole LOWERS the fundamental (γ dips
+    to 4.66 at b/a = 0.3 against the solid plate's 4.94) — the hole sheds
+    mass faster than bending stiffness until it starts crowding the rim.
+    Returns hertz; every quantity argument is dimension-checked.
+    """
+    return _annular_plate_fundamental(
+        _ANNULAR_PLATE_GAMMA_SS,
+        mass_per_area=mass_per_area,
+        diameter=diameter,
+        hole_diameter=hole_diameter,
+        thickness=thickness,
+        elastic_modulus=elastic_modulus,
+    )
+
+
+def clamped_annular_plate_fundamental_frequency(
+    *,
+    mass_per_area: Quantity,
+    diameter: Quantity,
+    hole_diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The fundamental frequency of a clamped-rim annular plate (free hole).
+
+    A round plate of ``diameter`` 2R with a concentric free-edged hole of
+    ``hole_diameter`` 2b, its outer rim built in, with ``mass_per_area`` μ:
+    f₁ = (γ/2π)·√(D/(μ·R⁴)), γ interpolated from our
+    finite-difference-verified eigenvalue table (ν = 0.3, hole ratio up to
+    0.8; 10.2158 at the solid limit, rising steeply once the hole crowds the
+    clamped rim — 4.2× the solid eigenvalue at b/a = 0.7). Returns hertz;
+    every quantity argument is dimension-checked.
+    """
+    return _annular_plate_fundamental(
+        _ANNULAR_PLATE_GAMMA_CLAMPED,
+        mass_per_area=mass_per_area,
+        diameter=diameter,
+        hole_diameter=hole_diameter,
+        thickness=thickness,
+        elastic_modulus=elastic_modulus,
+    )
 
 
 def solid_disc_polar_mass_moment(*, mass: Quantity, diameter: Quantity) -> Quantity:

@@ -194,7 +194,27 @@ def test_hole_dispatches_the_annular_check():
 def test_hole_is_restricted_to_the_encoded_cases():
     with pytest.raises(ValidationError, match="only encoded for a circular cover"):
         _rect(hole_diameter=_q("80 mm"))
-    with pytest.raises(ValidationError, match="not encoded for a holed cover"):
-        _round(hole_diameter=_q("80 mm"), min_frequency=_q("50 Hz"))
     with pytest.raises(ValidationError, match="hole_diameter must be a"):
         _round(hole_diameter=_q("80 kPa"))
+
+
+def test_holed_cover_resonance_uses_the_annular_eigenvalue():
+    # The O500 blank with a O150 port (b/a = 0.3, the bottom of the
+    # eigenvalue dip): the solid blank rang at 115.2 Hz, the ported one at
+    # 108.8 — the hole LOWERS a gasketed cover's fundamental. Welding the rim
+    # jumps the annular eigenvalue to 11.424 (266.6 Hz).
+    ss = screen_cover_plate(
+        _round(hole_diameter=_q("150 mm"), min_frequency=_q("120 Hz")),
+        required_safety_factor=2.0,
+    )
+    resonance = next(e for e in ss.entries if "resonance" in e.name)
+    assert resonance.status is CheckStatus.FAIL
+    assert "fundamental 108.8 Hz" in resonance.detail
+    assert resonance.reference == "Kirchhoff plate theory (FD-verified eigenvalue table)"
+    clamped = screen_cover_plate(
+        _round(PlateEdge.CLAMPED, hole_diameter=_q("150 mm"), min_frequency=_q("120 Hz")),
+        required_safety_factor=2.0,
+    )
+    resonance = next(e for e in clamped.entries if "resonance" in e.name)
+    assert resonance.status is CheckStatus.PASS
+    assert "fundamental 266.6 Hz" in resonance.detail

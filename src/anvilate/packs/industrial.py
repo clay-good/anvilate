@@ -21,6 +21,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..analysis import (
+    clamped_annular_plate_fundamental_frequency,
     clamped_annular_plate_uniform_load,
     clamped_circular_plate_fundamental_frequency,
     clamped_circular_plate_uniform_load,
@@ -28,6 +29,7 @@ from ..analysis import (
     clamped_plate_uniform_load,
     deflection_scorecard,
     frequency_scorecard,
+    simply_supported_annular_plate_fundamental_frequency,
     simply_supported_annular_plate_uniform_load,
     simply_supported_circular_plate_fundamental_frequency,
     simply_supported_circular_plate_uniform_load,
@@ -118,7 +120,8 @@ class CoverPlate(BaseModel):
     attachments are not modeled) against that floor. A circular cover may
     declare a concentric free-edged ``hole_diameter`` (a sight port, a
     gland bore) — the annular closed form replaces the solid one, and the
-    resonance screen is not encoded for a holed cover.
+    resonance screen switches to the annular eigenvalue table (hole up to
+    0.8 of the diameter).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -165,14 +168,8 @@ class CoverPlate(BaseModel):
             raise ValueError(
                 f"min_frequency must be a [frequency] quantity; got {self.min_frequency}"
             )
-        if self.hole_diameter is not None:
-            if self.diameter is None:
-                raise ValueError("a hole is only encoded for a circular cover — declare a diameter")
-            if self.min_frequency is not None:
-                raise ValueError(
-                    "the resonance screen is not encoded for a holed cover — "
-                    "drop min_frequency or the hole"
-                )
+        if self.hole_diameter is not None and self.diameter is None:
+            raise ValueError("a hole is only encoded for a circular cover — declare a diameter")
         patched = self.patch_length is not None or self.patch_width is not None
         if patched:
             if self.patch_length is None or self.patch_width is None:
@@ -259,7 +256,17 @@ def screen_cover_plate(
             "thickness": plate.thickness,
             "elastic_modulus": record.elastic_modulus.quantity,
         }
-        if circular:
+        if plate.hole_diameter is not None:
+            annular_modal = (
+                clamped_annular_plate_fundamental_frequency
+                if plate.edge is PlateEdge.CLAMPED
+                else simply_supported_annular_plate_fundamental_frequency
+            )
+            fundamental = annular_modal(
+                diameter=plate.diameter, hole_diameter=plate.hole_diameter, **modal
+            )
+            modal_reference = "Kirchhoff plate theory (FD-verified eigenvalue table)"
+        elif circular:
             fundamental = modal_check(diameter=plate.diameter, **modal)
         else:
             fundamental = modal_check(length=plate.length, width=plate.width, **modal)

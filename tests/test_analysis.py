@@ -27,6 +27,7 @@ from anvilate.analysis import (
     cantilever_uniform_load,
     circular_area,
     circular_second_moment,
+    clamped_annular_plate_fundamental_frequency,
     clamped_annular_plate_uniform_load,
     clamped_circular_plate_fundamental_frequency,
     clamped_circular_plate_uniform_load,
@@ -83,6 +84,7 @@ from anvilate.analysis import (
     shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
+    simply_supported_annular_plate_fundamental_frequency,
     simply_supported_annular_plate_uniform_load,
     simply_supported_center_load,
     simply_supported_center_patch_load,
@@ -2976,6 +2978,43 @@ def test_circular_plate_fundamentals_solve_the_characteristic_equations():
     assert f_cl.to("Hz").magnitude / f_ss.to("Hz").magnitude == pytest.approx(
         10.215826 / 4.935149, rel=1e-6
     )
+
+
+def test_annular_plate_fundamental_pins_the_fd_table_and_the_dip():
+    # At a table knot the interpolation is exact: b/a = 0.3 on the O500 panel
+    # gives gamma = 4.664 simply supported — BELOW the solid plate's 4.9351:
+    # a mid-size free hole sheds mass faster than bending stiffness and
+    # LOWERS the fundamental. Clamped the same hole raises it (11.424).
+    kw = dict(diameter=_q("500 mm"), hole_diameter=_q("150 mm"), **_PLATE_MODAL_KW)
+    f_ss = simply_supported_annular_plate_fundamental_frequency(**kw)
+    assert _plate_gamma(f_ss, 0.25) == pytest.approx(4.664, rel=1e-9)
+    f_solid = simply_supported_circular_plate_fundamental_frequency(
+        diameter=_q("500 mm"), **_PLATE_MODAL_KW
+    )
+    assert f_ss.to("Hz").magnitude < f_solid.to("Hz").magnitude
+    f_cl = clamped_annular_plate_fundamental_frequency(**kw)
+    assert _plate_gamma(f_cl, 0.25) == pytest.approx(11.424, rel=1e-9)
+
+
+def test_annular_plate_fundamental_approaches_the_solid_roots():
+    # A tiny hole must not move the eigenvalue: the b/a = 0.05 knots sit
+    # within 0.5% of the exact solid-plate Bessel roots that open the tables.
+    kw = dict(diameter=_q("500 mm"), hole_diameter=_q("25 mm"), **_PLATE_MODAL_KW)
+    f_ss = simply_supported_annular_plate_fundamental_frequency(**kw)
+    f_cl = clamped_annular_plate_fundamental_frequency(**kw)
+    assert _plate_gamma(f_ss, 0.25) == pytest.approx(4.935149, rel=5e-3)
+    assert _plate_gamma(f_cl, 0.25) == pytest.approx(10.215826, rel=5e-3)
+
+
+def test_annular_plate_fundamental_rejects_outside_the_table():
+    with pytest.raises(ValueError, match="must lie in"):
+        simply_supported_annular_plate_fundamental_frequency(
+            diameter=_q("500 mm"), hole_diameter=_q("450 mm"), **_PLATE_MODAL_KW
+        )
+    with pytest.raises(ValueError, match="hole_diameter must be a"):
+        clamped_annular_plate_fundamental_frequency(
+            diameter=_q("500 mm"), hole_diameter=_q("150 kPa"), **_PLATE_MODAL_KW
+        )
 
 
 def test_clamped_circular_eigenvalue_is_poisson_independent():
