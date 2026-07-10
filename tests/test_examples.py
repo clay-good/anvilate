@@ -465,6 +465,20 @@ def test_test_blind_example_sizes_the_plate_through_the_pack():
     assert card.status is CheckStatus.FAIL
 
 
+def test_dock_edge_example_is_governed_by_back_span_uplift():
+    namespace = runpy.run_path(str(_EXAMPLES / "dock_edge_overhang.py"))
+    card = namespace["screen_dock_edge"]()
+    by_name = {e.name: e for e in card.entries}
+    # Bending clears comfortably; the governing movement is the back span
+    # bowing UP (4.20 mm, beating the 3.77 mm tip drop at this short
+    # overhang) past the 3 mm deck flatness limit.
+    assert by_name["dock edge bending"].passed
+    assert "safety factor 2.86" in by_name["dock edge bending"].detail
+    assert by_name["dock edge deflection"].status is CheckStatus.FAIL
+    assert "deflection 4.203" in by_name["dock edge deflection"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_machine_foot_example_catches_the_smeared_footprint():
     namespace = runpy.run_path(str(_EXAMPLES / "machine_foot_on_panel.py"))
     card = namespace["screen_machine_foot"]()
