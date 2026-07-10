@@ -289,11 +289,13 @@ def test_lug_drawing_example_checks_and_draws(tmp_path):
 def test_flat_bar_strut_example_buckles_about_the_weak_axis():
     namespace = runpy.run_path(str(_EXAMPLES / "flat_bar_strut_weak_axis.py"))
     card = namespace["screen_flat_bar_strut"]()
-    # As drawn the strut is a stocky Johnson column with margin to spare, but the
-    # weak axis is a slender Euler column and the same 60 kN fails there.
+    # The builder section carries both second moments, so the as-drawn
+    # declaration screens about the weak axis automatically and fails
+    # honestly; only a hand-built raw section (no transverse I) can still
+    # produce the false strong-axis green.
     by_name = {e.name: e for e in card.entries}
-    assert by_name["as-drawn strong axis buckling (Johnson)"].passed
-    assert by_name["governing weak axis buckling (Euler)"].status is CheckStatus.FAIL
+    assert by_name["as-drawn (guarded) buckling (Euler)"].status is CheckStatus.FAIL
+    assert by_name["raw strong-axis section buckling (Johnson)"].passed
     assert card.status is CheckStatus.FAIL
 
 

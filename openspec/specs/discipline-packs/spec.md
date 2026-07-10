@@ -3,9 +3,7 @@
 ## Purpose
 
 Discipline packs extend Anvilate beyond mechanical parts to the adjacent engineers who share the same unmet need — structural/civil and industrial/manufacturing engineers — without complicating the core product. A pack bundles part archetypes, standards data, code-based checks, and docs behind the existing pipeline contracts; enabling one adds a discipline, disabling one leaves zero trace in the UI. The wedge: artifacts that are small, parametric, prescribed by codes, repeated constantly, and served today by expensive black-box tools or fragile spreadsheets.
-
 ## Requirements
-
 ### Requirement: Discipline pack contract
 
 A discipline pack SHALL bundle: pattern archetypes meeting the pattern-library contribution contract, standards-database records with provenance, discipline check sets returning standard scorecard records, process/DFM profiles, a default unit system, sample specs, and user documentation; packs MUST plug into the existing tiers and gates and MUST NOT bypass validation, export gating, or sandboxing.
@@ -89,3 +87,22 @@ Discipline packs SHALL be individually enable-able, add nothing to install size 
 
 - **WHEN** a user enables the structural pack
 - **THEN** its samples appear in the gallery, its archetypes become available to compilation, and its unit default (US customary) is offered for new specs
+
+### Requirement: Column screens use the least radius of gyration
+
+Structural-pack buckling screens (columns and the axial term of beam-columns) SHALL compute slenderness from the least radius of gyration the declared cross-section carries, falling back to the bending-axis value only when the section records no transverse second moment; the flexural term of a beam-column SHALL continue to use the declared bending axis.
+
+#### Scenario: Strong-axis declaration cannot inflate buckling capacity
+
+- **WHEN** a column member is declared with a section whose bending axis is
+  its strong axis (both second moments present)
+- **THEN** the buckling screen computes slenderness from the weak-axis radius
+  of gyration, and the scorecard reflects the weaker — governing — axis
+
+#### Scenario: Hand-built sections keep the explicit contract
+
+- **WHEN** a column member declares a `CrossSection` that carries no
+  transverse second moment
+- **THEN** the screen uses the bending-axis radius of gyration, as today, and
+  the member documentation states the caller owns the weak-axis choice
+

@@ -411,9 +411,12 @@ def screen_beam_member(
 class ColumnMember(BaseModel):
     """A structural compression member and what a buckling screen needs.
 
-    ``section``'s ``second_moment`` should be the *least* (weak-axis) value, since
-    a column buckles about its weak axis. ``end_condition`` sets the effective-
-    length factor; ``axial_load`` is the compressive force; ``material`` a database
+    The screen buckles the member about the least axis ``section`` carries
+    (its ``least_radius_of_gyration``) — a strong-axis declaration cannot
+    inflate the capacity. A hand-built section with no transverse second
+    moment is screened about its declared bending axis, so the caller owns
+    the weak-axis choice there. ``end_condition`` sets the effective-length
+    factor; ``axial_load`` is the compressive force; ``material`` a database
     id (E and yield drive the screen).
     """
 
@@ -460,7 +463,7 @@ def screen_column_member(
     )
     lam = slenderness_ratio(
         effective_length=effective_length,
-        radius_of_gyration=member.section.radius_of_gyration,
+        radius_of_gyration=member.section.least_radius_of_gyration,
     )
     lam_1 = transition_slenderness(yield_strength=yield_strength, elastic_modulus=modulus)
     if lam >= lam_1:
@@ -1007,10 +1010,14 @@ def screen_tension_member(
 class BeamColumnMember(BaseModel):
     """A member carrying combined axial compression and bending (a beam-column).
 
-    Screened by the AISC §H1.1 interaction equation. ``section``'s ``second_moment``
-    is the buckling (weak) axis; ``end_condition`` sets the effective-length factor;
-    ``axial_load`` is the compression and ``moment`` the applied bending moment;
-    ``material`` a database id (E and yield drive both capacities).
+    Screened by the AISC §H1.1 interaction equation. ``section``'s
+    ``second_moment`` is the declared bending axis, which the flexural term
+    keeps; the axial (buckling) term uses the least axis the section carries
+    (its ``least_radius_of_gyration``), falling back to the bending axis for a
+    hand-built section with no transverse second moment. ``end_condition``
+    sets the effective-length factor; ``axial_load`` is the compression and
+    ``moment`` the applied bending moment; ``material`` a database id (E and
+    yield drive both capacities).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -1063,7 +1070,7 @@ def screen_beam_column(
     )
     lam = slenderness_ratio(
         effective_length=effective_length,
-        radius_of_gyration=member.section.radius_of_gyration,
+        radius_of_gyration=member.section.least_radius_of_gyration,
     )
     lam_1 = transition_slenderness(yield_strength=yield_strength, elastic_modulus=modulus)
     if lam >= lam_1:

@@ -733,6 +733,57 @@ def test_stubby_column_uses_the_johnson_regime():
     assert "Johnson" in card.entries[0].name
 
 
+def test_column_screen_ignores_which_axis_was_declared():
+    # A strong-axis declaration cannot inflate buckling capacity: the same
+    # 20x10 bar declared either way around screens with the weak-axis r.
+    common = {
+        "name": "col",
+        "length": _q("500 mm"),
+        "end_condition": ColumnEnd.PINNED_PINNED,
+        "axial_load": _q("5 kN"),
+        "material": "ASTM-A36",
+    }
+    weak = screen_column_member(
+        ColumnMember(
+            section=CrossSection.rectangular(width=_q("20 mm"), height=_q("10 mm")), **common
+        ),
+        required_safety_factor=2.0,
+    )
+    strong = screen_column_member(
+        ColumnMember(
+            section=CrossSection.rectangular(width=_q("10 mm"), height=_q("20 mm")), **common
+        ),
+        required_safety_factor=2.0,
+    )
+    assert strong.entries[0].detail == weak.entries[0].detail
+    assert "Euler" in strong.entries[0].name
+
+
+def test_column_screen_falls_back_to_the_declared_axis_without_transverse_i():
+    # A hand-built section records no transverse second moment, so the caller
+    # still owns the weak-axis choice: a strong-axis raw section screens about
+    # the declared axis (higher capacity than the builder's least-axis screen).
+    raw = CrossSection(
+        area=_q("200 mm**2"),
+        second_moment=_q("6666.667 mm**4"),  # the 20x10 bar's STRONG axis
+        extreme_fibre=_q("10 mm"),
+    )
+    card = screen_column_member(
+        ColumnMember(
+            name="col",
+            section=raw,
+            length=_q("500 mm"),
+            end_condition=ColumnEnd.PINNED_PINNED,
+            axial_load=_q("5 kN"),
+            material="ASTM-A36",
+        ),
+        required_safety_factor=2.0,
+    )
+    guarded = screen_column_member(_column("500 mm"), required_safety_factor=2.0)
+    assert card.entries[0].detail != guarded.entries[0].detail
+    assert "Johnson" in card.entries[0].name  # strong-axis lambda = 86.6 < lambda_1
+
+
 def test_overloaded_column_fails():
     # A large axial load drops the buckling safety factor below the requirement.
     card = screen_column_member(_column("500 mm", load="20 kN"), required_safety_factor=2.0)
@@ -1182,23 +1233,43 @@ def _beam_column(axial: str = "200 kN", moment: str = "20 kN*m") -> BeamColumnMe
 
 
 def test_beam_column_interaction_low_axial_branch():
-    # A992: E=200 GPa, Fy=345. Section 60x100: A=6000, S=100000, r=28.868.
-    # lambda=2000/28.868=69.28 < lambda1=107 -> Johnson sigma_cr=272.6 MPa;
-    # Pc=1635.8 kN, Mc=Fy*S=34.5 kN*m. Pr/Pc=0.122 < 0.2 so H1.1(b):
-    # ratio = 0.122/2 + 20/34.5 = 0.0611 + 0.5797 = 0.6408 -> SF 1/ratio = 1.56.
-    card = screen_beam_column(_beam_column(), required_safety_factor=1.5)
+    # A992: E=200 GPa, Fy=345. Section 60x100 bends about its strong axis
+    # (S=100000) but buckles about its weak one: r=60/sqrt(12)=17.32,
+    # lambda=2000/17.32=115.5 >= lambda1=107 -> Euler sigma_cr=148.0 MPa;
+    # Pc=888.3 kN, Mc=Fy*S=34.5 kN*m. Pr/Pc=0.113 < 0.2 so H1.1(b):
+    # ratio = 0.113/2 + 20/34.5 = 0.0563 + 0.5797 = 0.636 -> SF 1/ratio = 1.57.
+    card = screen_beam_column(_beam_column(axial="100 kN"), required_safety_factor=1.5)
     assert card.status is CheckStatus.PASS
     assert card.entries[0].name == "bc interaction"
     assert card.entries[0].reference == "AISC 360-16 §H1.1"
-    assert "1.56" in card.entries[0].detail
+    assert "1.57" in card.entries[0].detail
 
 
 def test_beam_column_interaction_high_axial_branch_uses_8_9_form():
-    # Pr=500 kN -> Pr/Pc=0.306 >= 0.2 so H1.1(a):
-    # ratio = 0.306 + (8/9)*0.5797 = 0.306 + 0.5153 = 0.821 -> SF 1.218.
-    card = screen_beam_column(_beam_column(axial="500 kN"), required_safety_factor=1.5)
-    assert card.status is CheckStatus.FAIL  # 1.22 < 1.5
-    assert "1.22" in card.entries[0].detail
+    # Pr=200 kN against the weak-axis Pc=888.3 kN -> Pr/Pc=0.225 >= 0.2 so
+    # H1.1(a): ratio = 0.225 + (8/9)*0.5797 = 0.7405 -> SF 1.35 (this member
+    # screened 1.56 when the axial term trusted the declared strong axis —
+    # the flip is the point of the least-radius screen).
+    card = screen_beam_column(_beam_column(), required_safety_factor=1.5)
+    assert card.status is CheckStatus.FAIL  # 1.35 < 1.5
+    assert "1.35" in card.entries[0].detail
+
+
+def test_beam_column_flexural_term_keeps_the_declared_axis():
+    # Swapping the declared bending axis (60x100 -> 100x60) leaves the axial
+    # term alone (least r either way) but drops S from 100000 to 60000, so the
+    # interaction worsens: ratio = 0.0563 + 20/20.7 = 1.0225 -> SF 0.98.
+    member = BeamColumnMember(
+        name="bc",
+        section=CrossSection.rectangular(width=_q("100 mm"), height=_q("60 mm")),
+        length=_q("2000 mm"),
+        axial_load=_q("100 kN"),
+        moment=_q("20 kN*m"),
+        material="ASTM-A992",
+        end_condition=ColumnEnd.PINNED_PINNED,
+    )
+    card = screen_beam_column(member, required_safety_factor=1.5)
+    assert "0.98" in card.entries[0].detail
 
 
 def test_beam_column_rejects_non_moment():
@@ -1214,7 +1285,7 @@ def test_beam_column_rejects_non_moment():
 
 
 def test_screen_structure_includes_beam_columns():
-    card = screen_structure([_beam_column()], required_safety_factor=1.5)
+    card = screen_structure([_beam_column(axial="100 kN")], required_safety_factor=1.5)
     assert any("interaction" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
