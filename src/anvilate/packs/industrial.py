@@ -23,6 +23,7 @@ from ..analysis import (
     clamped_plate_uniform_load,
     deflection_scorecard,
     simply_supported_circular_plate_uniform_load,
+    simply_supported_plate_center_patch_load,
     simply_supported_plate_uniform_load,
     strength_scorecard,
 )
@@ -76,6 +77,10 @@ class CoverPlate(BaseModel):
     should be backed by a weld or a stiff bolt circle). ``pressure`` is the
     uniform design pressure, ``material`` a database id (its E and yield drive
     the checks), and an optional ``deflection_limit`` adds the flatness screen.
+    Declaring a centred ``patch_length`` × ``patch_width`` footprint (a machine
+    foot or pedestal instead of a full-face pressure) restricts ``pressure``
+    to that footprint — encoded only for a simply-supported rectangle, the
+    one plate with an exact patch solution.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -88,6 +93,8 @@ class CoverPlate(BaseModel):
     length: Quantity | None = None
     width: Quantity | None = None
     diameter: Quantity | None = None
+    patch_length: Quantity | None = None  # pressure may act on a centred footprint
+    patch_width: Quantity | None = None
     deflection_limit: Quantity | None = None
 
     @model_validator(mode="after")
@@ -107,10 +114,21 @@ class CoverPlate(BaseModel):
             (self.length, "length"),
             (self.width, "width"),
             (self.diameter, "diameter"),
+            (self.patch_length, "patch_length"),
+            (self.patch_width, "patch_width"),
             (self.deflection_limit, "deflection_limit"),
         ):
             if value is not None and not value.has_dimension("[length]"):
                 raise ValueError(f"{name} must be a [length] quantity; got {value}")
+        patched = self.patch_length is not None or self.patch_width is not None
+        if patched:
+            if self.patch_length is None or self.patch_width is None:
+                raise ValueError("a patch footprint needs both patch_length and patch_width")
+            if self.diameter is not None or self.edge is not PlateEdge.SIMPLY_SUPPORTED:
+                raise ValueError(
+                    "a patch footprint is only encoded for a simply-supported "
+                    "rectangular cover — the one plate with an exact patch solution"
+                )
         return self
 
 
@@ -138,7 +156,15 @@ def screen_cover_plate(
         "thickness": plate.thickness,
         "elastic_modulus": record.elastic_modulus.quantity,
     }
-    if circular:
+    if plate.patch_length is not None:
+        result = simply_supported_plate_center_patch_load(
+            patch_length=plate.patch_length,
+            patch_width=plate.patch_width,
+            length=plate.length,
+            width=plate.width,
+            **common,
+        )
+    elif circular:
         result = check(diameter=plate.diameter, **common)
     else:
         result = check(length=plate.length, width=plate.width, **common)

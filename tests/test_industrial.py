@@ -77,6 +77,35 @@ def test_deflection_limit_adds_the_flatness_screen():
     assert "deflection 3.209" in flatness.detail
 
 
+def test_patch_footprint_dispatches_the_patch_check():
+    # The 5 kN machine foot from the analysis worked example (0.5 MPa on a
+    # centred 100x100 pad of a 500x500x6 panel): sigma 177.0 MPa -> the
+    # bending screen FAILs at 2.0 where the same load smeared passed 6.26.
+    card = screen_cover_plate(
+        _rect(
+            pressure=_q("0.5 MPa"),
+            patch_length=_q("100 mm"),
+            patch_width=_q("100 mm"),
+        ),
+        required_safety_factor=2.0,
+    )
+    assert card.entries[0].status is CheckStatus.FAIL
+    assert "safety factor 1.41" in card.entries[0].detail
+
+
+def test_patch_footprint_is_restricted_to_the_encoded_case():
+    with pytest.raises(ValidationError, match="needs both patch_length and patch_width"):
+        _rect(patch_length=_q("100 mm"))
+    with pytest.raises(ValidationError, match="only encoded for a simply-supported"):
+        _rect(
+            edge=PlateEdge.CLAMPED,
+            patch_length=_q("100 mm"),
+            patch_width=_q("100 mm"),
+        )
+    with pytest.raises(ValidationError, match="only encoded for a simply-supported"):
+        _round(patch_length=_q("100 mm"), patch_width=_q("100 mm"))
+
+
 def test_cover_geometry_must_be_declared_exactly_one_way():
     with pytest.raises(ValidationError, match="length/width for a rectangle OR diameter"):
         _rect(diameter=_q("500 mm"))
