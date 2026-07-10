@@ -42,6 +42,7 @@ from ..analysis import (
     johnson_critical_stress,
     simply_supported_center_load,
     simply_supported_offset_load,
+    simply_supported_partial_uniform_load,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
     slenderness_ratio,
@@ -181,7 +182,9 @@ class BeamMember(BaseModel):
     mid-span on a simply-supported or fixed-fixed member (measured from either
     support), short of the tip on a cantilever (measured from the fixed end), or
     anywhere on a fixed-pinned member (measured from the propped end). Only
-    point loads accept it.
+    point loads accept it. An optional ``loaded_length`` restricts a distributed
+    load to a patch of that length adjacent to one support instead of the full
+    span — only encoded for a simply-supported member.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -195,6 +198,7 @@ class BeamMember(BaseModel):
     material: str
     deflection_limit: Quantity | None = None  # a member may carry its own limit
     load_position: Quantity | None = None  # a point load may sit off mid-span
+    loaded_length: Quantity | None = None  # a distributed load may cover a patch
 
     @model_validator(mode="after")
     def _well_formed(self) -> BeamMember:
@@ -226,6 +230,19 @@ class BeamMember(BaseModel):
                 raise ValueError(
                     "load_position is only supported for a point load; got "
                     f"{self.support.value}/{self.load_type.value}"
+                )
+        if self.loaded_length is not None:
+            if not self.loaded_length.has_dimension("[length]"):
+                raise ValueError(
+                    f"loaded_length must be a [length] quantity; got {self.loaded_length}"
+                )
+            if (
+                self.load_type is not LoadType.DISTRIBUTED
+                or self.support is not Support.SIMPLY_SUPPORTED
+            ):
+                raise ValueError(
+                    "loaded_length is only encoded for a distributed load on a "
+                    f"simply-supported member; got {self.support.value}/{self.load_type.value}"
                 )
         return self
 
@@ -265,6 +282,10 @@ def screen_beam_member(
         result = _POINT_CHECKS[member.support](force=member.load, **common)
     elif member.load_type is LoadType.TRIANGULAR:
         result = _TRIANGULAR_CHECKS[member.support](peak_distributed_load=member.load, **common)
+    elif member.loaded_length is not None:
+        result = simply_supported_partial_uniform_load(
+            distributed_load=member.load, loaded_length=member.loaded_length, **common
+        )
     else:
         result = _DISTRIBUTED_CHECKS[member.support](distributed_load=member.load, **common)
 

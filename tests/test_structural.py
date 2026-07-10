@@ -11,6 +11,7 @@ from anvilate.analysis import (
     cantilever_end_load,
     cantilever_triangular_load,
     fixed_fixed_center_load,
+    simply_supported_partial_uniform_load,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
 )
@@ -281,6 +282,62 @@ def test_triangular_load_dispatches_to_the_simply_supported_case():
     )
     assert tri.max_bending_stress.to("MPa").magnitude == pytest.approx(48.113, rel=1e-4)
     assert "safety factor 5.20" in card.entries[0].detail  # 250 / 48.113
+
+
+def test_loaded_length_dispatches_to_the_partial_udl_case():
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("1 N/mm"),
+        load_type=LoadType.DISTRIBUTED,
+        material="ASTM-A36",
+        loaded_length=_q("250 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    standalone = simply_supported_partial_uniform_load(
+        distributed_load=_q("1 N/mm"),
+        loaded_length=_q("250 mm"),
+        length=_q("500 mm"),
+        second_moment=_section().second_moment,
+        extreme_fibre=_section().extreme_fibre,
+        elastic_modulus=Quantity.parse("200 GPa"),
+    )
+    expected_sf = 250 / standalone.max_bending_stress.to("MPa").magnitude
+    assert card.entries[0].passed
+    assert f"safety factor {expected_sf:.2f}" in card.entries[0].detail
+    # The half-span patch is milder than the same intensity over the full span.
+    full = simply_supported_uniform_load(
+        distributed_load=_q("1 N/mm"),
+        length=_q("500 mm"),
+        second_moment=_section().second_moment,
+        extreme_fibre=_section().extreme_fibre,
+        elastic_modulus=Quantity.parse("200 GPa"),
+    )
+    assert (
+        standalone.max_bending_stress.to("MPa").magnitude
+        < full.max_bending_stress.to("MPa").magnitude
+    )
+
+
+def test_loaded_length_requires_a_simply_supported_distributed_member():
+    for support, load_type, load in (
+        (Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N"),
+        (Support.SIMPLY_SUPPORTED, LoadType.TRIANGULAR, "1 N/mm"),
+        (Support.CANTILEVER, LoadType.DISTRIBUTED, "1 N/mm"),
+    ):
+        with pytest.raises(ValidationError, match="loaded_length is only encoded for"):
+            BeamMember(
+                name="beam",
+                section=_section(),
+                length=_q("500 mm"),
+                support=support,
+                load=_q(load),
+                load_type=load_type,
+                material="ASTM-A36",
+                loaded_length=_q("250 mm"),
+            )
 
 
 def test_triangular_load_dispatches_to_the_cantilever_case():
