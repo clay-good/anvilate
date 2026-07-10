@@ -697,6 +697,50 @@ def test_moment_load_dispatches_on_the_fixed_pinned_member():
     assert "1.389 mm" in deflection.detail
 
 
+def test_offset_moment_dispatches_on_the_cantilever_member():
+    # The 50 N*m couple moved to mid-length: pure bending at 150 MPa from the
+    # wall to the couple (same SF 1.67 as at the tip — stress does not drop
+    # with position), but the tip deflection falls 18.75 -> M*a*(2L-a)/2EI =
+    # 14.0625 mm, so the 15 mm limit flips from FAIL to PASS.
+    common = {
+        "name": "beam",
+        "section": _section(),
+        "length": _q("500 mm"),
+        "support": Support.CANTILEVER,
+        "load": _q("50 N*m"),
+        "load_type": LoadType.MOMENT,
+        "material": "ASTM-A36",
+        "deflection_limit": _q("15 mm"),
+    }
+    at_tip = screen_beam_member(BeamMember(**common), required_safety_factor=1.5)
+    mid = screen_beam_member(
+        BeamMember(load_position=_q("250 mm"), **common), required_safety_factor=1.5
+    )
+    assert next(e for e in at_tip.entries if "deflection" in e.name).status is CheckStatus.FAIL
+    mid_deflection = next(e for e in mid.entries if "deflection" in e.name)
+    assert mid_deflection.status is CheckStatus.PASS
+    assert "14.063 mm" in mid_deflection.detail
+    # The strength entries agree exactly: pure bending at M0 either way.
+    assert (
+        next(e for e in mid.entries if "bending" in e.name).detail
+        == next(e for e in at_tip.entries if "bending" in e.name).detail
+    )
+
+
+def test_offset_moment_rejects_non_cantilever_supports():
+    with pytest.raises(ValidationError, match="off-end couple is only encoded"):
+        BeamMember(
+            name="beam",
+            section=_section(),
+            length=_q("500 mm"),
+            support=Support.SIMPLY_SUPPORTED,
+            load=_q("50 N*m"),
+            load_type=LoadType.MOMENT,
+            material="ASTM-A36",
+            load_position=_q("250 mm"),
+        )
+
+
 def test_moment_member_rejects_a_force_and_the_fixed_fixed_support():
     # The load must be a couple, and only a support with an end free to receive
     # one is encoded — both ends of a fixed-fixed member are built-in walls,

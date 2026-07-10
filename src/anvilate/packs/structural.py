@@ -30,6 +30,7 @@ from ..analysis import (
     cantilever_end_load,
     cantilever_end_moment,
     cantilever_offset_load,
+    cantilever_offset_moment,
     cantilever_partial_uniform_load,
     cantilever_triangular_load,
     cantilever_triangular_load_peak_at_tip,
@@ -232,8 +233,10 @@ class BeamMember(BaseModel):
     ``load_position`` places a point load away from its default position — off
     mid-span on a simply-supported or fixed-fixed member (measured from either
     support), short of the tip on a cantilever (measured from the fixed end), or
-    anywhere on a fixed-pinned member (measured from the propped end). Only
-    point loads accept it. An optional ``loaded_length`` restricts a distributed
+    anywhere on a fixed-pinned member (measured from the propped end). Point
+    loads accept it on every support; a moment load accepts it only on a
+    cantilever (the couple moves short of the tip, measured from the fixed
+    end — the only encoded off-end couple). An optional ``loaded_length`` restricts a distributed
     load to a patch of that length adjacent to one support (the fixed end on a
     cantilever or fixed-pinned member) instead of the full span — encoded for
     every support condition, but only for distributed loads. Setting
@@ -298,7 +301,13 @@ class BeamMember(BaseModel):
                 raise ValueError(
                     f"load_position must be a [length] quantity; got {self.load_position}"
                 )
-            if self.load_type is not LoadType.POINT:
+            if self.load_type is LoadType.MOMENT:
+                if self.support is not Support.CANTILEVER:
+                    raise ValueError(
+                        "an off-end couple is only encoded on a cantilever; got "
+                        f"{self.support.value}/{self.load_type.value}"
+                    )
+            elif self.load_type is not LoadType.POINT:
                 raise ValueError(
                     "load_position is only supported for a point load; got "
                     f"{self.support.value}/{self.load_type.value}"
@@ -369,6 +378,10 @@ def screen_beam_member(
     if member.pair_offset is not None:
         result = simply_supported_symmetric_point_loads(
             force=member.load, load_offset=member.pair_offset, **common
+        )
+    elif member.load_position is not None and member.load_type is LoadType.MOMENT:
+        result = cantilever_offset_moment(
+            moment=member.load, load_position=member.load_position, **common
         )
     elif member.load_position is not None:
         result = _OFFSET_POINT_CHECKS[member.support](
