@@ -73,6 +73,7 @@ from anvilate.analysis import (
     principal_stresses_plane,
     radius_of_gyration,
     rectangular_second_moment,
+    shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
     simply_supported_center_load,
@@ -86,12 +87,14 @@ from anvilate.analysis import (
     simply_supported_triangular_load,
     simply_supported_uniform_load,
     slenderness_ratio,
+    solid_disc_polar_mass_moment,
     spring_index,
     spring_shear_stress,
     strength_scorecard,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
     torque_for_preload,
+    torsional_natural_frequency,
     transition_slenderness,
     tresca_equivalent_stress,
     von_mises_bending_torsion,
@@ -2810,6 +2813,38 @@ def test_simply_supported_fundamental_exceeds_rayleigh_by_the_exact_ratio():
     exact = simply_supported_fundamental_frequency(**_BEAM_MODAL_KW)
     ratio = exact.to("Hz").magnitude / rayleigh.to("Hz").magnitude
     assert ratio == pytest.approx(pi**2 / (384 / 5) ** 0.5, rel=1e-9)
+
+
+def test_torsional_natural_frequency_matches_worked_example():
+    # A 5 kg, 200 mm flywheel on a 20 mm x 500 mm steel stub (G = 80 GPa):
+    # J = pi*20^4/32 = 15708 mm^4 -> k_t = G*J/L = 2513.3 N*m/rad;
+    # I = m*d^2/8 = 5*0.04/8 = 0.025 kg*m^2;
+    # f_n = sqrt(2513.3/0.025)/(2*pi) = 50.46 Hz.
+    stiffness = shaft_torsional_stiffness(
+        polar_second_moment=polar_second_moment_solid(_q("20 mm")),
+        length=_q("500 mm"),
+        shear_modulus=_q("80 GPa"),
+    )
+    assert stiffness.to("N*m").magnitude == pytest.approx(2513.27, rel=1e-4)
+    inertia = solid_disc_polar_mass_moment(mass=_q("5 kg"), diameter=_q("200 mm"))
+    assert inertia.to("kg*m**2").magnitude == pytest.approx(0.025, rel=1e-9)
+    fn = torsional_natural_frequency(torsional_stiffness=stiffness, polar_mass_moment=inertia)
+    assert fn.to("Hz").magnitude == pytest.approx(50.463, rel=1e-4)
+
+
+def test_torsional_frequency_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="torsional_stiffness must be a"):
+        torsional_natural_frequency(
+            torsional_stiffness=_q("100 N/m"),  # a linear rate, not torque/radian
+            polar_mass_moment=_q("0.025 kg*m**2"),
+        )
+    with pytest.raises(ValueError, match="polar_mass_moment must be a"):
+        torsional_natural_frequency(
+            torsional_stiffness=_q("2513 N*m"),
+            polar_mass_moment=_q("5 kg"),  # a mass, not a rotary inertia
+        )
+    with pytest.raises(ValueError, match="mass and diameter must be positive"):
+        solid_disc_polar_mass_moment(mass=_q("0 kg"), diameter=_q("200 mm"))
 
 
 def test_beam_fundamental_rejects_bad_inputs():

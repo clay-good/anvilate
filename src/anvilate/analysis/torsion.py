@@ -22,6 +22,7 @@ __all__ = [
     "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
     "hollow_shaft_twist_angle",
+    "shaft_torsional_stiffness",
 ]
 
 
@@ -116,6 +117,28 @@ def shaft_twist_angle(
     j = pi * diameter.pint**4 / 32
     angle = torque.pint * length.pint / (shear_modulus.pint * j)
     return _as_quantity(angle, "degree")
+
+
+def shaft_torsional_stiffness(
+    *,
+    polar_second_moment: Quantity,
+    length: Quantity,
+    shear_modulus: Quantity,
+) -> Quantity:
+    """The torsional spring rate k_t = G·J/L of a uniform round shaft.
+
+    The torque per unit twist a shaft of ``length`` presents at its free end,
+    ``polar_second_moment`` J from :func:`polar_second_moment_solid` or
+    :func:`polar_second_moment_hollow` and ``shear_modulus`` the material G.
+    This is the stiffness a disc-on-shaft torsional resonance screen consumes
+    (:func:`anvilate.analysis.torsional_natural_frequency`). Returns N·m per
+    radian; every argument is dimension-checked.
+    """
+    _require(polar_second_moment, "[length]**4", "polar_second_moment")
+    _require(length, "[length]", "length")
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    stiffness = shear_modulus.pint * polar_second_moment.pint / length.pint
+    return _as_quantity(stiffness, "N*m")
 
 
 def hollow_shaft_twist_angle(

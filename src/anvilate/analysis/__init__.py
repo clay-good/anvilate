@@ -95,6 +95,8 @@ from .dynamics import (
     natural_frequency,
     natural_frequency_from_deflection,
     simply_supported_fundamental_frequency,
+    solid_disc_polar_mass_moment,
+    torsional_natural_frequency,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -136,6 +138,7 @@ from .torsion import (
     hollow_shaft_twist_angle,
     polar_second_moment_hollow,
     polar_second_moment_solid,
+    shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
 )
@@ -198,6 +201,8 @@ __all__ = [
     "simply_supported_fundamental_frequency",
     "fixed_fixed_fundamental_frequency",
     "fixed_pinned_fundamental_frequency",
+    "torsional_natural_frequency",
+    "solid_disc_polar_mass_moment",
     "frequency_scorecard",
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
@@ -215,6 +220,7 @@ __all__ = [
     "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
     "hollow_shaft_twist_angle",
+    "shaft_torsional_stiffness",
     "ThinWallStress",
     "thin_wall_cylinder",
     "thin_wall_sphere_stress",

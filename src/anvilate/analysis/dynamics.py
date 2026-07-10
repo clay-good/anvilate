@@ -32,6 +32,8 @@ __all__ = [
     "simply_supported_fundamental_frequency",
     "fixed_fixed_fundamental_frequency",
     "fixed_pinned_fundamental_frequency",
+    "torsional_natural_frequency",
+    "solid_disc_polar_mass_moment",
     "frequency_scorecard",
 ]
 
@@ -203,6 +205,45 @@ def fixed_pinned_fundamental_frequency(
         second_moment=second_moment,
         elastic_modulus=elastic_modulus,
     )
+
+
+def solid_disc_polar_mass_moment(*, mass: Quantity, diameter: Quantity) -> Quantity:
+    """The polar mass moment of inertia I = m·d²/8 (= m·r²/2) of a solid disc.
+
+    The rotary inertia of a flywheel, coupling, or brake disc about the shaft
+    axis — the mass term of a torsional resonance. ``mass`` and ``diameter``
+    must be positive. Returns kg·m²; both arguments are dimension-checked.
+    """
+    _require(mass, "[mass]", "mass")
+    _require(diameter, "[length]", "diameter")
+    m = mass.to("kg").magnitude
+    d = diameter.to("m").magnitude
+    if m <= 0 or d <= 0:
+        raise ValueError("mass and diameter must be positive")
+    return Quantity(magnitude=m * d**2 / 8, unit="kg*m**2")
+
+
+def torsional_natural_frequency(
+    *,
+    torsional_stiffness: Quantity,
+    polar_mass_moment: Quantity,
+) -> Quantity:
+    """The torsional natural frequency f_n = (1/2π)·√(k_t/I) of a disc on a shaft.
+
+    The rotational counterpart of :func:`natural_frequency`: a rotary inertia
+    ``polar_mass_moment`` I (e.g. :func:`solid_disc_polar_mass_moment`) on a
+    shaft of ``torsional_stiffness`` k_t (torque per radian of twist, e.g.
+    :func:`anvilate.analysis.shaft_torsional_stiffness`) resonates in twist at
+    f_n — the drivetrain mode that torque pulsation (engine firing, VFD
+    ripple) excites. Both must be positive. Returns hertz.
+    """
+    _require(torsional_stiffness, "[force] * [length]", "torsional_stiffness")
+    _require(polar_mass_moment, "[mass] * [length]**2", "polar_mass_moment")
+    k = torsional_stiffness.to("N*m").magnitude
+    inertia = polar_mass_moment.to("kg*m**2").magnitude
+    if k <= 0 or inertia <= 0:
+        raise ValueError("torsional_stiffness and polar_mass_moment must be positive")
+    return Quantity(magnitude=sqrt(k / inertia) / (2 * pi), unit="Hz")
 
 
 def frequency_scorecard(
