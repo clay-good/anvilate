@@ -30,6 +30,7 @@ __all__ = [
     "simply_supported_offset_load",
     "simply_supported_uniform_load",
     "simply_supported_partial_uniform_load",
+    "simply_supported_center_patch_load",
     "simply_supported_triangular_load",
     "fixed_fixed_center_load",
     "fixed_fixed_uniform_load",
@@ -592,6 +593,58 @@ def simply_supported_partial_uniform_load(
             alpha**2 * (2 - alpha) ** 2 - 2 * alpha * (2 - alpha) * xi**2 + xi**3
         )
     deflection = deflection_norm * w * length_p**4 / (24 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def simply_supported_center_patch_load(
+    *,
+    distributed_load: Quantity,
+    loaded_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The simply-supported beam uniformly loaded over a centered patch (AISC).
+
+    A prismatic beam simply supported over a span ``length``, carrying a uniform
+    ``distributed_load`` w (force per unit length) over ``loaded_length`` a
+    centered on mid-span, unloaded toward both supports — a machine footprint in
+    the middle of a floor beam (AISC Table 3-23 case 25 with equal end
+    segments). Degenerates exactly to :func:`simply_supported_uniform_load` at
+    a = L; the one-sided counterpart is
+    :func:`simply_supported_partial_uniform_load`.
+
+    Returns the peak bending stress at mid-span (σ = M·c/I with
+    M = w·a·(2L−a)/8) and the mid-span maximum deflection
+    δ = w·a·(8L³ − 4a²·L + a³)/(384·E·I). Every argument is dimension-checked.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(loaded_length, "[length]", "loaded_length")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    loaded = loaded_length.pint.to(length_p.units)
+    if not 0 < loaded.magnitude <= length_p.magnitude:
+        raise ValueError(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w * loaded * (2 * length_p - loaded) / 8
+    stress = moment * c / inertia
+    deflection = (
+        w * loaded * (8 * length_p**3 - 4 * loaded**2 * length_p + loaded**3) / (384 * e * inertia)
+    )
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),

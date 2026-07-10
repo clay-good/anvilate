@@ -61,6 +61,7 @@ from anvilate.analysis import (
     shaft_torsional_stress,
     shaft_twist_angle,
     simply_supported_center_load,
+    simply_supported_center_patch_load,
     simply_supported_offset_load,
     simply_supported_partial_uniform_load,
     simply_supported_triangular_load,
@@ -804,6 +805,86 @@ def test_simply_supported_partial_uniform_load_rejects_bad_inputs():
             )
     with pytest.raises(ValueError, match="distributed_load must be a"):
         simply_supported_partial_uniform_load(
+            distributed_load=_q("100 N"),  # a force, not force-per-length
+            loaded_length=_q("250 mm"),
+            **kw,
+        )
+
+
+def test_simply_supported_center_patch_load_matches_worked_example():
+    # 10 N/mm over the middle 800 mm of a 2 m span, 80x120x5 box (I = 3,755,833
+    # mm^4, c = 60): M = w*a*(2L-a)/8 = 3,200,000 N*mm -> sigma = M*c/I = 51.12
+    # MPa; delta = w*a*(8L^3-4a^2L+a^3)/(384EI) = 1.64722 mm at mid-span
+    # (verified against a numeric double-integration of the beam ODE).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = simply_supported_center_patch_load(
+        distributed_load=_q("10 N/mm"),
+        loaded_length=_q("800 mm"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(51.115, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(1.64722, rel=1e-4)
+
+
+def test_simply_supported_center_patch_load_degenerates_to_the_full_udl():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    patch = simply_supported_center_patch_load(
+        distributed_load=_q("1 N/mm"), loaded_length=_q("500 mm"), **kw
+    )
+    full = simply_supported_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    assert patch.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        full.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    assert patch.max_deflection.to("mm").magnitude == pytest.approx(
+        full.max_deflection.to("mm").magnitude, rel=1e-9
+    )
+
+
+def test_center_patch_sits_between_the_end_patch_and_the_center_point_load():
+    # The same patch parked mid-span is harsher than against a support (the load
+    # sits farther from the reactions), but milder than its total concentrated
+    # at mid-span.
+    kw = {
+        "length": _q("2 m"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    center = simply_supported_center_patch_load(
+        distributed_load=_q("10 N/mm"), loaded_length=_q("800 mm"), **kw
+    )
+    end = simply_supported_partial_uniform_load(
+        distributed_load=_q("10 N/mm"), loaded_length=_q("800 mm"), **kw
+    )
+    point = simply_supported_center_load(force=_q("8 kN"), **kw)  # the patch total
+    stresses = [r.max_bending_stress.to("MPa").magnitude for r in (end, center, point)]
+    assert stresses == sorted(stresses)
+
+
+def test_simply_supported_center_patch_load_rejects_bad_inputs():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    for loaded_length in ("0 mm", "600 mm"):
+        with pytest.raises(ValueError, match="loaded_length must lie within the span"):
+            simply_supported_center_patch_load(
+                distributed_load=_q("1 N/mm"), loaded_length=_q(loaded_length), **kw
+            )
+    with pytest.raises(ValueError, match="distributed_load must be a"):
+        simply_supported_center_patch_load(
             distributed_load=_q("100 N"),  # a force, not force-per-length
             loaded_length=_q("250 mm"),
             **kw,
