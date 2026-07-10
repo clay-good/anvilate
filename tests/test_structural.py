@@ -10,6 +10,7 @@ from anvilate.analysis import (
     CrossSection,
     cantilever_end_load,
     fixed_fixed_center_load,
+    simply_supported_triangular_load,
     simply_supported_uniform_load,
 )
 from anvilate.packs.structural import (
@@ -262,6 +263,33 @@ def test_point_member_rejects_a_distributed_load_dimension():
 def test_distributed_member_rejects_a_force():
     with pytest.raises(ValidationError, match="distributed load must be a"):
         _member(Support.SIMPLY_SUPPORTED, LoadType.DISTRIBUTED, "100 N")
+
+
+def test_triangular_load_dispatches_to_the_simply_supported_case():
+    member = _member(Support.SIMPLY_SUPPORTED, LoadType.TRIANGULAR, "1 N/mm")
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    # M = w0*L^2/(9*sqrt(3)) = 16037 N*mm -> sigma = M*c/I = 48.11 MPa, about half
+    # the 93.75 MPa the same peak intensity gives as a full UDL.
+    assert card.status is CheckStatus.PASS
+    tri = simply_supported_triangular_load(
+        peak_distributed_load=_q("1 N/mm"),
+        length=_q("500 mm"),
+        second_moment=_section().second_moment,
+        extreme_fibre=_section().extreme_fibre,
+        elastic_modulus=Quantity.parse("200 GPa"),
+    )
+    assert tri.max_bending_stress.to("MPa").magnitude == pytest.approx(48.113, rel=1e-4)
+    assert "safety factor 5.20" in card.entries[0].detail  # 250 / 48.113
+
+
+def test_triangular_load_requires_simple_supports():
+    with pytest.raises(ValidationError, match="only encoded for a simply-supported"):
+        _member(Support.CANTILEVER, LoadType.TRIANGULAR, "1 N/mm")
+
+
+def test_triangular_member_rejects_a_force():
+    with pytest.raises(ValidationError, match="triangular load must be a"):
+        _member(Support.SIMPLY_SUPPORTED, LoadType.TRIANGULAR, "100 N")
 
 
 def _column(length: str, load: str = "5 kN") -> ColumnMember:

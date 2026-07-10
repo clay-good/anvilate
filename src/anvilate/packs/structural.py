@@ -41,6 +41,7 @@ from ..analysis import (
     johnson_critical_stress,
     simply_supported_center_load,
     simply_supported_offset_load,
+    simply_supported_triangular_load,
     simply_supported_uniform_load,
     slenderness_ratio,
     strength_scorecard,
@@ -131,10 +132,13 @@ class Support(StrEnum):
 
 
 class LoadType(StrEnum):
-    """How the member is loaded: a single point load or a uniform distributed one."""
+    """How the member is loaded: a single point load, a uniform distributed load,
+    or a linearly varying (triangular) one — zero at one support, peaking at the
+    other, as hydrostatic pressure loads a stiffener."""
 
     POINT = "point"
     DISTRIBUTED = "distributed"
+    TRIANGULAR = "triangular"
 
 
 # (support, load_type) -> the analysis check and the keyword its load takes.
@@ -162,7 +166,9 @@ class BeamMember(BaseModel):
     """A structural beam member and everything a T1 screen needs to check it.
 
     ``load`` is a force for a ``point`` member and a force-per-length for a
-    ``distributed`` one — the model validates the dimension matches ``load_type``.
+    ``distributed`` or ``triangular`` one (the triangle's peak intensity) — the
+    model validates the dimension matches ``load_type``, and a triangular load
+    is only encoded for a simply-supported member.
     ``material`` is a database id (its E and yield drive the checks). An optional
     ``load_position`` places a point load away from its default position — off
     mid-span on a simply-supported or fixed-fixed member (measured from either
@@ -198,6 +204,11 @@ class BeamMember(BaseModel):
             raise ValueError(
                 f"a {self.load_type.value} load must be a {expected} quantity; got "
                 f"{self.load.dimensionality} ({self.load})"
+            )
+        if self.load_type is LoadType.TRIANGULAR and self.support is not Support.SIMPLY_SUPPORTED:
+            raise ValueError(
+                "a triangular load is only encoded for a simply-supported member; got "
+                f"{self.support.value}"
             )
         if self.load_position is not None:
             if not self.load_position.has_dimension("[length]"):
@@ -245,6 +256,8 @@ def screen_beam_member(
         )
     elif member.load_type is LoadType.POINT:
         result = _POINT_CHECKS[member.support](force=member.load, **common)
+    elif member.load_type is LoadType.TRIANGULAR:
+        result = simply_supported_triangular_load(peak_distributed_load=member.load, **common)
     else:
         result = _DISTRIBUTED_CHECKS[member.support](distributed_load=member.load, **common)
 
