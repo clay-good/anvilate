@@ -372,6 +372,25 @@ def test_skid_position_example_fails_the_mid_platform_placement():
     assert card.status is CheckStatus.FAIL
 
 
+def test_stiffener_weld_end_example_fails_opposite_criteria():
+    namespace = runpy.run_path(str(_EXAMPLES / "stiffener_weld_end.py"))
+    card = namespace["screen_weld_ends"]()
+    by_name = {e.name: e for e in card.entries}
+    # Welding the sill puts the hydrostatic peak at the wall: stiff but
+    # overstressed. Mirroring the fixity trims the wall moment (w0*L^2/15 ->
+    # 7*w0*L^2/120) but bears on the softer mid-span — the two orientations
+    # fail OPPOSITE criteria.
+    assert by_name["welded at the sill (peak at the wall) bending"].status is CheckStatus.FAIL
+    assert "safety factor 1.36" in by_name["welded at the sill (peak at the wall) bending"].detail
+    assert by_name["welded at the sill (peak at the wall) deflection"].passed
+    assert "deflection 2.469" in by_name["welded at the sill (peak at the wall) deflection"].detail
+    assert by_name["welded at the waler (peak at the prop) bending"].passed
+    assert "safety factor 1.55" in by_name["welded at the waler (peak at the prop) bending"].detail
+    assert by_name["welded at the waler (peak at the prop) deflection"].status is CheckStatus.FAIL
+    assert "deflection 3.155" in by_name["welded at the waler (peak at the prop) deflection"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_retaining_wall_example_catches_the_unconservative_shortcut():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_post.py"))
     card = namespace["screen_retaining_post"]()
