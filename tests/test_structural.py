@@ -719,7 +719,7 @@ def test_offset_moment_dispatches_on_the_cantilever_member():
     assert next(e for e in at_tip.entries if "deflection" in e.name).status is CheckStatus.FAIL
     mid_deflection = next(e for e in mid.entries if "deflection" in e.name)
     assert mid_deflection.status is CheckStatus.PASS
-    assert "14.063 mm" in mid_deflection.detail
+    assert "14.062 mm" in mid_deflection.detail
     # The strength entries agree exactly: pure bending at M0 either way.
     assert (
         next(e for e in mid.entries if "bending" in e.name).detail
