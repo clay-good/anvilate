@@ -17,7 +17,7 @@ concentrically-loaded prismatic column.
 from __future__ import annotations
 
 from enum import StrEnum
-from math import pi
+from math import cos, pi, sqrt
 
 from ..units import Quantity
 
@@ -29,6 +29,7 @@ __all__ = [
     "euler_critical_stress",
     "transition_slenderness",
     "johnson_critical_stress",
+    "secant_column_max_stress",
 ]
 
 
@@ -162,3 +163,58 @@ def johnson_critical_stress(
     e = elastic_modulus.to("MPa").magnitude
     sigma = sy * (1 - sy * slenderness_ratio**2 / (4 * pi**2 * e))
     return Quantity(magnitude=sigma, unit="MPa")
+
+
+def secant_column_max_stress(
+    *,
+    load: Quantity,
+    eccentricity: Quantity,
+    area: Quantity,
+    second_moment: Quantity,
+    extreme_fiber: Quantity,
+    length: Quantity,
+    elastic_modulus: Quantity,
+    effective_length_factor: float = 1.0,
+) -> Quantity:
+    """The secant-formula peak stress of an eccentrically loaded column.
+
+    A pin-ended column whose axial ``load`` P acts at ``eccentricity`` e from
+    the centroid bends as it compresses, and the bending feeds back: the exact
+    beam-column solution is σ_max = (P/A)·[1 + (e·c/r²)·sec((KL/2r)·√(P/(E·A)))]
+    — the P-δ amplified counterpart of the naive P/A + P·e·c/I, which it
+    recovers as P → 0 and exceeds at any real load (verified against an
+    independent finite-difference beam-column solve). The secant blows up at
+    the Euler load, so P must sit below P_cr for the effective length — a
+    load at or beyond it raises rather than returning a meaningless number.
+    Every quantity argument is dimension-checked and must be positive.
+    """
+    _require(load, "[force]", "load")
+    _require(eccentricity, "[length]", "eccentricity")
+    _require(area, "[length]**2", "area")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fiber, "[length]", "extreme_fiber")
+    _require(length, "[length]", "length")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if effective_length_factor <= 0:
+        raise ValueError(f"effective_length_factor must be positive; got {effective_length_factor}")
+    p = load.to("N").magnitude
+    e_ecc = eccentricity.to("m").magnitude
+    a = area.to("m**2").magnitude
+    inertia = second_moment.to("m**4").magnitude
+    c = extreme_fiber.to("m").magnitude
+    modulus = elastic_modulus.to("Pa").magnitude
+    kl = effective_length_factor * length.to("m").magnitude
+    if min(p, e_ecc, a, inertia, c, kl, modulus) <= 0:
+        raise ValueError("every secant-formula input must be positive")
+
+    p_euler = pi**2 * modulus * inertia / kl**2
+    if p >= p_euler:
+        raise ValueError(
+            f"load ({load}) is at or beyond the Euler critical load "
+            f"({p_euler / 1000:.2f} kN for this effective length) — the secant "
+            "amplification diverges; treat this as a buckling failure, not a stress"
+        )
+    r_sq = inertia / a
+    secant = 1 / cos(kl / 2 * sqrt(p / (modulus * inertia)))
+    sigma = p / a * (1 + e_ecc * c / r_sq * secant)
+    return Quantity(magnitude=sigma / 1e6, unit="MPa")

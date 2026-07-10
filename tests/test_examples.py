@@ -671,3 +671,19 @@ def test_hydraulic_cylinder_example_catches_the_misused_thin_wall_form():
     assert lame.status is CheckStatus.FAIL
     assert "safety factor 1.70" in lame.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_off_center_post_example_catches_the_p_delta_feedback():
+    namespace = runpy.run_path(str(_EXAMPLES / "off_center_post_load.py"))
+    card = namespace["screen_off_center_post"]()
+    by_name = {e.name: e for e in card.entries}
+    # Plain superposition squeaks past the screen...
+    naive = by_name["superposition (no P-delta)"]
+    assert naive.passed
+    assert "safety factor 2.03" in naive.detail
+    # ...but at 60% of Euler the P-delta feedback amplifies the bending 2.88x
+    # and the exact secant stress nearly reaches yield.
+    secant = by_name["secant formula (exact)"]
+    assert secant.status is CheckStatus.FAIL
+    assert "safety factor 1.04" in secant.detail
+    assert card.status is CheckStatus.FAIL

@@ -86,6 +86,7 @@ from .column import (
     euler_critical_stress,
     johnson_critical_stress,
     radius_of_gyration,
+    secant_column_max_stress,
     slenderness_ratio,
     transition_slenderness,
 )
@@ -228,6 +229,7 @@ __all__ = [
     "euler_critical_stress",
     "transition_slenderness",
     "johnson_critical_stress",
+    "secant_column_max_stress",
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",

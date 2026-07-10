@@ -82,6 +82,7 @@ from anvilate.analysis import (
     polar_second_moment_solid,
     principal_stresses_plane,
     radius_of_gyration,
+    secant_column_max_stress,
     rectangular_second_moment,
     shaft_torsional_stiffness,
     shaft_torsional_stress,
@@ -2219,6 +2220,46 @@ def test_johnson_critical_stress_worked_example():
 def test_euler_critical_stress_rejects_bad_slenderness():
     with pytest.raises(ValueError, match="slenderness_ratio must be positive"):
         euler_critical_stress(elastic_modulus=_q("200 GPa"), slenderness_ratio=0.0)
+
+
+# A 20x30 mm steel bar, 1.2 m pin-ended, load 5 mm off-centroid: A = 600 mm^2,
+# I = 45000 mm^4, c = 15 mm, Euler load pi^2*200e9*4.5e-8/1.44 = 61.685 kN.
+_SECANT_KW = {
+    "eccentricity": _q("5 mm"),
+    "area": _q("600 mm**2"),
+    "second_moment": _q("45000 mm**4"),
+    "extreme_fiber": _q("15 mm"),
+    "length": _q("1.2 m"),
+    "elastic_modulus": _q("200 GPa"),
+}
+
+
+def test_secant_column_matches_the_fd_verified_case():
+    # At P = 0.3*P_euler = 18.506 kN the amplification is sec = 1.5334 and
+    # sigma_max = 78.135 MPa — verified against an independent
+    # finite-difference beam-column solve (rel 4e-9 in scratch).
+    sigma = secant_column_max_stress(load=_q("18505.5 N"), **_SECANT_KW)
+    assert sigma.to("MPa").magnitude == pytest.approx(78.135, rel=1e-4)
+
+
+def test_secant_column_recovers_and_then_beats_the_naive_reading():
+    # As P -> 0 the secant -> 1 and the formula collapses to the naive
+    # P/A + P*e*c/I; at working loads the P-delta feedback makes it strictly
+    # worse than naive — the direction that matters.
+    tiny = 1.0  # N — P/P_euler = 1.6e-5, secant amplification 1.00002
+    sigma = secant_column_max_stress(load=_q("1 N"), **_SECANT_KW)
+    naive = tiny / 600e-6 + tiny * 0.005 * 0.015 / 4.5e-8
+    assert sigma.to("Pa").magnitude == pytest.approx(naive, rel=1e-4)
+    working = secant_column_max_stress(load=_q("37011 N"), **_SECANT_KW)  # 0.6 Pe
+    naive_working = 37011 / 600e-6 + 37011 * 0.005 * 0.015 / 4.5e-8
+    assert working.to("Pa").magnitude > naive_working
+
+
+def test_secant_column_refuses_loads_at_or_beyond_euler():
+    with pytest.raises(ValueError, match="beyond the Euler critical load"):
+        secant_column_max_stress(load=_q("61.69 kN"), **_SECANT_KW)
+    with pytest.raises(ValueError, match="must be positive"):
+        secant_column_max_stress(load=_q("10 kN"), **{**_SECANT_KW, "eccentricity": _q("0 mm")})
 
 
 def test_bolt_preload_from_torque_matches_worked_example():
