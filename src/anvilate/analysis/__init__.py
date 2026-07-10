@@ -123,6 +123,7 @@ from .plate import (
     clamped_circular_plate_uniform_load,
     clamped_plate_uniform_load,
     simply_supported_circular_plate_uniform_load,
+    simply_supported_plate_center_patch_load,
     simply_supported_plate_uniform_load,
 )
 from .pressure_vessel import (
@@ -235,6 +236,7 @@ __all__ = [
     "shaft_torsional_stiffness",
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",
+    "simply_supported_plate_center_patch_load",
     "clamped_plate_uniform_load",
     "simply_supported_circular_plate_uniform_load",
     "clamped_circular_plate_uniform_load",

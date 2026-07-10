@@ -22,7 +22,7 @@ dimension-checked :class:`~anvilate.units.Quantity`.
 
 from __future__ import annotations
 
-from math import pi
+from math import pi, sin
 
 from pydantic import BaseModel, ConfigDict
 
@@ -31,6 +31,7 @@ from ..units import Quantity
 __all__ = [
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",
+    "simply_supported_plate_center_patch_load",
     "clamped_plate_uniform_load",
     "simply_supported_circular_plate_uniform_load",
     "clamped_circular_plate_uniform_load",
@@ -98,6 +99,83 @@ class PlateBendingResult(BaseModel):
             f"plate: sigma_max {self.max_bending_stress.to('MPa')}, "
             f"delta_max {self.max_deflection.to('mm')}"
         )
+
+
+def simply_supported_plate_center_patch_load(
+    *,
+    pressure: Quantity,
+    patch_length: Quantity,
+    patch_width: Quantity,
+    length: Quantity,
+    width: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> PlateBendingResult:
+    """The simply-supported plate loaded over a centred patch (Navier).
+
+    A thin flat plate of plan ``length`` a × ``width`` b, simply supported on
+    all edges, carrying ``pressure`` q₀ over a centred ``patch_length`` u ×
+    ``patch_width`` v footprint only — a machine foot, a pedestal, a stacked
+    load on a panel. Solved by the same exact Navier series as
+    :func:`simply_supported_plate_uniform_load` with the patch Fourier load
+    coefficient q_mn = (16·q₀/π²mn)·sin(mπu/2a)·sin(nπv/2b); at u = a, v = b
+    the two functions agree term-for-term. Peak stress and deflection are at
+    the plate centre. Shrinking the patch at fixed total load drives the
+    centre stress up without bound (the point-load moment singularity) —
+    declaring the real footprint is what keeps the screen honest.
+
+    Thin-plate screening limits apply (trustworthy while w ≲ t/2). Every
+    quantity argument is dimension-checked; the patch must fit inside the
+    plate and ν must lie in (0, 0.5).
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(patch_length, "[length]", "patch_length")
+    _require(patch_width, "[length]", "patch_width")
+    _require(length, "[length]", "length")
+    _require(width, "[length]", "width")
+    _require(thickness, "[length]", "thickness")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not 0 < poisson_ratio < 0.5:
+        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+
+    q = pressure.to("MPa").magnitude
+    a = length.to("mm").magnitude
+    b = width.to("mm").magnitude
+    u = patch_length.to("mm").magnitude
+    v = patch_width.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if min(q, a, b, t, e) <= 0:
+        raise ValueError("pressure, plan dimensions, thickness, and E must be positive")
+    if not 0 < u <= a or not 0 < v <= b:
+        raise ValueError(
+            f"the patch ({patch_length} x {patch_width}) must fit inside the "
+            f"plate ({length} x {width})"
+        )
+
+    rigidity = e * t**3 / (12 * (1 - poisson_ratio**2))
+
+    w_sum = mx_sum = my_sum = 0.0
+    for m in range(1, _SERIES_MAX_HARMONIC + 1, 2):
+        s_u = sin(m * pi * u / (2 * a))
+        for n in range(1, _SERIES_MAX_HARMONIC + 1, 2):
+            # The load-position factor sin(m*pi/2) equals the centre evaluation
+            # factor, squaring to +1 for odd harmonics.
+            s = s_u * sin(n * pi * v / (2 * b))
+            k = m**2 / a**2 + n**2 / b**2
+            coef = 16 * s / (pi**2 * m * n)
+            w_sum += coef / (pi**4 * k**2)
+            mx_sum += coef * (m**2 / a**2 + poisson_ratio * n**2 / b**2) / (pi**2 * k**2)
+            my_sum += coef * (poisson_ratio * m**2 / a**2 + n**2 / b**2) / (pi**2 * k**2)
+
+    deflection = q / rigidity * w_sum
+    moment = q * max(mx_sum, my_sum)
+    stress = 6 * moment / t**2
+    return PlateBendingResult(
+        max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
+        max_deflection=Quantity(magnitude=deflection, unit="mm"),
+    )
 
 
 def clamped_plate_uniform_load(

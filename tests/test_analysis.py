@@ -86,6 +86,7 @@ from anvilate.analysis import (
     simply_supported_offset_load,
     simply_supported_offset_moment,
     simply_supported_partial_uniform_load,
+    simply_supported_plate_center_patch_load,
     simply_supported_plate_uniform_load,
     simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
@@ -2860,6 +2861,88 @@ def test_two_to_one_plate_matches_the_handbook_beta():
     assert wide.max_deflection.to("mm").magnitude == pytest.approx(
         tall.max_deflection.to("mm").magnitude, rel=1e-12
     )
+
+
+def test_plate_center_patch_degenerates_to_the_uniform_plate():
+    # A patch covering the whole plate is term-for-term the uniform series.
+    kw = {
+        "pressure": _q("50 kPa"),
+        "length": _q("500 mm"),
+        "width": _q("400 mm"),
+        "thickness": _q("6 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    patch = simply_supported_plate_center_patch_load(
+        patch_length=_q("500 mm"), patch_width=_q("400 mm"), **kw
+    )
+    uniform = simply_supported_plate_uniform_load(**kw)
+    assert patch.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        uniform.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert patch.max_deflection.to("mm").magnitude == pytest.approx(
+        uniform.max_deflection.to("mm").magnitude, rel=1e-12
+    )
+
+
+def test_plate_center_patch_matches_worked_example_and_beats_smearing():
+    # A 5 kN machine foot (0.5 MPa over its true 100x100 footprint) centred on
+    # a 500x500x6 panel: sigma = 177.0 MPa, w = 3.433 mm — 4.4x the stress and
+    # 2.7x the deflection the same 5 kN smeared over the panel reports
+    # (39.9 MPa / 1.284 mm). Smearing a footprint is dangerously green.
+    patch = simply_supported_plate_center_patch_load(
+        pressure=_q("0.5 MPa"),
+        patch_length=_q("100 mm"),
+        patch_width=_q("100 mm"),
+        length=_q("500 mm"),
+        width=_q("500 mm"),
+        thickness=_q("6 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert patch.max_bending_stress.to("MPa").magnitude == pytest.approx(177.009, rel=1e-4)
+    assert patch.max_deflection.to("mm").magnitude == pytest.approx(3.43274, rel=1e-4)
+    smeared = simply_supported_plate_uniform_load(
+        pressure=_q("0.02 MPa"),  # the same 5 kN over the whole 500x500
+        length=_q("500 mm"),
+        width=_q("500 mm"),
+        thickness=_q("6 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert (
+        patch.max_bending_stress.to("MPa").magnitude
+        > 4 * smeared.max_bending_stress.to("MPa").magnitude
+    )
+
+
+def test_plate_center_patch_approaches_the_point_load_deflection():
+    # Shrinking the patch at fixed total P: the centre deflection approaches
+    # the classic point-load value 0.0116*P*a^2/D for a square SS plate (the
+    # stress keeps growing — the log singularity — so only deflection has a
+    # point limit).
+    result = simply_supported_plate_center_patch_load(
+        pressure=_q("2 MPa"),  # 5 kN over 50x50
+        patch_length=_q("50 mm"),
+        patch_width=_q("50 mm"),
+        length=_q("500 mm"),
+        width=_q("500 mm"),
+        thickness=_q("6 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    rigidity = 200000 * 6**3 / (12 * (1 - 0.09))
+    point = 0.0116 * 5000 * 500**2 / rigidity
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(point, rel=3e-2)
+
+
+def test_plate_center_patch_rejects_an_oversize_patch():
+    with pytest.raises(ValueError, match="must fit inside the plate"):
+        simply_supported_plate_center_patch_load(
+            pressure=_q("0.5 MPa"),
+            patch_length=_q("600 mm"),
+            patch_width=_q("100 mm"),
+            length=_q("500 mm"),
+            width=_q("500 mm"),
+            thickness=_q("6 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_clamped_square_plate_matches_the_handbook_coefficients():
