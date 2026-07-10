@@ -6,8 +6,10 @@ AISC-flavored members. A :class:`CoverPlate` declares a plate's plan shape
 (rectangular or circular), edge condition, uniform design pressure, thickness,
 and material; :func:`screen_cover_plate` dispatches to the matching closed-form
 plate check in :mod:`anvilate.analysis`, screens the peak bending stress
-against the material yield and, when a limit is set, the deflection against
-it. "No silent green" carries through, and every entry cites the theory the
+against the material yield and, when limits are set, the deflection and the
+fundamental frequency against them (the plate's mass per area comes from its
+material density — one declaration drives every screen). "No silent green"
+carries through, and every entry cites the theory the
 check implements (the plate checks are handbook theory, not a design code —
 the screening label stays with the engineer of record).
 """
@@ -19,11 +21,16 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..analysis import (
+    clamped_circular_plate_fundamental_frequency,
     clamped_circular_plate_uniform_load,
+    clamped_plate_fundamental_frequency,
     clamped_plate_uniform_load,
     deflection_scorecard,
+    frequency_scorecard,
+    simply_supported_circular_plate_fundamental_frequency,
     simply_supported_circular_plate_uniform_load,
     simply_supported_plate_center_patch_load,
+    simply_supported_plate_fundamental_frequency,
     simply_supported_plate_uniform_load,
     strength_scorecard,
 )
@@ -67,6 +74,29 @@ _PLATE_CHECKS = {
     ),
 }
 
+# (is_circular, edge) -> the fundamental-frequency check for the resonance
+# screen; frequency is load-independent, so every shape/edge combination has
+# one (the plate's own mass per area comes from its material density and
+# thickness — nothing extra to declare).
+_PLATE_MODAL_CHECKS = {
+    (False, PlateEdge.SIMPLY_SUPPORTED): (
+        simply_supported_plate_fundamental_frequency,
+        "Kirchhoff plate theory (Navier eigenvalue)",
+    ),
+    (False, PlateEdge.CLAMPED): (
+        clamped_plate_fundamental_frequency,
+        "Kirchhoff plate theory (FD-verified eigenvalue table)",
+    ),
+    (True, PlateEdge.SIMPLY_SUPPORTED): (
+        simply_supported_circular_plate_fundamental_frequency,
+        "Kirchhoff plate theory (Bessel eigenvalue)",
+    ),
+    (True, PlateEdge.CLAMPED): (
+        clamped_circular_plate_fundamental_frequency,
+        "Kirchhoff plate theory (Bessel eigenvalue)",
+    ),
+}
+
 
 class CoverPlate(BaseModel):
     """A flat cover or panel under uniform pressure, and what its screen needs.
@@ -80,7 +110,10 @@ class CoverPlate(BaseModel):
     Declaring a centred ``patch_length`` × ``patch_width`` footprint (a machine
     foot or pedestal instead of a full-face pressure) restricts ``pressure``
     to that footprint — encoded only for a simply-supported rectangle, the
-    one plate with an exact patch solution.
+    one plate with an exact patch solution. Declaring a ``min_frequency``
+    adds the resonance screen: the fundamental frequency of the bare plate
+    (mass per area from the material's density and the thickness — smeared
+    attachments are not modeled) against that floor.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -96,6 +129,7 @@ class CoverPlate(BaseModel):
     patch_length: Quantity | None = None  # pressure may act on a centred footprint
     patch_width: Quantity | None = None
     deflection_limit: Quantity | None = None
+    min_frequency: Quantity | None = None  # the resonance floor
 
     @model_validator(mode="after")
     def _well_formed(self) -> CoverPlate:
@@ -120,6 +154,10 @@ class CoverPlate(BaseModel):
         ):
             if value is not None and not value.has_dimension("[length]"):
                 raise ValueError(f"{name} must be a [length] quantity; got {value}")
+        if self.min_frequency is not None and not self.min_frequency.has_dimension("[frequency]"):
+            raise ValueError(
+                f"min_frequency must be a [frequency] quantity; got {self.min_frequency}"
+            )
         patched = self.patch_length is not None or self.patch_width is not None
         if patched:
             if self.patch_length is None or self.patch_width is None:
@@ -143,7 +181,8 @@ def screen_cover_plate(
     Dispatches on the cover's shape and edge condition to the matching
     closed-form plate check, screens the peak bending stress against the
     material's yield at ``required_safety_factor``, and — when the cover
-    declares a ``deflection_limit`` — the centre deflection against it.
+    declares them — the centre deflection against ``deflection_limit`` and
+    the bare plate's fundamental frequency against ``min_frequency``.
     ``materials`` defaults to the bundled database.
     """
     materials = materials or default_materials_db()
@@ -184,5 +223,28 @@ def screen_cover_plate(
                 deflection=result.max_deflection,
                 limit=plate.deflection_limit,
             ).model_copy(update={"reference": reference})
+        )
+    if plate.min_frequency is not None:
+        modal_check, modal_reference = _PLATE_MODAL_CHECKS[(circular, plate.edge)]
+        mass_per_area = Quantity(
+            magnitude=record.density.quantity.to("kg/m**3").magnitude
+            * plate.thickness.to("m").magnitude,
+            unit="kg/m**2",
+        )
+        modal = {
+            "mass_per_area": mass_per_area,
+            "thickness": plate.thickness,
+            "elastic_modulus": record.elastic_modulus.quantity,
+        }
+        if circular:
+            fundamental = modal_check(diameter=plate.diameter, **modal)
+        else:
+            fundamental = modal_check(length=plate.length, width=plate.width, **modal)
+        entries.append(
+            frequency_scorecard(
+                f"{plate.name} resonance",
+                frequency=fundamental,
+                min_frequency=plate.min_frequency,
+            ).model_copy(update={"reference": modal_reference})
         )
     return Scorecard(entries=tuple(entries))

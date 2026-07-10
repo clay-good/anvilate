@@ -123,3 +123,44 @@ def test_cover_geometry_must_be_declared_exactly_one_way():
 def test_cover_rejects_a_force_pressure():
     with pytest.raises(ValidationError, match="pressure must be a"):
         _rect(pressure=_q("50 N"))
+
+
+def test_min_frequency_adds_the_resonance_screen():
+    # The bare 500x500x6 A36 cover (mu = rho*t = 47.1 kg/m^2) rings at 115.2 Hz
+    # simply supported, so a 120 Hz floor fails it; clamping the same plate
+    # raises the fundamental 1.82x (gamma 35.982 vs 2*pi^2) to 209.9 Hz and
+    # passes — no new field beyond the floor, the mass comes from the material.
+    assert len(screen_cover_plate(_rect(), required_safety_factor=2.0).entries) == 1
+    ss = screen_cover_plate(_rect(min_frequency=_q("120 Hz")), required_safety_factor=2.0)
+    resonance = next(e for e in ss.entries if "resonance" in e.name)
+    assert resonance.status is CheckStatus.FAIL
+    assert "fundamental 115.2 Hz vs required minimum 120.0 Hz" in resonance.detail
+    assert resonance.reference == "Kirchhoff plate theory (Navier eigenvalue)"
+    clamped = screen_cover_plate(
+        _rect(PlateEdge.CLAMPED, min_frequency=_q("120 Hz")), required_safety_factor=2.0
+    )
+    resonance = next(e for e in clamped.entries if "resonance" in e.name)
+    assert resonance.status is CheckStatus.PASS
+    assert "fundamental 209.9 Hz" in resonance.detail
+    assert resonance.reference == "Kirchhoff plate theory (FD-verified eigenvalue table)"
+
+
+def test_circular_resonance_dispatches_by_edge():
+    # The gasketed O500 blank also rings at 115.2 Hz; welding the rim jumps it
+    # the exact 10.2158/4.9351 = 2.07x eigenvalue ratio to 238.4 Hz.
+    ss = screen_cover_plate(_round(min_frequency=_q("200 Hz")), required_safety_factor=2.0)
+    resonance = next(e for e in ss.entries if "resonance" in e.name)
+    assert resonance.status is CheckStatus.FAIL
+    assert "fundamental 115.2 Hz" in resonance.detail
+    clamped = screen_cover_plate(
+        _round(PlateEdge.CLAMPED, min_frequency=_q("200 Hz")), required_safety_factor=2.0
+    )
+    resonance = next(e for e in clamped.entries if "resonance" in e.name)
+    assert resonance.status is CheckStatus.PASS
+    assert "fundamental 238.4 Hz" in resonance.detail
+    assert resonance.reference == "Kirchhoff plate theory (Bessel eigenvalue)"
+
+
+def test_min_frequency_must_be_a_frequency():
+    with pytest.raises(ValidationError, match="min_frequency must be a"):
+        _rect(min_frequency=_q("120 mm"))
