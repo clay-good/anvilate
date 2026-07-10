@@ -32,6 +32,7 @@ from anvilate.analysis import (
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
     fixed_pinned_offset_load,
+    fixed_pinned_triangular_load,
     fixed_pinned_uniform_load,
     frequency_scorecard,
     goodman_safety_factor,
@@ -904,6 +905,57 @@ def test_fixed_fixed_triangular_load_sits_between_the_bracketing_uniform_loads()
 def test_fixed_fixed_triangular_load_rejects_point_load_units():
     with pytest.raises(ValueError, match="peak_distributed_load must be a"):
         fixed_fixed_triangular_load(
+            peak_distributed_load=_q("100 N"),  # a force, not force-per-length
+            length=_q("500 mm"),
+            second_moment=rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+            extreme_fibre=_q("5 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
+
+
+def test_fixed_pinned_triangular_load_matches_worked_example():
+    # 10 N/mm peaking at the WALL of a 2 m propped cantilever, 80x120x5 box
+    # (I = 3,755,833 mm^4, c = 60): the wall moment governs, M = w0*L^2/15
+    # = 2,666,667 N*mm -> sigma = M*c/I = 42.60 MPa; delta_max = 0.50804 mm at
+    # exactly 1/sqrt(5) of the span from the prop (verified against a numeric
+    # double-integration of the beam ODE).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = fixed_pinned_triangular_load(
+        peak_distributed_load=_q("10 N/mm"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(42.599, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.508039, rel=1e-4)
+
+
+def test_triangular_load_orders_across_the_support_conditions():
+    # With the peak at the wall, propping concentrates moment INTO the wall: the
+    # fixed-pinned wall moment w0*L^2/15 exceeds even the simply-supported
+    # maximum w0*L^2/(9*sqrt(3)) — while its deflection still sits between the
+    # fixed-fixed and simply-supported cases.
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    ff = fixed_fixed_triangular_load(peak_distributed_load=_q("1 N/mm"), **kw)
+    fp = fixed_pinned_triangular_load(peak_distributed_load=_q("1 N/mm"), **kw)
+    ss = simply_supported_triangular_load(peak_distributed_load=_q("1 N/mm"), **kw)
+    stresses = [r.max_bending_stress.to("MPa").magnitude for r in (ff, ss, fp)]
+    assert stresses == sorted(stresses)
+    deflections = [r.max_deflection.to("mm").magnitude for r in (ff, fp, ss)]
+    assert deflections == sorted(deflections)
+
+
+def test_fixed_pinned_triangular_load_rejects_point_load_units():
+    with pytest.raises(ValueError, match="peak_distributed_load must be a"):
+        fixed_pinned_triangular_load(
             peak_distributed_load=_q("100 N"),  # a force, not force-per-length
             length=_q("500 mm"),
             second_moment=rectangular_second_moment(_q("20 mm"), _q("10 mm")),

@@ -783,6 +783,52 @@ def fixed_pinned_uniform_load(
     )
 
 
+def fixed_pinned_triangular_load(
+    *,
+    peak_distributed_load: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The propped cantilever under a triangular load peaking at the fixed end.
+
+    A prismatic beam clamped at one end and simply supported (propped) at the
+    other over a span ``length``, carrying a load that rises linearly from zero
+    at the prop to ``peak_distributed_load`` w₀ (force per unit length) at the
+    wall — a barrier stiffener welded at the sill where the pressure peaks and
+    pinned at the top waler (Roark; prop reaction w₀·L/10). The wall moment
+    w₀·L²/15 governs (the interior sagging peak is only w₀·L²/(15·√5)).
+
+    Returns the peak bending stress at the fixed end (σ = M·c/I with
+    M = w₀·L²/15) and the true maximum deflection from the elastic curve
+    v(ξ) = (ξ − 2ξ³ + ξ⁵)·w₀·L⁴/(120·E·I), ξ measured from the prop — its slope
+    5ξ⁴ − 6ξ² + 1 vanishes inside the span exactly at ξ = 1/√5 ≈ 0.447, giving
+    δ_max = 16·w₀·L⁴/(3000·√5·E·I) ≈ w₀·L⁴/(419·E·I). Every argument is
+    dimension-checked.
+    """
+    _require(peak_distributed_load, "[force] / [length]", "peak_distributed_load")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w0 = peak_distributed_load.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w0 * length_p**2 / 15
+    stress = moment * c / inertia
+    xi = 1 / sqrt(5)
+    deflection = (xi - 2 * xi**3 + xi**5) * w0 * length_p**4 / (120 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
 def fixed_fixed_center_load(
     *,
     force: Quantity,
