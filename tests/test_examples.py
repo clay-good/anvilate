@@ -309,6 +309,20 @@ def test_flood_barrier_example_recovers_margin_from_the_true_load_shape():
     assert by_name["actual hydrostatic triangle deflection"].passed
 
 
+def test_pallet_bay_example_brackets_the_patch_between_the_shortcuts():
+    namespace = runpy.run_path(str(_EXAMPLES / "pallet_bay_floor_beam.py"))
+    card = namespace["screen_pallet_bay"]()
+    by_name = {e.name: e for e in card.entries}
+    # The declared half-span patch passes at its true SF 2.32...
+    assert by_name["declared half-span patch bending"].passed
+    assert "safety factor 2.32" in by_name["declared half-span patch bending"].detail
+    # ...while smearing the intensity over the span fails (over-conservative) and
+    # spreading the total over the span reports margin that isn't there (2.61).
+    assert by_name["intensity smeared over the span bending"].status is CheckStatus.FAIL
+    assert by_name["total spread over the span bending"].passed
+    assert "safety factor 2.61" in by_name["total spread over the span bending"].detail
+
+
 def test_retaining_wall_example_catches_the_unconservative_shortcut():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_post.py"))
     card = namespace["screen_retaining_post"]()
