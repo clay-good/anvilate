@@ -38,6 +38,7 @@ from anvilate.analysis import (
     fixed_pinned_offset_load,
     fixed_pinned_partial_uniform_load,
     fixed_pinned_triangular_load,
+    fixed_pinned_triangular_load_peak_at_prop,
     fixed_pinned_uniform_load,
     frequency_scorecard,
     goodman_safety_factor,
@@ -1512,6 +1513,64 @@ def test_triangular_load_orders_across_the_support_conditions():
     assert stresses == sorted(stresses)
     deflections = [r.max_deflection.to("mm").magnitude for r in (ff, fp, ss)]
     assert deflections == sorted(deflections)
+
+
+def test_fixed_pinned_triangular_load_peak_at_prop_matches_worked_example():
+    # 10 N/mm peaking at the PROP of a 2 m propped cantilever, same 80x120x5 box
+    # as the peak-at-wall example: the wall moment still governs, M = 7*w0*L^2/120
+    # = 2,333,333 N*mm -> sigma = M*c/I = 37.275 MPa; delta_max = 0.649256 mm at
+    # the root of 10*xi^3 - 27*xi + 14, xi = 0.597538 of the span from the wall
+    # (verified against a numeric double-integration of the beam ODE).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = fixed_pinned_triangular_load_peak_at_prop(
+        peak_distributed_load=_q("10 N/mm"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(37.2753, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.649256, rel=1e-4)
+
+
+def test_fixed_pinned_triangle_orientations_superpose_to_the_full_udl():
+    # The two triangle orientations sum to a full UDL, and both peak moments sit
+    # at the wall, so the wall moments superpose EXACTLY: w0*L^2/15 + 7*w0*L^2/120
+    # = w0*L^2/8, the fixed-pinned UDL wall moment. Sliding the peak toward the
+    # prop relieves the wall (lower stress) but loads the softer mid-span region
+    # (larger deflection).
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    wall_peak = fixed_pinned_triangular_load(peak_distributed_load=_q("1 N/mm"), **kw)
+    prop_peak = fixed_pinned_triangular_load_peak_at_prop(peak_distributed_load=_q("1 N/mm"), **kw)
+    udl = fixed_pinned_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    combined = (
+        wall_peak.max_bending_stress.to("MPa").magnitude
+        + prop_peak.max_bending_stress.to("MPa").magnitude
+    )
+    assert combined == pytest.approx(udl.max_bending_stress.to("MPa").magnitude, rel=1e-12)
+    assert (
+        prop_peak.max_bending_stress.to("MPa").magnitude
+        < wall_peak.max_bending_stress.to("MPa").magnitude
+    )
+    assert prop_peak.max_deflection.to("mm").magnitude > wall_peak.max_deflection.to("mm").magnitude
+
+
+def test_fixed_pinned_triangular_load_peak_at_prop_rejects_point_load_units():
+    with pytest.raises(ValueError, match="peak_distributed_load must be a"):
+        fixed_pinned_triangular_load_peak_at_prop(
+            peak_distributed_load=_q("100 N"),  # a force, not force-per-length
+            length=_q("500 mm"),
+            second_moment=rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+            extreme_fibre=_q("5 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_fixed_pinned_triangular_load_rejects_point_load_units():

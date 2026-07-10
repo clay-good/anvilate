@@ -40,6 +40,7 @@ __all__ = [
     "fixed_fixed_triangular_load",
     "fixed_pinned_partial_uniform_load",
     "fixed_pinned_center_patch_load",
+    "fixed_pinned_triangular_load_peak_at_prop",
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",
@@ -1094,6 +1095,67 @@ def fixed_pinned_triangular_load(
     stress = moment * c / inertia
     xi = 1 / sqrt(5)
     deflection = (xi - 2 * xi**3 + xi**5) * w0 * length_p**4 / (120 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def fixed_pinned_triangular_load_peak_at_prop(
+    *,
+    peak_distributed_load: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The propped cantilever under a triangular load peaking at the prop.
+
+    The mirror orientation of :func:`fixed_pinned_triangular_load`: the load
+    rises linearly from zero at the wall to ``peak_distributed_load`` w₀
+    (force per unit length) at the prop — a barrier stiffener welded at the
+    top and propped at the sill where the pressure peaks. The prop carries
+    11·w₀·L/40 and the wall moment 7·w₀·L²/120 still governs (the interior
+    sagging peak, (9·√5/200 − 7/120)·w₀·L² ≈ 0.0423·w₀·L² at
+    L·(1 − 3/(2·√5)) from the prop, is smaller) — though it is milder than
+    the peak-at-wall wall moment
+    w₀·L²/15; the two orientations superpose exactly to the full-UDL wall
+    moment w₀·L²/8.
+
+    Returns the peak bending stress at the fixed end (σ = M·c/I with
+    M = 7·w₀·L²/120) and the true maximum deflection from the elastic curve
+    v(ξ) = (7ξ² − 9ξ³ + 2ξ⁵)·w₀·L⁴/(240·E·I), ξ measured from the wall — its
+    slope vanishes inside the span at the root of 10ξ³ − 27ξ + 14 (bisected to
+    machine precision, ξ ≈ 0.5975), giving δ_max ≈ w₀·L⁴/(328·E·I). Every
+    argument is dimension-checked; verified against an independent numeric
+    integration of the beam ODE.
+    """
+    _require(peak_distributed_load, "[force] / [length]", "peak_distributed_load")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w0 = peak_distributed_load.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = 7 * w0 * length_p**2 / 120
+    stress = moment * c / inertia
+
+    # v'(ξ) ∝ −14ξ + 27ξ² − 10ξ⁴, whose interior zero is the single (0, 1)
+    # root of 10ξ³ − 27ξ + 14 (positive at 0, negative at 1).
+    lo, hi = 0.0, 1.0
+    for _ in range(100):
+        mid = (lo + hi) / 2
+        if 10 * mid**3 - 27 * mid + 14 > 0:
+            lo = mid
+        else:
+            hi = mid
+    xi = (lo + hi) / 2
+    deflection = (7 * xi**2 - 9 * xi**3 + 2 * xi**5) * w0 * length_p**4 / (240 * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
