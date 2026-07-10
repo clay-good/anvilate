@@ -13,7 +13,7 @@ linear-elastic beam, small deflections, and no stress concentration.
 
 from __future__ import annotations
 
-from math import pi
+from math import pi, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -27,6 +27,7 @@ __all__ = [
     "simply_supported_center_load",
     "simply_supported_offset_load",
     "simply_supported_uniform_load",
+    "simply_supported_triangular_load",
     "fixed_fixed_center_load",
     "fixed_fixed_uniform_load",
     "rectangular_second_moment",
@@ -422,6 +423,53 @@ def simply_supported_uniform_load(
     moment = w * length_p**2 / 8
     stress = moment * c / inertia
     deflection = 5 * w * length_p**4 / (384 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def simply_supported_triangular_load(
+    *,
+    peak_distributed_load: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The simply-supported beam under a linearly varying (triangular) load (Roark).
+
+    A prismatic beam simply supported over a span ``length`` carrying a load that
+    rises linearly from zero at one support to ``peak_distributed_load`` w₀ (force
+    per unit length) at the other — hydrostatic pressure on a gate stiffener, a
+    bin wall's stored-solids push. The maximum moment w₀·L²/(9·√3) occurs at
+    L/√3 ≈ 0.577·L from the zero end, and the maximum deflection (≈0.00652·w₀·L⁴/(E·I),
+    evaluated exactly from the elastic curve) at ≈0.519·L — neither at mid-span.
+    Every argument is dimension-checked.
+    """
+    _require(peak_distributed_load, "[force] / [length]", "peak_distributed_load")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w0 = peak_distributed_load.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w0 * length_p**2 / (9 * sqrt(3))
+    stress = moment * c / inertia
+    # Elastic curve v(x) = w0·x·(7L⁴ − 10L²x² + 3x⁴)/(360·L·E·I) measured from the
+    # zero-intensity end; v′ = 0 at x² = L²·(30 − √480)/30.
+    x = length_p * sqrt((30 - sqrt(480)) / 30)
+    deflection = (
+        w0
+        * x
+        * (7 * length_p**4 - 10 * length_p**2 * x**2 + 3 * x**4)
+        / (360 * length_p * e * inertia)
+    )
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),

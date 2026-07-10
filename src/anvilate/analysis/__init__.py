@@ -49,6 +49,7 @@ from .beam import (
     rectangular_second_moment,
     simply_supported_center_load,
     simply_supported_offset_load,
+    simply_supported_triangular_load,
     simply_supported_uniform_load,
 )
 from .column import (
@@ -125,6 +126,7 @@ __all__ = [
     "cantilever_uniform_load",
     "simply_supported_center_load",
     "simply_supported_offset_load",
+    "simply_supported_triangular_load",
     "simply_supported_uniform_load",
     "fixed_fixed_center_load",
     "fixed_fixed_offset_load",

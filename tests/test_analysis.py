@@ -8,6 +8,7 @@ from anvilate.analysis import (
     SHEAR_FORM_CIRCULAR,
     SHEAR_FORM_RECTANGULAR,
     ColumnEnd,
+    CrossSection,
     axial_stress,
     bearing_stress,
     bolt_preload_from_torque,
@@ -57,6 +58,7 @@ from anvilate.analysis import (
     shaft_twist_angle,
     simply_supported_center_load,
     simply_supported_offset_load,
+    simply_supported_triangular_load,
     simply_supported_uniform_load,
     slenderness_ratio,
     spring_index,
@@ -561,6 +563,56 @@ def test_simply_supported_uniform_load_rejects_point_load_units():
             distributed_load=_q("100 N"),  # a force, not force-per-length
             length=_q("500 mm"),
             second_moment=inertia,
+            extreme_fibre=_q("5 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
+
+
+def test_simply_supported_triangular_load_matches_worked_example():
+    # 10 N/mm peak over a 2 m span, 80x120x5 box (I = 3,755,833 mm^4, c = 60):
+    #   M_max = w0*L^2/(9*sqrt(3)) = 2,566,001 N*mm -> sigma = M*c/I = 40.99 MPa;
+    #   delta_max = 0.0065223*w0*L^4/(E*I) = 1.3892 mm (at 0.519*L, not mid-span).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = simply_supported_triangular_load(
+        peak_distributed_load=_q("10 N/mm"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(40.992, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(1.3892, rel=1e-3)
+
+
+def test_triangular_load_sits_between_the_bracketing_uniform_loads():
+    # A triangle peaking at w0 carries half the total of a w0 UDL, so it must be
+    # milder than the full UDL — but harsher than a UDL of the same total load
+    # (w0/2), because the triangle biases the load toward one support.
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    tri = simply_supported_triangular_load(peak_distributed_load=_q("1 N/mm"), **kw)
+    full = simply_supported_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    same_total = simply_supported_uniform_load(distributed_load=_q("0.5 N/mm"), **kw)
+    tri_stress = tri.max_bending_stress.to("MPa").magnitude
+    assert same_total.max_bending_stress.to("MPa").magnitude < tri_stress
+    assert tri_stress < full.max_bending_stress.to("MPa").magnitude
+    tri_deflection = tri.max_deflection.to("mm").magnitude
+    assert same_total.max_deflection.to("mm").magnitude < tri_deflection
+    assert tri_deflection < full.max_deflection.to("mm").magnitude
+
+
+def test_simply_supported_triangular_load_rejects_point_load_units():
+    with pytest.raises(ValueError, match="peak_distributed_load must be a"):
+        simply_supported_triangular_load(
+            peak_distributed_load=_q("100 N"),  # a force, not force-per-length
+            length=_q("500 mm"),
+            second_moment=rectangular_second_moment(_q("20 mm"), _q("10 mm")),
             extreme_fibre=_q("5 mm"),
             elastic_modulus=_q("200 GPa"),
         )
