@@ -36,6 +36,7 @@ from ..analysis import (
     euler_critical_stress,
     fixed_fixed_center_load,
     fixed_fixed_offset_load,
+    fixed_fixed_triangular_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
     fixed_pinned_offset_load,
@@ -167,6 +168,7 @@ _OFFSET_POINT_CHECKS = {
 _TRIANGULAR_CHECKS = {
     Support.CANTILEVER: cantilever_triangular_load,
     Support.SIMPLY_SUPPORTED: simply_supported_triangular_load,
+    Support.FIXED_FIXED: fixed_fixed_triangular_load,
 }
 _PARTIAL_UDL_CHECKS = {
     Support.CANTILEVER: cantilever_partial_uniform_load,
@@ -181,7 +183,7 @@ class BeamMember(BaseModel):
     ``distributed`` or ``triangular`` one (the triangle's peak intensity — at
     either support on a simply-supported member, at the fixed end on a
     cantilever) — the model validates the dimension matches ``load_type``, and
-    a triangular load is only encoded for those two support conditions.
+    a triangular load is not encoded for a fixed-pinned member.
     ``material`` is a database id (its E and yield drive the checks). An optional
     ``load_position`` places a point load away from its default position — off
     mid-span on a simply-supported or fixed-fixed member (measured from either
@@ -224,8 +226,8 @@ class BeamMember(BaseModel):
             )
         if self.load_type is LoadType.TRIANGULAR and self.support not in _TRIANGULAR_CHECKS:
             raise ValueError(
-                "a triangular load is only encoded for a cantilever or simply-supported "
-                f"member; got {self.support.value}"
+                "a triangular load is only encoded for a cantilever, simply-supported, "
+                f"or fixed-fixed member; got {self.support.value}"
             )
         if self.load_position is not None:
             if not self.load_position.has_dimension("[length]"):

@@ -376,10 +376,18 @@ def test_triangular_load_dispatches_to_the_cantilever_case():
     assert "safety factor 2.00" in card.entries[0].detail  # 250 / 125
 
 
-def test_triangular_load_requires_a_cantilever_or_simple_supports():
-    for support in (Support.FIXED_FIXED, Support.FIXED_PINNED):
-        with pytest.raises(ValidationError, match="only encoded for a cantilever or simply-"):
-            _member(support, LoadType.TRIANGULAR, "1 N/mm")
+def test_triangular_load_dispatches_to_the_fixed_fixed_case():
+    # A fixed-fixed triangular member: the peak-end wall governs, M = w0*L^2/20
+    # = 12500 N*mm -> sigma 37.5 MPa -> SF 250/37.5 = 6.67.
+    member = _member(Support.FIXED_FIXED, LoadType.TRIANGULAR, "1 N/mm")
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    assert card.entries[0].passed
+    assert "safety factor 6.67" in card.entries[0].detail
+
+
+def test_triangular_load_rejects_a_fixed_pinned_member():
+    with pytest.raises(ValidationError, match="triangular load is only encoded for"):
+        _member(Support.FIXED_PINNED, LoadType.TRIANGULAR, "1 N/mm")
 
 
 def test_triangular_member_rejects_a_force():
