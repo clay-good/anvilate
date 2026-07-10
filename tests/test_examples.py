@@ -447,6 +447,22 @@ def test_davit_example_flips_on_the_sheave_overhang_couple():
     assert card.status is CheckStatus.FAIL
 
 
+def test_machine_foot_example_catches_the_smeared_footprint():
+    namespace = runpy.run_path(str(_EXAMPLES / "machine_foot_on_panel.py"))
+    card = namespace["screen_machine_foot"]()
+    by_name = {e.name: e for e in card.entries}
+    # The same 5 kN: smeared it screens comfortably green; on its true
+    # 100 mm pad it concentrates 4.4x the bending and flips both checks.
+    assert by_name["smeared over the panel bending"].passed
+    assert "safety factor 6.26" in by_name["smeared over the panel bending"].detail
+    assert by_name["smeared over the panel deflection"].passed
+    assert by_name["declared 100 mm pad bending"].status is CheckStatus.FAIL
+    assert "safety factor 1.41" in by_name["declared 100 mm pad bending"].detail
+    assert by_name["declared 100 mm pad deflection"].status is CheckStatus.FAIL
+    assert "deflection 3.433" in by_name["declared 100 mm pad deflection"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_manway_lid_example_flips_on_the_edge_fixity_assumption():
     namespace = runpy.run_path(str(_EXAMPLES / "manway_lid_fixity.py"))
     card = namespace["screen_manway_lid"]()
