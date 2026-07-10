@@ -1,17 +1,23 @@
-"""T1 analytical plate bending (simply-supported rectangle, exact Navier series).
+"""T1 analytical flat-plate bending under uniform pressure.
 
-Flat rectangular plates under uniform pressure — covers, manway blanks, tank
-lids, access panels — are the plate counterpart of the beam screening checks.
-For a simply-supported rectangle the Kirchhoff plate problem has the exact
-Navier double-sine-series solution, so no handbook coefficient table needs to
-be bundled or trusted: the series is evaluated directly (it reproduces the
-classic Roark/Timoshenko coefficients — e.g. α = 0.0444, β = 0.2874 for a
-square at ν = 0.3 — to series-truncation precision).
+Flat plates — covers, manway blanks, tank lids, access panels — are the plate
+counterpart of the beam screening checks, in both plan shapes and both edge
+conditions:
+
+* **rectangle, simply supported** — the exact Kirchhoff Navier double series,
+  evaluated directly (no coefficient table to bundle or trust; it reproduces
+  the classic handbook values, e.g. α = 0.0444, β = 0.2874 for a square at
+  ν = 0.3);
+* **rectangle, clamped** — no closed form exists, so the standard Roark
+  Table 11.4 coefficients (ν = 0.3), whose strip limit is the exact
+  fixed-fixed beam and whose interior values were confirmed by an independent
+  finite-difference biharmonic solve;
+* **circle, simply supported and clamped** — the exact Timoshenko polynomial
+  closed forms.
 
 These are screening checks: linear-elastic thin-plate theory, small
-deflections (w ≲ t/2), uniform pressure, edges free to rotate but held from
-lifting. Every input and output is a dimension-checked
-:class:`~anvilate.units.Quantity`.
+deflections (w ≲ t/2), uniform pressure. Every input and output is a
+dimension-checked :class:`~anvilate.units.Quantity`.
 """
 
 from __future__ import annotations
