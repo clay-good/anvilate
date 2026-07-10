@@ -391,6 +391,24 @@ def test_stiffener_weld_end_example_fails_opposite_criteria():
     assert card.status is CheckStatus.FAIL
 
 
+def test_canopy_snow_drift_example_flips_on_the_drift_orientation():
+    namespace = runpy.run_path(str(_EXAMPLES / "canopy_snow_drift.py"))
+    card = namespace["screen_canopy_drift"]()
+    by_name = {e.name: e for e in card.entries}
+    # Drift assumed against the building face screens green; mirrored to the
+    # edge fascia the resultant moves to 2L/3, doubling the wall moment and
+    # nearly tripling the tip deflection (1/30 -> 11/120 of w0*L^4/EI).
+    assert by_name["drift against the building face bending"].passed
+    assert "safety factor 2.29" in by_name["drift against the building face bending"].detail
+    assert by_name["drift against the building face deflection"].passed
+    assert "deflection 8.855" in by_name["drift against the building face deflection"].detail
+    assert by_name["drift against the edge fascia bending"].status is CheckStatus.FAIL
+    assert "safety factor 1.14" in by_name["drift against the edge fascia bending"].detail
+    assert by_name["drift against the edge fascia deflection"].status is CheckStatus.FAIL
+    assert "deflection 24.350" in by_name["drift against the edge fascia deflection"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_retaining_wall_example_catches_the_unconservative_shortcut():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_post.py"))
     card = namespace["screen_retaining_post"]()
