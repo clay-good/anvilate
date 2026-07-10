@@ -62,6 +62,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `pump_mezzanine_beam.py` | One `BeamMember` declaration, three check dimensions: a pump beam that is statically bulletproof (bending SF 9.27, deflection well inside L/360) yet FAILs on resonance alone (23.9 Hz vs the 1450 rpm × 1.2 floor) — the dimension a static hand calc never sees. |
 | `flywheel_torsional_mode.py` | A flywheel on a stub shaft whose torsional mode sits dead on the 3000 rpm torque ripple (50.5 Hz): upsizing the shaft Ø20 → Ø25 multiplies J by 2.44 and moves the twist mode 56% to 78.8 Hz — the drivetrain dimension a lateral screen never sees. |
 | `motor_mount_resonance.py` | A cantilevered motor mount whose fundamental frequency falls below the running speed — a resonance FAIL. |
+| `cam_return_spring.py` | A cam return spring whose wire stress (Wahl, SF 2.0) never changes with machine speed — but its own 99 g of coil surges at ½√(k/m) = 139.7 Hz, 28 cam orders up at 300 rpm and only 7 at 1200: the speed-up fails on surge alone, and thicker wire isn't the fix. |
 | `shrink_fit_check.py` | An ISO 286 interference fit (Ø40 H7/s6) turned into a thick-wall contact pressure and hub bore hoop stress, screened against yield. Ties the tolerance, analysis, and materials layers together. |
 | `wheel_rail_contact.py` | A crane wheel on a rail screened for Hertzian line-contact surface pressure — annealed steel fails, the lesson that rolling-contact parts must be surface-hardened. |
 

@@ -623,3 +623,18 @@ def test_sight_port_blind_example_fails_the_passing_blind_on_the_declared_hole()
     assert "safety factor 1.90" in by_name["20 mm blind with port plate bending"].detail
     assert by_name["20 mm blind with port flatness"].passed
     assert card.status is CheckStatus.FAIL
+
+
+def test_cam_spring_example_fails_the_speed_up_on_surge_alone():
+    namespace = runpy.run_path(str(_EXAMPLES / "cam_return_spring.py"))
+    card = namespace["screen_cam_return_spring"]()
+    by_name = {e.name: e for e in card.entries}
+    # The wire stress never changes with machine speed...
+    assert by_name["return spring wire shear"].passed
+    assert "safety factor 2.00" in by_name["return spring wire shear"].detail
+    # ...but the coil's own 139.7 Hz surge mode is 28 cam orders up at
+    # 300 rpm and only 7 at 1200 — the speed-up fails on surge alone.
+    assert by_name["coil surge at 300 rpm"].passed
+    assert by_name["coil surge at 1200 rpm"].status is CheckStatus.FAIL
+    assert "fundamental 139.7 Hz" in by_name["coil surge at 1200 rpm"].detail
+    assert card.status is CheckStatus.FAIL
