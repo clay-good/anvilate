@@ -37,6 +37,7 @@ from anvilate.analysis import (
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
     fixed_pinned_center_patch_load,
+    fixed_pinned_end_moment,
     fixed_pinned_offset_load,
     fixed_pinned_partial_uniform_load,
     fixed_pinned_triangular_load,
@@ -371,6 +372,44 @@ def test_simply_supported_end_moment_matches_worked_example():
     )
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
     assert result.max_deflection.to("mm").magnitude == pytest.approx(2.40563, rel=1e-4)
+
+
+def test_fixed_pinned_end_moment_matches_worked_example():
+    # The same 50 N*m couple at the prop of a 500 mm propped cantilever: the
+    # wall carries over M0/2, so the applied couple still governs — sigma =
+    # 150 MPa at the prop; delta_max = M*L^2/(27*E*I) = 1.38889 mm at L/3 from
+    # the prop (verified against a numeric integration of the beam ODE).
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    result = fixed_pinned_end_moment(
+        moment=_q("50 N*m"),
+        length=_q("500 mm"),
+        second_moment=inertia,
+        extreme_fibre=_q("5 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(1.38889, rel=1e-4)
+
+
+def test_fixed_pinned_end_moment_deflects_1_over_sqrt3_of_simply_supported():
+    # Building in the far end leaves the peak stress unchanged (M0 at the
+    # loaded end in both) but cuts delta_max to exactly (1/27)/(1/(9*sqrt(3)))
+    # = 1/sqrt(3) of the simply-supported value.
+    kw = {
+        "moment": _q("50 N*m"),
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    propped = fixed_pinned_end_moment(**kw)
+    simple = simply_supported_end_moment(**kw)
+    assert propped.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        simple.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert propped.max_deflection.to("mm").magnitude == pytest.approx(
+        simple.max_deflection.to("mm").magnitude / 3**0.5, rel=1e-12
+    )
 
 
 def test_end_moment_rejects_a_force_load():
