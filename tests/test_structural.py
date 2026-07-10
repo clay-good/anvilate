@@ -574,6 +574,60 @@ def test_mirrored_triangle_rejects_symmetric_supports_and_other_load_types():
         )
 
 
+def test_moment_load_dispatches_on_the_cantilever_member():
+    # A 50 N*m couple at the tip: sigma = M*c/I = 150 MPa everywhere -> SF
+    # 250/150 = 1.67, and the tip deflection M*L^2/2EI = 18.75 mm busts a 10 mm
+    # limit — the couple bends the whole span, unlike an equal-wall-moment force.
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.CANTILEVER,
+        load=_q("50 N*m"),
+        load_type=LoadType.MOMENT,
+        material="ASTM-A36",
+        deflection_limit=_q("10 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.PASS
+    assert "safety factor 1.67" in bending.detail
+    deflection = next(e for e in card.entries if "deflection" in e.name)
+    assert deflection.status is CheckStatus.FAIL
+    assert "18.750 mm" in deflection.detail
+
+
+def test_moment_load_dispatches_on_the_simply_supported_member():
+    # The same couple on a simply-supported span: the end stress matches the
+    # cantilever's 150 MPa, but the deflection M*L^2/(9*sqrt(3)*EI) = 2.406 mm
+    # clears the same 10 mm limit the cantilever busts — distinct dispatch.
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("50 N*m"),
+        load_type=LoadType.MOMENT,
+        material="ASTM-A36",
+        deflection_limit=_q("10 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    deflection = next(e for e in card.entries if "deflection" in e.name)
+    assert deflection.status is CheckStatus.PASS
+    assert "2.406 mm" in deflection.detail
+
+
+def test_moment_member_rejects_a_force_and_walled_supports():
+    # The load must be a couple, and only the two supports with an end free to
+    # receive one are encoded — a built-in wall absorbs an applied couple.
+    with pytest.raises(ValidationError, match="moment load must be a"):
+        _member(Support.CANTILEVER, LoadType.MOMENT, "100 N")
+    with pytest.raises(ValidationError, match="moment load is only encoded"):
+        _member(Support.FIXED_FIXED, LoadType.MOMENT, "50 N*m")
+    with pytest.raises(ValidationError, match="moment load is only encoded"):
+        _member(Support.FIXED_PINNED, LoadType.MOMENT, "50 N*m")
+
+
 def _column(length: str, load: str = "5 kN") -> ColumnMember:
     return ColumnMember(
         name="col",

@@ -28,6 +28,7 @@ from ..analysis import (
     bolt_shear_stress,
     cantilever_center_patch_load,
     cantilever_end_load,
+    cantilever_end_moment,
     cantilever_offset_load,
     cantilever_partial_uniform_load,
     cantilever_triangular_load,
@@ -52,6 +53,7 @@ from ..analysis import (
     johnson_critical_stress,
     simply_supported_center_load,
     simply_supported_center_patch_load,
+    simply_supported_end_moment,
     simply_supported_offset_load,
     simply_supported_partial_uniform_load,
     simply_supported_triangular_load,
@@ -146,13 +148,16 @@ class Support(StrEnum):
 
 class LoadType(StrEnum):
     """How the member is loaded: a single point load, a uniform distributed load,
-    or a linearly varying (triangular) one — zero at one support, peaking at the
+    a linearly varying (triangular) one — zero at one support, peaking at the
     other (at the fixed end on a cantilever or fixed-pinned member), as
-    hydrostatic pressure loads a stiffener."""
+    hydrostatic pressure loads a stiffener — or an applied end moment (a couple
+    a bracket or hub hands the member at the tip of a cantilever or at one
+    support of a simply-supported span)."""
 
     POINT = "point"
     DISTRIBUTED = "distributed"
     TRIANGULAR = "triangular"
+    MOMENT = "moment"
 
 
 # (support, load_type) -> the analysis check and the keyword its load takes.
@@ -198,16 +203,26 @@ _MIRRORED_TRIANGULAR_CHECKS = {
     Support.CANTILEVER: cantilever_triangular_load_peak_at_tip,
     Support.FIXED_PINNED: fixed_pinned_triangular_load_peak_at_prop,
 }
+# An applied end couple is encoded where an end is free to receive one: the tip
+# of a cantilever or a support of a simply-supported span. A built-in wall
+# absorbs an applied couple directly, so fixed-fixed/fixed-pinned are not cases.
+_MOMENT_CHECKS = {
+    Support.CANTILEVER: cantilever_end_moment,
+    Support.SIMPLY_SUPPORTED: simply_supported_end_moment,
+}
 
 
 class BeamMember(BaseModel):
     """A structural beam member and everything a T1 screen needs to check it.
 
-    ``load`` is a force for a ``point`` member and a force-per-length for a
+    ``load`` is a force for a ``point`` member, a force-per-length for a
     ``distributed`` or ``triangular`` one (the triangle's peak intensity — at
     either support on a simply-supported member, at the fixed end on a
-    cantilever or fixed-pinned member, where the wall moment governs) — the
-    model validates the dimension matches ``load_type``.
+    cantilever or fixed-pinned member, where the wall moment governs), and a
+    force-times-length couple for a ``moment`` one (applied at the tip of a
+    cantilever or at one support of a simply-supported member — the only
+    supports with an end free to receive a couple) — the model validates the
+    dimension matches ``load_type``.
     ``material`` is a database id (its E and yield drive the checks). An optional
     ``load_position`` places a point load away from its default position — off
     mid-span on a simply-supported or fixed-fixed member (measured from either
@@ -250,11 +265,21 @@ class BeamMember(BaseModel):
             raise ValueError(
                 f"deflection_limit must be a [length] quantity; got {self.deflection_limit}"
             )
-        expected = "[force]" if self.load_type is LoadType.POINT else "[force] / [length]"
+        if self.load_type is LoadType.POINT:
+            expected = "[force]"
+        elif self.load_type is LoadType.MOMENT:
+            expected = "[force] * [length]"
+        else:
+            expected = "[force] / [length]"
         if not self.load.has_dimension(expected):
             raise ValueError(
                 f"a {self.load_type.value} load must be a {expected} quantity; got "
                 f"{self.load.dimensionality} ({self.load})"
+            )
+        if self.load_type is LoadType.MOMENT and self.support not in _MOMENT_CHECKS:
+            raise ValueError(
+                "a moment load is only encoded for a cantilever or simply-supported "
+                f"member; got {self.support.value}/{self.load_type.value}"
             )
         if self.load_position is not None:
             if not self.load_position.has_dimension("[length]"):
@@ -322,6 +347,8 @@ def screen_beam_member(
         )
     elif member.load_type is LoadType.POINT:
         result = _POINT_CHECKS[member.support](force=member.load, **common)
+    elif member.load_type is LoadType.MOMENT:
+        result = _MOMENT_CHECKS[member.support](moment=member.load, **common)
     elif member.load_type is LoadType.TRIANGULAR:
         checks = _MIRRORED_TRIANGULAR_CHECKS if member.triangle_mirrored else _TRIANGULAR_CHECKS
         result = checks[member.support](peak_distributed_load=member.load, **common)
