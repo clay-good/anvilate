@@ -33,6 +33,7 @@ from anvilate.analysis import (
     fixed_fixed_triangular_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
+    fixed_pinned_center_patch_load,
     fixed_pinned_offset_load,
     fixed_pinned_partial_uniform_load,
     fixed_pinned_triangular_load,
@@ -964,6 +965,109 @@ def test_fixed_pinned_partial_uniform_load_rejects_bad_inputs():
             )
     with pytest.raises(ValueError, match="distributed_load must be a"):
         fixed_pinned_partial_uniform_load(
+            distributed_load=_q("100 N"),  # a force, not force-per-length
+            loaded_length=_q("250 mm"),
+            **kw,
+        )
+
+
+def test_fixed_pinned_center_patch_load_matches_worked_example():
+    # 10 N/mm over the middle 1 m of a 2 m propped cantilever, 80x120x5 box
+    # (I = 3,755,833 mm^4, c = 60): the wall moment M = w*a*(3L^2 - a^2)/(16L)
+    # = 3,437,500 N*mm -> sigma = M*c/I = 54.91 MPa; delta_max = 0.85813 mm at
+    # 0.568*L from the wall, bisected from the in-patch slope cubic (verified
+    # against an independent numeric double-integration of the beam ODE).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = fixed_pinned_center_patch_load(
+        distributed_load=_q("10 N/mm"),
+        loaded_length=_q("1 m"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(54.915, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.858126, rel=1e-4)
+
+
+def test_fixed_pinned_center_patch_load_with_a_short_patch():
+    # 10 N/mm over the middle 200 mm only: the maximum deflection sits BEYOND
+    # the patch toward the prop, at the closed-form smaller root of the
+    # prop-side quadratic slope, 0.554*L (verified against the same numeric
+    # integration). M = 747,500 N*mm -> sigma = 11.94 MPa.
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = fixed_pinned_center_patch_load(
+        distributed_load=_q("10 N/mm"),
+        loaded_length=_q("200 mm"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(11.9414, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.197264, rel=1e-4)
+
+
+def test_fixed_pinned_center_patch_load_degenerates_to_the_full_udl():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    patch = fixed_pinned_center_patch_load(
+        distributed_load=_q("1 N/mm"), loaded_length=_q("500 mm"), **kw
+    )
+    full = fixed_pinned_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    assert patch.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        full.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    # The full-UDL check uses the rounded handbook constant 185 (exact: 184.6),
+    # so the exact elastic-curve deflection agrees only to that rounding.
+    assert patch.max_deflection.to("mm").magnitude == pytest.approx(
+        full.max_deflection.to("mm").magnitude, rel=2.5e-3
+    )
+
+
+def test_fixed_pinned_center_patch_degenerates_to_the_center_point_load():
+    # In the a -> 0 limit at fixed total w*a, the patch is the center point
+    # load: M -> 3PL/16 and delta -> PL^3/(48*sqrt(5)*EI).
+    kw = {
+        "length": _q("2 m"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    patch = fixed_pinned_center_patch_load(
+        distributed_load=_q("1000 N/mm"), loaded_length=_q("1 mm"), **kw
+    )
+    point = fixed_pinned_center_load(force=_q("1000 N"), **kw)
+    assert patch.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        point.max_bending_stress.to("MPa").magnitude, rel=1e-6
+    )
+    assert patch.max_deflection.to("mm").magnitude == pytest.approx(
+        point.max_deflection.to("mm").magnitude, rel=1e-6
+    )
+
+
+def test_fixed_pinned_center_patch_load_rejects_bad_inputs():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    for loaded_length in ("0 mm", "600 mm"):
+        with pytest.raises(ValueError, match="loaded_length must lie within the span"):
+            fixed_pinned_center_patch_load(
+                distributed_load=_q("1 N/mm"), loaded_length=_q(loaded_length), **kw
+            )
+    with pytest.raises(ValueError, match="distributed_load must be a"):
+        fixed_pinned_center_patch_load(
             distributed_load=_q("100 N"),  # a force, not force-per-length
             loaded_length=_q("250 mm"),
             **kw,
