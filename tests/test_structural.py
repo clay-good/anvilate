@@ -508,6 +508,53 @@ def test_triangular_member_rejects_a_force():
         _member(Support.SIMPLY_SUPPORTED, LoadType.TRIANGULAR, "100 N")
 
 
+def test_triangle_peak_at_prop_dispatches_to_the_mirrored_case():
+    # The same fixed-pinned triangle mirrored to peak at the prop: the wall
+    # moment drops from w0*L^2/15 to 7*w0*L^2/120 = 14583 N*mm -> sigma
+    # 43.75 MPa -> SF 250/43.75 = 5.71 (vs 5.00 with the peak at the wall).
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.FIXED_PINNED,
+        load=_q("1 N/mm"),
+        load_type=LoadType.TRIANGULAR,
+        material="ASTM-A36",
+        triangle_peak_at_prop=True,
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    assert card.entries[0].passed
+    assert "safety factor 5.71" in card.entries[0].detail
+
+
+def test_triangle_peak_at_prop_rejects_other_supports_and_load_types():
+    # The mirrored orientation is only encoded for a fixed-pinned triangle:
+    # simply-supported/fixed-fixed triangles are symmetric and the cantilever
+    # peak-at-tip form is not encoded.
+    common = {
+        "name": "beam",
+        "section": _section(),
+        "length": _q("500 mm"),
+        "material": "ASTM-A36",
+    }
+    with pytest.raises(ValidationError, match="triangle_peak_at_prop is only encoded"):
+        BeamMember(
+            support=Support.CANTILEVER,
+            load=_q("1 N/mm"),
+            load_type=LoadType.TRIANGULAR,
+            triangle_peak_at_prop=True,
+            **common,
+        )
+    with pytest.raises(ValidationError, match="triangle_peak_at_prop is only encoded"):
+        BeamMember(
+            support=Support.FIXED_PINNED,
+            load=_q("1 N/mm"),
+            load_type=LoadType.DISTRIBUTED,
+            triangle_peak_at_prop=True,
+            **common,
+        )
+
+
 def _column(length: str, load: str = "5 kN") -> ColumnMember:
     return ColumnMember(
         name="col",

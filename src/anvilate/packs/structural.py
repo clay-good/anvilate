@@ -46,6 +46,7 @@ from ..analysis import (
     fixed_pinned_offset_load,
     fixed_pinned_partial_uniform_load,
     fixed_pinned_triangular_load,
+    fixed_pinned_triangular_load_peak_at_prop,
     fixed_pinned_uniform_load,
     johnson_critical_stress,
     simply_supported_center_load,
@@ -211,7 +212,10 @@ class BeamMember(BaseModel):
     every support condition, but only for distributed loads. Setting
     ``patch_centered`` moves that patch to mid-span (a machine footprint in the
     middle of the member rather than parked against a support); it requires a
-    ``loaded_length``.
+    ``loaded_length``. Setting ``triangle_peak_at_prop`` mirrors a triangular
+    load on a fixed-pinned member so it peaks at the prop instead of the wall
+    (the only support where the orientation is both meaningful and encoded —
+    simply-supported and fixed-fixed members are symmetric).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -227,6 +231,7 @@ class BeamMember(BaseModel):
     load_position: Quantity | None = None  # a point load may sit off mid-span
     loaded_length: Quantity | None = None  # a distributed load may cover a patch
     patch_centered: bool = False  # the patch may sit at mid-span instead of at a support
+    triangle_peak_at_prop: bool = False  # a fixed-pinned triangle may peak at the prop
 
     @model_validator(mode="after")
     def _well_formed(self) -> BeamMember:
@@ -266,6 +271,13 @@ class BeamMember(BaseModel):
                 )
         if self.patch_centered and self.loaded_length is None:
             raise ValueError("patch_centered requires a loaded_length")
+        if self.triangle_peak_at_prop and (
+            self.load_type is not LoadType.TRIANGULAR or self.support is not Support.FIXED_PINNED
+        ):
+            raise ValueError(
+                "triangle_peak_at_prop is only encoded for a fixed-pinned triangular "
+                f"load; got {self.support.value}/{self.load_type.value}"
+            )
         return self
 
 
@@ -303,7 +315,12 @@ def screen_beam_member(
     elif member.load_type is LoadType.POINT:
         result = _POINT_CHECKS[member.support](force=member.load, **common)
     elif member.load_type is LoadType.TRIANGULAR:
-        result = _TRIANGULAR_CHECKS[member.support](peak_distributed_load=member.load, **common)
+        check = (
+            fixed_pinned_triangular_load_peak_at_prop
+            if member.triangle_peak_at_prop
+            else _TRIANGULAR_CHECKS[member.support]
+        )
+        result = check(peak_distributed_load=member.load, **common)
     elif member.loaded_length is not None:
         checks = _CENTER_PATCH_CHECKS if member.patch_centered else _PARTIAL_UDL_CHECKS
         result = checks[member.support](
