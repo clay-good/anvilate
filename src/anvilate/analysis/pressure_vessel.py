@@ -1,12 +1,16 @@
-"""T1 analytical thin-wall pressure-vessel check (closed-form).
+"""T1 analytical pressure-vessel checks (closed-form).
 
 A thin-walled cylinder under internal pressure carries a circumferential (hoop)
 membrane stress ``σ_hoop = p·r/t`` and a longitudinal stress ``σ_long = p·r/(2·t)``
 — the hoop stress is twice the longitudinal, which is why pressurized cylinders
 split along their length. These are the Roark / Shigley thin-wall forms, valid
-when the radius-to-thickness ratio is large (r/t ≳ 10); below that a thick-wall
-(Lamé) treatment is needed. As with the other checks, inputs and outputs are
-dimension-checked :class:`~anvilate.units.Quantity` values through Pint.
+when the radius-to-thickness ratio is large (r/t ≳ 10). Below that the wall
+carries a genuine stress gradient and the exact Lamé thick-wall solution takes
+over: the bore hoop stress ``p·(ro² + ri²)/(ro² − ri²)`` rides on a radial
+compression ``−p``, so the governing Tresca intensity at the bore is
+``2·p·ro²/(ro² − ri²)`` — always worse than what the thin-wall form reports.
+As with the other checks, inputs and outputs are dimension-checked
+:class:`~anvilate.units.Quantity` values through Pint.
 """
 
 from __future__ import annotations
@@ -17,7 +21,9 @@ from ..units import Quantity
 
 __all__ = [
     "ThinWallStress",
+    "ThickWallStress",
     "thin_wall_cylinder",
+    "thick_wall_cylinder",
     "thin_wall_sphere_stress",
 ]
 
@@ -92,6 +98,80 @@ def thin_wall_cylinder(
         hoop_stress=_as_quantity(hoop, "MPa"),
         longitudinal_stress=_as_quantity(longitudinal, "MPa"),
         thin_wall_ratio=ratio,
+    )
+
+
+class ThickWallStress(BaseModel):
+    """The exact Lamé stresses at the bore of a thick-wall cylinder.
+
+    ``hoop_stress`` is the circumferential stress at the bore (the peak in the
+    wall), ``radial_stress`` the radial stress there (exactly −p),
+    ``longitudinal_stress`` the closed-ends axial stress, and
+    ``bore_tresca_stress`` the governing stress intensity σ_hoop − σ_radial
+    that a yield screen should use — the bore sees tension and compression at
+    right angles, so it works harder than the hoop number alone says.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    hoop_stress: Quantity
+    radial_stress: Quantity
+    longitudinal_stress: Quantity
+
+    @property
+    def bore_tresca_stress(self) -> Quantity:
+        """The Tresca stress intensity σ_hoop − σ_radial at the bore."""
+        hoop = self.hoop_stress.to("MPa").magnitude
+        radial = self.radial_stress.to("MPa").magnitude
+        return Quantity(magnitude=hoop - radial, unit="MPa")
+
+    def yield_safety_factor(self, yield_strength: Quantity) -> float:
+        """The factor of safety against bore yielding on the Tresca intensity."""
+        _require(yield_strength, "[pressure]", "yield_strength")
+        sy = yield_strength.to("MPa").magnitude
+        return sy / self.bore_tresca_stress.to("MPa").magnitude
+
+    def __str__(self) -> str:
+        return (
+            f"thick-wall cylinder: bore hoop {self.hoop_stress.to('MPa')}, "
+            f"radial {self.radial_stress.to('MPa')}, "
+            f"tresca {self.bore_tresca_stress.to('MPa')}"
+        )
+
+
+def thick_wall_cylinder(
+    *,
+    pressure: Quantity,
+    radius: Quantity,
+    wall_thickness: Quantity,
+) -> ThickWallStress:
+    """The exact Lamé stresses in a thick-wall cylinder under internal pressure.
+
+    ``pressure`` is the internal gauge pressure, ``radius`` the INNER radius
+    r_i, and ``wall_thickness`` the wall (r_o = r_i + t) — the same arguments
+    as :func:`thin_wall_cylinder`, so the two screens swap freely. At the
+    bore, where everything peaks: σ_hoop = p·(r_o² + r_i²)/(r_o² − r_i²),
+    σ_radial = −p, and σ_long = p·r_i²/(r_o² − r_i²) with closed ends (the
+    hoop stress falls by exactly p across the wall, landing at 2·σ_long on
+    the OD). Exact at every r/t — as the wall thins it recovers the p·r/t
+    membrane forms, and at r/t ≲ 10 it is the honest one: the thin-wall
+    screen under-reports the bore. Every argument is dimension-checked and
+    must be positive.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(radius, "[length]", "radius")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    p = pressure.to("MPa").magnitude
+    ri = radius.to("mm").magnitude
+    t = wall_thickness.to("mm").magnitude
+    if p <= 0 or ri <= 0 or t <= 0:
+        raise ValueError("pressure, radius, and wall_thickness must be positive")
+    ro = ri + t
+    denom = ro**2 - ri**2
+    return ThickWallStress(
+        hoop_stress=Quantity(magnitude=p * (ro**2 + ri**2) / denom, unit="MPa"),
+        radial_stress=Quantity(magnitude=-p, unit="MPa"),
+        longitudinal_stress=Quantity(magnitude=p * ri**2 / denom, unit="MPa"),
     )
 
 

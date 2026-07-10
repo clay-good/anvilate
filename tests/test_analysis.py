@@ -110,6 +110,7 @@ from anvilate.analysis import (
     spring_shear_stress,
     spring_surge_frequency,
     strength_scorecard,
+    thick_wall_cylinder,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
     torque_for_preload,
@@ -2453,6 +2454,55 @@ def test_thin_wall_cylinder_matches_worked_example():
     )
     # Governing (hoop) safety factor against a 250 MPa yield.
     assert result.bending_safety_factor(_q("250 MPa")) == pytest.approx(6.25, rel=1e-6)
+
+
+def test_thick_wall_cylinder_matches_worked_example():
+    # A O50 bore hydraulic barrel with a 10 mm wall (ri = 25, ro = 35) at
+    # 60 MPa: bore hoop = p*(ro^2+ri^2)/(ro^2-ri^2) = 60*1850/600 = 185 MPa on
+    # a radial -60, so the bore Tresca intensity is 245 MPa; closed-ends
+    # longitudinal = 60*625/600 = 62.5 MPa.
+    result = thick_wall_cylinder(
+        pressure=_q("60 MPa"), radius=_q("25 mm"), wall_thickness=_q("10 mm")
+    )
+    assert result.hoop_stress.to("MPa").magnitude == pytest.approx(185.0, rel=1e-6)
+    assert result.radial_stress.to("MPa").magnitude == pytest.approx(-60.0, rel=1e-6)
+    assert result.longitudinal_stress.to("MPa").magnitude == pytest.approx(62.5, rel=1e-6)
+    assert result.bore_tresca_stress.to("MPa").magnitude == pytest.approx(245.0, rel=1e-6)
+    assert result.yield_safety_factor(_q("417 MPa")) == pytest.approx(417 / 245, rel=1e-6)
+
+
+def test_thick_wall_hoop_drops_by_exactly_the_pressure_across_the_wall():
+    # Lame identity: the OD hoop stress is 2*sigma_long, and the bore hoop
+    # exceeds it by EXACTLY p — the pressure is carried by the hoop gradient.
+    result = thick_wall_cylinder(
+        pressure=_q("60 MPa"), radius=_q("25 mm"), wall_thickness=_q("10 mm")
+    )
+    od_hoop = 2 * result.longitudinal_stress.to("MPa").magnitude
+    assert result.hoop_stress.to("MPa").magnitude - od_hoop == pytest.approx(60.0, rel=1e-12)
+
+
+def test_thick_wall_recovers_the_thin_wall_membrane_and_always_exceeds_it():
+    # At r/t = 100 the exact bore hoop sits within ~1% of p*r/t, and it is
+    # ALWAYS above it — the thin-wall screen under-reports the bore, which is
+    # the direction that matters.
+    kw = {"pressure": _q("2 MPa"), "radius": _q("500 mm"), "wall_thickness": _q("5 mm")}
+    thick = thick_wall_cylinder(**kw)
+    thin = thin_wall_cylinder(**kw)
+    thick_hoop = thick.hoop_stress.to("MPa").magnitude
+    thin_hoop = thin.hoop_stress.to("MPa").magnitude
+    assert thick_hoop == pytest.approx(thin_hoop, rel=2e-2)
+    assert thick_hoop > thin_hoop
+    stubby = thick_wall_cylinder(
+        pressure=_q("2 MPa"), radius=_q("25 mm"), wall_thickness=_q("10 mm")
+    )
+    assert stubby.hoop_stress.to("MPa").magnitude > 2 * 25 / 10  # thin-wall reading
+
+
+def test_thick_wall_cylinder_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="must be positive"):
+        thick_wall_cylinder(pressure=_q("2 MPa"), radius=_q("25 mm"), wall_thickness=_q("0 mm"))
+    with pytest.raises(ValueError, match="pressure must be a"):
+        thick_wall_cylinder(pressure=_q("2 N"), radius=_q("25 mm"), wall_thickness=_q("5 mm"))
 
 
 def test_thin_wall_sphere_is_half_the_cylinder_hoop():

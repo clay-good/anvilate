@@ -15,7 +15,8 @@ modules:
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
   and torsional stiffness
-- :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere
+- :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
+  exact Lamé thick-wall cylinder
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
@@ -139,7 +140,9 @@ from .plate import (
     simply_supported_plate_uniform_load,
 )
 from .pressure_vessel import (
+    ThickWallStress,
     ThinWallStress,
+    thick_wall_cylinder,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
 )
@@ -267,7 +270,9 @@ __all__ = [
     "simply_supported_annular_plate_uniform_load",
     "clamped_annular_plate_uniform_load",
     "ThinWallStress",
+    "ThickWallStress",
     "thin_wall_cylinder",
+    "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "InterferenceFit",
     "interference_fit",

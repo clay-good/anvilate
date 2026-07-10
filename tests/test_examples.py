@@ -655,3 +655,19 @@ def test_hub_heating_example_sizes_the_oven_not_just_the_fit():
     assert "opens 108 um" in furnace.detail
     assert "setpoint needed 199 degC" in furnace.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_hydraulic_cylinder_example_catches_the_misused_thin_wall_form():
+    namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_cylinder_wall.py"))
+    card = namespace["screen_cylinder_barrel"]()
+    by_name = {e.name: e for e in card.entries}
+    # The membrane shortcut at r/t = 2.5 reads 150 MPa and passes...
+    thin = by_name["thin-wall membrane (r/t 2.5)"]
+    assert thin.passed
+    assert "safety factor 2.78" in thin.detail
+    # ...but the exact Lame bore Tresca intensity (185 hoop on -60 radial)
+    # works the bore at 245 MPa and fails the same screen.
+    lame = by_name["Lame bore intensity"]
+    assert lame.status is CheckStatus.FAIL
+    assert "safety factor 1.70" in lame.detail
+    assert card.status is CheckStatus.FAIL
