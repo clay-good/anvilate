@@ -38,9 +38,13 @@ class CrossSection(BaseModel):
     from them. ``second_moment_transverse`` is I about the perpendicular
     centroidal axis — the weak axis of a section oriented depth-into-the-load —
     which :attr:`least_radius_of_gyration` folds in for column slenderness.
-    Build one with :meth:`rectangular`, :meth:`solid_circular`,
+    ``shear_form_factor`` is the peak-over-average transverse-shear ratio k in
+    τ_max = k·V/A (1.5 for a rectangle, 4/3 for a solid round, exact for a
+    tube, the web-area ratio for I and box shapes); a hand-built section
+    leaves it ``None`` and a shear screen must report NOT_EVALUATED rather
+    than guess. Build one with :meth:`rectangular`, :meth:`solid_circular`,
     :meth:`hollow_circular`, :meth:`hollow_rectangular`, or :meth:`i_section`
-    (the builders fill both second moments).
+    (the builders fill both second moments and the form factor).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -49,6 +53,7 @@ class CrossSection(BaseModel):
     second_moment: Quantity
     extreme_fibre: Quantity
     second_moment_transverse: Quantity | None = None
+    shear_form_factor: float | None = None
 
     @property
     def section_modulus(self) -> Quantity:
@@ -94,6 +99,7 @@ class CrossSection(BaseModel):
             second_moment=Quantity(magnitude=b * h**3 / 12, unit="mm**4"),
             extreme_fibre=_mm(h / 2),
             second_moment_transverse=Quantity(magnitude=h * b**3 / 12, unit="mm**4"),
+            shear_form_factor=1.5,
         )
 
     @classmethod
@@ -106,6 +112,7 @@ class CrossSection(BaseModel):
             second_moment=i,
             extreme_fibre=_mm(d / 2),
             second_moment_transverse=i,
+            shear_form_factor=4.0 / 3.0,
         )
 
     @classmethod
@@ -124,6 +131,8 @@ class CrossSection(BaseModel):
             second_moment=i,
             extreme_fibre=_mm(do / 2),
             second_moment_transverse=i,
+            # exact neutral-axis peak for an annulus: 4/3 solid -> 2.0 thin tube
+            shear_form_factor=(4.0 / 3.0) * (do**2 + do * di + di**2) / (do**2 + di**2),
         )
 
     @classmethod
@@ -142,11 +151,14 @@ class CrossSection(BaseModel):
                 f"the smaller outside dimension ({width} x {height})"
             )
         bi, hi = b - 2 * t, h - 2 * t
+        area = b * h - bi * hi
         return cls(
-            area=Quantity(magnitude=b * h - bi * hi, unit="mm**2"),
+            area=Quantity(magnitude=area, unit="mm**2"),
             second_moment=Quantity(magnitude=(b * h**3 - bi * hi**3) / 12, unit="mm**4"),
             extreme_fibre=_mm(h / 2),
             second_moment_transverse=Quantity(magnitude=(h * b**3 - hi * bi**3) / 12, unit="mm**4"),
+            # web-area approximation: the two side walls carry the shear
+            shear_form_factor=area / (2 * t * h),
         )
 
     @classmethod
@@ -178,11 +190,14 @@ class CrossSection(BaseModel):
                 f"flange_width ({flange_width})"
             )
         hw = h - 2 * tf  # clear web height between the flanges
+        area = 2 * bf * tf + hw * tw
         return cls(
-            area=Quantity(magnitude=2 * bf * tf + hw * tw, unit="mm**2"),
+            area=Quantity(magnitude=area, unit="mm**2"),
             second_moment=Quantity(magnitude=(bf * h**3 - (bf - tw) * hw**3) / 12, unit="mm**4"),
             extreme_fibre=_mm(h / 2),
             second_moment_transverse=Quantity(
                 magnitude=(2 * tf * bf**3 + hw * tw**3) / 12, unit="mm**4"
             ),
+            # web-area approximation on the full-depth web (the AISC G2 area)
+            shear_form_factor=area / (h * tw),
         )

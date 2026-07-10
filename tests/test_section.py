@@ -140,6 +140,40 @@ def test_least_radius_falls_back_without_a_transverse_moment():
     )
 
 
+def test_builders_record_the_shear_form_factor():
+    # tau_max = k*V/A: 1.5 for a rectangle, 4/3 solid round; the annulus is
+    # exact ((4/3)*(D^2+Dd+d^2)/(D^2+d^2) -> 1.86 for D=20/d=10, -> 2.0 thin);
+    # box and I shapes use the web-area ratio A/A_web.
+    assert CrossSection.rectangular(
+        width=_q("20 mm"), height=_q("10 mm")
+    ).shear_form_factor == pytest.approx(1.5)
+    assert CrossSection.solid_circular(diameter=_q("20 mm")).shear_form_factor == pytest.approx(
+        4 / 3
+    )
+    tube = CrossSection.hollow_circular(outer_diameter=_q("20 mm"), inner_diameter=_q("10 mm"))
+    assert tube.shear_form_factor == pytest.approx((4 / 3) * 700 / 500)
+    thin = CrossSection.hollow_circular(outer_diameter=_q("100 mm"), inner_diameter=_q("99 mm"))
+    assert thin.shear_form_factor == pytest.approx(2.0, rel=1e-4)
+    box = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    assert box.shear_form_factor == pytest.approx(1900 / (2 * 5 * 120))
+    i_beam = CrossSection.i_section(
+        depth=_q("200 mm"),
+        flange_width=_q("100 mm"),
+        flange_thickness=_q("10 mm"),
+        web_thickness=_q("6 mm"),
+    )
+    assert i_beam.shear_form_factor == pytest.approx(3080 / (200 * 6))
+    # A hand-built section records none — a shear screen must NOT_EVALUATE.
+    raw = CrossSection(
+        area=_q("200 mm**2"),
+        second_moment=_q("1666.667 mm**4"),
+        extreme_fibre=_q("5 mm"),
+    )
+    assert raw.shear_form_factor is None
+
+
 def test_cross_section_feeds_a_beam_check():
     # The section's I and c drive a bending check directly, matching the
     # standalone helpers: a 20x10 cantilever -> 150 MPa at the tip load.
