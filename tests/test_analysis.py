@@ -15,6 +15,7 @@ from anvilate.analysis import (
     bolt_shear_stress,
     cantilever_end_load,
     cantilever_offset_load,
+    cantilever_triangular_load,
     cantilever_uniform_load,
     circular_area,
     circular_second_moment,
@@ -281,6 +282,80 @@ def test_cantilever_uniform_load_matches_worked_example():
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(
         4 * ss.max_bending_stress.to("MPa").magnitude, rel=1e-6
     )
+
+
+def test_cantilever_triangular_load_matches_worked_example():
+    # 10 N/mm peaking at the fixed end of a 1 m, 80x120x5 box (I = 3,755,833 mm^4,
+    # c = 60): M_max = w0*L^2/6 = 1,666,667 N*mm -> sigma = M*c/I = 26.63 MPa;
+    #   delta = w0*L^4/(30*E*I) = 0.4438 mm at the free end.
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = cantilever_triangular_load(
+        peak_distributed_load=_q("10 N/mm"),
+        length=_q("1 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(26.625, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.44375, rel=1e-3)
+
+
+def test_cantilever_triangular_stress_matches_the_resultant_at_the_centroid():
+    # The fixed-end moment of any cantilever load equals its resultant times the
+    # centroid distance, so the triangle (total w0*L/2 acting at L/3 from the wall)
+    # must match a point load placed there exactly — in stress, not deflection.
+    kw = {
+        "length": _q("900 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    tri = cantilever_triangular_load(peak_distributed_load=_q("2 N/mm"), **kw)
+    resultant = cantilever_offset_load(
+        force=_q("900 N"),  # 2 N/mm * 900 mm / 2
+        load_position=_q("300 mm"),  # L/3 from the fixed end
+        **kw,
+    )
+    assert tri.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        resultant.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    assert tri.max_deflection.to("mm").magnitude != pytest.approx(
+        resultant.max_deflection.to("mm").magnitude, rel=1e-3
+    )
+
+
+def test_cantilever_triangular_load_is_milder_than_both_bracketing_uniform_loads():
+    # Unlike the simply-supported case, a triangle peaking at the WALL biases its
+    # load toward the support where the moment arm is short — so it is milder than
+    # even a UDL of the same total load (w0/2), not just the full-w0 one.
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    tri = cantilever_triangular_load(peak_distributed_load=_q("1 N/mm"), **kw)
+    full = cantilever_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    same_total = cantilever_uniform_load(distributed_load=_q("0.5 N/mm"), **kw)
+    tri_stress = tri.max_bending_stress.to("MPa").magnitude
+    assert tri_stress < same_total.max_bending_stress.to("MPa").magnitude
+    assert tri_stress < full.max_bending_stress.to("MPa").magnitude
+    tri_deflection = tri.max_deflection.to("mm").magnitude
+    assert tri_deflection < same_total.max_deflection.to("mm").magnitude
+    assert tri_deflection < full.max_deflection.to("mm").magnitude
+
+
+def test_cantilever_triangular_load_rejects_point_load_units():
+    with pytest.raises(ValueError, match="peak_distributed_load must be a"):
+        cantilever_triangular_load(
+            peak_distributed_load=_q("100 N"),  # a force, not force-per-length
+            length=_q("500 mm"),
+            second_moment=rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+            extreme_fibre=_q("5 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_fixed_fixed_center_load_matches_worked_example():
