@@ -28,6 +28,7 @@ from ..analysis import (
     bolt_shear_stress,
     cantilever_end_load,
     cantilever_offset_load,
+    cantilever_triangular_load,
     cantilever_uniform_load,
     circular_area,
     deflection_scorecard,
@@ -134,7 +135,8 @@ class Support(StrEnum):
 class LoadType(StrEnum):
     """How the member is loaded: a single point load, a uniform distributed load,
     or a linearly varying (triangular) one — zero at one support, peaking at the
-    other, as hydrostatic pressure loads a stiffener."""
+    other (at the fixed end on a cantilever), as hydrostatic pressure loads a
+    stiffener."""
 
     POINT = "point"
     DISTRIBUTED = "distributed"
@@ -160,15 +162,20 @@ _OFFSET_POINT_CHECKS = {
     Support.FIXED_FIXED: fixed_fixed_offset_load,
     Support.FIXED_PINNED: fixed_pinned_offset_load,
 }
+_TRIANGULAR_CHECKS = {
+    Support.CANTILEVER: cantilever_triangular_load,
+    Support.SIMPLY_SUPPORTED: simply_supported_triangular_load,
+}
 
 
 class BeamMember(BaseModel):
     """A structural beam member and everything a T1 screen needs to check it.
 
     ``load`` is a force for a ``point`` member and a force-per-length for a
-    ``distributed`` or ``triangular`` one (the triangle's peak intensity) — the
-    model validates the dimension matches ``load_type``, and a triangular load
-    is only encoded for a simply-supported member.
+    ``distributed`` or ``triangular`` one (the triangle's peak intensity — at
+    either support on a simply-supported member, at the fixed end on a
+    cantilever) — the model validates the dimension matches ``load_type``, and
+    a triangular load is only encoded for those two support conditions.
     ``material`` is a database id (its E and yield drive the checks). An optional
     ``load_position`` places a point load away from its default position — off
     mid-span on a simply-supported or fixed-fixed member (measured from either
@@ -205,10 +212,10 @@ class BeamMember(BaseModel):
                 f"a {self.load_type.value} load must be a {expected} quantity; got "
                 f"{self.load.dimensionality} ({self.load})"
             )
-        if self.load_type is LoadType.TRIANGULAR and self.support is not Support.SIMPLY_SUPPORTED:
+        if self.load_type is LoadType.TRIANGULAR and self.support not in _TRIANGULAR_CHECKS:
             raise ValueError(
-                "a triangular load is only encoded for a simply-supported member; got "
-                f"{self.support.value}"
+                "a triangular load is only encoded for a cantilever or simply-supported "
+                f"member; got {self.support.value}"
             )
         if self.load_position is not None:
             if not self.load_position.has_dimension("[length]"):
@@ -257,7 +264,7 @@ def screen_beam_member(
     elif member.load_type is LoadType.POINT:
         result = _POINT_CHECKS[member.support](force=member.load, **common)
     elif member.load_type is LoadType.TRIANGULAR:
-        result = simply_supported_triangular_load(peak_distributed_load=member.load, **common)
+        result = _TRIANGULAR_CHECKS[member.support](peak_distributed_load=member.load, **common)
     else:
         result = _DISTRIBUTED_CHECKS[member.support](distributed_load=member.load, **common)
 
