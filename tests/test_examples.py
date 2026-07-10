@@ -585,3 +585,21 @@ def test_retaining_wall_example_catches_the_unconservative_shortcut():
     assert by_name["resultant-at-centroid deflection"].passed
     assert by_name["soldier post deflection"].status is CheckStatus.FAIL
     assert card.status is CheckStatus.FAIL
+
+
+def test_plenum_panel_example_hears_the_blower_only_through_the_modal_screen():
+    namespace = runpy.run_path(str(_EXAMPLES / "plenum_access_panel.py"))
+    card = namespace["screen_plenum_panel"]()
+    by_name = {e.name: e for e in card.entries}
+    # Statically the clipped panel is nowhere near working hard...
+    assert by_name["clipped rim (simply supported) plate bending"].passed
+    assert by_name["clipped rim (simply supported) flatness"].passed
+    # ...but its first mode sits inside the blade-pass band, and only the
+    # min_frequency floor sees it; welding the rim lifts the fundamental 1.9x.
+    resonance = by_name["clipped rim (simply supported) resonance"]
+    assert resonance.status is CheckStatus.FAIL
+    assert "fundamental 108.3 Hz vs required minimum 120.0 Hz" in resonance.detail
+    welded = by_name["welded rim (clamped) resonance"]
+    assert welded.passed
+    assert "fundamental 205.5 Hz" in welded.detail
+    assert card.status is CheckStatus.FAIL
