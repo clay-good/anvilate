@@ -447,6 +447,20 @@ def test_davit_example_flips_on_the_sheave_overhang_couple():
     assert card.status is CheckStatus.FAIL
 
 
+def test_fan_deck_example_rescues_resonance_with_end_fixity():
+    namespace = runpy.run_path(str(_EXAMPLES / "fan_deck_resonance.py"))
+    card = namespace["screen_fan_deck"]()
+    by_name = {e.name: e for e in card.entries}
+    # Simply supported the deck's first mode sits below the 1450 rpm fan;
+    # welding the ends swaps the eigenvalue pi^2 -> 22.37 and clears the
+    # 29 Hz floor with the same steel.
+    assert by_name["on clip angles (simply supported)"].status is CheckStatus.FAIL
+    assert "fundamental 17.0 Hz" in by_name["on clip angles (simply supported)"].detail
+    assert by_name["ends welded to headers (fixed-fixed)"].passed
+    assert "fundamental 38.6 Hz" in by_name["ends welded to headers (fixed-fixed)"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_retaining_wall_example_catches_the_unconservative_shortcut():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_post.py"))
     card = namespace["screen_retaining_post"]()
