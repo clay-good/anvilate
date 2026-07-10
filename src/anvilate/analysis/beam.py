@@ -33,6 +33,7 @@ __all__ = [
     "simply_supported_triangular_load",
     "fixed_fixed_center_load",
     "fixed_fixed_uniform_load",
+    "fixed_fixed_triangular_load",
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",
@@ -902,6 +903,51 @@ def fixed_fixed_uniform_load(
     moment = w * length_p**2 / 12
     stress = moment * c / inertia
     deflection = w * length_p**4 / (384 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def fixed_fixed_triangular_load(
+    *,
+    peak_distributed_load: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The fixed-fixed beam under a linearly varying (triangular) load (Roark).
+
+    A prismatic beam clamped at both ends over a span ``length``, carrying a load
+    that rises linearly from zero at one wall to ``peak_distributed_load`` w₀
+    (force per unit length) at the other — hydrostatic pressure on a stiffener
+    whose ends are welded in. The peak-end wall moment w₀·L²/20 governs (the
+    zero-end wall carries w₀·L²/30, the interior sagging peak only ≈w₀·L²/47).
+
+    Returns the peak bending stress at the loaded-end wall (σ = M·c/I with
+    M = w₀·L²/20) and the true maximum deflection from the elastic curve
+    v(ξ) = (2ξ² − 3ξ³ + ξ⁵)·w₀·L⁴/(120·E·I), ξ measured from the zero end —
+    its slope 5ξ³ − 9ξ + 4 factors as (ξ−1)(5ξ² + 5ξ − 4), putting the maximum
+    at ξ = (√105 − 5)/10 ≈ 0.525 (≈w₀·L⁴/(764·E·I)). Every argument is
+    dimension-checked.
+    """
+    _require(peak_distributed_load, "[force] / [length]", "peak_distributed_load")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w0 = peak_distributed_load.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w0 * length_p**2 / 20
+    stress = moment * c / inertia
+    xi = (sqrt(105) - 5) / 10
+    deflection = (2 * xi**2 - 3 * xi**3 + xi**5) * w0 * length_p**4 / (120 * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
