@@ -447,6 +447,23 @@ def test_davit_example_flips_on_the_sheave_overhang_couple():
     assert card.status is CheckStatus.FAIL
 
 
+def test_test_blind_example_sizes_the_plate_through_the_pack():
+    namespace = runpy.run_path(str(_EXAMPLES / "test_blind_sizing.py"))
+    card = namespace["screen_test_blind"]()
+    by_name = {e.name: e for e in card.entries}
+    # The gasketed (simply-supported) blind at 12 mm fails both screens;
+    # 16 mm passes both, each entry citing the plate theory it ran.
+    assert by_name["12 mm blind plate bending"].status is CheckStatus.FAIL
+    assert "safety factor 1.21" in by_name["12 mm blind plate bending"].detail
+    assert by_name["12 mm blind flatness"].status is CheckStatus.FAIL
+    assert "deflection 1.932" in by_name["12 mm blind flatness"].detail
+    assert by_name["16 mm blind plate bending"].passed
+    assert "safety factor 2.15" in by_name["16 mm blind plate bending"].detail
+    assert by_name["16 mm blind flatness"].passed
+    assert by_name["16 mm blind flatness"].reference == "Timoshenko plate theory"
+    assert card.status is CheckStatus.FAIL
+
+
 def test_machine_foot_example_catches_the_smeared_footprint():
     namespace = runpy.run_path(str(_EXAMPLES / "machine_foot_on_panel.py"))
     card = namespace["screen_machine_foot"]()
