@@ -447,6 +447,24 @@ def test_davit_example_flips_on_the_sheave_overhang_couple():
     assert card.status is CheckStatus.FAIL
 
 
+def test_manway_lid_example_flips_on_the_edge_fixity_assumption():
+    namespace = runpy.run_path(str(_EXAMPLES / "manway_lid_fixity.py"))
+    card = namespace["screen_manway_lid"]()
+    by_name = {e.name: e for e in card.entries}
+    # Clamped the lid screens comfortably; modeled honestly as gasketed
+    # (simply supported) it deflects (5+nu)/(1+nu) = 4.08x more and busts the
+    # gasket flatness limit, while strength still passes.
+    assert by_name["welded rim (clamped) bending"].passed
+    assert "safety factor 3.84" in by_name["welded rim (clamped) bending"].detail
+    assert by_name["welded rim (clamped) flatness"].passed
+    assert "deflection 0.771" in by_name["welded rim (clamped) flatness"].detail
+    assert by_name["gasketed rim (simply supported) bending"].passed
+    assert "safety factor 2.33" in by_name["gasketed rim (simply supported) bending"].detail
+    assert by_name["gasketed rim (simply supported) flatness"].status is CheckStatus.FAIL
+    assert "deflection 3.145" in by_name["gasketed rim (simply supported) flatness"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_access_cover_example_is_governed_by_stiffness_not_strength():
     namespace = runpy.run_path(str(_EXAMPLES / "access_cover_sizing.py"))
     card = namespace["screen_access_cover"]()
