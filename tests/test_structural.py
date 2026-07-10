@@ -722,8 +722,11 @@ def test_overhang_member_dispatches_tip_and_overhang_loads():
     deflection = next(e for e in tip.entries if "deflection" in e.name)
     assert deflection.status is CheckStatus.FAIL
     assert "4.688 mm" in deflection.detail
-    # No shear entry: the overhang is not in the peak-shear table.
-    assert not any("shear" in e.name for e in tip.entries)
+    # The overhang carries its whole tip load in shear at the inner support
+    # (V = F): tau = 1.5*100/200 = 0.75 MPa — trivially passing here, but on
+    # the card rather than silently absent.
+    shear = next(e for e in tip.entries if "shear" in e.name)
+    assert shear.passed
     # The same overhang under 1 N/mm on the overhang only: w*c^2/2 -> 93.75
     # MPa -> SF 2.67 (a distinct dispatch from the tip point load).
     udl = screen_beam_member(

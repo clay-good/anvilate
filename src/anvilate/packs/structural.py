@@ -305,8 +305,9 @@ class BeamMember(BaseModel):
     An ``overhang`` member is a simply-supported back span of ``length`` whose
     section runs ``overhang_length`` past one support: a ``point`` load sits
     at the free tip and a ``distributed`` one covers the overhang only (the
-    dock-edge cases); other load types, positions, patches, and the resonance
-    screen are not encoded for it.
+    dock-edge cases; the shear entry uses the full overhang reaction); other
+    load types, positions, patches, and the resonance screen are not encoded
+    for it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -577,7 +578,13 @@ def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntr
         or member.loaded_length is not None
         or member.triangle_mirrored
     )
-    factor = _PEAK_SHEAR_FACTORS.get((member.support, member.load_type))
+    if member.support is Support.OVERHANG:
+        # The overhang carries its whole load in shear at the inner support:
+        # V = F for a tip point load, w*c for an overhang-only UDL.
+        factor, shear_length = 1.0, member.overhang_length
+    else:
+        factor = _PEAK_SHEAR_FACTORS.get((member.support, member.load_type))
+        shear_length = member.length
     if off_default or factor is None:
         return None
     if member.section.shear_form_factor is None:
@@ -591,7 +598,7 @@ def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntr
         peak_shear = Quantity(magnitude=factor * member.load.to("N").magnitude, unit="N")
     else:
         peak_shear = Quantity(
-            magnitude=factor * member.load.to("N/mm").magnitude * member.length.to("mm").magnitude,
+            magnitude=factor * member.load.to("N/mm").magnitude * shear_length.to("mm").magnitude,
             unit="N",
         )
     shear = max_transverse_shear_stress(
