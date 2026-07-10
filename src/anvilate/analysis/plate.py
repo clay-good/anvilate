@@ -13,7 +13,12 @@ conditions:
   fixed-fixed beam and whose interior values were confirmed by an independent
   finite-difference biharmonic solve;
 * **circle, simply supported and clamped** — the exact Timoshenko polynomial
-  closed forms.
+  closed forms;
+* **annulus (a circle with a free-edged concentric hole), outer edge simply
+  supported or clamped** — the exact axisymmetric general solution
+  w = q·r⁴/64D + C₁ + C₂·r² + C₃·ln r + C₄·r²·ln r with the constants solved
+  from the boundary conditions at runtime (verified against an independent
+  finite-difference solve of the plate ODE).
 
 These are screening checks: linear-elastic thin-plate theory, small
 deflections (w ≲ t/2), uniform pressure. Every input and output is a
@@ -22,7 +27,7 @@ dimension-checked :class:`~anvilate.units.Quantity`.
 
 from __future__ import annotations
 
-from math import pi, sin
+from math import log, pi, sin
 
 from pydantic import BaseModel, ConfigDict
 
@@ -35,6 +40,8 @@ __all__ = [
     "clamped_plate_uniform_load",
     "simply_supported_circular_plate_uniform_load",
     "clamped_circular_plate_uniform_load",
+    "simply_supported_annular_plate_uniform_load",
+    "clamped_annular_plate_uniform_load",
 ]
 
 # Odd-harmonic cap for the Navier series. Deflection terms fall off as 1/(mn)·
@@ -319,6 +326,141 @@ def clamped_circular_plate_uniform_load(
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
+    )
+
+
+def _annular_plate_uniform_load(
+    *,
+    pressure: Quantity,
+    diameter: Quantity,
+    hole_diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float,
+    clamped: bool,
+) -> PlateBendingResult:
+    """The exact axisymmetric annular-plate solution, outer edge SS or clamped.
+
+    General solution w = q·r⁴/64D + C₁ + C₂·r² + C₃·ln(r/a) + C₄·r²·ln(r/a).
+    Vertical equilibrium at the free inner edge (the Kirchhoff shear of the
+    C₄ term is −4D·C₄/r) pins C₄ = −q·b²/8D; Mr(b) = 0 and the outer-edge
+    condition give C₂ and C₃ as a 2×2 solve; w(a) = 0 gives C₁. Peak stress
+    and deflection are then scanned over the radius.
+    """
+    q, a, t, rigidity = _circular_plate_inputs(
+        pressure, diameter, thickness, elastic_modulus, poisson_ratio
+    )
+    _require(hole_diameter, "[length]", "hole_diameter")
+    b = hole_diameter.to("mm").magnitude / 2
+    if not 0 < b < a:
+        raise ValueError(f"the hole ({hole_diameter}) must be smaller than the plate ({diameter})")
+    nu = poisson_ratio
+    c4 = -q * b**2 / (8 * rigidity)
+
+    # Mr ∝ w'' + ν·w'/r = P(r) + 2(1+ν)·C₂ + (ν−1)/r²·C₃, with P the
+    # particular-plus-C₄ part.
+    def p_term(r: float) -> float:
+        ln = log(r / a)
+        return q * r**2 * (3 + nu) / (16 * rigidity) + c4 * (2 * (1 + nu) * ln + 3 + nu)
+
+    # Rows (coef_C2, coef_C3, rhs): the free inner edge, then the outer edge.
+    a11, a12, r1 = 2 * (1 + nu), (nu - 1) / b**2, -p_term(b)
+    if clamped:
+        # w'(a) = 0: q·a³/16D + 2·C₂·a + C₃/a + C₄·a = 0
+        a21, a22, r2 = 2 * a, 1 / a, -(q * a**3 / (16 * rigidity) + c4 * a)
+    else:
+        a21, a22, r2 = 2 * (1 + nu), (nu - 1) / a**2, -p_term(a)
+    det = a11 * a22 - a12 * a21
+    c2 = (r1 * a22 - a12 * r2) / det
+    c3 = (a11 * r2 - r1 * a21) / det
+    c1 = -(q * a**4 / (64 * rigidity) + c2 * a**2)  # w(a) = 0; ln(a/a) = 0
+
+    deflection = 0.0
+    moment = 0.0
+    steps = 1000
+    for i in range(steps + 1):
+        r = b + (a - b) * i / steps
+        ln = log(r / a)
+        w = q * r**4 / (64 * rigidity) + c1 + c2 * r**2 + c3 * ln + c4 * r**2 * ln
+        wp = q * r**3 / (16 * rigidity) + 2 * c2 * r + c3 / r + c4 * (2 * r * ln + r)
+        wpp = 3 * q * r**2 / (16 * rigidity) + 2 * c2 - c3 / r**2 + c4 * (2 * ln + 3)
+        m_r = -rigidity * (wpp + nu * wp / r)
+        m_t = -rigidity * (nu * wpp + wp / r)
+        deflection = max(deflection, abs(w))
+        moment = max(moment, abs(m_r), abs(m_t))
+
+    stress = 6 * moment / t**2
+    return PlateBendingResult(
+        max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
+        max_deflection=Quantity(magnitude=deflection, unit="mm"),
+    )
+
+
+def simply_supported_annular_plate_uniform_load(
+    *,
+    pressure: Quantity,
+    diameter: Quantity,
+    hole_diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> PlateBendingResult:
+    """The simply-supported annular plate (free-edged centre hole) under pressure.
+
+    A round cover of ``diameter`` 2a with a concentric free-edged hole of
+    ``hole_diameter`` 2b — a blind with a sight port, a seal gland, a spacer
+    ring — simply supported at its rim, carrying uniform ``pressure`` q over
+    the annulus. Solved exactly at runtime from the axisymmetric general
+    solution (verified against an independent finite-difference solve). The
+    peak stress is the TANGENTIAL bending at the hole edge — cutting the hole
+    concentrates hoop bending there (1.77× the solid plate's centre stress at
+    b/a = 0.2), and shrinking the hole does not shed it: the deflection
+    recovers the solid plate's but the hole-edge stress concentration
+    persists, which is why the hole must be declared. Thin-plate screening
+    limits apply (trustworthy while w ≲ t/2). Every quantity argument is
+    dimension-checked; ν must lie in (0, 0.5).
+    """
+    return _annular_plate_uniform_load(
+        pressure=pressure,
+        diameter=diameter,
+        hole_diameter=hole_diameter,
+        thickness=thickness,
+        elastic_modulus=elastic_modulus,
+        poisson_ratio=poisson_ratio,
+        clamped=False,
+    )
+
+
+def clamped_annular_plate_uniform_load(
+    *,
+    pressure: Quantity,
+    diameter: Quantity,
+    hole_diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> PlateBendingResult:
+    """The clamped-rim annular plate (free-edged centre hole) under pressure.
+
+    A round plate of ``diameter`` 2a with a concentric free-edged hole of
+    ``hole_diameter`` 2b, its outer rim built in — welded all around, or
+    bolted stiffly enough to hold the edge slope — under uniform ``pressure``
+    q over the annulus. Solved exactly at runtime from the axisymmetric
+    general solution (verified against an independent finite-difference
+    solve). Unlike the simply-supported annulus, the governing stress stays
+    the RADIAL bending at the clamped rim (the weld or bolt circle carries
+    it); the hole mainly costs deflection. Thin-plate screening limits apply
+    (trustworthy while w ≲ t/2). Every quantity argument is
+    dimension-checked; ν must lie in (0, 0.5).
+    """
+    return _annular_plate_uniform_load(
+        pressure=pressure,
+        diameter=diameter,
+        hole_diameter=hole_diameter,
+        thickness=thickness,
+        elastic_modulus=elastic_modulus,
+        poisson_ratio=poisson_ratio,
+        clamped=True,
     )
 
 

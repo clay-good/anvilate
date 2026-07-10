@@ -27,6 +27,7 @@ from anvilate.analysis import (
     cantilever_uniform_load,
     circular_area,
     circular_second_moment,
+    clamped_annular_plate_uniform_load,
     clamped_circular_plate_fundamental_frequency,
     clamped_circular_plate_uniform_load,
     clamped_plate_fundamental_frequency,
@@ -82,6 +83,7 @@ from anvilate.analysis import (
     shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
+    simply_supported_annular_plate_uniform_load,
     simply_supported_center_load,
     simply_supported_center_patch_load,
     simply_supported_circular_plate_fundamental_frequency,
@@ -3245,6 +3247,61 @@ def test_plate_rejects_bad_inputs():
         simply_supported_plate_uniform_load(pressure=_q("50 N"), **kw)
     with pytest.raises(ValueError, match="poisson_ratio must lie in"):
         simply_supported_plate_uniform_load(pressure=_q("50 kPa"), poisson_ratio=0.6, **kw)
+
+
+_ANNULAR_KW = {
+    "pressure": _q("50 kPa"),
+    "diameter": _q("500 mm"),
+    "thickness": _q("6 mm"),
+    "elastic_modulus": _q("200 GPa"),
+}
+
+
+def test_annular_plate_matches_the_fd_verified_worked_case():
+    # O500 x 6 (E = 200 GPa) at 50 kPa with a O100 free-edged hole (b/a = 0.2),
+    # both verified against an independent finite-difference solve of the
+    # axisymmetric plate ODE (w to 1e-4, moments to <1%). Simply supported the
+    # governing moment is the TANGENTIAL bending at the hole edge: 190.3 MPa
+    # and 3.677 mm — 1.77x the solid plate's stress. Clamped, the rim radial
+    # moment still governs (63.3 MPa, close to the solid rim's 65.1) and the
+    # hole mainly costs deflection.
+    ss = simply_supported_annular_plate_uniform_load(hole_diameter=_q("100 mm"), **_ANNULAR_KW)
+    assert ss.max_bending_stress.to("MPa").magnitude == pytest.approx(190.32, rel=1e-3)
+    assert ss.max_deflection.to("mm").magnitude == pytest.approx(3.677, rel=1e-3)
+    clamped = clamped_annular_plate_uniform_load(hole_diameter=_q("100 mm"), **_ANNULAR_KW)
+    assert clamped.max_bending_stress.to("MPa").magnitude == pytest.approx(63.34, rel=1e-3)
+    assert clamped.max_deflection.to("mm").magnitude == pytest.approx(0.7925, rel=1e-3)
+    solid_rim = 3 * 0.05 * 250**2 / (4 * 6**2)
+    assert clamped.max_bending_stress.to("MPa").magnitude < solid_rim
+
+
+def test_annular_plate_recovers_the_solid_deflection_but_doubles_the_stress():
+    # Shrinking the hole recovers the solid plate's deflection, but the
+    # hole-edge hoop moment approaches exactly TWICE the solid centre stress —
+    # the equibiaxial small-hole bending concentration. A tiny undeclared
+    # hole is a 2x stress the solid-plate screen never sees.
+    solid = simply_supported_circular_plate_uniform_load(**_ANNULAR_KW)
+    tiny = simply_supported_annular_plate_uniform_load(hole_diameter=_q("0.5 mm"), **_ANNULAR_KW)
+    assert tiny.max_deflection.to("mm").magnitude == pytest.approx(
+        solid.max_deflection.to("mm").magnitude, rel=1e-3
+    )
+    ratio = (
+        tiny.max_bending_stress.to("MPa").magnitude / solid.max_bending_stress.to("MPa").magnitude
+    )
+    assert ratio == pytest.approx(2.0, rel=1e-3)
+
+
+def test_annular_plate_rejects_bad_holes():
+    with pytest.raises(ValueError, match="must be smaller than the plate"):
+        simply_supported_annular_plate_uniform_load(hole_diameter=_q("500 mm"), **_ANNULAR_KW)
+    with pytest.raises(ValueError, match="must be smaller than the plate"):
+        clamped_annular_plate_uniform_load(hole_diameter=_q("0 mm"), **_ANNULAR_KW)
+    with pytest.raises(ValueError, match="hole_diameter must be a"):
+        simply_supported_annular_plate_uniform_load(hole_diameter=_q("100 kPa"), **_ANNULAR_KW)
+    with pytest.raises(ValueError, match="poisson_ratio must lie in"):
+        clamped_annular_plate_uniform_load(
+            hole_diameter=_q("100 mm"), poisson_ratio=0.7, **_ANNULAR_KW
+        )
 
 
 def test_torsional_natural_frequency_matches_worked_example():
