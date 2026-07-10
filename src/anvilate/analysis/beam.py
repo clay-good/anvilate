@@ -27,6 +27,7 @@ __all__ = [
     "cantilever_partial_uniform_load",
     "cantilever_center_patch_load",
     "cantilever_triangular_load",
+    "cantilever_triangular_load_peak_at_tip",
     "simply_supported_center_load",
     "simply_supported_offset_load",
     "simply_supported_uniform_load",
@@ -448,6 +449,51 @@ def cantilever_triangular_load(
     moment = w0 * length_p**2 / 6
     stress = moment * c / inertia
     deflection = w0 * length_p**4 / (30 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def cantilever_triangular_load_peak_at_tip(
+    *,
+    peak_distributed_load: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The cantilever under a triangular load peaking at the free end (Roark).
+
+    The mirror orientation of :func:`cantilever_triangular_load`: the load
+    rises linearly from zero at the wall to ``peak_distributed_load`` w₀
+    (force per unit length) at the tip — drifted snow piled against the edge
+    parapet of a cantilevered canopy. The resultant w₀·L/2 acts at 2·L/3 from
+    the wall, so the wall moment w₀·L²/3 is TWICE the peak-at-wall
+    orientation's w₀·L²/6 — assuming the milder orientation is unconservative
+    by a factor of two. Returns the peak bending stress at the fixed end
+    (σ = M·c/I with M = w₀·L²/3) and the free-end deflection
+    (δ = 11·w₀·L⁴/(120·E·I)). Both maxima sit where the mirror's do, so the
+    two orientations superpose exactly to the full-UDL cantilever in stress
+    AND deflection (1/6 + 1/3 = 1/2; 1/30 + 11/120 = 1/8). Every argument is
+    dimension-checked; verified against an independent numeric integration of
+    the beam ODE.
+    """
+    _require(peak_distributed_load, "[force] / [length]", "peak_distributed_load")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w0 = peak_distributed_load.pint
+    length_p = length.pint
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = w0 * length_p**2 / 3
+    stress = moment * c / inertia
+    deflection = 11 * w0 * length_p**4 / (120 * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),

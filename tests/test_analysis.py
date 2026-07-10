@@ -18,6 +18,7 @@ from anvilate.analysis import (
     cantilever_offset_load,
     cantilever_partial_uniform_load,
     cantilever_triangular_load,
+    cantilever_triangular_load_peak_at_tip,
     cantilever_uniform_load,
     circular_area,
     circular_second_moment,
@@ -478,6 +479,61 @@ def test_cantilever_triangular_stress_matches_the_resultant_at_the_centroid():
     assert tri.max_deflection.to("mm").magnitude != pytest.approx(
         resultant.max_deflection.to("mm").magnitude, rel=1e-3
     )
+
+
+def test_cantilever_triangular_load_peak_at_tip_matches_worked_example():
+    # 10 N/mm peaking at the TIP of a 1 m, 80x120x5 box (I = 3,755,833 mm^4,
+    # c = 60): M_max = w0*L^2/3 = 3,333,333 N*mm -> sigma = M*c/I = 53.25 MPa
+    # (TWICE the peak-at-wall orientation); delta = 11*w0*L^4/(120*E*I)
+    # = 1.2203 mm at the free end (verified against a numeric double-integration
+    # of the beam ODE).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = cantilever_triangular_load_peak_at_tip(
+        peak_distributed_load=_q("10 N/mm"),
+        length=_q("1 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(53.2505, rel=1e-4)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(1.220324, rel=1e-4)
+
+
+def test_cantilever_triangle_orientations_superpose_to_the_full_udl():
+    # The two orientations sum to a full UDL, and on a cantilever BOTH maxima sit
+    # at the same places (moment at the wall, deflection at the tip), so stress
+    # AND deflection superpose exactly: 1/6 + 1/3 = 1/2 and 1/30 + 11/120 = 1/8.
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    wall_peak = cantilever_triangular_load(peak_distributed_load=_q("1 N/mm"), **kw)
+    tip_peak = cantilever_triangular_load_peak_at_tip(peak_distributed_load=_q("1 N/mm"), **kw)
+    udl = cantilever_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    for attribute, unit in (("max_bending_stress", "MPa"), ("max_deflection", "mm")):
+        combined = (
+            getattr(wall_peak, attribute).to(unit).magnitude
+            + getattr(tip_peak, attribute).to(unit).magnitude
+        )
+        assert combined == pytest.approx(getattr(udl, attribute).to(unit).magnitude, rel=1e-12)
+    assert tip_peak.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        2 * wall_peak.max_bending_stress.to("MPa").magnitude, rel=1e-12
+    )
+
+
+def test_cantilever_triangular_load_peak_at_tip_rejects_point_load_units():
+    with pytest.raises(ValueError, match="peak_distributed_load must be a"):
+        cantilever_triangular_load_peak_at_tip(
+            peak_distributed_load=_q("100 N"),  # a force, not force-per-length
+            length=_q("500 mm"),
+            second_moment=rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+            extreme_fibre=_q("5 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_cantilever_triangular_load_is_milder_than_both_bracketing_uniform_loads():
