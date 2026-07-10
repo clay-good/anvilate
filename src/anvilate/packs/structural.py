@@ -29,6 +29,7 @@ from ..analysis import (
     cantilever_center_patch_load,
     cantilever_end_load,
     cantilever_end_moment,
+    cantilever_fundamental_frequency,
     cantilever_offset_load,
     cantilever_offset_moment,
     cantilever_partial_uniform_load,
@@ -40,6 +41,7 @@ from ..analysis import (
     euler_critical_stress,
     fixed_fixed_center_load,
     fixed_fixed_center_patch_load,
+    fixed_fixed_fundamental_frequency,
     fixed_fixed_offset_load,
     fixed_fixed_partial_uniform_load,
     fixed_fixed_triangular_load,
@@ -47,15 +49,18 @@ from ..analysis import (
     fixed_pinned_center_load,
     fixed_pinned_center_patch_load,
     fixed_pinned_end_moment,
+    fixed_pinned_fundamental_frequency,
     fixed_pinned_offset_load,
     fixed_pinned_partial_uniform_load,
     fixed_pinned_triangular_load,
     fixed_pinned_triangular_load_peak_at_prop,
     fixed_pinned_uniform_load,
+    frequency_scorecard,
     johnson_critical_stress,
     simply_supported_center_load,
     simply_supported_center_patch_load,
     simply_supported_end_moment,
+    simply_supported_fundamental_frequency,
     simply_supported_offset_load,
     simply_supported_partial_uniform_load,
     simply_supported_symmetric_point_loads,
@@ -216,6 +221,14 @@ _MOMENT_CHECKS = {
     Support.SIMPLY_SUPPORTED: simply_supported_end_moment,
     Support.FIXED_PINNED: fixed_pinned_end_moment,
 }
+# Distributed-mass fundamental frequency per support (exact Euler-Bernoulli
+# eigenvalues), for the optional resonance screen.
+_MODAL_CHECKS = {
+    Support.CANTILEVER: cantilever_fundamental_frequency,
+    Support.SIMPLY_SUPPORTED: simply_supported_fundamental_frequency,
+    Support.FIXED_FIXED: fixed_fixed_fundamental_frequency,
+    Support.FIXED_PINNED: fixed_pinned_fundamental_frequency,
+}
 
 
 class BeamMember(BaseModel):
@@ -251,6 +264,10 @@ class BeamMember(BaseModel):
     end-for-end so it peaks away from the wall — at the tip of a cantilever or
     the prop of a fixed-pinned member, the only supports where the orientation
     is distinct (simply-supported and fixed-fixed members are symmetric).
+    Declaring a ``mass_per_length`` (self-weight plus smeared attachments)
+    adds a resonance entry — the support's exact distributed-mass fundamental
+    frequency screened against ``min_frequency``. The floor requires the mass;
+    a declared mass with no floor surfaces NOT_EVALUATED, never a silent pass.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -266,6 +283,8 @@ class BeamMember(BaseModel):
     load_position: Quantity | None = None  # a point load may sit off mid-span
     pair_offset: Quantity | None = None  # a point load may split into a symmetric pair
     loaded_length: Quantity | None = None  # a distributed load may cover a patch
+    mass_per_length: Quantity | None = None  # enables the resonance screen
+    min_frequency: Quantity | None = None  # the resonance floor (needs mass_per_length)
     patch_centered: bool = False  # the patch may sit at mid-span instead of at a support
     triangle_mirrored: bool = False  # a triangle may peak at the tip/prop instead of the wall
 
@@ -337,6 +356,22 @@ class BeamMember(BaseModel):
                 )
         if self.patch_centered and self.loaded_length is None:
             raise ValueError("patch_centered requires a loaded_length")
+        if self.mass_per_length is not None and not self.mass_per_length.has_dimension(
+            "[mass] / [length]"
+        ):
+            raise ValueError(
+                f"mass_per_length must be a [mass] / [length] quantity; got {self.mass_per_length}"
+            )
+        if self.min_frequency is not None:
+            if not self.min_frequency.has_dimension("[frequency]"):
+                raise ValueError(
+                    f"min_frequency must be a [frequency] quantity; got {self.min_frequency}"
+                )
+            if self.mass_per_length is None:
+                raise ValueError(
+                    "min_frequency requires a mass_per_length — the fundamental "
+                    "cannot be computed without the member's distributed mass"
+                )
         if self.triangle_mirrored and (
             self.load_type is not LoadType.TRIANGULAR
             or self.support not in _MIRRORED_TRIANGULAR_CHECKS
@@ -361,7 +396,9 @@ def screen_beam_member(
     beam check, then screens the peak bending stress against the material's yield
     strength (at ``required_safety_factor``) and, when a limit is set, the peak
     deflection against it. The deflection limit is the ``max_deflection`` argument,
-    or the member's own ``deflection_limit`` when the argument is omitted.
+    or the member's own ``deflection_limit`` when the argument is omitted. A
+    member declaring a ``mass_per_length`` also gets its distributed-mass
+    fundamental frequency screened against its ``min_frequency`` floor.
     ``materials`` defaults to the bundled database; an unknown material id raises
     its lookup error.
     """
@@ -417,6 +454,20 @@ def screen_beam_member(
                 deflection=result.max_deflection,
                 limit=max_deflection,
             ).model_copy(update={"reference": _CLAUSE_DEFLECTION})
+        )
+    if member.mass_per_length is not None:
+        fundamental = _MODAL_CHECKS[member.support](
+            mass_per_length=member.mass_per_length,
+            length=member.length,
+            second_moment=member.section.second_moment,
+            elastic_modulus=record.elastic_modulus.quantity,
+        )
+        entries.append(
+            frequency_scorecard(
+                f"{member.name} resonance",
+                frequency=fundamental,
+                min_frequency=member.min_frequency,
+            )
         )
     return Scorecard(entries=tuple(entries))
 

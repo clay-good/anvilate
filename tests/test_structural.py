@@ -630,6 +630,76 @@ def test_pair_offset_rejects_other_supports_load_types_and_load_position():
         )
 
 
+def test_mass_per_length_adds_a_resonance_entry():
+    # The 20x10 steel bar carries 1.57 kg/m: simply supported over 500 mm its
+    # exact first mode is 91.6 Hz (clears a 50 Hz floor); the same bar as a
+    # cantilever drops to 32.6 Hz (lambda^2 3.516 vs pi^2) and fails it —
+    # distinct modal dispatch per support.
+    common = {
+        "name": "beam",
+        "section": _section(),
+        "length": _q("500 mm"),
+        "load": _q("100 N"),
+        "load_type": LoadType.POINT,
+        "material": "ASTM-A36",
+        "mass_per_length": _q("1.57 kg/m"),
+        "min_frequency": _q("50 Hz"),
+    }
+    ss = screen_beam_member(
+        BeamMember(support=Support.SIMPLY_SUPPORTED, **common), required_safety_factor=1.5
+    )
+    cant = screen_beam_member(
+        BeamMember(support=Support.CANTILEVER, **common), required_safety_factor=1.5
+    )
+    ss_entry = next(e for e in ss.entries if "resonance" in e.name)
+    assert ss_entry.passed
+    assert "fundamental 91.6 Hz" in ss_entry.detail
+    cant_entry = next(e for e in cant.entries if "resonance" in e.name)
+    assert cant_entry.status is CheckStatus.FAIL
+    assert "fundamental 32.6 Hz" in cant_entry.detail
+
+
+def test_mass_without_a_floor_is_not_evaluated_never_silent():
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("100 N"),
+        load_type=LoadType.POINT,
+        material="ASTM-A36",
+        mass_per_length=_q("1.57 kg/m"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    entry = next(e for e in card.entries if "resonance" in e.name)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+
+
+def test_min_frequency_requires_the_mass():
+    with pytest.raises(ValidationError, match="min_frequency requires a mass_per_length"):
+        BeamMember(
+            name="beam",
+            section=_section(),
+            length=_q("500 mm"),
+            support=Support.SIMPLY_SUPPORTED,
+            load=_q("100 N"),
+            load_type=LoadType.POINT,
+            material="ASTM-A36",
+            min_frequency=_q("50 Hz"),
+        )
+    with pytest.raises(ValidationError, match="mass_per_length must be a"):
+        BeamMember(
+            name="beam",
+            section=_section(),
+            length=_q("500 mm"),
+            support=Support.SIMPLY_SUPPORTED,
+            load=_q("100 N"),
+            load_type=LoadType.POINT,
+            material="ASTM-A36",
+            mass_per_length=_q("5 kg"),  # a lumped mass, not a line density
+        )
+
+
 def test_moment_load_dispatches_on_the_cantilever_member():
     # A 50 N*m couple at the tip: sigma = M*c/I = 150 MPa everywhere -> SF
     # 250/150 = 1.67, and the tip deflection M*L^2/2EI = 18.75 mm busts a 10 mm
