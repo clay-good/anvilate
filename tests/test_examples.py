@@ -447,6 +447,22 @@ def test_davit_example_flips_on_the_sheave_overhang_couple():
     assert card.status is CheckStatus.FAIL
 
 
+def test_access_cover_example_is_governed_by_stiffness_not_strength():
+    namespace = runpy.run_path(str(_EXAMPLES / "access_cover_sizing.py"))
+    card = namespace["screen_access_cover"]()
+    by_name = {e.name: e for e in card.entries}
+    # 6 mm clears the strength screen (SF 2.31) but bows past b/250; 8 mm
+    # fixes it — stress falls with t^2 but deflection with t^3.
+    assert by_name["6 mm cover bending"].passed
+    assert "safety factor 2.31" in by_name["6 mm cover bending"].detail
+    assert by_name["6 mm cover flatness"].status is CheckStatus.FAIL
+    assert "deflection 2.499" in by_name["6 mm cover flatness"].detail
+    assert by_name["8 mm cover bending"].passed
+    assert by_name["8 mm cover flatness"].passed
+    assert "deflection 1.054" in by_name["8 mm cover flatness"].detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_flywheel_example_moves_the_twist_mode_with_shaft_diameter():
     namespace = runpy.run_path(str(_EXAMPLES / "flywheel_torsional_mode.py"))
     card = namespace["screen_flywheel_drive"]()

@@ -48,6 +48,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 
 | Example | What it shows |
 |---|---|
+| `access_cover_sizing.py` | A 600 × 400 mm access cover under 50 kPa, solved by the exact Navier plate series: 6 mm passes strength (SF 2.31) but bows past b/250 — stress falls with t² and deflection with t³, so plate sizing lands on stiffness and the strength-sized cover is a gauge too thin. |
 | `bolted_joint_check.py` | A bolted lap joint: preload from torque, plate bearing, and bolt shear, all from the materials DB. |
 | `flood_barrier_stiffener.py` | A flood-barrier stiffener under hydrostatic pressure: smearing the peak as a uniform load fails bending and deflection, while the actual triangular load (w₀·L²/(9·√3)) passes both — margin the lazy screen throws away. |
 | `genset_on_two_rails.py` | A 10 kN genset on a floor beam, lumped at mid-span vs declared on its two skid rails (four-point bending): the rails carry a constant M = F·a, 2/3 of the lumped moment, flipping both the strength and L/240 screens from FAIL to PASS. |
