@@ -28,6 +28,7 @@ __all__ = [
     "simply_supported_center_load",
     "simply_supported_offset_load",
     "simply_supported_uniform_load",
+    "simply_supported_partial_uniform_load",
     "simply_supported_triangular_load",
     "fixed_fixed_center_load",
     "fixed_fixed_uniform_load",
@@ -462,6 +463,84 @@ def simply_supported_uniform_load(
     moment = w * length_p**2 / 8
     stress = moment * c / inertia
     deflection = 5 * w * length_p**4 / (384 * e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
+def simply_supported_partial_uniform_load(
+    *,
+    distributed_load: Quantity,
+    loaded_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The simply-supported beam uniformly loaded over part of its span (AISC).
+
+    A prismatic beam simply supported over a span ``length``, carrying a uniform
+    ``distributed_load`` w (force per unit length) over ``loaded_length`` a
+    measured from one support, unloaded beyond — a pallet stack parked at one end
+    of a floor beam, drifted snow against a parapet (AISC Table 3-23 case 24).
+    Degenerates exactly to :func:`simply_supported_uniform_load` at a = L.
+
+    Returns the peak bending stress where the shear crosses zero inside the
+    loaded region (σ = M·c/I with M = R₁²/(2·w), R₁ = w·a·(2L−a)/(2L)) and the
+    true maximum deflection from the piecewise elastic curve — its stationary
+    point is closed-form in the unloaded region and bisected to machine
+    precision from the analytic slope polynomial in the loaded one (no FEA).
+    Every argument is dimension-checked.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(loaded_length, "[length]", "loaded_length")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    loaded = loaded_length.pint.to(length_p.units)
+    alpha = loaded.magnitude / length_p.magnitude  # a/L
+    if not 0 < alpha <= 1:
+        raise ValueError(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    reaction = w * loaded * (2 * length_p - loaded) / (2 * length_p)
+    moment = reaction**2 / (2 * w)
+    stress = moment * c / inertia
+
+    # Dimensionless elastic curve (ξ = x/L from the loaded-end support, deflection
+    # in units of w·L⁴/(24·E·I)):
+    #   loaded (ξ < α):   δ = ξ·(α²(2−α)² − 2α(2−α)ξ² + ξ³)
+    #   unloaded (ξ ≥ α): δ = α²(1−ξ)(4ξ − 2ξ² − α²)
+    # The unloaded-region slope 6ξ² − 12ξ + 4 + α² vanishes at
+    # ξ* = 1 − √((2 − α²)/6); when the slope is already negative at ξ = α
+    # (7α² − 12α + 4 < 0), the maximum sits in the loaded region instead, where
+    # the slope polynomial 4ξ³ − 6α(2−α)ξ² + α²(2−α)² is bisected on (0, α).
+    if 7 * alpha**2 - 12 * alpha + 4 > 0:
+        xi = 1 - sqrt((2 - alpha**2) / 6)
+        deflection_norm = alpha**2 * (1 - xi) * (4 * xi - 2 * xi**2 - alpha**2)
+    else:
+        lo, hi = 0.0, alpha
+        for _ in range(100):
+            mid = (lo + hi) / 2
+            slope = 4 * mid**3 - 6 * alpha * (2 - alpha) * mid**2 + alpha**2 * (2 - alpha) ** 2
+            if slope > 0:
+                lo = mid
+            else:
+                hi = mid
+        xi = (lo + hi) / 2
+        deflection_norm = xi * (
+            alpha**2 * (2 - alpha) ** 2 - 2 * alpha * (2 - alpha) * xi**2 + xi**3
+        )
+    deflection = deflection_norm * w * length_p**4 / (24 * e * inertia)
     return BeamBendingResult(
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
