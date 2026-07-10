@@ -164,3 +164,37 @@ def test_circular_resonance_dispatches_by_edge():
 def test_min_frequency_must_be_a_frequency():
     with pytest.raises(ValidationError, match="min_frequency must be a"):
         _rect(min_frequency=_q("120 mm"))
+
+
+def test_hole_dispatches_the_annular_check():
+    # The O400 gasketed blind that passes a 6 bar hydro test at 16 mm
+    # (SF 2.15) grows a O80 sight port: the port sheds its share of the
+    # pressure, but the hole-edge hoop concentration grows the governing
+    # stress 1.77x — SF 1.22, FAIL — and the entry cites the annular form.
+    solid = screen_cover_plate(
+        _round(thickness=_q("16 mm"), pressure=_q("0.6 MPa"), diameter=_q("400 mm")),
+        required_safety_factor=1.5,
+    )
+    assert solid.entries[0].passed
+    assert "safety factor 2.15" in solid.entries[0].detail
+    ported = screen_cover_plate(
+        _round(
+            thickness=_q("16 mm"),
+            pressure=_q("0.6 MPa"),
+            diameter=_q("400 mm"),
+            hole_diameter=_q("80 mm"),
+        ),
+        required_safety_factor=1.5,
+    )
+    assert ported.entries[0].status is CheckStatus.FAIL
+    assert "safety factor 1.22" in ported.entries[0].detail
+    assert ported.entries[0].reference == "Kirchhoff plate theory (axisymmetric closed form)"
+
+
+def test_hole_is_restricted_to_the_encoded_cases():
+    with pytest.raises(ValidationError, match="only encoded for a circular cover"):
+        _rect(hole_diameter=_q("80 mm"))
+    with pytest.raises(ValidationError, match="not encoded for a holed cover"):
+        _round(hole_diameter=_q("80 mm"), min_frequency=_q("50 Hz"))
+    with pytest.raises(ValidationError, match="hole_diameter must be a"):
+        _round(hole_diameter=_q("80 kPa"))

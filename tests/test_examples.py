@@ -603,3 +603,23 @@ def test_plenum_panel_example_hears_the_blower_only_through_the_modal_screen():
     assert welded.passed
     assert "fundamental 205.5 Hz" in welded.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_sight_port_blind_example_fails_the_passing_blind_on_the_declared_hole():
+    namespace = runpy.run_path(str(_EXAMPLES / "sight_port_blind.py"))
+    card = namespace["screen_sight_port_blind"]()
+    by_name = {e.name: e for e in card.entries}
+    # The solid 16 mm blind passes the hydro screen...
+    assert by_name["16 mm solid blind plate bending"].passed
+    assert "safety factor 2.15" in by_name["16 mm solid blind plate bending"].detail
+    # ...but the declared O80 sight port concentrates hoop bending at its free
+    # edge (1.77x) and the same blind fails strength.
+    ported = by_name["16 mm blind with port plate bending"]
+    assert ported.status is CheckStatus.FAIL
+    assert "safety factor 1.22" in ported.detail
+    assert by_name["16 mm blind with port flatness"].passed
+    # One size up clears both screens again.
+    assert by_name["20 mm blind with port plate bending"].passed
+    assert "safety factor 1.90" in by_name["20 mm blind with port plate bending"].detail
+    assert by_name["20 mm blind with port flatness"].passed
+    assert card.status is CheckStatus.FAIL

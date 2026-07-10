@@ -21,12 +21,14 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..analysis import (
+    clamped_annular_plate_uniform_load,
     clamped_circular_plate_fundamental_frequency,
     clamped_circular_plate_uniform_load,
     clamped_plate_fundamental_frequency,
     clamped_plate_uniform_load,
     deflection_scorecard,
     frequency_scorecard,
+    simply_supported_annular_plate_uniform_load,
     simply_supported_circular_plate_fundamental_frequency,
     simply_supported_circular_plate_uniform_load,
     simply_supported_plate_center_patch_load,
@@ -113,7 +115,10 @@ class CoverPlate(BaseModel):
     one plate with an exact patch solution. Declaring a ``min_frequency``
     adds the resonance screen: the fundamental frequency of the bare plate
     (mass per area from the material's density and the thickness — smeared
-    attachments are not modeled) against that floor.
+    attachments are not modeled) against that floor. A circular cover may
+    declare a concentric free-edged ``hole_diameter`` (a sight port, a
+    gland bore) — the annular closed form replaces the solid one, and the
+    resonance screen is not encoded for a holed cover.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -126,6 +131,7 @@ class CoverPlate(BaseModel):
     length: Quantity | None = None
     width: Quantity | None = None
     diameter: Quantity | None = None
+    hole_diameter: Quantity | None = None  # a concentric free-edged hole (circular only)
     patch_length: Quantity | None = None  # pressure may act on a centred footprint
     patch_width: Quantity | None = None
     deflection_limit: Quantity | None = None
@@ -148,6 +154,7 @@ class CoverPlate(BaseModel):
             (self.length, "length"),
             (self.width, "width"),
             (self.diameter, "diameter"),
+            (self.hole_diameter, "hole_diameter"),
             (self.patch_length, "patch_length"),
             (self.patch_width, "patch_width"),
             (self.deflection_limit, "deflection_limit"),
@@ -158,6 +165,14 @@ class CoverPlate(BaseModel):
             raise ValueError(
                 f"min_frequency must be a [frequency] quantity; got {self.min_frequency}"
             )
+        if self.hole_diameter is not None:
+            if self.diameter is None:
+                raise ValueError("a hole is only encoded for a circular cover — declare a diameter")
+            if self.min_frequency is not None:
+                raise ValueError(
+                    "the resonance screen is not encoded for a holed cover — "
+                    "drop min_frequency or the hole"
+                )
         patched = self.patch_length is not None or self.patch_width is not None
         if patched:
             if self.patch_length is None or self.patch_width is None:
@@ -203,6 +218,14 @@ def screen_cover_plate(
             width=plate.width,
             **common,
         )
+    elif plate.hole_diameter is not None:
+        annular_check = (
+            clamped_annular_plate_uniform_load
+            if plate.edge is PlateEdge.CLAMPED
+            else simply_supported_annular_plate_uniform_load
+        )
+        result = annular_check(diameter=plate.diameter, hole_diameter=plate.hole_diameter, **common)
+        reference = "Kirchhoff plate theory (axisymmetric closed form)"
     elif circular:
         result = check(diameter=plate.diameter, **common)
     else:
