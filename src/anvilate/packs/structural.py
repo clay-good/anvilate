@@ -28,6 +28,7 @@ from ..analysis import (
     bolt_shear_stress,
     cantilever_end_load,
     cantilever_offset_load,
+    cantilever_partial_uniform_load,
     cantilever_triangular_load,
     cantilever_uniform_load,
     circular_area,
@@ -167,6 +168,10 @@ _TRIANGULAR_CHECKS = {
     Support.CANTILEVER: cantilever_triangular_load,
     Support.SIMPLY_SUPPORTED: simply_supported_triangular_load,
 }
+_PARTIAL_UDL_CHECKS = {
+    Support.CANTILEVER: cantilever_partial_uniform_load,
+    Support.SIMPLY_SUPPORTED: simply_supported_partial_uniform_load,
+}
 
 
 class BeamMember(BaseModel):
@@ -183,8 +188,9 @@ class BeamMember(BaseModel):
     support), short of the tip on a cantilever (measured from the fixed end), or
     anywhere on a fixed-pinned member (measured from the propped end). Only
     point loads accept it. An optional ``loaded_length`` restricts a distributed
-    load to a patch of that length adjacent to one support instead of the full
-    span — only encoded for a simply-supported member.
+    load to a patch of that length adjacent to one support (the fixed end on a
+    cantilever) instead of the full span — only encoded for simply-supported
+    and cantilever members.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -238,11 +244,12 @@ class BeamMember(BaseModel):
                 )
             if (
                 self.load_type is not LoadType.DISTRIBUTED
-                or self.support is not Support.SIMPLY_SUPPORTED
+                or self.support not in _PARTIAL_UDL_CHECKS
             ):
                 raise ValueError(
                     "loaded_length is only encoded for a distributed load on a "
-                    f"simply-supported member; got {self.support.value}/{self.load_type.value}"
+                    "simply-supported or cantilever member; got "
+                    f"{self.support.value}/{self.load_type.value}"
                 )
         return self
 
@@ -283,7 +290,7 @@ def screen_beam_member(
     elif member.load_type is LoadType.TRIANGULAR:
         result = _TRIANGULAR_CHECKS[member.support](peak_distributed_load=member.load, **common)
     elif member.loaded_length is not None:
-        result = simply_supported_partial_uniform_load(
+        result = _PARTIAL_UDL_CHECKS[member.support](
             distributed_load=member.load, loaded_length=member.loaded_length, **common
         )
     else:
