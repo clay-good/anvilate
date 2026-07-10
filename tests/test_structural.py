@@ -339,11 +339,29 @@ def test_loaded_length_dispatches_to_the_cantilever_patch_case():
     assert "safety factor 2.67" in card.entries[0].detail
 
 
-def test_loaded_length_requires_a_simply_supported_or_cantilever_distributed_member():
+def test_loaded_length_dispatches_to_the_fixed_fixed_patch_case():
+    # A wall-adjacent half-span patch on a fixed-fixed beam: the loaded-wall
+    # moment M = w*a^2*(6L^2 - 8aL + 3a^2)/(12L^2) = 14323 N*mm -> sigma
+    # 42.97 MPa -> SF 250/42.97 = 5.82 (vs 4.00 for the full-span UDL).
+    member = BeamMember(
+        name="beam",
+        section=_section(),
+        length=_q("500 mm"),
+        support=Support.FIXED_FIXED,
+        load=_q("1 N/mm"),
+        load_type=LoadType.DISTRIBUTED,
+        material="ASTM-A36",
+        loaded_length=_q("250 mm"),
+    )
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    assert card.entries[0].passed
+    assert "safety factor 5.82" in card.entries[0].detail
+
+
+def test_loaded_length_rejects_the_unsupported_member_kinds():
     for support, load_type, load in (
         (Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N"),
         (Support.SIMPLY_SUPPORTED, LoadType.TRIANGULAR, "1 N/mm"),
-        (Support.FIXED_FIXED, LoadType.DISTRIBUTED, "1 N/mm"),
         (Support.FIXED_PINNED, LoadType.DISTRIBUTED, "1 N/mm"),
     ):
         with pytest.raises(ValidationError, match="loaded_length is only encoded for"):

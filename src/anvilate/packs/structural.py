@@ -36,6 +36,7 @@ from ..analysis import (
     euler_critical_stress,
     fixed_fixed_center_load,
     fixed_fixed_offset_load,
+    fixed_fixed_partial_uniform_load,
     fixed_fixed_triangular_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
@@ -175,6 +176,7 @@ _TRIANGULAR_CHECKS = {
 _PARTIAL_UDL_CHECKS = {
     Support.CANTILEVER: cantilever_partial_uniform_load,
     Support.SIMPLY_SUPPORTED: simply_supported_partial_uniform_load,
+    Support.FIXED_FIXED: fixed_fixed_partial_uniform_load,
 }
 
 
@@ -193,8 +195,8 @@ class BeamMember(BaseModel):
     anywhere on a fixed-pinned member (measured from the propped end). Only
     point loads accept it. An optional ``loaded_length`` restricts a distributed
     load to a patch of that length adjacent to one support (the fixed end on a
-    cantilever) instead of the full span — only encoded for simply-supported
-    and cantilever members.
+    cantilever) instead of the full span — only encoded for simply-supported,
+    cantilever, and fixed-fixed members.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -247,7 +249,7 @@ class BeamMember(BaseModel):
             ):
                 raise ValueError(
                     "loaded_length is only encoded for a distributed load on a "
-                    "simply-supported or cantilever member; got "
+                    "simply-supported, cantilever, or fixed-fixed member; got "
                     f"{self.support.value}/{self.load_type.value}"
                 )
         return self
