@@ -33,6 +33,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `hanger_bracket_bolt.py` | A bracket bolt under combined tension and shear: every one-axis check clears SF 2.0, but the AISC §J3.7 combined interaction fails — the case one-axis-at-a-time checks miss. |
 | `clip_angle_edge_tearout.py` | A clip-angle bolt relocated toward the plate edge: bolt shear and bearing never see the move, but the AISC §J3.10 bolt-hole tear-out check drops from SF 6.4 to 1.28 and fails. |
 | `coped_beam_web_shear.py` | A coped beam web at a bolted end connection screened for both AISC §J4.2 shear limit states: bolt-hole deductions make shear rupture — not gross yielding — govern. |
+| `retaining_wall_post.py` | A retaining-wall soldier post under triangular soil load: the resultant-at-centroid shortcut nails the wall moment exactly but under-predicts tip deflection by 26% (w₀·L⁴/40.5EI vs /30EI) — a false serviceability green the declared triangle catches. |
 | `lifting_padeye.py` | A welded lifting padeye assembly (lug + fillet weld) screened together; flags an under-sized pin against the rigging safety factor. |
 | `lug_drawing.py` | The full white-space vertical: code-check a lifting lug (ASME BTH-1), then export its plan outline to a fabrication DXF. |
 

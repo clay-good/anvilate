@@ -307,3 +307,18 @@ def test_flood_barrier_example_recovers_margin_from_the_true_load_shape():
     assert by_name["peak smeared as UDL deflection"].status is CheckStatus.FAIL
     assert by_name["actual hydrostatic triangle bending"].passed
     assert by_name["actual hydrostatic triangle deflection"].passed
+
+
+def test_retaining_wall_example_catches_the_unconservative_shortcut():
+    namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_post.py"))
+    card = namespace["screen_retaining_post"]()
+    by_name = {e.name: e for e in card.entries}
+    # The resultant-at-centroid shortcut reproduces the fixed-end moment exactly,
+    # so both bending screens agree and pass...
+    assert by_name["soldier post bending"].passed
+    assert by_name["resultant-at-centroid bending"].passed
+    # ...but it under-predicts the tip deflection by 26% (w0*L^4/40.5EI vs /30EI):
+    # the shortcut reports a false green while the declared triangle fails L/180.
+    assert by_name["resultant-at-centroid deflection"].passed
+    assert by_name["soldier post deflection"].status is CheckStatus.FAIL
+    assert card.status is CheckStatus.FAIL
