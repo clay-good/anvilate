@@ -1008,6 +1008,82 @@ def fixed_fixed_uniform_load(
     )
 
 
+def fixed_fixed_partial_uniform_load(
+    *,
+    distributed_load: Quantity,
+    loaded_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    extreme_fibre: Quantity,
+    elastic_modulus: Quantity,
+) -> BeamBendingResult:
+    """The fixed-fixed beam uniformly loaded over part of its span (Roark).
+
+    A prismatic beam clamped at both ends over a span ``length``, carrying a
+    uniform ``distributed_load`` w (force per unit length) over ``loaded_length``
+    a measured from one wall, unloaded beyond — equipment parked at one end of a
+    built-in floor beam. Degenerates exactly to :func:`fixed_fixed_uniform_load`
+    at a = L; the simply-supported counterpart is
+    :func:`simply_supported_partial_uniform_load`.
+
+    The hogging moment at the loaded-end wall governs everywhere (σ = M·c/I with
+    M = w·a²·(6L² − 8aL + 3a²)/(12L²); the far wall carries only
+    w·a³·(4L − 3a)/(12L²) and the interior sagging peak R₁²/(2w) − M is smaller
+    still, R₁ = w·a·(2L³ − 2La² + a³)/(2L³) the loaded-end reaction). The true
+    maximum deflection comes from the piecewise elastic curve
+    EI·v = −M·x²/2 + R₁·x³/6 − w·x⁴/24 + w·⟨x−a⟩⁴/24 — its stationary point is
+    closed-form in both regions: the unloaded slope is quadratic with the fixed
+    end x = L as one root, putting the other at x* = 2L²/(3·(2L−a)) (valid while
+    3α² − 6α + 2 > 0, α = a/L); past that patch ratio the maximum moves into the
+    loaded region, to the smaller root of x² − (3R₁/w)·x + 6M/w = 0. Every
+    argument is dimension-checked; verified against an independent numeric
+    integration of the beam ODE.
+    """
+    _require(distributed_load, "[force] / [length]", "distributed_load")
+    _require(loaded_length, "[length]", "loaded_length")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(extreme_fibre, "[length]", "extreme_fibre")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+
+    w = distributed_load.pint
+    length_p = length.pint
+    loaded = loaded_length.pint.to(length_p.units)
+    alpha = loaded.magnitude / length_p.magnitude  # a/L
+    if not 0 < alpha <= 1:
+        raise ValueError(
+            f"loaded_length must lie within the span (0, {length}]; got {loaded_length}"
+        )
+    inertia = second_moment.pint
+    c = extreme_fibre.pint
+    e = elastic_modulus.pint
+
+    moment = (
+        w
+        * loaded**2
+        * (6 * length_p**2 - 8 * loaded * length_p + 3 * loaded**2)
+        / (12 * length_p**2)
+    )
+    stress = moment * c / inertia
+
+    reaction = (
+        w * loaded * (2 * length_p**3 - 2 * length_p * loaded**2 + loaded**3) / (2 * length_p**3)
+    )
+    if 3 * alpha**2 - 6 * alpha + 2 > 0:
+        x = 2 * length_p**2 / (3 * (2 * length_p - loaded))
+        deflection = (
+            moment * x**2 / 2 - reaction * x**3 / 6 + w * x**4 / 24 - w * (x - loaded) ** 4 / 24
+        ) / (e * inertia)
+    else:
+        half_sum = 3 * reaction / (2 * w)  # half the root sum of the loaded-region slope
+        x = half_sum - (half_sum**2 - 6 * moment / w) ** 0.5
+        deflection = (moment * x**2 / 2 - reaction * x**3 / 6 + w * x**4 / 24) / (e * inertia)
+    return BeamBendingResult(
+        max_bending_stress=_as_quantity(stress, "MPa"),
+        max_deflection=_as_quantity(deflection, "mm"),
+    )
+
+
 def fixed_fixed_triangular_load(
     *,
     peak_distributed_load: Quantity,

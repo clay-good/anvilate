@@ -28,6 +28,7 @@ from anvilate.analysis import (
     euler_critical_stress,
     fixed_fixed_center_load,
     fixed_fixed_offset_load,
+    fixed_fixed_partial_uniform_load,
     fixed_fixed_triangular_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
@@ -546,6 +547,105 @@ def test_fixed_fixed_uniform_load_matches_worked_example():
     )
     assert ff.max_bending_stress.to("MPa").magnitude == pytest.approx(62.5, rel=1e-4)
     assert ff.max_deflection.to("mm").magnitude == pytest.approx(0.48828, rel=1e-4)
+
+
+def test_fixed_fixed_partial_uniform_load_matches_worked_example():
+    # 10 N/mm over the first 1 m of a 2 m fixed-fixed span, 80x120x5 box
+    # (I = 3,755,833 mm^4, c = 60): the loaded-wall moment
+    # M = w*a^2*(6L^2 - 8aL + 3a^2)/(12L^2) = 2,291,667 N*mm -> sigma = M*c/I
+    # = 36.61 MPa; delta_max = 0.28542 mm at 0.443*L, the closed-form root of the
+    # loaded-region slope (verified against an independent numeric double-
+    # integration of the beam ODE).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = fixed_fixed_partial_uniform_load(
+        distributed_load=_q("10 N/mm"),
+        loaded_length=_q("1 m"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(36.610, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.285424, rel=1e-4)
+
+
+def test_fixed_fixed_partial_uniform_load_with_a_short_patch():
+    # 10 N/mm over the first 400 mm only: the maximum deflection sits in the
+    # UNLOADED region, at the closed-form stationary point 2L^2/(3*(2L - a))
+    # = 740.7 mm (verified against the same numeric integration).
+    section = CrossSection.hollow_rectangular(
+        width=_q("80 mm"), height=_q("120 mm"), wall_thickness=_q("5 mm")
+    )
+    result = fixed_fixed_partial_uniform_load(
+        distributed_load=_q("10 N/mm"),
+        loaded_length=_q("400 mm"),
+        length=_q("2 m"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("200 GPa"),
+    )
+    # M = 10*400^2*(6*2000^2 - 8*400*2000 + 3*400^2)/(12*2000^2) = 602,667 N*mm
+    # -> sigma = 9.628 MPa.
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(9.6277, rel=1e-3)
+    assert result.max_deflection.to("mm").magnitude == pytest.approx(0.031900, rel=1e-4)
+
+
+def test_fixed_fixed_partial_uniform_load_degenerates_to_the_full_udl():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    partial = fixed_fixed_partial_uniform_load(
+        distributed_load=_q("1 N/mm"), loaded_length=_q("500 mm"), **kw
+    )
+    full = fixed_fixed_uniform_load(distributed_load=_q("1 N/mm"), **kw)
+    assert partial.max_bending_stress.to("MPa").magnitude == pytest.approx(
+        full.max_bending_stress.to("MPa").magnitude, rel=1e-9
+    )
+    assert partial.max_deflection.to("mm").magnitude == pytest.approx(
+        full.max_deflection.to("mm").magnitude, rel=1e-9
+    )
+
+
+def test_fixed_fixed_partial_udl_is_stiffer_than_the_simply_supported_one():
+    # Clamping the ends of the same patch-loaded beam must cut both the peak
+    # deflection and the governing moment relative to simple supports.
+    kw = {
+        "distributed_load": _q("1 N/mm"),
+        "loaded_length": _q("1 m"),
+        "length": _q("2 m"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    ff = fixed_fixed_partial_uniform_load(**kw)
+    ss = simply_supported_partial_uniform_load(**kw)
+    assert ff.max_deflection.to("mm").magnitude < ss.max_deflection.to("mm").magnitude
+    assert ff.max_bending_stress.to("MPa").magnitude < ss.max_bending_stress.to("MPa").magnitude
+
+
+def test_fixed_fixed_partial_uniform_load_rejects_bad_inputs():
+    kw = {
+        "length": _q("500 mm"),
+        "second_moment": rectangular_second_moment(_q("20 mm"), _q("10 mm")),
+        "extreme_fibre": _q("5 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    for loaded_length in ("0 mm", "600 mm"):
+        with pytest.raises(ValueError, match="loaded_length must lie within the span"):
+            fixed_fixed_partial_uniform_load(
+                distributed_load=_q("1 N/mm"), loaded_length=_q(loaded_length), **kw
+            )
+    with pytest.raises(ValueError, match="distributed_load must be a"):
+        fixed_fixed_partial_uniform_load(
+            distributed_load=_q("100 N"),  # a force, not force-per-length
+            loaded_length=_q("250 mm"),
+            **kw,
+        )
 
 
 def test_fixed_pinned_center_load_matches_worked_example():
