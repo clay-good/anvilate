@@ -55,6 +55,7 @@ __all__ = [
     "bolt_axial_stress",
     "thread_stripping_shear_area",
     "thread_stripping_stress",
+    "thread_engagement_for_load",
 ]
 
 # Typical nut factor K for as-received (lightly-oiled) steel fasteners. Dry/rough
@@ -222,6 +223,32 @@ def bolt_tensile_stress_area(*, nominal_diameter: Quantity, pitch: Quantity) -> 
     return Quantity(magnitude=pi * effective**2 / 4, unit="mm**2")
 
 
+def _strip_geometry(
+    nominal_diameter: Quantity, pitch: Quantity, member: str
+) -> tuple[float, float]:
+    """The (coefficient, shear-cylinder diameter) pair for a stripping member, in
+    mm — the single source both the area and its length inverse read, so they
+    never drift. Validates the thread and the ``member`` selector.
+    """
+    _require(nominal_diameter, "[length]", "nominal_diameter")
+    _require(pitch, "[length]", "pitch")
+    d = nominal_diameter.to("mm").magnitude
+    p = pitch.to("mm").magnitude
+    if p <= 0:
+        raise ValueError(f"pitch must be positive; got {p} mm")
+    minor = d - _INTERNAL_MINOR_DIA_FACTOR * p
+    if minor <= 0:
+        raise ValueError(
+            f"nominal_diameter ({nominal_diameter}) must exceed 1.0825·pitch "
+            f"({pitch}) for a valid thread"
+        )
+    if member == "external":
+        return _EXTERNAL_STRIP_COEFFICIENT, minor
+    if member == "internal":
+        return _INTERNAL_STRIP_COEFFICIENT, d
+    raise ValueError(f"member must be 'external' (bolt) or 'internal' (nut); got {member!r}")
+
+
 def thread_stripping_shear_area(
     *,
     nominal_diameter: Quantity,
@@ -251,27 +278,12 @@ def thread_stripping_shear_area(
     in mm²; all three are dimension-checked lengths and must be positive, and d
     must exceed 1.0825·P for a valid thread.
     """
-    _require(nominal_diameter, "[length]", "nominal_diameter")
-    _require(pitch, "[length]", "pitch")
     _require(engagement_length, "[length]", "engagement_length")
-    d = nominal_diameter.to("mm").magnitude
-    p = pitch.to("mm").magnitude
     le = engagement_length.to("mm").magnitude
-    for value, name in ((p, "pitch"), (le, "engagement_length")):
-        if value <= 0:
-            raise ValueError(f"{name} must be positive; got {value} mm")
-    minor = d - _INTERNAL_MINOR_DIA_FACTOR * p
-    if minor <= 0:
-        raise ValueError(
-            f"nominal_diameter ({nominal_diameter}) must exceed 1.0825·pitch "
-            f"({pitch}) for a valid thread"
-        )
-    if member == "external":
-        area = _EXTERNAL_STRIP_COEFFICIENT * pi * minor * le
-    elif member == "internal":
-        area = _INTERNAL_STRIP_COEFFICIENT * pi * d * le
-    else:
-        raise ValueError(f"member must be 'external' (bolt) or 'internal' (nut); got {member!r}")
+    if le <= 0:
+        raise ValueError(f"engagement_length must be positive; got {le} mm")
+    coefficient, diameter = _strip_geometry(nominal_diameter, pitch, member)
+    area = coefficient * pi * diameter * le
     return Quantity(magnitude=area, unit="mm**2")
 
 
@@ -304,6 +316,41 @@ def thread_stripping_stress(
     stress = load.pint / area
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def thread_engagement_for_load(
+    *,
+    load: Quantity,
+    nominal_diameter: Quantity,
+    pitch: Quantity,
+    allowable_shear: Quantity,
+    member: str = "external",
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least thread engagement length L_e to carry an axial ``load`` without
+    stripping, within an allowable shear stress.
+
+    The inverse of :func:`thread_stripping_stress`: demanding F/(c·π·D·L_e) ≤
+    τ_allow/SF gives L_e = SF·F/(c·π·D·τ_allow), with the coefficient c and shear
+    diameter D taken from the stripping ``member`` (external/bolt or
+    internal/nut). This is the engagement-depth sizing step — how deep to tap a
+    hole or how tall a nut must be so the threads develop the load. ``load`` F is
+    the axial force, ``allowable_shear`` τ_allow the stripping member's allowable
+    shear stress (≈0.577·S_y), and ``required_safety_factor`` SF the margin on it
+    (default 1.0). Returns the minimum engagement in mm; ``load`` is a force,
+    ``allowable_shear`` a stress, and both SF and τ_allow must be positive.
+    """
+    _require(load, "[force]", "load")
+    _require(allowable_shear, "[pressure]", "allowable_shear")
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    tau = allowable_shear.to("MPa").magnitude
+    if tau <= 0:
+        raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
+    coefficient, diameter = _strip_geometry(nominal_diameter, pitch, member)
+    f = load.to("N").magnitude
+    le_min = required_safety_factor * f / (coefficient * pi * diameter * tau)
+    return Quantity(magnitude=le_min, unit="mm")
 
 
 def bolt_axial_stress(

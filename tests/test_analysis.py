@@ -148,6 +148,7 @@ from anvilate.analysis import (
     thin_wall_cylinder,
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
+    thread_engagement_for_load,
     thread_stripping_shear_area,
     thread_stripping_stress,
     torque_for_preload,
@@ -2835,6 +2836,73 @@ def test_thread_stripping_rejects_bad_inputs():
             nominal_diameter=_q("12 mm"),
             pitch=_q("1.75 mm"),
             engagement_length=_q("12 mm"),
+        )
+
+
+def test_thread_engagement_for_load_inverts_the_stripping_stress():
+    # Size the aluminium tapped hole (member="internal") so 40 kN develops within
+    # a 159 MPa allowable: at the returned engagement the stripping stress lands
+    # exactly on the allowable.
+    le = thread_engagement_for_load(
+        load=_q("40 kN"),
+        nominal_diameter=_q("12 mm"),
+        pitch=_q("1.75 mm"),
+        allowable_shear=_q("159 MPa"),
+        member="internal",
+    )
+    tau = thread_stripping_stress(
+        load=_q("40 kN"),
+        nominal_diameter=_q("12 mm"),
+        pitch=_q("1.75 mm"),
+        engagement_length=le,
+        member="internal",
+    )
+    assert tau.to("MPa").magnitude == pytest.approx(159.0, rel=1e-9)
+    # A required safety factor scales the engagement linearly.
+    le2 = thread_engagement_for_load(
+        load=_q("40 kN"),
+        nominal_diameter=_q("12 mm"),
+        pitch=_q("1.75 mm"),
+        allowable_shear=_q("159 MPa"),
+        member="internal",
+        required_safety_factor=2.0,
+    )
+    assert le2.to("mm").magnitude == pytest.approx(2 * le.to("mm").magnitude, rel=1e-9)
+    # The bolt's external threads, on the smaller shear cylinder, need a deeper
+    # engagement than the nut threads for the same load and allowable.
+    le_ext = thread_engagement_for_load(
+        load=_q("40 kN"),
+        nominal_diameter=_q("12 mm"),
+        pitch=_q("1.75 mm"),
+        allowable_shear=_q("159 MPa"),
+        member="external",
+    )
+    assert le_ext.to("mm").magnitude > le.to("mm").magnitude
+
+
+def test_thread_engagement_for_load_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="allowable_shear must be positive"):
+        thread_engagement_for_load(
+            load=_q("40 kN"),
+            nominal_diameter=_q("12 mm"),
+            pitch=_q("1.75 mm"),
+            allowable_shear=_q("0 MPa"),
+        )
+    with pytest.raises(ValueError, match="required_safety_factor must be positive"):
+        thread_engagement_for_load(
+            load=_q("40 kN"),
+            nominal_diameter=_q("12 mm"),
+            pitch=_q("1.75 mm"),
+            allowable_shear=_q("159 MPa"),
+            required_safety_factor=0.0,
+        )
+    with pytest.raises(ValueError, match="member must be"):
+        thread_engagement_for_load(
+            load=_q("40 kN"),
+            nominal_diameter=_q("12 mm"),
+            pitch=_q("1.75 mm"),
+            allowable_shear=_q("159 MPa"),
+            member="nut",
         )
 
 
