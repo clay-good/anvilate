@@ -821,3 +821,20 @@ def test_floor_beam_serviceability_example_is_governed_by_deflection():
     assert deflection.status is CheckStatus.FAIL
     assert "18.095 mm vs limit 16.667 mm" in deflection.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_bracket_weld_sizing_example_fails_the_default_fillet():
+    namespace = runpy.run_path(str(_EXAMPLES / "bracket_weld_sizing.py"))
+    # The load and length need about an 8 mm leg at the 2.0 margin.
+    assert namespace["required_leg"]().to("mm").magnitude == pytest.approx(8.129, rel=1e-3)
+    card = namespace["screen_bracket_weld"]()
+    by_name = {e.name: e for e in card.entries}
+    # The shop-default 5 mm fillet misses the 2.0 requirement (SF 1.23)...
+    drawn = by_name["5 mm fillet (as drawn) throat shear"]
+    assert drawn.status is CheckStatus.FAIL
+    assert "safety factor 1.23" in drawn.detail
+    # ...the revised 10 mm fillet clears it.
+    revised = by_name["10 mm fillet (revised) throat shear"]
+    assert revised.passed
+    assert "safety factor 2.46" in revised.detail
+    assert card.status is CheckStatus.FAIL
