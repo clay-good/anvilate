@@ -24,7 +24,7 @@ modules:
   open-section (strip) torsion
 - :mod:`~anvilate.analysis.power_screw` — square-thread lead-screw raise/lower
   torque, efficiency, and the self-locking condition
-- :mod:`~anvilate.analysis.clutch` — disc clutch / brake friction torque
+- :mod:`~anvilate.analysis.clutch` — disc and cone clutch / brake friction torque
   (uniform-wear and uniform-pressure) and the clamp force a torque requires
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder (closed or open ends) and sphere, and the wall
@@ -132,6 +132,7 @@ from .belt import (
 from .clutch import (
     UNIFORM_PRESSURE,
     UNIFORM_WEAR,
+    cone_clutch_torque,
     disc_clutch_force_for_torque,
     disc_clutch_torque,
 )
@@ -405,6 +406,7 @@ __all__ = [
     "UNIFORM_PRESSURE",
     "disc_clutch_torque",
     "disc_clutch_force_for_torque",
+    "cone_clutch_torque",
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",

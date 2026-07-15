@@ -22,6 +22,8 @@ wedge factor, not included). Force and radius inputs are dimension-checked
 
 from __future__ import annotations
 
+from math import radians, sin
+
 from ..units import Quantity
 
 UNIFORM_WEAR = "uniform_wear"
@@ -32,6 +34,7 @@ __all__ = [
     "UNIFORM_PRESSURE",
     "disc_clutch_torque",
     "disc_clutch_force_for_torque",
+    "cone_clutch_torque",
 ]
 
 
@@ -114,3 +117,36 @@ def disc_clutch_force_for_torque(
     t = torque.to("N*m").magnitude
     force = t / (friction_coefficient * surfaces * r_eff)
     return Quantity(magnitude=force, unit="N")
+
+
+def cone_clutch_torque(
+    *,
+    actuating_force: Quantity,
+    outer_radius: Quantity,
+    inner_radius: Quantity,
+    friction_coefficient: float,
+    cone_half_angle: float,
+    theory: str = UNIFORM_WEAR,
+) -> Quantity:
+    """The torque a cone clutch transmits, T = μ·F·r_eff/sin(α).
+
+    A cone clutch wedges a conical member into a matching seat, so the axial
+    ``actuating_force`` F presses the faces together with a normal force amplified
+    by 1/sin(α) for the cone half-angle α — the same disc-clutch torque
+    (:func:`disc_clutch_torque`) multiplied by that wedge factor. A shallow cone
+    (small α) multiplies grip steeply but risks jamming. ``outer_radius`` r_o and
+    ``inner_radius`` r_i bound the conical face (measured to the axis),
+    ``friction_coefficient`` μ the face friction, ``cone_half_angle`` α the half
+    angle **in degrees** (units layer carries no angles), and ``theory`` the
+    pressure distribution as in :func:`disc_clutch_torque`. r_o must exceed r_i, μ
+    be non-negative, and α in (0, 90). Returns the torque in N·m.
+    """
+    _require(actuating_force, "[force]", "actuating_force")
+    if friction_coefficient < 0:
+        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+    if not 0 < cone_half_angle < 90:
+        raise ValueError(f"cone_half_angle (degrees) must lie in (0, 90); got {cone_half_angle}")
+    r_eff = _mean_radius_factor(outer_radius, inner_radius, theory)
+    f = actuating_force.to("N").magnitude
+    torque = friction_coefficient * f * r_eff / sin(radians(cone_half_angle))
+    return Quantity(magnitude=torque, unit="N*m")

@@ -55,6 +55,7 @@ from anvilate.analysis import (
     coefficient_of_fluctuation,
     combine_axial_bending,
     concentrated_stress,
+    cone_clutch_torque,
     constrained_thermal_stress,
     cyclic_stress_components,
     deflection_scorecard,
@@ -3059,6 +3060,30 @@ def test_gear_lewis_rejects_bad_inputs():
         lewis_bending_stress(
             tangential_load=_q("3 mm"), module=_q("5 mm"), face_width=_q("50 mm"), form_factor=0.34
         )
+
+
+def test_cone_clutch_torque_wedges_up_the_disc_torque():
+    from math import radians, sin
+
+    kw = {
+        "actuating_force": _q("5 kN"),
+        "outer_radius": _q("100 mm"),
+        "inner_radius": _q("50 mm"),
+        "friction_coefficient": 0.3,
+    }
+    # Cone half-angle 12 deg: T = mu*F*r_mean/sin(alpha) = 112.5/sin(12) = 541.1 N*m.
+    cone = cone_clutch_torque(cone_half_angle=12, **kw)
+    assert cone.to("N*m").magnitude == pytest.approx(112.5 / sin(radians(12)), rel=1e-4)
+    # It is the single-surface disc torque times the 1/sin(alpha) wedge factor.
+    disc = disc_clutch_torque(**kw)  # N=1 by default
+    assert cone.to("N*m").magnitude == pytest.approx(
+        disc.to("N*m").magnitude / sin(radians(12)), rel=1e-9
+    )
+    # A shallower cone (smaller angle) multiplies the torque more.
+    shallower = cone_clutch_torque(cone_half_angle=8, **kw)
+    assert shallower.to("N*m").magnitude > cone.to("N*m").magnitude
+    with pytest.raises(ValueError, match=r"cone_half_angle \(degrees\) must lie in"):
+        cone_clutch_torque(cone_half_angle=0, **kw)
 
 
 def test_disc_clutch_torque_both_theories():
