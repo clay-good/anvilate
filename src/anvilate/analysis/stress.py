@@ -7,9 +7,12 @@ equivalent stress before comparing to the yield strength:
 
     plane stress:      σ_vm = √(σx² − σx·σy + σy² + 3·τxy²)
     bending + torsion: σ_vm = √(σ² + 3·τ²)   (the common shaft case)
+    triaxial:          σ_vm = √(½·[(σ₁−σ₂)² + (σ₂−σ₃)² + (σ₃−σ₁)²])
 
-Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity`
-stresses; a helper returns the factor of safety against yield.
+The triaxial form takes three principal stresses directly — e.g. the
+hoop/radial/longitudinal triad at a thick-wall vessel bore. Inputs and outputs
+are dimension-checked :class:`~anvilate.units.Quantity` stresses; a helper
+returns the factor of safety against yield.
 """
 
 from __future__ import annotations
@@ -24,9 +27,11 @@ from ..units import Quantity
 __all__ = [
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
+    "von_mises_principal",
     "principal_stresses_plane",
     "max_shear_stress_plane",
     "tresca_equivalent_stress",
+    "tresca_principal",
     "yield_safety_factor",
     "strength_scorecard",
     "CombinedNormalStress",
@@ -178,6 +183,48 @@ def tresca_equivalent_stress(
     """
     tau_max = max_shear_stress_plane(sigma_x=sigma_x, sigma_y=sigma_y, tau_xy=tau_xy)
     return Quantity(magnitude=2 * tau_max.to("MPa").magnitude, unit="MPa")
+
+
+def von_mises_principal(
+    *,
+    sigma_1: Quantity,
+    sigma_2: Quantity,
+    sigma_3: Quantity,
+) -> Quantity:
+    """The von Mises equivalent stress of a general triaxial principal state.
+
+    σ_vm = √(½·[(σ₁−σ₂)² + (σ₂−σ₃)² + (σ₃−σ₁)²]) for the three principal stresses,
+    which need not be ordered. Unlike :func:`von_mises_plane_stress` this takes a
+    fully three-dimensional state, so it accepts the hoop/radial/longitudinal
+    triad from a thick-wall :func:`~anvilate.analysis.thick_wall_cylinder` bore
+    directly. All three must be stresses. Returns the equivalent stress in MPa.
+    """
+    s1 = _require_stress(sigma_1, "sigma_1")
+    s2 = _require_stress(sigma_2, "sigma_2")
+    s3 = _require_stress(sigma_3, "sigma_3")
+    vm = sqrt(((s1 - s2) ** 2 + (s2 - s3) ** 2 + (s3 - s1) ** 2) / 2)
+    return Quantity(magnitude=vm, unit="MPa")
+
+
+def tresca_principal(
+    *,
+    sigma_1: Quantity,
+    sigma_2: Quantity,
+    sigma_3: Quantity,
+) -> Quantity:
+    """The Tresca (maximum-shear) equivalent stress of a general triaxial state.
+
+    σ_tresca = σ_max − σ_min over the three principal stresses (unordered) — the
+    three-dimensional counterpart of :func:`tresca_equivalent_stress`, and always
+    at least the von Mises value. Feeds the same thick-wall bore triad. All three
+    must be stresses. Returns the equivalent stress in MPa.
+    """
+    principals = (
+        _require_stress(sigma_1, "sigma_1"),
+        _require_stress(sigma_2, "sigma_2"),
+        _require_stress(sigma_3, "sigma_3"),
+    )
+    return Quantity(magnitude=max(principals) - min(principals), unit="MPa")
 
 
 def von_mises_bending_torsion(

@@ -182,8 +182,10 @@ from .stress import (
     principal_stresses_plane,
     strength_scorecard,
     tresca_equivalent_stress,
+    tresca_principal,
     von_mises_bending_torsion,
     von_mises_plane_stress,
+    von_mises_principal,
     yield_safety_factor,
 )
 from .thermal import (
@@ -342,9 +344,11 @@ __all__ = [
     "spring_surge_frequency",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
+    "von_mises_principal",
     "principal_stresses_plane",
     "max_shear_stress_plane",
     "tresca_equivalent_stress",
+    "tresca_principal",
     "yield_safety_factor",
     "strength_scorecard",
     "CombinedNormalStress",

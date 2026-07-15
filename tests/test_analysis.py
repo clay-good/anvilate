@@ -134,8 +134,10 @@ from anvilate.analysis import (
     torsional_natural_frequency,
     transition_slenderness,
     tresca_equivalent_stress,
+    tresca_principal,
     von_mises_bending_torsion,
     von_mises_plane_stress,
+    von_mises_principal,
     wahl_factor,
     yield_safety_factor,
 )
@@ -4028,6 +4030,45 @@ def test_von_mises_bending_torsion_matches_plane_stress():
     combined = von_mises_bending_torsion(bending_stress=_q("100 MPa"), shear_stress=_q("50 MPa"))
     plane = von_mises_plane_stress(sigma_x=_q("100 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("50 MPa"))
     assert combined.to("MPa").magnitude == pytest.approx(plane.to("MPa").magnitude, rel=1e-9)
+
+
+def test_von_mises_and_tresca_principal_on_the_thick_wall_bore():
+    # The thick-wall cylinder bore is a genuine triaxial state that the plane
+    # forms cannot hold: hoop 185, radial -60, longitudinal 62.5 MPa.
+    triad = {"sigma_1": _q("185 MPa"), "sigma_2": _q("-60 MPa"), "sigma_3": _q("62.5 MPa")}
+    # Tresca = max - min = 185 - (-60) = 245 MPa (matches bore_tresca_stress).
+    tresca = tresca_principal(**triad)
+    assert tresca.to("MPa").magnitude == pytest.approx(245.0, rel=1e-9)
+    # von Mises = sqrt(0.5*[(185+60)^2 + (-60-62.5)^2 + (62.5-185)^2]) = 212.18 MPa.
+    vm = von_mises_principal(**triad)
+    assert vm.to("MPa").magnitude == pytest.approx(212.18, rel=1e-4)
+    assert vm.to("MPa").magnitude < tresca.to("MPa").magnitude  # vM never above Tresca
+
+
+def test_von_mises_principal_matches_the_plane_form_when_one_principal_is_zero():
+    # With sigma_3 = 0 the triaxial von Mises collapses onto the plane-stress
+    # result computed from the same two in-plane principals.
+    s1, s2 = principal_stresses_plane(
+        sigma_x=_q("100 MPa"), sigma_y=_q("40 MPa"), tau_xy=_q("30 MPa")
+    )
+    triaxial = von_mises_principal(sigma_1=s1, sigma_2=s2, sigma_3=_q("0 MPa"))
+    plane = von_mises_plane_stress(sigma_x=_q("100 MPa"), sigma_y=_q("40 MPa"), tau_xy=_q("30 MPa"))
+    assert triaxial.to("MPa").magnitude == pytest.approx(plane.to("MPa").magnitude, rel=1e-9)
+
+
+def test_von_mises_principal_is_zero_for_hydrostatic_stress():
+    # Pure hydrostatic (equal triaxial) stress causes no distortion -> von Mises 0,
+    # while Tresca is also 0 (max = min). The classic von Mises property.
+    triad = {"sigma_1": _q("80 MPa"), "sigma_2": _q("80 MPa"), "sigma_3": _q("80 MPa")}
+    assert von_mises_principal(**triad).to("MPa").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert tresca_principal(**triad).to("MPa").magnitude == pytest.approx(0.0, abs=1e-9)
+
+
+def test_triaxial_forms_reject_non_stress_inputs():
+    with pytest.raises(ValueError, match="sigma_1 must be a"):
+        von_mises_principal(sigma_1=_q("5 mm"), sigma_2=_q("0 MPa"), sigma_3=_q("0 MPa"))
+    with pytest.raises(ValueError, match="sigma_3 must be a"):
+        tresca_principal(sigma_1=_q("5 MPa"), sigma_2=_q("0 MPa"), sigma_3=_q("1 N"))
 
 
 def test_yield_safety_factor_from_equivalent_stress():
