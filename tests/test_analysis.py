@@ -44,6 +44,7 @@ from anvilate.analysis import (
     clamped_circular_plate_uniform_load,
     clamped_plate_fundamental_frequency,
     clamped_plate_uniform_load,
+    coefficient_of_fluctuation,
     combine_axial_bending,
     concentrated_stress,
     constrained_thermal_stress,
@@ -74,6 +75,8 @@ from anvilate.analysis import (
     fixed_pinned_triangular_load,
     fixed_pinned_triangular_load_peak_at_prop,
     fixed_pinned_uniform_load,
+    flywheel_energy_fluctuation,
+    flywheel_inertia_for_fluctuation,
     free_thermal_expansion,
     frequency_scorecard,
     gerber_safety_factor,
@@ -2773,6 +2776,49 @@ def test_bolt_tensile_area_rejects_bad_inputs():
         bolt_tensile_stress_area(nominal_diameter=_q("1 mm"), pitch=_q("2 mm"))
     with pytest.raises(ValueError, match="tension must be a"):
         bolt_axial_stress(tension=_q("20 mm"), nominal_diameter=_q("10 mm"), pitch=_q("1.5 mm"))
+
+
+def test_flywheel_inertia_and_energy_round_trip():
+    # A press flywheel smoothing a 5000 J energy swing at 200 rpm mean speed to a
+    # coefficient of fluctuation of 0.05 needs I = dE/(omega^2*Cs) = 227.97 kg*m^2.
+    inertia = flywheel_inertia_for_fluctuation(
+        energy_fluctuation=_q("5000 J"),
+        mean_speed=_q("200 rpm"),
+        coefficient_of_fluctuation=0.05,
+    )
+    assert inertia.to("kg*m**2").magnitude == pytest.approx(227.973, rel=1e-4)
+    # The forward energy recovers the 5000 J at that inertia.
+    energy = flywheel_energy_fluctuation(
+        inertia=inertia, mean_speed=_q("200 rpm"), coefficient_of_fluctuation=0.05
+    )
+    assert energy.to("J").magnitude == pytest.approx(5000.0, rel=1e-9)
+    # The omega^2 lever: doubling the mean speed quarters the required inertia.
+    faster = flywheel_inertia_for_fluctuation(
+        energy_fluctuation=_q("5000 J"),
+        mean_speed=_q("400 rpm"),
+        coefficient_of_fluctuation=0.05,
+    )
+    assert faster.to("kg*m**2").magnitude == pytest.approx(
+        inertia.to("kg*m**2").magnitude / 4, rel=1e-9
+    )
+
+
+def test_coefficient_of_fluctuation_from_speed_swing():
+    # 205/195 rpm about a 200 mean: Cs = (205-195)/200 = 0.05.
+    cs = coefficient_of_fluctuation(max_speed=_q("205 rpm"), min_speed=_q("195 rpm"))
+    assert cs == pytest.approx(0.05, rel=1e-9)
+    with pytest.raises(ValueError, match="max_speed .* must exceed min_speed"):
+        coefficient_of_fluctuation(max_speed=_q("195 rpm"), min_speed=_q("205 rpm"))
+    with pytest.raises(ValueError, match="coefficient_of_fluctuation must be positive"):
+        flywheel_energy_fluctuation(
+            inertia=_q("10 kg*m**2"), mean_speed=_q("200 rpm"), coefficient_of_fluctuation=0.0
+        )
+    with pytest.raises(ValueError, match="energy_fluctuation must be a"):
+        flywheel_inertia_for_fluctuation(
+            energy_fluctuation=_q("5000 N"),
+            mean_speed=_q("200 rpm"),
+            coefficient_of_fluctuation=0.05,
+        )
 
 
 def test_impact_factor_energy_method():

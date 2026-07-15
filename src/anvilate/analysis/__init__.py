@@ -32,6 +32,8 @@ modules:
   (millions of revolutions and running hours)
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor (energy method)
+- :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
+  of fluctuation, and the inertia a speed-smoothing target requires
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, and
   the ISO 898 tensile stress area / axial stress
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
@@ -176,6 +178,11 @@ from .fatigue import (
     miner_spectrum_repeats_to_failure,
     soderberg_safety_factor,
     soderberg_scorecard,
+)
+from .flywheel import (
+    coefficient_of_fluctuation,
+    flywheel_energy_fluctuation,
+    flywheel_inertia_for_fluctuation,
 )
 from .impact import (
     SUDDENLY_APPLIED_FACTOR,
@@ -390,6 +397,9 @@ __all__ = [
     "cyclic_stress_components",
     "estimated_endurance_limit",
     "fatigue_notch_factor",
+    "coefficient_of_fluctuation",
+    "flywheel_energy_fluctuation",
+    "flywheel_inertia_for_fluctuation",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",
