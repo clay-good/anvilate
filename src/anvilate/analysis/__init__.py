@@ -112,6 +112,7 @@ from .contact import (
     HertzContact,
     HertzLineContact,
     hertz_cylinder_contact,
+    hertz_effective_modulus,
     hertz_sphere_contact,
 )
 from .dynamics import (
@@ -385,6 +386,7 @@ __all__ = [
     "interference_for_contact_pressure",
     "interference_axial_capacity",
     "interference_torque_capacity",
+    "hertz_effective_modulus",
     "HertzContact",
     "hertz_sphere_contact",
     "HertzLineContact",

@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict
 from ..units import Quantity
 
 __all__ = [
+    "hertz_effective_modulus",
     "HertzContact",
     "hertz_sphere_contact",
     "HertzLineContact",
@@ -102,6 +103,29 @@ class HertzContact(BaseModel):
         return shear_yield / self.max_subsurface_shear_stress.to("MPa").magnitude
 
 
+def hertz_effective_modulus(
+    *,
+    modulus1: Quantity,
+    poisson1: float,
+    modulus2: Quantity,
+    poisson2: float,
+) -> Quantity:
+    """The effective (reduced) contact modulus E*, where 1/E* = (1−ν₁²)/E₁ +
+    (1−ν₂²)/E₂.
+
+    The elastic compliance of the two bodies in series that every Hertz contact
+    formula rides on — a stiffer pair (higher E*) makes a smaller, harder-pressed
+    patch. Each body carries its own elastic ``modulus`` and ``poisson`` ratio.
+    Returns E* as a pressure; both moduli are dimension-checked.
+    """
+    _require(modulus1, "[pressure]", "modulus1")
+    _require(modulus2, "[pressure]", "modulus2")
+    e1 = modulus1.to("MPa").magnitude
+    e2 = modulus2.to("MPa").magnitude
+    inv_e_star = (1.0 - poisson1**2) / e1 + (1.0 - poisson2**2) / e2
+    return Quantity(magnitude=1.0 / inv_e_star, unit="MPa")
+
+
 def hertz_sphere_contact(
     *,
     force: Quantity,
@@ -123,8 +147,6 @@ def hertz_sphere_contact(
     """
     _require(force, "[force]", "force")
     _require(diameter1, "[length]", "diameter1")
-    _require(modulus1, "[pressure]", "modulus1")
-    _require(modulus2, "[pressure]", "modulus2")
 
     d1 = diameter1.to("mm").magnitude
     if d1 <= 0:
@@ -140,10 +162,13 @@ def hertz_sphere_contact(
         inv_r = 1.0 / r1 + 1.0 / (d2 / 2)
     effective_radius = 1.0 / inv_r  # R in mm
 
-    e1 = modulus1.to("MPa").magnitude
-    e2 = modulus2.to("MPa").magnitude
-    inv_e_star = (1.0 - poisson1**2) / e1 + (1.0 - poisson2**2) / e2
-    e_star = 1.0 / inv_e_star  # MPa
+    e_star = (
+        hertz_effective_modulus(
+            modulus1=modulus1, poisson1=poisson1, modulus2=modulus2, poisson2=poisson2
+        )
+        .to("MPa")
+        .magnitude
+    )
 
     f = force.to("N").magnitude
     a = (3.0 * f * effective_radius / (4.0 * e_star)) ** (1.0 / 3.0)  # mm
@@ -225,8 +250,6 @@ def hertz_cylinder_contact(
     _require(force, "[force]", "force")
     _require(length, "[length]", "length")
     _require(diameter1, "[length]", "diameter1")
-    _require(modulus1, "[pressure]", "modulus1")
-    _require(modulus2, "[pressure]", "modulus2")
 
     d1 = diameter1.to("mm").magnitude
     length_mm = length.to("mm").magnitude
@@ -243,9 +266,14 @@ def hertz_cylinder_contact(
             raise ValueError(f"diameter2 must be positive; got {diameter2}")
         inv_d = 1.0 / d1 + 1.0 / d2
 
-    e1 = modulus1.to("MPa").magnitude
-    e2 = modulus2.to("MPa").magnitude
-    inv_e_star = (1.0 - poisson1**2) / e1 + (1.0 - poisson2**2) / e2
+    inv_e_star = (
+        1.0
+        / hertz_effective_modulus(
+            modulus1=modulus1, poisson1=poisson1, modulus2=modulus2, poisson2=poisson2
+        )
+        .to("MPa")
+        .magnitude
+    )
 
     f = force.to("N").magnitude
     b = math.sqrt((2.0 * f / (math.pi * length_mm)) * inv_e_star / inv_d)  # mm

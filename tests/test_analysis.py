@@ -78,6 +78,7 @@ from anvilate.analysis import (
     helical_spring_buckling,
     helical_spring_rate,
     hertz_cylinder_contact,
+    hertz_effective_modulus,
     hertz_sphere_contact,
     hollow_circular_second_moment,
     hollow_shaft_torsional_stress,
@@ -3253,6 +3254,23 @@ def test_interference_fit_hollow_shaft_lowers_pressure():
         shaft_bore_diameter=_q("30 mm"),
     )
     assert hollow.contact_pressure.to("MPa").magnitude < solid.contact_pressure.to("MPa").magnitude
+
+
+def test_hertz_effective_modulus_matches_hand_calc():
+    # Two steel bodies (E=200 GPa, nu=0.3): 1/E* = 2*(1-0.09)/200000 -> E* = 109890 MPa.
+    e_star = hertz_effective_modulus(
+        modulus1=_q("200 GPa"), poisson1=0.3, modulus2=_q("200 GPa"), poisson2=0.3
+    )
+    assert e_star.to("MPa").magnitude == pytest.approx(109890.1, rel=1e-4)
+    # A steel body on a rigid (infinitely stiff) one is stiffer than steel-on-steel.
+    on_rigid = hertz_effective_modulus(
+        modulus1=_q("200 GPa"), poisson1=0.3, modulus2=_q("1e9 GPa"), poisson2=0.3
+    )
+    assert on_rigid.to("MPa").magnitude > e_star.to("MPa").magnitude
+    with pytest.raises(ValueError, match="modulus1 must be a"):
+        hertz_effective_modulus(
+            modulus1=_q("200 mm"), poisson1=0.3, modulus2=_q("200 GPa"), poisson2=0.3
+        )
 
 
 def test_hertz_sphere_contact_matches_hand_calc():
