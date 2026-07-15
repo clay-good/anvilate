@@ -148,6 +148,8 @@ from anvilate.analysis import (
     thin_wall_cylinder,
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
+    thread_stripping_shear_area,
+    thread_stripping_stress,
     torque_for_preload,
     torque_from_power,
     torsional_natural_frequency,
@@ -2753,6 +2755,87 @@ def test_bolt_tensile_area_rejects_bad_inputs():
         bolt_tensile_stress_area(nominal_diameter=_q("1 mm"), pitch=_q("2 mm"))
     with pytest.raises(ValueError, match="tension must be a"):
         bolt_axial_stress(tension=_q("20 mm"), nominal_diameter=_q("10 mm"), pitch=_q("1.5 mm"))
+
+
+def test_thread_stripping_shear_area_matches_basic_profile():
+    # M12x1.75, 12 mm engagement. External (bolt) threads strip on a cylinder at
+    # the internal minor diameter D1 = 12 - 1.0825*1.75 = 10.106 mm:
+    #   A = 0.75*pi*10.106*12 = 285.7 mm^2.
+    ext = thread_stripping_shear_area(
+        nominal_diameter=_q("12 mm"), pitch=_q("1.75 mm"), engagement_length=_q("12 mm")
+    )
+    assert ext.to("mm**2").magnitude == pytest.approx(285.7, rel=1e-3)
+    # Internal (nut) threads strip on a cylinder at the major diameter d = 12 mm:
+    #   A = 0.875*pi*12*12 = 395.8 mm^2.
+    internal = thread_stripping_shear_area(
+        nominal_diameter=_q("12 mm"),
+        pitch=_q("1.75 mm"),
+        engagement_length=_q("12 mm"),
+        member="internal",
+    )
+    assert internal.to("mm**2").magnitude == pytest.approx(395.8, rel=1e-3)
+    # With matched materials the bolt threads strip first: the internal area is
+    # always the larger (0.875*d > 0.75*D1 for any metric thread).
+    assert internal.to("mm**2").magnitude > ext.to("mm**2").magnitude
+    # The area is linear in the length of engagement.
+    doubled = thread_stripping_shear_area(
+        nominal_diameter=_q("12 mm"), pitch=_q("1.75 mm"), engagement_length=_q("24 mm")
+    )
+    assert doubled.to("mm**2").magnitude == pytest.approx(2 * ext.to("mm**2").magnitude, rel=1e-9)
+
+
+def test_thread_stripping_stress_is_load_over_area():
+    # 30 kN over the external stripping area of an M12x1.75 at 12 mm engagement:
+    #   tau = 30000 / 285.7 = 105.0 MPa.
+    tau = thread_stripping_stress(
+        load=_q("30 kN"),
+        nominal_diameter=_q("12 mm"),
+        pitch=_q("1.75 mm"),
+        engagement_length=_q("12 mm"),
+    )
+    area = thread_stripping_shear_area(
+        nominal_diameter=_q("12 mm"), pitch=_q("1.75 mm"), engagement_length=_q("12 mm")
+    )
+    assert tau.to("MPa").magnitude == pytest.approx(105.0, rel=1e-3)
+    assert tau.to("MPa").magnitude == pytest.approx(30000.0 / area.to("mm**2").magnitude, rel=1e-9)
+    # The internal (nut) threads see a lower stress on their larger area.
+    tau_int = thread_stripping_stress(
+        load=_q("30 kN"),
+        nominal_diameter=_q("12 mm"),
+        pitch=_q("1.75 mm"),
+        engagement_length=_q("12 mm"),
+        member="internal",
+    )
+    assert tau_int.to("MPa").magnitude < tau.to("MPa").magnitude
+
+
+def test_thread_stripping_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="pitch must be positive"):
+        thread_stripping_shear_area(
+            nominal_diameter=_q("12 mm"), pitch=_q("0 mm"), engagement_length=_q("12 mm")
+        )
+    with pytest.raises(ValueError, match="engagement_length must be positive"):
+        thread_stripping_shear_area(
+            nominal_diameter=_q("12 mm"), pitch=_q("1.75 mm"), engagement_length=_q("0 mm")
+        )
+    with pytest.raises(ValueError, match="must exceed 1.0825"):
+        thread_stripping_shear_area(
+            nominal_diameter=_q("1 mm"), pitch=_q("2 mm"), engagement_length=_q("12 mm")
+        )
+    with pytest.raises(ValueError, match="member must be"):
+        thread_stripping_shear_area(
+            nominal_diameter=_q("12 mm"),
+            pitch=_q("1.75 mm"),
+            engagement_length=_q("12 mm"),
+            member="bolt",
+        )
+    with pytest.raises(ValueError, match="load must be a"):
+        thread_stripping_stress(
+            load=_q("12 mm"),
+            nominal_diameter=_q("12 mm"),
+            pitch=_q("1.75 mm"),
+            engagement_length=_q("12 mm"),
+        )
 
 
 def test_polar_second_moment_solid_matches_pi_d4_over_32():

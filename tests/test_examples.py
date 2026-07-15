@@ -737,6 +737,26 @@ def test_bolt_tension_thread_area_example_fails_on_the_real_area():
     assert card.status is CheckStatus.FAIL
 
 
+def test_tapped_hole_engagement_example_strips_the_soft_threads():
+    namespace = runpy.run_path(str(_EXAMPLES / "tapped_hole_engagement.py"))
+    card = namespace["screen_tapped_hole"]()
+    by_name = {e.name: e for e in card.entries}
+    # The steel bolt's own threads clear one diameter of engagement (SF 2.16)...
+    steel = by_name["steel bolt threads @ 1*d"]
+    assert steel.passed
+    assert "safety factor 2.16" in steel.detail
+    # ...but the soft aluminium tapped hole strips first -- one diameter busts the
+    # 2.0 requirement (SF 1.29) -> the joint FAILs.
+    alum_short = by_name["aluminium hole threads @ 1*d"]
+    assert alum_short.status is CheckStatus.FAIL
+    assert "safety factor 1.29" in alum_short.detail
+    assert card.status is CheckStatus.FAIL
+    # Two diameters of engagement halves the stripping stress and recovers it.
+    alum_deep = by_name["aluminium hole threads @ 2*d"]
+    assert alum_deep.passed
+    assert "safety factor 2.58" in alum_deep.detail
+
+
 def test_coupling_key_example_passes_shear_but_fails_bearing():
     namespace = runpy.run_path(str(_EXAMPLES / "coupling_key_sizing.py"))
     card = namespace["screen_coupling_key"]()

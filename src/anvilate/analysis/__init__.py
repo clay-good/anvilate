@@ -143,6 +143,8 @@ from .fastener import (
     bolt_preload_from_torque,
     bolt_shear_stress,
     bolt_tensile_stress_area,
+    thread_stripping_shear_area,
+    thread_stripping_stress,
     torque_for_preload,
 )
 from .fatigue import (
@@ -334,6 +336,8 @@ __all__ = [
     "bolt_diameter_for_shear",
     "bolt_tensile_stress_area",
     "bolt_axial_stress",
+    "thread_stripping_shear_area",
+    "thread_stripping_stress",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",

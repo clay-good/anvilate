@@ -31,6 +31,19 @@ from ..units import Quantity
 # effective diameter is the mean of the pitch and rounded-root minor diameters.
 _TENSILE_AREA_PITCH_FACTOR = 0.9382
 
+# Basic ISO metric (60-degree) thread geometry, all derived from d and P alone.
+# Minor diameter of the internal thread, D1 = d - (5/4)*H = d - 1.0825*P, where
+# H = (sqrt(3)/2)*P is the height of the fundamental triangle; the bolt threads
+# strip on a cylinder at this diameter.
+_INTERNAL_MINOR_DIA_FACTOR = 1.0825
+# Thread-stripping shear-area coefficients (Alexander / FED-STD-H28, basic
+# profile): A_ext = 0.75*pi*D1*Le for the external (bolt) threads, A_int =
+# 0.875*pi*d*Le for the internal (nut/tapped-hole) threads. The coefficients are
+# 1/2 + tan(30)*(d2 - D1)/P = 0.75 and 1/2 + tan(30)*(d - d2)/P = 0.875, with the
+# pitch diameter d2 = d - 0.6495*P; they are exact for the basic profile.
+_EXTERNAL_STRIP_COEFFICIENT = 0.75
+_INTERNAL_STRIP_COEFFICIENT = 0.875
+
 __all__ = [
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
@@ -40,6 +53,8 @@ __all__ = [
     "bolt_diameter_for_shear",
     "bolt_tensile_stress_area",
     "bolt_axial_stress",
+    "thread_stripping_shear_area",
+    "thread_stripping_stress",
 ]
 
 # Typical nut factor K for as-received (lightly-oiled) steel fasteners. Dry/rough
@@ -205,6 +220,90 @@ def bolt_tensile_stress_area(*, nominal_diameter: Quantity, pitch: Quantity) -> 
             f"({pitch}) for a valid thread"
         )
     return Quantity(magnitude=pi * effective**2 / 4, unit="mm**2")
+
+
+def thread_stripping_shear_area(
+    *,
+    nominal_diameter: Quantity,
+    pitch: Quantity,
+    engagement_length: Quantity,
+    member: str = "external",
+) -> Quantity:
+    """The cylindrical shear area A_s that resists thread stripping over a length
+    of engagement.
+
+    A threaded joint can fail by the threads shearing off (stripping) instead of
+    the bolt breaking in tension. The area that resists it is a cylinder through
+    the engaged threads, and which cylinder depends on which member strips:
+
+    - ``member="external"`` — the **bolt** threads strip, on a cylinder at the
+      internal-thread minor diameter D1 = d − 1.0825·P:
+      A_s = 0.75·π·D1·L_e.
+    - ``member="internal"`` — the **nut** or tapped-hole threads strip, on a
+      cylinder at the external-thread major diameter d:
+      A_s = 0.875·π·d·L_e.
+
+    These are the Alexander / FED-STD-H28 basic-profile shear areas, derived from
+    the nominal diameter d and pitch P alone (no thread-tolerance data), so the
+    internal area always exceeds the external — with matched materials the bolt
+    threads strip first. ``nominal_diameter`` is d, ``pitch`` is P, and
+    ``engagement_length`` L_e is the threaded length in contact. Returns the area
+    in mm²; all three are dimension-checked lengths and must be positive, and d
+    must exceed 1.0825·P for a valid thread.
+    """
+    _require(nominal_diameter, "[length]", "nominal_diameter")
+    _require(pitch, "[length]", "pitch")
+    _require(engagement_length, "[length]", "engagement_length")
+    d = nominal_diameter.to("mm").magnitude
+    p = pitch.to("mm").magnitude
+    le = engagement_length.to("mm").magnitude
+    for value, name in ((p, "pitch"), (le, "engagement_length")):
+        if value <= 0:
+            raise ValueError(f"{name} must be positive; got {value} mm")
+    minor = d - _INTERNAL_MINOR_DIA_FACTOR * p
+    if minor <= 0:
+        raise ValueError(
+            f"nominal_diameter ({nominal_diameter}) must exceed 1.0825·pitch "
+            f"({pitch}) for a valid thread"
+        )
+    if member == "external":
+        area = _EXTERNAL_STRIP_COEFFICIENT * pi * minor * le
+    elif member == "internal":
+        area = _INTERNAL_STRIP_COEFFICIENT * pi * d * le
+    else:
+        raise ValueError(f"member must be 'external' (bolt) or 'internal' (nut); got {member!r}")
+    return Quantity(magnitude=area, unit="mm**2")
+
+
+def thread_stripping_stress(
+    *,
+    load: Quantity,
+    nominal_diameter: Quantity,
+    pitch: Quantity,
+    engagement_length: Quantity,
+    member: str = "external",
+) -> Quantity:
+    """The average thread-stripping shear stress τ = F/A_s over the engaged
+    threads.
+
+    ``load`` is the axial force F the joint carries; the other arguments and the
+    ``member`` selector are as in :func:`thread_stripping_shear_area`. Screen it
+    against the stripping member's allowable shear stress (≈0.577·S_y, or the
+    material's rated shear strength) — a short engagement in a soft tapped hole
+    strips the internal threads before the bolt reaches proof load, which is why a
+    steel bolt into aluminium needs roughly twice the engagement of steel into
+    steel. Returns the stress in MPa; ``load`` must be a force.
+    """
+    _require(load, "[force]", "load")
+    area = thread_stripping_shear_area(
+        nominal_diameter=nominal_diameter,
+        pitch=pitch,
+        engagement_length=engagement_length,
+        member=member,
+    ).pint
+    stress = load.pint / area
+    converted = stress.to("MPa")
+    return Quantity(magnitude=float(converted.magnitude), unit="MPa")
 
 
 def bolt_axial_stress(
