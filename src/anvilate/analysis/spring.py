@@ -42,6 +42,7 @@ __all__ = [
     "SPRING_END_CLAMPED_FREE",
     "SpringBucklingResult",
     "helical_spring_buckling",
+    "spring_stored_energy",
 ]
 
 
@@ -217,3 +218,26 @@ def helical_spring_buckling(
         absolutely_stable=False,
         critical_deflection=Quantity(magnitude=y_cr, unit="mm"),
     )
+
+
+def spring_stored_energy(*, spring_rate: Quantity, deflection: Quantity) -> Quantity:
+    """The elastic energy U = ½·k·y² stored in a linear spring at ``deflection``.
+
+    A compressed spring is an energy store; U (= ½·F·y for the force F = k·y at
+    that deflection) is what it returns on release — the quantity a surge, a
+    latch, or an impact snubber is sized around. ``spring_rate`` k is the coil rate
+    from :func:`helical_spring_rate` (force per length) and ``deflection`` y the
+    compression. Returns the energy in joules; both quantities are
+    dimension-checked and ``deflection`` must be non-negative.
+    """
+    if not spring_rate.has_dimension("[force] / [length]"):
+        raise ValueError(
+            f"spring_rate must be a [force]/[length] quantity; got "
+            f"{spring_rate.dimensionality} ({spring_rate})"
+        )
+    _require(deflection, "[length]", "deflection")
+    if deflection.to("mm").magnitude < 0:
+        raise ValueError(f"deflection must be non-negative; got {deflection}")
+    energy = spring_rate.pint * deflection.pint**2 / 2
+    converted = energy.to("J")
+    return Quantity(magnitude=float(converted.magnitude), unit="J")

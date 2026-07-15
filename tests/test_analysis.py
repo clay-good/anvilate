@@ -124,6 +124,7 @@ from anvilate.analysis import (
     solid_disc_polar_mass_moment,
     spring_index,
     spring_shear_stress,
+    spring_stored_energy,
     spring_surge_frequency,
     strength_scorecard,
     thick_wall_cylinder,
@@ -2366,6 +2367,22 @@ def test_spring_rate_and_surge_reject_bad_inputs():
         spring_surge_frequency(spring_rate=_q("7.7 N"), spring_mass=_q("100 g"))
     with pytest.raises(ValueError, match="must be positive"):
         spring_surge_frequency(spring_rate=_q("7.7 N/mm"), spring_mass=_q("0 g"))
+
+
+def test_spring_stored_energy_worked_example():
+    # k = 7.744 N/mm compressed 30 mm: U = 0.5*k*y^2 = 0.5*7.744*900 = 3484.8 N*mm
+    #   = 3.4848 J, and equals 0.5*F*y for F = k*y = 232.3 N.
+    u = spring_stored_energy(spring_rate=_q("7.744 N/mm"), deflection=_q("30 mm"))
+    assert u.to("J").magnitude == pytest.approx(3.4848, rel=1e-4)
+    force = 7.744 * 30  # N
+    assert u.to("J").magnitude == pytest.approx(0.5 * force * 30 / 1000, rel=1e-9)
+
+
+def test_spring_stored_energy_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="spring_rate must be a"):
+        spring_stored_energy(spring_rate=_q("7.744 N"), deflection=_q("30 mm"))
+    with pytest.raises(ValueError, match="deflection must be non-negative"):
+        spring_stored_energy(spring_rate=_q("7.744 N/mm"), deflection=_q("-1 mm"))
 
 
 def test_spring_buckling_critical_deflection_worked_example():

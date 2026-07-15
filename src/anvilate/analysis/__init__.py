@@ -183,6 +183,7 @@ from .spring import (
     helical_spring_rate,
     spring_index,
     spring_shear_stress,
+    spring_stored_energy,
     wahl_factor,
 )
 from .stress import (
@@ -357,6 +358,7 @@ __all__ = [
     "SPRING_END_CLAMPED_FREE",
     "SpringBucklingResult",
     "helical_spring_buckling",
+    "spring_stored_energy",
     "spring_surge_frequency",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
