@@ -30,6 +30,8 @@ modules:
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
   (millions of revolutions and running hours)
+- :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
+  amplification factor (energy method)
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, and
   the ISO 898 tensile stress area / axial stress
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
@@ -174,6 +176,11 @@ from .fatigue import (
     miner_spectrum_repeats_to_failure,
     soderberg_safety_factor,
     soderberg_scorecard,
+)
+from .impact import (
+    SUDDENLY_APPLIED_FACTOR,
+    impact_factor,
+    impact_stress,
 )
 from .interference import (
     InterferenceFit,
@@ -383,6 +390,9 @@ __all__ = [
     "cyclic_stress_components",
     "estimated_endurance_limit",
     "fatigue_notch_factor",
+    "SUDDENLY_APPLIED_FACTOR",
+    "impact_factor",
+    "impact_stress",
     "key_tangential_force",
     "key_shear_stress",
     "key_bearing_stress",

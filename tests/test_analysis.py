@@ -89,6 +89,8 @@ from anvilate.analysis import (
     hollow_shaft_diameter_for_bending_torsion,
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
+    impact_factor,
+    impact_stress,
     interference_axial_capacity,
     interference_fit,
     interference_for_contact_pressure,
@@ -2771,6 +2773,44 @@ def test_bolt_tensile_area_rejects_bad_inputs():
         bolt_tensile_stress_area(nominal_diameter=_q("1 mm"), pitch=_q("2 mm"))
     with pytest.raises(ValueError, match="tension must be a"):
         bolt_axial_stress(tension=_q("20 mm"), nominal_diameter=_q("10 mm"), pitch=_q("1.5 mm"))
+
+
+def test_impact_factor_energy_method():
+    # A load applied suddenly from rest (h=0) still doubles the static values.
+    sudden = impact_factor(drop_height=_q("0 mm"), static_deflection=_q("5 mm"))
+    assert sudden == pytest.approx(2.0, rel=1e-12)
+    # A 100 mm drop onto a member that deflects 2 mm statically: K = 1+sqrt(1+2*100/2)
+    # = 1 + sqrt(101) = 11.05.
+    dropped = impact_factor(drop_height=_q("100 mm"), static_deflection=_q("2 mm"))
+    assert dropped == pytest.approx(1 + (101) ** 0.5, rel=1e-9)
+    # A stiffer target (smaller static deflection) amplifies a drop more.
+    stiffer = impact_factor(drop_height=_q("100 mm"), static_deflection=_q("1 mm"))
+    assert stiffer > dropped
+
+
+def test_impact_stress_scales_the_static_stress_by_the_factor():
+    # 20 MPa static, applied suddenly -> 40 MPa (K=2).
+    sudden = impact_stress(
+        static_stress=_q("20 MPa"), drop_height=_q("0 mm"), static_deflection=_q("5 mm")
+    )
+    assert sudden.to("MPa").magnitude == pytest.approx(40.0, rel=1e-12)
+    # It equals the static stress times the impact factor for the same drop.
+    k = impact_factor(drop_height=_q("100 mm"), static_deflection=_q("2 mm"))
+    dropped = impact_stress(
+        static_stress=_q("20 MPa"), drop_height=_q("100 mm"), static_deflection=_q("2 mm")
+    )
+    assert dropped.to("MPa").magnitude == pytest.approx(20.0 * k, rel=1e-12)
+
+
+def test_impact_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="drop_height must be non-negative"):
+        impact_factor(drop_height=_q("-5 mm"), static_deflection=_q("5 mm"))
+    with pytest.raises(ValueError, match="static_deflection must be positive"):
+        impact_factor(drop_height=_q("5 mm"), static_deflection=_q("0 mm"))
+    with pytest.raises(ValueError, match="static_stress must be a"):
+        impact_stress(
+            static_stress=_q("20 mm"), drop_height=_q("0 mm"), static_deflection=_q("5 mm")
+        )
 
 
 def test_power_screw_torques_match_the_worked_example():
