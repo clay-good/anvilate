@@ -23,7 +23,7 @@ As with the beam and column checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from math import pi
+from math import pi, sqrt
 
 from ..units import Quantity
 
@@ -37,6 +37,7 @@ __all__ = [
     "torque_for_preload",
     "bearing_stress",
     "bolt_shear_stress",
+    "bolt_diameter_for_shear",
     "bolt_tensile_stress_area",
     "bolt_axial_stress",
 ]
@@ -145,6 +146,39 @@ def bolt_shear_stress(
     stress = force.pint / (shear_planes * area)
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def bolt_diameter_for_shear(
+    *,
+    shear_load: Quantity,
+    allowable_shear: Quantity,
+    shear_planes: int = 1,
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least bolt/pin diameter to carry a transverse ``shear_load`` within an
+    allowable shear stress.
+
+    The inverse of :func:`bolt_shear_stress`: demanding F/(n·π·d²/4) ≤ τ_allow/SF
+    gives d_min = √(4·SF·F/(π·n·τ_allow)) — the sizing step for a bolt or pin in
+    shear. ``shear_load`` F is the transverse load, ``allowable_shear`` τ_allow the
+    fastener's allowable shear stress, ``shear_planes`` n the number of shear planes
+    (1 single shear, 2 double shear), and ``required_safety_factor`` SF the margin
+    on it (default 1.0). Returns the minimum shank diameter in mm; the load and
+    stress are dimension-checked, ``shear_planes`` must be a positive integer, and
+    ``SF`` / ``allowable_shear`` must be positive.
+    """
+    _require(shear_load, "[force]", "shear_load")
+    _require(allowable_shear, "[pressure]", "allowable_shear")
+    if shear_planes < 1:
+        raise ValueError(f"shear_planes must be a positive integer; got {shear_planes}")
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    f = shear_load.to("N").magnitude
+    tau = allowable_shear.to("MPa").magnitude
+    if tau <= 0:
+        raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
+    d_min = sqrt(4 * required_safety_factor * f / (pi * shear_planes * tau))
+    return Quantity(magnitude=d_min, unit="mm")
 
 
 def bolt_tensile_stress_area(*, nominal_diameter: Quantity, pitch: Quantity) -> Quantity:

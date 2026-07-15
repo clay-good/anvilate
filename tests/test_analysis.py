@@ -16,6 +16,7 @@ from anvilate.analysis import (
     axial_stress,
     bearing_stress,
     bolt_axial_stress,
+    bolt_diameter_for_shear,
     bolt_preload_from_torque,
     bolt_shear_stress,
     bolt_tensile_stress_area,
@@ -2591,6 +2592,36 @@ def test_bolt_shear_stress_single_and_double():
 def test_bolt_shear_rejects_bad_planes():
     with pytest.raises(ValueError, match="shear_planes must be a positive integer"):
         bolt_shear_stress(force=_q("10 kN"), diameter=_q("8 mm"), shear_planes=0)
+
+
+def test_bolt_diameter_for_shear_inverts_the_shear_check():
+    # 20 kN in single shear within a 120 MPa allowable needs
+    #   d = sqrt(4*F/(pi*tau)) = sqrt(80000/(pi*120)) = 14.57 mm.
+    d = bolt_diameter_for_shear(shear_load=_q("20 kN"), allowable_shear=_q("120 MPa"))
+    assert d.to("mm").magnitude == pytest.approx(14.567, rel=1e-4)
+    # A bolt of exactly this diameter is worked to the allowable in shear.
+    tau = bolt_shear_stress(force=_q("20 kN"), diameter=d)
+    assert tau.to("MPa").magnitude == pytest.approx(120.0, rel=1e-6)
+
+
+def test_bolt_diameter_for_shear_shrinks_in_double_shear():
+    # Two shear planes halve the required area, so the diameter drops by sqrt(2).
+    single = bolt_diameter_for_shear(shear_load=_q("20 kN"), allowable_shear=_q("120 MPa"))
+    double = bolt_diameter_for_shear(
+        shear_load=_q("20 kN"), allowable_shear=_q("120 MPa"), shear_planes=2
+    )
+    assert double.to("mm").magnitude == pytest.approx(single.to("mm").magnitude / 2**0.5, rel=1e-9)
+
+
+def test_bolt_diameter_for_shear_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="shear_load must be a"):
+        bolt_diameter_for_shear(shear_load=_q("20 mm"), allowable_shear=_q("120 MPa"))
+    with pytest.raises(ValueError, match="shear_planes must be a positive integer"):
+        bolt_diameter_for_shear(
+            shear_load=_q("20 kN"), allowable_shear=_q("120 MPa"), shear_planes=0
+        )
+    with pytest.raises(ValueError, match="allowable_shear must be positive"):
+        bolt_diameter_for_shear(shear_load=_q("20 kN"), allowable_shear=_q("0 MPa"))
 
 
 def test_bearing_stress_matches_worked_example():
