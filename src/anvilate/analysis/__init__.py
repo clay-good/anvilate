@@ -32,7 +32,7 @@ modules:
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
-  (millions of revolutions and running hours)
+  (millions of revolutions and running hours) and static load safety factor
 - :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
   tension ratio, slack tension, and transmissible force
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
@@ -121,6 +121,7 @@ from .bearing import (
     ROLLER_BEARING_LIFE_EXPONENT,
     bearing_basic_rating_life,
     bearing_life_hours,
+    bearing_static_safety_factor,
 )
 from .belt import (
     belt_max_transmissible_force,
@@ -383,6 +384,7 @@ __all__ = [
     "ROLLER_BEARING_LIFE_EXPONENT",
     "bearing_basic_rating_life",
     "bearing_life_hours",
+    "bearing_static_safety_factor",
     "capstan_tension_ratio",
     "belt_slack_tension",
     "belt_max_transmissible_force",

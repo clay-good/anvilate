@@ -21,6 +21,7 @@ from anvilate.analysis import (
     basquin_stress_for_life,
     bearing_basic_rating_life,
     bearing_life_hours,
+    bearing_static_safety_factor,
     bearing_stress,
     belt_max_transmissible_force,
     belt_slack_tension,
@@ -3125,6 +3126,22 @@ def test_bearing_basic_rating_life_follows_the_load_life_law():
     )
     assert roller == pytest.approx(7 ** (10 / 3), rel=1e-9)
     assert roller > life
+
+
+def test_bearing_static_safety_factor():
+    # s0 = C0/P0: a 12 kN static rating under a 4 kN static load -> 3.0.
+    s0 = bearing_static_safety_factor(
+        static_load_rating=_q("12 kN"), equivalent_static_load=_q("4 kN")
+    )
+    assert s0 == pytest.approx(3.0, rel=1e-12)
+    with pytest.raises(ValueError, match="equivalent_static_load must be positive"):
+        bearing_static_safety_factor(
+            static_load_rating=_q("12 kN"), equivalent_static_load=_q("0 kN")
+        )
+    with pytest.raises(ValueError, match="static_load_rating must be a"):
+        bearing_static_safety_factor(
+            static_load_rating=_q("12 mm"), equivalent_static_load=_q("4 kN")
+        )
 
 
 def test_bearing_life_hours_converts_revolutions_at_speed():

@@ -32,6 +32,7 @@ __all__ = [
     "ROLLER_BEARING_LIFE_EXPONENT",
     "bearing_basic_rating_life",
     "bearing_life_hours",
+    "bearing_static_safety_factor",
 ]
 
 
@@ -98,3 +99,29 @@ def bearing_life_hours(
         raise ValueError(f"speed must be positive; got {speed}")
     hours = life_mrev * 1.0e6 / (60.0 * rpm)
     return Quantity(magnitude=hours, unit="hour")
+
+
+def bearing_static_safety_factor(
+    *,
+    static_load_rating: Quantity,
+    equivalent_static_load: Quantity,
+) -> float:
+    """The static load safety factor s₀ = C₀/P₀ of a rolling bearing.
+
+    Alongside the L10 dynamic life, a bearing must survive its heaviest *static*
+    (or slow, shock) load without brinelling the raceways. The static safety factor
+    is the basic static load rating ``static_load_rating`` C₀ (a catalogue value)
+    over the equivalent static load ``equivalent_static_load`` P₀ actually applied.
+    Typical minimums are s₀ ≈ 1–2 for smooth-running bearings and up to 3+ where
+    shock or quiet running matters. Both loads must be positive forces. Returns the
+    dimensionless s₀.
+    """
+    _require(static_load_rating, "[force]", "static_load_rating")
+    _require(equivalent_static_load, "[force]", "equivalent_static_load")
+    c0 = static_load_rating.to("N").magnitude
+    p0 = equivalent_static_load.to("N").magnitude
+    if c0 <= 0:
+        raise ValueError(f"static_load_rating must be positive; got {static_load_rating}")
+    if p0 <= 0:
+        raise ValueError(f"equivalent_static_load must be positive; got {equivalent_static_load}")
+    return c0 / p0
