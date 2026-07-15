@@ -125,6 +125,7 @@ from anvilate.analysis import (
     natural_frequency_from_deflection,
     overhang_tip_load,
     overhang_uniform_load,
+    plate_buckling_stress,
     polar_second_moment_hollow,
     polar_second_moment_solid,
     power_screw_efficiency,
@@ -2909,6 +2910,51 @@ def test_power_screw_rejects_bad_inputs():
         power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=-0.1, **kw)
     with pytest.raises(ValueError, match="load must be a"):
         power_screw_raise_torque(load=_q("6.4 mm"), friction_coefficient=0.08, **kw)
+
+
+def test_plate_buckling_stress_scales_with_thickness_squared():
+    # k=4, E=200 GPa, t=5 mm, b=300 mm, nu=0.3:
+    #   sigma_cr = 4*pi^2*E/(12*(1-nu^2))*(t/b)^2 = 200.85 MPa.
+    sigma = plate_buckling_stress(
+        buckling_coefficient=4.0,
+        elastic_modulus=_q("200 GPa"),
+        thickness=_q("5 mm"),
+        width=_q("300 mm"),
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(200.847, rel=1e-4)
+    # The (t/b)^2 lever: doubling the thickness quadruples the critical stress.
+    thicker = plate_buckling_stress(
+        buckling_coefficient=4.0,
+        elastic_modulus=_q("200 GPa"),
+        thickness=_q("10 mm"),
+        width=_q("300 mm"),
+    )
+    assert thicker.to("MPa").magnitude == pytest.approx(4 * sigma.to("MPa").magnitude, rel=1e-9)
+
+
+def test_plate_buckling_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="buckling_coefficient must be positive"):
+        plate_buckling_stress(
+            buckling_coefficient=0.0,
+            elastic_modulus=_q("200 GPa"),
+            thickness=_q("5 mm"),
+            width=_q("300 mm"),
+        )
+    with pytest.raises(ValueError, match="poisson_ratio must lie in"):
+        plate_buckling_stress(
+            buckling_coefficient=4.0,
+            elastic_modulus=_q("200 GPa"),
+            thickness=_q("5 mm"),
+            width=_q("300 mm"),
+            poisson_ratio=0.7,
+        )
+    with pytest.raises(ValueError, match="elastic_modulus must be a"):
+        plate_buckling_stress(
+            buckling_coefficient=4.0,
+            elastic_modulus=_q("200 mm"),
+            thickness=_q("5 mm"),
+            width=_q("300 mm"),
+        )
 
 
 def test_gear_lewis_bending_and_tangential_load():

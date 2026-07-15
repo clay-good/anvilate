@@ -43,6 +43,7 @@ __all__ = [
     "simply_supported_annular_plate_uniform_load",
     "clamped_annular_plate_uniform_load",
     "clamped_circular_plate_thickness_for_pressure",
+    "plate_buckling_stress",
 ]
 
 # Odd-harmonic cap for the Navier series. Deflection terms fall off as 1/(mn)·
@@ -563,3 +564,40 @@ def simply_supported_plate_uniform_load(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
     )
+
+
+def plate_buckling_stress(
+    *,
+    buckling_coefficient: float,
+    elastic_modulus: Quantity,
+    thickness: Quantity,
+    width: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> Quantity:
+    """The elastic critical buckling stress of a flat plate in in-plane compression.
+
+    A thin plate or beam web loaded edgewise buckles out of plane long before it
+    squashes, at σ_cr = k·π²·E/(12·(1−ν²))·(t/b)². ``buckling_coefficient`` k rolls
+    up the edge support and aspect ratio (k ≈ 4.0 for a long simply-supported plate,
+    6.97 clamped on the unloaded edges, 0.425 with one edge free — read from a
+    table, so supplied as an argument); ``elastic_modulus`` E is the material's,
+    ``thickness`` t the plate thickness, ``width`` b the loaded-edge width (the
+    dimension across the buckle), and ``poisson_ratio`` ν. The stress goes as
+    (t/b)², so a slender plate buckles far below yield — the reason webs and thin
+    covers need stiffeners. k, E, t, b must be positive and ν in (0, 0.5). Returns
+    the critical stress in MPa.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(thickness, "[length]", "thickness")
+    _require(width, "[length]", "width")
+    if buckling_coefficient <= 0:
+        raise ValueError(f"buckling_coefficient must be positive; got {buckling_coefficient}")
+    if not 0 < poisson_ratio < 0.5:
+        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+    e = elastic_modulus.to("MPa").magnitude
+    t = thickness.to("mm").magnitude
+    b = width.to("mm").magnitude
+    if t <= 0 or b <= 0:
+        raise ValueError("thickness and width must be positive")
+    sigma = buckling_coefficient * pi**2 * e / (12.0 * (1.0 - poisson_ratio**2)) * (t / b) ** 2
+    return Quantity(magnitude=sigma, unit="MPa")
