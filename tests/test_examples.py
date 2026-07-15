@@ -914,3 +914,22 @@ def test_drivetrain_shaft_twist_example_is_governed_by_stiffness():
     assert twist.status is CheckStatus.FAIL
     assert "safety factor 0.73" in twist.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_winch_band_brake_example_is_sized_by_lining_pressure():
+    namespace = runpy.run_path(str(_EXAMPLES / "winch_band_brake.py"))
+    card = namespace["screen_winch_brake"]()
+    by_name = {e.name: e for e in card.entries}
+    # The wrap holds the torque with margin at the rated band tension...
+    torque = by_name["hold torque"]
+    assert torque.passed
+    assert "safety factor 1.66" in torque.detail
+    # ...but the working tension crushes the lining on the 40 mm strap -> FAIL.
+    narrow = by_name["lining pressure (40 mm band)"]
+    assert narrow.status is CheckStatus.FAIL
+    assert "safety factor 0.75" in narrow.detail
+    assert card.status is CheckStatus.FAIL
+    # A 60 mm band spreads the same tension under the allowable.
+    wide = by_name["lining pressure (60 mm band)"]
+    assert wide.passed
+    assert "safety factor 1.12" in wide.detail
