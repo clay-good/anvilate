@@ -92,6 +92,7 @@ from .beam import (
     simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
+    span_deflection_limit,
 )
 from .column import (
     ColumnEnd,
@@ -284,6 +285,7 @@ __all__ = [
     "required_section_modulus",
     "max_transverse_shear_stress",
     "deflection_scorecard",
+    "span_deflection_limit",
     "SHEAR_FORM_RECTANGULAR",
     "SHEAR_FORM_CIRCULAR",
     "ColumnEnd",

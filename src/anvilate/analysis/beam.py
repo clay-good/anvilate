@@ -61,6 +61,7 @@ __all__ = [
     "hollow_circular_second_moment",
     "max_transverse_shear_stress",
     "deflection_scorecard",
+    "span_deflection_limit",
     "SHEAR_FORM_RECTANGULAR",
     "SHEAR_FORM_CIRCULAR",
 ]
@@ -169,6 +170,25 @@ def deflection_scorecard(
         status=status,
         detail=f"deflection {measured:.3f} mm vs limit {allowed:.3f} mm",
     )
+
+
+def span_deflection_limit(*, span: Quantity, ratio: float) -> Quantity:
+    """The serviceability deflection limit L/``ratio`` for a member of ``span`` L.
+
+    Deflection limits are conventionally a fraction of the span: the common
+    building ratios are L/360 (floors carrying brittle plaster or the classic live
+    load), L/240 (general floors), and L/180 (roofs) — a larger ratio is a tighter
+    limit. This returns the allowable deflection to hand to
+    :func:`deflection_scorecard` as its ``limit``. ``span`` must be a positive
+    length and ``ratio`` positive. Returns the limit in mm.
+    """
+    _require(span, "[length]", "span")
+    length = span.to("mm").magnitude
+    if length <= 0:
+        raise ValueError(f"span must be positive; got {span}")
+    if ratio <= 0:
+        raise ValueError(f"ratio must be positive; got {ratio}")
+    return Quantity(magnitude=length / ratio, unit="mm")
 
 
 class BeamBendingResult(BaseModel):

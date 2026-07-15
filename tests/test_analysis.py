@@ -130,6 +130,7 @@ from anvilate.analysis import (
     soderberg_safety_factor,
     soderberg_scorecard,
     solid_disc_polar_mass_moment,
+    span_deflection_limit,
     spring_index,
     spring_shear_stress,
     spring_stored_energy,
@@ -2134,6 +2135,36 @@ def test_deflection_scorecard_pass_fail_and_not_evaluated():
     none = deflection_scorecard("tip", deflection=result.max_deflection, limit=None)
     assert none.status is CheckStatus.NOT_EVALUATED
     assert not none.passed
+
+
+def test_span_deflection_limit_is_span_over_ratio():
+    # A 6 m floor beam at L/360 (plaster/live-load limit): 6000/360 = 16.67 mm.
+    limit = span_deflection_limit(span=_q("6 m"), ratio=360)
+    assert limit.to("mm").magnitude == pytest.approx(16.667, rel=1e-4)
+    # A looser L/240 general-floor limit is exactly 1.5x as generous.
+    loose = span_deflection_limit(span=_q("6 m"), ratio=240)
+    assert loose.to("mm").magnitude == pytest.approx(1.5 * limit.to("mm").magnitude, rel=1e-9)
+
+
+def test_span_deflection_limit_feeds_the_deflection_scorecard():
+    from anvilate.scorecard import CheckStatus
+
+    # A 6 m beam sagging 20 mm busts the L/360 (16.67 mm) limit but clears L/240.
+    tight = span_deflection_limit(span=_q("6 m"), ratio=360)
+    loose = span_deflection_limit(span=_q("6 m"), ratio=240)
+    assert deflection_scorecard("floor", deflection=_q("20 mm"), limit=tight).status is (
+        CheckStatus.FAIL
+    )
+    assert deflection_scorecard("floor", deflection=_q("20 mm"), limit=loose).status is (
+        CheckStatus.PASS
+    )
+
+
+def test_span_deflection_limit_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="span must be positive"):
+        span_deflection_limit(span=_q("0 m"), ratio=360)
+    with pytest.raises(ValueError, match="ratio must be positive"):
+        span_deflection_limit(span=_q("6 m"), ratio=0)
 
 
 def test_bending_safety_factor_against_yield():
