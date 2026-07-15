@@ -806,3 +806,18 @@ def test_lineshaft_critical_speed_example_resonates_only_when_combined():
     assert combined.status is CheckStatus.FAIL
     assert "28.8 Hz" in combined.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_floor_beam_serviceability_example_is_governed_by_deflection():
+    namespace = runpy.run_path(str(_EXAMPLES / "floor_beam_serviceability.py"))
+    card = namespace["screen_floor_beam"]()
+    by_name = {e.name: e for e in card.entries}
+    # The beam is comfortably strong (SF 1.71 in bending)...
+    bending = by_name["mid-span bending"]
+    assert bending.passed
+    assert "safety factor 1.71" in bending.detail
+    # ...but too flexible: it sags past the L/360 = 16.67 mm limit -> FAIL.
+    deflection = by_name["mid-span deflection (L/360)"]
+    assert deflection.status is CheckStatus.FAIL
+    assert "18.095 mm vs limit 16.667 mm" in deflection.detail
+    assert card.status is CheckStatus.FAIL
