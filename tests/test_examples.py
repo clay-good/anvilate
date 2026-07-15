@@ -687,3 +687,19 @@ def test_off_center_post_example_catches_the_p_delta_feedback():
     assert secant.status is CheckStatus.FAIL
     assert "safety factor 1.04" in secant.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_guide_spring_buckling_example_folds_past_the_working_stroke():
+    namespace = runpy.run_path(str(_EXAMPLES / "guide_spring_buckling.py"))
+    card = namespace["screen_guide_spring_buckling"]()
+    by_name = {e.name: e for e in card.entries}
+    # The wire-stress screen is comfortable at the working load...
+    shear = by_name["guide spring wire shear"]
+    assert shear.passed
+    assert "safety factor 2.00" in shear.detail
+    # ...but the 60 mm stroke drives the slender coil past its 45 mm critical
+    # buckling deflection, so it folds sideways and the screen FAILs.
+    buckling = by_name["guide spring buckling"]
+    assert buckling.status is CheckStatus.FAIL
+    assert "60.000 mm vs limit 45.418 mm" in buckling.detail
+    assert card.status is CheckStatus.FAIL
