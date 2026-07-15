@@ -87,6 +87,7 @@ from anvilate.analysis import (
     flywheel_inertia_for_fluctuation,
     free_thermal_expansion,
     frequency_scorecard,
+    gear_tangential_load,
     gerber_safety_factor,
     gerber_scorecard,
     goodman_safety_factor,
@@ -114,6 +115,7 @@ from anvilate.analysis import (
     key_shear_stress,
     key_tangential_force,
     lead_angle,
+    lewis_bending_stress,
     max_shear_stress_plane,
     max_transverse_shear_stress,
     member_clamp_load_in_joint,
@@ -2907,6 +2909,41 @@ def test_power_screw_rejects_bad_inputs():
         power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=-0.1, **kw)
     with pytest.raises(ValueError, match="load must be a"):
         power_screw_raise_torque(load=_q("6.4 mm"), friction_coefficient=0.08, **kw)
+
+
+def test_gear_lewis_bending_and_tangential_load():
+    # W_t = 2*T/d: 100 N*m on a 100 mm pitch circle -> 2000 N.
+    wt = gear_tangential_load(torque=_q("100 N*m"), pitch_diameter=_q("100 mm"))
+    assert wt.to("N").magnitude == pytest.approx(2000.0, rel=1e-9)
+    # Lewis sigma = W_t/(F*m*Y): 3 kN, m=5 mm, F=50 mm, Y=0.34 -> 35.29 MPa.
+    sigma = lewis_bending_stress(
+        tangential_load=_q("3 kN"),
+        module=_q("5 mm"),
+        face_width=_q("50 mm"),
+        form_factor=0.34,
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(35.294, rel=1e-4)
+    # A wider face or a coarser (larger-module) tooth lowers the stress.
+    wider = lewis_bending_stress(
+        tangential_load=_q("3 kN"),
+        module=_q("5 mm"),
+        face_width=_q("100 mm"),
+        form_factor=0.34,
+    )
+    assert wider.to("MPa").magnitude == pytest.approx(sigma.to("MPa").magnitude / 2, rel=1e-9)
+
+
+def test_gear_lewis_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="pitch_diameter must be positive"):
+        gear_tangential_load(torque=_q("100 N*m"), pitch_diameter=_q("0 mm"))
+    with pytest.raises(ValueError, match=r"form_factor \(Lewis Y\) must be positive"):
+        lewis_bending_stress(
+            tangential_load=_q("3 kN"), module=_q("5 mm"), face_width=_q("50 mm"), form_factor=0.0
+        )
+    with pytest.raises(ValueError, match="tangential_load must be a"):
+        lewis_bending_stress(
+            tangential_load=_q("3 mm"), module=_q("5 mm"), face_width=_q("50 mm"), form_factor=0.34
+        )
 
 
 def test_disc_clutch_torque_both_theories():
