@@ -30,6 +30,7 @@ __all__ = [
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",
+    "shaft_von_mises_stress",
     "shaft_diameter_for_torque",
     "shaft_diameter_for_bending_torsion",
     "hollow_shaft_diameter_for_bending_torsion",
@@ -112,6 +113,35 @@ def shaft_torsional_stress(*, torque: Quantity, diameter: Quantity) -> Quantity:
     r = d / 2
     stress = torque.pint * r / j
     return _as_quantity(stress, "MPa")
+
+
+def shaft_von_mises_stress(
+    *,
+    bending_moment: Quantity,
+    torque: Quantity,
+    diameter: Quantity,
+) -> Quantity:
+    """The distortion-energy (von Mises) stress at the surface of a solid round
+    shaft carrying a bending moment and a torque together.
+
+    A shaft sees σ = 32·M/(π·d³) from bending and τ = 16·T/(π·d³) from torsion, and
+    the von Mises stress combines them as σ' = √(σ² + 3·τ²) = (32/π·d³)·√(M² + ¾·T²)
+    — the forward companion to :func:`shaft_diameter_for_bending_torsion`, which
+    sizes the diameter to hold this stress below S_y/n. ``bending_moment`` M and
+    ``torque`` T are the steady loads and ``diameter`` d the shaft diameter; the
+    moment and torque are dimension-checked torques and d a length. Returns the
+    equivalent stress in MPa. Screen it against the yield strength with a
+    :func:`~anvilate.analysis.stress.yield_safety_factor`.
+    """
+    _require(bending_moment, "[force] * [length]", "bending_moment")
+    _require(torque, "[force] * [length]", "torque")
+    _require(diameter, "[length]", "diameter")
+    m = bending_moment.to("N*mm").magnitude
+    t = torque.to("N*mm").magnitude
+    d = diameter.to("mm").magnitude
+    equivalent = sqrt(m * m + 0.75 * t * t)
+    vm = 32.0 * equivalent / (pi * d**3)
+    return Quantity(magnitude=vm, unit="MPa")
 
 
 def shaft_diameter_for_torque(

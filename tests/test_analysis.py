@@ -114,6 +114,7 @@ from anvilate.analysis import (
     shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
+    shaft_von_mises_stress,
     shrink_fit_assembly_temperature,
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_annular_plate_uniform_load,
@@ -2905,6 +2906,40 @@ def test_thread_engagement_for_load_rejects_bad_inputs():
             pitch=_q("1.75 mm"),
             allowable_shear=_q("159 MPa"),
             member="nut",
+        )
+
+
+def test_shaft_von_mises_stress_is_the_forward_of_the_sizing_inverse():
+    # At the diameter the combined-loading inverse returns, the forward von Mises
+    # stress lands exactly on the allowable Sy/n = 350/2 = 175 MPa.
+    d = shaft_diameter_for_bending_torsion(
+        bending_moment=_q("300 N*m"),
+        torque=_q("500 N*m"),
+        yield_strength=_q("350 MPa"),
+        required_safety_factor=2.0,
+    )
+    vm = shaft_von_mises_stress(bending_moment=_q("300 N*m"), torque=_q("500 N*m"), diameter=d)
+    assert vm.to("MPa").magnitude == pytest.approx(175.0, rel=1e-9)
+    # It equals sqrt(sigma^2 + 3*tau^2) built from the separate bending and shear.
+    sigma = _q(f"{32 * 300000.0 / (pi * d.to('mm').magnitude ** 3)} MPa")
+    tau = shaft_torsional_stress(torque=_q("500 N*m"), diameter=d)
+    combined = von_mises_bending_torsion(bending_stress=sigma, shear_stress=tau)
+    assert vm.to("MPa").magnitude == pytest.approx(combined.to("MPa").magnitude, rel=1e-9)
+    # Pure bending (T=0) reduces to the plain bending stress 32*M/(pi*d^3).
+    pure_bending = shaft_von_mises_stress(
+        bending_moment=_q("300 N*m"), torque=_q("0 N*m"), diameter=_q("40 mm")
+    )
+    assert pure_bending.to("MPa").magnitude == pytest.approx(32 * 300000.0 / (pi * 40**3), rel=1e-9)
+
+
+def test_shaft_von_mises_stress_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="bending_moment must be a"):
+        shaft_von_mises_stress(
+            bending_moment=_q("300 mm"), torque=_q("500 N*m"), diameter=_q("40 mm")
+        )
+    with pytest.raises(ValueError, match="diameter must be a"):
+        shaft_von_mises_stress(
+            bending_moment=_q("300 N*m"), torque=_q("500 N*m"), diameter=_q("40 N")
         )
 
 
