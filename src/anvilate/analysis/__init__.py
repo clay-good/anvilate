@@ -17,8 +17,8 @@ modules:
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   and the minimum section second moment a load requires
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
-  and torsional stiffness; thin-walled rectangular (box) tube torsion (Bredt)
-  and thin open-section (strip) torsion
+  torsional stiffness, and the shaft diameter a torque requires; thin-walled
+  rectangular (box) tube torsion (Bredt) and thin open-section (strip) torsion
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder and sphere
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
@@ -217,6 +217,7 @@ from .torsion import (
     rectangular_tube_enclosed_area,
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
+    shaft_diameter_for_torque,
     shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
@@ -321,6 +322,7 @@ __all__ = [
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",
+    "shaft_diameter_for_torque",
     "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
     "hollow_shaft_twist_angle",

@@ -29,6 +29,7 @@ __all__ = [
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",
+    "shaft_diameter_for_torque",
     "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
     "hollow_shaft_twist_angle",
@@ -89,6 +90,35 @@ def shaft_torsional_stress(*, torque: Quantity, diameter: Quantity) -> Quantity:
     r = d / 2
     stress = torque.pint * r / j
     return _as_quantity(stress, "MPa")
+
+
+def shaft_diameter_for_torque(
+    *,
+    torque: Quantity,
+    allowable_shear: Quantity,
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least solid-shaft diameter to carry ``torque`` within an allowable
+    torsional shear stress.
+
+    The inverse of :func:`shaft_torsional_stress`: demanding 16·T/(π·d³) ≤
+    τ_allow/n gives d_min = (16·n·T/(π·τ_allow))^(1/3) — the sizing step for a
+    torque-carrying shaft. ``torque`` T is the transmitted torque,
+    ``allowable_shear`` τ_allow the material's allowable shear stress, and
+    ``required_safety_factor`` n the margin on it (default 1.0). Returns the
+    minimum diameter in mm; the torque and stress are dimension-checked and
+    ``n`` / ``allowable_shear`` must be positive.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(allowable_shear, "[pressure]", "allowable_shear")
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    t = torque.to("N*mm").magnitude
+    tau = allowable_shear.to("MPa").magnitude
+    if tau <= 0:
+        raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
+    d_min = (16 * required_safety_factor * t / (pi * tau)) ** (1.0 / 3.0)
+    return Quantity(magnitude=d_min, unit="mm")
 
 
 def hollow_shaft_torsional_stress(

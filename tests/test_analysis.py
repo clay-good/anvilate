@@ -99,6 +99,7 @@ from anvilate.analysis import (
     rectangular_tube_twist_angle,
     required_axial_area,
     secant_column_max_stress,
+    shaft_diameter_for_torque,
     shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
@@ -2650,6 +2651,38 @@ def test_shaft_torsional_stress_matches_worked_example():
     #   = 16*50 / (pi*0.02^3) = 31.83 MPa.
     tau = shaft_torsional_stress(torque=_q("50 N*m"), diameter=_q("20 mm"))
     assert tau.to("MPa").magnitude == pytest.approx(31.831, rel=1e-4)
+
+
+def test_shaft_diameter_for_torque_inverts_the_shear_check():
+    # 500 N*m within a 40 MPa allowable needs d = (16*T/(pi*tau))^(1/3)
+    #   = (16*500000/(pi*40))^(1/3) = 39.92 mm.
+    d = shaft_diameter_for_torque(torque=_q("500 N*m"), allowable_shear=_q("40 MPa"))
+    assert d.to("mm").magnitude == pytest.approx(39.92, rel=1e-3)
+    # A shaft of exactly this diameter is worked to the allowable.
+    tau = shaft_torsional_stress(torque=_q("500 N*m"), diameter=d)
+    assert tau.to("MPa").magnitude == pytest.approx(40.0, rel=1e-6)
+
+
+def test_shaft_diameter_for_torque_scales_as_the_cube_root_of_the_margin():
+    base = shaft_diameter_for_torque(torque=_q("500 N*m"), allowable_shear=_q("40 MPa"))
+    with_sf = shaft_diameter_for_torque(
+        torque=_q("500 N*m"), allowable_shear=_q("40 MPa"), required_safety_factor=2.0
+    )
+    # Diameter scales with the cube root of the required margin.
+    assert with_sf.to("mm").magnitude == pytest.approx(
+        2.0 ** (1 / 3) * base.to("mm").magnitude, rel=1e-9
+    )
+
+
+def test_shaft_diameter_for_torque_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="torque must be a"):
+        shaft_diameter_for_torque(torque=_q("500 N"), allowable_shear=_q("40 MPa"))
+    with pytest.raises(ValueError, match="allowable_shear must be positive"):
+        shaft_diameter_for_torque(torque=_q("500 N*m"), allowable_shear=_q("0 MPa"))
+    with pytest.raises(ValueError, match="required_safety_factor must be positive"):
+        shaft_diameter_for_torque(
+            torque=_q("500 N*m"), allowable_shear=_q("40 MPa"), required_safety_factor=0.0
+        )
 
 
 def test_shaft_twist_angle_matches_worked_example():
