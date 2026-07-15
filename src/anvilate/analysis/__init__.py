@@ -48,8 +48,8 @@ modules:
   key length a torque requires
 - :mod:`~anvilate.analysis.weld` — fillet-weld throat shear and the weld leg a
   load requires
-- :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, and
-  lateral (column) buckling screen
+- :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, stored
+  energy, series/parallel combination, and lateral (column) buckling screen
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
   stress, shrink-fit assembly temperature, and CTE-mismatch (differential)
   joint stress
@@ -273,6 +273,8 @@ from .spring import (
     spring_index,
     spring_shear_stress,
     spring_stored_energy,
+    springs_in_parallel,
+    springs_in_series,
     wahl_factor,
 )
 from .stress import (
@@ -515,6 +517,8 @@ __all__ = [
     "SpringBucklingResult",
     "helical_spring_buckling",
     "spring_stored_energy",
+    "springs_in_series",
+    "springs_in_parallel",
     "spring_surge_frequency",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",

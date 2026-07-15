@@ -174,6 +174,8 @@ from anvilate.analysis import (
     spring_shear_stress,
     spring_stored_energy,
     spring_surge_frequency,
+    springs_in_parallel,
+    springs_in_series,
     strength_scorecard,
     thick_wall_cylinder,
     thick_wall_sphere,
@@ -2910,6 +2912,29 @@ def test_power_screw_rejects_bad_inputs():
         power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=-0.1, **kw)
     with pytest.raises(ValueError, match="load must be a"):
         power_screw_raise_torque(load=_q("6.4 mm"), friction_coefficient=0.08, **kw)
+
+
+def test_springs_in_series_and_parallel():
+    rates = [_q("10 N/mm"), _q("20 N/mm")]
+    # Series is softer than the softest spring: 1/k = 1/10 + 1/20 -> 6.667 N/mm.
+    series = springs_in_series(rates)
+    assert series.to("N/mm").magnitude == pytest.approx(20.0 / 3.0, rel=1e-9)
+    assert series.to("N/mm").magnitude < 10.0
+    # Parallel is stiffer than the stiffest: k = 10 + 20 = 30 N/mm.
+    parallel = springs_in_parallel(rates)
+    assert parallel.to("N/mm").magnitude == pytest.approx(30.0, rel=1e-12)
+    assert parallel.to("N/mm").magnitude > 20.0
+    # A single spring returns its own rate either way.
+    assert springs_in_series([_q("15 N/mm")]).to("N/mm").magnitude == pytest.approx(15.0, rel=1e-12)
+
+
+def test_spring_combination_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="at least one spring rate"):
+        springs_in_parallel([])
+    with pytest.raises(ValueError, match="each spring rate must be positive"):
+        springs_in_series([_q("10 N/mm"), _q("0 N/mm")])
+    with pytest.raises(ValueError, match=r"each spring rate must be a \[force\]/\[length\]"):
+        springs_in_parallel([_q("10 N")])
 
 
 def test_plate_buckling_stress_scales_with_thickness_squared():

@@ -17,6 +17,7 @@ other checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import pi, sqrt
 
 from pydantic import BaseModel, ConfigDict
@@ -43,6 +44,8 @@ __all__ = [
     "SpringBucklingResult",
     "helical_spring_buckling",
     "spring_stored_energy",
+    "springs_in_series",
+    "springs_in_parallel",
 ]
 
 
@@ -241,3 +244,46 @@ def spring_stored_energy(*, spring_rate: Quantity, deflection: Quantity) -> Quan
     energy = spring_rate.pint * deflection.pint**2 / 2
     converted = energy.to("J")
     return Quantity(magnitude=float(converted.magnitude), unit="J")
+
+
+def _rates_in_n_per_mm(spring_rates: Sequence[Quantity]) -> list[float]:
+    if len(spring_rates) < 1:
+        raise ValueError("at least one spring rate is required")
+    values = []
+    for rate in spring_rates:
+        if not rate.has_dimension("[force] / [length]"):
+            raise ValueError(
+                f"each spring rate must be a [force]/[length] quantity; got "
+                f"{rate.dimensionality} ({rate})"
+            )
+        k = rate.to("N/mm").magnitude
+        if k <= 0:
+            raise ValueError(f"each spring rate must be positive; got {rate}")
+        values.append(k)
+    return values
+
+
+def springs_in_series(spring_rates: Sequence[Quantity]) -> Quantity:
+    """The combined rate of springs in series, 1/k = Σ(1/kᵢ).
+
+    Springs stacked end to end share the same force and add their deflections, so
+    the assembly is *softer* than any single spring — the combined rate is the
+    reciprocal sum of the individual ``spring_rates``. Each must be a positive
+    force-per-length; pass at least one. Returns the combined rate in N/mm.
+    """
+    rates = _rates_in_n_per_mm(spring_rates)
+    combined = 1.0 / sum(1.0 / k for k in rates)
+    return Quantity(magnitude=combined, unit="N/mm")
+
+
+def springs_in_parallel(spring_rates: Sequence[Quantity]) -> Quantity:
+    """The combined rate of springs in parallel, k = Σ kᵢ.
+
+    Springs side by side share the same deflection and add their forces, so the
+    assembly is *stiffer* than any single spring — the combined rate is the plain
+    sum of the individual ``spring_rates`` (the same law that lets a bolt pattern or
+    a set of parallel supports add stiffness). Each must be a positive
+    force-per-length; pass at least one. Returns the combined rate in N/mm.
+    """
+    rates = _rates_in_n_per_mm(spring_rates)
+    return Quantity(magnitude=sum(rates), unit="N/mm")
