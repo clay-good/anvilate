@@ -838,3 +838,18 @@ def test_bracket_weld_sizing_example_fails_the_default_fillet():
     assert revised.passed
     assert "safety factor 2.46" in revised.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_drivetrain_shaft_twist_example_is_governed_by_stiffness():
+    namespace = runpy.run_path(str(_EXAMPLES / "drivetrain_shaft_twist.py"))
+    card = namespace["screen_drivetrain_shaft"]()
+    by_name = {e.name: e for e in card.entries}
+    # The shaft is comfortably strong in torsion (SF 2.88)...
+    shear = by_name["torsional shear"]
+    assert shear.passed
+    assert "safety factor 2.88" in shear.detail
+    # ...but it winds up past the 0.25 deg/ft positioning limit -> FAIL.
+    twist = by_name["shaft twist (0.25 deg/ft)"]
+    assert twist.status is CheckStatus.FAIL
+    assert "safety factor 0.73" in twist.detail
+    assert card.status is CheckStatus.FAIL
