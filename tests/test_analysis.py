@@ -50,6 +50,8 @@ from anvilate.analysis import (
     euler_buckling_load,
     euler_critical_stress,
     euler_second_moment_for_load,
+    fillet_weld_leg_for_load,
+    fillet_weld_throat_stress,
     fixed_fixed_center_load,
     fixed_fixed_center_patch_load,
     fixed_fixed_fundamental_frequency,
@@ -2624,6 +2626,49 @@ def test_bolt_shear_stress_single_and_double():
 def test_bolt_shear_rejects_bad_planes():
     with pytest.raises(ValueError, match="shear_planes must be a positive integer"):
         bolt_shear_stress(force=_q("10 kN"), diameter=_q("8 mm"), shear_planes=0)
+
+
+def test_fillet_weld_throat_stress_worked_example():
+    # 20 kN on a 6 mm x 100 mm fillet: throat = 0.707*6*100 = 424.2 mm^2,
+    #   tau = 20000/424.2 = 47.15 MPa.
+    tau = fillet_weld_throat_stress(force=_q("20 kN"), leg_size=_q("6 mm"), length=_q("100 mm"))
+    assert tau.to("MPa").magnitude == pytest.approx(47.15, rel=1e-3)
+
+
+def test_fillet_weld_leg_for_load_inverts_the_throat_stress():
+    # Size the leg for 20 kN over 100 mm within a 290 MPa allowable (0.6*E70):
+    #   w = F/(0.707*L*tau) = 20000/(0.707*100*290) = 0.975 mm.
+    w = fillet_weld_leg_for_load(
+        force=_q("20 kN"), length=_q("100 mm"), allowable_shear=_q("290 MPa")
+    )
+    assert w.to("mm").magnitude == pytest.approx(0.9754, rel=1e-3)
+    # A weld with exactly this leg is worked to the allowable on the throat.
+    tau = fillet_weld_throat_stress(force=_q("20 kN"), leg_size=w, length=_q("100 mm"))
+    assert tau.to("MPa").magnitude == pytest.approx(290.0, rel=1e-4)
+
+
+def test_fillet_weld_leg_scales_with_margin():
+    base = fillet_weld_leg_for_load(
+        force=_q("20 kN"), length=_q("100 mm"), allowable_shear=_q("290 MPa")
+    )
+    with_sf = fillet_weld_leg_for_load(
+        force=_q("20 kN"),
+        length=_q("100 mm"),
+        allowable_shear=_q("290 MPa"),
+        required_safety_factor=2.0,
+    )
+    assert with_sf.to("mm").magnitude == pytest.approx(2.0 * base.to("mm").magnitude, rel=1e-9)
+
+
+def test_fillet_weld_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="force must be a"):
+        fillet_weld_throat_stress(force=_q("20 mm"), leg_size=_q("6 mm"), length=_q("100 mm"))
+    with pytest.raises(ValueError, match="leg_size and length must be positive"):
+        fillet_weld_throat_stress(force=_q("20 kN"), leg_size=_q("0 mm"), length=_q("100 mm"))
+    with pytest.raises(ValueError, match="allowable_shear must be positive"):
+        fillet_weld_leg_for_load(
+            force=_q("20 kN"), length=_q("100 mm"), allowable_shear=_q("0 MPa")
+        )
 
 
 def test_bolt_diameter_for_shear_inverts_the_shear_check():

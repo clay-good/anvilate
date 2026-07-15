@@ -29,6 +29,8 @@ modules:
   the ISO 898 tensile stress area / axial stress
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
   key length a torque requires
+- :mod:`~anvilate.analysis.weld` — fillet-weld throat shear and the weld leg a
+  load requires
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, and
   lateral (column) buckling screen
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
@@ -238,6 +240,11 @@ from .torsion import (
     thin_open_strip_torsional_stress,
     thin_open_strip_twist_angle,
 )
+from .weld import (
+    FILLET_THROAT_FACTOR,
+    fillet_weld_leg_for_load,
+    fillet_weld_throat_stress,
+)
 
 __all__ = [
     "axial_stress",
@@ -405,4 +412,7 @@ __all__ = [
     "shrink_fit_assembly_temperature",
     "DifferentialThermalStress",
     "differential_thermal_stress",
+    "FILLET_THROAT_FACTOR",
+    "fillet_weld_throat_stress",
+    "fillet_weld_leg_for_load",
 ]

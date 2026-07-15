@@ -39,6 +39,7 @@ from ..analysis import (
     circular_area,
     deflection_scorecard,
     euler_critical_stress,
+    fillet_weld_throat_stress,
     fixed_fixed_center_load,
     fixed_fixed_center_patch_load,
     fixed_fixed_fundamental_frequency,
@@ -114,8 +115,6 @@ _BLOCK_SHEAR_SHEAR_FRACTION = 0.6
 # AISC §J8 nominal concrete bearing on a plate is 0.85·f'c (no confinement bonus).
 _CONCRETE_BEARING_FRACTION = 0.85
 
-# The effective throat of a fillet weld is 0.707 (= 1/√2) of its leg size.
-_FILLET_THROAT_FACTOR = 0.707
 # AISC allowable/nominal fillet-weld shear is 0.6 of the electrode strength F_EXX.
 _WELD_SHEAR_FRACTION = 0.6
 
@@ -885,12 +884,11 @@ def screen_welded_connection(
     the allowable weld shear 0.6·F_EXX at ``required_safety_factor`` (AISC §J2.4).
     No material lookup is needed — the electrode strength is carried on the member.
     """
-    throat_area = (
-        _FILLET_THROAT_FACTOR
-        * connection.leg_size.to("mm").magnitude
-        * connection.weld_length.to("mm").magnitude
+    shear = fillet_weld_throat_stress(
+        force=connection.load,
+        leg_size=connection.leg_size,
+        length=connection.weld_length,
     )
-    shear = Quantity(magnitude=connection.load.to("N").magnitude / throat_area, unit="MPa")
     allowable = Quantity(
         magnitude=_WELD_SHEAR_FRACTION * connection.electrode_strength.to("MPa").magnitude,
         unit="MPa",
