@@ -42,6 +42,7 @@ from anvilate.analysis import (
     constrained_thermal_stress,
     cyclic_stress_components,
     deflection_scorecard,
+    estimated_endurance_limit,
     euler_buckling_load,
     euler_critical_stress,
     euler_second_moment_for_load,
@@ -3406,6 +3407,37 @@ def test_cyclic_stress_rejects_non_cycle():
         cyclic_stress_components(max_stress=_q("50 MPa"), min_stress=_q("50 MPa"))
     with pytest.raises(ValueError, match="max_stress must be a"):
         cyclic_stress_components(max_stress=_q("50 N"), min_stress=_q("10 MPa"))
+
+
+def test_estimated_endurance_limit_is_half_ultimate_capped():
+    # Steel rotating-beam estimate: Se' = 0.5*Su below the cap.
+    se = estimated_endurance_limit(ultimate_strength=_q("400 MPa"))
+    assert se.to("MPa").magnitude == pytest.approx(200.0, rel=1e-9)
+    # High-strength steel: capped at 700 MPa rather than 0.5*Su.
+    capped = estimated_endurance_limit(ultimate_strength=_q("1600 MPa"))
+    assert capped.to("MPa").magnitude == pytest.approx(700.0, rel=1e-9)
+    # Just below the cap boundary (Su = 1400 -> 700) it is still 0.5*Su.
+    boundary = estimated_endurance_limit(ultimate_strength=_q("1400 MPa"))
+    assert boundary.to("MPa").magnitude == pytest.approx(700.0, rel=1e-9)
+
+
+def test_estimated_endurance_limit_feeds_a_goodman_screen():
+    # The estimate drops straight into the criteria when no measured value exists.
+    se = estimated_endurance_limit(ultimate_strength=_q("500 MPa"))  # -> 250 MPa
+    n = goodman_safety_factor(
+        alternating_stress=_q("60 MPa"),
+        mean_stress=_q("40 MPa"),
+        endurance_limit=se,
+        ultimate_strength=_q("500 MPa"),
+    )
+    assert n == pytest.approx(1.0 / (60 / 250 + 40 / 500), rel=1e-9)
+
+
+def test_estimated_endurance_limit_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="ultimate_strength must be a"):
+        estimated_endurance_limit(ultimate_strength=_q("400 N"))
+    with pytest.raises(ValueError, match="ultimate_strength must be positive"):
+        estimated_endurance_limit(ultimate_strength=_q("0 MPa"))
 
 
 def test_goodman_safety_factor_worked_example():

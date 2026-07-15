@@ -31,6 +31,7 @@ from ..units import Quantity
 __all__ = [
     "CyclicStress",
     "cyclic_stress_components",
+    "estimated_endurance_limit",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",
@@ -38,6 +39,11 @@ __all__ = [
     "gerber_safety_factor",
     "gerber_scorecard",
 ]
+
+# Shigley's steel rotating-beam endurance-limit estimate: S_e' = 0.5*S_u, capped
+# at ENDURANCE_CAP for high-strength steels where the ratio no longer holds.
+_ENDURANCE_FRACTION = 0.5
+_ENDURANCE_CAP_MPA = 700.0  # ~100 ksi (steels with S_u above ~1400 MPa)
 
 
 def _require_stress(value: Quantity, name: str) -> float:
@@ -63,6 +69,29 @@ class CyclicStress(BaseModel):
     alternating_stress: Quantity
     mean_stress: Quantity
     stress_ratio: float
+
+
+def estimated_endurance_limit(*, ultimate_strength: Quantity) -> Quantity:
+    """Shigley's steel rotating-beam endurance-limit estimate S_e' ≈ 0.5·S_u.
+
+    When a material carries no measured endurance limit, this gives the standard
+    screening estimate for steel: half the ultimate strength, capped at 700 MPa
+    (~100 ksi) for high-strength steels where the 0.5 ratio breaks down. It is the
+    *uncorrected* rotating-beam value — a real part needs the Marin surface, size,
+    loading, and temperature factors applied on top — so treat a screen built on it
+    as an estimate, not a measured limit. ``ultimate_strength`` S_u must be a
+    positive stress; the result feeds :func:`goodman_safety_factor` and its
+    siblings. Returns the estimate in MPa.
+    """
+    if not ultimate_strength.has_dimension("[pressure]"):
+        raise ValueError(
+            f"ultimate_strength must be a [pressure] quantity; got "
+            f"{ultimate_strength.dimensionality} ({ultimate_strength})"
+        )
+    su = ultimate_strength.to("MPa").magnitude
+    if su <= 0:
+        raise ValueError(f"ultimate_strength must be positive; got {ultimate_strength}")
+    return Quantity(magnitude=min(_ENDURANCE_FRACTION * su, _ENDURANCE_CAP_MPA), unit="MPa")
 
 
 def cyclic_stress_components(*, max_stress: Quantity, min_stress: Quantity) -> CyclicStress:
