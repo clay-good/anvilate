@@ -136,6 +136,8 @@ from anvilate.analysis import (
     natural_frequency_from_deflection,
     overhang_tip_load,
     overhang_uniform_load,
+    petroff_friction_power,
+    petroff_friction_torque,
     pitch_line_velocity,
     plate_buckling_stress,
     polar_second_moment_hollow,
@@ -3053,6 +3055,48 @@ def test_plate_buckling_rejects_bad_inputs():
             elastic_modulus=_q("200 mm"),
             thickness=_q("5 mm"),
             width=_q("300 mm"),
+        )
+
+
+def test_petroff_journal_bearing_friction():
+    from math import pi
+
+    kw = {
+        "viscosity": _q("0.05 Pa*s"),
+        "speed": _q("1800 rpm"),
+        "journal_radius": _q("25 mm"),
+        "bearing_length": _q("50 mm"),
+        "radial_clearance": _q("0.05 mm"),
+    }
+    # T = 4*pi^2*mu*N*L*r^3/c with N=30 rev/s -> 0.9253 N*m.
+    torque = petroff_friction_torque(**kw)
+    assert torque.to("N*m").magnitude == pytest.approx(0.92534, rel=1e-4)
+    # Power = T*omega = T*2*pi*30 -> 174.4 W.
+    power = petroff_friction_power(**kw)
+    assert power.to("W").magnitude == pytest.approx(
+        torque.to("N*m").magnitude * 2 * pi * 30, rel=1e-6
+    )
+    # Tighter clearance (half c) doubles the friction torque.
+    tight = petroff_friction_torque(**{**kw, "radial_clearance": _q("0.025 mm")})
+    assert tight.to("N*m").magnitude == pytest.approx(2 * torque.to("N*m").magnitude, rel=1e-9)
+
+
+def test_petroff_rejects_bad_inputs():
+    kw = {
+        "speed": _q("1800 rpm"),
+        "journal_radius": _q("25 mm"),
+        "bearing_length": _q("50 mm"),
+        "radial_clearance": _q("0.05 mm"),
+    }
+    with pytest.raises(ValueError, match="viscosity must be a"):
+        petroff_friction_torque(viscosity=_q("0.05 Pa"), **kw)
+    with pytest.raises(ValueError, match="radial_clearance must be positive"):
+        petroff_friction_torque(
+            viscosity=_q("0.05 Pa*s"),
+            speed=_q("1800 rpm"),
+            journal_radius=_q("25 mm"),
+            bearing_length=_q("50 mm"),
+            radial_clearance=_q("0 mm"),
         )
 
 
