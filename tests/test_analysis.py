@@ -136,6 +136,7 @@ from anvilate.analysis import (
     leaf_spring_rate,
     leaf_spring_stress,
     lewis_bending_stress,
+    marin_endurance_limit,
     max_shear_stress_plane,
     max_transverse_shear_stress,
     member_clamp_load_in_joint,
@@ -6412,3 +6413,35 @@ def test_curved_beam_recovers_the_straight_beam_as_curvature_flattens():
             outer_radius=_q("100 mm"),
             width=_q("20 mm"),
         )
+
+
+def test_marin_endurance_limit_discounts_the_specimen_value():
+    # A machined 1045 shaft: Se' = 0.5*Su = 283 MPa (estimate), then Marin
+    # ka=0.787 (machined fit at Su=565), kb=0.879 (25 mm), kc=1 (bending):
+    # Se = 0.787*0.879*283 = 195.8 MPa -- the real part keeps ~69%.
+    se_prime = estimated_endurance_limit(ultimate_strength=_q("565 MPa"))
+    assert se_prime.to("MPa").magnitude == pytest.approx(282.5, rel=1e-12)
+    corrected = marin_endurance_limit(
+        base_endurance_limit=se_prime,
+        surface_factor=0.787,
+        size_factor=0.879,
+        load_factor=1.0,
+    )
+    assert corrected.to("MPa").magnitude == pytest.approx(0.787 * 0.879 * 282.5, rel=1e-12)
+    # All factors default to 1: no correction returns the input value.
+    untouched = marin_endurance_limit(base_endurance_limit=se_prime)
+    assert untouched.to("MPa").magnitude == pytest.approx(282.5, rel=1e-12)
+    # Torsion discounts further via kc.
+    torsion = marin_endurance_limit(
+        base_endurance_limit=se_prime,
+        surface_factor=0.787,
+        size_factor=0.879,
+        load_factor=0.59,
+    )
+    assert torsion.to("MPa").magnitude == pytest.approx(
+        0.59 * corrected.to("MPa").magnitude, rel=1e-12
+    )
+    with pytest.raises(ValueError, match="size_factor must be positive"):
+        marin_endurance_limit(base_endurance_limit=se_prime, size_factor=0.0)
+    with pytest.raises(ValueError, match="base_endurance_limit must be a"):
+        marin_endurance_limit(base_endurance_limit=_q("283 mm"))

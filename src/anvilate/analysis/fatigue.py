@@ -33,6 +33,7 @@ __all__ = [
     "CyclicStress",
     "cyclic_stress_components",
     "estimated_endurance_limit",
+    "marin_endurance_limit",
     "fatigue_notch_factor",
     "goodman_safety_factor",
     "goodman_scorecard",
@@ -116,6 +117,51 @@ def estimated_endurance_limit(*, ultimate_strength: Quantity) -> Quantity:
     if su <= 0:
         raise ValueError(f"ultimate_strength must be positive; got {ultimate_strength}")
     return Quantity(magnitude=min(_ENDURANCE_FRACTION * su, _ENDURANCE_CAP_MPA), unit="MPa")
+
+
+def marin_endurance_limit(
+    *,
+    base_endurance_limit: Quantity,
+    surface_factor: float = 1.0,
+    size_factor: float = 1.0,
+    load_factor: float = 1.0,
+    temperature_factor: float = 1.0,
+    reliability_factor: float = 1.0,
+    miscellaneous_factor: float = 1.0,
+) -> Quantity:
+    """The Marin-corrected endurance limit, S_e = k_a·k_b·k_c·k_d·k_e·k_f·S_e′.
+
+    The rotating-beam endurance limit (measured, or estimated by
+    :func:`estimated_endurance_limit`) belongs to a polished 7.6 mm specimen in
+    bending at room temperature; a real part earns less. Shigley's Marin factors
+    discount it: ``surface_factor`` k_a (machined/hot-rolled/forged finish),
+    ``size_factor`` k_b (larger sections expose more highly-stressed volume),
+    ``load_factor`` k_c (1.0 bending, ~0.85 axial, ~0.59 torsion),
+    ``temperature_factor`` k_d, ``reliability_factor`` k_e (below 1 for
+    reliability above 50%), and ``miscellaneous_factor`` k_f (platings, residual
+    stress, corrosion). The factor *values* are the engineer's inputs — from the
+    Marin a·S_u^b surface fits, the size formulas, or test data — supplied like
+    any allowable; each defaults to 1.0 (no correction) and must be positive
+    (typically at or below 1). Feed the result to :func:`goodman_safety_factor`
+    and its siblings. Returns the corrected limit in MPa.
+    """
+    se_prime = _require_stress(base_endurance_limit, "base_endurance_limit")
+    if se_prime <= 0:
+        raise ValueError(f"base_endurance_limit must be positive; got {base_endurance_limit}")
+    factors = {
+        "surface_factor": surface_factor,
+        "size_factor": size_factor,
+        "load_factor": load_factor,
+        "temperature_factor": temperature_factor,
+        "reliability_factor": reliability_factor,
+        "miscellaneous_factor": miscellaneous_factor,
+    }
+    product = 1.0
+    for name, factor in factors.items():
+        if factor <= 0:
+            raise ValueError(f"{name} must be positive; got {factor}")
+        product *= factor
+    return Quantity(magnitude=product * se_prime, unit="MPa")
 
 
 def cyclic_stress_components(*, max_stress: Quantity, min_stress: Quantity) -> CyclicStress:
