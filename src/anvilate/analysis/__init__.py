@@ -38,7 +38,8 @@ modules:
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
   (millions of revolutions and running hours) and static load safety factor
 - :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
-  tension ratio, slack tension, transmissible force, V-belt wedge friction, and
+  tension ratio, slack tension, transmissible force (still and at speed, with
+  centrifugal tension and the max-power belt speed), V-belt wedge friction, and
   belt-drive geometry (length and wrap angle)
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
   torque requires, and the peak lining pressure
@@ -135,9 +136,12 @@ from .bearing import (
     bearing_static_safety_factor,
 )
 from .belt import (
+    belt_centrifugal_tension,
     belt_length,
     belt_max_transmissible_force,
+    belt_max_transmissible_force_at_speed,
     belt_slack_tension,
+    belt_speed_for_max_power,
     belt_wrap_angle,
     capstan_tension_ratio,
     vee_belt_effective_friction,
@@ -430,6 +434,9 @@ __all__ = [
     "capstan_tension_ratio",
     "belt_slack_tension",
     "belt_max_transmissible_force",
+    "belt_centrifugal_tension",
+    "belt_max_transmissible_force_at_speed",
+    "belt_speed_for_max_power",
     "vee_belt_effective_friction",
     "belt_length",
     "belt_wrap_angle",

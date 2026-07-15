@@ -27,9 +27,12 @@ from anvilate.analysis import (
     bearing_life_hours,
     bearing_static_safety_factor,
     bearing_stress,
+    belt_centrifugal_tension,
     belt_length,
     belt_max_transmissible_force,
+    belt_max_transmissible_force_at_speed,
     belt_slack_tension,
+    belt_speed_for_max_power,
     belt_wrap_angle,
     bolt_axial_stress,
     bolt_diameter_for_shear,
@@ -3415,6 +3418,76 @@ def test_capstan_rejects_bad_inputs():
         capstan_tension_ratio(friction_coefficient=0.3, wrap_angle=0.0)
     with pytest.raises(ValueError, match="tight_tension must be a"):
         belt_slack_tension(tight_tension=_q("500 mm"), friction_coefficient=0.3, wrap_angle=pi)
+
+
+def test_belt_centrifugal_tension_sheds_grip_at_speed():
+    from math import pi
+
+    # 0.25 kg/m of belt at 20 m/s carries Tc = m'*v^2 = 100 N of its own tension.
+    tc = belt_centrifugal_tension(linear_density=_q("0.25 kg/m"), belt_speed=_q("20 m/s"))
+    assert tc.to("N").magnitude == pytest.approx(100.0, rel=1e-12)
+    # Only the excess above Tc grips: at speed the transmissible force is the
+    # still-belt force evaluated on (T1 - Tc).
+    at_speed = belt_max_transmissible_force_at_speed(
+        tight_tension=_q("500 N"),
+        linear_density=_q("0.25 kg/m"),
+        belt_speed=_q("20 m/s"),
+        friction_coefficient=0.3,
+        wrap_angle=pi,
+    )
+    reduced = belt_max_transmissible_force(
+        tight_tension=_q("400 N"), friction_coefficient=0.3, wrap_angle=pi
+    )
+    assert at_speed.to("N").magnitude == pytest.approx(reduced.to("N").magnitude, rel=1e-12)
+    # At rest it reduces exactly to the still-belt form.
+    at_rest = belt_max_transmissible_force_at_speed(
+        tight_tension=_q("500 N"),
+        linear_density=_q("0.25 kg/m"),
+        belt_speed=_q("0 m/s"),
+        friction_coefficient=0.3,
+        wrap_angle=pi,
+    )
+    still = belt_max_transmissible_force(
+        tight_tension=_q("500 N"), friction_coefficient=0.3, wrap_angle=pi
+    )
+    assert at_rest.to("N").magnitude == pytest.approx(still.to("N").magnitude, rel=1e-12)
+    # Past the speed where Tc eats the whole tight tension the belt transmits
+    # nothing -- the function refuses rather than returning a negative force.
+    with pytest.raises(ValueError, match="cannot transmit"):
+        belt_max_transmissible_force_at_speed(
+            tight_tension=_q("500 N"),
+            linear_density=_q("0.25 kg/m"),
+            belt_speed=_q("45 m/s"),
+            friction_coefficient=0.3,
+            wrap_angle=pi,
+        )
+
+
+def test_belt_speed_for_max_power_is_the_power_peak():
+    from math import pi
+
+    # v* = sqrt(T1/(3 m')): 500 N / 0.25 kg/m -> 25.820 m/s, where Tc = T1/3.
+    v_star = belt_speed_for_max_power(tight_tension=_q("500 N"), linear_density=_q("0.25 kg/m"))
+    assert v_star.to("m/s").magnitude == pytest.approx((500.0 / 0.75) ** 0.5, rel=1e-12)
+    tc = belt_centrifugal_tension(linear_density=_q("0.25 kg/m"), belt_speed=v_star)
+    assert tc.to("N").magnitude == pytest.approx(500.0 / 3.0, rel=1e-12)
+
+    # Power = force * speed genuinely peaks there: v* beats speeds 10% either side.
+    def power(v: float) -> float:
+        force = belt_max_transmissible_force_at_speed(
+            tight_tension=_q("500 N"),
+            linear_density=_q("0.25 kg/m"),
+            belt_speed=_q(f"{v} m/s"),
+            friction_coefficient=0.3,
+            wrap_angle=pi,
+        )
+        return force.to("N").magnitude * v
+
+    best = power(v_star.to("m/s").magnitude)
+    assert best > power(0.9 * v_star.to("m/s").magnitude)
+    assert best > power(1.1 * v_star.to("m/s").magnitude)
+    with pytest.raises(ValueError, match="linear_density must be a"):
+        belt_speed_for_max_power(tight_tension=_q("500 N"), linear_density=_q("0.25 kg"))
 
 
 def test_band_brake_torque_is_the_capstan_grip_at_the_drum_radius():

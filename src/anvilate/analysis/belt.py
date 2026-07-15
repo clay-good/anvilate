@@ -13,16 +13,22 @@ on the free end. The most a belt can transmit before it slips is the difference
 T₁ − T₂ = T₁·(1 − e^(−μ·β)); pushed past it the belt slips and the ratio caps at
 e^(μ·β).
 
-These are the classic capstan forms for a stationary or slowly-moving band; a
-fast belt also sheds grip to centrifugal tension (not included here). Tensions are
-dimension-checked :class:`~anvilate.units.Quantity` forces; the **wrap angle is a
-plain float in radians** (π for a half wrap, 2π per full turn — the units layer
-does not carry dimensionless angles), matching how μ is supplied.
+Those are the capstan forms for a stationary or slowly-moving band. A fast belt
+also sheds grip to centrifugal tension T_c = m′·v² (belt mass per length m′ at
+speed v), which lifts the belt off the pulley uniformly: only the *excess*
+tension above T_c grips, so the ratio applies as (T₁ − T_c)/(T₂ − T_c) and the
+transmissible force falls to (T₁ − T_c)·(1 − e^(−μ·β)). Since power is force
+times the same speed that feeds T_c, transmitted power peaks at the classic
+v* = √(T₁/(3·m′)) — run faster and the belt carries its own weight instead of
+the load. Tensions are dimension-checked :class:`~anvilate.units.Quantity`
+forces; the **wrap angle is a plain float in radians** (π for a half wrap, 2π
+per full turn — the units layer does not carry dimensionless angles), matching
+how μ is supplied.
 """
 
 from __future__ import annotations
 
-from math import asin, exp, pi, radians, sin
+from math import asin, exp, pi, radians, sin, sqrt
 
 from ..units import Quantity
 
@@ -30,6 +36,9 @@ __all__ = [
     "capstan_tension_ratio",
     "belt_slack_tension",
     "belt_max_transmissible_force",
+    "belt_centrifugal_tension",
+    "belt_max_transmissible_force_at_speed",
+    "belt_speed_for_max_power",
     "vee_belt_effective_friction",
     "belt_length",
     "belt_wrap_angle",
@@ -100,6 +109,92 @@ def belt_max_transmissible_force(
     ratio = _ratio(friction_coefficient, wrap_angle)
     t1 = tight_tension.to("N").magnitude
     return Quantity(magnitude=t1 * (1.0 - 1.0 / ratio), unit="N")
+
+
+def _linear_density_kg_per_m(linear_density: Quantity) -> float:
+    if not linear_density.has_dimension("[mass] / [length]"):
+        raise ValueError(
+            f"linear_density must be a [mass]/[length] quantity; "
+            f"got {linear_density.dimensionality} ({linear_density})"
+        )
+    m = linear_density.to("kg/m").magnitude
+    if m <= 0:
+        raise ValueError(f"linear_density must be positive; got {linear_density}")
+    return m
+
+
+def _speed_m_per_s(belt_speed: Quantity) -> float:
+    if not belt_speed.has_dimension("[velocity]"):
+        raise ValueError(
+            f"belt_speed must be a [velocity] quantity; "
+            f"got {belt_speed.dimensionality} ({belt_speed})"
+        )
+    v = belt_speed.to("m/s").magnitude
+    if v < 0:
+        raise ValueError(f"belt_speed must be non-negative; got {belt_speed}")
+    return v
+
+
+def belt_centrifugal_tension(*, linear_density: Quantity, belt_speed: Quantity) -> Quantity:
+    """The centrifugal tension a moving belt carries, T_c = m′·v².
+
+    A belt of mass per length ``linear_density`` m′ running at ``belt_speed`` v
+    needs a tension m′·v² just to hold itself on the pulley arc — tension the
+    drive pretensions into the belt but that presses nothing onto the pulley, so
+    it grips nothing. Subtract it from the tight-side tension before applying the
+    capstan relation (:func:`belt_max_transmissible_force_at_speed` does both).
+    Returns the tension in newtons.
+    """
+    m = _linear_density_kg_per_m(linear_density)
+    v = _speed_m_per_s(belt_speed)
+    return Quantity(magnitude=m * v * v, unit="N")
+
+
+def belt_max_transmissible_force_at_speed(
+    *,
+    tight_tension: Quantity,
+    linear_density: Quantity,
+    belt_speed: Quantity,
+    friction_coefficient: float,
+    wrap_angle: float,
+) -> Quantity:
+    """The maximum tangential force a *moving* belt transmits,
+    (T₁ − m′·v²)·(1 − e^(−μ·β)).
+
+    Centrifugal tension grips nothing, so only the tight tension in excess of
+    T_c = m′·v² (:func:`belt_centrifugal_tension`) is available to the capstan
+    relation — at v = 0 this reduces to :func:`belt_max_transmissible_force`, and
+    it falls to zero at the speed where the belt's whole tension goes to carrying
+    itself (past that the belt cannot transmit; this raises). ``tight_tension``
+    T₁ is the belt's allowable (maximum) tension. Returns the force in newtons.
+    """
+    _require_force(tight_tension, "tight_tension")
+    ratio = _ratio(friction_coefficient, wrap_angle)
+    t1 = tight_tension.to("N").magnitude
+    tc = belt_centrifugal_tension(linear_density=linear_density, belt_speed=belt_speed).magnitude
+    if tc >= t1:
+        raise ValueError(
+            f"centrifugal tension ({tc:.1f} N) consumes the whole tight-side tension "
+            f"({tight_tension}) at this speed; the belt cannot transmit"
+        )
+    return Quantity(magnitude=(t1 - tc) * (1.0 - 1.0 / ratio), unit="N")
+
+
+def belt_speed_for_max_power(*, tight_tension: Quantity, linear_density: Quantity) -> Quantity:
+    """The belt speed that maximises transmitted power, v* = √(T₁/(3·m′)).
+
+    Power is the transmissible force times the belt speed, and the force sheds
+    m′·v² of grip as the speed rises — the product peaks where the centrifugal
+    tension has eaten exactly a third of the allowable tight tension ``T₁``.
+    Below v* a faster belt carries more power; above it, more speed carries
+    less. Returns the speed in m/s.
+    """
+    _require_force(tight_tension, "tight_tension")
+    t1 = tight_tension.to("N").magnitude
+    if t1 <= 0:
+        raise ValueError(f"tight_tension must be positive; got {tight_tension}")
+    m = _linear_density_kg_per_m(linear_density)
+    return Quantity(magnitude=sqrt(t1 / (3.0 * m)), unit="m/s")
 
 
 def vee_belt_effective_friction(*, friction_coefficient: float, groove_angle: float) -> float:
