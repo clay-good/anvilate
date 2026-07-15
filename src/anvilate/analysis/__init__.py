@@ -40,6 +40,8 @@ modules:
 - :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
   tension ratio, slack tension, transmissible force, V-belt wedge friction, and
   belt-drive geometry (length and wrap angle)
+- :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
+  torque requires, and the peak lining pressure
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
@@ -139,6 +141,11 @@ from .belt import (
     belt_wrap_angle,
     capstan_tension_ratio,
     vee_belt_effective_friction,
+)
+from .brake import (
+    band_brake_max_lining_pressure,
+    band_brake_tight_tension_for_torque,
+    band_brake_torque,
 )
 from .clutch import (
     UNIFORM_PRESSURE,
@@ -426,6 +433,9 @@ __all__ = [
     "vee_belt_effective_friction",
     "belt_length",
     "belt_wrap_angle",
+    "band_brake_torque",
+    "band_brake_tight_tension_for_torque",
+    "band_brake_max_lining_pressure",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",

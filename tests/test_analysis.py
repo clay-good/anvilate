@@ -17,6 +17,9 @@ from anvilate.analysis import (
     CrossSection,
     asme_cylinder_thickness,
     axial_stress,
+    band_brake_max_lining_pressure,
+    band_brake_tight_tension_for_torque,
+    band_brake_torque,
     barth_velocity_factor,
     basquin_cycles_to_failure,
     basquin_stress_for_life,
@@ -3412,6 +3415,106 @@ def test_capstan_rejects_bad_inputs():
         capstan_tension_ratio(friction_coefficient=0.3, wrap_angle=0.0)
     with pytest.raises(ValueError, match="tight_tension must be a"):
         belt_slack_tension(tight_tension=_q("500 mm"), friction_coefficient=0.3, wrap_angle=pi)
+
+
+def test_band_brake_torque_is_the_capstan_grip_at_the_drum_radius():
+    from math import exp, pi
+
+    # 2 kN anchor tension, mu=0.25 lining, 270-degree wrap on a 300 mm drum:
+    # grip = 1 - e^(-0.25*3pi/2) = 0.69216, T = 2000*0.69216*0.15 = 207.65 N*m.
+    wrap = 3.0 * pi / 2.0
+    torque = band_brake_torque(
+        tight_tension=_q("2 kN"),
+        drum_diameter=_q("300 mm"),
+        friction_coefficient=0.25,
+        wrap_angle=wrap,
+    )
+    grip = 1.0 - exp(-0.25 * wrap)
+    assert torque.to("N*m").magnitude == pytest.approx(2000.0 * grip * 0.15, rel=1e-12)
+    assert torque.to("N*m").magnitude == pytest.approx(207.648, rel=1e-4)
+    # The torque IS the belt transmissible force acting at the drum radius —
+    # single source of truth with the capstan primitive.
+    force = belt_max_transmissible_force(
+        tight_tension=_q("2 kN"), friction_coefficient=0.25, wrap_angle=wrap
+    )
+    assert torque.to("N*m").magnitude == pytest.approx(force.to("N").magnitude * 0.15, rel=1e-12)
+    # More wrap holds more torque with the same band tension.
+    fuller_wrap = band_brake_torque(
+        tight_tension=_q("2 kN"),
+        drum_diameter=_q("300 mm"),
+        friction_coefficient=0.25,
+        wrap_angle=2.0 * pi,
+    )
+    assert fuller_wrap.to("N*m").magnitude > torque.to("N*m").magnitude
+
+
+def test_band_brake_tension_inverse_round_trips():
+    from math import pi
+
+    # Size the band for a 500 N*m hold, then check the forward torque lands on it.
+    wrap = 3.0 * pi / 2.0
+    tension = band_brake_tight_tension_for_torque(
+        torque=_q("500 N*m"),
+        drum_diameter=_q("300 mm"),
+        friction_coefficient=0.25,
+        wrap_angle=wrap,
+    )
+    back = band_brake_torque(
+        tight_tension=tension,
+        drum_diameter=_q("300 mm"),
+        friction_coefficient=0.25,
+        wrap_angle=wrap,
+    )
+    assert back.to("N*m").magnitude == pytest.approx(500.0, rel=1e-12)
+
+
+def test_band_brake_lining_pressure_peaks_at_the_tight_end():
+    # p_max = 2*T1/(b*D): 2 kN on a 50 mm band over a 300 mm drum -> 0.2667 MPa,
+    # under a ~0.34 MPa woven-lining allowable.
+    pressure = band_brake_max_lining_pressure(
+        tight_tension=_q("2 kN"), band_width=_q("50 mm"), drum_diameter=_q("300 mm")
+    )
+    assert pressure.to("MPa").magnitude == pytest.approx(2.0 * 2000.0 / (50.0 * 300.0), rel=1e-12)
+    assert pressure.to("MPa").magnitude == pytest.approx(0.26667, rel=1e-4)
+    # A wider band spreads the same tension thinner.
+    wider = band_brake_max_lining_pressure(
+        tight_tension=_q("2 kN"), band_width=_q("80 mm"), drum_diameter=_q("300 mm")
+    )
+    assert wider.to("MPa").magnitude < pressure.to("MPa").magnitude
+
+
+def test_band_brake_rejects_bad_inputs():
+    from math import pi
+
+    with pytest.raises(ValueError, match="drum_diameter must be positive"):
+        band_brake_torque(
+            tight_tension=_q("2 kN"),
+            drum_diameter=_q("0 mm"),
+            friction_coefficient=0.25,
+            wrap_angle=pi,
+        )
+    with pytest.raises(ValueError, match="torque must be positive"):
+        band_brake_tight_tension_for_torque(
+            torque=_q("0 N*m"),
+            drum_diameter=_q("300 mm"),
+            friction_coefficient=0.25,
+            wrap_angle=pi,
+        )
+    with pytest.raises(ValueError, match="friction_coefficient must be positive"):
+        band_brake_tight_tension_for_torque(
+            torque=_q("500 N*m"),
+            drum_diameter=_q("300 mm"),
+            friction_coefficient=0.0,
+            wrap_angle=pi,
+        )
+    with pytest.raises(ValueError, match="band_width must be positive"):
+        band_brake_max_lining_pressure(
+            tight_tension=_q("2 kN"), band_width=_q("0 mm"), drum_diameter=_q("300 mm")
+        )
+    with pytest.raises(ValueError, match="tight_tension must be a"):
+        band_brake_max_lining_pressure(
+            tight_tension=_q("2 m"), band_width=_q("50 mm"), drum_diameter=_q("300 mm")
+        )
 
 
 def test_bearing_basic_rating_life_follows_the_load_life_law():
