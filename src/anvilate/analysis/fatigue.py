@@ -23,10 +23,14 @@ from __future__ import annotations
 
 from math import inf, sqrt
 
+from pydantic import BaseModel, ConfigDict
+
 from ..scorecard import ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
+    "CyclicStress",
+    "cyclic_stress_components",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",
@@ -42,6 +46,51 @@ def _require_stress(value: Quantity, name: str) -> float:
             f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
         )
     return value.to("MPa").magnitude
+
+
+class CyclicStress(BaseModel):
+    """A fluctuating stress cycle resolved into its fatigue components.
+
+    ``alternating_stress`` is the amplitude σ_a = (σ_max − σ_min)/2 and
+    ``mean_stress`` the mean σ_m = (σ_max + σ_min)/2 — the pair the Goodman /
+    Soderberg / Gerber criteria consume. ``stress_ratio`` is R = σ_min/σ_max, the
+    common way loads are catalogued: R = −1 is fully reversed, R = 0 zero-to-tension,
+    R = +1 static (and −inf for a cycle peaking at zero).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    alternating_stress: Quantity
+    mean_stress: Quantity
+    stress_ratio: float
+
+
+def cyclic_stress_components(*, max_stress: Quantity, min_stress: Quantity) -> CyclicStress:
+    """Resolve a stress cycle given by its peak and valley into fatigue components.
+
+    Loads usually arrive as the maximum and minimum stress of the cycle, not as an
+    amplitude and mean; this converts them. σ_a = (σ_max − σ_min)/2,
+    σ_m = (σ_max + σ_min)/2, and R = σ_min/σ_max, ready to feed
+    :func:`goodman_safety_factor` and its Soderberg/Gerber siblings.
+    ``max_stress`` must exceed ``min_stress`` (both signed, tension positive);
+    the stress ratio is −inf when the cycle peaks at exactly zero. Returns a
+    :class:`CyclicStress`.
+    """
+    smax = _require_stress(max_stress, "max_stress")
+    smin = _require_stress(min_stress, "min_stress")
+    if smax <= smin:
+        raise ValueError(
+            f"max_stress ({max_stress}) must exceed min_stress ({min_stress}) for a cycle"
+        )
+    if smax == 0:
+        ratio = -inf  # cycle peaks at zero (fully compressive)
+    else:
+        ratio = smin / smax
+    return CyclicStress(
+        alternating_stress=Quantity(magnitude=(smax - smin) / 2, unit="MPa"),
+        mean_stress=Quantity(magnitude=(smax + smin) / 2, unit="MPa"),
+        stress_ratio=ratio,
+    )
 
 
 def goodman_safety_factor(

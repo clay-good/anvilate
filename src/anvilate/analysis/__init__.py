@@ -30,7 +30,8 @@ modules:
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, distributed-mass beam fundamentals, disc-on-shaft torsional mode
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending
-- :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue
+- :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
+  and the max/min → amplitude/mean cyclic-stress converter
 
 Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
@@ -128,6 +129,8 @@ from .fastener import (
     torque_for_preload,
 )
 from .fatigue import (
+    CyclicStress,
+    cyclic_stress_components,
     gerber_safety_factor,
     gerber_scorecard,
     goodman_safety_factor,
@@ -292,6 +295,8 @@ __all__ = [
     "soderberg_scorecard",
     "gerber_safety_factor",
     "gerber_scorecard",
+    "CyclicStress",
+    "cyclic_stress_components",
     "key_tangential_force",
     "key_shear_stress",
     "key_bearing_stress",

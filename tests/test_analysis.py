@@ -40,6 +40,7 @@ from anvilate.analysis import (
     combine_axial_bending,
     concentrated_stress,
     constrained_thermal_stress,
+    cyclic_stress_components,
     deflection_scorecard,
     euler_buckling_load,
     euler_critical_stress,
@@ -3055,6 +3056,47 @@ def test_axial_stress_worked_example_and_sign():
 def test_axial_stress_rejects_wrong_dimensions():
     with pytest.raises(ValueError, match="area must be a"):
         axial_stress(force=_q("10 kN"), area=_q("20 mm"))  # a length, not an area
+
+
+def test_cyclic_stress_components_from_max_and_min():
+    # sigma_max=200, sigma_min=50 MPa: amplitude 75, mean 125, R = 50/200 = 0.25.
+    c = cyclic_stress_components(max_stress=_q("200 MPa"), min_stress=_q("50 MPa"))
+    assert c.alternating_stress.to("MPa").magnitude == pytest.approx(75.0, rel=1e-9)
+    assert c.mean_stress.to("MPa").magnitude == pytest.approx(125.0, rel=1e-9)
+    assert c.stress_ratio == pytest.approx(0.25, rel=1e-9)
+
+
+def test_cyclic_stress_fully_reversed_and_zero_to_tension():
+    # Fully reversed: R = -1, zero mean, amplitude = the peak.
+    rev = cyclic_stress_components(max_stress=_q("120 MPa"), min_stress=_q("-120 MPa"))
+    assert rev.mean_stress.to("MPa").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert rev.alternating_stress.to("MPa").magnitude == pytest.approx(120.0, rel=1e-9)
+    assert rev.stress_ratio == pytest.approx(-1.0, rel=1e-9)
+    # Zero-to-tension: R = 0, amplitude = mean = half the peak.
+    zt = cyclic_stress_components(max_stress=_q("180 MPa"), min_stress=_q("0 MPa"))
+    assert zt.stress_ratio == pytest.approx(0.0, abs=1e-12)
+    assert zt.alternating_stress.to("MPa").magnitude == pytest.approx(90.0, rel=1e-9)
+    assert zt.mean_stress.to("MPa").magnitude == pytest.approx(90.0, rel=1e-9)
+
+
+def test_cyclic_stress_feeds_the_goodman_criterion():
+    # The converter output drops straight into the Goodman screen: sigma_a=75,
+    # sigma_m=125; Se=200, Su=400 -> 1/n = 75/200 + 125/400 = 0.6875 -> n = 1.4545.
+    c = cyclic_stress_components(max_stress=_q("200 MPa"), min_stress=_q("50 MPa"))
+    n = goodman_safety_factor(
+        alternating_stress=c.alternating_stress,
+        mean_stress=c.mean_stress,
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+    )
+    assert n == pytest.approx(1.0 / (75 / 200 + 125 / 400), rel=1e-9)
+
+
+def test_cyclic_stress_rejects_non_cycle():
+    with pytest.raises(ValueError, match="must exceed min_stress"):
+        cyclic_stress_components(max_stress=_q("50 MPa"), min_stress=_q("50 MPa"))
+    with pytest.raises(ValueError, match="max_stress must be a"):
+        cyclic_stress_components(max_stress=_q("50 N"), min_stress=_q("10 MPa"))
 
 
 def test_goodman_safety_factor_worked_example():
