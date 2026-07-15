@@ -60,6 +60,8 @@ __all__ = [
     "circular_second_moment",
     "hollow_circular_second_moment",
     "max_transverse_shear_stress",
+    "shear_flow",
+    "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
     "span_deflection_limit",
     "SHEAR_FORM_RECTANGULAR",
@@ -137,6 +139,67 @@ def max_transverse_shear_stress(
         raise ValueError(f"form_factor must be positive; got {form_factor}")
     stress = form_factor * shear_force.pint / area.pint
     return _as_quantity(stress, "MPa")
+
+
+def shear_flow(
+    *,
+    shear_force: Quantity,
+    first_moment_of_area: Quantity,
+    second_moment_of_area: Quantity,
+) -> Quantity:
+    """The longitudinal shear flow q = V·Q/I at a cut in a built-up beam.
+
+    Where two parts of a beam are joined — a plate welded to a flange, boards
+    nailed into a box — the fasteners carry the shear that flows between them along
+    the beam. That flow (force per unit length) is q = V·Q/I: ``shear_force`` V is
+    the transverse shear at the section, ``first_moment_of_area`` Q the first moment
+    (A·ȳ) of the joined area about the neutral axis, and ``second_moment_of_area`` I
+    the whole section's second moment. Divide a fastener's shear capacity by q for
+    its maximum spacing (:func:`fastener_spacing_for_shear_flow`). V must be a
+    force, Q a length³, and I a length⁴ (both positive). Returns the shear flow in
+    N/mm.
+    """
+    _require(shear_force, "[force]", "shear_force")
+    if not first_moment_of_area.has_dimension("[length]**3"):
+        raise ValueError(
+            f"first_moment_of_area must be a [length]**3 quantity; got "
+            f"{first_moment_of_area.dimensionality} ({first_moment_of_area})"
+        )
+    if not second_moment_of_area.has_dimension("[length]**4"):
+        raise ValueError(
+            f"second_moment_of_area must be a [length]**4 quantity; got "
+            f"{second_moment_of_area.dimensionality} ({second_moment_of_area})"
+        )
+    if second_moment_of_area.to("mm**4").magnitude <= 0:
+        raise ValueError(f"second_moment_of_area must be positive; got {second_moment_of_area}")
+    q = shear_force.pint * first_moment_of_area.pint / second_moment_of_area.pint
+    return _as_quantity(q, "N/mm")
+
+
+def fastener_spacing_for_shear_flow(
+    *,
+    fastener_capacity: Quantity,
+    shear_flow: Quantity,
+) -> Quantity:
+    """The maximum fastener spacing s = F/q along a built-up beam.
+
+    A connector carrying shear capacity ``fastener_capacity`` F, spaced s apart,
+    resists a shear flow F/s; setting that equal to the applied ``shear_flow`` q
+    gives the largest spacing that keeps the joint from shearing, s = F/q. For a
+    double row (two fasteners per station) pass twice the single-fastener capacity.
+    F must be a force and q a force-per-length (positive). Returns the spacing in
+    mm.
+    """
+    _require(fastener_capacity, "[force]", "fastener_capacity")
+    if not shear_flow.has_dimension("[force] / [length]"):
+        raise ValueError(
+            f"shear_flow must be a [force]/[length] quantity; got "
+            f"{shear_flow.dimensionality} ({shear_flow})"
+        )
+    if shear_flow.to("N/mm").magnitude <= 0:
+        raise ValueError(f"shear_flow must be positive; got {shear_flow}")
+    spacing = fastener_capacity.pint / shear_flow.pint
+    return _as_quantity(spacing, "mm")
 
 
 def deflection_scorecard(

@@ -8,7 +8,8 @@ modules:
   minimum area an axial load requires
 - :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
   fixed-fixed / fixed-pinned; point, distributed, triangular, patch, and
-  applied-couple loads), transverse shear, section second moments
+  applied-couple loads), transverse shear, shear flow (VQ/I) and built-up-beam
+  fastener spacing, section second moments
 - :mod:`~anvilate.analysis.plate` — flat-plate bending (simply-supported
   rectangle via the exact Navier series; circular, simply-supported and clamped),
   and the clamped-cover thickness a pressure requires
@@ -79,6 +80,7 @@ from .beam import (
     cantilever_uniform_load,
     circular_second_moment,
     deflection_scorecard,
+    fastener_spacing_for_shear_flow,
     fixed_fixed_center_load,
     fixed_fixed_center_patch_load,
     fixed_fixed_offset_load,
@@ -98,6 +100,7 @@ from .beam import (
     overhang_tip_load,
     overhang_uniform_load,
     rectangular_second_moment,
+    shear_flow,
     simply_supported_center_load,
     simply_supported_center_patch_load,
     simply_supported_end_moment,
@@ -350,6 +353,8 @@ __all__ = [
     "bending_stress",
     "required_section_modulus",
     "max_transverse_shear_stress",
+    "shear_flow",
+    "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
     "span_deflection_limit",
     "SHEAR_FORM_RECTANGULAR",

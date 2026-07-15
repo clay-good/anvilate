@@ -60,6 +60,7 @@ from anvilate.analysis import (
     euler_buckling_load,
     euler_critical_stress,
     euler_second_moment_for_load,
+    fastener_spacing_for_shear_flow,
     fatigue_notch_factor,
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
@@ -139,6 +140,7 @@ from anvilate.analysis import (
     shaft_torsional_stress,
     shaft_twist_angle,
     shaft_von_mises_stress,
+    shear_flow,
     shrink_fit_assembly_temperature,
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_annular_plate_uniform_load,
@@ -2980,6 +2982,39 @@ def test_bearing_life_rejects_bad_inputs():
         bearing_life_hours(
             dynamic_load_rating=_q("14 kN"), equivalent_load=_q("2 kN"), speed=_q("1800 N")
         )
+
+
+def test_shear_flow_and_fastener_spacing():
+    # Built-up beam: V=10 kN, Q=120,000 mm^3, I=50e6 mm^4 -> q = V*Q/I = 24 N/mm.
+    q = shear_flow(
+        shear_force=_q("10 kN"),
+        first_moment_of_area=_q("120000 mm**3"),
+        second_moment_of_area=_q("50e6 mm**4"),
+    )
+    assert q.to("N/mm").magnitude == pytest.approx(24.0, rel=1e-9)
+    # A 4 kN fastener can sit at most s = F/q = 4000/24 = 166.7 mm apart.
+    s = fastener_spacing_for_shear_flow(fastener_capacity=_q("4 kN"), shear_flow=q)
+    assert s.to("mm").magnitude == pytest.approx(166.667, rel=1e-4)
+    # A double row (twice the capacity) doubles the allowable spacing.
+    s2 = fastener_spacing_for_shear_flow(fastener_capacity=_q("8 kN"), shear_flow=q)
+    assert s2.to("mm").magnitude == pytest.approx(2 * s.to("mm").magnitude, rel=1e-9)
+
+
+def test_shear_flow_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="first_moment_of_area must be a"):
+        shear_flow(
+            shear_force=_q("10 kN"),
+            first_moment_of_area=_q("120000 mm**2"),
+            second_moment_of_area=_q("50e6 mm**4"),
+        )
+    with pytest.raises(ValueError, match="second_moment_of_area must be positive"):
+        shear_flow(
+            shear_force=_q("10 kN"),
+            first_moment_of_area=_q("120000 mm**3"),
+            second_moment_of_area=_q("0 mm**4"),
+        )
+    with pytest.raises(ValueError, match="shear_flow must be positive"):
+        fastener_spacing_for_shear_flow(fastener_capacity=_q("4 kN"), shear_flow=_q("0 N/mm"))
 
 
 def test_preloaded_joint_shares_the_external_load():
