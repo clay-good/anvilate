@@ -44,6 +44,9 @@ modules:
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
   torque requires, and the peak lining pressure; short-shoe (block) brake lever
   statics with the self-energizing/self-locking distinction
+- :mod:`~anvilate.analysis.curved_beam` — Winkler curved-beam bending
+  (rectangular section): shifted neutral axis and the unequal inner/outer
+  fibre stresses of hooks, clamps, and links
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
@@ -183,6 +186,10 @@ from .contact import (
 from .coupling import (
     flange_coupling_bolt_force,
     flange_coupling_torque,
+)
+from .curved_beam import (
+    CurvedBeamStress,
+    rectangular_curved_beam_stress,
 )
 from .dynamics import (
     STANDARD_GRAVITY,
@@ -450,6 +457,8 @@ __all__ = [
     "short_shoe_normal_force",
     "short_shoe_brake_torque",
     "short_shoe_is_self_locking",
+    "CurvedBeamStress",
+    "rectangular_curved_beam_stress",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",

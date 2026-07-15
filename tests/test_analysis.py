@@ -158,6 +158,7 @@ from anvilate.analysis import (
     preloaded_bolt_cyclic_stress,
     principal_stresses_plane,
     radius_of_gyration,
+    rectangular_curved_beam_stress,
     rectangular_second_moment,
     rectangular_tube_enclosed_area,
     rectangular_tube_torsional_stress,
@@ -6327,4 +6328,87 @@ def test_short_shoe_brake_self_locking_geometry():
     with pytest.raises(ValueError, match="normal_force must be a"):
         short_shoe_brake_torque(
             normal_force=_q("3 mm"), drum_diameter=_q("300 mm"), friction_coefficient=0.35
+        )
+
+
+def test_curved_beam_winkler_stresses_and_neutral_axis_shift():
+    from math import log
+
+    # 20 mm wide, ri=50 / ro=100 (h=50), opened by 500 N*m: the neutral axis
+    # sits at rn = h/ln(ro/ri) = 72.135 mm, e = 2.865 mm inside the centroid.
+    result = rectangular_curved_beam_stress(
+        moment=_q("500 N*m"),
+        inner_radius=_q("50 mm"),
+        outer_radius=_q("100 mm"),
+        width=_q("20 mm"),
+    )
+    rn = 50.0 / log(2.0)
+    e = 75.0 - rn
+    assert result.neutral_radius.to("mm").magnitude == pytest.approx(rn, rel=1e-12)
+    assert result.eccentricity.to("mm").magnitude == pytest.approx(e, rel=1e-12)
+    # sigma_i = M*(rn - ri)/(A*e*ri): the bore works at 77.3 MPa where the
+    # straight-beam formula 6M/(b*h^2) claims only 60 -- hooks crack inside.
+    inner = 500e3 * (rn - 50.0) / (1000.0 * e * 50.0)
+    outer = 500e3 * (rn - 100.0) / (1000.0 * e * 100.0)
+    assert result.inner_stress.to("MPa").magnitude == pytest.approx(inner, rel=1e-12)
+    assert result.inner_stress.to("MPa").magnitude == pytest.approx(77.259, rel=1e-4)
+    assert result.outer_stress.to("MPa").magnitude == pytest.approx(outer, rel=1e-12)
+    assert result.outer_stress.to("MPa").magnitude == pytest.approx(-48.630, rel=1e-4)
+    # The bore always works harder than the back.
+    assert abs(result.inner_stress.magnitude) > abs(result.outer_stress.magnitude)
+    assert result.inner_stress.magnitude > 6.0 * 500e3 / (20.0 * 50.0**2)
+
+
+def test_curved_beam_stress_field_satisfies_equilibrium():
+    from math import log
+
+    # Integrate the hyperbolic field sigma(r) = M*(rn-r)/(A*e*r) directly:
+    # the net axial force must vanish and the moment about the CENTROID must
+    # recover the applied M (Winkler's two defining conditions).
+    ri, ro, b, m = 50.0, 100.0, 20.0, 500e3
+    h = ro - ri
+    rn = h / log(ro / ri)
+    rc = (ri + ro) / 2.0
+    e = rc - rn
+    area = b * h
+    n = 400_000
+    dr = h / n
+    force = 0.0
+    moment_about_centroid = 0.0
+    for i in range(n):
+        r = ri + (i + 0.5) * dr
+        sigma = m * (rn - r) / (area * e * r)
+        force += sigma * b * dr
+        moment_about_centroid += sigma * (r - rc) * b * dr
+    # Zero net force (the rn definition) and |moment| = M about the centroid.
+    assert abs(force) < 1e-6 * m / h
+    assert -moment_about_centroid == pytest.approx(m, rel=1e-9)
+
+
+def test_curved_beam_recovers_the_straight_beam_as_curvature_flattens():
+    # Same 20x50 section bent by 500 N*m at rc/h = 200: both fibres approach
+    # the straight-beam +/- 6M/(b*h^2) = 60 MPa, inner from above.
+    result = rectangular_curved_beam_stress(
+        moment=_q("500 N*m"),
+        inner_radius=_q("9975 mm"),
+        outer_radius=_q("10025 mm"),
+        width=_q("20 mm"),
+    )
+    straight = 6.0 * 500e3 / (20.0 * 50.0**2)
+    assert result.inner_stress.to("MPa").magnitude == pytest.approx(straight, rel=2e-3)
+    assert result.outer_stress.to("MPa").magnitude == pytest.approx(-straight, rel=2e-3)
+    assert result.inner_stress.to("MPa").magnitude > straight
+    with pytest.raises(ValueError, match="inner_radius must be positive"):
+        rectangular_curved_beam_stress(
+            moment=_q("500 N*m"),
+            inner_radius=_q("0 mm"),
+            outer_radius=_q("100 mm"),
+            width=_q("20 mm"),
+        )
+    with pytest.raises(ValueError, match="must exceed inner_radius"):
+        rectangular_curved_beam_stress(
+            moment=_q("500 N*m"),
+            inner_radius=_q("100 mm"),
+            outer_radius=_q("100 mm"),
+            width=_q("20 mm"),
         )
