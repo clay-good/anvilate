@@ -719,3 +719,19 @@ def test_frame_member_torsion_example_collapses_when_the_seam_is_left_open():
     assert opened.status is CheckStatus.FAIL
     assert "safety factor 0.21" in opened.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_bolt_tension_thread_area_example_fails_on_the_real_area():
+    namespace = runpy.run_path(str(_EXAMPLES / "bolt_tension_thread_area.py"))
+    card = namespace["screen_bolt_tension"]()
+    by_name = {e.name: e for e in card.entries}
+    # Spread over the nominal shank area the tension looks fine (SF 1.73)...
+    shank = by_name["shank-area tension (nominal)"]
+    assert shank.passed
+    assert "safety factor 1.73" in shank.detail
+    # ...but on the ISO 898 tensile stress area through the threads -- where the
+    # bolt actually fails -- the same load is under the 1.5 requirement (SF 1.29).
+    thread = by_name["tensile-area tension (threads)"]
+    assert thread.status is CheckStatus.FAIL
+    assert "safety factor 1.29" in thread.detail
+    assert card.status is CheckStatus.FAIL
