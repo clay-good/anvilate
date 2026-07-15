@@ -21,10 +21,14 @@ factors on top. Inputs are dimension-checked
 
 from __future__ import annotations
 
+from math import cos, radians, tan
+
 from ..units import Quantity
 
 __all__ = [
     "gear_tangential_load",
+    "gear_radial_load",
+    "gear_normal_load",
     "lewis_bending_stress",
 ]
 
@@ -51,6 +55,42 @@ def gear_tangential_load(*, torque: Quantity, pitch_diameter: Quantity) -> Quant
         raise ValueError(f"pitch_diameter must be positive; got {pitch_diameter}")
     force = 2.0 * torque.pint / pitch_diameter.pint
     return Quantity(magnitude=float(force.to("N").magnitude), unit="N")
+
+
+def _check_pressure_angle(pressure_angle: float) -> float:
+    if not 0 < pressure_angle < 90:
+        raise ValueError(f"pressure_angle (degrees) must lie in (0, 90); got {pressure_angle}")
+    return radians(pressure_angle)
+
+
+def gear_radial_load(*, tangential_load: Quantity, pressure_angle: float) -> Quantity:
+    """The radial (separating) load W_r = W_t·tan(φ) on a spur-gear mesh.
+
+    The pressure angle tilts the tooth contact force off the tangent, producing a
+    radial component that pushes the gears apart and bends their shafts.
+    ``tangential_load`` W_t is the transmitted force (from
+    :func:`gear_tangential_load`) and ``pressure_angle`` φ the gear pressure angle
+    **in degrees** (20° is the modern standard; 14.5° and 25° also occur — the units
+    layer does not carry angles, so φ is a plain degree value). φ must lie in
+    (0, 90). Returns the radial load in newtons — add it to the other shaft loads
+    when sizing the bearings.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    phi = _check_pressure_angle(pressure_angle)
+    return Quantity(magnitude=tangential_load.to("N").magnitude * tan(phi), unit="N")
+
+
+def gear_normal_load(*, tangential_load: Quantity, pressure_angle: float) -> Quantity:
+    """The total normal tooth load W_n = W_t/cos(φ) on a spur-gear mesh.
+
+    The full force pressed along the line of action between the teeth — the
+    resultant of the tangential and radial components. ``tangential_load`` W_t and
+    ``pressure_angle`` φ (degrees, in (0, 90)) are as in :func:`gear_radial_load`.
+    Returns the normal load in newtons; it always exceeds W_t.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    phi = _check_pressure_angle(pressure_angle)
+    return Quantity(magnitude=tangential_load.to("N").magnitude / cos(phi), unit="N")
 
 
 def lewis_bending_stress(

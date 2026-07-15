@@ -88,6 +88,8 @@ from anvilate.analysis import (
     flywheel_inertia_for_fluctuation,
     free_thermal_expansion,
     frequency_scorecard,
+    gear_normal_load,
+    gear_radial_load,
     gear_tangential_load,
     gerber_safety_factor,
     gerber_scorecard,
@@ -2981,6 +2983,26 @@ def test_plate_buckling_rejects_bad_inputs():
             thickness=_q("5 mm"),
             width=_q("300 mm"),
         )
+
+
+def test_gear_force_resolution_from_pressure_angle():
+    from math import cos, radians, tan
+
+    wt = _q("2000 N")
+    # Radial (separating) load W_r = W_t*tan(phi) at 20 deg -> 727.94 N.
+    wr = gear_radial_load(tangential_load=wt, pressure_angle=20)
+    assert wr.to("N").magnitude == pytest.approx(2000 * tan(radians(20)), rel=1e-9)
+    # Normal tooth load W_n = W_t/cos(phi) always exceeds W_t.
+    wn = gear_normal_load(tangential_load=wt, pressure_angle=20)
+    assert wn.to("N").magnitude == pytest.approx(2000 / cos(radians(20)), rel=1e-9)
+    assert wn.to("N").magnitude > 2000.0
+    # A larger pressure angle raises the separating load.
+    assert (
+        gear_radial_load(tangential_load=wt, pressure_angle=25).to("N").magnitude
+        > wr.to("N").magnitude
+    )
+    with pytest.raises(ValueError, match=r"pressure_angle \(degrees\) must lie in"):
+        gear_radial_load(tangential_load=wt, pressure_angle=0)
 
 
 def test_gear_lewis_bending_and_tangential_load():
