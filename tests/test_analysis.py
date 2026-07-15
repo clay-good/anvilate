@@ -112,6 +112,8 @@ from anvilate.analysis import (
     simply_supported_triangular_load,
     simply_supported_uniform_load,
     slenderness_ratio,
+    soderberg_safety_factor,
+    soderberg_scorecard,
     solid_disc_polar_mass_moment,
     spring_index,
     spring_shear_stress,
@@ -2986,6 +2988,78 @@ def test_goodman_rejects_negative_amplitude():
             mean_stress=_q("0 MPa"),
             endurance_limit=_q("200 MPa"),
             ultimate_strength=_q("400 MPa"),
+        )
+
+
+def test_soderberg_safety_factor_worked_example():
+    # sigma_a=100, sigma_m=50 MPa; Se=200, Sy=300 MPa:
+    #   1/n = 100/200 + 50/300 = 0.5 + 0.16667 = 0.66667 -> n = 1.5.
+    n = soderberg_safety_factor(
+        alternating_stress=_q("100 MPa"),
+        mean_stress=_q("50 MPa"),
+        endurance_limit=_q("200 MPa"),
+        yield_strength=_q("300 MPa"),
+    )
+    assert n == pytest.approx(1.5, rel=1e-6)
+
+
+def test_soderberg_is_more_conservative_than_goodman():
+    # For the same mean stress, drawing to yield (< ultimate) gives a smaller n.
+    common = {
+        "alternating_stress": _q("100 MPa"),
+        "mean_stress": _q("120 MPa"),
+        "endurance_limit": _q("200 MPa"),
+    }
+    good = goodman_safety_factor(ultimate_strength=_q("500 MPa"), **common)
+    sod = soderberg_safety_factor(yield_strength=_q("350 MPa"), **common)
+    assert sod < good
+
+
+def test_soderberg_fully_reversed_matches_goodman_endurance_ratio():
+    # At zero mean stress both criteria reduce to n = Se / sigma_a.
+    kw = {
+        "alternating_stress": _q("80 MPa"),
+        "mean_stress": _q("0 MPa"),
+        "endurance_limit": _q("200 MPa"),
+    }
+    sod = soderberg_safety_factor(yield_strength=_q("300 MPa"), **kw)
+    good = goodman_safety_factor(ultimate_strength=_q("400 MPa"), **kw)
+    assert sod == pytest.approx(200 / 80, rel=1e-9)
+    assert sod == pytest.approx(good, rel=1e-9)
+
+
+def test_soderberg_scorecard_honours_no_silent_green():
+    from anvilate.scorecard import CheckStatus
+
+    evaluated = soderberg_scorecard(
+        "fatigue",
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q("20 MPa"),
+        endurance_limit=_q("180 MPa"),
+        yield_strength=_q("250 MPa"),
+        required=1.5,
+    )
+    assert evaluated.status in (CheckStatus.PASS, CheckStatus.FAIL)
+    # No listed endurance limit -> NOT_EVALUATED, never a silent pass.
+    gap = soderberg_scorecard(
+        "fatigue",
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q("20 MPa"),
+        endurance_limit=None,
+        yield_strength=_q("250 MPa"),
+        required=1.5,
+    )
+    assert gap.status is CheckStatus.NOT_EVALUATED
+    assert not gap.passed
+
+
+def test_soderberg_rejects_negative_amplitude():
+    with pytest.raises(ValueError, match="amplitude"):
+        soderberg_safety_factor(
+            alternating_stress=_q("-10 MPa"),
+            mean_stress=_q("0 MPa"),
+            endurance_limit=_q("200 MPa"),
+            yield_strength=_q("300 MPa"),
         )
 
 

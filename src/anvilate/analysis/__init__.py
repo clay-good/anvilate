@@ -28,7 +28,7 @@ modules:
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, distributed-mass beam fundamentals, disc-on-shaft torsional mode
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending
-- :mod:`~anvilate.analysis.fatigue` — modified-Goodman fatigue
+- :mod:`~anvilate.analysis.fatigue` — modified-Goodman and Soderberg fatigue
 
 Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
@@ -123,7 +123,12 @@ from .fastener import (
     bolt_shear_stress,
     torque_for_preload,
 )
-from .fatigue import goodman_safety_factor, goodman_scorecard
+from .fatigue import (
+    goodman_safety_factor,
+    goodman_scorecard,
+    soderberg_safety_factor,
+    soderberg_scorecard,
+)
 from .interference import (
     InterferenceFit,
     interference_axial_capacity,
@@ -268,6 +273,8 @@ __all__ = [
     "bolt_shear_stress",
     "goodman_safety_factor",
     "goodman_scorecard",
+    "soderberg_safety_factor",
+    "soderberg_scorecard",
     "key_tangential_force",
     "key_shear_stress",
     "key_bearing_stress",
