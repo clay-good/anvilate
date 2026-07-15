@@ -12,6 +12,7 @@ from anvilate.analysis import (
     SHEAR_FORM_RECTANGULAR,
     SPRING_END_HINGED_HINGED,
     SPRING_END_PARALLEL_PLATES,
+    UNIFORM_PRESSURE,
     ColumnEnd,
     CrossSection,
     axial_stress,
@@ -55,6 +56,8 @@ from anvilate.analysis import (
     cyclic_stress_components,
     deflection_scorecard,
     differential_thermal_stress,
+    disc_clutch_force_for_torque,
+    disc_clutch_torque,
     dunkerley_fundamental_frequency,
     estimated_endurance_limit,
     euler_buckling_load,
@@ -2904,6 +2907,43 @@ def test_power_screw_rejects_bad_inputs():
         power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=-0.1, **kw)
     with pytest.raises(ValueError, match="load must be a"):
         power_screw_raise_torque(load=_q("6.4 mm"), friction_coefficient=0.08, **kw)
+
+
+def test_disc_clutch_torque_both_theories():
+    kw = {
+        "outer_radius": _q("100 mm"),
+        "inner_radius": _q("50 mm"),
+        "friction_coefficient": 0.3,
+        "surfaces": 2,
+    }
+    # Uniform wear: T = mu*F*N*(ro+ri)/2 = 0.3*5000*2*0.075 = 225 N*m.
+    wear = disc_clutch_torque(actuating_force=_q("5 kN"), **kw)
+    assert wear.to("N*m").magnitude == pytest.approx(225.0, rel=1e-9)
+    # Uniform pressure gives a slightly higher torque (233.3 N*m) -> wear is the
+    # conservative design basis.
+    pressure = disc_clutch_torque(actuating_force=_q("5 kN"), theory=UNIFORM_PRESSURE, **kw)
+    assert pressure.to("N*m").magnitude == pytest.approx(233.333, rel=1e-4)
+    assert wear.to("N*m").magnitude < pressure.to("N*m").magnitude
+    # The force inverse recovers the 5 kN clamp for the wear torque.
+    force = disc_clutch_force_for_torque(torque=wear, **kw)
+    assert force.to("kN").magnitude == pytest.approx(5.0, rel=1e-9)
+
+
+def test_disc_clutch_rejects_bad_inputs():
+    kw = {"outer_radius": _q("100 mm"), "inner_radius": _q("50 mm"), "friction_coefficient": 0.3}
+    with pytest.raises(ValueError, match="outer_radius .* must exceed inner_radius"):
+        disc_clutch_torque(
+            actuating_force=_q("5 kN"),
+            outer_radius=_q("50 mm"),
+            inner_radius=_q("100 mm"),
+            friction_coefficient=0.3,
+        )
+    with pytest.raises(ValueError, match="surfaces must be a positive integer"):
+        disc_clutch_torque(actuating_force=_q("5 kN"), surfaces=0, **kw)
+    with pytest.raises(ValueError, match="theory must be"):
+        disc_clutch_torque(actuating_force=_q("5 kN"), theory="linear", **kw)
+    with pytest.raises(ValueError, match="actuating_force must be a"):
+        disc_clutch_torque(actuating_force=_q("5 mm"), **kw)
 
 
 def test_capstan_tension_ratio_and_belt_tensions():
