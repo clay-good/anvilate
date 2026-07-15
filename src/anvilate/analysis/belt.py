@@ -22,7 +22,7 @@ does not carry dimensionless angles), matching how μ is supplied.
 
 from __future__ import annotations
 
-from math import exp
+from math import exp, radians, sin
 
 from ..units import Quantity
 
@@ -30,6 +30,7 @@ __all__ = [
     "capstan_tension_ratio",
     "belt_slack_tension",
     "belt_max_transmissible_force",
+    "vee_belt_effective_friction",
 ]
 
 
@@ -97,3 +98,21 @@ def belt_max_transmissible_force(
     ratio = _ratio(friction_coefficient, wrap_angle)
     t1 = tight_tension.to("N").magnitude
     return Quantity(magnitude=t1 * (1.0 - 1.0 / ratio), unit="N")
+
+
+def vee_belt_effective_friction(*, friction_coefficient: float, groove_angle: float) -> float:
+    """The effective friction coefficient μ' = μ/sin(β/2) of a V-belt in its groove.
+
+    A V-belt wedges into a grooved pulley, so the sheave's flanks press on it far
+    harder than a flat belt's single face — the geometry multiplies the effective
+    friction to μ/sin(β/2) for the groove included angle β. Feed the result to
+    :func:`capstan_tension_ratio` in place of the plain μ to get the V-belt's much
+    steeper grip (a 38° groove roughly triples the effective friction). The physical
+    ``friction_coefficient`` μ must be non-negative and ``groove_angle`` β a positive
+    angle **in degrees** below 180°. Returns the dimensionless effective μ'.
+    """
+    if friction_coefficient < 0:
+        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+    if not 0 < groove_angle < 180:
+        raise ValueError(f"groove_angle (degrees) must lie in (0, 180); got {groove_angle}")
+    return friction_coefficient / sin(radians(groove_angle / 2.0))

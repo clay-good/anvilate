@@ -198,6 +198,7 @@ from anvilate.analysis import (
     transition_slenderness,
     tresca_equivalent_stress,
     tresca_principal,
+    vee_belt_effective_friction,
     von_mises_bending_torsion,
     von_mises_plane_stress,
     von_mises_principal,
@@ -3076,6 +3077,20 @@ def test_disc_clutch_rejects_bad_inputs():
         disc_clutch_torque(actuating_force=_q("5 kN"), theory="linear", **kw)
     with pytest.raises(ValueError, match="actuating_force must be a"):
         disc_clutch_torque(actuating_force=_q("5 mm"), **kw)
+
+
+def test_vee_belt_effective_friction_multiplies_grip():
+    from math import radians, sin
+
+    # A 38-degree groove: mu' = mu/sin(19 deg) = 0.3/0.32557 = 0.9215.
+    mu_eff = vee_belt_effective_friction(friction_coefficient=0.3, groove_angle=38)
+    assert mu_eff == pytest.approx(0.3 / sin(radians(19)), rel=1e-9)
+    # The wedge roughly triples the effective friction over a flat belt.
+    assert mu_eff > 3 * 0.3 * 0.9
+    # A narrower groove grips even harder.
+    assert vee_belt_effective_friction(friction_coefficient=0.3, groove_angle=34) > mu_eff
+    with pytest.raises(ValueError, match=r"groove_angle \(degrees\) must lie in"):
+        vee_belt_effective_friction(friction_coefficient=0.3, groove_angle=0)
 
 
 def test_capstan_tension_ratio_and_belt_tensions():
