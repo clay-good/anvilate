@@ -59,6 +59,8 @@ from anvilate.analysis import (
     fixed_pinned_uniform_load,
     free_thermal_expansion,
     frequency_scorecard,
+    gerber_safety_factor,
+    gerber_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
     helical_spring_buckling,
@@ -3061,6 +3063,67 @@ def test_soderberg_rejects_negative_amplitude():
             endurance_limit=_q("200 MPa"),
             yield_strength=_q("300 MPa"),
         )
+
+
+def test_gerber_safety_factor_worked_example():
+    # sigma_a=100, sigma_m=50 MPa; Se=200, Su=400 MPa. a=0.5, b=0.125:
+    #   n = (a/2b^2)[-1 + sqrt(1 + (2b/a)^2)] = 16[-1 + sqrt(1.25)] = 1.8885.
+    n = gerber_safety_factor(
+        alternating_stress=_q("100 MPa"),
+        mean_stress=_q("50 MPa"),
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+    )
+    assert n == pytest.approx(1.8885, rel=1e-4)
+
+
+def test_gerber_sits_above_goodman_for_a_tensile_mean():
+    # The parabola bulges above the Goodman line -> the same numbers give a larger
+    # (less conservative) factor than Goodman's n = 1.6.
+    common = {
+        "alternating_stress": _q("100 MPa"),
+        "mean_stress": _q("50 MPa"),
+        "endurance_limit": _q("200 MPa"),
+        "ultimate_strength": _q("400 MPa"),
+    }
+    assert gerber_safety_factor(**common) > goodman_safety_factor(**common)
+
+
+def test_gerber_pure_mean_returns_the_static_ultimate_ratio():
+    # sigma_a = 0: the parabola meets the mean axis at S_u -> n = Su/sigma_m.
+    n = gerber_safety_factor(
+        alternating_stress=_q("0 MPa"),
+        mean_stress=_q("100 MPa"),
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+    )
+    assert n == pytest.approx(4.0, rel=1e-9)
+
+
+def test_gerber_compressive_mean_falls_back_to_endurance_ratio():
+    # A compressive mean earns no credit: n = Se / sigma_a.
+    n = gerber_safety_factor(
+        alternating_stress=_q("80 MPa"),
+        mean_stress=_q("-50 MPa"),
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+    )
+    assert n == pytest.approx(200 / 80, rel=1e-9)
+
+
+def test_gerber_scorecard_honours_no_silent_green():
+    from anvilate.scorecard import CheckStatus
+
+    gap = gerber_scorecard(
+        "fatigue",
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q("20 MPa"),
+        endurance_limit=None,
+        ultimate_strength=_q("400 MPa"),
+        required=1.5,
+    )
+    assert gap.status is CheckStatus.NOT_EVALUATED
+    assert not gap.passed
 
 
 def test_combine_axial_bending_extreme_fibres():

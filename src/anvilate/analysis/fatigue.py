@@ -1,4 +1,4 @@
-"""T1 analytical fatigue screening (modified Goodman / Soderberg, closed-form).
+"""T1 analytical fatigue screening (Goodman / Soderberg / Gerber, closed-form).
 
 A part under fluctuating load fails by fatigue below its static strength. The
 modified Goodman criterion combines the alternating stress amplitude σ_a and the
@@ -9,7 +9,10 @@ mean stress σ_m against the endurance limit S_e and the ultimate strength S_u:
 so the fatigue safety factor is ``n = 1 / (σ_a/S_e + σ_m/S_u)`` (Shigley). The
 Soderberg criterion is the same line drawn to the *yield* strength S_y instead of
 S_u, ``σ_a/S_e + σ_m/S_y = 1/n`` — more conservative, and the one criterion that
-also guards the mean stress against first-cycle yielding. The endurance limit is
+also guards the mean stress against first-cycle yielding. The Gerber criterion
+replaces the straight line with a parabola through the same intercepts,
+``n·σ_a/S_e + (n·σ_m/S_u)² = 1`` — the best fit to test data, so it sits above
+Goodman and gives the least conservative of the three. The endurance limit is
 often a labelled estimate or simply absent for a material — in which case a screen
 honours No-silent-green and reports ``NOT_EVALUATED`` rather than a silent pass.
 As with the other checks, inputs are dimension-checked
@@ -18,7 +21,7 @@ As with the other checks, inputs are dimension-checked
 
 from __future__ import annotations
 
-from math import inf
+from math import inf, sqrt
 
 from ..scorecard import ScorecardEntry
 from ..units import Quantity
@@ -28,6 +31,8 @@ __all__ = [
     "goodman_scorecard",
     "soderberg_safety_factor",
     "soderberg_scorecard",
+    "gerber_safety_factor",
+    "gerber_scorecard",
 ]
 
 
@@ -149,5 +154,76 @@ def soderberg_scorecard(
             mean_stress=mean_stress,
             endurance_limit=endurance_limit,
             yield_strength=yield_strength,
+        )
+    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+
+
+def gerber_safety_factor(
+    *,
+    alternating_stress: Quantity,
+    mean_stress: Quantity,
+    endurance_limit: Quantity,
+    ultimate_strength: Quantity,
+) -> float:
+    """The Gerber fatigue safety factor, the positive root of
+    ``n·σ_a/S_e + (n·σ_m/S_u)² = 1``.
+
+    The Gerber parabola passes through the same S_e and S_u intercepts as
+    :func:`goodman_safety_factor` but bulges above the Goodman line, so for a
+    tensile mean it returns the larger (least conservative) factor — the best fit
+    to fatigue data (Shigley). ``alternating_stress`` is the amplitude σ_a
+    (non-negative), ``mean_stress`` the mean σ_m (tension positive), and
+    ``endurance_limit`` S_e / ``ultimate_strength`` S_u the material strengths
+    (both positive). All must be stresses.
+
+    A non-positive (compressive or zero) mean earns no fatigue credit — the screen
+    falls back to the amplitude-only endurance ratio n = S_e/σ_a — while a pure
+    mean (σ_a = 0) returns the static ultimate ratio S_u/σ_m. Returns ``inf`` when
+    no fatigue failure is predicted.
+    """
+    sa = _require_stress(alternating_stress, "alternating_stress")
+    sm = _require_stress(mean_stress, "mean_stress")
+    se = _require_stress(endurance_limit, "endurance_limit")
+    su = _require_stress(ultimate_strength, "ultimate_strength")
+    if sa < 0:
+        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
+    if se <= 0 or su <= 0:
+        raise ValueError("endurance_limit and ultimate_strength must be positive")
+    if sm <= 0:
+        # No credit for a compressive/zero mean: amplitude governs.
+        return inf if sa == 0 else se / sa
+    if sa == 0:
+        # Pure mean stress: the parabola meets the σ_m axis at S_u.
+        return su / sm
+    a = sa / se
+    b = sm / su
+    return (a / (2 * b * b)) * (-1 + sqrt(1 + (2 * b / a) ** 2))
+
+
+def gerber_scorecard(
+    name: str,
+    *,
+    alternating_stress: Quantity,
+    mean_stress: Quantity,
+    endurance_limit: Quantity | None,
+    ultimate_strength: Quantity,
+    required: float,
+) -> ScorecardEntry:
+    """Screen a fluctuating stress state for fatigue (Gerber) → a
+    :class:`ScorecardEntry`.
+
+    The least conservative counterpart of :func:`goodman_scorecard`, judging the
+    Gerber safety factor against ``required``. When ``endurance_limit`` is ``None``
+    the entry is ``NOT_EVALUATED`` rather than a silent pass, honouring
+    No-silent-green for the fatigue dimension.
+    """
+    if endurance_limit is None:
+        computed = None
+    else:
+        computed = gerber_safety_factor(
+            alternating_stress=alternating_stress,
+            mean_stress=mean_stress,
+            endurance_limit=endurance_limit,
+            ultimate_strength=ultimate_strength,
         )
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
