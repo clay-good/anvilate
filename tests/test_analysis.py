@@ -146,6 +146,7 @@ from anvilate.analysis import (
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
     required_axial_area,
+    riveted_joint_efficiency,
     secant_column_max_stress,
     shaft_diameter_for_bending_torsion,
     shaft_diameter_for_torque,
@@ -3060,6 +3061,43 @@ def test_gear_lewis_rejects_bad_inputs():
         lewis_bending_stress(
             tangential_load=_q("3 mm"), module=_q("5 mm"), face_width=_q("50 mm"), form_factor=0.34
         )
+
+
+def test_riveted_joint_efficiency_takes_the_weakest_mode():
+    # p=50, d=20, t=10, sigma_t=80, tau=60, sigma_c=120 (MPa), 1 rivet/pitch:
+    #   tearing=(50-20)*10*80=24 kN, shearing=(pi/4)*400*60=18.85 kN,
+    #   crushing=20*10*120=24 kN, solid=50*10*80=40 kN. Shearing governs.
+    r = riveted_joint_efficiency(
+        pitch=_q("50 mm"),
+        rivet_diameter=_q("20 mm"),
+        plate_thickness=_q("10 mm"),
+        allowable_tension=_q("80 MPa"),
+        allowable_shear=_q("60 MPa"),
+        allowable_bearing=_q("120 MPa"),
+    )
+    assert r.tearing_strength.to("kN").magnitude == pytest.approx(24.0, rel=1e-9)
+    assert r.shearing_strength.to("kN").magnitude == pytest.approx(
+        pi / 4 * 400 * 60 / 1000, rel=1e-9
+    )
+    assert r.governing_mode == "shearing"
+    assert r.joint_strength.to("kN").magnitude == pytest.approx(
+        r.shearing_strength.to("kN").magnitude, rel=1e-12
+    )
+    assert r.efficiency == pytest.approx(r.shearing_strength.to("kN").magnitude / 40.0, rel=1e-9)
+
+
+def test_riveted_joint_rejects_bad_inputs():
+    good = {
+        "rivet_diameter": _q("20 mm"),
+        "plate_thickness": _q("10 mm"),
+        "allowable_tension": _q("80 MPa"),
+        "allowable_shear": _q("60 MPa"),
+        "allowable_bearing": _q("120 MPa"),
+    }
+    with pytest.raises(ValueError, match="pitch .* must exceed rivet_diameter"):
+        riveted_joint_efficiency(pitch=_q("15 mm"), **good)
+    with pytest.raises(ValueError, match="rivets_per_pitch must be a positive integer"):
+        riveted_joint_efficiency(pitch=_q("50 mm"), rivets_per_pitch=0, **good)
 
 
 def test_cone_clutch_torque_wedges_up_the_disc_torque():

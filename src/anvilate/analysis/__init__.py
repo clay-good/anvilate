@@ -48,6 +48,8 @@ modules:
   key length a torque requires
 - :mod:`~anvilate.analysis.weld` — fillet-weld throat shear and the weld leg a
   load requires
+- :mod:`~anvilate.analysis.rivet` — riveted-joint tearing/shearing/crushing
+  strength, governing mode, and efficiency
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, stored
   energy, series/parallel combination, and lateral (column) buckling screen
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
@@ -269,6 +271,10 @@ from .pressure_vessel import (
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
 )
+from .rivet import (
+    RivetedJointStrength,
+    riveted_joint_efficiency,
+)
 from .section import CrossSection, bending_stress, required_section_modulus
 from .spring import (
     SPRING_END_CLAMPED_FREE,
@@ -377,6 +383,8 @@ __all__ = [
     "CrossSection",
     "bending_stress",
     "required_section_modulus",
+    "RivetedJointStrength",
+    "riveted_joint_efficiency",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
