@@ -3720,6 +3720,26 @@ def test_thick_wall_bore_von_mises_sits_below_the_tresca_intensity():
     assert vm < result.bore_tresca_stress.to("MPa").magnitude
 
 
+def test_thick_wall_open_ended_drops_the_longitudinal_stress():
+    kw = {"pressure": _q("60 MPa"), "radius": _q("25 mm"), "wall_thickness": _q("10 mm")}
+    closed = thick_wall_cylinder(**kw)
+    openc = thick_wall_cylinder(closed_ends=False, **kw)
+    # An open-ended cylinder carries no axial pressure load: sigma_long = 0.
+    assert openc.longitudinal_stress.to("MPa").magnitude == pytest.approx(0.0, abs=1e-9)
+    # Hoop, radial, and the governing Tresca intensity are unchanged...
+    assert openc.hoop_stress.to("MPa").magnitude == pytest.approx(
+        closed.hoop_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert openc.bore_tresca_stress.to("MPa").magnitude == pytest.approx(245.0, rel=1e-9)
+    # ...but the von Mises reading rises (the intermediate principal stress is gone):
+    # sqrt(1/2*[245^2 + 60^2 + 185^2]) = 221.19 MPa > the 212.18 closed-ends value.
+    assert openc.bore_von_mises_stress.to("MPa").magnitude == pytest.approx(221.19, rel=1e-4)
+    assert (
+        openc.bore_von_mises_stress.to("MPa").magnitude
+        > closed.bore_von_mises_stress.to("MPa").magnitude
+    )
+
+
 def test_thick_wall_hoop_drops_by_exactly_the_pressure_across_the_wall():
     # Lame identity: the OD hoop stress is 2*sigma_long, and the bore hoop
     # exceeds it by EXACTLY p — the pressure is carried by the hoop gradient.

@@ -201,6 +201,7 @@ def thick_wall_cylinder(
     pressure: Quantity,
     radius: Quantity,
     wall_thickness: Quantity,
+    closed_ends: bool = True,
 ) -> ThickWallStress:
     """The exact Lamé stresses in a thick-wall cylinder under internal pressure.
 
@@ -210,10 +211,14 @@ def thick_wall_cylinder(
     bore, where everything peaks: σ_hoop = p·(r_o² + r_i²)/(r_o² − r_i²),
     σ_radial = −p, and σ_long = p·r_i²/(r_o² − r_i²) with closed ends (the
     hoop stress falls by exactly p across the wall, landing at 2·σ_long on
-    the OD). Exact at every r/t — as the wall thins it recovers the p·r/t
-    membrane forms, and at r/t ≲ 10 it is the honest one: the thin-wall
-    screen under-reports the bore. Every argument is dimension-checked and
-    must be positive.
+    the OD). Set ``closed_ends=False`` for an open-ended cylinder — a pipe with
+    free or bellows-jointed ends, or a press-fit sleeve — which carries no axial
+    pressure load, so σ_long = 0; the hoop and radial stresses (and the governing
+    Tresca intensity) are unchanged, but the von Mises reading rises because the
+    intermediate principal stress is gone. Exact at every r/t — as the wall thins
+    it recovers the p·r/t membrane forms, and at r/t ≲ 10 it is the honest one: the
+    thin-wall screen under-reports the bore. Every quantity argument is
+    dimension-checked and must be positive.
     """
     _require(pressure, "[pressure]", "pressure")
     _require(radius, "[length]", "radius")
@@ -225,10 +230,11 @@ def thick_wall_cylinder(
         raise ValueError("pressure, radius, and wall_thickness must be positive")
     ro = ri + t
     denom = ro**2 - ri**2
+    longitudinal = p * ri**2 / denom if closed_ends else 0.0
     return ThickWallStress(
         hoop_stress=Quantity(magnitude=p * (ro**2 + ri**2) / denom, unit="MPa"),
         radial_stress=Quantity(magnitude=-p, unit="MPa"),
-        longitudinal_stress=Quantity(magnitude=p * ri**2 / denom, unit="MPa"),
+        longitudinal_stress=Quantity(magnitude=longitudinal, unit="MPa"),
     )
 
 
