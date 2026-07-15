@@ -42,6 +42,8 @@ __all__ = [
     "gerber_scorecard",
     "miner_cumulative_damage",
     "miner_spectrum_repeats_to_failure",
+    "basquin_cycles_to_failure",
+    "basquin_stress_for_life",
 ]
 
 # Shigley's steel rotating-beam endurance-limit estimate: S_e' = 0.5*S_u, capped
@@ -387,3 +389,57 @@ def miner_spectrum_repeats_to_failure(
     if damage == 0.0:
         return inf
     return 1.0 / damage
+
+
+def basquin_cycles_to_failure(
+    *,
+    stress_amplitude: Quantity,
+    coefficient: Quantity,
+    exponent: float,
+) -> float:
+    """The finite fatigue life N from Basquin's S-N law σ_a = a·N^b, solved for N.
+
+    In the high-cycle finite-life region the S-N curve is a straight line on
+    log-log axes, σ_a = a·N^b, with the fatigue-strength ``coefficient`` a (a
+    stress) and the ``exponent`` b (dimensionless and negative, typically −0.05 to
+    −0.12 for steel — the two constants come from the material's S-N curve).
+    Inverting gives the cycles to failure at a stress amplitude,
+    N = (σ_a/a)^(1/b) — exactly the per-level life
+    :func:`miner_cumulative_damage` needs. ``stress_amplitude`` σ_a and
+    ``coefficient`` a must be positive stresses and ``exponent`` b must be
+    negative (a steeper, more negative b spends life faster). Returns the life N in
+    cycles.
+    """
+    sa = _require_stress(stress_amplitude, "stress_amplitude")
+    a = _require_stress(coefficient, "coefficient")
+    if sa <= 0:
+        raise ValueError(f"stress_amplitude must be positive; got {stress_amplitude}")
+    if a <= 0:
+        raise ValueError(f"coefficient must be positive; got {coefficient}")
+    if exponent >= 0:
+        raise ValueError(f"exponent (Basquin's b) must be negative; got {exponent}")
+    return (sa / a) ** (1.0 / exponent)
+
+
+def basquin_stress_for_life(
+    *,
+    life_cycles: float,
+    coefficient: Quantity,
+    exponent: float,
+) -> Quantity:
+    """The stress amplitude a part tolerates for a target life, σ_a = a·N^b.
+
+    The forward of :func:`basquin_cycles_to_failure`: the fatigue strength at a
+    design life ``life_cycles`` N on Basquin's S-N line, with the same fatigue
+    strength ``coefficient`` a and (negative) ``exponent`` b. ``life_cycles`` must
+    be positive; a longer target life lowers the allowable amplitude. Returns the
+    stress amplitude in MPa.
+    """
+    a = _require_stress(coefficient, "coefficient")
+    if a <= 0:
+        raise ValueError(f"coefficient must be positive; got {coefficient}")
+    if life_cycles <= 0:
+        raise ValueError(f"life_cycles must be positive; got {life_cycles}")
+    if exponent >= 0:
+        raise ValueError(f"exponent (Basquin's b) must be negative; got {exponent}")
+    return Quantity(magnitude=a * life_cycles**exponent, unit="MPa")

@@ -15,6 +15,8 @@ from anvilate.analysis import (
     ColumnEnd,
     CrossSection,
     axial_stress,
+    basquin_cycles_to_failure,
+    basquin_stress_for_life,
     bearing_basic_rating_life,
     bearing_life_hours,
     bearing_stress,
@@ -4163,6 +4165,50 @@ def test_gerber_scorecard_honours_no_silent_green():
     )
     assert gap.status is CheckStatus.NOT_EVALUATED
     assert not gap.passed
+
+
+def test_basquin_cycles_to_failure_inverts_the_stress_for_life():
+    # S-N line a=1200 MPa, b=-0.1. The stress at 1e6 cycles is a*N^b =
+    # 1200*1e6^-0.1 = 1200*0.2512 = 301.4 MPa, and that stress feeds back to 1e6.
+    stress = basquin_stress_for_life(life_cycles=1e6, coefficient=_q("1200 MPa"), exponent=-0.1)
+    assert stress.to("MPa").magnitude == pytest.approx(1200 * 1e6**-0.1, rel=1e-9)
+    life = basquin_cycles_to_failure(
+        stress_amplitude=stress, coefficient=_q("1200 MPa"), exponent=-0.1
+    )
+    assert life == pytest.approx(1e6, rel=1e-9)
+    # A higher stress amplitude spends the fatigue life faster (fewer cycles).
+    hotter = basquin_cycles_to_failure(
+        stress_amplitude=_q("400 MPa"), coefficient=_q("1200 MPa"), exponent=-0.1
+    )
+    assert hotter < life
+
+
+def test_basquin_feeds_the_miner_spectrum():
+    # Two amplitudes on the same S-N line give the per-level lives Miner consumes.
+    n1 = basquin_cycles_to_failure(
+        stress_amplitude=_q("350 MPa"), coefficient=_q("1200 MPa"), exponent=-0.1
+    )
+    n2 = basquin_cycles_to_failure(
+        stress_amplitude=_q("300 MPa"), coefficient=_q("1200 MPa"), exponent=-0.1
+    )
+    damage = miner_cumulative_damage(applied_cycles=[1e4, 2e4], cycles_to_failure=[n1, n2])
+    assert damage == pytest.approx(1e4 / n1 + 2e4 / n2, rel=1e-12)
+    assert 0 < damage < 1  # the block survives one pass
+
+
+def test_basquin_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="exponent .* must be negative"):
+        basquin_cycles_to_failure(
+            stress_amplitude=_q("300 MPa"), coefficient=_q("1200 MPa"), exponent=0.1
+        )
+    with pytest.raises(ValueError, match="stress_amplitude must be positive"):
+        basquin_cycles_to_failure(
+            stress_amplitude=_q("0 MPa"), coefficient=_q("1200 MPa"), exponent=-0.1
+        )
+    with pytest.raises(ValueError, match="life_cycles must be positive"):
+        basquin_stress_for_life(life_cycles=0.0, coefficient=_q("1200 MPa"), exponent=-0.1)
+    with pytest.raises(ValueError, match="coefficient must be a"):
+        basquin_stress_for_life(life_cycles=1e6, coefficient=_q("1200 mm"), exponent=-0.1)
 
 
 def test_miner_cumulative_damage_sums_the_life_fractions():

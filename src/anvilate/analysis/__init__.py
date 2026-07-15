@@ -45,7 +45,8 @@ modules:
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending
 - :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
   the max/min → amplitude/mean cyclic-stress converter, the fatigue notch factor,
-  and the steel endurance-limit estimate
+  the steel endurance-limit estimate, the Basquin S-N finite-life law, and
+  Palmgren-Miner cumulative damage over a load spectrum
 
 Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
@@ -158,6 +159,8 @@ from .fastener import (
 )
 from .fatigue import (
     CyclicStress,
+    basquin_cycles_to_failure,
+    basquin_stress_for_life,
     cyclic_stress_components,
     estimated_endurance_limit,
     fatigue_notch_factor,
@@ -365,6 +368,8 @@ __all__ = [
     "gerber_scorecard",
     "miner_cumulative_damage",
     "miner_spectrum_repeats_to_failure",
+    "basquin_cycles_to_failure",
+    "basquin_stress_for_life",
     "CyclicStress",
     "cyclic_stress_components",
     "estimated_endurance_limit",
