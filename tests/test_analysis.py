@@ -3269,6 +3269,18 @@ def test_thick_wall_cylinder_matches_worked_example():
     assert result.yield_safety_factor(_q("417 MPa")) == pytest.approx(417 / 245, rel=1e-6)
 
 
+def test_thick_wall_bore_von_mises_sits_below_the_tresca_intensity():
+    # The bore triad (185, -60, 62.5): von Mises = sqrt(1/2*[(sig1-sig2)^2 +
+    # (sig2-sig3)^2 + (sig3-sig1)^2]) = 212.18 MPa, a few percent under the 245
+    # Tresca intensity -- the ductile criterion is less conservative but still safe.
+    result = thick_wall_cylinder(
+        pressure=_q("60 MPa"), radius=_q("25 mm"), wall_thickness=_q("10 mm")
+    )
+    vm = result.bore_von_mises_stress.to("MPa").magnitude
+    assert vm == pytest.approx(212.176, rel=1e-4)
+    assert vm < result.bore_tresca_stress.to("MPa").magnitude
+
+
 def test_thick_wall_hoop_drops_by_exactly_the_pressure_across_the_wall():
     # Lame identity: the OD hoop stress is 2*sigma_long, and the bore hoop
     # exceeds it by EXACTLY p — the pressure is carried by the hoop gradient.

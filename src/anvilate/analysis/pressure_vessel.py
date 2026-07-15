@@ -20,6 +20,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
+from .stress import von_mises_principal
 
 __all__ = [
     "ThinWallStress",
@@ -163,6 +164,23 @@ class ThickWallStress(BaseModel):
         hoop = self.hoop_stress.to("MPa").magnitude
         radial = self.radial_stress.to("MPa").magnitude
         return Quantity(magnitude=hoop - radial, unit="MPa")
+
+    @property
+    def bore_von_mises_stress(self) -> Quantity:
+        """The von Mises equivalent stress of the bore's hoop/radial/longitudinal
+        triad — the less-conservative ductile yield criterion.
+
+        Tresca (``bore_tresca_stress``) ignores the intermediate principal stress;
+        von Mises accounts for all three, so for a closed-end cylinder it reads a
+        few percent below the Tresca intensity and gives a less conservative but
+        still safe screen. Evaluated through
+        :func:`~anvilate.analysis.stress.von_mises_principal`.
+        """
+        return von_mises_principal(
+            sigma_1=self.hoop_stress,
+            sigma_2=self.radial_stress,
+            sigma_3=self.longitudinal_stress,
+        )
 
     def yield_safety_factor(self, yield_strength: Quantity) -> float:
         """The factor of safety against bore yielding on the Tresca intensity."""
