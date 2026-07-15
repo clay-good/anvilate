@@ -755,3 +755,21 @@ def test_coupling_key_example_passes_shear_but_fails_bearing():
     req = namespace["required_key_length"]()
     assert req.governing_mode == "bearing"
     assert req.required_length.to("mm").magnitude == pytest.approx(17.778, rel=1e-3)
+
+
+def test_beam_section_sizing_example_picks_the_section_above_the_floor():
+    namespace = runpy.run_path(str(_EXAMPLES / "beam_section_sizing.py"))
+    # The required section modulus is the floor a section must clear.
+    floor = namespace["floor_section_modulus"]()
+    assert floor.to("mm**3").magnitude == pytest.approx(72727.3, rel=1e-4)
+    card = namespace["screen_beam_sections"]()
+    by_name = {e.name: e for e in card.entries}
+    # The 80x120x5 box (Z ~ 62,600 < floor) misses the 1.5 margin...
+    small = by_name["80x120x5 box bending"]
+    assert small.status is CheckStatus.FAIL
+    assert "safety factor 1.29" in small.detail
+    # ...the 100x140x6 box (Z ~ 107,000 > floor) clears it comfortably.
+    large = by_name["100x140x6 box bending"]
+    assert large.passed
+    assert "safety factor 2.21" in large.detail
+    assert card.status is CheckStatus.FAIL
