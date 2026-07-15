@@ -15,13 +15,24 @@ absolute ``degC`` reading.
 
 from __future__ import annotations
 
+from pydantic import BaseModel, ConfigDict
+
 from ..units import Quantity
 
 __all__ = [
     "constrained_thermal_stress",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",
+    "DifferentialThermalStress",
+    "differential_thermal_stress",
 ]
+
+
+def _require(value: Quantity, expected: str, name: str) -> None:
+    if not value.has_dimension(expected):
+        raise ValueError(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        )
 
 
 def constrained_thermal_stress(
@@ -141,3 +152,71 @@ def shrink_fit_assembly_temperature(
     if clearance < 0:
         raise ValueError(f"assembly_clearance must be non-negative; got {assembly_clearance}")
     return Quantity(magnitude=(delta + clearance) / (alpha * d), unit="K")
+
+
+class DifferentialThermalStress(BaseModel):
+    """The stresses two rigidly-joined members develop from a CTE mismatch.
+
+    ``constraint_force`` is the shared internal force that pulls the two members
+    to a common length. ``stress_1`` and ``stress_2`` are the resulting SIGNED
+    stresses (tension positive): on heating, the higher-expansion member is held
+    back in compression while the lower-expansion one is stretched into tension —
+    the mechanism that cracks dissimilar-material joints on thermal cycling.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    constraint_force: Quantity
+    stress_1: Quantity
+    stress_2: Quantity
+
+
+def differential_thermal_stress(
+    *,
+    temperature_change: Quantity,
+    thermal_expansion_coefficient_1: Quantity,
+    elastic_modulus_1: Quantity,
+    area_1: Quantity,
+    thermal_expansion_coefficient_2: Quantity,
+    elastic_modulus_2: Quantity,
+    area_2: Quantity,
+) -> DifferentialThermalStress:
+    """The CTE-mismatch stresses in two members forced to share one length.
+
+    Two members of different expansion coefficient, rigidly joined and heated by
+    the same ``temperature_change`` ΔT, cannot both reach their free length; the
+    misfit (α₁ − α₂)·ΔT is taken up as strain. The shared constraint force is
+    F = (α₁ − α₂)·ΔT / (1/(E₁·A₁) + 1/(E₂·A₂)) (independent of the shared length),
+    and each member sees σᵢ = ∓F/Aᵢ — the higher-α member in compression on
+    heating, the lower-α in tension.
+
+    Each member carries its own ``thermal_expansion_coefficient`` (1/temperature),
+    ``elastic_modulus`` (pressure), and ``area`` (length²); ``temperature_change``
+    is a difference (K or delta_degC). Returns a :class:`DifferentialThermalStress`
+    with the shared force and both signed stresses. Every quantity is
+    dimension-checked and the areas must be positive.
+    """
+    _require(temperature_change, "[temperature]", "temperature_change")
+    _require(
+        thermal_expansion_coefficient_1, "1 / [temperature]", "thermal_expansion_coefficient_1"
+    )
+    _require(
+        thermal_expansion_coefficient_2, "1 / [temperature]", "thermal_expansion_coefficient_2"
+    )
+    _require(elastic_modulus_1, "[pressure]", "elastic_modulus_1")
+    _require(elastic_modulus_2, "[pressure]", "elastic_modulus_2")
+    _require(area_1, "[length]**2", "area_1")
+    _require(area_2, "[length]**2", "area_2")
+    delta_t = temperature_change.to("K").magnitude
+    a1 = thermal_expansion_coefficient_1.to("1/K").magnitude
+    a2 = thermal_expansion_coefficient_2.to("1/K").magnitude
+    ea1 = elastic_modulus_1.to("MPa").magnitude * area_1.to("mm**2").magnitude  # N
+    ea2 = elastic_modulus_2.to("MPa").magnitude * area_2.to("mm**2").magnitude  # N
+    if ea1 <= 0 or ea2 <= 0:
+        raise ValueError("elastic moduli and areas must be positive")
+    force = (a1 - a2) * delta_t / (1.0 / ea1 + 1.0 / ea2)  # N
+    return DifferentialThermalStress(
+        constraint_force=Quantity(magnitude=abs(force), unit="N"),
+        stress_1=Quantity(magnitude=-force / area_1.to("mm**2").magnitude, unit="MPa"),
+        stress_2=Quantity(magnitude=force / area_2.to("mm**2").magnitude, unit="MPa"),
+    )

@@ -32,7 +32,8 @@ modules:
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, and
   lateral (column) buckling screen
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
-  stress, and shrink-fit assembly temperature
+  stress, shrink-fit assembly temperature, and CTE-mismatch (differential)
+  joint stress
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
   fundamentals, disc-on-shaft torsional mode
@@ -214,7 +215,9 @@ from .stress import (
     yield_safety_factor,
 )
 from .thermal import (
+    DifferentialThermalStress,
     constrained_thermal_stress,
+    differential_thermal_stress,
     free_thermal_expansion,
     shrink_fit_assembly_temperature,
 )
@@ -398,4 +401,6 @@ __all__ = [
     "constrained_thermal_stress",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",
+    "DifferentialThermalStress",
+    "differential_thermal_stress",
 ]

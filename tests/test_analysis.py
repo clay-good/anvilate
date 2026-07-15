@@ -44,6 +44,7 @@ from anvilate.analysis import (
     constrained_thermal_stress,
     cyclic_stress_components,
     deflection_scorecard,
+    differential_thermal_stress,
     dunkerley_fundamental_frequency,
     estimated_endurance_limit,
     euler_buckling_load,
@@ -3774,6 +3775,56 @@ def test_thermal_expansion_rejects_bad_inputs():
             diametral_interference=_q("59 um"),
             assembly_clearance=_q("-1 um"),
             thermal_expansion_coefficient=_q("11.7e-6 / K"),
+        )
+
+
+def test_differential_thermal_stress_worked_example():
+    # Aluminum (a=23e-6, E=69 GPa) rigidly joined to steel (a=12e-6, E=200 GPa),
+    # each 100 mm^2, heated +100 K: F = (a1-a2)*dT / (1/E1A1 + 1/E2A2) = 5643 N;
+    #   the higher-a aluminum is compressed -56.4 MPa, the steel tensioned +56.4.
+    r = differential_thermal_stress(
+        temperature_change=_q("100 K"),
+        thermal_expansion_coefficient_1=_q("23e-6 / K"),
+        elastic_modulus_1=_q("69 GPa"),
+        area_1=_q("100 mm**2"),
+        thermal_expansion_coefficient_2=_q("12e-6 / K"),
+        elastic_modulus_2=_q("200 GPa"),
+        area_2=_q("100 mm**2"),
+    )
+    assert r.constraint_force.to("N").magnitude == pytest.approx(5643.4, rel=1e-3)
+    assert r.stress_1.to("MPa").magnitude == pytest.approx(-56.434, rel=1e-3)
+    assert r.stress_2.to("MPa").magnitude == pytest.approx(56.434, rel=1e-3)
+    # The shared force is the same in both members: |sigma_i| = F/A_i.
+    assert r.stress_2.to("MPa").magnitude == pytest.approx(
+        r.constraint_force.to("N").magnitude / 100, rel=1e-6
+    )
+
+
+def test_differential_thermal_stress_vanishes_for_matched_cte():
+    # Same expansion coefficient -> no misfit -> no stress, whatever the moduli.
+    r = differential_thermal_stress(
+        temperature_change=_q("100 K"),
+        thermal_expansion_coefficient_1=_q("12e-6 / K"),
+        elastic_modulus_1=_q("69 GPa"),
+        area_1=_q("100 mm**2"),
+        thermal_expansion_coefficient_2=_q("12e-6 / K"),
+        elastic_modulus_2=_q("200 GPa"),
+        area_2=_q("50 mm**2"),
+    )
+    assert r.constraint_force.to("N").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert r.stress_1.to("MPa").magnitude == pytest.approx(0.0, abs=1e-9)
+
+
+def test_differential_thermal_stress_rejects_bad_units():
+    with pytest.raises(ValueError, match="temperature_change must be a"):
+        differential_thermal_stress(
+            temperature_change=_q("100 mm"),
+            thermal_expansion_coefficient_1=_q("23e-6 / K"),
+            elastic_modulus_1=_q("69 GPa"),
+            area_1=_q("100 mm**2"),
+            thermal_expansion_coefficient_2=_q("12e-6 / K"),
+            elastic_modulus_2=_q("200 GPa"),
+            area_2=_q("100 mm**2"),
         )
 
 
