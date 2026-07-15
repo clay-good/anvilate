@@ -737,6 +737,25 @@ def test_bolt_tension_thread_area_example_fails_on_the_real_area():
     assert card.status is CheckStatus.FAIL
 
 
+def test_conveyor_bearing_life_example_needs_the_heavy_bearing():
+    namespace = runpy.run_path(str(_EXAMPLES / "conveyor_bearing_life.py"))
+    card = namespace["screen_pulley_bearing"]()
+    by_name = {e.name: e for e in card.entries}
+    # The bearing that fits the shaft lasts only a quarter of the 30,000 h target.
+    light = by_name["6208 (light)"]
+    assert light.status is CheckStatus.FAIL
+    assert "safety factor 0.25" in light.detail
+    # Even a medium upsize falls short (SF 0.73)...
+    medium = by_name["6308 (medium)"]
+    assert medium.status is CheckStatus.FAIL
+    assert "safety factor 0.73" in medium.detail
+    assert card.status is CheckStatus.FAIL
+    # ...only the heavy bearing clears it, with a comfortable life margin.
+    heavy = by_name["6310 (heavy)"]
+    assert heavy.passed
+    assert "safety factor 2.28" in heavy.detail
+
+
 def test_geared_shaft_example_fails_on_combined_loading():
     namespace = runpy.run_path(str(_EXAMPLES / "geared_shaft_sizing.py"))
     card = namespace["screen_geared_shaft"]()

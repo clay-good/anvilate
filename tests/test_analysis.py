@@ -7,6 +7,7 @@ from math import pi
 import pytest
 
 from anvilate.analysis import (
+    ROLLER_BEARING_LIFE_EXPONENT,
     SHEAR_FORM_CIRCULAR,
     SHEAR_FORM_RECTANGULAR,
     SPRING_END_HINGED_HINGED,
@@ -14,6 +15,8 @@ from anvilate.analysis import (
     ColumnEnd,
     CrossSection,
     axial_stress,
+    bearing_basic_rating_life,
+    bearing_life_hours,
     bearing_stress,
     bolt_axial_stress,
     bolt_diameter_for_shear,
@@ -2761,6 +2764,54 @@ def test_bolt_tensile_area_rejects_bad_inputs():
         bolt_tensile_stress_area(nominal_diameter=_q("1 mm"), pitch=_q("2 mm"))
     with pytest.raises(ValueError, match="tension must be a"):
         bolt_axial_stress(tension=_q("20 mm"), nominal_diameter=_q("10 mm"), pitch=_q("1.5 mm"))
+
+
+def test_bearing_basic_rating_life_follows_the_load_life_law():
+    # A ball bearing rated C=14 kN carrying P=2 kN: L10 = (14/2)^3 = 343 million
+    # revolutions.
+    life = bearing_basic_rating_life(dynamic_load_rating=_q("14 kN"), equivalent_load=_q("2 kN"))
+    assert life == pytest.approx(343.0, rel=1e-9)
+    # The law is steep: halving the load raises a ball bearing's life 8x.
+    half_load = bearing_basic_rating_life(
+        dynamic_load_rating=_q("14 kN"), equivalent_load=_q("1 kN")
+    )
+    assert half_load == pytest.approx(8 * life, rel=1e-9)
+    # A roller bearing (p=10/3) outlives a ball bearing at the same C/P ratio.
+    roller = bearing_basic_rating_life(
+        dynamic_load_rating=_q("14 kN"),
+        equivalent_load=_q("2 kN"),
+        life_exponent=ROLLER_BEARING_LIFE_EXPONENT,
+    )
+    assert roller == pytest.approx(7 ** (10 / 3), rel=1e-9)
+    assert roller > life
+
+
+def test_bearing_life_hours_converts_revolutions_at_speed():
+    # 343 Mrev at 1800 rpm: L10h = 343e6 / (60*1800) = 3175.93 hours.
+    hours = bearing_life_hours(
+        dynamic_load_rating=_q("14 kN"), equivalent_load=_q("2 kN"), speed=_q("1800 rpm")
+    )
+    assert hours.to("hour").magnitude == pytest.approx(3175.926, rel=1e-4)
+    # Twice the speed spends the same revolutions in half the hours.
+    faster = bearing_life_hours(
+        dynamic_load_rating=_q("14 kN"), equivalent_load=_q("2 kN"), speed=_q("3600 rpm")
+    )
+    assert faster.to("hour").magnitude == pytest.approx(hours.to("hour").magnitude / 2, rel=1e-9)
+
+
+def test_bearing_life_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="dynamic_load_rating must be a"):
+        bearing_basic_rating_life(dynamic_load_rating=_q("14 mm"), equivalent_load=_q("2 kN"))
+    with pytest.raises(ValueError, match="equivalent_load must be positive"):
+        bearing_basic_rating_life(dynamic_load_rating=_q("14 kN"), equivalent_load=_q("0 kN"))
+    with pytest.raises(ValueError, match="life_exponent must be positive"):
+        bearing_basic_rating_life(
+            dynamic_load_rating=_q("14 kN"), equivalent_load=_q("2 kN"), life_exponent=0.0
+        )
+    with pytest.raises(ValueError, match="speed must be a"):
+        bearing_life_hours(
+            dynamic_load_rating=_q("14 kN"), equivalent_load=_q("2 kN"), speed=_q("1800 N")
+        )
 
 
 def test_thread_stripping_shear_area_matches_basic_profile():

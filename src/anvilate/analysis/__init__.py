@@ -26,6 +26,8 @@ modules:
   requires
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
+- :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
+  (millions of revolutions and running hours)
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, and
   the ISO 898 tensile stress area / axial stress
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
@@ -96,6 +98,12 @@ from .beam import (
     simply_supported_triangular_load,
     simply_supported_uniform_load,
     span_deflection_limit,
+)
+from .bearing import (
+    BALL_BEARING_LIFE_EXPONENT,
+    ROLLER_BEARING_LIFE_EXPONENT,
+    bearing_basic_rating_life,
+    bearing_life_hours,
 )
 from .column import (
     ColumnEnd,
@@ -308,6 +316,10 @@ __all__ = [
     "span_deflection_limit",
     "SHEAR_FORM_RECTANGULAR",
     "SHEAR_FORM_CIRCULAR",
+    "BALL_BEARING_LIFE_EXPONENT",
+    "ROLLER_BEARING_LIFE_EXPONENT",
+    "bearing_basic_rating_life",
+    "bearing_life_hours",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",
