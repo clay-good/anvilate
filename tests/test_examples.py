@@ -933,3 +933,26 @@ def test_winch_band_brake_example_is_sized_by_lining_pressure():
     wide = by_name["lining pressure (60 mm band)"]
     assert wide.passed
     assert "safety factor 1.12" in wide.detail
+
+
+def test_high_speed_belt_drive_example_hits_the_power_ceiling():
+    namespace = runpy.run_path(str(_EXAMPLES / "high_speed_belt_drive.py"))
+    card = namespace["screen_belt_drive"]()
+    by_name = {e.name: e for e in card.entries}
+    # Short at 3,000 rpm...
+    slow = by_name["5.5 kW at 3000 rpm"]
+    assert slow.status is CheckStatus.FAIL
+    assert "safety factor 0.73" in slow.detail
+    # ...and doubling the speed barely helps: past v* the belt carries itself.
+    fast = by_name["5.5 kW at 6000 rpm"]
+    assert fast.status is CheckStatus.FAIL
+    assert "safety factor 0.85" in fast.detail
+    # No speed works -- the belt's power ceiling sits below the demand.
+    ceiling = by_name["power ceiling at v*"]
+    assert ceiling.status is CheckStatus.FAIL
+    assert "safety factor 0.92" in ceiling.detail
+    assert card.status is CheckStatus.FAIL
+    # The fix is tension rating (belt width), not rpm.
+    wider = by_name["wider (700 N) belt at its v*"]
+    assert wider.passed
+    assert "safety factor 1.52" in wider.detail
