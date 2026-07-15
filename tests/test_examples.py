@@ -703,3 +703,19 @@ def test_guide_spring_buckling_example_folds_past_the_working_stroke():
     assert buckling.status is CheckStatus.FAIL
     assert "60.000 mm vs limit 45.418 mm" in buckling.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_frame_member_torsion_example_collapses_when_the_seam_is_left_open():
+    namespace = runpy.run_path(str(_EXAMPLES / "frame_member_torsion.py"))
+    card = namespace["screen_frame_member_torsion"]()
+    by_name = {e.name: e for e in card.entries}
+    # Closed into a box tube the wall shear is a comfortable SF 4.35...
+    closed = by_name["closed box wall shear"]
+    assert closed.passed
+    assert "safety factor 4.35" in closed.detail
+    # ...but the same wall left open (unwelded seam) carries ~20x the shear and
+    # blows past the allowable -> the assembly FAILs.
+    opened = by_name["open seam wall shear"]
+    assert opened.status is CheckStatus.FAIL
+    assert "safety factor 0.21" in opened.detail
+    assert card.status is CheckStatus.FAIL
