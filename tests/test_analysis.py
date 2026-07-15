@@ -81,6 +81,7 @@ from anvilate.analysis import (
     hertz_effective_modulus,
     hertz_sphere_contact,
     hollow_circular_second_moment,
+    hollow_shaft_diameter_for_bending_torsion,
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
     interference_axial_capacity,
@@ -2932,6 +2933,40 @@ def test_shaft_diameter_for_bending_torsion_lands_on_the_von_mises_allowable():
     tau = shaft_torsional_stress(torque=_q("500 N*m"), diameter=d)
     vm = von_mises_bending_torsion(bending_stress=sigma, shear_stress=tau)
     assert vm.to("MPa").magnitude == pytest.approx(175.0, rel=1e-6)  # Sy/n = 350/2
+
+
+def test_hollow_shaft_diameter_for_bending_torsion_inflates_the_solid_size():
+    kw = {
+        "bending_moment": _q("300 N*m"),
+        "torque": _q("500 N*m"),
+        "yield_strength": _q("350 MPa"),
+        "required_safety_factor": 2.0,
+    }
+    solid = shaft_diameter_for_bending_torsion(**kw)
+    # A k=0.6 bore needs a slightly larger outer diameter: d_o = d_solid/(1-k^4)^(1/3).
+    hollow = hollow_shaft_diameter_for_bending_torsion(bore_ratio=0.6, **kw)
+    factor = (1 - 0.6**4) ** (1 / 3)
+    assert hollow.to("mm").magnitude == pytest.approx(solid.to("mm").magnitude / factor, rel=1e-9)
+    assert hollow.to("mm").magnitude == pytest.approx(32.781, rel=1e-4)
+    # ...yet the tube is far lighter: cross-section (d_o^2 - d_i^2) < solid d^2.
+    do = hollow.to("mm").magnitude
+    di = 0.6 * do
+    assert do**2 - di**2 < solid.to("mm").magnitude ** 2
+    # k=0 recovers the solid diameter exactly.
+    zero_bore = hollow_shaft_diameter_for_bending_torsion(bore_ratio=0.0, **kw)
+    assert zero_bore.to("mm").magnitude == pytest.approx(solid.to("mm").magnitude, rel=1e-12)
+
+
+def test_hollow_shaft_diameter_for_bending_torsion_rejects_bad_bore_ratio():
+    kw = {
+        "bending_moment": _q("300 N*m"),
+        "torque": _q("500 N*m"),
+        "yield_strength": _q("350 MPa"),
+    }
+    with pytest.raises(ValueError, match="bore_ratio must be in"):
+        hollow_shaft_diameter_for_bending_torsion(bore_ratio=1.0, **kw)
+    with pytest.raises(ValueError, match="bore_ratio must be in"):
+        hollow_shaft_diameter_for_bending_torsion(bore_ratio=-0.1, **kw)
 
 
 def test_shaft_diameter_for_bending_torsion_scales_and_rejects_bad_inputs():

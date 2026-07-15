@@ -32,6 +32,7 @@ __all__ = [
     "shaft_torsional_stress",
     "shaft_diameter_for_torque",
     "shaft_diameter_for_bending_torsion",
+    "hollow_shaft_diameter_for_bending_torsion",
     "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
     "hollow_shaft_twist_angle",
@@ -179,6 +180,39 @@ def shaft_diameter_for_bending_torsion(
     equivalent = sqrt(m * m + 0.75 * t * t)
     d_min = (32 * required_safety_factor * equivalent / (pi * sy)) ** (1.0 / 3.0)
     return Quantity(magnitude=d_min, unit="mm")
+
+
+def hollow_shaft_diameter_for_bending_torsion(
+    *,
+    bending_moment: Quantity,
+    torque: Quantity,
+    yield_strength: Quantity,
+    bore_ratio: float,
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least *outer* diameter of a hollow shaft with a fixed bore ratio to
+    carry a steady bending moment and torque by the distortion-energy criterion.
+
+    A tube of outer diameter d_o and inner diameter d_i = k·d_o (bore ratio k)
+    carries the same von Mises combination as a solid shaft, but its section
+    properties scale by (1 − k⁴): σ' = (solid σ')/(1 − k⁴) at the same d_o. So the
+    solid sizing (:func:`shaft_diameter_for_bending_torsion`) inflates by a single
+    factor, d_o = d_solid/(1 − k⁴)^(1/3) — a modestly larger outer diameter that,
+    hollowed out, weighs far less (a k = 0.6 bore drops ~30% of the metal). The
+    load, strength, and ``required_safety_factor`` arguments are as in the solid
+    form; ``bore_ratio`` k = d_i/d_o must be in [0, 1). Returns the minimum outer
+    diameter in mm; k = 0 recovers the solid diameter exactly.
+    """
+    if not 0.0 <= bore_ratio < 1.0:
+        raise ValueError(f"bore_ratio must be in [0, 1); got {bore_ratio}")
+    solid = shaft_diameter_for_bending_torsion(
+        bending_moment=bending_moment,
+        torque=torque,
+        yield_strength=yield_strength,
+        required_safety_factor=required_safety_factor,
+    )
+    outer = solid.to("mm").magnitude / (1.0 - bore_ratio**4) ** (1.0 / 3.0)
+    return Quantity(magnitude=outer, unit="mm")
 
 
 def hollow_shaft_torsional_stress(

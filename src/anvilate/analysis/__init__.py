@@ -231,6 +231,7 @@ from .thermal import (
     shrink_fit_assembly_temperature,
 )
 from .torsion import (
+    hollow_shaft_diameter_for_bending_torsion,
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
     polar_second_moment_hollow,
@@ -361,6 +362,7 @@ __all__ = [
     "shaft_torsional_stress",
     "shaft_diameter_for_torque",
     "shaft_diameter_for_bending_torsion",
+    "hollow_shaft_diameter_for_bending_torsion",
     "hollow_shaft_torsional_stress",
     "torque_from_power",
     "shaft_twist_angle",
