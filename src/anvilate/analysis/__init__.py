@@ -27,8 +27,8 @@ modules:
 - :mod:`~anvilate.analysis.clutch` — disc clutch / brake friction torque
   (uniform-wear and uniform-pressure) and the clamp force a torque requires
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
-  exact Lamé thick-wall cylinder and sphere, and the wall thickness a pressure
-  requires
+  exact Lamé thick-wall cylinder (closed or open ends) and sphere, and the wall
+  thickness a pressure requires (membrane and ASME VIII code form)
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
@@ -255,6 +255,7 @@ from .pressure_vessel import (
     ThickWallSphereStress,
     ThickWallStress,
     ThinWallStress,
+    asme_cylinder_thickness,
     thick_wall_cylinder,
     thick_wall_sphere,
     thin_wall_cylinder,
@@ -493,6 +494,7 @@ __all__ = [
     "ThickWallSphereStress",
     "thin_wall_cylinder",
     "thin_wall_thickness_for_pressure",
+    "asme_cylinder_thickness",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thick_wall_sphere",

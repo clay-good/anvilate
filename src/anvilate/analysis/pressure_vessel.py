@@ -28,6 +28,7 @@ __all__ = [
     "ThickWallSphereStress",
     "thin_wall_cylinder",
     "thin_wall_thickness_for_pressure",
+    "asme_cylinder_thickness",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thick_wall_sphere",
@@ -139,6 +140,45 @@ def thin_wall_thickness_for_pressure(
         raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
     thickness = required_safety_factor * pressure.pint * radius.pint / allowable_stress.pint
     return _as_quantity(thickness, "mm")
+
+
+def asme_cylinder_thickness(
+    *,
+    pressure: Quantity,
+    radius: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 code minimum wall for a cylindrical shell,
+    t = P·R/(S·E − 0.6·P).
+
+    The ASME Boiler & Pressure Vessel Code (Section VIII Div 1, UG-27) sizes a
+    cylinder's wall on the circumferential (hoop) stress with two refinements over
+    the bare membrane form ``P·R/(S·E)``: a weld ``joint_efficiency`` E (1.0 full
+    radiography, 0.85 spot, 0.70 none) that derates the allowable, and the −0.6·P
+    term that corrects toward the thick-wall stress as the wall grows.
+    ``pressure`` P is the internal design pressure, ``radius`` R the inner radius,
+    ``allowable_stress`` S the code allowable, and E the joint efficiency in (0, 1].
+    Requires S·E > 0.6·P (above that pressure a thin shell cannot be sized — go to a
+    thick-wall design). Returns the minimum thickness in mm.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(radius, "[length]", "radius")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 < joint_efficiency <= 1:
+        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+    p = pressure.to("MPa").magnitude
+    r = radius.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if p <= 0 or r <= 0 or s <= 0:
+        raise ValueError("pressure, radius, and allowable_stress must be positive")
+    denominator = s * joint_efficiency - 0.6 * p
+    if denominator <= 0:
+        raise ValueError(
+            f"S·E ({s * joint_efficiency:.4g} MPa) must exceed 0.6·P "
+            f"({0.6 * p:.4g} MPa); the pressure is too high for a thin-wall design"
+        )
+    return Quantity(magnitude=p * r / denominator, unit="mm")
 
 
 class ThickWallStress(BaseModel):

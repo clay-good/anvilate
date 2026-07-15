@@ -15,6 +15,7 @@ from anvilate.analysis import (
     UNIFORM_PRESSURE,
     ColumnEnd,
     CrossSection,
+    asme_cylinder_thickness,
     axial_stress,
     basquin_cycles_to_failure,
     basquin_stress_for_life,
@@ -3789,6 +3790,34 @@ def test_thick_wall_bore_von_mises_sits_below_the_tresca_intensity():
     vm = result.bore_von_mises_stress.to("MPa").magnitude
     assert vm == pytest.approx(212.176, rel=1e-4)
     assert vm < result.bore_tresca_stress.to("MPa").magnitude
+
+
+def test_asme_cylinder_thickness_matches_the_code_form():
+    kw = {"pressure": _q("2 MPa"), "radius": _q("500 mm"), "allowable_stress": _q("138 MPa")}
+    # ASME UG-27: t = P*R/(S*E - 0.6*P). Full radiography (E=1) sits just above the
+    # bare membrane P*R/S because of the -0.6*P term: 2*500/(138-1.2) = 7.31 mm.
+    full = asme_cylinder_thickness(**kw)
+    assert full.to("mm").magnitude == pytest.approx(2 * 500 / (138 - 0.6 * 2), rel=1e-9)
+    assert full.to("mm").magnitude > 2 * 500 / 138  # thicker than the membrane form
+    # A spot-radiographed weld (E=0.85) derates the allowable and needs more wall.
+    spot = asme_cylinder_thickness(joint_efficiency=0.85, **kw)
+    assert spot.to("mm").magnitude == pytest.approx(8.6133, rel=1e-4)
+    assert spot.to("mm").magnitude > full.to("mm").magnitude
+
+
+def test_asme_cylinder_thickness_rejects_overpressure_and_bad_efficiency():
+    with pytest.raises(ValueError, match="joint_efficiency must lie in"):
+        asme_cylinder_thickness(
+            pressure=_q("2 MPa"),
+            radius=_q("500 mm"),
+            allowable_stress=_q("138 MPa"),
+            joint_efficiency=1.5,
+        )
+    # When S*E does not clear 0.6*P the thin-wall form has no solution.
+    with pytest.raises(ValueError, match="too high for a thin-wall design"):
+        asme_cylinder_thickness(
+            pressure=_q("300 MPa"), radius=_q("500 mm"), allowable_stress=_q("138 MPa")
+        )
 
 
 def test_thick_wall_open_ended_drops_the_longitudinal_stress():
