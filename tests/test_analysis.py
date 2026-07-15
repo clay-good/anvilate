@@ -9,6 +9,8 @@ import pytest
 from anvilate.analysis import (
     SHEAR_FORM_CIRCULAR,
     SHEAR_FORM_RECTANGULAR,
+    SPRING_END_HINGED_HINGED,
+    SPRING_END_PARALLEL_PLATES,
     ColumnEnd,
     CrossSection,
     axial_stress,
@@ -59,6 +61,7 @@ from anvilate.analysis import (
     frequency_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
+    helical_spring_buckling,
     helical_spring_rate,
     hertz_cylinder_contact,
     hertz_sphere_contact,
@@ -2345,6 +2348,71 @@ def test_spring_rate_and_surge_reject_bad_inputs():
         spring_surge_frequency(spring_rate=_q("7.7 N"), spring_mass=_q("100 g"))
     with pytest.raises(ValueError, match="must be positive"):
         spring_surge_frequency(spring_rate=_q("7.7 N/mm"), spring_mass=_q("0 g"))
+
+
+def test_spring_buckling_critical_deflection_worked_example():
+    # Steel E=207 GPa, G=79.3 GPa: C1'=0.81049, C2'=6.8947 (sqrt=2.6258).
+    # D=25 mm, L0=200 mm, parallel plates a=0.5: lambda=0.5*200/25=4.0 > 2.6258,
+    # so it buckles. C2'/lam^2=6.8947/16=0.43092; y_cr=200*0.81049*(1-sqrt(1-
+    # 0.43092)) = 200*0.81049*0.24563 = 39.82 mm.
+    result = helical_spring_buckling(
+        free_length=_q("200 mm"),
+        mean_coil_diameter=_q("25 mm"),
+        elastic_modulus=_q("207 GPa"),
+        shear_modulus=_q("79.3 GPa"),
+    )
+    assert result.effective_slenderness == pytest.approx(4.0)
+    assert result.absolutely_stable is False
+    assert result.critical_deflection.to("mm").magnitude == pytest.approx(39.82, rel=1e-3)
+    # A working deflection past y_cr buckles; one short of it does not.
+    assert result.will_buckle(_q("50 mm")) is True
+    assert result.will_buckle(_q("30 mm")) is False
+
+
+def test_spring_buckling_absolute_stability_below_threshold():
+    # Same steel and diameter but a stubby L0=100 mm: lambda=0.5*100/25=2.0 <
+    # sqrt(C2')=2.6258, so the coil cannot buckle at any deflection.
+    result = helical_spring_buckling(
+        free_length=_q("100 mm"),
+        mean_coil_diameter=_q("25 mm"),
+        elastic_modulus=_q("207 GPa"),
+        shear_modulus=_q("79.3 GPa"),
+    )
+    assert result.effective_slenderness == pytest.approx(2.0)
+    assert result.absolutely_stable is True
+    assert result.critical_deflection is None
+    assert result.will_buckle(_q("40 mm")) is False
+
+
+def test_spring_buckling_hinged_ends_are_less_stable_than_plates():
+    # The same slender coil on pivoted (hinged) seats, a=1.0, doubles lambda and
+    # buckles far sooner than on parallel plates.
+    common = {
+        "free_length": _q("120 mm"),
+        "mean_coil_diameter": _q("25 mm"),
+        "elastic_modulus": _q("207 GPa"),
+        "shear_modulus": _q("79.3 GPa"),
+    }
+    plates = helical_spring_buckling(end_condition_constant=SPRING_END_PARALLEL_PLATES, **common)
+    hinged = helical_spring_buckling(end_condition_constant=SPRING_END_HINGED_HINGED, **common)
+    assert plates.absolutely_stable is True
+    assert hinged.absolutely_stable is False
+    assert hinged.effective_slenderness == pytest.approx(2 * plates.effective_slenderness)
+
+
+def test_spring_buckling_rejects_bad_inputs():
+    good = {
+        "free_length": _q("200 mm"),
+        "mean_coil_diameter": _q("25 mm"),
+        "elastic_modulus": _q("207 GPa"),
+        "shear_modulus": _q("79.3 GPa"),
+    }
+    with pytest.raises(ValueError, match="end_condition_constant must be positive"):
+        helical_spring_buckling(**{**good, "end_condition_constant": 0.0})
+    with pytest.raises(ValueError, match="elastic_modulus must be a"):
+        helical_spring_buckling(**{**good, "elastic_modulus": _q("207 N")})
+    with pytest.raises(ValueError, match="need elastic_modulus > shear_modulus"):
+        helical_spring_buckling(**{**good, "shear_modulus": _q("250 GPa")})
 
 
 def test_key_stresses_worked_example():

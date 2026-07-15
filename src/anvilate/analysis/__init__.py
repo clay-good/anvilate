@@ -21,7 +21,8 @@ modules:
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress
-- :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl) and rate
+- :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, and
+  lateral (column) buckling screen
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
   stress, and shrink-fit assembly temperature
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
@@ -148,7 +149,18 @@ from .pressure_vessel import (
     thin_wall_sphere_stress,
 )
 from .section import CrossSection
-from .spring import helical_spring_rate, spring_index, spring_shear_stress, wahl_factor
+from .spring import (
+    SPRING_END_CLAMPED_FREE,
+    SPRING_END_FIXED_HINGED,
+    SPRING_END_HINGED_HINGED,
+    SPRING_END_PARALLEL_PLATES,
+    SpringBucklingResult,
+    helical_spring_buckling,
+    helical_spring_rate,
+    spring_index,
+    spring_shear_stress,
+    wahl_factor,
+)
 from .stress import (
     CombinedNormalStress,
     combine_axial_bending,
@@ -288,6 +300,12 @@ __all__ = [
     "wahl_factor",
     "spring_shear_stress",
     "helical_spring_rate",
+    "SPRING_END_PARALLEL_PLATES",
+    "SPRING_END_FIXED_HINGED",
+    "SPRING_END_HINGED_HINGED",
+    "SPRING_END_CLAMPED_FREE",
+    "SpringBucklingResult",
+    "helical_spring_buckling",
     "spring_surge_frequency",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
