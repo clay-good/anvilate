@@ -994,3 +994,18 @@ def test_crane_hook_example_fails_the_straight_beam_screen_honestly():
     deeper = by_name["bore, Winkler curved-beam (h=60)"]
     assert deeper.passed
     assert "safety factor 2.14" in deeper.detail
+
+
+def test_fixture_clamp_example_rides_the_belleville_plateau():
+    namespace = runpy.run_path(str(_EXAMPLES / "fixture_clamp_washers.py"))
+    card = namespace["screen_clamp_washers"]()
+    by_name = {e.name: e for e in card.entries}
+    # The shallow disc sheds half the clamp force as the joint settles -> FAIL.
+    shallow = by_name["shallow disc (h/t = 0.5)"]
+    assert shallow.status is CheckStatus.FAIL
+    assert "safety factor 0.19" in shallow.detail
+    assert card.status is CheckStatus.FAIL
+    # The h/t = sqrt(2) disc rides its force plateau: 2.3% loss, 4.3x margin.
+    plateau = by_name["plateau disc (h/t = sqrt(2))"]
+    assert plateau.passed
+    assert "safety factor 4.34" in plateau.detail
