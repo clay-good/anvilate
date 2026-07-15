@@ -792,3 +792,17 @@ def test_drive_shaft_sizing_example_fails_when_sized_on_the_mean_torque():
     assert design.passed
     assert "safety factor 2.32" in design.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_lineshaft_critical_speed_example_resonates_only_when_combined():
+    namespace = runpy.run_path(str(_EXAMPLES / "lineshaft_critical_speed.py"))
+    card = namespace["screen_lineshaft"]()
+    by_name = {e.name: e for e in card.entries}
+    # Each pulley checked alone clears the 31.2 Hz resonance floor...
+    assert by_name["pulley A alone"].passed
+    assert by_name["pulley B alone"].passed
+    # ...but the Dunkerley-combined critical speed drops below it -> FAIL.
+    combined = by_name["both (Dunkerley)"]
+    assert combined.status is CheckStatus.FAIL
+    assert "28.8 Hz" in combined.detail
+    assert card.status is CheckStatus.FAIL
