@@ -50,6 +50,7 @@ from anvilate.analysis import (
     euler_buckling_load,
     euler_critical_stress,
     euler_second_moment_for_load,
+    fatigue_notch_factor,
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
     fixed_fixed_center_load,
@@ -3537,6 +3538,40 @@ def test_cyclic_stress_rejects_non_cycle():
         cyclic_stress_components(max_stress=_q("50 MPa"), min_stress=_q("50 MPa"))
     with pytest.raises(ValueError, match="max_stress must be a"):
         cyclic_stress_components(max_stress=_q("50 N"), min_stress=_q("10 MPa"))
+
+
+def test_fatigue_notch_factor_bridges_kt_and_sensitivity():
+    # Kf = 1 + q*(Kt - 1): Kt=2.5, q=0.8 -> 1 + 0.8*1.5 = 2.2.
+    assert fatigue_notch_factor(kt=2.5, notch_sensitivity=0.8) == pytest.approx(2.2, rel=1e-9)
+    # q=0 (notch-insensitive) -> Kf = 1; q=1 (fully sensitive) -> Kf = Kt.
+    assert fatigue_notch_factor(kt=2.5, notch_sensitivity=0.0) == pytest.approx(1.0)
+    assert fatigue_notch_factor(kt=2.5, notch_sensitivity=1.0) == pytest.approx(2.5)
+
+
+def test_fatigue_notch_factor_amplifies_the_alternating_stress():
+    # Kf multiplies the alternating stress before a Goodman screen: a 60 MPa
+    # amplitude at Kf=2.2 becomes 132 MPa, cutting the safety factor.
+    kf = fatigue_notch_factor(kt=2.5, notch_sensitivity=0.8)
+    plain = goodman_safety_factor(
+        alternating_stress=_q("60 MPa"),
+        mean_stress=_q("40 MPa"),
+        endurance_limit=_q("250 MPa"),
+        ultimate_strength=_q("500 MPa"),
+    )
+    notched = goodman_safety_factor(
+        alternating_stress=_q(f"{60 * kf} MPa"),
+        mean_stress=_q("40 MPa"),
+        endurance_limit=_q("250 MPa"),
+        ultimate_strength=_q("500 MPa"),
+    )
+    assert notched < plain
+
+
+def test_fatigue_notch_factor_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="kt must be at least 1"):
+        fatigue_notch_factor(kt=0.5, notch_sensitivity=0.8)
+    with pytest.raises(ValueError, match=r"notch_sensitivity must lie in \[0, 1\]"):
+        fatigue_notch_factor(kt=2.5, notch_sensitivity=1.5)
 
 
 def test_estimated_endurance_limit_is_half_ultimate_capped():

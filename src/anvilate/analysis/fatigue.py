@@ -32,6 +32,7 @@ __all__ = [
     "CyclicStress",
     "cyclic_stress_components",
     "estimated_endurance_limit",
+    "fatigue_notch_factor",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",
@@ -69,6 +70,24 @@ class CyclicStress(BaseModel):
     alternating_stress: Quantity
     mean_stress: Quantity
     stress_ratio: float
+
+
+def fatigue_notch_factor(*, kt: float, notch_sensitivity: float) -> float:
+    """The fatigue stress-concentration factor K_f = 1 + q·(K_t − 1).
+
+    A part is less sensitive to a notch in fatigue than the static geometric factor
+    K_t (from :func:`~anvilate.analysis.concentrated_stress`) implies; the notch
+    sensitivity ``notch_sensitivity`` q (0 to 1) scales the excess. K_f = 1 (q = 0,
+    fully insensitive — some cast irons) up to K_f = K_t (q = 1, fully sensitive —
+    high-strength steel with a sharp notch). Multiply the *alternating* stress by
+    K_f before a Goodman/Soderberg/Gerber screen. ``kt`` must be at least 1 (a
+    raiser never reduces stress) and ``notch_sensitivity`` must lie in [0, 1].
+    """
+    if kt < 1:
+        raise ValueError(f"kt must be at least 1 (a stress raiser); got {kt}")
+    if not 0 <= notch_sensitivity <= 1:
+        raise ValueError(f"notch_sensitivity must lie in [0, 1]; got {notch_sensitivity}")
+    return 1.0 + notch_sensitivity * (kt - 1.0)
 
 
 def estimated_endurance_limit(*, ultimate_strength: Quantity) -> Quantity:

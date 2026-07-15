@@ -42,8 +42,8 @@ modules:
   fundamentals, disc-on-shaft torsional mode
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending
 - :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
-  the max/min → amplitude/mean cyclic-stress converter, and the steel
-  endurance-limit estimate
+  the max/min → amplitude/mean cyclic-stress converter, the fatigue notch factor,
+  and the steel endurance-limit estimate
 
 Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
@@ -148,6 +148,7 @@ from .fatigue import (
     CyclicStress,
     cyclic_stress_components,
     estimated_endurance_limit,
+    fatigue_notch_factor,
     gerber_safety_factor,
     gerber_scorecard,
     goodman_safety_factor,
@@ -341,6 +342,7 @@ __all__ = [
     "CyclicStress",
     "cyclic_stress_components",
     "estimated_endurance_limit",
+    "fatigue_notch_factor",
     "key_tangential_force",
     "key_shear_stress",
     "key_bearing_stress",
