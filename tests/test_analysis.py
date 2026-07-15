@@ -97,6 +97,7 @@ from anvilate.analysis import (
     rectangular_tube_enclosed_area,
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
+    required_axial_area,
     secant_column_max_stress,
     shaft_torsional_stiffness,
     shaft_torsional_stress,
@@ -3228,6 +3229,42 @@ def test_axial_stress_worked_example_and_sign():
 def test_axial_stress_rejects_wrong_dimensions():
     with pytest.raises(ValueError, match="area must be a"):
         axial_stress(force=_q("10 kN"), area=_q("20 mm"))  # a length, not an area
+
+
+def test_required_axial_area_inverts_the_direct_stress_check():
+    # 100 kN of tension within a 165 MPa allowable needs A = F/sigma = 606.06 mm^2.
+    a = required_axial_area(axial_load=_q("100 kN"), allowable_stress=_q("165 MPa"))
+    assert a.to("mm**2").magnitude == pytest.approx(606.06, rel=1e-4)
+    # A member of exactly this area is stressed to the allowable.
+    sigma = axial_stress(force=_q("100 kN"), area=a)
+    assert sigma.to("MPa").magnitude == pytest.approx(165.0, rel=1e-6)
+
+
+def test_required_axial_area_ignores_load_sign_and_scales_with_margin():
+    # Compression sizes the same as tension of equal magnitude (area, not sign).
+    tension = required_axial_area(axial_load=_q("100 kN"), allowable_stress=_q("165 MPa"))
+    compression = required_axial_area(axial_load=_q("-100 kN"), allowable_stress=_q("165 MPa"))
+    assert compression.to("mm**2").magnitude == pytest.approx(
+        tension.to("mm**2").magnitude, rel=1e-9
+    )
+    # Area scales linearly with the required margin.
+    with_sf = required_axial_area(
+        axial_load=_q("100 kN"), allowable_stress=_q("165 MPa"), required_safety_factor=1.67
+    )
+    assert with_sf.to("mm**2").magnitude == pytest.approx(
+        1.67 * tension.to("mm**2").magnitude, rel=1e-9
+    )
+
+
+def test_required_axial_area_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="axial_load must be a"):
+        required_axial_area(axial_load=_q("100 mm"), allowable_stress=_q("165 MPa"))
+    with pytest.raises(ValueError, match="allowable_stress must be positive"):
+        required_axial_area(axial_load=_q("100 kN"), allowable_stress=_q("0 MPa"))
+    with pytest.raises(ValueError, match="required_safety_factor must be positive"):
+        required_axial_area(
+            axial_load=_q("100 kN"), allowable_stress=_q("165 MPa"), required_safety_factor=0.0
+        )
 
 
 def test_cyclic_stress_components_from_max_and_min():

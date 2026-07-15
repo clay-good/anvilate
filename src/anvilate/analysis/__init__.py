@@ -4,7 +4,8 @@ The T1 validation tier screens a design with handbook closed-form solutions
 (Roark, Shigley) before any FEA — fast, deterministic, and unit-checked. The
 modules:
 
-- :mod:`~anvilate.analysis.axial` — direct axial stress and section area
+- :mod:`~anvilate.analysis.axial` — direct axial stress, section area, and the
+  minimum area an axial load requires
 - :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
   fixed-fixed / fixed-pinned; point, distributed, triangular, patch, and
   applied-couple loads), transverse shear, section second moments
@@ -42,7 +43,7 @@ openspec/specs/validation-gauntlet/).
 
 from __future__ import annotations
 
-from .axial import axial_stress, circular_area
+from .axial import axial_stress, circular_area, required_axial_area
 from .beam import (
     SHEAR_FORM_CIRCULAR,
     SHEAR_FORM_RECTANGULAR,
@@ -227,6 +228,7 @@ from .torsion import (
 __all__ = [
     "axial_stress",
     "circular_area",
+    "required_axial_area",
     "BeamBendingResult",
     "cantilever_center_patch_load",
     "cantilever_end_load",
