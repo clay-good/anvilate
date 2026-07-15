@@ -119,6 +119,7 @@ from anvilate.analysis import (
     johnson_critical_stress,
     joint_separation_load,
     joint_stiffness_factor,
+    journal_bearing_unit_load,
     key_bearing_stress,
     key_length_for_torque,
     key_shear_stress,
@@ -185,6 +186,7 @@ from anvilate.analysis import (
     soderberg_safety_factor,
     soderberg_scorecard,
     solid_disc_polar_mass_moment,
+    sommerfeld_number,
     span_deflection_limit,
     spring_index,
     spring_shear_stress,
@@ -3055,6 +3057,40 @@ def test_plate_buckling_rejects_bad_inputs():
             elastic_modulus=_q("200 mm"),
             thickness=_q("5 mm"),
             width=_q("300 mm"),
+        )
+
+
+def test_journal_bearing_unit_load_and_sommerfeld_number():
+    # P = W/(D*L): 5 kN over 50x50 mm projected area -> 2 MPa.
+    p = journal_bearing_unit_load(
+        radial_load=_q("5 kN"), journal_diameter=_q("50 mm"), bearing_length=_q("50 mm")
+    )
+    assert p.to("MPa").magnitude == pytest.approx(2.0, rel=1e-9)
+    # S = (r/c)^2 * (mu*N/P) with r/c=500, mu=0.05, N=30 rev/s, P=2e6 -> 0.1875.
+    s = sommerfeld_number(
+        journal_radius=_q("25 mm"),
+        radial_clearance=_q("0.05 mm"),
+        viscosity=_q("0.05 Pa*s"),
+        speed=_q("1800 rpm"),
+        unit_load=p,
+    )
+    assert s == pytest.approx(0.1875, rel=1e-4)
+    # A more heavily loaded bearing (higher P) has a smaller Sommerfeld number.
+    heavier = sommerfeld_number(
+        journal_radius=_q("25 mm"),
+        radial_clearance=_q("0.05 mm"),
+        viscosity=_q("0.05 Pa*s"),
+        speed=_q("1800 rpm"),
+        unit_load=_q("4 MPa"),
+    )
+    assert heavier == pytest.approx(s / 2, rel=1e-9)
+    with pytest.raises(ValueError, match="unit_load must be a"):
+        sommerfeld_number(
+            journal_radius=_q("25 mm"),
+            radial_clearance=_q("0.05 mm"),
+            viscosity=_q("0.05 Pa*s"),
+            speed=_q("1800 rpm"),
+            unit_load=_q("4 kN"),
         )
 
 

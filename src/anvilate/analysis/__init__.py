@@ -31,7 +31,7 @@ modules:
   thickness a pressure requires (membrane and ASME VIII code form)
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.journal_bearing` — journal (plain) bearing Petroff
-  friction torque and power loss
+  friction torque and power loss, unit load, and Sommerfeld number
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque and per-bolt
   shear force
@@ -247,8 +247,10 @@ from .interference import (
     interference_torque_capacity,
 )
 from .journal_bearing import (
+    journal_bearing_unit_load,
     petroff_friction_power,
     petroff_friction_torque,
+    sommerfeld_number,
 )
 from .keys import (
     KeyLengthRequirement,
@@ -547,6 +549,8 @@ __all__ = [
     "interference_torque_capacity",
     "petroff_friction_torque",
     "petroff_friction_power",
+    "journal_bearing_unit_load",
+    "sommerfeld_number",
     "hertz_effective_modulus",
     "HertzContact",
     "hertz_sphere_contact",

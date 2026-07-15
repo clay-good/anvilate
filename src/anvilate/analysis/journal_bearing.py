@@ -27,6 +27,8 @@ from ..units import Quantity
 __all__ = [
     "petroff_friction_torque",
     "petroff_friction_power",
+    "journal_bearing_unit_load",
+    "sommerfeld_number",
 ]
 
 
@@ -108,3 +110,66 @@ def petroff_friction_power(
     torque = _petroff_torque_nm(viscosity, speed, journal_radius, bearing_length, radial_clearance)
     omega = speed.to("rad/s").magnitude
     return Quantity(magnitude=torque * omega, unit="W")
+
+
+def journal_bearing_unit_load(
+    *,
+    radial_load: Quantity,
+    journal_diameter: Quantity,
+    bearing_length: Quantity,
+) -> Quantity:
+    """The bearing unit load (projected pressure) P = W/(D·L).
+
+    A journal bearing's load is quoted as a pressure over its *projected* area, the
+    diameter times the length — ``radial_load`` W over ``journal_diameter`` D and
+    ``bearing_length`` L. This P is the pressure the film must support and the
+    denominator of the :func:`sommerfeld_number`. W must be a force and the
+    dimensions positive lengths. Returns the unit load in MPa.
+    """
+    _require(radial_load, "[force]", "radial_load")
+    _require(journal_diameter, "[length]", "journal_diameter")
+    _require(bearing_length, "[length]", "bearing_length")
+    d = journal_diameter.to("mm").magnitude
+    ell = bearing_length.to("mm").magnitude
+    if d <= 0 or ell <= 0:
+        raise ValueError("journal_diameter and bearing_length must be positive")
+    pressure = radial_load.pint / (journal_diameter.pint * bearing_length.pint)
+    return Quantity(magnitude=float(pressure.to("MPa").magnitude), unit="MPa")
+
+
+def sommerfeld_number(
+    *,
+    journal_radius: Quantity,
+    radial_clearance: Quantity,
+    viscosity: Quantity,
+    speed: Quantity,
+    unit_load: Quantity,
+) -> float:
+    """The Sommerfeld (bearing characteristic) number S = (r/c)²·(μ·N/P).
+
+    The dimensionless group that characterises a journal bearing's operating point
+    and indexes the Raimondi-Boyd design charts for film thickness, friction, and
+    flow. ``journal_radius`` r and ``radial_clearance`` c form the clearance ratio
+    r/c (~1000 typically), ``viscosity`` μ is the oil's, ``speed`` N the journal
+    speed, and ``unit_load`` P the projected pressure (:func:`journal_bearing_unit_load`).
+    A larger S means a more lightly loaded / faster / more viscous bearing — a
+    thicker, safer film. All quantities are positive. Returns the dimensionless S.
+    """
+    _require(journal_radius, "[length]", "journal_radius")
+    _require(radial_clearance, "[length]", "radial_clearance")
+    _require(viscosity, "[pressure] * [time]", "viscosity")
+    _require(unit_load, "[pressure]", "unit_load")
+    if not speed.has_dimension("[frequency]"):
+        raise ValueError(
+            f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})"
+        )
+    r = journal_radius.to("m").magnitude
+    c = radial_clearance.to("m").magnitude
+    mu = viscosity.to("Pa*s").magnitude
+    n = speed.to("rad/s").magnitude / (2.0 * pi)
+    p = unit_load.to("Pa").magnitude
+    if c <= 0 or r <= 0:
+        raise ValueError("journal_radius and radial_clearance must be positive")
+    if mu <= 0 or n <= 0 or p <= 0:
+        raise ValueError("viscosity, speed, and unit_load must be positive")
+    return (r / c) ** 2 * (mu * n / p)
