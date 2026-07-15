@@ -11,6 +11,12 @@ widely with lubrication and surface finish.
 A separate failure mode is bearing (the fastener crushing the hole it passes
 through): ``σ_bearing = F/(d·t)`` over the projected pin-and-plate contact area.
 
+A bolt in tension does not carry its axial load on the nominal shank area but on
+the smaller *tensile stress area* through the threads, ``A_t = (π/4)·(d −
+0.9382·P)²`` (ISO 898 / Shigley), midway between the pitch- and minor-diameter
+areas — so the axial stress is ``σ = F/A_t``, always higher than F over the
+nominal area.
+
 As with the beam and column checks, inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values and the arithmetic runs through Pint.
 """
@@ -21,12 +27,18 @@ from math import pi
 
 from ..units import Quantity
 
+# ISO 898 tensile-stress-area factor: A_t = (pi/4)(d - 0.9382*P)^2, where the
+# effective diameter is the mean of the pitch and rounded-root minor diameters.
+_TENSILE_AREA_PITCH_FACTOR = 0.9382
+
 __all__ = [
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",
     "torque_for_preload",
     "bearing_stress",
     "bolt_shear_stress",
+    "bolt_tensile_stress_area",
+    "bolt_axial_stress",
 ]
 
 # Typical nut factor K for as-received (lightly-oiled) steel fasteners. Dry/rough
@@ -131,5 +143,49 @@ def bolt_shear_stress(
         raise ValueError(f"shear_planes must be a positive integer; got {shear_planes}")
     area = pi * diameter.pint**2 / 4
     stress = force.pint / (shear_planes * area)
+    converted = stress.to("MPa")
+    return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def bolt_tensile_stress_area(*, nominal_diameter: Quantity, pitch: Quantity) -> Quantity:
+    """The ISO 898 tensile stress area A_t = (π/4)·(d − 0.9382·P)² of a metric
+    thread.
+
+    A threaded bolt in tension carries its load on A_t — an effective area midway
+    between the pitch- and minor-diameter areas — not on the nominal shank. Recovers
+    the ISO 898-1 table values (M10×1.5 → 58.0 mm², M8×1.25 → 36.6 mm²).
+    ``nominal_diameter`` is the thread's nominal diameter d and ``pitch`` its thread
+    pitch P (both from the standards :class:`~anvilate.standards.MetricThread`).
+    Returns the area in mm²; both must be lengths and d must exceed 0.9382·P.
+    """
+    _require(nominal_diameter, "[length]", "nominal_diameter")
+    _require(pitch, "[length]", "pitch")
+    d = nominal_diameter.to("mm").magnitude
+    p = pitch.to("mm").magnitude
+    if p <= 0:
+        raise ValueError(f"pitch must be positive; got {pitch}")
+    effective = d - _TENSILE_AREA_PITCH_FACTOR * p
+    if effective <= 0:
+        raise ValueError(
+            f"nominal_diameter ({nominal_diameter}) must exceed 0.9382·pitch "
+            f"({pitch}) for a valid thread"
+        )
+    return Quantity(magnitude=pi * effective**2 / 4, unit="mm**2")
+
+
+def bolt_axial_stress(
+    *, tension: Quantity, nominal_diameter: Quantity, pitch: Quantity
+) -> Quantity:
+    """The axial tensile stress σ = F/A_t in a threaded bolt over its ISO 898
+    tensile stress area.
+
+    ``tension`` is the axial force F, ``nominal_diameter`` the thread diameter d,
+    and ``pitch`` its pitch P. Uses :func:`bolt_tensile_stress_area`, so the stress
+    is the one that governs bolt proof/yield — higher than F over the nominal shank
+    area. Returns the stress in MPa; ``tension`` must be a force.
+    """
+    _require(tension, "[force]", "tension")
+    area = bolt_tensile_stress_area(nominal_diameter=nominal_diameter, pitch=pitch).pint
+    stress = tension.pint / area
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")

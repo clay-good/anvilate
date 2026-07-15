@@ -15,8 +15,10 @@ from anvilate.analysis import (
     CrossSection,
     axial_stress,
     bearing_stress,
+    bolt_axial_stress,
     bolt_preload_from_torque,
     bolt_shear_stress,
+    bolt_tensile_stress_area,
     cantilever_center_patch_load,
     cantilever_end_load,
     cantilever_end_moment,
@@ -2485,6 +2487,34 @@ def test_bolt_torque_tension_rejects_bad_inputs():
         )  # force, not torque
     with pytest.raises(ValueError, match="nut_factor must be positive"):
         bolt_preload_from_torque(torque=_q("10 N*m"), nominal_diameter=_q("8 mm"), nut_factor=0.0)
+
+
+def test_bolt_tensile_stress_area_recovers_the_iso_898_table():
+    # A_t = (pi/4)(d - 0.9382*P)^2 lands on the ISO 898-1 table values.
+    m10 = bolt_tensile_stress_area(nominal_diameter=_q("10 mm"), pitch=_q("1.5 mm"))
+    assert m10.to("mm**2").magnitude == pytest.approx(58.0, abs=0.1)
+    m8 = bolt_tensile_stress_area(nominal_diameter=_q("8 mm"), pitch=_q("1.25 mm"))
+    assert m8.to("mm**2").magnitude == pytest.approx(36.6, abs=0.1)
+    # It is smaller than the nominal shank area (pi/4*d^2 = 78.5 mm^2 for M10).
+    assert m10.to("mm**2").magnitude < pi * 10**2 / 4
+
+
+def test_bolt_axial_stress_uses_the_tensile_area_not_the_shank():
+    # 20 kN of tension on an M10x1.5: sigma = F/A_t = 20000/57.99 = 344.9 MPa,
+    # higher than the 254.6 MPa the nominal shank area would report.
+    sigma = bolt_axial_stress(tension=_q("20 kN"), nominal_diameter=_q("10 mm"), pitch=_q("1.5 mm"))
+    assert sigma.to("MPa").magnitude == pytest.approx(344.9, rel=1e-3)
+    shank = 20000.0 / (pi * 10**2 / 4)
+    assert sigma.to("MPa").magnitude > shank
+
+
+def test_bolt_tensile_area_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="pitch must be positive"):
+        bolt_tensile_stress_area(nominal_diameter=_q("10 mm"), pitch=_q("0 mm"))
+    with pytest.raises(ValueError, match="must exceed 0.9382"):
+        bolt_tensile_stress_area(nominal_diameter=_q("1 mm"), pitch=_q("2 mm"))
+    with pytest.raises(ValueError, match="tension must be a"):
+        bolt_axial_stress(tension=_q("20 mm"), nominal_diameter=_q("10 mm"), pitch=_q("1.5 mm"))
 
 
 def test_polar_second_moment_solid_matches_pi_d4_over_32():

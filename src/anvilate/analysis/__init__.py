@@ -20,7 +20,8 @@ modules:
   exact Lamé thick-wall cylinder and sphere
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
-- :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
+- :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, and
+  the ISO 898 tensile stress area / axial stress
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, and
   lateral (column) buckling screen
@@ -120,8 +121,10 @@ from .dynamics import (
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
     bearing_stress,
+    bolt_axial_stress,
     bolt_preload_from_torque,
     bolt_shear_stress,
+    bolt_tensile_stress_area,
     torque_for_preload,
 )
 from .fatigue import (
@@ -279,6 +282,8 @@ __all__ = [
     "torque_for_preload",
     "bearing_stress",
     "bolt_shear_stress",
+    "bolt_tensile_stress_area",
+    "bolt_axial_stress",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",
