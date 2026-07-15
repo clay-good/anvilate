@@ -737,6 +737,28 @@ def test_bolt_tension_thread_area_example_fails_on_the_real_area():
     assert card.status is CheckStatus.FAIL
 
 
+def test_geared_shaft_example_fails_on_combined_loading():
+    namespace = runpy.run_path(str(_EXAMPLES / "geared_shaft_sizing.py"))
+    card = namespace["screen_geared_shaft"]()
+    by_name = {e.name: e for e in card.entries}
+    # Sized on torque alone the 30 mm shaft looks fine (SF 2.14)...
+    torsion = by_name["torsion-only screen @ 30 mm"]
+    assert torsion.passed
+    assert "safety factor 2.14" in torsion.detail
+    # ...but bending and torsion together bust the 2.0 requirement (SF 1.76).
+    combined = by_name["combined bending+torsion @ 30 mm"]
+    assert combined.status is CheckStatus.FAIL
+    assert "safety factor 1.76" in combined.detail
+    assert card.status is CheckStatus.FAIL
+    # The 35 mm upsize clears the combined check (SF 2.80).
+    upsized = by_name["combined bending+torsion @ 35 mm"]
+    assert upsized.passed
+    assert "safety factor 2.80" in upsized.detail
+    # The combined sizing inverse names the ~31.3 mm floor between them.
+    floor = namespace["combined_diameter_floor"]()
+    assert floor.to("mm").magnitude == pytest.approx(31.30, rel=1e-3)
+
+
 def test_tapped_hole_engagement_example_strips_the_soft_threads():
     namespace = runpy.run_path(str(_EXAMPLES / "tapped_hole_engagement.py"))
     card = namespace["screen_tapped_hole"]()

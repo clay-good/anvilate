@@ -21,7 +21,7 @@ arithmetic runs through Pint.
 
 from __future__ import annotations
 
-from math import pi
+from math import pi, sqrt
 
 from ..units import Quantity
 
@@ -31,6 +31,7 @@ __all__ = [
     "polar_second_moment_hollow",
     "shaft_torsional_stress",
     "shaft_diameter_for_torque",
+    "shaft_diameter_for_bending_torsion",
     "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
     "hollow_shaft_twist_angle",
@@ -138,6 +139,45 @@ def shaft_diameter_for_torque(
     if tau <= 0:
         raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
     d_min = (16 * required_safety_factor * t / (pi * tau)) ** (1.0 / 3.0)
+    return Quantity(magnitude=d_min, unit="mm")
+
+
+def shaft_diameter_for_bending_torsion(
+    *,
+    bending_moment: Quantity,
+    torque: Quantity,
+    yield_strength: Quantity,
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least solid-shaft diameter to carry a steady bending moment and torque
+    together, by the distortion-energy (von Mises) criterion.
+
+    A round shaft under bending M and torsion T sees σ = 32·M/(π·d³) and τ =
+    16·T/(π·d³); the von Mises stress σ' = √(σ² + 3·τ²) = (32/π·d³)·√(M² + ¾·T²).
+    Setting σ' ≤ S_y/n and solving gives
+    d_min = (32·n·√(M² + ¾·T²)/(π·S_y))^(1/3) — the classic ASME/Shigley static
+    shaft-sizing equation (the same distortion-energy combination
+    :func:`~anvilate.analysis.stress.von_mises_bending_torsion` evaluates, inverted
+    for the diameter). ``bending_moment`` M and ``torque`` T are the steady loads,
+    ``yield_strength`` S_y the material's yield stress, and
+    ``required_safety_factor`` n the margin on yield (default 1.0). Returns the
+    minimum diameter in mm; the moment/torque are dimension-checked torques, the
+    strength a pressure, and ``n`` / ``yield_strength`` must be positive. Pure
+    torsion (M=0) does not reduce to :func:`shaft_diameter_for_torque`, which sizes
+    on shear yield τ_allow rather than the von Mises tensile yield used here.
+    """
+    _require(bending_moment, "[force] * [length]", "bending_moment")
+    _require(torque, "[force] * [length]", "torque")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    m = bending_moment.to("N*mm").magnitude
+    t = torque.to("N*mm").magnitude
+    sy = yield_strength.to("MPa").magnitude
+    if sy <= 0:
+        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+    equivalent = sqrt(m * m + 0.75 * t * t)
+    d_min = (32 * required_safety_factor * equivalent / (pi * sy)) ** (1.0 / 3.0)
     return Quantity(magnitude=d_min, unit="mm")
 
 

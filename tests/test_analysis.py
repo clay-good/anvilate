@@ -108,6 +108,7 @@ from anvilate.analysis import (
     rectangular_tube_twist_angle,
     required_axial_area,
     secant_column_max_stress,
+    shaft_diameter_for_bending_torsion,
     shaft_diameter_for_torque,
     shaft_torsional_stiffness,
     shaft_torsional_stress,
@@ -2903,6 +2904,64 @@ def test_thread_engagement_for_load_rejects_bad_inputs():
             pitch=_q("1.75 mm"),
             allowable_shear=_q("159 MPa"),
             member="nut",
+        )
+
+
+def test_shaft_diameter_for_bending_torsion_matches_worked_example():
+    # 300 N*m bending + 500 N*m torsion, Sy 350 MPa, SF 2.0:
+    #   d = (32*n*sqrt(M^2 + 0.75*T^2)/(pi*Sy))^(1/3) = 31.30 mm.
+    d = shaft_diameter_for_bending_torsion(
+        bending_moment=_q("300 N*m"),
+        torque=_q("500 N*m"),
+        yield_strength=_q("350 MPa"),
+        required_safety_factor=2.0,
+    )
+    assert d.to("mm").magnitude == pytest.approx(31.299, rel=1e-4)
+
+
+def test_shaft_diameter_for_bending_torsion_lands_on_the_von_mises_allowable():
+    # At the sized diameter the von Mises stress equals exactly Sy/n.
+    d = shaft_diameter_for_bending_torsion(
+        bending_moment=_q("300 N*m"),
+        torque=_q("500 N*m"),
+        yield_strength=_q("350 MPa"),
+        required_safety_factor=2.0,
+    )
+    d3 = d.to("mm").magnitude ** 3
+    sigma = _q(f"{32 * 300000.0 / (pi * d3)} MPa")  # 32*M/(pi*d^3), M in N*mm
+    tau = shaft_torsional_stress(torque=_q("500 N*m"), diameter=d)
+    vm = von_mises_bending_torsion(bending_stress=sigma, shear_stress=tau)
+    assert vm.to("MPa").magnitude == pytest.approx(175.0, rel=1e-6)  # Sy/n = 350/2
+
+
+def test_shaft_diameter_for_bending_torsion_scales_and_rejects_bad_inputs():
+    # More margin -> larger shaft, growing as the cube root of n.
+    base = shaft_diameter_for_bending_torsion(
+        bending_moment=_q("300 N*m"), torque=_q("500 N*m"), yield_strength=_q("350 MPa")
+    )
+    doubled = shaft_diameter_for_bending_torsion(
+        bending_moment=_q("300 N*m"),
+        torque=_q("500 N*m"),
+        yield_strength=_q("350 MPa"),
+        required_safety_factor=2.0,
+    )
+    assert doubled.to("mm").magnitude == pytest.approx(
+        base.to("mm").magnitude * 2 ** (1 / 3), rel=1e-9
+    )
+    with pytest.raises(ValueError, match="yield_strength must be positive"):
+        shaft_diameter_for_bending_torsion(
+            bending_moment=_q("300 N*m"), torque=_q("500 N*m"), yield_strength=_q("0 MPa")
+        )
+    with pytest.raises(ValueError, match="required_safety_factor must be positive"):
+        shaft_diameter_for_bending_torsion(
+            bending_moment=_q("300 N*m"),
+            torque=_q("500 N*m"),
+            yield_strength=_q("350 MPa"),
+            required_safety_factor=0.0,
+        )
+    with pytest.raises(ValueError, match="bending_moment must be a"):
+        shaft_diameter_for_bending_torsion(
+            bending_moment=_q("300 mm"), torque=_q("500 N*m"), yield_strength=_q("350 MPa")
         )
 
 
