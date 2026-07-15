@@ -975,3 +975,22 @@ def test_cart_drum_brake_example_has_a_rotation_direction():
     longer = by_name["800 mm lever, drum reverse"]
     assert longer.passed
     assert "safety factor 1.16" in longer.detail
+
+
+def test_crane_hook_example_fails_the_straight_beam_screen_honestly():
+    namespace = runpy.run_path(str(_EXAMPLES / "crane_hook_shank.py"))
+    card = namespace["screen_crane_hook"]()
+    by_name = {e.name: e for e in card.entries}
+    # The straight-beam formula happily passes the 50 mm shank...
+    straight = by_name["bore, straight-beam screen (h=50)"]
+    assert straight.passed
+    assert "safety factor 2.20" in straight.detail
+    # ...but curvature crowds 31% more stress onto the bore -> FAIL.
+    winkler = by_name["bore, Winkler curved-beam (h=50)"]
+    assert winkler.status is CheckStatus.FAIL
+    assert "safety factor 1.68" in winkler.detail
+    assert card.status is CheckStatus.FAIL
+    # Deepening the shank passes with the honest theory.
+    deeper = by_name["bore, Winkler curved-beam (h=60)"]
+    assert deeper.passed
+    assert "safety factor 2.14" in deeper.detail
