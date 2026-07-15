@@ -38,7 +38,8 @@ modules:
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
   (millions of revolutions and running hours) and static load safety factor
 - :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
-  tension ratio, slack tension, transmissible force, and V-belt wedge friction
+  tension ratio, slack tension, transmissible force, V-belt wedge friction, and
+  belt-drive geometry (length and wrap angle)
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
@@ -132,8 +133,10 @@ from .bearing import (
     bearing_static_safety_factor,
 )
 from .belt import (
+    belt_length,
     belt_max_transmissible_force,
     belt_slack_tension,
+    belt_wrap_angle,
     capstan_tension_ratio,
     vee_belt_effective_friction,
 )
@@ -421,6 +424,8 @@ __all__ = [
     "belt_slack_tension",
     "belt_max_transmissible_force",
     "vee_belt_effective_friction",
+    "belt_length",
+    "belt_wrap_angle",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",

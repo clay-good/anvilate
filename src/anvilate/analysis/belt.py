@@ -22,7 +22,7 @@ does not carry dimensionless angles), matching how μ is supplied.
 
 from __future__ import annotations
 
-from math import exp, radians, sin
+from math import asin, exp, pi, radians, sin
 
 from ..units import Quantity
 
@@ -31,6 +31,8 @@ __all__ = [
     "belt_slack_tension",
     "belt_max_transmissible_force",
     "vee_belt_effective_friction",
+    "belt_length",
+    "belt_wrap_angle",
 ]
 
 
@@ -116,3 +118,72 @@ def vee_belt_effective_friction(*, friction_coefficient: float, groove_angle: fl
     if not 0 < groove_angle < 180:
         raise ValueError(f"groove_angle (degrees) must lie in (0, 180); got {groove_angle}")
     return friction_coefficient / sin(radians(groove_angle / 2.0))
+
+
+def _pulley_geometry(
+    large_pulley_diameter: Quantity, small_pulley_diameter: Quantity, center_distance: Quantity
+) -> tuple[float, float, float]:
+    """Validate and return (D, d, C) in mm for an open two-pulley belt drive."""
+    for value, name in (
+        (large_pulley_diameter, "large_pulley_diameter"),
+        (small_pulley_diameter, "small_pulley_diameter"),
+        (center_distance, "center_distance"),
+    ):
+        if not value.has_dimension("[length]"):
+            raise ValueError(
+                f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
+            )
+    big = large_pulley_diameter.to("mm").magnitude
+    small = small_pulley_diameter.to("mm").magnitude
+    c = center_distance.to("mm").magnitude
+    if small <= 0 or c <= 0:
+        raise ValueError("small_pulley_diameter and center_distance must be positive")
+    if big < small:
+        raise ValueError(
+            f"large_pulley_diameter ({large_pulley_diameter}) must be at least "
+            f"small_pulley_diameter ({small_pulley_diameter})"
+        )
+    if c <= (big - small) / 2.0:
+        raise ValueError(
+            f"center_distance ({center_distance}) is too small for the pulleys to clear"
+        )
+    return big, small, c
+
+
+def belt_length(
+    *,
+    large_pulley_diameter: Quantity,
+    small_pulley_diameter: Quantity,
+    center_distance: Quantity,
+) -> Quantity:
+    """The length of an open belt over two pulleys,
+    L = 2C + π(D+d)/2 + (D−d)²/(4C).
+
+    The belt wraps each pulley over its arc and runs straight between them;
+    summing gives L for ``large_pulley_diameter`` D, ``small_pulley_diameter`` d, and
+    ``center_distance`` C. Use it to pick a stock belt or set the take-up. The
+    diameters and centre distance must be positive lengths with C large enough for
+    the pulleys to clear. Returns the length in mm.
+    """
+    big, small, c = _pulley_geometry(large_pulley_diameter, small_pulley_diameter, center_distance)
+    length = 2.0 * c + pi * (big + small) / 2.0 + (big - small) ** 2 / (4.0 * c)
+    return Quantity(magnitude=length, unit="mm")
+
+
+def belt_wrap_angle(
+    *,
+    large_pulley_diameter: Quantity,
+    small_pulley_diameter: Quantity,
+    center_distance: Quantity,
+) -> float:
+    """The wrap angle on the small pulley of an open belt drive, in **radians**.
+
+    β = π − 2·arcsin((D − d)/(2C)) — the arc the belt contacts the *small* pulley,
+    which is under 180° and so grips less and slips first, making it the wrap to
+    feed :func:`capstan_tension_ratio` when checking a belt drive's capacity.
+    ``large_pulley_diameter`` D, ``small_pulley_diameter`` d, and ``center_distance``
+    C are as in :func:`belt_length`. Returns the angle in radians (the units layer
+    carries no angles).
+    """
+    big, small, c = _pulley_geometry(large_pulley_diameter, small_pulley_diameter, center_distance)
+    return pi - 2.0 * asin((big - small) / (2.0 * c))

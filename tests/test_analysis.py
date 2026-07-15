@@ -24,8 +24,10 @@ from anvilate.analysis import (
     bearing_life_hours,
     bearing_static_safety_factor,
     bearing_stress,
+    belt_length,
     belt_max_transmissible_force,
     belt_slack_tension,
+    belt_wrap_angle,
     bolt_axial_stress,
     bolt_diameter_for_shear,
     bolt_load_in_joint,
@@ -3340,6 +3342,32 @@ def test_disc_clutch_rejects_bad_inputs():
         disc_clutch_torque(actuating_force=_q("5 kN"), theory="linear", **kw)
     with pytest.raises(ValueError, match="actuating_force must be a"):
         disc_clutch_torque(actuating_force=_q("5 mm"), **kw)
+
+
+def test_belt_drive_geometry_and_capstan_composition():
+    from math import asin, pi
+
+    kw = {
+        "large_pulley_diameter": _q("200 mm"),
+        "small_pulley_diameter": _q("100 mm"),
+        "center_distance": _q("500 mm"),
+    }
+    # L = 2C + pi*(D+d)/2 + (D-d)^2/(4C) = 1476.24 mm.
+    length = belt_length(**kw)
+    assert length.to("mm").magnitude == pytest.approx(1476.239, rel=1e-4)
+    # Small-pulley wrap beta = pi - 2*asin((D-d)/(2C)) < pi (it grips less).
+    beta = belt_wrap_angle(**kw)
+    assert beta == pytest.approx(pi - 2 * asin(100 / 1000), rel=1e-9)
+    assert beta < pi
+    # The wrap angle feeds the capstan ratio for the drive's real slip capacity.
+    ratio = capstan_tension_ratio(friction_coefficient=0.3, wrap_angle=beta)
+    assert ratio == pytest.approx(2.4166, rel=1e-3)
+    with pytest.raises(ValueError, match="center_distance .* is too small"):
+        belt_length(
+            large_pulley_diameter=_q("400 mm"),
+            small_pulley_diameter=_q("100 mm"),
+            center_distance=_q("100 mm"),
+        )
 
 
 def test_vee_belt_effective_friction_multiplies_grip():
