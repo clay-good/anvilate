@@ -956,3 +956,22 @@ def test_high_speed_belt_drive_example_hits_the_power_ceiling():
     wider = by_name["wider (700 N) belt at its v*"]
     assert wider.passed
     assert "safety factor 1.52" in wider.detail
+
+
+def test_cart_drum_brake_example_has_a_rotation_direction():
+    namespace = runpy.run_path(str(_EXAMPLES / "cart_drum_brake.py"))
+    card = namespace["screen_cart_brake"]()
+    by_name = {e.name: e for e in card.entries}
+    # With the drum dragging the shoe in, the lever holds with margin...
+    forward = by_name["hold, drum forward (self-energizing)"]
+    assert forward.passed
+    assert "safety factor 1.17" in forward.detail
+    # ...but the same brake creeps when the rotation de-energizes the shoe.
+    reverse = by_name["hold, drum reverse (de-energizing)"]
+    assert reverse.status is CheckStatus.FAIL
+    assert "safety factor 0.87" in reverse.detail
+    assert card.status is CheckStatus.FAIL
+    # Leverage, not self-energizing geometry, is the honest fix.
+    longer = by_name["800 mm lever, drum reverse"]
+    assert longer.passed
+    assert "safety factor 1.16" in longer.detail
