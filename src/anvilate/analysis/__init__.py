@@ -17,9 +17,10 @@ modules:
   stress a moment makes and the minimum section modulus it requires
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   and the minimum section second moment a load requires
-- :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
-  torsional stiffness, and the shaft diameter a torque requires; thin-walled
-  rectangular (box) tube torsion (Bredt) and thin open-section (strip) torsion
+- :mod:`~anvilate.analysis.torsion` — the torque a power/speed makes, solid and
+  hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
+  torque requires; thin-walled rectangular (box) tube torsion (Bredt) and thin
+  open-section (strip) torsion
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder and sphere, and the wall thickness a pressure
   requires
@@ -239,6 +240,7 @@ from .torsion import (
     thin_open_strip_torsion_constant,
     thin_open_strip_torsional_stress,
     thin_open_strip_twist_angle,
+    torque_from_power,
 )
 from .weld import (
     FILLET_THROAT_FACTOR,
@@ -349,6 +351,7 @@ __all__ = [
     "shaft_torsional_stress",
     "shaft_diameter_for_torque",
     "hollow_shaft_torsional_stress",
+    "torque_from_power",
     "shaft_twist_angle",
     "hollow_shaft_twist_angle",
     "shaft_torsional_stiffness",

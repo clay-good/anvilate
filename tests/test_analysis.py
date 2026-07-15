@@ -147,6 +147,7 @@ from anvilate.analysis import (
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
     torque_for_preload,
+    torque_from_power,
     torsional_natural_frequency,
     transition_slenderness,
     tresca_equivalent_stress,
@@ -2763,6 +2764,25 @@ def test_shaft_torsional_stress_matches_worked_example():
     #   = 16*50 / (pi*0.02^3) = 31.83 MPa.
     tau = shaft_torsional_stress(torque=_q("50 N*m"), diameter=_q("20 mm"))
     assert tau.to("MPa").magnitude == pytest.approx(31.831, rel=1e-4)
+
+
+def test_torque_from_power_matches_worked_example():
+    # 30 kW at 730 rpm: T = P/omega = 30000/(2*pi*730/60) = 392.4 N*m.
+    t = torque_from_power(power=_q("30 kW"), rotational_speed=_q("730 rpm"))
+    assert t.to("N*m").magnitude == pytest.approx(392.44, rel=1e-3)
+    # rad/s input gives the same torque (both carry the 2*pi).
+    same = torque_from_power(power=_q("30 kW"), rotational_speed=_q("76.4454 rad/s"))
+    assert same.to("N*m").magnitude == pytest.approx(t.to("N*m").magnitude, rel=1e-4)
+    # Torque falls as speed rises for the same power.
+    faster = torque_from_power(power=_q("30 kW"), rotational_speed=_q("1460 rpm"))
+    assert faster.to("N*m").magnitude == pytest.approx(t.to("N*m").magnitude / 2, rel=1e-6)
+
+
+def test_torque_from_power_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="power must be a"):
+        torque_from_power(power=_q("30 N"), rotational_speed=_q("730 rpm"))
+    with pytest.raises(ValueError, match="rotational_speed must be positive"):
+        torque_from_power(power=_q("30 kW"), rotational_speed=_q("0 rpm"))
 
 
 def test_shaft_diameter_for_torque_inverts_the_shear_check():

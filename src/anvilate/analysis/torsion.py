@@ -26,6 +26,7 @@ from math import pi
 from ..units import Quantity
 
 __all__ = [
+    "torque_from_power",
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",
@@ -53,6 +54,25 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 def _as_quantity(pint_value, unit: str) -> Quantity:
     converted = pint_value.to(unit)
     return Quantity(magnitude=float(converted.magnitude), unit=unit)
+
+
+def torque_from_power(*, power: Quantity, rotational_speed: Quantity) -> Quantity:
+    """The shaft torque T = P/ω that transmits ``power`` at ``rotational_speed``.
+
+    The first step of any drivetrain shaft calc: a shaft delivering ``power`` P
+    while turning at angular speed ω carries the torque T = P/ω. ``rotational_speed``
+    is the shaft speed — pass it as **rpm or rad/s** (an angular measure that carries
+    the 2π); it feeds :func:`shaft_diameter_for_torque` and
+    :func:`shaft_torsional_stress`. ``power`` must be a power and
+    ``rotational_speed`` a positive rotational frequency. Returns the torque in N·m.
+    """
+    _require(power, "[power]", "power")
+    _require(rotational_speed, "[frequency]", "rotational_speed")
+    if rotational_speed.to("rad/s").magnitude <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    if power.to("W").magnitude <= 0:
+        raise ValueError(f"power must be positive; got {power}")
+    return _as_quantity(power.pint / rotational_speed.pint, "N*m")
 
 
 def polar_second_moment_solid(diameter: Quantity) -> Quantity:
