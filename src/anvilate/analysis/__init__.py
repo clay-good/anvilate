@@ -36,8 +36,9 @@ modules:
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, and the inertia a speed-smoothing target requires
-- :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, and
-  the ISO 898 tensile stress area / axial stress
+- :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, the
+  ISO 898 tensile stress area / axial stress, thread-stripping engagement, and
+  preloaded-joint load sharing (stiffness constant, bolt/member load, separation)
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
   key length a torque requires
 - :mod:`~anvilate.analysis.weld` — fillet-weld throat shear and the weld leg a
@@ -162,9 +163,13 @@ from .fastener import (
     bearing_stress,
     bolt_axial_stress,
     bolt_diameter_for_shear,
+    bolt_load_in_joint,
     bolt_preload_from_torque,
     bolt_shear_stress,
     bolt_tensile_stress_area,
+    joint_separation_load,
+    joint_stiffness_factor,
+    member_clamp_load_in_joint,
     thread_engagement_for_load,
     thread_stripping_shear_area,
     thread_stripping_stress,
@@ -393,6 +398,10 @@ __all__ = [
     "thread_stripping_shear_area",
     "thread_stripping_stress",
     "thread_engagement_for_load",
+    "joint_stiffness_factor",
+    "bolt_load_in_joint",
+    "member_clamp_load_in_joint",
+    "joint_separation_load",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",

@@ -24,6 +24,7 @@ from anvilate.analysis import (
     belt_slack_tension,
     bolt_axial_stress,
     bolt_diameter_for_shear,
+    bolt_load_in_joint,
     bolt_preload_from_torque,
     bolt_shear_stress,
     bolt_tensile_stress_area,
@@ -102,6 +103,8 @@ from anvilate.analysis import (
     interference_for_contact_pressure,
     interference_torque_capacity,
     johnson_critical_stress,
+    joint_separation_load,
+    joint_stiffness_factor,
     key_bearing_stress,
     key_length_for_torque,
     key_shear_stress,
@@ -109,6 +112,7 @@ from anvilate.analysis import (
     lead_angle,
     max_shear_stress_plane,
     max_transverse_shear_stress,
+    member_clamp_load_in_joint,
     miner_cumulative_damage,
     miner_spectrum_repeats_to_failure,
     natural_frequency,
@@ -2976,6 +2980,42 @@ def test_bearing_life_rejects_bad_inputs():
         bearing_life_hours(
             dynamic_load_rating=_q("14 kN"), equivalent_load=_q("2 kN"), speed=_q("1800 N")
         )
+
+
+def test_preloaded_joint_shares_the_external_load():
+    # A joint with a bolt 3 MN/m into members 7 MN/m: C = 3/(3+7) = 0.3.
+    c = joint_stiffness_factor(bolt_stiffness=_q("3 MN/m"), member_stiffness=_q("7 MN/m"))
+    assert c == pytest.approx(0.3, rel=1e-12)
+    kw = {"preload": _q("25 kN"), "external_load": _q("10 kN"), "stiffness_factor": c}
+    # The bolt sees only C*P = 3 kN of the 10 kN external load on top of preload.
+    bolt = bolt_load_in_joint(**kw)
+    assert bolt.to("kN").magnitude == pytest.approx(28.0, rel=1e-9)
+    # The members shed (1-C)*P = 7 kN of clamp, leaving 18 kN.
+    clamp = member_clamp_load_in_joint(**kw)
+    assert clamp.to("kN").magnitude == pytest.approx(18.0, rel=1e-9)
+    # The bolt load plus the clamp relief equals preload plus the full external load.
+    assert bolt.to("kN").magnitude + (25.0 - clamp.to("kN").magnitude) == pytest.approx(
+        25.0 + 10.0, rel=1e-9
+    )
+
+
+def test_joint_separation_load_opens_the_clamp():
+    c = joint_stiffness_factor(bolt_stiffness=_q("3 MN/m"), member_stiffness=_q("7 MN/m"))
+    # Separation at P0 = Fi/(1-C) = 25/0.7 = 35.71 kN.
+    p0 = joint_separation_load(preload=_q("25 kN"), stiffness_factor=c)
+    assert p0.to("kN").magnitude == pytest.approx(35.714, rel=1e-4)
+    # At exactly P0 the member clamp reaches zero.
+    clamp = member_clamp_load_in_joint(preload=_q("25 kN"), external_load=p0, stiffness_factor=c)
+    assert clamp.to("kN").magnitude == pytest.approx(0.0, abs=1e-9)
+
+
+def test_preloaded_joint_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="member_stiffness must be positive"):
+        joint_stiffness_factor(bolt_stiffness=_q("3 MN/m"), member_stiffness=_q("0 MN/m"))
+    with pytest.raises(ValueError, match=r"stiffness_factor .* must lie in \(0, 1\)"):
+        bolt_load_in_joint(preload=_q("25 kN"), external_load=_q("10 kN"), stiffness_factor=1.0)
+    with pytest.raises(ValueError, match="preload must be a"):
+        joint_separation_load(preload=_q("25 mm"), stiffness_factor=0.3)
 
 
 def test_thread_stripping_shear_area_matches_basic_profile():

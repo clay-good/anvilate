@@ -56,6 +56,10 @@ __all__ = [
     "thread_stripping_shear_area",
     "thread_stripping_stress",
     "thread_engagement_for_load",
+    "joint_stiffness_factor",
+    "bolt_load_in_joint",
+    "member_clamp_load_in_joint",
+    "joint_separation_load",
 ]
 
 # Typical nut factor K for as-received (lightly-oiled) steel fasteners. Dry/rough
@@ -369,3 +373,91 @@ def bolt_axial_stress(
     stress = tension.pint / area
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def joint_stiffness_factor(*, bolt_stiffness: Quantity, member_stiffness: Quantity) -> float:
+    """The joint stiffness constant C = k_b/(k_b + k_m) of a preloaded bolted joint.
+
+    When an external tensile load is applied to a preloaded joint, the bolt and the
+    clamped members share it in proportion to their stiffnesses: the bolt picks up
+    the fraction C and the members shed the rest. ``bolt_stiffness`` k_b and
+    ``member_stiffness`` k_m are the axial stiffnesses (force per length, e.g.
+    A·E/L for each path); the members are usually far stiffer than the bolt, so C is
+    small (~0.2–0.4) — which is exactly why a preloaded bolt barely feels a
+    fluctuating external load and survives fatigue. Both stiffnesses must be
+    positive. Returns the dimensionless C in (0, 1).
+    """
+    _require(bolt_stiffness, "[force] / [length]", "bolt_stiffness")
+    _require(member_stiffness, "[force] / [length]", "member_stiffness")
+    kb = bolt_stiffness.to("N/mm").magnitude
+    km = member_stiffness.to("N/mm").magnitude
+    if kb <= 0:
+        raise ValueError(f"bolt_stiffness must be positive; got {bolt_stiffness}")
+    if km <= 0:
+        raise ValueError(f"member_stiffness must be positive; got {member_stiffness}")
+    return kb / (kb + km)
+
+
+def bolt_load_in_joint(
+    *,
+    preload: Quantity,
+    external_load: Quantity,
+    stiffness_factor: float,
+) -> Quantity:
+    """The total tensile load a preloaded bolt carries, F_b = F_i + C·P.
+
+    A bolt tightened to preload ``preload`` F_i and then pulled by an external load
+    ``external_load`` P (per bolt) sees only the fraction C of P added on top of the
+    preload, with ``stiffness_factor`` C from :func:`joint_stiffness_factor`. This is
+    the load to screen against proof/yield and the amplitude that drives bolt
+    fatigue — small because C is small. The forces must be forces and C must lie in
+    (0, 1). Returns the bolt load in newtons.
+    """
+    _require(preload, "[force]", "preload")
+    _require(external_load, "[force]", "external_load")
+    _check_factor(stiffness_factor)
+    fb = preload.to("N").magnitude + stiffness_factor * external_load.to("N").magnitude
+    return Quantity(magnitude=fb, unit="N")
+
+
+def member_clamp_load_in_joint(
+    *,
+    preload: Quantity,
+    external_load: Quantity,
+    stiffness_factor: float,
+) -> Quantity:
+    """The clamping load left in the members, F_m = F_i − (1 − C)·P.
+
+    The external load ``external_load`` P relieves the members' clamp by (1 − C)·P;
+    when this reaches zero the joint separates. A positive result is the remaining
+    clamp force (the joint still holds); a non-positive result means it has opened.
+    ``preload`` F_i and ``external_load`` P must be forces and ``stiffness_factor`` C
+    in (0, 1). Returns the clamp load in newtons (signed).
+    """
+    _require(preload, "[force]", "preload")
+    _require(external_load, "[force]", "external_load")
+    _check_factor(stiffness_factor)
+    fm = preload.to("N").magnitude - (1.0 - stiffness_factor) * external_load.to("N").magnitude
+    return Quantity(magnitude=fm, unit="N")
+
+
+def joint_separation_load(*, preload: Quantity, stiffness_factor: float) -> Quantity:
+    """The external load that separates a preloaded joint, P₀ = F_i/(1 − C).
+
+    The tensile load per bolt at which the members' clamp reaches zero and the joint
+    opens — beyond it the bolt takes the full external load directly and fatigue
+    life collapses. ``preload`` F_i must be a force and ``stiffness_factor`` C in
+    (0, 1); a stiffer bolt (larger C) separates a joint at a lower load. Returns the
+    separation load in newtons.
+    """
+    _require(preload, "[force]", "preload")
+    _check_factor(stiffness_factor)
+    p0 = preload.to("N").magnitude / (1.0 - stiffness_factor)
+    return Quantity(magnitude=p0, unit="N")
+
+
+def _check_factor(stiffness_factor: float) -> None:
+    if not 0.0 < stiffness_factor < 1.0:
+        raise ValueError(
+            f"stiffness_factor (joint constant C) must lie in (0, 1); got {stiffness_factor}"
+        )
