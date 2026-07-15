@@ -10,7 +10,8 @@ modules:
   fixed-fixed / fixed-pinned; point, distributed, triangular, patch, and
   applied-couple loads), transverse shear, section second moments
 - :mod:`~anvilate.analysis.plate` — flat-plate bending (simply-supported
-  rectangle via the exact Navier series; circular, simply-supported and clamped)
+  rectangle via the exact Navier series; circular, simply-supported and clamped),
+  and the clamped-cover thickness a pressure requires
 - :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
   moment, extreme fibre, section modulus, and radius of gyration; the minimum
   section modulus a bending moment requires
@@ -165,6 +166,7 @@ from .keys import (
 from .plate import (
     PlateBendingResult,
     clamped_annular_plate_uniform_load,
+    clamped_circular_plate_thickness_for_pressure,
     clamped_circular_plate_uniform_load,
     clamped_plate_uniform_load,
     simply_supported_annular_plate_uniform_load,
@@ -349,6 +351,7 @@ __all__ = [
     "clamped_circular_plate_uniform_load",
     "simply_supported_annular_plate_uniform_load",
     "clamped_annular_plate_uniform_load",
+    "clamped_circular_plate_thickness_for_pressure",
     "ThinWallStress",
     "ThickWallStress",
     "ThickWallSphereStress",

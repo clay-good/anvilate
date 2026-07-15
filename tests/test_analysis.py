@@ -34,6 +34,7 @@ from anvilate.analysis import (
     clamped_annular_plate_fundamental_frequency,
     clamped_annular_plate_uniform_load,
     clamped_circular_plate_fundamental_frequency,
+    clamped_circular_plate_thickness_for_pressure,
     clamped_circular_plate_uniform_load,
     clamped_plate_fundamental_frequency,
     clamped_plate_uniform_load,
@@ -4254,6 +4255,52 @@ def test_clamped_circular_plate_trades_deflection_for_edge_stress():
     assert ss.max_bending_stress.to("MPa").magnitude == pytest.approx(
         (3 + nu) / 2 * clamped.max_bending_stress.to("MPa").magnitude, rel=1e-12
     )
+
+
+def test_clamped_circular_cover_thickness_inverts_the_rim_stress():
+    # 1 MPa on a 300 mm clamped cover within a 100 MPa allowable needs
+    #   t = R*sqrt(3*q/(4*sigma)) = 150*sqrt(0.0075) = 12.99 mm.
+    t = clamped_circular_plate_thickness_for_pressure(
+        pressure=_q("1 MPa"), diameter=_q("300 mm"), allowable_stress=_q("100 MPa")
+    )
+    assert t.to("mm").magnitude == pytest.approx(12.990, rel=1e-4)
+    # A cover of exactly this thickness is worked to the allowable at the rim.
+    stress = clamped_circular_plate_uniform_load(
+        pressure=_q("1 MPa"), diameter=_q("300 mm"), thickness=t, elastic_modulus=_q("200 GPa")
+    ).max_bending_stress
+    assert stress.to("MPa").magnitude == pytest.approx(100.0, rel=1e-6)
+
+
+def test_clamped_circular_cover_thickness_scales_with_sqrt_margin():
+    base = clamped_circular_plate_thickness_for_pressure(
+        pressure=_q("1 MPa"), diameter=_q("300 mm"), allowable_stress=_q("100 MPa")
+    )
+    with_sf = clamped_circular_plate_thickness_for_pressure(
+        pressure=_q("1 MPa"),
+        diameter=_q("300 mm"),
+        allowable_stress=_q("100 MPa"),
+        required_safety_factor=2.0,
+    )
+    # Thickness scales with the square root of the required margin.
+    assert with_sf.to("mm").magnitude == pytest.approx(2.0**0.5 * base.to("mm").magnitude, rel=1e-9)
+
+
+def test_clamped_circular_cover_thickness_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="pressure must be a"):
+        clamped_circular_plate_thickness_for_pressure(
+            pressure=_q("1 N"), diameter=_q("300 mm"), allowable_stress=_q("100 MPa")
+        )
+    with pytest.raises(ValueError, match="allowable_stress must be positive"):
+        clamped_circular_plate_thickness_for_pressure(
+            pressure=_q("1 MPa"), diameter=_q("300 mm"), allowable_stress=_q("0 MPa")
+        )
+    with pytest.raises(ValueError, match="required_safety_factor must be positive"):
+        clamped_circular_plate_thickness_for_pressure(
+            pressure=_q("1 MPa"),
+            diameter=_q("300 mm"),
+            allowable_stress=_q("100 MPa"),
+            required_safety_factor=0.0,
+        )
 
 
 def test_circular_plate_rejects_bad_inputs():

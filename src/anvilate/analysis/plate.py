@@ -27,7 +27,7 @@ dimension-checked :class:`~anvilate.units.Quantity`.
 
 from __future__ import annotations
 
-from math import log, pi, sin
+from math import log, pi, sin, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -42,6 +42,7 @@ __all__ = [
     "clamped_circular_plate_uniform_load",
     "simply_supported_annular_plate_uniform_load",
     "clamped_annular_plate_uniform_load",
+    "clamped_circular_plate_thickness_for_pressure",
 ]
 
 # Odd-harmonic cap for the Navier series. Deflection terms fall off as 1/(mn)·
@@ -327,6 +328,43 @@ def clamped_circular_plate_uniform_load(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
     )
+
+
+def clamped_circular_plate_thickness_for_pressure(
+    *,
+    pressure: Quantity,
+    diameter: Quantity,
+    allowable_stress: Quantity,
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least thickness of a clamped circular cover to hold ``pressure`` within
+    an allowable bending stress.
+
+    The inverse of :func:`clamped_circular_plate_uniform_load`'s governing rim
+    stress σ = 3·q·R²/(4·t²): demanding it stay within σ_allow/n gives
+    t_min = R·√(3·n·q/(4·σ_allow)) — the sizing step for a round pressure cover or
+    blind flange with a stiffly held (welded/bolted) rim. ``pressure`` q is the
+    uniform pressure, ``diameter`` 2R the plate diameter, ``allowable_stress``
+    σ_allow the material's allowable bending stress, and ``required_safety_factor``
+    n the margin on it (default 1.0). Returns the minimum thickness in mm; a
+    strength (stress) size — re-check the deflection separately if stiffness
+    governs. The pressure/diameter/stress are dimension-checked and ``n`` /
+    ``allowable_stress`` must be positive.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(diameter, "[length]", "diameter")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    q = pressure.to("MPa").magnitude
+    radius = diameter.to("mm").magnitude / 2
+    sigma = allowable_stress.to("MPa").magnitude
+    if radius <= 0:
+        raise ValueError(f"diameter must be positive; got {diameter}")
+    if sigma <= 0:
+        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+    t_min = radius * sqrt(3 * required_safety_factor * q / (4 * sigma))
+    return Quantity(magnitude=t_min, unit="mm")
 
 
 def _annular_plate_uniform_load(
