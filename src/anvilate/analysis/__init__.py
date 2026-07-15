@@ -15,6 +15,7 @@ modules:
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
   and torsional stiffness; thin-walled rectangular (box) tube torsion (Bredt)
+  and thin open-section (strip) torsion
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder and sphere
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
@@ -198,6 +199,9 @@ from .torsion import (
     shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
+    thin_open_strip_torsion_constant,
+    thin_open_strip_torsional_stress,
+    thin_open_strip_twist_angle,
 )
 
 __all__ = [
@@ -294,6 +298,9 @@ __all__ = [
     "rectangular_tube_enclosed_area",
     "rectangular_tube_torsional_stress",
     "rectangular_tube_twist_angle",
+    "thin_open_strip_torsion_constant",
+    "thin_open_strip_torsional_stress",
+    "thin_open_strip_twist_angle",
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",
     "simply_supported_plate_center_patch_load",

@@ -123,6 +123,9 @@ from anvilate.analysis import (
     strength_scorecard,
     thick_wall_cylinder,
     thick_wall_sphere,
+    thin_open_strip_torsion_constant,
+    thin_open_strip_torsional_stress,
+    thin_open_strip_twist_angle,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
     torque_for_preload,
@@ -2600,6 +2603,61 @@ def test_rectangular_tube_rejects_wall_without_a_cavity():
     with pytest.raises(ValueError, match="torque must be a"):
         rectangular_tube_torsional_stress(
             torque=_q("50 N"), width=_q("100 mm"), height=_q("60 mm"), wall_thickness=_q("5 mm")
+        )
+
+
+def test_thin_open_strip_torsion_constant_is_b_t_cubed_over_three():
+    # b=100 mm, t=5 mm strip: J = b*t^3/3 = 100*125/3 = 4166.67 mm^4.
+    j = thin_open_strip_torsion_constant(width=_q("100 mm"), thickness=_q("5 mm"))
+    assert j.to("mm**4").magnitude == pytest.approx(4166.667, rel=1e-5)
+
+
+def test_thin_open_strip_torsional_stress_matches_worked_example():
+    # 50 N*m on the 100x5 strip: tau = 3T/(b*t^2) = 3*50000/(100*25) = 60 MPa,
+    # and this equals the T*t/J identity.
+    tau = thin_open_strip_torsional_stress(
+        torque=_q("50 N*m"), width=_q("100 mm"), thickness=_q("5 mm")
+    )
+    assert tau.to("MPa").magnitude == pytest.approx(60.0, rel=1e-4)
+    j = thin_open_strip_torsion_constant(width=_q("100 mm"), thickness=_q("5 mm"))
+    identity = 50000.0 * 5.0 / j.to("mm**4").magnitude  # T*t/J in N/mm^2
+    assert tau.to("MPa").magnitude == pytest.approx(identity, rel=1e-9)
+
+
+def test_thin_open_strip_twist_matches_worked_example():
+    # 50 N*m over 1 m at G=79.3 GPa: theta = T*L/(G*J) = 0.15130 rad = 8.669 deg.
+    theta = thin_open_strip_twist_angle(
+        torque=_q("50 N*m"),
+        length=_q("1 m"),
+        width=_q("100 mm"),
+        thickness=_q("5 mm"),
+        shear_modulus=_q("79.3 GPa"),
+    )
+    assert theta.to("degree").magnitude == pytest.approx(8.669, rel=1e-3)
+
+
+def test_thin_open_strip_is_far_weaker_than_the_closed_box_tube():
+    # An open slit section resists torsion far worse than the SAME wall closed:
+    # for the same torque the open-strip stress dwarfs the closed box-tube stress.
+    torque = _q("50 N*m")
+    box = rectangular_tube_torsional_stress(
+        torque=torque, width=_q("100 mm"), height=_q("60 mm"), wall_thickness=_q("5 mm")
+    )
+    # Unroll that box wall to a developed strip of width s = 2*(95+55) = 300 mm.
+    strip = thin_open_strip_torsional_stress(
+        torque=torque, width=_q("300 mm"), thickness=_q("5 mm")
+    )
+    assert strip.to("MPa").magnitude > 10 * box.to("MPa").magnitude
+
+
+def test_thin_open_strip_rejects_thickness_over_width():
+    with pytest.raises(ValueError, match="long dimension and must be at least"):
+        thin_open_strip_torsion_constant(width=_q("5 mm"), thickness=_q("100 mm"))
+    with pytest.raises(ValueError, match="must be positive"):
+        thin_open_strip_torsion_constant(width=_q("0 mm"), thickness=_q("5 mm"))
+    with pytest.raises(ValueError, match="torque must be a"):
+        thin_open_strip_torsional_stress(
+            torque=_q("50 N"), width=_q("100 mm"), thickness=_q("5 mm")
         )
 
 

@@ -10,9 +10,13 @@ A thin-walled *closed* non-circular tube (a rectangular box frame member, say)
 does not follow ``T·r/J``; its shear flows uniformly around the wall by Bredt's
 formulas: ``τ = T/(2·A_m·t)`` with the median-line enclosed area ``A_m`` and wall
 thickness ``t``, twisting at ``θ = T·L·s/(4·A_m²·G·t)`` over the median perimeter
-``s``. As with the beam and column checks, inputs and outputs are
-dimension-checked :class:`~anvilate.units.Quantity` values and the arithmetic
-runs through Pint.
+``s``. A thin *open* section (a flat strip, or a slit tube / channel / angle) has
+no closed shear path, so it carries torque only through its thin thickness:
+``J = b·t³/3`` and ``τ = 3·T/(b·t²)`` over the developed wall width ``b`` — orders
+of magnitude weaker and floppier than a closed tube of the same material, which is
+why torque tubes are closed. As with the beam and column checks, inputs and
+outputs are dimension-checked :class:`~anvilate.units.Quantity` values and the
+arithmetic runs through Pint.
 """
 
 from __future__ import annotations
@@ -32,6 +36,9 @@ __all__ = [
     "rectangular_tube_enclosed_area",
     "rectangular_tube_torsional_stress",
     "rectangular_tube_twist_angle",
+    "thin_open_strip_torsion_constant",
+    "thin_open_strip_torsional_stress",
+    "thin_open_strip_twist_angle",
 ]
 
 
@@ -257,4 +264,81 @@ def rectangular_tube_twist_angle(
         * perimeter
         / (4 * area**2 * shear_modulus.pint * wall_thickness.pint)
     )
+    return _as_quantity(angle, "degree")
+
+
+def _thin_open_strip_dims(width: Quantity, thickness: Quantity):
+    """Validate a thin open strip and return its ``(width, thickness)`` in mm.
+
+    ``width`` b is the developed wall width (the long dimension), ``thickness`` t
+    the wall (the short one); the thin-open form wants b ≫ t (b/t ≳ 10) and
+    requires b ≥ t and both positive."""
+    _require(width, "[length]", "width")
+    _require(thickness, "[length]", "thickness")
+    b = width.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    if b <= 0 or t <= 0:
+        raise ValueError("width and thickness must be positive")
+    if b < t:
+        raise ValueError(
+            f"width ({width}) is the long dimension and must be at least the "
+            f"thickness ({thickness})"
+        )
+    return b, t
+
+
+def thin_open_strip_torsion_constant(*, width: Quantity, thickness: Quantity) -> Quantity:
+    """The Saint-Venant torsion constant J = b·t³/3 of a thin open section — a flat
+    strip, or a slit tube / channel / angle unrolled to a developed wall width ``b``.
+
+    An open thin wall has no closed shear loop, so its torsion constant is only
+    ~(t/b)² of the enclosed-tube value; a composite open section sums the b·t³/3 of
+    each leg. ``width`` b is the developed wall width and ``thickness`` t the wall.
+    Returns the torsion constant in mm⁴ (the value a ``T·L/(G·J)`` twist consumes);
+    the thin form wants b/t ≳ 10.
+    """
+    b, t = _thin_open_strip_dims(width, thickness)
+    return Quantity(magnitude=b * t**3 / 3, unit="mm**4")
+
+
+def thin_open_strip_torsional_stress(
+    *, torque: Quantity, width: Quantity, thickness: Quantity
+) -> Quantity:
+    """The peak shear stress τ = 3·T/(b·t²) = T·t/J on the long face of a thin open
+    section (flat strip / slit tube / channel leg) carrying ``torque``.
+
+    With no closed shear path the torque is resisted only across the thin wall, so
+    the stress runs far higher than a closed tube of the same size would.
+    ``width`` b is the developed wall width and ``thickness`` t the wall. Returns
+    the shear stress as a pressure; every quantity is dimension-checked.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    b, t = _thin_open_strip_dims(width, thickness)
+    j = Quantity(magnitude=b * t**3 / 3, unit="mm**4").pint
+    stress = torque.pint * thickness.pint / j
+    return _as_quantity(stress, "MPa")
+
+
+def thin_open_strip_twist_angle(
+    *,
+    torque: Quantity,
+    length: Quantity,
+    width: Quantity,
+    thickness: Quantity,
+    shear_modulus: Quantity,
+) -> Quantity:
+    """The angle of twist θ = T·L/(G·J) = 3·T·L/(G·b·t³) of a thin open section.
+
+    Uses the open-section torsion constant J = b·t³/3, so the same member twists
+    orders of magnitude more than it would as a closed tube. ``length`` is the
+    member length, ``shear_modulus`` the material G, ``width`` b the developed wall
+    width, and ``thickness`` t the wall. Returns the twist in degrees; every
+    quantity argument is dimension-checked.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(length, "[length]", "length")
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    b, t = _thin_open_strip_dims(width, thickness)
+    j = Quantity(magnitude=b * t**3 / 3, unit="mm**4").pint
+    angle = torque.pint * length.pint / (shear_modulus.pint * j)
     return _as_quantity(angle, "degree")
