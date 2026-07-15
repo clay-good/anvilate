@@ -5,9 +5,10 @@ extreme-fibre distance. :class:`CrossSection` bundles them (plus the derived
 section modulus and radius of gyration) and builds them for the common shapes —
 rectangular, solid round, hollow round, hollow rectangular, and the doubly
 symmetric I — so a caller constructs the section once and hands its properties
-to any check. :func:`required_section_modulus` runs the sizing the other way:
-the minimum section modulus a bending moment needs to stay within an allowable
-stress.
+to any check. :func:`bending_stress` computes the stress a moment makes on a
+section (σ = M/Z), and :func:`required_section_modulus` runs the sizing the other
+way: the minimum section modulus a bending moment needs to stay within an
+allowable stress.
 """
 
 from __future__ import annotations
@@ -18,7 +19,32 @@ from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
 
-__all__ = ["CrossSection", "required_section_modulus"]
+__all__ = ["CrossSection", "bending_stress", "required_section_modulus"]
+
+
+def bending_stress(*, moment: Quantity, section_modulus: Quantity) -> Quantity:
+    """The bending stress σ = M/Z on a section of modulus Z under a ``moment``.
+
+    The direct forward check for any known moment and section — pass
+    :attr:`CrossSection.section_modulus` (or a hand value) as ``section_modulus``.
+    ``moment`` M must be a moment (force·length) and ``section_modulus`` Z a
+    volume (length³); ``Z`` must be positive. Returns the extreme-fibre bending
+    stress in MPa.
+    """
+    if not moment.has_dimension("[force] * [length]"):
+        raise ValueError(
+            f"moment must be a [force]*[length] quantity; got {moment.dimensionality} ({moment})"
+        )
+    if not section_modulus.has_dimension("[length]**3"):
+        raise ValueError(
+            f"section_modulus must be a [length]**3 quantity; got "
+            f"{section_modulus.dimensionality} ({section_modulus})"
+        )
+    if section_modulus.to("mm**3").magnitude <= 0:
+        raise ValueError(f"section_modulus must be positive; got {section_modulus}")
+    stress = moment.pint / section_modulus.pint
+    converted = stress.to("MPa")
+    return Quantity(magnitude=float(converted.magnitude), unit="MPa")
 
 
 def _mm(magnitude: float) -> Quantity:

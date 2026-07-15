@@ -13,8 +13,8 @@ modules:
   rectangle via the exact Navier series; circular, simply-supported and clamped),
   and the clamped-cover thickness a pressure requires
 - :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
-  moment, extreme fibre, section modulus, and radius of gyration; the minimum
-  section modulus a bending moment requires
+  moment, extreme fibre, section modulus, and radius of gyration; the bending
+  stress a moment makes and the minimum section modulus it requires
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   and the minimum section second moment a load requires
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
@@ -189,7 +189,7 @@ from .pressure_vessel import (
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
 )
-from .section import CrossSection, required_section_modulus
+from .section import CrossSection, bending_stress, required_section_modulus
 from .spring import (
     SPRING_END_CLAMPED_FREE,
     SPRING_END_FIXED_HINGED,
@@ -289,6 +289,7 @@ __all__ = [
     "circular_second_moment",
     "hollow_circular_second_moment",
     "CrossSection",
+    "bending_stress",
     "required_section_modulus",
     "max_transverse_shear_stress",
     "deflection_scorecard",

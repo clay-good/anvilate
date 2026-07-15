@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from anvilate.analysis import CrossSection, cantilever_end_load, required_section_modulus
+from anvilate.analysis import (
+    CrossSection,
+    bending_stress,
+    cantilever_end_load,
+    required_section_modulus,
+)
 from anvilate.units import Quantity
 
 
@@ -186,6 +191,34 @@ def test_cross_section_feeds_a_beam_check():
         elastic_modulus=_q("200 GPa"),
     )
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
+
+
+def test_bending_stress_from_moment_and_section():
+    # A 5 kN*m moment on a Z = 30303 mm^3 section: sigma = M/Z = 165 MPa.
+    sigma = bending_stress(moment=_q("5 kN*m"), section_modulus=_q("30303 mm**3"))
+    assert sigma.to("MPa").magnitude == pytest.approx(165.0, rel=1e-4)
+    # It is the exact inverse of required_section_modulus at SF 1.0.
+    z = required_section_modulus(bending_moment=_q("5 kN*m"), allowable_stress=_q("165 MPa"))
+    assert bending_stress(moment=_q("5 kN*m"), section_modulus=z).to("MPa").magnitude == (
+        pytest.approx(165.0, rel=1e-6)
+    )
+
+
+def test_bending_stress_uses_a_cross_section_modulus():
+    # Feeding a real CrossSection's modulus matches M / Z directly.
+    s = CrossSection.rectangular(width=_q("20 mm"), height=_q("40 mm"))  # Z = 20*40^2/6
+    sigma = bending_stress(moment=_q("500 N*m"), section_modulus=s.section_modulus)
+    z = s.section_modulus.to("mm**3").magnitude
+    assert sigma.to("MPa").magnitude == pytest.approx(500_000 / z, rel=1e-9)
+
+
+def test_bending_stress_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="moment must be a"):
+        bending_stress(moment=_q("5 kN"), section_modulus=_q("30303 mm**3"))
+    with pytest.raises(ValueError, match="section_modulus must be a"):
+        bending_stress(moment=_q("5 kN*m"), section_modulus=_q("30 mm"))
+    with pytest.raises(ValueError, match="section_modulus must be positive"):
+        bending_stress(moment=_q("5 kN*m"), section_modulus=_q("0 mm**3"))
 
 
 def test_required_section_modulus_inverts_the_bending_check():
