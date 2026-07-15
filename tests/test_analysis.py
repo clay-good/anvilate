@@ -44,6 +44,7 @@ from anvilate.analysis import (
     deflection_scorecard,
     euler_buckling_load,
     euler_critical_stress,
+    euler_second_moment_for_load,
     fixed_fixed_center_load,
     fixed_fixed_center_patch_load,
     fixed_fixed_fundamental_frequency,
@@ -2170,6 +2171,55 @@ def test_column_end_factors():
     assert ColumnEnd.PINNED_PINNED.factor() == 1.0
     assert ColumnEnd.FIXED_FIXED.factor() == 0.5
     assert ColumnEnd.FIXED_FREE.factor() == 2.0
+
+
+def test_euler_second_moment_for_load_inverts_the_buckling_load():
+    # Size a 3 m pinned steel strut for 50 kN at a 2.0 buckling margin:
+    #   I_min = n*P*(K*L)^2/(pi^2*E) = 2*50000*9/(pi^2*200e9) = 4.559e-7 m^4.
+    i_min = euler_second_moment_for_load(
+        design_load=_q("50 kN"),
+        length=_q("3 m"),
+        elastic_modulus=_q("200 GPa"),
+        required_safety_factor=2.0,
+    )
+    assert i_min.to("mm**4").magnitude == pytest.approx(455_940.0, rel=1e-4)
+    # A section with exactly this I buckles at n * the design load.
+    p_cr = euler_buckling_load(elastic_modulus=_q("200 GPa"), second_moment=i_min, length=_q("3 m"))
+    assert p_cr.to("N").magnitude == pytest.approx(2.0 * 50000, rel=1e-9)
+
+
+def test_euler_second_moment_scales_with_margin_and_end_condition():
+    kw = {
+        "design_load": _q("50 kN"),
+        "length": _q("3 m"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    n2 = euler_second_moment_for_load(required_safety_factor=2.0, **kw)
+    n3 = euler_second_moment_for_load(required_safety_factor=3.0, **kw)
+    # I scales linearly with the required margin...
+    assert n3.to("mm**4").magnitude == pytest.approx(1.5 * n2.to("mm**4").magnitude, rel=1e-9)
+    # ...and with (K)^2: a fixed-free strut (K=2) needs 4x the I of pinned-pinned.
+    fixed_free = euler_second_moment_for_load(
+        required_safety_factor=2.0, effective_length_factor=2.0, **kw
+    )
+    assert fixed_free.to("mm**4").magnitude == pytest.approx(4 * n2.to("mm**4").magnitude, rel=1e-9)
+
+
+def test_euler_second_moment_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="required_safety_factor must be positive"):
+        euler_second_moment_for_load(
+            design_load=_q("50 kN"),
+            length=_q("3 m"),
+            elastic_modulus=_q("200 GPa"),
+            required_safety_factor=0.0,
+        )
+    with pytest.raises(ValueError, match="design_load must be a"):
+        euler_second_moment_for_load(
+            design_load=_q("50 mm"),
+            length=_q("3 m"),
+            elastic_modulus=_q("200 GPa"),
+            required_safety_factor=2.0,
+        )
 
 
 def test_euler_buckling_rejects_bad_inputs():

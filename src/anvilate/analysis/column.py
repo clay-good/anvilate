@@ -24,6 +24,7 @@ from ..units import Quantity
 __all__ = [
     "ColumnEnd",
     "euler_buckling_load",
+    "euler_second_moment_for_load",
     "radius_of_gyration",
     "slenderness_ratio",
     "euler_critical_stress",
@@ -87,6 +88,46 @@ def euler_buckling_load(
     p_cr = pi**2 * e * inertia / effective_length**2
     converted = p_cr.to("N")
     return Quantity(magnitude=float(converted.magnitude), unit="N")
+
+
+def euler_second_moment_for_load(
+    *,
+    design_load: Quantity,
+    length: Quantity,
+    elastic_modulus: Quantity,
+    required_safety_factor: float,
+    effective_length_factor: float = 1.0,
+) -> Quantity:
+    """The least section second moment I to carry ``design_load`` with a required
+    margin against Euler buckling.
+
+    The inverse of :func:`euler_buckling_load`: demanding P_cr ≥ n·P gives
+    I_min = n·P·(K·L)²/(π²·E). Sizing a strut runs this way — the load, length,
+    and required safety factor are known, and a section with at least this weak-axis
+    I must be chosen. ``design_load`` P is the service compression,
+    ``required_safety_factor`` n the margin on the buckling load,
+    ``effective_length_factor`` K the end condition. Returns the minimum I in mm⁴;
+    every quantity is dimension-checked and ``n``/``K`` must be positive.
+
+    A screening size only — an intermediate (stubby) column may be governed by
+    inelastic (Johnson) failure or yield instead, which this elastic form ignores.
+    """
+    _require(design_load, "[force]", "design_load")
+    _require(length, "[length]", "length")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    if effective_length_factor <= 0:
+        raise ValueError(f"effective_length_factor must be positive; got {effective_length_factor}")
+    effective_length = effective_length_factor * length.pint
+    inertia = (
+        required_safety_factor
+        * design_load.pint
+        * effective_length**2
+        / (pi**2 * elastic_modulus.pint)
+    )
+    converted = inertia.to("mm**4")
+    return Quantity(magnitude=float(converted.magnitude), unit="mm**4")
 
 
 def radius_of_gyration(*, second_moment: Quantity, area: Quantity) -> Quantity:

@@ -12,7 +12,8 @@ modules:
   rectangle via the exact Navier series; circular, simply-supported and clamped)
 - :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
   moment, extreme fibre, section modulus, and radius of gyration
-- :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness
+- :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
+  and the minimum section second moment a load requires
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
   and torsional stiffness; thin-walled rectangular (box) tube torsion (Bredt)
   and thin open-section (strip) torsion
@@ -89,6 +90,7 @@ from .column import (
     ColumnEnd,
     euler_buckling_load,
     euler_critical_stress,
+    euler_second_moment_for_load,
     johnson_critical_stress,
     radius_of_gyration,
     secant_column_max_stress,
@@ -269,6 +271,7 @@ __all__ = [
     "SHEAR_FORM_CIRCULAR",
     "ColumnEnd",
     "euler_buckling_load",
+    "euler_second_moment_for_load",
     "radius_of_gyration",
     "slenderness_ratio",
     "euler_critical_stress",
