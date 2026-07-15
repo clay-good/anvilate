@@ -21,6 +21,8 @@ modules:
   hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
   torque requires; thin-walled rectangular (box) tube torsion (Bredt) and thin
   open-section (strip) torsion
+- :mod:`~anvilate.analysis.power_screw` — square-thread lead-screw raise/lower
+  torque, efficiency, and the self-locking condition
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder and sphere, and the wall thickness a pressure
   requires
@@ -197,6 +199,13 @@ from .plate import (
     simply_supported_circular_plate_uniform_load,
     simply_supported_plate_center_patch_load,
     simply_supported_plate_uniform_load,
+)
+from .power_screw import (
+    lead_angle,
+    power_screw_efficiency,
+    power_screw_is_self_locking,
+    power_screw_lower_torque,
+    power_screw_raise_torque,
 )
 from .pressure_vessel import (
     ThickWallSphereStress,
@@ -406,6 +415,11 @@ __all__ = [
     "simply_supported_annular_plate_uniform_load",
     "clamped_annular_plate_uniform_load",
     "clamped_circular_plate_thickness_for_pressure",
+    "lead_angle",
+    "power_screw_raise_torque",
+    "power_screw_lower_torque",
+    "power_screw_efficiency",
+    "power_screw_is_self_locking",
     "ThinWallStress",
     "ThickWallStress",
     "ThickWallSphereStress",

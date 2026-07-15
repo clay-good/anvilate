@@ -98,6 +98,7 @@ from anvilate.analysis import (
     key_length_for_torque,
     key_shear_stress,
     key_tangential_force,
+    lead_angle,
     max_shear_stress_plane,
     max_transverse_shear_stress,
     miner_cumulative_damage,
@@ -108,6 +109,10 @@ from anvilate.analysis import (
     overhang_uniform_load,
     polar_second_moment_hollow,
     polar_second_moment_solid,
+    power_screw_efficiency,
+    power_screw_is_self_locking,
+    power_screw_lower_torque,
+    power_screw_raise_torque,
     principal_stresses_plane,
     radius_of_gyration,
     rectangular_second_moment,
@@ -2766,6 +2771,44 @@ def test_bolt_tensile_area_rejects_bad_inputs():
         bolt_tensile_stress_area(nominal_diameter=_q("1 mm"), pitch=_q("2 mm"))
     with pytest.raises(ValueError, match="tension must be a"):
         bolt_axial_stress(tension=_q("20 mm"), nominal_diameter=_q("10 mm"), pitch=_q("1.5 mm"))
+
+
+def test_power_screw_torques_match_the_worked_example():
+    # Square-thread jack screw: d_m=25 mm, lead=5 mm, F=6.4 kN, mu=0.08.
+    kw = {"mean_diameter": _q("25 mm"), "lead": _q("5 mm")}
+    assert lead_angle(**kw).to("degree").magnitude == pytest.approx(3.6426, rel=1e-4)
+    raise_t = power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=0.08, **kw)
+    assert raise_t.to("N*m").magnitude == pytest.approx(11.5518, rel=1e-4)
+    lower_t = power_screw_lower_torque(load=_q("6.4 kN"), friction_coefficient=0.08, **kw)
+    assert lower_t.to("N*m").magnitude == pytest.approx(1.3004, rel=1e-4)
+    # Efficiency matches the closed form AND the raise-torque energy balance.
+    eff = power_screw_efficiency(friction_coefficient=0.08, **kw)
+    assert eff == pytest.approx(0.44088, rel=1e-4)
+    energy_eff = 6400 * 0.005 / (2 * pi * raise_t.to("N*m").magnitude)
+    assert eff == pytest.approx(energy_eff, rel=1e-6)
+
+
+def test_power_screw_self_locking_boundary():
+    kw = {"mean_diameter": _q("25 mm"), "lead": _q("5 mm"), "load": _q("6.4 kN")}
+    geom = {"mean_diameter": _q("25 mm"), "lead": _q("5 mm")}
+    # mu=0.08 > tan(lambda)=0.0637: self-locking, lowering torque is positive.
+    assert power_screw_is_self_locking(friction_coefficient=0.08, **geom)
+    assert power_screw_lower_torque(friction_coefficient=0.08, **kw).to("N*m").magnitude > 0
+    # A slick thread (mu=0.03 < tan lambda) backdrives: lowering torque goes negative.
+    assert not power_screw_is_self_locking(friction_coefficient=0.03, **geom)
+    assert power_screw_lower_torque(friction_coefficient=0.03, **kw).to("N*m").magnitude < 0
+    # Self-locking screws pay for it with efficiency below 50%.
+    assert power_screw_efficiency(friction_coefficient=0.08, **geom) < 0.5
+
+
+def test_power_screw_rejects_bad_inputs():
+    kw = {"mean_diameter": _q("25 mm"), "lead": _q("5 mm")}
+    with pytest.raises(ValueError, match="lead must be positive"):
+        lead_angle(mean_diameter=_q("25 mm"), lead=_q("0 mm"))
+    with pytest.raises(ValueError, match="friction_coefficient must be non-negative"):
+        power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=-0.1, **kw)
+    with pytest.raises(ValueError, match="load must be a"):
+        power_screw_raise_torque(load=_q("6.4 mm"), friction_coefficient=0.08, **kw)
 
 
 def test_bearing_basic_rating_life_follows_the_load_life_law():
