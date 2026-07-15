@@ -65,8 +65,9 @@ modules:
 - :mod:`~anvilate.analysis.rivet` — riveted-joint tearing/shearing/crushing
   strength, governing mode, and efficiency
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, stored
-  energy, series/parallel combination, lateral (column) buckling, and leaf-spring
-  stress and rate
+  energy, series/parallel combination, lateral (column) buckling, leaf-spring
+  stress and rate, and the Belleville (disc) washer's Almen-Laszlo
+  load-deflection curve and flat load
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
   stress, shrink-fit assembly temperature, and CTE-mismatch (differential)
   joint stress
@@ -325,11 +326,14 @@ from .rivet import (
 )
 from .section import CrossSection, bending_stress, required_section_modulus
 from .spring import (
+    BELLEVILLE_PLATEAU_RATIO,
     SPRING_END_CLAMPED_FREE,
     SPRING_END_FIXED_HINGED,
     SPRING_END_HINGED_HINGED,
     SPRING_END_PARALLEL_PLATES,
     SpringBucklingResult,
+    belleville_flat_load,
+    belleville_washer_force,
     helical_spring_buckling,
     helical_spring_rate,
     leaf_spring_rate,
@@ -617,6 +621,9 @@ __all__ = [
     "spring_stored_energy",
     "springs_in_series",
     "springs_in_parallel",
+    "BELLEVILLE_PLATEAU_RATIO",
+    "belleville_washer_force",
+    "belleville_flat_load",
     "leaf_spring_stress",
     "leaf_spring_rate",
     "spring_surge_frequency",

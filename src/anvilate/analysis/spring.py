@@ -18,7 +18,7 @@ other checks, inputs and outputs are dimension-checked
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import pi, sqrt
+from math import log, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -48,6 +48,9 @@ __all__ = [
     "springs_in_parallel",
     "leaf_spring_stress",
     "leaf_spring_rate",
+    "BELLEVILLE_PLATEAU_RATIO",
+    "belleville_washer_force",
+    "belleville_flat_load",
 ]
 
 
@@ -353,3 +356,111 @@ def leaf_spring_rate(
     ell, nb, t = _leaf_geometry(length, num_leaves, leaf_width, leaf_thickness)
     e = elastic_modulus.to("MPa").magnitude
     return Quantity(magnitude=e * nb * t**3 / (6.0 * ell**3), unit="N/mm")
+
+
+# A Belleville washer's load-deflection curve stops being monotonic once the
+# cone-height ratio h/t exceeds sqrt(2): dF/dy = 0 first acquires real roots
+# there, opening the near-constant-force plateau (and, higher still, the
+# snap-through regime) that disc springs are chosen for.
+BELLEVILLE_PLATEAU_RATIO = sqrt(2.0)
+
+
+def _belleville_geometry(
+    thickness: Quantity,
+    cone_height: Quantity,
+    outer_diameter: Quantity,
+    inner_diameter: Quantity,
+    poisson_ratio: float,
+) -> tuple[float, float, float, float]:
+    """Validate and return (t, h, De, K1) in mm for the Almen-Laszlo forms."""
+    _require(thickness, "[length]", "thickness")
+    _require(cone_height, "[length]", "cone_height")
+    _require(outer_diameter, "[length]", "outer_diameter")
+    _require(inner_diameter, "[length]", "inner_diameter")
+    t = thickness.to("mm").magnitude
+    h = cone_height.to("mm").magnitude
+    de = outer_diameter.to("mm").magnitude
+    di = inner_diameter.to("mm").magnitude
+    if t <= 0:
+        raise ValueError(f"thickness must be positive; got {thickness}")
+    if h <= 0:
+        raise ValueError(f"cone_height must be positive; got {cone_height}")
+    if di <= 0:
+        raise ValueError(f"inner_diameter must be positive; got {inner_diameter}")
+    if de <= di:
+        raise ValueError(
+            f"outer_diameter ({outer_diameter}) must exceed inner_diameter ({inner_diameter})"
+        )
+    if not 0 <= poisson_ratio < 0.5:
+        raise ValueError(f"poisson_ratio must lie in [0, 0.5); got {poisson_ratio}")
+    ratio = de / di
+    k1 = (6.0 / (pi * log(ratio))) * ((ratio - 1.0) / ratio) ** 2
+    return t, h, de, k1
+
+
+def belleville_washer_force(
+    *,
+    deflection: Quantity,
+    thickness: Quantity,
+    cone_height: Quantity,
+    outer_diameter: Quantity,
+    inner_diameter: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = 0.3,
+) -> Quantity:
+    """The load a Belleville (disc) washer carries at a given flattening,
+    F(y) = 4·E·y / ((1−ν²)·K₁·D_e²) · [(h − y)·(h − y/2) + t²]  (Almen-Laszlo).
+
+    A coned disc of ``thickness`` t and free ``cone_height`` h (the axial cone
+    rise, free height minus t), ``outer_diameter``/``inner_diameter`` D_e/D_i,
+    pressed flat by ``deflection`` y ∈ [0, h]; K₁ is the Almen-Laszlo geometry
+    constant 6/(π·ln(D_e/D_i))·((D_e/D_i − 1)/(D_e/D_i))². The curve is what
+    makes disc springs interesting: stiff for h/t well under
+    :data:`BELLEVILLE_PLATEAU_RATIO` (≈ a linear washer-spring), nearly
+    constant-force around h/t = √2, and regressive (snap-through) beyond — the
+    same washer geometry tunes a bolt stack, a constant-pressure clamp, or a
+    bistable detent. Returns the force in newtons.
+    """
+    t, h, de, k1 = _belleville_geometry(
+        thickness, cone_height, outer_diameter, inner_diameter, poisson_ratio
+    )
+    _require(deflection, "[length]", "deflection")
+    y = deflection.to("mm").magnitude
+    if not 0 <= y <= h:
+        raise ValueError(
+            f"deflection must lie in [0, cone_height] = [0, {cone_height}]; got {deflection}"
+        )
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    e = elastic_modulus.to("MPa").magnitude
+    if e <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    force = 4.0 * e * y / ((1.0 - poisson_ratio**2) * k1 * de**2) * ((h - y) * (h - y / 2.0) + t**2)
+    return Quantity(magnitude=force, unit="N")
+
+
+def belleville_flat_load(
+    *,
+    thickness: Quantity,
+    cone_height: Quantity,
+    outer_diameter: Quantity,
+    inner_diameter: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = 0.3,
+) -> Quantity:
+    """The load that presses a Belleville washer flat,
+    F_flat = 4·E·h·t² / ((1−ν²)·K₁·D_e²).
+
+    :func:`belleville_washer_force` evaluated at full deflection y = h — the
+    quadratic cone terms vanish and only the t² plate-bending term is left. The
+    usual catalogue anchor point (and the preload a bolt stack reaches when the
+    washers go flat). Arguments as there. Returns the force in newtons.
+    """
+    t, h, de, k1 = _belleville_geometry(
+        thickness, cone_height, outer_diameter, inner_diameter, poisson_ratio
+    )
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    e = elastic_modulus.to("MPa").magnitude
+    if e <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    force = 4.0 * e * h * t**2 / ((1.0 - poisson_ratio**2) * k1 * de**2)
+    return Quantity(magnitude=force, unit="N")

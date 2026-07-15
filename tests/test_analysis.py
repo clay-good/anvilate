@@ -27,6 +27,8 @@ from anvilate.analysis import (
     bearing_life_hours,
     bearing_static_safety_factor,
     bearing_stress,
+    belleville_flat_load,
+    belleville_washer_force,
     belt_centrifugal_tension,
     belt_length,
     belt_max_transmissible_force,
@@ -6518,4 +6520,74 @@ def test_differential_band_brake_lever_force_and_self_locking():
             tight_arm=_q("50 mm"),
             friction_coefficient=0.25,
             wrap_angle=wrap,
+        )
+
+
+def test_belleville_washer_almen_laszlo_curve():
+    from math import log, pi
+
+    # De=40/Di=20 (C=2 -> K1=0.6889), t=2, cone height h=1, steel: at y=0.5 mm
+    # F = 4*E*y/((1-nu^2)*K1*De^2) * [(h-y)(h-y/2)+t^2] = 1797 N.
+    kwargs = {
+        "thickness": _q("2 mm"),
+        "cone_height": _q("1 mm"),
+        "outer_diameter": _q("40 mm"),
+        "inner_diameter": _q("20 mm"),
+        "elastic_modulus": _q("206 GPa"),
+    }
+    k1 = (6.0 / (pi * log(2.0))) * (0.5) ** 2
+    force = belleville_washer_force(deflection=_q("0.5 mm"), **kwargs)
+    expected = 4.0 * 206000.0 * 0.5 / (0.91 * k1 * 1600.0) * ((0.5) * (0.75) + 4.0)
+    assert force.to("N").magnitude == pytest.approx(expected, rel=1e-12)
+    assert force.to("N").magnitude == pytest.approx(1797.1, rel=1e-4)
+    # The flat load is the y=h endpoint of the same curve (only t^2 survives).
+    flat = belleville_flat_load(**kwargs)
+    at_h = belleville_washer_force(deflection=_q("1 mm"), **kwargs)
+    assert flat.to("N").magnitude == pytest.approx(at_h.to("N").magnitude, rel=1e-12)
+    assert flat.to("N").magnitude == pytest.approx(3286.2, rel=1e-4)
+    # A shallow disc (h/t = 0.1) is essentially a linear spring.
+    shallow = {**kwargs, "cone_height": _q("0.2 mm")}
+    f1 = belleville_washer_force(deflection=_q("0.1 mm"), **shallow)
+    f2 = belleville_washer_force(deflection=_q("0.2 mm"), **shallow)
+    assert f2.to("N").magnitude / f1.to("N").magnitude == pytest.approx(2.0, rel=5e-3)
+
+
+def test_belleville_washer_plateau_appears_at_root_two():
+    # Below h/t = sqrt(2) the load climbs all the way to flat; above it the
+    # curve has an interior maximum (the constant-force/snap-through regime).
+    def curve(t_mm: float, h_mm: float) -> list[float]:
+        return [
+            belleville_washer_force(
+                deflection=_q(f"{h_mm * i / 200} mm"),
+                thickness=_q(f"{t_mm} mm"),
+                cone_height=_q(f"{h_mm} mm"),
+                outer_diameter=_q("40 mm"),
+                inner_diameter=_q("20 mm"),
+                elastic_modulus=_q("206 GPa"),
+            )
+            .to("N")
+            .magnitude
+            for i in range(1, 201)
+        ]
+
+    monotone = curve(2.0, 2.0)  # h/t = 1 < sqrt(2)
+    assert all(b > a for a, b in zip(monotone, monotone[1:], strict=False))
+    regressive = curve(1.0, 2.0)  # h/t = 2 > sqrt(2)
+    assert max(regressive) > regressive[-1]  # interior peak above the flat load
+    with pytest.raises(ValueError, match=r"deflection must lie in"):
+        belleville_washer_force(
+            deflection=_q("3 mm"),
+            thickness=_q("2 mm"),
+            cone_height=_q("1 mm"),
+            outer_diameter=_q("40 mm"),
+            inner_diameter=_q("20 mm"),
+            elastic_modulus=_q("206 GPa"),
+        )
+    with pytest.raises(ValueError, match="must exceed inner_diameter"):
+        belleville_flat_load(
+            thickness=_q("2 mm"),
+            cone_height=_q("1 mm"),
+            outer_diameter=_q("20 mm"),
+            inner_diameter=_q("20 mm"),
+            elastic_modulus=_q("206 GPa"),
         )
