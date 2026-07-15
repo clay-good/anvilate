@@ -33,7 +33,8 @@ modules:
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
   stress, and shrink-fit assembly temperature
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
-  estimates, distributed-mass beam fundamentals, disc-on-shaft torsional mode
+  estimates, the Dunkerley multi-mass combination, distributed-mass beam
+  fundamentals, disc-on-shaft torsional mode
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending
 - :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
   the max/min → amplitude/mean cyclic-stress converter, and the steel
@@ -113,6 +114,7 @@ from .dynamics import (
     clamped_annular_plate_fundamental_frequency,
     clamped_circular_plate_fundamental_frequency,
     clamped_plate_fundamental_frequency,
+    dunkerley_fundamental_frequency,
     fixed_fixed_fundamental_frequency,
     fixed_pinned_fundamental_frequency,
     frequency_scorecard,
@@ -290,6 +292,7 @@ __all__ = [
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",
+    "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",
     "fixed_fixed_fundamental_frequency",

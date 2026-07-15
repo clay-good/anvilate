@@ -42,6 +42,7 @@ from anvilate.analysis import (
     constrained_thermal_stress,
     cyclic_stress_components,
     deflection_scorecard,
+    dunkerley_fundamental_frequency,
     estimated_endurance_limit,
     euler_buckling_load,
     euler_critical_stress,
@@ -3770,6 +3771,26 @@ def test_rayleigh_frequency_from_self_weight_deflection():
     # fn = (1/2pi)*sqrt(g/delta); delta = 12.5 mm -> 4.458 Hz.
     fn = natural_frequency_from_deflection(_q("12.5 mm"))
     assert fn.to("Hz").magnitude == pytest.approx(4.458, rel=1e-3)
+
+
+def test_dunkerley_combines_individual_frequencies():
+    # Two discs at 30 and 40 Hz alone: 1/f^2 = 1/900 + 1/1600 -> f = 24 Hz.
+    f = dunkerley_fundamental_frequency([_q("30 Hz"), _q("40 Hz")])
+    assert f.to("Hz").magnitude == pytest.approx(24.0, rel=1e-6)
+    # The combined estimate always falls below the lowest contributor.
+    assert f.to("Hz").magnitude < 30.0
+    # A single mass returns its own frequency unchanged.
+    solo = dunkerley_fundamental_frequency([_q("30 Hz")])
+    assert solo.to("Hz").magnitude == pytest.approx(30.0, rel=1e-9)
+
+
+def test_dunkerley_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="non-empty"):
+        dunkerley_fundamental_frequency([])
+    with pytest.raises(ValueError, match=r"individual_frequencies\[1\] must be a"):
+        dunkerley_fundamental_frequency([_q("30 Hz"), _q("40 N")])
+    with pytest.raises(ValueError, match="each individual frequency must be positive"):
+        dunkerley_fundamental_frequency([_q("0 Hz")])
 
 
 def test_frequency_scorecard_resonance_screen():

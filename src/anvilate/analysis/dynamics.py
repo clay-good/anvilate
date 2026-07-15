@@ -34,6 +34,7 @@ __all__ = [
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",
+    "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",
     "fixed_fixed_fundamental_frequency",
@@ -104,6 +105,31 @@ def natural_frequency_from_deflection(
     if delta <= 0:
         raise ValueError(f"static_deflection must be positive; got {static_deflection}")
     return Quantity(magnitude=sqrt(g / delta) / (2 * pi), unit="Hz")
+
+
+def dunkerley_fundamental_frequency(individual_frequencies: list[Quantity]) -> Quantity:
+    """The Dunkerley fundamental-frequency estimate for a multi-mass system,
+    1/f² = Σ 1/fᵢ².
+
+    A shaft or beam carrying several masses vibrates slower than any single mass
+    would alone. Dunkerley's method combines each mass's stand-alone frequency fᵢ
+    (the frequency the system would have with only that mass present, from
+    :func:`natural_frequency` or :func:`natural_frequency_from_deflection`) into a
+    lower-bound estimate of the true fundamental — the standard hand estimate for a
+    shaft's first critical (whirl) speed with multiple discs. ``individual_
+    frequencies`` is the non-empty list of the fᵢ, each a positive frequency.
+    Returns the combined frequency in hertz; it always falls below the lowest fᵢ.
+    """
+    if not individual_frequencies:
+        raise ValueError("individual_frequencies must be a non-empty list")
+    inverse_squares = 0.0
+    for i, freq in enumerate(individual_frequencies):
+        _require(freq, "[frequency]", f"individual_frequencies[{i}]")
+        f = freq.to("Hz").magnitude
+        if f <= 0:
+            raise ValueError(f"each individual frequency must be positive; got {freq}")
+        inverse_squares += 1.0 / f**2
+    return Quantity(magnitude=1.0 / sqrt(inverse_squares), unit="Hz")
 
 
 def _beam_fundamental(
