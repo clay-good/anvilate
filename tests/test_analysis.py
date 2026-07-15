@@ -3139,6 +3139,19 @@ def test_hertz_sphere_contact_matches_hand_calc():
     assert c.contact_radius.to("mm").magnitude == pytest.approx(0.150554, rel=1e-4)
     assert c.max_contact_pressure.to("MPa").magnitude == pytest.approx(2106.5, rel=1e-4)
     assert c.surface_safety_factor(_q("2000 MPa")) == pytest.approx(2000 / 2106.5, rel=1e-4)
+    # The subsurface shear (0.31*p_max = 653 MPa) is what actually governs yield.
+    assert c.max_subsurface_shear_stress.to("MPa").magnitude == pytest.approx(
+        0.31 * 2106.5, rel=1e-4
+    )
+    # Screened on the Tresca shear yield Sy/2, the margin is (Sy/2)/(0.31*p_max) =
+    # SF 1.53 -- always 0.5/0.31 = 1.61x the crude surface ratio, because a contact
+    # sustains p_max up to ~1.6*Sy before it yields below the surface.
+    assert c.subsurface_shear_safety_factor(_q("2000 MPa")) == pytest.approx(
+        1000 / (0.31 * 2106.5), rel=1e-4
+    )
+    assert c.subsurface_shear_safety_factor(_q("2000 MPa")) == pytest.approx(
+        (0.5 / 0.31) * c.surface_safety_factor(_q("2000 MPa")), rel=1e-6
+    )
 
 
 def test_hertz_sphere_on_flat_softens_the_contact():
@@ -3186,6 +3199,14 @@ def test_hertz_cylinder_contact_matches_hand_calc():
     assert c.half_width.to("mm").magnitude == pytest.approx(0.0340389, rel=1e-4)
     assert c.max_contact_pressure.to("MPa").magnitude == pytest.approx(374.05, rel=1e-4)
     assert c.surface_safety_factor(_q("400 MPa")) == pytest.approx(400 / 374.05, rel=1e-4)
+    # Line contact peaks lower below the surface (0.30*p_max) and yields near
+    # p_max = 1.67*Sy: the subsurface SF is 0.5/0.30 = 1.67x the surface ratio.
+    assert c.max_subsurface_shear_stress.to("MPa").magnitude == pytest.approx(
+        0.30 * 374.05, rel=1e-4
+    )
+    assert c.subsurface_shear_safety_factor(_q("400 MPa")) == pytest.approx(
+        200 / (0.30 * 374.05), rel=1e-4
+    )
 
 
 def test_hertz_cylinder_on_flat_softens_the_contact():

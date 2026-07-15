@@ -15,8 +15,11 @@ of half-width ``b`` carrying total load ``F`` over contact length ``L``:
 
 where 1/E* = (1−ν₁²)/E₁ + (1−ν₂²)/E₂ is the effective modulus, 1/R = 1/R₁ + 1/R₂ the
 effective radius, and dᵢ the body diameters (a flat body has infinite radius, so it
-drops out). These are the Shigley / Roark forms. As with the other checks, inputs
-and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+drops out). These are the Shigley / Roark forms. Contact does not first yield at the
+surface but at a small depth, where the shear stress peaks (≈ 0.31·p_max for point,
+0.30·p_max for line) — the result models expose that subsurface shear and a Tresca
+yield screen on it. As with the other checks, inputs and outputs are
+dimension-checked :class:`~anvilate.units.Quantity` values.
 """
 
 from __future__ import annotations
@@ -42,6 +45,13 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         )
 
 
+# Peak subsurface shear stress as a fraction of the peak contact pressure, at the
+# depth where it acts (Shigley, ν ≈ 0.3): the value that actually initiates
+# contact yielding and rolling-contact-fatigue spalling, below the surface.
+_POINT_SUBSURFACE_SHEAR_COEFF = 0.31  # spherical/point contact (at z ≈ 0.48·a)
+_LINE_SUBSURFACE_SHEAR_COEFF = 0.30  # cylindrical/line contact (at z ≈ 0.786·b)
+
+
 class HertzContact(BaseModel):
     """A Hertzian point contact: the patch radius and the peak contact pressure.
 
@@ -65,6 +75,31 @@ class HertzContact(BaseModel):
         """
         _require(yield_strength, "[pressure]", "yield_strength")
         return yield_strength.to("MPa").magnitude / self.max_contact_pressure.to("MPa").magnitude
+
+    @property
+    def max_subsurface_shear_stress(self) -> Quantity:
+        """The peak shear stress ≈ 0.31·p_max below the surface (Shigley, ν ≈ 0.3).
+
+        Contact does not first yield at the surface but at a small depth
+        (≈ 0.48·a), where the shear stress peaks — the site where rolling-contact
+        fatigue cracks initiate. This is the value a proper contact-yield screen
+        uses; see :meth:`subsurface_shear_safety_factor`.
+        """
+        tau = _POINT_SUBSURFACE_SHEAR_COEFF * self.max_contact_pressure.to("MPa").magnitude
+        return Quantity(magnitude=tau, unit="MPa")
+
+    def subsurface_shear_safety_factor(self, yield_strength: Quantity) -> float:
+        """The factor of safety against contact yielding on the subsurface shear.
+
+        Compares the peak subsurface shear (:attr:`max_subsurface_shear_stress`)
+        against the Tresca shear yield S_y/2, so yielding begins near
+        p_max ≈ 1.6·S_y — the physically correct screen that
+        :meth:`surface_safety_factor` only approximates. ``yield_strength`` must be
+        a stress.
+        """
+        _require(yield_strength, "[pressure]", "yield_strength")
+        shear_yield = yield_strength.to("MPa").magnitude / 2
+        return shear_yield / self.max_subsurface_shear_stress.to("MPa").magnitude
 
 
 def hertz_sphere_contact(
@@ -141,6 +176,30 @@ class HertzLineContact(BaseModel):
         """
         _require(yield_strength, "[pressure]", "yield_strength")
         return yield_strength.to("MPa").magnitude / self.max_contact_pressure.to("MPa").magnitude
+
+    @property
+    def max_subsurface_shear_stress(self) -> Quantity:
+        """The peak shear stress ≈ 0.30·p_max below the surface (Shigley, ν ≈ 0.3).
+
+        As for point contact, line contact first yields at a small depth
+        (≈ 0.786·b), where the shear stress peaks and rolling-contact-fatigue
+        cracks start. See :meth:`subsurface_shear_safety_factor`.
+        """
+        tau = _LINE_SUBSURFACE_SHEAR_COEFF * self.max_contact_pressure.to("MPa").magnitude
+        return Quantity(magnitude=tau, unit="MPa")
+
+    def subsurface_shear_safety_factor(self, yield_strength: Quantity) -> float:
+        """The factor of safety against contact yielding on the subsurface shear.
+
+        Compares the peak subsurface shear (:attr:`max_subsurface_shear_stress`)
+        against the Tresca shear yield S_y/2, so yielding begins near
+        p_max ≈ 1.67·S_y — the physically correct screen that
+        :meth:`surface_safety_factor` only approximates. ``yield_strength`` must be
+        a stress.
+        """
+        _require(yield_strength, "[pressure]", "yield_strength")
+        shear_yield = yield_strength.to("MPa").magnitude / 2
+        return shear_yield / self.max_subsurface_shear_stress.to("MPa").magnitude
 
 
 def hertz_cylinder_contact(
