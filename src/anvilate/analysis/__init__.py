@@ -157,6 +157,8 @@ from .fatigue import (
     gerber_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
+    miner_cumulative_damage,
+    miner_spectrum_repeats_to_failure,
     soderberg_safety_factor,
     soderberg_scorecard,
 )
@@ -349,6 +351,8 @@ __all__ = [
     "soderberg_scorecard",
     "gerber_safety_factor",
     "gerber_scorecard",
+    "miner_cumulative_damage",
+    "miner_spectrum_repeats_to_failure",
     "CyclicStress",
     "cyclic_stress_components",
     "estimated_endurance_limit",

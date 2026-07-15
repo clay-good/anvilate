@@ -95,6 +95,8 @@ from anvilate.analysis import (
     key_tangential_force,
     max_shear_stress_plane,
     max_transverse_shear_stress,
+    miner_cumulative_damage,
+    miner_spectrum_repeats_to_failure,
     natural_frequency,
     natural_frequency_from_deflection,
     overhang_tip_load,
@@ -4110,6 +4112,41 @@ def test_gerber_scorecard_honours_no_silent_green():
     )
     assert gap.status is CheckStatus.NOT_EVALUATED
     assert not gap.passed
+
+
+def test_miner_cumulative_damage_sums_the_life_fractions():
+    # Two-level spectrum: 20,000 cycles where N=100,000 (D=0.2) plus 30,000 where
+    # N=200,000 (D=0.15) -> total damage 0.35 of the fatigue life.
+    d = miner_cumulative_damage(
+        applied_cycles=[20_000, 30_000],
+        cycles_to_failure=[100_000, 200_000],
+    )
+    assert d == pytest.approx(0.35, rel=1e-12)
+    # A part reaches D=1.0 exactly when a single level runs to its S-N life.
+    exhausted = miner_cumulative_damage(applied_cycles=[100_000], cycles_to_failure=[100_000])
+    assert exhausted == pytest.approx(1.0, rel=1e-12)
+
+
+def test_miner_spectrum_repeats_to_failure_is_one_over_damage():
+    kw = {"applied_cycles": [20_000, 30_000], "cycles_to_failure": [100_000, 200_000]}
+    repeats = miner_spectrum_repeats_to_failure(**kw)
+    # One pass does D=0.35, so the spectrum survives 1/0.35 = 2.857 repeats.
+    assert repeats == pytest.approx(1 / 0.35, rel=1e-12)
+    # A spectrum that applies no cycles never fails -> infinite repeats.
+    assert miner_spectrum_repeats_to_failure(
+        applied_cycles=[0.0, 0.0], cycles_to_failure=[100_000, 200_000]
+    ) == float("inf")
+
+
+def test_miner_rejects_bad_spectra():
+    with pytest.raises(ValueError, match="same length"):
+        miner_cumulative_damage(applied_cycles=[1.0, 2.0], cycles_to_failure=[100.0])
+    with pytest.raises(ValueError, match="at least one stress level"):
+        miner_cumulative_damage(applied_cycles=[], cycles_to_failure=[])
+    with pytest.raises(ValueError, match="applied_cycles must be non-negative"):
+        miner_cumulative_damage(applied_cycles=[-1.0], cycles_to_failure=[100.0])
+    with pytest.raises(ValueError, match="cycles_to_failure must be positive"):
+        miner_cumulative_damage(applied_cycles=[1.0], cycles_to_failure=[0.0])
 
 
 def test_combine_axial_bending_extreme_fibres():

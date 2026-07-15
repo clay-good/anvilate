@@ -21,6 +21,7 @@ As with the other checks, inputs are dimension-checked
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import inf, sqrt
 
 from pydantic import BaseModel, ConfigDict
@@ -39,6 +40,8 @@ __all__ = [
     "soderberg_scorecard",
     "gerber_safety_factor",
     "gerber_scorecard",
+    "miner_cumulative_damage",
+    "miner_spectrum_repeats_to_failure",
 ]
 
 # Shigley's steel rotating-beam endurance-limit estimate: S_e' = 0.5*S_u, capped
@@ -324,3 +327,63 @@ def gerber_scorecard(
             ultimate_strength=ultimate_strength,
         )
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+
+
+def _validate_spectrum(applied_cycles: Sequence[float], cycles_to_failure: Sequence[float]) -> None:
+    if len(applied_cycles) != len(cycles_to_failure):
+        raise ValueError(
+            f"applied_cycles and cycles_to_failure must be the same length; got "
+            f"{len(applied_cycles)} and {len(cycles_to_failure)}"
+        )
+    if not applied_cycles:
+        raise ValueError("the load spectrum must have at least one stress level")
+    for n in applied_cycles:
+        if n < 0:
+            raise ValueError(f"applied_cycles must be non-negative; got {n}")
+    for big_n in cycles_to_failure:
+        if big_n <= 0:
+            raise ValueError(f"cycles_to_failure must be positive; got {big_n}")
+
+
+def miner_cumulative_damage(
+    *,
+    applied_cycles: Sequence[float],
+    cycles_to_failure: Sequence[float],
+) -> float:
+    """The Palmgren-Miner cumulative fatigue damage D = Σ(nᵢ/Nᵢ) of a load
+    spectrum.
+
+    Under a spectrum of stress levels, each block of ``applied_cycles`` nᵢ at a
+    level consumes a fraction nᵢ/Nᵢ of the fatigue life, where ``cycles_to_failure``
+    Nᵢ is the S-N life at that level (read off the material's S-N curve for each
+    stress amplitude). The linear-damage rule sums those fractions: fatigue failure
+    is predicted when D reaches 1.0, so D is the fraction of life used and 1 − D the
+    fraction remaining. The two sequences pair level-for-level and must be the same
+    non-empty length; ``applied_cycles`` must be non-negative and
+    ``cycles_to_failure`` positive. Returns the dimensionless damage D.
+    """
+    _validate_spectrum(applied_cycles, cycles_to_failure)
+    return sum(n / big_n for n, big_n in zip(applied_cycles, cycles_to_failure, strict=True))
+
+
+def miner_spectrum_repeats_to_failure(
+    *,
+    applied_cycles: Sequence[float],
+    cycles_to_failure: Sequence[float],
+) -> float:
+    """The number of repeats of a load spectrum a part survives, 1/D by
+    Palmgren-Miner.
+
+    If one pass through the spectrum accumulates damage D =
+    :func:`miner_cumulative_damage`, the part fails after 1/D passes (the fatigue
+    safety factor on spectrum life — screen it against a required number of
+    service blocks). Returns ``inf`` when the spectrum does no damage (every level
+    has zero applied cycles). Same arguments and validation as
+    :func:`miner_cumulative_damage`.
+    """
+    damage = miner_cumulative_damage(
+        applied_cycles=applied_cycles, cycles_to_failure=cycles_to_failure
+    )
+    if damage == 0.0:
+        return inf
+    return 1.0 / damage
