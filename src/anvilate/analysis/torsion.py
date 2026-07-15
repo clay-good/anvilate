@@ -4,9 +4,15 @@ A shaft transmitting torque ``T`` carries a maximum torsional shear stress at it
 surface, ``τ_max = T·r/J`` with the polar second moment ``J = π·d⁴/32`` (solid) or
 ``π·(D⁴−d⁴)/32`` (hollow) and ``r`` the outer radius, and twists through an angle
 ``θ = T·L/(G·J)``. These are the Roark / Shigley closed forms for a prismatic,
-linear-elastic round shaft. As with the beam and column checks, inputs and
-outputs are dimension-checked :class:`~anvilate.units.Quantity` values and the
-arithmetic runs through Pint.
+linear-elastic round shaft.
+
+A thin-walled *closed* non-circular tube (a rectangular box frame member, say)
+does not follow ``T·r/J``; its shear flows uniformly around the wall by Bredt's
+formulas: ``τ = T/(2·A_m·t)`` with the median-line enclosed area ``A_m`` and wall
+thickness ``t``, twisting at ``θ = T·L·s/(4·A_m²·G·t)`` over the median perimeter
+``s``. As with the beam and column checks, inputs and outputs are
+dimension-checked :class:`~anvilate.units.Quantity` values and the arithmetic
+runs through Pint.
 """
 
 from __future__ import annotations
@@ -23,6 +29,9 @@ __all__ = [
     "shaft_twist_angle",
     "hollow_shaft_twist_angle",
     "shaft_torsional_stiffness",
+    "rectangular_tube_enclosed_area",
+    "rectangular_tube_torsional_stress",
+    "rectangular_tube_twist_angle",
 ]
 
 
@@ -162,4 +171,90 @@ def hollow_shaft_twist_angle(
         outer_diameter=outer_diameter, inner_diameter=inner_diameter
     ).pint
     angle = torque.pint * length.pint / (shear_modulus.pint * j)
+    return _as_quantity(angle, "degree")
+
+
+def _rectangular_tube_median(width: Quantity, height: Quantity, wall_thickness: Quantity):
+    """Validate a thin-walled rectangular tube and return its median-line
+    ``(width, height)`` in millimetres. ``width``/``height`` are the outer
+    dimensions; the wall must leave an actual cavity (``2·t`` below each side)."""
+    _require(width, "[length]", "width")
+    _require(height, "[length]", "height")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    w = width.to("mm").magnitude
+    h = height.to("mm").magnitude
+    t = wall_thickness.to("mm").magnitude
+    if t <= 0:
+        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+    if not (2 * t < w and 2 * t < h):
+        raise ValueError(
+            f"wall_thickness ({wall_thickness}) must be under half of both the width "
+            f"({width}) and the height ({height}) to leave a cavity"
+        )
+    # Median (wall-centreline) side lengths: one half-wall in from each outer face.
+    return w - t, h - t
+
+
+def rectangular_tube_enclosed_area(
+    *, width: Quantity, height: Quantity, wall_thickness: Quantity
+) -> Quantity:
+    """The median-line enclosed area A_m = (W−t)·(H−t) of a thin-walled
+    rectangular (box) tube — the area bounded by the wall centreline, as Bredt's
+    torsion formulas take it (not the outer or the clear-bore area).
+
+    ``width`` W and ``height`` H are the outer dimensions and ``wall_thickness`` t
+    the (uniform) wall. Returns an area in mm²; the wall must leave a cavity.
+    """
+    wm, hm = _rectangular_tube_median(width, height, wall_thickness)
+    return Quantity(magnitude=wm * hm, unit="mm**2")
+
+
+def rectangular_tube_torsional_stress(
+    *, torque: Quantity, width: Quantity, height: Quantity, wall_thickness: Quantity
+) -> Quantity:
+    """The Bredt shear stress τ = T/(2·A_m·t) in the wall of a thin-walled
+    rectangular (box) tube carrying ``torque``.
+
+    The shear flows uniformly around a closed thin wall, so the stress is set by
+    the median enclosed area A_m = (W−t)·(H−t) and the wall thickness t, not by
+    ``T·r/J``. ``width`` W and ``height`` H are the outer dimensions. Returns the
+    shear stress as a pressure; every quantity is dimension-checked.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    area = rectangular_tube_enclosed_area(
+        width=width, height=height, wall_thickness=wall_thickness
+    ).pint
+    stress = torque.pint / (2 * area * wall_thickness.pint)
+    return _as_quantity(stress, "MPa")
+
+
+def rectangular_tube_twist_angle(
+    *,
+    torque: Quantity,
+    length: Quantity,
+    width: Quantity,
+    height: Quantity,
+    wall_thickness: Quantity,
+    shear_modulus: Quantity,
+) -> Quantity:
+    """The Bredt angle of twist θ = T·L·s/(4·A_m²·G·t) of a thin-walled
+    rectangular (box) tube of uniform wall.
+
+    ``s`` is the median perimeter 2·[(W−t)+(H−t)] and A_m the median enclosed
+    area; ``length`` is the member length and ``shear_modulus`` the material G.
+    ``width`` W and ``height`` H are the outer dimensions. Returns the twist in
+    degrees; every quantity argument is dimension-checked.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(length, "[length]", "length")
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    wm, hm = _rectangular_tube_median(width, height, wall_thickness)
+    area = Quantity(magnitude=wm * hm, unit="mm**2").pint
+    perimeter = Quantity(magnitude=2 * (wm + hm), unit="mm").pint
+    angle = (
+        torque.pint
+        * length.pint
+        * perimeter
+        / (4 * area**2 * shear_modulus.pint * wall_thickness.pint)
+    )
     return _as_quantity(angle, "degree")

@@ -14,7 +14,7 @@ modules:
   moment, extreme fibre, section modulus, and radius of gyration
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
-  and torsional stiffness
+  and torsional stiffness; thin-walled rectangular (box) tube torsion (Bredt)
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
@@ -183,6 +183,9 @@ from .torsion import (
     hollow_shaft_twist_angle,
     polar_second_moment_hollow,
     polar_second_moment_solid,
+    rectangular_tube_enclosed_area,
+    rectangular_tube_torsional_stress,
+    rectangular_tube_twist_angle,
     shaft_torsional_stiffness,
     shaft_torsional_stress,
     shaft_twist_angle,
@@ -275,6 +278,9 @@ __all__ = [
     "shaft_twist_angle",
     "hollow_shaft_twist_angle",
     "shaft_torsional_stiffness",
+    "rectangular_tube_enclosed_area",
+    "rectangular_tube_torsional_stress",
+    "rectangular_tube_twist_angle",
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",
     "simply_supported_plate_center_patch_load",

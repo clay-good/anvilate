@@ -86,6 +86,9 @@ from anvilate.analysis import (
     principal_stresses_plane,
     radius_of_gyration,
     rectangular_second_moment,
+    rectangular_tube_enclosed_area,
+    rectangular_tube_torsional_stress,
+    rectangular_tube_twist_angle,
     secant_column_max_stress,
     shaft_torsional_stiffness,
     shaft_torsional_stress,
@@ -2544,6 +2547,55 @@ def test_hollow_shaft_rejects_inner_ge_outer():
 def test_shaft_torsion_rejects_wrong_dimensions():
     with pytest.raises(ValueError, match="torque must be a"):
         shaft_torsional_stress(torque=_q("50 N"), diameter=_q("20 mm"))  # force, not torque
+
+
+def test_rectangular_tube_enclosed_area_uses_the_median_line():
+    # 100 x 60 mm box, 5 mm wall: median sides 95 x 55 -> A_m = 5225 mm^2.
+    area = rectangular_tube_enclosed_area(
+        width=_q("100 mm"), height=_q("60 mm"), wall_thickness=_q("5 mm")
+    )
+    assert area.to("mm**2").magnitude == pytest.approx(5225.0)
+
+
+def test_rectangular_tube_torsional_stress_matches_bredt_worked_example():
+    # 1 kN*m through the 100x60x5 mm box: A_m = 5225 mm^2, tau = T/(2*A_m*t)
+    #   = 1e6 N*mm / (2*5225*5) = 19.139 MPa (uniform around the wall).
+    tau = rectangular_tube_torsional_stress(
+        torque=_q("1000 N*m"),
+        width=_q("100 mm"),
+        height=_q("60 mm"),
+        wall_thickness=_q("5 mm"),
+    )
+    assert tau.to("MPa").magnitude == pytest.approx(19.139, rel=1e-3)
+
+
+def test_rectangular_tube_twist_angle_matches_bredt_worked_example():
+    # Same box over 1 m at G=79.3 GPa: median perimeter s = 2*(95+55) = 300 mm,
+    #   theta = T*L*s/(4*A_m^2*G*t) = 6.927e-3 rad = 0.3969 deg.
+    theta = rectangular_tube_twist_angle(
+        torque=_q("1000 N*m"),
+        length=_q("1 m"),
+        width=_q("100 mm"),
+        height=_q("60 mm"),
+        wall_thickness=_q("5 mm"),
+        shear_modulus=_q("79.3 GPa"),
+    )
+    assert theta.to("degree").magnitude == pytest.approx(0.3969, rel=1e-3)
+
+
+def test_rectangular_tube_rejects_wall_without_a_cavity():
+    with pytest.raises(ValueError, match="must be under half of both"):
+        rectangular_tube_enclosed_area(
+            width=_q("100 mm"), height=_q("60 mm"), wall_thickness=_q("30 mm")
+        )
+    with pytest.raises(ValueError, match="wall_thickness must be positive"):
+        rectangular_tube_enclosed_area(
+            width=_q("100 mm"), height=_q("60 mm"), wall_thickness=_q("0 mm")
+        )
+    with pytest.raises(ValueError, match="torque must be a"):
+        rectangular_tube_torsional_stress(
+            torque=_q("50 N"), width=_q("100 mm"), height=_q("60 mm"), wall_thickness=_q("5 mm")
+        )
 
 
 def test_thin_wall_cylinder_matches_worked_example():
