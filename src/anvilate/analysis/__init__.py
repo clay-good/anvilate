@@ -42,8 +42,9 @@ modules:
   centrifugal tension and the max-power belt speed), V-belt wedge friction, and
   belt-drive geometry (length and wrap angle)
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
-  torque requires, and the peak lining pressure; short-shoe (block) brake lever
-  statics with the self-energizing/self-locking distinction
+  torque requires, the peak lining pressure, and the simple/differential lever
+  force; short-shoe (block) brake lever statics; the self-energizing /
+  self-locking distinction for both
 - :mod:`~anvilate.analysis.curved_beam` — Winkler curved-beam bending
   (rectangular section): shifted neutral axis and the unequal inner/outer
   fibre stresses of hooks, clamps, and links
@@ -155,6 +156,8 @@ from .brake import (
     band_brake_max_lining_pressure,
     band_brake_tight_tension_for_torque,
     band_brake_torque,
+    differential_band_brake_actuation_force,
+    differential_band_brake_is_self_locking,
     short_shoe_brake_torque,
     short_shoe_is_self_locking,
     short_shoe_normal_force,
@@ -456,6 +459,8 @@ __all__ = [
     "band_brake_torque",
     "band_brake_tight_tension_for_torque",
     "band_brake_max_lining_pressure",
+    "differential_band_brake_actuation_force",
+    "differential_band_brake_is_self_locking",
     "short_shoe_normal_force",
     "short_shoe_brake_torque",
     "short_shoe_is_self_locking",

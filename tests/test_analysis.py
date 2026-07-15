@@ -67,6 +67,8 @@ from anvilate.analysis import (
     constrained_thermal_stress,
     cyclic_stress_components,
     deflection_scorecard,
+    differential_band_brake_actuation_force,
+    differential_band_brake_is_self_locking,
     differential_thermal_stress,
     disc_clutch_force_for_torque,
     disc_clutch_torque,
@@ -6445,3 +6447,75 @@ def test_marin_endurance_limit_discounts_the_specimen_value():
         marin_endurance_limit(base_endurance_limit=se_prime, size_factor=0.0)
     with pytest.raises(ValueError, match="base_endurance_limit must be a"):
         marin_endurance_limit(base_endurance_limit=_q("283 mm"))
+
+
+def test_differential_band_brake_lever_force_and_self_locking():
+    from math import exp, pi
+
+    # T1=2 kN, mu=0.25, 270-degree wrap: T2 = T1/e^(mu*beta) = 615.7 N. A
+    # simple band brake (tight end on the pivot, b=0) needs F = T2*a/L =
+    # 615.7*0.2/0.8 = 153.9 N of hand force.
+    wrap = 3.0 * pi / 2.0
+    simple = differential_band_brake_actuation_force(
+        tight_tension=_q("2 kN"),
+        slack_arm=_q("200 mm"),
+        tight_arm=_q("0 mm"),
+        lever_length=_q("800 mm"),
+        friction_coefficient=0.25,
+        wrap_angle=wrap,
+    )
+    t2 = 2000.0 / exp(0.25 * wrap)
+    assert simple.to("N").magnitude == pytest.approx(t2 * 0.2 / 0.8, rel=1e-12)
+    # Anchoring the tight end 50 mm past the pivot makes it pull the band on:
+    # F = (T2*a - T1*b)/L = (123.1 - 100)/0.8 = 28.9 N -- a fifth the force.
+    differential = differential_band_brake_actuation_force(
+        tight_tension=_q("2 kN"),
+        slack_arm=_q("200 mm"),
+        tight_arm=_q("50 mm"),
+        lever_length=_q("800 mm"),
+        friction_coefficient=0.25,
+        wrap_angle=wrap,
+    )
+    assert differential.to("N").magnitude == pytest.approx(
+        (t2 * 0.2 - 2000.0 * 0.05) / 0.8, rel=1e-12
+    )
+    assert differential.to("N").magnitude < simple.to("N").magnitude
+    assert not differential_band_brake_is_self_locking(
+        slack_arm=_q("200 mm"),
+        tight_arm=_q("50 mm"),
+        friction_coefficient=0.25,
+        wrap_angle=wrap,
+    )
+    # Pushing the tight arm to 70 mm crosses a <= b*e^(mu*beta): the returned
+    # force goes NEGATIVE (the band winds itself tight) and the predicate flags.
+    locked = differential_band_brake_actuation_force(
+        tight_tension=_q("2 kN"),
+        slack_arm=_q("200 mm"),
+        tight_arm=_q("70 mm"),
+        lever_length=_q("800 mm"),
+        friction_coefficient=0.25,
+        wrap_angle=wrap,
+    )
+    assert locked.to("N").magnitude < 0
+    assert differential_band_brake_is_self_locking(
+        slack_arm=_q("200 mm"),
+        tight_arm=_q("70 mm"),
+        friction_coefficient=0.25,
+        wrap_angle=wrap,
+    )
+    with pytest.raises(ValueError, match="tight_arm must be non-negative"):
+        differential_band_brake_actuation_force(
+            tight_tension=_q("2 kN"),
+            slack_arm=_q("200 mm"),
+            tight_arm=_q("-5 mm"),
+            lever_length=_q("800 mm"),
+            friction_coefficient=0.25,
+            wrap_angle=wrap,
+        )
+    with pytest.raises(ValueError, match="slack_arm must be positive"):
+        differential_band_brake_is_self_locking(
+            slack_arm=_q("0 mm"),
+            tight_arm=_q("50 mm"),
+            friction_coefficient=0.25,
+            wrap_angle=wrap,
+        )

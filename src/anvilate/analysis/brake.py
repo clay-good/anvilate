@@ -43,10 +43,12 @@ from __future__ import annotations
 from math import exp
 
 from ..units import Quantity
-from .belt import belt_max_transmissible_force
+from .belt import belt_max_transmissible_force, belt_slack_tension, capstan_tension_ratio
 
 __all__ = [
     "band_brake_torque",
+    "differential_band_brake_actuation_force",
+    "differential_band_brake_is_self_locking",
     "band_brake_tight_tension_for_torque",
     "band_brake_max_lining_pressure",
     "short_shoe_normal_force",
@@ -246,3 +248,67 @@ def short_shoe_brake_torque(
         raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
     radius = _drum_radius_m(drum_diameter)
     return Quantity(magnitude=friction_coefficient * n * radius, unit="N*m")
+
+
+def differential_band_brake_actuation_force(
+    *,
+    tight_tension: Quantity,
+    slack_arm: Quantity,
+    tight_arm: Quantity,
+    lever_length: Quantity,
+    friction_coefficient: float,
+    wrap_angle: float,
+) -> Quantity:
+    """The lever force a band brake needs, F = (T₂·a − T₁·b)/L — **signed**.
+
+    The brake lever anchors the band's slack end at ``slack_arm`` a and its
+    tight end at ``tight_arm`` b from the pivot, with the operator pulling at
+    ``lever_length`` L; the capstan relation ties T₂ to the ``tight_tension`` T₁
+    (:func:`~anvilate.analysis.belt.belt_slack_tension`). With b = 0 this is the
+    *simple* band brake, F = T₂·a/L. Making b > 0 (the differential layout) lets
+    the tight side help pull the band on, cutting the hand force — and pushed to
+    a ≤ b·e^(μ·β) the returned force reaches **zero or negative: the brake is
+    self-locking** and holds with no force at all (a backstop, not a service
+    brake; see :func:`differential_band_brake_is_self_locking`). Arms and lever
+    must be lengths (a, L positive; b non-negative). Returns the force in
+    newtons, signed.
+    """
+    slack = belt_slack_tension(
+        tight_tension=tight_tension,
+        friction_coefficient=friction_coefficient,
+        wrap_angle=wrap_angle,
+    )
+    a = _positive_length_m(slack_arm, "slack_arm")
+    _require(tight_arm, "[length]", "tight_arm")
+    b = tight_arm.to("m").magnitude
+    if b < 0:
+        raise ValueError(f"tight_arm must be non-negative; got {tight_arm}")
+    length = _positive_length_m(lever_length, "lever_length")
+    t1 = tight_tension.to("N").magnitude
+    t2 = slack.to("N").magnitude
+    return Quantity(magnitude=(t2 * a - t1 * b) / length, unit="N")
+
+
+def differential_band_brake_is_self_locking(
+    *,
+    slack_arm: Quantity,
+    tight_arm: Quantity,
+    friction_coefficient: float,
+    wrap_angle: float,
+) -> bool:
+    """Whether a differential band brake grabs on its own, a ≤ b·e^(μ·β).
+
+    The tight side's pull on its ``tight_arm`` b overpowers the slack side's on
+    ``slack_arm`` a once a ≤ b·e^(μ·β) — the tension ratio does the levering —
+    and the applied band winds itself tight with no lever force. That is the
+    self-locking geometry a controllable brake must stay clear of (at the
+    lining's *highest* plausible μ) and a backstop deliberately adopts. Arms are
+    as in :func:`differential_band_brake_actuation_force`.
+    """
+    ratio = capstan_tension_ratio(friction_coefficient=friction_coefficient, wrap_angle=wrap_angle)
+    a = _positive_length_m(slack_arm, "slack_arm")
+    _require(tight_arm, "[length]", "tight_arm")
+    b = tight_arm.to("m").magnitude
+    if b < 0:
+        raise ValueError(f"tight_arm must be non-negative; got {tight_arm}")
+    return a <= b * ratio
