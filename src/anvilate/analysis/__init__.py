@@ -51,7 +51,8 @@ modules:
 - :mod:`~anvilate.analysis.rivet` — riveted-joint tearing/shearing/crushing
   strength, governing mode, and efficiency
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, stored
-  energy, series/parallel combination, and lateral (column) buckling screen
+  energy, series/parallel combination, lateral (column) buckling, and leaf-spring
+  stress and rate
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
   stress, shrink-fit assembly temperature, and CTE-mismatch (differential)
   joint stress
@@ -284,6 +285,8 @@ from .spring import (
     SpringBucklingResult,
     helical_spring_buckling,
     helical_spring_rate,
+    leaf_spring_rate,
+    leaf_spring_stress,
     spring_index,
     spring_shear_stress,
     spring_stored_energy,
@@ -543,6 +546,8 @@ __all__ = [
     "spring_stored_energy",
     "springs_in_series",
     "springs_in_parallel",
+    "leaf_spring_stress",
+    "leaf_spring_rate",
     "spring_surge_frequency",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",

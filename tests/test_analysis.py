@@ -121,6 +121,8 @@ from anvilate.analysis import (
     key_shear_stress,
     key_tangential_force,
     lead_angle,
+    leaf_spring_rate,
+    leaf_spring_stress,
     lewis_bending_stress,
     max_shear_stress_plane,
     max_transverse_shear_stress,
@@ -2921,6 +2923,47 @@ def test_power_screw_rejects_bad_inputs():
         power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=-0.1, **kw)
     with pytest.raises(ValueError, match="load must be a"):
         power_screw_raise_torque(load=_q("6.4 mm"), friction_coefficient=0.08, **kw)
+
+
+def test_leaf_spring_stress_rate_and_deflection_are_consistent():
+    kw = {
+        "length": _q("400 mm"),
+        "num_leaves": 4,
+        "leaf_width": _q("50 mm"),
+        "leaf_thickness": _q("10 mm"),
+    }
+    # sigma = 6*F*L/(n*b*t^2): 2 kN, 400 mm, 4x50x10 -> 240 MPa.
+    sigma = leaf_spring_stress(load=_q("2 kN"), **kw)
+    assert sigma.to("MPa").magnitude == pytest.approx(240.0, rel=1e-9)
+    # rate = E*n*b*t^3/(6*L^3), and F/rate must equal the 6*F*L^3/(E*n*b*t^3) drop.
+    rate = leaf_spring_rate(elastic_modulus=_q("207 GPa"), **kw)
+    assert rate.to("N/mm").magnitude == pytest.approx(107.8125, rel=1e-6)
+    deflection = 2000.0 / rate.to("N/mm").magnitude
+    expected = 6 * 2000 * 400**3 / (207000 * 4 * 50 * 10**3)
+    assert deflection == pytest.approx(expected, rel=1e-9)
+    # A thicker leaf stiffens it steeply (t^3 lever): double t -> 8x the rate.
+    thick_kw = {**kw, "leaf_thickness": _q("20 mm")}
+    thicker = leaf_spring_rate(elastic_modulus=_q("207 GPa"), **thick_kw)
+    assert thicker.to("N/mm").magnitude == pytest.approx(8 * rate.to("N/mm").magnitude, rel=1e-9)
+
+
+def test_leaf_spring_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="num_leaves must be a positive integer"):
+        leaf_spring_stress(
+            load=_q("2 kN"),
+            length=_q("400 mm"),
+            num_leaves=0,
+            leaf_width=_q("50 mm"),
+            leaf_thickness=_q("10 mm"),
+        )
+    with pytest.raises(ValueError, match="load must be a"):
+        leaf_spring_stress(
+            load=_q("2 mm"),
+            length=_q("400 mm"),
+            num_leaves=4,
+            leaf_width=_q("50 mm"),
+            leaf_thickness=_q("10 mm"),
+        )
 
 
 def test_springs_in_series_and_parallel():

@@ -46,6 +46,8 @@ __all__ = [
     "spring_stored_energy",
     "springs_in_series",
     "springs_in_parallel",
+    "leaf_spring_stress",
+    "leaf_spring_rate",
 ]
 
 
@@ -287,3 +289,67 @@ def springs_in_parallel(spring_rates: Sequence[Quantity]) -> Quantity:
     """
     rates = _rates_in_n_per_mm(spring_rates)
     return Quantity(magnitude=sum(rates), unit="N/mm")
+
+
+def _leaf_geometry(
+    length: Quantity, num_leaves: int, leaf_width: Quantity, leaf_thickness: Quantity
+) -> tuple[float, float, float]:
+    """Validate and return (L, n·b, t) in mm — the shared leaf-spring geometry."""
+    _require(length, "[length]", "length")
+    _require(leaf_width, "[length]", "leaf_width")
+    _require(leaf_thickness, "[length]", "leaf_thickness")
+    if num_leaves < 1:
+        raise ValueError(f"num_leaves must be a positive integer; got {num_leaves}")
+    ell = length.to("mm").magnitude
+    b = leaf_width.to("mm").magnitude
+    t = leaf_thickness.to("mm").magnitude
+    if ell <= 0 or b <= 0 or t <= 0:
+        raise ValueError("length, leaf_width, and leaf_thickness must be positive")
+    return ell, num_leaves * b, t
+
+
+def leaf_spring_stress(
+    *,
+    load: Quantity,
+    length: Quantity,
+    num_leaves: int,
+    leaf_width: Quantity,
+    leaf_thickness: Quantity,
+) -> Quantity:
+    """The peak bending stress σ = 6·F·L/(n·b·t²) in a cantilever leaf spring.
+
+    Models the multi-leaf spring as the idealized uniform-strength (fully-graduated)
+    plate: ``num_leaves`` n leaves of ``leaf_width`` b and ``leaf_thickness`` t stack
+    to a section modulus n·b·t²/6, so an end ``load`` F over a cantilever ``length``
+    L makes σ = 6·F·L/(n·b·t²) at the root. For a semi-elliptic (simply-supported,
+    centre-loaded) spring, use the half-span as L and half the central load as F.
+    The load is a force and the geometry positive lengths; n ≥ 1. Returns the stress
+    in MPa.
+    """
+    _require(load, "[force]", "load")
+    ell, nb, t = _leaf_geometry(length, num_leaves, leaf_width, leaf_thickness)
+    f = load.to("N").magnitude
+    return Quantity(magnitude=6.0 * f * ell / (nb * t**2), unit="MPa")
+
+
+def leaf_spring_rate(
+    *,
+    length: Quantity,
+    num_leaves: int,
+    leaf_width: Quantity,
+    leaf_thickness: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The rate k = E·n·b·t³/(6·L³) of a cantilever leaf spring.
+
+    The stiffness of the same idealized uniform-strength leaf spring as
+    :func:`leaf_spring_stress`: its end deflection is δ = 6·F·L³/(E·n·b·t³) — 1.5×
+    a plain rectangular cantilever, the flexibility a graduated stack buys — so the
+    rate is F/δ = E·n·b·t³/(6·L³). ``elastic_modulus`` E is the leaf material's,
+    with ``num_leaves`` n, ``leaf_width`` b, ``leaf_thickness`` t, and cantilever
+    ``length`` L as in :func:`leaf_spring_stress`. Returns the rate in N/mm.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    ell, nb, t = _leaf_geometry(length, num_leaves, leaf_width, leaf_thickness)
+    e = elastic_modulus.to("MPa").magnitude
+    return Quantity(magnitude=e * nb * t**3 / (6.0 * ell**3), unit="N/mm")
