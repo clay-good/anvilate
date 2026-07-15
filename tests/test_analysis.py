@@ -87,6 +87,8 @@ from anvilate.analysis import (
     fixed_pinned_triangular_load,
     fixed_pinned_triangular_load_peak_at_prop,
     fixed_pinned_uniform_load,
+    flange_coupling_bolt_force,
+    flange_coupling_torque,
     flywheel_energy_fluctuation,
     flywheel_inertia_for_fluctuation,
     free_thermal_expansion,
@@ -2923,6 +2925,24 @@ def test_power_screw_rejects_bad_inputs():
         power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=-0.1, **kw)
     with pytest.raises(ValueError, match="load must be a"):
         power_screw_raise_torque(load=_q("6.4 mm"), friction_coefficient=0.08, **kw)
+
+
+def test_flange_coupling_torque_and_bolt_force_invert():
+    # 6 bolts each carrying 5 kN at an 80 mm bolt circle: T = n*F*R = 2400 N*m.
+    t = flange_coupling_torque(
+        bolt_shear_force=_q("5 kN"), bolt_circle_radius=_q("80 mm"), num_bolts=6
+    )
+    assert t.to("N*m").magnitude == pytest.approx(2400.0, rel=1e-9)
+    # The inverse recovers the 5 kN per-bolt shear from that torque.
+    f = flange_coupling_bolt_force(torque=t, bolt_circle_radius=_q("80 mm"), num_bolts=6)
+    assert f.to("kN").magnitude == pytest.approx(5.0, rel=1e-9)
+    # More bolts share the same torque at a lower per-bolt force.
+    f12 = flange_coupling_bolt_force(torque=t, bolt_circle_radius=_q("80 mm"), num_bolts=12)
+    assert f12.to("kN").magnitude == pytest.approx(2.5, rel=1e-9)
+    with pytest.raises(ValueError, match="num_bolts must be a positive integer"):
+        flange_coupling_torque(
+            bolt_shear_force=_q("5 kN"), bolt_circle_radius=_q("80 mm"), num_bolts=0
+        )
 
 
 def test_leaf_spring_stress_rate_and_deflection_are_consistent():

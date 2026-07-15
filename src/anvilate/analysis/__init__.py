@@ -31,6 +31,8 @@ modules:
   thickness a pressure requires (membrane and ASME VIII code form)
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
+- :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque and per-bolt
+  shear force
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
   (millions of revolutions and running hours) and static load safety factor
 - :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
@@ -156,6 +158,10 @@ from .contact import (
     hertz_cylinder_contact,
     hertz_effective_modulus,
     hertz_sphere_contact,
+)
+from .coupling import (
+    flange_coupling_bolt_force,
+    flange_coupling_torque,
 )
 from .dynamics import (
     STANDARD_GRAVITY,
@@ -533,6 +539,8 @@ __all__ = [
     "hertz_sphere_contact",
     "HertzLineContact",
     "hertz_cylinder_contact",
+    "flange_coupling_torque",
+    "flange_coupling_bolt_force",
     "spring_index",
     "wahl_factor",
     "spring_shear_stress",
