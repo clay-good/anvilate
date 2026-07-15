@@ -26,6 +26,7 @@ __all__ = [
     "ThickWallStress",
     "ThickWallSphereStress",
     "thin_wall_cylinder",
+    "thin_wall_thickness_for_pressure",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thick_wall_sphere",
@@ -103,6 +104,40 @@ def thin_wall_cylinder(
         longitudinal_stress=_as_quantity(longitudinal, "MPa"),
         thin_wall_ratio=ratio,
     )
+
+
+def thin_wall_thickness_for_pressure(
+    *,
+    pressure: Quantity,
+    radius: Quantity,
+    allowable_stress: Quantity,
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least cylinder wall thickness to hold ``pressure`` within an allowable
+    hoop stress.
+
+    The inverse of :func:`thin_wall_cylinder`'s governing hoop stress: demanding
+    p·r/t ≤ σ_allow/n gives t_min = n·p·r/σ_allow — the membrane wall-sizing form
+    (ASME's ``t = p·r/(S·E)`` with the joint efficiency folded into σ_allow).
+    ``pressure`` p is the internal gauge pressure, ``radius`` r the inner radius,
+    ``allowable_stress`` σ_allow the material's allowable, and
+    ``required_safety_factor`` n the margin on it (default 1.0). Returns the
+    minimum thickness in mm; the pressure/radius/stress are dimension-checked and
+    ``n`` / ``allowable_stress`` must be positive.
+
+    A thin-wall (membrane) size — when the result gives r/t ≲ 10 the wall carries
+    a genuine gradient and the exact Lamé form (:func:`thick_wall_cylinder`)
+    governs, so re-check a thick result there.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(radius, "[length]", "radius")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    if allowable_stress.to("MPa").magnitude <= 0:
+        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+    thickness = required_safety_factor * pressure.pint * radius.pint / allowable_stress.pint
+    return _as_quantity(thickness, "mm")
 
 
 class ThickWallStress(BaseModel):

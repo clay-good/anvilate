@@ -137,6 +137,7 @@ from anvilate.analysis import (
     thin_open_strip_twist_angle,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
+    thin_wall_thickness_for_pressure,
     torque_for_preload,
     torsional_natural_frequency,
     transition_slenderness,
@@ -2863,6 +2864,51 @@ def test_thin_wall_cylinder_matches_worked_example():
     )
     # Governing (hoop) safety factor against a 250 MPa yield.
     assert result.bending_safety_factor(_q("250 MPa")) == pytest.approx(6.25, rel=1e-6)
+
+
+def test_thin_wall_thickness_for_pressure_inverts_the_hoop_stress():
+    # 2 MPa in a 100 mm-radius shell within a 120 MPa allowable needs
+    #   t = p*r/sigma = 2*100/120 = 1.667 mm.
+    t = thin_wall_thickness_for_pressure(
+        pressure=_q("2 MPa"), radius=_q("100 mm"), allowable_stress=_q("120 MPa")
+    )
+    assert t.to("mm").magnitude == pytest.approx(1.6667, rel=1e-4)
+    # A shell with exactly this wall is stressed to the allowable in hoop.
+    hoop = thin_wall_cylinder(
+        pressure=_q("2 MPa"), radius=_q("100 mm"), wall_thickness=t
+    ).hoop_stress
+    assert hoop.to("MPa").magnitude == pytest.approx(120.0, rel=1e-6)
+
+
+def test_thin_wall_thickness_scales_with_the_margin():
+    base = thin_wall_thickness_for_pressure(
+        pressure=_q("2 MPa"), radius=_q("100 mm"), allowable_stress=_q("120 MPa")
+    )
+    with_sf = thin_wall_thickness_for_pressure(
+        pressure=_q("2 MPa"),
+        radius=_q("100 mm"),
+        allowable_stress=_q("120 MPa"),
+        required_safety_factor=1.5,
+    )
+    assert with_sf.to("mm").magnitude == pytest.approx(1.5 * base.to("mm").magnitude, rel=1e-9)
+
+
+def test_thin_wall_thickness_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="pressure must be a"):
+        thin_wall_thickness_for_pressure(
+            pressure=_q("2 N"), radius=_q("100 mm"), allowable_stress=_q("120 MPa")
+        )
+    with pytest.raises(ValueError, match="allowable_stress must be positive"):
+        thin_wall_thickness_for_pressure(
+            pressure=_q("2 MPa"), radius=_q("100 mm"), allowable_stress=_q("0 MPa")
+        )
+    with pytest.raises(ValueError, match="required_safety_factor must be positive"):
+        thin_wall_thickness_for_pressure(
+            pressure=_q("2 MPa"),
+            radius=_q("100 mm"),
+            allowable_stress=_q("120 MPa"),
+            required_safety_factor=0.0,
+        )
 
 
 def test_thick_wall_cylinder_matches_worked_example():

@@ -20,7 +20,8 @@ modules:
   torsional stiffness, and the shaft diameter a torque requires; thin-walled
   rectangular (box) tube torsion (Bredt) and thin open-section (strip) torsion
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
-  exact Lamé thick-wall cylinder and sphere
+  exact Lamé thick-wall cylinder and sphere, and the wall thickness a pressure
+  requires
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, and
@@ -175,6 +176,7 @@ from .pressure_vessel import (
     thick_wall_sphere,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
+    thin_wall_thickness_for_pressure,
 )
 from .section import CrossSection, required_section_modulus
 from .spring import (
@@ -345,6 +347,7 @@ __all__ = [
     "ThickWallStress",
     "ThickWallSphereStress",
     "thin_wall_cylinder",
+    "thin_wall_thickness_for_pressure",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thick_wall_sphere",
