@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from anvilate.analysis import CrossSection, cantilever_end_load
+from anvilate.analysis import CrossSection, cantilever_end_load, required_section_modulus
 from anvilate.units import Quantity
 
 
@@ -186,3 +186,34 @@ def test_cross_section_feeds_a_beam_check():
         elastic_modulus=_q("200 GPa"),
     )
     assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(150.0, rel=1e-4)
+
+
+def test_required_section_modulus_inverts_the_bending_check():
+    # A 5 kN*m moment within a 165 MPa allowable needs Z = M/sigma = 30303 mm^3.
+    z = required_section_modulus(bending_moment=_q("5 kN*m"), allowable_stress=_q("165 MPa"))
+    assert z.to("mm**3").magnitude == pytest.approx(30303.0, rel=1e-4)
+    # A section with exactly this modulus is stressed to the allowable: sigma =
+    # M/Z = 165 MPa.
+    sigma = 5e6 / z.to("mm**3").magnitude  # N*mm / mm^3 = MPa
+    assert sigma == pytest.approx(165.0, rel=1e-6)
+
+
+def test_required_section_modulus_scales_with_the_margin():
+    base = required_section_modulus(bending_moment=_q("5 kN*m"), allowable_stress=_q("165 MPa"))
+    with_sf = required_section_modulus(
+        bending_moment=_q("5 kN*m"), allowable_stress=_q("165 MPa"), required_safety_factor=1.5
+    )
+    assert with_sf.to("mm**3").magnitude == pytest.approx(
+        1.5 * base.to("mm**3").magnitude, rel=1e-9
+    )
+
+
+def test_required_section_modulus_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="bending_moment must be a"):
+        required_section_modulus(bending_moment=_q("5 kN"), allowable_stress=_q("165 MPa"))
+    with pytest.raises(ValueError, match="allowable_stress must be a"):
+        required_section_modulus(bending_moment=_q("5 kN*m"), allowable_stress=_q("165 mm"))
+    with pytest.raises(ValueError, match="required_safety_factor must be positive"):
+        required_section_modulus(
+            bending_moment=_q("5 kN*m"), allowable_stress=_q("165 MPa"), required_safety_factor=0.0
+        )

@@ -11,7 +11,8 @@ modules:
 - :mod:`~anvilate.analysis.plate` — flat-plate bending (simply-supported
   rectangle via the exact Navier series; circular, simply-supported and clamped)
 - :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
-  moment, extreme fibre, section modulus, and radius of gyration
+  moment, extreme fibre, section modulus, and radius of gyration; the minimum
+  section modulus a bending moment requires
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   and the minimum section second moment a load requires
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
@@ -174,7 +175,7 @@ from .pressure_vessel import (
     thin_wall_cylinder,
     thin_wall_sphere_stress,
 )
-from .section import CrossSection
+from .section import CrossSection, required_section_modulus
 from .spring import (
     SPRING_END_CLAMPED_FREE,
     SPRING_END_FIXED_HINGED,
@@ -265,6 +266,7 @@ __all__ = [
     "circular_second_moment",
     "hollow_circular_second_moment",
     "CrossSection",
+    "required_section_modulus",
     "max_transverse_shear_stress",
     "deflection_scorecard",
     "SHEAR_FORM_RECTANGULAR",

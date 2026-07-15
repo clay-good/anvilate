@@ -5,7 +5,9 @@ extreme-fibre distance. :class:`CrossSection` bundles them (plus the derived
 section modulus and radius of gyration) and builds them for the common shapes —
 rectangular, solid round, hollow round, hollow rectangular, and the doubly
 symmetric I — so a caller constructs the section once and hands its properties
-to any check.
+to any check. :func:`required_section_modulus` runs the sizing the other way:
+the minimum section modulus a bending moment needs to stay within an allowable
+stress.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
 
-__all__ = ["CrossSection"]
+__all__ = ["CrossSection", "required_section_modulus"]
 
 
 def _mm(magnitude: float) -> Quantity:
@@ -27,6 +29,44 @@ def _require_length(value: Quantity, name: str) -> float:
     if not value.has_dimension("[length]"):
         raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
     return value.to("mm").magnitude
+
+
+def required_section_modulus(
+    *,
+    bending_moment: Quantity,
+    allowable_stress: Quantity,
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least section modulus Z a beam needs to carry ``bending_moment`` within
+    an allowable bending stress.
+
+    The inverse of the σ = M/Z bending check (and of
+    :attr:`CrossSection.section_modulus`): demanding M/Z ≤ σ_allow/n gives
+    Z_min = n·M/σ_allow — the first sizing step for a beam, before a trial section
+    is picked and its Z compared against this floor. ``bending_moment`` M is the
+    governing moment, ``allowable_stress`` σ_allow the material's allowable bending
+    stress, and ``required_safety_factor`` n the margin on it (default 1.0, i.e.
+    σ_allow already includes the margin). Returns the minimum Z in mm³; the moment
+    and stress are dimension-checked and ``n`` / ``allowable_stress`` must be
+    positive.
+    """
+    if not bending_moment.has_dimension("[force] * [length]"):
+        raise ValueError(
+            f"bending_moment must be a [force]*[length] quantity; got "
+            f"{bending_moment.dimensionality} ({bending_moment})"
+        )
+    if not allowable_stress.has_dimension("[pressure]"):
+        raise ValueError(
+            f"allowable_stress must be a [pressure] quantity; got "
+            f"{allowable_stress.dimensionality} ({allowable_stress})"
+        )
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    if allowable_stress.to("MPa").magnitude <= 0:
+        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+    z = required_safety_factor * bending_moment.pint / allowable_stress.pint
+    converted = z.to("mm**3")
+    return Quantity(magnitude=float(converted.magnitude), unit="mm**3")
 
 
 class CrossSection(BaseModel):
