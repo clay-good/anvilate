@@ -79,6 +79,7 @@ from anvilate.analysis import (
     interference_torque_capacity,
     johnson_critical_stress,
     key_bearing_stress,
+    key_length_for_torque,
     key_shear_stress,
     key_tangential_force,
     max_shear_stress_plane,
@@ -2454,6 +2455,55 @@ def test_key_stresses_worked_example():
 def test_key_stress_rejects_non_torque():
     with pytest.raises(ValueError, match="torque must be a"):
         key_tangential_force(torque=_q("50 N"), shaft_diameter=_q("20 mm"))
+
+
+def test_key_length_for_torque_governed_by_bearing():
+    # 200 N*m through a 40 mm shaft, 12x8 key, allowables 60/100 MPa: F = 10 kN;
+    #   L_shear = F/(w*tau) = 10000/(12*60) = 13.889 mm;
+    #   L_bearing = F/((h/2)*sigma) = 10000/(4*100) = 25.0 mm -> bearing governs.
+    req = key_length_for_torque(
+        torque=_q("200 N*m"),
+        shaft_diameter=_q("40 mm"),
+        key_width=_q("12 mm"),
+        key_height=_q("8 mm"),
+        allowable_shear=_q("60 MPa"),
+        allowable_bearing=_q("100 MPa"),
+    )
+    assert req.shear_length.to("mm").magnitude == pytest.approx(13.889, rel=1e-4)
+    assert req.bearing_length.to("mm").magnitude == pytest.approx(25.0, rel=1e-6)
+    assert req.required_length.to("mm").magnitude == pytest.approx(25.0, rel=1e-6)
+    assert req.governing_mode == "bearing"
+
+
+def test_key_length_for_torque_inverts_the_stress_checks():
+    # At the required length each governing stress lands exactly on its allowable.
+    req = key_length_for_torque(
+        torque=_q("200 N*m"),
+        shaft_diameter=_q("40 mm"),
+        key_width=_q("12 mm"),
+        key_height=_q("8 mm"),
+        allowable_shear=_q("60 MPa"),
+        allowable_bearing=_q("100 MPa"),
+    )
+    sigma = key_bearing_stress(
+        torque=_q("200 N*m"),
+        shaft_diameter=_q("40 mm"),
+        key_height=_q("8 mm"),
+        key_length=req.required_length,
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(100.0, rel=1e-6)
+
+
+def test_key_length_rejects_bad_allowable():
+    with pytest.raises(ValueError, match="must be positive"):
+        key_length_for_torque(
+            torque=_q("200 N*m"),
+            shaft_diameter=_q("40 mm"),
+            key_width=_q("12 mm"),
+            key_height=_q("8 mm"),
+            allowable_shear=_q("0 MPa"),
+            allowable_bearing=_q("100 MPa"),
+        )
 
 
 def test_bolt_shear_stress_single_and_double():

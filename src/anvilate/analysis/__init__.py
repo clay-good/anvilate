@@ -22,7 +22,8 @@ modules:
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, and
   the ISO 898 tensile stress area / axial stress
-- :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress
+- :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
+  key length a torque requires
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, and
   lateral (column) buckling screen
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
@@ -145,7 +146,13 @@ from .interference import (
     interference_for_contact_pressure,
     interference_torque_capacity,
 )
-from .keys import key_bearing_stress, key_shear_stress, key_tangential_force
+from .keys import (
+    KeyLengthRequirement,
+    key_bearing_stress,
+    key_length_for_torque,
+    key_shear_stress,
+    key_tangential_force,
+)
 from .plate import (
     PlateBendingResult,
     clamped_annular_plate_uniform_load,
@@ -301,6 +308,8 @@ __all__ = [
     "key_tangential_force",
     "key_shear_stress",
     "key_bearing_stress",
+    "KeyLengthRequirement",
+    "key_length_for_torque",
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",
