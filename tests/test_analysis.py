@@ -93,6 +93,7 @@ from anvilate.analysis import (
     flywheel_inertia_for_fluctuation,
     free_thermal_expansion,
     frequency_scorecard,
+    gear_contact_stress,
     gear_normal_load,
     gear_radial_load,
     gear_tangential_load,
@@ -3053,6 +3054,42 @@ def test_plate_buckling_rejects_bad_inputs():
             thickness=_q("5 mm"),
             width=_q("300 mm"),
         )
+
+
+def test_gear_contact_stress_matches_the_hertz_line_contact():
+    from math import cos, radians, sin
+
+    from anvilate.analysis import hertz_cylinder_contact
+
+    kw = {
+        "tangential_load": _q("2 kN"),
+        "pinion_pitch_diameter": _q("100 mm"),
+        "gear_pitch_diameter": _q("200 mm"),
+        "pressure_angle": 20,
+        "face_width": _q("40 mm"),
+        "modulus_pinion": _q("200 GPa"),
+        "modulus_gear": _q("200 GPa"),
+    }
+    sigma = gear_contact_stress(**kw)
+    # It delegates to the line-contact solver with the pitch-point geometry:
+    # equivalent cylinder diameters d*sin(phi), normal load W_t/cos(phi).
+    phi = radians(20)
+    ref = hertz_cylinder_contact(
+        force=_q(f"{2000 / cos(phi)} N"),
+        length=_q("40 mm"),
+        diameter1=_q(f"{100 * sin(phi)} mm"),
+        modulus1=_q("200 GPa"),
+        poisson1=0.3,
+        modulus2=_q("200 GPa"),
+        poisson2=0.3,
+        diameter2=_q(f"{200 * sin(phi)} mm"),
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(
+        ref.max_contact_pressure.to("MPa").magnitude, rel=1e-9
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(404.05, rel=1e-3)
+    with pytest.raises(ValueError, match=r"pressure_angle \(degrees\) must lie in"):
+        gear_contact_stress(**{**kw, "pressure_angle": 0})
 
 
 def test_gear_pitch_line_velocity_and_barth_factor():

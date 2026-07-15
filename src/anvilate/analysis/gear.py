@@ -21,9 +21,10 @@ factors on top. Inputs are dimension-checked
 
 from __future__ import annotations
 
-from math import cos, radians, sqrt, tan
+from math import cos, radians, sin, sqrt, tan
 
 from ..units import Quantity
+from .contact import hertz_cylinder_contact
 
 # Barth velocity-factor constants Kv = (A + f(V))/A, by tooth manufacturing quality:
 # cut/milled uses V, hobbed/shaped and precision ground/shaved use sqrt(V) (V m/s).
@@ -40,6 +41,7 @@ __all__ = [
     "pitch_line_velocity",
     "barth_velocity_factor",
     "lewis_bending_stress",
+    "gear_contact_stress",
 ]
 
 
@@ -181,3 +183,51 @@ def lewis_bending_stress(
         raise ValueError(f"form_factor (Lewis Y) must be positive; got {form_factor}")
     stress = tangential_load.pint / (face_width.pint * module.pint * form_factor)
     return Quantity(magnitude=float(stress.to("MPa").magnitude), unit="MPa")
+
+
+def gear_contact_stress(
+    *,
+    tangential_load: Quantity,
+    pinion_pitch_diameter: Quantity,
+    gear_pitch_diameter: Quantity,
+    pressure_angle: float,
+    face_width: Quantity,
+    modulus_pinion: Quantity,
+    modulus_gear: Quantity,
+    poisson_pinion: float = 0.3,
+    poisson_gear: float = 0.3,
+) -> Quantity:
+    """The Hertzian (Buckingham) surface contact stress at a spur-gear pitch point.
+
+    Gears also fail by surface pitting, a rolling-contact-fatigue problem set by the
+    peak Hertz pressure where the tooth flanks touch. At the pitch point the involute
+    flanks curve like two cylinders of diameter d·sin(φ), pressed by the normal load
+    W_t/cos(φ) over the ``face_width``. This derives that geometry and delegates to
+    the verified line-contact solver
+    (:func:`~anvilate.analysis.hertz_cylinder_contact`).
+    ``tangential_load`` W_t, ``pinion_pitch_diameter`` d₁ and
+    ``gear_pitch_diameter`` d₂, ``pressure_angle`` φ (degrees), ``face_width``, and
+    each body's elastic ``modulus``/``poisson`` describe the mesh. Screen the result
+    against the material's allowable contact (surface-fatigue) stress. Returns the
+    peak contact stress in MPa.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    _require(pinion_pitch_diameter, "[length]", "pinion_pitch_diameter")
+    _require(gear_pitch_diameter, "[length]", "gear_pitch_diameter")
+    phi = _check_pressure_angle(pressure_angle)
+    d1 = pinion_pitch_diameter.to("mm").magnitude
+    d2 = gear_pitch_diameter.to("mm").magnitude
+    if d1 <= 0 or d2 <= 0:
+        raise ValueError("pinion_pitch_diameter and gear_pitch_diameter must be positive")
+    normal_load = tangential_load.to("N").magnitude / cos(phi)
+    result = hertz_cylinder_contact(
+        force=Quantity(magnitude=normal_load, unit="N"),
+        length=face_width,
+        diameter1=Quantity(magnitude=d1 * sin(phi), unit="mm"),
+        modulus1=modulus_pinion,
+        poisson1=poisson_pinion,
+        modulus2=modulus_gear,
+        poisson2=poisson_gear,
+        diameter2=Quantity(magnitude=d2 * sin(phi), unit="mm"),
+    )
+    return result.max_contact_pressure
