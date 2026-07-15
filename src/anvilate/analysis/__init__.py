@@ -30,6 +30,8 @@ modules:
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
   (millions of revolutions and running hours)
+- :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
+  tension ratio, slack tension, and transmissible force
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
@@ -111,6 +113,11 @@ from .bearing import (
     ROLLER_BEARING_LIFE_EXPONENT,
     bearing_basic_rating_life,
     bearing_life_hours,
+)
+from .belt import (
+    belt_max_transmissible_force,
+    belt_slack_tension,
+    capstan_tension_ratio,
 )
 from .column import (
     ColumnEnd,
@@ -346,6 +353,9 @@ __all__ = [
     "ROLLER_BEARING_LIFE_EXPONENT",
     "bearing_basic_rating_life",
     "bearing_life_hours",
+    "capstan_tension_ratio",
+    "belt_slack_tension",
+    "belt_max_transmissible_force",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",

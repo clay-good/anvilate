@@ -20,6 +20,8 @@ from anvilate.analysis import (
     bearing_basic_rating_life,
     bearing_life_hours,
     bearing_stress,
+    belt_max_transmissible_force,
+    belt_slack_tension,
     bolt_axial_stress,
     bolt_diameter_for_shear,
     bolt_preload_from_torque,
@@ -35,6 +37,7 @@ from anvilate.analysis import (
     cantilever_triangular_load,
     cantilever_triangular_load_peak_at_tip,
     cantilever_uniform_load,
+    capstan_tension_ratio,
     circular_area,
     circular_second_moment,
     clamped_annular_plate_fundamental_frequency,
@@ -2895,6 +2898,36 @@ def test_power_screw_rejects_bad_inputs():
         power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=-0.1, **kw)
     with pytest.raises(ValueError, match="load must be a"):
         power_screw_raise_torque(load=_q("6.4 mm"), friction_coefficient=0.08, **kw)
+
+
+def test_capstan_tension_ratio_and_belt_tensions():
+    from math import exp, pi
+
+    # A rope with a 180-degree wrap (beta=pi) at mu=0.3: T1/T2 = e^(0.3*pi) = 2.566.
+    ratio = capstan_tension_ratio(friction_coefficient=0.3, wrap_angle=pi)
+    assert ratio == pytest.approx(exp(0.3 * pi), rel=1e-12)
+    # 500 N tight side -> slack side is T1/ratio, and the two split the tight
+    # tension: slack + transmissible force = tight.
+    slack = belt_slack_tension(tight_tension=_q("500 N"), friction_coefficient=0.3, wrap_angle=pi)
+    force = belt_max_transmissible_force(
+        tight_tension=_q("500 N"), friction_coefficient=0.3, wrap_angle=pi
+    )
+    assert slack.to("N").magnitude == pytest.approx(500 / ratio, rel=1e-12)
+    assert slack.to("N").magnitude + force.to("N").magnitude == pytest.approx(500.0, rel=1e-12)
+    # More wrap (a second turn) grips exponentially harder.
+    two_turns = capstan_tension_ratio(friction_coefficient=0.3, wrap_angle=pi + 2 * pi)
+    assert two_turns > ratio
+
+
+def test_capstan_rejects_bad_inputs():
+    from math import pi
+
+    with pytest.raises(ValueError, match="friction_coefficient must be non-negative"):
+        capstan_tension_ratio(friction_coefficient=-0.1, wrap_angle=pi)
+    with pytest.raises(ValueError, match="wrap_angle .* must be positive"):
+        capstan_tension_ratio(friction_coefficient=0.3, wrap_angle=0.0)
+    with pytest.raises(ValueError, match="tight_tension must be a"):
+        belt_slack_tension(tight_tension=_q("500 mm"), friction_coefficient=0.3, wrap_angle=pi)
 
 
 def test_bearing_basic_rating_life_follows_the_load_life_law():
