@@ -773,3 +773,22 @@ def test_beam_section_sizing_example_picks_the_section_above_the_floor():
     assert large.passed
     assert "safety factor 2.21" in large.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_drive_shaft_sizing_example_fails_when_sized_on_the_mean_torque():
+    namespace = runpy.run_path(str(_EXAMPLES / "drive_shaft_sizing.py"))
+    on_mean, on_design = namespace["sizing_floors"]()
+    # Sizing on the mean torque understates the shaft the peak needs.
+    assert on_mean.to("mm").magnitude == pytest.approx(30.21, rel=1e-3)
+    assert on_design.to("mm").magnitude == pytest.approx(38.06, rel=1e-3)
+    card = namespace["screen_drive_shaft"]()
+    by_name = {e.name: e for e in card.entries}
+    # Under the service-factored peak the mean-sized 31 mm shaft misses 2.0...
+    mean = by_name["mean-sized 31 mm shaft shear"]
+    assert mean.status is CheckStatus.FAIL
+    assert "safety factor 1.08" in mean.detail
+    # ...the design-sized 40 mm shaft clears it.
+    design = by_name["design-sized 40 mm shaft shear"]
+    assert design.passed
+    assert "safety factor 2.32" in design.detail
+    assert card.status is CheckStatus.FAIL
