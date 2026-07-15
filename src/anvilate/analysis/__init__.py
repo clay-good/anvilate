@@ -16,7 +16,7 @@ modules:
 - :mod:`~anvilate.analysis.torsion` — solid and hollow shaft torsion, twist,
   and torsional stiffness; thin-walled rectangular (box) tube torsion (Bredt)
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
-  exact Lamé thick-wall cylinder
+  exact Lamé thick-wall cylinder and sphere
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, and shear
@@ -149,9 +149,11 @@ from .plate import (
     simply_supported_plate_uniform_load,
 )
 from .pressure_vessel import (
+    ThickWallSphereStress,
     ThickWallStress,
     ThinWallStress,
     thick_wall_cylinder,
+    thick_wall_sphere,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
 )
@@ -302,9 +304,11 @@ __all__ = [
     "clamped_annular_plate_uniform_load",
     "ThinWallStress",
     "ThickWallStress",
+    "ThickWallSphereStress",
     "thin_wall_cylinder",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
+    "thick_wall_sphere",
     "InterferenceFit",
     "interference_fit",
     "interference_axial_capacity",

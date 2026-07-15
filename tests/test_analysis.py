@@ -122,6 +122,7 @@ from anvilate.analysis import (
     spring_surge_frequency,
     strength_scorecard,
     thick_wall_cylinder,
+    thick_wall_sphere,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
     torque_for_preload,
@@ -2679,6 +2680,43 @@ def test_thin_wall_sphere_is_half_the_cylinder_hoop():
     assert sphere.to("MPa").magnitude == pytest.approx(20.0, rel=1e-6)
     cyl = thin_wall_cylinder(pressure=_q("2 MPa"), radius=_q("100 mm"), wall_thickness=_q("5 mm"))
     assert sphere.to("MPa").magnitude == pytest.approx(cyl.hoop_stress.to("MPa").magnitude / 2)
+
+
+def test_thick_wall_sphere_matches_worked_example():
+    # Same ri=25, ro=35 bore at 60 MPa: sigma_hoop = p*(2*ri^3+ro^3)/(2*(ro^3-ri^3))
+    #   = 60*(2*15625+42875)/(2*27250) = 60*74125/54500 = 81.606 MPa on a radial
+    # -60, so the bore Tresca intensity is 3*p*ro^3/(2*(ro^3-ri^3)) = 141.606 MPa.
+    result = thick_wall_sphere(
+        pressure=_q("60 MPa"), radius=_q("25 mm"), wall_thickness=_q("10 mm")
+    )
+    assert result.hoop_stress.to("MPa").magnitude == pytest.approx(81.606, rel=1e-4)
+    assert result.radial_stress.to("MPa").magnitude == pytest.approx(-60.0, rel=1e-6)
+    assert result.bore_tresca_stress.to("MPa").magnitude == pytest.approx(141.606, rel=1e-4)
+    assert result.yield_safety_factor(_q("417 MPa")) == pytest.approx(417 / 141.606, rel=1e-4)
+    # A sphere works far less hard than a cylinder of the same bore and wall.
+    cyl = thick_wall_cylinder(pressure=_q("60 MPa"), radius=_q("25 mm"), wall_thickness=_q("10 mm"))
+    assert (
+        result.bore_tresca_stress.to("MPa").magnitude < cyl.bore_tresca_stress.to("MPa").magnitude
+    )
+
+
+def test_thick_wall_sphere_recovers_the_membrane_and_always_exceeds_it():
+    # At r/t = 100 the exact bore hoop sits within ~1.5% of the p*r/(2t) membrane
+    # and is ALWAYS above it — the thin-wall sphere screen under-reports the bore.
+    kw = {"pressure": _q("2 MPa"), "radius": _q("500 mm"), "wall_thickness": _q("5 mm")}
+    thick = thick_wall_sphere(**kw)
+    membrane = thin_wall_sphere_stress(**kw)
+    thick_hoop = thick.hoop_stress.to("MPa").magnitude
+    mem = membrane.to("MPa").magnitude
+    assert thick_hoop == pytest.approx(mem, rel=2e-2)
+    assert thick_hoop > mem
+
+
+def test_thick_wall_sphere_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="must be positive"):
+        thick_wall_sphere(pressure=_q("2 MPa"), radius=_q("25 mm"), wall_thickness=_q("0 mm"))
+    with pytest.raises(ValueError, match="pressure must be a"):
+        thick_wall_sphere(pressure=_q("2 N"), radius=_q("25 mm"), wall_thickness=_q("5 mm"))
 
 
 def test_thin_wall_cylinder_rejects_bad_inputs():

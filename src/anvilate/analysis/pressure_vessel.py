@@ -8,8 +8,10 @@ when the radius-to-thickness ratio is large (r/t ≳ 10). Below that the wall
 carries a genuine stress gradient and the exact Lamé thick-wall solution takes
 over: the bore hoop stress ``p·(ro² + ri²)/(ro² − ri²)`` rides on a radial
 compression ``−p``, so the governing Tresca intensity at the bore is
-``2·p·ro²/(ro² − ri²)`` — always worse than what the thin-wall form reports.
-As with the other checks, inputs and outputs are dimension-checked
+``2·p·ro²/(ro² − ri²)`` — always worse than what the thin-wall form reports. The
+same thin/thick split holds for a sphere: the membrane form ``p·r/(2·t)`` gives
+way to the exact Lamé bore Tresca ``3·p·ro³/(2·(ro³ − ri³))``. As with the other
+checks, inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values through Pint.
 """
 
@@ -22,9 +24,11 @@ from ..units import Quantity
 __all__ = [
     "ThinWallStress",
     "ThickWallStress",
+    "ThickWallSphereStress",
     "thin_wall_cylinder",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
+    "thick_wall_sphere",
 ]
 
 
@@ -196,3 +200,73 @@ def thin_wall_sphere_stress(
         raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
     stress = pressure.pint * radius.pint / (2 * wall_thickness.pint)
     return _as_quantity(stress, "MPa")
+
+
+class ThickWallSphereStress(BaseModel):
+    """The exact Lamé stresses at the bore of a thick-wall sphere.
+
+    ``hoop_stress`` is the tangential stress at the bore — equal in every
+    direction on the surface, since a sphere is spherically symmetric, and the
+    peak in the wall — and ``radial_stress`` the radial stress there (exactly −p).
+    ``bore_tresca_stress`` is the governing σ_hoop − σ_radial intensity a yield
+    screen should use.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    hoop_stress: Quantity
+    radial_stress: Quantity
+
+    @property
+    def bore_tresca_stress(self) -> Quantity:
+        """The Tresca stress intensity σ_hoop − σ_radial at the bore."""
+        hoop = self.hoop_stress.to("MPa").magnitude
+        radial = self.radial_stress.to("MPa").magnitude
+        return Quantity(magnitude=hoop - radial, unit="MPa")
+
+    def yield_safety_factor(self, yield_strength: Quantity) -> float:
+        """The factor of safety against bore yielding on the Tresca intensity."""
+        _require(yield_strength, "[pressure]", "yield_strength")
+        sy = yield_strength.to("MPa").magnitude
+        return sy / self.bore_tresca_stress.to("MPa").magnitude
+
+    def __str__(self) -> str:
+        return (
+            f"thick-wall sphere: bore hoop {self.hoop_stress.to('MPa')}, "
+            f"radial {self.radial_stress.to('MPa')}, "
+            f"tresca {self.bore_tresca_stress.to('MPa')}"
+        )
+
+
+def thick_wall_sphere(
+    *,
+    pressure: Quantity,
+    radius: Quantity,
+    wall_thickness: Quantity,
+) -> ThickWallSphereStress:
+    """The exact Lamé stresses in a thick-wall sphere under internal pressure.
+
+    Same arguments as :func:`thin_wall_sphere_stress` — ``pressure`` the internal
+    gauge pressure, ``radius`` the INNER radius r_i, ``wall_thickness`` the wall
+    (r_o = r_i + t) — so the membrane and exact screens swap freely. At the bore,
+    where everything peaks: σ_hoop = p·(2·r_i³ + r_o³)/(2·(r_o³ − r_i³)) in every
+    tangential direction, riding on σ_radial = −p, so the governing Tresca
+    intensity is 3·p·r_o³/(2·(r_o³ − r_i³)). Exact at every r/t — it recovers the
+    p·r/(2·t) membrane form as the wall thins and, like the cylinder, always
+    exceeds it at the bore. Every argument is dimension-checked and must be
+    positive.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(radius, "[length]", "radius")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    p = pressure.to("MPa").magnitude
+    ri = radius.to("mm").magnitude
+    t = wall_thickness.to("mm").magnitude
+    if p <= 0 or ri <= 0 or t <= 0:
+        raise ValueError("pressure, radius, and wall_thickness must be positive")
+    ro = ri + t
+    denom = ro**3 - ri**3
+    return ThickWallSphereStress(
+        hoop_stress=Quantity(magnitude=p * (2 * ri**3 + ro**3) / (2 * denom), unit="MPa"),
+        radial_stress=Quantity(magnitude=-p, unit="MPa"),
+    )
