@@ -75,6 +75,7 @@ from anvilate.analysis import (
     hollow_shaft_twist_angle,
     interference_axial_capacity,
     interference_fit,
+    interference_for_contact_pressure,
     interference_torque_capacity,
     johnson_critical_stress,
     key_bearing_stress,
@@ -2844,6 +2845,60 @@ def test_interference_fit_matches_hand_calc():
     assert fit.hub_hoop_stress.to("MPa").magnitude == pytest.approx(100.0, rel=1e-6)
     assert fit.shaft_hoop_stress.to("MPa").magnitude == pytest.approx(-60.0, rel=1e-6)
     assert fit.hub_safety_factor(_q("250 MPa")) == pytest.approx(2.5, rel=1e-6)
+
+
+def test_interference_for_contact_pressure_inverts_the_fit():
+    # The same geometry: 60 MPa of contact needs the 0.02 mm radial interference.
+    delta = interference_for_contact_pressure(
+        contact_pressure=_q("60 MPa"),
+        interface_diameter=_q("50 mm"),
+        hub_outer_diameter=_q("100 mm"),
+        hub_modulus=_q("200 GPa"),
+        hub_poisson=0.3,
+        shaft_modulus=_q("200 GPa"),
+        shaft_poisson=0.3,
+    )
+    assert delta.to("mm").magnitude == pytest.approx(0.02, rel=1e-6)
+
+
+def test_interference_pressure_round_trips_through_the_fit():
+    # Invert a target pressure to an interference, feed it back to interference_fit,
+    # and recover the pressure exactly -- including a hollow shaft.
+    kw = {
+        "interface_diameter": _q("50 mm"),
+        "hub_outer_diameter": _q("100 mm"),
+        "hub_modulus": _q("200 GPa"),
+        "hub_poisson": 0.3,
+        "shaft_modulus": _q("120 GPa"),
+        "shaft_poisson": 0.33,
+        "shaft_bore_diameter": _q("20 mm"),
+    }
+    delta = interference_for_contact_pressure(contact_pressure=_q("45 MPa"), **kw)
+    back = interference_fit(radial_interference=delta, **kw)
+    assert back.contact_pressure.to("MPa").magnitude == pytest.approx(45.0, rel=1e-9)
+
+
+def test_interference_for_contact_pressure_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="contact_pressure must be a"):
+        interference_for_contact_pressure(
+            contact_pressure=_q("60 N"),
+            interface_diameter=_q("50 mm"),
+            hub_outer_diameter=_q("100 mm"),
+            hub_modulus=_q("200 GPa"),
+            hub_poisson=0.3,
+            shaft_modulus=_q("200 GPa"),
+            shaft_poisson=0.3,
+        )
+    with pytest.raises(ValueError, match="need hub_outer_diameter >"):
+        interference_for_contact_pressure(
+            contact_pressure=_q("60 MPa"),
+            interface_diameter=_q("100 mm"),  # not smaller than the hub OD
+            hub_outer_diameter=_q("100 mm"),
+            hub_modulus=_q("200 GPa"),
+            hub_poisson=0.3,
+            shaft_modulus=_q("200 GPa"),
+            shaft_poisson=0.3,
+        )
 
 
 def test_interference_fit_hollow_shaft_lowers_pressure():

@@ -142,6 +142,7 @@ from .interference import (
     InterferenceFit,
     interference_axial_capacity,
     interference_fit,
+    interference_for_contact_pressure,
     interference_torque_capacity,
 )
 from .keys import key_bearing_stress, key_shear_stress, key_tangential_force
@@ -330,6 +331,7 @@ __all__ = [
     "thick_wall_sphere",
     "InterferenceFit",
     "interference_fit",
+    "interference_for_contact_pressure",
     "interference_axial_capacity",
     "interference_torque_capacity",
     "HertzContact",

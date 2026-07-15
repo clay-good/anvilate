@@ -26,6 +26,7 @@ from ..units import Quantity
 __all__ = [
     "InterferenceFit",
     "interference_fit",
+    "interference_for_contact_pressure",
     "interference_axial_capacity",
     "interference_torque_capacity",
 ]
@@ -69,6 +70,45 @@ class InterferenceFit(BaseModel):
         )
 
 
+def _fit_geometry(
+    *,
+    interface_diameter: Quantity,
+    hub_outer_diameter: Quantity,
+    hub_modulus: Quantity,
+    hub_poisson: float,
+    shaft_modulus: Quantity,
+    shaft_poisson: float,
+    shaft_bore_diameter: Quantity | None,
+):
+    """Validate the fit geometry and return ``(radius, hub_ratio, shaft_ratio,
+    compliance)`` — the shared terms of δ = p·R·compliance linking the radial
+    interference and the contact pressure (Shigley two-cylinder form)."""
+    _require(interface_diameter, "[length]", "interface_diameter")
+    _require(hub_outer_diameter, "[length]", "hub_outer_diameter")
+    _require(hub_modulus, "[pressure]", "hub_modulus")
+    _require(shaft_modulus, "[pressure]", "shaft_modulus")
+    if shaft_bore_diameter is not None:
+        _require(shaft_bore_diameter, "[length]", "shaft_bore_diameter")
+
+    d = interface_diameter.to("mm").magnitude
+    big_d = hub_outer_diameter.to("mm").magnitude
+    d_i = 0.0 if shaft_bore_diameter is None else shaft_bore_diameter.to("mm").magnitude
+    e_o = hub_modulus.to("MPa").magnitude
+    e_i = shaft_modulus.to("MPa").magnitude
+
+    if not (big_d > d > d_i >= 0):
+        raise ValueError(
+            f"need hub_outer_diameter > interface_diameter > shaft_bore_diameter >= 0; "
+            f"got {hub_outer_diameter}, {interface_diameter}, {shaft_bore_diameter}"
+        )
+
+    hub_ratio = (big_d**2 + d**2) / (big_d**2 - d**2)  # (D²+d²)/(D²−d²)
+    shaft_ratio = (d**2 + d_i**2) / (d**2 - d_i**2)  # (d²+d_i²)/(d²−d_i²)
+    radius = d / 2
+    compliance = (hub_ratio + hub_poisson) / e_o + (shaft_ratio - shaft_poisson) / e_i
+    return radius, hub_ratio, shaft_ratio, compliance
+
+
 def interference_fit(
     *,
     radial_interference: Quantity,
@@ -95,32 +135,17 @@ def interference_fit(
     must exceed any bore.
     """
     _require(radial_interference, "[length]", "radial_interference")
-    _require(interface_diameter, "[length]", "interface_diameter")
-    _require(hub_outer_diameter, "[length]", "hub_outer_diameter")
-    _require(hub_modulus, "[pressure]", "hub_modulus")
-    _require(shaft_modulus, "[pressure]", "shaft_modulus")
-
-    d = interface_diameter.to("mm").magnitude
-    big_d = hub_outer_diameter.to("mm").magnitude
-    d_i = 0.0 if shaft_bore_diameter is None else shaft_bore_diameter.to("mm").magnitude
-    if shaft_bore_diameter is not None:
-        _require(shaft_bore_diameter, "[length]", "shaft_bore_diameter")
+    radius, hub_ratio, shaft_ratio, compliance = _fit_geometry(
+        interface_diameter=interface_diameter,
+        hub_outer_diameter=hub_outer_diameter,
+        hub_modulus=hub_modulus,
+        hub_poisson=hub_poisson,
+        shaft_modulus=shaft_modulus,
+        shaft_poisson=shaft_poisson,
+        shaft_bore_diameter=shaft_bore_diameter,
+    )
     delta = radial_interference.to("mm").magnitude
-    e_o = hub_modulus.to("MPa").magnitude
-    e_i = shaft_modulus.to("MPa").magnitude
-
-    if not (big_d > d > d_i >= 0):
-        raise ValueError(
-            f"need hub_outer_diameter > interface_diameter > shaft_bore_diameter >= 0; "
-            f"got {hub_outer_diameter}, {interface_diameter}, {shaft_bore_diameter}"
-        )
-
-    hub_ratio = (big_d**2 + d**2) / (big_d**2 - d**2)  # (D²+d²)/(D²−d²)
-    shaft_ratio = (d**2 + d_i**2) / (d**2 - d_i**2)  # (d²+d_i²)/(d²−d_i²)
-    radius = d / 2
-
     # δ = p·R·[ (hub_ratio + ν_o)/E_o + (shaft_ratio − ν_i)/E_i ]  ->  solve for p.
-    compliance = (hub_ratio + hub_poisson) / e_o + (shaft_ratio - shaft_poisson) / e_i
     pressure = delta / (radius * compliance)
 
     return InterferenceFit(
@@ -128,6 +153,43 @@ def interference_fit(
         hub_hoop_stress=Quantity(magnitude=pressure * hub_ratio, unit="MPa"),
         shaft_hoop_stress=Quantity(magnitude=-pressure * shaft_ratio, unit="MPa"),
     )
+
+
+def interference_for_contact_pressure(
+    *,
+    contact_pressure: Quantity,
+    interface_diameter: Quantity,
+    hub_outer_diameter: Quantity,
+    hub_modulus: Quantity,
+    hub_poisson: float,
+    shaft_modulus: Quantity,
+    shaft_poisson: float,
+    shaft_bore_diameter: Quantity | None = None,
+) -> Quantity:
+    """The radial interference δ needed to develop a target ``contact_pressure``.
+
+    The exact inverse of :func:`interference_fit`'s pressure solve:
+    δ = p·R·[(D²+d²)/(D²−d²) + ν_o)/E_o + ((d²+d_i²)/(d²−d_i²) − ν_i)/E_i]. Sizing a
+    press/shrink fit usually runs this way — a minimum contact pressure is required
+    (e.g. for a torque-capacity target) and the interference, and hence the ISO 286
+    fit class, must be chosen to reach it. Geometry and material arguments are as
+    for :func:`interference_fit`. Returns the radial interference in mm (double it
+    for the diametral value a fit table lists); ``contact_pressure`` must be a
+    pressure.
+    """
+    _require(contact_pressure, "[pressure]", "contact_pressure")
+    radius, _hub_ratio, _shaft_ratio, compliance = _fit_geometry(
+        interface_diameter=interface_diameter,
+        hub_outer_diameter=hub_outer_diameter,
+        hub_modulus=hub_modulus,
+        hub_poisson=hub_poisson,
+        shaft_modulus=shaft_modulus,
+        shaft_poisson=shaft_poisson,
+        shaft_bore_diameter=shaft_bore_diameter,
+    )
+    p = contact_pressure.to("MPa").magnitude
+    delta = p * radius * compliance
+    return Quantity(magnitude=delta, unit="mm")
 
 
 def interference_axial_capacity(
