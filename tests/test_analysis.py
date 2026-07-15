@@ -172,6 +172,9 @@ from anvilate.analysis import (
     shaft_twist_angle,
     shaft_von_mises_stress,
     shear_flow,
+    short_shoe_brake_torque,
+    short_shoe_is_self_locking,
+    short_shoe_normal_force,
     shrink_fit_assembly_temperature,
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_annular_plate_uniform_load,
@@ -6244,4 +6247,84 @@ def test_cantilever_rejects_wrong_dimensions():
             second_moment=inertia,
             extreme_fibre=_q("5 mm"),
             elastic_modulus=_q("200 mm"),
+        )
+
+
+def test_short_shoe_brake_self_energizing_lever_statics():
+    # F=1 kN at c=300 mm, shoe normal at b=100 mm, friction drag at a=40 mm,
+    # mu=0.35. Self-energizing: N = F*c/(b - mu*a) = 300000/86 = 3488.4 N.
+    energized = short_shoe_normal_force(
+        actuation_force=_q("1 kN"),
+        force_arm=_q("300 mm"),
+        normal_arm=_q("100 mm"),
+        friction_arm=_q("40 mm"),
+        friction_coefficient=0.35,
+        self_energizing=True,
+    )
+    assert energized.to("N").magnitude == pytest.approx(300000.0 / 86.0, rel=1e-12)
+    # Reversed drum rotation fights the lever: N = F*c/(b + mu*a) = 2631.6 N --
+    # the same hand force brakes measurably harder in the energizing direction.
+    opposed = short_shoe_normal_force(
+        actuation_force=_q("1 kN"),
+        force_arm=_q("300 mm"),
+        normal_arm=_q("100 mm"),
+        friction_arm=_q("40 mm"),
+        friction_coefficient=0.35,
+        self_energizing=False,
+    )
+    assert opposed.to("N").magnitude == pytest.approx(300000.0 / 114.0, rel=1e-12)
+    assert energized.to("N").magnitude > opposed.to("N").magnitude
+    # Torque is the friction drag at the drum radius: T = mu*N*D/2.
+    torque = short_shoe_brake_torque(
+        normal_force=energized, drum_diameter=_q("300 mm"), friction_coefficient=0.35
+    )
+    assert torque.to("N*m").magnitude == pytest.approx(0.35 * (300000.0 / 86.0) * 0.15, rel=1e-12)
+    # With mu=0 there is no energizing effect and both directions agree at F*c/b.
+    neutral = short_shoe_normal_force(
+        actuation_force=_q("1 kN"),
+        force_arm=_q("300 mm"),
+        normal_arm=_q("100 mm"),
+        friction_arm=_q("40 mm"),
+        friction_coefficient=0.0,
+        self_energizing=True,
+    )
+    assert neutral.to("N").magnitude == pytest.approx(3000.0, rel=1e-12)
+
+
+def test_short_shoe_brake_self_locking_geometry():
+    # b=30 mm on a=100 mm locks at mu >= 0.3; a mu=0.35 lining grabs.
+    assert short_shoe_is_self_locking(
+        normal_arm=_q("30 mm"), friction_arm=_q("100 mm"), friction_coefficient=0.35
+    )
+    assert not short_shoe_is_self_locking(
+        normal_arm=_q("100 mm"), friction_arm=_q("40 mm"), friction_coefficient=0.35
+    )
+    # The force solve refuses the locking geometry rather than returning a
+    # negative "force".
+    with pytest.raises(ValueError, match="self-locking geometry"):
+        short_shoe_normal_force(
+            actuation_force=_q("1 kN"),
+            force_arm=_q("300 mm"),
+            normal_arm=_q("30 mm"),
+            friction_arm=_q("100 mm"),
+            friction_coefficient=0.35,
+            self_energizing=True,
+        )
+    # The de-energizing direction of the same geometry is fine (b + mu*a).
+    released = short_shoe_normal_force(
+        actuation_force=_q("1 kN"),
+        force_arm=_q("300 mm"),
+        normal_arm=_q("30 mm"),
+        friction_arm=_q("100 mm"),
+        friction_coefficient=0.35,
+        self_energizing=False,
+    )
+    assert released.to("N").magnitude == pytest.approx(300000.0 / 65.0, rel=1e-12)
+    with pytest.raises(ValueError, match="normal_arm must be positive"):
+        short_shoe_is_self_locking(
+            normal_arm=_q("0 mm"), friction_arm=_q("100 mm"), friction_coefficient=0.35
+        )
+    with pytest.raises(ValueError, match="normal_force must be a"):
+        short_shoe_brake_torque(
+            normal_force=_q("3 mm"), drum_diameter=_q("300 mm"), friction_coefficient=0.35
         )

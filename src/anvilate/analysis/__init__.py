@@ -42,7 +42,8 @@ modules:
   centrifugal tension and the max-power belt speed), V-belt wedge friction, and
   belt-drive geometry (length and wrap angle)
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
-  torque requires, and the peak lining pressure
+  torque requires, and the peak lining pressure; short-shoe (block) brake lever
+  statics with the self-energizing/self-locking distinction
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
@@ -150,6 +151,9 @@ from .brake import (
     band_brake_max_lining_pressure,
     band_brake_tight_tension_for_torque,
     band_brake_torque,
+    short_shoe_brake_torque,
+    short_shoe_is_self_locking,
+    short_shoe_normal_force,
 )
 from .clutch import (
     UNIFORM_PRESSURE,
@@ -443,6 +447,9 @@ __all__ = [
     "band_brake_torque",
     "band_brake_tight_tension_for_torque",
     "band_brake_max_lining_pressure",
+    "short_shoe_normal_force",
+    "short_shoe_brake_torque",
+    "short_shoe_is_self_locking",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",
