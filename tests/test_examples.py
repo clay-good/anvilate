@@ -735,3 +735,23 @@ def test_bolt_tension_thread_area_example_fails_on_the_real_area():
     assert thread.status is CheckStatus.FAIL
     assert "safety factor 1.29" in thread.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_coupling_key_example_passes_shear_but_fails_bearing():
+    namespace = runpy.run_path(str(_EXAMPLES / "coupling_key_sizing.py"))
+    card = namespace["screen_coupling_key"]()
+    by_name = {e.name: e for e in card.entries}
+    # Sized on shear, the 10 mm key clears the shear screen (SF 1.52)...
+    shear = by_name["key shear at 10 mm"]
+    assert shear.passed
+    assert "safety factor 1.52" in shear.detail
+    # ...but a parallel key fails in bearing first -> the side stress busts the
+    # 1.5 requirement (SF 0.84) and the assembly FAILs.
+    bearing = by_name["key bearing at 10 mm"]
+    assert bearing.status is CheckStatus.FAIL
+    assert "safety factor 0.84" in bearing.detail
+    assert card.status is CheckStatus.FAIL
+    # The sizing inverse confirms bearing governs and needs ~18 mm.
+    req = namespace["required_key_length"]()
+    assert req.governing_mode == "bearing"
+    assert req.required_length.to("mm").magnitude == pytest.approx(17.778, rel=1e-3)
