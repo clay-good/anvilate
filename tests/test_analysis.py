@@ -17,6 +17,7 @@ from anvilate.analysis import (
     CrossSection,
     asme_cylinder_thickness,
     axial_stress,
+    barth_velocity_factor,
     basquin_cycles_to_failure,
     basquin_stress_for_life,
     bearing_basic_rating_life,
@@ -129,6 +130,7 @@ from anvilate.analysis import (
     natural_frequency_from_deflection,
     overhang_tip_load,
     overhang_uniform_load,
+    pitch_line_velocity,
     plate_buckling_stress,
     polar_second_moment_hollow,
     polar_second_moment_solid,
@@ -2985,6 +2987,23 @@ def test_plate_buckling_rejects_bad_inputs():
             thickness=_q("5 mm"),
             width=_q("300 mm"),
         )
+
+
+def test_gear_pitch_line_velocity_and_barth_factor():
+    # V = pi*d*n: 100 mm pitch circle at 1500 rpm -> 7.854 m/s.
+    v = pitch_line_velocity(pitch_diameter=_q("100 mm"), rotational_speed=_q("1500 rpm"))
+    assert v.to("m/s").magnitude == pytest.approx(7.85398, rel=1e-4)
+    # Barth Kv for cut teeth = (6.1 + V)/6.1 = 2.288 -> more than doubles the load.
+    kv_cut = barth_velocity_factor(pitch_line_velocity=v, quality="cut")
+    assert kv_cut == pytest.approx((6.1 + 7.85398) / 6.1, rel=1e-4)
+    # Finer teeth amplify less: precision < hobbed < cut.
+    kv_hobbed = barth_velocity_factor(pitch_line_velocity=v, quality="hobbed")
+    kv_precision = barth_velocity_factor(pitch_line_velocity=v, quality="precision")
+    assert kv_precision < kv_hobbed < kv_cut
+    with pytest.raises(ValueError, match="quality must be one of"):
+        barth_velocity_factor(pitch_line_velocity=v, quality="forged")
+    with pytest.raises(ValueError, match="rotational_speed must be a"):
+        pitch_line_velocity(pitch_diameter=_q("100 mm"), rotational_speed=_q("1500 N"))
 
 
 def test_gear_force_resolution_from_pressure_angle():

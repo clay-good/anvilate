@@ -21,14 +21,24 @@ factors on top. Inputs are dimension-checked
 
 from __future__ import annotations
 
-from math import cos, radians, tan
+from math import cos, radians, sqrt, tan
 
 from ..units import Quantity
+
+# Barth velocity-factor constants Kv = (A + f(V))/A, by tooth manufacturing quality:
+# cut/milled uses V, hobbed/shaped and precision ground/shaved use sqrt(V) (V m/s).
+_BARTH_FACTORS = {
+    "cut": (6.1, False),
+    "hobbed": (3.56, True),
+    "precision": (5.56, True),
+}
 
 __all__ = [
     "gear_tangential_load",
     "gear_radial_load",
     "gear_normal_load",
+    "pitch_line_velocity",
+    "barth_velocity_factor",
     "lewis_bending_stress",
 ]
 
@@ -91,6 +101,56 @@ def gear_normal_load(*, tangential_load: Quantity, pressure_angle: float) -> Qua
     _require(tangential_load, "[force]", "tangential_load")
     phi = _check_pressure_angle(pressure_angle)
     return Quantity(magnitude=tangential_load.to("N").magnitude / cos(phi), unit="N")
+
+
+def pitch_line_velocity(*, pitch_diameter: Quantity, rotational_speed: Quantity) -> Quantity:
+    """The pitch-line velocity V = π·d·n of a gear.
+
+    The linear speed of the teeth at the pitch circle, which sets the dynamic load
+    a gear tooth feels. ``pitch_diameter`` d is the pitch diameter and
+    ``rotational_speed`` n the gear speed (rpm or rad/s — a rotational frequency).
+    Both must be positive. Returns the velocity in m/s, ready for
+    :func:`barth_velocity_factor`.
+    """
+    _require(pitch_diameter, "[length]", "pitch_diameter")
+    if not rotational_speed.has_dimension("[frequency]"):
+        raise ValueError(
+            f"rotational_speed must be a [frequency] quantity; got "
+            f"{rotational_speed.dimensionality} ({rotational_speed})"
+        )
+    d = pitch_diameter.to("m").magnitude
+    omega = rotational_speed.to("rad/s").magnitude  # V = omega * r = pi * d * n
+    if d <= 0:
+        raise ValueError(f"pitch_diameter must be positive; got {pitch_diameter}")
+    if omega <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    return Quantity(magnitude=omega * d / 2.0, unit="m/s")
+
+
+def barth_velocity_factor(*, pitch_line_velocity: Quantity, quality: str = "cut") -> float:
+    """The Barth dynamic velocity factor K_v that amplifies a gear's tooth load.
+
+    A gear tooth at speed carries more than the static transmitted load because of
+    meshing impact; the Barth factor K_v = (A + f(V))/A estimates the increase, with
+    the constant A and whether it uses V or √V set by the tooth ``quality``:
+    ``"cut"`` (commercial cut/milled, A = 6.1, linear V), ``"hobbed"`` (A = 3.56,
+    √V), or ``"precision"`` (shaved/ground, A = 5.56, √V) — finer teeth amplify
+    less. ``pitch_line_velocity`` V is from :func:`pitch_line_velocity` (a velocity).
+    Multiply the transmitted load by K_v before the :func:`lewis_bending_stress`
+    screen. Returns the dimensionless K_v (≥ 1).
+    """
+    if not pitch_line_velocity.has_dimension("[velocity]"):
+        raise ValueError(
+            f"pitch_line_velocity must be a [velocity] quantity; got "
+            f"{pitch_line_velocity.dimensionality} ({pitch_line_velocity})"
+        )
+    if quality not in _BARTH_FACTORS:
+        raise ValueError(f"quality must be one of {sorted(_BARTH_FACTORS)}; got {quality!r}")
+    v = pitch_line_velocity.to("m/s").magnitude
+    if v < 0:
+        raise ValueError(f"pitch_line_velocity must be non-negative; got {pitch_line_velocity}")
+    a, use_sqrt = _BARTH_FACTORS[quality]
+    return (a + (sqrt(v) if use_sqrt else v)) / a
 
 
 def lewis_bending_stress(

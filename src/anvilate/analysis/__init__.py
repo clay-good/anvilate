@@ -39,8 +39,8 @@ modules:
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, and the inertia a speed-smoothing target requires
-- :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads
-  and Lewis tooth-root bending stress
+- :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads,
+  pitch-line velocity, Barth dynamic factor, and Lewis tooth-root bending stress
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, the
   ISO 898 tensile stress area / axial stress, thread-stripping engagement, and
   preloaded-joint load sharing (stiffness constant, bolt/member load, separation)
@@ -212,10 +212,12 @@ from .flywheel import (
     flywheel_inertia_for_fluctuation,
 )
 from .gear import (
+    barth_velocity_factor,
     gear_normal_load,
     gear_radial_load,
     gear_tangential_load,
     lewis_bending_stress,
+    pitch_line_velocity,
 )
 from .impact import (
     SUDDENLY_APPLIED_FACTOR,
@@ -458,6 +460,8 @@ __all__ = [
     "gear_tangential_load",
     "gear_radial_load",
     "gear_normal_load",
+    "pitch_line_velocity",
+    "barth_velocity_factor",
     "lewis_bending_stress",
     "key_tangential_force",
     "key_shear_stress",
