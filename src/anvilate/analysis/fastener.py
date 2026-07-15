@@ -26,6 +26,7 @@ from __future__ import annotations
 from math import pi, sqrt
 
 from ..units import Quantity
+from .fatigue import CyclicStress, cyclic_stress_components
 
 # ISO 898 tensile-stress-area factor: A_t = (pi/4)(d - 0.9382*P)^2, where the
 # effective diameter is the mean of the pitch and rounded-root minor diameters.
@@ -60,6 +61,7 @@ __all__ = [
     "bolt_load_in_joint",
     "member_clamp_load_in_joint",
     "joint_separation_load",
+    "preloaded_bolt_cyclic_stress",
 ]
 
 # Typical nut factor K for as-received (lightly-oiled) steel fasteners. Dry/rough
@@ -461,3 +463,55 @@ def _check_factor(stiffness_factor: float) -> None:
         raise ValueError(
             f"stiffness_factor (joint constant C) must lie in (0, 1); got {stiffness_factor}"
         )
+
+
+def preloaded_bolt_cyclic_stress(
+    *,
+    preload: Quantity,
+    min_external_load: Quantity,
+    max_external_load: Quantity,
+    stiffness_factor: float,
+    tensile_stress_area: Quantity,
+) -> CyclicStress:
+    """The fatigue stress cycle in a preloaded bolt under a fluctuating external
+    load.
+
+    A bolt tightened to ``preload`` F_i and pulled by an external load that swings
+    between ``min_external_load`` and ``max_external_load`` (per bolt) carries only
+    the fraction ``stiffness_factor`` C of that swing (see
+    :func:`joint_stiffness_factor`), all over the ``tensile_stress_area`` A_t. So the
+    bolt stress runs between (F_i + C·P)/A_t at each extreme, giving an alternating
+    stress σ_a = C·(P_max − P_min)/(2·A_t) and a mean σ_m = F_i/A_t + C·(P_max +
+    P_min)/(2·A_t). The point of preload is right here: C is small, so the
+    *amplitude* the bolt sees is tiny even though the mean is high — which is what
+    keeps a preloaded bolt off the fatigue line. Feed the returned
+    :class:`~anvilate.analysis.CyclicStress` straight to
+    :func:`~anvilate.analysis.goodman_safety_factor` and its siblings. The loads
+    must be forces, ``tensile_stress_area`` an area, and C in (0, 1).
+    """
+    _require(preload, "[force]", "preload")
+    _require(min_external_load, "[force]", "min_external_load")
+    _require(max_external_load, "[force]", "max_external_load")
+    _check_factor(stiffness_factor)
+    if not tensile_stress_area.has_dimension("[length]**2"):
+        raise ValueError(
+            f"tensile_stress_area must be a [length]**2 quantity; got "
+            f"{tensile_stress_area.dimensionality} ({tensile_stress_area})"
+        )
+    fi = preload.to("N").magnitude
+    p_min = min_external_load.to("N").magnitude
+    p_max = max_external_load.to("N").magnitude
+    if p_max < p_min:
+        raise ValueError(
+            f"max_external_load ({max_external_load}) must be at least "
+            f"min_external_load ({min_external_load})"
+        )
+    area = tensile_stress_area.to("mm**2").magnitude
+    if area <= 0:
+        raise ValueError(f"tensile_stress_area must be positive; got {tensile_stress_area}")
+    stress_max = (fi + stiffness_factor * p_max) / area
+    stress_min = (fi + stiffness_factor * p_min) / area
+    return cyclic_stress_components(
+        max_stress=Quantity(magnitude=stress_max, unit="MPa"),
+        min_stress=Quantity(magnitude=stress_min, unit="MPa"),
+    )

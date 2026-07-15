@@ -143,6 +143,7 @@ from anvilate.analysis import (
     power_screw_is_self_locking,
     power_screw_lower_torque,
     power_screw_raise_torque,
+    preloaded_bolt_cyclic_stress,
     principal_stresses_plane,
     radius_of_gyration,
     rectangular_second_moment,
@@ -3363,6 +3364,52 @@ def test_shear_flow_rejects_bad_inputs():
         )
     with pytest.raises(ValueError, match="shear_flow must be positive"):
         fastener_spacing_for_shear_flow(fastener_capacity=_q("4 kN"), shear_flow=_q("0 N/mm"))
+
+
+def test_preloaded_bolt_cyclic_stress_keeps_the_amplitude_small():
+    # Fi=25 kN, C=0.3, external 0..10 kN, A_t=84.3 mm^2. Bolt stress runs between
+    # (25000)/84.3 = 296.6 and (25000+3000)/84.3 = 332.1 MPa.
+    cs = preloaded_bolt_cyclic_stress(
+        preload=_q("25 kN"),
+        min_external_load=_q("0 kN"),
+        max_external_load=_q("10 kN"),
+        stiffness_factor=0.3,
+        tensile_stress_area=_q("84.3 mm**2"),
+    )
+    # Alternating = C*(Pmax-Pmin)/(2*A_t) is tiny (17.8 MPa) despite a high mean...
+    assert cs.alternating_stress.to("MPa").magnitude == pytest.approx(17.794, rel=1e-3)
+    assert cs.mean_stress.to("MPa").magnitude == pytest.approx(314.353, rel=1e-4)
+    # ...which is the point of preload: the amplitude stays far below the mean.
+    assert cs.alternating_stress.to("MPa").magnitude < cs.mean_stress.to("MPa").magnitude
+    # It feeds straight into a Goodman screen.
+    from anvilate.analysis import goodman_safety_factor
+
+    n = goodman_safety_factor(
+        alternating_stress=cs.alternating_stress,
+        mean_stress=cs.mean_stress,
+        endurance_limit=_q("120 MPa"),
+        ultimate_strength=_q("800 MPa"),
+    )
+    assert n > 1  # a preloaded bolt survives the fluctuating load
+
+
+def test_preloaded_bolt_cyclic_stress_rejects_bad_inputs():
+    good = {
+        "preload": _q("25 kN"),
+        "min_external_load": _q("0 kN"),
+        "stiffness_factor": 0.3,
+        "tensile_stress_area": _q("84.3 mm**2"),
+    }
+    with pytest.raises(ValueError, match="max_external_load .* must be at least"):
+        preloaded_bolt_cyclic_stress(max_external_load=_q("-5 kN"), **good)
+    with pytest.raises(ValueError, match="tensile_stress_area must be a"):
+        preloaded_bolt_cyclic_stress(
+            preload=_q("25 kN"),
+            min_external_load=_q("0 kN"),
+            max_external_load=_q("10 kN"),
+            stiffness_factor=0.3,
+            tensile_stress_area=_q("84.3 mm"),
+        )
 
 
 def test_preloaded_joint_shares_the_external_load():
