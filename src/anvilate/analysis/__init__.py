@@ -24,6 +24,8 @@ modules:
   open-section (strip) torsion
 - :mod:`~anvilate.analysis.power_screw` — square-thread lead-screw raise/lower
   torque, efficiency, and the self-locking condition
+- :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
+  mesh efficiency, and the self-locking condition
 - :mod:`~anvilate.analysis.clutch` — disc and cone clutch / brake friction torque
   (uniform-wear and uniform-pressure) and the clamp force a torque requires
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
@@ -406,6 +408,12 @@ from .weld import (
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
 )
+from .worm import (
+    worm_gear_efficiency,
+    worm_gear_ratio,
+    worm_is_self_locking,
+    worm_lead_angle,
+)
 
 __all__ = [
     "axial_stress",
@@ -610,6 +618,10 @@ __all__ = [
     "power_screw_lower_torque",
     "power_screw_efficiency",
     "power_screw_is_self_locking",
+    "worm_gear_ratio",
+    "worm_lead_angle",
+    "worm_gear_efficiency",
+    "worm_is_self_locking",
     "ThinWallStress",
     "ThickWallStress",
     "ThickWallSphereStress",

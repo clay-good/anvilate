@@ -245,6 +245,10 @@ from anvilate.analysis import (
     von_mises_plane_stress,
     von_mises_principal,
     wahl_factor,
+    worm_gear_efficiency,
+    worm_gear_ratio,
+    worm_is_self_locking,
+    worm_lead_angle,
     yield_safety_factor,
 )
 from anvilate.units import Quantity
@@ -6931,3 +6935,52 @@ def test_bevel_gear_rejects_bad_inputs():
         bevel_gear_radial_load(tangential_load=_q("2000 N"), pressure_angle=0, pitch_cone_angle=20)
     with pytest.raises(ValueError, match=r"pitch_cone_angle \(degrees\) must lie in"):
         bevel_gear_axial_load(tangential_load=_q("2000 N"), pressure_angle=20, pitch_cone_angle=90)
+
+
+def test_worm_drive_ratio_lead_angle_efficiency_and_self_locking():
+    from math import atan2, cos, degrees, pi, radians, tan
+
+    # A single-start worm on a 40-tooth wheel reduces 40:1 in one mesh.
+    assert worm_gear_ratio(worm_starts=1, gear_teeth=40) == pytest.approx(40.0)
+    assert worm_gear_ratio(worm_starts=2, gear_teeth=40) == pytest.approx(20.0)
+    # Lead angle: L = N_W*p_x = 20 mm wrapped around a 50 mm worm.
+    lam_deg = worm_lead_angle(
+        worm_starts=2, axial_pitch=_q("10 mm"), worm_pitch_diameter=_q("50 mm")
+    )
+    assert lam_deg == pytest.approx(degrees(atan2(20.0, pi * 50.0)), rel=1e-12)
+    assert lam_deg == pytest.approx(7.256, rel=1e-3)
+    # Efficiency (worm driving) at lambda=15 deg, mu=0.05, phi_n=14.5 deg.
+    eta = worm_gear_efficiency(lead_angle=15, friction_coefficient=0.05, normal_pressure_angle=14.5)
+    lam = radians(15)
+    phi = radians(14.5)
+    ref = (cos(phi) - 0.05 * tan(lam)) / (cos(phi) + 0.05 / tan(lam))
+    assert eta == pytest.approx(ref, rel=1e-12)
+    assert eta == pytest.approx(0.8268, rel=1e-3)
+    # A frictionless mesh is perfectly efficient.
+    assert worm_gear_efficiency(lead_angle=15, friction_coefficient=0.0) == pytest.approx(1.0)
+    # A higher lead angle raises efficiency (multi-start worms drive harder).
+    assert worm_gear_efficiency(lead_angle=25, friction_coefficient=0.05) > eta
+
+
+def test_worm_self_locking_mirrors_the_lead_versus_friction_battle():
+    # Fine lead (2.5 deg), modest friction (0.05): friction beats the lead ->
+    # self-locking (mu >= cos(phi_n)*tan(lambda)).
+    assert worm_is_self_locking(lead_angle=2.5, friction_coefficient=0.05)
+    # Open the lead to 15 deg and the same friction can no longer hold it.
+    assert not worm_is_self_locking(lead_angle=15, friction_coefficient=0.05)
+    # A self-locking worm runs below 50% efficiency -- the price of holding load.
+    eta = worm_gear_efficiency(lead_angle=2.5, friction_coefficient=0.05)
+    assert eta < 0.5
+
+
+def test_worm_drive_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="worm_starts must be a positive whole number"):
+        worm_gear_ratio(worm_starts=0, gear_teeth=40)
+    with pytest.raises(ValueError, match="gear_teeth must be a positive whole number"):
+        worm_gear_ratio(worm_starts=1, gear_teeth=40.5)
+    with pytest.raises(ValueError, match="axial_pitch must be positive"):
+        worm_lead_angle(worm_starts=1, axial_pitch=_q("0 mm"), worm_pitch_diameter=_q("50 mm"))
+    with pytest.raises(ValueError, match=r"lead_angle \(degrees\) must lie in"):
+        worm_gear_efficiency(lead_angle=0, friction_coefficient=0.05)
+    with pytest.raises(ValueError, match="friction_coefficient must be non-negative"):
+        worm_is_self_locking(lead_angle=15, friction_coefficient=-0.1)
