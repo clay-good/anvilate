@@ -1074,3 +1074,23 @@ def test_conveyor_chain_example_rejects_the_rough_small_sprocket():
     assert "safety factor 1.17" in good.detail
     # A drive that offers a failing sprocket overall fails.
     assert card.status is CheckStatus.FAIL
+
+
+def test_highspeed_cam_example_is_a_speed_squared_problem():
+    namespace = runpy.run_path(str(_EXAMPLES / "highspeed_cam_follower.py"))
+    card = namespace["screen_cam_follower"]()
+    by_name = {e.name: e for e in card.entries}
+    # Comfortable at 600 rpm...
+    slow = by_name["SHM at 600 rpm"]
+    assert slow.passed
+    assert "safety factor 3.34" in slow.detail
+    # ...but doubling the speed quadruples the acceleration and floats the
+    # follower (the omega^2 law).
+    fast = by_name["SHM at 1200 rpm"]
+    assert fast.status is CheckStatus.FAIL
+    assert "safety factor 0.83" in fast.detail
+    # Cycloidal's smoother ends cost a higher mid-rise peak: it fails harder.
+    cyc = by_name["cycloidal at 1200 rpm"]
+    assert cyc.status is CheckStatus.FAIL
+    assert "safety factor 0.65" in cyc.detail
+    assert card.status is CheckStatus.FAIL
