@@ -1009,3 +1009,31 @@ def test_fixture_clamp_example_rides_the_belleville_plateau():
     plateau = by_name["plateau disc (h/t = sqrt(2))"]
     assert plateau.passed
     assert "safety factor 4.34" in plateau.detail
+
+
+def test_winch_planetary_example_checks_teeth_before_torque():
+    namespace = runpy.run_path(str(_EXAMPLES / "winch_planetary_reducer.py"))
+    card = namespace["screen_winch_reducer"]()
+    by_name = {e.name: e for e in card.entries}
+    # The motor alone musters a quarter of the drum demand.
+    direct = by_name["direct drive, drum torque"]
+    assert direct.status is CheckStatus.FAIL
+    assert "safety factor 0.28" in direct.detail
+    # The tidy 4.5:1 needs a 37.5-tooth planet -- that set cannot be cut...
+    half_tooth = by_name["4.5:1 (sun 30, ring 105), buildable"]
+    assert half_tooth.status is CheckStatus.FAIL
+    assert "no whole-tooth planet fits" in half_tooth.detail
+    # ...and 4.7:1 cuts fine but three equally spaced planets never phase in.
+    spacing = by_name["4.7:1 (sun 30, ring 110), buildable"]
+    assert spacing.status is CheckStatus.FAIL
+    assert "cannot assemble" in spacing.detail
+    assert card.status is CheckStatus.FAIL
+    # The buildable 4.6:1 assembles and clears the torque demand with margin.
+    buildable = by_name["4.6:1 (sun 30, ring 108), buildable"]
+    assert buildable.passed
+    assert "39-tooth planets" in buildable.detail
+    torque = by_name["4.6:1 (sun 30, ring 108), drum torque"]
+    assert torque.passed
+    assert "safety factor 1.26" in torque.detail
+    # Unbuildable candidates never get a torque row -- teeth vote first.
+    assert "4.5:1 (sun 30, ring 105), drum torque" not in by_name
