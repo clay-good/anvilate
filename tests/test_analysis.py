@@ -250,6 +250,7 @@ from anvilate.analysis import (
     worm_gear_ratio,
     worm_is_self_locking,
     worm_lead_angle,
+    worm_tangential_force,
     yield_safety_factor,
 )
 from anvilate.units import Quantity
@@ -7081,4 +7082,28 @@ def test_composite_curved_beam_rejects_bad_strips():
     with pytest.raises(ValueError, match="width must be positive"):
         composite_curved_beam_stress(
             moment=_q("500 N*m"), strips=[(_q("0 mm"), _q("50 mm"), _q("100 mm"))]
+        )
+
+
+def test_worm_tangential_force_from_the_power_balance():
+    from math import radians, tan
+
+    # W_Wt = W_Gt*tan(lambda)/eta: friction raises the input force by 1/eta.
+    wgt = _q("4000 N")
+    lam = 15.0
+    eta = worm_gear_efficiency(
+        lead_angle=lam, friction_coefficient=0.05, normal_pressure_angle=14.5
+    )
+    wwt = worm_tangential_force(gear_tangential_load=wgt, lead_angle=lam, friction_coefficient=0.05)
+    assert wwt.to("N").magnitude == pytest.approx(4000 * tan(radians(lam)) / eta, rel=1e-12)
+    # A frictionless mesh needs exactly W_Gt*tan(lambda) -- the pure geometry.
+    frictionless = worm_tangential_force(
+        gear_tangential_load=wgt, lead_angle=lam, friction_coefficient=0.0
+    )
+    assert frictionless.to("N").magnitude == pytest.approx(4000 * tan(radians(lam)), rel=1e-12)
+    # Friction always costs more input force than the frictionless floor.
+    assert wwt.to("N").magnitude > frictionless.to("N").magnitude
+    with pytest.raises(ValueError, match="gear_tangential_load must be a"):
+        worm_tangential_force(
+            gear_tangential_load=_q("4000 N*m"), lead_angle=lam, friction_coefficient=0.05
         )

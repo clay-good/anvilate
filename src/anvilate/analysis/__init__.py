@@ -25,7 +25,7 @@ modules:
 - :mod:`~anvilate.analysis.power_screw` — square-thread lead-screw raise/lower
   torque, efficiency, and the self-locking condition
 - :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
-  mesh efficiency, and the self-locking condition
+  mesh efficiency, the self-locking condition, and the input tangential force
 - :mod:`~anvilate.analysis.clutch` — disc and cone clutch / brake friction torque
   (uniform-wear and uniform-pressure) and the clamp force a torque requires
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
@@ -415,6 +415,7 @@ from .worm import (
     worm_gear_ratio,
     worm_is_self_locking,
     worm_lead_angle,
+    worm_tangential_force,
 )
 
 __all__ = [
@@ -625,6 +626,7 @@ __all__ = [
     "worm_lead_angle",
     "worm_gear_efficiency",
     "worm_is_self_locking",
+    "worm_tangential_force",
     "ThinWallStress",
     "ThickWallStress",
     "ThickWallSphereStress",

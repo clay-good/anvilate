@@ -36,6 +36,7 @@ __all__ = [
     "worm_lead_angle",
     "worm_gear_efficiency",
     "worm_is_self_locking",
+    "worm_tangential_force",
 ]
 
 
@@ -165,3 +166,35 @@ def worm_is_self_locking(
     mu = _check_friction(friction_coefficient)
     phi_n = _check_pressure_angle(normal_pressure_angle)
     return mu >= cos(phi_n) * tan(lam)
+
+
+def worm_tangential_force(
+    *,
+    gear_tangential_load: Quantity,
+    lead_angle: float,
+    friction_coefficient: float,
+    normal_pressure_angle: float = 14.5,
+) -> Quantity:
+    """The worm's input tangential force W_Wt = W_Gt·tan λ / η.
+
+    The tangential (driving) force the input shaft must apply at the worm pitch
+    line to transmit a given wheel load — what sizes the worm's input torque and
+    the shaft/bearing reactions. It follows straight from the power balance: the
+    wheel and worm pitch velocities are in the ratio tan λ, so
+    η = (W_Gt·V_gear)/(W_Wt·V_worm) = W_Gt·tan λ / W_Wt, giving
+    W_Wt = W_Gt·tan λ / η. ``gear_tangential_load`` W_Gt is the wheel's
+    transmitted tangential force (2·T_gear/d_gear), and ``lead_angle`` λ,
+    ``friction_coefficient`` μ, and ``normal_pressure_angle`` φ_n set the
+    efficiency η exactly as in :func:`worm_gear_efficiency`. A frictionless mesh
+    needs only W_Gt·tan λ; friction raises the input force by 1/η. Returns the
+    worm tangential force in newtons.
+    """
+    _require(gear_tangential_load, "[force]", "gear_tangential_load")
+    lam = _check_lead_angle(lead_angle)
+    eta = worm_gear_efficiency(
+        lead_angle=lead_angle,
+        friction_coefficient=friction_coefficient,
+        normal_pressure_angle=normal_pressure_angle,
+    )
+    magnitude = gear_tangential_load.to("N").magnitude * tan(lam) / eta
+    return Quantity(magnitude=magnitude, unit="N")
