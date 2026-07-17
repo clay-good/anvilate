@@ -29,6 +29,7 @@ from ..units import Quantity
 __all__ = [
     "chain_length_in_pitches",
     "chordal_speed_variation",
+    "chain_speed",
 ]
 
 
@@ -93,3 +94,33 @@ def chordal_speed_variation(*, sprocket_teeth: int) -> float:
     """
     n = _check_teeth(sprocket_teeth, "sprocket_teeth")
     return 1.0 - cos(pi / n)
+
+
+def chain_speed(
+    *, sprocket_teeth: int, chain_pitch: Quantity, rotational_speed: Quantity
+) -> Quantity:
+    """The mean linear chain speed v = N·p·n.
+
+    A sprocket's pitch circle carries N·p of chain per revolution, so the chain's
+    mean linear speed is v = N·p·n for a sprocket turning at speed n — the
+    velocity that turns a tension into transmitted power (P = F·v). ``sprocket_teeth``
+    N and ``chain_pitch`` p describe the sprocket, and ``rotational_speed`` n is its
+    speed (rpm or rad/s — a rotational frequency). All must be positive. Returns
+    the mean speed in m/s (the chordal action swings the instantaneous speed about
+    it by :func:`chordal_speed_variation`).
+    """
+    n = _check_teeth(sprocket_teeth, "sprocket_teeth")
+    _require(chain_pitch, "[length]", "chain_pitch")
+    if not rotational_speed.has_dimension("[frequency]"):
+        raise ValueError(
+            f"rotational_speed must be a rotational-speed ([frequency]) quantity; got "
+            f"{rotational_speed.dimensionality} ({rotational_speed})"
+        )
+    p = chain_pitch.to("m").magnitude
+    if p <= 0:
+        raise ValueError(f"chain_pitch must be positive; got {chain_pitch}")
+    omega = rotational_speed.to("rad/s").magnitude
+    if omega <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    rev_per_second = omega / (2.0 * pi)
+    return Quantity(magnitude=n * p * rev_per_second, unit="m/s")

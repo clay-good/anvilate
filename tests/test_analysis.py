@@ -57,6 +57,7 @@ from anvilate.analysis import (
     cantilever_uniform_load,
     capstan_tension_ratio,
     chain_length_in_pitches,
+    chain_speed,
     chordal_speed_variation,
     circular_area,
     circular_curved_beam_stress,
@@ -7166,3 +7167,28 @@ def test_chain_drive_rejects_bad_inputs():
         )
     with pytest.raises(ValueError, match="positive whole number of teeth"):
         chordal_speed_variation(sprocket_teeth=17.5)
+
+
+def test_chain_speed_is_teeth_times_pitch_times_speed():
+    from math import pi
+
+    # v = N*p*n: a 17-tooth #80 (25.4 mm) sprocket at 300 rpm.
+    v = chain_speed(sprocket_teeth=17, chain_pitch=_q("25.4 mm"), rotational_speed=_q("300 rpm"))
+    rev_per_s = 300.0 / 60.0
+    assert v.to("m/s").magnitude == pytest.approx(17 * 0.0254 * rev_per_s, rel=1e-9)
+    assert v.to("m/s").magnitude == pytest.approx(2.159, rel=1e-3)
+    # rad/s in gives the same answer (300 rpm = 31.4159 rad/s).
+    v_rad = chain_speed(
+        sprocket_teeth=17,
+        chain_pitch=_q("25.4 mm"),
+        rotational_speed=_q(f"{300 * 2 * pi / 60} rad/s"),
+    )
+    assert v_rad.to("m/s").magnitude == pytest.approx(v.to("m/s").magnitude, rel=1e-9)
+    # It scales linearly with tooth count and pitch.
+    assert chain_speed(
+        sprocket_teeth=34, chain_pitch=_q("25.4 mm"), rotational_speed=_q("300 rpm")
+    ).to("m/s").magnitude == pytest.approx(2 * v.to("m/s").magnitude, rel=1e-9)
+    with pytest.raises(ValueError, match="rotational_speed must be a rotational-speed"):
+        chain_speed(sprocket_teeth=17, chain_pitch=_q("25.4 mm"), rotational_speed=_q("300 N"))
+    with pytest.raises(ValueError, match="rotational_speed must be positive"):
+        chain_speed(sprocket_teeth=17, chain_pitch=_q("25.4 mm"), rotational_speed=_q("0 rpm"))
