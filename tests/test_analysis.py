@@ -45,6 +45,7 @@ from anvilate.analysis import (
     bolt_preload_from_torque,
     bolt_shear_stress,
     bolt_tensile_stress_area,
+    cam_follower_motion,
     cantilever_center_patch_load,
     cantilever_end_load,
     cantilever_end_moment,
@@ -7192,3 +7193,80 @@ def test_chain_speed_is_teeth_times_pitch_times_speed():
         chain_speed(sprocket_teeth=17, chain_pitch=_q("25.4 mm"), rotational_speed=_q("300 N"))
     with pytest.raises(ValueError, match="rotational_speed must be positive"):
         chain_speed(sprocket_teeth=17, chain_pitch=_q("25.4 mm"), rotational_speed=_q("0 rpm"))
+
+
+def test_cam_shm_profile_kinematics_and_finite_end_acceleration():
+    from math import pi
+
+    kw = {"rise": _q("20 mm"), "rise_angle": 90.0, "cam_speed": _q("600 rpm")}
+    ell = 0.020
+    beta = pi / 2.0
+    omega = 600 * 2 * pi / 60.0
+    # Start of the rise: no lift, no velocity, but a FINITE acceleration -- the
+    # SHM jerk step that knocks a high-speed cam.
+    start = cam_follower_motion(profile="shm", cam_angle=0.0, **kw)
+    assert start.displacement.to("mm").magnitude == pytest.approx(0.0, abs=1e-12)
+    assert start.velocity.to("m/s").magnitude == pytest.approx(0.0, abs=1e-12)
+    a_start = (ell / 2.0) * (pi / beta) ** 2 * omega**2
+    assert start.acceleration.to("m/s**2").magnitude == pytest.approx(a_start, rel=1e-9)
+    assert start.acceleration.to("m/s**2").magnitude > 100.0
+    # Midpoint: half the lift, peak velocity, zero acceleration.
+    mid = cam_follower_motion(profile="shm", cam_angle=45.0, **kw)
+    assert mid.displacement.to("mm").magnitude == pytest.approx(10.0, rel=1e-9)
+    assert mid.velocity.to("m/s").magnitude == pytest.approx(
+        (ell / 2.0) * (pi / beta) * omega, rel=1e-9
+    )
+    assert mid.acceleration.to("m/s**2").magnitude == pytest.approx(0.0, abs=1e-9)
+    # End of the rise reaches the full lift.
+    end = cam_follower_motion(profile="shm", cam_angle=90.0, **kw)
+    assert end.displacement.to("mm").magnitude == pytest.approx(20.0, rel=1e-9)
+
+
+def test_cam_cycloidal_profile_has_zero_acceleration_at_both_ends():
+    from math import pi
+
+    kw = {"rise": _q("20 mm"), "rise_angle": 90.0, "cam_speed": _q("600 rpm")}
+    ell = 0.020
+    beta = pi / 2.0
+    omega = 600 * 2 * pi / 60.0
+    # The cycloidal signature: acceleration eases to zero at start AND end, so it
+    # mates to a dwell without a jump -- unlike SHM.
+    start = cam_follower_motion(profile="cycloidal", cam_angle=0.0, **kw)
+    end = cam_follower_motion(profile="cycloidal", cam_angle=90.0, **kw)
+    assert start.acceleration.to("m/s**2").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert start.velocity.to("m/s").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert end.acceleration.to("m/s**2").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert end.velocity.to("m/s").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert end.displacement.to("mm").magnitude == pytest.approx(20.0, rel=1e-9)
+    # Midpoint: half lift and peak velocity 2x the average slope (L/beta)*omega.
+    mid = cam_follower_motion(profile="cycloidal", cam_angle=45.0, **kw)
+    assert mid.displacement.to("mm").magnitude == pytest.approx(10.0, rel=1e-9)
+    assert mid.velocity.to("m/s").magnitude == pytest.approx(2.0 * (ell / beta) * omega, rel=1e-9)
+    # Cycloidal peaks acceleration higher than SHM (the price of smooth ends):
+    # 2*pi*L/beta^2 * omega^2 at theta = beta/4.
+    peak = cam_follower_motion(profile="cycloidal", cam_angle=22.5, **kw)
+    assert peak.acceleration.to("m/s**2").magnitude == pytest.approx(
+        (ell / beta**2) * 2.0 * pi * omega**2, rel=1e-9
+    )
+    shm_peak = (ell / 2.0) * (pi / beta) ** 2 * omega**2
+    assert peak.acceleration.to("m/s**2").magnitude > shm_peak
+
+
+def test_cam_follower_motion_rejects_bad_inputs():
+    kw = {"rise": _q("20 mm"), "rise_angle": 90.0, "cam_speed": _q("600 rpm")}
+    with pytest.raises(ValueError, match="profile must be one of"):
+        cam_follower_motion(profile="parabolic", cam_angle=45.0, **kw)
+    with pytest.raises(ValueError, match=r"cam_angle \(degrees\) must lie in"):
+        cam_follower_motion(profile="shm", cam_angle=120.0, **kw)
+    with pytest.raises(ValueError, match="rise_angle .* must be positive"):
+        cam_follower_motion(
+            profile="shm", cam_angle=0.0, rise=_q("20 mm"), rise_angle=0.0, cam_speed=_q("600 rpm")
+        )
+    with pytest.raises(ValueError, match="cam_speed must be a rotational-speed"):
+        cam_follower_motion(
+            profile="shm", cam_angle=45.0, rise=_q("20 mm"), rise_angle=90.0, cam_speed=_q("600 N")
+        )
+    with pytest.raises(ValueError, match="rise must be a"):
+        cam_follower_motion(
+            profile="shm", cam_angle=45.0, rise=_q("20 N"), rise_angle=90.0, cam_speed=_q("600 rpm")
+        )

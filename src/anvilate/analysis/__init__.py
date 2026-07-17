@@ -46,6 +46,8 @@ modules:
 - :mod:`~anvilate.analysis.chain` — roller-chain drive geometry: chain length in
   pitches, mean chain speed, and the chordal (polygon-action) speed variation of
   a sprocket
+- :mod:`~anvilate.analysis.cam` — cam-follower rise kinematics (SHM and cycloidal
+  profiles): follower displacement, velocity, and acceleration at a cam angle
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
   torque requires, the peak lining pressure, and the simple/differential lever
   force; short-shoe (block) brake lever statics; the self-energizing /
@@ -171,6 +173,10 @@ from .brake import (
     short_shoe_brake_torque,
     short_shoe_is_self_locking,
     short_shoe_normal_force,
+)
+from .cam import (
+    CamMotion,
+    cam_follower_motion,
 )
 from .chain import (
     chain_length_in_pitches,
@@ -497,6 +503,8 @@ __all__ = [
     "chain_length_in_pitches",
     "chordal_speed_variation",
     "chain_speed",
+    "CamMotion",
+    "cam_follower_motion",
     "band_brake_torque",
     "band_brake_tight_tension_for_torque",
     "band_brake_max_lining_pressure",
