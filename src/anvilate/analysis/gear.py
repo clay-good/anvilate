@@ -1,4 +1,4 @@
-"""T1 analytical spur-gear tooth bending (Lewis equation, closed-form).
+"""T1 analytical spur-gear tooth bending (Lewis equation) and train kinematics.
 
 A spur-gear tooth is a short cantilever loaded at its tip by the transmitted
 tangential force W_t. The Lewis equation treats it as a beam of parabolic
@@ -17,11 +17,19 @@ pitch diameter d. This is the classic static Lewis screen (Shigley); a real gear
 also applies a velocity factor for dynamic load and the AGMA geometry/stress-cycle
 factors on top. Inputs are dimension-checked
 :class:`~anvilate.units.Quantity` values; Y is a positive dimensionless float.
+
+The kinematics half covers gear *trains*: the signed train value
+e = ±∏(driver teeth)/∏(driven teeth) of a simple or compound train, and the
+planetary (epicyclic) sun/carrier/ring speed relation via the Willis equation
+N_r·ω_r + N_s·ω_s = (N_r + N_s)·ω_c, together with the whole-tooth planet size
+N_p = (N_r − N_s)/2 and the equal-spacing assembly condition
+(N_s + N_r) divisible by the planet count (Shigley ch. 13).
 """
 
 from __future__ import annotations
 
-from math import cos, radians, sin, sqrt, tan
+from collections.abc import Sequence
+from math import cos, prod, radians, sin, sqrt, tan
 
 from ..units import Quantity
 from .contact import hertz_cylinder_contact
@@ -42,6 +50,10 @@ __all__ = [
     "barth_velocity_factor",
     "lewis_bending_stress",
     "gear_contact_stress",
+    "gear_train_value",
+    "planetary_planet_teeth",
+    "planetary_can_assemble",
+    "planetary_speed",
 ]
 
 
@@ -231,3 +243,162 @@ def gear_contact_stress(
         diameter2=Quantity(magnitude=d2 * sin(phi), unit="mm"),
     )
     return result.max_contact_pressure
+
+
+def _check_tooth_count(count: int, name: str) -> int:
+    whole = int(count)
+    if whole != count or whole <= 0:
+        raise ValueError(f"{name} must be a positive whole number of teeth; got {count}")
+    return whole
+
+
+def gear_train_value(
+    *,
+    driver_teeth: Sequence[int],
+    driven_teeth: Sequence[int],
+    internal_meshes: int = 0,
+) -> float:
+    """The signed train value e = ω_out/ω_in of a simple or compound gear train.
+
+    Each mesh in the train pairs one driving gear with one driven gear, and the
+    overall speed ratio is e = ±∏(driver teeth)/∏(driven teeth): a small gear
+    driving a big one slows the shaft down by their tooth ratio, and stages
+    multiply. The sign carries direction — every *external* mesh reverses
+    rotation, so e is negative for an odd number of external meshes. An idler
+    appears in both lists (it is driven by one gear and drives the next): it
+    cancels out of the magnitude but still contributes its reversal, which is
+    exactly what an idler is for. ``driver_teeth`` and ``driven_teeth`` list the
+    tooth counts mesh by mesh (equal length, positive whole numbers);
+    ``internal_meshes`` counts how many of the meshes are internal (ring-gear)
+    engagements, which do *not* reverse. Returns the dimensionless signed e —
+    multiply the input speed by it to get the output speed, and divide an ideal
+    (loss-free) torque by |e| to get the output torque.
+    """
+    if len(driver_teeth) == 0 or len(driver_teeth) != len(driven_teeth):
+        raise ValueError(
+            f"driver_teeth and driven_teeth must be non-empty and equal length "
+            f"(one entry per mesh); got {len(driver_teeth)} drivers and "
+            f"{len(driven_teeth)} driven"
+        )
+    drivers = [_check_tooth_count(n, "driver_teeth entry") for n in driver_teeth]
+    driven = [_check_tooth_count(n, "driven_teeth entry") for n in driven_teeth]
+    mesh_count = len(driven)
+    if not 0 <= internal_meshes <= mesh_count:
+        raise ValueError(
+            f"internal_meshes must lie in [0, {mesh_count}] for a {mesh_count}-mesh "
+            f"train; got {internal_meshes}"
+        )
+    sign = -1.0 if (mesh_count - internal_meshes) % 2 else 1.0
+    return sign * prod(drivers) / prod(driven)
+
+
+def planetary_planet_teeth(*, sun_teeth: int, ring_teeth: int) -> int:
+    """The planet tooth count N_p = (N_r − N_s)/2 forced by planetary geometry.
+
+    In an epicyclic train the planet must span the radial gap between the sun
+    and the ring, so its pitch diameter — and with a shared module, its tooth
+    count — is fixed at N_p = (N_r − N_s)/2. If N_r − N_s is odd there is no
+    whole-tooth planet: that sun/ring pair simply cannot be cut, however good
+    its ratio looks, and this raises rather than returning half a tooth.
+    ``sun_teeth`` N_s and ``ring_teeth`` N_r are positive whole tooth counts
+    with N_r > N_s. Returns the whole planet tooth count.
+    """
+    sun = _check_tooth_count(sun_teeth, "sun_teeth")
+    ring = _check_tooth_count(ring_teeth, "ring_teeth")
+    if ring <= sun:
+        raise ValueError(
+            f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
+            f"got ring {ring} vs sun {sun}"
+        )
+    if (ring - sun) % 2:
+        raise ValueError(
+            f"no whole-tooth planet fits: ring_teeth - sun_teeth = {ring - sun} is odd, "
+            f"so N_p = (N_r - N_s)/2 is not a whole number"
+        )
+    return (ring - sun) // 2
+
+
+def planetary_can_assemble(*, sun_teeth: int, ring_teeth: int, planet_count: int) -> bool:
+    """Whether equally spaced planets can actually be assembled into the train.
+
+    Planets are spaced equally to cancel the radial mesh loads, but the teeth
+    only line up at every planet position when (N_s + N_r) is divisible by the
+    planet count — otherwise the second planet arrives at its slot half a tooth
+    out of phase and will not drop in. ``sun_teeth``, ``ring_teeth``, and
+    ``planet_count`` are positive whole numbers with N_r > N_s. Returns True
+    when the train assembles.
+    """
+    sun = _check_tooth_count(sun_teeth, "sun_teeth")
+    ring = _check_tooth_count(ring_teeth, "ring_teeth")
+    count = _check_tooth_count(planet_count, "planet_count")
+    if ring <= sun:
+        raise ValueError(
+            f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
+            f"got ring {ring} vs sun {sun}"
+        )
+    return (sun + ring) % count == 0
+
+
+def _check_speed(value: Quantity, name: str) -> float:
+    if not value.has_dimension("[frequency]"):
+        raise ValueError(
+            f"{name} must be a rotational-speed ([frequency]) quantity; got "
+            f"{value.dimensionality} ({value})"
+        )
+    return value.to("rpm").magnitude
+
+
+def planetary_speed(
+    *,
+    sun_teeth: int,
+    ring_teeth: int,
+    sun_speed: Quantity | None = None,
+    carrier_speed: Quantity | None = None,
+    ring_speed: Quantity | None = None,
+) -> Quantity:
+    """Solve the Willis equation for the missing planetary-train member speed.
+
+    An epicyclic train's three coaxial members — sun, planet carrier, and ring —
+    obey one linear relation (the Willis equation, from the train value
+    −N_s/N_r seen by an observer riding the carrier):
+
+        N_r·ω_r + N_s·ω_s = (N_r + N_s)·ω_c
+
+    Fix any member and the other two are geared together; drive two and the
+    third follows. Pass exactly two of ``sun_speed``, ``carrier_speed``, and
+    ``ring_speed`` as *signed* rotational speeds (rpm or rad/s; opposite
+    directions get opposite signs, and a held member is simply 0 rpm) and leave
+    the unknown as ``None``. The classic reducer — ring held, sun driven —
+    returns the carrier speed ω_c = ω_s·N_s/(N_s + N_r), an
+    (1 + N_r/N_s):1 reduction with no direction reversal. ``sun_teeth`` and
+    ``ring_teeth`` are positive whole tooth counts with N_r > N_s. Returns the
+    solved speed in rpm, signed.
+    """
+    sun = _check_tooth_count(sun_teeth, "sun_teeth")
+    ring = _check_tooth_count(ring_teeth, "ring_teeth")
+    if ring <= sun:
+        raise ValueError(
+            f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
+            f"got ring {ring} vs sun {sun}"
+        )
+    speeds = {"sun_speed": sun_speed, "carrier_speed": carrier_speed, "ring_speed": ring_speed}
+    unknowns = [name for name, value in speeds.items() if value is None]
+    if len(unknowns) != 1:
+        raise ValueError(
+            f"exactly one of sun_speed, carrier_speed, ring_speed must be None (the "
+            f"unknown to solve for); got {len(unknowns)} unknowns"
+        )
+    (unknown,) = unknowns
+    if unknown == "carrier_speed":
+        ws = _check_speed(sun_speed, "sun_speed")
+        wr = _check_speed(ring_speed, "ring_speed")
+        solved = (ring * wr + sun * ws) / (ring + sun)
+    elif unknown == "sun_speed":
+        wc = _check_speed(carrier_speed, "carrier_speed")
+        wr = _check_speed(ring_speed, "ring_speed")
+        solved = ((ring + sun) * wc - ring * wr) / sun
+    else:
+        wc = _check_speed(carrier_speed, "carrier_speed")
+        ws = _check_speed(sun_speed, "sun_speed")
+        solved = ((ring + sun) * wc - sun * ws) / ring
+    return Quantity(magnitude=solved, unit="rpm")

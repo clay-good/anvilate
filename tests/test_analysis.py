@@ -109,6 +109,7 @@ from anvilate.analysis import (
     gear_normal_load,
     gear_radial_load,
     gear_tangential_load,
+    gear_train_value,
     gerber_safety_factor,
     gerber_scorecard,
     goodman_safety_factor,
@@ -153,6 +154,9 @@ from anvilate.analysis import (
     petroff_friction_power,
     petroff_friction_torque,
     pitch_line_velocity,
+    planetary_can_assemble,
+    planetary_planet_teeth,
+    planetary_speed,
     plate_buckling_stress,
     polar_second_moment_hollow,
     polar_second_moment_solid,
@@ -6591,3 +6595,97 @@ def test_belleville_washer_plateau_appears_at_root_two():
             inner_diameter=_q("20 mm"),
             elastic_modulus=_q("206 GPa"),
         )
+
+
+def test_gear_train_value_simple_compound_and_idler():
+    # A 20 t pinion driving a 40 t gear: 2:1 down, one external mesh reverses.
+    assert gear_train_value(driver_teeth=[20], driven_teeth=[40]) == pytest.approx(-0.5)
+    # Two-stage compound train (20/40)*(30/60) = 0.25; two reversals cancel.
+    e = gear_train_value(driver_teeth=[20, 30], driven_teeth=[40, 60])
+    assert e == pytest.approx(0.25)
+    # An idler appears in both lists: magnitude cancels to 20/30, but its extra
+    # external mesh keeps the direction — that is what an idler is for.
+    with_idler = gear_train_value(driver_teeth=[20, 40], driven_teeth=[40, 30])
+    assert with_idler == pytest.approx(20 / 30)
+    assert gear_train_value(driver_teeth=[20], driven_teeth=[30]) == pytest.approx(-20 / 30)
+    # An internal (ring) mesh does not reverse.
+    assert gear_train_value(
+        driver_teeth=[20], driven_teeth=[40], internal_meshes=1
+    ) == pytest.approx(0.5)
+
+
+def test_gear_train_value_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="non-empty and equal length"):
+        gear_train_value(driver_teeth=[20, 30], driven_teeth=[40])
+    with pytest.raises(ValueError, match="non-empty and equal length"):
+        gear_train_value(driver_teeth=[], driven_teeth=[])
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        gear_train_value(driver_teeth=[20.5], driven_teeth=[40])
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        gear_train_value(driver_teeth=[20], driven_teeth=[0])
+    with pytest.raises(ValueError, match=r"internal_meshes must lie in \[0, 1\]"):
+        gear_train_value(driver_teeth=[20], driven_teeth=[40], internal_meshes=2)
+
+
+def test_planetary_planet_teeth_and_assembly():
+    # N_p = (N_r - N_s)/2: a 30/90 sun/ring takes 30-tooth planets.
+    assert planetary_planet_teeth(sun_teeth=30, ring_teeth=90) == 30
+    # An odd difference leaves no whole-tooth planet — the set cannot be cut.
+    with pytest.raises(ValueError, match="no whole-tooth planet fits"):
+        planetary_planet_teeth(sun_teeth=30, ring_teeth=105)
+    # Equal spacing needs (N_s + N_r) divisible by the planet count.
+    assert planetary_can_assemble(sun_teeth=30, ring_teeth=90, planet_count=3)
+    assert planetary_can_assemble(sun_teeth=30, ring_teeth=90, planet_count=4)
+    assert not planetary_can_assemble(sun_teeth=30, ring_teeth=91, planet_count=3)
+    with pytest.raises(ValueError, match="ring_teeth must exceed sun_teeth"):
+        planetary_planet_teeth(sun_teeth=90, ring_teeth=30)
+    with pytest.raises(ValueError, match="ring_teeth must exceed sun_teeth"):
+        planetary_can_assemble(sun_teeth=90, ring_teeth=30, planet_count=3)
+
+
+def test_planetary_speed_solves_the_willis_equation_each_way():
+    teeth = {"sun_teeth": 30, "ring_teeth": 90}
+    # Ring held, sun driven — the classic (1 + N_r/N_s):1 = 4:1 reducer,
+    # carrier turning the same way as the sun.
+    wc = planetary_speed(sun_speed=_q("1200 rpm"), ring_speed=_q("0 rpm"), **teeth)
+    assert wc.to("rpm").magnitude == pytest.approx(300.0, rel=1e-9)
+    # Carrier held, the train is an ordinary pair through the planets:
+    # omega_r = -(N_s/N_r) * omega_s, and it matches gear_train_value with the
+    # planet cancelling as an idler across one external + one internal mesh.
+    wr = planetary_speed(sun_speed=_q("900 rpm"), carrier_speed=_q("0 rpm"), **teeth)
+    assert wr.to("rpm").magnitude == pytest.approx(-300.0, rel=1e-9)
+    e = gear_train_value(driver_teeth=[30, 30], driven_teeth=[30, 90], internal_meshes=1)
+    assert wr.to("rpm").magnitude == pytest.approx(900 * e, rel=1e-9)
+    # Sun held, ring driven: omega_c = N_r*omega_r/(N_r + N_s).
+    wc2 = planetary_speed(sun_speed=_q("0 rpm"), ring_speed=_q("120 rpm"), **teeth)
+    assert wc2.to("rpm").magnitude == pytest.approx(90.0, rel=1e-9)
+    # Solving for the member just held recovers it: plug two results back in.
+    ws = planetary_speed(carrier_speed=wc, ring_speed=_q("0 rpm"), **teeth)
+    assert ws.to("rpm").magnitude == pytest.approx(1200.0, rel=1e-9)
+    # Two members locked together lock the third: the train turns as a block.
+    locked = planetary_speed(sun_speed=_q("500 rpm"), carrier_speed=_q("500 rpm"), **teeth)
+    assert locked.to("rpm").magnitude == pytest.approx(500.0, rel=1e-9)
+    # rad/s in, signed rpm out.
+    wc3 = planetary_speed(sun_speed=_q("125.66370614359172 rad/s"), ring_speed=_q("0 rpm"), **teeth)
+    assert wc3.to("rpm").magnitude == pytest.approx(300.0, rel=1e-6)
+
+
+def test_planetary_speed_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="exactly one of sun_speed"):
+        planetary_speed(sun_teeth=30, ring_teeth=90, sun_speed=_q("100 rpm"))
+    with pytest.raises(ValueError, match="exactly one of sun_speed"):
+        planetary_speed(
+            sun_teeth=30,
+            ring_teeth=90,
+            sun_speed=_q("100 rpm"),
+            carrier_speed=_q("50 rpm"),
+            ring_speed=_q("0 rpm"),
+        )
+    with pytest.raises(ValueError, match="sun_speed must be a rotational-speed"):
+        planetary_speed(sun_teeth=30, ring_teeth=90, sun_speed=_q("100 N"), ring_speed=_q("0 rpm"))
+    with pytest.raises(ValueError, match="ring_teeth must exceed sun_teeth"):
+        planetary_speed(
+            sun_teeth=90, ring_teeth=30, sun_speed=_q("100 rpm"), ring_speed=_q("0 rpm")
+        )
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        planetary_speed(sun_teeth=0, ring_teeth=90, sun_speed=_q("100 rpm"), ring_speed=_q("0 rpm"))
