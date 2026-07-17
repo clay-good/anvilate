@@ -1037,3 +1037,23 @@ def test_winch_planetary_example_checks_teeth_before_torque():
     assert "safety factor 1.26" in torque.detail
     # Unbuildable candidates never get a torque row -- teeth vote first.
     assert "4.5:1 (sun 30, ring 105), drum torque" not in by_name
+
+
+def test_worm_hoist_example_must_self_lock_before_it_is_efficient():
+    namespace = runpy.run_path(str(_EXAMPLES / "worm_hoist_selflock.py"))
+    card = namespace["screen_worm_hoist"]()
+    by_name = {e.name: e for e in card.entries}
+    # Only the single-start worm self-locks -- and it pays in efficiency.
+    single = by_name["single-start worm"]
+    assert single.passed
+    assert "safety factor 1.30" in single.detail
+    assert "efficiency 43%" in single.detail
+    # The faster multi-start worms back-drive: the load would drop on power loss.
+    double = by_name["double-start worm"]
+    assert double.status is CheckStatus.FAIL
+    assert "efficiency 60%" in double.detail
+    triple = by_name["triple-start worm"]
+    assert triple.status is CheckStatus.FAIL
+    assert "efficiency 69%" in triple.detail
+    # A hoist that only self-locks one way overall fails the safe-hold screen.
+    assert card.status is CheckStatus.FAIL
