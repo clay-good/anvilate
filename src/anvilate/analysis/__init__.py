@@ -46,8 +46,8 @@ modules:
   force; short-shoe (block) brake lever statics; the self-energizing /
   self-locking distinction for both
 - :mod:`~anvilate.analysis.curved_beam` — Winkler curved-beam bending
-  (rectangular section): shifted neutral axis and the unequal inner/outer
-  fibre stresses of hooks, clamps, and links
+  (rectangular, trapezoidal, and circular sections): shifted neutral axis and
+  the unequal inner/outer fibre stresses of hooks, clamps, and links
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
@@ -195,7 +195,9 @@ from .coupling import (
 )
 from .curved_beam import (
     CurvedBeamStress,
+    circular_curved_beam_stress,
     rectangular_curved_beam_stress,
+    trapezoidal_curved_beam_stress,
 )
 from .dynamics import (
     STANDARD_GRAVITY,
@@ -475,6 +477,8 @@ __all__ = [
     "short_shoe_is_self_locking",
     "CurvedBeamStress",
     "rectangular_curved_beam_stress",
+    "trapezoidal_curved_beam_stress",
+    "circular_curved_beam_stress",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",

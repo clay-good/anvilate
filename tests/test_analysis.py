@@ -54,6 +54,7 @@ from anvilate.analysis import (
     cantilever_uniform_load,
     capstan_tension_ratio,
     circular_area,
+    circular_curved_beam_stress,
     circular_second_moment,
     clamped_annular_plate_fundamental_frequency,
     clamped_annular_plate_uniform_load,
@@ -231,6 +232,7 @@ from anvilate.analysis import (
     torque_from_power,
     torsional_natural_frequency,
     transition_slenderness,
+    trapezoidal_curved_beam_stress,
     tresca_equivalent_stress,
     tresca_principal,
     vee_belt_effective_friction,
@@ -6689,3 +6691,121 @@ def test_planetary_speed_rejects_bad_inputs():
         )
     with pytest.raises(ValueError, match="positive whole number of teeth"):
         planetary_speed(sun_teeth=0, ring_teeth=90, sun_speed=_q("100 rpm"), ring_speed=_q("0 rpm"))
+
+
+def test_trapezoidal_curved_beam_reduces_to_rectangle_when_widths_match():
+    # b_i = b_o collapses the trapezoid r_n integral to h/ln(ro/ri): the
+    # trapezoidal solver must reproduce the rectangular one term for term.
+    kw = {"inner_radius": _q("50 mm"), "outer_radius": _q("100 mm")}
+    rect = rectangular_curved_beam_stress(moment=_q("500 N*m"), width=_q("20 mm"), **kw)
+    trap = trapezoidal_curved_beam_stress(
+        moment=_q("500 N*m"), inner_width=_q("20 mm"), outer_width=_q("20 mm"), **kw
+    )
+    assert trap.neutral_radius.to("mm").magnitude == pytest.approx(
+        rect.neutral_radius.to("mm").magnitude, rel=1e-12
+    )
+    assert trap.inner_stress.to("MPa").magnitude == pytest.approx(
+        rect.inner_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert trap.outer_stress.to("MPa").magnitude == pytest.approx(
+        rect.outer_stress.to("MPa").magnitude, rel=1e-12
+    )
+
+
+def test_trapezoidal_curved_beam_hook_section_satisfies_equilibrium():
+    from math import log
+
+    # A crane-hook trapezoid: wide bore b_i=40, tapered back b_o=20, ri=50/ro=100,
+    # opened by 500 N*m. Integrate sigma(r) over the varying width b(r) directly
+    # and confirm Winkler's two conditions: zero net force, moment=M about rc.
+    ri, ro, bi, bo, m = 50.0, 100.0, 40.0, 20.0, 500e3
+    h = ro - ri
+    area = h * (bi + bo) / 2.0
+    rc = ri + h * (bi + 2.0 * bo) / (3.0 * (bi + bo))
+    integral = ((bi * ro - bo * ri) / h) * log(ro / ri) - (bi - bo)
+    rn = area / integral
+    e = rc - rn
+    result = trapezoidal_curved_beam_stress(
+        moment=_q("500 N*m"),
+        inner_radius=_q("50 mm"),
+        outer_radius=_q("100 mm"),
+        inner_width=_q("40 mm"),
+        outer_width=_q("20 mm"),
+    )
+    assert result.neutral_radius.to("mm").magnitude == pytest.approx(rn, rel=1e-12)
+    assert result.eccentricity.to("mm").magnitude == pytest.approx(e, rel=1e-12)
+    # Numerically integrate with the linearly tapering width b(r).
+    n = 400_000
+    dr = h / n
+    force = 0.0
+    moment_about_centroid = 0.0
+    for i in range(n):
+        r = ri + (i + 0.5) * dr
+        width = bi + (bo - bi) * (r - ri) / h
+        sigma = m * (rn - r) / (area * e * r)
+        force += sigma * width * dr
+        moment_about_centroid += sigma * (r - rc) * width * dr
+    assert abs(force) < 1e-6 * m / h
+    assert -moment_about_centroid == pytest.approx(m, rel=1e-9)
+    # The wide bore works hardest -- the whole point of the hook taper.
+    assert abs(result.inner_stress.magnitude) > abs(result.outer_stress.magnitude)
+    assert result.inner_stress.magnitude > 0 > result.outer_stress.magnitude
+
+
+def test_trapezoidal_curved_beam_rejects_bad_widths():
+    kw = {"inner_radius": _q("50 mm"), "outer_radius": _q("100 mm"), "moment": _q("500 N*m")}
+    with pytest.raises(ValueError, match="at most one may be zero"):
+        trapezoidal_curved_beam_stress(inner_width=_q("0 mm"), outer_width=_q("0 mm"), **kw)
+    with pytest.raises(ValueError, match="at most one may be zero"):
+        trapezoidal_curved_beam_stress(inner_width=_q("-10 mm"), outer_width=_q("20 mm"), **kw)
+    # A pure triangle (one width zero) is allowed.
+    tri = trapezoidal_curved_beam_stress(inner_width=_q("40 mm"), outer_width=_q("0 mm"), **kw)
+    assert tri.inner_stress.magnitude > 0
+
+
+def test_circular_curved_beam_stress_and_equilibrium():
+    from math import pi, sqrt
+
+    # A round bar (chain-link style): ri=50, ro=90 -> d=40, c=20, rc=70.
+    # r_n = (rc + sqrt(rc^2 - c^2))/2, opened by 300 N*m.
+    ri, ro, m = 50.0, 90.0, 300e3
+    c = (ro - ri) / 2.0
+    rc = (ri + ro) / 2.0
+    rn = (rc + sqrt(rc**2 - c**2)) / 2.0
+    e = rc - rn
+    area = pi * c**2
+    result = circular_curved_beam_stress(
+        moment=_q("300 N*m"), inner_radius=_q("50 mm"), outer_radius=_q("90 mm")
+    )
+    assert result.neutral_radius.to("mm").magnitude == pytest.approx(rn, rel=1e-12)
+    assert result.eccentricity.to("mm").magnitude == pytest.approx(e, rel=1e-12)
+    inner = m * (rn - ri) / (area * e * ri)
+    outer = m * (rn - ro) / (area * e * ro)
+    assert result.inner_stress.to("MPa").magnitude == pytest.approx(inner, rel=1e-12)
+    assert result.outer_stress.to("MPa").magnitude == pytest.approx(outer, rel=1e-12)
+    # Integrate over the circular width b(r) = 2*sqrt(c^2 - (r - rc)^2): both
+    # Winkler conditions must hold, which pins the closed-form r_n as correct.
+    n = 400_000
+    dr = (ro - ri) / n
+    force = 0.0
+    moment_about_centroid = 0.0
+    for i in range(n):
+        r = ri + (i + 0.5) * dr
+        width = 2.0 * sqrt(max(c**2 - (r - rc) ** 2, 0.0))
+        sigma = m * (rn - r) / (area * e * r)
+        force += sigma * width * dr
+        moment_about_centroid += sigma * (r - rc) * width * dr
+    assert abs(force) < 1e-4 * m / (ro - ri)
+    assert -moment_about_centroid == pytest.approx(m, rel=1e-4)
+    assert abs(result.inner_stress.magnitude) > abs(result.outer_stress.magnitude)
+
+
+def test_circular_curved_beam_rejects_bad_radii():
+    with pytest.raises(ValueError, match="inner_radius must be positive"):
+        circular_curved_beam_stress(
+            moment=_q("300 N*m"), inner_radius=_q("0 mm"), outer_radius=_q("90 mm")
+        )
+    with pytest.raises(ValueError, match="must exceed inner_radius"):
+        circular_curved_beam_stress(
+            moment=_q("300 N*m"), inner_radius=_q("90 mm"), outer_radius=_q("90 mm")
+        )
