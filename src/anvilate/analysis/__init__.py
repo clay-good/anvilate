@@ -260,6 +260,7 @@ from .flywheel import (
     flywheel_inertia_for_fluctuation,
 )
 from .gear import (
+    PlanetaryTorques,
     barth_velocity_factor,
     gear_contact_stress,
     gear_normal_load,
@@ -271,6 +272,7 @@ from .gear import (
     planetary_can_assemble,
     planetary_planet_teeth,
     planetary_speed,
+    planetary_torques,
 )
 from .impact import (
     SUDDENLY_APPLIED_FACTOR,
@@ -558,6 +560,8 @@ __all__ = [
     "planetary_planet_teeth",
     "planetary_can_assemble",
     "planetary_speed",
+    "PlanetaryTorques",
+    "planetary_torques",
     "key_tangential_force",
     "key_shear_stress",
     "key_bearing_stress",

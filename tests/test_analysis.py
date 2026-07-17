@@ -158,6 +158,7 @@ from anvilate.analysis import (
     planetary_can_assemble,
     planetary_planet_teeth,
     planetary_speed,
+    planetary_torques,
     plate_buckling_stress,
     polar_second_moment_hollow,
     polar_second_moment_solid,
@@ -6808,4 +6809,55 @@ def test_circular_curved_beam_rejects_bad_radii():
     with pytest.raises(ValueError, match="must exceed inner_radius"):
         circular_curved_beam_stress(
             moment=_q("300 N*m"), inner_radius=_q("90 mm"), outer_radius=_q("90 mm")
+        )
+
+
+def test_planetary_torque_split_is_fixed_by_the_tooth_counts():
+    # Sun 30 / ring 90: the ideal split is T_s : T_r : T_c = 30 : 90 : -120.
+    # Drive the sun with 100 N*m -> ring reacts 300, carrier delivers -400.
+    result = planetary_torques(
+        sun_teeth=30, ring_teeth=90, input_member="sun", input_torque=_q("100 N*m")
+    )
+    assert result.sun_torque.to("N*m").magnitude == pytest.approx(100.0, rel=1e-12)
+    assert result.ring_torque.to("N*m").magnitude == pytest.approx(300.0, rel=1e-12)
+    assert result.carrier_torque.to("N*m").magnitude == pytest.approx(-400.0, rel=1e-12)
+    # The three external torques balance the case: they sum to zero.
+    total = (
+        result.sun_torque.to("N*m").magnitude
+        + result.ring_torque.to("N*m").magnitude
+        + result.carrier_torque.to("N*m").magnitude
+    )
+    assert total == pytest.approx(0.0, abs=1e-9)
+    # The carrier is the summing member: largest magnitude, opposite sign.
+    assert abs(result.carrier_torque.magnitude) > abs(result.ring_torque.magnitude)
+    assert abs(result.carrier_torque.magnitude) > abs(result.sun_torque.magnitude)
+
+
+def test_planetary_torque_split_matches_the_speed_ratio_by_power():
+    # Ideal power balance ties torque to speed: the sun-in/carrier-out reducer
+    # multiplies torque by exactly the reciprocal of its speed ratio.
+    teeth = {"sun_teeth": 30, "ring_teeth": 90}
+    wc = planetary_speed(sun_speed=_q("1200 rpm"), ring_speed=_q("0 rpm"), **teeth)
+    speed_ratio = wc.to("rpm").magnitude / 1200.0  # 300/1200 = 0.25
+    torques = planetary_torques(input_member="sun", input_torque=_q("100 N*m"), **teeth)
+    # |T_carrier| / |T_sun| = 1 / speed_ratio (4:1), the loss-free lever.
+    assert abs(torques.carrier_torque.to("N*m").magnitude) / 100.0 == pytest.approx(
+        1.0 / speed_ratio, rel=1e-12
+    )
+    # Driving the ring instead scales everything through its tooth count.
+    ring_driven = planetary_torques(input_member="ring", input_torque=_q("300 N*m"), **teeth)
+    assert ring_driven.sun_torque.to("N*m").magnitude == pytest.approx(100.0, rel=1e-12)
+    assert ring_driven.carrier_torque.to("N*m").magnitude == pytest.approx(-400.0, rel=1e-12)
+
+
+def test_planetary_torques_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="input_member must be one of"):
+        planetary_torques(
+            sun_teeth=30, ring_teeth=90, input_member="planet", input_torque=_q("100 N*m")
+        )
+    with pytest.raises(ValueError, match="input_torque must be a"):
+        planetary_torques(sun_teeth=30, ring_teeth=90, input_member="sun", input_torque=_q("100 N"))
+    with pytest.raises(ValueError, match="ring_teeth must exceed sun_teeth"):
+        planetary_torques(
+            sun_teeth=90, ring_teeth=30, input_member="sun", input_torque=_q("100 N*m")
         )

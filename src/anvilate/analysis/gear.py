@@ -31,6 +31,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import cos, prod, radians, sin, sqrt, tan
 
+from pydantic import BaseModel, ConfigDict
+
 from ..units import Quantity
 from .contact import hertz_cylinder_contact
 
@@ -54,6 +56,8 @@ __all__ = [
     "planetary_planet_teeth",
     "planetary_can_assemble",
     "planetary_speed",
+    "PlanetaryTorques",
+    "planetary_torques",
 ]
 
 
@@ -402,3 +406,62 @@ def planetary_speed(
         ws = _check_speed(sun_speed, "sun_speed")
         solved = ((ring + sun) * wc - sun * ws) / ring
     return Quantity(magnitude=solved, unit="rpm")
+
+
+class PlanetaryTorques(BaseModel):
+    """The three reaction torques on an ideal (loss-free) planetary train.
+
+    ``sun_torque``, ``ring_torque``, and ``carrier_torque`` are the external
+    torques applied to each coaxial member, signed so their sum is zero (they
+    balance the case). The carrier — the summing member — always carries the
+    largest magnitude and the opposite sign to the sun and ring.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    sun_torque: Quantity
+    ring_torque: Quantity
+    carrier_torque: Quantity
+
+
+def planetary_torques(
+    *,
+    sun_teeth: int,
+    ring_teeth: int,
+    input_member: str,
+    input_torque: Quantity,
+) -> PlanetaryTorques:
+    """The ideal planetary torque split fixed by the tooth counts alone.
+
+    In a loss-free epicyclic train the external torques share out purely by
+    geometry, independent of which member is held or how fast anything turns:
+
+        T_s : T_r : T_c = N_s : N_r : −(N_s + N_r)
+
+    The sun and ring torques scale with their tooth counts and the carrier — the
+    summing member — takes their sum with the opposite sign, so the three add to
+    zero. Fixing the torque on any one member fixes the other two: name the
+    driven member in ``input_member`` (``"sun"``, ``"ring"``, or ``"carrier"``)
+    and pass its ``input_torque`` (a signed torque). This is the ideal split —
+    a real train loses a few percent per mesh, and the carrier torque is the one
+    a real efficiency discounts. ``sun_teeth`` and ``ring_teeth`` are positive
+    whole tooth counts with N_r > N_s. Returns a :class:`PlanetaryTorques` with
+    all three torques in N·m.
+    """
+    sun = _check_tooth_count(sun_teeth, "sun_teeth")
+    ring = _check_tooth_count(ring_teeth, "ring_teeth")
+    if ring <= sun:
+        raise ValueError(
+            f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
+            f"got ring {ring} vs sun {sun}"
+        )
+    _require(input_torque, "[force] * [length]", "input_torque")
+    ratios = {"sun": float(sun), "ring": float(ring), "carrier": -float(sun + ring)}
+    if input_member not in ratios:
+        raise ValueError(f"input_member must be one of {sorted(ratios)}; got {input_member!r}")
+    scale = input_torque.to("N*m").magnitude / ratios[input_member]
+    return PlanetaryTorques(
+        sun_torque=Quantity(magnitude=scale * ratios["sun"], unit="N*m"),
+        ring_torque=Quantity(magnitude=scale * ratios["ring"], unit="N*m"),
+        carrier_torque=Quantity(magnitude=scale * ratios["carrier"], unit="N*m"),
+    )
