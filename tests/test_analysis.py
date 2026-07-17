@@ -7255,7 +7255,7 @@ def test_cam_cycloidal_profile_has_zero_acceleration_at_both_ends():
 def test_cam_follower_motion_rejects_bad_inputs():
     kw = {"rise": _q("20 mm"), "rise_angle": 90.0, "cam_speed": _q("600 rpm")}
     with pytest.raises(ValueError, match="profile must be one of"):
-        cam_follower_motion(profile="parabolic", cam_angle=45.0, **kw)
+        cam_follower_motion(profile="polynomial", cam_angle=45.0, **kw)
     with pytest.raises(ValueError, match=r"cam_angle \(degrees\) must lie in"):
         cam_follower_motion(profile="shm", cam_angle=120.0, **kw)
     with pytest.raises(ValueError, match="rise_angle .* must be positive"):
@@ -7270,3 +7270,34 @@ def test_cam_follower_motion_rejects_bad_inputs():
         cam_follower_motion(
             profile="shm", cam_angle=45.0, rise=_q("20 N"), rise_angle=90.0, cam_speed=_q("600 rpm")
         )
+
+
+def test_cam_parabolic_profile_has_the_lowest_constant_acceleration():
+    from math import pi
+
+    kw = {"rise": _q("20 mm"), "rise_angle": 90.0, "cam_speed": _q("600 rpm")}
+    ell = 0.020
+    beta = pi / 2.0
+    omega = 600 * 2 * pi / 60.0
+    a_const = 4.0 * ell / beta**2 * omega**2
+    # First half: constant +4L/beta^2 acceleration; velocity ramps linearly.
+    quarter = cam_follower_motion(profile="parabolic", cam_angle=22.5, **kw)
+    assert quarter.acceleration.to("m/s**2").magnitude == pytest.approx(a_const, rel=1e-9)
+    assert quarter.displacement.to("mm").magnitude == pytest.approx(
+        2.0 * 20.0 * 0.25**2, rel=1e-9
+    )  # 2*L*u^2 at u=0.25 -> 2.5 mm
+    # Midpoint: half lift, peak velocity 2L/beta*omega, acceleration flips sign.
+    mid = cam_follower_motion(profile="parabolic", cam_angle=45.0, **kw)
+    assert mid.displacement.to("mm").magnitude == pytest.approx(10.0, rel=1e-9)
+    assert mid.velocity.to("m/s").magnitude == pytest.approx(2.0 * ell / beta * omega, rel=1e-9)
+    # Second half: constant -4L/beta^2 deceleration.
+    three_q = cam_follower_motion(profile="parabolic", cam_angle=67.5, **kw)
+    assert three_q.acceleration.to("m/s**2").magnitude == pytest.approx(-a_const, rel=1e-9)
+    # End reaches the full lift with zero velocity.
+    end = cam_follower_motion(profile="parabolic", cam_angle=90.0, **kw)
+    assert end.displacement.to("mm").magnitude == pytest.approx(20.0, rel=1e-9)
+    assert end.velocity.to("m/s").magnitude == pytest.approx(0.0, abs=1e-9)
+    # Parabolic peak acceleration is the lowest of the three profiles.
+    shm_peak = (ell / 2.0) * (pi / beta) ** 2 * omega**2
+    cyc_peak = (ell / beta**2) * 2.0 * pi * omega**2
+    assert a_const < shm_peak < cyc_peak
