@@ -56,6 +56,8 @@ from anvilate.analysis import (
     cantilever_triangular_load_peak_at_tip,
     cantilever_uniform_load,
     capstan_tension_ratio,
+    chain_length_in_pitches,
+    chordal_speed_variation,
     circular_area,
     circular_curved_beam_stress,
     circular_second_moment,
@@ -7107,3 +7109,60 @@ def test_worm_tangential_force_from_the_power_balance():
         worm_tangential_force(
             gear_tangential_load=_q("4000 N*m"), lead_angle=lam, friction_coefficient=0.05
         )
+
+
+def test_chain_length_in_pitches_and_chordal_speed_variation():
+    from math import cos, pi
+
+    # A 17/34 sprocket pair, 25.4 mm pitch (ANSI #80), 600 mm centres.
+    # C_p = 600/25.4 = 23.622 pitches; the formula gives the exact link count.
+    lp = chain_length_in_pitches(
+        small_sprocket_teeth=17,
+        large_sprocket_teeth=34,
+        center_distance=_q("600 mm"),
+        chain_pitch=_q("25.4 mm"),
+    )
+    cp = 600.0 / 25.4
+    expected = 2.0 * cp + (17 + 34) / 2.0 + ((34 - 17) / (2.0 * pi)) ** 2 / cp
+    assert lp == pytest.approx(expected, rel=1e-12)
+    assert lp == pytest.approx(73.05, rel=1e-3)  # rounds up to 74 (even) links
+    # An equal-sprocket drive drops the ((N2-N1)/2pi)^2 term entirely.
+    equal = chain_length_in_pitches(
+        small_sprocket_teeth=20,
+        large_sprocket_teeth=20,
+        center_distance=_q("508 mm"),
+        chain_pitch=_q("25.4 mm"),
+    )
+    assert equal == pytest.approx(2.0 * (508.0 / 25.4) + 20.0, rel=1e-12)
+    # Chordal action: 1 - cos(pi/N), falling fast with tooth count.
+    assert chordal_speed_variation(sprocket_teeth=11) == pytest.approx(1 - cos(pi / 11), rel=1e-12)
+    assert chordal_speed_variation(sprocket_teeth=11) == pytest.approx(0.0405, rel=1e-2)
+    assert chordal_speed_variation(sprocket_teeth=17) == pytest.approx(0.0170, rel=1e-2)
+    # More teeth run smoother.
+    assert chordal_speed_variation(sprocket_teeth=23) < chordal_speed_variation(sprocket_teeth=17)
+
+
+def test_chain_drive_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        chain_length_in_pitches(
+            small_sprocket_teeth=0,
+            large_sprocket_teeth=34,
+            center_distance=_q("600 mm"),
+            chain_pitch=_q("25.4 mm"),
+        )
+    with pytest.raises(ValueError, match="chain_pitch must be positive"):
+        chain_length_in_pitches(
+            small_sprocket_teeth=17,
+            large_sprocket_teeth=34,
+            center_distance=_q("600 mm"),
+            chain_pitch=_q("0 mm"),
+        )
+    with pytest.raises(ValueError, match="center_distance must be a"):
+        chain_length_in_pitches(
+            small_sprocket_teeth=17,
+            large_sprocket_teeth=34,
+            center_distance=_q("600 N"),
+            chain_pitch=_q("25.4 mm"),
+        )
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        chordal_speed_variation(sprocket_teeth=17.5)

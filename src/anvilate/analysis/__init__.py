@@ -43,6 +43,8 @@ modules:
   tension ratio, slack tension, transmissible force (still and at speed, with
   centrifugal tension and the max-power belt speed), V-belt wedge friction, and
   belt-drive geometry (length and wrap angle)
+- :mod:`~anvilate.analysis.chain` — roller-chain drive geometry: chain length in
+  pitches and the chordal (polygon-action) speed variation of a sprocket
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
   torque requires, the peak lining pressure, and the simple/differential lever
   force; short-shoe (block) brake lever statics; the self-energizing /
@@ -168,6 +170,10 @@ from .brake import (
     short_shoe_brake_torque,
     short_shoe_is_self_locking,
     short_shoe_normal_force,
+)
+from .chain import (
+    chain_length_in_pitches,
+    chordal_speed_variation,
 )
 from .clutch import (
     UNIFORM_PRESSURE,
@@ -486,6 +492,8 @@ __all__ = [
     "vee_belt_effective_friction",
     "belt_length",
     "belt_wrap_angle",
+    "chain_length_in_pitches",
+    "chordal_speed_variation",
     "band_brake_torque",
     "band_brake_tight_tension_for_torque",
     "band_brake_max_lining_pressure",
