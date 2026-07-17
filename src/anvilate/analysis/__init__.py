@@ -53,9 +53,11 @@ modules:
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, and the inertia a speed-smoothing target requires
 - :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads,
-  pitch-line velocity, Barth dynamic factor, Lewis tooth-root bending, Hertzian
-  surface contact stress, and train kinematics (signed compound-train value,
-  planetary Willis-equation speeds, whole-tooth planet and assembly checks)
+  bevel-gear radial/axial (thrust) resolution about the pitch cone, pitch-line
+  velocity, Barth dynamic factor, Lewis tooth-root bending, Hertzian surface
+  contact stress, and train kinematics (signed compound-train value, reverted
+  coaxial constraint, planetary Willis-equation speeds and ideal torque split,
+  whole-tooth planet and assembly checks)
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, the
   ISO 898 tensile stress area / axial stress, thread-stripping engagement, and
   preloaded-joint load sharing (stiffness constant, bolt/member load, separation)
@@ -262,6 +264,9 @@ from .flywheel import (
 from .gear import (
     PlanetaryTorques,
     barth_velocity_factor,
+    bevel_gear_axial_load,
+    bevel_gear_radial_load,
+    bevel_pitch_cone_angle,
     gear_contact_stress,
     gear_normal_load,
     gear_radial_load,
@@ -553,6 +558,9 @@ __all__ = [
     "gear_tangential_load",
     "gear_radial_load",
     "gear_normal_load",
+    "bevel_pitch_cone_angle",
+    "bevel_gear_radial_load",
+    "bevel_gear_axial_load",
     "pitch_line_velocity",
     "barth_velocity_factor",
     "lewis_bending_stress",

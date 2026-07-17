@@ -36,6 +36,9 @@ from anvilate.analysis import (
     belt_slack_tension,
     belt_speed_for_max_power,
     belt_wrap_angle,
+    bevel_gear_axial_load,
+    bevel_gear_radial_load,
+    bevel_pitch_cone_angle,
     bolt_axial_stress,
     bolt_diameter_for_shear,
     bolt_load_in_joint,
@@ -6891,3 +6894,40 @@ def test_reverted_train_coaxial_constraint():
             second_pinion_teeth=24,
             second_gear_teeth=56,
         )
+
+
+def test_bevel_gear_force_resolution_splits_the_separating_load():
+    from math import atan2, cos, degrees, radians, sin, tan
+
+    # A 20/40 right-angle bevel pair: the pinion's pitch cone is
+    # gamma = atan(20/40) = 26.565 deg.
+    gamma_deg = bevel_pitch_cone_angle(pinion_teeth=20, gear_teeth=40)
+    assert gamma_deg == pytest.approx(degrees(atan2(20, 40)), rel=1e-12)
+    assert gamma_deg == pytest.approx(26.565, rel=1e-4)
+    wt = _q("2000 N")
+    wr = bevel_gear_radial_load(tangential_load=wt, pressure_angle=20, pitch_cone_angle=gamma_deg)
+    wa = bevel_gear_axial_load(tangential_load=wt, pressure_angle=20, pitch_cone_angle=gamma_deg)
+    gamma = radians(gamma_deg)
+    sep = 2000 * tan(radians(20))
+    assert wr.to("N").magnitude == pytest.approx(sep * cos(gamma), rel=1e-12)
+    assert wa.to("N").magnitude == pytest.approx(sep * sin(gamma), rel=1e-12)
+    # The radial and thrust components resolve to the same separating force.
+    combined = (wr.to("N").magnitude ** 2 + wa.to("N").magnitude ** 2) ** 0.5
+    assert combined == pytest.approx(sep, rel=1e-12)
+    # A flat cone (gamma = 0) is a spur gear: all radial, no thrust.
+    spur_wr = bevel_gear_radial_load(tangential_load=wt, pressure_angle=20, pitch_cone_angle=0)
+    spur_wa = bevel_gear_axial_load(tangential_load=wt, pressure_angle=20, pitch_cone_angle=0)
+    assert spur_wr.to("N").magnitude == pytest.approx(sep, rel=1e-12)
+    assert spur_wa.to("N").magnitude == pytest.approx(0.0, abs=1e-9)
+    # The pinion's and gear's cone angles are complementary (sum to 90 deg).
+    gear_gamma = bevel_pitch_cone_angle(pinion_teeth=40, gear_teeth=20)
+    assert gamma_deg + gear_gamma == pytest.approx(90.0, rel=1e-12)
+
+
+def test_bevel_gear_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        bevel_pitch_cone_angle(pinion_teeth=0, gear_teeth=40)
+    with pytest.raises(ValueError, match=r"pressure_angle \(degrees\) must lie in"):
+        bevel_gear_radial_load(tangential_load=_q("2000 N"), pressure_angle=0, pitch_cone_angle=20)
+    with pytest.raises(ValueError, match=r"pitch_cone_angle \(degrees\) must lie in"):
+        bevel_gear_axial_load(tangential_load=_q("2000 N"), pressure_angle=20, pitch_cone_angle=90)

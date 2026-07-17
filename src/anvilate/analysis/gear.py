@@ -29,7 +29,7 @@ N_p = (N_r − N_s)/2 and the equal-spacing assembly condition
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import cos, prod, radians, sin, sqrt, tan
+from math import atan2, cos, degrees, prod, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict
 
@@ -48,6 +48,9 @@ __all__ = [
     "gear_tangential_load",
     "gear_radial_load",
     "gear_normal_load",
+    "bevel_pitch_cone_angle",
+    "bevel_gear_radial_load",
+    "bevel_gear_axial_load",
     "pitch_line_velocity",
     "barth_velocity_factor",
     "lewis_bending_stress",
@@ -120,6 +123,67 @@ def gear_normal_load(*, tangential_load: Quantity, pressure_angle: float) -> Qua
     _require(tangential_load, "[force]", "tangential_load")
     phi = _check_pressure_angle(pressure_angle)
     return Quantity(magnitude=tangential_load.to("N").magnitude / cos(phi), unit="N")
+
+
+def bevel_pitch_cone_angle(*, pinion_teeth: int, gear_teeth: int) -> float:
+    """The pinion's pitch-cone angle γ = atan(N_p/N_g) of a 90° bevel pair.
+
+    A straight bevel gear's teeth lie on a cone; for the usual right-angle shaft
+    intersection the pinion's pitch cone half-angle is γ_p = atan(N_p/N_g) and
+    the gear's is its complement (they sum to 90°). This is the angle the tooth
+    separating load resolves about into radial and axial (thrust) components.
+    ``pinion_teeth`` N_p and ``gear_teeth`` N_g are positive whole tooth counts.
+    Returns γ in **degrees** — feed it to :func:`bevel_gear_radial_load` and
+    :func:`bevel_gear_axial_load`.
+    """
+    p = _check_tooth_count(pinion_teeth, "pinion_teeth")
+    g = _check_tooth_count(gear_teeth, "gear_teeth")
+    return degrees(atan2(p, g))
+
+
+def _check_cone_angle(pitch_cone_angle: float) -> float:
+    if not 0 <= pitch_cone_angle < 90:
+        raise ValueError(f"pitch_cone_angle (degrees) must lie in [0, 90); got {pitch_cone_angle}")
+    return radians(pitch_cone_angle)
+
+
+def bevel_gear_radial_load(
+    *, tangential_load: Quantity, pressure_angle: float, pitch_cone_angle: float
+) -> Quantity:
+    """The radial (separating) load W_r = W_t·tan(φ)·cos(γ) on a bevel-gear tooth.
+
+    On a bevel gear the tooth separating force W_t·tan(φ) splits between a radial
+    component (toward the pitch-cone axis, bending the shaft) and an axial thrust
+    along it, in proportion to the pitch-cone angle γ. The radial part is
+    W_r = W_t·tan(φ)·cos(γ). ``tangential_load`` W_t is the transmitted force at
+    the mean radius, ``pressure_angle`` φ the pressure angle (degrees, (0, 90)),
+    and ``pitch_cone_angle`` γ (degrees, [0, 90), from
+    :func:`bevel_pitch_cone_angle`). At γ = 0 the cone flattens to a spur gear
+    and W_r → W_t·tan(φ). The pinion's radial load is the gear's thrust and vice
+    versa. Returns the radial load in newtons.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    phi = _check_pressure_angle(pressure_angle)
+    gamma = _check_cone_angle(pitch_cone_angle)
+    return Quantity(magnitude=tangential_load.to("N").magnitude * tan(phi) * cos(gamma), unit="N")
+
+
+def bevel_gear_axial_load(
+    *, tangential_load: Quantity, pressure_angle: float, pitch_cone_angle: float
+) -> Quantity:
+    """The axial thrust load W_a = W_t·tan(φ)·sin(γ) on a bevel-gear tooth.
+
+    The other half of the bevel-tooth separating force: the thrust that pushes
+    the gear off its cone along the shaft axis, which the mounting bearings must
+    take. ``tangential_load`` W_t, ``pressure_angle`` φ, and ``pitch_cone_angle``
+    γ are as in :func:`bevel_gear_radial_load`. At γ = 0 (a spur gear) the thrust
+    vanishes; W_r and W_a together always resolve to the same W_t·tan(φ)
+    separating force (W_r² + W_a² = (W_t·tan φ)²). Returns the thrust in newtons.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    phi = _check_pressure_angle(pressure_angle)
+    gamma = _check_cone_angle(pitch_cone_angle)
+    return Quantity(magnitude=tangential_load.to("N").magnitude * tan(phi) * sin(gamma), unit="N")
 
 
 def pitch_line_velocity(*, pitch_diameter: Quantity, rotational_speed: Quantity) -> Quantity:
