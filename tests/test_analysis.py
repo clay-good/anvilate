@@ -175,6 +175,7 @@ from anvilate.analysis import (
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
     required_axial_area,
+    reverted_train_is_coaxial,
     riveted_joint_efficiency,
     secant_column_max_stress,
     shaft_diameter_for_bending_torsion,
@@ -6860,4 +6861,33 @@ def test_planetary_torques_rejects_bad_inputs():
     with pytest.raises(ValueError, match="ring_teeth must exceed sun_teeth"):
         planetary_torques(
             sun_teeth=90, ring_teeth=30, input_member="sun", input_torque=_q("100 N*m")
+        )
+
+
+def test_reverted_train_coaxial_constraint():
+    # A reverted train needs both stages to span the same centre distance:
+    # N_p1 + N_g1 == N_p2 + N_g2. 20/60 then 24/56 both total 80 -> coaxial,
+    # and the two-stage ratio is (20/60)*(24/56) = 1/7.
+    assert reverted_train_is_coaxial(
+        first_pinion_teeth=20,
+        first_gear_teeth=60,
+        second_pinion_teeth=24,
+        second_gear_teeth=56,
+    )
+    ratio = gear_train_value(driver_teeth=[20, 24], driven_teeth=[60, 56])
+    assert ratio == pytest.approx((20 / 60) * (24 / 56))
+    # Same ratios but a stage-two pair totalling 84, not 80: the output shaft
+    # lands off-axis and the train will not revert.
+    assert not reverted_train_is_coaxial(
+        first_pinion_teeth=20,
+        first_gear_teeth=60,
+        second_pinion_teeth=28,
+        second_gear_teeth=56,
+    )
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        reverted_train_is_coaxial(
+            first_pinion_teeth=0,
+            first_gear_teeth=60,
+            second_pinion_teeth=24,
+            second_gear_teeth=56,
         )

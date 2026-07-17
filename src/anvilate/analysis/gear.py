@@ -53,6 +53,7 @@ __all__ = [
     "lewis_bending_stress",
     "gear_contact_stress",
     "gear_train_value",
+    "reverted_train_is_coaxial",
     "planetary_planet_teeth",
     "planetary_can_assemble",
     "planetary_speed",
@@ -294,6 +295,33 @@ def gear_train_value(
         )
     sign = -1.0 if (mesh_count - internal_meshes) % 2 else 1.0
     return sign * prod(drivers) / prod(driven)
+
+
+def reverted_train_is_coaxial(
+    *,
+    first_pinion_teeth: int,
+    first_gear_teeth: int,
+    second_pinion_teeth: int,
+    second_gear_teeth: int,
+) -> bool:
+    """Whether a two-stage compound train's input and output shafts line up.
+
+    A *reverted* train folds a two-stage reduction back onto one axis — the
+    input and output shafts are collinear, as in a clock or a concentric
+    gearbox. That only works when both stages span the same centre distance, and
+    with a shared module the centre distance is set by the tooth counts, so the
+    reverted condition is N_p1 + N_g1 = N_p2 + N_g2: the first stage's pinion +
+    gear must total the second stage's. Pick the ratios freely and this is the
+    constraint that decides whether they can share a shaft. All four counts are
+    positive whole numbers (``first_pinion_teeth``/``first_gear_teeth`` mesh on
+    stage one, ``second_pinion_teeth``/``second_gear_teeth`` on stage two).
+    Returns True when the train reverts.
+    """
+    p1 = _check_tooth_count(first_pinion_teeth, "first_pinion_teeth")
+    g1 = _check_tooth_count(first_gear_teeth, "first_gear_teeth")
+    p2 = _check_tooth_count(second_pinion_teeth, "second_pinion_teeth")
+    g2 = _check_tooth_count(second_gear_teeth, "second_gear_teeth")
+    return p1 + g1 == p2 + g2
 
 
 def planetary_planet_teeth(*, sun_teeth: int, ring_teeth: int) -> int:

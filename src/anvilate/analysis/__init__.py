@@ -273,6 +273,7 @@ from .gear import (
     planetary_planet_teeth,
     planetary_speed,
     planetary_torques,
+    reverted_train_is_coaxial,
 )
 from .impact import (
     SUDDENLY_APPLIED_FACTOR,
@@ -557,6 +558,7 @@ __all__ = [
     "lewis_bending_stress",
     "gear_contact_stress",
     "gear_train_value",
+    "reverted_train_is_coaxial",
     "planetary_planet_teeth",
     "planetary_can_assemble",
     "planetary_speed",
