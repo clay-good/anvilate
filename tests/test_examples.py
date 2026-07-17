@@ -1057,3 +1057,20 @@ def test_worm_hoist_example_must_self_lock_before_it_is_efficient():
     assert "efficiency 69%" in triple.detail
     # A hoist that only self-locks one way overall fails the safe-hold screen.
     assert card.status is CheckStatus.FAIL
+
+
+def test_conveyor_chain_example_rejects_the_rough_small_sprocket():
+    namespace = runpy.run_path(str(_EXAMPLES / "conveyor_chain_drive.py"))
+    card = namespace["screen_conveyor_chain"]()
+    by_name = {e.name: e for e in card.entries}
+    # The cheap 11-tooth driver ripples 4% -- over twice the 2% spec.
+    small = by_name["11-tooth driver"]
+    assert small.status is CheckStatus.FAIL
+    assert "safety factor 0.49" in small.detail
+    # 13 teeth still fail; only 17 teeth clear the smoothness spec.
+    assert by_name["13-tooth driver"].status is CheckStatus.FAIL
+    good = by_name["17-tooth driver"]
+    assert good.passed
+    assert "safety factor 1.17" in good.detail
+    # A drive that offers a failing sprocket overall fails.
+    assert card.status is CheckStatus.FAIL
