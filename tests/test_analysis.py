@@ -68,6 +68,7 @@ from anvilate.analysis import (
     clamped_plate_uniform_load,
     coefficient_of_fluctuation,
     combine_axial_bending,
+    composite_curved_beam_stress,
     concentrated_stress,
     cone_clutch_torque,
     constrained_thermal_stress,
@@ -6984,3 +6985,100 @@ def test_worm_drive_rejects_bad_inputs():
         worm_gear_efficiency(lead_angle=0, friction_coefficient=0.05)
     with pytest.raises(ValueError, match="friction_coefficient must be non-negative"):
         worm_is_self_locking(lead_angle=15, friction_coefficient=-0.1)
+
+
+def test_composite_curved_beam_single_strip_reproduces_the_rectangle():
+    # One strip is a plain rectangle: the composite must match term for term.
+    rect = rectangular_curved_beam_stress(
+        moment=_q("500 N*m"),
+        inner_radius=_q("50 mm"),
+        outer_radius=_q("100 mm"),
+        width=_q("20 mm"),
+    )
+    comp = composite_curved_beam_stress(
+        moment=_q("500 N*m"),
+        strips=[(_q("20 mm"), _q("50 mm"), _q("100 mm"))],
+    )
+    assert comp.neutral_radius.to("mm").magnitude == pytest.approx(
+        rect.neutral_radius.to("mm").magnitude, rel=1e-12
+    )
+    assert comp.inner_stress.to("MPa").magnitude == pytest.approx(
+        rect.inner_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert comp.outer_stress.to("MPa").magnitude == pytest.approx(
+        rect.outer_stress.to("MPa").magnitude, rel=1e-12
+    )
+    # Splitting the same rectangle into two stacked strips changes nothing.
+    split = composite_curved_beam_stress(
+        moment=_q("500 N*m"),
+        strips=[
+            (_q("20 mm"), _q("50 mm"), _q("75 mm")),
+            (_q("20 mm"), _q("75 mm"), _q("100 mm")),
+        ],
+    )
+    assert split.inner_stress.to("MPa").magnitude == pytest.approx(
+        rect.inner_stress.to("MPa").magnitude, rel=1e-12
+    )
+
+
+def test_composite_curved_beam_t_section_satisfies_equilibrium():
+    from math import log
+
+    # A T-section curved beam: a wide flange (b=60, 10 mm deep) at the bore and a
+    # narrow web (b=20, 40 mm deep) behind it, ri=50, opened by 800 N*m.
+    strips = [(60.0, 50.0, 60.0), (20.0, 60.0, 100.0)]
+    m = 800e3
+    area = sum(b * (ro - ri) for b, ri, ro in strips)
+    integral = sum(b * log(ro / ri) for b, ri, ro in strips)
+    first_moment = sum(b * (ro - ri) * (ri + ro) / 2.0 for b, ri, ro in strips)
+    rn = area / integral
+    rc = first_moment / area
+    e = rc - rn
+    result = composite_curved_beam_stress(
+        moment=_q("800 N*m"),
+        strips=[
+            (_q("60 mm"), _q("50 mm"), _q("60 mm")),
+            (_q("20 mm"), _q("60 mm"), _q("100 mm")),
+        ],
+    )
+    assert result.neutral_radius.to("mm").magnitude == pytest.approx(rn, rel=1e-12)
+    assert result.eccentricity.to("mm").magnitude == pytest.approx(e, rel=1e-12)
+    # Integrate the field over the piecewise-constant width: Winkler's two
+    # conditions (zero net force, moment = M about the centroid) must hold, which
+    # validates the composite r_n and r_c from first principles.
+    ri_all, ro_all = 50.0, 100.0
+    n = 400_000
+    dr = (ro_all - ri_all) / n
+    force = 0.0
+    moment_about_centroid = 0.0
+    for i in range(n):
+        r = ri_all + (i + 0.5) * dr
+        width = 60.0 if r < 60.0 else 20.0
+        sigma = m * (rn - r) / (area * e * r)
+        force += sigma * width * dr
+        moment_about_centroid += sigma * (r - rc) * width * dr
+    assert abs(force) < 1e-6 * m / (ro_all - ri_all)
+    assert -moment_about_centroid == pytest.approx(m, rel=1e-6)
+    # Bore in tension, back in compression, matching the hand calc.
+    assert result.inner_stress.to("MPa").magnitude == pytest.approx(59.44, rel=1e-3)
+    assert result.outer_stress.to("MPa").magnitude == pytest.approx(-62.15, rel=1e-3)
+    # With the flange at the bore, the neutral axis shifts inward and the *back*
+    # fibre works hardest -- the opposite of the plain rectangle.
+    assert abs(result.outer_stress.magnitude) > abs(result.inner_stress.magnitude)
+
+
+def test_composite_curved_beam_rejects_bad_strips():
+    with pytest.raises(ValueError, match="at least one"):
+        composite_curved_beam_stress(moment=_q("500 N*m"), strips=[])
+    with pytest.raises(ValueError, match="radially contiguous"):
+        composite_curved_beam_stress(
+            moment=_q("500 N*m"),
+            strips=[
+                (_q("60 mm"), _q("50 mm"), _q("60 mm")),
+                (_q("20 mm"), _q("70 mm"), _q("100 mm")),  # gap 60 -> 70
+            ],
+        )
+    with pytest.raises(ValueError, match="width must be positive"):
+        composite_curved_beam_stress(
+            moment=_q("500 N*m"), strips=[(_q("0 mm"), _q("50 mm"), _q("100 mm"))]
+        )

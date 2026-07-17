@@ -33,11 +33,16 @@ general r_n = A/∫(dA/r) integral differs per shape:
     trapezoid:  r_n = A / [ ((b_i·r_o − b_o·r_i)/h)·ln(r_o/r_i) − (b_i − b_o) ]
     circle:     r_n = (r_c + √(r_c² − c²)) / 2        (c = section radius)
 
+A T-, I-, box-, or stepped section is a *stack* of concentric rectangular
+strips, and its integral is just the sum of the rectangular ones —
+∫(dA/r) = Σ b_k·ln(r_o,k/r_i,k) — which the composite section handles directly.
+
 Inputs are dimension-checked :class:`~anvilate.units.Quantity` values.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import log, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict
@@ -49,6 +54,7 @@ __all__ = [
     "rectangular_curved_beam_stress",
     "trapezoidal_curved_beam_stress",
     "circular_curved_beam_stress",
+    "composite_curved_beam_stress",
 ]
 
 
@@ -214,3 +220,62 @@ def circular_curved_beam_stress(
     rc = (ri + ro) / 2.0
     rn = (rc + sqrt(rc**2 - c**2)) / 2.0
     return _winkler_stresses(m=m, area=pi * c**2, rn=rn, rc=rc, ri=ri, ro=ro)
+
+
+def composite_curved_beam_stress(
+    *,
+    moment: Quantity,
+    strips: Sequence[tuple[Quantity, Quantity, Quantity]],
+) -> CurvedBeamStress:
+    """The Winkler bending stresses of a T-, I-, box-, or stepped curved beam.
+
+    Any section built from concentric rectangular strips — a T-section hook, an
+    I-section frame, a stepped link — stacks additively in the Winkler integral:
+    with each strip k of width b_k spanning r_i,k to r_o,k,
+
+        A = Σ b_k·(r_o,k − r_i,k),   ∫(dA/r) = Σ b_k·ln(r_o,k/r_i,k),
+        r_n = A / ∫(dA/r),   r_c = Σ (b_k·A_k·r_c,k) / A
+
+    and the fibre stresses follow the same σ(r) = M·(r_n − r)/(A·e·r). ``strips``
+    is a sequence of ``(width, inner_radius, outer_radius)`` triples ordered from
+    the bore outward and radially *contiguous* (each strip's outer radius is the
+    next strip's inner radius — no gaps or overlaps). ``moment`` M is positive
+    when it opens the curve, putting the bore (the innermost strip's inner fibre)
+    in tension; because σ(r) is monotonic in r, the extreme stresses are always
+    at the overall bore and back. Returns a :class:`CurvedBeamStress`; stresses
+    in MPa.
+    """
+    _require(moment, "[force] * [length]", "moment")
+    if len(strips) == 0:
+        raise ValueError("strips must contain at least one (width, r_i, r_o) triple")
+    area = 0.0
+    integral = 0.0
+    first_moment = 0.0  # Σ A_k·r_c,k, for the centroid
+    prev_ro: float | None = None
+    ri_overall = 0.0
+    ro_overall = 0.0
+    for index, strip in enumerate(strips):
+        width, inner_radius, outer_radius = strip
+        _require(width, "[length]", f"strips[{index}] width")
+        ri, ro = _check_radii(inner_radius, outer_radius)
+        b = width.to("mm").magnitude
+        if b <= 0:
+            raise ValueError(f"strips[{index}] width must be positive; got {width}")
+        if prev_ro is not None and abs(ri - prev_ro) > 1e-9:
+            raise ValueError(
+                f"strips must be radially contiguous: strips[{index}] inner radius "
+                f"{inner_radius} does not meet the previous strip's outer radius "
+                f"({prev_ro:g} mm)"
+            )
+        if prev_ro is None:
+            ri_overall = ri
+        prev_ro = ro
+        ro_overall = ro
+        strip_area = b * (ro - ri)
+        area += strip_area
+        integral += b * log(ro / ri)
+        first_moment += strip_area * (ri + ro) / 2.0
+    m = moment.to("N*mm").magnitude
+    rn = area / integral
+    rc = first_moment / area
+    return _winkler_stresses(m=m, area=area, rn=rn, rc=rc, ri=ri_overall, ro=ro_overall)
