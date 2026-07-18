@@ -2055,3 +2055,16 @@ def test_hydraulic_meter_out_intensification_example_rod_ratio_governs():
     assert thin.entries[0].passed
     assert "safety factor 1.12" in thin.entries[0].detail
     assert thin.status is CheckStatus.PASS
+
+
+def test_gear_pair_layout_example_undercut_governs_the_pinion():
+    namespace = runpy.run_path(str(_EXAMPLES / "gear_pair_layout.py"))
+    coarse = namespace["screen_pinion"]()
+    # The 12-tooth coarse-module pinion fits the centre but undercuts.
+    assert coarse.status is CheckStatus.FAIL
+    assert "safety factor 0.67" in coarse.entries[0].detail
+    # More, finer teeth on the same centre and ratio clear the undercut minimum.
+    fine = namespace["screen_finer_pinion"]()
+    assert fine.entries[0].passed
+    assert "safety factor 1.11" in fine.entries[0].detail
+    assert fine.status is CheckStatus.PASS
