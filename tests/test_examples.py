@@ -1094,3 +1094,21 @@ def test_highspeed_cam_example_is_a_speed_squared_problem():
     assert cyc.status is CheckStatus.FAIL
     assert "safety factor 0.65" in cyc.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_engine_shaking_force_example_turns_on_the_rod_ratio():
+    namespace = runpy.run_path(str(_EXAMPLES / "engine_shaking_force.py"))
+    card = namespace["screen_shaking_force"]()
+    by_name = {e.name: e for e in card.entries}
+    # The stubby rod's secondary shake overloads the mounts.
+    short = by_name["short rod (L/r = 3.5)"]
+    assert short.status is CheckStatus.FAIL
+    assert "safety factor 0.95" in short.detail
+    # A longer rod lowers the peak and clears the mount rating.
+    assert by_name["medium rod (L/r = 5.0)"].passed
+    assert "safety factor 1.01" in by_name["medium rod (L/r = 5.0)"].detail
+    long = by_name["long rod (L/r = 6.67)"]
+    assert long.passed
+    assert "safety factor 1.06" in long.detail
+    # One failing option makes the overall screen fail.
+    assert card.status is CheckStatus.FAIL
