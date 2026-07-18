@@ -38,6 +38,7 @@ __all__ = [
     "neuber_notch_sensitivity",
     "peterson_notch_sensitivity",
     "smith_watson_topper_stress",
+    "goodman_equivalent_reversed_stress",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",
@@ -275,6 +276,37 @@ def smith_watson_topper_stress(*, max_stress: Quantity, alternating_stress: Quan
             f"max_stress must be positive for the SWT tensile-fatigue model; got {smax} MPa"
         )
     return Quantity(magnitude=sqrt(smax * sa), unit="MPa")
+
+
+def goodman_equivalent_reversed_stress(
+    *, alternating_stress: Quantity, mean_stress: Quantity, ultimate_strength: Quantity
+) -> Quantity:
+    """The Goodman equivalent fully-reversed stress σ_ar = σ_a/(1 − σ_m/S_u).
+
+    The fully-reversed amplitude that, on the modified-Goodman line, does the same
+    fatigue damage as the actual cycle — the value to look up on an S-N curve or
+    compare to the endurance limit, and the equivalent-stress counterpart of
+    :func:`goodman_safety_factor`. ``alternating_stress`` σ_a is the amplitude,
+    ``mean_stress`` σ_m the mean (tension positive), and ``ultimate_strength`` S_u the
+    material's ultimate. A fully-reversed cycle (σ_m = 0) returns σ_a unchanged; a
+    tensile mean inflates it toward infinity as σ_m approaches S_u. Compared with
+    :func:`smith_watson_topper_stress`, this is the Goodman rather than the SWT
+    mean-stress model. σ_a must be non-negative and σ_m below S_u (a mean at the
+    ultimate has zero fatigue life). Returns the equivalent reversed stress in MPa.
+    """
+    sa = _require_stress(alternating_stress, "alternating_stress")
+    sm = _require_stress(mean_stress, "mean_stress")
+    su = _require_stress(ultimate_strength, "ultimate_strength")
+    if sa < 0:
+        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
+    if su <= 0:
+        raise ValueError(f"ultimate_strength must be positive; got {su} MPa")
+    if sm >= su:
+        raise ValueError(
+            f"mean_stress ({sm} MPa) must be below ultimate_strength ({su} MPa) "
+            "for a finite equivalent stress"
+        )
+    return Quantity(magnitude=sa / (1.0 - sm / su), unit="MPa")
 
 
 def goodman_safety_factor(

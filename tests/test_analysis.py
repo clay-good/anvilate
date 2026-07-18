@@ -137,6 +137,7 @@ from anvilate.analysis import (
     geneva_index_angle,
     gerber_safety_factor,
     gerber_scorecard,
+    goodman_equivalent_reversed_stress,
     goodman_safety_factor,
     goodman_scorecard,
     helical_gear_axial_thrust,
@@ -8912,4 +8913,26 @@ def test_belt_transmitted_power_and_mean_tension():
     with pytest.raises(ValueError, match="belt_speed must be a"):
         belt_transmitted_power(
             tight_tension=_q("500 N"), slack_tension=_q("200 N"), belt_speed=_q("20 N")
+        )
+
+
+def test_goodman_equivalent_reversed_stress():
+    # sigma_ar = sigma_a/(1 - sigma_m/S_u): a tensile mean inflates the amplitude.
+    r = goodman_equivalent_reversed_stress(
+        alternating_stress=_q("50 MPa"), mean_stress=_q("100 MPa"), ultimate_strength=_q("700 MPa")
+    )
+    assert r.to("MPa").magnitude == pytest.approx(50 / (1 - 100 / 700), rel=1e-12)
+    assert r.to("MPa").magnitude == pytest.approx(58.333, rel=1e-4)
+    # A fully-reversed cycle (sigma_m = 0) returns the amplitude unchanged.
+    assert goodman_equivalent_reversed_stress(
+        alternating_stress=_q("50 MPa"), mean_stress=_q("0 MPa"), ultimate_strength=_q("700 MPa")
+    ).to("MPa").magnitude == pytest.approx(50.0, rel=1e-12)
+    # It differs from the SWT model for the same cycle (Goodman vs SWT lines).
+    swt = smith_watson_topper_stress(max_stress=_q("150 MPa"), alternating_stress=_q("50 MPa"))
+    assert r.to("MPa").magnitude != pytest.approx(swt.to("MPa").magnitude, rel=1e-2)
+    with pytest.raises(ValueError, match="mean_stress .* must be below ultimate_strength"):
+        goodman_equivalent_reversed_stress(
+            alternating_stress=_q("50 MPa"),
+            mean_stress=_q("700 MPa"),
+            ultimate_strength=_q("700 MPa"),
         )
