@@ -1716,3 +1716,18 @@ def test_bracket_weld_group_eccentric_example_direct_shear_underestimates():
     assert by_name["true peak (eccentric)"].status is CheckStatus.FAIL
     assert "safety factor 0.90" in by_name["true peak (eccentric)"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_shaft_bearing_misalignment_example_slope_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "shaft_bearing_misalignment.py"))
+    card = namespace["screen_shaft"]()
+    by_name = {e.name: e for e in card.entries}
+    # The shaft is plenty strong and plenty stiff...
+    assert by_name["bending stress"].passed
+    assert "safety factor 11.45" in by_name["bending stress"].detail
+    assert by_name["midspan deflection"].passed
+    assert "safety factor 1.18" in by_name["midspan deflection"].detail
+    # ...but the slope at its bearings exceeds the tight roller tolerance.
+    assert by_name["bearing misalignment slope"].status is CheckStatus.FAIL
+    assert "safety factor 0.79" in by_name["bearing misalignment slope"].detail
+    assert card.status is CheckStatus.FAIL
