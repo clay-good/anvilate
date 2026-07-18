@@ -173,6 +173,10 @@ modules:
   the steel endurance-limit estimate with its Marin correction to the real
   part, the Basquin S-N finite-life law, and
   Palmgren-Miner cumulative damage over a load spectrum
+- :mod:`~anvilate.analysis.gasket` — bolted-flange gasket bolt loads (ASME VIII
+  Appendix 2): the gasket seating load (π·b·G·y), the operating load (hydrostatic
+  end force plus the m-factor residual gasket reaction), and the governing (larger)
+  bolt load a flange is sized for
 - :mod:`~anvilate.analysis.sheetmetal` — sheet-metal bending flat-pattern geometry:
   the neutral-axis radius and bend allowance (K-factor), the outside setback and
   bend deduction, the developed blank length of a multi-bend strip, the minimum
@@ -471,6 +475,11 @@ from .fracture import (
     paris_law_crack_growth_rate,
     paris_law_cycles_to_failure,
     stress_intensity_factor,
+)
+from .gasket import (
+    gasket_operating_load,
+    gasket_seating_load,
+    governing_gasket_bolt_load,
 )
 from .gear import (
     PlanetaryTorques,
@@ -1157,6 +1166,9 @@ __all__ = [
     "critical_crack_length",
     "paris_law_crack_growth_rate",
     "paris_law_cycles_to_failure",
+    "gasket_seating_load",
+    "gasket_operating_load",
+    "governing_gasket_bolt_load",
     "constrained_thermal_stress",
     "thermal_shock_stress",
     "triaxial_constrained_thermal_stress",

@@ -10741,3 +10741,45 @@ def test_sling_leg_tension_multiplies_with_a_flatter_angle():
         r.sling_leg_tension(load=_q("10 kN"), number_of_legs=2, angle_from_horizontal=0)
     with pytest.raises(ValueError, match="load must be a"):
         r.sling_leg_tension(load=_q("10 mm"), number_of_legs=2, angle_from_horizontal=45)
+
+
+def test_gasket_seating_and_operating_bolt_loads():
+    from math import pi
+
+    from anvilate.analysis import gasket as g
+
+    kw = {"gasket_mean_diameter": _q("400 mm"), "effective_seating_width": _q("10 mm")}
+    # Seating load W = pi*b*G*y.
+    seating = g.gasket_seating_load(seating_stress=_q("11 MPa"), **kw)
+    assert seating.to("N").magnitude == pytest.approx(pi * 10 * 400 * 11, rel=1e-12)
+    # Operating load = hydrostatic end force + m-factor residual gasket reaction.
+    operating = g.gasket_operating_load(gasket_factor=2.0, pressure=_q("2 MPa"), **kw)
+    end_force = pi / 4 * 400**2 * 2
+    gasket_reaction = 2 * 10 * pi * 400 * 2.0 * 2
+    assert operating.to("N").magnitude == pytest.approx(end_force + gasket_reaction, rel=1e-12)
+    # Here operation governs; the bolts are sized for the larger load.
+    governing = g.governing_gasket_bolt_load(
+        seating_stress=_q("11 MPa"), gasket_factor=2.0, pressure=_q("2 MPa"), **kw
+    )
+    assert governing.to("N").magnitude == pytest.approx(operating.to("N").magnitude, rel=1e-12)
+    assert operating.to("N").magnitude > seating.to("N").magnitude
+    # A hard gasket at low pressure flips it: seating governs.
+    seat_governed = g.governing_gasket_bolt_load(
+        gasket_mean_diameter=_q("400 mm"),
+        effective_seating_width=_q("10 mm"),
+        seating_stress=_q("180 MPa"),  # spiral-wound-style hard seating stress
+        gasket_factor=3.0,
+        pressure=_q("0.3 MPa"),
+    )
+    hard_seating = g.gasket_seating_load(
+        gasket_mean_diameter=_q("400 mm"),
+        effective_seating_width=_q("10 mm"),
+        seating_stress=_q("180 MPa"),
+    )
+    assert seat_governed.to("N").magnitude == pytest.approx(
+        hard_seating.to("N").magnitude, rel=1e-12
+    )
+    with pytest.raises(ValueError, match="gasket_factor must be positive"):
+        g.gasket_operating_load(gasket_factor=0, pressure=_q("2 MPa"), **kw)
+    with pytest.raises(ValueError, match="pressure must be a"):
+        g.gasket_operating_load(gasket_factor=2.0, pressure=_q("2 mm"), **kw)
