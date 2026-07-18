@@ -34,6 +34,7 @@ __all__ = [
     "hertz_effective_modulus",
     "HertzContact",
     "hertz_sphere_contact",
+    "hertz_sphere_approach",
     "HertzLineContact",
     "hertz_cylinder_contact",
 ]
@@ -177,6 +178,55 @@ def hertz_sphere_contact(
         contact_radius=Quantity(magnitude=a, unit="mm"),
         max_contact_pressure=Quantity(magnitude=p_max, unit="MPa"),
     )
+
+
+def hertz_sphere_approach(
+    *,
+    force: Quantity,
+    diameter1: Quantity,
+    modulus1: Quantity,
+    poisson1: float,
+    modulus2: Quantity,
+    poisson2: float,
+    diameter2: Quantity | None = None,
+) -> Quantity:
+    """The mutual approach δ = (9·F²/(16·R·E*²))^(1/3) of a Hertzian point contact.
+
+    The distance the two bodies' centres move *together* as the load flattens the
+    contact — the local contact stiffness, on top of any bulk elastic deflection. It
+    is δ = a²/R = (9·F²/(16·R·E*²))^(1/3), where a is the contact-patch radius, R the
+    effective radius, and E* the reduced modulus. The arguments are exactly those of
+    :func:`hertz_sphere_contact` (``force``, the two spheres' diameters — ``diameter2``
+    ``None`` for a sphere on a flat — and each body's ``modulus``/``poisson``). The
+    approach grows only as F^(2/3), so a contact stiffens as it is pressed. Returns the
+    approach in micrometres.
+    """
+    _require(force, "[force]", "force")
+    _require(diameter1, "[length]", "diameter1")
+    d1 = diameter1.to("mm").magnitude
+    if d1 <= 0:
+        raise ValueError(f"diameter1 must be positive; got {diameter1}")
+    r1 = d1 / 2
+    if diameter2 is None:
+        inv_r = 1.0 / r1
+    else:
+        _require(diameter2, "[length]", "diameter2")
+        d2 = diameter2.to("mm").magnitude
+        if d2 <= 0:
+            raise ValueError(f"diameter2 must be positive; got {diameter2}")
+        inv_r = 1.0 / r1 + 1.0 / (d2 / 2)
+    effective_radius = 1.0 / inv_r  # mm
+    e_star = (
+        hertz_effective_modulus(
+            modulus1=modulus1, poisson1=poisson1, modulus2=modulus2, poisson2=poisson2
+        )
+        .to("MPa")
+        .magnitude
+    )
+    f = force.to("N").magnitude
+    a = (3.0 * f * effective_radius / (4.0 * e_star)) ** (1.0 / 3.0)  # mm
+    approach_mm = a**2 / effective_radius
+    return Quantity(magnitude=approach_mm, unit="mm").to("um")
 
 
 class HertzLineContact(BaseModel):

@@ -145,6 +145,7 @@ from anvilate.analysis import (
     helical_virtual_teeth,
     hertz_cylinder_contact,
     hertz_effective_modulus,
+    hertz_sphere_approach,
     hertz_sphere_contact,
     hollow_circular_second_moment,
     hollow_shaft_diameter_for_bending_torsion,
@@ -8803,3 +8804,30 @@ def test_thin_closed_tube_torsion_generalizes_the_box():
         thin_closed_tube_torsional_stress(
             torque=_q("500 N*m"), enclosed_area=_q("0 mm**2"), wall_thickness=_q("5 mm")
         )
+
+
+def test_hertz_sphere_approach_matches_a_squared_over_r():
+
+    kw = {
+        "force": _q("1000 N"),
+        "diameter1": _q("20 mm"),
+        "modulus1": _q("200 GPa"),
+        "poisson1": 0.3,
+        "modulus2": _q("200 GPa"),
+        "poisson2": 0.3,
+    }
+    approach = hertz_sphere_approach(**kw)
+    # delta = a^2 / R: cross-check against the contact-patch radius (R = 10 mm flat).
+    contact = hertz_sphere_contact(**kw)
+    a = contact.contact_radius.to("mm").magnitude
+    assert approach.to("mm").magnitude == pytest.approx(a**2 / 10.0, rel=1e-12)
+    # And against the closed form delta = (9 F^2 / (16 R E*^2))^(1/3).
+    e_star = 200000 / (2 * (1 - 0.3**2))
+    assert approach.to("um").magnitude == pytest.approx(
+        (9 * 1000**2 / (16 * 10 * e_star**2)) ** (1 / 3) * 1000, rel=1e-9
+    )
+    # It grows only as F^(2/3): 8x the load doubles the approach (a contact stiffens).
+    harder = hertz_sphere_approach(**{**kw, "force": _q("8000 N")})
+    assert harder.to("um").magnitude == pytest.approx(4 * approach.to("um").magnitude, rel=1e-9)
+    with pytest.raises(ValueError, match="diameter1 must be positive"):
+        hertz_sphere_approach(**{**kw, "diameter1": _q("0 mm")})

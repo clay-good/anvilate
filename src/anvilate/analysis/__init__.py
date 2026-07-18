@@ -249,6 +249,7 @@ from .contact import (
     HertzLineContact,
     hertz_cylinder_contact,
     hertz_effective_modulus,
+    hertz_sphere_approach,
     hertz_sphere_contact,
 )
 from .coupling import (
@@ -828,6 +829,7 @@ __all__ = [
     "hertz_effective_modulus",
     "HertzContact",
     "hertz_sphere_contact",
+    "hertz_sphere_approach",
     "HertzLineContact",
     "hertz_cylinder_contact",
     "flange_coupling_torque",
