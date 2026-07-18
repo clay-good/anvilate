@@ -1308,3 +1308,22 @@ def test_gearbox_output_shaft_example_passes_all_three_modes():
     assert bearing.passed
     assert "safety factor 1.13" in bearing.detail
     assert card.status is CheckStatus.PASS
+
+
+def test_spring_buckling_example_folds_the_tall_spring():
+    namespace = runpy.run_path(str(_EXAMPLES / "spring_buckling_freelength.py"))
+    card = namespace["screen_spring_buckling"]()
+    by_name = {e.name: e for e in card.entries}
+    # The squat spring is absolutely stable...
+    short = by_name["short (120 mm)"]
+    assert short.passed
+    assert "absolutely stable" in short.detail
+    # ...the medium one is a column but safe at the operating deflection...
+    medium = by_name["medium (150 mm)"]
+    assert medium.passed
+    assert "safety factor 1.26" in medium.detail
+    # ...and the tall one buckles in service though its wire is fine.
+    tall = by_name["tall (180 mm)"]
+    assert tall.status is CheckStatus.FAIL
+    assert "safety factor 0.92" in tall.detail
+    assert card.status is CheckStatus.FAIL
