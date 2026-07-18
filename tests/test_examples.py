@@ -1817,3 +1817,24 @@ def test_gasket_flange_leak_example_tightness_governs():
     assert by_name["stay tight under pressure"].status is CheckStatus.FAIL
     assert "safety factor 0.85" in by_name["stay tight under pressure"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_hydraulic_cylinder_cap_capstone_seal_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_cylinder_cap.py"))
+    card = namespace["screen_cap"]()
+    by_name = {e.name: e for e in card.entries}
+    # All five subsystems pass -- a validated design.
+    assert card.status is CheckStatus.PASS
+    assert all(e.passed for e in card.entries)
+    # The structural parts are comfortable...
+    assert "safety factor 3.09" in by_name["cylinder wall (bore von Mises)"].detail
+    assert "safety factor 2.86" in by_name["end cover bending"].detail
+    # ...while the seal and bolts are the tight ones, gland fill the tightest.
+    assert "safety factor 1.79" in by_name["cap bolts vs end force"].detail
+    assert "safety factor 1.40" in by_name["O-ring squeeze vs floor"].detail
+    assert "safety factor 1.21" in by_name["O-ring gland fill vs ceiling"].detail
+    # The binding constraint is the gland fill, not any structural check.
+    tightest = min(
+        card.entries, key=lambda e: float(e.detail.split("safety factor ")[1].split(" ")[0])
+    )
+    assert tightest.name == "O-ring gland fill vs ceiling"
