@@ -17,6 +17,8 @@ from anvilate.analysis import (
     CrossSection,
     annular_disc_polar_mass_moment,
     asme_cylinder_thickness,
+    axial_elongation,
+    axial_stiffness,
     axial_stress,
     band_brake_max_lining_pressure,
     band_brake_tight_tension_for_torque,
@@ -5219,6 +5221,29 @@ def test_required_axial_area_rejects_bad_inputs():
         required_axial_area(
             axial_load=_q("100 kN"), allowable_stress=_q("165 MPa"), required_safety_factor=0.0
         )
+
+
+def test_axial_elongation_and_stiffness_are_consistent():
+    kw = {"area": _q("100 mm**2"), "length": _q("1 m"), "elastic_modulus": _q("200 GPa")}
+    # delta = F*L/(A*E): 10 kN over 100 mm^2, 1 m, 200 GPa -> 0.5 mm (tension).
+    delta = axial_elongation(force=_q("10 kN"), **kw)
+    assert delta.to("mm").magnitude == pytest.approx(10000 * 1000 / (100 * 200000), rel=1e-12)
+    assert delta.to("mm").magnitude == pytest.approx(0.5, rel=1e-12)
+    # A compressive force shortens the member (signed result).
+    assert axial_elongation(force=_q("-10 kN"), **kw).to("mm").magnitude == pytest.approx(
+        -0.5, rel=1e-12
+    )
+    # k = A*E/L, and the elongation is exactly F/k.
+    k = axial_stiffness(**kw)
+    assert k.to("N/mm").magnitude == pytest.approx(100 * 200000 / 1000, rel=1e-12)
+    assert k.to("N/mm").magnitude == pytest.approx(20000.0, rel=1e-12)
+    assert delta.to("mm").magnitude == pytest.approx(10000 / k.to("N/mm").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="area must be positive"):
+        axial_elongation(
+            force=_q("10 kN"), area=_q("0 mm**2"), length=_q("1 m"), elastic_modulus=_q("200 GPa")
+        )
+    with pytest.raises(ValueError, match="length must be positive"):
+        axial_stiffness(area=_q("100 mm**2"), length=_q("0 m"), elastic_modulus=_q("200 GPa"))
 
 
 def test_cyclic_stress_components_from_max_and_min():

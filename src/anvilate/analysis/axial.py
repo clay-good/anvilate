@@ -20,6 +20,8 @@ __all__ = [
     "circular_area",
     "axial_stress",
     "required_axial_area",
+    "axial_elongation",
+    "axial_stiffness",
 ]
 
 
@@ -79,3 +81,53 @@ def required_axial_area(
         raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
     area = required_safety_factor * abs(axial_load.pint) / allowable_stress.pint
     return _as_quantity(area, "mm**2")
+
+
+def axial_elongation(
+    *, force: Quantity, length: Quantity, area: Quantity, elastic_modulus: Quantity
+) -> Quantity:
+    """The axial deformation δ = F·L/(A·E) of a uniform member.
+
+    A bar of ``length`` L and cross-sectional ``area`` A stretched (or compressed) by
+    an axial ``force`` F changes length by δ = F·L/(A·E) — Hooke's law over the whole
+    member, the axial counterpart of a beam's deflection and a shaft's twist. The
+    result is SIGNED: a tensile force lengthens, a compressive one shortens, which is
+    what a thermal-growth or fit-up clearance check needs. ``force`` is a force, L and
+    A are positive geometry, and ``elastic_modulus`` E the material's. Returns the
+    elongation in mm.
+    """
+    _require(force, "[force]", "force")
+    _require(length, "[length]", "length")
+    _require(area, "[length]**2", "area")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if length.to("mm").magnitude <= 0:
+        raise ValueError(f"length must be positive; got {length}")
+    if area.to("mm**2").magnitude <= 0:
+        raise ValueError(f"area must be positive; got {area}")
+    if elastic_modulus.to("MPa").magnitude <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    delta = force.pint * length.pint / (area.pint * elastic_modulus.pint)
+    return _as_quantity(delta, "mm")
+
+
+def axial_stiffness(*, length: Quantity, area: Quantity, elastic_modulus: Quantity) -> Quantity:
+    """The axial stiffness k = A·E/L of a uniform member.
+
+    The axial spring rate of a bar — the force it takes to stretch it a unit length,
+    k = A·E/L, so its elongation under a load is simply F/k (:func:`axial_elongation`).
+    It is the stiffness a bolt or tie-rod contributes to a preloaded joint or a
+    parallel load path, and the ``k`` a mass on the end of a rod resonates on. ``area``
+    A, ``length`` L, and ``elastic_modulus`` E must be positive. Returns the stiffness
+    in newtons per millimetre.
+    """
+    _require(length, "[length]", "length")
+    _require(area, "[length]**2", "area")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if length.to("mm").magnitude <= 0:
+        raise ValueError(f"length must be positive; got {length}")
+    if area.to("mm**2").magnitude <= 0:
+        raise ValueError(f"area must be positive; got {area}")
+    if elastic_modulus.to("MPa").magnitude <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    stiffness = area.pint * elastic_modulus.pint / length.pint
+    return _as_quantity(stiffness, "N/mm")
