@@ -11236,3 +11236,29 @@ def test_gear_center_distance_and_module_inverse():
     assert bigger.to("mm").magnitude > m.to("mm").magnitude
     with pytest.raises(ValueError, match="module must be positive"):
         gear_center_distance(module=_q("0 mm"), pinion_teeth=20, gear_teeth=40)
+
+
+def test_gear_pitch_outside_and_root_diameters():
+    from anvilate.analysis import (
+        gear_outside_diameter,
+        gear_pitch_diameter,
+        gear_root_diameter,
+    )
+
+    # Module 2, 20 teeth: pitch 40, outside m*(N+2)=44, root m*N - 2*1.25*m = 35.
+    assert gear_pitch_diameter(module=_q("2 mm"), teeth=20).to("mm").magnitude == pytest.approx(
+        40.0
+    )
+    assert gear_outside_diameter(module=_q("2 mm"), teeth=20).to("mm").magnitude == pytest.approx(
+        44.0
+    )
+    assert gear_root_diameter(module=_q("2 mm"), teeth=20).to("mm").magnitude == pytest.approx(35.0)
+    # Outside > pitch > root; the whole depth (OD - root)/2 is 2.25*m for full-depth teeth.
+    od = gear_outside_diameter(module=_q("2 mm"), teeth=20).to("mm").magnitude
+    root = gear_root_diameter(module=_q("2 mm"), teeth=20).to("mm").magnitude
+    assert (od - root) / 2 == pytest.approx(2.25 * 2, rel=1e-12)
+    # Stub teeth (k=0.8) give a smaller outside diameter.
+    stub = gear_outside_diameter(module=_q("2 mm"), teeth=20, addendum_coefficient=0.8)
+    assert stub.to("mm").magnitude < od
+    with pytest.raises(ValueError, match="teeth must be a positive whole number"):
+        gear_pitch_diameter(module=_q("2 mm"), teeth=0)

@@ -65,6 +65,9 @@ __all__ = [
     "involute_angle",
     "base_tangent_length",
     "gear_tooth_thickness_at_radius",
+    "gear_pitch_diameter",
+    "gear_outside_diameter",
+    "gear_root_diameter",
     "gear_center_distance",
     "gear_module_for_center_distance",
     "operating_pressure_angle",
@@ -612,6 +615,56 @@ def gear_tooth_thickness_at_radius(
     phi_r = acos(r_b / r)
     thickness = 2.0 * r * (pi / (2.0 * z) + (tan(phi) - phi) - (tan(phi_r) - phi_r))
     return Quantity(magnitude=thickness, unit="mm")
+
+
+def gear_pitch_diameter(*, module: Quantity, teeth: int) -> Quantity:
+    """The pitch diameter d = m·N of a spur gear.
+
+    The diameter of the reference (pitch) circle where meshing gears roll without sliding,
+    the geometry every other gear dimension and the transmitted-load radius refer to:
+    ``module`` m times the tooth count ``teeth`` N. m must be a positive length and N a
+    positive whole number. Returns the pitch diameter in mm.
+    """
+    _require(module, "[length]", "module")
+    m = module.to("mm").magnitude
+    if m <= 0:
+        raise ValueError(f"module must be positive; got {module}")
+    n = _check_tooth_count(teeth, "teeth")
+    return Quantity(magnitude=m * n, unit="mm")
+
+
+def gear_outside_diameter(
+    *, module: Quantity, teeth: int, addendum_coefficient: float = 1.0
+) -> Quantity:
+    """The outside (tip) diameter D_o = m·(N + 2·k) of a spur gear.
+
+    The diameter of the blank the teeth are cut into: the pitch diameter plus two addenda,
+    D_o = m·N + 2·k·m for ``module`` m, tooth count ``teeth`` N, and
+    ``addendum_coefficient`` k (1.0 for full-depth teeth, ~0.8 for stub teeth). Returns the
+    outside diameter in mm.
+    """
+    if addendum_coefficient <= 0:
+        raise ValueError(f"addendum_coefficient must be positive; got {addendum_coefficient}")
+    d = gear_pitch_diameter(module=module, teeth=teeth).to("mm").magnitude
+    m = module.to("mm").magnitude
+    return Quantity(magnitude=d + 2.0 * addendum_coefficient * m, unit="mm")
+
+
+def gear_root_diameter(
+    *, module: Quantity, teeth: int, dedendum_coefficient: float = 1.25
+) -> Quantity:
+    """The root (fillet) diameter D_r = m·(N − 2·b) of a spur gear.
+
+    The diameter at the bottom of the tooth spaces: the pitch diameter less two dedenda,
+    D_r = m·N − 2·b·m for ``module`` m, tooth count ``teeth`` N, and ``dedendum_coefficient``
+    b (1.25 for standard full-depth teeth, giving the 0.25·m clearance below the mating
+    addendum). Returns the root diameter in mm.
+    """
+    if dedendum_coefficient <= 0:
+        raise ValueError(f"dedendum_coefficient must be positive; got {dedendum_coefficient}")
+    d = gear_pitch_diameter(module=module, teeth=teeth).to("mm").magnitude
+    m = module.to("mm").magnitude
+    return Quantity(magnitude=d - 2.0 * dedendum_coefficient * m, unit="mm")
 
 
 def gear_center_distance(*, module: Quantity, pinion_teeth: int, gear_teeth: int) -> Quantity:
