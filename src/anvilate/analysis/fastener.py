@@ -55,6 +55,8 @@ __all__ = [
     "bolt_diameter_for_shear",
     "bolt_tensile_stress_area",
     "bolt_axial_stress",
+    "bolt_proof_load",
+    "recommended_bolt_preload",
     "thread_stripping_shear_area",
     "thread_stripping_stress",
     "thread_engagement_for_load",
@@ -379,6 +381,56 @@ def bolt_axial_stress(
     stress = tension.pint / area
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+# Shigley's recommended preload fractions of the proof load: reused connections are
+# tightened to 0.75·F_p (leaving margin to retighten), permanent ones to 0.90·F_p.
+REUSED_PRELOAD_FRACTION = 0.75
+PERMANENT_PRELOAD_FRACTION = 0.90
+
+
+def bolt_proof_load(*, tensile_stress_area: Quantity, proof_strength: Quantity) -> Quantity:
+    """The proof load F_p = A_t·S_p of a bolt.
+
+    The proof load is the largest tension a bolt takes without measurable permanent
+    set — the property-class strength the fastener tables quote (585 MPa for grade
+    8.8, 830 for 10.9, 970 for 12.9). It is the proof strength ``proof_strength`` S_p
+    times the ISO 898 ``tensile_stress_area`` A_t (:func:`bolt_tensile_stress_area`),
+    and it is the reference every preload target is a fraction of. A_t must be an area
+    and S_p a stress, both positive. Returns the proof load in newtons.
+    """
+    if not tensile_stress_area.has_dimension("[length]**2"):
+        raise ValueError(
+            f"tensile_stress_area must be a [length]**2 quantity; got "
+            f"{tensile_stress_area.dimensionality} ({tensile_stress_area})"
+        )
+    _require(proof_strength, "[pressure]", "proof_strength")
+    area = tensile_stress_area.to("mm**2").magnitude
+    sp = proof_strength.to("MPa").magnitude
+    if area <= 0:
+        raise ValueError(f"tensile_stress_area must be positive; got {tensile_stress_area}")
+    if sp <= 0:
+        raise ValueError(f"proof_strength must be positive; got {proof_strength}")
+    return Quantity(magnitude=area * sp, unit="N")
+
+
+def recommended_bolt_preload(*, proof_load: Quantity, permanent: bool = False) -> Quantity:
+    """The recommended bolt preload as a fraction of the proof load (Shigley).
+
+    A preloaded joint is tightened to a target tension well up the proof load: high
+    enough that the members stay clamped and the bolt sees little of the external
+    load's swing (good fatigue life), but below proof so the bolt does not yield.
+    Shigley recommends F_i = 0.75·F_p for a ``permanent=False`` reused connection
+    (leaving margin to loosen and retighten) and 0.90·F_p for a ``permanent=True``
+    one. ``proof_load`` F_p is the bolt's proof load (:func:`bolt_proof_load`), which
+    must be a positive force. Returns the recommended preload in newtons.
+    """
+    _require(proof_load, "[force]", "proof_load")
+    fp = proof_load.to("N").magnitude
+    if fp <= 0:
+        raise ValueError(f"proof_load must be positive; got {proof_load}")
+    fraction = PERMANENT_PRELOAD_FRACTION if permanent else REUSED_PRELOAD_FRACTION
+    return Quantity(magnitude=fraction * fp, unit="N")
 
 
 def bolt_axial_stiffness(

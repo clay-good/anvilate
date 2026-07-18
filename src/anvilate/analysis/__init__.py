@@ -114,7 +114,8 @@ modules:
   planetary Willis-equation speeds and ideal torque split, whole-tooth planet and
   assembly checks)
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, the
-  ISO 898 tensile stress area / axial stress, thread-stripping engagement, and
+  ISO 898 tensile stress area / axial stress, the proof load and recommended
+  preload, thread-stripping engagement, and
   preloaded-joint load sharing (bolt and member stiffness, stiffness constant,
   bolt/member load, separation), and the peak fastener force in an
   eccentrically-loaded shear group (AISC elastic method)
@@ -375,6 +376,7 @@ from .fastener import (
     bolt_diameter_for_shear,
     bolt_load_in_joint,
     bolt_preload_from_torque,
+    bolt_proof_load,
     bolt_shear_stress,
     bolt_tensile_stress_area,
     eccentric_shear_group_peak_force,
@@ -383,6 +385,7 @@ from .fastener import (
     member_clamp_load_in_joint,
     member_stiffness_frustum,
     preloaded_bolt_cyclic_stress,
+    recommended_bolt_preload,
     thread_engagement_for_load,
     thread_stripping_shear_area,
     thread_stripping_stress,
@@ -844,6 +847,8 @@ __all__ = [
     "bolt_diameter_for_shear",
     "bolt_tensile_stress_area",
     "bolt_axial_stress",
+    "bolt_proof_load",
+    "recommended_bolt_preload",
     "thread_stripping_shear_area",
     "thread_stripping_stress",
     "thread_engagement_for_load",

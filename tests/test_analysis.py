@@ -56,6 +56,7 @@ from anvilate.analysis import (
     bolt_diameter_for_shear,
     bolt_load_in_joint,
     bolt_preload_from_torque,
+    bolt_proof_load,
     bolt_shear_stress,
     bolt_tensile_stress_area,
     cam_follower_motion,
@@ -264,6 +265,7 @@ from anvilate.analysis import (
     quality_factor,
     radius_of_gyration,
     rankine_gordon_stress,
+    recommended_bolt_preload,
     rectangular_bar_torsion_constant,
     rectangular_bar_twist_angle,
     rectangular_curved_beam_stress,
@@ -2985,6 +2987,25 @@ def test_bolt_tensile_area_rejects_bad_inputs():
         bolt_tensile_stress_area(nominal_diameter=_q("1 mm"), pitch=_q("2 mm"))
     with pytest.raises(ValueError, match="tension must be a"):
         bolt_axial_stress(tension=_q("20 mm"), nominal_diameter=_q("10 mm"), pitch=_q("1.5 mm"))
+
+
+def test_bolt_proof_load_and_recommended_preload():
+    # Proof load F_p = A_t*S_p: M12x1.75 (A_t = 84.27 mm^2), grade 8.8 (S_p = 600 MPa)
+    # -> 50.56 kN.
+    area = bolt_tensile_stress_area(nominal_diameter=_q("12 mm"), pitch=_q("1.75 mm"))
+    fp = bolt_proof_load(tensile_stress_area=area, proof_strength=_q("600 MPa"))
+    assert fp.to("N").magnitude == pytest.approx(area.to("mm**2").magnitude * 600, rel=1e-12)
+    assert fp.to("kN").magnitude == pytest.approx(50.56, rel=1e-3)
+    # Reused connections are preloaded to 0.75*F_p, permanent ones to 0.90*F_p.
+    reused = recommended_bolt_preload(proof_load=fp)
+    permanent = recommended_bolt_preload(proof_load=fp, permanent=True)
+    assert reused.to("N").magnitude == pytest.approx(0.75 * fp.to("N").magnitude, rel=1e-12)
+    assert permanent.to("N").magnitude == pytest.approx(0.90 * fp.to("N").magnitude, rel=1e-12)
+    assert permanent.to("N").magnitude > reused.to("N").magnitude
+    with pytest.raises(ValueError, match="proof_strength must be positive"):
+        bolt_proof_load(tensile_stress_area=area, proof_strength=_q("0 MPa"))
+    with pytest.raises(ValueError, match="tensile_stress_area must be a"):
+        bolt_proof_load(tensile_stress_area=_q("84 mm"), proof_strength=_q("600 MPa"))
 
 
 def test_flywheel_inertia_and_energy_round_trip():
