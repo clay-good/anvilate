@@ -51,6 +51,8 @@ __all__ = [
     "bevel_pitch_cone_angle",
     "bevel_gear_radial_load",
     "bevel_gear_axial_load",
+    "helical_gear_axial_thrust",
+    "helical_gear_radial_load",
     "pitch_line_velocity",
     "barth_velocity_factor",
     "lewis_bending_stress",
@@ -187,6 +189,48 @@ def bevel_gear_axial_load(
     phi = _check_pressure_angle(pressure_angle)
     gamma = _check_cone_angle(pitch_cone_angle)
     return Quantity(magnitude=tangential_load.to("N").magnitude * tan(phi) * sin(gamma), unit="N")
+
+
+def _check_helix_angle(helix_angle: float) -> float:
+    if not 0 <= helix_angle < 90:
+        raise ValueError(f"helix_angle (degrees) must lie in [0, 90); got {helix_angle}")
+    return radians(helix_angle)
+
+
+def helical_gear_axial_thrust(*, tangential_load: Quantity, helix_angle: float) -> Quantity:
+    """The axial thrust W_a = W_t·tan(ψ) a helical gear generates.
+
+    A helical gear's slanted teeth push the transmitted force off to one side along
+    the shaft axis, producing an axial thrust the mounting must react with a thrust
+    bearing — the price of the helical tooth's smoother, quieter mesh. The thrust is
+    W_a = W_t·tan(ψ) for a tangential (transmitted) load ``tangential_load`` W_t and
+    ``helix_angle`` ψ (degrees, in [0, 90)). A spur gear (ψ = 0) makes no thrust,
+    and a steep helix makes a lot — which is why steep single-helical gears give way
+    to thrust-cancelling double-helical (herringbone) pairs. Returns the axial
+    thrust in newtons.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    psi = _check_helix_angle(helix_angle)
+    return Quantity(magnitude=tangential_load.to("N").magnitude * tan(psi), unit="N")
+
+
+def helical_gear_radial_load(
+    *, tangential_load: Quantity, normal_pressure_angle: float, helix_angle: float
+) -> Quantity:
+    """The radial (separating) load W_r = W_t·tan(φ_n)/cos(ψ) of a helical mesh.
+
+    The helical tooth's separating load derives from the *normal* pressure angle φ_n
+    (measured in the plane perpendicular to the tooth) through the transverse
+    pressure angle: tan(φ_t) = tan(φ_n)/cos(ψ), so W_r = W_t·tan(φ_t) =
+    W_t·tan(φ_n)/cos(ψ). ``tangential_load`` W_t, ``normal_pressure_angle`` φ_n
+    (degrees, in (0, 90)), and ``helix_angle`` ψ (degrees, in [0, 90)) describe the
+    mesh. At ψ = 0 this reduces to the spur-gear radial load W_t·tan(φ_n). Returns
+    the radial load in newtons.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    phi_n = _check_pressure_angle(normal_pressure_angle)
+    psi = _check_helix_angle(helix_angle)
+    return Quantity(magnitude=tangential_load.to("N").magnitude * tan(phi_n) / cos(psi), unit="N")
 
 
 def pitch_line_velocity(*, pitch_diameter: Quantity, rotational_speed: Quantity) -> Quantity:

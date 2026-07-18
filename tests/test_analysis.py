@@ -129,6 +129,8 @@ from anvilate.analysis import (
     gerber_scorecard,
     goodman_safety_factor,
     goodman_scorecard,
+    helical_gear_axial_thrust,
+    helical_gear_radial_load,
     helical_spring_buckling,
     helical_spring_rate,
     hertz_cylinder_contact,
@@ -7887,3 +7889,45 @@ def test_minimum_teeth_to_avoid_undercut_matches_textbook_values():
         minimum_teeth_to_avoid_undercut(pressure_angle=0.0)
     with pytest.raises(ValueError, match="addendum_coefficient must be positive"):
         minimum_teeth_to_avoid_undercut(pressure_angle=20.0, addendum_coefficient=0.0)
+
+
+def test_helical_gear_axial_thrust_and_radial_load():
+    from math import cos, radians, tan
+
+    wt = _q("2000 N")
+    # Axial thrust W_a = W_t*tan(psi): 30 deg helix -> 1154.7 N of thrust.
+    wa = helical_gear_axial_thrust(tangential_load=wt, helix_angle=30.0)
+    assert wa.to("N").magnitude == pytest.approx(2000 * tan(radians(30)), rel=1e-12)
+    assert wa.to("N").magnitude == pytest.approx(1154.7, rel=1e-3)
+    # A spur gear (psi = 0) makes no thrust; a steeper helix makes more.
+    assert helical_gear_axial_thrust(tangential_load=wt, helix_angle=0.0).to(
+        "N"
+    ).magnitude == pytest.approx(0.0, abs=1e-12)
+    assert (
+        helical_gear_axial_thrust(tangential_load=wt, helix_angle=40.0).to("N").magnitude
+        > wa.to("N").magnitude
+    )
+    # Radial load W_r = W_t*tan(phi_n)/cos(psi).
+    wr = helical_gear_radial_load(tangential_load=wt, normal_pressure_angle=20.0, helix_angle=30.0)
+    assert wr.to("N").magnitude == pytest.approx(
+        2000 * tan(radians(20)) / cos(radians(30)), rel=1e-12
+    )
+    assert wr.to("N").magnitude == pytest.approx(840.4, rel=1e-3)
+    # At psi = 0 the radial load reduces to the spur-gear value W_t*tan(phi_n).
+    wr_spur = helical_gear_radial_load(
+        tangential_load=wt, normal_pressure_angle=20.0, helix_angle=0.0
+    )
+    assert wr_spur.to("N").magnitude == pytest.approx(
+        gear_radial_load(tangential_load=wt, pressure_angle=20.0).to("N").magnitude, rel=1e-12
+    )
+
+
+def test_helical_gear_rejects_bad_angles():
+    with pytest.raises(ValueError, match=r"helix_angle \(degrees\) must lie in"):
+        helical_gear_axial_thrust(tangential_load=_q("2000 N"), helix_angle=90.0)
+    with pytest.raises(ValueError, match=r"pressure_angle \(degrees\) must lie in"):
+        helical_gear_radial_load(
+            tangential_load=_q("2000 N"), normal_pressure_angle=0.0, helix_angle=30.0
+        )
+    with pytest.raises(ValueError, match="tangential_load must be a"):
+        helical_gear_axial_thrust(tangential_load=_q("2000 N*m"), helix_angle=30.0)
