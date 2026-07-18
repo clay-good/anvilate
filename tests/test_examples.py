@@ -1664,3 +1664,16 @@ def test_rotor_unbalance_response_example_resonance_amplifies_the_shake():
     assert by_name["just under critical (r = 0.95)"].status is CheckStatus.FAIL
     assert "safety factor 0.68" in by_name["just under critical (r = 0.95)"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_flat_bar_torsion_penalty_example_thin_section_twists_far_more():
+    namespace = runpy.run_path(str(_EXAMPLES / "flat_bar_torsion_penalty.py"))
+    card = namespace["screen_torsion_sections"]()
+    by_name = {e.name: e for e in card.entries}
+    # The compact square (same area, same steel) stays inside the twist limit...
+    assert by_name["compact square (31.6 x 31.6 mm)"].passed
+    assert "safety factor 1.97" in by_name["compact square (31.6 x 31.6 mm)"].detail
+    # ...but the equal-area flat bar twists ~4.5x more and fails.
+    assert by_name["flat bar (100 x 10 mm)"].status is CheckStatus.FAIL
+    assert "safety factor 0.44" in by_name["flat bar (100 x 10 mm)"].detail
+    assert card.status is CheckStatus.FAIL
