@@ -1292,3 +1292,19 @@ def test_machine_isolation_example_needs_a_soft_mount():
     assert soft.passed
     assert "safety factor 3.02" in soft.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_gearbox_output_shaft_example_passes_all_three_modes():
+    namespace = runpy.run_path(str(_EXAMPLES / "gearbox_output_shaft.py"))
+    card = namespace["screen_output_shaft"]()
+    by_name = {e.name: e for e in card.entries}
+    # A coherent design clears all three independent failure modes...
+    shaft = by_name["shaft, combined bending + torsion"]
+    assert shaft.passed
+    assert "safety factor 2.98" in shaft.detail
+    assert by_name["key, shear"].passed
+    # ...and the bearing fatigue life is the governing (tightest) check.
+    bearing = by_name["bearings, L10 fatigue life"]
+    assert bearing.passed
+    assert "safety factor 1.13" in bearing.detail
+    assert card.status is CheckStatus.PASS
