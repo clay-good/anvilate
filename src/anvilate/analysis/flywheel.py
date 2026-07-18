@@ -39,6 +39,8 @@ __all__ = [
     "rotating_rim_burst_speed",
     "rotating_rim_radial_growth",
     "rotating_solid_disc_max_stress",
+    "rotating_solid_disc_radial_stress",
+    "rotating_solid_disc_tangential_stress",
     "rotating_annular_disc_bore_stress",
 ]
 
@@ -253,6 +255,85 @@ def rotating_solid_disc_max_stress(
     if omega <= 0:
         raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
     sigma = (3.0 + poisson) / 8.0 * rho * (omega * r) ** 2
+    return Quantity(magnitude=sigma / 1e6, unit="MPa")
+
+
+def _rotating_disc_inputs(
+    density: Quantity,
+    outer_radius: Quantity,
+    radius: Quantity,
+    rotational_speed: Quantity,
+    poisson: float,
+) -> tuple[float, float, float, float]:
+    """Validate a rotating solid disc and return (rho, R, r, omega) in SI."""
+    _require(density, "[mass] / [length]**3", "density")
+    _require(outer_radius, "[length]", "outer_radius")
+    _require(radius, "[length]", "radius")
+    _require(rotational_speed, "[frequency]", "rotational_speed")
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    rho = density.to("kg/m**3").magnitude
+    big_r = outer_radius.to("m").magnitude
+    r = radius.to("m").magnitude
+    omega = rotational_speed.to("rad/s").magnitude
+    if big_r <= 0:
+        raise ValueError(f"outer_radius must be positive; got {outer_radius}")
+    if omega <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    if not 0 <= r <= big_r:
+        raise ValueError(
+            f"radius ({radius}) must be between 0 and the outer_radius ({outer_radius})"
+        )
+    return rho, big_r, r, omega
+
+
+def rotating_solid_disc_radial_stress(
+    *,
+    density: Quantity,
+    outer_radius: Quantity,
+    radius: Quantity,
+    rotational_speed: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The radial stress σ_r = (3 + ν)/8·ρ·ω²·(R² − r²) at a radius in a spinning disc.
+
+    The radial stress in a solid rotating disc peaks at the centre (r = 0), where it
+    equals the tangential stress and the :func:`rotating_solid_disc_max_stress`, and
+    falls to *zero* at the free rim (r = R). ``density`` ρ, ``outer_radius`` R,
+    ``radius`` r (between 0 and R), ``rotational_speed`` ω, and Poisson's ratio
+    ``poisson`` ν describe the disc and the point of interest. Returns the radial
+    stress in MPa.
+    """
+    rho, big_r, r, omega = _rotating_disc_inputs(
+        density, outer_radius, radius, rotational_speed, poisson
+    )
+    sigma = (3.0 + poisson) / 8.0 * rho * omega**2 * (big_r**2 - r**2)
+    return Quantity(magnitude=sigma / 1e6, unit="MPa")
+
+
+def rotating_solid_disc_tangential_stress(
+    *,
+    density: Quantity,
+    outer_radius: Quantity,
+    radius: Quantity,
+    rotational_speed: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The tangential (hoop) stress σ_θ = (ρ·ω²/8)·[(3 + ν)·R² − (1 + 3ν)·r²] at a
+    radius in a spinning disc.
+
+    The hoop stress in a solid rotating disc is also highest at the centre (r = 0),
+    where it equals the radial stress and the :func:`rotating_solid_disc_max_stress`;
+    unlike the radial stress it does *not* vanish at the rim but settles to the
+    non-zero σ_θ = ρ·ω²·R²·(1 − ν)/4 there — the hoop tension that a rim feature or
+    keyway must survive. ``density`` ρ, ``outer_radius`` R, ``radius`` r (0 to R),
+    ``rotational_speed`` ω, and Poisson's ratio ``poisson`` ν are as in
+    :func:`rotating_solid_disc_radial_stress`. Returns the tangential stress in MPa.
+    """
+    rho, big_r, r, omega = _rotating_disc_inputs(
+        density, outer_radius, radius, rotational_speed, poisson
+    )
+    sigma = rho * omega**2 / 8.0 * ((3.0 + poisson) * big_r**2 - (1.0 + 3.0 * poisson) * r**2)
     return Quantity(magnitude=sigma / 1e6, unit="MPa")
 
 

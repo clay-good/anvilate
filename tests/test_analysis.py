@@ -280,6 +280,8 @@ from anvilate.analysis import (
     rotating_rim_hoop_stress,
     rotating_rim_radial_growth,
     rotating_solid_disc_max_stress,
+    rotating_solid_disc_radial_stress,
+    rotating_solid_disc_tangential_stress,
     scotch_yoke_acceleration,
     scotch_yoke_displacement,
     scotch_yoke_velocity,
@@ -9243,6 +9245,32 @@ def test_rotating_solid_disc_peak_stress_is_at_the_centre():
     assert faster.to("MPa").magnitude == pytest.approx(4 * disc.to("MPa").magnitude, rel=1e-9)
     with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
         rotating_solid_disc_max_stress(**kw, poisson=0.6)
+
+
+def test_rotating_solid_disc_stress_distribution_at_centre_and_rim():
+    steel = _q("7850 kg/m**3")
+    kw = {"density": steel, "outer_radius": _q("300 mm"), "rotational_speed": _q("3000 rpm")}
+    omega = 3000 * 2 * 3.141592653589793 / 60.0
+    centre = rotating_solid_disc_max_stress(**kw).to("MPa").magnitude
+    # At r = 0 the radial and tangential stresses both equal the centre peak.
+    assert rotating_solid_disc_radial_stress(**kw, radius=_q("0 mm")).to(
+        "MPa"
+    ).magnitude == pytest.approx(centre, rel=1e-12)
+    assert rotating_solid_disc_tangential_stress(**kw, radius=_q("0 mm")).to(
+        "MPa"
+    ).magnitude == pytest.approx(centre, rel=1e-12)
+    # At the free rim the radial stress is zero...
+    assert rotating_solid_disc_radial_stress(**kw, radius=_q("300 mm")).to(
+        "MPa"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+    # ...but the tangential stress settles to rho*omega^2*R^2*(1-nu)/4.
+    rim_hoop = rotating_solid_disc_tangential_stress(**kw, radius=_q("300 mm"))
+    assert rim_hoop.to("MPa").magnitude == pytest.approx(
+        7850 * omega**2 * 0.3**2 * (1 - 0.3) / 4 / 1e6, rel=1e-12
+    )
+    assert rim_hoop.to("MPa").magnitude == pytest.approx(12.203, rel=1e-3)
+    with pytest.raises(ValueError, match="radius .* must be between 0 and the outer_radius"):
+        rotating_solid_disc_radial_stress(**kw, radius=_q("400 mm"))
 
 
 def test_rotating_annular_disc_bore_stress_doubles_the_solid_disc():
