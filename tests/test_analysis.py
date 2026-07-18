@@ -21,6 +21,7 @@ from anvilate.analysis import (
     band_brake_tight_tension_for_torque,
     band_brake_torque,
     barth_velocity_factor,
+    base_excitation_relative_transmissibility,
     basquin_cycles_to_failure,
     basquin_stress_for_life,
     beam_on_elastic_foundation_max_deflection,
@@ -8692,6 +8693,23 @@ def test_resonance_phase_angle_passes_through_ninety_at_resonance():
     assert below < 90.0 < above
     with pytest.raises(ValueError, match="frequency_ratio must be non-negative"):
         resonance_phase_angle(frequency_ratio=-1.0, damping_ratio=0.1)
+
+
+def test_base_excitation_relative_transmissibility_two_instrument_regimes():
+    # Accelerometer regime (r << 1): the reading tends to r^2, so it tracks the
+    # base acceleration.
+    small = base_excitation_relative_transmissibility(frequency_ratio=0.1, damping_ratio=0.1)
+    assert small == pytest.approx(0.1**2, rel=0.02)
+    # At resonance (r = 1) it peaks at the quality factor 1/(2*zeta).
+    assert base_excitation_relative_transmissibility(
+        frequency_ratio=1.0, damping_ratio=0.1
+    ) == pytest.approx(1.0 / (2 * 0.1), rel=1e-12)
+    # Seismometer regime (r >> 1): the reading tends to 1, tracking base displacement.
+    assert base_excitation_relative_transmissibility(
+        frequency_ratio=100.0, damping_ratio=0.1
+    ) == pytest.approx(1.0, rel=1e-3)
+    with pytest.raises(ValueError, match="frequency_ratio must be non-negative"):
+        base_excitation_relative_transmissibility(frequency_ratio=-1.0, damping_ratio=0.1)
 
 
 def test_damped_vibration_rejects_bad_inputs():

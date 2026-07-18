@@ -128,7 +128,8 @@ modules:
   fundamentals, taut-string/cable transverse modes, disc-on-shaft and two-rotor
   drivetrain torsional modes,
   and damped-vibration measures (damped frequency, log decrement, quality factor,
-  isolator transmissibility, forced-response dynamic magnification); simple and
+  isolator transmissibility, forced-response dynamic magnification and phase, and
+  the base-excitation seismic-instrument response); simple and
   physical (rigid-body) pendulum periods;
   and the Den Hartog tuned-mass-damper optimal tuning
 - :mod:`~anvilate.analysis.stress` — von Mises and octahedral-shear combination,
@@ -310,6 +311,7 @@ from .curved_beam import (
 )
 from .dynamics import (
     STANDARD_GRAVITY,
+    base_excitation_relative_transmissibility,
     cantilever_fundamental_frequency,
     clamped_annular_plate_fundamental_frequency,
     clamped_circular_plate_fundamental_frequency,
@@ -762,6 +764,7 @@ __all__ = [
     "transmissibility",
     "dynamic_magnification_factor",
     "resonance_phase_angle",
+    "base_excitation_relative_transmissibility",
     "simple_pendulum_period",
     "physical_pendulum_period",
     "tuned_mass_damper_optimal_frequency_ratio",

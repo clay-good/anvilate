@@ -41,6 +41,7 @@ __all__ = [
     "transmissibility",
     "dynamic_magnification_factor",
     "resonance_phase_angle",
+    "base_excitation_relative_transmissibility",
     "simple_pendulum_period",
     "physical_pendulum_period",
     "tuned_mass_damper_optimal_frequency_ratio",
@@ -277,6 +278,32 @@ def resonance_phase_angle(*, frequency_ratio: float, damping_ratio: float) -> fl
         raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
     r = frequency_ratio
     return degrees(atan2(2.0 * zeta * r, 1.0 - r**2))
+
+
+def base_excitation_relative_transmissibility(
+    *, frequency_ratio: float, damping_ratio: float
+) -> float:
+    """The relative-motion response of a base-excited SDOF — the seismic-instrument ratio.
+
+    When the *base* of a spring-mass-damper is shaken by a harmonic motion of
+    amplitude Y, the mass's motion *relative to the base* has amplitude
+
+        |X_rel / Y| = r² / √((1 − r²)² + (2·ζ·r)²),
+
+    with ``frequency_ratio`` r = ω/ω_n and ``damping_ratio`` ζ (0 ≤ ζ < 1). This is
+    the transfer function a seismic instrument reads with its relative-displacement
+    pickup, and it has two useful regimes: well below resonance (r ≪ 1) it tends to
+    r², so the reading is proportional to the base *acceleration* (the accelerometer
+    regime), while well above (r ≫ 1) it tends to 1, reading the base *displacement*
+    directly (the seismometer/vibrometer regime). At resonance (r = 1) it peaks at
+    1/(2ζ). Distinct from :func:`transmissibility`, which is the *absolute* motion the
+    mass takes on. r must be non-negative. Returns the dimensionless ratio.
+    """
+    zeta = _check_damping_ratio(damping_ratio)
+    if frequency_ratio < 0:
+        raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
+    r = frequency_ratio
+    return r**2 / sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
 
 
 def simple_pendulum_period(*, length: Quantity, gravity: Quantity = STANDARD_GRAVITY) -> Quantity:
