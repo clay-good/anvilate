@@ -10814,3 +10814,34 @@ def test_isolator_design_inverse_round_trips_transmissibility():
         d.isolator_natural_frequency_for_transmissibility(
             forcing_frequency=_q("50 Hz"), transmissibility=1.5
         )
+
+
+def test_living_hinge_fold_strain_and_web_length_inverse():
+    from math import pi, radians
+
+    from anvilate.analysis import living_hinge as lh
+
+    # Full 180-degree fold: eps = pi*t/(2L).
+    strain = lh.living_hinge_fold_strain(web_thickness=_q("0.4 mm"), web_length=_q("1.5 mm"))
+    assert strain == pytest.approx(pi * 0.4 / (2 * 1.5), rel=1e-12)
+    # Half the fold angle -> half the strain (linear in theta).
+    half = lh.living_hinge_fold_strain(
+        web_thickness=_q("0.4 mm"), web_length=_q("1.5 mm"), fold_angle=90
+    )
+    assert half == pytest.approx(strain / 2, rel=1e-12)
+    # The web-length inverse recovers exactly the length that yields the target strain.
+    length = lh.living_hinge_web_length_for_strain(
+        web_thickness=_q("0.4 mm"), permissible_strain=0.30
+    )
+    assert length.to("mm").magnitude == pytest.approx(radians(180) * 0.4 / (2 * 0.30), rel=1e-12)
+    round_trip = lh.living_hinge_fold_strain(web_thickness=_q("0.4 mm"), web_length=length)
+    assert round_trip == pytest.approx(0.30, rel=1e-12)
+    # A thicker web at the same length strains more.
+    thicker = lh.living_hinge_fold_strain(web_thickness=_q("0.6 mm"), web_length=_q("1.5 mm"))
+    assert thicker > strain
+    with pytest.raises(ValueError, match="fold_angle must be in"):
+        lh.living_hinge_fold_strain(
+            web_thickness=_q("0.4 mm"), web_length=_q("1.5 mm"), fold_angle=270
+        )
+    with pytest.raises(ValueError, match="permissible_strain must be positive"):
+        lh.living_hinge_web_length_for_strain(web_thickness=_q("0.4 mm"), permissible_strain=0)
