@@ -69,6 +69,8 @@ __all__ = [
     "plastic_moment",
     "simply_supported_plastic_collapse_load",
     "fixed_fixed_plastic_collapse_load",
+    "simply_supported_plastic_collapse_udl",
+    "fixed_fixed_plastic_collapse_udl",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -372,6 +374,37 @@ def fixed_fixed_plastic_collapse_load(
     """
     mp, length = _collapse_inputs(plastic_moment_capacity, span)
     return _as_quantity(8 * mp.pint / length.pint, "N")
+
+
+def simply_supported_plastic_collapse_udl(
+    *, plastic_moment_capacity: Quantity, span: Quantity
+) -> Quantity:
+    """The distributed load that collapses a simply-supported beam, w = 8·M_p/L².
+
+    Under a uniform load the peak (midspan) moment of a simply-supported beam is
+    w·L²/8, so a plastic hinge forms there and the beam collapses when it reaches the
+    plastic moment M_p: w = 8·M_p/L². ``plastic_moment_capacity`` M_p
+    (:func:`plastic_moment`) and ``span`` L must be positive. Returns the collapse
+    load per unit length in N/m.
+    """
+    mp, length = _collapse_inputs(plastic_moment_capacity, span)
+    return _as_quantity(8 * mp.pint / length.pint**2, "N/m")
+
+
+def fixed_fixed_plastic_collapse_udl(
+    *, plastic_moment_capacity: Quantity, span: Quantity
+) -> Quantity:
+    """The distributed load that collapses a fixed-fixed beam, w = 16·M_p/L².
+
+    The built-in counterpart of :func:`simply_supported_plastic_collapse_udl`: with
+    hinges forming at the two fixed ends and at midspan, virtual work on the
+    three-hinge mechanism (w·(L·δ/2) = 4·M_p·θ, δ = θ·L/2) gives w = 16·M_p/L² —
+    twice the simply-supported collapse load, the reserve from moment redistribution
+    in a ductile indeterminate beam. ``plastic_moment_capacity`` M_p and ``span`` L
+    must be positive. Returns the collapse load per unit length in N/m.
+    """
+    mp, length = _collapse_inputs(plastic_moment_capacity, span)
+    return _as_quantity(16 * mp.pint / length.pint**2, "N/m")
 
 
 def max_transverse_shear_stress(

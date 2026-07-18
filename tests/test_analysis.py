@@ -119,6 +119,7 @@ from anvilate.analysis import (
     fixed_fixed_offset_load,
     fixed_fixed_partial_uniform_load,
     fixed_fixed_plastic_collapse_load,
+    fixed_fixed_plastic_collapse_udl,
     fixed_fixed_triangular_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
@@ -287,6 +288,7 @@ from anvilate.analysis import (
     simply_supported_offset_moment,
     simply_supported_partial_uniform_load,
     simply_supported_plastic_collapse_load,
+    simply_supported_plastic_collapse_udl,
     simply_supported_plate_center_patch_load,
     simply_supported_plate_fundamental_frequency,
     simply_supported_plate_uniform_load,
@@ -9009,6 +9011,13 @@ def test_plastic_collapse_loads_and_the_redistribution_reserve():
         simply_supported_plastic_collapse_load(plastic_moment_capacity=_q("0 kN*m"), span=span)
     with pytest.raises(ValueError, match="plastic_moment_capacity must be a"):
         fixed_fixed_plastic_collapse_load(plastic_moment_capacity=_q("50 kN"), span=span)
+    # Under a uniform load the collapse intensities are w = 8*M_p/L^2 (SS) and
+    # 16*M_p/L^2 (FF), again a 2x redistribution reserve.
+    ss_w = simply_supported_plastic_collapse_udl(plastic_moment_capacity=mp, span=span)
+    ff_w = fixed_fixed_plastic_collapse_udl(plastic_moment_capacity=mp, span=span)
+    assert ss_w.to("kN/m").magnitude == pytest.approx(8 * 50 / 4**2, rel=1e-12)
+    assert ff_w.to("kN/m").magnitude == pytest.approx(16 * 50 / 4**2, rel=1e-12)
+    assert ff_w.to("N/m").magnitude == pytest.approx(2 * ss_w.to("N/m").magnitude, rel=1e-12)
 
 
 def test_thermal_buckling_temperature_rise_is_the_sun_kink():
