@@ -1787,3 +1787,18 @@ def test_o_ring_gland_fill_example_width_and_depth_are_independent():
     assert "safety factor 1.21" in wide_by_name["gland fill vs 90% ceiling"].detail
     assert wide_by_name["squeeze vs 15% floor"].detail == by_name["squeeze vs 15% floor"].detail
     assert wide.status is CheckStatus.PASS
+
+
+def test_sling_angle_overload_example_capacity_is_an_angle_problem():
+    namespace = runpy.run_path(str(_EXAMPLES / "sling_angle_overload.py"))
+    shallow = namespace["screen_sling"]()
+    entry = shallow.entries[0]
+    # At 30 degrees each leg carries the whole load and blows past its rating.
+    assert entry.status is CheckStatus.FAIL
+    assert "safety factor 0.67" in entry.detail
+    assert shallow.status is CheckStatus.FAIL
+    # The same sling and load, rigged steeper, comes back inside the rating.
+    steep = namespace["screen_steep_sling"]()
+    assert steep.entries[0].passed
+    assert "safety factor 1.15" in steep.entries[0].detail
+    assert steep.status is CheckStatus.PASS
