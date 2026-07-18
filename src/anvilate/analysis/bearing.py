@@ -39,6 +39,7 @@ __all__ = [
     "ROLLER_BEARING_LIFE_EXPONENT",
     "BEARING_WEIBULL_SLOPE",
     "bearing_basic_rating_life",
+    "bearing_rating_for_life",
     "bearing_life_hours",
     "bearing_static_safety_factor",
     "bearing_equivalent_dynamic_load",
@@ -82,6 +83,33 @@ def bearing_basic_rating_life(
     if life_exponent <= 0:
         raise ValueError(f"life_exponent must be positive; got {life_exponent}")
     return (c / p) ** life_exponent
+
+
+def bearing_rating_for_life(
+    *,
+    equivalent_load: Quantity,
+    required_life_millions: float,
+    life_exponent: float = BALL_BEARING_LIFE_EXPONENT,
+) -> Quantity:
+    """The dynamic rating C = P·L10^(1/p) a target rating life requires — the selection step.
+
+    The bearing-selection inverse of :func:`bearing_basic_rating_life`: to reach a
+    ``required_life_millions`` L10 (millions of revolutions) under an ``equivalent_load`` P,
+    the catalogue dynamic capacity must be at least C = P·L10^(1/p), with ``life_exponent`` p
+    = 3 for ball or 10/3 for roller bearings. Pick the smallest catalogue bearing whose C
+    meets this. The steep 1/p exponent means a long life demands only a modestly bigger C
+    (tenfold life needs about 2.15× the rating for a ball bearing) — but it climbs fast if the
+    load is high. P must be positive, L10 and p positive. Returns the required rating in N.
+    """
+    _require(equivalent_load, "[force]", "equivalent_load")
+    p_load = equivalent_load.to("N").magnitude
+    if p_load <= 0:
+        raise ValueError(f"equivalent_load must be positive; got {equivalent_load}")
+    if required_life_millions <= 0:
+        raise ValueError(f"required_life_millions must be positive; got {required_life_millions}")
+    if life_exponent <= 0:
+        raise ValueError(f"life_exponent must be positive; got {life_exponent}")
+    return Quantity(magnitude=p_load * required_life_millions ** (1.0 / life_exponent), unit="N")
 
 
 def bearing_life_hours(

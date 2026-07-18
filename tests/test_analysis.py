@@ -11315,3 +11315,24 @@ def test_minimum_sprocket_teeth_for_chordal_variation_inverts():
     assert n1 > n2
     with pytest.raises(ValueError, match="max_variation must be in"):
         minimum_sprocket_teeth_for_chordal_variation(max_variation=1.5)
+
+
+def test_bearing_rating_for_life_inverts_the_basic_rating_life():
+    from anvilate.analysis import bearing_basic_rating_life, bearing_rating_for_life
+
+    # C = P*L10^(1/3): the rating for a 100-Mrev life under a 2 kN load.
+    c = bearing_rating_for_life(equivalent_load=_q("2 kN"), required_life_millions=100)
+    assert c.to("N").magnitude == pytest.approx(2000 * 100 ** (1 / 3), rel=1e-12)
+    # Feeding it back through the forward life recovers the 100-Mrev target.
+    life = bearing_basic_rating_life(dynamic_load_rating=c, equivalent_load=_q("2 kN"))
+    assert life == pytest.approx(100.0, rel=1e-9)
+    # Tenfold life needs about 2.15x the rating for a ball bearing (10^(1/3)).
+    c10 = bearing_rating_for_life(equivalent_load=_q("2 kN"), required_life_millions=1000)
+    assert c10.to("N").magnitude / c.to("N").magnitude == pytest.approx(10 ** (1 / 3), rel=1e-12)
+    # A roller bearing (p=10/3) needs less extra rating for the same life gain.
+    roller = bearing_rating_for_life(
+        equivalent_load=_q("2 kN"), required_life_millions=100, life_exponent=10 / 3
+    )
+    assert roller.to("N").magnitude < c.to("N").magnitude
+    with pytest.raises(ValueError, match="required_life_millions must be positive"):
+        bearing_rating_for_life(equivalent_load=_q("2 kN"), required_life_millions=0)
