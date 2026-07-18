@@ -133,6 +133,7 @@ from anvilate.analysis import (
     helical_gear_radial_load,
     helical_spring_buckling,
     helical_spring_rate,
+    helical_virtual_teeth,
     hertz_cylinder_contact,
     hertz_effective_modulus,
     hertz_sphere_contact,
@@ -7931,3 +7932,22 @@ def test_helical_gear_rejects_bad_angles():
         )
     with pytest.raises(ValueError, match="tangential_load must be a"):
         helical_gear_axial_thrust(tangential_load=_q("2000 N*m"), helix_angle=30.0)
+
+
+def test_helical_virtual_teeth_exceeds_the_actual_count():
+    from math import cos, radians
+
+    # N_v = N/cos^3(psi): a 20-tooth gear at a 30 deg helix cuts like a ~31-tooth
+    # spur, so it is stronger in bending than its real count suggests.
+    nv = helical_virtual_teeth(actual_teeth=20, helix_angle=30.0)
+    assert nv == pytest.approx(20 / cos(radians(30)) ** 3, rel=1e-12)
+    assert nv == pytest.approx(30.79, rel=1e-3)
+    assert nv > 20
+    # A spur gear (psi = 0) has virtual count equal to its actual count.
+    assert helical_virtual_teeth(actual_teeth=20, helix_angle=0.0) == pytest.approx(20.0, rel=1e-12)
+    # A steeper helix raises the virtual count further.
+    assert helical_virtual_teeth(actual_teeth=20, helix_angle=45.0) > nv
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        helical_virtual_teeth(actual_teeth=0, helix_angle=30.0)
+    with pytest.raises(ValueError, match=r"helix_angle \(degrees\) must lie in"):
+        helical_virtual_teeth(actual_teeth=20, helix_angle=90.0)

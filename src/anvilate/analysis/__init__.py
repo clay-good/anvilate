@@ -76,7 +76,7 @@ modules:
   thin-rim hoop (bursting) stress and burst speed
 - :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads,
   bevel-gear radial/axial (thrust) resolution about the pitch cone, helical-gear
-  axial thrust and radial load, pitch-line
+  axial thrust, radial load, and virtual tooth number, pitch-line
   velocity, Barth dynamic factor, Lewis tooth-root bending, Hertzian surface
   contact stress, the mesh contact ratio, the minimum teeth to avoid undercut,
   and train kinematics (signed compound-train value, reverted coaxial constraint,
@@ -322,6 +322,7 @@ from .gear import (
     gear_train_value,
     helical_gear_axial_thrust,
     helical_gear_radial_load,
+    helical_virtual_teeth,
     lewis_bending_stress,
     minimum_teeth_to_avoid_undercut,
     pitch_line_velocity,
@@ -661,6 +662,7 @@ __all__ = [
     "bevel_gear_axial_load",
     "helical_gear_axial_thrust",
     "helical_gear_radial_load",
+    "helical_virtual_teeth",
     "pitch_line_velocity",
     "barth_velocity_factor",
     "lewis_bending_stress",

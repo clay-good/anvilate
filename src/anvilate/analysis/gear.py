@@ -53,6 +53,7 @@ __all__ = [
     "bevel_gear_axial_load",
     "helical_gear_axial_thrust",
     "helical_gear_radial_load",
+    "helical_virtual_teeth",
     "pitch_line_velocity",
     "barth_velocity_factor",
     "lewis_bending_stress",
@@ -231,6 +232,24 @@ def helical_gear_radial_load(
     phi_n = _check_pressure_angle(normal_pressure_angle)
     psi = _check_helix_angle(helix_angle)
     return Quantity(magnitude=tangential_load.to("N").magnitude * tan(phi_n) / cos(psi), unit="N")
+
+
+def helical_virtual_teeth(*, actual_teeth: int, helix_angle: float) -> float:
+    """The virtual (formative) tooth number N_v = N/cos³(ψ) of a helical gear.
+
+    A helical tooth is cut in the plane normal to the helix, where its profile is
+    that of a spur gear with *more* teeth than the helical gear actually has — the
+    virtual tooth number N_v = N/cos³(ψ). It is the count you look the Lewis form
+    factor up at when screening a helical tooth with
+    :func:`lewis_bending_stress`, so a helical gear runs stronger in bending than
+    its real tooth count suggests. ``actual_teeth`` N is the real tooth count (a
+    positive whole number) and ``helix_angle`` ψ the helix angle (degrees, in
+    [0, 90)); at ψ = 0 the virtual count equals the actual. Returns the virtual
+    tooth number as a float (interpolate the form-factor table at it).
+    """
+    n = _check_tooth_count(actual_teeth, "actual_teeth")
+    psi = _check_helix_angle(helix_angle)
+    return n / cos(psi) ** 3
 
 
 def pitch_line_velocity(*, pitch_diameter: Quantity, rotational_speed: Quantity) -> Quantity:
