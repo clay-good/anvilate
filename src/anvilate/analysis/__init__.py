@@ -134,6 +134,7 @@ modules:
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
   stress, thermal-shock (quench) surface stress, the thermal-buckling ("sun kink")
   temperature rise of a held bar, the triaxial (fully-constrained) thermal stress,
+  the through-wall linear-gradient bending stress of a restrained wall,
   shrink-fit assembly temperature, CTE-mismatch (differential) joint stress, and the
   Timoshenko bimetallic-strip curvature and cantilever tip deflection
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
@@ -609,6 +610,7 @@ from .thermal import (
     shrink_fit_assembly_temperature,
     thermal_buckling_temperature_rise,
     thermal_shock_stress,
+    through_wall_gradient_thermal_stress,
     triaxial_constrained_thermal_stress,
 )
 from .torsion import (
@@ -1057,6 +1059,7 @@ __all__ = [
     "constrained_thermal_stress",
     "thermal_shock_stress",
     "triaxial_constrained_thermal_stress",
+    "through_wall_gradient_thermal_stress",
     "thermal_buckling_temperature_rise",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",

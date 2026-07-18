@@ -25,6 +25,7 @@ __all__ = [
     "constrained_thermal_stress",
     "thermal_shock_stress",
     "triaxial_constrained_thermal_stress",
+    "through_wall_gradient_thermal_stress",
     "thermal_buckling_temperature_rise",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",
@@ -159,6 +160,53 @@ def triaxial_constrained_thermal_stress(
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_change.to("K").magnitude
     return Quantity(magnitude=abs(e * alpha * delta_t) / (1.0 - 2.0 * poisson), unit="MPa")
+
+
+def through_wall_gradient_thermal_stress(
+    *,
+    elastic_modulus: Quantity,
+    thermal_expansion_coefficient: Quantity,
+    temperature_difference: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The surface bending stress σ = E·α·ΔT/(2(1 − ν)) of a wall with a linear
+    through-thickness temperature gradient.
+
+    A wall hot on one face and cold on the other — a pipe carrying steam in cold air,
+    a furnace wall, a reactor shell — wants to bow toward the cold side. Where it is
+    restrained from bending (a long pipe held straight by its own continuity, a
+    clamped plate), that bow is reacted as a bending stress that peaks at the two
+    surfaces: tension on the cold face, compression on the hot. For a *linear*
+    gradient the surface fibre sits ΔT/2 from the mean temperature and, restrained
+    biaxially, develops σ = E·α·ΔT/(2·(1 − ν)) — exactly half the biaxial
+    :func:`thermal_shock_stress` for the same total ΔT, because a gradient loads only
+    the extreme fibres while a quench loads the whole surface. ``elastic_modulus`` E,
+    the linear ``thermal_expansion_coefficient`` α, ``temperature_difference`` ΔT (the
+    hot-to-cold difference across the wall), and Poisson's ratio ``poisson`` ν
+    (0 ≤ ν < 0.5) describe the wall. An unrestrained wall simply curves and carries no
+    stress; this is the restrained-against-bending case. Returns the magnitude of the
+    surface stress in MPa.
+    """
+    if not elastic_modulus.has_dimension("[pressure]"):
+        raise ValueError(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        )
+    if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            "thermal_expansion_coefficient must have units of 1/temperature; got "
+            f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not temperature_difference.has_dimension("[temperature]"):
+        raise ValueError(
+            f"temperature_difference must be a temperature difference; got "
+            f"{temperature_difference.dimensionality}"
+        )
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    e = elastic_modulus.to("MPa").magnitude
+    alpha = thermal_expansion_coefficient.to("1/K").magnitude
+    delta_t = temperature_difference.to("K").magnitude
+    return Quantity(magnitude=abs(e * alpha * delta_t) / (2.0 * (1.0 - poisson)), unit="MPa")
 
 
 def free_thermal_expansion(

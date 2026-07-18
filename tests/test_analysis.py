@@ -367,6 +367,7 @@ from anvilate.analysis import (
     thread_engagement_for_load,
     thread_stripping_shear_area,
     thread_stripping_stress,
+    through_wall_gradient_thermal_stress,
     torque_for_preload,
     torque_from_power,
     torsional_natural_frequency,
@@ -9969,6 +9970,27 @@ def test_triaxial_constrained_thermal_stress_is_the_most_severe():
     assert near_incompressible.to("MPa").magnitude > 10 * tri.to("MPa").magnitude
     with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
         triaxial_constrained_thermal_stress(**kw, poisson=0.5)
+
+
+def test_through_wall_gradient_thermal_stress_is_half_the_biaxial_shock():
+    kw = {
+        "elastic_modulus": _q("200 GPa"),
+        "thermal_expansion_coefficient": _q("12e-6 1/K"),
+    }
+    # sigma = E*alpha*dT/(2*(1-nu)): a 100 K gradient across a steel wall -> 171 MPa.
+    grad = through_wall_gradient_thermal_stress(
+        temperature_difference=_q("100 K"), **kw, poisson=0.3
+    )
+    assert grad.to("MPa").magnitude == pytest.approx(
+        200e3 * 12e-6 * 100 / (2 * (1 - 0.3)), rel=1e-12
+    )
+    assert grad.to("MPa").magnitude == pytest.approx(171.43, rel=1e-3)
+    # A linear gradient loads only the extreme fibres, so it is exactly half the
+    # biaxial quench stress for the same total temperature difference.
+    shock = thermal_shock_stress(temperature_change=_q("100 K"), **kw, poisson=0.3)
+    assert grad.to("MPa").magnitude == pytest.approx(shock.to("MPa").magnitude / 2, rel=1e-12)
+    with pytest.raises(ValueError, match="temperature_difference must be a"):
+        through_wall_gradient_thermal_stress(temperature_difference=_q("100 mm"), **kw)
 
 
 def test_quality_factor():
