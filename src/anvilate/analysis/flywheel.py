@@ -39,6 +39,7 @@ __all__ = [
     "rotating_rim_burst_speed",
     "rotating_rim_radial_growth",
     "rotating_solid_disc_max_stress",
+    "rotating_annular_disc_bore_stress",
 ]
 
 
@@ -252,4 +253,45 @@ def rotating_solid_disc_max_stress(
     if omega <= 0:
         raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
     sigma = (3.0 + poisson) / 8.0 * rho * (omega * r) ** 2
+    return Quantity(magnitude=sigma / 1e6, unit="MPa")
+
+
+def rotating_annular_disc_bore_stress(
+    *,
+    density: Quantity,
+    outer_radius: Quantity,
+    inner_radius: Quantity,
+    rotational_speed: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The bore tangential stress of a rotating annular disc,
+    σ = (ρ·ω²/4)·[(3 + ν)·R_o² + (1 − ν)·R_i²].
+
+    Bore a hole in a spinning disc and the peak stress moves to the bore and *jumps*:
+    the tangential stress there is σ = (ρ·ω²/4)·[(3 + ν)·R_o² + (1 − ν)·R_i²]. As the
+    hole shrinks to nothing (R_i → 0) this tends to (3 + ν)/4·ρ·ω²·R_o² — exactly
+    *twice* the solid disc's centre stress (:func:`rotating_solid_disc_max_stress`),
+    so even a pinhole at the axis doubles the peak stress. That is why turbine and
+    flywheel discs with a central bore burst at half the speed a solid one would.
+    ``density`` ρ, ``outer_radius`` R_o, ``inner_radius`` R_i (0 < R_i < R_o),
+    ``rotational_speed`` ω, and Poisson's ratio ``poisson`` ν describe the disc.
+    Returns the bore tangential stress in MPa.
+    """
+    _require(density, "[mass] / [length]**3", "density")
+    _require(outer_radius, "[length]", "outer_radius")
+    _require(inner_radius, "[length]", "inner_radius")
+    _require(rotational_speed, "[frequency]", "rotational_speed")
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    rho = density.to("kg/m**3").magnitude
+    ro = outer_radius.to("m").magnitude
+    ri = inner_radius.to("m").magnitude
+    omega = rotational_speed.to("rad/s").magnitude
+    if ri <= 0:
+        raise ValueError(f"inner_radius must be positive; got {inner_radius}")
+    if ro <= ri:
+        raise ValueError(f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})")
+    if omega <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    sigma = rho * omega**2 / 4.0 * ((3.0 + poisson) * ro**2 + (1.0 - poisson) * ri**2)
     return Quantity(magnitude=sigma / 1e6, unit="MPa")

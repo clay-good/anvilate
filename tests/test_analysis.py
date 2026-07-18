@@ -211,6 +211,7 @@ from anvilate.analysis import (
     required_axial_area,
     reverted_train_is_coaxial,
     riveted_joint_efficiency,
+    rotating_annular_disc_bore_stress,
     rotating_rim_burst_speed,
     rotating_rim_hoop_stress,
     rotating_rim_radial_growth,
@@ -8446,3 +8447,38 @@ def test_rotating_solid_disc_peak_stress_is_at_the_centre():
     assert faster.to("MPa").magnitude == pytest.approx(4 * disc.to("MPa").magnitude, rel=1e-9)
     with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
         rotating_solid_disc_max_stress(**kw, poisson=0.6)
+
+
+def test_rotating_annular_disc_bore_stress_doubles_the_solid_disc():
+    steel = _q("7850 kg/m**3")
+    speed = _q("3000 rpm")
+    # sigma_bore = (rho*omega^2/4)*[(3+nu)*Ro^2 + (1-nu)*Ri^2].
+    bore = rotating_annular_disc_bore_stress(
+        density=steel,
+        outer_radius=_q("300 mm"),
+        inner_radius=_q("100 mm"),
+        rotational_speed=speed,
+        poisson=0.3,
+    )
+    omega = 3000 * 2 * 3.141592653589793 / 60.0
+    expected = 7850 * omega**2 / 4 * (3.3 * 0.3**2 + 0.7 * 0.1**2) / 1e6
+    assert bore.to("MPa").magnitude == pytest.approx(expected, rel=1e-12)
+    # The classic result: a vanishing central hole DOUBLES the solid-disc centre
+    # stress -- even a pinhole at the axis halves the burst speed.
+    tiny_hole = rotating_annular_disc_bore_stress(
+        density=steel,
+        outer_radius=_q("300 mm"),
+        inner_radius=_q("0.001 mm"),
+        rotational_speed=speed,
+    )
+    solid = rotating_solid_disc_max_stress(
+        density=steel, outer_radius=_q("300 mm"), rotational_speed=speed
+    )
+    assert tiny_hole.to("MPa").magnitude == pytest.approx(2 * solid.to("MPa").magnitude, rel=1e-4)
+    with pytest.raises(ValueError, match="outer_radius .* must exceed inner_radius"):
+        rotating_annular_disc_bore_stress(
+            density=steel,
+            outer_radius=_q("100 mm"),
+            inner_radius=_q("300 mm"),
+            rotational_speed=speed,
+        )
