@@ -23,7 +23,7 @@ As with the beam and column checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from math import pi, sqrt
+from math import log, pi, sqrt
 
 from ..units import Quantity
 from .fatigue import CyclicStress, cyclic_stress_components
@@ -57,6 +57,8 @@ __all__ = [
     "thread_stripping_shear_area",
     "thread_stripping_stress",
     "thread_engagement_for_load",
+    "bolt_axial_stiffness",
+    "member_stiffness_frustum",
     "joint_stiffness_factor",
     "bolt_load_in_joint",
     "member_clamp_load_in_joint",
@@ -375,6 +377,78 @@ def bolt_axial_stress(
     stress = tension.pint / area
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def bolt_axial_stiffness(
+    *,
+    nominal_diameter: Quantity,
+    pitch: Quantity,
+    grip_length: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The bolt axial stiffness k_b = A_t·E/L over the grip.
+
+    A screening estimate of a bolt's tensile spring rate: its ISO 898 tensile stress
+    area A_t (:func:`bolt_tensile_stress_area`) times its modulus over the
+    ``grip_length`` L of clamped material, k_b = A_t·E/L. ``nominal_diameter`` d and
+    ``pitch`` P set A_t, and ``elastic_modulus`` E is the bolt material's. This feeds
+    :func:`joint_stiffness_factor` (with :func:`member_stiffness_frustum`) so the
+    joint constant C can be found from geometry rather than assumed. A short grip or
+    a fat bolt is stiffer. Every quantity is positive. Returns the stiffness in N/mm.
+    """
+    at = (
+        bolt_tensile_stress_area(nominal_diameter=nominal_diameter, pitch=pitch)
+        .to("mm**2")
+        .magnitude
+    )
+    _require(grip_length, "[length]", "grip_length")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    length = grip_length.to("mm").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if length <= 0:
+        raise ValueError(f"grip_length must be positive; got {grip_length}")
+    if e <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    return Quantity(magnitude=at * e / length, unit="N/mm")
+
+
+def member_stiffness_frustum(
+    *,
+    nominal_diameter: Quantity,
+    grip_length: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The clamped-member stiffness k_m of a bolted joint (Shigley frustum model).
+
+    The clamped members carry the bolt's preload through a pair of 30°-half-angle
+    stress cones (frusta) radiating from under the head and nut. For a symmetric
+    joint of a single material with a standard washer face (D ≈ 1.5·d), Shigley
+    integrates the cone compliance to
+
+        k_m = 0.5774·π·E·d / (2·ln(5·(0.5774·L + 0.5·d)/(0.5774·L + 2.5·d)))
+
+    where ``nominal_diameter`` d is the bolt diameter, ``grip_length`` L the total
+    thickness clamped, and ``elastic_modulus`` E the member material's. The members
+    are usually several times stiffer than the bolt, which is why the bolt sees only
+    a fraction C of an external load (:func:`joint_stiffness_factor`). Every quantity
+    is positive. Returns the member stiffness in N/mm.
+    """
+    _require(nominal_diameter, "[length]", "nominal_diameter")
+    _require(grip_length, "[length]", "grip_length")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    d = nominal_diameter.to("mm").magnitude
+    length = grip_length.to("mm").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if d <= 0:
+        raise ValueError(f"nominal_diameter must be positive; got {nominal_diameter}")
+    if length <= 0:
+        raise ValueError(f"grip_length must be positive; got {grip_length}")
+    if e <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    tan30 = 0.5774
+    numerator = tan30 * pi * e * d
+    denominator = 2.0 * log(5.0 * (tan30 * length + 0.5 * d) / (tan30 * length + 2.5 * d))
+    return Quantity(magnitude=numerator / denominator, unit="N/mm")
 
 
 def joint_stiffness_factor(*, bolt_stiffness: Quantity, member_stiffness: Quantity) -> float:

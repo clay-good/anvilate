@@ -42,6 +42,7 @@ from anvilate.analysis import (
     bevel_gear_axial_load,
     bevel_gear_radial_load,
     bevel_pitch_cone_angle,
+    bolt_axial_stiffness,
     bolt_axial_stress,
     bolt_diameter_for_shear,
     bolt_load_in_joint,
@@ -182,6 +183,7 @@ from anvilate.analysis import (
     max_shear_stress_plane,
     max_transverse_shear_stress,
     member_clamp_load_in_joint,
+    member_stiffness_frustum,
     miner_cumulative_damage,
     miner_spectrum_repeats_to_failure,
     minimum_teeth_to_avoid_undercut,
@@ -8996,4 +8998,47 @@ def test_bearing_equivalent_dynamic_load():
     with pytest.raises(ValueError, match="radial_factor and axial_factor must be positive"):
         bearing_equivalent_dynamic_load(
             radial_load=_q("4000 N"), axial_load=_q("2000 N"), radial_factor=0, axial_factor=1.6
+        )
+
+
+def test_bolt_and_member_stiffness_give_a_typical_joint_constant():
+    from math import log, pi
+
+    kb = bolt_axial_stiffness(
+        nominal_diameter=_q("12 mm"),
+        pitch=_q("1.75 mm"),
+        grip_length=_q("30 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    # k_b = A_t*E/L: A_t for M12x1.75 is 84.27 mm^2.
+    at = (
+        bolt_tensile_stress_area(nominal_diameter=_q("12 mm"), pitch=_q("1.75 mm"))
+        .to("mm**2")
+        .magnitude
+    )
+    assert kb.to("N/mm").magnitude == pytest.approx(at * 200000 / 30, rel=1e-12)
+    # Member frustum (Shigley): matches the closed form.
+    km = member_stiffness_frustum(
+        nominal_diameter=_q("12 mm"), grip_length=_q("30 mm"), elastic_modulus=_q("200 GPa")
+    )
+    expected_km = (
+        0.5774
+        * pi
+        * 200000
+        * 12
+        / (2 * log(5 * (0.5774 * 30 + 0.5 * 12) / (0.5774 * 30 + 2.5 * 12)))
+    )
+    assert km.to("N/mm").magnitude == pytest.approx(expected_km, rel=1e-12)
+    # The members are several times stiffer than the bolt, so C lands in the
+    # typical 0.15-0.35 range.
+    c = joint_stiffness_factor(bolt_stiffness=kb, member_stiffness=km)
+    assert km.to("N/mm").magnitude > kb.to("N/mm").magnitude
+    assert 0.15 < c < 0.35
+    assert c == pytest.approx(0.189, rel=1e-2)
+    with pytest.raises(ValueError, match="grip_length must be positive"):
+        bolt_axial_stiffness(
+            nominal_diameter=_q("12 mm"),
+            pitch=_q("1.75 mm"),
+            grip_length=_q("0 mm"),
+            elastic_modulus=_q("200 GPa"),
         )

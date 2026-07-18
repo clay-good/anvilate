@@ -95,7 +95,8 @@ modules:
   assembly checks)
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, the
   ISO 898 tensile stress area / axial stress, thread-stripping engagement, and
-  preloaded-joint load sharing (stiffness constant, bolt/member load, separation)
+  preloaded-joint load sharing (bolt and member stiffness, stiffness constant,
+  bolt/member load, separation)
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
   key length a torque requires
 - :mod:`~anvilate.analysis.weld` — fillet-weld throat shear and the weld leg a
@@ -303,6 +304,7 @@ from .dynamics import (
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
     bearing_stress,
+    bolt_axial_stiffness,
     bolt_axial_stress,
     bolt_diameter_for_shear,
     bolt_load_in_joint,
@@ -312,6 +314,7 @@ from .fastener import (
     joint_separation_load,
     joint_stiffness_factor,
     member_clamp_load_in_joint,
+    member_stiffness_frustum,
     preloaded_bolt_cyclic_stress,
     thread_engagement_for_load,
     thread_stripping_shear_area,
@@ -716,6 +719,8 @@ __all__ = [
     "thread_stripping_shear_area",
     "thread_stripping_stress",
     "thread_engagement_for_load",
+    "bolt_axial_stiffness",
+    "member_stiffness_frustum",
     "joint_stiffness_factor",
     "bolt_load_in_joint",
     "member_clamp_load_in_joint",
