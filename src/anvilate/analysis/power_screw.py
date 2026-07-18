@@ -30,6 +30,7 @@ from ..units import Quantity
 __all__ = [
     "lead_angle",
     "power_screw_raise_torque",
+    "power_screw_raise_load",
     "power_screw_lower_torque",
     "power_screw_efficiency",
     "power_screw_is_self_locking",
@@ -94,6 +95,31 @@ def power_screw_raise_torque(
     ell_m = ell / 1000.0
     torque = (f * dm_m / 2.0) * (ell_m + pi * mu * dm_m) / (pi * dm_m - mu * ell_m)
     return Quantity(magnitude=torque, unit="N*m")
+
+
+def power_screw_raise_load(
+    *,
+    torque: Quantity,
+    mean_diameter: Quantity,
+    lead: Quantity,
+    friction_coefficient: float,
+) -> Quantity:
+    """The axial load a given input ``torque`` can raise on a square-thread screw.
+
+    The inverse of :func:`power_screw_raise_torque`: inverting
+    T = (F·d_m/2)·(l + π·μ·d_m)/(π·d_m − μ·l) for the load gives
+    F = 2·T·(π·d_m − μ·l)/(d_m·(l + π·μ·d_m)) — the lifting capacity of a screw jack or
+    press for the ``torque`` a handle, wrench, or motor applies. ``mean_diameter`` d_m,
+    ``lead`` l, and ``friction_coefficient`` μ describe the thread; collar friction is
+    not included. The torque must be a torque. Returns the load in N.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    dm, ell, mu = _geometry(mean_diameter, lead, friction_coefficient)
+    t = torque.to("N*m").magnitude
+    dm_m = dm / 1000.0
+    ell_m = ell / 1000.0
+    load = 2.0 * t * (pi * dm_m - mu * ell_m) / (dm_m * (ell_m + pi * mu * dm_m))
+    return Quantity(magnitude=load, unit="N")
 
 
 def power_screw_lower_torque(

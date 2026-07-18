@@ -38,8 +38,8 @@ modules:
   open-section (strip) torsion, general closed thin-tube (Bredt) torsion, and
   solid rectangular, elliptical, and equilateral-triangle bar torsion
 - :mod:`~anvilate.analysis.power_screw` — square-thread lead-screw raise/lower
-  torque, efficiency, the self-locking condition, and the collar (thrust-bearing)
-  friction torque
+  torque, the load a given input torque can raise (jack capacity), efficiency, the
+  self-locking condition, and the collar (thrust-bearing) friction torque
 - :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
   mesh efficiency, the self-locking condition, and the input tangential and
   separating (radial) tooth forces
@@ -588,6 +588,7 @@ from .power_screw import (
     power_screw_efficiency,
     power_screw_is_self_locking,
     power_screw_lower_torque,
+    power_screw_raise_load,
     power_screw_raise_torque,
 )
 from .pressure_vessel import (
@@ -1103,6 +1104,7 @@ __all__ = [
     "plate_compression_buckling_coefficient",
     "lead_angle",
     "power_screw_raise_torque",
+    "power_screw_raise_load",
     "power_screw_lower_torque",
     "power_screw_efficiency",
     "power_screw_is_self_locking",

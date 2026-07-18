@@ -10926,3 +10926,22 @@ def test_rim_flywheel_mass_closes_the_inertia_chain():
     assert de.to("J").magnitude == pytest.approx(399.0, abs=2.0)
     with pytest.raises(ValueError, match="mean_radius must be positive"):
         rim_flywheel_mass(inertia=_q("5 kg*m**2"), mean_radius=_q("0 m"))
+
+
+def test_power_screw_raise_load_inverts_the_raise_torque():
+    from anvilate.analysis import power_screw_raise_load, power_screw_raise_torque
+
+    thread = {"mean_diameter": _q("36 mm"), "lead": _q("6 mm"), "friction_coefficient": 0.15}
+    # Torque to raise a 10 kN load, then recover that load from the torque.
+    torque = power_screw_raise_torque(load=_q("10 kN"), **thread)
+    load = power_screw_raise_load(torque=torque, **thread)
+    assert load.to("N").magnitude == pytest.approx(10000.0, rel=1e-9)
+    # A screw jack: how much can a 20 N*m wrench effort raise?
+    capacity = power_screw_raise_load(torque=_q("20 N*m"), **thread)
+    back = power_screw_raise_torque(load=capacity, **thread)
+    assert back.to("N*m").magnitude == pytest.approx(20.0, rel=1e-9)
+    # More torque raises more load, in proportion (the relation is linear).
+    doubled = power_screw_raise_load(torque=_q("40 N*m"), **thread)
+    assert doubled.to("N").magnitude == pytest.approx(2 * capacity.to("N").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="torque must be a"):
+        power_screw_raise_load(torque=_q("20 N"), **thread)
