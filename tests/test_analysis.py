@@ -4952,6 +4952,33 @@ def test_hertz_sphere_contact_matches_hand_calc():
     assert c.subsurface_shear_safety_factor(_q("2000 MPa")) == pytest.approx(
         (0.5 / 0.31) * c.surface_safety_factor(_q("2000 MPa")), rel=1e-6
     )
+    # The mean pressure over the circular patch is exactly 2/3 of the peak.
+    assert c.mean_contact_pressure.to("MPa").magnitude == pytest.approx(
+        (2 / 3) * c.max_contact_pressure.to("MPa").magnitude, rel=1e-12
+    )
+
+
+def test_hertz_line_contact_mean_pressure_is_pi_over_four_of_the_peak():
+    from math import pi
+
+    c = hertz_cylinder_contact(
+        force=_q("1000 N"),
+        length=_q("50 mm"),
+        diameter1=_q("20 mm"),
+        diameter2=_q("20 mm"),
+        modulus1=_q("200 GPa"),
+        poisson1=0.3,
+        modulus2=_q("200 GPa"),
+        poisson2=0.3,
+    )
+    # A line contact's elliptical pressure profile makes the mean pi/4 of the peak,
+    # fuller than the point contact's 2/3.
+    assert c.mean_contact_pressure.to("MPa").magnitude == pytest.approx(
+        (pi / 4) * c.max_contact_pressure.to("MPa").magnitude, rel=1e-12
+    )
+    assert c.mean_contact_pressure.to("MPa").magnitude / c.max_contact_pressure.to(
+        "MPa"
+    ).magnitude == pytest.approx(0.7854, rel=1e-3)
 
 
 def test_hertz_sphere_on_flat_softens_the_contact():

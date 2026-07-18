@@ -79,6 +79,19 @@ class HertzContact(BaseModel):
         return yield_strength.to("MPa").magnitude / self.max_contact_pressure.to("MPa").magnitude
 
     @property
+    def mean_contact_pressure(self) -> Quantity:
+        """The average pressure over the circular patch, p_m = (2/3)·p_max.
+
+        The load divided by the patch area, F/(π·a²). For a Hertzian point contact
+        the parabolic pressure distribution makes the peak exactly 3/2 of this mean,
+        so p_m = (2/3)·p_max. It is the value some bearing/contact allowables are
+        quoted against, though surface yield is governed by the peak and the
+        subsurface shear, not the mean.
+        """
+        p_m = (2.0 / 3.0) * self.max_contact_pressure.to("MPa").magnitude
+        return Quantity(magnitude=p_m, unit="MPa")
+
+    @property
     def max_subsurface_shear_stress(self) -> Quantity:
         """The peak shear stress ≈ 0.31·p_max below the surface (Shigley, ν ≈ 0.3).
 
@@ -251,6 +264,18 @@ class HertzLineContact(BaseModel):
         """
         _require(yield_strength, "[pressure]", "yield_strength")
         return yield_strength.to("MPa").magnitude / self.max_contact_pressure.to("MPa").magnitude
+
+    @property
+    def mean_contact_pressure(self) -> Quantity:
+        """The average pressure over the contact strip, p_m = (π/4)·p_max.
+
+        The load per unit length divided by the strip width, (F/L)/(2·b). A Hertzian
+        line contact's elliptical pressure profile makes the peak 4/π of this mean,
+        so p_m = (π/4)·p_max ≈ 0.785·p_max — the counterpart of the point contact's
+        2/3, higher because the line profile is fuller than the point's paraboloid.
+        """
+        p_m = (math.pi / 4.0) * self.max_contact_pressure.to("MPa").magnitude
+        return Quantity(magnitude=p_m, unit="MPa")
 
     @property
     def max_subsurface_shear_stress(self) -> Quantity:
