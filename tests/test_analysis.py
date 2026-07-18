@@ -167,6 +167,7 @@ from anvilate.analysis import (
     natural_frequency_from_deflection,
     overhang_tip_load,
     overhang_uniform_load,
+    parabolic_cable_length,
     parabolic_cable_max_tension,
     parabolic_cable_sag,
     perry_robertson_stress,
@@ -7797,3 +7798,18 @@ def test_parabolic_cable_rejects_bad_inputs():
         parabolic_cable_max_tension(
             weight_per_length=_q("10 N"), span=_q("100 m"), horizontal_tension=_q("5000 N")
         )
+
+
+def test_parabolic_cable_length_exceeds_the_span():
+    # S = L + 8d^2/(3L): 100 m span with 2.5 m sag -> 100.167 m of cable.
+    s = parabolic_cable_length(span=_q("100 m"), sag=_q("2.5 m"))
+    assert s.to("m").magnitude == pytest.approx(100.0 + 8 * 2.5**2 / (3 * 100.0), rel=1e-12)
+    assert s.to("m").magnitude == pytest.approx(100.1667, rel=1e-4)
+    assert s.to("m").magnitude > 100.0
+    # The extra length grows with the square of the sag: doubling sag quadruples it.
+    s2 = parabolic_cable_length(span=_q("100 m"), sag=_q("5 m"))
+    assert (s2.to("m").magnitude - 100.0) == pytest.approx(
+        4.0 * (s.to("m").magnitude - 100.0), rel=1e-12
+    )
+    with pytest.raises(ValueError, match="sag must be positive"):
+        parabolic_cable_length(span=_q("100 m"), sag=_q("0 m"))

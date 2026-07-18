@@ -48,7 +48,7 @@ modules:
   pitches, mean chain speed, and the chordal (polygon-action) speed variation of
   a sprocket
 - :mod:`~anvilate.analysis.cable` — uniformly loaded cable (parabolic) midspan
-  sag and peak support tension
+  sag, peak support tension, and developed arc length
 - :mod:`~anvilate.analysis.cam` — cam-follower rise kinematics (SHM, cycloidal,
   parabolic, and 3-4-5 polynomial profiles): follower displacement, velocity, and
   acceleration at a cam angle
@@ -189,6 +189,7 @@ from .brake import (
     short_shoe_normal_force,
 )
 from .cable import (
+    parabolic_cable_length,
     parabolic_cable_max_tension,
     parabolic_cable_sag,
 )
@@ -549,6 +550,7 @@ __all__ = [
     "cam_follower_motion",
     "parabolic_cable_sag",
     "parabolic_cable_max_tension",
+    "parabolic_cable_length",
     "geneva_index_angle",
     "geneva_crank_radius",
     "geneva_driven_radius",

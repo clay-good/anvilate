@@ -29,6 +29,7 @@ from ..units import Quantity
 __all__ = [
     "parabolic_cable_sag",
     "parabolic_cable_max_tension",
+    "parabolic_cable_length",
 ]
 
 
@@ -90,3 +91,25 @@ def parabolic_cable_max_tension(
         raise ValueError(f"horizontal_tension must be positive; got {horizontal_tension}")
     vertical_reaction = w * length / 2.0
     return Quantity(magnitude=sqrt(h**2 + vertical_reaction**2), unit="N")
+
+
+def parabolic_cable_length(*, span: Quantity, sag: Quantity) -> Quantity:
+    """The arc length of a shallow parabolic cable, S ≈ L·(1 + 8·(d/L)²/3).
+
+    The cable is longer than the straight-line span it crosses, and how much longer
+    is what you actually order and cut. For a parabolic profile with span ``span`` L
+    and midspan ``sag`` d the developed length is S = L + 8·d²/(3·L), the standard
+    shallow-sag series (accurate while d/L is small, as it is for real cables). The
+    extra length grows with the square of the sag, so a slack cable needs
+    disproportionately more material. Both inputs must be positive lengths. Returns
+    the arc length in metres, always at least the span.
+    """
+    _require(span, "[length]", "span")
+    _require(sag, "[length]", "sag")
+    length = span.to("m").magnitude
+    d = sag.to("m").magnitude
+    if length <= 0:
+        raise ValueError(f"span must be positive; got {span}")
+    if d <= 0:
+        raise ValueError(f"sag must be positive; got {sag}")
+    return Quantity(magnitude=length + 8.0 * d**2 / (3.0 * length), unit="m")
