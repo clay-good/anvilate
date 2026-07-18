@@ -1802,3 +1802,18 @@ def test_sling_angle_overload_example_capacity_is_an_angle_problem():
     assert steep.entries[0].passed
     assert "safety factor 1.15" in steep.entries[0].detail
     assert steep.status is CheckStatus.PASS
+
+
+def test_gasket_flange_leak_example_tightness_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "gasket_flange_leak.py"))
+    card = namespace["screen_flange"]()
+    by_name = {e.name: e for e in card.entries}
+    # The preload seats the gasket and out-pulls the end force...
+    assert by_name["seat the gasket at assembly"].passed
+    assert "safety factor 2.17" in by_name["seat the gasket at assembly"].detail
+    assert by_name["hold against the end force"].passed
+    assert "safety factor 1.19" in by_name["hold against the end force"].detail
+    # ...but cannot keep the gasket crushed under pressure, so the joint leaks.
+    assert by_name["stay tight under pressure"].status is CheckStatus.FAIL
+    assert "safety factor 0.85" in by_name["stay tight under pressure"].detail
+    assert card.status is CheckStatus.FAIL
