@@ -11032,3 +11032,15 @@ def test_archard_wear_volume_depth_and_life_are_consistent():
         archard_wear_volume(
             wear_coefficient=0, load=_q("100 N"), sliding_distance=_q("1 m"), hardness=_q("1 GPa")
         )
+
+
+def test_sliding_contact_pv_is_pressure_times_velocity():
+    from anvilate.analysis import sliding_contact_pv
+
+    pv = sliding_contact_pv(contact_pressure=_q("2 MPa"), sliding_velocity=_q("0.5 m/s"))
+    assert pv.to("MPa*m/s").magnitude == pytest.approx(1.0, rel=1e-12)
+    # A bronze bushing (limit ~1.75) is fine here; a nylon one (limit ~0.10) is not.
+    assert pv.to("MPa*m/s").magnitude < 1.75
+    assert pv.to("MPa*m/s").magnitude > 0.10
+    with pytest.raises(ValueError, match="sliding_velocity must be a velocity"):
+        sliding_contact_pv(contact_pressure=_q("2 MPa"), sliding_velocity=_q("0.5 m"))

@@ -30,6 +30,7 @@ __all__ = [
     "archard_wear_volume",
     "archard_wear_depth",
     "sliding_distance_for_wear_depth",
+    "sliding_contact_pv",
 ]
 
 
@@ -132,3 +133,27 @@ def sliding_distance_for_wear_depth(
         raise ValueError("contact_pressure and allowable_depth must be positive")
     distance_m = depth_m * hardness_pa / (k * p)
     return Quantity(magnitude=distance_m, unit="m")
+
+
+def sliding_contact_pv(*, contact_pressure: Quantity, sliding_velocity: Quantity) -> Quantity:
+    """The PV factor p·v of a sliding contact, against the material's PV limit.
+
+    The product of the bearing ``contact_pressure`` p and the ``sliding_velocity`` v is
+    the frictional power dissipated per unit area, and it is the canonical plain-bearing
+    screen alongside wear: every dry or boundary-lubricated bushing material has an
+    allowable PV above which it overheats and melts or chars, regardless of how slowly it
+    would otherwise wear. Typical limits are roughly 1.75 MPa·m/s for a bronze bushing,
+    0.35 for filled PTFE, and 0.10 for nylon. A slow, heavily-loaded bushing is usually
+    wear-limited; a fast, lightly-loaded one is PV-limited. Both inputs must be positive.
+    Returns the PV factor in MPa·m/s.
+    """
+    _require(contact_pressure, "[pressure]", "contact_pressure")
+    if not sliding_velocity.has_dimension("[length] / [time]"):
+        raise ValueError(
+            f"sliding_velocity must be a velocity quantity; got {sliding_velocity.dimensionality}"
+        )
+    p = contact_pressure.to("MPa").magnitude
+    v = sliding_velocity.to("m/s").magnitude
+    if p <= 0 or v <= 0:
+        raise ValueError("contact_pressure and sliding_velocity must be positive")
+    return Quantity(magnitude=p * v, unit="MPa*m/s")

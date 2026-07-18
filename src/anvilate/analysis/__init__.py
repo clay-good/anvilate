@@ -57,7 +57,8 @@ modules:
   oil-film thickness from the eccentricity ratio
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.wear` — Archard sliding-wear law: the worn volume and wear
-  depth of a sliding contact, and the sliding distance (wear life) a depth limit allows
+  depth of a sliding contact, the sliding distance (wear life) a depth limit allows, and
+  the plain-bearing PV (pressure × velocity) factor against its overheating limit
 - :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque and per-bolt
   shear force
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
@@ -740,6 +741,7 @@ from .torsion import (
 from .wear import (
     archard_wear_depth,
     archard_wear_volume,
+    sliding_contact_pv,
     sliding_distance_for_wear_depth,
 )
 from .weld import (
@@ -1220,6 +1222,7 @@ __all__ = [
     "archard_wear_volume",
     "archard_wear_depth",
     "sliding_distance_for_wear_depth",
+    "sliding_contact_pv",
     "FILLET_THROAT_FACTOR",
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",
