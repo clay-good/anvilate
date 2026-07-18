@@ -101,7 +101,8 @@ modules:
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, the
   ISO 898 tensile stress area / axial stress, thread-stripping engagement, and
   preloaded-joint load sharing (bolt and member stiffness, stiffness constant,
-  bolt/member load, separation)
+  bolt/member load, separation), and the peak fastener force in an
+  eccentrically-loaded shear group (AISC elastic method)
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
   key length a torque requires
 - :mod:`~anvilate.analysis.weld` — fillet-weld throat shear and the weld leg a
@@ -323,6 +324,7 @@ from .fastener import (
     bolt_preload_from_torque,
     bolt_shear_stress,
     bolt_tensile_stress_area,
+    eccentric_shear_group_peak_force,
     joint_separation_load,
     joint_stiffness_factor,
     member_clamp_load_in_joint,
@@ -748,6 +750,7 @@ __all__ = [
     "member_clamp_load_in_joint",
     "joint_separation_load",
     "preloaded_bolt_cyclic_stress",
+    "eccentric_shear_group_peak_force",
     "goodman_safety_factor",
     "goodman_scorecard",
     "smith_watson_topper_stress",

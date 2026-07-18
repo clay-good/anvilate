@@ -23,6 +23,7 @@ As with the beam and column checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import log, pi, sqrt
 
 from ..units import Quantity
@@ -64,6 +65,7 @@ __all__ = [
     "member_clamp_load_in_joint",
     "joint_separation_load",
     "preloaded_bolt_cyclic_stress",
+    "eccentric_shear_group_peak_force",
 ]
 
 # Typical nut factor K for as-received (lightly-oiled) steel fasteners. Dry/rough
@@ -589,3 +591,56 @@ def preloaded_bolt_cyclic_stress(
         max_stress=Quantity(magnitude=stress_max, unit="MPa"),
         min_stress=Quantity(magnitude=stress_min, unit="MPa"),
     )
+
+
+def eccentric_shear_group_peak_force(
+    *,
+    positions: Sequence[tuple[Quantity, Quantity]],
+    load: Quantity,
+    eccentricity: Quantity,
+) -> Quantity:
+    """The peak fastener force in an eccentrically-loaded shear group (elastic method).
+
+    The AISC "elastic vector" analysis of a bolt or rivet group carrying an in-plane
+    load offset from its centroid. The load ``load`` P (taken to act in the
+    y-direction) at a perpendicular ``eccentricity`` e from the group centroid is
+    replaced by a concentric P plus a torque T = P·e. Every fastener then carries a
+    *direct* share P/n (in the load direction) plus a *torsional* share T·r_i/J
+    perpendicular to its radius r_i from the centroid, where J = Σ(x_i² + y_i²) is
+    the group's polar moment of the fastener areas (equal areas assumed). The two are
+    summed as vectors and the largest resultant governs the group.
+
+    ``positions`` is the sequence of (x, y) fastener coordinates *relative to the
+    group centroid* (each a length pair — the caller centres them); at least two are
+    required and they must not all coincide. Assuming the load acts along +y, each
+    fastener i sees (−T·y_i/J, P/n + T·x_i/J); this returns the maximum resultant
+    magnitude over the group, in newtons. ``load`` must be a force and
+    ``eccentricity`` a length.
+    """
+    _require(load, "[force]", "load")
+    _require(eccentricity, "[length]", "eccentricity")
+    n = len(positions)
+    if n < 2:
+        raise ValueError(f"positions must list at least two fasteners; got {n}")
+    xs = []
+    ys = []
+    for i, pair in enumerate(positions):
+        if len(pair) != 2:
+            raise ValueError(f"positions[{i}] must be an (x, y) pair; got {pair!r}")
+        x_q, y_q = pair
+        _require(x_q, "[length]", f"positions[{i}].x")
+        _require(y_q, "[length]", f"positions[{i}].y")
+        xs.append(x_q.to("mm").magnitude)
+        ys.append(y_q.to("mm").magnitude)
+    polar_moment = sum(x * x + y * y for x, y in zip(xs, ys, strict=True))  # mm^2 (unit areas)
+    if polar_moment <= 0:
+        raise ValueError("fasteners must not all coincide at the centroid")
+    p = load.to("N").magnitude
+    torque = p * eccentricity.to("mm").magnitude  # N*mm
+    direct = p / n  # N, along +y
+    peak = 0.0
+    for x, y in zip(xs, ys, strict=True):
+        fx = -torque * y / polar_moment
+        fy = direct + torque * x / polar_moment
+        peak = max(peak, sqrt(fx * fx + fy * fy))
+    return Quantity(magnitude=peak, unit="N")

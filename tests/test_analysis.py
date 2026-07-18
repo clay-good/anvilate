@@ -95,6 +95,7 @@ from anvilate.analysis import (
     disc_clutch_force_for_torque,
     disc_clutch_torque,
     dunkerley_fundamental_frequency,
+    eccentric_shear_group_peak_force,
     elliptical_bar_torsional_stress,
     elliptical_bar_twist_angle,
     elliptical_hole_stress_concentration,
@@ -3881,6 +3882,43 @@ def test_preloaded_joint_rejects_bad_inputs():
         bolt_load_in_joint(preload=_q("25 kN"), external_load=_q("10 kN"), stiffness_factor=1.0)
     with pytest.raises(ValueError, match="preload must be a"):
         joint_separation_load(preload=_q("25 mm"), stiffness_factor=0.3)
+
+
+def test_eccentric_shear_group_peak_force_matches_the_vector_sum():
+    from math import sqrt
+
+    def mm(v):
+        return _q(f"{v} mm")
+
+    # Two bolts on a vertical line +-50 mm; a 10 kN load offset 100 mm sideways.
+    # J = 2*50^2 = 5000 mm^2, T = 10 kN * 100 mm = 1e6 N*mm. The extreme bolt sees
+    # a torsional 10 kN horizontal + a direct 5 kN vertical -> sqrt(10^2+5^2)=11.18.
+    positions = [(mm(0), mm(50)), (mm(0), mm(-50))]
+    peak = eccentric_shear_group_peak_force(
+        positions=positions, load=_q("10 kN"), eccentricity=mm(100)
+    )
+    assert peak.to("N").magnitude == pytest.approx(sqrt(10000.0**2 + 5000.0**2), rel=1e-12)
+    assert peak.to("kN").magnitude == pytest.approx(11.180, rel=1e-3)
+    # A concentric load (zero eccentricity) puts pure direct shear on each bolt.
+    concentric = eccentric_shear_group_peak_force(
+        positions=positions, load=_q("10 kN"), eccentricity=mm(0)
+    )
+    assert concentric.to("kN").magnitude == pytest.approx(5.0, rel=1e-12)
+    # A wider bolt group (bigger J) carries the same eccentric load with less peak.
+    wide = eccentric_shear_group_peak_force(
+        positions=[(mm(0), mm(150)), (mm(0), mm(-150))],
+        load=_q("10 kN"),
+        eccentricity=mm(100),
+    )
+    assert wide.to("N").magnitude < peak.to("N").magnitude
+    with pytest.raises(ValueError, match="at least two fasteners"):
+        eccentric_shear_group_peak_force(
+            positions=[(mm(0), mm(0))], load=_q("10 kN"), eccentricity=mm(100)
+        )
+    with pytest.raises(ValueError, match="must not all coincide"):
+        eccentric_shear_group_peak_force(
+            positions=[(mm(0), mm(0)), (mm(0), mm(0))], load=_q("10 kN"), eccentricity=mm(100)
+        )
 
 
 def test_thread_stripping_shear_area_matches_basic_profile():
