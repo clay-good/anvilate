@@ -167,6 +167,7 @@ from anvilate.analysis import (
     natural_frequency_from_deflection,
     overhang_tip_load,
     overhang_uniform_load,
+    perry_robertson_stress,
     petroff_friction_power,
     petroff_friction_torque,
     pitch_line_velocity,
@@ -7668,3 +7669,53 @@ def test_gear_train_efficiency_compounds_the_mesh_losses():
         gear_train_efficiency(mesh_efficiencies=[0.98, 1.2])
     with pytest.raises(ValueError, match=r"each mesh efficiency must lie in \(0, 1\]"):
         gear_train_efficiency(mesh_efficiencies=[0.0])
+
+
+def test_perry_robertson_perfect_column_recovers_yield_or_euler():
+    from math import pi, sqrt
+
+    E = _q("200 GPa")
+    sy = _q("250 MPa")
+    # Perfect column (eta = 0): fails at min(sigma_y, sigma_euler).
+    # Slender (lambda=150): sigma_e = pi^2*E/lambda^2 = 87.7 MPa < 250 -> Euler governs.
+    se_slender = pi**2 * 200000.0 / 150.0**2
+    slender = perry_robertson_stress(
+        yield_strength=sy, elastic_modulus=E, slenderness_ratio=150.0, imperfection_factor=0.0
+    )
+    assert slender.to("MPa").magnitude == pytest.approx(se_slender, rel=1e-9)
+    assert slender.to("MPa").magnitude == pytest.approx(87.73, rel=1e-3)
+    # Stocky (lambda=30): sigma_e = 2193 MPa >> 250 -> yield governs.
+    stocky = perry_robertson_stress(
+        yield_strength=sy, elastic_modulus=E, slenderness_ratio=30.0, imperfection_factor=0.0
+    )
+    assert stocky.to("MPa").magnitude == pytest.approx(250.0, rel=1e-6)
+    # An imperfection (eta > 0) knocks the capacity below the perfect value, and
+    # matches a direct evaluation of the interaction quadratic's lower root.
+    se = pi**2 * 200000.0 / 100.0**2
+    b = 250.0 + 1.2 * se
+    ref = 0.5 * (b - sqrt(b**2 - 4.0 * 250.0 * se))
+    imperfect = perry_robertson_stress(
+        yield_strength=sy, elastic_modulus=E, slenderness_ratio=100.0, imperfection_factor=0.2
+    )
+    assert imperfect.to("MPa").magnitude == pytest.approx(ref, rel=1e-12)
+    perfect = perry_robertson_stress(
+        yield_strength=sy, elastic_modulus=E, slenderness_ratio=100.0, imperfection_factor=0.0
+    )
+    assert imperfect.to("MPa").magnitude < perfect.to("MPa").magnitude
+
+
+def test_perry_robertson_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="slenderness_ratio must be positive"):
+        perry_robertson_stress(
+            yield_strength=_q("250 MPa"),
+            elastic_modulus=_q("200 GPa"),
+            slenderness_ratio=0.0,
+            imperfection_factor=0.2,
+        )
+    with pytest.raises(ValueError, match="imperfection_factor must be non-negative"):
+        perry_robertson_stress(
+            yield_strength=_q("250 MPa"),
+            elastic_modulus=_q("200 GPa"),
+            slenderness_ratio=100.0,
+            imperfection_factor=-0.1,
+        )

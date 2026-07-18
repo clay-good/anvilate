@@ -17,7 +17,8 @@ modules:
   moment, extreme fibre, section modulus, and radius of gyration; the bending
   stress a moment makes and the minimum section modulus it requires
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
-  and the minimum section second moment a load requires
+  the minimum section second moment a load requires, the eccentric-load secant
+  stress, and the Perry-Robertson imperfect-column stress
 - :mod:`~anvilate.analysis.torsion` — the torque a power/speed makes, solid and
   hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
   torque requires; thin-walled rectangular (box) tube torsion (Bredt) and thin
@@ -206,6 +207,7 @@ from .column import (
     euler_critical_stress,
     euler_second_moment_for_load,
     johnson_critical_stress,
+    perry_robertson_stress,
     radius_of_gyration,
     secant_column_max_stress,
     slenderness_ratio,
@@ -570,6 +572,7 @@ __all__ = [
     "transition_slenderness",
     "johnson_critical_stress",
     "secant_column_max_stress",
+    "perry_robertson_stress",
     "UNIFORM_WEAR",
     "UNIFORM_PRESSURE",
     "disc_clutch_torque",

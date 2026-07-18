@@ -31,6 +31,7 @@ __all__ = [
     "transition_slenderness",
     "johnson_critical_stress",
     "secant_column_max_stress",
+    "perry_robertson_stress",
 ]
 
 
@@ -259,3 +260,41 @@ def secant_column_max_stress(
     secant = 1 / cos(kl / 2 * sqrt(p / (modulus * inertia)))
     sigma = p / a * (1 + e_ecc * c / r_sq * secant)
     return Quantity(magnitude=sigma / 1e6, unit="MPa")
+
+
+def perry_robertson_stress(
+    *,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+    slenderness_ratio: float,
+    imperfection_factor: float,
+) -> Quantity:
+    """The Perry-Robertson mean compressive stress of an imperfect column.
+
+    Real columns are never perfectly straight, and the Perry-Robertson model —
+    the basis of the column curves in modern design codes — sizes them by asking
+    when an initially-crooked column's peak fibre first reaches yield. With the
+    Euler stress σ_e = π²·E/λ², the yield strength σ_y, and the Perry imperfection
+    factor η (a dimensionless measure of the initial crookedness, supplied like any
+    code coefficient — η = 0 is the perfect column), the failure stress is the
+    smaller root of the interaction quadratic:
+
+        σ_c = ½·[ (σ_y + (η+1)·σ_e) − √((σ_y + (η+1)·σ_e)² − 4·σ_y·σ_e) ].
+
+    A perfect column (η = 0) recovers σ_c = min(σ_y, σ_e) — it fails by yield when
+    stocky and by Euler buckling when slender — and any η > 0 knocks the capacity
+    below that, most sharply near the transition slenderness. ``slenderness_ratio``
+    λ must be positive and ``imperfection_factor`` η non-negative. Returns the mean
+    stress at failure in MPa.
+    """
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if slenderness_ratio <= 0:
+        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+    if imperfection_factor < 0:
+        raise ValueError(f"imperfection_factor must be non-negative; got {imperfection_factor}")
+    sy = yield_strength.to("MPa").magnitude
+    se = pi**2 * elastic_modulus.to("MPa").magnitude / slenderness_ratio**2
+    b = sy + (imperfection_factor + 1.0) * se
+    sigma_c = 0.5 * (b - sqrt(b**2 - 4.0 * sy * se))
+    return Quantity(magnitude=sigma_c, unit="MPa")
