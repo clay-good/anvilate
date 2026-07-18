@@ -37,6 +37,7 @@ __all__ = [
     "string_natural_frequency",
     "damped_natural_frequency",
     "logarithmic_decrement",
+    "quality_factor",
     "transmissibility",
     "simple_pendulum_period",
     "physical_pendulum_period",
@@ -188,6 +189,23 @@ def logarithmic_decrement(*, damping_ratio: float) -> float:
     """
     zeta = _check_damping_ratio(damping_ratio)
     return 2.0 * pi * zeta / sqrt(1.0 - zeta**2)
+
+
+def quality_factor(*, damping_ratio: float) -> float:
+    """The resonance quality factor Q = 1/(2·ζ) of a lightly damped system.
+
+    Q measures how sharply a system resonates: it is very nearly the amplification
+    of the response at resonance over the static response, and equals the resonant
+    frequency divided by the −3 dB (half-power) bandwidth. For a viscously damped
+    system Q = 1/(2·ζ), so light damping (small ζ) gives a tall, narrow resonance
+    peak — a Q of 50 at ζ = 0.01 amplifies fiftyfold. ``damping_ratio`` ζ is the
+    fraction of critical damping and must be positive (an undamped system has
+    infinite Q). Returns the dimensionless quality factor.
+    """
+    zeta = _check_damping_ratio(damping_ratio)
+    if zeta <= 0:
+        raise ValueError(f"damping_ratio must be positive for a finite Q; got {zeta}")
+    return 1.0 / (2.0 * zeta)
 
 
 def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:

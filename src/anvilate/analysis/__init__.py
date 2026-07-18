@@ -111,9 +111,9 @@ modules:
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
   fundamentals, taut-string/cable transverse modes, disc-on-shaft torsional mode,
-  and damped-vibration measures (damped frequency, log decrement, isolator
-  transmissibility); simple and physical (rigid-body) pendulum periods; and the
-  Den Hartog tuned-mass-damper optimal tuning
+  and damped-vibration measures (damped frequency, log decrement, quality factor,
+  isolator transmissibility); simple and physical (rigid-body) pendulum periods;
+  and the Den Hartog tuned-mass-damper optimal tuning
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending,
   and the Inglis elliptical-hole stress-concentration factor
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
@@ -280,6 +280,7 @@ from .dynamics import (
     natural_frequency,
     natural_frequency_from_deflection,
     physical_pendulum_period,
+    quality_factor,
     simple_pendulum_period,
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_circular_plate_fundamental_frequency,
@@ -672,6 +673,7 @@ __all__ = [
     "string_natural_frequency",
     "damped_natural_frequency",
     "logarithmic_decrement",
+    "quality_factor",
     "transmissibility",
     "simple_pendulum_period",
     "physical_pendulum_period",

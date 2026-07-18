@@ -209,6 +209,7 @@ from anvilate.analysis import (
     power_screw_raise_torque,
     preloaded_bolt_cyclic_stress,
     principal_stresses_plane,
+    quality_factor,
     radius_of_gyration,
     rankine_gordon_stress,
     rectangular_curved_beam_stress,
@@ -8880,3 +8881,13 @@ def test_triaxial_constrained_thermal_stress_is_the_most_severe():
     assert near_incompressible.to("MPa").magnitude > 10 * tri.to("MPa").magnitude
     with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
         triaxial_constrained_thermal_stress(**kw, poisson=0.5)
+
+
+def test_quality_factor():
+    # Q = 1/(2*zeta): light damping gives a tall, sharp resonance.
+    assert quality_factor(damping_ratio=0.05) == pytest.approx(10.0, rel=1e-12)
+    assert quality_factor(damping_ratio=0.01) == pytest.approx(50.0, rel=1e-12)
+    # Lighter damping -> higher Q.
+    assert quality_factor(damping_ratio=0.02) > quality_factor(damping_ratio=0.1)
+    with pytest.raises(ValueError, match="damping_ratio"):
+        quality_factor(damping_ratio=0)
