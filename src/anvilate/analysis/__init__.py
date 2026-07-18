@@ -77,9 +77,9 @@ modules:
 - :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads,
   bevel-gear radial/axial (thrust) resolution about the pitch cone, pitch-line
   velocity, Barth dynamic factor, Lewis tooth-root bending, Hertzian surface
-  contact stress, and train kinematics (signed compound-train value, reverted
-  coaxial constraint, planetary Willis-equation speeds and ideal torque split,
-  whole-tooth planet and assembly checks)
+  contact stress, the mesh contact ratio, and train kinematics (signed
+  compound-train value, reverted coaxial constraint, planetary Willis-equation
+  speeds and ideal torque split, whole-tooth planet and assembly checks)
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, the
   ISO 898 tensile stress area / axial stress, thread-stripping engagement, and
   preloaded-joint load sharing (stiffness constant, bolt/member load, separation)
@@ -325,6 +325,7 @@ from .gear import (
     planetary_speed,
     planetary_torques,
     reverted_train_is_coaxial,
+    spur_gear_contact_ratio,
 )
 from .geneva import (
     geneva_crank_radius,
@@ -657,6 +658,7 @@ __all__ = [
     "barth_velocity_factor",
     "lewis_bending_stress",
     "gear_contact_stress",
+    "spur_gear_contact_ratio",
     "gear_train_value",
     "gear_train_efficiency",
     "reverted_train_is_coaxial",

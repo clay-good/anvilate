@@ -245,6 +245,7 @@ from anvilate.analysis import (
     spring_surge_frequency,
     springs_in_parallel,
     springs_in_series,
+    spur_gear_contact_ratio,
     strength_scorecard,
     thick_wall_cylinder,
     thick_wall_sphere,
@@ -7813,3 +7814,51 @@ def test_parabolic_cable_length_exceeds_the_span():
     )
     with pytest.raises(ValueError, match="sag must be positive"):
         parabolic_cable_length(span=_q("100 m"), sag=_q("0 m"))
+
+
+def test_spur_gear_contact_ratio_and_pressure_angle_effect():
+    from math import cos, pi, radians, sin, sqrt
+
+    # 20-tooth pinion, 40-tooth gear, module 1, 20 deg pressure angle, standard
+    # full-depth (addendum = module). Recompute the standard formula directly.
+    def cr(n1, n2, m, phi_deg):
+        phi = radians(phi_deg)
+        r1, r2 = m * n1 / 2, m * n2 / 2
+        ra1, ra2 = r1 + m, r2 + m
+        rb1, rb2 = r1 * cos(phi), r2 * cos(phi)
+        z = sqrt(ra1**2 - rb1**2) + sqrt(ra2**2 - rb2**2) - (r1 + r2) * sin(phi)
+        return z / (pi * m * cos(phi))
+
+    mc = spur_gear_contact_ratio(
+        module=_q("1 mm"), pinion_teeth=20, gear_teeth=40, pressure_angle=20.0
+    )
+    assert mc == pytest.approx(cr(20, 40, 1.0, 20.0), rel=1e-12)
+    assert mc == pytest.approx(1.635, rel=1e-3)
+    # Contact ratio must exceed 1 for continuous meshing.
+    assert mc > 1.0
+    # A larger pressure angle shortens the line of action and lowers the ratio.
+    mc25 = spur_gear_contact_ratio(
+        module=_q("1 mm"), pinion_teeth=20, gear_teeth=40, pressure_angle=25.0
+    )
+    assert mc25 < mc
+    # Contact ratio is scale-free in the module (only the tooth counts and angle
+    # matter): a 2 mm module gives the same ratio.
+    mc2 = spur_gear_contact_ratio(
+        module=_q("2 mm"), pinion_teeth=20, gear_teeth=40, pressure_angle=20.0
+    )
+    assert mc2 == pytest.approx(mc, rel=1e-12)
+
+
+def test_spur_gear_contact_ratio_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        spur_gear_contact_ratio(
+            module=_q("1 mm"), pinion_teeth=0, gear_teeth=40, pressure_angle=20.0
+        )
+    with pytest.raises(ValueError, match=r"pressure_angle \(degrees\) must lie in"):
+        spur_gear_contact_ratio(
+            module=_q("1 mm"), pinion_teeth=20, gear_teeth=40, pressure_angle=0.0
+        )
+    with pytest.raises(ValueError, match="module must be positive"):
+        spur_gear_contact_ratio(
+            module=_q("0 mm"), pinion_teeth=20, gear_teeth=40, pressure_angle=20.0
+        )

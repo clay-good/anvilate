@@ -29,7 +29,7 @@ N_p = (N_r − N_s)/2 and the equal-spacing assembly condition
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import atan2, cos, degrees, prod, radians, sin, sqrt, tan
+from math import atan2, cos, degrees, pi, prod, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict
 
@@ -55,6 +55,7 @@ __all__ = [
     "barth_velocity_factor",
     "lewis_bending_stress",
     "gear_contact_stress",
+    "spur_gear_contact_ratio",
     "gear_train_value",
     "gear_train_efficiency",
     "reverted_train_is_coaxial",
@@ -320,6 +321,56 @@ def _check_tooth_count(count: int, name: str) -> int:
     if whole != count or whole <= 0:
         raise ValueError(f"{name} must be a positive whole number of teeth; got {count}")
     return whole
+
+
+def spur_gear_contact_ratio(
+    *,
+    module: Quantity,
+    pinion_teeth: int,
+    gear_teeth: int,
+    pressure_angle: float,
+    addendum: Quantity | None = None,
+) -> float:
+    """The contact ratio m_c of a standard spur-gear pair on standard centres.
+
+    The contact ratio is the average number of tooth pairs sharing the load — the
+    length of the line of action divided by the base pitch. It must exceed 1 for
+    continuous meshing (one pair must engage before the last disengages) and good
+    design keeps it above ~1.2; a higher ratio spreads the load and runs quieter.
+    For teeth of ``module`` m, counts ``pinion_teeth`` N₁ and ``gear_teeth`` N₂, and
+    ``pressure_angle`` φ (degrees), on standard centres C = m·(N₁+N₂)/2 with pitch
+    radii r = m·N/2, base radii r_b = r·cos φ, and outer radii r_a = r + a (the
+    ``addendum`` a, defaulting to the standard full-depth a = m), the length of
+    action and base pitch give
+
+        m_c = [√(r_a1² − r_b1²) + √(r_a2² − r_b2²) − C·sin φ] / (π·m·cos φ).
+
+    A larger pressure angle shortens the line of action and lowers the ratio.
+    ``module`` and ``addendum`` are positive lengths; the tooth counts are positive
+    whole numbers; φ lies in (0, 90). Returns the dimensionless contact ratio.
+    """
+    _require(module, "[length]", "module")
+    n1 = _check_tooth_count(pinion_teeth, "pinion_teeth")
+    n2 = _check_tooth_count(gear_teeth, "gear_teeth")
+    phi = _check_pressure_angle(pressure_angle)
+    m = module.to("mm").magnitude
+    if m <= 0:
+        raise ValueError(f"module must be positive; got {module}")
+    a = m if addendum is None else addendum.to("mm").magnitude
+    if addendum is not None:
+        _require(addendum, "[length]", "addendum")
+        if a <= 0:
+            raise ValueError(f"addendum must be positive; got {addendum}")
+    r1 = m * n1 / 2.0
+    r2 = m * n2 / 2.0
+    rb1 = r1 * cos(phi)
+    rb2 = r2 * cos(phi)
+    ra1 = r1 + a
+    ra2 = r2 + a
+    center = r1 + r2
+    length_of_action = sqrt(ra1**2 - rb1**2) + sqrt(ra2**2 - rb2**2) - center * sin(phi)
+    base_pitch = pi * m * cos(phi)
+    return length_of_action / base_pitch
 
 
 def gear_train_value(
