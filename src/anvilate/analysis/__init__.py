@@ -54,7 +54,8 @@ modules:
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, and slider acceleration
 - :mod:`~anvilate.analysis.fourbar` — four-bar linkage Grashof rotatability
-  criterion and mechanism-type classification from the four link lengths
+  criterion, mechanism-type classification, and the transmission angle at a given
+  input angle
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
   torque requires, the peak lining pressure, and the simple/differential lever
   force; short-shoe (block) brake lever statics; the self-energizing /
@@ -287,6 +288,7 @@ from .flywheel import (
     flywheel_inertia_for_fluctuation,
 )
 from .fourbar import (
+    fourbar_transmission_angle,
     fourbar_type,
     is_grashof,
 )
@@ -534,6 +536,7 @@ __all__ = [
     "slider_crank_acceleration",
     "is_grashof",
     "fourbar_type",
+    "fourbar_transmission_angle",
     "band_brake_torque",
     "band_brake_tight_tension_for_torque",
     "band_brake_max_lining_pressure",

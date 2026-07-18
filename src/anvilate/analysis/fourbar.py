@@ -22,11 +22,14 @@ the sum of the other three). Lengths are dimension-checked
 
 from __future__ import annotations
 
+from math import acos, cos, degrees, radians, sqrt
+
 from ..units import Quantity
 
 __all__ = [
     "is_grashof",
     "fourbar_type",
+    "fourbar_transmission_angle",
 ]
 
 
@@ -117,3 +120,44 @@ def fourbar_type(
     if shortest_name == "coupler":
         return "double-rocker"
     return "crank-rocker"
+
+
+def fourbar_transmission_angle(
+    *,
+    ground: Quantity,
+    input_link: Quantity,
+    coupler: Quantity,
+    output_link: Quantity,
+    input_angle: float,
+) -> float:
+    """The transmission angle μ between coupler and output at an input angle.
+
+    The transmission angle is the angle the coupler makes with the output link; it
+    measures how effectively the coupler force drives the output. Near 90° the force
+    goes almost entirely into useful torque, and near 0° or 180° it jams — designers
+    keep μ within roughly 40°–140° over the motion. For an input crank at
+    ``input_angle`` θ₂ (degrees measured from the ground line), the diagonal between
+    the moving input pin and the output ground pivot is
+    d = √(r₁² + r₂² − 2·r₁·r₂·cos θ₂), and the law of cosines on the coupler/output
+    triangle gives cos μ = (r₃² + r₄² − d²)/(2·r₃·r₄). ``ground`` r₁, ``input_link``
+    r₂, ``coupler`` r₃, and ``output_link`` r₄ are the loop-order lengths. Raises if
+    the linkage cannot assemble at that input angle. Returns μ in **degrees**,
+    0 ≤ μ ≤ 180.
+    """
+    lengths = _lengths_mm(ground, input_link, coupler, output_link)
+    r1, r2, r3, r4 = (
+        lengths["ground"],
+        lengths["input"],
+        lengths["coupler"],
+        lengths["output"],
+    )
+    theta2 = radians(input_angle)
+    diagonal = sqrt(r1**2 + r2**2 - 2.0 * r1 * r2 * cos(theta2))
+    if diagonal > r3 + r4 or diagonal < abs(r3 - r4):
+        raise ValueError(
+            f"the linkage cannot assemble at input_angle {input_angle}°: the "
+            f"coupler and output cannot reach across the diagonal ({diagonal:.3g} mm)"
+        )
+    cos_mu = (r3**2 + r4**2 - diagonal**2) / (2.0 * r3 * r4)
+    cos_mu = max(-1.0, min(1.0, cos_mu))  # guard float drift past the domain
+    return degrees(acos(cos_mu))

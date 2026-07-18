@@ -112,6 +112,7 @@ from anvilate.analysis import (
     flange_coupling_torque,
     flywheel_energy_fluctuation,
     flywheel_inertia_for_fluctuation,
+    fourbar_transmission_angle,
     fourbar_type,
     free_thermal_expansion,
     frequency_scorecard,
@@ -7551,4 +7552,47 @@ def test_fourbar_rejects_non_closable_and_bad_inputs():
             input_link=_q("30 mm"),
             coupler=_q("90 mm"),
             output_link=_q("80 mm"),
+        )
+
+
+def test_fourbar_transmission_angle_law_of_cosines():
+    from math import acos, cos, degrees, radians, sqrt
+
+    kw = {
+        "ground": _q("100 mm"),
+        "input_link": _q("40 mm"),
+        "coupler": _q("100 mm"),
+        "output_link": _q("40 mm"),
+    }
+    # Parallelogram linkage: at input 90 deg the transmission angle is exactly 90.
+    assert fourbar_transmission_angle(input_angle=90.0, **kw) == pytest.approx(90.0, rel=1e-9)
+    # At an arbitrary input angle it matches a direct law-of-cosines evaluation.
+    theta = radians(120.0)
+    diag = sqrt(100.0**2 + 40.0**2 - 2.0 * 100.0 * 40.0 * cos(theta))
+    ref = degrees(acos((100.0**2 + 40.0**2 - diag**2) / (2.0 * 100.0 * 40.0)))
+    assert fourbar_transmission_angle(input_angle=120.0, **kw) == pytest.approx(ref, rel=1e-12)
+    # A crank-rocker's transmission angle stays away from 0/180 in its mid-range
+    # but degrades toward the extremes -- here it is healthiest near mid-travel.
+    mid = fourbar_transmission_angle(
+        ground=_q("100 mm"),
+        input_link=_q("30 mm"),
+        coupler=_q("90 mm"),
+        output_link=_q("80 mm"),
+        input_angle=90.0,
+    )
+    assert 40.0 < mid < 140.0
+
+
+def test_fourbar_transmission_angle_rejects_unreachable_pose():
+    # A crank-rocker cannot make a full input turn: some input angles are
+    # unreachable, and the diagonal then exceeds coupler + output.
+    with pytest.raises(ValueError, match="cannot assemble at input_angle"):
+        # At 180 deg the input points away from the output pivot, so the diagonal
+        # r1 + r2 = 180 mm outreaches coupler + output = 70 mm.
+        fourbar_transmission_angle(
+            ground=_q("100 mm"),
+            input_link=_q("80 mm"),
+            coupler=_q("30 mm"),
+            output_link=_q("40 mm"),
+            input_angle=180.0,
         )
