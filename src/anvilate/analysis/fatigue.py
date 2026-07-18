@@ -12,7 +12,9 @@ S_u, ``σ_a/S_e + σ_m/S_y = 1/n`` — more conservative, and the one criterion 
 also guards the mean stress against first-cycle yielding. The Gerber criterion
 replaces the straight line with a parabola through the same intercepts,
 ``n·σ_a/S_e + (n·σ_m/S_u)² = 1`` — the best fit to test data, so it sits above
-Goodman and gives the least conservative of the three. The endurance limit is
+Goodman and gives the least conservative of the three. Morrow's correction reuses
+the Goodman line but draws it to the true fracture strength σ_f' instead of S_u.
+The endurance limit is
 often a labelled estimate or simply absent for a material — in which case a screen
 honours No-silent-green and reports ``NOT_EVALUATED`` rather than a silent pass.
 As with the other checks, inputs are dimension-checked
@@ -39,6 +41,7 @@ __all__ = [
     "peterson_notch_sensitivity",
     "smith_watson_topper_stress",
     "goodman_equivalent_reversed_stress",
+    "morrow_equivalent_reversed_stress",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",
@@ -307,6 +310,36 @@ def goodman_equivalent_reversed_stress(
             "for a finite equivalent stress"
         )
     return Quantity(magnitude=sa / (1.0 - sm / su), unit="MPa")
+
+
+def morrow_equivalent_reversed_stress(
+    *, alternating_stress: Quantity, mean_stress: Quantity, true_fracture_strength: Quantity
+) -> Quantity:
+    """The Morrow equivalent fully-reversed stress σ_ar = σ_a/(1 − σ_m/σ_f').
+
+    Morrow's mean-stress correction, identical in form to
+    :func:`goodman_equivalent_reversed_stress` but drawn to the material's *true
+    fracture strength* σ_f' (from a strain-life fit) instead of the ultimate S_u.
+    Because σ_f' exceeds S_u, Morrow is less conservative than Goodman for a tensile
+    mean and fits steel fatigue data better, especially where the mean is large.
+    ``alternating_stress`` σ_a is the amplitude, ``mean_stress`` σ_m the mean (tension
+    positive), and ``true_fracture_strength`` σ_f' the material constant. A
+    fully-reversed cycle (σ_m = 0) returns σ_a unchanged; σ_m must stay below σ_f'.
+    Returns the equivalent reversed stress in MPa.
+    """
+    sa = _require_stress(alternating_stress, "alternating_stress")
+    sm = _require_stress(mean_stress, "mean_stress")
+    sf = _require_stress(true_fracture_strength, "true_fracture_strength")
+    if sa < 0:
+        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
+    if sf <= 0:
+        raise ValueError(f"true_fracture_strength must be positive; got {sf} MPa")
+    if sm >= sf:
+        raise ValueError(
+            f"mean_stress ({sm} MPa) must be below true_fracture_strength ({sf} MPa) "
+            "for a finite equivalent stress"
+        )
+    return Quantity(magnitude=sa / (1.0 - sm / sf), unit="MPa")
 
 
 def goodman_safety_factor(

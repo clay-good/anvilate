@@ -218,6 +218,7 @@ from anvilate.analysis import (
     miner_cumulative_damage,
     miner_spectrum_repeats_to_failure,
     minimum_teeth_to_avoid_undercut,
+    morrow_equivalent_reversed_stress,
     natural_frequency,
     natural_frequency_from_deflection,
     neuber_notch_sensitivity,
@@ -9811,6 +9812,37 @@ def test_goodman_equivalent_reversed_stress():
             alternating_stress=_q("50 MPa"),
             mean_stress=_q("700 MPa"),
             ultimate_strength=_q("700 MPa"),
+        )
+
+
+def test_morrow_equivalent_reversed_stress_is_less_conservative_than_goodman():
+    # sigma_ar = sigma_a/(1 - sigma_m/sigma_f'): uses the true fracture strength.
+    morrow = morrow_equivalent_reversed_stress(
+        alternating_stress=_q("100 MPa"),
+        mean_stress=_q("200 MPa"),
+        true_fracture_strength=_q("700 MPa"),
+    )
+    assert morrow.to("MPa").magnitude == pytest.approx(100 / (1 - 200 / 700), rel=1e-12)
+    assert morrow.to("MPa").magnitude == pytest.approx(140.0, rel=1e-4)
+    # Because sigma_f' > S_u, Morrow inflates the amplitude less than Goodman does
+    # for the same cycle (it is less conservative for a tensile mean).
+    goodman = goodman_equivalent_reversed_stress(
+        alternating_stress=_q("100 MPa"),
+        mean_stress=_q("200 MPa"),
+        ultimate_strength=_q("500 MPa"),
+    )
+    assert morrow.to("MPa").magnitude < goodman.to("MPa").magnitude
+    # A fully-reversed cycle returns the amplitude unchanged.
+    assert morrow_equivalent_reversed_stress(
+        alternating_stress=_q("100 MPa"),
+        mean_stress=_q("0 MPa"),
+        true_fracture_strength=_q("700 MPa"),
+    ).to("MPa").magnitude == pytest.approx(100.0, rel=1e-12)
+    with pytest.raises(ValueError, match="mean_stress .* must be below true_fracture_strength"):
+        morrow_equivalent_reversed_stress(
+            alternating_stress=_q("100 MPa"),
+            mean_stress=_q("700 MPa"),
+            true_fracture_strength=_q("700 MPa"),
         )
 
 
