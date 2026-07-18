@@ -40,6 +40,8 @@ __all__ = [
     "transmissibility",
     "simple_pendulum_period",
     "physical_pendulum_period",
+    "tuned_mass_damper_optimal_frequency_ratio",
+    "tuned_mass_damper_optimal_damping",
     "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",
@@ -257,6 +259,43 @@ def physical_pendulum_period(
     if min(inertia, m, d) <= 0:
         raise ValueError("moment_of_inertia, mass, and pivot_distance must be positive")
     return Quantity(magnitude=2.0 * pi * sqrt(inertia / (m * g * d)), unit="s")
+
+
+def _check_mass_ratio(mass_ratio: float) -> float:
+    if mass_ratio <= 0:
+        raise ValueError(f"mass_ratio must be positive; got {mass_ratio}")
+    return mass_ratio
+
+
+def tuned_mass_damper_optimal_frequency_ratio(*, mass_ratio: float) -> float:
+    """The Den Hartog optimal tuning f = 1/(1 + μ) of a tuned mass damper.
+
+    A tuned mass damper (vibration absorber) is a small mass-spring-damper hung on a
+    resonating structure to soak up its motion — the pendulum in a skyscraper, the
+    absorber on an engine. Den Hartog's optimum tunes the absorber's natural
+    frequency slightly *below* the main system's: the ratio of absorber to main
+    natural frequency is f_opt = 1/(1 + μ), where ``mass_ratio`` μ is the absorber
+    mass over the main (modal) mass. A heavier absorber (larger μ) tunes lower and
+    suppresses more. ``mass_ratio`` must be positive. Returns the dimensionless
+    optimal frequency ratio.
+    """
+    mu = _check_mass_ratio(mass_ratio)
+    return 1.0 / (1.0 + mu)
+
+
+def tuned_mass_damper_optimal_damping(*, mass_ratio: float) -> float:
+    """The Den Hartog optimal damping ζ = √(3μ / (8·(1 + μ)³)) of a tuned mass damper.
+
+    The absorber's own damping ratio that, paired with the optimal tuning
+    (:func:`tuned_mass_damper_optimal_frequency_ratio`), flattens the main system's
+    resonant response to its lowest peak: ζ_opt = √(3·μ / (8·(1 + μ)³)), where
+    ``mass_ratio`` μ is the absorber-to-main mass ratio. Too little damping leaves
+    two sharp peaks; too much locks the absorber to the structure — this value sits
+    at the minimum. A 5% mass ratio wants about 13% damping. ``mass_ratio`` must be
+    positive. Returns the dimensionless optimal damping ratio.
+    """
+    mu = _check_mass_ratio(mass_ratio)
+    return sqrt(3.0 * mu / (8.0 * (1.0 + mu) ** 3))
 
 
 def dunkerley_fundamental_frequency(individual_frequencies: list[Quantity]) -> Quantity:

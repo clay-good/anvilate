@@ -111,7 +111,8 @@ modules:
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
   fundamentals, taut-string/cable transverse modes, disc-on-shaft torsional mode,
   and damped-vibration measures (damped frequency, log decrement, isolator
-  transmissibility); simple and physical (rigid-body) pendulum periods
+  transmissibility); simple and physical (rigid-body) pendulum periods; and the
+  Den Hartog tuned-mass-damper optimal tuning
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending,
   and the Inglis elliptical-hole stress-concentration factor
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
@@ -287,6 +288,8 @@ from .dynamics import (
     string_natural_frequency,
     torsional_natural_frequency,
     transmissibility,
+    tuned_mass_damper_optimal_damping,
+    tuned_mass_damper_optimal_frequency_ratio,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -666,6 +669,8 @@ __all__ = [
     "transmissibility",
     "simple_pendulum_period",
     "physical_pendulum_period",
+    "tuned_mass_damper_optimal_frequency_ratio",
+    "tuned_mass_damper_optimal_damping",
     "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",

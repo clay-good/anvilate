@@ -303,6 +303,8 @@ from anvilate.analysis import (
     tresca_principal,
     triangular_bar_torsional_stress,
     triangular_bar_twist_angle,
+    tuned_mass_damper_optimal_damping,
+    tuned_mass_damper_optimal_frequency_ratio,
     vee_belt_effective_friction,
     von_mises_bending_torsion,
     von_mises_plane_stress,
@@ -8725,3 +8727,30 @@ def test_pendulum_periods():
         physical_pendulum_period(
             moment_of_inertia=_q("2 kg*m**2"), mass=_q("2 kg"), pivot_distance=_q("0 m")
         )
+
+
+def test_tuned_mass_damper_den_hartog_optimum():
+    from math import sqrt
+
+    # Optimal tuning f = 1/(1+mu); a 5% absorber tunes ~5% below the main mode.
+    assert tuned_mass_damper_optimal_frequency_ratio(mass_ratio=0.05) == pytest.approx(
+        1 / 1.05, rel=1e-12
+    )
+    assert tuned_mass_damper_optimal_frequency_ratio(mass_ratio=0.05) == pytest.approx(
+        0.9524, rel=1e-3
+    )
+    # A heavier absorber tunes lower.
+    assert tuned_mass_damper_optimal_frequency_ratio(
+        mass_ratio=0.1
+    ) < tuned_mass_damper_optimal_frequency_ratio(mass_ratio=0.05)
+    # Optimal damping zeta = sqrt(3*mu/(8*(1+mu)^3)); a 5% absorber wants ~13%.
+    assert tuned_mass_damper_optimal_damping(mass_ratio=0.05) == pytest.approx(
+        sqrt(3 * 0.05 / (8 * 1.05**3)), rel=1e-12
+    )
+    assert tuned_mass_damper_optimal_damping(mass_ratio=0.05) == pytest.approx(0.1273, rel=1e-3)
+    # A heavier absorber wants more damping.
+    assert tuned_mass_damper_optimal_damping(mass_ratio=0.1) > tuned_mass_damper_optimal_damping(
+        mass_ratio=0.05
+    )
+    with pytest.raises(ValueError, match="mass_ratio must be positive"):
+        tuned_mass_damper_optimal_frequency_ratio(mass_ratio=0)
