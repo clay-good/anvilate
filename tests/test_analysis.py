@@ -293,6 +293,7 @@ from anvilate.analysis import (
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_annular_plate_uniform_load,
     simply_supported_center_load,
+    simply_supported_center_mass_frequency,
     simply_supported_center_patch_load,
     simply_supported_circular_plate_center_load_deflection,
     simply_supported_circular_plate_fundamental_frequency,
@@ -5752,6 +5753,37 @@ def test_cantilever_tip_mass_frequency_with_beam_mass_correction():
             second_moment=_q("1e4 mm**4"),
             length=_q("100 mm"),
             tip_mass=_q("0 kg"),
+        )
+
+
+def test_simply_supported_center_mass_frequency_with_beam_mass_correction():
+    from math import pi, sqrt
+
+    kw = {
+        "elastic_modulus": _q("200 GPa"),
+        "second_moment": _q("1e6 mm**4"),
+        "length": _q("2000 mm"),
+        "center_mass": _q("50 kg"),
+    }
+    k_si = 48 * 200e3 * 1e6 / 2000**3 * 1000  # k = 48EI/L^3 in N/m
+    massless = simply_supported_center_mass_frequency(**kw)
+    assert massless.to("Hz").magnitude == pytest.approx(sqrt(k_si / 50) / (2 * pi), rel=1e-12)
+    assert massless.to("Hz").magnitude == pytest.approx(
+        natural_frequency(stiffness=_q(f"{k_si} N/m"), mass=_q("50 kg")).to("Hz").magnitude,
+        rel=1e-12,
+    )
+    # The beam adds 17/35 of its own mass (a larger share than a cantilever's
+    # 33/140, since a simply-supported beam moves more of its length).
+    with_beam = simply_supported_center_mass_frequency(**kw, beam_mass=_q("30 kg"))
+    m_eff = 50 + (17 / 35) * 30
+    assert with_beam.to("Hz").magnitude == pytest.approx(sqrt(k_si / m_eff) / (2 * pi), rel=1e-12)
+    assert with_beam.to("Hz").magnitude < massless.to("Hz").magnitude
+    with pytest.raises(ValueError, match="center_mass must be positive"):
+        simply_supported_center_mass_frequency(
+            elastic_modulus=_q("200 GPa"),
+            second_moment=_q("1e6 mm**4"),
+            length=_q("2000 mm"),
+            center_mass=_q("0 kg"),
         )
 
 
