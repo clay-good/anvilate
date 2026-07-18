@@ -34,6 +34,7 @@ __all__ = [
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",
+    "string_natural_frequency",
     "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",
@@ -105,6 +106,42 @@ def natural_frequency_from_deflection(
     if delta <= 0:
         raise ValueError(f"static_deflection must be positive; got {static_deflection}")
     return Quantity(magnitude=sqrt(g / delta) / (2 * pi), unit="Hz")
+
+
+def string_natural_frequency(
+    *,
+    tension: Quantity,
+    length: Quantity,
+    mass_per_length: Quantity,
+    mode: int = 1,
+) -> Quantity:
+    """The transverse natural frequency f_n = (n/2L)·√(T/μ) of a taut string.
+
+    A stretched string or cable — a guitar string, a guyed cable, a transmission
+    line — vibrates laterally at frequencies set by its tension, not its bending
+    stiffness: f_n = (n/2L)·√(T/μ). ``tension`` T is the axial pull, ``length`` L the
+    span between the fixed ends, ``mass_per_length`` μ the mass per unit length, and
+    ``mode`` n the harmonic (1 for the fundamental, 2, 3, … for the overtones). The
+    wave speed √(T/μ) rises with tension, so tightening a string sharpens its pitch;
+    the overtones are exact integer multiples of the fundamental. All quantities must
+    be positive and ``mode`` a positive whole number. Returns the frequency in hertz.
+    """
+    _require(tension, "[force]", "tension")
+    _require(length, "[length]", "length")
+    _require(mass_per_length, "[mass] / [length]", "mass_per_length")
+    n = int(mode)
+    if n != mode or n <= 0:
+        raise ValueError(f"mode must be a positive whole number; got {mode}")
+    t = tension.to("N").magnitude
+    ell = length.to("m").magnitude
+    mu = mass_per_length.to("kg/m").magnitude
+    if t <= 0:
+        raise ValueError(f"tension must be positive; got {tension}")
+    if ell <= 0:
+        raise ValueError(f"length must be positive; got {length}")
+    if mu <= 0:
+        raise ValueError(f"mass_per_length must be positive; got {mass_per_length}")
+    return Quantity(magnitude=n / (2.0 * ell) * sqrt(t / mu), unit="Hz")
 
 
 def dunkerley_fundamental_frequency(individual_frequencies: list[Quantity]) -> Quantity:

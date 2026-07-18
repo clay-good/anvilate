@@ -101,7 +101,7 @@ modules:
   and CTE-mismatch (differential) joint stress
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
-  fundamentals, disc-on-shaft torsional mode
+  fundamentals, taut-string/cable transverse modes, disc-on-shaft torsional mode
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending,
   and the Inglis elliptical-hole stress-concentration factor
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
@@ -263,6 +263,7 @@ from .dynamics import (
     simply_supported_plate_fundamental_frequency,
     solid_disc_polar_mass_moment,
     spring_surge_frequency,
+    string_natural_frequency,
     torsional_natural_frequency,
 )
 from .fastener import (
@@ -612,6 +613,7 @@ __all__ = [
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",
+    "string_natural_frequency",
     "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",

@@ -255,6 +255,7 @@ from anvilate.analysis import (
     spur_gear_contact_ratio,
     strength_scorecard,
     stress_intensity_factor,
+    string_natural_frequency,
     thermal_shock_stress,
     thick_wall_cylinder,
     thick_wall_sphere,
@@ -8100,4 +8101,37 @@ def test_thermal_shock_stress_adds_the_biaxial_factor():
             elastic_modulus=_q("70 GPa"),
             thermal_expansion_coefficient=_q("9e-6 1/K"),
             temperature_change=_q("200 N"),
+        )
+
+
+def test_string_natural_frequency_and_harmonics():
+    from math import sqrt
+
+    kw = {"tension": _q("1000 N"), "length": _q("2 m"), "mass_per_length": _q("0.5 kg/m")}
+    # f_1 = (1/2L)*sqrt(T/mu): 1000 N, 2 m, 0.5 kg/m -> 11.18 Hz.
+    f1 = string_natural_frequency(**kw)
+    assert f1.to("Hz").magnitude == pytest.approx(1 / (2 * 2.0) * sqrt(1000 / 0.5), rel=1e-12)
+    assert f1.to("Hz").magnitude == pytest.approx(11.180, rel=1e-3)
+    # Overtones are exact integer multiples of the fundamental.
+    f3 = string_natural_frequency(**kw, mode=3)
+    assert f3.to("Hz").magnitude == pytest.approx(3 * f1.to("Hz").magnitude, rel=1e-12)
+    # Tightening the string (4x tension) doubles the pitch.
+    tighter = string_natural_frequency(
+        tension=_q("4000 N"), length=_q("2 m"), mass_per_length=_q("0.5 kg/m")
+    )
+    assert tighter.to("Hz").magnitude == pytest.approx(2 * f1.to("Hz").magnitude, rel=1e-12)
+
+
+def test_string_natural_frequency_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="mode must be a positive whole number"):
+        string_natural_frequency(
+            tension=_q("1000 N"), length=_q("2 m"), mass_per_length=_q("0.5 kg/m"), mode=0
+        )
+    with pytest.raises(ValueError, match="tension must be positive"):
+        string_natural_frequency(
+            tension=_q("0 N"), length=_q("2 m"), mass_per_length=_q("0.5 kg/m")
+        )
+    with pytest.raises(ValueError, match="mass_per_length must be a"):
+        string_natural_frequency(
+            tension=_q("1000 N"), length=_q("2 m"), mass_per_length=_q("0.5 kg")
         )
