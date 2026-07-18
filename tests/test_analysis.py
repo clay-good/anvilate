@@ -366,6 +366,7 @@ from anvilate.analysis import (
     thin_ring_diametral_deflection,
     thin_ring_max_moment,
     thin_wall_cylinder,
+    thin_wall_cylinder_diametral_growth,
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
     thread_engagement_for_load,
@@ -4657,6 +4658,39 @@ def test_thin_wall_cylinder_matches_worked_example():
     )
     # Governing (hoop) safety factor against a 250 MPa yield.
     assert result.bending_safety_factor(_q("250 MPa")) == pytest.approx(6.25, rel=1e-6)
+
+
+def test_thin_wall_cylinder_diametral_growth():
+    # dD = D*(sigma_hoop - nu*sigma_long)/E: 10 MPa in a 200 mm-dia, 10 mm-wall
+    # steel cylinder -> sigma_h=100, sigma_l=50, eps=(100-0.3*50)/2e5, dD = 0.085 mm.
+    dD = thin_wall_cylinder_diametral_growth(
+        pressure=_q("10 MPa"),
+        radius=_q("100 mm"),
+        wall_thickness=_q("10 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert dD.to("mm").magnitude == pytest.approx(200 * (100 - 0.3 * 50) / 200000, rel=1e-12)
+    assert dD.to("mm").magnitude == pytest.approx(0.085, rel=1e-9)
+    # Equivalently pD^2(1 - nu/2)/(2tE).
+    assert dD.to("mm").magnitude == pytest.approx(
+        10 * 200**2 * (1 - 0.3 / 2) / (2 * 10 * 200000), rel=1e-12
+    )
+    # A stiffer material breathes less; more pressure breathes proportionally more.
+    stiffer = thin_wall_cylinder_diametral_growth(
+        pressure=_q("10 MPa"),
+        radius=_q("100 mm"),
+        wall_thickness=_q("10 mm"),
+        elastic_modulus=_q("400 GPa"),
+    )
+    assert stiffer.to("mm").magnitude == pytest.approx(dD.to("mm").magnitude / 2, rel=1e-12)
+    with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
+        thin_wall_cylinder_diametral_growth(
+            pressure=_q("10 MPa"),
+            radius=_q("100 mm"),
+            wall_thickness=_q("10 mm"),
+            elastic_modulus=_q("200 GPa"),
+            poisson=0.5,
+        )
 
 
 def test_thin_wall_thickness_for_pressure_inverts_the_hoop_stress():

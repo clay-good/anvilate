@@ -29,6 +29,7 @@ __all__ = [
     "ThickWallStress",
     "ThickWallSphereStress",
     "thin_wall_cylinder",
+    "thin_wall_cylinder_diametral_growth",
     "thin_wall_thickness_for_pressure",
     "asme_cylinder_thickness",
     "thick_wall_cylinder",
@@ -111,6 +112,40 @@ def thin_wall_cylinder(
         longitudinal_stress=_as_quantity(longitudinal, "MPa"),
         thin_wall_ratio=ratio,
     )
+
+
+def thin_wall_cylinder_diametral_growth(
+    *,
+    pressure: Quantity,
+    radius: Quantity,
+    wall_thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The increase in diameter ΔD = D·(σ_hoop − ν·σ_long)/E of a pressurized thin
+    cylinder.
+
+    Internal pressure does not only stress a thin cylinder, it swells it: the biaxial
+    membrane stress strains the circumference by ε_θ = (σ_hoop − ν·σ_long)/E, so the
+    inner diameter grows by ΔD = D·ε_θ = p·D²·(1 − ν/2)/(2·t·E) (using σ_hoop = p·r/t
+    and σ_long = p·r/2t). This is the radial breathing a running clearance must allow —
+    a piston in a pressurized bore, a liner in its jacket, a rotor in a pressurized
+    casing. ``pressure`` p, ``radius`` r (inner), ``wall_thickness`` t,
+    ``elastic_modulus`` E, and Poisson's ratio ``poisson`` ν (0 ≤ ν < 0.5) describe the
+    cylinder; the wall must be positive. Returns the diametral growth in mm.
+    """
+    stress = thin_wall_cylinder(pressure=pressure, radius=radius, wall_thickness=wall_thickness)
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    e = elastic_modulus.to("MPa").magnitude
+    if e <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    hoop = stress.hoop_stress.to("MPa").magnitude
+    longitudinal = stress.longitudinal_stress.to("MPa").magnitude
+    diameter = 2.0 * radius.to("mm").magnitude
+    hoop_strain = (hoop - poisson * longitudinal) / e
+    return Quantity(magnitude=diameter * hoop_strain, unit="mm")
 
 
 def thin_wall_thickness_for_pressure(
