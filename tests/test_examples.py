@@ -1537,3 +1537,19 @@ def test_flywheel_bore_stress_example_the_shaft_hole_doubles_the_stress():
     assert bored.status is CheckStatus.FAIL
     assert "safety factor 1.12" in bored.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_bearing_reliability_life_example_higher_reliability_costs_life():
+    namespace = runpy.run_path(str(_EXAMPLES / "bearing_reliability_life.py"))
+    card = namespace["screen_bearing_reliability"]()
+    by_name = {e.name: e for e in card.entries}
+    # The catalogue L10 (90% reliability) clears the service life comfortably...
+    assert by_name["life at 90% reliability"].passed
+    assert "safety factor 1.85" in by_name["life at 90% reliability"].detail
+    # ...95% still passes, but only just.
+    assert by_name["life at 95% reliability"].passed
+    assert "safety factor 1.14" in by_name["life at 95% reliability"].detail
+    # ...and a 99% requirement (a1 = 0.21) collapses the usable life below target.
+    assert by_name["life at 99% reliability"].status is CheckStatus.FAIL
+    assert "safety factor 0.39" in by_name["life at 99% reliability"].detail
+    assert card.status is CheckStatus.FAIL
