@@ -27,6 +27,7 @@ __all__ = [
     "plate_cut_length",
     "plate_mass",
     "export_plate_dxf",
+    "export_gear_blank_dxf",
 ]
 
 # A fabrication DXF separates the outer profile cut from the interior hole pierces
@@ -39,6 +40,9 @@ _HOLE_LAYER = "HOLES"
 # geometry. Text height is a fixed fraction of the plate height.
 _TEXT_LAYER = "TEXT"
 _LABEL_HEIGHT_FRACTION = 0.06
+# Reference circles (a gear's pitch and root) are construction geometry, not cuts, so
+# they go on their own layer for the machinist to see but not drive the tool path.
+_REFERENCE_LAYER = "REFERENCE"
 
 
 def _require_ezdxf():
@@ -372,3 +376,60 @@ def export_plate_dxf(
     path = Path(path)
     doc.saveas(path)
     return path
+
+
+def export_gear_blank_dxf(
+    *,
+    outside_diameter: Quantity,
+    pitch_diameter: Quantity,
+    root_diameter: Quantity,
+    bore_diameter: Quantity,
+    path: str | Path,
+    label: str | None = None,
+) -> Path:
+    """Write a spur-gear blank (outside profile, bore, and reference circles) to a DXF.
+
+    Turns the validated gear geometry (from :func:`~anvilate.analysis.gear_outside_diameter`,
+    :func:`~anvilate.analysis.gear_pitch_diameter`, and
+    :func:`~anvilate.analysis.gear_root_diameter`) into a cuttable blank centred on the
+    origin: the ``outside_diameter`` is the outer profile cut, the ``bore_diameter`` the
+    central pierce, and the ``pitch_diameter`` and ``root_diameter`` are drawn as reference
+    circles on a separate layer so the machinist sees where the teeth land without the tool
+    path following them. An optional ``label`` (part mark, module × teeth) goes below the
+    blank. The diameters must satisfy outside > pitch > root > bore > 0. Returns the path
+    written; raises :class:`ValueError` on a bad diameter order and :class:`ImportError` if
+    ezdxf is unavailable.
+    """
+    ezdxf = _require_ezdxf()
+    from ezdxf.enums import TextEntityAlignment
+
+    od = _mm(outside_diameter, "outside_diameter")
+    pd = _mm(pitch_diameter, "pitch_diameter")
+    rd = _mm(root_diameter, "root_diameter")
+    bore = _mm(bore_diameter, "bore_diameter")
+    if not (od > pd > rd > bore > 0):
+        raise ValueError(
+            "gear diameters must satisfy outside > pitch > root > bore > 0; got "
+            f"{outside_diameter}, {pitch_diameter}, {root_diameter}, {bore_diameter}"
+        )
+
+    doc = ezdxf.new()
+    doc.units = ezdxf.units.MM
+    doc.layers.add(_OUTLINE_LAYER, color=7)  # the outer profile cut
+    doc.layers.add(_HOLE_LAYER, color=1)  # the bore pierce
+    doc.layers.add(_REFERENCE_LAYER, color=4)  # cyan — pitch/root reference circles
+    msp = doc.modelspace()
+    msp.add_circle((0, 0), od / 2, dxfattribs={"layer": _OUTLINE_LAYER})
+    msp.add_circle((0, 0), bore / 2, dxfattribs={"layer": _HOLE_LAYER})
+    msp.add_circle((0, 0), pd / 2, dxfattribs={"layer": _REFERENCE_LAYER})
+    msp.add_circle((0, 0), rd / 2, dxfattribs={"layer": _REFERENCE_LAYER})
+
+    if label:
+        doc.layers.add(_TEXT_LAYER, color=7)
+        text_height = od * _LABEL_HEIGHT_FRACTION
+        text = msp.add_text(label, height=text_height, dxfattribs={"layer": _TEXT_LAYER})
+        text.set_placement((-od / 2, -od / 2 - 1.5 * text_height), align=TextEntityAlignment.LEFT)
+
+    out_path = Path(path)
+    doc.saveas(out_path)
+    return out_path

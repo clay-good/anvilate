@@ -310,3 +310,46 @@ def test_plate_mass_is_net_of_holes_and_slots():
         plate_mass(
             width=_q("100 mm"), height=_q("80 mm"), thickness=_q("5 mm"), density=_q("7850 kg")
         )
+
+
+def test_export_gear_blank_dxf_draws_the_reference_circles(tmp_path):
+    ezdxf = pytest.importorskip("ezdxf")
+
+    from anvilate.analysis import (
+        gear_outside_diameter,
+        gear_pitch_diameter,
+        gear_root_diameter,
+    )
+    from anvilate.export.dxf import export_gear_blank_dxf
+
+    # A module-2, 20-tooth gear blank with a 12 mm bore.
+    out = export_gear_blank_dxf(
+        outside_diameter=gear_outside_diameter(module=_q("2 mm"), teeth=20),
+        pitch_diameter=gear_pitch_diameter(module=_q("2 mm"), teeth=20),
+        root_diameter=gear_root_diameter(module=_q("2 mm"), teeth=20),
+        bore_diameter=_q("12 mm"),
+        path=tmp_path / "gear.dxf",
+        label="m2 z20",
+    )
+    assert out.exists()
+    doc = ezdxf.readfile(out)
+    circles = list(doc.modelspace().query("CIRCLE"))
+    # Outside, bore, pitch, and root -> four concentric circles.
+    assert len(circles) == 4
+    radii = sorted(c.dxf.radius for c in circles)
+    assert radii == pytest.approx([6.0, 17.5, 20.0, 22.0])  # bore, root, pitch, outside
+
+
+def test_export_gear_blank_dxf_rejects_bad_diameter_order(tmp_path):
+    pytest.importorskip("ezdxf")
+
+    from anvilate.export.dxf import export_gear_blank_dxf
+
+    with pytest.raises(ValueError, match="outside > pitch > root > bore"):
+        export_gear_blank_dxf(
+            outside_diameter=_q("40 mm"),
+            pitch_diameter=_q("44 mm"),  # pitch above outside -> invalid
+            root_diameter=_q("35 mm"),
+            bore_diameter=_q("12 mm"),
+            path=tmp_path / "bad.dxf",
+        )
