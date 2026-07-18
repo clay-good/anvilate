@@ -117,7 +117,8 @@ modules:
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
   stress, thermal-shock (quench) surface stress, the thermal-buckling ("sun kink")
   temperature rise of a held bar, the triaxial (fully-constrained) thermal stress,
-  shrink-fit assembly temperature, and CTE-mismatch (differential) joint stress
+  shrink-fit assembly temperature, CTE-mismatch (differential) joint stress, and the
+  Timoshenko bimetallic-strip curvature and cantilever tip deflection
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
   fundamentals, taut-string/cable transverse modes, disc-on-shaft torsional mode,
@@ -530,6 +531,8 @@ from .stress import (
 )
 from .thermal import (
     DifferentialThermalStress,
+    bimetallic_strip_curvature,
+    bimetallic_strip_tip_deflection,
     constrained_thermal_stress,
     differential_thermal_stress,
     free_thermal_expansion,
@@ -936,6 +939,8 @@ __all__ = [
     "shrink_fit_assembly_temperature",
     "DifferentialThermalStress",
     "differential_thermal_stress",
+    "bimetallic_strip_curvature",
+    "bimetallic_strip_tip_deflection",
     "FILLET_THROAT_FACTOR",
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",

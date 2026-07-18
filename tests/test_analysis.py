@@ -44,6 +44,8 @@ from anvilate.analysis import (
     bevel_gear_axial_load,
     bevel_gear_radial_load,
     bevel_pitch_cone_angle,
+    bimetallic_strip_curvature,
+    bimetallic_strip_tip_deflection,
     bolt_axial_stiffness,
     bolt_axial_stress,
     bolt_diameter_for_shear,
@@ -5553,6 +5555,48 @@ def test_differential_thermal_stress_rejects_bad_units():
             thermal_expansion_coefficient_2=_q("12e-6 / K"),
             elastic_modulus_2=_q("200 GPa"),
             area_2=_q("100 mm**2"),
+        )
+
+
+def test_bimetallic_strip_curvature_and_tip_deflection():
+    # Equal 1 mm layers, equal 200 GPa moduli, Delta-alpha = 11e-6/K, 100 K rise.
+    # Timoshenko reduces to 1/rho = 3*da*dT/(2h) = 3*11e-6*100/(2*2) = 8.25e-4 /mm.
+    layers = {
+        "alpha_1": _q("12e-6 / K"),
+        "elastic_modulus_1": _q("200 GPa"),
+        "thickness_1": _q("1 mm"),
+        "alpha_2": _q("23e-6 / K"),
+        "elastic_modulus_2": _q("200 GPa"),
+        "thickness_2": _q("1 mm"),
+        "temperature_change": _q("100 K"),
+    }
+    curvature = bimetallic_strip_curvature(**layers)
+    assert curvature.to("1/mm").magnitude == pytest.approx(3 * 11e-6 * 100 / (2 * 2), rel=1e-12)
+    assert curvature.to("1/mm").magnitude == pytest.approx(8.25e-4, rel=1e-6)
+    # A cantilever strip: tip deflection delta = (1/rho)*L^2/2.
+    tip = bimetallic_strip_tip_deflection(length=_q("50 mm"), **layers)
+    assert tip.to("mm").magnitude == pytest.approx(8.25e-4 * 50**2 / 2, rel=1e-12)
+    assert tip.to("mm").magnitude == pytest.approx(1.03125, rel=1e-6)
+    # Matched CTEs -> no bowing at all.
+    flat = bimetallic_strip_curvature(
+        alpha_1=_q("15e-6 / K"),
+        elastic_modulus_1=_q("200 GPa"),
+        thickness_1=_q("1 mm"),
+        alpha_2=_q("15e-6 / K"),
+        elastic_modulus_2=_q("120 GPa"),
+        thickness_2=_q("2 mm"),
+        temperature_change=_q("100 K"),
+    )
+    assert flat.to("1/mm").magnitude == pytest.approx(0.0, abs=1e-15)
+    with pytest.raises(ValueError, match="alpha_1 must have units"):
+        bimetallic_strip_curvature(
+            alpha_1=_q("12 mm"),
+            elastic_modulus_1=_q("200 GPa"),
+            thickness_1=_q("1 mm"),
+            alpha_2=_q("23e-6 / K"),
+            elastic_modulus_2=_q("200 GPa"),
+            thickness_2=_q("1 mm"),
+            temperature_change=_q("100 K"),
         )
 
 

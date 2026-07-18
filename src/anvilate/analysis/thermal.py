@@ -30,6 +30,8 @@ __all__ = [
     "shrink_fit_assembly_temperature",
     "DifferentialThermalStress",
     "differential_thermal_stress",
+    "bimetallic_strip_curvature",
+    "bimetallic_strip_tip_deflection",
 ]
 
 
@@ -349,3 +351,110 @@ def thermal_buckling_temperature_rise(
     effective_slenderness = end_condition_factor * slenderness_ratio
     delta_t = pi**2 / (effective_slenderness**2 * alpha)
     return Quantity(magnitude=delta_t, unit="K")
+
+
+def _bimetal_layer_check(
+    alpha: Quantity, elastic_modulus: Quantity, thickness: Quantity, layer: int
+) -> tuple[float, float, float]:
+    """Validate one bimetal layer -> (alpha 1/K, E MPa, t mm), all positive."""
+    if not alpha.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            f"alpha_{layer} must have units of 1/temperature; got {alpha.dimensionality}"
+        )
+    _require(elastic_modulus, "[pressure]", f"elastic_modulus_{layer}")
+    _require(thickness, "[length]", f"thickness_{layer}")
+    a = alpha.to("1/K").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    t = thickness.to("mm").magnitude
+    if e <= 0 or t <= 0:
+        raise ValueError(f"elastic_modulus_{layer} and thickness_{layer} must be positive")
+    return a, e, t
+
+
+def bimetallic_strip_curvature(
+    *,
+    alpha_1: Quantity,
+    elastic_modulus_1: Quantity,
+    thickness_1: Quantity,
+    alpha_2: Quantity,
+    elastic_modulus_2: Quantity,
+    thickness_2: Quantity,
+    temperature_change: Quantity,
+) -> Quantity:
+    """The curvature a heated bimetallic strip takes (Timoshenko, 1925).
+
+    Two bonded layers with different expansion coefficients cannot grow equally, so
+    a temperature change bows the strip — the working principle of a thermostat, a
+    thermal breaker, a bimetal actuator. The strip curls toward the lower-expansion
+    layer; its curvature 1/ρ follows Timoshenko's bimetal formula
+
+        1/ρ = 6·(α₂ − α₁)·ΔT·(1 + m)² /
+              [ h·(3·(1 + m)² + (1 + m·n)·(m² + 1/(m·n))) ],
+
+    with m = t₁/t₂ the thickness ratio, n = E₁/E₂ the modulus ratio, and h = t₁ + t₂
+    the total thickness. For equal thicknesses and moduli it reduces to the familiar
+    1/ρ = 3·(α₂ − α₁)·ΔT/(2·h). Layer 1 and layer 2 each take a CTE ``alpha_i`` (a
+    1/temperature quantity), an ``elastic_modulus_i``, and a ``thickness_i`` (both
+    positive); ``temperature_change`` ΔT is a temperature difference. Returns the
+    signed curvature as an inverse length (1/mm) — positive when α₂ > α₁ with a
+    positive ΔT (the strip bends toward layer 1).
+    """
+    a1, e1, t1 = _bimetal_layer_check(alpha_1, elastic_modulus_1, thickness_1, 1)
+    a2, e2, t2 = _bimetal_layer_check(alpha_2, elastic_modulus_2, thickness_2, 2)
+    if not temperature_change.has_dimension("[temperature]"):
+        raise ValueError(
+            f"temperature_change must be a temperature difference; got "
+            f"{temperature_change.dimensionality}"
+        )
+    delta_t = temperature_change.to("K").magnitude
+    m = t1 / t2
+    n = e1 / e2
+    h = t1 + t2
+    curvature = (
+        6.0
+        * (a2 - a1)
+        * delta_t
+        * (1.0 + m) ** 2
+        / (h * (3.0 * (1.0 + m) ** 2 + (1.0 + m * n) * (m**2 + 1.0 / (m * n))))
+    )
+    return Quantity(magnitude=curvature, unit="1/mm")
+
+
+def bimetallic_strip_tip_deflection(
+    *,
+    length: Quantity,
+    alpha_1: Quantity,
+    elastic_modulus_1: Quantity,
+    thickness_1: Quantity,
+    alpha_2: Quantity,
+    elastic_modulus_2: Quantity,
+    thickness_2: Quantity,
+    temperature_change: Quantity,
+) -> Quantity:
+    """The free-end deflection of a heated bimetallic cantilever strip.
+
+    A bimetal strip clamped at one end deflects its free tip by δ ≈ (1/ρ)·L²/2 for a
+    small curvature, where 1/ρ is the :func:`bimetallic_strip_curvature` and
+    ``length`` L the strip's free length — the stroke a bimetal thermostat or actuator
+    delivers per degree. The layer arguments and ``temperature_change`` are as in
+    :func:`bimetallic_strip_curvature`; ``length`` must be positive. Returns the
+    signed tip deflection in millimetres (positive toward layer 1).
+    """
+    _require(length, "[length]", "length")
+    ell = length.to("mm").magnitude
+    if ell <= 0:
+        raise ValueError(f"length must be positive; got {length}")
+    curvature = (
+        bimetallic_strip_curvature(
+            alpha_1=alpha_1,
+            elastic_modulus_1=elastic_modulus_1,
+            thickness_1=thickness_1,
+            alpha_2=alpha_2,
+            elastic_modulus_2=elastic_modulus_2,
+            thickness_2=thickness_2,
+            temperature_change=temperature_change,
+        )
+        .to("1/mm")
+        .magnitude
+    )
+    return Quantity(magnitude=curvature * ell**2 / 2.0, unit="mm")
