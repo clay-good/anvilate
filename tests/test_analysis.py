@@ -154,6 +154,7 @@ from anvilate.analysis import (
     hollow_shaft_diameter_for_bending_torsion,
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
+    horizontal_impact_force,
     i_section_second_moment,
     impact_factor,
     impact_stress,
@@ -8956,3 +8957,22 @@ def test_octahedral_shear_stress_is_sqrt2_over_3_of_von_mises():
     ).to("MPa").magnitude == pytest.approx(0.0, abs=1e-12)
     with pytest.raises(ValueError, match="sigma_1 must be a"):
         octahedral_shear_stress(sigma_1=_q("100 mm"), sigma_2=_q("0 MPa"), sigma_3=_q("0 MPa"))
+
+
+def test_horizontal_impact_force():
+    from math import sqrt
+
+    # F = v*sqrt(m*k): a 10 kg mass at 2 m/s into a 1e6 N/m stop -> 6325 N.
+    f = horizontal_impact_force(mass=_q("10 kg"), velocity=_q("2 m/s"), stiffness=_q("1e6 N/m"))
+    assert f.to("N").magnitude == pytest.approx(2 * sqrt(10 * 1e6), rel=1e-12)
+    assert f.to("N").magnitude == pytest.approx(6324.56, rel=1e-4)
+    # F = k*delta_max cross-check: delta_max = v*sqrt(m/k).
+    delta_max = 2 * sqrt(10 / 1e6)  # m
+    assert f.to("N").magnitude == pytest.approx(1e6 * delta_max, rel=1e-9)
+    # A softer stop cushions the blow (force ~ sqrt(k)): quartering k halves F.
+    softer = horizontal_impact_force(
+        mass=_q("10 kg"), velocity=_q("2 m/s"), stiffness=_q("250000 N/m")
+    )
+    assert softer.to("N").magnitude == pytest.approx(f.to("N").magnitude / 2, rel=1e-9)
+    with pytest.raises(ValueError, match="stiffness must be a"):
+        horizontal_impact_force(mass=_q("10 kg"), velocity=_q("2 m/s"), stiffness=_q("1e6 N"))

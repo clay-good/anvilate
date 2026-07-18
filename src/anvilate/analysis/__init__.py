@@ -78,7 +78,8 @@ modules:
   clamps, and links; and the thin circular ring's diametral deflection and peak
   moment under opposing loads
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
-  amplification factor (energy method)
+  amplification factor and the horizontal (kinetic-energy) impact force
+  (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, the inertia a speed-smoothing target requires, the rotating
   thin-rim hoop (bursting) stress, burst speed, and radial growth, and the solid
@@ -389,6 +390,7 @@ from .geneva import (
 )
 from .impact import (
     SUDDENLY_APPLIED_FACTOR,
+    horizontal_impact_force,
     impact_factor,
     impact_stress,
 )
@@ -746,6 +748,7 @@ __all__ = [
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",
+    "horizontal_impact_force",
     "gear_tangential_load",
     "gear_radial_load",
     "gear_normal_load",

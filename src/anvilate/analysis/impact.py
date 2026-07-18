@@ -33,6 +33,7 @@ __all__ = [
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",
+    "horizontal_impact_force",
 ]
 
 
@@ -82,3 +83,30 @@ def impact_stress(
     _require(static_stress, "[pressure]", "static_stress")
     k = impact_factor(drop_height=drop_height, static_deflection=static_deflection)
     return Quantity(magnitude=static_stress.to("MPa").magnitude * k, unit="MPa")
+
+
+def horizontal_impact_force(*, mass: Quantity, velocity: Quantity, stiffness: Quantity) -> Quantity:
+    """The peak force F = v·√(m·k) of a mass striking a spring end-on.
+
+    A mass ``mass`` m moving at ``velocity`` v that runs into a stop of stiffness
+    ``stiffness`` k — a carriage hitting a bumper, a load swinging into an arrest —
+    has no gravitational drop; its kinetic energy ½·m·v² all goes into the spring.
+    Equating ½·m·v² = ½·k·δ_max² gives the peak deflection δ_max = v·√(m/k) and the
+    peak force F = k·δ_max = v·√(m·k). This is the horizontal (energy-from-motion)
+    counterpart to the drop-height :func:`impact_factor` — the force rises with the
+    *square root* of the stiffness, so a softer stop (lower k) cushions the blow. All
+    three must be positive. Returns the peak arresting force in newtons.
+    """
+    _require(mass, "[mass]", "mass")
+    _require(velocity, "[velocity]", "velocity")
+    _require(stiffness, "[force] / [length]", "stiffness")
+    m = mass.to("kg").magnitude
+    v = velocity.to("m/s").magnitude
+    k = stiffness.to("N/m").magnitude
+    if m <= 0:
+        raise ValueError(f"mass must be positive; got {mass}")
+    if v <= 0:
+        raise ValueError(f"velocity must be positive; got {velocity}")
+    if k <= 0:
+        raise ValueError(f"stiffness must be positive; got {stiffness}")
+    return Quantity(magnitude=v * sqrt(m * k), unit="N")
