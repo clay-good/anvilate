@@ -57,6 +57,7 @@ from anvilate.analysis import (
     bolt_shear_stress,
     bolt_tensile_stress_area,
     cam_follower_motion,
+    cam_pressure_angle,
     cantilever_center_patch_load,
     cantilever_end_load,
     cantilever_end_moment,
@@ -7761,6 +7762,42 @@ def test_cam_follower_motion_rejects_bad_inputs():
     with pytest.raises(ValueError, match="rise must be a"):
         cam_follower_motion(
             profile="shm", cam_angle=45.0, rise=_q("20 N"), rise_angle=90.0, cam_speed=_q("600 rpm")
+        )
+
+
+def test_cam_pressure_angle_and_base_circle_effect():
+    from math import atan2, degrees
+
+    # tan(phi) = (ds/dtheta - e)/(sqrt(r_b^2 - e^2) + s): on-centre follower,
+    # ds/dtheta = 30 mm/rad, s = 10 mm, r_b = 40 mm -> ~30.96 deg.
+    phi = cam_pressure_angle(
+        lift_gradient=_q("30 mm"),
+        follower_displacement=_q("10 mm"),
+        base_circle_radius=_q("40 mm"),
+    )
+    assert phi.to("degree").magnitude == pytest.approx(degrees(atan2(30, 50)), rel=1e-12)
+    assert phi.to("degree").magnitude == pytest.approx(30.964, rel=1e-3)
+    # A larger base circle lowers the pressure angle (the usual fix for jamming).
+    bigger = cam_pressure_angle(
+        lift_gradient=_q("30 mm"),
+        follower_displacement=_q("10 mm"),
+        base_circle_radius=_q("80 mm"),
+    )
+    assert bigger.to("degree").magnitude < phi.to("degree").magnitude
+    # A positive offset in the lift direction reduces the pressure angle on the rise.
+    offset = cam_pressure_angle(
+        lift_gradient=_q("30 mm"),
+        follower_displacement=_q("10 mm"),
+        base_circle_radius=_q("40 mm"),
+        offset=_q("10 mm"),
+    )
+    assert offset.to("degree").magnitude < phi.to("degree").magnitude
+    with pytest.raises(ValueError, match="offset .* must be smaller than the base_circle_radius"):
+        cam_pressure_angle(
+            lift_gradient=_q("30 mm"),
+            follower_displacement=_q("10 mm"),
+            base_circle_radius=_q("40 mm"),
+            offset=_q("40 mm"),
         )
 
 

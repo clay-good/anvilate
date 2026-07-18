@@ -32,7 +32,7 @@ dimension-checked :class:`~anvilate.units.Quantity` values.
 
 from __future__ import annotations
 
-from math import cos, pi, radians, sin
+from math import atan2, cos, degrees, pi, radians, sin, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -41,6 +41,7 @@ from ..units import Quantity
 __all__ = [
     "CamMotion",
     "cam_follower_motion",
+    "cam_pressure_angle",
 ]
 
 _PROFILES = ("shm", "cycloidal", "parabolic", "poly345")
@@ -139,3 +140,50 @@ def cam_follower_motion(
         velocity=Quantity(magnitude=dy_dtheta * omega, unit="m/s"),
         acceleration=Quantity(magnitude=d2y_dtheta2 * omega**2, unit="m/s**2"),
     )
+
+
+def cam_pressure_angle(
+    *,
+    lift_gradient: Quantity,
+    follower_displacement: Quantity,
+    base_circle_radius: Quantity,
+    offset: Quantity | None = None,
+) -> Quantity:
+    """The pressure angle of a radial translating roller-follower cam.
+
+    The pressure angle φ is the angle between the cam-to-follower contact normal and
+    the follower's line of travel; it sets how much of the contact force pushes the
+    follower *sideways* against its guide rather than along its stroke. For a radial
+    translating roller follower,
+
+        tan(φ) = (ds/dθ − e) / (√(r_b² − e²) + s),
+
+    where ``lift_gradient`` ds/dθ is the follower's lift per unit *cam angle* (a
+    length per radian — divide a :attr:`CamMotion.velocity` by the cam's angular
+    speed ω to get it), ``follower_displacement`` s the current lift,
+    ``base_circle_radius`` r_b the cam's base circle, and ``offset`` e the follower
+    axis's offset from the cam centre (default 0 for an on-centre follower; a positive
+    offset in the direction of ds/dθ reduces φ on the rise). Keep the peak φ below
+    about 30° for a translating follower or it jams in its guide — enlarging the base
+    circle is the usual fix. ``offset`` must be below r_b. Returns φ in degrees.
+    """
+    _require(lift_gradient, "[length]", "lift_gradient")
+    _require(follower_displacement, "[length]", "follower_displacement")
+    _require(base_circle_radius, "[length]", "base_circle_radius")
+    dsdtheta = lift_gradient.to("mm").magnitude
+    s = follower_displacement.to("mm").magnitude
+    r_b = base_circle_radius.to("mm").magnitude
+    if r_b <= 0:
+        raise ValueError(f"base_circle_radius must be positive; got {base_circle_radius}")
+    if s < 0:
+        raise ValueError(f"follower_displacement must be non-negative; got {follower_displacement}")
+    e = 0.0
+    if offset is not None:
+        _require(offset, "[length]", "offset")
+        e = offset.to("mm").magnitude
+    if abs(e) >= r_b:
+        raise ValueError(
+            f"offset ({offset}) must be smaller than the base_circle_radius ({base_circle_radius})"
+        )
+    angle = atan2(dsdtheta - e, sqrt(r_b**2 - e**2) + s)
+    return Quantity(magnitude=degrees(angle), unit="degree")
