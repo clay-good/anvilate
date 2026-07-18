@@ -1851,3 +1851,16 @@ def test_isolator_mount_selection_example_softer_is_better():
     assert soft.entries[0].passed
     assert "safety factor 1.01" in soft.entries[0].detail
     assert soft.status is CheckStatus.PASS
+
+
+def test_living_hinge_flip_cap_example_lengthening_fixes_it():
+    namespace = runpy.run_path(str(_EXAMPLES / "living_hinge_flip_cap.py"))
+    drawn = namespace["screen_hinge"]()
+    # The short, sharp web over-strains at 52% vs the 30% allowable.
+    assert drawn.status is CheckStatus.FAIL
+    assert "safety factor 0.57" in drawn.entries[0].detail
+    # Lengthening the web spreads the same fold and brings the strain in band.
+    fixed = namespace["screen_redesigned_hinge"]()
+    assert fixed.entries[0].passed
+    assert "safety factor 1.05" in fixed.entries[0].detail
+    assert fixed.status is CheckStatus.PASS
