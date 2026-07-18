@@ -1275,3 +1275,20 @@ def test_glass_thermal_shock_example_favors_low_expansion():
     assert boro.passed
     assert "safety factor 1.26" in boro.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_machine_isolation_example_needs_a_soft_mount():
+    namespace = runpy.run_path(str(_EXAMPLES / "machine_vibration_isolation.py"))
+    card = namespace["screen_isolation"]()
+    by_name = {e.name: e for e in card.entries}
+    # The stiff mount amplifies -- worse than no mount at all.
+    stiff = by_name["stiff mount (20 Hz)"]
+    assert stiff.status is CheckStatus.FAIL
+    assert "safety factor 0.11" in stiff.detail
+    # The medium mount isolates a little but falls short of the target.
+    assert by_name["medium mount (12 Hz)"].status is CheckStatus.FAIL
+    # Only the soft mount clears the isolation target with margin.
+    soft = by_name["soft mount (6 Hz)"]
+    assert soft.passed
+    assert "safety factor 3.02" in soft.detail
+    assert card.status is CheckStatus.FAIL
