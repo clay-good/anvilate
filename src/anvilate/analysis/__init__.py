@@ -99,7 +99,8 @@ modules:
   axial thrust, radial load, and virtual tooth number, pitch-line
   velocity, Barth dynamic factor, Lewis tooth-root bending, Hertzian surface
   contact stress, the mesh contact ratio, the minimum teeth to avoid undercut,
-  the involute function and base tangent length (span measurement),
+  the involute function, base tangent length (span measurement), and the arc tooth
+  thickness at any radius (top-land pointed-tooth check),
   and train kinematics (signed compound-train value, reverted coaxial constraint,
   planetary Willis-equation speeds and ideal torque split, whole-tooth planet and
   assembly checks)
@@ -417,6 +418,7 @@ from .gear import (
     gear_normal_load,
     gear_radial_load,
     gear_tangential_load,
+    gear_tooth_thickness_at_radius,
     gear_train_efficiency,
     gear_train_value,
     helical_gear_axial_thrust,
@@ -854,6 +856,7 @@ __all__ = [
     "minimum_teeth_to_avoid_undercut",
     "involute_function",
     "base_tangent_length",
+    "gear_tooth_thickness_at_radius",
     "gear_train_value",
     "gear_train_efficiency",
     "reverted_train_is_coaxial",

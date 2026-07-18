@@ -29,7 +29,7 @@ N_p = (N_r − N_s)/2 and the equal-spacing assembly condition
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import atan2, ceil, cos, degrees, pi, prod, radians, sin, sqrt, tan
+from math import acos, atan2, ceil, cos, degrees, pi, prod, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict
 
@@ -62,6 +62,7 @@ __all__ = [
     "minimum_teeth_to_avoid_undercut",
     "involute_function",
     "base_tangent_length",
+    "gear_tooth_thickness_at_radius",
     "gear_train_value",
     "gear_train_efficiency",
     "reverted_train_is_coaxial",
@@ -509,6 +510,48 @@ def base_tangent_length(
     inv = tan(phi) - phi
     w_k = m * cos(phi) * ((k - 0.5) * pi + z * inv)
     return Quantity(magnitude=w_k, unit="mm")
+
+
+def gear_tooth_thickness_at_radius(
+    *,
+    module: Quantity,
+    teeth: int,
+    pressure_angle: float,
+    radius: Quantity,
+) -> Quantity:
+    """The arc tooth thickness of a standard spur gear at a given radius.
+
+    An involute tooth tapers from root to tip; its arc thickness at any radius r
+    follows from the involute geometry as
+
+        s_r = 2·r·[π/(2·z) + inv(φ) − inv(φ_r)],   cos(φ_r) = r_b / r,
+
+    where ``module`` m and ``teeth`` z fix the base radius r_b = (m·z/2)·cos(φ),
+    ``pressure_angle`` φ is the nominal pressure angle (degrees), inv is the
+    :func:`involute_function`, and φ_r is the pressure angle at radius r. At the pitch
+    radius r = m·z/2 this returns the reference thickness π·m/2; at the tip it gives
+    the *top-land* thickness — check it stays above ~0.3·m so the tooth is not pointed
+    (which happens on small-tooth or heavily-profile-shifted pinions). ``radius`` r
+    must be a length at least the base radius (there is no tooth flank inside the base
+    circle). Returns the arc tooth thickness in millimetres.
+    """
+    _require(module, "[length]", "module")
+    _require(radius, "[length]", "radius")
+    z = _check_tooth_count(teeth, "teeth")
+    m = module.to("mm").magnitude
+    r = radius.to("mm").magnitude
+    if m <= 0:
+        raise ValueError(f"module must be positive; got {module}")
+    phi = _check_pressure_angle(pressure_angle)
+    r_b = (m * z / 2.0) * cos(phi)
+    if r < r_b:
+        raise ValueError(
+            f"radius ({radius}) must be at least the base radius ({r_b:.4f} mm); "
+            "there is no involute flank inside the base circle"
+        )
+    phi_r = acos(r_b / r)
+    thickness = 2.0 * r * (pi / (2.0 * z) + (tan(phi) - phi) - (tan(phi_r) - phi_r))
+    return Quantity(magnitude=thickness, unit="mm")
 
 
 def gear_train_value(

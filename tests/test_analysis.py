@@ -147,6 +147,7 @@ from anvilate.analysis import (
     gear_normal_load,
     gear_radial_load,
     gear_tangential_load,
+    gear_tooth_thickness_at_radius,
     gear_train_efficiency,
     gear_train_value,
     geneva_advance_fraction,
@@ -8212,6 +8213,22 @@ def test_involute_function_and_base_tangent_length():
         base_tangent_length(module=_q("2 mm"), teeth=20, teeth_spanned=20, pressure_angle=20.0)
     with pytest.raises(ValueError, match=r"pressure_angle \(degrees\) must lie in"):
         involute_function(pressure_angle=95.0)
+
+
+def test_gear_tooth_thickness_at_radius_thins_from_pitch_to_tip():
+    from math import pi
+
+    kw = {"module": _q("2 mm"), "teeth": 20, "pressure_angle": 20.0}
+    # At the pitch radius (m*z/2 = 20 mm) it returns the reference thickness pi*m/2.
+    at_pitch = gear_tooth_thickness_at_radius(radius=_q("20 mm"), **kw)
+    assert at_pitch.to("mm").magnitude == pytest.approx(pi * 2 / 2, rel=1e-12)
+    # At the tip (r = 22 mm) the tooth is thinner (the top land).
+    at_tip = gear_tooth_thickness_at_radius(radius=_q("22 mm"), **kw)
+    assert at_tip.to("mm").magnitude < at_pitch.to("mm").magnitude
+    assert at_tip.to("mm").magnitude == pytest.approx(1.3898, rel=1e-3)
+    # Inside the base circle there is no involute flank.
+    with pytest.raises(ValueError, match="must be at least the base radius"):
+        gear_tooth_thickness_at_radius(radius=_q("18 mm"), **kw)
 
 
 def test_helical_gear_axial_thrust_and_radial_load():
