@@ -11336,3 +11336,32 @@ def test_bearing_rating_for_life_inverts_the_basic_rating_life():
     assert roller.to("N").magnitude < c.to("N").magnitude
     with pytest.raises(ValueError, match="required_life_millions must be positive"):
         bearing_rating_for_life(equivalent_load=_q("2 kN"), required_life_millions=0)
+
+
+def test_flange_coupling_bolt_count_selects_the_fewest_bolts():
+    from anvilate.analysis import flange_coupling_bolt_count, flange_coupling_torque
+
+    # n = ceil(T/(F_allow*R)): 2000 N*m, 100 mm radius, 5 kN bolts -> 4 bolts.
+    n = flange_coupling_bolt_count(
+        torque=_q("2000 N*m"), bolt_circle_radius=_q("100 mm"), allowable_bolt_force=_q("5 kN")
+    )
+    assert n == 4
+    # That many bolts at the allowable force do carry at least the torque.
+    capacity = flange_coupling_torque(
+        bolt_shear_force=_q("5 kN"), bolt_circle_radius=_q("100 mm"), num_bolts=n
+    )
+    assert capacity.to("N*m").magnitude >= 2000
+    # One fewer bolt would fall short.
+    short = flange_coupling_torque(
+        bolt_shear_force=_q("5 kN"), bolt_circle_radius=_q("100 mm"), num_bolts=n - 1
+    )
+    assert short.to("N*m").magnitude < 2000
+    # Bigger bolts or a larger circle cut the count.
+    fewer = flange_coupling_bolt_count(
+        torque=_q("2000 N*m"), bolt_circle_radius=_q("150 mm"), allowable_bolt_force=_q("5 kN")
+    )
+    assert fewer < n
+    with pytest.raises(ValueError, match="allowable_bolt_force must be positive"):
+        flange_coupling_bolt_count(
+            torque=_q("2000 N*m"), bolt_circle_radius=_q("100 mm"), allowable_bolt_force=_q("0 N")
+        )

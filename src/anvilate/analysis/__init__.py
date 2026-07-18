@@ -60,8 +60,8 @@ modules:
 - :mod:`~anvilate.analysis.wear` — Archard sliding-wear law: the worn volume and wear
   depth of a sliding contact, the sliding distance (wear life) a depth limit allows, and
   the plain-bearing PV (pressure × velocity) factor against its overheating limit
-- :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque and per-bolt
-  shear force
+- :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque, per-bolt
+  shear force, and the bolt count a torque requires
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
   (millions of revolutions and running hours) and the dynamic rating a target life
   requires, static load safety factor, the
@@ -380,6 +380,7 @@ from .contact import (
     hertz_sphere_contact,
 )
 from .coupling import (
+    flange_coupling_bolt_count,
     flange_coupling_bolt_force,
     flange_coupling_torque,
 )
@@ -1206,6 +1207,7 @@ __all__ = [
     "hertz_cylinder_contact",
     "flange_coupling_torque",
     "flange_coupling_bolt_force",
+    "flange_coupling_bolt_count",
     "spring_index",
     "wahl_factor",
     "spring_shear_stress",

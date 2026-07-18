@@ -18,11 +18,14 @@ rigid flange). Force, torque, and radius inputs are dimension-checked
 
 from __future__ import annotations
 
+from math import ceil
+
 from ..units import Quantity
 
 __all__ = [
     "flange_coupling_torque",
     "flange_coupling_bolt_force",
+    "flange_coupling_bolt_count",
 ]
 
 
@@ -78,3 +81,31 @@ def flange_coupling_bolt_force(
         raise ValueError(f"bolt_circle_radius must be positive; got {bolt_circle_radius}")
     force = torque.pint / (num_bolts * bolt_circle_radius.pint)
     return Quantity(magnitude=float(force.to("N").magnitude), unit="N")
+
+
+def flange_coupling_bolt_count(
+    *,
+    torque: Quantity,
+    bolt_circle_radius: Quantity,
+    allowable_bolt_force: Quantity,
+) -> int:
+    """The fewest bolts n = ceil(T/(F_allow·R)) a flange coupling needs for a torque.
+
+    The bolt-selection inverse of :func:`flange_coupling_torque`: having chosen a bolt size
+    (hence an ``allowable_bolt_force`` F_allow from its shear capacity), the number of bolts
+    on a ``bolt_circle_radius`` R that share the ``torque`` T is n = ceil(T/(F_allow·R)) --
+    rounded up to a whole bolt, and in practice to an even number for a symmetric pattern.
+    Fewer, bigger bolts or a larger bolt circle both cut the count. T must be a torque, R a
+    positive length, and F_allow a positive force. Returns the minimum bolt count as an int.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(bolt_circle_radius, "[length]", "bolt_circle_radius")
+    _require(allowable_bolt_force, "[force]", "allowable_bolt_force")
+    r = bolt_circle_radius.to("m").magnitude
+    f = allowable_bolt_force.to("N").magnitude
+    if r <= 0:
+        raise ValueError(f"bolt_circle_radius must be positive; got {bolt_circle_radius}")
+    if f <= 0:
+        raise ValueError(f"allowable_bolt_force must be positive; got {allowable_bolt_force}")
+    t = torque.to("N*m").magnitude
+    return ceil(t / (f * r))
