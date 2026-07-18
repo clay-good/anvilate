@@ -19,8 +19,9 @@ modules:
   stress a moment makes and the minimum section modulus it requires
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   the minimum section second moment a load requires, the eccentric-load secant
-  stress, the Perry-Robertson imperfect-column stress, and the lateral-torsional
-  buckling moment of an unbraced beam
+  stress, the Perry-Robertson imperfect-column stress, the lateral-torsional
+  buckling moment of an unbraced beam, and the empirical Rankine-Gordon column
+  stress
 - :mod:`~anvilate.analysis.torsion` — the torque a power/speed makes, solid and
   hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
   torque requires; thin-walled rectangular (box) tube torsion (Bredt), thin
@@ -236,6 +237,7 @@ from .column import (
     lateral_torsional_buckling_moment,
     perry_robertson_stress,
     radius_of_gyration,
+    rankine_gordon_stress,
     secant_column_max_stress,
     slenderness_ratio,
     transition_slenderness,
@@ -647,6 +649,7 @@ __all__ = [
     "secant_column_max_stress",
     "perry_robertson_stress",
     "lateral_torsional_buckling_moment",
+    "rankine_gordon_stress",
     "UNIFORM_WEAR",
     "UNIFORM_PRESSURE",
     "disc_clutch_torque",

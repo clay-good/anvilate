@@ -33,6 +33,7 @@ __all__ = [
     "secant_column_max_stress",
     "perry_robertson_stress",
     "lateral_torsional_buckling_moment",
+    "rankine_gordon_stress",
 ]
 
 
@@ -337,3 +338,34 @@ def lateral_torsional_buckling_moment(
         raise ValueError("every lateral-torsional-buckling input must be positive")
     m_cr_n_mm = pi / length * sqrt(e * iy * g * j)  # N*mm
     return Quantity(magnitude=m_cr_n_mm / 1000.0, unit="N*m")
+
+
+def rankine_gordon_stress(
+    *,
+    crushing_stress: Quantity,
+    slenderness_ratio: float,
+    rankine_constant: float,
+) -> Quantity:
+    """The Rankine-Gordon column stress σ_R = σ_c / (1 + a·λ²).
+
+    An empirical column formula (British practice) that blends the two failure modes
+    into one smooth curve: at zero slenderness it is the crushing stress σ_c, and as
+    slenderness grows the 1/(1 + a·λ²) denominator pulls it down toward the Euler
+    curve. σ_R = σ_c / (1 + a·λ²), where ``crushing_stress`` σ_c is the material's
+    compressive (yield/crushing) strength, ``slenderness_ratio`` λ = K·L/r the
+    effective slenderness, and ``rankine_constant`` a a material constant (≈ 1/7500
+    for mild steel, ≈ 1/1600 for cast iron — supplied like any code coefficient, and
+    tuned so the curve matches Euler at high λ). It needs no separate transition
+    check: one expression covers stubby and slender columns. ``slenderness_ratio``
+    must be non-negative and ``rankine_constant`` positive. Returns the allowable
+    mean stress in MPa.
+    """
+    _require(crushing_stress, "[pressure]", "crushing_stress")
+    if slenderness_ratio < 0:
+        raise ValueError(f"slenderness_ratio must be non-negative; got {slenderness_ratio}")
+    if rankine_constant <= 0:
+        raise ValueError(f"rankine_constant must be positive; got {rankine_constant}")
+    sc = crushing_stress.to("MPa").magnitude
+    if sc <= 0:
+        raise ValueError(f"crushing_stress must be positive; got {crushing_stress}")
+    return Quantity(magnitude=sc / (1.0 + rankine_constant * slenderness_ratio**2), unit="MPa")

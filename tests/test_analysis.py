@@ -206,6 +206,7 @@ from anvilate.analysis import (
     preloaded_bolt_cyclic_stress,
     principal_stresses_plane,
     radius_of_gyration,
+    rankine_gordon_stress,
     rectangular_curved_beam_stress,
     rectangular_second_moment,
     rectangular_tube_enclosed_area,
@@ -8663,3 +8664,33 @@ def test_smith_watson_topper_equivalent_stress():
     assert swt2.to("MPa").magnitude == pytest.approx(sqrt(200 * 80), rel=1e-12)
     with pytest.raises(ValueError, match="max_stress must be positive"):
         smith_watson_topper_stress(max_stress=_q("-10 MPa"), alternating_stress=_q("50 MPa"))
+
+
+def test_rankine_gordon_stress_blends_crushing_to_euler():
+    # sigma_R = sigma_c / (1 + a*lambda^2): at lambda = 0 it is the crushing stress.
+    assert rankine_gordon_stress(
+        crushing_stress=_q("320 MPa"), slenderness_ratio=0, rankine_constant=1 / 7500
+    ).to("MPa").magnitude == pytest.approx(320.0, rel=1e-12)
+    # It falls smoothly as slenderness grows -- one curve, no transition check.
+    s100 = rankine_gordon_stress(
+        crushing_stress=_q("320 MPa"), slenderness_ratio=100, rankine_constant=1 / 7500
+    )
+    assert s100.to("MPa").magnitude == pytest.approx(320 / (1 + 10000 / 7500), rel=1e-12)
+    assert s100.to("MPa").magnitude == pytest.approx(137.14, rel=1e-3)
+    s200 = rankine_gordon_stress(
+        crushing_stress=_q("320 MPa"), slenderness_ratio=200, rankine_constant=1 / 7500
+    )
+    assert s200.to("MPa").magnitude < s100.to("MPa").magnitude
+    # A larger Rankine constant (a floppier material like cast iron) drops faster.
+    assert (
+        rankine_gordon_stress(
+            crushing_stress=_q("320 MPa"), slenderness_ratio=100, rankine_constant=1 / 1600
+        )
+        .to("MPa")
+        .magnitude
+        < s100.to("MPa").magnitude
+    )
+    with pytest.raises(ValueError, match="rankine_constant must be positive"):
+        rankine_gordon_stress(
+            crushing_stress=_q("320 MPa"), slenderness_ratio=100, rankine_constant=0
+        )
