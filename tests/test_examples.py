@@ -1490,3 +1490,19 @@ def test_plastic_collapse_reserve_example_elastic_fails_plastic_passes():
     assert "safety factor 2.50" in plastic.detail
     # The overall card is FAIL because the elastic entry fails (No silent green).
     assert card.status is CheckStatus.FAIL
+
+
+def test_support_beam_resonance_example_beam_mass_moves_it_onto_the_peak():
+    namespace = runpy.run_path(str(_EXAMPLES / "support_beam_resonance.py"))
+    card = namespace["screen_support_resonance"]()
+    by_name = {e.name: e for e in card.entries}
+    # Ignoring the beam's own mass, the fundamental clears the running speed.
+    ignored = by_name["resonance margin (beam mass ignored)"]
+    assert ignored.passed
+    assert "safety factor 1.12" in ignored.detail
+    # Including 17/35 of the 30 kg beam drops the frequency below the running
+    # speed -> the check fails once the support's own mass is counted.
+    included = by_name["resonance margin (beam mass included)"]
+    assert included.status is CheckStatus.FAIL
+    assert "safety factor 0.99" in included.detail
+    assert card.status is CheckStatus.FAIL
