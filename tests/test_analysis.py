@@ -196,6 +196,8 @@ from anvilate.analysis import (
     parabolic_cable_length,
     parabolic_cable_max_tension,
     parabolic_cable_sag,
+    paris_law_crack_growth_rate,
+    paris_law_cycles_to_failure,
     perry_robertson_stress,
     peterson_notch_sensitivity,
     petroff_friction_power,
@@ -8078,6 +8080,72 @@ def test_fracture_rejects_bad_inputs():
         )
     with pytest.raises(ValueError, match="fracture_toughness must be a"):
         critical_crack_length(fracture_toughness=_q("50 MPa"), remote_stress=_q("100 MPa"))
+
+
+def test_paris_law_growth_rate_and_integrated_life():
+    from math import pi, sqrt
+
+    # da/dN = C*(Y*ds*sqrt(pi*a))^m at a 1 mm crack, C=1e-11, m=3.
+    rate = paris_law_crack_growth_rate(
+        stress_range=_q("100 MPa"),
+        crack_length=_q("1 mm"),
+        paris_coefficient=1e-11,
+        paris_exponent=3.0,
+    )
+    dk = 1.0 * 100.0 * sqrt(pi * 0.001)
+    assert rate.to("m").magnitude == pytest.approx(1e-11 * dk**3, rel=1e-12)
+    assert rate.to("m").magnitude == pytest.approx(1.7609e-9, rel=1e-3)
+    # The integrated life from 1 mm to 10 mm matches the closed form and a
+    # numeric integration of the same rate (cross-check).
+    n = paris_law_cycles_to_failure(
+        stress_range=_q("100 MPa"),
+        initial_crack_length=_q("1 mm"),
+        final_crack_length=_q("10 mm"),
+        paris_coefficient=1e-11,
+        paris_exponent=3.0,
+    )
+    exponent = 1.0 - 3.0 / 2.0
+    expected = (0.01**exponent - 0.001**exponent) / (
+        1e-11 * (1.0 * 100.0 * sqrt(pi)) ** 3.0 * exponent
+    )
+    assert n == pytest.approx(expected, rel=1e-12)
+    assert n == pytest.approx(776634.0, rel=1e-4)
+    # Numeric trapezoid of dN = da/(da/dN) over the same span.
+    steps = 20000
+    a0, af = 0.001, 0.01
+    h = (af - a0) / steps
+    total = 0.0
+    for i in range(steps + 1):
+        a = a0 + i * h
+        rate_i = 1e-11 * (1.0 * 100.0 * sqrt(pi * a)) ** 3.0
+        total += (0.5 if i in (0, steps) else 1.0) / rate_i
+    assert n == pytest.approx(total * h, rel=1e-3)
+
+
+def test_paris_law_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="paris_coefficient must be positive"):
+        paris_law_crack_growth_rate(
+            stress_range=_q("100 MPa"),
+            crack_length=_q("1 mm"),
+            paris_coefficient=0.0,
+            paris_exponent=3.0,
+        )
+    with pytest.raises(ValueError, match="differ from 2"):
+        paris_law_cycles_to_failure(
+            stress_range=_q("100 MPa"),
+            initial_crack_length=_q("1 mm"),
+            final_crack_length=_q("10 mm"),
+            paris_coefficient=1e-11,
+            paris_exponent=2.0,
+        )
+    with pytest.raises(ValueError, match="final_crack_length must exceed"):
+        paris_law_cycles_to_failure(
+            stress_range=_q("100 MPa"),
+            initial_crack_length=_q("10 mm"),
+            final_crack_length=_q("1 mm"),
+            paris_coefficient=1e-11,
+            paris_exponent=3.0,
+        )
 
 
 def test_cylinder_external_pressure_buckling_rides_on_the_cube_of_thinness():

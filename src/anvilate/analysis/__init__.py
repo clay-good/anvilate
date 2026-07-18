@@ -120,7 +120,8 @@ modules:
 - :mod:`~anvilate.analysis.stress` — von Mises and octahedral-shear combination,
   combined axial+bending, and the Inglis elliptical-hole stress-concentration factor
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
-  stress-intensity factor and the critical crack length for fast fracture
+  stress-intensity factor, the critical crack length for fast fracture, and the
+  Paris-Erdogan fatigue crack-growth rate and integrated propagation life
 - :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
   the max/min → amplitude/mean cyclic-stress converter, the Goodman and
   Smith-Watson-Topper equivalent reversed stresses, the fatigue notch factor
@@ -359,6 +360,8 @@ from .fourbar import (
 )
 from .fracture import (
     critical_crack_length,
+    paris_law_crack_growth_rate,
+    paris_law_cycles_to_failure,
     stress_intensity_factor,
 )
 from .gear import (
@@ -896,6 +899,8 @@ __all__ = [
     "elliptical_hole_stress_concentration",
     "stress_intensity_factor",
     "critical_crack_length",
+    "paris_law_crack_growth_rate",
+    "paris_law_cycles_to_failure",
     "constrained_thermal_stress",
     "thermal_shock_stress",
     "triaxial_constrained_thermal_stress",
