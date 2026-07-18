@@ -1179,3 +1179,19 @@ def test_shrink_fit_at_speed_example_loses_grip_at_high_speed():
     assert fast.status is CheckStatus.FAIL
     assert "safety factor -0.40" in fast.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_fracture_toughness_example_favors_toughness_over_strength():
+    namespace = runpy.run_path(str(_EXAMPLES / "fracture_toughness_screen.py"))
+    card = namespace["screen_fracture_toughness"]()
+    by_name = {e.name: e for e in card.entries}
+    # The high-strength (brittle) steel's critical crack barely exceeds the
+    # detectable flaw size -> fails the inspection margin.
+    brittle = by_name["high-strength steel (K_IC 50)"]
+    assert brittle.status is CheckStatus.FAIL
+    assert "safety factor 0.50" in brittle.detail
+    # The tougher steel tolerates a comfortably inspectable crack.
+    tough = by_name["tough steel (K_IC 100)"]
+    assert tough.passed
+    assert "safety factor 1.99" in tough.detail
+    assert card.status is CheckStatus.FAIL
