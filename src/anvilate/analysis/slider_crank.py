@@ -37,6 +37,7 @@ __all__ = [
     "slider_crank_velocity",
     "slider_crank_acceleration",
     "slider_crank_piston_side_thrust",
+    "slider_crank_torque",
 ]
 
 
@@ -167,3 +168,35 @@ def slider_crank_piston_side_thrust(
     sin_phi = r * sin(theta) / length
     tan_phi = sin_phi / sqrt(1.0 - sin_phi**2)
     return Quantity(magnitude=abs(axial_force.to("N").magnitude * tan_phi), unit="N")
+
+
+def slider_crank_torque(
+    *,
+    piston_force: Quantity,
+    crank_radius: Quantity,
+    rod_length: Quantity,
+    crank_angle: float,
+) -> Quantity:
+    """The crank torque T = F·(dx/dθ) a piston force makes on a slider-crank.
+
+    The instantaneous turning moment a cylinder (gas or inertia) force ``piston_force``
+    F delivers to the crankshaft. By virtual work T·dθ = F·dx, so the torque is the
+    force times the exact slider displacement per radian:
+
+        T = F·r·sin θ·(1 + r·cos θ / √(L² − r²·sin²θ)),
+
+    the same kinematic factor that sets :func:`slider_crank_velocity`. It is zero at
+    both dead centres (θ = 0, 180°) — where the rod is straight and the crank has no
+    lever arm — and peaks a little *before* mid-stroke, the rod-obliquity shift a short
+    rod exaggerates. ``crank_radius`` r, ``rod_length`` L (L > r), and ``crank_angle`` θ
+    (degrees) describe the linkage. A positive result turns the crank in the direction
+    of increasing θ; reverse the sign of F on the return stroke. Returns the torque in
+    newton-metres.
+    """
+    _require(piston_force, "[force]", "piston_force")
+    r, length = _geometry(crank_radius, rod_length)
+    theta = radians(crank_angle)
+    root = sqrt(length**2 - (r * sin(theta)) ** 2)
+    dx_dtheta_mm = r * sin(theta) * (1.0 + r * cos(theta) / root)
+    torque_n_mm = piston_force.to("N").magnitude * dx_dtheta_mm
+    return Quantity(magnitude=torque_n_mm / 1000.0, unit="N*m")

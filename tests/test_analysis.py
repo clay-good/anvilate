@@ -10877,3 +10877,31 @@ def test_lewis_module_inverse_round_trips_the_bending_stress():
             form_factor=0.35,
             allowable_stress=_q("0 MPa"),
         )
+
+
+def test_slider_crank_torque_matches_virtual_work_and_dead_centres():
+    from math import cos, radians, sin, sqrt
+
+    from anvilate.analysis import slider_crank_torque, slider_crank_velocity
+
+    kw = {"crank_radius": _q("50 mm"), "rod_length": _q("200 mm")}
+    # Zero torque at both dead centres (no crank lever arm).
+    assert slider_crank_torque(piston_force=_q("1000 N"), crank_angle=0, **kw).to(
+        "N*m"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+    assert slider_crank_torque(piston_force=_q("1000 N"), crank_angle=180, **kw).to(
+        "N*m"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+    # Closed-form check T = F*r*sin(theta)*(1 + r*cos/sqrt(L^2 - r^2 sin^2)).
+    for deg in (30, 75, 90, 150):
+        theta = radians(deg)
+        root = sqrt(200**2 - (50 * sin(theta)) ** 2)
+        expected = 1000 * 50 * sin(theta) * (1 + 50 * cos(theta) / root) / 1000.0
+        got = slider_crank_torque(piston_force=_q("1000 N"), crank_angle=deg, **kw)
+        assert got.to("N*m").magnitude == pytest.approx(expected, rel=1e-12)
+    # Virtual work: T = F * (dx/dtheta). At any theta, T/F equals v/omega.
+    v = slider_crank_velocity(crank_angle=75, crank_speed=_q("1 rad/s"), **kw)  # v = dx/dtheta
+    t = slider_crank_torque(piston_force=_q("1000 N"), crank_angle=75, **kw)
+    assert t.to("N*m").magnitude == pytest.approx(1000 * v.to("m/s").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="piston_force must be a"):
+        slider_crank_torque(piston_force=_q("1000 mm"), crank_angle=90, **kw)
