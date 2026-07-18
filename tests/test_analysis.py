@@ -324,6 +324,7 @@ from anvilate.analysis import (
     slenderness_ratio,
     slider_crank_acceleration,
     slider_crank_displacement,
+    slider_crank_piston_side_thrust,
     slider_crank_velocity,
     smith_watson_topper_stress,
     soderberg_safety_factor,
@@ -8059,6 +8060,34 @@ def test_slider_crank_acceleration_peaks_at_top_dead_centre():
             crank_angle=45.0,
             crank_speed=_q("1000 N"),
         )
+
+
+def test_slider_crank_piston_side_thrust_from_rod_obliquity():
+    from math import sqrt
+
+    kw = {"crank_radius": _q("25 mm"), "rod_length": _q("100 mm")}  # L/r = 4
+    # At theta = 90 deg the rod obliquity is largest: sin(phi) = r/L = 1/4, so the
+    # side thrust is F*tan(phi) = F/sqrt(L^2/r^2 - 1) = F/sqrt(15).
+    side = slider_crank_piston_side_thrust(axial_force=_q("1000 N"), crank_angle=90.0, **kw)
+    assert side.to("N").magnitude == pytest.approx(1000 / sqrt(15), rel=1e-12)
+    assert side.to("N").magnitude == pytest.approx(258.20, rel=1e-3)
+    # The rod is aligned with the bore at the dead centres, so no side thrust.
+    assert slider_crank_piston_side_thrust(axial_force=_q("1000 N"), crank_angle=0.0, **kw).to(
+        "N"
+    ).magnitude == pytest.approx(0.0, abs=1e-12)
+    assert slider_crank_piston_side_thrust(axial_force=_q("1000 N"), crank_angle=180.0, **kw).to(
+        "N"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+    # A longer connecting rod (larger L/r) reduces the side thrust.
+    longer = slider_crank_piston_side_thrust(
+        axial_force=_q("1000 N"),
+        crank_radius=_q("25 mm"),
+        rod_length=_q("200 mm"),
+        crank_angle=90.0,
+    )
+    assert longer.to("N").magnitude < side.to("N").magnitude
+    with pytest.raises(ValueError, match="axial_force must be a"):
+        slider_crank_piston_side_thrust(axial_force=_q("1000 N*m"), crank_angle=90.0, **kw)
 
 
 def test_fourbar_grashof_classification():

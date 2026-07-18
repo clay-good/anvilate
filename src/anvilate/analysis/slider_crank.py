@@ -36,6 +36,7 @@ __all__ = [
     "slider_crank_displacement",
     "slider_crank_velocity",
     "slider_crank_acceleration",
+    "slider_crank_piston_side_thrust",
 ]
 
 
@@ -138,3 +139,31 @@ def slider_crank_acceleration(
         cos(2.0 * theta) / root + r**2 * sin(theta) ** 2 * cos(theta) ** 2 / root**3
     )
     return Quantity(magnitude=d2x_dtheta2_mm / 1000.0 * omega**2, unit="m/s**2")
+
+
+def slider_crank_piston_side_thrust(
+    *,
+    axial_force: Quantity,
+    crank_radius: Quantity,
+    rod_length: Quantity,
+    crank_angle: float,
+) -> Quantity:
+    """The side thrust a slider-crank presses its piston against the cylinder wall with.
+
+    Because the connecting rod swings at an angle φ to the cylinder axis, the axial
+    (gas or inertia) force ``axial_force`` F it transmits is not purely along the
+    bore: the rod force F/cos φ has a transverse component F·tan φ that pushes the
+    piston sideways against the liner — the load that wears the cylinder and, when it
+    reverses across dead centre, causes piston slap. The rod obliquity is set by
+    sin φ = (r/L)·sin θ, so the side thrust is F·tan φ. ``crank_radius`` r,
+    ``rod_length`` L (L > r), and ``crank_angle`` θ (degrees) describe the linkage; the
+    thrust is zero at the dead centres (θ = 0, 180°) and peaks near mid-stroke, and a
+    longer rod (larger L/r) reduces it. Returns the magnitude of the side thrust in
+    newtons.
+    """
+    _require(axial_force, "[force]", "axial_force")
+    r, length = _geometry(crank_radius, rod_length)
+    theta = radians(crank_angle)
+    sin_phi = r * sin(theta) / length
+    tan_phi = sin_phi / sqrt(1.0 - sin_phi**2)
+    return Quantity(magnitude=abs(axial_force.to("N").magnitude * tan_phi), unit="N")

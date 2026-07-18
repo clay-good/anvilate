@@ -76,7 +76,8 @@ modules:
   mechanism geometry: index angle, crank and driven engagement radii, and the
   advance/dwell fraction of the cycle
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
-  displacement from top dead centre, slider velocity, and slider acceleration
+  displacement from top dead centre, slider velocity, slider acceleration, and the
+  connecting-rod obliquity side thrust on the piston
 - :mod:`~anvilate.analysis.scotch_yoke` — scotch-yoke pure simple-harmonic
   displacement, velocity, and acceleration (the infinite-rod slider-crank limit)
 - :mod:`~anvilate.analysis.fourbar` — four-bar linkage Grashof rotatability
@@ -546,6 +547,7 @@ from .section import CrossSection, bending_stress, required_section_modulus
 from .slider_crank import (
     slider_crank_acceleration,
     slider_crank_displacement,
+    slider_crank_piston_side_thrust,
     slider_crank_velocity,
 )
 from .spring import (
@@ -752,6 +754,7 @@ __all__ = [
     "slider_crank_displacement",
     "slider_crank_velocity",
     "slider_crank_acceleration",
+    "slider_crank_piston_side_thrust",
     "scotch_yoke_displacement",
     "scotch_yoke_velocity",
     "scotch_yoke_acceleration",
