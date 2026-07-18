@@ -1610,3 +1610,16 @@ def test_cam_base_circle_pressure_angle_example_bigger_base_circle_fixes_jamming
     assert by_name["60 mm base circle"].passed
     assert "safety factor 1.29" in by_name["60 mm base circle"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_drivetrain_torsional_mode_example_stiffer_coupling_clears_the_firing_freq():
+    namespace = runpy.run_path(str(_EXAMPLES / "drivetrain_torsional_mode.py"))
+    card = namespace["screen_drivetrain_mode"]()
+    by_name = {e.name: e for e in card.entries}
+    # The soft coupling puts the two-rotor mode too near the firing frequency.
+    assert by_name["soft coupling (20 kN*m/rad)"].status is CheckStatus.FAIL
+    assert "safety factor 0.64" in by_name["soft coupling (20 kN*m/rad)"].detail
+    # Stiffening it lifts the mode above the excitation with margin.
+    assert by_name["stiff coupling (100 kN*m/rad)"].passed
+    assert "safety factor 1.42" in by_name["stiff coupling (100 kN*m/rad)"].detail
+    assert card.status is CheckStatus.FAIL
