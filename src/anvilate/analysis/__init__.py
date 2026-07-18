@@ -21,8 +21,9 @@ modules:
   stress, and the Perry-Robertson imperfect-column stress
 - :mod:`~anvilate.analysis.torsion` — the torque a power/speed makes, solid and
   hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
-  torque requires; thin-walled rectangular (box) tube torsion (Bredt) and thin
-  open-section (strip) torsion
+  torque requires; thin-walled rectangular (box) tube torsion (Bredt), thin
+  open-section (strip) torsion, and solid elliptical and equilateral-triangle bar
+  torsion
 - :mod:`~anvilate.analysis.power_screw` — square-thread lead-screw raise/lower
   torque, efficiency, and the self-locking condition
 - :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
@@ -473,6 +474,8 @@ from .thermal import (
     thermal_shock_stress,
 )
 from .torsion import (
+    elliptical_bar_torsional_stress,
+    elliptical_bar_twist_angle,
     hollow_shaft_diameter_for_bending_torsion,
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
@@ -491,6 +494,8 @@ from .torsion import (
     thin_open_strip_torsional_stress,
     thin_open_strip_twist_angle,
     torque_from_power,
+    triangular_bar_torsional_stress,
+    triangular_bar_twist_angle,
 )
 from .weld import (
     FILLET_THROAT_FACTOR,
@@ -730,6 +735,10 @@ __all__ = [
     "thin_open_strip_torsion_constant",
     "thin_open_strip_torsional_stress",
     "thin_open_strip_twist_angle",
+    "elliptical_bar_torsional_stress",
+    "elliptical_bar_twist_angle",
+    "triangular_bar_torsional_stress",
+    "triangular_bar_twist_angle",
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",
     "simply_supported_plate_center_patch_load",

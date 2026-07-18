@@ -87,6 +87,8 @@ from anvilate.analysis import (
     disc_clutch_force_for_torque,
     disc_clutch_torque,
     dunkerley_fundamental_frequency,
+    elliptical_bar_torsional_stress,
+    elliptical_bar_twist_angle,
     elliptical_hole_stress_concentration,
     estimated_endurance_limit,
     euler_buckling_load,
@@ -283,6 +285,8 @@ from anvilate.analysis import (
     trapezoidal_curved_beam_stress,
     tresca_equivalent_stress,
     tresca_principal,
+    triangular_bar_torsional_stress,
+    triangular_bar_twist_angle,
     vee_belt_effective_friction,
     von_mises_bending_torsion,
     von_mises_plane_stress,
@@ -8289,3 +8293,59 @@ def test_geneva_advance_and_dwell_fractions():
     assert geneva_dwell_fraction(slots=8) < geneva_dwell_fraction(slots=4)
     with pytest.raises(ValueError, match="whole number ≥ 3"):
         geneva_advance_fraction(slots=2)
+
+
+def test_elliptical_bar_torsion_reduces_to_the_circle():
+    from math import pi
+
+    # tau_max = 2T/(pi*a*b^2); at a = b = r it must equal the circular 2T/(pi*r^3).
+    ellipse = elliptical_bar_torsional_stress(
+        torque=_q("500 N*m"), semi_major_axis=_q("25 mm"), semi_minor_axis=_q("25 mm")
+    )
+    assert ellipse.to("MPa").magnitude == pytest.approx(
+        shaft_torsional_stress(torque=_q("500 N*m"), diameter=_q("50 mm")).to("MPa").magnitude,
+        rel=1e-12,
+    )
+    # A real 40x20 mm ellipse: peak at the minor-axis ends.
+    e2 = elliptical_bar_torsional_stress(
+        torque=_q("500 N*m"), semi_major_axis=_q("40 mm"), semi_minor_axis=_q("20 mm")
+    )
+    assert e2.to("MPa").magnitude == pytest.approx(2 * 500e3 / (pi * 40 * 20**2), rel=1e-12)
+    # Twist also collapses to the circular-shaft value at a = b.
+    et = elliptical_bar_twist_angle(
+        torque=_q("500 N*m"),
+        length=_q("1 m"),
+        semi_major_axis=_q("25 mm"),
+        semi_minor_axis=_q("25 mm"),
+        shear_modulus=_q("79 GPa"),
+    )
+    assert et.to("degree").magnitude == pytest.approx(
+        shaft_twist_angle(
+            torque=_q("500 N*m"), length=_q("1 m"), diameter=_q("50 mm"), shear_modulus=_q("79 GPa")
+        )
+        .to("degree")
+        .magnitude,
+        rel=1e-12,
+    )
+    with pytest.raises(ValueError, match="semi_minor_axis .* must not exceed semi_major_axis"):
+        elliptical_bar_torsional_stress(
+            torque=_q("500 N*m"), semi_major_axis=_q("20 mm"), semi_minor_axis=_q("40 mm")
+        )
+
+
+def test_triangular_bar_torsion():
+    from math import sqrt
+
+    # tau_max = 20T/s^3 at the midpoint of each side.
+    tau = triangular_bar_torsional_stress(torque=_q("500 N*m"), side_length=_q("60 mm"))
+    assert tau.to("MPa").magnitude == pytest.approx(20 * 500e3 / 60**3, rel=1e-12)
+    assert tau.to("MPa").magnitude == pytest.approx(46.30, rel=1e-3)
+    # Twist theta = T*L/(G*J), J = sqrt(3)*s^4/80.
+    theta = triangular_bar_twist_angle(
+        torque=_q("500 N*m"), length=_q("1 m"), side_length=_q("60 mm"), shear_modulus=_q("79 GPa")
+    )
+    j = sqrt(3) * 60**4 / 80  # mm^4
+    expected_rad = 500e3 * 1000 / (79000 * j)
+    assert theta.to("rad").magnitude == pytest.approx(expected_rad, rel=1e-9)
+    with pytest.raises(ValueError, match="side_length must be positive"):
+        triangular_bar_torsional_stress(torque=_q("500 N*m"), side_length=_q("0 mm"))

@@ -44,6 +44,10 @@ __all__ = [
     "thin_open_strip_torsion_constant",
     "thin_open_strip_torsional_stress",
     "thin_open_strip_twist_angle",
+    "elliptical_bar_torsional_stress",
+    "elliptical_bar_twist_angle",
+    "triangular_bar_torsional_stress",
+    "triangular_bar_twist_angle",
 ]
 
 
@@ -495,4 +499,108 @@ def thin_open_strip_twist_angle(
     b, t = _thin_open_strip_dims(width, thickness)
     j = Quantity(magnitude=b * t**3 / 3, unit="mm**4").pint
     angle = torque.pint * length.pint / (shear_modulus.pint * j)
+    return _as_quantity(angle, "degree")
+
+
+def _elliptical_axes(semi_major_axis: Quantity, semi_minor_axis: Quantity) -> tuple[float, float]:
+    _require(semi_major_axis, "[length]", "semi_major_axis")
+    _require(semi_minor_axis, "[length]", "semi_minor_axis")
+    a = semi_major_axis.to("mm").magnitude
+    b = semi_minor_axis.to("mm").magnitude
+    if a <= 0 or b <= 0:
+        raise ValueError("semi_major_axis and semi_minor_axis must be positive")
+    if b > a:
+        raise ValueError(
+            f"semi_minor_axis ({semi_minor_axis}) must not exceed semi_major_axis "
+            f"({semi_major_axis})"
+        )
+    return a, b
+
+
+def elliptical_bar_torsional_stress(
+    *, torque: Quantity, semi_major_axis: Quantity, semi_minor_axis: Quantity
+) -> Quantity:
+    """The peak shear stress τ_max = 2·T/(π·a·b²) of a solid elliptical bar in torsion.
+
+    The exact Saint-Venant result for a solid bar of elliptical cross-section: the
+    shear stress peaks at the ends of the *minor* axis (the boundary points closest
+    to the centroid) at τ_max = 2·T/(π·a·b²), where ``semi_major_axis`` a and
+    ``semi_minor_axis`` b (a ≥ b) are the half-axes. At a = b it collapses to the
+    circular-shaft 2·T/(π·r³). ``torque`` T is the applied torque. Returns the peak
+    shear stress in MPa.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    a, b = _elliptical_axes(semi_major_axis, semi_minor_axis)
+    t = torque.to("N*mm").magnitude
+    return Quantity(magnitude=2.0 * t / (pi * a * b**2), unit="MPa")
+
+
+def elliptical_bar_twist_angle(
+    *,
+    torque: Quantity,
+    length: Quantity,
+    semi_major_axis: Quantity,
+    semi_minor_axis: Quantity,
+    shear_modulus: Quantity,
+) -> Quantity:
+    """The twist θ = T·L/(G·J_t) of a solid elliptical bar, J_t = π·a³·b³/(a²+b²).
+
+    The torsion constant of a solid ellipse is J_t = π·a³·b³/(a² + b²) — always less
+    than the polar second moment, so the bar twists more than the polar-moment
+    estimate would say (only a circle twists as its polar moment). ``length`` L,
+    ``semi_major_axis`` a, ``semi_minor_axis`` b (a ≥ b), and ``shear_modulus`` G
+    describe the bar and material. At a = b it recovers the circular-shaft twist.
+    Returns the angle of twist in degrees.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(length, "[length]", "length")
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    a, b = _elliptical_axes(semi_major_axis, semi_minor_axis)
+    jt = Quantity(magnitude=pi * a**3 * b**3 / (a**2 + b**2), unit="mm**4").pint
+    angle = torque.pint * length.pint / (shear_modulus.pint * jt)
+    return _as_quantity(angle, "degree")
+
+
+def _triangle_side(side_length: Quantity) -> float:
+    _require(side_length, "[length]", "side_length")
+    s = side_length.to("mm").magnitude
+    if s <= 0:
+        raise ValueError(f"side_length must be positive; got {side_length}")
+    return s
+
+
+def triangular_bar_torsional_stress(*, torque: Quantity, side_length: Quantity) -> Quantity:
+    """The peak shear stress τ_max = 20·T/s³ of a solid equilateral-triangle bar.
+
+    The exact Saint-Venant result for a solid bar whose cross-section is an
+    equilateral triangle of side ``side_length`` s: the shear stress peaks at the
+    midpoint of each side (not the corners, which are stress-free) at
+    τ_max = 20·T/s³. ``torque`` T is the applied torque. Returns the peak shear
+    stress in MPa.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    s = _triangle_side(side_length)
+    t = torque.to("N*mm").magnitude
+    return Quantity(magnitude=20.0 * t / s**3, unit="MPa")
+
+
+def triangular_bar_twist_angle(
+    *,
+    torque: Quantity,
+    length: Quantity,
+    side_length: Quantity,
+    shear_modulus: Quantity,
+) -> Quantity:
+    """The twist θ = T·L/(G·J_t) of a solid equilateral-triangle bar, J_t = √3·s⁴/80.
+
+    The torsion constant of a solid equilateral triangle of side ``side_length`` s
+    is J_t = √3·s⁴/80. ``length`` L and ``shear_modulus`` G are the member length
+    and material shear modulus. Returns the angle of twist in degrees.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(length, "[length]", "length")
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    s = _triangle_side(side_length)
+    jt = Quantity(magnitude=sqrt(3.0) * s**4 / 80.0, unit="mm**4").pint
+    angle = torque.pint * length.pint / (shear_modulus.pint * jt)
     return _as_quantity(angle, "degree")
