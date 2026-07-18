@@ -121,7 +121,8 @@ modules:
   Timoshenko bimetallic-strip curvature and cantilever tip deflection
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
-  fundamentals, taut-string/cable transverse modes, disc-on-shaft torsional mode,
+  fundamentals, taut-string/cable transverse modes, disc-on-shaft and two-rotor
+  drivetrain torsional modes,
   and damped-vibration measures (damped frequency, log decrement, quality factor,
   isolator transmissibility); simple and physical (rigid-body) pendulum periods;
   and the Den Hartog tuned-mass-damper optimal tuning
@@ -315,6 +316,7 @@ from .dynamics import (
     transmissibility,
     tuned_mass_damper_optimal_damping,
     tuned_mass_damper_optimal_frequency_ratio,
+    two_rotor_torsional_natural_frequency,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -735,6 +737,7 @@ __all__ = [
     "simply_supported_annular_plate_fundamental_frequency",
     "clamped_annular_plate_fundamental_frequency",
     "torsional_natural_frequency",
+    "two_rotor_torsional_natural_frequency",
     "solid_disc_polar_mass_moment",
     "frequency_scorecard",
     "NUT_FACTOR_AS_RECEIVED",

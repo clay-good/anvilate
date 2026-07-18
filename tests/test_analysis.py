@@ -333,6 +333,7 @@ from anvilate.analysis import (
     triaxial_constrained_thermal_stress,
     tuned_mass_damper_optimal_damping,
     tuned_mass_damper_optimal_frequency_ratio,
+    two_rotor_torsional_natural_frequency,
     vee_belt_effective_friction,
     von_mises_bending_torsion,
     von_mises_plane_stress,
@@ -6287,6 +6288,37 @@ def test_torsional_natural_frequency_matches_worked_example():
     assert inertia.to("kg*m**2").magnitude == pytest.approx(0.025, rel=1e-9)
     fn = torsional_natural_frequency(torsional_stiffness=stiffness, polar_mass_moment=inertia)
     assert fn.to("Hz").magnitude == pytest.approx(50.463, rel=1e-4)
+
+
+def test_two_rotor_torsional_natural_frequency():
+    from math import pi, sqrt
+
+    # I_eq = I1*I2/(I1+I2) = 0.1*0.4/0.5 = 0.08 kg*m^2; k_t = 5000 N*m/rad.
+    # f_n = sqrt(5000/0.08)/(2*pi) = 39.79 Hz.
+    fn = two_rotor_torsional_natural_frequency(
+        torsional_stiffness=_q("5000 N*m"),
+        polar_mass_moment_1=_q("0.1 kg*m**2"),
+        polar_mass_moment_2=_q("0.4 kg*m**2"),
+    )
+    assert fn.to("Hz").magnitude == pytest.approx(sqrt(5000 / 0.08) / (2 * pi), rel=1e-12)
+    assert fn.to("Hz").magnitude == pytest.approx(39.789, rel=1e-4)
+    # As one inertia grows without bound the reduced inertia -> the smaller one,
+    # recovering the fixed-end single-disc frequency at I1.
+    huge = two_rotor_torsional_natural_frequency(
+        torsional_stiffness=_q("5000 N*m"),
+        polar_mass_moment_1=_q("0.1 kg*m**2"),
+        polar_mass_moment_2=_q("1e9 kg*m**2"),
+    )
+    single = torsional_natural_frequency(
+        torsional_stiffness=_q("5000 N*m"), polar_mass_moment=_q("0.1 kg*m**2")
+    )
+    assert huge.to("Hz").magnitude == pytest.approx(single.to("Hz").magnitude, rel=1e-6)
+    with pytest.raises(ValueError, match="both polar mass moments must be positive"):
+        two_rotor_torsional_natural_frequency(
+            torsional_stiffness=_q("5000 N*m"),
+            polar_mass_moment_1=_q("0 kg*m**2"),
+            polar_mass_moment_2=_q("0.4 kg*m**2"),
+        )
 
 
 def test_torsional_frequency_rejects_bad_inputs():

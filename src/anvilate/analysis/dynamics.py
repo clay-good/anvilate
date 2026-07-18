@@ -55,6 +55,7 @@ __all__ = [
     "simply_supported_annular_plate_fundamental_frequency",
     "clamped_annular_plate_fundamental_frequency",
     "torsional_natural_frequency",
+    "two_rotor_torsional_natural_frequency",
     "solid_disc_polar_mass_moment",
     "spring_surge_frequency",
     "frequency_scorecard",
@@ -855,6 +856,39 @@ def torsional_natural_frequency(
     if k <= 0 or inertia <= 0:
         raise ValueError("torsional_stiffness and polar_mass_moment must be positive")
     return Quantity(magnitude=sqrt(k / inertia) / (2 * pi), unit="Hz")
+
+
+def two_rotor_torsional_natural_frequency(
+    *,
+    torsional_stiffness: Quantity,
+    polar_mass_moment_1: Quantity,
+    polar_mass_moment_2: Quantity,
+) -> Quantity:
+    """The torsional natural frequency of a two-disc (two-rotor) drivetrain.
+
+    An engine and its flywheel, a motor and its load — two rotary inertias joined by
+    a shaft twist against *each other* (a free-free torsional system, no fixed end),
+    with a stationary node somewhere along the shaft. The single non-zero mode is
+
+        f_n = (1/2π)·√(k_t·(I₁ + I₂)/(I₁·I₂)),
+
+    equivalently f_n = (1/2π)·√(k_t/I_eq) with the reduced inertia
+    I_eq = I₁·I₂/(I₁ + I₂). ``torsional_stiffness`` k_t is the connecting shaft's
+    torque-per-radian, ``polar_mass_moment_1`` I₁ and ``polar_mass_moment_2`` I₂ the
+    two rotary inertias (e.g. :func:`solid_disc_polar_mass_moment`). As one inertia
+    grows without bound I_eq → the smaller, recovering the fixed-end single-disc
+    :func:`torsional_natural_frequency`. All three must be positive. Returns hertz.
+    """
+    _require(torsional_stiffness, "[force] * [length]", "torsional_stiffness")
+    _require(polar_mass_moment_1, "[mass] * [length]**2", "polar_mass_moment_1")
+    _require(polar_mass_moment_2, "[mass] * [length]**2", "polar_mass_moment_2")
+    k = torsional_stiffness.to("N*m").magnitude
+    i1 = polar_mass_moment_1.to("kg*m**2").magnitude
+    i2 = polar_mass_moment_2.to("kg*m**2").magnitude
+    if k <= 0 or i1 <= 0 or i2 <= 0:
+        raise ValueError("torsional_stiffness and both polar mass moments must be positive")
+    reduced = i1 * i2 / (i1 + i2)
+    return Quantity(magnitude=sqrt(k / reduced) / (2 * pi), unit="Hz")
 
 
 def spring_surge_frequency(*, spring_rate: Quantity, spring_mass: Quantity) -> Quantity:
