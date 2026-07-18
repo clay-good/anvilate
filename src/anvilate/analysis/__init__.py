@@ -11,9 +11,10 @@ modules:
   applied-couple loads), transverse shear, shear flow (VQ/I) and built-up-beam
   fastener spacing, section second moments (rectangular, circular, hollow circle,
   box tube, and I-section), the plastic section modulus / fully-plastic hinge
-  moment (solid and hollow rectangle and circle, I-section), and the plastic
+  moment (solid and hollow rectangle and circle, I-section), the plastic
   collapse load (point and distributed) of a simply-supported, fixed-fixed, and
-  propped-cantilever beam
+  propped-cantilever beam, and the simply-supported end (bearing-misalignment)
+  slope under a central or distributed load
 - :mod:`~anvilate.analysis.beam_foundation` — beam on a continuous elastic
   foundation (Hetényi): the characteristic parameter β, and the peak deflection and
   bending moment a point load makes on a long (effectively infinite) beam
@@ -228,6 +229,7 @@ from .beam import (
     rectangular_tube_second_moment,
     shear_flow,
     simply_supported_center_load,
+    simply_supported_center_load_support_slope,
     simply_supported_center_patch_load,
     simply_supported_end_moment,
     simply_supported_offset_load,
@@ -238,6 +240,7 @@ from .beam import (
     simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
+    simply_supported_uniform_load_support_slope,
     span_deflection_limit,
 )
 from .beam_foundation import (
@@ -723,6 +726,8 @@ __all__ = [
     "plastic_moment",
     "simply_supported_plastic_collapse_load",
     "fixed_fixed_plastic_collapse_load",
+    "simply_supported_center_load_support_slope",
+    "simply_supported_uniform_load_support_slope",
     "simply_supported_plastic_collapse_udl",
     "fixed_fixed_plastic_collapse_udl",
     "propped_cantilever_plastic_collapse_load",

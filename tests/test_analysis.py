@@ -313,6 +313,7 @@ from anvilate.analysis import (
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_annular_plate_uniform_load,
     simply_supported_center_load,
+    simply_supported_center_load_support_slope,
     simply_supported_center_mass_frequency,
     simply_supported_center_patch_load,
     simply_supported_circular_plate_center_load_deflection,
@@ -331,6 +332,7 @@ from anvilate.analysis import (
     simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
+    simply_supported_uniform_load_support_slope,
     slenderness_ratio,
     slider_crank_acceleration,
     slider_crank_displacement,
@@ -9722,6 +9724,39 @@ def test_plastic_section_modulus_and_hinge_moment():
         rectangular_plastic_section_modulus(_q("50 mm"), _q("100 mm")).to("mm**3").magnitude,
         rel=1e-4,
     )
+
+
+def test_simply_supported_support_slope_is_the_bearing_misalignment():
+    from math import radians
+
+    kw = {
+        "length": _q("1 m"),
+        "second_moment": _q("1e6 mm**4"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    # Central load: end slope = F*L^2/(16*E*I) = 0.003125 rad for 10 kN.
+    central = simply_supported_center_load_support_slope(force=_q("10 kN"), **kw)
+    assert radians(central.to("degree").magnitude) == pytest.approx(
+        10000 * 1000**2 / (16 * 200000 * 1e6), rel=1e-12
+    )
+    assert radians(central.to("degree").magnitude) == pytest.approx(0.003125, rel=1e-9)
+    # UDL: end slope = w*L^3/(24*E*I) = 0.002083 rad for 10 N/mm.
+    udl = simply_supported_uniform_load_support_slope(load_per_length=_q("10 N/mm"), **kw)
+    assert radians(udl.to("degree").magnitude) == pytest.approx(
+        10 * 1000**3 / (24 * 200000 * 1e6), rel=1e-12
+    )
+    # A stiffer (bigger I) shaft slopes less at its bearings.
+    stiffer = simply_supported_center_load_support_slope(
+        force=_q("10 kN"),
+        length=_q("1 m"),
+        second_moment=_q("2e6 mm**4"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert stiffer.to("degree").magnitude == pytest.approx(
+        central.to("degree").magnitude / 2, rel=1e-12
+    )
+    with pytest.raises(ValueError, match="force must be a"):
+        simply_supported_center_load_support_slope(force=_q("10 N*m"), **kw)
 
 
 def test_plastic_collapse_loads_and_the_redistribution_reserve():

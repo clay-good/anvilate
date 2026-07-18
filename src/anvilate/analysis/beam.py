@@ -13,7 +13,7 @@ linear-elastic beam, small deflections, and no stress concentration.
 
 from __future__ import annotations
 
-from math import pi, sqrt
+from math import degrees, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -70,6 +70,8 @@ __all__ = [
     "simply_supported_plastic_collapse_load",
     "fixed_fixed_plastic_collapse_load",
     "propped_cantilever_plastic_collapse_load",
+    "simply_supported_center_load_support_slope",
+    "simply_supported_uniform_load_support_slope",
     "simply_supported_plastic_collapse_udl",
     "fixed_fixed_plastic_collapse_udl",
     "propped_cantilever_plastic_collapse_udl",
@@ -394,6 +396,69 @@ def propped_cantilever_plastic_collapse_load(
     """
     mp, length = _collapse_inputs(plastic_moment_capacity, span)
     return _as_quantity(6 * mp.pint / length.pint, "N")
+
+
+def _slope_inputs(
+    length: Quantity, second_moment: Quantity, elastic_modulus: Quantity
+) -> tuple[float, float, float]:
+    """Validate and return (L, I, E) in mm, mm⁴, MPa for a beam-slope formula."""
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    ell = length.to("mm").magnitude
+    i = second_moment.to("mm**4").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if ell <= 0 or i <= 0 or e <= 0:
+        raise ValueError("length, second_moment, and elastic_modulus must be positive")
+    return ell, i, e
+
+
+def simply_supported_center_load_support_slope(
+    *,
+    force: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The end slope θ = F·L²/(16·E·I) of a simply-supported beam with a central load.
+
+    A simply-supported beam bends most steeply at its supports, where the slope is
+    θ = F·L²/(16·E·I) for a central point ``force`` F. On a shaft this is the
+    *misalignment angle* the load imposes on the bearings at the ends — a rolling
+    bearing tolerates only about 0.001–0.004 rad before its life falls off, so this is
+    the slope to screen against the bearing's allowable, not just the midspan
+    deflection. ``length`` L, ``second_moment`` I, and ``elastic_modulus`` E are the
+    beam's; all must be positive. Returns the support slope in degrees (a radian
+    tolerance is degrees·π/180).
+    """
+    _require(force, "[force]", "force")
+    ell, i, e = _slope_inputs(length, second_moment, elastic_modulus)
+    f = force.to("N").magnitude
+    slope_rad = f * ell**2 / (16.0 * e * i)
+    return Quantity(magnitude=degrees(slope_rad), unit="degree")
+
+
+def simply_supported_uniform_load_support_slope(
+    *,
+    load_per_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The end slope θ = w·L³/(24·E·I) of a simply-supported beam under a uniform load.
+
+    The distributed-load counterpart of
+    :func:`simply_supported_center_load_support_slope`: a simply-supported beam under a
+    uniform ``load_per_length`` w slopes at its supports by θ = w·L³/(24·E·I) — the
+    self-weight or distributed-load misalignment a shaft imposes on its end bearings.
+    ``length`` L, ``second_moment`` I, and ``elastic_modulus`` E must be positive.
+    Returns the support slope in degrees.
+    """
+    _require(load_per_length, "[force] / [length]", "load_per_length")
+    ell, i, e = _slope_inputs(length, second_moment, elastic_modulus)
+    w = load_per_length.to("N/mm").magnitude
+    slope_rad = w * ell**3 / (24.0 * e * i)
+    return Quantity(magnitude=degrees(slope_rad), unit="degree")
 
 
 def simply_supported_plastic_collapse_udl(
