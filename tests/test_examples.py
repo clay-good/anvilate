@@ -1864,3 +1864,19 @@ def test_living_hinge_flip_cap_example_lengthening_fixes_it():
     assert fixed.entries[0].passed
     assert "safety factor 1.05" in fixed.entries[0].detail
     assert fixed.status is CheckStatus.PASS
+
+
+def test_flip_top_closure_capstone_hinge_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "flip_top_closure.py"))
+    card = namespace["screen_closure"]()
+    by_name = {e.name: e for e in card.entries}
+    assert card.status is CheckStatus.PASS
+    assert all(e.passed for e in card.entries)
+    assert "safety factor 1.20" in by_name["hinge fold strain"].detail
+    assert "safety factor 1.42" in by_name["latch flex strain"].detail
+    assert "safety factor 4.31" in by_name["thumb close force"].detail
+    # The hinge, which folds furthest every use, is the binding feature.
+    tightest = min(
+        card.entries, key=lambda e: float(e.detail.split("safety factor ")[1].split(" ")[0])
+    )
+    assert tightest.name == "hinge fold strain"
