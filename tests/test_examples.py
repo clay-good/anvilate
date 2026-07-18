@@ -1597,3 +1597,16 @@ def test_transmission_line_clearance_example_parabola_hides_a_violation():
     assert by_name["exact catenary sag"].status is CheckStatus.FAIL
     assert "safety factor 0.99" in by_name["exact catenary sag"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_cam_base_circle_pressure_angle_example_bigger_base_circle_fixes_jamming():
+    namespace = runpy.run_path(str(_EXAMPLES / "cam_base_circle_pressure_angle.py"))
+    card = namespace["screen_cam_pressure_angle"]()
+    by_name = {e.name: e for e in card.entries}
+    # The tight base circle pushes the pressure angle over the 30-degree limit.
+    assert by_name["40 mm base circle"].status is CheckStatus.FAIL
+    assert "safety factor 0.97" in by_name["40 mm base circle"].detail
+    # Opening the base circle flattens the geometry and clears the limit.
+    assert by_name["60 mm base circle"].passed
+    assert "safety factor 1.29" in by_name["60 mm base circle"].detail
+    assert card.status is CheckStatus.FAIL
