@@ -1128,3 +1128,18 @@ def test_fourbar_linkage_example_needs_a_healthy_transmission_angle():
     assert good.passed
     assert "safety factor 1.07" in good.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_multistage_reducer_example_sizes_on_delivered_torque():
+    namespace = runpy.run_path(str(_EXAMPLES / "multistage_reducer_efficiency.py"))
+    card = namespace["screen_reducer"]()
+    by_name = {e.name: e for e in card.entries}
+    # On ideal (lossless) torque the reducer clears the demand...
+    ideal = by_name["ideal (lossless) output torque"]
+    assert ideal.passed
+    assert "safety factor 1.06" in ideal.detail
+    # ...but the compounded three-stage losses drop it below the demand.
+    real = by_name["real output torque (three-stage losses)"]
+    assert real.status is CheckStatus.FAIL
+    assert "safety factor 0.97" in real.detail
+    assert card.status is CheckStatus.FAIL
