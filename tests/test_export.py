@@ -197,3 +197,66 @@ def test_bolt_circle_holes_feed_the_plate_export(tmp_path):
     doc = ezdxf.readfile(out)
     circles = list(doc.modelspace().query("CIRCLE"))
     assert len(circles) == 8
+
+
+def test_linear_hole_pattern_marches_along_the_pitch_line():
+    from math import cos, radians, sin
+
+    from anvilate.export.dxf import linear_hole_pattern
+
+    row = linear_hole_pattern(
+        start_x=_q("10 mm"),
+        start_y=_q("10 mm"),
+        hole_diameter=_q("6 mm"),
+        count=4,
+        pitch=_q("20 mm"),
+    )
+    assert [h.x.to("mm").magnitude for h in row] == pytest.approx([10, 30, 50, 70])
+    assert all(h.y.to("mm").magnitude == pytest.approx(10) for h in row)
+    # An angled row steps along the pitch direction.
+    diag = linear_hole_pattern(
+        start_x=_q("0 mm"),
+        start_y=_q("0 mm"),
+        hole_diameter=_q("6 mm"),
+        count=3,
+        pitch=_q("10 mm"),
+        angle=45.0,
+    )
+    for i, h in enumerate(diag):
+        assert h.x.to("mm").magnitude == pytest.approx(10 * i * cos(radians(45)), abs=1e-9)
+        assert h.y.to("mm").magnitude == pytest.approx(10 * i * sin(radians(45)), abs=1e-9)
+    with pytest.raises(ValueError, match="pitch must be positive"):
+        linear_hole_pattern(
+            start_x=_q("0 mm"),
+            start_y=_q("0 mm"),
+            hole_diameter=_q("6 mm"),
+            count=3,
+            pitch=_q("0 mm"),
+        )
+
+
+def test_grid_hole_pattern_fills_a_rectangular_array():
+    from anvilate.export.dxf import grid_hole_pattern
+
+    grid = grid_hole_pattern(
+        origin_x=_q("0 mm"),
+        origin_y=_q("0 mm"),
+        hole_diameter=_q("6 mm"),
+        columns=3,
+        rows=2,
+        x_pitch=_q("25 mm"),
+        y_pitch=_q("30 mm"),
+    )
+    assert len(grid) == 6
+    coords = [(h.x.to("mm").magnitude, h.y.to("mm").magnitude) for h in grid]
+    assert coords == [(0, 0), (25, 0), (50, 0), (0, 30), (25, 30), (50, 30)]
+    with pytest.raises(ValueError, match="columns and rows must be at least 1"):
+        grid_hole_pattern(
+            origin_x=_q("0 mm"),
+            origin_y=_q("0 mm"),
+            hole_diameter=_q("6 mm"),
+            columns=0,
+            rows=2,
+            x_pitch=_q("25 mm"),
+            y_pitch=_q("30 mm"),
+        )

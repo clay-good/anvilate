@@ -18,7 +18,14 @@ from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
 
-__all__ = ["Hole", "Slot", "bolt_circle_holes", "export_plate_dxf"]
+__all__ = [
+    "Hole",
+    "Slot",
+    "bolt_circle_holes",
+    "linear_hole_pattern",
+    "grid_hole_pattern",
+    "export_plate_dxf",
+]
 
 # A fabrication DXF separates the outer profile cut from the interior hole pierces
 # onto named layers so a CNC controller (plasma/laser/waterjet) can order and lead
@@ -112,6 +119,81 @@ def bolt_circle_holes(
             )
         )
     return holes
+
+
+def linear_hole_pattern(
+    *,
+    start_x: Quantity,
+    start_y: Quantity,
+    hole_diameter: Quantity,
+    count: int,
+    pitch: Quantity,
+    angle: float = 0.0,
+) -> list[Hole]:
+    """Generate ``count`` :class:`Hole` centres in a straight row at a fixed ``pitch``.
+
+    The holes march from (``start_x``, ``start_y``) along a line at ``angle`` degrees
+    from the positive X axis, spaced ``pitch`` apart (centre to centre) — a bolt row,
+    a louvre line, a rack of mounting holes. ``count`` must be at least 1, the diameter
+    and pitch positive. Returns the holes in order from the start point.
+    """
+    if count < 1:
+        raise ValueError(f"count must be at least 1; got {count}")
+    sx = _mm(start_x, "start_x")
+    sy = _mm(start_y, "start_y")
+    step = _mm(pitch, "pitch")
+    if step <= 0:
+        raise ValueError(f"pitch must be positive; got {pitch}")
+    if _mm(hole_diameter, "hole_diameter") <= 0:
+        raise ValueError(f"hole_diameter must be positive; got {hole_diameter}")
+    theta = radians(angle)
+    dx, dy = step * cos(theta), step * sin(theta)
+    return [
+        Hole(
+            x=Quantity(magnitude=sx + i * dx, unit="mm"),
+            y=Quantity(magnitude=sy + i * dy, unit="mm"),
+            diameter=hole_diameter,
+        )
+        for i in range(count)
+    ]
+
+
+def grid_hole_pattern(
+    *,
+    origin_x: Quantity,
+    origin_y: Quantity,
+    hole_diameter: Quantity,
+    columns: int,
+    rows: int,
+    x_pitch: Quantity,
+    y_pitch: Quantity,
+) -> list[Hole]:
+    """Generate a rectangular ``columns`` × ``rows`` grid of :class:`Hole` centres.
+
+    The holes fill a rectangular array from (``origin_x``, ``origin_y``), stepping
+    ``x_pitch`` across each row and ``y_pitch`` up between rows — a perforated plate, a
+    breadboard, a bolt field. ``columns`` and ``rows`` must be at least 1, the diameter
+    and pitches positive. Returns the holes row by row (bottom row first, left to right).
+    """
+    if columns < 1 or rows < 1:
+        raise ValueError(f"columns and rows must be at least 1; got {columns} x {rows}")
+    ox = _mm(origin_x, "origin_x")
+    oy = _mm(origin_y, "origin_y")
+    xp = _mm(x_pitch, "x_pitch")
+    yp = _mm(y_pitch, "y_pitch")
+    if xp <= 0 or yp <= 0:
+        raise ValueError(f"x_pitch and y_pitch must be positive; got {x_pitch}, {y_pitch}")
+    if _mm(hole_diameter, "hole_diameter") <= 0:
+        raise ValueError(f"hole_diameter must be positive; got {hole_diameter}")
+    return [
+        Hole(
+            x=Quantity(magnitude=ox + col * xp, unit="mm"),
+            y=Quantity(magnitude=oy + row * yp, unit="mm"),
+            diameter=hole_diameter,
+        )
+        for row in range(rows)
+        for col in range(columns)
+    ]
 
 
 def _slot_vertices(
