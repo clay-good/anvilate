@@ -218,6 +218,7 @@ from anvilate.analysis import (
     simply_supported_triangular_load,
     simply_supported_uniform_load,
     slenderness_ratio,
+    slider_crank_acceleration,
     slider_crank_displacement,
     slider_crank_velocity,
     soderberg_safety_factor,
@@ -7434,6 +7435,37 @@ def test_slider_crank_rejects_short_rod_and_bad_inputs():
         )
     with pytest.raises(ValueError, match="crank_speed must be a rotational-speed"):
         slider_crank_velocity(
+            crank_radius=_q("50 mm"),
+            rod_length=_q("200 mm"),
+            crank_angle=45.0,
+            crank_speed=_q("1000 N"),
+        )
+
+
+def test_slider_crank_acceleration_peaks_at_top_dead_centre():
+    from math import radians
+
+    kw = {"crank_radius": _q("50 mm"), "rod_length": _q("200 mm"), "crank_speed": _q("1000 rpm")}
+    omega = 1000 * 2 * 3.141592653589793 / 60.0
+    r, length = 0.050, 0.200
+    # TDC: a = r*omega^2*(1 + r/L), the maximum (and the shaking-force peak).
+    a_tdc = slider_crank_acceleration(crank_angle=0.0, **kw).to("m/s**2").magnitude
+    assert a_tdc == pytest.approx(r * omega**2 * (1.0 + r / length), rel=1e-12)
+    # BDC: a = -r*omega^2*(1 - r/L), smaller in magnitude -- the finite-rod asymmetry.
+    a_bdc = slider_crank_acceleration(crank_angle=180.0, **kw).to("m/s**2").magnitude
+    assert a_bdc == pytest.approx(-r * omega**2 * (1.0 - r / length), rel=1e-12)
+    assert abs(a_tdc) > abs(a_bdc)
+    # Independent check: finite-difference the velocity (dv/dt = dv/dtheta * omega)
+    # at an arbitrary angle and confirm the closed-form acceleration matches.
+    h = 1e-4  # degrees
+    v_plus = slider_crank_velocity(crank_angle=70.0 + h, **kw).to("m/s").magnitude
+    v_minus = slider_crank_velocity(crank_angle=70.0 - h, **kw).to("m/s").magnitude
+    dv_dtheta = (v_plus - v_minus) / (2.0 * radians(h))
+    fd_accel = dv_dtheta * omega
+    a_70 = slider_crank_acceleration(crank_angle=70.0, **kw).to("m/s**2").magnitude
+    assert a_70 == pytest.approx(fd_accel, rel=1e-6)
+    with pytest.raises(ValueError, match="crank_speed must be a rotational-speed"):
+        slider_crank_acceleration(
             crank_radius=_q("50 mm"),
             rod_length=_q("200 mm"),
             crank_angle=45.0,

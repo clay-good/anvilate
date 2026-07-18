@@ -35,6 +35,7 @@ from ..units import Quantity
 __all__ = [
     "slider_crank_displacement",
     "slider_crank_velocity",
+    "slider_crank_acceleration",
 ]
 
 
@@ -104,3 +105,36 @@ def slider_crank_velocity(
     root = sqrt(length**2 - (r * sin(theta)) ** 2)
     dx_dtheta_mm = r * sin(theta) * (1.0 + r * cos(theta) / root)
     return Quantity(magnitude=dx_dtheta_mm / 1000.0 * omega, unit="m/s")
+
+
+def slider_crank_acceleration(
+    *,
+    crank_radius: Quantity,
+    rod_length: Quantity,
+    crank_angle: float,
+    crank_speed: Quantity,
+) -> Quantity:
+    """The exact slider acceleration a = ω²·d²x/dθ² of a slider-crank.
+
+    The instantaneous slider acceleration for a crank at ``crank_angle`` θ
+    (degrees) turning at constant ``crank_speed`` ω — the quantity that, times the
+    reciprocating mass, is the inertia (shaking) force an engine balancer fights.
+    ``crank_radius`` r and ``rod_length`` L (L > r) set the linkage; ω is a
+    rotational frequency. Acceleration peaks at top dead centre (r·ω²·(1 + r/L))
+    and is smaller in magnitude at bottom dead centre (r·ω²·(1 − r/L)) — the
+    finite-rod asymmetry that a piston engine feels as a second-order shake.
+    Returns the acceleration in m/s².
+    """
+    r, length = _geometry(crank_radius, rod_length)
+    if not crank_speed.has_dimension("[frequency]"):
+        raise ValueError(
+            f"crank_speed must be a rotational-speed ([frequency]) quantity; got "
+            f"{crank_speed.dimensionality} ({crank_speed})"
+        )
+    theta = radians(crank_angle)
+    omega = crank_speed.to("rad/s").magnitude
+    root = sqrt(length**2 - (r * sin(theta)) ** 2)
+    d2x_dtheta2_mm = r * cos(theta) + r**2 * (
+        cos(2.0 * theta) / root + r**2 * sin(theta) ** 2 * cos(theta) ** 2 / root**3
+    )
+    return Quantity(magnitude=d2x_dtheta2_mm / 1000.0 * omega**2, unit="m/s**2")

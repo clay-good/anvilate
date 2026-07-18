@@ -52,7 +52,7 @@ modules:
 - :mod:`~anvilate.analysis.geneva` — external Geneva (intermittent-indexing)
   mechanism geometry: index angle, crank and driven engagement radii
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
-  displacement from top dead centre and instantaneous slider velocity
+  displacement from top dead centre, slider velocity, and slider acceleration
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
   torque requires, the peak lining pressure, and the simple/differential lever
   force; short-shoe (block) brake lever statics; the self-energizing /
@@ -369,6 +369,7 @@ from .rivet import (
 )
 from .section import CrossSection, bending_stress, required_section_modulus
 from .slider_crank import (
+    slider_crank_acceleration,
     slider_crank_displacement,
     slider_crank_velocity,
 )
@@ -524,6 +525,7 @@ __all__ = [
     "geneva_driven_radius",
     "slider_crank_displacement",
     "slider_crank_velocity",
+    "slider_crank_acceleration",
     "band_brake_torque",
     "band_brake_tight_tension_for_torque",
     "band_brake_max_lining_pressure",
