@@ -165,6 +165,7 @@ from anvilate.analysis import (
     key_length_for_torque,
     key_shear_stress,
     key_tangential_force,
+    lateral_torsional_buckling_moment,
     lead_angle,
     leaf_spring_rate,
     leaf_spring_stress,
@@ -8560,4 +8561,31 @@ def test_thermal_buckling_temperature_rise_is_the_sun_kink():
     with pytest.raises(ValueError, match="thermal_expansion_coefficient must have units"):
         thermal_buckling_temperature_rise(
             slenderness_ratio=100, thermal_expansion_coefficient=_q("12 MPa")
+        )
+
+
+def test_lateral_torsional_buckling_moment():
+    from math import pi, sqrt
+
+    kw = {
+        "weak_axis_second_moment": _q("133333 mm**4"),
+        "torsion_constant": _q("533333 mm**4"),
+        "elastic_modulus": _q("200 GPa"),
+        "shear_modulus": _q("79 GPa"),
+    }
+    # M_cr = (pi/L)*sqrt(E*I_y*G*J).
+    m = lateral_torsional_buckling_moment(unbraced_length=_q("2 m"), **kw)
+    expected = pi / 2000 * sqrt(200000 * 133333 * 79000 * 533333) / 1000  # N*m
+    assert m.to("N*m").magnitude == pytest.approx(expected, rel=1e-9)
+    assert m.to("N*m").magnitude == pytest.approx(52652, rel=1e-3)
+    # It falls inversely with the unbraced length: brace it and it climbs.
+    longer = lateral_torsional_buckling_moment(unbraced_length=_q("4 m"), **kw)
+    assert longer.to("N*m").magnitude == pytest.approx(m.to("N*m").magnitude / 2, rel=1e-12)
+    with pytest.raises(ValueError, match="weak_axis_second_moment must be a"):
+        lateral_torsional_buckling_moment(
+            unbraced_length=_q("2 m"),
+            weak_axis_second_moment=_q("133333 mm"),
+            torsion_constant=_q("533333 mm**4"),
+            elastic_modulus=_q("200 GPa"),
+            shear_modulus=_q("79 GPa"),
         )

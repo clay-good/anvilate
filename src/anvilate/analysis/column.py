@@ -32,6 +32,7 @@ __all__ = [
     "johnson_critical_stress",
     "secant_column_max_stress",
     "perry_robertson_stress",
+    "lateral_torsional_buckling_moment",
 ]
 
 
@@ -298,3 +299,41 @@ def perry_robertson_stress(
     b = sy + (imperfection_factor + 1.0) * se
     sigma_c = 0.5 * (b - sqrt(b**2 - 4.0 * sy * se))
     return Quantity(magnitude=sigma_c, unit="MPa")
+
+
+def lateral_torsional_buckling_moment(
+    *,
+    unbraced_length: Quantity,
+    weak_axis_second_moment: Quantity,
+    torsion_constant: Quantity,
+    elastic_modulus: Quantity,
+    shear_modulus: Quantity,
+) -> Quantity:
+    """The elastic lateral-torsional buckling moment M_cr = (π/L)·√(E·I_y·G·J).
+
+    A beam bent about its strong axis can buckle *sideways* — twisting and swaying
+    out of plane — long before the material yields, if its compression edge is not
+    braced. The classic critical moment for a simply-supported beam under uniform
+    moment (no warping restraint) is M_cr = (π/L)·√(E·I_y·G·J), where ``unbraced_length``
+    L is the distance between lateral braces, ``weak_axis_second_moment`` I_y the
+    minor-axis second moment, ``torsion_constant`` J the section torsion constant,
+    ``elastic_modulus`` E, and ``shear_modulus`` G. This is exact for a narrow
+    rectangular section and *conservative* for an I-beam (it omits the warping term
+    that adds capacity), so it is a safe first screen — brace the beam or deepen it
+    if the service moment approaches M_cr. Every argument is dimension-checked and
+    must be positive. Returns the critical moment in N·m.
+    """
+    _require(unbraced_length, "[length]", "unbraced_length")
+    _require(weak_axis_second_moment, "[length]**4", "weak_axis_second_moment")
+    _require(torsion_constant, "[length]**4", "torsion_constant")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    length = unbraced_length.to("mm").magnitude
+    iy = weak_axis_second_moment.to("mm**4").magnitude
+    j = torsion_constant.to("mm**4").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    g = shear_modulus.to("MPa").magnitude
+    if min(length, iy, j, e, g) <= 0:
+        raise ValueError("every lateral-torsional-buckling input must be positive")
+    m_cr_n_mm = pi / length * sqrt(e * iy * g * j)  # N*mm
+    return Quantity(magnitude=m_cr_n_mm / 1000.0, unit="N*m")
