@@ -282,3 +282,31 @@ def test_plate_cut_length_sums_outline_holes_and_slots():
     assert total.to("mm").magnitude == pytest.approx(expected, rel=1e-12)
     with pytest.raises(ValueError, match="plate width and height must be positive"):
         plate_cut_length(width=_q("0 mm"), height=_q("80 mm"))
+
+
+def test_plate_mass_is_net_of_holes_and_slots():
+    from math import pi
+
+    from anvilate.export.dxf import Hole, Slot, plate_mass
+
+    # Bare 100x80x5 steel plate: 8000 mm^2 * 5 mm * 7850 kg/m^3 = 0.314 kg.
+    bare = plate_mass(
+        width=_q("100 mm"), height=_q("80 mm"), thickness=_q("5 mm"), density=_q("7850 kg/m**3")
+    )
+    assert bare.to("kg").magnitude == pytest.approx(8000 * 5 * 1e-9 * 7850, rel=1e-12)
+    # Holes and slots subtract their areas.
+    net = plate_mass(
+        width=_q("100 mm"),
+        height=_q("80 mm"),
+        thickness=_q("5 mm"),
+        density=_q("7850 kg/m**3"),
+        holes=[Hole(x=_q("50 mm"), y=_q("40 mm"), diameter=_q("20 mm"))],
+        slots=[Slot(x=_q("30 mm"), y=_q("20 mm"), length=_q("40 mm"), width=_q("10 mm"))],
+    )
+    net_area = 8000 - pi * 20**2 / 4 - ((40 - 10) * 10 + pi * 10**2 / 4)
+    assert net.to("kg").magnitude == pytest.approx(net_area * 5 * 1e-9 * 7850, rel=1e-12)
+    assert net.to("kg").magnitude < bare.to("kg").magnitude
+    with pytest.raises(ValueError, match="density must be a mass/volume"):
+        plate_mass(
+            width=_q("100 mm"), height=_q("80 mm"), thickness=_q("5 mm"), density=_q("7850 kg")
+        )

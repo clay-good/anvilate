@@ -25,6 +25,7 @@ __all__ = [
     "linear_hole_pattern",
     "grid_hole_pattern",
     "plate_cut_length",
+    "plate_mass",
     "export_plate_dxf",
 ]
 
@@ -225,6 +226,45 @@ def plate_cut_length(
         slot_width = _mm(slot.width, f"slots[{i}].width")
         total += 2.0 * (slot_length - slot_width) + pi * slot_width
     return Quantity(magnitude=total, unit="mm")
+
+
+def plate_mass(
+    *,
+    width: Quantity,
+    height: Quantity,
+    thickness: Quantity,
+    density: Quantity,
+    holes: list[Hole] | None = None,
+    slots: list[Slot] | None = None,
+) -> Quantity:
+    """The finished mass of a rectangular plate, net of its holes and slots.
+
+    The material actually left after cutting: the gross rectangle ``width`` × ``height``
+    less the area of each :class:`Hole` (π·d²/4) and each :class:`Slot` (the obround area
+    (L − w)·w + π·w²/4), times ``thickness`` and ``density`` — the number for a weight or
+    material-cost estimate. All the plate dimensions and ``density`` must be positive, and
+    the cut-outs must not remove more than the whole plate. Returns the mass in kg.
+    """
+    w = _mm(width, "width")
+    h = _mm(height, "height")
+    t = _mm(thickness, "thickness")
+    if w <= 0 or h <= 0 or t <= 0:
+        raise ValueError("plate width, height, and thickness must be positive")
+    if not density.has_dimension("[mass] / [length]**3"):
+        raise ValueError(f"density must be a mass/volume quantity; got {density.dimensionality}")
+    net_area = w * h
+    for i, hole in enumerate(holes or []):
+        d = _mm(hole.diameter, f"holes[{i}].diameter")
+        net_area -= pi * d**2 / 4.0
+    for i, slot in enumerate(slots or []):
+        slot_length = _mm(slot.length, f"slots[{i}].length")
+        slot_width = _mm(slot.width, f"slots[{i}].width")
+        net_area -= (slot_length - slot_width) * slot_width + pi * slot_width**2 / 4.0
+    if net_area <= 0:
+        raise ValueError("holes and slots remove the whole plate; net area is not positive")
+    volume_m3 = net_area * t * 1e-9  # mm^3 -> m^3
+    mass_kg = volume_m3 * density.to("kg/m**3").magnitude
+    return Quantity(magnitude=mass_kg, unit="kg")
 
 
 def _slot_vertices(
