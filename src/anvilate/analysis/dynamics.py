@@ -38,6 +38,8 @@ __all__ = [
     "damped_natural_frequency",
     "logarithmic_decrement",
     "transmissibility",
+    "simple_pendulum_period",
+    "physical_pendulum_period",
     "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",
@@ -208,6 +210,53 @@ def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
     numerator = sqrt(1.0 + (2.0 * zeta * r) ** 2)
     denominator = sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
     return numerator / denominator
+
+
+def simple_pendulum_period(*, length: Quantity, gravity: Quantity = STANDARD_GRAVITY) -> Quantity:
+    """The small-swing period T = 2π·√(L/g) of a simple pendulum.
+
+    A point mass on a light cord swings at a period set only by its length, not its
+    mass or its amplitude (in the small-angle limit): T = 2π·√(L/g). ``length`` L is
+    the cord length and ``gravity`` g defaults to standard g. This is the metronome /
+    escapement / seconds-pendulum relation — a 1 m pendulum swings in about 2 s.
+    ``length`` must be positive. Returns the period in seconds.
+    """
+    _require(length, "[length]", "length")
+    _require(gravity, "[acceleration]", "gravity")
+    ell = length.to("m").magnitude
+    g = gravity.to("m/s**2").magnitude
+    if ell <= 0:
+        raise ValueError(f"length must be positive; got {length}")
+    return Quantity(magnitude=2.0 * pi * sqrt(ell / g), unit="s")
+
+
+def physical_pendulum_period(
+    *,
+    moment_of_inertia: Quantity,
+    mass: Quantity,
+    pivot_distance: Quantity,
+    gravity: Quantity = STANDARD_GRAVITY,
+) -> Quantity:
+    """The small-swing period T = 2π·√(I/(m·g·d)) of a physical (rigid-body) pendulum.
+
+    A rigid body pivoted off its centre of mass swings at T = 2π·√(I/(m·g·d)), where
+    ``moment_of_inertia`` I is the mass moment of inertia *about the pivot*, ``mass``
+    m the body mass, ``pivot_distance`` d the distance from the pivot to the centre of
+    mass, and ``gravity`` g. A compound pendulum, a swinging linkage, or a tilt gauge
+    follows this; it reduces to the simple pendulum when the mass concentrates at the
+    end (I = m·d²). All quantities must be positive. Returns the period in seconds.
+    """
+    _require(moment_of_inertia, "[mass] * [length]**2", "moment_of_inertia")
+    _require(mass, "[mass]", "mass")
+    _require(pivot_distance, "[length]", "pivot_distance")
+    _require(gravity, "[acceleration]", "gravity")
+    inertia = moment_of_inertia.to("kg*m**2").magnitude
+    m = mass.to("kg").magnitude
+    d = pivot_distance.to("m").magnitude
+    g = gravity.to("m/s**2").magnitude
+    if min(inertia, m, d) <= 0:
+        raise ValueError("moment_of_inertia, mass, and pivot_distance must be positive")
+    return Quantity(magnitude=2.0 * pi * sqrt(inertia / (m * g * d)), unit="s")
 
 
 def dunkerley_fundamental_frequency(individual_frequencies: list[Quantity]) -> Quantity:

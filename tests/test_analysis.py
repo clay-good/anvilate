@@ -191,6 +191,7 @@ from anvilate.analysis import (
     peterson_notch_sensitivity,
     petroff_friction_power,
     petroff_friction_torque,
+    physical_pendulum_period,
     pitch_line_velocity,
     planetary_can_assemble,
     planetary_planet_teeth,
@@ -236,6 +237,7 @@ from anvilate.analysis import (
     short_shoe_is_self_locking,
     short_shoe_normal_force,
     shrink_fit_assembly_temperature,
+    simple_pendulum_period,
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_annular_plate_uniform_load,
     simply_supported_center_load,
@@ -8693,4 +8695,33 @@ def test_rankine_gordon_stress_blends_crushing_to_euler():
     with pytest.raises(ValueError, match="rankine_constant must be positive"):
         rankine_gordon_stress(
             crushing_stress=_q("320 MPa"), slenderness_ratio=100, rankine_constant=0
+        )
+
+
+def test_pendulum_periods():
+    from math import pi, sqrt
+
+    # Simple pendulum T = 2*pi*sqrt(L/g): a 1 m pendulum swings in ~2.006 s.
+    t = simple_pendulum_period(length=_q("1 m"))
+    assert t.to("s").magnitude == pytest.approx(2 * pi * sqrt(1 / 9.80665), rel=1e-12)
+    assert t.to("s").magnitude == pytest.approx(2.006, rel=1e-3)
+    # Period scales with sqrt(length): 4x length doubles the period.
+    assert simple_pendulum_period(length=_q("4 m")).to("s").magnitude == pytest.approx(
+        2 * t.to("s").magnitude, rel=1e-12
+    )
+    # Physical pendulum reduces to the simple one when I = m*d^2 (mass at the end).
+    phys = physical_pendulum_period(
+        moment_of_inertia=_q("2 kg*m**2"), mass=_q("2 kg"), pivot_distance=_q("1 m")
+    )
+    assert phys.to("s").magnitude == pytest.approx(t.to("s").magnitude, rel=1e-12)
+    # A uniform rod pivoted at its end (I = m*L^2/3, d = L/2): T = 2*pi*sqrt(2L/3g).
+    rod = physical_pendulum_period(
+        moment_of_inertia=_q(f"{1 / 3} kg*m**2"), mass=_q("1 kg"), pivot_distance=_q("0.5 m")
+    )
+    assert rod.to("s").magnitude == pytest.approx(2 * pi * sqrt(2 / (3 * 9.80665)), rel=1e-9)
+    with pytest.raises(ValueError, match="length must be positive"):
+        simple_pendulum_period(length=_q("0 m"))
+    with pytest.raises(ValueError, match="moment_of_inertia, mass, and pivot_distance"):
+        physical_pendulum_period(
+            moment_of_inertia=_q("2 kg*m**2"), mass=_q("2 kg"), pivot_distance=_q("0 m")
         )

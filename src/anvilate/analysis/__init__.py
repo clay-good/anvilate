@@ -111,7 +111,7 @@ modules:
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
   fundamentals, taut-string/cable transverse modes, disc-on-shaft torsional mode,
   and damped-vibration measures (damped frequency, log decrement, isolator
-  transmissibility)
+  transmissibility); simple and physical (rigid-body) pendulum periods
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending,
   and the Inglis elliptical-hole stress-concentration factor
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
@@ -276,6 +276,8 @@ from .dynamics import (
     logarithmic_decrement,
     natural_frequency,
     natural_frequency_from_deflection,
+    physical_pendulum_period,
+    simple_pendulum_period,
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_circular_plate_fundamental_frequency,
     simply_supported_fundamental_frequency,
@@ -662,6 +664,8 @@ __all__ = [
     "damped_natural_frequency",
     "logarithmic_decrement",
     "transmissibility",
+    "simple_pendulum_period",
+    "physical_pendulum_period",
     "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",
