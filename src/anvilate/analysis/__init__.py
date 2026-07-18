@@ -47,7 +47,8 @@ modules:
   (uniform-wear and uniform-pressure) and the clamp force a torque requires
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder (closed or open ends) and sphere, the wall
-  thickness a pressure requires (membrane and ASME VIII code form), and the
+  thickness a pressure requires (membrane and ASME VIII code form) and the ASME
+  maximum allowable working pressure (MAWP) a wall gives, and the
   external-pressure collapse (buckling) pressure of a long cylinder and a sphere,
   the classical axial-compression buckling stress of a thin cylindrical shell, and
   the diametral growth a pressurized thin cylinder or sphere breathes
@@ -631,6 +632,7 @@ from .pressure_vessel import (
     ThickWallSphereStress,
     ThickWallStress,
     ThinWallStress,
+    asme_cylinder_mawp,
     asme_cylinder_thickness,
     cylinder_axial_buckling_stress,
     cylinder_external_pressure_buckling,
@@ -1181,6 +1183,7 @@ __all__ = [
     "thin_wall_cylinder_diametral_growth",
     "thin_wall_thickness_for_pressure",
     "asme_cylinder_thickness",
+    "asme_cylinder_mawp",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thin_wall_sphere_diametral_growth",

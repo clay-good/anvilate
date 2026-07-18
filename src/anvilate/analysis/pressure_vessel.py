@@ -32,6 +32,7 @@ __all__ = [
     "thin_wall_cylinder_diametral_growth",
     "thin_wall_thickness_for_pressure",
     "asme_cylinder_thickness",
+    "asme_cylinder_mawp",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thin_wall_sphere_diametral_growth",
@@ -220,6 +221,35 @@ def asme_cylinder_thickness(
             f"({0.6 * p:.4g} MPa); the pressure is too high for a thin-wall design"
         )
     return Quantity(magnitude=p * r / denominator, unit="mm")
+
+
+def asme_cylinder_mawp(
+    *,
+    thickness: Quantity,
+    radius: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 maximum allowable working pressure P = S·E·t/(R + 0.6·t).
+
+    The rating inverse of :func:`asme_cylinder_thickness`: the highest internal pressure a
+    cylindrical shell of ``thickness`` t and inner ``radius`` R may carry under the code hoop
+    rule, P = S·E·t/(R + 0.6·t) for a code ``allowable_stress`` S and weld ``joint_efficiency``
+    E. This is the MAWP a vessel is stamped and set its relief valve to — computed from the
+    *as-built* wall (less any corrosion allowance), not the design pressure. All positive,
+    E in (0, 1]. Returns the MAWP in MPa.
+    """
+    _require(thickness, "[length]", "thickness")
+    _require(radius, "[length]", "radius")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 < joint_efficiency <= 1:
+        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+    t = thickness.to("mm").magnitude
+    r = radius.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if t <= 0 or r <= 0 or s <= 0:
+        raise ValueError("thickness, radius, and allowable_stress must be positive")
+    return Quantity(magnitude=s * joint_efficiency * t / (r + 0.6 * t), unit="MPa")
 
 
 class ThickWallStress(BaseModel):

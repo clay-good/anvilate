@@ -11365,3 +11365,40 @@ def test_flange_coupling_bolt_count_selects_the_fewest_bolts():
         flange_coupling_bolt_count(
             torque=_q("2000 N*m"), bolt_circle_radius=_q("100 mm"), allowable_bolt_force=_q("0 N")
         )
+
+
+def test_asme_cylinder_mawp_inverts_the_thickness_rule():
+    from anvilate.analysis import asme_cylinder_mawp, asme_cylinder_thickness
+
+    # The MAWP of the as-built wall recovers the design pressure the thickness was sized for.
+    t = asme_cylinder_thickness(
+        pressure=_q("1.2 MPa"),
+        radius=_q("200 mm"),
+        allowable_stress=_q("110 MPa"),
+        joint_efficiency=0.85,
+    )
+    mawp = asme_cylinder_mawp(
+        thickness=t, radius=_q("200 mm"), allowable_stress=_q("110 MPa"), joint_efficiency=0.85
+    )
+    assert mawp.to("MPa").magnitude == pytest.approx(1.2, rel=1e-9)
+    # A thicker wall rates a higher pressure; poorer weld quality (lower E) a lower one.
+    thicker = asme_cylinder_mawp(
+        thickness=_q("6 mm"),
+        radius=_q("200 mm"),
+        allowable_stress=_q("110 MPa"),
+        joint_efficiency=0.85,
+    )
+    assert thicker.to("MPa").magnitude > mawp.to("MPa").magnitude
+    poorer_weld = asme_cylinder_mawp(
+        thickness=_q("6 mm"),
+        radius=_q("200 mm"),
+        allowable_stress=_q("110 MPa"),
+        joint_efficiency=0.70,
+    )
+    assert poorer_weld.to("MPa").magnitude < thicker.to("MPa").magnitude
+    with pytest.raises(
+        ValueError, match="thickness, radius, and allowable_stress must be positive"
+    ):
+        asme_cylinder_mawp(
+            thickness=_q("0 mm"), radius=_q("200 mm"), allowable_stress=_q("110 MPa")
+        )
