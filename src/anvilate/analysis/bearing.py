@@ -42,6 +42,7 @@ __all__ = [
     "bearing_life_hours",
     "bearing_static_safety_factor",
     "bearing_equivalent_dynamic_load",
+    "bearing_equivalent_static_load",
     "bearing_reliability_life_factor",
 ]
 
@@ -165,6 +166,37 @@ def bearing_equivalent_dynamic_load(
     if radial_factor <= 0 or axial_factor <= 0:
         raise ValueError("radial_factor and axial_factor must be positive")
     return Quantity(magnitude=radial_factor * fr + axial_factor * fa, unit="N")
+
+
+def bearing_equivalent_static_load(
+    *,
+    radial_load: Quantity,
+    axial_load: Quantity,
+    radial_factor: float,
+    axial_factor: float,
+) -> Quantity:
+    """The ISO 76 equivalent static bearing load P₀ = max(F_r, X₀·F_r + Y₀·F_a).
+
+    The static counterpart of :func:`bearing_equivalent_dynamic_load`: the constant
+    radial load that would brinell the raceways as much as the actual combined
+    radial + thrust load a stationary (or slow, shock-loaded) bearing carries — the
+    value to feed :func:`bearing_static_safety_factor`. It is X₀·F_r + Y₀·F_a, but
+    ISO 76 floors it at the radial load itself (a combined load can never be less
+    damaging than the pure radial), so P₀ = max(F_r, X₀·F_r + Y₀·F_a).
+    ``radial_load`` F_r and ``axial_load`` F_a are the components, and
+    ``radial_factor`` X₀ and ``axial_factor`` Y₀ the static combination factors
+    (0.6 and 0.5 for a deep-groove ball bearing). Both loads must be non-negative and
+    the factors positive. Returns the equivalent static load in newtons.
+    """
+    _require(radial_load, "[force]", "radial_load")
+    _require(axial_load, "[force]", "axial_load")
+    fr = radial_load.to("N").magnitude
+    fa = axial_load.to("N").magnitude
+    if fr < 0 or fa < 0:
+        raise ValueError("radial_load and axial_load must be non-negative")
+    if radial_factor <= 0 or axial_factor <= 0:
+        raise ValueError("radial_factor and axial_factor must be positive")
+    return Quantity(magnitude=max(fr, radial_factor * fr + axial_factor * fa), unit="N")
 
 
 def bearing_reliability_life_factor(

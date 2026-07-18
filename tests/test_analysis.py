@@ -30,6 +30,7 @@ from anvilate.analysis import (
     beam_on_elastic_foundation_max_moment,
     bearing_basic_rating_life,
     bearing_equivalent_dynamic_load,
+    bearing_equivalent_static_load,
     bearing_life_hours,
     bearing_reliability_life_factor,
     bearing_static_safety_factor,
@@ -10103,6 +10104,28 @@ def test_bearing_equivalent_dynamic_load():
     with pytest.raises(ValueError, match="radial_factor and axial_factor must be positive"):
         bearing_equivalent_dynamic_load(
             radial_load=_q("4000 N"), axial_load=_q("2000 N"), radial_factor=0, axial_factor=1.6
+        )
+
+
+def test_bearing_equivalent_static_load_floors_at_the_radial_load():
+    # P0 = max(Fr, X0*Fr + Y0*Fa); deep-groove ball X0=0.6, Y0=0.5.
+    # 4 kN radial + 2 kN axial: X0*Fr+Y0*Fa = 3400 N < Fr, so the radial governs.
+    p0 = bearing_equivalent_static_load(
+        radial_load=_q("4000 N"), axial_load=_q("2000 N"), radial_factor=0.6, axial_factor=0.5
+    )
+    assert p0.to("N").magnitude == pytest.approx(4000.0, rel=1e-12)
+    # A heavier thrust pushes X0*Fr+Y0*Fa above Fr, so the combined form governs.
+    heavy_axial = bearing_equivalent_static_load(
+        radial_load=_q("4000 N"), axial_load=_q("8000 N"), radial_factor=0.6, axial_factor=0.5
+    )
+    assert heavy_axial.to("N").magnitude == pytest.approx(0.6 * 4000 + 0.5 * 8000, rel=1e-12)
+    assert heavy_axial.to("N").magnitude == pytest.approx(6400.0, rel=1e-12)
+    # It feeds the static safety factor s0 = C0/P0.
+    s0 = bearing_static_safety_factor(static_load_rating=_q("20 kN"), equivalent_static_load=p0)
+    assert s0 == pytest.approx(20000 / 4000, rel=1e-12)
+    with pytest.raises(ValueError, match="radial_load and axial_load must be non-negative"):
+        bearing_equivalent_static_load(
+            radial_load=_q("-1 N"), axial_load=_q("2000 N"), radial_factor=0.6, axial_factor=0.5
         )
 
 
