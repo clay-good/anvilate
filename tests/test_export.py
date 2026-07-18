@@ -260,3 +260,25 @@ def test_grid_hole_pattern_fills_a_rectangular_array():
             x_pitch=_q("25 mm"),
             y_pitch=_q("30 mm"),
         )
+
+
+def test_plate_cut_length_sums_outline_holes_and_slots():
+    from math import pi
+
+    from anvilate.export.dxf import Hole, Slot, plate_cut_length
+
+    # Bare rectangle: just the outline perimeter.
+    assert plate_cut_length(width=_q("100 mm"), height=_q("80 mm")).to(
+        "mm"
+    ).magnitude == pytest.approx(2 * (100 + 80))
+    # Outline + a round hole (pi*d) + an obround slot (2*(L-w) + pi*w).
+    total = plate_cut_length(
+        width=_q("100 mm"),
+        height=_q("80 mm"),
+        holes=[Hole(x=_q("50 mm"), y=_q("40 mm"), diameter=_q("20 mm"))],
+        slots=[Slot(x=_q("30 mm"), y=_q("20 mm"), length=_q("40 mm"), width=_q("10 mm"))],
+    )
+    expected = 2 * (100 + 80) + pi * 20 + (2 * (40 - 10) + pi * 10)
+    assert total.to("mm").magnitude == pytest.approx(expected, rel=1e-12)
+    with pytest.raises(ValueError, match="plate width and height must be positive"):
+        plate_cut_length(width=_q("0 mm"), height=_q("80 mm"))

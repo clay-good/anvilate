@@ -11,7 +11,7 @@ a clear :class:`ImportError`.
 
 from __future__ import annotations
 
-from math import cos, radians, sin
+from math import cos, pi, radians, sin
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -24,6 +24,7 @@ __all__ = [
     "bolt_circle_holes",
     "linear_hole_pattern",
     "grid_hole_pattern",
+    "plate_cut_length",
     "export_plate_dxf",
 ]
 
@@ -194,6 +195,36 @@ def grid_hole_pattern(
         for row in range(rows)
         for col in range(columns)
     ]
+
+
+def plate_cut_length(
+    *,
+    width: Quantity,
+    height: Quantity,
+    holes: list[Hole] | None = None,
+    slots: list[Slot] | None = None,
+) -> Quantity:
+    """The total cut length of a rectangular plate: outline plus every hole and slot.
+
+    The distance a plasma, laser, or waterjet head travels to cut the part — the
+    rectangular outline perimeter 2·(``width`` + ``height``), plus π·d for each
+    :class:`Hole`, plus the obround perimeter 2·(L − w) + π·w for each :class:`Slot`
+    (two straight sides and two semicircular caps). Multiply by the machine's cut rate
+    to estimate cut time and cost. ``width`` and ``height`` must be positive. Returns
+    the total cut length in mm.
+    """
+    w = _mm(width, "width")
+    h = _mm(height, "height")
+    if w <= 0 or h <= 0:
+        raise ValueError(f"plate width and height must be positive; got {width} x {height}")
+    total = 2.0 * (w + h)
+    for i, hole in enumerate(holes or []):
+        total += pi * _mm(hole.diameter, f"holes[{i}].diameter")
+    for i, slot in enumerate(slots or []):
+        slot_length = _mm(slot.length, f"slots[{i}].length")
+        slot_width = _mm(slot.width, f"slots[{i}].width")
+        total += 2.0 * (slot_length - slot_width) + pi * slot_width
+    return Quantity(magnitude=total, unit="mm")
 
 
 def _slot_vertices(
