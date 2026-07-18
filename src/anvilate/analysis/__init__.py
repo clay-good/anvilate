@@ -172,7 +172,8 @@ modules:
   forced-response dynamic
   magnification and phase, and the base-excitation seismic-instrument response);
   simple and physical (rigid-body) pendulum periods; the solid-disc and annular
-  (hollow-cylinder) polar mass moments of inertia;
+  (hollow-cylinder) polar mass moments of inertia; the rotating-unbalance
+  centrifugal force and the counterweight that balances it;
   and the Den Hartog tuned-mass-damper optimal tuning
 - :mod:`~anvilate.analysis.stress` — von Mises and octahedral-shear combination,
   the plane principal stresses and their orientation angle, the maximum shear,
@@ -388,6 +389,7 @@ from .curved_beam import (
 from .dynamics import (
     STANDARD_GRAVITY,
     annular_disc_polar_mass_moment,
+    balance_correction_mass,
     base_excitation_relative_transmissibility,
     cantilever_fundamental_frequency,
     cantilever_tip_mass_frequency,
@@ -410,6 +412,7 @@ from .dynamics import (
     physical_pendulum_period,
     quality_factor,
     resonance_phase_angle,
+    rotating_unbalance_force,
     simple_pendulum_period,
     simply_supported_annular_plate_fundamental_frequency,
     simply_supported_center_mass_frequency,
@@ -1206,6 +1209,8 @@ __all__ = [
     "leaf_spring_stress",
     "leaf_spring_rate",
     "spring_surge_frequency",
+    "rotating_unbalance_force",
+    "balance_correction_mass",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
     "von_mises_principal",

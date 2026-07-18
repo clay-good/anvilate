@@ -68,6 +68,8 @@ __all__ = [
     "solid_disc_polar_mass_moment",
     "annular_disc_polar_mass_moment",
     "spring_surge_frequency",
+    "rotating_unbalance_force",
+    "balance_correction_mass",
     "frequency_scorecard",
 ]
 
@@ -1228,6 +1230,53 @@ def spring_surge_frequency(*, spring_rate: Quantity, spring_mass: Quantity) -> Q
     if k <= 0 or m <= 0:
         raise ValueError("spring_rate and spring_mass must be positive")
     return Quantity(magnitude=sqrt(k / m) / 2, unit="Hz")
+
+
+def rotating_unbalance_force(
+    *, unbalance_mass: Quantity, eccentricity: Quantity, rotational_speed: Quantity
+) -> Quantity:
+    """The centrifugal force F = m·e·ω² a residual rotor unbalance throws.
+
+    An imperfectly balanced rotor carries an effective ``unbalance_mass`` m at an
+    ``eccentricity`` e from the spin axis, and it slings that mass outward with a rotating
+    force m·e·ω² at the ``rotational_speed`` ω — the force that shakes the bearings and the
+    frame, once per revolution. The ω² lever is unforgiving: doubling the speed quadruples
+    the shake, which is why high-speed rotors are balanced to a tight residual m·e. All
+    positive; ω is a rotational frequency. Returns the force in N.
+    """
+    _require(unbalance_mass, "[mass]", "unbalance_mass")
+    _require(eccentricity, "[length]", "eccentricity")
+    _require(rotational_speed, "[frequency]", "rotational_speed")
+    m = unbalance_mass.to("kg").magnitude
+    e = eccentricity.to("m").magnitude
+    omega = rotational_speed.to("rad/s").magnitude
+    if m <= 0 or e <= 0 or omega <= 0:
+        raise ValueError("unbalance_mass, eccentricity, and rotational_speed must be positive")
+    return Quantity(magnitude=m * e * omega**2, unit="N")
+
+
+def balance_correction_mass(
+    *, unbalance_mass: Quantity, eccentricity: Quantity, correction_radius: Quantity
+) -> Quantity:
+    """The counterweight m_c = m·e/r_c that balances a rotor unbalance.
+
+    Balancing nulls the unbalance U = m·e (mass times eccentricity, e.g. g·mm) with an equal
+    and opposite one, so a counterweight placed at ``correction_radius`` r_c opposite the
+    heavy spot needs mass m_c = ``unbalance_mass``·``eccentricity``/r_c — a small mass far out
+    or a large mass close in, the same U either way. This is speed-independent: balance is a
+    geometry (m·e) problem, and once U is nulled the centrifugal force
+    (:func:`rotating_unbalance_force`) vanishes at every speed. All positive. Returns the
+    correction mass in g.
+    """
+    _require(unbalance_mass, "[mass]", "unbalance_mass")
+    _require(eccentricity, "[length]", "eccentricity")
+    _require(correction_radius, "[length]", "correction_radius")
+    m = unbalance_mass.to("kg").magnitude
+    e = eccentricity.to("m").magnitude
+    r = correction_radius.to("m").magnitude
+    if m <= 0 or e <= 0 or r <= 0:
+        raise ValueError("unbalance_mass, eccentricity, and correction_radius must be positive")
+    return Quantity(magnitude=m * e / r, unit="kg").to("g")
 
 
 def frequency_scorecard(

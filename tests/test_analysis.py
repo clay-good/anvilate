@@ -11153,3 +11153,34 @@ def test_cylinder_rodside_pressure_intensification():
         cylinder_rodside_intensified_pressure(
             supply_pressure=_q("10 MPa"), bore_diameter=_q("40 mm"), rod_diameter=_q("40 mm")
         )
+
+
+def test_rotating_unbalance_force_and_balance_correction():
+    from anvilate.analysis import balance_correction_mass, rotating_unbalance_force
+
+    # F = m*e*omega^2: 50 g at 2 mm eccentricity at 3000 rpm.
+    f = rotating_unbalance_force(
+        unbalance_mass=_q("50 g"), eccentricity=_q("2 mm"), rotational_speed=_q("3000 rpm")
+    )
+    omega = 2 * 3.141592653589793 * 3000 / 60
+    assert f.to("N").magnitude == pytest.approx(0.05 * 0.002 * omega**2, rel=1e-12)
+    # The omega^2 lever: doubling the speed quadruples the force.
+    f2 = rotating_unbalance_force(
+        unbalance_mass=_q("50 g"), eccentricity=_q("2 mm"), rotational_speed=_q("6000 rpm")
+    )
+    assert f2.to("N").magnitude == pytest.approx(4 * f.to("N").magnitude, rel=1e-12)
+    # The counterweight preserves the unbalance U = m*e: 50 g * 2 mm = m_c * 100 mm -> 1 g.
+    mc = balance_correction_mass(
+        unbalance_mass=_q("50 g"), eccentricity=_q("2 mm"), correction_radius=_q("100 mm")
+    )
+    assert mc.to("g").magnitude == pytest.approx(50 * 2 / 100, rel=1e-12)
+    assert mc.to("g").magnitude == pytest.approx(1.0, rel=1e-12)
+    # A larger correction radius needs a smaller counterweight (same U).
+    mc_far = balance_correction_mass(
+        unbalance_mass=_q("50 g"), eccentricity=_q("2 mm"), correction_radius=_q("200 mm")
+    )
+    assert mc_far.to("g").magnitude == pytest.approx(mc.to("g").magnitude / 2, rel=1e-12)
+    with pytest.raises(ValueError, match="unbalance_mass, eccentricity, and rotational_speed"):
+        rotating_unbalance_force(
+            unbalance_mass=_q("50 g"), eccentricity=_q("2 mm"), rotational_speed=_q("0 rpm")
+        )
