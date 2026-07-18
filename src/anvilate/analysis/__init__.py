@@ -56,8 +56,8 @@ modules:
 - :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque and per-bolt
   shear force
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
-  (millions of revolutions and running hours), static load safety factor, and the
-  combined-load equivalent dynamic load
+  (millions of revolutions and running hours), static load safety factor, the
+  combined-load equivalent dynamic load, and the reliability life-adjustment factor a₁
 - :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
   tension ratio, slack tension, transmissible force (still and at speed, with
   centrifugal tension and the max-power belt speed), V-belt wedge friction,
@@ -238,6 +238,7 @@ from .bearing import (
     bearing_basic_rating_life,
     bearing_equivalent_dynamic_load,
     bearing_life_hours,
+    bearing_reliability_life_factor,
     bearing_static_safety_factor,
 )
 from .belt import (
@@ -723,6 +724,7 @@ __all__ = [
     "bearing_life_hours",
     "bearing_static_safety_factor",
     "bearing_equivalent_dynamic_load",
+    "bearing_reliability_life_factor",
     "capstan_tension_ratio",
     "belt_slack_tension",
     "belt_max_transmissible_force",

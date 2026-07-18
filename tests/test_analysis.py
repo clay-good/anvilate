@@ -31,6 +31,7 @@ from anvilate.analysis import (
     bearing_basic_rating_life,
     bearing_equivalent_dynamic_load,
     bearing_life_hours,
+    bearing_reliability_life_factor,
     bearing_static_safety_factor,
     bearing_stress,
     belleville_flat_load,
@@ -10103,6 +10104,29 @@ def test_bearing_equivalent_dynamic_load():
         bearing_equivalent_dynamic_load(
             radial_load=_q("4000 N"), axial_load=_q("2000 N"), radial_factor=0, axial_factor=1.6
         )
+
+
+def test_bearing_reliability_life_factor_reproduces_the_iso281_table():
+    from math import log
+
+    # a1 = (ln(1/R)/ln(1/0.90))^(1/e), e=1.5: at 90% reliability a1 = 1.
+    assert bearing_reliability_life_factor(reliability=0.90) == pytest.approx(1.0, rel=1e-12)
+    # It reproduces the standard ISO 281 a1 table to two decimals.
+    assert bearing_reliability_life_factor(reliability=0.95) == pytest.approx(0.62, abs=5e-3)
+    assert bearing_reliability_life_factor(reliability=0.98) == pytest.approx(0.33, abs=5e-3)
+    assert bearing_reliability_life_factor(reliability=0.99) == pytest.approx(0.21, abs=5e-3)
+    # Match the closed form exactly.
+    assert bearing_reliability_life_factor(reliability=0.99) == pytest.approx(
+        (log(1 / 0.99) / log(1 / 0.90)) ** (1 / 1.5), rel=1e-12
+    )
+    # Designing for higher reliability shortens the usable life (a1 < 1).
+    assert (
+        bearing_reliability_life_factor(reliability=0.99)
+        < bearing_reliability_life_factor(reliability=0.95)
+        < 1.0
+    )
+    with pytest.raises(ValueError, match=r"reliability must lie in \(0, 1\)"):
+        bearing_reliability_life_factor(reliability=1.0)
 
 
 def test_bolt_and_member_stiffness_give_a_typical_joint_constant():

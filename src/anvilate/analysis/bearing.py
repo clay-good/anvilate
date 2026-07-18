@@ -21,19 +21,28 @@ dimensions). As with the other checks, force and speed inputs are dimension-chec
 
 from __future__ import annotations
 
+from math import log
+
 from ..units import Quantity
 
 # ISO 281 life exponents: the load-life power law L10 = (C/P)^p.
 BALL_BEARING_LIFE_EXPONENT = 3.0
 ROLLER_BEARING_LIFE_EXPONENT = 10.0 / 3.0
 
+# Weibull dispersion exponent for rolling-bearing life scatter (ISO 281): the
+# reliability-adjustment a1 = (ln(1/R)/ln(1/0.90))^(1/e) with e ≈ 1.5 reproduces the
+# standard a1 table (0.62 at 95%, 0.21 at 99%).
+BEARING_WEIBULL_SLOPE = 1.5
+
 __all__ = [
     "BALL_BEARING_LIFE_EXPONENT",
     "ROLLER_BEARING_LIFE_EXPONENT",
+    "BEARING_WEIBULL_SLOPE",
     "bearing_basic_rating_life",
     "bearing_life_hours",
     "bearing_static_safety_factor",
     "bearing_equivalent_dynamic_load",
+    "bearing_reliability_life_factor",
 ]
 
 
@@ -156,3 +165,26 @@ def bearing_equivalent_dynamic_load(
     if radial_factor <= 0 or axial_factor <= 0:
         raise ValueError("radial_factor and axial_factor must be positive")
     return Quantity(magnitude=radial_factor * fr + axial_factor * fa, unit="N")
+
+
+def bearing_reliability_life_factor(
+    *, reliability: float, weibull_slope: float = BEARING_WEIBULL_SLOPE
+) -> float:
+    """The ISO 281 life-adjustment factor a₁ = (ln(1/R)/ln(1/0.90))^(1/e) for a
+    reliability above 90%.
+
+    The basic rating life L10 (:func:`bearing_basic_rating_life`) is the life 90% of
+    bearings reach — a 10% failure probability. To design for a higher reliability R
+    the life is scaled down by a₁, which follows from the Weibull scatter of bearing
+    life: a₁ = (ln(1/R)/ln(1/0.90))^(1/e), with ``weibull_slope`` e ≈ 1.5. This
+    reproduces the standard ISO 281 a₁ table — 1.0 at 90%, 0.62 at 95%, 0.33 at 98%,
+    0.21 at 99% — so the reliability-adjusted life is L_R = a₁·L10 (multiply the
+    output of :func:`bearing_basic_rating_life` or :func:`bearing_life_hours` by it).
+    ``reliability`` R must lie in (0, 1); at R = 0.90 a₁ = 1. A higher reliability
+    buys a shorter usable life. Returns the dimensionless a₁ (≤ 1 for R ≥ 0.90).
+    """
+    if not 0.0 < reliability < 1.0:
+        raise ValueError(f"reliability must lie in (0, 1); got {reliability}")
+    if weibull_slope <= 0:
+        raise ValueError(f"weibull_slope must be positive; got {weibull_slope}")
+    return (log(1.0 / reliability) / log(1.0 / 0.90)) ** (1.0 / weibull_slope)
