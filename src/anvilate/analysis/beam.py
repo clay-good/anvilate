@@ -65,6 +65,7 @@ __all__ = [
     "circular_plastic_section_modulus",
     "hollow_circular_plastic_section_modulus",
     "rectangular_tube_plastic_section_modulus",
+    "i_section_plastic_section_modulus",
     "plastic_moment",
     "max_transverse_shear_stress",
     "shear_flow",
@@ -263,6 +264,45 @@ def rectangular_tube_plastic_section_modulus(
         )
     inner = (b - 2 * t) * (h - 2 * t) ** 2
     return Quantity(magnitude=(b * h**2 - inner) / 4.0, unit="mm**3")
+
+
+def i_section_plastic_section_modulus(
+    *,
+    flange_width: Quantity,
+    total_height: Quantity,
+    flange_thickness: Quantity,
+    web_thickness: Quantity,
+) -> Quantity:
+    """The strong-axis plastic section modulus of a doubly-symmetric I-section.
+
+    Summing area·(distance to the plastic neutral axis) over the fully-yielded
+    section gives, for the two flanges plus the web,
+
+        Z_p = b·t_f·(h − t_f) + t_w·(h − 2·t_f)²/4,
+
+    the plastic counterpart of :func:`i_section_second_moment` (and, with the flanges
+    grown to fill the depth, it recovers the solid rectangle's b·h²/4).
+    ``flange_width`` b, ``total_height`` h, ``flange_thickness`` t_f, and
+    ``web_thickness`` t_w describe the section, with 2·t_f < h and t_w < b. Because
+    an I-section piles its area in the flanges its shape factor is low (~1.1–1.2), so
+    it keeps little reserve past first yield. Returns Z_p in mm³.
+    """
+    _require(flange_width, "[length]", "flange_width")
+    _require(total_height, "[length]", "total_height")
+    _require(flange_thickness, "[length]", "flange_thickness")
+    _require(web_thickness, "[length]", "web_thickness")
+    b = flange_width.to("mm").magnitude
+    h = total_height.to("mm").magnitude
+    tf = flange_thickness.to("mm").magnitude
+    tw = web_thickness.to("mm").magnitude
+    if tf <= 0 or tw <= 0:
+        raise ValueError("flange_thickness and web_thickness must be positive")
+    if 2 * tf >= h:
+        raise ValueError(f"2*flange_thickness ({2 * tf} mm) must be below total_height ({h} mm)")
+    if tw >= b:
+        raise ValueError(f"web_thickness ({tw} mm) must be below flange_width ({b} mm)")
+    z_p = b * tf * (h - tf) + tw * (h - 2 * tf) ** 2 / 4.0
+    return Quantity(magnitude=z_p, unit="mm**3")
 
 
 def plastic_moment(*, plastic_section_modulus: Quantity, yield_strength: Quantity) -> Quantity:

@@ -172,6 +172,7 @@ from anvilate.analysis import (
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
     horizontal_impact_force,
+    i_section_plastic_section_modulus,
     i_section_second_moment,
     impact_factor,
     impact_stress,
@@ -8968,6 +8969,25 @@ def test_plastic_section_modulus_and_hinge_moment():
         rectangular_tube_plastic_section_modulus(
             width=_q("60 mm"), height=_q("100 mm"), wall_thickness=_q("40 mm")
         )
+    # I-section Z_p = b*t_f*(h - t_f) + t_w*(h - 2*t_f)^2/4.
+    ibeam = i_section_plastic_section_modulus(
+        flange_width=_q("100 mm"),
+        total_height=_q("200 mm"),
+        flange_thickness=_q("15 mm"),
+        web_thickness=_q("10 mm"),
+    )
+    assert ibeam.to("mm**3").magnitude == pytest.approx(100 * 15 * 185 + 10 * 170**2 / 4, rel=1e-12)
+    # Filling the flanges and web solid recovers the rectangle's b*h^2/4.
+    near_solid = i_section_plastic_section_modulus(
+        flange_width=_q("50 mm"),
+        total_height=_q("100 mm"),
+        flange_thickness=_q("49.999 mm"),
+        web_thickness=_q("49.999 mm"),
+    )
+    assert near_solid.to("mm**3").magnitude == pytest.approx(
+        rectangular_plastic_section_modulus(_q("50 mm"), _q("100 mm")).to("mm**3").magnitude,
+        rel=1e-4,
+    )
 
 
 def test_thermal_buckling_temperature_rise_is_the_sun_kink():
