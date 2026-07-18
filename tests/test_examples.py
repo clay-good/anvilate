@@ -1961,3 +1961,18 @@ def test_rotating_shaft_fatigue_capstone_fatigue_governs():
         by_name["fatigue (Goodman, fully reversed)"].detail.split("safety factor ")[1].split(" ")[0]
     )
     assert fatigue_sf < static_sf / 2
+
+
+def test_thermal_clearance_seizure_example_thermal_closure_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "thermal_clearance_seizure.py"))
+    tight = namespace["screen_clearance"]()
+    # The 0.10 mm cold fit cannot cover the 0.144 mm thermal closure -> it seizes hot.
+    assert tight.status is CheckStatus.FAIL
+    assert "safety factor 0.61" in tight.entries[0].detail
+    # Opening the cold clearance to 0.20 mm survives the closure with a film.
+    opened = namespace["screen_opened_clearance"]()
+    assert opened.entries[0].passed
+    assert "safety factor 1.22" in opened.entries[0].detail
+    assert opened.status is CheckStatus.PASS
+    # The closure itself exceeds the tight cold clearance (why it seizes).
+    assert namespace["_thermal_closure"]() > 0.10
