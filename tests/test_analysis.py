@@ -73,6 +73,7 @@ from anvilate.analysis import (
     chordal_speed_variation,
     circular_area,
     circular_curved_beam_stress,
+    circular_plastic_section_modulus,
     circular_second_moment,
     clamped_annular_plate_fundamental_frequency,
     clamped_annular_plate_uniform_load,
@@ -221,6 +222,7 @@ from anvilate.analysis import (
     planetary_planet_teeth,
     planetary_speed,
     planetary_torques,
+    plastic_moment,
     plate_buckling_stress,
     plate_compression_buckling_coefficient,
     plate_shear_buckling_coefficient,
@@ -238,6 +240,7 @@ from anvilate.analysis import (
     rectangular_bar_torsion_constant,
     rectangular_bar_twist_angle,
     rectangular_curved_beam_stress,
+    rectangular_plastic_section_modulus,
     rectangular_second_moment,
     rectangular_tube_enclosed_area,
     rectangular_tube_second_moment,
@@ -8922,6 +8925,29 @@ def test_box_and_i_section_second_moments():
             flange_thickness=_q("15 mm"),
             web_thickness=_q("10 mm"),
         )
+
+
+def test_plastic_section_modulus_and_hinge_moment():
+    from math import pi
+
+    # Rectangle 50x100: Z_p = b*h^2/4 = 125000 mm^3, shape factor 3/2 over elastic.
+    zp = rectangular_plastic_section_modulus(_q("50 mm"), _q("100 mm"))
+    assert zp.to("mm**3").magnitude == pytest.approx(50 * 100**2 / 4, rel=1e-12)
+    elastic = rectangular_second_moment(_q("50 mm"), _q("100 mm")).to("mm**4").magnitude / 50.0
+    assert zp.to("mm**3").magnitude / elastic == pytest.approx(1.5, rel=1e-12)
+    # Solid circle d=60: Z_p = d^3/6 = 36000 mm^3, shape factor 16/(3*pi).
+    zpc = circular_plastic_section_modulus(_q("60 mm"))
+    assert zpc.to("mm**3").magnitude == pytest.approx(60**3 / 6, rel=1e-12)
+    elastic_c = circular_second_moment(_q("60 mm")).to("mm**4").magnitude / 30.0
+    assert zpc.to("mm**3").magnitude / elastic_c == pytest.approx(16 / (3 * pi), rel=1e-12)
+    # Fully-plastic moment M_p = Z_p * S_y.
+    mp = plastic_moment(plastic_section_modulus=zp, yield_strength=_q("250 MPa"))
+    assert mp.to("N*m").magnitude == pytest.approx(125000 * 250 / 1000, rel=1e-12)
+    assert mp.to("N*m").magnitude == pytest.approx(31250.0, rel=1e-9)
+    with pytest.raises(ValueError, match="yield_strength must be positive"):
+        plastic_moment(plastic_section_modulus=zp, yield_strength=_q("0 MPa"))
+    with pytest.raises(ValueError, match="width must be a"):
+        rectangular_plastic_section_modulus(_q("50 N"), _q("100 mm"))
 
 
 def test_thermal_buckling_temperature_rise_is_the_sun_kink():

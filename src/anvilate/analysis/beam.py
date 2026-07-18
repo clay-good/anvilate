@@ -61,6 +61,9 @@ __all__ = [
     "hollow_circular_second_moment",
     "rectangular_tube_second_moment",
     "i_section_second_moment",
+    "rectangular_plastic_section_modulus",
+    "circular_plastic_section_modulus",
+    "plastic_moment",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -180,6 +183,53 @@ def i_section_second_moment(
     if tw >= b:
         raise ValueError(f"web_thickness ({tw} mm) must be below flange_width ({b} mm)")
     return Quantity(magnitude=(b * h**3 - (b - tw) * (h - 2 * tf) ** 3) / 12.0, unit="mm**4")
+
+
+def rectangular_plastic_section_modulus(width: Quantity, height: Quantity) -> Quantity:
+    """The plastic section modulus Z_p = b·h²/4 of a rectangular section.
+
+    Where the elastic section modulus (:meth:`CrossSection.section_modulus`, I/c =
+    b·h²/6) sets first yield at the extreme fibre, the *plastic* modulus sets the
+    fully-plastic moment M_p = Z_p·S_y at which the whole section has yielded and a
+    plastic hinge forms. For a rectangle Z_p = b·h²/4, exactly 3/2 of the elastic
+    b·h²/6 — the rectangle's shape factor. ``width`` b and ``height`` h (the depth in
+    the load direction) must be positive lengths. Returns Z_p in mm³.
+    """
+    _require(width, "[length]", "width")
+    _require(height, "[length]", "height")
+    return _as_quantity(width.pint * height.pint**2 / 4, "mm**3")
+
+
+def circular_plastic_section_modulus(diameter: Quantity) -> Quantity:
+    """The plastic section modulus Z_p = d³/6 of a solid circular section.
+
+    The round-bar counterpart of :func:`rectangular_plastic_section_modulus`: the
+    fully-plastic modulus is Z_p = d³/6, against the elastic π·d³/32, so a solid
+    circle's shape factor is 16/(3π) ≈ 1.70 — a round section keeps more reserve past
+    first yield than a rectangle does. ``diameter`` d must be a positive length.
+    Returns Z_p in mm³.
+    """
+    _require(diameter, "[length]", "diameter")
+    return _as_quantity(diameter.pint**3 / 6, "mm**3")
+
+
+def plastic_moment(*, plastic_section_modulus: Quantity, yield_strength: Quantity) -> Quantity:
+    """The fully-plastic moment M_p = Z_p·S_y of a section.
+
+    The moment at which a whole section has yielded and forms a plastic hinge — the
+    basis of plastic (limit-state) design and the collapse load of a ductile beam.
+    ``plastic_section_modulus`` Z_p is the section's plastic modulus (e.g.
+    :func:`rectangular_plastic_section_modulus`) and ``yield_strength`` S_y the
+    material's yield stress. It exceeds the first-yield moment M_y = S·S_y by the
+    section's shape factor Z_p/S. Both must be positive. Returns M_p in N·m.
+    """
+    _require(plastic_section_modulus, "[length]**3", "plastic_section_modulus")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    if plastic_section_modulus.to("mm**3").magnitude <= 0:
+        raise ValueError(f"plastic_section_modulus must be positive; got {plastic_section_modulus}")
+    if yield_strength.to("MPa").magnitude <= 0:
+        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+    return _as_quantity(plastic_section_modulus.pint * yield_strength.pint, "N*m")
 
 
 def max_transverse_shear_stress(

@@ -10,7 +10,8 @@ modules:
   fixed-fixed / fixed-pinned; point, distributed, triangular, patch, and
   applied-couple loads), transverse shear, shear flow (VQ/I) and built-up-beam
   fastener spacing, section second moments (rectangular, circular, hollow circle,
-  box tube, and I-section)
+  box tube, and I-section), and the plastic section modulus / fully-plastic hinge
+  moment (rectangle and circle)
 - :mod:`~anvilate.analysis.beam_foundation` — beam on a continuous elastic
   foundation (Hetényi): the characteristic parameter β, and the peak deflection and
   bending moment a point load makes on a long (effectively infinite) beam
@@ -160,6 +161,7 @@ from .beam import (
     cantilever_triangular_load,
     cantilever_triangular_load_peak_at_tip,
     cantilever_uniform_load,
+    circular_plastic_section_modulus,
     circular_second_moment,
     deflection_scorecard,
     fastener_spacing_for_shear_flow,
@@ -182,6 +184,8 @@ from .beam import (
     max_transverse_shear_stress,
     overhang_tip_load,
     overhang_uniform_load,
+    plastic_moment,
+    rectangular_plastic_section_modulus,
     rectangular_second_moment,
     rectangular_tube_second_moment,
     shear_flow,
@@ -632,6 +636,9 @@ __all__ = [
     "hollow_circular_second_moment",
     "rectangular_tube_second_moment",
     "i_section_second_moment",
+    "rectangular_plastic_section_modulus",
+    "circular_plastic_section_modulus",
+    "plastic_moment",
     "CrossSection",
     "bending_stress",
     "required_section_modulus",
