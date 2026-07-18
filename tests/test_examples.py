@@ -1441,3 +1441,18 @@ def test_crack_growth_inspection_interval_example_fails_at_heavy_duty():
     assert heavy.status is CheckStatus.FAIL
     assert "safety factor 0.60" in heavy.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_crane_rail_on_foundation_example_the_soft_pad_fails():
+    namespace = runpy.run_path(str(_EXAMPLES / "crane_rail_on_foundation.py"))
+    card = namespace["screen_crane_rail"]()
+    by_name = {e.name: e for e in card.entries}
+    # A stiffer foundation concentrates the wheel load and lowers the rail moment.
+    stiff = by_name["stiff grout bed (k 100)"]
+    assert stiff.passed
+    assert "safety factor 1.89" in stiff.detail
+    # The softer pad lets the load spread, so the rail bends more and fails 1.5.
+    soft = by_name["soft elastomeric pad (k 20)"]
+    assert soft.status is CheckStatus.FAIL
+    assert "safety factor 1.26" in soft.detail
+    assert card.status is CheckStatus.FAIL
