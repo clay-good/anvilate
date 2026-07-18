@@ -11295,3 +11295,23 @@ def test_spline_torque_capacity_bearing_on_tooth_flanks():
             spline_length=_q("40 mm"),
             number_of_teeth=0,
         )
+
+
+def test_minimum_sprocket_teeth_for_chordal_variation_inverts():
+    from anvilate.analysis import (
+        chordal_speed_variation,
+        minimum_sprocket_teeth_for_chordal_variation,
+    )
+
+    # 2% smoothness needs 16 teeth; 1% needs 23.
+    n2 = minimum_sprocket_teeth_for_chordal_variation(max_variation=0.02)
+    assert n2 == 16
+    assert chordal_speed_variation(sprocket_teeth=n2) <= 0.02
+    assert chordal_speed_variation(sprocket_teeth=n2 - 1) > 0.02  # one fewer tooth exceeds it
+    n1 = minimum_sprocket_teeth_for_chordal_variation(max_variation=0.01)
+    assert n1 == 23
+    assert chordal_speed_variation(sprocket_teeth=n1) <= 0.01
+    # A tighter target needs more teeth.
+    assert n1 > n2
+    with pytest.raises(ValueError, match="max_variation must be in"):
+        minimum_sprocket_teeth_for_chordal_variation(max_variation=1.5)

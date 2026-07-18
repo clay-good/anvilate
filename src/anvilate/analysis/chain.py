@@ -22,13 +22,14 @@ counts are positive whole numbers.
 
 from __future__ import annotations
 
-from math import cos, pi
+from math import acos, ceil, cos, pi
 
 from ..units import Quantity
 
 __all__ = [
     "chain_length_in_pitches",
     "chordal_speed_variation",
+    "minimum_sprocket_teeth_for_chordal_variation",
     "chain_speed",
     "chain_working_tension",
 ]
@@ -95,6 +96,21 @@ def chordal_speed_variation(*, sprocket_teeth: int) -> float:
     """
     n = _check_teeth(sprocket_teeth, "sprocket_teeth")
     return 1.0 - cos(pi / n)
+
+
+def minimum_sprocket_teeth_for_chordal_variation(*, max_variation: float) -> int:
+    """The fewest sprocket teeth N that hold the chordal speed variation below a limit.
+
+    The sizing inverse of :func:`chordal_speed_variation`: solving 1 − cos(π/N) ≤
+    ``max_variation`` for N gives N ≥ π/acos(1 − max_variation), rounded up to a whole
+    tooth — the smallest sprocket a smoothness target allows. Tightening the target from
+    2 % (16 teeth) to 1 % (23 teeth) forces a markedly bigger sprocket, the reason smooth
+    drives avoid small sprockets. ``max_variation`` must be in (0, 1). Returns the minimum
+    tooth count as an int.
+    """
+    if not 0 < max_variation < 1:
+        raise ValueError(f"max_variation must be in (0, 1); got {max_variation}")
+    return ceil(pi / acos(1.0 - max_variation))
 
 
 def chain_speed(

@@ -73,7 +73,8 @@ modules:
   and the tight-side tension a required power needs, and mean tension
 - :mod:`~anvilate.analysis.chain` — roller-chain drive geometry: chain length in
   pitches, mean chain speed, the chordal (polygon-action) speed variation of
-  a sprocket, and the working tension from transmitted power
+  a sprocket (and the fewest teeth a smoothness target allows), and the working
+  tension from transmitted power
 - :mod:`~anvilate.analysis.cable` — uniformly loaded cable (parabolic) midspan
   sag, peak support tension, and developed arc length, and the exact catenary
   (heavy-cable) sag, arc length, and peak tension
@@ -345,6 +346,7 @@ from .chain import (
     chain_speed,
     chain_working_tension,
     chordal_speed_variation,
+    minimum_sprocket_teeth_for_chordal_variation,
 )
 from .clutch import (
     UNIFORM_PRESSURE,
@@ -903,6 +905,7 @@ __all__ = [
     "belt_mean_tension",
     "chain_length_in_pitches",
     "chordal_speed_variation",
+    "minimum_sprocket_teeth_for_chordal_variation",
     "chain_speed",
     "chain_working_tension",
     "CamMotion",
