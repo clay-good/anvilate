@@ -46,8 +46,11 @@ modules:
 - :mod:`~anvilate.analysis.chain` — roller-chain drive geometry: chain length in
   pitches, mean chain speed, and the chordal (polygon-action) speed variation of
   a sprocket
-- :mod:`~anvilate.analysis.cam` — cam-follower rise kinematics (SHM and cycloidal
-  profiles): follower displacement, velocity, and acceleration at a cam angle
+- :mod:`~anvilate.analysis.cam` — cam-follower rise kinematics (SHM, cycloidal,
+  parabolic, and 3-4-5 polynomial profiles): follower displacement, velocity, and
+  acceleration at a cam angle
+- :mod:`~anvilate.analysis.geneva` — external Geneva (intermittent-indexing)
+  mechanism geometry: index angle, crank and driven engagement radii
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
   torque requires, the peak lining pressure, and the simple/differential lever
   force; short-shoe (block) brake lever statics; the self-energizing /
@@ -298,6 +301,11 @@ from .gear import (
     planetary_torques,
     reverted_train_is_coaxial,
 )
+from .geneva import (
+    geneva_crank_radius,
+    geneva_driven_radius,
+    geneva_index_angle,
+)
 from .impact import (
     SUDDENLY_APPLIED_FACTOR,
     impact_factor,
@@ -505,6 +513,9 @@ __all__ = [
     "chain_speed",
     "CamMotion",
     "cam_follower_motion",
+    "geneva_index_angle",
+    "geneva_crank_radius",
+    "geneva_driven_radius",
     "band_brake_torque",
     "band_brake_tight_tension_for_torque",
     "band_brake_max_lining_pressure",

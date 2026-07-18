@@ -119,6 +119,9 @@ from anvilate.analysis import (
     gear_radial_load,
     gear_tangential_load,
     gear_train_value,
+    geneva_crank_radius,
+    geneva_driven_radius,
+    geneva_index_angle,
     gerber_safety_factor,
     gerber_scorecard,
     goodman_safety_factor,
@@ -7339,3 +7342,37 @@ def test_cam_poly345_profile_is_smooth_at_both_ends():
     cyc_peak = (ell / beta**2) * 2.0 * pi * omega**2
     assert shm_peak < peak < cyc_peak
     assert peak == pytest.approx(5.7735 * ell / beta**2 * omega**2, rel=1e-3)
+
+
+def test_geneva_mechanism_geometry():
+    from math import cos, pi, sin
+
+    # A 4-slot Geneva indexes 90 deg per engagement.
+    assert geneva_index_angle(slots=4) == pytest.approx(90.0)
+    assert geneva_index_angle(slots=6) == pytest.approx(60.0)
+    # Crank r = c*sin(pi/n), driven r = c*cos(pi/n): equal at n=4.
+    rc = geneva_crank_radius(slots=4, center_distance=_q("100 mm"))
+    rd = geneva_driven_radius(slots=4, center_distance=_q("100 mm"))
+    assert rc.to("mm").magnitude == pytest.approx(100 * sin(pi / 4), rel=1e-12)
+    assert rc.to("mm").magnitude == pytest.approx(70.711, rel=1e-4)
+    assert rd.to("mm").magnitude == pytest.approx(rc.to("mm").magnitude, rel=1e-12)
+    # More slots: the crank radius shrinks, the driven radius grows.
+    rc6 = geneva_crank_radius(slots=6, center_distance=_q("100 mm"))
+    rd6 = geneva_driven_radius(slots=6, center_distance=_q("100 mm"))
+    assert rc6.to("mm").magnitude == pytest.approx(50.0, rel=1e-9)  # c*sin(30) = 50
+    assert rd6.to("mm").magnitude == pytest.approx(100 * cos(pi / 6), rel=1e-12)
+    assert rc6.to("mm").magnitude < rd6.to("mm").magnitude
+    # The two radii are the legs of the right-angle engagement triangle.
+    combined = (rc.to("mm").magnitude ** 2 + rd.to("mm").magnitude ** 2) ** 0.5
+    assert combined == pytest.approx(100.0, rel=1e-12)
+
+
+def test_geneva_rejects_too_few_slots():
+    with pytest.raises(ValueError, match="whole number ≥ 3"):
+        geneva_index_angle(slots=2)
+    with pytest.raises(ValueError, match="whole number ≥ 3"):
+        geneva_crank_radius(slots=4.5, center_distance=_q("100 mm"))
+    with pytest.raises(ValueError, match="center_distance must be positive"):
+        geneva_crank_radius(slots=4, center_distance=_q("0 mm"))
+    with pytest.raises(ValueError, match="center_distance must be a"):
+        geneva_driven_radius(slots=4, center_distance=_q("100 N"))
