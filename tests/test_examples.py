@@ -1506,3 +1506,19 @@ def test_support_beam_resonance_example_beam_mass_moves_it_onto_the_peak():
     assert included.status is CheckStatus.FAIL
     assert "safety factor 0.99" in included.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_fatigue_criteria_compared_example_three_verdicts():
+    namespace = runpy.run_path(str(_EXAMPLES / "fatigue_criteria_compared.py"))
+    card = namespace["screen_fatigue_criteria"]()
+    by_name = {e.name: e for e in card.entries}
+    # The conservative Soderberg (to yield) and Goodman (to ultimate) both fail 1.5...
+    assert by_name["Soderberg (to yield)"].status is CheckStatus.FAIL
+    assert "safety factor 1.11" in by_name["Soderberg (to yield)"].detail
+    assert by_name["Goodman (to ultimate)"].status is CheckStatus.FAIL
+    assert "safety factor 1.36" in by_name["Goodman (to ultimate)"].detail
+    # ...but the Gerber parabola, hugging the data, passes the same cycle.
+    assert by_name["Gerber (parabola)"].passed
+    assert "safety factor 1.70" in by_name["Gerber (parabola)"].detail
+    # No-silent-green: any failing entry makes the whole card FAIL.
+    assert card.status is CheckStatus.FAIL
