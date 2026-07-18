@@ -23,6 +23,8 @@ from anvilate.analysis import (
     barth_velocity_factor,
     basquin_cycles_to_failure,
     basquin_stress_for_life,
+    beam_on_elastic_foundation_max_deflection,
+    beam_on_elastic_foundation_max_moment,
     bearing_basic_rating_life,
     bearing_equivalent_dynamic_load,
     bearing_life_hours,
@@ -122,6 +124,7 @@ from anvilate.analysis import (
     flange_coupling_torque,
     flywheel_energy_fluctuation,
     flywheel_inertia_for_fluctuation,
+    foundation_characteristic_parameter,
     fourbar_transmission_angle,
     fourbar_type,
     free_thermal_expansion,
@@ -9154,3 +9157,47 @@ def test_bolt_and_member_stiffness_give_a_typical_joint_constant():
             grip_length=_q("0 mm"),
             elastic_modulus=_q("200 GPa"),
         )
+
+
+def test_beam_on_elastic_foundation_point_load():
+    # beta = (k/(4EI))^0.25: k=50 N/mm^2, E=200 GPa, I=1e6 mm^4.
+    kw = {
+        "foundation_modulus": _q("50 N/mm**2"),
+        "elastic_modulus": _q("200 GPa"),
+        "second_moment": _q("1e6 mm**4"),
+    }
+    beta = foundation_characteristic_parameter(**kw)
+    expected_beta = (50.0 / (4.0 * 200e3 * 1e6)) ** 0.25  # 1/mm
+    assert beta.to("1/mm").magnitude == pytest.approx(expected_beta, rel=1e-12)
+    assert beta.to("1/mm").magnitude == pytest.approx(2.8117e-3, rel=1e-3)
+    # y_max = P*beta/(2k), M_max = P/(4*beta) for a 10 kN point load.
+    y = beam_on_elastic_foundation_max_deflection(load=_q("10 kN"), **kw)
+    m = beam_on_elastic_foundation_max_moment(load=_q("10 kN"), **kw)
+    assert y.to("mm").magnitude == pytest.approx(10000.0 * expected_beta / (2 * 50.0), rel=1e-12)
+    assert y.to("mm").magnitude == pytest.approx(0.28117, rel=1e-4)
+    assert m.to("N*m").magnitude == pytest.approx(10000.0 / (4 * expected_beta) / 1000.0, rel=1e-12)
+    assert m.to("N*m").magnitude == pytest.approx(889.14, rel=1e-3)
+    # A stiffer foundation localizes the load: bigger beta, smaller peak moment.
+    stiffer = beam_on_elastic_foundation_max_moment(
+        load=_q("10 kN"),
+        foundation_modulus=_q("200 N/mm**2"),
+        elastic_modulus=_q("200 GPa"),
+        second_moment=_q("1e6 mm**4"),
+    )
+    assert stiffer.to("N*m").magnitude < m.to("N*m").magnitude
+
+
+def test_beam_on_elastic_foundation_rejects_bad_inputs():
+    good = {
+        "foundation_modulus": _q("50 N/mm**2"),
+        "elastic_modulus": _q("200 GPa"),
+        "second_moment": _q("1e6 mm**4"),
+    }
+    with pytest.raises(ValueError, match="second_moment must be a"):
+        foundation_characteristic_parameter(
+            foundation_modulus=_q("50 N/mm**2"),
+            elastic_modulus=_q("200 GPa"),
+            second_moment=_q("1e6 mm"),
+        )
+    with pytest.raises(ValueError, match="load must be positive"):
+        beam_on_elastic_foundation_max_deflection(load=_q("0 kN"), **good)

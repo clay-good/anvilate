@@ -11,6 +11,9 @@ modules:
   applied-couple loads), transverse shear, shear flow (VQ/I) and built-up-beam
   fastener spacing, section second moments (rectangular, circular, hollow circle,
   box tube, and I-section)
+- :mod:`~anvilate.analysis.beam_foundation` — beam on a continuous elastic
+  foundation (Hetényi): the characteristic parameter β, and the peak deflection and
+  bending moment a point load makes on a long (effectively infinite) beam
 - :mod:`~anvilate.analysis.plate` — flat-plate bending (simply-supported
   rectangle via the exact Navier series; circular, simply-supported and clamped),
   the clamped-cover thickness a pressure requires, elastic plate/web buckling,
@@ -186,6 +189,11 @@ from .beam import (
     simply_supported_triangular_load,
     simply_supported_uniform_load,
     span_deflection_limit,
+)
+from .beam_foundation import (
+    beam_on_elastic_foundation_max_deflection,
+    beam_on_elastic_foundation_max_moment,
+    foundation_characteristic_parameter,
 )
 from .bearing import (
     BALL_BEARING_LIFE_EXPONENT,
@@ -617,6 +625,9 @@ __all__ = [
     "span_deflection_limit",
     "SHEAR_FORM_RECTANGULAR",
     "SHEAR_FORM_CIRCULAR",
+    "foundation_characteristic_parameter",
+    "beam_on_elastic_foundation_max_deflection",
+    "beam_on_elastic_foundation_max_moment",
     "BALL_BEARING_LIFE_EXPONENT",
     "ROLLER_BEARING_LIFE_EXPONENT",
     "bearing_basic_rating_life",
