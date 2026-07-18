@@ -271,6 +271,7 @@ from anvilate.analysis import (
     strength_scorecard,
     stress_intensity_factor,
     string_natural_frequency,
+    thermal_buckling_temperature_rise,
     thermal_shock_stress,
     thick_wall_cylinder,
     thick_wall_sphere,
@@ -8528,4 +8529,35 @@ def test_box_and_i_section_second_moments():
             total_height=_q("20 mm"),
             flange_thickness=_q("15 mm"),
             web_thickness=_q("10 mm"),
+        )
+
+
+def test_thermal_buckling_temperature_rise_is_the_sun_kink():
+    from math import pi
+
+    # dT_cr = pi^2 / ((K*lambda)^2 * alpha), independent of E: a held steel bar
+    # (alpha = 12e-6) at slenderness 100 buckles at ~82 K rise.
+    dt = thermal_buckling_temperature_rise(
+        slenderness_ratio=100, thermal_expansion_coefficient=_q("12e-6 1/K")
+    )
+    assert dt.to("K").magnitude == pytest.approx(pi**2 / (100**2 * 12e-6), rel=1e-12)
+    assert dt.to("K").magnitude == pytest.approx(82.25, rel=1e-3)
+    # A stiffer restraint (fixed-fixed, K = 0.5) tolerates 4x the temperature rise.
+    fixed = thermal_buckling_temperature_rise(
+        slenderness_ratio=100,
+        thermal_expansion_coefficient=_q("12e-6 1/K"),
+        end_condition_factor=0.5,
+    )
+    assert fixed.to("K").magnitude == pytest.approx(4 * dt.to("K").magnitude, rel=1e-12)
+    # A stockier bar (lower slenderness) tolerates far more heat before buckling.
+    assert thermal_buckling_temperature_rise(
+        slenderness_ratio=50, thermal_expansion_coefficient=_q("12e-6 1/K")
+    ).to("K").magnitude == pytest.approx(4 * dt.to("K").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="slenderness_ratio must be positive"):
+        thermal_buckling_temperature_rise(
+            slenderness_ratio=0, thermal_expansion_coefficient=_q("12e-6 1/K")
+        )
+    with pytest.raises(ValueError, match="thermal_expansion_coefficient must have units"):
+        thermal_buckling_temperature_rise(
+            slenderness_ratio=100, thermal_expansion_coefficient=_q("12 MPa")
         )

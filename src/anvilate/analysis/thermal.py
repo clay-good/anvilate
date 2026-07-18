@@ -15,6 +15,8 @@ absolute ``degC`` reading.
 
 from __future__ import annotations
 
+from math import pi
+
 from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
@@ -22,6 +24,7 @@ from ..units import Quantity
 __all__ = [
     "constrained_thermal_stress",
     "thermal_shock_stress",
+    "thermal_buckling_temperature_rise",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",
     "DifferentialThermalStress",
@@ -264,3 +267,41 @@ def differential_thermal_stress(
         stress_1=Quantity(magnitude=-force / area_1.to("mm**2").magnitude, unit="MPa"),
         stress_2=Quantity(magnitude=force / area_2.to("mm**2").magnitude, unit="MPa"),
     )
+
+
+def thermal_buckling_temperature_rise(
+    *,
+    slenderness_ratio: float,
+    thermal_expansion_coefficient: Quantity,
+    end_condition_factor: float = 1.0,
+) -> Quantity:
+    """The temperature rise ΔT_cr = π²/((K·λ)²·α) that buckles an axially held bar.
+
+    Heat a bar that cannot expand and it builds a compressive thermal stress
+    E·α·ΔT; when that reaches the Euler buckling stress π²·E/(K·λ)² the bar snaps
+    sideways — the "sun kink" that buckles constrained rail and pipe in hot weather.
+    Setting the two equal, the elastic modulus cancels, so the critical temperature
+    rise depends only on the geometry and the expansion coefficient:
+    ΔT_cr = π²/((K·λ)²·α). ``slenderness_ratio`` λ = L/r is the pinned-pinned
+    slenderness, ``end_condition_factor`` K the effective-length factor (1.0
+    pinned-pinned, 0.5 fixed-fixed — stiffer restraint tolerates more heat), and
+    ``thermal_expansion_coefficient`` α the material's linear α. λ, K, and α must be
+    positive. Returns the critical temperature rise as a temperature difference (K).
+    """
+    if slenderness_ratio <= 0:
+        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+    if end_condition_factor <= 0:
+        raise ValueError(f"end_condition_factor must be positive; got {end_condition_factor}")
+    if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            "thermal_expansion_coefficient must have units of 1/temperature; got "
+            f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    alpha = thermal_expansion_coefficient.to("1/K").magnitude
+    if alpha <= 0:
+        raise ValueError(
+            f"thermal_expansion_coefficient must be positive; got {thermal_expansion_coefficient}"
+        )
+    effective_slenderness = end_condition_factor * slenderness_ratio
+    delta_t = pi**2 / (effective_slenderness**2 * alpha)
+    return Quantity(magnitude=delta_t, unit="K")
