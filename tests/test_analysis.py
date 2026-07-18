@@ -84,6 +84,7 @@ from anvilate.analysis import (
     constrained_thermal_stress,
     critical_crack_length,
     cyclic_stress_components,
+    cylinder_axial_buckling_stress,
     cylinder_external_pressure_buckling,
     damped_natural_frequency,
     deflection_scorecard,
@@ -8754,6 +8755,31 @@ def test_sphere_external_pressure_buckling_beats_the_cylinder():
     with pytest.raises(ValueError, match="wall_thickness must be positive"):
         sphere_external_pressure_buckling(
             elastic_modulus=_q("200 GPa"), wall_thickness=_q("0 mm"), mean_radius=_q("500 mm")
+        )
+
+
+def test_cylinder_axial_buckling_stress_rides_on_the_thin_ratio():
+    from math import sqrt
+
+    # sigma_cr = E*(t/R)/sqrt(3*(1-nu^2)): a 2 mm wall at 100 mm radius.
+    s = cylinder_axial_buckling_stress(
+        elastic_modulus=_q("200 GPa"), wall_thickness=_q("2 mm"), mean_radius=_q("100 mm")
+    )
+    expected = 200e3 * (2 / 100) / sqrt(3 * (1 - 0.3**2))
+    assert s.to("MPa").magnitude == pytest.approx(expected, rel=1e-12)
+    assert s.to("MPa").magnitude == pytest.approx(2420.9, rel=1e-3)
+    # It rides on t/R linearly (unlike external-pressure collapse's cube), so
+    # doubling the wall doubles the critical stress.
+    thicker = cylinder_axial_buckling_stress(
+        elastic_modulus=_q("200 GPa"), wall_thickness=_q("4 mm"), mean_radius=_q("100 mm")
+    )
+    assert thicker.to("MPa").magnitude == pytest.approx(2 * s.to("MPa").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="poisson must lie in"):
+        cylinder_axial_buckling_stress(
+            elastic_modulus=_q("200 GPa"),
+            wall_thickness=_q("2 mm"),
+            mean_radius=_q("100 mm"),
+            poisson=0.5,
         )
 
 

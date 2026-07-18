@@ -36,6 +36,7 @@ __all__ = [
     "thick_wall_sphere",
     "cylinder_external_pressure_buckling",
     "sphere_external_pressure_buckling",
+    "cylinder_axial_buckling_stress",
 ]
 
 
@@ -451,3 +452,41 @@ def sphere_external_pressure_buckling(
         raise ValueError(f"mean_radius must be positive; got {mean_radius}")
     p_cr = 2.0 * e * (t / r) ** 2 / sqrt(3.0 * (1.0 - poisson**2))
     return Quantity(magnitude=p_cr, unit="MPa")
+
+
+def cylinder_axial_buckling_stress(
+    *,
+    elastic_modulus: Quantity,
+    wall_thickness: Quantity,
+    mean_radius: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The classical axial-compression buckling stress of a thin cylindrical shell.
+
+    A thin tube squeezed *along its axis* — a rocket stage, a silo wall, a strut of
+    tubing — does not simply yield or Euler-buckle as a column; its wall crinkles into
+    a diamond pattern at the classical (Lorenz-Timoshenko) critical stress
+
+        σ_cr = E·(t/R) / √(3·(1 − ν²)),
+
+    which rises with the thin ratio t/R (not its cube, as external-pressure collapse
+    does). ``elastic_modulus`` E, ``wall_thickness`` t, ``mean_radius`` R, and
+    Poisson's ratio ``poisson`` ν describe the shell; the wall must be positive and
+    0 ≤ ν < 0.5. This ideal value is famously unconservative — real cylinders, acutely
+    sensitive to tiny dimples, buckle at only ~15–60% of it, so design codes apply a
+    steep knockdown factor. Returns the critical axial stress in MPa.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    _require(mean_radius, "[length]", "mean_radius")
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    e = elastic_modulus.to("MPa").magnitude
+    t = wall_thickness.to("mm").magnitude
+    r = mean_radius.to("mm").magnitude
+    if t <= 0:
+        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+    if r <= 0:
+        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+    sigma_cr = e * (t / r) / sqrt(3.0 * (1.0 - poisson**2))
+    return Quantity(magnitude=sigma_cr, unit="MPa")

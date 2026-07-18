@@ -40,7 +40,8 @@ modules:
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder (closed or open ends) and sphere, the wall
   thickness a pressure requires (membrane and ASME VIII code form), and the
-  external-pressure collapse (buckling) pressure of a long cylinder and a sphere
+  external-pressure collapse (buckling) pressure of a long cylinder and a sphere,
+  and the classical axial-compression buckling stress of a thin cylindrical shell
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.journal_bearing` — journal (plain) bearing Petroff
   friction torque and power loss, unit load, and Sommerfeld number
@@ -457,6 +458,7 @@ from .pressure_vessel import (
     ThickWallStress,
     ThinWallStress,
     asme_cylinder_thickness,
+    cylinder_axial_buckling_stress,
     cylinder_external_pressure_buckling,
     sphere_external_pressure_buckling,
     thick_wall_cylinder,
@@ -858,6 +860,7 @@ __all__ = [
     "thick_wall_sphere",
     "cylinder_external_pressure_buckling",
     "sphere_external_pressure_buckling",
+    "cylinder_axial_buckling_stress",
     "InterferenceFit",
     "interference_fit",
     "interference_for_contact_pressure",
