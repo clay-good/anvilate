@@ -16,13 +16,15 @@ peak (support) tension
 
     T_max = √(H² + (w·L/2)²),
 
-always larger than H. Loads, spans, and tensions are dimension-checked
-:class:`~anvilate.units.Quantity` values.
+always larger than H. For a cable that sags too deeply for the parabola, the exact
+catenary y = a·cosh(x/a) (a = H/w) gives the sag, arc length, and peak tension in
+hyperbolic form, collapsing to the parabolic values in the shallow-sag limit. Loads,
+spans, and tensions are dimension-checked :class:`~anvilate.units.Quantity` values.
 """
 
 from __future__ import annotations
 
-from math import sqrt
+from math import cosh, sinh, sqrt
 
 from ..units import Quantity
 
@@ -30,6 +32,9 @@ __all__ = [
     "parabolic_cable_sag",
     "parabolic_cable_max_tension",
     "parabolic_cable_length",
+    "catenary_sag",
+    "catenary_arc_length",
+    "catenary_max_tension",
 ]
 
 
@@ -113,3 +118,81 @@ def parabolic_cable_length(*, span: Quantity, sag: Quantity) -> Quantity:
     if d <= 0:
         raise ValueError(f"sag must be positive; got {sag}")
     return Quantity(magnitude=length + 8.0 * d**2 / (3.0 * length), unit="m")
+
+
+def _catenary_inputs(
+    weight_per_length: Quantity, horizontal_tension: Quantity, span: Quantity
+) -> tuple[float, float, float]:
+    """Validate a catenary and return (a, half_span, w) in metres/N, all positive.
+
+    ``a = H/w`` is the catenary parameter; ``span`` is the full level-support span so
+    the half-span (lowest point to a support) is span/2.
+    """
+    _require(weight_per_length, "[force] / [length]", "weight_per_length")
+    _require(horizontal_tension, "[force]", "horizontal_tension")
+    _require(span, "[length]", "span")
+    w = weight_per_length.to("N/m").magnitude
+    h = horizontal_tension.to("N").magnitude
+    length = span.to("m").magnitude
+    if w <= 0:
+        raise ValueError(f"weight_per_length must be positive; got {weight_per_length}")
+    if h <= 0:
+        raise ValueError(f"horizontal_tension must be positive; got {horizontal_tension}")
+    if length <= 0:
+        raise ValueError(f"span must be positive; got {span}")
+    return h / w, length / 2.0, w
+
+
+def catenary_sag(
+    *, weight_per_length: Quantity, span: Quantity, horizontal_tension: Quantity
+) -> Quantity:
+    """The exact midspan sag of a heavy cable hanging in a catenary.
+
+    A cable heavy enough to sag deeply hangs not in a parabola but in a *catenary*,
+    the shape y = a·cosh(x/a) a chain takes under its own weight, with the catenary
+    parameter a = H/w (horizontal tension over weight per unit length). Between level
+    supports the midspan dips below the support line by
+
+        d = a·(cosh(x/a) − 1),   x = L/2,
+
+    the exact result the parabolic :func:`parabolic_cable_sag` approximates — for a
+    shallow cable cosh(x/a) − 1 ≈ (x/a)²/2 and this collapses to w·L²/(8·H), but a
+    deeply-sagging line (a transmission span, a mooring, a ski lift) needs the exact
+    form. ``weight_per_length`` w is the load per unit length *along the cable*,
+    ``span`` L the level-support distance, and ``horizontal_tension`` H the constant
+    horizontal tension. All three must be positive. Returns the midspan sag in metres.
+    """
+    a, half_span, _ = _catenary_inputs(weight_per_length, horizontal_tension, span)
+    return Quantity(magnitude=a * (cosh(half_span / a) - 1.0), unit="m")
+
+
+def catenary_arc_length(
+    *, weight_per_length: Quantity, span: Quantity, horizontal_tension: Quantity
+) -> Quantity:
+    """The exact developed arc length of a catenary cable, S = 2·a·sinh(L/2a).
+
+    The length of cable to order for a heavy span: for the catenary y = a·cosh(x/a)
+    the arc from the low point out to a support at x = L/2 is a·sinh(x/a), so the full
+    level-support length is S = 2·a·sinh(L/2a) with a = H/w. Like :func:`catenary_sag`
+    this is the exact counterpart of the shallow parabolic :func:`parabolic_cable_length`.
+    ``weight_per_length`` w, ``span`` L, and ``horizontal_tension`` H are as in
+    :func:`catenary_sag`. Returns the arc length in metres, always exceeding the span.
+    """
+    a, half_span, _ = _catenary_inputs(weight_per_length, horizontal_tension, span)
+    return Quantity(magnitude=2.0 * a * sinh(half_span / a), unit="m")
+
+
+def catenary_max_tension(
+    *, weight_per_length: Quantity, span: Quantity, horizontal_tension: Quantity
+) -> Quantity:
+    """The peak (support) tension of a catenary cable, T_max = w·a·cosh(L/2a).
+
+    In a catenary the tension is lowest (equal to H) at the bottom and greatest at
+    the supports, where the cable also lifts the full weight of its half-length. The
+    exact peak tension is T_max = w·a·cosh(L/2a) = H + w·d — the horizontal tension
+    plus the weight of cable hung below support level (``d`` the :func:`catenary_sag`).
+    ``weight_per_length`` w, ``span`` L, and ``horizontal_tension`` H are as in
+    :func:`catenary_sag`. Returns the maximum tension in newtons, always exceeding H.
+    """
+    a, half_span, w = _catenary_inputs(weight_per_length, horizontal_tension, span)
+    return Quantity(magnitude=w * a * cosh(half_span / a), unit="N")

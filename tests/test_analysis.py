@@ -65,6 +65,9 @@ from anvilate.analysis import (
     cantilever_triangular_load_peak_at_tip,
     cantilever_uniform_load,
     capstan_tension_ratio,
+    catenary_arc_length,
+    catenary_max_tension,
+    catenary_sag,
     chain_length_in_pitches,
     chain_speed,
     chordal_speed_variation,
@@ -8027,6 +8030,38 @@ def test_parabolic_cable_length_exceeds_the_span():
     )
     with pytest.raises(ValueError, match="sag must be positive"):
         parabolic_cable_length(span=_q("100 m"), sag=_q("0 m"))
+
+
+def test_catenary_matches_hyperbolic_forms_and_the_shallow_parabola():
+    from math import cosh, sinh
+
+    kw = {
+        "weight_per_length": _q("10 N/m"),
+        "span": _q("100 m"),
+        "horizontal_tension": _q("1000 N"),
+    }
+    a = 1000.0 / 10.0  # catenary parameter H/w = 100 m
+    x = 50.0  # half-span
+    sag = catenary_sag(**kw)
+    arc = catenary_arc_length(**kw)
+    tmax = catenary_max_tension(**kw)
+    assert sag.to("m").magnitude == pytest.approx(a * (cosh(x / a) - 1.0), rel=1e-12)
+    assert sag.to("m").magnitude == pytest.approx(12.7626, rel=1e-4)
+    assert arc.to("m").magnitude == pytest.approx(2.0 * a * sinh(x / a), rel=1e-12)
+    # Peak tension is H + w*d exactly (the horizontal pull plus the hung weight).
+    assert tmax.to("N").magnitude == pytest.approx(1000.0 + 10.0 * sag.to("m").magnitude, rel=1e-12)
+    # In the shallow-sag limit the catenary collapses onto the parabola: a taut
+    # cable (large H) sags almost exactly w*L^2/(8H).
+    taut = {
+        "weight_per_length": _q("10 N/m"),
+        "span": _q("100 m"),
+        "horizontal_tension": _q("100 kN"),
+    }
+    cat = catenary_sag(**taut).to("m").magnitude
+    par = parabolic_cable_sag(**taut).to("m").magnitude
+    assert cat == pytest.approx(par, rel=1e-3)
+    with pytest.raises(ValueError, match="horizontal_tension must be positive"):
+        catenary_sag(weight_per_length=_q("10 N/m"), span=_q("100 m"), horizontal_tension=_q("0 N"))
 
 
 def test_spur_gear_contact_ratio_and_pressure_angle_effect():
