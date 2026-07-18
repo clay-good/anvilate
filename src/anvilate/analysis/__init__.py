@@ -123,6 +123,7 @@ modules:
   contact stress, the mesh contact ratio, the minimum teeth to avoid undercut,
   the involute function and its Newton inverse, base tangent length (span
   measurement), the arc tooth thickness at any radius (top-land pointed-tooth check),
+  the standard centre distance and the module a fixed centre requires,
   and the operating pressure angle and profile-shift sum for a non-standard centre,
   and train kinematics (signed compound-train value, reverted coaxial constraint,
   planetary Willis-equation speeds and ideal torque split, whole-tooth planet and
@@ -513,7 +514,9 @@ from .gear import (
     bevel_gear_axial_load,
     bevel_gear_radial_load,
     bevel_pitch_cone_angle,
+    gear_center_distance,
     gear_contact_stress,
+    gear_module_for_center_distance,
     gear_normal_load,
     gear_radial_load,
     gear_tangential_load,
@@ -1080,6 +1083,8 @@ __all__ = [
     "involute_angle",
     "base_tangent_length",
     "gear_tooth_thickness_at_radius",
+    "gear_center_distance",
+    "gear_module_for_center_distance",
     "operating_pressure_angle",
     "profile_shift_sum_for_center_distance",
     "gear_train_value",

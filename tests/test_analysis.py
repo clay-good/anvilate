@@ -11216,3 +11216,23 @@ def test_balance_quality_permissible_eccentricity_iso1940():
     assert residual.to("N").magnitude > 0
     with pytest.raises(ValueError, match="balance_grade must be positive"):
         balance_quality_permissible_eccentricity(balance_grade=0, rotational_speed=_q("3000 rpm"))
+
+
+def test_gear_center_distance_and_module_inverse():
+    from anvilate.analysis import gear_center_distance, gear_module_for_center_distance
+
+    # a = m*(N1+N2)/2: a 2 mm module 20/40 pair centres at 60 mm.
+    a = gear_center_distance(module=_q("2 mm"), pinion_teeth=20, gear_teeth=40)
+    assert a.to("mm").magnitude == pytest.approx(2 * (20 + 40) / 2, rel=1e-12)
+    assert a.to("mm").magnitude == pytest.approx(60.0, rel=1e-12)
+    # The inverse recovers the module a fixed centre distance needs.
+    m = gear_module_for_center_distance(center_distance=a, pinion_teeth=20, gear_teeth=40)
+    assert m.to("mm").magnitude == pytest.approx(2.0, rel=1e-12)
+    # A wider housing at the same tooth counts needs a larger module.
+    bigger = gear_module_for_center_distance(
+        center_distance=_q("75 mm"), pinion_teeth=20, gear_teeth=40
+    )
+    assert bigger.to("mm").magnitude == pytest.approx(2 * 75 / 60, rel=1e-12)
+    assert bigger.to("mm").magnitude > m.to("mm").magnitude
+    with pytest.raises(ValueError, match="module must be positive"):
+        gear_center_distance(module=_q("0 mm"), pinion_teeth=20, gear_teeth=40)

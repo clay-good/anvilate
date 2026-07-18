@@ -65,6 +65,8 @@ __all__ = [
     "involute_angle",
     "base_tangent_length",
     "gear_tooth_thickness_at_radius",
+    "gear_center_distance",
+    "gear_module_for_center_distance",
     "operating_pressure_angle",
     "profile_shift_sum_for_center_distance",
     "gear_train_value",
@@ -610,6 +612,45 @@ def gear_tooth_thickness_at_radius(
     phi_r = acos(r_b / r)
     thickness = 2.0 * r * (pi / (2.0 * z) + (tan(phi) - phi) - (tan(phi_r) - phi_r))
     return Quantity(magnitude=thickness, unit="mm")
+
+
+def gear_center_distance(*, module: Quantity, pinion_teeth: int, gear_teeth: int) -> Quantity:
+    """The standard (reference) centre distance a = m·(N₁ + N₂)/2 of a spur-gear pair.
+
+    Where to place the two shafts: for standard (unshifted) gears meshing at their reference
+    pitch circles, the centre distance is half the sum of the pitch diameters, a = m·(N₁ +
+    N₂)/2 for the ``module`` m and the two tooth counts ``pinion_teeth`` N₁ and ``gear_teeth``
+    N₂. This is the baseline a profile shift (:func:`operating_pressure_angle`) then stretches
+    or compresses to fit a non-standard housing. Both counts must be positive whole numbers.
+    Returns the centre distance in mm.
+    """
+    _require(module, "[length]", "module")
+    m = module.to("mm").magnitude
+    if m <= 0:
+        raise ValueError(f"module must be positive; got {module}")
+    n1 = _check_tooth_count(pinion_teeth, "pinion_teeth")
+    n2 = _check_tooth_count(gear_teeth, "gear_teeth")
+    return Quantity(magnitude=m * (n1 + n2) / 2.0, unit="mm")
+
+
+def gear_module_for_center_distance(
+    *, center_distance: Quantity, pinion_teeth: int, gear_teeth: int
+) -> Quantity:
+    """The module m = 2·a/(N₁ + N₂) a fixed centre distance and tooth counts require.
+
+    The inverse of :func:`gear_center_distance`: when the ``center_distance`` a is set by the
+    housing and the ratio fixes the tooth counts ``pinion_teeth`` N₁ and ``gear_teeth`` N₂,
+    the module that makes standard gears mesh at exactly that centre is m = 2·a/(N₁ + N₂). A
+    non-integer or non-standard result is the signal to shift the profile or adjust a tooth
+    count rather than force an odd module. All must be positive. Returns the module in mm.
+    """
+    _require(center_distance, "[length]", "center_distance")
+    a = center_distance.to("mm").magnitude
+    if a <= 0:
+        raise ValueError(f"center_distance must be positive; got {center_distance}")
+    n1 = _check_tooth_count(pinion_teeth, "pinion_teeth")
+    n2 = _check_tooth_count(gear_teeth, "gear_teeth")
+    return Quantity(magnitude=2.0 * a / (n1 + n2), unit="mm")
 
 
 def _operating_pressure_angle_rad(
