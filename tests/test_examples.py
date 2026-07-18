@@ -1995,3 +1995,18 @@ def test_overhung_fan_resonance_capstone_critical_speed_governs():
     assert stiffer_by_name["critical-speed separation"].passed
     assert "safety factor 1.71" in stiffer_by_name["critical-speed separation"].detail
     assert stiffer.status is CheckStatus.PASS
+
+
+def test_single_cylinder_flywheel_example_sizes_from_energy_fluctuation():
+    namespace = runpy.run_path(str(_EXAMPLES / "single_cylinder_flywheel.py"))
+    # The energy fluctuation of the lumpy single-cylinder torque is ~399 J.
+    assert namespace["energy_fluctuation"]().to("J").magnitude == pytest.approx(399.0, abs=2.0)
+    # A 6.0 kg*m^2 flywheel holds the 2% coefficient of fluctuation...
+    adequate = namespace["screen_flywheel"]()
+    assert adequate.entries[0].passed
+    assert "safety factor 1.19" in adequate.entries[0].detail
+    assert adequate.status is CheckStatus.PASS
+    # ...a 4.0 kg*m^2 one does not, and the engine hunts.
+    light = namespace["screen_undersized_flywheel"]()
+    assert light.entries[0].status is CheckStatus.FAIL
+    assert "safety factor 0.79" in light.entries[0].detail
