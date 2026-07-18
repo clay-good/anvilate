@@ -31,7 +31,7 @@ modules:
   hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
   torque requires; thin-walled rectangular (box) tube torsion (Bredt), thin
   open-section (strip) torsion, general closed thin-tube (Bredt) torsion, and
-  solid elliptical and equilateral-triangle bar torsion
+  solid rectangular, elliptical, and equilateral-triangle bar torsion
 - :mod:`~anvilate.analysis.power_screw` — square-thread lead-screw raise/lower
   torque, efficiency, and the self-locking condition
 - :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
@@ -556,6 +556,8 @@ from .torsion import (
     hollow_shaft_twist_angle,
     polar_second_moment_hollow,
     polar_second_moment_solid,
+    rectangular_bar_torsion_constant,
+    rectangular_bar_twist_angle,
     rectangular_tube_enclosed_area,
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
@@ -843,6 +845,8 @@ __all__ = [
     "thin_open_strip_torsion_constant",
     "thin_open_strip_torsional_stress",
     "thin_open_strip_twist_angle",
+    "rectangular_bar_torsion_constant",
+    "rectangular_bar_twist_angle",
     "elliptical_bar_torsional_stress",
     "elliptical_bar_twist_angle",
     "triangular_bar_torsional_stress",

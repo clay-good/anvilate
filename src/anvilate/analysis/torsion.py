@@ -44,6 +44,8 @@ __all__ = [
     "thin_open_strip_torsion_constant",
     "thin_open_strip_torsional_stress",
     "thin_open_strip_twist_angle",
+    "rectangular_bar_torsion_constant",
+    "rectangular_bar_twist_angle",
     "elliptical_bar_torsional_stress",
     "elliptical_bar_twist_angle",
     "triangular_bar_torsional_stress",
@@ -499,6 +501,67 @@ def thin_open_strip_twist_angle(
     _require(shear_modulus, "[pressure]", "shear_modulus")
     b, t = _thin_open_strip_dims(width, thickness)
     j = Quantity(magnitude=b * t**3 / 3, unit="mm**4").pint
+    angle = torque.pint * length.pint / (shear_modulus.pint * j)
+    return _as_quantity(angle, "degree")
+
+
+def _rectangular_bar_sides(width: Quantity, thickness: Quantity) -> tuple[float, float]:
+    """Validate a solid rectangular bar and return ``(a, b)`` in mm with a ≥ b."""
+    _require(width, "[length]", "width")
+    _require(thickness, "[length]", "thickness")
+    w = width.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    if w <= 0 or t <= 0:
+        raise ValueError("width and thickness must be positive")
+    return (w, t) if w >= t else (t, w)
+
+
+def _rectangular_bar_torsion_constant_mm4(a: float, b: float) -> float:
+    """The Roark solid-rectangle torsion constant J (mm⁴) for sides a ≥ b."""
+    r = b / a
+    return a * b**3 * (1.0 / 3.0 - 0.21 * r * (1.0 - r**4 / 12.0))
+
+
+def rectangular_bar_torsion_constant(*, width: Quantity, thickness: Quantity) -> Quantity:
+    """The Saint-Venant torsion constant of a *solid* rectangular bar (Roark).
+
+    Unlike the polar second moment (which governs only a round shaft), a solid
+    rectangle in torsion warps out of plane and resists with the reduced constant
+
+        J = a·b³·[1/3 − 0.21·(b/a)·(1 − (b/a)⁴/12)],
+
+    where ``width`` a and ``thickness`` b are the two side lengths (the larger is
+    taken as a). It interpolates the two limits the module already covers: a → b
+    gives the square's J ≈ 0.141·a⁴, and a ≫ b recovers the thin strip's
+    :func:`thin_open_strip_torsion_constant` J = a·b³/3. Feed it to
+    :func:`rectangular_bar_twist_angle` (or any T·L/(G·J) twist). Both sides must be
+    positive. Returns J in mm⁴.
+    """
+    a, b = _rectangular_bar_sides(width, thickness)
+    return Quantity(magnitude=_rectangular_bar_torsion_constant_mm4(a, b), unit="mm**4")
+
+
+def rectangular_bar_twist_angle(
+    *,
+    torque: Quantity,
+    length: Quantity,
+    width: Quantity,
+    thickness: Quantity,
+    shear_modulus: Quantity,
+) -> Quantity:
+    """The angle of twist θ = T·L/(G·J) of a solid rectangular bar.
+
+    Uses the solid-rectangle torsion constant J from
+    :func:`rectangular_bar_torsion_constant`, so a square or flat bar twists more
+    than the ``T·L/(G·J_polar)`` a round shaft of the same area would. ``torque`` T,
+    ``length`` L, ``width`` and ``thickness`` the two sides, and ``shear_modulus`` G
+    the material's. Returns the twist in degrees; every quantity is dimension-checked.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(length, "[length]", "length")
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    a, b = _rectangular_bar_sides(width, thickness)
+    j = Quantity(magnitude=_rectangular_bar_torsion_constant_mm4(a, b), unit="mm**4").pint
     angle = torque.pint * length.pint / (shear_modulus.pint * j)
     return _as_quantity(angle, "degree")
 

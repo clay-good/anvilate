@@ -235,6 +235,8 @@ from anvilate.analysis import (
     quality_factor,
     radius_of_gyration,
     rankine_gordon_stress,
+    rectangular_bar_torsion_constant,
+    rectangular_bar_twist_angle,
     rectangular_curved_beam_stress,
     rectangular_second_moment,
     rectangular_tube_enclosed_area,
@@ -4425,6 +4427,40 @@ def test_thin_open_strip_rejects_thickness_over_width():
         thin_open_strip_torsional_stress(
             torque=_q("50 N"), width=_q("100 mm"), thickness=_q("5 mm")
         )
+
+
+def test_rectangular_bar_torsion_constant_interpolates_square_and_strip():
+    import math
+
+    # Square 20x20: J = a*b^3*(1/3 - 0.21*(1)*(1 - 1/12)) = 0.14083*a^4.
+    square = rectangular_bar_torsion_constant(width=_q("20 mm"), thickness=_q("20 mm"))
+    assert square.to("mm**4").magnitude == pytest.approx(0.140833 * 20**4, rel=1e-4)
+    # The larger side is taken as 'a', so the order of the two arguments is
+    # irrelevant.
+    swapped = rectangular_bar_torsion_constant(width=_q("20 mm"), thickness=_q("40 mm"))
+    upright = rectangular_bar_torsion_constant(width=_q("40 mm"), thickness=_q("20 mm"))
+    assert swapped.to("mm**4").magnitude == pytest.approx(upright.to("mm**4").magnitude, rel=1e-12)
+    # A slender bar approaches the thin open strip's b*t^3/3 (from just below).
+    slender = rectangular_bar_torsion_constant(width=_q("500 mm"), thickness=_q("10 mm"))
+    strip = thin_open_strip_torsion_constant(width=_q("500 mm"), thickness=_q("10 mm"))
+    ratio = slender.to("mm**4").magnitude / strip.to("mm**4").magnitude
+    assert 0.98 < ratio < 1.0
+    # Twist theta = T*L/(G*J): a 40x20 bar, 100 N*m over 1 m at G = 80 GPa.
+    theta = rectangular_bar_twist_angle(
+        torque=_q("100 N*m"),
+        length=_q("1 m"),
+        width=_q("40 mm"),
+        thickness=_q("20 mm"),
+        shear_modulus=_q("80 GPa"),
+    )
+    a, b = 40.0, 20.0
+    r = b / a
+    j = a * b**3 * (1 / 3 - 0.21 * r * (1 - r**4 / 12))
+    assert theta.to("degree").magnitude == pytest.approx(
+        math.degrees(100e3 * 1000 / (80e3 * j)), rel=1e-12
+    )
+    with pytest.raises(ValueError, match="width and thickness must be positive"):
+        rectangular_bar_torsion_constant(width=_q("0 mm"), thickness=_q("20 mm"))
 
 
 def test_thin_wall_cylinder_matches_worked_example():
