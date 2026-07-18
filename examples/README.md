@@ -50,6 +50,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | Example | What it shows |
 |---|---|
 | `access_cover_sizing.py` | A 600 × 400 mm access cover under 50 kPa, solved by the exact Navier plate series: 6 mm passes strength (SF 2.31) but bows past b/250 — stress falls with t² and deflection with t³, so plate sizing lands on stiffness and the strength-sized cover is a gauge too thin. |
+| `cover_plate_edge_fixity.py` | A Ø500 × 10 mm cover under a 10 kN central load that dishes 1.72 mm (over a 1 mm limit) when simply supported but only 0.68 mm when its edge is clamped — the clamped plate is (3+ν)/(1+ν) = 2.5× stiffer under identical load and thickness, so fixing the edge, not thickening the plate, is what clears the deflection here. |
 | `bolted_joint_check.py` | A bolted lap joint: preload from torque, plate bearing, and bolt shear, all from the materials DB. |
 | `machine_foot_on_panel.py` | A 5 kN machine foot on a 500 × 500 panel screened both ways: smeared it is comfortably green (SF 6.26), on its true 100 mm pad the two-way concentration is 4.4× — SF 1.41 and 3.4 mm, both FAIL. Plates forgive smearing even less than beams. |
 | `manway_lid_fixity.py` | A Ø500 manway blank screened under both honest edge models: welded (clamped) it passes everything, but on a gasket (simply supported) the same lid deflects 4.08× more and busts the sealing flatness limit while strength still passes — the edge-fixity assumption is the design. |

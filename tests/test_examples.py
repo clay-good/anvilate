@@ -1623,3 +1623,16 @@ def test_drivetrain_torsional_mode_example_stiffer_coupling_clears_the_firing_fr
     assert by_name["stiff coupling (100 kN*m/rad)"].passed
     assert "safety factor 1.42" in by_name["stiff coupling (100 kN*m/rad)"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_cover_plate_edge_fixity_example_clamped_edge_passes():
+    namespace = runpy.run_path(str(_EXAMPLES / "cover_plate_edge_fixity.py"))
+    card = namespace["screen_cover_plate"]()
+    by_name = {e.name: e for e in card.entries}
+    # The simply-supported plate dishes past the 1 mm limit...
+    assert by_name["simply-supported edge"].status is CheckStatus.FAIL
+    assert "safety factor 0.58" in by_name["simply-supported edge"].detail
+    # ...but clamping the edge makes the same plate 2.5x stiffer and it clears it.
+    assert by_name["clamped edge"].passed
+    assert "safety factor 1.47" in by_name["clamped edge"].detail
+    assert card.status is CheckStatus.FAIL
