@@ -1636,3 +1636,16 @@ def test_cover_plate_edge_fixity_example_clamped_edge_passes():
     assert by_name["clamped edge"].passed
     assert "safety factor 1.47" in by_name["clamped edge"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_bracket_bolt_group_eccentric_example_direct_shear_underestimates():
+    namespace = runpy.run_path(str(_EXAMPLES / "bracket_bolt_group_eccentric.py"))
+    card = namespace["screen_bracket_bolts"]()
+    by_name = {e.name: e for e in card.entries}
+    # Sharing the load equally (P/n) looks safe...
+    assert by_name["direct-shear estimate (P/n)"].passed
+    assert "safety factor 2.50" in by_name["direct-shear estimate (P/n)"].detail
+    # ...but the eccentric moment drives the corner bolt to ~2.8x that and it fails.
+    assert by_name["true peak (eccentric)"].status is CheckStatus.FAIL
+    assert "safety factor 0.90" in by_name["true peak (eccentric)"].detail
+    assert card.status is CheckStatus.FAIL
