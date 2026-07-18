@@ -45,6 +45,7 @@ __all__ = [
     "crossed_belt_length",
     "crossed_belt_wrap_angle",
     "belt_transmitted_power",
+    "belt_tight_tension_for_power",
     "belt_mean_tension",
 ]
 
@@ -373,6 +374,40 @@ def belt_transmitted_power(
     if v <= 0:
         raise ValueError(f"belt_speed must be positive; got {belt_speed}")
     return Quantity(magnitude=(t1 - t2) * v, unit="W")
+
+
+def belt_tight_tension_for_power(
+    *,
+    power: Quantity,
+    belt_speed: Quantity,
+    friction_coefficient: float,
+    wrap_angle: float,
+) -> Quantity:
+    """The tight-side tension T₁ = (P/v)·m/(m − 1) a belt needs to transmit a power.
+
+    The belt-selection inverse of :func:`belt_transmitted_power`: to carry a ``power`` P at
+    the ``belt_speed`` v without slipping, the drive needs a net pull P/v, and the tension
+    ratio m = e^(μθ) (the capstan ratio for ``friction_coefficient`` μ and ``wrap_angle`` θ)
+    splits that into a tight side T₁ = (P/v)·m/(m − 1) and a slack side T₂ = T₁/m. This is
+    the installation tension a belt must be tensioned to — set it higher than this or the
+    belt slips. Centrifugal tension is neglected (a low-speed / first-cut selection). P and v
+    must be positive; μ and θ as in :func:`capstan_tension_ratio`. Returns T₁ in N.
+    """
+    if not power.has_dimension("[power]"):
+        raise ValueError(f"power must be a [power] quantity; got {power.dimensionality} ({power})")
+    if not belt_speed.has_dimension("[velocity]"):
+        raise ValueError(
+            f"belt_speed must be a [velocity] quantity; got {belt_speed.dimensionality}"
+        )
+    p = power.to("W").magnitude
+    v = belt_speed.to("m/s").magnitude
+    if p <= 0 or v <= 0:
+        raise ValueError("power and belt_speed must be positive")
+    ratio = _ratio(friction_coefficient, wrap_angle)
+    if ratio <= 1:
+        raise ValueError("the tension ratio must exceed 1 (need positive friction and wrap)")
+    tight = (p / v) * ratio / (ratio - 1.0)
+    return Quantity(magnitude=tight, unit="N")
 
 
 def belt_mean_tension(*, tight_tension: Quantity, slack_tension: Quantity) -> Quantity:

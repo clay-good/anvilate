@@ -11107,3 +11107,29 @@ def test_hydraulic_cylinder_force_and_speed_rod_asymmetry():
         cylinder_retract_force(
             pressure=_q("20 MPa"), bore_diameter=_q("63 mm"), rod_diameter=_q("63 mm")
         )
+
+
+def test_belt_tight_tension_for_power_inverts_the_transmitted_power():
+    from anvilate.analysis import (
+        belt_slack_tension,
+        belt_tight_tension_for_power,
+        belt_transmitted_power,
+    )
+
+    # Size the tight tension to transmit 5 kW at 10 m/s over a 2.9 rad wrap, mu = 0.3.
+    t1 = belt_tight_tension_for_power(
+        power=_q("5 kW"), belt_speed=_q("10 m/s"), friction_coefficient=0.3, wrap_angle=2.9
+    )
+    # The slack side follows from the capstan ratio; the pair must transmit exactly 5 kW.
+    t2 = belt_slack_tension(tight_tension=t1, friction_coefficient=0.3, wrap_angle=2.9)
+    power = belt_transmitted_power(tight_tension=t1, slack_tension=t2, belt_speed=_q("10 m/s"))
+    assert power.to("W").magnitude == pytest.approx(5000.0, rel=1e-9)
+    # More wrap (a bigger pulley or an idler) needs less tight tension for the same power.
+    more_wrap = belt_tight_tension_for_power(
+        power=_q("5 kW"), belt_speed=_q("10 m/s"), friction_coefficient=0.3, wrap_angle=3.5
+    )
+    assert more_wrap.to("N").magnitude < t1.to("N").magnitude
+    with pytest.raises(ValueError, match="power must be a"):
+        belt_tight_tension_for_power(
+            power=_q("5 kN"), belt_speed=_q("10 m/s"), friction_coefficient=0.3, wrap_angle=2.9
+        )
