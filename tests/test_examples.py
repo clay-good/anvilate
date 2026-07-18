@@ -1228,3 +1228,20 @@ def test_helical_thrust_example_lands_on_the_bearing():
     assert steep.status is CheckStatus.FAIL
     assert "safety factor 0.60" in steep.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_cable_resonance_example_tunes_off_the_forcing():
+    namespace = runpy.run_path(str(_EXAMPLES / "cable_resonance_tuning.py"))
+    card = namespace["screen_cable_resonance"]()
+    by_name = {e.name: e for e in card.entries}
+    # The low tension tunes the fundamental right onto the forcing -> resonance.
+    low = by_name["40 kN"]
+    assert low.status is CheckStatus.FAIL
+    assert "safety factor 0.68" in low.detail
+    # Tightening lifts the fundamental clear of the keep-out band.
+    assert by_name["90 kN"].passed
+    high = by_name["150 kN"]
+    assert high.passed
+    assert "safety factor 1.32" in high.detail
+    # With a resonant option present, the overall screen fails.
+    assert card.status is CheckStatus.FAIL
