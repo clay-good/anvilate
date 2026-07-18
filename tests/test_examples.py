@@ -2023,3 +2023,22 @@ def test_bushing_wear_life_example_lubrication_governs():
     assert improved.entries[0].passed
     assert "safety factor 1.49" in improved.entries[0].detail
     assert improved.status is CheckStatus.PASS
+
+
+def test_hydraulic_rod_buckling_capstone_rod_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_rod_buckling.py"))
+    slender = namespace["screen_cylinder"]()
+    by_name = {e.name: e for e in slender.entries}
+    # The cylinder makes plenty of force...
+    assert by_name["extend force vs load"].passed
+    assert "safety factor 1.25" in by_name["extend force vs load"].detail
+    # ...but the slender rod buckles as a column at full extension.
+    assert by_name["rod column buckling at full stroke"].status is CheckStatus.FAIL
+    assert "safety factor 0.83" in by_name["rod column buckling at full stroke"].detail
+    assert slender.status is CheckStatus.FAIL
+    # A stouter rod carries the same thrust standing up.
+    stout = namespace["screen_stouter_rod"]()
+    stout_by_name = {e.name: e for e in stout.entries}
+    assert stout_by_name["rod column buckling at full stroke"].passed
+    assert "safety factor 1.41" in stout_by_name["rod column buckling at full stroke"].detail
+    assert stout.status is CheckStatus.PASS
