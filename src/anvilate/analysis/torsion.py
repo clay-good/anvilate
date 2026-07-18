@@ -48,6 +48,7 @@ __all__ = [
     "elliptical_bar_twist_angle",
     "triangular_bar_torsional_stress",
     "triangular_bar_twist_angle",
+    "thin_closed_tube_torsional_stress",
 ]
 
 
@@ -604,3 +605,30 @@ def triangular_bar_twist_angle(
     jt = Quantity(magnitude=sqrt(3.0) * s**4 / 80.0, unit="mm**4").pint
     angle = torque.pint * length.pint / (shear_modulus.pint * jt)
     return _as_quantity(angle, "degree")
+
+
+def thin_closed_tube_torsional_stress(
+    *, torque: Quantity, enclosed_area: Quantity, wall_thickness: Quantity
+) -> Quantity:
+    """The Bredt shear stress τ = T/(2·A_m·t) in any thin closed tube of given area.
+
+    The general (first Bredt) formula for a thin-walled *closed* section of any
+    shape — an oval, a D-section, a triangular tube — carrying ``torque`` T: the
+    shear flows uniformly around the wall, so the stress is set by the median-line
+    ``enclosed_area`` A_m and the ``wall_thickness`` t alone, τ = T/(2·A_m·t). Supply
+    the enclosed area for the section's shape (for a box it is
+    :func:`rectangular_tube_enclosed_area`; for a thin circular tube it is π·r_m²).
+    Every quantity is dimension-checked and A_m and t must be positive. Returns the
+    wall shear stress in MPa.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(enclosed_area, "[length]**2", "enclosed_area")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    am = enclosed_area.to("mm**2").magnitude
+    t = wall_thickness.to("mm").magnitude
+    if am <= 0:
+        raise ValueError(f"enclosed_area must be positive; got {enclosed_area}")
+    if t <= 0:
+        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+    stress = torque.pint / (2 * enclosed_area.pint * wall_thickness.pint)
+    return _as_quantity(stress, "MPa")

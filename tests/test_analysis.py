@@ -283,6 +283,7 @@ from anvilate.analysis import (
     thermal_shock_stress,
     thick_wall_cylinder,
     thick_wall_sphere,
+    thin_closed_tube_torsional_stress,
     thin_open_strip_torsion_constant,
     thin_open_strip_torsional_stress,
     thin_open_strip_twist_angle,
@@ -8777,3 +8778,28 @@ def test_plate_shear_buckling_coefficient():
     assert tau_cr.to("MPa").magnitude > 0
     with pytest.raises(ValueError, match="aspect_ratio .* must be at least 1"):
         plate_shear_buckling_coefficient(aspect_ratio=0.5)
+
+
+def test_thin_closed_tube_torsion_generalizes_the_box():
+    from math import pi
+
+    # tau = T/(2*A_m*t); it matches the rectangular-box Bredt for a box's A_m.
+    area = rectangular_tube_enclosed_area(
+        width=_q("100 mm"), height=_q("60 mm"), wall_thickness=_q("5 mm")
+    )
+    general = thin_closed_tube_torsional_stress(
+        torque=_q("500 N*m"), enclosed_area=area, wall_thickness=_q("5 mm")
+    )
+    box = rectangular_tube_torsional_stress(
+        torque=_q("500 N*m"), width=_q("100 mm"), height=_q("60 mm"), wall_thickness=_q("5 mm")
+    )
+    assert general.to("MPa").magnitude == pytest.approx(box.to("MPa").magnitude, rel=1e-12)
+    # For a thin circular tube A_m = pi*r_m^2, matching the direct T/(2*A_m*t).
+    circ = thin_closed_tube_torsional_stress(
+        torque=_q("500 N*m"), enclosed_area=_q(f"{pi * 47.5**2} mm**2"), wall_thickness=_q("5 mm")
+    )
+    assert circ.to("MPa").magnitude == pytest.approx(500e3 / (2 * pi * 47.5**2 * 5), rel=1e-12)
+    with pytest.raises(ValueError, match="enclosed_area must be positive"):
+        thin_closed_tube_torsional_stress(
+            torque=_q("500 N*m"), enclosed_area=_q("0 mm**2"), wall_thickness=_q("5 mm")
+        )
