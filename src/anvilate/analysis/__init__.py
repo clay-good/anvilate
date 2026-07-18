@@ -171,7 +171,8 @@ modules:
   the neutral-axis radius and bend allowance (K-factor), the outside setback and
   bend deduction, the developed blank length of a multi-bend strip, the minimum
   bend radius a material's ductility allows, the air (V-die) bending force, and the
-  shear-cutting / round-hole punching force and the stripping force to clear the punch
+  shear-cutting / round-hole punching force and the stripping force to clear the punch,
+  and the deep-drawing cup blank diameter, draw ratio, and drawing force
 
 Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
@@ -580,6 +581,9 @@ from .sheetmetal import (
     air_bending_force,
     bend_allowance,
     bend_deduction,
+    cup_blank_diameter,
+    deep_draw_force,
+    draw_ratio,
     flat_pattern_length,
     minimum_bend_radius,
     neutral_axis_radius,
@@ -767,6 +771,9 @@ __all__ = [
     "shear_cutting_force",
     "round_hole_punching_force",
     "stripping_force",
+    "cup_blank_diameter",
+    "draw_ratio",
+    "deep_draw_force",
     "RivetedJointStrength",
     "riveted_joint_efficiency",
     "max_transverse_shear_stress",

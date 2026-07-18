@@ -44,6 +44,9 @@ __all__ = [
     "shear_cutting_force",
     "round_hole_punching_force",
     "stripping_force",
+    "cup_blank_diameter",
+    "draw_ratio",
+    "deep_draw_force",
 ]
 
 
@@ -290,3 +293,74 @@ def stripping_force(*, cutting_force: Quantity, strip_factor: float = 0.1) -> Qu
     if not 0 < strip_factor <= 1:
         raise ValueError(f"strip_factor must be in (0, 1]; got {strip_factor}")
     return Quantity(magnitude=f * strip_factor, unit="kN")
+
+
+def cup_blank_diameter(*, cup_diameter: Quantity, cup_height: Quantity) -> Quantity:
+    """The flat-blank diameter D = √(d² + 4·d·h) for a plain cylindrical cup.
+
+    A drawn cup starts as a flat disc whose area equals the finished cup's surface
+    (bottom π·d²/4 plus wall π·d·h); equating the two gives D = √(d² + 4·d·h) for a
+    ``cup_diameter`` d and ``cup_height`` h. This is the first-order blank, neglecting
+    the bottom-corner radius and wall thinning — a trim allowance is added on top. Both
+    inputs must be positive. Returns the blank diameter in mm.
+    """
+    _require(cup_diameter, "[length]", "cup_diameter")
+    _require(cup_height, "[length]", "cup_height")
+    d = cup_diameter.to("mm").magnitude
+    h = cup_height.to("mm").magnitude
+    if d <= 0 or h <= 0:
+        raise ValueError("cup_diameter and cup_height must be positive")
+    return Quantity(magnitude=(d**2 + 4.0 * d * h) ** 0.5, unit="mm")
+
+
+def draw_ratio(*, blank_diameter: Quantity, punch_diameter: Quantity) -> float:
+    """The draw ratio DR = D/d of a deep-drawing operation.
+
+    The ratio of the ``blank_diameter`` D to the ``punch_diameter`` d (the cup
+    diameter) measures how severe the draw is. A single draw is limited to the
+    material's limiting draw ratio (LDR, typically 1.8–2.2); a DR beyond it must be
+    split into a first draw and one or more redraws. Both diameters must be positive.
+    Returns the dimensionless ratio.
+    """
+    _require(blank_diameter, "[length]", "blank_diameter")
+    _require(punch_diameter, "[length]", "punch_diameter")
+    big = blank_diameter.to("mm").magnitude
+    small = punch_diameter.to("mm").magnitude
+    if big <= 0 or small <= 0:
+        raise ValueError("blank_diameter and punch_diameter must be positive")
+    return big / small
+
+
+def deep_draw_force(
+    *,
+    punch_diameter: Quantity,
+    thickness: Quantity,
+    ultimate_tensile_strength: Quantity,
+    blank_diameter: Quantity,
+    draw_constant: float = 0.7,
+) -> Quantity:
+    """The punch force F = π·d·t·σ_u·(D/d − C) to draw a cylindrical cup.
+
+    The peak drawing force scales with the cup wall's tensile capacity π·d·t·σ_u times
+    a draw-severity term (D/d − C): ``punch_diameter`` d, ``thickness`` t,
+    ``ultimate_tensile_strength`` σ_u, and ``blank_diameter`` D, with the empirical
+    ``draw_constant`` C (default 0.7, Kalpakjian) covering friction and the
+    blank-holder work. The bracket must be positive (a draw ratio above C). Returns the
+    force in kN.
+    """
+    _require(punch_diameter, "[length]", "punch_diameter")
+    _require(thickness, "[length]", "thickness")
+    _require(ultimate_tensile_strength, "[pressure]", "ultimate_tensile_strength")
+    _require(blank_diameter, "[length]", "blank_diameter")
+    d = punch_diameter.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    su = ultimate_tensile_strength.to("MPa").magnitude
+    big = blank_diameter.to("mm").magnitude
+    if d <= 0 or t <= 0 or su <= 0 or big <= 0:
+        raise ValueError("punch_diameter, thickness, strength, and blank_diameter must be positive")
+    bracket = big / d - draw_constant
+    if bracket <= 0:
+        raise ValueError(
+            f"draw ratio D/d ({big / d:.3f}) must exceed draw_constant ({draw_constant})"
+        )
+    return Quantity(magnitude=pi * d * t * su * bracket / 1000.0, unit="kN")

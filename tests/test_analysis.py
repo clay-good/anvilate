@@ -10613,3 +10613,37 @@ def test_sheetmetal_punching_and_stripping_forces():
         sm.shear_cutting_force(
             cut_length=_q("100 mm"), thickness=_q("2 mm"), ultimate_shear_strength=_q("5 mm")
         )
+
+
+def test_sheetmetal_deep_draw_blank_ratio_and_force():
+    from math import pi, sqrt
+
+    from anvilate.analysis import sheetmetal as sm
+
+    # Blank area equals the cup surface: D = sqrt(d^2 + 4*d*h).
+    blank = sm.cup_blank_diameter(cup_diameter=_q("50 mm"), cup_height=_q("60 mm"))
+    assert blank.to("mm").magnitude == pytest.approx(sqrt(50**2 + 4 * 50 * 60), rel=1e-12)
+    # pi*D^2/4 == pi*d^2/4 + pi*d*h (the identity the blank formula enforces).
+    d_blank = blank.to("mm").magnitude
+    assert pi * d_blank**2 / 4 == pytest.approx(pi * 50**2 / 4 + pi * 50 * 60, rel=1e-12)
+    dr = sm.draw_ratio(blank_diameter=blank, punch_diameter=_q("50 mm"))
+    assert dr == pytest.approx(d_blank / 50, rel=1e-12)
+    assert dr > 2.2  # beyond a typical LDR -> this cup needs a redraw, not one draw
+    # Draw force F = pi*d*t*su*(D/d - C).
+    force = sm.deep_draw_force(
+        punch_diameter=_q("50 mm"),
+        thickness=_q("1 mm"),
+        ultimate_tensile_strength=_q("300 MPa"),
+        blank_diameter=blank,
+    )
+    assert force.to("kN").magnitude == pytest.approx(
+        pi * 50 * 1 * 300 * (dr - 0.7) / 1000, rel=1e-12
+    )
+    # A draw ratio at or below the draw constant leaves no positive force bracket.
+    with pytest.raises(ValueError, match="must exceed draw_constant"):
+        sm.deep_draw_force(
+            punch_diameter=_q("50 mm"),
+            thickness=_q("1 mm"),
+            ultimate_tensile_strength=_q("300 MPa"),
+            blank_diameter=_q("30 mm"),  # D/d = 0.6 < C
+        )
