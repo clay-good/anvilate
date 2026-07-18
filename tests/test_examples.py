@@ -1690,3 +1690,16 @@ def test_thin_tube_shell_buckling_example_shell_governs_not_column():
     assert by_name["shell (local wall) buckling"].status is CheckStatus.FAIL
     assert "safety factor 0.91" in by_name["shell (local wall) buckling"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_gear_nonstandard_center_example_operating_angle_caps_the_stretch():
+    namespace = runpy.run_path(str(_EXAMPLES / "gear_nonstandard_center.py"))
+    card = namespace["screen_gear_centers"]()
+    by_name = {e.name: e for e in card.entries}
+    # A 62 mm centre keeps the operating pressure angle just inside the 25-deg cap.
+    assert by_name["62 mm centre"].passed
+    assert "safety factor 1.02" in by_name["62 mm centre"].detail
+    # Stretching to 63 mm pushes the operating angle past the cap -> a redesign.
+    assert by_name["63 mm centre"].status is CheckStatus.FAIL
+    assert "safety factor 0.94" in by_name["63 mm centre"].detail
+    assert card.status is CheckStatus.FAIL
