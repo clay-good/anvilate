@@ -29,6 +29,7 @@ __all__ = [
     "petroff_friction_power",
     "journal_bearing_unit_load",
     "sommerfeld_number",
+    "journal_bearing_minimum_film_thickness",
 ]
 
 
@@ -173,3 +174,29 @@ def sommerfeld_number(
     if mu <= 0 or n <= 0 or p <= 0:
         raise ValueError("viscosity, speed, and unit_load must be positive")
     return (r / c) ** 2 * (mu * n / p)
+
+
+def journal_bearing_minimum_film_thickness(
+    *,
+    radial_clearance: Quantity,
+    eccentricity_ratio: float,
+) -> Quantity:
+    """The minimum oil-film thickness h₀ = c·(1 − ε) of a loaded journal bearing.
+
+    A loaded journal does not run concentric: it rides eccentric in the bush by a
+    fraction ε (the eccentricity ratio, 0 concentric to 1 metal-to-metal) read from
+    the Raimondi-Boyd charts against the :func:`sommerfeld_number`. The film is
+    thinnest opposite the load line, at h₀ = c·(1 − ε), where ``radial_clearance`` c
+    is the difference between the bush and journal radii. This h₀ is what a full-film
+    (hydrodynamic) bearing lives or dies by: it must stay above the combined
+    surface-roughness of journal and bush (a common rule is h₀ ≳ 5× the RMS
+    roughness) or the surfaces touch and the bearing wears. ``eccentricity_ratio`` ε
+    must lie in [0, 1) and c be a positive length. Returns h₀ in micrometres.
+    """
+    _require(radial_clearance, "[length]", "radial_clearance")
+    if not 0 <= eccentricity_ratio < 1:
+        raise ValueError(f"eccentricity_ratio must lie in [0, 1); got {eccentricity_ratio}")
+    c = radial_clearance.to("um").magnitude
+    if c <= 0:
+        raise ValueError(f"radial_clearance must be positive; got {radial_clearance}")
+    return Quantity(magnitude=c * (1.0 - eccentricity_ratio), unit="um")

@@ -49,7 +49,8 @@ modules:
   and the classical axial-compression buckling stress of a thin cylindrical shell
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.journal_bearing` — journal (plain) bearing Petroff
-  friction torque and power loss, unit load, and Sommerfeld number
+  friction torque and power loss, unit load, Sommerfeld number, and the minimum
+  oil-film thickness from the eccentricity ratio
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque and per-bolt
   shear force
@@ -472,6 +473,7 @@ from .interference import (
     interference_torque_capacity,
 )
 from .journal_bearing import (
+    journal_bearing_minimum_film_thickness,
     journal_bearing_unit_load,
     petroff_friction_power,
     petroff_friction_torque,
@@ -968,6 +970,7 @@ __all__ = [
     "petroff_friction_power",
     "journal_bearing_unit_load",
     "sommerfeld_number",
+    "journal_bearing_minimum_film_thickness",
     "hertz_effective_modulus",
     "HertzContact",
     "hertz_sphere_contact",

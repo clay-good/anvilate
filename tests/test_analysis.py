@@ -198,6 +198,7 @@ from anvilate.analysis import (
     johnson_critical_stress,
     joint_separation_load,
     joint_stiffness_factor,
+    journal_bearing_minimum_film_thickness,
     journal_bearing_unit_load,
     key_bearing_stress,
     key_length_for_torque,
@@ -3275,6 +3276,26 @@ def test_journal_bearing_unit_load_and_sommerfeld_number():
             speed=_q("1800 rpm"),
             unit_load=_q("4 kN"),
         )
+
+
+def test_journal_bearing_minimum_film_thickness():
+    # h0 = c*(1-eps): c = 40 um, eps = 0.6 -> 16 um of oil film.
+    h0 = journal_bearing_minimum_film_thickness(
+        radial_clearance=_q("40 um"), eccentricity_ratio=0.6
+    )
+    assert h0.to("um").magnitude == pytest.approx(40 * (1 - 0.6), rel=1e-12)
+    assert h0.to("um").magnitude == pytest.approx(16.0, rel=1e-9)
+    # A concentric journal (eps = 0) has the full clearance as film thickness.
+    assert journal_bearing_minimum_film_thickness(
+        radial_clearance=_q("40 um"), eccentricity_ratio=0.0
+    ).to("um").magnitude == pytest.approx(40.0, rel=1e-12)
+    # A more heavily loaded (more eccentric) bearing runs a thinner film.
+    thinner = journal_bearing_minimum_film_thickness(
+        radial_clearance=_q("40 um"), eccentricity_ratio=0.9
+    )
+    assert thinner.to("um").magnitude < h0.to("um").magnitude
+    with pytest.raises(ValueError, match=r"eccentricity_ratio must lie in \[0, 1\)"):
+        journal_bearing_minimum_film_thickness(radial_clearance=_q("40 um"), eccentricity_ratio=1.0)
 
 
 def test_petroff_journal_bearing_friction():
