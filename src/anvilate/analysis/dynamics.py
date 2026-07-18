@@ -39,6 +39,7 @@ __all__ = [
     "logarithmic_decrement",
     "quality_factor",
     "transmissibility",
+    "dynamic_magnification_factor",
     "simple_pendulum_period",
     "physical_pendulum_period",
     "tuned_mass_damper_optimal_frequency_ratio",
@@ -231,6 +232,29 @@ def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
     numerator = sqrt(1.0 + (2.0 * zeta * r) ** 2)
     denominator = sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
     return numerator / denominator
+
+
+def dynamic_magnification_factor(*, frequency_ratio: float, damping_ratio: float) -> float:
+    """The steady-state dynamic magnification factor of a forced SDOF system.
+
+    How much a harmonic force of amplitude F₀ amplifies the static deflection F₀/k it
+    would make if applied slowly:
+
+        M = 1 / √((1 − r²)² + (2·ζ·r)²),
+
+    with ``frequency_ratio`` r = ω/ω_n the forcing frequency over the natural
+    frequency and ``damping_ratio`` ζ the fraction of critical damping (0 ≤ ζ < 1).
+    Well below resonance (r → 0) M → 1 (the load acts quasi-statically); at resonance
+    (r ≈ 1) it peaks near 1/(2ζ) = the :func:`quality_factor`; well above (r ≫ 1) the
+    mass cannot follow the force and M → 0. Unlike :func:`transmissibility` (what a
+    mount passes on) this is the response *of* the driven mass itself. r must be
+    non-negative. Returns the dimensionless magnification factor.
+    """
+    zeta = _check_damping_ratio(damping_ratio)
+    if frequency_ratio < 0:
+        raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
+    r = frequency_ratio
+    return 1.0 / sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
 
 
 def simple_pendulum_period(*, length: Quantity, gravity: Quantity = STANDARD_GRAVITY) -> Quantity:

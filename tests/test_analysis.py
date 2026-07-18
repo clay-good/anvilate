@@ -101,6 +101,7 @@ from anvilate.analysis import (
     disc_clutch_force_for_torque,
     disc_clutch_torque,
     dunkerley_fundamental_frequency,
+    dynamic_magnification_factor,
     eccentric_shear_group_peak_force,
     elliptical_bar_torsional_stress,
     elliptical_bar_twist_angle,
@@ -8648,6 +8649,28 @@ def test_transmissibility_isolation_crossover():
     # At resonance TR = sqrt(1+(2*zeta)^2)/(2*zeta).
     tr_res = transmissibility(frequency_ratio=1.0, damping_ratio=0.2)
     assert tr_res == pytest.approx(sqrt(1 + (2 * 0.2) ** 2) / (2 * 0.2), rel=1e-12)
+
+
+def test_dynamic_magnification_factor_peaks_near_resonance():
+    # Quasi-static (r -> 0) the response equals the static deflection: M = 1.
+    assert dynamic_magnification_factor(frequency_ratio=0.0, damping_ratio=0.05) == pytest.approx(
+        1.0, rel=1e-12
+    )
+    # At r = 1 exactly, M = 1/(2*zeta) = the quality factor.
+    assert dynamic_magnification_factor(frequency_ratio=1.0, damping_ratio=0.05) == pytest.approx(
+        1.0 / (2 * 0.05), rel=1e-12
+    )
+    assert dynamic_magnification_factor(frequency_ratio=1.0, damping_ratio=0.05) == pytest.approx(
+        quality_factor(damping_ratio=0.05), rel=1e-12
+    )
+    # Well above resonance the mass cannot follow the force: M -> 0.
+    assert dynamic_magnification_factor(frequency_ratio=5.0, damping_ratio=0.05) < 0.05
+    # More damping lowers the resonant peak.
+    assert dynamic_magnification_factor(
+        frequency_ratio=1.0, damping_ratio=0.2
+    ) < dynamic_magnification_factor(frequency_ratio=1.0, damping_ratio=0.05)
+    with pytest.raises(ValueError, match="frequency_ratio must be non-negative"):
+        dynamic_magnification_factor(frequency_ratio=-1.0, damping_ratio=0.1)
 
 
 def test_damped_vibration_rejects_bad_inputs():
