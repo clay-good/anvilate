@@ -214,6 +214,7 @@ from anvilate.analysis import (
     rotating_rim_burst_speed,
     rotating_rim_hoop_stress,
     rotating_rim_radial_growth,
+    rotating_solid_disc_max_stress,
     scotch_yoke_acceleration,
     scotch_yoke_displacement,
     scotch_yoke_velocity,
@@ -8422,3 +8423,26 @@ def test_thin_ring_diametral_deflection_and_moment():
             elastic_modulus=_q("200 GPa"),
             second_moment=_q("500 mm"),
         )
+
+
+def test_rotating_solid_disc_peak_stress_is_at_the_centre():
+    steel = _q("7850 kg/m**3")
+    kw = {"density": steel, "outer_radius": _q("300 mm"), "rotational_speed": _q("3000 rpm")}
+    # sigma_center = (3+nu)/8 * rho * (omega*R)^2.
+    disc = rotating_solid_disc_max_stress(**kw, poisson=0.3)
+    omega = 3000 * 2 * 3.141592653589793 / 60.0
+    v = omega * 0.3
+    assert disc.to("MPa").magnitude == pytest.approx((3.3 / 8) * 7850 * v**2 / 1e6, rel=1e-12)
+    assert disc.to("MPa").magnitude == pytest.approx(28.76, rel=1e-3)
+    # A SOLID disc peaks at (3+nu)/8 = 0.4125 of a thin rim's rho*v^2 at the same R.
+    rim = rotating_rim_hoop_stress(
+        density=steel, mean_radius=_q("300 mm"), rotational_speed=_q("3000 rpm")
+    )
+    assert disc.to("MPa").magnitude / rim.to("MPa").magnitude == pytest.approx(3.3 / 8, rel=1e-9)
+    # Stress rides on (omega*R)^2.
+    faster = rotating_solid_disc_max_stress(
+        density=steel, outer_radius=_q("300 mm"), rotational_speed=_q("6000 rpm")
+    )
+    assert faster.to("MPa").magnitude == pytest.approx(4 * disc.to("MPa").magnitude, rel=1e-9)
+    with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
+        rotating_solid_disc_max_stress(**kw, poisson=0.6)

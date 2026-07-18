@@ -38,6 +38,7 @@ __all__ = [
     "rotating_rim_hoop_stress",
     "rotating_rim_burst_speed",
     "rotating_rim_radial_growth",
+    "rotating_solid_disc_max_stress",
 ]
 
 
@@ -218,3 +219,37 @@ def rotating_rim_radial_growth(
         raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
     growth = rho * omega**2 * r**3 / e  # metres
     return Quantity(magnitude=growth * 1000.0, unit="mm")
+
+
+def rotating_solid_disc_max_stress(
+    *,
+    density: Quantity,
+    outer_radius: Quantity,
+    rotational_speed: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The peak stress σ = (3 + ν)/8·ρ·(ω·R)² at the centre of a solid spinning disc.
+
+    A *solid* disc (a turbine wheel, a flywheel machined from plate) does not carry
+    the thin-rim's uniform ρ·v²: its stress is highest at the centre, where the
+    radial and tangential stresses are equal at σ = (3 + ν)/8·ρ·ω²·R². This is the
+    stress that bursts a solid rotor from the middle out, distinct from the
+    :func:`rotating_rim_hoop_stress` of a thin ring. ``density`` ρ, ``outer_radius``
+    R, ``rotational_speed`` ω (positive), and Poisson's ratio ``poisson`` ν
+    (0 ≤ ν < 0.5) describe the disc. Screen it against the material's allowable.
+    Returns the peak centre stress in MPa.
+    """
+    _require(density, "[mass] / [length]**3", "density")
+    _require(outer_radius, "[length]", "outer_radius")
+    _require(rotational_speed, "[frequency]", "rotational_speed")
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    rho = density.to("kg/m**3").magnitude
+    r = outer_radius.to("m").magnitude
+    omega = rotational_speed.to("rad/s").magnitude
+    if r <= 0:
+        raise ValueError(f"outer_radius must be positive; got {outer_radius}")
+    if omega <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    sigma = (3.0 + poisson) / 8.0 * rho * (omega * r) ** 2
+    return Quantity(magnitude=sigma / 1e6, unit="MPa")
