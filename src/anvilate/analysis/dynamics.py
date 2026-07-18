@@ -38,6 +38,7 @@ __all__ = [
     "damped_natural_frequency",
     "logarithmic_decrement",
     "quality_factor",
+    "critical_damping_coefficient",
     "transmissibility",
     "dynamic_magnification_factor",
     "resonance_phase_angle",
@@ -162,6 +163,25 @@ def _check_damping_ratio(damping_ratio: float) -> float:
             f"damping_ratio must lie in [0, 1) (an underdamped system); got {damping_ratio}"
         )
     return damping_ratio
+
+
+def critical_damping_coefficient(*, stiffness: Quantity, mass: Quantity) -> Quantity:
+    """The critical damping coefficient c_c = 2·√(k·m) of a mass-spring system.
+
+    Critical damping is the least damping that returns a disturbed system to rest
+    without overshooting — the boundary between the oscillating (underdamped) and
+    creeping (overdamped) regimes. It is c_c = 2·√(k·m) = 2·m·ω_n, and every damping
+    ratio is a fraction of it (ζ = c/c_c), so this is the coefficient that turns a
+    target ζ into the actual dashpot rating to specify. ``stiffness`` k and ``mass``
+    m must be positive. Returns c_c in newton-seconds per metre (N·s/m).
+    """
+    _require(stiffness, "[force] / [length]", "stiffness")
+    _require(mass, "[mass]", "mass")
+    k = stiffness.to("N/m").magnitude
+    m = mass.to("kg").magnitude
+    if k <= 0 or m <= 0:
+        raise ValueError("stiffness and mass must be positive")
+    return Quantity(magnitude=2.0 * sqrt(k * m), unit="N*s/m")
 
 
 def damped_natural_frequency(*, natural_frequency: Quantity, damping_ratio: float) -> Quantity:

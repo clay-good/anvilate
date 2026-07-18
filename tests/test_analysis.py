@@ -92,6 +92,7 @@ from anvilate.analysis import (
     cone_clutch_torque,
     constrained_thermal_stress,
     critical_crack_length,
+    critical_damping_coefficient,
     cyclic_stress_components,
     cylinder_axial_buckling_stress,
     cylinder_external_pressure_buckling,
@@ -9509,6 +9510,22 @@ def test_quality_factor():
     assert quality_factor(damping_ratio=0.02) > quality_factor(damping_ratio=0.1)
     with pytest.raises(ValueError, match="damping_ratio"):
         quality_factor(damping_ratio=0)
+
+
+def test_critical_damping_coefficient():
+    from math import sqrt
+
+    # c_c = 2*sqrt(k*m): k = 8000 N/m, m = 1 kg -> 178.9 N*s/m.
+    cc = critical_damping_coefficient(stiffness=_q("8000 N/m"), mass=_q("1 kg"))
+    assert cc.to("N*s/m").magnitude == pytest.approx(2 * sqrt(8000 * 1), rel=1e-12)
+    assert cc.to("N*s/m").magnitude == pytest.approx(178.885, rel=1e-4)
+    # c_c = 2*m*omega_n, so a target damping ratio needs c = zeta*c_c of damping.
+    omega_n = natural_frequency(stiffness=_q("8000 N/m"), mass=_q("1 kg")).to("Hz").magnitude * (
+        2 * 3.141592653589793
+    )
+    assert cc.to("N*s/m").magnitude == pytest.approx(2 * 1 * omega_n, rel=1e-9)
+    with pytest.raises(ValueError, match="stiffness and mass must be positive"):
+        critical_damping_coefficient(stiffness=_q("0 N/m"), mass=_q("1 kg"))
 
 
 def test_belt_transmitted_power_and_mean_tension():
