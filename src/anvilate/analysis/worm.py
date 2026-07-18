@@ -35,6 +35,7 @@ __all__ = [
     "worm_gear_ratio",
     "worm_lead_angle",
     "worm_gear_efficiency",
+    "worm_output_torque",
     "worm_is_self_locking",
     "worm_tangential_force",
     "worm_separating_force",
@@ -146,6 +147,36 @@ def worm_gear_efficiency(
     numerator = cos(phi_n) - mu * tan(lam)
     denominator = cos(phi_n) + mu / tan(lam)
     return numerator / denominator
+
+
+def worm_output_torque(
+    *,
+    input_torque: Quantity,
+    worm_starts: int,
+    gear_teeth: int,
+    lead_angle: float,
+    friction_coefficient: float,
+    normal_pressure_angle: float = 14.5,
+) -> Quantity:
+    """The wheel output torque T_out = T_in·m_G·η a worm drive delivers.
+
+    A worm reduction multiplies torque by its ratio, but the sliding mesh is
+    inefficient, so the real output is the ideal T_in·m_G knocked down by the mesh
+    efficiency: T_out = ``input_torque``·m_G·η, with the reduction ratio m_G from
+    :func:`worm_gear_ratio` (``worm_starts`` N_W, ``gear_teeth`` N_G) and η from
+    :func:`worm_gear_efficiency` (``lead_angle`` λ, ``friction_coefficient`` μ,
+    ``normal_pressure_angle`` φ_n). Skipping η badly over-predicts the output — a
+    single-start worm often keeps barely half. The input torque must be a torque.
+    Returns the output torque in N·m.
+    """
+    _require(input_torque, "[force] * [length]", "input_torque")
+    ratio = worm_gear_ratio(worm_starts=worm_starts, gear_teeth=gear_teeth)
+    eta = worm_gear_efficiency(
+        lead_angle=lead_angle,
+        friction_coefficient=friction_coefficient,
+        normal_pressure_angle=normal_pressure_angle,
+    )
+    return Quantity(magnitude=input_torque.to("N*m").magnitude * ratio * eta, unit="N*m")
 
 
 def worm_is_self_locking(

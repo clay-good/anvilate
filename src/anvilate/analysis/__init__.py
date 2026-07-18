@@ -41,8 +41,8 @@ modules:
   torque, the load a given input torque can raise (jack capacity), efficiency, the
   self-locking condition, and the collar (thrust-bearing) friction torque
 - :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
-  mesh efficiency, the self-locking condition, and the input tangential and
-  separating (radial) tooth forces
+  mesh efficiency, the efficiency-corrected wheel output torque, the self-locking
+  condition, and the input tangential and separating (radial) tooth forces
 - :mod:`~anvilate.analysis.clutch` — disc and cone clutch / brake friction torque
   (uniform-wear and uniform-pressure) and the clamp force a torque requires
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
@@ -744,6 +744,7 @@ from .worm import (
     worm_gear_ratio,
     worm_is_self_locking,
     worm_lead_angle,
+    worm_output_torque,
     worm_separating_force,
     worm_tangential_force,
 )
@@ -1112,6 +1113,7 @@ __all__ = [
     "worm_gear_ratio",
     "worm_lead_angle",
     "worm_gear_efficiency",
+    "worm_output_torque",
     "worm_is_self_locking",
     "worm_tangential_force",
     "worm_separating_force",

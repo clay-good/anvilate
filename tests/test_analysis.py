@@ -10945,3 +10945,19 @@ def test_power_screw_raise_load_inverts_the_raise_torque():
     assert doubled.to("N").magnitude == pytest.approx(2 * capacity.to("N").magnitude, rel=1e-12)
     with pytest.raises(ValueError, match="torque must be a"):
         power_screw_raise_load(torque=_q("20 N"), **thread)
+
+
+def test_worm_output_torque_folds_in_the_mesh_efficiency():
+    from anvilate.analysis import worm_gear_efficiency, worm_gear_ratio, worm_output_torque
+
+    kw = {"lead_angle": 5.0, "friction_coefficient": 0.05, "normal_pressure_angle": 20.0}
+    eta = worm_gear_efficiency(**kw)
+    ratio = worm_gear_ratio(worm_starts=1, gear_teeth=40)
+    out = worm_output_torque(input_torque=_q("10 N*m"), worm_starts=1, gear_teeth=40, **kw)
+    assert out.to("N*m").magnitude == pytest.approx(10 * ratio * eta, rel=1e-12)
+    # The efficiency loss is large: the real output is well below the ideal T_in*ratio.
+    ideal = 10 * ratio
+    assert out.to("N*m").magnitude < 0.7 * ideal
+    assert eta < 0.7
+    with pytest.raises(ValueError, match="input_torque must be a"):
+        worm_output_torque(input_torque=_q("10 N"), worm_starts=1, gear_teeth=40, **kw)
