@@ -44,6 +44,7 @@ __all__ = [
     "clamped_annular_plate_uniform_load",
     "clamped_circular_plate_thickness_for_pressure",
     "plate_buckling_stress",
+    "plate_shear_buckling_coefficient",
 ]
 
 # Odd-harmonic cap for the Navier series. Deflection terms fall off as 1/(mn)·
@@ -601,3 +602,27 @@ def plate_buckling_stress(
         raise ValueError("thickness and width must be positive")
     sigma = buckling_coefficient * pi**2 * e / (12.0 * (1.0 - poisson_ratio**2)) * (t / b) ** 2
     return Quantity(magnitude=sigma, unit="MPa")
+
+
+def plate_shear_buckling_coefficient(*, aspect_ratio: float) -> float:
+    """The shear-buckling coefficient k_s of a simply-supported rectangular plate.
+
+    A plate loaded in edge *shear* (a beam web under shear, say) buckles in a
+    diagonal pattern at a critical stress k_s·π²·E/(12(1−ν²))·(t/b)² — the same form
+    as :func:`plate_buckling_stress`, but with the shear coefficient in place of the
+    compression one. For a simply-supported plate that coefficient has a closed form
+    in the panel aspect ratio a/b (long side over short side, ≥ 1):
+
+        k_s = 5.34 + 4·(b/a)²   (a ≥ b)
+
+    so a very long panel tends to k_s = 5.34 and a square one to 9.34 — closer web
+    stiffeners (smaller a/b) raise the buckling stress. Pass the result as the
+    ``buckling_coefficient`` to :func:`plate_buckling_stress`. ``aspect_ratio`` a/b
+    must be at least 1 (orient the panel so the loaded pair is the longer). Returns
+    the dimensionless k_s.
+    """
+    if aspect_ratio < 1:
+        raise ValueError(
+            f"aspect_ratio (long side / short side) must be at least 1; got {aspect_ratio}"
+        )
+    return 5.34 + 4.0 / aspect_ratio**2

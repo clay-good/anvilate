@@ -198,6 +198,7 @@ from anvilate.analysis import (
     planetary_speed,
     planetary_torques,
     plate_buckling_stress,
+    plate_shear_buckling_coefficient,
     polar_second_moment_hollow,
     polar_second_moment_solid,
     power_screw_efficiency,
@@ -8754,3 +8755,25 @@ def test_tuned_mass_damper_den_hartog_optimum():
     )
     with pytest.raises(ValueError, match="mass_ratio must be positive"):
         tuned_mass_damper_optimal_frequency_ratio(mass_ratio=0)
+
+
+def test_plate_shear_buckling_coefficient():
+    # k_s = 5.34 + 4/(a/b)^2: a square panel gives 9.34, a long one tends to 5.34.
+    assert plate_shear_buckling_coefficient(aspect_ratio=1.0) == pytest.approx(9.34, rel=1e-12)
+    assert plate_shear_buckling_coefficient(aspect_ratio=2.0) == pytest.approx(6.34, rel=1e-12)
+    assert plate_shear_buckling_coefficient(aspect_ratio=100.0) == pytest.approx(5.3404, rel=1e-4)
+    # Closer stiffeners (smaller aspect ratio) raise the coefficient.
+    assert plate_shear_buckling_coefficient(aspect_ratio=1.5) > plate_shear_buckling_coefficient(
+        aspect_ratio=3.0
+    )
+    # It feeds plate_buckling_stress as the buckling coefficient.
+    k = plate_shear_buckling_coefficient(aspect_ratio=2.0)
+    tau_cr = plate_buckling_stress(
+        buckling_coefficient=k,
+        elastic_modulus=_q("200 GPa"),
+        thickness=_q("5 mm"),
+        width=_q("300 mm"),
+    )
+    assert tau_cr.to("MPa").magnitude > 0
+    with pytest.raises(ValueError, match="aspect_ratio .* must be at least 1"):
+        plate_shear_buckling_coefficient(aspect_ratio=0.5)
