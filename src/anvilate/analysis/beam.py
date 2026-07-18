@@ -67,6 +67,8 @@ __all__ = [
     "rectangular_tube_plastic_section_modulus",
     "i_section_plastic_section_modulus",
     "plastic_moment",
+    "simply_supported_plastic_collapse_load",
+    "fixed_fixed_plastic_collapse_load",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -322,6 +324,54 @@ def plastic_moment(*, plastic_section_modulus: Quantity, yield_strength: Quantit
     if yield_strength.to("MPa").magnitude <= 0:
         raise ValueError(f"yield_strength must be positive; got {yield_strength}")
     return _as_quantity(plastic_section_modulus.pint * yield_strength.pint, "N*m")
+
+
+def _collapse_inputs(
+    plastic_moment_capacity: Quantity, span: Quantity
+) -> tuple[Quantity, Quantity]:
+    _require(plastic_moment_capacity, "[force] * [length]", "plastic_moment_capacity")
+    _require(span, "[length]", "span")
+    if plastic_moment_capacity.to("N*m").magnitude <= 0:
+        raise ValueError(f"plastic_moment_capacity must be positive; got {plastic_moment_capacity}")
+    if span.to("mm").magnitude <= 0:
+        raise ValueError(f"span must be positive; got {span}")
+    return plastic_moment_capacity, span
+
+
+def simply_supported_plastic_collapse_load(
+    *, plastic_moment_capacity: Quantity, span: Quantity
+) -> Quantity:
+    """The central point load that collapses a simply-supported beam, P = 4·M_p/L.
+
+    A simply-supported beam under a central point load collapses when a single
+    plastic hinge forms at midspan, where the peak moment P·L/4 reaches the section's
+    plastic moment M_p — so the collapse load is P = 4·M_p/L (equivalently, the
+    beam is statically determinate, so collapse coincides with the midspan section
+    fully yielding). ``plastic_moment_capacity`` M_p is the section's fully-plastic
+    moment (:func:`plastic_moment`) and ``span`` L the support spacing; both must be
+    positive. Returns the collapse point load in newtons.
+    """
+    mp, length = _collapse_inputs(plastic_moment_capacity, span)
+    return _as_quantity(4 * mp.pint / length.pint, "N")
+
+
+def fixed_fixed_plastic_collapse_load(
+    *, plastic_moment_capacity: Quantity, span: Quantity
+) -> Quantity:
+    """The central point load that collapses a fixed-fixed beam, P = 8·M_p/L.
+
+    A built-in (fixed-fixed) beam is statically indeterminate, so it does not fail
+    when the first section yields: hinges form at the two fixed ends and then a third
+    at midspan before a mechanism develops. Virtual work on that three-hinge
+    mechanism (end rotations θ, a 2θ midspan hinge) gives P·(L/2)·θ = 4·M_p·θ, i.e.
+    P = 8·M_p/L — twice the simply-supported
+    :func:`simply_supported_plastic_collapse_load`, the extra capacity coming from
+    the moment redistribution a ductile indeterminate structure allows.
+    ``plastic_moment_capacity`` M_p and ``span`` L must be positive. Returns the
+    collapse point load in newtons.
+    """
+    mp, length = _collapse_inputs(plastic_moment_capacity, span)
+    return _as_quantity(8 * mp.pint / length.pint, "N")
 
 
 def max_transverse_shear_stress(

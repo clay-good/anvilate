@@ -10,8 +10,9 @@ modules:
   fixed-fixed / fixed-pinned; point, distributed, triangular, patch, and
   applied-couple loads), transverse shear, shear flow (VQ/I) and built-up-beam
   fastener spacing, section second moments (rectangular, circular, hollow circle,
-  box tube, and I-section), and the plastic section modulus / fully-plastic hinge
-  moment (solid and hollow rectangle and circle)
+  box tube, and I-section), the plastic section modulus / fully-plastic hinge
+  moment (solid and hollow rectangle and circle, I-section), and the plastic
+  collapse load of a simply-supported and a fixed-fixed beam
 - :mod:`~anvilate.analysis.beam_foundation` — beam on a continuous elastic
   foundation (Hetényi): the characteristic parameter β, and the peak deflection and
   bending moment a point load makes on a long (effectively infinite) beam
@@ -169,6 +170,7 @@ from .beam import (
     fixed_fixed_center_patch_load,
     fixed_fixed_offset_load,
     fixed_fixed_partial_uniform_load,
+    fixed_fixed_plastic_collapse_load,
     fixed_fixed_triangular_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
@@ -198,6 +200,7 @@ from .beam import (
     simply_supported_offset_load,
     simply_supported_offset_moment,
     simply_supported_partial_uniform_load,
+    simply_supported_plastic_collapse_load,
     simply_supported_symmetric_point_loads,
     simply_supported_triangular_load,
     simply_supported_uniform_load,
@@ -645,6 +648,8 @@ __all__ = [
     "rectangular_tube_plastic_section_modulus",
     "i_section_plastic_section_modulus",
     "plastic_moment",
+    "simply_supported_plastic_collapse_load",
+    "fixed_fixed_plastic_collapse_load",
     "CrossSection",
     "bending_stress",
     "required_section_modulus",

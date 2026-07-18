@@ -118,6 +118,7 @@ from anvilate.analysis import (
     fixed_fixed_fundamental_frequency,
     fixed_fixed_offset_load,
     fixed_fixed_partial_uniform_load,
+    fixed_fixed_plastic_collapse_load,
     fixed_fixed_triangular_load,
     fixed_fixed_uniform_load,
     fixed_pinned_center_load,
@@ -285,6 +286,7 @@ from anvilate.analysis import (
     simply_supported_offset_load,
     simply_supported_offset_moment,
     simply_supported_partial_uniform_load,
+    simply_supported_plastic_collapse_load,
     simply_supported_plate_center_patch_load,
     simply_supported_plate_fundamental_frequency,
     simply_supported_plate_uniform_load,
@@ -8988,6 +8990,25 @@ def test_plastic_section_modulus_and_hinge_moment():
         rectangular_plastic_section_modulus(_q("50 mm"), _q("100 mm")).to("mm**3").magnitude,
         rel=1e-4,
     )
+
+
+def test_plastic_collapse_loads_and_the_redistribution_reserve():
+    mp = _q("50 kN*m")
+    span = _q("4 m")
+    # SS central point load collapses at P = 4*M_p/L (one midspan hinge).
+    ss = simply_supported_plastic_collapse_load(plastic_moment_capacity=mp, span=span)
+    assert ss.to("kN").magnitude == pytest.approx(4 * 50 / 4, rel=1e-12)
+    assert ss.to("kN").magnitude == pytest.approx(50.0, rel=1e-9)
+    # Fixed-fixed collapses at P = 8*M_p/L (three-hinge mechanism) -- twice the
+    # simply-supported load, the moment-redistribution reserve of an indeterminate
+    # ductile beam.
+    ff = fixed_fixed_plastic_collapse_load(plastic_moment_capacity=mp, span=span)
+    assert ff.to("kN").magnitude == pytest.approx(8 * 50 / 4, rel=1e-12)
+    assert ff.to("N").magnitude == pytest.approx(2 * ss.to("N").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="plastic_moment_capacity must be positive"):
+        simply_supported_plastic_collapse_load(plastic_moment_capacity=_q("0 kN*m"), span=span)
+    with pytest.raises(ValueError, match="plastic_moment_capacity must be a"):
+        fixed_fixed_plastic_collapse_load(plastic_moment_capacity=_q("50 kN"), span=span)
 
 
 def test_thermal_buckling_temperature_rise_is_the_sun_kink():
