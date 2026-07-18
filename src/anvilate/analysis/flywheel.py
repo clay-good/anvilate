@@ -35,6 +35,7 @@ __all__ = [
     "coefficient_of_fluctuation",
     "flywheel_energy_fluctuation",
     "flywheel_inertia_for_fluctuation",
+    "rim_flywheel_mass",
     "rotating_rim_hoop_stress",
     "rotating_rim_burst_speed",
     "rotating_rim_radial_growth",
@@ -133,6 +134,30 @@ def flywheel_inertia_for_fluctuation(
         raise ValueError(f"mean_speed must be positive; got {mean_speed}")
     inertia = de / (omega**2 * coefficient_of_fluctuation)
     return Quantity(magnitude=inertia, unit="kg*m**2")
+
+
+def rim_flywheel_mass(*, inertia: Quantity, mean_radius: Quantity) -> Quantity:
+    """The rim mass m = I/r² a thin-rim flywheel needs for a target inertia.
+
+    Turns the abstract inertia requirement (from
+    :func:`flywheel_inertia_for_fluctuation`) into a buildable rim. Idealising the
+    flywheel as a thin rim with all its mass at the ``mean_radius`` r, the mass moment
+    of inertia is I = m·r², so the rim mass is m = I/r² — and the r² lever means a
+    slightly larger rim needs far less metal for the same inertia (the reason flywheels
+    are made large and light-rimmed rather than small and heavy). ``inertia`` I must be
+    a mass·length² and ``mean_radius`` r a positive length. A real rim with spokes and a
+    hub, or a solid disc, needs somewhat more mass for the same I. Returns the rim mass
+    in kg.
+    """
+    _require(inertia, "[mass] * [length]**2", "inertia")
+    _require(mean_radius, "[length]", "mean_radius")
+    r = mean_radius.to("m").magnitude
+    if r <= 0:
+        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+    i = inertia.to("kg*m**2").magnitude
+    if i <= 0:
+        raise ValueError(f"inertia must be positive; got {inertia}")
+    return Quantity(magnitude=i / r**2, unit="kg")
 
 
 def rotating_rim_hoop_stress(

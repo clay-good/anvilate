@@ -10905,3 +10905,24 @@ def test_slider_crank_torque_matches_virtual_work_and_dead_centres():
     assert t.to("N*m").magnitude == pytest.approx(1000 * v.to("m/s").magnitude, rel=1e-12)
     with pytest.raises(ValueError, match="piston_force must be a"):
         slider_crank_torque(piston_force=_q("1000 mm"), crank_angle=90, **kw)
+
+
+def test_rim_flywheel_mass_closes_the_inertia_chain():
+    from anvilate.analysis import flywheel_energy_fluctuation, rim_flywheel_mass
+
+    # A thin rim: I = m*r^2, so m = I/r^2.
+    mass = rim_flywheel_mass(inertia=_q("5.05 kg*m**2"), mean_radius=_q("0.3 m"))
+    assert mass.to("kg").magnitude == pytest.approx(5.05 / 0.3**2, rel=1e-12)
+    # Round-trip: that rim's inertia (m*r^2) reproduces the target energy fluctuation.
+    inertia_back = mass.to("kg").magnitude * 0.3**2
+    assert inertia_back == pytest.approx(5.05, rel=1e-12)
+    # The r^2 lever: a bigger rim needs far less metal for the same inertia.
+    bigger = rim_flywheel_mass(inertia=_q("5.05 kg*m**2"), mean_radius=_q("0.6 m"))
+    assert bigger.to("kg").magnitude == pytest.approx(mass.to("kg").magnitude / 4, rel=1e-12)
+    # Consistency with the forward energy relation at 600 rpm, Cs = 0.02.
+    de = flywheel_energy_fluctuation(
+        inertia=_q("5.05 kg*m**2"), mean_speed=_q("600 rpm"), coefficient_of_fluctuation=0.02
+    )
+    assert de.to("J").magnitude == pytest.approx(399.0, abs=2.0)
+    with pytest.raises(ValueError, match="mean_radius must be positive"):
+        rim_flywheel_mass(inertia=_q("5 kg*m**2"), mean_radius=_q("0 m"))

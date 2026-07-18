@@ -101,7 +101,8 @@ modules:
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
-  of fluctuation, the inertia a speed-smoothing target requires, the rotating
+  of fluctuation, the inertia a speed-smoothing target requires and the thin-rim
+  mass that inertia needs, the rotating
   thin-rim hoop (bursting) stress, burst speed, and radial growth, the solid
   spinning disc's peak centre stress and its full radial/tangential stress
   distribution at any radius, and the annular (bored) disc's bore stress and full
@@ -463,6 +464,7 @@ from .flywheel import (
     coefficient_of_fluctuation,
     flywheel_energy_fluctuation,
     flywheel_inertia_for_fluctuation,
+    rim_flywheel_mass,
     rotating_annular_disc_bore_stress,
     rotating_annular_disc_radial_stress,
     rotating_annular_disc_tangential_stress,
@@ -1006,6 +1008,7 @@ __all__ = [
     "coefficient_of_fluctuation",
     "flywheel_energy_fluctuation",
     "flywheel_inertia_for_fluctuation",
+    "rim_flywheel_mass",
     "rotating_rim_hoop_stress",
     "rotating_rim_burst_speed",
     "rotating_rim_radial_growth",
