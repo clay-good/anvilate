@@ -56,6 +56,8 @@ modules:
   friction torque and power loss, unit load, Sommerfeld number, and the minimum
   oil-film thickness from the eccentricity ratio
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
+- :mod:`~anvilate.analysis.wear` — Archard sliding-wear law: the worn volume and wear
+  depth of a sliding contact, and the sliding distance (wear life) a depth limit allows
 - :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque and per-bolt
   shear force
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
@@ -735,6 +737,11 @@ from .torsion import (
     triangular_bar_torsional_stress,
     triangular_bar_twist_angle,
 )
+from .wear import (
+    archard_wear_depth,
+    archard_wear_volume,
+    sliding_distance_for_wear_depth,
+)
 from .weld import (
     FILLET_THROAT_FACTOR,
     eccentric_weld_group_peak_stress,
@@ -1210,6 +1217,9 @@ __all__ = [
     "differential_thermal_stress",
     "bimetallic_strip_curvature",
     "bimetallic_strip_tip_deflection",
+    "archard_wear_volume",
+    "archard_wear_depth",
+    "sliding_distance_for_wear_depth",
     "FILLET_THROAT_FACTOR",
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",

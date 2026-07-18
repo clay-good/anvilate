@@ -10987,3 +10987,48 @@ def test_cam_base_circle_for_pressure_angle_inverts_the_pressure_angle():
         cam_base_circle_for_pressure_angle(
             lift_gradient=_q("20 mm"), follower_displacement=_q("10 mm"), max_pressure_angle=95.0
         )
+
+
+def test_archard_wear_volume_depth_and_life_are_consistent():
+    from anvilate.analysis import (
+        archard_wear_depth,
+        archard_wear_volume,
+        sliding_distance_for_wear_depth,
+    )
+
+    # V = K*F*s/H: 1e-4 * 100 N * 1000 m / 1962 MPa.
+    vol = archard_wear_volume(
+        wear_coefficient=1e-4,
+        load=_q("100 N"),
+        sliding_distance=_q("1000 m"),
+        hardness=_q("1962 MPa"),
+    )
+    assert vol.to("mm**3").magnitude == pytest.approx(1e-4 * 100 * 1000 / 1.962e9 * 1e9, rel=1e-12)
+    # Depth h = K*p*s/H.
+    depth = archard_wear_depth(
+        wear_coefficient=1e-4,
+        contact_pressure=_q("2 MPa"),
+        sliding_distance=_q("1000 m"),
+        hardness=_q("1962 MPa"),
+    )
+    assert depth.to("mm").magnitude == pytest.approx(1e-4 * 2e6 * 1000 / 1.962e9 * 1000, rel=1e-12)
+    # The life inverse recovers exactly the distance that reaches a given depth.
+    life = sliding_distance_for_wear_depth(
+        wear_coefficient=1e-4,
+        contact_pressure=_q("2 MPa"),
+        hardness=_q("1962 MPa"),
+        allowable_depth=depth,
+    )
+    assert life.to("m").magnitude == pytest.approx(1000.0, rel=1e-9)
+    # Harder surface wears less; softer wears more (inverse in H).
+    harder = archard_wear_depth(
+        wear_coefficient=1e-4,
+        contact_pressure=_q("2 MPa"),
+        sliding_distance=_q("1000 m"),
+        hardness=_q("3924 MPa"),
+    )
+    assert harder.to("mm").magnitude == pytest.approx(depth.to("mm").magnitude / 2, rel=1e-12)
+    with pytest.raises(ValueError, match="wear_coefficient must be positive"):
+        archard_wear_volume(
+            wear_coefficient=0, load=_q("100 N"), sliding_distance=_q("1 m"), hardness=_q("1 GPa")
+        )
