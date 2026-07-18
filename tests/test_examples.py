@@ -1377,3 +1377,19 @@ def test_jacketed_reactor_example_is_governed_by_vacuum():
     assert "safety factor 2.53" in thick_vac.detail
     # The 3 mm wall passes pressure but fails vacuum -> overall FAIL.
     assert card.status is CheckStatus.FAIL
+
+
+def test_bolted_cover_flange_example_counts_bolts_for_the_end_force():
+    namespace = runpy.run_path(str(_EXAMPLES / "bolted_cover_flange.py"))
+    card = namespace["screen_cover_bolts"]()
+    by_name = {e.name: e for e in card.entries}
+    # Four bolts overstress the threads under the pressure end-force...
+    four = by_name["4 bolts"]
+    assert four.status is CheckStatus.FAIL
+    assert "safety factor 1.73" in four.detail
+    # ...six clear the proof-strength margin, eight give room.
+    six = by_name["6 bolts"]
+    assert six.passed
+    assert "safety factor 2.59" in six.detail
+    assert by_name["8 bolts"].passed
+    assert card.status is CheckStatus.FAIL
