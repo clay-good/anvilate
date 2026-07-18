@@ -166,6 +166,7 @@ from anvilate.analysis import (
     hertz_effective_modulus,
     hertz_sphere_approach,
     hertz_sphere_contact,
+    hollow_circular_plastic_section_modulus,
     hollow_circular_second_moment,
     hollow_shaft_diameter_for_bending_torsion,
     hollow_shaft_torsional_stress,
@@ -243,6 +244,7 @@ from anvilate.analysis import (
     rectangular_plastic_section_modulus,
     rectangular_second_moment,
     rectangular_tube_enclosed_area,
+    rectangular_tube_plastic_section_modulus,
     rectangular_tube_second_moment,
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
@@ -8948,6 +8950,24 @@ def test_plastic_section_modulus_and_hinge_moment():
         plastic_moment(plastic_section_modulus=zp, yield_strength=_q("0 MPa"))
     with pytest.raises(ValueError, match="width must be a"):
         rectangular_plastic_section_modulus(_q("50 N"), _q("100 mm"))
+    # Hollow circle Z_p = (D^3 - d^3)/6, recovering the solid as the bore vanishes.
+    hollow = hollow_circular_plastic_section_modulus(
+        outer_diameter=_q("60 mm"), inner_diameter=_q("40 mm")
+    )
+    assert hollow.to("mm**3").magnitude == pytest.approx((60**3 - 40**3) / 6, rel=1e-12)
+    solid_again = hollow_circular_plastic_section_modulus(
+        outer_diameter=_q("60 mm"), inner_diameter=_q("0 mm")
+    )
+    assert solid_again.to("mm**3").magnitude == pytest.approx(zpc.to("mm**3").magnitude, rel=1e-12)
+    # Box tube Z_p = (b*h^2 - (b-2t)*(h-2t)^2)/4.
+    box = rectangular_tube_plastic_section_modulus(
+        width=_q("60 mm"), height=_q("100 mm"), wall_thickness=_q("5 mm")
+    )
+    assert box.to("mm**3").magnitude == pytest.approx((60 * 100**2 - 50 * 90**2) / 4, rel=1e-12)
+    with pytest.raises(ValueError, match="2\\*wall_thickness"):
+        rectangular_tube_plastic_section_modulus(
+            width=_q("60 mm"), height=_q("100 mm"), wall_thickness=_q("40 mm")
+        )
 
 
 def test_thermal_buckling_temperature_rise_is_the_sun_kink():

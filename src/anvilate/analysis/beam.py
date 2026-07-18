@@ -63,6 +63,8 @@ __all__ = [
     "i_section_second_moment",
     "rectangular_plastic_section_modulus",
     "circular_plastic_section_modulus",
+    "hollow_circular_plastic_section_modulus",
+    "rectangular_tube_plastic_section_modulus",
     "plastic_moment",
     "max_transverse_shear_stress",
     "shear_flow",
@@ -211,6 +213,56 @@ def circular_plastic_section_modulus(diameter: Quantity) -> Quantity:
     """
     _require(diameter, "[length]", "diameter")
     return _as_quantity(diameter.pint**3 / 6, "mm**3")
+
+
+def hollow_circular_plastic_section_modulus(
+    *, outer_diameter: Quantity, inner_diameter: Quantity
+) -> Quantity:
+    """The plastic section modulus Z_p = (D³ − d³)/6 of a hollow circular (tube) section.
+
+    The tube form of :func:`circular_plastic_section_modulus`: the fully-plastic
+    modulus subtracts the bore from the outside, Z_p = (D³ − d³)/6, recovering the
+    solid d³/6 as the bore vanishes. ``outer_diameter`` D and ``inner_diameter`` d
+    (which must be non-negative and below D) set it. Returns Z_p in mm³.
+    """
+    _require(outer_diameter, "[length]", "outer_diameter")
+    _require(inner_diameter, "[length]", "inner_diameter")
+    do = outer_diameter.to("mm").magnitude
+    di = inner_diameter.to("mm").magnitude
+    if not 0 <= di < do:
+        raise ValueError(
+            f"inner_diameter ({inner_diameter}) must be non-negative and below "
+            f"outer_diameter ({outer_diameter})"
+        )
+    return _as_quantity((outer_diameter.pint**3 - inner_diameter.pint**3) / 6, "mm**3")
+
+
+def rectangular_tube_plastic_section_modulus(
+    *, width: Quantity, height: Quantity, wall_thickness: Quantity
+) -> Quantity:
+    """The plastic section modulus Z_p = (b·h² − b_i·h_i²)/4 of a rectangular (box) tube.
+
+    The box-tube form of :func:`rectangular_plastic_section_modulus`, the plastic
+    counterpart of :func:`rectangular_tube_second_moment`: it subtracts the inner
+    rectangle's plastic modulus from the outer's,
+    Z_p = (b·h² − (b − 2t)·(h − 2t)²)/4, bending about the axis perpendicular to
+    ``height``. ``width`` b and ``height`` h are the outer overall dimensions and
+    ``wall_thickness`` t the wall; 2t must stay below both. Returns Z_p in mm³.
+    """
+    _require(width, "[length]", "width")
+    _require(height, "[length]", "height")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    b = width.to("mm").magnitude
+    h = height.to("mm").magnitude
+    t = wall_thickness.to("mm").magnitude
+    if t <= 0:
+        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+    if 2 * t >= b or 2 * t >= h:
+        raise ValueError(
+            f"2*wall_thickness ({2 * t} mm) must be below both width and height ({width}, {height})"
+        )
+    inner = (b - 2 * t) * (h - 2 * t) ** 2
+    return Quantity(magnitude=(b * h**2 - inner) / 4.0, unit="mm**3")
 
 
 def plastic_moment(*, plastic_section_modulus: Quantity, yield_strength: Quantity) -> Quantity:
