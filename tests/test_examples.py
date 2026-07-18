@@ -1245,3 +1245,18 @@ def test_cable_resonance_example_tunes_off_the_forcing():
     assert "safety factor 1.32" in high.detail
     # With a resonant option present, the overall screen fails.
     assert card.status is CheckStatus.FAIL
+
+
+def test_imperfect_column_example_fails_where_euler_passes():
+    namespace = runpy.run_path(str(_EXAMPLES / "imperfect_column_capacity.py"))
+    card = namespace["screen_column_capacity"]()
+    by_name = {e.name: e for e in card.entries}
+    # The perfect-column (Euler/yield) screen waves the column through...
+    perfect = by_name["Euler / perfect-column screen"]
+    assert perfect.passed
+    assert "safety factor 1.22" in perfect.detail
+    # ...but the real imperfect column is overloaded.
+    real = by_name["Perry-Robertson (real imperfection)"]
+    assert real.status is CheckStatus.FAIL
+    assert "safety factor 0.87" in real.detail
+    assert card.status is CheckStatus.FAIL
