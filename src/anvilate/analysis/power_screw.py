@@ -33,6 +33,7 @@ __all__ = [
     "power_screw_lower_torque",
     "power_screw_efficiency",
     "power_screw_is_self_locking",
+    "power_screw_collar_torque",
 ]
 
 
@@ -155,3 +156,34 @@ def power_screw_is_self_locking(
     """
     dm, ell, mu = _geometry(mean_diameter, lead, friction_coefficient)
     return mu >= ell / (pi * dm)
+
+
+def power_screw_collar_torque(
+    *,
+    load: Quantity,
+    collar_mean_radius: Quantity,
+    collar_friction_coefficient: float,
+) -> Quantity:
+    """The collar (thrust-bearing) friction torque T_c = μ_c·F·r_c of a power screw.
+
+    The thread torque (:func:`power_screw_raise_torque`) turns the screw, but the
+    axial ``load`` F also presses on a thrust collar or bearing that rubs as the screw
+    turns, adding a separate friction torque T_c = μ_c·F·r_c. ``collar_mean_radius``
+    r_c is the mean radius of the collar's rubbing face and ``collar_friction_coefficient``
+    μ_c its friction coefficient (often lower than the thread's if the collar is a
+    rolling thrust bearing). Add T_c to the thread torque for the total driving torque;
+    unlike the thread friction it does *no* useful lifting, so it drops the overall
+    efficiency. The load must be a force, r_c a positive length, and μ_c non-negative.
+    Returns the collar torque in N·m.
+    """
+    _require(load, "[force]", "load")
+    _require(collar_mean_radius, "[length]", "collar_mean_radius")
+    if collar_friction_coefficient < 0:
+        raise ValueError(
+            f"collar_friction_coefficient must be non-negative; got {collar_friction_coefficient}"
+        )
+    f = load.to("N").magnitude
+    r_c = collar_mean_radius.to("m").magnitude
+    if r_c <= 0:
+        raise ValueError(f"collar_mean_radius must be positive; got {collar_mean_radius}")
+    return Quantity(magnitude=collar_friction_coefficient * f * r_c, unit="N*m")

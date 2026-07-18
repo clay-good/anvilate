@@ -36,7 +36,8 @@ modules:
   open-section (strip) torsion, general closed thin-tube (Bredt) torsion, and
   solid rectangular, elliptical, and equilateral-triangle bar torsion
 - :mod:`~anvilate.analysis.power_screw` — square-thread lead-screw raise/lower
-  torque, efficiency, and the self-locking condition
+  torque, efficiency, the self-locking condition, and the collar (thrust-bearing)
+  friction torque
 - :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
   mesh efficiency, the self-locking condition, and the input tangential force
 - :mod:`~anvilate.analysis.clutch` — disc and cone clutch / brake friction torque
@@ -501,6 +502,7 @@ from .plate import (
 )
 from .power_screw import (
     lead_angle,
+    power_screw_collar_torque,
     power_screw_efficiency,
     power_screw_is_self_locking,
     power_screw_lower_torque,
@@ -939,6 +941,7 @@ __all__ = [
     "power_screw_lower_torque",
     "power_screw_efficiency",
     "power_screw_is_self_locking",
+    "power_screw_collar_torque",
     "worm_gear_ratio",
     "worm_lead_angle",
     "worm_gear_efficiency",

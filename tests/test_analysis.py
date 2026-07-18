@@ -245,6 +245,7 @@ from anvilate.analysis import (
     plate_shear_buckling_coefficient,
     polar_second_moment_hollow,
     polar_second_moment_solid,
+    power_screw_collar_torque,
     power_screw_efficiency,
     power_screw_is_self_locking,
     power_screw_lower_torque,
@@ -3091,6 +3092,28 @@ def test_power_screw_rejects_bad_inputs():
         power_screw_raise_torque(load=_q("6.4 kN"), friction_coefficient=-0.1, **kw)
     with pytest.raises(ValueError, match="load must be a"):
         power_screw_raise_torque(load=_q("6.4 mm"), friction_coefficient=0.08, **kw)
+
+
+def test_power_screw_collar_torque_adds_to_the_thread_torque():
+    # T_c = mu_c * F * r_c: 10 kN axial, 25 mm collar radius, mu_c = 0.15 -> 37.5 N*m.
+    tc = power_screw_collar_torque(
+        load=_q("10 kN"), collar_mean_radius=_q("25 mm"), collar_friction_coefficient=0.15
+    )
+    assert tc.to("N*m").magnitude == pytest.approx(0.15 * 10000 * 0.025, rel=1e-12)
+    assert tc.to("N*m").magnitude == pytest.approx(37.5, rel=1e-9)
+    # A frictionless (e.g. rolling) thrust bearing adds no collar torque.
+    zero = power_screw_collar_torque(
+        load=_q("10 kN"), collar_mean_radius=_q("25 mm"), collar_friction_coefficient=0.0
+    )
+    assert zero.to("N*m").magnitude == pytest.approx(0.0, abs=1e-12)
+    with pytest.raises(ValueError, match="collar_mean_radius must be positive"):
+        power_screw_collar_torque(
+            load=_q("10 kN"), collar_mean_radius=_q("0 mm"), collar_friction_coefficient=0.15
+        )
+    with pytest.raises(ValueError, match="collar_friction_coefficient must be non-negative"):
+        power_screw_collar_torque(
+            load=_q("10 kN"), collar_mean_radius=_q("25 mm"), collar_friction_coefficient=-0.1
+        )
 
 
 def test_flange_coupling_torque_and_bolt_force_invert():
