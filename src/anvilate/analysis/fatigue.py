@@ -37,6 +37,7 @@ __all__ = [
     "fatigue_notch_factor",
     "neuber_notch_sensitivity",
     "peterson_notch_sensitivity",
+    "smith_watson_topper_stress",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",
@@ -249,6 +250,31 @@ def cyclic_stress_components(*, max_stress: Quantity, min_stress: Quantity) -> C
         mean_stress=Quantity(magnitude=(smax + smin) / 2, unit="MPa"),
         stress_ratio=ratio,
     )
+
+
+def smith_watson_topper_stress(*, max_stress: Quantity, alternating_stress: Quantity) -> Quantity:
+    """The Smith-Watson-Topper equivalent fully-reversed stress σ_ar = √(σ_max·σ_a).
+
+    An alternative to Goodman for mean-stress correction: SWT collapses a cycle with
+    a tensile mean to the fully-reversed amplitude σ_ar = √(σ_max·σ_a) that would do
+    the same fatigue damage, ready to compare against the endurance limit or S-N
+    curve. ``max_stress`` σ_max = σ_m + σ_a is the peak stress and
+    ``alternating_stress`` σ_a the amplitude (from :func:`cyclic_stress_components`).
+    A fully-reversed cycle (σ_m = 0, σ_max = σ_a) returns σ_a unchanged; a tensile
+    mean raises σ_ar above σ_a. SWT often fits tensile-mean-dominated data better
+    than Goodman and needs no ultimate strength. ``max_stress`` must be positive (a
+    compressive peak does no tensile-fatigue damage under SWT) and σ_a non-negative.
+    Returns the equivalent fully-reversed stress in MPa.
+    """
+    smax = _require_stress(max_stress, "max_stress")
+    sa = _require_stress(alternating_stress, "alternating_stress")
+    if sa < 0:
+        raise ValueError(f"alternating_stress (an amplitude) must be non-negative; got {sa} MPa")
+    if smax <= 0:
+        raise ValueError(
+            f"max_stress must be positive for the SWT tensile-fatigue model; got {smax} MPa"
+        )
+    return Quantity(magnitude=sqrt(smax * sa), unit="MPa")
 
 
 def goodman_safety_factor(

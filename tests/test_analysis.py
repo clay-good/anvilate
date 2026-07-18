@@ -256,6 +256,7 @@ from anvilate.analysis import (
     slider_crank_acceleration,
     slider_crank_displacement,
     slider_crank_velocity,
+    smith_watson_topper_stress,
     soderberg_safety_factor,
     soderberg_scorecard,
     solid_disc_polar_mass_moment,
@@ -8640,3 +8641,25 @@ def test_helical_spring_active_coils_for_rate_inverts_the_rate():
     )
     with pytest.raises(ValueError, match="target_rate must be a"):
         helical_spring_active_coils_for_rate(target_rate=_q("15 N"), **kw)
+
+
+def test_smith_watson_topper_equivalent_stress():
+    from math import sqrt
+
+    # Fully reversed (sigma_m = 0, sigma_max = sigma_a) returns the amplitude.
+    assert smith_watson_topper_stress(max_stress=_q("50 MPa"), alternating_stress=_q("50 MPa")).to(
+        "MPa"
+    ).magnitude == pytest.approx(50.0, rel=1e-12)
+    # sigma_ar = sqrt(sigma_max * sigma_a): a tensile mean raises it above sigma_a.
+    swt = smith_watson_topper_stress(max_stress=_q("150 MPa"), alternating_stress=_q("50 MPa"))
+    assert swt.to("MPa").magnitude == pytest.approx(sqrt(150 * 50), rel=1e-12)
+    assert swt.to("MPa").magnitude == pytest.approx(86.603, rel=1e-4)
+    assert swt.to("MPa").magnitude > 50.0
+    # It composes with cyclic_stress_components: sigma_max = mean + amplitude.
+    cyc = cyclic_stress_components(max_stress=_q("200 MPa"), min_stress=_q("40 MPa"))
+    swt2 = smith_watson_topper_stress(
+        max_stress=_q("200 MPa"), alternating_stress=cyc.alternating_stress
+    )
+    assert swt2.to("MPa").magnitude == pytest.approx(sqrt(200 * 80), rel=1e-12)
+    with pytest.raises(ValueError, match="max_stress must be positive"):
+        smith_watson_topper_stress(max_stress=_q("-10 MPa"), alternating_stress=_q("50 MPa"))

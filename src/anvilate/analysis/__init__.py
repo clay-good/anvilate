@@ -318,6 +318,7 @@ from .fatigue import (
     miner_spectrum_repeats_to_failure,
     neuber_notch_sensitivity,
     peterson_notch_sensitivity,
+    smith_watson_topper_stress,
     soderberg_safety_factor,
     soderberg_scorecard,
 )
@@ -690,6 +691,7 @@ __all__ = [
     "preloaded_bolt_cyclic_stress",
     "goodman_safety_factor",
     "goodman_scorecard",
+    "smith_watson_topper_stress",
     "soderberg_safety_factor",
     "soderberg_scorecard",
     "gerber_safety_factor",
