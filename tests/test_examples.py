@@ -2010,3 +2010,16 @@ def test_single_cylinder_flywheel_example_sizes_from_energy_fluctuation():
     light = namespace["screen_undersized_flywheel"]()
     assert light.entries[0].status is CheckStatus.FAIL
     assert "safety factor 0.79" in light.entries[0].detail
+
+
+def test_bushing_wear_life_example_lubrication_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "bushing_wear_life.py"))
+    marginal = namespace["screen_bushing"]()
+    # At K = 1e-7 the bushing wears out before its service interval.
+    assert marginal.status is CheckStatus.FAIL
+    assert "safety factor 0.75" in marginal.entries[0].detail
+    # Halving the wear coefficient (a better film) doubles the life.
+    improved = namespace["screen_better_lubricated_bushing"]()
+    assert improved.entries[0].passed
+    assert "safety factor 1.49" in improved.entries[0].detail
+    assert improved.status is CheckStatus.PASS
