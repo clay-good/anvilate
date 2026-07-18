@@ -1212,3 +1212,19 @@ def test_vacuum_vessel_example_buckles_before_it_bursts():
     assert thick.passed
     assert "safety factor 2.53" in thick.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_helical_thrust_example_lands_on_the_bearing():
+    namespace = runpy.run_path(str(_EXAMPLES / "helical_gear_thrust_bearing.py"))
+    card = namespace["screen_helical_thrust"]()
+    by_name = {e.name: e for e in card.entries}
+    # A shallow helix keeps the thrust within the bearing margin...
+    shallow = by_name["15 deg helix"]
+    assert shallow.passed
+    assert "safety factor 2.24" in shallow.detail
+    # ...but a smoother, steeper helix overruns it.
+    assert by_name["30 deg helix"].status is CheckStatus.FAIL
+    steep = by_name["45 deg helix"]
+    assert steep.status is CheckStatus.FAIL
+    assert "safety factor 0.60" in steep.detail
+    assert card.status is CheckStatus.FAIL
