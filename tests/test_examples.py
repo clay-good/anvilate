@@ -1976,3 +1976,22 @@ def test_thermal_clearance_seizure_example_thermal_closure_governs():
     assert opened.status is CheckStatus.PASS
     # The closure itself exceeds the tight cold clearance (why it seizes).
     assert namespace["_thermal_closure"]() > 0.10
+
+
+def test_overhung_fan_resonance_capstone_critical_speed_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "overhung_fan_resonance.py"))
+    slender = namespace["screen_fan_shaft"]()
+    by_name = {e.name: e for e in slender.entries}
+    # Hugely strong in bending...
+    assert by_name["shaft bending vs yield"].passed
+    assert "safety factor 18.25" in by_name["shaft bending vs yield"].detail
+    # ...but it runs at its critical speed and resonates.
+    assert by_name["critical-speed separation"].status is CheckStatus.FAIL
+    assert "safety factor 0.74" in by_name["critical-speed separation"].detail
+    assert slender.status is CheckStatus.FAIL
+    # A stiffer shaft raises the critical speed clear of the running speed.
+    stiffer = namespace["screen_stiffer_shaft"]()
+    stiffer_by_name = {e.name: e for e in stiffer.entries}
+    assert stiffer_by_name["critical-speed separation"].passed
+    assert "safety factor 1.71" in stiffer_by_name["critical-speed separation"].detail
+    assert stiffer.status is CheckStatus.PASS
