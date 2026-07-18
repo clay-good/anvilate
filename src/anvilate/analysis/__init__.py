@@ -173,7 +173,8 @@ modules:
   magnification and phase, and the base-excitation seismic-instrument response);
   simple and physical (rigid-body) pendulum periods; the solid-disc and annular
   (hollow-cylinder) polar mass moments of inertia; the rotating-unbalance
-  centrifugal force and the counterweight that balances it;
+  centrifugal force, the counterweight that balances it, and the ISO 1940
+  balance-grade permissible eccentricity;
   and the Den Hartog tuned-mass-damper optimal tuning
 - :mod:`~anvilate.analysis.stress` — von Mises and octahedral-shear combination,
   the plane principal stresses and their orientation angle, the maximum shear,
@@ -390,6 +391,7 @@ from .dynamics import (
     STANDARD_GRAVITY,
     annular_disc_polar_mass_moment,
     balance_correction_mass,
+    balance_quality_permissible_eccentricity,
     base_excitation_relative_transmissibility,
     cantilever_fundamental_frequency,
     cantilever_tip_mass_frequency,
@@ -1211,6 +1213,7 @@ __all__ = [
     "spring_surge_frequency",
     "rotating_unbalance_force",
     "balance_correction_mass",
+    "balance_quality_permissible_eccentricity",
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
     "von_mises_principal",

@@ -70,6 +70,7 @@ __all__ = [
     "spring_surge_frequency",
     "rotating_unbalance_force",
     "balance_correction_mass",
+    "balance_quality_permissible_eccentricity",
     "frequency_scorecard",
 ]
 
@@ -1277,6 +1278,31 @@ def balance_correction_mass(
     if m <= 0 or e <= 0 or r <= 0:
         raise ValueError("unbalance_mass, eccentricity, and correction_radius must be positive")
     return Quantity(magnitude=m * e / r, unit="kg").to("g")
+
+
+def balance_quality_permissible_eccentricity(
+    *, balance_grade: float, rotational_speed: Quantity
+) -> Quantity:
+    """The permissible residual eccentricity e_per = G/ω for an ISO 1940 balance grade.
+
+    ISO 1940 grades a rotor's balance by the product of its residual eccentricity and its
+    service speed, e·ω = G (a constant rim velocity in mm/s), so the permissible residual
+    eccentricity at the ``rotational_speed`` ω is e_per = ``balance_grade`` G / ω. Common
+    grades are G6.3 for pumps and general machinery, G2.5 for machine-tool spindles and
+    turbines, and G1.0 or finer for high-speed spindles — a smaller G is a finer balance.
+    The 1/ω dependence means the *same* grade allows less eccentricity the faster the rotor
+    runs, which is why high-speed rotors are balanced so precisely. ``balance_grade`` (the
+    G-number in mm/s) must be positive and ω a positive rotational frequency. Returns e_per
+    in micrometres.
+    """
+    if balance_grade <= 0:
+        raise ValueError(f"balance_grade must be positive; got {balance_grade}")
+    _require(rotational_speed, "[frequency]", "rotational_speed")
+    omega = rotational_speed.to("rad/s").magnitude
+    if omega <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    # G is in mm/s; e_per = G/omega in mm, converted to micrometres.
+    return Quantity(magnitude=balance_grade / omega, unit="mm").to("um")
 
 
 def frequency_scorecard(

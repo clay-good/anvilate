@@ -11184,3 +11184,35 @@ def test_rotating_unbalance_force_and_balance_correction():
         rotating_unbalance_force(
             unbalance_mass=_q("50 g"), eccentricity=_q("2 mm"), rotational_speed=_q("0 rpm")
         )
+
+
+def test_balance_quality_permissible_eccentricity_iso1940():
+    from anvilate.analysis import (
+        balance_quality_permissible_eccentricity,
+        rotating_unbalance_force,
+    )
+
+    omega = 2 * 3.141592653589793 * 3000 / 60
+    # G6.3 at 3000 rpm: e_per = 6.3 / omega in mm -> ~20 um.
+    e_per = balance_quality_permissible_eccentricity(
+        balance_grade=6.3, rotational_speed=_q("3000 rpm")
+    )
+    assert e_per.to("um").magnitude == pytest.approx(6.3 / omega * 1000, rel=1e-12)
+    assert e_per.to("um").magnitude == pytest.approx(20.05, abs=0.1)
+    # The same grade allows less eccentricity at higher speed (1/omega).
+    faster = balance_quality_permissible_eccentricity(
+        balance_grade=6.3, rotational_speed=_q("6000 rpm")
+    )
+    assert faster.to("um").magnitude == pytest.approx(e_per.to("um").magnitude / 2, rel=1e-12)
+    # A finer grade (smaller G) permits less eccentricity.
+    finer = balance_quality_permissible_eccentricity(
+        balance_grade=2.5, rotational_speed=_q("3000 rpm")
+    )
+    assert finer.to("um").magnitude < e_per.to("um").magnitude
+    # Sanity: an example rotor balanced to G6.3 leaves a small residual force.
+    residual = rotating_unbalance_force(
+        unbalance_mass=_q("2 kg"), eccentricity=e_per, rotational_speed=_q("3000 rpm")
+    )
+    assert residual.to("N").magnitude > 0
+    with pytest.raises(ValueError, match="balance_grade must be positive"):
+        balance_quality_permissible_eccentricity(balance_grade=0, rotational_speed=_q("3000 rpm"))
