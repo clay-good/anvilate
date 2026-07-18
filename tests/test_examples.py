@@ -1112,3 +1112,19 @@ def test_engine_shaking_force_example_turns_on_the_rod_ratio():
     assert "safety factor 1.06" in long.detail
     # One failing option makes the overall screen fail.
     assert card.status is CheckStatus.FAIL
+
+
+def test_fourbar_linkage_example_needs_a_healthy_transmission_angle():
+    namespace = runpy.run_path(str(_EXAMPLES / "fourbar_linkage_design.py"))
+    card = namespace["screen_fourbar_linkage"]()
+    by_name = {e.name: e for e in card.entries}
+    # The long-coupler linkage turns but binds -- its worst transmission angle
+    # falls to 21 deg, below the 45 deg floor.
+    poor = by_name["long-coupler crank-rocker"]
+    assert poor.status is CheckStatus.FAIL
+    assert "safety factor 0.46" in poor.detail
+    # Rebalanced lengths keep the transmission angle healthy through the turn.
+    good = by_name["balanced crank-rocker"]
+    assert good.passed
+    assert "safety factor 1.07" in good.detail
+    assert card.status is CheckStatus.FAIL
