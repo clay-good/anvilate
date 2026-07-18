@@ -246,6 +246,8 @@ from anvilate.analysis import (
     solid_disc_polar_mass_moment,
     sommerfeld_number,
     span_deflection_limit,
+    spiral_spring_rate,
+    spiral_spring_stress,
     spring_index,
     spring_shear_stress,
     spring_stored_energy,
@@ -8135,3 +8137,41 @@ def test_string_natural_frequency_rejects_bad_inputs():
         string_natural_frequency(
             tension=_q("1000 N"), length=_q("2 m"), mass_per_length=_q("0.5 kg")
         )
+
+
+def test_spiral_spring_rate_and_stress():
+    # k_theta = E*b*t^3/(12*L): 200 GPa, 10 mm wide, 0.5 mm thick, 500 mm long.
+    k = spiral_spring_rate(
+        width=_q("10 mm"),
+        thickness=_q("0.5 mm"),
+        developed_length=_q("500 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    # E in MPa (=N/mm^2), lengths mm -> N*mm/rad, then /1000 -> N*m/rad.
+    expected = 200e3 * 10.0 * 0.5**3 / (12.0 * 500.0) / 1000.0
+    assert k.to("N*m").magnitude == pytest.approx(expected, rel=1e-12)
+    assert k.to("N*m").magnitude == pytest.approx(0.041667, rel=1e-4)
+    # A longer strip is softer (winds more turns for the same torque).
+    softer = spiral_spring_rate(
+        width=_q("10 mm"),
+        thickness=_q("0.5 mm"),
+        developed_length=_q("1000 mm"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert softer.to("N*m").magnitude == pytest.approx(k.to("N*m").magnitude / 2, rel=1e-12)
+    # Peak stress sigma = 6M/(b*t^2): a 0.02 N*m wind-up.
+    s = spiral_spring_stress(moment=_q("0.02 N*m"), width=_q("10 mm"), thickness=_q("0.5 mm"))
+    assert s.to("MPa").magnitude == pytest.approx(6 * 20.0 / (10.0 * 0.5**2), rel=1e-12)
+    assert s.to("MPa").magnitude == pytest.approx(48.0, rel=1e-9)
+
+
+def test_spiral_spring_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="thickness must be positive"):
+        spiral_spring_rate(
+            width=_q("10 mm"),
+            thickness=_q("0 mm"),
+            developed_length=_q("500 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
+    with pytest.raises(ValueError, match="moment must be a"):
+        spiral_spring_stress(moment=_q("0.02 N"), width=_q("10 mm"), thickness=_q("0.5 mm"))

@@ -51,6 +51,8 @@ __all__ = [
     "BELLEVILLE_PLATEAU_RATIO",
     "belleville_washer_force",
     "belleville_flat_load",
+    "spiral_spring_rate",
+    "spiral_spring_stress",
 ]
 
 
@@ -464,3 +466,60 @@ def belleville_flat_load(
         raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
     force = 4.0 * e * h * t**2 / ((1.0 - poisson_ratio**2) * k1 * de**2)
     return Quantity(magnitude=force, unit="N")
+
+
+def _spiral_strip(width: Quantity, thickness: Quantity) -> tuple[float, float]:
+    _require(width, "[length]", "width")
+    _require(thickness, "[length]", "thickness")
+    b = width.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    if b <= 0:
+        raise ValueError(f"width must be positive; got {width}")
+    if t <= 0:
+        raise ValueError(f"thickness must be positive; got {thickness}")
+    return b, t
+
+
+def spiral_spring_rate(
+    *,
+    width: Quantity,
+    thickness: Quantity,
+    developed_length: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The torsional rate k_θ = E·b·t³/(12·L) of a flat spiral (clock) spring.
+
+    A flat strip wound into a spiral — a clock or wind-up spring, a constant-torque
+    return spring — stores energy by bending along its whole length, so it behaves as
+    a straight cantilever strip of the full developed length. Its angular rate is the
+    strip's bending rigidity over that length: k_θ = M/θ = E·I/L = E·b·t³/(12·L),
+    the torque per radian of wind-up. ``width`` b and ``thickness`` t are the strip's
+    cross-section, ``developed_length`` L its total unwound length, and
+    ``elastic_modulus`` E the material's. The long developed length is what makes a
+    spiral spring soft enough to wind many turns. Returns the rate in N·m per radian.
+    """
+    b, t = _spiral_strip(width, thickness)
+    _require(developed_length, "[length]", "developed_length")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    length = developed_length.to("mm").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if length <= 0:
+        raise ValueError(f"developed_length must be positive; got {developed_length}")
+    # E [MPa=N/mm^2], b,t,L [mm] -> k_theta in N*mm/rad; convert to N*m/rad.
+    k_theta_n_mm = e * b * t**3 / (12.0 * length)
+    return Quantity(magnitude=k_theta_n_mm / 1000.0, unit="N*m")
+
+
+def spiral_spring_stress(*, moment: Quantity, width: Quantity, thickness: Quantity) -> Quantity:
+    """The peak bending stress σ = 6·M/(b·t²) in a flat spiral (clock) spring.
+
+    The wound strip is a rectangular section in bending, so a wind-up ``moment`` M
+    raises a peak fibre stress σ = M·(t/2)/(b·t³/12) = 6·M/(b·t²) — screen it against
+    the strip material's allowable to find how far the spring can be wound. ``width``
+    b and ``thickness`` t are the strip cross-section as in
+    :func:`spiral_spring_rate`. Returns the stress in MPa.
+    """
+    _require(moment, "[force] * [length]", "moment")
+    b, t = _spiral_strip(width, thickness)
+    m = moment.to("N*mm").magnitude
+    return Quantity(magnitude=6.0 * m / (b * t**2), unit="MPa")
