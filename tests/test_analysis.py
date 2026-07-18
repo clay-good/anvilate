@@ -121,6 +121,7 @@ from anvilate.analysis import (
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
     fixed_fixed_center_load,
+    fixed_fixed_center_mass_frequency,
     fixed_fixed_center_patch_load,
     fixed_fixed_fundamental_frequency,
     fixed_fixed_offset_load,
@@ -5780,6 +5781,35 @@ def test_simply_supported_center_mass_frequency_with_beam_mass_correction():
     assert with_beam.to("Hz").magnitude < massless.to("Hz").magnitude
     with pytest.raises(ValueError, match="center_mass must be positive"):
         simply_supported_center_mass_frequency(
+            elastic_modulus=_q("200 GPa"),
+            second_moment=_q("1e6 mm**4"),
+            length=_q("2000 mm"),
+            center_mass=_q("0 kg"),
+        )
+
+
+def test_fixed_fixed_center_mass_frequency_is_twice_the_simply_supported():
+    from math import pi, sqrt
+
+    kw = {
+        "elastic_modulus": _q("200 GPa"),
+        "second_moment": _q("1e6 mm**4"),
+        "length": _q("2000 mm"),
+        "center_mass": _q("50 kg"),
+    }
+    k_si = 192 * 200e3 * 1e6 / 2000**3 * 1000  # k = 192EI/L^3, 4x the simply-supported
+    ff = fixed_fixed_center_mass_frequency(**kw)
+    assert ff.to("Hz").magnitude == pytest.approx(sqrt(k_si / 50) / (2 * pi), rel=1e-12)
+    # Four times the stiffness -> twice the (massless) frequency of the SS beam.
+    ss = simply_supported_center_mass_frequency(**kw)
+    assert ff.to("Hz").magnitude == pytest.approx(2 * ss.to("Hz").magnitude, rel=1e-12)
+    # The clamped ends hold more of the beam still: only 13/35 of the beam mass adds.
+    with_beam = fixed_fixed_center_mass_frequency(**kw, beam_mass=_q("30 kg"))
+    m_eff = 50 + (13 / 35) * 30
+    assert with_beam.to("Hz").magnitude == pytest.approx(sqrt(k_si / m_eff) / (2 * pi), rel=1e-12)
+    assert with_beam.to("Hz").magnitude < ff.to("Hz").magnitude
+    with pytest.raises(ValueError, match="center_mass must be positive"):
+        fixed_fixed_center_mass_frequency(
             elastic_modulus=_q("200 GPa"),
             second_moment=_q("1e6 mm**4"),
             length=_q("2000 mm"),

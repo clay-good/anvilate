@@ -128,9 +128,9 @@ modules:
   shrink-fit assembly temperature, CTE-mismatch (differential) joint stress, and the
   Timoshenko bimetallic-strip curvature and cantilever tip deflection
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
-  estimates, the cantilever-with-tip-mass and simply-supported-with-central-mass
-  frequencies (with the Rayleigh beam-mass correction), the Dunkerley multi-mass
-  combination, distributed-mass beam
+  estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
+  fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
+  multi-mass combination, distributed-mass beam
   fundamentals, taut-string/cable transverse modes, disc-on-shaft and two-rotor
   drivetrain torsional modes,
   and damped-vibration measures (damped frequency, log decrement, quality factor,
@@ -329,6 +329,7 @@ from .dynamics import (
     damped_natural_frequency,
     dunkerley_fundamental_frequency,
     dynamic_magnification_factor,
+    fixed_fixed_center_mass_frequency,
     fixed_fixed_fundamental_frequency,
     fixed_pinned_fundamental_frequency,
     frequency_scorecard,
@@ -778,6 +779,7 @@ __all__ = [
     "natural_frequency_from_deflection",
     "cantilever_tip_mass_frequency",
     "simply_supported_center_mass_frequency",
+    "fixed_fixed_center_mass_frequency",
     "string_natural_frequency",
     "damped_natural_frequency",
     "logarithmic_decrement",

@@ -36,6 +36,7 @@ __all__ = [
     "natural_frequency_from_deflection",
     "cantilever_tip_mass_frequency",
     "simply_supported_center_mass_frequency",
+    "fixed_fixed_center_mass_frequency",
     "string_natural_frequency",
     "damped_natural_frequency",
     "logarithmic_decrement",
@@ -208,6 +209,50 @@ def simply_supported_center_mass_frequency(
             raise ValueError(f"beam_mass must be non-negative; got {beam_mass}")
     stiffness_si = 48.0 * e * i / ell**3 * 1000.0  # N/m
     m_eff = m_center + (17.0 / 35.0) * m_beam
+    return Quantity(magnitude=sqrt(stiffness_si / m_eff) / (2 * pi), unit="Hz")
+
+
+def fixed_fixed_center_mass_frequency(
+    *,
+    elastic_modulus: Quantity,
+    second_moment: Quantity,
+    length: Quantity,
+    center_mass: Quantity,
+    beam_mass: Quantity | None = None,
+) -> Quantity:
+    """The fundamental frequency of a fixed-fixed beam with a central point mass.
+
+    The built-in-ends counterpart of :func:`simply_supported_center_mass_frequency`:
+    clamping both ends stiffens the central bending to k = 192·E·I/L³ (four times the
+    simply-supported value), raising f = (1/2π)·√(k/m_eff). The effective mass adds
+    the Rayleigh share m_eff = m_center + (13/35)·m_beam (the 13/35 ≈ 0.371 factor is
+    the exact integral of the static fixed-fixed central-load deflection shape — a
+    smaller share than the simply-supported 17/35 because the clamped ends hold more
+    of the beam still). ``elastic_modulus`` E, ``second_moment`` I, ``length`` L,
+    ``center_mass`` m_center, and optional ``beam_mass`` m_beam are as in
+    :func:`simply_supported_center_mass_frequency`. Returns the fundamental frequency
+    in hertz.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(length, "[length]", "length")
+    _require(center_mass, "[mass]", "center_mass")
+    e = elastic_modulus.to("MPa").magnitude  # N/mm^2
+    i = second_moment.to("mm**4").magnitude
+    ell = length.to("mm").magnitude
+    m_center = center_mass.to("kg").magnitude
+    if e <= 0 or i <= 0 or ell <= 0:
+        raise ValueError("elastic_modulus, second_moment, and length must be positive")
+    if m_center <= 0:
+        raise ValueError(f"center_mass must be positive; got {center_mass}")
+    m_beam = 0.0
+    if beam_mass is not None:
+        _require(beam_mass, "[mass]", "beam_mass")
+        m_beam = beam_mass.to("kg").magnitude
+        if m_beam < 0:
+            raise ValueError(f"beam_mass must be non-negative; got {beam_mass}")
+    stiffness_si = 192.0 * e * i / ell**3 * 1000.0  # N/m
+    m_eff = m_center + (13.0 / 35.0) * m_beam
     return Quantity(magnitude=sqrt(stiffness_si / m_eff) / (2 * pi), unit="Hz")
 
 
