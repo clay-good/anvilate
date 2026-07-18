@@ -1425,3 +1425,19 @@ def test_fatigue_link_example_passes_static_but_fails_fatigue():
     assert fatigue.status is CheckStatus.FAIL
     assert "safety factor 0.84" in fatigue.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_crack_growth_inspection_interval_example_fails_at_heavy_duty():
+    namespace = runpy.run_path(str(_EXAMPLES / "crack_growth_inspection_interval.py"))
+    card = namespace["screen_inspection_interval"]()
+    by_name = {e.name: e for e in card.entries}
+    # The moderate duty cycle grows the crack past twice the inspection interval.
+    moderate = by_name["moderate duty (stress range 150 MPa)"]
+    assert moderate.passed
+    assert "safety factor 1.91" in moderate.detail
+    # A 50% larger stress range cuts the propagation life below the doubled
+    # interval (the Paris cube law) -> the schedule is unsafe.
+    heavy = by_name["heavy duty (stress range 220 MPa)"]
+    assert heavy.status is CheckStatus.FAIL
+    assert "safety factor 0.60" in heavy.detail
+    assert card.status is CheckStatus.FAIL
