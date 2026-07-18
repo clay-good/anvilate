@@ -1838,3 +1838,16 @@ def test_hydraulic_cylinder_cap_capstone_seal_governs():
         card.entries, key=lambda e: float(e.detail.split("safety factor ")[1].split(" ")[0])
     )
     assert tightest.name == "O-ring gland fill vs ceiling"
+
+
+def test_isolator_mount_selection_example_softer_is_better():
+    namespace = runpy.run_path(str(_EXAMPLES / "isolator_mount_selection.py"))
+    firm = namespace["screen_mount"]()
+    # The firm 1 mm mount only reaches 34% isolation -- far short of the 90% target.
+    assert firm.status is CheckStatus.FAIL
+    assert "safety factor 0.15" in firm.entries[0].detail
+    # The soft 4.4 mm mount, sized from the transmissibility inverse, meets it.
+    soft = namespace["screen_soft_mount"]()
+    assert soft.entries[0].passed
+    assert "safety factor 1.01" in soft.entries[0].detail
+    assert soft.status is CheckStatus.PASS
