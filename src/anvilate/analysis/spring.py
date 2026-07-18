@@ -38,6 +38,7 @@ __all__ = [
     "spring_shear_stress",
     "helical_spring_rate",
     "helical_spring_active_coils_for_rate",
+    "helical_spring_solid_length",
     "SPRING_END_PARALLEL_PLATES",
     "SPRING_END_FIXED_HINGED",
     "SPRING_END_HINGED_HINGED",
@@ -171,6 +172,27 @@ def helical_spring_active_coils_for_rate(
     if g <= 0:
         raise ValueError(f"shear_modulus must be positive; got {shear_modulus}")
     return g * d**4 / (8.0 * big_d**3 * k)
+
+
+def helical_spring_solid_length(*, total_coils: float, wire_diameter: Quantity) -> Quantity:
+    """The solid (fully-compressed) length L_s = N_t·d of a helical spring.
+
+    When a compression spring is squeezed until every coil touches, its length is
+    just the total number of coils stacked wire-on-wire: L_s = N_t·d for
+    ``total_coils`` N_t (the wound coils, active plus the closed end coils) of
+    ``wire_diameter`` d. This holds for squared-and-ground ends (a plain-ended spring
+    runs a fraction longer). It is the hard stop a design must clear: the free length
+    must exceed L_s by more than the maximum working deflection, or the spring goes
+    solid and stops acting like a spring (and its stress spikes). ``total_coils`` must
+    be positive. Returns the solid length in mm.
+    """
+    _require(wire_diameter, "[length]", "wire_diameter")
+    d = wire_diameter.to("mm").magnitude
+    if total_coils <= 0:
+        raise ValueError(f"total_coils must be positive; got {total_coils}")
+    if d <= 0:
+        raise ValueError(f"wire_diameter must be positive; got {wire_diameter}")
+    return Quantity(magnitude=total_coils * d, unit="mm")
 
 
 class SpringBucklingResult(BaseModel):

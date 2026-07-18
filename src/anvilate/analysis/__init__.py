@@ -123,7 +123,8 @@ modules:
   load requires
 - :mod:`~anvilate.analysis.rivet` — riveted-joint tearing/shearing/crushing
   strength, governing mode, and efficiency
-- :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, stored
+- :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, active
+  coils for a rate, solid (fully-compressed) length, stored
   energy, series/parallel combination, lateral (column) buckling, leaf-spring
   stress and rate, the helical torsion spring's angular rate and inner-fibre
   bending stress, the Belleville (disc) washer's Almen-Laszlo load-deflection
@@ -562,6 +563,7 @@ from .spring import (
     helical_spring_active_coils_for_rate,
     helical_spring_buckling,
     helical_spring_rate,
+    helical_spring_solid_length,
     helical_torsion_spring_rate,
     helical_torsion_spring_stress,
     leaf_spring_rate,
@@ -1004,6 +1006,7 @@ __all__ = [
     "spring_shear_stress",
     "helical_spring_rate",
     "helical_spring_active_coils_for_rate",
+    "helical_spring_solid_length",
     "SPRING_END_PARALLEL_PLATES",
     "SPRING_END_FIXED_HINGED",
     "SPRING_END_HINGED_HINGED",

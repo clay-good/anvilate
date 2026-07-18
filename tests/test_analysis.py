@@ -172,6 +172,7 @@ from anvilate.analysis import (
     helical_spring_active_coils_for_rate,
     helical_spring_buckling,
     helical_spring_rate,
+    helical_spring_solid_length,
     helical_torsion_spring_rate,
     helical_torsion_spring_stress,
     helical_virtual_teeth,
@@ -9702,6 +9703,20 @@ def test_helical_spring_active_coils_for_rate_inverts_the_rate():
     )
     with pytest.raises(ValueError, match="target_rate must be a"):
         helical_spring_active_coils_for_rate(target_rate=_q("15 N"), **kw)
+
+
+def test_helical_spring_solid_length_stacks_the_coils():
+    # L_s = N_t*d: 10 total coils of 3 mm wire stack to 30 mm solid.
+    ls = helical_spring_solid_length(total_coils=10, wire_diameter=_q("3 mm"))
+    assert ls.to("mm").magnitude == pytest.approx(30.0, rel=1e-12)
+    # A design must clear the solid height by more than its working deflection: a
+    # 60 mm free length gives 30 mm of travel before this spring goes solid.
+    free_length = 60.0
+    assert free_length - ls.to("mm").magnitude == pytest.approx(30.0, rel=1e-12)
+    with pytest.raises(ValueError, match="total_coils must be positive"):
+        helical_spring_solid_length(total_coils=0, wire_diameter=_q("3 mm"))
+    with pytest.raises(ValueError, match="wire_diameter must be a"):
+        helical_spring_solid_length(total_coils=10, wire_diameter=_q("3 N"))
 
 
 def test_smith_watson_topper_equivalent_stress():
