@@ -48,7 +48,7 @@ modules:
   thickness a pressure requires (membrane and ASME VIII code form), and the
   external-pressure collapse (buckling) pressure of a long cylinder and a sphere,
   the classical axial-compression buckling stress of a thin cylindrical shell, and
-  the diametral growth a pressurized thin cylinder breathes
+  the diametral growth a pressurized thin cylinder or sphere breathes
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.journal_bearing` — journal (plain) bearing Petroff
   friction torque and power loss, unit load, Sommerfeld number, and the minimum
@@ -551,6 +551,7 @@ from .pressure_vessel import (
     thick_wall_sphere,
     thin_wall_cylinder,
     thin_wall_cylinder_diametral_growth,
+    thin_wall_sphere_diametral_growth,
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
 )
@@ -1009,6 +1010,7 @@ __all__ = [
     "asme_cylinder_thickness",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
+    "thin_wall_sphere_diametral_growth",
     "thick_wall_sphere",
     "cylinder_external_pressure_buckling",
     "sphere_external_pressure_buckling",

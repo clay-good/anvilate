@@ -34,6 +34,7 @@ __all__ = [
     "asme_cylinder_thickness",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
+    "thin_wall_sphere_diametral_growth",
     "thick_wall_sphere",
     "cylinder_external_pressure_buckling",
     "sphere_external_pressure_buckling",
@@ -339,6 +340,41 @@ def thin_wall_sphere_stress(
         raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
     stress = pressure.pint * radius.pint / (2 * wall_thickness.pint)
     return _as_quantity(stress, "MPa")
+
+
+def thin_wall_sphere_diametral_growth(
+    *,
+    pressure: Quantity,
+    radius: Quantity,
+    wall_thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The increase in diameter ΔD = D·σ·(1 − ν)/E of a pressurized thin sphere.
+
+    The spherical counterpart of :func:`thin_wall_cylinder_diametral_growth`: a
+    sphere's equibiaxial membrane stress σ = p·r/(2·t) strains its surface by
+    ε = σ·(1 − ν)/E in every direction, so the diameter grows by ΔD = D·ε =
+    p·D²·(1 − ν)/(4·t·E). Because the sphere's stress is half a cylinder's and its
+    strain carries (1 − ν) rather than (1 − ν/2), a pressurized sphere breathes
+    appreciably less than a cylinder of the same size — the deformation a clearance or
+    a shrink-fitted band around it must allow. ``pressure`` p, ``radius`` r (inner),
+    ``wall_thickness`` t, ``elastic_modulus`` E, and Poisson's ratio ``poisson`` ν
+    (0 ≤ ν < 0.5) describe the sphere; the wall must be positive. Returns the diametral
+    growth in mm.
+    """
+    stress = thin_wall_sphere_stress(
+        pressure=pressure, radius=radius, wall_thickness=wall_thickness
+    )
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    e = elastic_modulus.to("MPa").magnitude
+    if e <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    sigma = stress.to("MPa").magnitude
+    diameter = 2.0 * radius.to("mm").magnitude
+    return Quantity(magnitude=diameter * sigma * (1.0 - poisson) / e, unit="mm")
 
 
 class ThickWallSphereStress(BaseModel):

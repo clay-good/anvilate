@@ -368,6 +368,7 @@ from anvilate.analysis import (
     thin_ring_max_moment,
     thin_wall_cylinder,
     thin_wall_cylinder_diametral_growth,
+    thin_wall_sphere_diametral_growth,
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
     thread_engagement_for_load,
@@ -4857,6 +4858,29 @@ def test_thin_wall_sphere_is_half_the_cylinder_hoop():
     assert sphere.to("MPa").magnitude == pytest.approx(20.0, rel=1e-6)
     cyl = thin_wall_cylinder(pressure=_q("2 MPa"), radius=_q("100 mm"), wall_thickness=_q("5 mm"))
     assert sphere.to("MPa").magnitude == pytest.approx(cyl.hoop_stress.to("MPa").magnitude / 2)
+
+
+def test_thin_wall_sphere_diametral_growth_is_less_than_the_cylinder():
+    kw = {
+        "pressure": _q("10 MPa"),
+        "radius": _q("100 mm"),
+        "wall_thickness": _q("10 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    # dD = D*sigma*(1-nu)/E, sigma = p*r/2t = 50 MPa -> 200*50*0.7/2e5 = 0.035 mm.
+    dD = thin_wall_sphere_diametral_growth(**kw)
+    assert dD.to("mm").magnitude == pytest.approx(200 * 50 * (1 - 0.3) / 200000, rel=1e-12)
+    assert dD.to("mm").magnitude == pytest.approx(0.035, rel=1e-9)
+    # Also p*D^2*(1-nu)/(4tE).
+    assert dD.to("mm").magnitude == pytest.approx(
+        10 * 200**2 * (1 - 0.3) / (4 * 10 * 200000), rel=1e-12
+    )
+    # A sphere breathes less than a cylinder of the same size (lower stress, and
+    # (1-nu) rather than (1-nu/2)).
+    cyl = thin_wall_cylinder_diametral_growth(**kw)
+    assert dD.to("mm").magnitude < cyl.to("mm").magnitude
+    with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
+        thin_wall_sphere_diametral_growth(**kw, poisson=0.6)
 
 
 def test_thick_wall_sphere_matches_worked_example():
