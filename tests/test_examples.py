@@ -1569,3 +1569,18 @@ def test_steam_pipe_thermal_gradient_example_thermal_governs_not_pressure():
     assert thermal.status is CheckStatus.FAIL
     assert "safety factor 0.97" in thermal.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_bimetal_thermostat_blade_example_length_is_the_lever():
+    namespace = runpy.run_path(str(_EXAMPLES / "bimetal_thermostat_blade.py"))
+    card = namespace["screen_thermostat_blades"]()
+    by_name = {e.name: e for e in card.entries}
+    # The short blade's tip does not reach the contact gap -> it fails to trip.
+    assert by_name["40 mm blade"].status is CheckStatus.FAIL
+    assert "safety factor 0.71" in by_name["40 mm blade"].detail
+    # Lengthening the blade grows the stroke as L^2, so 50 and 60 mm both clear it.
+    assert by_name["50 mm blade"].passed
+    assert "safety factor 1.11" in by_name["50 mm blade"].detail
+    assert by_name["60 mm blade"].passed
+    assert "safety factor 1.59" in by_name["60 mm blade"].detail
+    assert card.status is CheckStatus.FAIL
