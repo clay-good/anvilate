@@ -1195,3 +1195,20 @@ def test_fracture_toughness_example_favors_toughness_over_strength():
     assert tough.passed
     assert "safety factor 1.99" in tough.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_vacuum_vessel_example_buckles_before_it_bursts():
+    namespace = runpy.run_path(str(_EXAMPLES / "vacuum_vessel_buckling.py"))
+    card = namespace["screen_vacuum_vessel"]()
+    by_name = {e.name: e for e in card.entries}
+    # The thin wall is fine for internal pressure but implodes under vacuum.
+    thin = by_name["3 mm wall"]
+    assert thin.status is CheckStatus.FAIL
+    assert "safety factor 0.04" in thin.detail
+    # 8 mm is closer but still short of the buckling margin.
+    assert by_name["8 mm wall"].status is CheckStatus.FAIL
+    # Only the 12 mm wall (t^3 law) clears the external-pressure buckling margin.
+    thick = by_name["12 mm wall"]
+    assert thick.passed
+    assert "safety factor 2.53" in thick.detail
+    assert card.status is CheckStatus.FAIL
