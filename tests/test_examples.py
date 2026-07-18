@@ -1393,3 +1393,20 @@ def test_bolted_cover_flange_example_counts_bolts_for_the_end_force():
     assert "safety factor 2.59" in six.detail
     assert by_name["8 bolts"].passed
     assert card.status is CheckStatus.FAIL
+
+
+def test_flywheel_speed_limits_example_whirls_though_it_holds():
+    namespace = runpy.run_path(str(_EXAMPLES / "flywheel_speed_limits.py"))
+    card = namespace["screen_flywheel"]()
+    by_name = {e.name: e for e in card.entries}
+    # The flywheel stores enough energy and is nowhere near bursting...
+    energy = by_name["stored energy"]
+    assert energy.passed
+    assert "safety factor 1.22" in energy.detail
+    assert by_name["rim burst stress"].passed
+    assert "safety factor 4.84" in by_name["rim burst stress"].detail
+    # ...but the slender shaft whirls near the running speed -> the assembly fails.
+    whirl = by_name["shaft whirl critical speed"]
+    assert whirl.status is CheckStatus.FAIL
+    assert "safety factor 0.86" in whirl.detail
+    assert card.status is CheckStatus.FAIL
