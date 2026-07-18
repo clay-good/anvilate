@@ -71,7 +71,8 @@ modules:
 - :mod:`~anvilate.analysis.curved_beam` — Winkler curved-beam bending
   (rectangular, trapezoidal, circular, and composite T/I/box/stepped sections):
   shifted neutral axis and the unequal inner/outer fibre stresses of hooks,
-  clamps, and links
+  clamps, and links; and the thin circular ring's diametral deflection and peak
+  moment under opposing loads
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
@@ -248,6 +249,8 @@ from .curved_beam import (
     circular_curved_beam_stress,
     composite_curved_beam_stress,
     rectangular_curved_beam_stress,
+    thin_ring_diametral_deflection,
+    thin_ring_max_moment,
     trapezoidal_curved_beam_stress,
 )
 from .dynamics import (
@@ -616,6 +619,8 @@ __all__ = [
     "trapezoidal_curved_beam_stress",
     "circular_curved_beam_stress",
     "composite_curved_beam_stress",
+    "thin_ring_diametral_deflection",
+    "thin_ring_max_moment",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",

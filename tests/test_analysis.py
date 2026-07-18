@@ -273,6 +273,8 @@ from anvilate.analysis import (
     thin_open_strip_torsion_constant,
     thin_open_strip_torsional_stress,
     thin_open_strip_twist_angle,
+    thin_ring_diametral_deflection,
+    thin_ring_max_moment,
     thin_wall_cylinder,
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
@@ -8382,3 +8384,41 @@ def test_notch_sensitivity_neuber_and_peterson():
         neuber_notch_sensitivity(notch_radius=_q("2 mm"), neuber_constant=_q("0.25 mm"))
     with pytest.raises(ValueError, match="notch_radius must be positive"):
         peterson_notch_sensitivity(notch_radius=_q("0 mm"), peterson_constant=_q("0.5 mm"))
+
+
+def test_thin_ring_diametral_deflection_and_moment():
+    from math import pi
+
+    # delta = (pi/4 - 2/pi)*P*R^3/(E*I): a 100 mm-radius ring under 500 N.
+    d = thin_ring_diametral_deflection(
+        load=_q("500 N"),
+        radius=_q("100 mm"),
+        elastic_modulus=_q("200 GPa"),
+        second_moment=_q("500 mm**4"),
+    )
+    coefficient = pi / 4 - 2 / pi
+    assert d.to("mm").magnitude == pytest.approx(
+        coefficient * 500 * 100**3 / (200000 * 500), rel=1e-12
+    )
+    assert d.to("mm").magnitude == pytest.approx(0.7439, rel=1e-3)
+    # The deflection scales with R^3 and inversely with E*I.
+    stiffer = thin_ring_diametral_deflection(
+        load=_q("500 N"),
+        radius=_q("100 mm"),
+        elastic_modulus=_q("200 GPa"),
+        second_moment=_q("1000 mm**4"),
+    )
+    assert stiffer.to("mm").magnitude == pytest.approx(d.to("mm").magnitude / 2, rel=1e-12)
+    # Peak moment M = P*R*(1/2 - 1/pi) ~ 0.1817*P*R at the load points.
+    m = thin_ring_max_moment(load=_q("500 N"), radius=_q("100 mm"))
+    assert m.to("N*mm").magnitude == pytest.approx(500 * 100 * (0.5 - 1 / pi), rel=1e-12)
+    assert m.to("N*mm").magnitude == pytest.approx(9084.5, rel=1e-3)
+    with pytest.raises(ValueError, match="radius must be positive"):
+        thin_ring_max_moment(load=_q("500 N"), radius=_q("0 mm"))
+    with pytest.raises(ValueError, match="second_moment must be a"):
+        thin_ring_diametral_deflection(
+            load=_q("500 N"),
+            radius=_q("100 mm"),
+            elastic_modulus=_q("200 GPa"),
+            second_moment=_q("500 mm"),
+        )

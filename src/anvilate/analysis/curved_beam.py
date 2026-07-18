@@ -55,6 +55,8 @@ __all__ = [
     "trapezoidal_curved_beam_stress",
     "circular_curved_beam_stress",
     "composite_curved_beam_stress",
+    "thin_ring_diametral_deflection",
+    "thin_ring_max_moment",
 ]
 
 
@@ -279,3 +281,56 @@ def composite_curved_beam_stress(
     rn = area / integral
     rc = first_moment / area
     return _winkler_stresses(m=m, area=area, rn=rn, rc=rc, ri=ri_overall, ro=ro_overall)
+
+
+def thin_ring_diametral_deflection(
+    *,
+    load: Quantity,
+    radius: Quantity,
+    elastic_modulus: Quantity,
+    second_moment: Quantity,
+) -> Quantity:
+    """The diametral stretch δ = (π/4 − 2/π)·P·R³/(E·I) of a thin circular ring.
+
+    A thin circular ring pulled apart by two equal, opposite radial loads P along a
+    diameter — a proving ring, a snap ring, a piston-ring gauge — stretches along the
+    load line by δ = (π/4 − 2/π)·P·R³/(E·I) (Castigliano; Roark). ``load`` P is one of
+    the pair, ``radius`` R the ring centreline radius, ``elastic_modulus`` E and
+    ``second_moment`` I the ring cross-section's bending properties (I about the
+    axis perpendicular to the ring plane). The ring narrows across the perpendicular
+    diameter by the slightly smaller (2/π − 1/2)·P·R³/(E·I). Valid while R is large
+    against the section depth (thin ring). Returns the diametral deflection in mm.
+    """
+    _require(load, "[force]", "load")
+    _require(radius, "[length]", "radius")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(second_moment, "[length]**4", "second_moment")
+    p = load.to("N").magnitude
+    r = radius.to("mm").magnitude
+    e = elastic_modulus.to("MPa").magnitude  # N/mm^2
+    i = second_moment.to("mm**4").magnitude
+    if r <= 0:
+        raise ValueError(f"radius must be positive; got {radius}")
+    if e <= 0 or i <= 0:
+        raise ValueError("elastic_modulus and second_moment must be positive")
+    coefficient = pi / 4.0 - 2.0 / pi
+    return Quantity(magnitude=coefficient * p * r**3 / (e * i), unit="mm")
+
+
+def thin_ring_max_moment(*, load: Quantity, radius: Quantity) -> Quantity:
+    """The peak bending moment M = P·R·(1/2 − 1/π) in a diametrally loaded thin ring.
+
+    The bending moment in a thin circular ring pulled apart by two opposite radial
+    loads P peaks at the load points at M = P·R·(1/2 − 1/π) ≈ 0.182·P·R (opening the
+    ring there); at 90° it reverses to M = P·R·(1/π − ...), smaller in magnitude.
+    ``load`` P is one of the load pair and ``radius`` R the ring centreline radius.
+    Combine it with the section modulus for the fibre stress. Returns the maximum
+    bending moment in N·mm.
+    """
+    _require(load, "[force]", "load")
+    _require(radius, "[length]", "radius")
+    p = load.to("N").magnitude
+    r = radius.to("mm").magnitude
+    if r <= 0:
+        raise ValueError(f"radius must be positive; got {radius}")
+    return Quantity(magnitude=p * r * (0.5 - 1.0 / pi), unit="N*mm")
