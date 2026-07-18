@@ -255,6 +255,7 @@ from anvilate.analysis import (
     spur_gear_contact_ratio,
     strength_scorecard,
     stress_intensity_factor,
+    thermal_shock_stress,
     thick_wall_cylinder,
     thick_wall_sphere,
     thin_open_strip_torsion_constant,
@@ -8072,4 +8073,31 @@ def test_cylinder_external_pressure_buckling_rejects_bad_inputs():
     with pytest.raises(ValueError, match="elastic_modulus must be a"):
         cylinder_external_pressure_buckling(
             elastic_modulus=_q("200 mm"), wall_thickness=_q("2 mm"), mean_radius=_q("100 mm")
+        )
+
+
+def test_thermal_shock_stress_adds_the_biaxial_factor():
+    kw = {
+        "elastic_modulus": _q("70 GPa"),
+        "thermal_expansion_coefficient": _q("9e-6 1/K"),
+        "temperature_change": _q("200 K"),
+    }
+    # sigma = E*alpha*dT/(1-nu): glass quenched 200 K, nu=0.22.
+    shock = thermal_shock_stress(**kw, poisson=0.22)
+    base = 70e3 * 9e-6 * 200  # E*alpha*dT in MPa
+    assert shock.to("MPa").magnitude == pytest.approx(base / (1 - 0.22), rel=1e-12)
+    assert shock.to("MPa").magnitude == pytest.approx(161.5, rel=1e-3)
+    # It is exactly the uniaxial constrained stress amplified by 1/(1-nu).
+    uniaxial = constrained_thermal_stress(**kw)
+    assert shock.to("MPa").magnitude == pytest.approx(
+        uniaxial.to("MPa").magnitude / (1 - 0.22), rel=1e-12
+    )
+    assert shock.to("MPa").magnitude > uniaxial.to("MPa").magnitude
+    with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
+        thermal_shock_stress(**kw, poisson=0.5)
+    with pytest.raises(ValueError, match="temperature_change must be a temperature"):
+        thermal_shock_stress(
+            elastic_modulus=_q("70 GPa"),
+            thermal_expansion_coefficient=_q("9e-6 1/K"),
+            temperature_change=_q("200 N"),
         )

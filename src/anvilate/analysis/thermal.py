@@ -21,6 +21,7 @@ from ..units import Quantity
 
 __all__ = [
     "constrained_thermal_stress",
+    "thermal_shock_stress",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",
     "DifferentialThermalStress",
@@ -66,6 +67,49 @@ def constrained_thermal_stress(
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_change.to("K").magnitude
     return Quantity(magnitude=abs(e * alpha * delta_t), unit="MPa")
+
+
+def thermal_shock_stress(
+    *,
+    elastic_modulus: Quantity,
+    thermal_expansion_coefficient: Quantity,
+    temperature_change: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The surface stress of a thermally shocked body, σ = E·α·ΔT/(1 − ν).
+
+    When a surface is quenched — suddenly cooled (or heated) while the bulk stays
+    put — it wants to shrink but the cool interior holds it, and because the
+    restraint acts in *both* in-plane directions the stress carries a biaxial factor
+    1/(1 − ν) beyond the uniaxial :func:`constrained_thermal_stress`. A sudden
+    cooling puts the surface in tension, which is why brittle parts (glass, ceramics,
+    castings) crack when quenched. ``elastic_modulus`` E, the linear
+    ``thermal_expansion_coefficient`` α (1/temperature), ``temperature_change`` ΔT
+    (a temperature difference), and Poisson's ratio ``poisson`` ν (0 ≤ ν < 0.5)
+    describe the shock — ΔT is the instantaneous surface-to-bulk difference, the
+    severe limit of an infinitely fast quench. Returns the magnitude of the surface
+    stress in MPa.
+    """
+    if not elastic_modulus.has_dimension("[pressure]"):
+        raise ValueError(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        )
+    if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            "thermal_expansion_coefficient must have units of 1/temperature; got "
+            f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not temperature_change.has_dimension("[temperature]"):
+        raise ValueError(
+            f"temperature_change must be a temperature difference; got "
+            f"{temperature_change.dimensionality}"
+        )
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    e = elastic_modulus.to("MPa").magnitude
+    alpha = thermal_expansion_coefficient.to("1/K").magnitude
+    delta_t = temperature_change.to("K").magnitude
+    return Quantity(magnitude=abs(e * alpha * delta_t) / (1.0 - poisson), unit="MPa")
 
 
 def free_thermal_expansion(

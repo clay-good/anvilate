@@ -97,8 +97,8 @@ modules:
   stress and rate, and the Belleville (disc) washer's Almen-Laszlo
   load-deflection curve and flat load
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
-  stress, shrink-fit assembly temperature, and CTE-mismatch (differential)
-  joint stress
+  stress, thermal-shock (quench) surface stress, shrink-fit assembly temperature,
+  and CTE-mismatch (differential) joint stress
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
   fundamentals, disc-on-shaft torsional mode
@@ -458,6 +458,7 @@ from .thermal import (
     differential_thermal_stress,
     free_thermal_expansion,
     shrink_fit_assembly_temperature,
+    thermal_shock_stress,
 )
 from .torsion import (
     hollow_shaft_diameter_for_bending_torsion,
@@ -791,6 +792,7 @@ __all__ = [
     "stress_intensity_factor",
     "critical_crack_length",
     "constrained_thermal_stress",
+    "thermal_shock_stress",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",
     "DifferentialThermalStress",
