@@ -57,6 +57,7 @@ __all__ = [
     "pitch_line_velocity",
     "barth_velocity_factor",
     "lewis_bending_stress",
+    "lewis_module_for_bending_stress",
     "gear_contact_stress",
     "spur_gear_contact_ratio",
     "minimum_teeth_to_avoid_undercut",
@@ -336,6 +337,34 @@ def lewis_bending_stress(
         raise ValueError(f"form_factor (Lewis Y) must be positive; got {form_factor}")
     stress = tangential_load.pint / (face_width.pint * module.pint * form_factor)
     return Quantity(magnitude=float(stress.to("MPa").magnitude), unit="MPa")
+
+
+def lewis_module_for_bending_stress(
+    *,
+    tangential_load: Quantity,
+    face_width: Quantity,
+    form_factor: float,
+    allowable_stress: Quantity,
+) -> Quantity:
+    """The minimum gear module m = W_t/(F·Y·σ_allow) for an allowable tooth-root stress.
+
+    The sizing inverse of :func:`lewis_bending_stress`: the smallest module whose
+    tooth-root bending stress stays at or below the ``allowable_stress`` σ_allow, for a
+    ``tangential_load`` W_t, ``face_width`` F, and Lewis ``form_factor`` Y. A larger
+    module (coarser, stronger teeth) is conservative; a smaller one over-stresses the
+    root. All must be positive. Returns the required module in mm.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    _require(face_width, "[length]", "face_width")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if face_width.to("mm").magnitude <= 0:
+        raise ValueError(f"face_width must be positive; got {face_width}")
+    if form_factor <= 0:
+        raise ValueError(f"form_factor (Lewis Y) must be positive; got {form_factor}")
+    if allowable_stress.to("MPa").magnitude <= 0:
+        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+    module = tangential_load.pint / (face_width.pint * form_factor * allowable_stress.pint)
+    return Quantity(magnitude=float(module.to("mm").magnitude), unit="mm")
 
 
 def gear_contact_stress(

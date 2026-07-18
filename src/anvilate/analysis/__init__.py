@@ -108,7 +108,8 @@ modules:
 - :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads,
   bevel-gear radial/axial (thrust) resolution about the pitch cone, helical-gear
   axial thrust, radial load, and virtual tooth number, pitch-line
-  velocity, Barth dynamic factor, Lewis tooth-root bending, Hertzian surface
+  velocity, Barth dynamic factor, Lewis tooth-root bending and the module a bending
+  allowable requires, Hertzian surface
   contact stress, the mesh contact ratio, the minimum teeth to avoid undercut,
   the involute function and its Newton inverse, base tangent length (span
   measurement), the arc tooth thickness at any radius (top-land pointed-tooth check),
@@ -507,6 +508,7 @@ from .gear import (
     involute_angle,
     involute_function,
     lewis_bending_stress,
+    lewis_module_for_bending_stress,
     minimum_teeth_to_avoid_undercut,
     operating_pressure_angle,
     pitch_line_velocity,
@@ -1026,6 +1028,7 @@ __all__ = [
     "pitch_line_velocity",
     "barth_velocity_factor",
     "lewis_bending_stress",
+    "lewis_module_for_bending_stress",
     "gear_contact_stress",
     "spur_gear_contact_ratio",
     "minimum_teeth_to_avoid_undercut",

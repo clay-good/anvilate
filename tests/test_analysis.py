@@ -10845,3 +10845,35 @@ def test_living_hinge_fold_strain_and_web_length_inverse():
         )
     with pytest.raises(ValueError, match="permissible_strain must be positive"):
         lh.living_hinge_web_length_for_strain(web_thickness=_q("0.4 mm"), permissible_strain=0)
+
+
+def test_lewis_module_inverse_round_trips_the_bending_stress():
+    from anvilate.analysis import lewis_bending_stress, lewis_module_for_bending_stress
+
+    # The smallest module that keeps the root at the allowable, then verify forward.
+    module = lewis_module_for_bending_stress(
+        tangential_load=_q("3000 N"),
+        face_width=_q("40 mm"),
+        form_factor=0.35,
+        allowable_stress=_q("100 MPa"),
+    )
+    assert module.to("mm").magnitude == pytest.approx(3000 / (40 * 0.35 * 100), rel=1e-12)
+    back = lewis_bending_stress(
+        tangential_load=_q("3000 N"), module=module, face_width=_q("40 mm"), form_factor=0.35
+    )
+    assert back.to("MPa").magnitude == pytest.approx(100.0, rel=1e-9)
+    # A larger allowable (stronger steel) permits a smaller module.
+    smaller = lewis_module_for_bending_stress(
+        tangential_load=_q("3000 N"),
+        face_width=_q("40 mm"),
+        form_factor=0.35,
+        allowable_stress=_q("200 MPa"),
+    )
+    assert smaller.to("mm").magnitude < module.to("mm").magnitude
+    with pytest.raises(ValueError, match="allowable_stress must be positive"):
+        lewis_module_for_bending_stress(
+            tangential_load=_q("3000 N"),
+            face_width=_q("40 mm"),
+            form_factor=0.35,
+            allowable_stress=_q("0 MPa"),
+        )
