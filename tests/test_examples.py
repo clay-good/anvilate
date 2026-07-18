@@ -1522,3 +1522,18 @@ def test_fatigue_criteria_compared_example_three_verdicts():
     assert "safety factor 1.70" in by_name["Gerber (parabola)"].detail
     # No-silent-green: any failing entry makes the whole card FAIL.
     assert card.status is CheckStatus.FAIL
+
+
+def test_flywheel_bore_stress_example_the_shaft_hole_doubles_the_stress():
+    namespace = runpy.run_path(str(_EXAMPLES / "flywheel_bore_stress.py"))
+    card = namespace["screen_flywheel_bore"]()
+    by_name = {e.name: e for e in card.entries}
+    # As a solid disc the peak (centre) stress passes the 2.0 factor.
+    solid = by_name["solid disc (peak at centre)"]
+    assert solid.passed
+    assert "safety factor 2.24" in solid.detail
+    # The shaft bore moves the peak to the bore and roughly doubles it -> fails.
+    bored = by_name["disc with shaft bore (peak at bore)"]
+    assert bored.status is CheckStatus.FAIL
+    assert "safety factor 1.12" in bored.detail
+    assert card.status is CheckStatus.FAIL
