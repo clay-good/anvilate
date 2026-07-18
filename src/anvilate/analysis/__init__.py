@@ -121,8 +121,9 @@ modules:
   eccentrically-loaded shear group (AISC elastic method)
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
   key length a torque requires
-- :mod:`~anvilate.analysis.weld` — fillet-weld throat shear and the weld leg a
-  load requires
+- :mod:`~anvilate.analysis.weld` — fillet-weld throat shear, the weld leg a
+  load requires, and the peak throat stress of an eccentrically-loaded weld group
+  (AISC elastic method)
 - :mod:`~anvilate.analysis.rivet` — riveted-joint tearing/shearing/crushing
   strength, governing mode, and efficiency
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, active
@@ -649,6 +650,7 @@ from .torsion import (
 )
 from .weld import (
     FILLET_THROAT_FACTOR,
+    eccentric_weld_group_peak_stress,
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
 )
@@ -1080,4 +1082,5 @@ __all__ = [
     "FILLET_THROAT_FACTOR",
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",
+    "eccentric_weld_group_peak_stress",
 ]

@@ -117,6 +117,7 @@ from anvilate.analysis import (
     dunkerley_fundamental_frequency,
     dynamic_magnification_factor,
     eccentric_shear_group_peak_force,
+    eccentric_weld_group_peak_stress,
     elliptical_bar_torsional_stress,
     elliptical_bar_twist_angle,
     elliptical_hole_stress_concentration,
@@ -2909,6 +2910,46 @@ def test_fillet_weld_rejects_bad_inputs():
     with pytest.raises(ValueError, match="allowable_shear must be positive"):
         fillet_weld_leg_for_load(
             force=_q("20 kN"), length=_q("100 mm"), allowable_shear=_q("0 MPa")
+        )
+
+
+def test_eccentric_weld_group_peak_stress_matches_the_vector_sum():
+    from math import sqrt
+
+    def mm(v):
+        return _q(f"{v} mm")
+
+    # A single 200 mm vertical weld centred on the origin, 10 kN load 100 mm off it,
+    # 6 mm leg. J_w = L^3/12 = 200^3/12 = 666667 mm^3; the corner flow is
+    # sqrt((T*100/J_w)^2 + (P/L + 0)^2) = sqrt(150^2 + 50^2) = 158.1 N/mm.
+    single = [((mm(0), mm(100)), (mm(0), mm(-100)))]
+    stress = eccentric_weld_group_peak_stress(
+        segments=single, load=_q("10 kN"), eccentricity=mm(100), leg_size=mm(6)
+    )
+    peak_flow = sqrt(150.0**2 + 50.0**2)
+    assert stress.to("MPa").magnitude == pytest.approx(peak_flow / (0.707 * 6), rel=1e-9)
+    assert stress.to("MPa").magnitude == pytest.approx(37.27, rel=1e-3)
+    # Two vertical welds spread wider (bigger polar moment) carry the same eccentric
+    # load per unit length at a lower peak stress than one weld of the same total
+    # length would.
+    two_narrow = [
+        ((mm(5), mm(100)), (mm(5), mm(-100))),
+        ((mm(-5), mm(100)), (mm(-5), mm(-100))),
+    ]
+    two_wide = [
+        ((mm(80), mm(100)), (mm(80), mm(-100))),
+        ((mm(-80), mm(100)), (mm(-80), mm(-100))),
+    ]
+    narrow = eccentric_weld_group_peak_stress(
+        segments=two_narrow, load=_q("20 kN"), eccentricity=mm(100), leg_size=mm(6)
+    )
+    wide = eccentric_weld_group_peak_stress(
+        segments=two_wide, load=_q("20 kN"), eccentricity=mm(100), leg_size=mm(6)
+    )
+    assert wide.to("MPa").magnitude < narrow.to("MPa").magnitude
+    with pytest.raises(ValueError, match="at least one weld"):
+        eccentric_weld_group_peak_stress(
+            segments=[], load=_q("10 kN"), eccentricity=mm(100), leg_size=mm(6)
         )
 
 
