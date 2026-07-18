@@ -103,6 +103,8 @@ modules:
   fundamentals, disc-on-shaft torsional mode
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending,
   and the Inglis elliptical-hole stress-concentration factor
+- :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
+  stress-intensity factor and the critical crack length for fast fracture
 - :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
   the max/min → amplitude/mean cyclic-stress converter, the fatigue notch factor,
   the steel endurance-limit estimate with its Marin correction to the real
@@ -308,6 +310,10 @@ from .fourbar import (
     fourbar_transmission_angle,
     fourbar_type,
     is_grashof,
+)
+from .fracture import (
+    critical_crack_length,
+    stress_intensity_factor,
 )
 from .gear import (
     PlanetaryTorques,
@@ -779,6 +785,8 @@ __all__ = [
     "combine_axial_bending",
     "concentrated_stress",
     "elliptical_hole_stress_concentration",
+    "stress_intensity_factor",
+    "critical_crack_length",
     "constrained_thermal_stress",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",

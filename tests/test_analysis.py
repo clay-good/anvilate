@@ -76,6 +76,7 @@ from anvilate.analysis import (
     concentrated_stress,
     cone_clutch_torque,
     constrained_thermal_stress,
+    critical_crack_length,
     cyclic_stress_components,
     deflection_scorecard,
     differential_band_brake_actuation_force,
@@ -252,6 +253,7 @@ from anvilate.analysis import (
     springs_in_series,
     spur_gear_contact_ratio,
     strength_scorecard,
+    stress_intensity_factor,
     thick_wall_cylinder,
     thick_wall_sphere,
     thin_open_strip_torsion_constant,
@@ -7990,3 +7992,42 @@ def test_elliptical_hole_rejects_bad_inputs():
         elliptical_hole_stress_concentration(
             semi_axis_across_load=_q("5 mm"), semi_axis_along_load=_q("5 N")
         )
+
+
+def test_stress_intensity_and_critical_crack_length_round_trip():
+    from math import pi, sqrt
+
+    # K_I = Y*sigma*sqrt(pi*a): 100 MPa, 5 mm central crack, Y=1.
+    ki = stress_intensity_factor(remote_stress=_q("100 MPa"), crack_length=_q("5 mm"))
+    assert ki.to("MPa*m**0.5").magnitude == pytest.approx(100 * sqrt(pi * 0.005), rel=1e-12)
+    assert ki.to("MPa*m**0.5").magnitude == pytest.approx(12.533, rel=1e-3)
+    # An edge crack (Y=1.12) is more severe than a central one.
+    ki_edge = stress_intensity_factor(
+        remote_stress=_q("100 MPa"), crack_length=_q("5 mm"), geometry_factor=1.12
+    )
+    assert ki_edge.to("MPa*m**0.5").magnitude == pytest.approx(
+        1.12 * ki.to("MPa*m**0.5").magnitude, rel=1e-12
+    )
+    # a_c = (K_IC/(Y*sigma))^2/pi: a 50 MPa-sqrt(m) steel at 100 MPa tolerates ~79.6 mm.
+    ac = critical_crack_length(fracture_toughness=_q("50 MPa*m**0.5"), remote_stress=_q("100 MPa"))
+    assert ac.to("mm").magnitude == pytest.approx((50 / 100) ** 2 / pi * 1000, rel=1e-12)
+    assert ac.to("mm").magnitude == pytest.approx(79.58, rel=1e-3)
+    # Round trip: the stress intensity at the critical length equals the toughness.
+    ki_at_ac = stress_intensity_factor(remote_stress=_q("100 MPa"), crack_length=ac)
+    assert ki_at_ac.to("MPa*m**0.5").magnitude == pytest.approx(50.0, rel=1e-9)
+    # Halving the stress quadruples the tolerable crack length.
+    ac_low = critical_crack_length(
+        fracture_toughness=_q("50 MPa*m**0.5"), remote_stress=_q("50 MPa")
+    )
+    assert ac_low.to("mm").magnitude == pytest.approx(4 * ac.to("mm").magnitude, rel=1e-12)
+
+
+def test_fracture_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="crack_length must be positive"):
+        stress_intensity_factor(remote_stress=_q("100 MPa"), crack_length=_q("0 mm"))
+    with pytest.raises(ValueError, match="geometry_factor must be positive"):
+        stress_intensity_factor(
+            remote_stress=_q("100 MPa"), crack_length=_q("5 mm"), geometry_factor=0.0
+        )
+    with pytest.raises(ValueError, match="fracture_toughness must be a"):
+        critical_crack_length(fracture_toughness=_q("50 MPa"), remote_stress=_q("100 MPa"))
