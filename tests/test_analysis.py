@@ -120,6 +120,7 @@ from anvilate.analysis import (
     gear_normal_load,
     gear_radial_load,
     gear_tangential_load,
+    gear_train_efficiency,
     gear_train_value,
     geneva_crank_radius,
     geneva_driven_radius,
@@ -7650,3 +7651,20 @@ def test_scotch_yoke_rejects_bad_inputs():
         scotch_yoke_displacement(crank_radius=_q("0 mm"), crank_angle=45.0)
     with pytest.raises(ValueError, match="crank_speed must be a rotational-speed"):
         scotch_yoke_velocity(crank_radius=_q("50 mm"), crank_angle=45.0, crank_speed=_q("1000 N"))
+
+
+def test_gear_train_efficiency_compounds_the_mesh_losses():
+    # Losses compound: four 98%-efficient meshes keep 0.98^4 ~= 92.2%.
+    assert gear_train_efficiency(mesh_efficiencies=[0.98, 0.98, 0.98, 0.98]) == pytest.approx(
+        0.98**4, rel=1e-12
+    )
+    assert gear_train_efficiency(mesh_efficiencies=[0.98] * 4) == pytest.approx(0.9224, rel=1e-3)
+    # A single perfect mesh keeps everything; one poor worm mesh dominates.
+    assert gear_train_efficiency(mesh_efficiencies=[1.0]) == pytest.approx(1.0)
+    assert gear_train_efficiency(mesh_efficiencies=[0.99, 0.45]) == pytest.approx(0.4455, rel=1e-4)
+    with pytest.raises(ValueError, match="at least one mesh"):
+        gear_train_efficiency(mesh_efficiencies=[])
+    with pytest.raises(ValueError, match=r"each mesh efficiency must lie in \(0, 1\]"):
+        gear_train_efficiency(mesh_efficiencies=[0.98, 1.2])
+    with pytest.raises(ValueError, match=r"each mesh efficiency must lie in \(0, 1\]"):
+        gear_train_efficiency(mesh_efficiencies=[0.0])

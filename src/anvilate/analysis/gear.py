@@ -56,6 +56,7 @@ __all__ = [
     "lewis_bending_stress",
     "gear_contact_stress",
     "gear_train_value",
+    "gear_train_efficiency",
     "reverted_train_is_coaxial",
     "planetary_planet_teeth",
     "planetary_can_assemble",
@@ -359,6 +360,27 @@ def gear_train_value(
         )
     sign = -1.0 if (mesh_count - internal_meshes) % 2 else 1.0
     return sign * prod(drivers) / prod(driven)
+
+
+def gear_train_efficiency(*, mesh_efficiencies: Sequence[float]) -> float:
+    """The overall efficiency of a gear train, η = ∏ ηᵢ over its meshes.
+
+    Power drops a little at every mesh, and the losses compound: a train's overall
+    efficiency is the product of its individual mesh efficiencies, so a four-stage
+    train of 98%-efficient meshes keeps only 0.98⁴ ≈ 92%. ``mesh_efficiencies`` is
+    the per-mesh efficiency of each gear engagement in the train, each a fraction in
+    (0, 1] (a spur mesh runs ~0.98–0.99; a worm mesh far less — pair this with
+    :func:`~anvilate.analysis.worm_gear_efficiency`). Multiply an ideal output torque
+    by the result to get the real one. The sequence must be non-empty. Returns the
+    dimensionless overall efficiency.
+    """
+    effs = list(mesh_efficiencies)
+    if len(effs) == 0:
+        raise ValueError("mesh_efficiencies must contain at least one mesh")
+    for eff in effs:
+        if not 0.0 < eff <= 1.0:
+            raise ValueError(f"each mesh efficiency must lie in (0, 1]; got {eff}")
+    return prod(effs)
 
 
 def reverted_train_is_coaxial(
