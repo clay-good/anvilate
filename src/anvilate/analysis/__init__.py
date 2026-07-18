@@ -51,6 +51,8 @@ modules:
   acceleration at a cam angle
 - :mod:`~anvilate.analysis.geneva` — external Geneva (intermittent-indexing)
   mechanism geometry: index angle, crank and driven engagement radii
+- :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
+  displacement from top dead centre and instantaneous slider velocity
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
   torque requires, the peak lining pressure, and the simple/differential lever
   force; short-shoe (block) brake lever statics; the self-energizing /
@@ -366,6 +368,10 @@ from .rivet import (
     riveted_joint_efficiency,
 )
 from .section import CrossSection, bending_stress, required_section_modulus
+from .slider_crank import (
+    slider_crank_displacement,
+    slider_crank_velocity,
+)
 from .spring import (
     BELLEVILLE_PLATEAU_RATIO,
     SPRING_END_CLAMPED_FREE,
@@ -516,6 +522,8 @@ __all__ = [
     "geneva_index_angle",
     "geneva_crank_radius",
     "geneva_driven_radius",
+    "slider_crank_displacement",
+    "slider_crank_velocity",
     "band_brake_torque",
     "band_brake_tight_tension_for_torque",
     "band_brake_max_lining_pressure",

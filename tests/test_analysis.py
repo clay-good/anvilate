@@ -218,6 +218,8 @@ from anvilate.analysis import (
     simply_supported_triangular_load,
     simply_supported_uniform_load,
     slenderness_ratio,
+    slider_crank_displacement,
+    slider_crank_velocity,
     soderberg_safety_factor,
     soderberg_scorecard,
     solid_disc_polar_mass_moment,
@@ -7376,3 +7378,64 @@ def test_geneva_rejects_too_few_slots():
         geneva_crank_radius(slots=4, center_distance=_q("0 mm"))
     with pytest.raises(ValueError, match="center_distance must be a"):
         geneva_driven_radius(slots=4, center_distance=_q("100 N"))
+
+
+def test_slider_crank_displacement_spans_the_stroke():
+    from math import sqrt
+
+    kw = {"crank_radius": _q("50 mm"), "rod_length": _q("200 mm")}
+    # TDC: zero displacement. BDC: the full stroke 2r = 100 mm.
+    assert slider_crank_displacement(crank_angle=0.0, **kw).to("mm").magnitude == pytest.approx(
+        0.0, abs=1e-12
+    )
+    assert slider_crank_displacement(crank_angle=180.0, **kw).to("mm").magnitude == pytest.approx(
+        100.0, rel=1e-12
+    )
+    # At 90 deg: x = r + L - sqrt(L^2 - r^2).
+    mid = slider_crank_displacement(crank_angle=90.0, **kw).to("mm").magnitude
+    assert mid == pytest.approx(50.0 + 200.0 - sqrt(200.0**2 - 50.0**2), rel=1e-12)
+    assert mid == pytest.approx(56.351, rel=1e-4)
+    # The finite rod makes the first half-stroke longer than the second at 90 deg:
+    # more than half the stroke is covered by the first quarter-turn.
+    assert mid > 50.0
+
+
+def test_slider_crank_velocity_is_zero_at_dead_centres():
+    from math import cos, radians, sin, sqrt
+
+    kw = {"crank_radius": _q("50 mm"), "rod_length": _q("200 mm"), "crank_speed": _q("1000 rpm")}
+    # Velocity vanishes at both dead centres (the piston reverses there).
+    assert slider_crank_velocity(crank_angle=0.0, **kw).to("m/s").magnitude == pytest.approx(
+        0.0, abs=1e-12
+    )
+    assert slider_crank_velocity(crank_angle=180.0, **kw).to("m/s").magnitude == pytest.approx(
+        0.0, abs=1e-9
+    )
+    # At 90 deg the cos term drops and v = omega*r.
+    omega = 1000 * 2 * 3.141592653589793 / 60.0
+    v90 = slider_crank_velocity(crank_angle=90.0, **kw).to("m/s").magnitude
+    assert v90 == pytest.approx(omega * 0.050, rel=1e-9)
+    # The exact form matches a direct evaluation at an arbitrary angle.
+    theta = radians(60.0)
+    root = sqrt(200.0**2 - (50.0 * sin(theta)) ** 2)
+    ref = omega * 50.0 * sin(theta) * (1.0 + 50.0 * cos(theta) / root) / 1000.0
+    v60 = slider_crank_velocity(crank_angle=60.0, **kw).to("m/s").magnitude
+    assert v60 == pytest.approx(ref, rel=1e-12)
+
+
+def test_slider_crank_rejects_short_rod_and_bad_inputs():
+    with pytest.raises(ValueError, match="rod_length must exceed crank_radius"):
+        slider_crank_displacement(
+            crank_radius=_q("200 mm"), rod_length=_q("100 mm"), crank_angle=45.0
+        )
+    with pytest.raises(ValueError, match="crank_radius must be positive"):
+        slider_crank_displacement(
+            crank_radius=_q("0 mm"), rod_length=_q("200 mm"), crank_angle=45.0
+        )
+    with pytest.raises(ValueError, match="crank_speed must be a rotational-speed"):
+        slider_crank_velocity(
+            crank_radius=_q("50 mm"),
+            rod_length=_q("200 mm"),
+            crank_angle=45.0,
+            crank_speed=_q("1000 N"),
+        )
