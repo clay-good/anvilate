@@ -199,6 +199,7 @@ from anvilate.analysis import (
     planetary_speed,
     planetary_torques,
     plate_buckling_stress,
+    plate_compression_buckling_coefficient,
     plate_shear_buckling_coefficient,
     polar_second_moment_hollow,
     polar_second_moment_solid,
@@ -8831,3 +8832,28 @@ def test_hertz_sphere_approach_matches_a_squared_over_r():
     assert harder.to("um").magnitude == pytest.approx(4 * approach.to("um").magnitude, rel=1e-9)
     with pytest.raises(ValueError, match="diameter1 must be positive"):
         hertz_sphere_approach(**{**kw, "diameter1": _q("0 mm")})
+
+
+def test_plate_compression_buckling_coefficient():
+    # k = min over m of (m/gamma + gamma/m)^2; it touches 4 at integer aspect ratios.
+    assert plate_compression_buckling_coefficient(aspect_ratio=1.0) == pytest.approx(4.0, rel=1e-12)
+    assert plate_compression_buckling_coefficient(aspect_ratio=2.0) == pytest.approx(4.0, rel=1e-12)
+    assert plate_compression_buckling_coefficient(aspect_ratio=3.0) == pytest.approx(4.0, rel=1e-12)
+    # A short plate (gamma < 1) buckles in one half-wave with a higher coefficient.
+    assert plate_compression_buckling_coefficient(aspect_ratio=0.5) == pytest.approx(
+        (1 / 0.5 + 0.5) ** 2, rel=1e-12
+    )
+    # Between integer ratios it rises only slightly (never below 4).
+    mid = plate_compression_buckling_coefficient(aspect_ratio=1.4142)
+    assert mid == pytest.approx(4.5, rel=1e-3)
+    assert mid > 4.0
+    # It feeds plate_buckling_stress as the compression coefficient.
+    sigma_cr = plate_buckling_stress(
+        buckling_coefficient=plate_compression_buckling_coefficient(aspect_ratio=3.0),
+        elastic_modulus=_q("200 GPa"),
+        thickness=_q("5 mm"),
+        width=_q("300 mm"),
+    )
+    assert sigma_cr.to("MPa").magnitude > 0
+    with pytest.raises(ValueError, match="aspect_ratio must be positive"):
+        plate_compression_buckling_coefficient(aspect_ratio=0)

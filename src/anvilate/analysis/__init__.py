@@ -14,7 +14,7 @@ modules:
 - :mod:`~anvilate.analysis.plate` — flat-plate bending (simply-supported
   rectangle via the exact Navier series; circular, simply-supported and clamped),
   the clamped-cover thickness a pressure requires, elastic plate/web buckling,
-  and the shear-buckling coefficient
+  and the compression/shear-buckling coefficients
 - :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
   moment, extreme fibre, section modulus, and radius of gyration; the bending
   stress a moment makes and the minimum section modulus it requires
@@ -414,6 +414,7 @@ from .plate import (
     clamped_circular_plate_uniform_load,
     clamped_plate_uniform_load,
     plate_buckling_stress,
+    plate_compression_buckling_coefficient,
     plate_shear_buckling_coefficient,
     simply_supported_annular_plate_uniform_load,
     simply_supported_circular_plate_uniform_load,
@@ -796,6 +797,7 @@ __all__ = [
     "clamped_circular_plate_thickness_for_pressure",
     "plate_buckling_stress",
     "plate_shear_buckling_coefficient",
+    "plate_compression_buckling_coefficient",
     "lead_angle",
     "power_screw_raise_torque",
     "power_screw_lower_torque",

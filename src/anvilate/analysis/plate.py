@@ -45,6 +45,7 @@ __all__ = [
     "clamped_circular_plate_thickness_for_pressure",
     "plate_buckling_stress",
     "plate_shear_buckling_coefficient",
+    "plate_compression_buckling_coefficient",
 ]
 
 # Odd-harmonic cap for the Navier series. Deflection terms fall off as 1/(mn)·
@@ -626,3 +627,26 @@ def plate_shear_buckling_coefficient(*, aspect_ratio: float) -> float:
             f"aspect_ratio (long side / short side) must be at least 1; got {aspect_ratio}"
         )
     return 5.34 + 4.0 / aspect_ratio**2
+
+
+def plate_compression_buckling_coefficient(*, aspect_ratio: float) -> float:
+    """The compression-buckling coefficient k of a simply-supported plate.
+
+    A rectangular plate simply supported on all edges and pushed edgewise buckles
+    into m half-waves along its loaded length; the critical coefficient is the value
+    of (m·b/a + a/(m·b))² for the integer m that minimises it — the plate picks the
+    wave count that buckles soonest. For a loaded length a and unloaded width b
+    (``aspect_ratio`` γ = a/b), k = min over m of (m/γ + γ/m)². The minimum touches
+    4 whenever γ is an integer (the plate buckles into γ square-ish cells) and rises
+    only slightly between, so a long plate sits essentially at k = 4. Pass the result
+    as the ``buckling_coefficient`` to :func:`plate_buckling_stress`. ``aspect_ratio``
+    must be positive. Returns the dimensionless k (≥ 4).
+    """
+    if aspect_ratio <= 0:
+        raise ValueError(f"aspect_ratio must be positive; got {aspect_ratio}")
+    gamma = aspect_ratio
+    # k(m) = (m/gamma + gamma/m)^2 is minimised near m = gamma; scan the integers
+    # bracketing it (one below, one above) and take the least.
+    lower = max(1, int(gamma))
+    best = min((m / gamma + gamma / m) ** 2 for m in (lower, lower + 1))
+    return best
