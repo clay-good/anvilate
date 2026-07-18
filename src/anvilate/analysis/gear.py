@@ -61,6 +61,7 @@ __all__ = [
     "spur_gear_contact_ratio",
     "minimum_teeth_to_avoid_undercut",
     "involute_function",
+    "involute_angle",
     "base_tangent_length",
     "gear_tooth_thickness_at_radius",
     "gear_train_value",
@@ -473,6 +474,32 @@ def involute_function(*, pressure_angle: float) -> float:
     """
     phi = _check_pressure_angle(pressure_angle)
     return tan(phi) - phi
+
+
+def involute_angle(*, involute_value: float) -> float:
+    """The inverse involute: the pressure angle φ whose inv(φ) = tan(φ) − φ equals a
+    given value.
+
+    The involute function has no closed-form inverse, but it is smooth and strictly
+    increasing, so a few Newton steps recover φ to machine precision (from the
+    small-angle seed φ ≈ (3·inv)^(1/3)). This is the step measurement-over-pins and
+    profile-shift geometry need — converting an involute-function value back into the
+    angle at which the flank sits. ``involute_value`` is inv(φ) and must be
+    non-negative (0 gives φ = 0). Returns φ in degrees.
+    """
+    if involute_value < 0:
+        raise ValueError(f"involute_value must be non-negative; got {involute_value}")
+    if involute_value == 0:
+        return 0.0
+    phi = (3.0 * involute_value) ** (1.0 / 3.0)  # small-angle initial guess
+    for _ in range(60):
+        residual = tan(phi) - phi - involute_value
+        slope = tan(phi) ** 2  # d/dφ (tan φ − φ) = sec²φ − 1 = tan²φ
+        step = residual / slope
+        phi -= step
+        if abs(step) < 1e-14:
+            break
+    return degrees(phi)
 
 
 def base_tangent_length(

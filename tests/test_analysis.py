@@ -187,6 +187,7 @@ from anvilate.analysis import (
     interference_fit,
     interference_for_contact_pressure,
     interference_torque_capacity,
+    involute_angle,
     involute_function,
     is_grashof,
     johnson_critical_stress,
@@ -8214,6 +8215,17 @@ def test_involute_function_and_base_tangent_length():
         base_tangent_length(module=_q("2 mm"), teeth=20, teeth_spanned=20, pressure_angle=20.0)
     with pytest.raises(ValueError, match=r"pressure_angle \(degrees\) must lie in"):
         involute_function(pressure_angle=95.0)
+
+
+def test_involute_angle_inverts_the_involute_function():
+    # The Newton inverse recovers the angle to machine precision across the range.
+    for deg in (10.0, 20.0, 25.0, 30.0, 45.0):
+        value = involute_function(pressure_angle=deg)
+        assert involute_angle(involute_value=value) == pytest.approx(deg, rel=1e-9)
+    # inv(0) = 0 -> phi = 0.
+    assert involute_angle(involute_value=0.0) == 0.0
+    with pytest.raises(ValueError, match="involute_value must be non-negative"):
+        involute_angle(involute_value=-0.01)
 
 
 def test_gear_tooth_thickness_at_radius_thins_from_pitch_to_tip():
