@@ -22,6 +22,7 @@ from anvilate.analysis import (
     band_brake_torque,
     barth_velocity_factor,
     base_excitation_relative_transmissibility,
+    base_tangent_length,
     basquin_cycles_to_failure,
     basquin_stress_for_life,
     beam_on_elastic_foundation_max_deflection,
@@ -184,6 +185,7 @@ from anvilate.analysis import (
     interference_fit,
     interference_for_contact_pressure,
     interference_torque_capacity,
+    involute_function,
     is_grashof,
     johnson_critical_stress,
     joint_separation_load,
@@ -8185,6 +8187,31 @@ def test_minimum_teeth_to_avoid_undercut_matches_textbook_values():
         minimum_teeth_to_avoid_undercut(pressure_angle=0.0)
     with pytest.raises(ValueError, match="addendum_coefficient must be positive"):
         minimum_teeth_to_avoid_undercut(pressure_angle=20.0, addendum_coefficient=0.0)
+
+
+def test_involute_function_and_base_tangent_length():
+    from math import cos, pi, radians, tan
+
+    # inv(20 deg) = tan(20) - 20*pi/180 ~ 0.014904.
+    inv20 = involute_function(pressure_angle=20.0)
+    assert inv20 == pytest.approx(tan(radians(20)) - radians(20), rel=1e-12)
+    assert inv20 == pytest.approx(0.0149044, rel=1e-5)
+    # Base tangent length W_k = m*cos(phi)*[(k-0.5)*pi + z*inv(phi)] for a standard
+    # m=2, z=20, 20 deg gear spanned over k=3 teeth: ~15.32 mm.
+    w = base_tangent_length(module=_q("2 mm"), teeth=20, teeth_spanned=3, pressure_angle=20.0)
+    phi = radians(20)
+    expected = 2 * cos(phi) * ((3 - 0.5) * pi + 20 * (tan(phi) - phi))
+    assert w.to("mm").magnitude == pytest.approx(expected, rel=1e-12)
+    assert w.to("mm").magnitude == pytest.approx(15.3209, rel=1e-4)
+    # Spanning one more tooth adds exactly one base pitch p_b = pi*m*cos(phi).
+    w4 = base_tangent_length(module=_q("2 mm"), teeth=20, teeth_spanned=4, pressure_angle=20.0)
+    assert (w4.to("mm").magnitude - w.to("mm").magnitude) == pytest.approx(
+        pi * 2 * cos(phi), rel=1e-12
+    )
+    with pytest.raises(ValueError, match="teeth_spanned .* must be below teeth"):
+        base_tangent_length(module=_q("2 mm"), teeth=20, teeth_spanned=20, pressure_angle=20.0)
+    with pytest.raises(ValueError, match=r"pressure_angle \(degrees\) must lie in"):
+        involute_function(pressure_angle=95.0)
 
 
 def test_helical_gear_axial_thrust_and_radial_load():

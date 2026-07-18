@@ -60,6 +60,8 @@ __all__ = [
     "gear_contact_stress",
     "spur_gear_contact_ratio",
     "minimum_teeth_to_avoid_undercut",
+    "involute_function",
+    "base_tangent_length",
     "gear_train_value",
     "gear_train_efficiency",
     "reverted_train_is_coaxial",
@@ -456,6 +458,57 @@ def minimum_teeth_to_avoid_undercut(
         raise ValueError(f"addendum_coefficient must be positive; got {addendum_coefficient}")
     exact = 2.0 * addendum_coefficient / sin(phi) ** 2
     return ceil(exact)
+
+
+def involute_function(*, pressure_angle: float) -> float:
+    """The involute function inv(φ) = tan(φ) − φ of a pressure angle.
+
+    The involute function is the angular difference, in radians, between the point
+    where an involute tooth flank crosses a given circle and where it leaves the base
+    circle — the geometric building block of gear-tooth thickness and span
+    measurement. ``pressure_angle`` φ is given in degrees (0 < φ < 90) and φ inside
+    tan and the subtraction is taken in radians; for the common 20° pressure angle
+    inv(φ) ≈ 0.014904. Returns the dimensionless involute-function value.
+    """
+    phi = _check_pressure_angle(pressure_angle)
+    return tan(phi) - phi
+
+
+def base_tangent_length(
+    *,
+    module: Quantity,
+    teeth: int,
+    teeth_spanned: int,
+    pressure_angle: float,
+) -> Quantity:
+    """The base tangent length (span measurement) over ``teeth_spanned`` teeth of a
+    standard spur gear.
+
+    A gear's tooth thickness is checked in the shop with a span micrometer laid
+    across k teeth, its jaws tangent to the base circle. That span is (k − 1) base
+    pitches plus one base-circle tooth thickness, which reduces to
+
+        W_k = m·cos(φ)·[(k − 0.5)·π + z·inv(φ)],
+
+    with ``module`` m, ``teeth`` z the gear's tooth count, ``teeth_spanned`` k the
+    number of teeth the jaws bridge, ``pressure_angle`` φ (degrees), and the involute
+    function inv(φ) = tan(φ) − φ (:func:`involute_function`). k is chosen so the jaws
+    contact near the pitch line (roughly k ≈ z·φ/180° + 0.5); it must be at least 1
+    and below z. The module must be a positive length and the tooth counts positive
+    whole numbers. Returns the span W_k in millimetres.
+    """
+    _require(module, "[length]", "module")
+    z = _check_tooth_count(teeth, "teeth")
+    k = _check_tooth_count(teeth_spanned, "teeth_spanned")
+    if k >= z:
+        raise ValueError(f"teeth_spanned ({teeth_spanned}) must be below teeth ({teeth})")
+    m = module.to("mm").magnitude
+    if m <= 0:
+        raise ValueError(f"module must be positive; got {module}")
+    phi = _check_pressure_angle(pressure_angle)
+    inv = tan(phi) - phi
+    w_k = m * cos(phi) * ((k - 0.5) * pi + z * inv)
+    return Quantity(magnitude=w_k, unit="mm")
 
 
 def gear_train_value(

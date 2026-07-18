@@ -99,6 +99,7 @@ modules:
   axial thrust, radial load, and virtual tooth number, pitch-line
   velocity, Barth dynamic factor, Lewis tooth-root bending, Hertzian surface
   contact stress, the mesh contact ratio, the minimum teeth to avoid undercut,
+  the involute function and base tangent length (span measurement),
   and train kinematics (signed compound-train value, reverted coaxial constraint,
   planetary Willis-equation speeds and ideal torque split, whole-tooth planet and
   assembly checks)
@@ -408,6 +409,7 @@ from .fracture import (
 from .gear import (
     PlanetaryTorques,
     barth_velocity_factor,
+    base_tangent_length,
     bevel_gear_axial_load,
     bevel_gear_radial_load,
     bevel_pitch_cone_angle,
@@ -420,6 +422,7 @@ from .gear import (
     helical_gear_axial_thrust,
     helical_gear_radial_load,
     helical_virtual_teeth,
+    involute_function,
     lewis_bending_stress,
     minimum_teeth_to_avoid_undercut,
     pitch_line_velocity,
@@ -849,6 +852,8 @@ __all__ = [
     "gear_contact_stress",
     "spur_gear_contact_ratio",
     "minimum_teeth_to_avoid_undercut",
+    "involute_function",
+    "base_tangent_length",
     "gear_train_value",
     "gear_train_efficiency",
     "reverted_train_is_coaxial",
