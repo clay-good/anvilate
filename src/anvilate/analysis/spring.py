@@ -37,6 +37,7 @@ __all__ = [
     "wahl_factor",
     "spring_shear_stress",
     "helical_spring_rate",
+    "helical_spring_active_coils_for_rate",
     "SPRING_END_PARALLEL_PLATES",
     "SPRING_END_FIXED_HINGED",
     "SPRING_END_HINGED_HINGED",
@@ -137,6 +138,37 @@ def helical_spring_rate(
     )
     converted = rate.to("N/mm")
     return Quantity(magnitude=float(converted.magnitude), unit="N/mm")
+
+
+def helical_spring_active_coils_for_rate(
+    *,
+    target_rate: Quantity,
+    mean_coil_diameter: Quantity,
+    wire_diameter: Quantity,
+    shear_modulus: Quantity,
+) -> float:
+    """The active coils N_a = G·d⁴/(8·D³·k) a helical spring needs for a target rate.
+
+    The inverse of :func:`helical_spring_rate`: solving k = G·d⁴/(8·D³·N_a) for the
+    coil count gives N_a = G·d⁴/(8·D³·k). This is the sizing step once the wire and
+    coil diameters are fixed and a spring rate is wanted — add the closed-and-ground
+    end coils (usually 2) to get the total coils to wind. ``target_rate`` k is the
+    desired stiffness, ``mean_coil_diameter`` D and ``wire_diameter`` d the coil
+    geometry, and ``shear_modulus`` G the wire's. A softer target or a bigger coil
+    calls for more coils. Returns the (fractional) active coil count.
+    """
+    _require(target_rate, "[force] / [length]", "target_rate")
+    spring_index(mean_coil_diameter=mean_coil_diameter, wire_diameter=wire_diameter)
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    k = target_rate.to("N/mm").magnitude
+    g = shear_modulus.to("MPa").magnitude  # N/mm^2
+    d = wire_diameter.to("mm").magnitude
+    big_d = mean_coil_diameter.to("mm").magnitude
+    if k <= 0:
+        raise ValueError(f"target_rate must be positive; got {target_rate}")
+    if g <= 0:
+        raise ValueError(f"shear_modulus must be positive; got {shear_modulus}")
+    return g * d**4 / (8.0 * big_d**3 * k)
 
 
 class SpringBucklingResult(BaseModel):

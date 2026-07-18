@@ -139,6 +139,7 @@ from anvilate.analysis import (
     goodman_scorecard,
     helical_gear_axial_thrust,
     helical_gear_radial_load,
+    helical_spring_active_coils_for_rate,
     helical_spring_buckling,
     helical_spring_rate,
     helical_virtual_teeth,
@@ -8619,3 +8620,23 @@ def test_sphere_external_pressure_buckling_beats_the_cylinder():
         sphere_external_pressure_buckling(
             elastic_modulus=_q("200 GPa"), wall_thickness=_q("0 mm"), mean_radius=_q("500 mm")
         )
+
+
+def test_helical_spring_active_coils_for_rate_inverts_the_rate():
+    kw = {
+        "mean_coil_diameter": _q("30 mm"),
+        "wire_diameter": _q("4 mm"),
+        "shear_modulus": _q("79 GPa"),
+    }
+    # N_a = G*d^4/(8*D^3*k); round-trips through helical_spring_rate.
+    n = helical_spring_active_coils_for_rate(target_rate=_q("15 N/mm"), **kw)
+    assert n == pytest.approx(79000 * 4**4 / (8 * 30**3 * 15), rel=1e-12)
+    assert n == pytest.approx(6.242, rel=1e-3)
+    back = helical_spring_rate(active_coils=n, **kw)
+    assert back.to("N/mm").magnitude == pytest.approx(15.0, rel=1e-12)
+    # A softer target needs more coils.
+    assert helical_spring_active_coils_for_rate(target_rate=_q("7.5 N/mm"), **kw) == pytest.approx(
+        2 * n, rel=1e-12
+    )
+    with pytest.raises(ValueError, match="target_rate must be a"):
+        helical_spring_active_coils_for_rate(target_rate=_q("15 N"), **kw)
