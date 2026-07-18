@@ -17,6 +17,8 @@ checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
+from math import sqrt
+
 from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
@@ -33,6 +35,7 @@ __all__ = [
     "thin_wall_sphere_stress",
     "thick_wall_sphere",
     "cylinder_external_pressure_buckling",
+    "sphere_external_pressure_buckling",
 ]
 
 
@@ -409,4 +412,42 @@ def cylinder_external_pressure_buckling(
     if r <= 0:
         raise ValueError(f"mean_radius must be positive; got {mean_radius}")
     p_cr = e * t**3 / (4.0 * r**3 * (1.0 - poisson**2))
+    return Quantity(magnitude=p_cr, unit="MPa")
+
+
+def sphere_external_pressure_buckling(
+    *,
+    elastic_modulus: Quantity,
+    wall_thickness: Quantity,
+    mean_radius: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The buckling collapse pressure of a thin spherical shell under external pressure.
+
+    A complete thin sphere under uniform external pressure buckles inward at the
+    classical (Zoelly) pressure
+
+        p_cr = 2·E·(t/R)² / √(3·(1 − ν²)),
+
+    which — unlike the cylinder — rides on the *square* of the thin ratio, so a
+    sphere holds far more external pressure than a cylinder of the same t/R. That is
+    why deep-submergence hulls and vacuum spheres are spherical. ``elastic_modulus``
+    E, ``wall_thickness`` t, ``mean_radius`` R, and Poisson's ratio ``poisson`` ν
+    describe the shell; the wall must be positive and 0 ≤ ν < 0.5. This is the ideal
+    (perfect-sphere) buckling pressure — real shells with dimples knock down well
+    below it, so apply a generous factor. Returns the critical external pressure in MPa.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    _require(mean_radius, "[length]", "mean_radius")
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    e = elastic_modulus.to("MPa").magnitude
+    t = wall_thickness.to("mm").magnitude
+    r = mean_radius.to("mm").magnitude
+    if t <= 0:
+        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+    if r <= 0:
+        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+    p_cr = 2.0 * e * (t / r) ** 2 / sqrt(3.0 * (1.0 - poisson**2))
     return Quantity(magnitude=p_cr, unit="MPa")

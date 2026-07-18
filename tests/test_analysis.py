@@ -260,6 +260,7 @@ from anvilate.analysis import (
     solid_disc_polar_mass_moment,
     sommerfeld_number,
     span_deflection_limit,
+    sphere_external_pressure_buckling,
     spiral_spring_rate,
     spiral_spring_stress,
     spring_index,
@@ -8588,4 +8589,33 @@ def test_lateral_torsional_buckling_moment():
             torsion_constant=_q("533333 mm**4"),
             elastic_modulus=_q("200 GPa"),
             shear_modulus=_q("79 GPa"),
+        )
+
+
+def test_sphere_external_pressure_buckling_beats_the_cylinder():
+    from math import sqrt
+
+    kw = {
+        "elastic_modulus": _q("200 GPa"),
+        "wall_thickness": _q("5 mm"),
+        "mean_radius": _q("500 mm"),
+    }
+    # p_cr = 2*E*(t/R)^2 / sqrt(3*(1-nu^2)).
+    sphere = sphere_external_pressure_buckling(**kw, poisson=0.3)
+    assert sphere.to("MPa").magnitude == pytest.approx(
+        2 * 200e3 * (5 / 500) ** 2 / sqrt(3 * (1 - 0.3**2)), rel=1e-12
+    )
+    assert sphere.to("MPa").magnitude == pytest.approx(24.21, rel=1e-3)
+    # A sphere holds far more external pressure than a cylinder of the same t/R
+    # (it rides on (t/R)^2, the cylinder on (t/R)^3) -- why deep hulls are spheres.
+    cylinder = cylinder_external_pressure_buckling(**kw, poisson=0.3)
+    assert sphere.to("MPa").magnitude > 100 * cylinder.to("MPa").magnitude
+    # It rides on the square of the thinness: doubling the wall gives 4x.
+    thicker = sphere_external_pressure_buckling(
+        elastic_modulus=_q("200 GPa"), wall_thickness=_q("10 mm"), mean_radius=_q("500 mm")
+    )
+    assert thicker.to("MPa").magnitude == pytest.approx(4 * sphere.to("MPa").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="wall_thickness must be positive"):
+        sphere_external_pressure_buckling(
+            elastic_modulus=_q("200 GPa"), wall_thickness=_q("0 mm"), mean_radius=_q("500 mm")
         )
