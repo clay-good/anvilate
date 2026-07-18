@@ -64,6 +64,8 @@ __all__ = [
     "involute_angle",
     "base_tangent_length",
     "gear_tooth_thickness_at_radius",
+    "operating_pressure_angle",
+    "profile_shift_sum_for_center_distance",
     "gear_train_value",
     "gear_train_efficiency",
     "reverted_train_is_coaxial",
@@ -579,6 +581,100 @@ def gear_tooth_thickness_at_radius(
     phi_r = acos(r_b / r)
     thickness = 2.0 * r * (pi / (2.0 * z) + (tan(phi) - phi) - (tan(phi_r) - phi_r))
     return Quantity(magnitude=thickness, unit="mm")
+
+
+def _operating_pressure_angle_rad(
+    module: Quantity,
+    pinion_teeth: int,
+    gear_teeth: int,
+    pressure_angle: float,
+    operating_center_distance: Quantity,
+) -> float:
+    """Validate a gear pair and return its operating pressure angle in radians."""
+    _require(module, "[length]", "module")
+    _require(operating_center_distance, "[length]", "operating_center_distance")
+    z1 = _check_tooth_count(pinion_teeth, "pinion_teeth")
+    z2 = _check_tooth_count(gear_teeth, "gear_teeth")
+    m = module.to("mm").magnitude
+    a_w = operating_center_distance.to("mm").magnitude
+    if m <= 0:
+        raise ValueError(f"module must be positive; got {module}")
+    if a_w <= 0:
+        raise ValueError(
+            f"operating_center_distance must be positive; got {operating_center_distance}"
+        )
+    phi = _check_pressure_angle(pressure_angle)
+    a = m * (z1 + z2) / 2.0  # standard (reference) centre distance
+    ratio = a * cos(phi) / a_w
+    if ratio >= 1.0:
+        raise ValueError(
+            f"operating_center_distance ({operating_center_distance}) is below the base "
+            f"centre a*cos(phi) = {a * cos(phi):.4f} mm; the teeth cannot mesh"
+        )
+    return acos(ratio)
+
+
+def operating_pressure_angle(
+    *,
+    module: Quantity,
+    pinion_teeth: int,
+    gear_teeth: int,
+    pressure_angle: float,
+    operating_center_distance: Quantity,
+) -> float:
+    """The operating (working) pressure angle of a spur pair on a non-standard centre.
+
+    A gear pair run at a centre distance other than the standard a = m·(z₁+z₂)/2 — to
+    take up backlash, or because the gears are profile-shifted — meshes at a different,
+    *operating* pressure angle. The base circles are fixed, so r_b = r·cos(φ) =
+    r_w·cos(φ_w) gives the exact relation
+
+        cos(φ_w) = a·cos(φ) / a_w,
+
+    with ``module`` m, tooth counts ``pinion_teeth`` z₁ and ``gear_teeth`` z₂,
+    reference ``pressure_angle`` φ (degrees), and ``operating_center_distance`` a_w.
+    Spreading the centres apart (a_w > a) raises φ_w. a_w must exceed a·cos(φ) or the
+    base circles overlap and the teeth cannot mesh. Returns the operating pressure
+    angle φ_w in degrees.
+    """
+    return degrees(
+        _operating_pressure_angle_rad(
+            module, pinion_teeth, gear_teeth, pressure_angle, operating_center_distance
+        )
+    )
+
+
+def profile_shift_sum_for_center_distance(
+    *,
+    module: Quantity,
+    pinion_teeth: int,
+    gear_teeth: int,
+    pressure_angle: float,
+    operating_center_distance: Quantity,
+) -> float:
+    """The total profile-shift coefficient a spur pair needs for a given centre distance.
+
+    Running a pair at an enlarged centre distance a_w requires the two gears to be
+    profile-shifted (corrected) so their teeth still mesh without excessive backlash.
+    The required *sum* of the shift coefficients follows from the operating pressure
+    angle (:func:`operating_pressure_angle`) through the involute meshing equation
+
+        inv(φ_w) = inv(φ) + 2·(x₁ + x₂)·tan(φ)/(z₁ + z₂),
+
+    solved for x₁ + x₂ = (inv φ_w − inv φ)·(z₁ + z₂)/(2·tan φ). The arguments are as
+    in :func:`operating_pressure_angle`; how the sum is split between the two gears is
+    a separate design choice. A standard-centre pair (a_w = a) returns 0. Returns the
+    dimensionless total profile-shift coefficient x₁ + x₂.
+    """
+    z1 = _check_tooth_count(pinion_teeth, "pinion_teeth")
+    z2 = _check_tooth_count(gear_teeth, "gear_teeth")
+    phi = _check_pressure_angle(pressure_angle)
+    phi_w = _operating_pressure_angle_rad(
+        module, pinion_teeth, gear_teeth, pressure_angle, operating_center_distance
+    )
+    inv_phi = tan(phi) - phi
+    inv_phi_w = tan(phi_w) - phi_w
+    return (inv_phi_w - inv_phi) * (z1 + z2) / (2.0 * tan(phi))
 
 
 def gear_train_value(

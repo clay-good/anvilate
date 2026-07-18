@@ -216,6 +216,7 @@ from anvilate.analysis import (
     natural_frequency_from_deflection,
     neuber_notch_sensitivity,
     octahedral_shear_stress,
+    operating_pressure_angle,
     overhang_tip_load,
     overhang_uniform_load,
     parabolic_cable_length,
@@ -245,6 +246,7 @@ from anvilate.analysis import (
     power_screw_raise_torque,
     preloaded_bolt_cyclic_stress,
     principal_stresses_plane,
+    profile_shift_sum_for_center_distance,
     propped_cantilever_plastic_collapse_load,
     propped_cantilever_plastic_collapse_udl,
     quality_factor,
@@ -8242,6 +8244,39 @@ def test_gear_tooth_thickness_at_radius_thins_from_pitch_to_tip():
     # Inside the base circle there is no involute flank.
     with pytest.raises(ValueError, match="must be at least the base radius"):
         gear_tooth_thickness_at_radius(radius=_q("18 mm"), **kw)
+
+
+def test_operating_pressure_angle_and_profile_shift():
+    from math import acos, cos, radians, tan
+
+    pair = {"module": _q("2 mm"), "pinion_teeth": 20, "gear_teeth": 40, "pressure_angle": 20.0}
+    # cos(phi_w) = a*cos(phi)/a_w, a = m*(z1+z2)/2 = 60 mm; a_w = 61 mm -> ~22.44 deg.
+    phi_w = operating_pressure_angle(operating_center_distance=_q("61 mm"), **pair)
+    a = 2 * (20 + 40) / 2
+    assert phi_w == pytest.approx(
+        acos(a * cos(radians(20)) / 61) * 180 / 3.141592653589793, rel=1e-9
+    )
+    assert phi_w == pytest.approx(22.439, rel=1e-3)
+    # At the standard centre the operating angle is the reference angle and the
+    # required profile-shift sum is zero.
+    assert operating_pressure_angle(operating_center_distance=_q("60 mm"), **pair) == pytest.approx(
+        20.0, rel=1e-9
+    )
+    assert profile_shift_sum_for_center_distance(
+        operating_center_distance=_q("60 mm"), **pair
+    ) == pytest.approx(0.0, abs=1e-9)
+    # Spreading the centres to 61 mm needs x1+x2 ~ 0.53.
+    x_sum = profile_shift_sum_for_center_distance(operating_center_distance=_q("61 mm"), **pair)
+
+    def inv(x):
+        return tan(x) - x
+
+    expected = (inv(radians(phi_w)) - inv(radians(20))) * 60 / (2 * tan(radians(20)))
+    assert x_sum == pytest.approx(expected, rel=1e-9)
+    assert x_sum == pytest.approx(0.5298, rel=1e-3)
+    # Too small a centre distance overlaps the base circles.
+    with pytest.raises(ValueError, match="below the base centre"):
+        operating_pressure_angle(operating_center_distance=_q("50 mm"), **pair)
 
 
 def test_helical_gear_axial_thrust_and_radial_load():

@@ -100,7 +100,8 @@ modules:
   velocity, Barth dynamic factor, Lewis tooth-root bending, Hertzian surface
   contact stress, the mesh contact ratio, the minimum teeth to avoid undercut,
   the involute function and its Newton inverse, base tangent length (span
-  measurement), and the arc tooth thickness at any radius (top-land pointed-tooth check),
+  measurement), the arc tooth thickness at any radius (top-land pointed-tooth check),
+  and the operating pressure angle and profile-shift sum for a non-standard centre,
   and train kinematics (signed compound-train value, reverted coaxial constraint,
   planetary Willis-equation speeds and ideal torque split, whole-tooth planet and
   assembly checks)
@@ -429,11 +430,13 @@ from .gear import (
     involute_function,
     lewis_bending_stress,
     minimum_teeth_to_avoid_undercut,
+    operating_pressure_angle,
     pitch_line_velocity,
     planetary_can_assemble,
     planetary_planet_teeth,
     planetary_speed,
     planetary_torques,
+    profile_shift_sum_for_center_distance,
     reverted_train_is_coaxial,
     spur_gear_contact_ratio,
 )
@@ -861,6 +864,8 @@ __all__ = [
     "involute_angle",
     "base_tangent_length",
     "gear_tooth_thickness_at_radius",
+    "operating_pressure_angle",
+    "profile_shift_sum_for_center_distance",
     "gear_train_value",
     "gear_train_efficiency",
     "reverted_train_is_coaxial",
