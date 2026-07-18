@@ -35,6 +35,9 @@ __all__ = [
     "natural_frequency",
     "natural_frequency_from_deflection",
     "string_natural_frequency",
+    "damped_natural_frequency",
+    "logarithmic_decrement",
+    "transmissibility",
     "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",
@@ -142,6 +145,69 @@ def string_natural_frequency(
     if mu <= 0:
         raise ValueError(f"mass_per_length must be positive; got {mass_per_length}")
     return Quantity(magnitude=n / (2.0 * ell) * sqrt(t / mu), unit="Hz")
+
+
+def _check_damping_ratio(damping_ratio: float) -> float:
+    if not 0 <= damping_ratio < 1:
+        raise ValueError(
+            f"damping_ratio must lie in [0, 1) (an underdamped system); got {damping_ratio}"
+        )
+    return damping_ratio
+
+
+def damped_natural_frequency(*, natural_frequency: Quantity, damping_ratio: float) -> Quantity:
+    """The damped natural frequency f_d = f_n·√(1 − ζ²) of a viscously damped system.
+
+    A damped system oscillates a little slower than its undamped natural frequency:
+    f_d = f_n·√(1 − ζ²). ``natural_frequency`` f_n is the undamped frequency (from
+    :func:`natural_frequency`) and ``damping_ratio`` ζ the fraction of critical
+    damping (0 ≤ ζ < 1 for the underdamped case that still oscillates). Light damping
+    (ζ ≲ 0.1) barely shifts the frequency; near critical the oscillation slows toward
+    zero. Returns the damped frequency in hertz.
+    """
+    _require(natural_frequency, "[frequency]", "natural_frequency")
+    zeta = _check_damping_ratio(damping_ratio)
+    fn = natural_frequency.to("Hz").magnitude
+    if fn <= 0:
+        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+    return Quantity(magnitude=fn * sqrt(1.0 - zeta**2), unit="Hz")
+
+
+def logarithmic_decrement(*, damping_ratio: float) -> float:
+    """The logarithmic decrement δ = 2π·ζ/√(1 − ζ²) of a damped free vibration.
+
+    The natural log of the ratio of successive oscillation peaks — the standard way
+    damping is measured from a decay trace, since ζ is hard to read directly.
+    ``damping_ratio`` ζ is the fraction of critical damping (0 ≤ ζ < 1). For light
+    damping δ ≈ 2π·ζ, so a decay record gives ζ ≈ δ/(2π). Returns the dimensionless
+    decrement.
+    """
+    zeta = _check_damping_ratio(damping_ratio)
+    return 2.0 * pi * zeta / sqrt(1.0 - zeta**2)
+
+
+def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
+    """The vibration transmissibility TR of a single-degree-of-freedom isolator.
+
+    The fraction of a harmonic force (or base motion) that passes through a spring-
+    and-damper isolator to (or from) the mass:
+
+        TR = √(1 + (2·ζ·r)²) / √((1 − r²)² + (2·ζ·r)²),
+
+    where ``frequency_ratio`` r = ω/ω_n is the forcing frequency over the mount's
+    natural frequency and ``damping_ratio`` ζ the fraction of critical damping
+    (0 ≤ ζ < 1). Isolation (TR < 1) only begins past r = √2 — below it the mount
+    amplifies — so a soft mount (low ω_n, high r) isolates, and adding damping tames
+    the resonant peak at r ≈ 1 but *worsens* the isolation at high r. r must be
+    non-negative. Returns the dimensionless transmissibility.
+    """
+    zeta = _check_damping_ratio(damping_ratio)
+    if frequency_ratio < 0:
+        raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
+    r = frequency_ratio
+    numerator = sqrt(1.0 + (2.0 * zeta * r) ** 2)
+    denominator = sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
+    return numerator / denominator
 
 
 def dunkerley_fundamental_frequency(individual_frequencies: list[Quantity]) -> Quantity:

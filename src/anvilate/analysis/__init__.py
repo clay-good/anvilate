@@ -101,7 +101,9 @@ modules:
   and CTE-mismatch (differential) joint stress
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
-  fundamentals, taut-string/cable transverse modes, disc-on-shaft torsional mode
+  fundamentals, taut-string/cable transverse modes, disc-on-shaft torsional mode,
+  and damped-vibration measures (damped frequency, log decrement, isolator
+  transmissibility)
 - :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending,
   and the Inglis elliptical-hole stress-concentration factor
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
@@ -251,10 +253,12 @@ from .dynamics import (
     clamped_annular_plate_fundamental_frequency,
     clamped_circular_plate_fundamental_frequency,
     clamped_plate_fundamental_frequency,
+    damped_natural_frequency,
     dunkerley_fundamental_frequency,
     fixed_fixed_fundamental_frequency,
     fixed_pinned_fundamental_frequency,
     frequency_scorecard,
+    logarithmic_decrement,
     natural_frequency,
     natural_frequency_from_deflection,
     simply_supported_annular_plate_fundamental_frequency,
@@ -265,6 +269,7 @@ from .dynamics import (
     spring_surge_frequency,
     string_natural_frequency,
     torsional_natural_frequency,
+    transmissibility,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -617,6 +622,9 @@ __all__ = [
     "natural_frequency",
     "natural_frequency_from_deflection",
     "string_natural_frequency",
+    "damped_natural_frequency",
+    "logarithmic_decrement",
+    "transmissibility",
     "dunkerley_fundamental_frequency",
     "cantilever_fundamental_frequency",
     "simply_supported_fundamental_frequency",

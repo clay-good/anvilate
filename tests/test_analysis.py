@@ -79,6 +79,7 @@ from anvilate.analysis import (
     critical_crack_length,
     cyclic_stress_components,
     cylinder_external_pressure_buckling,
+    damped_natural_frequency,
     deflection_scorecard,
     differential_band_brake_actuation_force,
     differential_band_brake_is_self_locking,
@@ -163,6 +164,7 @@ from anvilate.analysis import (
     leaf_spring_rate,
     leaf_spring_stress,
     lewis_bending_stress,
+    logarithmic_decrement,
     marin_endurance_limit,
     max_shear_stress_plane,
     max_transverse_shear_stress,
@@ -275,6 +277,7 @@ from anvilate.analysis import (
     torque_from_power,
     torsional_natural_frequency,
     transition_slenderness,
+    transmissibility,
     trapezoidal_curved_beam_stress,
     tresca_equivalent_stress,
     tresca_principal,
@@ -8215,3 +8218,54 @@ def test_rotating_rim_radial_growth_rejects_bad_inputs():
             rotational_speed=_q("3000 rpm"),
             elastic_modulus=_q("200 mm"),
         )
+
+
+def test_damped_vibration_measures():
+    from math import pi, sqrt
+
+    # Damped frequency f_d = f_n*sqrt(1-zeta^2): light damping barely shifts it.
+    fd = damped_natural_frequency(natural_frequency=_q("100 Hz"), damping_ratio=0.05)
+    assert fd.to("Hz").magnitude == pytest.approx(100 * sqrt(1 - 0.05**2), rel=1e-12)
+    assert fd.to("Hz").magnitude == pytest.approx(99.875, rel=1e-4)
+    # An undamped system keeps its full frequency.
+    assert damped_natural_frequency(natural_frequency=_q("100 Hz"), damping_ratio=0.0).to(
+        "Hz"
+    ).magnitude == pytest.approx(100.0, rel=1e-12)
+    # Log decrement delta = 2*pi*zeta/sqrt(1-zeta^2); ~2*pi*zeta when light.
+    delta = logarithmic_decrement(damping_ratio=0.05)
+    assert delta == pytest.approx(2 * pi * 0.05 / sqrt(1 - 0.05**2), rel=1e-12)
+    assert delta == pytest.approx(2 * pi * 0.05, rel=2e-3)
+
+
+def test_transmissibility_isolation_crossover():
+    from math import sqrt
+
+    # At r = sqrt(2) the transmissibility is exactly 1 for ANY damping -- the
+    # crossover below which a mount amplifies and above which it isolates.
+    for zeta in (0.0, 0.1, 0.3, 0.5):
+        assert transmissibility(frequency_ratio=sqrt(2), damping_ratio=zeta) == pytest.approx(
+            1.0, rel=1e-9
+        )
+    # Below the crossover the mount amplifies (TR > 1); well above it isolates.
+    assert transmissibility(frequency_ratio=1.0, damping_ratio=0.1) > 1.0  # near resonance
+    assert transmissibility(frequency_ratio=4.0, damping_ratio=0.1) < 1.0  # isolation region
+    # More damping tames the resonant peak...
+    assert transmissibility(frequency_ratio=1.0, damping_ratio=0.3) < transmissibility(
+        frequency_ratio=1.0, damping_ratio=0.1
+    )
+    # ...but WORSENS isolation high above the crossover.
+    assert transmissibility(frequency_ratio=4.0, damping_ratio=0.3) > transmissibility(
+        frequency_ratio=4.0, damping_ratio=0.1
+    )
+    # At resonance TR = sqrt(1+(2*zeta)^2)/(2*zeta).
+    tr_res = transmissibility(frequency_ratio=1.0, damping_ratio=0.2)
+    assert tr_res == pytest.approx(sqrt(1 + (2 * 0.2) ** 2) / (2 * 0.2), rel=1e-12)
+
+
+def test_damped_vibration_rejects_bad_inputs():
+    with pytest.raises(ValueError, match=r"damping_ratio must lie in \[0, 1\)"):
+        damped_natural_frequency(natural_frequency=_q("100 Hz"), damping_ratio=1.0)
+    with pytest.raises(ValueError, match=r"damping_ratio must lie in \[0, 1\)"):
+        logarithmic_decrement(damping_ratio=1.5)
+    with pytest.raises(ValueError, match="frequency_ratio must be non-negative"):
+        transmissibility(frequency_ratio=-1.0, damping_ratio=0.1)
