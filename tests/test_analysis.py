@@ -163,6 +163,7 @@ from anvilate.analysis import (
     member_clamp_load_in_joint,
     miner_cumulative_damage,
     miner_spectrum_repeats_to_failure,
+    minimum_teeth_to_avoid_undercut,
     natural_frequency,
     natural_frequency_from_deflection,
     overhang_tip_load,
@@ -7862,3 +7863,27 @@ def test_spur_gear_contact_ratio_rejects_bad_inputs():
         spur_gear_contact_ratio(
             module=_q("0 mm"), pinion_teeth=20, gear_teeth=40, pressure_angle=20.0
         )
+
+
+def test_minimum_teeth_to_avoid_undercut_matches_textbook_values():
+    from math import ceil, radians, sin
+
+    # Standard full-depth: 20 deg -> 18, 14.5 deg -> 32, 25 deg -> 12.
+    assert minimum_teeth_to_avoid_undercut(pressure_angle=20.0) == 18
+    assert minimum_teeth_to_avoid_undercut(pressure_angle=14.5) == 32
+    assert minimum_teeth_to_avoid_undercut(pressure_angle=25.0) == 12
+    # It is the ceiling of the exact 2k/sin^2(phi).
+    assert minimum_teeth_to_avoid_undercut(pressure_angle=20.0) == ceil(
+        2.0 / sin(radians(20.0)) ** 2
+    )
+    # A larger pressure angle allows fewer teeth; a stub tooth (k < 1) fewer still.
+    assert minimum_teeth_to_avoid_undercut(pressure_angle=25.0) < minimum_teeth_to_avoid_undercut(
+        pressure_angle=20.0
+    )
+    assert minimum_teeth_to_avoid_undercut(
+        pressure_angle=20.0, addendum_coefficient=0.8
+    ) < minimum_teeth_to_avoid_undercut(pressure_angle=20.0)
+    with pytest.raises(ValueError, match=r"pressure_angle \(degrees\) must lie in"):
+        minimum_teeth_to_avoid_undercut(pressure_angle=0.0)
+    with pytest.raises(ValueError, match="addendum_coefficient must be positive"):
+        minimum_teeth_to_avoid_undercut(pressure_angle=20.0, addendum_coefficient=0.0)

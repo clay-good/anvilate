@@ -29,7 +29,7 @@ N_p = (N_r − N_s)/2 and the equal-spacing assembly condition
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import atan2, cos, degrees, pi, prod, radians, sin, sqrt, tan
+from math import atan2, ceil, cos, degrees, pi, prod, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict
 
@@ -56,6 +56,7 @@ __all__ = [
     "lewis_bending_stress",
     "gear_contact_stress",
     "spur_gear_contact_ratio",
+    "minimum_teeth_to_avoid_undercut",
     "gear_train_value",
     "gear_train_efficiency",
     "reverted_train_is_coaxial",
@@ -371,6 +372,27 @@ def spur_gear_contact_ratio(
     length_of_action = sqrt(ra1**2 - rb1**2) + sqrt(ra2**2 - rb2**2) - center * sin(phi)
     base_pitch = pi * m * cos(phi)
     return length_of_action / base_pitch
+
+
+def minimum_teeth_to_avoid_undercut(
+    *, pressure_angle: float, addendum_coefficient: float = 1.0
+) -> int:
+    """The fewest pinion teeth that avoid undercut against a rack, N_min = ⌈2·k/sin²φ⌉.
+
+    A pinion with too few teeth is *undercut*: the generating cutter gouges the
+    tooth flank below the base circle, thinning the root and weakening the tooth.
+    The limit for a gear meshing a rack (the worst case) is N_min = 2·k/sin²φ, so a
+    standard full-depth 20° pinion needs 18 teeth, a 14.5° one 32, and a stub or
+    25° tooth fewer. ``pressure_angle`` φ (degrees, in (0, 90)) and the
+    ``addendum_coefficient`` k (1.0 for full-depth teeth, ~0.8 for stub teeth)
+    describe the tooth form. The exact 2·k/sin²φ is rounded *up* to the next whole
+    tooth. Returns the minimum whole tooth count.
+    """
+    phi = _check_pressure_angle(pressure_angle)
+    if addendum_coefficient <= 0:
+        raise ValueError(f"addendum_coefficient must be positive; got {addendum_coefficient}")
+    exact = 2.0 * addendum_coefficient / sin(phi) ** 2
+    return ceil(exact)
 
 
 def gear_train_value(
