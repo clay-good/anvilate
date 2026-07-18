@@ -154,7 +154,9 @@ modules:
   fundamentals, taut-string/cable transverse modes, disc-on-shaft and two-rotor
   drivetrain torsional modes,
   and damped-vibration measures (damped frequency, log decrement, quality factor,
-  critical damping coefficient, isolator transmissibility, forced-response dynamic
+  critical damping coefficient, isolator transmissibility and its design inverse
+  (the mount natural frequency and static deflection a target isolation needs),
+  forced-response dynamic
   magnification and phase, and the base-excitation seismic-instrument response);
   simple and physical (rigid-body) pendulum periods; the solid-disc and annular
   (hollow-cylinder) polar mass moments of inertia;
@@ -385,6 +387,8 @@ from .dynamics import (
     fixed_fixed_fundamental_frequency,
     fixed_pinned_fundamental_frequency,
     frequency_scorecard,
+    isolator_natural_frequency_for_transmissibility,
+    isolator_static_deflection_for_transmissibility,
     logarithmic_decrement,
     natural_frequency,
     natural_frequency_from_deflection,
@@ -922,6 +926,8 @@ __all__ = [
     "quality_factor",
     "critical_damping_coefficient",
     "transmissibility",
+    "isolator_natural_frequency_for_transmissibility",
+    "isolator_static_deflection_for_transmissibility",
     "dynamic_magnification_factor",
     "resonance_phase_angle",
     "base_excitation_relative_transmissibility",

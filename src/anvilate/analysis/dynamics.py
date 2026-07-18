@@ -43,6 +43,8 @@ __all__ = [
     "quality_factor",
     "critical_damping_coefficient",
     "transmissibility",
+    "isolator_natural_frequency_for_transmissibility",
+    "isolator_static_deflection_for_transmissibility",
     "dynamic_magnification_factor",
     "resonance_phase_angle",
     "base_excitation_relative_transmissibility",
@@ -390,6 +392,63 @@ def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
     numerator = sqrt(1.0 + (2.0 * zeta * r) ** 2)
     denominator = sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
     return numerator / denominator
+
+
+def isolator_natural_frequency_for_transmissibility(
+    *, forcing_frequency: Quantity, transmissibility: float
+) -> Quantity:
+    """The mount natural frequency f_n = f/√(1 + 1/TR) for a target isolation.
+
+    The design inverse of :func:`transmissibility` in the undamped isolation region:
+    to pass only a fraction ``transmissibility`` TR (< 1) of a disturbance at
+    ``forcing_frequency`` f, the isolator must be soft enough that its natural
+    frequency is f_n = f/√(1 + 1/TR) — since undamped TR = 1/(r² − 1) with r = f/f_n.
+    A smaller TR (better isolation) demands a lower f_n (a softer mount). TR must be in
+    (0, 1); f_n always comes out below f/√2, the onset of isolation. Returns f_n in hertz.
+    """
+    if not forcing_frequency.has_dimension("[frequency]"):
+        raise ValueError(
+            f"forcing_frequency must be a [frequency] quantity; got "
+            f"{forcing_frequency.dimensionality} ({forcing_frequency})"
+        )
+    if not 0 < transmissibility < 1:
+        raise ValueError(
+            f"transmissibility must be in (0, 1) for isolation; got {transmissibility}"
+        )
+    f = forcing_frequency.to("Hz").magnitude
+    if f <= 0:
+        raise ValueError(f"forcing_frequency must be positive; got {forcing_frequency}")
+    ratio = sqrt(1.0 + 1.0 / transmissibility)
+    return Quantity(magnitude=f / ratio, unit="Hz")
+
+
+def isolator_static_deflection_for_transmissibility(
+    *,
+    forcing_frequency: Quantity,
+    transmissibility: float,
+    gravity: Quantity = STANDARD_GRAVITY,
+) -> Quantity:
+    """The isolator static deflection δ = g/(2π·f_n)² for a target transmissibility.
+
+    How soft a mount to pick, expressed as its static (self-weight) deflection — the
+    number an isolator is chosen by. Combining
+    :func:`isolator_natural_frequency_for_transmissibility` (f_n for the target ``transmissibility``
+    TR at the ``forcing_frequency`` f) with the mass-on-spring relation f_n = (1/2π)·√(g/δ)
+    gives δ = g/(2π·f_n)². Softer mounts (larger δ) isolate better; a stiff mount cannot.
+    ``gravity`` defaults to standard g. Returns the static deflection in mm.
+    """
+    natural_frequency = isolator_natural_frequency_for_transmissibility(
+        forcing_frequency=forcing_frequency, transmissibility=transmissibility
+    )
+    if not gravity.has_dimension("[acceleration]"):
+        raise ValueError(
+            f"gravity must be an [acceleration] quantity; got {gravity.dimensionality} ({gravity})"
+        )
+    fn = natural_frequency.to("Hz").magnitude
+    g = gravity.to("m/s**2").magnitude
+    omega_n = 2.0 * pi * fn
+    deflection_m = g / omega_n**2
+    return Quantity(magnitude=deflection_m, unit="m").to("mm")
 
 
 def dynamic_magnification_factor(*, frequency_ratio: float, damping_ratio: float) -> float:

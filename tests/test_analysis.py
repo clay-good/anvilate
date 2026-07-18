@@ -10783,3 +10783,34 @@ def test_gasket_seating_and_operating_bolt_loads():
         g.gasket_operating_load(gasket_factor=0, pressure=_q("2 MPa"), **kw)
     with pytest.raises(ValueError, match="pressure must be a"):
         g.gasket_operating_load(gasket_factor=2.0, pressure=_q("2 mm"), **kw)
+
+
+def test_isolator_design_inverse_round_trips_transmissibility():
+    from math import pi, sqrt
+
+    from anvilate.analysis import dynamics as d
+
+    # Pick a mount for 90% isolation (TR=0.1) at 50 Hz.
+    fn = d.isolator_natural_frequency_for_transmissibility(
+        forcing_frequency=_q("50 Hz"), transmissibility=0.1
+    )
+    assert fn.to("Hz").magnitude == pytest.approx(50 / sqrt(1 + 1 / 0.1), rel=1e-12)
+    # Feeding f_n back through the undamped forward transmissibility recovers TR = 0.1.
+    r = 50 / fn.to("Hz").magnitude
+    assert d.transmissibility(frequency_ratio=r, damping_ratio=0.0) == pytest.approx(0.1, rel=1e-9)
+    # The static deflection is g/(2*pi*fn)^2.
+    delta = d.isolator_static_deflection_for_transmissibility(
+        forcing_frequency=_q("50 Hz"), transmissibility=0.1
+    )
+    expected_mm = 9.80665 / (2 * pi * fn.to("Hz").magnitude) ** 2 * 1000
+    assert delta.to("mm").magnitude == pytest.approx(expected_mm, rel=1e-12)
+    # Better isolation (smaller TR) demands a softer mount: lower fn, larger deflection.
+    softer = d.isolator_static_deflection_for_transmissibility(
+        forcing_frequency=_q("50 Hz"), transmissibility=0.02
+    )
+    assert softer.to("mm").magnitude > delta.to("mm").magnitude
+    # TR must be in the isolation region (0, 1).
+    with pytest.raises(ValueError, match="transmissibility must be in"):
+        d.isolator_natural_frequency_for_transmissibility(
+            forcing_frequency=_q("50 Hz"), transmissibility=1.5
+        )
