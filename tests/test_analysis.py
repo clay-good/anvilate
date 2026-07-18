@@ -112,6 +112,7 @@ from anvilate.analysis import (
     flange_coupling_torque,
     flywheel_energy_fluctuation,
     flywheel_inertia_for_fluctuation,
+    fourbar_type,
     free_thermal_expansion,
     frequency_scorecard,
     gear_contact_stress,
@@ -141,6 +142,7 @@ from anvilate.analysis import (
     interference_fit,
     interference_for_contact_pressure,
     interference_torque_capacity,
+    is_grashof,
     johnson_critical_stress,
     joint_separation_load,
     joint_stiffness_factor,
@@ -7470,4 +7472,83 @@ def test_slider_crank_acceleration_peaks_at_top_dead_centre():
             rod_length=_q("200 mm"),
             crank_angle=45.0,
             crank_speed=_q("1000 N"),
+        )
+
+
+def test_fourbar_grashof_classification():
+    # Same four lengths, different shortest position -> different mechanism.
+    # 30/90/80 sides with a 100 frame: s+l = 30+100 = 130 < 90+80 = 170 -> Grashof.
+    crank_rocker = fourbar_type(
+        ground=_q("100 mm"),
+        input_link=_q("30 mm"),
+        coupler=_q("90 mm"),
+        output_link=_q("80 mm"),
+    )
+    assert crank_rocker == "crank-rocker"  # shortest is the input side link
+    # Move the 30 mm link to the frame: both side links now rotate fully.
+    double_crank = fourbar_type(
+        ground=_q("30 mm"),
+        input_link=_q("100 mm"),
+        coupler=_q("90 mm"),
+        output_link=_q("80 mm"),
+    )
+    assert double_crank == "double-crank"
+    # Move the 30 mm link to the coupler: neither input nor output completes a turn.
+    double_rocker = fourbar_type(
+        ground=_q("100 mm"),
+        input_link=_q("90 mm"),
+        coupler=_q("30 mm"),
+        output_link=_q("80 mm"),
+    )
+    assert double_rocker == "double-rocker"
+    # s + l == p + q is the change-point case (10+9 == 8+... ): 11/9/7/... tuned.
+    change = fourbar_type(
+        ground=_q("10 mm"),
+        input_link=_q("9 mm"),
+        coupler=_q("8 mm"),
+        output_link=_q("7 mm"),
+    )
+    assert change == "change-point"  # 7+10 == 8+9
+    # s + l > p + q: no link rotates fully.
+    triple = fourbar_type(
+        ground=_q("11 mm"),
+        input_link=_q("9 mm"),
+        coupler=_q("7 mm"),
+        output_link=_q("6 mm"),
+    )
+    assert triple == "triple-rocker"  # 6+11 = 17 > 7+9 = 16
+    # is_grashof agrees: True through the change-point, False for the triple-rocker.
+    assert is_grashof(
+        ground=_q("100 mm"),
+        input_link=_q("30 mm"),
+        coupler=_q("90 mm"),
+        output_link=_q("80 mm"),
+    )
+    assert is_grashof(
+        ground=_q("10 mm"), input_link=_q("9 mm"), coupler=_q("8 mm"), output_link=_q("7 mm")
+    )
+    assert not is_grashof(
+        ground=_q("11 mm"), input_link=_q("9 mm"), coupler=_q("7 mm"), output_link=_q("6 mm")
+    )
+
+
+def test_fourbar_rejects_non_closable_and_bad_inputs():
+    # The longest link exceeds the sum of the other three: cannot close.
+    with pytest.raises(ValueError, match="closable four-bar"):
+        fourbar_type(
+            ground=_q("100 mm"),
+            input_link=_q("20 mm"),
+            coupler=_q("15 mm"),
+            output_link=_q("10 mm"),
+        )
+    with pytest.raises(ValueError, match="link length must be positive"):
+        is_grashof(
+            ground=_q("0 mm"), input_link=_q("30 mm"), coupler=_q("90 mm"), output_link=_q("80 mm")
+        )
+    with pytest.raises(ValueError, match="link must be a"):
+        is_grashof(
+            ground=_q("100 N"),
+            input_link=_q("30 mm"),
+            coupler=_q("90 mm"),
+            output_link=_q("80 mm"),
         )
