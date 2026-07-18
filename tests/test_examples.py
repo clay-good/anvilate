@@ -1359,3 +1359,21 @@ def test_indexing_table_example_runs_out_of_dwell():
     assert twelve.status is CheckStatus.FAIL
     assert "safety factor 0.92" in twelve.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_jacketed_reactor_example_is_governed_by_vacuum():
+    namespace = runpy.run_path(str(_EXAMPLES / "jacketed_reactor_vacuum.py"))
+    card = namespace["screen_reactor_shell"]()
+    by_name = {e.name: e for e in card.entries}
+    # Every wall clears the internal pressure with margin...
+    assert by_name["3 mm wall: internal pressure (hoop)"].passed
+    assert "safety factor 2.07" in by_name["3 mm wall: internal pressure (hoop)"].detail
+    assert by_name["12 mm wall: internal pressure (hoop)"].passed
+    # ...but the vacuum buckling governs: thin walls fail it.
+    assert by_name["3 mm wall: external vacuum (buckling)"].status is CheckStatus.FAIL
+    assert by_name["6 mm wall: external vacuum (buckling)"].status is CheckStatus.FAIL
+    thick_vac = by_name["12 mm wall: external vacuum (buckling)"]
+    assert thick_vac.passed
+    assert "safety factor 2.53" in thick_vac.detail
+    # The 3 mm wall passes pressure but fails vacuum -> overall FAIL.
+    assert card.status is CheckStatus.FAIL
