@@ -15,8 +15,9 @@ modules:
   foundation (Hetényi): the characteristic parameter β, and the peak deflection and
   bending moment a point load makes on a long (effectively infinite) beam
 - :mod:`~anvilate.analysis.plate` — flat-plate bending (simply-supported
-  rectangle via the exact Navier series; circular, simply-supported and clamped),
-  the clamped-cover thickness a pressure requires, elastic plate/web buckling,
+  rectangle via the exact Navier series; circular, simply-supported and clamped,
+  under uniform pressure or a central point load), the clamped-cover thickness a
+  pressure requires, elastic plate/web buckling,
   and the compression/shear-buckling coefficients
 - :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
   moment, extreme fibre, section modulus, and radius of gyration; the bending
@@ -435,6 +436,7 @@ from .keys import (
 from .plate import (
     PlateBendingResult,
     clamped_annular_plate_uniform_load,
+    clamped_circular_plate_center_load_deflection,
     clamped_circular_plate_thickness_for_pressure,
     clamped_circular_plate_uniform_load,
     clamped_plate_uniform_load,
@@ -442,6 +444,7 @@ from .plate import (
     plate_compression_buckling_coefficient,
     plate_shear_buckling_coefficient,
     simply_supported_annular_plate_uniform_load,
+    simply_supported_circular_plate_center_load_deflection,
     simply_supported_circular_plate_uniform_load,
     simply_supported_plate_center_patch_load,
     simply_supported_plate_uniform_load,
@@ -833,6 +836,8 @@ __all__ = [
     "clamped_plate_uniform_load",
     "simply_supported_circular_plate_uniform_load",
     "clamped_circular_plate_uniform_load",
+    "simply_supported_circular_plate_center_load_deflection",
+    "clamped_circular_plate_center_load_deflection",
     "simply_supported_annular_plate_uniform_load",
     "clamped_annular_plate_uniform_load",
     "clamped_circular_plate_thickness_for_pressure",

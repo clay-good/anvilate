@@ -71,6 +71,7 @@ from anvilate.analysis import (
     circular_second_moment,
     clamped_annular_plate_fundamental_frequency,
     clamped_annular_plate_uniform_load,
+    clamped_circular_plate_center_load_deflection,
     clamped_circular_plate_fundamental_frequency,
     clamped_circular_plate_thickness_for_pressure,
     clamped_circular_plate_uniform_load,
@@ -262,6 +263,7 @@ from anvilate.analysis import (
     simply_supported_annular_plate_uniform_load,
     simply_supported_center_load,
     simply_supported_center_patch_load,
+    simply_supported_circular_plate_center_load_deflection,
     simply_supported_circular_plate_fundamental_frequency,
     simply_supported_circular_plate_uniform_load,
     simply_supported_end_moment,
@@ -6083,6 +6085,40 @@ def test_circular_plate_rejects_bad_inputs():
         clamped_circular_plate_uniform_load(pressure=_q("50 N"), **kw)
     with pytest.raises(ValueError, match="poisson_ratio must lie in"):
         simply_supported_circular_plate_uniform_load(pressure=_q("50 kPa"), poisson_ratio=0.5, **kw)
+
+
+def test_circular_plate_central_point_load_deflection():
+    from math import pi
+
+    kw = {
+        "force": _q("10 kN"),
+        "diameter": _q("500 mm"),
+        "thickness": _q("10 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    nu = 0.3
+    rigidity = 200e3 * 10.0**3 / (12 * (1 - nu**2))  # N*mm
+    clamped = clamped_circular_plate_center_load_deflection(**kw)
+    ss = simply_supported_circular_plate_center_load_deflection(**kw)
+    # w_clamped = P*R^2/(16*pi*D); w_ss = P*R^2*(3+nu)/(16*pi*D*(1+nu)).
+    assert clamped.to("mm").magnitude == pytest.approx(
+        10000.0 * 250.0**2 / (16 * pi * rigidity), rel=1e-12
+    )
+    assert clamped.to("mm").magnitude == pytest.approx(0.67890, rel=1e-4)
+    assert ss.to("mm").magnitude == pytest.approx(
+        10000.0 * 250.0**2 * (3 + nu) / (16 * pi * rigidity * (1 + nu)), rel=1e-12
+    )
+    # The simply-supported plate deflects (3+nu)/(1+nu) times the clamped one.
+    assert ss.to("mm").magnitude == pytest.approx(
+        (3 + nu) / (1 + nu) * clamped.to("mm").magnitude, rel=1e-12
+    )
+    with pytest.raises(ValueError, match="force must be a"):
+        clamped_circular_plate_center_load_deflection(
+            force=_q("10 MPa"),
+            diameter=_q("500 mm"),
+            thickness=_q("10 mm"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_plate_rejects_bad_inputs():

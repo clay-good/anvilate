@@ -40,6 +40,8 @@ __all__ = [
     "clamped_plate_uniform_load",
     "simply_supported_circular_plate_uniform_load",
     "clamped_circular_plate_uniform_load",
+    "simply_supported_circular_plate_center_load_deflection",
+    "clamped_circular_plate_center_load_deflection",
     "simply_supported_annular_plate_uniform_load",
     "clamped_annular_plate_uniform_load",
     "clamped_circular_plate_thickness_for_pressure",
@@ -331,6 +333,93 @@ def clamped_circular_plate_uniform_load(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
     )
+
+
+def _circular_plate_point_inputs(
+    force: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float,
+) -> tuple[float, float, float]:
+    """Validate a centrally-point-loaded circular plate -> (P N, R mm, D N·mm)."""
+    _require(force, "[force]", "force")
+    _require(diameter, "[length]", "diameter")
+    _require(thickness, "[length]", "thickness")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not 0 < poisson_ratio < 0.5:
+        raise ValueError(f"poisson_ratio must lie in (0, 0.5); got {poisson_ratio}")
+    p = force.to("N").magnitude
+    radius = diameter.to("mm").magnitude / 2
+    t = thickness.to("mm").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if min(p, radius, t, e) <= 0:
+        raise ValueError("force, diameter, thickness, and E must be positive")
+    rigidity = e * t**3 / (12 * (1 - poisson_ratio**2))
+    return p, radius, rigidity
+
+
+def simply_supported_circular_plate_center_load_deflection(
+    *,
+    force: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> Quantity:
+    """The centre deflection of a simply-supported circular plate under a central
+    point load (Roark / Timoshenko).
+
+    A round plate of ``diameter`` 2R and ``thickness`` t, simply supported at its
+    rim, carrying a concentrated ``force`` P at its centre — a strut bearing on a
+    cover, a jack pad. The centre deflects
+
+        w = P·R²·(3 + ν) / (16·π·D·(1 + ν)),
+
+    with the flexural rigidity D = E·t³/(12(1 − ν²)). Only the deflection is
+    returned: under a mathematically concentrated load the centre *bending stress*
+    is logarithmically singular, so a usable stress needs the load spread over a
+    finite radius (Roark), which this screen does not model. Thin-plate limits apply
+    (trustworthy while w ≲ t/2). Every quantity is dimension-checked; ν ∈ (0, 0.5).
+    Returns the centre deflection in millimetres.
+    """
+    p, radius, rigidity = _circular_plate_point_inputs(
+        force, diameter, thickness, elastic_modulus, poisson_ratio
+    )
+    deflection = p * radius**2 * (3 + poisson_ratio) / (16 * pi * rigidity * (1 + poisson_ratio))
+    return Quantity(magnitude=deflection, unit="mm")
+
+
+def clamped_circular_plate_center_load_deflection(
+    *,
+    force: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    elastic_modulus: Quantity,
+    poisson_ratio: float = DEFAULT_POISSON_RATIO,
+) -> Quantity:
+    """The centre deflection of a clamped circular plate under a central point load
+    (Roark / Timoshenko).
+
+    The clamped-rim counterpart of
+    :func:`simply_supported_circular_plate_center_load_deflection`: with the edge
+    fully fixed the same concentrated ``force`` P at the centre deflects only
+
+        w = P·R² / (16·π·D),
+
+    exactly (1 + ν)/(3 + ν) of the simply-supported value (≈ 0.39× at ν = 0.3) —
+    clamping stiffens the plate against a point load just as it does against
+    pressure. As with the simply-supported case only the deflection is returned (the
+    centre stress is singular for a true point load; the finite radial bending lives
+    at the clamped edge and needs a load radius to pin the centre). Thin-plate limits
+    apply. Every quantity is dimension-checked; ν ∈ (0, 0.5). Returns the centre
+    deflection in millimetres.
+    """
+    p, radius, rigidity = _circular_plate_point_inputs(
+        force, diameter, thickness, elastic_modulus, poisson_ratio
+    )
+    deflection = p * radius**2 / (16 * pi * rigidity)
+    return Quantity(magnitude=deflection, unit="mm")
 
 
 def clamped_circular_plate_thickness_for_pressure(
