@@ -11044,3 +11044,31 @@ def test_sliding_contact_pv_is_pressure_times_velocity():
     assert pv.to("MPa*m/s").magnitude > 0.10
     with pytest.raises(ValueError, match="sliding_velocity must be a velocity"):
         sliding_contact_pv(contact_pressure=_q("2 MPa"), sliding_velocity=_q("0.5 m"))
+
+
+def test_specific_film_ratio_sets_the_lubrication_regime():
+    from math import sqrt
+
+    from anvilate.analysis import specific_film_ratio
+
+    lam = specific_film_ratio(
+        minimum_film_thickness=_q("10 um"),
+        journal_roughness=_q("0.4 um"),
+        bush_roughness=_q("0.8 um"),
+    )
+    assert lam == pytest.approx(10 / sqrt(0.4**2 + 0.8**2), rel=1e-12)
+    assert lam > 3  # full-film hydrodynamic operation
+    # Rougher surfaces drop lambda toward the mixed/boundary regime at the same film.
+    rough = specific_film_ratio(
+        minimum_film_thickness=_q("10 um"),
+        journal_roughness=_q("3 um"),
+        bush_roughness=_q("4 um"),
+    )
+    assert rough < 3
+    assert rough == pytest.approx(10 / sqrt(3**2 + 4**2), rel=1e-12)  # = 10/5 = 2.0
+    with pytest.raises(ValueError, match="journal_roughness and bush_roughness must be positive"):
+        specific_film_ratio(
+            minimum_film_thickness=_q("10 um"),
+            journal_roughness=_q("0 um"),
+            bush_roughness=_q("0.8 um"),
+        )

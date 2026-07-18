@@ -30,6 +30,7 @@ __all__ = [
     "journal_bearing_unit_load",
     "sommerfeld_number",
     "journal_bearing_minimum_film_thickness",
+    "specific_film_ratio",
 ]
 
 
@@ -200,3 +201,36 @@ def journal_bearing_minimum_film_thickness(
     if c <= 0:
         raise ValueError(f"radial_clearance must be positive; got {radial_clearance}")
     return Quantity(magnitude=c * (1.0 - eccentricity_ratio), unit="um")
+
+
+def specific_film_ratio(
+    *,
+    minimum_film_thickness: Quantity,
+    journal_roughness: Quantity,
+    bush_roughness: Quantity,
+) -> float:
+    """The specific film ratio λ = h₀/√(Ra_j² + Ra_b²) that sets the lubrication regime.
+
+    Whether a bearing runs on a full oil film or on its high spots is decided not by the
+    film thickness alone but by how it compares to the surface finish. The specific film
+    (or lambda) ratio divides the ``minimum_film_thickness`` h₀ (from
+    :func:`journal_bearing_minimum_film_thickness`) by the composite RMS roughness of the
+    two surfaces, √(Ra_j² + Ra_b²) for the ``journal_roughness`` Ra_j and
+    ``bush_roughness`` Ra_b. λ ≳ 3–4 is full-film (hydrodynamic) operation with no metal
+    contact; 1 ≲ λ ≲ 3 is mixed lubrication with asperity contact and wear (see
+    :mod:`~anvilate.analysis.wear`); λ ≲ 1 is boundary lubrication, running on the high
+    spots. Smoother surfaces buy a higher λ from the same film. The roughnesses must be
+    positive lengths. Returns the dimensionless λ.
+    """
+    _require(minimum_film_thickness, "[length]", "minimum_film_thickness")
+    _require(journal_roughness, "[length]", "journal_roughness")
+    _require(bush_roughness, "[length]", "bush_roughness")
+    h0 = minimum_film_thickness.to("um").magnitude
+    ra_j = journal_roughness.to("um").magnitude
+    ra_b = bush_roughness.to("um").magnitude
+    if h0 <= 0:
+        raise ValueError(f"minimum_film_thickness must be positive; got {minimum_film_thickness}")
+    if ra_j <= 0 or ra_b <= 0:
+        raise ValueError("journal_roughness and bush_roughness must be positive")
+    composite = (ra_j**2 + ra_b**2) ** 0.5
+    return h0 / composite

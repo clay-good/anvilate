@@ -53,8 +53,9 @@ modules:
   the diametral growth a pressurized thin cylinder or sphere breathes
 - :mod:`~anvilate.analysis.interference` — thick-wall press/shrink-fit (Lamé)
 - :mod:`~anvilate.analysis.journal_bearing` — journal (plain) bearing Petroff
-  friction torque and power loss, unit load, Sommerfeld number, and the minimum
-  oil-film thickness from the eccentricity ratio
+  friction torque and power loss, unit load, Sommerfeld number, the minimum
+  oil-film thickness from the eccentricity ratio, and the specific film (lambda)
+  ratio that sets the lubrication regime
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.wear` — Archard sliding-wear law: the worn volume and wear
   depth of a sliding contact, the sliding distance (wear life) a depth limit allows, and
@@ -554,6 +555,7 @@ from .journal_bearing import (
     petroff_friction_power,
     petroff_friction_torque,
     sommerfeld_number,
+    specific_film_ratio,
 )
 from .keys import (
     KeyLengthRequirement,
@@ -1153,6 +1155,7 @@ __all__ = [
     "journal_bearing_unit_load",
     "sommerfeld_number",
     "journal_bearing_minimum_film_thickness",
+    "specific_film_ratio",
     "hertz_effective_modulus",
     "HertzContact",
     "hertz_sphere_contact",
