@@ -70,7 +70,8 @@ modules:
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
-  of fluctuation, and the inertia a speed-smoothing target requires
+  of fluctuation, the inertia a speed-smoothing target requires, and the rotating
+  thin-rim hoop (bursting) stress and burst speed
 - :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads,
   bevel-gear radial/axial (thrust) resolution about the pitch cone, pitch-line
   velocity, Barth dynamic factor, Lewis tooth-root bending, Hertzian surface
@@ -290,6 +291,8 @@ from .flywheel import (
     coefficient_of_fluctuation,
     flywheel_energy_fluctuation,
     flywheel_inertia_for_fluctuation,
+    rotating_rim_burst_speed,
+    rotating_rim_hoop_stress,
 )
 from .fourbar import (
     fourbar_transmission_angle,
@@ -629,6 +632,8 @@ __all__ = [
     "coefficient_of_fluctuation",
     "flywheel_energy_fluctuation",
     "flywheel_inertia_for_fluctuation",
+    "rotating_rim_hoop_stress",
+    "rotating_rim_burst_speed",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

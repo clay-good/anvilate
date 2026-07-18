@@ -193,6 +193,8 @@ from anvilate.analysis import (
     required_axial_area,
     reverted_train_is_coaxial,
     riveted_joint_efficiency,
+    rotating_rim_burst_speed,
+    rotating_rim_hoop_stress,
     scotch_yoke_acceleration,
     scotch_yoke_displacement,
     scotch_yoke_velocity,
@@ -7718,4 +7720,45 @@ def test_perry_robertson_rejects_bad_inputs():
             elastic_modulus=_q("200 GPa"),
             slenderness_ratio=100.0,
             imperfection_factor=-0.1,
+        )
+
+
+def test_rotating_rim_hoop_stress_and_burst_speed_round_trip():
+    steel = _q("7850 kg/m**3")
+    # sigma = rho*v^2: a 0.3 m steel rim at 3000 rpm (v = 94.25 m/s).
+    sigma = rotating_rim_hoop_stress(
+        density=steel, mean_radius=_q("0.3 m"), rotational_speed=_q("3000 rpm")
+    )
+    v = (3000 * 2 * 3.141592653589793 / 60.0) * 0.3
+    assert sigma.to("MPa").magnitude == pytest.approx(7850 * v**2 / 1e6, rel=1e-9)
+    assert sigma.to("MPa").magnitude == pytest.approx(69.73, rel=1e-3)
+    # Stress rides on rim SPEED, not thickness: it is independent of the rim mass.
+    # Doubling the radius at the same rpm quadruples the stress (v doubles).
+    bigger = rotating_rim_hoop_stress(
+        density=steel, mean_radius=_q("0.6 m"), rotational_speed=_q("3000 rpm")
+    )
+    assert bigger.to("MPa").magnitude == pytest.approx(4.0 * sigma.to("MPa").magnitude, rel=1e-9)
+    # Burst speed inverts it: the hoop stress at the burst speed equals the allowable.
+    burst = rotating_rim_burst_speed(
+        allowable_stress=_q("200 MPa"), density=steel, mean_radius=_q("0.3 m")
+    )
+    assert burst.to("rpm").magnitude == pytest.approx(5080.8, rel=1e-3)
+    at_burst = rotating_rim_hoop_stress(
+        density=steel, mean_radius=_q("0.3 m"), rotational_speed=burst
+    )
+    assert at_burst.to("MPa").magnitude == pytest.approx(200.0, rel=1e-9)
+
+
+def test_rotating_rim_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="rotational_speed must be positive"):
+        rotating_rim_hoop_stress(
+            density=_q("7850 kg/m**3"), mean_radius=_q("0.3 m"), rotational_speed=_q("0 rpm")
+        )
+    with pytest.raises(ValueError, match="density must be a"):
+        rotating_rim_hoop_stress(
+            density=_q("7850 kg"), mean_radius=_q("0.3 m"), rotational_speed=_q("3000 rpm")
+        )
+    with pytest.raises(ValueError, match="mean_radius must be positive"):
+        rotating_rim_burst_speed(
+            allowable_stress=_q("200 MPa"), density=_q("7850 kg/m**3"), mean_radius=_q("0 m")
         )
