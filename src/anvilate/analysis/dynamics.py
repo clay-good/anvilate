@@ -24,7 +24,7 @@ returned in hertz.
 
 from __future__ import annotations
 
-from math import pi, sqrt
+from math import atan2, degrees, pi, sqrt
 
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
@@ -40,6 +40,7 @@ __all__ = [
     "quality_factor",
     "transmissibility",
     "dynamic_magnification_factor",
+    "resonance_phase_angle",
     "simple_pendulum_period",
     "physical_pendulum_period",
     "tuned_mass_damper_optimal_frequency_ratio",
@@ -255,6 +256,27 @@ def dynamic_magnification_factor(*, frequency_ratio: float, damping_ratio: float
         raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
     r = frequency_ratio
     return 1.0 / sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
+
+
+def resonance_phase_angle(*, frequency_ratio: float, damping_ratio: float) -> float:
+    """The steady-state phase lag of a forced SDOF response behind the driving force.
+
+    A harmonically driven mass does not move in step with the force: it lags by
+
+        φ = atan2(2·ζ·r, 1 − r²),
+
+    with ``frequency_ratio`` r = ω/ω_n and ``damping_ratio`` ζ (0 ≤ ζ < 1). Well
+    below resonance (r → 0) the response is in phase (φ → 0°); at resonance (r = 1)
+    it lags exactly 90° whatever the damping — the tell-tale of resonance; well above
+    (r ≫ 1) it is 180° out of phase, moving opposite the force. The quadrant-aware
+    atan2 keeps φ climbing smoothly through 90° past r = 1 (rather than wrapping). r
+    must be non-negative. Returns the phase lag in degrees (0 to 180).
+    """
+    zeta = _check_damping_ratio(damping_ratio)
+    if frequency_ratio < 0:
+        raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
+    r = frequency_ratio
+    return degrees(atan2(2.0 * zeta * r, 1.0 - r**2))
 
 
 def simple_pendulum_period(*, length: Quantity, gravity: Quantity = STANDARD_GRAVITY) -> Quantity:

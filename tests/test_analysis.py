@@ -255,6 +255,7 @@ from anvilate.analysis import (
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
     required_axial_area,
+    resonance_phase_angle,
     reverted_train_is_coaxial,
     riveted_joint_efficiency,
     rotating_annular_disc_bore_stress,
@@ -8671,6 +8672,26 @@ def test_dynamic_magnification_factor_peaks_near_resonance():
     ) < dynamic_magnification_factor(frequency_ratio=1.0, damping_ratio=0.05)
     with pytest.raises(ValueError, match="frequency_ratio must be non-negative"):
         dynamic_magnification_factor(frequency_ratio=-1.0, damping_ratio=0.1)
+
+
+def test_resonance_phase_angle_passes_through_ninety_at_resonance():
+    # Well below resonance the response is in phase with the force.
+    assert resonance_phase_angle(frequency_ratio=0.0, damping_ratio=0.1) == pytest.approx(
+        0.0, abs=1e-9
+    )
+    # At r = 1 the lag is exactly 90 degrees for ANY damping.
+    for zeta in (0.02, 0.1, 0.5):
+        assert resonance_phase_angle(frequency_ratio=1.0, damping_ratio=zeta) == pytest.approx(
+            90.0, rel=1e-12
+        )
+    # Well above resonance it approaches 180 degrees (moving opposite the force).
+    assert resonance_phase_angle(frequency_ratio=50.0, damping_ratio=0.1) > 179.0
+    # The phase climbs monotonically through resonance (atan2 keeps it in 0..180).
+    below = resonance_phase_angle(frequency_ratio=0.9, damping_ratio=0.1)
+    above = resonance_phase_angle(frequency_ratio=1.1, damping_ratio=0.1)
+    assert below < 90.0 < above
+    with pytest.raises(ValueError, match="frequency_ratio must be non-negative"):
+        resonance_phase_angle(frequency_ratio=-1.0, damping_ratio=0.1)
 
 
 def test_damped_vibration_rejects_bad_inputs():
