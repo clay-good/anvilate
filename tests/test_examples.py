@@ -1703,3 +1703,16 @@ def test_gear_nonstandard_center_example_operating_angle_caps_the_stretch():
     assert by_name["63 mm centre"].status is CheckStatus.FAIL
     assert "safety factor 0.94" in by_name["63 mm centre"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_bracket_weld_group_eccentric_example_direct_shear_underestimates():
+    namespace = runpy.run_path(str(_EXAMPLES / "bracket_weld_group_eccentric.py"))
+    card = namespace["screen_bracket_welds"]()
+    by_name = {e.name: e for e in card.entries}
+    # Spreading the load over the whole weld throat looks very safe...
+    assert by_name["direct-shear estimate"].passed
+    assert "safety factor 3.39" in by_name["direct-shear estimate"].detail
+    # ...but the eccentric moment drives the weld ends to ~4x that and fails.
+    assert by_name["true peak (eccentric)"].status is CheckStatus.FAIL
+    assert "safety factor 0.90" in by_name["true peak (eccentric)"].detail
+    assert card.status is CheckStatus.FAIL
