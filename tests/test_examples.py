@@ -2068,3 +2068,15 @@ def test_gear_pair_layout_example_undercut_governs_the_pinion():
     assert fine.entries[0].passed
     assert "safety factor 1.11" in fine.entries[0].detail
     assert fine.status is CheckStatus.PASS
+
+
+def test_key_vs_spline_example_spline_shares_what_a_key_concentrates():
+    namespace = runpy.run_path(str(_EXAMPLES / "key_vs_spline.py"))
+    card = namespace["screen_connection"]()
+    by_name = {e.name: e for e in card.entries}
+    # A single key needs ~114 mm of hub for 2000 N*m, more than the 60 mm available.
+    assert by_name["single key: hub length vs length needed"].status is CheckStatus.FAIL
+    assert "safety factor 0.53" in by_name["single key: hub length vs length needed"].detail
+    # A 10-tooth spline carries the same torque in the same length.
+    assert by_name["spline: capacity vs torque"].passed
+    assert "safety factor 1.06" in by_name["spline: capacity vs torque"].detail
