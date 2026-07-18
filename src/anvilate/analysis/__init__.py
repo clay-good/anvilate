@@ -65,8 +65,8 @@ modules:
   open- and crossed-belt-drive geometry (length and wrap angle), transmitted power,
   and mean tension
 - :mod:`~anvilate.analysis.chain` — roller-chain drive geometry: chain length in
-  pitches, mean chain speed, and the chordal (polygon-action) speed variation of
-  a sprocket
+  pitches, mean chain speed, the chordal (polygon-action) speed variation of
+  a sprocket, and the working tension from transmitted power
 - :mod:`~anvilate.analysis.cable` — uniformly loaded cable (parabolic) midspan
   sag, peak support tension, and developed arc length, and the exact catenary
   (heavy-cable) sag, arc length, and peak tension
@@ -286,6 +286,7 @@ from .cam import (
 from .chain import (
     chain_length_in_pitches,
     chain_speed,
+    chain_working_tension,
     chordal_speed_variation,
 )
 from .clutch import (
@@ -749,6 +750,7 @@ __all__ = [
     "chain_length_in_pitches",
     "chordal_speed_variation",
     "chain_speed",
+    "chain_working_tension",
     "CamMotion",
     "cam_follower_motion",
     "cam_pressure_angle",

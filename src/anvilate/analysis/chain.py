@@ -30,6 +30,7 @@ __all__ = [
     "chain_length_in_pitches",
     "chordal_speed_variation",
     "chain_speed",
+    "chain_working_tension",
 ]
 
 
@@ -124,3 +125,26 @@ def chain_speed(
         raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
     rev_per_second = omega / (2.0 * pi)
     return Quantity(magnitude=n * p * rev_per_second, unit="m/s")
+
+
+def chain_working_tension(*, power: Quantity, chain_speed: Quantity) -> Quantity:
+    """The working (tight-side) tension F = P/v a roller chain carries.
+
+    A chain drive transmits power as a tension on its tight strand pulling the driven
+    sprocket, so the working tension is simply F = P/v for a transmitted ``power`` P
+    at the mean ``chain_speed`` v (:func:`chain_speed`). Unlike a belt the chain has
+    no meaningful slack-side pull to subtract — it does not rely on friction — so this
+    single tension is the load to compare against the chain's rated tensile strength
+    (through a service factor and a generous margin for fatigue and the chordal
+    pulsation). ``power`` must be a power and ``chain_speed`` a positive velocity.
+    Returns the tension in newtons.
+    """
+    _require(power, "[power]", "power")
+    _require(chain_speed, "[velocity]", "chain_speed")
+    p = power.to("W").magnitude
+    v = chain_speed.to("m/s").magnitude
+    if p <= 0:
+        raise ValueError(f"power must be positive; got {power}")
+    if v <= 0:
+        raise ValueError(f"chain_speed must be positive; got {chain_speed}")
+    return Quantity(magnitude=p / v, unit="N")

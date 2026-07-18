@@ -78,6 +78,7 @@ from anvilate.analysis import (
     catenary_sag,
     chain_length_in_pitches,
     chain_speed,
+    chain_working_tension,
     chordal_speed_variation,
     circular_area,
     circular_curved_beam_stress,
@@ -7777,6 +7778,23 @@ def test_chain_speed_is_teeth_times_pitch_times_speed():
         chain_speed(sprocket_teeth=17, chain_pitch=_q("25.4 mm"), rotational_speed=_q("300 N"))
     with pytest.raises(ValueError, match="rotational_speed must be positive"):
         chain_speed(sprocket_teeth=17, chain_pitch=_q("25.4 mm"), rotational_speed=_q("0 rpm"))
+
+
+def test_chain_working_tension_from_power_and_speed():
+    # F = P/v: 10 kW through a chain running at 5 m/s carries 2 kN of working tension.
+    f = chain_working_tension(power=_q("10 kW"), chain_speed=_q("5 m/s"))
+    assert f.to("N").magnitude == pytest.approx(2000.0, rel=1e-12)
+    # A faster chain carries the same power at a lower tension.
+    faster = chain_working_tension(power=_q("10 kW"), chain_speed=_q("10 m/s"))
+    assert faster.to("N").magnitude == pytest.approx(1000.0, rel=1e-12)
+    # It composes with chain_speed to size a drive end-to-end.
+    v = chain_speed(sprocket_teeth=17, chain_pitch=_q("25.4 mm"), rotational_speed=_q("300 rpm"))
+    tension = chain_working_tension(power=_q("4 kW"), chain_speed=v)
+    assert tension.to("N").magnitude == pytest.approx(4000.0 / v.to("m/s").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="power must be a"):
+        chain_working_tension(power=_q("10 N"), chain_speed=_q("5 m/s"))
+    with pytest.raises(ValueError, match="chain_speed must be a"):
+        chain_working_tension(power=_q("10 kW"), chain_speed=_q("5 m"))
 
 
 def test_cam_shm_profile_kinematics_and_finite_end_acceleration():
