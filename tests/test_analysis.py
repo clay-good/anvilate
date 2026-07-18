@@ -78,6 +78,7 @@ from anvilate.analysis import (
     constrained_thermal_stress,
     critical_crack_length,
     cyclic_stress_components,
+    cylinder_external_pressure_buckling,
     deflection_scorecard,
     differential_band_brake_actuation_force,
     differential_band_brake_is_self_locking,
@@ -8031,3 +8032,44 @@ def test_fracture_rejects_bad_inputs():
         )
     with pytest.raises(ValueError, match="fracture_toughness must be a"):
         critical_crack_length(fracture_toughness=_q("50 MPa"), remote_stress=_q("100 MPa"))
+
+
+def test_cylinder_external_pressure_buckling_rides_on_the_cube_of_thinness():
+    # p_cr = E*t^3/(4*r^3*(1-nu^2)): a 2 mm steel tube at 100 mm mean radius.
+    p = cylinder_external_pressure_buckling(
+        elastic_modulus=_q("200 GPa"), wall_thickness=_q("2 mm"), mean_radius=_q("100 mm")
+    )
+    expected = 200e3 * 2.0**3 / (4.0 * 100.0**3 * (1 - 0.3**2))  # MPa (E in MPa, lengths mm)
+    assert p.to("MPa").magnitude == pytest.approx(expected, rel=1e-12)
+    assert p.to("MPa").magnitude == pytest.approx(0.4396, rel=1e-3)
+    # It rides on the CUBE of the thickness ratio: doubling the wall gives 8x.
+    thicker = cylinder_external_pressure_buckling(
+        elastic_modulus=_q("200 GPa"), wall_thickness=_q("4 mm"), mean_radius=_q("100 mm")
+    )
+    assert thicker.to("MPa").magnitude == pytest.approx(8.0 * p.to("MPa").magnitude, rel=1e-12)
+    # And falls with the cube of the radius: a bigger tube collapses far sooner.
+    bigger = cylinder_external_pressure_buckling(
+        elastic_modulus=_q("200 GPa"), wall_thickness=_q("2 mm"), mean_radius=_q("200 mm")
+    )
+    assert bigger.to("MPa").magnitude == pytest.approx(p.to("MPa").magnitude / 8.0, rel=1e-12)
+    # It also matches the equivalent 2E(t/D)^3/(1-nu^2) form.
+    alt = 2 * 200e3 * (2.0 / 200.0) ** 3 / (1 - 0.3**2)
+    assert p.to("MPa").magnitude == pytest.approx(alt, rel=1e-12)
+
+
+def test_cylinder_external_pressure_buckling_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="wall_thickness must be positive"):
+        cylinder_external_pressure_buckling(
+            elastic_modulus=_q("200 GPa"), wall_thickness=_q("0 mm"), mean_radius=_q("100 mm")
+        )
+    with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
+        cylinder_external_pressure_buckling(
+            elastic_modulus=_q("200 GPa"),
+            wall_thickness=_q("2 mm"),
+            mean_radius=_q("100 mm"),
+            poisson=0.5,
+        )
+    with pytest.raises(ValueError, match="elastic_modulus must be a"):
+        cylinder_external_pressure_buckling(
+            elastic_modulus=_q("200 mm"), wall_thickness=_q("2 mm"), mean_radius=_q("100 mm")
+        )

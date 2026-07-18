@@ -32,6 +32,7 @@ __all__ = [
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thick_wall_sphere",
+    "cylinder_external_pressure_buckling",
 ]
 
 
@@ -369,3 +370,43 @@ def thick_wall_sphere(
         hoop_stress=Quantity(magnitude=p * (2 * ri**3 + ro**3) / (2 * denom), unit="MPa"),
         radial_stress=Quantity(magnitude=-p, unit="MPa"),
     )
+
+
+def cylinder_external_pressure_buckling(
+    *,
+    elastic_modulus: Quantity,
+    wall_thickness: Quantity,
+    mean_radius: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The collapse pressure of a long thin cylinder under external pressure.
+
+    Under *external* pressure a thin tube does not yield — it buckles, snapping into
+    an oval (the n = 2 lobe) at a pressure far below its internal-pressure strength.
+    This is the failure that implodes a vacuum vessel or a submarine hull. For a long
+    cylinder the critical pressure is
+
+        p_cr = E·t³ / (4·r³·(1 − ν²)) = (2·E / (1 − ν²))·(t/D)³,
+
+    riding on the *cube* of the thin (t/r) ratio, so a tube stout enough against
+    internal pressure can still be dangerously weak against external pressure.
+    ``elastic_modulus`` E, ``wall_thickness`` t, ``mean_radius`` r (of the wall
+    mid-thickness), and Poisson's ratio ``poisson`` ν describe the shell; the wall
+    must be positive and 0 ≤ ν < 0.5. This is the classic (Timoshenko) long-cylinder
+    result — short cylinders with stiffening rings or closed ends hold more. Returns
+    the critical external pressure in MPa.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    _require(mean_radius, "[length]", "mean_radius")
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    e = elastic_modulus.to("MPa").magnitude
+    t = wall_thickness.to("mm").magnitude
+    r = mean_radius.to("mm").magnitude
+    if t <= 0:
+        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+    if r <= 0:
+        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+    p_cr = e * t**3 / (4.0 * r**3 * (1.0 - poisson**2))
+    return Quantity(magnitude=p_cr, unit="MPa")
