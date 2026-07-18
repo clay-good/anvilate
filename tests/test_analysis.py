@@ -126,8 +126,10 @@ from anvilate.analysis import (
     gear_tangential_load,
     gear_train_efficiency,
     gear_train_value,
+    geneva_advance_fraction,
     geneva_crank_radius,
     geneva_driven_radius,
+    geneva_dwell_fraction,
     geneva_index_angle,
     gerber_safety_factor,
     gerber_scorecard,
@@ -8269,3 +8271,21 @@ def test_damped_vibration_rejects_bad_inputs():
         logarithmic_decrement(damping_ratio=1.5)
     with pytest.raises(ValueError, match="frequency_ratio must be non-negative"):
         transmissibility(frequency_ratio=-1.0, damping_ratio=0.1)
+
+
+def test_geneva_advance_and_dwell_fractions():
+    # Advance (moving) fraction (n-2)/(2n); dwell its complement (n+2)/(2n).
+    assert geneva_advance_fraction(slots=4) == pytest.approx(0.25)
+    assert geneva_dwell_fraction(slots=4) == pytest.approx(0.75)
+    assert geneva_advance_fraction(slots=6) == pytest.approx(1 / 3)
+    assert geneva_dwell_fraction(slots=6) == pytest.approx(2 / 3)
+    assert geneva_advance_fraction(slots=8) == pytest.approx(0.375)
+    # They always sum to one, and more slots spend more of the cycle moving.
+    for n in (3, 4, 6, 8, 12):
+        assert geneva_advance_fraction(slots=n) + geneva_dwell_fraction(slots=n) == pytest.approx(
+            1.0
+        )
+    assert geneva_advance_fraction(slots=8) > geneva_advance_fraction(slots=4)
+    assert geneva_dwell_fraction(slots=8) < geneva_dwell_fraction(slots=4)
+    with pytest.raises(ValueError, match="whole number ≥ 3"):
+        geneva_advance_fraction(slots=2)

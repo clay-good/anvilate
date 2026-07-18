@@ -54,7 +54,8 @@ modules:
   parabolic, and 3-4-5 polynomial profiles): follower displacement, velocity, and
   acceleration at a cam angle
 - :mod:`~anvilate.analysis.geneva` — external Geneva (intermittent-indexing)
-  mechanism geometry: index angle, crank and driven engagement radii
+  mechanism geometry: index angle, crank and driven engagement radii, and the
+  advance/dwell fraction of the cycle
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, and slider acceleration
 - :mod:`~anvilate.analysis.scotch_yoke` — scotch-yoke pure simple-harmonic
@@ -349,8 +350,10 @@ from .gear import (
     spur_gear_contact_ratio,
 )
 from .geneva import (
+    geneva_advance_fraction,
     geneva_crank_radius,
     geneva_driven_radius,
+    geneva_dwell_fraction,
     geneva_index_angle,
 )
 from .impact import (
@@ -581,6 +584,8 @@ __all__ = [
     "geneva_index_angle",
     "geneva_crank_radius",
     "geneva_driven_radius",
+    "geneva_advance_fraction",
+    "geneva_dwell_fraction",
     "slider_crank_displacement",
     "slider_crank_velocity",
     "slider_crank_acceleration",

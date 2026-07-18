@@ -29,6 +29,8 @@ __all__ = [
     "geneva_index_angle",
     "geneva_crank_radius",
     "geneva_driven_radius",
+    "geneva_advance_fraction",
+    "geneva_dwell_fraction",
 ]
 
 
@@ -90,3 +92,33 @@ def geneva_driven_radius(*, slots: int, center_distance: Quantity) -> Quantity:
     if c <= 0:
         raise ValueError(f"center_distance must be positive; got {center_distance}")
     return Quantity(magnitude=c * cos(pi / n), unit="mm")
+
+
+def geneva_advance_fraction(*, slots: int) -> float:
+    """The fraction (n − 2)/(2n) of the cycle an external Geneva spends indexing.
+
+    The driving pin is only in a slot for part of each crank revolution; the rest of
+    the turn the locking arc holds the wheel still. For an external Geneva the pin is
+    engaged — the wheel is *moving* — for a fraction (n − 2)/(2n) of the cycle: a
+    4-slot wheel indexes for a quarter of each turn and dwells the other three
+    quarters, and more slots spend more of the cycle moving (a 4-slot at 0.25, a
+    6-slot at 0.333, an 8-slot at 0.375). ``slots`` n is the slot count (≥ 3).
+    Returns the dimensionless advancing (moving) fraction; its complement is the
+    :func:`geneva_dwell_fraction`.
+    """
+    n = _check_slots(slots)
+    return (n - 2) / (2 * n)
+
+
+def geneva_dwell_fraction(*, slots: int) -> float:
+    """The fraction (n + 2)/(2n) of the cycle an external Geneva wheel dwells.
+
+    The complement of :func:`geneva_advance_fraction`: the share of each crank
+    revolution the wheel is locked still, when the work at a station actually
+    happens. Fewer slots give a longer dwell (a 4-slot rests 75% of the cycle, a
+    6-slot 66.7%, an 8-slot 62.5%), so a station that needs a long dwell for its
+    operation wants *few* slots — the opposite of what a fine index angle wants.
+    ``slots`` n is the slot count (≥ 3). Returns the dimensionless dwell fraction.
+    """
+    n = _check_slots(slots)
+    return (n + 2) / (2 * n)
