@@ -167,6 +167,8 @@ from anvilate.analysis import (
     natural_frequency_from_deflection,
     overhang_tip_load,
     overhang_uniform_load,
+    parabolic_cable_max_tension,
+    parabolic_cable_sag,
     perry_robertson_stress,
     petroff_friction_power,
     petroff_friction_torque,
@@ -7761,4 +7763,37 @@ def test_rotating_rim_rejects_bad_inputs():
     with pytest.raises(ValueError, match="mean_radius must be positive"):
         rotating_rim_burst_speed(
             allowable_stress=_q("200 MPa"), density=_q("7850 kg/m**3"), mean_radius=_q("0 m")
+        )
+
+
+def test_parabolic_cable_sag_and_max_tension():
+    from math import sqrt
+
+    kw = {"weight_per_length": _q("10 N/m"), "span": _q("100 m")}
+    # d = w*L^2/(8H): 10 N/m over 100 m at 5000 N -> 2.5 m sag.
+    sag = parabolic_cable_sag(horizontal_tension=_q("5000 N"), **kw)
+    assert sag.to("m").magnitude == pytest.approx(10 * 100**2 / (8 * 5000), rel=1e-12)
+    assert sag.to("m").magnitude == pytest.approx(2.5, rel=1e-12)
+    # A taut cable is a high-tension cable: doubling H halves the sag.
+    tauter = parabolic_cable_sag(horizontal_tension=_q("10000 N"), **kw)
+    assert tauter.to("m").magnitude == pytest.approx(1.25, rel=1e-12)
+    # T_max = sqrt(H^2 + (wL/2)^2), always above H.
+    tmax = parabolic_cable_max_tension(horizontal_tension=_q("5000 N"), **kw)
+    assert tmax.to("N").magnitude == pytest.approx(sqrt(5000**2 + (10 * 100 / 2) ** 2), rel=1e-12)
+    assert tmax.to("N").magnitude == pytest.approx(5024.94, rel=1e-4)
+    assert tmax.to("N").magnitude > 5000.0
+
+
+def test_parabolic_cable_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="horizontal_tension must be positive"):
+        parabolic_cable_sag(
+            weight_per_length=_q("10 N/m"), span=_q("100 m"), horizontal_tension=_q("0 N")
+        )
+    with pytest.raises(ValueError, match="span must be positive"):
+        parabolic_cable_sag(
+            weight_per_length=_q("10 N/m"), span=_q("0 m"), horizontal_tension=_q("5000 N")
+        )
+    with pytest.raises(ValueError, match="weight_per_length must be a"):
+        parabolic_cable_max_tension(
+            weight_per_length=_q("10 N"), span=_q("100 m"), horizontal_tension=_q("5000 N")
         )

@@ -47,6 +47,8 @@ modules:
 - :mod:`~anvilate.analysis.chain` — roller-chain drive geometry: chain length in
   pitches, mean chain speed, and the chordal (polygon-action) speed variation of
   a sprocket
+- :mod:`~anvilate.analysis.cable` — uniformly loaded cable (parabolic) midspan
+  sag and peak support tension
 - :mod:`~anvilate.analysis.cam` — cam-follower rise kinematics (SHM, cycloidal,
   parabolic, and 3-4-5 polynomial profiles): follower displacement, velocity, and
   acceleration at a cam angle
@@ -185,6 +187,10 @@ from .brake import (
     short_shoe_brake_torque,
     short_shoe_is_self_locking,
     short_shoe_normal_force,
+)
+from .cable import (
+    parabolic_cable_max_tension,
+    parabolic_cable_sag,
 )
 from .cam import (
     CamMotion,
@@ -541,6 +547,8 @@ __all__ = [
     "chain_speed",
     "CamMotion",
     "cam_follower_motion",
+    "parabolic_cable_sag",
+    "parabolic_cable_max_tension",
     "geneva_index_angle",
     "geneva_crank_radius",
     "geneva_driven_radius",
