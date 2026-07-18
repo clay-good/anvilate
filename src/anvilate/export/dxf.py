@@ -11,13 +11,14 @@ a clear :class:`ImportError`.
 
 from __future__ import annotations
 
+from math import cos, radians, sin
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
 
-__all__ = ["Hole", "Slot", "export_plate_dxf"]
+__all__ = ["Hole", "Slot", "bolt_circle_holes", "export_plate_dxf"]
 
 # A fabrication DXF separates the outer profile cut from the interior hole pierces
 # onto named layers so a CNC controller (plasma/laser/waterjet) can order and lead
@@ -70,6 +71,47 @@ def _mm(value: Quantity, name: str) -> float:
     if not value.has_dimension("[length]"):
         raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
     return value.to("mm").magnitude
+
+
+def bolt_circle_holes(
+    *,
+    center_x: Quantity,
+    center_y: Quantity,
+    bolt_circle_diameter: Quantity,
+    hole_diameter: Quantity,
+    count: int,
+    start_angle: float = 0.0,
+) -> list[Hole]:
+    """Generate ``count`` equally-spaced :class:`Hole` centres on a bolt circle.
+
+    The standard flange / hub / bearing-cap pattern: ``count`` holes of
+    ``hole_diameter`` spaced evenly around a circle of ``bolt_circle_diameter`` centred
+    on (``center_x``, ``center_y``), the first at ``start_angle`` degrees from the
+    positive X axis and the rest following counter-clockwise. Feed the returned list
+    straight to :func:`export_plate_dxf` as its ``holes``. ``count`` must be at least 1
+    and the diameters positive. Returns the holes in angular order.
+    """
+    if count < 1:
+        raise ValueError(f"count must be at least 1; got {count}")
+    cx = _mm(center_x, "center_x")
+    cy = _mm(center_y, "center_y")
+    bcd = _mm(bolt_circle_diameter, "bolt_circle_diameter")
+    if bcd <= 0:
+        raise ValueError(f"bolt_circle_diameter must be positive; got {bolt_circle_diameter}")
+    if _mm(hole_diameter, "hole_diameter") <= 0:
+        raise ValueError(f"hole_diameter must be positive; got {hole_diameter}")
+    pitch_radius = bcd / 2.0
+    holes: list[Hole] = []
+    for i in range(count):
+        angle = radians(start_angle + 360.0 * i / count)
+        holes.append(
+            Hole(
+                x=Quantity(magnitude=cx + pitch_radius * cos(angle), unit="mm"),
+                y=Quantity(magnitude=cy + pitch_radius * sin(angle), unit="mm"),
+                diameter=hole_diameter,
+            )
+        )
+    return holes
 
 
 def _slot_vertices(

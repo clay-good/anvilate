@@ -135,3 +135,65 @@ def test_export_rejects_non_positive_plate(tmp_path):
             holes=[],
             path=tmp_path / "empty.dxf",
         )
+
+
+def test_bolt_circle_holes_places_evenly_on_the_circle():
+    from math import cos, radians, sin
+
+    from anvilate.export.dxf import bolt_circle_holes
+
+    holes = bolt_circle_holes(
+        center_x=_q("50 mm"),
+        center_y=_q("50 mm"),
+        bolt_circle_diameter=_q("100 mm"),
+        hole_diameter=_q("10 mm"),
+        count=4,
+    )
+    assert len(holes) == 4
+    # Four holes on a 100 mm circle centred at (50, 50): at 0, 90, 180, 270 degrees.
+    expected = [(100, 50), (50, 100), (0, 50), (50, 0)]
+    for hole, (ex, ey) in zip(holes, expected, strict=True):
+        assert hole.x.to("mm").magnitude == pytest.approx(ex, abs=1e-9)
+        assert hole.y.to("mm").magnitude == pytest.approx(ey, abs=1e-9)
+        assert hole.diameter.to("mm").magnitude == 10.0
+    # Every hole sits exactly the pitch radius from the centre, at the start angle offset.
+    offset = bolt_circle_holes(
+        center_x=_q("0 mm"),
+        center_y=_q("0 mm"),
+        bolt_circle_diameter=_q("80 mm"),
+        hole_diameter=_q("8 mm"),
+        count=6,
+        start_angle=30.0,
+    )
+    for i, hole in enumerate(offset):
+        angle = radians(30.0 + 60.0 * i)
+        assert hole.x.to("mm").magnitude == pytest.approx(40 * cos(angle), abs=1e-9)
+        assert hole.y.to("mm").magnitude == pytest.approx(40 * sin(angle), abs=1e-9)
+    with pytest.raises(ValueError, match="count must be at least 1"):
+        bolt_circle_holes(
+            center_x=_q("0 mm"),
+            center_y=_q("0 mm"),
+            bolt_circle_diameter=_q("80 mm"),
+            hole_diameter=_q("8 mm"),
+            count=0,
+        )
+
+
+def test_bolt_circle_holes_feed_the_plate_export(tmp_path):
+    ezdxf = pytest.importorskip("ezdxf")
+
+    from anvilate.export.dxf import bolt_circle_holes, export_plate_dxf
+
+    holes = bolt_circle_holes(
+        center_x=_q("100 mm"),
+        center_y=_q("100 mm"),
+        bolt_circle_diameter=_q("140 mm"),
+        hole_diameter=_q("14 mm"),
+        count=8,
+    )
+    out = export_plate_dxf(
+        width=_q("200 mm"), height=_q("200 mm"), holes=holes, path=tmp_path / "flange.dxf"
+    )
+    doc = ezdxf.readfile(out)
+    circles = list(doc.modelspace().query("CIRCLE"))
+    assert len(circles) == 8
