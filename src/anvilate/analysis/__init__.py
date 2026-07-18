@@ -12,7 +12,8 @@ modules:
   fastener spacing, section second moments (rectangular, circular, hollow circle,
   box tube, and I-section), the plastic section modulus / fully-plastic hinge
   moment (solid and hollow rectangle and circle, I-section), and the plastic
-  collapse load (point and distributed) of a simply-supported and a fixed-fixed beam
+  collapse load (point and distributed) of a simply-supported, fixed-fixed, and
+  propped-cantilever beam
 - :mod:`~anvilate.analysis.beam_foundation` — beam on a continuous elastic
   foundation (Hetényi): the characteristic parameter β, and the peak deflection and
   bending moment a point load makes on a long (effectively infinite) beam
@@ -190,6 +191,7 @@ from .beam import (
     overhang_tip_load,
     overhang_uniform_load,
     plastic_moment,
+    propped_cantilever_plastic_collapse_udl,
     rectangular_plastic_section_modulus,
     rectangular_second_moment,
     rectangular_tube_plastic_section_modulus,
@@ -654,6 +656,7 @@ __all__ = [
     "fixed_fixed_plastic_collapse_load",
     "simply_supported_plastic_collapse_udl",
     "fixed_fixed_plastic_collapse_udl",
+    "propped_cantilever_plastic_collapse_udl",
     "CrossSection",
     "bending_stress",
     "required_section_modulus",

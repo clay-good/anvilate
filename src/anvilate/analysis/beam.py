@@ -71,6 +71,7 @@ __all__ = [
     "fixed_fixed_plastic_collapse_load",
     "simply_supported_plastic_collapse_udl",
     "fixed_fixed_plastic_collapse_udl",
+    "propped_cantilever_plastic_collapse_udl",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -405,6 +406,24 @@ def fixed_fixed_plastic_collapse_udl(
     """
     mp, length = _collapse_inputs(plastic_moment_capacity, span)
     return _as_quantity(16 * mp.pint / length.pint**2, "N/m")
+
+
+def propped_cantilever_plastic_collapse_udl(
+    *, plastic_moment_capacity: Quantity, span: Quantity
+) -> Quantity:
+    """The distributed load that collapses a propped cantilever, w = (6 + 4√2)·M_p/L².
+
+    A propped cantilever (fixed at one end, simply propped at the other) under a
+    uniform load fails by a two-hinge mechanism: one hinge at the fixed end and a
+    second, sagging hinge in the span. Unlike the symmetric fixed-fixed case the span
+    hinge does not sit at midspan — minimizing the collapse load over its position
+    (the kinematic theorem) places it at (√2 − 1)·L ≈ 0.414·L from the propped end and
+    gives w = (6 + 4√2)·M_p/L² ≈ 11.66·M_p/L², between the simply-supported 8 and the
+    fixed-fixed 16. ``plastic_moment_capacity`` M_p (:func:`plastic_moment`) and
+    ``span`` L must be positive. Returns the collapse load per unit length in N/m.
+    """
+    mp, length = _collapse_inputs(plastic_moment_capacity, span)
+    return _as_quantity((6.0 + 4.0 * sqrt(2.0)) * mp.pint / length.pint**2, "N/m")
 
 
 def max_transverse_shear_stress(
