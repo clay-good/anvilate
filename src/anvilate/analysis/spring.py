@@ -47,6 +47,8 @@ __all__ = [
     "spring_stored_energy",
     "springs_in_series",
     "springs_in_parallel",
+    "helical_torsion_spring_rate",
+    "helical_torsion_spring_stress",
     "leaf_spring_stress",
     "leaf_spring_rate",
     "BELLEVILLE_PLATEAU_RATIO",
@@ -326,6 +328,65 @@ def springs_in_parallel(spring_rates: Sequence[Quantity]) -> Quantity:
     """
     rates = _rates_in_n_per_mm(spring_rates)
     return Quantity(magnitude=sum(rates), unit="N/mm")
+
+
+def helical_torsion_spring_rate(
+    *,
+    mean_coil_diameter: Quantity,
+    wire_diameter: Quantity,
+    active_coils: float,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The angular rate k = E·d⁴/(64·D·N_a) of a round-wire helical torsion spring.
+
+    A helical torsion spring — a clothespin, a garage-door counterbalance, a
+    hinge return — winds about its own axis, so unlike the axially-loaded
+    compression coil its wire carries *bending*, not torsion. The applied moment M
+    bends a wire of length L = π·D·N_a and second moment I = π·d⁴/64, twisting the
+    ends through θ = M·L/(E·I) radians; the rate M/θ = E·d⁴/(64·D·N_a) then follows
+    from beam bending alone. ``mean_coil_diameter`` D, ``wire_diameter`` d,
+    ``active_coils`` N_a and ``elastic_modulus`` E (the wire's Young's modulus, not
+    its shear modulus) set it. The coil geometry is validated through the spring
+    index and ``active_coils`` must be positive. Returns the rate as a torque per
+    radian in newton-metres (radians being dimensionless); real springs run a few
+    percent stiffer as inter-coil friction adds to this ideal value.
+    """
+    spring_index(mean_coil_diameter=mean_coil_diameter, wire_diameter=wire_diameter)
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if active_coils <= 0:
+        raise ValueError(f"active_coils must be positive; got {active_coils}")
+    if elastic_modulus.to("Pa").magnitude <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    rate = (
+        elastic_modulus.pint * wire_diameter.pint**4 / (64 * mean_coil_diameter.pint * active_coils)
+    )
+    converted = rate.to("N*m")
+    return Quantity(magnitude=float(converted.magnitude), unit="N*m")
+
+
+def helical_torsion_spring_stress(
+    *,
+    moment: Quantity,
+    mean_coil_diameter: Quantity,
+    wire_diameter: Quantity,
+) -> Quantity:
+    """The peak inner-fibre bending stress σ = K_i·32·M/(π·d³) of a helical torsion
+    spring.
+
+    The wire of a torsion spring is a curved beam in bending, so the stress is the
+    straight-beam σ = 32·M/(π·d³) raised at the coil's inner fibre by the curvature
+    factor K_i = (4C²−C−1)/(4C(C−1)), with the spring index C = D/d (Wahl, for
+    round wire in bending). ``moment`` M is the applied wind-up moment,
+    ``mean_coil_diameter`` D and ``wire_diameter`` d the coil geometry. As the coil
+    opens up (large C) K_i → 1 and the correction fades. Returns the peak stress in
+    MPa; every quantity is dimension-checked through the spring index.
+    """
+    _require(moment, "[force] * [length]", "moment")
+    c = spring_index(mean_coil_diameter=mean_coil_diameter, wire_diameter=wire_diameter)
+    ki = (4 * c**2 - c - 1) / (4 * c * (c - 1))
+    stress = ki * 32 * moment.pint / (pi * wire_diameter.pint**3)
+    converted = stress.to("MPa")
+    return Quantity(magnitude=float(converted.magnitude), unit="MPa")
 
 
 def _leaf_geometry(

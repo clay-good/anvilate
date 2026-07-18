@@ -105,7 +105,8 @@ modules:
   strength, governing mode, and efficiency
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, stored
   energy, series/parallel combination, lateral (column) buckling, leaf-spring
-  stress and rate, the Belleville (disc) washer's Almen-Laszlo load-deflection
+  stress and rate, the helical torsion spring's angular rate and inner-fibre
+  bending stress, the Belleville (disc) washer's Almen-Laszlo load-deflection
   curve and flat load, and the flat spiral (clock) spring's rate and stress
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
   stress, thermal-shock (quench) surface stress, the thermal-buckling ("sun kink")
@@ -483,6 +484,8 @@ from .spring import (
     helical_spring_active_coils_for_rate,
     helical_spring_buckling,
     helical_spring_rate,
+    helical_torsion_spring_rate,
+    helical_torsion_spring_stress,
     leaf_spring_rate,
     leaf_spring_stress,
     spiral_spring_rate,
@@ -880,6 +883,8 @@ __all__ = [
     "belleville_flat_load",
     "spiral_spring_rate",
     "spiral_spring_stress",
+    "helical_torsion_spring_rate",
+    "helical_torsion_spring_stress",
     "leaf_spring_stress",
     "leaf_spring_rate",
     "spring_surge_frequency",

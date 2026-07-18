@@ -147,6 +147,8 @@ from anvilate.analysis import (
     helical_spring_active_coils_for_rate,
     helical_spring_buckling,
     helical_spring_rate,
+    helical_torsion_spring_rate,
+    helical_torsion_spring_stress,
     helical_virtual_teeth,
     hertz_cylinder_contact,
     hertz_effective_modulus,
@@ -8285,6 +8287,48 @@ def test_spiral_spring_rejects_bad_inputs():
         )
     with pytest.raises(ValueError, match="moment must be a"):
         spiral_spring_stress(moment=_q("0.02 N"), width=_q("10 mm"), thickness=_q("0.5 mm"))
+
+
+def test_helical_torsion_spring_rate_and_stress():
+    # k = E*d^4/(64*D*N_a): 200 GPa, 3 mm wire, 25 mm coil, 5 active coils.
+    k = helical_torsion_spring_rate(
+        mean_coil_diameter=_q("25 mm"),
+        wire_diameter=_q("3 mm"),
+        active_coils=5,
+        elastic_modulus=_q("200 GPa"),
+    )
+    # E in MPa (N/mm^2), lengths mm -> N*mm/rad, /1000 -> N*m/rad.
+    expected = 200e3 * 3.0**4 / (64.0 * 25.0 * 5.0) / 1000.0
+    assert k.to("N*m").magnitude == pytest.approx(expected, rel=1e-12)
+    assert k.to("N*m").magnitude == pytest.approx(2.025, rel=1e-3)
+    # Inner-fibre stress sigma = K_i*32*M/(pi*d^3), K_i=(4C^2-C-1)/(4C(C-1)), C=D/d.
+    c = 25.0 / 3.0
+    ki = (4 * c**2 - c - 1) / (4 * c * (c - 1))
+    s = helical_torsion_spring_stress(
+        moment=_q("1 N*m"), mean_coil_diameter=_q("25 mm"), wire_diameter=_q("3 mm")
+    )
+    assert s.to("MPa").magnitude == pytest.approx(ki * 32 * 1000.0 / (pi * 3.0**3), rel=1e-12)
+    assert s.to("MPa").magnitude == pytest.approx(414.3, rel=1e-3)
+    # As the coil opens up (large C) the curvature factor fades to 1 and the
+    # stress approaches the straight-beam value 32M/(pi*d^3).
+    opened = helical_torsion_spring_stress(
+        moment=_q("1 N*m"), mean_coil_diameter=_q("3000 mm"), wire_diameter=_q("3 mm")
+    )
+    assert opened.to("MPa").magnitude == pytest.approx(32 * 1000.0 / (pi * 3.0**3), rel=2e-3)
+
+
+def test_helical_torsion_spring_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="active_coils must be positive"):
+        helical_torsion_spring_rate(
+            mean_coil_diameter=_q("25 mm"),
+            wire_diameter=_q("3 mm"),
+            active_coils=0,
+            elastic_modulus=_q("200 GPa"),
+        )
+    with pytest.raises(ValueError, match="moment must be a"):
+        helical_torsion_spring_stress(
+            moment=_q("1 N"), mean_coil_diameter=_q("25 mm"), wire_diameter=_q("3 mm")
+        )
 
 
 def test_rotating_rim_radial_growth_matches_the_hoop_stress():
