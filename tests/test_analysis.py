@@ -311,6 +311,7 @@ from anvilate.analysis import (
     thin_open_strip_torsion_constant,
     thin_open_strip_torsional_stress,
     thin_open_strip_twist_angle,
+    thin_ring_buckling_pressure,
     thin_ring_diametral_deflection,
     thin_ring_max_moment,
     thin_wall_cylinder,
@@ -8683,6 +8684,37 @@ def test_thin_ring_diametral_deflection_and_moment():
             radius=_q("100 mm"),
             elastic_modulus=_q("200 GPa"),
             second_moment=_q("500 mm"),
+        )
+
+
+def test_thin_ring_buckling_pressure():
+    # q_cr = 3*E*I/R^3: E=200 GPa, I=1000 mm^4, R=100 mm -> 600 N/mm.
+    q = thin_ring_buckling_pressure(
+        elastic_modulus=_q("200 GPa"),
+        second_moment=_q("1000 mm**4"),
+        radius=_q("100 mm"),
+    )
+    assert q.to("N/mm").magnitude == pytest.approx(3 * 200000 * 1000 / 100**3, rel=1e-12)
+    assert q.to("N/mm").magnitude == pytest.approx(600.0, rel=1e-9)
+    # It recovers the long-tube collapse pressure (bar the plane-strain 1-nu^2
+    # factor) when I = t^3/12 per unit width: q_cr/1 vs E*t^3/(4*R^3).
+    t = 4.0
+    per_width = thin_ring_buckling_pressure(
+        elastic_modulus=_q("200 GPa"),
+        second_moment=_q(f"{t**3 / 12} mm**4"),
+        radius=_q("100 mm"),
+    )
+    assert per_width.to("N/mm").magnitude == pytest.approx(200000 * t**3 / (4 * 100**3), rel=1e-12)
+    # It falls off with the cube of the radius: doubling R gives 1/8.
+    bigger = thin_ring_buckling_pressure(
+        elastic_modulus=_q("200 GPa"),
+        second_moment=_q("1000 mm**4"),
+        radius=_q("200 mm"),
+    )
+    assert bigger.to("N/mm").magnitude == pytest.approx(q.to("N/mm").magnitude / 8, rel=1e-12)
+    with pytest.raises(ValueError, match="radius must be positive"):
+        thin_ring_buckling_pressure(
+            elastic_modulus=_q("200 GPa"), second_moment=_q("1000 mm**4"), radius=_q("0 mm")
         )
 
 

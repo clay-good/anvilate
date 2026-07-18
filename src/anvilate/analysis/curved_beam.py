@@ -57,6 +57,7 @@ __all__ = [
     "composite_curved_beam_stress",
     "thin_ring_diametral_deflection",
     "thin_ring_max_moment",
+    "thin_ring_buckling_pressure",
 ]
 
 
@@ -334,3 +335,38 @@ def thin_ring_max_moment(*, load: Quantity, radius: Quantity) -> Quantity:
     if r <= 0:
         raise ValueError(f"radius must be positive; got {radius}")
     return Quantity(magnitude=p * r * (0.5 - 1.0 / pi), unit="N*mm")
+
+
+def thin_ring_buckling_pressure(
+    *,
+    elastic_modulus: Quantity,
+    second_moment: Quantity,
+    radius: Quantity,
+) -> Quantity:
+    """The external pressure that buckles a thin circular ring, q_cr = 3·E·I/R³.
+
+    A thin circular ring or a long unstiffened pipe under uniform external radial
+    pressure does not squash uniformly — past a critical load it snaps out of round
+    into an oval (the n = 2 mode). Timoshenko's elastic-stability result gives the
+    critical radial load per unit length of centreline as
+
+        q_cr = 3·E·I / R³,
+
+    with ``elastic_modulus`` E, ``second_moment`` I of the ring section (about the
+    axis normal to the ring plane), and ``radius`` R the centreline radius. For a
+    pipe wall of thickness t taking I = t³/12 per unit length this recovers the long
+    tube's collapse pressure E·t³/(4·R³·(1 − ν²)) up to the plane-strain (1 − ν²)
+    factor. E, I, and R must be positive. Returns the critical pressure as a load per
+    unit length (N/mm).
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(radius, "[length]", "radius")
+    e = elastic_modulus.to("MPa").magnitude  # N/mm^2
+    i = second_moment.to("mm**4").magnitude
+    r = radius.to("mm").magnitude
+    if e <= 0 or i <= 0:
+        raise ValueError("elastic_modulus and second_moment must be positive")
+    if r <= 0:
+        raise ValueError(f"radius must be positive; got {radius}")
+    return Quantity(magnitude=3.0 * e * i / r**3, unit="N/mm")
