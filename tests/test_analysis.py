@@ -11072,3 +11072,38 @@ def test_specific_film_ratio_sets_the_lubrication_regime():
             journal_roughness=_q("0 um"),
             bush_roughness=_q("0.8 um"),
         )
+
+
+def test_hydraulic_cylinder_force_and_speed_rod_asymmetry():
+    from math import pi
+
+    from anvilate.analysis import (
+        cylinder_extend_force,
+        cylinder_extend_speed,
+        cylinder_retract_force,
+        cylinder_retract_speed,
+    )
+
+    # Extend force on the full bore area; retract on the annulus (bore - rod).
+    ext = cylinder_extend_force(pressure=_q("20 MPa"), bore_diameter=_q("63 mm"))
+    assert ext.to("kN").magnitude == pytest.approx(20 * pi / 4 * 63**2 / 1000, rel=1e-12)
+    ret = cylinder_retract_force(
+        pressure=_q("20 MPa"), bore_diameter=_q("63 mm"), rod_diameter=_q("36 mm")
+    )
+    assert ret.to("kN").magnitude == pytest.approx(20 * pi / 4 * (63**2 - 36**2) / 1000, rel=1e-12)
+    # Retract force is always less than extend (the rod steals area).
+    assert ret.to("kN").magnitude < ext.to("kN").magnitude
+    # The same flow retracts faster than it extends (less area to fill).
+    ext_v = cylinder_extend_speed(flow_rate=_q("20 L/min"), bore_diameter=_q("63 mm"))
+    ret_v = cylinder_retract_speed(
+        flow_rate=_q("20 L/min"), bore_diameter=_q("63 mm"), rod_diameter=_q("36 mm")
+    )
+    assert ret_v.to("mm/s").magnitude > ext_v.to("mm/s").magnitude
+    # Force x speed is conserved between strokes (both equal p*Q, the hydraulic power).
+    assert ext.to("kN").magnitude * ext_v.to("mm/s").magnitude == pytest.approx(
+        ret.to("kN").magnitude * ret_v.to("mm/s").magnitude, rel=1e-9
+    )
+    with pytest.raises(ValueError, match="rod_diameter .* must be smaller than the bore"):
+        cylinder_retract_force(
+            pressure=_q("20 MPa"), bore_diameter=_q("63 mm"), rod_diameter=_q("63 mm")
+        )

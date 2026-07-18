@@ -84,6 +84,9 @@ modules:
 - :mod:`~anvilate.analysis.geneva` — external Geneva (intermittent-indexing)
   mechanism geometry: index angle, crank and driven engagement radii, and the
   advance/dwell fraction of the cycle
+- :mod:`~anvilate.analysis.hydraulic_cylinder` — fluid-cylinder actuator sizing:
+  the extend and retract force (bore vs annular area) and the extend and retract
+  speed from the supply flow (the rod-side asymmetry)
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -536,6 +539,12 @@ from .geneva import (
     geneva_dwell_fraction,
     geneva_index_angle,
 )
+from .hydraulic_cylinder import (
+    cylinder_extend_force,
+    cylinder_extend_speed,
+    cylinder_retract_force,
+    cylinder_retract_speed,
+)
 from .impact import (
     SUDDENLY_APPLIED_FACTOR,
     horizontal_impact_force,
@@ -895,6 +904,10 @@ __all__ = [
     "geneva_driven_radius",
     "geneva_advance_fraction",
     "geneva_dwell_fraction",
+    "cylinder_extend_force",
+    "cylinder_retract_force",
+    "cylinder_extend_speed",
+    "cylinder_retract_speed",
     "slider_crank_displacement",
     "slider_crank_velocity",
     "slider_crank_acceleration",
