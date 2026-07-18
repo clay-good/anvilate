@@ -1327,3 +1327,19 @@ def test_spring_buckling_example_folds_the_tall_spring():
     assert tall.status is CheckStatus.FAIL
     assert "safety factor 0.92" in tall.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_bevel_gear_thrust_example_loads_the_gear_shaft_harder():
+    namespace = runpy.run_path(str(_EXAMPLES / "bevel_gear_thrust.py"))
+    card = namespace["screen_bevel_thrust"]()
+    by_name = {e.name: e for e in card.entries}
+    # The fast pinion's thrust is comfortably held...
+    pinion = by_name["pinion (18 teeth)"]
+    assert pinion.passed
+    assert "safety factor 1.84" in pinion.detail
+    # ...but the larger gear throws twice the thrust (the gear ratio) and overruns
+    # the same bearing.
+    gear = by_name["gear (36 teeth)"]
+    assert gear.status is CheckStatus.FAIL
+    assert "safety factor 0.92" in gear.detail
+    assert card.status is CheckStatus.FAIL
