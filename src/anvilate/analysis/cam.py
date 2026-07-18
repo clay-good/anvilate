@@ -32,7 +32,7 @@ dimension-checked :class:`~anvilate.units.Quantity` values.
 
 from __future__ import annotations
 
-from math import atan2, cos, degrees, pi, radians, sin, sqrt
+from math import atan2, cos, degrees, pi, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict
 
@@ -42,6 +42,7 @@ __all__ = [
     "CamMotion",
     "cam_follower_motion",
     "cam_pressure_angle",
+    "cam_base_circle_for_pressure_angle",
 ]
 
 _PROFILES = ("shm", "cycloidal", "parabolic", "poly345")
@@ -187,3 +188,36 @@ def cam_pressure_angle(
         )
     angle = atan2(dsdtheta - e, sqrt(r_b**2 - e**2) + s)
     return Quantity(magnitude=degrees(angle), unit="degree")
+
+
+def cam_base_circle_for_pressure_angle(
+    *,
+    lift_gradient: Quantity,
+    follower_displacement: Quantity,
+    max_pressure_angle: float,
+) -> Quantity:
+    """The minimum base-circle radius r_b that holds a cam's pressure angle in check.
+
+    The design inverse of :func:`cam_pressure_angle` for an on-centre translating roller
+    follower: setting tan(φ) = (ds/dθ)/(r_b + s) equal to the ``max_pressure_angle`` φ_max
+    and solving gives r_b = (ds/dθ)/tan(φ_max) − s. Evaluate the ``lift_gradient`` ds/dθ
+    (lift per unit cam angle) and ``follower_displacement`` s at the point of *steepest*
+    rise, where φ peaks, and this returns the smallest base circle that keeps the whole
+    rise under φ_max — the standard "enlarge the base circle to tame the pressure angle"
+    sizing step (keep φ_max ≤ ~30° for a translating follower). φ_max must be in (0, 90);
+    the base circle comes out negative if the demanded rise is too steep for *any*
+    positive base circle at that displacement, which is itself the signal to slow the
+    motion. Returns the base-circle radius in mm.
+    """
+    _require(lift_gradient, "[length]", "lift_gradient")
+    _require(follower_displacement, "[length]", "follower_displacement")
+    if not 0 < max_pressure_angle < 90:
+        raise ValueError(
+            f"max_pressure_angle (degrees) must lie in (0, 90); got {max_pressure_angle}"
+        )
+    dsdtheta = lift_gradient.to("mm").magnitude
+    s = follower_displacement.to("mm").magnitude
+    if s < 0:
+        raise ValueError(f"follower_displacement must be non-negative; got {follower_displacement}")
+    r_b = dsdtheta / tan(radians(max_pressure_angle)) - s
+    return Quantity(magnitude=r_b, unit="mm")

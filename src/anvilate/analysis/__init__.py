@@ -75,7 +75,8 @@ modules:
   (heavy-cable) sag, arc length, and peak tension
 - :mod:`~anvilate.analysis.cam` — cam-follower rise kinematics (SHM, cycloidal,
   parabolic, and 3-4-5 polynomial profiles): follower displacement, velocity, and
-  acceleration at a cam angle, and the translating roller-follower pressure angle
+  acceleration at a cam angle, the translating roller-follower pressure angle, and
+  the minimum base circle a maximum pressure angle allows
 - :mod:`~anvilate.analysis.geneva` — external Geneva (intermittent-indexing)
   mechanism geometry: index angle, crank and driven engagement radii, and the
   advance/dwell fraction of the cycle
@@ -323,6 +324,7 @@ from .cable import (
 )
 from .cam import (
     CamMotion,
+    cam_base_circle_for_pressure_angle,
     cam_follower_motion,
     cam_pressure_angle,
 )
@@ -870,6 +872,7 @@ __all__ = [
     "CamMotion",
     "cam_follower_motion",
     "cam_pressure_angle",
+    "cam_base_circle_for_pressure_angle",
     "parabolic_cable_sag",
     "parabolic_cable_max_tension",
     "parabolic_cable_length",

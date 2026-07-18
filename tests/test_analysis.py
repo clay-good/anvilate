@@ -10961,3 +10961,29 @@ def test_worm_output_torque_folds_in_the_mesh_efficiency():
     assert eta < 0.7
     with pytest.raises(ValueError, match="input_torque must be a"):
         worm_output_torque(input_torque=_q("10 N"), worm_starts=1, gear_teeth=40, **kw)
+
+
+def test_cam_base_circle_for_pressure_angle_inverts_the_pressure_angle():
+    from anvilate.analysis import cam_base_circle_for_pressure_angle, cam_pressure_angle
+
+    # Size the base circle so the steepest rise stays at 30 degrees.
+    r_b = cam_base_circle_for_pressure_angle(
+        lift_gradient=_q("20 mm"), follower_displacement=_q("10 mm"), max_pressure_angle=30.0
+    )
+    from math import radians, tan
+
+    assert r_b.to("mm").magnitude == pytest.approx(20 / tan(radians(30)) - 10, rel=1e-12)
+    # Feeding it back through the forward pressure angle recovers 30 degrees.
+    phi = cam_pressure_angle(
+        lift_gradient=_q("20 mm"), follower_displacement=_q("10 mm"), base_circle_radius=r_b
+    )
+    assert phi.to("degree").magnitude == pytest.approx(30.0, rel=1e-9)
+    # A tighter pressure-angle limit demands a bigger base circle.
+    tighter = cam_base_circle_for_pressure_angle(
+        lift_gradient=_q("20 mm"), follower_displacement=_q("10 mm"), max_pressure_angle=20.0
+    )
+    assert tighter.to("mm").magnitude > r_b.to("mm").magnitude
+    with pytest.raises(ValueError, match="max_pressure_angle"):
+        cam_base_circle_for_pressure_angle(
+            lift_gradient=_q("20 mm"), follower_displacement=_q("10 mm"), max_pressure_angle=95.0
+        )
