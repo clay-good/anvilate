@@ -10709,3 +10709,35 @@ def test_o_ring_gland_squeeze_fill_and_stretch():
         o.o_ring_squeeze_fraction(cross_section_diameter=_q("3.53 mm"), gland_depth=_q("3.6 mm"))
     with pytest.raises(ValueError, match="must be at least the O-ring inner_diameter"):
         o.o_ring_stretch_fraction(inner_diameter=_q("25 mm"), groove_diameter=_q("24 mm"))
+
+
+def test_sling_leg_tension_multiplies_with_a_flatter_angle():
+    from math import cos, radians, sin
+
+    from anvilate.analysis import rigging as r
+
+    # A vertical lift shares the load equally: T = W/n, no horizontal force.
+    vert = r.sling_leg_tension(load=_q("10 kN"), number_of_legs=2, angle_from_horizontal=90)
+    assert vert.to("kN").magnitude == pytest.approx(5.0, rel=1e-12)
+    assert r.sling_horizontal_force(
+        load=_q("10 kN"), number_of_legs=2, angle_from_horizontal=90
+    ).to("kN").magnitude == pytest.approx(0.0, abs=1e-9)
+    # At 30 degrees each leg carries twice its vertical share.
+    assert r.sling_tension_factor(angle_from_horizontal=30) == pytest.approx(2.0, rel=1e-12)
+    flat = r.sling_leg_tension(load=_q("10 kN"), number_of_legs=2, angle_from_horizontal=30)
+    assert flat.to("kN").magnitude == pytest.approx(10.0, rel=1e-12)
+    # The horizontal force is the tension's horizontal component: H = T*cos(theta).
+    for theta in (30, 45, 60):
+        t = r.sling_leg_tension(load=_q("10 kN"), number_of_legs=2, angle_from_horizontal=theta)
+        h = r.sling_horizontal_force(
+            load=_q("10 kN"), number_of_legs=2, angle_from_horizontal=theta
+        )
+        assert h.to("kN").magnitude == pytest.approx(
+            t.to("kN").magnitude * cos(radians(theta)), rel=1e-12
+        )
+        # ...and the tension's vertical components carry the whole load.
+        assert 2 * t.to("kN").magnitude * sin(radians(theta)) == pytest.approx(10.0, rel=1e-12)
+    with pytest.raises(ValueError, match="angle_from_horizontal must be in"):
+        r.sling_leg_tension(load=_q("10 kN"), number_of_legs=2, angle_from_horizontal=0)
+    with pytest.raises(ValueError, match="load must be a"):
+        r.sling_leg_tension(load=_q("10 mm"), number_of_legs=2, angle_from_horizontal=45)

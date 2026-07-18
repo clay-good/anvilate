@@ -132,6 +132,9 @@ modules:
   (AISC elastic method)
 - :mod:`~anvilate.analysis.rivet` — riveted-joint tearing/shearing/crushing
   strength, governing mode, and efficiency
+- :mod:`~anvilate.analysis.rigging` — multi-leg sling lifting statics: the
+  sling-angle tension multiplier 1/sin θ, each leg's tension, and the inward
+  horizontal force at the pick points (the eyebolt/lifting-beam side load)
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, active
   coils for a rate, solid (fully-compressed) length, stored
   energy, series/parallel combination, lateral (column) buckling, leaf-spring
@@ -579,6 +582,11 @@ from .pressure_vessel import (
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
 )
+from .rigging import (
+    sling_horizontal_force,
+    sling_leg_tension,
+    sling_tension_factor,
+)
 from .rivet import (
     RivetedJointStrength,
     riveted_joint_efficiency,
@@ -794,6 +802,9 @@ __all__ = [
     "deep_draw_force",
     "RivetedJointStrength",
     "riveted_joint_efficiency",
+    "sling_tension_factor",
+    "sling_leg_tension",
+    "sling_horizontal_force",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
