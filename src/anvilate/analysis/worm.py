@@ -27,7 +27,7 @@ angles are plain degree floats, μ a dimensionless coefficient the user supplies
 
 from __future__ import annotations
 
-from math import atan2, cos, degrees, pi, radians, tan
+from math import atan2, cos, degrees, pi, radians, sin, tan
 
 from ..units import Quantity
 
@@ -37,6 +37,7 @@ __all__ = [
     "worm_gear_efficiency",
     "worm_is_self_locking",
     "worm_tangential_force",
+    "worm_separating_force",
 ]
 
 
@@ -197,4 +198,40 @@ def worm_tangential_force(
         normal_pressure_angle=normal_pressure_angle,
     )
     magnitude = gear_tangential_load.to("N").magnitude * tan(lam) / eta
+    return Quantity(magnitude=magnitude, unit="N")
+
+
+def worm_separating_force(
+    *,
+    gear_tangential_load: Quantity,
+    lead_angle: float,
+    friction_coefficient: float,
+    normal_pressure_angle: float = 14.5,
+) -> Quantity:
+    """The separating (radial) force W_r = W_Gt·sin(φ_n)/(cos φ_n·cos λ − μ·sin λ) of a
+    worm mesh.
+
+    The tooth normal force W tilts off the pitch tangents by the normal pressure
+    angle φ_n and the lead angle λ, producing a radial component that pushes the worm
+    and wheel apart and bends their shafts. Resolving the normal-force triple gives
+    the gear tangential load W_Gt = W·(cos φ_n·cos λ − μ·sin λ) and the separating
+    force W_r = W·sin φ_n, so W_r = W_Gt·sin(φ_n)/(cos φ_n·cos λ − μ·sin λ).
+    ``gear_tangential_load`` W_Gt is the wheel's transmitted force (2·T_gear/d_gear),
+    and ``lead_angle`` λ, ``friction_coefficient`` μ, and ``normal_pressure_angle``
+    φ_n describe the mesh — the same triple whose ratio gives
+    :func:`worm_gear_efficiency`. A zero-pressure-angle mesh separates nothing (W_r =
+    0); a real 14.5°–30° tooth develops a significant radial load the bearings must
+    carry. Returns the separating force in newtons.
+    """
+    _require(gear_tangential_load, "[force]", "gear_tangential_load")
+    lam = _check_lead_angle(lead_angle)
+    phi_n = _check_pressure_angle(normal_pressure_angle)
+    mu = _check_friction(friction_coefficient)
+    denominator = cos(phi_n) * cos(lam) - mu * sin(lam)
+    if denominator <= 0:
+        raise ValueError(
+            "cos(phi_n)*cos(lambda) - mu*sin(lambda) must be positive; the friction and "
+            "lead angle exceed the mesh's driving capacity"
+        )
+    magnitude = gear_tangential_load.to("N").magnitude * sin(phi_n) / denominator
     return Quantity(magnitude=magnitude, unit="N")

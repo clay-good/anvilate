@@ -384,6 +384,7 @@ from anvilate.analysis import (
     worm_gear_ratio,
     worm_is_self_locking,
     worm_lead_angle,
+    worm_separating_force,
     worm_tangential_force,
     yield_safety_factor,
 )
@@ -7607,6 +7608,39 @@ def test_worm_tangential_force_from_the_power_balance():
     with pytest.raises(ValueError, match="gear_tangential_load must be a"):
         worm_tangential_force(
             gear_tangential_load=_q("4000 N*m"), lead_angle=lam, friction_coefficient=0.05
+        )
+
+
+def test_worm_separating_force_from_the_tooth_normal_force():
+    from math import cos, radians, sin
+
+    # W_r = W_Gt*sin(phi_n)/(cos(phi_n)*cos(lambda) - mu*sin(lambda)).
+    lam, phi_n, mu = 15.0, 20.0, 0.05
+    wr = worm_separating_force(
+        gear_tangential_load=_q("1000 N"),
+        lead_angle=lam,
+        friction_coefficient=mu,
+        normal_pressure_angle=phi_n,
+    )
+    expected = (
+        1000
+        * sin(radians(phi_n))
+        / (cos(radians(phi_n)) * cos(radians(lam)) - mu * sin(radians(lam)))
+    )
+    assert wr.to("N").magnitude == pytest.approx(expected, rel=1e-12)
+    assert wr.to("N").magnitude == pytest.approx(382.26, rel=1e-3)
+    # The force triple is consistent with the module's efficiency (already tested
+    # elsewhere); a zero-pressure-angle tooth separates nothing.
+    zero = worm_separating_force(
+        gear_tangential_load=_q("1000 N"),
+        lead_angle=lam,
+        friction_coefficient=mu,
+        normal_pressure_angle=0.0,
+    )
+    assert zero.to("N").magnitude == pytest.approx(0.0, abs=1e-12)
+    with pytest.raises(ValueError, match="gear_tangential_load must be a"):
+        worm_separating_force(
+            gear_tangential_load=_q("1000 N*m"), lead_angle=lam, friction_coefficient=mu
         )
 
 
