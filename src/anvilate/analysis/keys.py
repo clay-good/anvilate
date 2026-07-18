@@ -25,6 +25,7 @@ __all__ = [
     "key_bearing_stress",
     "KeyLengthRequirement",
     "key_length_for_torque",
+    "spline_torque_capacity",
 ]
 
 
@@ -141,3 +142,42 @@ def key_length_for_torque(
         required_length=Quantity(magnitude=max(l_shear, l_bearing), unit="mm"),
         governing_mode=governing,
     )
+
+
+def spline_torque_capacity(
+    *,
+    allowable_pressure: Quantity,
+    mean_radius: Quantity,
+    tooth_height: Quantity,
+    spline_length: Quantity,
+    number_of_teeth: int,
+    load_fraction: float = 0.25,
+) -> Quantity:
+    """The torque a straight-sided spline transmits at an allowable bearing pressure.
+
+    A spline is a shaft with many integral keys, so it carries torque by bearing on the
+    sides of its teeth: the tooth-flank contact area is N·h·L (``number_of_teeth`` N times
+    the engaged ``tooth_height`` h times the ``spline_length`` L), and pressing on it at the
+    ``allowable_pressure`` p over the ``mean_radius`` r gives a torque T = f·p·N·h·L·r. The
+    ``load_fraction`` f (default 0.25, the standard conservative value for straight splines —
+    manufacturing tolerances mean only about a quarter of the teeth share the load at once)
+    folds in the uneven load sharing; supply the value your spline standard specifies. The
+    mechanics is exact; the fraction and the engaged geometry are the caller's design values.
+    All positive, N a positive whole number. Returns the torque in N·m.
+    """
+    _require(allowable_pressure, "[pressure]", "allowable_pressure")
+    _require(mean_radius, "[length]", "mean_radius")
+    _require(tooth_height, "[length]", "tooth_height")
+    _require(spline_length, "[length]", "spline_length")
+    if int(number_of_teeth) != number_of_teeth or number_of_teeth <= 0:
+        raise ValueError(f"number_of_teeth must be a positive whole number; got {number_of_teeth}")
+    if not 0 < load_fraction <= 1:
+        raise ValueError(f"load_fraction must be in (0, 1]; got {load_fraction}")
+    p = allowable_pressure.to("MPa").magnitude
+    r = mean_radius.to("mm").magnitude
+    h = tooth_height.to("mm").magnitude
+    length = spline_length.to("mm").magnitude
+    if p <= 0 or r <= 0 or h <= 0 or length <= 0:
+        raise ValueError("pressure, mean_radius, tooth_height, and spline_length must be positive")
+    torque_n_mm = load_fraction * p * number_of_teeth * h * length * r
+    return Quantity(magnitude=torque_n_mm / 1000.0, unit="N*m")

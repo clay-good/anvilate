@@ -11262,3 +11262,36 @@ def test_gear_pitch_outside_and_root_diameters():
     assert stub.to("mm").magnitude < od
     with pytest.raises(ValueError, match="teeth must be a positive whole number"):
         gear_pitch_diameter(module=_q("2 mm"), teeth=0)
+
+
+def test_spline_torque_capacity_bearing_on_tooth_flanks():
+    from anvilate.analysis import spline_torque_capacity
+
+    # T = f*p*N*h*L*r: default f=0.25.
+    t = spline_torque_capacity(
+        allowable_pressure=_q("20 MPa"),
+        mean_radius=_q("25 mm"),
+        tooth_height=_q("2.5 mm"),
+        spline_length=_q("40 mm"),
+        number_of_teeth=10,
+    )
+    assert t.to("N*m").magnitude == pytest.approx(0.25 * 20 * 10 * 2.5 * 40 * 25 / 1000, rel=1e-12)
+    assert t.to("N*m").magnitude == pytest.approx(125.0, rel=1e-12)
+    # Assuming full load sharing (f=1) quadruples the nominal capacity.
+    full = spline_torque_capacity(
+        allowable_pressure=_q("20 MPa"),
+        mean_radius=_q("25 mm"),
+        tooth_height=_q("2.5 mm"),
+        spline_length=_q("40 mm"),
+        number_of_teeth=10,
+        load_fraction=1.0,
+    )
+    assert full.to("N*m").magnitude == pytest.approx(4 * t.to("N*m").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="number_of_teeth must be a positive whole number"):
+        spline_torque_capacity(
+            allowable_pressure=_q("20 MPa"),
+            mean_radius=_q("25 mm"),
+            tooth_height=_q("2.5 mm"),
+            spline_length=_q("40 mm"),
+            number_of_teeth=0,
+        )

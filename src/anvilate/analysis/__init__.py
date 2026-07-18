@@ -135,8 +135,8 @@ modules:
   preloaded-joint load sharing (bolt and member stiffness, stiffness constant,
   bolt/member load, separation), and the peak fastener force in an
   eccentrically-loaded shear group (AISC elastic method)
-- :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
-  key length a torque requires
+- :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, the key
+  length a torque requires, and the torque a straight spline transmits
 - :mod:`~anvilate.analysis.o_ring` — O-ring gland design geometry: the squeeze,
   gland-fill, and stretch fractions a groove must keep in band to seal without
   extruding or over-straining the ring
@@ -586,6 +586,7 @@ from .keys import (
     key_length_for_torque,
     key_shear_stress,
     key_tangential_force,
+    spline_torque_capacity,
 )
 from .living_hinge import (
     living_hinge_fold_strain,
@@ -1107,6 +1108,7 @@ __all__ = [
     "key_bearing_stress",
     "KeyLengthRequirement",
     "key_length_for_torque",
+    "spline_torque_capacity",
     "living_hinge_fold_strain",
     "living_hinge_web_length_for_strain",
     "o_ring_squeeze_fraction",
