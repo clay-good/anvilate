@@ -1649,3 +1649,18 @@ def test_bracket_bolt_group_eccentric_example_direct_shear_underestimates():
     assert by_name["true peak (eccentric)"].status is CheckStatus.FAIL
     assert "safety factor 0.90" in by_name["true peak (eccentric)"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_rotor_unbalance_response_example_resonance_amplifies_the_shake():
+    namespace = runpy.run_path(str(_EXAMPLES / "rotor_unbalance_response.py"))
+    card = namespace["screen_rotor_vibration"]()
+    by_name = {e.name: e for e in card.entries}
+    # Well below and well above the critical speed the unbalance is comfortable.
+    assert by_name["well below critical (r = 0.5)"].passed
+    assert "safety factor 3.76" in by_name["well below critical (r = 0.5)"].detail
+    assert by_name["super-critical (r = 2.0)"].passed
+    assert "safety factor 15.03" in by_name["super-critical (r = 2.0)"].detail
+    # Just under the critical speed the dynamic magnification spikes and it fails.
+    assert by_name["just under critical (r = 0.95)"].status is CheckStatus.FAIL
+    assert "safety factor 0.68" in by_name["just under critical (r = 0.95)"].detail
+    assert card.status is CheckStatus.FAIL
