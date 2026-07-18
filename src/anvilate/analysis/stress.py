@@ -28,6 +28,7 @@ __all__ = [
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
     "von_mises_principal",
+    "octahedral_shear_stress",
     "principal_stresses_plane",
     "max_shear_stress_plane",
     "tresca_equivalent_stress",
@@ -237,6 +238,30 @@ def von_mises_principal(
     s3 = _require_stress(sigma_3, "sigma_3")
     vm = sqrt(((s1 - s2) ** 2 + (s2 - s3) ** 2 + (s3 - s1) ** 2) / 2)
     return Quantity(magnitude=vm, unit="MPa")
+
+
+def octahedral_shear_stress(
+    *,
+    sigma_1: Quantity,
+    sigma_2: Quantity,
+    sigma_3: Quantity,
+) -> Quantity:
+    """The octahedral shear stress τ_oct = ⅓·√[(σ₁−σ₂)² + (σ₂−σ₃)² + (σ₃−σ₁)²].
+
+    The shear stress on the octahedral plane (equally inclined to the three
+    principal directions), and the physical quantity the distortion-energy yield
+    theory is built on: yielding begins when τ_oct reaches √2/3·S_y. It relates to
+    the von Mises stress by τ_oct = (√2/3)·σ_vm, so it carries the same information
+    as :func:`von_mises_principal` in the shear form some plasticity and
+    rock/soil-mechanics workflows use directly. ``sigma_1``, ``sigma_2``, ``sigma_3``
+    are the three principal stresses (unordered). Returns the octahedral shear stress
+    in MPa.
+    """
+    s1 = _require_stress(sigma_1, "sigma_1")
+    s2 = _require_stress(sigma_2, "sigma_2")
+    s3 = _require_stress(sigma_3, "sigma_3")
+    tau = sqrt((s1 - s2) ** 2 + (s2 - s3) ** 2 + (s3 - s1) ** 2) / 3.0
+    return Quantity(magnitude=tau, unit="MPa")
 
 
 def tresca_principal(

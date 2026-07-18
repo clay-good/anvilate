@@ -114,8 +114,8 @@ modules:
   and damped-vibration measures (damped frequency, log decrement, quality factor,
   isolator transmissibility); simple and physical (rigid-body) pendulum periods;
   and the Den Hartog tuned-mass-damper optimal tuning
-- :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending,
-  and the Inglis elliptical-hole stress-concentration factor
+- :mod:`~anvilate.analysis.stress` — von Mises and octahedral-shear combination,
+  combined axial+bending, and the Inglis elliptical-hole stress-concentration factor
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
   stress-intensity factor and the critical crack length for fast fracture
 - :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
@@ -490,6 +490,7 @@ from .stress import (
     concentrated_stress,
     elliptical_hole_stress_concentration,
     max_shear_stress_plane,
+    octahedral_shear_stress,
     principal_stresses_plane,
     strength_scorecard,
     tresca_equivalent_stress,
@@ -871,6 +872,7 @@ __all__ = [
     "von_mises_plane_stress",
     "von_mises_bending_torsion",
     "von_mises_principal",
+    "octahedral_shear_stress",
     "principal_stresses_plane",
     "max_shear_stress_plane",
     "tresca_equivalent_stress",

@@ -186,6 +186,7 @@ from anvilate.analysis import (
     natural_frequency,
     natural_frequency_from_deflection,
     neuber_notch_sensitivity,
+    octahedral_shear_stress,
     overhang_tip_load,
     overhang_uniform_load,
     parabolic_cable_length,
@@ -8936,3 +8937,22 @@ def test_goodman_equivalent_reversed_stress():
             mean_stress=_q("700 MPa"),
             ultimate_strength=_q("700 MPa"),
         )
+
+
+def test_octahedral_shear_stress_is_sqrt2_over_3_of_von_mises():
+    from math import sqrt
+
+    # Uniaxial: tau_oct = sqrt(2)/3 * sigma.
+    tau = octahedral_shear_stress(sigma_1=_q("100 MPa"), sigma_2=_q("0 MPa"), sigma_3=_q("0 MPa"))
+    assert tau.to("MPa").magnitude == pytest.approx(sqrt(2) / 3 * 100, rel=1e-12)
+    # It is exactly sqrt(2)/3 of the von Mises stress for the same state.
+    triad = {"sigma_1": _q("120 MPa"), "sigma_2": _q("-40 MPa"), "sigma_3": _q("30 MPa")}
+    to = octahedral_shear_stress(**triad).to("MPa").magnitude
+    vm = von_mises_principal(**triad).to("MPa").magnitude
+    assert to == pytest.approx(sqrt(2) / 3 * vm, rel=1e-12)
+    # A hydrostatic state (equal principals) has zero octahedral shear.
+    assert octahedral_shear_stress(
+        sigma_1=_q("50 MPa"), sigma_2=_q("50 MPa"), sigma_3=_q("50 MPa")
+    ).to("MPa").magnitude == pytest.approx(0.0, abs=1e-12)
+    with pytest.raises(ValueError, match="sigma_1 must be a"):
+        octahedral_shear_stress(sigma_1=_q("100 mm"), sigma_2=_q("0 MPa"), sigma_3=_q("0 MPa"))
