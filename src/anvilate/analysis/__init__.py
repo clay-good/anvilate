@@ -14,7 +14,8 @@ modules:
   moment (solid and hollow rectangle and circle, I-section), the plastic
   collapse load (point and distributed) of a simply-supported, fixed-fixed, and
   propped-cantilever beam, and the bearing-misalignment slope (simply-supported end
-  under a central or distributed load, and cantilever tip under an end load)
+  under a central or distributed load, and cantilever tip under an end or
+  distributed load)
 - :mod:`~anvilate.analysis.beam_foundation` — beam on a continuous elastic
   foundation (Hetényi): the characteristic parameter β, and the peak deflection and
   bending moment a point load makes on a long (effectively infinite) beam
@@ -194,6 +195,7 @@ from .beam import (
     cantilever_triangular_load,
     cantilever_triangular_load_peak_at_tip,
     cantilever_uniform_load,
+    cantilever_uniform_load_tip_slope,
     circular_plastic_section_modulus,
     circular_second_moment,
     deflection_scorecard,
@@ -730,6 +732,7 @@ __all__ = [
     "simply_supported_center_load_support_slope",
     "simply_supported_uniform_load_support_slope",
     "cantilever_end_load_tip_slope",
+    "cantilever_uniform_load_tip_slope",
     "simply_supported_plastic_collapse_udl",
     "fixed_fixed_plastic_collapse_udl",
     "propped_cantilever_plastic_collapse_load",

@@ -73,6 +73,7 @@ __all__ = [
     "simply_supported_center_load_support_slope",
     "simply_supported_uniform_load_support_slope",
     "cantilever_end_load_tip_slope",
+    "cantilever_uniform_load_tip_slope",
     "simply_supported_plastic_collapse_udl",
     "fixed_fixed_plastic_collapse_udl",
     "propped_cantilever_plastic_collapse_udl",
@@ -483,6 +484,29 @@ def cantilever_end_load_tip_slope(
     ell, i, e = _slope_inputs(length, second_moment, elastic_modulus)
     f = force.to("N").magnitude
     slope_rad = f * ell**2 / (2.0 * e * i)
+    return Quantity(magnitude=degrees(slope_rad), unit="degree")
+
+
+def cantilever_uniform_load_tip_slope(
+    *,
+    load_per_length: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The free-end slope θ = w·L³/(6·E·I) of a cantilever under a uniform load.
+
+    The distributed-load counterpart of :func:`cantilever_end_load_tip_slope`: a
+    cantilever carrying a uniform ``load_per_length`` w tilts its free end by
+    θ = w·L³/(6·E·I) — the self-weight or distributed-load misalignment an overhung
+    shaft imposes on its inboard bearing, or the tilt of a boom under its own weight.
+    ``length`` L, ``second_moment`` I, and ``elastic_modulus`` E must be positive.
+    Returns the tip slope in degrees.
+    """
+    _require(load_per_length, "[force] / [length]", "load_per_length")
+    ell, i, e = _slope_inputs(length, second_moment, elastic_modulus)
+    w = load_per_length.to("N/mm").magnitude
+    slope_rad = w * ell**3 / (6.0 * e * i)
     return Quantity(magnitude=degrees(slope_rad), unit="degree")
 
 

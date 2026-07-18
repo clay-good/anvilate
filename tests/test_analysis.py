@@ -75,6 +75,7 @@ from anvilate.analysis import (
     cantilever_triangular_load,
     cantilever_triangular_load_peak_at_tip,
     cantilever_uniform_load,
+    cantilever_uniform_load_tip_slope,
     capstan_tension_ratio,
     catenary_arc_length,
     catenary_max_tension,
@@ -9769,6 +9770,27 @@ def test_simply_supported_support_slope_is_the_bearing_misalignment():
         10000 * 500**2 / (2 * 200000 * 1e6), rel=1e-12
     )
     assert radians(tip.to("degree").magnitude) == pytest.approx(0.00625, rel=1e-9)
+    # UDL cantilever tip slope theta = w*L^3/(6*E*I); for a total load w*L equal to the
+    # end point load, the distributed case slopes exactly 1/3 as much ((1/6)/(1/2)).
+    udl_tip = cantilever_uniform_load_tip_slope(
+        load_per_length=_q("20 N/mm"),
+        length=_q("0.5 m"),
+        second_moment=_q("1e6 mm**4"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert radians(udl_tip.to("degree").magnitude) == pytest.approx(
+        20 * 500**3 / (6 * 200000 * 1e6), rel=1e-12
+    )
+    assert udl_tip.to("degree").magnitude == pytest.approx(
+        tip.to("degree").magnitude / 3, rel=1e-12
+    )
+    with pytest.raises(ValueError, match="load_per_length must be a"):
+        cantilever_uniform_load_tip_slope(
+            load_per_length=_q("20 N"),
+            length=_q("0.5 m"),
+            second_moment=_q("1e6 mm**4"),
+            elastic_modulus=_q("200 GPa"),
+        )
 
 
 def test_plastic_collapse_loads_and_the_redistribution_reserve():
