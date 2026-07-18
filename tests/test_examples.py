@@ -1767,3 +1767,23 @@ def test_snap_fit_latch_example_strain_governs_not_force():
     assert fixed_by_name["root strain vs allowable"].passed
     assert "safety factor 1.50" in fixed_by_name["root strain vs allowable"].detail
     assert fixed.status is CheckStatus.PASS
+
+
+def test_o_ring_gland_fill_example_width_and_depth_are_independent():
+    namespace = runpy.run_path(str(_EXAMPLES / "o_ring_gland_fill.py"))
+    narrow = namespace["screen_gland"]()
+    by_name = {e.name: e for e in narrow.entries}
+    # The depth gives a textbook squeeze...
+    assert by_name["squeeze vs 15% floor"].passed
+    assert "safety factor 1.40" in by_name["squeeze vs 15% floor"].detail
+    # ...but the narrow groove overfills and the ring will extrude on swell.
+    assert by_name["gland fill vs 90% ceiling"].status is CheckStatus.FAIL
+    assert "safety factor 0.97" in by_name["gland fill vs 90% ceiling"].detail
+    assert narrow.status is CheckStatus.FAIL
+    # Widening the groove fixes fill without touching the (still-passing) squeeze.
+    wide = namespace["screen_widened_gland"]()
+    wide_by_name = {e.name: e for e in wide.entries}
+    assert wide_by_name["gland fill vs 90% ceiling"].passed
+    assert "safety factor 1.21" in wide_by_name["gland fill vs 90% ceiling"].detail
+    assert wide_by_name["squeeze vs 15% floor"].detail == by_name["squeeze vs 15% floor"].detail
+    assert wide.status is CheckStatus.PASS
