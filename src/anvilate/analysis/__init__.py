@@ -97,7 +97,8 @@ modules:
   of fluctuation, the inertia a speed-smoothing target requires, the rotating
   thin-rim hoop (bursting) stress, burst speed, and radial growth, the solid
   spinning disc's peak centre stress and its full radial/tangential stress
-  distribution at any radius, and the bore stress of an annular disc
+  distribution at any radius, and the annular (bored) disc's bore stress and full
+  radial/tangential distribution
 - :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads,
   bevel-gear radial/axial (thrust) resolution about the pitch cone, helical-gear
   axial thrust, radial load, and virtual tooth number, pitch-line
@@ -408,6 +409,8 @@ from .flywheel import (
     flywheel_energy_fluctuation,
     flywheel_inertia_for_fluctuation,
     rotating_annular_disc_bore_stress,
+    rotating_annular_disc_radial_stress,
+    rotating_annular_disc_tangential_stress,
     rotating_rim_burst_speed,
     rotating_rim_hoop_stress,
     rotating_rim_radial_growth,
@@ -870,6 +873,8 @@ __all__ = [
     "rotating_solid_disc_radial_stress",
     "rotating_solid_disc_tangential_stress",
     "rotating_annular_disc_bore_stress",
+    "rotating_annular_disc_radial_stress",
+    "rotating_annular_disc_tangential_stress",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

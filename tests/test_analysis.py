@@ -276,6 +276,8 @@ from anvilate.analysis import (
     reverted_train_is_coaxial,
     riveted_joint_efficiency,
     rotating_annular_disc_bore_stress,
+    rotating_annular_disc_radial_stress,
+    rotating_annular_disc_tangential_stress,
     rotating_rim_burst_speed,
     rotating_rim_hoop_stress,
     rotating_rim_radial_growth,
@@ -9306,6 +9308,35 @@ def test_rotating_annular_disc_bore_stress_doubles_the_solid_disc():
             inner_radius=_q("300 mm"),
             rotational_speed=speed,
         )
+
+
+def test_rotating_annular_disc_stress_distribution():
+    import math
+
+    kw = {
+        "density": _q("7850 kg/m**3"),
+        "outer_radius": _q("300 mm"),
+        "inner_radius": _q("100 mm"),
+        "rotational_speed": _q("3000 rpm"),
+    }
+    # The tangential stress at the bore equals the closed-form bore stress.
+    bore = rotating_annular_disc_bore_stress(**kw)
+    tang_bore = rotating_annular_disc_tangential_stress(**kw, radius=_q("100 mm"))
+    assert tang_bore.to("MPa").magnitude == pytest.approx(bore.to("MPa").magnitude, rel=1e-12)
+    # The radial stress vanishes at both free edges (bore and rim).
+    assert rotating_annular_disc_radial_stress(**kw, radius=_q("100 mm")).to(
+        "MPa"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+    assert rotating_annular_disc_radial_stress(**kw, radius=_q("300 mm")).to(
+        "MPa"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+    # ...and peaks in between at r = sqrt(Ri*Ro), above the values either side.
+    r_peak = math.sqrt(0.1 * 0.3) * 1000  # mm
+    peak = rotating_annular_disc_radial_stress(**kw, radius=_q(f"{r_peak} mm")).to("MPa").magnitude
+    lower = rotating_annular_disc_radial_stress(**kw, radius=_q("150 mm")).to("MPa").magnitude
+    assert peak > lower > 0
+    with pytest.raises(ValueError, match="radius .* must lie between the inner and outer radii"):
+        rotating_annular_disc_tangential_stress(**kw, radius=_q("50 mm"))
 
 
 def test_box_and_i_section_second_moments():

@@ -42,6 +42,8 @@ __all__ = [
     "rotating_solid_disc_radial_stress",
     "rotating_solid_disc_tangential_stress",
     "rotating_annular_disc_bore_stress",
+    "rotating_annular_disc_radial_stress",
+    "rotating_annular_disc_tangential_stress",
 ]
 
 
@@ -375,4 +377,95 @@ def rotating_annular_disc_bore_stress(
     if omega <= 0:
         raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
     sigma = rho * omega**2 / 4.0 * ((3.0 + poisson) * ro**2 + (1.0 - poisson) * ri**2)
+    return Quantity(magnitude=sigma / 1e6, unit="MPa")
+
+
+def _annular_disc_inputs(
+    density: Quantity,
+    outer_radius: Quantity,
+    inner_radius: Quantity,
+    radius: Quantity,
+    rotational_speed: Quantity,
+    poisson: float,
+) -> tuple[float, float, float, float, float]:
+    """Validate a rotating annular disc and return (rho, ro, ri, r, omega) in SI."""
+    _require(density, "[mass] / [length]**3", "density")
+    _require(outer_radius, "[length]", "outer_radius")
+    _require(inner_radius, "[length]", "inner_radius")
+    _require(radius, "[length]", "radius")
+    _require(rotational_speed, "[frequency]", "rotational_speed")
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    rho = density.to("kg/m**3").magnitude
+    ro = outer_radius.to("m").magnitude
+    ri = inner_radius.to("m").magnitude
+    r = radius.to("m").magnitude
+    omega = rotational_speed.to("rad/s").magnitude
+    if ri <= 0:
+        raise ValueError(f"inner_radius must be positive; got {inner_radius}")
+    if ro <= ri:
+        raise ValueError(f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})")
+    if omega <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    if not ri <= r <= ro:
+        raise ValueError(
+            f"radius ({radius}) must lie between the inner and outer radii "
+            f"({inner_radius}, {outer_radius})"
+        )
+    return rho, ro, ri, r, omega
+
+
+def rotating_annular_disc_radial_stress(
+    *,
+    density: Quantity,
+    outer_radius: Quantity,
+    inner_radius: Quantity,
+    radius: Quantity,
+    rotational_speed: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The radial stress at a radius in a rotating annular disc,
+    σ_r = (3 + ν)/8·ρ·ω²·(R_o² + R_i² − R_i²·R_o²/r² − r²).
+
+    The radial stress vanishes at both free edges (the bore R_i and the rim R_o) and
+    peaks in between at r = √(R_i·R_o). ``density`` ρ, ``outer_radius`` R_o,
+    ``inner_radius`` R_i, ``radius`` r (between R_i and R_o), ``rotational_speed`` ω,
+    and Poisson's ratio ``poisson`` ν describe the disc and the point. Returns the
+    radial stress in MPa.
+    """
+    rho, ro, ri, r, omega = _annular_disc_inputs(
+        density, outer_radius, inner_radius, radius, rotational_speed, poisson
+    )
+    sigma = (3.0 + poisson) / 8.0 * rho * omega**2 * (ro**2 + ri**2 - ri**2 * ro**2 / r**2 - r**2)
+    return Quantity(magnitude=sigma / 1e6, unit="MPa")
+
+
+def rotating_annular_disc_tangential_stress(
+    *,
+    density: Quantity,
+    outer_radius: Quantity,
+    inner_radius: Quantity,
+    radius: Quantity,
+    rotational_speed: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The tangential (hoop) stress at a radius in a rotating annular disc,
+    σ_θ = (3 + ν)/8·ρ·ω²·(R_o² + R_i² + R_i²·R_o²/r² − (1 + 3ν)/(3 + ν)·r²).
+
+    The tangential stress is greatest at the bore (r = R_i), where it equals the
+    :func:`rotating_annular_disc_bore_stress`, and falls monotonically to the rim.
+    ``density`` ρ, ``outer_radius`` R_o, ``inner_radius`` R_i, ``radius`` r (between
+    R_i and R_o), ``rotational_speed`` ω, and Poisson's ratio ``poisson`` ν are as in
+    :func:`rotating_annular_disc_radial_stress`. Returns the tangential stress in MPa.
+    """
+    rho, ro, ri, r, omega = _annular_disc_inputs(
+        density, outer_radius, inner_radius, radius, rotational_speed, poisson
+    )
+    sigma = (
+        (3.0 + poisson)
+        / 8.0
+        * rho
+        * omega**2
+        * (ro**2 + ri**2 + ri**2 * ro**2 / r**2 - (1.0 + 3.0 * poisson) / (3.0 + poisson) * r**2)
+    )
     return Quantity(magnitude=sigma / 1e6, unit="MPa")
