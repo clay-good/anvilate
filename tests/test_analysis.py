@@ -63,6 +63,7 @@ from anvilate.analysis import (
     cantilever_offset_load,
     cantilever_offset_moment,
     cantilever_partial_uniform_load,
+    cantilever_tip_mass_frequency,
     cantilever_triangular_load,
     cantilever_triangular_load_peak_at_tip,
     cantilever_uniform_load,
@@ -5719,6 +5720,39 @@ def test_rayleigh_frequency_from_self_weight_deflection():
     # fn = (1/2pi)*sqrt(g/delta); delta = 12.5 mm -> 4.458 Hz.
     fn = natural_frequency_from_deflection(_q("12.5 mm"))
     assert fn.to("Hz").magnitude == pytest.approx(4.458, rel=1e-3)
+
+
+def test_cantilever_tip_mass_frequency_with_beam_mass_correction():
+    from math import pi, sqrt
+
+    kw = {
+        "elastic_modulus": _q("200 GPa"),
+        "second_moment": _q("1e4 mm**4"),
+        "length": _q("100 mm"),
+        "tip_mass": _q("0.1 kg"),
+    }
+    k_si = 3 * 200e3 * 1e4 / 100**3 * 1000  # k = 3EI/L^3 in N/m
+    # Massless-beam limit: f = (1/2pi)*sqrt(k/m_tip).
+    massless = cantilever_tip_mass_frequency(**kw)
+    assert massless.to("Hz").magnitude == pytest.approx(sqrt(k_si / 0.1) / (2 * pi), rel=1e-12)
+    # It equals the plain SDOF frequency at that stiffness.
+    assert massless.to("Hz").magnitude == pytest.approx(
+        natural_frequency(stiffness=_q(f"{k_si} N/m"), mass=_q("0.1 kg")).to("Hz").magnitude,
+        rel=1e-12,
+    )
+    # Including the beam's own mass adds 33/140 of it to the effective mass, which
+    # lowers the frequency.
+    with_beam = cantilever_tip_mass_frequency(**kw, beam_mass=_q("0.05 kg"))
+    m_eff = 0.1 + (33 / 140) * 0.05
+    assert with_beam.to("Hz").magnitude == pytest.approx(sqrt(k_si / m_eff) / (2 * pi), rel=1e-12)
+    assert with_beam.to("Hz").magnitude < massless.to("Hz").magnitude
+    with pytest.raises(ValueError, match="tip_mass must be positive"):
+        cantilever_tip_mass_frequency(
+            elastic_modulus=_q("200 GPa"),
+            second_moment=_q("1e4 mm**4"),
+            length=_q("100 mm"),
+            tip_mass=_q("0 kg"),
+        )
 
 
 def test_dunkerley_combines_individual_frequencies():

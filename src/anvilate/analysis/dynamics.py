@@ -34,6 +34,7 @@ __all__ = [
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",
+    "cantilever_tip_mass_frequency",
     "string_natural_frequency",
     "damped_natural_frequency",
     "logarithmic_decrement",
@@ -119,6 +120,50 @@ def natural_frequency_from_deflection(
     if delta <= 0:
         raise ValueError(f"static_deflection must be positive; got {static_deflection}")
     return Quantity(magnitude=sqrt(g / delta) / (2 * pi), unit="Hz")
+
+
+def cantilever_tip_mass_frequency(
+    *,
+    elastic_modulus: Quantity,
+    second_moment: Quantity,
+    length: Quantity,
+    tip_mass: Quantity,
+    beam_mass: Quantity | None = None,
+) -> Quantity:
+    """The fundamental frequency of a cantilever carrying a concentrated tip mass.
+
+    A mass on the end of a cantilever beam — an accelerometer proof mass, a valve on
+    a reed, an antenna on a mast — bounces on the beam's bending stiffness
+    k = 3·E·I/L³ at f = (1/2π)·√(k/m_eff). The effective mass includes the tip mass
+    plus the Rayleigh share of the beam's own mass, m_eff = m_tip + (33/140)·m_beam
+    (the 33/140 ≈ 0.236 factor is the exact integral of the static cantilever
+    deflection shape). ``elastic_modulus`` E, ``second_moment`` I, and ``length`` L
+    set the stiffness, ``tip_mass`` m_tip is the end load, and ``beam_mass`` m_beam
+    (default 0, the massless-beam limit) the beam's own mass. The positive quantities
+    must be positive. Returns the fundamental frequency in hertz.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(length, "[length]", "length")
+    _require(tip_mass, "[mass]", "tip_mass")
+    e = elastic_modulus.to("MPa").magnitude  # N/mm^2
+    i = second_moment.to("mm**4").magnitude
+    ell = length.to("mm").magnitude
+    m_tip = tip_mass.to("kg").magnitude
+    if e <= 0 or i <= 0 or ell <= 0:
+        raise ValueError("elastic_modulus, second_moment, and length must be positive")
+    if m_tip <= 0:
+        raise ValueError(f"tip_mass must be positive; got {tip_mass}")
+    m_beam = 0.0
+    if beam_mass is not None:
+        _require(beam_mass, "[mass]", "beam_mass")
+        m_beam = beam_mass.to("kg").magnitude
+        if m_beam < 0:
+            raise ValueError(f"beam_mass must be non-negative; got {beam_mass}")
+    stiffness = 3.0 * e * i / ell**3  # N/mm
+    stiffness_si = stiffness * 1000.0  # N/m
+    m_eff = m_tip + (33.0 / 140.0) * m_beam
+    return Quantity(magnitude=sqrt(stiffness_si / m_eff) / (2 * pi), unit="Hz")
 
 
 def string_natural_frequency(
