@@ -17,7 +17,7 @@ returns the factor of safety against yield.
 
 from __future__ import annotations
 
-from math import sqrt
+from math import atan2, degrees, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -30,6 +30,7 @@ __all__ = [
     "von_mises_principal",
     "octahedral_shear_stress",
     "principal_stresses_plane",
+    "principal_angle_plane",
     "max_shear_stress_plane",
     "tresca_equivalent_stress",
     "tresca_principal",
@@ -183,6 +184,29 @@ def principal_stresses_plane(
         Quantity(magnitude=centre + radius, unit="MPa"),
         Quantity(magnitude=centre - radius, unit="MPa"),
     )
+
+
+def principal_angle_plane(
+    *,
+    sigma_x: Quantity,
+    sigma_y: Quantity,
+    tau_xy: Quantity,
+) -> Quantity:
+    """The orientation of the major principal stress in a plane-stress state.
+
+    The principal stresses (:func:`principal_stresses_plane`) act on planes rotated
+    from the x-axis by θ_p = ½·atan2(2·τxy, σx − σy) — the angle at which the shear
+    stress vanishes and the *major* principal σ₁ acts. This is what turns a
+    strain-gauge rosette or a combined-loading state into a physical direction, and it
+    locates the plane a brittle crack opens on. ``sigma_x`` σx, ``sigma_y`` σy, and
+    ``tau_xy`` τxy are the plane-stress components; the maximum-shear planes lie at
+    θ_p ± 45°. The quadrant-aware atan2 returns θ_p in (−90°, 90°] — for pure shear
+    it is 45°, for a uniaxial σx it is 0°. Returns the angle in degrees.
+    """
+    sx = _require_stress(sigma_x, "sigma_x")
+    sy = _require_stress(sigma_y, "sigma_y")
+    txy = _require_stress(tau_xy, "tau_xy")
+    return Quantity(magnitude=0.5 * degrees(atan2(2.0 * txy, sx - sy)), unit="degree")
 
 
 def max_shear_stress_plane(

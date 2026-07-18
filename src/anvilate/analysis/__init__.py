@@ -152,7 +152,9 @@ modules:
   (hollow-cylinder) polar mass moments of inertia;
   and the Den Hartog tuned-mass-damper optimal tuning
 - :mod:`~anvilate.analysis.stress` — von Mises and octahedral-shear combination,
-  combined axial+bending, and the Inglis elliptical-hole stress-concentration factor
+  the plane principal stresses and their orientation angle, the maximum shear,
+  Tresca, combined axial+bending, and the Inglis elliptical-hole
+  stress-concentration factor
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
   stress-intensity factor, the critical crack length for fast fracture, and the
   Paris-Erdogan fatigue crack-growth rate and integrated propagation life
@@ -601,6 +603,7 @@ from .stress import (
     elliptical_hole_stress_concentration,
     max_shear_stress_plane,
     octahedral_shear_stress,
+    principal_angle_plane,
     principal_stresses_plane,
     strength_scorecard,
     tresca_equivalent_stress,
@@ -1058,6 +1061,7 @@ __all__ = [
     "von_mises_principal",
     "octahedral_shear_stress",
     "principal_stresses_plane",
+    "principal_angle_plane",
     "max_shear_stress_plane",
     "tresca_equivalent_stress",
     "tresca_principal",

@@ -262,6 +262,7 @@ from anvilate.analysis import (
     power_screw_lower_torque,
     power_screw_raise_torque,
     preloaded_bolt_cyclic_stress,
+    principal_angle_plane,
     principal_stresses_plane,
     profile_shift_sum_for_center_distance,
     propped_cantilever_plastic_collapse_load,
@@ -6795,6 +6796,28 @@ def test_principal_stresses_and_tresca_worked_example():
     assert tau_max.to("MPa").magnitude == pytest.approx(70.711, rel=1e-4)
     tresca = tresca_equivalent_stress(**kw)
     assert tresca.to("MPa").magnitude == pytest.approx(141.421, rel=1e-4)
+    # The major principal acts at theta_p = 0.5*atan2(2*tau, sx-sy) = 22.5 deg
+    # from the x-axis for this state.
+    theta = principal_angle_plane(**kw)
+    assert theta.to("degree").magnitude == pytest.approx(22.5, rel=1e-4)
+
+
+def test_principal_angle_plane_special_cases():
+    from math import atan2, degrees
+
+    # Pure shear: principal stresses lie at +-45 deg.
+    assert principal_angle_plane(sigma_x=_q("0 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("50 MPa")).to(
+        "degree"
+    ).magnitude == pytest.approx(45.0, rel=1e-9)
+    # Uniaxial along x: the principal axis is the x-axis (0 deg).
+    assert principal_angle_plane(sigma_x=_q("100 MPa"), sigma_y=_q("0 MPa"), tau_xy=_q("0 MPa")).to(
+        "degree"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+    # General state matches the closed form.
+    kw = {"sigma_x": _q("120 MPa"), "sigma_y": _q("40 MPa"), "tau_xy": _q("30 MPa")}
+    assert principal_angle_plane(**kw).to("degree").magnitude == pytest.approx(
+        0.5 * degrees(atan2(2 * 30, 120 - 40)), rel=1e-12
+    )
 
 
 def test_tresca_is_never_below_von_mises():
