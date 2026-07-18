@@ -1941,3 +1941,23 @@ def test_press_fit_gear_capstone_grip_governs():
     assert longer_by_name["fit grip (slip) vs required torque"].passed
     assert "safety factor 1.40" in longer_by_name["fit grip (slip) vs required torque"].detail
     assert longer.status is CheckStatus.PASS
+
+
+def test_rotating_shaft_fatigue_capstone_fatigue_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "rotating_shaft_fatigue.py"))
+    card = namespace["screen_shaft"]()
+    by_name = {e.name: e for e in card.entries}
+    assert card.status is CheckStatus.PASS
+    # Statically robust...
+    assert by_name["static yield (keyway peak)"].passed
+    assert "safety factor 3.31" in by_name["static yield (keyway peak)"].detail
+    # ...but the fatigue margin is less than half, and it governs the shaft's life.
+    assert by_name["fatigue (Goodman, fully reversed)"].passed
+    assert "safety factor 1.35" in by_name["fatigue (Goodman, fully reversed)"].detail
+    static_sf = float(
+        by_name["static yield (keyway peak)"].detail.split("safety factor ")[1].split(" ")[0]
+    )
+    fatigue_sf = float(
+        by_name["fatigue (Goodman, fully reversed)"].detail.split("safety factor ")[1].split(" ")[0]
+    )
+    assert fatigue_sf < static_sf / 2
