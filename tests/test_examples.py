@@ -1343,3 +1343,19 @@ def test_bevel_gear_thrust_example_loads_the_gear_shaft_harder():
     assert gear.status is CheckStatus.FAIL
     assert "safety factor 0.92" in gear.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_indexing_table_example_runs_out_of_dwell():
+    namespace = runpy.run_path(str(_EXAMPLES / "indexing_table_stations.py"))
+    card = namespace["screen_indexing_table"]()
+    by_name = {e.name: e for e in card.entries}
+    # 6 stations leave just enough dwell for the operation...
+    six = by_name["6 stations"]
+    assert six.passed
+    assert "safety factor 1.05" in six.detail
+    # ...but adding stations steals dwell until the operation no longer fits.
+    assert by_name["8 stations"].status is CheckStatus.FAIL
+    twelve = by_name["12 stations"]
+    assert twelve.status is CheckStatus.FAIL
+    assert "safety factor 0.92" in twelve.detail
+    assert card.status is CheckStatus.FAIL
