@@ -167,6 +167,10 @@ modules:
   the steel endurance-limit estimate with its Marin correction to the real
   part, the Basquin S-N finite-life law, and
   Palmgren-Miner cumulative damage over a load spectrum
+- :mod:`~anvilate.analysis.sheetmetal` — sheet-metal bending flat-pattern geometry:
+  the neutral-axis radius and bend allowance (K-factor), the outside setback and
+  bend deduction, the developed blank length of a multi-bend strip, the minimum
+  bend radius a material's ductility allows, and the air (V-die) bending force
 
 Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
@@ -571,6 +575,15 @@ from .scotch_yoke import (
     scotch_yoke_velocity,
 )
 from .section import CrossSection, bending_stress, required_section_modulus
+from .sheetmetal import (
+    air_bending_force,
+    bend_allowance,
+    bend_deduction,
+    flat_pattern_length,
+    minimum_bend_radius,
+    neutral_axis_radius,
+    outside_setback,
+)
 from .slider_crank import (
     slider_crank_acceleration,
     slider_crank_displacement,
@@ -740,6 +753,13 @@ __all__ = [
     "CrossSection",
     "bending_stress",
     "required_section_modulus",
+    "neutral_axis_radius",
+    "bend_allowance",
+    "outside_setback",
+    "bend_deduction",
+    "flat_pattern_length",
+    "minimum_bend_radius",
+    "air_bending_force",
     "RivetedJointStrength",
     "riveted_joint_efficiency",
     "max_transverse_shear_stress",

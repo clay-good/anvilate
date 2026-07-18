@@ -10514,3 +10514,66 @@ def test_beam_on_elastic_foundation_rejects_bad_inputs():
         )
     with pytest.raises(ValueError, match="load must be positive"):
         beam_on_elastic_foundation_max_deflection(load=_q("0 kN"), **good)
+
+
+def test_sheetmetal_bend_geometry_is_self_consistent():
+    from math import radians
+
+    from anvilate.analysis import sheetmetal as sm
+
+    kw = {"inner_radius": _q("1 mm"), "thickness": _q("1 mm"), "k_factor": 0.44}
+    # A 90-degree bend: neutral axis at R + K*t, BA = (pi/2)*R_n.
+    r_n = sm.neutral_axis_radius(**kw)
+    assert r_n.to("mm").magnitude == pytest.approx(1.44, rel=1e-12)
+    ba = sm.bend_allowance(bend_angle=90, **kw)
+    assert ba.to("mm").magnitude == pytest.approx(radians(90) * 1.44, rel=1e-12)
+    ossb = sm.outside_setback(bend_angle=90, inner_radius=_q("1 mm"), thickness=_q("1 mm"))
+    assert ossb.to("mm").magnitude == pytest.approx(2.0, rel=1e-12)  # (R+t)*tan45 = 2
+    bd = sm.bend_deduction(bend_angle=90, **kw)
+    assert bd.to("mm").magnitude == pytest.approx(2 * 2.0 - ba.to("mm").magnitude, rel=1e-12)
+    # The two flat-length routes agree exactly: tangent flanges + BA == outside - BD.
+    flat_tangent = sm.flat_pattern_length(
+        flange_lengths=[_q("18 mm"), _q("18 mm")], bend_angle=90, **kw
+    )
+    outside_route = 40.0 - bd.to("mm").magnitude
+    assert flat_tangent.to("mm").magnitude == pytest.approx(outside_route, rel=1e-12)
+    assert flat_tangent.to("mm").magnitude == pytest.approx(
+        18 + 18 + ba.to("mm").magnitude, rel=1e-12
+    )
+
+
+def test_sheetmetal_minimum_bend_radius_and_air_force():
+    from anvilate.analysis import sheetmetal as sm
+
+    # R_min/t = 50/r - 1: a marginal r=10% needs 4t; a ductile r>=50% bends dead sharp.
+    assert sm.minimum_bend_radius(thickness=_q("2 mm"), reduction_of_area_percent=10).to(
+        "mm"
+    ).magnitude == pytest.approx(8.0, rel=1e-12)
+    assert (
+        sm.minimum_bend_radius(thickness=_q("2 mm"), reduction_of_area_percent=60)
+        .to("mm")
+        .magnitude
+        == 0.0
+    )
+    # Air bend: F = k*sigma_u*L*t^2/V; 1.33*400*1000*4/16 = 133000 N = 133 kN.
+    f = sm.air_bending_force(
+        ultimate_tensile_strength=_q("400 MPa"),
+        bend_length=_q("1000 mm"),
+        thickness=_q("2 mm"),
+        die_opening=_q("16 mm"),
+    )
+    assert f.to("kN").magnitude == pytest.approx(133.0, rel=1e-12)
+    # Doubling thickness quadruples the force (t^2 law).
+    f2 = sm.air_bending_force(
+        ultimate_tensile_strength=_q("400 MPa"),
+        bend_length=_q("1000 mm"),
+        thickness=_q("4 mm"),
+        die_opening=_q("16 mm"),
+    )
+    assert f2.to("kN").magnitude == pytest.approx(4 * 133.0, rel=1e-12)
+    with pytest.raises(ValueError, match="bend_angle must be in"):
+        sm.bend_allowance(
+            bend_angle=200, inner_radius=_q("1 mm"), thickness=_q("1 mm"), k_factor=0.4
+        )
+    with pytest.raises(ValueError, match="k_factor must be in"):
+        sm.neutral_axis_radius(inner_radius=_q("1 mm"), thickness=_q("1 mm"), k_factor=0.9)
