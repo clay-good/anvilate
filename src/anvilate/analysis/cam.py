@@ -43,7 +43,7 @@ __all__ = [
     "cam_follower_motion",
 ]
 
-_PROFILES = ("shm", "cycloidal", "parabolic")
+_PROFILES = ("shm", "cycloidal", "parabolic", "poly345")
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
@@ -81,9 +81,11 @@ def cam_follower_motion(
 
     ``profile`` selects the motion law — ``"shm"`` (simple harmonic, smooth
     velocity but finite end acceleration), ``"cycloidal"`` (acceleration zero at
-    both ends, smoother but higher peak), or ``"parabolic"`` (constant
-    acceleration each half — the lowest peak, but with jerk steps). ``rise`` L is
-    the total lift, ``cam_angle``
+    both ends, smoother but higher peak), ``"parabolic"`` (constant acceleration
+    each half — the lowest peak, but with jerk steps), or ``"poly345"`` (the
+    3-4-5 polynomial, zero velocity and acceleration at both ends with bounded
+    jerk — the workhorse high-speed profile). ``rise`` L is the total lift,
+    ``cam_angle``
     θ the current angle measured from the start of the rise, and ``rise_angle`` β the
     angle over which the full lift happens (both in **degrees**, 0 ≤ θ ≤ β).
     ``cam_speed`` ω is the cam's rotational speed (rpm or rad/s). The velocity and
@@ -119,7 +121,7 @@ def cam_follower_motion(
         y = ell * (frac - sin(2.0 * pi * frac) / (2.0 * pi))
         dy_dtheta = (ell / beta) * (1.0 - cos(2.0 * pi * frac))
         d2y_dtheta2 = (ell / beta**2) * (2.0 * pi * sin(2.0 * pi * frac))
-    else:  # parabolic (constant acceleration each half)
+    elif profile == "parabolic":  # constant acceleration each half
         if frac <= 0.5:
             y = 2.0 * ell * frac**2
             dy_dtheta = 4.0 * ell * frac / beta
@@ -128,6 +130,10 @@ def cam_follower_motion(
             y = ell * (1.0 - 2.0 * (1.0 - frac) ** 2)
             dy_dtheta = 4.0 * ell * (1.0 - frac) / beta
             d2y_dtheta2 = -4.0 * ell / beta**2
+    else:  # poly345 (3-4-5 polynomial)
+        y = ell * (10.0 * frac**3 - 15.0 * frac**4 + 6.0 * frac**5)
+        dy_dtheta = (ell / beta) * (30.0 * frac**2 - 60.0 * frac**3 + 30.0 * frac**4)
+        d2y_dtheta2 = (ell / beta**2) * (60.0 * frac - 180.0 * frac**2 + 120.0 * frac**3)
     return CamMotion(
         displacement=Quantity(magnitude=y * 1000.0, unit="mm"),
         velocity=Quantity(magnitude=dy_dtheta * omega, unit="m/s"),

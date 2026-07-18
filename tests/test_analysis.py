@@ -7301,3 +7301,41 @@ def test_cam_parabolic_profile_has_the_lowest_constant_acceleration():
     shm_peak = (ell / 2.0) * (pi / beta) ** 2 * omega**2
     cyc_peak = (ell / beta**2) * 2.0 * pi * omega**2
     assert a_const < shm_peak < cyc_peak
+
+
+def test_cam_poly345_profile_is_smooth_at_both_ends():
+    from math import pi
+
+    kw = {"rise": _q("20 mm"), "rise_angle": 90.0, "cam_speed": _q("600 rpm")}
+    ell = 0.020
+    beta = pi / 2.0
+    omega = 600 * 2 * pi / 60.0
+    # The 3-4-5 polynomial has zero velocity AND acceleration at both ends,
+    # like cycloidal but with a polynomial (bounded-jerk) form.
+    start = cam_follower_motion(profile="poly345", cam_angle=0.0, **kw)
+    end = cam_follower_motion(profile="poly345", cam_angle=90.0, **kw)
+    assert start.displacement.to("mm").magnitude == pytest.approx(0.0, abs=1e-12)
+    assert start.velocity.to("m/s").magnitude == pytest.approx(0.0, abs=1e-12)
+    assert start.acceleration.to("m/s**2").magnitude == pytest.approx(0.0, abs=1e-12)
+    assert end.displacement.to("mm").magnitude == pytest.approx(20.0, rel=1e-9)
+    assert end.velocity.to("m/s").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert end.acceleration.to("m/s**2").magnitude == pytest.approx(0.0, abs=1e-9)
+    # Midpoint: half lift, and acceleration crosses zero there.
+    mid = cam_follower_motion(profile="poly345", cam_angle=45.0, **kw)
+    assert mid.displacement.to("mm").magnitude == pytest.approx(10.0, rel=1e-9)
+    assert mid.acceleration.to("m/s**2").magnitude == pytest.approx(0.0, abs=1e-9)
+    # Its peak acceleration sits between SHM and cycloidal (~5.77 L/beta^2 omega^2).
+    peak = 0.0
+    step = 0
+    while step <= 90:
+        a = abs(
+            cam_follower_motion(profile="poly345", cam_angle=float(step), **kw)
+            .acceleration.to("m/s**2")
+            .magnitude
+        )
+        peak = max(peak, a)
+        step += 1
+    shm_peak = (ell / 2.0) * (pi / beta) ** 2 * omega**2
+    cyc_peak = (ell / beta**2) * 2.0 * pi * omega**2
+    assert shm_peak < peak < cyc_peak
+    assert peak == pytest.approx(5.7735 * ell / beta**2 * omega**2, rel=1e-3)
