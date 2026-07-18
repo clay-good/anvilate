@@ -32,6 +32,7 @@ __all__ = [
     "cylinder_retract_force",
     "cylinder_extend_speed",
     "cylinder_retract_speed",
+    "cylinder_rodside_intensified_pressure",
 ]
 
 
@@ -134,3 +135,31 @@ def cylinder_retract_speed(
     if q <= 0:
         raise ValueError(f"flow_rate must be positive; got {flow_rate}")
     return Quantity(magnitude=q / (pi / 4.0 * (bore**2 - rod**2)), unit="mm/s")
+
+
+def cylinder_rodside_intensified_pressure(
+    *, supply_pressure: Quantity, bore_diameter: Quantity, rod_diameter: Quantity
+) -> Quantity:
+    """The rod-side pressure p·D²/(D² − d²) a driven, blocked cylinder intensifies to.
+
+    A cylinder pressurised on the bore side while its rod-side flow is restricted or blocked
+    (a meter-out circuit, a stalled retract, a regeneration deadhead) traps the rod-side oil,
+    and force balance across the piston raises its pressure by the *area ratio*: the same
+    force acts over the smaller annular area, so p_rod = ``supply_pressure``·D²/(D² − d²) for
+    ``bore_diameter`` D and ``rod_diameter`` d. A small rod barely intensifies; a fat rod can
+    double or triple the pressure. This is the over-pressure that bursts a rod-side seal or
+    hose rated only for the supply — check it against their rating, not the pump pressure.
+    All inputs must be positive and d < D. Returns the intensified pressure in the supply's
+    pressure units.
+    """
+    if not supply_pressure.has_dimension("[pressure]"):
+        raise ValueError(
+            f"supply_pressure must be a [pressure] quantity; got {supply_pressure.dimensionality}"
+        )
+    p = supply_pressure.to("MPa").magnitude
+    bore = _bore(bore_diameter)
+    rod = _rod(rod_diameter, bore)
+    if p <= 0:
+        raise ValueError(f"supply_pressure must be positive; got {supply_pressure}")
+    intensified = p * bore**2 / (bore**2 - rod**2)
+    return Quantity(magnitude=intensified, unit="MPa")

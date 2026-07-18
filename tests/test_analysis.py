@@ -11133,3 +11133,23 @@ def test_belt_tight_tension_for_power_inverts_the_transmitted_power():
         belt_tight_tension_for_power(
             power=_q("5 kN"), belt_speed=_q("10 m/s"), friction_coefficient=0.3, wrap_angle=2.9
         )
+
+
+def test_cylinder_rodside_pressure_intensification():
+    from anvilate.analysis import cylinder_rodside_intensified_pressure
+
+    # p_rod = p * D^2/(D^2 - d^2): a 63/36 cylinder intensifies 100 bar to ~148 bar.
+    intensified = cylinder_rodside_intensified_pressure(
+        supply_pressure=_q("10 MPa"), bore_diameter=_q("63 mm"), rod_diameter=_q("36 mm")
+    )
+    assert intensified.to("MPa").magnitude == pytest.approx(10 * 63**2 / (63**2 - 36**2), rel=1e-12)
+    assert intensified.to("MPa").magnitude > 10  # always above supply
+    # A fatter rod intensifies harder (less annular area to carry the same force).
+    fatter = cylinder_rodside_intensified_pressure(
+        supply_pressure=_q("10 MPa"), bore_diameter=_q("63 mm"), rod_diameter=_q("45 mm")
+    )
+    assert fatter.to("MPa").magnitude > intensified.to("MPa").magnitude
+    with pytest.raises(ValueError, match="rod_diameter .* must be smaller than the bore"):
+        cylinder_rodside_intensified_pressure(
+            supply_pressure=_q("10 MPa"), bore_diameter=_q("40 mm"), rod_diameter=_q("40 mm")
+        )

@@ -85,8 +85,8 @@ modules:
   mechanism geometry: index angle, crank and driven engagement radii, and the
   advance/dwell fraction of the cycle
 - :mod:`~anvilate.analysis.hydraulic_cylinder` — fluid-cylinder actuator sizing:
-  the extend and retract force (bore vs annular area) and the extend and retract
-  speed from the supply flow (the rod-side asymmetry)
+  the extend and retract force (bore vs annular area), the extend and retract speed
+  from the supply flow, and the rod-side pressure intensification of a blocked stroke
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -545,6 +545,7 @@ from .hydraulic_cylinder import (
     cylinder_extend_speed,
     cylinder_retract_force,
     cylinder_retract_speed,
+    cylinder_rodside_intensified_pressure,
 )
 from .impact import (
     SUDDENLY_APPLIED_FACTOR,
@@ -910,6 +911,7 @@ __all__ = [
     "cylinder_retract_force",
     "cylinder_extend_speed",
     "cylinder_retract_speed",
+    "cylinder_rodside_intensified_pressure",
     "slider_crank_displacement",
     "slider_crank_velocity",
     "slider_crank_acceleration",
