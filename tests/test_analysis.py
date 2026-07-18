@@ -10683,3 +10683,29 @@ def test_snap_fit_strain_deflection_and_forces_are_consistent():
         sf.snap_fit_mating_force(deflection_force=p, insertion_angle=80, friction_coefficient=0.3)
     with pytest.raises(ValueError, match="permissible_strain must be positive"):
         sf.snap_fit_permissible_deflection(permissible_strain=0, **geom)
+
+
+def test_o_ring_gland_squeeze_fill_and_stretch():
+    from math import pi
+
+    from anvilate.analysis import o_ring as o
+
+    # AS568-214 style gland: CS=3.53, gland depth 2.79, groove width 4.7.
+    squeeze = o.o_ring_squeeze_fraction(
+        cross_section_diameter=_q("3.53 mm"), gland_depth=_q("2.79 mm")
+    )
+    assert squeeze == pytest.approx((3.53 - 2.79) / 3.53, rel=1e-12)
+    assert 0.15 < squeeze < 0.30  # a healthy static-seal squeeze
+    fill = o.o_ring_gland_fill_fraction(
+        cross_section_diameter=_q("3.53 mm"), gland_depth=_q("2.79 mm"), groove_width=_q("4.7 mm")
+    )
+    assert fill == pytest.approx((pi * 3.53**2 / 4) / (2.79 * 4.7), rel=1e-12)
+    assert 0.60 < fill < 0.85  # leaves room for swell, does not overfill
+    stretch = o.o_ring_stretch_fraction(inner_diameter=_q("24.99 mm"), groove_diameter=_q("26 mm"))
+    assert stretch == pytest.approx((26 - 24.99) / 24.99, rel=1e-12)
+    assert stretch < 0.05
+    # A gland deeper than the cross-section applies no squeeze -> rejected.
+    with pytest.raises(ValueError, match="must be less than cross_section_diameter"):
+        o.o_ring_squeeze_fraction(cross_section_diameter=_q("3.53 mm"), gland_depth=_q("3.6 mm"))
+    with pytest.raises(ValueError, match="must be at least the O-ring inner_diameter"):
+        o.o_ring_stretch_fraction(inner_diameter=_q("25 mm"), groove_diameter=_q("24 mm"))

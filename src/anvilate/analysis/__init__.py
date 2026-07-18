@@ -124,6 +124,9 @@ modules:
   eccentrically-loaded shear group (AISC elastic method)
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, and the
   key length a torque requires
+- :mod:`~anvilate.analysis.o_ring` — O-ring gland design geometry: the squeeze,
+  gland-fill, and stretch fractions a groove must keep in band to seal without
+  extruding or over-straining the ring
 - :mod:`~anvilate.analysis.weld` — fillet-weld throat shear, the weld leg a
   load requires, and the peak throat stress of an eccentrically-loaded weld group
   (AISC elastic method)
@@ -530,6 +533,11 @@ from .keys import (
     key_length_for_torque,
     key_shear_stress,
     key_tangential_force,
+)
+from .o_ring import (
+    o_ring_gland_fill_fraction,
+    o_ring_squeeze_fraction,
+    o_ring_stretch_fraction,
 )
 from .plate import (
     PlateBendingResult,
@@ -1008,6 +1016,9 @@ __all__ = [
     "key_bearing_stress",
     "KeyLengthRequirement",
     "key_length_for_torque",
+    "o_ring_squeeze_fraction",
+    "o_ring_gland_fill_fraction",
+    "o_ring_stretch_fraction",
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",
