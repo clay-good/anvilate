@@ -111,7 +111,8 @@ modules:
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
   stress-intensity factor and the critical crack length for fast fracture
 - :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
-  the max/min → amplitude/mean cyclic-stress converter, the fatigue notch factor,
+  the max/min → amplitude/mean cyclic-stress converter, the fatigue notch factor
+  (with the Neuber and Peterson notch sensitivities that feed it),
   the steel endurance-limit estimate with its Marin correction to the real
   part, the Basquin S-N finite-life law, and
   Palmgren-Miner cumulative damage over a load spectrum
@@ -305,6 +306,8 @@ from .fatigue import (
     marin_endurance_limit,
     miner_cumulative_damage,
     miner_spectrum_repeats_to_failure,
+    neuber_notch_sensitivity,
+    peterson_notch_sensitivity,
     soderberg_safety_factor,
     soderberg_scorecard,
 )
@@ -680,6 +683,8 @@ __all__ = [
     "estimated_endurance_limit",
     "marin_endurance_limit",
     "fatigue_notch_factor",
+    "neuber_notch_sensitivity",
+    "peterson_notch_sensitivity",
     "coefficient_of_fluctuation",
     "flywheel_energy_fluctuation",
     "flywheel_inertia_for_fluctuation",

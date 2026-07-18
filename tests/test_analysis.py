@@ -178,12 +178,14 @@ from anvilate.analysis import (
     minimum_teeth_to_avoid_undercut,
     natural_frequency,
     natural_frequency_from_deflection,
+    neuber_notch_sensitivity,
     overhang_tip_load,
     overhang_uniform_load,
     parabolic_cable_length,
     parabolic_cable_max_tension,
     parabolic_cable_sag,
     perry_robertson_stress,
+    peterson_notch_sensitivity,
     petroff_friction_power,
     petroff_friction_torque,
     pitch_line_velocity,
@@ -8349,3 +8351,34 @@ def test_triangular_bar_torsion():
     assert theta.to("rad").magnitude == pytest.approx(expected_rad, rel=1e-9)
     with pytest.raises(ValueError, match="side_length must be positive"):
         triangular_bar_torsional_stress(torque=_q("500 N*m"), side_length=_q("0 mm"))
+
+
+def test_notch_sensitivity_neuber_and_peterson():
+    from math import sqrt
+
+    # Neuber q = 1/(1 + sqrt(a)/sqrt(r)); blunt notch -> q near 1.
+    n = neuber_notch_sensitivity(notch_radius=_q("2 mm"), neuber_constant=_q("0.25 mm**0.5"))
+    assert n == pytest.approx(1 / (1 + 0.25 / sqrt(2.0)), rel=1e-12)
+    assert n == pytest.approx(0.8498, rel=1e-3)
+    # q = 0.5 when sqrt(r) = sqrt(a), i.e. r = a^2 = 0.0625 mm.
+    assert neuber_notch_sensitivity(
+        notch_radius=_q("0.0625 mm"), neuber_constant=_q("0.25 mm**0.5")
+    ) == pytest.approx(0.5, rel=1e-12)
+    # Peterson q = 1/(1 + a/r); q = 0.5 at r = a, climbs toward 1 for a blunt notch.
+    assert peterson_notch_sensitivity(
+        notch_radius=_q("0.5 mm"), peterson_constant=_q("0.5 mm")
+    ) == pytest.approx(0.5, rel=1e-12)
+    assert peterson_notch_sensitivity(
+        notch_radius=_q("5 mm"), peterson_constant=_q("0.5 mm")
+    ) == pytest.approx(10 / 11, rel=1e-12)
+    # A blunter notch is more sensitive; both q stay in [0, 1].
+    assert (
+        neuber_notch_sensitivity(notch_radius=_q("10 mm"), neuber_constant=_q("0.25 mm**0.5")) > n
+    )
+    # They feed the notch factor: K_f = 1 + q*(K_t - 1).
+    kf = fatigue_notch_factor(kt=2.5, notch_sensitivity=n)
+    assert kf == pytest.approx(1 + n * 1.5, rel=1e-12)
+    with pytest.raises(ValueError, match="neuber_constant must be a"):
+        neuber_notch_sensitivity(notch_radius=_q("2 mm"), neuber_constant=_q("0.25 mm"))
+    with pytest.raises(ValueError, match="notch_radius must be positive"):
+        peterson_notch_sensitivity(notch_radius=_q("0 mm"), peterson_constant=_q("0.5 mm"))

@@ -35,6 +35,8 @@ __all__ = [
     "estimated_endurance_limit",
     "marin_endurance_limit",
     "fatigue_notch_factor",
+    "neuber_notch_sensitivity",
+    "peterson_notch_sensitivity",
     "goodman_safety_factor",
     "goodman_scorecard",
     "soderberg_safety_factor",
@@ -59,6 +61,13 @@ def _require_stress(value: Quantity, name: str) -> float:
             f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
         )
     return value.to("MPa").magnitude
+
+
+def _require_length(value: Quantity, name: str) -> None:
+    if not value.has_dimension("[length]"):
+        raise ValueError(
+            f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
+        )
 
 
 class CyclicStress(BaseModel):
@@ -94,6 +103,56 @@ def fatigue_notch_factor(*, kt: float, notch_sensitivity: float) -> float:
     if not 0 <= notch_sensitivity <= 1:
         raise ValueError(f"notch_sensitivity must lie in [0, 1]; got {notch_sensitivity}")
     return 1.0 + notch_sensitivity * (kt - 1.0)
+
+
+def neuber_notch_sensitivity(*, notch_radius: Quantity, neuber_constant: Quantity) -> float:
+    """The Neuber notch sensitivity q = 1/(1 + √a/√r) from the notch radius.
+
+    Instead of guessing the notch sensitivity q for :func:`fatigue_notch_factor`,
+    Neuber's rule derives it from the notch geometry: q = 1/(1 + √a/√r), where
+    ``notch_radius`` r is the notch root radius and ``neuber_constant`` √a is the
+    Neuber material constant (a √length, tabulated by ultimate strength — smaller
+    for stronger steels, which are more notch-sensitive). A blunt notch (r ≫ a) is
+    fully sensitive (q → 1); a sharp one (r ≪ a) is insensitive (q → 0) because the
+    tiny highly-stressed volume yields locally. ``notch_radius`` is a positive length
+    and ``neuber_constant`` a non-negative √length (pass it as e.g. ``"0.25 mm**0.5"``).
+    Returns the dimensionless q in [0, 1].
+    """
+    _require_length(notch_radius, "notch_radius")
+    if not neuber_constant.has_dimension("[length]**0.5"):
+        raise ValueError(
+            f"neuber_constant must be a [length]**0.5 quantity (√a); got "
+            f"{neuber_constant.dimensionality} ({neuber_constant})"
+        )
+    r = notch_radius.to("mm").magnitude
+    if r <= 0:
+        raise ValueError(f"notch_radius must be positive; got {notch_radius}")
+    sqrt_a = neuber_constant.to("mm**0.5").magnitude
+    if sqrt_a < 0:
+        raise ValueError(f"neuber_constant must be non-negative; got {neuber_constant}")
+    return 1.0 / (1.0 + sqrt_a / sqrt(r))
+
+
+def peterson_notch_sensitivity(*, notch_radius: Quantity, peterson_constant: Quantity) -> float:
+    """The Peterson notch sensitivity q = 1/(1 + a/r) from the notch radius.
+
+    Peterson's alternative to :func:`neuber_notch_sensitivity`: q = 1/(1 + a/r),
+    with ``notch_radius`` r the notch root radius and ``peterson_constant`` a the
+    Peterson material constant (a length, tabulated by strength). Like Neuber it runs
+    from insensitive (q → 0) at a sharp notch to fully sensitive (q → 1) at a blunt
+    one, crossing q = 0.5 when r = a; it just uses a/r rather than √(a/r). Both
+    arguments are lengths, r positive and a non-negative. Returns the dimensionless
+    q in [0, 1].
+    """
+    _require_length(notch_radius, "notch_radius")
+    _require_length(peterson_constant, "peterson_constant")
+    r = notch_radius.to("mm").magnitude
+    a = peterson_constant.to("mm").magnitude
+    if r <= 0:
+        raise ValueError(f"notch_radius must be positive; got {notch_radius}")
+    if a < 0:
+        raise ValueError(f"peterson_constant must be non-negative; got {peterson_constant}")
+    return 1.0 / (1.0 + a / r)
 
 
 def estimated_endurance_limit(*, ultimate_strength: Quantity) -> Quantity:
