@@ -106,8 +106,8 @@ modules:
   curve and flat load, and the flat spiral (clock) spring's rate and stress
 - :mod:`~anvilate.analysis.thermal` — thermal growth, constrained thermal
   stress, thermal-shock (quench) surface stress, the thermal-buckling ("sun kink")
-  temperature rise of a held bar, shrink-fit assembly temperature, and
-  CTE-mismatch (differential) joint stress
+  temperature rise of a held bar, the triaxial (fully-constrained) thermal stress,
+  shrink-fit assembly temperature, and CTE-mismatch (differential) joint stress
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
   fundamentals, taut-string/cable transverse modes, disc-on-shaft torsional mode,
@@ -502,6 +502,7 @@ from .thermal import (
     shrink_fit_assembly_temperature,
     thermal_buckling_temperature_rise,
     thermal_shock_stress,
+    triaxial_constrained_thermal_stress,
 )
 from .torsion import (
     elliptical_bar_torsional_stress,
@@ -875,6 +876,7 @@ __all__ = [
     "critical_crack_length",
     "constrained_thermal_stress",
     "thermal_shock_stress",
+    "triaxial_constrained_thermal_stress",
     "thermal_buckling_temperature_rise",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",

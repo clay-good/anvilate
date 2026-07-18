@@ -307,6 +307,7 @@ from anvilate.analysis import (
     tresca_principal,
     triangular_bar_torsional_stress,
     triangular_bar_twist_angle,
+    triaxial_constrained_thermal_stress,
     tuned_mass_damper_optimal_damping,
     tuned_mass_damper_optimal_frequency_ratio,
     vee_belt_effective_friction,
@@ -8857,3 +8858,25 @@ def test_plate_compression_buckling_coefficient():
     assert sigma_cr.to("MPa").magnitude > 0
     with pytest.raises(ValueError, match="aspect_ratio must be positive"):
         plate_compression_buckling_coefficient(aspect_ratio=0)
+
+
+def test_triaxial_constrained_thermal_stress_is_the_most_severe():
+    kw = {
+        "elastic_modulus": _q("200 GPa"),
+        "thermal_expansion_coefficient": _q("12e-6 1/K"),
+        "temperature_change": _q("100 K"),
+    }
+    # sigma = E*alpha*dT/(1-2nu): 2.5x the uniaxial for nu = 0.3.
+    tri = triaxial_constrained_thermal_stress(**kw, poisson=0.3)
+    assert tri.to("MPa").magnitude == pytest.approx(200e3 * 12e-6 * 100 / (1 - 2 * 0.3), rel=1e-12)
+    assert tri.to("MPa").magnitude == pytest.approx(600.0, rel=1e-6)
+    # It exceeds the biaxial (thermal shock) and uniaxial constraint cases.
+    uni = constrained_thermal_stress(**kw)
+    bi = thermal_shock_stress(**kw, poisson=0.3)
+    assert tri.to("MPa").magnitude > bi.to("MPa").magnitude > uni.to("MPa").magnitude
+    assert tri.to("MPa").magnitude == pytest.approx(2.5 * uni.to("MPa").magnitude, rel=1e-12)
+    # As nu -> 0.5 (incompressible) the constrained stress diverges.
+    near_incompressible = triaxial_constrained_thermal_stress(**kw, poisson=0.49)
+    assert near_incompressible.to("MPa").magnitude > 10 * tri.to("MPa").magnitude
+    with pytest.raises(ValueError, match=r"poisson must lie in \[0, 0.5\)"):
+        triaxial_constrained_thermal_stress(**kw, poisson=0.5)

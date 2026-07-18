@@ -24,6 +24,7 @@ from ..units import Quantity
 __all__ = [
     "constrained_thermal_stress",
     "thermal_shock_stress",
+    "triaxial_constrained_thermal_stress",
     "thermal_buckling_temperature_rise",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",
@@ -113,6 +114,49 @@ def thermal_shock_stress(
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_change.to("K").magnitude
     return Quantity(magnitude=abs(e * alpha * delta_t) / (1.0 - poisson), unit="MPa")
+
+
+def triaxial_constrained_thermal_stress(
+    *,
+    elastic_modulus: Quantity,
+    thermal_expansion_coefficient: Quantity,
+    temperature_change: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The hydrostatic stress σ = E·α·ΔT/(1 − 2ν) of a fully (triaxially) constrained body.
+
+    When a body is held in *all three* directions — a heated inclusion locked in a
+    rigid matrix, a part filling a rigid cavity, a hot spot deep in a large solid —
+    its thermal strain is entirely denied and it builds a hydrostatic stress
+    σ = E·α·ΔT/(1 − 2ν). This is the most severe of the constraint family: it exceeds
+    the biaxial :func:`thermal_shock_stress` (1/(1 − ν)) and the uniaxial
+    :func:`constrained_thermal_stress` (1) by the shrinking (1 − 2ν) denominator — as
+    ν → 0.5 (an incompressible material) the constrained stress diverges, because
+    there is nowhere for the volume to go. ``elastic_modulus`` E, the linear
+    ``thermal_expansion_coefficient`` α, ``temperature_change`` ΔT, and Poisson's
+    ratio ``poisson`` ν (0 ≤ ν < 0.5) describe the body. Returns the magnitude of the
+    hydrostatic stress in MPa.
+    """
+    if not elastic_modulus.has_dimension("[pressure]"):
+        raise ValueError(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        )
+    if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            "thermal_expansion_coefficient must have units of 1/temperature; got "
+            f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not temperature_change.has_dimension("[temperature]"):
+        raise ValueError(
+            f"temperature_change must be a temperature difference; got "
+            f"{temperature_change.dimensionality}"
+        )
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    e = elastic_modulus.to("MPa").magnitude
+    alpha = thermal_expansion_coefficient.to("1/K").magnitude
+    delta_t = temperature_change.to("K").magnitude
+    return Quantity(magnitude=abs(e * alpha * delta_t) / (1.0 - 2.0 * poisson), unit="MPa")
 
 
 def free_thermal_expansion(
