@@ -1584,3 +1584,16 @@ def test_bimetal_thermostat_blade_example_length_is_the_lever():
     assert by_name["60 mm blade"].passed
     assert "safety factor 1.59" in by_name["60 mm blade"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_transmission_line_clearance_example_parabola_hides_a_violation():
+    namespace = runpy.run_path(str(_EXAMPLES / "transmission_line_clearance.py"))
+    card = namespace["screen_line_clearance"]()
+    by_name = {e.name: e for e in card.entries}
+    # The parabolic approximation says the line clears the sag limit...
+    assert by_name["parabolic-approximation sag"].passed
+    assert "safety factor 1.02" in by_name["parabolic-approximation sag"].detail
+    # ...but the exact catenary (which sags ~3% more on a deep span) does not.
+    assert by_name["exact catenary sag"].status is CheckStatus.FAIL
+    assert "safety factor 0.99" in by_name["exact catenary sag"].detail
+    assert card.status is CheckStatus.FAIL
