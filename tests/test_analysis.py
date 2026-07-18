@@ -238,6 +238,7 @@ from anvilate.analysis import (
     power_screw_raise_torque,
     preloaded_bolt_cyclic_stress,
     principal_stresses_plane,
+    propped_cantilever_plastic_collapse_load,
     propped_cantilever_plastic_collapse_udl,
     quality_factor,
     radius_of_gyration,
@@ -9026,6 +9027,11 @@ def test_plastic_collapse_loads_and_the_redistribution_reserve():
     pc_w = propped_cantilever_plastic_collapse_udl(plastic_moment_capacity=mp, span=span)
     assert pc_w.to("kN/m").magnitude == pytest.approx((6 + 4 * sqrt(2)) * 50 / 4**2, rel=1e-12)
     assert ss_w.to("N/m").magnitude < pc_w.to("N/m").magnitude < ff_w.to("N/m").magnitude
+    # Under a central point load the propped cantilever collapses at P = 6*M_p/L,
+    # between the SS (4) and FF (8) point-load cases.
+    pc_p = propped_cantilever_plastic_collapse_load(plastic_moment_capacity=mp, span=span)
+    assert pc_p.to("kN").magnitude == pytest.approx(6 * 50 / 4, rel=1e-12)
+    assert ss.to("N").magnitude < pc_p.to("N").magnitude < ff.to("N").magnitude
 
 
 def test_thermal_buckling_temperature_rise_is_the_sun_kink():

@@ -69,6 +69,7 @@ __all__ = [
     "plastic_moment",
     "simply_supported_plastic_collapse_load",
     "fixed_fixed_plastic_collapse_load",
+    "propped_cantilever_plastic_collapse_load",
     "simply_supported_plastic_collapse_udl",
     "fixed_fixed_plastic_collapse_udl",
     "propped_cantilever_plastic_collapse_udl",
@@ -375,6 +376,24 @@ def fixed_fixed_plastic_collapse_load(
     """
     mp, length = _collapse_inputs(plastic_moment_capacity, span)
     return _as_quantity(8 * mp.pint / length.pint, "N")
+
+
+def propped_cantilever_plastic_collapse_load(
+    *, plastic_moment_capacity: Quantity, span: Quantity
+) -> Quantity:
+    """The central point load that collapses a propped cantilever, P = 6·M_p/L.
+
+    A propped cantilever (fixed one end, propped the other) under a central point
+    load fails by a two-hinge mechanism: a hinge at the fixed end and one under the
+    load. Virtual work (end rotation θ, a 2θ hinge under the load) gives
+    P·(L/2)·θ = 3·M_p·θ, i.e. P = 6·M_p/L — between the simply-supported
+    :func:`simply_supported_plastic_collapse_load` (4·M_p/L) and the fixed-fixed
+    :func:`fixed_fixed_plastic_collapse_load` (8·M_p/L), as its one fixed end sits
+    between the two support conditions. ``plastic_moment_capacity`` M_p and ``span``
+    L must be positive. Returns the collapse point load in newtons.
+    """
+    mp, length = _collapse_inputs(plastic_moment_capacity, span)
+    return _as_quantity(6 * mp.pint / length.pint, "N")
 
 
 def simply_supported_plastic_collapse_udl(
