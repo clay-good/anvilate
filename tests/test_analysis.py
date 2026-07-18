@@ -191,6 +191,9 @@ from anvilate.analysis import (
     required_axial_area,
     reverted_train_is_coaxial,
     riveted_joint_efficiency,
+    scotch_yoke_acceleration,
+    scotch_yoke_displacement,
+    scotch_yoke_velocity,
     secant_column_max_stress,
     shaft_diameter_for_bending_torsion,
     shaft_diameter_for_torque,
@@ -7596,3 +7599,54 @@ def test_fourbar_transmission_angle_rejects_unreachable_pose():
             output_link=_q("40 mm"),
             input_angle=180.0,
         )
+
+
+def test_scotch_yoke_is_pure_simple_harmonic_motion():
+    kw = {"crank_radius": _q("50 mm")}
+    vkw = {"crank_radius": _q("50 mm"), "crank_speed": _q("1000 rpm")}
+    omega = 1000 * 2 * 3.141592653589793 / 60.0
+    # Displacement 0 -> 2r over half a turn.
+    assert scotch_yoke_displacement(crank_angle=0.0, **kw).to("mm").magnitude == pytest.approx(
+        0.0, abs=1e-12
+    )
+    assert scotch_yoke_displacement(crank_angle=90.0, **kw).to("mm").magnitude == pytest.approx(
+        50.0, rel=1e-12
+    )
+    assert scotch_yoke_displacement(crank_angle=180.0, **kw).to("mm").magnitude == pytest.approx(
+        100.0, rel=1e-12
+    )
+    # Velocity: zero at dead centres, omega*r at mid-stroke.
+    assert scotch_yoke_velocity(crank_angle=0.0, **vkw).to("m/s").magnitude == pytest.approx(
+        0.0, abs=1e-12
+    )
+    assert scotch_yoke_velocity(crank_angle=90.0, **vkw).to("m/s").magnitude == pytest.approx(
+        omega * 0.050, rel=1e-12
+    )
+    # Acceleration: a pure cosine with EQUAL peak magnitude at both dead centres --
+    # the symmetry the finite-rod slider-crank lacks.
+    a_tdc = scotch_yoke_acceleration(crank_angle=0.0, **vkw).to("m/s**2").magnitude
+    a_bdc = scotch_yoke_acceleration(crank_angle=180.0, **vkw).to("m/s**2").magnitude
+    assert a_tdc == pytest.approx(omega**2 * 0.050, rel=1e-12)
+    assert a_bdc == pytest.approx(-a_tdc, rel=1e-12)
+
+
+def test_scotch_yoke_is_the_infinite_rod_slider_crank_limit():
+    # As the connecting rod grows the slider-crank velocity approaches the scotch
+    # yoke's pure sinusoid: a huge rod makes them agree closely at 70 deg.
+    sy = scotch_yoke_velocity(
+        crank_radius=_q("50 mm"), crank_angle=70.0, crank_speed=_q("1000 rpm")
+    )
+    sc = slider_crank_velocity(
+        crank_radius=_q("50 mm"),
+        rod_length=_q("500000 mm"),
+        crank_angle=70.0,
+        crank_speed=_q("1000 rpm"),
+    )
+    assert sc.to("m/s").magnitude == pytest.approx(sy.to("m/s").magnitude, rel=1e-4)
+
+
+def test_scotch_yoke_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="crank_radius must be positive"):
+        scotch_yoke_displacement(crank_radius=_q("0 mm"), crank_angle=45.0)
+    with pytest.raises(ValueError, match="crank_speed must be a rotational-speed"):
+        scotch_yoke_velocity(crank_radius=_q("50 mm"), crank_angle=45.0, crank_speed=_q("1000 N"))

@@ -53,6 +53,8 @@ modules:
   mechanism geometry: index angle, crank and driven engagement radii
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, and slider acceleration
+- :mod:`~anvilate.analysis.scotch_yoke` — scotch-yoke pure simple-harmonic
+  displacement, velocity, and acceleration (the infinite-rod slider-crank limit)
 - :mod:`~anvilate.analysis.fourbar` — four-bar linkage Grashof rotatability
   criterion, mechanism-type classification, and the transmission angle at a given
   input angle
@@ -375,6 +377,11 @@ from .rivet import (
     RivetedJointStrength,
     riveted_joint_efficiency,
 )
+from .scotch_yoke import (
+    scotch_yoke_acceleration,
+    scotch_yoke_displacement,
+    scotch_yoke_velocity,
+)
 from .section import CrossSection, bending_stress, required_section_modulus
 from .slider_crank import (
     slider_crank_acceleration,
@@ -534,6 +541,9 @@ __all__ = [
     "slider_crank_displacement",
     "slider_crank_velocity",
     "slider_crank_acceleration",
+    "scotch_yoke_displacement",
+    "scotch_yoke_velocity",
+    "scotch_yoke_acceleration",
     "is_grashof",
     "fourbar_type",
     "fourbar_transmission_angle",
