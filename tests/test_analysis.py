@@ -10577,3 +10577,39 @@ def test_sheetmetal_minimum_bend_radius_and_air_force():
         )
     with pytest.raises(ValueError, match="k_factor must be in"):
         sm.neutral_axis_radius(inner_radius=_q("1 mm"), thickness=_q("1 mm"), k_factor=0.9)
+
+
+def test_sheetmetal_punching_and_stripping_forces():
+    from math import pi
+
+    from anvilate.analysis import sheetmetal as sm
+
+    # A round hole is the shear force over its circumference: F = pi*d*t*tau.
+    hole = sm.round_hole_punching_force(
+        hole_diameter=_q("10 mm"), thickness=_q("2 mm"), ultimate_shear_strength=_q("350 MPa")
+    )
+    assert hole.to("kN").magnitude == pytest.approx(pi * 10 * 2 * 350 / 1000, rel=1e-12)
+    # The round hole equals the general shear cut over an equal cut length.
+    equal = sm.shear_cutting_force(
+        cut_length=_q(f"{pi * 10} mm"),  # circumference
+        thickness=_q("2 mm"),
+        ultimate_shear_strength=_q("350 MPa"),
+    )
+    assert equal.to("kN").magnitude == pytest.approx(hole.to("kN").magnitude, rel=1e-12)
+    # A straight 100 mm shear line: F = L*t*tau = 70 kN.
+    line = sm.shear_cutting_force(
+        cut_length=_q("100 mm"), thickness=_q("2 mm"), ultimate_shear_strength=_q("350 MPa")
+    )
+    assert line.to("kN").magnitude == pytest.approx(70.0, rel=1e-12)
+    # Stripping force is the default 10% of the cutting force.
+    strip = sm.stripping_force(cutting_force=hole)
+    assert strip.to("kN").magnitude == pytest.approx(0.1 * hole.to("kN").magnitude, rel=1e-12)
+    assert sm.stripping_force(cutting_force=hole, strip_factor=0.2).to(
+        "kN"
+    ).magnitude == pytest.approx(0.2 * hole.to("kN").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="strip_factor must be in"):
+        sm.stripping_force(cutting_force=hole, strip_factor=1.5)
+    with pytest.raises(ValueError, match="ultimate_shear_strength must be a"):
+        sm.shear_cutting_force(
+            cut_length=_q("100 mm"), thickness=_q("2 mm"), ultimate_shear_strength=_q("5 mm")
+        )

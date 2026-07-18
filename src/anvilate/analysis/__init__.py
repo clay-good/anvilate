@@ -170,7 +170,8 @@ modules:
 - :mod:`~anvilate.analysis.sheetmetal` — sheet-metal bending flat-pattern geometry:
   the neutral-axis radius and bend allowance (K-factor), the outside setback and
   bend deduction, the developed blank length of a multi-bend strip, the minimum
-  bend radius a material's ductility allows, and the air (V-die) bending force
+  bend radius a material's ductility allows, the air (V-die) bending force, and the
+  shear-cutting / round-hole punching force and the stripping force to clear the punch
 
 Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
@@ -583,6 +584,9 @@ from .sheetmetal import (
     minimum_bend_radius,
     neutral_axis_radius,
     outside_setback,
+    round_hole_punching_force,
+    shear_cutting_force,
+    stripping_force,
 )
 from .slider_crank import (
     slider_crank_acceleration,
@@ -760,6 +764,9 @@ __all__ = [
     "flat_pattern_length",
     "minimum_bend_radius",
     "air_bending_force",
+    "shear_cutting_force",
+    "round_hole_punching_force",
+    "stripping_force",
     "RivetedJointStrength",
     "riveted_joint_efficiency",
     "max_transverse_shear_stress",

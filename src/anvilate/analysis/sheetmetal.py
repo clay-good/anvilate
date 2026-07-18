@@ -29,7 +29,7 @@ every length, strength, and force is a dimension-checked :class:`~anvilate.units
 
 from __future__ import annotations
 
-from math import radians, tan
+from math import pi, radians, tan
 
 from ..units import Quantity
 
@@ -41,6 +41,9 @@ __all__ = [
     "flat_pattern_length",
     "minimum_bend_radius",
     "air_bending_force",
+    "shear_cutting_force",
+    "round_hole_punching_force",
+    "stripping_force",
 ]
 
 
@@ -225,3 +228,65 @@ def air_bending_force(
         raise ValueError(f"force_coefficient must be positive; got {force_coefficient}")
     force_n = force_coefficient * su * length * t**2 / v
     return Quantity(magnitude=force_n / 1000.0, unit="kN")
+
+
+def shear_cutting_force(
+    *, cut_length: Quantity, thickness: Quantity, ultimate_shear_strength: Quantity
+) -> Quantity:
+    """The punch force F = L·t·τ a blanking, piercing, or shearing cut requires.
+
+    Cutting sheet is pure shear on the area swept by the cut edge: the ``cut_length``
+    L (the blank perimeter, the pierced-hole circumference, or the shear-line length)
+    times the ``thickness`` t times the material's ``ultimate_shear_strength`` τ
+    (≈ 0.75–0.85·σ_u for steel). F = L·t·τ. All quantities must be positive. Returns
+    the force in kN. (Grinding a shear angle onto the punch or die spreads the cut
+    over the stroke and cuts this peak — see a die handbook for the reduction factor.)
+    """
+    _require(cut_length, "[length]", "cut_length")
+    _require(thickness, "[length]", "thickness")
+    _require(ultimate_shear_strength, "[pressure]", "ultimate_shear_strength")
+    length = cut_length.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    tau = ultimate_shear_strength.to("MPa").magnitude
+    if length <= 0 or t <= 0 or tau <= 0:
+        raise ValueError("cut_length, thickness, and ultimate_shear_strength must be positive")
+    return Quantity(magnitude=length * t * tau / 1000.0, unit="kN")
+
+
+def round_hole_punching_force(
+    *, hole_diameter: Quantity, thickness: Quantity, ultimate_shear_strength: Quantity
+) -> Quantity:
+    """The punch force F = π·d·t·τ to pierce a round hole.
+
+    The round-hole case of :func:`shear_cutting_force`: the cut length is the hole
+    circumference π·d, so F = π·d·t·τ for ``hole_diameter`` d, ``thickness`` t, and
+    ``ultimate_shear_strength`` τ. All quantities must be positive. Returns the force
+    in kN.
+    """
+    _require(hole_diameter, "[length]", "hole_diameter")
+    d = hole_diameter.to("mm").magnitude
+    if d <= 0:
+        raise ValueError(f"hole_diameter must be positive; got {hole_diameter}")
+    return shear_cutting_force(
+        cut_length=Quantity(magnitude=pi * d, unit="mm"),
+        thickness=thickness,
+        ultimate_shear_strength=ultimate_shear_strength,
+    )
+
+
+def stripping_force(*, cutting_force: Quantity, strip_factor: float = 0.1) -> Quantity:
+    """The force F_s = k·F to strip the sheet back off the punch after a cut.
+
+    As the punch withdraws, the elastic sheet grips it and must be pushed off by the
+    stripper plate. The stripping force is an empirical fraction of the ``cutting_force``
+    F: F_s = k·F, with ``strip_factor`` k typically 0.05–0.20 (default 0.10; higher
+    for thin stock, tight clearances, or piercing near an edge). ``cutting_force`` must
+    be a positive force and k in (0, 1]. Returns the force in the units of F.
+    """
+    _require(cutting_force, "[force]", "cutting_force")
+    f = cutting_force.to("kN").magnitude
+    if f <= 0:
+        raise ValueError(f"cutting_force must be positive; got {cutting_force}")
+    if not 0 < strip_factor <= 1:
+        raise ValueError(f"strip_factor must be in (0, 1]; got {strip_factor}")
+    return Quantity(magnitude=f * strip_factor, unit="kN")
