@@ -24,6 +24,7 @@ from anvilate.analysis import (
     basquin_cycles_to_failure,
     basquin_stress_for_life,
     bearing_basic_rating_life,
+    bearing_equivalent_dynamic_load,
     bearing_life_hours,
     bearing_static_safety_factor,
     bearing_stress,
@@ -8976,3 +8977,23 @@ def test_horizontal_impact_force():
     assert softer.to("N").magnitude == pytest.approx(f.to("N").magnitude / 2, rel=1e-9)
     with pytest.raises(ValueError, match="stiffness must be a"):
         horizontal_impact_force(mass=_q("10 kg"), velocity=_q("2 m/s"), stiffness=_q("1e6 N"))
+
+
+def test_bearing_equivalent_dynamic_load():
+    # P = X*Fr + Y*Fa: combined 4 kN radial + 2 kN axial with X=0.56, Y=1.6.
+    p = bearing_equivalent_dynamic_load(
+        radial_load=_q("4000 N"), axial_load=_q("2000 N"), radial_factor=0.56, axial_factor=1.6
+    )
+    assert p.to("N").magnitude == pytest.approx(0.56 * 4000 + 1.6 * 2000, rel=1e-12)
+    assert p.to("N").magnitude == pytest.approx(5440.0, rel=1e-12)
+    # It feeds the L10 life directly.
+    life = bearing_basic_rating_life(dynamic_load_rating=_q("40 kN"), equivalent_load=p)
+    assert life > 0
+    # Pure radial (X=1, Y=0-ish) is just the radial load.
+    assert bearing_equivalent_dynamic_load(
+        radial_load=_q("4000 N"), axial_load=_q("0 N"), radial_factor=1.0, axial_factor=1.0
+    ).to("N").magnitude == pytest.approx(4000.0, rel=1e-12)
+    with pytest.raises(ValueError, match="radial_factor and axial_factor must be positive"):
+        bearing_equivalent_dynamic_load(
+            radial_load=_q("4000 N"), axial_load=_q("2000 N"), radial_factor=0, axial_factor=1.6
+        )

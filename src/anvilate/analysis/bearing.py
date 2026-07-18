@@ -33,6 +33,7 @@ __all__ = [
     "bearing_basic_rating_life",
     "bearing_life_hours",
     "bearing_static_safety_factor",
+    "bearing_equivalent_dynamic_load",
 ]
 
 
@@ -125,3 +126,33 @@ def bearing_static_safety_factor(
     if p0 <= 0:
         raise ValueError(f"equivalent_static_load must be positive; got {equivalent_static_load}")
     return c0 / p0
+
+
+def bearing_equivalent_dynamic_load(
+    *,
+    radial_load: Quantity,
+    axial_load: Quantity,
+    radial_factor: float,
+    axial_factor: float,
+) -> Quantity:
+    """The ISO 281 equivalent dynamic bearing load P = X·F_r + Y·F_a.
+
+    A rolling bearing under *combined* radial and thrust load feels an equivalent
+    pure-radial load P = X·F_r + Y·F_a that does the same fatigue damage — the value
+    to feed :func:`bearing_basic_rating_life`. ``radial_load`` F_r and ``axial_load``
+    F_a are the two load components, and ``radial_factor`` X and ``axial_factor`` Y
+    the dimensionless ISO 281 combination factors, read from the bearing's table by
+    the axial-to-radial ratio against its e value (supplied like any catalogue
+    datum; a common pair is X = 0.56, Y ≈ 1.4–2). For pure radial load below the e
+    threshold X = 1, Y = 0 and P = F_r. Both loads must be non-negative and the
+    factors positive. Returns the equivalent load in newtons.
+    """
+    _require(radial_load, "[force]", "radial_load")
+    _require(axial_load, "[force]", "axial_load")
+    fr = radial_load.to("N").magnitude
+    fa = axial_load.to("N").magnitude
+    if fr < 0 or fa < 0:
+        raise ValueError("radial_load and axial_load must be non-negative")
+    if radial_factor <= 0 or axial_factor <= 0:
+        raise ValueError("radial_factor and axial_factor must be positive")
+    return Quantity(magnitude=radial_factor * fr + axial_factor * fa, unit="N")
