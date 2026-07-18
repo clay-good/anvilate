@@ -48,8 +48,8 @@ modules:
   (millions of revolutions and running hours) and static load safety factor
 - :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
   tension ratio, slack tension, transmissible force (still and at speed, with
-  centrifugal tension and the max-power belt speed), V-belt wedge friction, and
-  belt-drive geometry (length and wrap angle)
+  centrifugal tension and the max-power belt speed), V-belt wedge friction,
+  belt-drive geometry (length and wrap angle), transmitted power, and mean tension
 - :mod:`~anvilate.analysis.chain` — roller-chain drive geometry: chain length in
   pitches, mean chain speed, and the chordal (polygon-action) speed variation of
   a sprocket
@@ -193,8 +193,10 @@ from .belt import (
     belt_length,
     belt_max_transmissible_force,
     belt_max_transmissible_force_at_speed,
+    belt_mean_tension,
     belt_slack_tension,
     belt_speed_for_max_power,
+    belt_transmitted_power,
     belt_wrap_angle,
     capstan_tension_ratio,
     vee_belt_effective_friction,
@@ -613,6 +615,8 @@ __all__ = [
     "vee_belt_effective_friction",
     "belt_length",
     "belt_wrap_angle",
+    "belt_transmitted_power",
+    "belt_mean_tension",
     "chain_length_in_pitches",
     "chordal_speed_variation",
     "chain_speed",

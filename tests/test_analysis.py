@@ -33,8 +33,10 @@ from anvilate.analysis import (
     belt_length,
     belt_max_transmissible_force,
     belt_max_transmissible_force_at_speed,
+    belt_mean_tension,
     belt_slack_tension,
     belt_speed_for_max_power,
+    belt_transmitted_power,
     belt_wrap_angle,
     bevel_gear_axial_load,
     bevel_gear_radial_load,
@@ -8891,3 +8893,23 @@ def test_quality_factor():
     assert quality_factor(damping_ratio=0.02) > quality_factor(damping_ratio=0.1)
     with pytest.raises(ValueError, match="damping_ratio"):
         quality_factor(damping_ratio=0)
+
+
+def test_belt_transmitted_power_and_mean_tension():
+    # P = (T1 - T2)*v: 500 N tight, 200 N slack, 20 m/s -> 6 kW.
+    p = belt_transmitted_power(
+        tight_tension=_q("500 N"), slack_tension=_q("200 N"), belt_speed=_q("20 m/s")
+    )
+    assert p.to("W").magnitude == pytest.approx((500 - 200) * 20, rel=1e-12)
+    assert p.to("kW").magnitude == pytest.approx(6.0, rel=1e-12)
+    # T_m = (T1 + T2)/2: the initial tension / shaft side-load driver.
+    tm = belt_mean_tension(tight_tension=_q("500 N"), slack_tension=_q("200 N"))
+    assert tm.to("N").magnitude == pytest.approx(350.0, rel=1e-12)
+    with pytest.raises(ValueError, match="tight_tension .* must exceed slack_tension"):
+        belt_transmitted_power(
+            tight_tension=_q("200 N"), slack_tension=_q("500 N"), belt_speed=_q("20 m/s")
+        )
+    with pytest.raises(ValueError, match="belt_speed must be a"):
+        belt_transmitted_power(
+            tight_tension=_q("500 N"), slack_tension=_q("200 N"), belt_speed=_q("20 N")
+        )

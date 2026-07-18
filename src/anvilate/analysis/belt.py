@@ -42,6 +42,8 @@ __all__ = [
     "vee_belt_effective_friction",
     "belt_length",
     "belt_wrap_angle",
+    "belt_transmitted_power",
+    "belt_mean_tension",
 ]
 
 
@@ -282,3 +284,52 @@ def belt_wrap_angle(
     """
     big, small, c = _pulley_geometry(large_pulley_diameter, small_pulley_diameter, center_distance)
     return pi - 2.0 * asin((big - small) / (2.0 * c))
+
+
+def belt_transmitted_power(
+    *, tight_tension: Quantity, slack_tension: Quantity, belt_speed: Quantity
+) -> Quantity:
+    """The power a belt transmits, P = (T₁ − T₂)·v.
+
+    The useful output of a belt drive: the net tension difference between the tight
+    and slack sides, times the belt speed. ``tight_tension`` T₁ and ``slack_tension``
+    T₂ are the two side tensions (T₁ > T₂; T₂ from :func:`belt_slack_tension`) and
+    ``belt_speed`` v the linear belt speed at the pulley (from a pitch-line velocity).
+    At the slip limit T₁ − T₂ is :func:`belt_max_transmissible_force`, so this gives
+    the drive's power ceiling. All must be positive and T₁ > T₂. Returns the power in
+    watts.
+    """
+    _require_force(tight_tension, "tight_tension")
+    _require_force(slack_tension, "slack_tension")
+    if not belt_speed.has_dimension("[velocity]"):
+        raise ValueError(
+            f"belt_speed must be a [velocity] quantity; got "
+            f"{belt_speed.dimensionality} ({belt_speed})"
+        )
+    t1 = tight_tension.to("N").magnitude
+    t2 = slack_tension.to("N").magnitude
+    v = belt_speed.to("m/s").magnitude
+    if t1 <= t2:
+        raise ValueError(
+            f"tight_tension ({tight_tension}) must exceed slack_tension ({slack_tension})"
+        )
+    if v <= 0:
+        raise ValueError(f"belt_speed must be positive; got {belt_speed}")
+    return Quantity(magnitude=(t1 - t2) * v, unit="W")
+
+
+def belt_mean_tension(*, tight_tension: Quantity, slack_tension: Quantity) -> Quantity:
+    """The mean belt tension T_m = (T₁ + T₂)/2.
+
+    The average of the tight and slack side tensions — the value that sets the belt's
+    static (initial) tensioning and the net radial pull the belt puts on the shaft
+    bearings (about 2·T_m into the pulley). ``tight_tension`` T₁ and ``slack_tension``
+    T₂ are the two side tensions (both positive). Returns the mean tension in newtons.
+    """
+    _require_force(tight_tension, "tight_tension")
+    _require_force(slack_tension, "slack_tension")
+    t1 = tight_tension.to("N").magnitude
+    t2 = slack_tension.to("N").magnitude
+    if t1 <= 0 or t2 <= 0:
+        raise ValueError("tight_tension and slack_tension must be positive")
+    return Quantity(magnitude=(t1 + t2) / 2.0, unit="N")
