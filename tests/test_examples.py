@@ -1410,3 +1410,18 @@ def test_flywheel_speed_limits_example_whirls_though_it_holds():
     assert whirl.status is CheckStatus.FAIL
     assert "safety factor 0.86" in whirl.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_fatigue_link_example_passes_static_but_fails_fatigue():
+    namespace = runpy.run_path(str(_EXAMPLES / "fatigue_link_stress_riser.py"))
+    card = namespace["screen_fatigue_link"]()
+    by_name = {e.name: e for e in card.entries}
+    # The link is comfortably safe on its peak static load...
+    static = by_name["static yield on peak load"]
+    assert static.passed
+    assert "safety factor 2.40" in static.detail
+    # ...but the stress riser drives the modified-Goodman fatigue check below one.
+    fatigue = by_name["modified-Goodman fatigue at the hole"]
+    assert fatigue.status is CheckStatus.FAIL
+    assert "safety factor 0.84" in fatigue.detail
+    assert card.status is CheckStatus.FAIL
