@@ -2042,3 +2042,16 @@ def test_hydraulic_rod_buckling_capstone_rod_governs():
     assert stout_by_name["rod column buckling at full stroke"].passed
     assert "safety factor 1.41" in stout_by_name["rod column buckling at full stroke"].detail
     assert stout.status is CheckStatus.PASS
+
+
+def test_hydraulic_meter_out_intensification_example_rod_ratio_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_meter_out_intensification.py"))
+    fat = namespace["screen_rodside"]()
+    # The fat rod intensifies the rod side past the hose rating.
+    assert fat.status is CheckStatus.FAIL
+    assert "safety factor 0.82" in fat.entries[0].detail
+    # A thinner rod lowers the area ratio and the intensified pressure.
+    thin = namespace["screen_thinner_rod"]()
+    assert thin.entries[0].passed
+    assert "safety factor 1.12" in thin.entries[0].detail
+    assert thin.status is CheckStatus.PASS
