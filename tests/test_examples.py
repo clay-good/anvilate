@@ -1161,3 +1161,21 @@ def test_spanning_cable_example_has_no_tension_that_passes_both():
     assert by_name["taut (12 kN): cable strength"].status is CheckStatus.FAIL
     # No tension clears both demands -> the window is empty, overall fail.
     assert card.status is CheckStatus.FAIL
+
+
+def test_shrink_fit_at_speed_example_loses_grip_at_high_speed():
+    namespace = runpy.run_path(str(_EXAMPLES / "shrink_fit_at_speed.py"))
+    card = namespace["screen_shrink_fit"]()
+    by_name = {e.name: e for e in card.entries}
+    # Grips cold with margin...
+    at_rest = by_name["at rest"]
+    assert at_rest.passed
+    assert "safety factor 1.67" in at_rest.detail
+    # ...still holds at moderate speed, just...
+    assert by_name["at 6000 rpm"].passed
+    assert "safety factor 1.15" in by_name["at 6000 rpm"].detail
+    # ...but the rim growth exceeds the interference at high speed: fit lost.
+    fast = by_name["at 12000 rpm"]
+    assert fast.status is CheckStatus.FAIL
+    assert "safety factor -0.40" in fast.detail
+    assert card.status is CheckStatus.FAIL
