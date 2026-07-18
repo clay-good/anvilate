@@ -1143,3 +1143,21 @@ def test_multistage_reducer_example_sizes_on_delivered_torque():
     assert real.status is CheckStatus.FAIL
     assert "safety factor 0.97" in real.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_spanning_cable_example_has_no_tension_that_passes_both():
+    namespace = runpy.run_path(str(_EXAMPLES / "spanning_cable_tension.py"))
+    card = namespace["screen_cable_span"]()
+    by_name = {e.name: e for e in card.entries}
+    # Slack: protects the cable but sags too far.
+    assert by_name["slack (6 kN): sag clearance"].status is CheckStatus.FAIL
+    assert by_name["slack (6 kN): cable strength"].passed
+    # Balanced: meets clearance exactly but is over the tension allowable.
+    assert by_name["balanced (8 kN): sag clearance"].passed
+    assert by_name["balanced (8 kN): cable strength"].status is CheckStatus.FAIL
+    assert "safety factor 0.98" in by_name["balanced (8 kN): cable strength"].detail
+    # Taut: clears the sag with margin but badly overloads the cable.
+    assert by_name["taut (12 kN): sag clearance"].passed
+    assert by_name["taut (12 kN): cable strength"].status is CheckStatus.FAIL
+    # No tension clears both demands -> the window is empty, overall fail.
+    assert card.status is CheckStatus.FAIL
