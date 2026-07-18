@@ -1920,3 +1920,24 @@ def test_spreader_beam_buckling_capstone_column_governs():
     assert stubby_by_name["spreader column buckling"].passed
     assert "safety factor 1.80" in stubby_by_name["spreader column buckling"].detail
     assert stubby.status is CheckStatus.PASS
+
+
+def test_press_fit_gear_capstone_grip_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "press_fit_gear.py"))
+    tight = namespace["screen_press_fit"]()
+    by_name = {e.name: e for e in tight.entries}
+    # Hub and shaft have plenty of margin...
+    assert by_name["hub bore hoop stress"].passed
+    assert "safety factor 3.34" in by_name["hub bore hoop stress"].detail
+    assert by_name["shaft torsional shear"].passed
+    assert "safety factor 2.45" in by_name["shaft torsional shear"].detail
+    # ...but the fit slips before anything breaks.
+    assert by_name["fit grip (slip) vs required torque"].status is CheckStatus.FAIL
+    assert "safety factor 0.93" in by_name["fit grip (slip) vs required torque"].detail
+    assert tight.status is CheckStatus.FAIL
+    # A longer engagement adds grip area and carries the torque.
+    longer = namespace["screen_longer_engagement"]()
+    longer_by_name = {e.name: e for e in longer.entries}
+    assert longer_by_name["fit grip (slip) vs required torque"].passed
+    assert "safety factor 1.40" in longer_by_name["fit grip (slip) vs required torque"].detail
+    assert longer.status is CheckStatus.PASS
