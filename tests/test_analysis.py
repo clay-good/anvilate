@@ -205,6 +205,7 @@ from anvilate.analysis import (
     riveted_joint_efficiency,
     rotating_rim_burst_speed,
     rotating_rim_hoop_stress,
+    rotating_rim_radial_growth,
     scotch_yoke_acceleration,
     scotch_yoke_displacement,
     scotch_yoke_velocity,
@@ -8175,3 +8176,42 @@ def test_spiral_spring_rejects_bad_inputs():
         )
     with pytest.raises(ValueError, match="moment must be a"):
         spiral_spring_stress(moment=_q("0.02 N"), width=_q("10 mm"), thickness=_q("0.5 mm"))
+
+
+def test_rotating_rim_radial_growth_matches_the_hoop_stress():
+    steel = _q("7850 kg/m**3")
+    E = _q("200 GPa")
+    kw = {"density": steel, "mean_radius": _q("0.3 m"), "rotational_speed": _q("3000 rpm")}
+    # delta = rho*omega^2*r^3/E: a 0.3 m steel rim at 3000 rpm grows ~0.105 mm.
+    growth = rotating_rim_radial_growth(**kw, elastic_modulus=E)
+    omega = 3000 * 2 * 3.141592653589793 / 60.0
+    assert growth.to("mm").magnitude == pytest.approx(
+        7850 * omega**2 * 0.3**3 / 200e9 * 1000, rel=1e-9
+    )
+    assert growth.to("mm").magnitude == pytest.approx(0.1046, rel=1e-3)
+    # It is exactly the hoop stress times r/E (the shrink-fit loss at speed).
+    sigma = rotating_rim_hoop_stress(**kw)
+    predicted = sigma.to("Pa").magnitude * 0.3 / 200e9 * 1000  # mm
+    assert growth.to("mm").magnitude == pytest.approx(predicted, rel=1e-9)
+    # Growth rides on omega^2: doubling the speed quadruples it.
+    faster = rotating_rim_radial_growth(
+        density=steel, mean_radius=_q("0.3 m"), rotational_speed=_q("6000 rpm"), elastic_modulus=E
+    )
+    assert faster.to("mm").magnitude == pytest.approx(4 * growth.to("mm").magnitude, rel=1e-9)
+
+
+def test_rotating_rim_radial_growth_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="rotational_speed must be positive"):
+        rotating_rim_radial_growth(
+            density=_q("7850 kg/m**3"),
+            mean_radius=_q("0.3 m"),
+            rotational_speed=_q("0 rpm"),
+            elastic_modulus=_q("200 GPa"),
+        )
+    with pytest.raises(ValueError, match="elastic_modulus must be a"):
+        rotating_rim_radial_growth(
+            density=_q("7850 kg/m**3"),
+            mean_radius=_q("0.3 m"),
+            rotational_speed=_q("3000 rpm"),
+            elastic_modulus=_q("200 mm"),
+        )

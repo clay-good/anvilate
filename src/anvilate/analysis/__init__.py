@@ -74,7 +74,7 @@ modules:
   amplification factor (energy method)
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, the inertia a speed-smoothing target requires, and the rotating
-  thin-rim hoop (bursting) stress and burst speed
+  thin-rim hoop (bursting) stress, burst speed, and radial growth
 - :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads,
   bevel-gear radial/axial (thrust) resolution about the pitch cone, helical-gear
   axial thrust, radial load, and virtual tooth number, pitch-line
@@ -307,6 +307,7 @@ from .flywheel import (
     flywheel_inertia_for_fluctuation,
     rotating_rim_burst_speed,
     rotating_rim_hoop_stress,
+    rotating_rim_radial_growth,
 )
 from .fourbar import (
     fourbar_transmission_angle,
@@ -666,6 +667,7 @@ __all__ = [
     "flywheel_inertia_for_fluctuation",
     "rotating_rim_hoop_stress",
     "rotating_rim_burst_speed",
+    "rotating_rim_radial_growth",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

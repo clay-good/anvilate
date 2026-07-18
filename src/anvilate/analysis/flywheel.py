@@ -37,6 +37,7 @@ __all__ = [
     "flywheel_inertia_for_fluctuation",
     "rotating_rim_hoop_stress",
     "rotating_rim_burst_speed",
+    "rotating_rim_radial_growth",
 ]
 
 
@@ -181,3 +182,39 @@ def rotating_rim_burst_speed(
         raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
     omega = sqrt(sigma / rho) / r  # rad/s
     return Quantity(magnitude=omega, unit="rad/s").to("rpm")
+
+
+def rotating_rim_radial_growth(
+    *,
+    density: Quantity,
+    mean_radius: Quantity,
+    rotational_speed: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The radial growth δ = ρ·ω²·r³/E of a thin spinning rim.
+
+    The same centrifugal hoop stress that can burst a rim also *stretches* it: the
+    rim's radius grows by δ = σ_hoop·r/E = ρ·ω²·r³/E as it spins up. This is why a
+    shrink-fit ring, gear, or rotor loosens at speed — the rim grows away from its
+    shaft and the interference bleeds off, so a fit that grips at rest can slip at
+    running speed. ``density`` ρ, ``mean_radius`` r, ``rotational_speed`` ω, and the
+    rim material's ``elastic_modulus`` E describe the rim; r and ω must be positive.
+    Compare the growth against the shrink-fit interference to check the fit holds at
+    speed. Returns the radial growth in millimetres.
+    """
+    _require(density, "[mass] / [length]**3", "density")
+    _require(mean_radius, "[length]", "mean_radius")
+    _require(rotational_speed, "[frequency]", "rotational_speed")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    rho = density.to("kg/m**3").magnitude
+    r = mean_radius.to("m").magnitude
+    omega = rotational_speed.to("rad/s").magnitude
+    e = elastic_modulus.to("Pa").magnitude
+    if r <= 0:
+        raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+    if omega <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    if e <= 0:
+        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+    growth = rho * omega**2 * r**3 / e  # metres
+    return Quantity(magnitude=growth * 1000.0, unit="mm")
