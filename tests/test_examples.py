@@ -1260,3 +1260,18 @@ def test_imperfect_column_example_fails_where_euler_passes():
     assert real.status is CheckStatus.FAIL
     assert "safety factor 0.87" in real.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_glass_thermal_shock_example_favors_low_expansion():
+    namespace = runpy.run_path(str(_EXAMPLES / "glass_thermal_shock.py"))
+    card = namespace["screen_thermal_shock"]()
+    by_name = {e.name: e for e in card.entries}
+    # The high-expansion soda-lime glass shatters under the quench...
+    soda = by_name["soda-lime tumbler"]
+    assert soda.status is CheckStatus.FAIL
+    assert "safety factor 0.41" in soda.detail
+    # ...but the low-expansion borosilicate survives it.
+    boro = by_name["borosilicate beaker"]
+    assert boro.passed
+    assert "safety factor 1.26" in boro.detail
+    assert card.status is CheckStatus.FAIL
