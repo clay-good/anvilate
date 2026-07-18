@@ -136,7 +136,8 @@ modules:
   and damped-vibration measures (damped frequency, log decrement, quality factor,
   critical damping coefficient, isolator transmissibility, forced-response dynamic
   magnification and phase, and the base-excitation seismic-instrument response);
-  simple and physical (rigid-body) pendulum periods;
+  simple and physical (rigid-body) pendulum periods; the solid-disc and annular
+  (hollow-cylinder) polar mass moments of inertia;
   and the Den Hartog tuned-mass-damper optimal tuning
 - :mod:`~anvilate.analysis.stress` — von Mises and octahedral-shear combination,
   combined axial+bending, and the Inglis elliptical-hole stress-concentration factor
@@ -319,6 +320,7 @@ from .curved_beam import (
 )
 from .dynamics import (
     STANDARD_GRAVITY,
+    annular_disc_polar_mass_moment,
     base_excitation_relative_transmissibility,
     cantilever_fundamental_frequency,
     cantilever_tip_mass_frequency,
@@ -807,6 +809,7 @@ __all__ = [
     "torsional_natural_frequency",
     "two_rotor_torsional_natural_frequency",
     "solid_disc_polar_mass_moment",
+    "annular_disc_polar_mass_moment",
     "frequency_scorecard",
     "NUT_FACTOR_AS_RECEIVED",
     "bolt_preload_from_torque",

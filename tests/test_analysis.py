@@ -15,6 +15,7 @@ from anvilate.analysis import (
     UNIFORM_PRESSURE,
     ColumnEnd,
     CrossSection,
+    annular_disc_polar_mass_moment,
     asme_cylinder_thickness,
     axial_stress,
     band_brake_max_lining_pressure,
@@ -6521,6 +6522,32 @@ def test_torsional_frequency_rejects_bad_inputs():
         )
     with pytest.raises(ValueError, match="mass and diameter must be positive"):
         solid_disc_polar_mass_moment(mass=_q("0 kg"), diameter=_q("200 mm"))
+
+
+def test_annular_disc_polar_mass_moment():
+    # I = m*(D^2 + d^2)/8: 10 kg, 0.4 m outer, 0.2 m inner -> 0.25 kg*m^2.
+    i = annular_disc_polar_mass_moment(
+        mass=_q("10 kg"), outer_diameter=_q("0.4 m"), inner_diameter=_q("0.2 m")
+    )
+    assert i.to("kg*m**2").magnitude == pytest.approx(10 * (0.4**2 + 0.2**2) / 8, rel=1e-12)
+    assert i.to("kg*m**2").magnitude == pytest.approx(0.25, rel=1e-12)
+    # A vanishing bore recovers the solid disc's m*D^2/8.
+    solid_limit = annular_disc_polar_mass_moment(
+        mass=_q("10 kg"), outer_diameter=_q("0.4 m"), inner_diameter=_q("0 m")
+    )
+    assert solid_limit.to("kg*m**2").magnitude == pytest.approx(
+        solid_disc_polar_mass_moment(mass=_q("10 kg"), diameter=_q("0.4 m"))
+        .to("kg*m**2")
+        .magnitude,
+        rel=1e-12,
+    )
+    # Boring out the same mass concentrates it at large radius -> more inertia than
+    # the solid disc of that mass and outer diameter.
+    assert i.to("kg*m**2").magnitude > solid_limit.to("kg*m**2").magnitude
+    with pytest.raises(ValueError, match="inner_diameter .* must be non-negative and below"):
+        annular_disc_polar_mass_moment(
+            mass=_q("10 kg"), outer_diameter=_q("0.2 m"), inner_diameter=_q("0.4 m")
+        )
 
 
 def test_beam_fundamental_rejects_bad_inputs():

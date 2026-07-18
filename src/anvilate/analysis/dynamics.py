@@ -64,6 +64,7 @@ __all__ = [
     "torsional_natural_frequency",
     "two_rotor_torsional_natural_frequency",
     "solid_disc_polar_mass_moment",
+    "annular_disc_polar_mass_moment",
     "spring_surge_frequency",
     "frequency_scorecard",
 ]
@@ -1061,6 +1062,37 @@ def solid_disc_polar_mass_moment(*, mass: Quantity, diameter: Quantity) -> Quant
     if m <= 0 or d <= 0:
         raise ValueError("mass and diameter must be positive")
     return Quantity(magnitude=m * d**2 / 8, unit="kg*m**2")
+
+
+def annular_disc_polar_mass_moment(
+    *, mass: Quantity, outer_diameter: Quantity, inner_diameter: Quantity
+) -> Quantity:
+    """The polar mass moment of inertia I = m·(D² + d²)/8 (= m·(R² + r²)/2) of an
+    annular disc or hollow cylinder.
+
+    The rotary inertia of a bored flywheel, a rim, or a pulley about its axis — the
+    hollow counterpart of :func:`solid_disc_polar_mass_moment`. It sums the mean-square
+    radius of the outer and inner circles: I = m·(D² + d²)/8, which recovers the solid
+    disc as the bore vanishes (d → 0) and tends to the thin-rim m·R² as d → D.
+    ``mass`` m is the actual (bored) mass, ``outer_diameter`` D, and ``inner_diameter``
+    d (non-negative and below D). Because it piles mass at large radius, an annular
+    disc of the same mass carries far more inertia than a solid one — the flywheel
+    designer's lever. Returns kg·m²; the quantities are dimension-checked.
+    """
+    _require(mass, "[mass]", "mass")
+    _require(outer_diameter, "[length]", "outer_diameter")
+    _require(inner_diameter, "[length]", "inner_diameter")
+    m = mass.to("kg").magnitude
+    do = outer_diameter.to("m").magnitude
+    di = inner_diameter.to("m").magnitude
+    if m <= 0:
+        raise ValueError(f"mass must be positive; got {mass}")
+    if not 0 <= di < do:
+        raise ValueError(
+            f"inner_diameter ({inner_diameter}) must be non-negative and below "
+            f"outer_diameter ({outer_diameter})"
+        )
+    return Quantity(magnitude=m * (do**2 + di**2) / 8, unit="kg*m**2")
 
 
 def torsional_natural_frequency(
