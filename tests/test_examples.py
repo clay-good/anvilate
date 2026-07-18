@@ -1880,3 +1880,24 @@ def test_flip_top_closure_capstone_hinge_governs():
         card.entries, key=lambda e: float(e.detail.split("safety factor ")[1].split(" ")[0])
     )
     assert tightest.name == "hinge fold strain"
+
+
+def test_v_belt_drive_capstone_traction_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "v_belt_drive.py"))
+    single = namespace["screen_drive"]()
+    by_name = {e.name: e for e in single.entries}
+    # Geometry and bearings pass comfortably...
+    assert by_name["small-pulley wrap angle"].passed
+    assert "safety factor 1.40" in by_name["small-pulley wrap angle"].detail
+    assert by_name["belt speed"].passed
+    assert by_name["pulley bearing L10 life"].passed
+    # ...but a single belt slips under the service-factored load.
+    assert by_name["belt grip (slip)"].status is CheckStatus.FAIL
+    assert "safety factor 0.83" in by_name["belt grip (slip)"].detail
+    assert single.status is CheckStatus.FAIL
+    # Two belts split the load and restore the grip.
+    two = namespace["screen_two_belt_drive"]()
+    two_by_name = {e.name: e for e in two.entries}
+    assert two_by_name["belt grip (slip)"].passed
+    assert "safety factor 1.65" in two_by_name["belt grip (slip)"].detail
+    assert two.status is CheckStatus.PASS
