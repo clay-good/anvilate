@@ -1677,3 +1677,16 @@ def test_flat_bar_torsion_penalty_example_thin_section_twists_far_more():
     assert by_name["flat bar (100 x 10 mm)"].status is CheckStatus.FAIL
     assert "safety factor 0.44" in by_name["flat bar (100 x 10 mm)"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_thin_tube_shell_buckling_example_shell_governs_not_column():
+    namespace = runpy.run_path(str(_EXAMPLES / "thin_tube_shell_buckling.py"))
+    card = namespace["screen_tube_strut"]()
+    by_name = {e.name: e for e in card.entries}
+    # As a column the thin tube looks bombproof -- 12x clear of Euler buckling...
+    assert by_name["Euler column buckling"].passed
+    assert "safety factor 12.28" in by_name["Euler column buckling"].detail
+    # ...but its wall crinkles (local shell buckling) below the working stress.
+    assert by_name["shell (local wall) buckling"].status is CheckStatus.FAIL
+    assert "safety factor 0.91" in by_name["shell (local wall) buckling"].detail
+    assert card.status is CheckStatus.FAIL
