@@ -1731,3 +1731,20 @@ def test_shaft_bearing_misalignment_example_slope_governs():
     assert by_name["bearing misalignment slope"].status is CheckStatus.FAIL
     assert "safety factor 0.79" in by_name["bearing misalignment slope"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_sheet_metal_bend_radius_example_ductility_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "sheet_metal_bend_radius.py"))
+    card = namespace["screen_bend"]()
+    by_name = {e.name: e for e in card.entries}
+    # A 400 kN brake covers the ~104 kN air bend nearly four times over...
+    assert by_name["press-brake tonnage"].passed
+    assert "safety factor 3.86" in by_name["press-brake tonnage"].detail
+    # ...but the 1t radius cracks the H32 temper: a ductility limit no press can move.
+    assert by_name["bend radius vs ductility limit"].status is CheckStatus.FAIL
+    assert "safety factor 0.67" in by_name["bend radius vs ductility limit"].detail
+    assert card.status is CheckStatus.FAIL
+    # The flat blank is the tangent flanges plus the bend allowance, not the flange sum.
+    flat = namespace["flat_blank_length"]().to("mm").magnitude
+    assert flat == pytest.approx(104.52, abs=0.01)
+    assert flat > 100.0  # the naive 40+60 flange sum would misplace every downstream hole
