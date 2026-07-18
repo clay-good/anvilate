@@ -59,6 +59,8 @@ __all__ = [
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",
+    "rectangular_tube_second_moment",
+    "i_section_second_moment",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -117,6 +119,67 @@ def hollow_circular_second_moment(
             f"outer_diameter ({outer_diameter})"
         )
     return _as_quantity(pi * (outer_diameter.pint**4 - inner_diameter.pint**4) / 64, "mm**4")
+
+
+def rectangular_tube_second_moment(
+    *, width: Quantity, height: Quantity, wall_thickness: Quantity
+) -> Quantity:
+    """The bending second moment I = (b·h³ − b_i·h_i³)/12 of a rectangular (box) tube.
+
+    A hollow rectangular section — an RHS/SHS box beam — subtracts its inner
+    rectangle from the outer: I = (b·h³ − (b − 2t)·(h − 2t)³)/12 about the axis
+    perpendicular to ``height``. ``width`` b and ``height`` h are the outer overall
+    dimensions and ``wall_thickness`` t the wall; 2t must stay below both outer
+    dimensions. A box carries far more I per unit weight than the solid bar it hollows
+    out, which is why beams are box or I sections. Returns the second moment in mm⁴.
+    """
+    _require(width, "[length]", "width")
+    _require(height, "[length]", "height")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    b = width.to("mm").magnitude
+    h = height.to("mm").magnitude
+    t = wall_thickness.to("mm").magnitude
+    if t <= 0:
+        raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+    if 2 * t >= b or 2 * t >= h:
+        raise ValueError(
+            f"2*wall_thickness ({2 * t} mm) must be below both width and height ({width}, {height})"
+        )
+    inner = (b - 2 * t) * (h - 2 * t) ** 3
+    return Quantity(magnitude=(b * h**3 - inner) / 12.0, unit="mm**4")
+
+
+def i_section_second_moment(
+    *,
+    flange_width: Quantity,
+    total_height: Quantity,
+    flange_thickness: Quantity,
+    web_thickness: Quantity,
+) -> Quantity:
+    """The strong-axis second moment I = (b·h³ − (b − t_w)·(h − 2·t_f)³)/12 of an I-beam.
+
+    A doubly-symmetric I- or H-section is the outer bounding rectangle minus the two
+    web-flanking voids: I = (b·h³ − (b − t_w)·(h − 2·t_f)³)/12 about the strong
+    (horizontal) axis. ``flange_width`` b, ``total_height`` h, ``flange_thickness``
+    t_f, and ``web_thickness`` t_w describe the section, with 2·t_f < h and t_w < b.
+    Nearly all the material sits in the flanges far from the axis, which is where the
+    I-section's stiffness-per-weight comes from. Returns the second moment in mm⁴.
+    """
+    _require(flange_width, "[length]", "flange_width")
+    _require(total_height, "[length]", "total_height")
+    _require(flange_thickness, "[length]", "flange_thickness")
+    _require(web_thickness, "[length]", "web_thickness")
+    b = flange_width.to("mm").magnitude
+    h = total_height.to("mm").magnitude
+    tf = flange_thickness.to("mm").magnitude
+    tw = web_thickness.to("mm").magnitude
+    if tf <= 0 or tw <= 0:
+        raise ValueError("flange_thickness and web_thickness must be positive")
+    if 2 * tf >= h:
+        raise ValueError(f"2*flange_thickness ({2 * tf} mm) must be below total_height ({h} mm)")
+    if tw >= b:
+        raise ValueError(f"web_thickness ({tw} mm) must be below flange_width ({b} mm)")
+    return Quantity(magnitude=(b * h**3 - (b - tw) * (h - 2 * tf) ** 3) / 12.0, unit="mm**4")
 
 
 def max_transverse_shear_stress(

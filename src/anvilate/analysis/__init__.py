@@ -9,7 +9,8 @@ modules:
 - :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
   fixed-fixed / fixed-pinned; point, distributed, triangular, patch, and
   applied-couple loads), transverse shear, shear flow (VQ/I) and built-up-beam
-  fastener spacing, section second moments
+  fastener spacing, section second moments (rectangular, circular, hollow circle,
+  box tube, and I-section)
 - :mod:`~anvilate.analysis.plate` — flat-plate bending (simply-supported
   rectangle via the exact Navier series; circular, simply-supported and clamped),
   the clamped-cover thickness a pressure requires, and elastic plate/web buckling
@@ -157,10 +158,12 @@ from .beam import (
     fixed_pinned_triangular_load_peak_at_prop,
     fixed_pinned_uniform_load,
     hollow_circular_second_moment,
+    i_section_second_moment,
     max_transverse_shear_stress,
     overhang_tip_load,
     overhang_uniform_load,
     rectangular_second_moment,
+    rectangular_tube_second_moment,
     shear_flow,
     simply_supported_center_load,
     simply_supported_center_patch_load,
@@ -561,6 +564,8 @@ __all__ = [
     "rectangular_second_moment",
     "circular_second_moment",
     "hollow_circular_second_moment",
+    "rectangular_tube_second_moment",
+    "i_section_second_moment",
     "CrossSection",
     "bending_stress",
     "required_section_modulus",

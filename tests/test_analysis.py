@@ -149,6 +149,7 @@ from anvilate.analysis import (
     hollow_shaft_diameter_for_bending_torsion,
     hollow_shaft_torsional_stress,
     hollow_shaft_twist_angle,
+    i_section_second_moment,
     impact_factor,
     impact_stress,
     interference_axial_capacity,
@@ -206,6 +207,7 @@ from anvilate.analysis import (
     rectangular_curved_beam_stress,
     rectangular_second_moment,
     rectangular_tube_enclosed_area,
+    rectangular_tube_second_moment,
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
     required_axial_area,
@@ -8481,4 +8483,49 @@ def test_rotating_annular_disc_bore_stress_doubles_the_solid_disc():
             outer_radius=_q("100 mm"),
             inner_radius=_q("300 mm"),
             rotational_speed=speed,
+        )
+
+
+def test_box_and_i_section_second_moments():
+    # Box tube I = (b*h^3 - (b-2t)*(h-2t)^3)/12.
+    box = rectangular_tube_second_moment(
+        width=_q("60 mm"), height=_q("100 mm"), wall_thickness=_q("5 mm")
+    )
+    assert box.to("mm**4").magnitude == pytest.approx((60 * 100**3 - 50 * 90**3) / 12, rel=1e-12)
+    # A box carries far more I than the same-outline solid would per unit weight,
+    # but less than the solid rectangle itself.
+    assert (
+        box.to("mm**4").magnitude
+        < rectangular_second_moment(_q("60 mm"), _q("100 mm")).to("mm**4").magnitude
+    )
+    # I-section I = (b*h^3 - (b-t_w)*(h-2*t_f)^3)/12.
+    ibeam = i_section_second_moment(
+        flange_width=_q("100 mm"),
+        total_height=_q("200 mm"),
+        flange_thickness=_q("15 mm"),
+        web_thickness=_q("10 mm"),
+    )
+    assert ibeam.to("mm**4").magnitude == pytest.approx(
+        (100 * 200**3 - 90 * 170**3) / 12, rel=1e-12
+    )
+    # Filling the web and flanges solid recovers the solid rectangle.
+    near_solid = i_section_second_moment(
+        flange_width=_q("50 mm"),
+        total_height=_q("100 mm"),
+        flange_thickness=_q("49.999 mm"),
+        web_thickness=_q("49.999 mm"),
+    )
+    assert near_solid.to("mm**4").magnitude == pytest.approx(
+        rectangular_second_moment(_q("50 mm"), _q("100 mm")).to("mm**4").magnitude, rel=1e-3
+    )
+    with pytest.raises(ValueError, match="2\\*wall_thickness"):
+        rectangular_tube_second_moment(
+            width=_q("60 mm"), height=_q("100 mm"), wall_thickness=_q("30 mm")
+        )
+    with pytest.raises(ValueError, match="2\\*flange_thickness"):
+        i_section_second_moment(
+            flange_width=_q("100 mm"),
+            total_height=_q("20 mm"),
+            flange_thickness=_q("15 mm"),
+            web_thickness=_q("10 mm"),
         )
