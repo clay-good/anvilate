@@ -1473,3 +1473,20 @@ def test_section_shape_factor_example_ranks_reserve_by_shape():
     assert i_beam.status is CheckStatus.FAIL
     assert "safety factor 1.17" in i_beam.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_plastic_collapse_reserve_example_elastic_fails_plastic_passes():
+    namespace = runpy.run_path(str(_EXAMPLES / "plastic_collapse_reserve.py"))
+    card = namespace["screen_collapse_reserve"]()
+    by_name = {e.name: e for e in card.entries}
+    # First-yield (elastic) design rejects the beam at SF 1.25...
+    elastic = by_name["first-yield (elastic)"]
+    assert elastic.status is CheckStatus.FAIL
+    assert "safety factor 1.25" in elastic.detail
+    # ...but the true plastic collapse load is 2x higher (shape factor 1.5 x
+    # redistribution 16/12), passing with SF 2.50.
+    plastic = by_name["plastic collapse"]
+    assert plastic.passed
+    assert "safety factor 2.50" in plastic.detail
+    # The overall card is FAIL because the elastic entry fails (No silent green).
+    assert card.status is CheckStatus.FAIL
