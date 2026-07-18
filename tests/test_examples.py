@@ -1901,3 +1901,22 @@ def test_v_belt_drive_capstone_traction_governs():
     assert two_by_name["belt grip (slip)"].passed
     assert "safety factor 1.65" in two_by_name["belt grip (slip)"].detail
     assert two.status is CheckStatus.PASS
+
+
+def test_spreader_beam_buckling_capstone_column_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "spreader_beam_buckling.py"))
+    slender = namespace["screen_spreader"]()
+    by_name = {e.name: e for e in slender.entries}
+    # The slings are fine...
+    assert by_name["top sling leg tension"].passed
+    assert "safety factor 1.13" in by_name["top sling leg tension"].detail
+    # ...but the spreader buckles as a slender column under the sling compression.
+    assert by_name["spreader column buckling"].status is CheckStatus.FAIL
+    assert "safety factor 0.89" in by_name["spreader column buckling"].detail
+    assert slender.status is CheckStatus.FAIL
+    # A stubbier tube (same length and wall) clears the same compression.
+    stubby = namespace["screen_stubbier_spreader"]()
+    stubby_by_name = {e.name: e for e in stubby.entries}
+    assert stubby_by_name["spreader column buckling"].passed
+    assert "safety factor 1.80" in stubby_by_name["spreader column buckling"].detail
+    assert stubby.status is CheckStatus.PASS
