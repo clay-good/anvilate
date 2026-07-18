@@ -1748,3 +1748,22 @@ def test_sheet_metal_bend_radius_example_ductility_governs():
     flat = namespace["flat_blank_length"]().to("mm").magnitude
     assert flat == pytest.approx(104.52, abs=0.01)
     assert flat > 100.0  # the naive 40+60 flange sum would misplace every downstream hole
+
+
+def test_snap_fit_latch_example_strain_governs_not_force():
+    namespace = runpy.run_path(str(_EXAMPLES / "snap_fit_latch_strain.py"))
+    drawn = namespace["screen_latch"]()
+    by_name = {e.name: e for e in drawn.entries}
+    # The stubby finger assembles by hand (46 N < 65 N)...
+    assert by_name["mating force vs hand limit"].passed
+    assert "safety factor 1.40" in by_name["mating force vs hand limit"].detail
+    # ...but over-strains its root at 4.7% vs the 2% allowable and cracks.
+    assert by_name["root strain vs allowable"].status is CheckStatus.FAIL
+    assert "safety factor 0.43" in by_name["root strain vs allowable"].detail
+    assert drawn.status is CheckStatus.FAIL
+    # The slender redesign clears the same undercut within the strain allowable.
+    fixed = namespace["screen_redesigned_latch"]()
+    fixed_by_name = {e.name: e for e in fixed.entries}
+    assert fixed_by_name["root strain vs allowable"].passed
+    assert "safety factor 1.50" in fixed_by_name["root strain vs allowable"].detail
+    assert fixed.status is CheckStatus.PASS
