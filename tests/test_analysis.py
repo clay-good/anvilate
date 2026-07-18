@@ -10647,3 +10647,39 @@ def test_sheetmetal_deep_draw_blank_ratio_and_force():
             ultimate_tensile_strength=_q("300 MPa"),
             blank_diameter=_q("30 mm"),  # D/d = 0.6 < C
         )
+
+
+def test_snap_fit_strain_deflection_and_forces_are_consistent():
+    from math import radians, tan
+
+    from anvilate.analysis import snapfit as sf
+
+    geom = {"length": _q("20 mm"), "thickness": _q("2 mm")}
+    # Permissible deflection Y = eps*L^2/(1.5*h); inverting recovers the strain exactly.
+    y = sf.snap_fit_permissible_deflection(permissible_strain=0.02, **geom)
+    assert y.to("mm").magnitude == pytest.approx(0.02 * 20**2 / (1.5 * 2), rel=1e-12)
+    assert sf.snap_fit_strain(deflection=y, **geom) == pytest.approx(0.02, rel=1e-12)
+    # Deflection force P = E*w*h^2*eps/(6L), and equals 3*E*I*Y/L^3 from beam theory.
+    p = sf.snap_fit_deflection_force(
+        permissible_strain=0.02,
+        width=_q("5 mm"),
+        thickness=_q("2 mm"),
+        length=_q("20 mm"),
+        elastic_modulus=_q("2500 MPa"),
+    )
+    assert p.to("N").magnitude == pytest.approx(2500 * 5 * 2**2 * 0.02 / (6 * 20), rel=1e-12)
+    second_moment = 5 * 2**3 / 12
+    assert p.to("N").magnitude == pytest.approx(
+        3 * 2500 * second_moment * y.to("mm").magnitude / 20**3, rel=1e-12
+    )
+    # Mating force W = P*(mu+tan a)/(1-mu*tan a).
+    w = sf.snap_fit_mating_force(deflection_force=p, insertion_angle=30, friction_coefficient=0.3)
+    ta = tan(radians(30))
+    assert w.to("N").magnitude == pytest.approx(
+        p.to("N").magnitude * (0.3 + ta) / (1 - 0.3 * ta), rel=1e-12
+    )
+    # A ramp so steep and rough that mu*tan(a) >= 1 self-locks: no push assembles it.
+    with pytest.raises(ValueError, match="self-locks"):
+        sf.snap_fit_mating_force(deflection_force=p, insertion_angle=80, friction_coefficient=0.3)
+    with pytest.raises(ValueError, match="permissible_strain must be positive"):
+        sf.snap_fit_permissible_deflection(permissible_strain=0, **geom)

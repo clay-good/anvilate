@@ -173,6 +173,10 @@ modules:
   bend radius a material's ductility allows, the air (V-die) bending force, and the
   shear-cutting / round-hole punching force and the stripping force to clear the punch,
   and the deep-drawing cup blank diameter, draw ratio, and drawing force
+- :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
+  strain: the permissible deflection a material allowable permits, the peak root strain
+  a required undercut imposes, the finger deflection (spring) force, and the mating
+  (assembly) force over the lead-in ramp
 
 Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
@@ -598,6 +602,12 @@ from .slider_crank import (
     slider_crank_piston_side_thrust,
     slider_crank_velocity,
 )
+from .snapfit import (
+    snap_fit_deflection_force,
+    snap_fit_mating_force,
+    snap_fit_permissible_deflection,
+    snap_fit_strain,
+)
 from .spring import (
     BELLEVILLE_PLATEAU_RATIO,
     SPRING_END_CLAMPED_FREE,
@@ -829,6 +839,10 @@ __all__ = [
     "slider_crank_velocity",
     "slider_crank_acceleration",
     "slider_crank_piston_side_thrust",
+    "snap_fit_permissible_deflection",
+    "snap_fit_strain",
+    "snap_fit_deflection_force",
+    "snap_fit_mating_force",
     "scotch_yoke_displacement",
     "scotch_yoke_velocity",
     "scotch_yoke_acceleration",
