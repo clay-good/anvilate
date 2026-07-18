@@ -37,6 +37,7 @@ __all__ = [
     "CombinedNormalStress",
     "combine_axial_bending",
     "concentrated_stress",
+    "elliptical_hole_stress_concentration",
 ]
 
 
@@ -109,6 +110,38 @@ def concentrated_stress(*, nominal_stress: Quantity, kt: float) -> Quantity:
     if kt < 1:
         raise ValueError(f"kt must be at least 1 (a stress raiser); got {kt}")
     return Quantity(magnitude=kt * sigma, unit="MPa")
+
+
+def elliptical_hole_stress_concentration(
+    *, semi_axis_across_load: Quantity, semi_axis_along_load: Quantity
+) -> float:
+    """The Inglis stress-concentration factor K_t = 1 + 2·a/b of an elliptical hole.
+
+    An elliptical hole in a wide plate under uniaxial tension concentrates the
+    stress at the ends of the axis across the load. Inglis's exact solution gives
+    K_t = 1 + 2·a/b, where ``semi_axis_across_load`` a is the semi-axis
+    perpendicular to the load (the one that raises the stress) and
+    ``semi_axis_along_load`` b the semi-axis parallel to it. A circular hole (a = b)
+    gives the familiar K_t = 3; a hole stretched across the load raises it without
+    limit, so a crack-like slit (b → 0) is why sharp flaws are so dangerous. Feed
+    the result to :func:`concentrated_stress`. Both semi-axes are positive lengths.
+    Returns the dimensionless K_t (≥ 3, and = 3 only for a circular hole).
+    """
+    if not semi_axis_across_load.has_dimension("[length]"):
+        raise ValueError(
+            f"semi_axis_across_load must be a [length] quantity; got {semi_axis_across_load}"
+        )
+    if not semi_axis_along_load.has_dimension("[length]"):
+        raise ValueError(
+            f"semi_axis_along_load must be a [length] quantity; got {semi_axis_along_load}"
+        )
+    a = semi_axis_across_load.to("mm").magnitude
+    b = semi_axis_along_load.to("mm").magnitude
+    if a <= 0:
+        raise ValueError(f"semi_axis_across_load must be positive; got {semi_axis_across_load}")
+    if b <= 0:
+        raise ValueError(f"semi_axis_along_load must be positive; got {semi_axis_along_load}")
+    return 1.0 + 2.0 * a / b
 
 
 def von_mises_plane_stress(

@@ -84,6 +84,7 @@ from anvilate.analysis import (
     disc_clutch_force_for_torque,
     disc_clutch_torque,
     dunkerley_fundamental_frequency,
+    elliptical_hole_stress_concentration,
     estimated_endurance_limit,
     euler_buckling_load,
     euler_critical_stress,
@@ -7951,3 +7952,41 @@ def test_helical_virtual_teeth_exceeds_the_actual_count():
         helical_virtual_teeth(actual_teeth=0, helix_angle=30.0)
     with pytest.raises(ValueError, match=r"helix_angle \(degrees\) must lie in"):
         helical_virtual_teeth(actual_teeth=20, helix_angle=90.0)
+
+
+def test_elliptical_hole_stress_concentration_inglis():
+    # Circular hole (a = b): the classic K_t = 3.
+    kt_circle = elliptical_hole_stress_concentration(
+        semi_axis_across_load=_q("5 mm"), semi_axis_along_load=_q("5 mm")
+    )
+    assert kt_circle == pytest.approx(3.0, rel=1e-12)
+    # Stretched across the load (a = 2b): K_t = 1 + 2*2 = 5.
+    kt_wide = elliptical_hole_stress_concentration(
+        semi_axis_across_load=_q("10 mm"), semi_axis_along_load=_q("5 mm")
+    )
+    assert kt_wide == pytest.approx(5.0, rel=1e-12)
+    assert kt_wide > kt_circle
+    # A hole aligned with the load (a < b) is gentler, but never below 1.
+    kt_slender = elliptical_hole_stress_concentration(
+        semi_axis_across_load=_q("2 mm"), semi_axis_along_load=_q("10 mm")
+    )
+    assert kt_slender == pytest.approx(1.4, rel=1e-12)
+    # A crack-like slit (b -> 0) drives K_t up without limit.
+    kt_crack = elliptical_hole_stress_concentration(
+        semi_axis_across_load=_q("10 mm"), semi_axis_along_load=_q("0.1 mm")
+    )
+    assert kt_crack == pytest.approx(201.0, rel=1e-12)
+    # It composes with concentrated_stress: peak = K_t * nominal.
+    peak = concentrated_stress(nominal_stress=_q("50 MPa"), kt=kt_circle)
+    assert peak.to("MPa").magnitude == pytest.approx(150.0, rel=1e-12)
+
+
+def test_elliptical_hole_rejects_bad_inputs():
+    with pytest.raises(ValueError, match="semi_axis_across_load must be positive"):
+        elliptical_hole_stress_concentration(
+            semi_axis_across_load=_q("0 mm"), semi_axis_along_load=_q("5 mm")
+        )
+    with pytest.raises(ValueError, match="semi_axis_along_load must be a"):
+        elliptical_hole_stress_concentration(
+            semi_axis_across_load=_q("5 mm"), semi_axis_along_load=_q("5 N")
+        )

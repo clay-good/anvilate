@@ -101,7 +101,8 @@ modules:
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the Dunkerley multi-mass combination, distributed-mass beam
   fundamentals, disc-on-shaft torsional mode
-- :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending
+- :mod:`~anvilate.analysis.stress` — von Mises combination, combined axial+bending,
+  and the Inglis elliptical-hole stress-concentration factor
 - :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
   the max/min → amplitude/mean cyclic-stress converter, the fatigue notch factor,
   the steel endurance-limit estimate with its Marin correction to the real
@@ -432,6 +433,7 @@ from .stress import (
     CombinedNormalStress,
     combine_axial_bending,
     concentrated_stress,
+    elliptical_hole_stress_concentration,
     max_shear_stress_plane,
     principal_stresses_plane,
     strength_scorecard,
@@ -776,6 +778,7 @@ __all__ = [
     "CombinedNormalStress",
     "combine_axial_bending",
     "concentrated_stress",
+    "elliptical_hole_stress_concentration",
     "constrained_thermal_stress",
     "free_thermal_expansion",
     "shrink_fit_assembly_temperature",
