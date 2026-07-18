@@ -93,6 +93,8 @@ from anvilate.analysis import (
     constrained_thermal_stress,
     critical_crack_length,
     critical_damping_coefficient,
+    crossed_belt_length,
+    crossed_belt_wrap_angle,
     cyclic_stress_components,
     cylinder_axial_buckling_stress,
     cylinder_external_pressure_buckling,
@@ -3519,6 +3521,34 @@ def test_belt_drive_geometry_and_capstan_composition():
             large_pulley_diameter=_q("400 mm"),
             small_pulley_diameter=_q("100 mm"),
             center_distance=_q("100 mm"),
+        )
+
+
+def test_crossed_belt_is_longer_and_wraps_more_than_the_open_belt():
+    from math import asin, pi
+
+    kw = {
+        "large_pulley_diameter": _q("300 mm"),
+        "small_pulley_diameter": _q("150 mm"),
+        "center_distance": _q("600 mm"),
+    }
+    # Crossed belt uses the SUM of the radii: L = 2C + pi*(D+d)/2 + (D+d)^2/(4C).
+    crossed_len = crossed_belt_length(**kw)
+    assert crossed_len.to("mm").magnitude == pytest.approx(
+        2 * 600 + pi * 450 / 2 + 450**2 / (4 * 600), rel=1e-12
+    )
+    # It is always longer than the open belt on the same pulleys.
+    assert crossed_len.to("mm").magnitude > belt_length(**kw).to("mm").magnitude
+    # Both pulleys wrap the same angle beta = pi + 2*asin((D+d)/(2C)) > pi.
+    crossed_beta = crossed_belt_wrap_angle(**kw)
+    assert crossed_beta == pytest.approx(pi + 2 * asin(450 / 1200), rel=1e-12)
+    assert crossed_beta > pi > belt_wrap_angle(**kw)
+    # The pulleys must clear at the cross (C > (D+d)/2).
+    with pytest.raises(ValueError, match=r"must exceed \(D\+d\)/2"):
+        crossed_belt_length(
+            large_pulley_diameter=_q("300 mm"),
+            small_pulley_diameter=_q("150 mm"),
+            center_distance=_q("200 mm"),
         )
 
 

@@ -58,7 +58,8 @@ modules:
 - :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
   tension ratio, slack tension, transmissible force (still and at speed, with
   centrifugal tension and the max-power belt speed), V-belt wedge friction,
-  belt-drive geometry (length and wrap angle), transmitted power, and mean tension
+  open- and crossed-belt-drive geometry (length and wrap angle), transmitted power,
+  and mean tension
 - :mod:`~anvilate.analysis.chain` — roller-chain drive geometry: chain length in
   pitches, mean chain speed, and the chordal (polygon-action) speed variation of
   a sprocket
@@ -240,6 +241,8 @@ from .belt import (
     belt_transmitted_power,
     belt_wrap_angle,
     capstan_tension_ratio,
+    crossed_belt_length,
+    crossed_belt_wrap_angle,
     vee_belt_effective_friction,
 )
 from .brake import (
@@ -704,6 +707,8 @@ __all__ = [
     "vee_belt_effective_friction",
     "belt_length",
     "belt_wrap_angle",
+    "crossed_belt_length",
+    "crossed_belt_wrap_angle",
     "belt_transmitted_power",
     "belt_mean_tension",
     "chain_length_in_pitches",

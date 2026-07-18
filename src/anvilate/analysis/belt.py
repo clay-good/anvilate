@@ -42,6 +42,8 @@ __all__ = [
     "vee_belt_effective_friction",
     "belt_length",
     "belt_wrap_angle",
+    "crossed_belt_length",
+    "crossed_belt_wrap_angle",
     "belt_transmitted_power",
     "belt_mean_tension",
 ]
@@ -284,6 +286,61 @@ def belt_wrap_angle(
     """
     big, small, c = _pulley_geometry(large_pulley_diameter, small_pulley_diameter, center_distance)
     return pi - 2.0 * asin((big - small) / (2.0 * c))
+
+
+def _crossed_geometry(
+    large_pulley_diameter: Quantity, small_pulley_diameter: Quantity, center_distance: Quantity
+) -> tuple[float, float, float]:
+    """Validate and return (D, d, C) in mm for a crossed two-pulley belt drive."""
+    big, small, c = _pulley_geometry(large_pulley_diameter, small_pulley_diameter, center_distance)
+    if c <= (big + small) / 2.0:
+        raise ValueError(
+            f"center_distance ({center_distance}) must exceed (D+d)/2 for a crossed belt "
+            "(the pulleys would touch at the cross)"
+        )
+    return big, small, c
+
+
+def crossed_belt_length(
+    *,
+    large_pulley_diameter: Quantity,
+    small_pulley_diameter: Quantity,
+    center_distance: Quantity,
+) -> Quantity:
+    """The length of a crossed belt over two pulleys,
+    L = 2C + π(D+d)/2 + (D+d)²/(4C).
+
+    A crossed belt figure-eights between the pulleys so they turn in *opposite*
+    directions; because the belt crosses, its geometry uses the *sum* of the radii
+    where the open belt (:func:`belt_length`) uses the difference, giving the
+    (D+d)²/(4C) closing term. ``large_pulley_diameter`` D, ``small_pulley_diameter``
+    d, and ``center_distance`` C must be positive lengths with C above (D+d)/2 so the
+    pulleys clear at the cross. A crossed belt is always longer than the open belt on
+    the same pulleys. Returns the length in mm.
+    """
+    big, small, c = _crossed_geometry(large_pulley_diameter, small_pulley_diameter, center_distance)
+    length = 2.0 * c + pi * (big + small) / 2.0 + (big + small) ** 2 / (4.0 * c)
+    return Quantity(magnitude=length, unit="mm")
+
+
+def crossed_belt_wrap_angle(
+    *,
+    large_pulley_diameter: Quantity,
+    small_pulley_diameter: Quantity,
+    center_distance: Quantity,
+) -> float:
+    """The wrap angle of a crossed belt, β = π + 2·arcsin((D+d)/(2C)), in **radians**.
+
+    Unlike the open belt — whose two pulleys wrap different arcs — a crossed belt
+    wraps *both* pulleys over the same angle, and that angle exceeds 180° (the belt
+    crossing bends it further around each pulley). The extra wrap grips harder and
+    raises the transmissible force, at the cost of the belt rubbing itself where it
+    crosses (so crossed belts wear faster and are not used with V-belts).
+    ``large_pulley_diameter`` D, ``small_pulley_diameter`` d, and ``center_distance``
+    C are as in :func:`crossed_belt_length`. Returns the common wrap angle in radians.
+    """
+    big, small, c = _crossed_geometry(large_pulley_diameter, small_pulley_diameter, center_distance)
+    return pi + 2.0 * asin((big + small) / (2.0 * c))
 
 
 def belt_transmitted_power(
