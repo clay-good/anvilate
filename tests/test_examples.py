@@ -1456,3 +1456,20 @@ def test_crane_rail_on_foundation_example_the_soft_pad_fails():
     assert soft.status is CheckStatus.FAIL
     assert "safety factor 1.26" in soft.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_section_shape_factor_example_ranks_reserve_by_shape():
+    namespace = runpy.run_path(str(_EXAMPLES / "section_shape_factor.py"))
+    card = namespace["screen_shape_factors"]()
+    by_name = {e.name: e for e in card.entries}
+    # A solid round bar keeps ~70% in reserve past first yield.
+    assert by_name["solid round bar (d 80)"].passed
+    assert "safety factor 1.70" in by_name["solid round bar (d 80)"].detail
+    # A rectangle's shape factor is exactly 1.5 -- it just meets the requirement.
+    assert by_name["solid rectangle (40x120)"].passed
+    assert "safety factor 1.50" in by_name["solid rectangle (40x120)"].detail
+    # An I-section has almost all its area at the extreme fibre -> little reserve.
+    i_beam = by_name["I-section (100x200, 15/10)"]
+    assert i_beam.status is CheckStatus.FAIL
+    assert "safety factor 1.17" in i_beam.detail
+    assert card.status is CheckStatus.FAIL
