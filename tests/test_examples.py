@@ -1553,3 +1553,19 @@ def test_bearing_reliability_life_example_higher_reliability_costs_life():
     assert by_name["life at 99% reliability"].status is CheckStatus.FAIL
     assert "safety factor 0.39" in by_name["life at 99% reliability"].detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_steam_pipe_thermal_gradient_example_thermal_governs_not_pressure():
+    namespace = runpy.run_path(str(_EXAMPLES / "steam_pipe_thermal_gradient.py"))
+    card = namespace["screen_steam_pipe"]()
+    by_name = {e.name: e for e in card.entries}
+    # The pressure hoop stress is a trivial fraction of yield.
+    hoop = by_name["pressure hoop stress"]
+    assert hoop.passed
+    assert "safety factor 12.50" in hoop.detail
+    # The through-wall thermal gradient stress -- which the pressure check never
+    # sees -- pushes past yield and governs the pipe.
+    thermal = by_name["through-wall thermal gradient"]
+    assert thermal.status is CheckStatus.FAIL
+    assert "safety factor 0.97" in thermal.detail
+    assert card.status is CheckStatus.FAIL
