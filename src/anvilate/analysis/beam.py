@@ -72,6 +72,7 @@ __all__ = [
     "propped_cantilever_plastic_collapse_load",
     "simply_supported_center_load_support_slope",
     "simply_supported_uniform_load_support_slope",
+    "cantilever_end_load_tip_slope",
     "simply_supported_plastic_collapse_udl",
     "fixed_fixed_plastic_collapse_udl",
     "propped_cantilever_plastic_collapse_udl",
@@ -458,6 +459,30 @@ def simply_supported_uniform_load_support_slope(
     ell, i, e = _slope_inputs(length, second_moment, elastic_modulus)
     w = load_per_length.to("N/mm").magnitude
     slope_rad = w * ell**3 / (24.0 * e * i)
+    return Quantity(magnitude=degrees(slope_rad), unit="degree")
+
+
+def cantilever_end_load_tip_slope(
+    *,
+    force: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The free-end slope θ = F·L²/(2·E·I) of a cantilever with an end load.
+
+    A cantilever bends most steeply at its tip, where the slope is θ = F·L²/(2·E·I)
+    for an end ``force`` F. For an overhung shaft — a spindle nose, an outboard
+    pulley — this is the misalignment angle the load imposes on the *inboard* bearing
+    (or the tilt of a tool held at the tip), the slope counterpart of
+    :func:`simply_supported_center_load_support_slope`. ``length`` L, ``second_moment``
+    I, and ``elastic_modulus`` E must be positive. Returns the tip slope in degrees (a
+    radian tolerance is degrees·π/180).
+    """
+    _require(force, "[force]", "force")
+    ell, i, e = _slope_inputs(length, second_moment, elastic_modulus)
+    f = force.to("N").magnitude
+    slope_rad = f * ell**2 / (2.0 * e * i)
     return Quantity(magnitude=degrees(slope_rad), unit="degree")
 
 

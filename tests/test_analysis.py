@@ -65,6 +65,7 @@ from anvilate.analysis import (
     cam_pressure_angle,
     cantilever_center_patch_load,
     cantilever_end_load,
+    cantilever_end_load_tip_slope,
     cantilever_end_moment,
     cantilever_fundamental_frequency,
     cantilever_offset_load,
@@ -9757,6 +9758,17 @@ def test_simply_supported_support_slope_is_the_bearing_misalignment():
     )
     with pytest.raises(ValueError, match="force must be a"):
         simply_supported_center_load_support_slope(force=_q("10 N*m"), **kw)
+    # A cantilever's tip slope theta = F*L^2/(2*E*I) -- the overhung-shaft case.
+    tip = cantilever_end_load_tip_slope(
+        force=_q("10 kN"),
+        length=_q("0.5 m"),
+        second_moment=_q("1e6 mm**4"),
+        elastic_modulus=_q("200 GPa"),
+    )
+    assert radians(tip.to("degree").magnitude) == pytest.approx(
+        10000 * 500**2 / (2 * 200000 * 1e6), rel=1e-12
+    )
+    assert radians(tip.to("degree").magnitude) == pytest.approx(0.00625, rel=1e-9)
 
 
 def test_plastic_collapse_loads_and_the_redistribution_reserve():
