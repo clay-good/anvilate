@@ -18,6 +18,16 @@ inertia ratio (J_L/i²)/J_m, the number servo datasheets ask to be kept low (nea
 for aggressive motion, up to ~10 for gentle moves): too high and the motor cannot
 control the load; far below 1 and the motor is mostly accelerating itself.
 
+A servo is then sized twice: its *peak* torque must cover the hardest instant of the
+move, and its *continuous* (thermal) rating must cover the root-mean-square torque
+over the whole repeating cycle,
+
+    T_rms = √( Σ Tᵢ²·tᵢ / Σ tᵢ ),
+
+because winding heat goes as T² and the motor integrates it — dwell segments at zero
+torque are thermal recovery and belong in the sum. A motor can clear every
+instantaneous demand and still burn up on a fast-repeating cycle.
+
 These are exact rigid-body results — friction, gearbox inertia, and load torque add
 on top, and the gearbox's own inertia is best lumped into ``motor_inertia``. Inertias
 are dimension-checked :class:`~anvilate.units.Quantity` values (kg·m²); the gear
@@ -26,6 +36,7 @@ ratio is a plain positive float.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import sqrt
 
 from ..units import Quantity
@@ -35,6 +46,7 @@ __all__ = [
     "reflected_inertia_ratio",
     "motor_acceleration_torque",
     "inertia_matching_gear_ratio",
+    "rms_torque_over_cycle",
 ]
 
 
@@ -140,3 +152,39 @@ def inertia_matching_gear_ratio(
     j_motor = _inertia_kgm2(motor_inertia, "motor_inertia")
     j_load = _inertia_kgm2(load_inertia, "load_inertia")
     return sqrt(j_load / j_motor)
+
+
+def rms_torque_over_cycle(
+    *,
+    torques: Sequence[Quantity],
+    durations: Sequence[Quantity],
+) -> Quantity:
+    """The thermal-equivalent torque √(ΣT²·t/Σt) of a repeating duty cycle.
+
+    Each segment's ``torques`` entry (≥ 0 — a dwell is a legitimate zero-torque
+    segment) held for the matching ``durations`` entry (> 0), squared-averaged over
+    the whole cycle: winding heat goes as T², so this is the steady torque that
+    heats the motor identically, and it is screened against the motor's
+    *continuous* rating while the largest segment is screened against the *peak*
+    rating. Lengthening a dwell lowers it; a motor can pass every instant and
+    still fail the cycle. Returns the RMS torque in N·m.
+    """
+    if len(torques) != len(durations) or not torques:
+        raise ValueError(
+            "torques and durations must be non-empty sequences of the same length; "
+            f"got {len(torques)} torques and {len(durations)} durations"
+        )
+    weighted = 0.0
+    total_time = 0.0
+    for index, (torque, duration) in enumerate(zip(torques, durations, strict=True)):
+        _require(torque, "[force] * [length]", f"torques[{index}]")
+        _require(duration, "[time]", f"durations[{index}]")
+        t = torque.to("N*m").magnitude
+        dt = duration.to("s").magnitude
+        if t < 0:
+            raise ValueError(f"torques[{index}] must be non-negative; got {torque}")
+        if dt <= 0:
+            raise ValueError(f"durations[{index}] must be positive; got {duration}")
+        weighted += t**2 * dt
+        total_time += dt
+    return Quantity(magnitude=sqrt(weighted / total_time), unit="N*m")

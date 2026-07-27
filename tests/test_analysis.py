@@ -11142,6 +11142,34 @@ def test_servo_inertia_reflection_and_matching_ratio():
         )
 
 
+def test_rms_torque_over_cycle_is_the_thermal_equivalent():
+    from math import sqrt
+
+    from anvilate.analysis import rms_torque_over_cycle
+
+    # By hand: sqrt((2^2*1 + 0.5^2*3 + 0^2*2)/6) — the dwell counts in the time base.
+    rms = rms_torque_over_cycle(
+        torques=[_q("2 N*m"), _q("0.5 N*m"), _q("0 N*m")],
+        durations=[_q("1 s"), _q("3 s"), _q("2 s")],
+    )
+    assert rms.to("N*m").magnitude == pytest.approx(sqrt((4 + 0.75) / 6), rel=1e-12)
+    # A constant torque is its own RMS.
+    constant = rms_torque_over_cycle(
+        torques=[_q("1.5 N*m"), _q("1.5 N*m")], durations=[_q("2 s"), _q("5 s")]
+    )
+    assert constant.to("N*m").magnitude == pytest.approx(1.5, rel=1e-12)
+    # Lengthening the dwell lowers the thermal-equivalent torque.
+    longer_dwell = rms_torque_over_cycle(
+        torques=[_q("2 N*m"), _q("0.5 N*m"), _q("0 N*m")],
+        durations=[_q("1 s"), _q("3 s"), _q("6 s")],
+    )
+    assert longer_dwell.to("N*m").magnitude < rms.to("N*m").magnitude
+    with pytest.raises(ValueError, match="same length"):
+        rms_torque_over_cycle(torques=[_q("2 N*m")], durations=[])
+    with pytest.raises(ValueError, match=r"durations\[0\] must be positive"):
+        rms_torque_over_cycle(torques=[_q("2 N*m")], durations=[_q("0 s")])
+
+
 def test_adhesive_bond_capacities_and_lap_shear():
     from math import pi
 
