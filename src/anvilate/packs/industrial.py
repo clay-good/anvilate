@@ -21,6 +21,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..analysis import (
+    DEFAULT_POISSON_RATIO,
     clamped_annular_plate_fundamental_frequency,
     clamped_annular_plate_uniform_load,
     clamped_circular_plate_fundamental_frequency,
@@ -38,6 +39,7 @@ from ..analysis import (
     simply_supported_plate_uniform_load,
     strength_scorecard,
 )
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard
 from ..standards import MaterialsDatabase, default_materials_db
 from ..units import Quantity
@@ -228,13 +230,45 @@ def screen_cover_plate(
     else:
         result = check(length=plate.length, width=plate.width, **common)
 
+    bending_update: dict = {"reference": reference}
+    if result.stress_formula is not None and plate.diameter is not None:
+        # The circular uniform-pressure cases are one-line closed forms in the
+        # pressure, radius, and thickness. The rectangular, patch, and annular
+        # cases are series or numeric solutions and declare no formula, so they
+        # render as an inputs table instead of a tidy expression that is not what
+        # was computed.
+        symbols = [
+            SymbolValue(
+                symbol="q", description="uniform pressure on the cover", value=plate.pressure
+            ),
+            SymbolValue(
+                symbol="R",
+                description="cover radius",
+                value=Quantity(magnitude=plate.diameter.to("mm").magnitude / 2, unit="mm"),
+            ),
+            SymbolValue(symbol="t", description="cover thickness", value=plate.thickness),
+        ]
+        if "ν" in result.stress_formula:
+            symbols.append(
+                SymbolValue(symbol="ν", description="Poisson's ratio", value=DEFAULT_POISSON_RATIO)
+            )
+        bending_update["derivation"] = Derivation(
+            symbolic=result.stress_formula,
+            inputs=tuple(symbols),
+            result=SymbolValue(
+                symbol="σ",
+                description="peak bending stress in the cover",
+                value=result.max_bending_stress,
+            ),
+            citation=reference,
+        )
     entries = [
         strength_scorecard(
             f"{plate.name} plate bending",
             stress=result.max_bending_stress,
             allowable=record.yield_strength.quantity,
             required=required_safety_factor,
-        ).model_copy(update={"reference": reference})
+        ).model_copy(update=bending_update)
     ]
     if plate.deflection_limit is not None:
         entries.append(

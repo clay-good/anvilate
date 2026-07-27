@@ -34,6 +34,7 @@ from pydantic import BaseModel, ConfigDict
 from ..units import Quantity
 
 __all__ = [
+    "DEFAULT_POISSON_RATIO",
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",
     "simply_supported_plate_center_patch_load",
@@ -99,6 +100,11 @@ class PlateBendingResult(BaseModel):
 
     max_bending_stress: Quantity
     max_deflection: Quantity
+    # The closed-form peak-stress expression for this case, when it has one a
+    # reviewer can follow in a line. The rectangular and patch cases sum a Navier
+    # series and the annular cases search the radius numerically, so they declare
+    # none rather than a tidy formula that is not what was computed.
+    stress_formula: str | None = None
 
     def bending_safety_factor(self, yield_strength: Quantity) -> float:
         """The factor of safety against surface yielding: yield / peak stress."""
@@ -301,6 +307,7 @@ def simply_supported_circular_plate_uniform_load(
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
+        stress_formula="σ = 3·(3 + ν)·q·R²/(8·t²)",
     )
 
 
@@ -332,6 +339,7 @@ def clamped_circular_plate_uniform_load(
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
+        stress_formula="σ = 3·q·R²/(4·t²)",
     )
 
 

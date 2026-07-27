@@ -492,3 +492,36 @@ def test_beam_deflection_derivation_only_where_a_closed_form_exists():
         load_position=Quantity.parse("1 m"),
     )
     assert offset.derivation is None
+
+
+def test_cover_plate_derivation_only_for_the_closed_form_cases():
+    from anvilate.packs.industrial import CoverPlate, PlateEdge, screen_cover_plate
+
+    def bending(**overrides):
+        fields = {
+            "name": "manway",
+            "diameter": Quantity.parse("500 mm"),
+            "thickness": Quantity.parse("12 mm"),
+            "pressure": Quantity.parse("0.4 MPa"),
+            "material": "ASTM-A36",
+            "edge": PlateEdge.CLAMPED,
+        }
+        card = screen_cover_plate(CoverPlate(**{**fields, **overrides}), required_safety_factor=1.5)
+        return card.entries[0]
+
+    clamped = bending().derivation
+    assert clamped.symbolic == "σ = 3·q·R²/(4·t²)"
+    assert clamped.substituted() == "σ = 3·0.4 MPa·(250.00 mm)²/(4·(12.00 mm)²)"
+
+    # The simply-supported form carries Poisson's ratio, so it declares it.
+    supported = bending(edge=PlateEdge.SIMPLY_SUPPORTED).derivation
+    assert "ν" in supported.symbolic
+    assert any(item.symbol == "ν" for item in supported.inputs)
+    assert supported.unresolved_symbols() == ()
+
+    # A rectangular cover sums a Navier series; there is no one-line formula that
+    # is what was computed, so it declares none.
+    rectangular = bending(
+        diameter=None, length=Quantity.parse("600 mm"), width=Quantity.parse("400 mm")
+    )
+    assert rectangular.derivation is None

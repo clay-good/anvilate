@@ -336,6 +336,7 @@ living_hinge.living_hinge_web_length_for_strain
 o_ring.o_ring_gland_fill_fraction
 o_ring.o_ring_squeeze_fraction
 o_ring.o_ring_stretch_fraction
+plate.DEFAULT_POISSON_RATIO
 plate.PlateBendingResult
 plate.clamped_annular_plate_uniform_load
 plate.clamped_circular_plate_center_load_deflection

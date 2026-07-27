@@ -627,6 +627,7 @@ from .o_ring import (
     o_ring_stretch_fraction,
 )
 from .plate import (
+    DEFAULT_POISSON_RATIO,
     PlateBendingResult,
     clamped_annular_plate_uniform_load,
     clamped_circular_plate_center_load_deflection,
@@ -839,6 +840,7 @@ from .worm import (
 )
 
 __all__ = [
+    "DEFAULT_POISSON_RATIO",
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",

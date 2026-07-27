@@ -27,8 +27,10 @@
       closed form on the result (`BeamBendingResult.deflection_formula`). Off-default
       geometry (offset loads, patches, load pairs) solves numerically or through a
       series and declares none, so it falls back rather than showing a tidy formula
-      that is not what was computed — as does the industrial pack's cover plate, whose
-      checks are Navier-series and table-interpolated solutions.
+      that is not what was computed. The industrial pack's cover plate follows the same
+      rule: the two circular uniform-pressure cases have exact closed forms and declare
+      them, while the rectangular (Navier series), patch, and annular (numeric radius
+      search) cases declare none.
 - [x] 2.2 Tabular fallback rendering for checks without metadata, with the honest label
       ("derivation not rendered"; a derivation with undeclared symbols also falls back
       rather than printing a bare symbol where a value belongs)
