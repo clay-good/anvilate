@@ -2025,6 +2025,31 @@ def test_bushing_wear_life_example_lubrication_governs():
     assert improved.status is CheckStatus.PASS
 
 
+def test_workshop_hoist_system_capstone_full_drum_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "workshop_hoist_system.py"))
+    # The friction-amplified lead line, not W/n = 5 kN, sizes the whole chain.
+    lead = namespace["lead_line_tension"]()
+    assert lead.to("kN").magnitude == pytest.approx(5.82, abs=0.005)
+    naive = namespace["screen_hoist_system"]()
+    by_name = {e.name: e for e in naive.entries}
+    # Rope, sheave, and drum storage all clear against the real lead line...
+    assert "safety factor 5.42" in by_name["lead line plus sheave bending vs rope strength"].detail
+    assert "safety factor 1.37" in by_name["head-sheave groove pressure vs allowable"].detail
+    assert "safety factor 1.07" in by_name["drum rope capacity vs travel"].detail
+    # ...and the naive winch even clears the bare drum...
+    assert by_name["bare-drum line pull vs lead line"].passed
+    assert "safety factor 1.01" in by_name["bare-drum line pull vs lead line"].detail
+    # ...but stalls where the lift finishes: on the full drum.
+    full = by_name["full-drum line pull vs lead line"]
+    assert full.status is CheckStatus.FAIL
+    assert "safety factor 0.82" in full.detail
+    assert naive.status is CheckStatus.FAIL
+    upgraded = namespace["screen_upgraded_winch"]()
+    upgraded_by_name = {e.name: e for e in upgraded.entries}
+    assert "safety factor 1.14" in upgraded_by_name["full-drum line pull vs lead line"].detail
+    assert upgraded.status is CheckStatus.PASS
+
+
 def test_winch_full_drum_stall_example_top_layer_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "winch_full_drum_stall.py"))
     narrow = namespace["screen_narrow_drum"]()
