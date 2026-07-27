@@ -15,18 +15,16 @@
 
 ## 2. Implementation
 
-- [x] 2.1 Derivation metadata for the initial slice of high-traffic checks, all in the
-      structural pack: lug net tension and pin bearing, column buckling (Euler and
-      Johnson, each showing the regime that actually governed), concrete bearing, bolt
-      shear, plate bearing, edge tear-out (showing whichever of the two §J3.10 branches
-      governed, not a `min()` the reader has to evaluate), bolt tension, combined
-      tension+shear, weld throat shear, tension-member gross yielding and net rupture.
-      Beam bending too: the beam checks now report the peak moment they already
-      computed (`BeamBendingResult.max_moment`), so the flexure derivation reads the
-      same for every support and load case while naming the case behind the moment.
-      Still to wire: beam deflection and the per-case moment formulas behind it
-      (w·L⁴/384EI and friends), base plate, gusset block shear, beam-column
-      interaction, shear plate.
+- [x] 2.1 Derivation metadata for high-traffic checks. The structural pack is complete:
+      every one of its checks carries a worked derivation — beam bending and transverse
+      shear, column buckling, bolt shear/bearing/tear-out/tension/combined, weld throat,
+      base-plate bearing and plate bending, lug tension and pin bearing, gusset block
+      shear, tension-member gross yielding and net rupture, beam-column interaction,
+      concrete bearing, and shear-plate yielding and rupture. Where a clause branches
+      (§J3.10 tear-out, §H1.1 interaction, Euler vs Johnson) the derivation shows the
+      branch that actually governed rather than a condition the reader has to resolve.
+      Still to wire: beam deflection (needs the per-case deflection formulas, the same
+      shape of work as `max_moment`), and the industrial pack.
 - [x] 2.2 Tabular fallback rendering for checks without metadata, with the honest label
       ("derivation not rendered"; a derivation with undeclared symbols also falls back
       rather than printing a bare symbol where a value belongs)

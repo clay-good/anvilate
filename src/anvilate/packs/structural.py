@@ -649,12 +649,33 @@ def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntr
         magnitude=_SHEAR_YIELD_FRACTION * record.yield_strength.quantity.to("MPa").magnitude,
         unit="MPa",
     )
+    derivation = Derivation(
+        # The form factor k carries the section shape: 3/2 for a rectangle, 4/3 for
+        # a circle — the peak at the neutral axis, not the V/A average.
+        symbolic="τ = k · V / A",
+        inputs=(
+            SymbolValue(
+                symbol="k",
+                description="section shear form factor, peak over average",
+                value=member.section.shear_form_factor,
+            ),
+            SymbolValue(
+                symbol="V",
+                description="peak transverse shear force in the span",
+                value=peak_shear,
+                unit="kN",
+            ),
+            SymbolValue(symbol="A", description="cross-sectional area", value=member.section.area),
+        ),
+        result=SymbolValue(symbol="τ", description="peak transverse shear stress", value=shear),
+        citation=_CLAUSE_BEAM_SHEAR,
+    )
     return strength_scorecard(
         f"{member.name} shear",
         stress=shear,
         allowable=shear_yield,
         required=required_safety_factor,
-    ).model_copy(update={"reference": _CLAUSE_BEAM_SHEAR})
+    ).model_copy(update={"reference": _CLAUSE_BEAM_SHEAR, "derivation": derivation})
 
 
 class ColumnMember(BaseModel):
@@ -1175,13 +1196,32 @@ def screen_base_plate(
         magnitude=_CONCRETE_BEARING_FRACTION * plate.concrete_strength.to("MPa").magnitude,
         unit="MPa",
     )
+    bearing_symbol = SymbolValue(
+        symbol="f_p", description="bearing pressure under the plate", value=bearing
+    )
     entries = [
         strength_scorecard(
             f"{plate.name} concrete bearing",
             stress=bearing,
             allowable=capacity,
             required=required_safety_factor,
-        ).model_copy(update={"reference": _CLAUSE_BEARING_CONCRETE})
+        ).model_copy(
+            update={
+                "reference": _CLAUSE_BEARING_CONCRETE,
+                "derivation": Derivation(
+                    symbolic="f_p = P / (B · N)",
+                    inputs=(
+                        SymbolValue(
+                            symbol="P", description="column axial load", value=plate.axial_load
+                        ),
+                        SymbolValue(symbol="B", description="plate width", value=plate.width),
+                        SymbolValue(symbol="N", description="plate depth", value=plate.depth),
+                    ),
+                    result=bearing_symbol,
+                    citation=_CLAUSE_BEARING_CONCRETE,
+                ),
+            }
+        )
     ]
     if plate.plate_thickness is not None:
         materials = materials or default_materials_db()
@@ -1197,7 +1237,36 @@ def screen_base_plate(
                 stress=plate_bending,
                 allowable=plate_yield,
                 required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_BASEPLATE_BENDING})
+            ).model_copy(
+                update={
+                    "reference": _CLAUSE_BASEPLATE_BENDING,
+                    "derivation": Derivation(
+                        # The plate is treated as a cantilever of length l carrying
+                        # the bearing pressure: M = f_p·l²/2 over a section modulus
+                        # t²/6, which collapses to 3·f_p·l²/t².
+                        symbolic="σ = 3 · f_p · l² / t²",
+                        inputs=(
+                            bearing_symbol,
+                            SymbolValue(
+                                symbol="l",
+                                description="cantilever from the column face to the plate edge",
+                                value=plate.cantilever,
+                            ),
+                            SymbolValue(
+                                symbol="t",
+                                description="base plate thickness",
+                                value=plate.plate_thickness,
+                            ),
+                        ),
+                        result=SymbolValue(
+                            symbol="σ",
+                            description="bending stress in the cantilevered plate",
+                            value=plate_bending,
+                        ),
+                        citation=_CLAUSE_BASEPLATE_BENDING,
+                    ),
+                }
+            )
         )
     return Scorecard(entries=tuple(entries))
 
@@ -1350,9 +1419,37 @@ def screen_gusset_plate(
     capacity_n = ultimate * (_BLOCK_SHEAR_SHEAR_FRACTION * shear_area + tension_area)
     load_n = gusset.load.to("N").magnitude
     safety = capacity_n / load_n if load_n > 0 else float("inf")
+    derivation = Derivation(
+        # Block shear tears a wedge out: the shear planes carry 0.6·Fu, the tension
+        # plane the full Fu.
+        symbolic="R_n = 0.6 · F_u · A_nv + F_u · A_nt",
+        inputs=(
+            SymbolValue(
+                symbol="F_u",
+                description="plate ultimate tensile strength",
+                value=materials.get(gusset.material).ultimate_strength.quantity,
+            ),
+            SymbolValue(
+                symbol="A_nv",
+                description="net area along the shear planes",
+                value=gusset.net_shear_area,
+            ),
+            SymbolValue(
+                symbol="A_nt",
+                description="net area across the tension plane",
+                value=gusset.net_tension_area,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="R_n",
+            description="block-shear rupture capacity",
+            value=Quantity(magnitude=capacity_n, unit="N"),
+        ),
+        citation=_CLAUSE_BLOCK_SHEAR,
+    )
     entry = ScorecardEntry.from_safety_factor(
         f"{gusset.name} block shear", computed=safety, required=required_safety_factor
-    ).model_copy(update={"reference": _CLAUSE_BLOCK_SHEAR})
+    ).model_copy(update={"reference": _CLAUSE_BLOCK_SHEAR, "derivation": derivation})
     return Scorecard(entries=(entry,))
 
 
@@ -1570,9 +1667,46 @@ def screen_beam_column(
         interaction = pr_pc / 2.0 + mr_mc
 
     safety = float("inf") if interaction == 0 else 1.0 / interaction
+    capacity_symbols = (
+        SymbolValue(symbol="P_r", description="required axial strength", value=member.axial_load),
+        SymbolValue(
+            symbol="P_c",
+            description="available axial strength, buckling stress × area",
+            value=Quantity(magnitude=axial_capacity, unit="N"),
+        ),
+        SymbolValue(symbol="M_r", description="required flexural strength", value=member.moment),
+        SymbolValue(
+            symbol="M_c",
+            description="available flexural strength, first yield F_y·S",
+            value=Quantity(magnitude=flexural_capacity, unit="N*mm"),
+            unit="kN*m",
+        ),
+    )
+    ratio_result = SymbolValue(
+        symbol="IR",
+        description="interaction ratio; the member is at capacity at 1.0",
+        value=interaction,
+    )
+    # §H1.1 switches form at Pr/Pc = 0.2. Show the branch that actually applied,
+    # not both with a condition for the reader to resolve.
+    interaction_derivation = (
+        Derivation(
+            symbolic="IR = P_r/P_c + 8/9 · M_r/M_c",
+            inputs=capacity_symbols,
+            result=ratio_result,
+            citation=_CLAUSE_INTERACTION,
+        )
+        if pr_pc >= 0.2
+        else Derivation(
+            symbolic="IR = P_r/(2 · P_c) + M_r/M_c",
+            inputs=capacity_symbols,
+            result=ratio_result,
+            citation=_CLAUSE_INTERACTION,
+        )
+    )
     entry = ScorecardEntry.from_safety_factor(
         f"{member.name} interaction", computed=safety, required=required_safety_factor
-    ).model_copy(update={"reference": _CLAUSE_INTERACTION})
+    ).model_copy(update={"reference": _CLAUSE_INTERACTION, "derivation": interaction_derivation})
     return Scorecard(entries=(entry,))
 
 
@@ -1738,10 +1872,64 @@ def screen_shear_plate(
         entries=(
             ScorecardEntry.from_safety_factor(
                 f"{plate.name} shear yielding", computed=yield_sf, required=required_safety_factor
-            ).model_copy(update={"reference": _CLAUSE_SHEAR}),
+            ).model_copy(
+                update={
+                    "reference": _CLAUSE_SHEAR,
+                    "derivation": Derivation(
+                        # Yielding is checked on the gross area: the whole section
+                        # has to go plastic before the plate deforms.
+                        symbolic="R_n = 0.60 · F_y · A_gv",
+                        inputs=(
+                            SymbolValue(
+                                symbol="F_y",
+                                description="plate yield strength",
+                                value=record.yield_strength.quantity,
+                            ),
+                            SymbolValue(
+                                symbol="A_gv",
+                                description="gross area resisting shear",
+                                value=plate.gross_shear_area,
+                            ),
+                        ),
+                        result=SymbolValue(
+                            symbol="R_n",
+                            description="shear yielding capacity",
+                            value=Quantity(magnitude=yield_capacity, unit="N"),
+                        ),
+                        citation=_CLAUSE_SHEAR,
+                    ),
+                }
+            ),
             ScorecardEntry.from_safety_factor(
                 f"{plate.name} shear rupture", computed=rupture_sf, required=required_safety_factor
-            ).model_copy(update={"reference": _CLAUSE_SHEAR}),
+            ).model_copy(
+                update={
+                    "reference": _CLAUSE_SHEAR,
+                    "derivation": Derivation(
+                        # Rupture is checked on the net area, through the holes, and
+                        # against the ultimate rather than the yield strength.
+                        symbolic="R_n = 0.60 · F_u · A_nv",
+                        inputs=(
+                            SymbolValue(
+                                symbol="F_u",
+                                description="plate ultimate tensile strength",
+                                value=record.ultimate_strength.quantity,
+                            ),
+                            SymbolValue(
+                                symbol="A_nv",
+                                description="net area resisting shear, through the holes",
+                                value=plate.net_shear_area,
+                            ),
+                        ),
+                        result=SymbolValue(
+                            symbol="R_n",
+                            description="shear rupture capacity",
+                            value=Quantity(magnitude=rupture_capacity, unit="N"),
+                        ),
+                        citation=_CLAUSE_SHEAR,
+                    ),
+                }
+            ),
         )
     )
 

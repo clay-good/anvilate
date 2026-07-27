@@ -118,6 +118,7 @@ def test_every_public_callable_has_a_docstring():
 
 _CHECKS_WITH_DERIVATIONS = {
     "bending",
+    "block shear",
     "bolt shear",
     "bolt tension",
     "buckling",
@@ -126,9 +127,14 @@ _CHECKS_WITH_DERIVATIONS = {
     "edge tear-out",
     "gross yielding",
     "net rupture",
+    "interaction",
     "net tension",
     "pin bearing",
     "plate bearing",
+    "plate bending",
+    "joist shear",
+    "shear rupture",
+    "shear yielding",
     "weld shear",
 }
 
@@ -137,20 +143,28 @@ def _structural_entries():
     """One scorecard entry per structural-pack check, from a screened assembly."""
     from anvilate.analysis import CrossSection
     from anvilate.packs.structural import (
+        BasePlate,
+        BeamColumnMember,
         BeamMember,
         BoltedConnection,
         ColumnMember,
         ConcreteBearing,
+        GussetPlate,
         LiftingLug,
         LoadType,
+        ShearPlate,
         Support,
         TensionMember,
         WeldedConnection,
+        screen_base_plate,
+        screen_beam_column,
         screen_beam_member,
         screen_bolted_connection,
         screen_column_member,
         screen_concrete_bearing,
+        screen_gusset_plate,
         screen_lifting_lug,
+        screen_shear_plate,
         screen_tension_member,
         screen_welded_connection,
     )
@@ -249,6 +263,58 @@ def _structural_entries():
                 net_area=Quantity.parse("1000 mm^2"),
                 shear_lag_factor=0.85,
                 load=Quantity.parse("200 kN"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=1.5,
+        ).entries
+    )
+    entries.extend(
+        screen_base_plate(
+            BasePlate(
+                name="bp",
+                width=Quantity.parse("300 mm"),
+                depth=Quantity.parse("300 mm"),
+                axial_load=Quantity.parse("500 kN"),
+                concrete_strength=Quantity.parse("25 MPa"),
+                plate_thickness=Quantity.parse("25 mm"),
+                cantilever=Quantity.parse("75 mm"),
+                plate_material="ASTM-A36",
+            ),
+            required_safety_factor=1.5,
+        ).entries
+    )
+    entries.extend(
+        screen_gusset_plate(
+            GussetPlate(
+                name="gusset",
+                net_shear_area=Quantity.parse("3000 mm^2"),
+                net_tension_area=Quantity.parse("1200 mm^2"),
+                load=Quantity.parse("400 kN"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=2.0,
+        ).entries
+    )
+    entries.extend(
+        screen_shear_plate(
+            ShearPlate(
+                name="tab",
+                gross_shear_area=Quantity.parse("2400 mm^2"),
+                net_shear_area=Quantity.parse("1800 mm^2"),
+                load=Quantity.parse("250 kN"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=1.5,
+        ).entries
+    )
+    entries.extend(
+        screen_beam_column(
+            BeamColumnMember(
+                name="bc",
+                section=section,
+                length=Quantity.parse("3 m"),
+                axial_load=Quantity.parse("300 kN"),
+                moment=Quantity.parse("20 kN*m"),
                 material="ASTM-A36",
             ),
             required_safety_factor=1.5,
