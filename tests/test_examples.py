@@ -2025,6 +2025,27 @@ def test_bushing_wear_life_example_lubrication_governs():
     assert improved.status is CheckStatus.PASS
 
 
+def test_winch_full_drum_stall_example_top_layer_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "winch_full_drum_stall.py"))
+    narrow = namespace["screen_narrow_drum"]()
+    by_name = {e.name: e for e in narrow.entries}
+    # The rope fits and the bare-drum (catalogue) pull clears...
+    assert by_name["stored rope vs required length"].passed
+    assert "safety factor 1.06" in by_name["stored rope vs required length"].detail
+    assert by_name["line pull at bare drum vs load"].passed
+    assert "safety factor 1.14" in by_name["line pull at bare drum vs load"].detail
+    # ...but by the fourth layer the grown radius stalls the winch.
+    full = by_name["line pull at full drum vs load"]
+    assert full.status is CheckStatus.FAIL
+    assert "safety factor 0.83" in full.detail
+    assert narrow.status is CheckStatus.FAIL
+    # Spreading the same rope wider (two layers) buys the lever arm back.
+    wide = namespace["screen_wide_drum"]()
+    wide_by_name = {e.name: e for e in wide.entries}
+    assert "safety factor 1.02" in wide_by_name["line pull at full drum vs load"].detail
+    assert wide.status is CheckStatus.PASS
+
+
 def test_winch_tackle_friction_example_friction_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "winch_tackle_friction.py"))
     plain = namespace["screen_plain_bushing_tackle"]()
