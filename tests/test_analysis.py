@@ -11078,6 +11078,70 @@ def test_sliding_contact_pv_is_pressure_times_velocity():
         sliding_contact_pv(contact_pressure=_q("2 MPa"), sliding_velocity=_q("0.5 m"))
 
 
+def test_servo_inertia_reflection_and_matching_ratio():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        inertia_matching_gear_ratio,
+        motor_acceleration_torque,
+        reflected_inertia_ratio,
+        reflected_load_inertia,
+    )
+
+    # J_L/i^2: a 5:1 reduction makes a 0.02 kg*m^2 load feel 25x lighter.
+    reflected = reflected_load_inertia(load_inertia=_q("0.02 kg*m**2"), gear_ratio=5.0)
+    assert reflected.to("kg*m**2").magnitude == pytest.approx(0.02 / 25, rel=1e-12)
+    # The vendor screen: reflected load over motor inertia.
+    ratio = reflected_inertia_ratio(
+        motor_inertia=_q("0.0001 kg*m**2"), load_inertia=_q("0.02 kg*m**2"), gear_ratio=5.0
+    )
+    assert ratio == pytest.approx(8.0, rel=1e-12)
+    # T = (J_m*i + J_L/i)*alpha, by hand: (1e-4*5 + 0.02/5)*100 = 0.45 N*m.
+    torque = motor_acceleration_torque(
+        motor_inertia=_q("0.0001 kg*m**2"),
+        load_inertia=_q("0.02 kg*m**2"),
+        gear_ratio=5.0,
+        load_angular_acceleration=_q("100 rad/s**2"),
+    )
+    assert torque.to("N*m").magnitude == pytest.approx(0.45, rel=1e-12)
+    # i_opt = sqrt(J_L/J_m); at it the reflected load exactly equals the motor's own
+    # inertia (ratio 1), and the torque hits the closed-form minimum 2*alpha*sqrt(Jm*JL).
+    i_opt = inertia_matching_gear_ratio(
+        motor_inertia=_q("0.0001 kg*m**2"), load_inertia=_q("0.02 kg*m**2")
+    )
+    assert i_opt == pytest.approx(sqrt(200), rel=1e-12)
+    assert reflected_inertia_ratio(
+        motor_inertia=_q("0.0001 kg*m**2"), load_inertia=_q("0.02 kg*m**2"), gear_ratio=i_opt
+    ) == pytest.approx(1.0, rel=1e-12)
+
+    def torque_at(i: float) -> float:
+        return (
+            motor_acceleration_torque(
+                motor_inertia=_q("0.0001 kg*m**2"),
+                load_inertia=_q("0.02 kg*m**2"),
+                gear_ratio=i,
+                load_angular_acceleration=_q("100 rad/s**2"),
+            )
+            .to("N*m")
+            .magnitude
+        )
+
+    t_min = torque_at(i_opt)
+    assert t_min == pytest.approx(2 * 100 * sqrt(1e-4 * 0.02), rel=1e-12)
+    # Numeric check that it is a true minimum: any ratio off-optimum costs torque.
+    for off in (0.5, 0.8, 1.25, 2.0):
+        assert torque_at(i_opt * off) > t_min
+    with pytest.raises(ValueError, match="gear_ratio must be positive"):
+        reflected_load_inertia(load_inertia=_q("0.02 kg*m**2"), gear_ratio=0)
+    with pytest.raises(ValueError, match="load_angular_acceleration must be an angular"):
+        motor_acceleration_torque(
+            motor_inertia=_q("0.0001 kg*m**2"),
+            load_inertia=_q("0.02 kg*m**2"),
+            gear_ratio=5.0,
+            load_angular_acceleration=_q("100 rad/s"),
+        )
+
+
 def test_adhesive_bond_capacities_and_lap_shear():
     from math import pi
 

@@ -158,6 +158,9 @@ modules:
   horizontal force at the pick points (the eyebolt/lifting-beam side load); plus
   the block-and-tackle actual mechanical advantage with per-sheave friction and
   the lead-line (winch) tension it implies
+- :mod:`~anvilate.analysis.servo` — servo drivetrain sizing: the load inertia
+  reflected through a gear ratio (J/i²), the vendor inertia-ratio screen, the
+  motor torque an acceleration demands, and the inertia-matching optimal ratio
 - :mod:`~anvilate.analysis.winch` — winch-drum spooling geometry: the working
   radius and line pull at each rope layer (a fuller drum pulls less) and the
   tight-wound rope length a drum stores
@@ -679,6 +682,12 @@ from .scotch_yoke import (
     scotch_yoke_velocity,
 )
 from .section import CrossSection, bending_stress, required_section_modulus
+from .servo import (
+    inertia_matching_gear_ratio,
+    motor_acceleration_torque,
+    reflected_inertia_ratio,
+    reflected_load_inertia,
+)
 from .sheetmetal import (
     air_bending_force,
     bend_allowance,
@@ -911,6 +920,10 @@ __all__ = [
     "sling_horizontal_force",
     "tackle_mechanical_advantage",
     "tackle_lead_line_tension",
+    "reflected_load_inertia",
+    "reflected_inertia_ratio",
+    "motor_acceleration_torque",
+    "inertia_matching_gear_ratio",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
