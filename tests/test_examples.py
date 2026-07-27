@@ -2025,6 +2025,25 @@ def test_bushing_wear_life_example_lubrication_governs():
     assert improved.status is CheckStatus.PASS
 
 
+def test_winch_tackle_friction_example_friction_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "winch_tackle_friction.py"))
+    plain = namespace["screen_plain_bushing_tackle"]()
+    by_name = {e.name: e for e in plain.entries}
+    # The frictionless W/n estimate clears the winch rating...
+    assert by_name["frictionless lead line vs winch rating"].passed
+    assert "safety factor 1.20" in by_name["frictionless lead line vs winch rating"].detail
+    # ...but on plain bushings the real lead line overloads it.
+    actual = by_name["actual lead line vs winch rating"]
+    assert actual.status is CheckStatus.FAIL
+    assert "safety factor 0.97" in actual.detail
+    assert plain.status is CheckStatus.FAIL
+    # Better sheaves — not a bigger winch — recover the margin.
+    rolling = namespace["screen_rolling_bearing_tackle"]()
+    rolling_by_name = {e.name: e for e in rolling.entries}
+    assert "safety factor 1.12" in rolling_by_name["actual lead line vs winch rating"].detail
+    assert rolling.status is CheckStatus.PASS
+
+
 def test_hoist_sheave_bending_example_sheave_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "hoist_sheave_bending.py"))
     compact = namespace["screen_hoist"]()
