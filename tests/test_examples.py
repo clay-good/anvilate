@@ -2025,6 +2025,31 @@ def test_bushing_wear_life_example_lubrication_governs():
     assert improved.status is CheckStatus.PASS
 
 
+def test_hoist_sheave_bending_example_sheave_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "hoist_sheave_bending.py"))
+    compact = namespace["screen_hoist"]()
+    by_name = {e.name: e for e in compact.entries}
+    # The straight pull is generous...
+    assert by_name["static rope tension vs breaking strength"].passed
+    assert "safety factor 8.83" in by_name["static rope tension vs breaking strength"].detail
+    # ...but the small sheave's equivalent bending load collapses the margin...
+    bending = by_name["tension plus sheave bending vs breaking strength"]
+    assert bending.status is CheckStatus.FAIL
+    assert "safety factor 3.28" in bending.detail
+    # ...and over-presses the groove.
+    pressure = by_name["sheave bearing pressure vs allowable"]
+    assert pressure.status is CheckStatus.FAIL
+    assert "safety factor 0.88" in pressure.detail
+    assert compact.status is CheckStatus.FAIL
+    # A bigger sheave — not a bigger rope — recovers both checks.
+    generous = namespace["screen_generous_sheave"]()
+    generous_by_name = {e.name: e for e in generous.entries}
+    recovered = generous_by_name["tension plus sheave bending vs breaking strength"]
+    assert "safety factor 5.18" in recovered.detail
+    assert "safety factor 2.11" in generous_by_name["sheave bearing pressure vs allowable"].detail
+    assert generous.status is CheckStatus.PASS
+
+
 def test_hydraulic_rod_buckling_capstone_rod_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_rod_buckling.py"))
     slender = namespace["screen_cylinder"]()
