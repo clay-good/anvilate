@@ -317,6 +317,7 @@ from .beam_foundation import (
 )
 from .bearing import (
     BALL_BEARING_LIFE_EXPONENT,
+    BEARING_WEIBULL_SLOPE,
     ROLLER_BEARING_LIFE_EXPONENT,
     bearing_basic_rating_life,
     bearing_equivalent_dynamic_load,
@@ -943,6 +944,7 @@ __all__ = [
     "beam_on_elastic_foundation_max_deflection",
     "beam_on_elastic_foundation_max_moment",
     "BALL_BEARING_LIFE_EXPONENT",
+    "BEARING_WEIBULL_SLOPE",
     "ROLLER_BEARING_LIFE_EXPONENT",
     "bearing_basic_rating_life",
     "bearing_rating_for_life",
