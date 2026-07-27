@@ -117,6 +117,7 @@ def test_every_public_callable_has_a_docstring():
 # silently absent.
 
 _CHECKS_WITH_DERIVATIONS = {
+    "bending",
     "bolt shear",
     "bolt tension",
     "buckling",
@@ -136,12 +137,16 @@ def _structural_entries():
     """One scorecard entry per structural-pack check, from a screened assembly."""
     from anvilate.analysis import CrossSection
     from anvilate.packs.structural import (
+        BeamMember,
         BoltedConnection,
         ColumnMember,
         ConcreteBearing,
         LiftingLug,
+        LoadType,
+        Support,
         TensionMember,
         WeldedConnection,
+        screen_beam_member,
         screen_bolted_connection,
         screen_column_member,
         screen_concrete_bearing,
@@ -155,6 +160,22 @@ def _structural_entries():
         width=Quantity.parse("50 mm"), height=Quantity.parse("50 mm")
     )
     entries = []
+    entries.extend(
+        screen_beam_member(
+            BeamMember(
+                name="joist",
+                section=CrossSection.rectangular(
+                    width=Quantity.parse("100 mm"), height=Quantity.parse("150 mm")
+                ),
+                length=Quantity.parse("4 m"),
+                support=Support.SIMPLY_SUPPORTED,
+                load_type=LoadType.DISTRIBUTED,
+                load=Quantity.parse("5 kN/m"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=1.5,
+        ).entries
+    )
     entries.extend(
         screen_lifting_lug(
             LiftingLug(

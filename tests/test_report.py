@@ -426,3 +426,30 @@ def test_exponent_brackets_the_substituted_value():
         citation="geometry",
     )
     assert derivation.substituted() == "A = π · (16.00 mm)² / 4"
+
+
+def test_beam_bending_derivation_names_the_load_case_behind_the_moment():
+    from anvilate.analysis import CrossSection
+    from anvilate.packs.structural import BeamMember, LoadType, Support, screen_beam_member
+
+    member = BeamMember(
+        name="joist",
+        section=CrossSection.rectangular(
+            width=Quantity.parse("100 mm"), height=Quantity.parse("150 mm")
+        ),
+        length=Quantity.parse("4 m"),
+        support=Support.SIMPLY_SUPPORTED,
+        load_type=LoadType.DISTRIBUTED,
+        load=Quantity.parse("5 kN/m"),
+        material="ASTM-A36",
+    )
+    bending = screen_beam_member(member, required_safety_factor=1.5).entries[0]
+    derivation = bending.derivation
+    # The flexure formula is the same for every support and load case; the moment
+    # is the value that case produced, and it says which case that was.
+    assert derivation.symbolic == "σ_b = M · c / I"
+    assert derivation.unresolved_symbols() == ()
+    moment = next(item for item in derivation.inputs if item.symbol == "M")
+    assert "simply_supported" in moment.description
+    assert "distributed" in moment.description
+    assert derivation.substituted() == "σ_b = 10.00 kN·m · 75.00 mm / 28125000.00 mm⁴"

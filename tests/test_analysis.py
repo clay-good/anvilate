@@ -11745,3 +11745,41 @@ def test_asme_cylinder_mawp_inverts_the_thickness_rule():
         asme_cylinder_mawp(
             thickness=_q("0 mm"), radius=_q("200 mm"), allowable_stress=_q("110 MPa")
         )
+
+
+def test_beam_results_report_the_peak_moment_they_computed():
+    from anvilate.analysis import beam as beam_module
+
+    common = {
+        "length": Quantity.parse("4 m"),
+        "second_moment": Quantity.parse("2.1e7 mm^4"),
+        "extreme_fibre": Quantity.parse("75 mm"),
+        "elastic_modulus": Quantity.parse("200 GPa"),
+    }
+    # The classic textbook moments, in kN·m for a 4 m span under 5 kN/m or 10 kN.
+    cases = (
+        (
+            beam_module.simply_supported_uniform_load(
+                distributed_load=Quantity.parse("5 kN/m"), **common
+            ),
+            10.0,
+        ),
+        (beam_module.simply_supported_center_load(force=Quantity.parse("10 kN"), **common), 10.0),
+        (beam_module.cantilever_end_load(force=Quantity.parse("10 kN"), **common), 40.0),
+        (
+            beam_module.cantilever_uniform_load(
+                distributed_load=Quantity.parse("5 kN/m"), **common
+            ),
+            40.0,
+        ),
+        (beam_module.fixed_pinned_center_load(force=Quantity.parse("10 kN"), **common), 7.5),
+    )
+    for result, expected in cases:
+        assert result.max_moment.to("kN*m").magnitude == pytest.approx(expected)
+        # The reported moment is the one behind the reported stress: σ = M·c/I.
+        implied = (
+            result.max_moment.to("N*mm").magnitude
+            * common["extreme_fibre"].to("mm").magnitude
+            / common["second_moment"].to("mm**4").magnitude
+        )
+        assert implied == pytest.approx(result.max_bending_stress.to("MPa").magnitude)

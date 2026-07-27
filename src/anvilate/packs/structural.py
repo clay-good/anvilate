@@ -534,7 +534,46 @@ def screen_beam_member(
             stress=result.max_bending_stress,
             allowable=record.yield_strength.quantity,
             required=required_safety_factor,
-        ).model_copy(update={"reference": _CLAUSE_FLEXURE})
+        ).model_copy(
+            update={
+                "reference": _CLAUSE_FLEXURE,
+                # The peak moment depends on the support and load case; the stress
+                # it makes on the section does not. The moment is shown as the
+                # value the case produced, so the flexure formula reads the same
+                # for every one of them.
+                "derivation": Derivation(
+                    symbolic="σ_b = M · c / I",
+                    inputs=(
+                        SymbolValue(
+                            symbol="M",
+                            description=(
+                                f"peak bending moment, {member.support.value} beam under "
+                                f"{member.load_type.value} load"
+                            ),
+                            value=result.max_moment,
+                            unit="kN*m",
+                        ),
+                        SymbolValue(
+                            symbol="c",
+                            description="distance from the neutral axis to the extreme fibre",
+                            value=member.section.extreme_fibre,
+                        ),
+                        SymbolValue(
+                            symbol="I",
+                            description="second moment of area about the bending axis",
+                            value=member.section.second_moment,
+                            unit="mm^4",
+                        ),
+                    ),
+                    result=SymbolValue(
+                        symbol="σ_b",
+                        description="peak bending stress",
+                        value=result.max_bending_stress,
+                    ),
+                    citation=_CLAUSE_FLEXURE,
+                ),
+            }
+        )
     ]
     if max_deflection is not None:
         entries.append(

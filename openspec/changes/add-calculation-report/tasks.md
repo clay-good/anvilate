@@ -21,8 +21,12 @@
       shear, plate bearing, edge tear-out (showing whichever of the two §J3.10 branches
       governed, not a `min()` the reader has to evaluate), bolt tension, combined
       tension+shear, weld throat shear, tension-member gross yielding and net rupture.
-      Still to wire: beam bending and deflection, base plate, gusset block shear,
-      beam-column interaction, shear plate.
+      Beam bending too: the beam checks now report the peak moment they already
+      computed (`BeamBendingResult.max_moment`), so the flexure derivation reads the
+      same for every support and load case while naming the case behind the moment.
+      Still to wire: beam deflection and the per-case moment formulas behind it
+      (w·L⁴/384EI and friends), base plate, gusset block shear, beam-column
+      interaction, shear plate.
 - [x] 2.2 Tabular fallback rendering for checks without metadata, with the honest label
       ("derivation not rendered"; a derivation with undeclared symbols also falls back
       rather than printing a bare symbol where a value belongs)

@@ -697,14 +697,17 @@ def span_deflection_limit(*, span: Quantity, ratio: float) -> Quantity:
 class BeamBendingResult(BaseModel):
     """The result of a closed-form beam bending check.
 
-    ``max_bending_stress`` is the peak bending stress; ``max_deflection`` is the
-    peak deflection (at the free end for a cantilever, at mid-span for a
-    simply-supported beam). Both are screening estimates for a prismatic
-    linear-elastic beam under small deflections.
+    ``max_moment`` is the peak bending moment the load case makes — the number a
+    reviewer checks first and the one that carries into a section-sizing or a
+    connection design. ``max_bending_stress`` is the stress it makes on the section
+    (σ = M·c/I); ``max_deflection`` is the peak deflection (at the free end for a
+    cantilever, at mid-span for a simply-supported beam). All three are screening
+    estimates for a prismatic linear-elastic beam under small deflections.
     """
 
     model_config = ConfigDict(frozen=True)
 
+    max_moment: Quantity
     max_bending_stress: Quantity
     max_deflection: Quantity
 
@@ -763,6 +766,7 @@ def cantilever_end_load(
     stress = moment * c / inertia
     deflection = f * length_p**3 / (3 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -812,6 +816,7 @@ def cantilever_offset_load(
     stress = moment * c / inertia
     deflection = f * position**2 * (3 * length_p - position) / (6 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -848,6 +853,7 @@ def cantilever_uniform_load(
     stress = moment * c / inertia
     deflection = w * length_p**4 / (8 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -897,6 +903,7 @@ def cantilever_partial_uniform_load(
     stress = moment * c / inertia
     deflection = w * loaded**3 * (4 * length_p - loaded) / (24 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -949,6 +956,7 @@ def cantilever_center_patch_load(
     stress = moment * c / inertia
     deflection = w * length_p * loaded * (5 * length_p**2 + loaded**2) / (48 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -987,6 +995,7 @@ def cantilever_triangular_load(
     stress = moment * c / inertia
     deflection = w0 * length_p**4 / (30 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1032,6 +1041,7 @@ def cantilever_triangular_load_peak_at_tip(
     stress = moment * c / inertia
     deflection = 11 * w0 * length_p**4 / (120 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1075,6 +1085,7 @@ def cantilever_end_moment(
     stress = m0 * c / inertia
     deflection = m0 * length_p**2 / (2 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(m0, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1128,6 +1139,7 @@ def cantilever_offset_moment(
     stress = m0 * c / inertia
     deflection = m0 * position * (2 * length_p - position) / (2 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(m0, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1165,6 +1177,7 @@ def simply_supported_center_load(
     stress = moment * c / inertia
     deflection = f * length_p**3 / (48 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1216,6 +1229,7 @@ def simply_supported_offset_load(
     stress = moment * c / inertia
     deflection = f * near * (length_p**2 - near**2) ** 1.5 / (9 * 3**0.5 * length_p * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1268,6 +1282,7 @@ def simply_supported_symmetric_point_loads(
     stress = moment * c / inertia
     deflection = f * offset * (3 * length_p**2 - 4 * offset**2) / (24 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1305,6 +1320,7 @@ def simply_supported_uniform_load(
     stress = moment * c / inertia
     deflection = 5 * w * length_p**4 / (384 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1383,6 +1399,7 @@ def simply_supported_partial_uniform_load(
         )
     deflection = deflection_norm * w * length_p**4 / (24 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1435,6 +1452,7 @@ def simply_supported_center_patch_load(
         w * loaded * (8 * length_p**3 - 4 * loaded**2 * length_p + loaded**3) / (384 * e * inertia)
     )
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1482,6 +1500,7 @@ def simply_supported_triangular_load(
         / (360 * length_p * e * inertia)
     )
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1526,6 +1545,7 @@ def simply_supported_end_moment(
     stress = m0 * c / inertia
     deflection = m0 * length_p**2 / (9 * sqrt(3) * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(m0, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1601,6 +1621,7 @@ def simply_supported_offset_moment(
         candidates.append(abs(_v(x2, loaded=True)))
     deflection = max(candidates) / (e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(m0 * max(a, b) / length_p, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1641,6 +1662,7 @@ def fixed_pinned_center_load(
     stress = moment * c / inertia
     deflection = f * length_p**3 / (48 * 5**0.5 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1701,6 +1723,7 @@ def fixed_pinned_offset_load(
     else:
         deflection = f * a * b**2 / (6 * e * inertia) * (a / (2 * length_p + a)) ** 0.5
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1739,6 +1762,7 @@ def fixed_pinned_uniform_load(
     stress = moment * c / inertia
     deflection = w * length_p**4 / (185 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1811,6 +1835,7 @@ def fixed_pinned_partial_uniform_load(
             moment * x**2 / 2 - reaction * x**3 / 6 + w * x**4 / 24 - w * (x - loaded) ** 4 / 24
         ) / (e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1900,6 +1925,7 @@ def fixed_pinned_center_patch_load(
             - w * (x - far_edge) ** 4 / 24
         ) / (e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -1946,6 +1972,7 @@ def fixed_pinned_triangular_load(
     xi = 1 / sqrt(5)
     deflection = (xi - 2 * xi**3 + xi**5) * w0 * length_p**4 / (120 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2007,6 +2034,7 @@ def fixed_pinned_triangular_load_peak_at_prop(
     xi = (lo + hi) / 2
     deflection = (7 * xi**2 - 9 * xi**3 + 2 * xi**5) * w0 * length_p**4 / (240 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2055,6 +2083,7 @@ def fixed_pinned_end_moment(
     stress = m0 * c / inertia
     deflection = m0 * length_p**2 / (27 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(m0, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2105,6 +2134,7 @@ def overhang_tip_load(
     uplift = f * c_len * span**2 / (9 * sqrt(3) * e * inertia)
     deflection = max(tip, uplift)
     return BeamBendingResult(
+        max_moment=_as_quantity(f * c_len, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2155,6 +2185,7 @@ def overhang_uniform_load(
     uplift = moment * span**2 / (9 * sqrt(3) * e * inertia)
     deflection = max(tip, uplift)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2192,6 +2223,7 @@ def fixed_fixed_center_load(
     stress = moment * c / inertia
     deflection = f * length_p**3 / (192 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2245,6 +2277,7 @@ def fixed_fixed_offset_load(
     stress = moment * c / inertia
     deflection = 2 * f * far**3 * near**2 / (3 * e * inertia * (3 * far + near) ** 2)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2281,6 +2314,7 @@ def fixed_fixed_uniform_load(
     stress = moment * c / inertia
     deflection = w * length_p**4 / (384 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2357,6 +2391,7 @@ def fixed_fixed_partial_uniform_load(
         x = half_sum - (half_sum**2 - 6 * moment / w) ** 0.5
         deflection = (moment * x**2 / 2 - reaction * x**3 / 6 + w * x**4 / 24) / (e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2414,6 +2449,7 @@ def fixed_fixed_center_patch_load(
         w * loaded * (2 * length_p**3 - 2 * length_p * loaded**2 + loaded**3) / (384 * e * inertia)
     )
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
@@ -2459,6 +2495,7 @@ def fixed_fixed_triangular_load(
     xi = (sqrt(105) - 5) / 10
     deflection = (2 * xi**2 - 3 * xi**3 + xi**5) * w0 * length_p**4 / (120 * e * inertia)
     return BeamBendingResult(
+        max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
     )
