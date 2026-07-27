@@ -2225,3 +2225,81 @@ def test_key_vs_spline_example_spline_shares_what_a_key_concentrates():
     # A 10-tooth spline carries the same torque in the same length.
     assert by_name["spline: capacity vs torque"].passed
     assert "safety factor 1.06" in by_name["spline: capacity vs torque"].detail
+
+
+def test_multi_plate_clutch_example_stacks_surfaces_not_spring_force():
+    namespace = runpy.run_path(str(_EXAMPLES / "multi_plate_clutch_stack.py"))
+    single = namespace["screen_single_plate_clutch"]()
+    # A single plate (2 surfaces) at 2 kN carries 72 N*m against a 135 N*m duty.
+    assert single.status is CheckStatus.FAIL
+    assert "safety factor 0.53" in single.entries[0].detail
+    # Six surfaces from the same spring carry 216 N*m.
+    stacked = namespace["screen_stacked_clutch"]()
+    assert stacked.status is CheckStatus.PASS
+    assert "safety factor 1.60" in stacked.entries[0].detail
+
+
+def test_flange_coupling_example_adds_bolts_not_diameter():
+    namespace = runpy.run_path(str(_EXAMPLES / "flange_coupling_bolt_pattern.py"))
+    four = namespace["screen_four_bolt_coupling"]()
+    # Four bolts see 5,969 N each against a 5 kN allowable.
+    assert four.status is CheckStatus.FAIL
+    assert "safety factor 0.84" in four.entries[0].detail
+    # The inverse says five bolts minimum; the even pattern is six.
+    assert namespace["minimum_bolt_count"]() == 5
+    six = namespace["screen_six_bolt_coupling"]()
+    assert six.status is CheckStatus.PASS
+    assert "safety factor 1.26" in six.entries[0].detail
+
+
+def test_hoist_hook_example_static_pass_fails_on_impact():
+    namespace = runpy.run_path(str(_EXAMPLES / "hoist_hook_sudden_load.py"))
+    gentle = namespace["screen_gentle_placement"]()
+    # Placed gently the beam holds a 2.5 factor on yield.
+    assert gentle.status is CheckStatus.PASS
+    assert "safety factor 2.50" in gentle.entries[0].detail
+    # Suddenly applied (K = 2) the lifting-duty 1.5 margin is gone.
+    sudden = namespace["screen_sudden_application"]()
+    assert sudden.status is CheckStatus.FAIL
+    assert "safety factor 1.25" in sudden.entries[0].detail
+    # A 20 mm snatch amplifies 4.3x, past yield itself.
+    snatch = namespace["screen_snatch_drop"]()
+    assert snatch.status is CheckStatus.FAIL
+    assert "safety factor 0.58" in snatch.entries[0].detail
+
+
+def test_journal_bearing_example_finish_decides_the_regime():
+    namespace = runpy.run_path(str(_EXAMPLES / "journal_bearing_film_regime.py"))
+    ground = namespace["screen_ground_journal"]()
+    # Ground on honed: lambda = 8.9 against the full-film floor of 3.
+    assert ground.status is CheckStatus.PASS
+    assert "safety factor 2.98" in ground.entries[0].detail
+    # Turned finishes drop the same 8 um film to lambda = 1.8: mixed lubrication.
+    turned = namespace["screen_turned_finishes"]()
+    assert turned.status is CheckStatus.FAIL
+    assert "safety factor 0.59" in turned.entries[0].detail
+
+
+def test_riveted_lap_joint_example_second_row_balances_the_modes():
+    namespace = runpy.run_path(str(_EXAMPLES / "riveted_lap_joint_efficiency.py"))
+    single = namespace["screen_single_riveted_seam"]()
+    # Single-riveted: shear governs at 39% efficiency, short of the 50% floor.
+    assert single.status is CheckStatus.FAIL
+    assert "shearing" in single.entries[0].name
+    # Double-riveted: the governing mode flips to tearing and efficiency hits 60%.
+    double = namespace["screen_double_riveted_seam"]()
+    assert double.status is CheckStatus.PASS
+    assert "tearing" in double.entries[0].name
+    assert "safety factor 1.20" in double.entries[0].detail
+
+
+def test_scotch_yoke_example_speed_squared_overloads_the_pin():
+    namespace = runpy.run_path(str(_EXAMPLES / "scotch_yoke_pump_speed.py"))
+    design = namespace["screen_design_speed"]()
+    # At 300 rpm the pin loafs at a 5.6 factor.
+    assert design.status is CheckStatus.PASS
+    assert "safety factor 5.63" in design.entries[0].detail
+    # Tripling the speed multiplies the inertia force nine-fold: 320 N on a 200 N pin.
+    uprated = namespace["screen_uprated_speed"]()
+    assert uprated.status is CheckStatus.FAIL
+    assert "safety factor 0.63" in uprated.entries[0].detail
