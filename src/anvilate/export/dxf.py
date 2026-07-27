@@ -11,7 +11,7 @@ a clear :class:`ImportError`.
 
 from __future__ import annotations
 
-from math import cos, pi, radians, sin
+from math import cos, pi, radians, sin, tan
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -43,6 +43,25 @@ _LABEL_HEIGHT_FRACTION = 0.06
 # Reference circles (a gear's pitch and root) are construction geometry, not cuts, so
 # they go on their own layer for the machinist to see but not drive the tool path.
 _REFERENCE_LAYER = "REFERENCE"
+
+# A DXF polyline bulge is tan(theta/4) of the arc it spans; every rounded plate
+# corner is a quarter circle.
+_CORNER_BULGE = tan(pi / 8)
+
+
+def _corner_radius_mm(corner_radius: Quantity | None, w: float, h: float) -> float:
+    """Validate an optional corner radius against the plate: 0 (sharp) if omitted."""
+    if corner_radius is None:
+        return 0.0
+    r = _mm(corner_radius, "corner_radius")
+    if r < 0:
+        raise ValueError(f"corner_radius must be non-negative; got {corner_radius}")
+    if 2 * r >= min(w, h):
+        raise ValueError(
+            f"corner_radius ({corner_radius}) must be under half the shorter plate side "
+            f"({w} x {h} mm)"
+        )
+    return r
 
 
 def _require_ezdxf():
@@ -208,13 +227,16 @@ def plate_cut_length(
     height: Quantity,
     holes: list[Hole] | None = None,
     slots: list[Slot] | None = None,
+    corner_radius: Quantity | None = None,
 ) -> Quantity:
     """The total cut length of a rectangular plate: outline plus every hole and slot.
 
     The distance a plasma, laser, or waterjet head travels to cut the part — the
     rectangular outline perimeter 2·(``width`` + ``height``), plus π·d for each
     :class:`Hole`, plus the obround perimeter 2·(L − w) + π·w for each :class:`Slot`
-    (two straight sides and two semicircular caps). Multiply by the machine's cut rate
+    (two straight sides and two semicircular caps). An optional ``corner_radius`` r
+    (matching :func:`export_plate_dxf`) swaps each sharp corner for a quarter arc,
+    shortening the outline by (8 − 2π)·r in total. Multiply by the machine's cut rate
     to estimate cut time and cost. ``width`` and ``height`` must be positive. Returns
     the total cut length in mm.
     """
@@ -222,7 +244,8 @@ def plate_cut_length(
     h = _mm(height, "height")
     if w <= 0 or h <= 0:
         raise ValueError(f"plate width and height must be positive; got {width} x {height}")
-    total = 2.0 * (w + h)
+    r = _corner_radius_mm(corner_radius, w, h)
+    total = 2.0 * (w + h) - (8.0 - 2.0 * pi) * r
     for i, hole in enumerate(holes or []):
         total += pi * _mm(hole.diameter, f"holes[{i}].diameter")
     for i, slot in enumerate(slots or []):
@@ -240,14 +263,17 @@ def plate_mass(
     density: Quantity,
     holes: list[Hole] | None = None,
     slots: list[Slot] | None = None,
+    corner_radius: Quantity | None = None,
 ) -> Quantity:
     """The finished mass of a rectangular plate, net of its holes and slots.
 
     The material actually left after cutting: the gross rectangle ``width`` × ``height``
     less the area of each :class:`Hole` (π·d²/4) and each :class:`Slot` (the obround area
     (L − w)·w + π·w²/4), times ``thickness`` and ``density`` — the number for a weight or
-    material-cost estimate. All the plate dimensions and ``density`` must be positive, and
-    the cut-outs must not remove more than the whole plate. Returns the mass in kg.
+    material-cost estimate. An optional ``corner_radius`` r (matching
+    :func:`export_plate_dxf`) also trims the four corner cut-offs, (4 − π)·r² in total.
+    All the plate dimensions and ``density`` must be positive, and the cut-outs must not
+    remove more than the whole plate. Returns the mass in kg.
     """
     w = _mm(width, "width")
     h = _mm(height, "height")
@@ -256,7 +282,8 @@ def plate_mass(
         raise ValueError("plate width, height, and thickness must be positive")
     if not density.has_dimension("[mass] / [length]**3"):
         raise ValueError(f"density must be a mass/volume quantity; got {density.dimensionality}")
-    net_area = w * h
+    r = _corner_radius_mm(corner_radius, w, h)
+    net_area = w * h - (4.0 - pi) * r**2
     for i, hole in enumerate(holes or []):
         d = _mm(hole.diameter, f"holes[{i}].diameter")
         net_area -= pi * d**2 / 4.0
@@ -302,16 +329,21 @@ def export_plate_dxf(
     path: str | Path,
     slots: list[Slot] | None = None,
     label: str | None = None,
+    corner_radius: Quantity | None = None,
 ) -> Path:
     """Write a rectangular plate outline with ``holes`` and ``slots`` to a DXF file.
 
     The plate spans (0, 0) to (``width``, ``height``) as a closed polyline; each
     :class:`Hole` becomes a circle and each :class:`Slot` an obround polyline, both
-    on the ``HOLES`` layer. An optional ``label`` (e.g. a part mark and material) is
-    written as text just below the plate on a separate ``TEXT`` layer. All lengths
-    are written in millimetres. Returns the path written. Raises :class:`ValueError`
-    for a non-positive plate or a feature that falls outside it, and
-    :class:`ImportError` if ezdxf is unavailable.
+    on the ``HOLES`` layer. An optional ``corner_radius`` rounds all four corners
+    with quarter-circle arcs (bulged polyline segments) — the usual treatment on a
+    cut plate — and must be under half the shorter side; omitted, the corners are
+    sharp. An optional ``label`` (e.g. a part mark and material) is written as text
+    just below the plate on a separate ``TEXT`` layer. All lengths are written in
+    millimetres. Returns the path written. Raises :class:`ValueError` for a
+    non-positive plate or a feature that falls outside it (features are checked
+    against the full rectangle, not the corner cut-offs), and :class:`ImportError`
+    if ezdxf is unavailable.
     """
     ezdxf = _require_ezdxf()
     from ezdxf.enums import TextEntityAlignment
@@ -320,15 +352,29 @@ def export_plate_dxf(
     h = _mm(height, "height")
     if w <= 0 or h <= 0:
         raise ValueError(f"plate width and height must be positive; got {width} x {height}")
+    r = _corner_radius_mm(corner_radius, w, h)
 
     doc = ezdxf.new()
     doc.units = ezdxf.units.MM
     doc.layers.add(_OUTLINE_LAYER, color=7)  # white/black — the profile cut
     doc.layers.add(_HOLE_LAYER, color=1)  # red — the interior pierces
     msp = doc.modelspace()
-    msp.add_lwpolyline(
-        [(0, 0), (w, 0), (w, h), (0, h)], close=True, dxfattribs={"layer": _OUTLINE_LAYER}
-    )
+    if r > 0:
+        outline = [
+            (r, 0, 0),
+            (w - r, 0, _CORNER_BULGE),
+            (w, r, 0),
+            (w, h - r, _CORNER_BULGE),
+            (w - r, h, 0),
+            (r, h, _CORNER_BULGE),
+            (0, h - r, 0),
+            (0, r, _CORNER_BULGE),
+        ]
+        msp.add_lwpolyline(outline, format="xyb", close=True, dxfattribs={"layer": _OUTLINE_LAYER})
+    else:
+        msp.add_lwpolyline(
+            [(0, 0), (w, 0), (w, h), (0, h)], close=True, dxfattribs={"layer": _OUTLINE_LAYER}
+        )
 
     if label:
         doc.layers.add(_TEXT_LAYER, color=7)

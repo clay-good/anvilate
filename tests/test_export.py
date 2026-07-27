@@ -353,3 +353,75 @@ def test_export_gear_blank_dxf_rejects_bad_diameter_order(tmp_path):
             bore_diameter=_q("12 mm"),
             path=tmp_path / "bad.dxf",
         )
+
+
+def test_export_rounds_the_plate_corners_with_quarter_arcs(tmp_path):
+    ezdxf = pytest.importorskip("ezdxf")
+    from math import pi, tan
+
+    out = export_plate_dxf(
+        width=_q("80 mm"),
+        height=_q("120 mm"),
+        holes=[],
+        corner_radius=_q("10 mm"),
+        path=tmp_path / "rounded.dxf",
+    )
+    doc = ezdxf.readfile(out)
+    outline = doc.modelspace().query("LWPOLYLINE")[0]
+    assert outline.closed
+    points = outline.get_points("xyb")
+    # Eight vertices: a straight edge then a quarter-arc at each corner, CCW.
+    coords = [(round(p[0]), round(p[1])) for p in points]
+    assert coords == [
+        (10, 0),
+        (70, 0),
+        (80, 10),
+        (80, 110),
+        (70, 120),
+        (10, 120),
+        (0, 110),
+        (0, 10),
+    ]
+    # Alternate segments carry the 90-degree arc bulge tan(pi/8); edges are straight.
+    bulges = [p[2] for p in points]
+    for i, bulge in enumerate(bulges):
+        expected = tan(pi / 8) if i % 2 == 1 else 0.0
+        assert bulge == pytest.approx(expected, abs=1e-12)
+
+
+def test_export_rejects_an_oversized_corner_radius(tmp_path):
+    pytest.importorskip("ezdxf")
+    with pytest.raises(ValueError, match="corner_radius .* under half the shorter"):
+        export_plate_dxf(
+            width=_q("80 mm"),
+            height=_q("120 mm"),
+            holes=[],
+            corner_radius=_q("40 mm"),
+            path=tmp_path / "bad.dxf",
+        )
+
+
+def test_plate_cut_length_and_mass_account_for_rounded_corners():
+    from math import pi
+
+    from anvilate.export.dxf import plate_cut_length, plate_mass
+
+    # Each rounded corner swaps 2r of straight edge for a quarter arc pi*r/2:
+    # the outline shortens by (8 - 2*pi)*r in total.
+    rounded = plate_cut_length(width=_q("100 mm"), height=_q("80 mm"), corner_radius=_q("10 mm"))
+    assert rounded.to("mm").magnitude == pytest.approx(
+        2 * (100 + 80) - (8 - 2 * pi) * 10, rel=1e-12
+    )
+    # A zero radius is exactly the sharp-cornered perimeter.
+    sharp = plate_cut_length(width=_q("100 mm"), height=_q("80 mm"), corner_radius=_q("0 mm"))
+    assert sharp.to("mm").magnitude == pytest.approx(2 * (100 + 80), rel=1e-12)
+    # The mass loses the four corner cut-offs, (4 - pi)*r^2 of area.
+    mass = plate_mass(
+        width=_q("100 mm"),
+        height=_q("80 mm"),
+        thickness=_q("5 mm"),
+        density=_q("7850 kg/m**3"),
+        corner_radius=_q("10 mm"),
+    )
+    expected_area = 100 * 80 - (4 - pi) * 10**2
+    assert mass.to("kg").magnitude == pytest.approx(expected_area * 5 * 1e-9 * 7850, rel=1e-12)
