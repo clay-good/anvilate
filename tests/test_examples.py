@@ -2303,3 +2303,20 @@ def test_scotch_yoke_example_speed_squared_overloads_the_pin():
     uprated = namespace["screen_uprated_speed"]()
     assert uprated.status is CheckStatus.FAIL
     assert "safety factor 0.63" in uprated.entries[0].detail
+
+
+def test_lifting_lug_calc_report_example_shows_its_work():
+    namespace = runpy.run_path(str(_EXAMPLES / "lifting_lug_calc_report.py"))
+    report = namespace["build_report"]()
+    text = report.to_text()
+    # The bearing check shows formula, substitution with units, and result.
+    assert "σ_p = P / (d · t)" in text
+    assert "σ_p = 50.0 kN / (25.00 mm · 12.00 mm)" in text
+    assert "σ_p = 166.7 MPa" in text
+    assert "ASME BTH-1 §3-3" in text
+    # Two of the three checks are worked; the weld falls back honestly.
+    assert report.derivation_coverage() == (2, 3)
+    assert "derivation not rendered" in text
+    # Pin bearing at 1.50 against a required 2.00 is what has to change.
+    assert report.governing().name == "padeye pin bearing"
+    assert report.status is CheckStatus.FAIL

@@ -43,19 +43,25 @@ def render(
     *,
     unit: str | None = None,
     system: UnitSystem | None = None,
+    pretty: bool = False,
 ) -> str:
     """Render ``quantity`` at conventional precision.
 
     ``unit`` forces a target unit. Otherwise, if ``system`` is given the value
     is converted to that system's conventional unit for its dimension; if
     neither is given the quantity's own unit is used.
+
+    ``pretty`` writes compound units the way a document does — ``"N·m"`` and
+    ``"mm⁴"`` rather than the machine-readable ``"m * N"`` and ``"mm ** 4"`` a
+    spec card echoes. The magnitude and its precision are identical either way.
     """
     target = unit
     if target is None and system is not None:
         target = _system_unit(quantity, system)
     shown = quantity if target is None else quantity.to(target)
     places = decimals_for(shown.unit)
-    return f"{shown.magnitude:.{places}f} {shown.unit}"
+    label = f"{shown.pint.units:~P}" if pretty else shown.unit
+    return f"{shown.magnitude:.{places}f} {label}"
 
 
 def render_dual(quantity: Quantity, *, primary: UnitSystem) -> str:

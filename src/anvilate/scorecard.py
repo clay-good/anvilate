@@ -43,6 +43,25 @@ class ScorecardEntry(BaseModel):
     status: CheckStatus
     detail: str
     reference: str | None = None  # the code/standard clause behind the check, if any
+    # The numbers behind the verdict, kept alongside the detail line so a report
+    # can rank checks by how close they run to their limit rather than re-parsing
+    # prose. Both are None for a check that did not come from a safety factor.
+    safety_factor: float | None = None
+    required_safety_factor: float | None = None
+
+    @property
+    def utilization(self) -> float | None:
+        """How much of the allowed margin the check uses, required/computed.
+
+        1.0 sits exactly at the limit, above 1.0 is a failure, and the *largest*
+        utilization among a set of checks is the governing one. ``None`` when the
+        check did not come from a safety factor.
+        """
+        if self.safety_factor is None or self.required_safety_factor is None:
+            return None
+        if self.safety_factor == 0:
+            return float("inf")
+        return self.required_safety_factor / self.safety_factor
 
     @property
     def passed(self) -> bool:
@@ -84,6 +103,8 @@ class ScorecardEntry(BaseModel):
             name=name,
             status=status,
             detail=f"safety factor {computed:.2f} vs required minimum {required:.2f}",
+            safety_factor=computed,
+            required_safety_factor=required,
         )
 
     def __str__(self) -> str:
@@ -120,6 +141,18 @@ class Scorecard(BaseModel):
     def failures(self) -> tuple[ScorecardEntry, ...]:
         """The checks that ran and failed — the blocking issues."""
         return tuple(e for e in self.entries if e.status is CheckStatus.FAIL)
+
+    def governing(self) -> ScorecardEntry | None:
+        """The check running closest to (or furthest past) its limit.
+
+        The entry with the largest :attr:`ScorecardEntry.utilization` — the one a
+        reviewer reads first, and the one that has to move before anything else
+        matters. ``None`` when no check carries a safety factor.
+        """
+        ranked = [e for e in self.entries if e.utilization is not None]
+        if not ranked:
+            return None
+        return max(ranked, key=lambda e: e.utilization)
 
     def not_evaluated(self) -> tuple[ScorecardEntry, ...]:
         """The checks that could not run — the gaps, never silently passed."""
