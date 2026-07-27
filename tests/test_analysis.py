@@ -11046,6 +11046,88 @@ def test_sliding_contact_pv_is_pressure_times_velocity():
         sliding_contact_pv(contact_pressure=_q("2 MPa"), sliding_velocity=_q("0.5 m"))
 
 
+def test_wire_rope_bending_stress_and_sheave_inverse_round_trip():
+    from anvilate.analysis import (
+        minimum_sheave_diameter_for_bending_stress,
+        wire_rope_bending_stress,
+    )
+
+    # sigma_b = E_r*d_w/D: 83 GPa * 0.9 mm / 250 mm = 298.8 MPa exactly.
+    stress = wire_rope_bending_stress(
+        wire_diameter=_q("0.9 mm"),
+        sheave_diameter=_q("250 mm"),
+        rope_modulus=_q("83 GPa"),
+    )
+    assert stress.to("MPa").magnitude == pytest.approx(298.8, rel=1e-12)
+    # Doubling the sheave halves the bending stress (inverse in D).
+    doubled = wire_rope_bending_stress(
+        wire_diameter=_q("0.9 mm"),
+        sheave_diameter=_q("500 mm"),
+        rope_modulus=_q("83 GPa"),
+    )
+    assert doubled.to("MPa").magnitude == pytest.approx(298.8 / 2, rel=1e-12)
+    # The sizing inverse recovers exactly the sheave that produces the allowable.
+    d_min = minimum_sheave_diameter_for_bending_stress(
+        wire_diameter=_q("0.9 mm"),
+        rope_modulus=_q("83 GPa"),
+        allowable_bending_stress=stress,
+    )
+    assert d_min.to("mm").magnitude == pytest.approx(250.0, rel=1e-12)
+    with pytest.raises(ValueError, match="wire_diameter .* must be below the sheave_diameter"):
+        wire_rope_bending_stress(
+            wire_diameter=_q("10 mm"),
+            sheave_diameter=_q("5 mm"),
+            rope_modulus=_q("83 GPa"),
+        )
+
+
+def test_wire_rope_equivalent_bending_load_is_stress_times_metal_area():
+    from anvilate.analysis import wire_rope_equivalent_bending_load
+
+    # F_b = sigma_b * A_m = 298.8 MPa * 68 mm^2 = 20318.4 N.
+    load = wire_rope_equivalent_bending_load(
+        wire_diameter=_q("0.9 mm"),
+        sheave_diameter=_q("250 mm"),
+        rope_modulus=_q("83 GPa"),
+        metal_area=_q("68 mm**2"),
+    )
+    assert load.to("N").magnitude == pytest.approx(298.8 * 68, rel=1e-12)
+    with pytest.raises(ValueError, match="metal_area must be positive"):
+        wire_rope_equivalent_bending_load(
+            wire_diameter=_q("0.9 mm"),
+            sheave_diameter=_q("250 mm"),
+            rope_modulus=_q("83 GPa"),
+            metal_area=_q("0 mm**2"),
+        )
+
+
+def test_wire_rope_sheave_pressure_is_projected_area_bearing():
+    from anvilate.analysis import wire_rope_sheave_pressure
+
+    # p = 2F/(d*D): 2*12000 N / (13 mm * 250 mm) = 7.3846 MPa.
+    pressure = wire_rope_sheave_pressure(
+        tension=_q("12 kN"),
+        rope_diameter=_q("13 mm"),
+        sheave_diameter=_q("250 mm"),
+    )
+    assert pressure.to("MPa").magnitude == pytest.approx(2 * 12000 / (13 * 250), rel=1e-12)
+    # A larger sheave spreads the same tension over more tread (inverse in D).
+    larger = wire_rope_sheave_pressure(
+        tension=_q("12 kN"),
+        rope_diameter=_q("13 mm"),
+        sheave_diameter=_q("500 mm"),
+    )
+    assert larger.to("MPa").magnitude == pytest.approx(pressure.to("MPa").magnitude / 2, rel=1e-12)
+    with pytest.raises(ValueError, match="rope_diameter .* must be below the sheave_diameter"):
+        wire_rope_sheave_pressure(
+            tension=_q("12 kN"), rope_diameter=_q("13 mm"), sheave_diameter=_q("13 mm")
+        )
+    with pytest.raises(ValueError, match="tension must be positive"):
+        wire_rope_sheave_pressure(
+            tension=_q("-1 N"), rope_diameter=_q("13 mm"), sheave_diameter=_q("250 mm")
+        )
+
+
 def test_specific_film_ratio_sets_the_lubrication_regime():
     from math import sqrt
 

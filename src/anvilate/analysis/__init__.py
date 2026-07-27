@@ -153,6 +153,10 @@ modules:
 - :mod:`~anvilate.analysis.rigging` — multi-leg sling lifting statics: the
   sling-angle tension multiplier 1/sin θ, each leg's tension, and the inward
   horizontal force at the pick points (the eyebolt/lifting-beam side load)
+- :mod:`~anvilate.analysis.wire_rope` — wire rope over a sheave: the wire bending
+  stress E_r·d_w/D, the minimum sheave a bending allowable permits, the equivalent
+  bending load folded into the rope's strength margin, and the rope-on-sheave
+  bearing pressure 2F/(d·D)
 - :mod:`~anvilate.analysis.spring` — helical-spring shear (Wahl), rate, active
   coils for a rate, solid (fully-compressed) length, stored
   energy, series/parallel combination, lateral (column) buckling, leaf-spring
@@ -783,6 +787,12 @@ from .weld import (
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
 )
+from .wire_rope import (
+    minimum_sheave_diameter_for_bending_stress,
+    wire_rope_bending_stress,
+    wire_rope_equivalent_bending_load,
+    wire_rope_sheave_pressure,
+)
 from .worm import (
     worm_gear_efficiency,
     worm_gear_ratio,
@@ -1280,4 +1290,8 @@ __all__ = [
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",
     "eccentric_weld_group_peak_stress",
+    "wire_rope_bending_stress",
+    "minimum_sheave_diameter_for_bending_stress",
+    "wire_rope_equivalent_bending_load",
+    "wire_rope_sheave_pressure",
 ]
