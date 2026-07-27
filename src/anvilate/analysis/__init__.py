@@ -155,6 +155,9 @@ modules:
   horizontal force at the pick points (the eyebolt/lifting-beam side load); plus
   the block-and-tackle actual mechanical advantage with per-sheave friction and
   the lead-line (winch) tension it implies
+- :mod:`~anvilate.analysis.winch` — winch-drum spooling geometry: the working
+  radius and line pull at each rope layer (a fuller drum pulls less) and the
+  tight-wound rope length a drum stores
 - :mod:`~anvilate.analysis.wire_rope` — wire rope over a sheave: the wire bending
   stress E_r·d_w/D, the minimum sheave a bending allowable permits, the equivalent
   bending load folded into the rope's strength margin, and the rope-on-sheave
@@ -791,6 +794,11 @@ from .weld import (
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
 )
+from .winch import (
+    drum_line_pull,
+    drum_rope_capacity,
+    drum_working_radius,
+)
 from .wire_rope import (
     minimum_sheave_diameter_for_bending_stress,
     wire_rope_bending_stress,
@@ -1300,4 +1308,7 @@ __all__ = [
     "minimum_sheave_diameter_for_bending_stress",
     "wire_rope_equivalent_bending_load",
     "wire_rope_sheave_pressure",
+    "drum_working_radius",
+    "drum_line_pull",
+    "drum_rope_capacity",
 ]

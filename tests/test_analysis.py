@@ -11078,6 +11078,59 @@ def test_sliding_contact_pv_is_pressure_times_velocity():
         sliding_contact_pv(contact_pressure=_q("2 MPa"), sliding_velocity=_q("0.5 m"))
 
 
+def test_drum_line_pull_falls_as_the_drum_fills():
+    from anvilate.analysis import drum_line_pull, drum_working_radius
+
+    # Layer k centreline radius = (D + (2k-1)*d)/2: first layer sits one rope up.
+    first = drum_working_radius(core_diameter=_q("200 mm"), rope_diameter=_q("13 mm"), layer=1)
+    assert first.to("mm").magnitude == pytest.approx((200 + 13) / 2, rel=1e-12)
+    fourth = drum_working_radius(core_diameter=_q("200 mm"), rope_diameter=_q("13 mm"), layer=4)
+    assert fourth.to("mm").magnitude == pytest.approx((200 + 7 * 13) / 2, rel=1e-12)
+    # Each layer adds exactly one rope diameter to the radius.
+    assert fourth.to("mm").magnitude - first.to("mm").magnitude == pytest.approx(3 * 13, rel=1e-12)
+    # F = T/r: the same torque pulls less on a fuller drum.
+    bare = drum_line_pull(
+        torque=_q("850 N*m"), core_diameter=_q("200 mm"), rope_diameter=_q("13 mm"), layer=1
+    )
+    assert bare.to("N").magnitude == pytest.approx(850 / 0.1065, rel=1e-12)
+    full = drum_line_pull(
+        torque=_q("850 N*m"), core_diameter=_q("200 mm"), rope_diameter=_q("13 mm"), layer=4
+    )
+    assert full.to("N").magnitude == pytest.approx(850 / 0.1455, rel=1e-12)
+    assert full.to("N").magnitude < bare.to("N").magnitude
+    with pytest.raises(ValueError, match="layer must be at least 1"):
+        drum_working_radius(core_diameter=_q("200 mm"), rope_diameter=_q("13 mm"), layer=0)
+    with pytest.raises(ValueError, match="torque must be positive"):
+        drum_line_pull(
+            torque=_q("0 N*m"), core_diameter=_q("200 mm"), rope_diameter=_q("13 mm"), layer=1
+        )
+
+
+def test_drum_rope_capacity_matches_the_layer_sum():
+    from math import pi
+
+    from anvilate.analysis import drum_rope_capacity
+
+    # The closed form L = pi*w*m*(D + m*d) must equal the explicit sum of the layer
+    # circumferences pi*(D + (2k-1)*d)*w for k = 1..m.
+    for core, rope, wraps, layers in ((200.0, 13.0, 20, 4), (300.0, 10.0, 15, 1)):
+        capacity = drum_rope_capacity(
+            core_diameter=_q(f"{core} mm"),
+            rope_diameter=_q(f"{rope} mm"),
+            wraps_per_layer=wraps,
+            layers=layers,
+        )
+        explicit_mm = sum(pi * (core + (2 * k - 1) * rope) * wraps for k in range(1, layers + 1))
+        assert capacity.to("m").magnitude == pytest.approx(explicit_mm / 1000, rel=1e-12)
+    with pytest.raises(ValueError, match="wraps_per_layer must be at least 1"):
+        drum_rope_capacity(
+            core_diameter=_q("200 mm"),
+            rope_diameter=_q("13 mm"),
+            wraps_per_layer=0,
+            layers=2,
+        )
+
+
 def test_wire_rope_bending_stress_and_sheave_inverse_round_trip():
     from anvilate.analysis import (
         minimum_sheave_diameter_for_bending_stress,
