@@ -4,6 +4,9 @@ The T1 validation tier screens a design with handbook closed-form solutions
 (Roark, Shigley) before any FEA — fast, deterministic, and unit-checked. The
 modules:
 
+- :mod:`~anvilate.analysis.adhesive` — bonded joints: the lap-joint average shear
+  stress against the datasheet lap-shear strength, and the axial and torque
+  capacity of a cylindrical retaining-compound bond
 - :mod:`~anvilate.analysis.axial` — direct axial stress, section area, the
   minimum area an axial load requires, and the axial elongation and stiffness
 - :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
@@ -225,6 +228,11 @@ openspec/specs/validation-gauntlet/).
 
 from __future__ import annotations
 
+from .adhesive import (
+    cylindrical_bond_axial_capacity,
+    cylindrical_bond_torque_capacity,
+    lap_joint_average_shear_stress,
+)
 from .axial import (
     axial_elongation,
     axial_stiffness,
@@ -816,6 +824,9 @@ from .worm import (
 )
 
 __all__ = [
+    "lap_joint_average_shear_stress",
+    "cylindrical_bond_axial_capacity",
+    "cylindrical_bond_torque_capacity",
     "axial_stress",
     "axial_elongation",
     "axial_stiffness",

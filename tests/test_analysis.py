@@ -11078,6 +11078,61 @@ def test_sliding_contact_pv_is_pressure_times_velocity():
         sliding_contact_pv(contact_pressure=_q("2 MPa"), sliding_velocity=_q("0.5 m"))
 
 
+def test_adhesive_bond_capacities_and_lap_shear():
+    from math import pi
+
+    from anvilate.analysis import (
+        cylindrical_bond_axial_capacity,
+        cylindrical_bond_torque_capacity,
+        interference_torque_capacity,
+        lap_joint_average_shear_stress,
+    )
+
+    # Lap joint: tau = F/(L*w) = 5000 N / (25 mm * 20 mm) = 10 MPa.
+    tau = lap_joint_average_shear_stress(
+        load=_q("5 kN"), overlap_length=_q("25 mm"), joint_width=_q("20 mm")
+    )
+    assert tau.to("MPa").magnitude == pytest.approx(10.0, rel=1e-12)
+    # Cylindrical bond: F = tau*pi*d*L over the mating area.
+    axial = cylindrical_bond_axial_capacity(
+        interface_diameter=_q("20 mm"),
+        engagement_length=_q("15 mm"),
+        bond_shear_strength=_q("25 MPa"),
+    )
+    assert axial.to("N").magnitude == pytest.approx(25 * pi * 20 * 15, rel=1e-12)
+    # The torque is exactly the axial capacity acting at the interface radius.
+    torque = cylindrical_bond_torque_capacity(
+        interface_diameter=_q("20 mm"),
+        engagement_length=_q("15 mm"),
+        bond_shear_strength=_q("25 MPa"),
+    )
+    assert torque.to("N*m").magnitude == pytest.approx(axial.to("N").magnitude * 0.010, rel=1e-12)
+    # Consistency with the press-fit analogue: a bond at tau = mu*p transmits the
+    # same torque as friction at contact pressure p.
+    friction = interference_torque_capacity(
+        _q("50 MPa"),
+        interface_diameter=_q("20 mm"),
+        engagement_length=_q("15 mm"),
+        friction_coefficient=0.15,
+    )
+    bonded = cylindrical_bond_torque_capacity(
+        interface_diameter=_q("20 mm"),
+        engagement_length=_q("15 mm"),
+        bond_shear_strength=_q("7.5 MPa"),
+    )
+    assert bonded.to("N*m").magnitude == pytest.approx(friction.to("N*m").magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="load must be positive"):
+        lap_joint_average_shear_stress(
+            load=_q("0 N"), overlap_length=_q("25 mm"), joint_width=_q("20 mm")
+        )
+    with pytest.raises(ValueError, match="bond_shear_strength must be positive"):
+        cylindrical_bond_axial_capacity(
+            interface_diameter=_q("20 mm"),
+            engagement_length=_q("15 mm"),
+            bond_shear_strength=_q("0 MPa"),
+        )
+
+
 def test_drum_line_pull_falls_as_the_drum_fills():
     from anvilate.analysis import drum_line_pull, drum_working_radius
 
