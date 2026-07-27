@@ -453,3 +453,42 @@ def test_beam_bending_derivation_names_the_load_case_behind_the_moment():
     assert "simply_supported" in moment.description
     assert "distributed" in moment.description
     assert derivation.substituted() == "σ_b = 10.00 kN·m · 75.00 mm / 28125000.00 mm⁴"
+
+
+def test_beam_deflection_derivation_only_where_a_closed_form_exists():
+    from anvilate.analysis import CrossSection
+    from anvilate.packs.structural import BeamMember, LoadType, Support, screen_beam_member
+
+    section = CrossSection.rectangular(
+        width=Quantity.parse("100 mm"), height=Quantity.parse("150 mm")
+    )
+
+    def deflection_entry(**overrides):
+        fields = {
+            "name": "b",
+            "section": section,
+            "length": Quantity.parse("4 m"),
+            "support": Support.SIMPLY_SUPPORTED,
+            "load_type": LoadType.DISTRIBUTED,
+            "load": Quantity.parse("5 kN/m"),
+            "material": "ASTM-A36",
+            "deflection_limit": Quantity.parse("20 mm"),
+        }
+        member = BeamMember(**{**fields, **overrides})
+        card = screen_beam_member(member, required_safety_factor=1.5)
+        return next(e for e in card.entries if "deflection" in e.name)
+
+    standard = deflection_entry()
+    # The standard full-span case states the formula a reviewer can follow.
+    assert standard.derivation.symbolic == "δ = 5·w·L⁴/(384·E·I)"
+    assert standard.derivation.unresolved_symbols() == ()
+    assert "2.96 mm" in standard.derivation.lines(system=UnitSystem.SI)[2]
+
+    # An offset point load solves for the peak position rather than evaluating a
+    # one-line formula, so it declares none and the report falls back honestly.
+    offset = deflection_entry(
+        load_type=LoadType.POINT,
+        load=Quantity.parse("10 kN"),
+        load_position=Quantity.parse("1 m"),
+    )
+    assert offset.derivation is None

@@ -23,8 +23,12 @@
       concrete bearing, and shear-plate yielding and rupture. Where a clause branches
       (§J3.10 tear-out, §H1.1 interaction, Euler vs Johnson) the derivation shows the
       branch that actually governed rather than a condition the reader has to resolve.
-      Still to wire: beam deflection (needs the per-case deflection formulas, the same
-      shape of work as `max_moment`), and the industrial pack.
+      Beam deflection too, for the eight standard full-span cases, which declare their
+      closed form on the result (`BeamBendingResult.deflection_formula`). Off-default
+      geometry (offset loads, patches, load pairs) solves numerically or through a
+      series and declares none, so it falls back rather than showing a tidy formula
+      that is not what was computed — as does the industrial pack's cover plate, whose
+      checks are Navier-series and table-interpolated solutions.
 - [x] 2.2 Tabular fallback rendering for checks without metadata, with the honest label
       ("derivation not rendered"; a derivation with undeclared symbols also falls back
       rather than printing a bare symbol where a value belongs)

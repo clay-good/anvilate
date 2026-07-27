@@ -576,12 +576,45 @@ def screen_beam_member(
         )
     ]
     if max_deflection is not None:
+        update: dict = {"reference": _CLAUSE_DEFLECTION}
+        if result.deflection_formula is not None:
+            update["derivation"] = Derivation(
+                symbolic=result.deflection_formula,
+                inputs=(
+                    SymbolValue(
+                        symbol="F" if member.load_type is LoadType.POINT else "w",
+                        description=(
+                            "applied load"
+                            if member.load_type is LoadType.POINT
+                            else "distributed load"
+                        ),
+                        value=member.load,
+                    ),
+                    SymbolValue(symbol="L", description="span", value=member.length),
+                    SymbolValue(
+                        symbol="E",
+                        description="elastic modulus",
+                        value=record.elastic_modulus.quantity,
+                        unit="GPa",
+                    ),
+                    SymbolValue(
+                        symbol="I",
+                        description="second moment of area",
+                        value=member.section.second_moment,
+                        unit="mm^4",
+                    ),
+                ),
+                result=SymbolValue(
+                    symbol="δ", description="peak deflection", value=result.max_deflection
+                ),
+                citation=_CLAUSE_DEFLECTION,
+            )
         entries.append(
             deflection_scorecard(
                 f"{member.name} deflection",
                 deflection=result.max_deflection,
                 limit=max_deflection,
-            ).model_copy(update={"reference": _CLAUSE_DEFLECTION})
+            ).model_copy(update=update)
         )
     if member.mass_per_length is not None:
         fundamental = _MODAL_CHECKS[member.support](

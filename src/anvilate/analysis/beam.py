@@ -710,6 +710,12 @@ class BeamBendingResult(BaseModel):
     max_moment: Quantity
     max_bending_stress: Quantity
     max_deflection: Quantity
+    # The closed-form deflection expression for this case, when it has one a
+    # reviewer can follow in a line — the full-span standard cases. Off-default
+    # geometry (offset loads, partial patches, load pairs) solves for the peak
+    # position numerically or through a series, so it declares no formula rather
+    # than a tidy one that is not what was computed.
+    deflection_formula: str | None = None
 
     def bending_safety_factor(self, yield_strength: Quantity) -> float:
         """The factor of safety against yielding: yield strength / peak stress.
@@ -769,6 +775,7 @@ def cantilever_end_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = F·L³/(3·E·I)",
     )
 
 
@@ -856,6 +863,7 @@ def cantilever_uniform_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = w·L⁴/(8·E·I)",
     )
 
 
@@ -1180,6 +1188,7 @@ def simply_supported_center_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = F·L³/(48·E·I)",
     )
 
 
@@ -1323,6 +1332,7 @@ def simply_supported_uniform_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = 5·w·L⁴/(384·E·I)",
     )
 
 
@@ -1665,6 +1675,7 @@ def fixed_pinned_center_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = F·L³/(48·√5·E·I)",
     )
 
 
@@ -1765,6 +1776,7 @@ def fixed_pinned_uniform_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = w·L⁴/(185·E·I)",
     )
 
 
@@ -2226,6 +2238,7 @@ def fixed_fixed_center_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = F·L³/(192·E·I)",
     )
 
 
@@ -2317,6 +2330,7 @@ def fixed_fixed_uniform_load(
         max_moment=_as_quantity(moment, "N*m"),
         max_bending_stress=_as_quantity(stress, "MPa"),
         max_deflection=_as_quantity(deflection, "mm"),
+        deflection_formula="δ = w·L⁴/(384·E·I)",
     )
 
 
