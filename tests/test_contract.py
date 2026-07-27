@@ -117,10 +117,18 @@ def test_every_public_callable_has_a_docstring():
 # silently absent.
 
 _CHECKS_WITH_DERIVATIONS = {
-    "concrete bearing",
+    "bolt shear",
+    "bolt tension",
     "buckling",
+    "combined tension+shear",
+    "concrete bearing",
+    "edge tear-out",
+    "gross yielding",
+    "net rupture",
     "net tension",
     "pin bearing",
+    "plate bearing",
+    "weld shear",
 }
 
 
@@ -128,12 +136,18 @@ def _structural_entries():
     """One scorecard entry per structural-pack check, from a screened assembly."""
     from anvilate.analysis import CrossSection
     from anvilate.packs.structural import (
+        BoltedConnection,
         ColumnMember,
         ConcreteBearing,
         LiftingLug,
+        TensionMember,
+        WeldedConnection,
+        screen_bolted_connection,
         screen_column_member,
         screen_concrete_bearing,
         screen_lifting_lug,
+        screen_tension_member,
+        screen_welded_connection,
     )
     from anvilate.units import Quantity
 
@@ -176,6 +190,47 @@ def _structural_entries():
                 load=Quantity.parse("600 kN"),
             ),
             required_safety_factor=2.0,
+        ).entries
+    )
+    entries.extend(
+        screen_bolted_connection(
+            BoltedConnection(
+                name="clevis",
+                bolt_diameter=Quantity.parse("16 mm"),
+                shear_planes=2,
+                plate_thickness=Quantity.parse("10 mm"),
+                load=Quantity.parse("60 kN"),
+                edge_distance=Quantity.parse("30 mm"),
+                tension=Quantity.parse("25 kN"),
+                bolt_material="ASTM-A36",
+                plate_material="ASTM-A36",
+            ),
+            required_safety_factor=1.5,
+        ).entries
+    )
+    entries.extend(
+        screen_welded_connection(
+            WeldedConnection(
+                name="seam",
+                leg_size=Quantity.parse("8 mm"),
+                weld_length=Quantity.parse("160 mm"),
+                load=Quantity.parse("50 kN"),
+                electrode_strength=Quantity.parse("483 MPa"),
+            ),
+            required_safety_factor=2.0,
+        ).entries
+    )
+    entries.extend(
+        screen_tension_member(
+            TensionMember(
+                name="tie",
+                gross_area=Quantity.parse("1200 mm^2"),
+                net_area=Quantity.parse("1000 mm^2"),
+                shear_lag_factor=0.85,
+                load=Quantity.parse("200 kN"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=1.5,
         ).entries
     )
     return entries

@@ -173,8 +173,14 @@ def _scan(text: str, by_symbol: dict[str, str]) -> tuple[str, list[str]]:
                     matched = symbol
                     break
         if matched is not None:
-            out.append(by_symbol[matched])
             index += len(matched)
+            value = by_symbol[matched]
+            # An exponent applies to the whole value, so it has to be bracketed:
+            # "d²" with d = 16 mm is "(16.00 mm)²", never "16.00 mm²" — which a
+            # reviewer would read as an area.
+            if index < len(text) and text[index] in _SUPERSCRIPTS:
+                value = f"({value})"
+            out.append(value)
             continue
         if at_boundary and _is_symbol_char(text[index]):
             # An undeclared name: take the whole token so a multi-character symbol

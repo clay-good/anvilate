@@ -380,7 +380,8 @@ def test_column_derivation_names_the_regime_that_actually_governed():
 
 def test_mathematical_constants_are_not_missing_inputs():
     # π is not a value the caller supplies, so a formula naming it is still fully
-    # worked; a superscript exponents the symbol rather than renaming it.
+    # worked; a superscript exponents the symbol rather than renaming it, and the
+    # substituted value is bracketed so the exponent still applies to all of it.
     derivation = Derivation(
         symbolic="σ_cr = π² · E / λ²",
         inputs=(
@@ -393,7 +394,7 @@ def test_mathematical_constants_are_not_missing_inputs():
         citation="Shigley, Eq. 4-43",
     )
     assert derivation.unresolved_symbols() == ()
-    assert derivation.substituted() == "σ_cr = π² · 200.0 GPa / 207.846²"
+    assert derivation.substituted() == "σ_cr = π² · 200.0 GPa / (207.846)²"
 
 
 def test_multi_character_symbol_is_reported_whole_when_undeclared():
@@ -409,3 +410,19 @@ def test_multi_character_symbol_is_reported_whole_when_undeclared():
     )
     # The undeclared symbol is named as itself, not split into "f" and "c".
     assert derivation.unresolved_symbols() == ("f′c",)
+
+
+def test_exponent_brackets_the_substituted_value():
+    # d² with d = 16 mm must render as "(16.00 mm)²" — "16.00 mm²" would read as an
+    # area, which is a different quantity entirely.
+    derivation = Derivation(
+        symbolic="A = π · d² / 4",
+        inputs=(
+            SymbolValue(symbol="d", description="bolt diameter", value=Quantity.parse("16 mm")),
+        ),
+        result=SymbolValue(
+            symbol="A", description="bolt shank area", value=Quantity.parse("201 mm^2")
+        ),
+        citation="geometry",
+    )
+    assert derivation.substituted() == "A = π · (16.00 mm)² / 4"

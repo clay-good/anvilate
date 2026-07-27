@@ -15,11 +15,14 @@
 
 ## 2. Implementation
 
-- [ ] 2.1 Derivation metadata for an initial slice of high-traffic checks. Done in the
-      structural pack: lug net tension, lug pin bearing, column buckling (Euler and
-      Johnson, each showing the regime that actually governed), concrete bearing.
-      Remaining: beam bending and deflection, bolt shear/tension, weld throat shear,
-      base plate, gusset block shear, tension member, beam-column interaction, shear plate.
+- [x] 2.1 Derivation metadata for the initial slice of high-traffic checks, all in the
+      structural pack: lug net tension and pin bearing, column buckling (Euler and
+      Johnson, each showing the regime that actually governed), concrete bearing, bolt
+      shear, plate bearing, edge tear-out (showing whichever of the two §J3.10 branches
+      governed, not a `min()` the reader has to evaluate), bolt tension, combined
+      tension+shear, weld throat shear, tension-member gross yielding and net rupture.
+      Still to wire: beam bending and deflection, base plate, gusset block shear,
+      beam-column interaction, shear plate.
 - [x] 2.2 Tabular fallback rendering for checks without metadata, with the honest label
       ("derivation not rendered"; a derivation with undeclared symbols also falls back
       rather than printing a bare symbol where a value belongs)

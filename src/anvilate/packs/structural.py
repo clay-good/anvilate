@@ -817,37 +817,117 @@ def screen_bolted_connection(
         diameter=connection.bolt_diameter,
         thickness=connection.plate_thickness,
     )
+    load_symbol = SymbolValue(
+        symbol="P", description="load transferred by the connection", value=connection.load
+    )
+    diameter_symbol = SymbolValue(
+        symbol="d", description="bolt shank diameter", value=connection.bolt_diameter
+    )
+    thickness_symbol = SymbolValue(
+        symbol="t", description="plate thickness", value=connection.plate_thickness
+    )
     entries = [
         strength_scorecard(
             f"{connection.name} bolt shear",
             stress=shear,
             allowable=shear_yield,
             required=required_safety_factor,
-        ).model_copy(update={"reference": _CLAUSE_BOLT_SHEAR}),
+        ).model_copy(
+            update={
+                "reference": _CLAUSE_BOLT_SHEAR,
+                "derivation": Derivation(
+                    symbolic="τ = P / (n · π · d² / 4)",
+                    inputs=(
+                        load_symbol,
+                        SymbolValue(
+                            symbol="n",
+                            description="shear planes through the bolt",
+                            value=float(connection.shear_planes),
+                        ),
+                        diameter_symbol,
+                    ),
+                    result=SymbolValue(symbol="τ", description="bolt shear stress", value=shear),
+                    citation=_CLAUSE_BOLT_SHEAR,
+                ),
+            }
+        ),
         strength_scorecard(
             f"{connection.name} plate bearing",
             stress=bearing,
             allowable=plate.yield_strength.quantity,
             required=required_safety_factor,
-        ).model_copy(update={"reference": _CLAUSE_BEARING}),
+        ).model_copy(
+            update={
+                "reference": _CLAUSE_BEARING,
+                "derivation": Derivation(
+                    symbolic="σ_p = P / (d · t)",
+                    inputs=(load_symbol, diameter_symbol, thickness_symbol),
+                    result=SymbolValue(
+                        symbol="σ_p",
+                        description="bearing stress on the projected hole area",
+                        value=bearing,
+                    ),
+                    citation=_CLAUSE_BEARING,
+                ),
+            }
+        ),
     ]
     if connection.edge_distance is not None:
         d_mm = connection.bolt_diameter.to("mm").magnitude
         t_mm = connection.plate_thickness.to("mm").magnitude
         fu = plate.ultimate_strength.quantity.to("MPa").magnitude
         clear = connection.edge_distance.to("mm").magnitude - d_mm / 2
-        capacity = min(
-            _TEAROUT_CLEAR_FRACTION * clear * t_mm * fu,
-            _TEAROUT_BEARING_CAP_FRACTION * d_mm * t_mm * fu,
-        )
+        tear_capacity = _TEAROUT_CLEAR_FRACTION * clear * t_mm * fu
+        deformation_cap = _TEAROUT_BEARING_CAP_FRACTION * d_mm * t_mm * fu
+        capacity = min(tear_capacity, deformation_cap)
         load_n = connection.load.to("N").magnitude
         tearout_sf = capacity / load_n if load_n > 0 else float("inf")
+        ultimate_symbol = SymbolValue(
+            symbol="F_u",
+            description="plate ultimate tensile strength",
+            value=plate.ultimate_strength.quantity,
+        )
+        # §J3.10 takes the lesser of tear-out on the clear distance and the
+        # bearing-deformation cap. Show the one that actually governed rather than
+        # a min() the reader has to evaluate.
+        if tear_capacity <= deformation_cap:
+            tearout_derivation = Derivation(
+                symbolic="R_n = 1.2 · l_c · t · F_u",
+                inputs=(
+                    SymbolValue(
+                        symbol="l_c",
+                        description="clear distance from hole edge to plate edge, e − d/2",
+                        value=Quantity(magnitude=clear, unit="mm"),
+                    ),
+                    thickness_symbol,
+                    ultimate_symbol,
+                ),
+                result=SymbolValue(
+                    symbol="R_n",
+                    description="tear-out capacity (below the bearing-deformation cap)",
+                    value=Quantity(magnitude=capacity, unit="N"),
+                ),
+                citation=_CLAUSE_BEARING,
+            )
+        else:
+            tearout_derivation = Derivation(
+                symbolic="R_n = 2.4 · d · t · F_u",
+                inputs=(diameter_symbol, thickness_symbol, ultimate_symbol),
+                result=SymbolValue(
+                    symbol="R_n",
+                    description=(
+                        "bearing-deformation cap, which governs below the tear-out capacity"
+                    ),
+                    value=Quantity(magnitude=capacity, unit="N"),
+                ),
+                citation=_CLAUSE_BEARING,
+            )
         entries.append(
             ScorecardEntry.from_safety_factor(
                 f"{connection.name} edge tear-out",
                 computed=tearout_sf,
                 required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_BEARING})
+            ).model_copy(update={"reference": _CLAUSE_BEARING, "derivation": tearout_derivation})
         )
     if connection.tension is not None:
         tensile = axial_stress(
@@ -856,13 +936,30 @@ def screen_bolted_connection(
         combined = von_mises_plane_stress(
             sigma_x=tensile, sigma_y=Quantity(magnitude=0.0, unit="MPa"), tau_xy=shear
         )
+        tension_symbol = SymbolValue(
+            symbol="P_t", description="tensile load on the bolt", value=connection.tension
+        )
+        shear_result = SymbolValue(symbol="τ", description="bolt shear stress", value=shear)
+        tensile_result = SymbolValue(
+            symbol="σ_t", description="bolt direct tensile stress", value=tensile
+        )
         entries.append(
             strength_scorecard(
                 f"{connection.name} bolt tension",
                 stress=tensile,
                 allowable=bolt.yield_strength.quantity,
                 required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_BOLT_SHEAR})
+            ).model_copy(
+                update={
+                    "reference": _CLAUSE_BOLT_SHEAR,
+                    "derivation": Derivation(
+                        symbolic="σ_t = P_t / (π · d² / 4)",
+                        inputs=(tension_symbol, diameter_symbol),
+                        result=tensile_result,
+                        citation=_CLAUSE_BOLT_SHEAR,
+                    ),
+                }
+            )
         )
         entries.append(
             strength_scorecard(
@@ -870,7 +967,23 @@ def screen_bolted_connection(
                 stress=combined,
                 allowable=bolt.yield_strength.quantity,
                 required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_BOLT_COMBINED})
+            ).model_copy(
+                update={
+                    "reference": _CLAUSE_BOLT_COMBINED,
+                    "derivation": Derivation(
+                        # Plane stress with no transverse direct stress, so the
+                        # general von Mises form collapses to tension and shear.
+                        symbolic="σ_vm = √(σ_t² + 3 · τ²)",
+                        inputs=(tensile_result, shear_result),
+                        result=SymbolValue(
+                            symbol="σ_vm",
+                            description="von Mises equivalent stress under combined loading",
+                            value=combined,
+                        ),
+                        citation=_CLAUSE_BOLT_COMBINED,
+                    ),
+                }
+            )
         )
     return Scorecard(entries=tuple(entries))
 
@@ -926,12 +1039,26 @@ def screen_welded_connection(
         magnitude=_WELD_SHEAR_FRACTION * connection.electrode_strength.to("MPa").magnitude,
         unit="MPa",
     )
+    derivation = Derivation(
+        # 0.707·w is the effective throat of an equal-leg fillet: the shortest path
+        # through the weld, at 45° to the legs.
+        symbolic="τ = P / (0.707 · w · L)",
+        inputs=(
+            SymbolValue(symbol="P", description="load carried by the weld", value=connection.load),
+            SymbolValue(symbol="w", description="fillet leg size", value=connection.leg_size),
+            SymbolValue(symbol="L", description="total weld length", value=connection.weld_length),
+        ),
+        result=SymbolValue(
+            symbol="τ", description="shear stress on the effective throat", value=shear
+        ),
+        citation=_CLAUSE_WELD,
+    )
     entry = strength_scorecard(
         f"{connection.name} weld shear",
         stress=shear,
         allowable=allowable,
         required=required_safety_factor,
-    ).model_copy(update={"reference": _CLAUSE_WELD})
+    ).model_copy(update={"reference": _CLAUSE_WELD, "derivation": derivation})
     return Scorecard(entries=(entry,))
 
 
@@ -1251,6 +1378,7 @@ def screen_tension_member(
 
     gross_stress = Quantity(magnitude=force / gross, unit="MPa")
     net_stress = Quantity(magnitude=force / effective_net, unit="MPa")
+    load_symbol = SymbolValue(symbol="P", description="axial tension", value=member.load)
     return Scorecard(
         entries=(
             strength_scorecard(
@@ -1258,13 +1386,62 @@ def screen_tension_member(
                 stress=gross_stress,
                 allowable=record.yield_strength.quantity,
                 required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_TENSION}),
+            ).model_copy(
+                update={
+                    "reference": _CLAUSE_TENSION,
+                    "derivation": Derivation(
+                        symbolic="σ_g = P / A_g",
+                        inputs=(
+                            load_symbol,
+                            SymbolValue(
+                                symbol="A_g",
+                                description="gross cross-sectional area",
+                                value=member.gross_area,
+                            ),
+                        ),
+                        result=SymbolValue(
+                            symbol="σ_g",
+                            description="stress on the gross section",
+                            value=gross_stress,
+                        ),
+                        citation=_CLAUSE_TENSION,
+                    ),
+                }
+            ),
             strength_scorecard(
                 f"{member.name} net rupture",
                 stress=net_stress,
                 allowable=record.ultimate_strength.quantity,
                 required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_TENSION}),
+            ).model_copy(
+                update={
+                    "reference": _CLAUSE_TENSION,
+                    "derivation": Derivation(
+                        # The shear-lag factor U reduces the net area to the part of
+                        # the section the connection actually engages.
+                        symbolic="σ_n = P / (U · A_n)",
+                        inputs=(
+                            load_symbol,
+                            SymbolValue(
+                                symbol="U",
+                                description="shear-lag factor",
+                                value=member.shear_lag_factor,
+                            ),
+                            SymbolValue(
+                                symbol="A_n",
+                                description="net area through the connection",
+                                value=member.net_area,
+                            ),
+                        ),
+                        result=SymbolValue(
+                            symbol="σ_n",
+                            description="stress on the effective net section",
+                            value=net_stress,
+                        ),
+                        citation=_CLAUSE_TENSION,
+                    ),
+                }
+            ),
         )
     )
 

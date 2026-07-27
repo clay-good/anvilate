@@ -13,12 +13,12 @@ assumptions in force, and a margin summary naming the governing check. That is t
 difference between an answer and a calculation, and it is what a permitting
 jurisdiction, an engineer of record, or an independent checker asks for.
 
-The lug's two derivations come from the pack itself -- :func:`screen_lifting_lug`
-attaches the work to the entries it returns, so this example never restates a
-formula the check already knows. The weld check does not yet declare derivation
-metadata, so the example also shows the honest fallback: its inputs and verdict in
-a table labeled "derivation not rendered," never a formula invented to fill the
-space.
+Every derivation here comes from the pack itself -- the screen functions attach the
+work to the entries they return -- so this example never restates a formula the
+check already knows, and the report cannot drift from what was actually computed.
+A check that declares no derivation still appears, as its inputs and verdict under
+an honest "derivation not rendered" label rather than a formula invented to fill
+the space.
 
 The governing check is pin bearing: at 166.7 MPa against A36's 250 MPa yield, it
 carries a 1.50 factor where the lift demands 2.00 -- so the pin hole, not the lug
@@ -35,7 +35,7 @@ import tempfile
 from pathlib import Path
 
 from anvilate.packs.structural import LiftingLug, WeldedConnection, screen_structure
-from anvilate.report import CalculationReport, ReportSection, SymbolValue
+from anvilate.report import CalculationReport, ReportSection
 from anvilate.units import Quantity, UnitSystem
 
 LIFT_LOAD = Quantity.parse("50 kN")
@@ -46,19 +46,6 @@ WELD_LEG = Quantity.parse("8 mm")
 WELD_LENGTH = Quantity.parse("160 mm")
 ELECTRODE_STRENGTH = Quantity.parse("483 MPa")  # E70
 RIGGING_FACTOR = 2.0
-
-# The weld check carries no derivation yet, so the report is given its inputs to
-# tabulate rather than a formula to invent.
-_WELD_INPUTS = (
-    SymbolValue(symbol="P", description="lifted load", value=LIFT_LOAD),
-    SymbolValue(symbol="w", description="fillet leg size", value=WELD_LEG),
-    SymbolValue(symbol="L", description="total weld length", value=WELD_LENGTH),
-    SymbolValue(
-        symbol="F_EXX",
-        description="electrode tensile strength (E70)",
-        value=ELECTRODE_STRENGTH,
-    ),
-)
 
 
 def _screen():
@@ -84,15 +71,10 @@ def _screen():
 def build_report() -> CalculationReport:
     """Assemble the padeye screening into a submittal-shaped calculation report.
 
-    Each section is just its scorecard entry: a check that declares a derivation
-    renders it, and one that does not falls back to its inputs.
+    Each section is just its scorecard entry: the check carries its own worked
+    derivation, so nothing here has to restate a formula.
     """
-    sections = tuple(
-        ReportSection(entry=entry)
-        if entry.derivation is not None
-        else ReportSection(entry=entry, inputs=_WELD_INPUTS)
-        for entry in _screen().entries
-    )
+    sections = tuple(ReportSection(entry=entry) for entry in _screen().entries)
     return CalculationReport(
         title="Lifting padeye — screening calculations",
         project="Shop crane padeye, 50 kN",

@@ -2314,9 +2314,9 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "σ_p = 50.0 kN / (25.00 mm · 12.00 mm)" in text
     assert "σ_p = 166.7 MPa" in text
     assert "ASME BTH-1 §3-3" in text
-    # Two of the three checks are worked; the weld falls back honestly.
-    assert report.derivation_coverage() == (2, 3)
-    assert "derivation not rendered" in text
+    # All three checks declare their own work, so nothing falls back.
+    assert report.derivation_coverage() == (3, 3)
+    assert "derivation not rendered" not in text
     # Pin bearing at 1.50 against a required 2.00 is what has to change.
     assert report.governing().name == "padeye pin bearing"
     assert report.status is CheckStatus.FAIL
