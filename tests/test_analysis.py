@@ -11142,6 +11142,35 @@ def test_servo_inertia_reflection_and_matching_ratio():
         )
 
 
+def test_trapezoidal_move_profile_recovers_the_travel():
+    from anvilate.analysis import (
+        trapezoidal_move_acceleration,
+        trapezoidal_move_peak_velocity,
+    )
+
+    # Equal-thirds profile, by hand: v = d/((1-f)t) = 0.5/(2/3) = 0.75 m/s,
+    # a = v/(f*t) = 2.25 m/s^2.
+    peak = trapezoidal_move_peak_velocity(travel=_q("0.5 m"), move_time=_q("1 s"))
+    assert peak.to("m/s").magnitude == pytest.approx(0.75, rel=1e-12)
+    accel = trapezoidal_move_acceleration(travel=_q("0.5 m"), move_time=_q("1 s"))
+    assert accel.to("m/s**2").magnitude == pytest.approx(2.25, rel=1e-12)
+    # The trapezoid's area must equal the travel: ramp + cruise + ramp.
+    f, t = 1 / 3, 1.0
+    v = peak.to("m/s").magnitude
+    area = v * f * t + v * (1 - 2 * f) * t  # two half-ramps sum to one full v*f*t
+    assert area == pytest.approx(0.5, rel=1e-12)
+    # f = 0.5 is the triangular profile with the classic v = 2d/t.
+    triangle = trapezoidal_move_peak_velocity(
+        travel=_q("1.2 m"), move_time=_q("2 s"), accel_fraction=0.5
+    )
+    assert triangle.to("m/s").magnitude == pytest.approx(2 * 1.2 / 2.0, rel=1e-12)
+    # Halving the move time doubles the peak but quadruples the acceleration.
+    fast_accel = trapezoidal_move_acceleration(travel=_q("0.5 m"), move_time=_q("0.5 s"))
+    assert fast_accel.to("m/s**2").magnitude == pytest.approx(4 * 2.25, rel=1e-12)
+    with pytest.raises(ValueError, match="accel_fraction must be in"):
+        trapezoidal_move_peak_velocity(travel=_q("0.5 m"), move_time=_q("1 s"), accel_fraction=0.6)
+
+
 def test_rms_torque_over_cycle_is_the_thermal_equivalent():
     from math import sqrt
 

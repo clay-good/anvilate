@@ -47,6 +47,8 @@ __all__ = [
     "motor_acceleration_torque",
     "inertia_matching_gear_ratio",
     "rms_torque_over_cycle",
+    "trapezoidal_move_peak_velocity",
+    "trapezoidal_move_acceleration",
 ]
 
 
@@ -188,3 +190,57 @@ def rms_torque_over_cycle(
         weighted += t**2 * dt
         total_time += dt
     return Quantity(magnitude=sqrt(weighted / total_time), unit="N*m")
+
+
+def _check_accel_fraction(accel_fraction: float) -> float:
+    if not 0 < accel_fraction <= 0.5:
+        raise ValueError(f"accel_fraction must be in (0, 0.5]; got {accel_fraction}")
+    return accel_fraction
+
+
+def trapezoidal_move_peak_velocity(
+    *,
+    travel: Quantity,
+    move_time: Quantity,
+    accel_fraction: float = 1 / 3,
+) -> Quantity:
+    """The peak velocity v = d/((1−f)·t) of a trapezoidal point-to-point move.
+
+    A move of ``travel`` d completed in ``move_time`` t, accelerating for the first
+    ``accel_fraction`` f of the time, cruising, and braking for the last f (the
+    classic equal-thirds profile at the default f = 1/3). Equating the trapezoid's
+    area to the travel gives the cruise velocity in closed form; at f = 0.5 the
+    profile is triangular and v = 2d/t, the fastest peak a given move demands.
+    Returns the peak velocity in m/s.
+    """
+    _require(travel, "[length]", "travel")
+    _require(move_time, "[time]", "move_time")
+    d = travel.to("m").magnitude
+    t = move_time.to("s").magnitude
+    if d <= 0 or t <= 0:
+        raise ValueError("travel and move_time must be positive")
+    f = _check_accel_fraction(accel_fraction)
+    return Quantity(magnitude=d / ((1 - f) * t), unit="m/s")
+
+
+def trapezoidal_move_acceleration(
+    *,
+    travel: Quantity,
+    move_time: Quantity,
+    accel_fraction: float = 1 / 3,
+) -> Quantity:
+    """The acceleration a = d/(f·(1−f)·t²) a trapezoidal move demands.
+
+    The ramp that reaches the profile's peak velocity
+    (:func:`trapezoidal_move_peak_velocity`) in its ``accel_fraction`` f of the
+    ``move_time`` — the number that, through the drivetrain, becomes the motor's
+    acceleration torque. Shortening the move time costs acceleration with the
+    *square*; sharpening the ramps (smaller f) costs it linearly. Returns the
+    acceleration in m/s².
+    """
+    peak = trapezoidal_move_peak_velocity(
+        travel=travel, move_time=move_time, accel_fraction=accel_fraction
+    )
+    f = _check_accel_fraction(accel_fraction)
+    t = move_time.to("s").magnitude
+    return Quantity(magnitude=peak.to("m/s").magnitude / (f * t), unit="m/s**2")

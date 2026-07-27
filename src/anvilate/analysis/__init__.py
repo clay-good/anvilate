@@ -160,8 +160,9 @@ modules:
   the lead-line (winch) tension it implies
 - :mod:`~anvilate.analysis.servo` — servo drivetrain sizing: the load inertia
   reflected through a gear ratio (J/i²), the vendor inertia-ratio screen, the
-  motor torque an acceleration demands, the inertia-matching optimal ratio, and
-  the thermal RMS torque of a repeating duty cycle
+  motor torque an acceleration demands, the inertia-matching optimal ratio, the
+  thermal RMS torque of a repeating duty cycle, and the peak velocity and
+  acceleration a trapezoidal point-to-point move profile demands
 - :mod:`~anvilate.analysis.winch` — winch-drum spooling geometry: the working
   radius and line pull at each rope layer (a fuller drum pulls less) and the
   tight-wound rope length a drum stores
@@ -689,6 +690,8 @@ from .servo import (
     reflected_inertia_ratio,
     reflected_load_inertia,
     rms_torque_over_cycle,
+    trapezoidal_move_acceleration,
+    trapezoidal_move_peak_velocity,
 )
 from .sheetmetal import (
     air_bending_force,
@@ -927,6 +930,8 @@ __all__ = [
     "motor_acceleration_torque",
     "inertia_matching_gear_ratio",
     "rms_torque_over_cycle",
+    "trapezoidal_move_peak_velocity",
+    "trapezoidal_move_acceleration",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
