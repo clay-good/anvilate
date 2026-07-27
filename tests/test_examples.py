@@ -2025,6 +2025,30 @@ def test_bushing_wear_life_example_lubrication_governs():
     assert improved.status is CheckStatus.PASS
 
 
+def test_servo_inertia_matching_example_ratio_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "servo_inertia_matching.py"))
+    # Direct drive fails on both torque and the drive's inertia-ratio bound.
+    direct = namespace["screen_direct_drive"]()
+    by_name = {e.name: e for e in direct.entries}
+    assert by_name["motor peak torque vs acceleration demand"].status is CheckStatus.FAIL
+    assert "safety factor 0.30" in by_name["motor peak torque vs acceleration demand"].detail
+    assert by_name["drive inertia-ratio bound vs reflected load"].status is CheckStatus.FAIL
+    assert direct.status is CheckStatus.FAIL
+    # The inertia-matched ratio is sqrt(J_L/J_m) = 15.8 and clears both checks.
+    assert namespace["matched_ratio"]() == pytest.approx(15.81, abs=0.005)
+    matched = namespace["screen_matched_drive"]()
+    matched_by_name = {e.name: e for e in matched.entries}
+    assert (
+        "safety factor 2.37" in matched_by_name["motor peak torque vs acceleration demand"].detail
+    )
+    # At the matched ratio the reflected load equals the rotor: inertia ratio exactly 1.
+    assert (
+        "safety factor 10.00"
+        in matched_by_name["drive inertia-ratio bound vs reflected load"].detail
+    )
+    assert matched.status is CheckStatus.PASS
+
+
 def test_retaining_compound_hub_example_bond_beats_friction():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_compound_hub.py"))
     # The thin hub caps the fit pressure, so friction (mu*p) tops out far short.
