@@ -10743,6 +10743,38 @@ def test_sling_leg_tension_multiplies_with_a_flatter_angle():
         r.sling_leg_tension(load=_q("10 mm"), number_of_legs=2, angle_from_horizontal=45)
 
 
+def test_tackle_mechanical_advantage_matches_the_tension_chain():
+    from anvilate.analysis import tackle_lead_line_tension, tackle_mechanical_advantage
+
+    # Frictionless, the advantage is exactly the part count.
+    assert tackle_mechanical_advantage(supporting_parts=6, sheave_efficiency=1.0) == 6.0
+    # With friction, the closed form must match a first-principles tension chain:
+    # n parts in a geometric series (each sheave pass divides by eta), summing to the
+    # load, with the lead line j more passes beyond the last part.
+    for n, eta, j in ((4, 0.95, 1), (6, 0.94, 1), (2, 0.9, 0), (8, 0.98, 2)):
+        r = 1.0 / eta
+        first_part = 1000.0 / sum(r**k for k in range(n))
+        chain_effort = first_part * r ** (n - 1 + j)
+        lead = tackle_lead_line_tension(
+            load=_q("1000 N"),
+            supporting_parts=n,
+            sheave_efficiency=eta,
+            lead_sheaves=j,
+        )
+        assert lead.to("N").magnitude == pytest.approx(chain_effort, rel=1e-12)
+        # Friction always costs: the actual advantage sits below the part count.
+        assert (
+            tackle_mechanical_advantage(supporting_parts=n, sheave_efficiency=eta, lead_sheaves=j)
+            < n
+        )
+    with pytest.raises(ValueError, match="sheave_efficiency must be in"):
+        tackle_mechanical_advantage(supporting_parts=4, sheave_efficiency=1.2)
+    with pytest.raises(ValueError, match="supporting_parts must be at least 1"):
+        tackle_mechanical_advantage(supporting_parts=0, sheave_efficiency=0.95)
+    with pytest.raises(ValueError, match="lead_sheaves must be non-negative"):
+        tackle_mechanical_advantage(supporting_parts=4, sheave_efficiency=0.95, lead_sheaves=-1)
+
+
 def test_gasket_seating_and_operating_bolt_loads():
     from math import pi
 

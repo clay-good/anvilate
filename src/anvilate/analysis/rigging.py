@@ -17,9 +17,25 @@ sling's rated capacity, and is the horizontal pull within what the pick points a
 spreader can take? The lesson these formulas encode is that sling capacity is an angle
 problem, not just a weight problem.
 
+The other rigging staple is the block and tackle. Frictionless, ``n`` supporting rope
+parts give a mechanical advantage of exactly n; with friction, hoisting forces each
+sheave pass to raise the rope tension by 1/η (the per-sheave efficiency), so the parts
+carry a geometric series of tensions and the lead line — after the last supporting part
+and any lead sheaves — sees the largest of all. Summing the series gives the actual
+mechanical advantage
+
+    MA = (r^n − 1) / ((r − 1) · r^(n−1+j)),   r = 1/η,
+
+with ``j`` extra sheave passes between the last supporting part and the winch; the lead
+line tension is W/MA. At η = 1 this collapses to MA = n exactly. This is the closed form
+behind the lead-line-factor tables in rigging handbooks, and it is why a worn
+plain-bearing tackle hoists at far less than its part count.
+
 The leg angle is a plain-float degrees value (the units layer carries no angles); the
-load is a dimension-checked :class:`~anvilate.units.Quantity` and every force comes back
-in the same force dimension.
+sheave efficiency is the caller's per-sheave value (≈ 0.98 rolling-bearing, ≈ 0.94
+plain-bearing sheaves); the load is a dimension-checked
+:class:`~anvilate.units.Quantity` and every force comes back in the same force
+dimension.
 """
 
 from __future__ import annotations
@@ -32,6 +48,8 @@ __all__ = [
     "sling_tension_factor",
     "sling_leg_tension",
     "sling_horizontal_force",
+    "tackle_mechanical_advantage",
+    "tackle_lead_line_tension",
 ]
 
 
@@ -95,6 +113,77 @@ def sling_horizontal_force(
     theta = _check_angle(angle_from_horizontal)
     horizontal = load.to("N").magnitude / (n * tan(radians(theta)))
     return Quantity(magnitude=horizontal, unit="N")
+
+
+def tackle_mechanical_advantage(
+    *,
+    supporting_parts: int,
+    sheave_efficiency: float,
+    lead_sheaves: int = 0,
+) -> float:
+    """The actual hoisting mechanical advantage of a block and tackle with friction.
+
+    ``supporting_parts`` n rope parts hold the moving block; each sheave pass while
+    hoisting raises the rope tension by 1/η for a per-sheave ``sheave_efficiency`` η
+    (the caller's value — about 0.98 for rolling-bearing sheaves, 0.94 for plain
+    bushings), and ``lead_sheaves`` j counts the extra passes between the last
+    supporting part and the winch (0 when the hand pulls the last part directly).
+    Summing the geometric series of part tensions gives
+    MA = (r^n − 1)/((r − 1)·r^(n−1+j)) with r = 1/η, which collapses to exactly n when
+    η = 1 — friction always costs, so the actual advantage is always below the part
+    count. Returns the dimensionless mechanical advantage.
+    """
+    n = _check_parts(supporting_parts)
+    eta = _check_efficiency(sheave_efficiency)
+    j = _check_lead_sheaves(lead_sheaves)
+    if eta == 1.0:
+        return float(n)
+    r = 1.0 / eta
+    return (r**n - 1.0) / ((r - 1.0) * r ** (n - 1 + j))
+
+
+def tackle_lead_line_tension(
+    *,
+    load: Quantity,
+    supporting_parts: int,
+    sheave_efficiency: float,
+    lead_sheaves: int = 0,
+) -> Quantity:
+    """The lead-line (winch) tension W/MA a tackle needs to hoist a load.
+
+    The pull the winch or hand must supply to raise ``load`` W through a tackle of
+    ``supporting_parts`` n with per-sheave ``sheave_efficiency`` η and ``lead_sheaves``
+    j extra passes to the winch — the load over the actual mechanical advantage
+    (:func:`tackle_mechanical_advantage`). This is the largest tension anywhere in the
+    rope, so it is the number both the winch rating and the rope selection screen
+    against; the frictionless estimate W/n understates it on every real tackle.
+    Returns the tension in the load's force units.
+    """
+    _require_force(load)
+    advantage = tackle_mechanical_advantage(
+        supporting_parts=supporting_parts,
+        sheave_efficiency=sheave_efficiency,
+        lead_sheaves=lead_sheaves,
+    )
+    return Quantity(magnitude=load.to("N").magnitude / advantage, unit="N")
+
+
+def _check_parts(supporting_parts: int) -> int:
+    if supporting_parts < 1:
+        raise ValueError(f"supporting_parts must be at least 1; got {supporting_parts}")
+    return supporting_parts
+
+
+def _check_efficiency(sheave_efficiency: float) -> float:
+    if not 0 < sheave_efficiency <= 1:
+        raise ValueError(f"sheave_efficiency must be in (0, 1]; got {sheave_efficiency}")
+    return sheave_efficiency
+
+
+def _check_lead_sheaves(lead_sheaves: int) -> int:
+    if lead_sheaves < 0:
+        raise ValueError(f"lead_sheaves must be non-negative; got {lead_sheaves}")
+    return lead_sheaves
 
 
 def _require_force(load: Quantity) -> None:

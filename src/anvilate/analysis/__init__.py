@@ -152,7 +152,9 @@ modules:
   strength, governing mode, and efficiency
 - :mod:`~anvilate.analysis.rigging` — multi-leg sling lifting statics: the
   sling-angle tension multiplier 1/sin θ, each leg's tension, and the inward
-  horizontal force at the pick points (the eyebolt/lifting-beam side load)
+  horizontal force at the pick points (the eyebolt/lifting-beam side load); plus
+  the block-and-tackle actual mechanical advantage with per-sheave friction and
+  the lead-line (winch) tension it implies
 - :mod:`~anvilate.analysis.wire_rope` — wire rope over a sheave: the wire bending
   stress E_r·d_w/D, the minimum sheave a bending allowable permits, the equivalent
   bending load folded into the rope's strength margin, and the rope-on-sheave
@@ -653,6 +655,8 @@ from .rigging import (
     sling_horizontal_force,
     sling_leg_tension,
     sling_tension_factor,
+    tackle_lead_line_tension,
+    tackle_mechanical_advantage,
 )
 from .rivet import (
     RivetedJointStrength,
@@ -886,6 +890,8 @@ __all__ = [
     "sling_tension_factor",
     "sling_leg_tension",
     "sling_horizontal_force",
+    "tackle_mechanical_advantage",
+    "tackle_lead_line_tension",
     "max_transverse_shear_stress",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
