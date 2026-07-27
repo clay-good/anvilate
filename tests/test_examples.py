@@ -2025,6 +2025,25 @@ def test_bushing_wear_life_example_lubrication_governs():
     assert improved.status is CheckStatus.PASS
 
 
+def test_servo_duty_cycle_thermal_example_rms_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "servo_duty_cycle_thermal.py"))
+    fast = namespace["screen_fast_cycle"]()
+    by_name = {e.name: e for e in fast.entries}
+    # Every instant clears the peak rating...
+    assert by_name["peak rating vs hardest instant"].passed
+    assert "safety factor 1.50" in by_name["peak rating vs hardest instant"].detail
+    # ...but the squared-average over the fast cycle exceeds the continuous rating.
+    thermal = by_name["continuous rating vs cycle RMS torque"]
+    assert thermal.status is CheckStatus.FAIL
+    assert "safety factor 0.95" in thermal.detail
+    assert fast.status is CheckStatus.FAIL
+    # The same moves with a longer dwell cool enough to pass.
+    relaxed = namespace["screen_relaxed_cycle"]()
+    relaxed_by_name = {e.name: e for e in relaxed.entries}
+    assert "safety factor 1.12" in relaxed_by_name["continuous rating vs cycle RMS torque"].detail
+    assert relaxed.status is CheckStatus.PASS
+
+
 def test_servo_inertia_matching_example_ratio_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "servo_inertia_matching.py"))
     # Direct drive fails on both torque and the drive's inertia-ratio bound.
