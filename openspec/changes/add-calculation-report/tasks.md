@@ -52,8 +52,9 @@
 
 - [x] 4.1 Example: lifting lug screening rendered to a submittal-shaped report
       (`examples/lifting_lug_calc_report.py`, HTML output; PDF pending 1.3)
-- [ ] 4.2 Documentation page: what the report contains, what "screening" means, how to
-      hand it to a reviewer
+- [x] 4.2 Documentation page: what the report contains, what "screening" means, how to
+      hand it to a reviewer (`docs/calculation-reports.md`, with its code sample and
+      quoted output verified against a real run)
 
 ## 5. Follow-ups surfaced while building
 
