@@ -25,9 +25,9 @@ from html import escape
 
 from pydantic import BaseModel, ConfigDict
 
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..units import UnitSystem
-from .derivation import Derivation, SymbolValue
 
 __all__ = [
     "CALC_RECORD_SCHEMA_VERSION",
@@ -60,10 +60,11 @@ _FALLBACK_LABEL = "derivation not rendered"
 class ReportSection(BaseModel):
     """One check in the report: its verdict, and the work behind it.
 
-    ``derivation`` is the worked calculation when the check declares one. Without
-    it the section renders a plain inputs table labeled "derivation not rendered" —
-    an honest gap, never a formula invented to fill the space. ``inputs`` supplies
-    that fallback table (and is ignored when a derivation is present).
+    Checks that declare their own derivation carry it on the scorecard entry, and
+    the section renders that without being told. ``derivation`` overrides it for a
+    caller assembling work a check does not yet declare. Without either, the
+    section renders a plain inputs table labeled "derivation not rendered" — an
+    honest gap, never a formula invented to fill the space — from ``inputs``.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -73,6 +74,11 @@ class ReportSection(BaseModel):
     inputs: tuple[SymbolValue, ...] = ()
 
     @property
+    def worked(self) -> Derivation | None:
+        """The derivation this section renders: the caller's, else the check's own."""
+        return self.derivation if self.derivation is not None else self.entry.derivation
+
+    @property
     def is_worked(self) -> bool:
         """Whether this section renders a derivation rather than the fallback table.
 
@@ -80,13 +86,15 @@ class ReportSection(BaseModel):
         worked — the substituted line would carry a bare symbol where a value
         belongs — so it falls back with the rest.
         """
-        return self.derivation is not None and not self.derivation.unresolved_symbols()
+        derivation = self.worked
+        return derivation is not None and not derivation.unresolved_symbols()
 
     @property
     def citation(self) -> str | None:
         """The clause behind the check, from the derivation or the entry."""
-        if self.derivation is not None:
-            return self.derivation.citation
+        derivation = self.worked
+        if derivation is not None:
+            return derivation.citation
         return self.entry.reference
 
 
@@ -148,13 +156,12 @@ class CalculationReport(BaseModel):
             out.append(heading)
             out.append("-" * len(heading))
             if section.is_worked:
-                assert section.derivation is not None  # guaranteed by is_worked
-                for line in section.derivation.lines(system=self.unit_system):
+                derivation = section.worked
+                assert derivation is not None  # guaranteed by is_worked
+                for line in derivation.lines(system=self.unit_system):
                     out.append(f"    {line}")
                 out.append("  where:")
-                for symbol, description, value in section.derivation.glossary(
-                    system=self.unit_system
-                ):
+                for symbol, description, value in derivation.glossary(system=self.unit_system):
                     out.append(f"    {symbol} = {value}  ({description})")
             else:
                 out.append(f"  [{_FALLBACK_LABEL}]")
@@ -264,14 +271,15 @@ class CalculationReport(BaseModel):
             f' <span class="status">{_STATUS_LABEL[status]}</span></h2>',
         ]
         if section.is_worked:
-            assert section.derivation is not None  # guaranteed by is_worked
+            derivation = section.worked
+            assert derivation is not None  # guaranteed by is_worked
             out.append('<div class="derivation">')
-            for line in section.derivation.lines(system=self.unit_system):
+            for line in derivation.lines(system=self.unit_system):
                 out.append(f"<p>{escape(line)}</p>")
             out.append("</div>")
             out.append('<table class="glossary">')
             out.append("<tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr>")
-            for symbol, description, value in section.derivation.glossary(system=self.unit_system):
+            for symbol, description, value in derivation.glossary(system=self.unit_system):
                 out.append(
                     f"<tr><td>{escape(symbol)}</td><td>{escape(description)}</td>"
                     f"<td>{escape(value)}</td></tr>"

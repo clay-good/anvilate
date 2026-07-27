@@ -13,10 +13,12 @@ assumptions in force, and a margin summary naming the governing check. That is t
 difference between an answer and a calculation, and it is what a permitting
 jurisdiction, an engineer of record, or an independent checker asks for.
 
-Two of the three checks here are worked derivations. The weld check is deliberately
-left without derivation metadata, so the example also shows the honest fallback:
-its inputs and verdict in a table labeled "derivation not rendered," never a
-formula invented to fill the space.
+The lug's two derivations come from the pack itself -- :func:`screen_lifting_lug`
+attaches the work to the entries it returns, so this example never restates a
+formula the check already knows. The weld check does not yet declare derivation
+metadata, so the example also shows the honest fallback: its inputs and verdict in
+a table labeled "derivation not rendered," never a formula invented to fill the
+space.
 
 The governing check is pin bearing: at 166.7 MPa against A36's 250 MPa yield, it
 carries a 1.50 factor where the lift demands 2.00 -- so the pin hole, not the lug
@@ -33,7 +35,7 @@ import tempfile
 from pathlib import Path
 
 from anvilate.packs.structural import LiftingLug, WeldedConnection, screen_structure
-from anvilate.report import CalculationReport, Derivation, ReportSection, SymbolValue
+from anvilate.report import CalculationReport, ReportSection, SymbolValue
 from anvilate.units import Quantity, UnitSystem
 
 LIFT_LOAD = Quantity.parse("50 kN")
@@ -45,22 +47,17 @@ WELD_LENGTH = Quantity.parse("160 mm")
 ELECTRODE_STRENGTH = Quantity.parse("483 MPa")  # E70
 RIGGING_FACTOR = 2.0
 
-_LUG_CLAUSE = "ASME BTH-1 §3-3"
-
-# The two limit-state stresses, computed the same way the structural pack computes
-# them, so the derivations show the numbers the scorecard actually screened.
-_NET_TENSION = Quantity(
-    magnitude=LIFT_LOAD.to("N").magnitude
-    / (
-        (LUG_WIDTH.to("mm").magnitude - HOLE_DIAMETER.to("mm").magnitude)
-        * THICKNESS.to("mm").magnitude
+# The weld check carries no derivation yet, so the report is given its inputs to
+# tabulate rather than a formula to invent.
+_WELD_INPUTS = (
+    SymbolValue(symbol="P", description="lifted load", value=LIFT_LOAD),
+    SymbolValue(symbol="w", description="fillet leg size", value=WELD_LEG),
+    SymbolValue(symbol="L", description="total weld length", value=WELD_LENGTH),
+    SymbolValue(
+        symbol="F_EXX",
+        description="electrode tensile strength (E70)",
+        value=ELECTRODE_STRENGTH,
     ),
-    unit="MPa",
-)
-_BEARING = Quantity(
-    magnitude=LIFT_LOAD.to("N").magnitude
-    / (HOLE_DIAMETER.to("mm").magnitude * THICKNESS.to("mm").magnitude),
-    unit="MPa",
 )
 
 
@@ -84,65 +81,18 @@ def _screen():
     return screen_structure([lug, weld], required_safety_factor=RIGGING_FACTOR)
 
 
-def _net_tension_derivation() -> Derivation:
-    return Derivation(
-        symbolic="σ_t = P / ((W − d) · t)",
-        inputs=(
-            SymbolValue(symbol="P", description="lifted load", value=LIFT_LOAD),
-            SymbolValue(symbol="W", description="lug width across the hole", value=LUG_WIDTH),
-            SymbolValue(symbol="d", description="pin hole diameter", value=HOLE_DIAMETER),
-            SymbolValue(symbol="t", description="lug plate thickness", value=THICKNESS),
-        ),
-        result=SymbolValue(
-            symbol="σ_t", description="net-section tensile stress", value=_NET_TENSION
-        ),
-        citation=_LUG_CLAUSE,
-    )
-
-
-def _bearing_derivation() -> Derivation:
-    return Derivation(
-        symbolic="σ_p = P / (d · t)",
-        inputs=(
-            SymbolValue(symbol="P", description="lifted load", value=LIFT_LOAD),
-            SymbolValue(symbol="d", description="pin hole diameter", value=HOLE_DIAMETER),
-            SymbolValue(symbol="t", description="lug plate thickness", value=THICKNESS),
-        ),
-        result=SymbolValue(symbol="σ_p", description="pin bearing stress", value=_BEARING),
-        citation=_LUG_CLAUSE,
-    )
-
-
 def build_report() -> CalculationReport:
-    """Assemble the padeye screening into a submittal-shaped calculation report."""
-    entries = {entry.name: entry for entry in _screen().entries}
-    derivations = {
-        "padeye net tension": _net_tension_derivation(),
-        "padeye pin bearing": _bearing_derivation(),
-    }
-    sections = []
-    for name, entry in entries.items():
-        derivation = derivations.get(name)
-        if derivation is not None:
-            sections.append(ReportSection(entry=entry, derivation=derivation))
-        else:
-            # No derivation metadata for the weld check: the report says so rather
-            # than fabricating a formula.
-            sections.append(
-                ReportSection(
-                    entry=entry,
-                    inputs=(
-                        SymbolValue(symbol="P", description="lifted load", value=LIFT_LOAD),
-                        SymbolValue(symbol="w", description="fillet leg size", value=WELD_LEG),
-                        SymbolValue(symbol="L", description="total weld length", value=WELD_LENGTH),
-                        SymbolValue(
-                            symbol="F_EXX",
-                            description="electrode tensile strength (E70)",
-                            value=ELECTRODE_STRENGTH,
-                        ),
-                    ),
-                )
-            )
+    """Assemble the padeye screening into a submittal-shaped calculation report.
+
+    Each section is just its scorecard entry: a check that declares a derivation
+    renders it, and one that does not falls back to its inputs.
+    """
+    sections = tuple(
+        ReportSection(entry=entry)
+        if entry.derivation is not None
+        else ReportSection(entry=entry, inputs=_WELD_INPUTS)
+        for entry in _screen().entries
+    )
     return CalculationReport(
         title="Lifting padeye — screening calculations",
         project="Shop crane padeye, 50 kN",
@@ -160,7 +110,7 @@ def build_report() -> CalculationReport:
             "Static lift; no impact or side-load factor applied.",
             "Pin fits the hole; bearing taken over the full projected area d·t.",
         ),
-        sections=tuple(sections),
+        sections=sections,
     )
 
 

@@ -18,6 +18,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
+from .derivation import Derivation
+
 __all__ = [
     "CheckStatus",
     "ScorecardEntry",
@@ -48,6 +50,10 @@ class ScorecardEntry(BaseModel):
     # prose. Both are None for a check that did not come from a safety factor.
     safety_factor: float | None = None
     required_safety_factor: float | None = None
+    # The worked calculation behind the verdict, when the check declares one. It
+    # travels with the entry so a report renders the real formula and values
+    # rather than a reconstruction.
+    derivation: Derivation | None = None
 
     @property
     def utilization(self) -> float | None:

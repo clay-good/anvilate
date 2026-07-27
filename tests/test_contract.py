@@ -106,3 +106,107 @@ def test_every_public_callable_has_a_docstring():
         obj = getattr(analysis_pkg, symbol)
         if callable(obj):
             assert obj.__doc__, f"public callable anvilate.analysis.{symbol} has no docstring"
+
+
+# -- derivation coverage ---------------------------------------------------
+#
+# The calculation-report spec requires a check to declare the work behind its
+# verdict. Coverage is being backfilled pack by pack, so the gate below pins the
+# checks that already declare a derivation: adding one is free, and dropping one
+# fails the build. The pending list is the remaining work, named rather than
+# silently absent.
+
+_CHECKS_WITH_DERIVATIONS = {
+    "concrete bearing",
+    "buckling",
+    "net tension",
+    "pin bearing",
+}
+
+
+def _structural_entries():
+    """One scorecard entry per structural-pack check, from a screened assembly."""
+    from anvilate.analysis import CrossSection
+    from anvilate.packs.structural import (
+        ColumnMember,
+        ConcreteBearing,
+        LiftingLug,
+        screen_column_member,
+        screen_concrete_bearing,
+        screen_lifting_lug,
+    )
+    from anvilate.units import Quantity
+
+    section = CrossSection.rectangular(
+        width=Quantity.parse("50 mm"), height=Quantity.parse("50 mm")
+    )
+    entries = []
+    entries.extend(
+        screen_lifting_lug(
+            LiftingLug(
+                name="lug",
+                width=Quantity.parse("80 mm"),
+                hole_diameter=Quantity.parse("25 mm"),
+                thickness=Quantity.parse("12 mm"),
+                load=Quantity.parse("50 kN"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=2.0,
+        ).entries
+    )
+    entries.extend(
+        screen_column_member(
+            ColumnMember(
+                name="post",
+                section=section,
+                length=Quantity.parse("3000 mm"),
+                axial_load=Quantity.parse("40 kN"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=2.0,
+        ).entries
+    )
+    entries.extend(
+        screen_concrete_bearing(
+            ConcreteBearing(
+                name="pedestal",
+                bearing_area=Quantity.parse("40000 mm^2"),
+                support_area=Quantity.parse("250000 mm^2"),
+                concrete_strength=Quantity.parse("28 MPa"),
+                load=Quantity.parse("600 kN"),
+            ),
+            required_safety_factor=2.0,
+        ).entries
+    )
+    return entries
+
+
+def test_checks_that_declare_a_derivation_keep_declaring_one():
+    missing = [
+        entry.name
+        for entry in _structural_entries()
+        if entry.derivation is None
+        and any(check in entry.name for check in _CHECKS_WITH_DERIVATIONS)
+    ]
+    assert not missing, (
+        f"these checks used to carry a worked derivation and no longer do: {missing}"
+    )
+
+
+def test_declared_derivations_are_fully_substitutable():
+    # A derivation whose formula names a symbol it never declares would render a
+    # bare symbol where a value belongs, so the report would refuse to show it as
+    # worked. Catch that here rather than in a silently-degraded report.
+    for entry in _structural_entries():
+        if entry.derivation is None:
+            continue
+        assert entry.derivation.unresolved_symbols() == (), (
+            f"{entry.name} declares a formula using symbols it never supplies: "
+            f"{entry.derivation.unresolved_symbols()}"
+        )
+
+
+def test_declared_derivations_cite_their_source():
+    for entry in _structural_entries():
+        if entry.derivation is not None:
+            assert entry.derivation.citation, f"{entry.name} has a derivation with no citation"

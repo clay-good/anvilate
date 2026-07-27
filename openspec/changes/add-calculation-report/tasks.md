@@ -3,8 +3,9 @@
 ## 1. Contracts
 
 - [x] 1.1 Design the derivation-metadata type (symbolic form, glossary, citation) and the
-      registry keyed by check ID — `anvilate.report.Derivation` / `SymbolValue`; sections
-      bind a derivation to its scorecard entry (a per-check-ID registry lands with 2.1)
+      registry keyed by check ID — `anvilate.derivation.Derivation` / `SymbolValue`, carried
+      on the `ScorecardEntry` the check returns, so the work travels with the verdict
+      instead of a side registry needing to be kept in sync
 - [x] 1.2 Design the calc-record JSON schema (versioned) and its relationship to the
       scorecard and evidence roll-up — `CalculationReport.to_record()` /
       `report_from_record()`, `CALC_RECORD_SCHEMA_VERSION`
@@ -14,9 +15,11 @@
 
 ## 2. Implementation
 
-- [ ] 2.1 Derivation metadata for an initial slice of high-traffic checks (beam bending,
-      deflection, column buckling, bolt shear/tension, concrete bearing, lug limit states)
-      — lug tension + pin bearing done in the example; the rest still to move into the packs
+- [ ] 2.1 Derivation metadata for an initial slice of high-traffic checks. Done in the
+      structural pack: lug net tension, lug pin bearing, column buckling (Euler and
+      Johnson, each showing the regime that actually governed), concrete bearing.
+      Remaining: beam bending and deflection, bolt shear/tension, weld throat shear,
+      base plate, gusset block shear, tension member, beam-column interaction, shear plate.
 - [x] 2.2 Tabular fallback rendering for checks without metadata, with the honest label
       ("derivation not rendered"; a derivation with undeclared symbols also falls back
       rather than printing a bare symbol where a value belongs)
@@ -33,8 +36,10 @@
       asserts the exact rendered derivation lines)
 - [x] 3.2 Calc-record recompute test (round trip plus a full-precision check that an
       external verifier reads the computed value, not the rounded one)
-- [ ] 3.3 CI coverage gate: new checks without derivation metadata fail unless registered
-      tabular-only — `derivation_coverage()` reports the ratio; the gate lands with 2.1
+- [x] 3.3 CI coverage gate (`tests/test_contract.py`): the checks that declare a
+      derivation are pinned so one cannot be dropped, every declared derivation must be
+      fully substitutable (no bare symbol where a value belongs) and must cite a source.
+      `derivation_coverage()` reports the worked/total ratio for a rendered report.
 - [x] 3.4 Air-gapped render test (socket calls fail the test; HTML carries no external
       assets)
 

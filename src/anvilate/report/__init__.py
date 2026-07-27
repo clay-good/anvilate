@@ -14,7 +14,7 @@ offline, and byte-identical across rebuilds.
 
 from __future__ import annotations
 
-from .derivation import Derivation, SymbolValue
+from ..derivation import Derivation, SymbolValue
 from .document import (
     CALC_RECORD_SCHEMA_VERSION,
     SCREENING_DISCLAIMER,

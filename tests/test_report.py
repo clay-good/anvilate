@@ -316,3 +316,96 @@ def test_calc_record_rejects_an_unreadable_schema_major():
 def test_calc_record_requires_a_schema_version():
     with pytest.raises(ValueError, match="no schema_version"):
         report_from_record({"report": {}})
+
+
+# -- checks that declare their own work ------------------------------------
+
+
+def test_pack_checks_carry_their_derivation_to_the_report():
+    from anvilate.packs.structural import LiftingLug, screen_lifting_lug
+
+    lug = LiftingLug(
+        name="padeye",
+        width=Quantity.parse("80 mm"),
+        hole_diameter=Quantity.parse("25 mm"),
+        thickness=Quantity.parse("12 mm"),
+        load=Quantity.parse("50 kN"),
+        material="ASTM-A36",
+    )
+    entries = screen_lifting_lug(lug, required_safety_factor=2.0).entries
+    # A section built from nothing but the entry renders the check's own work.
+    report = CalculationReport(
+        title="padeye",
+        unit_system=UnitSystem.SI,
+        sections=tuple(ReportSection(entry=entry) for entry in entries),
+    )
+    assert report.derivation_coverage() == (2, 2)
+    text = report.to_text()
+    assert "σ_p = P / (d · t)" in text
+    assert "σ_p = 50.0 kN / (25.00 mm · 12.00 mm)" in text
+    assert "σ_p = 166.7 MPa" in text
+
+
+def test_column_derivation_names_the_regime_that_actually_governed():
+    from anvilate.analysis import CrossSection
+    from anvilate.packs.structural import ColumnMember, screen_column_member
+
+    section = CrossSection.rectangular(
+        width=Quantity.parse("50 mm"), height=Quantity.parse("50 mm")
+    )
+
+    def screen(length: str):
+        member = ColumnMember(
+            name="post",
+            section=section,
+            length=Quantity.parse(length),
+            axial_load=Quantity.parse("40 kN"),
+            material="ASTM-A36",
+        )
+        return screen_column_member(member, required_safety_factor=2.0).entries[0]
+
+    slender = screen("3000 mm")
+    # A slender column buckles elastically: the formula shown must be Euler's, and
+    # the yield strength must not appear in it.
+    assert "Euler" in slender.name
+    assert slender.derivation.symbolic == "σ_cr = π² · E / λ²"
+    assert "S_y" not in slender.derivation.substituted()
+
+    stocky = screen("500 mm")
+    # A stocky one is inelastic, and the Johnson parabola does use the yield strength.
+    assert "Johnson" in stocky.name
+    assert "S_y" in stocky.derivation.symbolic
+    assert any(item.symbol == "S_y" for item in stocky.derivation.inputs)
+
+
+def test_mathematical_constants_are_not_missing_inputs():
+    # π is not a value the caller supplies, so a formula naming it is still fully
+    # worked; a superscript exponents the symbol rather than renaming it.
+    derivation = Derivation(
+        symbolic="σ_cr = π² · E / λ²",
+        inputs=(
+            SymbolValue(symbol="E", description="elastic modulus", value=Quantity.parse("200 GPa")),
+            SymbolValue(symbol="λ", description="slenderness ratio", value=207.846),
+        ),
+        result=SymbolValue(
+            symbol="σ_cr", description="critical stress", value=Quantity.parse("45.7 MPa")
+        ),
+        citation="Shigley, Eq. 4-43",
+    )
+    assert derivation.unresolved_symbols() == ()
+    assert derivation.substituted() == "σ_cr = π² · 200.0 GPa / 207.846²"
+
+
+def test_multi_character_symbol_is_reported_whole_when_undeclared():
+    derivation = Derivation(
+        symbolic="B_n = 0.85 · f′c · A₁",
+        inputs=(
+            SymbolValue(symbol="A₁", description="bearing area", value=Quantity.parse("1 mm^2")),
+        ),
+        result=SymbolValue(
+            symbol="B_n", description="bearing strength", value=Quantity.parse("1 N")
+        ),
+        citation="ACI 318 §22.8.3",
+    )
+    # The undeclared symbol is named as itself, not split into "f" and "c".
+    assert derivation.unresolved_symbols() == ("f′c",)

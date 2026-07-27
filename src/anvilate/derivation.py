@@ -7,7 +7,10 @@ in, and the result. This module holds that three-line record.
 
 A :class:`Derivation` is declared next to the check that produces it — the
 symbolic form, one :class:`SymbolValue` per input with a plain-language gloss, the
-result, and the citation the number rests on. Substitution is mechanical: the
+result, and the citation the number rests on — and rides on the
+:class:`~anvilate.scorecard.ScorecardEntry` the check returns, so the work travels
+with the verdict instead of being reconstructed by whoever renders it later.
+Substitution is mechanical: the
 symbolic string is scanned once, left to right, and each declared symbol is
 replaced by its rendered value, so no substituted text can ever be substituted
 again (a rendered ``"1500.0 N"`` cannot have its ``N`` mistaken for a symbol).
@@ -21,7 +24,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from ..units import Quantity, UnitSystem, render
+from .units import Quantity, UnitSystem, render
 
 __all__ = [
     "SymbolValue",
@@ -29,13 +32,26 @@ __all__ = [
 ]
 
 
+# Superscript digits exponentiate a symbol rather than naming it: the λ in "λ²" is
+# the same λ the caller declares. Subscripts do the opposite — A₁ and A₂ are two
+# different areas — so they stay part of the name.
+_SUPERSCRIPTS = frozenset("⁰¹²³⁴⁵⁶⁷⁸⁹")
+
+
 def _is_symbol_char(char: str) -> bool:
     """Whether ``char`` can be part of a symbol name (so a match needs a boundary).
 
-    Covers Latin and Greek letters, digits, underscores, subscript digits, and the
-    prime mark — the alphabet handbook symbols are written in (σ_b, τ, d₁, r').
+    Covers Latin and Greek letters, digits, underscores, subscript digits, and both
+    prime marks — the alphabet handbook symbols are written in (σ_b, τ, d₁, r', f′c).
     """
-    return char.isalnum() or char in "_'₀₁₂₃₄₅₆₇₈₉"
+    if char in _SUPERSCRIPTS:
+        return False
+    return char.isalnum() or char in "_'′₀₁₂₃₄₅₆₇₈₉"
+
+
+# Mathematical constants a formula may name without them being inputs: they carry
+# no value the caller supplies, so they are not missing when left unsubstituted.
+_CONSTANTS = frozenset({"π", "e"})
 
 
 class SymbolValue(BaseModel):
@@ -92,11 +108,9 @@ class Derivation(BaseModel):
         formula produces, not a restatement of the answer — and every right-hand
         symbol becomes a rendered value with its unit.
         """
-        by_symbol = {inp.symbol: inp.rendered(system=system) for inp in self.inputs}
         lhs, sep, rhs = self.symbolic.partition("=")
-        if not sep:
-            return _substitute(self.symbolic, by_symbol)
-        return f"{lhs}={_substitute(rhs, by_symbol)}"
+        substituted, _ = _scan(rhs if sep else self.symbolic, self._by_symbol(system))
+        return substituted if not sep else f"{lhs}={substituted}"
 
     def unresolved_symbols(self) -> tuple[str, ...]:
         """Symbols left standing on the right-hand side after substitution.
@@ -104,12 +118,15 @@ class Derivation(BaseModel):
         A non-empty result means the derivation declares fewer inputs than its
         formula uses, so the rendered work would show a bare symbol where a number
         belongs. Callers gate on this; the report refuses to render such a
-        derivation as worked.
+        derivation as worked. Mathematical constants (π, e) are not missing inputs
+        and never appear here.
         """
         _, sep, rhs = self.symbolic.partition("=")
-        source = rhs if sep else self.symbolic
-        declared = {inp.symbol for inp in self.inputs}
-        return tuple(sorted(set(_tokens(source)) - declared))
+        _, leftover = _scan(rhs if sep else self.symbolic, self._by_symbol(None))
+        return tuple(sorted(set(leftover) - _CONSTANTS))
+
+    def _by_symbol(self, system: UnitSystem | None) -> dict[str, str]:
+        return {inp.symbol: inp.rendered(system=system) for inp in self.inputs}
 
     def lines(self, *, system: UnitSystem | None = None) -> tuple[str, str, str]:
         """The three lines of the worked calculation: formula, substitution, result."""
@@ -127,38 +144,27 @@ class Derivation(BaseModel):
         )
 
 
-def _tokens(text: str) -> list[str]:
-    """Every maximal run of symbol characters in ``text``."""
-    tokens: list[str] = []
-    current: list[str] = []
-    for char in text:
-        if _is_symbol_char(char):
-            current.append(char)
-        elif current:
-            tokens.append("".join(current))
-            current = []
-    if current:
-        tokens.append("".join(current))
-    return [token for token in tokens if not token.replace(".", "").isdigit()]
+def _scan(text: str, by_symbol: dict[str, str]) -> tuple[str, list[str]]:
+    """Substitute declared symbols in ``text``, reporting the ones left standing.
 
-
-def _substitute(text: str, by_symbol: dict[str, str]) -> str:
-    """Replace declared symbols in ``text`` with their rendered values.
-
-    Scans once, left to right, taking the longest declared symbol that matches at
-    each position with symbol-character boundaries on both sides. Because output is
-    emitted rather than rescanned, a substituted value is never itself substituted.
+    One left-to-right pass does both jobs, so what the reader sees and what the
+    coverage check counts can never disagree. At each position the longest declared
+    symbol that matches with symbol-character boundaries on both sides wins; because
+    output is emitted rather than rescanned, a substituted value is never itself
+    substituted (the ``N`` in a rendered ``"1500.0 N"`` is not the symbol ``N``).
+    Anything else that reads as a symbol — a name the derivation never declared — is
+    passed through untouched and returned as leftover.
     """
-    if not by_symbol:
-        return text
     candidates = sorted(by_symbol, key=len, reverse=True)
     out: list[str] = []
+    leftover: list[str] = []
     index = 0
     while index < len(text):
-        matched = None
         # A symbol can only start here if the previous character is not itself a
         # symbol character (otherwise we would be mid-token).
-        if index == 0 or not _is_symbol_char(text[index - 1]):
+        at_boundary = index == 0 or not _is_symbol_char(text[index - 1])
+        matched = None
+        if at_boundary:
             for symbol in candidates:
                 end = index + len(symbol)
                 if text.startswith(symbol, index) and (
@@ -166,10 +172,22 @@ def _substitute(text: str, by_symbol: dict[str, str]) -> str:
                 ):
                     matched = symbol
                     break
-        if matched is None:
-            out.append(text[index])
-            index += 1
-        else:
+        if matched is not None:
             out.append(by_symbol[matched])
             index += len(matched)
-    return "".join(out)
+            continue
+        if at_boundary and _is_symbol_char(text[index]):
+            # An undeclared name: take the whole token so a multi-character symbol
+            # is reported as itself rather than as its letters.
+            end = index
+            while end < len(text) and _is_symbol_char(text[end]):
+                end += 1
+            token = text[index:end]
+            if not token.replace(".", "").isdigit():
+                leftover.append(token)
+            out.append(token)
+            index = end
+            continue
+        out.append(text[index])
+        index += 1
+    return "".join(out), leftover

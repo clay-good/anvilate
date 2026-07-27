@@ -76,6 +76,7 @@ from ..analysis import (
     transition_slenderness,
     von_mises_plane_stress,
 )
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..standards import MaterialsDatabase, default_materials_db
 from ..units import Quantity
@@ -685,12 +686,44 @@ def screen_column_member(
         regime = "Johnson"
 
     applied = axial_stress(force=member.axial_load, area=member.section.area)
+    slenderness_symbol = SymbolValue(
+        symbol="λ", description="slenderness ratio K·L/r about the least axis", value=lam
+    )
+    modulus_symbol = SymbolValue(symbol="E", description="elastic modulus", value=modulus)
+    if regime == "Euler":
+        # Above the transition slenderness the column buckles elastically, and the
+        # yield strength never enters the capacity.
+        derivation = Derivation(
+            symbolic="σ_cr = π² · E / λ²",
+            inputs=(modulus_symbol, slenderness_symbol),
+            result=SymbolValue(
+                symbol="σ_cr", description="elastic (Euler) critical stress", value=critical
+            ),
+            citation=_CLAUSE_COMPRESSION,
+        )
+    else:
+        derivation = Derivation(
+            symbolic="σ_cr = S_y · [1 − S_y · λ² / (4 · π² · E)]",
+            inputs=(
+                SymbolValue(
+                    symbol="S_y", description="material yield strength", value=yield_strength
+                ),
+                slenderness_symbol,
+                modulus_symbol,
+            ),
+            result=SymbolValue(
+                symbol="σ_cr",
+                description="inelastic (J. B. Johnson parabola) critical stress",
+                value=critical,
+            ),
+            citation=_CLAUSE_COMPRESSION,
+        )
     entry = strength_scorecard(
         f"{member.name} buckling ({regime})",
         stress=applied,
         allowable=critical,
         required=required_safety_factor,
-    ).model_copy(update={"reference": _CLAUSE_COMPRESSION})
+    ).model_copy(update={"reference": _CLAUSE_COMPRESSION, "derivation": derivation})
     return Scorecard(entries=(entry,))
 
 
@@ -1062,6 +1095,27 @@ def screen_lifting_lug(
 
     net_tension = Quantity(magnitude=force / ((width - hole) * thickness), unit="MPa")
     bearing = bearing_stress(force=lug.load, diameter=lug.hole_diameter, thickness=lug.thickness)
+
+    load_symbol = SymbolValue(symbol="P", description="lifted load", value=lug.load)
+    width_symbol = SymbolValue(symbol="W", description="lug width across the hole", value=lug.width)
+    hole_symbol = SymbolValue(symbol="d", description="pin hole diameter", value=lug.hole_diameter)
+    thickness_symbol = SymbolValue(
+        symbol="t", description="lug plate thickness", value=lug.thickness
+    )
+    tension_derivation = Derivation(
+        symbolic="σ_t = P / ((W − d) · t)",
+        inputs=(load_symbol, width_symbol, hole_symbol, thickness_symbol),
+        result=SymbolValue(
+            symbol="σ_t", description="net-section tensile stress", value=net_tension
+        ),
+        citation=_CLAUSE_LUG,
+    )
+    bearing_derivation = Derivation(
+        symbolic="σ_p = P / (d · t)",
+        inputs=(load_symbol, hole_symbol, thickness_symbol),
+        result=SymbolValue(symbol="σ_p", description="pin bearing stress", value=bearing),
+        citation=_CLAUSE_LUG,
+    )
     return Scorecard(
         entries=(
             strength_scorecard(
@@ -1069,13 +1123,13 @@ def screen_lifting_lug(
                 stress=net_tension,
                 allowable=yield_strength,
                 required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_LUG}),
+            ).model_copy(update={"reference": _CLAUSE_LUG, "derivation": tension_derivation}),
             strength_scorecard(
                 f"{lug.name} pin bearing",
                 stress=bearing,
                 allowable=yield_strength,
                 required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_LUG}),
+            ).model_copy(update={"reference": _CLAUSE_LUG, "derivation": bearing_derivation}),
         )
     )
 
@@ -1365,9 +1419,40 @@ def screen_concrete_bearing(
     confinement = min((a2 / a1) ** 0.5, _ACI_CONFINEMENT_CAP)
     capacity_n = _ACI_BEARING_FRACTION * fc * a1 * confinement
     safety = capacity_n / load_n if load_n > 0 else float("inf")
+    derivation = Derivation(
+        symbolic="B_n = 0.85 · f′c · A₁ · √(A₂/A₁)",
+        inputs=(
+            SymbolValue(
+                symbol="f′c",
+                description="concrete compressive strength",
+                value=bearing.concrete_strength,
+            ),
+            SymbolValue(
+                symbol="A₁", description="loaded (bearing) area", value=bearing.bearing_area
+            ),
+            SymbolValue(
+                symbol="A₂",
+                description="supporting concrete area, confining the bearing zone",
+                value=bearing.support_area,
+            ),
+        ),
+        result=SymbolValue(
+            symbol="B_n",
+            description=(
+                "nominal bearing strength"
+                + (
+                    f", confinement factor √(A₂/A₁) capped at {_ACI_CONFINEMENT_CAP:.0f}"
+                    if (a2 / a1) ** 0.5 > _ACI_CONFINEMENT_CAP
+                    else f", confinement factor {confinement:.2f}"
+                )
+            ),
+            value=Quantity(magnitude=capacity_n, unit="N"),
+        ),
+        citation=_CLAUSE_CONCRETE_BEARING_ACI,
+    )
     entry = ScorecardEntry.from_safety_factor(
         f"{bearing.name} concrete bearing", computed=safety, required=required_safety_factor
-    ).model_copy(update={"reference": _CLAUSE_CONCRETE_BEARING_ACI})
+    ).model_copy(update={"reference": _CLAUSE_CONCRETE_BEARING_ACI, "derivation": derivation})
     return Scorecard(entries=(entry,))
 
 
