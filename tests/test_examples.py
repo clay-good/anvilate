@@ -2025,6 +2025,18 @@ def test_bushing_wear_life_example_lubrication_governs():
     assert improved.status is CheckStatus.PASS
 
 
+def test_retaining_compound_hub_example_bond_beats_friction():
+    namespace = runpy.run_path(str(_EXAMPLES / "retaining_compound_hub.py"))
+    # The thin hub caps the fit pressure, so friction (mu*p) tops out far short.
+    press = namespace["screen_press_fit"]()
+    assert press.status is CheckStatus.FAIL
+    assert "safety factor 0.28" in press.entries[0].detail
+    # The same slip-fit interface bonded at the derated datasheet strength carries it.
+    bonded = namespace["screen_bonded_hub"]()
+    assert bonded.status is CheckStatus.PASS
+    assert "safety factor 1.57" in bonded.entries[0].detail
+
+
 def test_workshop_hoist_system_capstone_full_drum_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "workshop_hoist_system.py"))
     # The friction-amplified lead line, not W/n = 5 kN, sizes the whole chain.
