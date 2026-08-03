@@ -83,6 +83,7 @@ Over 45 runnable examples, each executed in CI so they stay honest. A few:
 | `lifting_lug_calc_report.py` | The same padeye screening rendered as a submittal: formula, substituted values, result, and clause for every check. See [calculation reports](docs/calculation-reports.md). |
 | `sheave_repair_from_inverse.py` | A failing bending check that carries its own fix: a design inverse names the sheave diameter that lands the margin in one solve. See [typed repair feedback](docs/repair-feedback.md). |
 | `bracket_load_scatter_fragility.py` | A bracket that passes at SF 1.70 nominal but falls below the required 1.5 one run in five once the load scatters ±15% — a shortfall probability no single-point check reports. See [uncertainty margins](docs/uncertainty-margins.md). |
+| `canopy_beam_load_combinations.py` | A light canopy whose bending is sized by one ASCE 7-22 combination and whose hold-down by another — a wind uplift the gravity cases never show. See [load combinations](docs/load-combinations.md). |
 
 Full annotated gallery: [`examples/README.md`](examples/README.md).
 

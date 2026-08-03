@@ -2324,6 +2324,19 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_canopy_beam_load_combinations_example_uplift_is_hidden():
+    namespace = runpy.run_path(str(_EXAMPLES / "canopy_beam_load_combinations.py"))
+    down_combo, down = namespace["gravity_envelope"]()
+    up_combo, up = namespace["uplift_governing"]()
+    # The governing gravity combination is not the reflexive 1.2D + 1.6L: roof live
+    # as the principal (combination 3) governs at 47.2 kN.
+    assert down_combo.name == "LRFD 3 (+L) [Lr]"
+    assert down == pytest.approx(47.2)
+    # And a net uplift the gravity cases never show governs the hold-down.
+    assert up_combo.name == "LRFD 5"
+    assert up == pytest.approx(-26.5)
+
+
 def test_bracket_load_scatter_fragility_example_flags_a_nominal_pass():
     namespace = runpy.run_path(str(_EXAMPLES / "bracket_load_scatter_fragility.py"))
     # On single best-guess numbers the bracket clears the required 1.5.
