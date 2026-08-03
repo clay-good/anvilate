@@ -43,7 +43,7 @@ from anvilate.packs.structural import (
     screen_tension_member,
     screen_welded_connection,
 )
-from anvilate.scorecard import CheckStatus
+from anvilate.scorecard import CheckStatus, Direction
 from anvilate.units import Quantity
 
 
@@ -1363,6 +1363,47 @@ def test_lifting_lug_screens_tension_and_bearing():
 def test_overloaded_lug_fails():
     card = screen_lifting_lug(_lug(load="200 kN"), required_safety_factor=1.4)
     assert card.status is CheckStatus.FAIL
+
+
+def test_passing_lug_carries_no_repair_hints():
+    card = screen_lifting_lug(_lug(), required_safety_factor=1.4)
+    assert card.status is CheckStatus.PASS
+    assert all(e.repair_hint is None for e in card.entries)
+    assert card.repair_hints() == ()
+
+
+def test_failing_lug_hint_thickness_repairs_the_check_in_one_solve():
+    required = 1.4
+    card = screen_lifting_lug(_lug(load="200 kN"), required_safety_factor=required)
+    assert card.status is CheckStatus.FAIL
+
+    # Every failing check names thickness as the lever, with a solved value.
+    for entry in card.failures():
+        hint = entry.repair_hint
+        assert hint is not None
+        assert hint.parameter == "thickness"
+        assert hint.direction is Direction.INCREASE
+        assert hint.corrective_value is not None
+
+    # The governing (tightest) check drives the thickness: rebuild at that value
+    # and every check lands at or above the required margin — the governing one
+    # exactly on it (a single solve, no search). At the exact boundary the PASS
+    # verdict is float-fragile, so assert the margin landed, not the ≥ flip.
+    governing = card.governing()
+    thickness = governing.repair_hint.corrective_value
+    repaired = LiftingLug(
+        name="pad_eye",
+        width=_q("80 mm"),
+        hole_diameter=_q("25 mm"),
+        thickness=_q(f"{thickness} mm"),
+        load=_q("200 kN"),
+        material="ASTM-A36",
+    )
+    after = screen_lifting_lug(repaired, required_safety_factor=required)
+    by_name = {e.name: e for e in after.entries}
+    # The governing check lands on the required margin; the other clears it.
+    assert by_name[governing.name].safety_factor == pytest.approx(required, rel=1e-9)
+    assert all(e.safety_factor >= required * (1 - 1e-9) for e in after.entries)
 
 
 def test_lug_rejects_hole_wider_than_lug():

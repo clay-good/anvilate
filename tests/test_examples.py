@@ -2317,9 +2317,11 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     # All three checks declare their own work, so nothing falls back.
     assert report.derivation_coverage() == (3, 3)
     assert "derivation not rendered" not in text
-    # Pin bearing at 1.50 against a required 2.00 is what has to change.
+    # Pin bearing at 1.50 against a required 2.00 is what has to change, and the
+    # report says how: the lug thickness that lands the required margin.
     assert report.governing().name == "padeye pin bearing"
     assert report.status is CheckStatus.FAIL
+    assert "repair: increase thickness to 16 mm" in text
 
 
 def test_sheave_repair_from_inverse_example_repairs_in_one_solve():

@@ -77,7 +77,13 @@ from ..analysis import (
     von_mises_plane_stress,
 )
 from ..derivation import Derivation, SymbolValue
-from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
+from ..scorecard import (
+    CheckStatus,
+    Direction,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+)
 from ..standards import MaterialsDatabase, default_materials_db
 from ..units import Quantity
 
@@ -1340,6 +1346,27 @@ class LiftingLug(BaseModel):
         return self
 
 
+def _thickness_repair_hint(entry: ScorecardEntry, thickness: Quantity, required: float):
+    """A solved repair hint for a lug check that failed on thickness.
+
+    Both lug limit states run stress ∝ 1/t, so the safety factor is linear in the
+    plate thickness: the thickness that reaches the required margin is simply
+    t · required / computed. Thickness is the lug's design lever — the pin
+    diameter is set by the shackle, the width by clearance — so the hint names it
+    unambiguously. Returns ``None`` for a check that did not fail.
+    """
+    if entry.status is not CheckStatus.FAIL or not entry.safety_factor:
+        return None
+    t_mm = thickness.to("mm").magnitude
+    return RepairHint.solved(
+        "thickness",
+        direction=Direction.INCREASE,
+        value=t_mm * required / entry.safety_factor,
+        unit="mm",
+        provenance="lug thickness inverse (σ ∝ 1/t, so SF ∝ t)",
+    )
+
+
 def screen_lifting_lug(
     lug: LiftingLug,
     *,
@@ -1350,7 +1377,10 @@ def screen_lifting_lug(
 
     Screens the net-section tension P/((W−d)·t) and the pin bearing P/(d·t), both
     against the lug material's yield at ``required_safety_factor`` (ASME BTH-1).
-    ``materials`` defaults to the bundled database.
+    A failing check carries a typed repair hint: because both limit states run
+    stress ∝ 1/t, the thickness that reaches the required margin is t·required/SF,
+    solved directly rather than searched. ``materials`` defaults to the bundled
+    database.
     """
     materials = materials or default_materials_db()
     record = materials.get(lug.material)
@@ -1384,20 +1414,34 @@ def screen_lifting_lug(
         result=SymbolValue(symbol="σ_p", description="pin bearing stress", value=bearing),
         citation=_CLAUSE_LUG,
     )
+    tension_entry = strength_scorecard(
+        f"{lug.name} net tension",
+        stress=net_tension,
+        allowable=yield_strength,
+        required=required_safety_factor,
+    ).model_copy(update={"reference": _CLAUSE_LUG, "derivation": tension_derivation})
+    bearing_entry = strength_scorecard(
+        f"{lug.name} pin bearing",
+        stress=bearing,
+        allowable=yield_strength,
+        required=required_safety_factor,
+    ).model_copy(update={"reference": _CLAUSE_LUG, "derivation": bearing_derivation})
     return Scorecard(
         entries=(
-            strength_scorecard(
-                f"{lug.name} net tension",
-                stress=net_tension,
-                allowable=yield_strength,
-                required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_LUG, "derivation": tension_derivation}),
-            strength_scorecard(
-                f"{lug.name} pin bearing",
-                stress=bearing,
-                allowable=yield_strength,
-                required=required_safety_factor,
-            ).model_copy(update={"reference": _CLAUSE_LUG, "derivation": bearing_derivation}),
+            tension_entry.model_copy(
+                update={
+                    "repair_hint": _thickness_repair_hint(
+                        tension_entry, lug.thickness, required_safety_factor
+                    )
+                }
+            ),
+            bearing_entry.model_copy(
+                update={
+                    "repair_hint": _thickness_repair_hint(
+                        bearing_entry, lug.thickness, required_safety_factor
+                    )
+                }
+            ),
         )
     )
 
