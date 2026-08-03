@@ -29,9 +29,10 @@
       0.405·Δσ_C; N = 2M at Δσ_C, 5M at Δσ_D, and the m=5 branch between.
 - [x] 3.2 Forward/inverse round-trip — the allowable range at a life feeds back through
       the endurance curve to the same life on each branch.
-- [~] 3.3 Missing category → "not evaluated"; corrections appear in results — bad-input
-      guards covered; a scorecard-level "not evaluated" for an absent category and the
-      correction factors belong with the corrections slice (2.2 / 1.2).
+- [x] 3.3 Missing category → "not evaluated" — `weld_fatigue_scorecard` returns a
+      `NOT_EVALUATED` entry when no detail category is supplied (No-silent-green: the
+      category is the engineer's call), with the thickness correction applied when
+      given. Mean-stress correction factors surfacing remains with 2.2.
 
 ## 4. Docs & examples
 

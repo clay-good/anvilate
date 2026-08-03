@@ -5787,6 +5787,50 @@ def test_weld_size_effect_rejects_bad_thickness():
         weld_size_effect_factor(thickness=_q("0 mm"))
 
 
+def test_weld_fatigue_scorecard_screens_a_spectrum_and_requires_a_category():
+    from anvilate.analysis import weld_fatigue_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    cycles = [1.0e5, 1.0e6, 1.0e7]
+    ranges = [_q("90 MPa"), _q("60 MPa"), _q("40 MPa")]
+
+    # A harsh category-56 detail is spent 2.5x over -> SF ~0.39 -> FAIL.
+    harsh = weld_fatigue_scorecard(
+        "weld", applied_cycles=cycles, stress_ranges=ranges, detail_category=_q("56 MPa")
+    )
+    assert harsh.status is CheckStatus.FAIL
+    assert harsh.safety_factor == pytest.approx(0.394, abs=0.01)
+    assert harsh.reference == "EN 1993-1-9"
+
+    # A good category-90 detail survives the same spectrum.
+    good = weld_fatigue_scorecard(
+        "weld", applied_cycles=cycles, stress_ranges=ranges, detail_category=_q("90 MPa")
+    )
+    assert good.status is CheckStatus.PASS
+
+    # No-silent-green: without a chosen detail category the check is NOT_EVALUATED.
+    unrated = weld_fatigue_scorecard(
+        "weld", applied_cycles=cycles, stress_ranges=ranges, detail_category=None
+    )
+    assert unrated.status is CheckStatus.NOT_EVALUATED
+    assert "detail category" in unrated.detail
+
+    # Applying a thickness reduces the category and shortens the life vs. no thickness.
+    thick = weld_fatigue_scorecard(
+        "weld",
+        applied_cycles=cycles,
+        stress_ranges=ranges,
+        detail_category=_q("90 MPa"),
+        thickness=_q("50 mm"),
+    )
+    assert thick.safety_factor < good.safety_factor
+
+    with pytest.raises(ValueError, match="must have the same length"):
+        weld_fatigue_scorecard(
+            "weld", applied_cycles=[1.0e5], stress_ranges=ranges, detail_category=_q("56 MPa")
+        )
+
+
 def test_weld_detail_rejects_bad_inputs():
     from anvilate.analysis import (
         weld_detail_allowable_stress_range,

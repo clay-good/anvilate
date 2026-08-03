@@ -28,7 +28,7 @@ from math import inf, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
-from ..scorecard import ScorecardEntry
+from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
@@ -58,6 +58,7 @@ __all__ = [
     "weld_detail_allowable_stress_range",
     "weld_size_effect_factor",
     "weld_size_corrected_detail_category",
+    "weld_fatigue_scorecard",
 ]
 
 # EN 1993-1-9 nominal-stress fatigue curve anchors (cycles). The detail category
@@ -810,3 +811,57 @@ def weld_size_corrected_detail_category(
         thickness=thickness, reference_thickness=reference_thickness, exponent=exponent
     )
     return Quantity(magnitude=dsc * factor, unit="MPa")
+
+
+def weld_fatigue_scorecard(
+    name: str,
+    *,
+    applied_cycles: Sequence[float],
+    stress_ranges: Sequence[Quantity],
+    detail_category: Quantity | None,
+    thickness: Quantity | None = None,
+    variable_amplitude: bool = True,
+    required: float = 1.0,
+) -> ScorecardEntry:
+    """Screen a weld detail over a stress-range spectrum → a :class:`ScorecardEntry`.
+
+    Builds the EN 1993-1-9 S-N curve from ``detail_category`` (optionally reduced for
+    ``thickness`` via the size effect), computes each range's life, sums the
+    Palmgren-Miner damage D over the ``applied_cycles``, and reports the fatigue
+    safety factor 1/D against ``required`` (1.0 = exactly the design life).
+
+    When ``detail_category`` is ``None`` the entry is ``NOT_EVALUATED``, never a
+    silent pass: choosing and defending the detail category is the engineer's call,
+    and a weld fatigue check without one has not been made. ``applied_cycles`` and
+    ``stress_ranges`` must be the same length.
+    """
+    if len(applied_cycles) != len(stress_ranges):
+        raise ValueError(
+            f"applied_cycles ({len(applied_cycles)}) and stress_ranges "
+            f"({len(stress_ranges)}) must have the same length"
+        )
+    if detail_category is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — no EN 1993-1-9 detail category chosen",
+            reference="EN 1993-1-9",
+        )
+    category = (
+        detail_category
+        if thickness is None
+        else weld_size_corrected_detail_category(
+            detail_category=detail_category, thickness=thickness
+        )
+    )
+    lives = [
+        weld_detail_endurance_cycles(
+            stress_range=sr, detail_category=category, variable_amplitude=variable_amplitude
+        )
+        for sr in stress_ranges
+    ]
+    damage = miner_cumulative_damage(applied_cycles=applied_cycles, cycles_to_failure=lives)
+    computed = inf if damage == 0 else 1.0 / damage
+    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
+        update={"reference": "EN 1993-1-9"}
+    )

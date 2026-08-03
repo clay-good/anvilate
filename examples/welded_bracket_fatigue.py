@@ -26,8 +26,8 @@ matters. Run it directly (``python examples/welded_bracket_fatigue.py``);
 
 from __future__ import annotations
 
-from anvilate.analysis import miner_cumulative_damage, weld_detail_endurance_cycles
-from anvilate.scorecard import Scorecard, ScorecardEntry
+from anvilate.analysis import weld_fatigue_scorecard
+from anvilate.scorecard import Scorecard
 from anvilate.units import Quantity
 
 # The service spectrum: (applied cycles, nominal stress range). Identical for both
@@ -40,19 +40,6 @@ SPECTRUM = (
 
 HARSH_DETAIL = Quantity.parse("56 MPa")  # transverse attachment across the stress flow
 GOOD_DETAIL = Quantity.parse("90 MPa")  # ground, flow-aligned weld
-CITATION = "EN 1993-1-9"
-
-
-def _cumulative_damage(detail_category: Quantity) -> float:
-    lives = [
-        weld_detail_endurance_cycles(
-            stress_range=Quantity.parse(stress), detail_category=detail_category
-        )
-        for _, stress in SPECTRUM
-    ]
-    return miner_cumulative_damage(
-        applied_cycles=[cycles for cycles, _ in SPECTRUM], cycles_to_failure=lives
-    )
 
 
 def screen_detail(detail_category: Quantity) -> Scorecard:
@@ -61,13 +48,15 @@ def screen_detail(detail_category: Quantity) -> Scorecard:
     The Palmgren-Miner damage D must stay below 1 for the detail to survive its
     design life, so the fatigue safety factor is 1/D against a required 1.0.
     """
-    damage = _cumulative_damage(detail_category)
-    safety = float("inf") if damage == 0 else 1.0 / damage
     return Scorecard(
         entries=(
-            ScorecardEntry.from_safety_factor(
-                "weld fatigue (Miner damage)", computed=safety, required=1.0
-            ).model_copy(update={"reference": CITATION}),
+            weld_fatigue_scorecard(
+                "weld fatigue (Miner damage)",
+                applied_cycles=[cycles for cycles, _ in SPECTRUM],
+                stress_ranges=[Quantity.parse(stress) for _, stress in SPECTRUM],
+                detail_category=detail_category,
+                required=1.0,
+            ),
         )
     )
 
@@ -87,9 +76,10 @@ def main() -> None:
         ("category 56 (harsh)", HARSH_DETAIL),
         ("category 90 (good)", GOOD_DETAIL),
     ):
-        damage = _cumulative_damage(detail)
-        print(f"{label}: Miner damage {damage:.2f}  ->  safety factor {1.0 / damage:.2f}")
-        print(f"  {screen_detail(detail).entries[0]}")
+        entry = screen_detail(detail).entries[0]
+        # SF = 1/D, so the Miner damage is the reciprocal of the reported factor.
+        print(f"{label}: Miner damage {1.0 / entry.safety_factor:.2f}")
+        print(f"  {entry}")
 
 
 if __name__ == "__main__":
