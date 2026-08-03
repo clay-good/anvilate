@@ -3,10 +3,10 @@
 ## 1. Thermal set
 
 - [x] 1.1 Resistance-network composition — `conduction_thermal_resistance` (L/kA),
-      `convection_thermal_resistance` (1/hA), `series_thermal_resistance`,
+      `convection_thermal_resistance` (1/hA), `circular_source_spreading_resistance`
+      (1/4ka, isothermal circular source on a half-space), `series_thermal_resistance`,
       `parallel_thermal_resistance`, and `temperature_rise` (Q·R), all in K/W kept in
-      temperature differences. Contact resistance is a caller-supplied series R;
-      spreading resistance is a follow-up.
+      temperature differences. Contact resistance is a caller-supplied series R.
 - [~] 1.2 Fin efficiency — `fin_efficiency` = tanh(mL)/(mL) with m = √(hP/kA_c); the
       fin-array sizing design inverse is a follow-up.
 - [x] 1.3 Convection correlations with enforced validity ranges — forced:

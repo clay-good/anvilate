@@ -43,6 +43,7 @@ __all__ = [
     "junction_temperature_scorecard",
     "flat_plate_forced_convection_coefficient",
     "vertical_plate_natural_convection_coefficient",
+    "circular_source_spreading_resistance",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -805,3 +806,28 @@ def vertical_plate_natural_convection_coefficient(
         / (1.0 + (0.492 / prandtl_number) ** (9.0 / 16.0)) ** (8.0 / 27.0)
     ) ** 2
     return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")
+
+
+def circular_source_spreading_resistance(
+    *,
+    source_radius: Quantity,
+    conductivity: Quantity,
+) -> Quantity:
+    """The spreading (constriction) resistance R = 1/(4·k·a) of a circular source (K/W).
+
+    When heat enters a large body through a small patch — a die onto a heat-sink
+    base, a bolt head onto a plate — it constricts to the patch and spreads out
+    again, and that constriction adds a resistance on top of the bulk conduction.
+    For an isothermal circular source of ``source_radius`` a on a semi-infinite body
+    of thermal ``conductivity`` k, that spreading resistance is exactly 1/(4·k·a):
+    smaller sources and less-conductive substrates spread worse. Add it in series
+    with the conduction and convection paths. ``conductivity`` is a
+    ``[power]/[length]/[temperature]`` quantity. Returns K/W.
+    """
+    _require(source_radius, "[length]", "source_radius")
+    _require(conductivity, "[power] / [length] / [temperature]", "conductivity")
+    a = source_radius.to("m").magnitude
+    k = conductivity.to("W/(m*K)").magnitude
+    if a <= 0 or k <= 0:
+        raise ValueError("source_radius and conductivity must be positive")
+    return Quantity(magnitude=1.0 / (4.0 * k * a), unit=_THERMAL_RESISTANCE_UNIT)

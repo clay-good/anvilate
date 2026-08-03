@@ -10546,6 +10546,30 @@ def test_flat_plate_forced_convection_coefficient_and_validity_range():
     assert turbulent is None
 
 
+def test_circular_source_spreading_resistance_is_the_constriction_term():
+    from anvilate.analysis import (
+        circular_source_spreading_resistance,
+        series_thermal_resistance,
+    )
+
+    # A 3 mm-radius die on an aluminum base (k = 200): R_sp = 1/(4·k·a).
+    r_sp = circular_source_spreading_resistance(
+        source_radius=_q("3 mm"), conductivity=_q("200 W/(m*K)")
+    )
+    assert r_sp.to("K/W").magnitude == pytest.approx(1.0 / (4.0 * 200.0 * 0.003), rel=1e-9)
+    # A smaller source spreads worse (higher resistance).
+    smaller = circular_source_spreading_resistance(
+        source_radius=_q("1 mm"), conductivity=_q("200 W/(m*K)")
+    )
+    assert smaller.to("K/W").magnitude > r_sp.to("K/W").magnitude
+    # It adds in series with the rest of the path like any other resistance.
+    assert series_thermal_resistance(r_sp, Quantity(magnitude=1.0, unit="K/W"))
+    with pytest.raises(ValueError, match="must be positive"):
+        circular_source_spreading_resistance(
+            source_radius=_q("0 mm"), conductivity=_q("200 W/(m*K)")
+        )
+
+
 def test_vertical_plate_natural_convection_matches_churchill_chu():
     from anvilate.analysis import vertical_plate_natural_convection_coefficient
 

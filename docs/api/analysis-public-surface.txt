@@ -465,6 +465,7 @@ stress.yield_safety_factor
 thermal.DifferentialThermalStress
 thermal.bimetallic_strip_curvature
 thermal.bimetallic_strip_tip_deflection
+thermal.circular_source_spreading_resistance
 thermal.conduction_thermal_resistance
 thermal.constrained_thermal_stress
 thermal.convection_thermal_resistance
