@@ -2324,6 +2324,19 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_welded_bracket_fatigue_example_detail_category_decides_life():
+    namespace = runpy.run_path(str(_EXAMPLES / "welded_bracket_fatigue.py"))
+    # Identical spectrum, two weld details: the harsh category-56 detail is spent
+    # 2.5 times over (fails)...
+    harsh = namespace["screen_harsh_detail"]()
+    assert harsh.status is CheckStatus.FAIL
+    assert harsh.entries[0].safety_factor == pytest.approx(0.394, abs=0.01)
+    # ...while the flow-aligned category-90 detail survives the same loads.
+    good = namespace["screen_good_detail"]()
+    assert good.status is CheckStatus.PASS
+    assert good.entries[0].safety_factor == pytest.approx(3.02, abs=0.02)
+
+
 def test_spec_load_combination_check_example_drives_loads_from_the_spec():
     namespace = runpy.run_path(str(_EXAMPLES / "spec_load_combination_check.py"))
     # The spec aggregates its classified cases: dead sums to 18 kN, and the wind

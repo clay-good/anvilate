@@ -52,7 +52,21 @@ __all__ = [
     "miner_spectrum_repeats_to_failure",
     "basquin_cycles_to_failure",
     "basquin_stress_for_life",
+    "weld_constant_amplitude_fatigue_limit",
+    "weld_cutoff_limit",
+    "weld_detail_endurance_cycles",
+    "weld_detail_allowable_stress_range",
 ]
+
+# EN 1993-1-9 nominal-stress fatigue curve anchors (cycles). The detail category
+# Δσ_C is the reference fatigue strength at N_C = 2M cycles; the curve runs at
+# slope m = 3 down to the constant-amplitude limit Δσ_D at N_D = 5M, then at slope
+# m = 5 down to the cutoff Δσ_L at N_L = 100M, below which the range does no damage.
+_WELD_N_C = 2.0e6
+_WELD_N_D = 5.0e6
+_WELD_N_L = 1.0e8
+_WELD_SLOPE_HIGH = 3.0  # m, above the constant-amplitude limit
+_WELD_SLOPE_LOW = 5.0  # m, between the constant-amplitude limit and the cutoff
 
 # Shigley's steel rotating-beam endurance-limit estimate: S_e' = 0.5*S_u, capped
 # at ENDURANCE_CAP for high-strength steels where the ratio no longer holds.
@@ -639,3 +653,98 @@ def basquin_stress_for_life(
     if exponent >= 0:
         raise ValueError(f"exponent (Basquin's b) must be negative; got {exponent}")
     return Quantity(magnitude=a * life_cycles**exponent, unit="MPa")
+
+
+def weld_constant_amplitude_fatigue_limit(*, detail_category: Quantity) -> Quantity:
+    """The EN 1993-1-9 constant-amplitude fatigue limit Δσ_D of a weld detail.
+
+    Below this stress range a constant-amplitude spectrum causes no fatigue damage.
+    It sits at N_D = 5M cycles on the m = 3 line through the ``detail_category``
+    Δσ_C (the category's reference strength at 2M cycles, a user-supplied value from
+    EN 1993-1-9 Table 8.x — Anvilate encodes the curve, not the copyrighted table):
+    Δσ_D = Δσ_C·(N_C/N_D)^(1/3) = Δσ_C·(2/5)^(1/3) ≈ 0.737·Δσ_C. Returns MPa.
+    """
+    dsc = _require_stress(detail_category, "detail_category")
+    if dsc <= 0:
+        raise ValueError(f"detail_category must be positive; got {detail_category}")
+    return Quantity(magnitude=dsc * (_WELD_N_C / _WELD_N_D) ** (1.0 / _WELD_SLOPE_HIGH), unit="MPa")
+
+
+def weld_cutoff_limit(*, detail_category: Quantity) -> Quantity:
+    """The EN 1993-1-9 cutoff limit Δσ_L of a weld detail.
+
+    Below this stress range even a variable-amplitude spectrum does no damage. It
+    sits at N_L = 100M cycles on the m = 5 line below the constant-amplitude limit:
+    Δσ_L = Δσ_D·(N_D/N_L)^(1/5) = Δσ_D·(5/100)^(1/5) ≈ 0.549·Δσ_D ≈ 0.405·Δσ_C, from
+    the user-supplied ``detail_category`` Δσ_C. Returns MPa.
+    """
+    dsd = weld_constant_amplitude_fatigue_limit(detail_category=detail_category)
+    return Quantity(
+        magnitude=dsd.magnitude * (_WELD_N_D / _WELD_N_L) ** (1.0 / _WELD_SLOPE_LOW),
+        unit="MPa",
+    )
+
+
+def weld_detail_endurance_cycles(
+    *,
+    stress_range: Quantity,
+    detail_category: Quantity,
+    variable_amplitude: bool = True,
+) -> float:
+    """The EN 1993-1-9 endurance N of a weld detail at a nominal ``stress_range``.
+
+    The standardized trilinear S-N curve from the user-supplied ``detail_category``
+    Δσ_C: at slope m = 3 above the constant-amplitude limit Δσ_D,
+    N = N_C·(Δσ_C/Δσ)³; between Δσ_D and the cutoff Δσ_L at slope m = 5,
+    N = N_D·(Δσ_D/Δσ)⁵; and below the cutoff the range does no damage (``inf``).
+    ``variable_amplitude`` selects which limit ends the life: under a variable
+    spectrum (the default, EN 1993-1-9 §7) the m = 5 branch runs to the cutoff Δσ_L;
+    under a constant-amplitude spectrum, life is infinite below Δσ_D. Returns the
+    cycles to failure (``math.inf`` below the governing limit).
+    """
+    ds = _require_stress(stress_range, "stress_range")
+    dsc = _require_stress(detail_category, "detail_category")
+    if ds <= 0:
+        raise ValueError(f"stress_range must be positive; got {stress_range}")
+    if dsc <= 0:
+        raise ValueError(f"detail_category must be positive; got {detail_category}")
+    dsd = weld_constant_amplitude_fatigue_limit(detail_category=detail_category).magnitude
+    if ds >= dsd:
+        return _WELD_N_C * (dsc / ds) ** _WELD_SLOPE_HIGH
+    if not variable_amplitude:
+        return inf  # constant amplitude: no damage below the CAFL
+    dsl = weld_cutoff_limit(detail_category=detail_category).magnitude
+    if ds < dsl:
+        return inf  # below the cutoff: no damage even under a variable spectrum
+    return _WELD_N_D * (dsd / ds) ** _WELD_SLOPE_LOW
+
+
+def weld_detail_allowable_stress_range(
+    *,
+    life_cycles: float,
+    detail_category: Quantity,
+) -> Quantity:
+    """The EN 1993-1-9 stress range a weld detail tolerates for a target life.
+
+    The design inverse of :func:`weld_detail_endurance_cycles`: the nominal stress
+    range Δσ that reaches ``life_cycles`` N on the standardized curve from the
+    user-supplied ``detail_category`` Δσ_C. For N ≤ N_D (5M) it is on the m = 3
+    branch, Δσ = Δσ_C·(N_C/N)^(1/3); for N_D < N ≤ N_L (100M) on the m = 5 branch,
+    Δσ = Δσ_D·(N_D/N)^(1/5); beyond the cutoff N_L it is the cutoff limit Δσ_L.
+    Returns MPa.
+    """
+    dsc = _require_stress(detail_category, "detail_category")
+    if dsc <= 0:
+        raise ValueError(f"detail_category must be positive; got {detail_category}")
+    if life_cycles <= 0:
+        raise ValueError(f"life_cycles must be positive; got {life_cycles}")
+    if life_cycles <= _WELD_N_D:
+        return Quantity(
+            magnitude=dsc * (_WELD_N_C / life_cycles) ** (1.0 / _WELD_SLOPE_HIGH), unit="MPa"
+        )
+    dsd = weld_constant_amplitude_fatigue_limit(detail_category=detail_category).magnitude
+    if life_cycles <= _WELD_N_L:
+        return Quantity(
+            magnitude=dsd * (_WELD_N_D / life_cycles) ** (1.0 / _WELD_SLOPE_LOW), unit="MPa"
+        )
+    return weld_cutoff_limit(detail_category=detail_category)

@@ -242,6 +242,10 @@ fatigue.peterson_notch_sensitivity
 fatigue.smith_watson_topper_stress
 fatigue.soderberg_safety_factor
 fatigue.soderberg_scorecard
+fatigue.weld_constant_amplitude_fatigue_limit
+fatigue.weld_cutoff_limit
+fatigue.weld_detail_allowable_stress_range
+fatigue.weld_detail_endurance_cycles
 flywheel.coefficient_of_fluctuation
 flywheel.flywheel_energy_fluctuation
 flywheel.flywheel_inertia_for_fluctuation

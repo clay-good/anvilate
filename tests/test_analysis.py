@@ -5682,6 +5682,96 @@ def test_basquin_feeds_the_miner_spectrum():
     assert 0 < damage < 1  # the block survives one pass
 
 
+def test_weld_detail_fatigue_limits_follow_en1993_curve():
+    from anvilate.analysis import (
+        weld_constant_amplitude_fatigue_limit,
+        weld_cutoff_limit,
+    )
+
+    category = _q("80 MPa")  # EN 1993-1-9 detail category 80 (user-supplied)
+    # Δσ_D = Δσ_C·(2/5)^(1/3) ≈ 0.737·80 = 58.9 MPa.
+    dsd = weld_constant_amplitude_fatigue_limit(detail_category=category)
+    assert dsd.to("MPa").magnitude == pytest.approx(58.94, abs=0.1)
+    # Δσ_L = Δσ_D·(5/100)^(1/5) ≈ 0.405·80 = 32.4 MPa.
+    dsl = weld_cutoff_limit(detail_category=category)
+    assert dsl.to("MPa").magnitude == pytest.approx(32.37, abs=0.1)
+
+
+def test_weld_detail_endurance_matches_the_anchor_points_and_branches():
+    from anvilate.analysis import weld_detail_endurance_cycles
+
+    category = _q("80 MPa")
+    # At the category stress the life is the 2M-cycle anchor.
+    assert weld_detail_endurance_cycles(
+        stress_range=_q("80 MPa"), detail_category=category
+    ) == pytest.approx(2.0e6, rel=1e-9)
+    # At the constant-amplitude limit the two branches meet at 5M cycles.
+    assert weld_detail_endurance_cycles(
+        stress_range=_q("58.94 MPa"), detail_category=category
+    ) == pytest.approx(5.0e6, rel=1e-3)
+    # Between the limits the shallower m = 5 slope governs.
+    mid = weld_detail_endurance_cycles(stress_range=_q("45 MPa"), detail_category=category)
+    assert mid == pytest.approx(5.0e6 * (58.94 / 45) ** 5, rel=1e-3)
+    # Below the cutoff a variable-amplitude spectrum does no damage.
+    assert weld_detail_endurance_cycles(
+        stress_range=_q("30 MPa"), detail_category=category
+    ) == float("inf")
+    # Under constant amplitude, no damage below the CAFL either.
+    assert weld_detail_endurance_cycles(
+        stress_range=_q("45 MPa"), detail_category=category, variable_amplitude=False
+    ) == float("inf")
+
+
+def test_weld_detail_allowable_stress_range_inverts_the_curve():
+    from anvilate.analysis import (
+        weld_detail_allowable_stress_range,
+        weld_detail_endurance_cycles,
+    )
+
+    category = _q("80 MPa")
+    # The design inverse returns the category strength at its 2M-cycle anchor...
+    assert weld_detail_allowable_stress_range(life_cycles=2.0e6, detail_category=category).to(
+        "MPa"
+    ).magnitude == pytest.approx(80.0, rel=1e-9)
+    # ...the cutoff limit beyond 100M cycles...
+    assert weld_detail_allowable_stress_range(life_cycles=5.0e8, detail_category=category).to(
+        "MPa"
+    ).magnitude == pytest.approx(32.37, abs=0.1)
+    # ...and round-trips the forward curve at a finite life on each branch.
+    for target in (1.0e6, 2.0e7):
+        allowable = weld_detail_allowable_stress_range(life_cycles=target, detail_category=category)
+        back = weld_detail_endurance_cycles(stress_range=allowable, detail_category=category)
+        assert back == pytest.approx(target, rel=1e-6)
+
+
+def test_weld_detail_curve_feeds_the_miner_spectrum():
+    # A stress-range spectrum on a category-80 detail: the per-range lives feed the
+    # existing Miner summation, so weld fatigue composes with the shipped machinery.
+    from anvilate.analysis import weld_detail_endurance_cycles
+
+    category = _q("80 MPa")
+    n_high = weld_detail_endurance_cycles(stress_range=_q("70 MPa"), detail_category=category)
+    n_low = weld_detail_endurance_cycles(stress_range=_q("50 MPa"), detail_category=category)
+    damage = miner_cumulative_damage(
+        applied_cycles=[1.0e5, 5.0e5], cycles_to_failure=[n_high, n_low]
+    )
+    assert damage == pytest.approx(1.0e5 / n_high + 5.0e5 / n_low, rel=1e-12)
+
+
+def test_weld_detail_rejects_bad_inputs():
+    from anvilate.analysis import (
+        weld_detail_allowable_stress_range,
+        weld_detail_endurance_cycles,
+    )
+
+    with pytest.raises(ValueError, match="stress_range must be positive"):
+        weld_detail_endurance_cycles(stress_range=_q("0 MPa"), detail_category=_q("80 MPa"))
+    with pytest.raises(ValueError, match="detail_category must be positive"):
+        weld_detail_endurance_cycles(stress_range=_q("50 MPa"), detail_category=_q("0 MPa"))
+    with pytest.raises(ValueError, match="life_cycles must be positive"):
+        weld_detail_allowable_stress_range(life_cycles=0.0, detail_category=_q("80 MPa"))
+
+
 def test_basquin_rejects_bad_inputs():
     with pytest.raises(ValueError, match="exponent .* must be negative"):
         basquin_cycles_to_failure(

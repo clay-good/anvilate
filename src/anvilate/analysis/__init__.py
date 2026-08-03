@@ -505,6 +505,10 @@ from .fatigue import (
     smith_watson_topper_stress,
     soderberg_safety_factor,
     soderberg_scorecard,
+    weld_constant_amplitude_fatigue_limit,
+    weld_cutoff_limit,
+    weld_detail_allowable_stress_range,
+    weld_detail_endurance_cycles,
 )
 from .flywheel import (
     coefficient_of_fluctuation,
@@ -1113,6 +1117,10 @@ __all__ = [
     "miner_spectrum_repeats_to_failure",
     "basquin_cycles_to_failure",
     "basquin_stress_for_life",
+    "weld_constant_amplitude_fatigue_limit",
+    "weld_cutoff_limit",
+    "weld_detail_endurance_cycles",
+    "weld_detail_allowable_stress_range",
     "CyclicStress",
     "cyclic_stress_components",
     "estimated_endurance_limit",
