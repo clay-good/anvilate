@@ -33,6 +33,8 @@ __all__ = [
     "thin_wall_thickness_for_pressure",
     "asme_cylinder_thickness",
     "asme_cylinder_mawp",
+    "asme_b313_pipe_wall_thickness",
+    "asme_b313_pipe_pressure",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thin_wall_sphere_diametral_growth",
@@ -250,6 +252,77 @@ def asme_cylinder_mawp(
     if t <= 0 or r <= 0 or s <= 0:
         raise ValueError("thickness, radius, and allowable_stress must be positive")
     return Quantity(magnitude=s * joint_efficiency * t / (r + 0.6 * t), unit="MPa")
+
+
+def asme_b313_pipe_wall_thickness(
+    *,
+    pressure: Quantity,
+    outside_diameter: Quantity,
+    allowable_stress: Quantity,
+    quality_factor: float = 1.0,
+    coefficient_y: float = 0.4,
+) -> Quantity:
+    """The ASME B31.3 pressure-design wall for straight pipe, t = P·D/(2·(S·E + P·Y)).
+
+    The process-piping code (ASME B31.3 §304.1.2) sizes straight pipe on the outside
+    diameter: ``pressure`` P is the internal design pressure, ``outside_diameter`` D
+    the pipe OD, ``allowable_stress`` S the code allowable at temperature (user-
+    supplied from Table A-1), ``quality_factor`` E the product of the weld-joint and
+    casting quality factors (E, from Tables A-1A/A-1B), and ``coefficient_y`` Y the
+    material/temperature coefficient (0.4 for ferritic and austenitic steels below
+    the code's temperature threshold; §304.1.1 Table 304.1.1). This is the
+    *pressure-design* thickness only — the mechanical allowances (mill tolerance,
+    typically 12.5%, and corrosion) are added on top separately. Valid for
+    t < D/6; above that the code's thick-wall form applies. All inputs positive,
+    E in (0, 1]. Returns the thickness in mm.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(outside_diameter, "[length]", "outside_diameter")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 < quality_factor <= 1:
+        raise ValueError(f"quality_factor must lie in (0, 1]; got {quality_factor}")
+    p = pressure.to("MPa").magnitude
+    d = outside_diameter.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if p <= 0 or d <= 0 or s <= 0:
+        raise ValueError("pressure, outside_diameter, and allowable_stress must be positive")
+    return Quantity(magnitude=p * d / (2.0 * (s * quality_factor + p * coefficient_y)), unit="mm")
+
+
+def asme_b313_pipe_pressure(
+    *,
+    wall_thickness: Quantity,
+    outside_diameter: Quantity,
+    allowable_stress: Quantity,
+    quality_factor: float = 1.0,
+    coefficient_y: float = 0.4,
+) -> Quantity:
+    """The ASME B31.3 pressure a straight pipe wall carries, P = 2·t·S·E/(D − 2·Y·t).
+
+    The rating inverse of :func:`asme_b313_pipe_wall_thickness`: the internal pressure
+    a straight pipe of pressure-design wall ``wall_thickness`` t and
+    ``outside_diameter`` D may carry under the code allowable ``allowable_stress`` S,
+    quality factor ``quality_factor`` E, and coefficient ``coefficient_y`` Y. Use the
+    *available* pressure-design wall (the as-built wall less the mill tolerance and
+    corrosion allowance) to get the pressure rating. Requires D > 2·Y·t. All positive,
+    E in (0, 1]. Returns the pressure in MPa.
+    """
+    _require(wall_thickness, "[length]", "wall_thickness")
+    _require(outside_diameter, "[length]", "outside_diameter")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 < quality_factor <= 1:
+        raise ValueError(f"quality_factor must lie in (0, 1]; got {quality_factor}")
+    t = wall_thickness.to("mm").magnitude
+    d = outside_diameter.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if t <= 0 or d <= 0 or s <= 0:
+        raise ValueError("wall_thickness, outside_diameter, and allowable_stress must be positive")
+    denominator = d - 2.0 * coefficient_y * t
+    if denominator <= 0:
+        raise ValueError(
+            f"outside_diameter ({d:.4g} mm) must exceed 2·Y·t ({2.0 * coefficient_y * t:.4g} mm)"
+        )
+    return Quantity(magnitude=2.0 * t * s * quality_factor / denominator, unit="MPa")
 
 
 class ThickWallStress(BaseModel):

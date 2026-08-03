@@ -369,6 +369,8 @@ power_screw.power_screw_raise_torque
 pressure_vessel.ThickWallSphereStress
 pressure_vessel.ThickWallStress
 pressure_vessel.ThinWallStress
+pressure_vessel.asme_b313_pipe_pressure
+pressure_vessel.asme_b313_pipe_wall_thickness
 pressure_vessel.asme_cylinder_mawp
 pressure_vessel.asme_cylinder_thickness
 pressure_vessel.cylinder_axial_buckling_stress

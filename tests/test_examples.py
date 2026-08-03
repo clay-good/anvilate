@@ -2324,6 +2324,19 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_process_pipe_schedule_example_rates_the_available_wall():
+    namespace = runpy.run_path(str(_EXAMPLES / "process_pipe_schedule.py"))
+    # Schedule 10 looks like plenty at 3.05 mm, but mill tolerance and corrosion leave
+    # only ~1.2 mm to hold pressure — below the 5 MPa service.
+    sch10 = namespace["screen_schedule_10"]()
+    assert sch10.status is CheckStatus.FAIL
+    assert sch10.entries[0].safety_factor == pytest.approx(0.57, abs=0.02)
+    # Schedule 40 keeps ~3.8 mm available and clears the service with margin.
+    sch40 = namespace["screen_schedule_40"]()
+    assert sch40.status is CheckStatus.PASS
+    assert sch40.entries[0].safety_factor == pytest.approx(1.87, abs=0.03)
+
+
 def test_power_device_heatsink_example_convection_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "power_device_heatsink.py"))
     # Still air: the sink-to-air convection dominates and the junction cooks.

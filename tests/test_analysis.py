@@ -4799,6 +4799,44 @@ def test_asme_cylinder_thickness_rejects_overpressure_and_bad_efficiency():
         )
 
 
+def test_asme_b313_pipe_wall_matches_the_code_form_and_round_trips():
+    from anvilate.analysis import asme_b313_pipe_pressure, asme_b313_pipe_wall_thickness
+
+    # ASME B31.3 §304.1.2: t = P*D/(2*(S*E + P*Y)). NPS 4 pipe (D=114.3 mm), 5 MPa,
+    # S=138 MPa, E=1, Y=0.4 -> 2.04 mm pressure-design wall.
+    kw = {
+        "outside_diameter": _q("114.3 mm"),
+        "allowable_stress": _q("138 MPa"),
+    }
+    t = asme_b313_pipe_wall_thickness(pressure=_q("5 MPa"), **kw)
+    assert t.to("mm").magnitude == pytest.approx(5 * 114.3 / (2 * (138 + 5 * 0.4)), rel=1e-9)
+    # The rating inverse recovers the pressure from that wall.
+    p = asme_b313_pipe_pressure(wall_thickness=t, **kw)
+    assert p.to("MPa").magnitude == pytest.approx(5.0, rel=1e-9)
+    # A lower-quality weld (E<1) or a higher Y needs more wall for the same pressure.
+    spot = asme_b313_pipe_wall_thickness(pressure=_q("5 MPa"), quality_factor=0.85, **kw)
+    assert spot.to("mm").magnitude > t.to("mm").magnitude
+
+
+def test_asme_b313_pipe_rejects_bad_inputs():
+    from anvilate.analysis import asme_b313_pipe_pressure, asme_b313_pipe_wall_thickness
+
+    with pytest.raises(ValueError, match="quality_factor must lie in"):
+        asme_b313_pipe_wall_thickness(
+            pressure=_q("5 MPa"),
+            outside_diameter=_q("114.3 mm"),
+            allowable_stress=_q("138 MPa"),
+            quality_factor=1.5,
+        )
+    # D must exceed 2*Y*t for the rating inverse.
+    with pytest.raises(ValueError, match="must exceed"):
+        asme_b313_pipe_pressure(
+            wall_thickness=_q("200 mm"),
+            outside_diameter=_q("114.3 mm"),
+            allowable_stress=_q("138 MPa"),
+        )
+
+
 def test_thick_wall_open_ended_drops_the_longitudinal_stress():
     kw = {"pressure": _q("60 MPa"), "radius": _q("25 mm"), "wall_thickness": _q("10 mm")}
     closed = thick_wall_cylinder(**kw)
