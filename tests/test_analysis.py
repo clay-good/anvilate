@@ -10546,6 +10546,31 @@ def test_flat_plate_forced_convection_coefficient_and_validity_range():
     assert turbulent is None
 
 
+def test_vertical_plate_natural_convection_matches_churchill_chu():
+    from anvilate.analysis import vertical_plate_natural_convection_coefficient
+
+    air = {
+        "thermal_conductivity": _q("0.026 W/(m*K)"),
+        "kinematic_viscosity": _q("1.6e-5 m**2/s"),
+        "prandtl_number": 0.71,
+        "thermal_expansion_coefficient": _q("0.003333 1/K"),  # ideal gas at ~300 K
+    }
+    # A 0.2 m vertical wall 30 K above ambient air: h ≈ 5 W/m²·K (buoyancy only).
+    h = vertical_plate_natural_convection_coefficient(
+        surface_temperature_difference=_q("30 K"), plate_height=_q("0.2 m"), **air
+    )
+    assert h.to("W/(m**2*K)").magnitude == pytest.approx(5.07, abs=0.05)
+    # A bigger surface-to-air difference drives stronger convection.
+    hotter = vertical_plate_natural_convection_coefficient(
+        surface_temperature_difference=_q("60 K"), plate_height=_q("0.2 m"), **air
+    )
+    assert hotter.to("W/(m**2*K)").magnitude > h.to("W/(m**2*K)").magnitude
+    with pytest.raises(ValueError, match="must be positive"):
+        vertical_plate_natural_convection_coefficient(
+            surface_temperature_difference=_q("0 K"), plate_height=_q("0.2 m"), **air
+        )
+
+
 def test_thermal_resistance_rejects_bad_dimensions():
     from anvilate.analysis import (
         conduction_thermal_resistance,

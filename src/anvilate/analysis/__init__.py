@@ -794,6 +794,7 @@ from .thermal import (
     thermal_shock_stress,
     through_wall_gradient_thermal_stress,
     triaxial_constrained_thermal_stress,
+    vertical_plate_natural_convection_coefficient,
 )
 from .torsion import (
     elliptical_bar_torsional_stress,
@@ -1364,6 +1365,7 @@ __all__ = [
     "fin_efficiency",
     "junction_temperature_scorecard",
     "flat_plate_forced_convection_coefficient",
+    "vertical_plate_natural_convection_coefficient",
     "archard_wear_volume",
     "archard_wear_depth",
     "sliding_distance_for_wear_depth",

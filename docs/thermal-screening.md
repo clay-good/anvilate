@@ -38,6 +38,21 @@ rise = temperature_rise(power=Quantity.parse("30 W"), thermal_resistance=total) 
   compare against the rated limit.
 - **`fin_efficiency`** = tanh(mL)/(mL) with m = √(h·P/(k·A_c)) — the fraction of the
   ideal (isothermal) fin heat a real fin moves.
+- **`junction_temperature_scorecard`** screens the rise Q·R against an allowable-rise
+  budget (the rated junction limit over the ambient) as a No-silent-green check.
+
+## Computing the coefficient h
+
+When you don't have a datasheet h, compute it from the flow. Both take
+caller-supplied fluid properties (Anvilate evaluates the correlation, it carries no
+fluid-property database):
+
+- **`flat_plate_forced_convection_coefficient`** — the Incropera laminar external-flow
+  correlation Nu = 0.664·Re^(1/2)·Pr^(1/3). Above the laminar limit (Re ≈ 5×10⁵) it
+  returns `None` — the flow is turbulent and the correlation would extrapolate, so it
+  reports "not evaluated" instead of a wrong number.
+- **`vertical_plate_natural_convection_coefficient`** — the Churchill–Chu correlation
+  (valid over the whole Rayleigh range), what governs a passively-cooled enclosure.
 
 ## Temperature differences, not absolute scales
 

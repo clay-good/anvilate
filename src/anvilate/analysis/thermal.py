@@ -42,12 +42,14 @@ __all__ = [
     "fin_efficiency",
     "junction_temperature_scorecard",
     "flat_plate_forced_convection_coefficient",
+    "vertical_plate_natural_convection_coefficient",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
 # The laminar–turbulent transition Reynolds number for external flow over a flat
 # plate (Incropera). Above it the laminar correlation no longer holds.
 _FLAT_PLATE_LAMINAR_RE = 5.0e5
+_STANDARD_GRAVITY = 9.80665  # m/s², for the buoyancy-driven Rayleigh number
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
@@ -750,4 +752,56 @@ def flat_plate_forced_convection_coefficient(
     if reynolds > _FLAT_PLATE_LAMINAR_RE:
         return None  # turbulent: out of the laminar correlation's validity range
     nusselt = 0.664 * reynolds**0.5 * prandtl_number ** (1.0 / 3.0)
+    return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")
+
+
+def vertical_plate_natural_convection_coefficient(
+    *,
+    surface_temperature_difference: Quantity,
+    plate_height: Quantity,
+    thermal_conductivity: Quantity,
+    kinematic_viscosity: Quantity,
+    prandtl_number: float,
+    thermal_expansion_coefficient: Quantity,
+) -> Quantity:
+    """The average natural-convection coefficient h on a vertical plate.
+
+    The Churchill–Chu correlation, valid over the whole Rayleigh range:
+
+        Ra = g·β·ΔT·L³·Pr/ν²,
+        Nu = {0.825 + 0.387·Ra^(1/6) / [1 + (0.492/Pr)^(9/16)]^(8/27)}²,
+        h = Nu·k/L.
+
+    ``surface_temperature_difference`` ΔT is the surface-to-fluid difference,
+    ``plate_height`` L the vertical extent, ``thermal_conductivity`` k,
+    ``kinematic_viscosity`` ν, ``prandtl_number`` Pr, and
+    ``thermal_expansion_coefficient`` β (1/temperature — for an ideal gas ≈ 1/T) the
+    fluid's caller-supplied properties (the thermal diffusivity is taken as ν/Pr).
+    Buoyancy is the whole mechanism, so a passively-cooled enclosure lives or dies on
+    this number. Returns h in W/(m²·K).
+    """
+    _require(surface_temperature_difference, "[temperature]", "surface_temperature_difference")
+    _require(plate_height, "[length]", "plate_height")
+    _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
+    _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
+    _require(thermal_expansion_coefficient, "1 / [temperature]", "thermal_expansion_coefficient")
+    dt = surface_temperature_difference.to("K").magnitude
+    length_m = plate_height.to("m").magnitude
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    beta = thermal_expansion_coefficient.to("1/K").magnitude
+    if min(dt, length_m, k, nu, beta) <= 0:
+        raise ValueError(
+            "surface_temperature_difference, plate_height, thermal_conductivity, "
+            "kinematic_viscosity, and thermal_expansion_coefficient must be positive"
+        )
+    if prandtl_number <= 0:
+        raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
+    rayleigh = _STANDARD_GRAVITY * beta * dt * length_m**3 * prandtl_number / nu**2
+    nusselt = (
+        0.825
+        + 0.387
+        * rayleigh ** (1.0 / 6.0)
+        / (1.0 + (0.492 / prandtl_number) ** (9.0 / 16.0)) ** (8.0 / 27.0)
+    ) ** 2
     return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")

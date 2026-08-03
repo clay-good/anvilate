@@ -471,6 +471,7 @@ thermal.convection_thermal_resistance
 thermal.differential_thermal_stress
 thermal.fin_efficiency
 thermal.flat_plate_forced_convection_coefficient
+thermal.vertical_plate_natural_convection_coefficient
 thermal.junction_temperature_scorecard
 thermal.free_thermal_expansion
 thermal.parallel_thermal_resistance
