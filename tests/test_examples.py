@@ -2324,6 +2324,22 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_bracket_load_scatter_fragility_example_flags_a_nominal_pass():
+    namespace = runpy.run_path(str(_EXAMPLES / "bracket_load_scatter_fragility.py"))
+    # On single best-guess numbers the bracket clears the required 1.5.
+    assert namespace["nominal_safety_factor"]() == pytest.approx(1.70, abs=0.01)
+
+    result = namespace["screen_bracket"]()
+    # But the load scatter drags the safety factor below the required 1.5 in about
+    # one run in five — a shortfall a single-point check never reports.
+    assert result.mean > 1.5  # nominally comfortable
+    assert result.shortfall_probability == pytest.approx(0.21, abs=0.03)
+    assert result.is_fragile(threshold=0.05)
+    # The load is the input to pin down first, by a wide margin.
+    assert result.dominant().name == "load"
+    assert result.dominant().variance_share > 0.8
+
+
 def test_base_plate_revision_governing_shift_moves_the_governing_check():
     namespace = runpy.run_path(str(_EXAMPLES / "base_plate_revision_governing_shift.py"))
     before = namespace["thin_plate"]()
