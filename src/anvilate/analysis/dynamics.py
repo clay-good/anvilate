@@ -43,6 +43,7 @@ __all__ = [
     "quality_factor",
     "critical_damping_coefficient",
     "transmissibility",
+    "isolation_scorecard",
     "isolator_natural_frequency_for_transmissibility",
     "isolator_static_deflection_for_transmissibility",
     "dynamic_magnification_factor",
@@ -395,6 +396,41 @@ def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
     numerator = sqrt(1.0 + (2.0 * zeta * r) ** 2)
     denominator = sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
     return numerator / denominator
+
+
+def isolation_scorecard(
+    name: str,
+    *,
+    frequency_ratio: float,
+    damping_ratio: float,
+    required_transmissibility: float,
+) -> ScorecardEntry:
+    """Screen a vibration isolator's transmissibility → a :class:`ScorecardEntry`.
+
+    Computes :func:`transmissibility` TR at the ``frequency_ratio`` r and
+    ``damping_ratio`` ζ and judges it against a target ``required_transmissibility``
+    (< 1): since a lower TR is better isolation, the safety factor is
+    target/TR, passing when TR is at or below the target. A mount below the isolation
+    onset (r < √2) *amplifies* the disturbance — TR > 1 — and the entry says so
+    explicitly rather than reporting a bare number, catching the classic error of a
+    mount tuned into resonance instead of out of it. ``required_transmissibility``
+    must be in (0, 1).
+    """
+    if not 0 < required_transmissibility < 1:
+        raise ValueError(
+            f"required_transmissibility must be in (0, 1); got {required_transmissibility}"
+        )
+    tr = transmissibility(frequency_ratio=frequency_ratio, damping_ratio=damping_ratio)
+    computed = float("inf") if tr == 0 else required_transmissibility / tr
+    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0)
+    if frequency_ratio < sqrt(2.0):
+        detail = (
+            f"mount amplifies (r = {frequency_ratio:.2f} < √2): transmissibility "
+            f"{tr:.2f} > 1, target {required_transmissibility:.2f}"
+        )
+    else:
+        detail = f"transmissibility {tr:.3f} vs target {required_transmissibility:.2f}"
+    return entry.model_copy(update={"detail": detail})
 
 
 def isolator_natural_frequency_for_transmissibility(

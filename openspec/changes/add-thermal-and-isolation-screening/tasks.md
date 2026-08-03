@@ -18,9 +18,11 @@
 
 ## 2. Isolation/shock set
 
-- [~] 2.1 Transmissibility screen — the `dynamics` module already ships
-      `transmissibility`, `base_excitation_relative_transmissibility`, and the isolator
-      static-deflection / natural-frequency inverses (pre-existing).
+- [x] 2.1 Transmissibility screen with amplification-region failure — `transmissibility`
+      (pre-existing) is now composed into `isolation_scorecard`, which judges TR against
+      a target and, below the r = √2 isolation onset, reports that the mount *amplifies*
+      rather than a bare number (No-silent-green for the classic tuned-into-resonance
+      error).
 - [ ] 2.2 Isolator selection margin composing the static-deflection inverse — follow-up.
 - [ ] 2.3 Half-sine shock response screen with regime identification — follow-up.
 

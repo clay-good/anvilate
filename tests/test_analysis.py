@@ -9448,6 +9448,31 @@ def test_transmissibility_isolation_crossover():
     assert tr_res == pytest.approx(sqrt(1 + (2 * 0.2) ** 2) / (2 * 0.2), rel=1e-12)
 
 
+def test_isolation_scorecard_flags_the_amplification_region():
+    from anvilate.analysis import isolation_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    # A soft mount well past the crossover isolates: TR ~ 0.07 at r = 4, below a 0.2
+    # target -> PASS.
+    good = isolation_scorecard(
+        "mount", frequency_ratio=4.0, damping_ratio=0.05, required_transmissibility=0.2
+    )
+    assert good.status is CheckStatus.PASS
+
+    # A stiff mount below r = sqrt(2) does not isolate — it amplifies — and the entry
+    # says so explicitly rather than reporting a bare number.
+    bad = isolation_scorecard(
+        "mount", frequency_ratio=1.0, damping_ratio=0.05, required_transmissibility=0.2
+    )
+    assert bad.status is CheckStatus.FAIL
+    assert "amplifies" in bad.detail and "√2" in bad.detail
+
+    with pytest.raises(ValueError, match="required_transmissibility must be in"):
+        isolation_scorecard(
+            "mount", frequency_ratio=4.0, damping_ratio=0.05, required_transmissibility=1.0
+        )
+
+
 def test_dynamic_magnification_factor_peaks_near_resonance():
     # Quasi-static (r -> 0) the response equals the static deflection: M = 1.
     assert dynamic_magnification_factor(frequency_ratio=0.0, damping_ratio=0.05) == pytest.approx(
