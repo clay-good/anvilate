@@ -470,6 +470,7 @@ thermal.constrained_thermal_stress
 thermal.convection_thermal_resistance
 thermal.differential_thermal_stress
 thermal.fin_efficiency
+thermal.junction_temperature_scorecard
 thermal.free_thermal_expansion
 thermal.parallel_thermal_resistance
 thermal.series_thermal_resistance

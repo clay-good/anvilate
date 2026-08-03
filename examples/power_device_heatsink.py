@@ -27,15 +27,16 @@ from __future__ import annotations
 from anvilate.analysis import (
     conduction_thermal_resistance,
     convection_thermal_resistance,
+    junction_temperature_scorecard,
     series_thermal_resistance,
     temperature_rise,
 )
-from anvilate.scorecard import Scorecard, ScorecardEntry
+from anvilate.scorecard import Scorecard
 from anvilate.units import Quantity
 
 DISSIPATION = Quantity.parse("30 W")
 # The allowable junction-to-ambient rise: 125 °C rated junction over a 40 °C ambient.
-ALLOWABLE_RISE_K = 85.0
+ALLOWABLE_RISE = Quantity(magnitude=85.0, unit="K")
 REQUIRED_SF = 1.25
 
 # The fixed part of the path (datasheet + interface), independent of the cooling.
@@ -46,7 +47,7 @@ NATURAL_CONVECTION = Quantity.parse("8 W/(m**2*K)")  # still air
 FORCED_CONVECTION = Quantity.parse("40 W/(m**2*K)")  # a fan over the sink
 
 
-def _junction_rise(sink_coefficient: Quantity) -> Quantity:
+def _total_resistance(sink_coefficient: Quantity) -> Quantity:
     r_pad = conduction_thermal_resistance(
         thickness=Quantity.parse("0.3 mm"),
         area=Quantity.parse("400 mm**2"),
@@ -55,8 +56,13 @@ def _junction_rise(sink_coefficient: Quantity) -> Quantity:
     r_sink = convection_thermal_resistance(
         area=SINK_AREA, heat_transfer_coefficient=sink_coefficient
     )
-    total = series_thermal_resistance(R_JUNCTION_TO_CASE, r_pad, r_sink)
-    return temperature_rise(power=DISSIPATION, thermal_resistance=total)
+    return series_thermal_resistance(R_JUNCTION_TO_CASE, r_pad, r_sink)
+
+
+def _junction_rise(sink_coefficient: Quantity) -> Quantity:
+    return temperature_rise(
+        power=DISSIPATION, thermal_resistance=_total_resistance(sink_coefficient)
+    )
 
 
 def screen_cooling(sink_coefficient: Quantity) -> Scorecard:
@@ -64,12 +70,14 @@ def screen_cooling(sink_coefficient: Quantity) -> Scorecard:
 
     The safety factor is the allowable rise over the computed rise.
     """
-    rise = _junction_rise(sink_coefficient).to("K").magnitude
-    safety = float("inf") if rise == 0 else ALLOWABLE_RISE_K / rise
     return Scorecard(
         entries=(
-            ScorecardEntry.from_safety_factor(
-                "junction temperature rise", computed=safety, required=REQUIRED_SF
+            junction_temperature_scorecard(
+                "junction temperature rise",
+                power=DISSIPATION,
+                thermal_resistance=_total_resistance(sink_coefficient),
+                allowable_temperature_rise=ALLOWABLE_RISE,
+                required=REQUIRED_SF,
             ),
         )
     )
@@ -88,7 +96,7 @@ def screen_forced_convection() -> Scorecard:
 def main() -> None:
     for label, h in (("still air", NATURAL_CONVECTION), ("forced air (fan)", FORCED_CONVECTION)):
         rise = _junction_rise(h).to("K").magnitude
-        print(f"{label}: junction rise {rise:.0f} K (allowable {ALLOWABLE_RISE_K:.0f} K)")
+        print(f"{label}: junction rise {rise:.0f} K (allowable {ALLOWABLE_RISE.magnitude:.0f} K)")
         print(f"  {screen_cooling(h).entries[0]}")
 
 

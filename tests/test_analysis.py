@@ -10485,6 +10485,38 @@ def test_fin_efficiency_falls_from_one_as_the_fin_lengthens():
         fin_efficiency(length=_q("0 mm"), **kw)
 
 
+def test_junction_temperature_scorecard_screens_the_rise_against_a_budget():
+    from anvilate.analysis import junction_temperature_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    # 20 W through 2 K/W is a 40 K rise; against an 85 K budget that clears at SF ~2.1.
+    ok = junction_temperature_scorecard(
+        "junction",
+        power=_q("20 W"),
+        thermal_resistance=Quantity(magnitude=2.0, unit="K/W"),
+        allowable_temperature_rise=_q("85 K"),
+    )
+    assert ok.status is CheckStatus.PASS
+    assert ok.safety_factor == pytest.approx(85.0 / 40.0, rel=1e-9)
+    assert "40.0 K" in ok.detail and "85.0 K" in ok.detail
+
+    # The same device on a worse path (6 K/W -> 120 K rise) overruns the budget.
+    hot = junction_temperature_scorecard(
+        "junction",
+        power=_q("20 W"),
+        thermal_resistance=Quantity(magnitude=6.0, unit="K/W"),
+        allowable_temperature_rise=_q("85 K"),
+    )
+    assert hot.status is CheckStatus.FAIL
+    with pytest.raises(ValueError, match="allowable_temperature_rise must be positive"):
+        junction_temperature_scorecard(
+            "junction",
+            power=_q("20 W"),
+            thermal_resistance=Quantity(magnitude=2.0, unit="K/W"),
+            allowable_temperature_rise=_q("0 K"),
+        )
+
+
 def test_thermal_resistance_rejects_bad_dimensions():
     from anvilate.analysis import (
         conduction_thermal_resistance,

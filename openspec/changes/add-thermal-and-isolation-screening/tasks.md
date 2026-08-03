@@ -12,9 +12,10 @@
 - [ ] 1.3 Natural/forced convection correlations with enforced validity ranges — the
       coefficient h is caller-supplied for now; bundling correlations (with validity
       ranges → not-evaluated on out-of-range) is a follow-up.
-- [~] 1.4 Junction/surface temperature margin — the rise composes into a safety-factor
-      scorecard in the example (allowable rise / computed rise); a dedicated margin
-      helper is a follow-up.
+- [x] 1.4 Junction/surface temperature margin — `junction_temperature_scorecard` screens
+      the rise ΔT = Q·R against an allowable rise budget (the rated junction limit over
+      the ambient, a temperature difference), reporting the rise vs allowable; the
+      heat-sink example screens through it.
 
 ## 2. Isolation/shock set
 

@@ -19,6 +19,7 @@ from math import pi, sqrt, tanh
 
 from pydantic import BaseModel, ConfigDict
 
+from ..scorecard import ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
@@ -39,6 +40,7 @@ __all__ = [
     "parallel_thermal_resistance",
     "temperature_rise",
     "fin_efficiency",
+    "junction_temperature_scorecard",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -669,3 +671,34 @@ def fin_efficiency(
     m = sqrt(h * p / (k * a_c))
     ml = m * length_m
     return tanh(ml) / ml
+
+
+def junction_temperature_scorecard(
+    name: str,
+    *,
+    power: Quantity,
+    thermal_resistance: Quantity,
+    allowable_temperature_rise: Quantity,
+    required: float = 1.0,
+) -> ScorecardEntry:
+    """Screen a junction-to-ambient temperature rise → a :class:`ScorecardEntry`.
+
+    Computes the rise ΔT = Q·R from ``power`` and total ``thermal_resistance`` and
+    judges it against ``allowable_temperature_rise`` — the rated junction limit above
+    the ambient, a temperature *difference* (e.g. a 125 °C junction over a 40 °C
+    ambient is an 85 K budget). The safety factor is the allowable rise over the
+    computed rise, so it passes when the junction stays within budget at
+    ``required`` margin. ``allowable_temperature_rise`` must be a positive
+    ``[temperature]`` quantity.
+    """
+    _require(allowable_temperature_rise, "[temperature]", "allowable_temperature_rise")
+    allowable = allowable_temperature_rise.to("K").magnitude
+    if allowable <= 0:
+        raise ValueError(
+            f"allowable_temperature_rise must be positive; got {allowable_temperature_rise}"
+        )
+    rise = temperature_rise(power=power, thermal_resistance=thermal_resistance).to("K").magnitude
+    computed = float("inf") if rise == 0 else allowable / rise
+    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    detail = f"junction rise {rise:.1f} K vs {allowable:.1f} K allowable"
+    return entry.model_copy(update={"detail": detail})
