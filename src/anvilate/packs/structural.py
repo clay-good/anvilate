@@ -1270,43 +1270,59 @@ def screen_base_plate(
         plate_bending = Quantity(
             magnitude=3 * bearing_mpa * cantilever**2 / thickness**2, unit="MPa"
         )
-        entries.append(
-            strength_scorecard(
-                f"{plate.name} plate bending",
-                stress=plate_bending,
-                allowable=plate_yield,
-                required=required_safety_factor,
-            ).model_copy(
-                update={
-                    "reference": _CLAUSE_BASEPLATE_BENDING,
-                    "derivation": Derivation(
-                        # The plate is treated as a cantilever of length l carrying
-                        # the bearing pressure: M = f_p·l²/2 over a section modulus
-                        # t²/6, which collapses to 3·f_p·l²/t².
-                        symbolic="σ = 3 · f_p · l² / t²",
-                        inputs=(
-                            bearing_symbol,
-                            SymbolValue(
-                                symbol="l",
-                                description="cantilever from the column face to the plate edge",
-                                value=plate.cantilever,
-                            ),
-                            SymbolValue(
-                                symbol="t",
-                                description="base plate thickness",
-                                value=plate.plate_thickness,
-                            ),
+        bending_entry = strength_scorecard(
+            f"{plate.name} plate bending",
+            stress=plate_bending,
+            allowable=plate_yield,
+            required=required_safety_factor,
+        ).model_copy(
+            update={
+                "reference": _CLAUSE_BASEPLATE_BENDING,
+                "derivation": Derivation(
+                    # The plate is treated as a cantilever of length l carrying
+                    # the bearing pressure: M = f_p·l²/2 over a section modulus
+                    # t²/6, which collapses to 3·f_p·l²/t².
+                    symbolic="σ = 3 · f_p · l² / t²",
+                    inputs=(
+                        bearing_symbol,
+                        SymbolValue(
+                            symbol="l",
+                            description="cantilever from the column face to the plate edge",
+                            value=plate.cantilever,
                         ),
-                        result=SymbolValue(
-                            symbol="σ",
-                            description="bending stress in the cantilevered plate",
-                            value=plate_bending,
+                        SymbolValue(
+                            symbol="t",
+                            description="base plate thickness",
+                            value=plate.plate_thickness,
                         ),
-                        citation=_CLAUSE_BASEPLATE_BENDING,
                     ),
+                    result=SymbolValue(
+                        symbol="σ",
+                        description="bending stress in the cantilevered plate",
+                        value=plate_bending,
+                    ),
+                    citation=_CLAUSE_BASEPLATE_BENDING,
+                ),
+            }
+        )
+        # The plate-bending stress runs ∝ 1/t², so the safety factor is ∝ t² and
+        # the thickness that reaches the required margin is t·√(required/SF) —
+        # exact, and decoupled from the footprint (which sets f_p and l). A thicker
+        # plate is the standard fix, so the hint names thickness unambiguously.
+        if bending_entry.status is CheckStatus.FAIL and bending_entry.safety_factor:
+            bending_entry = bending_entry.model_copy(
+                update={
+                    "repair_hint": RepairHint.solved(
+                        "plate_thickness",
+                        direction=Direction.INCREASE,
+                        value=thickness
+                        * (required_safety_factor / bending_entry.safety_factor) ** 0.5,
+                        unit="mm",
+                        provenance="base-plate bending inverse (σ ∝ 1/t², so SF ∝ t²)",
+                    )
                 }
             )
-        )
+        entries.append(bending_entry)
     return Scorecard(entries=tuple(entries))
 
 

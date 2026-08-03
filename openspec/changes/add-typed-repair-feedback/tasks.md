@@ -15,10 +15,13 @@
 ## 2. Analysis bindings
 
 - [x] 2.1 Bind existing design inverses to their forward checks as hint providers —
-      demonstrated end-to-end with `minimum_sheave_diameter_for_bending_stress` in the
-      example and a round-trip test; `RepairHint.solved(...)` is the binding pattern any
-      pack check applies (isolator deflection, Lewis module, bearing rating, bolt count
-      remain to be wired into their own pack entries).
+      `screen_lifting_lug` now attaches a solved thickness hint to a failing lug check
+      (both limit states run stress ∝ 1/t, so t_req = t·required/SF is exact and
+      thickness is the unambiguous lever); the calc report renders it, and a round-trip
+      test confirms it lands the margin in one solve. The sheave example binds
+      `minimum_sheave_diameter_for_bending_stress` the same way. Remaining pack checks
+      (isolator deflection, Lewis module, bearing rating, bolt count) follow the same
+      `RepairHint.solved(...)` pattern.
 - [ ] 2.2 Monotonicity declarations for hint direction on non-inverse checks —
       `RepairHint.directional(...)` carries a direction without a value; per-check
       monotonicity declarations across the packs are follow-up.

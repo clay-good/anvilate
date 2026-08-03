@@ -1301,6 +1301,40 @@ def test_base_plate_adds_plate_bending_when_details_given():
     assert card.status is CheckStatus.PASS
 
 
+def test_thin_base_plate_bending_hint_repairs_in_one_solve():
+    # A 10 mm plate is too thin for bending: sigma = 3*2.22*75^2/10^2 = 374.8 MPa
+    # vs A36 250 -> SF 0.667, failing the required 2.0. Bearing is unaffected.
+    def _plate(thickness: str) -> BasePlate:
+        return BasePlate(
+            name="col_base",
+            width=_q("300 mm"),
+            depth=_q("300 mm"),
+            axial_load=_q("200 kN"),
+            concrete_strength=_q("25 MPa"),
+            plate_thickness=_q(thickness),
+            cantilever=_q("75 mm"),
+            plate_material="ASTM-A36",
+        )
+
+    card = screen_base_plate(_plate("10 mm"), required_safety_factor=2.0)
+    bending = next(e for e in card.entries if "bending" in e.name)
+    assert bending.status is CheckStatus.FAIL
+    hint = bending.repair_hint
+    assert hint is not None
+    assert hint.parameter == "plate_thickness"
+    assert hint.direction is Direction.INCREASE
+    # SF is quadratic in t, so the fix is t*sqrt(required/SF) = 10*sqrt(2/0.667).
+    assert hint.corrective_value == pytest.approx(17.32, abs=0.05)
+    # The concrete-bearing check, decoupled from thickness, carries no hint.
+    bearing = next(e for e in card.entries if "concrete bearing" in e.name)
+    assert bearing.repair_hint is None
+
+    # Rebuild at the hint thickness: the bending check lands on the required margin.
+    repaired = screen_base_plate(_plate(f"{hint.corrective_value} mm"), required_safety_factor=2.0)
+    repaired_bending = next(e for e in repaired.entries if "bending" in e.name)
+    assert repaired_bending.safety_factor == pytest.approx(2.0, rel=1e-9)
+
+
 def test_base_plate_bending_rejects_partial_plate_details():
     with pytest.raises(ValidationError, match="plate_thickness, cantilever, and"):
         BasePlate(
