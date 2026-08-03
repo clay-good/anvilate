@@ -2324,6 +2324,27 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_base_plate_revision_governing_shift_moves_the_governing_check():
+    namespace = runpy.run_path(str(_EXAMPLES / "base_plate_revision_governing_shift.py"))
+    before = namespace["thin_plate"]()
+    after = namespace["thick_plate"]()
+
+    # The thin plate fails on bending, which governs; the concrete bearing is idle.
+    assert before.status is CheckStatus.FAIL
+    assert before.governing().name == "col_base plate bending"
+
+    # Thickening relaxes bending (∝ 1/t²) far past the fixed concrete bearing, which
+    # now governs — the plate passes.
+    assert after.status is CheckStatus.PASS
+    assert after.governing().name == "col_base concrete bearing"
+
+    # The revision moved the governing check, and governing_shift names both.
+    shift = namespace["governing_shift"]()
+    assert shift is not None
+    assert shift.previous == "col_base plate bending"
+    assert shift.current == "col_base concrete bearing"
+
+
 def test_sheave_repair_from_inverse_example_repairs_in_one_solve():
     namespace = runpy.run_path(str(_EXAMPLES / "sheave_repair_from_inverse.py"))
     before = namespace["screen_on_compact_sheave"]()
