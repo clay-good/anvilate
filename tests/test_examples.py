@@ -2324,6 +2324,23 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_braced_frame_column_seismic_example_tension_reversal_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "braced_frame_column_seismic.py"))
+    card = namespace["screen_column"]()
+    by_name = {e.name: e for e in card.entries}
+    # The column is comfortable in compression...
+    compression = by_name["column axial compression"]
+    assert compression.status is CheckStatus.PASS
+    assert compression.safety_factor == pytest.approx(600.0 / 348.0, rel=1e-6)
+    # ...but the seismic reversal puts the base connection into a net tension that
+    # governs and fails — a demand the gravity cases never produce.
+    tension = by_name["base connection tension (seismic reversal)"]
+    assert tension.status is CheckStatus.FAIL
+    assert tension.safety_factor == pytest.approx(220.0 / 192.0, rel=1e-6)
+    assert "LRFD 7 (-E)" in tension.detail
+    assert card.governing().name == "base connection tension (seismic reversal)"
+
+
 def test_canopy_beam_load_combinations_example_uplift_is_hidden():
     namespace = runpy.run_path(str(_EXAMPLES / "canopy_beam_load_combinations.py"))
     down_combo, down = namespace["gravity_envelope"]()
