@@ -1399,6 +1399,25 @@ def test_overloaded_lug_fails():
     assert card.status is CheckStatus.FAIL
 
 
+def test_over_plated_lug_flags_over_margin_when_a_band_is_given():
+    # A light 20 kN load on the standard 12 mm lug: bearing SF = 250/(20000/(25*12))
+    # = 3.75, net tension SF = 250/(20000/((80-25)*12)) = 8.25 — both comfortably
+    # over a 1.4-2.5 target band, so both flag OVER MARGIN (a pass, not a failure).
+    card = screen_lifting_lug(
+        _lug(load="20 kN"), required_safety_factor=1.4, target_safety_factor=2.5
+    )
+    assert card.status is CheckStatus.OVER_MARGIN
+    assert card.passed  # over-plated is not blocking
+    assert {e.name for e in card.over_margin()} == {
+        "pad_eye net tension",
+        "pad_eye pin bearing",
+    }
+    # Over-margin is opt-in: without a band, the same lug passes clean.
+    plain = screen_lifting_lug(_lug(load="20 kN"), required_safety_factor=1.4)
+    assert plain.status is CheckStatus.PASS
+    assert plain.over_margin() == ()
+
+
 def test_passing_lug_carries_no_repair_hints():
     card = screen_lifting_lug(_lug(), required_safety_factor=1.4)
     assert card.status is CheckStatus.PASS

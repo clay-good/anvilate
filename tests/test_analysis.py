@@ -6935,6 +6935,23 @@ def test_strength_scorecard_ties_stress_material_and_scorecard():
     assert bad.status is CheckStatus.FAIL
 
 
+def test_strength_scorecard_two_sided_band_flags_over_margin():
+    # A generous margin above the declared upper band is OVER_MARGIN, not a silent
+    # pass and not a failure — the band is opt-in.
+    from anvilate.scorecard import CheckStatus
+
+    yield_strength = _q("276 MPa")
+    # 30 MPa working stress -> SF 9.2, above a 2.0-3.0 band -> OVER_MARGIN.
+    over = strength_scorecard(
+        "yield", stress=_q("30 MPa"), allowable=yield_strength, required=2.0, upper=3.0
+    )
+    assert over.status is CheckStatus.OVER_MARGIN
+    assert over.passed and over.over_margin
+    # The same stress with no band declared passes clean.
+    plain = strength_scorecard("yield", stress=_q("30 MPa"), allowable=yield_strength, required=2.0)
+    assert plain.status is CheckStatus.PASS
+
+
 def test_strength_scorecard_not_evaluated_for_missing_property():
     # No silent green: SS-304 has no listed endurance limit, so a fatigue screen
     # against it is NOT_EVALUATED, never a silent pass.

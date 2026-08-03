@@ -343,6 +343,7 @@ def strength_scorecard(
     stress: Quantity,
     allowable: Quantity | None,
     required: float,
+    upper: float | None = None,
 ) -> ScorecardEntry:
     """Screen a computed ``stress`` against a material ``allowable`` strength.
 
@@ -353,6 +354,10 @@ def strength_scorecard(
     unlisted endurance limit — the entry is ``NOT_EVALUATED`` rather than a silent
     pass, honouring the No-silent-green rule. ``stress`` (and ``allowable`` when
     given) must be stresses.
+
+    ``upper`` opts into a two-sided band: a safety factor above it is
+    ``OVER_MARGIN`` — a pass flagged as over-engineered, never blocking. Omit it
+    and high margins pass silently.
     """
     sigma = abs(_require_stress(stress, "stress"))
     if allowable is None:
@@ -360,4 +365,6 @@ def strength_scorecard(
     else:
         strength = _require_stress(allowable, "allowable")
         computed = float("inf") if sigma == 0 else strength / sigma
-    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    return ScorecardEntry.from_safety_factor(
+        name, computed=computed, required=required, upper=upper
+    )

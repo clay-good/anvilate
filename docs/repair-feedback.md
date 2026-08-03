@@ -52,6 +52,12 @@ Omit `upper` and high margins pass silently, exactly as before — the band is
 strictly opt-in. A scorecard whose only blemish is over-margin checks rolls up to
 `OVER_MARGIN` and stays `passed`; a single failure still dominates.
 
+The discipline packs expose the band the same way. `screen_lifting_lug(lug,
+required_safety_factor=1.4, target_safety_factor=2.5)` flags an over-plated lug as
+`OVER_MARGIN` on both limit states; omit `target_safety_factor` and it screens
+one-sided as before. The helper `strength_scorecard(..., upper=...)` carries the
+band into any pack check.
+
 ## Governing check and governing change
 
 `Scorecard.governing()` returns the tightest check — the largest utilization

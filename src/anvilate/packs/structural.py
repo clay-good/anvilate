@@ -1387,6 +1387,7 @@ def screen_lifting_lug(
     lug: LiftingLug,
     *,
     required_safety_factor: float,
+    target_safety_factor: float | None = None,
     materials: MaterialsDatabase | None = None,
 ) -> Scorecard:
     """Screen a :class:`LiftingLug`'s tension and bearing limit states.
@@ -1395,7 +1396,11 @@ def screen_lifting_lug(
     against the lug material's yield at ``required_safety_factor`` (ASME BTH-1).
     A failing check carries a typed repair hint: because both limit states run
     stress ∝ 1/t, the thickness that reaches the required margin is t·required/SF,
-    solved directly rather than searched. ``materials`` defaults to the bundled
+    solved directly rather than searched.
+
+    ``target_safety_factor`` opts into a two-sided band: a check running above it
+    is flagged ``OVER_MARGIN`` — a pass, never blocking — so an over-plated lug is
+    as visible as an under-plated one. ``materials`` defaults to the bundled
     database.
     """
     materials = materials or default_materials_db()
@@ -1435,12 +1440,14 @@ def screen_lifting_lug(
         stress=net_tension,
         allowable=yield_strength,
         required=required_safety_factor,
+        upper=target_safety_factor,
     ).model_copy(update={"reference": _CLAUSE_LUG, "derivation": tension_derivation})
     bearing_entry = strength_scorecard(
         f"{lug.name} pin bearing",
         stress=bearing,
         allowable=yield_strength,
         required=required_safety_factor,
+        upper=target_safety_factor,
     ).model_copy(update={"reference": _CLAUSE_LUG, "derivation": bearing_derivation})
     return Scorecard(
         entries=(
