@@ -22,18 +22,119 @@ from .derivation import Derivation
 
 __all__ = [
     "CheckStatus",
+    "Direction",
+    "RepairHint",
+    "GoverningChange",
     "ScorecardEntry",
     "Scorecard",
 ]
 
 
 class CheckStatus(StrEnum):
-    """A check's outcome. ``NOT_EVALUATED`` is never silently treated as a pass —
-    a check that could not run is reported as such."""
+    """A check's outcome.
+
+    ``NOT_EVALUATED`` is never silently treated as a pass — a check that could
+    not run is reported as such. ``OVER_MARGIN`` is a passing check whose margin
+    ran past a declared upper band: acceptable, never blocking, but flagged so an
+    over-engineered candidate is as visible as a failing one.
+    """
 
     PASS = "pass"
     FAIL = "fail"
+    OVER_MARGIN = "over_margin"
     NOT_EVALUATED = "not_evaluated"
+
+
+class Direction(StrEnum):
+    """Which way a parameter has to move to improve a check's margin."""
+
+    INCREASE = "increase"
+    DECREASE = "decrease"
+
+
+class RepairHint(BaseModel):
+    """How to move a failing check back into bounds.
+
+    A failed check computes this deterministically — never an LLM guess. It names
+    the governing spec ``parameter`` by its stable name and the ``direction`` that
+    improves the margin. When a paired design inverse exists, ``corrective_value``
+    (in ``unit``) is the value of that parameter which satisfies the check at the
+    required margin — turning repair from a search into a single solve. Without an
+    inverse the value is ``None``: a direction is still honest, an invented number
+    is not. ``provenance`` records where the hint came from (the inverse function,
+    or a monotonicity declaration).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    parameter: str
+    direction: Direction
+    corrective_value: float | None = None
+    unit: str | None = None
+    provenance: str | None = None
+
+    @classmethod
+    def solved(
+        cls,
+        parameter: str,
+        *,
+        direction: Direction,
+        value: float,
+        unit: str | None = None,
+        provenance: str | None = None,
+    ) -> RepairHint:
+        """A hint whose corrective value a design inverse supplied."""
+        return cls(
+            parameter=parameter,
+            direction=direction,
+            corrective_value=value,
+            unit=unit,
+            provenance=provenance,
+        )
+
+    @classmethod
+    def directional(
+        cls,
+        parameter: str,
+        *,
+        direction: Direction,
+        provenance: str | None = None,
+    ) -> RepairHint:
+        """A hint that names the parameter and direction but not a value.
+
+        For a check that is monotonic in a parameter but has no paired inverse to
+        solve for the corrective value.
+        """
+        return cls(parameter=parameter, direction=direction, provenance=provenance)
+
+    def __str__(self) -> str:
+        if self.corrective_value is None:
+            return f"{self.direction.value} {self.parameter}"
+        unit = f" {self.unit}" if self.unit else ""
+        return f"{self.direction.value} {self.parameter} to {self.corrective_value:.4g}{unit}"
+
+
+class GoverningChange(BaseModel):
+    """A shift in which check governs, reported across a revalidation.
+
+    When a revision moves the tightest check from one to another — a thicker
+    flange handing governance from bending to bolt bearing — the reviewer needs
+    to know the reference point moved, not just that the numbers changed.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    previous: str
+    current: str
+    previous_utilization: float
+    current_utilization: float
+
+    def __str__(self) -> str:
+        return (
+            f"governing check changed: '{self.previous}' "
+            f"(util {self.previous_utilization:.2f}) → '{self.current}' "
+            f"(util {self.current_utilization:.2f})"
+        )
 
 
 class ScorecardEntry(BaseModel):
@@ -50,6 +151,13 @@ class ScorecardEntry(BaseModel):
     # prose. Both are None for a check that did not come from a safety factor.
     safety_factor: float | None = None
     required_safety_factor: float | None = None
+    # The top of the target safety-factor band, when the spec declares one. A
+    # check that runs above it is OVER_MARGIN — passing, but flagged as
+    # over-engineered. ``None`` leaves the check one-sided (a minimum only).
+    upper_safety_factor: float | None = None
+    # How to move a failing check back into bounds, when the check can say. Set
+    # only on FAIL entries; ``None`` otherwise.
+    repair_hint: RepairHint | None = None
     # The worked calculation behind the verdict, when the check declares one. It
     # travels with the entry so a report renders the real formula and values
     # rather than a reconstruction.
@@ -71,13 +179,22 @@ class ScorecardEntry(BaseModel):
 
     @property
     def passed(self) -> bool:
-        """True only when the check actually ran and passed — never for a check
-        that could not be evaluated."""
-        return self.status is CheckStatus.PASS
+        """True when the check ran and met its minimum requirement.
+
+        Covers both a clean ``PASS`` and an ``OVER_MARGIN`` check — over-margin
+        met the minimum, it simply ran past the target band. Never true for a
+        ``FAIL`` or a check that could not be evaluated."""
+        return self.status in (CheckStatus.PASS, CheckStatus.OVER_MARGIN)
+
+    @property
+    def over_margin(self) -> bool:
+        """Whether the check passed but ran past its declared upper band."""
+        return self.status is CheckStatus.OVER_MARGIN
 
     @property
     def evaluated(self) -> bool:
-        """Whether the check ran at all (pass or fail, not ``NOT_EVALUATED``)."""
+        """Whether the check ran at all (pass, fail, or over-margin — not
+        ``NOT_EVALUATED``)."""
         return self.status is not CheckStatus.NOT_EVALUATED
 
     @classmethod
@@ -87,6 +204,8 @@ class ScorecardEntry(BaseModel):
         *,
         computed: float | None,
         required: float,
+        upper: float | None = None,
+        repair_hint: RepairHint | None = None,
     ) -> ScorecardEntry:
         """Build an entry from a computed safety factor against a required minimum.
 
@@ -94,6 +213,14 @@ class ScorecardEntry(BaseModel):
         material property was missing) — the entry is ``NOT_EVALUATED``, never a
         silent pass. Otherwise it is ``PASS`` when ``computed >= required`` and
         ``FAIL`` below.
+
+        ``upper`` opts the check into a two-sided band: a computed factor above it
+        is ``OVER_MARGIN`` — still a pass, but flagged as over-engineered with the
+        excess stated. Omit it and high margins pass silently, as before.
+
+        ``repair_hint`` travels with a ``FAIL`` entry to say which parameter to
+        move and, when a design inverse supplied it, to what value. It is dropped
+        on a passing entry — a hint only belongs on a check that needs one.
         """
         if computed is None:
             return cls(
@@ -101,16 +228,26 @@ class ScorecardEntry(BaseModel):
                 status=CheckStatus.NOT_EVALUATED,
                 detail="not evaluated — safety factor unavailable",
             )
-        if computed >= required:
-            status = CheckStatus.PASS
-        else:
+        if computed < required:
             status = CheckStatus.FAIL
+            detail = f"safety factor {computed:.2f} vs required minimum {required:.2f}"
+        elif upper is not None and computed > upper:
+            status = CheckStatus.OVER_MARGIN
+            detail = (
+                f"safety factor {computed:.2f} exceeds target band "
+                f"{required:.2f}–{upper:.2f} by {computed - upper:.2f} — over-engineered"
+            )
+        else:
+            status = CheckStatus.PASS
+            detail = f"safety factor {computed:.2f} vs required minimum {required:.2f}"
         return cls(
             name=name,
             status=status,
-            detail=f"safety factor {computed:.2f} vs required minimum {required:.2f}",
+            detail=detail,
             safety_factor=computed,
             required_safety_factor=required,
+            upper_safety_factor=upper,
+            repair_hint=repair_hint if status is CheckStatus.FAIL else None,
         )
 
     def __str__(self) -> str:
@@ -123,8 +260,10 @@ class Scorecard(BaseModel):
 
     The roll-up honours No-silent-green: the scorecard :attr:`status` is ``FAIL``
     if any check failed, else ``NOT_EVALUATED`` if any check could not run (or
-    there are no checks at all), and only ``PASS`` when every check ran and
-    passed. So :attr:`passed` is never true while a check is unevaluated.
+    there are no checks at all), else ``OVER_MARGIN`` if any check passed above
+    its band, and only ``PASS`` when every check ran and passed cleanly. So
+    :attr:`passed` is never true while a check is unevaluated, and an
+    over-engineered card is visible without being blocked.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -137,16 +276,30 @@ class Scorecard(BaseModel):
             return CheckStatus.FAIL
         if not self.entries or any(e.status is CheckStatus.NOT_EVALUATED for e in self.entries):
             return CheckStatus.NOT_EVALUATED
+        if any(e.status is CheckStatus.OVER_MARGIN for e in self.entries):
+            return CheckStatus.OVER_MARGIN
         return CheckStatus.PASS
 
     @property
     def passed(self) -> bool:
-        """True only when there is at least one check and every one ran and passed."""
-        return self.status is CheckStatus.PASS
+        """True when there is at least one check and every one met its minimum.
+
+        Includes a card whose only blemish is over-margin checks — over-margin is
+        a warning, not a blocker. Never true while a check failed or could not run.
+        """
+        return self.status in (CheckStatus.PASS, CheckStatus.OVER_MARGIN)
 
     def failures(self) -> tuple[ScorecardEntry, ...]:
         """The checks that ran and failed — the blocking issues."""
         return tuple(e for e in self.entries if e.status is CheckStatus.FAIL)
+
+    def over_margin(self) -> tuple[ScorecardEntry, ...]:
+        """The checks that passed but ran past their band — the over-engineered."""
+        return tuple(e for e in self.entries if e.status is CheckStatus.OVER_MARGIN)
+
+    def repair_hints(self) -> tuple[RepairHint, ...]:
+        """The repair hints carried by failing checks — the actionable feedback."""
+        return tuple(e.repair_hint for e in self.entries if e.repair_hint is not None)
 
     def governing(self) -> ScorecardEntry | None:
         """The check running closest to (or furthest past) its limit.
@@ -159,6 +312,25 @@ class Scorecard(BaseModel):
         if not ranked:
             return None
         return max(ranked, key=lambda e: e.utilization)
+
+    def governing_shift(self, previous: Scorecard) -> GoverningChange | None:
+        """How the governing check moved since ``previous``, or ``None``.
+
+        ``None`` when either card has no check carrying a safety factor, or when
+        the same check still governs. Otherwise a :class:`GoverningChange` naming
+        both — so a revalidation states that the reference point moved rather than
+        leaving the reviewer to notice.
+        """
+        before = previous.governing()
+        after = self.governing()
+        if before is None or after is None or before.name == after.name:
+            return None
+        return GoverningChange(
+            previous=before.name,
+            current=after.name,
+            previous_utilization=before.utilization,
+            current_utilization=after.utilization,
+        )
 
     def not_evaluated(self) -> tuple[ScorecardEntry, ...]:
         """The checks that could not run — the gaps, never silently passed."""

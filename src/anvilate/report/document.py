@@ -51,6 +51,7 @@ SCREENING_DISCLAIMER = (
 _STATUS_LABEL = {
     CheckStatus.PASS: "PASS",
     CheckStatus.FAIL: "FAIL",
+    CheckStatus.OVER_MARGIN: "OVER MARGIN",
     CheckStatus.NOT_EVALUATED: "NOT EVALUATED",
 }
 
@@ -171,6 +172,8 @@ class CalculationReport(BaseModel):
                         f"  ({item.description})"
                     )
             out.append(f"  {section.entry.detail}")
+            if section.entry.repair_hint is not None:
+                out.append(f"  repair: {section.entry.repair_hint}")
             if section.citation:
                 out.append(f"  source: {section.citation}")
         out.append("")
@@ -298,6 +301,8 @@ class CalculationReport(BaseModel):
                     )
                 out.append("</table>")
         out.append(f'<p class="detail">{escape(section.entry.detail)}</p>')
+        if section.entry.repair_hint is not None:
+            out.append(f'<p class="repair">Repair: {escape(str(section.entry.repair_hint))}</p>')
         if section.citation:
             out.append(f'<p class="source">Source: {escape(section.citation)}</p>')
         out.append("</section>")
@@ -352,6 +357,8 @@ section.check { page-break-inside: avoid; }
 .status { font-size: 0.8em; letter-spacing: 0.08em; }
 .fail .status { color: #a00; }
 .pass .status { color: #060; }
+.over_margin .status { color: #b60; }
+.repair { font-size: 0.9em; color: #a00; }
 .fallback { font-style: italic; color: #666; }
 .source { font-size: 0.9em; color: #444; }
 tr.governing td { font-weight: bold; }

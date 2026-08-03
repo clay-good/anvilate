@@ -2320,3 +2320,36 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     # Pin bearing at 1.50 against a required 2.00 is what has to change.
     assert report.governing().name == "padeye pin bearing"
     assert report.status is CheckStatus.FAIL
+
+
+def test_sheave_repair_from_inverse_example_repairs_in_one_solve():
+    namespace = runpy.run_path(str(_EXAMPLES / "sheave_repair_from_inverse.py"))
+    before = namespace["screen_on_compact_sheave"]()
+    by_name = {e.name: e for e in before.entries}
+
+    # The rope is over-heavy for pure tension: a passing OVER_MARGIN warning, not
+    # a failure and not a silent green.
+    static = by_name["static rope tension vs breaking strength"]
+    assert static.status is CheckStatus.OVER_MARGIN
+    assert static.passed and static.over_margin
+
+    # The small sheave fails the wire bending, and the failing entry carries the
+    # sheave diameter that would fix it — a solved hint, not a bare direction.
+    bending = by_name["wire bending over the sheave"]
+    assert bending.status is CheckStatus.FAIL
+    assert "safety factor 0.74" in bending.detail
+    hint = bending.repair_hint
+    assert hint is not None
+    assert hint.parameter == "sheave_diameter"
+    assert hint.direction.value == "increase"
+    assert hint.corrective_value == pytest.approx(509.3, abs=0.1)
+    assert before.status is CheckStatus.FAIL
+
+    # Applying that one value — no iteration — lands the bending check at exactly
+    # the required margin, and the assembly is no longer blocked.
+    after = namespace["repaired_scorecard"]()
+    repaired_bending = {e.name: e for e in after.entries}["wire bending over the sheave"]
+    assert repaired_bending.status is CheckStatus.PASS
+    assert "safety factor 1.50" in repaired_bending.detail
+    assert after.status is CheckStatus.OVER_MARGIN  # only the over-heavy rope remains
+    assert after.passed

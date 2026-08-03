@@ -15,7 +15,7 @@ from anvilate.report import (
     SymbolValue,
     report_from_record,
 )
-from anvilate.scorecard import CheckStatus, ScorecardEntry
+from anvilate.scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
 from anvilate.units import Quantity, UnitSystem
 
 BENDING = Derivation(
@@ -206,6 +206,53 @@ def test_governing_check_is_the_tightest_not_merely_the_lowest_factor():
         ),
     )
     assert report.governing().name == "rigging"
+
+
+def test_report_renders_over_margin_and_repair_hint():
+    report = CalculationReport(
+        title="Over-engineered bracket",
+        sections=(
+            ReportSection(
+                entry=ScorecardEntry.from_safety_factor(
+                    "bending", computed=8.7, required=2.0, upper=3.0
+                )
+            ),
+            ReportSection(
+                entry=ScorecardEntry.from_safety_factor(
+                    "bolt bearing",
+                    computed=0.9,
+                    required=1.5,
+                    repair_hint=RepairHint.solved(
+                        "bolt_diameter", direction=Direction.INCREASE, value=16.0, unit="mm"
+                    ),
+                )
+            ),
+        ),
+    )
+    text = report.to_text()
+    assert "OVER MARGIN  bending" in text
+    assert "over-engineered" in text  # the band excess is surfaced, not hidden
+    assert "repair: increase bolt_diameter to 16 mm" in text
+    # A failing check keeps the card blocked; over-margin alone would not.
+    assert report.status is CheckStatus.FAIL
+    html = report.to_html()
+    assert "OVER MARGIN" in html
+    assert 'class="repair"' in html
+
+
+def test_over_margin_only_report_is_not_blocked():
+    report = CalculationReport(
+        title="Comfortably clear",
+        sections=(
+            ReportSection(
+                entry=ScorecardEntry.from_safety_factor(
+                    "bending", computed=8.7, required=2.0, upper=3.0
+                )
+            ),
+        ),
+    )
+    assert report.status is CheckStatus.OVER_MARGIN
+    assert "OVER MARGIN" in report.to_text()
 
 
 def test_check_without_derivation_falls_back_honestly():

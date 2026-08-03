@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+from anvilate.scorecard import (
+    CheckStatus,
+    Direction,
+    GoverningChange,
+    RepairHint,
+    Scorecard,
+    ScorecardEntry,
+)
 
 
 def test_safety_factor_pass_and_fail():
@@ -85,3 +92,191 @@ def test_empty_scorecard_is_not_a_silent_pass():
     card = Scorecard()
     assert card.status is CheckStatus.NOT_EVALUATED
     assert not card.passed
+
+
+# -- two-sided acceptance bands ------------------------------------------------
+
+
+def test_over_margin_is_a_pass_with_a_warning_not_a_failure():
+    # Target band 2.0-3.0, computed 8.7: passes the minimum but runs over the top.
+    entry = ScorecardEntry.from_safety_factor("bracket", computed=8.7, required=2.0, upper=3.0)
+    assert entry.status is CheckStatus.OVER_MARGIN
+    assert entry.passed  # met the minimum — over-margin is not a failure
+    assert entry.over_margin
+    assert entry.evaluated
+    assert "2.00" in entry.detail and "3.00" in entry.detail  # the band is stated
+    assert "5.70" in entry.detail  # the excess is quantified (8.7 - 3.0)
+
+
+def test_band_is_opt_in_high_margin_without_a_band_is_silent():
+    # No upper declared: a high margin passes clean, no warning noise.
+    entry = ScorecardEntry.from_safety_factor("bracket", computed=8.7, required=2.0)
+    assert entry.status is CheckStatus.PASS
+    assert not entry.over_margin
+
+
+def test_within_band_upper_bound_is_a_clean_pass():
+    at_top = ScorecardEntry.from_safety_factor("bracket", computed=3.0, required=2.0, upper=3.0)
+    assert at_top.status is CheckStatus.PASS  # exactly at the top is still in band
+
+
+def test_below_required_fails_even_with_a_band():
+    entry = ScorecardEntry.from_safety_factor("bracket", computed=1.4, required=2.0, upper=3.0)
+    assert entry.status is CheckStatus.FAIL
+
+
+def test_scorecard_rolls_up_over_margin_without_blocking():
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("a", computed=2.5, required=2.0),
+            ScorecardEntry.from_safety_factor("b", computed=8.7, required=2.0, upper=3.0),
+        )
+    )
+    assert card.status is CheckStatus.OVER_MARGIN
+    assert card.passed  # over-margin never blocks export
+    assert [e.name for e in card.over_margin()] == ["b"]
+
+
+def test_a_failure_dominates_an_over_margin():
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("a", computed=1.2, required=2.0),
+            ScorecardEntry.from_safety_factor("b", computed=8.7, required=2.0, upper=3.0),
+        )
+    )
+    assert card.status is CheckStatus.FAIL
+    assert not card.passed
+
+
+# -- typed repair hints --------------------------------------------------------
+
+
+def test_repair_hint_only_rides_on_a_failing_check():
+    hint = RepairHint.solved("D", direction=Direction.INCREASE, value=600.0, unit="mm")
+    failed = ScorecardEntry.from_safety_factor(
+        "sheave bending", computed=0.9, required=1.5, repair_hint=hint
+    )
+    assert failed.status is CheckStatus.FAIL
+    assert failed.repair_hint is hint
+    # A hint has no place on a passing check even if one is offered.
+    passing = ScorecardEntry.from_safety_factor(
+        "sheave bending", computed=2.0, required=1.5, repair_hint=hint
+    )
+    assert passing.repair_hint is None
+
+
+def test_repair_hint_renders_direction_parameter_and_value():
+    solved = RepairHint.solved("D", direction=Direction.INCREASE, value=612.5, unit="mm")
+    assert str(solved) == "increase D to 612.5 mm"
+    # A directional hint names the parameter and way, and omits an invented value.
+    directional = RepairHint.directional("t", direction=Direction.INCREASE)
+    assert directional.corrective_value is None
+    assert str(directional) == "increase t"
+
+
+def test_scorecard_collects_repair_hints_from_its_failures():
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("a", computed=2.0, required=1.5),
+            ScorecardEntry.from_safety_factor(
+                "b",
+                computed=0.8,
+                required=1.5,
+                repair_hint=RepairHint.directional("t", direction=Direction.INCREASE),
+            ),
+        )
+    )
+    hints = card.repair_hints()
+    assert [h.parameter for h in hints] == ["t"]
+
+
+def test_repair_hint_corrective_value_round_trips_through_the_inverse():
+    # The hint's value must actually satisfy the forward check at the required
+    # margin — a real design inverse, solved once, not searched.
+    from anvilate.analysis.wire_rope import (
+        minimum_sheave_diameter_for_bending_stress,
+        wire_rope_bending_stress,
+    )
+    from anvilate.units import Quantity
+
+    rope_modulus = Quantity(magnitude=83.0, unit="GPa")
+    wire_diameter = Quantity(magnitude=1.2, unit="mm")
+    allowable = Quantity(magnitude=300.0, unit="MPa")
+    required_sf = 1.5
+
+    def safety_factor(sheave: Quantity) -> float:
+        stress = wire_rope_bending_stress(
+            wire_diameter=wire_diameter,
+            sheave_diameter=sheave,
+            rope_modulus=rope_modulus,
+        )
+        return allowable.to("MPa").magnitude / stress.to("MPa").magnitude
+
+    # An undersized sheave: bending stress too high, safety factor below 1.5.
+    sf_small = safety_factor(Quantity(magnitude=250.0, unit="mm"))
+    assert sf_small < required_sf
+
+    # The inverse solves for the sheave diameter that just meets allowable/SF.
+    derated = Quantity(magnitude=allowable.magnitude / required_sf, unit="MPa")
+    d_fix = minimum_sheave_diameter_for_bending_stress(
+        wire_diameter=wire_diameter,
+        rope_modulus=rope_modulus,
+        allowable_bending_stress=derated,
+    )
+    hint = RepairHint.solved(
+        "sheave_diameter",
+        direction=Direction.INCREASE,
+        value=d_fix.to("mm").magnitude,
+        unit="mm",
+        provenance="minimum_sheave_diameter_for_bending_stress",
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "sheave bending", computed=sf_small, required=required_sf, repair_hint=hint
+    )
+    assert entry.status is CheckStatus.FAIL
+
+    # Applying the corrective value satisfies the check at exactly the margin.
+    sf_fixed = safety_factor(Quantity(magnitude=hint.corrective_value, unit="mm"))
+    assert sf_fixed >= required_sf
+    assert abs(sf_fixed - required_sf) < 1e-6
+
+
+# -- governing check identification and change ---------------------------------
+
+
+def _sf(name: str, computed: float, required: float) -> ScorecardEntry:
+    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+
+
+def test_governing_is_the_tightest_utilization():
+    card = Scorecard(
+        entries=(
+            _sf("bending", 3.0, 1.5),  # util 0.50
+            _sf("bearing", 1.8, 1.5),  # util 0.83 — tightest
+            _sf("shear", 4.0, 1.5),  # util 0.375
+        )
+    )
+    assert card.governing().name == "bearing"
+
+
+def test_governing_shift_names_previous_and_new():
+    before = Scorecard(entries=(_sf("bending", 1.6, 1.5), _sf("bearing", 3.0, 1.5)))
+    # A thicker flange relaxes bending; bearing now governs.
+    after = Scorecard(entries=(_sf("bending", 3.2, 1.5), _sf("bearing", 1.7, 1.5)))
+    shift = after.governing_shift(before)
+    assert isinstance(shift, GoverningChange)
+    assert shift.previous == "bending"
+    assert shift.current == "bearing"
+    assert "bending" in str(shift) and "bearing" in str(shift)
+
+
+def test_governing_shift_is_none_when_the_same_check_still_governs():
+    before = Scorecard(entries=(_sf("bending", 1.6, 1.5), _sf("bearing", 3.0, 1.5)))
+    after = Scorecard(entries=(_sf("bending", 1.55, 1.5), _sf("bearing", 3.1, 1.5)))
+    assert after.governing_shift(before) is None
+
+
+def test_governing_shift_is_none_without_a_safety_factor_check():
+    before = Scorecard(entries=(_entry("note", CheckStatus.PASS),))
+    after = Scorecard(entries=(_sf("bending", 1.6, 1.5),))
+    assert after.governing_shift(before) is None

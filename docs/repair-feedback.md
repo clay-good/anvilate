@@ -1,0 +1,74 @@
+# Typed repair feedback
+
+A scorecard says whether each check passed. Typed repair feedback says what to do
+about the ones that did not — and flags the ones that passed by too much. All of
+it is computed deterministically from the analysis library, never guessed.
+
+Three pieces, all opt-in and backward compatible:
+
+## Repair hints on a failing check
+
+A failing check can carry a `RepairHint`: the governing parameter (by its stable
+name), the direction that improves the margin, and — when the check has a paired
+design inverse — the exact value that lands it at the required margin.
+
+```python
+from anvilate.scorecard import Direction, RepairHint, ScorecardEntry
+
+# A design inverse solved for the sheave diameter that meets the allowable at SF 1.5.
+hint = RepairHint.solved(
+    "sheave_diameter", direction=Direction.INCREASE, value=509.3, unit="mm",
+    provenance="minimum_sheave_diameter_for_bending_stress",
+)
+entry = ScorecardEntry.from_safety_factor(
+    "wire bending over the sheave", computed=0.74, required=1.5, repair_hint=hint,
+)
+print(entry.repair_hint)   # increase sheave_diameter to 509.3 mm
+```
+
+When no inverse exists but the check is monotonic in a known parameter, use
+`RepairHint.directional(...)`: it names the parameter and direction and omits the
+value rather than inventing one. A hint only rides on a `FAIL` entry — it is
+dropped from a passing check even if you pass one.
+
+Repair turns from a search into a single solve: apply `hint.corrective_value` and
+the forward check lands at exactly the required margin. See
+[`examples/sheave_repair_from_inverse.py`](../examples/sheave_repair_from_inverse.py).
+
+## Two-sided acceptance bands
+
+`from_safety_factor` takes an optional `upper` bound. A check above it is
+`OVER_MARGIN` — a pass, never a failure, never blocking export — with the excess
+quantified so an over-engineered candidate is as visible as a failing one:
+
+```python
+entry = ScorecardEntry.from_safety_factor("bracket", computed=8.7, required=2.0, upper=3.0)
+entry.status        # CheckStatus.OVER_MARGIN
+entry.passed        # True — it met the minimum
+entry.over_margin   # True — it ran past the band
+```
+
+Omit `upper` and high margins pass silently, exactly as before — the band is
+strictly opt-in. A scorecard whose only blemish is over-margin checks rolls up to
+`OVER_MARGIN` and stays `passed`; a single failure still dominates.
+
+## Governing check and governing change
+
+`Scorecard.governing()` returns the tightest check — the largest utilization
+(required ÷ computed), the one a reviewer reads first. Across a revalidation,
+`governing_shift(previous)` reports when the reference point moved:
+
+```python
+shift = after.governing_shift(before)
+if shift is not None:
+    print(shift)   # governing check changed: 'bending' (util 0.94) → 'bolt bearing' (util 0.88)
+```
+
+It returns `None` when the same check still governs or when neither card carries a
+safety-factor check — a quiet no-news, not a false alarm.
+
+## In a report
+
+`CalculationReport` renders all three: an over-margin check shows its band and
+excess, a failing check prints its repair line, and the margin summary names the
+governing check. See [calculation reports](calculation-reports.md).
