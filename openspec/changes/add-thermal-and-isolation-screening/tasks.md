@@ -9,9 +9,11 @@
       spreading resistance is a follow-up.
 - [~] 1.2 Fin efficiency — `fin_efficiency` = tanh(mL)/(mL) with m = √(hP/kA_c); the
       fin-array sizing design inverse is a follow-up.
-- [ ] 1.3 Natural/forced convection correlations with enforced validity ranges — the
-      coefficient h is caller-supplied for now; bundling correlations (with validity
-      ranges → not-evaluated on out-of-range) is a follow-up.
+- [~] 1.3 Convection correlations with enforced validity ranges —
+      `flat_plate_forced_convection_coefficient` (Incropera laminar external flow,
+      Nu = 0.664·Re^½·Pr^⅓ → h) returns ``None`` above the Re ≈ 5×10⁵ laminar limit
+      rather than extrapolating (not evaluated, not a wrong number). Natural-convection
+      and turbulent correlations are follow-ups.
 - [x] 1.4 Junction/surface temperature margin — `junction_temperature_scorecard` screens
       the rise ΔT = Q·R against an allowable rise budget (the rated junction limit over
       the ambient, a temperature difference), reporting the rise vs allowable; the

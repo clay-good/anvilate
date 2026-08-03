@@ -41,9 +41,13 @@ __all__ = [
     "temperature_rise",
     "fin_efficiency",
     "junction_temperature_scorecard",
+    "flat_plate_forced_convection_coefficient",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
+# The laminar–turbulent transition Reynolds number for external flow over a flat
+# plate (Incropera). Above it the laminar correlation no longer holds.
+_FLAT_PLATE_LAMINAR_RE = 5.0e5
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
@@ -702,3 +706,48 @@ def junction_temperature_scorecard(
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
     detail = f"junction rise {rise:.1f} K vs {allowable:.1f} K allowable"
     return entry.model_copy(update={"detail": detail})
+
+
+def flat_plate_forced_convection_coefficient(
+    *,
+    fluid_velocity: Quantity,
+    plate_length: Quantity,
+    thermal_conductivity: Quantity,
+    kinematic_viscosity: Quantity,
+    prandtl_number: float,
+) -> Quantity | None:
+    """The average convection coefficient h for laminar flow over a flat plate.
+
+    The Incropera correlation for external forced convection: with the Reynolds
+    number Re_L = V·L/ν and the average Nusselt number Nu = 0.664·Re_L^(1/2)·Pr^(1/3),
+    the coefficient is h = Nu·k/L. ``fluid_velocity`` V is the free-stream speed,
+    ``plate_length`` L the plate length in the flow direction, ``thermal_conductivity``
+    k and ``kinematic_viscosity`` ν the fluid's properties (caller-supplied — Anvilate
+    evaluates the correlation, it does not carry a fluid-property database), and
+    ``prandtl_number`` Pr its dimensionless Prandtl number.
+
+    Returns ``None`` when Re_L exceeds the laminar limit (~5×10⁵): the flow is
+    turbulent and this correlation would extrapolate, so it reports "not evaluated"
+    rather than a wrong number — feed a turbulent correlation instead. Otherwise
+    returns h in W/(m²·K).
+    """
+    _require(fluid_velocity, "[velocity]", "fluid_velocity")
+    _require(plate_length, "[length]", "plate_length")
+    _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
+    _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
+    v = fluid_velocity.to("m/s").magnitude
+    length_m = plate_length.to("m").magnitude
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    if min(v, length_m, k, nu) <= 0:
+        raise ValueError(
+            "fluid_velocity, plate_length, thermal_conductivity, and kinematic_viscosity "
+            "must be positive"
+        )
+    if prandtl_number <= 0:
+        raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
+    reynolds = v * length_m / nu
+    if reynolds > _FLAT_PLATE_LAMINAR_RE:
+        return None  # turbulent: out of the laminar correlation's validity range
+    nusselt = 0.664 * reynolds**0.5 * prandtl_number ** (1.0 / 3.0)
+    return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")

@@ -10517,6 +10517,35 @@ def test_junction_temperature_scorecard_screens_the_rise_against_a_budget():
         )
 
 
+def test_flat_plate_forced_convection_coefficient_and_validity_range():
+    from anvilate.analysis import (
+        convection_thermal_resistance,
+        flat_plate_forced_convection_coefficient,
+    )
+
+    air = {
+        "thermal_conductivity": _q("0.026 W/(m*K)"),
+        "kinematic_viscosity": _q("1.6e-5 m**2/s"),
+        "prandtl_number": 0.71,
+    }
+    # 5 m/s air over a 0.1 m board: Re = 31,250 (laminar), h ≈ 27 W/m²·K.
+    h = flat_plate_forced_convection_coefficient(
+        fluid_velocity=_q("5 m/s"), plate_length=_q("0.1 m"), **air
+    )
+    assert h is not None
+    re = 5.0 * 0.1 / 1.6e-5
+    nu = 0.664 * re**0.5 * 0.71 ** (1.0 / 3.0)
+    assert h.to("W/(m**2*K)").magnitude == pytest.approx(nu * 0.026 / 0.1, rel=1e-9)
+    # The computed coefficient feeds the convection resistance directly.
+    assert convection_thermal_resistance(area=_q("0.01 m**2"), heat_transfer_coefficient=h)
+
+    # Out of the laminar range (Re > 5e5): not evaluated, not extrapolated.
+    turbulent = flat_plate_forced_convection_coefficient(
+        fluid_velocity=_q("100 m/s"), plate_length=_q("1 m"), **air
+    )
+    assert turbulent is None
+
+
 def test_thermal_resistance_rejects_bad_dimensions():
     from anvilate.analysis import (
         conduction_thermal_resistance,
