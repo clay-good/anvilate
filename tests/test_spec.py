@@ -120,6 +120,46 @@ def test_remote_mass_load_case_requires_a_mass():
         LoadCase(name="motor", kind=LoadKind.REMOTE_MASS, applied_to="bore")
 
 
+def test_combination_loads_aggregates_classified_cases_for_the_engine():
+    from anvilate.loads import LoadNature, asce7_lrfd_basic
+
+    def _case(name, nature, force):
+        return LoadCase(
+            name=name,
+            kind=LoadKind.STATIC,
+            applied_to="deck",
+            force=Quantity.parse(force),
+            nature=nature,
+        )
+
+    spec = golden_bracket().model_copy(
+        update={
+            "load_cases": [
+                _case("self_weight", LoadNature.DEAD, "10 kN"),
+                _case("dead_equipment", LoadNature.DEAD, "10 kN"),  # summed with the above
+                _case("occupancy", LoadNature.LIVE, "50 kN"),
+                _case("wind_uplift", LoadNature.WIND, "-40 kN"),
+                # An unclassified case is not part of any combination.
+                LoadCase(
+                    name="handling",
+                    kind=LoadKind.STATIC,
+                    applied_to="tip",
+                    force=Quantity.parse("5 kN"),
+                ),
+            ]
+        }
+    )
+    loads = spec.combination_loads()
+    assert loads[LoadNature.DEAD] == pytest.approx(20_000.0)  # 10 + 10 kN, in N
+    assert loads[LoadNature.LIVE] == pytest.approx(50_000.0)
+    assert loads[LoadNature.WIND] == pytest.approx(-40_000.0)  # sign carries through
+    assert LoadNature.SNOW not in loads  # not declared
+
+    # The mapping feeds the combination engine directly — the whole point.
+    governing, _ = asce7_lrfd_basic().governing(loads)
+    assert governing.name.startswith("LRFD")
+
+
 def test_load_case_nature_is_optional_and_classifies_by_asce_symbol():
     from anvilate.loads import LoadNature
 

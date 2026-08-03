@@ -531,6 +531,24 @@ class DesignSpec(_Base):
     # Interface contracts this part publishes for others to import against.
     exports: list[InterfaceContract] = Field(default_factory=list)
 
+    def combination_loads(self) -> dict[LoadNature, float]:
+        """Aggregate the classified load cases into a per-nature demand mapping (N).
+
+        Sums the force magnitude of every load case that declares a ``nature`` into
+        a ``{LoadNature: newtons}`` mapping — the input the ASCE 7 combination
+        generators in :mod:`anvilate.loads` consume. A case with no ``nature`` (or no
+        force, such as a remote-mass case) is skipped: only classified force cases
+        enter a load combination. Force signs carry through, so a case tagged as a
+        wind uplift contributes a negative magnitude and drives the counteracting
+        combinations.
+        """
+        loads: dict[LoadNature, float] = {}
+        for case in self.load_cases:
+            if case.nature is None or case.force is None:
+                continue
+            loads[case.nature] = loads.get(case.nature, 0.0) + case.force.to("N").magnitude
+        return loads
+
     def analyze_chains(self) -> list[ChainAnalysis]:
         """Analyze every declared stack-up chain against this spec's dimensions.
 
