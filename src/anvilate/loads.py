@@ -8,14 +8,12 @@ uplift case where wind counteracts dead load can govern a connection the
 gravity cases never stress).
 
 This module carries the combination vocabulary and generates the ASCE 7-22 basic
-combination sets (§2.3.1 strength / §2.4.1 allowable stress). The combination
-expressions are short, universally republished equation lists; deriving the load
-*magnitudes* (wind, seismic, snow from maps and site parameters) stays firmly out
-of scope — the caller supplies each case's magnitude.
-
-Seismic combinations (§2.3.6 / §2.4.5, which need E split into its Ev and Eh parts
-from S_DS) are a later slice; the generators here cover the dead/live/roof/snow/
-rain/wind basic sets.
+combination sets (§2.3.1 strength / §2.4.1 allowable stress) and the seismic sets
+(§2.3.6 / §2.4.5, with the design spectral acceleration S_DS and redundancy factor
+as typed user inputs). The combination expressions are short, universally
+republished equation lists; deriving the load *magnitudes* (wind, seismic, snow
+from maps and site parameters) stays firmly out of scope — the caller supplies each
+case's magnitude.
 """
 
 from __future__ import annotations
@@ -33,6 +31,8 @@ __all__ = [
     "CombinationSet",
     "asce7_lrfd_basic",
     "asce7_asd_basic",
+    "asce7_lrfd_seismic",
+    "asce7_asd_seismic",
     "combination_scorecard",
 ]
 
@@ -41,8 +41,8 @@ class LoadNature(StrEnum):
     """The nature of a load case, by its ASCE 7 symbol.
 
     The factor a combination applies depends on the load's nature, not its name —
-    dead load is always factored as dead load. Seismic (``E``) is carried in the
-    vocabulary but not yet produced by the basic generators.
+    dead load is always factored as dead load. Seismic (``E``) carries the
+    horizontal earthquake effect ρ·Q_E; the vertical part folds into the dead factor.
     """
 
     DEAD = "D"
@@ -151,7 +151,7 @@ def asce7_lrfd_basic() -> CombinationSet:
 
     Dead, live, roof-live, snow, rain, and wind; the roof companion "(Lr or S or R)"
     is expanded into one variant per companion, and combination 3's "(L or 0.5W)"
-    alternative into its two forms. Seismic (§2.3.6) is a later slice.
+    alternative into its two forms. Seismic is :func:`asce7_lrfd_seismic`.
     """
     clause = "ASCE 7-22 §2.3.1"
     combos: list[LoadCombination] = [
@@ -194,6 +194,63 @@ def combination_scorecard(
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
     detail = f"{entry.detail}; demand {demand:g} from {governing}"
     return entry.model_copy(update={"detail": detail, "reference": reference or governing.citation})
+
+
+def asce7_lrfd_seismic(*, s_ds: float, redundancy: float = 1.0) -> CombinationSet:
+    """The ASCE 7-22 §2.3.6 strength (LRFD) combinations with earthquake load.
+
+    The earthquake effect E splits into a vertical part Ev = 0.2·S_DS·D — folded
+    into the dead-load factor — and a horizontal part Eh = ρ·Q_E, carried on the
+    seismic nature ``E`` (the caller supplies Q_E as the seismic load magnitude).
+    ``s_ds`` is the design spectral acceleration S_DS and ``redundancy`` the factor
+    ρ, both typed user inputs — Anvilate factors the combination, it does not derive
+    the seismic hazard. Each combination is generated for both horizontal directions
+    (±Eh) so the envelope and the minimizing (overturning) case each see the
+    governing sense.
+    """
+    clause = "ASCE 7-22 §2.3.6"
+    ev = 0.2 * s_ds
+    combos: list[LoadCombination] = []
+    for sign, tag in ((1.0, "+E"), (-1.0, "-E")):
+        eh = sign * redundancy
+        # 6. (1.2 + 0.2·S_DS)D + ρQ_E + L + 0.2S
+        combos.append(_combo(f"LRFD 6 ({tag})", clause, D=1.2 + ev, E=eh, L=1.0, S=0.2))
+        # 7. (0.9 − 0.2·S_DS)D + ρQ_E  (reduced dead — the overturning case)
+        combos.append(_combo(f"LRFD 7 ({tag})", clause, D=0.9 - ev, E=eh))
+    return CombinationSet(basis="ASCE 7-22 LRFD (seismic)", combinations=tuple(combos))
+
+
+def asce7_asd_seismic(*, s_ds: float, redundancy: float = 1.0) -> CombinationSet:
+    """The ASCE 7-22 §2.4.5 allowable-stress (ASD) combinations with earthquake load.
+
+    The ASD 0.7 factor on E carries through: the vertical Ev folds into the dead
+    factor (0.7·0.2·S_DS = 0.14·S_DS, and 0.525·0.2·S_DS = 0.105·S_DS in the
+    live-companion combination), and the horizontal Eh = ρ·Q_E rides the seismic
+    nature at 0.7ρ or 0.525ρ. ``s_ds`` and ``redundancy`` are typed user inputs.
+    Combination 9's "(Lr or S or R)" roof companion is expanded; both ±Eh directions
+    are generated.
+    """
+    clause = "ASCE 7-22 §2.4.5"
+    combos: list[LoadCombination] = []
+    for sign, tag in ((1.0, "+E"), (-1.0, "-E")):
+        # 8. (1.0 + 0.14·S_DS)D + 0.7ρQ_E
+        combos.append(
+            _combo(f"ASD 8 ({tag})", clause, D=1.0 + 0.14 * s_ds, E=sign * 0.7 * redundancy)
+        )
+        # 9. (1.0 + 0.105·S_DS)D + 0.525ρQ_E + 0.75L + 0.75(Lr or S or R)
+        combos.extend(
+            _expand_roof(
+                f"ASD 9 ({tag})",
+                clause,
+                {"D": 1.0 + 0.105 * s_ds, "E": sign * 0.525 * redundancy, "L": 0.75},
+                0.75,
+            )
+        )
+        # 10. (0.6 − 0.14·S_DS)D + 0.7ρQ_E  (reduced dead — the overturning case)
+        combos.append(
+            _combo(f"ASD 10 ({tag})", clause, D=0.6 - 0.14 * s_ds, E=sign * 0.7 * redundancy)
+        )
+    return CombinationSet(basis="ASCE 7-22 ASD (seismic)", combinations=tuple(combos))
 
 
 def asce7_asd_basic() -> CombinationSet:

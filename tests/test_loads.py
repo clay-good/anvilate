@@ -9,10 +9,14 @@ from anvilate.loads import (
     LoadCombination,
     LoadNature,
     asce7_asd_basic,
+    asce7_asd_seismic,
     asce7_lrfd_basic,
+    asce7_lrfd_seismic,
     combination_scorecard,
 )
 from anvilate.scorecard import CheckStatus
+
+E = LoadNature.SEISMIC
 
 D = LoadNature.DEAD
 L = LoadNature.LIVE
@@ -106,6 +110,52 @@ def test_custom_combination_set_and_rendering():
 def test_empty_set_has_no_governing_combination():
     with pytest.raises(ValueError, match="empty combination set"):
         CombinationSet(basis="none", combinations=()).governing({D: 1.0})
+
+
+# -- seismic combinations ------------------------------------------------------
+
+
+def test_lrfd_seismic_folds_ev_into_the_dead_factor_and_carries_eh():
+    # S_DS = 1.0, rho = 1.3: Ev = 0.2*S_DS folds into D, Eh = rho on E.
+    cs = asce7_lrfd_seismic(s_ds=1.0, redundancy=1.3)
+    by_name = _by_name(cs)
+    # 2 signs x (combo 6 + combo 7) = 4 combinations.
+    assert len(cs.combinations) == 4
+    six = by_name["LRFD 6 (+E)"].factors
+    assert six[D] == pytest.approx(1.4)  # 1.2 + 0.2*1.0
+    assert six[E] == pytest.approx(1.3)
+    assert six[L] == pytest.approx(1.0)
+    assert six[S] == pytest.approx(0.2)
+    seven = by_name["LRFD 7 (-E)"].factors
+    assert seven[D] == pytest.approx(0.7)  # 0.9 - 0.2*1.0
+    assert seven[E] == pytest.approx(-1.3)
+    assert all(c.citation == "ASCE 7-22 §2.3.6" for c in cs.combinations)
+
+
+def test_asd_seismic_coefficients_and_count():
+    cs = asce7_asd_seismic(s_ds=1.0, redundancy=1.0)
+    # 2 signs x (combo 8 + 3 roof variants of combo 9 + combo 10) = 10.
+    assert len(cs.combinations) == 10
+    by_name = _by_name(cs)
+    assert by_name["ASD 8 (+E)"].factors[D] == pytest.approx(1.14)  # 1.0 + 0.14
+    assert by_name["ASD 8 (+E)"].factors[E] == pytest.approx(0.7)
+    assert by_name["ASD 9 (+E) [S]"].factors[D] == pytest.approx(1.105)  # 1.0 + 0.105
+    assert by_name["ASD 9 (+E) [S]"].factors[E] == pytest.approx(0.525)
+    assert by_name["ASD 10 (+E)"].factors[D] == pytest.approx(0.46)  # 0.6 - 0.14
+    assert all(c.citation == "ASCE 7-22 §2.4.5" for c in cs.combinations)
+
+
+def test_seismic_reversal_puts_a_gravity_column_into_net_tension():
+    # A braced-frame column: 50 gravity compression, 200 seismic axial. Under the
+    # reduced-dead combination with reversed horizontal seismic it goes into net
+    # tension — the load reversal a gravity-only check never sees.
+    loads = {D: 50.0, E: 200.0}
+    cs = asce7_lrfd_seismic(s_ds=1.0, redundancy=1.3)
+    governing, demand = cs.governing(loads, minimize=True)
+    assert governing.name == "LRFD 7 (-E)"
+    assert demand == pytest.approx(0.7 * 50.0 - 1.3 * 200.0)  # 35 - 260 = -225
+    # The compression envelope is a different, positive combination.
+    assert cs.governing(loads)[1] > 0
 
 
 # -- scorecard surfacing -------------------------------------------------------

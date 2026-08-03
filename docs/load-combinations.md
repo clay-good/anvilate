@@ -69,6 +69,11 @@ published factors to load magnitudes you supply. Deriving those magnitudes — w
 seismic, snow, rain from maps, site parameters, and building geometry — stays out of
 scope; that is the wind-tunnel and hazard-map work a combination table cannot do.
 
-Seismic combinations (§2.3.6 / §2.4.5), which split the earthquake load E into its
-vertical and horizontal parts from S_DS, are a later slice. The basic sets here
-cover dead, live, roof live, snow, rain, and wind.
+Seismic combinations are available through `asce7_lrfd_seismic(s_ds=..., redundancy=...)`
+(§2.3.6) and `asce7_asd_seismic(...)` (§2.4.5). They split the earthquake load E into
+its vertical part Ev = 0.2·S_DS·D (folded into the dead-load factor) and its horizontal
+part Eh = ρ·Q_E (carried on the seismic load you supply as Q_E). The design spectral
+acceleration S_DS and the redundancy factor ρ are typed inputs — the combination is
+factored here, the seismic hazard is derived by you. Both horizontal directions (±Eh)
+are generated, so the reduced-dead combination surfaces the load reversal that puts a
+gravity-compression column into net tension.
