@@ -14,6 +14,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from ..loads import LoadNature
 from ..tolerance import (
     AchievabilityCheck,
     ResolvedTolerance,
@@ -406,6 +407,11 @@ class LoadCase(_Base):
     ``remote_mass`` case an offset ``remote_mass``. A case missing its magnitude is
     rejected at construction — a downstream analysis can never be handed a load
     with nothing to apply.
+
+    ``nature`` optionally classifies the case by its ASCE 7 load nature (dead, live,
+    wind, seismic, …) so a declared combination set can factor it. It is orthogonal
+    to ``kind`` (which is how the load is applied) and defaults to ``None`` — a spec
+    that does not use load combinations leaves it unset.
     """
 
     name: str
@@ -414,6 +420,7 @@ class LoadCase(_Base):
     force: Force | None = None
     remote_mass: Mass | None = None
     quasi_static_factor: float | None = Field(default=None, gt=0)
+    nature: LoadNature | None = None
 
     @model_validator(mode="after")
     def _kind_carries_its_magnitude(self) -> LoadCase:
@@ -499,7 +506,9 @@ class AcceptanceCriteria(_Base):
 
 # --- The spec ---
 
-SCHEMA_VERSION = "1.0.0"
+# 1.1.0 added the optional LoadCase.nature classification (additive; a 1.0.0 spec
+# loads unchanged and is re-stamped to the current version).
+SCHEMA_VERSION = "1.1.0"
 
 
 class DesignSpec(_Base):

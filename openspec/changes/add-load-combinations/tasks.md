@@ -3,7 +3,8 @@
 ## 1. Contracts
 
 - [x] 1.1 Load-nature classification — `LoadNature` (D, L, Lr, S, R, W, E by ASCE 7
-      symbol) in `src/anvilate/loads.py`.
+      symbol) in `src/anvilate/loads.py`, and an optional `LoadCase.nature` on the Spec
+      IR (schema 1.1.0, additive) so a spec's load cases can be classified for factoring.
 - [x] 1.2 Combination and combination-set types — `LoadCombination` (factors × natures,
       citation) and `CombinationSet` (basis label + combinations).
 

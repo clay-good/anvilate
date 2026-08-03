@@ -120,6 +120,27 @@ def test_remote_mass_load_case_requires_a_mass():
         LoadCase(name="motor", kind=LoadKind.REMOTE_MASS, applied_to="bore")
 
 
+def test_load_case_nature_is_optional_and_classifies_by_asce_symbol():
+    from anvilate.loads import LoadNature
+
+    # Unclassified by default — a spec that ignores combinations leaves it None.
+    plain = LoadCase(
+        name="tip_push", kind=LoadKind.STATIC, applied_to="tip", force=Quantity.parse("50 N")
+    )
+    assert plain.nature is None
+    # A case can be tagged with its load nature for combination factoring.
+    wind = LoadCase(
+        name="gust",
+        kind=LoadKind.STATIC,
+        applied_to="face",
+        force=Quantity.parse("-40 kN"),
+        nature=LoadNature.WIND,
+    )
+    assert wind.nature is LoadNature.WIND
+    # It round-trips through the model dump/validate.
+    assert LoadCase.model_validate(wind.model_dump()).nature is LoadNature.WIND
+
+
 # --- Requirement: General tolerances by default, explicit overrides ---
 
 
