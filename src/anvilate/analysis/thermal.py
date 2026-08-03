@@ -44,6 +44,7 @@ __all__ = [
     "flat_plate_forced_convection_coefficient",
     "vertical_plate_natural_convection_coefficient",
     "circular_source_spreading_resistance",
+    "fin_array_count_for_resistance",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -831,3 +832,46 @@ def circular_source_spreading_resistance(
     if a <= 0 or k <= 0:
         raise ValueError("source_radius and conductivity must be positive")
     return Quantity(magnitude=1.0 / (4.0 * k * a), unit=_THERMAL_RESISTANCE_UNIT)
+
+
+def fin_array_count_for_resistance(
+    *,
+    target_resistance: Quantity,
+    heat_transfer_coefficient: Quantity,
+    fin_efficiency: float,
+    fin_surface_area: Quantity,
+    unfinned_base_area: Quantity,
+) -> float:
+    """The number of fins a target array resistance needs (the fin-array design inverse).
+
+    An array of N identical fins plus the exposed base carries a convective
+    conductance h·(N·η·A_f + A_base), so its resistance is the reciprocal. Inverting
+    for the fin count that just reaches ``target_resistance`` R gives
+    N = (1/(h·R) − A_base)/(η·A_f), where ``heat_transfer_coefficient`` h is the
+    surface coefficient, ``fin_efficiency`` η the per-fin efficiency (from
+    :func:`fin_efficiency`), ``fin_surface_area`` A_f the wetted area of one fin, and
+    ``unfinned_base_area`` A_base the exposed base between the fins. Returns the real
+    fin count — round *up* for the physical number; returns 0.0 when the bare base
+    already meets the target. ``fin_efficiency`` must be in (0, 1].
+    """
+    _require(target_resistance, "[temperature] / [power]", "target_resistance")
+    _require(
+        heat_transfer_coefficient,
+        "[power] / [length]**2 / [temperature]",
+        "heat_transfer_coefficient",
+    )
+    _require(fin_surface_area, "[area]", "fin_surface_area")
+    _require(unfinned_base_area, "[area]", "unfinned_base_area")
+    if not 0 < fin_efficiency <= 1:
+        raise ValueError(f"fin_efficiency must be in (0, 1]; got {fin_efficiency}")
+    r = target_resistance.to(_THERMAL_RESISTANCE_UNIT).magnitude
+    h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
+    a_f = fin_surface_area.to("m**2").magnitude
+    a_base = unfinned_base_area.to("m**2").magnitude
+    if r <= 0 or h <= 0 or a_f <= 0 or a_base < 0:
+        raise ValueError(
+            "target_resistance, heat_transfer_coefficient, and fin_surface_area must be "
+            "positive, and unfinned_base_area non-negative"
+        )
+    count = (1.0 / (h * r) - a_base) / (fin_efficiency * a_f)
+    return max(count, 0.0)

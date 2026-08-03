@@ -470,6 +470,7 @@ thermal.conduction_thermal_resistance
 thermal.constrained_thermal_stress
 thermal.convection_thermal_resistance
 thermal.differential_thermal_stress
+thermal.fin_array_count_for_resistance
 thermal.fin_efficiency
 thermal.flat_plate_forced_convection_coefficient
 thermal.vertical_plate_natural_convection_coefficient

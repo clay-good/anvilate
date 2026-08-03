@@ -7,8 +7,9 @@
       (1/4ka, isothermal circular source on a half-space), `series_thermal_resistance`,
       `parallel_thermal_resistance`, and `temperature_rise` (Q·R), all in K/W kept in
       temperature differences. Contact resistance is a caller-supplied series R.
-- [~] 1.2 Fin efficiency — `fin_efficiency` = tanh(mL)/(mL) with m = √(hP/kA_c); the
-      fin-array sizing design inverse is a follow-up.
+- [x] 1.2 Fin efficiency and fin-array sizing — `fin_efficiency` = tanh(mL)/(mL) with
+      m = √(hP/kA_c), and `fin_array_count_for_resistance` (the design inverse:
+      N = (1/(hR) − A_base)/(η·A_f), the fin count a target array resistance needs).
 - [x] 1.3 Convection correlations with enforced validity ranges — forced:
       `flat_plate_forced_convection_coefficient` (Incropera laminar external flow) returns
       ``None`` above the Re ≈ 5×10⁵ laminar limit rather than extrapolating; natural:

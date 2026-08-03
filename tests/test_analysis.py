@@ -10546,6 +10546,38 @@ def test_flat_plate_forced_convection_coefficient_and_validity_range():
     assert turbulent is None
 
 
+def test_fin_array_count_inverts_the_array_resistance():
+    from anvilate.analysis import fin_array_count_for_resistance
+
+    kw = {
+        "heat_transfer_coefficient": _q("25 W/(m**2*K)"),
+        "fin_efficiency": 0.95,
+        "fin_surface_area": _q("0.004 m**2"),
+        "unfinned_base_area": _q("0.002 m**2"),
+    }
+    # To hit 0.5 K/W: N = (1/(h·R) − A_base)/(η·A_f) ≈ 20.5 → 21 fins.
+    n = fin_array_count_for_resistance(target_resistance=Quantity(magnitude=0.5, unit="K/W"), **kw)
+    assert n == pytest.approx(20.53, abs=0.05)
+    # A tighter target needs more fins.
+    tighter = fin_array_count_for_resistance(
+        target_resistance=Quantity(magnitude=0.3, unit="K/W"), **kw
+    )
+    assert tighter > n
+    # A loose target the bare base already meets returns zero fins.
+    loose = fin_array_count_for_resistance(
+        target_resistance=Quantity(magnitude=100.0, unit="K/W"), **kw
+    )
+    assert loose == 0.0
+    with pytest.raises(ValueError, match="fin_efficiency must be in"):
+        fin_array_count_for_resistance(
+            target_resistance=Quantity(magnitude=0.5, unit="K/W"),
+            heat_transfer_coefficient=_q("25 W/(m**2*K)"),
+            fin_efficiency=1.5,
+            fin_surface_area=_q("0.004 m**2"),
+            unfinned_base_area=_q("0.002 m**2"),
+        )
+
+
 def test_circular_source_spreading_resistance_is_the_constriction_term():
     from anvilate.analysis import (
         circular_source_spreading_resistance,
