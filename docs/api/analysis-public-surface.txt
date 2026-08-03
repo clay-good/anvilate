@@ -246,6 +246,8 @@ fatigue.weld_constant_amplitude_fatigue_limit
 fatigue.weld_cutoff_limit
 fatigue.weld_detail_allowable_stress_range
 fatigue.weld_detail_endurance_cycles
+fatigue.weld_size_corrected_detail_category
+fatigue.weld_size_effect_factor
 flywheel.coefficient_of_fluctuation
 flywheel.flywheel_energy_fluctuation
 flywheel.flywheel_inertia_for_fluctuation

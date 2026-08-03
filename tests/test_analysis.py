@@ -5758,6 +5758,35 @@ def test_weld_detail_curve_feeds_the_miner_spectrum():
     assert damage == pytest.approx(1.0e5 / n_high + 5.0e5 / n_low, rel=1e-12)
 
 
+def test_weld_size_effect_penalizes_thick_plates_only():
+    from anvilate.analysis import (
+        weld_detail_endurance_cycles,
+        weld_size_corrected_detail_category,
+        weld_size_effect_factor,
+    )
+
+    # At or below the 25 mm reference there is no penalty.
+    assert weld_size_effect_factor(thickness=_q("25 mm")) == pytest.approx(1.0)
+    assert weld_size_effect_factor(thickness=_q("12 mm")) == pytest.approx(1.0)
+    # Above it, k_s = (25/t)^0.2 — a 50 mm plate loses ~13%.
+    assert weld_size_effect_factor(thickness=_q("50 mm")) == pytest.approx(0.5**0.2, rel=1e-9)
+
+    # The corrected category feeds the curve; the thicker plate has the shorter life.
+    category = _q("80 MPa")
+    corrected = weld_size_corrected_detail_category(detail_category=category, thickness=_q("50 mm"))
+    assert corrected.to("MPa").magnitude == pytest.approx(80.0 * 0.5**0.2, rel=1e-9)
+    thin_life = weld_detail_endurance_cycles(stress_range=_q("70 MPa"), detail_category=category)
+    thick_life = weld_detail_endurance_cycles(stress_range=_q("70 MPa"), detail_category=corrected)
+    assert thick_life < thin_life
+
+
+def test_weld_size_effect_rejects_bad_thickness():
+    from anvilate.analysis import weld_size_effect_factor
+
+    with pytest.raises(ValueError, match="thickness must be positive"):
+        weld_size_effect_factor(thickness=_q("0 mm"))
+
+
 def test_weld_detail_rejects_bad_inputs():
     from anvilate.analysis import (
         weld_detail_allowable_stress_range,

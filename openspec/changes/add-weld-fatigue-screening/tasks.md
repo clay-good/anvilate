@@ -14,7 +14,10 @@
       `weld_detail_endurance_cycles` (EN 1993-1-9 trilinear: m=3 to Δσ_D at 5M, m=5 to
       the cutoff Δσ_L at 100M), plus `weld_constant_amplitude_fatigue_limit` and
       `weld_cutoff_limit` for the knee points.
-- [ ] 2.2 Thickness and mean-stress corrections with visible factors — next slice.
+- [~] 2.2 Thickness and mean-stress corrections with visible factors — thickness
+      size-effect done (`weld_size_effect_factor` k_s = (t_ref/t)^n, EN 1993-1-9 §7.2.2,
+      and `weld_size_corrected_detail_category` = k_s·Δσ_C); the mean-stress reduction
+      is the remaining correction.
 - [x] 2.3 Spectrum damage via existing Miner summation — the per-range lives feed
       `miner_cumulative_damage` directly (demonstrated in the example + a test).
 - [x] 2.4 Allowable-range design inverse — `weld_detail_allowable_stress_range`

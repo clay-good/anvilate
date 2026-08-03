@@ -56,6 +56,8 @@ __all__ = [
     "weld_cutoff_limit",
     "weld_detail_endurance_cycles",
     "weld_detail_allowable_stress_range",
+    "weld_size_effect_factor",
+    "weld_size_corrected_detail_category",
 ]
 
 # EN 1993-1-9 nominal-stress fatigue curve anchors (cycles). The detail category
@@ -748,3 +750,63 @@ def weld_detail_allowable_stress_range(
             magnitude=dsd * (_WELD_N_D / life_cycles) ** (1.0 / _WELD_SLOPE_LOW), unit="MPa"
         )
     return weld_cutoff_limit(detail_category=detail_category)
+
+
+# EN 1993-1-9 §7.2.2 size-effect reference thickness and exponent (the standard
+# values for the thickness-sensitive details; detail-dependent, so caller-tunable).
+_WELD_SIZE_REFERENCE_MM = 25.0
+_WELD_SIZE_EXPONENT = 0.2
+
+
+def weld_size_effect_factor(
+    *,
+    thickness: Quantity,
+    reference_thickness: Quantity | None = None,
+    exponent: float = _WELD_SIZE_EXPONENT,
+) -> float:
+    """The EN 1993-1-9 §7.2.2 thickness size-effect factor k_s ≤ 1.
+
+    A thicker plate cracks at a lower stress range: for a thickness-sensitive detail
+    above the ``reference_thickness`` t_ref (25 mm by default), the fatigue strength
+    is reduced by k_s = (t_ref/t)^n, with the standard ``exponent`` n = 0.2 (both
+    detail-dependent, so caller-tunable — the mechanics are exact, the convention is
+    yours, guardrail-safe). At or below the reference thickness there is no penalty
+    (k_s = 1). Multiply the detail category by k_s before building the S-N curve.
+    Returns the dimensionless factor.
+    """
+    t = thickness.to("mm").magnitude
+    if t <= 0:
+        raise ValueError(f"thickness must be positive; got {thickness}")
+    t_ref = (
+        _WELD_SIZE_REFERENCE_MM
+        if reference_thickness is None
+        else reference_thickness.to("mm").magnitude
+    )
+    if t_ref <= 0:
+        raise ValueError(f"reference_thickness must be positive; got {reference_thickness}")
+    if t <= t_ref:
+        return 1.0
+    return (t_ref / t) ** exponent
+
+
+def weld_size_corrected_detail_category(
+    *,
+    detail_category: Quantity,
+    thickness: Quantity,
+    reference_thickness: Quantity | None = None,
+    exponent: float = _WELD_SIZE_EXPONENT,
+) -> Quantity:
+    """The detail category reduced for the plate thickness, k_s·Δσ_C.
+
+    Applies :func:`weld_size_effect_factor` to the user-supplied ``detail_category``
+    so the size-corrected value can be fed straight into
+    :func:`weld_detail_endurance_cycles` or :func:`weld_detail_allowable_stress_range`.
+    Below the reference thickness it returns the category unchanged. Returns MPa.
+    """
+    dsc = _require_stress(detail_category, "detail_category")
+    if dsc <= 0:
+        raise ValueError(f"detail_category must be positive; got {detail_category}")
+    factor = weld_size_effect_factor(
+        thickness=thickness, reference_thickness=reference_thickness, exponent=exponent
+    )
+    return Quantity(magnitude=dsc * factor, unit="MPa")
