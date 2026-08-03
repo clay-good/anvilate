@@ -39,6 +39,29 @@ See [`examples/canopy_beam_load_combinations.py`](../examples/canopy_beam_load_c
 for a canopy beam whose bending is sized by one combination and whose hold-down by
 another.
 
+## Into the scorecard
+
+`combination_scorecard` screens a capacity against the governing combination and
+returns a scorecard entry that names which combination controlled — no silent
+subsetting to one number:
+
+```python
+from anvilate.loads import asce7_lrfd_basic, combination_scorecard
+
+entry = combination_scorecard(
+    "beam bending",
+    combinations=asce7_lrfd_basic(),
+    loads=loads,
+    capacity=130.0,
+    required=1.5,
+)
+entry.detail      # "...; demand 111.5 from LRFD 2 [Lr]: 1.2D + 1.6L + 0.5Lr"
+entry.reference   # "ASCE 7-22 §2.3.1"
+```
+
+Pass `minimize=True` to screen a hold-down or overturning check against the
+counteracting combination instead.
+
 ## What Anvilate does and does not derive
 
 This is **combination factoring, not load derivation**. The generators apply the

@@ -15,9 +15,10 @@
       vocabulary already carries `E`.
 - [x] 2.2 Evaluate per combination, envelope, name governing — `evaluate_all`,
       `envelope`, `governing(loads, minimize=...)` (max for strength, min for uplift).
-- [ ] 2.3 Scorecard and evidence-bundle surfacing of the governing combination — the
-      next slice (wire the governing combination into a `ScorecardEntry` and the
-      evidence roll-up).
+- [~] 2.3 Scorecard and evidence-bundle surfacing of the governing combination —
+      `combination_scorecard` screens a capacity against the governing (or minimizing)
+      combination and names it in the entry detail + reference. Evidence-bundle
+      surfacing is the remaining part.
 
 ## 3. Tests
 

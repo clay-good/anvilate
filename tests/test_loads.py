@@ -10,7 +10,9 @@ from anvilate.loads import (
     LoadNature,
     asce7_asd_basic,
     asce7_lrfd_basic,
+    combination_scorecard,
 )
+from anvilate.scorecard import CheckStatus
 
 D = LoadNature.DEAD
 L = LoadNature.LIVE
@@ -104,3 +106,40 @@ def test_custom_combination_set_and_rendering():
 def test_empty_set_has_no_governing_combination():
     with pytest.raises(ValueError, match="empty combination set"):
         CombinationSet(basis="none", combinations=()).governing({D: 1.0})
+
+
+# -- scorecard surfacing -------------------------------------------------------
+
+
+def test_combination_scorecard_screens_capacity_and_names_the_combination():
+    # Envelope demand 111.5 (LRFD 2 [Lr]); a 130 capacity clears it at SF 1.166.
+    loads = {D: 20.0, L: 50.0, Lr: 15.0, W: 10.0}
+    entry = combination_scorecard(
+        "beam bending",
+        combinations=asce7_lrfd_basic(),
+        loads=loads,
+        capacity=130.0,
+        required=1.5,
+    )
+    assert entry.status is CheckStatus.FAIL  # 1.166 < 1.5
+    assert entry.safety_factor == pytest.approx(130.0 / 111.5, rel=1e-9)
+    # The controlling combination and its citation are on the entry, not hidden.
+    assert "LRFD 2 [Lr]" in entry.detail
+    assert entry.reference == "ASCE 7-22 §2.3.1"
+
+
+def test_combination_scorecard_uplift_uses_the_counteracting_combination():
+    # Net uplift: capacity is the hold-down resistance vs the minimizing combination.
+    loads = {D: 100.0, W: -150.0}
+    entry = combination_scorecard(
+        "hold-down uplift",
+        combinations=asce7_lrfd_basic(),
+        loads=loads,
+        capacity=80.0,
+        required=1.5,
+        minimize=True,
+    )
+    # |demand| = |0.9*100 - 150| = 60; SF = 80/60 = 1.33 -> FAIL against 1.5.
+    assert entry.safety_factor == pytest.approx(80.0 / 60.0, rel=1e-9)
+    assert entry.status is CheckStatus.FAIL
+    assert "LRFD 5" in entry.detail

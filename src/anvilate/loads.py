@@ -25,12 +25,15 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
+from .scorecard import ScorecardEntry
+
 __all__ = [
     "LoadNature",
     "LoadCombination",
     "CombinationSet",
     "asce7_lrfd_basic",
     "asce7_asd_basic",
+    "combination_scorecard",
 ]
 
 
@@ -164,6 +167,33 @@ def asce7_lrfd_basic() -> CombinationSet:
         _combo("LRFD 5", clause, D=0.9, W=1.0),
     ]
     return CombinationSet(basis="ASCE 7-22 LRFD (strength)", combinations=tuple(combos))
+
+
+def combination_scorecard(
+    name: str,
+    *,
+    combinations: CombinationSet,
+    loads: Mapping[LoadNature, float],
+    capacity: float,
+    required: float,
+    minimize: bool = False,
+    reference: str | None = None,
+) -> ScorecardEntry:
+    """Screen a ``capacity`` against the governing combination's demand.
+
+    The demand is the governing combination's factored sum — the strength envelope
+    by default, or the counteracting minimum when ``minimize=True`` (an uplift or
+    overturning check). The safety factor is ``capacity / |demand|``, judged against
+    ``required``. The entry names which combination governed in its detail and takes
+    that combination's citation as its reference, so the scorecard shows the
+    controlling combination rather than silently reducing the set to one number.
+    """
+    governing, demand = combinations.governing(loads, minimize=minimize)
+    magnitude = abs(demand)
+    computed = float("inf") if magnitude == 0 else capacity / magnitude
+    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    detail = f"{entry.detail}; demand {demand:g} from {governing}"
+    return entry.model_copy(update={"detail": detail, "reference": reference or governing.citation})
 
 
 def asce7_asd_basic() -> CombinationSet:
