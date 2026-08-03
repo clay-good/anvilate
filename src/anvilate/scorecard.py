@@ -19,6 +19,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 
 from .derivation import Derivation
+from .uncertainty import MarginUncertainty
 
 __all__ = [
     "CheckStatus",
@@ -162,6 +163,21 @@ class ScorecardEntry(BaseModel):
     # travels with the entry so a report renders the real formula and values
     # rather than a reconstruction.
     derivation: Derivation | None = None
+    # An opt-in probabilistic view of the same check: the margin distribution under
+    # input scatter. The deterministic status stays primary; this annotation, when
+    # present, lets a nominal pass carry a fragility warning. ``None`` leaves the
+    # check purely deterministic.
+    uncertainty: MarginUncertainty | None = None
+
+    def is_fragile(self, threshold: float = 0.05) -> bool:
+        """Whether an attached margin distribution shows a material shortfall.
+
+        ``True`` only when the check carries an uncertainty annotation whose
+        shortfall probability exceeds ``threshold`` (default 5%) — a nominal pass
+        that input scatter would fail materially often. ``False`` when no
+        distribution is attached, so a check without one is never flagged.
+        """
+        return self.uncertainty is not None and self.uncertainty.is_fragile(threshold)
 
     @property
     def utilization(self) -> float | None:
@@ -335,6 +351,16 @@ class Scorecard(BaseModel):
     def not_evaluated(self) -> tuple[ScorecardEntry, ...]:
         """The checks that could not run — the gaps, never silently passed."""
         return tuple(e for e in self.entries if e.status is CheckStatus.NOT_EVALUATED)
+
+    def fragile(self, threshold: float = 0.05) -> tuple[ScorecardEntry, ...]:
+        """The checks whose attached margin distribution shows a material shortfall.
+
+        A nominal pass can still be fragile: its deterministic verdict stays as it
+        is, but this surfaces the checks where the asserted input scatter fails the
+        margin more than ``threshold`` of the time — no silent green under
+        uncertainty. Empty when no check carries a distribution.
+        """
+        return tuple(e for e in self.entries if e.is_fragile(threshold))
 
     def __str__(self) -> str:
         return f"scorecard {self.status.value.upper()} ({len(self.entries)} checks)"

@@ -280,3 +280,55 @@ def test_governing_shift_is_none_without_a_safety_factor_check():
     before = Scorecard(entries=(_entry("note", CheckStatus.PASS),))
     after = Scorecard(entries=(_sf("bending", 1.6, 1.5),))
     assert after.governing_shift(before) is None
+
+
+# -- uncertainty annotation and fragility --------------------------------------
+
+
+def _margin(shortfall: float):
+    from anvilate.uncertainty import MarginUncertainty, Sensitivity
+
+    return MarginUncertainty(
+        samples=10000,
+        seed=1,
+        required=1.5,
+        mean=1.7,
+        std=0.3,
+        shortfall_probability=shortfall,
+        lower=1.3,
+        upper=2.2,
+        coverage=0.9,
+        sensitivities=(Sensitivity(name="load", variance_share=1.0),),
+    )
+
+
+def test_fragile_flags_a_nominal_pass_with_a_material_shortfall():
+    # A deterministic PASS whose attached distribution fails 20% of the time.
+    entry = ScorecardEntry.from_safety_factor("bracket", computed=1.7, required=1.5).model_copy(
+        update={"uncertainty": _margin(0.20)}
+    )
+    assert entry.status is CheckStatus.PASS  # deterministic verdict is unchanged
+    assert entry.is_fragile()  # but flagged fragile under scatter
+    assert not entry.is_fragile(threshold=0.5)  # threshold is configurable
+
+
+def test_check_without_a_distribution_is_never_fragile():
+    # No-op: a check with no attached distribution is never flagged.
+    entry = ScorecardEntry.from_safety_factor("bracket", computed=1.7, required=1.5)
+    assert entry.uncertainty is None
+    assert not entry.is_fragile()
+
+
+def test_scorecard_collects_fragile_checks_without_changing_status():
+    card = Scorecard(
+        entries=(
+            _sf("solid", 3.0, 1.5),
+            ScorecardEntry.from_safety_factor("fragile", computed=1.7, required=1.5).model_copy(
+                update={"uncertainty": _margin(0.20)}
+            ),
+        )
+    )
+    # The deterministic roll-up still passes; fragility is a separate warning.
+    assert card.status is CheckStatus.PASS
+    assert card.passed
+    assert [e.name for e in card.fragile()] == ["fragile"]

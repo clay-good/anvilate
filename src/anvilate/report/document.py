@@ -38,8 +38,10 @@ __all__ = [
 ]
 
 # The calc-record schema version. Bump the minor for additive fields, the major
-# for a change that older readers cannot ignore.
-CALC_RECORD_SCHEMA_VERSION = "1.0"
+# for a change that older readers cannot ignore. 1.1 added the optional scorecard
+# annotations (repair hint, upper safety-factor band, uncertainty distribution);
+# a 1.0 reader ignores them and still loads the record.
+CALC_RECORD_SCHEMA_VERSION = "1.1"
 
 SCREENING_DISCLAIMER = (
     "These are closed-form screening calculations, not a substitute for detailed "
@@ -174,6 +176,13 @@ class CalculationReport(BaseModel):
             out.append(f"  {section.entry.detail}")
             if section.entry.repair_hint is not None:
                 out.append(f"  repair: {section.entry.repair_hint}")
+            unc = section.entry.uncertainty
+            if unc is not None:
+                flag = " — FRAGILE" if section.entry.is_fragile() else ""
+                out.append(
+                    f"  uncertainty: P(below {unc.required:.2f}) = "
+                    f"{unc.shortfall_probability * 100:.1f}% over {unc.samples} samples{flag}"
+                )
             if section.citation:
                 out.append(f"  source: {section.citation}")
         out.append("")
@@ -303,6 +312,16 @@ class CalculationReport(BaseModel):
         out.append(f'<p class="detail">{escape(section.entry.detail)}</p>')
         if section.entry.repair_hint is not None:
             out.append(f'<p class="repair">Repair: {escape(str(section.entry.repair_hint))}</p>')
+        unc = section.entry.uncertainty
+        if unc is not None:
+            fragile = section.entry.is_fragile()
+            flag = " — FRAGILE" if fragile else ""
+            cls = "uncertainty fragile" if fragile else "uncertainty"
+            message = (
+                f"Uncertainty: P(below {unc.required:.2f}) = "
+                f"{unc.shortfall_probability * 100:.1f}% over {unc.samples} samples{flag}"
+            )
+            out.append(f'<p class="{cls}">{escape(message)}</p>')
         if section.citation:
             out.append(f'<p class="source">Source: {escape(section.citation)}</p>')
         out.append("</section>")
@@ -359,6 +378,8 @@ section.check { page-break-inside: avoid; }
 .pass .status { color: #060; }
 .over_margin .status { color: #b60; }
 .repair { font-size: 0.9em; color: #a00; }
+.uncertainty { font-size: 0.9em; color: #444; }
+.uncertainty.fragile { color: #a00; font-weight: bold; }
 .fallback { font-style: italic; color: #666; }
 .source { font-size: 0.9em; color: #444; }
 tr.governing td { font-weight: bold; }

@@ -240,6 +240,39 @@ def test_report_renders_over_margin_and_repair_hint():
     assert 'class="repair"' in html
 
 
+def test_report_renders_a_fragility_warning_on_an_annotated_check():
+    from anvilate.uncertainty import MarginUncertainty, Sensitivity
+
+    fragile = MarginUncertainty(
+        samples=20000,
+        seed=1,
+        required=1.5,
+        mean=1.7,
+        std=0.3,
+        shortfall_probability=0.21,
+        lower=1.3,
+        upper=2.2,
+        coverage=0.9,
+        sensitivities=(Sensitivity(name="load", variance_share=0.87),),
+    )
+    report = CalculationReport(
+        title="Bracket under load scatter",
+        sections=(
+            ReportSection(
+                entry=ScorecardEntry.from_safety_factor(
+                    "tension", computed=1.7, required=1.5
+                ).model_copy(update={"uncertainty": fragile}),
+            ),
+        ),
+    )
+    text = report.to_text()
+    # A nominal pass that the distribution fails 21% of the time is flagged FRAGILE.
+    assert "uncertainty: P(below 1.50) = 21.0% over 20000 samples — FRAGILE" in text
+    assert report.status is CheckStatus.PASS  # deterministic verdict unchanged
+    html = report.to_html()
+    assert 'class="uncertainty fragile"' in html
+
+
 def test_over_margin_only_report_is_not_blocked():
     report = CalculationReport(
         title="Comfortably clear",
@@ -313,6 +346,39 @@ def test_calc_record_round_trips():
     record = report.to_record()
     assert record["schema_version"] == CALC_RECORD_SCHEMA_VERSION
     assert report_from_record(record) == report
+
+
+def test_calc_record_round_trips_the_uncertainty_annotation():
+    from anvilate.uncertainty import MarginUncertainty, Sensitivity
+
+    annotated = CalculationReport(
+        title="t",
+        sections=(
+            ReportSection(
+                entry=ScorecardEntry.from_safety_factor(
+                    "tension", computed=1.7, required=1.5
+                ).model_copy(
+                    update={
+                        "uncertainty": MarginUncertainty(
+                            samples=5000,
+                            seed=2,
+                            required=1.5,
+                            mean=1.7,
+                            std=0.3,
+                            shortfall_probability=0.21,
+                            lower=1.3,
+                            upper=2.2,
+                            coverage=0.9,
+                            sensitivities=(Sensitivity(name="load", variance_share=0.87),),
+                        )
+                    }
+                ),
+            ),
+        ),
+    )
+    restored = report_from_record(annotated.to_record())
+    assert restored == annotated
+    assert restored.sections[0].entry.is_fragile()
 
 
 def test_calc_record_carries_full_precision_not_display_precision():
