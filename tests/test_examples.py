@@ -2324,6 +2324,24 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_spec_load_combination_check_example_drives_loads_from_the_spec():
+    namespace = runpy.run_path(str(_EXAMPLES / "spec_load_combination_check.py"))
+    # The spec aggregates its classified cases: dead sums to 18 kN, and the wind
+    # uplift keeps its sign.
+    loads = namespace["deck_spec"]().combination_loads()
+    from anvilate.loads import LoadNature
+
+    assert loads[LoadNature.DEAD] == pytest.approx(18_000.0)
+    assert loads[LoadNature.WIND] == pytest.approx(-30_000.0)
+
+    card = namespace["screen_deck"]()
+    by_name = {e.name: e for e in card.entries}
+    # Strength is governed by a gravity combination; the anchorage by the uplift.
+    assert "LRFD 2" in by_name["deck strength"].detail
+    assert "LRFD 5" in by_name["edge anchorage uplift"].detail
+    assert card.governing().name == "deck strength"
+
+
 def test_braced_frame_column_seismic_example_tension_reversal_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "braced_frame_column_seismic.py"))
     card = namespace["screen_column"]()

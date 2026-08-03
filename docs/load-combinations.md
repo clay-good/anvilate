@@ -62,6 +62,22 @@ entry.reference   # "ASCE 7-22 §2.3.1"
 Pass `minimize=True` to screen a hold-down or overturning check against the
 counteracting combination instead.
 
+## From a spec's load cases
+
+A `DesignSpec` load case can declare its `nature` (an ASCE 7 `LoadNature`), and
+`DesignSpec.combination_loads()` aggregates the classified cases into the same
+`{LoadNature: newtons}` mapping the generators consume — so combinations run from
+the spec, not a side spreadsheet:
+
+```python
+loads = spec.combination_loads()          # sums each nature's force magnitude, signs kept
+combination_scorecard("deck strength", combinations=asce7_lrfd_basic(),
+                      loads=loads, capacity=90_000.0, required=1.5)
+```
+
+See [`examples/spec_load_combination_check.py`](../examples/spec_load_combination_check.py)
+for the full spec-to-scorecard flow.
+
 ## What Anvilate does and does not derive
 
 This is **combination factoring, not load derivation**. The generators apply the
