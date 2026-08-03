@@ -2324,6 +2324,18 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_power_device_heatsink_example_convection_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "power_device_heatsink.py"))
+    # Still air: the sink-to-air convection dominates and the junction cooks.
+    still = namespace["screen_natural_convection"]()
+    assert still.status is CheckStatus.FAIL
+    assert still.entries[0].safety_factor == pytest.approx(0.59, abs=0.02)
+    # A fan drops the sink resistance five-fold and the junction sits inside its limit.
+    fan = namespace["screen_forced_convection"]()
+    assert fan.status is CheckStatus.PASS
+    assert fan.entries[0].safety_factor == pytest.approx(1.91, abs=0.03)
+
+
 def test_welded_bracket_fatigue_example_detail_category_decides_life():
     namespace = runpy.run_path(str(_EXAMPLES / "welded_bracket_fatigue.py"))
     # Identical spectrum, two weld details: the harsh category-56 detail is spent

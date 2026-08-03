@@ -87,6 +87,7 @@ Over 45 runnable examples, each executed in CI so they stay honest. A few:
 | `braced_frame_column_seismic.py` | A gravity column comfortable in compression whose base connection is governed by the net tension an ASCE 7-22 §2.3.6 seismic reversal produces — a load the gravity cases never reveal. |
 | `spec_load_combination_check.py` | A Design Spec whose load cases are classified by nature, aggregated into a demand mapping and screened against the governing ASCE 7-22 combination — load combinations as part of the same validated flow, not a separate spreadsheet. |
 | `welded_bracket_fatigue.py` | The same stress spectrum passes on a category-90 weld detail and fails on a category-56 one — the EN 1993-1-9 detail category, not the stress, decides fatigue life. |
+| `power_device_heatsink.py` | A 30 W device whose junction cooks in still air (145 K rise) and survives with a fan (44 K) — a thermal resistance network where the convection to air governs. See [thermal screening](docs/thermal-screening.md). |
 
 Full annotated gallery: [`examples/README.md`](examples/README.md).
 

@@ -10407,6 +10407,78 @@ def test_through_wall_gradient_thermal_stress_is_half_the_biaxial_shock():
         through_wall_gradient_thermal_stress(temperature_difference=_q("100 mm"), **kw)
 
 
+def test_thermal_resistance_network_sums_a_junction_to_ambient_path():
+    from anvilate.analysis import (
+        conduction_thermal_resistance,
+        convection_thermal_resistance,
+        parallel_thermal_resistance,
+        series_thermal_resistance,
+        temperature_rise,
+    )
+
+    # A 25 W device: a thin TIM pad in series with a heat-sink-to-air convection.
+    r_tim = conduction_thermal_resistance(
+        thickness=_q("0.5 mm"), area=_q("900 mm**2"), conductivity=_q("3 W/(m*K)")
+    )
+    assert r_tim.to("K/W").magnitude == pytest.approx(0.5e-3 / (3.0 * 900e-6), rel=1e-9)
+    r_sink = convection_thermal_resistance(
+        area=_q("0.05 m**2"), heat_transfer_coefficient=_q("20 W/(m**2*K)")
+    )
+    assert r_sink.to("K/W").magnitude == pytest.approx(1.0 / (20.0 * 0.05), rel=1e-9)  # 1.0
+
+    total = series_thermal_resistance(r_tim, r_sink)
+    assert total.to("K/W").magnitude == pytest.approx(
+        r_tim.to("K/W").magnitude + r_sink.to("K/W").magnitude, rel=1e-12
+    )
+    rise = temperature_rise(power=_q("25 W"), thermal_resistance=total)
+    assert rise.to("K").magnitude == pytest.approx(25.0 * total.to("K/W").magnitude, rel=1e-12)
+
+    # Two equal sinks in parallel halve the resistance (conductances add).
+    parallel = parallel_thermal_resistance(
+        Quantity(magnitude=4.0, unit="K/W"), Quantity(magnitude=4.0, unit="K/W")
+    )
+    assert parallel.to("K/W").magnitude == pytest.approx(2.0, rel=1e-12)
+
+
+def test_fin_efficiency_falls_from_one_as_the_fin_lengthens():
+    from anvilate.analysis import fin_efficiency
+
+    kw = {
+        "heat_transfer_coefficient": _q("20 W/(m**2*K)"),
+        "perimeter": _q("102 mm"),
+        "conductivity": _q("200 W/(m*K)"),
+        "cross_section_area": _q("100 mm**2"),
+    }
+    # η = tanh(mL)/(mL); a stubby aluminum fin is nearly ideal.
+    short = fin_efficiency(length=_q("30 mm"), **kw)
+    assert short == pytest.approx(0.970, abs=0.005)
+    assert 0.0 < short <= 1.0
+    # A longer fin runs cooler at the tip and moves proportionally less heat.
+    long = fin_efficiency(length=_q("120 mm"), **kw)
+    assert long < short
+    with pytest.raises(ValueError, match="all fin parameters must be positive"):
+        fin_efficiency(length=_q("0 mm"), **kw)
+
+
+def test_thermal_resistance_rejects_bad_dimensions():
+    from anvilate.analysis import (
+        conduction_thermal_resistance,
+        convection_thermal_resistance,
+        series_thermal_resistance,
+    )
+
+    with pytest.raises(ValueError, match="conductivity must be"):
+        conduction_thermal_resistance(
+            thickness=_q("5 mm"), area=_q("900 mm**2"), conductivity=_q("3 W")
+        )
+    with pytest.raises(ValueError, match="heat_transfer_coefficient must be"):
+        convection_thermal_resistance(
+            area=_q("0.05 m**2"), heat_transfer_coefficient=_q("20 W/(m*K)")
+        )
+    with pytest.raises(ValueError, match="at least one resistance"):
+        series_thermal_resistance()
+
+
 def test_quality_factor():
     # Q = 1/(2*zeta): light damping gives a tall, sharp resonance.
     assert quality_factor(damping_ratio=0.05) == pytest.approx(10.0, rel=1e-12)

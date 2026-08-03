@@ -15,7 +15,7 @@ absolute ``degC`` reading.
 
 from __future__ import annotations
 
-from math import pi
+from math import pi, sqrt, tanh
 
 from pydantic import BaseModel, ConfigDict
 
@@ -33,7 +33,15 @@ __all__ = [
     "differential_thermal_stress",
     "bimetallic_strip_curvature",
     "bimetallic_strip_tip_deflection",
+    "conduction_thermal_resistance",
+    "convection_thermal_resistance",
+    "series_thermal_resistance",
+    "parallel_thermal_resistance",
+    "temperature_rise",
+    "fin_efficiency",
 ]
+
+_THERMAL_RESISTANCE_UNIT = "K/W"
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
@@ -506,3 +514,158 @@ def bimetallic_strip_tip_deflection(
         .magnitude
     )
     return Quantity(magnitude=curvature * ell**2 / 2.0, unit="mm")
+
+
+# --- Heat-transfer screening: resistance networks and fin efficiency ---
+#
+# Enclosure and electronics thermal design starts with a resistance network: the
+# same series/parallel algebra as a circuit, with temperature difference playing
+# the role of voltage and heat flow the current. Conduction is R = L/(kA),
+# convection R = 1/(hA); the rise across a network carrying Q is ΔT = Q·R. These
+# are the Incropera-class closed forms, kept in temperature *differences* (kelvin)
+# so no absolute-temperature offset scale is involved. Convection coefficients h
+# are caller-supplied (a correlation, datasheet, or measurement).
+
+
+def conduction_thermal_resistance(
+    *,
+    thickness: Quantity,
+    area: Quantity,
+    conductivity: Quantity,
+) -> Quantity:
+    """The conduction thermal resistance R = L/(k·A) of a slab (K/W).
+
+    Heat crossing a slab of ``thickness`` L and cross-sectional ``area`` A whose
+    material has thermal ``conductivity`` k meets a resistance L/(k·A): a thicker or
+    less-conductive slab resists more, a wider one less. ``conductivity`` is a
+    ``[power]/[length]/[temperature]`` quantity (W/(m·K)). Returns K/W.
+    """
+    _require(thickness, "[length]", "thickness")
+    _require(area, "[area]", "area")
+    _require(conductivity, "[power] / [length] / [temperature]", "conductivity")
+    length_m = thickness.to("m").magnitude
+    area_m2 = area.to("m**2").magnitude
+    k = conductivity.to("W/(m*K)").magnitude
+    if length_m <= 0 or area_m2 <= 0 or k <= 0:
+        raise ValueError("thickness, area, and conductivity must be positive")
+    return Quantity(magnitude=length_m / (k * area_m2), unit=_THERMAL_RESISTANCE_UNIT)
+
+
+def convection_thermal_resistance(
+    *,
+    area: Quantity,
+    heat_transfer_coefficient: Quantity,
+) -> Quantity:
+    """The convection thermal resistance R = 1/(h·A) of a surface (K/W).
+
+    Heat leaving a surface of ``area`` A to a fluid through a convection
+    ``heat_transfer_coefficient`` h meets a resistance 1/(h·A): a larger area or a
+    stronger coefficient (forced air over natural, liquid over air) resists less.
+    ``heat_transfer_coefficient`` is a ``[power]/[length]**2/[temperature]`` quantity
+    (W/(m²·K)), supplied by the caller from a correlation or datasheet. Returns K/W.
+    """
+    _require(area, "[area]", "area")
+    _require(
+        heat_transfer_coefficient,
+        "[power] / [length]**2 / [temperature]",
+        "heat_transfer_coefficient",
+    )
+    area_m2 = area.to("m**2").magnitude
+    h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
+    if area_m2 <= 0 or h <= 0:
+        raise ValueError("area and heat_transfer_coefficient must be positive")
+    return Quantity(magnitude=1.0 / (h * area_m2), unit=_THERMAL_RESISTANCE_UNIT)
+
+
+def series_thermal_resistance(*resistances: Quantity) -> Quantity:
+    """The total resistance of paths in series, R = ΣRᵢ (K/W).
+
+    Conduction through a wall then convection off its face is two resistances in
+    series — the heat flows through both, so they add. Needs at least one
+    resistance; each is a ``[temperature]/[power]`` quantity.
+    """
+    if not resistances:
+        raise ValueError("series_thermal_resistance needs at least one resistance")
+    total = 0.0
+    for r in resistances:
+        _require(r, "[temperature] / [power]", "resistance")
+        total += r.to(_THERMAL_RESISTANCE_UNIT).magnitude
+    return Quantity(magnitude=total, unit=_THERMAL_RESISTANCE_UNIT)
+
+
+def parallel_thermal_resistance(*resistances: Quantity) -> Quantity:
+    """The total resistance of paths in parallel, 1/R = Σ(1/Rᵢ) (K/W).
+
+    A heat sink and the enclosure wall both carrying heat away from a component are
+    parallel paths — the conductances add, so the combined resistance is below the
+    smallest. Needs at least one positive resistance; each is a
+    ``[temperature]/[power]`` quantity.
+    """
+    if not resistances:
+        raise ValueError("parallel_thermal_resistance needs at least one resistance")
+    conductance = 0.0
+    for r in resistances:
+        _require(r, "[temperature] / [power]", "resistance")
+        magnitude = r.to(_THERMAL_RESISTANCE_UNIT).magnitude
+        if magnitude <= 0:
+            raise ValueError(f"each resistance must be positive; got {r}")
+        conductance += 1.0 / magnitude
+    return Quantity(magnitude=1.0 / conductance, unit=_THERMAL_RESISTANCE_UNIT)
+
+
+def temperature_rise(*, power: Quantity, thermal_resistance: Quantity) -> Quantity:
+    """The temperature rise ΔT = Q·R across a resistance carrying a heat flow (K).
+
+    The junction-to-ambient rise of a component dissipating ``power`` Q through a
+    total ``thermal_resistance`` R — add it to the ambient temperature to get the
+    junction temperature, and compare against the rated limit. ``power`` is a
+    ``[power]`` quantity and ``thermal_resistance`` a ``[temperature]/[power]`` one.
+    Returns the rise in kelvin (a temperature difference).
+    """
+    _require(power, "[power]", "power")
+    _require(thermal_resistance, "[temperature] / [power]", "thermal_resistance")
+    q = power.to("W").magnitude
+    r = thermal_resistance.to(_THERMAL_RESISTANCE_UNIT).magnitude
+    if q < 0 or r < 0:
+        raise ValueError("power and thermal_resistance must be non-negative")
+    return Quantity(magnitude=q * r, unit="K")
+
+
+def fin_efficiency(
+    *,
+    heat_transfer_coefficient: Quantity,
+    perimeter: Quantity,
+    conductivity: Quantity,
+    cross_section_area: Quantity,
+    length: Quantity,
+) -> float:
+    """The efficiency η = tanh(mL)/(mL) of a straight fin (adiabatic tip).
+
+    A fin is not isothermal — its tip runs cooler than its base, so it moves less
+    heat than an ideal fin at the base temperature. The efficiency is
+    η = tanh(mL)/(mL) with m = √(h·P/(k·A_c)), where ``perimeter`` P and
+    ``cross_section_area`` A_c are the fin's section, ``conductivity`` k its
+    material, ``heat_transfer_coefficient`` h the surface coefficient, and
+    ``length`` L the fin length. A short, thick, conductive fin approaches η = 1; a
+    long, thin, low-conductivity one falls off. Returns the dimensionless efficiency
+    in (0, 1].
+    """
+    _require(
+        heat_transfer_coefficient,
+        "[power] / [length]**2 / [temperature]",
+        "heat_transfer_coefficient",
+    )
+    _require(perimeter, "[length]", "perimeter")
+    _require(conductivity, "[power] / [length] / [temperature]", "conductivity")
+    _require(cross_section_area, "[area]", "cross_section_area")
+    _require(length, "[length]", "length")
+    h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
+    p = perimeter.to("m").magnitude
+    k = conductivity.to("W/(m*K)").magnitude
+    a_c = cross_section_area.to("m**2").magnitude
+    length_m = length.to("m").magnitude
+    if min(h, p, k, a_c, length_m) <= 0:
+        raise ValueError("all fin parameters must be positive")
+    m = sqrt(h * p / (k * a_c))
+    ml = m * length_m
+    return tanh(ml) / ml
