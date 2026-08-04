@@ -80,6 +80,7 @@ Over 45 runnable examples, each executed in CI so they stay honest. A few:
 | `bolted_tension_splice.py` | Gross yielding (621 kN) and net-section rupture (544 kN) both pass, but AISC §J4.3 block shear tears the end block out first at 450 kN — the limit state a member-only check never sees. |
 | `plate_girder_design.py` | A deep welded girder: the slender web docks bending 5.6% (AISC §F5 R_pg) yet, once stiffened, nearly doubles the shear via §G2.2 tension-field action (832 → 1468 kN). |
 | `spur_gear_agma_check.py` | An AGMA spur gear checked for both tooth-root bending and surface pitting — pitting runs the higher utilization (0.69 vs 0.39), the mode a Lewis bending-only check never flags. |
+| `pipe_expansion_loop.py` | A B31.3 thermal-expansion bend: the elbow's stress-intensification factor makes it work 73% harder than the straight-pipe stress calc predicts (S_E/S_A 0.84 vs 0.48). |
 | `lug_drawing.py` | Code-check a lifting lug (ASME BTH-1), then export its outline to a fabrication-ready DXF. |
 | `column_base_plate.py` | A base plate checked for concrete bearing (AISC J8) *and* plate bending (Design Guide 1) — bearing passes, the thin plate fails. |
 | `motor_mount_resonance.py` | A mount that's statically bulletproof but resonates below running speed — the dimension a static hand calc never sees. |

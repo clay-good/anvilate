@@ -162,6 +162,16 @@ def test_beam_bearing_web_checks_example_is_governed_by_crippling():
     assert crippling == pytest.approx(212.6, abs=0.5)
 
 
+def test_pipe_expansion_loop_example_shows_the_sif_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "pipe_expansion_loop.py"))
+    utils = namespace["loop_utilizations"]()
+    # Accounting for the elbow SIF raises the utilization well above the straight-pipe
+    # value — both pass, but the fitting is where the real stress is.
+    assert utils["at_the_elbow"] > utils["straight_pipe"]
+    assert utils["at_the_elbow"] < 1.0
+    assert utils["at_the_elbow"] == pytest.approx(0.84, abs=0.03)
+
+
 def test_spur_gear_agma_example_is_governed_by_pitting():
     namespace = runpy.run_path(str(_EXAMPLES / "spur_gear_agma_check.py"))
     utils = namespace["gear_utilizations"]()
