@@ -15306,6 +15306,35 @@ def test_building_loads_seismic_response_coefficient_and_base_shear():
         )
 
 
+def test_asce7_lrfd_and_asd_load_combinations_governing():
+    from anvilate.analysis import asce7_asd_factored_load, asce7_lrfd_factored_load
+
+    loads = {
+        "dead": _q("100 kN"),
+        "live": _q("80 kN"),
+        "roof_snow_rain": _q("40 kN"),
+        "wind": _q("30 kN"),
+        "seismic": _q("50 kN"),
+    }
+    # LRFD governs on 1.2D + 1.6L + 0.5S = 120 + 128 + 20 = 268 kN.
+    lrfd = asce7_lrfd_factored_load(**loads)
+    assert lrfd.to("kN").magnitude == pytest.approx(268.0, rel=1e-9)
+    # ASD governs on D + 0.75L + 0.75(0.7E) + 0.75S = 100 + 60 + 26.25 + 30 = 216.25 kN.
+    asd = asce7_asd_factored_load(**loads)
+    assert asd.to("kN").magnitude == pytest.approx(216.25, rel=1e-9)
+    # LRFD (strength-level) always governs higher than ASD (service-level) for the same loads.
+    assert lrfd.to("kN").magnitude > asd.to("kN").magnitude
+    # Dead alone: LRFD is 1.4D, ASD is D.
+    assert asce7_lrfd_factored_load(dead=_q("100 kN")).to("kN").magnitude == pytest.approx(140.0)
+    assert asce7_asd_factored_load(dead=_q("100 kN")).to("kN").magnitude == pytest.approx(100.0)
+    # Dimension-general: it combines moment effects just as it does forces (1.2*10 + 1.6*8 = 24.8).
+    m = asce7_lrfd_factored_load(dead=_q("10 kN*m"), live=_q("8 kN*m"))
+    assert m.to("kN*m").magnitude == pytest.approx(24.8, rel=1e-9)
+    # A load with the wrong dimensionality is rejected.
+    with pytest.raises(ValueError, match="dimensionality"):
+        asce7_lrfd_factored_load(dead=_q("100 kN"), live=_q("5 MPa"))
+
+
 def test_building_loads_flat_and_sloped_roof_snow():
     from anvilate.analysis import flat_roof_snow_load, sloped_roof_snow_load
 

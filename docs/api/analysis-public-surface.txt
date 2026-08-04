@@ -516,6 +516,8 @@ keys.key_tangential_force
 keys.spline_torque_capacity
 living_hinge.living_hinge_fold_strain
 living_hinge.living_hinge_web_length_for_strain
+load_combinations.asce7_asd_factored_load
+load_combinations.asce7_lrfd_factored_load
 nds_timber.LoadDuration
 nds_timber.nds_adjusted_design_value
 nds_timber.nds_bearing_area_factor

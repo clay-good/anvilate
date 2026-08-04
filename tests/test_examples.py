@@ -945,6 +945,15 @@ def test_motor_feeder_voltage_drop_example_bigger_conductor_passes():
     assert f["small_drop_percent"] > f["large_drop_percent"]
 
 
+def test_column_load_combinations_example_lrfd_exceeds_asd():
+    namespace = runpy.run_path(str(_EXAMPLES / "column_load_combinations.py"))
+    d = namespace["column_demands"]()
+    # LRFD strength-level demand governs higher than the ASD service-level one.
+    assert d["lrfd_kn"] == pytest.approx(677, abs=1)
+    assert d["asd_kn"] == pytest.approx(535, abs=1)
+    assert d["lrfd_kn"] > d["asd_kn"]
+
+
 def test_cold_storage_roof_snow_example_freezer_carries_more():
     namespace = runpy.run_path(str(_EXAMPLES / "cold_storage_roof_snow.py"))
     r = namespace["roof_snow_loads"]()

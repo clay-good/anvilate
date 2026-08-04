@@ -280,6 +280,9 @@ modules:
   extruding or over-straining the ring
 - :mod:`~anvilate.analysis.living_hinge` — moulded living-hinge fold strain
   ε = θ·t/(2·L) and the minimum web length a permissible flexural strain requires
+- :mod:`~anvilate.analysis.load_combinations` — the governing ASCE 7 factored load
+  combination (§2.3 LRFD strength and §2.4 ASD) from the dead, live, roof/snow/rain,
+  wind, and seismic load effects — dimension-general (force, moment, or stress)
 - :mod:`~anvilate.analysis.weld` — fillet-weld throat shear, the weld leg a
   load requires, the peak throat stress of an eccentrically-loaded weld group
   (AISC elastic method), and the AISC 360 fillet-weld design strengths — the base
@@ -1030,6 +1033,10 @@ from .keys import (
 from .living_hinge import (
     living_hinge_fold_strain,
     living_hinge_web_length_for_strain,
+)
+from .load_combinations import (
+    asce7_asd_factored_load,
+    asce7_lrfd_factored_load,
 )
 from .masonry import (
     masonry_allowable_axial_stress,
@@ -2082,6 +2089,8 @@ __all__ = [
     "spline_torque_capacity",
     "living_hinge_fold_strain",
     "living_hinge_web_length_for_strain",
+    "asce7_lrfd_factored_load",
+    "asce7_asd_factored_load",
     "LoadDuration",
     "nds_load_duration_factor",
     "nds_adjusted_design_value",
