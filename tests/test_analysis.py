@@ -13187,6 +13187,29 @@ def test_air_receiver_holdup_and_sizing_round_trip():
         )
 
 
+def test_acoustics_level_sum_and_distance_attenuation():
+    import math
+
+    from anvilate.analysis import inverse_square_attenuation, sound_level_sum
+
+    # Two equal sources add 3 dB (energy sum, not arithmetic): 85 + 85 -> 88.01.
+    assert sound_level_sum(levels=[85.0, 85.0]) == pytest.approx(85 + 10 * math.log10(2), rel=1e-9)
+    # A source well below the loudest barely moves the total.
+    dominated = sound_level_sum(levels=[90.0, 70.0])
+    assert dominated == pytest.approx(90.0, abs=0.05)
+    # Three sources against the closed form.
+    three = sound_level_sum(levels=[90.0, 85.0, 80.0])
+    assert three == pytest.approx(10 * math.log10(10**9.0 + 10**8.5 + 10**8.0), rel=1e-9)
+    # Inverse-square: 6 dB drop per doubling of distance.
+    at_2m = inverse_square_attenuation(
+        reference_level=90.0, reference_distance=_q("1 m"), distance=_q("2 m")
+    )
+    assert at_2m == pytest.approx(90 - 20 * math.log10(2), rel=1e-9)
+    assert at_2m == pytest.approx(84.0, abs=0.1)  # -6 dB
+    with pytest.raises(ValueError, match="at least one"):
+        sound_level_sum(levels=[])
+
+
 def test_electrical_three_phase_power_current_and_voltage_drop():
     import math
 

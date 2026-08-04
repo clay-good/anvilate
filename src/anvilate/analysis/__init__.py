@@ -4,6 +4,8 @@ The T1 validation tier screens a design with handbook closed-form solutions
 (Roark, Shigley) before any FEA — fast, deterministic, and unit-checked. The
 modules:
 
+- :mod:`~anvilate.analysis.acoustics` — machinery-noise arithmetic (for plant/industrial
+  work): the decibel sum of several sources and the inverse-square distance attenuation
 - :mod:`~anvilate.analysis.adhesive` — bonded joints: the lap-joint average shear
   stress against the datasheet lap-shear strength, and the axial and torque
   capacity of a cylindrical retaining-compound bond
@@ -356,6 +358,10 @@ openspec/specs/validation-gauntlet/).
 
 from __future__ import annotations
 
+from .acoustics import (
+    inverse_square_attenuation,
+    sound_level_sum,
+)
 from .adhesive import (
     cylindrical_bond_axial_capacity,
     cylindrical_bond_torque_capacity,
@@ -1384,6 +1390,8 @@ __all__ = [
     "power_factor_correction_kvar",
     "three_phase_power",
     "voltage_drop_three_phase",
+    "inverse_square_attenuation",
+    "sound_level_sum",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

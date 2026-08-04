@@ -467,6 +467,17 @@ def test_heat_pump_cold_day_example_cop_collapses():
     assert p["cold_power_kw"] / p["mild_power_kw"] > 1.5
 
 
+def test_plant_noise_exposure_example_loudest_dominates():
+    namespace = runpy.run_path(str(_EXAMPLES / "plant_noise_exposure.py"))
+    a = namespace["noise_assessment"]()
+    # The combined level sits just above the loudest machine (energy summing).
+    assert a["combined_db"] == pytest.approx(94.2, abs=0.3)
+    assert a["margin_over_loudest"] < 3.0
+    # The inverse-square safe distance drops the level to the action level.
+    assert a["level_at_safe_distance"] == pytest.approx(85.0, abs=0.1)
+    assert a["safe_distance_m"] > 1.0
+
+
 def test_motor_feeder_voltage_drop_example_bigger_conductor_passes():
     namespace = runpy.run_path(str(_EXAMPLES / "motor_feeder_voltage_drop.py"))
     f = namespace["feeder_check"]()
