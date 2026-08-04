@@ -4308,7 +4308,38 @@ def test_shaft_diameter_for_bending_torsion_matches_worked_example():
     assert d.to("mm").magnitude == pytest.approx(31.299, rel=1e-4)
 
 
-def test_shaft_diameter_for_bending_torsion_lands_on_the_von_mises_allowable():
+def test_shaft_diameter_de_goodman_sizes_a_rotating_shaft_for_fatigue():
+    from math import pi, sqrt
+
+    from anvilate.analysis import shaft_diameter_de_goodman
+
+    # Rotating shaft: 200 N*m reversed bending + 100 N*m steady torque, S_e=200,
+    # S_ut=500, K_f=1.5, K_fs=1.3, n=2 -> d = 32.8 mm.
+    d = shaft_diameter_de_goodman(
+        alternating_bending_moment=_q("200 N*m"),
+        mean_torque=_q("100 N*m"),
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("500 MPa"),
+        bending_fatigue_factor=1.5,
+        torsion_fatigue_factor=1.3,
+        required_safety_factor=2.0,
+    )
+    alt = sqrt(4 * (1.5 * 200000) ** 2)
+    mean = sqrt(3 * (1.3 * 100000) ** 2)
+    expect = (16 * 2 / pi * (alt / 200 + mean / 500)) ** (1 / 3)
+    assert d.to("mm").magnitude == pytest.approx(expect, rel=1e-9)
+    assert d.to("mm").magnitude == pytest.approx(32.8, abs=0.2)
+    # The fatigue size exceeds the static von Mises size for the same peak loads, because
+    # the reversed bending is far more damaging than a steady moment of the same size.
+    from anvilate.analysis import shaft_diameter_for_bending_torsion
+
+    static = shaft_diameter_for_bending_torsion(
+        bending_moment=_q("200 N*m"),
+        torque=_q("100 N*m"),
+        yield_strength=_q("500 MPa"),
+        required_safety_factor=2.0,
+    )
+    assert d.to("mm").magnitude > static.to("mm").magnitude
     # At the sized diameter the von Mises stress equals exactly Sy/n.
     d = shaft_diameter_for_bending_torsion(
         bending_moment=_q("300 N*m"),

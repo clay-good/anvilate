@@ -33,6 +33,7 @@ __all__ = [
     "shaft_von_mises_stress",
     "shaft_diameter_for_torque",
     "shaft_diameter_for_bending_torsion",
+    "shaft_diameter_de_goodman",
     "hollow_shaft_diameter_for_bending_torsion",
     "hollow_shaft_torsional_stress",
     "shaft_twist_angle",
@@ -216,6 +217,71 @@ def shaft_diameter_for_bending_torsion(
         raise ValueError(f"yield_strength must be positive; got {yield_strength}")
     equivalent = sqrt(m * m + 0.75 * t * t)
     d_min = (32 * required_safety_factor * equivalent / (pi * sy)) ** (1.0 / 3.0)
+    return Quantity(magnitude=d_min, unit="mm")
+
+
+def shaft_diameter_de_goodman(
+    *,
+    alternating_bending_moment: Quantity,
+    mean_torque: Quantity,
+    endurance_limit: Quantity,
+    ultimate_strength: Quantity,
+    mean_bending_moment: Quantity | None = None,
+    alternating_torque: Quantity | None = None,
+    bending_fatigue_factor: float = 1.0,
+    torsion_fatigue_factor: float = 1.0,
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least rotating-shaft diameter for combined fatigue, by the DE-Goodman criterion.
+
+    A rotating shaft under a steady transverse load sees *fully reversed* bending every
+    revolution while its torque stays roughly steady — a fatigue problem the static
+    von Mises sizing (:func:`shaft_diameter_for_bending_torsion`) does not capture. The
+    Shigley distortion-energy Goodman equation sizes it against both the endurance limit
+    and the ultimate strength (Shigley Eq. 7-8):
+
+        d = { (16·n/π)·[ (1/S_e)·√(4(K_f·M_a)² + 3(K_fs·T_a)²)
+                        + (1/S_ut)·√(4(K_f·M_m)² + 3(K_fs·T_m)²) ] }^(1/3).
+
+    ``alternating_bending_moment`` M_a and ``mean_torque`` T_m are the usual rotating-shaft
+    pair (reversed bending, steady torque); ``mean_bending_moment`` M_m and
+    ``alternating_torque`` T_a default to zero for the other components. ``endurance_limit``
+    S_e is the *corrected* endurance limit (apply the Marin factors first),
+    ``ultimate_strength`` S_ut the tensile strength, ``bending_fatigue_factor`` K_f and
+    ``torsion_fatigue_factor`` K_fs the fatigue stress-concentration factors at the section
+    (from a keyway, fillet, or shoulder), and ``required_safety_factor`` n the design factor.
+    Returns the minimum diameter in mm.
+    """
+    _require(alternating_bending_moment, "[force] * [length]", "alternating_bending_moment")
+    _require(mean_torque, "[force] * [length]", "mean_torque")
+    _require(endurance_limit, "[pressure]", "endurance_limit")
+    _require(ultimate_strength, "[pressure]", "ultimate_strength")
+    m_a = alternating_bending_moment.to("N*mm").magnitude
+    t_m = mean_torque.to("N*mm").magnitude
+    m_m = 0.0
+    if mean_bending_moment is not None:
+        _require(mean_bending_moment, "[force] * [length]", "mean_bending_moment")
+        m_m = mean_bending_moment.to("N*mm").magnitude
+    t_a = 0.0
+    if alternating_torque is not None:
+        _require(alternating_torque, "[force] * [length]", "alternating_torque")
+        t_a = alternating_torque.to("N*mm").magnitude
+    se = endurance_limit.to("MPa").magnitude
+    sut = ultimate_strength.to("MPa").magnitude
+    if se <= 0 or sut <= 0:
+        raise ValueError("endurance_limit and ultimate_strength must be positive")
+    if bending_fatigue_factor <= 0 or torsion_fatigue_factor <= 0:
+        raise ValueError("the fatigue stress-concentration factors must be positive")
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    alternating = sqrt(
+        4.0 * (bending_fatigue_factor * m_a) ** 2 + 3.0 * (torsion_fatigue_factor * t_a) ** 2
+    )
+    mean = sqrt(
+        4.0 * (bending_fatigue_factor * m_m) ** 2 + 3.0 * (torsion_fatigue_factor * t_m) ** 2
+    )
+    bracket = alternating / se + mean / sut
+    d_min = (16.0 * required_safety_factor / pi * bracket) ** (1.0 / 3.0)
     return Quantity(magnitude=d_min, unit="mm")
 
 
