@@ -745,6 +745,17 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_weld_heat_input_window_example_travel_speed_band():
+    namespace = runpy.run_path(str(_EXAMPLES / "weld_heat_input_window.py"))
+    w = namespace["heat_input_window"]()
+    # 5 kW arc at 80% efficiency, 4 mm/s -> 1.0 kJ/mm.
+    assert w["nominal_heat_input_kj_mm"] == pytest.approx(1.0, rel=1e-9)
+    # The 0.8-1.5 kJ/mm window maps to a 2.67-5.0 mm/s travel band.
+    assert w["slowest_speed_mm_s"] == pytest.approx(2.667, abs=0.01)
+    assert w["fastest_speed_mm_s"] == pytest.approx(5.0, rel=1e-9)
+    assert w["fastest_speed_mm_s"] > w["slowest_speed_mm_s"]
+
+
 def test_stopping_sight_distance_grade_example_downgrade_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "stopping_sight_distance_grade.py"))
     s = namespace["sight_distance_by_grade"]()

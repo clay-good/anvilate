@@ -3010,6 +3010,56 @@ def test_bolt_shear_rejects_bad_planes():
         bolt_shear_stress(force=_q("10 kN"), diameter=_q("8 mm"), shear_planes=0)
 
 
+def test_weld_heat_input_arc_power_and_travel_speed_inverse():
+    from anvilate.analysis import (
+        weld_arc_power,
+        weld_heat_input,
+        weld_travel_speed_for_heat_input,
+    )
+
+    # Arc power P = U*I = 25 V * 200 A = 5000 W.
+    p = weld_arc_power(arc_voltage=_q("25 V"), welding_current=_q("200 A"))
+    assert p.to("W").magnitude == pytest.approx(5000.0, rel=1e-12)
+
+    # Heat input Q = eta*U*I/v; 0.8*5000/(4 mm/s) = 1000 J/mm = 1.0 kJ/mm.
+    hi = weld_heat_input(
+        arc_voltage=_q("25 V"),
+        welding_current=_q("200 A"),
+        travel_speed=_q("4 mm/s"),
+        thermal_efficiency=0.8,
+    )
+    assert hi.to("kJ/mm").magnitude == pytest.approx(1.0, rel=1e-9)
+
+    # The travel-speed inverse round-trips back to the original 4 mm/s.
+    v = weld_travel_speed_for_heat_input(
+        arc_voltage=_q("25 V"),
+        welding_current=_q("200 A"),
+        heat_input=hi,
+        thermal_efficiency=0.8,
+    )
+    assert v.to("mm/s").magnitude == pytest.approx(4.0, rel=1e-9)
+
+    # Faster travel drops the heat input (less energy per unit length).
+    faster = weld_heat_input(
+        arc_voltage=_q("25 V"),
+        welding_current=_q("200 A"),
+        travel_speed=_q("8 mm/s"),
+        thermal_efficiency=0.8,
+    )
+    assert faster.to("kJ/mm").magnitude == pytest.approx(0.5, rel=1e-9)
+
+    # Guardrails: efficiency is a fraction, current must be positive.
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        weld_heat_input(
+            arc_voltage=_q("25 V"),
+            welding_current=_q("200 A"),
+            travel_speed=_q("4 mm/s"),
+            thermal_efficiency=1.5,
+        )
+    with pytest.raises(ValueError, match="must be positive"):
+        weld_arc_power(arc_voltage=_q("25 V"), welding_current=_q("0 A"))
+
+
 def test_fillet_weld_throat_stress_worked_example():
     # 20 kN on a 6 mm x 100 mm fillet: throat = 0.707*6*100 = 424.2 mm^2,
     #   tau = 20000/424.2 = 47.15 MPa.

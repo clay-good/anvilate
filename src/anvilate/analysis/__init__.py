@@ -333,6 +333,9 @@ modules:
   (AISC elastic method), and the AISC 360 fillet-weld design strengths — the base
   §J2.4 weld-metal strength, the directional (sin θ) increase, and the companion
   §J4.2 base-metal shear rupture
+- :mod:`~anvilate.analysis.welding_heat` — arc-welding process heat input: the arc
+  power P = U·I, the heat input Q = η·U·I/v per unit length that sets the cooling
+  rate and HAZ, and the travel speed a target heat input needs (v = η·U·I/Q)
 - :mod:`~anvilate.analysis.rivet` — riveted-joint tearing/shearing/crushing
   strength, governing mode, and efficiency
 - :mod:`~anvilate.analysis.rigging` — multi-leg sling lifting statics: the
@@ -1572,6 +1575,11 @@ from .weld import (
     fillet_weld_throat_stress,
     weld_base_metal_shear_strength,
 )
+from .welding_heat import (
+    weld_arc_power,
+    weld_heat_input,
+    weld_travel_speed_for_heat_input,
+)
 from .winch import (
     drum_line_pull,
     drum_rope_capacity,
@@ -2523,6 +2531,9 @@ __all__ = [
     "fillet_weld_directional_strength",
     "weld_base_metal_shear_strength",
     "eccentric_weld_group_peak_stress",
+    "weld_arc_power",
+    "weld_heat_input",
+    "weld_travel_speed_for_heat_input",
     "wire_rope_bending_stress",
     "minimum_sheave_diameter_for_bending_stress",
     "wire_rope_equivalent_bending_load",

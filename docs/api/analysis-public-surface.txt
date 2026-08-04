@@ -920,6 +920,9 @@ weld.fillet_weld_directional_strength
 weld.weld_base_metal_shear_strength
 weld.fillet_weld_leg_for_load
 weld.fillet_weld_throat_stress
+welding_heat.weld_arc_power
+welding_heat.weld_heat_input
+welding_heat.weld_travel_speed_for_heat_input
 winch.drum_line_pull
 winch.drum_rope_capacity
 winch.drum_working_radius
