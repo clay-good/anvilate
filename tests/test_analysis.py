@@ -13617,6 +13617,34 @@ def test_aisc_rectangular_hss_flexural_strength_governing_limit_state():
         )
 
 
+def test_aisc_plate_girder_flange_stress_spans_the_three_ranges():
+    from anvilate.analysis import aisc_plate_girder_flange_stress
+
+    base = {
+        "web_depth": _q("1500 mm"),
+        "web_thickness": _q("8 mm"),
+        "yield_strength": _q("345 MPa"),
+        "elastic_modulus": _q("200000 MPa"),
+    }
+    # k_c = 4/sqrt(187.5) = 0.292 -> floored at 0.35; lambda_pf = 9.15.
+    # Compact flange (lambda = 7.5): F_cr = F_y.
+    compact = aisc_plate_girder_flange_stress(
+        flange_width=_q("300 mm"), flange_thickness=_q("20 mm"), **base
+    )
+    assert compact.to("MPa").magnitude == pytest.approx(345.0, rel=1e-9)
+    # Slender flange (lambda = 20): elastic buckling F_cr = 0.9*E*k_c/lambda^2.
+    slender = aisc_plate_girder_flange_stress(
+        flange_width=_q("400 mm"), flange_thickness=_q("10 mm"), **base
+    )
+    assert slender.to("MPa").magnitude == pytest.approx(0.9 * 200000 * 0.35 / 20**2, rel=1e-9)
+    assert slender.to("MPa").magnitude < compact.to("MPa").magnitude
+    # A noncompact flange sits between F_L = 0.7*F_y and F_y.
+    noncompact = aisc_plate_girder_flange_stress(
+        flange_width=_q("300 mm"), flange_thickness=_q("12.5 mm"), **base
+    )
+    assert 0.7 * 345 < noncompact.to("MPa").magnitude < 345
+
+
 def test_aisc_tension_field_shear_recovers_post_buckling_reserve():
     from anvilate.analysis import aisc_tension_field_shear_strength, aisc_web_shear_strength
 

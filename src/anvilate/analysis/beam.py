@@ -88,6 +88,7 @@ __all__ = [
     "aisc_rectangular_hss_flexural_strength",
     "aisc_minor_axis_flexural_strength",
     "aisc_plate_girder_bending_factor",
+    "aisc_plate_girder_flange_stress",
     "aisc_tension_field_shear_strength",
     "aisc_web_shear_strength",
     "shear_flow",
@@ -994,6 +995,57 @@ def aisc_tension_field_shear_strength(
     tension_field = c_v2 + (1.0 - c_v2) / (1.15 * (1.0 + aspect**2) ** 0.5)
     v_n = 0.6 * fy * a_w * tension_field
     return Quantity(magnitude=v_n / 1000.0, unit="kN")
+
+
+def aisc_plate_girder_flange_stress(
+    *,
+    flange_width: Quantity,
+    flange_thickness: Quantity,
+    web_depth: Quantity,
+    web_thickness: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The AISC 360 §F5.3 compression-flange local-buckling stress F_cr of a plate girder.
+
+    A plate girder's bending strength is M_n = R_pg·F_cr·S_xc
+    (:func:`aisc_plate_girder_bending_factor` gives R_pg); this is the F_cr set by the
+    compression flange buckling locally. Unlike a rolled shape, a girder flange's buckling
+    limit depends on the web through the coefficient k_c = 4/√(h/t_w), bounded to
+    [0.35, 0.76]: a slender web offers the flange less restraint. The flange slenderness
+    λ = b_f/(2·t_f) is read against λ_pf = 0.38·√(E/F_y) and λ_rf = 0.95·√(k_c·E/F_L),
+    F_L = 0.7·F_y. A compact flange reaches F_cr = F_y; a noncompact one falls linearly to
+    F_L; a slender one buckles elastically at F_cr = 0.9·E·k_c/λ². ``flange_width`` b_f,
+    ``flange_thickness`` t_f, ``web_depth`` h, ``web_thickness`` t_w, ``yield_strength`` F_y,
+    and ``elastic_modulus`` E. Take the lesser of this and the girder's lateral-torsional
+    buckling stress before applying R_pg. Returns F_cr in MPa.
+    """
+    _require(flange_width, "[length]", "flange_width")
+    _require(flange_thickness, "[length]", "flange_thickness")
+    _require(web_depth, "[length]", "web_depth")
+    _require(web_thickness, "[length]", "web_thickness")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    bf = flange_width.to("mm").magnitude
+    tf = flange_thickness.to("mm").magnitude
+    h = web_depth.to("mm").magnitude
+    tw = web_thickness.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if bf <= 0 or tf <= 0 or h <= 0 or tw <= 0 or fy <= 0 or e <= 0:
+        raise ValueError("all dimensions and material properties must be positive")
+    k_c = min(max(4.0 / (h / tw) ** 0.5, 0.35), 0.76)
+    lam = bf / (2.0 * tf)
+    f_l = 0.7 * fy
+    lambda_pf = 0.38 * (e / fy) ** 0.5
+    lambda_rf = 0.95 * (k_c * e / f_l) ** 0.5
+    if lam <= lambda_pf:
+        f_cr = fy
+    elif lam <= lambda_rf:
+        f_cr = fy - 0.3 * fy * (lam - lambda_pf) / (lambda_rf - lambda_pf)
+    else:
+        f_cr = 0.9 * e * k_c / lam**2
+    return Quantity(magnitude=f_cr, unit="MPa")
 
 
 def aisc_minor_axis_flexural_strength(
