@@ -22,11 +22,20 @@ from math import exp, log
 from ..units import Quantity
 
 __all__ = [
+    "cooling_coil_load",
     "dew_point_temperature",
     "humidity_ratio",
+    "moist_air_enthalpy",
     "relative_humidity",
     "saturation_vapor_pressure",
 ]
+
+# Specific-heat coefficients for moist-air enthalpy (per kg of dry air, T in deg C, h in kJ/kg):
+# h = 1.006*T + W*(2501 + 1.86*T) — dry-air sensible heat plus the latent + sensible heat of the
+# water vapor it carries.
+_CP_DRY_AIR = 1.006
+_LATENT_HEAT_0C = 2501.0
+_CP_WATER_VAPOR = 1.86
 
 # Magnus-Tetens coefficients for saturation vapor pressure over water (T in deg C, p in Pa).
 _MAGNUS_A = 610.94
@@ -108,6 +117,50 @@ def dew_point_temperature(*, vapor_pressure: Quantity) -> Quantity:
         raise ValueError("vapor_pressure is above the valid range of the Magnus inverse")
     t_dp_celsius = _MAGNUS_C * gamma / (_MAGNUS_B - gamma)
     return Quantity(magnitude=t_dp_celsius + 273.15, unit="K")
+
+
+def moist_air_enthalpy(*, temperature: Quantity, humidity_ratio: float) -> Quantity:
+    """The specific enthalpy of moist air, h = 1.006·T + W·(2501 + 1.86·T) (kJ per kg dry air).
+
+    The total heat content of the air — the number an air-conditioning coil actually changes:
+    h = 1.006·T + W·(2501 + 1.86·T), the dry-air sensible heat plus the latent and sensible heat of
+    the water vapor it carries, with T in degrees Celsius. ``temperature`` T is the dry-bulb
+    temperature and ``humidity_ratio`` W the mass of vapor per mass of dry air (from
+    :func:`humidity_ratio`). Because it rolls sensible and latent heat into one number, an enthalpy
+    difference across a coil times the air flow is the total cooling or heating load — see
+    :func:`cooling_coil_load`. Returns the enthalpy in kJ/kg of dry air.
+    """
+    _check(temperature, "[temperature]", "temperature")
+    if humidity_ratio < 0:
+        raise ValueError("humidity_ratio must be non-negative")
+    t = temperature.to("degC").magnitude
+    h = _CP_DRY_AIR * t + humidity_ratio * (_LATENT_HEAT_0C + _CP_WATER_VAPOR * t)
+    return Quantity(magnitude=h, unit="kJ/kg")
+
+
+def cooling_coil_load(
+    *,
+    dry_air_mass_flow: Quantity,
+    enthalpy_in: Quantity,
+    enthalpy_out: Quantity,
+) -> Quantity:
+    """The total cooling (or heating) load of an air coil, Q = ṁ·(h_in − h_out).
+
+    The rate of heat a coil removes from (or adds to) an air stream, rolling sensible and latent
+    together: Q = ṁ·(h_in − h_out). ``dry_air_mass_flow`` ṁ is the mass flow of *dry* air,
+    ``enthalpy_in`` and ``enthalpy_out`` the moist-air enthalpies before and after the coil (from
+    :func:`moist_air_enthalpy`). A positive result is cooling (enthalpy drops); the latent share is
+    whatever part came from condensing moisture out. Returns the load in kW.
+    """
+    _check(dry_air_mass_flow, "[mass]/[time]", "dry_air_mass_flow")
+    _check(enthalpy_in, "[length]**2/[time]**2", "enthalpy_in")
+    _check(enthalpy_out, "[length]**2/[time]**2", "enthalpy_out")
+    m_dot = dry_air_mass_flow.to("kg/s").magnitude
+    h_in = enthalpy_in.to("kJ/kg").magnitude
+    h_out = enthalpy_out.to("kJ/kg").magnitude
+    if m_dot <= 0:
+        raise ValueError("dry_air_mass_flow must be positive")
+    return Quantity(magnitude=m_dot * (h_in - h_out), unit="kW")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

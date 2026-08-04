@@ -13153,6 +13153,33 @@ def test_psychrometric_moist_air_properties():
         humidity_ratio(vapor_pressure=_q("200000 Pa"), total_pressure=_q("101325 Pa"))
 
 
+def test_moist_air_enthalpy_and_cooling_coil_load():
+    from anvilate.analysis import cooling_coil_load, moist_air_enthalpy
+
+    # h = 1.006*T + W*(2501 + 1.86*T); 25 C, W=0.00986 -> ~50.3 kJ/kg.
+    h = moist_air_enthalpy(temperature=_q("298.15 K"), humidity_ratio=0.00986)
+    expect = 1.006 * 25 + 0.00986 * (2501 + 1.86 * 25)
+    assert h.to("kJ/kg").magnitude == pytest.approx(expect, rel=1e-9)
+    assert h.to("kJ/kg").magnitude == pytest.approx(50.3, abs=0.2)
+    # Dry air (W=0) is just the sensible term.
+    dry = moist_air_enthalpy(temperature=_q("298.15 K"), humidity_ratio=0.0)
+    assert dry.to("kJ/kg").magnitude == pytest.approx(1.006 * 25, rel=1e-9)
+    # Cooling load Q = mdot*(h_in - h_out): 1 kg/s across a 10 kJ/kg drop = 10 kW.
+    load = cooling_coil_load(
+        dry_air_mass_flow=_q("1 kg/s"), enthalpy_in=_q("50 kJ/kg"), enthalpy_out=_q("40 kJ/kg")
+    )
+    assert load.to("kW").magnitude == pytest.approx(10.0, rel=1e-9)
+    # A larger air flow is a proportionally larger load.
+    load2 = cooling_coil_load(
+        dry_air_mass_flow=_q("2 kg/s"), enthalpy_in=_q("50 kJ/kg"), enthalpy_out=_q("40 kJ/kg")
+    )
+    assert load2.to("kW").magnitude == pytest.approx(20.0, rel=1e-9)
+    with pytest.raises(ValueError, match="dry_air_mass_flow"):
+        cooling_coil_load(
+            dry_air_mass_flow=_q("0 kg/s"), enthalpy_in=_q("50 kJ/kg"), enthalpy_out=_q("40 kJ/kg")
+        )
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 

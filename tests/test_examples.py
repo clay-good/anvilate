@@ -406,6 +406,16 @@ def test_dew_point_condensation_example_cold_surface_sweats():
     assert m["condenses"] is True
 
 
+def test_cooling_coil_load_example_latent_is_a_big_share():
+    namespace = runpy.run_path(str(_EXAMPLES / "cooling_coil_load.py"))
+    c = namespace["coil_load"]()
+    # The total load exceeds the sensible-only load — the difference is the latent (drying) load.
+    assert c["total_kw"] > c["sensible_kw"]
+    assert c["total_kw"] == pytest.approx(33.3, abs=1.0)
+    # For warm humid air a large fraction of the load is latent, not temperature.
+    assert c["latent_fraction"] > 0.4
+
+
 def test_multistage_compressor_staging_example_cuts_power_and_heat():
     namespace = runpy.run_path(str(_EXAMPLES / "multistage_compressor_staging.py"))
     s = namespace["staging_comparison"]()
