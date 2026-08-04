@@ -82,6 +82,7 @@ Over 45 runnable examples, each executed in CI so they stay honest. A few:
 | `spur_gear_agma_check.py` | An AGMA spur gear checked for both tooth-root bending and surface pitting — pitting runs the higher utilization (0.69 vs 0.39), the mode a Lewis bending-only check never flags. |
 | `pipe_expansion_loop.py` | A B31.3 thermal-expansion bend: the elbow's stress-intensification factor makes it work 73% harder than the straight-pipe stress calc predicts (S_E/S_A 0.84 vs 0.48). |
 | `gear_shaft_assembly.py` | One gear shaft, three coupled subsystems: DE-Goodman fatigue sets the 28.5 mm diameter, then the key length and bearing L10 life follow from it — no single check is the design. |
+| `rc_t_beam_floor.py` | A monolithic RC floor beam: counting the slab as a compression flange (ACI T-beam) adds strength and drives the net tensile strain to 0.024 — far past the 0.005 ductility limit the bare web barely meets. |
 | `lug_drawing.py` | Code-check a lifting lug (ASME BTH-1), then export its outline to a fabrication-ready DXF. |
 | `column_base_plate.py` | A base plate checked for concrete bearing (AISC J8) *and* plate bending (Design Guide 1) — bearing passes, the thin plate fails. |
 | `motor_mount_resonance.py` | A mount that's statically bulletproof but resonates below running speed — the dimension a static hand calc never sees. |

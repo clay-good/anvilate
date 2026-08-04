@@ -162,6 +162,17 @@ def test_beam_bearing_web_checks_example_is_governed_by_crippling():
     assert crippling == pytest.approx(212.6, abs=0.5)
 
 
+def test_rc_t_beam_floor_example_flange_adds_strength_and_ductility():
+    namespace = runpy.run_path(str(_EXAMPLES / "rc_t_beam_floor.py"))
+    r = namespace["floor_beam_capacity"]()
+    # The flange adds strength ...
+    assert r["t_beam_moment_kn_m"] > r["web_only_moment_kn_m"]
+    assert r["t_beam_moment_kn_m"] == pytest.approx(649, abs=5)
+    # ... and keeps the section far more ductile (net tensile strain well past 0.005).
+    assert r["t_beam_strain"] > 0.02
+    assert r["web_only_strain"] < r["t_beam_strain"]
+
+
 def test_gear_shaft_assembly_example_sizes_three_subsystems():
     namespace = runpy.run_path(str(_EXAMPLES / "gear_shaft_assembly.py"))
     result = namespace["size_the_shaft_assembly"]()
