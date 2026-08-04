@@ -553,6 +553,46 @@ def test_simply_supported_offset_load_degenerates_to_the_center_case():
     )
 
 
+def test_compound_section_reproduces_the_i_section_formula():
+    from anvilate.analysis import (
+        compound_section_properties,
+        i_section_second_moment,
+    )
+
+    # An I built from three plates: two 200x20 flanges at y=+/-110, a 10x200 web at 0
+    # (total height 240) must match the closed-form I-section second moment.
+    compound = compound_section_properties(
+        rectangles=[
+            (_q("200 mm"), _q("20 mm"), _q("110 mm")),
+            (_q("200 mm"), _q("20 mm"), _q("-110 mm")),
+            (_q("10 mm"), _q("200 mm"), _q("0 mm")),
+        ]
+    )
+    closed_form = i_section_second_moment(
+        flange_width=_q("200 mm"),
+        total_height=_q("240 mm"),
+        flange_thickness=_q("20 mm"),
+        web_thickness=_q("10 mm"),
+    )
+    assert compound.second_moment.to("mm**4").magnitude == pytest.approx(
+        closed_form.to("mm**4").magnitude, rel=1e-9
+    )
+    # Symmetric, so the neutral axis is at the datum and the extreme fibres are +/-120.
+    assert compound.centroid.to("mm").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert compound.extreme_fibre_top.to("mm").magnitude == pytest.approx(120.0, rel=1e-9)
+    assert compound.area.to("mm**2").magnitude == pytest.approx(2 * 200 * 20 + 10 * 200, rel=1e-9)
+    # An unsymmetric built-up section (a tee) puts the neutral axis toward the flange.
+    tee = compound_section_properties(
+        rectangles=[
+            (_q("200 mm"), _q("20 mm"), _q("90 mm")),  # flange on top
+            (_q("10 mm"), _q("80 mm"), _q("40 mm")),  # stem below (centroid at 40)
+        ]
+    )
+    # Flange area 4000 dominates, so the NA sits high (above mid-height).
+    assert tee.centroid.to("mm").magnitude > 40
+    assert tee.section_modulus.to("mm**3").magnitude > 0
+
+
 def test_channel_shear_center_offset():
     from anvilate.analysis import channel_shear_center
 

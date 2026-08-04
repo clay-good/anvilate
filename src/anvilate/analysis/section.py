@@ -13,6 +13,7 @@ allowable stress.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import pi
 
 from pydantic import BaseModel, ConfigDict
@@ -26,6 +27,8 @@ __all__ = [
     "CompositeBeamStresses",
     "composite_beam_bending_stresses",
     "channel_shear_center",
+    "CompoundSection",
+    "compound_section_properties",
 ]
 
 
@@ -385,3 +388,76 @@ def channel_shear_center(*, flange_width: Quantity, web_height: Quantity) -> Qua
     if b <= 0 or h <= 0:
         raise ValueError("flange_width and web_height must be positive")
     return _mm(3.0 * b**2 / (h + 6.0 * b))
+
+
+class CompoundSection(BaseModel):
+    """The properties of a built-up section assembled from rectangular elements.
+
+    ``area`` A is the total cross-sectional area, ``centroid`` the height of the combined
+    neutral axis above the datum the element centroids were measured from,
+    ``second_moment`` I the second moment about that combined neutral axis (by the
+    parallel-axis theorem), and ``extreme_fibre_top`` / ``extreme_fibre_bottom`` the
+    distances from the neutral axis to the topmost and bottommost fibres — divide I by the
+    larger of the two for the governing section modulus.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    area: Quantity
+    centroid: Quantity
+    second_moment: Quantity
+    extreme_fibre_top: Quantity
+    extreme_fibre_bottom: Quantity
+
+    @property
+    def section_modulus(self) -> Quantity:
+        """The governing elastic section modulus Z = I/c_max over the two extreme fibres."""
+        c = max(
+            self.extreme_fibre_top.to("mm").magnitude,
+            self.extreme_fibre_bottom.to("mm").magnitude,
+        )
+        return Quantity(magnitude=self.second_moment.to("mm**4").magnitude / c, unit="mm**3")
+
+
+def compound_section_properties(
+    *,
+    rectangles: Sequence[tuple[Quantity, Quantity, Quantity]],
+) -> CompoundSection:
+    """The area, neutral axis, and second moment of a built-up section (parallel-axis theorem).
+
+    Any welded or built-up section — a plate girder, a custom I or box, a tee, a
+    cover-plated beam — is a stack of rectangles, and its bending properties come from the
+    parallel-axis theorem: the combined neutral axis is the area-weighted mean of the part
+    centroids, ȳ = Σ(A_i·y_i)/ΣA_i, and the second moment about it is
+    I = Σ(I_i + A_i·(y_i − ȳ)²) with each part's own I_i = b_i·h_i³/12. ``rectangles`` is a
+    sequence of ``(width, height, centroid)`` triples — the width, the height (in the
+    bending direction), and the height of each rectangle's own centroid above a common
+    datum. This turns a sketch of plates into the A, I, and section modulus the bending and
+    buckling checks need, for sections the standard-shape builders do not cover. Returns a
+    :class:`CompoundSection`.
+    """
+    if not rectangles:
+        raise ValueError("rectangles must be a non-empty sequence")
+    parts = []
+    for i, rect in enumerate(rectangles):
+        if len(rect) != 3:
+            raise ValueError(f"rectangles[{i}] must be a (width, height, centroid) triple")
+        width, height, centroid = rect
+        b = _require_length(width, f"rectangles[{i}].width")
+        h = _require_length(height, f"rectangles[{i}].height")
+        y = _require_length(centroid, f"rectangles[{i}].centroid")
+        if b <= 0 or h <= 0:
+            raise ValueError(f"rectangles[{i}] width and height must be positive")
+        parts.append((b, h, y))
+    total_area = sum(b * h for b, h, _ in parts)
+    centroid = sum(b * h * y for b, h, y in parts) / total_area
+    second_moment = sum(b * h**3 / 12.0 + b * h * (y - centroid) ** 2 for b, h, y in parts)
+    top = max(y + h / 2.0 for _, h, y in parts)
+    bottom = min(y - h / 2.0 for _, h, y in parts)
+    return CompoundSection(
+        area=Quantity(magnitude=total_area, unit="mm**2"),
+        centroid=_mm(centroid),
+        second_moment=Quantity(magnitude=second_moment, unit="mm**4"),
+        extreme_fibre_top=_mm(top - centroid),
+        extreme_fibre_bottom=_mm(centroid - bottom),
+    )

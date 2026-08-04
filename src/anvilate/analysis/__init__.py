@@ -830,10 +830,12 @@ from .scotch_yoke import (
 )
 from .section import (
     CompositeBeamStresses,
+    CompoundSection,
     CrossSection,
     bending_stress,
     channel_shear_center,
     composite_beam_bending_stresses,
+    compound_section_properties,
     required_section_modulus,
 )
 from .servo import (
@@ -1099,6 +1101,8 @@ __all__ = [
     "CompositeBeamStresses",
     "composite_beam_bending_stresses",
     "channel_shear_center",
+    "CompoundSection",
+    "compound_section_properties",
     "neutral_axis_radius",
     "bend_allowance",
     "outside_setback",
