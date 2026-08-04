@@ -15770,6 +15770,49 @@ def test_refrigeration_second_law_efficiency():
         second_law_efficiency(actual_cop=8.0, carnot_cop=7.0)
 
 
+def test_conveyor_mass_flow_belt_speed_inverse_and_lift_power():
+    from anvilate.analysis import (
+        belt_speed_for_capacity,
+        conveyor_lift_power,
+        conveyor_mass_flow,
+    )
+
+    # Mass flow m = rho*A*v; 1500 kg/m^3 * 0.05 m^2 * 2 m/s = 150 kg/s (540 t/h).
+    m = conveyor_mass_flow(
+        bulk_density=_q("1500 kg/m**3"),
+        cross_section_area=_q("0.05 m**2"),
+        belt_speed=_q("2 m/s"),
+    )
+    assert m.to("kg/s").magnitude == pytest.approx(150.0, rel=1e-9)
+    assert m.to("kg/s").magnitude * 3.6 == pytest.approx(540.0, rel=1e-9)  # tonnes/hour
+
+    # The belt-speed inverse round-trips back to 2 m/s.
+    v = belt_speed_for_capacity(
+        mass_flow=m, bulk_density=_q("1500 kg/m**3"), cross_section_area=_q("0.05 m**2")
+    )
+    assert v.to("m/s").magnitude == pytest.approx(2.0, rel=1e-9)
+    # A wider load profile carries the same throughput at a lower belt speed.
+    v_wide = belt_speed_for_capacity(
+        mass_flow=m, bulk_density=_q("1500 kg/m**3"), cross_section_area=_q("0.10 m**2")
+    )
+    assert v_wide.to("m/s").magnitude < v.to("m/s").magnitude
+
+    # Lift power P = m*g*H; 150 kg/s over 10 m = 14.71 kW.
+    p = conveyor_lift_power(mass_flow=m, lift_height=_q("10 m"))
+    assert p.to("kW").magnitude == pytest.approx(150 * 9.80665 * 10 / 1000, rel=1e-9)
+    # A level conveyor (no lift) needs no lift power.
+    p_level = conveyor_lift_power(mass_flow=m, lift_height=_q("0 m"))
+    assert p_level.to("kW").magnitude == pytest.approx(0.0, abs=1e-12)
+
+    # Guardrail: bulk density and area must be positive.
+    with pytest.raises(ValueError, match="bulk_density and cross_section_area must be positive"):
+        conveyor_mass_flow(
+            bulk_density=_q("0 kg/m**3"),
+            cross_section_area=_q("0.05 m**2"),
+            belt_speed=_q("2 m/s"),
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

@@ -239,6 +239,10 @@ modules:
   wet-bulb floor: the range R = T_hot − T_cold it cools the water, the approach
   A = T_cold − T_wb that measures tower capability, and the effectiveness
   ε = R/(R + A) — the fraction of the available cooling achieved
+- :mod:`~anvilate.analysis.conveyor` — belt-conveyor (bulk-material) sizing: the
+  mass flow ṁ = ρ·A·v it carries, the belt speed a target throughput needs
+  (v = ṁ/(ρ·A)), and the irreducible lift power P = ṁ·g·H to raise the material —
+  distinct from the power-transmission belts of :mod:`~anvilate.analysis.belt`
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -791,6 +795,11 @@ from .contact import (
     hertz_effective_modulus,
     hertz_sphere_approach,
     hertz_sphere_contact,
+)
+from .conveyor import (
+    belt_speed_for_capacity,
+    conveyor_lift_power,
+    conveyor_mass_flow,
 )
 from .cooling_tower import (
     cooling_tower_approach,
@@ -1799,6 +1808,9 @@ __all__ = [
     "cooling_tower_range",
     "cooling_tower_approach",
     "cooling_tower_effectiveness",
+    "conveyor_mass_flow",
+    "belt_speed_for_capacity",
+    "conveyor_lift_power",
     "drag_force",
     "jet_impact_force",
     "stokes_settling_velocity",

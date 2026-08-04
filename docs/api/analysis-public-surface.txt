@@ -279,6 +279,9 @@ contact.hertz_cylinder_contact
 contact.hertz_effective_modulus
 contact.hertz_sphere_approach
 contact.hertz_sphere_contact
+conveyor.conveyor_mass_flow
+conveyor.belt_speed_for_capacity
+conveyor.conveyor_lift_power
 cooling_tower.cooling_tower_range
 cooling_tower.cooling_tower_approach
 cooling_tower.cooling_tower_effectiveness

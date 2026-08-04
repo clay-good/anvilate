@@ -755,6 +755,18 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_incline_conveyor_sizing_example_throughput_and_lift():
+    namespace = runpy.run_path(str(_EXAMPLES / "incline_conveyor_sizing.py"))
+    c = namespace["conveyor_sizing"]()
+    # 540 t/h on a 0.05 m^2 profile -> 2 m/s; a narrower profile needs a faster belt.
+    assert c["throughput_tph"] == pytest.approx(540.0, rel=1e-9)
+    assert c["belt_speed_ms"] == pytest.approx(2.0, rel=1e-9)
+    assert c["narrow_belt_speed_ms"] == pytest.approx(3.03, abs=0.02)
+    assert c["narrow_belt_speed_ms"] > c["belt_speed_ms"]
+    # Lifting 150 kg/s up 30 m draws ~44 kW.
+    assert c["lift_power_kw"] == pytest.approx(44.13, abs=0.1)
+
+
 def test_press_brake_springback_example_spring_steel_recovers_more():
     namespace = runpy.run_path(str(_EXAMPLES / "press_brake_springback.py"))
     r = namespace["springback_by_material"]()
