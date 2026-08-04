@@ -13995,6 +13995,36 @@ def test_thermal_degree_day_heating_and_cooling_energy():
         )
 
 
+def test_thermal_grashof_and_rayleigh_numbers():
+    from anvilate.analysis import grashof_number, rayleigh_number
+
+    # Gr = g*beta*dT*L^3/nu^2; standard values -> ~3.63e8.
+    gr = grashof_number(
+        thermal_expansion_coefficient=_q("0.00333 1/K"),
+        temperature_difference=_q("20 K"),
+        characteristic_length=_q("0.5 m"),
+        kinematic_viscosity=_q("1.5e-5 m**2/s"),
+    )
+    expected = 9.80665 * 0.00333 * 20 * 0.5**3 / (1.5e-5) ** 2
+    assert gr == pytest.approx(expected, rel=1e-9)
+
+    # Grashof scales with the cube of length: double L -> 8x Gr.
+    gr2 = grashof_number(
+        thermal_expansion_coefficient=_q("0.00333 1/K"),
+        temperature_difference=_q("20 K"),
+        characteristic_length=_q("1 m"),
+        kinematic_viscosity=_q("1.5e-5 m**2/s"),
+    )
+    assert gr2 / gr == pytest.approx(8.0, rel=1e-9)
+
+    # Ra = Gr*Pr.
+    ra = rayleigh_number(grashof_number=gr, prandtl_number=0.71)
+    assert ra == pytest.approx(gr * 0.71, rel=1e-9)
+
+    with pytest.raises(ValueError, match="prandtl_number"):
+        rayleigh_number(grashof_number=gr, prandtl_number=0.0)
+
+
 def test_thermal_cylindrical_conduction_and_critical_radius():
     import math
 

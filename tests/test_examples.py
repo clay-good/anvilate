@@ -756,6 +756,14 @@ def test_home_heating_degree_days_example_heat_pump_cuts_energy():
     assert s["furnace_kwh"] / s["heat_pump_kwh"] == pytest.approx(3.0 / 0.9, rel=1e-6)
 
 
+def test_heated_panel_convection_regime_example_height_flips_regime():
+    namespace = runpy.run_path(str(_EXAMPLES / "heated_panel_convection_regime.py"))
+    r = namespace["panel_regimes"]()
+    # The short panel is laminar (Ra < 1e9); the tall one is turbulent (Ra > 1e9).
+    assert r["rayleigh_0p3m"] < 1e9
+    assert r["rayleigh_2m"] > 1e9
+
+
 def test_insulated_steam_pipe_heat_loss_example_lagging_cuts_loss():
     namespace = runpy.run_path(str(_EXAMPLES / "insulated_steam_pipe_heat_loss.py"))
     p = namespace["pipe_heat_loss"]()

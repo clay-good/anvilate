@@ -52,6 +52,8 @@ __all__ = [
     "laminar_tube_convection_coefficient",
     "flat_plate_forced_convection_coefficient",
     "flat_plate_turbulent_convection_coefficient",
+    "grashof_number",
+    "rayleigh_number",
     "vertical_plate_natural_convection_coefficient",
     "horizontal_cylinder_natural_convection_coefficient",
     "horizontal_plate_natural_convection_coefficient",
@@ -1128,6 +1130,54 @@ def flat_plate_turbulent_convection_coefficient(
         return None  # laminar below, or out of the turbulent correlation's range above
     nusselt = 0.037 * reynolds**0.8 * prandtl_number ** (1.0 / 3.0)
     return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")
+
+
+def grashof_number(
+    *,
+    thermal_expansion_coefficient: Quantity,
+    temperature_difference: Quantity,
+    characteristic_length: Quantity,
+    kinematic_viscosity: Quantity,
+) -> float:
+    """The Grashof number of a natural-convection flow, Gr = g·β·ΔT·L³/ν².
+
+    The ratio of buoyancy to viscous forces that drives natural convection: Gr = g·β·ΔT·L³/ν², from
+    the fluid's ``thermal_expansion_coefficient`` β (1/T for an ideal gas), the surface-to-fluid
+    ``temperature_difference`` ΔT, the ``characteristic_length`` L (plate height or cylinder
+    diameter), and the ``kinematic_viscosity`` ν. It plays the role Reynolds does in forced flow —
+    buoyancy stands in for the imposed velocity. Multiplied by the Prandtl number it gives the
+    Rayleigh number (:func:`rayleigh_number`) that the natural-convection correlations use. Returns
+    the dimensionless Grashof number.
+    """
+    _require(thermal_expansion_coefficient, "1/[temperature]", "thermal_expansion_coefficient")
+    _require(temperature_difference, "[temperature]", "temperature_difference")
+    _require(characteristic_length, "[length]", "characteristic_length")
+    _require(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
+    beta = thermal_expansion_coefficient.to("1/K").magnitude
+    dt = abs(temperature_difference.to("K").magnitude)
+    length = characteristic_length.to("m").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    if length <= 0:
+        raise ValueError("characteristic_length must be positive")
+    if nu <= 0:
+        raise ValueError("kinematic_viscosity must be positive")
+    return _STANDARD_GRAVITY * beta * dt * length**3 / nu**2
+
+
+def rayleigh_number(*, grashof_number: float, prandtl_number: float) -> float:
+    """The Rayleigh number of a natural-convection flow, Ra = Gr·Pr.
+
+    The product of the ``grashof_number`` Gr (:func:`grashof_number`) and the ``prandtl_number`` Pr:
+    Ra = Gr·Pr. It is the single number the natural-convection Nusselt correlations are written in,
+    and it classifies the flow — for a vertical plate the boundary layer stays laminar up to
+    Ra ≈ 10⁹ and goes turbulent above it, which decides which correlation applies. Returns the
+    dimensionless Rayleigh number.
+    """
+    if grashof_number < 0:
+        raise ValueError("grashof_number must be non-negative")
+    if prandtl_number <= 0:
+        raise ValueError("prandtl_number must be positive")
+    return grashof_number * prandtl_number
 
 
 def vertical_plate_natural_convection_coefficient(
