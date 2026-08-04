@@ -504,6 +504,14 @@ def test_heat_pump_cold_day_example_cop_collapses():
     assert p["cold_power_kw"] / p["mild_power_kw"] > 1.5
 
 
+def test_machine_noise_placement_example_corner_adds_9db():
+    namespace = runpy.run_path(str(_EXAMPLES / "machine_noise_placement.py"))
+    lv = namespace["operator_levels"]()
+    # Free field < on floor < in corner; the corner is 9 dB over free field.
+    assert lv["free_field_q1"] < lv["on_floor_q2"] < lv["in_corner_q8"]
+    assert lv["in_corner_q8"] - lv["free_field_q1"] == pytest.approx(9.0, abs=0.1)
+
+
 def test_plant_noise_exposure_example_loudest_dominates():
     namespace = runpy.run_path(str(_EXAMPLES / "plant_noise_exposure.py"))
     a = namespace["noise_assessment"]()

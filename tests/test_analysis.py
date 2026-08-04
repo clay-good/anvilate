@@ -13467,6 +13467,40 @@ def test_acoustics_mass_law_transmission_loss():
         mass_law_transmission_loss(frequency=_q("0 Hz"), surface_density=_q("10 kg/m**2"))
 
 
+def test_acoustics_sound_pressure_from_power_level():
+    import math
+
+    from anvilate.analysis import sound_pressure_from_power_level
+
+    # L_p = L_w + 10*log10(Q/(4*pi*r^2)); free field 1 m -> L_w - 11.
+    lp = sound_pressure_from_power_level(
+        sound_power_level=90.0, distance=_q("1 m"), directivity_factor=1.0
+    )
+    assert lp == pytest.approx(90 + 10 * math.log10(1 / (4 * math.pi)), rel=1e-9)
+    assert lp == pytest.approx(79.0, abs=0.1)
+
+    # Each doubling of the directivity factor (another reflecting surface) adds ~3 dB.
+    floor = sound_pressure_from_power_level(
+        sound_power_level=90.0, distance=_q("3 m"), directivity_factor=2.0
+    )
+    corner = sound_pressure_from_power_level(
+        sound_power_level=90.0, distance=_q("3 m"), directivity_factor=8.0
+    )
+    assert corner - floor == pytest.approx(10 * math.log10(4), abs=1e-9)  # 8/2 = 4x -> 6 dB
+
+    # Level falls 6 dB per doubling of distance (inverse-square).
+    near = sound_pressure_from_power_level(
+        sound_power_level=90.0, distance=_q("2 m"), directivity_factor=2.0
+    )
+    far = sound_pressure_from_power_level(
+        sound_power_level=90.0, distance=_q("4 m"), directivity_factor=2.0
+    )
+    assert near - far == pytest.approx(20 * math.log10(2), abs=1e-9)
+
+    with pytest.raises(ValueError, match="distance"):
+        sound_pressure_from_power_level(sound_power_level=90.0, distance=_q("0 m"))
+
+
 def test_acoustics_sabine_reverberation_time():
     from anvilate.analysis import sabine_reverberation_time
 

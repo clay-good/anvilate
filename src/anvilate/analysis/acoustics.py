@@ -17,7 +17,7 @@ decibel numbers (a dimensionless ratio); distances are dimension-checked
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import log10
+from math import log10, pi
 
 from ..units import Quantity
 
@@ -28,6 +28,7 @@ __all__ = [
     "permissible_exposure_time",
     "sabine_reverberation_time",
     "sound_level_sum",
+    "sound_pressure_from_power_level",
 ]
 
 
@@ -156,6 +157,31 @@ def noise_dose_fraction(*, exposure_time: Quantity, permissible_time: Quantity) 
     if t <= 0:
         raise ValueError("permissible_time must be positive")
     return c / t
+
+
+def sound_pressure_from_power_level(
+    *,
+    sound_power_level: float,
+    distance: Quantity,
+    directivity_factor: float = 2.0,
+) -> float:
+    """The sound pressure level from a source's power level, L_p = L_w + 10·log₁₀(Q/(4π·r²)).
+
+    A machine is rated by its sound *power* level L_w (a fixed property of the source), but what a
+    worker hears is a *pressure* level L_p that falls with distance and depends on where the machine
+    sits: L_p = L_w + 10·log₁₀(Q/(4π·r²)), from the ``sound_power_level`` L_w (dB re 1 pW), the
+    ``distance`` r, and the ``directivity_factor`` Q — 1 in free space, 2 on a reflecting floor (the
+    usual plant case), 4 against a wall, 8 in a corner, each reflection adding 3 dB. In a free field
+    at 1 m the pressure level is about L_w − 11 dB. Feed the result to the noise-exposure screen.
+    Returns the sound pressure level in dB.
+    """
+    _check(distance, "[length]", "distance")
+    r = distance.to("m").magnitude
+    if r <= 0:
+        raise ValueError("distance must be positive")
+    if directivity_factor <= 0:
+        raise ValueError("directivity_factor must be positive")
+    return sound_power_level + 10.0 * log10(directivity_factor / (4.0 * pi * r**2))
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
