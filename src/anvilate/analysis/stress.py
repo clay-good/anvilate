@@ -17,7 +17,7 @@ returns the factor of safety against yield.
 
 from __future__ import annotations
 
-from math import atan2, degrees, sqrt
+from math import atan2, cos, degrees, radians, sin, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -32,6 +32,7 @@ __all__ = [
     "principal_stresses_plane",
     "principal_angle_plane",
     "max_shear_stress_plane",
+    "plane_stress_at_angle",
     "tresca_equivalent_stress",
     "tresca_principal",
     "yield_safety_factor",
@@ -224,6 +225,40 @@ def max_shear_stress_plane(
     s1, s2 = principal_stresses_plane(sigma_x=sigma_x, sigma_y=sigma_y, tau_xy=tau_xy)
     principals = (s1.to("MPa").magnitude, s2.to("MPa").magnitude, 0.0)
     return Quantity(magnitude=(max(principals) - min(principals)) / 2, unit="MPa")
+
+
+def plane_stress_at_angle(
+    *,
+    sigma_x: Quantity,
+    sigma_y: Quantity,
+    tau_xy: Quantity,
+    angle: float,
+) -> tuple[Quantity, Quantity]:
+    """The normal and shear stress on a plane inclined at ``angle`` (stress transformation).
+
+    Mohr's circle for an arbitrary plane, not just the principal one: rotating the
+    reference axes by θ resolves a plane-stress state onto a plane whose normal is at θ
+    from the x-axis. σ_n(θ) = (σx+σy)/2 + (σx−σy)/2·cos2θ + τxy·sin2θ and
+    τ_n(θ) = −(σx−σy)/2·sin2θ + τxy·cos2θ. ``sigma_x`` σx, ``sigma_y`` σy, and ``tau_xy``
+    τxy are the plane-stress components, and ``angle`` θ the plane-normal orientation **in
+    degrees** from the x-axis. This is what gives the stress across a weld throat, a bonded
+    lap at an angle, a ply direction, or a geological fault plane — the components a failure
+    check on that specific plane needs. At θ = 0 it returns (σx, τxy); the principal planes
+    (:func:`principal_angle_plane`) are where τ_n vanishes. Returns ``(normal_stress,
+    shear_stress)`` in MPa.
+    """
+    sx = _require_stress(sigma_x, "sigma_x")
+    sy = _require_stress(sigma_y, "sigma_y")
+    txy = _require_stress(tau_xy, "tau_xy")
+    two_theta = 2.0 * radians(angle)
+    average = (sx + sy) / 2.0
+    half_diff = (sx - sy) / 2.0
+    normal = average + half_diff * cos(two_theta) + txy * sin(two_theta)
+    shear = -half_diff * sin(two_theta) + txy * cos(two_theta)
+    return (
+        Quantity(magnitude=normal, unit="MPa"),
+        Quantity(magnitude=shear, unit="MPa"),
+    )
 
 
 def tresca_equivalent_stress(

@@ -7210,6 +7210,37 @@ def test_principal_stresses_and_tresca_worked_example():
     assert theta.to("degree").magnitude == pytest.approx(22.5, rel=1e-4)
 
 
+def test_plane_stress_at_angle_transformation():
+    import math
+
+    from anvilate.analysis import (
+        plane_stress_at_angle,
+        principal_angle_plane,
+        principal_stresses_plane,
+    )
+
+    kw = {"sigma_x": _q("100 MPa"), "sigma_y": _q("40 MPa"), "tau_xy": _q("30 MPa")}
+    # At theta = 30 deg: sigma_n = 70 + 30*cos60 + 30*sin60 = 110.98, tau_n = -30*sin60 + 30*cos60.
+    normal, shear = plane_stress_at_angle(angle=30.0, **kw)
+    tt = math.radians(60)
+    assert normal.to("MPa").magnitude == pytest.approx(
+        70 + 30 * math.cos(tt) + 30 * math.sin(tt), rel=1e-9
+    )
+    assert shear.to("MPa").magnitude == pytest.approx(
+        -30 * math.sin(tt) + 30 * math.cos(tt), rel=1e-9
+    )
+    # At theta = 0 the plane is the x-face: (sigma_x, tau_xy).
+    n0, s0 = plane_stress_at_angle(angle=0.0, **kw)
+    assert n0.to("MPa").magnitude == pytest.approx(100.0, rel=1e-12)
+    assert s0.to("MPa").magnitude == pytest.approx(30.0, rel=1e-12)
+    # On the principal plane the shear vanishes and the normal equals the major principal.
+    theta_p = principal_angle_plane(**kw).to("degree").magnitude
+    s1, _s2 = principal_stresses_plane(**kw)
+    n_p, s_p = plane_stress_at_angle(angle=theta_p, **kw)
+    assert abs(s_p.to("MPa").magnitude) < 1e-9
+    assert n_p.to("MPa").magnitude == pytest.approx(s1.to("MPa").magnitude, rel=1e-9)
+
+
 def test_principal_angle_plane_special_cases():
     from math import atan2, degrees
 
