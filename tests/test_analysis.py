@@ -13736,6 +13736,35 @@ def test_rc_shear_reinforcement_strength_aci():
     assert total > v_c.to("kN").magnitude
 
 
+def test_rc_stirrup_spacing_inverts_the_shear_reinforcement():
+    from anvilate.analysis import rc_shear_reinforcement_strength, rc_stirrup_spacing_for_shear
+
+    # s = A_v*f_yt*d/V_s: needing 200 kN from 157 mm2 stirrups (420 MPa, d=550) -> ~181 mm.
+    s = rc_stirrup_spacing_for_shear(
+        required_shear_strength=_q("200 kN"),
+        stirrup_area=_q("157 mm**2"),
+        stirrup_yield=_q("420 MPa"),
+        effective_depth=_q("550 mm"),
+    )
+    assert s.to("mm").magnitude == pytest.approx(157 * 420 * 550 / 200000, rel=1e-9)
+    # Round-trip: stirrups at this spacing deliver exactly the required V_s.
+    back = rc_shear_reinforcement_strength(
+        stirrup_area=_q("157 mm**2"),
+        stirrup_yield=_q("420 MPa"),
+        effective_depth=_q("550 mm"),
+        stirrup_spacing=s,
+    )
+    assert back.to("kN").magnitude == pytest.approx(200.0, rel=1e-9)
+    # A higher shear demand forces tighter stirrups.
+    tighter = rc_stirrup_spacing_for_shear(
+        required_shear_strength=_q("400 kN"),
+        stirrup_area=_q("157 mm**2"),
+        stirrup_yield=_q("420 MPa"),
+        effective_depth=_q("550 mm"),
+    )
+    assert tighter.to("mm").magnitude < s.to("mm").magnitude
+
+
 def test_rc_column_axial_strength_aci():
     from anvilate.analysis import rc_column_axial_strength
 

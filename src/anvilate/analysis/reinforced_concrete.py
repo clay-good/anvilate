@@ -27,6 +27,7 @@ __all__ = [
     "rc_tension_steel_for_moment",
     "rc_concrete_shear_strength",
     "rc_shear_reinforcement_strength",
+    "rc_stirrup_spacing_for_shear",
     "rc_column_axial_strength",
     "rc_column_balanced_point",
     "rc_beta1",
@@ -367,6 +368,38 @@ def rc_shear_reinforcement_strength(
         raise ValueError("all inputs must be positive")
     vs_n = av * fyt * d / s
     return Quantity(magnitude=vs_n / 1000.0, unit="kN")
+
+
+def rc_stirrup_spacing_for_shear(
+    *,
+    required_shear_strength: Quantity,
+    stirrup_area: Quantity,
+    stirrup_yield: Quantity,
+    effective_depth: Quantity,
+) -> Quantity:
+    """The stirrup spacing s = A_v·f_yt·d/V_s a required shear-reinforcement strength needs.
+
+    The design inverse of :func:`rc_shear_reinforcement_strength`: once the concrete's V_c
+    falls short of the factored shear, the stirrups must supply the balance
+    V_s = V_u/φ − V_c, and rearranging V_s = A_v·f_yt·d/s gives the spacing
+    s = A_v·f_yt·d/V_s for a chosen bar. ``required_shear_strength`` V_s is the shear the
+    stirrups must carry, ``stirrup_area`` A_v the total leg area, ``stirrup_yield`` f_yt, and
+    ``effective_depth`` d. The result is the *maximum* spacing that satisfies strength; ACI
+    also caps the spacing at d/2 (≤ 600 mm), halved where V_s exceeds 0.33·√f'c·b_w·d, which
+    the caller applies on top. A higher demand or a smaller bar forces tighter stirrups.
+    Returns the required spacing in mm.
+    """
+    _require(required_shear_strength, "[force]", "required_shear_strength")
+    _require(stirrup_area, "[area]", "stirrup_area")
+    _require(stirrup_yield, "[pressure]", "stirrup_yield")
+    _require(effective_depth, "[length]", "effective_depth")
+    vs = required_shear_strength.to("N").magnitude
+    av = stirrup_area.to("mm**2").magnitude
+    fyt = stirrup_yield.to("MPa").magnitude
+    d = effective_depth.to("mm").magnitude
+    if vs <= 0 or av <= 0 or fyt <= 0 or d <= 0:
+        raise ValueError("all inputs must be positive")
+    return Quantity(magnitude=av * fyt * d / vs, unit="mm")
 
 
 def rc_column_axial_strength(
