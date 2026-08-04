@@ -17,9 +17,13 @@ ultimate analysis; the balances are here.
 
 from __future__ import annotations
 
+from ..units import Quantity
+
 __all__ = [
     "actual_air_fuel_ratio",
     "excess_air_from_flue_oxygen",
+    "siegert_dry_flue_gas_loss",
+    "combustion_efficiency",
     "stoichiometric_air_fuel_ratio",
 ]
 
@@ -93,3 +97,59 @@ def actual_air_fuel_ratio(
     if excess_air_fraction < 0:
         raise ValueError("excess_air_fraction must be non-negative")
     return stoichiometric_air_fuel_ratio * (1.0 + excess_air_fraction)
+
+
+def siegert_dry_flue_gas_loss(
+    *,
+    flue_temperature: Quantity,
+    combustion_air_temperature: Quantity,
+    flue_oxygen_percent: float,
+    siegert_factor: float,
+) -> float:
+    """The dry flue-gas heat loss by the Siegert formula, qA = f·(T_flue − T_air)/(21 − O₂%).
+
+    The largest loss in a fuel-fired boiler is the heat that leaves up the stack in the hot, dry
+    flue gas, and the Siegert formula estimates it from a flue-gas analysis:
+    qA = ``siegert_factor``·(``flue_temperature`` − ``combustion_air_temperature``)/(21 −
+    ``flue_oxygen_percent``), as a percentage of the fuel's heat input. The loss grows with a hotter
+    stack (poor heat recovery) and with more excess air (higher flue O₂, which dilutes and carries
+    away more heat). ``siegert_factor`` f is the fuel's constant (about 0.66 for natural gas, 0.68
+    for oil, 0.74 for coal). Subtract the result from 100% with :func:`combustion_efficiency`.
+    Returns the dry flue-gas loss as a percentage.
+    """
+    if not flue_temperature.has_dimension("[temperature]"):
+        raise ValueError("flue_temperature must be a [temperature] quantity")
+    if not combustion_air_temperature.has_dimension("[temperature]"):
+        raise ValueError("combustion_air_temperature must be a [temperature] quantity")
+    t_flue = flue_temperature.to("degC").magnitude
+    t_air = combustion_air_temperature.to("degC").magnitude
+    if t_flue <= t_air:
+        raise ValueError("flue_temperature must exceed the combustion air temperature")
+    if not 0 <= flue_oxygen_percent < 21:
+        raise ValueError("flue_oxygen_percent must be in [0, 21)")
+    if siegert_factor <= 0:
+        raise ValueError("siegert_factor must be positive")
+    return siegert_factor * (t_flue - t_air) / (21.0 - flue_oxygen_percent)
+
+
+def combustion_efficiency(
+    *,
+    dry_flue_gas_loss_percent: float,
+    other_losses_percent: float = 0.0,
+) -> float:
+    """The combustion (thermal) efficiency, η = 100 − qA − other losses.
+
+    The fraction of the fuel's heat that stays in the boiler rather than escaping: 100% minus the
+    ``dry_flue_gas_loss_percent`` qA (from :func:`siegert_dry_flue_gas_loss`, the dominant loss) and
+    any ``other_losses_percent`` (radiation, blowdown, unburnt fuel — a couple of percent). A modern
+    condensing gas boiler reaches the mid-90s; an old, poorly-tuned one runs in the 70s. Cutting the
+    stack temperature or the excess air lifts it directly. Returns the efficiency as a percentage.
+    """
+    if dry_flue_gas_loss_percent < 0:
+        raise ValueError("dry_flue_gas_loss_percent must be non-negative")
+    if other_losses_percent < 0:
+        raise ValueError("other_losses_percent must be non-negative")
+    efficiency = 100.0 - dry_flue_gas_loss_percent - other_losses_percent
+    if efficiency <= 0:
+        raise ValueError("the losses given exceed 100% (check the inputs)")
+    return efficiency

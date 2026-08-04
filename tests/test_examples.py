@@ -613,6 +613,16 @@ def test_engine_cycle_efficiency_example_higher_compression_wins():
     assert c["diesel_r18"] > c["otto_r10"]
 
 
+def test_boiler_flue_gas_efficiency_example_tuning_matters():
+    namespace = runpy.run_path(str(_EXAMPLES / "boiler_flue_gas_efficiency.py"))
+    b = namespace["boiler_efficiency"]()
+    # The well-tuned boiler loses less up the stack and is more efficient.
+    assert b["tuned_loss"] == pytest.approx(5.87, abs=0.05)
+    assert b["tuned_efficiency"] == pytest.approx(94.1, abs=0.1)
+    assert b["drifted_loss"] > b["tuned_loss"]
+    assert b["drifted_efficiency"] < b["tuned_efficiency"]
+
+
 def test_boiler_combustion_air_example_flue_confirms_excess():
     namespace = runpy.run_path(str(_EXAMPLES / "boiler_combustion_air.py"))
     t = namespace["combustion_tune"]()

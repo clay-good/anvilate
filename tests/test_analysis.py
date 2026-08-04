@@ -15238,6 +15238,40 @@ def test_carnot_efficiency_and_heat_engine_second_law():
         heat_engine_second_law_efficiency(thermal_efficiency=0.80, carnot_efficiency=eta_c)
 
 
+def test_siegert_flue_gas_loss_and_combustion_efficiency():
+    from anvilate.analysis import combustion_efficiency, siegert_dry_flue_gas_loss
+    from anvilate.units import Quantity
+
+    # qA = f*(T_flue - T_air)/(21 - O2%): 0.66*(180-20)/(21-3) = 5.867%.
+    loss = siegert_dry_flue_gas_loss(
+        flue_temperature=Quantity(magnitude=180.0, unit="degC"),
+        combustion_air_temperature=Quantity(magnitude=20.0, unit="degC"),
+        flue_oxygen_percent=3.0,
+        siegert_factor=0.66,
+    )
+    assert loss == pytest.approx(0.66 * (180 - 20) / (21 - 3), rel=1e-9)
+    # A hotter stack and more excess air (higher flue O2) both raise the loss.
+    worse = siegert_dry_flue_gas_loss(
+        flue_temperature=Quantity(magnitude=240.0, unit="degC"),
+        combustion_air_temperature=Quantity(magnitude=20.0, unit="degC"),
+        flue_oxygen_percent=7.0,
+        siegert_factor=0.66,
+    )
+    assert worse > loss
+    # Efficiency is 100 minus the losses.
+    eta = combustion_efficiency(dry_flue_gas_loss_percent=loss)
+    assert eta == pytest.approx(100 - loss, rel=1e-12)
+    eta2 = combustion_efficiency(dry_flue_gas_loss_percent=loss, other_losses_percent=2.0)
+    assert eta2 == pytest.approx(eta - 2.0, rel=1e-9)
+    with pytest.raises(ValueError, match="flue_temperature must exceed"):
+        siegert_dry_flue_gas_loss(
+            flue_temperature=Quantity(magnitude=20.0, unit="degC"),
+            combustion_air_temperature=Quantity(magnitude=20.0, unit="degC"),
+            flue_oxygen_percent=3.0,
+            siegert_factor=0.66,
+        )
+
+
 def test_combustion_air_fuel_ratio_and_excess_air():
     from anvilate.analysis import (
         actual_air_fuel_ratio,
