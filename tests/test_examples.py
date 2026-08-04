@@ -1064,6 +1064,16 @@ def test_seismic_story_drift_check_example_amplification_matters():
     assert d["amplified_mm"] < d["allowable_mm"]
 
 
+def test_seismic_diaphragm_force_example_roof_floored():
+    namespace = runpy.run_path(str(_EXAMPLES / "seismic_diaphragm_force.py"))
+    d = namespace["diaphragm_forces"]()
+    # The roof diaphragm force is floored above its proportional value...
+    assert d["roof_fpx_kn"] == pytest.approx(400.0, rel=1e-9)
+    assert d["roof_fpx_kn"] > d["roof_proportional_kn"]
+    # ...while a mid floor takes its in-band proportional value.
+    assert d["mid_fpx_kn"] == pytest.approx(600.0, rel=1e-9)
+
+
 def test_seismic_story_forces_example_top_heavy():
     namespace = runpy.run_path(str(_EXAMPLES / "seismic_story_forces.py"))
     s = namespace["story_forces"]()

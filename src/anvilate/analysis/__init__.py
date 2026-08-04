@@ -233,7 +233,8 @@ modules:
   long-period cap (Cs_max = SD1·Ie/(T·R)) and the approximate fundamental period
   (Ta = Ct·hn^x) that sets it, the equivalent-lateral-force base shear V = Cs·W
   and its vertical distribution to
-  each floor (Fx = V·wx·hx^k/Σwi·hi^k), the Cd-amplified design story drift
+  each floor (Fx = V·wx·hx^k/Σwi·hi^k), the bounded diaphragm design force Fpx,
+  the Cd-amplified design story drift
   (Δ = Cd·δxe/Ie) and the allowable drift it is checked against, the P-delta
   stability coefficient (θ = Pₓ·Δ/(Vₓ·hsx·Cd)) and its stability ceiling, the
   combined seismic load effect E = ρ·Q_E ± 0.2·SDS·D fed to the combinations, the
@@ -610,6 +611,7 @@ from .building_loads import (
     reduced_live_load,
     seismic_base_shear,
     seismic_design_story_drift,
+    seismic_diaphragm_force,
     seismic_load_effect,
     seismic_response_coefficient,
     seismic_response_coefficient_upper_limit,
@@ -1915,6 +1917,7 @@ __all__ = [
     "approximate_fundamental_period",
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
+    "seismic_diaphragm_force",
     "seismic_design_story_drift",
     "allowable_story_drift",
     "seismic_stability_coefficient",

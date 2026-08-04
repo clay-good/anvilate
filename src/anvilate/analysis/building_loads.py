@@ -38,6 +38,7 @@ __all__ = [
     "approximate_fundamental_period",
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
+    "seismic_diaphragm_force",
     "seismic_design_story_drift",
     "allowable_story_drift",
     "seismic_stability_coefficient",
@@ -291,6 +292,47 @@ def seismic_vertical_force_distribution(
         products.append(wm * hm**distribution_exponent)
     total = sum(products)
     return tuple(Quantity(magnitude=v * p / total, unit="kN") for p in products)
+
+
+def seismic_diaphragm_force(
+    *,
+    story_forces_above: Quantity,
+    story_weights_above: Quantity,
+    diaphragm_weight: Quantity,
+    design_spectral_acceleration: float,
+    importance_factor: float = 1.0,
+) -> Quantity:
+    """The ASCE 7 diaphragm design force Fpx, bounded (§12.10.1.1).
+
+    A floor diaphragm collects the inertial force of its own level and delivers it to the vertical
+    lateral system, and it is designed for its own force Fpx — not the story force Fx. Fpx is the
+    diaphragm weight times the average acceleration of everything above it,
+    Fpx = (ΣFi/ΣWi)·wpx, but bounded below by 0.2·SDS·Ie·wpx and above by 0.4·SDS·Ie·wpx.
+    ``story_forces_above`` ΣFi and ``story_weights_above`` ΣWi are the sums of the lateral forces
+    and weights at and above this level (ΣFi from :func:`seismic_vertical_force_distribution`),
+    ``diaphragm_weight`` wpx the weight tributary to this diaphragm, and
+    ``design_spectral_acceleration`` SDS and ``importance_factor`` Ie set the bounds. The lower
+    bound routinely governs at the roof,
+    where the diaphragm force exceeds the roof story force — a common surprise. Returns Fpx in kN.
+    """
+    _check(story_forces_above, "[force]", "story_forces_above")
+    _check(story_weights_above, "[force]", "story_weights_above")
+    _check(diaphragm_weight, "[force]", "diaphragm_weight")
+    sf = story_forces_above.to("kN").magnitude
+    sw = story_weights_above.to("kN").magnitude
+    wpx = diaphragm_weight.to("kN").magnitude
+    if sf < 0 or sw <= 0 or wpx <= 0:
+        raise ValueError(
+            "story_weights_above and diaphragm_weight must be positive, story_forces_above ≥ 0"
+        )
+    if design_spectral_acceleration <= 0:
+        raise ValueError("design_spectral_acceleration must be positive")
+    if importance_factor <= 0:
+        raise ValueError("importance_factor must be positive")
+    proportional = sf / sw * wpx
+    lower = 0.2 * design_spectral_acceleration * importance_factor * wpx
+    upper = 0.4 * design_spectral_acceleration * importance_factor * wpx
+    return Quantity(magnitude=min(max(proportional, lower), upper), unit="kN")
 
 
 def seismic_design_story_drift(

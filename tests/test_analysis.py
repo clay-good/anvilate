@@ -15446,6 +15446,34 @@ def test_reduced_live_load_regimes():
         )
 
 
+def test_seismic_diaphragm_force_bounds():
+    from anvilate.analysis import seismic_diaphragm_force
+
+    kw = {"diaphragm_weight": _q("2000 kN"), "design_spectral_acceleration": 1.0}
+    # Proportional (SigmaF/SigmaW)*wpx = 250, but floored at 0.2*SDS*wpx = 400 -> 400 (roof case).
+    roof = seismic_diaphragm_force(
+        story_forces_above=_q("1000 kN"), story_weights_above=_q("8000 kN"), **kw
+    )
+    assert roof.to("kN").magnitude == pytest.approx(400.0, rel=1e-9)
+    # A proportional value inside [0.2, 0.4]*SDS*wpx = [400, 800] is taken as-is: 0.3*2000 = 600.
+    mid = seismic_diaphragm_force(
+        story_forces_above=_q("3600 kN"), story_weights_above=_q("12000 kN"), **kw
+    )
+    assert mid.to("kN").magnitude == pytest.approx(600.0, rel=1e-9)
+    # A very high proportional value is capped at the 0.4*SDS*wpx = 800 ceiling.
+    capped = seismic_diaphragm_force(
+        story_forces_above=_q("6000 kN"), story_weights_above=_q("8000 kN"), **kw
+    )
+    assert capped.to("kN").magnitude == pytest.approx(800.0, rel=1e-9)
+    with pytest.raises(ValueError, match="design_spectral_acceleration"):
+        seismic_diaphragm_force(
+            story_forces_above=_q("1000 kN"),
+            story_weights_above=_q("8000 kN"),
+            diaphragm_weight=_q("2000 kN"),
+            design_spectral_acceleration=0.0,
+        )
+
+
 def test_seismic_vertical_force_distribution_sums_to_base_shear():
     from anvilate.analysis import seismic_vertical_force_distribution
 
