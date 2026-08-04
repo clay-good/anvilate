@@ -14213,6 +14213,25 @@ def test_road_curve_superelevation_and_max_speed():
         )
 
 
+def test_compressible_flow_isentropic_area_ratio():
+    from anvilate.analysis import isentropic_area_ratio
+
+    # A/A* = 1 exactly at the sonic throat (M = 1).
+    assert isentropic_area_ratio(mach_number=1.0, heat_capacity_ratio=1.4) == pytest.approx(1.0)
+    # Standard table value: M = 2, gamma = 1.4 -> 1.6875.
+    assert isentropic_area_ratio(mach_number=2.0, heat_capacity_ratio=1.4) == pytest.approx(
+        1.6875, rel=1e-6
+    )
+    # The ratio grows on both sides of the throat (a subsonic and a supersonic branch).
+    supersonic = isentropic_area_ratio(mach_number=3.0, heat_capacity_ratio=1.4)
+    subsonic = isentropic_area_ratio(mach_number=0.3, heat_capacity_ratio=1.4)
+    assert supersonic > 1.0
+    assert subsonic > 1.0
+
+    with pytest.raises(ValueError, match="mach_number must be positive"):
+        isentropic_area_ratio(mach_number=0.0, heat_capacity_ratio=1.4)
+
+
 def test_pipe_flow_cavitation_number():
     from anvilate.analysis import cavitation_number
 

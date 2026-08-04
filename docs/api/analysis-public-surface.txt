@@ -22,6 +22,7 @@ aluminum.aluminum_buckling_stress
 aluminum.aluminum_tension_stress
 compressible_flow.choked_mass_flow_rate
 compressible_flow.critical_pressure_ratio
+compressible_flow.isentropic_area_ratio
 compressible_flow.mach_number
 compressible_flow.speed_of_sound
 compressible_flow.stagnation_temperature_ratio

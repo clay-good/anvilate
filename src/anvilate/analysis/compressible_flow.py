@@ -24,6 +24,7 @@ from ..units import Quantity
 __all__ = [
     "choked_mass_flow_rate",
     "critical_pressure_ratio",
+    "isentropic_area_ratio",
     "mach_number",
     "speed_of_sound",
     "stagnation_temperature_ratio",
@@ -90,6 +91,26 @@ def stagnation_temperature_ratio(*, mach_number: float, heat_capacity_ratio: flo
     if heat_capacity_ratio <= 1.0:
         raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
     return 1.0 + (heat_capacity_ratio - 1.0) / 2.0 * mach_number**2
+
+
+def isentropic_area_ratio(*, mach_number: float, heat_capacity_ratio: float) -> float:
+    """The isentropic nozzle area ratio A/A* (the converging-diverging area-Mach relation).
+
+    A converging-diverging nozzle reaches a given ``mach_number`` M only at a definite area relative
+    to its sonic throat: A/A* = (1/M)·[(2/(γ+1))·(1 + (γ−1)/2·M²)]^((γ+1)/(2(γ−1))), from M and the
+    ``heat_capacity_ratio`` γ. The ratio is 1 at the throat (M = 1) and rises on *both* sides — a
+    subsonic and a supersonic Mach share each area ratio — so the divergent bell sets the exit Mach,
+    which is why a rocket nozzle must be matched to its altitude. Returns the dimensionless area
+    ratio A/A* (≥ 1).
+    """
+    if mach_number <= 0:
+        raise ValueError(f"mach_number must be positive; got {mach_number}")
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    g = heat_capacity_ratio
+    bracket = (2.0 / (g + 1.0)) * (1.0 + (g - 1.0) / 2.0 * mach_number**2)
+    exponent = (g + 1.0) / (2.0 * (g - 1.0))
+    return bracket**exponent / mach_number
 
 
 def critical_pressure_ratio(*, heat_capacity_ratio: float) -> float:

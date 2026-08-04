@@ -578,6 +578,16 @@ def test_highway_curve_superelevation_example_max_speed_matches_design():
     assert c["ideal_superelevation_rate"] > 0.06
 
 
+def test_rocket_nozzle_area_ratio_example_two_roots():
+    namespace = runpy.run_path(str(_EXAMPLES / "rocket_nozzle_area_ratio.py"))
+    r = namespace["nozzle_area_ratios"]()
+    assert r["throat_m1"] == pytest.approx(1.0, rel=1e-9)
+    # Mach 3 needs a far larger bell than Mach 2.
+    assert r["exit_m3"] > r["exit_m2"]
+    # The subsonic M~0.33 shares roughly the Mach-2 area ratio (the two-root property).
+    assert r["subsonic_m033"] == pytest.approx(r["exit_m2"], rel=0.05)
+
+
 def test_control_valve_cavitation_example_heavy_throttle_cavitates():
     namespace = runpy.run_path(str(_EXAMPLES / "control_valve_cavitation.py"))
     v = namespace["valve_cavitation"]()
