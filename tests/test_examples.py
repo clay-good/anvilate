@@ -358,6 +358,17 @@ def test_air_compressor_duty_example_brackets_power_and_heat():
     assert d["discharge_degc"] == pytest.approx(229, abs=3)
 
 
+def test_multistage_compressor_staging_example_cuts_power_and_heat():
+    namespace = runpy.run_path(str(_EXAMPLES / "multistage_compressor_staging.py"))
+    s = namespace["staging_comparison"]()
+    # More stages -> less power and a much lower per-stage discharge temperature.
+    assert s["power_3stage_kw"] < s["power_2stage_kw"] < s["power_1stage_kw"]
+    assert s["discharge_3stage_degc"] < s["discharge_2stage_degc"] < s["discharge_1stage_degc"]
+    # Single stage runs ferociously hot; three stages tame it.
+    assert s["discharge_1stage_degc"] == pytest.approx(603, abs=5)
+    assert s["discharge_3stage_degc"] == pytest.approx(144, abs=5)
+
+
 def test_water_main_hazen_williams_example_agrees_with_darcy():
     namespace = runpy.run_path(str(_EXAMPLES / "water_main_hazen_williams.py"))
     r = namespace["main_head_loss"]()

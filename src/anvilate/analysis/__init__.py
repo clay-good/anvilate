@@ -113,8 +113,9 @@ modules:
   the extend and retract force (bore vs annular area), the extend and retract speed
   from the supply flow, and the rod-side pressure intensification of a blocked stroke
 - :mod:`~anvilate.analysis.gas_compression` — gas compression: the ideal-gas density,
-  the isothermal and adiabatic compression power that bracket a compressor's duty, and
-  the adiabatic discharge temperature that sets intercooling
+  the isothermal and adiabatic compression power that bracket a compressor's duty, the
+  adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
+  and power of a multi-stage machine
 - :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
   orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
   inverse, and the pitot-tube point velocity √(2Δp/ρ)
@@ -710,6 +711,8 @@ from .gas_compression import (
     adiabatic_discharge_temperature,
     ideal_gas_density,
     isothermal_compression_power,
+    multistage_compression_power,
+    optimal_stage_pressure_ratio,
 )
 from .gasket import (
     gasket_operating_load,
@@ -1239,6 +1242,8 @@ __all__ = [
     "adiabatic_discharge_temperature",
     "ideal_gas_density",
     "isothermal_compression_power",
+    "multistage_compression_power",
+    "optimal_stage_pressure_ratio",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

@@ -13119,6 +13119,37 @@ def test_ideal_gas_density_and_compression_power():
         )
 
 
+def test_multistage_compression_power_and_optimal_ratio():
+    from anvilate.analysis import (
+        adiabatic_compression_power,
+        multistage_compression_power,
+        optimal_stage_pressure_ratio,
+    )
+
+    # Optimal per-stage ratio is the nth root of the overall: 49^(1/2) = 7.
+    assert optimal_stage_pressure_ratio(overall_pressure_ratio=49.0, stages=2) == pytest.approx(
+        7.0, rel=1e-9
+    )
+    kw = {
+        "volumetric_flow": _q("1 m**3/s"),
+        "inlet_pressure": _q("100 kPa"),
+        "heat_capacity_ratio": 1.4,
+    }
+    # A single "stage" recovers the plain adiabatic power.
+    one = multistage_compression_power(overall_pressure_ratio=49.0, stages=1, **kw)
+    adiabatic = adiabatic_compression_power(pressure_ratio=49.0, **kw)
+    assert one.to("W").magnitude == pytest.approx(adiabatic.to("W").magnitude, rel=1e-9)
+    # More stages cut the work, approaching the isothermal ideal.
+    two = multistage_compression_power(overall_pressure_ratio=49.0, stages=2, **kw)
+    three = multistage_compression_power(overall_pressure_ratio=49.0, stages=3, **kw)
+    assert two.to("W").magnitude < one.to("W").magnitude
+    assert three.to("W").magnitude < two.to("W").magnitude
+    # Two stages save about 27% over a single stage at this ratio.
+    assert two.to("W").magnitude / one.to("W").magnitude == pytest.approx(0.729, abs=0.005)
+    with pytest.raises(ValueError, match="stages must be at least 1"):
+        multistage_compression_power(overall_pressure_ratio=49.0, stages=0, **kw)
+
+
 def test_adiabatic_discharge_temperature_rises_with_ratio():
     from anvilate.analysis import adiabatic_discharge_temperature
 

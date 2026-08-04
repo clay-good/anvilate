@@ -23,6 +23,8 @@ __all__ = [
     "adiabatic_discharge_temperature",
     "ideal_gas_density",
     "isothermal_compression_power",
+    "multistage_compression_power",
+    "optimal_stage_pressure_ratio",
 ]
 
 
@@ -133,6 +135,58 @@ def adiabatic_discharge_temperature(
         raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
     k = heat_capacity_ratio
     return Quantity(magnitude=t1 * pressure_ratio ** ((k - 1.0) / k), unit="K")
+
+
+def optimal_stage_pressure_ratio(*, overall_pressure_ratio: float, stages: int) -> float:
+    """The per-stage pressure ratio that minimizes multi-stage compression work, r^(1/n).
+
+    With perfect intercooling back to the inlet temperature between stages, the total work is
+    least when every stage shares the same pressure ratio — and that equal ratio is the nth root of
+    the overall one: r_stage = r^(1/n). ``overall_pressure_ratio`` r = p_out/p_in and ``stages`` n.
+    A three-stage machine at an overall 27:1, for instance, runs each stage at 3:1. Returns the
+    dimensionless per-stage ratio.
+    """
+    if overall_pressure_ratio <= 1.0:
+        raise ValueError(f"overall_pressure_ratio must exceed 1; got {overall_pressure_ratio}")
+    if stages < 1:
+        raise ValueError(f"stages must be at least 1; got {stages}")
+    return overall_pressure_ratio ** (1.0 / stages)
+
+
+def multistage_compression_power(
+    *,
+    volumetric_flow: Quantity,
+    inlet_pressure: Quantity,
+    overall_pressure_ratio: float,
+    stages: int,
+    heat_capacity_ratio: float,
+) -> Quantity:
+    """The ideal power of a multi-stage compressor with optimal intercooling.
+
+    Splitting compression into stages with an intercooler cooling the gas back to inlet temperature
+    between them cuts both the work and the discharge temperature. With the optimal equal per-stage
+    ratio r^(1/n), the total power is n times a single stage at that smaller ratio:
+    P = n·[k/(k−1)]·p₁·Q·[r^((k−1)/(n·k)) − 1]. ``volumetric_flow`` Q₁, ``inlet_pressure`` p₁,
+    ``overall_pressure_ratio`` r, number of ``stages`` n, and ``heat_capacity_ratio`` k. As n rises
+    the power falls toward the isothermal ideal (see :func:`isothermal_compression_power`); a single
+    stage recovers :func:`adiabatic_compression_power`. Returns the power in watts.
+    """
+    _check(volumetric_flow, "[length]**3/[time]", "volumetric_flow")
+    _check(inlet_pressure, "[pressure]", "inlet_pressure")
+    q = volumetric_flow.to("m**3/s").magnitude
+    p1 = inlet_pressure.to("Pa").magnitude
+    if q <= 0 or p1 <= 0:
+        raise ValueError("volumetric_flow and inlet_pressure must be positive")
+    if overall_pressure_ratio <= 1.0:
+        raise ValueError(f"overall_pressure_ratio must exceed 1; got {overall_pressure_ratio}")
+    if stages < 1:
+        raise ValueError(f"stages must be at least 1; got {stages}")
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    k = heat_capacity_ratio
+    exponent = (k - 1.0) / (stages * k)
+    power = stages * (k / (k - 1.0)) * p1 * q * (overall_pressure_ratio**exponent - 1.0)
+    return Quantity(magnitude=power, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
