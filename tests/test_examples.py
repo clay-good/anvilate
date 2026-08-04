@@ -745,6 +745,18 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_casting_riser_sizing_example_riser_outlasts_the_casting():
+    namespace = runpy.run_path(str(_EXAMPLES / "casting_riser_sizing.py"))
+    s = namespace["riser_sizing"]()
+    # 200x150x40 mm plate: V/A = 1200/880 = 1.36 cm.
+    assert s["casting_modulus_cm"] == pytest.approx(1200.0 / 880.0, rel=1e-6)
+    # Chvorinov t = 2 * 1.36^2 ~ 3.72 min.
+    assert s["freeze_time_min"] == pytest.approx(2.0 * (1200.0 / 880.0) ** 2, rel=1e-6)
+    # The riser modulus target is 1.2x the casting's, so it freezes last.
+    assert s["riser_modulus_cm"] == pytest.approx(1.2 * s["casting_modulus_cm"], rel=1e-9)
+    assert s["riser_modulus_cm"] > s["casting_modulus_cm"]
+
+
 def test_turning_speed_and_tool_life_example_trades_speed_for_life():
     namespace = runpy.run_path(str(_EXAMPLES / "turning_speed_and_tool_life.py"))
     t = namespace["turning_tradeoff"]()

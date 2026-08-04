@@ -420,6 +420,9 @@ modules:
 - :mod:`~anvilate.analysis.machining` — metal-cutting parameters: the surface cutting
   speed V = π·D·N and its spindle-speed inverse N = V/(π·D), the material removal rate
   MRR = V·f·d, and the Taylor tool life T = (C/V)^(1/n) that trades speed for edge life
+- :mod:`~anvilate.analysis.casting` — metal-casting solidification: the casting modulus
+  M = V/A that governs freezing, Chvorinov's solidification time t = B·M², and the
+  riser modulus M_r ≈ 1.2·M that makes the riser freeze last and take the shrinkage
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -681,6 +684,11 @@ from .cam import (
     cam_base_circle_for_pressure_angle,
     cam_follower_motion,
     cam_pressure_angle,
+)
+from .casting import (
+    casting_modulus,
+    chvorinov_solidification_time,
+    riser_modulus_for_feeding,
 )
 from .chain import (
     chain_length_in_pitches,
@@ -1998,6 +2006,9 @@ __all__ = [
     "cam_follower_motion",
     "cam_pressure_angle",
     "cam_base_circle_for_pressure_angle",
+    "casting_modulus",
+    "chvorinov_solidification_time",
+    "riser_modulus_for_feeding",
     "parabolic_cable_sag",
     "parabolic_cable_max_tension",
     "parabolic_cable_length",

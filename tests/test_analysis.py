@@ -8652,6 +8652,36 @@ def test_chain_working_tension_from_power_and_speed():
         chain_working_tension(power=_q("10 kW"), chain_speed=_q("5 m"))
 
 
+def test_casting_modulus_chvorinov_time_and_riser_sizing():
+    from anvilate.analysis import (
+        casting_modulus,
+        chvorinov_solidification_time,
+        riser_modulus_for_feeding,
+    )
+
+    # M = V/A; a 200 cm^3 casting with 280 cm^2 of surface -> 0.714 cm.
+    m = casting_modulus(volume=_q("200 cm**3"), surface_area=_q("280 cm**2"))
+    assert m.to("cm").magnitude == pytest.approx(200.0 / 280.0, rel=1e-9)
+
+    # Chvorinov t = B*M^2; B = 3 min/cm^2 -> 3 * 0.714^2 = 1.53 min.
+    t = chvorinov_solidification_time(modulus=m, mold_constant=_q("3 min/cm**2"))
+    assert t.to("min").magnitude == pytest.approx(3.0 * (200.0 / 280.0) ** 2, rel=1e-9)
+
+    # Time goes as the square of modulus: doubling the modulus quadruples the time.
+    m2 = casting_modulus(volume=_q("400 cm**3"), surface_area=_q("280 cm**2"))
+    t2 = chvorinov_solidification_time(modulus=m2, mold_constant=_q("3 min/cm**2"))
+    assert t2.to("min").magnitude == pytest.approx(4.0 * t.to("min").magnitude, rel=1e-9)
+
+    # The riser must have a larger modulus (default 1.2x) to freeze last and feed the part.
+    r = riser_modulus_for_feeding(casting_modulus=m)
+    assert r.to("cm").magnitude == pytest.approx(1.2 * m.to("cm").magnitude, rel=1e-9)
+    assert r.to("cm").magnitude > m.to("cm").magnitude
+
+    # Guardrail: a feeding factor <= 1 would let the riser freeze first (useless).
+    with pytest.raises(ValueError, match="must exceed 1"):
+        riser_modulus_for_feeding(casting_modulus=m, feeding_factor=0.9)
+
+
 def test_cam_shm_profile_kinematics_and_finite_end_acceleration():
     from math import pi
 

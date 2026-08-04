@@ -226,6 +226,9 @@ cam.CamMotion
 cam.cam_base_circle_for_pressure_angle
 cam.cam_follower_motion
 cam.cam_pressure_angle
+casting.casting_modulus
+casting.chvorinov_solidification_time
+casting.riser_modulus_for_feeding
 chain.chain_length_in_pitches
 chain.chain_speed
 chain.chain_working_tension
