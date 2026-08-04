@@ -14056,6 +14056,36 @@ def test_center_of_pressure_below_centroid_and_buoyancy():
         buoyant_force(displaced_volume=_q("0 m**3"), fluid_density=_q("1000 kg/m**3"))
 
 
+def test_metacentric_height_and_righting_moment():
+    import math
+
+    from anvilate.analysis import metacentric_height, righting_moment
+
+    # GM = I/V - BG = 53.333/20 - 0.3 = 2.367 m (a wide flat hull is stable).
+    gm = metacentric_height(
+        waterplane_second_moment=_q("53.333 m**4"),
+        displaced_volume=_q("20 m**3"),
+        buoyancy_to_gravity_distance=_q("0.3 m"),
+    )
+    assert gm.to("m").magnitude == pytest.approx(53.333 / 20 - 0.3, rel=1e-6)
+    assert gm.to("m").magnitude > 0  # stable
+    # Raising the center of gravity (larger BG) shrinks GM and can go negative.
+    gm_high = metacentric_height(
+        waterplane_second_moment=_q("53.333 m**4"),
+        displaced_volume=_q("20 m**3"),
+        buoyancy_to_gravity_distance=_q("3.0 m"),
+    )
+    assert gm_high.to("m").magnitude < 0  # unstable — would capsize
+    # Righting moment M = W*GM*sin(theta).
+    m = righting_moment(weight=_q("196.1 kN"), metacentric_height=gm, heel_angle=10.0)
+    assert m.to("kN*m").magnitude == pytest.approx(
+        196.1 * 2.36665 * math.sin(math.radians(10)), rel=1e-4
+    )
+    # A negative GM has no righting moment — the function rejects it.
+    with pytest.raises(ValueError, match="stable"):
+        righting_moment(weight=_q("196.1 kN"), metacentric_height=_q("-0.1 m"), heel_angle=10.0)
+
+
 def test_obstruction_meter_flow_and_pressure_round_trip():
     import math
 

@@ -306,6 +306,16 @@ def test_submerged_gate_hinge_example_center_of_pressure_below_centroid():
     assert g["center_of_pressure_m"] > g["centroid_depth_m"]
 
 
+def test_pontoon_stability_example_capsizes_with_a_high_load():
+    namespace = runpy.run_path(str(_EXAMPLES / "pontoon_stability.py"))
+    s = namespace["pontoon_stability"]()
+    # Low load: positive metacentric height and a real righting moment.
+    assert s["low_load_gm_m"] > 0
+    assert s["low_load_righting_knm"] > 0
+    # High load: the center of gravity climbs above the metacenter and GM goes negative.
+    assert s["high_load_gm_m"] < 0
+
+
 def test_slope_stability_rain_example_cohesion_holds_until_saturation():
     namespace = runpy.run_path(str(_EXAMPLES / "slope_stability_rain.py"))
     f = namespace["slope_factors"]()

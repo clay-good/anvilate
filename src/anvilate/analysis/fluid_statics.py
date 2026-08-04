@@ -24,6 +24,8 @@ __all__ = [
     "center_of_pressure_depth",
     "hydrostatic_force_on_plane",
     "hydrostatic_pressure",
+    "metacentric_height",
+    "righting_moment",
 ]
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
@@ -115,6 +117,64 @@ def buoyant_force(*, displaced_volume: Quantity, fluid_density: Quantity) -> Qua
     if v <= 0 or rho <= 0:
         raise ValueError("displaced_volume and fluid_density must be positive")
     return Quantity(magnitude=rho * _GRAVITY * v / 1000.0, unit="kN")
+
+
+def metacentric_height(
+    *,
+    waterplane_second_moment: Quantity,
+    displaced_volume: Quantity,
+    buoyancy_to_gravity_distance: Quantity,
+) -> Quantity:
+    """The metacentric height GM = I/V − BG that decides a floating body's stability.
+
+    A floating body — a pontoon, a barge, a buoy — is stable in roll only if, when it heels, the
+    upward buoyant force acts far enough outboard to push it back upright. The metacentric height
+    measures that: GM = BM − BG, where the metacentric radius BM = I/V is the
+    ``waterplane_second_moment`` I (of the waterline area about the roll axis) over the
+    ``displaced_volume`` V, and
+    ``buoyancy_to_gravity_distance`` BG is the height of the center of gravity above the center of
+    buoyancy. A positive GM is stable (the body rights itself); a negative one capsizes. A wide,
+    shallow hull has a large I and is hard to tip — which is why rafts are wide. Returns GM in
+    meters.
+    """
+    _check(waterplane_second_moment, "[length]**4", "waterplane_second_moment")
+    _check(displaced_volume, "[length]**3", "displaced_volume")
+    _check(buoyancy_to_gravity_distance, "[length]", "buoyancy_to_gravity_distance")
+    i = waterplane_second_moment.to("m**4").magnitude
+    v = displaced_volume.to("m**3").magnitude
+    bg = buoyancy_to_gravity_distance.to("m").magnitude
+    if i <= 0 or v <= 0:
+        raise ValueError("waterplane_second_moment and displaced_volume must be positive")
+    return Quantity(magnitude=i / v - bg, unit="m")
+
+
+def righting_moment(
+    *,
+    weight: Quantity,
+    metacentric_height: Quantity,
+    heel_angle: float,
+) -> Quantity:
+    """The righting moment M = W·GM·sin(θ) that returns a heeled floating body upright.
+
+    When a stable floating body heels by a small angle, the buoyant force and the weight form a
+    couple that rights it: M = W·GM·sin(θ). ``weight`` W is the body's weight (equal to its
+    buoyancy), ``metacentric_height`` GM comes from :func:`metacentric_height`, and ``heel_angle`` θ
+    is the roll angle in degrees. A larger GM gives a stiffer, snappier righting response — good for
+    stability but harsh in a seaway. Returns the righting moment in kN·m.
+    """
+    from math import radians, sin
+
+    _check(weight, "[force]", "weight")
+    _check(metacentric_height, "[length]", "metacentric_height")
+    w = weight.to("kN").magnitude
+    gm = metacentric_height.to("m").magnitude
+    if w <= 0:
+        raise ValueError("weight must be positive")
+    if gm <= 0:
+        raise ValueError("metacentric_height must be positive for a stable, righting body")
+    if not 0.0 <= heel_angle < 90.0:
+        raise ValueError(f"heel_angle must be in [0, 90) degrees; got {heel_angle}")
+    return Quantity(magnitude=w * gm * sin(radians(heel_angle)), unit="kN*m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
