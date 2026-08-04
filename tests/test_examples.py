@@ -965,6 +965,20 @@ def test_cold_storage_roof_snow_example_freezer_carries_more():
     assert r["freezer_sloped_kpa"] < r["freezer_flat_kpa"]
 
 
+def test_building_column_load_path_capstone_reduction_decides():
+    namespace = runpy.run_path(str(_EXAMPLES / "building_column_load_path.py"))
+    card = namespace["screen_column"]()
+    by_name = {e.name: e for e in card.entries}
+    # With the code-permitted live-load reduction the column passes...
+    reduced = by_name["column with code live-load reduction"]
+    assert reduced.passed
+    assert "safety factor 1.19" in reduced.detail
+    # ...but designed for the full unreduced live load it fails — the reduction decides.
+    unreduced = by_name["column without the reduction"]
+    assert unreduced.status is CheckStatus.FAIL
+    assert "safety factor 0.90" in unreduced.detail
+
+
 def test_flat_roof_rain_vs_snow_example_rain_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "flat_roof_rain_vs_snow.py"))
     r = namespace["roof_loads"]()
