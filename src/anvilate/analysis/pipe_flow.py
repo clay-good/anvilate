@@ -11,8 +11,12 @@ equation, which :func:`darcy_friction_factor` evaluates with the explicit Swamee
 Fittings, valves, bends and entrances add *minor* losses h_m = K·V²/(2g) on top, and the
 total head loss converts to a pressure drop through Δp = ρ·g·h. Together these size the
 run: :func:`reynolds_number` → :func:`darcy_friction_factor` → :func:`darcy_weisbach_head_loss`
-(plus :func:`minor_loss_head`) → :func:`pipe_pressure_drop`. Inputs and outputs are
-dimension-checked :class:`~anvilate.units.Quantity` values.
+(plus :func:`minor_loss_head`) → :func:`pipe_pressure_drop`.
+
+For water distribution the empirical Hazen-Williams equation is the common shortcut — it needs
+only a roughness coefficient C (no Reynolds number or friction factor), giving the head loss
+directly as h_f = 10.67·L·Q^1.852/(C^1.852·D^4.87). Inputs and outputs are dimension-checked
+:class:`~anvilate.units.Quantity` values.
 """
 
 from __future__ import annotations
@@ -24,10 +28,18 @@ from ..units import Quantity
 __all__ = [
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
+    "hazen_williams_flow_capacity",
+    "hazen_williams_head_loss",
     "minor_loss_head",
     "pipe_pressure_drop",
     "reynolds_number",
 ]
+
+# Hazen-Williams SI constant and exponents: h_f = 10.67*L*Q^1.852 / (C^1.852 * D^4.87),
+# with Q in m^3/s, D and L in m. The empirical form for water near 15-20 C.
+_HW_CONSTANT = 10.67
+_HW_FLOW_EXPONENT = 1.852
+_HW_DIAMETER_EXPONENT = 4.87
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
 _LAMINAR_LIMIT = 2300.0  # Reynolds number below which flow is laminar
@@ -139,6 +151,71 @@ def pipe_pressure_drop(*, head_loss: Quantity, density: Quantity) -> Quantity:
     if h < 0 or rho <= 0:
         raise ValueError("head_loss must be non-negative and density positive")
     return Quantity(magnitude=rho * _GRAVITY * h / 1000.0, unit="kPa")
+
+
+def hazen_williams_head_loss(
+    *,
+    flow_rate: Quantity,
+    pipe_diameter: Quantity,
+    length: Quantity,
+    roughness_coefficient: float,
+) -> Quantity:
+    """The Hazen-Williams friction head loss for water flow in a pipe.
+
+    The empirical head loss water utilities use, needing only a roughness coefficient rather than a
+    Reynolds number and friction factor: h_f = 10.67·L·Q^1.852 / (C^1.852·D^4.87) (SI form).
+    ``flow_rate`` Q, ``pipe_diameter`` D, and ``length`` L set the geometry, and
+    ``roughness_coefficient`` C is the Hazen-Williams C (~130–150 for new cast iron or PVC, ~100
+    for older or tuberculated pipe — a higher C is smoother). Valid for water near ambient
+    temperature; for other fluids or regimes use :func:`darcy_weisbach_head_loss`. Returns the head
+    loss in meters.
+    """
+    _check(flow_rate, "[length]**3/[time]", "flow_rate")
+    _check(pipe_diameter, "[length]", "pipe_diameter")
+    _check(length, "[length]", "length")
+    q = flow_rate.to("m**3/s").magnitude
+    d = pipe_diameter.to("m").magnitude
+    lo = length.to("m").magnitude
+    if q <= 0 or d <= 0 or lo <= 0:
+        raise ValueError("flow_rate, pipe_diameter, and length must be positive")
+    if roughness_coefficient <= 0:
+        raise ValueError("roughness_coefficient must be positive")
+    h_f = (
+        _HW_CONSTANT
+        * lo
+        * q**_HW_FLOW_EXPONENT
+        / (roughness_coefficient**_HW_FLOW_EXPONENT * d**_HW_DIAMETER_EXPONENT)
+    )
+    return Quantity(magnitude=h_f, unit="m")
+
+
+def hazen_williams_flow_capacity(
+    *,
+    head_loss: Quantity,
+    pipe_diameter: Quantity,
+    length: Quantity,
+    roughness_coefficient: float,
+) -> Quantity:
+    """The water flow a pipe carries for a given Hazen-Williams head loss (capacity inverse).
+
+    The inverse of :func:`hazen_williams_head_loss`, Q = [h_f·C^1.852·D^4.87 / (10.67·L)]^(1/1.852)
+    — the discharge a main delivers when a head or pressure budget ``head_loss`` h_f is spent over
+    its ``length`` L. ``pipe_diameter`` D and ``roughness_coefficient`` C are as in the forward
+    relation. Returns the flow rate in m³/s.
+    """
+    _check(head_loss, "[length]", "head_loss")
+    _check(pipe_diameter, "[length]", "pipe_diameter")
+    _check(length, "[length]", "length")
+    h_f = head_loss.to("m").magnitude
+    d = pipe_diameter.to("m").magnitude
+    lo = length.to("m").magnitude
+    if h_f <= 0 or d <= 0 or lo <= 0:
+        raise ValueError("head_loss, pipe_diameter, and length must be positive")
+    if roughness_coefficient <= 0:
+        raise ValueError("roughness_coefficient must be positive")
+    numerator = h_f * roughness_coefficient**_HW_FLOW_EXPONENT * d**_HW_DIAMETER_EXPONENT
+    q = (numerator / (_HW_CONSTANT * lo)) ** (1.0 / _HW_FLOW_EXPONENT)
+    return Quantity(magnitude=q, unit="m**3/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

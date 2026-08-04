@@ -13587,6 +13587,34 @@ def test_darcy_weisbach_head_loss_and_pressure_drop():
         )
 
 
+def test_hazen_williams_head_loss_and_capacity_round_trip():
+    from anvilate.analysis import hazen_williams_flow_capacity, hazen_williams_head_loss
+
+    kw = {"pipe_diameter": _q("0.15 m"), "length": _q("100 m"), "roughness_coefficient": 130.0}
+    # h_f = 10.67*L*Q^1.852/(C^1.852*D^4.87); Q=0.05, C=130, D=0.15, L=100 -> 5.20 m.
+    hf = hazen_williams_head_loss(flow_rate=_q("0.05 m**3/s"), **kw)
+    expect = 10.67 * 100 * 0.05**1.852 / (130**1.852 * 0.15**4.87)
+    assert hf.to("m").magnitude == pytest.approx(expect, rel=1e-9)
+    # The capacity inverse recovers the original flow exactly.
+    q = hazen_williams_flow_capacity(head_loss=hf, **kw)
+    assert q.to("m**3/s").magnitude == pytest.approx(0.05, rel=1e-9)
+    # A smoother pipe (higher C) loses less head at the same flow.
+    hf_smooth = hazen_williams_head_loss(
+        flow_rate=_q("0.05 m**3/s"),
+        pipe_diameter=_q("0.15 m"),
+        length=_q("100 m"),
+        roughness_coefficient=150.0,
+    )
+    assert hf_smooth.to("m").magnitude < hf.to("m").magnitude
+    with pytest.raises(ValueError, match="roughness_coefficient"):
+        hazen_williams_head_loss(
+            flow_rate=_q("0.05 m**3/s"),
+            pipe_diameter=_q("0.15 m"),
+            length=_q("100 m"),
+            roughness_coefficient=0.0,
+        )
+
+
 def test_manning_open_channel_flow():
     from anvilate.analysis import (
         hydraulic_radius,

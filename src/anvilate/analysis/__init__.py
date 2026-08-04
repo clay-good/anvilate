@@ -123,8 +123,9 @@ modules:
   depth, and the Archimedes buoyant force on a submerged body
 - :mod:`~anvilate.analysis.pipe_flow` — incompressible pipe hydraulics: the Reynolds
   number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
-  Darcy-Weisbach friction head loss and fitting minor losses, and the pressure drop
-  ρ·g·h a pump must overcome
+  Darcy-Weisbach friction head loss and fitting minor losses, the pressure drop ρ·g·h a
+  pump must overcome, and the empirical Hazen-Williams head loss and flow capacity for
+  water mains
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), and the Froude
   number and rectangular critical depth that classify the flow as sub- or supercritical
@@ -840,6 +841,8 @@ from .open_channel import (
 from .pipe_flow import (
     darcy_friction_factor,
     darcy_weisbach_head_loss,
+    hazen_williams_flow_capacity,
+    hazen_williams_head_loss,
     minor_loss_head,
     pipe_pressure_drop,
     reynolds_number,
@@ -1190,6 +1193,8 @@ __all__ = [
     "manning_flow_velocity",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
+    "hazen_williams_flow_capacity",
+    "hazen_williams_head_loss",
     "minor_loss_head",
     "pipe_pressure_drop",
     "reynolds_number",

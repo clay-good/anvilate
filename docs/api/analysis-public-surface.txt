@@ -447,6 +447,8 @@ pump.pump_shaft_power
 pump.pump_specific_speed
 pipe_flow.darcy_friction_factor
 pipe_flow.darcy_weisbach_head_loss
+pipe_flow.hazen_williams_flow_capacity
+pipe_flow.hazen_williams_head_loss
 pipe_flow.minor_loss_head
 pipe_flow.pipe_pressure_drop
 pipe_flow.reynolds_number

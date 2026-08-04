@@ -319,6 +319,17 @@ def test_air_compressor_duty_example_brackets_power_and_heat():
     assert d["discharge_degc"] == pytest.approx(229, abs=3)
 
 
+def test_water_main_hazen_williams_example_agrees_with_darcy():
+    namespace = runpy.run_path(str(_EXAMPLES / "water_main_hazen_williams.py"))
+    r = namespace["main_head_loss"]()
+    # The two methods land within about 20% of each other on the same main.
+    assert r["hazen_williams_head_m"] == pytest.approx(5.2, abs=0.2)
+    assert r["darcy_head_m"] == pytest.approx(6.3, abs=0.3)
+    assert 0.7 < r["ratio"] < 1.0
+    # The capacity inverse gives a sensible discharge for the head budget.
+    assert r["capacity_at_6m_lps"] == pytest.approx(54, abs=3)
+
+
 def test_orifice_meter_sizing_example_reads_and_sizes():
     namespace = runpy.run_path(str(_EXAMPLES / "orifice_meter_sizing.py"))
     r = namespace["meter_readings"]()
