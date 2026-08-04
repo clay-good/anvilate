@@ -13730,6 +13730,43 @@ def test_rc_column_axial_strength_aci():
         )
 
 
+def test_rc_doubly_reinforced_moment_both_yield_states():
+    from anvilate.analysis import rc_beam_nominal_moment, rc_doubly_reinforced_moment
+
+    common = {
+        "steel_yield": _q("420 MPa"),
+        "concrete_strength": _q("30 MPa"),
+        "beam_width": _q("300 mm"),
+        "effective_depth": _q("440 mm"),
+    }
+    # Compression steel stays elastic (small d'=60, moderate tension steel): M_n ~ 407 kN*m.
+    elastic = rc_doubly_reinforced_moment(
+        tension_steel_area=_q("2500 mm**2"),
+        compression_steel_area=_q("1000 mm**2"),
+        compression_steel_depth=_q("60 mm"),
+        **common,
+    )
+    assert elastic.to("kN*m").magnitude == pytest.approx(407, abs=3)
+    # Compression steel yields (more tension steel, shallow d'=30): M_n ~ 496 kN*m.
+    yielded = rc_doubly_reinforced_moment(
+        tension_steel_area=_q("3000 mm**2"),
+        compression_steel_area=_q("1000 mm**2"),
+        compression_steel_depth=_q("30 mm"),
+        **common,
+    )
+    assert yielded.to("kN*m").magnitude == pytest.approx(496, abs=3)
+    # Doubling the tension steel and adding compression steel beats the singly-reinforced
+    # strength for the same tension steel.
+    singly = rc_beam_nominal_moment(
+        steel_area=_q("2500 mm**2"),
+        steel_yield=_q("420 MPa"),
+        concrete_strength=_q("30 MPa"),
+        beam_width=_q("300 mm"),
+        effective_depth=_q("440 mm"),
+    )
+    assert elastic.to("kN*m").magnitude > singly.to("kN*m").magnitude
+
+
 def test_rc_column_balanced_point_strain_compatibility():
     from anvilate.analysis import rc_column_axial_strength, rc_column_balanced_point
 

@@ -22,6 +22,7 @@ from ..units import Quantity
 __all__ = [
     "rc_stress_block_depth",
     "rc_beam_nominal_moment",
+    "rc_doubly_reinforced_moment",
     "rc_tension_steel_for_moment",
     "rc_concrete_shear_strength",
     "rc_column_axial_strength",
@@ -126,6 +127,79 @@ def rc_beam_nominal_moment(
     as_mm2 = steel_area.to("mm**2").magnitude
     fy = steel_yield.to("MPa").magnitude
     moment_n_mm = as_mm2 * fy * (d - a / 2.0)
+    return Quantity(magnitude=moment_n_mm / 1.0e6, unit="kN*m")
+
+
+def rc_doubly_reinforced_moment(
+    *,
+    tension_steel_area: Quantity,
+    compression_steel_area: Quantity,
+    steel_yield: Quantity,
+    concrete_strength: Quantity,
+    beam_width: Quantity,
+    effective_depth: Quantity,
+    compression_steel_depth: Quantity,
+    steel_modulus: Quantity | None = None,
+) -> Quantity:
+    """The ACI 318 nominal moment of a doubly-reinforced beam (with compression steel).
+
+    When a section is too shallow to carry its moment on tension steel alone, compression
+    steel A_s' is added near the top, and the nominal moment is the concrete-compression
+    couple plus the compression-steel couple. This resolves the subtlety that the
+    compression steel may or may not have yielded: it first assumes it yields
+    (a = (A_s − A_s')·f_y/(0.85·f'c·b)) and checks the strain ε_s' = 0.003·(c − d')/c; if
+    the steel is still elastic it solves the equilibrium quadratic for the neutral axis with
+    f_s' = ε_s'·E_s instead. ``tension_steel_area`` A_s, ``compression_steel_area`` A_s',
+    ``steel_yield`` f_y, ``concrete_strength`` f'c, ``beam_width`` b, ``effective_depth`` d,
+    ``compression_steel_depth`` d' (from the compression face), and ``steel_modulus`` E_s
+    (default 200 GPa). Returns M_n in kN·m — larger than the singly-reinforced strength for
+    the same tension steel, and with a more ductile neutral axis.
+    """
+    _require(tension_steel_area, "[area]", "tension_steel_area")
+    _require(compression_steel_area, "[area]", "compression_steel_area")
+    _require(steel_yield, "[pressure]", "steel_yield")
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    _require(beam_width, "[length]", "beam_width")
+    _require(effective_depth, "[length]", "effective_depth")
+    _require(compression_steel_depth, "[length]", "compression_steel_depth")
+    if steel_modulus is None:
+        steel_modulus = Quantity(magnitude=_ACI_STEEL_MODULUS_MPA, unit="MPa")
+    _require(steel_modulus, "[pressure]", "steel_modulus")
+    a_s = tension_steel_area.to("mm**2").magnitude
+    a_sp = compression_steel_area.to("mm**2").magnitude
+    fy = steel_yield.to("MPa").magnitude
+    fc = concrete_strength.to("MPa").magnitude
+    b = beam_width.to("mm").magnitude
+    d = effective_depth.to("mm").magnitude
+    dp = compression_steel_depth.to("mm").magnitude
+    es = steel_modulus.to("MPa").magnitude
+    if min(a_s, a_sp, fy, fc, b, d, dp, es) <= 0:
+        raise ValueError("all areas, strengths, and dimensions must be positive")
+    if not dp < d:
+        raise ValueError("compression_steel_depth must be less than effective_depth")
+    beta1 = rc_beta1(concrete_strength=concrete_strength)
+    ecu = _ACI_CONCRETE_ULTIMATE_STRAIN
+    strain_yield = fy / es
+    # First assume the compression steel yields.
+    a_yield = (a_s - a_sp) * fy / (_ACI_STRESS_BLOCK_FACTOR * fc * b)
+    c_yield = a_yield / beta1
+    if a_yield > 0 and ecu * (c_yield - dp) / c_yield >= strain_yield:
+        a = a_yield
+        force_comp = a_sp * fy
+    else:
+        # Compression steel is elastic: solve the equilibrium quadratic for c.
+        # 0.85*f'c*beta1*b*c^2 + (A_s'*ecu*Es - A_s*f_y)*c - A_s'*ecu*Es*d' = 0.
+        qa = _ACI_STRESS_BLOCK_FACTOR * fc * beta1 * b
+        qb = a_sp * ecu * es - a_s * fy
+        qc = -a_sp * ecu * es * dp
+        c = (-qb + sqrt(qb * qb - 4.0 * qa * qc)) / (2.0 * qa)
+        a = beta1 * c
+        stress_comp = min(ecu * (c - dp) / c * es, fy)
+        force_comp = a_sp * stress_comp
+    if a >= 2.0 * d:
+        raise ValueError("the stress block exceeds the section; check the inputs")
+    concrete_force = _ACI_STRESS_BLOCK_FACTOR * fc * a * b
+    moment_n_mm = concrete_force * (d - a / 2.0) + force_comp * (d - dp)
     return Quantity(magnitude=moment_n_mm / 1.0e6, unit="kN*m")
 
 
