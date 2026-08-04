@@ -637,6 +637,9 @@ reinforced_concrete.rc_tension_steel_for_moment
 reinforced_concrete.rc_two_way_shear_strength
 rivet.RivetedJointStrength
 rivet.riveted_joint_efficiency
+road_curve.banked_curve_max_speed
+road_curve.ideal_superelevation_rate
+road_curve.minimum_curve_radius
 scotch_yoke.scotch_yoke_acceleration
 scotch_yoke.scotch_yoke_displacement
 scotch_yoke.scotch_yoke_velocity

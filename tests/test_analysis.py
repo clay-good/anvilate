@@ -14094,6 +14094,40 @@ def test_combustion_air_fuel_ratio_and_excess_air():
         excess_air_from_flue_oxygen(flue_oxygen_percent=21.0)
 
 
+def test_road_curve_superelevation_and_max_speed():
+    from anvilate.analysis import (
+        banked_curve_max_speed,
+        ideal_superelevation_rate,
+        minimum_curve_radius,
+    )
+
+    g = 9.80665
+    # R_min = v^2/(g*(e+f)); 25 m/s, e=0.06, f=0.12 -> ~354 m.
+    radius = minimum_curve_radius(
+        design_speed=_q("25 m/s"), superelevation_rate=0.06, side_friction_factor=0.12
+    )
+    assert radius.to("m").magnitude == pytest.approx(25**2 / (g * 0.18), rel=1e-9)
+
+    # The friction-free ideal rate is e = v^2/(g*R) = e+f (0.18) at that radius.
+    ideal = ideal_superelevation_rate(speed=_q("25 m/s"), radius=radius)
+    assert ideal == pytest.approx(0.18, rel=1e-9)
+
+    # The built curve's max speed comes back to the 25 m/s design speed (self-consistent).
+    v = banked_curve_max_speed(radius=radius, superelevation_rate=0.06, side_friction_factor=0.12)
+    assert v.to("m/s").magnitude == pytest.approx(25.0, abs=0.2)
+
+    # A sharper (smaller-radius) curve, same banking, is slower.
+    tight = banked_curve_max_speed(
+        radius=_q("100 m"), superelevation_rate=0.06, side_friction_factor=0.12
+    )
+    assert tight.to("m/s").magnitude < v.to("m/s").magnitude
+
+    with pytest.raises(ValueError, match="must be positive"):
+        minimum_curve_radius(
+            design_speed=_q("25 m/s"), superelevation_rate=-0.06, side_friction_factor=0.0
+        )
+
+
 def test_pipe_flow_cavitation_number():
     from anvilate.analysis import cavitation_number
 

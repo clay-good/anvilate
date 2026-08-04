@@ -376,6 +376,9 @@ modules:
   α-method pile capacity (shaft skin friction plus end bearing) for deep foundations, and
   groundwater seepage (Darcy flow, seepage velocity, and the critical gradient and piping
   factor of safety), and the Janssen silo pressure of stored granular material
+- :mod:`~anvilate.analysis.road_curve` — highway/rail curve superelevation (AASHTO):
+  the minimum curve radius a design speed needs (R = v²/(g·(e+f))), the friction-free
+  ideal superelevation rate, and the maximum speed a banked curve can be taken at
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
   unreinforced member, the axial capacity of a reinforced masonry column, and the
@@ -1159,6 +1162,11 @@ from .rivet import (
     RivetedJointStrength,
     riveted_joint_efficiency,
 )
+from .road_curve import (
+    banked_curve_max_speed,
+    ideal_superelevation_rate,
+    minimum_curve_radius,
+)
 from .scotch_yoke import (
     scotch_yoke_acceleration,
     scotch_yoke_displacement,
@@ -1626,6 +1634,9 @@ __all__ = [
     "deep_draw_force",
     "RivetedJointStrength",
     "riveted_joint_efficiency",
+    "minimum_curve_radius",
+    "ideal_superelevation_rate",
+    "banked_curve_max_speed",
     "rc_stress_block_depth",
     "rc_beam_nominal_moment",
     "rc_doubly_reinforced_moment",

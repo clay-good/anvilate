@@ -568,6 +568,16 @@ def test_boiler_combustion_air_example_flue_confirms_excess():
     assert t["actual_afr"] > t["stoichiometric_afr"]
 
 
+def test_highway_curve_superelevation_example_max_speed_matches_design():
+    namespace = runpy.run_path(str(_EXAMPLES / "highway_curve_superelevation.py"))
+    c = namespace["curve_design"]()
+    assert c["radius_m"] == pytest.approx(354.0, abs=2.0)
+    # The built curve's max speed returns the 25 m/s design speed.
+    assert c["max_speed_m_s"] == pytest.approx(25.0, abs=0.2)
+    # The friction-free ideal superelevation far exceeds the 6% actually built.
+    assert c["ideal_superelevation_rate"] > 0.06
+
+
 def test_control_valve_cavitation_example_heavy_throttle_cavitates():
     namespace = runpy.run_path(str(_EXAMPLES / "control_valve_cavitation.py"))
     v = namespace["valve_cavitation"]()
