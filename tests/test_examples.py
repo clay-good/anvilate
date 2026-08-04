@@ -150,6 +150,18 @@ def test_coped_beam_web_example_is_governed_by_shear_rupture():
     assert _sf(rupture) < _sf(yielding)
 
 
+def test_beam_bearing_web_checks_example_is_governed_by_crippling():
+    namespace = runpy.run_path(str(_EXAMPLES / "beam_bearing_web_checks.py"))
+    result = namespace["end_bearing_capacity"]()
+    yielding = result["yielding"].to("kN").magnitude
+    crippling = result["crippling"].to("kN").magnitude
+    # At this short end bearing the thin web buckles (crippling) before it crushes
+    # (yielding), so crippling is the smaller strength and governs the ~213 kN capacity.
+    assert crippling < yielding
+    assert result["governing"] is result["crippling"]
+    assert crippling == pytest.approx(212.6, abs=0.5)
+
+
 def test_machine_on_floor_beam_example_recovers_margin_from_the_real_position():
     namespace = runpy.run_path(str(_EXAMPLES / "machine_on_floor_beam.py"))
     card = namespace["screen_floor_beam"]()
