@@ -571,6 +571,7 @@ thermal.shrink_fit_assembly_temperature
 thermal.temperature_rise
 thermal.thermal_buckling_temperature_rise
 thermal.thermal_shock_stress
+thermal.thermal_shock_temperature_limit
 thermal.through_wall_gradient_thermal_stress
 thermal.triaxial_constrained_thermal_stress
 torsion.elliptical_bar_torsional_stress

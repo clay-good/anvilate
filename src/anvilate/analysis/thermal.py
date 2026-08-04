@@ -25,6 +25,7 @@ from ..units import Quantity
 __all__ = [
     "constrained_thermal_stress",
     "thermal_shock_stress",
+    "thermal_shock_temperature_limit",
     "triaxial_constrained_thermal_stress",
     "through_wall_gradient_thermal_stress",
     "thermal_buckling_temperature_rise",
@@ -154,6 +155,48 @@ def thermal_shock_stress(
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_change.to("K").magnitude
     return Quantity(magnitude=abs(e * alpha * delta_t) / (1.0 - poisson), unit="MPa")
+
+
+def thermal_shock_temperature_limit(
+    *,
+    fracture_strength: Quantity,
+    elastic_modulus: Quantity,
+    thermal_expansion_coefficient: Quantity,
+    poisson: float = 0.3,
+) -> Quantity:
+    """The critical quench ΔT_c = σ_f·(1 − ν)/(E·α) a body survives — thermal-shock resistance.
+
+    The design inverse of :func:`thermal_shock_stress`: setting the quench surface stress
+    equal to the material's fracture strength gives the largest instantaneous surface-to-bulk
+    temperature difference the body can take before it cracks, ΔT_c = σ_f·(1 − ν)/(E·α). This
+    is the classic first thermal-shock-resistance parameter R — the figure of merit that ranks
+    materials for quench duty (a low-expansion, low-modulus, high-strength material like fused
+    silica tolerates a huge ΔT; a stiff, high-expansion one cracks at a small one).
+    ``fracture_strength`` σ_f, ``elastic_modulus`` E, the linear ``thermal_expansion_coefficient``
+    α, and Poisson's ratio ``poisson`` ν (0 ≤ ν < 0.5). This is the severe (infinitely fast,
+    infinite-Biot) limit; a finite quench rate tolerates more. Returns ΔT_c as a temperature
+    difference in kelvin.
+    """
+    _require(fracture_strength, "[pressure]", "fracture_strength")
+    if not elastic_modulus.has_dimension("[pressure]"):
+        raise ValueError(
+            f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus.dimensionality}"
+        )
+    if not thermal_expansion_coefficient.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            "thermal_expansion_coefficient must have units of 1/temperature; got "
+            f"{thermal_expansion_coefficient.dimensionality}"
+        )
+    if not 0 <= poisson < 0.5:
+        raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
+    sf = fracture_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    alpha = thermal_expansion_coefficient.to("1/K").magnitude
+    if sf <= 0:
+        raise ValueError(f"fracture_strength must be positive; got {fracture_strength}")
+    if e <= 0 or alpha <= 0:
+        raise ValueError("elastic_modulus and thermal_expansion_coefficient must be positive")
+    return Quantity(magnitude=sf * (1.0 - poisson) / (e * alpha), unit="K")
 
 
 def triaxial_constrained_thermal_stress(

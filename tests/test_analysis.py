@@ -9377,6 +9377,31 @@ def test_thermal_shock_stress_adds_the_biaxial_factor():
         )
 
 
+def test_thermal_shock_temperature_limit_inverts_the_shock_stress():
+    from anvilate.analysis import thermal_shock_stress, thermal_shock_temperature_limit
+
+    props = {
+        "elastic_modulus": _q("300 GPa"),
+        "thermal_expansion_coefficient": _q("8e-6 1/K"),
+        "poisson": 0.25,
+    }
+    # dT_c = sigma_f*(1-nu)/(E*alpha): a 100 MPa ceramic -> 31.25 K.
+    dt_c = thermal_shock_temperature_limit(fracture_strength=_q("100 MPa"), **props)
+    assert dt_c.to("K").magnitude == pytest.approx(100 * (1 - 0.25) / (300e3 * 8e-6), rel=1e-9)
+    assert dt_c.to("K").magnitude == pytest.approx(31.25, rel=1e-6)
+    # A quench of exactly dT_c drives the shock stress to the fracture strength.
+    stress = thermal_shock_stress(temperature_change=dt_c, **props)
+    assert stress.to("MPa").magnitude == pytest.approx(100.0, rel=1e-9)
+    # A stiffer, higher-expansion material survives a smaller quench.
+    stiff = thermal_shock_temperature_limit(
+        fracture_strength=_q("100 MPa"),
+        elastic_modulus=_q("400 GPa"),
+        thermal_expansion_coefficient=_q("12e-6 1/K"),
+        poisson=0.25,
+    )
+    assert stiff.to("K").magnitude < dt_c.to("K").magnitude
+
+
 def test_string_natural_frequency_and_harmonics():
     from math import sqrt
 
