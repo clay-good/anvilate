@@ -112,6 +112,9 @@ modules:
 - :mod:`~anvilate.analysis.hydraulic_cylinder` — fluid-cylinder actuator sizing:
   the extend and retract force (bore vs annular area), the extend and retract speed
   from the supply flow, and the rod-side pressure intensification of a blocked stroke
+- :mod:`~anvilate.analysis.gas_compression` — gas compression: the ideal-gas density,
+  the isothermal and adiabatic compression power that bracket a compressor's duty, and
+  the adiabatic discharge temperature that sets intercooling
 - :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
   orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
   inverse, and the pitot-tube point velocity √(2Δp/ρ)
@@ -695,6 +698,12 @@ from .fracture import (
     plane_strain_thickness_requirement,
     stress_intensity_factor,
 )
+from .gas_compression import (
+    adiabatic_compression_power,
+    adiabatic_discharge_temperature,
+    ideal_gas_density,
+    isothermal_compression_power,
+)
 from .gasket import (
     gasket_operating_load,
     gasket_seating_load,
@@ -1191,6 +1200,10 @@ __all__ = [
     "center_of_pressure_depth",
     "hydrostatic_force_on_plane",
     "hydrostatic_pressure",
+    "adiabatic_compression_power",
+    "adiabatic_discharge_temperature",
+    "ideal_gas_density",
+    "isothermal_compression_power",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

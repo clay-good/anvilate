@@ -309,6 +309,16 @@ def test_slope_stability_rain_example_cohesion_holds_until_saturation():
     assert f["saturated"] == pytest.approx(1.07, abs=0.05)
 
 
+def test_air_compressor_duty_example_brackets_power_and_heat():
+    namespace = runpy.run_path(str(_EXAMPLES / "air_compressor_duty.py"))
+    d = namespace["compressor_duty"]()
+    # Adiabatic (uncooled) power exceeds the isothermal ideal by about a third.
+    assert d["adiabatic_kw"] > d["isothermal_kw"]
+    assert d["adiabatic_over_isothermal"] == pytest.approx(1.34, abs=0.03)
+    # Air taken to 7:1 in one stage leaves near 230 deg C — the intercooling driver.
+    assert d["discharge_degc"] == pytest.approx(229, abs=3)
+
+
 def test_orifice_meter_sizing_example_reads_and_sizes():
     namespace = runpy.run_path(str(_EXAMPLES / "orifice_meter_sizing.py"))
     r = namespace["meter_readings"]()

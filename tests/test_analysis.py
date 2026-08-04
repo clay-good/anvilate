@@ -13081,6 +13081,64 @@ def test_aluminum_tension_stress_lesser_of_yield_and_rupture():
         )
 
 
+def test_ideal_gas_density_and_compression_power():
+    import math
+
+    from anvilate.analysis import (
+        adiabatic_compression_power,
+        ideal_gas_density,
+        isothermal_compression_power,
+    )
+
+    # rho = p/(R*T): air at 101.325 kPa, 288.15 K, R=287 -> 1.225 kg/m^3.
+    rho = ideal_gas_density(
+        pressure=_q("101.325 kPa"),
+        temperature=_q("288.15 K"),
+        specific_gas_constant=_q("287 J/(kg*K)"),
+    )
+    assert rho.to("kg/m**3").magnitude == pytest.approx(101325 / (287 * 288.15), rel=1e-9)
+    assert rho.to("kg/m**3").magnitude == pytest.approx(1.225, abs=0.001)
+    # Isothermal power P = p1*Q*ln(r): 100 kPa, 1 m^3/s, r=7 -> 194.6 kW.
+    iso = isothermal_compression_power(
+        volumetric_flow=_q("1 m**3/s"), inlet_pressure=_q("100 kPa"), pressure_ratio=7.0
+    )
+    assert iso.to("W").magnitude == pytest.approx(100000 * math.log(7), rel=1e-9)
+    # Adiabatic power always exceeds isothermal for the same duty.
+    adi = adiabatic_compression_power(
+        volumetric_flow=_q("1 m**3/s"),
+        inlet_pressure=_q("100 kPa"),
+        pressure_ratio=7.0,
+        heat_capacity_ratio=1.4,
+    )
+    expect = (1.4 / 0.4) * 100000 * (7.0 ** (0.4 / 1.4) - 1.0)
+    assert adi.to("W").magnitude == pytest.approx(expect, rel=1e-9)
+    assert adi.to("W").magnitude > iso.to("W").magnitude
+    with pytest.raises(ValueError, match="pressure_ratio must exceed 1"):
+        isothermal_compression_power(
+            volumetric_flow=_q("1 m**3/s"), inlet_pressure=_q("100 kPa"), pressure_ratio=1.0
+        )
+
+
+def test_adiabatic_discharge_temperature_rises_with_ratio():
+    from anvilate.analysis import adiabatic_discharge_temperature
+
+    # T2 = T1*r^((k-1)/k): 300 K, r=7, k=1.4 -> 523.1 K.
+    t2 = adiabatic_discharge_temperature(
+        inlet_temperature=_q("300 K"), pressure_ratio=7.0, heat_capacity_ratio=1.4
+    )
+    assert t2.to("K").magnitude == pytest.approx(300 * 7.0 ** (0.4 / 1.4), rel=1e-9)
+    assert t2.to("K").magnitude > 300  # compression heats the gas
+    # A higher pressure ratio discharges hotter.
+    t2_high = adiabatic_discharge_temperature(
+        inlet_temperature=_q("300 K"), pressure_ratio=10.0, heat_capacity_ratio=1.4
+    )
+    assert t2_high.to("K").magnitude > t2.to("K").magnitude
+    with pytest.raises(ValueError, match="heat_capacity_ratio"):
+        adiabatic_discharge_temperature(
+            inlet_temperature=_q("300 K"), pressure_ratio=7.0, heat_capacity_ratio=1.0
+        )
+
+
 def test_masonry_allowable_axial_stress_two_slenderness_branches():
     from anvilate.analysis import masonry_allowable_axial_stress
 
