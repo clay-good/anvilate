@@ -13294,3 +13294,45 @@ def test_aisc_rectangular_hss_shear_strength_three_branches():
         0.6 * 345 * 2 * 585 * 5 * c_v2 / 1000, rel=1e-9
     )
     assert c_v2 < 1.0
+
+
+def test_aisc_rectangular_hss_flexural_strength_governing_limit_state():
+    from anvilate.analysis import aisc_rectangular_hss_flexural_strength
+
+    E, Fy, S, Z = 200000.0, 345.0, 1.5e6, 1.8e6
+    base = {
+        "wall_thickness": _q("10 mm"),
+        "yield_strength": _q(f"{Fy} MPa"),
+        "elastic_modulus": _q(f"{E} MPa"),
+        "plastic_section_modulus": _q(f"{Z} mm**3"),
+        "elastic_section_modulus": _q(f"{S} mm**3"),
+    }
+    mp = Fy * Z / 1e6
+    fy_s = Fy * S / 1e6
+    # Compact flange (b/t = 17) and web (h/t = 27): full plastic moment.
+    compact = aisc_rectangular_hss_flexural_strength(
+        flange_flat_width=_q("170 mm"), web_flat_height=_q("270 mm"), **base
+    )
+    assert compact.to("kN*m").magnitude == pytest.approx(mp, rel=1e-9)
+    # Noncompact flange (b/t = 30): FLB reduces M_n between F_y*S and M_p.
+    nc_flange = aisc_rectangular_hss_flexural_strength(
+        flange_flat_width=_q("300 mm"), web_flat_height=_q("270 mm"), **base
+    )
+    flb = mp - (mp - fy_s) * (3.57 * 30 * (Fy / E) ** 0.5 - 4.0)
+    assert nc_flange.to("kN*m").magnitude == pytest.approx(flb, rel=1e-9)
+    assert fy_s < nc_flange.to("kN*m").magnitude < mp
+    # Noncompact web (h/t = 100): WLB governs instead.
+    nc_web = aisc_rectangular_hss_flexural_strength(
+        flange_flat_width=_q("170 mm"), web_flat_height=_q("1000 mm"), **base
+    )
+    wlb = mp - (mp - fy_s) * (0.305 * 100 * (Fy / E) ** 0.5 - 0.738)
+    assert nc_web.to("kN*m").magnitude == pytest.approx(wlb, rel=1e-9)
+    # Slender flange and slender web each raise (need the effective-section provisions).
+    with pytest.raises(ValueError, match="slender flange"):
+        aisc_rectangular_hss_flexural_strength(
+            flange_flat_width=_q("400 mm"), web_flat_height=_q("270 mm"), **base
+        )
+    with pytest.raises(ValueError, match="slender web"):
+        aisc_rectangular_hss_flexural_strength(
+            flange_flat_width=_q("170 mm"), web_flat_height=_q("1400 mm"), **base
+        )

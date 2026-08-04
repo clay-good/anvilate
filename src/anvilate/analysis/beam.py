@@ -85,6 +85,7 @@ __all__ = [
     "aisc_round_hss_flexural_strength",
     "aisc_round_hss_shear_strength",
     "aisc_rectangular_hss_shear_strength",
+    "aisc_rectangular_hss_flexural_strength",
     "aisc_web_shear_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -813,6 +814,83 @@ def aisc_round_hss_flexural_strength(
         m_n = (0.021 * e / dt + fy) * s
     else:
         m_n = 0.33 * e / dt * s
+    m_n = min(m_n, m_p)
+    return Quantity(magnitude=m_n / 1.0e6, unit="kN*m")
+
+
+def aisc_rectangular_hss_flexural_strength(
+    *,
+    flange_flat_width: Quantity,
+    web_flat_height: Quantity,
+    wall_thickness: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+    plastic_section_modulus: Quantity,
+    elastic_section_modulus: Quantity,
+) -> Quantity:
+    """The AISC 360 §F7 flexural strength of a rectangular HSS or box section.
+
+    A box in bending is limited by three things and the least governs: the plastic moment
+    M_p = F_y·Z (§F7.1); flange local buckling of the compression wall (§F7.2); and web
+    local buckling of the side walls (§F7.3). Each wall is read against its compact and
+    noncompact limits — the flange against λ_pf = 1.12·√(E/F_y), λ_rf = 1.40·√(E/F_y); the
+    web against λ_pw = 2.42·√(E/F_y), λ_rw = 5.70·√(E/F_y). A noncompact flange knocks the
+    moment down by (M_p − F_y·S)·(3.57·(b/t)·√(F_y/E) − 4.0); a noncompact web by
+    (M_p − F_y·S)·(0.305·(h/t)·√(F_y/E) − 0.738); both bottom out at the yield moment F_y·S.
+    ``flange_flat_width`` b and ``web_flat_height`` h are the flat wall dimensions (overall
+    less the corners), ``wall_thickness`` t, ``yield_strength`` F_y, ``elastic_modulus`` E,
+    ``plastic_section_modulus`` Z, and ``elastic_section_modulus`` S. A slender flange
+    (b/t > λ_rf) or slender web (h/t > λ_rw) needs the §F7 effective-section provisions,
+    which depend on the full section geometry — this raises rather than guess. Returns
+    M_n in kN·m.
+    """
+    _require(flange_flat_width, "[length]", "flange_flat_width")
+    _require(web_flat_height, "[length]", "web_flat_height")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not plastic_section_modulus.has_dimension("[length]**3"):
+        raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
+    if not elastic_section_modulus.has_dimension("[length]**3"):
+        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+    b = flange_flat_width.to("mm").magnitude
+    h = web_flat_height.to("mm").magnitude
+    t = wall_thickness.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    z = plastic_section_modulus.to("mm**3").magnitude
+    s = elastic_section_modulus.to("mm**3").magnitude
+    if b <= 0 or h <= 0 or t <= 0 or fy <= 0 or e <= 0 or z <= 0 or s <= 0:
+        raise ValueError(
+            "flange_flat_width, web_flat_height, wall_thickness, yield_strength, "
+            "elastic_modulus, and the section moduli must all be positive"
+        )
+    root = (e / fy) ** 0.5
+    b_t = b / t
+    h_t = h / t
+    lambda_rf = 1.40 * root
+    lambda_rw = 5.70 * root
+    if b_t > lambda_rf:
+        raise ValueError(
+            f"slender flange (b/t = {b_t:.1f} > lambda_rf = {lambda_rf:.1f}); §F7 "
+            "effective-section modulus is required and is not implemented"
+        )
+    if h_t > lambda_rw:
+        raise ValueError(
+            f"slender web (h/t = {h_t:.1f} > lambda_rw = {lambda_rw:.1f}); §F7 "
+            "effective-section modulus is required and is not implemented"
+        )
+    lambda_pf = 1.12 * root
+    lambda_pw = 2.42 * root
+    m_p = fy * z
+    m_yield = fy * s
+    m_n = m_p
+    if b_t > lambda_pf:
+        m_flb = m_p - (m_p - m_yield) * (3.57 * b_t * (fy / e) ** 0.5 - 4.0)
+        m_n = min(m_n, m_flb)
+    if h_t > lambda_pw:
+        m_wlb = m_p - (m_p - m_yield) * (0.305 * h_t * (fy / e) ** 0.5 - 0.738)
+        m_n = min(m_n, m_wlb)
     m_n = min(m_n, m_p)
     return Quantity(magnitude=m_n / 1.0e6, unit="kN*m")
 
