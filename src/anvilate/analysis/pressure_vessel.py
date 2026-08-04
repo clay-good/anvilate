@@ -17,7 +17,7 @@ checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from math import sqrt
+from math import radians, sin, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -42,6 +42,7 @@ __all__ = [
     "asme_b313_pipe_wall_thickness",
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
+    "asme_b313_branch_required_reinforcement_area",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thin_wall_sphere_diametral_growth",
@@ -589,6 +590,50 @@ def asme_b313_minimum_ordered_wall(
             "pressure_design_thickness must be positive and mechanical_allowance non-negative"
         )
     return Quantity(magnitude=(t + c) / (1.0 - mill_tolerance_fraction), unit="mm")
+
+
+def asme_b313_branch_required_reinforcement_area(
+    *,
+    header_pressure_design_thickness: Quantity,
+    branch_outside_diameter: Quantity,
+    branch_wall: Quantity,
+    mechanical_allowance: Quantity,
+    branch_angle_deg: float = 90.0,
+) -> Quantity:
+    """The ASME B31.3 §304.3.3 reinforcement area a branch connection requires,
+    A1 = t_h·d1·(2 − sin β).
+
+    Cutting a hole in the run for a branch removes pressure-carrying metal that must
+    be replaced nearby. The required replacement area is A1 = t_h·d1·(2 − sin β),
+    where ``header_pressure_design_thickness`` t_h is the run's pressure-design wall,
+    the effective removed width d1 = [D_b − 2·(T_b − c)]/sin β is the branch opening
+    projected onto the run, ``branch_outside_diameter`` D_b and ``branch_wall`` T_b
+    are the branch's dimensions, ``mechanical_allowance`` c its corrosion/thread
+    allowance, and ``branch_angle_deg`` β the angle between the branch and run axes.
+    A skewed branch (β < 90°) opens a longer hole and needs more reinforcement.
+    Compare A1 to the available excess-wall and added-pad area (A2+A3+A4); the branch
+    is adequately reinforced when that meets or exceeds A1. Returns A1 in mm².
+    """
+    _require(header_pressure_design_thickness, "[length]", "header_pressure_design_thickness")
+    _require(branch_outside_diameter, "[length]", "branch_outside_diameter")
+    _require(branch_wall, "[length]", "branch_wall")
+    _require(mechanical_allowance, "[length]", "mechanical_allowance")
+    if not 0 < branch_angle_deg <= 90:
+        raise ValueError(f"branch_angle_deg must lie in (0, 90]; got {branch_angle_deg}")
+    th = header_pressure_design_thickness.to("mm").magnitude
+    db = branch_outside_diameter.to("mm").magnitude
+    tb = branch_wall.to("mm").magnitude
+    c = mechanical_allowance.to("mm").magnitude
+    if th <= 0 or db <= 0 or tb <= 0 or c < 0:
+        raise ValueError(
+            "the header thickness, branch diameter, and branch wall must be positive and "
+            "the mechanical allowance non-negative"
+        )
+    sin_beta = sin(radians(branch_angle_deg))
+    d1 = (db - 2.0 * (tb - c)) / sin_beta
+    if d1 <= 0:
+        raise ValueError("the branch wall consumes the whole opening; check the inputs")
+    return Quantity(magnitude=th * d1 * (2.0 - sin_beta), unit="mm**2")
 
 
 class ThickWallStress(BaseModel):

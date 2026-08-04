@@ -13,7 +13,9 @@
       `asme_b313_pipe_pressure`, and `asme_b313_minimum_ordered_wall`
       (T = (t + c)/(1 − mill_tolerance), §304.1.1) so the ordered nominal wall accounts
       for the mechanical allowance and mill under-tolerance. S/E/Y user-supplied.
-- [ ] 2.2 Branch reinforcement area
+- [~] 2.2 Branch reinforcement area — `asme_b313_branch_required_reinforcement_area`
+      (§304.3.3 A1 = t_h·d1·(2−sinβ), the required replacement area); the available
+      A2+A3+A4 excess-wall/pad composition is a follow-up.
 - [ ] 2.3 Miter-bend pressure screening
 - [ ] 2.4 Displacement stress range vs. allowable range
 

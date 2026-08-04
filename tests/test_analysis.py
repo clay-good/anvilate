@@ -12504,3 +12504,23 @@ def test_asme_spherical_shell_thickness_is_half_the_cylinder_and_round_trips():
     # The MAWP inverse recovers the design pressure.
     p = asme_spherical_shell_mawp(thickness=t, radius=_q("500 mm"), allowable_stress=_q("138 MPa"))
     assert p.to("MPa").magnitude == pytest.approx(2.0, rel=1e-9)
+
+
+def test_asme_b313_branch_reinforcement_area_and_skew():
+    from anvilate.analysis import asme_b313_branch_required_reinforcement_area
+
+    kw = {
+        "header_pressure_design_thickness": _q("5 mm"),
+        "branch_outside_diameter": _q("60 mm"),
+        "branch_wall": _q("4 mm"),
+        "mechanical_allowance": _q("1.5 mm"),
+    }
+    # A 90° branch: d1 = 60 - 2*(4-1.5) = 55 mm; A1 = 5*55*(2-1) = 275 mm^2.
+    a90 = asme_b313_branch_required_reinforcement_area(**kw)
+    assert a90.to("mm**2").magnitude == pytest.approx(275.0, rel=1e-9)
+    # A skewed 60° branch opens a longer hole and needs more reinforcement.
+    a60 = asme_b313_branch_required_reinforcement_area(branch_angle_deg=60.0, **kw)
+    assert a60.to("mm**2").magnitude > a90.to("mm**2").magnitude
+    assert a60.to("mm**2").magnitude == pytest.approx(360.0, abs=1.0)
+    with pytest.raises(ValueError, match="branch_angle_deg must lie in"):
+        asme_b313_branch_required_reinforcement_area(branch_angle_deg=120.0, **kw)
