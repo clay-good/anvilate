@@ -12995,3 +12995,31 @@ def test_rc_two_way_punching_shear_min_of_three():
     assert oblong.to("kN").magnitude == pytest.approx(
         0.17 * (1 + 2 / 3) * 30**0.5 * 1600 * 200 / 1000, rel=1e-9
     )
+
+
+def test_radiation_heat_transfer_and_linearized_coefficient():
+    from anvilate.analysis import radiation_heat_transfer, radiation_heat_transfer_coefficient
+
+    sig = 5.670374419e-8
+    # q = eps*sigma*A*(T_s^4 - T_surr^4): eps=0.9, 0.1 m2, 400 K over 300 K -> ~89 W.
+    q = radiation_heat_transfer(
+        emissivity=0.9,
+        area=_q("0.1 m**2"),
+        surface_temperature=_q("400 K"),
+        surroundings_temperature=_q("300 K"),
+    )
+    assert q.to("W").magnitude == pytest.approx(0.9 * sig * 0.1 * (400**4 - 300**4), rel=1e-9)
+    # The linearized coefficient reproduces q as h_r*A*(T_s - T_surr).
+    hr = radiation_heat_transfer_coefficient(
+        emissivity=0.9, surface_temperature=_q("400 K"), surroundings_temperature=_q("300 K")
+    )
+    assert hr.to("W/(m**2*K)").magnitude * 0.1 * (400 - 300) == pytest.approx(
+        q.to("W").magnitude, rel=1e-9
+    )
+    with pytest.raises(ValueError, match="emissivity must lie in"):
+        radiation_heat_transfer(
+            emissivity=1.5,
+            area=_q("0.1 m**2"),
+            surface_temperature=_q("400 K"),
+            surroundings_temperature=_q("300 K"),
+        )

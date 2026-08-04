@@ -60,7 +60,11 @@ __all__ = [
     "biot_number",
     "lumped_capacitance_time_constant",
     "lumped_capacitance_cooling_time",
+    "radiation_heat_transfer",
+    "radiation_heat_transfer_coefficient",
 ]
+
+_STEFAN_BOLTZMANN = 5.670374419e-8  # W/(m²·K⁴)
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
 # The laminar–turbulent transition Reynolds number for external flow over a flat
@@ -1340,3 +1344,61 @@ def lumped_capacitance_cooling_time(
     if theta >= theta_0:
         raise ValueError("target_excess_temperature must be below initial_excess_temperature")
     return Quantity(magnitude=tau * log(theta_0 / theta), unit="s")
+
+
+def radiation_heat_transfer(
+    *,
+    emissivity: float,
+    area: Quantity,
+    surface_temperature: Quantity,
+    surroundings_temperature: Quantity,
+) -> Quantity:
+    """The net radiant heat q = ε·σ·A·(T_s⁴ − T_surr⁴) a surface exchanges (W).
+
+    The third heat-transfer mode: every surface radiates, and the net exchange with
+    large surroundings goes as the *fourth power* of absolute temperature, so radiation
+    overtakes convection at high temperature. ``emissivity`` ε (0 to 1) is the
+    surface's, ``area`` A its radiating area, ``surface_temperature`` T_s and
+    ``surroundings_temperature`` T_surr the *absolute* temperatures (pass them in
+    kelvin — a fourth power needs a true zero). A positive result is heat leaving the
+    surface. Returns the net radiant power in W.
+    """
+    if not 0 <= emissivity <= 1:
+        raise ValueError(f"emissivity must lie in [0, 1]; got {emissivity}")
+    _require(area, "[area]", "area")
+    _require(surface_temperature, "[temperature]", "surface_temperature")
+    _require(surroundings_temperature, "[temperature]", "surroundings_temperature")
+    a = area.to("m**2").magnitude
+    ts = surface_temperature.to("K").magnitude
+    tsur = surroundings_temperature.to("K").magnitude
+    if a <= 0 or ts <= 0 or tsur <= 0:
+        raise ValueError("area and the absolute temperatures must be positive")
+    return Quantity(magnitude=emissivity * _STEFAN_BOLTZMANN * a * (ts**4 - tsur**4), unit="W")
+
+
+def radiation_heat_transfer_coefficient(
+    *,
+    emissivity: float,
+    surface_temperature: Quantity,
+    surroundings_temperature: Quantity,
+) -> Quantity:
+    """The linearized radiation coefficient h_r = ε·σ·(T_s² + T_surr²)(T_s + T_surr).
+
+    Radiation folded into an equivalent convection coefficient, so it can be added to
+    the true convection coefficient and put through the same resistance network
+    (q_rad = h_r·A·(T_s − T_surr)). ``emissivity`` ε, ``surface_temperature`` T_s, and
+    ``surroundings_temperature`` T_surr (both *absolute*, in kelvin). Because it embeds
+    the operating temperatures, h_r rises steeply with temperature — the reason
+    radiation matters little near ambient but dominates in a furnace. Returns h_r in
+    W/(m²·K).
+    """
+    if not 0 <= emissivity <= 1:
+        raise ValueError(f"emissivity must lie in [0, 1]; got {emissivity}")
+    _require(surface_temperature, "[temperature]", "surface_temperature")
+    _require(surroundings_temperature, "[temperature]", "surroundings_temperature")
+    ts = surface_temperature.to("K").magnitude
+    tsur = surroundings_temperature.to("K").magnitude
+    if ts <= 0 or tsur <= 0:
+        raise ValueError("the absolute temperatures must be positive")
+    hr = emissivity * _STEFAN_BOLTZMANN * (ts**2 + tsur**2) * (ts + tsur)
+    return Quantity(magnitude=hr, unit="W/(m**2*K)")

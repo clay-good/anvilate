@@ -528,6 +528,8 @@ thermal.free_thermal_expansion
 thermal.parallel_flow_effectiveness
 thermal.parallel_flow_ntu_for_effectiveness
 thermal.parallel_thermal_resistance
+thermal.radiation_heat_transfer
+thermal.radiation_heat_transfer_coefficient
 thermal.series_thermal_resistance
 thermal.shrink_fit_assembly_temperature
 thermal.temperature_rise
