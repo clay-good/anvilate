@@ -28,6 +28,8 @@ __all__ = [
     "rule_of_mixtures_modulus",
     "transverse_modulus_inverse_rule",
     "rule_of_mixtures_strength",
+    "composite_major_poisson_ratio",
+    "composite_shear_modulus_inverse_rule",
 ]
 
 
@@ -121,3 +123,50 @@ def rule_of_mixtures_strength(
             "fiber_strength must be positive and matrix_stress_at_fiber_failure non-negative"
         )
     return Quantity(magnitude=vf * sf + (1.0 - vf) * sm, unit="MPa")
+
+
+def composite_major_poisson_ratio(
+    *,
+    fiber_fraction: float,
+    fiber_poisson: float,
+    matrix_poisson: float,
+) -> float:
+    """The major Poisson's ratio ν₁₂ = V_f·ν_f + (1 − V_f)·ν_m of a unidirectional ply.
+
+    The third of a lamina's four independent elastic constants (with E₁, E₂, and G₁₂):
+    ν₁₂ is the transverse contraction under longitudinal tension, and it follows the same
+    parallel rule of mixtures as the longitudinal modulus. ``fiber_fraction`` V_f,
+    ``fiber_poisson`` ν_f, and ``matrix_poisson`` ν_m (each in [0, 0.5)). It sits between the
+    fiber and matrix values; the *minor* ratio ν₂₁ follows from the reciprocity
+    ν₂₁ = ν₁₂·E₂/E₁. Returns the dimensionless ν₁₂.
+    """
+    vf = _fraction(fiber_fraction)
+    for value, name in ((fiber_poisson, "fiber_poisson"), (matrix_poisson, "matrix_poisson")):
+        if not 0.0 <= value < 0.5:
+            raise ValueError(f"{name} must lie in [0, 0.5); got {value}")
+    return vf * fiber_poisson + (1.0 - vf) * matrix_poisson
+
+
+def composite_shear_modulus_inverse_rule(
+    *,
+    fiber_fraction: float,
+    fiber_shear_modulus: Quantity,
+    matrix_shear_modulus: Quantity,
+) -> Quantity:
+    """The in-plane shear modulus G₁₂, 1/G₁₂ = V_f/G_f + (1 − V_f)/G_m of a ply.
+
+    The fourth independent elastic constant of a unidirectional lamina. In-plane shear loads
+    the fibers and matrix in series much like transverse tension, so G₁₂ follows the inverse
+    rule and is matrix-dominated and low — the simple lower-bound estimate (real plies run
+    higher; a Halpin-Tsai fit is closer, but the inverse rule is the standard first screen).
+    ``fiber_fraction`` V_f, ``fiber_shear_modulus`` G_f, and ``matrix_shear_modulus`` G_m.
+    Returns G₁₂ in MPa.
+    """
+    _require(fiber_shear_modulus, "[pressure]", "fiber_shear_modulus")
+    _require(matrix_shear_modulus, "[pressure]", "matrix_shear_modulus")
+    vf = _fraction(fiber_fraction)
+    gf = fiber_shear_modulus.to("MPa").magnitude
+    gm = matrix_shear_modulus.to("MPa").magnitude
+    if gf <= 0 or gm <= 0:
+        raise ValueError("fiber_shear_modulus and matrix_shear_modulus must be positive")
+    return Quantity(magnitude=1.0 / (vf / gf + (1.0 - vf) / gm), unit="MPa")

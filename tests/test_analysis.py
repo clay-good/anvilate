@@ -12917,6 +12917,28 @@ def test_composite_rule_of_mixtures_cfrp():
         rule_of_mixtures_modulus(fiber_fraction=1.5, **fm)
 
 
+def test_composite_poisson_and_shear_modulus():
+    from anvilate.analysis import (
+        composite_major_poisson_ratio,
+        composite_shear_modulus_inverse_rule,
+    )
+
+    # nu_12 = V_f*nu_f + (1-V_f)*nu_m: 0.6*0.2 + 0.4*0.35 = 0.26 (rule of mixtures).
+    nu12 = composite_major_poisson_ratio(
+        fiber_fraction=0.60, fiber_poisson=0.2, matrix_poisson=0.35
+    )
+    assert nu12 == pytest.approx(0.6 * 0.2 + 0.4 * 0.35, rel=1e-9)
+    assert 0.2 < nu12 < 0.35  # between the two constituents
+    # G_12 inverse rule: matrix-dominated and low.
+    g12 = composite_shear_modulus_inverse_rule(
+        fiber_fraction=0.60, fiber_shear_modulus=_q("90 GPa"), matrix_shear_modulus=_q("1.3 GPa")
+    )
+    assert g12.to("MPa").magnitude == pytest.approx(1 / (0.6 / 90000 + 0.4 / 1300), rel=1e-9)
+    assert g12.to("MPa").magnitude < 5000  # far below the fiber's own shear modulus
+    with pytest.raises(ValueError, match=r"fiber_poisson must lie in \[0, 0.5\)"):
+        composite_major_poisson_ratio(fiber_fraction=0.6, fiber_poisson=0.6, matrix_poisson=0.35)
+
+
 def test_aluminum_buckling_stress_two_regions():
     import math
 

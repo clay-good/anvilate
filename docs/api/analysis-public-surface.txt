@@ -10,6 +10,8 @@ adhesive.cylindrical_bond_torque_capacity
 adhesive.lap_joint_average_shear_stress
 aluminum.aluminum_buckling_stress
 aluminum.aluminum_tension_stress
+composite.composite_major_poisson_ratio
+composite.composite_shear_modulus_inverse_rule
 composite.rule_of_mixtures_modulus
 composite.rule_of_mixtures_strength
 composite.transverse_modulus_inverse_rule
