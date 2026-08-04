@@ -13046,6 +13046,46 @@ def test_stokes_settling_velocity_and_drag_are_consistent():
         )
 
 
+def test_wind_power_density_turbine_power_and_betz_limit():
+    import math
+
+    from anvilate.analysis import BETZ_LIMIT, wind_power_density, wind_turbine_power
+
+    assert BETZ_LIMIT == pytest.approx(16 / 27, rel=1e-12)
+
+    # Power density P/A = 0.5*rho*V^3; 1.225, 10 m/s -> 612.5 W/m^2.
+    pd = wind_power_density(air_density=_q("1.225 kg/m**3"), wind_speed=_q("10 m/s"))
+    assert pd.to("W/m**2").magnitude == pytest.approx(0.5 * 1.225 * 1000, rel=1e-9)
+
+    # Turbine power P = 0.5*rho*A*V^3*Cp; D=90, 10 m/s, Cp=0.4.
+    p = wind_turbine_power(
+        air_density=_q("1.225 kg/m**3"),
+        rotor_diameter=_q("90 m"),
+        wind_speed=_q("10 m/s"),
+        power_coefficient=0.4,
+    )
+    area = math.pi * 90**2 / 4
+    assert p.to("W").magnitude == pytest.approx(0.5 * 1.225 * area * 1000 * 0.4, rel=1e-9)
+
+    # Cube law: 8 m/s gives (8/10)^3 = 0.512 of the 10 m/s power.
+    p8 = wind_turbine_power(
+        air_density=_q("1.225 kg/m**3"),
+        rotor_diameter=_q("90 m"),
+        wind_speed=_q("8 m/s"),
+        power_coefficient=0.4,
+    )
+    assert p8.to("W").magnitude / p.to("W").magnitude == pytest.approx((8 / 10) ** 3, rel=1e-9)
+
+    # A power coefficient above the Betz limit is rejected.
+    with pytest.raises(ValueError, match="Betz limit"):
+        wind_turbine_power(
+            air_density=_q("1.225 kg/m**3"),
+            rotor_diameter=_q("90 m"),
+            wind_speed=_q("10 m/s"),
+            power_coefficient=0.7,
+        )
+
+
 def test_solar_pv_array_power_daily_energy_and_sizing():
     from anvilate.analysis import pv_array_power, pv_array_size_for_load, pv_daily_energy
 

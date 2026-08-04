@@ -605,6 +605,15 @@ def test_clarifier_particle_settling_example_d_squared_law():
     assert ratio == pytest.approx(100.0, rel=1e-6)
 
 
+def test_wind_turbine_power_curve_example_cube_law():
+    namespace = runpy.run_path(str(_EXAMPLES / "wind_turbine_power_curve.py"))
+    t = namespace["turbine_output"]()
+    assert t["power_12ms_mw"] > t["power_8ms_mw"]
+    # 8 m/s over 12 m/s power ratio is (8/12)^3 ~ 0.30.
+    assert t["light_over_brisk"] == pytest.approx((8 / 12) ** 3, rel=1e-6)
+    assert t["betz_limit"] == pytest.approx(16 / 27, rel=1e-9)
+
+
 def test_off_grid_cabin_solar_battery_example_sizes_both():
     namespace = runpy.run_path(str(_EXAMPLES / "off_grid_cabin_solar_battery.py"))
     s = namespace["off_grid_sizing"]()

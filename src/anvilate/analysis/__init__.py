@@ -180,6 +180,9 @@ modules:
 - :mod:`~anvilate.analysis.solar_pv` — photovoltaic array sizing: a module's power
   (P = G·A·η), the daily energy an array yields (E = P·PSH·D), and the array rating
   a daily load needs — pairs with energy_storage for off-grid design
+- :mod:`~anvilate.analysis.wind_power` — wind-turbine power: the ½·ρ·V³ power density
+  in the wind (cube law), the P = ½·ρ·A·V³·C_p a rotor delivers, and the Betz limit
+  16/27 ceiling on the power coefficient
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
@@ -1387,6 +1390,11 @@ from .winch import (
     drum_rope_capacity,
     drum_working_radius,
 )
+from .wind_power import (
+    BETZ_LIMIT,
+    wind_power_density,
+    wind_turbine_power,
+)
 from .wire_rope import (
     minimum_sheave_diameter_for_bending_stress,
     wire_rope_bending_stress,
@@ -2236,4 +2244,7 @@ __all__ = [
     "drum_working_radius",
     "drum_line_pull",
     "drum_rope_capacity",
+    "BETZ_LIMIT",
+    "wind_power_density",
+    "wind_turbine_power",
 ]

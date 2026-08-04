@@ -826,6 +826,9 @@ weld.fillet_weld_throat_stress
 winch.drum_line_pull
 winch.drum_rope_capacity
 winch.drum_working_radius
+wind_power.BETZ_LIMIT
+wind_power.wind_power_density
+wind_power.wind_turbine_power
 wire_rope.minimum_sheave_diameter_for_bending_stress
 wire_rope.wire_rope_bending_stress
 wire_rope.wire_rope_equivalent_bending_load
