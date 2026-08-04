@@ -12562,3 +12562,12 @@ def test_asme_conical_head_thickness_reduces_to_the_cylinder_at_zero_angle():
     )
     with pytest.raises(ValueError, match="half_apex_angle_deg must lie in"):
         asme_conical_head_thickness(half_apex_angle_deg=90.0, **kw)
+
+
+def test_asme_conical_head_mawp_round_trips_the_thickness():
+    from anvilate.analysis import asme_conical_head_mawp, asme_conical_head_thickness
+
+    kw = {"diameter": _q("1000 mm"), "allowable_stress": _q("138 MPa"), "half_apex_angle_deg": 30.0}
+    t = asme_conical_head_thickness(pressure=_q("2 MPa"), **kw)
+    p = asme_conical_head_mawp(thickness=t, **kw)
+    assert p.to("MPa").magnitude == pytest.approx(2.0, rel=1e-9)

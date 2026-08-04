@@ -40,6 +40,7 @@ __all__ = [
     "asme_spherical_shell_thickness",
     "asme_spherical_shell_mawp",
     "asme_conical_head_thickness",
+    "asme_conical_head_mawp",
     "asme_b313_pipe_wall_thickness",
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
@@ -531,6 +532,40 @@ def asme_conical_head_thickness(
     return Quantity(
         magnitude=p * d / (2.0 * cos(radians(half_apex_angle_deg)) * denominator), unit="mm"
     )
+
+
+def asme_conical_head_mawp(
+    *,
+    thickness: Quantity,
+    diameter: Quantity,
+    allowable_stress: Quantity,
+    half_apex_angle_deg: float,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 MAWP of a conical head or reducer,
+    P = 2·cos α·S·E·t/(D + 1.2·cos α·t).
+
+    The rating inverse of :func:`asme_conical_head_thickness`: the maximum allowable
+    working pressure a cone of ``thickness`` t and inside ``diameter`` D (at the point
+    checked) carries at code ``allowable_stress`` S, ``half_apex_angle_deg`` α, and
+    weld ``joint_efficiency`` E. All positive, α in [0, 90), E in (0, 1]. Returns the
+    MAWP in MPa.
+    """
+    _require(thickness, "[length]", "thickness")
+    _require(diameter, "[length]", "diameter")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 <= half_apex_angle_deg < 90:
+        raise ValueError(f"half_apex_angle_deg must lie in [0, 90); got {half_apex_angle_deg}")
+    if not 0 < joint_efficiency <= 1:
+        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+    t = thickness.to("mm").magnitude
+    d = diameter.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if t <= 0 or d <= 0 or s <= 0:
+        raise ValueError("thickness, diameter, and allowable_stress must be positive")
+    cos_alpha = cos(radians(half_apex_angle_deg))
+    numerator = 2.0 * cos_alpha * s * joint_efficiency * t
+    return Quantity(magnitude=numerator / (d + 1.2 * cos_alpha * t), unit="MPa")
 
 
 def asme_b313_pipe_wall_thickness(
