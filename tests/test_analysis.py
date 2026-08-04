@@ -12939,6 +12939,27 @@ def test_composite_poisson_and_shear_modulus():
         composite_major_poisson_ratio(fiber_fraction=0.6, fiber_poisson=0.6, matrix_poisson=0.35)
 
 
+def test_composite_longitudinal_cte_is_stiffness_weighted():
+    from anvilate.analysis import composite_longitudinal_cte
+
+    # alpha_1 = (V_f*E_f*a_f + (1-V_f)*E_m*a_m)/(V_f*E_f + (1-V_f)*E_m).
+    a1 = composite_longitudinal_cte(
+        fiber_fraction=0.60,
+        fiber_modulus=_q("230 GPa"),
+        matrix_modulus=_q("3.5 GPa"),
+        fiber_cte=_q("-0.5e-6 1/K"),
+        matrix_cte=_q("60e-6 1/K"),
+    )
+    expect = (0.6 * 230000 * -0.5e-6 + 0.4 * 3500 * 60e-6) / (0.6 * 230000 + 0.4 * 3500)
+    assert a1.to("1/K").magnitude == pytest.approx(expect, rel=1e-9)
+    # The stiff, near-zero-CTE carbon dominates: the laminate is nearly dimensionally stable
+    # even though the epoxy expands 60e-6/K.
+    assert abs(a1.to("1/K").magnitude) < 1e-6
+    # Stiffness weighting (not volume) — a pure volume average would give ~24e-6/K.
+    volume_average = 0.6 * -0.5e-6 + 0.4 * 60e-6
+    assert abs(a1.to("1/K").magnitude) < abs(volume_average)
+
+
 def test_aluminum_buckling_stress_two_regions():
     import math
 

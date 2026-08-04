@@ -485,6 +485,7 @@ from .column import (
     transition_slenderness,
 )
 from .composite import (
+    composite_longitudinal_cte,
     composite_major_poisson_ratio,
     composite_shear_modulus_inverse_rule,
     rule_of_mixtures_modulus,
@@ -1067,6 +1068,7 @@ __all__ = [
     "transverse_modulus_inverse_rule",
     "composite_major_poisson_ratio",
     "composite_shear_modulus_inverse_rule",
+    "composite_longitudinal_cte",
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",

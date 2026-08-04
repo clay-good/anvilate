@@ -30,6 +30,7 @@ __all__ = [
     "rule_of_mixtures_strength",
     "composite_major_poisson_ratio",
     "composite_shear_modulus_inverse_rule",
+    "composite_longitudinal_cte",
 ]
 
 
@@ -170,3 +171,45 @@ def composite_shear_modulus_inverse_rule(
     if gf <= 0 or gm <= 0:
         raise ValueError("fiber_shear_modulus and matrix_shear_modulus must be positive")
     return Quantity(magnitude=1.0 / (vf / gf + (1.0 - vf) / gm), unit="MPa")
+
+
+def composite_longitudinal_cte(
+    *,
+    fiber_fraction: float,
+    fiber_modulus: Quantity,
+    matrix_modulus: Quantity,
+    fiber_cte: Quantity,
+    matrix_cte: Quantity,
+) -> Quantity:
+    """The longitudinal thermal-expansion coefficient α₁ of a unidirectional ply.
+
+    Along the fibers the two phases must expand together, and the stiff fibers win, so the
+    laminate CTE is *stiffness*-weighted, not volume-weighted:
+    α₁ = (V_f·E_f·α_f + (1 − V_f)·E_m·α_m)/(V_f·E_f + (1 − V_f)·E_m). Because carbon fiber has
+    a near-zero (even slightly negative) axial CTE, a carbon/epoxy laminate is almost
+    dimensionally stable along the fibers — the property that makes CFRP the choice for
+    satellite optical benches and precision structures. ``fiber_fraction`` V_f,
+    ``fiber_modulus`` E_f, ``matrix_modulus`` E_m, ``fiber_cte`` α_f, and ``matrix_cte`` α_m
+    (each a 1/temperature quantity). The transverse α₂ is much larger (matrix-dominated) and
+    needs the Schapery form, not this. Returns α₁ in 1/K.
+    """
+    _require(fiber_modulus, "[pressure]", "fiber_modulus")
+    _require(matrix_modulus, "[pressure]", "matrix_modulus")
+    if not fiber_cte.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            f"fiber_cte must have units of 1/temperature; got {fiber_cte.dimensionality}"
+        )
+    if not matrix_cte.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            f"matrix_cte must have units of 1/temperature; got {matrix_cte.dimensionality}"
+        )
+    vf = _fraction(fiber_fraction)
+    ef = fiber_modulus.to("MPa").magnitude
+    em = matrix_modulus.to("MPa").magnitude
+    af = fiber_cte.to("1/K").magnitude
+    am = matrix_cte.to("1/K").magnitude
+    if ef <= 0 or em <= 0:
+        raise ValueError("fiber_modulus and matrix_modulus must be positive")
+    stiffness = vf * ef + (1.0 - vf) * em
+    alpha1 = (vf * ef * af + (1.0 - vf) * em * am) / stiffness
+    return Quantity(magnitude=alpha1, unit="1/K")
