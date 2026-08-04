@@ -397,7 +397,9 @@ modules:
   sloped-backfill coefficient for an embankment behind the wall),
   the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing (with
   Vesić shape and depth factors and Meyerhof load-inclination factors that correct it for
-  a rectangular embedded footing under an inclined load),
+  a rectangular embedded footing under an inclined load), the allowable pressure from the
+  ultimate over a factor of safety and the required spread-footing area it sizes (net of
+  overburden),
   Terzaghi 1D consolidation settlement with its time-rate factor, retaining-wall
   external stability (overturning, sliding, and eccentric base-pressure) checks, the
   infinite-slope factor of safety, the 2:1 vertical stress increase under a footing, the
@@ -960,6 +962,7 @@ from .geneva import (
     geneva_index_angle,
 )
 from .geotechnical import (
+    allowable_bearing_from_ultimate,
     bearing_capacity_factors,
     bearing_depth_factors,
     bearing_inclination_factors,
@@ -981,6 +984,7 @@ from .geotechnical import (
     rankine_lateral_thrust,
     rankine_passive_pressure_cohesive,
     rankine_sloped_backfill_coefficient,
+    required_spread_footing_area,
     retaining_wall_overturning_factor,
     retaining_wall_sliding_factor,
     seepage_velocity,
@@ -1526,6 +1530,8 @@ __all__ = [
     "rankine_lateral_thrust",
     "rankine_passive_pressure_cohesive",
     "rankine_sloped_backfill_coefficient",
+    "allowable_bearing_from_ultimate",
+    "required_spread_footing_area",
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
     "seepage_velocity",

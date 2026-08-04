@@ -965,6 +965,16 @@ def test_cold_storage_roof_snow_example_freezer_carries_more():
     assert r["freezer_sloped_kpa"] < r["freezer_flat_kpa"]
 
 
+def test_spread_footing_sizing_example_overburden_grows_the_footing():
+    namespace = runpy.run_path(str(_EXAMPLES / "spread_footing_sizing.py"))
+    f = namespace["footing_area"]()
+    assert f["allowable_kpa"] == pytest.approx(200.0, rel=1e-9)
+    # The net-pressure footing (accounting for overburden) is bigger than the gross one.
+    assert f["gross_area_m2"] == pytest.approx(4.0, rel=1e-9)
+    assert f["net_area_m2"] == pytest.approx(4.571, abs=0.01)
+    assert f["net_area_m2"] > f["gross_area_m2"]
+
+
 def test_building_column_load_path_capstone_reduction_decides():
     namespace = runpy.run_path(str(_EXAMPLES / "building_column_load_path.py"))
     card = namespace["screen_column"]()

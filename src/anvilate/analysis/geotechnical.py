@@ -33,11 +33,13 @@ from math import cos, exp, log10, pi, radians, sin, sqrt, tan
 from ..units import Quantity
 
 __all__ = [
+    "allowable_bearing_from_ultimate",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",
     "bearing_shape_factors",
     "consolidation_settlement",
+    "required_spread_footing_area",
     "consolidation_time",
     "consolidation_time_factor",
     "critical_hydraulic_gradient",
@@ -402,6 +404,64 @@ def terzaghi_bearing_capacity(
         raise ValueError("unit_weight and width must be positive")
     q_ult = c * bearing_factor_c + q * bearing_factor_q + 0.5 * gamma * b * bearing_factor_gamma
     return Quantity(magnitude=q_ult, unit="kPa")
+
+
+def allowable_bearing_from_ultimate(
+    *,
+    ultimate_bearing_capacity: Quantity,
+    factor_of_safety: float,
+) -> Quantity:
+    """The allowable bearing pressure q_all = q_ult / FS from the ultimate capacity.
+
+    Foundations are sized on an allowable pressure well below the ultimate: the
+    ``ultimate_bearing_capacity`` q_ult (from :func:`terzaghi_bearing_capacity`) divided by a
+    ``factor_of_safety`` FS — typically 3 for bearing, to cover soil variability and to keep
+    settlement small. Returns the allowable (gross) bearing pressure in kPa; pass it to
+    :func:`required_spread_footing_area` to size the footing.
+    """
+    _require(ultimate_bearing_capacity, "[pressure]", "ultimate_bearing_capacity")
+    q_ult = ultimate_bearing_capacity.to("kPa").magnitude
+    if q_ult <= 0:
+        raise ValueError("ultimate_bearing_capacity must be positive")
+    if factor_of_safety <= 0:
+        raise ValueError("factor_of_safety must be positive")
+    return Quantity(magnitude=q_ult / factor_of_safety, unit="kPa")
+
+
+def required_spread_footing_area(
+    *,
+    service_load: Quantity,
+    allowable_bearing_pressure: Quantity,
+    overburden_pressure: Quantity | None = None,
+) -> Quantity:
+    """The plan area a spread footing needs, A = P / (q_all − q_overburden).
+
+    The footing plan area required to keep the soil pressure under the allowable: the unfactored
+    (service) column ``service_load`` P divided by the *net* allowable pressure. The common trap is
+    to divide by the gross ``allowable_bearing_pressure`` q_all; the footing and the soil backfilled
+    over it also press on the ground, so their ``overburden_pressure`` q_o at founding level must
+    first be subtracted, leaving q_all − q_o for the column load. Omitting the overburden
+    undersizes the footing. For a square footing take the square root of the result. Returns the
+    required plan area in m².
+    """
+    _require(service_load, "[force]", "service_load")
+    _require(allowable_bearing_pressure, "[pressure]", "allowable_bearing_pressure")
+    p = service_load.to("kN").magnitude
+    q_all = allowable_bearing_pressure.to("kPa").magnitude
+    if p <= 0:
+        raise ValueError("service_load must be positive")
+    if q_all <= 0:
+        raise ValueError("allowable_bearing_pressure must be positive")
+    q_o = 0.0
+    if overburden_pressure is not None:
+        _require(overburden_pressure, "[pressure]", "overburden_pressure")
+        q_o = overburden_pressure.to("kPa").magnitude
+        if q_o < 0:
+            raise ValueError("overburden_pressure must be non-negative")
+    net = q_all - q_o
+    if net <= 0:
+        raise ValueError("overburden_pressure must be less than the allowable bearing pressure")
+    return Quantity(magnitude=p / net, unit="m**2")
 
 
 def consolidation_settlement(

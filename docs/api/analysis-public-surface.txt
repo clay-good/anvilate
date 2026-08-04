@@ -41,6 +41,7 @@ composite.rule_of_mixtures_modulus
 composite.rule_of_mixtures_strength
 composite.transverse_modulus_inverse_rule
 composite.tsai_hill_failure_index
+geotechnical.allowable_bearing_from_ultimate
 geotechnical.bearing_capacity_factors
 geotechnical.bearing_depth_factors
 geotechnical.bearing_inclination_factors
@@ -62,6 +63,7 @@ geotechnical.rankine_earth_pressure_coefficient
 geotechnical.rankine_lateral_thrust
 geotechnical.rankine_passive_pressure_cohesive
 geotechnical.rankine_sloped_backfill_coefficient
+geotechnical.required_spread_footing_area
 geotechnical.retaining_wall_overturning_factor
 geotechnical.retaining_wall_sliding_factor
 geotechnical.seepage_velocity

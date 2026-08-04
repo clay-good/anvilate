@@ -15631,6 +15631,39 @@ def test_terzaghi_bearing_capacity_sums_three_terms():
         )
 
 
+def test_footing_sizing_allowable_and_net_area():
+    from anvilate.analysis import (
+        allowable_bearing_from_ultimate,
+        required_spread_footing_area,
+    )
+
+    # Allowable = ultimate / FS: 600 / 3 = 200 kPa.
+    q_all = allowable_bearing_from_ultimate(
+        ultimate_bearing_capacity=_q("600 kPa"), factor_of_safety=3.0
+    )
+    assert q_all.to("kPa").magnitude == pytest.approx(200.0, rel=1e-12)
+    # Without overburden: A = P/q_all = 800/200 = 4.0 m^2.
+    gross = required_spread_footing_area(
+        service_load=_q("800 kN"), allowable_bearing_pressure=q_all
+    )
+    assert gross.to("m**2").magnitude == pytest.approx(4.0, rel=1e-12)
+    # Net of 25 kPa overburden: A = 800/(200-25) = 4.571 m^2 -- a bigger footing.
+    net = required_spread_footing_area(
+        service_load=_q("800 kN"),
+        allowable_bearing_pressure=q_all,
+        overburden_pressure=_q("25 kPa"),
+    )
+    assert net.to("m**2").magnitude == pytest.approx(800.0 / 175.0, rel=1e-9)
+    assert net.to("m**2").magnitude > gross.to("m**2").magnitude
+    # Overburden at or above the allowable leaves nothing for the column -> rejected.
+    with pytest.raises(ValueError, match="less than the allowable"):
+        required_spread_footing_area(
+            service_load=_q("800 kN"),
+            allowable_bearing_pressure=q_all,
+            overburden_pressure=_q("200 kPa"),
+        )
+
+
 def test_consolidation_settlement_normally_consolidated():
     import math
 
