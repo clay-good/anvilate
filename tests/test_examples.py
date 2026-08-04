@@ -515,6 +515,17 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_clarifier_particle_settling_example_d_squared_law():
+    namespace = runpy.run_path(str(_EXAMPLES / "clarifier_particle_settling.py"))
+    r = namespace["settling_times"]()
+    # Both particles are in the Stokes regime (Re < 1).
+    assert r["sand_100um"]["reynolds"] < 1.0
+    assert r["silt_10um"]["reynolds"] < 1.0
+    # The 10x smaller silt settles ~100x slower (the d^2 law).
+    ratio = r["silt_10um"]["settle_minutes"] / r["sand_100um"]["settle_minutes"]
+    assert ratio == pytest.approx(100.0, rel=1e-6)
+
+
 def test_off_grid_cabin_solar_battery_example_sizes_both():
     namespace = runpy.run_path(str(_EXAMPLES / "off_grid_cabin_solar_battery.py"))
     s = namespace["off_grid_sizing"]()

@@ -166,7 +166,8 @@ modules:
   a daily load needs — pairs with energy_storage for off-grid design
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
-  weight, and the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface
+  weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
+  low-Reynolds Stokes settling velocity and drag on a small sphere
 - :mod:`~anvilate.analysis.refrigeration` — refrigeration and heat-pump cycle performance:
   the Carnot cooling and heating COP ceilings and the actual COP = Q/W
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
@@ -638,6 +639,8 @@ from .curved_beam import (
 from .drag import (
     drag_force,
     jet_impact_force,
+    stokes_drag_force,
+    stokes_settling_velocity,
     terminal_velocity,
 )
 from .dynamics import (
@@ -1442,6 +1445,8 @@ __all__ = [
     "coefficient_of_performance",
     "drag_force",
     "jet_impact_force",
+    "stokes_settling_velocity",
+    "stokes_drag_force",
     "terminal_velocity",
     "tank_drain_time",
     "torricelli_efflux_velocity",

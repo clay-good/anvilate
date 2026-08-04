@@ -15,15 +15,19 @@ the drag equal to the weight. Inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from math import sqrt
+from math import pi, sqrt
 
 from ..units import Quantity
 
 __all__ = [
     "drag_force",
     "jet_impact_force",
+    "stokes_drag_force",
+    "stokes_settling_velocity",
     "terminal_velocity",
 ]
+
+_GRAVITY = 9.80665  # m/s², standard gravity
 
 
 def drag_force(
@@ -118,6 +122,68 @@ def jet_impact_force(
     if not 0.0 <= deflection_angle <= 180.0:
         raise ValueError(f"deflection_angle must be in [0, 180] degrees; got {deflection_angle}")
     return Quantity(magnitude=rho * q * v * (1.0 - cos(radians(deflection_angle))), unit="N")
+
+
+def stokes_settling_velocity(
+    *,
+    particle_diameter: Quantity,
+    particle_density: Quantity,
+    fluid_density: Quantity,
+    fluid_viscosity: Quantity,
+) -> Quantity:
+    """The settling velocity of a small sphere by Stokes' law, v = (ρ_p − ρ_f)·g·d²/(18·μ).
+
+    Where :func:`terminal_velocity` uses a tabulated drag coefficient, a small particle in the
+    creeping-flow regime (Reynolds number below ~1) has an exact drag law, so its settling velocity
+    is closed-form: v = (ρ_p − ρ_f)·g·d²/(18·μ), from the ``particle_diameter`` d, the
+    ``particle_density`` ρ_p, the ``fluid_density`` ρ_f, and the ``fluid_viscosity`` μ. It rises
+    with the *square* of diameter — the reason fine silt takes so long to settle and coarse sand
+    fast. Valid only while the resulting Reynolds number stays below ~1 (small particles, viscous
+    fluid); above it the flow separates and the Stokes value overpredicts. Returns the settling
+    velocity in m/s (negative if the particle is buoyant and rises).
+    """
+    _check(particle_diameter, "[length]", "particle_diameter")
+    _check(particle_density, "[mass]/[length]**3", "particle_density")
+    _check(fluid_density, "[mass]/[length]**3", "fluid_density")
+    _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
+    d = particle_diameter.to("m").magnitude
+    rho_p = particle_density.to("kg/m**3").magnitude
+    rho_f = fluid_density.to("kg/m**3").magnitude
+    mu = fluid_viscosity.to("Pa*s").magnitude
+    if d <= 0:
+        raise ValueError("particle_diameter must be positive")
+    if mu <= 0:
+        raise ValueError("fluid_viscosity must be positive")
+    v = (rho_p - rho_f) * _GRAVITY * d**2 / (18.0 * mu)
+    return Quantity(magnitude=v, unit="m/s")
+
+
+def stokes_drag_force(
+    *,
+    fluid_viscosity: Quantity,
+    particle_diameter: Quantity,
+    velocity: Quantity,
+) -> Quantity:
+    """The creeping-flow drag on a sphere by Stokes' law, F = 3·π·μ·d·V.
+
+    In the same low-Reynolds regime, the drag on a sphere is linear in speed (not quadratic like the
+    bluff-body law): F = 3·π·μ·d·V, from the ``fluid_viscosity`` μ, ``particle_diameter`` d, and
+    relative ``velocity`` V. Setting it equal to the submerged weight gives
+    :func:`stokes_settling_velocity`. It is the drag on a droplet, a bubble, or a bacterium, and the
+    basis of falling-ball viscometry. Valid for Reynolds number below ~1. Returns the drag force in
+    N.
+    """
+    _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
+    _check(particle_diameter, "[length]", "particle_diameter")
+    _check(velocity, "[length]/[time]", "velocity")
+    mu = fluid_viscosity.to("Pa*s").magnitude
+    d = particle_diameter.to("m").magnitude
+    v = velocity.to("m/s").magnitude
+    if mu <= 0 or d <= 0:
+        raise ValueError("fluid_viscosity and particle_diameter must be positive")
+    if v < 0:
+        raise ValueError("velocity must be non-negative")
+    return Quantity(magnitude=3.0 * pi * mu * d * v, unit="N")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

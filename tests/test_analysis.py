@@ -13009,6 +13009,43 @@ def test_nds_column_stability_factor_ylinen_and_euler_stress():
         )
 
 
+def test_stokes_settling_velocity_and_drag_are_consistent():
+    import math
+
+    from anvilate.analysis import stokes_drag_force, stokes_settling_velocity
+
+    # v = (rho_p - rho_f) g d^2 / (18 mu); 100 um quartz in water -> ~8.99 mm/s.
+    v = stokes_settling_velocity(
+        particle_diameter=_q("100 um"),
+        particle_density=_q("2650 kg/m**3"),
+        fluid_density=_q("1000 kg/m**3"),
+        fluid_viscosity=_q("0.001 Pa*s"),
+    )
+    expected = (2650 - 1000) * 9.80665 * (1e-4) ** 2 / (18 * 0.001)
+    assert v.to("m/s").magnitude == pytest.approx(expected, rel=1e-9)
+
+    # The Stokes drag at the settling velocity equals the particle's submerged weight.
+    drag = stokes_drag_force(
+        fluid_viscosity=_q("0.001 Pa*s"), particle_diameter=_q("100 um"), velocity=v
+    )
+    submerged_weight = (2650 - 1000) * 9.80665 * math.pi / 6 * (1e-4) ** 3
+    assert drag.to("N").magnitude == pytest.approx(submerged_weight, rel=1e-9)
+
+    # Settling velocity scales with the square of diameter: 10x smaller -> 100x slower.
+    v_small = stokes_settling_velocity(
+        particle_diameter=_q("10 um"),
+        particle_density=_q("2650 kg/m**3"),
+        fluid_density=_q("1000 kg/m**3"),
+        fluid_viscosity=_q("0.001 Pa*s"),
+    )
+    assert v.to("m/s").magnitude / v_small.to("m/s").magnitude == pytest.approx(100.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="pressure.*time|viscosity"):
+        stokes_drag_force(
+            fluid_viscosity=_q("0.001 Pa"), particle_diameter=_q("100 um"), velocity=v
+        )
+
+
 def test_solar_pv_array_power_daily_energy_and_sizing():
     from anvilate.analysis import pv_array_power, pv_array_size_for_load, pv_daily_energy
 
