@@ -12762,6 +12762,38 @@ def test_shear_lag_factor_aisc_d3():
         shear_lag_factor(connection_eccentricity=_q("100 mm"), connection_length=_q("100 mm"))
 
 
+def test_net_width_staggered_holes_aisc_b43b():
+    from anvilate.analysis import net_width_staggered_holes
+
+    # Straight path (no stagger): w_net = w - n*d = 200 - 2*22 = 156 mm.
+    straight = net_width_staggered_holes(
+        gross_width=_q("200 mm"), hole_diameter=_q("22 mm"), hole_count=2
+    )
+    assert straight.to("mm").magnitude == pytest.approx(156.0, rel=1e-12)
+    # Zigzag crossing 3 holes with two diagonals recovers s^2/4g on each leg:
+    # 200 - 3*22 + 2*(60^2/(4*75)) = 134 + 24 = 158 mm.
+    zigzag = net_width_staggered_holes(
+        gross_width=_q("200 mm"),
+        hole_diameter=_q("22 mm"),
+        hole_count=3,
+        stagger_pitch_gauge=[(_q("60 mm"), _q("75 mm")), (_q("60 mm"), _q("75 mm"))],
+    )
+    assert zigzag.to("mm").magnitude == pytest.approx(
+        200 - 3 * 22 + 2 * (60**2 / (4 * 75)), rel=1e-12
+    )
+    # Tighter stagger (smaller pitch) recovers less, so the zigzag can dip below straight.
+    tight = net_width_staggered_holes(
+        gross_width=_q("200 mm"),
+        hole_diameter=_q("22 mm"),
+        hole_count=3,
+        stagger_pitch_gauge=[(_q("20 mm"), _q("75 mm")), (_q("20 mm"), _q("75 mm"))],
+    )
+    assert tight.to("mm").magnitude < straight.to("mm").magnitude
+    # Holes removing the whole section is rejected.
+    with pytest.raises(ValueError, match="net width"):
+        net_width_staggered_holes(gross_width=_q("40 mm"), hole_diameter=_q("22 mm"), hole_count=2)
+
+
 def test_fillet_weld_design_strength_aisc_j24():
     from anvilate.analysis import fillet_weld_design_strength, fillet_weld_throat_stress
 

@@ -71,6 +71,7 @@ __all__ = [
     "slip_critical_resistance",
     "block_shear_strength",
     "shear_lag_factor",
+    "net_width_staggered_holes",
 ]
 
 # AISC J3.8 D_u — the ratio of the mean installed bolt pretension to the specified
@@ -297,6 +298,59 @@ def shear_lag_factor(
             f"(x̄/L = {x_bar / length:.2f} gives a non-positive U)"
         )
     return u
+
+
+def net_width_staggered_holes(
+    *,
+    gross_width: Quantity,
+    hole_diameter: Quantity,
+    hole_count: int,
+    stagger_pitch_gauge: Sequence[tuple[Quantity, Quantity]] = (),
+) -> Quantity:
+    """The AISC 360 §B4.3b net width of a bolted plate across a staggered hole path.
+
+    A tension failure does not always run straight across a member — where bolts are
+    staggered, the tear zigzags from hole to hole, and each diagonal leg recovers some
+    width. §B4.3b nets that out with the classic s²/4g rule: the net width is the gross
+    width less every hole the path crosses, plus s²/(4g) for each diagonal leg, where s
+    is the longitudinal pitch (spacing along the load) and g the transverse gauge
+    (spacing across it). ``gross_width`` w, ``hole_diameter`` d (the hole, i.e. bolt
+    diameter plus clearance and any damage allowance), ``hole_count`` the number of
+    holes on the path, and ``stagger_pitch_gauge`` the (s, g) pair of each diagonal leg
+    (empty for a straight transverse path):
+
+        w_net = w − hole_count·d + Σ s²/(4·g).
+
+    Check every plausible path and take the smallest; multiply by thickness for the net
+    area, then A_e = U·A_n for rupture. Returns the net width in mm.
+    """
+    _require(gross_width, "[length]", "gross_width")
+    _require(hole_diameter, "[length]", "hole_diameter")
+    w = gross_width.to("mm").magnitude
+    d = hole_diameter.to("mm").magnitude
+    if w <= 0 or d <= 0:
+        raise ValueError("gross_width and hole_diameter must be positive")
+    if hole_count < 1:
+        raise ValueError(f"hole_count must be a positive integer; got {hole_count}")
+    stagger = 0.0
+    for i, pair in enumerate(stagger_pitch_gauge):
+        if len(pair) != 2:
+            raise ValueError(f"stagger_pitch_gauge[{i}] must be an (s, g) pair; got {pair!r}")
+        s_q, g_q = pair
+        _require(s_q, "[length]", f"stagger_pitch_gauge[{i}].s")
+        _require(g_q, "[length]", f"stagger_pitch_gauge[{i}].g")
+        s = s_q.to("mm").magnitude
+        g = g_q.to("mm").magnitude
+        if s <= 0 or g <= 0:
+            raise ValueError(f"stagger_pitch_gauge[{i}] pitch and gauge must be positive")
+        stagger += s * s / (4.0 * g)
+    net = w - hole_count * d + stagger
+    if net <= 0:
+        raise ValueError(
+            f"the holes remove the whole section (net width {net:.1f} mm <= 0); "
+            "check hole_count and gross_width"
+        )
+    return Quantity(magnitude=net, unit="mm")
 
 
 def bolt_diameter_for_shear(
