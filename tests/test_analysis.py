@@ -12571,3 +12571,27 @@ def test_asme_conical_head_mawp_round_trips_the_thickness():
     t = asme_conical_head_thickness(pressure=_q("2 MPa"), **kw)
     p = asme_conical_head_mawp(thickness=t, **kw)
     assert p.to("MPa").magnitude == pytest.approx(2.0, rel=1e-9)
+
+
+def test_horizontal_cylinder_natural_convection_matches_churchill_chu():
+    from anvilate.analysis import horizontal_cylinder_natural_convection_coefficient
+
+    # A 50 mm hot pipe 40 K above still air: h ≈ 6 W/m²·K (Churchill-Chu, on D).
+    h = horizontal_cylinder_natural_convection_coefficient(
+        surface_temperature_difference=_q("40 K"),
+        diameter=_q("50 mm"),
+        thermal_conductivity=_q("0.026 W/(m*K)"),
+        kinematic_viscosity=_q("1.6e-5 m**2/s"),
+        prandtl_number=0.71,
+        thermal_expansion_coefficient=_q("0.003333 1/K"),
+    )
+    assert h.to("W/(m**2*K)").magnitude == pytest.approx(6.07, abs=0.05)
+    with pytest.raises(ValueError, match="must be positive"):
+        horizontal_cylinder_natural_convection_coefficient(
+            surface_temperature_difference=_q("0 K"),
+            diameter=_q("50 mm"),
+            thermal_conductivity=_q("0.026 W/(m*K)"),
+            kinematic_viscosity=_q("1.6e-5 m**2/s"),
+            prandtl_number=0.71,
+            thermal_expansion_coefficient=_q("0.003333 1/K"),
+        )

@@ -44,6 +44,7 @@ __all__ = [
     "flat_plate_forced_convection_coefficient",
     "flat_plate_turbulent_convection_coefficient",
     "vertical_plate_natural_convection_coefficient",
+    "horizontal_cylinder_natural_convection_coefficient",
     "circular_source_spreading_resistance",
     "fin_array_count_for_resistance",
 ]
@@ -848,6 +849,56 @@ def vertical_plate_natural_convection_coefficient(
         / (1.0 + (0.492 / prandtl_number) ** (9.0 / 16.0)) ** (8.0 / 27.0)
     ) ** 2
     return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")
+
+
+def horizontal_cylinder_natural_convection_coefficient(
+    *,
+    surface_temperature_difference: Quantity,
+    diameter: Quantity,
+    thermal_conductivity: Quantity,
+    kinematic_viscosity: Quantity,
+    prandtl_number: float,
+    thermal_expansion_coefficient: Quantity,
+) -> Quantity:
+    """The average natural-convection coefficient h on a long horizontal cylinder.
+
+    The Churchill–Chu correlation for a horizontal cylinder (a hot pipe or tube
+    losing heat to still fluid), on the diameter as the characteristic length:
+
+        Ra_D = g·β·ΔT·D³·Pr/ν²,
+        Nu = {0.60 + 0.387·Ra_D^(1/6) / [1 + (0.559/Pr)^(9/16)]^(8/27)}²,
+        h = Nu·k/D.
+
+    The arguments mirror :func:`vertical_plate_natural_convection_coefficient` with
+    ``diameter`` D in place of the plate height; it is a distinct correlation (the
+    cylinder's curvature changes the constants). Valid to Ra_D ≈ 10¹². Returns h in
+    W/(m²·K).
+    """
+    _require(surface_temperature_difference, "[temperature]", "surface_temperature_difference")
+    _require(diameter, "[length]", "diameter")
+    _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
+    _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
+    _require(thermal_expansion_coefficient, "1 / [temperature]", "thermal_expansion_coefficient")
+    dt = surface_temperature_difference.to("K").magnitude
+    d = diameter.to("m").magnitude
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    beta = thermal_expansion_coefficient.to("1/K").magnitude
+    if min(dt, d, k, nu, beta) <= 0:
+        raise ValueError(
+            "surface_temperature_difference, diameter, thermal_conductivity, "
+            "kinematic_viscosity, and thermal_expansion_coefficient must be positive"
+        )
+    if prandtl_number <= 0:
+        raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
+    rayleigh = _STANDARD_GRAVITY * beta * dt * d**3 * prandtl_number / nu**2
+    nusselt = (
+        0.60
+        + 0.387
+        * rayleigh ** (1.0 / 6.0)
+        / (1.0 + (0.559 / prandtl_number) ** (9.0 / 16.0)) ** (8.0 / 27.0)
+    ) ** 2
+    return Quantity(magnitude=nusselt * k / d, unit="W/(m**2*K)")
 
 
 def circular_source_spreading_resistance(
