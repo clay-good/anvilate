@@ -369,6 +369,16 @@ def test_multistage_compressor_staging_example_cuts_power_and_heat():
     assert s["discharge_3stage_degc"] == pytest.approx(144, abs=5)
 
 
+def test_air_receiver_sizing_example_holds_up_and_sizes():
+    namespace = runpy.run_path(str(_EXAMPLES / "air_receiver_sizing.py"))
+    r = namespace["receiver_sizing"]()
+    # A 1 m^3 tank covers the 10 L/s net burst for a few minutes.
+    assert r["holdup_s"] == pytest.approx(197, abs=3)
+    # Riding a full 5-minute burst needs a larger receiver.
+    assert r["volume_for_5min_m3"] == pytest.approx(1.52, abs=0.05)
+    assert r["volume_for_5min_m3"] > 1.0
+
+
 def test_water_main_hazen_williams_example_agrees_with_darcy():
     namespace = runpy.run_path(str(_EXAMPLES / "water_main_hazen_williams.py"))
     r = namespace["main_head_loss"]()

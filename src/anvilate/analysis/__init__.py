@@ -112,6 +112,8 @@ modules:
 - :mod:`~anvilate.analysis.hydraulic_cylinder` — fluid-cylinder actuator sizing:
   the extend and retract force (bore vs annular area), the extend and retract speed
   from the supply flow, and the rod-side pressure intensification of a blocked stroke
+- :mod:`~anvilate.analysis.pneumatics` — compressed-air systems: the receiver hold-up
+  time V·Δp/(Q·p_atm) and the receiver volume a required hold-up needs
 - :mod:`~anvilate.analysis.gas_compression` — gas compression: the ideal-gas density,
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
@@ -884,6 +886,10 @@ from .plate import (
     simply_supported_plate_center_patch_load,
     simply_supported_plate_uniform_load,
 )
+from .pneumatics import (
+    air_receiver_holdup_time,
+    air_receiver_volume_for_demand,
+)
 from .power_screw import (
     lead_angle,
     power_screw_collar_torque,
@@ -1244,6 +1250,8 @@ __all__ = [
     "isothermal_compression_power",
     "multistage_compression_power",
     "optimal_stage_pressure_ratio",
+    "air_receiver_holdup_time",
+    "air_receiver_volume_for_demand",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

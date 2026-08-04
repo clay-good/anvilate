@@ -13081,6 +13081,39 @@ def test_aluminum_tension_stress_lesser_of_yield_and_rupture():
         )
 
 
+def test_air_receiver_holdup_and_sizing_round_trip():
+    from anvilate.analysis import air_receiver_holdup_time, air_receiver_volume_for_demand
+
+    band = {
+        "max_pressure": _q("800 kPa"),
+        "min_pressure": _q("600 kPa"),
+        "atmospheric_pressure": _q("101.325 kPa"),
+    }
+    # t = V*(p_max-p_min)/(Q*p_atm) = 1*200000/(0.01*101325) = 197.4 s.
+    t = air_receiver_holdup_time(receiver_volume=_q("1 m**3"), net_demand=_q("0.01 m**3/s"), **band)
+    assert t.to("s").magnitude == pytest.approx(1 * 200000 / (0.01 * 101325), rel=1e-9)
+    # The sizing inverse recovers the 1 m^3 tank for that hold-up.
+    v = air_receiver_volume_for_demand(net_demand=_q("0.01 m**3/s"), holdup_time=t, **band)
+    assert v.to("m**3").magnitude == pytest.approx(1.0, rel=1e-9)
+    # A wider pressure band stores more air, so the same tank holds up longer.
+    t_wide = air_receiver_holdup_time(
+        receiver_volume=_q("1 m**3"),
+        net_demand=_q("0.01 m**3/s"),
+        max_pressure=_q("900 kPa"),
+        min_pressure=_q("600 kPa"),
+        atmospheric_pressure=_q("101.325 kPa"),
+    )
+    assert t_wide.to("s").magnitude > t.to("s").magnitude
+    with pytest.raises(ValueError, match="max_pressure must exceed min_pressure"):
+        air_receiver_holdup_time(
+            receiver_volume=_q("1 m**3"),
+            net_demand=_q("0.01 m**3/s"),
+            max_pressure=_q("600 kPa"),
+            min_pressure=_q("600 kPa"),
+            atmospheric_pressure=_q("101.325 kPa"),
+        )
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 
