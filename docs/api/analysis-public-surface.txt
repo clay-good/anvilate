@@ -789,6 +789,7 @@ torsion.hollow_shaft_twist_angle
 torsion.polar_second_moment_hollow
 torsion.polar_second_moment_solid
 torsion.rectangular_bar_torsion_constant
+torsion.rectangular_bar_torsional_stress
 torsion.rectangular_bar_twist_angle
 torsion.rectangular_tube_enclosed_area
 torsion.rectangular_tube_torsional_stress

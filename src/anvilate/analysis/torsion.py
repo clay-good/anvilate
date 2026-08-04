@@ -49,6 +49,7 @@ __all__ = [
     "thin_open_strip_torsional_stress",
     "thin_open_strip_twist_angle",
     "rectangular_bar_torsion_constant",
+    "rectangular_bar_torsional_stress",
     "rectangular_bar_twist_angle",
     "elliptical_bar_torsional_stress",
     "elliptical_bar_twist_angle",
@@ -725,6 +726,30 @@ def rectangular_bar_twist_angle(
     j = Quantity(magnitude=_rectangular_bar_torsion_constant_mm4(a, b), unit="mm**4").pint
     angle = torque.pint * length.pint / (shear_modulus.pint * j)
     return _as_quantity(angle, "degree")
+
+
+def rectangular_bar_torsional_stress(
+    *,
+    torque: Quantity,
+    width: Quantity,
+    thickness: Quantity,
+) -> Quantity:
+    """The peak shear stress of a *solid* rectangular bar in torsion, τ_max = T·(3a + 1.8b)/(a²·b²).
+
+    A round shaft's τ = T·r/J does not carry over to a rectangle — the peak shear sits at the middle
+    of the *long* side (not the corners, which are stress-free), and the Roark closed-form fit is
+    τ_max = T·(3·a + 1.8·b)/(a²·b²), with ``width`` a and ``thickness`` b the two sides (the larger
+    taken as a) and ``torque`` T. It spans the two limits the module already covers: a square gives
+    4.81·T/a³ and a thin strip (a ≫ b) gives 3·T/(a·b²). Both sides must be positive. Returns the
+    peak shear stress in MPa.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    a_mm, b_mm = _rectangular_bar_sides(width, thickness)
+    a = a_mm / 1000.0  # m
+    b = b_mm / 1000.0
+    t = torque.to("N*m").magnitude
+    stress = t * (3.0 * a + 1.8 * b) / (a**2 * b**2)
+    return Quantity(magnitude=stress / 1e6, unit="MPa")
 
 
 def _elliptical_axes(semi_major_axis: Quantity, semi_minor_axis: Quantity) -> tuple[float, float]:

@@ -14067,6 +14067,36 @@ def test_aisc_flexural_compactness_classification():
         classify_flexural_element(slenderness=10.0, plastic_limit=20.0, noncompact_limit=10.0)
 
 
+def test_rectangular_bar_torsional_stress_limits_and_symmetry():
+    from anvilate.analysis import rectangular_bar_torsional_stress
+
+    # 50 x 20 mm bar, 1000 N*m -> 186 MPa.
+    tau = rectangular_bar_torsional_stress(
+        torque=_q("1000 N*m"), width=_q("50 mm"), thickness=_q("20 mm")
+    )
+    a, b = 0.05, 0.02
+    assert tau.to("MPa").magnitude == pytest.approx(
+        1000 * (3 * a + 1.8 * b) / (a**2 * b**2) / 1e6, rel=1e-9
+    )
+
+    # Side order does not matter (the larger is taken as a).
+    swapped = rectangular_bar_torsional_stress(
+        torque=_q("1000 N*m"), width=_q("20 mm"), thickness=_q("50 mm")
+    )
+    assert swapped.to("MPa").magnitude == pytest.approx(tau.to("MPa").magnitude, rel=1e-12)
+
+    # A square (a=b) gives ~4.81*T/a^3.
+    square = rectangular_bar_torsional_stress(
+        torque=_q("1000 N*m"), width=_q("50 mm"), thickness=_q("50 mm")
+    )
+    assert square.to("MPa").magnitude == pytest.approx(4.8 * 1000 / 0.05**3 / 1e6, rel=1e-9)
+
+    with pytest.raises(ValueError, match="positive"):
+        rectangular_bar_torsional_stress(
+            torque=_q("1000 N*m"), width=_q("0 mm"), thickness=_q("20 mm")
+        )
+
+
 def test_warping_constant_doubly_symmetric_matches_aisc_manual():
     from anvilate.analysis import warping_constant_doubly_symmetric
 

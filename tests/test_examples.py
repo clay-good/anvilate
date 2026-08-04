@@ -532,6 +532,15 @@ def test_beam_flexural_compactness_example_slender_web_reclassifies():
     assert c["plate_girder"] == "slender"
 
 
+def test_rectangular_torsion_bar_stress_example_flat_bar_loses():
+    namespace = runpy.run_path(str(_EXAMPLES / "rectangular_torsion_bar_stress.py"))
+    b = namespace["bar_stresses"]()
+    # The flat bar carries higher stress and more twist than the equal-area square.
+    assert b["flat_100x10mm"]["stress_mpa"] > b["square_31.6mm"]["stress_mpa"]
+    assert b["flat_100x10mm"]["twist_deg"] > b["square_31.6mm"]["twist_deg"]
+    assert b["flat_100x10mm"]["stress_mpa"] == pytest.approx(64.0, abs=1.0)
+
+
 def test_wide_flange_torsional_properties_example_matches_manual():
     namespace = runpy.run_path(str(_EXAMPLES / "wide_flange_torsional_properties.py"))
     t = namespace["w18x50_torsion"]()
