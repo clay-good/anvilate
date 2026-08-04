@@ -30,6 +30,7 @@ __all__ = [
     "darcy_weisbach_head_loss",
     "hazen_williams_flow_capacity",
     "hazen_williams_head_loss",
+    "hydraulic_diameter",
     "joukowsky_surge_pressure",
     "minor_loss_head",
     "pipe_pressure_drop",
@@ -218,6 +219,25 @@ def hazen_williams_flow_capacity(
     numerator = h_f * roughness_coefficient**_HW_FLOW_EXPONENT * d**_HW_DIAMETER_EXPONENT
     q = (numerator / (_HW_CONSTANT * lo)) ** (1.0 / _HW_FLOW_EXPONENT)
     return Quantity(magnitude=q, unit="m**3/s")
+
+
+def hydraulic_diameter(*, flow_area: Quantity, wetted_perimeter: Quantity) -> Quantity:
+    """The hydraulic diameter D_h = 4·A/P of a non-circular duct.
+
+    The Darcy-Weisbach and Reynolds-number relations are written for round pipe, but they carry over
+    to a rectangular HVAC duct, an annulus, or any other closed non-circular section if the diameter
+    is replaced by the hydraulic diameter D_h = 4·A/P — four times the ``flow_area`` A over the
+    ``wetted_perimeter`` P. For a full circular pipe it reduces exactly to the pipe diameter. Feed
+    the result in as the ``diameter`` of :func:`reynolds_number` and
+    :func:`darcy_weisbach_head_loss` to size a non-round duct. Returns D_h in meters.
+    """
+    _check(flow_area, "[area]", "flow_area")
+    _check(wetted_perimeter, "[length]", "wetted_perimeter")
+    a = flow_area.to("m**2").magnitude
+    p = wetted_perimeter.to("m").magnitude
+    if a <= 0 or p <= 0:
+        raise ValueError("flow_area and wetted_perimeter must be positive")
+    return Quantity(magnitude=4.0 * a / p, unit="m")
 
 
 def joukowsky_surge_pressure(

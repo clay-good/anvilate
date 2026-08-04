@@ -14383,6 +14383,24 @@ def test_darcy_weisbach_head_loss_and_pressure_drop():
         )
 
 
+def test_hydraulic_diameter_non_circular_and_circular_limit():
+    import math
+
+    from anvilate.analysis import hydraulic_diameter
+
+    # Rectangular duct 0.4 x 0.2 m: A=0.08, P=1.2, D_h = 4A/P = 0.267 m.
+    dh = hydraulic_diameter(flow_area=_q("0.08 m**2"), wetted_perimeter=_q("1.2 m"))
+    assert dh.to("m").magnitude == pytest.approx(4 * 0.08 / 1.2, rel=1e-9)
+    # For a full circular pipe it reduces exactly to the pipe diameter.
+    d = 0.3
+    circ = hydraulic_diameter(
+        flow_area=_q(f"{math.pi * d**2 / 4} m**2"), wetted_perimeter=_q(f"{math.pi * d} m")
+    )
+    assert circ.to("m").magnitude == pytest.approx(d, rel=1e-9)
+    with pytest.raises(ValueError, match="positive"):
+        hydraulic_diameter(flow_area=_q("0 m**2"), wetted_perimeter=_q("1.2 m"))
+
+
 def test_joukowsky_surge_pressure_and_wave_period():
     from anvilate.analysis import joukowsky_surge_pressure, surge_wave_period
 
