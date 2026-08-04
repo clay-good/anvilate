@@ -130,8 +130,9 @@ modules:
   pump must overcome, and the empirical Hazen-Williams head loss and flow capacity for
   water mains
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
-  radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), and the Froude
-  number and rectangular critical depth that classify the flow as sub- or supercritical
+  radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), the Froude number
+  and rectangular critical depth that classify the flow as sub- or supercritical, and the
+  flow geometry of trapezoidal (canal) and partially-full circular (culvert) sections
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -853,11 +854,13 @@ from .o_ring import (
     o_ring_stretch_fraction,
 )
 from .open_channel import (
+    circular_channel_properties,
     critical_depth_rectangular,
     froude_number,
     hydraulic_radius,
     manning_flow_rate,
     manning_flow_velocity,
+    trapezoidal_channel_properties,
 )
 from .pipe_flow import (
     darcy_friction_factor,
@@ -1217,6 +1220,7 @@ __all__ = [
     "seepage_velocity",
     "terzaghi_bearing_capacity",
     "vertical_stress_increase_2to1",
+    "circular_channel_properties",
     "critical_depth_rectangular",
     "froude_number",
     "hydraulic_radius",
@@ -1230,6 +1234,7 @@ __all__ = [
     "pump_shaft_power",
     "pump_specific_speed",
     "manning_flow_velocity",
+    "trapezoidal_channel_properties",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
     "hazen_williams_flow_capacity",

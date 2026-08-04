@@ -13836,6 +13836,47 @@ def test_hazen_williams_head_loss_and_capacity_round_trip():
         )
 
 
+def test_trapezoidal_channel_properties():
+    import math
+
+    from anvilate.analysis import trapezoidal_channel_properties
+
+    # b=3, y=1, z=1.5: A=(3+1.5)*1=4.5, P=3+2*sqrt(1+2.25)=6.606, T=3+3=6.
+    g = trapezoidal_channel_properties(bottom_width=_q("3 m"), depth=_q("1 m"), side_slope=1.5)
+    assert g["area"].to("m**2").magnitude == pytest.approx(4.5, rel=1e-9)
+    assert g["wetted_perimeter"].to("m").magnitude == pytest.approx(
+        3 + 2 * math.sqrt(1 + 1.5**2), rel=1e-9
+    )
+    assert g["top_width"].to("m").magnitude == pytest.approx(6.0, rel=1e-9)
+    assert g["hydraulic_radius"].to("m").magnitude == pytest.approx(
+        4.5 / (3 + 2 * math.sqrt(1 + 1.5**2)), rel=1e-9
+    )
+    # A rectangular channel is the z=0 special case: P = b + 2y, A = b*y.
+    rect = trapezoidal_channel_properties(bottom_width=_q("3 m"), depth=_q("1 m"), side_slope=0.0)
+    assert rect["wetted_perimeter"].to("m").magnitude == pytest.approx(5.0, rel=1e-9)
+    assert rect["area"].to("m**2").magnitude == pytest.approx(3.0, rel=1e-9)
+    with pytest.raises(ValueError, match="side_slope"):
+        trapezoidal_channel_properties(bottom_width=_q("3 m"), depth=_q("1 m"), side_slope=-1.0)
+
+
+def test_circular_channel_properties_half_full():
+    import math
+
+    from anvilate.analysis import circular_channel_properties
+
+    # Half-full pipe (y = D/2): R reduces to the tidy D/4, A = half the full area.
+    g = circular_channel_properties(diameter=_q("1 m"), depth=_q("0.5 m"))
+    assert g["hydraulic_radius"].to("m").magnitude == pytest.approx(0.25, rel=1e-9)
+    assert g["area"].to("m**2").magnitude == pytest.approx(math.pi * 0.5**2 / 2, rel=1e-9)
+    assert g["wetted_perimeter"].to("m").magnitude == pytest.approx(math.pi * 0.5, rel=1e-9)
+    assert g["top_width"].to("m").magnitude == pytest.approx(1.0, rel=1e-9)  # full diameter
+    # A shallower flow has a smaller area and a narrower top width than half-full.
+    shallow = circular_channel_properties(diameter=_q("1 m"), depth=_q("0.25 m"))
+    assert shallow["area"].to("m**2").magnitude < g["area"].to("m**2").magnitude
+    with pytest.raises(ValueError, match="free surface"):
+        circular_channel_properties(diameter=_q("1 m"), depth=_q("1 m"))
+
+
 def test_manning_open_channel_flow():
     from anvilate.analysis import (
         hydraulic_radius,

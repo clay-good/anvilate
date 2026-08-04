@@ -20,16 +20,18 @@ channel carrying unit discharge q = Q/b. Inputs and outputs are dimension-checke
 
 from __future__ import annotations
 
-from math import sqrt
+from math import acos, sin, sqrt
 
 from ..units import Quantity
 
 __all__ = [
+    "circular_channel_properties",
     "critical_depth_rectangular",
     "froude_number",
     "hydraulic_radius",
     "manning_flow_rate",
     "manning_flow_velocity",
+    "trapezoidal_channel_properties",
 ]
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
@@ -143,6 +145,79 @@ def critical_depth_rectangular(*, flow_rate: Quantity, channel_width: Quantity) 
         raise ValueError("flow_rate and channel_width must be positive")
     unit_discharge = q_total / b
     return Quantity(magnitude=(unit_discharge**2 / _GRAVITY) ** (1.0 / 3.0), unit="m")
+
+
+def trapezoidal_channel_properties(
+    *,
+    bottom_width: Quantity,
+    depth: Quantity,
+    side_slope: float,
+) -> dict[str, Quantity]:
+    """The flow geometry of a trapezoidal channel — the shape most earthen canals actually are.
+
+    A trapezoidal section with ``bottom_width`` b, flow ``depth`` y, and ``side_slope`` z (the
+    horizontal run per unit rise of the banks, z:1) has area A = (b + z·y)·y, wetted perimeter
+    P = b + 2·y·√(1 + z²), hydraulic radius R = A/P, and top width T = b + 2·z·y. A rectangular
+    channel is the z = 0 case and a triangular one the b = 0 case. Feed the area and hydraulic
+    radius to :func:`manning_flow_rate`, and the top width and area to :func:`froude_number` as the
+    hydraulic depth A/T. Returns a dict with keys ``"area"``, ``"wetted_perimeter"``,
+    ``"hydraulic_radius"``, ``"top_width"``.
+    """
+    _check(bottom_width, "[length]", "bottom_width")
+    _check(depth, "[length]", "depth")
+    b = bottom_width.to("m").magnitude
+    y = depth.to("m").magnitude
+    if b < 0 or y <= 0:
+        raise ValueError("bottom_width must be non-negative and depth positive")
+    if side_slope < 0:
+        raise ValueError("side_slope must be non-negative")
+    area = (b + side_slope * y) * y
+    perimeter = b + 2.0 * y * sqrt(1.0 + side_slope**2)
+    if area <= 0 or perimeter <= 0:
+        raise ValueError("a trapezoidal channel needs a positive bottom width or side slope")
+    top_width = b + 2.0 * side_slope * y
+    return {
+        "area": Quantity(magnitude=area, unit="m**2"),
+        "wetted_perimeter": Quantity(magnitude=perimeter, unit="m"),
+        "hydraulic_radius": Quantity(magnitude=area / perimeter, unit="m"),
+        "top_width": Quantity(magnitude=top_width, unit="m"),
+    }
+
+
+def circular_channel_properties(
+    *,
+    diameter: Quantity,
+    depth: Quantity,
+) -> dict[str, Quantity]:
+    """The flow geometry of a partially-full circular pipe — the culvert and sewer case.
+
+    A circular pipe of ``diameter`` D running at a flow ``depth`` y (0 < y < D) is filled to a
+    sector subtending an angle θ = 2·arccos(1 − 2y/D). The flow area is A = (r²/2)(θ − sin θ), the
+    wetted perimeter is the arc P = r·θ, and R = A/P — which for a half-full pipe reduces to the
+    tidy D/4. Feed A and R to :func:`manning_flow_rate`; note a circular channel carries its
+    *maximum* flow slightly below full (near 0.94·D), because the last sliver of area adds more
+    wetted perimeter than flow. Returns a dict with keys ``"area"``, ``"wetted_perimeter"``,
+    ``"hydraulic_radius"``, ``"top_width"``.
+    """
+    _check(diameter, "[length]", "diameter")
+    _check(depth, "[length]", "depth")
+    d = diameter.to("m").magnitude
+    y = depth.to("m").magnitude
+    if d <= 0:
+        raise ValueError("diameter must be positive")
+    if not 0.0 < y < d:
+        raise ValueError("depth must be between 0 and the diameter (a free surface)")
+    r = d / 2.0
+    theta = 2.0 * acos(1.0 - 2.0 * y / d)
+    area = (r**2 / 2.0) * (theta - sin(theta))
+    perimeter = r * theta
+    top_width = 2.0 * sqrt(y * (d - y))
+    return {
+        "area": Quantity(magnitude=area, unit="m**2"),
+        "wetted_perimeter": Quantity(magnitude=perimeter, unit="m"),
+        "hydraulic_radius": Quantity(magnitude=area / perimeter, unit="m"),
+        "top_width": Quantity(magnitude=top_width, unit="m"),
+    }
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

@@ -274,6 +274,15 @@ def test_drainage_channel_capacity_example_passes_and_is_subcritical():
     assert c["critical_depth_m"] == pytest.approx(0.67, abs=0.02)
 
 
+def test_trapezoidal_canal_capacity_example_carries_and_is_subcritical():
+    namespace = runpy.run_path(str(_EXAMPLES / "trapezoidal_canal_capacity.py"))
+    c = namespace["canal_capacity"]()
+    # The canal carries more than its 5 m3/s design flow, subcritically.
+    assert c["discharge_m3s"] > 5.0
+    assert c["discharge_m3s"] == pytest.approx(6.2, abs=0.2)
+    assert c["froude"] < 1.0
+
+
 def test_pump_selection_from_line_example_chains_to_a_motor():
     namespace = runpy.run_path(str(_EXAMPLES / "pump_selection_from_line.py"))
     d = namespace["pump_duty"]()
