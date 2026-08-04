@@ -88,6 +88,7 @@ __all__ = [
     "aisc_rectangular_hss_flexural_strength",
     "aisc_minor_axis_flexural_strength",
     "aisc_plate_girder_bending_factor",
+    "aisc_tension_field_shear_strength",
     "aisc_web_shear_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -938,6 +939,61 @@ def aisc_plate_girder_bending_factor(
     limit = 5.7 * (e / fy) ** 0.5
     r_pg = 1.0 - (a_w / (1200.0 + 300.0 * a_w)) * (hc / tw - limit)
     return min(r_pg, 1.0)
+
+
+def aisc_tension_field_shear_strength(
+    *,
+    web_area: Quantity,
+    web_depth: Quantity,
+    web_thickness: Quantity,
+    stiffener_spacing: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The AISC 360 §G2.2 shear strength of a stiffened girder web with tension-field action.
+
+    Once a transversely-stiffened web buckles in shear, it does not fail — the panel acts
+    like a Pratt truss, the buckled web carrying diagonal tension while the stiffeners take
+    compression. §G2.2 credits that post-buckling reserve:
+    V_n = 0.6·F_y·A_w·[C_v2 + (1 − C_v2)/(1.15·√(1 + (a/h)²))], where the second term is the
+    tension-field bonus over the plain buckling strength 0.6·F_y·A_w·C_v2. ``web_area`` A_w,
+    ``web_depth`` h (clear web between flanges), ``web_thickness`` t_w, ``stiffener_spacing``
+    a (clear distance between transverse stiffeners), ``yield_strength`` F_y, and
+    ``elastic_modulus`` E. The stiffener spacing sets both the panel aspect ratio a/h and the
+    plate buckling coefficient k_v = 5 + 5/(a/h)², from which the web shear coefficient C_v2
+    follows. Closer stiffeners (small a/h) mobilize more tension field. Tension-field action
+    is not permitted for end panels or when the flanges are too small to anchor it (§G2.2(b));
+    check those limits before relying on this. Returns V_n in kN.
+    """
+    if not web_area.has_dimension("[length]**2"):
+        raise ValueError("web_area must be a [length]**2 quantity")
+    _require(web_depth, "[length]", "web_depth")
+    _require(web_thickness, "[length]", "web_thickness")
+    _require(stiffener_spacing, "[length]", "stiffener_spacing")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    a_w = web_area.to("mm**2").magnitude
+    h = web_depth.to("mm").magnitude
+    tw = web_thickness.to("mm").magnitude
+    a = stiffener_spacing.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if a_w <= 0 or h <= 0 or tw <= 0 or a <= 0 or fy <= 0 or e <= 0:
+        raise ValueError("all inputs must be positive")
+    aspect = a / h
+    kv = 5.0 + 5.0 / aspect**2
+    h_tw = h / tw
+    limit_1 = 1.10 * (kv * e / fy) ** 0.5
+    limit_2 = 1.37 * (kv * e / fy) ** 0.5
+    if h_tw <= limit_1:
+        c_v2 = 1.0
+    elif h_tw <= limit_2:
+        c_v2 = limit_1 / h_tw
+    else:
+        c_v2 = 1.51 * kv * e / (h_tw**2 * fy)
+    tension_field = c_v2 + (1.0 - c_v2) / (1.15 * (1.0 + aspect**2) ** 0.5)
+    v_n = 0.6 * fy * a_w * tension_field
+    return Quantity(magnitude=v_n / 1000.0, unit="kN")
 
 
 def aisc_minor_axis_flexural_strength(

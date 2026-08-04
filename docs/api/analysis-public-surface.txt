@@ -54,6 +54,7 @@ beam.i_section_second_moment
 beam.aisc_bearing_length_for_web_yielding
 beam.aisc_minor_axis_flexural_strength
 beam.aisc_plate_girder_bending_factor
+beam.aisc_tension_field_shear_strength
 beam.aisc_rectangular_hss_flexural_strength
 beam.aisc_rectangular_hss_shear_strength
 beam.aisc_round_hss_flexural_strength

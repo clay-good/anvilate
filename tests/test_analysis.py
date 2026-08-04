@@ -13617,6 +13617,37 @@ def test_aisc_rectangular_hss_flexural_strength_governing_limit_state():
         )
 
 
+def test_aisc_tension_field_shear_recovers_post_buckling_reserve():
+    from anvilate.analysis import aisc_tension_field_shear_strength, aisc_web_shear_strength
+
+    tf = aisc_tension_field_shear_strength(
+        web_area=_q("12000 mm**2"),
+        web_depth=_q("1500 mm"),
+        web_thickness=_q("8 mm"),
+        stiffener_spacing=_q("2250 mm"),
+        yield_strength=_q("345 MPa"),
+        elastic_modulus=_q("200000 MPa"),
+    )
+    # Recompute the closed form: a/h = 1.5, k_v = 5 + 5/1.5^2, C_v2 third branch,
+    # then V_n = 0.6*Fy*Aw*[C_v2 + (1-C_v2)/(1.15*sqrt(1+(a/h)^2))].
+    ah = 1.5
+    kv = 5 + 5 / ah**2
+    htw = 1500 / 8
+    c_v2 = 1.51 * kv * 200000 / (htw**2 * 345)
+    factor = c_v2 + (1 - c_v2) / (1.15 * (1 + ah**2) ** 0.5)
+    assert tf.to("kN").magnitude == pytest.approx(0.6 * 345 * 12000 * factor / 1000, rel=1e-9)
+    # The tension field is a large gain over the plain (no-stiffener) buckling strength
+    # of the same slender web.
+    plain = aisc_web_shear_strength(
+        overall_depth=_q("1500 mm"),
+        web_thickness=_q("8 mm"),
+        clear_web_depth=_q("1500 mm"),
+        web_yield=_q("345 MPa"),
+        elastic_modulus=_q("200000 MPa"),
+    )
+    assert tf.to("kN").magnitude > plain.to("kN").magnitude
+
+
 def test_aisc_plate_girder_bending_factor_penalizes_slender_webs():
     from anvilate.analysis import aisc_plate_girder_bending_factor
 
