@@ -13712,6 +13712,30 @@ def test_aisc_plastic_bracing_limit_lp():
     assert softer.to("mm").magnitude > lp.to("mm").magnitude
 
 
+def test_aisc_effective_radius_of_gyration_matches_manual_w18x50():
+    from anvilate.analysis import aisc_effective_radius_of_gyration
+
+    # W18x50: I_y=40.1 in^4, S_x=88.9 in^3, h_o=17.4 in -> r_ts = 1.98 in (AISC Manual).
+    r_ts = aisc_effective_radius_of_gyration(
+        minor_second_moment=_q("40.1 in**4"),
+        elastic_section_modulus=_q("88.9 in**3"),
+        flange_centroid_distance=_q("17.4 in"),
+    )
+    assert r_ts.to("in").magnitude == pytest.approx(1.98, abs=0.01)
+    # It feeds the L_r limit: computing r_ts then L_r reproduces the manual 16.9 ft.
+    from anvilate.analysis import aisc_inelastic_ltb_limit
+
+    l_r = aisc_inelastic_ltb_limit(
+        effective_radius_of_gyration=r_ts,
+        torsion_constant=_q("1.24 in**4"),
+        elastic_section_modulus=_q("88.9 in**3"),
+        flange_centroid_distance=_q("17.4 in"),
+        yield_strength=_q("50 ksi"),
+        elastic_modulus=_q("29000 ksi"),
+    )
+    assert l_r.to("ft").magnitude == pytest.approx(16.9, abs=0.1)
+
+
 def test_aisc_inelastic_ltb_limit_matches_manual_w18x50():
     from anvilate.analysis import aisc_inelastic_ltb_limit
 

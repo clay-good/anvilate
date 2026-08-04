@@ -36,6 +36,7 @@ __all__ = [
     "rankine_gordon_stress",
     "aisc_flexural_buckling_stress",
     "aisc_plastic_bracing_limit",
+    "aisc_effective_radius_of_gyration",
     "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
     "aisc_beam_column_interaction",
@@ -236,6 +237,36 @@ def aisc_plastic_bracing_limit(
     if ry <= 0 or fy <= 0 or e <= 0:
         raise ValueError("all inputs must be positive")
     return Quantity(magnitude=1.76 * ry * sqrt(e / fy), unit="mm")
+
+
+def aisc_effective_radius_of_gyration(
+    *,
+    minor_second_moment: Quantity,
+    elastic_section_modulus: Quantity,
+    flange_centroid_distance: Quantity,
+) -> Quantity:
+    """The AISC 360 §F2 effective radius of gyration r_ts of a doubly-symmetric I-shape.
+
+    r_ts is the section property that governs lateral-torsional buckling, feeding the
+    inelastic-LTB limit L_r (:func:`aisc_inelastic_ltb_limit`). Its general definition
+    r_ts² = √(I_y·C_w)/S_x collapses, for a doubly-symmetric I whose warping constant is
+    C_w = I_y·h_o²/4, to the clean r_ts = √(I_y·h_o/(2·S_x)). ``minor_second_moment`` I_y is
+    the weak-axis second moment, ``elastic_section_modulus`` S_x the strong-axis section
+    modulus, and ``flange_centroid_distance`` h_o the distance between the flange centroids.
+    r_ts sits a little above the flange's own radius of gyration; it is what turns the
+    section geometry into the L_r brace-spacing limit. Returns r_ts in mm.
+    """
+    if not minor_second_moment.has_dimension("[length]**4"):
+        raise ValueError("minor_second_moment must be a [length]**4 quantity")
+    if not elastic_section_modulus.has_dimension("[length]**3"):
+        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+    _require(flange_centroid_distance, "[length]", "flange_centroid_distance")
+    iy = minor_second_moment.to("mm**4").magnitude
+    sx = elastic_section_modulus.to("mm**3").magnitude
+    ho = flange_centroid_distance.to("mm").magnitude
+    if iy <= 0 or sx <= 0 or ho <= 0:
+        raise ValueError("all inputs must be positive")
+    return Quantity(magnitude=sqrt(iy * ho / (2.0 * sx)), unit="mm")
 
 
 def aisc_inelastic_ltb_limit(

@@ -150,6 +150,7 @@ column.aisc_inelastic_ltb_limit
 column.aisc_beam_column_interaction
 column.aisc_effective_length_factor_braced
 column.aisc_effective_length_factor_sway
+column.aisc_effective_radius_of_gyration
 column.aisc_inelastic_ltb_moment
 column.aisc_plastic_bracing_limit
 column.euler_buckling_load
