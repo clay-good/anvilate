@@ -33,6 +33,7 @@ __all__ = [
     "three_phase_power",
     "transformer_available_fault_current",
     "transformer_full_load_current",
+    "voltage_drop_single_phase",
     "voltage_drop_three_phase",
 ]
 
@@ -143,6 +144,42 @@ def voltage_drop_three_phase(
     cos_phi = power_factor
     sin_phi = sqrt(max(0.0, 1.0 - power_factor**2))
     return Quantity(magnitude=_SQRT3 * i * (r * cos_phi + x * sin_phi), unit="V")
+
+
+def voltage_drop_single_phase(
+    *,
+    load_current: Quantity,
+    resistance: Quantity,
+    power_factor: float = 1.0,
+    reactance: Quantity | None = None,
+) -> Quantity:
+    """The voltage drop along a single-phase or DC two-wire run, ΔV = 2·I·(R·cosφ + X·sinφ).
+
+    The sibling of :func:`voltage_drop_three_phase` for a two-wire circuit — a single-phase branch,
+    a split-phase load, or a DC feeder. Here the current flows out and returns over the *same* run
+    length, so the drop is twice the one-way conductor loss, ΔV = 2·I·(R·cosφ + X·sinφ), not the
+    √3 of a balanced three-phase line. ``load_current`` I, the one-way conductor ``resistance`` R
+    (from :func:`conductor_resistance`), the ``power_factor`` cosφ (1 for DC or a resistive load),
+    and any conductor ``reactance`` X. Kept under ~3% of nominal, it keeps the load's terminal
+    voltage in tolerance. Returns the voltage drop in volts.
+    """
+    _check(load_current, "[current]", "load_current")
+    _check(resistance, "[resistance]", "resistance")
+    i = load_current.to("A").magnitude
+    r = resistance.to("ohm").magnitude
+    if i <= 0 or r <= 0:
+        raise ValueError("load_current and resistance must be positive")
+    if not 0.0 < power_factor <= 1.0:
+        raise ValueError(f"power_factor must be in (0, 1]; got {power_factor}")
+    x = 0.0
+    if reactance is not None:
+        _check(reactance, "[resistance]", "reactance")
+        x = reactance.to("ohm").magnitude
+        if x < 0:
+            raise ValueError("reactance must be non-negative")
+    cos_phi = power_factor
+    sin_phi = sqrt(max(0.0, 1.0 - power_factor**2))
+    return Quantity(magnitude=2.0 * i * (r * cos_phi + x * sin_phi), unit="V")
 
 
 def apparent_power_three_phase(*, line_voltage: Quantity, line_current: Quantity) -> Quantity:

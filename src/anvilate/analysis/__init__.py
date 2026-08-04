@@ -764,6 +764,7 @@ from .electrical import (
     three_phase_power,
     transformer_available_fault_current,
     transformer_full_load_current,
+    voltage_drop_single_phase,
     voltage_drop_three_phase,
 )
 from .energy_storage import (
@@ -1603,6 +1604,7 @@ __all__ = [
     "transformer_available_fault_current",
     "ground_rod_resistance",
     "parallel_ground_electrodes_resistance",
+    "voltage_drop_single_phase",
     "voltage_drop_three_phase",
     "battery_bank_capacity",
     "usable_battery_energy",

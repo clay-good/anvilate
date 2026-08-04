@@ -937,6 +937,15 @@ def test_motor_feeder_voltage_drop_example_bigger_conductor_passes():
     assert f["small_drop_percent"] > f["large_drop_percent"]
 
 
+def test_dc_low_voltage_run_example_small_cable_browns_out():
+    namespace = runpy.run_path(str(_EXAMPLES / "dc_low_voltage_run.py"))
+    f = namespace["dc_run_check"]()
+    # On 24 V DC the small cable drops a crippling ~16%; the fat one clears the 3% limit.
+    assert f["small_drop_percent"] == pytest.approx(15.8, abs=0.5)
+    assert f["small_drop_percent"] > 3.0
+    assert f["large_drop_percent"] < 3.0
+
+
 def test_sign_wind_drag_example_gust_square_law():
     namespace = runpy.run_path(str(_EXAMPLES / "sign_wind_drag.py"))
     w = namespace["sign_wind_load"]()

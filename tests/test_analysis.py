@@ -13780,6 +13780,25 @@ def test_electrical_three_phase_power_current_and_voltage_drop():
         three_phase_power(line_voltage=_q("400 V"), line_current=_q("50 A"), power_factor=1.5)
 
 
+def test_electrical_single_phase_voltage_drop_uses_factor_two():
+    from anvilate.analysis import voltage_drop_single_phase, voltage_drop_three_phase
+
+    r = _q("0.5 ohm")
+    # DC (pf=1, no reactance): dV = 2*I*R = 2*20*0.5 = 20 V — the out-and-back factor of 2.
+    dc = voltage_drop_single_phase(load_current=_q("20 A"), resistance=r)
+    assert dc.to("V").magnitude == pytest.approx(2 * 20 * 0.5, rel=1e-12)
+    # The three-phase form on the same current and resistance uses sqrt(3), not 2 — a difference.
+    tp = voltage_drop_three_phase(line_current=_q("20 A"), resistance=r, power_factor=1.0)
+    assert dc.to("V").magnitude > tp.to("V").magnitude
+    # Reactance adds the X*sin(phi) term at a lagging power factor.
+    ac = voltage_drop_single_phase(
+        load_current=_q("30 A"), resistance=_q("0.2 ohm"), power_factor=0.8, reactance=_q("0.1 ohm")
+    )
+    assert ac.to("V").magnitude == pytest.approx(2 * 30 * (0.2 * 0.8 + 0.1 * 0.6), rel=1e-9)
+    with pytest.raises(ValueError, match="load_current and resistance"):
+        voltage_drop_single_phase(load_current=_q("0 A"), resistance=r)
+
+
 def test_electrical_apparent_power_and_pf_correction():
     import math
 
