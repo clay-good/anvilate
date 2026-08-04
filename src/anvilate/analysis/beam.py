@@ -86,6 +86,7 @@ __all__ = [
     "aisc_round_hss_shear_strength",
     "aisc_rectangular_hss_shear_strength",
     "aisc_rectangular_hss_flexural_strength",
+    "aisc_minor_axis_flexural_strength",
     "aisc_web_shear_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -892,6 +893,61 @@ def aisc_rectangular_hss_flexural_strength(
         m_wlb = m_p - (m_p - m_yield) * (0.305 * h_t * (fy / e) ** 0.5 - 0.738)
         m_n = min(m_n, m_wlb)
     m_n = min(m_n, m_p)
+    return Quantity(magnitude=m_n / 1.0e6, unit="kN*m")
+
+
+def aisc_minor_axis_flexural_strength(
+    *,
+    flange_width: Quantity,
+    flange_thickness: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+    plastic_section_modulus: Quantity,
+    elastic_section_modulus: Quantity,
+) -> Quantity:
+    """The AISC 360 §F6 minor-axis flexural strength of an I-shape or channel.
+
+    Bending an I-shape about its weak axis — the other half of biaxial bending, or a
+    channel laid flat — has no lateral-torsional buckling, so §F6 weighs only yielding
+    against flange local buckling. Yielding gives M_p = F_y·Z_y but capped at 1.6·F_y·S_y
+    so the plastic shape factor cannot run away (§F6.1). A noncompact flange interpolates
+    linearly down to 0.7·F_y·S_y, M_n = M_p − (M_p − 0.7·F_y·S_y)·(λ − λ_pf)/(λ_rf − λ_pf),
+    and a slender flange buckles elastically at M_n = 0.69·E/λ²·S_y (§F6.2), where the
+    flange slenderness λ = b_f/(2·t_f) is read against λ_pf = 0.38·√(E/F_y) and
+    λ_rf = 1.0·√(E/F_y). ``flange_width`` b_f, ``flange_thickness`` t_f,
+    ``yield_strength`` F_y, ``elastic_modulus`` E, ``plastic_section_modulus`` Z_y, and
+    ``elastic_section_modulus`` S_y are all about the minor axis. Returns M_n in kN·m.
+    """
+    _require(flange_width, "[length]", "flange_width")
+    _require(flange_thickness, "[length]", "flange_thickness")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not plastic_section_modulus.has_dimension("[length]**3"):
+        raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
+    if not elastic_section_modulus.has_dimension("[length]**3"):
+        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+    bf = flange_width.to("mm").magnitude
+    tf = flange_thickness.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    zy = plastic_section_modulus.to("mm**3").magnitude
+    sy = elastic_section_modulus.to("mm**3").magnitude
+    if bf <= 0 or tf <= 0 or fy <= 0 or e <= 0 or zy <= 0 or sy <= 0:
+        raise ValueError(
+            "flange_width, flange_thickness, yield_strength, elastic_modulus, and "
+            "the section moduli must all be positive"
+        )
+    lam = bf / (2.0 * tf)
+    root = (e / fy) ** 0.5
+    lambda_pf = 0.38 * root
+    lambda_rf = 1.0 * root
+    m_p = min(fy * zy, 1.6 * fy * sy)
+    if lam <= lambda_pf:
+        m_n = m_p
+    elif lam <= lambda_rf:
+        m_n = m_p - (m_p - 0.7 * fy * sy) * (lam - lambda_pf) / (lambda_rf - lambda_pf)
+    else:
+        m_n = 0.69 * e / lam**2 * sy
     return Quantity(magnitude=m_n / 1.0e6, unit="kN*m")
 
 

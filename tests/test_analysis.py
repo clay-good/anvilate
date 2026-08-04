@@ -13336,3 +13336,38 @@ def test_aisc_rectangular_hss_flexural_strength_governing_limit_state():
         aisc_rectangular_hss_flexural_strength(
             flange_flat_width=_q("170 mm"), web_flat_height=_q("1400 mm"), **base
         )
+
+
+def test_aisc_minor_axis_flexural_strength_yield_cap_and_flb():
+    from anvilate.analysis import aisc_minor_axis_flexural_strength
+
+    E, Fy, Sy, Zy = 200000.0, 345.0, 0.5e6, 0.78e6
+    base = {
+        "yield_strength": _q(f"{Fy} MPa"),
+        "elastic_modulus": _q(f"{E} MPa"),
+        "plastic_section_modulus": _q(f"{Zy} mm**3"),
+        "elastic_section_modulus": _q(f"{Sy} mm**3"),
+    }
+    root = (E / Fy) ** 0.5
+    # Compact flange (lambda = b_f/2t_f = 5 < lambda_pf = 9.15): M_p = F_y*Z_y, under the cap.
+    mp = min(Fy * Zy, 1.6 * Fy * Sy) / 1e6
+    compact = aisc_minor_axis_flexural_strength(
+        flange_width=_q("200 mm"), flange_thickness=_q("20 mm"), **base
+    )
+    assert compact.to("kN*m").magnitude == pytest.approx(mp, rel=1e-9)
+    # Noncompact flange (lambda = 15): linear interpolation toward 0.7*F_y*S_y.
+    nc = aisc_minor_axis_flexural_strength(
+        flange_width=_q("300 mm"), flange_thickness=_q("10 mm"), **base
+    )
+    lam = 15.0
+    expect = (
+        Fy * Zy - (Fy * Zy - 0.7 * Fy * Sy) * (lam - 0.38 * root) / (root - 0.38 * root)
+    ) / 1e6
+    # note M_p uncapped here (269<276 cap) so use F_y*Z_y as M_p
+    assert nc.to("kN*m").magnitude == pytest.approx(expect, rel=1e-9)
+    assert 0.7 * Fy * Sy / 1e6 < nc.to("kN*m").magnitude < mp
+    # Slender flange (lambda = 25 > lambda_rf = 24.08): elastic buckling F_cr = 0.69E/lambda^2.
+    slender = aisc_minor_axis_flexural_strength(
+        flange_width=_q("500 mm"), flange_thickness=_q("10 mm"), **base
+    )
+    assert slender.to("kN*m").magnitude == pytest.approx(0.69 * E / 25**2 * Sy / 1e6, rel=1e-9)
