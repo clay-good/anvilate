@@ -240,6 +240,7 @@ curved_beam.thin_ring_diametral_deflection
 curved_beam.thin_ring_max_moment
 curved_beam.trapezoidal_curved_beam_stress
 drag.drag_force
+drag.jet_impact_force
 drag.terminal_velocity
 dynamics.STANDARD_GRAVITY
 dynamics.annular_disc_polar_mass_moment

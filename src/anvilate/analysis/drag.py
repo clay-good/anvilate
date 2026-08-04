@@ -21,6 +21,7 @@ from ..units import Quantity
 
 __all__ = [
     "drag_force",
+    "jet_impact_force",
     "terminal_velocity",
 ]
 
@@ -84,6 +85,39 @@ def terminal_velocity(
     if drag_coefficient <= 0:
         raise ValueError("drag_coefficient must be positive")
     return Quantity(magnitude=sqrt(2.0 * w / (rho * drag_coefficient * a)), unit="m/s")
+
+
+def jet_impact_force(
+    *,
+    density: Quantity,
+    flow_rate: Quantity,
+    jet_velocity: Quantity,
+    deflection_angle: float = 90.0,
+) -> Quantity:
+    """The force a fluid jet delivers to a surface it strikes, F = ρ·Q·V·(1 − cos θ).
+
+    Where drag is the force a stream exerts on a body immersed *in* it, this is the force a confined
+    jet delivers *to* a surface by giving up its momentum: F = ρ·Q·V·(1 − cos θ). ``density`` ρ,
+    volumetric ``flow_rate`` Q, and ``jet_velocity`` V set the momentum flux ρ·Q·V, and
+    ``deflection_angle`` θ is the angle the surface turns the jet through — 90° for a flat plate
+    that spreads the jet sideways (F = ρQV, the default) and 180° for a bucket that reverses it
+    (F = 2ρQV, the Pelton-wheel case that doubles the force). This is the reaction of a fire-hose
+    nozzle,
+    the thrust on a turbine bucket, or the kick of a cutting jet. Returns the force in N.
+    """
+    from math import cos, radians
+
+    _check(density, "[mass]/[length]**3", "density")
+    _check(flow_rate, "[length]**3/[time]", "flow_rate")
+    _check(jet_velocity, "[length]/[time]", "jet_velocity")
+    rho = density.to("kg/m**3").magnitude
+    q = flow_rate.to("m**3/s").magnitude
+    v = jet_velocity.to("m/s").magnitude
+    if rho <= 0 or q <= 0 or v <= 0:
+        raise ValueError("density, flow_rate, and jet_velocity must be positive")
+    if not 0.0 <= deflection_angle <= 180.0:
+        raise ValueError(f"deflection_angle must be in [0, 180] degrees; got {deflection_angle}")
+    return Quantity(magnitude=rho * q * v * (1.0 - cos(radians(deflection_angle))), unit="N")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

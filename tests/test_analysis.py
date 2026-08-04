@@ -13147,6 +13147,43 @@ def test_drag_force_and_terminal_velocity():
         )
 
 
+def test_jet_impact_force_plate_and_pelton():
+    import math
+
+    from anvilate.analysis import jet_impact_force
+
+    # Flat plate (default 90 deg): F = rho*Q*V*(1-cos90) = rho*Q*V = 1000*0.05*20 = 1000 N.
+    flat = jet_impact_force(
+        density=_q("1000 kg/m**3"), flow_rate=_q("0.05 m**3/s"), jet_velocity=_q("20 m/s")
+    )
+    assert flat.to("N").magnitude == pytest.approx(1000 * 0.05 * 20, rel=1e-9)
+    # A 180 deg bucket (Pelton) reverses the jet and doubles the force.
+    pelton = jet_impact_force(
+        density=_q("1000 kg/m**3"),
+        flow_rate=_q("0.05 m**3/s"),
+        jet_velocity=_q("20 m/s"),
+        deflection_angle=180.0,
+    )
+    assert pelton.to("N").magnitude == pytest.approx(2 * flat.to("N").magnitude, rel=1e-9)
+    # A general deflection follows the (1 - cos theta) factor.
+    partial = jet_impact_force(
+        density=_q("1000 kg/m**3"),
+        flow_rate=_q("0.05 m**3/s"),
+        jet_velocity=_q("20 m/s"),
+        deflection_angle=60.0,
+    )
+    assert partial.to("N").magnitude == pytest.approx(
+        1000 * 0.05 * 20 * (1 - math.cos(math.radians(60))), rel=1e-9
+    )
+    with pytest.raises(ValueError, match="deflection_angle"):
+        jet_impact_force(
+            density=_q("1000 kg/m**3"),
+            flow_rate=_q("0.05 m**3/s"),
+            jet_velocity=_q("20 m/s"),
+            deflection_angle=200.0,
+        )
+
+
 def test_refrigeration_carnot_and_actual_cop():
     from anvilate.analysis import (
         carnot_cop_cooling,

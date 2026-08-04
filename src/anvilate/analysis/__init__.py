@@ -144,8 +144,9 @@ modules:
   broad-crested weir discharge for gauging channel flow and rating spillway sills
 - :mod:`~anvilate.analysis.tank_flow` — tank draining: the Torricelli efflux velocity √(2gh)
   and the time to drain a tank between two levels through a bottom orifice
-- :mod:`~anvilate.analysis.drag` — fluid drag: the drag force ½·ρ·V²·C_d·A (wind load on a
-  sign, current on a member) and the terminal (settling) velocity where drag balances weight
+- :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
+  load on a sign, current on a member), the terminal (settling) velocity where drag balances
+  weight, and the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface
 - :mod:`~anvilate.analysis.refrigeration` — refrigeration and heat-pump cycle performance:
   the Carnot cooling and heating COP ceilings and the actual COP = Q/W
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
@@ -596,6 +597,7 @@ from .curved_beam import (
 )
 from .drag import (
     drag_force,
+    jet_impact_force,
     terminal_velocity,
 )
 from .dynamics import (
@@ -1347,6 +1349,7 @@ __all__ = [
     "carnot_cop_heating",
     "coefficient_of_performance",
     "drag_force",
+    "jet_impact_force",
     "terminal_velocity",
     "tank_drain_time",
     "torricelli_efflux_velocity",
