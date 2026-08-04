@@ -43,6 +43,7 @@ __all__ = [
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
     "asme_b313_branch_required_reinforcement_area",
+    "asme_b313_allowable_displacement_stress_range",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thin_wall_sphere_diametral_growth",
@@ -634,6 +635,36 @@ def asme_b313_branch_required_reinforcement_area(
     if d1 <= 0:
         raise ValueError("the branch wall consumes the whole opening; check the inputs")
     return Quantity(magnitude=th * d1 * (2.0 - sin_beta), unit="mm**2")
+
+
+def asme_b313_allowable_displacement_stress_range(
+    *,
+    cold_allowable: Quantity,
+    hot_allowable: Quantity,
+    stress_range_factor: float = 1.0,
+) -> Quantity:
+    """The ASME B31.3 §302.3.5 allowable displacement stress range,
+    S_A = f·(1.25·S_c + 0.25·S_h).
+
+    A piping system's thermal expansion is restrained at its anchors, and the
+    resulting secondary (displacement) stress cycles as the line heats and cools —
+    a fatigue question, not a pressure one. The allowable range is
+    S_A = f·(1.25·S_c + 0.25·S_h), where ``cold_allowable`` S_c and ``hot_allowable``
+    S_h are the basic allowable stresses at the cold (installed) and hot (operating)
+    conditions, and ``stress_range_factor`` f (the cyclic-reduction factor, ≤ 1,
+    from Table 302.3.5 — 1.0 up to 7,000 equivalent cycles, falling for more) accounts
+    for the number of thermal cycles. Compare the computed expansion stress range
+    against this. S_c, S_h, and f are user-supplied code inputs. Returns S_A in MPa.
+    """
+    _require(cold_allowable, "[pressure]", "cold_allowable")
+    _require(hot_allowable, "[pressure]", "hot_allowable")
+    if stress_range_factor <= 0:
+        raise ValueError(f"stress_range_factor must be positive; got {stress_range_factor}")
+    sc = cold_allowable.to("MPa").magnitude
+    sh = hot_allowable.to("MPa").magnitude
+    if sc <= 0 or sh <= 0:
+        raise ValueError("cold_allowable and hot_allowable must be positive")
+    return Quantity(magnitude=stress_range_factor * (1.25 * sc + 0.25 * sh), unit="MPa")
 
 
 class ThickWallStress(BaseModel):

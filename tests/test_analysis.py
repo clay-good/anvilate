@@ -12524,3 +12524,22 @@ def test_asme_b313_branch_reinforcement_area_and_skew():
     assert a60.to("mm**2").magnitude == pytest.approx(360.0, abs=1.0)
     with pytest.raises(ValueError, match="branch_angle_deg must lie in"):
         asme_b313_branch_required_reinforcement_area(branch_angle_deg=120.0, **kw)
+
+
+def test_asme_b313_allowable_displacement_stress_range():
+    from anvilate.analysis import asme_b313_allowable_displacement_stress_range
+
+    # S_A = f*(1.25*S_c + 0.25*S_h): f=1, S_c=138, S_h=130 -> 205 MPa.
+    sa = asme_b313_allowable_displacement_stress_range(
+        cold_allowable=_q("138 MPa"), hot_allowable=_q("130 MPa")
+    )
+    assert sa.to("MPa").magnitude == pytest.approx(1.25 * 138 + 0.25 * 130, rel=1e-9)
+    # A high cycle count (f < 1) reduces the allowable range.
+    cyclic = asme_b313_allowable_displacement_stress_range(
+        cold_allowable=_q("138 MPa"), hot_allowable=_q("130 MPa"), stress_range_factor=0.8
+    )
+    assert cyclic.to("MPa").magnitude == pytest.approx(0.8 * sa.to("MPa").magnitude, rel=1e-9)
+    with pytest.raises(ValueError, match="stress_range_factor must be positive"):
+        asme_b313_allowable_displacement_stress_range(
+            cold_allowable=_q("138 MPa"), hot_allowable=_q("130 MPa"), stress_range_factor=0.0
+        )

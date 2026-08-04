@@ -17,7 +17,9 @@
       (§304.3.3 A1 = t_h·d1·(2−sinβ), the required replacement area); the available
       A2+A3+A4 excess-wall/pad composition is a follow-up.
 - [ ] 2.3 Miter-bend pressure screening
-- [ ] 2.4 Displacement stress range vs. allowable range
+- [~] 2.4 Displacement stress range vs. allowable range — `asme_b313_allowable_displacement_stress_range`
+      (§302.3.5 S_A = f·(1.25·S_c + 0.25·S_h)); the computed-expansion-stress side needs the
+      flexibility analysis, out of screening scope.
 
 ## 3. Tests & examples
 
