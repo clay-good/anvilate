@@ -12742,3 +12742,20 @@ def test_crossflow_effectiveness_sits_between_parallel_and_counterflow():
     assert crossflow_both_unmixed_effectiveness(ntu=2.0, capacity_ratio=0.0) == pytest.approx(
         1 - _exp(-2.0), rel=1e-9
     )
+
+
+def test_aisc_flexural_buckling_stress_chapter_e_curve():
+    from anvilate.analysis import aisc_flexural_buckling_stress
+
+    fy = _q("345 MPa")
+    # Stocky column (F_y/F_e = 0.69 <= 2.25): inelastic F_cr = 0.658^0.69 * F_y.
+    stocky = aisc_flexural_buckling_stress(yield_strength=fy, euler_stress=_q("500 MPa"))
+    assert stocky.to("MPa").magnitude == pytest.approx(0.658 ** (345 / 500) * 345, rel=1e-9)
+    assert stocky.to("MPa").magnitude < 345  # below yield
+    # Slender column (F_y/F_e = 3.45 > 2.25): elastic F_cr = 0.877 * F_e.
+    slender = aisc_flexural_buckling_stress(yield_strength=fy, euler_stress=_q("100 MPa"))
+    assert slender.to("MPa").magnitude == pytest.approx(0.877 * 100, rel=1e-9)
+    # The curve is monotonic: a stronger Euler stress gives a higher F_cr.
+    assert stocky.to("MPa").magnitude > slender.to("MPa").magnitude
+    with pytest.raises(ValueError, match="must be positive"):
+        aisc_flexural_buckling_stress(yield_strength=fy, euler_stress=_q("0 MPa"))

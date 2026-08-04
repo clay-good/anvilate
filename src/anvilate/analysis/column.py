@@ -34,6 +34,7 @@ __all__ = [
     "perry_robertson_stress",
     "lateral_torsional_buckling_moment",
     "rankine_gordon_stress",
+    "aisc_flexural_buckling_stress",
 ]
 
 
@@ -167,6 +168,40 @@ def euler_critical_stress(*, elastic_modulus: Quantity, slenderness_ratio: float
     sigma = pi**2 * elastic_modulus.pint / slenderness_ratio**2
     converted = sigma.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def aisc_flexural_buckling_stress(
+    *,
+    yield_strength: Quantity,
+    euler_stress: Quantity,
+) -> Quantity:
+    """The AISC 360 Chapter E flexural buckling stress F_cr of a steel column.
+
+    The modern steel column curve (AISC 360 §E3), a single smooth transition from
+    inelastic to elastic buckling based on the ratio of yield to elastic (Euler)
+    stress:
+
+    - F_cr = 0.658^(F_y/F_e)·F_y  when F_y/F_e ≤ 2.25 (equivalently KL/r ≤ 4.71√(E/F_y)),
+      the inelastic range where residual stresses soften the buckling;
+    - F_cr = 0.877·F_e            when F_y/F_e > 2.25, the elastic range, the Euler
+      stress knocked down by an out-of-straightness factor.
+
+    ``yield_strength`` F_y is the steel's yield and ``euler_stress`` F_e = π²E/(KL/r)²
+    the elastic buckling stress (from :func:`euler_critical_stress` at the effective
+    slenderness). The design compressive strength is φ·F_cr·A_g (φ = 0.90). Returns
+    F_cr as a stress in MPa.
+    """
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(euler_stress, "[pressure]", "euler_stress")
+    fy = yield_strength.to("MPa").magnitude
+    fe = euler_stress.to("MPa").magnitude
+    if fy <= 0 or fe <= 0:
+        raise ValueError("yield_strength and euler_stress must be positive")
+    if fy / fe <= 2.25:
+        fcr = 0.658 ** (fy / fe) * fy
+    else:
+        fcr = 0.877 * fe
+    return Quantity(magnitude=fcr, unit="MPa")
 
 
 def transition_slenderness(*, yield_strength: Quantity, elastic_modulus: Quantity) -> float:
