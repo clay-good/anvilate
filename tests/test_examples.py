@@ -515,6 +515,14 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_motor_feeder_scorecard_example_long_run_fails_on_drop():
+    namespace = runpy.run_path(str(_EXAMPLES / "motor_feeder_scorecard.py"))
+    r = namespace["feeder_scorecards"]()
+    assert r["short_status"] == "pass"
+    assert r["long_status"] == "fail"
+    assert r["long_failures"] == "voltage drop"
+
+
 def test_ups_battery_bank_sizing_example_shallower_dod_shortens_runtime():
     namespace = runpy.run_path(str(_EXAMPLES / "ups_battery_bank_sizing.py"))
     b = namespace["bank_sizing"]()
