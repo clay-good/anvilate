@@ -702,6 +702,8 @@ thermal.bimetallic_strip_tip_deflection
 thermal.biot_number
 thermal.circular_source_spreading_resistance
 thermal.conduction_thermal_resistance
+thermal.critical_insulation_radius
+thermal.cylindrical_conduction_resistance
 thermal.confined_liquid_thermal_pressure
 thermal.constrained_thermal_stress
 thermal.convection_thermal_resistance

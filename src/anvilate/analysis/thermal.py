@@ -38,6 +38,8 @@ __all__ = [
     "bimetallic_strip_tip_deflection",
     "conduction_thermal_resistance",
     "convection_thermal_resistance",
+    "critical_insulation_radius",
+    "cylindrical_conduction_resistance",
     "series_thermal_resistance",
     "parallel_thermal_resistance",
     "temperature_rise",
@@ -662,6 +664,67 @@ def conduction_thermal_resistance(
     if length_m <= 0 or area_m2 <= 0 or k <= 0:
         raise ValueError("thickness, area, and conductivity must be positive")
     return Quantity(magnitude=length_m / (k * area_m2), unit=_THERMAL_RESISTANCE_UNIT)
+
+
+def cylindrical_conduction_resistance(
+    *,
+    inner_radius: Quantity,
+    outer_radius: Quantity,
+    length: Quantity,
+    conductivity: Quantity,
+) -> Quantity:
+    """The radial conduction resistance of a pipe or insulation layer, R = ln(r₂/r₁)/(2πkL) (K/W).
+
+    Heat flowing outward through a cylindrical shell — a pipe wall or a layer of lagging — does not
+    meet the slab resistance L/(k·A), because the area grows with radius. The right expression is
+    R = ln(r₂/r₁)/(2πkL), from the ``inner_radius`` r₁, ``outer_radius`` r₂, pipe ``length`` L, and
+    material ``conductivity`` k. Put it in series with the outer-surface
+    :func:`convection_thermal_resistance` (area 2πr₂L) to get a bare or insulated pipe's heat loss.
+    ``conductivity`` is a ``[power]/[length]/[temperature]`` quantity (W/(m·K)). Returns K/W.
+    """
+    _require(inner_radius, "[length]", "inner_radius")
+    _require(outer_radius, "[length]", "outer_radius")
+    _require(length, "[length]", "length")
+    _require(conductivity, "[power] / [length] / [temperature]", "conductivity")
+    r1 = inner_radius.to("m").magnitude
+    r2 = outer_radius.to("m").magnitude
+    length_m = length.to("m").magnitude
+    k = conductivity.to("W/(m*K)").magnitude
+    if r1 <= 0 or length_m <= 0 or k <= 0:
+        raise ValueError("inner_radius, length, and conductivity must be positive")
+    if r2 <= r1:
+        raise ValueError("outer_radius must exceed inner_radius")
+    return Quantity(
+        magnitude=log(r2 / r1) / (2.0 * pi * k * length_m), unit=_THERMAL_RESISTANCE_UNIT
+    )
+
+
+def critical_insulation_radius(
+    *,
+    conductivity: Quantity,
+    heat_transfer_coefficient: Quantity,
+) -> Quantity:
+    """The critical insulation radius of a pipe or wire, r_cr = k/h.
+
+    A counterintuitive result: on a thin pipe or wire, adding a first layer of insulation can
+    *raise* heat loss, because the extra outer area exposed to convection outweighs the added
+    conduction resistance — up to the critical radius r_cr = k/h, from the insulation
+    ``conductivity`` k and the outer ``heat_transfer_coefficient`` h. Insulation only ever reduces
+    loss once the outer radius passes r_cr, so it matters only when the bare radius is below it
+    (small tubes, cables); for any normal pipe the bare radius already exceeds r_cr and insulation
+    always helps. Returns the critical radius as a length.
+    """
+    _require(conductivity, "[power] / [length] / [temperature]", "conductivity")
+    _require(
+        heat_transfer_coefficient,
+        "[power] / [length]**2 / [temperature]",
+        "heat_transfer_coefficient",
+    )
+    k = conductivity.to("W/(m*K)").magnitude
+    h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
+    if k <= 0 or h <= 0:
+        raise ValueError("conductivity and heat_transfer_coefficient must be positive")
+    return Quantity(magnitude=k / h, unit="m")
 
 
 def convection_thermal_resistance(

@@ -13571,6 +13571,39 @@ def test_electrical_transformer_full_load_and_fault_current():
         transformer_available_fault_current(full_load_current=fla, impedance_percent=0.0)
 
 
+def test_thermal_cylindrical_conduction_and_critical_radius():
+    import math
+
+    from anvilate.analysis import (
+        critical_insulation_radius,
+        cylindrical_conduction_resistance,
+    )
+
+    # R = ln(r2/r1)/(2*pi*k*L); 0.05->0.10 m, k=0.04, L=1 -> 2.758 K/W.
+    r = cylindrical_conduction_resistance(
+        inner_radius=_q("0.05 m"),
+        outer_radius=_q("0.10 m"),
+        length=_q("1 m"),
+        conductivity=_q("0.04 W/(m*K)"),
+    )
+    assert r.to("K/W").magnitude == pytest.approx(math.log(2) / (2 * math.pi * 0.04), rel=1e-9)
+
+    # Critical radius r_cr = k/h = 0.04/10 = 0.004 m.
+    rc = critical_insulation_radius(
+        conductivity=_q("0.04 W/(m*K)"), heat_transfer_coefficient=_q("10 W/(m**2*K)")
+    )
+    assert rc.to("m").magnitude == pytest.approx(0.004, rel=1e-9)
+
+    # Outer radius must exceed inner radius.
+    with pytest.raises(ValueError, match="outer_radius must exceed"):
+        cylindrical_conduction_resistance(
+            inner_radius=_q("0.10 m"),
+            outer_radius=_q("0.05 m"),
+            length=_q("1 m"),
+            conductivity=_q("0.04 W/(m*K)"),
+        )
+
+
 def test_energy_storage_capacity_energy_and_backup_time():
     from anvilate.analysis import (
         battery_backup_time,

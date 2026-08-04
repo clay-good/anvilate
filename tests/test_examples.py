@@ -515,6 +515,17 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_insulated_steam_pipe_heat_loss_example_lagging_cuts_loss():
+    namespace = runpy.run_path(str(_EXAMPLES / "insulated_steam_pipe_heat_loss.py"))
+    p = namespace["pipe_heat_loss"]()
+    # Bare pipe sheds ~408 W/m; 50 mm lagging drops it near 45 W/m (~89% less).
+    assert p["bare_w_per_m"] == pytest.approx(408.0, abs=5.0)
+    assert p["insulated_w_per_m"] == pytest.approx(45.0, abs=2.0)
+    assert p["reduction_percent"] > 85.0
+    # The pipe radius (50 mm) is far above the 4 mm critical radius.
+    assert p["critical_radius_mm"] == pytest.approx(4.0, abs=0.1)
+
+
 def test_motor_feeder_scorecard_example_long_run_fails_on_drop():
     namespace = runpy.run_path(str(_EXAMPLES / "motor_feeder_scorecard.py"))
     r = namespace["feeder_scorecards"]()
