@@ -15335,6 +15335,30 @@ def test_asce7_lrfd_and_asd_load_combinations_governing():
         asce7_lrfd_factored_load(dead=_q("100 kN"), live=_q("5 MPa"))
 
 
+def test_reduced_live_load_regimes():
+    from anvilate.analysis import reduced_live_load
+
+    kw = {"unreduced_live_load": _q("2.4 kPa"), "live_load_element_factor": 4.0}
+    # L = L0*(0.25 + 4.57/sqrt(KLL*AT)); KLL*AT = 200 -> 1.376 kPa.
+    reduced = reduced_live_load(tributary_area=_q("50 m**2"), **kw)
+    assert reduced.to("kPa").magnitude == pytest.approx(2.4 * (0.25 + 4.57 / 200**0.5), rel=1e-6)
+    assert reduced.to("kPa").magnitude < 2.4
+    # Below the 37.16 m^2 (400 ft^2) influence-area threshold, no reduction: full L0.
+    small = reduced_live_load(tributary_area=_q("5 m**2"), **kw)
+    assert small.to("kPa").magnitude == pytest.approx(2.4, rel=1e-12)
+    # A huge area is floored at 0.5*L0 (one floor) or 0.4*L0 (multiple floors).
+    one_floor = reduced_live_load(tributary_area=_q("400 m**2"), **kw)
+    assert one_floor.to("kPa").magnitude == pytest.approx(0.5 * 2.4, rel=1e-9)
+    multi = reduced_live_load(tributary_area=_q("400 m**2"), supports_multiple_floors=True, **kw)
+    assert multi.to("kPa").magnitude == pytest.approx(0.4 * 2.4, rel=1e-9)
+    with pytest.raises(ValueError, match="live_load_element_factor must be positive"):
+        reduced_live_load(
+            unreduced_live_load=_q("2.4 kPa"),
+            live_load_element_factor=0.0,
+            tributary_area=_q("50 m**2"),
+        )
+
+
 def test_seismic_vertical_force_distribution_sums_to_base_shear():
     from anvilate.analysis import seismic_vertical_force_distribution
 

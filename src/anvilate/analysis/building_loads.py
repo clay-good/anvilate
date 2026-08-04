@@ -25,6 +25,7 @@ ps = Cs·pf.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from math import sqrt
 
 from ..units import Quantity
 
@@ -36,7 +37,11 @@ __all__ = [
     "seismic_vertical_force_distribution",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
+    "reduced_live_load",
 ]
+
+_LIVE_LOAD_REDUCTION_CONSTANT = 4.57  # ASCE 7 Eq 4.7-1 (SI), = 15/sqrt(0.0929 m^2/ft^2)
+_LIVE_LOAD_REDUCTION_THRESHOLD = 37.16  # m^2 (= 400 ft^2); no reduction below this KLL*AT
 
 _VELOCITY_PRESSURE_CONSTANT = 0.613  # = 1/2 * rho_air (1.225 kg/m^3), SI ASCE 7 form
 _FLAT_ROOF_SNOW_CONSTANT = 0.7  # ASCE 7 Eq 7.3-1 exposure/thermal baseline
@@ -244,6 +249,39 @@ def sloped_roof_snow_load(
     if not 0 <= slope_factor <= 1:
         raise ValueError(f"slope_factor must lie in [0, 1]; got {slope_factor}")
     return Quantity(magnitude=slope_factor * pf, unit="kPa")
+
+
+def reduced_live_load(
+    *,
+    unreduced_live_load: Quantity,
+    live_load_element_factor: float,
+    tributary_area: Quantity,
+    supports_multiple_floors: bool = False,
+) -> Quantity:
+    """The ASCE 7 reduced design live load L = L0·(0.25 + 4.57/√(KLL·AT)) (§4.7.2).
+
+    A large floor area is unlikely to ever carry its full design live load everywhere at once, so
+    ASCE 7 lets a member collecting a big tributary area design for less. ``unreduced_live_load`` L0
+    is the tabulated design live load, ``live_load_element_factor`` KLL the element factor (4 for an
+    interior column, 2 for an interior beam, etc.), and ``tributary_area`` AT the area the member
+    supports. The reduction applies only when KLL·AT reaches 37.16 m² (400 ft²) — below that the
+    full L0 is returned — and is floored at 0.50·L0 for a member supporting one floor or 0.40·L0 for
+    one supporting two or more (``supports_multiple_floors``). Returns the reduced live load in kPa.
+    """
+    _check(unreduced_live_load, "[pressure]", "unreduced_live_load")
+    _check(tributary_area, "[area]", "tributary_area")
+    l0 = unreduced_live_load.to("kPa").magnitude
+    at = tributary_area.to("m**2").magnitude
+    if l0 <= 0 or at <= 0:
+        raise ValueError("unreduced_live_load and tributary_area must be positive")
+    if live_load_element_factor <= 0:
+        raise ValueError("live_load_element_factor must be positive")
+    influence = live_load_element_factor * at
+    if influence < _LIVE_LOAD_REDUCTION_THRESHOLD:
+        return Quantity(magnitude=l0, unit="kPa")
+    reduced = l0 * (0.25 + _LIVE_LOAD_REDUCTION_CONSTANT / sqrt(influence))
+    floor = (0.40 if supports_multiple_floors else 0.50) * l0
+    return Quantity(magnitude=max(reduced, floor), unit="kPa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

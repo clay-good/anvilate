@@ -230,8 +230,9 @@ modules:
   the wind velocity pressure (0.613·Kz·Kzt·Kd·Ke·V²) and the surface design
   pressure it drives, the seismic response coefficient (Cs = SDS·Ie/R) and the
   equivalent-lateral-force base shear V = Cs·W and its vertical distribution to
-  each floor (Fx = V·wx·hx^k/Σwi·hi^k), and the flat- and sloped-roof snow loads
-  (pf = 0.7·Ce·Ct·Is·pg, ps = Cs·pf)
+  each floor (Fx = V·wx·hx^k/Σwi·hi^k), the flat- and sloped-roof snow loads
+  (pf = 0.7·Ce·Ct·Is·pg, ps = Cs·pf), and the tributary-area live-load reduction
+  (L = L0·(0.25 + 4.57/√(KLL·AT)))
 - :mod:`~anvilate.analysis.curved_beam` — Winkler curved-beam bending
   (rectangular, trapezoidal, circular, and composite T/I/box/stepped sections):
   shifted neutral axis and the unequal inner/outer fibre stresses of hooks,
@@ -591,6 +592,7 @@ from .brake import (
 )
 from .building_loads import (
     flat_roof_snow_load,
+    reduced_live_load,
     seismic_base_shear,
     seismic_response_coefficient,
     seismic_vertical_force_distribution,
@@ -1887,6 +1889,7 @@ __all__ = [
     "seismic_vertical_force_distribution",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
+    "reduced_live_load",
     "CurvedBeamStress",
     "rectangular_curved_beam_stress",
     "trapezoidal_curved_beam_stress",

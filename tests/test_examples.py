@@ -965,6 +965,16 @@ def test_cold_storage_roof_snow_example_freezer_carries_more():
     assert r["freezer_sloped_kpa"] < r["freezer_flat_kpa"]
 
 
+def test_column_live_load_reduction_example_cuts_the_demand():
+    namespace = runpy.run_path(str(_EXAMPLES / "column_live_load_reduction.py"))
+    c = namespace["column_live_load"]()
+    # Gathering 360 m2, the live load is floored at 40% of the unreduced value.
+    assert c["reduced_live_kpa"] == pytest.approx(0.96, abs=0.01)
+    assert c["reduced_live_kpa"] < c["unreduced_live_kpa"]
+    # The reduction carries through the LRFD combination to a smaller factored demand.
+    assert c["lrfd_reduced_kpa"] < c["lrfd_unreduced_kpa"]
+
+
 def test_seismic_story_forces_example_top_heavy():
     namespace = runpy.run_path(str(_EXAMPLES / "seismic_story_forces.py"))
     s = namespace["story_forces"]()
