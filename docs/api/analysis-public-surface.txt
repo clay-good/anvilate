@@ -35,6 +35,7 @@ geotechnical.critical_hydraulic_gradient
 geotechnical.darcy_seepage_flow
 geotechnical.eccentric_base_pressure
 geotechnical.infinite_slope_factor_of_safety
+geotechnical.janssen_silo_pressure
 geotechnical.piping_factor_of_safety
 geotechnical.pile_allowable_capacity
 geotechnical.pile_end_bearing_capacity

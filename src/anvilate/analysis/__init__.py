@@ -334,7 +334,7 @@ modules:
   infinite-slope factor of safety, the 2:1 vertical stress increase under a footing, the
   α-method pile capacity (shaft skin friction plus end bearing) for deep foundations, and
   groundwater seepage (Darcy flow, seepage velocity, and the critical gradient and piping
-  factor of safety)
+  factor of safety), and the Janssen silo pressure of stored granular material
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
   unreinforced member, the axial capacity of a reinforced masonry column, and the
@@ -819,6 +819,7 @@ from .geotechnical import (
     darcy_seepage_flow,
     eccentric_base_pressure,
     infinite_slope_factor_of_safety,
+    janssen_silo_pressure,
     pile_allowable_capacity,
     pile_end_bearing_capacity,
     pile_skin_friction_capacity,
@@ -1278,6 +1279,7 @@ __all__ = [
     "darcy_seepage_flow",
     "eccentric_base_pressure",
     "infinite_slope_factor_of_safety",
+    "janssen_silo_pressure",
     "piping_factor_of_safety",
     "pile_allowable_capacity",
     "pile_end_bearing_capacity",

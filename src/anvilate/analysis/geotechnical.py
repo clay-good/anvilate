@@ -46,6 +46,7 @@ __all__ = [
     "piping_factor_of_safety",
     "seepage_velocity",
     "infinite_slope_factor_of_safety",
+    "janssen_silo_pressure",
     "pile_allowable_capacity",
     "pile_end_bearing_capacity",
     "pile_skin_friction_capacity",
@@ -770,6 +771,43 @@ def piping_factor_of_safety(*, critical_gradient: float, exit_gradient: float) -
     if exit_gradient <= 0:
         raise ValueError(f"exit_gradient must be positive; got {exit_gradient}")
     return critical_gradient / exit_gradient
+
+
+def janssen_silo_pressure(
+    *,
+    unit_weight: Quantity,
+    hydraulic_radius: Quantity,
+    wall_friction_coefficient: float,
+    lateral_pressure_ratio: float,
+    depth: Quantity,
+) -> Quantity:
+    """The vertical stress in stored granular material by the Janssen silo equation.
+
+    Grain, sand, or ore in a silo does *not* press on the bottom like a liquid — friction against
+    the walls carries a growing share of the weight, so the vertical stress saturates instead of
+    rising linearly with depth: σ_v = (γ·R/(2·μ·k))·(1 − e^(−2·μ·k·z/R)). ``unit_weight`` γ is the
+    bulk material's, ``hydraulic_radius`` R the cross-section's area over perimeter (D/4 for a round
+    silo), ``wall_friction_coefficient`` μ the material-on-wall friction, ``lateral_pressure_ratio``
+    k = σ_h/σ_v (~0.4–0.6), and ``depth`` z below the surface. Deep down it approaches the asymptote
+    γ·R/(2μk) — often a small fraction of the γ·z a liquid would give, which is why silos are not
+    designed as if they held a fluid. The wall (horizontal) pressure is σ_h = k·σ_v. Returns σ_v in
+    kPa.
+    """
+    _require(unit_weight, "[force]/[length]**3", "unit_weight")
+    _require(hydraulic_radius, "[length]", "hydraulic_radius")
+    _require(depth, "[length]", "depth")
+    gamma = unit_weight.to("kN/m**3").magnitude
+    r = hydraulic_radius.to("m").magnitude
+    z = depth.to("m").magnitude
+    if gamma <= 0 or r <= 0:
+        raise ValueError("unit_weight and hydraulic_radius must be positive")
+    if z < 0:
+        raise ValueError("depth must be non-negative")
+    if wall_friction_coefficient <= 0 or lateral_pressure_ratio <= 0:
+        raise ValueError("wall_friction_coefficient and lateral_pressure_ratio must be positive")
+    factor = 2.0 * wall_friction_coefficient * lateral_pressure_ratio / r
+    sigma_v = (gamma / factor) * (1.0 - exp(-factor * z))
+    return Quantity(magnitude=sigma_v, unit="kPa")
 
 
 def pile_skin_friction_capacity(

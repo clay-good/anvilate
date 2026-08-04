@@ -13977,6 +13977,37 @@ def test_eccentric_base_pressure_middle_third_and_uplift():
         )
 
 
+def test_janssen_silo_pressure_saturates():
+    import math
+
+    from anvilate.analysis import janssen_silo_pressure
+
+    kw = {
+        "unit_weight": _q("8 kN/m**3"),
+        "hydraulic_radius": _q("1 m"),
+        "wall_friction_coefficient": 0.4,
+        "lateral_pressure_ratio": 0.5,
+    }
+    # sigma_v = (gamma*R/(2*mu*k))*(1 - exp(-2*mu*k*z/R)); factor = 2*0.4*0.5/1 = 0.4.
+    shallow = janssen_silo_pressure(depth=_q("2 m"), **kw)
+    expect = (8 / 0.4) * (1 - math.exp(-0.4 * 2))
+    assert shallow.to("kPa").magnitude == pytest.approx(expect, rel=1e-9)
+    # Deep down it approaches the asymptote gamma*R/(2*mu*k) = 20 kPa, far below the liquid value.
+    deep = janssen_silo_pressure(depth=_q("30 m"), **kw)
+    assert deep.to("kPa").magnitude == pytest.approx(20.0, abs=0.1)
+    assert deep.to("kPa").magnitude < 8 * 30  # much less than a liquid's gamma*z
+    # Pressure grows monotonically with depth but by ever less (wall friction takes the rest).
+    assert deep.to("kPa").magnitude > shallow.to("kPa").magnitude
+    with pytest.raises(ValueError, match="wall_friction_coefficient"):
+        janssen_silo_pressure(
+            unit_weight=_q("8 kN/m**3"),
+            hydraulic_radius=_q("1 m"),
+            wall_friction_coefficient=0.0,
+            lateral_pressure_ratio=0.5,
+            depth=_q("10 m"),
+        )
+
+
 def test_darcy_seepage_flow_and_velocity():
     from anvilate.analysis import darcy_seepage_flow, seepage_velocity
 
