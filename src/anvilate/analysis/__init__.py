@@ -890,6 +890,7 @@ from .wear import (
 from .weld import (
     FILLET_THROAT_FACTOR,
     eccentric_weld_group_peak_stress,
+    fillet_weld_design_strength,
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
 )
@@ -1465,6 +1466,7 @@ __all__ = [
     "FILLET_THROAT_FACTOR",
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",
+    "fillet_weld_design_strength",
     "eccentric_weld_group_peak_stress",
     "wire_rope_bending_stress",
     "minimum_sheave_diameter_for_bending_stress",

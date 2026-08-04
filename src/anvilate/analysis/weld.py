@@ -24,8 +24,12 @@ __all__ = [
     "FILLET_THROAT_FACTOR",
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",
+    "fillet_weld_design_strength",
     "eccentric_weld_group_peak_stress",
 ]
+
+# AISC J2.4 nominal weld-metal shear strength fraction: R_n uses 0.6·F_EXX.
+_WELD_METAL_SHEAR_FRACTION = 0.6
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
@@ -92,6 +96,41 @@ def fillet_weld_leg_for_load(
         required_safety_factor * force.to("N").magnitude / (FILLET_THROAT_FACTOR * length_mm * tau)
     )
     return Quantity(magnitude=leg, unit="mm")
+
+
+def fillet_weld_design_strength(
+    *,
+    leg_size: Quantity,
+    length: Quantity,
+    electrode_strength: Quantity,
+    weld_metal_shear_fraction: float = _WELD_METAL_SHEAR_FRACTION,
+) -> Quantity:
+    """The AISC J2.4 nominal strength of a fillet weld, R_n = 0.6·F_EXX·(0.707·w)·L.
+
+    The load a fillet weld can carry, from the weld metal rather than the base metal:
+    the weld-metal shear strength 0.6·F_EXX acts over the effective throat area
+    0.707·w·L. ``leg_size`` w is the fillet leg, ``length`` L the weld length,
+    ``electrode_strength`` F_EXX the electrode's tensile strength (e.g. 490 MPa for an
+    E70 electrode), and ``weld_metal_shear_fraction`` the 0.6 factor (caller-tunable).
+    This is the capacity (a force) to compare against the load, the rating complement
+    to :func:`fillet_weld_throat_stress`; a real check also verifies the base-metal
+    strength at the weld. Returns the nominal strength in kN.
+    """
+    _require(leg_size, "[length]", "leg_size")
+    _require(length, "[length]", "length")
+    _require(electrode_strength, "[pressure]", "electrode_strength")
+    if weld_metal_shear_fraction <= 0:
+        raise ValueError(
+            f"weld_metal_shear_fraction must be positive; got {weld_metal_shear_fraction}"
+        )
+    w = leg_size.to("mm").magnitude
+    length_mm = length.to("mm").magnitude
+    fexx = electrode_strength.to("MPa").magnitude
+    if w <= 0 or length_mm <= 0 or fexx <= 0:
+        raise ValueError("leg_size, length, and electrode_strength must be positive")
+    # MPa·mm² = N; convert to kN.
+    strength_n = weld_metal_shear_fraction * fexx * FILLET_THROAT_FACTOR * w * length_mm
+    return Quantity(magnitude=strength_n / 1000.0, unit="kN")
 
 
 def eccentric_weld_group_peak_stress(

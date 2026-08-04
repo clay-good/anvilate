@@ -547,6 +547,7 @@ wear.sliding_contact_pv
 wear.sliding_distance_for_wear_depth
 weld.FILLET_THROAT_FACTOR
 weld.eccentric_weld_group_peak_stress
+weld.fillet_weld_design_strength
 weld.fillet_weld_leg_for_load
 weld.fillet_weld_throat_stress
 winch.drum_line_pull

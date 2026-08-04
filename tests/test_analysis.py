@@ -12699,3 +12699,24 @@ def test_slip_critical_resistance_aisc_j38():
     assert double.to("kN").magnitude == pytest.approx(2 * r.to("kN").magnitude, rel=1e-9)
     with pytest.raises(ValueError, match="slip_coefficient must be positive"):
         slip_critical_resistance(slip_coefficient=0.0, bolt_pretension=_q("142 kN"))
+
+
+def test_fillet_weld_design_strength_aisc_j24():
+    from anvilate.analysis import fillet_weld_design_strength, fillet_weld_throat_stress
+
+    # R_n = 0.6*F_EXX*0.707*w*L: 6 mm leg, 200 mm, E70 (490 MPa) -> 249.4 kN.
+    rn = fillet_weld_design_strength(
+        leg_size=_q("6 mm"), length=_q("200 mm"), electrode_strength=_q("490 MPa")
+    )
+    assert rn.to("kN").magnitude == pytest.approx(0.6 * 490 * 0.707 * 6 * 200 / 1000, rel=1e-9)
+    # It is the capacity complement to the demand stress: loading the weld to exactly
+    # R_n drives the throat stress to 0.6*F_EXX.
+    stress_at_capacity = fillet_weld_throat_stress(
+        force=rn, length=_q("200 mm"), leg_size=_q("6 mm")
+    )
+    assert stress_at_capacity.to("MPa").magnitude == pytest.approx(0.6 * 490, rel=1e-6)
+    # A bigger leg or stronger electrode carries more.
+    bigger = fillet_weld_design_strength(
+        leg_size=_q("8 mm"), length=_q("200 mm"), electrode_strength=_q("490 MPa")
+    )
+    assert bigger.to("kN").magnitude > rn.to("kN").magnitude
