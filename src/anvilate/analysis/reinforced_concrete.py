@@ -28,6 +28,7 @@ __all__ = [
     "rc_beta1",
     "rc_net_tensile_strain",
     "rc_development_length",
+    "rc_max_bar_spacing_crack_control",
 ]
 
 # ACI 318 ultimate concrete compressive strain (the strain-diagram anchor).
@@ -310,3 +311,33 @@ def rc_development_length(
         size_spacing_constant * lightweight_factor * sqrt(fc)
     )
     return Quantity(magnitude=ld, unit="mm")
+
+
+def rc_max_bar_spacing_crack_control(
+    *,
+    steel_service_stress: Quantity,
+    clear_cover: Quantity,
+) -> Quantity:
+    """The ACI 318 maximum bar spacing for flexural crack control,
+    s = min(380·(280/f_s) − 2.5·c_c, 300·(280/f_s)).
+
+    Distributing the flexural reinforcement limits crack widths at service load
+    (ACI 318-19 §24.3.2): the centre-to-centre spacing of the tension bars nearest the
+    face must not exceed s = 380·(280/f_s) − 2.5·c_c, capped by 300·(280/f_s), where
+    ``steel_service_stress`` f_s is the stress in the bars at service load (permitted
+    as ⅔·f_y) and ``clear_cover`` c_c the least clear cover to those bars. Higher steel
+    stress or more cover forces the bars closer together. Returns the maximum spacing
+    in mm.
+    """
+    _require(steel_service_stress, "[pressure]", "steel_service_stress")
+    _require(clear_cover, "[length]", "clear_cover")
+    fs = steel_service_stress.to("MPa").magnitude
+    cc = clear_cover.to("mm").magnitude
+    if fs <= 0:
+        raise ValueError(f"steel_service_stress must be positive; got {steel_service_stress}")
+    if cc < 0:
+        raise ValueError(f"clear_cover must be non-negative; got {clear_cover}")
+    spacing = min(380.0 * (280.0 / fs) - 2.5 * cc, 300.0 * (280.0 / fs))
+    if spacing <= 0:
+        raise ValueError("the cover and steel stress leave no permissible spacing; check inputs")
+    return Quantity(magnitude=spacing, unit="mm")

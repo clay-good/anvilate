@@ -12898,3 +12898,18 @@ def test_rc_development_length_aci():
     assert top_epoxy.to("mm").magnitude == pytest.approx(
         1.3 * 1.5 * ld.to("mm").magnitude, rel=1e-9
     )
+
+
+def test_rc_max_bar_spacing_crack_control_aci():
+    from anvilate.analysis import rc_max_bar_spacing_crack_control
+
+    # s = min(380*(280/f_s) - 2.5*c_c, 300*(280/f_s)): f_s=280, cover 40 -> 280 mm.
+    s = rc_max_bar_spacing_crack_control(
+        steel_service_stress=_q("280 MPa"), clear_cover=_q("40 mm")
+    )
+    assert s.to("mm").magnitude == pytest.approx(280.0, rel=1e-9)
+    # More cover forces the bars closer together (the first term governs).
+    more_cover = rc_max_bar_spacing_crack_control(
+        steel_service_stress=_q("280 MPa"), clear_cover=_q("60 mm")
+    )
+    assert more_cover.to("mm").magnitude < s.to("mm").magnitude
