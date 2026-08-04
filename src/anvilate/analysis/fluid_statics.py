@@ -28,6 +28,7 @@ __all__ = [
     "metacentric_height",
     "righting_moment",
     "stack_effect_pressure",
+    "weber_number",
 ]
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
@@ -244,6 +245,39 @@ def stack_effect_pressure(
         raise ValueError("height, temperatures, and atmospheric_pressure must be positive")
     delta_p = _GRAVITY * h * (p / _AIR_GAS_CONSTANT) * (1.0 / t_o - 1.0 / t_i)
     return Quantity(magnitude=delta_p, unit="Pa")
+
+
+def weber_number(
+    *,
+    density: Quantity,
+    velocity: Quantity,
+    characteristic_length: Quantity,
+    surface_tension: Quantity,
+) -> float:
+    """The Weber number of a moving interface, We = ρ·V²·L/σ.
+
+    The ratio of a flow's disrupting inertia to the surface tension holding a droplet, bubble, or
+    liquid sheet together: We = ρ·V²·L/σ, from the ``density`` ρ, relative ``velocity`` V, drop or
+    jet ``characteristic_length`` L, and ``surface_tension`` σ. At low We surface tension keeps a
+    droplet round; above a critical value (~12 for a drop in a gas stream) the aerodynamic pressure
+    overwhelms it and the drop shatters — which is exactly what an atomizer, a fuel injector, or a
+    spray nozzle is engineered to do. Returns the dimensionless Weber number.
+    """
+    _check(density, "[mass]/[length]**3", "density")
+    _check(velocity, "[length]/[time]", "velocity")
+    _check(characteristic_length, "[length]", "characteristic_length")
+    _check(surface_tension, "[force]/[length]", "surface_tension")
+    rho = density.to("kg/m**3").magnitude
+    v = velocity.to("m/s").magnitude
+    length = characteristic_length.to("m").magnitude
+    sigma = surface_tension.to("N/m").magnitude
+    if rho <= 0 or length <= 0:
+        raise ValueError("density and characteristic_length must be positive")
+    if sigma <= 0:
+        raise ValueError("surface_tension must be positive")
+    if v < 0:
+        raise ValueError("velocity must be non-negative")
+    return rho * v**2 * length / sigma
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

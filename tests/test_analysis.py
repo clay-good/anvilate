@@ -14666,6 +14666,36 @@ def test_hvac_duct_equivalent_diameter_and_fan_power():
         fan_power(flow_rate=_q("1 m**3/s"), total_pressure=_q("500 Pa"), fan_efficiency=1.5)
 
 
+def test_fluid_statics_weber_number():
+    from anvilate.analysis import weber_number
+
+    # We = rho*V^2*L/sigma; 1000 kg/m^3, 10 m/s, 1 mm, 0.072 N/m -> ~1389.
+    we = weber_number(
+        density=_q("1000 kg/m**3"),
+        velocity=_q("10 m/s"),
+        characteristic_length=_q("1 mm"),
+        surface_tension=_q("0.072 N/m"),
+    )
+    assert we == pytest.approx(1000 * 100 * 1e-3 / 0.072, rel=1e-9)
+
+    # Weber goes as the square of velocity: half the speed -> a quarter the Weber.
+    slow = weber_number(
+        density=_q("1000 kg/m**3"),
+        velocity=_q("5 m/s"),
+        characteristic_length=_q("1 mm"),
+        surface_tension=_q("0.072 N/m"),
+    )
+    assert slow / we == pytest.approx(0.25, rel=1e-9)
+
+    with pytest.raises(ValueError, match="surface_tension"):
+        weber_number(
+            density=_q("1000 kg/m**3"),
+            velocity=_q("10 m/s"),
+            characteristic_length=_q("1 mm"),
+            surface_tension=_q("0 N/m"),
+        )
+
+
 def test_drag_force_and_terminal_velocity():
     from anvilate.analysis import drag_force, terminal_velocity
 

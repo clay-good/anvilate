@@ -669,6 +669,16 @@ def test_rectangular_duct_sizing_example_equivalent_exceeds_hydraulic():
     assert r["fan_watts"] == pytest.approx(774.0, abs=2.0)
 
 
+def test_fuel_injector_droplet_breakup_example_velocity_squared():
+    namespace = runpy.run_path(str(_EXAMPLES / "fuel_injector_droplet_breakup.py"))
+    w = namespace["droplet_weber"]()
+    # The low-velocity droplet stays intact (We < 12); the high-velocity one breaks up.
+    assert w["weber_dribble"] < 12
+    assert w["weber_spray"] > 12
+    # Weber scales with velocity squared: 40x the speed -> 1600x the Weber.
+    assert w["weber_spray"] / w["weber_dribble"] == pytest.approx((80 / 2) ** 2, rel=1e-6)
+
+
 def test_clarifier_particle_settling_example_d_squared_law():
     namespace = runpy.run_path(str(_EXAMPLES / "clarifier_particle_settling.py"))
     r = namespace["settling_times"]()

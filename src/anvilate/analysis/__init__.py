@@ -154,8 +154,9 @@ modules:
   ρ·g·h, the resultant force on a submerged plane surface and its center-of-pressure
   depth, the Archimedes buoyant force on a submerged body, the metacentric height and
   righting moment that decide a floating body's stability, the stack-effect pressure that
-  air buoyancy draws over a building or chimney height, and the capillary rise of a liquid
-  in a fine tube or pore
+  air buoyancy draws over a building or chimney height, the capillary rise of a liquid
+  in a fine tube or pore, and the Weber number We = ρ·V²·L/σ that screens a droplet or jet
+  for surface-tension breakup
 - :mod:`~anvilate.analysis.pipe_flow` — incompressible pipe hydraulics: the Reynolds
   number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
   Darcy-Weisbach friction head loss and fitting minor losses, the pressure drop ρ·g·h a
@@ -839,6 +840,7 @@ from .fluid_statics import (
     metacentric_height,
     righting_moment,
     stack_effect_pressure,
+    weber_number,
 )
 from .flywheel import (
     coefficient_of_fluctuation,
@@ -1543,6 +1545,7 @@ __all__ = [
     "metacentric_height",
     "righting_moment",
     "stack_effect_pressure",
+    "weber_number",
     "adiabatic_compression_power",
     "adiabatic_discharge_temperature",
     "ideal_gas_density",
