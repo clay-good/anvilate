@@ -17701,6 +17701,56 @@ def test_radiation_heat_transfer_and_linearized_coefficient():
         )
 
 
+def test_radiation_two_surface_exchange_parallel_plates_and_shield():
+    from anvilate.analysis import radiation_two_surface_exchange
+
+    sig = 5.670374419e-8
+    # Equal-area, F=1 collapses to sigma*(T1^4-T2^4)/(1/e1 + 1/e2 - 1): e=0.8, 800/500 K -> 13121 W.
+    q = radiation_two_surface_exchange(
+        emissivity_1=0.8,
+        area_1=_q("1 m**2"),
+        temperature_1=_q("800 K"),
+        emissivity_2=0.8,
+        area_2=_q("1 m**2"),
+        temperature_2=_q("500 K"),
+        view_factor=1.0,
+    )
+    expect = sig * (800**4 - 500**4) / (1 / 0.8 + 1 / 0.8 - 1)
+    assert q.to("W").magnitude == pytest.approx(expect, rel=1e-9)
+    # A low-emissivity second surface (a radiant barrier) sharply cuts the exchange.
+    shielded = radiation_two_surface_exchange(
+        emissivity_1=0.8,
+        area_1=_q("1 m**2"),
+        temperature_1=_q("800 K"),
+        emissivity_2=0.05,
+        area_2=_q("1 m**2"),
+        temperature_2=_q("500 K"),
+        view_factor=1.0,
+    )
+    assert shielded.to("W").magnitude < q.to("W").magnitude / 5
+    # Equal temperatures exchange nothing, whatever the emissivities.
+    zero = radiation_two_surface_exchange(
+        emissivity_1=0.5,
+        area_1=_q("2 m**2"),
+        temperature_1=_q("600 K"),
+        emissivity_2=0.9,
+        area_2=_q("5 m**2"),
+        temperature_2=_q("600 K"),
+        view_factor=0.4,
+    )
+    assert zero.to("W").magnitude == pytest.approx(0.0, abs=1e-9)
+    with pytest.raises(ValueError, match="view_factor"):
+        radiation_two_surface_exchange(
+            emissivity_1=0.8,
+            area_1=_q("1 m**2"),
+            temperature_1=_q("800 K"),
+            emissivity_2=0.8,
+            area_2=_q("1 m**2"),
+            temperature_2=_q("500 K"),
+            view_factor=0.0,
+        )
+
+
 def test_rc_cracking_moment_and_effective_inertia_bischoff():
     from anvilate.analysis import rc_cracking_moment, rc_effective_moment_of_inertia
 

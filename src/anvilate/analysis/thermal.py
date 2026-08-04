@@ -75,6 +75,7 @@ __all__ = [
     "semi_infinite_solid_temperature_rise",
     "semi_infinite_solid_surface_flux",
     "radiation_heat_transfer",
+    "radiation_two_surface_exchange",
     "radiation_heat_transfer_coefficient",
     "wien_peak_wavelength",
     "wien_temperature_from_peak",
@@ -1847,6 +1848,53 @@ def radiation_heat_transfer(
     if a <= 0 or ts <= 0 or tsur <= 0:
         raise ValueError("area and the absolute temperatures must be positive")
     return Quantity(magnitude=emissivity * _STEFAN_BOLTZMANN * a * (ts**4 - tsur**4), unit="W")
+
+
+def radiation_two_surface_exchange(
+    *,
+    emissivity_1: float,
+    area_1: Quantity,
+    temperature_1: Quantity,
+    emissivity_2: float,
+    area_2: Quantity,
+    temperature_2: Quantity,
+    view_factor: float,
+) -> Quantity:
+    """The net radiation between two gray surfaces of an enclosure (the radiation-network result).
+
+    Where :func:`radiation_heat_transfer` handles one surface against large black surroundings, two
+    real gray surfaces that see each other exchange less, because each reflects part of what it
+    receives. The net flow from surface 1 to surface 2 runs through three thermal resistances in
+    series — surface 1's, the space (view-factor) resistance, and surface 2's:
+
+        Q₁₂ = σ·(T₁⁴ − T₂⁴) / [ (1 − ε₁)/(ε₁·A₁) + 1/(A₁·F₁₂) + (1 − ε₂)/(ε₂·A₂) ].
+
+    ``emissivity_1``/``emissivity_2`` are the gray emissivities (0 to 1), ``area_1``/``area_2`` the
+    surface areas, ``temperature_1``/``temperature_2`` the *absolute* temperatures (kelvin — a
+    fourth power needs a true zero), and ``view_factor`` F₁₂ the fraction of surface 1's radiation
+    that lands on surface 2 (a geometry term the caller supplies). For infinite parallel plates
+    (A₁ = A₂, F₁₂ = 1) this collapses to the familiar σ(T₁⁴ − T₂⁴)/(1/ε₁ + 1/ε₂ − 1). A positive
+    result is heat leaving surface 1. Returns the net radiant power in W.
+    """
+    if not 0 < emissivity_1 <= 1:
+        raise ValueError(f"emissivity_1 must lie in (0, 1]; got {emissivity_1}")
+    if not 0 < emissivity_2 <= 1:
+        raise ValueError(f"emissivity_2 must lie in (0, 1]; got {emissivity_2}")
+    if not 0 < view_factor <= 1:
+        raise ValueError(f"view_factor must lie in (0, 1]; got {view_factor}")
+    _require(area_1, "[area]", "area_1")
+    _require(area_2, "[area]", "area_2")
+    _require(temperature_1, "[temperature]", "temperature_1")
+    _require(temperature_2, "[temperature]", "temperature_2")
+    a1 = area_1.to("m**2").magnitude
+    a2 = area_2.to("m**2").magnitude
+    t1 = temperature_1.to("K").magnitude
+    t2 = temperature_2.to("K").magnitude
+    if a1 <= 0 or a2 <= 0 or t1 <= 0 or t2 <= 0:
+        raise ValueError("areas and the absolute temperatures must be positive")
+    resistance = (1 - emissivity_1) / (emissivity_1 * a1) + 1 / (a1 * view_factor)
+    resistance += (1 - emissivity_2) / (emissivity_2 * a2)
+    return Quantity(magnitude=_STEFAN_BOLTZMANN * (t1**4 - t2**4) / resistance, unit="W")
 
 
 def radiation_heat_transfer_coefficient(

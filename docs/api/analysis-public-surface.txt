@@ -800,6 +800,7 @@ thermal.parallel_flow_effectiveness
 thermal.parallel_flow_ntu_for_effectiveness
 thermal.parallel_thermal_resistance
 thermal.radiation_heat_transfer
+thermal.radiation_two_surface_exchange
 thermal.radiation_heat_transfer_coefficient
 thermal.wien_peak_wavelength
 thermal.wien_temperature_from_peak

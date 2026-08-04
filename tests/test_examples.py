@@ -793,6 +793,14 @@ def test_heated_panel_convection_regime_example_height_flips_regime():
     assert r["rayleigh_2m"] > 1e9
 
 
+def test_radiant_barrier_shield_example_low_emissivity_cuts_exchange():
+    namespace = runpy.run_path(str(_EXAMPLES / "radiant_barrier_shield.py"))
+    c = namespace["barrier_comparison"]()
+    # The bare steel wall exchanges ~14.5 kW; the low-e barrier cuts it past 10x.
+    assert c["bare_steel_w"] == pytest.approx(14516, rel=0.02)
+    assert c["bare_steel_w"] / c["radiant_barrier_w"] > 10
+
+
 def test_insulated_steam_pipe_heat_loss_example_lagging_cuts_loss():
     namespace = runpy.run_path(str(_EXAMPLES / "insulated_steam_pipe_heat_loss.py"))
     p = namespace["pipe_heat_loss"]()
