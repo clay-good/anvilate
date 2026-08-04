@@ -13863,6 +13863,37 @@ def test_energy_storage_capacity_energy_and_backup_time():
         )
 
 
+def test_vortex_shedding_frequency_lock_in_and_reduced_velocity():
+    from anvilate.analysis import (
+        lock_in_velocity,
+        reduced_velocity,
+        vortex_shedding_frequency,
+    )
+
+    # f_s = St*V/D; 0.2, 10 m/s, 0.1 m -> 20 Hz.
+    f = vortex_shedding_frequency(
+        strouhal_number=0.2, velocity=_q("10 m/s"), characteristic_length=_q("0.1 m")
+    )
+    assert f.to("Hz").magnitude == pytest.approx(20.0, rel=1e-9)
+
+    # Lock-in velocity V = f_n*D/St; 20 Hz, 0.1 m, 0.2 -> 10 m/s (inverse of the above).
+    v = lock_in_velocity(
+        strouhal_number=0.2, natural_frequency=_q("20 Hz"), characteristic_length=_q("0.1 m")
+    )
+    assert v.to("m/s").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    # At the lock-in velocity the reduced velocity is exactly 1/St.
+    v_r = reduced_velocity(
+        velocity=v, natural_frequency=_q("20 Hz"), characteristic_length=_q("0.1 m")
+    )
+    assert v_r == pytest.approx(1 / 0.2, rel=1e-9)
+
+    with pytest.raises(ValueError, match="strouhal_number"):
+        vortex_shedding_frequency(
+            strouhal_number=0.0, velocity=_q("10 m/s"), characteristic_length=_q("0.1 m")
+        )
+
+
 def test_combustion_air_fuel_ratio_and_excess_air():
     from anvilate.analysis import (
         actual_air_fuel_ratio,

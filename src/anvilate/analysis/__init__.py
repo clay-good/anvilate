@@ -79,6 +79,9 @@ modules:
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.ventilation` — indoor-air-quality airflow: ASHRAE 62.1
   breathing-zone outdoor air, air changes per hour, and contaminant dilution airflow
+- :mod:`~anvilate.analysis.vortex_shedding` — flow-induced vibration: the Strouhal
+  shedding frequency f_s = St·V/D, the lock-in velocity that resonates a structure,
+  and the reduced velocity that screens the risk
 - :mod:`~anvilate.analysis.wear` — Archard sliding-wear law: the worn volume and wear
   depth of a sliding contact, the sliding distance (wear life) a depth limit allows, and
   the plain-bearing PV (pressure × velocity) factor against its overheating limit
@@ -1326,6 +1329,11 @@ from .ventilation import (
     breathing_zone_outdoor_airflow,
     dilution_airflow,
 )
+from .vortex_shedding import (
+    lock_in_velocity,
+    reduced_velocity,
+    vortex_shedding_frequency,
+)
 from .wear import (
     archard_wear_depth,
     archard_wear_volume,
@@ -2163,6 +2171,9 @@ __all__ = [
     "breathing_zone_outdoor_airflow",
     "air_changes_per_hour",
     "dilution_airflow",
+    "vortex_shedding_frequency",
+    "lock_in_velocity",
+    "reduced_velocity",
     "FILLET_THROAT_FACTOR",
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",

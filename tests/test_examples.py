@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_stack_vortex_lock_in_example_flags_common_wind():
+    namespace = runpy.run_path(str(_EXAMPLES / "stack_vortex_lock_in.py"))
+    s = namespace["stack_viv_screen"]()
+    # 0.9 Hz, 1 m, St 0.2 -> lock-in at 4.5 m/s, a common wind speed.
+    assert s["lock_in_wind_m_s"] == pytest.approx(4.5, abs=0.05)
+    # At lock-in the reduced velocity is 1/St = 5.
+    assert s["reduced_velocity_at_lock_in"] == pytest.approx(5.0, rel=1e-6)
+
+
 def test_boiler_combustion_air_example_flue_confirms_excess():
     namespace = runpy.run_path(str(_EXAMPLES / "boiler_combustion_air.py"))
     t = namespace["combustion_tune"]()

@@ -798,6 +798,9 @@ wear.sliding_distance_for_wear_depth
 ventilation.air_changes_per_hour
 ventilation.breathing_zone_outdoor_airflow
 ventilation.dilution_airflow
+vortex_shedding.lock_in_velocity
+vortex_shedding.reduced_velocity
+vortex_shedding.vortex_shedding_frequency
 weld.FILLET_THROAT_FACTOR
 weld.eccentric_weld_group_peak_stress
 weld.fillet_weld_design_strength
