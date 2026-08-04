@@ -36,6 +36,7 @@ __all__ = [
     "rankine_gordon_stress",
     "aisc_flexural_buckling_stress",
     "aisc_plastic_bracing_limit",
+    "aisc_inelastic_ltb_moment",
 ]
 
 
@@ -231,6 +232,58 @@ def aisc_plastic_bracing_limit(
     if ry <= 0 or fy <= 0 or e <= 0:
         raise ValueError("all inputs must be positive")
     return Quantity(magnitude=1.76 * ry * sqrt(e / fy), unit="mm")
+
+
+def aisc_inelastic_ltb_moment(
+    *,
+    plastic_moment: Quantity,
+    residual_yield_moment: Quantity,
+    unbraced_length: Quantity,
+    plastic_limit: Quantity,
+    inelastic_limit: Quantity,
+    moment_gradient_factor: float = 1.0,
+) -> Quantity:
+    """The AISC 360 §F2.2 flexural strength M_n in the inelastic LTB range.
+
+    Between the plastic-bracing limit L_p (:func:`aisc_plastic_bracing_limit`) and the
+    inelastic limit L_r, a compact I-beam's capacity falls linearly from the plastic
+    moment toward the residual-yield moment as the unbraced length grows:
+
+        M_n = C_b·[M_p − (M_p − 0.7·F_y·S_x)·(L_b − L_p)/(L_r − L_p)] ≤ M_p.
+
+    ``plastic_moment`` M_p and ``residual_yield_moment`` 0.7·F_y·S_x (the moment at L_r)
+    are the anchors, ``unbraced_length`` L_b the actual brace spacing, ``plastic_limit``
+    L_p and ``inelastic_limit`` L_r the range bounds, and ``moment_gradient_factor`` C_b
+    the moment-gradient factor (1.0 for uniform moment; higher for a varying moment
+    braces the beam more). At or below L_p the strength is M_p; beyond L_r use the
+    elastic form (:func:`lateral_torsional_buckling_moment`). The result is capped at
+    M_p. Returns M_n in kN·m.
+    """
+    _require(plastic_moment, "[force] * [length]", "plastic_moment")
+    _require(residual_yield_moment, "[force] * [length]", "residual_yield_moment")
+    _require(unbraced_length, "[length]", "unbraced_length")
+    _require(plastic_limit, "[length]", "plastic_limit")
+    _require(inelastic_limit, "[length]", "inelastic_limit")
+    mp = plastic_moment.to("kN*m").magnitude
+    mr = residual_yield_moment.to("kN*m").magnitude
+    lb = unbraced_length.to("mm").magnitude
+    lp = plastic_limit.to("mm").magnitude
+    lr = inelastic_limit.to("mm").magnitude
+    if mp <= 0 or mr <= 0 or lb <= 0 or lp <= 0 or lr <= 0:
+        raise ValueError("the moments and lengths must be positive")
+    if moment_gradient_factor <= 0:
+        raise ValueError(f"moment_gradient_factor must be positive; got {moment_gradient_factor}")
+    if lr <= lp:
+        raise ValueError("inelastic_limit L_r must exceed plastic_limit L_p")
+    if lb <= lp:
+        return Quantity(magnitude=mp, unit="kN*m")
+    if lb > lr:
+        raise ValueError(
+            "unbraced_length exceeds L_r — elastic LTB governs; use "
+            "lateral_torsional_buckling_moment"
+        )
+    mn = moment_gradient_factor * (mp - (mp - mr) * (lb - lp) / (lr - lp))
+    return Quantity(magnitude=min(mn, mp), unit="kN*m")
 
 
 def transition_slenderness(*, yield_strength: Quantity, elastic_modulus: Quantity) -> float:

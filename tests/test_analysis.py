@@ -13070,3 +13070,25 @@ def test_aisc_plastic_bracing_limit_lp():
         elastic_modulus=_q("200000 MPa"),
     )
     assert softer.to("mm").magnitude > lp.to("mm").magnitude
+
+
+def test_aisc_inelastic_ltb_moment_interpolates_between_lp_and_lr():
+    from anvilate.analysis import aisc_inelastic_ltb_moment
+
+    kw = {
+        "plastic_moment": _q("300 kN*m"),
+        "residual_yield_moment": _q("200 kN*m"),
+        "plastic_limit": _q("1695 mm"),
+        "inelastic_limit": _q("5000 mm"),
+    }
+    # At L_b between L_p and L_r the capacity interpolates: L_b=3000 -> 260.5 kN.m.
+    mn = aisc_inelastic_ltb_moment(unbraced_length=_q("3000 mm"), **kw)
+    assert mn.to("kN*m").magnitude == pytest.approx(
+        300 - 100 * (3000 - 1695) / (5000 - 1695), rel=1e-9
+    )
+    # At or below L_p the beam reaches its full plastic moment.
+    at_lp = aisc_inelastic_ltb_moment(unbraced_length=_q("1000 mm"), **kw)
+    assert at_lp.to("kN*m").magnitude == pytest.approx(300.0, rel=1e-12)
+    # Beyond L_r the elastic form governs, so this refuses.
+    with pytest.raises(ValueError, match="elastic LTB governs"):
+        aisc_inelastic_ltb_moment(unbraced_length=_q("6000 mm"), **kw)
