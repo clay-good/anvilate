@@ -515,6 +515,17 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_lighting_energy_tradeoff_example_middle_count_clears_both():
+    namespace = runpy.run_path(str(_EXAMPLES / "lighting_energy_tradeoff.py"))
+    r = namespace["layout_scorecards"]()
+    # Too few fixtures is too dim; too many blows the energy cap; 20 passes both.
+    assert r["count_14"] == "fail"
+    assert r["count_14_fails"] == "task illuminance"
+    assert r["count_20"] == "pass"
+    assert r["count_28"] == "fail"
+    assert r["count_28_fails"] == "lighting power density"
+
+
 def test_worker_noise_dose_scorecard_example_niosh_is_stricter():
     namespace = runpy.run_path(str(_EXAMPLES / "worker_noise_dose_scorecard.py"))
     r = namespace["exposure_scorecards"]()

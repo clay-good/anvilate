@@ -13356,6 +13356,25 @@ def test_illumination_point_source_and_lumen_method():
         )
 
 
+def test_illumination_lighting_power_density():
+    from anvilate.analysis import lighting_power_density
+
+    # LPD = n*W/A. 20 x 30 W over 80 m^2 -> 7.5 W/m^2.
+    lpd = lighting_power_density(
+        luminaire_count=20, input_watts_per_luminaire=_q("30 W"), area=_q("80 m**2")
+    )
+    assert lpd.to("W/m**2").magnitude == pytest.approx(7.5, rel=1e-9)
+    # Scales with fixture count.
+    lpd2 = lighting_power_density(
+        luminaire_count=40, input_watts_per_luminaire=_q("30 W"), area=_q("80 m**2")
+    )
+    assert lpd2.to("W/m**2").magnitude == pytest.approx(15.0, rel=1e-9)
+    with pytest.raises(ValueError, match="power"):
+        lighting_power_density(
+            luminaire_count=20, input_watts_per_luminaire=_q("30 lux"), area=_q("80 m**2")
+        )
+
+
 def test_electrical_three_phase_power_current_and_voltage_drop():
     import math
 

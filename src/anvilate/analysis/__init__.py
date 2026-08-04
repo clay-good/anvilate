@@ -184,8 +184,8 @@ modules:
   clamps, and links; and the thin circular ring's diametral deflection, peak
   moment under opposing loads, and external-pressure buckling load
 - :mod:`~anvilate.analysis.illumination` — lighting design: point-source
-  inverse-square cosine illuminance and the lumen method (room illuminance
-  and its luminaire-count inverse)
+  inverse-square cosine illuminance, the lumen method (room illuminance and
+  its luminaire-count inverse), and installed lighting power density
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -872,6 +872,7 @@ from .hydraulic_cylinder import (
     cylinder_rodside_intensified_pressure,
 )
 from .illumination import (
+    lighting_power_density,
     lumen_method_illuminance,
     lumen_method_luminaire_count,
     point_source_illuminance,
@@ -1781,6 +1782,7 @@ __all__ = [
     "point_source_illuminance",
     "lumen_method_illuminance",
     "lumen_method_luminaire_count",
+    "lighting_power_density",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

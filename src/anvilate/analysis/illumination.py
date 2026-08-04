@@ -27,6 +27,7 @@ from math import cos
 from ..units import Quantity
 
 __all__ = [
+    "lighting_power_density",
     "lumen_method_illuminance",
     "lumen_method_luminaire_count",
     "point_source_illuminance",
@@ -119,6 +120,31 @@ def lumen_method_luminaire_count(
     if e <= 0 or a <= 0 or phi <= 0:
         raise ValueError("target_illuminance, area, and lumens_per_luminaire must be positive")
     return e * a / (phi * coefficient_of_utilization * light_loss_factor)
+
+
+def lighting_power_density(
+    *,
+    luminaire_count: int,
+    input_watts_per_luminaire: Quantity,
+    area: Quantity,
+) -> Quantity:
+    """The installed lighting power density, LPD = n·W/A — the energy-code metric.
+
+    Energy codes cap how much connected lighting power a space may draw per unit floor area:
+    LPD = n·W/A, from the ``luminaire_count`` n, the ``input_watts_per_luminaire`` W (the fixture's
+    total input power, driver included — not the lamp lumens), and the floor ``area`` A. It is the
+    lever a code like ASHRAE 90.1 or the IECC pulls against illuminance: more fixtures light the
+    room better but push the LPD up toward the allowance. Returns the power density in W/m².
+    """
+    _check(input_watts_per_luminaire, "[power]", "input_watts_per_luminaire")
+    _check(area, "[length]**2", "area")
+    if luminaire_count <= 0:
+        raise ValueError("luminaire_count must be positive")
+    a = area.to("m**2").magnitude
+    if a <= 0:
+        raise ValueError("area must be positive")
+    watts = input_watts_per_luminaire.to("W").magnitude
+    return Quantity(magnitude=luminaire_count * watts / a, unit="W/m**2")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

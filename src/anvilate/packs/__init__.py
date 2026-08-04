@@ -13,7 +13,9 @@ adequacy and cavitation margin, and a pipe run's head budget); and
 :mod:`anvilate.packs.masonry` serves the masonry
 designer, screening a wall's TMS 402 axial and combined stresses; and
 :mod:`anvilate.packs.noise_exposure` serves the industrial hygienist, screening
-a worker's OSHA/NIOSH noise dose. Each screen rolls its results into a scorecard.
+a worker's OSHA/NIOSH noise dose; and :mod:`anvilate.packs.lighting` serves the
+lighting designer, screening a layout's task illuminance against its energy-code
+power density. Each screen rolls its results into a scorecard.
 """
 
 from __future__ import annotations
