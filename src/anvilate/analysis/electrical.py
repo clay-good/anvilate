@@ -1,4 +1,4 @@
-"""T1 analytical electrical feeder checks (power, current, and voltage drop, closed-form).
+"""T1 analytical electrical power-distribution checks (power, current, drop, fault, ground).
 
 The industrial and plant engineers this library serves size motor feeders and heater circuits, and
 that comes down to a few crisp relations. Three-phase real power is P = √3·V_LL·I·cosφ, so the line
@@ -8,21 +8,26 @@ run, ΔV = √3·I·(R·cosφ + X·sinφ) — the resistive part plus, on longer
 usual acceptance check is that the drop stays under a few percent of the nominal voltage, so a motor
 at the end of a long feeder still sees enough voltage to start and run.
 
-This is a wiring-sizing screen, not a protection or arc-flash study. Resistivity, reactance, and
-power factor are the caller's; inputs and outputs are dimension-checked
+Beyond sizing the feeder, the module also gives the transformer full-load and available fault
+current that set downstream interrupting ratings, and the Dwight earthing resistance of a driven
+ground rod (and rods in parallel). These are first-cut design values, not a full protection-
+coordination or arc-flash study. Resistivity, reactance, power factor, and the grounding combining
+factor are the caller's; inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
 """
 
 from __future__ import annotations
 
-from math import acos, sqrt, tan
+from math import acos, log, pi, sqrt, tan
 
 from ..units import Quantity
 
 __all__ = [
     "apparent_power_three_phase",
     "conductor_resistance",
+    "ground_rod_resistance",
     "line_current_for_power",
+    "parallel_ground_electrodes_resistance",
     "power_factor_correction_kvar",
     "three_phase_power",
     "transformer_available_fault_current",
@@ -221,6 +226,61 @@ def transformer_available_fault_current(
     if impedance_percent <= 0:
         raise ValueError("impedance_percent must be positive")
     return Quantity(magnitude=i_fla * 100.0 / impedance_percent, unit="A")
+
+
+def ground_rod_resistance(
+    *,
+    soil_resistivity: Quantity,
+    rod_length: Quantity,
+    rod_radius: Quantity,
+) -> Quantity:
+    """The earthing resistance of a driven ground rod, R = ρ/(2πL)·(ln(4L/a) − 1) (Dwight/IEEE 142).
+
+    A single vertical rod's resistance to remote earth is set mostly by the soil, not the metal:
+    R = ρ/(2πL)·(ln(4L/a) − 1), from the ``soil_resistivity`` ρ (Ω·m, the dominant and highly
+    variable term — ~100 for moist loam, thousands for dry sand or rock), the ``rod_length`` L, and
+    the ``rod_radius`` a. Driving a rod deeper helps roughly linearly; making it fatter barely helps
+    (it is inside a logarithm), which is why grounding is improved by more or longer rods, not
+    fatter ones. Returns the resistance in ohms.
+    """
+    _check(soil_resistivity, "[resistance]*[length]", "soil_resistivity")
+    _check(rod_length, "[length]", "rod_length")
+    _check(rod_radius, "[length]", "rod_radius")
+    rho = soil_resistivity.to("ohm*m").magnitude
+    length = rod_length.to("m").magnitude
+    a = rod_radius.to("m").magnitude
+    if rho <= 0 or length <= 0 or a <= 0:
+        raise ValueError("soil_resistivity, rod_length, and rod_radius must be positive")
+    if length <= a:
+        raise ValueError("rod_length must exceed rod_radius")
+    return Quantity(magnitude=rho / (2.0 * pi * length) * (log(4.0 * length / a) - 1.0), unit="ohm")
+
+
+def parallel_ground_electrodes_resistance(
+    *,
+    single_rod_resistance: Quantity,
+    rod_count: int,
+    arrangement_efficiency: float,
+) -> Quantity:
+    """The resistance of several ground rods in parallel, R_N = R₁/(N·F).
+
+    Rods driven near each other do not combine as cleanly as ideal parallel resistors, because their
+    earth shells overlap and compete for the same soil: R_N = R₁/(N·F), from the
+    ``single_rod_resistance`` R₁ (from :func:`ground_rod_resistance`), the ``rod_count`` N, and an
+    ``arrangement_efficiency`` F in (0, 1] — the combining factor from IEEE 142 for the spacing and
+    geometry (F → 1 only when the rods are spaced several rod-lengths apart). The result is always
+    above the ideal R₁/N, which is why grounding grids gain less than proportionally from added
+    rods. Returns the combined resistance in ohms.
+    """
+    _check(single_rod_resistance, "[resistance]", "single_rod_resistance")
+    if rod_count <= 0:
+        raise ValueError("rod_count must be positive")
+    if not 0.0 < arrangement_efficiency <= 1.0:
+        raise ValueError(f"arrangement_efficiency must be in (0, 1]; got {arrangement_efficiency}")
+    r1 = single_rod_resistance.to("ohm").magnitude
+    if r1 <= 0:
+        raise ValueError("single_rod_resistance must be positive")
+    return Quantity(magnitude=r1 / (rod_count * arrangement_efficiency), unit="ohm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

@@ -592,6 +592,15 @@ def test_ups_battery_bank_sizing_example_shallower_dod_shortens_runtime():
     assert b["shallow_runtime_h"] == pytest.approx(1.6, abs=0.05)
 
 
+def test_ground_electrode_sizing_example_soil_dominates():
+    namespace = runpy.run_path(str(_EXAMPLES / "ground_electrode_sizing.py"))
+    g = namespace["grounding_study"]()
+    # The 10x-more-resistive sand gives a 10x-worse rod.
+    assert g["sand_ohm"] == pytest.approx(10 * g["loam_ohm"], rel=1e-6)
+    # Four interfering rods land above the ideal one-quarter.
+    assert g["sand_four_rods_ohm"] > g["sand_ideal_quarter_ohm"]
+
+
 def test_transformer_fault_current_rating_example_stiffer_is_harder():
     namespace = runpy.run_path(str(_EXAMPLES / "transformer_fault_current_rating.py"))
     s = namespace["fault_study"]()

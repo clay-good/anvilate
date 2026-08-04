@@ -156,8 +156,9 @@ modules:
 - :mod:`~anvilate.analysis.electrical` — electrical feeder sizing (for plant/industrial
   work): three-phase real and apparent power, the line current a load draws, conductor
   resistance ρ·L/A, the three-phase voltage drop along a feeder, the capacitor kVAR to
-  correct a poor power factor, and the transformer full-load and available fault current
-  (the AIC rating downstream gear must interrupt)
+  correct a poor power factor, the transformer full-load and available fault current
+  (the AIC rating downstream gear must interrupt), and the Dwight earthing resistance of
+  a driven ground rod and of rods in parallel
 - :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, and the runtime
   a given bank delivers
@@ -690,7 +691,9 @@ from .dynamics import (
 from .electrical import (
     apparent_power_three_phase,
     conductor_resistance,
+    ground_rod_resistance,
     line_current_for_power,
+    parallel_ground_electrodes_resistance,
     power_factor_correction_kvar,
     three_phase_power,
     transformer_available_fault_current,
@@ -1464,6 +1467,8 @@ __all__ = [
     "three_phase_power",
     "transformer_full_load_current",
     "transformer_available_fault_current",
+    "ground_rod_resistance",
+    "parallel_ground_electrodes_resistance",
     "voltage_drop_three_phase",
     "battery_bank_capacity",
     "usable_battery_energy",

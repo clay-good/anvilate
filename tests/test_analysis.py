@@ -13688,6 +13688,37 @@ def test_electrical_apparent_power_and_pf_correction():
         )
 
 
+def test_electrical_ground_rod_and_parallel_electrodes():
+    import math
+
+    from anvilate.analysis import ground_rod_resistance, parallel_ground_electrodes_resistance
+
+    # Dwight: R = rho/(2*pi*L)*(ln(4L/a) - 1); 100 ohm*m, 3 m, 8 mm radius -> ~33.5 ohm.
+    r = ground_rod_resistance(
+        soil_resistivity=_q("100 ohm*m"), rod_length=_q("3 m"), rod_radius=_q("0.008 m")
+    )
+    expected = 100 / (2 * math.pi * 3) * (math.log(4 * 3 / 0.008) - 1)
+    assert r.to("ohm").magnitude == pytest.approx(expected, rel=1e-9)
+
+    # A deeper rod lowers the resistance.
+    deeper = ground_rod_resistance(
+        soil_resistivity=_q("100 ohm*m"), rod_length=_q("6 m"), rod_radius=_q("0.008 m")
+    )
+    assert deeper.to("ohm").magnitude < r.to("ohm").magnitude
+
+    # Parallel rods: R_N = R1/(N*F), always above the ideal R1/N.
+    four = parallel_ground_electrodes_resistance(
+        single_rod_resistance=r, rod_count=4, arrangement_efficiency=0.7
+    )
+    assert four.to("ohm").magnitude == pytest.approx(r.to("ohm").magnitude / (4 * 0.7), rel=1e-9)
+    assert four.to("ohm").magnitude > r.to("ohm").magnitude / 4
+
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        parallel_ground_electrodes_resistance(
+            single_rod_resistance=r, rod_count=4, arrangement_efficiency=1.5
+        )
+
+
 def test_electrical_transformer_full_load_and_fault_current():
     import math
 
