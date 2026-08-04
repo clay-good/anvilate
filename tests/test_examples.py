@@ -319,6 +319,17 @@ def test_friction_pile_capacity_example_shaft_carries_the_load():
     assert p["allowable_kn"] == pytest.approx(430, abs=5)
 
 
+def test_cofferdam_seepage_piping_example_piping_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "cofferdam_seepage_piping.py"))
+    s = namespace["seepage_check"]()
+    # The inflow is a small pump duty.
+    assert s["inflow_lps"] == pytest.approx(1.5, abs=0.1)
+    # The critical gradient is near 1, and the piping FS falls short of the 2.5 target.
+    assert 0.9 < s["critical_gradient"] < 1.0
+    assert s["piping_fs"] < 2.5
+    assert s["piping_fs"] == pytest.approx(1.94, abs=0.05)
+
+
 def test_square_footing_shape_depth_example_recovers_capacity():
     namespace = runpy.run_path(str(_EXAMPLES / "square_footing_shape_depth.py"))
     r = namespace["corrected_bearing"]()

@@ -40,7 +40,11 @@ __all__ = [
     "consolidation_settlement",
     "consolidation_time",
     "consolidation_time_factor",
+    "critical_hydraulic_gradient",
+    "darcy_seepage_flow",
     "eccentric_base_pressure",
+    "piping_factor_of_safety",
+    "seepage_velocity",
     "infinite_slope_factor_of_safety",
     "pile_allowable_capacity",
     "pile_end_bearing_capacity",
@@ -569,6 +573,89 @@ def vertical_stress_increase_2to1(
         raise ValueError("depth must be non-negative")
     delta_sigma = q0 * b * lo / ((b + z) * (lo + z))
     return Quantity(magnitude=delta_sigma, unit="kPa")
+
+
+def darcy_seepage_flow(
+    *,
+    permeability: Quantity,
+    hydraulic_gradient: float,
+    area: Quantity,
+) -> Quantity:
+    """The groundwater seepage flow through soil by Darcy's law, q = k·i·A.
+
+    Water moves through soil in proportion to the hydraulic gradient driving it: q = k·i·A.
+    ``permeability`` k is the soil's coefficient of permeability (hydraulic conductivity, a velocity
+    — ~1e-2 m/s for gravel down to ~1e-9 m/s for clay), ``hydraulic_gradient`` i the dimensionless
+    head drop per unit flow length (Δh/L), and ``area`` A the gross cross-section the flow crosses.
+    This is the discharge for a dewatering or under-dam seepage estimate. Returns the flow in m³/s.
+    """
+    _require(permeability, "[length]/[time]", "permeability")
+    _require(area, "[area]", "area")
+    k = permeability.to("m/s").magnitude
+    a = area.to("m**2").magnitude
+    if k <= 0 or a <= 0:
+        raise ValueError("permeability and area must be positive")
+    if hydraulic_gradient < 0:
+        raise ValueError("hydraulic_gradient must be non-negative")
+    return Quantity(magnitude=k * hydraulic_gradient * a, unit="m**3/s")
+
+
+def seepage_velocity(
+    *,
+    permeability: Quantity,
+    hydraulic_gradient: float,
+    porosity: float,
+) -> Quantity:
+    """The actual seepage velocity of water through the soil pores, v_s = k·i/n.
+
+    Darcy's law gives a *discharge* velocity v = k·i over the gross area, but the water actually
+    threads through only the pore space, so its true speed is higher: v_s = k·i/n. ``permeability``
+    k, ``hydraulic_gradient`` i, and ``porosity`` n (the void fraction, ~0.3–0.5 for most soils).
+    This is the velocity that governs how fast a contaminant or a tracer travels. Returns the
+    seepage velocity in m/s.
+    """
+    _require(permeability, "[length]/[time]", "permeability")
+    k = permeability.to("m/s").magnitude
+    if k <= 0:
+        raise ValueError("permeability must be positive")
+    if hydraulic_gradient < 0:
+        raise ValueError("hydraulic_gradient must be non-negative")
+    if not 0.0 < porosity < 1.0:
+        raise ValueError(f"porosity must be in (0, 1); got {porosity}")
+    return Quantity(magnitude=k * hydraulic_gradient / porosity, unit="m/s")
+
+
+def critical_hydraulic_gradient(*, specific_gravity: float, void_ratio: float) -> float:
+    """The critical hydraulic gradient at which upward seepage floats the soil.
+
+    When water seeps upward hard enough, its drag cancels the soil's buoyant weight and the grains
+    lose all contact — the quicksand or piping condition. That happens at the critical gradient
+    i_cr = (G_s − 1)/(1 + e), from the ``specific_gravity`` G_s of the solids (~2.65 for quartz
+    sand) and the ``void_ratio`` e. It is close to 1 for most soils. Compare a computed exit
+    gradient against it with :func:`piping_factor_of_safety`. Returns the dimensionless critical
+    gradient.
+    """
+    if specific_gravity <= 1.0:
+        raise ValueError(f"specific_gravity must exceed 1; got {specific_gravity}")
+    if void_ratio <= 0:
+        raise ValueError(f"void_ratio must be positive; got {void_ratio}")
+    return (specific_gravity - 1.0) / (1.0 + void_ratio)
+
+
+def piping_factor_of_safety(*, critical_gradient: float, exit_gradient: float) -> float:
+    """The factor of safety against piping (heave/boiling) at a seepage exit, i_cr/i_exit.
+
+    Downstream of a sheet-pile wall or under a dam, water exits the ground with an
+    ``exit_gradient`` i_exit; if it reaches the ``critical_gradient`` i_cr (from
+    :func:`critical_hydraulic_gradient`) the soil boils and pipes. The factor of safety is their
+    ratio, FS = i_cr/i_exit — typically kept at 2.5–3 because the consequences (loss of a
+    cofferdam, a dam foundation) are severe. Returns the dimensionless factor of safety.
+    """
+    if critical_gradient <= 0:
+        raise ValueError(f"critical_gradient must be positive; got {critical_gradient}")
+    if exit_gradient <= 0:
+        raise ValueError(f"exit_gradient must be positive; got {exit_gradient}")
+    return critical_gradient / exit_gradient
 
 
 def pile_skin_friction_capacity(

@@ -13550,6 +13550,37 @@ def test_eccentric_base_pressure_middle_third_and_uplift():
         )
 
 
+def test_darcy_seepage_flow_and_velocity():
+    from anvilate.analysis import darcy_seepage_flow, seepage_velocity
+
+    # q = k*i*A = 1e-5*0.5*10 = 5e-5 m^3/s.
+    q = darcy_seepage_flow(permeability=_q("1e-5 m/s"), hydraulic_gradient=0.5, area=_q("10 m**2"))
+    assert q.to("m**3/s").magnitude == pytest.approx(1e-5 * 0.5 * 10, rel=1e-9)
+    # Seepage velocity v_s = k*i/n exceeds the Darcy discharge velocity k*i.
+    v = seepage_velocity(permeability=_q("1e-5 m/s"), hydraulic_gradient=0.5, porosity=0.4)
+    assert v.to("m/s").magnitude == pytest.approx(1e-5 * 0.5 / 0.4, rel=1e-9)
+    assert v.to("m/s").magnitude > 1e-5 * 0.5  # faster than the discharge velocity
+    with pytest.raises(ValueError, match="porosity"):
+        seepage_velocity(permeability=_q("1e-5 m/s"), hydraulic_gradient=0.5, porosity=1.5)
+
+
+def test_critical_gradient_and_piping_factor_of_safety():
+    from anvilate.analysis import critical_hydraulic_gradient, piping_factor_of_safety
+
+    # i_cr = (G_s-1)/(1+e) = 1.65/1.7 = 0.971, near 1 as expected.
+    i_cr = critical_hydraulic_gradient(specific_gravity=2.65, void_ratio=0.7)
+    assert i_cr == pytest.approx((2.65 - 1) / (1 + 0.7), rel=1e-9)
+    assert 0.9 < i_cr < 1.1
+    # FS against piping is i_cr/i_exit.
+    fs = piping_factor_of_safety(critical_gradient=i_cr, exit_gradient=0.4)
+    assert fs == pytest.approx(i_cr / 0.4, rel=1e-9)
+    # A higher exit gradient (steeper seepage) lowers the safety factor toward boiling.
+    fs_worse = piping_factor_of_safety(critical_gradient=i_cr, exit_gradient=0.8)
+    assert fs_worse < fs
+    with pytest.raises(ValueError, match="specific_gravity"):
+        critical_hydraulic_gradient(specific_gravity=0.9, void_ratio=0.7)
+
+
 def test_infinite_slope_factor_of_safety_dry_cohesive_and_saturated():
     import math
 

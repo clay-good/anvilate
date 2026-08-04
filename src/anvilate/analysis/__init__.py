@@ -305,8 +305,10 @@ modules:
   a rectangular embedded footing under an inclined load),
   Terzaghi 1D consolidation settlement with its time-rate factor, retaining-wall
   external stability (overturning, sliding, and eccentric base-pressure) checks, the
-  infinite-slope factor of safety, the 2:1 vertical stress increase under a footing, and
-  the α-method pile capacity (shaft skin friction plus end bearing) for deep foundations
+  infinite-slope factor of safety, the 2:1 vertical stress increase under a footing, the
+  α-method pile capacity (shaft skin friction plus end bearing) for deep foundations, and
+  groundwater seepage (Darcy flow, seepage velocity, and the critical gradient and piping
+  factor of safety)
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
   unreinforced member, the axial capacity of a reinforced masonry column, and the
@@ -769,15 +771,19 @@ from .geotechnical import (
     consolidation_settlement,
     consolidation_time,
     consolidation_time_factor,
+    critical_hydraulic_gradient,
+    darcy_seepage_flow,
     eccentric_base_pressure,
     infinite_slope_factor_of_safety,
     pile_allowable_capacity,
     pile_end_bearing_capacity,
     pile_skin_friction_capacity,
+    piping_factor_of_safety,
     rankine_earth_pressure_coefficient,
     rankine_lateral_thrust,
     retaining_wall_overturning_factor,
     retaining_wall_sliding_factor,
+    seepage_velocity,
     terzaghi_bearing_capacity,
     vertical_stress_increase_2to1,
 )
@@ -1187,8 +1193,11 @@ __all__ = [
     "consolidation_settlement",
     "consolidation_time",
     "consolidation_time_factor",
+    "critical_hydraulic_gradient",
+    "darcy_seepage_flow",
     "eccentric_base_pressure",
     "infinite_slope_factor_of_safety",
+    "piping_factor_of_safety",
     "pile_allowable_capacity",
     "pile_end_bearing_capacity",
     "pile_skin_friction_capacity",
@@ -1196,6 +1205,7 @@ __all__ = [
     "rankine_lateral_thrust",
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
+    "seepage_velocity",
     "terzaghi_bearing_capacity",
     "vertical_stress_increase_2to1",
     "critical_depth_rectangular",
