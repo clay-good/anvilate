@@ -745,6 +745,20 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_micro_hydro_sizing_example_penstock_loss_costs_power():
+    namespace = runpy.run_path(str(_EXAMPLES / "micro_hydro_sizing.py"))
+    s = namespace["hydro_sizing"]()
+    # Net head strips the 4 m penstock loss off the 40 m gross drop.
+    assert s["net_head_m"] == pytest.approx(36.0, rel=1e-9)
+    # Gross-head power overstates the plant; the net-head number is the honest one.
+    assert s["gross_power_kw"] == pytest.approx(16.48, abs=0.05)
+    assert s["net_power_kw"] == pytest.approx(14.83, abs=0.05)
+    assert s["net_power_kw"] < s["gross_power_kw"]
+    # A 12 kW target at the net head needs ~49 L/s, under the 60 L/s the stream carries.
+    assert s["flow_for_target_lps"] == pytest.approx(48.6, abs=0.5)
+    assert s["flow_for_target_lps"] < 60.0
+
+
 def test_solar_collector_stagnation_example_hot_fluid_bleeds_efficiency():
     namespace = runpy.run_path(str(_EXAMPLES / "solar_collector_stagnation.py"))
     p = namespace["collector_operating_points"]()

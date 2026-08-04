@@ -13230,6 +13230,47 @@ def test_solar_pv_array_power_daily_energy_and_sizing():
         pv_array_power(irradiance=_q("1000 W/m**2"), area=_q("1.6 m**2"), module_efficiency=1.5)
 
 
+def test_hydro_turbine_power_net_head_and_flow_inverse():
+    from anvilate.analysis import (
+        hydro_flow_for_power,
+        hydro_net_head,
+        hydro_turbine_power,
+    )
+
+    # Net head strips the penstock loss: 25 - 5 = 20 m.
+    h_net = hydro_net_head(gross_head=_q("25 m"), head_loss=_q("5 m"))
+    assert h_net.to("m").magnitude == pytest.approx(20.0, rel=1e-12)
+
+    # P = rho*g*Q*H*eta; 1000 * 9.80665 * 0.5 * 20 * 0.75 = 73549.875 W.
+    p = hydro_turbine_power(
+        flow_rate=_q("0.5 m**3/s"),
+        net_head=h_net,
+        overall_efficiency=0.75,
+        fluid_density=_q("1000 kg/m**3"),
+    )
+    assert p.to("W").magnitude == pytest.approx(1000 * 9.80665 * 0.5 * 20 * 0.75, rel=1e-9)
+
+    # The flow inverse round-trips: the flow that yields that power is the original 0.5 m^3/s.
+    q = hydro_flow_for_power(
+        target_power=p,
+        net_head=h_net,
+        overall_efficiency=0.75,
+        fluid_density=_q("1000 kg/m**3"),
+    )
+    assert q.to("m**3/s").magnitude == pytest.approx(0.5, rel=1e-9)
+
+    # Guardrails: efficiency is a fraction, and losses cannot swallow the whole gross head.
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        hydro_turbine_power(
+            flow_rate=_q("0.5 m**3/s"),
+            net_head=h_net,
+            overall_efficiency=1.2,
+            fluid_density=_q("1000 kg/m**3"),
+        )
+    with pytest.raises(ValueError, match="head_loss must be less than gross_head"):
+        hydro_net_head(gross_head=_q("10 m"), head_loss=_q("10 m"))
+
+
 def test_solar_thermal_collector_efficiency_useful_heat_and_stagnation():
     from anvilate.analysis import (
         collector_stagnation_temperature,

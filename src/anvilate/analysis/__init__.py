@@ -207,6 +207,10 @@ modules:
   in the wind (cube law), the P = ½·ρ·A·V³·C_p a rotor delivers, the Betz limit
   16/27 ceiling on the power coefficient, the tip speed ratio λ = ω·R/V, and the
   capacity factor CF = E/(P·t)
+- :mod:`~anvilate.analysis.hydro_power` — hydro-turbine power: the net head a
+  turbine sees after penstock loss (H_net = H_gross − h_loss), the P = ρ·g·Q·H·η
+  a plant delivers (linear in flow and head), and the flow a target output needs
+  (Q = P/(ρ·g·H·η)) — completes the renewable set with solar_pv/solar_thermal/wind_power
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
@@ -1057,6 +1061,11 @@ from .hydraulic_cylinder import (
     cylinder_retract_speed,
     cylinder_rodside_intensified_pressure,
 )
+from .hydro_power import (
+    hydro_flow_for_power,
+    hydro_net_head,
+    hydro_turbine_power,
+)
 from .illumination import (
     lighting_power_density,
     lumen_method_illuminance,
@@ -1731,6 +1740,9 @@ __all__ = [
     "flat_plate_collector_efficiency",
     "collector_useful_heat",
     "collector_stagnation_temperature",
+    "hydro_net_head",
+    "hydro_turbine_power",
+    "hydro_flow_for_power",
     "accumulator_size_for_volume",
     "accumulator_usable_volume",
     "inverse_square_attenuation",

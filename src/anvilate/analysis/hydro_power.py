@@ -1,0 +1,120 @@
+"""T1 analytical hydro-turbine power checks (closed-form).
+
+Hydro completes the renewable set with :mod:`anvilate.analysis.solar_pv`,
+:mod:`anvilate.analysis.solar_thermal`, and :mod:`anvilate.analysis.wind_power`: where those turn
+sun and wind into power, a hydro plant turns *falling water* into it, and the arithmetic is the
+plainest of the four — the power is set by how much water falls and how far.
+
+The hydraulic power in a stream is P = ρ·g·Q·H: the weight rate of the flow (ρ·g·Q, from the
+``fluid_density`` ρ and the volumetric ``flow_rate`` Q) times the head H it drops through. A real
+plant delivers less: friction in the penstock eats part of the drop, so the turbine sees a *net*
+head H_net = H_gross − h_loss rather than the full gross head, and the turbine-plus-generator
+converts that with an overall efficiency η (~0.7–0.9 for a good small plant). The shaft/electrical
+output is then P = ρ·g·Q·H_net·η. Turned around, the flow a target output needs is
+Q = P/(ρ·g·H·η) — the sizing inverse that sets the intake and penstock.
+
+Unlike wind's cube law, hydro power is linear in both flow and head, which is why a modest head over
+a steady flow is such a dependable resource: the power is there whenever the water is.
+"""
+
+from __future__ import annotations
+
+from ..units import Quantity
+
+_GRAVITY = 9.80665  # m/s^2, standard gravity
+
+__all__ = [
+    "hydro_flow_for_power",
+    "hydro_net_head",
+    "hydro_turbine_power",
+]
+
+
+def hydro_net_head(*, gross_head: Quantity, head_loss: Quantity) -> Quantity:
+    """The net head a turbine actually sees, H_net = H_gross − h_loss.
+
+    The full vertical drop from intake to turbine is the ``gross_head`` H_gross, but penstock
+    friction and fittings burn part of it before the water arrives: the turbine sees only
+    H_net = H_gross − h_loss, from the ``head_loss`` h_loss (the friction head from
+    :mod:`~anvilate.analysis.pipe_flow`). This is the head to feed :func:`hydro_turbine_power` —
+    using the gross head instead overstates the output by the loss fraction. Raises if the loss
+    meets or exceeds the gross head (no head left to drive the turbine). Returns the net head as a
+    length.
+    """
+    _check(gross_head, "[length]", "gross_head")
+    _check(head_loss, "[length]", "head_loss")
+    h_gross = gross_head.to("m").magnitude
+    h_loss = head_loss.to("m").magnitude
+    if h_gross <= 0:
+        raise ValueError("gross_head must be positive")
+    if h_loss < 0:
+        raise ValueError("head_loss must be non-negative")
+    if h_loss >= h_gross:
+        raise ValueError(
+            "head_loss must be less than gross_head (no net head to drive the turbine)"
+        )
+    return Quantity(magnitude=h_gross - h_loss, unit="m")
+
+
+def hydro_turbine_power(
+    *,
+    flow_rate: Quantity,
+    net_head: Quantity,
+    overall_efficiency: float,
+    fluid_density: Quantity,
+) -> Quantity:
+    """The power a hydro turbine delivers, P = ρ·g·Q·H·η.
+
+    The shaft/electrical output from a volumetric ``flow_rate`` Q of a fluid of ``fluid_density`` ρ
+    dropping through a ``net_head`` H (from :func:`hydro_net_head`): P = ρ·g·Q·H·η, where the
+    ``overall_efficiency`` η folds together the turbine, drive, and generator (0 to 1, ~0.7–0.9 for
+    a good small plant). It is linear in both flow and head — double either and the power doubles —
+    so a steady stream over a modest fall is a dependable resource. Returns the power in watts.
+    """
+    _check(flow_rate, "[length]**3/[time]", "flow_rate")
+    _check(net_head, "[length]", "net_head")
+    _check(fluid_density, "[mass]/[length]**3", "fluid_density")
+    q = flow_rate.to("m**3/s").magnitude
+    h = net_head.to("m").magnitude
+    rho = fluid_density.to("kg/m**3").magnitude
+    if q <= 0 or h <= 0 or rho <= 0:
+        raise ValueError("flow_rate, net_head, and fluid_density must be positive")
+    if not 0.0 < overall_efficiency <= 1.0:
+        raise ValueError(f"overall_efficiency must be in (0, 1]; got {overall_efficiency}")
+    return Quantity(magnitude=rho * _GRAVITY * q * h * overall_efficiency, unit="W")
+
+
+def hydro_flow_for_power(
+    *,
+    target_power: Quantity,
+    net_head: Quantity,
+    overall_efficiency: float,
+    fluid_density: Quantity,
+) -> Quantity:
+    """The flow a target output needs, Q = P/(ρ·g·H·η) (the sizing inverse).
+
+    How much water a plant must pass to reach a ``target_power`` P at a given ``net_head`` H:
+    Q = P/(ρ·g·H·η), the inverse of :func:`hydro_turbine_power`, from the ``fluid_density`` ρ and
+    the ``overall_efficiency`` η. This is the flow the intake and penstock must carry — check it
+    against the stream's available flow before committing to a rating. Returns the required
+    volumetric flow rate in m³/s.
+    """
+    _check(target_power, "[power]", "target_power")
+    _check(net_head, "[length]", "net_head")
+    _check(fluid_density, "[mass]/[length]**3", "fluid_density")
+    p = target_power.to("W").magnitude
+    h = net_head.to("m").magnitude
+    rho = fluid_density.to("kg/m**3").magnitude
+    if p <= 0 or h <= 0 or rho <= 0:
+        raise ValueError("target_power, net_head, and fluid_density must be positive")
+    if not 0.0 < overall_efficiency <= 1.0:
+        raise ValueError(f"overall_efficiency must be in (0, 1]; got {overall_efficiency}")
+    q = p / (rho * _GRAVITY * h * overall_efficiency)
+    return Quantity(magnitude=q, unit="m**3/s")
+
+
+def _check(value: Quantity, expected: str, name: str) -> None:
+    if not value.has_dimension(expected):
+        raise ValueError(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        )
