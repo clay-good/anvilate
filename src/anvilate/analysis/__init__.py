@@ -417,6 +417,9 @@ modules:
   bend radius a material's ductility allows, the air (V-die) bending force, and the
   shear-cutting / round-hole punching force and the stripping force to clear the punch,
   and the deep-drawing cup blank diameter, draw ratio, and drawing force
+- :mod:`~anvilate.analysis.machining` — metal-cutting parameters: the surface cutting
+  speed V = π·D·N and its spindle-speed inverse N = V/(π·D), the material removal rate
+  MRR = V·f·d, and the Taylor tool life T = (C/V)^(1/n) that trades speed for edge life
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -1134,6 +1137,12 @@ from .living_hinge import (
 from .load_combinations import (
     asce7_asd_factored_load,
     asce7_lrfd_factored_load,
+)
+from .machining import (
+    cutting_speed,
+    material_removal_rate,
+    spindle_speed_for_cutting_speed,
+    taylor_tool_life,
 )
 from .masonry import (
     masonry_allowable_axial_stress,
@@ -2264,6 +2273,10 @@ __all__ = [
     "living_hinge_web_length_for_strain",
     "asce7_lrfd_factored_load",
     "asce7_asd_factored_load",
+    "cutting_speed",
+    "spindle_speed_for_cutting_speed",
+    "material_removal_rate",
+    "taylor_tool_life",
     "LoadDuration",
     "nds_load_duration_factor",
     "nds_adjusted_design_value",

@@ -556,6 +556,10 @@ living_hinge.living_hinge_fold_strain
 living_hinge.living_hinge_web_length_for_strain
 load_combinations.asce7_asd_factored_load
 load_combinations.asce7_lrfd_factored_load
+machining.cutting_speed
+machining.spindle_speed_for_cutting_speed
+machining.material_removal_rate
+machining.taylor_tool_life
 nds_timber.LoadDuration
 nds_timber.nds_adjusted_design_value
 nds_timber.nds_bearing_area_factor

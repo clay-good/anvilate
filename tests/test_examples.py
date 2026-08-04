@@ -745,6 +745,20 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_turning_speed_and_tool_life_example_trades_speed_for_life():
+    namespace = runpy.run_path(str(_EXAMPLES / "turning_speed_and_tool_life.py"))
+    t = namespace["turning_tradeoff"]()
+    # 157 m/min -> ~1000 rpm, ~63 cm3/min, ~42 min life.
+    assert t["slow_rpm"] == pytest.approx(1000.0, abs=2.0)
+    assert t["slow_mrr"] == pytest.approx(62.8, abs=0.5)
+    assert t["slow_life"] == pytest.approx(42.1, abs=0.5)
+    # 250 m/min removes ~60% more metal but the tool lasts far less.
+    assert t["fast_mrr"] == pytest.approx(100.0, abs=0.5)
+    assert t["fast_mrr"] > t["slow_mrr"]
+    assert t["fast_life"] < t["slow_life"]
+    assert t["slow_life"] / t["fast_life"] > 6.0
+
+
 def test_weld_heat_input_window_example_travel_speed_band():
     namespace = runpy.run_path(str(_EXAMPLES / "weld_heat_input_window.py"))
     w = namespace["heat_input_window"]()

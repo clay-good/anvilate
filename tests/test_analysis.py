@@ -11612,6 +11612,55 @@ def test_beam_on_elastic_foundation_rejects_bad_inputs():
         beam_on_elastic_foundation_max_deflection(load=_q("0 kN"), **good)
 
 
+def test_machining_cutting_speed_mrr_and_taylor_tool_life():
+    from math import pi
+
+    from anvilate.analysis import (
+        cutting_speed,
+        material_removal_rate,
+        spindle_speed_for_cutting_speed,
+        taylor_tool_life,
+    )
+
+    # V = pi*D*N; 50 mm at 1000 rpm -> pi*0.05*1000 = 157.08 m/min.
+    v = cutting_speed(diameter=_q("50 mm"), spindle_speed=_q("1000 rpm"))
+    assert v.to("m/min").magnitude == pytest.approx(pi * 0.05 * 1000, rel=1e-9)
+
+    # The spindle-speed inverse round-trips back to 1000 rpm.
+    n = spindle_speed_for_cutting_speed(cutting_speed=v, diameter=_q("50 mm"))
+    assert n.to("rpm").magnitude == pytest.approx(1000.0, rel=1e-9)
+    # The same cutting speed needs more rpm on a smaller diameter.
+    n_small = spindle_speed_for_cutting_speed(cutting_speed=v, diameter=_q("10 mm"))
+    assert n_small.to("rpm").magnitude > n.to("rpm").magnitude
+
+    # MRR = V*f*d; ~157080 mm/min * 0.2 mm * 2 mm = ~62832 mm^3/min = ~62.83 cm^3/min.
+    mrr = material_removal_rate(cutting_speed=v, feed=_q("0.2 mm"), depth_of_cut=_q("2 mm"))
+    v_mm_min = v.to("mm/min").magnitude
+    assert mrr.to("cm**3/min").magnitude == pytest.approx(v_mm_min * 0.2 * 2 / 1000, rel=1e-9)
+    assert mrr.to("cm**3/min").magnitude == pytest.approx(62.83, abs=0.01)
+
+    # Taylor: T = (C/V)^(1/n); C=400 m/min, n=0.25 -> (400/157.08)^4 ~ 42.0 min.
+    t = taylor_tool_life(
+        cutting_speed=v, taylor_speed_constant=_q("400 m/min"), taylor_exponent=0.25
+    )
+    assert t.to("min").magnitude == pytest.approx((400 / v.to("m/min").magnitude) ** 4, rel=1e-9)
+    # Life falls steeply with speed: doubling the cutting speed cuts life by 2^(1/n) = 16x.
+    t_fast = taylor_tool_life(
+        cutting_speed=_q("314.159 m/min"),
+        taylor_speed_constant=_q("400 m/min"),
+        taylor_exponent=0.25,
+    )
+    assert t_fast.to("min").magnitude == pytest.approx(t.to("min").magnitude / 16.0, rel=1e-3)
+
+    # Guardrails: exponent in (0,1), positive diameter.
+    with pytest.raises(ValueError, match=r"\(0, 1\)"):
+        taylor_tool_life(
+            cutting_speed=v, taylor_speed_constant=_q("400 m/min"), taylor_exponent=1.5
+        )
+    with pytest.raises(ValueError, match="diameter must be positive"):
+        cutting_speed(diameter=_q("0 mm"), spindle_speed=_q("1000 rpm"))
+
+
 def test_sheetmetal_bend_geometry_is_self_consistent():
     from math import radians
 
