@@ -23,6 +23,7 @@ __all__ = [
     "rc_stress_block_depth",
     "rc_beam_nominal_moment",
     "rc_doubly_reinforced_moment",
+    "rc_t_beam_moment",
     "rc_tension_steel_for_moment",
     "rc_concrete_shear_strength",
     "rc_column_axial_strength",
@@ -128,6 +129,64 @@ def rc_beam_nominal_moment(
     fy = steel_yield.to("MPa").magnitude
     moment_n_mm = as_mm2 * fy * (d - a / 2.0)
     return Quantity(magnitude=moment_n_mm / 1.0e6, unit="kN*m")
+
+
+def rc_t_beam_moment(
+    *,
+    tension_steel_area: Quantity,
+    steel_yield: Quantity,
+    concrete_strength: Quantity,
+    flange_width: Quantity,
+    web_width: Quantity,
+    flange_thickness: Quantity,
+    effective_depth: Quantity,
+) -> Quantity:
+    """The ACI 318 nominal moment of a flanged (T-) reinforced-concrete beam.
+
+    A beam cast monolithically with its slab acts as a T: the slab is the wide compression
+    flange. If the Whitney stress block stays within the flange (a ≤ h_f) the beam is simply
+    a wide rectangular beam of the ``flange_width``. If the compression spills into the web
+    (a > h_f) the strength splits into two couples — the flange overhangs
+    (A_sf·f_y = 0.85·f'c·(b_f − b_w)·h_f acting at d − h_f/2) plus the web
+    (the remaining steel over the web width b_w, at d − a_w/2). ``tension_steel_area`` A_s,
+    ``steel_yield`` f_y, ``concrete_strength`` f'c, ``flange_width`` b_f, ``web_width`` b_w,
+    ``flange_thickness`` h_f, and ``effective_depth`` d. The wide flange makes a T-beam far
+    stronger and stiffer in positive bending than its web alone. Returns M_n in kN·m.
+    """
+    _require(tension_steel_area, "[area]", "tension_steel_area")
+    _require(steel_yield, "[pressure]", "steel_yield")
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    _require(flange_width, "[length]", "flange_width")
+    _require(web_width, "[length]", "web_width")
+    _require(flange_thickness, "[length]", "flange_thickness")
+    _require(effective_depth, "[length]", "effective_depth")
+    a_s = tension_steel_area.to("mm**2").magnitude
+    fy = steel_yield.to("MPa").magnitude
+    fc = concrete_strength.to("MPa").magnitude
+    bf = flange_width.to("mm").magnitude
+    bw = web_width.to("mm").magnitude
+    hf = flange_thickness.to("mm").magnitude
+    d = effective_depth.to("mm").magnitude
+    if min(a_s, fy, fc, bf, bw, hf, d) <= 0:
+        raise ValueError("all areas, strengths, and dimensions must be positive")
+    if bw > bf:
+        raise ValueError("web_width cannot exceed flange_width")
+    a_rectangular = a_s * fy / (_ACI_STRESS_BLOCK_FACTOR * fc * bf)
+    if a_rectangular <= hf:
+        # The stress block stays in the flange: a wide rectangular beam.
+        moment_n_mm = a_s * fy * (d - a_rectangular / 2.0)
+        return Quantity(magnitude=moment_n_mm / 1.0e6, unit="kN*m")
+    # Compression spills into the web: flange-overhang couple + web couple.
+    a_sf = _ACI_STRESS_BLOCK_FACTOR * fc * (bf - bw) * hf / fy
+    moment_flange = a_sf * fy * (d - hf / 2.0)
+    a_sw = a_s - a_sf
+    if a_sw <= 0:
+        raise ValueError("the flange overhang alone balances the steel; check the geometry")
+    a_w = a_sw * fy / (_ACI_STRESS_BLOCK_FACTOR * fc * bw)
+    if a_w >= 2.0 * d:
+        raise ValueError("the web stress block exceeds the section; check the inputs")
+    moment_web = a_sw * fy * (d - a_w / 2.0)
+    return Quantity(magnitude=(moment_flange + moment_web) / 1.0e6, unit="kN*m")
 
 
 def rc_doubly_reinforced_moment(

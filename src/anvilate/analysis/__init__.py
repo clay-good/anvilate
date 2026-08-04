@@ -813,6 +813,7 @@ from .reinforced_concrete import (
     rc_minimum_flexural_steel,
     rc_net_tensile_strain,
     rc_stress_block_depth,
+    rc_t_beam_moment,
     rc_tension_steel_for_moment,
     rc_two_way_shear_strength,
 )
@@ -1128,6 +1129,7 @@ __all__ = [
     "rc_stress_block_depth",
     "rc_beam_nominal_moment",
     "rc_doubly_reinforced_moment",
+    "rc_t_beam_moment",
     "rc_tension_steel_for_moment",
     "rc_concrete_shear_strength",
     "rc_column_axial_strength",

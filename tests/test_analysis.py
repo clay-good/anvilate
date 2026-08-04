@@ -13730,6 +13730,37 @@ def test_rc_column_axial_strength_aci():
         )
 
 
+def test_rc_t_beam_moment_flange_and_web_regimes():
+    from anvilate.analysis import rc_beam_nominal_moment, rc_t_beam_moment
+
+    common = {
+        "steel_yield": _q("420 MPa"),
+        "concrete_strength": _q("30 MPa"),
+        "flange_width": _q("800 mm"),
+        "web_width": _q("300 mm"),
+        "effective_depth": _q("500 mm"),
+    }
+    # Stress block into the web (a > h_f = 80): flange couple + web couple -> ~1072 kN*m.
+    into_web = rc_t_beam_moment(
+        tension_steel_area=_q("6000 mm**2"), flange_thickness=_q("80 mm"), **common
+    )
+    assert into_web.to("kN*m").magnitude == pytest.approx(1072, abs=5)
+    # Stress block within the flange (a <= h_f): acts as a wide rectangular beam of b_f.
+    within_flange = rc_t_beam_moment(
+        tension_steel_area=_q("4000 mm**2"), flange_thickness=_q("150 mm"), **common
+    )
+    rectangular = rc_beam_nominal_moment(
+        steel_area=_q("4000 mm**2"),
+        steel_yield=_q("420 MPa"),
+        concrete_strength=_q("30 MPa"),
+        beam_width=_q("800 mm"),  # the full flange width
+        effective_depth=_q("500 mm"),
+    )
+    assert within_flange.to("kN*m").magnitude == pytest.approx(
+        rectangular.to("kN*m").magnitude, rel=1e-9
+    )
+
+
 def test_rc_doubly_reinforced_moment_both_yield_states():
     from anvilate.analysis import rc_beam_nominal_moment, rc_doubly_reinforced_moment
 
