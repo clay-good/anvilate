@@ -745,6 +745,18 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_forging_press_sizing_example_friction_hill_dominates():
+    namespace = runpy.run_path(str(_EXAMPLES / "forging_press_sizing.py"))
+    p = namespace["press_sizing"]()
+    # 40 -> 25 mm is a 0.47 true strain; Hollomon flow stress ~508 MPa.
+    assert p["true_strain"] == pytest.approx(0.470, abs=0.005)
+    assert p["flow_stress_mpa"] == pytest.approx(508.2, abs=0.5)
+    # The friction hill raises the load ~27% above the frictionless sigma*A.
+    assert p["frictionless_kn"] == pytest.approx(3991.2, abs=1.0)
+    assert p["load_kn"] == pytest.approx(5055.5, abs=1.0)
+    assert p["load_kn"] > p["frictionless_kn"]
+
+
 def test_injection_molding_machine_pick_example_clamp_and_cooling():
     namespace = runpy.run_path(str(_EXAMPLES / "injection_molding_machine_pick.py"))
     m = namespace["mould_process"]()

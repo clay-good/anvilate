@@ -423,6 +423,9 @@ modules:
 - :mod:`~anvilate.analysis.casting` — metal-casting solidification: the casting modulus
   M = V/A that governs freezing, Chvorinov's solidification time t = B·M², and the
   riser modulus M_r ≈ 1.2·M that makes the riser freeze last and take the shrinkage
+- :mod:`~anvilate.analysis.forging` — open-die (bulk-deformation) forging: the true
+  strain ε = ln(h₀/h₁) of an upset, the Hollomon flow stress σ = K·εⁿ that work-
+  hardening sets, and the press load F = σ·π·r²·(1 + 2μr/(3h)) with its friction hill
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -977,6 +980,11 @@ from .flywheel import (
     rotating_solid_disc_max_stress,
     rotating_solid_disc_radial_stress,
     rotating_solid_disc_tangential_stress,
+)
+from .forging import (
+    flow_stress_power_law,
+    forging_true_strain,
+    open_die_forging_load,
 )
 from .fourbar import (
     fourbar_transmission_angle,
@@ -2236,6 +2244,9 @@ __all__ = [
     "rotating_annular_disc_bore_stress",
     "rotating_annular_disc_radial_stress",
     "rotating_annular_disc_tangential_stress",
+    "forging_true_strain",
+    "flow_stress_power_law",
+    "open_die_forging_load",
     "point_source_illuminance",
     "lumen_method_illuminance",
     "lumen_method_luminaire_count",

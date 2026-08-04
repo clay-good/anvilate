@@ -439,6 +439,9 @@ flywheel.rotating_rim_radial_growth
 flywheel.rotating_solid_disc_max_stress
 flywheel.rotating_solid_disc_radial_stress
 flywheel.rotating_solid_disc_tangential_stress
+forging.forging_true_strain
+forging.flow_stress_power_law
+forging.open_die_forging_load
 fourbar.fourbar_transmission_angle
 fourbar.fourbar_type
 fourbar.is_grashof

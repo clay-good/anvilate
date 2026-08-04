@@ -3243,6 +3243,57 @@ def test_bolt_proof_load_and_recommended_preload():
         bolt_proof_load(tensile_stress_area=_q("84 mm"), proof_strength=_q("600 MPa"))
 
 
+def test_forging_true_strain_flow_stress_and_open_die_load():
+    from math import log, pi
+
+    from anvilate.analysis import (
+        flow_stress_power_law,
+        forging_true_strain,
+        open_die_forging_load,
+    )
+
+    # True strain eps = ln(h0/h1); 40 -> 25 mm -> ln(1.6) = 0.470.
+    eps = forging_true_strain(initial_height=_q("40 mm"), final_height=_q("25 mm"))
+    assert eps == pytest.approx(log(40 / 25), rel=1e-9)
+
+    # Hollomon flow stress sigma = K*eps^n; K=600 MPa, n=0.22 -> 508.2 MPa.
+    sigma = flow_stress_power_law(
+        strength_coefficient=_q("600 MPa"), true_strain=eps, strain_hardening_exponent=0.22
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(600 * eps**0.22, rel=1e-9)
+
+    # Open-die load F = sigma*pi*r^2*(1 + 2*mu*r/(3h)); r=50, h=25 mm, mu=0.2.
+    f = open_die_forging_load(
+        flow_stress=sigma, radius=_q("50 mm"), height=_q("25 mm"), friction_coefficient=0.2
+    )
+    sigma_pa = sigma.to("Pa").magnitude
+    hill = 1 + 2 * 0.2 * 0.05 / (3 * 0.025)
+    expected_kn = sigma_pa * pi * 0.05**2 * hill / 1000
+    assert f.to("kN").magnitude == pytest.approx(expected_kn, rel=1e-9)
+
+    # The frictionless load is just sigma*A; friction always raises it (the friction hill).
+    f_frictionless = open_die_forging_load(
+        flow_stress=sigma, radius=_q("50 mm"), height=_q("25 mm"), friction_coefficient=0.0
+    )
+    assert f_frictionless.to("kN").magnitude == pytest.approx(
+        sigma_pa * pi * 0.05**2 / 1000, rel=1e-9
+    )
+    assert f.to("kN").magnitude > f_frictionless.to("kN").magnitude
+    # A flatter forging (larger r/h) fights more friction, so its load is higher still.
+    f_flat = open_die_forging_load(
+        flow_stress=sigma, radius=_q("50 mm"), height=_q("12.5 mm"), friction_coefficient=0.2
+    )
+    assert f_flat.to("kN").magnitude > f.to("kN").magnitude
+
+    # Guardrails: an upset must reduce height, and the hardening exponent is in [0, 1).
+    with pytest.raises(ValueError, match="final_height must be less than initial_height"):
+        forging_true_strain(initial_height=_q("25 mm"), final_height=_q("40 mm"))
+    with pytest.raises(ValueError, match=r"\[0, 1\)"):
+        flow_stress_power_law(
+            strength_coefficient=_q("600 MPa"), true_strain=eps, strain_hardening_exponent=1.0
+        )
+
+
 def test_flywheel_inertia_and_energy_round_trip():
     # A press flywheel smoothing a 5000 J energy swing at 200 rpm mean speed to a
     # coefficient of fluctuation of 0.05 needs I = dE/(omega^2*Cs) = 227.97 kg*m^2.
