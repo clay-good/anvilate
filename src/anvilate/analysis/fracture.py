@@ -48,6 +48,8 @@ __all__ = [
     "critical_crack_length",
     "paris_law_crack_growth_rate",
     "paris_law_cycles_to_failure",
+    "crack_tip_plastic_zone_size",
+    "plane_strain_thickness_requirement",
 ]
 
 
@@ -194,3 +196,62 @@ def paris_law_cycles_to_failure(
         paris_coefficient * (geometry_factor * delta_sigma * sqrt(pi)) ** paris_exponent * exponent
     )
     return numerator / denominator
+
+
+def crack_tip_plastic_zone_size(
+    *,
+    stress_intensity: Quantity,
+    yield_strength: Quantity,
+    plane_strain: bool = False,
+) -> Quantity:
+    """The Irwin crack-tip plastic-zone size r_p at a loaded crack.
+
+    Linear-elastic fracture mechanics assumes the crack tip yields over only a small
+    region; r_p sizes that region and so tells you whether LEFM even applies. Irwin's
+    estimate is r_p = (1/(2π))·(K/σ_y)² in plane stress (thin sections) and, because
+    triaxial constraint suppresses yielding, a third of that, (1/(6π))·(K/σ_y)², in
+    plane strain (thick sections). ``stress_intensity`` K is the applied stress-intensity
+    factor (a MPa·√m quantity, from :func:`stress_intensity_factor`), ``yield_strength``
+    σ_y the material's yield, and ``plane_strain`` selects the constraint. If r_p is not
+    small compared with the crack length and the remaining ligament, LEFM is invalid and
+    an elastic-plastic (J-integral / CTOD) treatment is needed. Returns r_p in mm.
+    """
+    _require(stress_intensity, "[pressure] * [length]**0.5", "stress_intensity")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    k = stress_intensity.to("MPa*m**0.5").magnitude
+    sy = yield_strength.to("MPa").magnitude
+    if k < 0:
+        raise ValueError(f"stress_intensity must be non-negative; got {stress_intensity}")
+    if sy <= 0:
+        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+    coefficient = 1.0 / (6.0 * pi) if plane_strain else 1.0 / (2.0 * pi)
+    r_p_m = coefficient * (k / sy) ** 2  # metres
+    return Quantity(magnitude=r_p_m * 1000.0, unit="mm")
+
+
+def plane_strain_thickness_requirement(
+    *,
+    fracture_toughness: Quantity,
+    yield_strength: Quantity,
+) -> Quantity:
+    """The ASTM E399 minimum thickness B ≥ 2.5·(K_IC/σ_y)² for a valid plane-strain K_IC.
+
+    A fracture-toughness value is only a true, geometry-independent plane-strain K_IC if
+    the specimen (or the component) is thick enough to hold the crack tip in plane strain;
+    ASTM E399 requires B ≥ 2.5·(K_IC/σ_y)². Below that thickness the material behaves
+    tougher (plane-stress, more plastic zone), so using a handbook K_IC would be
+    conservative for the part but the test itself would be invalid. ``fracture_toughness``
+    K_IC (a MPa·√m quantity) and ``yield_strength`` σ_y set the requirement — the same
+    2.5·(K_IC/σ_y)² also bounds the crack length and ligament for a valid test. A tough,
+    low-yield material needs a very thick section to be plane-strain. Returns B in mm.
+    """
+    _require(fracture_toughness, "[pressure] * [length]**0.5", "fracture_toughness")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    kic = fracture_toughness.to("MPa*m**0.5").magnitude
+    sy = yield_strength.to("MPa").magnitude
+    if kic <= 0:
+        raise ValueError(f"fracture_toughness must be positive; got {fracture_toughness}")
+    if sy <= 0:
+        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+    b_m = 2.5 * (kic / sy) ** 2  # metres
+    return Quantity(magnitude=b_m * 1000.0, unit="mm")

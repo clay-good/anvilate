@@ -226,8 +226,10 @@ modules:
   Tresca, combined axial+bending, and the Inglis elliptical-hole
   stress-concentration factor
 - :mod:`~anvilate.analysis.fracture` — linear-elastic fracture mechanics: mode-I
-  stress-intensity factor, the critical crack length for fast fracture, and the
-  Paris-Erdogan fatigue crack-growth rate and integrated propagation life
+  stress-intensity factor, the critical crack length for fast fracture, the
+  Paris-Erdogan fatigue crack-growth rate and integrated propagation life, the
+  Irwin crack-tip plastic-zone size, and the ASTM E399 plane-strain thickness a
+  valid K_IC requires
 - :mod:`~anvilate.analysis.fatigue` — Goodman, Soderberg, and Gerber fatigue,
   the max/min → amplitude/mean cyclic-stress converter, the Goodman and
   Smith-Watson-Topper equivalent reversed stresses, the fatigue notch factor
@@ -607,9 +609,11 @@ from .fourbar import (
     is_grashof,
 )
 from .fracture import (
+    crack_tip_plastic_zone_size,
     critical_crack_length,
     paris_law_crack_growth_rate,
     paris_law_cycles_to_failure,
+    plane_strain_thickness_requirement,
     stress_intensity_factor,
 )
 from .gasket import (
@@ -1551,6 +1555,8 @@ __all__ = [
     "critical_crack_length",
     "paris_law_crack_growth_rate",
     "paris_law_cycles_to_failure",
+    "crack_tip_plastic_zone_size",
+    "plane_strain_thickness_requirement",
     "gasket_seating_load",
     "gasket_operating_load",
     "governing_gasket_bolt_load",

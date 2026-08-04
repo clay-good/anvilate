@@ -298,7 +298,9 @@ fourbar.fourbar_type
 fourbar.is_grashof
 fracture.critical_crack_length
 fracture.paris_law_crack_growth_rate
+fracture.crack_tip_plastic_zone_size
 fracture.paris_law_cycles_to_failure
+fracture.plane_strain_thickness_requirement
 fracture.stress_intensity_factor
 gasket.gasket_operating_load
 gasket.gasket_seating_load

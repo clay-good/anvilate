@@ -9197,6 +9197,41 @@ def test_stress_intensity_and_critical_crack_length_round_trip():
     assert ac_low.to("mm").magnitude == pytest.approx(4 * ac.to("mm").magnitude, rel=1e-12)
 
 
+def test_crack_tip_plastic_zone_and_thickness_requirement():
+    from math import pi
+
+    from anvilate.analysis import (
+        crack_tip_plastic_zone_size,
+        plane_strain_thickness_requirement,
+    )
+
+    # r_p = (1/(2pi))*(K/sy)^2 in plane stress: K=50 MPa-sqrt(m), sy=500 MPa -> 1.59 mm.
+    plane_stress = crack_tip_plastic_zone_size(
+        stress_intensity=_q("50 MPa*m**0.5"), yield_strength=_q("500 MPa")
+    )
+    assert plane_stress.to("mm").magnitude == pytest.approx(
+        (1 / (2 * pi)) * (50 / 500) ** 2 * 1000, rel=1e-9
+    )
+    # Plane strain (triaxial constraint) is a third the size.
+    plane_strain = crack_tip_plastic_zone_size(
+        stress_intensity=_q("50 MPa*m**0.5"), yield_strength=_q("500 MPa"), plane_strain=True
+    )
+    assert plane_strain.to("mm").magnitude == pytest.approx(
+        plane_stress.to("mm").magnitude / 3, rel=1e-9
+    )
+    # ASTM E399 B >= 2.5*(K_IC/sy)^2: 50/500 -> 25 mm.
+    b = plane_strain_thickness_requirement(
+        fracture_toughness=_q("50 MPa*m**0.5"), yield_strength=_q("500 MPa")
+    )
+    assert b.to("mm").magnitude == pytest.approx(2.5 * (50 / 500) ** 2 * 1000, rel=1e-9)
+    assert b.to("mm").magnitude == pytest.approx(25.0, rel=1e-9)
+    # A tougher, lower-yield material needs a much thicker section to be plane-strain.
+    tougher = plane_strain_thickness_requirement(
+        fracture_toughness=_q("100 MPa*m**0.5"), yield_strength=_q("400 MPa")
+    )
+    assert tougher.to("mm").magnitude > b.to("mm").magnitude
+
+
 def test_fracture_rejects_bad_inputs():
     with pytest.raises(ValueError, match="crack_length must be positive"):
         stress_intensity_factor(remote_stress=_q("100 MPa"), crack_length=_q("0 mm"))
