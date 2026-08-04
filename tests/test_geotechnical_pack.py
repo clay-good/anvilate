@@ -6,9 +6,11 @@ import pytest
 from pydantic import ValidationError
 
 from anvilate.packs.geotechnical import (
+    DrivenPile,
     InfiniteSlope,
     RetainingWall,
     ShallowFooting,
+    screen_driven_pile,
     screen_infinite_slope,
     screen_retaining_wall,
     screen_shallow_footing,
@@ -115,3 +117,25 @@ def test_infinite_slope_dry_passes_saturated_fails():
     u = 9.81 * 2.5 * math.cos(math.radians(35)) ** 2
     wet = dry.model_copy(update={"pore_pressure": _q(f"{u} kPa")})
     assert screen_infinite_slope(wet).status is CheckStatus.FAIL
+
+
+def _pile(**overrides) -> DrivenPile:
+    fields = {
+        "diameter": _q("0.4 m"),
+        "length": _q("15 m"),
+        "undrained_shear_strength": _q("75 kPa"),
+        "adhesion_factor": 0.7,
+        "applied_load": _q("350 kN"),
+    }
+    fields.update(overrides)
+    return DrivenPile(**fields)
+
+
+def test_driven_pile_passes_at_service_load_fails_when_overloaded():
+    ok = screen_driven_pile(_pile())
+    assert ok.status is CheckStatus.PASS
+    (entry,) = ok.entries
+    assert entry.name == "pile capacity"
+    assert entry.reference is not None
+    over = screen_driven_pile(_pile(applied_load=_q("500 kN")))
+    assert over.status is CheckStatus.FAIL

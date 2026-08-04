@@ -20,6 +20,9 @@ from ..analysis import (
     bearing_depth_factors,
     bearing_shape_factors,
     infinite_slope_factor_of_safety,
+    pile_allowable_capacity,
+    pile_end_bearing_capacity,
+    pile_skin_friction_capacity,
     rankine_lateral_thrust,
     retaining_wall_overturning_factor,
     retaining_wall_sliding_factor,
@@ -29,9 +32,11 @@ from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
+    "DrivenPile",
     "InfiniteSlope",
     "RetainingWall",
     "ShallowFooting",
+    "screen_driven_pile",
     "screen_infinite_slope",
     "screen_retaining_wall",
     "screen_shallow_footing",
@@ -41,6 +46,7 @@ _BEARING_REFERENCE = "Terzaghi bearing capacity with Vesić shape/depth factors"
 _OVERTURNING_REFERENCE = "Rankine active thrust, moment balance about the toe"
 _SLIDING_REFERENCE = "Rankine active thrust, base friction resistance"
 _SLOPE_REFERENCE = "Infinite-slope limit equilibrium"
+_PILE_REFERENCE = "α-method pile capacity (shaft friction + end bearing)"
 
 
 class ShallowFooting(BaseModel):
@@ -234,4 +240,55 @@ def screen_infinite_slope(
     entry = ScorecardEntry.from_safety_factor(
         "slope stability", computed=factor_of_safety, required=required_safety_factor
     ).model_copy(update={"reference": _SLOPE_REFERENCE})
+    return Scorecard(entries=(entry,))
+
+
+class DrivenPile(BaseModel):
+    """A single α-method pile in clay, its load, and what its capacity screen needs.
+
+    ``diameter`` D and ``length`` L set the pile geometry. The clay is given by its
+    ``undrained_shear_strength`` c_u and the ``adhesion_factor`` α (~1.0 soft down to ~0.5 stiff)
+    that sets the shaft friction. ``applied_load`` is the working axial load, and
+    ``factor_of_safety`` is the global factor applied to the ultimate capacity (typically 2.5–3).
+    """
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    diameter: Quantity
+    length: Quantity
+    undrained_shear_strength: Quantity
+    adhesion_factor: float
+    applied_load: Quantity
+    factor_of_safety: float = 2.5
+
+
+def screen_driven_pile(pile: DrivenPile) -> Scorecard:
+    """Screen a :class:`DrivenPile` for axial capacity and return its scorecard.
+
+    Builds the α-method shaft friction and end bearing, divides their sum by the pile's
+    ``factor_of_safety`` for the allowable capacity, and screens it against the ``applied_load``.
+    Returns a :class:`~anvilate.scorecard.Scorecard` with a cited PASS/FAIL capacity entry — the
+    allowable already carries the factor of safety, so the check is against a demand ratio of 1.0.
+    """
+    shaft = pile_skin_friction_capacity(
+        adhesion_factor=pile.adhesion_factor,
+        undrained_shear_strength=pile.undrained_shear_strength,
+        diameter=pile.diameter,
+        length=pile.length,
+    )
+    tip = pile_end_bearing_capacity(
+        undrained_shear_strength=pile.undrained_shear_strength, diameter=pile.diameter
+    )
+    allowable = (
+        pile_allowable_capacity(
+            skin_friction=shaft, end_bearing=tip, factor_of_safety=pile.factor_of_safety
+        )
+        .to("kN")
+        .magnitude
+    )
+    load = pile.applied_load.to("kN").magnitude
+    demand_ratio = allowable / load if load > 0 else None
+    entry = ScorecardEntry.from_safety_factor(
+        "pile capacity", computed=demand_ratio, required=1.0
+    ).model_copy(update={"reference": _PILE_REFERENCE})
     return Scorecard(entries=(entry,))
