@@ -13009,6 +13009,39 @@ def test_nds_column_stability_factor_ylinen_and_euler_stress():
         )
 
 
+def test_nds_shear_stress_scorecard_and_bearing_area_factor():
+    from anvilate.analysis import (
+        nds_bearing_area_factor,
+        nds_shear_scorecard,
+        nds_shear_stress,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    # f_v = 1.5*V/(b*d); 5000 N, 38 mm x 235 mm -> 0.840 MPa.
+    fv = nds_shear_stress(shear_force=_q("5000 N"), width=_q("38 mm"), depth=_q("235 mm"))
+    assert fv.to("MPa").magnitude == pytest.approx(1.5 * 5000 / (0.038 * 0.235) / 1e6, rel=1e-9)
+
+    # Scorecard: adjusted F'_v over f_v.
+    card = nds_shear_scorecard("shear", shear_stress=fv, adjusted_shear_value=_q("1.2 MPa"))
+    assert card.safety_factor == pytest.approx(1.2 / fv.to("MPa").magnitude, rel=1e-9)
+    assert card.status is CheckStatus.PASS
+
+    # No reference value -> NOT_EVALUATED, never a silent pass.
+    unset = nds_shear_scorecard("shear", shear_stress=fv, adjusted_shear_value=None)
+    assert unset.status is CheckStatus.NOT_EVALUATED
+
+    # Bearing area factor C_b = (l_b + 0.375)/l_b; 1.5 in -> 1.25, fading toward 1.0.
+    assert nds_bearing_area_factor(bearing_length=_q("1.5 inch")) == pytest.approx(1.25, rel=1e-9)
+    assert nds_bearing_area_factor(bearing_length=_q("3.5 inch")) == pytest.approx(
+        (3.5 + 0.375) / 3.5, rel=1e-9
+    )
+    assert nds_bearing_area_factor(bearing_length=_q("6 inch")) < nds_bearing_area_factor(
+        bearing_length=_q("1.5 inch")
+    )
+    with pytest.raises(ValueError, match="force"):
+        nds_shear_stress(shear_force=_q("5 MPa"), width=_q("38 mm"), depth=_q("235 mm"))
+
+
 def test_composite_rule_of_mixtures_cfrp():
     from anvilate.analysis import (
         rule_of_mixtures_modulus,

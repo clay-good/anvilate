@@ -27,10 +27,13 @@ __all__ = [
     "LoadDuration",
     "nds_load_duration_factor",
     "nds_adjusted_design_value",
+    "nds_bearing_area_factor",
     "nds_bending_scorecard",
     "nds_euler_buckling_stress",
     "nds_column_stability_factor",
     "nds_combined_bending_compression",
+    "nds_shear_scorecard",
+    "nds_shear_stress",
 ]
 
 # NDS §3.7.1 buckling coefficient and the c parameter of the Ylinen column formula.
@@ -136,6 +139,87 @@ def nds_bending_scorecard(
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
         update={"reference": "NDS"}
     )
+
+
+def nds_shear_stress(
+    *,
+    shear_force: Quantity,
+    width: Quantity,
+    depth: Quantity,
+) -> Quantity:
+    """The maximum horizontal shear stress in a rectangular beam, f_v = 1.5·V/(b·d) (NDS §3.4.2).
+
+    Shear stress in a rectangular section peaks at the neutral axis at 1.5× the average V/A:
+    f_v = 1.5·V/(b·d), from the ``shear_force`` V, section ``width`` b, and ``depth`` d. In timber
+    it is the check that governs short, heavily loaded spans, where the horizontal shear parallel to
+    the grain reaches F'_v before the bending stress reaches F'_b. Returns the shear stress in the
+    force/area kind (a stress in psi or MPa).
+    """
+    if not shear_force.has_dimension("[force]"):
+        raise ValueError(
+            f"shear_force must be a [force] quantity; got {shear_force.dimensionality}"
+        )
+    if not width.has_dimension("[length]") or not depth.has_dimension("[length]"):
+        raise ValueError("width and depth must be [length] quantities")
+    b = width.to("m").magnitude
+    d = depth.to("m").magnitude
+    if b <= 0 or d <= 0:
+        raise ValueError("width and depth must be positive")
+    stress = 1.5 * abs(shear_force.to("N").magnitude) / (b * d)
+    return Quantity(magnitude=stress / 1e6, unit="MPa")
+
+
+def nds_shear_scorecard(
+    name: str,
+    *,
+    shear_stress: Quantity,
+    adjusted_shear_value: Quantity | None,
+    required: float = 1.0,
+) -> ScorecardEntry:
+    """Screen a horizontal shear stress against the adjusted shear design value → an entry.
+
+    The safety factor is the adjusted design value F'_v over the applied ``shear_stress`` f_v,
+    judged against ``required`` (1.0 = exactly the NDS allowable). When ``adjusted_shear_value`` is
+    ``None`` — no reference F_v was supplied — the entry is ``NOT_EVALUATED`` rather than a silent
+    pass, mirroring :func:`nds_bending_scorecard`.
+    """
+    if adjusted_shear_value is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — no NDS reference shear value supplied",
+            reference="NDS",
+        )
+    if not shear_stress.has_dimension("[pressure]"):
+        raise ValueError(
+            f"shear_stress must be a [pressure] quantity; got {shear_stress.dimensionality}"
+        )
+    fv = abs(shear_stress.to("MPa").magnitude)
+    fv_allow = adjusted_shear_value.to("MPa").magnitude
+    computed = float("inf") if fv == 0 else fv_allow / fv
+    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
+        update={"reference": "NDS"}
+    )
+
+
+def nds_bearing_area_factor(*, bearing_length: Quantity) -> float:
+    """The NDS §3.10.4 bearing area factor C_b = (l_b + 0.375 in)/l_b.
+
+    A short bearing perpendicular to the grain carries a little more than its nominal area because
+    the fibres just past each end share the load: C_b = (l_b + 0.375 in)/l_b, from the
+    ``bearing_length`` l_b measured along the grain. The 0.375-inch bonus is fixed, so the factor is
+    largest for short bearings (1.25 at 1.5 in) and fades toward 1.0 as the bearing lengthens. It
+    applies only to bearings under 6 in long and at least 3 in from the member end; otherwise C_b is
+    1.0. Returns the dimensionless factor.
+    """
+    if not bearing_length.has_dimension("[length]"):
+        raise ValueError(
+            f"bearing_length must be a [length] quantity; got {bearing_length.dimensionality}"
+        )
+    lb = bearing_length.to("inch").magnitude
+    if lb <= 0:
+        raise ValueError("bearing_length must be positive")
+    return (lb + 0.375) / lb
 
 
 def nds_euler_buckling_stress(

@@ -515,6 +515,17 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_timber_header_shear_governs_example_shear_beats_bending():
+    namespace = runpy.run_path(str(_EXAMPLES / "timber_header_shear_governs.py"))
+    card = namespace["header_scorecard"]()
+    names = {e.name: e for e in card.entries}
+    # Bending has room; the short span is governed (and failed) by shear.
+    assert names["header bending"].status is CheckStatus.PASS
+    assert names["header shear"].status is CheckStatus.FAIL
+    # The bearing check clears with the C_b bonus.
+    assert namespace["bearing_margin"]() > 1.5
+
+
 def test_insulated_steam_pipe_heat_loss_example_lagging_cuts_loss():
     namespace = runpy.run_path(str(_EXAMPLES / "insulated_steam_pipe_heat_loss.py"))
     p = namespace["pipe_heat_loss"]()

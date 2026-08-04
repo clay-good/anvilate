@@ -940,11 +940,14 @@ from .masonry import (
 from .nds_timber import (
     LoadDuration,
     nds_adjusted_design_value,
+    nds_bearing_area_factor,
     nds_bending_scorecard,
     nds_column_stability_factor,
     nds_combined_bending_compression,
     nds_euler_buckling_stress,
     nds_load_duration_factor,
+    nds_shear_scorecard,
+    nds_shear_stress,
 )
 from .o_ring import (
     o_ring_gland_fill_fraction,
@@ -1873,6 +1876,9 @@ __all__ = [
     "nds_euler_buckling_stress",
     "nds_column_stability_factor",
     "nds_combined_bending_compression",
+    "nds_shear_stress",
+    "nds_shear_scorecard",
+    "nds_bearing_area_factor",
     "o_ring_squeeze_fraction",
     "o_ring_gland_fill_fraction",
     "o_ring_stretch_fraction",
