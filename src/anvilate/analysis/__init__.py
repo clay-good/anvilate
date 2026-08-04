@@ -176,7 +176,8 @@ modules:
   (the AIC rating downstream gear must interrupt), the Dwight earthing resistance of
   a driven ground rod and of rods in parallel, and the AC skin depth √(ρ/(π·f·μ))
 - :mod:`~anvilate.analysis.reactive_circuit` — reactive components: the energy a
-  capacitor (½·C·V²) and an inductor (½·L·I²) store, and the LC resonant frequency
+  capacitor (½·C·V²) and an inductor (½·L·I²) store, the RC/RL first-order time
+  constants and the RC filter cutoff f_c = 1/(2π·R·C), and the LC resonant frequency
   f₀ = 1/(2π·√(L·C))
 - :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, and the runtime
@@ -1140,6 +1141,9 @@ from .reactive_circuit import (
     capacitor_stored_energy,
     inductor_stored_energy,
     lc_resonant_frequency,
+    rc_cutoff_frequency,
+    rc_time_constant,
+    rl_time_constant,
 )
 from .refrigeration import (
     carnot_cop_cooling,
@@ -1486,6 +1490,9 @@ __all__ = [
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",
+    "rc_time_constant",
+    "rl_time_constant",
+    "rc_cutoff_frequency",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",

@@ -728,6 +728,15 @@ def test_motor_feeder_scorecard_example_long_run_fails_on_drop():
     assert r["long_failures"] == "voltage drop"
 
 
+def test_rc_antialiasing_filter_example_cutoff_and_settling():
+    namespace = runpy.run_path(str(_EXAMPLES / "rc_antialiasing_filter.py"))
+    r = namespace["rc_filter"]()
+    # 10 kohm * 100 nF -> 1 ms tau, ~159 Hz cutoff, ~5 ms settling.
+    assert r["time_constant_ms"] == pytest.approx(1.0, rel=1e-6)
+    assert r["cutoff_hz"] == pytest.approx(159.2, abs=0.5)
+    assert r["settling_ms"] == pytest.approx(5.0, rel=1e-6)
+
+
 def test_dc_link_capacitor_energy_example_stores_hundreds_of_joules():
     namespace = runpy.run_path(str(_EXAMPLES / "dc_link_capacitor_energy.py"))
     d = namespace["dc_link_design"]()

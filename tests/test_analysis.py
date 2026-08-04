@@ -13978,6 +13978,31 @@ def test_thermal_cylindrical_conduction_and_critical_radius():
         )
 
 
+def test_reactive_circuit_first_order_time_constants_and_cutoff():
+    import math
+
+    from anvilate.analysis import rc_cutoff_frequency, rc_time_constant, rl_time_constant
+
+    # RC time constant tau = R*C; 1 kohm * 1 uF = 1 ms.
+    tau = rc_time_constant(resistance=_q("1000 ohm"), capacitance=_q("1 uF"))
+    assert tau.to("s").magnitude == pytest.approx(1e-3, rel=1e-9)
+
+    # RC cutoff f_c = 1/(2*pi*R*C); 1 kohm, 1 uF -> ~159 Hz.
+    fc = rc_cutoff_frequency(resistance=_q("1000 ohm"), capacitance=_q("1 uF"))
+    assert fc.to("Hz").magnitude == pytest.approx(1 / (2 * math.pi * 1e-3), rel=1e-9)
+    # f_c is the reciprocal of 2*pi*tau.
+    assert fc.to("Hz").magnitude == pytest.approx(
+        1 / (2 * math.pi * tau.to("s").magnitude), rel=1e-9
+    )
+
+    # RL time constant tau = L/R; 10 mH / 5 ohm = 2 ms.
+    rl = rl_time_constant(inductance=_q("10 mH"), resistance=_q("5 ohm"))
+    assert rl.to("s").magnitude == pytest.approx(10e-3 / 5, rel=1e-9)
+
+    with pytest.raises(ValueError, match="resistance and capacitance"):
+        rc_time_constant(resistance=_q("0 ohm"), capacitance=_q("1 uF"))
+
+
 def test_reactive_circuit_stored_energy_and_lc_resonance():
     import math
 

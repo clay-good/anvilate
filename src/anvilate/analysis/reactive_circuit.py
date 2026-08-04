@@ -12,7 +12,8 @@ freewheeling paths.
 
 Put the two together and the energy sloshes between them at the LC resonant frequency
 f₀ = 1/(2π·√(L·C)) — the tuning of a filter, the ring of a switching node, the frequency a tank
-circuit selects.
+circuit selects. Paired instead with a resistor, a single reactive element gives a first-order
+response with time constant τ = R·C (or L/R) and an RC filter corner at f_c = 1/(2π·R·C).
 """
 
 from __future__ import annotations
@@ -25,6 +26,9 @@ __all__ = [
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",
+    "rc_cutoff_frequency",
+    "rc_time_constant",
+    "rl_time_constant",
 ]
 
 
@@ -79,6 +83,60 @@ def lc_resonant_frequency(*, inductance: Quantity, capacitance: Quantity) -> Qua
     if length <= 0 or c <= 0:
         raise ValueError("inductance and capacitance must be positive")
     return Quantity(magnitude=1.0 / (2.0 * pi * sqrt(length * c)), unit="Hz")
+
+
+def rc_time_constant(*, resistance: Quantity, capacitance: Quantity) -> Quantity:
+    """The time constant of an RC circuit, τ = R·C.
+
+    A resistor charging a capacitor settles exponentially with the time constant τ = R·C, from the
+    ``resistance`` R and ``capacitance`` C — after one τ the capacitor is 63% of the way to its
+    final voltage, and after ~5τ it is essentially there. It sets the debounce delay of an RC
+    network, the ripple decay of a filter, and the response time of a first-order sensor. Returns
+    the time constant in seconds.
+    """
+    _check(resistance, "[resistance]", "resistance")
+    _check(capacitance, "[capacitance]", "capacitance")
+    r = resistance.to("ohm").magnitude
+    c = capacitance.to("F").magnitude
+    if r <= 0 or c <= 0:
+        raise ValueError("resistance and capacitance must be positive")
+    return Quantity(magnitude=r * c, unit="s")
+
+
+def rl_time_constant(*, inductance: Quantity, resistance: Quantity) -> Quantity:
+    """The time constant of an RL circuit, τ = L/R.
+
+    The current in an inductor driven through a resistor rises (or decays) exponentially with the
+    time constant τ = L/R, from the ``inductance`` L and ``resistance`` R. A large inductance or a
+    small resistance makes the current sluggish to change — the reason a relay coil or a motor
+    winding does not switch its current instantly, and needs a snubber to absorb what is left when
+    it tries to. Returns the time constant in seconds.
+    """
+    _check(inductance, "[inductance]", "inductance")
+    _check(resistance, "[resistance]", "resistance")
+    length = inductance.to("H").magnitude
+    r = resistance.to("ohm").magnitude
+    if length <= 0 or r <= 0:
+        raise ValueError("inductance and resistance must be positive")
+    return Quantity(magnitude=length / r, unit="s")
+
+
+def rc_cutoff_frequency(*, resistance: Quantity, capacitance: Quantity) -> Quantity:
+    """The −3 dB cutoff frequency of a first-order RC filter, f_c = 1/(2π·R·C).
+
+    A single resistor and capacitor make a first-order low- or high-pass filter whose corner — the
+    frequency at which the output has fallen 3 dB (to 1/√2 of the passband) — is f_c = 1/(2π·R·C),
+    from the ``resistance`` R and ``capacitance`` C. It is the reciprocal of 2π times the RC time
+    constant, and the number that sets an anti-alias filter's edge, a sensor's bandwidth, or a tone
+    control's turnover. Returns the cutoff frequency in hertz.
+    """
+    _check(resistance, "[resistance]", "resistance")
+    _check(capacitance, "[capacitance]", "capacitance")
+    r = resistance.to("ohm").magnitude
+    c = capacitance.to("F").magnitude
+    if r <= 0 or c <= 0:
+        raise ValueError("resistance and capacitance must be positive")
+    return Quantity(magnitude=1.0 / (2.0 * pi * r * c), unit="Hz")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
