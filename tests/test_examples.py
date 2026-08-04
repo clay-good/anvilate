@@ -1073,6 +1073,16 @@ def test_seismic_story_drift_check_example_amplification_matters():
     assert d["amplified_mm"] < d["allowable_mm"]
 
 
+def test_seismic_accidental_torsion_example_irregular_amplifies():
+    namespace = runpy.run_path(str(_EXAMPLES / "seismic_accidental_torsion.py"))
+    t = namespace["torsional_moments"]()
+    assert t["symmetric_knm"] == pytest.approx(1200.0, rel=1e-9)
+    assert t["amplification"] == pytest.approx(1.5625, abs=0.01)
+    # The irregular building's amplified torsion is larger than the symmetric baseline.
+    assert t["irregular_knm"] == pytest.approx(1875.0, abs=1.0)
+    assert t["irregular_knm"] > t["symmetric_knm"]
+
+
 def test_seismic_diaphragm_force_example_roof_floored():
     namespace = runpy.run_path(str(_EXAMPLES / "seismic_diaphragm_force.py"))
     d = namespace["diaphragm_forces"]()

@@ -39,6 +39,8 @@ __all__ = [
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
     "seismic_diaphragm_force",
+    "seismic_torsional_amplification_factor",
+    "seismic_accidental_torsional_moment",
     "seismic_design_story_drift",
     "allowable_story_drift",
     "seismic_stability_coefficient",
@@ -335,6 +337,61 @@ def seismic_diaphragm_force(
     lower = 0.2 * design_spectral_acceleration * importance_factor * wpx
     upper = 0.4 * design_spectral_acceleration * importance_factor * wpx
     return Quantity(magnitude=min(max(proportional, lower), upper), unit="kN")
+
+
+def seismic_torsional_amplification_factor(
+    *,
+    maximum_displacement: Quantity,
+    average_displacement: Quantity,
+) -> float:
+    """The ASCE 7 torsional amplification factor Ax = (δmax/(1.2·δavg))², 1 ≤ Ax ≤ 3 (§12.8.4.3).
+
+    A building whose lateral stiffness is lopsided twists as it sways, and one edge deflects more
+    than the other. When that imbalance is large enough to be a torsional irregularity, ASCE 7
+    amplifies the accidental torsion by Ax = (δmax/(1.2·δavg))² — the squared ratio of the
+    ``maximum_displacement`` δmax at the worst corner to 1.2 times the ``average_displacement`` δavg
+    of the two ends. Ax is 1.0 for a symmetric building (no amplification) and is capped at 3.0.
+    Feed it to :func:`seismic_accidental_torsional_moment`. Returns the dimensionless Ax.
+    """
+    _check(maximum_displacement, "[length]", "maximum_displacement")
+    _check(average_displacement, "[length]", "average_displacement")
+    dmax = maximum_displacement.to("mm").magnitude
+    davg = average_displacement.to("mm").magnitude
+    if dmax <= 0 or davg <= 0:
+        raise ValueError("maximum_displacement and average_displacement must be positive")
+    if dmax < davg:
+        raise ValueError("maximum_displacement cannot be less than the average")
+    return min(max((dmax / (1.2 * davg)) ** 2, 1.0), 3.0)
+
+
+def seismic_accidental_torsional_moment(
+    *,
+    story_shear: Quantity,
+    building_dimension: Quantity,
+    amplification_factor: float = 1.0,
+    eccentricity_ratio: float = 0.05,
+) -> Quantity:
+    """The ASCE 7 accidental torsional moment Mta = Vx·(e·L)·Ax (§12.8.4.2–3).
+
+    Even a symmetric building is designed for a torsion the analysis does not show, to cover
+    uncertainty in where the mass actually sits: the story shear is taken to act at an accidental
+    eccentricity of 5% of the building width. The moment is ``story_shear`` Vx times that
+    eccentricity, ``eccentricity_ratio``·``building_dimension`` (0.05·L), further scaled by the
+    ``amplification_factor`` Ax from :func:`seismic_torsional_amplification_factor` when the
+    building is torsionally irregular. This moment is resisted by the lateral system on top of the
+    direct shear, and it loads the far side of the building hardest. Returns the moment in kN·m.
+    """
+    _check(story_shear, "[force]", "story_shear")
+    _check(building_dimension, "[length]", "building_dimension")
+    vx = story_shear.to("kN").magnitude
+    length = building_dimension.to("m").magnitude
+    if vx <= 0 or length <= 0:
+        raise ValueError("story_shear and building_dimension must be positive")
+    if eccentricity_ratio <= 0:
+        raise ValueError("eccentricity_ratio must be positive")
+    if amplification_factor < 1.0:
+        raise ValueError("amplification_factor must be at least 1.0")
+    return Quantity(magnitude=vx * eccentricity_ratio * length * amplification_factor, unit="kN*m")
 
 
 def seismic_design_story_drift(

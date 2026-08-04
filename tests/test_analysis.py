@@ -15465,6 +15465,40 @@ def test_reduced_live_load_regimes():
         )
 
 
+def test_seismic_torsional_amplification_and_accidental_moment():
+    from anvilate.analysis import (
+        seismic_accidental_torsional_moment,
+        seismic_torsional_amplification_factor,
+    )
+
+    # Ax = (dmax/(1.2*davg))^2: (15/12)^2 = 1.5625.
+    ax = seismic_torsional_amplification_factor(
+        maximum_displacement=_q("15 mm"), average_displacement=_q("10 mm")
+    )
+    assert ax == pytest.approx((15 / (1.2 * 10)) ** 2, rel=1e-9)
+    # Ax is floored at 1.0 (near-symmetric) and capped at 3.0 (strongly irregular).
+    assert seismic_torsional_amplification_factor(
+        maximum_displacement=_q("11 mm"), average_displacement=_q("10 mm")
+    ) == pytest.approx(1.0)
+    assert seismic_torsional_amplification_factor(
+        maximum_displacement=_q("25 mm"), average_displacement=_q("10 mm")
+    ) == pytest.approx(3.0)
+    # Mta = Vx * 0.05*L * Ax: 800 * 0.05*30 * 1 = 1200 kN.m symmetric.
+    base = seismic_accidental_torsional_moment(
+        story_shear=_q("800 kN"), building_dimension=_q("30 m")
+    )
+    assert base.to("kN*m").magnitude == pytest.approx(800 * 0.05 * 30, rel=1e-9)
+    # Amplifying by Ax scales the moment.
+    amplified = seismic_accidental_torsional_moment(
+        story_shear=_q("800 kN"), building_dimension=_q("30 m"), amplification_factor=ax
+    )
+    assert amplified.to("kN*m").magnitude == pytest.approx(base.to("kN*m").magnitude * ax, rel=1e-9)
+    with pytest.raises(ValueError, match="cannot be less than the average"):
+        seismic_torsional_amplification_factor(
+            maximum_displacement=_q("8 mm"), average_displacement=_q("10 mm")
+        )
+
+
 def test_seismic_diaphragm_force_bounds():
     from anvilate.analysis import seismic_diaphragm_force
 

@@ -234,7 +234,8 @@ modules:
   (Ta = Ct·hn^x) that sets it, the equivalent-lateral-force base shear V = Cs·W
   and its vertical distribution to
   each floor (Fx = V·wx·hx^k/Σwi·hi^k), the bounded diaphragm design force Fpx,
-  the Cd-amplified design story drift
+  the accidental torsional moment (Mta = Vx·0.05·L·Ax) and its amplification
+  factor Ax, the Cd-amplified design story drift
   (Δ = Cd·δxe/Ie) and the allowable drift it is checked against, the P-delta
   stability coefficient (θ = Pₓ·Δ/(Vₓ·hsx·Cd)) and its stability ceiling, the
   combined seismic load effect E = ρ·Q_E ± 0.2·SDS·D fed to the combinations, the
@@ -612,6 +613,7 @@ from .building_loads import (
     leeward_snow_drift_height,
     rain_load,
     reduced_live_load,
+    seismic_accidental_torsional_moment,
     seismic_base_shear,
     seismic_design_story_drift,
     seismic_diaphragm_force,
@@ -620,6 +622,7 @@ from .building_loads import (
     seismic_response_coefficient_upper_limit,
     seismic_stability_coefficient,
     seismic_stability_coefficient_limit,
+    seismic_torsional_amplification_factor,
     seismic_vertical_force_distribution,
     sloped_roof_snow_load,
     snow_density,
@@ -1922,6 +1925,8 @@ __all__ = [
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
     "seismic_diaphragm_force",
+    "seismic_torsional_amplification_factor",
+    "seismic_accidental_torsional_moment",
     "seismic_design_story_drift",
     "allowable_story_drift",
     "seismic_stability_coefficient",
