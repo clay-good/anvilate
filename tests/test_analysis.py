@@ -12701,6 +12701,53 @@ def test_slip_critical_resistance_aisc_j38():
         slip_critical_resistance(slip_coefficient=0.0, bolt_pretension=_q("142 kN"))
 
 
+def test_block_shear_strength_aisc_j43():
+    from anvilate.analysis import block_shear_strength
+
+    common = {"yield_strength": _q("345 MPa"), "ultimate_strength": _q("450 MPa")}
+    # Holes cut enough shear area that rupture (0.6*Fu*Anv = 189 kN) is below shear
+    # yielding (0.6*Fy*Agv = 207 kN): R_n = 189 + Ubs*Fu*Ant = 189 + 135 = 324 kN.
+    rupture_governs = block_shear_strength(
+        gross_shear_area=_q("1000 mm**2"),
+        net_shear_area=_q("700 mm**2"),
+        net_tension_area=_q("300 mm**2"),
+        **common,
+    )
+    assert rupture_governs.to("kN").magnitude == pytest.approx(
+        (0.6 * 450 * 700 + 1.0 * 450 * 300) / 1000, rel=1e-9
+    )
+    # With little hole removal on the shear plane, shear yielding on the gross area caps
+    # the shear term (0.6*Fy*Agv < 0.6*Fu*Anv).
+    yield_caps = block_shear_strength(
+        gross_shear_area=_q("1000 mm**2"),
+        net_shear_area=_q("950 mm**2"),
+        net_tension_area=_q("300 mm**2"),
+        **common,
+    )
+    assert yield_caps.to("kN").magnitude == pytest.approx(
+        (0.6 * 345 * 1000 + 1.0 * 450 * 300) / 1000, rel=1e-9
+    )
+    # A non-uniform tension stress (U_bs = 0.5) halves the tension contribution.
+    non_uniform = block_shear_strength(
+        gross_shear_area=_q("1000 mm**2"),
+        net_shear_area=_q("700 mm**2"),
+        net_tension_area=_q("300 mm**2"),
+        tension_uniformity_factor=0.5,
+        **common,
+    )
+    assert non_uniform.to("kN").magnitude == pytest.approx(
+        (0.6 * 450 * 700 + 0.5 * 450 * 300) / 1000, rel=1e-9
+    )
+    # Net shear area cannot exceed gross.
+    with pytest.raises(ValueError, match="net_shear_area cannot exceed"):
+        block_shear_strength(
+            gross_shear_area=_q("700 mm**2"),
+            net_shear_area=_q("1000 mm**2"),
+            net_tension_area=_q("300 mm**2"),
+            **common,
+        )
+
+
 def test_fillet_weld_design_strength_aisc_j24():
     from anvilate.analysis import fillet_weld_design_strength, fillet_weld_throat_stress
 

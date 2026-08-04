@@ -69,6 +69,7 @@ __all__ = [
     "preloaded_bolt_cyclic_stress",
     "eccentric_shear_group_peak_force",
     "slip_critical_resistance",
+    "block_shear_strength",
 ]
 
 # AISC J3.8 D_u — the ratio of the mean installed bolt pretension to the specified
@@ -213,6 +214,52 @@ def slip_critical_resistance(
         raise ValueError(f"bolt_pretension must be positive; got {bolt_pretension}")
     resistance = slip_coefficient * mean_pretension_ratio * filler_factor * tb * slip_planes
     return Quantity(magnitude=resistance, unit="kN")
+
+
+def block_shear_strength(
+    *,
+    gross_shear_area: Quantity,
+    net_shear_area: Quantity,
+    net_tension_area: Quantity,
+    yield_strength: Quantity,
+    ultimate_strength: Quantity,
+    tension_uniformity_factor: float = 1.0,
+) -> Quantity:
+    """The AISC 360 §J4.3 block-shear rupture strength of a connected element.
+
+    A bolt group can tear a block of material out of the plate it connects: the block
+    rips along a shear plane through the bolt line and pulls free on a tension plane
+    across it. §J4.3 adds the two planes, R_n = 0.6·F_u·A_nv + U_bs·F_u·A_nt, but caps
+    the shear term at shear yielding on the gross area, so
+    R_n = min(0.6·F_u·A_nv, 0.6·F_y·A_gv) + U_bs·F_u·A_nt. ``gross_shear_area`` A_gv and
+    ``net_shear_area`` A_nv are the shear plane before and after the bolt holes,
+    ``net_tension_area`` A_nt the net tension plane, ``yield_strength`` F_y,
+    ``ultimate_strength`` F_u, and ``tension_uniformity_factor`` U_bs — 1.0 when the
+    tension stress is uniform (a single bolt line, an angle), 0.5 when it is not (the
+    far row of a two-row coped-beam connection). Block shear often governs bolted
+    tension connections that the net-section check alone passes. Returns R_n in kN.
+    """
+    _require(gross_shear_area, "[area]", "gross_shear_area")
+    _require(net_shear_area, "[area]", "net_shear_area")
+    _require(net_tension_area, "[area]", "net_tension_area")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(ultimate_strength, "[pressure]", "ultimate_strength")
+    agv = gross_shear_area.to("mm**2").magnitude
+    anv = net_shear_area.to("mm**2").magnitude
+    ant = net_tension_area.to("mm**2").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    fu = ultimate_strength.to("MPa").magnitude
+    if agv <= 0 or anv <= 0 or ant <= 0 or fy <= 0 or fu <= 0:
+        raise ValueError("all areas and strengths must be positive")
+    if anv > agv:
+        raise ValueError("net_shear_area cannot exceed gross_shear_area")
+    if not 0 < tension_uniformity_factor <= 1.0:
+        raise ValueError(
+            f"tension_uniformity_factor must be in (0, 1]; got {tension_uniformity_factor}"
+        )
+    shear_term = min(0.6 * fu * anv, 0.6 * fy * agv)
+    tension_term = tension_uniformity_factor * fu * ant
+    return Quantity(magnitude=(shear_term + tension_term) / 1000.0, unit="kN")
 
 
 def bolt_diameter_for_shear(
