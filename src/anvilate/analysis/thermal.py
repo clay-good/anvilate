@@ -40,6 +40,8 @@ __all__ = [
     "convection_thermal_resistance",
     "critical_insulation_radius",
     "cylindrical_conduction_resistance",
+    "degree_day_cooling_energy",
+    "degree_day_heating_energy",
     "series_thermal_resistance",
     "parallel_thermal_resistance",
     "temperature_rise",
@@ -751,6 +753,61 @@ def convection_thermal_resistance(
     if area_m2 <= 0 or h <= 0:
         raise ValueError("area and heat_transfer_coefficient must be positive")
     return Quantity(magnitude=1.0 / (h * area_m2), unit=_THERMAL_RESISTANCE_UNIT)
+
+
+def degree_day_heating_energy(
+    *,
+    heat_loss_coefficient: Quantity,
+    heating_degree_days: Quantity,
+    system_efficiency: float = 1.0,
+) -> Quantity:
+    """The seasonal heating energy of a building by the degree-day method, E = UA·HDD/η.
+
+    A building's heat loss over a season is set by how leaky it is and how cold and long the season
+    was: E = UA·HDD/η, from the ``heat_loss_coefficient`` UA (the whole-building conductance, W/K —
+    the sum of every envelope element's U·A plus infiltration), the ``heating_degree_days`` HDD (the
+    season's total shortfall of outdoor temperature below the balance point, supplied as a
+    temperature·time quantity such as ``"3000 K*day"``), and the heating ``system_efficiency`` η
+    (furnace/boiler efficiency, or a COP for a heat pump). Returns the delivered fuel or electric
+    energy in kWh.
+    """
+    _require(heat_loss_coefficient, "[power] / [temperature]", "heat_loss_coefficient")
+    _require(heating_degree_days, "[temperature] * [time]", "heating_degree_days")
+    if heat_loss_coefficient.to("W/K").magnitude <= 0:
+        raise ValueError("heat_loss_coefficient must be positive")
+    if heating_degree_days.to("K*day").magnitude < 0:
+        raise ValueError("heating_degree_days must be non-negative")
+    if system_efficiency <= 0:
+        raise ValueError("system_efficiency must be positive")
+    energy = heat_loss_coefficient.pint * heating_degree_days.pint / system_efficiency
+    return Quantity(magnitude=float(energy.to("kWh").magnitude), unit="kWh")
+
+
+def degree_day_cooling_energy(
+    *,
+    heat_loss_coefficient: Quantity,
+    cooling_degree_days: Quantity,
+    coefficient_of_performance: float,
+) -> Quantity:
+    """The seasonal cooling energy of a building by the degree-day method, E = UA·CDD/COP.
+
+    The mirror of the heating case for the cooling season: the sensible cooling load is UA·CDD, and
+    the electrical energy to remove it is that load over the equipment's
+    ``coefficient_of_performance`` COP: E = UA·CDD/COP, from the ``heat_loss_coefficient`` UA (W/K)
+    and the ``cooling_degree_days`` CDD (a temperature·time quantity such as ``"500 K*day"``).
+    Because a chiller moves several units of heat per unit of electricity, the electric energy is a
+    fraction of the thermal load. Returns the electrical energy in kWh.
+    """
+    _require(heat_loss_coefficient, "[power] / [temperature]", "heat_loss_coefficient")
+    _require(cooling_degree_days, "[temperature] * [time]", "cooling_degree_days")
+    if heat_loss_coefficient.to("W/K").magnitude <= 0:
+        raise ValueError("heat_loss_coefficient must be positive")
+    if cooling_degree_days.to("K*day").magnitude < 0:
+        raise ValueError("cooling_degree_days must be non-negative")
+    if coefficient_of_performance <= 0:
+        raise ValueError("coefficient_of_performance must be positive")
+    energy = heat_loss_coefficient.pint * cooling_degree_days.pint / coefficient_of_performance
+    return Quantity(magnitude=float(energy.to("kWh").magnitude), unit="kWh")
 
 
 def series_thermal_resistance(*resistances: Quantity) -> Quantity:

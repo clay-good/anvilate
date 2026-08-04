@@ -13713,6 +13713,41 @@ def test_electrical_transformer_full_load_and_fault_current():
         transformer_available_fault_current(full_load_current=fla, impedance_percent=0.0)
 
 
+def test_thermal_degree_day_heating_and_cooling_energy():
+    from anvilate.analysis import degree_day_cooling_energy, degree_day_heating_energy
+
+    # E = UA*HDD/eta; 250 W/K, 3000 K*day, 0.9 -> 20,000 kWh (18,000 thermal / 0.9).
+    heating = degree_day_heating_energy(
+        heat_loss_coefficient=_q("250 W/K"),
+        heating_degree_days=_q("3000 K*day"),
+        system_efficiency=0.9,
+    )
+    assert heating.to("kWh").magnitude == pytest.approx(250 * 3000 * 24 / 1000 / 0.9, rel=1e-9)
+
+    # A heat pump (COP as the "efficiency") cuts the delivered energy by the COP.
+    heat_pump = degree_day_heating_energy(
+        heat_loss_coefficient=_q("250 W/K"),
+        heating_degree_days=_q("3000 K*day"),
+        system_efficiency=3.0,
+    )
+    assert heat_pump.to("kWh").magnitude == pytest.approx(250 * 3000 * 24 / 1000 / 3.0, rel=1e-9)
+
+    # Cooling: E = UA*CDD/COP.
+    cooling = degree_day_cooling_energy(
+        heat_loss_coefficient=_q("200 W/K"),
+        cooling_degree_days=_q("500 K*day"),
+        coefficient_of_performance=3.5,
+    )
+    assert cooling.to("kWh").magnitude == pytest.approx(200 * 500 * 24 / 1000 / 3.5, rel=1e-9)
+
+    with pytest.raises(ValueError, match="temperature.*time|heating_degree_days"):
+        degree_day_heating_energy(
+            heat_loss_coefficient=_q("250 W/K"),
+            heating_degree_days=_q("3000 K"),  # missing the time dimension
+            system_efficiency=0.9,
+        )
+
+
 def test_thermal_cylindrical_conduction_and_critical_radius():
     import math
 

@@ -555,6 +555,15 @@ def test_timber_header_shear_governs_example_shear_beats_bending():
     assert namespace["bearing_margin"]() > 1.5
 
 
+def test_home_heating_degree_days_example_heat_pump_cuts_energy():
+    namespace = runpy.run_path(str(_EXAMPLES / "home_heating_degree_days.py"))
+    s = namespace["seasonal_heating"]()
+    assert s["furnace_kwh"] == pytest.approx(20000.0, rel=1e-6)
+    # The COP-3 heat pump delivers the same heat for a third of the furnace's fuel.
+    assert s["heat_pump_kwh"] == pytest.approx(6000.0, rel=1e-6)
+    assert s["furnace_kwh"] / s["heat_pump_kwh"] == pytest.approx(3.0 / 0.9, rel=1e-6)
+
+
 def test_insulated_steam_pipe_heat_loss_example_lagging_cuts_loss():
     namespace = runpy.run_path(str(_EXAMPLES / "insulated_steam_pipe_heat_loss.py"))
     p = namespace["pipe_heat_loss"]()

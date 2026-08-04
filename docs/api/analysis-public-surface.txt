@@ -715,6 +715,8 @@ thermal.circular_source_spreading_resistance
 thermal.conduction_thermal_resistance
 thermal.critical_insulation_radius
 thermal.cylindrical_conduction_resistance
+thermal.degree_day_cooling_energy
+thermal.degree_day_heating_energy
 thermal.confined_liquid_thermal_pressure
 thermal.constrained_thermal_stress
 thermal.convection_thermal_resistance
