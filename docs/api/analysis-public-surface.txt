@@ -74,6 +74,8 @@ axial.axial_stiffness
 axial.axial_stress
 axial.circular_area
 axial.required_axial_area
+ball_screw.ball_screw_back_drive_torque
+ball_screw.ball_screw_drive_torque
 beam.BeamBendingResult
 beam.SHEAR_FORM_CIRCULAR
 beam.SHEAR_FORM_RECTANGULAR

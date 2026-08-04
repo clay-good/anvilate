@@ -64,6 +64,8 @@ modules:
 - :mod:`~anvilate.analysis.power_screw` — square-thread lead-screw raise/lower
   torque, the load a given input torque can raise (jack capacity), efficiency, the
   self-locking condition, and the collar (thrust-bearing) friction torque
+- :mod:`~anvilate.analysis.ball_screw` — ball-screw drive torque T = F·L/(2π·η) and
+  the back-driving torque T_b = F·L·η_b/(2π) a holding brake must resist (not self-locking)
 - :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
   mesh efficiency, the efficiency-corrected wheel output torque, the self-locking
   condition, and the input tangential and separating (radial) tooth forces
@@ -438,6 +440,10 @@ from .axial import (
     axial_stress,
     circular_area,
     required_axial_area,
+)
+from .ball_screw import (
+    ball_screw_back_drive_torque,
+    ball_screw_drive_torque,
 )
 from .beam import (
     SHEAR_FORM_CIRCULAR,
@@ -1594,6 +1600,8 @@ __all__ = [
     "axial_stiffness",
     "circular_area",
     "required_axial_area",
+    "ball_screw_drive_torque",
+    "ball_screw_back_drive_torque",
     "BeamBendingResult",
     "cantilever_center_patch_load",
     "cantilever_end_load",

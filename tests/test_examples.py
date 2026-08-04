@@ -549,6 +549,15 @@ def test_rectangular_torsion_bar_stress_example_flat_bar_loses():
     assert b["flat_100x10mm"]["stress_mpa"] == pytest.approx(64.0, abs=1.0)
 
 
+def test_vertical_ball_screw_axis_example_needs_a_brake():
+    namespace = runpy.run_path(str(_EXAMPLES / "vertical_ball_screw_axis.py"))
+    t = namespace["axis_torques"]()
+    assert t["drive_torque_nm"] == pytest.approx(7.07, abs=0.05)
+    # The load back-drives with a real torque, so a holding brake is required.
+    assert t["back_drive_torque_nm"] == pytest.approx(5.09, abs=0.05)
+    assert t["back_drive_torque_nm"] > 0
+
+
 def test_wide_flange_torsional_properties_example_matches_manual():
     namespace = runpy.run_path(str(_EXAMPLES / "wide_flange_torsional_properties.py"))
     t = namespace["w18x50_torsion"]()

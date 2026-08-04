@@ -14233,6 +14233,29 @@ def test_rectangular_bar_torsional_stress_limits_and_symmetry():
         )
 
 
+def test_ball_screw_drive_and_back_drive_torque():
+    import math
+
+    from anvilate.analysis import ball_screw_back_drive_torque, ball_screw_drive_torque
+
+    # Drive T = F*L/(2*pi*eta); 5000 N, 10 mm, 0.9 -> 8.84 N*m.
+    drive = ball_screw_drive_torque(axial_load=_q("5000 N"), lead=_q("10 mm"), efficiency=0.9)
+    assert drive.to("N*m").magnitude == pytest.approx(5000 * 0.01 / (2 * math.pi * 0.9), rel=1e-9)
+
+    # Back-drive T = F*L*eta_b/(2*pi); 5000 N, 10 mm, 0.8 -> 6.37 N*m.
+    back = ball_screw_back_drive_torque(
+        axial_load=_q("5000 N"), lead=_q("10 mm"), back_drive_efficiency=0.8
+    )
+    assert back.to("N*m").magnitude == pytest.approx(5000 * 0.01 * 0.8 / (2 * math.pi), rel=1e-9)
+
+    # A coarser lead needs proportionally more drive torque.
+    coarse = ball_screw_drive_torque(axial_load=_q("5000 N"), lead=_q("20 mm"), efficiency=0.9)
+    assert coarse.to("N*m").magnitude == pytest.approx(2 * drive.to("N*m").magnitude, rel=1e-9)
+
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        ball_screw_drive_torque(axial_load=_q("5000 N"), lead=_q("10 mm"), efficiency=1.5)
+
+
 def test_warping_constant_doubly_symmetric_matches_aisc_manual():
     from anvilate.analysis import warping_constant_doubly_symmetric
 
