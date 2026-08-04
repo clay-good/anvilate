@@ -200,7 +200,8 @@ modules:
   the Carnot cooling and heating COP ceilings and the actual COP = Q/W
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
   Magnus saturation vapor pressure, the humidity ratio and relative humidity, the dew-point
-  temperature, and the moist-air enthalpy and cooling-coil load for capacity sizing
+  temperature, the moist-air enthalpy and cooling-coil load for capacity sizing, and the
+  sensible/latent split with the sensible heat ratio SHR = Q_s/(Q_s + Q_l)
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -1129,9 +1130,12 @@ from .psychrometrics import (
     cooling_coil_load,
     dew_point_temperature,
     humidity_ratio,
+    latent_heat_load,
     moist_air_enthalpy,
     relative_humidity,
     saturation_vapor_pressure,
+    sensible_heat_load,
+    sensible_heat_ratio,
 )
 from .pump import (
     affinity_flow_rate,
@@ -1539,6 +1543,9 @@ __all__ = [
     "cooling_coil_load",
     "dew_point_temperature",
     "humidity_ratio",
+    "sensible_heat_load",
+    "latent_heat_load",
+    "sensible_heat_ratio",
     "moist_air_enthalpy",
     "relative_humidity",
     "saturation_vapor_pressure",

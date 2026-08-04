@@ -25,9 +25,12 @@ __all__ = [
     "cooling_coil_load",
     "dew_point_temperature",
     "humidity_ratio",
+    "latent_heat_load",
     "moist_air_enthalpy",
     "relative_humidity",
     "saturation_vapor_pressure",
+    "sensible_heat_load",
+    "sensible_heat_ratio",
 ]
 
 # Specific-heat coefficients for moist-air enthalpy (per kg of dry air, T in deg C, h in kJ/kg):
@@ -161,6 +164,77 @@ def cooling_coil_load(
     if m_dot <= 0:
         raise ValueError("dry_air_mass_flow must be positive")
     return Quantity(magnitude=m_dot * (h_in - h_out), unit="kW")
+
+
+def sensible_heat_load(
+    *,
+    dry_air_mass_flow: Quantity,
+    temperature_change: Quantity,
+    humidity_ratio: float = 0.0,
+) -> Quantity:
+    """The sensible portion of a coil's load, Q_s = ṁ·(1.006 + 1.86·W)·ΔT.
+
+    The heat a coil moves by changing the air's *temperature* (at constant moisture), separate from
+    the latent heat of condensing water: Q_s = ṁ·(1.006 + 1.86·W)·ΔT, from the ``dry_air_mass_flow``
+    ṁ, the dry-bulb ``temperature_change`` ΔT, and the ``humidity_ratio`` W (whose vapor adds a
+    little to the moist-air specific heat). It is the part of the load a fan-driven reheat or a
+    sensible-only coil handles, and the numerator of the sensible heat ratio. Returns the sensible
+    load in kW.
+    """
+    _check(dry_air_mass_flow, "[mass]/[time]", "dry_air_mass_flow")
+    _check(temperature_change, "[temperature]", "temperature_change")
+    m = dry_air_mass_flow.to("kg/s").magnitude
+    dt = temperature_change.to("K").magnitude
+    if m <= 0:
+        raise ValueError("dry_air_mass_flow must be positive")
+    if humidity_ratio < 0:
+        raise ValueError("humidity_ratio must be non-negative")
+    cp = _CP_DRY_AIR + _CP_WATER_VAPOR * humidity_ratio
+    return Quantity(magnitude=m * cp * dt, unit="kW")
+
+
+def latent_heat_load(
+    *,
+    dry_air_mass_flow: Quantity,
+    humidity_ratio_change: float,
+) -> Quantity:
+    """The latent portion of a coil's load, Q_l = ṁ·h_fg·ΔW.
+
+    The heat a coil moves by condensing (or evaporating) *moisture*, separate from the temperature
+    change: Q_l = ṁ·h_fg·ΔW, from the ``dry_air_mass_flow`` ṁ and the ``humidity_ratio_change`` ΔW
+    (kg water per kg dry air), with the latent heat of vaporization h_fg ≈ 2501 kJ/kg. It is the
+    dehumidification load — the part a dry (sensible) coil cannot touch — and the reason a coil that
+    holds temperature can still be working hard to pull water out of the air. Returns the latent
+    load in kW.
+    """
+    _check(dry_air_mass_flow, "[mass]/[time]", "dry_air_mass_flow")
+    m = dry_air_mass_flow.to("kg/s").magnitude
+    if m <= 0:
+        raise ValueError("dry_air_mass_flow must be positive")
+    if humidity_ratio_change < 0:
+        raise ValueError("humidity_ratio_change must be non-negative")
+    return Quantity(magnitude=m * _LATENT_HEAT_0C * humidity_ratio_change, unit="kW")
+
+
+def sensible_heat_ratio(*, sensible_load: Quantity, latent_load: Quantity) -> float:
+    """The sensible heat ratio, SHR = Q_s/(Q_s + Q_l).
+
+    The fraction of a coil's total load that is sensible: SHR = Q_s/(Q_s + Q_l), from the
+    ``sensible_load`` Q_s and ``latent_load`` Q_l. A high SHR (near 1) is a dry, mostly-temperature
+    job; a low SHR is a wet, dehumidification-heavy one — and matching a coil's inherent SHR to the
+    space's is what keeps a system from overcooling to dehumidify (and then reheating). Returns the
+    dimensionless ratio in [0, 1].
+    """
+    _check(sensible_load, "[power]", "sensible_load")
+    _check(latent_load, "[power]", "latent_load")
+    q_s = sensible_load.to("kW").magnitude
+    q_l = latent_load.to("kW").magnitude
+    if q_s < 0 or q_l < 0:
+        raise ValueError("sensible_load and latent_load must be non-negative")
+    total = q_s + q_l
+    if total <= 0:
+        raise ValueError("the total load must be positive")
+    return q_s / total
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

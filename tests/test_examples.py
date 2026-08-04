@@ -709,6 +709,17 @@ def test_steam_line_expansion_loop_example_sizes_the_leg():
     assert s["leg_length_m"] == pytest.approx(11.6, abs=0.5)
 
 
+def test_cooling_coil_sensible_latent_split_example_typical_shr():
+    namespace = runpy.run_path(str(_EXAMPLES / "cooling_coil_sensible_latent_split.py"))
+    c = namespace["coil_load_split"]()
+    assert c["sensible_kw"] > c["latent_kw"]  # a comfort-cooling job is sensible-heavy
+    assert c["shr"] == pytest.approx(0.72, abs=0.02)
+    # The SHR is the sensible fraction of the total.
+    assert c["shr"] == pytest.approx(
+        c["sensible_kw"] / (c["sensible_kw"] + c["latent_kw"]), rel=1e-9
+    )
+
+
 def test_home_heating_degree_days_example_heat_pump_cuts_energy():
     namespace = runpy.run_path(str(_EXAMPLES / "home_heating_degree_days.py"))
     s = namespace["seasonal_heating"]()

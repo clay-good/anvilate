@@ -13910,6 +13910,35 @@ def test_thermal_guided_cantilever_expansion_loop_leg():
         )
 
 
+def test_psychrometrics_sensible_latent_and_shr():
+    from anvilate.analysis import (
+        latent_heat_load,
+        sensible_heat_load,
+        sensible_heat_ratio,
+    )
+
+    # Q_s = m*(1.006 + 1.86*W)*dT; 1 kg/s, 10 K, W=0.01 -> 10.25 kW.
+    qs = sensible_heat_load(
+        dry_air_mass_flow=_q("1 kg/s"), temperature_change=_q("10 K"), humidity_ratio=0.01
+    )
+    assert qs.to("kW").magnitude == pytest.approx((1.006 + 1.86 * 0.01) * 10, rel=1e-9)
+
+    # Q_l = m*2501*dW; 1 kg/s, dW=0.004 -> 10.0 kW.
+    ql = latent_heat_load(dry_air_mass_flow=_q("1 kg/s"), humidity_ratio_change=0.004)
+    assert ql.to("kW").magnitude == pytest.approx(2501 * 0.004, rel=1e-9)
+
+    # SHR = Q_s/(Q_s + Q_l).
+    shr = sensible_heat_ratio(sensible_load=qs, latent_load=ql)
+    assert shr == pytest.approx(
+        qs.to("kW").magnitude / (qs.to("kW").magnitude + ql.to("kW").magnitude), rel=1e-9
+    )
+    # An all-sensible job gives SHR = 1.
+    assert sensible_heat_ratio(sensible_load=_q("10 kW"), latent_load=_q("0 kW")) == 1.0
+
+    with pytest.raises(ValueError, match="total load"):
+        sensible_heat_ratio(sensible_load=_q("0 kW"), latent_load=_q("0 kW"))
+
+
 def test_thermal_degree_day_heating_and_cooling_energy():
     from anvilate.analysis import degree_day_cooling_energy, degree_day_heating_energy
 

@@ -531,9 +531,12 @@ open_channel.triangular_weir_flow
 psychrometrics.cooling_coil_load
 psychrometrics.dew_point_temperature
 psychrometrics.humidity_ratio
+psychrometrics.latent_heat_load
 psychrometrics.moist_air_enthalpy
 psychrometrics.relative_humidity
 psychrometrics.saturation_vapor_pressure
+psychrometrics.sensible_heat_load
+psychrometrics.sensible_heat_ratio
 pump.affinity_flow_rate
 pump.affinity_head
 pump.affinity_power
