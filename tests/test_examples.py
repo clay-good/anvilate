@@ -226,6 +226,15 @@ def test_clay_backfill_tension_crack_example():
     assert p["base_pressure_kpa"] > 0
 
 
+def test_pump_duty_scorecard_example_sound_passes_marginal_fails():
+    namespace = runpy.run_path(str(_EXAMPLES / "pump_duty_scorecard.py"))
+    d = namespace["duty_scorecards"]()
+    assert d["sound_status"] == "pass"
+    assert d["marginal_status"] == "fail"
+    assert "motor rating" in d["marginal_failures"]
+    assert "NPSH margin" in d["marginal_failures"]
+
+
 def test_retaining_wall_scorecard_example_good_passes_weak_fails():
     namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_scorecard.py"))
     w = namespace["wall_scorecards"]()
