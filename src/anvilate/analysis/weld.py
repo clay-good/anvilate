@@ -26,6 +26,7 @@ __all__ = [
     "fillet_weld_leg_for_load",
     "fillet_weld_design_strength",
     "fillet_weld_directional_strength",
+    "weld_base_metal_shear_strength",
     "eccentric_weld_group_peak_stress",
 ]
 
@@ -173,6 +174,39 @@ def fillet_weld_directional_strength(
     strength_n = (
         weld_metal_shear_fraction * fexx * directional * FILLET_THROAT_FACTOR * w * length_mm
     )
+    return Quantity(magnitude=strength_n / 1000.0, unit="kN")
+
+
+def weld_base_metal_shear_strength(
+    *,
+    base_thickness: Quantity,
+    length: Quantity,
+    base_ultimate_strength: Quantity,
+    shear_fraction: float = _WELD_METAL_SHEAR_FRACTION,
+) -> Quantity:
+    """The AISC J2.4 / J4.2 base-metal shear rupture strength alongside a fillet weld.
+
+    A welded joint is only as strong as the weaker of the weld metal and the base metal
+    it fuses to, and the base-metal side is the shear rupture of the connected part along
+    the weld line: R_n = 0.6·F_u·A_BM, with A_BM = t·L the base-metal area (the connected
+    element's thickness through its length). ``base_thickness`` t is the thickness of the
+    part the weld tears out of, ``length`` L the weld length, ``base_ultimate_strength``
+    F_u the base metal's tensile strength, and ``shear_fraction`` the 0.6 rupture factor.
+    Compare the lesser of this and the weld-metal :func:`fillet_weld_design_strength`: a
+    heavy weld on a thin plate is base-metal-limited, a light weld on thick plate
+    weld-metal-limited. Returns R_n in kN.
+    """
+    _require(base_thickness, "[length]", "base_thickness")
+    _require(length, "[length]", "length")
+    _require(base_ultimate_strength, "[pressure]", "base_ultimate_strength")
+    if shear_fraction <= 0:
+        raise ValueError(f"shear_fraction must be positive; got {shear_fraction}")
+    t = base_thickness.to("mm").magnitude
+    length_mm = length.to("mm").magnitude
+    fu = base_ultimate_strength.to("MPa").magnitude
+    if t <= 0 or length_mm <= 0 or fu <= 0:
+        raise ValueError("base_thickness, length, and base_ultimate_strength must be positive")
+    strength_n = shear_fraction * fu * t * length_mm
     return Quantity(magnitude=strength_n / 1000.0, unit="kN")
 
 

@@ -939,6 +939,7 @@ from .weld import (
     fillet_weld_directional_strength,
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
+    weld_base_metal_shear_strength,
 )
 from .winch import (
     drum_line_pull,
@@ -1557,6 +1558,7 @@ __all__ = [
     "fillet_weld_leg_for_load",
     "fillet_weld_design_strength",
     "fillet_weld_directional_strength",
+    "weld_base_metal_shear_strength",
     "eccentric_weld_group_peak_stress",
     "wire_rope_bending_stress",
     "minimum_sheave_diameter_for_bending_stress",

@@ -12890,6 +12890,26 @@ def test_fillet_weld_design_strength_aisc_j24():
     assert bigger.to("kN").magnitude > rn.to("kN").magnitude
 
 
+def test_weld_base_metal_shear_strength_pairs_with_weld_metal():
+    from anvilate.analysis import fillet_weld_design_strength, weld_base_metal_shear_strength
+
+    # R_n = 0.6*F_u*t*L: 10 mm plate, 200 mm, F_u=450 -> 540 kN.
+    base = weld_base_metal_shear_strength(
+        base_thickness=_q("10 mm"), length=_q("200 mm"), base_ultimate_strength=_q("450 MPa")
+    )
+    assert base.to("kN").magnitude == pytest.approx(0.6 * 450 * 10 * 200 / 1000, rel=1e-9)
+    # A 6 mm E70 fillet on that plate is weld-metal-governed (249 < 540 kN).
+    weld_metal = fillet_weld_design_strength(
+        leg_size=_q("6 mm"), length=_q("200 mm"), electrode_strength=_q("490 MPa")
+    )
+    assert weld_metal.to("kN").magnitude < base.to("kN").magnitude
+    # A thin base plate flips it: base metal governs.
+    thin_base = weld_base_metal_shear_strength(
+        base_thickness=_q("3 mm"), length=_q("200 mm"), base_ultimate_strength=_q("450 MPa")
+    )
+    assert thin_base.to("kN").magnitude < weld_metal.to("kN").magnitude
+
+
 def test_fillet_weld_directional_strength_transverse_is_50pct_stronger():
     import math
 
