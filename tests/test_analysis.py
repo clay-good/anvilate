@@ -4818,6 +4818,31 @@ def test_asme_b313_pipe_wall_matches_the_code_form_and_round_trips():
     assert spot.to("mm").magnitude > t.to("mm").magnitude
 
 
+def test_asme_b313_minimum_ordered_wall_grosses_up_for_allowances():
+    from anvilate.analysis import asme_b313_minimum_ordered_wall
+
+    # t_m = t + c, then divided by (1 - mill tolerance): (2.04 + 1.5)/0.875 = 4.05 mm.
+    ordered = asme_b313_minimum_ordered_wall(
+        pressure_design_thickness=_q("2.04 mm"), mechanical_allowance=_q("1.5 mm")
+    )
+    assert ordered.to("mm").magnitude == pytest.approx((2.04 + 1.5) / 0.875, rel=1e-9)
+    # It always exceeds the bare sum of pressure-design + allowance.
+    assert ordered.to("mm").magnitude > 2.04 + 1.5
+    # A tighter mill tolerance needs less gross-up.
+    tight = asme_b313_minimum_ordered_wall(
+        pressure_design_thickness=_q("2.04 mm"),
+        mechanical_allowance=_q("1.5 mm"),
+        mill_tolerance_fraction=0.0,
+    )
+    assert tight.to("mm").magnitude == pytest.approx(2.04 + 1.5, rel=1e-9)
+    with pytest.raises(ValueError, match="mill_tolerance_fraction must lie in"):
+        asme_b313_minimum_ordered_wall(
+            pressure_design_thickness=_q("2.04 mm"),
+            mechanical_allowance=_q("1.5 mm"),
+            mill_tolerance_fraction=1.0,
+        )
+
+
 def test_asme_b313_pipe_rejects_bad_inputs():
     from anvilate.analysis import asme_b313_pipe_pressure, asme_b313_pipe_wall_thickness
 

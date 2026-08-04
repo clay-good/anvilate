@@ -8,11 +8,11 @@
 
 ## 2. Checks
 
-- [~] 2.1 Straight-pipe wall thickness (§304.1.2) — `asme_b313_pipe_wall_thickness`
-      (t = P·D/(2·(S·E + P·Y))) and its rating inverse `asme_b313_pipe_pressure`
-      (P = 2·t·S·E/(D − 2·Y·t)) in `analysis/pressure_vessel.py`, with S/E/Y as
-      user-supplied code inputs. The mill-tolerance and corrosion-allowance add-ons
-      (composed on top of the pressure-design wall) are a follow-up.
+- [x] 2.1 Straight-pipe wall thickness (§304.1.2, mill tolerance, corrosion allowance) —
+      `asme_b313_pipe_wall_thickness` (t = P·D/(2·(S·E + P·Y))), its rating inverse
+      `asme_b313_pipe_pressure`, and `asme_b313_minimum_ordered_wall`
+      (T = (t + c)/(1 − mill_tolerance), §304.1.1) so the ordered nominal wall accounts
+      for the mechanical allowance and mill under-tolerance. S/E/Y user-supplied.
 - [ ] 2.2 Branch reinforcement area
 - [ ] 2.3 Miter-bend pressure screening
 - [ ] 2.4 Displacement stress range vs. allowable range

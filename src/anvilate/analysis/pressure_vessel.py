@@ -35,6 +35,7 @@ __all__ = [
     "asme_cylinder_mawp",
     "asme_b313_pipe_wall_thickness",
     "asme_b313_pipe_pressure",
+    "asme_b313_minimum_ordered_wall",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thin_wall_sphere_diametral_growth",
@@ -323,6 +324,39 @@ def asme_b313_pipe_pressure(
             f"outside_diameter ({d:.4g} mm) must exceed 2·Y·t ({2.0 * coefficient_y * t:.4g} mm)"
         )
     return Quantity(magnitude=2.0 * t * s * quality_factor / denominator, unit="MPa")
+
+
+def asme_b313_minimum_ordered_wall(
+    *,
+    pressure_design_thickness: Quantity,
+    mechanical_allowance: Quantity,
+    mill_tolerance_fraction: float = 0.125,
+) -> Quantity:
+    """The nominal wall to order so the thinnest delivered pipe still holds pressure.
+
+    ASME B31.3 §304.1.1: the required minimum wall is the pressure-design thickness
+    plus the mechanical allowances, t_m = t + c (``pressure_design_thickness`` t from
+    :func:`asme_b313_pipe_wall_thickness`, ``mechanical_allowance`` c the sum of the
+    corrosion/erosion allowance and any thread or groove depth). But pipe ships up to
+    a ``mill_tolerance_fraction`` under nominal (12.5% for seamless pipe), so the
+    *ordered* nominal wall must be T = (t + c)/(1 − mill_tolerance) for the thinnest
+    delivered pipe to still meet t_m. Pick the first schedule at or above T. Both
+    thicknesses positive; the mill tolerance in [0, 1). Returns the minimum nominal
+    wall in mm.
+    """
+    _require(pressure_design_thickness, "[length]", "pressure_design_thickness")
+    _require(mechanical_allowance, "[length]", "mechanical_allowance")
+    if not 0 <= mill_tolerance_fraction < 1:
+        raise ValueError(
+            f"mill_tolerance_fraction must lie in [0, 1); got {mill_tolerance_fraction}"
+        )
+    t = pressure_design_thickness.to("mm").magnitude
+    c = mechanical_allowance.to("mm").magnitude
+    if t <= 0 or c < 0:
+        raise ValueError(
+            "pressure_design_thickness must be positive and mechanical_allowance non-negative"
+        )
+    return Quantity(magnitude=(t + c) / (1.0 - mill_tolerance_fraction), unit="mm")
 
 
 class ThickWallStress(BaseModel):
