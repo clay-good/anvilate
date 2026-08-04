@@ -18,14 +18,20 @@ modules:
   collapse load (point and distributed) of a simply-supported, fixed-fixed, and
   propped-cantilever beam, and the bearing-misalignment slope (simply-supported end
   under a central or distributed load, and cantilever tip under an end or
-  distributed load)
+  distributed load); and the AISC 360 design strengths of a steel member — flexure
+  of a round HSS (§F8), a rectangular HSS (§F7), and minor-axis I-shapes (§F6); web
+  shear of an I-shape (§G2.1), a round HSS (§G4), and a rectangular HSS (§G5); the
+  web local yielding, crippling, and compression buckling at a concentrated load
+  (§J10) with the bearing length a reaction needs; and slender-web plate girders
+  (§F5 R_pg and compression-flange stress, §G2.2 tension-field shear)
 - :mod:`~anvilate.analysis.beam_foundation` — beam on a continuous elastic
   foundation (Hetényi): the characteristic parameter β, and the peak deflection and
   bending moment a point load makes on a long (effectively infinite) beam
 - :mod:`~anvilate.analysis.plate` — flat-plate bending (simply-supported
   rectangle via the exact Navier series; circular, simply-supported and clamped,
   under uniform pressure or a central point load), the clamped-cover thickness a
-  pressure requires, elastic plate/web buckling,
+  pressure requires, the column base-plate thickness a bearing pressure requires
+  (AISC Design Guide 1), elastic plate/web buckling,
   and the compression/shear-buckling coefficients
 - :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
   moment, extreme fibre, section modulus, and radius of gyration; the bending
@@ -34,7 +40,9 @@ modules:
   the minimum section second moment a load requires, the eccentric-load secant
   stress, the Perry-Robertson imperfect-column stress, the lateral-torsional
   buckling moment of an unbraced beam, and the empirical Rankine-Gordon column
-  stress
+  stress; and the AISC 360 steel checks — the §E3 flexural buckling stress, the
+  §F2 lateral-torsional bracing limits L_p and L_r with the inelastic-LTB moment
+  between them, and the §H1.1 beam-column interaction (uniaxial or biaxial)
 - :mod:`~anvilate.analysis.torsion` — the torque a power/speed makes, solid and
   hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
   torque requires; thin-walled rectangular (box) tube torsion (Bredt), thin
@@ -139,8 +147,12 @@ modules:
   ISO 898 tensile stress area / axial stress, the proof load and recommended
   preload, thread-stripping engagement, and
   preloaded-joint load sharing (bolt and member stiffness, stiffness constant,
-  bolt/member load, separation), and the peak fastener force in an
-  eccentrically-loaded shear group (AISC elastic method)
+  bolt/member load, separation), the peak fastener force in an
+  eccentrically-loaded shear group (AISC elastic method), and the AISC 360
+  connection strengths — bolt shear (§J3.6), bearing/tear-out (§J3.10),
+  slip-critical resistance (§J3.8), and block-shear rupture (§J4.3) — with the
+  tension-member effective-net-area pieces (the §B4.3b staggered-hole net width
+  and the §D3 shear-lag factor)
 - :mod:`~anvilate.analysis.keys` — shaft-key shear and bearing stress, the key
   length a torque requires, and the torque a straight spline transmits
 - :mod:`~anvilate.analysis.o_ring` — O-ring gland design geometry: the squeeze,
@@ -149,8 +161,10 @@ modules:
 - :mod:`~anvilate.analysis.living_hinge` — moulded living-hinge fold strain
   ε = θ·t/(2·L) and the minimum web length a permissible flexural strain requires
 - :mod:`~anvilate.analysis.weld` — fillet-weld throat shear, the weld leg a
-  load requires, and the peak throat stress of an eccentrically-loaded weld group
-  (AISC elastic method)
+  load requires, the peak throat stress of an eccentrically-loaded weld group
+  (AISC elastic method), and the AISC 360 fillet-weld design strengths — the base
+  §J2.4 weld-metal strength, the directional (sin θ) increase, and the companion
+  §J4.2 base-metal shear rupture
 - :mod:`~anvilate.analysis.rivet` — riveted-joint tearing/shearing/crushing
   strength, governing mode, and efficiency
 - :mod:`~anvilate.analysis.rigging` — multi-leg sling lifting statics: the
