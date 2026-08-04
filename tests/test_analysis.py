@@ -11051,6 +11051,35 @@ def test_junction_temperature_scorecard_screens_the_rise_against_a_budget():
         )
 
 
+def test_laminar_tube_convection_constant_nusselt():
+    from anvilate.analysis import (
+        dittus_boelter_convection_coefficient,
+        laminar_tube_convection_coefficient,
+    )
+
+    # Constant wall temperature: Nu = 3.66, h = Nu*k/D = 3.66*0.6/0.02 = 109.8 W/m2K.
+    h_t = laminar_tube_convection_coefficient(
+        thermal_conductivity=_q("0.6 W/(m*K)"), diameter=_q("0.02 m")
+    )
+    assert h_t.to("W/(m**2*K)").magnitude == pytest.approx(3.66 * 0.6 / 0.02, rel=1e-9)
+    # Constant heat flux uses the higher Nu = 4.36.
+    h_q = laminar_tube_convection_coefficient(
+        thermal_conductivity=_q("0.6 W/(m*K)"),
+        diameter=_q("0.02 m"),
+        constant_wall_temperature=False,
+    )
+    assert h_q.to("W/(m**2*K)").magnitude == pytest.approx(4.36 * 0.6 / 0.02, rel=1e-9)
+    # Laminar convection is far weaker than the turbulent Dittus-Boelter coefficient.
+    turbulent = dittus_boelter_convection_coefficient(
+        fluid_velocity=_q("1 m/s"),
+        diameter=_q("0.02 m"),
+        thermal_conductivity=_q("0.6 W/(m*K)"),
+        kinematic_viscosity=_q("1e-6 m**2/s"),
+        prandtl_number=7.0,
+    )
+    assert h_t.to("W/(m**2*K)").magnitude < turbulent.to("W/(m**2*K)").magnitude
+
+
 def test_dittus_boelter_convection_coefficient_and_validity():
     from anvilate.analysis import dittus_boelter_convection_coefficient
 

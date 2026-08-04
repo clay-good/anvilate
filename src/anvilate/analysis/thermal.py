@@ -44,6 +44,7 @@ __all__ = [
     "fin_efficiency",
     "junction_temperature_scorecard",
     "dittus_boelter_convection_coefficient",
+    "laminar_tube_convection_coefficient",
     "flat_plate_forced_convection_coefficient",
     "flat_plate_turbulent_convection_coefficient",
     "vertical_plate_natural_convection_coefficient",
@@ -812,6 +813,33 @@ def junction_temperature_scorecard(
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
     detail = f"junction rise {rise:.1f} K vs {allowable:.1f} K allowable"
     return entry.model_copy(update={"detail": detail})
+
+
+def laminar_tube_convection_coefficient(
+    *,
+    thermal_conductivity: Quantity,
+    diameter: Quantity,
+    constant_wall_temperature: bool = True,
+) -> Quantity:
+    """The convection coefficient h for fully-developed laminar flow in a tube (constant Nusselt).
+
+    Unlike turbulent flow, fully-developed laminar tube flow has a *constant* Nusselt number set
+    only by the boundary condition: Nu = 3.66 for a constant wall temperature and Nu = 4.36 for a
+    constant heat flux. The coefficient is then h = Nu·k/D, from the fluid ``thermal_conductivity``
+    k and the tube ``diameter`` D; ``constant_wall_temperature`` picks the boundary condition. It is
+    much smaller
+    than the turbulent :func:`dittus_boelter_convection_coefficient` — laminar flow is a poor
+    heat-transfer regime, which is why exchangers run turbulent. Valid for Re below ~2300; above the
+    transition the flow turns turbulent. Returns h in W/(m²·K).
+    """
+    _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
+    _require(diameter, "[length]", "diameter")
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    d = diameter.to("m").magnitude
+    if k <= 0 or d <= 0:
+        raise ValueError("thermal_conductivity and diameter must be positive")
+    nusselt = 3.66 if constant_wall_temperature else 4.36
+    return Quantity(magnitude=nusselt * k / d, unit="W/(m**2*K)")
 
 
 def dittus_boelter_convection_coefficient(
