@@ -13193,3 +13193,36 @@ def test_aisc_web_compression_buckling_interior_vs_end():
     # Within d/2 of the member end the strength is halved.
     end = aisc_web_compression_buckling_strength(at_member_end=True, **kw)
     assert end.to("kN").magnitude == pytest.approx(interior.to("kN").magnitude / 2, rel=1e-9)
+
+
+def test_aisc_round_hss_flexural_strength_spans_the_three_ranges():
+    from anvilate.analysis import aisc_round_hss_flexural_strength
+
+    base = {
+        "yield_strength": _q("345 MPa"),
+        "elastic_modulus": _q("200000 MPa"),
+        "plastic_section_modulus": _q("1.27e6 mm**3"),
+        "elastic_section_modulus": _q("1.0e6 mm**3"),
+    }
+    # lambda_p = 0.07E/Fy = 40.6, lambda_r = 0.31E/Fy = 179.7, applic-limit 260.9.
+    mp = 345 * 1.27e6 / 1e6  # kN*m
+    # Compact wall (D/t = 20 < 40.6): full plastic moment.
+    compact = aisc_round_hss_flexural_strength(diameter=_q("200 mm"), thickness=_q("10 mm"), **base)
+    assert compact.to("kN*m").magnitude == pytest.approx(mp, rel=1e-9)
+    # Noncompact wall (D/t = 100): local buckling, below M_p.
+    noncompact = aisc_round_hss_flexural_strength(
+        diameter=_q("500 mm"), thickness=_q("5 mm"), **base
+    )
+    assert noncompact.to("kN*m").magnitude == pytest.approx(
+        (0.021 * 200000 / 100 + 345) * 1.0e6 / 1e6, rel=1e-9
+    )
+    assert noncompact.to("kN*m").magnitude < mp
+    # Slender wall (D/t = 250 > 179.7): F_cr governs, weaker still.
+    slender = aisc_round_hss_flexural_strength(diameter=_q("500 mm"), thickness=_q("2 mm"), **base)
+    assert slender.to("kN*m").magnitude == pytest.approx(
+        0.33 * 200000 / 250 * 1.0e6 / 1e6, rel=1e-9
+    )
+    assert slender.to("kN*m").magnitude < noncompact.to("kN*m").magnitude
+    # Past D/t = 0.45E/Fy = 260.9 the section is too thin for §F8.
+    with pytest.raises(ValueError, match="applicability"):
+        aisc_round_hss_flexural_strength(diameter=_q("600 mm"), thickness=_q("2 mm"), **base)

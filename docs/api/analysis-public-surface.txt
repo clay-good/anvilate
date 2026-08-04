@@ -52,6 +52,7 @@ beam.hollow_circular_second_moment
 beam.i_section_plastic_section_modulus
 beam.i_section_second_moment
 beam.aisc_bearing_length_for_web_yielding
+beam.aisc_round_hss_flexural_strength
 beam.aisc_web_compression_buckling_strength
 beam.aisc_web_crippling_strength
 beam.aisc_web_local_yielding_strength

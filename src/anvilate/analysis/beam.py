@@ -82,6 +82,7 @@ __all__ = [
     "aisc_bearing_length_for_web_yielding",
     "aisc_web_crippling_strength",
     "aisc_web_compression_buckling_strength",
+    "aisc_round_hss_flexural_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
@@ -752,6 +753,65 @@ def aisc_web_compression_buckling_strength(
     if at_member_end:
         rn_n *= 0.5
     return Quantity(magnitude=rn_n / 1000.0, unit="kN")
+
+
+def aisc_round_hss_flexural_strength(
+    *,
+    diameter: Quantity,
+    thickness: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+    plastic_section_modulus: Quantity,
+    elastic_section_modulus: Quantity,
+) -> Quantity:
+    """The AISC 360 §F8 flexural strength of a round HSS or pipe.
+
+    Round tubes bend differently from I-shapes: there is no lateral-torsional buckling,
+    and the only slenderness that matters is the wall's D/t. §F8 reads the wall in three
+    ranges against λ_p = 0.07·E/F_y and λ_r = 0.31·E/F_y. A compact wall reaches the full
+    plastic moment M_p = F_y·Z (§F8.1). A noncompact wall buckles locally at
+    M_n = (0.021·E/(D/t) + F_y)·S, and a slender wall at M_n = F_cr·S with F_cr =
+    0.33·E/(D/t) (§F8.2) — both capped at M_p. ``diameter`` D, ``thickness`` t (wall),
+    ``yield_strength`` F_y, ``elastic_modulus`` E, ``plastic_section_modulus`` Z, and
+    ``elastic_section_modulus`` S. §F8 does not apply past D/t = 0.45·E/F_y (the tube is
+    then too thin to carry bending as a section) — that raises. Returns M_n in kN·m.
+    """
+    _require(diameter, "[length]", "diameter")
+    _require(thickness, "[length]", "thickness")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if not plastic_section_modulus.has_dimension("[length]**3"):
+        raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
+    if not elastic_section_modulus.has_dimension("[length]**3"):
+        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+    d = diameter.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    z = plastic_section_modulus.to("mm**3").magnitude
+    s = elastic_section_modulus.to("mm**3").magnitude
+    if d <= 0 or t <= 0 or fy <= 0 or e <= 0 or z <= 0 or s <= 0:
+        raise ValueError(
+            "diameter, thickness, yield_strength, elastic_modulus, and the section "
+            "moduli must all be positive"
+        )
+    dt = d / t
+    limit = 0.45 * e / fy
+    if dt > limit:
+        raise ValueError(
+            f"D/t = {dt:.1f} exceeds the §F8 applicability limit 0.45E/F_y = {limit:.1f}"
+        )
+    lambda_p = 0.07 * e / fy
+    lambda_r = 0.31 * e / fy
+    m_p = fy * z
+    if dt <= lambda_p:
+        m_n = m_p
+    elif dt <= lambda_r:
+        m_n = (0.021 * e / dt + fy) * s
+    else:
+        m_n = 0.33 * e / dt * s
+    m_n = min(m_n, m_p)
+    return Quantity(magnitude=m_n / 1.0e6, unit="kN*m")
 
 
 def shear_flow(
