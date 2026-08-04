@@ -13115,6 +13115,34 @@ def test_stokes_settling_velocity_and_drag_are_consistent():
         )
 
 
+def test_wind_turbine_tip_speed_ratio_and_capacity_factor():
+    import math
+
+    from anvilate.analysis import capacity_factor, wind_turbine_tip_speed_ratio
+
+    # lambda = omega*R/V: 15 rpm (1.571 rad/s) * 40 m / 10 m/s = 6.283.
+    tsr = wind_turbine_tip_speed_ratio(
+        rotor_speed=_q("15 rpm"), rotor_radius=_q("40 m"), wind_speed=_q("10 m/s")
+    )
+    omega = 15 * 2 * math.pi / 60
+    assert tsr == pytest.approx(omega * 40 / 10, rel=1e-9)
+    # Faster wind at the same rotor speed lowers the tip speed ratio.
+    slow = wind_turbine_tip_speed_ratio(
+        rotor_speed=_q("15 rpm"), rotor_radius=_q("40 m"), wind_speed=_q("20 m/s")
+    )
+    assert slow == pytest.approx(tsr / 2, rel=1e-9)
+    # CF = E/(P*t): 6000 MWh from a 2 MW turbine over 8760 h -> 0.342.
+    cf = capacity_factor(
+        energy_produced=_q("6000 MWh"), rated_power=_q("2 MW"), period=_q("8760 hour")
+    )
+    assert cf == pytest.approx(6000 / (2 * 8760), rel=1e-9)
+    # Energy beyond the rated output over the period is impossible (CF > 1).
+    with pytest.raises(ValueError, match="exceeds the rated output"):
+        capacity_factor(
+            energy_produced=_q("20000 MWh"), rated_power=_q("2 MW"), period=_q("8760 hour")
+        )
+
+
 def test_wind_power_density_turbine_power_and_betz_limit():
     import math
 

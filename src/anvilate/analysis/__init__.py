@@ -199,8 +199,9 @@ modules:
   a daily load needs, and the cell-temperature (NOCT) and its power derating
   (P = P_stc·[1 + γ·(T_cell − 25)]) — pairs with energy_storage for off-grid design
 - :mod:`~anvilate.analysis.wind_power` — wind-turbine power: the ½·ρ·V³ power density
-  in the wind (cube law), the P = ½·ρ·A·V³·C_p a rotor delivers, and the Betz limit
-  16/27 ceiling on the power coefficient
+  in the wind (cube law), the P = ½·ρ·A·V³·C_p a rotor delivers, the Betz limit
+  16/27 ceiling on the power coefficient, the tip speed ratio λ = ω·R/V, and the
+  capacity factor CF = E/(P·t)
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
@@ -1530,8 +1531,10 @@ from .winch import (
 )
 from .wind_power import (
     BETZ_LIMIT,
+    capacity_factor,
     wind_power_density,
     wind_turbine_power,
+    wind_turbine_tip_speed_ratio,
 )
 from .wire_rope import (
     minimum_sheave_diameter_for_bending_stress,
@@ -2463,4 +2466,6 @@ __all__ = [
     "BETZ_LIMIT",
     "wind_power_density",
     "wind_turbine_power",
+    "wind_turbine_tip_speed_ratio",
+    "capacity_factor",
 ]

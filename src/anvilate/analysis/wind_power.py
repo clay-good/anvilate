@@ -23,6 +23,8 @@ __all__ = [
     "BETZ_LIMIT",
     "wind_power_density",
     "wind_turbine_power",
+    "wind_turbine_tip_speed_ratio",
+    "capacity_factor",
 ]
 
 BETZ_LIMIT = 16.0 / 27.0  # ≈ 0.593, the maximum fraction of wind power any turbine can extract
@@ -76,6 +78,62 @@ def wind_turbine_power(
         raise ValueError(f"power_coefficient must be in (0, {BETZ_LIMIT:.4f}] (the Betz limit)")
     area = pi * d**2 / 4.0
     return Quantity(magnitude=0.5 * rho * area * v**3 * power_coefficient, unit="W")
+
+
+def wind_turbine_tip_speed_ratio(
+    *,
+    rotor_speed: Quantity,
+    rotor_radius: Quantity,
+    wind_speed: Quantity,
+) -> float:
+    """The tip speed ratio of a wind turbine, λ = ω·R/V.
+
+    The single most important aerodynamic parameter of a rotor: how fast the blade *tips* move
+    compared to the wind, λ = ``rotor_speed``·``rotor_radius``/``wind_speed``. Every rotor has an
+    optimal tip speed ratio where it extracts the most power — around 6–8 for a modern three-blade
+    turbine, lower for many-bladed water pumpers. Turn too slowly (low λ) and wind slips between the
+    blades untouched; too fast (high λ) and the blades stall each other in turbulence. A
+    variable-speed turbine holds λ near its optimum by tracking the wind. ``rotor_speed`` is an
+    angular rate (rpm or rad/s). Returns the dimensionless tip speed ratio.
+    """
+    _check(rotor_speed, "1/[time]", "rotor_speed")
+    _check(rotor_radius, "[length]", "rotor_radius")
+    _check(wind_speed, "[length]/[time]", "wind_speed")
+    omega = rotor_speed.to("rad/s").magnitude
+    r = rotor_radius.to("m").magnitude
+    v = wind_speed.to("m/s").magnitude
+    if omega <= 0 or r <= 0 or v <= 0:
+        raise ValueError("rotor_speed, rotor_radius, and wind_speed must be positive")
+    return omega * r / v
+
+
+def capacity_factor(
+    *,
+    energy_produced: Quantity,
+    rated_power: Quantity,
+    period: Quantity,
+) -> float:
+    """The capacity factor, CF = E/(P_rated·t).
+
+    The fraction of its nameplate a generator actually delivers over time: the ``energy_produced`` E
+    divided by what it would have made running flat out at its ``rated_power`` P for the whole
+    ``period`` t, CF = E/(P·t). It rolls the intermittency and the derating into one number —
+    onshore wind runs around 0.35, offshore 0.45–0.55, rooftop solar 0.15–0.25, a baseload plant
+    above 0.9. It is the honest way to compare an intermittent renewable against firm capacity.
+    Returns the dimensionless capacity factor (0 to 1).
+    """
+    _check(energy_produced, "[energy]", "energy_produced")
+    _check(rated_power, "[power]", "rated_power")
+    _check(period, "[time]", "period")
+    e = energy_produced.to("J").magnitude
+    p = rated_power.to("W").magnitude
+    t = period.to("s").magnitude
+    if e < 0 or p <= 0 or t <= 0:
+        raise ValueError("rated_power and period must be positive, energy non-negative")
+    cf = e / (p * t)
+    if cf > 1.0:
+        raise ValueError("energy_produced exceeds the rated output for the period (CF > 1)")
+    return cf
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

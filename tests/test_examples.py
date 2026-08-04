@@ -718,6 +718,15 @@ def test_clarifier_particle_settling_example_d_squared_law():
     assert ratio == pytest.approx(100.0, rel=1e-6)
 
 
+def test_generator_capacity_factor_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "generator_capacity_factor.py"))
+    c = namespace["capacity_factors"]()
+    # Baseload gas beats wind beats solar on capacity factor.
+    assert c["wind_cf"] == pytest.approx(0.342, abs=0.005)
+    assert c["solar_cf"] == pytest.approx(0.20, abs=0.005)
+    assert c["gas_cf"] > c["wind_cf"] > c["solar_cf"]
+
+
 def test_wind_turbine_power_curve_example_cube_law():
     namespace = runpy.run_path(str(_EXAMPLES / "wind_turbine_power_curve.py"))
     t = namespace["turbine_output"]()
