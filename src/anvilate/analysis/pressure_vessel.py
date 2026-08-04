@@ -35,6 +35,8 @@ __all__ = [
     "asme_cylinder_mawp",
     "asme_ellipsoidal_head_thickness",
     "asme_torispherical_head_thickness",
+    "asme_ellipsoidal_head_mawp",
+    "asme_torispherical_head_mawp",
     "asme_b313_pipe_wall_thickness",
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
@@ -339,6 +341,84 @@ def _asme_head_thickness(
     if denominator <= 0:
         raise ValueError("S·E is too low for the pressure (the head denominator is non-positive)")
     return Quantity(magnitude=coefficient * p * length_mm / denominator, unit="mm")
+
+
+def asme_ellipsoidal_head_mawp(
+    *,
+    thickness: Quantity,
+    diameter: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 MAWP of a 2:1 ellipsoidal head, P = 2·S·E·t/(D + 0.2·t).
+
+    The rating inverse of :func:`asme_ellipsoidal_head_thickness`: the maximum
+    allowable working pressure a 2:1 head of ``thickness`` t and inside ``diameter``
+    D carries at code ``allowable_stress`` S and weld ``joint_efficiency`` E. Use the
+    as-built wall (less corrosion allowance) to get the head's pressure rating. All
+    positive, E in (0, 1]. Returns the MAWP in MPa.
+    """
+    return _asme_head_mawp(
+        denom_factor=0.2,
+        numer_leading=2.0,
+        thickness=thickness,
+        length=diameter,
+        allowable_stress=allowable_stress,
+        joint_efficiency=joint_efficiency,
+    )
+
+
+def asme_torispherical_head_mawp(
+    *,
+    thickness: Quantity,
+    crown_radius: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 MAWP of a standard torispherical head,
+    P = S·E·t/(0.885·L + 0.1·t).
+
+    The rating inverse of :func:`asme_torispherical_head_thickness`: the maximum
+    allowable working pressure a standard flanged-and-dished head of ``thickness`` t
+    and ``crown_radius`` L carries at ``allowable_stress`` S and ``joint_efficiency``
+    E. The 0.885 knuckle coefficient makes its rating lower than an ellipsoidal head
+    of the same wall. All positive, E in (0, 1]. Returns the MAWP in MPa.
+    """
+    return _asme_head_mawp(
+        denom_factor=0.1,
+        numer_leading=1.0,
+        thickness=thickness,
+        length=crown_radius,
+        allowable_stress=allowable_stress,
+        joint_efficiency=joint_efficiency,
+        length_coefficient=0.885,
+    )
+
+
+def _asme_head_mawp(
+    *,
+    denom_factor: float,
+    numer_leading: float,
+    thickness: Quantity,
+    length: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float,
+    length_coefficient: float = 1.0,
+) -> Quantity:
+    """Shared UG-32 head rating P = m·S·E·t/(K·L + f·t)."""
+    _require(thickness, "[length]", "thickness")
+    _require(length, "[length]", "length")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 < joint_efficiency <= 1:
+        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+    t = thickness.to("mm").magnitude
+    length_mm = length.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if t <= 0 or length_mm <= 0 or s <= 0:
+        raise ValueError("thickness, the geometry, and allowable_stress must be positive")
+    numerator = numer_leading * s * joint_efficiency * t
+    denominator = length_coefficient * length_mm + denom_factor * t
+    return Quantity(magnitude=numerator / denominator, unit="MPa")
 
 
 def asme_b313_pipe_wall_thickness(

@@ -12455,3 +12455,33 @@ def test_flat_plate_turbulent_convection_and_its_validity_window():
         )
         is None
     )
+
+
+def test_asme_head_mawp_round_trips_the_thickness():
+    from anvilate.analysis import (
+        asme_ellipsoidal_head_mawp,
+        asme_ellipsoidal_head_thickness,
+        asme_torispherical_head_mawp,
+        asme_torispherical_head_thickness,
+    )
+
+    s = _q("138 MPa")
+    # Ellipsoidal: size at 2 MPa, then rate the wall -> recover 2 MPa.
+    t_ell = asme_ellipsoidal_head_thickness(
+        pressure=_q("2 MPa"), diameter=_q("1000 mm"), allowable_stress=s
+    )
+    p_ell = asme_ellipsoidal_head_mawp(thickness=t_ell, diameter=_q("1000 mm"), allowable_stress=s)
+    assert p_ell.to("MPa").magnitude == pytest.approx(2.0, rel=1e-9)
+    # Torispherical round-trips too, and rates lower than an ellipsoidal head of the
+    # same wall (the knuckle coefficient).
+    t_tor = asme_torispherical_head_thickness(
+        pressure=_q("2 MPa"), crown_radius=_q("1000 mm"), allowable_stress=s
+    )
+    p_tor = asme_torispherical_head_mawp(
+        thickness=t_tor, crown_radius=_q("1000 mm"), allowable_stress=s
+    )
+    assert p_tor.to("MPa").magnitude == pytest.approx(2.0, rel=1e-9)
+    same_wall = asme_torispherical_head_mawp(
+        thickness=t_ell, crown_radius=_q("1000 mm"), allowable_stress=s
+    )
+    assert same_wall.to("MPa").magnitude < p_ell.to("MPa").magnitude
