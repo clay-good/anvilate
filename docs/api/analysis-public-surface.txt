@@ -477,6 +477,7 @@ section.CrossSection
 section.bending_stress
 section.channel_shear_center
 section.composite_beam_bending_stresses
+section.compound_plastic_section_modulus
 section.compound_section_properties
 section.required_section_modulus
 servo.inertia_matching_gear_ratio

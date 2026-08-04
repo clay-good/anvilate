@@ -553,6 +553,41 @@ def test_simply_supported_offset_load_degenerates_to_the_center_case():
     )
 
 
+def test_compound_plastic_section_modulus_matches_i_section():
+    from anvilate.analysis import (
+        compound_plastic_section_modulus,
+        i_section_plastic_section_modulus,
+    )
+
+    # Symmetric I from three plates: PNA at the centroid, Z matches the closed form.
+    z = compound_plastic_section_modulus(
+        rectangles=[
+            (_q("200 mm"), _q("20 mm"), _q("110 mm")),
+            (_q("200 mm"), _q("20 mm"), _q("-110 mm")),
+            (_q("10 mm"), _q("200 mm"), _q("0 mm")),
+        ]
+    )
+    closed = i_section_plastic_section_modulus(
+        flange_width=_q("200 mm"),
+        total_height=_q("240 mm"),
+        flange_thickness=_q("20 mm"),
+        web_thickness=_q("10 mm"),
+    )
+    assert z.to("mm**3").magnitude == pytest.approx(closed.to("mm**3").magnitude, rel=1e-6)
+    assert z.to("mm**3").magnitude == pytest.approx(980000, rel=1e-4)
+    # The plastic modulus exceeds the elastic one (shape factor > 1) for the same section.
+    from anvilate.analysis import compound_section_properties
+
+    elastic = compound_section_properties(
+        rectangles=[
+            (_q("200 mm"), _q("20 mm"), _q("110 mm")),
+            (_q("200 mm"), _q("20 mm"), _q("-110 mm")),
+            (_q("10 mm"), _q("200 mm"), _q("0 mm")),
+        ]
+    )
+    assert z.to("mm**3").magnitude > elastic.section_modulus.to("mm**3").magnitude
+
+
 def test_compound_section_reproduces_the_i_section_formula():
     from anvilate.analysis import (
         compound_section_properties,

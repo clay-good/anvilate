@@ -29,6 +29,7 @@ __all__ = [
     "channel_shear_center",
     "CompoundSection",
     "compound_section_properties",
+    "compound_plastic_section_modulus",
 ]
 
 
@@ -461,3 +462,59 @@ def compound_section_properties(
         extreme_fibre_top=_mm(top - centroid),
         extreme_fibre_bottom=_mm(centroid - bottom),
     )
+
+
+def compound_plastic_section_modulus(
+    *,
+    rectangles: Sequence[tuple[Quantity, Quantity, Quantity]],
+) -> Quantity:
+    """The plastic section modulus Z of a built-up section (for the plastic moment M_p = F_y·Z).
+
+    Where the elastic :func:`compound_section_properties` gives I about the neutral axis, this
+    gives the *plastic* modulus, the property behind a section's full plastic moment. At M_p
+    the whole section has yielded, so the plastic neutral axis (PNA) splits it into equal
+    areas, and Z is the first moment of area taken as positive on both sides of the PNA,
+    Z = Σ|A_i·(ȳ_i − y_PNA)| with any part straddling the PNA split. ``rectangles`` is the same
+    sequence of ``(width, height, centroid)`` triples as
+    :func:`compound_section_properties` — the plates that make up a plate girder, tee, or
+    cover-plated beam. For a doubly-symmetric section the PNA is the centroid; for an
+    unsymmetric one it shifts to equalize the areas. Returns Z in mm³ (multiply by F_y for M_p).
+    """
+    if not rectangles:
+        raise ValueError("rectangles must be a non-empty sequence")
+    parts = []
+    for i, rect in enumerate(rectangles):
+        if len(rect) != 3:
+            raise ValueError(f"rectangles[{i}] must be a (width, height, centroid) triple")
+        b = _require_length(rect[0], f"rectangles[{i}].width")
+        h = _require_length(rect[1], f"rectangles[{i}].height")
+        y = _require_length(rect[2], f"rectangles[{i}].centroid")
+        if b <= 0 or h <= 0:
+            raise ValueError(f"rectangles[{i}] width and height must be positive")
+        parts.append((b, h, y))
+    total_area = sum(b * h for b, h, _ in parts)
+    half_area = total_area / 2.0
+
+    def area_below(y_p: float) -> float:
+        return sum(b * max(0.0, min(y_p - (y - h / 2.0), h)) for b, h, y in parts)
+
+    lo = min(y - h / 2.0 for _, h, y in parts)
+    hi = max(y + h / 2.0 for _, h, y in parts)
+    for _ in range(200):  # bisection on the monotonic area-below function
+        mid = (lo + hi) / 2.0
+        if area_below(mid) < half_area:
+            lo = mid
+        else:
+            hi = mid
+    pna = (lo + hi) / 2.0
+
+    modulus = 0.0
+    for b, h, y in parts:
+        bottom, top = y - h / 2.0, y + h / 2.0
+        below_hi = min(pna, top)
+        if below_hi > bottom:
+            modulus += b * (below_hi - bottom) * abs((bottom + below_hi) / 2.0 - pna)
+        above_lo = max(pna, bottom)
+        if top > above_lo:
+            modulus += b * (top - above_lo) * abs((above_lo + top) / 2.0 - pna)
+    return Quantity(magnitude=modulus, unit="mm**3")
