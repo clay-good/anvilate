@@ -214,7 +214,8 @@ modules:
   temperature, the moist-air enthalpy and cooling-coil load for capacity sizing, the
   sensible/latent split with the sensible heat ratio SHR = Q_s/(Q_s + Q_l), the
   adiabatic mixing of two air streams (mass-weighted temperature and humidity ratio),
-  and the cooling-coil bypass factor against its apparent dew point
+  the cooling-coil bypass factor against its apparent dew point, and the direct
+  evaporative-cooler saturation effectiveness toward the wet-bulb
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -1223,6 +1224,7 @@ from .psychrometrics import (
     coil_bypass_factor,
     cooling_coil_load,
     dew_point_temperature,
+    evaporative_cooler_effectiveness,
     humidity_ratio,
     latent_heat_load,
     moist_air_enthalpy,
@@ -1651,6 +1653,7 @@ __all__ = [
     "adiabatic_mixing_humidity_ratio",
     "coil_bypass_factor",
     "cooling_coil_load",
+    "evaporative_cooler_effectiveness",
     "dew_point_temperature",
     "humidity_ratio",
     "sensible_heat_load",

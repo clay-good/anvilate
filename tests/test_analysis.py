@@ -15108,6 +15108,33 @@ def test_adiabatic_air_mixing():
         )
 
 
+def test_evaporative_cooler_effectiveness():
+    from anvilate.analysis import evaporative_cooler_effectiveness
+    from anvilate.units import Quantity
+
+    # eff = (t_db1 - t_db2)/(t_db1 - t_wb1): 38 -> 25 with a 21 C wet-bulb -> 13/17 = 0.7647.
+    eff = evaporative_cooler_effectiveness(
+        entering_dry_bulb=Quantity(magnitude=38.0, unit="degC"),
+        leaving_dry_bulb=Quantity(magnitude=25.0, unit="degC"),
+        entering_wet_bulb=Quantity(magnitude=21.0, unit="degC"),
+    )
+    assert eff == pytest.approx((38 - 25) / (38 - 21), rel=1e-9)
+    # Reaching the wet-bulb exactly is 100% effective.
+    perfect = evaporative_cooler_effectiveness(
+        entering_dry_bulb=Quantity(magnitude=38.0, unit="degC"),
+        leaving_dry_bulb=Quantity(magnitude=21.0, unit="degC"),
+        entering_wet_bulb=Quantity(magnitude=21.0, unit="degC"),
+    )
+    assert perfect == pytest.approx(1.0, rel=1e-12)
+    # Leaving below the wet-bulb is thermodynamically impossible and rejected.
+    with pytest.raises(ValueError, match="entering_wet_bulb <= leaving_dry_bulb"):
+        evaporative_cooler_effectiveness(
+            entering_dry_bulb=Quantity(magnitude=38.0, unit="degC"),
+            leaving_dry_bulb=Quantity(magnitude=18.0, unit="degC"),
+            entering_wet_bulb=Quantity(magnitude=21.0, unit="degC"),
+        )
+
+
 def test_coil_bypass_factor():
     from anvilate.analysis import coil_bypass_factor
     from anvilate.units import Quantity

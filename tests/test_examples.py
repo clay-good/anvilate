@@ -783,6 +783,16 @@ def test_cooling_coil_bypass_factor_example_deep_vs_shallow():
     assert c["shallow_bf"] > c["deep_bf"]
 
 
+def test_evaporative_cooler_climate_example_dry_beats_humid():
+    namespace = runpy.run_path(str(_EXAMPLES / "evaporative_cooler_climate.py"))
+    c = namespace["cooler_climates"]()
+    # Same effectiveness both climates, but the dry desert gets far more cooling.
+    assert c["desert_effectiveness"] == pytest.approx(0.85, rel=1e-9)
+    assert c["humid_effectiveness"] == pytest.approx(0.85, rel=1e-9)
+    assert c["desert_leaving_c"] == pytest.approx(23.0, abs=0.1)
+    assert c["humid_leaving_c"] > c["desert_leaving_c"]
+
+
 def test_ahu_mixed_air_example():
     namespace = runpy.run_path(str(_EXAMPLES / "ahu_mixed_air.py"))
     m = namespace["mixed_air"]()

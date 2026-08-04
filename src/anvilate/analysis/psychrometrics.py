@@ -26,6 +26,7 @@ __all__ = [
     "adiabatic_mixing_humidity_ratio",
     "coil_bypass_factor",
     "cooling_coil_load",
+    "evaporative_cooler_effectiveness",
     "dew_point_temperature",
     "humidity_ratio",
     "latent_heat_load",
@@ -198,6 +199,39 @@ def adiabatic_mixing_humidity_ratio(
     if humidity_ratio_1 < 0 or humidity_ratio_2 < 0:
         raise ValueError("humidity ratios must be non-negative")
     return (m1 * humidity_ratio_1 + m2 * humidity_ratio_2) / (m1 + m2)
+
+
+def evaporative_cooler_effectiveness(
+    *,
+    entering_dry_bulb: Quantity,
+    leaving_dry_bulb: Quantity,
+    entering_wet_bulb: Quantity,
+) -> float:
+    """The direct evaporative cooler saturation effectiveness ε = (t_db1 − t_db2)/(t_db1 − t_wb1).
+
+    A direct (adiabatic) evaporative cooler drops the air's dry-bulb temperature by evaporating
+    water into it, and the coldest it could reach is the entering wet-bulb temperature — the
+    thermodynamic limit where the air is saturated. The saturation effectiveness measures how close
+    it gets: ε = (``entering_dry_bulb`` − ``leaving_dry_bulb``)/(``entering_dry_bulb`` −
+    ``entering_wet_bulb``). A good rigid-media (swamp) cooler reaches 0.8–0.9; a spray or slinger
+    less. The bigger the wet-bulb depression (hot, dry air), the more cooling that effectiveness
+    delivers, which is why evaporative cooling suits arid climates and fails in humid ones. The
+    leaving dry-bulb must lie between the entering wet-bulb and the entering dry-bulb. Returns the
+    dimensionless effectiveness.
+    """
+    _check(entering_dry_bulb, "[temperature]", "entering_dry_bulb")
+    _check(leaving_dry_bulb, "[temperature]", "leaving_dry_bulb")
+    _check(entering_wet_bulb, "[temperature]", "entering_wet_bulb")
+    t_db1 = entering_dry_bulb.to("degC").magnitude
+    t_db2 = leaving_dry_bulb.to("degC").magnitude
+    t_wb1 = entering_wet_bulb.to("degC").magnitude
+    if not t_wb1 <= t_db2 <= t_db1:
+        raise ValueError(
+            "temperatures must satisfy entering_wet_bulb <= leaving_dry_bulb <= entering_dry_bulb"
+        )
+    if t_db1 == t_wb1:
+        raise ValueError("entering air is already saturated (no wet-bulb depression to work with)")
+    return (t_db1 - t_db2) / (t_db1 - t_wb1)
 
 
 def coil_bypass_factor(
