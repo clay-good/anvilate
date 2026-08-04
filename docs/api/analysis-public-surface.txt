@@ -952,6 +952,9 @@ wind_power.wind_power_density
 wind_power.capacity_factor
 wind_power.wind_turbine_power
 wind_power.wind_turbine_tip_speed_ratio
+wire_drawing.wire_drawing_stress
+wire_drawing.wire_drawing_force
+wire_drawing.wire_drawing_max_reduction
 wire_rope.minimum_sheave_diameter_for_bending_stress
 wire_rope.wire_rope_bending_stress
 wire_rope.wire_rope_equivalent_bending_load

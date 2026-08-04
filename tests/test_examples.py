@@ -755,6 +755,19 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_wire_drawing_pass_limit_example_reduction_capped_by_strength():
+    namespace = runpy.run_path(str(_EXAMPLES / "wire_drawing_pass_limit.py"))
+    d = namespace["drawing_limits"]()
+    # Max reduction ~49% with friction, below the frictionless 63% (1 - 1/e).
+    assert d["max_reduction"] == pytest.approx(0.492, abs=0.005)
+    assert d["ideal_reduction"] == pytest.approx(0.632, abs=0.005)
+    assert d["max_reduction"] < d["ideal_reduction"]
+    # A 20% working pass draws at ~132 MPa, about a third of the 400 MPa wire strength.
+    assert d["pass_stress_mpa"] == pytest.approx(131.7, abs=0.5)
+    assert d["stress_ratio"] == pytest.approx(0.329, abs=0.005)
+    assert d["stress_ratio"] < 1.0  # the wire survives the pass
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

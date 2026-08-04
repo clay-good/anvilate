@@ -3294,6 +3294,53 @@ def test_forging_true_strain_flow_stress_and_open_die_load():
         )
 
 
+def test_wire_drawing_stress_force_and_max_reduction():
+    from math import exp, log, radians, tan
+
+    from anvilate.analysis import (
+        wire_drawing_force,
+        wire_drawing_max_reduction,
+        wire_drawing_stress,
+    )
+
+    # Draw stress sigma_d = Y*ln(A0/Af)*(1 + mu/tan(alpha)); 10 -> 8 mm^2, alpha=6deg, mu=0.05.
+    ff = 1 + 0.05 / tan(radians(6.0))
+    s = wire_drawing_stress(
+        flow_stress=_q("400 MPa"),
+        initial_area=_q("10 mm**2"),
+        final_area=_q("8 mm**2"),
+        die_half_angle=6.0,
+        friction_coefficient=0.05,
+    )
+    assert s.to("MPa").magnitude == pytest.approx(400 * log(10 / 8) * ff, rel=1e-9)
+    # The draw stress stays below the 400 MPa flow stress, so the wire survives the pass.
+    assert s.to("MPa").magnitude < 400
+
+    # Draw force F = sigma_d * Af.
+    f = wire_drawing_force(drawing_stress=s, final_area=_q("8 mm**2"))
+    assert f.to("kN").magnitude == pytest.approx(s.to("Pa").magnitude * 8e-6 / 1000, rel=1e-9)
+
+    # Max reduction r = 1 - exp(-1/(1+mu/tan alpha)); frictionless is the classic 1 - 1/e.
+    r = wire_drawing_max_reduction(die_half_angle=6.0, friction_coefficient=0.05)
+    assert r == pytest.approx(1 - exp(-1 / ff), rel=1e-9)
+    r_ideal = wire_drawing_max_reduction(die_half_angle=6.0, friction_coefficient=0.0)
+    assert r_ideal == pytest.approx(1 - 1 / exp(1), rel=1e-9)
+    # Friction lowers the achievable reduction below the frictionless limit.
+    assert r < r_ideal
+
+    # Guardrails: drawing must reduce area, and the die angle is in (0, 90).
+    with pytest.raises(ValueError, match="final_area must be smaller"):
+        wire_drawing_stress(
+            flow_stress=_q("400 MPa"),
+            initial_area=_q("8 mm**2"),
+            final_area=_q("10 mm**2"),
+            die_half_angle=6.0,
+            friction_coefficient=0.05,
+        )
+    with pytest.raises(ValueError, match="die_half_angle must be in"):
+        wire_drawing_max_reduction(die_half_angle=0.0, friction_coefficient=0.05)
+
+
 def test_extrusion_ratio_pressure_and_force():
     from math import log, pi
 

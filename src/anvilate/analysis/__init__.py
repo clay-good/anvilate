@@ -433,6 +433,9 @@ modules:
 - :mod:`~anvilate.analysis.extrusion` — direct extrusion: the extrusion ratio
   R = A₀/A_f, the ram pressure p = Y_avg·ln(R)/η (ideal work over a deformation
   efficiency), and the ram force F = p·A₀ that sizes the press
+- :mod:`~anvilate.analysis.wire_drawing` — wire/rod drawing: the draw stress
+  σ_d = Y·ln(A₀/A_f)·(1 + μ/tan α), the draw force F = σ_d·A_f, and the maximum
+  area reduction per pass r_max = 1 − exp(−1/(1 + μ/tan α)) before the wire snaps
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -1645,6 +1648,11 @@ from .wind_power import (
     wind_turbine_power,
     wind_turbine_tip_speed_ratio,
 )
+from .wire_drawing import (
+    wire_drawing_force,
+    wire_drawing_max_reduction,
+    wire_drawing_stress,
+)
 from .wire_rope import (
     minimum_sheave_diameter_for_bending_stress,
     wire_rope_bending_stress,
@@ -2620,4 +2628,7 @@ __all__ = [
     "wind_turbine_power",
     "wind_turbine_tip_speed_ratio",
     "capacity_factor",
+    "wire_drawing_stress",
+    "wire_drawing_force",
+    "wire_drawing_max_reduction",
 ]
