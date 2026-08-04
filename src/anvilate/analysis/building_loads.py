@@ -16,6 +16,10 @@ where the seismic weight W is resisted in proportion to the response coefficient
 design spectral acceleration, scaled up by importance and down by the system's ductility R). ASCE 7
 also caps Cs above and below (by SD1/T and the 0.044·SDS·Ie floor) — those bounds need the building
 period and are the caller's to apply; this is the base §12.8.1.1 value.
+
+**Snow.** The flat-roof snow load is the ground snow discounted for the roof's exposure, warmth, and
+occupancy, pf = 0.7·Ce·Ct·Is·pg, and a pitched roof sheds part of it through the slope factor,
+ps = Cs·pf.
 """
 
 from __future__ import annotations
@@ -27,9 +31,12 @@ __all__ = [
     "wind_design_pressure",
     "seismic_response_coefficient",
     "seismic_base_shear",
+    "flat_roof_snow_load",
+    "sloped_roof_snow_load",
 ]
 
 _VELOCITY_PRESSURE_CONSTANT = 0.613  # = 1/2 * rho_air (1.225 kg/m^3), SI ASCE 7 form
+_FLAT_ROOF_SNOW_CONSTANT = 0.7  # ASCE 7 Eq 7.3-1 exposure/thermal baseline
 
 
 def wind_velocity_pressure(
@@ -141,6 +148,58 @@ def seismic_base_shear(
     if response_coefficient <= 0:
         raise ValueError(f"response_coefficient must be positive; got {response_coefficient}")
     return Quantity(magnitude=w * response_coefficient, unit="kN")
+
+
+def flat_roof_snow_load(
+    *,
+    ground_snow_load: Quantity,
+    exposure_factor: float = 1.0,
+    thermal_factor: float = 1.0,
+    importance_factor: float = 1.0,
+) -> Quantity:
+    """The ASCE 7 flat-roof snow load pf = 0.7·Ce·Ct·Is·pg (§7.3).
+
+    The design snow on a flat (or nearly flat) roof: the site's ``ground_snow_load`` pg discounted
+    by the 0.7 baseline and three table factors — ``exposure_factor`` Ce (wind exposure, <1 for a
+    windswept roof that blows clear, >1 for a sheltered one), ``thermal_factor`` Ct (roof warmth, <1
+    for a heated building whose roof melts snow, >1 for a cold/freezer roof), and
+    ``importance_factor`` Is (occupancy). All three are ASCE 7 table values. Reduce it for a pitched
+    roof with :func:`sloped_roof_snow_load`. Returns the flat-roof snow load in kPa.
+    """
+    _check(ground_snow_load, "[pressure]", "ground_snow_load")
+    pg = ground_snow_load.to("kPa").magnitude
+    if pg <= 0:
+        raise ValueError("ground_snow_load must be positive")
+    for name, value in (
+        ("exposure_factor", exposure_factor),
+        ("thermal_factor", thermal_factor),
+        ("importance_factor", importance_factor),
+    ):
+        if value <= 0:
+            raise ValueError(f"{name} must be positive; got {value}")
+    pf = _FLAT_ROOF_SNOW_CONSTANT * exposure_factor * thermal_factor * importance_factor * pg
+    return Quantity(magnitude=pf, unit="kPa")
+
+
+def sloped_roof_snow_load(
+    *,
+    flat_roof_snow_load: Quantity,
+    slope_factor: float,
+) -> Quantity:
+    """The ASCE 7 sloped-roof snow load ps = Cs·pf (§7.4).
+
+    A pitched roof holds less snow than a flat one, because some slides off: the
+    ``flat_roof_snow_load`` pf (from :func:`flat_roof_snow_load`) scaled by the ``slope_factor`` Cs,
+    which falls from 1 toward 0 as the roof steepens and its surface grows more slippery (an ASCE 7
+    value from the pitch and the roof's slipperiness). Returns the sloped-roof snow load in kPa.
+    """
+    _check(flat_roof_snow_load, "[pressure]", "flat_roof_snow_load")
+    pf = flat_roof_snow_load.to("kPa").magnitude
+    if pf <= 0:
+        raise ValueError("flat_roof_snow_load must be positive")
+    if not 0 <= slope_factor <= 1:
+        raise ValueError(f"slope_factor must lie in [0, 1]; got {slope_factor}")
+    return Quantity(magnitude=slope_factor * pf, unit="kPa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

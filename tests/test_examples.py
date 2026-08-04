@@ -945,6 +945,17 @@ def test_motor_feeder_voltage_drop_example_bigger_conductor_passes():
     assert f["small_drop_percent"] > f["large_drop_percent"]
 
 
+def test_cold_storage_roof_snow_example_freezer_carries_more():
+    namespace = runpy.run_path(str(_EXAMPLES / "cold_storage_roof_snow.py"))
+    r = namespace["roof_snow_loads"]()
+    # The freezer roof (Ct>1) carries more snow than the heated one...
+    assert r["freezer_flat_kpa"] == pytest.approx(1.82, abs=0.01)
+    assert r["heated_flat_kpa"] == pytest.approx(1.40, abs=0.01)
+    assert r["freezer_flat_kpa"] > r["heated_flat_kpa"]
+    # ...and the pitch sheds part of the freezer load back off.
+    assert r["freezer_sloped_kpa"] < r["freezer_flat_kpa"]
+
+
 def test_wind_vs_seismic_base_shear_example_seismic_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "wind_vs_seismic_base_shear.py"))
     d = namespace["lateral_demands"]()

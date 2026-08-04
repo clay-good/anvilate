@@ -15306,6 +15306,24 @@ def test_building_loads_seismic_response_coefficient_and_base_shear():
         )
 
 
+def test_building_loads_flat_and_sloped_roof_snow():
+    from anvilate.analysis import flat_roof_snow_load, sloped_roof_snow_load
+
+    # pf = 0.7*Ce*Ct*Is*pg: 2.0 kPa ground, all factors 1 -> 1.4 kPa.
+    pf = flat_roof_snow_load(ground_snow_load=_q("2.0 kPa"))
+    assert pf.to("kPa").magnitude == pytest.approx(0.7 * 2.0, rel=1e-12)
+    # A cold/freezer roof (Ct>1) carries more snow than a heated one.
+    freezer = flat_roof_snow_load(ground_snow_load=_q("2.0 kPa"), thermal_factor=1.3)
+    assert freezer.to("kPa").magnitude == pytest.approx(0.7 * 1.3 * 2.0, rel=1e-12)
+    assert freezer.to("kPa").magnitude > pf.to("kPa").magnitude
+    # A pitched roof sheds part of it: ps = Cs*pf.
+    ps = sloped_roof_snow_load(flat_roof_snow_load=freezer, slope_factor=0.7)
+    assert ps.to("kPa").magnitude == pytest.approx(0.7 * freezer.to("kPa").magnitude, rel=1e-12)
+    assert ps.to("kPa").magnitude < freezer.to("kPa").magnitude
+    with pytest.raises(ValueError, match="slope_factor must lie in"):
+        sloped_roof_snow_load(flat_roof_snow_load=pf, slope_factor=1.5)
+
+
 def test_rankine_cohesive_active_pressure_and_tension_crack():
     import math
 

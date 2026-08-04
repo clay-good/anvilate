@@ -228,8 +228,9 @@ modules:
   self-locking distinction for both
 - :mod:`~anvilate.analysis.building_loads` — ASCE 7 environmental design loads:
   the wind velocity pressure (0.613·Kz·Kzt·Kd·Ke·V²) and the surface design
-  pressure it drives, and the seismic response coefficient (Cs = SDS·Ie/R) and
-  the equivalent-lateral-force base shear V = Cs·W
+  pressure it drives, the seismic response coefficient (Cs = SDS·Ie/R) and the
+  equivalent-lateral-force base shear V = Cs·W, and the flat- and sloped-roof
+  snow loads (pf = 0.7·Ce·Ct·Is·pg, ps = Cs·pf)
 - :mod:`~anvilate.analysis.curved_beam` — Winkler curved-beam bending
   (rectangular, trapezoidal, circular, and composite T/I/box/stepped sections):
   shifted neutral axis and the unequal inner/outer fibre stresses of hooks,
@@ -585,8 +586,10 @@ from .brake import (
     short_shoe_normal_force,
 )
 from .building_loads import (
+    flat_roof_snow_load,
     seismic_base_shear,
     seismic_response_coefficient,
+    sloped_roof_snow_load,
     wind_design_pressure,
     wind_velocity_pressure,
 )
@@ -1872,6 +1875,8 @@ __all__ = [
     "wind_design_pressure",
     "seismic_response_coefficient",
     "seismic_base_shear",
+    "flat_roof_snow_load",
+    "sloped_roof_snow_load",
     "CurvedBeamStress",
     "rectangular_curved_beam_stress",
     "trapezoidal_curved_beam_stress",
