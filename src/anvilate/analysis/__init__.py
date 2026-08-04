@@ -229,8 +229,10 @@ modules:
 - :mod:`~anvilate.analysis.building_loads` — ASCE 7 environmental design loads:
   the wind velocity pressure (0.613·Kz·Kzt·Kd·Ke·V²), the MWFRS surface design
   pressure it drives, and the components-and-cladding net pressure
-  (p = qh·(GCp − GCpi)); the seismic response coefficient (Cs = SDS·Ie/R) and the
-  equivalent-lateral-force base shear V = Cs·W and its vertical distribution to
+  (p = qh·(GCp − GCpi)); the seismic response coefficient (Cs = SDS·Ie/R), its
+  long-period cap (Cs_max = SD1·Ie/(T·R)) and the approximate fundamental period
+  (Ta = Ct·hn^x) that sets it, the equivalent-lateral-force base shear V = Cs·W
+  and its vertical distribution to
   each floor (Fx = V·wx·hx^k/Σwi·hi^k), the Cd-amplified design story drift
   (Δ = Cd·δxe/Ie) and the allowable drift it is checked against, the P-delta
   stability coefficient (θ = Pₓ·Δ/(Vₓ·hsx·Cd)) and its stability ceiling, the
@@ -601,6 +603,7 @@ from .brake import (
 )
 from .building_loads import (
     allowable_story_drift,
+    approximate_fundamental_period,
     components_cladding_net_pressure,
     flat_roof_snow_load,
     rain_load,
@@ -609,6 +612,7 @@ from .building_loads import (
     seismic_design_story_drift,
     seismic_load_effect,
     seismic_response_coefficient,
+    seismic_response_coefficient_upper_limit,
     seismic_stability_coefficient,
     seismic_stability_coefficient_limit,
     seismic_vertical_force_distribution,
@@ -1907,6 +1911,8 @@ __all__ = [
     "wind_design_pressure",
     "components_cladding_net_pressure",
     "seismic_response_coefficient",
+    "seismic_response_coefficient_upper_limit",
+    "approximate_fundamental_period",
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
     "seismic_design_story_drift",

@@ -15580,6 +15580,38 @@ def test_seismic_stability_coefficient_and_limit():
         )
 
 
+def test_approximate_period_and_cs_upper_limit():
+    from anvilate.analysis import (
+        approximate_fundamental_period,
+        seismic_response_coefficient,
+        seismic_response_coefficient_upper_limit,
+    )
+
+    # Ta = Ct*hn^x: steel MRF 0.0724 * 30^0.8 = 1.100 s.
+    ta = approximate_fundamental_period(
+        building_height=_q("30 m"), period_coefficient=0.0724, height_exponent=0.8
+    )
+    assert ta.to("s").magnitude == pytest.approx(0.0724 * 30**0.8, rel=1e-9)
+    # A taller building has a longer period.
+    taller = approximate_fundamental_period(
+        building_height=_q("60 m"), period_coefficient=0.0724, height_exponent=0.8
+    )
+    assert taller.to("s").magnitude > ta.to("s").magnitude
+    # Cs_max = SD1*Ie/(T*R): 0.6/(1.1*8) = 0.0682, which caps the 0.125 plateau for this period.
+    cap = seismic_response_coefficient_upper_limit(
+        design_spectral_acceleration_1s=0.6, fundamental_period=ta, response_modification_factor=8.0
+    )
+    assert cap == pytest.approx(0.6 / (ta.to("s").magnitude * 8.0), rel=1e-9)
+    plateau = seismic_response_coefficient(
+        design_spectral_acceleration=1.0, response_modification_factor=8.0
+    )
+    assert cap < plateau  # the period cap governs for this taller building
+    with pytest.raises(ValueError, match="period_coefficient"):
+        approximate_fundamental_period(
+            building_height=_q("30 m"), period_coefficient=0.0, height_exponent=0.8
+        )
+
+
 def test_building_loads_flat_and_sloped_roof_snow():
     from anvilate.analysis import flat_roof_snow_load, sloped_roof_snow_load
 

@@ -1084,6 +1084,16 @@ def test_cladding_internal_pressure_example_breach_worsens_suction():
     assert s["breached_kpa"] < s["enclosed_kpa"] < 0
 
 
+def test_seismic_cs_period_cap_example_tall_building_capped():
+    namespace = runpy.run_path(str(_EXAMPLES / "seismic_cs_period_cap.py"))
+    r = namespace["governing_cs"]()
+    # The squat building takes the plateau; the tall building's longer period caps Cs lower.
+    assert r["squat"]["governing"] == pytest.approx(r["squat"]["plateau"], rel=1e-9)
+    assert r["tall"]["governing"] == pytest.approx(r["tall"]["cap"], rel=1e-9)
+    assert r["tall"]["governing"] < r["squat"]["governing"]
+    assert r["tall"]["period_s"] > r["squat"]["period_s"]
+
+
 def test_wind_vs_seismic_base_shear_example_seismic_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "wind_vs_seismic_base_shear.py"))
     d = namespace["lateral_demands"]()

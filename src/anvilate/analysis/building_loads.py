@@ -34,6 +34,8 @@ __all__ = [
     "wind_design_pressure",
     "components_cladding_net_pressure",
     "seismic_response_coefficient",
+    "seismic_response_coefficient_upper_limit",
+    "approximate_fundamental_period",
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
     "seismic_design_story_drift",
@@ -169,6 +171,64 @@ def seismic_response_coefficient(
     if importance_factor <= 0:
         raise ValueError("importance_factor must be positive")
     return design_spectral_acceleration * importance_factor / response_modification_factor
+
+
+def approximate_fundamental_period(
+    *,
+    building_height: Quantity,
+    period_coefficient: float,
+    height_exponent: float,
+) -> Quantity:
+    """The ASCE 7 approximate fundamental period Ta = Ct·hn^x (§12.8.2.1).
+
+    The equivalent lateral force method needs the building's fundamental period, and rather than a
+    modal analysis it allows an empirical estimate from the ``building_height`` hn (to the roof) and
+    two system constants: Ta = ``period_coefficient``·hn^``height_exponent``. Ct and x are ASCE 7
+    table values for the lateral system (in SI, 0.0724/0.8 for steel moment frames, 0.0466/0.9 for
+    concrete moment frames, 0.0731/0.75 for eccentrically braced frames, 0.0488/0.75 for everything
+    else). A taller building has a longer period and a softer seismic response; the period sets the
+    :func:`seismic_response_coefficient_upper_limit` cap on Cs. Returns Ta in seconds.
+    """
+    _check(building_height, "[length]", "building_height")
+    hn = building_height.to("m").magnitude
+    if hn <= 0:
+        raise ValueError("building_height must be positive")
+    if period_coefficient <= 0:
+        raise ValueError("period_coefficient must be positive")
+    if height_exponent <= 0:
+        raise ValueError("height_exponent must be positive")
+    return Quantity(magnitude=period_coefficient * hn**height_exponent, unit="s")
+
+
+def seismic_response_coefficient_upper_limit(
+    *,
+    design_spectral_acceleration_1s: float,
+    fundamental_period: Quantity,
+    response_modification_factor: float,
+    importance_factor: float = 1.0,
+) -> float:
+    """The ASCE 7 upper limit on Cs, Cs_max = SD1·Ie/(T·R) (§12.8.1.1, Eq 12.8-3).
+
+    The base :func:`seismic_response_coefficient` (Cs = SDS·Ie/R) is a plateau value that ASCE 7
+    caps for longer-period buildings, because the design spectrum falls off as 1/T past the corner
+    period. This is that cap: ``design_spectral_acceleration_1s`` SD1 (the 1-second spectral
+    acceleration, in g), the ``fundamental_period`` T (from
+    :func:`approximate_fundamental_period` or a modal analysis), the
+    ``response_modification_factor`` R, and the ``importance_factor`` Ie give Cs_max = SD1·Ie/(T·R).
+    The governing Cs is the smaller of the base value and this cap (subject also to a floor). A
+    taller, longer-period building takes the cap, a lower seismic demand. Returns Cs_max.
+    """
+    _check(fundamental_period, "[time]", "fundamental_period")
+    t = fundamental_period.to("s").magnitude
+    if design_spectral_acceleration_1s <= 0:
+        raise ValueError("design_spectral_acceleration_1s must be positive")
+    if t <= 0:
+        raise ValueError("fundamental_period must be positive")
+    if response_modification_factor <= 0:
+        raise ValueError("response_modification_factor must be positive")
+    if importance_factor <= 0:
+        raise ValueError("importance_factor must be positive")
+    return design_spectral_acceleration_1s * importance_factor / (t * response_modification_factor)
 
 
 def seismic_base_shear(
