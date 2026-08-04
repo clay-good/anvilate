@@ -13110,3 +13110,36 @@ def test_aisc_web_local_yielding_interior_vs_end():
     end = aisc_web_local_yielding_strength(at_member_end=True, **kw)
     assert end.to("kN").magnitude == pytest.approx(345 * 10 * (2.5 * 30 + 100) / 1000, rel=1e-9)
     assert end.to("kN").magnitude < interior.to("kN").magnitude
+
+
+def test_aisc_web_crippling_interior_vs_end():
+    from anvilate.analysis import aisc_web_crippling_strength
+
+    kw = {
+        "web_thickness": _q("10 mm"),
+        "flange_thickness": _q("15 mm"),
+        "member_depth": _q("400 mm"),
+        "bearing_length": _q("100 mm"),
+        "web_yield": _q("345 MPa"),
+        "elastic_modulus": _q("200000 MPa"),
+    }
+    # Interior §J10.3a: 0.80*t_w^2*[1+3(N/d)(t_w/t_f)^1.5]*sqrt(E*F_yw*t_f/t_w).
+    interior = aisc_web_crippling_strength(**kw)
+    expect = (
+        0.80
+        * 10**2
+        * (1 + 3 * (100 / 400) * (10 / 15) ** 1.5)
+        * (200000 * 345 * 15 / 10) ** 0.5
+        / 1000
+    )
+    assert interior.to("kN").magnitude == pytest.approx(expect, rel=1e-9)
+    # An end load halves the leading coefficient -> weaker.
+    end = aisc_web_crippling_strength(at_member_end=True, **kw)
+    assert end.to("kN").magnitude < interior.to("kN").magnitude
+    # Long-bearing end branch (N/d > 0.2) uses the (4N/d-0.2) bracket and stays continuous.
+    long_end = aisc_web_crippling_strength(
+        at_member_end=True,
+        bearing_length=_q("120 mm"),
+        **{k: v for k, v in kw.items() if k != "bearing_length"},
+    )
+    assert long_end.to("kN").magnitude > end.to("kN").magnitude

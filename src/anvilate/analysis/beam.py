@@ -79,6 +79,7 @@ __all__ = [
     "propped_cantilever_plastic_collapse_udl",
     "max_transverse_shear_stress",
     "aisc_web_local_yielding_strength",
+    "aisc_web_crippling_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
@@ -618,6 +619,60 @@ def aisc_web_local_yielding_strength(
         )
     coefficient = 2.5 if at_member_end else 5.0
     rn_n = fyw * tw * (coefficient * k + n)
+    return Quantity(magnitude=rn_n / 1000.0, unit="kN")
+
+
+def aisc_web_crippling_strength(
+    *,
+    web_thickness: Quantity,
+    flange_thickness: Quantity,
+    member_depth: Quantity,
+    bearing_length: Quantity,
+    web_yield: Quantity,
+    elastic_modulus: Quantity,
+    at_member_end: bool = False,
+) -> Quantity:
+    """The AISC 360 §J10.3 web local crippling strength at a concentrated load.
+
+    Web local yielding (:func:`aisc_web_local_yielding_strength`) is the web crushing;
+    web crippling is the web *buckling* — the thin web folding out of plane under the
+    bearing. Both are checked at every concentrated load and the lesser governs. For an
+    interior load (§J10.3a) R_n = 0.80·t_w²·[1 + 3(N/d)(t_w/t_f)^1.5]·√(E·F_yw·t_f/t_w);
+    for a load within half a depth of the member end (§J10.3b) the leading coefficient
+    drops to 0.40, and once the bearing is long (N/d > 0.2) the bracket becomes
+    [1 + (4N/d − 0.2)(t_w/t_f)^1.5]. ``web_thickness`` t_w, ``flange_thickness`` t_f,
+    ``member_depth`` d, ``bearing_length`` N, ``web_yield`` F_yw, and ``elastic_modulus``
+    E. A thicker web dominates (the t_w² term); a thin web at a member end with a short
+    bearing is the weakest case. Returns R_n in kN.
+    """
+    _require(web_thickness, "[length]", "web_thickness")
+    _require(flange_thickness, "[length]", "flange_thickness")
+    _require(member_depth, "[length]", "member_depth")
+    _require(bearing_length, "[length]", "bearing_length")
+    _require(web_yield, "[pressure]", "web_yield")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    tw = web_thickness.to("mm").magnitude
+    tf = flange_thickness.to("mm").magnitude
+    d = member_depth.to("mm").magnitude
+    n = bearing_length.to("mm").magnitude
+    fyw = web_yield.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if tw <= 0 or tf <= 0 or d <= 0 or n < 0 or fyw <= 0 or e <= 0:
+        raise ValueError(
+            "web_thickness, flange_thickness, member_depth, web_yield, and "
+            "elastic_modulus must be positive and bearing_length non-negative"
+        )
+    n_over_d = n / d
+    ratio = (tw / tf) ** 1.5
+    if at_member_end:
+        coefficient = 0.40
+        bracket = (
+            1.0 + (4.0 * n_over_d - 0.2) * ratio if n_over_d > 0.2 else 1.0 + 3.0 * n_over_d * ratio
+        )
+    else:
+        coefficient = 0.80
+        bracket = 1.0 + 3.0 * n_over_d * ratio
+    rn_n = coefficient * tw**2 * bracket * (e * fyw * tf / tw) ** 0.5
     return Quantity(magnitude=rn_n / 1000.0, unit="kN")
 
 
