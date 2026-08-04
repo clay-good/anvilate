@@ -64,6 +64,7 @@ beam.aisc_web_compression_buckling_strength
 beam.aisc_web_crippling_strength
 beam.aisc_web_local_yielding_strength
 beam.aisc_web_shear_strength
+beam.two_span_continuous_interior_reaction
 beam.two_span_continuous_middle_moment
 beam.max_transverse_shear_stress
 beam.overhang_tip_load

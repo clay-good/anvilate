@@ -14165,6 +14165,22 @@ def test_two_span_continuous_middle_moment_three_moment_equation():
         )
 
 
+def test_two_span_continuous_interior_reaction():
+    from anvilate.analysis import two_span_continuous_interior_reaction
+
+    # Equal spans and loads: R_interior = 1.25*w*L = 75 kN (vs 60 kN for a simple span).
+    r = two_span_continuous_interior_reaction(
+        span_1=_q("6 m"), span_2=_q("6 m"), udl_1=_q("10 kN/m"), udl_2=_q("10 kN/m")
+    )
+    assert r.to("kN").magnitude == pytest.approx(1.25 * 10 * 6, rel=1e-9)
+    assert r.to("kN").magnitude == pytest.approx(75.0, rel=1e-9)
+    # It exceeds the w*L a pair of simple spans would put on the middle support.
+    assert r.to("kN").magnitude > 10 * 6
+    # All three reactions sum to the total applied load (statics check).
+    total_load = 10 * 6 + 10 * 6
+    assert r.to("kN").magnitude < total_load
+
+
 def test_aisc_web_local_yielding_interior_vs_end():
     from anvilate.analysis import aisc_web_local_yielding_strength
 

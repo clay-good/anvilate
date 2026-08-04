@@ -92,6 +92,7 @@ __all__ = [
     "aisc_tension_field_shear_strength",
     "aisc_web_shear_strength",
     "two_span_continuous_middle_moment",
+    "two_span_continuous_interior_reaction",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
@@ -1279,6 +1280,39 @@ def two_span_continuous_middle_moment(
         raise ValueError("span_1 and span_2 must be positive")
     moment = -(w1 * l1**3 + w2 * l2**3) / (8.0 * (l1 + l2))
     return Quantity(magnitude=moment, unit="kN*m")
+
+
+def two_span_continuous_interior_reaction(
+    *,
+    span_1: Quantity,
+    span_2: Quantity,
+    udl_1: Quantity,
+    udl_2: Quantity,
+) -> Quantity:
+    """The interior-support reaction of a two-span continuous beam under uniform load.
+
+    Continuity draws load *toward* the interior support: the hogging moment there
+    (:func:`two_span_continuous_middle_moment`) reduces the end reactions and piles the
+    difference onto the middle, so the interior support carries more than a pair of simple
+    beams would. From the middle moment M and statics, R_int = w₁·L₁ + w₂·L₂ − (w₁·L₁/2 +
+    M/L₁) − (w₂·L₂/2 + M/L₂). ``span_1`` L₁, ``span_2`` L₂, ``udl_1`` w₁, and ``udl_2`` w₂ as
+    in the moment function. For equal spans and loads it is the classic 1.25·w·L — 25% more
+    than the w·L a simple span puts on the support — which is why the interior column or
+    bearing of a continuous beam is the one that governs. Returns the reaction in kN.
+    """
+    moment = (
+        two_span_continuous_middle_moment(span_1=span_1, span_2=span_2, udl_1=udl_1, udl_2=udl_2)
+        .to("kN*m")
+        .magnitude
+    )
+    l1 = span_1.to("m").magnitude
+    l2 = span_2.to("m").magnitude
+    w1 = udl_1.to("kN/m").magnitude
+    w2 = udl_2.to("kN/m").magnitude
+    end_1 = w1 * l1 / 2.0 + moment / l1
+    end_2 = w2 * l2 / 2.0 + moment / l2
+    interior = w1 * l1 + w2 * l2 - end_1 - end_2
+    return Quantity(magnitude=interior, unit="kN")
 
 
 def shear_flow(
