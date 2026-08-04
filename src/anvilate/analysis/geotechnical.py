@@ -52,6 +52,7 @@ __all__ = [
     "rankine_active_pressure_cohesive",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
+    "rankine_sloped_backfill_coefficient",
     "tension_crack_depth",
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
@@ -86,6 +87,29 @@ def rankine_earth_pressure_coefficient(*, friction_angle: float, passive: bool =
     if passive:
         return tan(radians(45.0 + friction_angle / 2.0)) ** 2
     return tan(radians(45.0 - friction_angle / 2.0)) ** 2
+
+
+def rankine_sloped_backfill_coefficient(*, friction_angle: float, backfill_slope: float) -> float:
+    """The Rankine active earth-pressure coefficient for a sloped (inclined) backfill.
+
+    When the retained soil surface slopes up behind the wall — an embankment, a terraced site — the
+    active pressure is higher than for level ground, and the coefficient picks up the slope angle:
+    K_a = cosβ·(cosβ − √(cos²β − cos²φ))/(cosβ + √(cos²β − cos²φ)). ``friction_angle`` φ and
+    ``backfill_slope`` β are both in degrees, and the pressure acts parallel to the slope. The
+    slope cannot be steeper than the friction angle (the soil would slide), so β < φ. At β = 0 this
+    reduces to the level-ground tan²(45 − φ/2) of :func:`rankine_earth_pressure_coefficient`.
+    Returns the dimensionless coefficient.
+    """
+    _check_friction_angle(friction_angle)
+    if not 0.0 <= backfill_slope < friction_angle:
+        raise ValueError(
+            f"backfill_slope must be in [0, φ) — it cannot exceed the friction angle "
+            f"{friction_angle}; got {backfill_slope}"
+        )
+    beta = radians(backfill_slope)
+    phi = radians(friction_angle)
+    root = sqrt(cos(beta) ** 2 - cos(phi) ** 2)
+    return cos(beta) * (cos(beta) - root) / (cos(beta) + root)
 
 
 def rankine_active_pressure_cohesive(

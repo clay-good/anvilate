@@ -13495,6 +13495,30 @@ def test_masonry_combined_stress_ratio_governs_over_either_alone():
         masonry_allowable_flexural_stress(masonry_strength=_q("-1 MPa"))
 
 
+def test_rankine_sloped_backfill_coefficient():
+    import math
+
+    from anvilate.analysis import (
+        rankine_earth_pressure_coefficient,
+        rankine_sloped_backfill_coefficient,
+    )
+
+    # At zero slope it reduces exactly to the level-ground coefficient.
+    level = rankine_sloped_backfill_coefficient(friction_angle=30.0, backfill_slope=0.0)
+    assert level == pytest.approx(rankine_earth_pressure_coefficient(friction_angle=30.0), rel=1e-9)
+    # A sloped backfill raises the active pressure (K_a grows with slope).
+    sloped = rankine_sloped_backfill_coefficient(friction_angle=30.0, backfill_slope=15.0)
+    assert sloped > level
+    # Against the closed form.
+    beta, phi = math.radians(15), math.radians(30)
+    root = math.sqrt(math.cos(beta) ** 2 - math.cos(phi) ** 2)
+    expect = math.cos(beta) * (math.cos(beta) - root) / (math.cos(beta) + root)
+    assert sloped == pytest.approx(expect, rel=1e-9)
+    # A slope steeper than the friction angle is unstable and rejected.
+    with pytest.raises(ValueError, match="cannot exceed the friction angle"):
+        rankine_sloped_backfill_coefficient(friction_angle=30.0, backfill_slope=35.0)
+
+
 def test_rankine_cohesive_active_pressure_and_tension_crack():
     import math
 
