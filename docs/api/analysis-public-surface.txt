@@ -538,6 +538,9 @@ impact.SUDDENLY_APPLIED_FACTOR
 impact.horizontal_impact_force
 impact.impact_factor
 impact.impact_stress
+injection_molding.injection_clamp_force
+injection_molding.max_projected_area_for_clamp
+injection_molding.injection_cooling_time
 interference.InterferenceFit
 interference.interference_axial_capacity
 interference.interference_fit

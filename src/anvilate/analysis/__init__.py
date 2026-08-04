@@ -427,6 +427,10 @@ modules:
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
   (assembly) force over the lead-in ramp
+- :mod:`~anvilate.analysis.injection_molding` — injection-moulding process: the clamp
+  force F = A·p a mould needs (and the inverse max projected area a machine's tonnage
+  allows), and the cooling time t = (s²/π²α)·ln[…] that dominates the cycle (goes as
+  wall thickness squared) — the process side of snapfit/living_hinge part design
 - :mod:`~anvilate.analysis.nds_timber` — the NDS wood adjusted design value
   F' = F·∏Cᵢ (the reference value times its visible factor chain, with the Table
   2.3.2 load-duration factor), the bending scorecard (not evaluated without a
@@ -1114,6 +1118,11 @@ from .impact import (
     horizontal_impact_force,
     impact_factor,
     impact_stress,
+)
+from .injection_molding import (
+    injection_clamp_force,
+    injection_cooling_time,
+    max_projected_area_for_clamp,
 )
 from .interference import (
     InterferenceFit,
@@ -2236,6 +2245,9 @@ __all__ = [
     "impact_factor",
     "impact_stress",
     "horizontal_impact_force",
+    "injection_clamp_force",
+    "max_projected_area_for_clamp",
+    "injection_cooling_time",
     "gear_tangential_load",
     "gear_radial_load",
     "gear_normal_load",

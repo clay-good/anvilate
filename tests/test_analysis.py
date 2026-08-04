@@ -3286,6 +3286,58 @@ def test_coefficient_of_fluctuation_from_speed_swing():
         )
 
 
+def test_injection_molding_clamp_force_area_inverse_and_cooling_time():
+    from math import log, pi
+
+    from anvilate.analysis import (
+        injection_clamp_force,
+        injection_cooling_time,
+        max_projected_area_for_clamp,
+    )
+
+    # F = A*p; 100 cm^2 at 40 MPa -> 0.01 m^2 * 40e6 Pa = 400 kN.
+    f = injection_clamp_force(projected_area=_q("100 cm**2"), cavity_pressure=_q("40 MPa"))
+    assert f.to("kN").magnitude == pytest.approx(400.0, rel=1e-9)
+
+    # The area inverse round-trips back to 100 cm^2.
+    a = max_projected_area_for_clamp(clamp_force=f, cavity_pressure=_q("40 MPa"))
+    assert a.to("cm**2").magnitude == pytest.approx(100.0, rel=1e-9)
+    # A higher moulding pressure shrinks the area a fixed clamp can hold.
+    a_high = max_projected_area_for_clamp(clamp_force=f, cavity_pressure=_q("80 MPa"))
+    assert a_high.to("cm**2").magnitude < a.to("cm**2").magnitude
+
+    # Cooling time t = (s^2/(pi^2*alpha))*ln[(4/pi)*(Tm-Tw)/(Te-Tw)]; 2 mm wall, ABS -> ~7.07 s.
+    t = injection_cooling_time(
+        wall_thickness=_q("2 mm"),
+        thermal_diffusivity=_q("1e-7 m**2/s"),
+        melt_temperature=Quantity(magnitude=230.0, unit="degC"),
+        mold_temperature=Quantity(magnitude=50.0, unit="degC"),
+        ejection_temperature=Quantity(magnitude=90.0, unit="degC"),
+    )
+    expected = (0.002**2 / (pi**2 * 1e-7)) * log((4 / pi) * (230 - 50) / (90 - 50))
+    assert t.to("s").magnitude == pytest.approx(expected, rel=1e-9)
+
+    # Cooling goes as the square of wall thickness: a 4 mm wall takes 4x as long.
+    t_thick = injection_cooling_time(
+        wall_thickness=_q("4 mm"),
+        thermal_diffusivity=_q("1e-7 m**2/s"),
+        melt_temperature=Quantity(magnitude=230.0, unit="degC"),
+        mold_temperature=Quantity(magnitude=50.0, unit="degC"),
+        ejection_temperature=Quantity(magnitude=90.0, unit="degC"),
+    )
+    assert t_thick.to("s").magnitude == pytest.approx(4.0 * t.to("s").magnitude, rel=1e-9)
+
+    # Guardrail: temperatures must satisfy melt > ejection > mold.
+    with pytest.raises(ValueError, match="melt > ejection > mold"):
+        injection_cooling_time(
+            wall_thickness=_q("2 mm"),
+            thermal_diffusivity=_q("1e-7 m**2/s"),
+            melt_temperature=Quantity(magnitude=230.0, unit="degC"),
+            mold_temperature=Quantity(magnitude=50.0, unit="degC"),
+            ejection_temperature=Quantity(magnitude=40.0, unit="degC"),
+        )
+
+
 def test_impact_factor_energy_method():
     # A load applied suddenly from rest (h=0) still doubles the static values.
     sudden = impact_factor(drop_height=_q("0 mm"), static_deflection=_q("5 mm"))

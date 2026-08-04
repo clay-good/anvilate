@@ -745,6 +745,19 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_injection_molding_machine_pick_example_clamp_and_cooling():
+    namespace = runpy.run_path(str(_EXAMPLES / "injection_molding_machine_pick.py"))
+    m = namespace["mould_process"]()
+    # 120 cm^2 at 45 MPa -> 540 kN (~55 tonnes).
+    assert m["clamp_force_kn"] == pytest.approx(540.0, rel=1e-6)
+    assert m["clamp_force_tonnes"] == pytest.approx(55.06, abs=0.1)
+    # A 980 kN machine holds up to ~218 cm^2 at 45 MPa.
+    assert m["max_area_cm2"] == pytest.approx(217.78, abs=0.5)
+    # Cooling scales with wall^2: a 3.5 mm wall takes (3.5/2.5)^2 = 1.96x the 2.5 mm time.
+    assert m["cooling_3p5mm_s"] / m["cooling_2p5mm_s"] == pytest.approx((3.5 / 2.5) ** 2, rel=1e-6)
+    assert m["cooling_3p5mm_s"] > m["cooling_2p5mm_s"]
+
+
 def test_casting_riser_sizing_example_riser_outlasts_the_casting():
     namespace = runpy.run_path(str(_EXAMPLES / "casting_riser_sizing.py"))
     s = namespace["riser_sizing"]()
