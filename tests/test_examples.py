@@ -634,6 +634,14 @@ def test_timber_header_shear_governs_example_shear_beats_bending():
     assert namespace["bearing_margin"]() > 1.5
 
 
+def test_steam_line_expansion_loop_example_sizes_the_leg():
+    namespace = runpy.run_path(str(_EXAMPLES / "steam_line_expansion_loop.py"))
+    s = namespace["loop_sizing"]()
+    # 60 m of steel over +280 K grows ~200 mm, needing an ~11-12 m loop leg.
+    assert s["growth_mm"] == pytest.approx(201.6, abs=1.0)
+    assert s["leg_length_m"] == pytest.approx(11.6, abs=0.5)
+
+
 def test_home_heating_degree_days_example_heat_pump_cuts_energy():
     namespace = runpy.run_path(str(_EXAMPLES / "home_heating_degree_days.py"))
     s = namespace["seasonal_heating"]()

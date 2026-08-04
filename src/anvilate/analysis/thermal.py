@@ -31,6 +31,7 @@ __all__ = [
     "through_wall_gradient_thermal_stress",
     "thermal_buckling_temperature_rise",
     "free_thermal_expansion",
+    "guided_cantilever_leg_length",
     "shrink_fit_assembly_temperature",
     "DifferentialThermalStress",
     "differential_thermal_stress",
@@ -367,6 +368,41 @@ def free_thermal_expansion(
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     delta_t = temperature_change.to("K").magnitude
     return Quantity(magnitude=alpha * size * delta_t, unit="mm")
+
+
+def guided_cantilever_leg_length(
+    *,
+    elastic_modulus: Quantity,
+    pipe_outside_diameter: Quantity,
+    expansion_to_absorb: Quantity,
+    allowable_stress: Quantity,
+) -> Quantity:
+    """The pipe-loop leg length to absorb thermal expansion, L = √(3·E·D·Δ/S_A).
+
+    A pipe run that grows with temperature must be given somewhere to flex, or the restrained
+    expansion overstresses it. The guided-cantilever method sizes the offset (or expansion-loop) leg
+    that takes the growth ``expansion_to_absorb`` Δ within an ``allowable_stress`` S_A: a leg of
+    length L guided at both ends develops a bending stress 3·E·D·Δ/L², so setting that to S_A gives
+    L = √(3·E·D·Δ/S_A), from the ``elastic_modulus`` E and the ``pipe_outside_diameter`` D. The leg
+    grows only with the *square root* of the expansion, so absorbing twice the growth needs about
+    40% more leg. A conservative first pass (real layouts share the flex over several legs and add
+    stress-intensification at the elbows). Returns the required leg length in metres.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(pipe_outside_diameter, "[length]", "pipe_outside_diameter")
+    _require(expansion_to_absorb, "[length]", "expansion_to_absorb")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    e = elastic_modulus.to("Pa").magnitude
+    d = pipe_outside_diameter.to("m").magnitude
+    delta = expansion_to_absorb.to("m").magnitude
+    s_a = allowable_stress.to("Pa").magnitude
+    if e <= 0 or d <= 0:
+        raise ValueError("elastic_modulus and pipe_outside_diameter must be positive")
+    if delta < 0:
+        raise ValueError("expansion_to_absorb must be non-negative")
+    if s_a <= 0:
+        raise ValueError("allowable_stress must be positive")
+    return Quantity(magnitude=sqrt(3.0 * e * d * delta / s_a), unit="m")
 
 
 def shrink_fit_assembly_temperature(

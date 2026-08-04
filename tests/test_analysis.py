@@ -13744,6 +13744,51 @@ def test_electrical_transformer_full_load_and_fault_current():
         transformer_available_fault_current(full_load_current=fla, impedance_percent=0.0)
 
 
+def test_thermal_guided_cantilever_expansion_loop_leg():
+    import math
+
+    from anvilate.analysis import free_thermal_expansion, guided_cantilever_leg_length
+
+    # L = sqrt(3*E*D*delta/S_A); 200 GPa, 0.1 m, 0.05 m, 100 MPa -> 5.48 m.
+    leg = guided_cantilever_leg_length(
+        elastic_modulus=_q("200 GPa"),
+        pipe_outside_diameter=_q("0.1 m"),
+        expansion_to_absorb=_q("0.05 m"),
+        allowable_stress=_q("100 MPa"),
+    )
+    expected = math.sqrt(3 * 200e9 * 0.1 * 0.05 / 100e6)
+    assert leg.to("m").magnitude == pytest.approx(expected, rel=1e-9)
+
+    # The stress at that leg length is exactly the allowable (self-consistent).
+    stress = 3 * 200e9 * 0.1 * 0.05 / leg.to("m").magnitude ** 2
+    assert stress == pytest.approx(100e6, rel=1e-9)
+
+    # Absorbing twice the expansion needs sqrt(2) x more leg.
+    leg2 = guided_cantilever_leg_length(
+        elastic_modulus=_q("200 GPa"),
+        pipe_outside_diameter=_q("0.1 m"),
+        expansion_to_absorb=_q("0.1 m"),
+        allowable_stress=_q("100 MPa"),
+    )
+    assert leg2.to("m").magnitude / leg.to("m").magnitude == pytest.approx(math.sqrt(2), rel=1e-9)
+
+    # It composes with free_thermal_expansion: the growth it absorbs is alpha*L*dT.
+    growth = free_thermal_expansion(
+        length=_q("60 m"),
+        thermal_expansion_coefficient=_q("12e-6 1/K"),
+        temperature_change=_q("280 K"),
+    )
+    assert growth.to("mm").magnitude == pytest.approx(12e-6 * 60000 * 280, rel=1e-9)
+
+    with pytest.raises(ValueError, match="allowable_stress"):
+        guided_cantilever_leg_length(
+            elastic_modulus=_q("200 GPa"),
+            pipe_outside_diameter=_q("0.1 m"),
+            expansion_to_absorb=_q("0.05 m"),
+            allowable_stress=_q("0 MPa"),
+        )
+
+
 def test_thermal_degree_day_heating_and_cooling_energy():
     from anvilate.analysis import degree_day_cooling_energy, degree_day_heating_energy
 
