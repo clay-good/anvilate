@@ -257,6 +257,8 @@ electrical.conductor_resistance
 electrical.line_current_for_power
 electrical.power_factor_correction_kvar
 electrical.three_phase_power
+electrical.transformer_available_fault_current
+electrical.transformer_full_load_current
 electrical.voltage_drop_three_phase
 dynamics.STANDARD_GRAVITY
 dynamics.annular_disc_polar_mass_moment

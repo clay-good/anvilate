@@ -13546,6 +13546,31 @@ def test_electrical_apparent_power_and_pf_correction():
         )
 
 
+def test_electrical_transformer_full_load_and_fault_current():
+    import math
+
+    from anvilate.analysis import (
+        transformer_available_fault_current,
+        transformer_full_load_current,
+    )
+
+    # I_FLA = S/(sqrt(3)*V); 1000 kVA, 480 V -> 1202.8 A.
+    fla = transformer_full_load_current(apparent_power=_q("1000 kVA"), line_voltage=_q("480 V"))
+    assert fla.to("A").magnitude == pytest.approx(1_000_000 / (math.sqrt(3) * 480), rel=1e-9)
+
+    # I_sc = I_FLA * 100/%Z; 5.75% -> ~20,918 A.
+    isc = transformer_available_fault_current(full_load_current=fla, impedance_percent=5.75)
+    assert isc.to("A").magnitude == pytest.approx(fla.to("A").magnitude * 100 / 5.75, rel=1e-9)
+    assert isc.to("A").magnitude == pytest.approx(20918.0, abs=5.0)
+
+    # Lower impedance (stiffer) -> higher fault current.
+    stiff = transformer_available_fault_current(full_load_current=fla, impedance_percent=4.0)
+    assert stiff.to("A").magnitude > isc.to("A").magnitude
+
+    with pytest.raises(ValueError, match="impedance_percent"):
+        transformer_available_fault_current(full_load_current=fla, impedance_percent=0.0)
+
+
 def test_drag_force_and_terminal_velocity():
     from anvilate.analysis import drag_force, terminal_velocity
 

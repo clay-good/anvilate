@@ -155,8 +155,9 @@ modules:
   and the time to drain a tank between two levels through a bottom orifice
 - :mod:`~anvilate.analysis.electrical` — electrical feeder sizing (for plant/industrial
   work): three-phase real and apparent power, the line current a load draws, conductor
-  resistance ρ·L/A, the three-phase voltage drop along a feeder, and the capacitor kVAR to
-  correct a poor power factor
+  resistance ρ·L/A, the three-phase voltage drop along a feeder, the capacitor kVAR to
+  correct a poor power factor, and the transformer full-load and available fault current
+  (the AIC rating downstream gear must interrupt)
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, and the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface
@@ -679,6 +680,8 @@ from .electrical import (
     line_current_for_power,
     power_factor_correction_kvar,
     three_phase_power,
+    transformer_available_fault_current,
+    transformer_full_load_current,
     voltage_drop_three_phase,
 )
 from .fastener import (
@@ -1422,6 +1425,8 @@ __all__ = [
     "line_current_for_power",
     "power_factor_correction_kvar",
     "three_phase_power",
+    "transformer_full_load_current",
+    "transformer_available_fault_current",
     "voltage_drop_three_phase",
     "inverse_square_attenuation",
     "mass_law_transmission_loss",

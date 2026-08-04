@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_transformer_fault_current_rating_example_stiffer_is_harder():
+    namespace = runpy.run_path(str(_EXAMPLES / "transformer_fault_current_rating.py"))
+    s = namespace["fault_study"]()
+    assert s["full_load_a"] == pytest.approx(1202.8, abs=1.0)
+    assert s["fault_5p75_a"] == pytest.approx(20918.0, abs=50.0)
+    # A stiffer (lower-impedance) transformer delivers a harder fault.
+    assert s["fault_4p0_a"] > s["fault_5p75_a"]
+
+
 def test_tank_floor_corrosion_life_example_methods_agree():
     namespace = runpy.run_path(str(_EXAMPLES / "tank_floor_corrosion_life.py"))
     a = namespace["floor_assessment"]()

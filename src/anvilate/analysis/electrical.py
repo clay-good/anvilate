@@ -25,6 +25,8 @@ __all__ = [
     "line_current_for_power",
     "power_factor_correction_kvar",
     "three_phase_power",
+    "transformer_available_fault_current",
+    "transformer_full_load_current",
     "voltage_drop_three_phase",
 ]
 
@@ -181,6 +183,44 @@ def power_factor_correction_kvar(
         raise ValueError("target_power_factor must exceed initial_power_factor (correcting upward)")
     q_c = p * (tan(acos(initial_power_factor)) - tan(acos(target_power_factor)))
     return Quantity(magnitude=q_c, unit="kVA")
+
+
+def transformer_full_load_current(*, apparent_power: Quantity, line_voltage: Quantity) -> Quantity:
+    """The rated secondary current of a three-phase transformer, I_FLA = S/(√3·V_LL).
+
+    A transformer's full-load current is set by its apparent-power rating, not the load's power
+    factor: I_FLA = S/(√3·V_LL), from the ``apparent_power`` S (its kVA nameplate) and the secondary
+    ``line_voltage`` V_LL. It is the base the overcurrent protection is sized around and the number
+    the available fault current scales from. Returns the full-load current in amperes.
+    """
+    _check(apparent_power, "[power]", "apparent_power")
+    _check(line_voltage, "[electric_potential]", "line_voltage")
+    s = apparent_power.to("VA").magnitude
+    v = line_voltage.to("V").magnitude
+    if s <= 0 or v <= 0:
+        raise ValueError("apparent_power and line_voltage must be positive")
+    return Quantity(magnitude=s / (_SQRT3 * v), unit="A")
+
+
+def transformer_available_fault_current(
+    *, full_load_current: Quantity, impedance_percent: float
+) -> Quantity:
+    """The bolted fault current at a transformer secondary, I_sc = I_FLA·(100/%Z).
+
+    Assuming an infinite (stiff) primary source, the worst-case bolted three-phase fault current a
+    transformer can deliver is set by its own impedance: I_sc = I_FLA·(100/%Z), from the
+    ``full_load_current`` I_FLA and the nameplate ``impedance_percent`` %Z. This is the available
+    fault current downstream equipment must be rated to interrupt — the AIC/withstand number — so a
+    lower-impedance transformer (stiffer supply) drives it higher. Ignoring the source and cable
+    impedance makes it conservative (an upper bound). Returns the available fault current in amps.
+    """
+    _check(full_load_current, "[current]", "full_load_current")
+    i_fla = full_load_current.to("A").magnitude
+    if i_fla <= 0:
+        raise ValueError("full_load_current must be positive")
+    if impedance_percent <= 0:
+        raise ValueError("impedance_percent must be positive")
+    return Quantity(magnitude=i_fla * 100.0 / impedance_percent, unit="A")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
