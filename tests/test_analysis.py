@@ -7210,6 +7210,57 @@ def test_principal_stresses_and_tresca_worked_example():
     assert theta.to("degree").magnitude == pytest.approx(22.5, rel=1e-4)
 
 
+def test_principal_stresses_3d_smith_algorithm():
+    from anvilate.analysis import (
+        principal_stresses_3d,
+        principal_stresses_plane,
+        von_mises_principal,
+    )
+
+    # A plane-stress state (sigma_z = 0, no out-of-plane shear) must reproduce the 2D
+    # principals plus zero.
+    s1_2d, s2_2d = principal_stresses_plane(
+        sigma_x=_q("100 MPa"), sigma_y=_q("40 MPa"), tau_xy=_q("30 MPa")
+    )
+    p1, p2, p3 = principal_stresses_3d(
+        sigma_x=_q("100 MPa"),
+        sigma_y=_q("40 MPa"),
+        sigma_z=_q("0 MPa"),
+        tau_xy=_q("30 MPa"),
+        tau_yz=_q("0 MPa"),
+        tau_zx=_q("0 MPa"),
+    )
+    got = sorted(
+        [p1.to("MPa").magnitude, p2.to("MPa").magnitude, p3.to("MPa").magnitude], reverse=True
+    )
+    expect = sorted([s1_2d.to("MPa").magnitude, s2_2d.to("MPa").magnitude, 0.0], reverse=True)
+    assert got == pytest.approx(expect, rel=1e-9)
+    # A diagonal tensor has its diagonal as the principals (ordered).
+    d1, d2, d3 = principal_stresses_3d(
+        sigma_x=_q("50 MPa"),
+        sigma_y=_q("20 MPa"),
+        sigma_z=_q("-10 MPa"),
+        tau_xy=_q("0 MPa"),
+        tau_yz=_q("0 MPa"),
+        tau_zx=_q("0 MPa"),
+    )
+    assert d1.to("MPa").magnitude == pytest.approx(50)
+    assert d2.to("MPa").magnitude == pytest.approx(20)
+    assert d3.to("MPa").magnitude == pytest.approx(-10)
+    # The 3D principals feed the von Mises screen for a fully triaxial state.
+    t1, t2, t3 = principal_stresses_3d(
+        sigma_x=_q("120 MPa"),
+        sigma_y=_q("60 MPa"),
+        sigma_z=_q("40 MPa"),
+        tau_xy=_q("30 MPa"),
+        tau_yz=_q("20 MPa"),
+        tau_zx=_q("10 MPa"),
+    )
+    assert t1.to("MPa").magnitude > t2.to("MPa").magnitude > t3.to("MPa").magnitude
+    vm = von_mises_principal(sigma_1=t1, sigma_2=t2, sigma_3=t3)
+    assert vm.to("MPa").magnitude > 0
+
+
 def test_plane_stress_at_angle_transformation():
     import math
 

@@ -536,6 +536,7 @@ stress.concentrated_stress
 stress.elliptical_hole_stress_concentration
 stress.max_shear_stress_plane
 stress.plane_stress_at_angle
+stress.principal_stresses_3d
 stress.octahedral_shear_stress
 stress.principal_angle_plane
 stress.principal_stresses_plane

@@ -17,7 +17,7 @@ returns the factor of safety against yield.
 
 from __future__ import annotations
 
-from math import atan2, cos, degrees, radians, sin, sqrt
+from math import acos, atan2, cos, degrees, pi, radians, sin, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -33,6 +33,7 @@ __all__ = [
     "principal_angle_plane",
     "max_shear_stress_plane",
     "plane_stress_at_angle",
+    "principal_stresses_3d",
     "tresca_equivalent_stress",
     "tresca_principal",
     "yield_safety_factor",
@@ -225,6 +226,55 @@ def max_shear_stress_plane(
     s1, s2 = principal_stresses_plane(sigma_x=sigma_x, sigma_y=sigma_y, tau_xy=tau_xy)
     principals = (s1.to("MPa").magnitude, s2.to("MPa").magnitude, 0.0)
     return Quantity(magnitude=(max(principals) - min(principals)) / 2, unit="MPa")
+
+
+def principal_stresses_3d(
+    *,
+    sigma_x: Quantity,
+    sigma_y: Quantity,
+    sigma_z: Quantity,
+    tau_xy: Quantity,
+    tau_yz: Quantity,
+    tau_zx: Quantity,
+) -> tuple[Quantity, Quantity, Quantity]:
+    """The three principal stresses of a general (triaxial) stress state.
+
+    The eigenvalues of the symmetric stress tensor — the three mutually perpendicular
+    normal stresses on the planes where all shear vanishes — for a full 3D state, where
+    the plane-stress :func:`principal_stresses_plane` is not enough (a shaft with axial
+    plus bending plus torsion plus contact, a thick-wall bore, a weld under combined load).
+    Computed by the numerically stable trigonometric (Smith) solution of the stress cubic
+    σ³ − I₁σ² + I₂σ − I₃ = 0. ``sigma_x``, ``sigma_y``, ``sigma_z`` are the normal
+    components and ``tau_xy``, ``tau_yz``, ``tau_zx`` the shears. Feed the result to
+    :func:`von_mises_principal` or :func:`tresca_principal` for a yield screen. Returns
+    ``(σ₁, σ₂, σ₃)`` ordered σ₁ ≥ σ₂ ≥ σ₃, all in MPa.
+    """
+    sx = _require_stress(sigma_x, "sigma_x")
+    sy = _require_stress(sigma_y, "sigma_y")
+    sz = _require_stress(sigma_z, "sigma_z")
+    txy = _require_stress(tau_xy, "tau_xy")
+    tyz = _require_stress(tau_yz, "tau_yz")
+    tzx = _require_stress(tau_zx, "tau_zx")
+    p1 = txy * txy + tyz * tyz + tzx * tzx
+    if p1 == 0.0:
+        ordered = sorted((sx, sy, sz), reverse=True)
+        return tuple(Quantity(magnitude=v, unit="MPa") for v in ordered)
+    q = (sx + sy + sz) / 3.0
+    p2 = (sx - q) ** 2 + (sy - q) ** 2 + (sz - q) ** 2 + 2.0 * p1
+    p = sqrt(p2 / 6.0)
+    a, b, c = (sx - q) / p, (sy - q) / p, (sz - q) / p
+    d, e, f = txy / p, tyz / p, tzx / p
+    det_b = a * b * c + 2.0 * d * e * f - a * e * e - b * f * f - c * d * d
+    r = max(-1.0, min(1.0, det_b / 2.0))
+    phi = acos(r) / 3.0
+    s1 = q + 2.0 * p * cos(phi)
+    s3 = q + 2.0 * p * cos(phi + 2.0 * pi / 3.0)
+    s2 = 3.0 * q - s1 - s3
+    return (
+        Quantity(magnitude=s1, unit="MPa"),
+        Quantity(magnitude=s2, unit="MPa"),
+        Quantity(magnitude=s3, unit="MPa"),
+    )
 
 
 def plane_stress_at_angle(
