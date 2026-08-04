@@ -11420,6 +11420,34 @@ def test_agma_bending_stress_derates_the_lewis_form():
         agma_bending_stress(geometry_factor=0.0, **kw)
 
 
+def test_larson_miller_parameter_and_inverses_round_trip():
+    from anvilate.analysis import (
+        larson_miller_parameter,
+        larson_miller_rupture_life,
+        larson_miller_temperature_limit,
+    )
+
+    # P = T*(C + log10 t_r): 811 K, 100000 h, C=20 -> 811*(20+5) = 20275.
+    p = larson_miller_parameter(
+        temperature=_q("811 K"), rupture_time=_q("100000 hour"), constant=20.0
+    )
+    assert p == pytest.approx(811 * (20 + 5), rel=1e-9)
+    # The rupture-life inverse recovers the time.
+    life = larson_miller_rupture_life(parameter=p, temperature=_q("811 K"), constant=20.0)
+    assert life.to("hour").magnitude == pytest.approx(100000, rel=1e-9)
+    # The temperature-limit inverse recovers the temperature.
+    t_limit = larson_miller_temperature_limit(
+        parameter=p, rupture_time=_q("100000 hour"), constant=20.0
+    )
+    assert t_limit.to("K").magnitude == pytest.approx(811, rel=1e-9)
+    # Creep life is exponential in temperature: hotter collapses it sharply.
+    hotter = larson_miller_rupture_life(parameter=p, temperature=_q("900 K"), constant=20.0)
+    assert hotter.to("hour").magnitude < life.to("hour").magnitude
+    # A Celsius (non-absolute) temperature is rejected by the dimension check via kelvin.
+    with pytest.raises(ValueError, match="rupture_time must be positive"):
+        larson_miller_parameter(temperature=_q("811 K"), rupture_time=_q("0 hour"))
+
+
 def test_agma_module_inverse_round_trips_the_bending_stress():
     from anvilate.analysis import agma_bending_stress, agma_module_for_bending_stress
 

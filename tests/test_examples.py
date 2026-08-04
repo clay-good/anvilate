@@ -162,6 +162,15 @@ def test_beam_bearing_web_checks_example_is_governed_by_crippling():
     assert crippling == pytest.approx(212.6, abs=0.5)
 
 
+def test_turbine_blade_creep_example_shows_temperature_sensitivity():
+    namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
+    summary = namespace["creep_life_summary"]()
+    # A 100 K rise collapses the creep life by roughly two orders of magnitude.
+    assert summary["excursion_life_hours"] < summary["design_life_hours"] / 100
+    # The temperature limit for a 100,000 h life sits between the two service points.
+    assert 1050 < summary["temperature_limit_K"] < 1150
+
+
 def test_pipe_expansion_loop_example_shows_the_sif_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "pipe_expansion_loop.py"))
     utils = namespace["loop_utilizations"]()

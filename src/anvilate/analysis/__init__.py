@@ -74,6 +74,10 @@ modules:
   the plain-bearing PV (pressure × velocity) factor against its overheating limit
 - :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque, per-bolt
   shear force, and the bolt count a torque requires
+- :mod:`~anvilate.analysis.creep` — high-temperature creep-rupture screening by the
+  Larson-Miller parameter P = T·(C + log10 t_r): the parameter from a temperature and
+  rupture time, and its inverses for the rupture life and the limiting service
+  temperature a required life allows
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
   (millions of revolutions and running hours) and the dynamic rating a target life
   requires, static load safety factor, the
@@ -463,6 +467,12 @@ from .coupling import (
     flange_coupling_bolt_count,
     flange_coupling_bolt_force,
     flange_coupling_torque,
+)
+from .creep import (
+    LARSON_MILLER_CONSTANT,
+    larson_miller_parameter,
+    larson_miller_rupture_life,
+    larson_miller_temperature_limit,
 )
 from .curved_beam import (
     CurvedBeamStress,
@@ -1490,6 +1500,10 @@ __all__ = [
     "flange_coupling_torque",
     "flange_coupling_bolt_force",
     "flange_coupling_bolt_count",
+    "LARSON_MILLER_CONSTANT",
+    "larson_miller_parameter",
+    "larson_miller_rupture_life",
+    "larson_miller_temperature_limit",
     "spring_index",
     "wahl_factor",
     "spring_shear_stress",
