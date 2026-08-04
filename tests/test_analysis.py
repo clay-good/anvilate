@@ -13246,3 +13246,30 @@ def test_aisc_web_shear_strength_yields_then_buckles():
     c_v1 = threshold / 100
     assert slender.to("kN").magnitude == pytest.approx(0.6 * 345 * 400 * 10 * c_v1 / 1000, rel=1e-9)
     assert slender.to("kN").magnitude < stocky.to("kN").magnitude
+
+
+def test_aisc_round_hss_shear_strength_caps_at_shear_yield():
+    import math
+
+    from anvilate.analysis import aisc_round_hss_shear_strength
+
+    common = {
+        "diameter": _q("200 mm"),
+        "shear_length": _q("2000 mm"),
+        "yield_strength": _q("345 MPa"),
+        "elastic_modulus": _q("200000 MPa"),
+    }
+    # Stocky wall (D/t = 20): both buckling terms exceed 0.6*Fy, so F_cr clamps there.
+    ag_stocky = math.pi / 4 * (200**2 - 180**2)
+    stocky = aisc_round_hss_shear_strength(
+        gross_area=_q(f"{ag_stocky} mm**2"), thickness=_q("10 mm"), **common
+    )
+    assert stocky.to("kN").magnitude == pytest.approx(0.6 * 345 * ag_stocky / 2 / 1000, rel=1e-9)
+    # Thin wall (D/t = 200): shell buckling drops F_cr below shear yield.
+    ag_thin = math.pi / 4 * (200**2 - 198**2)
+    thin = aisc_round_hss_shear_strength(
+        gross_area=_q(f"{ag_thin} mm**2"), thickness=_q("1 mm"), **common
+    )
+    f_cr_a = 1.60 * 200000 / ((2000 / 200) ** 0.5 * 200**1.25)
+    assert thin.to("kN").magnitude == pytest.approx(f_cr_a * ag_thin / 2 / 1000, rel=1e-9)
+    assert f_cr_a < 0.6 * 345

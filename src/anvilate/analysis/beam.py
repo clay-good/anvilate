@@ -83,6 +83,7 @@ __all__ = [
     "aisc_web_crippling_strength",
     "aisc_web_compression_buckling_strength",
     "aisc_round_hss_flexural_strength",
+    "aisc_round_hss_shear_strength",
     "aisc_web_shear_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -813,6 +814,52 @@ def aisc_round_hss_flexural_strength(
         m_n = 0.33 * e / dt * s
     m_n = min(m_n, m_p)
     return Quantity(magnitude=m_n / 1.0e6, unit="kN*m")
+
+
+def aisc_round_hss_shear_strength(
+    *,
+    gross_area: Quantity,
+    diameter: Quantity,
+    thickness: Quantity,
+    shear_length: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The AISC 360 §G4 shear strength V_n = F_cr·A_g/2 of a round HSS or pipe.
+
+    A round tube shears differently from an I-shape web: only half the section is
+    effective (the ``/2``), and the critical stress F_cr is the *larger* of two shell
+    shear-buckling terms, F_cr = max(1.60·E/(√(L_v/D)·(D/t)^1.25), 0.78·E/(D/t)^1.5),
+    but never more than the shear-yield stress 0.6·F_y. ``gross_area`` A_g,
+    ``diameter`` D, ``thickness`` t (wall), ``shear_length`` L_v (the distance from the
+    section of maximum shear to the section of zero shear), ``yield_strength`` F_y, and
+    ``elastic_modulus`` E. A stocky wall yields (F_cr clamps to 0.6·F_y); a thin, long
+    tube buckles below yield. Returns V_n in kN.
+    """
+    if not gross_area.has_dimension("[length]**2"):
+        raise ValueError("gross_area must be a [length]**2 quantity")
+    _require(diameter, "[length]", "diameter")
+    _require(thickness, "[length]", "thickness")
+    _require(shear_length, "[length]", "shear_length")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    ag = gross_area.to("mm**2").magnitude
+    d = diameter.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    lv = shear_length.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if ag <= 0 or d <= 0 or t <= 0 or lv <= 0 or fy <= 0 or e <= 0:
+        raise ValueError(
+            "gross_area, diameter, thickness, shear_length, yield_strength, and "
+            "elastic_modulus must be positive"
+        )
+    dt = d / t
+    f_cr_a = 1.60 * e / ((lv / d) ** 0.5 * dt**1.25)
+    f_cr_b = 0.78 * e / dt**1.5
+    f_cr = min(max(f_cr_a, f_cr_b), 0.6 * fy)
+    v_n = f_cr * ag / 2.0
+    return Quantity(magnitude=v_n / 1000.0, unit="kN")
 
 
 def aisc_web_shear_strength(
