@@ -12616,3 +12616,33 @@ def test_horizontal_plate_natural_convection_up_vs_down():
     assert down.to("W/(m**2*K)").magnitude == pytest.approx(
         up.to("W/(m**2*K)").magnitude / 2, rel=1e-9
     )
+
+
+def test_lmtd_and_heat_exchanger_sizing_round_trip():
+    from anvilate.analysis import (
+        heat_exchanger_area_for_duty,
+        heat_exchanger_duty,
+        log_mean_temperature_difference,
+    )
+
+    # Counterflow ends 40 K and 35 K: LMTD = 5/ln(40/35) = 37.44 K.
+    lmtd = log_mean_temperature_difference(delta_t_1=_q("40 K"), delta_t_2=_q("35 K"))
+    from math import log as _log
+
+    assert lmtd.to("K").magnitude == pytest.approx(5 / _log(40 / 35), rel=1e-9)
+    # Equal end differences -> the log form degenerates to the common value.
+    equal = log_mean_temperature_difference(delta_t_1=_q("30 K"), delta_t_2=_q("30 K"))
+    assert equal.to("K").magnitude == pytest.approx(30.0, rel=1e-12)
+    # Area a 50 kW duty needs at U = 500 W/m²K, and the rating recovers the duty.
+    area = heat_exchanger_area_for_duty(
+        duty=_q("50 kW"),
+        overall_coefficient=_q("500 W/(m**2*K)"),
+        log_mean_temperature_difference=lmtd,
+    )
+    assert area.to("m**2").magnitude == pytest.approx(
+        50000 / (500 * lmtd.to("K").magnitude), rel=1e-9
+    )
+    duty = heat_exchanger_duty(
+        overall_coefficient=_q("500 W/(m**2*K)"), area=area, log_mean_temperature_difference=lmtd
+    )
+    assert duty.to("W").magnitude == pytest.approx(50000.0, rel=1e-9)

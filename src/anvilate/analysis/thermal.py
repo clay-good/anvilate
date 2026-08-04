@@ -15,7 +15,7 @@ absolute ``degC`` reading.
 
 from __future__ import annotations
 
-from math import pi, sqrt, tanh
+from math import log, pi, sqrt, tanh
 
 from pydantic import BaseModel, ConfigDict
 
@@ -48,6 +48,9 @@ __all__ = [
     "horizontal_plate_natural_convection_coefficient",
     "circular_source_spreading_resistance",
     "fin_array_count_for_resistance",
+    "log_mean_temperature_difference",
+    "heat_exchanger_area_for_duty",
+    "heat_exchanger_duty",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -1020,3 +1023,81 @@ def fin_array_count_for_resistance(
         )
     count = (1.0 / (h * r) - a_base) / (fin_efficiency * a_f)
     return max(count, 0.0)
+
+
+def log_mean_temperature_difference(
+    *,
+    delta_t_1: Quantity,
+    delta_t_2: Quantity,
+) -> Quantity:
+    """The log-mean temperature difference ΔT_lm = (ΔT₁ − ΔT₂)/ln(ΔT₁/ΔT₂) (K).
+
+    The effective driving temperature difference across a heat exchanger, whose local
+    value changes along the length as the streams approach each other.
+    ``delta_t_1`` and ``delta_t_2`` are the two terminal approach differences (for a
+    counterflow exchanger, hot-in − cold-out and hot-out − cold-in; for parallel flow,
+    hot-in − cold-in and hot-out − cold-out) — both temperature *differences* in
+    kelvin, both positive. When the two are equal the log form is indeterminate and
+    the LMTD is simply their common value. Returns ΔT_lm in K.
+    """
+    _require(delta_t_1, "[temperature]", "delta_t_1")
+    _require(delta_t_2, "[temperature]", "delta_t_2")
+    dt1 = delta_t_1.to("K").magnitude
+    dt2 = delta_t_2.to("K").magnitude
+    if dt1 <= 0 or dt2 <= 0:
+        raise ValueError("delta_t_1 and delta_t_2 must be positive temperature differences")
+    if dt1 == dt2:
+        return Quantity(magnitude=dt1, unit="K")
+    return Quantity(magnitude=(dt1 - dt2) / log(dt1 / dt2), unit="K")
+
+
+def heat_exchanger_area_for_duty(
+    *,
+    duty: Quantity,
+    overall_coefficient: Quantity,
+    log_mean_temperature_difference: Quantity,
+) -> Quantity:
+    """The heat-transfer area A = Q/(U·ΔT_lm) a heat duty requires (m²).
+
+    Sizing inverse of :func:`heat_exchanger_duty`: the surface area an exchanger needs
+    to move ``duty`` Q with an overall heat-transfer ``overall_coefficient`` U and a
+    ``log_mean_temperature_difference`` ΔT_lm. U comes from the wall and film
+    resistances in series (the convection coefficients in this module feed it). Returns
+    the area in m².
+    """
+    _require(duty, "[power]", "duty")
+    _require(overall_coefficient, "[power] / [length]**2 / [temperature]", "overall_coefficient")
+    _require(
+        log_mean_temperature_difference, "[temperature]", "log_mean_temperature_difference"
+    )
+    q = duty.to("W").magnitude
+    u = overall_coefficient.to("W/(m**2*K)").magnitude
+    lmtd = log_mean_temperature_difference.to("K").magnitude
+    if q <= 0 or u <= 0 or lmtd <= 0:
+        raise ValueError("duty, overall_coefficient, and the LMTD must be positive")
+    return Quantity(magnitude=q / (u * lmtd), unit="m**2")
+
+
+def heat_exchanger_duty(
+    *,
+    overall_coefficient: Quantity,
+    area: Quantity,
+    log_mean_temperature_difference: Quantity,
+) -> Quantity:
+    """The heat duty Q = U·A·ΔT_lm an exchanger delivers (W).
+
+    The rating form: the heat an exchanger of ``area`` A moves at an overall
+    ``overall_coefficient`` U across a ``log_mean_temperature_difference`` ΔT_lm.
+    Returns the duty in W.
+    """
+    _require(overall_coefficient, "[power] / [length]**2 / [temperature]", "overall_coefficient")
+    _require(area, "[area]", "area")
+    _require(
+        log_mean_temperature_difference, "[temperature]", "log_mean_temperature_difference"
+    )
+    u = overall_coefficient.to("W/(m**2*K)").magnitude
+    a = area.to("m**2").magnitude
+    lmtd = log_mean_temperature_difference.to("K").magnitude
+    if u <= 0 or a <= 0 or lmtd <= 0:
+        raise ValueError("overall_coefficient, area, and the LMTD must be positive")
+    return Quantity(magnitude=u * a * lmtd, unit="W")
