@@ -70,6 +70,7 @@ __all__ = [
     "eccentric_shear_group_peak_force",
     "slip_critical_resistance",
     "block_shear_strength",
+    "shear_lag_factor",
 ]
 
 # AISC J3.8 D_u — the ratio of the mean installed bolt pretension to the specified
@@ -260,6 +261,42 @@ def block_shear_strength(
     shear_term = min(0.6 * fu * anv, 0.6 * fy * agv)
     tension_term = tension_uniformity_factor * fu * ant
     return Quantity(magnitude=(shear_term + tension_term) / 1000.0, unit="kN")
+
+
+def shear_lag_factor(
+    *,
+    connection_eccentricity: Quantity,
+    connection_length: Quantity,
+) -> float:
+    """The AISC 360 §D3 shear-lag factor U = 1 − x̄/L for a tension member.
+
+    When a tension load enters a member through some but not all of its cross-section —
+    an angle bolted through one leg, a channel welded at its web — the far elements lag
+    and the net section is not fully effective. Table D3.1 Case 2 scales the net area to
+    an effective net area A_e = U·A_n with U = 1 − x̄/L, where ``connection_eccentricity``
+    x̄ is the distance from the connection plane to the member's centroid (the connection
+    eccentricity) and ``connection_length`` L is the length of the connection along the
+    line of force (end bolt to end bolt, or the weld length). A short, eccentric
+    connection (large x̄, small L) lags most; a long connection recovers U toward 1. Feed
+    the result as the shear-lag factor of a tension-rupture check. Returns U (0 to 1).
+    """
+    _require(connection_eccentricity, "[length]", "connection_eccentricity")
+    _require(connection_length, "[length]", "connection_length")
+    x_bar = connection_eccentricity.to("mm").magnitude
+    length = connection_length.to("mm").magnitude
+    if x_bar < 0:
+        raise ValueError(
+            f"connection_eccentricity must be non-negative; got {connection_eccentricity}"
+        )
+    if length <= 0:
+        raise ValueError(f"connection_length must be positive; got {connection_length}")
+    u = 1.0 - x_bar / length
+    if u <= 0:
+        raise ValueError(
+            "connection_eccentricity must be less than connection_length "
+            f"(x̄/L = {x_bar / length:.2f} gives a non-positive U)"
+        )
+    return u
 
 
 def bolt_diameter_for_shear(

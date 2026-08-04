@@ -221,6 +221,7 @@ dynamics.tuned_mass_damper_optimal_frequency_ratio
 dynamics.two_rotor_torsional_natural_frequency
 fastener.NUT_FACTOR_AS_RECEIVED
 fastener.block_shear_strength
+fastener.shear_lag_factor
 fastener.slip_critical_resistance
 fastener.bearing_stress
 fastener.bolt_axial_stiffness

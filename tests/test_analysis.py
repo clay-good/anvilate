@@ -12748,6 +12748,20 @@ def test_block_shear_strength_aisc_j43():
         )
 
 
+def test_shear_lag_factor_aisc_d3():
+    from anvilate.analysis import shear_lag_factor
+
+    # U = 1 - x̄/L: x̄=20 mm, L=100 mm -> 0.80.
+    u = shear_lag_factor(connection_eccentricity=_q("20 mm"), connection_length=_q("100 mm"))
+    assert u == pytest.approx(0.80, rel=1e-12)
+    # A longer connection recovers U toward 1.
+    longer = shear_lag_factor(connection_eccentricity=_q("20 mm"), connection_length=_q("300 mm"))
+    assert longer > u
+    # An eccentricity at or beyond the connection length gives a non-positive U -> error.
+    with pytest.raises(ValueError, match="non-positive U"):
+        shear_lag_factor(connection_eccentricity=_q("100 mm"), connection_length=_q("100 mm"))
+
+
 def test_fillet_weld_design_strength_aisc_j24():
     from anvilate.analysis import fillet_weld_design_strength, fillet_weld_throat_stress
 
