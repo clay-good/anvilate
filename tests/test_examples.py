@@ -262,6 +262,18 @@ def test_pump_line_pressure_drop_example_fittings_are_not_minor():
     assert r["pressure_drop_kpa"] == pytest.approx(48, abs=2)
 
 
+def test_drainage_channel_capacity_example_passes_and_is_subcritical():
+    namespace = runpy.run_path(str(_EXAMPLES / "drainage_channel_capacity.py"))
+    c = namespace["channel_check"]()
+    # The channel carries more than the 4.5 m3/s design storm.
+    assert c["discharge_m3s"] == pytest.approx(5.19, abs=0.05)
+    assert c["discharge_m3s"] > 4.5
+    # Subcritical flow: Fr < 1 and the flow depth exceeds the critical depth — same verdict.
+    assert c["froude"] < 1.0
+    assert c["flow_depth_m"] > c["critical_depth_m"]
+    assert c["critical_depth_m"] == pytest.approx(0.67, abs=0.02)
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

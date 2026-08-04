@@ -116,6 +116,9 @@ modules:
   number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
   Darcy-Weisbach friction head loss and fitting minor losses, and the pressure drop
   ρ·g·h a pump must overcome
+- :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
+  radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), and the Froude
+  number and rectangular critical depth that classify the flow as sub- or supercritical
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -794,6 +797,13 @@ from .o_ring import (
     o_ring_squeeze_fraction,
     o_ring_stretch_fraction,
 )
+from .open_channel import (
+    critical_depth_rectangular,
+    froude_number,
+    hydraulic_radius,
+    manning_flow_rate,
+    manning_flow_velocity,
+)
 from .pipe_flow import (
     darcy_friction_factor,
     darcy_weisbach_head_loss,
@@ -1124,6 +1134,11 @@ __all__ = [
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
     "terzaghi_bearing_capacity",
+    "critical_depth_rectangular",
+    "froude_number",
+    "hydraulic_radius",
+    "manning_flow_rate",
+    "manning_flow_velocity",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
     "minor_loss_head",

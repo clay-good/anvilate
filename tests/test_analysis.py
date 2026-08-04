@@ -13454,6 +13454,51 @@ def test_darcy_weisbach_head_loss_and_pressure_drop():
         )
 
 
+def test_manning_open_channel_flow():
+    from anvilate.analysis import (
+        hydraulic_radius,
+        manning_flow_rate,
+        manning_flow_velocity,
+    )
+
+    # Rectangular concrete channel b=3, y=1: A=3, P=3+2=5, R=A/P=0.6.
+    r = hydraulic_radius(flow_area=_q("3 m**2"), wetted_perimeter=_q("5 m"))
+    assert r.to("m").magnitude == pytest.approx(0.6, rel=1e-12)
+    # V = (1/n)*R^(2/3)*S^(1/2) = (1/0.013)*0.6^(2/3)*0.001^0.5 = 1.73 m/s.
+    v = manning_flow_velocity(roughness_coefficient=0.013, hydraulic_radius=r, channel_slope=0.001)
+    expect_v = (1 / 0.013) * 0.6 ** (2 / 3) * 0.001**0.5
+    assert v.to("m/s").magnitude == pytest.approx(expect_v, rel=1e-9)
+    # Q = V*A.
+    q = manning_flow_rate(
+        roughness_coefficient=0.013, flow_area=_q("3 m**2"), hydraulic_radius=r, channel_slope=0.001
+    )
+    assert q.to("m**3/s").magnitude == pytest.approx(expect_v * 3, rel=1e-9)
+    # A rougher lining (higher n) carries less flow at the same section and slope.
+    q_rough = manning_flow_rate(
+        roughness_coefficient=0.030, flow_area=_q("3 m**2"), hydraulic_radius=r, channel_slope=0.001
+    )
+    assert q_rough.to("m**3/s").magnitude < q.to("m**3/s").magnitude
+    with pytest.raises(ValueError, match="positive"):
+        manning_flow_velocity(roughness_coefficient=0.013, hydraulic_radius=r, channel_slope=0.0)
+
+
+def test_froude_number_and_critical_depth_agree_on_regime():
+    from anvilate.analysis import critical_depth_rectangular, froude_number
+
+    # Subcritical example: V=1.73 m/s at y=1 m -> Fr = 1.73/sqrt(9.80665*1) = 0.55 < 1.
+    fr = froude_number(velocity=_q("1.73 m/s"), hydraulic_depth=_q("1 m"))
+    assert fr == pytest.approx(1.73 / (9.80665 * 1) ** 0.5, rel=1e-9)
+    assert fr < 1.0  # subcritical
+    # Critical depth of a rectangular channel: y_c = (q^2/g)^(1/3), q = Q/b.
+    y_c = critical_depth_rectangular(flow_rate=_q("5.19 m**3/s"), channel_width=_q("3 m"))
+    unit_q = 5.19 / 3
+    assert y_c.to("m").magnitude == pytest.approx((unit_q**2 / 9.80665) ** (1 / 3), rel=1e-9)
+    # The flow depth (1 m) exceeds critical (0.67 m), the same subcritical verdict as Fr < 1.
+    assert y_c.to("m").magnitude < 1.0
+    # A Froude number above 1 is supercritical.
+    assert froude_number(velocity=_q("4 m/s"), hydraulic_depth=_q("0.3 m")) > 1.0
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 
