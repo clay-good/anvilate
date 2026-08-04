@@ -26,6 +26,7 @@ from math import log10
 from ..units import Quantity
 
 __all__ = [
+    "cavitation_number",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
     "hazen_williams_flow_capacity",
@@ -286,6 +287,41 @@ def surge_wave_period(*, pipe_length: Quantity, wave_speed: Quantity) -> Quantit
     if lo <= 0 or a <= 0:
         raise ValueError("pipe_length and wave_speed must be positive")
     return Quantity(magnitude=2.0 * lo / a, unit="s")
+
+
+def cavitation_number(
+    *,
+    local_pressure: Quantity,
+    vapor_pressure: Quantity,
+    density: Quantity,
+    velocity: Quantity,
+) -> float:
+    """The cavitation number of a flow, σ = (p − p_v)/(½·ρ·V²).
+
+    A dimensionless margin against cavitation: how far the local absolute pressure sits above the
+    liquid's vapor pressure, scaled by the flow's dynamic pressure. σ = (p − p_v)/(½·ρ·V²), from the
+    ``local_pressure`` p (absolute), the ``vapor_pressure`` p_v, the ``density`` ρ, and the
+    ``velocity`` V. A high σ is safe; as a valve throttles or a flow accelerates, p falls and V
+    rises, driving σ down, and below a device-specific incipient value σ_i the pressure reaches
+    vapor and the liquid flashes to cavities that collapse and erode the metal. It is the general
+    form behind valve, orifice, and propeller cavitation. Returns the dimensionless cavitation
+    number.
+    """
+    _check(local_pressure, "[pressure]", "local_pressure")
+    _check(vapor_pressure, "[pressure]", "vapor_pressure")
+    _check(density, "[mass]/[length]**3", "density")
+    _check(velocity, "[length]/[time]", "velocity")
+    rho = density.to("kg/m**3").magnitude
+    v = velocity.to("m/s").magnitude
+    if rho <= 0:
+        raise ValueError("density must be positive")
+    if v <= 0:
+        raise ValueError("velocity must be positive")
+    p = local_pressure.to("Pa").magnitude
+    p_v = vapor_pressure.to("Pa").magnitude
+    if p_v < 0:
+        raise ValueError("vapor_pressure must be non-negative")
+    return (p - p_v) / (0.5 * rho * v**2)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

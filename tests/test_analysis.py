@@ -14065,6 +14065,37 @@ def test_combustion_air_fuel_ratio_and_excess_air():
         excess_air_from_flue_oxygen(flue_oxygen_percent=21.0)
 
 
+def test_pipe_flow_cavitation_number():
+    from anvilate.analysis import cavitation_number
+
+    # sigma = (p - p_v)/(0.5*rho*V^2); 200 kPa, 2.34 kPa, 998, 8 m/s -> ~6.19.
+    s = cavitation_number(
+        local_pressure=_q("200 kPa"),
+        vapor_pressure=_q("2.34 kPa"),
+        density=_q("998 kg/m**3"),
+        velocity=_q("8 m/s"),
+    )
+    assert s == pytest.approx((200000 - 2340) / (0.5 * 998 * 64), rel=1e-9)
+    assert s > 1.0  # safe
+
+    # Throttling drops the local pressure and raises the velocity, pushing sigma below 1.
+    throttled = cavitation_number(
+        local_pressure=_q("40 kPa"),
+        vapor_pressure=_q("2.34 kPa"),
+        density=_q("998 kg/m**3"),
+        velocity=_q("18 m/s"),
+    )
+    assert throttled < 1.0  # cavitation risk
+
+    with pytest.raises(ValueError, match="velocity"):
+        cavitation_number(
+            local_pressure=_q("200 kPa"),
+            vapor_pressure=_q("2.34 kPa"),
+            density=_q("998 kg/m**3"),
+            velocity=_q("0 m/s"),
+        )
+
+
 def test_hvac_duct_equivalent_diameter_and_fan_power():
     from anvilate.analysis import circular_equivalent_diameter, fan_power
 

@@ -535,6 +535,7 @@ pump.npsh_margin
 pump.pump_hydraulic_power
 pump.pump_shaft_power
 pump.pump_specific_speed
+pipe_flow.cavitation_number
 pipe_flow.darcy_friction_factor
 pipe_flow.darcy_weisbach_head_loss
 pipe_flow.hazen_williams_flow_capacity

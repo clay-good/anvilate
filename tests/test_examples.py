@@ -559,6 +559,13 @@ def test_boiler_combustion_air_example_flue_confirms_excess():
     assert t["actual_afr"] > t["stoichiometric_afr"]
 
 
+def test_control_valve_cavitation_example_heavy_throttle_cavitates():
+    namespace = runpy.run_path(str(_EXAMPLES / "control_valve_cavitation.py"))
+    v = namespace["valve_cavitation"]()
+    assert v["light_sigma"] > 1.0
+    assert v["heavy_sigma"] < 1.0
+
+
 def test_rectangular_duct_sizing_example_equivalent_exceeds_hydraulic():
     namespace = runpy.run_path(str(_EXAMPLES / "rectangular_duct_sizing.py"))
     r = namespace["duct_and_fan"]()

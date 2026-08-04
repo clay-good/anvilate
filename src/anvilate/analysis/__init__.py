@@ -153,8 +153,9 @@ modules:
   Darcy-Weisbach friction head loss and fitting minor losses, the pressure drop ρ·g·h a
   pump must overcome, the empirical Hazen-Williams head loss and flow capacity for
   water mains, the hydraulic diameter that carries the round-pipe relations over to a
-  non-circular duct, and the Joukowsky water-hammer surge pressure with its critical
-  valve-closure time
+  non-circular duct, the Joukowsky water-hammer surge pressure with its critical
+  valve-closure time, and the cavitation number σ = (p−p_v)/(½·ρ·V²) that screens a
+  valve or orifice for cavitation
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), the Froude number
   and rectangular critical depth that classify the flow as sub- or supercritical, the
@@ -1014,6 +1015,7 @@ from .open_channel import (
     triangular_weir_flow,
 )
 from .pipe_flow import (
+    cavitation_number,
     darcy_friction_factor,
     darcy_weisbach_head_loss,
     hazen_williams_flow_capacity,
@@ -1446,6 +1448,7 @@ __all__ = [
     "specific_energy",
     "trapezoidal_channel_properties",
     "triangular_weir_flow",
+    "cavitation_number",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
     "hazen_williams_flow_capacity",
