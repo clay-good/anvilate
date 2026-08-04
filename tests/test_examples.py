@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_tank_floor_corrosion_life_example_methods_agree():
+    namespace = runpy.run_path(str(_EXAMPLES / "tank_floor_corrosion_life.py"))
+    a = namespace["floor_assessment"]()
+    # The two independent methods land within ~10% of each other.
+    assert a["coupon_rate_mm_yr"] == pytest.approx(a["probe_rate_mm_yr"], rel=0.1)
+    # 8 mm now, 3 mm retirement, ~0.2 mm/yr -> ~25 years left.
+    assert a["remaining_life_yr"] == pytest.approx(24.6, abs=1.0)
+
+
 def test_welding_shop_ventilation_example_dilution_dwarfs_comfort():
     namespace = runpy.run_path(str(_EXAMPLES / "welding_shop_ventilation.py"))
     s = namespace["shop_ventilation"]()

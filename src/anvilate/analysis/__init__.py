@@ -82,6 +82,9 @@ modules:
 - :mod:`~anvilate.analysis.wear` — Archard sliding-wear law: the worn volume and wear
   depth of a sliding contact, the sliding distance (wear life) a depth limit allows, and
   the plain-bearing PV (pressure × velocity) factor against its overheating limit
+- :mod:`~anvilate.analysis.corrosion` — electrochemical metal loss: the ASTM G1
+  weight-loss penetration rate, the Faraday rate from a corrosion current density,
+  and the remaining wall life above a retirement thickness
 - :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque, per-bolt
   shear force, and the bolt count a torque requires
 - :mod:`~anvilate.analysis.creep` — high-temperature creep-rupture screening by the
@@ -593,6 +596,11 @@ from .contact import (
     hertz_effective_modulus,
     hertz_sphere_approach,
     hertz_sphere_contact,
+)
+from .corrosion import (
+    corrosion_penetration_rate,
+    faraday_corrosion_rate,
+    remaining_wall_life,
 )
 from .coupling import (
     flange_coupling_bolt_count,
@@ -1959,6 +1967,9 @@ __all__ = [
     "flange_coupling_torque",
     "flange_coupling_bolt_force",
     "flange_coupling_bolt_count",
+    "corrosion_penetration_rate",
+    "faraday_corrosion_rate",
+    "remaining_wall_life",
     "LARSON_MILLER_CONSTANT",
     "larson_miller_parameter",
     "larson_miller_rupture_life",

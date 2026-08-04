@@ -13375,6 +13375,53 @@ def test_illumination_lighting_power_density():
         )
 
 
+def test_corrosion_penetration_rate_faraday_and_remaining_life():
+    from anvilate.analysis import (
+        corrosion_penetration_rate,
+        faraday_corrosion_rate,
+        remaining_wall_life,
+    )
+
+    # Weight-loss: 100 mg from 10 cm^2 over 168 h, steel 7.87 g/cm^3 -> ~0.663 mm/yr.
+    cr = corrosion_penetration_rate(
+        mass_loss=_q("100 mg"),
+        exposed_area=_q("10 cm**2"),
+        exposure_time=_q("168 hour"),
+        density=_q("7.87 g/cm**3"),
+    )
+    assert cr.to("mm/year").magnitude == pytest.approx(0.663, abs=2e-3)
+
+    # Faraday: 1 uA/cm^2, EW 27.9, 7.87 g/cm^3 -> 3.27e-3*1*27.9/7.87 mm/yr.
+    fc = faraday_corrosion_rate(
+        corrosion_current_density=_q("1 uA/cm**2"),
+        equivalent_weight=27.9,
+        density=_q("7.87 g/cm**3"),
+    )
+    assert fc.to("mm/year").magnitude == pytest.approx(3.27e-3 * 27.9 / 7.87, rel=1e-9)
+
+    # Remaining life: (12 - 6) mm at 0.5 mm/yr -> 12 yr.
+    life = remaining_wall_life(
+        current_thickness=_q("12 mm"),
+        minimum_thickness=_q("6 mm"),
+        corrosion_rate=_q("0.5 mm/year"),
+    )
+    assert life.to("year").magnitude == pytest.approx(12.0, rel=1e-9)
+
+    # Already-retired wall raises.
+    with pytest.raises(ValueError, match="already retired"):
+        remaining_wall_life(
+            current_thickness=_q("5 mm"),
+            minimum_thickness=_q("6 mm"),
+            corrosion_rate=_q("0.5 mm/year"),
+        )
+    with pytest.raises(ValueError, match="equivalent_weight"):
+        faraday_corrosion_rate(
+            corrosion_current_density=_q("1 uA/cm**2"),
+            equivalent_weight=0.0,
+            density=_q("7.87 g/cm**3"),
+        )
+
+
 def test_ventilation_outdoor_air_changes_and_dilution():
     from anvilate.analysis import (
         air_changes_per_hour,

@@ -230,6 +230,9 @@ contact.hertz_cylinder_contact
 contact.hertz_effective_modulus
 contact.hertz_sphere_approach
 contact.hertz_sphere_contact
+corrosion.corrosion_penetration_rate
+corrosion.faraday_corrosion_rate
+corrosion.remaining_wall_life
 coupling.flange_coupling_bolt_count
 coupling.flange_coupling_bolt_force
 coupling.flange_coupling_torque
