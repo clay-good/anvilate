@@ -87,6 +87,7 @@ __all__ = [
     "aisc_rectangular_hss_shear_strength",
     "aisc_rectangular_hss_flexural_strength",
     "aisc_minor_axis_flexural_strength",
+    "aisc_plate_girder_bending_factor",
     "aisc_web_shear_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -894,6 +895,49 @@ def aisc_rectangular_hss_flexural_strength(
         m_n = min(m_n, m_wlb)
     m_n = min(m_n, m_p)
     return Quantity(magnitude=m_n / 1.0e6, unit="kN*m")
+
+
+def aisc_plate_girder_bending_factor(
+    *,
+    web_clear_depth: Quantity,
+    web_thickness: Quantity,
+    compression_flange_width: Quantity,
+    compression_flange_thickness: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+) -> float:
+    """The AISC 360 §F5 bending-strength reduction factor R_pg of a slender-web girder.
+
+    A deep built-up plate girder has a web too slender to keep its share of the bending
+    stress; it buckles and sheds load to the flanges, and §F5 debits the flexural
+    strength by R_pg = 1 − (a_w/(1200 + 300·a_w))·(h_c/t_w − 5.7·√(E/F_y)) ≤ 1.0, where
+    a_w = h_c·t_w/(b_fc·t_fc) is the web-to-compression-flange area ratio (capped at 10).
+    ``web_clear_depth`` h_c (twice the distance from the centroid to the inside of the
+    compression flange — the web depth for a symmetric girder), ``web_thickness`` t_w,
+    ``compression_flange_width`` b_fc, ``compression_flange_thickness`` t_fc,
+    ``yield_strength`` F_y, and ``elastic_modulus`` E. A web at or below the slenderness
+    limit 5.7·√(E/F_y) is not slender and R_pg is 1.0 (no penalty); a very slender web
+    drives R_pg down. Multiply the compression-flange stress strength F_cr·S_xc by R_pg
+    for the §F5 girder moment. Returns R_pg (0 to 1, dimensionless).
+    """
+    _require(web_clear_depth, "[length]", "web_clear_depth")
+    _require(web_thickness, "[length]", "web_thickness")
+    _require(compression_flange_width, "[length]", "compression_flange_width")
+    _require(compression_flange_thickness, "[length]", "compression_flange_thickness")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    hc = web_clear_depth.to("mm").magnitude
+    tw = web_thickness.to("mm").magnitude
+    bfc = compression_flange_width.to("mm").magnitude
+    tfc = compression_flange_thickness.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if hc <= 0 or tw <= 0 or bfc <= 0 or tfc <= 0 or fy <= 0 or e <= 0:
+        raise ValueError("all dimensions and material properties must be positive")
+    a_w = min(hc * tw / (bfc * tfc), 10.0)
+    limit = 5.7 * (e / fy) ** 0.5
+    r_pg = 1.0 - (a_w / (1200.0 + 300.0 * a_w)) * (hc / tw - limit)
+    return min(r_pg, 1.0)
 
 
 def aisc_minor_axis_flexural_strength(

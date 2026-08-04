@@ -13617,6 +13617,31 @@ def test_aisc_rectangular_hss_flexural_strength_governing_limit_state():
         )
 
 
+def test_aisc_plate_girder_bending_factor_penalizes_slender_webs():
+    from anvilate.analysis import aisc_plate_girder_bending_factor
+
+    base = {
+        "compression_flange_width": _q("300 mm"),
+        "compression_flange_thickness": _q("20 mm"),
+        "yield_strength": _q("345 MPa"),
+        "elastic_modulus": _q("200000 MPa"),
+    }
+    # Slender web (h_c/t_w = 187.5 >> 5.7*sqrt(E/Fy) = 137.2): R_pg < 1.
+    slender = aisc_plate_girder_bending_factor(
+        web_clear_depth=_q("1500 mm"), web_thickness=_q("8 mm"), **base
+    )
+    a_w = min(1500 * 8 / (300 * 20), 10.0)
+    limit = 5.7 * (200000 / 345) ** 0.5
+    expect = 1 - (a_w / (1200 + 300 * a_w)) * (1500 / 8 - limit)
+    assert slender == pytest.approx(expect, rel=1e-9)
+    assert slender < 1.0
+    # A stocky web (h_c/t_w below the slenderness limit) takes no penalty: R_pg = 1.
+    stocky = aisc_plate_girder_bending_factor(
+        web_clear_depth=_q("800 mm"), web_thickness=_q("12 mm"), **base
+    )
+    assert stocky == 1.0
+
+
 def test_aisc_minor_axis_flexural_strength_yield_cap_and_flb():
     from anvilate.analysis import aisc_minor_axis_flexural_strength
 
