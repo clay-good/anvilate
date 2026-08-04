@@ -902,6 +902,15 @@ def test_dc_link_capacitor_energy_example_stores_hundreds_of_joules():
     assert d["resonant_frequency_hz"] == pytest.approx(92.0, abs=1.0)
 
 
+def test_battery_round_trip_losses_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "battery_round_trip_losses.py"))
+    d = namespace["delivered_energy"]()
+    # Lithium returns nearly all the surplus; lead-acid loses far more.
+    assert d["lithium_kwh"] == pytest.approx(11.28, abs=0.05)
+    assert d["lead_acid_kwh"] == pytest.approx(9.6, abs=0.05)
+    assert d["lithium_kwh"] > d["lead_acid_kwh"]
+
+
 def test_ups_battery_bank_sizing_example_shallower_dod_shortens_runtime():
     namespace = runpy.run_path(str(_EXAMPLES / "ups_battery_bank_sizing.py"))
     b = namespace["bank_sizing"]()

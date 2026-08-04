@@ -192,8 +192,9 @@ modules:
   constants and the RC filter cutoff f_c = 1/(2π·R·C), and the LC resonant frequency
   f₀ = 1/(2π·√(L·C))
 - :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
-  capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, and the runtime
-  a given bank delivers
+  capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, the runtime
+  a given bank delivers, and the round-trip efficiency and the delivered energy
+  it yields (E_out = E_stored·η)
 - :mod:`~anvilate.analysis.solar_pv` — photovoltaic array sizing: a module's power
   (P = G·A·η), the daily energy an array yields (E = P·PSH·D), the array rating
   a daily load needs, and the cell-temperature (NOCT) and its power derating
@@ -837,6 +838,8 @@ from .electrical import (
 from .energy_storage import (
     battery_backup_time,
     battery_bank_capacity,
+    battery_delivered_energy,
+    battery_round_trip_efficiency,
     usable_battery_energy,
 )
 from .fastener import (
@@ -1709,6 +1712,8 @@ __all__ = [
     "battery_bank_capacity",
     "usable_battery_energy",
     "battery_backup_time",
+    "battery_round_trip_efficiency",
+    "battery_delivered_energy",
     "pv_array_power",
     "pv_daily_energy",
     "pv_array_size_for_load",

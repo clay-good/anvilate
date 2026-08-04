@@ -317,6 +317,8 @@ electrical.voltage_drop_single_phase
 electrical.voltage_drop_three_phase
 energy_storage.battery_backup_time
 energy_storage.battery_bank_capacity
+energy_storage.battery_delivered_energy
+energy_storage.battery_round_trip_efficiency
 energy_storage.usable_battery_energy
 dynamics.STANDARD_GRAVITY
 dynamics.annular_disc_polar_mass_moment

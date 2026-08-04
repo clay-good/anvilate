@@ -14389,6 +14389,21 @@ def test_reactive_circuit_stored_energy_and_lc_resonance():
         capacitor_stored_energy(capacitance=_q("0 uF"), voltage=_q("400 V"))
 
 
+def test_battery_round_trip_efficiency_and_delivered_energy():
+    from anvilate.analysis import battery_delivered_energy, battery_round_trip_efficiency
+
+    # eta = E_out/E_in: 9 kWh back from 10 kWh in -> 0.9.
+    eta = battery_round_trip_efficiency(energy_discharged=_q("9 kWh"), energy_charged=_q("10 kWh"))
+    assert eta == pytest.approx(0.9, rel=1e-12)
+    # Delivered energy is stored*eta, and it round-trips with the efficiency.
+    out = battery_delivered_energy(stored_energy=_q("10 kWh"), round_trip_efficiency=eta)
+    assert out.to("kWh").magnitude == pytest.approx(9.0, rel=1e-9)
+    assert out.to("kWh").magnitude < 10.0  # losses shrink it
+    # Getting out more than went in is impossible.
+    with pytest.raises(ValueError, match="cannot exceed energy_charged"):
+        battery_round_trip_efficiency(energy_discharged=_q("11 kWh"), energy_charged=_q("10 kWh"))
+
+
 def test_energy_storage_capacity_energy_and_backup_time():
     from anvilate.analysis import (
         battery_backup_time,

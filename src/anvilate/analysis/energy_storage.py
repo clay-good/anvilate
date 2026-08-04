@@ -21,6 +21,8 @@ from ..units import Quantity
 __all__ = [
     "battery_backup_time",
     "battery_bank_capacity",
+    "battery_delivered_energy",
+    "battery_round_trip_efficiency",
     "usable_battery_energy",
 ]
 
@@ -109,6 +111,53 @@ def battery_backup_time(
     )
     time = energy.pint / load_power.pint
     return Quantity(magnitude=float(time.to("hour").magnitude), unit="hour")
+
+
+def battery_round_trip_efficiency(
+    *,
+    energy_discharged: Quantity,
+    energy_charged: Quantity,
+) -> float:
+    """The battery round-trip efficiency, η = E_out/E_in.
+
+    Storing energy and getting it back is lossy — the charge and discharge each waste some to
+    internal resistance and, in a lead-acid cell, to gassing. The round-trip efficiency is the ratio
+    of the ``energy_discharged`` E_out returned to the ``energy_charged`` E_in put in over a full
+    cycle: η = E_out/E_in. Lithium-ion reaches ~0.90–0.95, lead-acid ~0.75–0.85, flow batteries
+    lower. It is what turns a nameplate storage capacity into the energy a system can actually count
+    on (see :func:`battery_delivered_energy`). Returns the dimensionless efficiency (0 to 1).
+    """
+    _check(energy_discharged, "[energy]", "energy_discharged")
+    _check(energy_charged, "[energy]", "energy_charged")
+    e_out = energy_discharged.to("J").magnitude
+    e_in = energy_charged.to("J").magnitude
+    if e_out < 0 or e_in <= 0:
+        raise ValueError("energy_charged must be positive and energy_discharged non-negative")
+    if e_out > e_in:
+        raise ValueError("energy_discharged cannot exceed energy_charged (η > 1 is impossible)")
+    return e_out / e_in
+
+
+def battery_delivered_energy(
+    *,
+    stored_energy: Quantity,
+    round_trip_efficiency: float,
+) -> Quantity:
+    """The energy a battery actually returns, E_out = E_stored·η.
+
+    The usable energy that comes back out of storage after the round-trip losses: the
+    ``stored_energy`` E_stored (what went in, e.g. a day's solar surplus) times the
+    ``round_trip_efficiency`` η (from :func:`battery_round_trip_efficiency` or the datasheet).
+    Sizing an off-grid or backup system on the stored energy alone overstates what the loads will
+    see by the loss fraction — a 10 kWh charge through an 0.9 battery delivers only 9 kWh. Returns
+    the delivered energy in kWh.
+    """
+    _check(stored_energy, "[energy]", "stored_energy")
+    _fraction(round_trip_efficiency, "round_trip_efficiency")
+    e = stored_energy.to("kWh").magnitude
+    if e < 0:
+        raise ValueError("stored_energy must be non-negative")
+    return Quantity(magnitude=e * round_trip_efficiency, unit="kWh")
 
 
 def _fraction(value: float, name: str) -> None:
