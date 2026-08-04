@@ -31,19 +31,30 @@ head = darcy_weisbach_head_loss(
   **`minor_loss_head`** `K·V²/(2g)` for fittings and **`pipe_pressure_drop`** `ρ·g·h`.
 - **`hazen_williams_head_loss`** / **`hazen_williams_flow_capacity`** — the empirical
   water-distribution shortcut, needing only a roughness coefficient C.
+- **`joukowsky_surge_pressure`** `ρ·a·Δv` and **`surge_wave_period`** `2L/a` — the water-
+  hammer transient a fast valve closure produces, the burst risk steady head loss never shows.
 
-See [`examples/pump_line_pressure_drop.py`](../examples/pump_line_pressure_drop.py) and
-[`examples/water_main_hazen_williams.py`](../examples/water_main_hazen_williams.py).
+See [`examples/pump_line_pressure_drop.py`](../examples/pump_line_pressure_drop.py),
+[`examples/water_main_hazen_williams.py`](../examples/water_main_hazen_williams.py), and
+[`examples/water_hammer_valve_closure.py`](../examples/water_hammer_valve_closure.py).
 
 ## Open-channel (free-surface) flow
 
 - **`hydraulic_radius`** `A/P` → **`manning_flow_velocity`** / **`manning_flow_rate`**
-  `(1/n)·R^(2/3)·S^(1/2)`.
-- **`froude_number`** `V/√(g·y)` and **`critical_depth_rectangular`** `(q²/g)^(1/3)` —
-  the pair that classifies the flow as sub- or supercritical.
+  `(1/n)·R^(2/3)·S^(1/2)`, with **`trapezoidal_channel_properties`** and
+  **`circular_channel_properties`** giving A, P, R for real canal and culvert sections.
+- **`froude_number`** `V/√(g·y)`, **`critical_depth_rectangular`** `(q²/g)^(1/3)`, and
+  **`specific_energy`** `y + V²/2g` (with **`minimum_specific_energy_rectangular`** `1.5·y_c`)
+  — the regime and energy basis that governs gates and steps.
+- **`hydraulic_jump_downstream_depth`** and **`hydraulic_jump_energy_loss`** — the
+  stilling-basin energy dissipator below a spillway.
+- **`rectangular_weir_flow`** and **`triangular_weir_flow`** — gauging channel flow from
+  the head over a weir (the channel analog of the orifice meter).
 
-See [`examples/drainage_channel_capacity.py`](../examples/drainage_channel_capacity.py) —
-a channel that passes the design storm *and* runs subcritical.
+See [`examples/drainage_channel_capacity.py`](../examples/drainage_channel_capacity.py),
+[`examples/trapezoidal_canal_capacity.py`](../examples/trapezoidal_canal_capacity.py),
+[`examples/spillway_stilling_basin.py`](../examples/spillway_stilling_basin.py), and
+[`examples/weir_flow_gauging.py`](../examples/weir_flow_gauging.py).
 
 ## Pump sizing
 
@@ -66,3 +77,15 @@ See [`examples/pump_selection_from_line.py`](../examples/pump_selection_from_lin
 - **`hydrostatic_pressure`** `ρ·g·h`, **`hydrostatic_force_on_plane`** `ρ·g·h_c·A`,
   **`center_of_pressure_depth`** (below the centroid), and **`buoyant_force`** `ρ·g·V`
   ([`examples/submerged_gate_hinge.py`](../examples/submerged_gate_hinge.py)).
+- **`metacentric_height`** `I/V − BG` and **`righting_moment`** `W·GM·sin θ` — whether a
+  floating body (pontoon, barge) rights itself or capsizes
+  ([`examples/pontoon_stability.py`](../examples/pontoon_stability.py)).
+
+## Compressed air
+
+Beyond incompressible flow, the [`pneumatics`](../src/anvilate/analysis/pneumatics.py) and
+[`gas_compression`](../src/anvilate/analysis/gas_compression.py) modules size compressed-air
+systems: the **`air_receiver_holdup_time`** a tank rides out a demand burst, and the
+isothermal/adiabatic/multi-stage **compression power** and discharge temperature of the
+compressor that fills it ([`examples/air_receiver_sizing.py`](../examples/air_receiver_sizing.py),
+[`examples/air_compressor_duty.py`](../examples/air_compressor_duty.py)).
