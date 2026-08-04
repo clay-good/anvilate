@@ -26,6 +26,7 @@ from ..units import Quantity
 
 __all__ = [
     "differential_pressure_for_flow",
+    "dynamic_pressure",
     "obstruction_meter_flow_rate",
     "pitot_velocity",
 ]
@@ -104,6 +105,25 @@ def differential_pressure_for_flow(
     velocity_term = q * sqrt(1.0 - beta**4) / (discharge_coefficient * area)
     dp = 0.5 * rho * velocity_term**2
     return Quantity(magnitude=dp / 1000.0, unit="kPa")
+
+
+def dynamic_pressure(*, velocity: Quantity, density: Quantity) -> Quantity:
+    """The dynamic (velocity) pressure of a moving fluid, Δp = ½·ρ·V².
+
+    The pressure a flow carries by virtue of its motion — the forward of :func:`pitot_velocity`.
+    Bringing a stream of ``density`` ρ moving at ``velocity`` V to rest raises its pressure by
+    ½·ρ·V²: this is what a pitot tube reads, and in a duct it is the *velocity pressure* that adds
+    to the static pressure to make the fan total pressure (see
+    :func:`~anvilate.analysis.fan_total_pressure`). For standard air (ρ ≈ 1.2 kg/m³) a 10 m/s duct
+    velocity is 60 Pa. Returns the dynamic pressure in Pa.
+    """
+    _check(velocity, "[length]/[time]", "velocity")
+    _check(density, "[mass]/[length]**3", "density")
+    v = velocity.to("m/s").magnitude
+    rho = density.to("kg/m**3").magnitude
+    if rho <= 0:
+        raise ValueError("density must be positive")
+    return Quantity(magnitude=0.5 * rho * v**2, unit="Pa")
 
 
 def pitot_velocity(*, dynamic_pressure: Quantity, density: Quantity) -> Quantity:

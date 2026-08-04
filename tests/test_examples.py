@@ -660,6 +660,15 @@ def test_control_valve_cavitation_example_heavy_throttle_cavitates():
     assert v["heavy_sigma"] < 1.0
 
 
+def test_fan_total_pressure_selection_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "fan_total_pressure_selection.py"))
+    d = namespace["fan_duty"]()
+    assert d["velocity_pressure_pa"] == pytest.approx(60.0, rel=1e-9)
+    assert d["fan_total_pressure_pa"] == pytest.approx(310.0, rel=1e-9)
+    # The pitot relation recovers the duct velocity from the velocity pressure.
+    assert d["recovered_velocity_ms"] == pytest.approx(10.0, rel=1e-6)
+
+
 def test_rectangular_duct_sizing_example_equivalent_exceeds_hydraulic():
     namespace = runpy.run_path(str(_EXAMPLES / "rectangular_duct_sizing.py"))
     r = namespace["duct_and_fan"]()

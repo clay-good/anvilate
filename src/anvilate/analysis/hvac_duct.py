@@ -22,7 +22,31 @@ from ..units import Quantity
 __all__ = [
     "circular_equivalent_diameter",
     "fan_power",
+    "fan_total_pressure",
 ]
+
+
+def fan_total_pressure(
+    *,
+    static_pressure: Quantity,
+    velocity_pressure: Quantity,
+) -> Quantity:
+    """The fan total pressure Pt = Ps + Pv a fan must develop.
+
+    A fan has to supply two things: the ``static_pressure`` Ps that pushes air through the system's
+    resistance (filters, coils, duct friction, dampers), and the ``velocity_pressure`` Pv (the
+    dynamic pressure ½·ρ·V² from :func:`~anvilate.analysis.dynamic_pressure`) that accounts for the
+    kinetic energy of the air leaving the system. Their sum is the fan total pressure, the quantity
+    a fan curve is plotted against and the one that, with the flow, sets the air power. Returns the
+    total pressure in the static pressure's units.
+    """
+    _check(static_pressure, "[pressure]", "static_pressure")
+    _check(velocity_pressure, "[pressure]", "velocity_pressure")
+    ps = static_pressure.to("Pa").magnitude
+    pv = velocity_pressure.to("Pa").magnitude
+    if ps < 0 or pv < 0:
+        raise ValueError("static_pressure and velocity_pressure must be non-negative")
+    return Quantity(magnitude=ps + pv, unit="Pa")
 
 
 def circular_equivalent_diameter(*, width: Quantity, height: Quantity) -> Quantity:

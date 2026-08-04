@@ -436,6 +436,7 @@ fourbar.fourbar_type
 fourbar.is_grashof
 flow_measurement.differential_pressure_for_flow
 flow_measurement.obstruction_meter_flow_rate
+flow_measurement.dynamic_pressure
 flow_measurement.pitot_velocity
 fluid_statics.buoyant_force
 fluid_statics.capillary_rise
@@ -506,6 +507,7 @@ geneva.geneva_dwell_fraction
 geneva.geneva_index_angle
 hvac_duct.circular_equivalent_diameter
 hvac_duct.fan_power
+hvac_duct.fan_total_pressure
 hydraulic_cylinder.cylinder_extend_force
 hydraulic_cylinder.cylinder_extend_speed
 hydraulic_cylinder.cylinder_regen_extend_force

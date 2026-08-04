@@ -17080,6 +17080,30 @@ def test_pitot_velocity_from_dynamic_pressure():
         pitot_velocity(dynamic_pressure=_q("500 Pa"), density=_q("0 kg/m**3"))
 
 
+def test_dynamic_pressure_is_the_forward_of_pitot():
+    from anvilate.analysis import dynamic_pressure, pitot_velocity
+
+    # dp = 1/2*rho*V^2: 10 m/s in air (1.2) -> 60 Pa.
+    dp = dynamic_pressure(velocity=_q("10 m/s"), density=_q("1.2 kg/m**3"))
+    assert dp.to("Pa").magnitude == pytest.approx(0.5 * 1.2 * 100, rel=1e-12)
+    # It is the exact inverse of pitot_velocity: feeding dp back recovers the velocity.
+    v = pitot_velocity(dynamic_pressure=dp, density=_q("1.2 kg/m**3"))
+    assert v.to("m/s").magnitude == pytest.approx(10.0, rel=1e-9)
+    # Dynamic pressure scales with the square of velocity.
+    dp2 = dynamic_pressure(velocity=_q("20 m/s"), density=_q("1.2 kg/m**3"))
+    assert dp2.to("Pa").magnitude == pytest.approx(4 * dp.to("Pa").magnitude, rel=1e-9)
+
+
+def test_fan_total_pressure_sums_static_and_velocity():
+    from anvilate.analysis import dynamic_pressure, fan_total_pressure
+
+    pv = dynamic_pressure(velocity=_q("10 m/s"), density=_q("1.2 kg/m**3"))
+    pt = fan_total_pressure(static_pressure=_q("250 Pa"), velocity_pressure=pv)
+    assert pt.to("Pa").magnitude == pytest.approx(250 + 60, rel=1e-9)
+    with pytest.raises(ValueError, match="non-negative"):
+        fan_total_pressure(static_pressure=_q("-1 Pa"), velocity_pressure=pv)
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 

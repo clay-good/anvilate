@@ -151,7 +151,7 @@ modules:
   (η = 1 − 1/r_p^((γ−1)/γ)) ideal thermal efficiencies
 - :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
   orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
-  inverse, and the pitot-tube point velocity √(2Δp/ρ)
+  inverse, the pitot-tube point velocity √(2Δp/ρ), and its forward dynamic pressure ½ρV²
 - :mod:`~anvilate.analysis.fluid_statics` — fluid statics: the hydrostatic pressure
   ρ·g·h, the resultant force on a submerged plane surface and its center-of-pressure
   depth, the Archimedes buoyant force on a submerged body, the metacentric height and
@@ -204,7 +204,8 @@ modules:
   weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
   low-Reynolds Stokes settling velocity and drag on a small sphere
 - :mod:`~anvilate.analysis.hvac_duct` — air-duct sizing: the ASHRAE circular equivalent
-  diameter of a rectangular duct (equal friction), and the fan shaft power P = Q·Δp/η
+  diameter of a rectangular duct (equal friction), the fan total pressure Pt = Ps + Pv,
+  and the fan shaft power P = Q·Δp/η
 - :mod:`~anvilate.analysis.refrigeration` — refrigeration and heat-pump cycle performance:
   the Carnot cooling and heating COP ceilings and the actual COP = Q/W
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
@@ -894,6 +895,7 @@ from .fatigue import (
 )
 from .flow_measurement import (
     differential_pressure_for_flow,
+    dynamic_pressure,
     obstruction_meter_flow_rate,
     pitot_velocity,
 )
@@ -1030,6 +1032,7 @@ from .geotechnical import (
 from .hvac_duct import (
     circular_equivalent_diameter,
     fan_power,
+    fan_total_pressure,
 )
 from .hydraulic_cylinder import (
     cylinder_extend_force,
@@ -1619,6 +1622,7 @@ __all__ = [
     "differential_pressure_for_flow",
     "obstruction_meter_flow_rate",
     "pitot_velocity",
+    "dynamic_pressure",
     "buoyant_force",
     "capillary_rise",
     "center_of_pressure_depth",
@@ -1901,6 +1905,7 @@ __all__ = [
     "geneva_dwell_fraction",
     "circular_equivalent_diameter",
     "fan_power",
+    "fan_total_pressure",
     "cylinder_extend_force",
     "cylinder_retract_force",
     "cylinder_extend_speed",
