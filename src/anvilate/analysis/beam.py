@@ -80,6 +80,7 @@ __all__ = [
     "max_transverse_shear_stress",
     "aisc_web_local_yielding_strength",
     "aisc_web_crippling_strength",
+    "aisc_web_compression_buckling_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
@@ -673,6 +674,45 @@ def aisc_web_crippling_strength(
         coefficient = 0.80
         bracket = 1.0 + 3.0 * n_over_d * ratio
     rn_n = coefficient * tw**2 * bracket * (e * fyw * tf / tw) ** 0.5
+    return Quantity(magnitude=rn_n / 1000.0, unit="kN")
+
+
+def aisc_web_compression_buckling_strength(
+    *,
+    web_thickness: Quantity,
+    clear_web_depth: Quantity,
+    web_yield: Quantity,
+    elastic_modulus: Quantity,
+    at_member_end: bool = False,
+) -> Quantity:
+    """The AISC 360 §J10.5 web compression buckling strength under a force pair.
+
+    Where two opposing concentrated forces bear on both flanges at the same section —
+    the compression flange of a beam framing into a column, both flanges of a moment
+    connection — the web between them acts like a stubby column and can buckle:
+    R_n = 24·t_w³·√(E·F_yw)/h, with ``web_thickness`` t_w, ``clear_web_depth`` h (the
+    clear distance between flanges less the fillets), ``web_yield`` F_yw, and
+    ``elastic_modulus`` E. The cube on t_w makes web thickness decisive and a slender
+    (large h) web the vulnerable one. Per §J10.5 the strength is halved when the force
+    pair sits within half a member depth of the end (``at_member_end``). This is the
+    two-sided companion to the one-sided web local yielding and crippling checks.
+    Returns R_n in kN.
+    """
+    _require(web_thickness, "[length]", "web_thickness")
+    _require(clear_web_depth, "[length]", "clear_web_depth")
+    _require(web_yield, "[pressure]", "web_yield")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    tw = web_thickness.to("mm").magnitude
+    h = clear_web_depth.to("mm").magnitude
+    fyw = web_yield.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if tw <= 0 or h <= 0 or fyw <= 0 or e <= 0:
+        raise ValueError(
+            "web_thickness, clear_web_depth, web_yield, and elastic_modulus must be positive"
+        )
+    rn_n = 24.0 * tw**3 * (e * fyw) ** 0.5 / h
+    if at_member_end:
+        rn_n *= 0.5
     return Quantity(magnitude=rn_n / 1000.0, unit="kN")
 
 

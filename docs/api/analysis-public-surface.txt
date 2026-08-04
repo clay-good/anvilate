@@ -51,6 +51,7 @@ beam.hollow_circular_plastic_section_modulus
 beam.hollow_circular_second_moment
 beam.i_section_plastic_section_modulus
 beam.i_section_second_moment
+beam.aisc_web_compression_buckling_strength
 beam.aisc_web_crippling_strength
 beam.aisc_web_local_yielding_strength
 beam.max_transverse_shear_stress

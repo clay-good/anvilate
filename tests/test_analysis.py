@@ -13143,3 +13143,21 @@ def test_aisc_web_crippling_interior_vs_end():
         **{k: v for k, v in kw.items() if k != "bearing_length"},
     )
     assert long_end.to("kN").magnitude > end.to("kN").magnitude
+
+
+def test_aisc_web_compression_buckling_interior_vs_end():
+    from anvilate.analysis import aisc_web_compression_buckling_strength
+
+    kw = {
+        "web_thickness": _q("10 mm"),
+        "clear_web_depth": _q("350 mm"),
+        "web_yield": _q("345 MPa"),
+        "elastic_modulus": _q("200000 MPa"),
+    }
+    # Interior §J10.5: R_n = 24*t_w^3*sqrt(E*F_yw)/h.
+    interior = aisc_web_compression_buckling_strength(**kw)
+    expect = 24 * 10**3 * (200000 * 345) ** 0.5 / 350 / 1000
+    assert interior.to("kN").magnitude == pytest.approx(expect, rel=1e-9)
+    # Within d/2 of the member end the strength is halved.
+    end = aisc_web_compression_buckling_strength(at_member_end=True, **kw)
+    assert end.to("kN").magnitude == pytest.approx(interior.to("kN").magnitude / 2, rel=1e-9)
