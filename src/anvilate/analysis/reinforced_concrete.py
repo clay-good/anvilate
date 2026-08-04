@@ -25,6 +25,7 @@ __all__ = [
     "rc_tension_steel_for_moment",
     "rc_concrete_shear_strength",
     "rc_column_axial_strength",
+    "rc_column_balanced_point",
     "rc_beta1",
     "rc_net_tensile_strain",
     "rc_development_length",
@@ -46,6 +47,8 @@ _TENSION_CONTROLLED_C_OVER_D = 0.375
 
 # ACI 318 ultimate concrete compressive strain (the strain-diagram anchor).
 _ACI_CONCRETE_ULTIMATE_STRAIN = 0.003
+# Elastic modulus of reinforcing steel, ACI 318 §20.2.2.2 (E_s = 200 GPa).
+_ACI_STEEL_MODULUS_MPA = 200000.0
 
 _ACI_STRESS_BLOCK_FACTOR = 0.85  # the 0.85·f'c Whitney stress-block intensity
 
@@ -232,6 +235,76 @@ def rc_column_axial_strength(
         raise ValueError(f"steel_area ({steel_area}) must be below the gross area ({gross_area})")
     po_n = _ACI_STRESS_BLOCK_FACTOR * fc * (ag - ast) + fy * ast
     return Quantity(magnitude=po_n / 1000.0, unit="kN")
+
+
+def rc_column_balanced_point(
+    *,
+    width: Quantity,
+    total_depth: Quantity,
+    tension_steel_depth: Quantity,
+    compression_steel_depth: Quantity,
+    tension_steel_area: Quantity,
+    compression_steel_area: Quantity,
+    concrete_strength: Quantity,
+    steel_yield: Quantity,
+    steel_modulus: Quantity | None = None,
+) -> tuple[Quantity, Quantity]:
+    """The balanced-failure point (P_b, M_b) of a rectangular reinforced-concrete column.
+
+    An RC column is governed by its P-M interaction diagram, and the balanced point is its
+    hinge — the axial-load/moment pair at which the concrete crushes (ε = 0.003) exactly as
+    the tension steel yields. Below P_b the column fails in tension (ductile); above it, in
+    compression (brittle). The balanced neutral axis is c_b = 0.003·d/(0.003 + f_y/E_s); the
+    stress block a_b = β₁·c_b carries C_c = 0.85·f'c·a_b·b, the compression steel adds
+    A_s'·f_s' (yielded or not per its strain), and the tension steel pulls A_s·f_y, giving
+    P_b = C_c + C_s − T and M_b taken about the section mid-depth. ``width`` b,
+    ``total_depth`` h, ``tension_steel_depth`` d and ``compression_steel_depth`` d' (from the
+    compression face), the two steel areas, ``concrete_strength`` f'c, ``steel_yield`` f_y,
+    and ``steel_modulus`` E_s (default 200 GPa). Displaced concrete under the compression
+    steel is neglected (a small, standard screening simplification). Returns ``(P_b, M_b)``
+    with P_b in kN (compression positive) and M_b in kN·m.
+    """
+    _require(width, "[length]", "width")
+    _require(total_depth, "[length]", "total_depth")
+    _require(tension_steel_depth, "[length]", "tension_steel_depth")
+    _require(compression_steel_depth, "[length]", "compression_steel_depth")
+    _require(tension_steel_area, "[area]", "tension_steel_area")
+    _require(compression_steel_area, "[area]", "compression_steel_area")
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    _require(steel_yield, "[pressure]", "steel_yield")
+    if steel_modulus is None:
+        steel_modulus = Quantity(magnitude=_ACI_STEEL_MODULUS_MPA, unit="MPa")
+    _require(steel_modulus, "[pressure]", "steel_modulus")
+    b = width.to("mm").magnitude
+    h = total_depth.to("mm").magnitude
+    d = tension_steel_depth.to("mm").magnitude
+    dp = compression_steel_depth.to("mm").magnitude
+    a_s = tension_steel_area.to("mm**2").magnitude
+    a_sp = compression_steel_area.to("mm**2").magnitude
+    fc = concrete_strength.to("MPa").magnitude
+    fy = steel_yield.to("MPa").magnitude
+    es = steel_modulus.to("MPa").magnitude
+    if min(b, h, d, dp, a_s, a_sp, fc, fy, es) <= 0:
+        raise ValueError("all dimensions, areas, and material properties must be positive")
+    if not dp < d < h:
+        raise ValueError("require compression_steel_depth < tension_steel_depth < total_depth")
+    strain_yield = fy / es
+    c_b = _ACI_CONCRETE_ULTIMATE_STRAIN / (_ACI_CONCRETE_ULTIMATE_STRAIN + strain_yield) * d
+    beta1 = rc_beta1(concrete_strength=concrete_strength)
+    a_b = beta1 * c_b
+    c_c = _ACI_STRESS_BLOCK_FACTOR * fc * a_b * b  # N
+    strain_comp = _ACI_CONCRETE_ULTIMATE_STRAIN * (c_b - dp) / c_b
+    stress_comp = min(abs(strain_comp) * es, fy)
+    if strain_comp < 0:  # compression steel actually in tension (shallow c_b)
+        stress_comp = -stress_comp
+    c_s = a_sp * stress_comp  # N
+    tension = a_s * fy  # N
+    p_b = c_c + c_s - tension  # N
+    m_b = c_c * (h / 2.0 - a_b / 2.0) + c_s * (h / 2.0 - dp) + tension * (d - h / 2.0)  # N*mm
+    return (
+        Quantity(magnitude=p_b / 1000.0, unit="kN"),
+        Quantity(magnitude=m_b / 1.0e6, unit="kN*m"),
+    )
 
 
 def rc_beta1(*, concrete_strength: Quantity) -> float:

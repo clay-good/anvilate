@@ -13730,6 +13730,43 @@ def test_rc_column_axial_strength_aci():
         )
 
 
+def test_rc_column_balanced_point_strain_compatibility():
+    from anvilate.analysis import rc_column_axial_strength, rc_column_balanced_point
+
+    # 300x500 column, d=440, d'=60, As=As'=1500, f'c=30, fy=420 -> P_b~1655 kN, M_b~474 kN*m.
+    p_b, m_b = rc_column_balanced_point(
+        width=_q("300 mm"),
+        total_depth=_q("500 mm"),
+        tension_steel_depth=_q("440 mm"),
+        compression_steel_depth=_q("60 mm"),
+        tension_steel_area=_q("1500 mm**2"),
+        compression_steel_area=_q("1500 mm**2"),
+        concrete_strength=_q("30 MPa"),
+        steel_yield=_q("420 MPa"),
+    )
+    assert p_b.to("kN").magnitude == pytest.approx(1655, abs=5)
+    assert m_b.to("kN*m").magnitude == pytest.approx(474, abs=5)
+    # The balanced axial load is well below the concentric squash load P_o.
+    po = rc_column_axial_strength(
+        gross_area=_q("150000 mm**2"),
+        steel_area=_q("3000 mm**2"),
+        concrete_strength=_q("30 MPa"),
+        steel_yield=_q("420 MPa"),
+    )
+    assert p_b.to("kN").magnitude < po.to("kN").magnitude
+    with pytest.raises(ValueError, match="compression_steel_depth"):
+        rc_column_balanced_point(
+            width=_q("300 mm"),
+            total_depth=_q("500 mm"),
+            tension_steel_depth=_q("440 mm"),
+            compression_steel_depth=_q("500 mm"),  # not < d
+            tension_steel_area=_q("1500 mm**2"),
+            compression_steel_area=_q("1500 mm**2"),
+            concrete_strength=_q("30 MPa"),
+            steel_yield=_q("420 MPa"),
+        )
+
+
 def test_rc_beta1_and_net_tensile_strain_ductility():
     from anvilate.analysis import rc_beta1, rc_net_tensile_strain, rc_stress_block_depth
 
