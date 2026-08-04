@@ -35,6 +35,8 @@ __all__ = [
     "disc_clutch_torque",
     "disc_clutch_force_for_torque",
     "cone_clutch_torque",
+    "clutch_engagement_energy",
+    "brake_absorbed_energy",
 ]
 
 
@@ -150,3 +152,49 @@ def cone_clutch_torque(
     f = actuating_force.to("N").magnitude
     torque = friction_coefficient * f * r_eff / sin(radians(cone_half_angle))
     return Quantity(magnitude=torque, unit="N*m")
+
+
+def clutch_engagement_energy(
+    *,
+    driving_inertia: Quantity,
+    driven_inertia: Quantity,
+    speed_difference: Quantity,
+) -> Quantity:
+    """The heat a clutch dissipates in one engagement, E = ½·(I₁·I₂/(I₁+I₂))·Δω².
+
+    When a clutch closes between a ``driving_inertia`` I₁ and a ``driven_inertia`` I₂ turning at a
+    ``speed_difference`` Δω, the two are dragged to a common speed and the lost kinetic energy is
+    burned as friction heat: E = ½·(I₁·I₂/(I₁+I₂))·Δω². The striking result is that this heat
+    depends only on the inertias and the speed gap — *not* on the clutch torque, which only sets how
+    quickly the engagement happens. So a clutch cannot be made to run cooler by gripping harder; the
+    friction faces must be sized to soak up this energy every cycle. Returns the energy in joules.
+    """
+    _require(driving_inertia, "[mass]*[length]**2", "driving_inertia")
+    _require(driven_inertia, "[mass]*[length]**2", "driven_inertia")
+    _require(speed_difference, "1/[time]", "speed_difference")
+    i1 = driving_inertia.to("kg*m**2").magnitude
+    i2 = driven_inertia.to("kg*m**2").magnitude
+    d_omega = speed_difference.to("rad/s").magnitude
+    if i1 <= 0 or i2 <= 0:
+        raise ValueError("driving_inertia and driven_inertia must be positive")
+    reduced = i1 * i2 / (i1 + i2)
+    return Quantity(magnitude=0.5 * reduced * d_omega**2, unit="J")
+
+
+def brake_absorbed_energy(*, inertia: Quantity, angular_velocity: Quantity) -> Quantity:
+    """The energy a brake absorbs stopping a rotating load, E = ½·I·ω².
+
+    A brake is a clutch with one side held fixed, so stopping a rotating ``inertia`` I turning at
+    ``angular_velocity`` ω dumps its whole rotational kinetic energy into the friction material:
+    E = ½·I·ω² (the I₂ → ∞ limit of :func:`clutch_engagement_energy`). It is the heat the brake must
+    shed each stop — the number that sets the disc mass and the cooling, and that decides whether a
+    long descent needs an engine or eddy-current brake to keep the friction brake from fading.
+    Returns the absorbed energy in joules.
+    """
+    _require(inertia, "[mass]*[length]**2", "inertia")
+    _require(angular_velocity, "1/[time]", "angular_velocity")
+    i = inertia.to("kg*m**2").magnitude
+    omega = angular_velocity.to("rad/s").magnitude
+    if i <= 0:
+        raise ValueError("inertia must be positive")
+    return Quantity(magnitude=0.5 * i * omega**2, unit="J")

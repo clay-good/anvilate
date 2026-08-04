@@ -70,7 +70,9 @@ modules:
   mesh efficiency, the efficiency-corrected wheel output torque, the self-locking
   condition, and the input tangential and separating (radial) tooth forces
 - :mod:`~anvilate.analysis.clutch` — disc and cone clutch / brake friction torque
-  (uniform-wear and uniform-pressure) and the clamp force a torque requires
+  (uniform-wear and uniform-pressure), the clamp force a torque requires, and the
+  engagement slip energy ½·(I₁I₂/(I₁+I₂))·Δω² and brake absorbed energy ½·I·ω²
+  the friction faces must dissipate
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder (closed or open ends) and sphere, the wall
   thickness a pressure requires (membrane and ASME VIII code form) and the ASME
@@ -594,6 +596,8 @@ from .chain import (
 from .clutch import (
     UNIFORM_PRESSURE,
     UNIFORM_WEAR,
+    brake_absorbed_energy,
+    clutch_engagement_energy,
     cone_clutch_torque,
     disc_clutch_force_for_torque,
     disc_clutch_torque,
@@ -1867,6 +1871,8 @@ __all__ = [
     "disc_clutch_torque",
     "disc_clutch_force_for_torque",
     "cone_clutch_torque",
+    "clutch_engagement_energy",
+    "brake_absorbed_energy",
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",

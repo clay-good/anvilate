@@ -558,6 +558,15 @@ def test_rectangular_torsion_bar_stress_example_flat_bar_loses():
     assert b["flat_100x10mm"]["stress_mpa"] == pytest.approx(64.0, abs=1.0)
 
 
+def test_clutch_thermal_capacity_example_slip_below_brake_limit():
+    namespace = runpy.run_path(str(_EXAMPLES / "clutch_thermal_capacity.py"))
+    e = namespace["engagement_heat"]()
+    # The slip energy is below the brake-limit energy (driven side is finite, not infinite).
+    assert e["slip_energy_kj"] < e["brake_limit_kj"]
+    assert e["slip_energy_kj"] == pytest.approx(14.21, abs=0.05)
+    assert e["brake_limit_kj"] == pytest.approx(18.0, abs=0.05)
+
+
 def test_vertical_ball_screw_axis_example_needs_a_brake():
     namespace = runpy.run_path(str(_EXAMPLES / "vertical_ball_screw_axis.py"))
     t = namespace["axis_torques"]()

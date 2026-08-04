@@ -207,6 +207,8 @@ chain.chordal_speed_variation
 chain.minimum_sprocket_teeth_for_chordal_variation
 clutch.UNIFORM_PRESSURE
 clutch.UNIFORM_WEAR
+clutch.brake_absorbed_energy
+clutch.clutch_engagement_energy
 clutch.cone_clutch_torque
 clutch.disc_clutch_force_for_torque
 clutch.disc_clutch_torque

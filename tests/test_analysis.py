@@ -14283,6 +14283,33 @@ def test_rectangular_bar_torsional_stress_limits_and_symmetry():
         )
 
 
+def test_clutch_engagement_energy_and_brake_absorbed_energy():
+    from anvilate.analysis import brake_absorbed_energy, clutch_engagement_energy
+
+    # E = 0.5*(I1*I2/(I1+I2))*dw^2; 0.5, 2.0 kg*m^2, 100 rad/s -> 2000 J.
+    slip = clutch_engagement_energy(
+        driving_inertia=_q("0.5 kg*m**2"),
+        driven_inertia=_q("2 kg*m**2"),
+        speed_difference=_q("100 rad/s"),
+    )
+    assert slip.to("J").magnitude == pytest.approx(0.5 * (0.5 * 2 / 2.5) * 100**2, rel=1e-9)
+
+    # Brake absorbs the full 0.5*I*w^2; 5 kg*m^2 at 150 rad/s -> 56.25 kJ.
+    brake = brake_absorbed_energy(inertia=_q("5 kg*m**2"), angular_velocity=_q("150 rad/s"))
+    assert brake.to("J").magnitude == pytest.approx(0.5 * 5 * 150**2, rel=1e-9)
+
+    # As the driven inertia grows the clutch energy approaches the brake limit (0.5*I1*dw^2).
+    huge = clutch_engagement_energy(
+        driving_inertia=_q("5 kg*m**2"),
+        driven_inertia=_q("1e9 kg*m**2"),
+        speed_difference=_q("150 rad/s"),
+    )
+    assert huge.to("J").magnitude == pytest.approx(0.5 * 5 * 150**2, rel=1e-6)
+
+    with pytest.raises(ValueError, match="must be positive"):
+        brake_absorbed_energy(inertia=_q("0 kg*m**2"), angular_velocity=_q("150 rad/s"))
+
+
 def test_ball_screw_drive_and_back_drive_torque():
     import math
 
