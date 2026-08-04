@@ -745,6 +745,18 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_carnot_ceiling_engine_grade_example_ranks_by_second_law():
+    namespace = runpy.run_path(str(_EXAMPLES / "carnot_ceiling_engine_grade.py"))
+    g = namespace["grade_engines"]()
+    # Carnot ceiling between 1400 C and 15 C is ~83%.
+    assert g["carnot_ceiling"] == pytest.approx(0.828, abs=0.005)
+    # Both plants sit under the ceiling; the combined cycle grades far higher on the same duty.
+    assert g["simple_second_law"] == pytest.approx(0.459, abs=0.005)
+    assert g["combined_second_law"] == pytest.approx(0.725, abs=0.005)
+    assert g["combined_second_law"] > g["simple_second_law"]
+    assert g["combined_second_law"] < 1.0
+
+
 def test_micro_hydro_sizing_example_penstock_loss_costs_power():
     namespace = runpy.run_path(str(_EXAMPLES / "micro_hydro_sizing.py"))
     s = namespace["hydro_sizing"]()

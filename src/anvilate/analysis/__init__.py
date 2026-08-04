@@ -149,7 +149,9 @@ modules:
   (EA = O₂/(20.9−O₂)), and the actual air-fuel ratio a burner runs at
 - :mod:`~anvilate.analysis.power_cycles` — air-standard power-cycle efficiencies: the
   Otto (η = 1 − 1/r^(γ−1)), Diesel (with a cutoff ratio), and Brayton gas-turbine
-  (η = 1 − 1/r_p^((γ−1)/γ)) ideal thermal efficiencies
+  (η = 1 − 1/r_p^((γ−1)/γ)) ideal thermal efficiencies, the Carnot ceiling
+  η = 1 − T_c/T_h no engine can beat, and the second-law efficiency η/η_Carnot
+  that grades a real engine against it
 - :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
   orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
   inverse, the pitot-tube point velocity √(2Δp/ρ), and its forward dynamic pressure ½ρV²
@@ -1188,7 +1190,9 @@ from .pneumatics import (
 )
 from .power_cycles import (
     brayton_cycle_efficiency,
+    carnot_efficiency,
     diesel_cycle_efficiency,
+    heat_engine_second_law_efficiency,
     otto_cycle_efficiency,
 )
 from .power_screw import (
@@ -2280,6 +2284,8 @@ __all__ = [
     "otto_cycle_efficiency",
     "diesel_cycle_efficiency",
     "brayton_cycle_efficiency",
+    "carnot_efficiency",
+    "heat_engine_second_law_efficiency",
     "lead_angle",
     "power_screw_raise_torque",
     "power_screw_raise_load",

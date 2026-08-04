@@ -639,6 +639,8 @@ plate.simply_supported_plate_uniform_load
 power_cycles.brayton_cycle_efficiency
 power_cycles.diesel_cycle_efficiency
 power_cycles.otto_cycle_efficiency
+power_cycles.carnot_efficiency
+power_cycles.heat_engine_second_law_efficiency
 power_screw.lead_angle
 power_screw.power_screw_collar_torque
 power_screw.power_screw_efficiency

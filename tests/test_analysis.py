@@ -14856,6 +14856,40 @@ def test_power_cycle_efficiencies_otto_diesel_brayton():
         otto_cycle_efficiency(compression_ratio=1.0)
 
 
+def test_carnot_efficiency_and_heat_engine_second_law():
+    from anvilate.analysis import (
+        brayton_cycle_efficiency,
+        carnot_efficiency,
+        heat_engine_second_law_efficiency,
+    )
+    from anvilate.units import Quantity
+
+    # Carnot: 1 - T_c/T_h; 300 K sink, 900 K source -> 2/3.
+    eta_c = carnot_efficiency(
+        cold_temperature=Quantity(magnitude=300.0, unit="K"),
+        hot_temperature=Quantity(magnitude=900.0, unit="K"),
+    )
+    assert eta_c == pytest.approx(1 - 300 / 900, rel=1e-12)
+
+    # Every air-standard cycle lives under the Carnot ceiling for the same reservoirs.
+    brayton = brayton_cycle_efficiency(pressure_ratio=10)
+    assert brayton < eta_c
+
+    # Second-law efficiency grades the real engine against its ceiling: 0.40 / (2/3) = 0.60.
+    eta_ii = heat_engine_second_law_efficiency(thermal_efficiency=0.40, carnot_efficiency=eta_c)
+    assert eta_ii == pytest.approx(0.40 / (2 / 3), rel=1e-9)
+    assert eta_ii < 1.0
+
+    # Guardrails: the sink must be colder than the source, and no engine beats Carnot.
+    with pytest.raises(ValueError, match="hot_temperature must exceed cold_temperature"):
+        carnot_efficiency(
+            cold_temperature=Quantity(magnitude=900.0, unit="K"),
+            hot_temperature=Quantity(magnitude=300.0, unit="K"),
+        )
+    with pytest.raises(ValueError, match="cannot exceed the Carnot efficiency"):
+        heat_engine_second_law_efficiency(thermal_efficiency=0.80, carnot_efficiency=eta_c)
+
+
 def test_combustion_air_fuel_ratio_and_excess_air():
     from anvilate.analysis import (
         actual_air_fuel_ratio,
