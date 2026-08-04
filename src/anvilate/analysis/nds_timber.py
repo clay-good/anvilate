@@ -30,6 +30,7 @@ __all__ = [
     "nds_bending_scorecard",
     "nds_euler_buckling_stress",
     "nds_column_stability_factor",
+    "nds_combined_bending_compression",
 ]
 
 # NDS §3.7.1 buckling coefficient and the c parameter of the Ylinen column formula.
@@ -196,3 +197,51 @@ def nds_column_stability_factor(
     alpha = fce / fc_star
     half = (1.0 + alpha) / (2.0 * c)
     return half - sqrt(half**2 - alpha / c)
+
+
+def nds_combined_bending_compression(
+    *,
+    compression_stress: Quantity,
+    adjusted_compression: Quantity,
+    bending_stress: Quantity,
+    adjusted_bending: Quantity,
+    euler_buckling_stress: Quantity,
+) -> float:
+    """The NDS §3.9.2 combined bending + axial compression interaction (≤ 1 passes).
+
+    A beam-column is checked with the interaction
+
+        (f_c/F'_c)² + f_b / [F'_b·(1 − f_c/F_cE)] ≤ 1.0,
+
+    where ``compression_stress`` f_c and ``bending_stress`` f_b are the applied
+    stresses, ``adjusted_compression`` F'_c and ``adjusted_bending`` F'_b the adjusted
+    design values (F'_c includes the column stability factor C_P), and
+    ``euler_buckling_stress`` F_cE from :func:`nds_euler_buckling_stress` about the
+    bending axis. The (1 − f_c/F_cE) denominator is the moment amplification — the axial
+    load bending the already-deflected member further — so it must stay positive
+    (f_c < F_cE, or the member has buckled). Returns the interaction value; a caller
+    passes when it is at or below 1.0.
+    """
+    for value, label in (
+        (compression_stress, "compression_stress"),
+        (adjusted_compression, "adjusted_compression"),
+        (bending_stress, "bending_stress"),
+        (adjusted_bending, "adjusted_bending"),
+        (euler_buckling_stress, "euler_buckling_stress"),
+    ):
+        if not value.has_dimension("[pressure]"):
+            raise ValueError(f"{label} must be a [pressure] quantity; got {value}")
+    fc = abs(compression_stress.to("MPa").magnitude)
+    fpc = adjusted_compression.to("MPa").magnitude
+    fb = abs(bending_stress.to("MPa").magnitude)
+    fpb = adjusted_bending.to("MPa").magnitude
+    fce = euler_buckling_stress.to("MPa").magnitude
+    if fpc <= 0 or fpb <= 0 or fce <= 0:
+        raise ValueError("the adjusted values and Euler stress must be positive")
+    amplification = 1.0 - fc / fce
+    if amplification <= 0:
+        raise ValueError(
+            f"compression stress ({fc:.4g} MPa) reaches the Euler buckling stress "
+            f"({fce:.4g} MPa): the member has buckled, the interaction is undefined"
+        )
+    return (fc / fpc) ** 2 + fb / (fpb * amplification)

@@ -12398,3 +12398,25 @@ def test_asme_head_rejects_bad_efficiency():
             allowable_stress=_q("138 MPa"),
             joint_efficiency=1.5,
         )
+
+
+def test_nds_combined_bending_compression_interaction_and_amplification():
+    from anvilate.analysis import nds_combined_bending_compression
+
+    kw = {
+        "compression_stress": _q("500 psi"),
+        "adjusted_compression": _q("810 psi"),
+        "bending_stress": _q("400 psi"),
+        "adjusted_bending": _q("1138 psi"),
+        "euler_buckling_stress": _q("1000 psi"),
+    }
+    # (500/810)^2 + 400/(1138*(1-500/1000)) = 0.381 + 0.703 = 1.084 > 1 -> fails.
+    i = nds_combined_bending_compression(**kw)
+    assert i == pytest.approx((500 / 810) ** 2 + 400 / (1138 * 0.5), rel=1e-9)
+    assert i > 1.0
+    # Less axial load relaxes both terms and the moment amplification.
+    lighter = nds_combined_bending_compression(**{**kw, "compression_stress": _q("200 psi")})
+    assert lighter < i
+    # When f_c reaches F_cE the member has buckled: the interaction is undefined.
+    with pytest.raises(ValueError, match="has buckled"):
+        nds_combined_bending_compression(**{**kw, "compression_stress": _q("1000 psi")})

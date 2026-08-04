@@ -21,7 +21,9 @@
       (F_cE = 0.822·E'_min/(l_e/d)²) and `nds_column_stability_factor` (the Ylinen C_P,
       §3.7.1) compose into the adjusted compression value F'_c = F*_c·C_P. The l_e/d
       slenderness limit (≤ 50) guard and a compression scorecard are follow-ups.
-- [ ] 2.4 Combined bending + axial interaction
+- [x] 2.4 Combined bending + axial interaction — `nds_combined_bending_compression`
+      (§3.9.2: (f_c/F'_c)² + f_b/[F'_b(1−f_c/F_cE)] ≤ 1) with the moment-amplification
+      denominator guarded against buckling (f_c ≥ F_cE).
 
 ## 3. Tests & examples
 
