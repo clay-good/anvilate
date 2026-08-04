@@ -52,6 +52,8 @@ __all__ = [
     "miner_spectrum_repeats_to_failure",
     "basquin_cycles_to_failure",
     "basquin_stress_for_life",
+    "coffin_manson_reversals",
+    "strain_life_total_amplitude",
     "weld_constant_amplitude_fatigue_limit",
     "weld_cutoff_limit",
     "weld_detail_endurance_cycles",
@@ -656,6 +658,68 @@ def basquin_stress_for_life(
     if exponent >= 0:
         raise ValueError(f"exponent (Basquin's b) must be negative; got {exponent}")
     return Quantity(magnitude=a * life_cycles**exponent, unit="MPa")
+
+
+def coffin_manson_reversals(
+    *,
+    plastic_strain_amplitude: float,
+    fatigue_ductility_coefficient: float,
+    fatigue_ductility_exponent: float,
+) -> float:
+    """The reversals to failure in low-cycle fatigue by the Coffin-Manson law, from plastic strain.
+
+    Where Basquin's stress-life governs high-cycle fatigue, the Coffin-Manson relation governs the
+    *low*-cycle, plastic regime (thermal cycling, seismic, forming): Δε_p/2 = εf'·(2N)^c, inverted
+    for life as 2N = (Δε_p/2 / εf')^(1/c). ``plastic_strain_amplitude`` Δε_p/2 is the plastic strain
+    amplitude, ``fatigue_ductility_coefficient`` εf' (~the true fracture strain), and
+    ``fatigue_ductility_exponent`` c (negative, ~−0.5 to −0.7). Returns the number of reversals to
+    failure 2N (two per cycle).
+    """
+    if plastic_strain_amplitude <= 0:
+        raise ValueError("plastic_strain_amplitude must be positive")
+    if fatigue_ductility_coefficient <= 0:
+        raise ValueError("fatigue_ductility_coefficient must be positive")
+    if fatigue_ductility_exponent >= 0:
+        raise ValueError("fatigue_ductility_exponent (c) must be negative")
+    return (plastic_strain_amplitude / fatigue_ductility_coefficient) ** (
+        1.0 / fatigue_ductility_exponent
+    )
+
+
+def strain_life_total_amplitude(
+    *,
+    reversals: float,
+    fatigue_strength_coefficient: Quantity,
+    elastic_modulus: Quantity,
+    fatigue_strength_exponent: float,
+    fatigue_ductility_coefficient: float,
+    fatigue_ductility_exponent: float,
+) -> float:
+    """The total strain amplitude at a given life by the strain-life (Coffin-Manson-Basquin) law.
+
+    The full strain-life curve sums an elastic branch (Basquin, in strain) and a plastic branch
+    (Coffin-Manson): Δε/2 = (σf'/E)·(2N)^b + εf'·(2N)^c. At short lives the plastic term dominates
+    (low-cycle fatigue), at long lives the elastic term does (high-cycle). ``reversals`` 2N is the
+    life, ``fatigue_strength_coefficient`` σf' and ``elastic_modulus`` E and
+    ``fatigue_strength_exponent`` b give the elastic branch, and
+    ``fatigue_ductility_coefficient`` εf' with ``fatigue_ductility_exponent`` c the plastic branch.
+    Returns the dimensionless total strain amplitude Δε/2.
+    """
+    sigma_f = _require_stress(fatigue_strength_coefficient, "fatigue_strength_coefficient")
+    e = _require_stress(elastic_modulus, "elastic_modulus")
+    if reversals <= 0:
+        raise ValueError("reversals must be positive")
+    if sigma_f <= 0 or e <= 0:
+        raise ValueError("fatigue_strength_coefficient and elastic_modulus must be positive")
+    if fatigue_strength_exponent >= 0:
+        raise ValueError("fatigue_strength_exponent (b) must be negative")
+    if fatigue_ductility_coefficient <= 0:
+        raise ValueError("fatigue_ductility_coefficient must be positive")
+    if fatigue_ductility_exponent >= 0:
+        raise ValueError("fatigue_ductility_exponent (c) must be negative")
+    elastic = (sigma_f / e) * reversals**fatigue_strength_exponent
+    plastic = fatigue_ductility_coefficient * reversals**fatigue_ductility_exponent
+    return elastic + plastic
 
 
 def weld_constant_amplitude_fatigue_limit(*, detail_category: Quantity) -> Quantity:

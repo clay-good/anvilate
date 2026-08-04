@@ -316,6 +316,8 @@ fastener.torque_for_preload
 fatigue.CyclicStress
 fatigue.basquin_cycles_to_failure
 fatigue.basquin_stress_for_life
+fatigue.coffin_manson_reversals
+fatigue.strain_life_total_amplitude
 fatigue.cyclic_stress_components
 fatigue.estimated_endurance_limit
 fatigue.fatigue_notch_factor

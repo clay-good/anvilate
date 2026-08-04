@@ -5947,6 +5947,53 @@ def test_gerber_scorecard_honours_no_silent_green():
     assert not gap.passed
 
 
+def test_coffin_manson_and_strain_life():
+    from anvilate.analysis import coffin_manson_reversals, strain_life_total_amplitude
+
+    # Coffin-Manson: 2N = (Δε_p/2 / εf')^(1/c); 0.01, εf'=0.5, c=-0.6 -> ~679 reversals (low-cycle).
+    reversals = coffin_manson_reversals(
+        plastic_strain_amplitude=0.01,
+        fatigue_ductility_coefficient=0.5,
+        fatigue_ductility_exponent=-0.6,
+    )
+    assert reversals == pytest.approx((0.01 / 0.5) ** (1 / -0.6), rel=1e-9)
+    # A larger plastic strain amplitude means a shorter low-cycle life.
+    fewer = coffin_manson_reversals(
+        plastic_strain_amplitude=0.02,
+        fatigue_ductility_coefficient=0.5,
+        fatigue_ductility_exponent=-0.6,
+    )
+    assert fewer < reversals
+    # Total strain-life = elastic (Basquin) + plastic (Coffin-Manson) branches.
+    amp = strain_life_total_amplitude(
+        reversals=1000.0,
+        fatigue_strength_coefficient=_q("1000 MPa"),
+        elastic_modulus=_q("200 GPa"),
+        fatigue_strength_exponent=-0.1,
+        fatigue_ductility_coefficient=0.5,
+        fatigue_ductility_exponent=-0.6,
+    )
+    elastic = (1000 / 200000) * 1000**-0.1
+    plastic = 0.5 * 1000**-0.6
+    assert amp == pytest.approx(elastic + plastic, rel=1e-9)
+    # At long life the elastic branch dominates; at short life the plastic branch does.
+    long_life = strain_life_total_amplitude(
+        reversals=1_000_000.0,
+        fatigue_strength_coefficient=_q("1000 MPa"),
+        elastic_modulus=_q("200 GPa"),
+        fatigue_strength_exponent=-0.1,
+        fatigue_ductility_coefficient=0.5,
+        fatigue_ductility_exponent=-0.6,
+    )
+    assert long_life < amp  # more reversals -> smaller strain amplitude
+    with pytest.raises(ValueError, match="fatigue_ductility_exponent"):
+        coffin_manson_reversals(
+            plastic_strain_amplitude=0.01,
+            fatigue_ductility_coefficient=0.5,
+            fatigue_ductility_exponent=0.6,
+        )
+
+
 def test_basquin_cycles_to_failure_inverts_the_stress_for_life():
     # S-N line a=1200 MPa, b=-0.1. The stress at 1e6 cycles is a*N^b =
     # 1200*1e6^-0.1 = 1200*0.2512 = 301.4 MPa, and that stress feeds back to 1e6.
