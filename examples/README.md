@@ -166,6 +166,51 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `bimetal_thermostat_blade.py` | An Invar/brass thermostat blade that must sweep its tip across a 2.5 mm contact gap at a 50 K rise: a 40 mm blade reaches only 1.77 mm and fails to trip while 50 mm (2.77) and 60 mm (3.99) clear it — the tip stroke grows as L², so a bimetal actuator's reach is a geometry problem the length solves, not just a materials one. |
 | `glass_thermal_shock.py` | The same 150 K quench that shatters a soda-lime tumbler (surface tension 121 MPa vs 50 MPa strength, SF 0.41) is survived by low-expansion borosilicate (40 MPa, 1.26) — thermal-shock resistance is low CTE, not strength. |
 
+## Geotechnical — foundations, walls & seepage
+
+| Example | What it shows |
+|---|---|
+| `strip_footing_bearing.py` | A Terzaghi strip footing where founding deeper buys bearing capacity for free through the surcharge term. |
+| `square_footing_shape_depth.py` | Vesić shape and depth factors recover ~60% more capacity than the infinite-strip formula alone credits for a real square, embedded footing. |
+| `inclined_load_footing.py` | A modest 11° load inclination (retaining-wall base, braced column) costs 34% of the bearing capacity a vertical-only check counts on. |
+| `friction_pile_capacity.py` | An α-method clay pile whose shaft carries 92% of the load — why deepening a friction pile buys capacity and fattening its tip buys almost none. |
+| `clay_layer_settlement.py` | A footing strong enough to bear that still settles 97 mm — the serviceability half of foundation design, and it takes 7.6 years to reach 90%. |
+| `retaining_wall_stability.py` | One wall, three external-stability checks: overturning and sliding pass, but the resultant leaves the middle third so the heel lifts and bearing governs. |
+| `slope_stability_rain.py` | A 35° cut friction alone can't hold, cohesion does, and saturation nearly undoes — why slopes stand for years then fail in a storm. |
+| `cofferdam_seepage_piping.py` | A dewatered excavation whose 1.5 L/s inflow is a trivial pump duty, but whose piping (floor-boiling) factor of safety is what deepens the sheet piles. |
+| `clay_backfill_tension_crack.py` | A clay backfill opens a tension crack over 48% of the wall — the water-filled-crack worst case a cohesionless analysis never sees. |
+
+## Hydraulics — pipes, channels & pumps
+
+| Example | What it shows |
+|---|---|
+| `pump_line_pressure_drop.py` | The fittings on a pipe run lose as much head as ~30 m of extra straight pipe — minor losses that aren't minor. |
+| `water_main_hazen_williams.py` | Hazen-Williams and Darcy-Weisbach agree within ~17% on the same main — why utilities use the C-factor shortcut. |
+| `water_hammer_valve_closure.py` | A line at 800 kPa working pressure hit with a 3 MPa surge (4x) from a fast valve closure — the transient, not the steady pressure, bursts it. |
+| `drainage_channel_capacity.py` | A concrete channel that both passes the design storm and runs subcritical — capacity and flow regime are two questions, not one. |
+| `spillway_stilling_basin.py` | A hydraulic jump that lifts the flow 4.5x and burns a 0.7 m head of energy that would otherwise scour the river. |
+| `weir_flow_gauging.py` | Gauging a stream with a weir: the V-notch resolves low flow far better than the rectangular weir (the 5/2 vs 3/2 head power). |
+| `pump_selection_from_line.py` | The whole chain — Darcy friction + fittings + lift → total head → hydraulic and shaft power → specific speed → centrifugal — pipe geometry to a motor nameplate. |
+| `vfd_pump_energy_saving.py` | The affinity cube law: backing a pump to 80% speed trades a fifth less flow for nearly half the power. |
+| `pump_npsh_cavitation.py` | One installation on cold then hot water — vapor pressure rises 20x and drives the NPSH margin from +1.6 m to −2.8 m, cavitating the pump. |
+| `pontoon_stability.py` | A raft stable with its load low but capsizing when it's stacked high — the metacentric height going negative. |
+| `tank_drain_down.py` | A draining tank whose low-head bottom half takes 2.4x as long as the top half (the √h Torricelli tail). |
+
+## Building systems & gas dynamics — HVAC, compressors, flow
+
+| Example | What it shows |
+|---|---|
+| `dew_point_condensation.py` | A 25 °C/60% room dews at 16.7 °C, so a 15 °C chilled-water pipe sweats — the dew point, not the room temperature, is the insulation design limit. |
+| `cooling_coil_load.py` | Sizing a cooling coil by enthalpy: 48% of the load is latent (drying the air), the moisture removal a dry-bulb calc misses. |
+| `heat_pump_cold_day.py` | The Carnot ceiling collapsing as it gets colder — the same 8 kW of heat costs 121% more power at −10 °C than at 7 °C. |
+| `air_compressor_duty.py` | A compressor's real duty brackets between the isothermal and adiabatic bounds, and runs hot enough (229 °C) to demand intercooling. |
+| `air_receiver_sizing.py` | The receiver tank as a pneumatic battery — how long it covers a burst, and the size a 5-minute burst needs. |
+| `relief_valve_choked_flow.py` | A relief valve sized by choked flow: once the pressure ratio is below 0.528 the discharge is capped by the vessel alone — a clean worst-case number. |
+| `blower_mach_limit.py` | A fast duct crossing Mach 0.3 where air stops behaving as incompressible and the pressure-drop calc quietly starts to lie. |
+| `stack_effect_draft.py` | The buoyancy draft up a tall building — 68 Pa on a −5 °C day versus 15 Pa on a mild one, a winter problem. |
+| `sign_wind_drag.py` | The V² drag law: a 40% faster gust puts 96% more load on a sign's post and footing. |
+| `masonry_wall_slenderness.py` | A TMS 402 masonry wall its gravity check passes at 0.52 but whose combined-with-wind unity ratio crosses 1.0 — the interaction governs. |
+
 ## Tolerance & manufacturability
 
 | Example | What it shows |
