@@ -15108,6 +15108,33 @@ def test_adiabatic_air_mixing():
         )
 
 
+def test_coil_bypass_factor():
+    from anvilate.analysis import coil_bypass_factor
+    from anvilate.units import Quantity
+
+    # BF = (t_out - t_adp)/(t_in - t_adp): 27 -> 14 over an 11 C ADP -> 3/16 = 0.1875.
+    bf = coil_bypass_factor(
+        entering_temperature=Quantity(magnitude=27.0, unit="degC"),
+        leaving_temperature=Quantity(magnitude=14.0, unit="degC"),
+        apparent_dew_point=Quantity(magnitude=11.0, unit="degC"),
+    )
+    assert bf == pytest.approx((14 - 11) / (27 - 11), rel=1e-9)
+    # A colder leaving temperature (deeper coil) means a lower bypass factor.
+    deeper = coil_bypass_factor(
+        entering_temperature=Quantity(magnitude=27.0, unit="degC"),
+        leaving_temperature=Quantity(magnitude=12.0, unit="degC"),
+        apparent_dew_point=Quantity(magnitude=11.0, unit="degC"),
+    )
+    assert deeper < bf
+    # Leaving must lie between the apparent dew point and the entering temperature.
+    with pytest.raises(ValueError, match="apparent_dew_point < leaving < entering"):
+        coil_bypass_factor(
+            entering_temperature=Quantity(magnitude=27.0, unit="degC"),
+            leaving_temperature=Quantity(magnitude=10.0, unit="degC"),
+            apparent_dew_point=Quantity(magnitude=11.0, unit="degC"),
+        )
+
+
 def test_moist_air_enthalpy_and_cooling_coil_load():
     from anvilate.analysis import cooling_coil_load, moist_air_enthalpy
 

@@ -24,6 +24,7 @@ from ..units import Quantity
 __all__ = [
     "adiabatic_mixing_temperature",
     "adiabatic_mixing_humidity_ratio",
+    "coil_bypass_factor",
     "cooling_coil_load",
     "dew_point_temperature",
     "humidity_ratio",
@@ -197,6 +198,34 @@ def adiabatic_mixing_humidity_ratio(
     if humidity_ratio_1 < 0 or humidity_ratio_2 < 0:
         raise ValueError("humidity ratios must be non-negative")
     return (m1 * humidity_ratio_1 + m2 * humidity_ratio_2) / (m1 + m2)
+
+
+def coil_bypass_factor(
+    *,
+    entering_temperature: Quantity,
+    leaving_temperature: Quantity,
+    apparent_dew_point: Quantity,
+) -> float:
+    """The cooling-coil bypass factor BF = (t_leave − t_ADP)/(t_enter − t_ADP).
+
+    A cooling coil does not bring all the air to its fin temperature — some slips through untouched,
+    as if it bypassed the coil entirely. The bypass factor is that fraction, measured on the
+    temperature approach to the coil's apparent dew point (the effective fin-surface condition):
+    BF = (``leaving_temperature`` − ``apparent_dew_point``)/(``entering_temperature`` −
+    ``apparent_dew_point``). A tight, many-row coil has a low BF (0.05–0.15, most air contacts the
+    fins); a shallow, high-velocity coil bypasses more. The contact factor 1 − BF is its complement.
+    The leaving temperature must lie between the apparent dew point and the entering temperature.
+    Returns the dimensionless bypass factor.
+    """
+    _check(entering_temperature, "[temperature]", "entering_temperature")
+    _check(leaving_temperature, "[temperature]", "leaving_temperature")
+    _check(apparent_dew_point, "[temperature]", "apparent_dew_point")
+    t_in = entering_temperature.to("degC").magnitude
+    t_out = leaving_temperature.to("degC").magnitude
+    t_adp = apparent_dew_point.to("degC").magnitude
+    if not t_adp < t_out < t_in:
+        raise ValueError("temperatures must satisfy apparent_dew_point < leaving < entering")
+    return (t_out - t_adp) / (t_in - t_adp)
 
 
 def cooling_coil_load(

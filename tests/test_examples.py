@@ -774,6 +774,15 @@ def test_steam_line_expansion_loop_example_sizes_the_leg():
     assert s["leg_length_m"] == pytest.approx(11.6, abs=0.5)
 
 
+def test_cooling_coil_bypass_factor_example_deep_vs_shallow():
+    namespace = runpy.run_path(str(_EXAMPLES / "cooling_coil_bypass_factor.py"))
+    c = namespace["coil_factors"]()
+    # The deep coil has a low bypass factor; the shallow one a much higher one.
+    assert c["deep_bf"] == pytest.approx(0.09375, abs=0.001)
+    assert c["shallow_bf"] == pytest.approx(0.375, abs=0.001)
+    assert c["shallow_bf"] > c["deep_bf"]
+
+
 def test_ahu_mixed_air_example():
     namespace = runpy.run_path(str(_EXAMPLES / "ahu_mixed_air.py"))
     m = namespace["mixed_air"]()

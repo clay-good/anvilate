@@ -212,8 +212,9 @@ modules:
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
   Magnus saturation vapor pressure, the humidity ratio and relative humidity, the dew-point
   temperature, the moist-air enthalpy and cooling-coil load for capacity sizing, the
-  sensible/latent split with the sensible heat ratio SHR = Q_s/(Q_s + Q_l), and the
-  adiabatic mixing of two air streams (mass-weighted temperature and humidity ratio)
+  sensible/latent split with the sensible heat ratio SHR = Q_s/(Q_s + Q_l), the
+  adiabatic mixing of two air streams (mass-weighted temperature and humidity ratio),
+  and the cooling-coil bypass factor against its apparent dew point
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -1219,6 +1220,7 @@ from .prestressed_concrete import (
 from .psychrometrics import (
     adiabatic_mixing_humidity_ratio,
     adiabatic_mixing_temperature,
+    coil_bypass_factor,
     cooling_coil_load,
     dew_point_temperature,
     humidity_ratio,
@@ -1647,6 +1649,7 @@ __all__ = [
     "air_receiver_volume_for_demand",
     "adiabatic_mixing_temperature",
     "adiabatic_mixing_humidity_ratio",
+    "coil_bypass_factor",
     "cooling_coil_load",
     "dew_point_temperature",
     "humidity_ratio",
