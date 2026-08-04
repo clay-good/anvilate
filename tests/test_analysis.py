@@ -13787,6 +13787,37 @@ def test_aisc_inelastic_ltb_limit_matches_manual_w18x50():
     assert l_r_hi.to("ft").magnitude < l_r.to("ft").magnitude
 
 
+def test_aisc_moment_amplifiers_b1_b2():
+    from anvilate.analysis import aisc_moment_amplifier_b1, aisc_moment_amplifier_b2
+
+    # B1 = C_m/(1 - alpha*P_r/P_e1): C_m=1, P_r=500, P_e1=2000 -> 1/(1-0.25) = 1.333.
+    b1 = aisc_moment_amplifier_b1(
+        moment_gradient_coefficient=1.0,
+        required_axial_strength=_q("500 kN"),
+        elastic_buckling_load=_q("2000 kN"),
+    )
+    assert b1 == pytest.approx(1.0 / (1 - 0.25), rel=1e-9)
+    # B1 is floored at 1.0 when the low C_m would drive it below unity.
+    floored = aisc_moment_amplifier_b1(
+        moment_gradient_coefficient=0.6,
+        required_axial_strength=_q("200 kN"),
+        elastic_buckling_load=_q("2000 kN"),
+    )
+    assert floored == 1.0
+    # B2 = 1/(1 - alpha*P_story/P_e_story): 2000/10000 -> 1/(1-0.2) = 1.25.
+    b2 = aisc_moment_amplifier_b2(
+        story_axial_load=_q("2000 kN"), story_elastic_buckling_strength=_q("10000 kN")
+    )
+    assert b2 == pytest.approx(1.25, rel=1e-9)
+    # Reaching the buckling load is flagged as instability.
+    with pytest.raises(ValueError, match="unstable"):
+        aisc_moment_amplifier_b1(
+            moment_gradient_coefficient=1.0,
+            required_axial_strength=_q("2000 kN"),
+            elastic_buckling_load=_q("2000 kN"),
+        )
+
+
 def test_aisc_alignment_chart_effective_length_factors():
     from anvilate.analysis import (
         aisc_effective_length_factor_braced,

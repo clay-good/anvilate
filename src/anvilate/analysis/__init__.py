@@ -44,7 +44,8 @@ modules:
   §F2 lateral-torsional bracing limits L_p and L_r with the inelastic-LTB moment
   between them, the §H1.1 beam-column interaction (uniaxial or biaxial), and the
   alignment-chart effective-length factor K of a framed column (braced and sway)
-  from its joint stiffness ratios
+  from its joint stiffness ratios, and the §C2 second-order moment amplifiers B₁
+  (member P-δ) and B₂ (story P-Δ)
 - :mod:`~anvilate.analysis.torsion` — the torque a power/speed makes, solid and
   hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
   torque requires — the static von Mises size and the DE-Goodman and DE-Gerber
@@ -454,6 +455,8 @@ from .column import (
     aisc_flexural_buckling_stress,
     aisc_inelastic_ltb_limit,
     aisc_inelastic_ltb_moment,
+    aisc_moment_amplifier_b1,
+    aisc_moment_amplifier_b2,
     aisc_plastic_bracing_limit,
     euler_buckling_load,
     euler_critical_stress,
@@ -1247,6 +1250,8 @@ __all__ = [
     "aisc_beam_column_interaction",
     "aisc_effective_length_factor_braced",
     "aisc_effective_length_factor_sway",
+    "aisc_moment_amplifier_b1",
+    "aisc_moment_amplifier_b2",
     "aisc_effective_radius_of_gyration",
     "aisc_elastic_ltb_stress",
     "aisc_inelastic_ltb_limit",

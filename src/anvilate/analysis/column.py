@@ -43,6 +43,8 @@ __all__ = [
     "aisc_beam_column_interaction",
     "aisc_effective_length_factor_braced",
     "aisc_effective_length_factor_sway",
+    "aisc_moment_amplifier_b1",
+    "aisc_moment_amplifier_b2",
 ]
 
 
@@ -725,3 +727,83 @@ def aisc_effective_length_factor_sway(*, g_top: float, g_bottom: float) -> float
         raise ValueError("g_top and g_bottom must be non-negative")
     a, b = g_top, g_bottom
     return ((1.6 * a * b + 4.0 * (a + b) + 7.5) / (a + b + 7.5)) ** 0.5
+
+
+def aisc_moment_amplifier_b1(
+    *,
+    moment_gradient_coefficient: float,
+    required_axial_strength: Quantity,
+    elastic_buckling_load: Quantity,
+    load_factor: float = 1.0,
+) -> float:
+    """The AISC 360 §C2 B₁ amplifier for member second-order (P-δ) moments.
+
+    Axial compression bows a member and amplifies the moment along its length; the
+    amplified first-order method captures that with B₁ = C_m/(1 − α·P_r/P_e1) ≥ 1.
+    ``moment_gradient_coefficient`` C_m accounts for the moment shape (0.6 − 0.4·(M1/M2)
+    for a member with no transverse load, 1.0 with one), ``required_axial_strength`` P_r
+    the compression, ``elastic_buckling_load`` P_e1 = π²·E·I/(K1·L)² the in-plane elastic
+    buckling load, and ``load_factor`` α (1.0 for LRFD, 1.6 for ASD). B₁ never falls below
+    1, and it runs away as P_r approaches P_e1 — the signal that the member is too slender.
+    Feed B₁·M_nt (plus B₂·M_lt) as the required moment of the §H1.1 interaction
+    (:func:`aisc_beam_column_interaction`). Returns the dimensionless amplifier.
+    """
+    _require(required_axial_strength, "[force]", "required_axial_strength")
+    _require(elastic_buckling_load, "[force]", "elastic_buckling_load")
+    pr = required_axial_strength.to("kN").magnitude
+    pe1 = elastic_buckling_load.to("kN").magnitude
+    if pr < 0:
+        raise ValueError(
+            f"required_axial_strength must be non-negative; got {required_axial_strength}"
+        )
+    if pe1 <= 0:
+        raise ValueError(f"elastic_buckling_load must be positive; got {elastic_buckling_load}")
+    if load_factor <= 0:
+        raise ValueError(f"load_factor must be positive; got {load_factor}")
+    denominator = 1.0 - load_factor * pr / pe1
+    if denominator <= 0:
+        raise ValueError(
+            "alpha*P_r has reached the elastic buckling load P_e1 — the member is "
+            "unstable in-plane; increase the section or reduce the load"
+        )
+    return max(moment_gradient_coefficient / denominator, 1.0)
+
+
+def aisc_moment_amplifier_b2(
+    *,
+    story_axial_load: Quantity,
+    story_elastic_buckling_strength: Quantity,
+    load_factor: float = 1.0,
+) -> float:
+    """The AISC 360 §C2 B₂ amplifier for frame second-order (P-Δ) sidesway moments.
+
+    When a frame leans, gravity acting through the drift adds moment story-wide; the
+    amplified first-order method captures that with B₂ = 1/(1 − α·ΣP_r/ΣP_e,story) ≥ 1.
+    ``story_axial_load`` ΣP_r is the total vertical load on the story,
+    ``story_elastic_buckling_strength`` ΣP_e,story its elastic sidesway buckling strength
+    (R_M·ΣH·L/Δ_H from the first-order drift), and ``load_factor`` α (1.0 LRFD, 1.6 ASD).
+    B₂ multiplies the sidesway (lateral-translation) moments M_lt before they enter the
+    §H1.1 interaction. A stiff, well-braced story keeps B₂ near 1; a flexible one inflates
+    it and can run away — the quantitative stability check on the frame. Returns the
+    dimensionless amplifier.
+    """
+    _require(story_axial_load, "[force]", "story_axial_load")
+    _require(story_elastic_buckling_strength, "[force]", "story_elastic_buckling_strength")
+    p_story = story_axial_load.to("kN").magnitude
+    p_e = story_elastic_buckling_strength.to("kN").magnitude
+    if p_story < 0:
+        raise ValueError(f"story_axial_load must be non-negative; got {story_axial_load}")
+    if p_e <= 0:
+        raise ValueError(
+            "story_elastic_buckling_strength must be positive; got "
+            f"{story_elastic_buckling_strength}"
+        )
+    if load_factor <= 0:
+        raise ValueError(f"load_factor must be positive; got {load_factor}")
+    denominator = 1.0 - load_factor * p_story / p_e
+    if denominator <= 0:
+        raise ValueError(
+            "alpha*ΣP_r has reached the story buckling strength — the frame is unstable "
+            "in sidesway; stiffen or brace it"
+        )
+    return max(1.0 / denominator, 1.0)
