@@ -11051,6 +11051,31 @@ def test_junction_temperature_scorecard_screens_the_rise_against_a_budget():
         )
 
 
+def test_dittus_boelter_convection_coefficient_and_validity():
+    from anvilate.analysis import dittus_boelter_convection_coefficient
+
+    base = {
+        "diameter": _q("0.02 m"),
+        "thermal_conductivity": _q("0.6 W/(m*K)"),
+        "kinematic_viscosity": _q("1e-6 m**2/s"),
+        "prandtl_number": 7.0,
+    }
+    # Re = V*D/nu = 1*0.02/1e-6 = 20000; Nu = 0.023*Re^0.8*Pr^0.4; h = Nu*k/D ~ 4147 W/m2K.
+    h = dittus_boelter_convection_coefficient(fluid_velocity=_q("1 m/s"), heating=True, **base)
+    re = 20000.0
+    nu_num = 0.023 * re**0.8 * 7.0**0.4
+    assert h.to("W/(m**2*K)").magnitude == pytest.approx(nu_num * 0.6 / 0.02, rel=1e-9)
+    # Cooling uses the lower exponent 0.3, giving a smaller coefficient than heating.
+    h_cool = dittus_boelter_convection_coefficient(
+        fluid_velocity=_q("1 m/s"), heating=False, **base
+    )
+    assert h_cool.to("W/(m**2*K)").magnitude < h.to("W/(m**2*K)").magnitude
+    # Below the turbulent threshold it returns None (not evaluated), never a wrong number.
+    assert (
+        dittus_boelter_convection_coefficient(fluid_velocity=_q("0.1 m/s"), **base) is None
+    )  # Re = 2000, laminar
+
+
 def test_flat_plate_forced_convection_coefficient_and_validity_range():
     from anvilate.analysis import (
         convection_thermal_resistance,

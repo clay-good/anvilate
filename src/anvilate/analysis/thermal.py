@@ -43,6 +43,7 @@ __all__ = [
     "temperature_rise",
     "fin_efficiency",
     "junction_temperature_scorecard",
+    "dittus_boelter_convection_coefficient",
     "flat_plate_forced_convection_coefficient",
     "flat_plate_turbulent_convection_coefficient",
     "vertical_plate_natural_convection_coefficient",
@@ -811,6 +812,50 @@ def junction_temperature_scorecard(
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
     detail = f"junction rise {rise:.1f} K vs {allowable:.1f} K allowable"
     return entry.model_copy(update={"detail": detail})
+
+
+def dittus_boelter_convection_coefficient(
+    *,
+    fluid_velocity: Quantity,
+    diameter: Quantity,
+    thermal_conductivity: Quantity,
+    kinematic_viscosity: Quantity,
+    prandtl_number: float,
+    heating: bool = True,
+) -> Quantity | None:
+    """The convection coefficient h for fully-turbulent flow inside a tube (Dittus-Boelter).
+
+    The workhorse correlation for the tube-side coefficient of a heat exchanger: with the pipe
+    Reynolds number Re = V·D/ν and the Nusselt number Nu = 0.023·Re^0.8·Pr^n, the coefficient is
+    h = Nu·k/D. The exponent n is 0.4 when the fluid is being *heated* and 0.3 when it is *cooled*
+    (set by ``heating``). ``fluid_velocity`` V is the mean velocity, ``diameter`` D the inside
+    diameter (use :func:`~anvilate.analysis.hydraulic_diameter` for a non-circular duct),
+    ``thermal_conductivity`` k and ``kinematic_viscosity`` ν the fluid's, and ``prandtl_number`` Pr
+    its Prandtl number.
+
+    Returns ``None`` when Re is below ~10⁴ — Dittus-Boelter is only valid for fully turbulent flow,
+    so it reports "not evaluated" for laminar or transitional flow rather than extrapolating.
+    Otherwise returns h in W/(m²·K).
+    """
+    _require(fluid_velocity, "[velocity]", "fluid_velocity")
+    _require(diameter, "[length]", "diameter")
+    _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
+    _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
+    v = fluid_velocity.to("m/s").magnitude
+    d = diameter.to("m").magnitude
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    if min(v, d, k, nu) <= 0 or prandtl_number <= 0:
+        raise ValueError(
+            "fluid_velocity, diameter, thermal_conductivity, kinematic_viscosity, and "
+            "prandtl_number must be positive"
+        )
+    reynolds = v * d / nu
+    if reynolds < 1.0e4:
+        return None
+    exponent = 0.4 if heating else 0.3
+    nusselt = 0.023 * reynolds**0.8 * prandtl_number**exponent
+    return Quantity(magnitude=nusselt * k / d, unit="W/(m**2*K)")
 
 
 def flat_plate_forced_convection_coefficient(
