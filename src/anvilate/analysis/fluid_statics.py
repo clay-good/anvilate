@@ -26,9 +26,11 @@ __all__ = [
     "hydrostatic_pressure",
     "metacentric_height",
     "righting_moment",
+    "stack_effect_pressure",
 ]
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
+_AIR_GAS_CONSTANT = 287.0  # J/(kg*K), specific gas constant of dry air
 
 
 def hydrostatic_pressure(*, depth: Quantity, density: Quantity) -> Quantity:
@@ -175,6 +177,39 @@ def righting_moment(
     if not 0.0 <= heel_angle < 90.0:
         raise ValueError(f"heel_angle must be in [0, 90) degrees; got {heel_angle}")
     return Quantity(magnitude=w * gm * sin(radians(heel_angle)), unit="kN*m")
+
+
+def stack_effect_pressure(
+    *,
+    height: Quantity,
+    indoor_temperature: Quantity,
+    outdoor_temperature: Quantity,
+    atmospheric_pressure: Quantity,
+) -> Quantity:
+    """The stack-effect (buoyancy) pressure difference across a building or chimney height.
+
+    Warm air is lighter than cold, so a column of it inside a building or a chimney floats and draws
+    a pressure difference over the height — the same buoyancy that lifts a boat, acting on air
+    instead of water. From the ideal-gas density difference it is Δp = g·h·(P/R)·(1/T_o − 1/T_i),
+    with ``height`` h the vertical separation (from a low inlet to a high outlet), the absolute
+    ``indoor_temperature`` T_i and ``outdoor_temperature`` T_o, and ``atmospheric_pressure`` P (R is
+    the gas constant of air). This is the natural draft of a chimney and the stack pressure that
+    drives smoke and air up tall buildings; it is largest in winter, when the inside–outside
+    temperature gap is widest. Returns the pressure difference in Pa (positive when the inside is
+    warmer, drawing air upward).
+    """
+    _check(height, "[length]", "height")
+    _check(indoor_temperature, "[temperature]", "indoor_temperature")
+    _check(outdoor_temperature, "[temperature]", "outdoor_temperature")
+    _check(atmospheric_pressure, "[pressure]", "atmospheric_pressure")
+    h = height.to("m").magnitude
+    t_i = indoor_temperature.to("K").magnitude
+    t_o = outdoor_temperature.to("K").magnitude
+    p = atmospheric_pressure.to("Pa").magnitude
+    if h <= 0 or t_i <= 0 or t_o <= 0 or p <= 0:
+        raise ValueError("height, temperatures, and atmospheric_pressure must be positive")
+    delta_p = _GRAVITY * h * (p / _AIR_GAS_CONSTANT) * (1.0 / t_o - 1.0 / t_i)
+    return Quantity(magnitude=delta_p, unit="Pa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

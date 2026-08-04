@@ -14342,6 +14342,44 @@ def test_center_of_pressure_below_centroid_and_buoyancy():
         buoyant_force(displaced_volume=_q("0 m**3"), fluid_density=_q("1000 kg/m**3"))
 
 
+def test_stack_effect_pressure():
+    from anvilate.analysis import stack_effect_pressure
+
+    # dp = g*h*(P/R)*(1/T_o - 1/T_i); h=30, T_i=293.15, T_o=273.15 -> ~25.9 Pa.
+    dp = stack_effect_pressure(
+        height=_q("30 m"),
+        indoor_temperature=_q("293.15 K"),
+        outdoor_temperature=_q("273.15 K"),
+        atmospheric_pressure=_q("101325 Pa"),
+    )
+    expect = 9.80665 * 30 * (101325 / 287) * (1 / 273.15 - 1 / 293.15)
+    assert dp.to("Pa").magnitude == pytest.approx(expect, rel=1e-9)
+    assert dp.to("Pa").magnitude > 0  # warm inside draws air up
+    # A taller building has a proportionally larger stack pressure.
+    dp_tall = stack_effect_pressure(
+        height=_q("60 m"),
+        indoor_temperature=_q("293.15 K"),
+        outdoor_temperature=_q("273.15 K"),
+        atmospheric_pressure=_q("101325 Pa"),
+    )
+    assert dp_tall.to("Pa").magnitude == pytest.approx(2 * dp.to("Pa").magnitude, rel=1e-9)
+    # When it is warmer outside than in, the stack reverses (negative).
+    dp_summer = stack_effect_pressure(
+        height=_q("30 m"),
+        indoor_temperature=_q("297.15 K"),
+        outdoor_temperature=_q("308.15 K"),
+        atmospheric_pressure=_q("101325 Pa"),
+    )
+    assert dp_summer.to("Pa").magnitude < 0
+    with pytest.raises(ValueError, match="positive"):
+        stack_effect_pressure(
+            height=_q("0 m"),
+            indoor_temperature=_q("293.15 K"),
+            outdoor_temperature=_q("273.15 K"),
+            atmospheric_pressure=_q("101325 Pa"),
+        )
+
+
 def test_metacentric_height_and_righting_moment():
     import math
 

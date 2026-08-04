@@ -123,8 +123,9 @@ modules:
   inverse, and the pitot-tube point velocity √(2Δp/ρ)
 - :mod:`~anvilate.analysis.fluid_statics` — fluid statics: the hydrostatic pressure
   ρ·g·h, the resultant force on a submerged plane surface and its center-of-pressure
-  depth, the Archimedes buoyant force on a submerged body, and the metacentric height
-  and righting moment that decide a floating body's stability
+  depth, the Archimedes buoyant force on a submerged body, the metacentric height and
+  righting moment that decide a floating body's stability, and the stack-effect pressure
+  that air buoyancy draws over a building or chimney height
 - :mod:`~anvilate.analysis.pipe_flow` — incompressible pipe hydraulics: the Reynolds
   number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
   Darcy-Weisbach friction head loss and fitting minor losses, the pressure drop ρ·g·h a
@@ -699,6 +700,7 @@ from .fluid_statics import (
     hydrostatic_pressure,
     metacentric_height,
     righting_moment,
+    stack_effect_pressure,
 )
 from .flywheel import (
     coefficient_of_fluctuation,
@@ -1305,6 +1307,7 @@ __all__ = [
     "hydrostatic_pressure",
     "metacentric_height",
     "righting_moment",
+    "stack_effect_pressure",
     "adiabatic_compression_power",
     "adiabatic_discharge_temperature",
     "ideal_gas_density",

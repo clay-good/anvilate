@@ -356,6 +356,7 @@ fluid_statics.hydrostatic_force_on_plane
 fluid_statics.hydrostatic_pressure
 fluid_statics.metacentric_height
 fluid_statics.righting_moment
+fluid_statics.stack_effect_pressure
 fracture.critical_crack_length
 fracture.paris_law_crack_growth_rate
 fracture.crack_tip_plastic_zone_size

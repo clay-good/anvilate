@@ -334,6 +334,15 @@ def test_submerged_gate_hinge_example_center_of_pressure_below_centroid():
     assert g["center_of_pressure_m"] > g["centroid_depth_m"]
 
 
+def test_stack_effect_draft_example_worse_in_winter():
+    namespace = runpy.run_path(str(_EXAMPLES / "stack_effect_draft.py"))
+    d = namespace["building_draft"]()
+    # The cold day drives a much larger stack pressure than the mild day.
+    assert d["winter_pa"] > d["mild_pa"] > 0
+    assert d["winter_over_mild"] > 3.0
+    assert d["winter_pa"] == pytest.approx(68, abs=3)
+
+
 def test_pontoon_stability_example_capsizes_with_a_high_load():
     namespace = runpy.run_path(str(_EXAMPLES / "pontoon_stability.py"))
     s = namespace["pontoon_stability"]()
