@@ -15335,6 +15335,37 @@ def test_asce7_lrfd_and_asd_load_combinations_governing():
         asce7_lrfd_factored_load(dead=_q("100 kN"), live=_q("5 MPa"))
 
 
+def test_seismic_vertical_force_distribution_sums_to_base_shear():
+    from anvilate.analysis import seismic_vertical_force_distribution
+
+    weights = [_q("1000 kN"), _q("1000 kN"), _q("800 kN")]
+    heights = [_q("4 m"), _q("8 m"), _q("12 m")]
+    # Fx = V*wx*hx^k/sum(wi*hi^k); k=1, V=300 -> [55.6, 111.1, 133.3], summing to V.
+    f = seismic_vertical_force_distribution(
+        base_shear=_q("300 kN"), story_weights=weights, story_heights=heights
+    )
+    vals = [x.to("kN").magnitude for x in f]
+    assert vals == pytest.approx([55.5556, 111.1111, 133.3333], rel=1e-4)
+    assert sum(vals) == pytest.approx(300.0, rel=1e-9)
+    # The forces climb with height — the top story takes the most.
+    assert vals[2] > vals[1] > vals[0]
+    # A larger exponent (long-period building) tips the distribution further toward the top.
+    f2 = seismic_vertical_force_distribution(
+        base_shear=_q("300 kN"),
+        story_weights=weights,
+        story_heights=heights,
+        distribution_exponent=2.0,
+    )
+    top_fraction_k1 = vals[2] / 300.0
+    top_fraction_k2 = f2[2].to("kN").magnitude / 300.0
+    assert top_fraction_k2 > top_fraction_k1
+    assert sum(x.to("kN").magnitude for x in f2) == pytest.approx(300.0, rel=1e-9)
+    with pytest.raises(ValueError, match="same length"):
+        seismic_vertical_force_distribution(
+            base_shear=_q("300 kN"), story_weights=weights, story_heights=heights[:2]
+        )
+
+
 def test_building_loads_flat_and_sloped_roof_snow():
     from anvilate.analysis import flat_roof_snow_load, sloped_roof_snow_load
 

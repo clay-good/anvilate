@@ -965,6 +965,17 @@ def test_cold_storage_roof_snow_example_freezer_carries_more():
     assert r["freezer_sloped_kpa"] < r["freezer_flat_kpa"]
 
 
+def test_seismic_story_forces_example_top_heavy():
+    namespace = runpy.run_path(str(_EXAMPLES / "seismic_story_forces.py"))
+    s = namespace["story_forces"]()
+    # The story forces sum to the base shear...
+    assert sum(s["k1_forces"]) == pytest.approx(s["base_shear_kn"], rel=1e-6)
+    assert sum(s["k2_forces"]) == pytest.approx(s["base_shear_kn"], rel=1e-6)
+    # ...and both distributions put the most force on the roof, k=2 more so.
+    assert s["k1_forces"][-1] == max(s["k1_forces"])
+    assert s["k2_forces"][-1] > s["k1_forces"][-1]
+
+
 def test_wind_vs_seismic_base_shear_example_seismic_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "wind_vs_seismic_base_shear.py"))
     d = namespace["lateral_demands"]()

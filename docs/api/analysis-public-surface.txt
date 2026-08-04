@@ -195,6 +195,7 @@ brake.short_shoe_normal_force
 building_loads.flat_roof_snow_load
 building_loads.seismic_base_shear
 building_loads.seismic_response_coefficient
+building_loads.seismic_vertical_force_distribution
 building_loads.sloped_roof_snow_load
 building_loads.wind_design_pressure
 building_loads.wind_velocity_pressure

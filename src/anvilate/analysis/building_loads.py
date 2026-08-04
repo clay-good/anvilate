@@ -24,6 +24,8 @@ ps = Cs·pf.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from ..units import Quantity
 
 __all__ = [
@@ -31,6 +33,7 @@ __all__ = [
     "wind_design_pressure",
     "seismic_response_coefficient",
     "seismic_base_shear",
+    "seismic_vertical_force_distribution",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
 ]
@@ -148,6 +151,47 @@ def seismic_base_shear(
     if response_coefficient <= 0:
         raise ValueError(f"response_coefficient must be positive; got {response_coefficient}")
     return Quantity(magnitude=w * response_coefficient, unit="kN")
+
+
+def seismic_vertical_force_distribution(
+    *,
+    base_shear: Quantity,
+    story_weights: Sequence[Quantity],
+    story_heights: Sequence[Quantity],
+    distribution_exponent: float = 1.0,
+) -> tuple[Quantity, ...]:
+    """The ASCE 7 vertical distribution of base shear, Fx = V·wx·hx^k/Σ(wi·hi^k) (§12.8.3).
+
+    The base shear from :func:`seismic_base_shear` is not applied at the base but shared out to the
+    floors, each level x taking a fraction Cvx = wx·hx^k / Σ(wi·hi^k) of it. ``base_shear`` V is the
+    total, ``story_weights`` wx and ``story_heights`` hx the effective weight and the height above
+    the base of each level (same length, ordered consistently), and ``distribution_exponent`` k the
+    period-dependent exponent (1 for a short-period T ≤ 0.5 s building, 2 for a long-period
+    T ≥ 2.5 s one, interpolated between — the caller's from the period). The k > 1 exponent throws
+    more of the force to the upper floors, where a tall building's whipping does the damage. The
+    returned forces sum to the base shear. Returns a tuple of level forces in kN, one per story.
+    """
+    _check(base_shear, "[force]", "base_shear")
+    v = base_shear.to("kN").magnitude
+    if v <= 0:
+        raise ValueError("base_shear must be positive")
+    if len(story_weights) != len(story_heights):
+        raise ValueError("story_weights and story_heights must have the same length")
+    if len(story_weights) == 0:
+        raise ValueError("at least one story is required")
+    if distribution_exponent <= 0:
+        raise ValueError("distribution_exponent must be positive")
+    products = []
+    for i, (w, h) in enumerate(zip(story_weights, story_heights, strict=True)):
+        _check(w, "[force]", f"story_weights[{i}]")
+        _check(h, "[length]", f"story_heights[{i}]")
+        wm = w.to("kN").magnitude
+        hm = h.to("m").magnitude
+        if wm <= 0 or hm <= 0:
+            raise ValueError("every story weight and height must be positive")
+        products.append(wm * hm**distribution_exponent)
+    total = sum(products)
+    return tuple(Quantity(magnitude=v * p / total, unit="kN") for p in products)
 
 
 def flat_roof_snow_load(
