@@ -68,7 +68,12 @@ __all__ = [
     "joint_separation_load",
     "preloaded_bolt_cyclic_stress",
     "eccentric_shear_group_peak_force",
+    "slip_critical_resistance",
 ]
+
+# AISC J3.8 D_u — the ratio of the mean installed bolt pretension to the specified
+# minimum. 1.13 for the standard case (caller-tunable for a controlled installation).
+SLIP_MEAN_PRETENSION_RATIO = 1.13
 
 # Typical nut factor K for as-received (lightly-oiled) steel fasteners. Dry/rough
 # joints run higher (~0.3), well-lubricated or coated ones lower (~0.15); K is the
@@ -174,6 +179,40 @@ def bolt_shear_stress(
     stress = force.pint / (shear_planes * area)
     converted = stress.to("MPa")
     return Quantity(magnitude=float(converted.magnitude), unit="MPa")
+
+
+def slip_critical_resistance(
+    *,
+    slip_coefficient: float,
+    bolt_pretension: Quantity,
+    slip_planes: int = 1,
+    filler_factor: float = 1.0,
+    mean_pretension_ratio: float = SLIP_MEAN_PRETENSION_RATIO,
+) -> Quantity:
+    """The AISC J3.8 slip resistance of a pretensioned bolt, R_n = μ·D_u·h_f·T_b·n_s.
+
+    A slip-critical connection carries shear by friction between the faying surfaces,
+    clamped by the bolt's pretension, rather than by the bolt bearing on the hole. Its
+    resistance is R_n = μ·D_u·h_f·T_b·n_s, where ``slip_coefficient`` μ is the mean
+    slip coefficient of the faying surface (0.30 Class A, 0.50 Class B),
+    ``mean_pretension_ratio`` D_u the mean-to-specified pretension ratio (1.13),
+    ``filler_factor`` h_f the filler-plate factor (1.0 with no fillers),
+    ``bolt_pretension`` T_b the minimum bolt pretension (AISC Table J3.1), and
+    ``slip_planes`` n_s the number of slip planes. μ and T_b are the user's inputs.
+    Returns the slip resistance per bolt in kN.
+    """
+    _require(bolt_pretension, "[force]", "bolt_pretension")
+    if slip_coefficient <= 0:
+        raise ValueError(f"slip_coefficient must be positive; got {slip_coefficient}")
+    if slip_planes < 1:
+        raise ValueError(f"slip_planes must be a positive integer; got {slip_planes}")
+    if filler_factor <= 0 or mean_pretension_ratio <= 0:
+        raise ValueError("filler_factor and mean_pretension_ratio must be positive")
+    tb = bolt_pretension.to("kN").magnitude
+    if tb <= 0:
+        raise ValueError(f"bolt_pretension must be positive; got {bolt_pretension}")
+    resistance = slip_coefficient * mean_pretension_ratio * filler_factor * tb * slip_planes
+    return Quantity(magnitude=resistance, unit="kN")
 
 
 def bolt_diameter_for_shear(

@@ -12682,3 +12682,20 @@ def test_parallel_flow_effectiveness_is_below_counterflow():
     assert parallel_flow_effectiveness(ntu=1000.0, capacity_ratio=0.5) == pytest.approx(
         1 / 1.5, rel=1e-6
     )
+
+
+def test_slip_critical_resistance_aisc_j38():
+    from anvilate.analysis import slip_critical_resistance
+
+    # R_n = mu*D_u*h_f*T_b*n_s: Class A (mu=0.30), M20 A325 (T_b=142 kN), 1 plane.
+    r = slip_critical_resistance(slip_coefficient=0.30, bolt_pretension=_q("142 kN"))
+    assert r.to("kN").magnitude == pytest.approx(0.30 * 1.13 * 1.0 * 142 * 1, rel=1e-9)
+    # A Class B surface (mu=0.50) resists more; double the slip planes doubles it.
+    class_b = slip_critical_resistance(slip_coefficient=0.50, bolt_pretension=_q("142 kN"))
+    assert class_b.to("kN").magnitude > r.to("kN").magnitude
+    double = slip_critical_resistance(
+        slip_coefficient=0.30, bolt_pretension=_q("142 kN"), slip_planes=2
+    )
+    assert double.to("kN").magnitude == pytest.approx(2 * r.to("kN").magnitude, rel=1e-9)
+    with pytest.raises(ValueError, match="slip_coefficient must be positive"):
+        slip_critical_resistance(slip_coefficient=0.0, bolt_pretension=_q("142 kN"))
