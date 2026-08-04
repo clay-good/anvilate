@@ -13285,6 +13285,22 @@ def test_acoustics_mass_law_transmission_loss():
         mass_law_transmission_loss(frequency=_q("0 Hz"), surface_density=_q("10 kg/m**2"))
 
 
+def test_acoustics_sabine_reverberation_time():
+    from anvilate.analysis import sabine_reverberation_time
+
+    # T60 = 0.161*V/A. 100 m^3 room, 20 m^2 sabins -> 0.805 s.
+    t = sabine_reverberation_time(volume=_q("100 m**3"), total_absorption=_q("20 m**2"))
+    assert t.to("s").magnitude == pytest.approx(0.161 * 100 / 20, rel=1e-9)
+    assert t.to("s").magnitude == pytest.approx(0.805, abs=1e-3)
+    # More absorption shortens it inversely: doubling A halves T60.
+    t2 = sabine_reverberation_time(volume=_q("100 m**3"), total_absorption=_q("40 m**2"))
+    assert t2.to("s").magnitude == pytest.approx(t.to("s").magnitude / 2, rel=1e-9)
+    with pytest.raises(ValueError, match="length"):
+        sabine_reverberation_time(volume=_q("100 m**2"), total_absorption=_q("20 m**2"))
+    with pytest.raises(ValueError, match="positive"):
+        sabine_reverberation_time(volume=_q("0 m**3"), total_absorption=_q("20 m**2"))
+
+
 def test_electrical_three_phase_power_current_and_voltage_drop():
     import math
 

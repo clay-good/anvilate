@@ -24,6 +24,7 @@ from ..units import Quantity
 __all__ = [
     "inverse_square_attenuation",
     "mass_law_transmission_loss",
+    "sabine_reverberation_time",
     "sound_level_sum",
 ]
 
@@ -85,6 +86,26 @@ def mass_law_transmission_loss(*, frequency: Quantity, surface_density: Quantity
     if f <= 0 or m_s <= 0:
         raise ValueError("frequency and surface_density must be positive")
     return 20.0 * log10(f * m_s) - 47.0
+
+
+def sabine_reverberation_time(*, volume: Quantity, total_absorption: Quantity) -> Quantity:
+    """The reverberation time of a room by Sabine's equation, T₆₀ = 0.161·V/A.
+
+    How long sound lingers after a source stops is set by how big the room is against how much its
+    surfaces soak up: T₆₀ = 0.161·V/A, where ``volume`` V is the room volume (m³) and
+    ``total_absorption`` A is the summed absorption Σ Sᵢ·αᵢ — each surface's area times its
+    absorption coefficient — in sabins (m²). The 0.161 s/m constant is metric. A hard, empty plant
+    room (little absorption) rings for seconds and pumps up the reverberant field a worker stands
+    in; adding absorption is the lever that shortens it. Sabine assumes a diffuse field and fairly
+    even absorption. Returns the reverberation time (the 60 dB decay) as a time Quantity.
+    """
+    _check(volume, "[length]**3", "volume")
+    _check(total_absorption, "[length]**2", "total_absorption")
+    v = volume.to("m**3").magnitude
+    a = total_absorption.to("m**2").magnitude
+    if v <= 0 or a <= 0:
+        raise ValueError("volume and total_absorption must be positive")
+    return Quantity(magnitude=0.161 * v / a, unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
