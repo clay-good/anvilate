@@ -429,6 +429,9 @@ modules:
 - :mod:`~anvilate.analysis.rolling` — flat rolling: the maximum draft Δh_max = μ²·R
   the rolls can bite, the roll-strip contact length L = √(R·Δh), and the roll
   separating force F = Y_avg·w·L the mill stand must carry
+- :mod:`~anvilate.analysis.extrusion` — direct extrusion: the extrusion ratio
+  R = A₀/A_f, the ram pressure p = Y_avg·ln(R)/η (ideal work over a deformation
+  efficiency), and the ram force F = p·A₀ that sizes the press
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -890,6 +893,11 @@ from .energy_storage import (
     battery_delivered_energy,
     battery_round_trip_efficiency,
     usable_battery_energy,
+)
+from .extrusion import (
+    extrusion_force,
+    extrusion_pressure,
+    extrusion_ratio,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -1812,6 +1820,9 @@ __all__ = [
     "battery_backup_time",
     "battery_round_trip_efficiency",
     "battery_delivered_energy",
+    "extrusion_ratio",
+    "extrusion_pressure",
+    "extrusion_force",
     "pv_array_power",
     "pv_daily_energy",
     "pv_array_size_for_load",

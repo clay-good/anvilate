@@ -326,6 +326,9 @@ energy_storage.battery_bank_capacity
 energy_storage.battery_delivered_energy
 energy_storage.battery_round_trip_efficiency
 energy_storage.usable_battery_energy
+extrusion.extrusion_ratio
+extrusion.extrusion_pressure
+extrusion.extrusion_force
 dynamics.STANDARD_GRAVITY
 dynamics.annular_disc_polar_mass_moment
 dynamics.balance_correction_mass

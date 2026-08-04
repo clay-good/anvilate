@@ -745,6 +745,19 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_aluminium_extrusion_press_example_ratio_pressure_force():
+    namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
+    e = namespace["extrusion_press"]()
+    # 200 mm -> 32 mm round: ratio (200/32)^2 ~ 39.
+    assert e["ratio"] == pytest.approx(39.06, abs=0.05)
+    # Ideal ram pressure Y*ln R ~ 183 MPa; the 55% efficiency raises it to ~333 MPa.
+    assert e["ideal_pressure_mpa"] == pytest.approx(183.3, abs=0.5)
+    assert e["real_pressure_mpa"] == pytest.approx(333.2, abs=0.5)
+    assert e["real_pressure_mpa"] > e["ideal_pressure_mpa"]
+    # Ram force over the big billet is enormous, ~10,500 kN.
+    assert e["ram_force_kn"] == pytest.approx(10467.7, abs=5.0)
+
+
 def test_rolling_pass_schedule_example_bite_limit_and_force():
     namespace = runpy.run_path(str(_EXAMPLES / "rolling_pass_schedule.py"))
     p = namespace["rolling_pass"]()

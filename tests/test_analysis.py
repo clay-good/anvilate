@@ -3294,6 +3294,45 @@ def test_forging_true_strain_flow_stress_and_open_die_load():
         )
 
 
+def test_extrusion_ratio_pressure_and_force():
+    from math import log, pi
+
+    from anvilate.analysis import extrusion_force, extrusion_pressure, extrusion_ratio
+
+    # R = A0/Af; 100 mm -> 40 mm diameter billet -> (100/40)^2 = 6.25.
+    a0 = _q(f"{pi / 4 * 100**2} mm**2")
+    af = _q(f"{pi / 4 * 40**2} mm**2")
+    r = extrusion_ratio(billet_area=a0, extrudate_area=af)
+    assert r == pytest.approx(6.25, rel=1e-9)
+
+    # Ideal ram pressure p = Y*ln(R); 150 MPa * ln(6.25) = 274.9 MPa.
+    p = extrusion_pressure(flow_stress=_q("150 MPa"), extrusion_ratio=r)
+    assert p.to("MPa").magnitude == pytest.approx(150 * log(6.25), rel=1e-9)
+
+    # A deformation efficiency below 1 raises the real pressure (friction + redundant work).
+    p_real = extrusion_pressure(
+        flow_stress=_q("150 MPa"), extrusion_ratio=r, deformation_efficiency=0.6
+    )
+    assert p_real.to("MPa").magnitude == pytest.approx(p.to("MPa").magnitude / 0.6, rel=1e-9)
+    assert p_real.to("MPa").magnitude > p.to("MPa").magnitude
+
+    # Ram force F = p*A0; 274.9 MPa over the billet area -> ~2159 kN.
+    f = extrusion_force(extrusion_pressure=p, billet_area=a0)
+    assert f.to("kN").magnitude == pytest.approx(
+        p.to("Pa").magnitude * (pi / 4 * 0.1**2) / 1000, rel=1e-9
+    )
+
+    # A higher extrusion ratio needs more pressure (pressure grows with ln R).
+    p_high = extrusion_pressure(flow_stress=_q("150 MPa"), extrusion_ratio=40.0)
+    assert p_high.to("MPa").magnitude > p.to("MPa").magnitude
+
+    # Guardrails: the extrudate must be smaller than the billet, and R must exceed 1.
+    with pytest.raises(ValueError, match="extrudate_area must be smaller"):
+        extrusion_ratio(billet_area=af, extrudate_area=a0)
+    with pytest.raises(ValueError, match="extrusion_ratio must exceed 1"):
+        extrusion_pressure(flow_stress=_q("150 MPa"), extrusion_ratio=1.0)
+
+
 def test_rolling_max_draft_contact_length_and_force():
     from math import sqrt
 
