@@ -12787,6 +12787,30 @@ def test_shear_lag_factor_aisc_d3():
         shear_lag_factor(connection_eccentricity=_q("100 mm"), connection_length=_q("100 mm"))
 
 
+def test_bolt_bearing_strength_aisc_j310():
+    from anvilate.analysis import bolt_bearing_strength
+
+    common = {
+        "plate_thickness": _q("10 mm"),
+        "bolt_diameter": _q("20 mm"),
+        "ultimate_strength": _q("450 MPa"),
+    }
+    # Short edge distance (l_c = 30): tear-out 1.2*30*10*450 = 162 kN < bearing cap
+    # 2.4*20*10*450 = 216 kN, so tear-out governs.
+    tearout = bolt_bearing_strength(clear_distance=_q("30 mm"), **common)
+    assert tearout.to("kN").magnitude == pytest.approx(1.2 * 30 * 10 * 450 / 1000, rel=1e-9)
+    # Generous edge distance (l_c = 50): bearing deformation cap 2.4*d*t*Fu governs.
+    bearing = bolt_bearing_strength(clear_distance=_q("50 mm"), **common)
+    assert bearing.to("kN").magnitude == pytest.approx(2.4 * 20 * 10 * 450 / 1000, rel=1e-9)
+    assert tearout.to("kN").magnitude < bearing.to("kN").magnitude
+    # When deformation is not a design consideration the coefficients rise to 1.5/3.0.
+    no_deform = bolt_bearing_strength(
+        clear_distance=_q("30 mm"), deformation_at_service_considered=False, **common
+    )
+    assert no_deform.to("kN").magnitude == pytest.approx(1.5 * 30 * 10 * 450 / 1000, rel=1e-9)
+    assert no_deform.to("kN").magnitude > tearout.to("kN").magnitude
+
+
 def test_net_width_staggered_holes_aisc_b43b():
     from anvilate.analysis import net_width_staggered_holes
 

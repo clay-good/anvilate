@@ -72,6 +72,7 @@ __all__ = [
     "block_shear_strength",
     "shear_lag_factor",
     "net_width_staggered_holes",
+    "bolt_bearing_strength",
 ]
 
 # AISC J3.8 D_u — the ratio of the mean installed bolt pretension to the specified
@@ -298,6 +299,45 @@ def shear_lag_factor(
             f"(x̄/L = {x_bar / length:.2f} gives a non-positive U)"
         )
     return u
+
+
+def bolt_bearing_strength(
+    *,
+    clear_distance: Quantity,
+    plate_thickness: Quantity,
+    bolt_diameter: Quantity,
+    ultimate_strength: Quantity,
+    deformation_at_service_considered: bool = True,
+) -> Quantity:
+    """The AISC 360 §J3.10 bolt bearing / tear-out strength at a bolt hole.
+
+    At each bolt hole the plate can fail two ways, and §J3.10 takes the lesser: the bolt
+    tears out a strip to the nearest edge or hole (proportional to the clear distance
+    l_c), or the plate simply crushes in bearing (capped by the bolt diameter d). With
+    deformation at the hole a design consideration, R_n = 1.2·l_c·t·F_u ≤ 2.4·d·t·F_u;
+    when it is not, the coefficients rise to 1.5 and 3.0. ``clear_distance`` l_c is the
+    clear distance in the load direction from the edge of the hole to the edge of the
+    adjacent hole or the material edge, ``plate_thickness`` t, ``bolt_diameter`` d, and
+    ``ultimate_strength`` F_u of the connected part. A short edge distance makes tear-out
+    govern; a generous one lets bearing govern at the 2.4·d·t·F_u cap. This is the
+    strength complement to the raw :func:`bearing_stress`. Returns R_n per bolt in kN.
+    """
+    _require(clear_distance, "[length]", "clear_distance")
+    _require(plate_thickness, "[length]", "plate_thickness")
+    _require(bolt_diameter, "[length]", "bolt_diameter")
+    _require(ultimate_strength, "[pressure]", "ultimate_strength")
+    lc = clear_distance.to("mm").magnitude
+    t = plate_thickness.to("mm").magnitude
+    d = bolt_diameter.to("mm").magnitude
+    fu = ultimate_strength.to("MPa").magnitude
+    if lc <= 0 or t <= 0 or d <= 0 or fu <= 0:
+        raise ValueError(
+            "clear_distance, plate_thickness, bolt_diameter, and ultimate_strength must be positive"
+        )
+    tearout_coeff, bearing_coeff = (1.2, 2.4) if deformation_at_service_considered else (1.5, 3.0)
+    tearout = tearout_coeff * lc * t * fu
+    bearing = bearing_coeff * d * t * fu
+    return Quantity(magnitude=min(tearout, bearing) / 1000.0, unit="kN")
 
 
 def net_width_staggered_holes(
