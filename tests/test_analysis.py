@@ -12720,3 +12720,25 @@ def test_fillet_weld_design_strength_aisc_j24():
         leg_size=_q("8 mm"), length=_q("200 mm"), electrode_strength=_q("490 MPa")
     )
     assert bigger.to("kN").magnitude > rn.to("kN").magnitude
+
+
+def test_crossflow_effectiveness_sits_between_parallel_and_counterflow():
+    from anvilate.analysis import (
+        counterflow_effectiveness,
+        crossflow_both_unmixed_effectiveness,
+        parallel_flow_effectiveness,
+    )
+
+    cross = crossflow_both_unmixed_effectiveness(ntu=2.0, capacity_ratio=0.5)
+    assert cross == pytest.approx(0.7388, abs=0.001)
+    assert (
+        parallel_flow_effectiveness(ntu=2.0, capacity_ratio=0.5)
+        < cross
+        < counterflow_effectiveness(ntu=2.0, capacity_ratio=0.5)
+    )
+    # At C_r = 0 (a condenser/boiler) every arrangement is 1 - exp(-NTU).
+    from math import exp as _exp
+
+    assert crossflow_both_unmixed_effectiveness(ntu=2.0, capacity_ratio=0.0) == pytest.approx(
+        1 - _exp(-2.0), rel=1e-9
+    )

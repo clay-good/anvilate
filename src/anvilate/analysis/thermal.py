@@ -54,6 +54,7 @@ __all__ = [
     "heat_exchanger_ntu",
     "counterflow_effectiveness",
     "parallel_flow_effectiveness",
+    "crossflow_both_unmixed_effectiveness",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -1171,3 +1172,29 @@ def parallel_flow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
     if not 0 <= capacity_ratio <= 1:
         raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
     return (1.0 - exp(-ntu * (1.0 + capacity_ratio))) / (1.0 + capacity_ratio)
+
+
+def crossflow_both_unmixed_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
+    """The effectiveness ε of a crossflow exchanger with both fluids unmixed (ε-NTU).
+
+    Crossflow — the streams run at right angles, as in a car radiator or an HVAC coil —
+    is the common compact-exchanger arrangement, and with both fluids unmixed its
+    effectiveness follows the standard approximation
+
+        ε = 1 − exp{ (1/C_r)·NTU^0.22·[exp(−C_r·NTU^0.78) − 1] },
+
+    which sits between :func:`parallel_flow_effectiveness` and
+    :func:`counterflow_effectiveness`. ``ntu`` is :func:`heat_exchanger_ntu` and
+    ``capacity_ratio`` C_r = C_min/C_max in [0, 1]; at C_r = 0 (a boiler or condenser)
+    it reduces to 1 − exp(−NTU), as every arrangement does. ``ntu`` non-negative.
+    Returns ε in [0, 1].
+    """
+    if ntu < 0:
+        raise ValueError(f"ntu must be non-negative; got {ntu}")
+    if not 0 <= capacity_ratio <= 1:
+        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+    if capacity_ratio == 0 or ntu == 0:
+        return 1.0 - exp(-ntu)
+    return 1.0 - exp(
+        (1.0 / capacity_ratio) * ntu**0.22 * (exp(-capacity_ratio * ntu**0.78) - 1.0)
+    )

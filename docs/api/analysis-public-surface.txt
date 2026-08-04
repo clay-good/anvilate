@@ -496,6 +496,7 @@ thermal.differential_thermal_stress
 thermal.fin_array_count_for_resistance
 thermal.heat_exchanger_area_for_duty
 thermal.counterflow_effectiveness
+thermal.crossflow_both_unmixed_effectiveness
 thermal.heat_exchanger_duty
 thermal.heat_exchanger_ntu
 thermal.log_mean_temperature_difference
