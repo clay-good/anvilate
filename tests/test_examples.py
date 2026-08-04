@@ -497,6 +497,15 @@ def test_orifice_meter_sizing_example_reads_and_sizes():
     assert r["full_scale_drop_kpa"] > 20.0
 
 
+def test_tank_drain_down_example_slow_tail():
+    namespace = runpy.run_path(str(_EXAMPLES / "tank_drain_down.py"))
+    d = namespace["drain_schedule"]()
+    # The two halves sum to the total, and the low-head half is much slower.
+    assert d["upper_half_s"] + d["lower_half_s"] == pytest.approx(d["total_s"], rel=1e-9)
+    assert d["lower_half_s"] > d["upper_half_s"]
+    assert d["lower_over_upper"] == pytest.approx(2.4, abs=0.1)
+
+
 def test_water_hammer_valve_closure_example_surge_dwarfs_working():
     namespace = runpy.run_path(str(_EXAMPLES / "water_hammer_valve_closure.py"))
     s = namespace["surge_check"]()

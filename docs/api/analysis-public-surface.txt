@@ -657,6 +657,8 @@ stress.von_mises_bending_torsion
 stress.von_mises_plane_stress
 stress.von_mises_principal
 stress.yield_safety_factor
+tank_flow.tank_drain_time
+tank_flow.torricelli_efflux_velocity
 thermal.DifferentialThermalStress
 thermal.bimetallic_strip_curvature
 thermal.bimetallic_strip_tip_deflection

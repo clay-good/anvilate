@@ -13915,6 +13915,46 @@ def test_pile_capacity_alpha_method_shaft_dominates():
         )
 
 
+def test_torricelli_efflux_and_tank_drain_time():
+    import math
+
+    from anvilate.analysis import tank_drain_time, torricelli_efflux_velocity
+
+    # V = sqrt(2*g*h); h=4 m -> 8.86 m/s.
+    v = torricelli_efflux_velocity(head=_q("4 m"))
+    assert v.to("m/s").magnitude == pytest.approx(math.sqrt(2 * 9.80665 * 4), rel=1e-9)
+    # Quadrupling the head doubles the efflux velocity (square-root law).
+    v4 = torricelli_efflux_velocity(head=_q("16 m"))
+    assert v4.to("m/s").magnitude == pytest.approx(2 * v.to("m/s").magnitude, rel=1e-9)
+    # Drain time t = (A_t/(Cd*A_o))*sqrt(2/g)*(sqrt(h1)-sqrt(h2)).
+    t = tank_drain_time(
+        tank_area=_q("10 m**2"),
+        orifice_area=_q("0.01 m**2"),
+        discharge_coefficient=0.6,
+        initial_head=_q("4 m"),
+        final_head=_q("0 m"),
+    )
+    expect = (10 / (0.6 * 0.01)) * math.sqrt(2 / 9.80665) * (math.sqrt(4) - 0)
+    assert t.to("s").magnitude == pytest.approx(expect, rel=1e-9)
+    # The low-head bottom half takes longer than the top half (the sqrt(h) tail).
+    upper = tank_drain_time(
+        tank_area=_q("10 m**2"),
+        orifice_area=_q("0.01 m**2"),
+        discharge_coefficient=0.6,
+        initial_head=_q("4 m"),
+        final_head=_q("2 m"),
+    )
+    assert (t.to("s").magnitude - upper.to("s").magnitude) > upper.to("s").magnitude
+    with pytest.raises(ValueError, match="final_head must not exceed"):
+        tank_drain_time(
+            tank_area=_q("10 m**2"),
+            orifice_area=_q("0.01 m**2"),
+            discharge_coefficient=0.6,
+            initial_head=_q("2 m"),
+            final_head=_q("4 m"),
+        )
+
+
 def test_reynolds_number_and_friction_factor_regimes():
     from anvilate.analysis import darcy_friction_factor, reynolds_number
 

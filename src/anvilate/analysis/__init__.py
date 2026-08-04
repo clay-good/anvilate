@@ -139,6 +139,8 @@ modules:
   hydraulic jump (sequent depth and energy dissipated) below a spillway, the specific
   energy E = y + V²/2g with its critical-depth minimum, and rectangular, V-notch, and
   broad-crested weir discharge for gauging channel flow and rating spillway sills
+- :mod:`~anvilate.analysis.tank_flow` — tank draining: the Torricelli efflux velocity √(2gh)
+  and the time to drain a tank between two levels through a bottom orifice
 - :mod:`~anvilate.analysis.drag` — fluid drag: the drag force ½·ρ·V²·C_d·A (wind load on a
   sign, current on a member) and the terminal (settling) velocity where drag balances weight
 - :mod:`~anvilate.analysis.refrigeration` — refrigeration and heat-pump cycle performance:
@@ -1120,6 +1122,10 @@ from .stress import (
     von_mises_principal,
     yield_safety_factor,
 )
+from .tank_flow import (
+    tank_drain_time,
+    torricelli_efflux_velocity,
+)
 from .thermal import (
     DifferentialThermalStress,
     bimetallic_strip_curvature,
@@ -1327,6 +1333,8 @@ __all__ = [
     "coefficient_of_performance",
     "drag_force",
     "terminal_velocity",
+    "tank_drain_time",
+    "torricelli_efflux_velocity",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",
