@@ -12788,3 +12788,31 @@ def test_parallel_flow_ntu_inverse_and_the_effectiveness_ceiling():
     # Parallel flow caps at 1/(1+C_r) = 0.667 for C_r=0.5; asking for more is rejected.
     with pytest.raises(ValueError, match="cannot exceed"):
         parallel_flow_ntu_for_effectiveness(effectiveness=0.7, capacity_ratio=0.5)
+
+
+def test_rc_beam_moment_and_steel_inverse_round_trip():
+    from anvilate.analysis import (
+        rc_beam_nominal_moment,
+        rc_stress_block_depth,
+        rc_tension_steel_for_moment,
+    )
+
+    kw = {
+        "steel_yield": _q("420 MPa"),
+        "concrete_strength": _q("30 MPa"),
+        "beam_width": _q("300 mm"),
+    }
+    # a = A_s*f_y/(0.85*f'c*b): 1500*420/(0.85*30*300) = 82.35 mm.
+    a = rc_stress_block_depth(steel_area=_q("1500 mm**2"), **kw)
+    assert a.to("mm").magnitude == pytest.approx(1500 * 420 / (0.85 * 30 * 300), rel=1e-9)
+    # M_n = A_s*f_y*(d-a/2) = 320.6 kN.m.
+    mn = rc_beam_nominal_moment(steel_area=_q("1500 mm**2"), effective_depth=_q("550 mm"), **kw)
+    assert mn.to("kN*m").magnitude == pytest.approx(320.6, abs=0.2)
+    # The design inverse recovers the 1500 mm² from that moment.
+    as_back = rc_tension_steel_for_moment(required_moment=mn, effective_depth=_q("550 mm"), **kw)
+    assert as_back.to("mm**2").magnitude == pytest.approx(1500.0, rel=1e-6)
+    # A moment beyond the section's capacity is rejected, not silently returned.
+    with pytest.raises(ValueError, match="exceeds the section"):
+        rc_tension_steel_for_moment(
+            required_moment=_q("5000 kN*m"), effective_depth=_q("550 mm"), **kw
+        )

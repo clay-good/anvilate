@@ -725,6 +725,11 @@ from .pressure_vessel import (
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
 )
+from .reinforced_concrete import (
+    rc_beam_nominal_moment,
+    rc_stress_block_depth,
+    rc_tension_steel_for_moment,
+)
 from .rigging import (
     sling_horizontal_force,
     sling_leg_tension,
@@ -1003,6 +1008,9 @@ __all__ = [
     "deep_draw_force",
     "RivetedJointStrength",
     "riveted_joint_efficiency",
+    "rc_stress_block_depth",
+    "rc_beam_nominal_moment",
+    "rc_tension_steel_for_moment",
     "sling_tension_factor",
     "sling_leg_tension",
     "sling_horizontal_force",

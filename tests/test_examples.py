@@ -2324,6 +2324,14 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_rc_floor_beam_example_capacity_and_steel_inverse():
+    namespace = runpy.run_path(str(_EXAMPLES / "rc_floor_beam.py"))
+    # 1500 mm2 of steel develops ~321 kN.m.
+    assert namespace["beam_capacity"]().to("kN*m").magnitude == pytest.approx(320.6, abs=0.5)
+    # A 400 kN.m demand needs ~1915 mm2 (about a fourth bar).
+    assert namespace["steel_for_demand"]().to("mm**2").magnitude == pytest.approx(1915, abs=5)
+
+
 def test_cold_formed_stud_flange_example_slender_element_is_reduced():
     namespace = runpy.run_path(str(_EXAMPLES / "cold_formed_stud_flange.py"))
     from anvilate.units import Quantity
