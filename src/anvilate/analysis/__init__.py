@@ -115,7 +115,8 @@ modules:
 - :mod:`~anvilate.analysis.pneumatics` — compressed-air systems: the receiver hold-up
   time V·Δp/(Q·p_atm) and the receiver volume a required hold-up needs
 - :mod:`~anvilate.analysis.compressible_flow` — gas dynamics: the speed of sound √(γRT),
-  the Mach number, and the stagnation-to-static temperature ratio for high-speed gas flow
+  the Mach number, the stagnation-to-static temperature ratio, and the critical pressure
+  ratio and choked mass flow that size a relief valve
 - :mod:`~anvilate.analysis.gas_compression` — gas compression: the ideal-gas density,
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
@@ -556,6 +557,8 @@ from .composite import (
     tsai_hill_failure_index,
 )
 from .compressible_flow import (
+    choked_mass_flow_rate,
+    critical_pressure_ratio,
     mach_number,
     speed_of_sound,
     stagnation_temperature_ratio,
@@ -1342,6 +1345,8 @@ __all__ = [
     "terminal_velocity",
     "tank_drain_time",
     "torricelli_efflux_velocity",
+    "choked_mass_flow_rate",
+    "critical_pressure_ratio",
     "mach_number",
     "speed_of_sound",
     "stagnation_temperature_ratio",

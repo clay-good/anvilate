@@ -22,6 +22,8 @@ from math import sqrt
 from ..units import Quantity
 
 __all__ = [
+    "choked_mass_flow_rate",
+    "critical_pressure_ratio",
     "mach_number",
     "speed_of_sound",
     "stagnation_temperature_ratio",
@@ -88,6 +90,59 @@ def stagnation_temperature_ratio(*, mach_number: float, heat_capacity_ratio: flo
     if heat_capacity_ratio <= 1.0:
         raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
     return 1.0 + (heat_capacity_ratio - 1.0) / 2.0 * mach_number**2
+
+
+def critical_pressure_ratio(*, heat_capacity_ratio: float) -> float:
+    """The critical (choking) pressure ratio, p*/p₀ = (2/(γ+1))^(γ/(γ−1)).
+
+    The downstream-to-upstream pressure ratio at which a gas flowing through a restriction reaches
+    Mach 1 and chokes: p*/p₀ = (2/(γ+1))^(γ/(γ−1)), a function only of ``heat_capacity_ratio`` γ.
+    For air it is the famous 0.528 — drop the downstream pressure below 52.8% of the upstream and
+    the flow can go no faster, no matter how much further the pressure falls. Below this ratio the
+    flow is choked (see :func:`choked_mass_flow_rate`). Returns the dimensionless pressure ratio.
+    """
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    g = heat_capacity_ratio
+    return (2.0 / (g + 1.0)) ** (g / (g - 1.0))
+
+
+def choked_mass_flow_rate(
+    *,
+    stagnation_pressure: Quantity,
+    stagnation_temperature: Quantity,
+    orifice_area: Quantity,
+    discharge_coefficient: float,
+    heat_capacity_ratio: float,
+    specific_gas_constant: Quantity,
+) -> Quantity:
+    """The maximum (choked) gas mass flow through a restriction — the relief-valve sizing form.
+
+    Once a gas is choked (downstream pressure below :func:`critical_pressure_ratio`), the mass flow
+    hits a ceiling set only by the upstream conditions and cannot be increased by lowering the
+    downstream pressure further: ṁ = C_d·A·p₀·√(γ/(R·T₀))·(2/(γ+1))^((γ+1)/(2(γ−1))). This is the
+    worst-case discharge a safety or relief valve must pass. ``stagnation_pressure`` p₀ and
+    ``stagnation_temperature`` T₀ are the upstream (vessel) conditions, ``orifice_area`` A the flow
+    area, ``discharge_coefficient`` C_d (~0.85 for a nozzle), and ``heat_capacity_ratio`` γ /
+    ``specific_gas_constant`` R the gas properties. Returns the choked mass flow in kg/s.
+    """
+    _check(stagnation_pressure, "[pressure]", "stagnation_pressure")
+    _check(stagnation_temperature, "[temperature]", "stagnation_temperature")
+    _check(orifice_area, "[area]", "orifice_area")
+    _check(specific_gas_constant, "[length]**2/[time]**2/[temperature]", "specific_gas_constant")
+    p0 = stagnation_pressure.to("Pa").magnitude
+    t0 = stagnation_temperature.to("K").magnitude
+    a = orifice_area.to("m**2").magnitude
+    r = specific_gas_constant.to("J/(kg*K)").magnitude
+    if p0 <= 0 or t0 <= 0 or a <= 0 or r <= 0:
+        raise ValueError("pressure, temperature, area, and gas constant must be positive")
+    if not 0.0 < discharge_coefficient <= 1.0:
+        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    g = heat_capacity_ratio
+    flux = p0 * sqrt(g / (r * t0)) * (2.0 / (g + 1.0)) ** ((g + 1.0) / (2.0 * (g - 1.0)))
+    return Quantity(magnitude=discharge_coefficient * a * flux, unit="kg/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

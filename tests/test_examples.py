@@ -415,6 +415,17 @@ def test_blower_mach_limit_example_fast_jet_is_compressible():
     assert d["fast_stagnation_rise_c"] > 5.0
 
 
+def test_relief_valve_choked_flow_example_is_choked():
+    namespace = runpy.run_path(str(_EXAMPLES / "relief_valve_choked_flow.py"))
+    r = namespace["relief_capacity"]()
+    # The vessel-to-atmosphere ratio is well below critical, so the valve is choked.
+    assert r["actual_ratio"] < r["critical_ratio"]
+    assert r["is_choked"] is True
+    assert r["critical_ratio"] == pytest.approx(0.528, abs=0.002)
+    # It relieves a substantial mass flow, capped by the upstream conditions.
+    assert r["mass_flow_kgs"] == pytest.approx(0.595, abs=0.02)
+
+
 def test_air_compressor_duty_example_brackets_power_and_heat():
     namespace = runpy.run_path(str(_EXAMPLES / "air_compressor_duty.py"))
     d = namespace["compressor_duty"]()

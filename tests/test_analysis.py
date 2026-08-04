@@ -13287,6 +13287,47 @@ def test_compressible_flow_speed_of_sound_mach_and_stagnation():
         )
 
 
+def test_choked_flow_critical_ratio_and_mass_flow():
+    import math
+
+    from anvilate.analysis import choked_mass_flow_rate, critical_pressure_ratio
+
+    # Critical pressure ratio for air is the famous 0.528.
+    assert critical_pressure_ratio(heat_capacity_ratio=1.4) == pytest.approx(0.5283, abs=0.0005)
+    # A gas with a lower gamma chokes at a higher pressure ratio.
+    assert critical_pressure_ratio(heat_capacity_ratio=1.3) > critical_pressure_ratio(
+        heat_capacity_ratio=1.4
+    )
+    # Choked mass flow ṁ = Cd*A*p0*sqrt(g/(R*T0))*(2/(g+1))^((g+1)/(2(g-1))).
+    m = choked_mass_flow_rate(
+        stagnation_pressure=_q("500 kPa"),
+        stagnation_temperature=_q("300 K"),
+        orifice_area=_q("1e-4 m**2"),
+        discharge_coefficient=0.85,
+        heat_capacity_ratio=1.4,
+        specific_gas_constant=_q("287 J/(kg*K)"),
+    )
+    g = 1.4
+    expect = (
+        0.85
+        * 1e-4
+        * 500000
+        * math.sqrt(g / (287 * 300))
+        * (2 / (g + 1)) ** ((g + 1) / (2 * (g - 1)))
+    )
+    assert m.to("kg/s").magnitude == pytest.approx(expect, rel=1e-9)
+    # The choked flow scales linearly with the upstream (stagnation) pressure.
+    m2 = choked_mass_flow_rate(
+        stagnation_pressure=_q("1000 kPa"),
+        stagnation_temperature=_q("300 K"),
+        orifice_area=_q("1e-4 m**2"),
+        discharge_coefficient=0.85,
+        heat_capacity_ratio=1.4,
+        specific_gas_constant=_q("287 J/(kg*K)"),
+    )
+    assert m2.to("kg/s").magnitude == pytest.approx(2 * m.to("kg/s").magnitude, rel=1e-9)
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 
