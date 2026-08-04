@@ -13230,6 +13230,85 @@ def test_solar_pv_array_power_daily_energy_and_sizing():
         pv_array_power(irradiance=_q("1000 W/m**2"), area=_q("1.6 m**2"), module_efficiency=1.5)
 
 
+def test_solar_thermal_collector_efficiency_useful_heat_and_stagnation():
+    from anvilate.analysis import (
+        collector_stagnation_temperature,
+        collector_useful_heat,
+        flat_plate_collector_efficiency,
+    )
+    from anvilate.units import Quantity
+
+    # eta = eta0 - a1*dT/G - a2*dT^2/G; dT = 60-20 = 40, G = 800:
+    # 0.75 - 4*40/800 - 0.015*1600/800 = 0.75 - 0.20 - 0.03 = 0.52.
+    eta = flat_plate_collector_efficiency(
+        optical_efficiency=0.75,
+        loss_coefficient=_q("4 W/(m**2*K)"),
+        mean_fluid_temperature=Quantity(magnitude=60.0, unit="degC"),
+        ambient_temperature=Quantity(magnitude=20.0, unit="degC"),
+        irradiance=_q("800 W/m**2"),
+        second_order_loss_coefficient=_q("0.015 W/(m**2*K**2)"),
+    )
+    assert eta == pytest.approx(0.52, rel=1e-9)
+
+    # With no fluid rise (T_m = T_a) the loss terms vanish and eta -> eta0.
+    eta0 = flat_plate_collector_efficiency(
+        optical_efficiency=0.75,
+        loss_coefficient=_q("4 W/(m**2*K)"),
+        mean_fluid_temperature=Quantity(magnitude=20.0, unit="degC"),
+        ambient_temperature=Quantity(magnitude=20.0, unit="degC"),
+        irradiance=_q("800 W/m**2"),
+    )
+    assert eta0 == pytest.approx(0.75, rel=1e-12)
+
+    # Q = eta*G*A; 0.52 * 800 * 2 = 832 W.
+    q = collector_useful_heat(efficiency=eta, irradiance=_q("800 W/m**2"), area=_q("2 m**2"))
+    assert q.to("W").magnitude == pytest.approx(832.0, rel=1e-9)
+
+    # Stagnation (eta=0): a2*dT^2 + a1*dT - eta0*G = 0 at G=1000:
+    # dT = (-4 + sqrt(16 + 4*0.015*0.75*1000))/(2*0.015) = 127.008..., T_stag = 20 + dT.
+    t_stag = collector_stagnation_temperature(
+        optical_efficiency=0.75,
+        loss_coefficient=_q("4 W/(m**2*K)"),
+        ambient_temperature=Quantity(magnitude=20.0, unit="degC"),
+        irradiance=_q("1000 W/m**2"),
+        second_order_loss_coefficient=_q("0.015 W/(m**2*K**2)"),
+    )
+    dt_expected = (-4.0 + (16.0 + 4 * 0.015 * 0.75 * 1000) ** 0.5) / (2 * 0.015)
+    assert t_stag.to("degC").magnitude == pytest.approx(20.0 + dt_expected, rel=1e-9)
+
+    # The efficiency at the stagnation temperature is zero by construction.
+    eta_at_stag = flat_plate_collector_efficiency(
+        optical_efficiency=0.75,
+        loss_coefficient=_q("4 W/(m**2*K)"),
+        mean_fluid_temperature=t_stag,
+        ambient_temperature=Quantity(magnitude=20.0, unit="degC"),
+        irradiance=_q("1000 W/m**2"),
+        second_order_loss_coefficient=_q("0.015 W/(m**2*K**2)"),
+    )
+    assert eta_at_stag == pytest.approx(0.0, abs=1e-9)
+
+    # Linear (first-order) stagnation: dT = eta0*G/a1 = 0.75*1000/4 = 187.5.
+    t_stag_lin = collector_stagnation_temperature(
+        optical_efficiency=0.75,
+        loss_coefficient=_q("4 W/(m**2*K)"),
+        ambient_temperature=Quantity(magnitude=20.0, unit="degC"),
+        irradiance=_q("1000 W/m**2"),
+    )
+    assert t_stag_lin.to("degC").magnitude == pytest.approx(20.0 + 187.5, rel=1e-9)
+
+    # Guardrails: optical efficiency is a fraction, irradiance must be positive.
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        flat_plate_collector_efficiency(
+            optical_efficiency=1.5,
+            loss_coefficient=_q("4 W/(m**2*K)"),
+            mean_fluid_temperature=Quantity(magnitude=60.0, unit="degC"),
+            ambient_temperature=Quantity(magnitude=20.0, unit="degC"),
+            irradiance=_q("800 W/m**2"),
+        )
+    with pytest.raises(ValueError, match="irradiance and area must be positive"):
+        collector_useful_heat(efficiency=0.5, irradiance=_q("0 W/m**2"), area=_q("2 m**2"))
+
+
 def test_prestress_load_balancing_and_cracking_moment():
     from anvilate.analysis import (
         prestress_balanced_load,

@@ -199,6 +199,10 @@ modules:
   (P = G·A·η), the daily energy an array yields (E = P·PSH·D), the array rating
   a daily load needs, and the cell-temperature (NOCT) and its power derating
   (P = P_stc·[1 + γ·(T_cell − 25)]) — pairs with energy_storage for off-grid design
+- :mod:`~anvilate.analysis.solar_thermal` — flat-plate collector performance: the
+  instantaneous efficiency η = η₀ − a₁·ΔT/G − a₂·ΔT²/G from the collector test curve,
+  the useful heat it delivers (Q = η·G·A), and the no-flow stagnation temperature
+  (η → 0) that sets the loop's material and pressure-relief limits
 - :mod:`~anvilate.analysis.wind_power` — wind-turbine power: the ½·ρ·V³ power density
   in the wind (cube law), the P = ½·ρ·A·V³·C_p a rotor delivers, the Betz limit
   16/27 ceiling on the power coefficient, the tip speed ratio λ = ω·R/V, and the
@@ -1363,6 +1367,11 @@ from .solar_pv import (
     pv_daily_energy,
     pv_temperature_derated_power,
 )
+from .solar_thermal import (
+    collector_stagnation_temperature,
+    collector_useful_heat,
+    flat_plate_collector_efficiency,
+)
 from .spring import (
     BELLEVILLE_PLATEAU_RATIO,
     SPRING_END_CLAMPED_FREE,
@@ -1719,6 +1728,9 @@ __all__ = [
     "pv_array_size_for_load",
     "pv_cell_temperature",
     "pv_temperature_derated_power",
+    "flat_plate_collector_efficiency",
+    "collector_useful_heat",
+    "collector_stagnation_temperature",
     "accumulator_size_for_volume",
     "accumulator_usable_volume",
     "inverse_square_attenuation",

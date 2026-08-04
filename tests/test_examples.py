@@ -745,6 +745,19 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_solar_collector_stagnation_example_hot_fluid_bleeds_efficiency():
+    namespace = runpy.run_path(str(_EXAMPLES / "solar_collector_stagnation.py"))
+    p = namespace["collector_operating_points"]()
+    # A near-ambient fluid keeps the collector near its optical ceiling (~0.77);
+    # a hot afternoon fluid (45 C rise) bleeds it to ~0.58.
+    assert p["morning_efficiency"] == pytest.approx(0.772, abs=0.01)
+    assert p["afternoon_efficiency"] < p["morning_efficiency"]
+    assert p["afternoon_efficiency"] == pytest.approx(0.584, abs=0.01)
+    # No-flow stagnation on a 35 C day at full sun climbs to ~181 C.
+    assert p["stagnation_c"] == pytest.approx(180.8, abs=1.0)
+    assert p["stagnation_c"] > 150.0
+
+
 def test_off_grid_cabin_solar_battery_example_sizes_both():
     namespace = runpy.run_path(str(_EXAMPLES / "off_grid_cabin_solar_battery.py"))
     s = namespace["off_grid_sizing"]()
