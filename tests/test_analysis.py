@@ -12882,6 +12882,41 @@ def test_nds_column_stability_factor_ylinen_and_euler_stress():
         )
 
 
+def test_composite_rule_of_mixtures_cfrp():
+    from anvilate.analysis import (
+        rule_of_mixtures_modulus,
+        rule_of_mixtures_strength,
+        transverse_modulus_inverse_rule,
+    )
+
+    fm = {"fiber_modulus": _q("230 GPa"), "matrix_modulus": _q("3.5 GPa")}
+    # Longitudinal (iso-strain, Voigt): E1 = V_f*E_f + (1-V_f)*E_m = 139.4 GPa.
+    e1 = rule_of_mixtures_modulus(fiber_fraction=0.60, **fm)
+    assert e1.to("MPa").magnitude == pytest.approx(0.6 * 230000 + 0.4 * 3500, rel=1e-9)
+    # Transverse (iso-stress, Reuss): 1/E2 = V_f/E_f + (1-V_f)/E_m = 8.6 GPa.
+    e2 = transverse_modulus_inverse_rule(fiber_fraction=0.60, **fm)
+    assert e2.to("MPa").magnitude == pytest.approx(1 / (0.6 / 230000 + 0.4 / 3500), rel=1e-9)
+    # E1 is the upper bound and E2 the lower — the fibers dominate one way, the matrix the other.
+    assert e2.to("MPa").magnitude < e1.to("MPa").magnitude
+    assert e1.to("MPa").magnitude / e2.to("MPa").magnitude > 10
+    # Longitudinal strength follows the parallel rule.
+    strength = rule_of_mixtures_strength(
+        fiber_fraction=0.60,
+        fiber_strength=_q("4000 MPa"),
+        matrix_stress_at_fiber_failure=_q("70 MPa"),
+    )
+    assert strength.to("MPa").magnitude == pytest.approx(0.6 * 4000 + 0.4 * 70, rel=1e-9)
+    # A pure matrix (V_f = 0) returns the matrix modulus; pure fiber returns the fiber's.
+    assert rule_of_mixtures_modulus(fiber_fraction=0.0, **fm).to("MPa").magnitude == pytest.approx(
+        3500
+    )
+    assert rule_of_mixtures_modulus(fiber_fraction=1.0, **fm).to("MPa").magnitude == pytest.approx(
+        230000
+    )
+    with pytest.raises(ValueError, match=r"fiber_fraction must lie in \[0, 1\]"):
+        rule_of_mixtures_modulus(fiber_fraction=1.5, **fm)
+
+
 def test_aluminum_buckling_stress_two_regions():
     import math
 

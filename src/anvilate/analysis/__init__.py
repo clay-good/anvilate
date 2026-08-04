@@ -272,6 +272,10 @@ modules:
   unified straight-line/Euler buckling stress from the alloy-temper's buckling
   constants (column, beam, or local buckling), and the tension stress F = min(F_ty,
   F_tu/k_t)
+- :mod:`~anvilate.analysis.composite` — fiber-composite micromechanics (rule of
+  mixtures): the longitudinal (iso-strain) modulus and strength, and the transverse
+  (iso-stress inverse-rule) modulus of a unidirectional laminate from its fiber and
+  matrix properties and volume fraction
 
 Note: :mod:`~anvilate.analysis.pressure_vessel` also carries the ASME VIII head forms
 (ellipsoidal, torispherical, hemispherical/sphere — each sizing and MAWP) and the
@@ -479,6 +483,11 @@ from .column import (
     secant_column_max_stress,
     slenderness_ratio,
     transition_slenderness,
+)
+from .composite import (
+    rule_of_mixtures_modulus,
+    rule_of_mixtures_strength,
+    transverse_modulus_inverse_rule,
 )
 from .contact import (
     HertzContact,
@@ -1051,6 +1060,9 @@ __all__ = [
     "DEFAULT_POISSON_RATIO",
     "aluminum_buckling_stress",
     "aluminum_tension_stress",
+    "rule_of_mixtures_modulus",
+    "rule_of_mixtures_strength",
+    "transverse_modulus_inverse_rule",
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",

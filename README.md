@@ -100,6 +100,7 @@ Over 45 runnable examples, each executed in CI so they stay honest. A few:
 | `floor_joist_wet_service.py` | An NDS timber joist that passes dry and fails wet — the wet-service factor C_M in the adjustment chain is the whole difference. See [timber screening](docs/timber-screening.md). |
 | `cold_formed_stud_flange.py` | A cold-formed flange that is only 59% effective at 1.5 mm and fully effective at 3.5 mm — the AISI Winter effective-width reduction that sets cold-formed design apart. See [cold-formed steel](docs/cold-formed-steel.md). |
 | `aluminum_ladder_rail.py` | A 6061-T6 strut whose low modulus makes it buckle (ADM curve) at 107 MPa — giving away 55% of the 240 MPa strength it reaches in tension. |
+| `cfrp_ply_anisotropy.py` | A unidirectional carbon/epoxy ply is 139 GPa along the fibers but only 9 GPa across (16:1) — the rule of mixtures that explains why laminates cross-ply. |
 | `rc_floor_beam.py` | A reinforced-concrete floor beam whose reinforcement develops 321 kN·m, and the ACI 318 design inverse for the steel a 400 kN·m demand needs. See [reinforced concrete](docs/reinforced-concrete.md). |
 
 Full annotated gallery: [`examples/README.md`](examples/README.md).

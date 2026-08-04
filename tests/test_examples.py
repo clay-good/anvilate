@@ -183,6 +183,15 @@ def test_gear_shaft_assembly_example_sizes_three_subsystems():
     assert result["bearing_life_hours"] > 50000
 
 
+def test_cfrp_ply_example_shows_the_anisotropy():
+    namespace = runpy.run_path(str(_EXAMPLES / "cfrp_ply_anisotropy.py"))
+    p = namespace["ply_properties"]()
+    # A unidirectional ply is an order of magnitude stiffer along the fibers than across.
+    assert p["longitudinal_modulus_mpa"] > 10 * p["transverse_modulus_mpa"]
+    assert p["longitudinal_modulus_mpa"] == pytest.approx(139400, rel=0.01)
+    assert p["longitudinal_strength_mpa"] == pytest.approx(2428, abs=5)
+
+
 def test_aluminum_ladder_rail_example_is_buckling_governed():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminum_ladder_rail.py"))
     r = namespace["rail_strengths"]()
