@@ -338,6 +338,7 @@ modules:
   (the mount natural frequency and static deflection a target isolation needs),
   forced-response dynamic
   magnification and phase, and the base-excitation seismic-instrument response);
+  the Design Guide 11 walking-vibration acceleration ratio a floor is judged by;
   simple and physical (rigid-body) pendulum periods; the solid-disc and annular
   (hollow-cylinder) polar mass moments of inertia; the rotating-unbalance
   centrifugal force, the counterweight that balances it, and the ISO 1940
@@ -751,6 +752,7 @@ from .dynamics import (
     fixed_fixed_center_mass_frequency,
     fixed_fixed_fundamental_frequency,
     fixed_pinned_fundamental_frequency,
+    floor_vibration_peak_acceleration_ratio,
     frequency_scorecard,
     isolation_scorecard,
     isolator_natural_frequency_for_transmissibility,
@@ -1960,6 +1962,7 @@ __all__ = [
     "dynamic_magnification_factor",
     "resonance_phase_angle",
     "base_excitation_relative_transmissibility",
+    "floor_vibration_peak_acceleration_ratio",
     "simple_pendulum_period",
     "physical_pendulum_period",
     "tuned_mass_damper_optimal_frequency_ratio",

@@ -24,7 +24,7 @@ returned in hertz.
 
 from __future__ import annotations
 
-from math import atan2, degrees, pi, sqrt
+from math import atan2, degrees, exp, pi, sqrt
 
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
@@ -49,6 +49,7 @@ __all__ = [
     "dynamic_magnification_factor",
     "resonance_phase_angle",
     "base_excitation_relative_transmissibility",
+    "floor_vibration_peak_acceleration_ratio",
     "simple_pendulum_period",
     "physical_pendulum_period",
     "tuned_mass_damper_optimal_frequency_ratio",
@@ -558,6 +559,41 @@ def base_excitation_relative_transmissibility(
         raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
     r = frequency_ratio
     return r**2 / sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
+
+
+def floor_vibration_peak_acceleration_ratio(
+    *,
+    fundamental_frequency: Quantity,
+    effective_panel_weight: Quantity,
+    damping_ratio: float,
+    constant_force: Quantity,
+) -> float:
+    """The AISC/CISC Design Guide 11 walking-vibration ratio a_p/g = P₀·e^(−0.35·fₙ)/(β·W).
+
+    The serviceability check that governs most long-span steel floors: a person walking excites the
+    floor's fundamental mode, and the resulting peak acceleration (as a fraction of g) is compared
+    to a comfort limit (~0.005 for offices and residences, ~0.015 for shopping malls and
+    footbridges). ``fundamental_frequency`` fₙ is the floor system's first natural frequency (from
+    :func:`simply_supported_fundamental_frequency` or a modal estimate), ``effective_panel_weight``
+    W the weight of the vibrating floor panel (dead plus a fraction of live), ``damping_ratio`` β
+    the modal damping (0.02 bare, up to ~0.05 with partitions and fit-out), and ``constant_force``
+    P₀ the DG11 walking-force constant for the occupancy. A stiff, heavy, well-damped floor keeps
+    the ratio low; a light, springy one fails even when it is plenty strong. Returns the a_p/g.
+    """
+    _require(fundamental_frequency, "1/[time]", "fundamental_frequency")
+    _require(effective_panel_weight, "[force]", "effective_panel_weight")
+    _require(constant_force, "[force]", "constant_force")
+    fn = fundamental_frequency.to("Hz").magnitude
+    w = effective_panel_weight.to("kN").magnitude
+    p0 = constant_force.to("kN").magnitude
+    if fn <= 0:
+        raise ValueError("fundamental_frequency must be positive")
+    if w <= 0 or p0 <= 0:
+        raise ValueError("effective_panel_weight and constant_force must be positive")
+    beta = _check_damping_ratio(damping_ratio)
+    if beta <= 0:
+        raise ValueError("damping_ratio must be positive (an undamped floor never settles)")
+    return p0 * exp(-0.35 * fn) / (beta * w)
 
 
 def simple_pendulum_period(*, length: Quantity, gravity: Quantity = STANDARD_GRAVITY) -> Quantity:

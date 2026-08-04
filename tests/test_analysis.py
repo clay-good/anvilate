@@ -10066,6 +10066,45 @@ def test_base_excitation_relative_transmissibility_two_instrument_regimes():
         base_excitation_relative_transmissibility(frequency_ratio=-1.0, damping_ratio=0.1)
 
 
+def test_floor_vibration_peak_acceleration_ratio_dg11():
+    import math
+
+    from anvilate.analysis import floor_vibration_peak_acceleration_ratio
+
+    # a_p/g = P0*exp(-0.35*fn)/(beta*W); 5 Hz, 400 kN, 3% damping, 0.29 kN -> 0.0042.
+    r = floor_vibration_peak_acceleration_ratio(
+        fundamental_frequency=_q("5 Hz"),
+        effective_panel_weight=_q("400 kN"),
+        damping_ratio=0.03,
+        constant_force=_q("0.29 kN"),
+    )
+    assert r == pytest.approx(0.29 * math.exp(-0.35 * 5) / (0.03 * 400), rel=1e-9)
+    # A lighter, springier floor with less damping vibrates more (fails the ~0.5% office limit).
+    springy = floor_vibration_peak_acceleration_ratio(
+        fundamental_frequency=_q("4 Hz"),
+        effective_panel_weight=_q("250 kN"),
+        damping_ratio=0.02,
+        constant_force=_q("0.29 kN"),
+    )
+    assert springy > r
+    assert springy > 0.005
+    # A higher frequency sharply cuts the response (the exp(-0.35 fn) term).
+    stiff = floor_vibration_peak_acceleration_ratio(
+        fundamental_frequency=_q("8 Hz"),
+        effective_panel_weight=_q("400 kN"),
+        damping_ratio=0.03,
+        constant_force=_q("0.29 kN"),
+    )
+    assert stiff < r
+    with pytest.raises(ValueError, match="damping_ratio"):
+        floor_vibration_peak_acceleration_ratio(
+            fundamental_frequency=_q("5 Hz"),
+            effective_panel_weight=_q("400 kN"),
+            damping_ratio=0.0,
+            constant_force=_q("0.29 kN"),
+        )
+
+
 def test_damped_vibration_rejects_bad_inputs():
     with pytest.raises(ValueError, match=r"damping_ratio must lie in \[0, 1\)"):
         damped_natural_frequency(natural_frequency=_q("100 Hz"), damping_ratio=1.0)

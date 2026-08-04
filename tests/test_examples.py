@@ -965,6 +965,15 @@ def test_cold_storage_roof_snow_example_freezer_carries_more():
     assert r["freezer_sloped_kpa"] < r["freezer_flat_kpa"]
 
 
+def test_office_floor_vibration_example_springy_bay_fails():
+    namespace = runpy.run_path(str(_EXAMPLES / "office_floor_vibration.py"))
+    r = namespace["floor_ratios"]()
+    # The springy bay exceeds the 0.5% g office comfort limit; the stiff bay clears it.
+    assert r["springy_ratio"] > 0.005
+    assert r["stiff_ratio"] < 0.005
+    assert r["springy_ratio"] > r["stiff_ratio"]
+
+
 def test_spread_footing_sizing_example_overburden_grows_the_footing():
     namespace = runpy.run_path(str(_EXAMPLES / "spread_footing_sizing.py"))
     f = namespace["footing_area"]()
