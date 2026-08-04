@@ -13712,6 +13712,31 @@ def test_aisc_plastic_bracing_limit_lp():
     assert softer.to("mm").magnitude > lp.to("mm").magnitude
 
 
+def test_aisc_elastic_ltb_stress_includes_warping():
+    from math import pi, sqrt
+
+    from anvilate.analysis import aisc_elastic_ltb_stress
+
+    # W18x50 at Lb=25 ft (imperial): F_cr = 19.46 ksi (with the warping term).
+    kw = {
+        "unbraced_length": _q("25 ft"),
+        "effective_radius_of_gyration": _q("1.98 in"),
+        "torsion_constant": _q("1.24 in**4"),
+        "elastic_section_modulus": _q("88.9 in**3"),
+        "flange_centroid_distance": _q("17.4 in"),
+        "elastic_modulus": _q("29000 ksi"),
+    }
+    f_cr = aisc_elastic_ltb_stress(**kw)
+    lb = 300 / 1.98
+    term = 1.24 / (88.9 * 17.4)
+    expect = pi**2 * 29000 / lb**2 * sqrt(1 + 0.078 * term * lb**2)
+    assert f_cr.to("ksi").magnitude == pytest.approx(expect, rel=1e-9)
+    assert f_cr.to("ksi").magnitude == pytest.approx(19.46, abs=0.1)
+    # A moment gradient (C_b > 1) raises the buckling stress proportionally.
+    graded = aisc_elastic_ltb_stress(moment_gradient_factor=1.3, **kw)
+    assert graded.to("ksi").magnitude == pytest.approx(1.3 * f_cr.to("ksi").magnitude, rel=1e-9)
+
+
 def test_aisc_effective_radius_of_gyration_matches_manual_w18x50():
     from anvilate.analysis import aisc_effective_radius_of_gyration
 

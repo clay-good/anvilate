@@ -37,6 +37,7 @@ __all__ = [
     "aisc_flexural_buckling_stress",
     "aisc_plastic_bracing_limit",
     "aisc_effective_radius_of_gyration",
+    "aisc_elastic_ltb_stress",
     "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
     "aisc_beam_column_interaction",
@@ -314,6 +315,66 @@ def aisc_inelastic_ltb_limit(
     f_ratio = 0.7 * fy / e
     l_r = 1.95 * rts * (1.0 / f_ratio) * sqrt(term + sqrt(term**2 + 6.76 * f_ratio**2))
     return Quantity(magnitude=l_r, unit="mm")
+
+
+def aisc_elastic_ltb_stress(
+    *,
+    unbraced_length: Quantity,
+    effective_radius_of_gyration: Quantity,
+    torsion_constant: Quantity,
+    elastic_section_modulus: Quantity,
+    flange_centroid_distance: Quantity,
+    elastic_modulus: Quantity,
+    moment_gradient_factor: float = 1.0,
+    section_coefficient: float = 1.0,
+) -> Quantity:
+    """The AISC 360 §F2.2(b) elastic lateral-torsional buckling stress F_cr (Eq. F2-4).
+
+    Beyond the inelastic limit L_r (:func:`aisc_inelastic_ltb_limit`) a beam buckles
+    elastically, and this is the code-accurate critical stress — the one that includes both
+    the St-Venant torsion and the warping term the simplified
+    :func:`lateral_torsional_buckling_moment` leaves out:
+
+        F_cr = (C_b·π²·E/(L_b/r_ts)²)·√(1 + 0.078·(J·c/(S_x·h_o))·(L_b/r_ts)²).
+
+    The flexural strength is then M_n = F_cr·S_x (capped at M_p). ``unbraced_length`` L_b,
+    ``effective_radius_of_gyration`` r_ts (:func:`aisc_effective_radius_of_gyration`),
+    ``torsion_constant`` J, ``elastic_section_modulus`` S_x, ``flange_centroid_distance``
+    h_o, ``elastic_modulus`` E, the ``moment_gradient_factor`` C_b (1.0 for uniform moment;
+    higher for a varying moment), and ``section_coefficient`` c (1.0 for a doubly-symmetric
+    I). The √ term is the warping contribution — it makes a compact, stocky-flanged beam
+    noticeably stronger than the pure-torsion estimate. Returns F_cr in MPa.
+    """
+    _require(unbraced_length, "[length]", "unbraced_length")
+    _require(effective_radius_of_gyration, "[length]", "effective_radius_of_gyration")
+    if not torsion_constant.has_dimension("[length]**4"):
+        raise ValueError("torsion_constant must be a [length]**4 quantity")
+    if not elastic_section_modulus.has_dimension("[length]**3"):
+        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+    _require(flange_centroid_distance, "[length]", "flange_centroid_distance")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    lb = unbraced_length.to("mm").magnitude
+    rts = effective_radius_of_gyration.to("mm").magnitude
+    j = torsion_constant.to("mm**4").magnitude
+    sx = elastic_section_modulus.to("mm**3").magnitude
+    ho = flange_centroid_distance.to("mm").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if min(lb, rts, j, sx, ho, e) <= 0:
+        raise ValueError("all quantity inputs must be positive")
+    if moment_gradient_factor <= 0:
+        raise ValueError(f"moment_gradient_factor must be positive; got {moment_gradient_factor}")
+    if section_coefficient <= 0:
+        raise ValueError(f"section_coefficient must be positive; got {section_coefficient}")
+    slenderness = lb / rts
+    term = j * section_coefficient / (sx * ho)
+    f_cr = (
+        moment_gradient_factor
+        * pi**2
+        * e
+        / slenderness**2
+        * sqrt(1.0 + 0.078 * term * slenderness**2)
+    )
+    return Quantity(magnitude=f_cr, unit="MPa")
 
 
 def aisc_inelastic_ltb_moment(
