@@ -58,6 +58,7 @@ __all__ = [
     "barth_velocity_factor",
     "lewis_bending_stress",
     "lewis_module_for_bending_stress",
+    "agma_bending_stress",
     "gear_contact_stress",
     "spur_gear_contact_ratio",
     "minimum_teeth_to_avoid_undercut",
@@ -370,6 +371,64 @@ def lewis_module_for_bending_stress(
         raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
     module = tangential_load.pint / (face_width.pint * form_factor * allowable_stress.pint)
     return Quantity(magnitude=float(module.to("mm").magnitude), unit="mm")
+
+
+def agma_bending_stress(
+    *,
+    tangential_load: Quantity,
+    module: Quantity,
+    face_width: Quantity,
+    geometry_factor: float,
+    overload_factor: float = 1.0,
+    dynamic_factor: float = 1.0,
+    size_factor: float = 1.0,
+    load_distribution_factor: float = 1.0,
+    rim_thickness_factor: float = 1.0,
+) -> Quantity:
+    """The AGMA 2001 / ISO 6336 tooth-root bending stress with the derating factors.
+
+    Real gear design refines the Lewis stress (:func:`lewis_bending_stress`) with a set of
+    factors that account for how the tooth is actually loaded:
+    σ = (W_t/(b·m_t))·K_o·K_v·K_s·(K_H·K_B/Y_J). ``tangential_load`` W_t and ``module`` m_t
+    and ``face_width`` b are the Lewis inputs; ``geometry_factor`` Y_J is the AGMA geometry
+    (J) factor, which rolls the Lewis form factor together with stress concentration and
+    load sharing. The derating factors — ``overload_factor`` K_o (driven/driver machine
+    roughness), ``dynamic_factor`` K_v (mesh speed and quality, e.g. from
+    :func:`barth_velocity_factor`), ``size_factor`` K_s, ``load_distribution_factor`` K_H
+    (misalignment across the face), and ``rim_thickness_factor`` K_B (thin-rimmed gears) —
+    each default to 1.0 and are supplied by the caller from the AGMA charts, like any
+    allowable. Screen the result against the material's allowable bending stress. Returns
+    the bending stress in MPa.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    _require(module, "[length]", "module")
+    _require(face_width, "[length]", "face_width")
+    if module.to("mm").magnitude <= 0:
+        raise ValueError(f"module must be positive; got {module}")
+    if face_width.to("mm").magnitude <= 0:
+        raise ValueError(f"face_width must be positive; got {face_width}")
+    if geometry_factor <= 0:
+        raise ValueError(f"geometry_factor (AGMA Y_J) must be positive; got {geometry_factor}")
+    factors = {
+        "overload_factor": overload_factor,
+        "dynamic_factor": dynamic_factor,
+        "size_factor": size_factor,
+        "load_distribution_factor": load_distribution_factor,
+        "rim_thickness_factor": rim_thickness_factor,
+    }
+    for name, value in factors.items():
+        if value <= 0:
+            raise ValueError(f"{name} must be positive; got {value}")
+    derating = (
+        overload_factor
+        * dynamic_factor
+        * size_factor
+        * load_distribution_factor
+        * rim_thickness_factor
+        / geometry_factor
+    )
+    stress = tangential_load.pint / (face_width.pint * module.pint) * derating
+    return Quantity(magnitude=float(stress.to("MPa").magnitude), unit="MPa")
 
 
 def gear_contact_stress(

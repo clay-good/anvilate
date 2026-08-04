@@ -11386,6 +11386,40 @@ def test_living_hinge_fold_strain_and_web_length_inverse():
         lh.living_hinge_web_length_for_strain(web_thickness=_q("0.4 mm"), permissible_strain=0)
 
 
+def test_agma_bending_stress_derates_the_lewis_form():
+    from anvilate.analysis import agma_bending_stress, lewis_bending_stress
+
+    kw = {
+        "tangential_load": _q("5000 N"),
+        "module": _q("5 mm"),
+        "face_width": _q("40 mm"),
+    }
+    # σ = (W_t/(b*m_t))*K_o*K_v*K_s*(K_H*K_B/Y_J) = 121.9 MPa for these factors.
+    sigma = agma_bending_stress(
+        geometry_factor=0.4,
+        overload_factor=1.25,
+        dynamic_factor=1.2,
+        size_factor=1.0,
+        load_distribution_factor=1.3,
+        rim_thickness_factor=1.0,
+        **kw,
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(
+        (5000 / (40 * 5)) * 1.25 * 1.2 * 1.0 * (1.3 * 1.0 / 0.4), rel=1e-9
+    )
+    # With every derating factor at 1.0, AGMA reduces to the Lewis stress using Y_J as
+    # the form factor.
+    unit_factors = agma_bending_stress(geometry_factor=0.4, **kw)
+    lewis = lewis_bending_stress(
+        tangential_load=_q("5000 N"), module=_q("5 mm"), face_width=_q("40 mm"), form_factor=0.4
+    )
+    assert unit_factors.to("MPa").magnitude == pytest.approx(lewis.to("MPa").magnitude, rel=1e-9)
+    # The derating factors raise the stress above the bare Lewis value.
+    assert sigma.to("MPa").magnitude > unit_factors.to("MPa").magnitude
+    with pytest.raises(ValueError, match="geometry_factor"):
+        agma_bending_stress(geometry_factor=0.0, **kw)
+
+
 def test_lewis_module_inverse_round_trips_the_bending_stress():
     from anvilate.analysis import lewis_bending_stress, lewis_module_for_bending_stress
 

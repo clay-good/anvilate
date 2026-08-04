@@ -323,6 +323,7 @@ gear.helical_virtual_teeth
 gear.involute_angle
 gear.involute_function
 gear.lewis_bending_stress
+gear.agma_bending_stress
 gear.lewis_module_for_bending_stress
 gear.minimum_teeth_to_avoid_undercut
 gear.operating_pressure_angle
