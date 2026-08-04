@@ -13781,6 +13781,38 @@ def test_ventilation_outdoor_air_changes_and_dilution():
         )
 
 
+def test_motor_full_load_current_and_branch_circuit():
+    import math
+
+    from anvilate.analysis import (
+        line_current_for_power,
+        motor_branch_circuit_ampacity,
+        motor_full_load_current,
+    )
+
+    # FLC = P_out/(sqrt(3)*V*pf*eff): 15 kW, 400 V, 0.85, 0.90 -> 28.30 A.
+    flc = motor_full_load_current(
+        output_power=_q("15 kW"), line_voltage=_q("400 V"), power_factor=0.85, efficiency=0.90
+    )
+    assert flc.to("A").magnitude == pytest.approx(
+        15000 / (math.sqrt(3) * 400 * 0.85 * 0.90), rel=1e-9
+    )
+    # The motor draws more than the naive line current (which ignores efficiency).
+    naive = line_current_for_power(
+        real_power=_q("15 kW"), line_voltage=_q("400 V"), power_factor=0.85
+    )
+    assert flc.to("A").magnitude > naive.to("A").magnitude
+    # It equals the naive current divided by the efficiency.
+    assert flc.to("A").magnitude == pytest.approx(naive.to("A").magnitude / 0.90, rel=1e-9)
+    # Branch circuit is 125% of the FLC (NEC 430.22).
+    branch = motor_branch_circuit_ampacity(full_load_current=flc)
+    assert branch.to("A").magnitude == pytest.approx(1.25 * flc.to("A").magnitude, rel=1e-9)
+    with pytest.raises(ValueError, match="efficiency"):
+        motor_full_load_current(
+            output_power=_q("15 kW"), line_voltage=_q("400 V"), power_factor=0.85, efficiency=1.5
+        )
+
+
 def test_electrical_three_phase_power_current_and_voltage_drop():
     import math
 

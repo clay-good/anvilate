@@ -1147,6 +1147,16 @@ def test_wind_vs_seismic_base_shear_example_seismic_governs():
     assert d["seismic_shear_kn"] > d["wind_shear_kn"]
 
 
+def test_motor_branch_circuit_example_efficiency_and_nec_factor():
+    namespace = runpy.run_path(str(_EXAMPLES / "motor_branch_circuit.py"))
+    m = namespace["motor_circuit"]()
+    # The true full-load current exceeds the naive nameplate current...
+    assert m["full_load_a"] == pytest.approx(28.3, abs=0.1)
+    assert m["full_load_a"] > m["naive_a"]
+    # ...and the branch circuit is 125% of it.
+    assert m["branch_ampacity_a"] == pytest.approx(1.25 * m["full_load_a"], rel=1e-6)
+
+
 def test_dc_low_voltage_run_example_small_cable_browns_out():
     namespace = runpy.run_path(str(_EXAMPLES / "dc_low_voltage_run.py"))
     f = namespace["dc_run_check"]()

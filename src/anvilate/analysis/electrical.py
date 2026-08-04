@@ -27,6 +27,8 @@ __all__ = [
     "conductor_resistance",
     "ground_rod_resistance",
     "line_current_for_power",
+    "motor_full_load_current",
+    "motor_branch_circuit_ampacity",
     "parallel_ground_electrodes_resistance",
     "power_factor_correction_kvar",
     "skin_depth",
@@ -86,6 +88,58 @@ def line_current_for_power(
     if not 0.0 < power_factor <= 1.0:
         raise ValueError(f"power_factor must be in (0, 1]; got {power_factor}")
     return Quantity(magnitude=p / (_SQRT3 * v * power_factor), unit="A")
+
+
+def motor_full_load_current(
+    *,
+    output_power: Quantity,
+    line_voltage: Quantity,
+    power_factor: float,
+    efficiency: float,
+) -> Quantity:
+    """The full-load current of a three-phase motor, I = P_out/(√3·V·cosφ·η).
+
+    A motor is rated by its *mechanical output*, but the line has to supply the larger electrical
+    *input* — the output over the efficiency — so its full-load current is
+    I = ``output_power``/(√3·``line_voltage``·``power_factor``·``efficiency``). This is why a motor
+    draws more current than :func:`line_current_for_power` would give for the same nameplate kW:
+    that function takes the electrical power directly, whereas a motor's kW is shaft power and the
+    losses add to the draw. ``power_factor`` cosφ and ``efficiency`` η are the motor's nameplate
+    values (both in (0, 1]). Size the branch circuit off this with
+    :func:`motor_branch_circuit_ampacity`. Returns the full-load current in amperes.
+    """
+    _check(output_power, "[power]", "output_power")
+    _check(line_voltage, "[electric_potential]", "line_voltage")
+    p = output_power.to("W").magnitude
+    v = line_voltage.to("V").magnitude
+    if p <= 0 or v <= 0:
+        raise ValueError("output_power and line_voltage must be positive")
+    if not 0.0 < power_factor <= 1.0:
+        raise ValueError(f"power_factor must be in (0, 1]; got {power_factor}")
+    if not 0.0 < efficiency <= 1.0:
+        raise ValueError(f"efficiency must be in (0, 1]; got {efficiency}")
+    return Quantity(magnitude=p / (_SQRT3 * v * power_factor * efficiency), unit="A")
+
+
+def motor_branch_circuit_ampacity(
+    *,
+    full_load_current: Quantity,
+    sizing_factor: float = 1.25,
+) -> Quantity:
+    """The minimum branch-circuit ampacity for a motor, 1.25·I_FLC (NEC 430.22).
+
+    A motor runs continuously and rides through starting surges, so the NEC sizes its branch-circuit
+    conductors for 125% of the full-load current, not 100%: the ``full_load_current`` I_FLC (from
+    :func:`motor_full_load_current`) times the ``sizing_factor`` (1.25 for a continuous-duty motor).
+    Pick a conductor whose ampacity is at least this. Returns the required ampacity in amperes.
+    """
+    _check(full_load_current, "[current]", "full_load_current")
+    i = full_load_current.to("A").magnitude
+    if i <= 0:
+        raise ValueError("full_load_current must be positive")
+    if sizing_factor < 1.0:
+        raise ValueError("sizing_factor must be at least 1.0")
+    return Quantity(magnitude=i * sizing_factor, unit="A")
 
 
 def conductor_resistance(

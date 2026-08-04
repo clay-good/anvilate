@@ -302,6 +302,8 @@ electrical.apparent_power_three_phase
 electrical.conductor_resistance
 electrical.ground_rod_resistance
 electrical.line_current_for_power
+electrical.motor_branch_circuit_ampacity
+electrical.motor_full_load_current
 electrical.parallel_ground_electrodes_resistance
 electrical.power_factor_correction_kvar
 electrical.skin_depth
