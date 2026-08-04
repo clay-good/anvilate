@@ -426,6 +426,15 @@ def test_heat_pump_cold_day_example_cop_collapses():
     assert p["cold_power_kw"] / p["mild_power_kw"] > 1.5
 
 
+def test_sign_wind_drag_example_gust_square_law():
+    namespace = runpy.run_path(str(_EXAMPLES / "sign_wind_drag.py"))
+    w = namespace["sign_wind_load"]()
+    # A 40% faster gust nearly doubles the load (V^2): (42/30)^2 = 1.96.
+    assert w["gust_over_mean"] == pytest.approx((42 / 30) ** 2, rel=1e-6)
+    assert w["gust_load_kn"] > w["mean_load_kn"]
+    assert w["mean_load_kn"] == pytest.approx(4.0, abs=0.2)
+
+
 def test_multistage_compressor_staging_example_cuts_power_and_heat():
     namespace = runpy.run_path(str(_EXAMPLES / "multistage_compressor_staging.py"))
     s = namespace["staging_comparison"]()

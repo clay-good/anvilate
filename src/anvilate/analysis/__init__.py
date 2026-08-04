@@ -138,6 +138,8 @@ modules:
   hydraulic jump (sequent depth and energy dissipated) below a spillway, the specific
   energy E = y + V²/2g with its critical-depth minimum, and rectangular, V-notch, and
   broad-crested weir discharge for gauging channel flow and rating spillway sills
+- :mod:`~anvilate.analysis.drag` — fluid drag: the drag force ½·ρ·V²·C_d·A (wind load on a
+  sign, current on a member) and the terminal (settling) velocity where drag balances weight
 - :mod:`~anvilate.analysis.refrigeration` — refrigeration and heat-pump cycle performance:
   the Carnot cooling and heating COP ceilings and the actual COP = Q/W
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
@@ -576,6 +578,10 @@ from .curved_beam import (
     thin_ring_diametral_deflection,
     thin_ring_max_moment,
     trapezoidal_curved_beam_stress,
+)
+from .drag import (
+    drag_force,
+    terminal_velocity,
 )
 from .dynamics import (
     STANDARD_GRAVITY,
@@ -1311,6 +1317,8 @@ __all__ = [
     "carnot_cop_cooling",
     "carnot_cop_heating",
     "coefficient_of_performance",
+    "drag_force",
+    "terminal_velocity",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

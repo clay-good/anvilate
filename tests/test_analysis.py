@@ -13114,6 +13114,39 @@ def test_air_receiver_holdup_and_sizing_round_trip():
         )
 
 
+def test_drag_force_and_terminal_velocity():
+    from anvilate.analysis import drag_force, terminal_velocity
+
+    # F_d = 0.5*rho*V^2*Cd*A = 0.5*1.225*900*1.2*2 = 1323 N.
+    fd = drag_force(
+        density=_q("1.225 kg/m**3"),
+        velocity=_q("30 m/s"),
+        drag_coefficient=1.2,
+        reference_area=_q("2 m**2"),
+    )
+    assert fd.to("N").magnitude == pytest.approx(0.5 * 1.225 * 30**2 * 1.2 * 2, rel=1e-9)
+    # The square law: doubling the velocity quadruples the drag.
+    fd_double = drag_force(
+        density=_q("1.225 kg/m**3"),
+        velocity=_q("60 m/s"),
+        drag_coefficient=1.2,
+        reference_area=_q("2 m**2"),
+    )
+    assert fd_double.to("N").magnitude == pytest.approx(4 * fd.to("N").magnitude, rel=1e-9)
+    # Terminal velocity balances drag against weight — round-trips the drag above.
+    vt = terminal_velocity(
+        weight=fd, density=_q("1.225 kg/m**3"), drag_coefficient=1.2, reference_area=_q("2 m**2")
+    )
+    assert vt.to("m/s").magnitude == pytest.approx(30.0, rel=1e-9)
+    with pytest.raises(ValueError, match="drag_coefficient"):
+        drag_force(
+            density=_q("1.225 kg/m**3"),
+            velocity=_q("30 m/s"),
+            drag_coefficient=0.0,
+            reference_area=_q("2 m**2"),
+        )
+
+
 def test_refrigeration_carnot_and_actual_cop():
     from anvilate.analysis import (
         carnot_cop_cooling,
