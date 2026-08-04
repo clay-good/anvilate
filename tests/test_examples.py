@@ -2324,6 +2324,18 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_floor_joist_wet_service_example_factor_chain_flips_the_verdict():
+    namespace = runpy.run_path(str(_EXAMPLES / "floor_joist_wet_service.py"))
+    # The identical joist passes dry and fails wet — the wet-service factor C_M is
+    # the whole difference.
+    dry = namespace["screen_dry"]()
+    assert dry.status is CheckStatus.PASS
+    assert dry.entries[0].safety_factor == pytest.approx(1.14, abs=0.01)
+    wet = namespace["screen_wet"]()
+    assert wet.status is CheckStatus.FAIL
+    assert wet.entries[0].safety_factor == pytest.approx(0.97, abs=0.01)
+
+
 def test_process_pipe_schedule_example_rates_the_available_wall():
     namespace = runpy.run_path(str(_EXAMPLES / "process_pipe_schedule.py"))
     # Schedule 10 looks like plenty at 3.05 mm, but mill tolerance and corrosion leave

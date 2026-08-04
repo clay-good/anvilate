@@ -629,6 +629,12 @@ from .living_hinge import (
     living_hinge_fold_strain,
     living_hinge_web_length_for_strain,
 )
+from .nds_timber import (
+    LoadDuration,
+    nds_adjusted_design_value,
+    nds_bending_scorecard,
+    nds_load_duration_factor,
+)
 from .o_ring import (
     o_ring_gland_fill_fraction,
     o_ring_squeeze_fraction,
@@ -1210,6 +1216,10 @@ __all__ = [
     "spline_torque_capacity",
     "living_hinge_fold_strain",
     "living_hinge_web_length_for_strain",
+    "LoadDuration",
+    "nds_load_duration_factor",
+    "nds_adjusted_design_value",
+    "nds_bending_scorecard",
     "o_ring_squeeze_fraction",
     "o_ring_gland_fill_fraction",
     "o_ring_stretch_fraction",

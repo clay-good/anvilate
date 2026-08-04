@@ -12265,3 +12265,43 @@ def test_beam_results_report_the_peak_moment_they_computed():
             / common["second_moment"].to("mm**4").magnitude
         )
         assert implied == pytest.approx(result.max_bending_stress.to("MPa").magnitude)
+
+
+def test_nds_adjusted_design_value_composes_the_factor_chain():
+    from anvilate.analysis import (
+        LoadDuration,
+        nds_adjusted_design_value,
+        nds_load_duration_factor,
+    )
+
+    # C_D from Table 2.3.2: snow is 1.15, wind/earthquake 1.6.
+    assert nds_load_duration_factor(LoadDuration.TWO_MONTH) == pytest.approx(1.15)
+    assert nds_load_duration_factor(LoadDuration.TEN_MINUTE) == pytest.approx(1.6)
+    # F' = F * product of factors; an empty chain returns the reference unchanged.
+    adjusted = nds_adjusted_design_value(
+        reference_value=_q("900 psi"), factors={"C_D": 1.0, "C_F": 1.1, "C_M": 0.85}
+    )
+    assert adjusted.to("psi").magnitude == pytest.approx(900 * 1.0 * 1.1 * 0.85, rel=1e-9)
+    assert nds_adjusted_design_value(reference_value=_q("900 psi"), factors={}).to(
+        "psi"
+    ).magnitude == pytest.approx(900.0, rel=1e-9)
+    with pytest.raises(ValueError, match="must be positive"):
+        nds_adjusted_design_value(reference_value=_q("900 psi"), factors={"C_M": 0.0})
+
+
+def test_nds_bending_scorecard_not_evaluated_without_a_reference_value():
+    from anvilate.analysis import nds_bending_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    # A supplied adjusted value screens normally.
+    ok = nds_bending_scorecard(
+        "bending", bending_stress=_q("1000 psi"), adjusted_bending_value=_q("1200 psi")
+    )
+    assert ok.status is CheckStatus.PASS
+    assert ok.safety_factor == pytest.approx(1.2, rel=1e-9)
+    # No reference value -> NOT_EVALUATED, never a silent pass.
+    unrated = nds_bending_scorecard(
+        "bending", bending_stress=_q("1000 psi"), adjusted_bending_value=None
+    )
+    assert unrated.status is CheckStatus.NOT_EVALUATED
+    assert "reference design value" in unrated.detail
