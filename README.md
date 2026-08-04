@@ -70,7 +70,7 @@ Units are first-class (SI and US customary — mix `kip`, `ksi`, `in`, `mm`, `MP
 
 ## What you can do today
 
-Over 45 runnable examples, each executed in CI so they stay honest. A few:
+Over 150 runnable examples, each executed in CI so they stay honest. A few:
 
 | Run this | What it shows |
 |---|---|
@@ -102,10 +102,15 @@ Over 45 runnable examples, each executed in CI so they stay honest. A few:
 | `aluminum_ladder_rail.py` | A 6061-T6 strut whose low modulus makes it buckle (ADM curve) at 107 MPa — giving away 55% of the 240 MPa strength it reaches in tension. |
 | `cfrp_ply_anisotropy.py` | A unidirectional carbon/epoxy ply is 139 GPa along the fibers but only 9 GPa across (16:1) — the rule of mixtures that explains why laminates cross-ply. |
 | `rc_floor_beam.py` | A reinforced-concrete floor beam whose reinforcement develops 321 kN·m, and the ACI 318 design inverse for the steel a 400 kN·m demand needs. See [reinforced concrete](docs/reinforced-concrete.md). |
+| `retaining_wall_stability.py` | One retaining wall, three external-stability checks (TMS/geotech): overturning and sliding both pass, but the resultant leaves the middle third so the heel lifts and bearing governs — no single number says the wall stands. |
+| `slope_stability_rain.py` | A 35° cut steeper than its friction angle: friction alone can't hold it, cohesion does, and saturation (pore pressure) nearly undoes it — why slopes stand for years then fail in a storm. |
+| `pump_selection_from_line.py` | The whole hydraulics chain — Darcy friction + fittings + static lift → total head → hydraulic and shaft power → specific speed → centrifugal — from pipe geometry to a motor nameplate. |
+| `vfd_pump_energy_saving.py` | The pump affinity laws: backing a pump to 80% speed with a VFD trades a fifth less flow for nearly half the power — the cube law that is the whole case for variable-speed drives. |
+| `masonry_wall_slenderness.py` | A TMS 402 masonry wall its gravity check passes at f_a/F_a = 0.52, but adding out-of-plane wind drives the combined unity ratio past 1.0 — the interaction, not either stress, sizes it. |
 
 Full annotated gallery: [`examples/README.md`](examples/README.md).
 
-What's implemented: a units layer, the typed **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA, dowels, T-slot), the T1 analytical library above, ISO 286 fits + tolerance stack-ups + DFM process-capability checks, an auditable evidence/provenance roll-up, DXF export, and a structural discipline pack (beams, columns, beam-columns, bolted/welded connections, base plates, lugs, gussets — AISC 360 / ACI 318 / ASME BTH-1, every check citing its clause). Every check also renders as a reviewable [calculation report](docs/calculation-reports.md) — formula, substituted values, result, and clause. On top of the scorecard sit three cross-cutting layers that keep a green from being a silent one: [typed repair feedback](docs/repair-feedback.md) (a failing check names the parameter and the value that fixes it; a two-sided band flags over-engineering), [uncertainty-aware margins](docs/uncertainty-margins.md) (input scatter propagated to a shortfall probability and a sensitivity ranking), and [ASCE 7-22 load combinations](docs/load-combinations.md) (the governing combination named, including the counteracting uplift case a gravity-only check misses).
+What's implemented: a units layer, the typed **Design Spec IR**, a standards/materials database (materials, fasteners, bearings, NEMA, dowels, T-slot), the T1 analytical library above, ISO 286 fits + tolerance stack-ups + DFM process-capability checks, an auditable evidence/provenance roll-up, DXF export, and a structural discipline pack (beams, columns, beam-columns, bolted/welded connections, base plates, lugs, gussets — AISC 360 / ACI 318 / ASME BTH-1, every check citing its clause). The analytical library reaches past the mechanical/structural core into neighboring disciplines the same engineers work in — **geotechnical** (Rankine earth pressure, Terzaghi bearing capacity, consolidation settlement, retaining-wall stability, slope stability), **hydraulics** (Darcy-Weisbach pipe flow, open-channel Manning flow, pump sizing and affinity laws, differential-pressure metering, fluid statics), and **masonry** (TMS 402 allowable-stress design) — each closed-form, dimension-checked, and hand-verified. Every check also renders as a reviewable [calculation report](docs/calculation-reports.md) — formula, substituted values, result, and clause. On top of the scorecard sit three cross-cutting layers that keep a green from being a silent one: [typed repair feedback](docs/repair-feedback.md) (a failing check names the parameter and the value that fixes it; a two-sided band flags over-engineering), [uncertainty-aware margins](docs/uncertainty-margins.md) (input scatter propagated to a shortfall probability and a sensitivity ranking), and [ASCE 7-22 load combinations](docs/load-combinations.md) (the governing combination named, including the counteracting uplift case a gravity-only check misses).
 
 ## Where this is going
 
