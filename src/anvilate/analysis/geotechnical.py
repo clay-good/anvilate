@@ -37,8 +37,11 @@ __all__ = [
     "consolidation_settlement",
     "consolidation_time",
     "consolidation_time_factor",
+    "eccentric_base_pressure",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
+    "retaining_wall_overturning_factor",
+    "retaining_wall_sliding_factor",
     "terzaghi_bearing_capacity",
 ]
 
@@ -262,3 +265,111 @@ def consolidation_time(
     if h_dr <= 0 or c_v <= 0:
         raise ValueError("drainage_path_length and coefficient_of_consolidation must be positive")
     return Quantity(magnitude=time_factor * h_dr**2 / c_v, unit="year")
+
+
+def retaining_wall_overturning_factor(
+    *,
+    lateral_thrust: Quantity,
+    thrust_height: Quantity,
+    vertical_load: Quantity,
+    load_arm: Quantity,
+) -> float:
+    """The factor of safety against overturning of a retaining wall about its toe.
+
+    A retaining wall tips about its toe when the backfill's lateral thrust overpowers the
+    restoring moment of the weight bearing down on it. This is the ratio of the two moments,
+    FS = (V·a) / (P·y): the ``vertical_load`` V (the wall plus the soil on its heel, per unit
+    length) times its ``load_arm`` a to the toe, over the ``lateral_thrust`` P (from
+    :func:`rankine_lateral_thrust`) times ``thrust_height`` y, the height of its line of action
+    above the base (H/3 for the triangular soil pressure). Loads and thrust are per unit wall
+    length; the units cancel to a dimensionless factor. Returns FS — 2.0 is a common minimum.
+    """
+    _require(lateral_thrust, "[force]/[length]", "lateral_thrust")
+    _require(thrust_height, "[length]", "thrust_height")
+    _require(vertical_load, "[force]/[length]", "vertical_load")
+    _require(load_arm, "[length]", "load_arm")
+    p = lateral_thrust.to("kN/m").magnitude
+    y = thrust_height.to("m").magnitude
+    v = vertical_load.to("kN/m").magnitude
+    a = load_arm.to("m").magnitude
+    if p <= 0 or y <= 0:
+        raise ValueError("lateral_thrust and thrust_height must be positive")
+    if v <= 0 or a <= 0:
+        raise ValueError("vertical_load and load_arm must be positive")
+    return (v * a) / (p * y)
+
+
+def retaining_wall_sliding_factor(
+    *,
+    lateral_thrust: Quantity,
+    vertical_load: Quantity,
+    base_friction_coefficient: float,
+    passive_resistance: Quantity | None = None,
+) -> float:
+    """The factor of safety against sliding of a retaining wall on its base.
+
+    A wall slides when the lateral thrust exceeds the friction the base can mobilize. This is
+    FS = (μ·V + P_p) / P: the base friction, ``base_friction_coefficient`` μ (= tanδ) times the
+    ``vertical_load`` V pressing the wall down, plus any ``passive_resistance`` P_p mobilized in
+    front of the toe, over the driving ``lateral_thrust`` P (from
+    :func:`rankine_lateral_thrust`). Forces are per unit wall length. Passive resistance is often
+    neglected (the soil in front can be excavated), so it defaults to none. Returns FS — 1.5 is a
+    common minimum.
+    """
+    _require(lateral_thrust, "[force]/[length]", "lateral_thrust")
+    _require(vertical_load, "[force]/[length]", "vertical_load")
+    p = lateral_thrust.to("kN/m").magnitude
+    v = vertical_load.to("kN/m").magnitude
+    if p <= 0 or v <= 0:
+        raise ValueError("lateral_thrust and vertical_load must be positive")
+    if base_friction_coefficient <= 0:
+        raise ValueError("base_friction_coefficient must be positive")
+    resisting = base_friction_coefficient * v
+    if passive_resistance is not None:
+        _require(passive_resistance, "[force]/[length]", "passive_resistance")
+        p_p = passive_resistance.to("kN/m").magnitude
+        if p_p < 0:
+            raise ValueError("passive_resistance must be non-negative")
+        resisting += p_p
+    return resisting / p
+
+
+def eccentric_base_pressure(
+    *,
+    vertical_load: Quantity,
+    base_width: Quantity,
+    eccentricity: Quantity,
+) -> dict[str, Quantity]:
+    """The soil bearing pressures under the base of an eccentrically loaded wall or footing.
+
+    The resultant vertical load on a retaining-wall base rarely lands at the center, and the
+    pressure under the base tilts from heel to toe. While the eccentricity stays within the
+    middle third (e ≤ B/6) the whole base bears and the pressures are the linear
+    q = (V/B)·(1 ± 6e/B). Past the middle third the heel would need to pull the soil in tension —
+    which it cannot — so contact shortens and the toe pressure jumps to q_max = 2V/[3·(B/2 − e)]
+    with the heel at zero. ``vertical_load`` V and ``base_width`` B and ``eccentricity`` e of the
+    resultant from the base centroid are all per unit wall length / actual dimensions. Returns a
+    dict with ``"q_max"`` (toe) and ``"q_min"`` (heel) pressures in kPa.
+    """
+    _require(vertical_load, "[force]/[length]", "vertical_load")
+    _require(base_width, "[length]", "base_width")
+    _require(eccentricity, "[length]", "eccentricity")
+    v = vertical_load.to("kN/m").magnitude
+    b = base_width.to("m").magnitude
+    e = eccentricity.to("m").magnitude
+    if v <= 0 or b <= 0:
+        raise ValueError("vertical_load and base_width must be positive")
+    if e < 0:
+        raise ValueError("eccentricity must be non-negative")
+    if e >= b / 2.0:
+        raise ValueError("eccentricity must be less than half the base width (resultant off base)")
+    if e <= b / 6.0:
+        q_max = (v / b) * (1.0 + 6.0 * e / b)
+        q_min = (v / b) * (1.0 - 6.0 * e / b)
+    else:
+        q_max = 2.0 * v / (3.0 * (b / 2.0 - e))
+        q_min = 0.0
+    return {
+        "q_max": Quantity(magnitude=q_max, unit="kPa"),
+        "q_min": Quantity(magnitude=q_min, unit="kPa"),
+    }

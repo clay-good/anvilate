@@ -238,6 +238,18 @@ def test_clay_layer_settlement_example_fails_serviceability_over_years():
     assert s["years_to_target"] > 5.0
 
 
+def test_retaining_wall_stability_example_bearing_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_stability.py"))
+    s = namespace["wall_stability"]()
+    # Overturning and sliding both pass their usual minimums.
+    assert s["fs_overturning"] >= 2.0
+    assert s["fs_sliding"] >= 1.5
+    # But the resultant is outside the middle third, so the heel lifts off and the toe
+    # pressure spikes — the governing check is bearing, not stability.
+    assert s["q_min_kpa"] == pytest.approx(0.0, abs=1e-9)
+    assert s["q_max_kpa"] == pytest.approx(148, abs=2)
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

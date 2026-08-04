@@ -13327,6 +13327,80 @@ def test_consolidation_time_factor_and_time():
         consolidation_time_factor(degree_of_consolidation=100.0)
 
 
+def test_retaining_wall_overturning_factor_is_moment_ratio():
+    from anvilate.analysis import retaining_wall_overturning_factor
+
+    # FS = (V*a)/(P*y) = (200*1.5)/(48*4/3) = 300/64 = 4.69.
+    fs = retaining_wall_overturning_factor(
+        lateral_thrust=_q("48 kN/m"),
+        thrust_height=_q("1.3333333 m"),
+        vertical_load=_q("200 kN/m"),
+        load_arm=_q("1.5 m"),
+    )
+    assert fs == pytest.approx((200 * 1.5) / (48 * (4 / 3)), rel=1e-5)
+    assert fs > 2.0  # passes the usual minimum
+    with pytest.raises(ValueError, match="positive"):
+        retaining_wall_overturning_factor(
+            lateral_thrust=_q("0 kN/m"),
+            thrust_height=_q("1.33 m"),
+            vertical_load=_q("200 kN/m"),
+            load_arm=_q("1.5 m"),
+        )
+
+
+def test_retaining_wall_sliding_factor_with_and_without_passive():
+    from anvilate.analysis import retaining_wall_sliding_factor
+
+    # FS = mu*V/P = 0.5*200/48 = 2.08 without passive help.
+    fs = retaining_wall_sliding_factor(
+        lateral_thrust=_q("48 kN/m"),
+        vertical_load=_q("200 kN/m"),
+        base_friction_coefficient=0.5,
+    )
+    assert fs == pytest.approx(0.5 * 200 / 48, rel=1e-9)
+    # Counting passive resistance in front of the toe raises it.
+    fs_p = retaining_wall_sliding_factor(
+        lateral_thrust=_q("48 kN/m"),
+        vertical_load=_q("200 kN/m"),
+        base_friction_coefficient=0.5,
+        passive_resistance=_q("20 kN/m"),
+    )
+    assert fs_p == pytest.approx((0.5 * 200 + 20) / 48, rel=1e-9)
+    assert fs_p > fs
+    with pytest.raises(ValueError, match="base_friction_coefficient"):
+        retaining_wall_sliding_factor(
+            lateral_thrust=_q("48 kN/m"),
+            vertical_load=_q("200 kN/m"),
+            base_friction_coefficient=0.0,
+        )
+
+
+def test_eccentric_base_pressure_middle_third_and_uplift():
+    from anvilate.analysis import eccentric_base_pressure
+
+    # Within the middle third (e = 0.3 <= B/6 = 0.5): linear q = (V/B)(1 +/- 6e/B).
+    inside = eccentric_base_pressure(
+        vertical_load=_q("200 kN/m"), base_width=_q("3 m"), eccentricity=_q("0.3 m")
+    )
+    assert inside["q_max"].to("kPa").magnitude == pytest.approx(200 / 3 * (1 + 0.6), rel=1e-9)
+    assert inside["q_min"].to("kPa").magnitude == pytest.approx(200 / 3 * (1 - 0.6), rel=1e-9)
+    assert inside["q_min"].to("kPa").magnitude > 0  # full contact
+    # Outside the middle third (e = 0.6 > 0.5): heel lifts, toe spikes to 2V/[3(B/2-e)].
+    outside = eccentric_base_pressure(
+        vertical_load=_q("200 kN/m"), base_width=_q("3 m"), eccentricity=_q("0.6 m")
+    )
+    assert outside["q_min"].to("kPa").magnitude == pytest.approx(0.0, abs=1e-12)
+    assert outside["q_max"].to("kPa").magnitude == pytest.approx(
+        2 * 200 / (3 * (1.5 - 0.6)), rel=1e-9
+    )
+    assert outside["q_max"].to("kPa").magnitude > inside["q_max"].to("kPa").magnitude
+    # Resultant off the base entirely is an error.
+    with pytest.raises(ValueError, match="off base"):
+        eccentric_base_pressure(
+            vertical_load=_q("200 kN/m"), base_width=_q("3 m"), eccentricity=_q("1.5 m")
+        )
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 
