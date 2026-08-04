@@ -10,6 +10,11 @@
 - [ ] 2.1 DSM compression: local, distortional, global strengths and governing state
 - [ ] 2.2 DSM flexure: local, distortional, lateral-torsional strengths and governing
       state
+- [~] 2.3 Effective-width method (AISI S100 Chapter B / Winter) — the complementary
+      slice already shipped in `analysis/cold_formed_steel.py`: `aisi_plate_slenderness`
+      (λ = (1.052/√k)·(w/t)·√(f/E)) and `aisi_effective_width` (b = w below λ = 0.673,
+      else ρ·w). Yield/modulus caller-supplied; k caller-supplied. This is the EWM path;
+      the DSM checks above remain the proposal's main scope.
 
 ## 3. Interop
 

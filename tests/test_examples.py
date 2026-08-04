@@ -2324,6 +2324,18 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "repair: increase thickness to 16 mm" in text
 
 
+def test_cold_formed_stud_flange_example_slender_element_is_reduced():
+    namespace = runpy.run_path(str(_EXAMPLES / "cold_formed_stud_flange.py"))
+    from anvilate.units import Quantity
+
+    # The 1.5 mm flange is slender: only ~59 mm of the 100 mm is effective.
+    thin = namespace["effective_flange_width"](Quantity.parse("1.5 mm"))
+    assert thin.to("mm").magnitude == pytest.approx(58.6, abs=0.3)
+    # The 3.5 mm flange is compact: fully effective.
+    thick = namespace["effective_flange_width"](Quantity.parse("3.5 mm"))
+    assert thick.to("mm").magnitude == pytest.approx(100.0, rel=1e-9)
+
+
 def test_floor_joist_wet_service_example_factor_chain_flips_the_verdict():
     namespace = runpy.run_path(str(_EXAMPLES / "floor_joist_wet_service.py"))
     # The identical joist passes dry and fails wet — the wet-service factor C_M is

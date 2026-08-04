@@ -381,6 +381,10 @@ from .clutch import (
     disc_clutch_force_for_torque,
     disc_clutch_torque,
 )
+from .cold_formed_steel import (
+    aisi_effective_width,
+    aisi_plate_slenderness,
+)
 from .column import (
     ColumnEnd,
     euler_buckling_load,
@@ -1310,6 +1314,8 @@ __all__ = [
     "journal_bearing_minimum_film_thickness",
     "specific_film_ratio",
     "hertz_effective_modulus",
+    "aisi_plate_slenderness",
+    "aisi_effective_width",
     "HertzContact",
     "hertz_sphere_contact",
     "hertz_sphere_approach",

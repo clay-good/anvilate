@@ -90,6 +90,7 @@ Over 45 runnable examples, each executed in CI so they stay honest. A few:
 | `power_device_heatsink.py` | A 30 W device whose junction cooks in still air (145 K rise) and survives with a fan (44 K) — a thermal resistance network where the convection to air governs. See [thermal screening](docs/thermal-screening.md). |
 | `process_pipe_schedule.py` | An ASME B31.3 process line where Schedule 10 fails and Schedule 40 passes the service pressure once mill tolerance and corrosion are taken off the wall — rate the wall you keep, not the one stamped on the pipe. |
 | `floor_joist_wet_service.py` | An NDS timber joist that passes dry and fails wet — the wet-service factor C_M in the adjustment chain is the whole difference. See [timber screening](docs/timber-screening.md). |
+| `cold_formed_stud_flange.py` | A cold-formed flange that is only 59% effective at 1.5 mm and fully effective at 3.5 mm — the AISI Winter effective-width reduction that sets cold-formed design apart. See [cold-formed steel](docs/cold-formed-steel.md). |
 
 Full annotated gallery: [`examples/README.md`](examples/README.md).
 

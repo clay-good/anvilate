@@ -12330,3 +12330,40 @@ def test_nds_column_stability_factor_ylinen_and_euler_stress():
             reference_compression=_q("1500 psi"),
             c=1.5,
         )
+
+
+def test_aisi_effective_width_winter_reduces_a_slender_element():
+    from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
+
+    kw = {"stress": _q("345 MPa"), "elastic_modulus": _q("203000 MPa")}
+    # A 100 mm x 1.5 mm stiffened flange at yield: lambda = 1.45 > 0.673, ~59% effective.
+    lam = aisi_plate_slenderness(flat_width=_q("100 mm"), thickness=_q("1.5 mm"), **kw)
+    assert lam == pytest.approx(1.446, abs=0.005)
+    b = aisi_effective_width(flat_width=_q("100 mm"), thickness=_q("1.5 mm"), **kw)
+    rho = (1 - 0.22 / lam) / lam
+    assert b.to("mm").magnitude == pytest.approx(rho * 100.0, rel=1e-9)
+    assert b.to("mm").magnitude < 100.0  # reduced
+
+    # A thick, compact element (lambda <= 0.673) is fully effective: b = w.
+    full = aisi_effective_width(flat_width=_q("100 mm"), thickness=_q("3.5 mm"), **kw)
+    assert full.to("mm").magnitude == pytest.approx(100.0, rel=1e-12)
+
+
+def test_aisi_effective_width_rejects_bad_inputs():
+    from anvilate.analysis import aisi_plate_slenderness
+
+    with pytest.raises(ValueError, match="must be positive"):
+        aisi_plate_slenderness(
+            flat_width=_q("0 mm"),
+            thickness=_q("1.5 mm"),
+            stress=_q("345 MPa"),
+            elastic_modulus=_q("203000 MPa"),
+        )
+    with pytest.raises(ValueError, match="plate_buckling_coefficient must be positive"):
+        aisi_plate_slenderness(
+            flat_width=_q("100 mm"),
+            thickness=_q("1.5 mm"),
+            stress=_q("345 MPa"),
+            elastic_modulus=_q("203000 MPa"),
+            plate_buckling_coefficient=0.0,
+        )

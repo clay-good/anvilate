@@ -143,6 +143,8 @@ column.rankine_gordon_stress
 column.secant_column_max_stress
 column.slenderness_ratio
 column.transition_slenderness
+cold_formed_steel.aisi_effective_width
+cold_formed_steel.aisi_plate_slenderness
 contact.HertzContact
 contact.HertzLineContact
 contact.hertz_cylinder_contact
