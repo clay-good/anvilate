@@ -226,6 +226,16 @@ def test_clay_backfill_tension_crack_example():
     assert p["base_pressure_kpa"] > 0
 
 
+def test_retaining_wall_scorecard_example_good_passes_weak_fails():
+    namespace = runpy.run_path(str(_EXAMPLES / "retaining_wall_scorecard.py"))
+    w = namespace["wall_scorecards"]()
+    assert w["good_status"] == "pass"
+    assert w["weak_status"] == "fail"
+    # The under-built wall fails both external-stability checks.
+    assert "overturning" in w["weak_failures"]
+    assert "sliding" in w["weak_failures"]
+
+
 def test_spread_footing_scorecard_example_passes_then_fails():
     namespace = runpy.run_path(str(_EXAMPLES / "spread_footing_scorecard.py"))
     s = namespace["footing_scorecards"]()

@@ -19,17 +19,24 @@ from ..analysis import (
     bearing_capacity_factors,
     bearing_depth_factors,
     bearing_shape_factors,
+    rankine_lateral_thrust,
+    retaining_wall_overturning_factor,
+    retaining_wall_sliding_factor,
     terzaghi_bearing_capacity,
 )
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
+    "RetainingWall",
     "ShallowFooting",
+    "screen_retaining_wall",
     "screen_shallow_footing",
 ]
 
 _BEARING_REFERENCE = "Terzaghi bearing capacity with Vesić shape/depth factors"
+_OVERTURNING_REFERENCE = "Rankine active thrust, moment balance about the toe"
+_SLIDING_REFERENCE = "Rankine active thrust, base friction resistance"
 
 
 class ShallowFooting(BaseModel):
@@ -118,3 +125,65 @@ def screen_shallow_footing(
     )
     entry = entry.model_copy(update={"reference": _BEARING_REFERENCE})
     return Scorecard(entries=(entry,))
+
+
+class RetainingWall(BaseModel):
+    """A gravity/cantilever retaining wall and what its external-stability screen needs.
+
+    The backfill is described by its ``retained_height`` H, ``backfill_unit_weight`` γ, and
+    ``backfill_friction_angle`` φ, which set the Rankine active thrust (acting at H/3 above the
+    base). The stabilizing side is given as a single resultant: the ``vertical_load`` V (the wall
+    plus the soil on its heel, per unit length of wall) and its ``load_arm`` a to the toe, with the
+    ``base_friction_coefficient`` μ between the base and the soil. Loads are per unit wall length.
+    """
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    retained_height: Quantity
+    backfill_unit_weight: Quantity
+    backfill_friction_angle: float
+    vertical_load: Quantity
+    load_arm: Quantity
+    base_friction_coefficient: float
+
+
+def screen_retaining_wall(
+    wall: RetainingWall,
+    *,
+    overturning_safety_factor: float = 2.0,
+    sliding_safety_factor: float = 1.5,
+) -> Scorecard:
+    """Screen a :class:`RetainingWall` for external stability and return its scorecard.
+
+    Computes the Rankine active thrust from the backfill, then screens the two classic
+    external-stability limit states — overturning about the toe (against
+    ``overturning_safety_factor``, usually 2.0) and sliding on the base (against
+    ``sliding_safety_factor``, usually 1.5). Returns a :class:`~anvilate.scorecard.Scorecard` with a
+    cited PASS/FAIL entry for each, no silent green.
+    """
+    thrust = rankine_lateral_thrust(
+        unit_weight=wall.backfill_unit_weight,
+        height=wall.retained_height,
+        friction_angle=wall.backfill_friction_angle,
+    )
+    thrust_height = Quantity(
+        magnitude=wall.retained_height.to("m").magnitude / 3.0, unit="m"
+    )  # H/3 for the triangular pressure
+    fs_overturning = retaining_wall_overturning_factor(
+        lateral_thrust=thrust,
+        thrust_height=thrust_height,
+        vertical_load=wall.vertical_load,
+        load_arm=wall.load_arm,
+    )
+    fs_sliding = retaining_wall_sliding_factor(
+        lateral_thrust=thrust,
+        vertical_load=wall.vertical_load,
+        base_friction_coefficient=wall.base_friction_coefficient,
+    )
+    overturning = ScorecardEntry.from_safety_factor(
+        "overturning", computed=fs_overturning, required=overturning_safety_factor
+    ).model_copy(update={"reference": _OVERTURNING_REFERENCE})
+    sliding = ScorecardEntry.from_safety_factor(
+        "sliding", computed=fs_sliding, required=sliding_safety_factor
+    ).model_copy(update={"reference": _SLIDING_REFERENCE})
+    return Scorecard(entries=(overturning, sliding))

@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from anvilate.packs.geotechnical import ShallowFooting, screen_shallow_footing
+from anvilate.packs.geotechnical import (
+    RetainingWall,
+    ShallowFooting,
+    screen_retaining_wall,
+    screen_shallow_footing,
+)
 from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
 
@@ -50,3 +55,40 @@ def test_shallow_footing_rejects_inverted_plan():
     # width must be the shorter side.
     with pytest.raises(ValidationError):
         _footing(width=_q("3 m"), length=_q("2 m"))
+
+
+def _wall(**overrides) -> RetainingWall:
+    fields = {
+        "retained_height": _q("4 m"),
+        "backfill_unit_weight": _q("18 kN/m**3"),
+        "backfill_friction_angle": 30.0,
+        "vertical_load": _q("200 kN/m"),
+        "load_arm": _q("1.6 m"),
+        "base_friction_coefficient": 0.5,
+    }
+    fields.update(overrides)
+    return RetainingWall(**fields)
+
+
+def test_retaining_wall_passes_overturning_and_sliding():
+    card = screen_retaining_wall(_wall())
+    assert card.status is CheckStatus.PASS
+    names = {e.name: e for e in card.entries}
+    assert set(names) == {"overturning", "sliding"}
+    assert "safety factor 5.00" in names["overturning"].detail
+    assert "safety factor 2.08" in names["sliding"].detail
+    assert all(e.reference is not None for e in card.entries)
+
+
+def test_retaining_wall_underbuilt_fails_both():
+    card = screen_retaining_wall(
+        _wall(
+            retained_height=_q("5 m"),
+            backfill_friction_angle=28.0,
+            vertical_load=_q("150 kN/m"),
+            load_arm=_q("1.2 m"),
+            base_friction_coefficient=0.45,
+        )
+    )
+    assert card.status is CheckStatus.FAIL
+    assert {e.name for e in card.failures()} == {"overturning", "sliding"}
