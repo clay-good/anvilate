@@ -274,6 +274,18 @@ def test_drainage_channel_capacity_example_passes_and_is_subcritical():
     assert c["critical_depth_m"] == pytest.approx(0.67, abs=0.02)
 
 
+def test_pump_selection_from_line_example_chains_to_a_motor():
+    namespace = runpy.run_path(str(_EXAMPLES / "pump_selection_from_line.py"))
+    d = namespace["pump_duty"]()
+    # Total head is the static lift (8 m) plus real friction and fitting losses.
+    assert d["total_head_m"] > 8.0
+    assert d["total_head_m"] == pytest.approx(19.2, abs=1.0)
+    # Shaft power exceeds hydraulic power by the efficiency factor (1/0.7).
+    assert d["shaft_power_kw"] == pytest.approx(d["hydraulic_power_kw"] / 0.70, rel=1e-6)
+    # Low specific speed -> a centrifugal pump.
+    assert d["specific_speed"] < 1.0
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

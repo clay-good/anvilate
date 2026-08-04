@@ -13499,6 +13499,45 @@ def test_froude_number_and_critical_depth_agree_on_regime():
     assert froude_number(velocity=_q("4 m/s"), hydraulic_depth=_q("0.3 m")) > 1.0
 
 
+def test_pump_power_hydraulic_and_shaft():
+    from anvilate.analysis import pump_hydraulic_power, pump_shaft_power
+
+    # P_hyd = rho*g*Q*H = 1000*9.80665*0.05*20 = 9806.6 W.
+    p_hyd = pump_hydraulic_power(
+        flow_rate=_q("0.05 m**3/s"), head=_q("20 m"), density=_q("1000 kg/m**3")
+    )
+    assert p_hyd.to("W").magnitude == pytest.approx(1000 * 9.80665 * 0.05 * 20, rel=1e-9)
+    # Shaft power divides by efficiency: 9.807/0.7 = 14.0 kW.
+    p_shaft = pump_shaft_power(hydraulic_power=p_hyd, efficiency=0.70)
+    assert p_shaft.to("W").magnitude == pytest.approx(p_hyd.to("W").magnitude / 0.70, rel=1e-9)
+    assert p_shaft.to("W").magnitude > p_hyd.to("W").magnitude
+    with pytest.raises(ValueError, match="efficiency"):
+        pump_shaft_power(hydraulic_power=p_hyd, efficiency=1.5)
+
+
+def test_pump_specific_speed_classifies_the_duty():
+    import math
+
+    from anvilate.analysis import pump_specific_speed
+
+    # N_s = omega*sqrt(Q)/(g*H)^0.75; 1450 rpm, Q=0.05, H=20 -> ~0.65 (centrifugal range).
+    n_s = pump_specific_speed(
+        rotational_speed=_q("1450 rpm"), flow_rate=_q("0.05 m**3/s"), head=_q("20 m")
+    )
+    omega = 1450 * 2 * math.pi / 60
+    assert n_s == pytest.approx(omega * math.sqrt(0.05) / (9.80665 * 20) ** 0.75, rel=1e-9)
+    assert n_s < 1.0  # low specific speed -> radial/centrifugal
+    # A high-flow, low-head duty at the same speed has a much higher specific speed.
+    n_s_axial = pump_specific_speed(
+        rotational_speed=_q("1450 rpm"), flow_rate=_q("2 m**3/s"), head=_q("3 m")
+    )
+    assert n_s_axial > n_s
+    with pytest.raises(ValueError, match="positive"):
+        pump_specific_speed(
+            rotational_speed=_q("1450 rpm"), flow_rate=_q("0.05 m**3/s"), head=_q("0 m")
+        )
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 

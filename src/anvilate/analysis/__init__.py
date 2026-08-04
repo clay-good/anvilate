@@ -119,6 +119,9 @@ modules:
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), and the Froude
   number and rectangular critical depth that classify the flow as sub- or supercritical
+- :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
+  power P/η the driver must supply, and the dimensionless specific speed that picks the
+  impeller type for a duty
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -870,6 +873,11 @@ from .pressure_vessel import (
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
 )
+from .pump import (
+    pump_hydraulic_power,
+    pump_shaft_power,
+    pump_specific_speed,
+)
 from .reinforced_concrete import (
     rc_beam_nominal_moment,
     rc_beta1,
@@ -1138,6 +1146,9 @@ __all__ = [
     "froude_number",
     "hydraulic_radius",
     "manning_flow_rate",
+    "pump_hydraulic_power",
+    "pump_shaft_power",
+    "pump_specific_speed",
     "manning_flow_velocity",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
