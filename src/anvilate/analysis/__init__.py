@@ -492,6 +492,7 @@ from .composite import (
     rule_of_mixtures_modulus,
     rule_of_mixtures_strength,
     transverse_modulus_inverse_rule,
+    tsai_hill_failure_index,
 )
 from .contact import (
     HertzContact,
@@ -1071,6 +1072,7 @@ __all__ = [
     "composite_shear_modulus_inverse_rule",
     "composite_longitudinal_cte",
     "critical_fiber_length",
+    "tsai_hill_failure_index",
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",

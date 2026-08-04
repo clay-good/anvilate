@@ -32,6 +32,7 @@ __all__ = [
     "composite_shear_modulus_inverse_rule",
     "composite_longitudinal_cte",
     "critical_fiber_length",
+    "tsai_hill_failure_index",
 ]
 
 
@@ -242,3 +243,43 @@ def critical_fiber_length(
     if sfu <= 0 or d <= 0 or tau <= 0:
         raise ValueError("all inputs must be positive")
     return Quantity(magnitude=sfu * d / (2.0 * tau), unit="mm")
+
+
+def tsai_hill_failure_index(
+    *,
+    longitudinal_stress: Quantity,
+    transverse_stress: Quantity,
+    shear_stress: Quantity,
+    longitudinal_strength: Quantity,
+    transverse_strength: Quantity,
+    shear_strength: Quantity,
+) -> float:
+    """The Tsai-Hill first-ply-failure index of a lamina under combined in-plane stress.
+
+    A composite ply rarely sees pure longitudinal load; it carries σ₁, σ₂, and τ₁₂ together,
+    and the Tsai-Hill criterion combines them into one interactive index,
+    FI = (σ₁/X)² − σ₁·σ₂/X² + (σ₂/Y)² + (τ₁₂/S)². The ply is predicted to fail when FI reaches
+    1.0, so FI is the fraction of strength used and 1/√FI is the load factor on a
+    proportional stress state. ``longitudinal_stress`` σ₁ and ``transverse_stress`` σ₂ are the
+    ply-axis normal stresses (signed) and ``shear_stress`` τ₁₂ the in-plane shear;
+    ``longitudinal_strength`` X, ``transverse_strength`` Y, and ``shear_strength`` S are the
+    corresponding strengths — use the *tensile* or *compressive* X, Y to match the sign of
+    each normal stress. Because Y (transverse) is small, a modest σ₂ often drives failure,
+    which is why unidirectional plies are laid up in several directions. Returns the
+    dimensionless failure index (≥ 1 means first-ply failure).
+    """
+    _require(longitudinal_stress, "[pressure]", "longitudinal_stress")
+    _require(transverse_stress, "[pressure]", "transverse_stress")
+    _require(shear_stress, "[pressure]", "shear_stress")
+    _require(longitudinal_strength, "[pressure]", "longitudinal_strength")
+    _require(transverse_strength, "[pressure]", "transverse_strength")
+    _require(shear_strength, "[pressure]", "shear_strength")
+    s1 = longitudinal_stress.to("MPa").magnitude
+    s2 = transverse_stress.to("MPa").magnitude
+    t12 = shear_stress.to("MPa").magnitude
+    x = longitudinal_strength.to("MPa").magnitude
+    y = transverse_strength.to("MPa").magnitude
+    s = shear_strength.to("MPa").magnitude
+    if x <= 0 or y <= 0 or s <= 0:
+        raise ValueError("the strengths must be positive")
+    return (s1 / x) ** 2 - s1 * s2 / x**2 + (s2 / y) ** 2 + (t12 / s) ** 2

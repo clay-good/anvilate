@@ -12939,6 +12939,42 @@ def test_composite_poisson_and_shear_modulus():
         composite_major_poisson_ratio(fiber_fraction=0.6, fiber_poisson=0.6, matrix_poisson=0.35)
 
 
+def test_tsai_hill_failure_index():
+    from anvilate.analysis import tsai_hill_failure_index
+
+    strengths = {
+        "longitudinal_strength": _q("1500 MPa"),
+        "transverse_strength": _q("40 MPa"),
+        "shear_strength": _q("70 MPa"),
+    }
+    # FI = (s1/X)^2 - s1*s2/X^2 + (s2/Y)^2 + (t12/S)^2. Safe state -> FI < 1.
+    safe = tsai_hill_failure_index(
+        longitudinal_stress=_q("500 MPa"),
+        transverse_stress=_q("20 MPa"),
+        shear_stress=_q("30 MPa"),
+        **strengths,
+    )
+    expect = (500 / 1500) ** 2 - 500 * 20 / 1500**2 + (20 / 40) ** 2 + (30 / 70) ** 2
+    assert safe == pytest.approx(expect, rel=1e-9)
+    assert safe < 1.0
+    # The small transverse strength makes a modest sigma_2 govern: FI crosses 1.
+    fails = tsai_hill_failure_index(
+        longitudinal_stress=_q("500 MPa"),
+        transverse_stress=_q("40 MPa"),
+        shear_stress=_q("30 MPa"),
+        **strengths,
+    )
+    assert fails > 1.0
+    # Pure longitudinal load at the longitudinal strength gives FI = 1 exactly.
+    at_x = tsai_hill_failure_index(
+        longitudinal_stress=_q("1500 MPa"),
+        transverse_stress=_q("0 MPa"),
+        shear_stress=_q("0 MPa"),
+        **strengths,
+    )
+    assert at_x == pytest.approx(1.0, rel=1e-9)
+
+
 def test_critical_fiber_length():
     from anvilate.analysis import critical_fiber_length
 
