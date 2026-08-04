@@ -15319,6 +15319,39 @@ def test_building_loads_wind_velocity_and_design_pressure():
         wind_velocity_pressure(basic_wind_speed=_q("0 m/s"), exposure_coefficient=1.0)
 
 
+def test_components_cladding_net_pressure_includes_internal():
+    from anvilate.analysis import components_cladding_net_pressure
+
+    # p = qh*(GCp - GCpi): 1.3 kPa, GCp=-1.4, GCpi=0.18 -> -2.054 kPa (net suction).
+    p = components_cladding_net_pressure(
+        velocity_pressure=_q("1.3 kPa"),
+        external_pressure_coefficient=-1.4,
+        internal_pressure_coefficient=0.18,
+    )
+    assert p.to("kPa").magnitude == pytest.approx(1.3 * (-1.4 - 0.18), rel=1e-9)
+    assert p.to("kPa").magnitude < 0  # net suction
+    # The opposite internal sign gives a smaller-magnitude suction; the +0.18 case governs.
+    other = components_cladding_net_pressure(
+        velocity_pressure=_q("1.3 kPa"),
+        external_pressure_coefficient=-1.4,
+        internal_pressure_coefficient=-0.18,
+    )
+    assert abs(p.to("kPa").magnitude) > abs(other.to("kPa").magnitude)
+    # A breached (partially enclosed) building's larger GCpi worsens the suction.
+    breached = components_cladding_net_pressure(
+        velocity_pressure=_q("1.3 kPa"),
+        external_pressure_coefficient=-1.4,
+        internal_pressure_coefficient=0.55,
+    )
+    assert breached.to("kPa").magnitude < p.to("kPa").magnitude
+    with pytest.raises(ValueError, match="velocity_pressure"):
+        components_cladding_net_pressure(
+            velocity_pressure=_q("0 kPa"),
+            external_pressure_coefficient=-1.4,
+            internal_pressure_coefficient=0.18,
+        )
+
+
 def test_building_loads_seismic_response_coefficient_and_base_shear():
     from anvilate.analysis import seismic_base_shear, seismic_response_coefficient
 

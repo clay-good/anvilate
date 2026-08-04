@@ -1075,6 +1075,15 @@ def test_seismic_story_forces_example_top_heavy():
     assert s["k2_forces"][-1] > s["k1_forces"][-1]
 
 
+def test_cladding_internal_pressure_example_breach_worsens_suction():
+    namespace = runpy.run_path(str(_EXAMPLES / "cladding_internal_pressure.py"))
+    s = namespace["corner_panel_suction"]()
+    # Both are net suction (negative); breaching the envelope makes it worse.
+    assert s["enclosed_kpa"] == pytest.approx(-2.05, abs=0.01)
+    assert s["breached_kpa"] == pytest.approx(-2.54, abs=0.01)
+    assert s["breached_kpa"] < s["enclosed_kpa"] < 0
+
+
 def test_wind_vs_seismic_base_shear_example_seismic_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "wind_vs_seismic_base_shear.py"))
     d = namespace["lateral_demands"]()

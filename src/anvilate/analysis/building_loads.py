@@ -32,6 +32,7 @@ from ..units import Quantity
 __all__ = [
     "wind_velocity_pressure",
     "wind_design_pressure",
+    "components_cladding_net_pressure",
     "seismic_response_coefficient",
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
@@ -117,6 +118,32 @@ def wind_design_pressure(
     if gust_effect_factor <= 0:
         raise ValueError(f"gust_effect_factor must be positive; got {gust_effect_factor}")
     return Quantity(magnitude=qz * gust_effect_factor * pressure_coefficient, unit="Pa")
+
+
+def components_cladding_net_pressure(
+    *,
+    velocity_pressure: Quantity,
+    external_pressure_coefficient: float,
+    internal_pressure_coefficient: float,
+) -> Quantity:
+    """The ASCE 7 Components & Cladding net wind pressure p = qh·(GCp − GCpi) (§30).
+
+    A cladding panel, fastener, or window is sized not for the whole-building MWFRS pressure but for
+    the net across its own thickness — the external pressure on one face minus the internal pressure
+    on the other. Both faces see the same ``velocity_pressure`` qh, so the net is
+    p = qh·(GCp − GCpi): ``external_pressure_coefficient`` GCp is the combined external coefficient
+    for the element's zone (large and negative at corners and eaves, where suction peaks), and
+    ``internal_pressure_coefficient`` GCpi the internal one (±0.18 enclosed, ±0.55 partially
+    enclosed — a broken window turns the first into the second). The two GCpi signs give two nets;
+    the governing one is the larger magnitude. A negative result is net suction, trying to pull the
+    cladding off. Returns the net pressure in Pa.
+    """
+    _check(velocity_pressure, "[pressure]", "velocity_pressure")
+    qh = velocity_pressure.to("Pa").magnitude
+    if qh <= 0:
+        raise ValueError("velocity_pressure must be positive")
+    net = qh * (external_pressure_coefficient - internal_pressure_coefficient)
+    return Quantity(magnitude=net, unit="Pa")
 
 
 def seismic_response_coefficient(

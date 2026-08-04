@@ -195,6 +195,7 @@ brake.short_shoe_brake_torque
 brake.short_shoe_is_self_locking
 brake.short_shoe_normal_force
 building_loads.allowable_story_drift
+building_loads.components_cladding_net_pressure
 building_loads.flat_roof_snow_load
 building_loads.rain_load
 building_loads.reduced_live_load

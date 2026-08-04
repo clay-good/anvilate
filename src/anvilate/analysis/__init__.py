@@ -227,8 +227,9 @@ modules:
   force; short-shoe (block) brake lever statics; the self-energizing /
   self-locking distinction for both
 - :mod:`~anvilate.analysis.building_loads` — ASCE 7 environmental design loads:
-  the wind velocity pressure (0.613·Kz·Kzt·Kd·Ke·V²) and the surface design
-  pressure it drives, the seismic response coefficient (Cs = SDS·Ie/R) and the
+  the wind velocity pressure (0.613·Kz·Kzt·Kd·Ke·V²), the MWFRS surface design
+  pressure it drives, and the components-and-cladding net pressure
+  (p = qh·(GCp − GCpi)); the seismic response coefficient (Cs = SDS·Ie/R) and the
   equivalent-lateral-force base shear V = Cs·W and its vertical distribution to
   each floor (Fx = V·wx·hx^k/Σwi·hi^k), the Cd-amplified design story drift
   (Δ = Cd·δxe/Ie) and the allowable drift it is checked against, the P-delta
@@ -600,6 +601,7 @@ from .brake import (
 )
 from .building_loads import (
     allowable_story_drift,
+    components_cladding_net_pressure,
     flat_roof_snow_load,
     rain_load,
     reduced_live_load,
@@ -1903,6 +1905,7 @@ __all__ = [
     "short_shoe_is_self_locking",
     "wind_velocity_pressure",
     "wind_design_pressure",
+    "components_cladding_net_pressure",
     "seismic_response_coefficient",
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
