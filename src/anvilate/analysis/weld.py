@@ -13,7 +13,7 @@ As with the other checks, inputs and outputs are dimension-checked
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import sqrt
+from math import pi, sin, sqrt
 
 from ..units import Quantity
 
@@ -25,6 +25,7 @@ __all__ = [
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",
     "fillet_weld_design_strength",
+    "fillet_weld_directional_strength",
     "eccentric_weld_group_peak_stress",
 ]
 
@@ -130,6 +131,48 @@ def fillet_weld_design_strength(
         raise ValueError("leg_size, length, and electrode_strength must be positive")
     # MPa·mm² = N; convert to kN.
     strength_n = weld_metal_shear_fraction * fexx * FILLET_THROAT_FACTOR * w * length_mm
+    return Quantity(magnitude=strength_n / 1000.0, unit="kN")
+
+
+def fillet_weld_directional_strength(
+    *,
+    leg_size: Quantity,
+    length: Quantity,
+    electrode_strength: Quantity,
+    load_angle: float,
+    weld_metal_shear_fraction: float = _WELD_METAL_SHEAR_FRACTION,
+) -> Quantity:
+    """The AISC J2.4 fillet-weld strength with the directional increase (sin θ factor).
+
+    A fillet weld is stronger the more the load pulls *across* its axis rather than
+    along it, and AISC J2.4(a) credits that: R_n = 0.6·F_EXX·(1.0 + 0.5·sin^1.5 θ)·A_we,
+    where θ is the angle between the line of force and the weld's longitudinal axis.
+    A weld loaded along its length (θ = 0, longitudinal) gets the base 0.6·F_EXX·A_we —
+    exactly :func:`fillet_weld_design_strength` — while one loaded square across it
+    (θ = π/2, transverse) is 50% stronger. ``leg_size`` w, ``length`` L, and
+    ``electrode_strength`` F_EXX as in the base check; ``load_angle`` θ **in radians**
+    (0 to π/2); ``weld_metal_shear_fraction`` the 0.6 factor. Use the base longitudinal
+    strength for a weld group unless every segment shares one load angle. Returns the
+    nominal strength in kN.
+    """
+    _require(leg_size, "[length]", "leg_size")
+    _require(length, "[length]", "length")
+    _require(electrode_strength, "[pressure]", "electrode_strength")
+    if weld_metal_shear_fraction <= 0:
+        raise ValueError(
+            f"weld_metal_shear_fraction must be positive; got {weld_metal_shear_fraction}"
+        )
+    if not 0.0 <= load_angle <= pi / 2:
+        raise ValueError(f"load_angle must be between 0 and pi/2 radians; got {load_angle}")
+    w = leg_size.to("mm").magnitude
+    length_mm = length.to("mm").magnitude
+    fexx = electrode_strength.to("MPa").magnitude
+    if w <= 0 or length_mm <= 0 or fexx <= 0:
+        raise ValueError("leg_size, length, and electrode_strength must be positive")
+    directional = 1.0 + 0.5 * sin(load_angle) ** 1.5
+    strength_n = (
+        weld_metal_shear_fraction * fexx * directional * FILLET_THROAT_FACTOR * w * length_mm
+    )
     return Quantity(magnitude=strength_n / 1000.0, unit="kN")
 
 

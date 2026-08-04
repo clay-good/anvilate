@@ -12722,6 +12722,30 @@ def test_fillet_weld_design_strength_aisc_j24():
     assert bigger.to("kN").magnitude > rn.to("kN").magnitude
 
 
+def test_fillet_weld_directional_strength_transverse_is_50pct_stronger():
+    import math
+
+    from anvilate.analysis import (
+        fillet_weld_design_strength,
+        fillet_weld_directional_strength,
+    )
+
+    kw = {"leg_size": _q("6 mm"), "length": _q("200 mm"), "electrode_strength": _q("490 MPa")}
+    base = fillet_weld_design_strength(**kw)
+    # Longitudinal (theta = 0): the directional factor is 1.0, so it equals the base.
+    longitudinal = fillet_weld_directional_strength(load_angle=0.0, **kw)
+    assert longitudinal.to("kN").magnitude == pytest.approx(base.to("kN").magnitude, rel=1e-12)
+    # Transverse (theta = pi/2): 1 + 0.5*sin^1.5 = 1.5, so 50% stronger.
+    transverse = fillet_weld_directional_strength(load_angle=math.pi / 2, **kw)
+    assert transverse.to("kN").magnitude == pytest.approx(1.5 * base.to("kN").magnitude, rel=1e-9)
+    # An intermediate angle sits between the two.
+    at45 = fillet_weld_directional_strength(load_angle=math.pi / 4, **kw)
+    assert longitudinal.to("kN").magnitude < at45.to("kN").magnitude < transverse.to("kN").magnitude
+    # Out-of-range angles are rejected.
+    with pytest.raises(ValueError, match="load_angle"):
+        fillet_weld_directional_strength(load_angle=math.pi, **kw)
+
+
 def test_crossflow_effectiveness_sits_between_parallel_and_counterflow():
     from anvilate.analysis import (
         counterflow_effectiveness,
