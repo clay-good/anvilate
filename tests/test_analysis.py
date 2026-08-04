@@ -13863,6 +13863,36 @@ def test_energy_storage_capacity_energy_and_backup_time():
         )
 
 
+def test_combustion_air_fuel_ratio_and_excess_air():
+    from anvilate.analysis import (
+        actual_air_fuel_ratio,
+        excess_air_from_flue_oxygen,
+        stoichiometric_air_fuel_ratio,
+    )
+
+    # Methane: (2.6667*0.7487 + 8*0.2513)/0.232 ~ 17.3.
+    afr = stoichiometric_air_fuel_ratio(carbon=0.7487, hydrogen=0.2513)
+    expected = (2.6667 * 0.7487 + 8 * 0.2513) / 0.232
+    assert afr == pytest.approx(expected, rel=1e-9)
+    assert afr == pytest.approx(17.2, abs=0.2)
+
+    # Excess air from flue O2: EA = O2/(20.9 - O2); 3% -> ~0.168.
+    ea = excess_air_from_flue_oxygen(flue_oxygen_percent=3.0)
+    assert ea == pytest.approx(3.0 / 17.9, rel=1e-9)
+    # Zero flue oxygen is exactly stoichiometric.
+    assert excess_air_from_flue_oxygen(flue_oxygen_percent=0.0) == 0.0
+
+    # Actual AFR scales the stoichiometric ratio by (1 + EA).
+    actual = actual_air_fuel_ratio(stoichiometric_air_fuel_ratio=afr, excess_air_fraction=0.2)
+    assert actual == pytest.approx(afr * 1.2, rel=1e-9)
+
+    # Guards: oxygen-only "fuel" has no net oxygen demand; flue O2 cannot reach ambient.
+    with pytest.raises(ValueError, match="net oxygen demand"):
+        stoichiometric_air_fuel_ratio(carbon=0.0, hydrogen=0.0, oxygen=0.5)
+    with pytest.raises(ValueError, match="20.9"):
+        excess_air_from_flue_oxygen(flue_oxygen_percent=21.0)
+
+
 def test_hvac_duct_equivalent_diameter_and_fan_power():
     from anvilate.analysis import circular_equivalent_diameter, fan_power
 

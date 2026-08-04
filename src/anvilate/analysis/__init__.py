@@ -128,6 +128,9 @@ modules:
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
   and power of a multi-stage machine
+- :mod:`~anvilate.analysis.combustion` — furnace/boiler combustion: the stoichiometric
+  air-fuel ratio from an ultimate analysis, the excess air read from flue-gas oxygen
+  (EA = O₂/(20.9−O₂)), and the actual air-fuel ratio a burner runs at
 - :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
   orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
   inverse, and the pitot-tube point velocity √(2Δp/ρ)
@@ -585,6 +588,11 @@ from .column import (
     secant_column_max_stress,
     slenderness_ratio,
     transition_slenderness,
+)
+from .combustion import (
+    actual_air_fuel_ratio,
+    excess_air_from_flue_oxygen,
+    stoichiometric_air_fuel_ratio,
 )
 from .composite import (
     composite_longitudinal_cte,
@@ -1737,6 +1745,9 @@ __all__ = [
     "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
     "transition_slenderness",
+    "stoichiometric_air_fuel_ratio",
+    "excess_air_from_flue_oxygen",
+    "actual_air_fuel_ratio",
     "johnson_critical_stress",
     "secant_column_max_stress",
     "perry_robertson_stress",

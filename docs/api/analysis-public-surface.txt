@@ -222,6 +222,9 @@ column.rankine_gordon_stress
 column.secant_column_max_stress
 column.slenderness_ratio
 column.transition_slenderness
+combustion.actual_air_fuel_ratio
+combustion.excess_air_from_flue_oxygen
+combustion.stoichiometric_air_fuel_ratio
 cold_formed_steel.aisi_effective_width
 cold_formed_steel.aisi_plate_slenderness
 contact.HertzContact

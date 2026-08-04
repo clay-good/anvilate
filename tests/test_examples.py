@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_boiler_combustion_air_example_flue_confirms_excess():
+    namespace = runpy.run_path(str(_EXAMPLES / "boiler_combustion_air.py"))
+    t = namespace["combustion_tune"]()
+    assert t["stoichiometric_afr"] == pytest.approx(17.3, abs=0.2)
+    assert t["excess_air_percent"] == pytest.approx(16.8, abs=0.5)
+    # The actual ratio is the stoichiometric one scaled up by the excess air.
+    assert t["actual_afr"] > t["stoichiometric_afr"]
+
+
 def test_rectangular_duct_sizing_example_equivalent_exceeds_hydraulic():
     namespace = runpy.run_path(str(_EXAMPLES / "rectangular_duct_sizing.py"))
     r = namespace["duct_and_fan"]()
