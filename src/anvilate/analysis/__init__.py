@@ -1162,6 +1162,7 @@ from .pump import (
     pump_hydraulic_power,
     pump_shaft_power,
     pump_specific_speed,
+    pump_suction_specific_speed,
 )
 from .reactive_circuit import (
     capacitor_stored_energy,
@@ -1516,6 +1517,7 @@ __all__ = [
     "pump_hydraulic_power",
     "pump_shaft_power",
     "pump_specific_speed",
+    "pump_suction_specific_speed",
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",

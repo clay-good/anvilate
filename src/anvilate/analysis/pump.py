@@ -33,6 +33,7 @@ __all__ = [
     "pump_hydraulic_power",
     "pump_shaft_power",
     "pump_specific_speed",
+    "pump_suction_specific_speed",
 ]
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
@@ -105,6 +106,34 @@ def pump_specific_speed(
     if omega <= 0 or q <= 0 or h <= 0:
         raise ValueError("rotational_speed, flow_rate, and head must be positive")
     return omega * sqrt(q) / (_GRAVITY * h) ** 0.75
+
+
+def pump_suction_specific_speed(
+    *,
+    rotational_speed: Quantity,
+    flow_rate: Quantity,
+    npsh_required: Quantity,
+) -> float:
+    """The dimensionless suction specific speed N_ss = ω·√Q / (g·NPSHr)^(3/4) of a pump inlet.
+
+    The cousin of :func:`pump_specific_speed` that governs *cavitation*, not impeller shape: it
+    replaces the total head with the required NPSH, N_ss = ω·√Q / (g·NPSHr)^(3/4) from the
+    ``rotational_speed`` ω, ``flow_rate`` Q, and ``npsh_required`` NPSHr from the pump curve. It
+    measures how hard the inlet is worked — a high N_ss means the pump makes head from very little
+    suction margin, which buys efficiency but courts suction recirculation and instability at
+    part-load; the Hydraulic Institute's reliability guidance caps it (~3.5 in this SI dimensionless
+    form, ~9000-11000 in US rpm/gpm/ft units). Rotational speed is an angular rate (rpm or rad/s).
+    Returns the dimensionless suction specific speed.
+    """
+    _check(rotational_speed, "1/[time]", "rotational_speed")
+    _check(flow_rate, "[length]**3/[time]", "flow_rate")
+    _check(npsh_required, "[length]", "npsh_required")
+    omega = rotational_speed.to("rad/s").magnitude
+    q = flow_rate.to("m**3/s").magnitude
+    npshr = npsh_required.to("m").magnitude
+    if omega <= 0 or q <= 0 or npshr <= 0:
+        raise ValueError("rotational_speed, flow_rate, and npsh_required must be positive")
+    return omega * sqrt(q) / (_GRAVITY * npshr) ** 0.75
 
 
 def affinity_flow_rate(*, flow_rate: Quantity, speed_ratio: float) -> Quantity:

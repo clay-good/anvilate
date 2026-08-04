@@ -1031,6 +1031,15 @@ def test_pump_npsh_cavitation_example_hot_water_cavitates():
     assert s["hot_npsh_available_m"] < s["cold_npsh_available_m"]
 
 
+def test_pump_suction_specific_speed_limit_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "pump_suction_specific_speed_limit.py"))
+    s = namespace["suction_speeds"]()
+    # The slow pump stays under the ~3.5 reliability cap; the fast one crosses it.
+    assert s["slow_nss"] == pytest.approx(2.92, abs=0.05)
+    assert s["fast_nss"] == pytest.approx(4.54, abs=0.05)
+    assert s["slow_nss"] < 3.5 < s["fast_nss"]
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

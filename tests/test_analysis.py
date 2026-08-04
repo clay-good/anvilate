@@ -16174,6 +16174,29 @@ def test_pump_specific_speed_classifies_the_duty():
         )
 
 
+def test_pump_suction_specific_speed_uses_npshr_not_head():
+    import math
+
+    from anvilate.analysis import pump_suction_specific_speed
+
+    # N_ss = omega*sqrt(Q)/(g*NPSHr)^0.75; 1450 rpm, Q=0.045, NPSHr=2.5 -> ~2.92.
+    n_ss = pump_suction_specific_speed(
+        rotational_speed=_q("1450 rpm"), flow_rate=_q("0.045 m**3/s"), npsh_required=_q("2.5 m")
+    )
+    omega = 1450 * 2 * math.pi / 60
+    assert n_ss == pytest.approx(omega * math.sqrt(0.045) / (9.80665 * 2.5) ** 0.75, rel=1e-9)
+    assert n_ss == pytest.approx(2.92, abs=0.02)
+    # Doubling the speed (same duty and NPSHr) doubles N_ss — the fast pump works its inlet harder.
+    fast = pump_suction_specific_speed(
+        rotational_speed=_q("2900 rpm"), flow_rate=_q("0.045 m**3/s"), npsh_required=_q("2.5 m")
+    )
+    assert fast / n_ss == pytest.approx(2.0, rel=1e-9)
+    with pytest.raises(ValueError, match="positive"):
+        pump_suction_specific_speed(
+            rotational_speed=_q("1450 rpm"), flow_rate=_q("0.045 m**3/s"), npsh_required=_q("0 m")
+        )
+
+
 def test_pump_affinity_laws_scale_by_speed_ratio():
     from anvilate.analysis import affinity_flow_rate, affinity_head, affinity_power
 
