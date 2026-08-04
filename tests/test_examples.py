@@ -515,6 +515,24 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_welding_shop_ventilation_example_dilution_dwarfs_comfort():
+    namespace = runpy.run_path(str(_EXAMPLES / "welding_shop_ventilation.py"))
+    s = namespace["shop_ventilation"]()
+    # ASHRAE comfort air is modest; fume dilution needs orders of magnitude more.
+    assert s["comfort_cfm"] == pytest.approx(400.0, abs=1.0)
+    assert s["dilution_cfm"] > 50 * s["comfort_cfm"]
+    assert s["dilution_ach"] > 50.0
+
+
+def test_office_ventilation_scorecard_example_lab_fails_on_air_changes():
+    namespace = runpy.run_path(str(_EXAMPLES / "office_ventilation_scorecard.py"))
+    r = namespace["zone_scorecards"]()
+    # The office minimum passes; the lab-grade 6 ACH minimum fails on air changes only.
+    assert r["office_status"] == "pass"
+    assert r["lab_status"] == "fail"
+    assert r["lab_fails"] == "air changes per hour"
+
+
 def test_lighting_energy_tradeoff_example_middle_count_clears_both():
     namespace = runpy.run_path(str(_EXAMPLES / "lighting_energy_tradeoff.py"))
     r = namespace["layout_scorecards"]()

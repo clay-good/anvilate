@@ -77,6 +77,8 @@ modules:
   oil-film thickness from the eccentricity ratio, and the specific film (lambda)
   ratio that sets the lubrication regime
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
+- :mod:`~anvilate.analysis.ventilation` — indoor-air-quality airflow: ASHRAE 62.1
+  breathing-zone outdoor air, air changes per hour, and contaminant dilution airflow
 - :mod:`~anvilate.analysis.wear` — Archard sliding-wear law: the worn volume and wear
   depth of a sliding contact, the sliding distance (wear life) a depth limit allows, and
   the plain-bearing PV (pressure × velocity) factor against its overheating limit
@@ -1256,6 +1258,11 @@ from .torsion import (
     triangular_bar_torsional_stress,
     triangular_bar_twist_angle,
 )
+from .ventilation import (
+    air_changes_per_hour,
+    breathing_zone_outdoor_airflow,
+    dilution_airflow,
+)
 from .wear import (
     archard_wear_depth,
     archard_wear_volume,
@@ -2060,6 +2067,9 @@ __all__ = [
     "archard_wear_depth",
     "sliding_distance_for_wear_depth",
     "sliding_contact_pv",
+    "breathing_zone_outdoor_airflow",
+    "air_changes_per_hour",
+    "dilution_airflow",
     "FILLET_THROAT_FACTOR",
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",

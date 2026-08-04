@@ -13375,6 +13375,59 @@ def test_illumination_lighting_power_density():
         )
 
 
+def test_ventilation_outdoor_air_changes_and_dilution():
+    from anvilate.analysis import (
+        air_changes_per_hour,
+        breathing_zone_outdoor_airflow,
+        dilution_airflow,
+    )
+
+    # ASHRAE 62.1: Vbz = Rp*Pz + Ra*Az = 5*50 + 0.06*5000 = 550 cfm; /Ez=0.8 -> 687.5 cfm.
+    voz = breathing_zone_outdoor_airflow(
+        people_outdoor_rate=_q("5 ft**3/min"),
+        occupancy=50,
+        area_outdoor_rate=_q("0.06 ft**3/min/ft**2"),
+        floor_area=_q("5000 ft**2"),
+        zone_air_distribution_effectiveness=0.8,
+    )
+    assert voz.to("ft**3/min").magnitude == pytest.approx(687.5, rel=1e-6)
+    # Ez = 1.0 leaves Vbz unchanged.
+    vbz = breathing_zone_outdoor_airflow(
+        people_outdoor_rate=_q("5 ft**3/min"),
+        occupancy=50,
+        area_outdoor_rate=_q("0.06 ft**3/min/ft**2"),
+        floor_area=_q("5000 ft**2"),
+    )
+    assert vbz.to("ft**3/min").magnitude == pytest.approx(550.0, rel=1e-6)
+
+    # ACH = Q/V. 550 cfm in 50,000 ft^3 -> 0.66/h.
+    ach = air_changes_per_hour(airflow=_q("550 ft**3/min"), room_volume=_q("50000 ft**3"))
+    assert ach == pytest.approx(0.66, rel=1e-6)
+
+    # Dilution Q = K*G/C. G/C = 10 g/min / 0.001 g/ft^3 = 10,000 cfm; K=5 -> 50,000 cfm.
+    q = dilution_airflow(
+        contaminant_generation_rate=_q("10 g/min"),
+        target_concentration=_q("0.001 g/ft**3"),
+        mixing_factor=5.0,
+    )
+    assert q.to("ft**3/min").magnitude == pytest.approx(50000.0, rel=1e-6)
+
+    with pytest.raises(ValueError, match="at least 1"):
+        dilution_airflow(
+            contaminant_generation_rate=_q("10 g/min"),
+            target_concentration=_q("0.001 g/ft**3"),
+            mixing_factor=0.5,
+        )
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        breathing_zone_outdoor_airflow(
+            people_outdoor_rate=_q("5 ft**3/min"),
+            occupancy=50,
+            area_outdoor_rate=_q("0.06 ft**3/min/ft**2"),
+            floor_area=_q("5000 ft**2"),
+            zone_air_distribution_effectiveness=1.5,
+        )
+
+
 def test_electrical_three_phase_power_current_and_voltage_drop():
     import math
 

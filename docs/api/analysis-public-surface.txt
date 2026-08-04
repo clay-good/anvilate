@@ -765,6 +765,9 @@ wear.archard_wear_depth
 wear.archard_wear_volume
 wear.sliding_contact_pv
 wear.sliding_distance_for_wear_depth
+ventilation.air_changes_per_hour
+ventilation.breathing_zone_outdoor_airflow
+ventilation.dilution_airflow
 weld.FILLET_THROAT_FACTOR
 weld.eccentric_weld_group_peak_stress
 weld.fillet_weld_design_strength
