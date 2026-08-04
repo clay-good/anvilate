@@ -12595,3 +12595,24 @@ def test_horizontal_cylinder_natural_convection_matches_churchill_chu():
             prandtl_number=0.71,
             thermal_expansion_coefficient=_q("0.003333 1/K"),
         )
+
+
+def test_horizontal_plate_natural_convection_up_vs_down():
+    from anvilate.analysis import horizontal_plate_natural_convection_coefficient
+
+    kw = {
+        "surface_temperature_difference": _q("40 K"),
+        "characteristic_length": _q("25 mm"),
+        "thermal_conductivity": _q("0.026 W/(m*K)"),
+        "kinematic_viscosity": _q("1.6e-5 m**2/s"),
+        "prandtl_number": 0.71,
+        "thermal_expansion_coefficient": _q("0.003333 1/K"),
+    }
+    # Hot face up (buoyant plumes lift off): h ≈ 8.7 W/m²·K.
+    up = horizontal_plate_natural_convection_coefficient(hot_surface_facing_up=True, **kw)
+    assert up.to("W/(m**2*K)").magnitude == pytest.approx(8.66, abs=0.05)
+    # Hot face down (fluid trapped) is about half — 0.27 vs 0.54 in the same Ra range.
+    down = horizontal_plate_natural_convection_coefficient(hot_surface_facing_up=False, **kw)
+    assert down.to("W/(m**2*K)").magnitude == pytest.approx(
+        up.to("W/(m**2*K)").magnitude / 2, rel=1e-9
+    )
