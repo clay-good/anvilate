@@ -308,6 +308,16 @@ def test_orifice_meter_sizing_example_reads_and_sizes():
     assert r["full_scale_drop_kpa"] > 20.0
 
 
+def test_vfd_pump_energy_saving_example_cube_law():
+    namespace = runpy.run_path(str(_EXAMPLES / "vfd_pump_energy_saving.py"))
+    op = namespace["vfd_operating_point"]()
+    # 80% speed -> 80% flow but 0.8^3 = 51% power.
+    assert op["flow_lps"] == pytest.approx(40, abs=0.5)
+    assert op["power_fraction"] == pytest.approx(0.512, rel=1e-6)
+    # A 20% speed cut is nearly a halving of power.
+    assert op["power_fraction"] < 0.55
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

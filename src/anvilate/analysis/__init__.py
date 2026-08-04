@@ -126,8 +126,9 @@ modules:
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), and the Froude
   number and rectangular critical depth that classify the flow as sub- or supercritical
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
-  power P/η the driver must supply, and the dimensionless specific speed that picks the
-  impeller type for a duty
+  power P/η the driver must supply, the dimensionless specific speed that picks the
+  impeller type, and the affinity laws that scale flow, head, and power (∝ N, N², N³)
+  when the same pump runs at a new speed
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -891,6 +892,9 @@ from .pressure_vessel import (
     thin_wall_thickness_for_pressure,
 )
 from .pump import (
+    affinity_flow_rate,
+    affinity_head,
+    affinity_power,
     pump_hydraulic_power,
     pump_shaft_power,
     pump_specific_speed,
@@ -1163,6 +1167,9 @@ __all__ = [
     "froude_number",
     "hydraulic_radius",
     "manning_flow_rate",
+    "affinity_flow_rate",
+    "affinity_head",
+    "affinity_power",
     "pump_hydraulic_power",
     "pump_shaft_power",
     "pump_specific_speed",

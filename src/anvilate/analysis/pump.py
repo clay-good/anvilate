@@ -9,7 +9,12 @@ shaft (brake) power the driver has to deliver.
 Which *kind* of pump suits the duty is set by the specific speed, a dimensionless group that
 collapses speed, flow and head into one number: N_s = ω·√Q / (g·H)^(3/4). Low values (well
 below 1) point to high-head, low-flow radial (centrifugal) impellers; high values to low-head,
-high-flow axial ones. Inputs and outputs are dimension-checked
+high-flow axial ones.
+
+Run the *same* pump at a different speed and the affinity laws predict the new operating point:
+flow scales with the speed ratio, head with its square, and power with its cube. That cube is
+why trimming speed with a variable-frequency drive saves so much energy — a 20% speed cut nearly
+halves the power. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
 """
 
@@ -20,6 +25,9 @@ from math import sqrt
 from ..units import Quantity
 
 __all__ = [
+    "affinity_head",
+    "affinity_flow_rate",
+    "affinity_power",
     "pump_hydraulic_power",
     "pump_shaft_power",
     "pump_specific_speed",
@@ -95,6 +103,53 @@ def pump_specific_speed(
     if omega <= 0 or q <= 0 or h <= 0:
         raise ValueError("rotational_speed, flow_rate, and head must be positive")
     return omega * sqrt(q) / (_GRAVITY * h) ** 0.75
+
+
+def affinity_flow_rate(*, flow_rate: Quantity, speed_ratio: float) -> Quantity:
+    """The flow of the same pump at a new speed, Q₂ = Q₁·(N₂/N₁) (first affinity law).
+
+    Flow scales in direct proportion to shaft speed: ``flow_rate`` Q₁ at the reference speed
+    becomes Q₁·``speed_ratio`` at the new one, where ``speed_ratio`` = N₂/N₁. Returns the scaled
+    flow rate in m³/s.
+    """
+    _check(flow_rate, "[length]**3/[time]", "flow_rate")
+    q = flow_rate.to("m**3/s").magnitude
+    if speed_ratio <= 0:
+        raise ValueError(f"speed_ratio must be positive; got {speed_ratio}")
+    if q <= 0:
+        raise ValueError("flow_rate must be positive")
+    return Quantity(magnitude=q * speed_ratio, unit="m**3/s")
+
+
+def affinity_head(*, head: Quantity, speed_ratio: float) -> Quantity:
+    """The head of the same pump at a new speed, H₂ = H₁·(N₂/N₁)² (second affinity law).
+
+    Head scales with the *square* of the speed ratio: ``head`` H₁ becomes H₁·``speed_ratio``²,
+    where ``speed_ratio`` = N₂/N₁. Returns the scaled head in meters.
+    """
+    _check(head, "[length]", "head")
+    h = head.to("m").magnitude
+    if speed_ratio <= 0:
+        raise ValueError(f"speed_ratio must be positive; got {speed_ratio}")
+    if h <= 0:
+        raise ValueError("head must be positive")
+    return Quantity(magnitude=h * speed_ratio**2, unit="m")
+
+
+def affinity_power(*, power: Quantity, speed_ratio: float) -> Quantity:
+    """The power of the same pump at a new speed, P₂ = P₁·(N₂/N₁)³ (third affinity law).
+
+    Power scales with the *cube* of the speed ratio: ``power`` P₁ becomes P₁·``speed_ratio``³,
+    where ``speed_ratio`` = N₂/N₁. This cube is the whole case for variable-speed drives — a
+    modest speed cut is a large power saving. Returns the scaled power in watts.
+    """
+    _check(power, "[power]", "power")
+    p = power.to("W").magnitude
+    if speed_ratio <= 0:
+        raise ValueError(f"speed_ratio must be positive; got {speed_ratio}")
+    if p <= 0:
+        raise ValueError("power must be positive")
+    return Quantity(magnitude=p * speed_ratio**3, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

@@ -13538,6 +13538,25 @@ def test_pump_specific_speed_classifies_the_duty():
         )
 
 
+def test_pump_affinity_laws_scale_by_speed_ratio():
+    from anvilate.analysis import affinity_flow_rate, affinity_head, affinity_power
+
+    r = 0.8  # N2/N1
+    # Flow scales linearly, head with the square, power with the cube.
+    q2 = affinity_flow_rate(flow_rate=_q("0.05 m**3/s"), speed_ratio=r)
+    assert q2.to("m**3/s").magnitude == pytest.approx(0.05 * r, rel=1e-9)
+    h2 = affinity_head(head=_q("20 m"), speed_ratio=r)
+    assert h2.to("m").magnitude == pytest.approx(20 * r**2, rel=1e-9)
+    p2 = affinity_power(power=_q("14 kW"), speed_ratio=r)
+    assert p2.to("kW").magnitude == pytest.approx(14 * r**3, rel=1e-9)
+    # The cube law: an 80% speed drops power to ~51% — nearly half.
+    assert p2.to("kW").magnitude / 14 == pytest.approx(0.512, rel=1e-9)
+    # A unit speed ratio leaves the operating point unchanged.
+    assert affinity_head(head=_q("20 m"), speed_ratio=1.0).to("m").magnitude == pytest.approx(20.0)
+    with pytest.raises(ValueError, match="speed_ratio"):
+        affinity_power(power=_q("14 kW"), speed_ratio=0.0)
+
+
 def test_hydrostatic_pressure_and_force():
     from anvilate.analysis import hydrostatic_force_on_plane, hydrostatic_pressure
 

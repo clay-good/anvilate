@@ -433,6 +433,9 @@ open_channel.froude_number
 open_channel.hydraulic_radius
 open_channel.manning_flow_rate
 open_channel.manning_flow_velocity
+pump.affinity_flow_rate
+pump.affinity_head
+pump.affinity_power
 pump.pump_hydraulic_power
 pump.pump_shaft_power
 pump.pump_specific_speed
