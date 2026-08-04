@@ -260,6 +260,9 @@ electrical.three_phase_power
 electrical.transformer_available_fault_current
 electrical.transformer_full_load_current
 electrical.voltage_drop_three_phase
+energy_storage.battery_backup_time
+energy_storage.battery_bank_capacity
+energy_storage.usable_battery_energy
 dynamics.STANDARD_GRAVITY
 dynamics.annular_disc_polar_mass_moment
 dynamics.balance_correction_mass

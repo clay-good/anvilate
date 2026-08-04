@@ -13571,6 +13571,57 @@ def test_electrical_transformer_full_load_and_fault_current():
         transformer_available_fault_current(full_load_current=fla, impedance_percent=0.0)
 
 
+def test_energy_storage_capacity_energy_and_backup_time():
+    from anvilate.analysis import (
+        battery_backup_time,
+        battery_bank_capacity,
+        usable_battery_energy,
+    )
+
+    # C = P*t/(V*DoD*eta); 2000 W, 4 h, 48 V, 0.5, 0.9 -> 370.4 Ah.
+    cap = battery_bank_capacity(
+        load_power=_q("2000 W"),
+        autonomy_time=_q("4 hour"),
+        system_voltage=_q("48 V"),
+        depth_of_discharge=0.5,
+        efficiency=0.9,
+    )
+    assert cap.to("A*hour").magnitude == pytest.approx(2000 * 4 / (48 * 0.5 * 0.9), rel=1e-9)
+
+    # Usable energy E = C*V*DoD*eta -> 8000 Wh, and it round-trips to the 4 h autonomy.
+    energy = usable_battery_energy(
+        rated_capacity=cap, system_voltage=_q("48 V"), depth_of_discharge=0.5, efficiency=0.9
+    )
+    assert energy.to("W*hour").magnitude == pytest.approx(8000.0, rel=1e-6)
+    back = battery_backup_time(
+        rated_capacity=cap,
+        system_voltage=_q("48 V"),
+        load_power=_q("2000 W"),
+        depth_of_discharge=0.5,
+        efficiency=0.9,
+    )
+    assert back.to("hour").magnitude == pytest.approx(4.0, rel=1e-6)
+
+    # A deeper usable depth of discharge yields proportionally more runtime.
+    deeper = battery_backup_time(
+        rated_capacity=cap,
+        system_voltage=_q("48 V"),
+        load_power=_q("2000 W"),
+        depth_of_discharge=1.0,
+        efficiency=0.9,
+    )
+    assert deeper.to("hour").magnitude == pytest.approx(8.0, rel=1e-6)
+
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        battery_bank_capacity(
+            load_power=_q("2000 W"),
+            autonomy_time=_q("4 hour"),
+            system_voltage=_q("48 V"),
+            depth_of_discharge=1.5,
+            efficiency=0.9,
+        )
+
+
 def test_drag_force_and_terminal_velocity():
     from anvilate.analysis import drag_force, terminal_velocity
 

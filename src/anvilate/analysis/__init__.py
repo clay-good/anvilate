@@ -158,6 +158,9 @@ modules:
   resistance ρ·L/A, the three-phase voltage drop along a feeder, the capacitor kVAR to
   correct a poor power factor, and the transformer full-load and available fault current
   (the AIC rating downstream gear must interrupt)
+- :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
+  capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, and the runtime
+  a given bank delivers
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, and the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface
@@ -683,6 +686,11 @@ from .electrical import (
     transformer_available_fault_current,
     transformer_full_load_current,
     voltage_drop_three_phase,
+)
+from .energy_storage import (
+    battery_backup_time,
+    battery_bank_capacity,
+    usable_battery_energy,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -1428,6 +1436,9 @@ __all__ = [
     "transformer_full_load_current",
     "transformer_available_fault_current",
     "voltage_drop_three_phase",
+    "battery_bank_capacity",
+    "usable_battery_energy",
+    "battery_backup_time",
     "inverse_square_attenuation",
     "mass_law_transmission_loss",
     "noise_dose_fraction",

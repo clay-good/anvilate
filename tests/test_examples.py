@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_ups_battery_bank_sizing_example_shallower_dod_shortens_runtime():
+    namespace = runpy.run_path(str(_EXAMPLES / "ups_battery_bank_sizing.py"))
+    b = namespace["bank_sizing"]()
+    # 3 kW over 2 h at 48 V, 50% DoD, 90% eff -> ~278 Ah.
+    assert b["capacity_ah"] == pytest.approx(277.8, abs=1.0)
+    # Cycling the same bank to only 40% DoD gives 2 h * 0.4/0.5 = 1.6 h.
+    assert b["shallow_runtime_h"] == pytest.approx(1.6, abs=0.05)
+
+
 def test_transformer_fault_current_rating_example_stiffer_is_harder():
     namespace = runpy.run_path(str(_EXAMPLES / "transformer_fault_current_rating.py"))
     s = namespace["fault_study"]()
