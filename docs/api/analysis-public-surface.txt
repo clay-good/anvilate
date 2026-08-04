@@ -586,6 +586,7 @@ torsion.rectangular_bar_twist_angle
 torsion.rectangular_tube_enclosed_area
 torsion.rectangular_tube_torsional_stress
 torsion.rectangular_tube_twist_angle
+torsion.shaft_diameter_de_gerber
 torsion.shaft_diameter_de_goodman
 torsion.shaft_diameter_for_bending_torsion
 torsion.shaft_diameter_for_torque

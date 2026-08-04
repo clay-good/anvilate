@@ -4340,6 +4340,46 @@ def test_shaft_diameter_de_goodman_sizes_a_rotating_shaft_for_fatigue():
         required_safety_factor=2.0,
     )
     assert d.to("mm").magnitude > static.to("mm").magnitude
+
+
+def test_shaft_diameter_de_gerber_is_less_conservative_than_de_goodman():
+    from math import pi, sqrt
+
+    from anvilate.analysis import shaft_diameter_de_gerber, shaft_diameter_de_goodman
+
+    kw = {
+        "alternating_bending_moment": _q("200 N*m"),
+        "mean_torque": _q("100 N*m"),
+        "endurance_limit": _q("200 MPa"),
+        "ultimate_strength": _q("500 MPa"),
+        "bending_fatigue_factor": 1.5,
+        "torsion_fatigue_factor": 1.3,
+        "required_safety_factor": 2.0,
+    }
+    gerber = shaft_diameter_de_gerber(**kw)
+    a = sqrt(4 * (1.5 * 200000) ** 2)
+    b = sqrt(3 * (1.3 * 100000) ** 2)
+    root = 1 + sqrt(1 + (2 * b * 200 / (a * 500)) ** 2)
+    expect = (8 * a * 2 / (pi * 200) * root) ** (1 / 3)
+    assert gerber.to("mm").magnitude == pytest.approx(expect, rel=1e-9)
+    # Gerber's parabola sizes a ductile shaft a little smaller than Goodman's line.
+    goodman = shaft_diameter_de_goodman(**kw)
+    assert gerber.to("mm").magnitude < goodman.to("mm").magnitude
+    # With negligible mean stress the two criteria coincide.
+    no_mean = {**kw, "mean_torque": _q("0.001 N*m")}
+    assert shaft_diameter_de_gerber(**no_mean).to("mm").magnitude == pytest.approx(
+        shaft_diameter_de_goodman(**no_mean).to("mm").magnitude, rel=1e-3
+    )
+    with pytest.raises(ValueError, match="no fatigue to size for"):
+        shaft_diameter_de_gerber(
+            alternating_bending_moment=_q("0 N*m"),
+            mean_torque=_q("100 N*m"),
+            endurance_limit=_q("200 MPa"),
+            ultimate_strength=_q("500 MPa"),
+        )
+
+
+def test_shaft_diameter_for_bending_torsion_lands_on_the_von_mises_allowable():
     # At the sized diameter the von Mises stress equals exactly Sy/n.
     d = shaft_diameter_for_bending_torsion(
         bending_moment=_q("300 N*m"),

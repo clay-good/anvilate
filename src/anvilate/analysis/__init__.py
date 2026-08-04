@@ -45,8 +45,9 @@ modules:
   between them, and the §H1.1 beam-column interaction (uniaxial or biaxial)
 - :mod:`~anvilate.analysis.torsion` — the torque a power/speed makes, solid and
   hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
-  torque requires — the static von Mises size and the DE-Goodman fatigue size for
-  a rotating shaft under reversed bending and steady torque; thin-walled
+  torque requires — the static von Mises size and the DE-Goodman and DE-Gerber
+  fatigue sizes for a rotating shaft under reversed bending and steady torque;
+  thin-walled
   rectangular (box) tube torsion (Bredt), thin
   open-section (strip) torsion, general closed thin-tube (Bredt) torsion, and
   solid rectangular, elliptical, and equilateral-triangle bar torsion
@@ -951,6 +952,7 @@ from .torsion import (
     rectangular_tube_enclosed_area,
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
+    shaft_diameter_de_gerber,
     shaft_diameter_de_goodman,
     shaft_diameter_for_bending_torsion,
     shaft_diameter_for_torque,
@@ -1409,6 +1411,7 @@ __all__ = [
     "shaft_diameter_for_torque",
     "shaft_diameter_for_bending_torsion",
     "shaft_diameter_de_goodman",
+    "shaft_diameter_de_gerber",
     "hollow_shaft_diameter_for_bending_torsion",
     "hollow_shaft_torsional_stress",
     "torque_from_power",
