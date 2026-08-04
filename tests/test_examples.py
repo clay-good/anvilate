@@ -416,6 +416,16 @@ def test_cooling_coil_load_example_latent_is_a_big_share():
     assert c["latent_fraction"] > 0.4
 
 
+def test_heat_pump_cold_day_example_cop_collapses():
+    namespace = runpy.run_path(str(_EXAMPLES / "heat_pump_cold_day.py"))
+    p = namespace["heat_pump_performance"]()
+    # The Carnot ceiling falls sharply as the outdoor temperature drops.
+    assert p["cold_carnot_cop"] < p["mild_carnot_cop"]
+    # The same heat demand costs substantially more compressor power on the cold day.
+    assert p["cold_power_kw"] > p["mild_power_kw"]
+    assert p["cold_power_kw"] / p["mild_power_kw"] > 1.5
+
+
 def test_multistage_compressor_staging_example_cuts_power_and_heat():
     namespace = runpy.run_path(str(_EXAMPLES / "multistage_compressor_staging.py"))
     s = namespace["staging_comparison"]()

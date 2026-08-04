@@ -13114,6 +13114,32 @@ def test_air_receiver_holdup_and_sizing_round_trip():
         )
 
 
+def test_refrigeration_carnot_and_actual_cop():
+    from anvilate.analysis import (
+        carnot_cop_cooling,
+        carnot_cop_heating,
+        coefficient_of_performance,
+    )
+
+    # Carnot cooling COP = T_c/(T_h - T_c) = 278.15/40 = 6.954.
+    cc = carnot_cop_cooling(cold_temperature=_q("278.15 K"), hot_temperature=_q("318.15 K"))
+    assert cc == pytest.approx(278.15 / (318.15 - 278.15), rel=1e-9)
+    # Heating COP is always exactly one more than cooling.
+    ch = carnot_cop_heating(cold_temperature=_q("278.15 K"), hot_temperature=_q("318.15 K"))
+    assert ch == pytest.approx(cc + 1.0, rel=1e-9)
+    # A smaller temperature lift gives a higher ceiling.
+    cc_small_lift = carnot_cop_cooling(
+        cold_temperature=_q("288.15 K"), hot_temperature=_q("308.15 K")
+    )
+    assert cc_small_lift > cc
+    # Actual COP = Q/W, and its ratio to Carnot is the second-law efficiency (~0.5 typical).
+    cop = coefficient_of_performance(capacity=_q("10 kW"), power_input=_q("3 kW"))
+    assert cop == pytest.approx(10 / 3, rel=1e-9)
+    assert cop / cc == pytest.approx(0.479, abs=0.005)
+    with pytest.raises(ValueError, match="hot_temperature must exceed"):
+        carnot_cop_cooling(cold_temperature=_q("318.15 K"), hot_temperature=_q("278.15 K"))
+
+
 def test_psychrometric_moist_air_properties():
     import math
 

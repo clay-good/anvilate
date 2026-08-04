@@ -545,6 +545,9 @@ rigging.sling_leg_tension
 rigging.sling_tension_factor
 rigging.tackle_lead_line_tension
 rigging.tackle_mechanical_advantage
+refrigeration.carnot_cop_cooling
+refrigeration.carnot_cop_heating
+refrigeration.coefficient_of_performance
 reinforced_concrete.rc_beam_nominal_moment
 reinforced_concrete.rc_doubly_reinforced_moment
 reinforced_concrete.rc_t_beam_moment

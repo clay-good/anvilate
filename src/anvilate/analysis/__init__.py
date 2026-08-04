@@ -138,6 +138,8 @@ modules:
   hydraulic jump (sequent depth and energy dissipated) below a spillway, the specific
   energy E = y + V²/2g with its critical-depth minimum, and rectangular, V-notch, and
   broad-crested weir discharge for gauging channel flow and rating spillway sills
+- :mod:`~anvilate.analysis.refrigeration` — refrigeration and heat-pump cycle performance:
+  the Carnot cooling and heating COP ceilings and the actual COP = Q/W
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
   Magnus saturation vapor pressure, the humidity ratio and relative humidity, the dew-point
   temperature, and the moist-air enthalpy and cooling-coil load for capacity sizing
@@ -971,6 +973,11 @@ from .pump import (
     pump_shaft_power,
     pump_specific_speed,
 )
+from .refrigeration import (
+    carnot_cop_cooling,
+    carnot_cop_heating,
+    coefficient_of_performance,
+)
 from .reinforced_concrete import (
     rc_beam_nominal_moment,
     rc_beta1,
@@ -1301,6 +1308,9 @@ __all__ = [
     "moist_air_enthalpy",
     "relative_humidity",
     "saturation_vapor_pressure",
+    "carnot_cop_cooling",
+    "carnot_cop_heating",
+    "coefficient_of_performance",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",
