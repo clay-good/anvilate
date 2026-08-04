@@ -100,6 +100,25 @@ class Material(_Base):
         g = self.elastic_modulus.quantity.pint / (2 * (1 + nu))
         return Quantity(magnitude=float(g.to("GPa").magnitude), unit="GPa")
 
+    def bulk_modulus(self) -> Quantity:
+        """The isotropic bulk modulus K = E/(3·(1−2ν)), derived from the elastic
+        modulus and Poisson ratio.
+
+        The material's resistance to uniform (hydrostatic) compression — an exact
+        isotropic relation, not an estimate. It rises steeply as ν approaches 0.5
+        (an incompressible material), so a material with ν ≥ 0.5 has no finite bulk
+        modulus and this raises. Used wherever confined or hydrostatic loading
+        matters (e.g. the pressure a blocked-in liquid builds when heated).
+        """
+        nu = self.poisson_ratio.value
+        if nu >= 0.5:
+            raise ValueError(
+                f"bulk modulus is undefined for Poisson ratio >= 0.5 (incompressible); "
+                f"got {nu} for {self.id}"
+            )
+        k = self.elastic_modulus.quantity.pint / (3 * (1 - 2 * nu))
+        return Quantity(magnitude=float(k.to("GPa").magnitude), unit="GPa")
+
     def citations(self) -> dict[str, PropertyCitation]:
         """Every property's citation, keyed by property name — the evidence trail."""
         out: dict[str, PropertyCitation] = {}

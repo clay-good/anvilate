@@ -199,6 +199,18 @@ def test_shear_modulus_derived_from_e_and_nu(db: MaterialsDatabase) -> None:
     assert al.shear_modulus().to("GPa").magnitude == pytest.approx(25.9, rel=1e-2)
 
 
+def test_bulk_modulus_derived_from_e_and_nu(db: MaterialsDatabase) -> None:
+    # K = E/(3(1-2nu)). Steel A992 (200 GPa, 0.30) -> 166.7 GPa.
+    a992 = db.get("ASTM-A992")
+    expected = a992.elastic_modulus.quantity.to("GPa").magnitude / (
+        3 * (1 - 2 * a992.poisson_ratio.value)
+    )
+    assert a992.bulk_modulus().to("GPa").magnitude == pytest.approx(expected, rel=1e-9)
+    assert a992.bulk_modulus().to("GPa").magnitude == pytest.approx(166.7, rel=1e-3)
+    # The bulk modulus exceeds the shear modulus for a typical metal (nu < 0.5).
+    assert a992.bulk_modulus().to("GPa").magnitude > a992.shear_modulus().to("GPa").magnitude
+
+
 def test_shear_modulus_feeds_a_torsion_check(db: MaterialsDatabase) -> None:
     # A DB material's derived G drives the shaft twist-angle check directly.
     from anvilate.analysis import shaft_twist_angle
