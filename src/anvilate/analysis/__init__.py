@@ -230,6 +230,10 @@ modules:
   adiabatic mixing of two air streams (mass-weighted temperature and humidity ratio),
   the cooling-coil bypass factor against its apparent dew point, and the direct
   evaporative-cooler saturation effectiveness toward the wet-bulb
+- :mod:`~anvilate.analysis.cooling_tower` — cooling-tower performance against the
+  wet-bulb floor: the range R = T_hot − T_cold it cools the water, the approach
+  A = T_cold − T_wb that measures tower capability, and the effectiveness
+  ε = R/(R + A) — the fraction of the available cooling achieved
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -746,6 +750,11 @@ from .contact import (
     hertz_effective_modulus,
     hertz_sphere_approach,
     hertz_sphere_contact,
+)
+from .cooling_tower import (
+    cooling_tower_approach,
+    cooling_tower_effectiveness,
+    cooling_tower_range,
 )
 from .corrosion import (
     corrosion_penetration_rate,
@@ -1699,6 +1708,9 @@ __all__ = [
     "carnot_cop_heating",
     "coefficient_of_performance",
     "second_law_efficiency",
+    "cooling_tower_range",
+    "cooling_tower_approach",
+    "cooling_tower_effectiveness",
     "drag_force",
     "jet_impact_force",
     "stokes_settling_velocity",

@@ -274,6 +274,9 @@ contact.hertz_cylinder_contact
 contact.hertz_effective_modulus
 contact.hertz_sphere_approach
 contact.hertz_sphere_contact
+cooling_tower.cooling_tower_range
+cooling_tower.cooling_tower_approach
+cooling_tower.cooling_tower_effectiveness
 corrosion.corrosion_penetration_rate
 corrosion.faraday_corrosion_rate
 corrosion.remaining_wall_life

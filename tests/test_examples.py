@@ -745,6 +745,18 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_cooling_tower_approach_example_rates_by_approach():
+    namespace = runpy.run_path(str(_EXAMPLES / "cooling_tower_approach.py"))
+    p = namespace["tower_performance"]()
+    # 37 C -> 30 C is a 7 K range; 30 C water vs 25 C wet-bulb is a 5 K approach.
+    assert p["range_k"] == pytest.approx(7.0, rel=1e-9)
+    assert p["approach_k"] == pytest.approx(5.0, rel=1e-9)
+    # Effectiveness 7/12 ~ 0.58; a tighter 2 K approach lifts it well above.
+    assert p["effectiveness"] == pytest.approx(7.0 / 12.0, rel=1e-9)
+    assert p["tight_effectiveness"] == pytest.approx(7.0 / 9.0, rel=1e-9)
+    assert p["tight_effectiveness"] > p["effectiveness"]
+
+
 def test_carnot_ceiling_engine_grade_example_ranks_by_second_law():
     namespace = runpy.run_path(str(_EXAMPLES / "carnot_ceiling_engine_grade.py"))
     g = namespace["grade_engines"]()

@@ -15260,6 +15260,49 @@ def test_refrigeration_second_law_efficiency():
         second_law_efficiency(actual_cop=8.0, carnot_cop=7.0)
 
 
+def test_cooling_tower_range_approach_and_effectiveness():
+    from anvilate.analysis import (
+        cooling_tower_approach,
+        cooling_tower_effectiveness,
+        cooling_tower_range,
+    )
+
+    # Range = T_hot - T_cold; 37 C in, 30 C out -> 7 K.
+    r = cooling_tower_range(
+        hot_water_temperature=Quantity(magnitude=37.0, unit="degC"),
+        cold_water_temperature=Quantity(magnitude=30.0, unit="degC"),
+    )
+    assert r.to("K").magnitude == pytest.approx(7.0, rel=1e-9)
+
+    # Approach = T_cold - T_wb; 30 C water, 25 C wet-bulb -> 5 K.
+    a = cooling_tower_approach(
+        cold_water_temperature=Quantity(magnitude=30.0, unit="degC"),
+        wet_bulb_temperature=Quantity(magnitude=25.0, unit="degC"),
+    )
+    assert a.to("K").magnitude == pytest.approx(5.0, rel=1e-9)
+
+    # Effectiveness = R/(R+A) = 7/12 ~ 0.583 (the max drop is the full 12 K down to the wet-bulb).
+    eff = cooling_tower_effectiveness(range_=r, approach=a)
+    assert eff == pytest.approx(7.0 / 12.0, rel=1e-9)
+    assert 0.0 < eff < 1.0
+
+    # A smaller approach (a bigger/better tower) drives the effectiveness up toward 1.
+    tight = cooling_tower_effectiveness(range_=r, approach=_q("2 K"))
+    assert tight > eff
+
+    # Guardrails: hot water must be warmer than cold, and cold water cannot reach the wet-bulb.
+    with pytest.raises(ValueError, match="hot_water_temperature must exceed"):
+        cooling_tower_range(
+            hot_water_temperature=Quantity(magnitude=30.0, unit="degC"),
+            cold_water_temperature=Quantity(magnitude=37.0, unit="degC"),
+        )
+    with pytest.raises(ValueError, match="cannot cool below the wet-bulb"):
+        cooling_tower_approach(
+            cold_water_temperature=Quantity(magnitude=25.0, unit="degC"),
+            wet_bulb_temperature=Quantity(magnitude=25.0, unit="degC"),
+        )
+
+
 def test_psychrometric_moist_air_properties():
     import math
 
