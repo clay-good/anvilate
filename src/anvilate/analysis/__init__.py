@@ -819,7 +819,13 @@ from .scotch_yoke import (
     scotch_yoke_displacement,
     scotch_yoke_velocity,
 )
-from .section import CrossSection, bending_stress, required_section_modulus
+from .section import (
+    CompositeBeamStresses,
+    CrossSection,
+    bending_stress,
+    composite_beam_bending_stresses,
+    required_section_modulus,
+)
 from .servo import (
     inertia_matching_gear_ratio,
     motor_acceleration_torque,
@@ -1076,6 +1082,8 @@ __all__ = [
     "CrossSection",
     "bending_stress",
     "required_section_modulus",
+    "CompositeBeamStresses",
+    "composite_beam_bending_stresses",
     "neutral_axis_radius",
     "bend_allowance",
     "outside_setback",

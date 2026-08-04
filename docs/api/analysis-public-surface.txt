@@ -465,8 +465,10 @@ rivet.riveted_joint_efficiency
 scotch_yoke.scotch_yoke_acceleration
 scotch_yoke.scotch_yoke_displacement
 scotch_yoke.scotch_yoke_velocity
+section.CompositeBeamStresses
 section.CrossSection
 section.bending_stress
+section.composite_beam_bending_stresses
 section.required_section_modulus
 servo.inertia_matching_gear_ratio
 servo.motor_acceleration_torque

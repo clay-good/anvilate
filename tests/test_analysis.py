@@ -553,6 +553,47 @@ def test_simply_supported_offset_load_degenerates_to_the_center_case():
     )
 
 
+def test_composite_beam_bending_stresses_flitch_and_homogeneous_limit():
+    from anvilate.analysis import bending_stress, composite_beam_bending_stresses
+
+    # Homogeneous limit: two equal timber layers = a solid 100x400, so the transformed
+    # section reduces to the ordinary solid-section stress sigma = M/Z.
+    homogeneous = composite_beam_bending_stresses(
+        moment=_q("10 kN*m"),
+        bottom_width=_q("100 mm"),
+        bottom_height=_q("200 mm"),
+        bottom_modulus=_q("10 GPa"),
+        top_width=_q("100 mm"),
+        top_height=_q("200 mm"),
+        top_modulus=_q("10 GPa"),
+    )
+    assert homogeneous.neutral_axis_from_bottom.to("mm").magnitude == pytest.approx(200.0, rel=1e-9)
+    z_solid = 100 * 400**2 / 6
+    solid = bending_stress(moment=_q("10 kN*m"), section_modulus=_q(f"{z_solid} mm**3"))
+    assert homogeneous.bottom_fibre_stress.to("MPa").magnitude == pytest.approx(
+        solid.to("MPa").magnitude, rel=1e-9
+    )
+    # Flitch beam: a steel plate on a timber joist. The neutral axis shifts up toward the
+    # stiff steel, which carries far more stress than its 10 mm depth alone implies.
+    flitch = composite_beam_bending_stresses(
+        moment=_q("10 kN*m"),
+        bottom_width=_q("100 mm"),
+        bottom_height=_q("200 mm"),
+        bottom_modulus=_q("10 GPa"),
+        top_width=_q("100 mm"),
+        top_height=_q("10 mm"),
+        top_modulus=_q("200 GPa"),
+    )
+    assert flitch.neutral_axis_from_bottom.to("mm").magnitude == pytest.approx(152.5, rel=1e-3)
+    assert flitch.bottom_fibre_stress.to("MPa").magnitude == pytest.approx(8.6, abs=0.2)
+    assert flitch.top_fibre_stress.to("MPa").magnitude == pytest.approx(64.9, abs=0.5)
+    # The steel (stiff top) is far more stressed than the timber.
+    assert (
+        flitch.top_fibre_stress.to("MPa").magnitude
+        > 5 * flitch.bottom_fibre_stress.to("MPa").magnitude
+    )
+
+
 def test_symmetric_point_loads_match_worked_example():
     # Four-point bending: 5 kN at 1 m from EACH support of a 3 m span, 80x120x5
     # box (I = 3,755,833 mm^4, c = 60). M = F*a = 5e6 N*mm constant between the

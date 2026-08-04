@@ -19,7 +19,13 @@ from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
 
-__all__ = ["CrossSection", "bending_stress", "required_section_modulus"]
+__all__ = [
+    "CrossSection",
+    "bending_stress",
+    "required_section_modulus",
+    "CompositeBeamStresses",
+    "composite_beam_bending_stresses",
+]
 
 
 def bending_stress(*, moment: Quantity, section_modulus: Quantity) -> Quantity:
@@ -267,3 +273,94 @@ class CrossSection(BaseModel):
             # web-area approximation on the full-depth web (the AISC G2 area)
             shear_form_factor=area / (h * tw),
         )
+
+
+class CompositeBeamStresses(BaseModel):
+    """The bending stresses of a two-material composite (flitch) beam under a moment.
+
+    ``neutral_axis_from_bottom`` is the height of the transformed-section neutral axis
+    above the bottom fibre, ``transformed_second_moment`` the second moment of the section
+    transformed into the *bottom* material, and ``bottom_fibre_stress`` /
+    ``top_fibre_stress`` the extreme-fibre bending stresses in the bottom and top
+    materials. The top stress carries the modular-ratio factor n = E_top/E_bottom, which
+    is why a stiff top layer (a steel plate on timber) draws far more stress than its
+    depth alone suggests.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    neutral_axis_from_bottom: Quantity
+    transformed_second_moment: Quantity
+    bottom_fibre_stress: Quantity
+    top_fibre_stress: Quantity
+
+
+def composite_beam_bending_stresses(
+    *,
+    moment: Quantity,
+    bottom_width: Quantity,
+    bottom_height: Quantity,
+    bottom_modulus: Quantity,
+    top_width: Quantity,
+    top_height: Quantity,
+    top_modulus: Quantity,
+) -> CompositeBeamStresses:
+    """The bending stresses in a two-layer composite beam by the transformed-section method.
+
+    Two rectangular layers bonded one on top of the other — a steel plate on a timber
+    joist (a flitch beam), a bimetallic strip, a stiffened cover — bend as one section but
+    do not share stress evenly: the stiffer material draws load in proportion to its
+    modulus. The transformed-section method scales the top layer's width by the modular
+    ratio n = E_top/E_bottom into an equivalent all-bottom-material section, finds its
+    neutral axis and second moment I_t, and reads the stresses σ_bottom = M·y_b/I_t and
+    σ_top = n·M·y_t/I_t at the extreme fibres. ``moment`` M is the applied bending moment;
+    ``bottom_width``/``bottom_height``/``bottom_modulus`` and
+    ``top_width``/``top_height``/``top_modulus`` are the two layers, bottom listed first.
+    When both moduli are equal it reduces to the ordinary solid-section stress. Returns a
+    :class:`CompositeBeamStresses` with the neutral axis, transformed I, and both fibre
+    stresses.
+    """
+    if not moment.has_dimension("[force] * [length]"):
+        raise ValueError(
+            f"moment must be a [force]*[length] quantity; got {moment.dimensionality} ({moment})"
+        )
+    for value, name in (
+        (bottom_width, "bottom_width"),
+        (bottom_height, "bottom_height"),
+        (top_width, "top_width"),
+        (top_height, "top_height"),
+    ):
+        if not value.has_dimension("[length]"):
+            raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
+    for value, name in ((bottom_modulus, "bottom_modulus"), (top_modulus, "top_modulus")):
+        if not value.has_dimension("[pressure]"):
+            raise ValueError(f"{name} must be a [pressure] quantity; got {value.dimensionality}")
+    m = moment.to("N*mm").magnitude
+    b1 = bottom_width.to("mm").magnitude
+    h1 = bottom_height.to("mm").magnitude
+    b2 = top_width.to("mm").magnitude
+    h2 = top_height.to("mm").magnitude
+    e1 = bottom_modulus.to("MPa").magnitude
+    e2 = top_modulus.to("MPa").magnitude
+    if min(b1, h1, b2, h2, e1, e2) <= 0:
+        raise ValueError("all widths, heights, and moduli must be positive")
+    n = e2 / e1
+    a1 = b1 * h1
+    a2 = b2 * h2
+    y1 = h1 / 2.0
+    y2 = h1 + h2 / 2.0
+    neutral = (a1 * y1 + n * a2 * y2) / (a1 + n * a2)  # from bottom
+    i_t = (
+        b1 * h1**3 / 12.0
+        + a1 * (neutral - y1) ** 2
+        + n * (b2 * h2**3 / 12.0 + a2 * (y2 - neutral) ** 2)
+    )
+    total_height = h1 + h2
+    sigma_bottom = m * neutral / i_t
+    sigma_top = n * m * (total_height - neutral) / i_t
+    return CompositeBeamStresses(
+        neutral_axis_from_bottom=Quantity(magnitude=neutral, unit="mm"),
+        transformed_second_moment=Quantity(magnitude=i_t, unit="mm**4"),
+        bottom_fibre_stress=Quantity(magnitude=sigma_bottom, unit="MPa"),
+        top_fibre_stress=Quantity(magnitude=sigma_top, unit="MPa"),
+    )
