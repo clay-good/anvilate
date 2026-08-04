@@ -35,6 +35,7 @@ __all__ = [
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",
+    "rational_method_peak_runoff",
     "rectangular_weir_flow",
     "specific_energy",
     "trapezoidal_channel_properties",
@@ -399,6 +400,34 @@ def triangular_weir_flow(
         * h**2.5
     )
     return Quantity(magnitude=q, unit="m**3/s")
+
+
+def rational_method_peak_runoff(
+    *,
+    runoff_coefficient: float,
+    rainfall_intensity: Quantity,
+    drainage_area: Quantity,
+) -> Quantity:
+    """The peak stormwater runoff of a catchment by the rational method, Q = C·i·A.
+
+    The design flow a storm drain, culvert, or channel must carry off a catchment: Q = C·i·A, from
+    the dimensionless ``runoff_coefficient`` C (the fraction of rain that runs off rather than soaks
+    in — ~0.9 for pavement, ~0.2 for lawn), the ``rainfall_intensity`` i (depth per time, for the
+    design storm), and the ``drainage_area`` A. It is the peak flow the whole downstream sizing
+    starts from — feed Q to :func:`manning_flow_rate` (inverted for depth) or a pipe to size the
+    conduit. C must be in (0, 1]. Returns the peak runoff as a volumetric flow rate (m³/s).
+    """
+    _check(rainfall_intensity, "[length]/[time]", "rainfall_intensity")
+    _check(drainage_area, "[length]**2", "drainage_area")
+    if not 0.0 < runoff_coefficient <= 1.0:
+        raise ValueError(f"runoff_coefficient must be in (0, 1]; got {runoff_coefficient}")
+    i = rainfall_intensity.to("m/s").magnitude
+    a = drainage_area.to("m**2").magnitude
+    if i < 0:
+        raise ValueError("rainfall_intensity must be non-negative")
+    if a <= 0:
+        raise ValueError("drainage_area must be positive")
+    return Quantity(magnitude=runoff_coefficient * i * a, unit="m**3/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

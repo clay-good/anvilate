@@ -612,6 +612,15 @@ def test_boiler_combustion_air_example_flue_confirms_excess():
     assert t["actual_afr"] > t["stoichiometric_afr"]
 
 
+def test_parking_lot_storm_drain_example_swale_carries_the_storm():
+    namespace = runpy.run_path(str(_EXAMPLES / "parking_lot_storm_drain.py"))
+    d = namespace["drainage_check"]()
+    # The rational-method peak runoff and the swale's Manning capacity, with margin > 1.
+    assert d["peak_runoff_m3s"] == pytest.approx(0.120, abs=0.005)
+    assert d["swale_capacity_m3s"] > d["peak_runoff_m3s"]
+    assert d["capacity_margin"] == pytest.approx(1.9, abs=0.1)
+
+
 def test_highway_curve_superelevation_example_max_speed_matches_design():
     namespace = runpy.run_path(str(_EXAMPLES / "highway_curve_superelevation.py"))
     c = namespace["curve_design"]()

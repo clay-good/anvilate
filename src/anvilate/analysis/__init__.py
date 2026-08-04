@@ -169,8 +169,9 @@ modules:
   and rectangular critical depth that classify the flow as sub- or supercritical, the
   flow geometry of trapezoidal (canal) and partially-full circular (culvert) sections, the
   hydraulic jump (sequent depth and energy dissipated) below a spillway, the specific
-  energy E = y + V²/2g with its critical-depth minimum, and rectangular, V-notch, and
-  broad-crested weir discharge for gauging channel flow and rating spillway sills
+  energy E = y + V²/2g with its critical-depth minimum, rectangular, V-notch, and
+  broad-crested weir discharge for gauging channel flow and rating spillway sills, and
+  the rational-method peak runoff Q = C·i·A that sets the drainage design flow
 - :mod:`~anvilate.analysis.tank_flow` — tank draining: the Torricelli efflux velocity √(2gh)
   and the time to drain a tank between two levels through a bottom orifice
 - :mod:`~anvilate.analysis.electrical` — electrical feeder sizing (for plant/industrial
@@ -1040,6 +1041,7 @@ from .open_channel import (
     manning_flow_rate,
     manning_flow_velocity,
     minimum_specific_energy_rectangular,
+    rational_method_peak_runoff,
     rectangular_weir_flow,
     specific_energy,
     trapezoidal_channel_properties,
@@ -1511,6 +1513,7 @@ __all__ = [
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",
+    "rational_method_peak_runoff",
     "rectangular_weir_flow",
     "specific_energy",
     "trapezoidal_channel_properties",

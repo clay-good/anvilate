@@ -14445,6 +14445,35 @@ def test_combustion_air_fuel_ratio_and_excess_air():
         excess_air_from_flue_oxygen(flue_oxygen_percent=21.0)
 
 
+def test_open_channel_rational_method_peak_runoff():
+    from anvilate.analysis import rational_method_peak_runoff
+
+    # Q = C*i*A; 0.9, 50 mm/hr, 1 ha -> 0.125 m^3/s.
+    q = rational_method_peak_runoff(
+        runoff_coefficient=0.9,
+        rainfall_intensity=_q("50 mm/hour"),
+        drainage_area=_q("10000 m**2"),
+    )
+    assert q.to("m**3/s").magnitude == pytest.approx(0.9 * (50e-3 / 3600) * 10000, rel=1e-9)
+
+    # A grassed catchment (lower coefficient) runs off proportionally less.
+    lawn = rational_method_peak_runoff(
+        runoff_coefficient=0.2,
+        rainfall_intensity=_q("50 mm/hour"),
+        drainage_area=_q("10000 m**2"),
+    )
+    assert lawn.to("m**3/s").magnitude == pytest.approx(
+        q.to("m**3/s").magnitude * 0.2 / 0.9, rel=1e-9
+    )
+
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        rational_method_peak_runoff(
+            runoff_coefficient=1.5,
+            rainfall_intensity=_q("50 mm/hour"),
+            drainage_area=_q("10000 m**2"),
+        )
+
+
 def test_road_curve_superelevation_and_max_speed():
     from anvilate.analysis import (
         banked_curve_max_speed,
