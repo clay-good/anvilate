@@ -737,6 +737,7 @@ from .reinforced_concrete import (
     rc_net_tensile_strain,
     rc_stress_block_depth,
     rc_tension_steel_for_moment,
+    rc_two_way_shear_strength,
 )
 from .rigging import (
     sling_horizontal_force,
@@ -1030,6 +1031,7 @@ __all__ = [
     "rc_max_bar_spacing_crack_control",
     "rc_minimum_flexural_steel",
     "rc_maximum_tension_controlled_steel",
+    "rc_two_way_shear_strength",
     "sling_tension_factor",
     "sling_leg_tension",
     "sling_horizontal_force",

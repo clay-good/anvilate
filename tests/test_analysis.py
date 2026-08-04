@@ -12976,3 +12976,22 @@ def test_lumped_capacitance_transient_cooling():
             target_excess_temperature=_q("100 K"),
             time_constant=tau,
         )
+
+
+def test_rc_two_way_punching_shear_min_of_three():
+    from anvilate.analysis import rc_two_way_shear_strength
+
+    kw = {
+        "concrete_strength": _q("30 MPa"),
+        "critical_perimeter": _q("1600 mm"),
+        "effective_depth": _q("200 mm"),
+    }
+    # Square interior column: the 0.33*sqrt(f'c) term governs -> 578 kN.
+    square = rc_two_way_shear_strength(**kw)
+    assert square.to("kN").magnitude == pytest.approx(0.33 * 30**0.5 * 1600 * 200 / 1000, rel=1e-9)
+    # A very oblong column (beta=3) drops the strength via the second term.
+    oblong = rc_two_way_shear_strength(column_aspect_ratio=3.0, **kw)
+    assert oblong.to("kN").magnitude < square.to("kN").magnitude
+    assert oblong.to("kN").magnitude == pytest.approx(
+        0.17 * (1 + 2 / 3) * 30**0.5 * 1600 * 200 / 1000, rel=1e-9
+    )

@@ -31,6 +31,7 @@ __all__ = [
     "rc_max_bar_spacing_crack_control",
     "rc_minimum_flexural_steel",
     "rc_maximum_tension_controlled_steel",
+    "rc_two_way_shear_strength",
 ]
 
 # The tension-controlled neutral-axis ratio c/d at ε_t = 0.005 (with ε_cu = 0.003):
@@ -407,3 +408,51 @@ def rc_maximum_tension_controlled_steel(
     beta1 = rc_beta1(concrete_strength=concrete_strength)
     ratio = _ACI_STRESS_BLOCK_FACTOR * beta1 * (fc / fy) * _TENSION_CONTROLLED_C_OVER_D
     return Quantity(magnitude=ratio * b * d, unit="mm**2")
+
+
+def rc_two_way_shear_strength(
+    *,
+    concrete_strength: Quantity,
+    critical_perimeter: Quantity,
+    effective_depth: Quantity,
+    column_aspect_ratio: float = 1.0,
+    column_position_factor: float = 40.0,
+    lightweight_factor: float = 1.0,
+) -> Quantity:
+    """The ACI 318 two-way (punching) shear strength V_c at a slab-column connection.
+
+    The governing check for a flat plate: the slab tends to punch through around the
+    column on a critical perimeter b_o at d/2 from the column face. ACI 318-19
+    §22.6.5.2 takes the least of three limits,
+
+        V_c = min[ 0.33·λ·√f'c,
+                   0.17·(1 + 2/β)·λ·√f'c,
+                   0.083·(2 + α_s·d/b_o)·λ·√f'c ] · b_o · d,
+
+    where ``critical_perimeter`` b_o is the perimeter of the critical section,
+    ``effective_depth`` d the slab depth to steel, ``column_aspect_ratio`` β the ratio
+    of the column's long to short side (a very oblong column concentrates the shear),
+    ``column_position_factor`` α_s (40 interior, 30 edge, 20 corner), and
+    ``lightweight_factor`` λ. Returns V_c in kN.
+    """
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    _require(critical_perimeter, "[length]", "critical_perimeter")
+    _require(effective_depth, "[length]", "effective_depth")
+    fc = concrete_strength.to("MPa").magnitude
+    bo = critical_perimeter.to("mm").magnitude
+    d = effective_depth.to("mm").magnitude
+    if fc <= 0 or bo <= 0 or d <= 0:
+        raise ValueError(
+            "concrete_strength, critical_perimeter, and effective_depth must be positive"
+        )
+    if column_aspect_ratio < 1.0:
+        raise ValueError(f"column_aspect_ratio must be at least 1; got {column_aspect_ratio}")
+    if column_position_factor <= 0 or lightweight_factor <= 0:
+        raise ValueError("column_position_factor and lightweight_factor must be positive")
+    lam_root = lightweight_factor * sqrt(fc)
+    stress = min(
+        0.33 * lam_root,
+        0.17 * (1.0 + 2.0 / column_aspect_ratio) * lam_root,
+        0.083 * (2.0 + column_position_factor * d / bo) * lam_root,
+    )
+    return Quantity(magnitude=stress * bo * d / 1000.0, unit="kN")
