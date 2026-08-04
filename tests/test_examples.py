@@ -945,6 +945,15 @@ def test_motor_feeder_voltage_drop_example_bigger_conductor_passes():
     assert f["small_drop_percent"] > f["large_drop_percent"]
 
 
+def test_wind_vs_seismic_base_shear_example_seismic_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "wind_vs_seismic_base_shear.py"))
+    d = namespace["lateral_demands"]()
+    # The heavy building on a strong-shaking site is seismic-governed.
+    assert d["wind_shear_kn"] == pytest.approx(770, abs=10)
+    assert d["seismic_shear_kn"] == pytest.approx(6667, abs=10)
+    assert d["seismic_shear_kn"] > d["wind_shear_kn"]
+
+
 def test_dc_low_voltage_run_example_small_cable_browns_out():
     namespace = runpy.run_path(str(_EXAMPLES / "dc_low_voltage_run.py"))
     f = namespace["dc_run_check"]()

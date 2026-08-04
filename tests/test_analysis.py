@@ -15258,6 +15258,54 @@ def test_rankine_sloped_backfill_coefficient():
         rankine_sloped_backfill_coefficient(friction_angle=30.0, backfill_slope=35.0)
 
 
+def test_building_loads_wind_velocity_and_design_pressure():
+    from anvilate.analysis import wind_design_pressure, wind_velocity_pressure
+
+    # qz = 0.613*Kz*Kzt*Kd*Ke*V^2: 50 m/s, Kz=1, Kd=0.85 -> 1302.6 Pa.
+    qz = wind_velocity_pressure(basic_wind_speed=_q("50 m/s"), exposure_coefficient=1.0)
+    assert qz.to("Pa").magnitude == pytest.approx(0.613 * 1.0 * 1.0 * 0.85 * 1.0 * 50**2, rel=1e-9)
+    # It scales with the square of the wind speed.
+    qz_slow = wind_velocity_pressure(basic_wind_speed=_q("25 m/s"), exposure_coefficient=1.0)
+    assert qz.to("Pa").magnitude / qz_slow.to("Pa").magnitude == pytest.approx(4.0, rel=1e-9)
+    # Design pressure p = qz*G*Cp; a negative Cp (leeward/roof) is a net suction.
+    p = wind_design_pressure(
+        velocity_pressure=qz, gust_effect_factor=0.85, pressure_coefficient=0.8
+    )
+    assert p.to("Pa").magnitude == pytest.approx(qz.to("Pa").magnitude * 0.85 * 0.8, rel=1e-9)
+    suction = wind_design_pressure(
+        velocity_pressure=qz, gust_effect_factor=0.85, pressure_coefficient=-0.5
+    )
+    assert suction.to("Pa").magnitude < 0
+    with pytest.raises(ValueError, match="basic_wind_speed must be positive"):
+        wind_velocity_pressure(basic_wind_speed=_q("0 m/s"), exposure_coefficient=1.0)
+
+
+def test_building_loads_seismic_response_coefficient_and_base_shear():
+    from anvilate.analysis import seismic_base_shear, seismic_response_coefficient
+
+    # Cs = SDS*Ie/R: 1.0 g, R=8, Ie=1 -> 0.125; a more ductile system (bigger R) takes less force.
+    cs = seismic_response_coefficient(
+        design_spectral_acceleration=1.0, response_modification_factor=8.0
+    )
+    assert cs == pytest.approx(0.125, rel=1e-12)
+    stiffer = seismic_response_coefficient(
+        design_spectral_acceleration=1.0, response_modification_factor=3.0
+    )
+    assert stiffer > cs
+    # Importance factor scales the coefficient up.
+    important = seismic_response_coefficient(
+        design_spectral_acceleration=1.0, response_modification_factor=8.0, importance_factor=1.5
+    )
+    assert important == pytest.approx(cs * 1.5, rel=1e-12)
+    # Base shear V = Cs*W.
+    v = seismic_base_shear(seismic_weight=_q("10000 kN"), response_coefficient=cs)
+    assert v.to("kN").magnitude == pytest.approx(0.125 * 10000, rel=1e-12)
+    with pytest.raises(ValueError, match="response_modification_factor must be positive"):
+        seismic_response_coefficient(
+            design_spectral_acceleration=1.0, response_modification_factor=0.0
+        )
+
+
 def test_rankine_cohesive_active_pressure_and_tension_crack():
     import math
 

@@ -226,6 +226,10 @@ modules:
   torque requires, the peak lining pressure, and the simple/differential lever
   force; short-shoe (block) brake lever statics; the self-energizing /
   self-locking distinction for both
+- :mod:`~anvilate.analysis.building_loads` — ASCE 7 environmental design loads:
+  the wind velocity pressure (0.613·Kz·Kzt·Kd·Ke·V²) and the surface design
+  pressure it drives, and the seismic response coefficient (Cs = SDS·Ie/R) and
+  the equivalent-lateral-force base shear V = Cs·W
 - :mod:`~anvilate.analysis.curved_beam` — Winkler curved-beam bending
   (rectangular, trapezoidal, circular, and composite T/I/box/stepped sections):
   shifted neutral axis and the unequal inner/outer fibre stresses of hooks,
@@ -579,6 +583,12 @@ from .brake import (
     short_shoe_brake_torque,
     short_shoe_is_self_locking,
     short_shoe_normal_force,
+)
+from .building_loads import (
+    seismic_base_shear,
+    seismic_response_coefficient,
+    wind_design_pressure,
+    wind_velocity_pressure,
 )
 from .cable import (
     catenary_arc_length,
@@ -1858,6 +1868,10 @@ __all__ = [
     "short_shoe_normal_force",
     "short_shoe_brake_torque",
     "short_shoe_is_self_locking",
+    "wind_velocity_pressure",
+    "wind_design_pressure",
+    "seismic_response_coefficient",
+    "seismic_base_shear",
     "CurvedBeamStress",
     "rectangular_curved_beam_stress",
     "trapezoidal_curved_beam_stress",
