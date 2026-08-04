@@ -195,6 +195,46 @@ def test_combination_basis_resolves_to_its_generator_and_drives_the_flow():
     assert asd.basis.startswith("ASCE 7-22 ASD")
 
 
+def test_seismic_combination_basis_resolves_with_its_parameters():
+    from anvilate.loads import LoadNature
+
+    base = golden_bracket().model_copy(
+        update={
+            "load_cases": [
+                LoadCase(
+                    name="dead",
+                    kind=LoadKind.STATIC,
+                    applied_to="deck",
+                    force=Quantity.parse("60 kN"),
+                    nature=LoadNature.DEAD,
+                ),
+                LoadCase(
+                    name="quake",
+                    kind=LoadKind.STATIC,
+                    applied_to="deck",
+                    force=Quantity.parse("180 kN"),
+                    nature=LoadNature.SEISMIC,
+                ),
+            ],
+        }
+    )
+    # A seismic basis needs S_DS declared, or it refuses rather than guessing.
+    with pytest.raises(ValueError, match="seismic_design_acceleration"):
+        base.model_copy(update={"combination_basis": "asce7_lrfd_seismic"}).combination_set()
+    # With S_DS and ρ it resolves to the §2.3.6 seismic set and drives the flow.
+    spec = base.model_copy(
+        update={
+            "combination_basis": "asce7_lrfd_seismic",
+            "seismic_design_acceleration": 1.0,
+            "seismic_redundancy_factor": 1.3,
+        }
+    )
+    combos = spec.combination_set()
+    assert combos is not None and "seismic" in combos.basis.lower()
+    governing, _ = combos.governing(spec.combination_loads(), minimize=True)
+    assert governing.name.startswith("LRFD 7")  # the reduced-dead reversal case
+
+
 def test_load_case_nature_is_optional_and_classifies_by_asce_symbol():
     from anvilate.loads import LoadNature
 
