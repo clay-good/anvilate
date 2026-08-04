@@ -755,6 +755,21 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_press_brake_springback_example_spring_steel_recovers_more():
+    namespace = runpy.run_path(str(_EXAMPLES / "press_brake_springback.py"))
+    r = namespace["springback_by_material"]()
+    mild = r["mild_steel"]
+    spring = r["spring_steel"]
+    # Mild steel barely springs back (~0.5 deg); spring steel recovers ~2.5 deg.
+    assert mild["overbend_deg"] == pytest.approx(0.54, abs=0.05)
+    assert spring["overbend_deg"] == pytest.approx(2.52, abs=0.05)
+    # The resilient alloy springs back much more, and its factor is further from 1.
+    assert spring["overbend_deg"] > mild["overbend_deg"]
+    assert spring["springback_factor"] < mild["springback_factor"]
+    # Both sprung radii open up past the formed 4 mm.
+    assert spring["sprung_radius_mm"] > mild["sprung_radius_mm"] > 4.0
+
+
 def test_wire_drawing_pass_limit_example_reduction_capped_by_strength():
     namespace = runpy.run_path(str(_EXAMPLES / "wire_drawing_pass_limit.py"))
     d = namespace["drawing_limits"]()

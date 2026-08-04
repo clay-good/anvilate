@@ -778,6 +778,9 @@ sheetmetal.outside_setback
 sheetmetal.round_hole_punching_force
 sheetmetal.shear_cutting_force
 sheetmetal.stripping_force
+sheetmetal.springback_factor
+sheetmetal.sprung_bend_radius
+sheetmetal.sprung_bend_angle
 slider_crank.slider_crank_acceleration
 slider_crank.slider_crank_displacement
 slider_crank.slider_crank_piston_side_thrust

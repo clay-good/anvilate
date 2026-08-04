@@ -417,7 +417,9 @@ modules:
   bend deduction, the developed blank length of a multi-bend strip, the minimum
   bend radius a material's ductility allows, the air (V-die) bending force, and the
   shear-cutting / round-hole punching force and the stripping force to clear the punch,
-  and the deep-drawing cup blank diameter, draw ratio, and drawing force
+  the deep-drawing cup blank diameter, draw ratio, and drawing force, and the elastic
+  springback of a bend — the factor K_s = R_i/R_f, the sprung radius, and the sprung
+  angle a press brake must overbend to beat
 - :mod:`~anvilate.analysis.machining` — metal-cutting parameters: the surface cutting
   speed V = π·D·N and its spindle-speed inverse N = V/(π·D), the material removal rate
   MRR = V·f·d, and the Taylor tool life T = (C/V)^(1/n) that trades speed for edge life
@@ -1440,6 +1442,9 @@ from .sheetmetal import (
     outside_setback,
     round_hole_punching_force,
     shear_cutting_force,
+    springback_factor,
+    sprung_bend_angle,
+    sprung_bend_radius,
     stripping_force,
 )
 from .slider_crank import (
@@ -1955,6 +1960,9 @@ __all__ = [
     "cup_blank_diameter",
     "draw_ratio",
     "deep_draw_force",
+    "springback_factor",
+    "sprung_bend_radius",
+    "sprung_bend_angle",
     "RivetedJointStrength",
     "riveted_joint_efficiency",
     "minimum_curve_radius",

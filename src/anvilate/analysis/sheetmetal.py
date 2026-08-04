@@ -47,6 +47,9 @@ __all__ = [
     "cup_blank_diameter",
     "draw_ratio",
     "deep_draw_force",
+    "springback_factor",
+    "sprung_bend_radius",
+    "sprung_bend_angle",
 ]
 
 
@@ -364,3 +367,81 @@ def deep_draw_force(
             f"draw ratio D/d ({big / d:.3f}) must exceed draw_constant ({draw_constant})"
         )
     return Quantity(magnitude=pi * d * t * su * bracket / 1000.0, unit="kN")
+
+
+def springback_factor(
+    *,
+    initial_bend_radius: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+    thickness: Quantity,
+) -> float:
+    """The springback factor, K_s = R_i/R_f = 4·(R_i·Y/E·t)³ − 3·(R_i·Y/E·t) + 1.
+
+    When the punch releases, the elastic part of a bend recovers and the part springs open — its
+    radius grows from the as-formed ``initial_bend_radius`` R_i to a larger R_f. The springback
+    factor K_s = R_i/R_f measures that recovery, from the strip's ``yield_strength`` Y, its
+    ``elastic_modulus`` E, and its ``thickness`` t: K_s = 4·x³ − 3·x + 1 with x = R_i·Y/(E·t). The
+    more resilient the material (high Y/E) or the tighter the bend, the smaller K_s and the more the
+    part springs back — the reason a bend must be *overbent* to land on target (see
+    :func:`sprung_bend_radius`). K_s is 1 for no springback and falls toward 0 as recovery grows.
+    Returns the dimensionless springback factor.
+    """
+    r, t = _bend_geometry(initial_bend_radius, thickness)
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    if r <= 0:
+        raise ValueError("initial_bend_radius must be positive")
+    y = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if y <= 0 or e <= 0:
+        raise ValueError("yield_strength and elastic_modulus must be positive")
+    x = r * y / (e * t)
+    k_s = 4.0 * x**3 - 3.0 * x + 1.0
+    if k_s <= 0:
+        raise ValueError("inputs give a non-physical springback factor (R_i·Y/E·t too large)")
+    return k_s
+
+
+def sprung_bend_radius(*, initial_bend_radius: Quantity, springback_factor: float) -> Quantity:
+    """The bend radius after springback, R_f = R_i/K_s.
+
+    The radius the bend relaxes to once the load is removed: the ``initial_bend_radius`` R_i divided
+    by the ``springback_factor`` K_s (from :func:`springback_factor`), R_f = R_i/K_s. As K_s ≤ 1
+    the final radius is always larger than the formed one — to end up at a target radius you form to
+    a tighter R_i, the inverse of this relation. Returns the sprung radius in mm.
+    """
+    _require(initial_bend_radius, "[length]", "initial_bend_radius")
+    r = initial_bend_radius.to("mm").magnitude
+    if r <= 0:
+        raise ValueError("initial_bend_radius must be positive")
+    if not 0.0 < springback_factor <= 1.0:
+        raise ValueError(f"springback_factor must be in (0, 1]; got {springback_factor}")
+    return Quantity(magnitude=r / springback_factor, unit="mm")
+
+
+def sprung_bend_angle(
+    *,
+    initial_bend_angle: float,
+    initial_bend_radius: Quantity,
+    sprung_bend_radius: Quantity,
+    thickness: Quantity,
+) -> float:
+    """The included bend angle after springback, θ_f = θ_i·(R_i + t/2)/(R_f + t/2).
+
+    As the bend relaxes, the arc length along the neutral fibre is conserved, so the angle opens as
+    the radius grows: θ_f = θ_i·(R_i + t/2)/(R_f + t/2), from the ``initial_bend_angle`` θ_i
+    (degrees), the ``initial_bend_radius`` R_i, the ``sprung_bend_radius`` R_f (from
+    :func:`sprung_bend_radius`), and the ``thickness`` t. The result is smaller than θ_i — the bend
+    springs toward flat — which is how much a press brake must overbend to hit the target angle.
+    Returns the sprung included angle in degrees.
+    """
+    theta_i = _check_bend_angle(initial_bend_angle)
+    r_i, t = _bend_geometry(initial_bend_radius, thickness)
+    _require(sprung_bend_radius, "[length]", "sprung_bend_radius")
+    r_f = sprung_bend_radius.to("mm").magnitude
+    if r_i <= 0:
+        raise ValueError("initial_bend_radius must be positive")
+    if r_f < r_i:
+        raise ValueError("sprung_bend_radius must be at least the initial_bend_radius")
+    return theta_i * (r_i + t / 2.0) / (r_f + t / 2.0)

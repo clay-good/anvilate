@@ -12012,6 +12012,49 @@ def test_sheetmetal_punching_and_stripping_forces():
         )
 
 
+def test_sheetmetal_springback_factor_radius_and_angle():
+    from anvilate.analysis import sheetmetal as sm
+
+    # K_s = 4x^3 - 3x + 1 with x = R_i*Y/(E*t); spring steel Ri=20, Y=1000, E=200 GPa, t=1.
+    ks = sm.springback_factor(
+        initial_bend_radius=_q("20 mm"),
+        yield_strength=_q("1000 MPa"),
+        elastic_modulus=_q("200 GPa"),
+        thickness=_q("1 mm"),
+    )
+    x = 20 * 1000 / (200000 * 1)
+    assert ks == pytest.approx(4 * x**3 - 3 * x + 1, rel=1e-9)
+    assert 0 < ks < 1  # springs back
+
+    # A stiffer/lower-strength bend springs back less (K_s closer to 1).
+    ks_mild = sm.springback_factor(
+        initial_bend_radius=_q("10 mm"),
+        yield_strength=_q("300 MPa"),
+        elastic_modulus=_q("200 GPa"),
+        thickness=_q("2 mm"),
+    )
+    assert ks_mild > ks
+
+    # Final radius R_f = R_i/K_s is always larger than the formed radius.
+    rf = sm.sprung_bend_radius(initial_bend_radius=_q("20 mm"), springback_factor=ks)
+    assert rf.to("mm").magnitude == pytest.approx(20 / ks, rel=1e-9)
+    assert rf.to("mm").magnitude > 20
+
+    # The angle opens toward flat: theta_f = theta_i*(Ri+t/2)/(Rf+t/2) < theta_i.
+    theta_f = sm.sprung_bend_angle(
+        initial_bend_angle=90.0,
+        initial_bend_radius=_q("20 mm"),
+        sprung_bend_radius=rf,
+        thickness=_q("1 mm"),
+    )
+    assert theta_f == pytest.approx(90 * (20 + 0.5) / (rf.to("mm").magnitude + 0.5), rel=1e-9)
+    assert theta_f < 90
+
+    # Guardrail: the springback factor is a fraction in (0, 1].
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        sm.sprung_bend_radius(initial_bend_radius=_q("20 mm"), springback_factor=1.5)
+
+
 def test_sheetmetal_deep_draw_blank_ratio_and_force():
     from math import pi, sqrt
 
