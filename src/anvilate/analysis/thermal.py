@@ -53,6 +53,7 @@ __all__ = [
     "heat_exchanger_duty",
     "heat_exchanger_ntu",
     "counterflow_effectiveness",
+    "parallel_flow_effectiveness",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -1152,3 +1153,21 @@ def counterflow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
         return ntu / (1.0 + ntu)
     exponent = exp(-ntu * (1.0 - capacity_ratio))
     return (1.0 - exponent) / (1.0 - capacity_ratio * exponent)
+
+
+def parallel_flow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
+    """The effectiveness ε of a parallel-flow heat exchanger (the ε-NTU method).
+
+    The complement to :func:`counterflow_effectiveness` for streams that enter at the
+    same end and run together: ε = [1 − exp(−NTU·(1 + C_r))] / (1 + C_r), where ``ntu``
+    is :func:`heat_exchanger_ntu` and ``capacity_ratio`` C_r = C_min/C_max (0 to 1).
+    Parallel flow is always less effective than counterflow for the same size, and its
+    effectiveness is capped at 1/(1 + C_r) no matter how large the exchanger — the
+    outlets converge to a common temperature before the maximum transfer is reached.
+    ``ntu`` non-negative, ``capacity_ratio`` in [0, 1]. Returns ε in [0, 1].
+    """
+    if ntu < 0:
+        raise ValueError(f"ntu must be non-negative; got {ntu}")
+    if not 0 <= capacity_ratio <= 1:
+        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+    return (1.0 - exp(-ntu * (1.0 + capacity_ratio))) / (1.0 + capacity_ratio)

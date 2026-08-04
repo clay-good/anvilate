@@ -12669,3 +12669,16 @@ def test_effectiveness_ntu_counterflow():
     assert counterflow_effectiveness(ntu=10.0, capacity_ratio=0.5) > eps
     with pytest.raises(ValueError, match="capacity_ratio must lie in"):
         counterflow_effectiveness(ntu=2.0, capacity_ratio=1.5)
+
+
+def test_parallel_flow_effectiveness_is_below_counterflow():
+    from anvilate.analysis import counterflow_effectiveness, parallel_flow_effectiveness
+
+    par = parallel_flow_effectiveness(ntu=2.0, capacity_ratio=0.5)
+    assert par == pytest.approx(0.6335, abs=0.001)
+    # Parallel flow is always less effective than counterflow for the same size.
+    assert par < counterflow_effectiveness(ntu=2.0, capacity_ratio=0.5)
+    # Its effectiveness is capped at 1/(1+C_r) no matter how large the exchanger.
+    assert parallel_flow_effectiveness(ntu=1000.0, capacity_ratio=0.5) == pytest.approx(
+        1 / 1.5, rel=1e-6
+    )
