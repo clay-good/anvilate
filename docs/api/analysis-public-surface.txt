@@ -462,6 +462,10 @@ open_channel.rectangular_weir_flow
 open_channel.specific_energy
 open_channel.trapezoidal_channel_properties
 open_channel.triangular_weir_flow
+psychrometrics.dew_point_temperature
+psychrometrics.humidity_ratio
+psychrometrics.relative_humidity
+psychrometrics.saturation_vapor_pressure
 pump.affinity_flow_rate
 pump.affinity_head
 pump.affinity_power

@@ -395,6 +395,17 @@ def test_air_compressor_duty_example_brackets_power_and_heat():
     assert d["discharge_degc"] == pytest.approx(229, abs=3)
 
 
+def test_dew_point_condensation_example_cold_surface_sweats():
+    namespace = runpy.run_path(str(_EXAMPLES / "dew_point_condensation.py"))
+    m = namespace["room_moisture"]()
+    # 25 C / 60% RH air carries ~12 g/kg and dews around 16-17 C.
+    assert m["humidity_ratio_gkg"] == pytest.approx(11.9, abs=0.3)
+    assert m["dew_point_degc"] == pytest.approx(16.7, abs=0.3)
+    # The 15 C pipe is below the dew point, so it condenses.
+    assert m["cold_surface_degc"] < m["dew_point_degc"]
+    assert m["condenses"] is True
+
+
 def test_multistage_compressor_staging_example_cuts_power_and_heat():
     namespace = runpy.run_path(str(_EXAMPLES / "multistage_compressor_staging.py"))
     s = namespace["staging_comparison"]()

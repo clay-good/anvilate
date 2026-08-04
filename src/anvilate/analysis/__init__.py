@@ -138,6 +138,9 @@ modules:
   hydraulic jump (sequent depth and energy dissipated) below a spillway, the specific
   energy E = y + V²/2g with its critical-depth minimum, and rectangular, V-notch, and
   broad-crested weir discharge for gauging channel flow and rating spillway sills
+- :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
+  Magnus saturation vapor pressure, the humidity ratio and relative humidity, and the
+  dew-point temperature
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -950,6 +953,12 @@ from .pressure_vessel import (
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
 )
+from .psychrometrics import (
+    dew_point_temperature,
+    humidity_ratio,
+    relative_humidity,
+    saturation_vapor_pressure,
+)
 from .pump import (
     affinity_flow_rate,
     affinity_head,
@@ -1284,6 +1293,10 @@ __all__ = [
     "optimal_stage_pressure_ratio",
     "air_receiver_holdup_time",
     "air_receiver_volume_for_demand",
+    "dew_point_temperature",
+    "humidity_ratio",
+    "relative_humidity",
+    "saturation_vapor_pressure",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

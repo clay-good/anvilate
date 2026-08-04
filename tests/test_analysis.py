@@ -13114,6 +13114,45 @@ def test_air_receiver_holdup_and_sizing_round_trip():
         )
 
 
+def test_psychrometric_moist_air_properties():
+    import math
+
+    from anvilate.analysis import (
+        dew_point_temperature,
+        humidity_ratio,
+        relative_humidity,
+        saturation_vapor_pressure,
+    )
+
+    # Magnus saturation pressure at 25 C ~ 3162 Pa (within a fraction of a percent of ASHRAE).
+    p_ws = saturation_vapor_pressure(temperature=_q("298.15 K"))
+    expect = 610.94 * math.exp(17.625 * 25 / (25 + 243.04))
+    assert p_ws.to("Pa").magnitude == pytest.approx(expect, rel=1e-9)
+    assert p_ws.to("Pa").magnitude == pytest.approx(3169, rel=0.01)
+    # Warmer air holds more: saturation pressure rises with temperature.
+    assert (
+        saturation_vapor_pressure(temperature=_q("308.15 K")).to("Pa").magnitude
+        > p_ws.to("Pa").magnitude
+    )
+    # At 50% RH the vapor pressure is half saturation; W = 0.622*p_w/(p-p_w).
+    p_w = _q(f"{0.5 * p_ws.to('Pa').magnitude} Pa")
+    w = humidity_ratio(vapor_pressure=p_w, total_pressure=_q("101325 Pa"))
+    assert w == pytest.approx(
+        0.62198 * p_w.to("Pa").magnitude / (101325 - p_w.to("Pa").magnitude), rel=1e-9
+    )
+    assert w * 1000 == pytest.approx(9.9, abs=0.2)  # ~9.9 g/kg
+    # Relative humidity recovers the 50%.
+    assert relative_humidity(vapor_pressure=p_w, saturation_pressure=p_ws) == pytest.approx(
+        0.5, rel=1e-9
+    )
+    # Dew point of 25 C / 50% RH air is about 13.9 C.
+    t_dp = dew_point_temperature(vapor_pressure=p_w)
+    assert t_dp.to("degC").magnitude == pytest.approx(13.9, abs=0.2)
+    assert t_dp.to("K").magnitude < 298.15  # always below the dry-bulb temperature
+    with pytest.raises(ValueError, match="less than total_pressure"):
+        humidity_ratio(vapor_pressure=_q("200000 Pa"), total_pressure=_q("101325 Pa"))
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 
