@@ -112,6 +112,10 @@ modules:
 - :mod:`~anvilate.analysis.hydraulic_cylinder` — fluid-cylinder actuator sizing:
   the extend and retract force (bore vs annular area), the extend and retract speed
   from the supply flow, and the rod-side pressure intensification of a blocked stroke
+- :mod:`~anvilate.analysis.pipe_flow` — incompressible pipe hydraulics: the Reynolds
+  number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
+  Darcy-Weisbach friction head loss and fitting minor losses, and the pressure drop
+  ρ·g·h a pump must overcome
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -790,6 +794,13 @@ from .o_ring import (
     o_ring_squeeze_fraction,
     o_ring_stretch_fraction,
 )
+from .pipe_flow import (
+    darcy_friction_factor,
+    darcy_weisbach_head_loss,
+    minor_loss_head,
+    pipe_pressure_drop,
+    reynolds_number,
+)
 from .plate import (
     DEFAULT_POISSON_RATIO,
     PlateBendingResult,
@@ -1113,6 +1124,11 @@ __all__ = [
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
     "terzaghi_bearing_capacity",
+    "darcy_friction_factor",
+    "darcy_weisbach_head_loss",
+    "minor_loss_head",
+    "pipe_pressure_drop",
+    "reynolds_number",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

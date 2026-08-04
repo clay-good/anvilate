@@ -250,6 +250,18 @@ def test_retaining_wall_stability_example_bearing_governs():
     assert s["q_max_kpa"] == pytest.approx(148, abs=2)
 
 
+def test_pump_line_pressure_drop_example_fittings_are_not_minor():
+    namespace = runpy.run_path(str(_EXAMPLES / "pump_line_pressure_drop.py"))
+    r = namespace["line_losses"]()
+    assert r["reynolds"] == pytest.approx(2e5, rel=1e-6)
+    assert r["friction_factor"] == pytest.approx(0.0187, abs=0.0005)
+    # The fitting head is a real fraction of the friction head, worth ~30 m of extra pipe.
+    assert r["fitting_head_m"] > 0.2 * r["friction_head_m"]
+    assert r["equivalent_fitting_length_m"] == pytest.approx(29, abs=3)
+    # Total pressure the pump must supply.
+    assert r["pressure_drop_kpa"] == pytest.approx(48, abs=2)
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

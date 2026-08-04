@@ -421,6 +421,11 @@ nds_timber.nds_load_duration_factor
 o_ring.o_ring_gland_fill_fraction
 o_ring.o_ring_squeeze_fraction
 o_ring.o_ring_stretch_fraction
+pipe_flow.darcy_friction_factor
+pipe_flow.darcy_weisbach_head_loss
+pipe_flow.minor_loss_head
+pipe_flow.pipe_pressure_drop
+pipe_flow.reynolds_number
 plate.DEFAULT_POISSON_RATIO
 plate.PlateBendingResult
 plate.clamped_annular_plate_uniform_load

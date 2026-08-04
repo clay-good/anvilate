@@ -13401,6 +13401,59 @@ def test_eccentric_base_pressure_middle_third_and_uplift():
         )
 
 
+def test_reynolds_number_and_friction_factor_regimes():
+    from anvilate.analysis import darcy_friction_factor, reynolds_number
+
+    # Re = V*D/nu = 2*0.1/1e-6 = 200,000.
+    re = reynolds_number(
+        velocity=_q("2 m/s"), diameter=_q("0.1 m"), kinematic_viscosity=_q("1e-6 m**2/s")
+    )
+    assert re == pytest.approx(2e5, rel=1e-9)
+    # Laminar (Re <= 2300): f = 64/Re exactly, roughness ignored.
+    assert darcy_friction_factor(reynolds=1000.0, relative_roughness=0.01) == pytest.approx(
+        64 / 1000, rel=1e-12
+    )
+    # Turbulent Swamee-Jain against the Moody chart: Re=2e5, eps/D=4.5e-4 -> f ~ 0.0187.
+    f = darcy_friction_factor(reynolds=re, relative_roughness=0.045e-3 / 0.1)
+    assert f == pytest.approx(0.01867, abs=0.0002)
+    # A smooth pipe has a lower friction factor than a rough one at the same Re.
+    assert darcy_friction_factor(reynolds=re, relative_roughness=0.0) < f
+    with pytest.raises(ValueError, match="positive"):
+        darcy_friction_factor(reynolds=-1.0)
+
+
+def test_darcy_weisbach_head_loss_and_pressure_drop():
+    import math
+
+    from anvilate.analysis import (
+        darcy_weisbach_head_loss,
+        minor_loss_head,
+        pipe_pressure_drop,
+    )
+
+    g = 9.80665
+    # h_f = f*(L/D)*V^2/(2g) = 0.0187*(100/0.1)*4/(2g) = 3.81 m.
+    h_f = darcy_weisbach_head_loss(
+        friction_factor=0.0187, length=_q("100 m"), diameter=_q("0.1 m"), velocity=_q("2 m/s")
+    )
+    assert h_f.to("m").magnitude == pytest.approx(0.0187 * 1000 * 4 / (2 * g), rel=1e-9)
+    # Minor loss h_m = K*V^2/(2g); a K=0.5 entrance at 2 m/s -> 0.102 m.
+    h_m = minor_loss_head(loss_coefficient=0.5, velocity=_q("2 m/s"))
+    assert h_m.to("m").magnitude == pytest.approx(0.5 * 4 / (2 * g), rel=1e-9)
+    # Pressure drop dp = rho*g*h; total head 3.9 m of water -> ~38.2 kPa.
+    total = _q("3.907 m")
+    dp = pipe_pressure_drop(head_loss=total, density=_q("998 kg/m**3"))
+    assert dp.to("kPa").magnitude == pytest.approx(998 * g * 3.907 / 1000, rel=1e-9)
+    assert not math.isnan(dp.to("kPa").magnitude)
+    with pytest.raises(ValueError, match="positive"):
+        darcy_weisbach_head_loss(
+            friction_factor=0.0,
+            length=_q("100 m"),
+            diameter=_q("0.1 m"),
+            velocity=_q("2 m/s"),
+        )
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 
