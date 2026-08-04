@@ -6205,6 +6205,32 @@ def test_combine_axial_bending_compression_governs():
     assert combined.peak_magnitude.to("MPa").magnitude == pytest.approx(80.0, rel=1e-9)
 
 
+def test_confined_liquid_thermal_pressure():
+    from anvilate.analysis import confined_liquid_thermal_pressure
+
+    # dp = beta*K*dT; water beta=2.1e-4/K, K=2.2 GPa, dT=10 K -> 4.62 MPa (~0.46 MPa/K).
+    dp = confined_liquid_thermal_pressure(
+        volumetric_expansion_coefficient=_q("2.1e-4 / K"),
+        bulk_modulus=_q("2.2 GPa"),
+        temperature_change=_q("10 K"),
+    )
+    assert dp.to("MPa").magnitude == pytest.approx(2.1e-4 * 2.2e9 * 10 / 1e6, rel=1e-9)
+    assert dp.to("MPa").magnitude == pytest.approx(4.62, abs=0.01)
+    # The rise is linear in the temperature change.
+    dp2 = confined_liquid_thermal_pressure(
+        volumetric_expansion_coefficient=_q("2.1e-4 / K"),
+        bulk_modulus=_q("2.2 GPa"),
+        temperature_change=_q("20 K"),
+    )
+    assert dp2.to("MPa").magnitude == pytest.approx(2 * dp.to("MPa").magnitude, rel=1e-9)
+    with pytest.raises(ValueError, match="bulk_modulus"):
+        confined_liquid_thermal_pressure(
+            volumetric_expansion_coefficient=_q("2.1e-4 / K"),
+            bulk_modulus=_q("2.2 m"),
+            temperature_change=_q("10 K"),
+        )
+
+
 def test_constrained_thermal_stress_worked_example():
     # A fully-restrained steel bar heated 50 K: sigma = E*alpha*dT
     #   = 200000 * 12e-6 * 50 = 120 MPa.

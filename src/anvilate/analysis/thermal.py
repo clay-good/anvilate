@@ -23,6 +23,7 @@ from ..scorecard import ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
+    "confined_liquid_thermal_pressure",
     "constrained_thermal_stress",
     "thermal_shock_stress",
     "thermal_shock_temperature_limit",
@@ -81,6 +82,42 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def confined_liquid_thermal_pressure(
+    *,
+    volumetric_expansion_coefficient: Quantity,
+    bulk_modulus: Quantity,
+    temperature_change: Quantity,
+) -> Quantity:
+    """The pressure rise of a liquid blocked in a rigid volume and heated, Δp = β·K·ΔT.
+
+    A liquid trapped between two closed valves in a pipe and then heated has nowhere to expand, so
+    almost all of its would-be expansion turns into pressure: Δp = β·K·ΔT. The rise is startling —
+    for water it is about 0.46 MPa per °C, so a handful of degrees can burst a line — which is why
+    valved-off liquid segments need thermal relief. ``volumetric_expansion_coefficient`` β is the
+    liquid's cubical expansion (1/temperature; ~2.1e-4/K for water, larger for hydrocarbons),
+    ``bulk_modulus`` K its stiffness (~2.2 GPa for water), and ``temperature_change`` ΔT the rise (a
+    temperature difference, in K or delta_degC). Assumes a perfectly rigid container; real pipe
+    compliance relieves some of it. Returns the pressure rise in MPa.
+    """
+    if not volumetric_expansion_coefficient.has_dimension("1 / [temperature]"):
+        raise ValueError(
+            "volumetric_expansion_coefficient must have units of 1/temperature; got "
+            f"{volumetric_expansion_coefficient.dimensionality}"
+        )
+    _require(bulk_modulus, "[pressure]", "bulk_modulus")
+    if not temperature_change.has_dimension("[temperature]"):
+        raise ValueError(
+            f"temperature_change must be a temperature difference; got "
+            f"{temperature_change.dimensionality}"
+        )
+    beta = volumetric_expansion_coefficient.to("1/K").magnitude
+    k = bulk_modulus.to("Pa").magnitude
+    dt = temperature_change.to("K").magnitude
+    if beta <= 0 or k <= 0:
+        raise ValueError("volumetric_expansion_coefficient and bulk_modulus must be positive")
+    return Quantity(magnitude=beta * k * dt / 1.0e6, unit="MPa")
 
 
 def constrained_thermal_stress(
