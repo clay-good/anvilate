@@ -13863,6 +13863,56 @@ def test_energy_storage_capacity_energy_and_backup_time():
         )
 
 
+def test_aisc_flexural_compactness_classification():
+    import math
+
+    from anvilate.analysis import (
+        CompactnessClass,
+        classify_flexural_element,
+        flexural_flange_slenderness_limits,
+        flexural_web_slenderness_limits,
+    )
+
+    e = _q("29000 ksi")
+    fy = _q("50 ksi")  # A992
+    root = math.sqrt(29000 / 50)
+
+    # Flange limits 0.38*root, 1.0*root; web limits 3.76*root, 5.70*root.
+    fp, fr = flexural_flange_slenderness_limits(elastic_modulus=e, yield_strength=fy)
+    assert fp == pytest.approx(0.38 * root, rel=1e-9)
+    assert fr == pytest.approx(1.0 * root, rel=1e-9)
+    wp, wr = flexural_web_slenderness_limits(elastic_modulus=e, yield_strength=fy)
+    assert wp == pytest.approx(3.76 * root, rel=1e-9)
+    assert wr == pytest.approx(5.70 * root, rel=1e-9)
+
+    # W18x50 flange (6.57) and web (43.7) are both compact.
+    assert (
+        classify_flexural_element(slenderness=6.57, plastic_limit=fp, noncompact_limit=fr)
+        is CompactnessClass.COMPACT
+    )
+    assert (
+        classify_flexural_element(slenderness=43.7, plastic_limit=wp, noncompact_limit=wr)
+        is CompactnessClass.COMPACT
+    )
+    # A thin, tall plate-girder web is slender.
+    assert (
+        classify_flexural_element(slenderness=160.0, plastic_limit=wp, noncompact_limit=wr)
+        is CompactnessClass.SLENDER
+    )
+    # Right at the plastic limit is still compact; just past it is noncompact.
+    assert (
+        classify_flexural_element(slenderness=wp, plastic_limit=wp, noncompact_limit=wr)
+        is CompactnessClass.COMPACT
+    )
+    assert (
+        classify_flexural_element(slenderness=wp + 0.1, plastic_limit=wp, noncompact_limit=wr)
+        is CompactnessClass.NONCOMPACT
+    )
+
+    with pytest.raises(ValueError, match="plastic_limit < noncompact_limit"):
+        classify_flexural_element(slenderness=10.0, plastic_limit=20.0, noncompact_limit=10.0)
+
+
 def test_warping_constant_doubly_symmetric_matches_aisc_manual():
     from anvilate.analysis import warping_constant_doubly_symmetric
 

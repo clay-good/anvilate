@@ -515,6 +515,14 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_beam_flexural_compactness_example_slender_web_reclassifies():
+    namespace = runpy.run_path(str(_EXAMPLES / "beam_flexural_compactness.py"))
+    c = namespace["classify_sections"]()
+    assert c["rolled_w18x50"] == "compact"
+    # The plate girder's slender web makes the whole section slender.
+    assert c["plate_girder"] == "slender"
+
+
 def test_wide_flange_torsional_properties_example_matches_manual():
     namespace = runpy.run_path(str(_EXAMPLES / "wide_flange_torsional_properties.py"))
     t = namespace["w18x50_torsion"]()

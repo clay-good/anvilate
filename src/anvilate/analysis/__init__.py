@@ -39,6 +39,9 @@ modules:
   moment, extreme fibre, section modulus, and radius of gyration; the bending
   stress a moment makes and the minimum section modulus it requires; the channel
   shear centre and the doubly-symmetric warping constant C_w = I_y·h²/4
+- :mod:`~anvilate.analysis.aisc_compactness` — AISC 360 Table B4.1b flexural
+  classification: the flange and web plastic (λ_p) and noncompact (λ_r) slenderness
+  limits, and the compact/noncompact/slender class an element's slenderness falls in
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   the minimum section second moment a load requires, the eccentric-load secant
   stress, the Perry-Robertson imperfect-column stress, the lateral-torsional
@@ -401,6 +404,12 @@ from .adhesive import (
     cylindrical_bond_axial_capacity,
     cylindrical_bond_torque_capacity,
     lap_joint_average_shear_stress,
+)
+from .aisc_compactness import (
+    CompactnessClass,
+    classify_flexural_element,
+    flexural_flange_slenderness_limits,
+    flexural_web_slenderness_limits,
 )
 from .aluminum import (
     aluminum_buckling_stress,
@@ -1513,6 +1522,10 @@ __all__ = [
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",
+    "CompactnessClass",
+    "classify_flexural_element",
+    "flexural_flange_slenderness_limits",
+    "flexural_web_slenderness_limits",
     "axial_stress",
     "axial_elongation",
     "axial_stiffness",
