@@ -638,6 +638,8 @@ from .compressible_flow import (
     isentropic_area_ratio,
     mach_number,
     speed_of_sound,
+    stagnation_density_ratio,
+    stagnation_pressure_ratio,
     stagnation_temperature_ratio,
 )
 from .contact import (
@@ -1524,6 +1526,8 @@ __all__ = [
     "choked_mass_flow_rate",
     "critical_pressure_ratio",
     "isentropic_area_ratio",
+    "stagnation_pressure_ratio",
+    "stagnation_density_ratio",
     "mach_number",
     "speed_of_sound",
     "stagnation_temperature_ratio",

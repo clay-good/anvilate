@@ -578,6 +578,18 @@ def test_highway_curve_superelevation_example_max_speed_matches_design():
     assert c["ideal_superelevation_rate"] > 0.06
 
 
+def test_compressible_pitot_stagnation_example_bernoulli_undercounts():
+    namespace = runpy.run_path(str(_EXAMPLES / "compressible_pitot_stagnation.py"))
+    r = namespace["stagnation_ratios"]()
+    # The compressible pressure ratio exceeds the incompressible Bernoulli approximation.
+    assert r["pressure_ratio"] > r["incompressible_pressure_ratio"]
+    assert r["pressure_ratio"] == pytest.approx(1.6038, rel=1e-3)
+    # The ideal-gas identity holds: p0/p = rho0/rho * T0/T.
+    assert r["pressure_ratio"] == pytest.approx(
+        r["density_ratio"] * r["temperature_ratio"], rel=1e-9
+    )
+
+
 def test_rocket_nozzle_area_ratio_example_two_roots():
     namespace = runpy.run_path(str(_EXAMPLES / "rocket_nozzle_area_ratio.py"))
     r = namespace["nozzle_area_ratios"]()

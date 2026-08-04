@@ -14213,6 +14213,30 @@ def test_road_curve_superelevation_and_max_speed():
         )
 
 
+def test_compressible_flow_stagnation_pressure_and_density_ratios():
+    from anvilate.analysis import (
+        stagnation_density_ratio,
+        stagnation_pressure_ratio,
+        stagnation_temperature_ratio,
+    )
+
+    # M = 2, gamma = 1.4: p0/p = 7.824, rho0/rho = 4.347 (standard table).
+    p = stagnation_pressure_ratio(mach_number=2.0, heat_capacity_ratio=1.4)
+    rho = stagnation_density_ratio(mach_number=2.0, heat_capacity_ratio=1.4)
+    assert p == pytest.approx(7.8244, rel=1e-4)
+    assert rho == pytest.approx(4.3469, rel=1e-4)
+
+    # The ideal-gas identity p0/p = (rho0/rho)*(T0/T) holds exactly at any Mach.
+    t = stagnation_temperature_ratio(mach_number=0.85, heat_capacity_ratio=1.4)
+    p085 = stagnation_pressure_ratio(mach_number=0.85, heat_capacity_ratio=1.4)
+    rho085 = stagnation_density_ratio(mach_number=0.85, heat_capacity_ratio=1.4)
+    assert p085 == pytest.approx(rho085 * t, rel=1e-12)
+
+    # All three ratios are 1 at zero Mach (no compression at rest).
+    assert stagnation_pressure_ratio(mach_number=0.0, heat_capacity_ratio=1.4) == pytest.approx(1.0)
+    assert stagnation_density_ratio(mach_number=0.0, heat_capacity_ratio=1.4) == pytest.approx(1.0)
+
+
 def test_compressible_flow_isentropic_area_ratio():
     from anvilate.analysis import isentropic_area_ratio
 

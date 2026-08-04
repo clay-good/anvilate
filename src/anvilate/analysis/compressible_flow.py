@@ -27,6 +27,8 @@ __all__ = [
     "isentropic_area_ratio",
     "mach_number",
     "speed_of_sound",
+    "stagnation_density_ratio",
+    "stagnation_pressure_ratio",
     "stagnation_temperature_ratio",
 ]
 
@@ -91,6 +93,36 @@ def stagnation_temperature_ratio(*, mach_number: float, heat_capacity_ratio: flo
     if heat_capacity_ratio <= 1.0:
         raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
     return 1.0 + (heat_capacity_ratio - 1.0) / 2.0 * mach_number**2
+
+
+def stagnation_pressure_ratio(*, mach_number: float, heat_capacity_ratio: float) -> float:
+    """The stagnation-to-static pressure ratio, p₀/p = (1 + (γ−1)/2·M²)^(γ/(γ−1)).
+
+    Bringing a compressible stream isentropically to rest raises its pressure by
+    p₀/p = (1 + (γ−1)/2·M²)^(γ/(γ−1)), from the ``mach_number`` M and ``heat_capacity_ratio`` γ —
+    the temperature ratio raised to γ/(γ−1). It is what a Pitot tube reads in high-speed flow (the
+    incompressible ½·ρ·V² form undercounts badly past about Mach 0.3), and the total-to-static ratio
+    a nozzle or inlet is designed around. Returns the dimensionless ratio p₀/p (≥ 1).
+    """
+    temperature_ratio = stagnation_temperature_ratio(
+        mach_number=mach_number, heat_capacity_ratio=heat_capacity_ratio
+    )
+    return temperature_ratio ** (heat_capacity_ratio / (heat_capacity_ratio - 1.0))
+
+
+def stagnation_density_ratio(*, mach_number: float, heat_capacity_ratio: float) -> float:
+    """The stagnation-to-static density ratio, ρ₀/ρ = (1 + (γ−1)/2·M²)^(1/(γ−1)).
+
+    The density rise of a compressible stream brought isentropically to rest,
+    ρ₀/ρ = (1 + (γ−1)/2·M²)^(1/(γ−1)), from the ``mach_number`` M and ``heat_capacity_ratio`` γ —
+    the temperature ratio raised to 1/(γ−1). With the pressure and temperature ratios it completes
+    isentropic set (and is consistent with them through the ideal-gas law, p₀/p = (ρ₀/ρ)·(T₀/T)).
+    Returns the dimensionless ratio ρ₀/ρ (≥ 1).
+    """
+    temperature_ratio = stagnation_temperature_ratio(
+        mach_number=mach_number, heat_capacity_ratio=heat_capacity_ratio
+    )
+    return temperature_ratio ** (1.0 / (heat_capacity_ratio - 1.0))
 
 
 def isentropic_area_ratio(*, mach_number: float, heat_capacity_ratio: float) -> float:
