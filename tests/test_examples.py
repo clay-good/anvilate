@@ -467,6 +467,16 @@ def test_heat_pump_cold_day_example_cop_collapses():
     assert p["cold_power_kw"] / p["mild_power_kw"] > 1.5
 
 
+def test_motor_feeder_voltage_drop_example_bigger_conductor_passes():
+    namespace = runpy.run_path(str(_EXAMPLES / "motor_feeder_voltage_drop.py"))
+    f = namespace["feeder_check"]()
+    assert f["current_a"] == pytest.approx(51, abs=1)
+    # The small conductor exceeds the 3% drop limit; the large one stays within it.
+    assert f["small_drop_percent"] > 3.0
+    assert f["large_drop_percent"] < 3.0
+    assert f["small_drop_percent"] > f["large_drop_percent"]
+
+
 def test_sign_wind_drag_example_gust_square_law():
     namespace = runpy.run_path(str(_EXAMPLES / "sign_wind_drag.py"))
     w = namespace["sign_wind_load"]()

@@ -145,6 +145,9 @@ modules:
   broad-crested weir discharge for gauging channel flow and rating spillway sills
 - :mod:`~anvilate.analysis.tank_flow` — tank draining: the Torricelli efflux velocity √(2gh)
   and the time to drain a tank between two levels through a bottom orifice
+- :mod:`~anvilate.analysis.electrical` — electrical feeder sizing (for plant/industrial
+  work): three-phase power √3·V·I·cosφ, the line current a load draws, conductor resistance
+  ρ·L/A, and the three-phase voltage drop along a feeder
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, and the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface
@@ -644,6 +647,12 @@ from .dynamics import (
     tuned_mass_damper_optimal_damping,
     tuned_mass_damper_optimal_frequency_ratio,
     two_rotor_torsional_natural_frequency,
+)
+from .electrical import (
+    conductor_resistance,
+    line_current_for_power,
+    three_phase_power,
+    voltage_drop_three_phase,
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
@@ -1366,6 +1375,10 @@ __all__ = [
     "mach_number",
     "speed_of_sound",
     "stagnation_temperature_ratio",
+    "conductor_resistance",
+    "line_current_for_power",
+    "three_phase_power",
+    "voltage_drop_three_phase",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

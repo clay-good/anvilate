@@ -13187,6 +13187,44 @@ def test_air_receiver_holdup_and_sizing_round_trip():
         )
 
 
+def test_electrical_three_phase_power_current_and_voltage_drop():
+    import math
+
+    from anvilate.analysis import (
+        conductor_resistance,
+        line_current_for_power,
+        three_phase_power,
+        voltage_drop_three_phase,
+    )
+
+    # P = sqrt(3)*V*I*pf; 400 V, 50 A, 0.85 -> 29.4 kW.
+    p = three_phase_power(line_voltage=_q("400 V"), line_current=_q("50 A"), power_factor=0.85)
+    assert p.to("kW").magnitude == pytest.approx(math.sqrt(3) * 400 * 50 * 0.85 / 1000, rel=1e-9)
+    # The current inverse: I = P/(sqrt(3)*V*pf) recovers ~50.9 A for 30 kW.
+    i = line_current_for_power(real_power=_q("30 kW"), line_voltage=_q("400 V"), power_factor=0.85)
+    assert i.to("A").magnitude == pytest.approx(30000 / (math.sqrt(3) * 400 * 0.85), rel=1e-9)
+    # Round-trip: the power of that current back at the same voltage/pf is 30 kW.
+    back = three_phase_power(line_voltage=_q("400 V"), line_current=i, power_factor=0.85)
+    assert back.to("kW").magnitude == pytest.approx(30.0, rel=1e-9)
+    # Resistance R = rho*L/A.
+    r = conductor_resistance(
+        resistivity=_q("1.68e-8 ohm*m"), length=_q("100 m"), cross_section_area=_q("25 mm**2")
+    )
+    assert r.to("ohm").magnitude == pytest.approx(1.68e-8 * 100 / 25e-6, rel=1e-9)
+    # Voltage drop (resistance only): sqrt(3)*I*R*cos(phi).
+    vd = voltage_drop_three_phase(line_current=_q("50 A"), resistance=r, power_factor=0.85)
+    assert vd.to("V").magnitude == pytest.approx(
+        math.sqrt(3) * 50 * r.to("ohm").magnitude * 0.85, rel=1e-9
+    )
+    # Adding conductor reactance increases the drop (the X*sin(phi) term).
+    vd_x = voltage_drop_three_phase(
+        line_current=_q("50 A"), resistance=r, power_factor=0.85, reactance=_q("0.05 ohm")
+    )
+    assert vd_x.to("V").magnitude > vd.to("V").magnitude
+    with pytest.raises(ValueError, match="power_factor"):
+        three_phase_power(line_voltage=_q("400 V"), line_current=_q("50 A"), power_factor=1.5)
+
+
 def test_drag_force_and_terminal_velocity():
     from anvilate.analysis import drag_force, terminal_velocity
 
