@@ -12367,3 +12367,34 @@ def test_aisi_effective_width_rejects_bad_inputs():
             elastic_modulus=_q("203000 MPa"),
             plate_buckling_coefficient=0.0,
         )
+
+
+def test_asme_heads_match_the_ug32_forms_and_torispherical_is_thicker():
+    from anvilate.analysis import (
+        asme_ellipsoidal_head_thickness,
+        asme_torispherical_head_thickness,
+    )
+
+    kw = {"pressure": _q("2 MPa"), "allowable_stress": _q("138 MPa")}
+    # UG-32(d): t = P*D/(2*S*E - 0.2*P).
+    ell = asme_ellipsoidal_head_thickness(diameter=_q("1000 mm"), **kw)
+    assert ell.to("mm").magnitude == pytest.approx(2 * 1000 / (2 * 138 - 0.2 * 2), rel=1e-9)
+    # UG-32(e): t = 0.885*P*L/(S*E - 0.1*P) — thicker, for the knuckle stress.
+    tori = asme_torispherical_head_thickness(crown_radius=_q("1000 mm"), **kw)
+    assert tori.to("mm").magnitude == pytest.approx(0.885 * 2 * 1000 / (138 - 0.1 * 2), rel=1e-9)
+    assert tori.to("mm").magnitude > ell.to("mm").magnitude
+    # A spot-radiographed weld needs more wall.
+    spot = asme_ellipsoidal_head_thickness(diameter=_q("1000 mm"), joint_efficiency=0.85, **kw)
+    assert spot.to("mm").magnitude > ell.to("mm").magnitude
+
+
+def test_asme_head_rejects_bad_efficiency():
+    from anvilate.analysis import asme_ellipsoidal_head_thickness
+
+    with pytest.raises(ValueError, match="joint_efficiency must lie in"):
+        asme_ellipsoidal_head_thickness(
+            pressure=_q("2 MPa"),
+            diameter=_q("1000 mm"),
+            allowable_stress=_q("138 MPa"),
+            joint_efficiency=1.5,
+        )

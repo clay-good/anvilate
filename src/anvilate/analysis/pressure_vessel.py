@@ -33,6 +33,8 @@ __all__ = [
     "thin_wall_thickness_for_pressure",
     "asme_cylinder_thickness",
     "asme_cylinder_mawp",
+    "asme_ellipsoidal_head_thickness",
+    "asme_torispherical_head_thickness",
     "asme_b313_pipe_wall_thickness",
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
@@ -253,6 +255,90 @@ def asme_cylinder_mawp(
     if t <= 0 or r <= 0 or s <= 0:
         raise ValueError("thickness, radius, and allowable_stress must be positive")
     return Quantity(magnitude=s * joint_efficiency * t / (r + 0.6 * t), unit="MPa")
+
+
+def asme_ellipsoidal_head_thickness(
+    *,
+    pressure: Quantity,
+    diameter: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 UG-32(d) wall for a 2:1 ellipsoidal head, t = P·D/(2·S·E − 0.2·P).
+
+    A 2:1 semi-ellipsoidal head — the common dished vessel end whose depth is a
+    quarter of its diameter — is sized by ``pressure`` P (internal design pressure),
+    ``diameter`` D (the inside diameter), ``allowable_stress`` S (the code allowable),
+    and weld ``joint_efficiency`` E. It comes out close to the shell wall because the
+    2:1 shape carries pressure almost as efficiently as the cylinder. Requires
+    2·S·E > 0.2·P. Returns the minimum head thickness in mm.
+    """
+    return _asme_head_thickness(
+        coefficient=1.0,
+        denom_factor=0.2,
+        denom_leading=2.0,
+        pressure=pressure,
+        length=diameter,
+        allowable_stress=allowable_stress,
+        joint_efficiency=joint_efficiency,
+    )
+
+
+def asme_torispherical_head_thickness(
+    *,
+    pressure: Quantity,
+    crown_radius: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 UG-32(e) wall for a standard torispherical head,
+    t = 0.885·P·L/(S·E − 0.1·P).
+
+    A standard (ASME flanged-and-dished) torispherical head — a shallow spherical
+    crown of radius L blended to the cylinder by a small knuckle — is sized by
+    ``pressure`` P, the ``crown_radius`` L (equal to the outside diameter for the
+    standard head), ``allowable_stress`` S, and weld ``joint_efficiency`` E. The 0.885
+    coefficient captures the knuckle's stress concentration, so a torispherical head
+    is thicker than an ellipsoidal one for the same pressure — the price of the
+    shallower, cheaper-to-form shape. Requires S·E > 0.1·P. Returns the thickness in
+    mm.
+    """
+    return _asme_head_thickness(
+        coefficient=0.885,
+        denom_factor=0.1,
+        denom_leading=1.0,
+        pressure=pressure,
+        length=crown_radius,
+        allowable_stress=allowable_stress,
+        joint_efficiency=joint_efficiency,
+    )
+
+
+def _asme_head_thickness(
+    *,
+    coefficient: float,
+    denom_factor: float,
+    denom_leading: float,
+    pressure: Quantity,
+    length: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float,
+) -> Quantity:
+    """Shared UG-32 head form t = K·P·L/(m·S·E − f·P)."""
+    _require(pressure, "[pressure]", "pressure")
+    _require(length, "[length]", "length")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 < joint_efficiency <= 1:
+        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+    p = pressure.to("MPa").magnitude
+    length_mm = length.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if p <= 0 or length_mm <= 0 or s <= 0:
+        raise ValueError("pressure, the geometry, and allowable_stress must be positive")
+    denominator = denom_leading * s * joint_efficiency - denom_factor * p
+    if denominator <= 0:
+        raise ValueError("S·E is too low for the pressure (the head denominator is non-positive)")
+    return Quantity(magnitude=coefficient * p * length_mm / denominator, unit="mm")
 
 
 def asme_b313_pipe_wall_thickness(
