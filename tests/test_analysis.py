@@ -15469,6 +15469,42 @@ def test_seismic_design_story_drift_and_allowable():
         )
 
 
+def test_seismic_load_effect_combines_horizontal_and_vertical():
+    from anvilate.analysis import seismic_load_effect
+
+    # E = rho*Qe + 0.2*SDS*D: 1.3*100 + 0.2*1.0*200 = 130 + 40 = 170 kN.
+    add = seismic_load_effect(
+        horizontal_effect=_q("100 kN"),
+        dead_load_effect=_q("200 kN"),
+        design_spectral_acceleration=1.0,
+        redundancy_factor=1.3,
+    )
+    assert add.to("kN").magnitude == pytest.approx(1.3 * 100 + 0.2 * 1.0 * 200, rel=1e-9)
+    # Counteracting (uplift): the vertical earthquake relieves gravity, E = rho*Qe - 0.2*SDS*D.
+    counter = seismic_load_effect(
+        horizontal_effect=_q("100 kN"),
+        dead_load_effect=_q("200 kN"),
+        design_spectral_acceleration=1.0,
+        redundancy_factor=1.3,
+        counteracting=True,
+    )
+    assert counter.to("kN").magnitude == pytest.approx(1.3 * 100 - 0.2 * 1.0 * 200, rel=1e-9)
+    assert counter.to("kN").magnitude < add.to("kN").magnitude
+    # Dimension-general: it assembles a moment effect just as it does a force.
+    m = seismic_load_effect(
+        horizontal_effect=_q("50 kN*m"),
+        dead_load_effect=_q("80 kN*m"),
+        design_spectral_acceleration=1.0,
+    )
+    assert m.to("kN*m").magnitude == pytest.approx(50 + 0.2 * 80, rel=1e-9)
+    with pytest.raises(ValueError, match="design_spectral_acceleration"):
+        seismic_load_effect(
+            horizontal_effect=_q("100 kN"),
+            dead_load_effect=_q("200 kN"),
+            design_spectral_acceleration=0.0,
+        )
+
+
 def test_seismic_stability_coefficient_and_limit():
     from anvilate.analysis import (
         seismic_stability_coefficient,

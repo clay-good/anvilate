@@ -200,6 +200,7 @@ building_loads.rain_load
 building_loads.reduced_live_load
 building_loads.seismic_base_shear
 building_loads.seismic_design_story_drift
+building_loads.seismic_load_effect
 building_loads.seismic_response_coefficient
 building_loads.seismic_stability_coefficient
 building_loads.seismic_stability_coefficient_limit

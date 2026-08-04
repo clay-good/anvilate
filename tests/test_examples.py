@@ -1032,6 +1032,16 @@ def test_column_live_load_reduction_example_cuts_the_demand():
     assert c["lrfd_reduced_kpa"] < c["lrfd_unreduced_kpa"]
 
 
+def test_seismic_load_effect_combination_example_grows_the_demand():
+    namespace = runpy.run_path(str(_EXAMPLES / "seismic_load_effect_combination.py"))
+    d = namespace["seismic_demand"]()
+    # The assembled E (rho + vertical) is much larger than the raw horizontal force...
+    assert d["assembled_e_kn"] == pytest.approx(174.2, abs=0.5)
+    assert d["assembled_e_kn"] > d["raw_qe_kn"]
+    # ...and carries through to a larger, correct factored demand.
+    assert d["demand_adjusted_kn"] > d["demand_raw_kn"]
+
+
 def test_seismic_p_delta_stability_example_soft_story_amplifies():
     namespace = runpy.run_path(str(_EXAMPLES / "seismic_p_delta_stability.py"))
     s = namespace["stability_check"]()

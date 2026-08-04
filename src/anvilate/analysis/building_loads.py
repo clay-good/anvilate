@@ -39,6 +39,7 @@ __all__ = [
     "allowable_story_drift",
     "seismic_stability_coefficient",
     "seismic_stability_coefficient_limit",
+    "seismic_load_effect",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
     "reduced_live_load",
@@ -309,6 +310,48 @@ def seismic_stability_coefficient_limit(
     if not 0 < demand_capacity_ratio <= 1.0:
         raise ValueError("demand_capacity_ratio must be in (0, 1]")
     return min(0.5 / (demand_capacity_ratio * deflection_amplification_factor), 0.25)
+
+
+def seismic_load_effect(
+    *,
+    horizontal_effect: Quantity,
+    dead_load_effect: Quantity,
+    design_spectral_acceleration: float,
+    redundancy_factor: float = 1.0,
+    counteracting: bool = False,
+) -> Quantity:
+    """The ASCE 7 seismic load effect E = ρ·Q_E ± 0.2·SDS·D fed to the load combinations (§12.4.2).
+
+    The earthquake force the strength combinations actually use is not the bare analysis result but
+    a horizontal part and a vertical part combined. The horizontal effect ``horizontal_effect`` Q_E
+    (the force, moment, or stress the seismic analysis produces in the element) is scaled by the
+    ``redundancy_factor`` ρ (1.0 or 1.3, a penalty on systems with few lateral-load paths), and the
+    vertical earthquake adds 0.2·SDS·D — a fraction of the ``dead_load_effect`` D set by the
+    ``design_spectral_acceleration`` SDS: E = ρ·Q_E + 0.2·SDS·D. Pass ``counteracting=True`` for the
+    load combinations where the vertical earthquake acts *upward* and relieves gravity (the 0.9D
+    uplift cases), giving E = ρ·Q_E − 0.2·SDS·D. Feed the result as the seismic effect to
+    :func:`~anvilate.analysis.asce7_lrfd_factored_load`. Returns E in the horizontal effect's units.
+    """
+    if not isinstance(horizontal_effect, Quantity):
+        raise TypeError("horizontal_effect must be a Quantity load effect")
+    if not dead_load_effect.has_dimension(horizontal_effect.dimensionality):
+        raise ValueError(
+            "dead_load_effect must share the horizontal effect's dimensionality "
+            f"({horizontal_effect.dimensionality}); got {dead_load_effect.dimensionality}"
+        )
+    unit = horizontal_effect.unit
+    qe = horizontal_effect.to(unit).magnitude
+    d = dead_load_effect.to(unit).magnitude
+    if qe < 0 or d < 0:
+        raise ValueError("horizontal_effect and dead_load_effect must be non-negative")
+    if design_spectral_acceleration <= 0:
+        raise ValueError("design_spectral_acceleration must be positive")
+    if redundancy_factor <= 0:
+        raise ValueError("redundancy_factor must be positive")
+    vertical = 0.2 * design_spectral_acceleration * d
+    horizontal = redundancy_factor * qe
+    e = horizontal - vertical if counteracting else horizontal + vertical
+    return Quantity(magnitude=e, unit=unit)
 
 
 def flat_roof_snow_load(

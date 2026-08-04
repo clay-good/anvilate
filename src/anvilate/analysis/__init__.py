@@ -233,6 +233,7 @@ modules:
   each floor (Fx = V·wx·hx^k/Σwi·hi^k), the Cd-amplified design story drift
   (Δ = Cd·δxe/Ie) and the allowable drift it is checked against, the P-delta
   stability coefficient (θ = Pₓ·Δ/(Vₓ·hsx·Cd)) and its stability ceiling, the
+  combined seismic load effect E = ρ·Q_E ± 0.2·SDS·D fed to the combinations, the
   flat- and sloped-roof snow loads
   (pf = 0.7·Ce·Ct·Is·pg, ps = Cs·pf), the tributary-area live-load reduction
   (L = L0·(0.25 + 4.57/√(KLL·AT))), and the ponded-water rain load
@@ -604,6 +605,7 @@ from .building_loads import (
     reduced_live_load,
     seismic_base_shear,
     seismic_design_story_drift,
+    seismic_load_effect,
     seismic_response_coefficient,
     seismic_stability_coefficient,
     seismic_stability_coefficient_limit,
@@ -1908,6 +1910,7 @@ __all__ = [
     "allowable_story_drift",
     "seismic_stability_coefficient",
     "seismic_stability_coefficient_limit",
+    "seismic_load_effect",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
     "reduced_live_load",
