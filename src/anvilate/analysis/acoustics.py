@@ -23,6 +23,7 @@ from ..units import Quantity
 
 __all__ = [
     "inverse_square_attenuation",
+    "mass_law_transmission_loss",
     "sound_level_sum",
 ]
 
@@ -64,6 +65,26 @@ def inverse_square_attenuation(
     if r1 <= 0 or r2 <= 0:
         raise ValueError("reference_distance and distance must be positive")
     return reference_level - 20.0 * log10(r2 / r1)
+
+
+def mass_law_transmission_loss(*, frequency: Quantity, surface_density: Quantity) -> float:
+    """The sound transmission loss of a single partition by the mass law, TL = 20·log₁₀(f·m) − 47.
+
+    How much a wall or panel cuts airborne sound depends mostly on how heavy it is: the field-
+    incidence mass law gives TL = 20·log₁₀(f·m_s) − 47 dB, from the ``frequency`` f (Hz) and the
+    partition's ``surface_density`` m_s (mass per unit area, kg/m²). The two big consequences are
+    baked in: the loss rises 6 dB for every doubling of frequency (partitions insulate treble far
+    better than bass) and 6 dB for every doubling of mass (to quiet a wall, make it heavier). It is
+    an idealization — real partitions dip at their coincidence and resonance frequencies — but it is
+    the first number a noise-control layout works from. Returns the transmission loss in dB.
+    """
+    _check(frequency, "1/[time]", "frequency")
+    _check(surface_density, "[mass]/[length]**2", "surface_density")
+    f = frequency.to("Hz").magnitude
+    m_s = surface_density.to("kg/m**2").magnitude
+    if f <= 0 or m_s <= 0:
+        raise ValueError("frequency and surface_density must be positive")
+    return 20.0 * log10(f * m_s) - 47.0
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

@@ -8,7 +8,9 @@ more than a few decibels quieter is almost inaudible against it. That has a blun
 consequence — silencing the 80 dB fan does essentially nothing, while taming the 92 dB compressor is
 the only move that matters. The example then uses the inverse-square law to find how far back the
 worker would have to stand for the noise to fall below the 85 dB action level, the distance a
-hearing-conservation layout has to buy.
+hearing-conservation layout has to buy. Finally, when distance isn't available, it sizes the other
+lever — a partition wall — using the mass law to find the transmission loss a block wall buys for
+the adjacent office.
 
 Run it directly (``python examples/plant_noise_exposure.py``);
 :func:`noise_assessment` is also exercised in the test suite.
@@ -16,12 +18,18 @@ Run it directly (``python examples/plant_noise_exposure.py``);
 
 from __future__ import annotations
 
-from anvilate.analysis import inverse_square_attenuation, sound_level_sum
+from anvilate.analysis import (
+    inverse_square_attenuation,
+    mass_law_transmission_loss,
+    sound_level_sum,
+)
 from anvilate.units import Quantity
 
 MACHINE_LEVELS = [92.0, 88.0, 85.0, 80.0]  # dB at the operator's 1 m position
 MEASUREMENT_DISTANCE = Quantity.parse("1 m")
 ACTION_LEVEL = 85.0  # dB, the hearing-conservation action level
+WALL_SURFACE_DENSITY = Quantity.parse("150 kg/m**2")  # a nominal 150 mm concrete-block wall
+SPEECH_FREQUENCY = Quantity.parse("500 Hz")  # mid-band, where speech intelligibility lives
 
 
 def noise_assessment() -> dict[str, float]:
@@ -37,12 +45,18 @@ def noise_assessment() -> dict[str, float]:
         reference_distance=MEASUREMENT_DISTANCE,
         distance=Quantity(magnitude=safe_distance, unit="m"),
     )
+    # The other lever: a partition wall. Its mass-law TL sets the level in the next room.
+    wall_tl = mass_law_transmission_loss(
+        frequency=SPEECH_FREQUENCY, surface_density=WALL_SURFACE_DENSITY
+    )
     return {
         "combined_db": combined,
         "loudest_db": loudest,
         "margin_over_loudest": combined - loudest,
         "safe_distance_m": safe_distance,
         "level_at_safe_distance": at_safe,
+        "wall_transmission_loss_db": wall_tl,
+        "level_behind_wall_db": combined - wall_tl,
     }
 
 
@@ -52,6 +66,8 @@ def main() -> None:
     print(f"  only {a['margin_over_loudest']:.1f} dB above the loudest ({a['loudest_db']:.0f} dB)")
     print(f"drops below {ACTION_LEVEL:.0f} dB action level at {a['safe_distance_m']:.1f} m")
     print("  -> silence the loudest machine, not the quiet ones; energy-summing hides the rest")
+    print(f"150 mm block wall gives {a['wall_transmission_loss_db']:.0f} dB TL at 500 Hz")
+    print(f"  -> office behind it sees {a['level_behind_wall_db']:.0f} dB (mass law, mid-band)")
 
 
 if __name__ == "__main__":

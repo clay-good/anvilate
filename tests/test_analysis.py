@@ -13264,6 +13264,27 @@ def test_acoustics_level_sum_and_distance_attenuation():
         sound_level_sum(levels=[])
 
 
+def test_acoustics_mass_law_transmission_loss():
+    import math
+
+    from anvilate.analysis import mass_law_transmission_loss
+
+    # TL = 20 log10(f*m) - 47. 500 Hz through 10 kg/m^2 -> ~27 dB.
+    tl = mass_law_transmission_loss(frequency=_q("500 Hz"), surface_density=_q("10 kg/m**2"))
+    assert tl == pytest.approx(20 * math.log10(500 * 10) - 47, rel=1e-9)
+    assert tl == pytest.approx(27.0, abs=0.1)
+    # +6 dB per doubling of frequency, and per doubling of mass.
+    base = mass_law_transmission_loss(frequency=_q("500 Hz"), surface_density=_q("10 kg/m**2"))
+    octave = mass_law_transmission_loss(frequency=_q("1000 Hz"), surface_density=_q("10 kg/m**2"))
+    heavier = mass_law_transmission_loss(frequency=_q("500 Hz"), surface_density=_q("20 kg/m**2"))
+    assert octave - base == pytest.approx(6.0206, abs=1e-3)
+    assert heavier - base == pytest.approx(6.0206, abs=1e-3)
+    with pytest.raises(ValueError, match="1/\\[time\\]"):
+        mass_law_transmission_loss(frequency=_q("1 m"), surface_density=_q("10 kg/m**2"))
+    with pytest.raises(ValueError, match="positive"):
+        mass_law_transmission_loss(frequency=_q("0 Hz"), surface_density=_q("10 kg/m**2"))
+
+
 def test_electrical_three_phase_power_current_and_voltage_drop():
     import math
 

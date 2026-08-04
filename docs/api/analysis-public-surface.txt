@@ -6,6 +6,7 @@
 # change. To remove one, follow the deprecation policy (deprecate with a
 # replacement for at least one minor release) before deleting its line.
 acoustics.inverse_square_attenuation
+acoustics.mass_law_transmission_loss
 acoustics.sound_level_sum
 adhesive.cylindrical_bond_axial_capacity
 adhesive.cylindrical_bond_torque_capacity
