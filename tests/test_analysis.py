@@ -12834,3 +12834,25 @@ def test_rc_concrete_shear_strength_aci():
         lightweight_factor=0.75,
     )
     assert light.to("kN").magnitude == pytest.approx(0.75 * vc.to("kN").magnitude, rel=1e-9)
+
+
+def test_rc_column_axial_strength_aci():
+    from anvilate.analysis import rc_column_axial_strength
+
+    # P_o = 0.85*f'c*(A_g - A_st) + f_y*A_st: 300x300, 1600 mm2 steel -> 2926 kN.
+    po = rc_column_axial_strength(
+        gross_area=_q("90000 mm**2"),
+        steel_area=_q("1600 mm**2"),
+        concrete_strength=_q("30 MPa"),
+        steel_yield=_q("420 MPa"),
+    )
+    assert po.to("kN").magnitude == pytest.approx(
+        (0.85 * 30 * (90000 - 1600) + 420 * 1600) / 1000, rel=1e-9
+    )
+    with pytest.raises(ValueError, match="must be below the gross area"):
+        rc_column_axial_strength(
+            gross_area=_q("1000 mm**2"),
+            steel_area=_q("1600 mm**2"),
+            concrete_strength=_q("30 MPa"),
+            steel_yield=_q("420 MPa"),
+        )

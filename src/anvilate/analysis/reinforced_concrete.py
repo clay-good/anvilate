@@ -24,6 +24,7 @@ __all__ = [
     "rc_beam_nominal_moment",
     "rc_tension_steel_for_moment",
     "rc_concrete_shear_strength",
+    "rc_column_axial_strength",
 ]
 
 _ACI_STRESS_BLOCK_FACTOR = 0.85  # the 0.85·f'c Whitney stress-block intensity
@@ -176,3 +177,38 @@ def rc_concrete_shear_strength(
         raise ValueError(f"lightweight_factor must be positive; got {lightweight_factor}")
     vc_n = 0.17 * lightweight_factor * sqrt(fc) * b * d
     return Quantity(magnitude=vc_n / 1000.0, unit="kN")
+
+
+def rc_column_axial_strength(
+    *,
+    gross_area: Quantity,
+    steel_area: Quantity,
+    concrete_strength: Quantity,
+    steel_yield: Quantity,
+) -> Quantity:
+    """The ACI 318 nominal axial strength P_o = 0.85·f'c·(A_g − A_st) + f_y·A_st.
+
+    The concentric (zero-eccentricity) squash load of a reinforced-concrete column
+    (ACI 318-19 §22.4.2.2): the concrete on its net area A_g − A_st at 0.85·f'c plus
+    the longitudinal steel A_st at yield. ``gross_area`` A_g is the column's gross
+    cross-section, ``steel_area`` A_st the total longitudinal reinforcement,
+    ``concrete_strength`` f'c, and ``steel_yield`` f_y. The design maximum caps this at
+    φ·0.80·P_o for a tied column (φ·0.85·P_o spiral) to allow for accidental
+    eccentricity — apply that on top. Requires A_st < A_g. Returns P_o in kN.
+    """
+    _require(gross_area, "[area]", "gross_area")
+    _require(steel_area, "[area]", "steel_area")
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    _require(steel_yield, "[pressure]", "steel_yield")
+    ag = gross_area.to("mm**2").magnitude
+    ast = steel_area.to("mm**2").magnitude
+    fc = concrete_strength.to("MPa").magnitude
+    fy = steel_yield.to("MPa").magnitude
+    if ag <= 0 or ast <= 0 or fc <= 0 or fy <= 0:
+        raise ValueError(
+            "gross_area, steel_area, concrete_strength, and steel_yield must be positive"
+        )
+    if ast >= ag:
+        raise ValueError(f"steel_area ({steel_area}) must be below the gross area ({gross_area})")
+    po_n = _ACI_STRESS_BLOCK_FACTOR * fc * (ag - ast) + fy * ast
+    return Quantity(magnitude=po_n / 1000.0, unit="kN")

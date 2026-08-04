@@ -727,6 +727,7 @@ from .pressure_vessel import (
 )
 from .reinforced_concrete import (
     rc_beam_nominal_moment,
+    rc_column_axial_strength,
     rc_concrete_shear_strength,
     rc_stress_block_depth,
     rc_tension_steel_for_moment,
@@ -1013,6 +1014,7 @@ __all__ = [
     "rc_beam_nominal_moment",
     "rc_tension_steel_for_moment",
     "rc_concrete_shear_strength",
+    "rc_column_axial_strength",
     "sling_tension_factor",
     "sling_leg_tension",
     "sling_horizontal_force",
