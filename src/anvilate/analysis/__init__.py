@@ -535,6 +535,7 @@ from .dynamics import (
 )
 from .fastener import (
     NUT_FACTOR_AS_RECEIVED,
+    aisc_tension_member_design_strength,
     bearing_stress,
     block_shear_strength,
     bolt_axial_stiffness,
@@ -1302,6 +1303,7 @@ __all__ = [
     "eccentric_shear_group_peak_force",
     "slip_critical_resistance",
     "block_shear_strength",
+    "aisc_tension_member_design_strength",
     "shear_lag_factor",
     "net_width_staggered_holes",
     "goodman_safety_factor",

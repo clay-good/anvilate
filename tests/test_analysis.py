@@ -13042,6 +13042,36 @@ def test_slip_critical_resistance_aisc_j38():
         slip_critical_resistance(slip_coefficient=0.0, bolt_pretension=_q("142 kN"))
 
 
+def test_aisc_tension_member_design_strength_lesser_of_two_limit_states():
+    from anvilate.analysis import aisc_tension_member_design_strength
+
+    common = {"yield_strength": _q("345 MPa"), "ultimate_strength": _q("450 MPa")}
+    # Holes + shear lag cut A_e enough that rupture (0.75*Fu*Ae = 533 kN) is below
+    # yielding (0.90*Fy*Ag = 621 kN), so rupture governs.
+    rupture_governs = aisc_tension_member_design_strength(
+        gross_area=_q("2000 mm**2"), effective_net_area=_q("1580 mm**2"), **common
+    )
+    assert rupture_governs.to("kN").magnitude == pytest.approx(0.75 * 450 * 1580 / 1000, rel=1e-9)
+    # A nearly full net area lets gross yielding govern instead.
+    yield_governs = aisc_tension_member_design_strength(
+        gross_area=_q("2000 mm**2"), effective_net_area=_q("1950 mm**2"), **common
+    )
+    assert yield_governs.to("kN").magnitude == pytest.approx(0.90 * 345 * 2000 / 1000, rel=1e-9)
+    # ASD basis (factors set to 1/Omega) gives lower design strengths than LRFD.
+    asd = aisc_tension_member_design_strength(
+        gross_area=_q("2000 mm**2"),
+        effective_net_area=_q("1580 mm**2"),
+        yield_resistance_factor=1 / 1.67,
+        rupture_resistance_factor=1 / 2.00,
+        **common,
+    )
+    assert asd.to("kN").magnitude < rupture_governs.to("kN").magnitude
+    with pytest.raises(ValueError, match="effective_net_area cannot exceed"):
+        aisc_tension_member_design_strength(
+            gross_area=_q("1000 mm**2"), effective_net_area=_q("1200 mm**2"), **common
+        )
+
+
 def test_block_shear_strength_aisc_j43():
     from anvilate.analysis import block_shear_strength
 

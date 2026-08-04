@@ -72,6 +72,7 @@ __all__ = [
     "block_shear_strength",
     "shear_lag_factor",
     "net_width_staggered_holes",
+    "aisc_tension_member_design_strength",
     "bolt_shear_strength",
     "bolt_bearing_strength",
 ]
@@ -300,6 +301,50 @@ def shear_lag_factor(
             f"(x̄/L = {x_bar / length:.2f} gives a non-positive U)"
         )
     return u
+
+
+def aisc_tension_member_design_strength(
+    *,
+    gross_area: Quantity,
+    effective_net_area: Quantity,
+    yield_strength: Quantity,
+    ultimate_strength: Quantity,
+    yield_resistance_factor: float = 0.90,
+    rupture_resistance_factor: float = 0.75,
+) -> Quantity:
+    """The AISC 360 §D2 design tensile strength of a member — the lesser of two limit states.
+
+    A tension member is governed by whichever gives less: yielding on the *gross* section
+    (which limits gross deformation) or rupture on the *effective net* section (at the
+    holes). §D2 rates them with different resistance factors, so the design strength is
+    min(φ_y·F_y·A_g, φ_r·F_u·A_e). ``gross_area`` A_g, ``effective_net_area`` A_e (the net
+    area reduced by the shear-lag factor, A_e = U·A_n — see :func:`shear_lag_factor` and
+    :func:`net_width_staggered_holes`), ``yield_strength`` F_y, and ``ultimate_strength``
+    F_u; ``yield_resistance_factor`` φ_y = 0.90 and ``rupture_resistance_factor`` φ_r = 0.75
+    are the LRFD factors (set both to 1/Ω for ASD, Ω_y = 1.67, Ω_r = 2.00). Rupture tends
+    to govern once the holes and shear lag cut A_e enough; this is the terminal check of the
+    net-section flow, to compare against the factored tension demand. Returns the design
+    strength in kN.
+    """
+    if not gross_area.has_dimension("[length]**2"):
+        raise ValueError("gross_area must be a [length]**2 quantity")
+    if not effective_net_area.has_dimension("[length]**2"):
+        raise ValueError("effective_net_area must be a [length]**2 quantity")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(ultimate_strength, "[pressure]", "ultimate_strength")
+    ag = gross_area.to("mm**2").magnitude
+    ae = effective_net_area.to("mm**2").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    fu = ultimate_strength.to("MPa").magnitude
+    if ag <= 0 or ae <= 0 or fy <= 0 or fu <= 0:
+        raise ValueError("the areas and strengths must be positive")
+    if ae > ag:
+        raise ValueError("effective_net_area cannot exceed gross_area")
+    if yield_resistance_factor <= 0 or rupture_resistance_factor <= 0:
+        raise ValueError("the resistance factors must be positive")
+    yielding = yield_resistance_factor * fy * ag
+    rupture = rupture_resistance_factor * fu * ae
+    return Quantity(magnitude=min(yielding, rupture) / 1000.0, unit="kN")
 
 
 def bolt_shear_strength(
