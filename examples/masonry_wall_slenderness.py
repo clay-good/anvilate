@@ -1,37 +1,39 @@
-"""Worked example: why a masonry wall's slenderness, not its strength, sets its allowable.
+"""Worked example: a masonry wall its gravity check passes but its combined check fails.
 
 A concrete-block wall is designed to TMS 402 allowable-stress rules, and a masonry
-compression member is a buckling problem as much as a crushing one. The allowable axial
-stress starts at 0.25·f'm but is derated by a factor that falls with the height-to-radius
-ratio h/r: a stocky pier (h/r = 30) keeps most of it, but a slender wall (h/r = 90) has
-given away nearly half before the block is anywhere near its 10 MPa strength. The example
-runs the same wall at three slendernesses to show how much capacity slenderness alone
-removes, then sizes a short reinforced pier where four bars add a steel term the plain
-wall never had.
+compression member is a buckling problem as much as a crushing one: the allowable axial
+stress starts at 0.25·f'm but is derated by a slenderness factor on the height-to-radius
+ratio h/r, so a slender wall gives away much of it before the block is near its 10 MPa
+strength. But gravity is only half the wall's life. Under out-of-plane wind it also bends,
+and TMS 402 governs the pair with a unity check f_a/F_a + f_b/F_b ≤ 1, not either stress
+alone. This wall's axial utilization is a comfortable 0.52 — a gravity-only look passes it
+— yet once the wind bending is added, the combined ratio climbs past 1.0 and the wall
+fails. The example runs the axial allowable across three slendernesses to show the derate,
+then the combined check that actually sizes the wall.
 
 Run it directly (``python examples/masonry_wall_slenderness.py``);
-:func:`wall_allowables` is also exercised in the test suite.
+:func:`wall_check` is also exercised in the test suite.
 """
 
 from __future__ import annotations
 
 from anvilate.analysis import (
     masonry_allowable_axial_stress,
-    masonry_column_axial_capacity,
+    masonry_allowable_flexural_stress,
+    masonry_combined_stress_ratio,
 )
 from anvilate.units import Quantity
 
 MASONRY_STRENGTH = Quantity.parse("10 MPa")  # f'm, grouted concrete block
 SLENDERNESS_CASES = (30.0, 60.0, 90.0)  # h/r: stocky, mid, slender
 
-PIER_NET_AREA = Quantity.parse("1e5 mm**2")  # net (grouted) cross-section
-PIER_SLENDERNESS = 40.0
-PIER_STEEL_AREA = Quantity.parse("800 mm**2")  # four #16 bars
-PIER_STEEL_STRESS = Quantity.parse("165 MPa")  # F_s = 0.6*f_y, code cap
+WALL_SLENDERNESS = 40.0  # h/r of the design wall
+AXIAL_STRESS = Quantity.parse("1.2 MPa")  # f_a from dead + live gravity
+FLEXURAL_STRESS = Quantity.parse("2.2 MPa")  # f_b, extreme fiber from out-of-plane wind
 
 
-def wall_allowables() -> dict[str, float]:
-    """Return the allowable stress (MPa) at each slenderness and the reinforced pier P_a (kN)."""
+def wall_check() -> dict[str, float]:
+    """Return the allowable stress (MPa) at each slenderness and the design wall's utilizations."""
     out = {
         f"Fa_hr_{int(hr)}_mpa": masonry_allowable_axial_stress(
             masonry_strength=MASONRY_STRENGTH, slenderness_ratio=hr
@@ -40,39 +42,30 @@ def wall_allowables() -> dict[str, float]:
         .magnitude
         for hr in SLENDERNESS_CASES
     }
-    out["pier_reinforced_kn"] = (
-        masonry_column_axial_capacity(
-            masonry_strength=MASONRY_STRENGTH,
-            net_area=PIER_NET_AREA,
-            slenderness_ratio=PIER_SLENDERNESS,
-            steel_area=PIER_STEEL_AREA,
-            steel_allowable_stress=PIER_STEEL_STRESS,
-        )
-        .to("kN")
-        .magnitude
+    fa_allow = masonry_allowable_axial_stress(
+        masonry_strength=MASONRY_STRENGTH, slenderness_ratio=WALL_SLENDERNESS
     )
-    out["pier_plain_kn"] = (
-        masonry_column_axial_capacity(
-            masonry_strength=MASONRY_STRENGTH,
-            net_area=PIER_NET_AREA,
-            slenderness_ratio=PIER_SLENDERNESS,
-        )
-        .to("kN")
-        .magnitude
+    fb_allow = masonry_allowable_flexural_stress(masonry_strength=MASONRY_STRENGTH)
+    out["axial_utilization"] = AXIAL_STRESS.to("MPa").magnitude / fa_allow.to("MPa").magnitude
+    out["combined_unity"] = masonry_combined_stress_ratio(
+        axial_stress=AXIAL_STRESS,
+        allowable_axial_stress=fa_allow,
+        flexural_stress=FLEXURAL_STRESS,
+        allowable_flexural_stress=fb_allow,
     )
     return out
 
 
 def main() -> None:
-    a = wall_allowables()
+    a = wall_check()
     stocky = a["Fa_hr_30_mpa"]
     for hr in SLENDERNESS_CASES:
         fa = a[f"Fa_hr_{int(hr)}_mpa"]
         print(f"h/r = {int(hr):>2} : Fa = {fa:.3f} MPa  ({fa / stocky:.0%} of the stocky value)")
-    plain = a["pier_plain_kn"]
-    reinf = a["pier_reinforced_kn"]
-    print(f"pier  plain : P_a = {plain:.0f} kN")
-    print(f"pier  4 bars: P_a = {reinf:.0f} kN  (+{reinf - plain:.0f} kN from the steel)")
+    axial = a["axial_utilization"]
+    unity = a["combined_unity"]
+    print(f"gravity only  : f_a/F_a           = {axial:.2f}  ({'PASS' if axial <= 1 else 'FAIL'})")
+    print(f"with wind     : f_a/F_a + f_b/F_b = {unity:.2f}  ({'PASS' if unity <= 1 else 'FAIL'})")
 
 
 if __name__ == "__main__":

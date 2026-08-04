@@ -13127,6 +13127,38 @@ def test_masonry_column_axial_capacity_adds_a_steel_term():
         masonry_column_axial_capacity(steel_area=_q("800 mm**2"), **base)
 
 
+def test_masonry_combined_stress_ratio_governs_over_either_alone():
+    from anvilate.analysis import (
+        masonry_allowable_flexural_stress,
+        masonry_combined_stress_ratio,
+    )
+
+    # Flexural allowable is 0.45*f'm, higher than the 0.25*f'm axial allowable.
+    fb_allow = masonry_allowable_flexural_stress(masonry_strength=_q("10 MPa"))
+    assert fb_allow.to("MPa").magnitude == pytest.approx(4.5, rel=1e-9)
+    # A wall whose axial (0.52) and flexural (0.49) utilizations each pass on their own
+    # but whose unity sum exceeds 1.0 — the interaction is what fails it.
+    fa_allow = _q("2.296 MPa")  # F_a at h/r = 40
+    ratio = masonry_combined_stress_ratio(
+        axial_stress=_q("1.2 MPa"),
+        allowable_axial_stress=fa_allow,
+        flexural_stress=_q("2.2 MPa"),
+        allowable_flexural_stress=fb_allow,
+    )
+    assert ratio == pytest.approx(1.2 / 2.296 + 2.2 / 4.5, rel=1e-9)
+    assert 1.2 / 2.296 < 1.0 and 2.2 / 4.5 < 1.0  # each alone passes
+    assert ratio > 1.0  # combined fails
+    with pytest.raises(ValueError, match="positive"):
+        masonry_combined_stress_ratio(
+            axial_stress=_q("1.2 MPa"),
+            allowable_axial_stress=_q("0 MPa"),
+            flexural_stress=_q("2.2 MPa"),
+            allowable_flexural_stress=fb_allow,
+        )
+    with pytest.raises(ValueError, match="positive"):
+        masonry_allowable_flexural_stress(masonry_strength=_q("-1 MPa"))
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 

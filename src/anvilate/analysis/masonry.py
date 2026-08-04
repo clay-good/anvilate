@@ -22,7 +22,9 @@ from ..units import Quantity
 
 __all__ = [
     "masonry_allowable_axial_stress",
+    "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",
+    "masonry_combined_stress_ratio",
 ]
 
 
@@ -104,3 +106,53 @@ def masonry_column_axial_capacity(
         steel_term = 0.65 * ast * fs
     capacity = (0.25 * fm * an + steel_term) * _slenderness_factor(slenderness_ratio)
     return Quantity(magnitude=capacity / 1000.0, unit="kN")
+
+
+def masonry_allowable_flexural_stress(*, masonry_strength: Quantity) -> Quantity:
+    """The TMS 402 allowable flexural compressive stress F_b of unreinforced masonry.
+
+    When a wall bends — out-of-plane wind, an eccentric floor reaction — the extreme fiber is
+    checked against a flexural allowable that TMS 402 §8.2.4.2 sets at F_b = 0.45·f'm, higher
+    than the 0.25·f'm axial allowable because a bending stress block is not a uniform crushing
+    one. ``masonry_strength`` f'm is the specified compressive strength. Pair this with
+    :func:`masonry_combined_stress_ratio` to size a wall under simultaneous gravity and lateral
+    load. Returns F_b in MPa.
+    """
+    _require(masonry_strength, "[pressure]", "masonry_strength")
+    fm = masonry_strength.to("MPa").magnitude
+    if fm <= 0:
+        raise ValueError(f"masonry_strength must be positive; got {masonry_strength}")
+    return Quantity(magnitude=0.45 * fm, unit="MPa")
+
+
+def masonry_combined_stress_ratio(
+    *,
+    axial_stress: Quantity,
+    allowable_axial_stress: Quantity,
+    flexural_stress: Quantity,
+    allowable_flexural_stress: Quantity,
+) -> float:
+    """The TMS 402 unreinforced-masonry unity ratio for combined axial and flexural stress.
+
+    A masonry wall under gravity *and* out-of-plane bending is governed not by either stress
+    alone but by their interaction: TMS 402 §8.2.4.2 requires f_a/F_a + f_b/F_b ≤ 1, the sum of
+    the axial and flexural utilizations. ``axial_stress`` f_a is the applied axial stress and
+    ``allowable_axial_stress`` F_a its slenderness-reduced allowable (from
+    :func:`masonry_allowable_axial_stress`); ``flexural_stress`` f_b is the extreme-fiber bending
+    stress and ``allowable_flexural_stress`` F_b its allowable (from
+    :func:`masonry_allowable_flexural_stress`). Returns the unity ratio — 1.0 is the limit, so a
+    value above 1 fails even when each stress passes on its own.
+    """
+    _require(axial_stress, "[pressure]", "axial_stress")
+    _require(allowable_axial_stress, "[pressure]", "allowable_axial_stress")
+    _require(flexural_stress, "[pressure]", "flexural_stress")
+    _require(allowable_flexural_stress, "[pressure]", "allowable_flexural_stress")
+    fa = axial_stress.to("MPa").magnitude
+    fa_allow = allowable_axial_stress.to("MPa").magnitude
+    fb = flexural_stress.to("MPa").magnitude
+    fb_allow = allowable_flexural_stress.to("MPa").magnitude
+    if fa_allow <= 0 or fb_allow <= 0:
+        raise ValueError("allowable stresses must be positive")
+    if fa < 0 or fb < 0:
+        raise ValueError("applied stresses must be non-negative")
+    return fa / fa_allow + fb / fb_allow

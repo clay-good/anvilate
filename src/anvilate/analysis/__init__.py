@@ -278,7 +278,9 @@ modules:
   matrix properties and volume fraction
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
-  unreinforced member, and the axial capacity of a reinforced masonry column
+  unreinforced member, the axial capacity of a reinforced masonry column, and the
+  combined axial-plus-flexure unity check f_a/F_a + f_b/F_b that governs a wall under
+  gravity and out-of-plane wind
 
 Note: :mod:`~anvilate.analysis.pressure_vessel` also carries the ASME VIII head forms
 (ellipsoidal, torispherical, hemispherical/sphere — each sizing and MAWP) and the
@@ -753,7 +755,9 @@ from .living_hinge import (
 )
 from .masonry import (
     masonry_allowable_axial_stress,
+    masonry_allowable_flexural_stress,
     masonry_column_axial_capacity,
+    masonry_combined_stress_ratio,
 )
 from .nds_timber import (
     LoadDuration,
@@ -1083,7 +1087,9 @@ __all__ = [
     "tsai_hill_failure_index",
     "off_axis_modulus",
     "masonry_allowable_axial_stress",
+    "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",
+    "masonry_combined_stress_ratio",
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",

@@ -202,17 +202,18 @@ def test_aluminum_ladder_rail_example_is_buckling_governed():
     assert r["tension_stress_mpa"] == pytest.approx(240, abs=1)
 
 
-def test_masonry_wall_slenderness_example_is_slenderness_governed():
+def test_masonry_wall_slenderness_example_combined_check_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "masonry_wall_slenderness.py"))
-    a = namespace["wall_allowables"]()
+    a = namespace["wall_check"]()
     # The allowable stress falls monotonically as the wall gets more slender.
     assert a["Fa_hr_30_mpa"] > a["Fa_hr_60_mpa"] > a["Fa_hr_90_mpa"]
-    # A slender wall (h/r = 90) has shed nearly 40% of the stocky (h/r = 30) allowable
-    # before the block is anywhere near its strength.
+    # A slender wall (h/r = 90) has shed nearly 40% of the stocky (h/r = 30) allowable.
     assert a["Fa_hr_90_mpa"] / a["Fa_hr_30_mpa"] < 0.65
-    # Reinforcement adds a steel term the plain pier never had.
-    assert a["pier_reinforced_kn"] > a["pier_plain_kn"]
-    assert a["pier_reinforced_kn"] == pytest.approx(308, abs=3)
+    # Gravity alone passes comfortably, but adding the out-of-plane wind bending pushes
+    # the TMS 402 unity ratio past 1.0 — the combined check, not either stress, governs.
+    assert a["axial_utilization"] < 0.6
+    assert a["combined_unity"] > 1.0
+    assert a["combined_unity"] == pytest.approx(1.01, abs=0.02)
 
 
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
