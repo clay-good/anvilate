@@ -47,6 +47,7 @@ __all__ = [
     "asme_b313_branch_required_reinforcement_area",
     "asme_b313_allowable_displacement_stress_range",
     "asme_b313_bend_stress_intensification",
+    "asme_b313_displacement_stress",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thin_wall_sphere_diametral_growth",
@@ -780,6 +781,47 @@ def asme_b313_bend_stress_intensification(
     in_plane = max(0.9 / h ** (2.0 / 3.0), 1.0)
     out_of_plane = max(0.75 / h ** (2.0 / 3.0), 1.0)
     return in_plane, out_of_plane
+
+
+def asme_b313_displacement_stress(
+    *,
+    in_plane_moment: Quantity,
+    out_of_plane_moment: Quantity,
+    torsional_moment: Quantity,
+    section_modulus: Quantity,
+    in_plane_sif: float = 1.0,
+    out_of_plane_sif: float = 1.0,
+) -> Quantity:
+    """The ASME B31.3 §319.4.4 displacement (expansion) stress range S_E at a fitting.
+
+    The thermal-expansion stress a restrained line develops, computed from the moment
+    ranges the flexibility analysis reports and the fitting's stress-intensification
+    factors (:func:`asme_b313_bend_stress_intensification`). The bending and torsional
+    parts combine as S_E = √(S_b² + 4·S_t²), where the intensified resultant bending
+    stress is S_b = √((i_i·M_i)² + (i_o·M_o)²)/Z and the torsional stress S_t = M_t/(2·Z).
+    ``in_plane_moment`` M_i, ``out_of_plane_moment`` M_o, and ``torsional_moment`` M_t are
+    the moment ranges (peak-to-peak over the thermal cycle), ``section_modulus`` Z the
+    pipe section modulus, and ``in_plane_sif`` i_i / ``out_of_plane_sif`` i_o the SIFs
+    (1.0 for straight pipe). Compare the result against the allowable range
+    (:func:`asme_b313_allowable_displacement_stress_range`). Returns S_E in MPa.
+    """
+    _require(in_plane_moment, "[force] * [length]", "in_plane_moment")
+    _require(out_of_plane_moment, "[force] * [length]", "out_of_plane_moment")
+    _require(torsional_moment, "[force] * [length]", "torsional_moment")
+    if not section_modulus.has_dimension("[length]**3"):
+        raise ValueError("section_modulus must be a [length]**3 quantity")
+    mi = in_plane_moment.to("N*mm").magnitude
+    mo = out_of_plane_moment.to("N*mm").magnitude
+    mt = torsional_moment.to("N*mm").magnitude
+    z = section_modulus.to("mm**3").magnitude
+    if z <= 0:
+        raise ValueError("section_modulus must be positive")
+    if in_plane_sif < 1.0 or out_of_plane_sif < 1.0:
+        raise ValueError("stress-intensification factors must be at least 1.0")
+    s_b = ((in_plane_sif * mi) ** 2 + (out_of_plane_sif * mo) ** 2) ** 0.5 / z
+    s_t = mt / (2.0 * z)
+    s_e = (s_b**2 + 4.0 * s_t**2) ** 0.5
+    return Quantity(magnitude=s_e, unit="MPa")
 
 
 class ThickWallStress(BaseModel):

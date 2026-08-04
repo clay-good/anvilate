@@ -12689,6 +12689,44 @@ def test_asme_b313_bend_stress_intensification():
     assert stiff_in == 1.0 and stiff_out == 1.0
 
 
+def test_asme_b313_displacement_stress_combines_bending_and_torsion():
+    from anvilate.analysis import (
+        asme_b313_bend_stress_intensification,
+        asme_b313_displacement_stress,
+    )
+
+    i_in, i_out = asme_b313_bend_stress_intensification(
+        wall_thickness=_q("6 mm"), bend_radius=_q("150 mm"), mean_radius=_q("52 mm")
+    )
+    s_e = asme_b313_displacement_stress(
+        in_plane_moment=_q("5 kN*m"),
+        out_of_plane_moment=_q("3 kN*m"),
+        torsional_moment=_q("2 kN*m"),
+        section_modulus=_q("100000 mm**3"),
+        in_plane_sif=i_in,
+        out_of_plane_sif=i_out,
+    )
+    s_b = ((i_in * 5e6) ** 2 + (i_out * 3e6) ** 2) ** 0.5 / 100000
+    s_t = 2e6 / (2 * 100000)
+    assert s_e.to("MPa").magnitude == pytest.approx((s_b**2 + 4 * s_t**2) ** 0.5, rel=1e-9)
+    # Straight pipe (SIFs = 1) is less stressed than the intensified fitting.
+    straight = asme_b313_displacement_stress(
+        in_plane_moment=_q("5 kN*m"),
+        out_of_plane_moment=_q("3 kN*m"),
+        torsional_moment=_q("2 kN*m"),
+        section_modulus=_q("100000 mm**3"),
+    )
+    assert straight.to("MPa").magnitude < s_e.to("MPa").magnitude
+    with pytest.raises(ValueError, match="at least 1.0"):
+        asme_b313_displacement_stress(
+            in_plane_moment=_q("5 kN*m"),
+            out_of_plane_moment=_q("3 kN*m"),
+            torsional_moment=_q("2 kN*m"),
+            section_modulus=_q("100000 mm**3"),
+            in_plane_sif=0.5,
+        )
+
+
 def test_asme_conical_head_thickness_reduces_to_the_cylinder_at_zero_angle():
     from anvilate.analysis import asme_conical_head_thickness
 
