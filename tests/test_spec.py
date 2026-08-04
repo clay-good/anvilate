@@ -160,6 +160,41 @@ def test_combination_loads_aggregates_classified_cases_for_the_engine():
     assert governing.name.startswith("LRFD")
 
 
+def test_combination_basis_resolves_to_its_generator_and_drives_the_flow():
+    from anvilate.loads import LoadNature
+
+    # No basis declared -> no combination set (per-case evaluation, as before).
+    assert golden_bracket().combination_set() is None
+
+    def _case(name, nature, force):
+        return LoadCase(
+            name=name,
+            kind=LoadKind.STATIC,
+            applied_to="deck",
+            force=Quantity.parse(force),
+            nature=nature,
+        )
+
+    spec = golden_bracket().model_copy(
+        update={
+            "combination_basis": "asce7_lrfd",
+            "load_cases": [
+                _case("dead", LoadNature.DEAD, "20 kN"),
+                _case("live", LoadNature.LIVE, "50 kN"),
+            ],
+        }
+    )
+    combos = spec.combination_set()
+    assert combos is not None and combos.basis.startswith("ASCE 7-22 LRFD")
+    # The spec-driven flow: its own loads through its own declared combination set.
+    governing, demand = combos.governing(spec.combination_loads())
+    assert governing.name.startswith("LRFD")
+    assert demand > 0
+    # ASD resolves to the allowable-stress set.
+    asd = spec.model_copy(update={"combination_basis": "asce7_asd"}).combination_set()
+    assert asd.basis.startswith("ASCE 7-22 ASD")
+
+
 def test_load_case_nature_is_optional_and_classifies_by_asce_symbol():
     from anvilate.loads import LoadNature
 

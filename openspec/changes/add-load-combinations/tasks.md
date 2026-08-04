@@ -17,6 +17,9 @@
       ±Eh directions generated. S_DS and ρ are typed user inputs.
 - [x] 2.2 Evaluate per combination, envelope, name governing — `evaluate_all`,
       `envelope`, `governing(loads, minimize=...)` (max for strength, min for uplift).
+      A spec declares its basis via `DesignSpec.combination_basis` and resolves it with
+      `DesignSpec.combination_set()`, so the full flow is
+      `spec.combination_set().governing(spec.combination_loads())`.
 - [~] 2.3 Scorecard and evidence-bundle surfacing of the governing combination —
       `combination_scorecard` screens a capacity against the governing (or minimizing)
       combination and names it in the entry detail + reference. Evidence-bundle
