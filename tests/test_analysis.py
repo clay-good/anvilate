@@ -12939,6 +12939,27 @@ def test_composite_poisson_and_shear_modulus():
         composite_major_poisson_ratio(fiber_fraction=0.6, fiber_poisson=0.6, matrix_poisson=0.35)
 
 
+def test_critical_fiber_length():
+    from anvilate.analysis import critical_fiber_length
+
+    # l_c = sigma_fu*d/(2*tau): 4000 MPa carbon, 7 um, 40 MPa interface -> 0.35 mm.
+    lc = critical_fiber_length(
+        fiber_strength=_q("4000 MPa"),
+        fiber_diameter=_q("0.007 mm"),
+        interface_shear_strength=_q("40 MPa"),
+    )
+    assert lc.to("mm").magnitude == pytest.approx(4000 * 0.007 / (2 * 40), rel=1e-9)
+    assert lc.to("mm").magnitude == pytest.approx(0.35, rel=1e-6)
+    # A stronger interface (better sizing) shortens the critical length — the fiber is
+    # gripped over a shorter run.
+    stronger = critical_fiber_length(
+        fiber_strength=_q("4000 MPa"),
+        fiber_diameter=_q("0.007 mm"),
+        interface_shear_strength=_q("80 MPa"),
+    )
+    assert stronger.to("mm").magnitude == pytest.approx(lc.to("mm").magnitude / 2, rel=1e-9)
+
+
 def test_composite_longitudinal_cte_is_stiffness_weighted():
     from anvilate.analysis import composite_longitudinal_cte
 

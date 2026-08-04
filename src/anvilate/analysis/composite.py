@@ -31,6 +31,7 @@ __all__ = [
     "composite_major_poisson_ratio",
     "composite_shear_modulus_inverse_rule",
     "composite_longitudinal_cte",
+    "critical_fiber_length",
 ]
 
 
@@ -213,3 +214,31 @@ def composite_longitudinal_cte(
     stiffness = vf * ef + (1.0 - vf) * em
     alpha1 = (vf * ef * af + (1.0 - vf) * em * am) / stiffness
     return Quantity(magnitude=alpha1, unit="1/K")
+
+
+def critical_fiber_length(
+    *,
+    fiber_strength: Quantity,
+    fiber_diameter: Quantity,
+    interface_shear_strength: Quantity,
+) -> Quantity:
+    """The critical fiber length ℓ_c = σ_fu·d/(2·τ) for load transfer in a short-fiber composite.
+
+    A short (chopped, injection-moulded) fiber is not gripped along its whole length — the
+    matrix builds up tension in it through interface shear, from zero at each end. Only a
+    fiber at least ℓ_c long can be stressed all the way to its own strength before it pulls
+    out, so ℓ_c sets whether reinforcement is fiber-limited (fibers break, strong) or
+    interface-limited (fibers pull out, weak). ℓ_c = σ_fu·d/(2·τ), where ``fiber_strength``
+    σ_fu is the fiber tensile strength, ``fiber_diameter`` d, and ``interface_shear_strength``
+    τ the fiber-matrix (or matrix yield) shear strength. Practical chopped fibers are made a
+    few times ℓ_c so most of each fiber is fully effective. Returns ℓ_c in mm.
+    """
+    _require(fiber_strength, "[pressure]", "fiber_strength")
+    _require(fiber_diameter, "[length]", "fiber_diameter")
+    _require(interface_shear_strength, "[pressure]", "interface_shear_strength")
+    sfu = fiber_strength.to("MPa").magnitude
+    d = fiber_diameter.to("mm").magnitude
+    tau = interface_shear_strength.to("MPa").magnitude
+    if sfu <= 0 or d <= 0 or tau <= 0:
+        raise ValueError("all inputs must be positive")
+    return Quantity(magnitude=sfu * d / (2.0 * tau), unit="mm")
