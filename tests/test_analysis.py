@@ -12787,6 +12787,32 @@ def test_shear_lag_factor_aisc_d3():
         shear_lag_factor(connection_eccentricity=_q("100 mm"), connection_length=_q("100 mm"))
 
 
+def test_bolt_shear_strength_aisc_j36():
+    from anvilate.analysis import bolt_bearing_strength, bolt_shear_strength
+
+    # R_n = F_nv*A_b*n: A325-N (F_nv=372 MPa) M20, single shear -> 116.9 kN.
+    single = bolt_shear_strength(nominal_shear_stress=_q("372 MPa"), bolt_diameter=_q("20 mm"))
+    import math
+
+    assert single.to("kN").magnitude == pytest.approx(372 * math.pi * 20**2 / 4 / 1000, rel=1e-9)
+    # Double shear doubles it.
+    double = bolt_shear_strength(
+        nominal_shear_stress=_q("372 MPa"), bolt_diameter=_q("20 mm"), shear_planes=2
+    )
+    assert double.to("kN").magnitude == pytest.approx(2 * single.to("kN").magnitude, rel=1e-9)
+    # Governing per-bolt strength is the lesser of shear and bearing: with a short edge
+    # distance the plate tears out (162 kN) below the bolt's shear (117 kN)? Here shear
+    # governs, since 117 < 162.
+    bearing = bolt_bearing_strength(
+        clear_distance=_q("30 mm"),
+        plate_thickness=_q("10 mm"),
+        bolt_diameter=_q("20 mm"),
+        ultimate_strength=_q("450 MPa"),
+    )
+    governing = min(single.to("kN").magnitude, bearing.to("kN").magnitude)
+    assert governing == pytest.approx(single.to("kN").magnitude)
+
+
 def test_bolt_bearing_strength_aisc_j310():
     from anvilate.analysis import bolt_bearing_strength
 

@@ -72,6 +72,7 @@ __all__ = [
     "block_shear_strength",
     "shear_lag_factor",
     "net_width_staggered_holes",
+    "bolt_shear_strength",
     "bolt_bearing_strength",
 ]
 
@@ -299,6 +300,36 @@ def shear_lag_factor(
             f"(x̄/L = {x_bar / length:.2f} gives a non-positive U)"
         )
     return u
+
+
+def bolt_shear_strength(
+    *,
+    nominal_shear_stress: Quantity,
+    bolt_diameter: Quantity,
+    shear_planes: int = 1,
+) -> Quantity:
+    """The AISC 360 §J3.6 nominal shear strength R_n = F_nv·A_b·n of a bolt.
+
+    A bolt in a bearing-type connection carries shear on its nominal (shank) area, and
+    §J3.6 rates it at R_n = F_nv·A_b·n_s, with A_b = π·d²/4. ``nominal_shear_stress`` F_nv
+    is the bolt's nominal shear strength from Table J3.2 — it depends on the grade and
+    whether the threads lie in a shear plane (e.g. ≈372 MPa for an A325/Group 120 bolt
+    with threads included, ≈469 MPa excluded) — ``bolt_diameter`` d the nominal diameter,
+    and ``shear_planes`` n_s the number of shear planes (1 single, 2 double). Compare the
+    lesser of this and the plate's :func:`bolt_bearing_strength` to find what governs a
+    bolt: a small bolt in thick plate is shear-limited, a large bolt in thin plate
+    bearing-limited. Returns R_n per bolt in kN.
+    """
+    _require(nominal_shear_stress, "[pressure]", "nominal_shear_stress")
+    _require(bolt_diameter, "[length]", "bolt_diameter")
+    fnv = nominal_shear_stress.to("MPa").magnitude
+    d = bolt_diameter.to("mm").magnitude
+    if fnv <= 0 or d <= 0:
+        raise ValueError("nominal_shear_stress and bolt_diameter must be positive")
+    if shear_planes < 1:
+        raise ValueError(f"shear_planes must be a positive integer; got {shear_planes}")
+    area = pi * d**2 / 4.0
+    return Quantity(magnitude=fnv * area * shear_planes / 1000.0, unit="kN")
 
 
 def bolt_bearing_strength(
