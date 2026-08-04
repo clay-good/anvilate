@@ -216,6 +216,16 @@ def test_masonry_wall_slenderness_example_combined_check_governs():
     assert a["combined_unity"] == pytest.approx(1.01, abs=0.02)
 
 
+def test_clay_backfill_tension_crack_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "clay_backfill_tension_crack.py"))
+    p = namespace["backfill_pressures"]()
+    # A tension crack opens over a substantial fraction of the wall.
+    assert p["tension_crack_m"] == pytest.approx(2.38, abs=0.05)
+    # Surface pressure is tensile (negative), base pressure compressive.
+    assert p["surface_pressure_kpa"] < 0
+    assert p["base_pressure_kpa"] > 0
+
+
 def test_strip_footing_bearing_example_deeper_founding_lifts_capacity():
     namespace = runpy.run_path(str(_EXAMPLES / "strip_footing_bearing.py"))
     cap = namespace["footing_capacity"]()

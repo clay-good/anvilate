@@ -315,7 +315,8 @@ modules:
   (iso-stress inverse-rule) modulus of a unidirectional laminate from its fiber and
   matrix properties and volume fraction
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
-  active/passive earth-pressure coefficients and resultant thrust on a retaining wall,
+  active/passive earth-pressure coefficients and resultant thrust on a retaining wall
+  (with the cohesive-soil active pressure and its tension-crack depth),
   the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing (with
   Vesić shape and depth factors and Meyerhof load-inclination factors that correct it for
   a rectangular embedded footing under an inclined load),
@@ -803,11 +804,13 @@ from .geotechnical import (
     pile_end_bearing_capacity,
     pile_skin_friction_capacity,
     piping_factor_of_safety,
+    rankine_active_pressure_cohesive,
     rankine_earth_pressure_coefficient,
     rankine_lateral_thrust,
     retaining_wall_overturning_factor,
     retaining_wall_sliding_factor,
     seepage_velocity,
+    tension_crack_depth,
     terzaghi_bearing_capacity,
     vertical_stress_increase_2to1,
 )
@@ -1253,11 +1256,13 @@ __all__ = [
     "pile_allowable_capacity",
     "pile_end_bearing_capacity",
     "pile_skin_friction_capacity",
+    "rankine_active_pressure_cohesive",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
     "seepage_velocity",
+    "tension_crack_depth",
     "terzaghi_bearing_capacity",
     "vertical_stress_increase_2to1",
     "circular_channel_properties",

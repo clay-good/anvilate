@@ -13406,6 +13406,41 @@ def test_masonry_combined_stress_ratio_governs_over_either_alone():
         masonry_allowable_flexural_stress(masonry_strength=_q("-1 MPa"))
 
 
+def test_rankine_cohesive_active_pressure_and_tension_crack():
+    import math
+
+    from anvilate.analysis import (
+        rankine_active_pressure_cohesive,
+        tension_crack_depth,
+    )
+
+    # z_c = 2c/(gamma*sqrt(K_a)); phi=20, K_a=tan^2(35)=0.490, c=15, gamma=18 -> 2.38 m.
+    k_a = math.tan(math.radians(35)) ** 2
+    z_c = tension_crack_depth(
+        cohesion=_q("15 kPa"), unit_weight=_q("18 kN/m**3"), friction_angle=20.0
+    )
+    assert z_c.to("m").magnitude == pytest.approx(2 * 15 / (18 * math.sqrt(k_a)), rel=1e-9)
+    # sigma_a = K_a*gamma*z - 2c*sqrt(K_a); at the surface it is negative (tension).
+    surface = rankine_active_pressure_cohesive(
+        depth=_q("0 m"), unit_weight=_q("18 kN/m**3"), friction_angle=20.0, cohesion=_q("15 kPa")
+    )
+    assert surface.to("kPa").magnitude == pytest.approx(-2 * 15 * math.sqrt(k_a), rel=1e-9)
+    assert surface.to("kPa").magnitude < 0
+    # The pressure is exactly zero at the tension-crack depth (its definition).
+    at_crack = rankine_active_pressure_cohesive(
+        depth=z_c, unit_weight=_q("18 kN/m**3"), friction_angle=20.0, cohesion=_q("15 kPa")
+    )
+    assert at_crack.to("kPa").magnitude == pytest.approx(0.0, abs=1e-9)
+    # Below the crack it is compressive and grows with depth.
+    base = rankine_active_pressure_cohesive(
+        depth=_q("5 m"), unit_weight=_q("18 kN/m**3"), friction_angle=20.0, cohesion=_q("15 kPa")
+    )
+    assert base.to("kPa").magnitude > 0
+    assert base.to("kPa").magnitude == pytest.approx(
+        k_a * 18 * 5 - 2 * 15 * math.sqrt(k_a), rel=1e-9
+    )
+
+
 def test_rankine_earth_pressure_coefficient_active_and_passive():
     import math
 

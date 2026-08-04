@@ -28,7 +28,7 @@ all outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
 
 from __future__ import annotations
 
-from math import cos, exp, log10, pi, radians, sin, tan
+from math import cos, exp, log10, pi, radians, sin, sqrt, tan
 
 from ..units import Quantity
 
@@ -49,8 +49,10 @@ __all__ = [
     "pile_allowable_capacity",
     "pile_end_bearing_capacity",
     "pile_skin_friction_capacity",
+    "rankine_active_pressure_cohesive",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
+    "tension_crack_depth",
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
     "terzaghi_bearing_capacity",
@@ -84,6 +86,62 @@ def rankine_earth_pressure_coefficient(*, friction_angle: float, passive: bool =
     if passive:
         return tan(radians(45.0 + friction_angle / 2.0)) ** 2
     return tan(radians(45.0 - friction_angle / 2.0)) ** 2
+
+
+def rankine_active_pressure_cohesive(
+    *,
+    depth: Quantity,
+    unit_weight: Quantity,
+    friction_angle: float,
+    cohesion: Quantity,
+) -> Quantity:
+    """The Rankine active earth pressure in a cohesive (c-φ) soil, σ_a = K_a·γ·z − 2c·√K_a.
+
+    A clay backfill holds itself together, so it presses on a wall less than a cohesionless soil —
+    the cohesion subtracts a constant 2c·√K_a from the pressure: σ_a = K_a·γ·z − 2c·√K_a, from the
+    ``depth`` z, ``unit_weight`` γ, ``friction_angle`` φ (degrees, giving K_a), and ``cohesion`` c.
+    Near the surface this goes *negative* — the soil is in tension and simply cracks away from the
+    wall, carrying no pressure down to the tension-crack depth (see :func:`tension_crack_depth`).
+    Returns σ_a in kPa (a negative value marks the cracked, tension zone, taken as zero pressure in
+    design).
+    """
+    _require(depth, "[length]", "depth")
+    _require(unit_weight, "[force]/[length]**3", "unit_weight")
+    _require(cohesion, "[pressure]", "cohesion")
+    _check_friction_angle(friction_angle)
+    z = depth.to("m").magnitude
+    gamma = unit_weight.to("kN/m**3").magnitude
+    c = cohesion.to("kPa").magnitude
+    if z < 0 or gamma <= 0 or c < 0:
+        raise ValueError("depth non-negative, unit_weight positive, cohesion non-negative")
+    k_a = rankine_earth_pressure_coefficient(friction_angle=friction_angle)
+    sigma_a = k_a * gamma * z - 2.0 * c * sqrt(k_a)
+    return Quantity(magnitude=sigma_a, unit="kPa")
+
+
+def tension_crack_depth(
+    *,
+    cohesion: Quantity,
+    unit_weight: Quantity,
+    friction_angle: float,
+) -> Quantity:
+    """The depth of the tension crack behind a wall in cohesive soil, z_c = 2c/(γ·√K_a).
+
+    In a c-φ soil the active pressure is negative (tension) near the surface, so the soil pulls away
+    from the wall and opens a crack down to where the pressure first becomes compressive:
+    z_c = 2c/(γ·√K_a), from the ``cohesion`` c, ``unit_weight`` γ, and ``friction_angle`` φ. This is
+    also how deep a temporary vertical cut in clay can stand unsupported (briefly), and the crack
+    fills with water in rain — a worst case for wall design. Returns z_c in meters.
+    """
+    _require(cohesion, "[pressure]", "cohesion")
+    _require(unit_weight, "[force]/[length]**3", "unit_weight")
+    _check_friction_angle(friction_angle)
+    c = cohesion.to("kPa").magnitude
+    gamma = unit_weight.to("kN/m**3").magnitude
+    if c <= 0 or gamma <= 0:
+        raise ValueError("cohesion and unit_weight must be positive")
+    k_a = rankine_earth_pressure_coefficient(friction_angle=friction_angle)
+    return Quantity(magnitude=2.0 * c / (gamma * sqrt(k_a)), unit="m")
 
 
 def rankine_lateral_thrust(
