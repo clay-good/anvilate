@@ -136,8 +136,8 @@ modules:
   and rectangular critical depth that classify the flow as sub- or supercritical, the
   flow geometry of trapezoidal (canal) and partially-full circular (culvert) sections, the
   hydraulic jump (sequent depth and energy dissipated) below a spillway, the specific
-  energy E = y + V²/2g with its critical-depth minimum, and rectangular and V-notch weir
-  discharge for gauging channel flow
+  energy E = y + V²/2g with its critical-depth minimum, and rectangular, V-notch, and
+  broad-crested weir discharge for gauging channel flow and rating spillway sills
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -861,6 +861,7 @@ from .o_ring import (
     o_ring_stretch_fraction,
 )
 from .open_channel import (
+    broad_crested_weir_flow,
     circular_channel_properties,
     critical_depth_rectangular,
     froude_number,
@@ -1251,6 +1252,7 @@ __all__ = [
     "pump_shaft_power",
     "pump_specific_speed",
     "manning_flow_velocity",
+    "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",
     "rectangular_weir_flow",
     "specific_energy",

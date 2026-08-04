@@ -33,6 +33,7 @@ __all__ = [
     "hydraulic_radius",
     "manning_flow_rate",
     "manning_flow_velocity",
+    "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",
     "rectangular_weir_flow",
     "specific_energy",
@@ -337,6 +338,34 @@ def rectangular_weir_flow(
     if b <= 0 or h <= 0:
         raise ValueError("crest_length and head must be positive")
     q = discharge_coefficient * (2.0 / 3.0) * b * sqrt(2.0 * _GRAVITY) * h**1.5
+    return Quantity(magnitude=q, unit="m**3/s")
+
+
+def broad_crested_weir_flow(
+    *,
+    discharge_coefficient: float,
+    crest_length: Quantity,
+    head: Quantity,
+) -> Quantity:
+    """The discharge over a broad-crested weir, Q = C_d·(2/3)^(3/2)·√g·b·H^(3/2).
+
+    A broad-crested weir — a flat-topped sill long enough that the flow goes critical on the crest,
+    the physics behind spillway sills and flumes — passes Q = C_d·(2/3)^(3/2)·√g·b·H^(3/2). Unlike a
+    sharp-crested weir (a free overfall, see :func:`rectangular_weir_flow`), the discharge follows
+    from the critical-flow condition on the crest, so the coefficient is different and steadier.
+    ``discharge_coefficient`` C_d (~0.85–1.0, absorbing approach and friction effects),
+    ``crest_length`` b (weir width), and ``head`` H (upstream depth above the crest). Returns the
+    discharge in m³/s.
+    """
+    _check(crest_length, "[length]", "crest_length")
+    _check(head, "[length]", "head")
+    b = crest_length.to("m").magnitude
+    h = head.to("m").magnitude
+    if not 0.0 < discharge_coefficient <= 1.0:
+        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+    if b <= 0 or h <= 0:
+        raise ValueError("crest_length and head must be positive")
+    q = discharge_coefficient * (2.0 / 3.0) ** 1.5 * sqrt(_GRAVITY) * b * h**1.5
     return Quantity(magnitude=q, unit="m**3/s")
 
 

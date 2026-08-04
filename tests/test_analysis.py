@@ -13884,6 +13884,26 @@ def test_weir_flow_rectangular_and_vnotch():
         triangular_weir_flow(discharge_coefficient=0.58, notch_angle=200.0, head=_q("0.3 m"))
 
 
+def test_broad_crested_weir_flow():
+    import math
+
+    from anvilate.analysis import broad_crested_weir_flow
+
+    # Q = Cd*(2/3)^1.5*sqrt(g)*b*H^1.5; Cd=0.9, b=2, H=0.5 -> 1.085 m^3/s.
+    q = broad_crested_weir_flow(discharge_coefficient=0.9, crest_length=_q("2 m"), head=_q("0.5 m"))
+    expect = 0.9 * (2 / 3) ** 1.5 * math.sqrt(9.80665) * 2 * 0.5**1.5
+    assert q.to("m**3/s").magnitude == pytest.approx(expect, rel=1e-9)
+    # Same H^(3/2) power as a rectangular weir, so doubling head multiplies flow by 2^1.5.
+    q_double = broad_crested_weir_flow(
+        discharge_coefficient=0.9, crest_length=_q("2 m"), head=_q("1.0 m")
+    )
+    assert q_double.to("m**3/s").magnitude / q.to("m**3/s").magnitude == pytest.approx(
+        2**1.5, rel=1e-9
+    )
+    with pytest.raises(ValueError, match="discharge_coefficient"):
+        broad_crested_weir_flow(discharge_coefficient=1.5, crest_length=_q("2 m"), head=_q("0.5 m"))
+
+
 def test_specific_energy_and_minimum():
     from anvilate.analysis import (
         critical_depth_rectangular,
