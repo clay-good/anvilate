@@ -11420,6 +11420,36 @@ def test_agma_bending_stress_derates_the_lewis_form():
         agma_bending_stress(geometry_factor=0.0, **kw)
 
 
+def test_agma_module_inverse_round_trips_the_bending_stress():
+    from anvilate.analysis import agma_bending_stress, agma_module_for_bending_stress
+
+    factors = {
+        "geometry_factor": 0.4,
+        "overload_factor": 1.25,
+        "dynamic_factor": 1.2,
+        "load_distribution_factor": 1.3,
+    }
+    # Size the module to hold a 122 MPa allowable, then verify the forward stress.
+    module = agma_module_for_bending_stress(
+        tangential_load=_q("5000 N"),
+        face_width=_q("40 mm"),
+        allowable_stress=_q("121.9 MPa"),
+        **factors,
+    )
+    back = agma_bending_stress(
+        tangential_load=_q("5000 N"), module=module, face_width=_q("40 mm"), **factors
+    )
+    assert back.to("MPa").magnitude == pytest.approx(121.9, rel=1e-9)
+    # A stronger steel (higher allowable) permits a smaller module.
+    smaller = agma_module_for_bending_stress(
+        tangential_load=_q("5000 N"),
+        face_width=_q("40 mm"),
+        allowable_stress=_q("200 MPa"),
+        **factors,
+    )
+    assert smaller.to("mm").magnitude < module.to("mm").magnitude
+
+
 def test_agma_contact_stress_derated_pitting():
     import math
 
