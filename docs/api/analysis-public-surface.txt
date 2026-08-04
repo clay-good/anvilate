@@ -243,8 +243,10 @@ curved_beam.trapezoidal_curved_beam_stress
 drag.drag_force
 drag.jet_impact_force
 drag.terminal_velocity
+electrical.apparent_power_three_phase
 electrical.conductor_resistance
 electrical.line_current_for_power
+electrical.power_factor_correction_kvar
 electrical.three_phase_power
 electrical.voltage_drop_three_phase
 dynamics.STANDARD_GRAVITY

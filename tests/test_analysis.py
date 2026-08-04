@@ -13225,6 +13225,39 @@ def test_electrical_three_phase_power_current_and_voltage_drop():
         three_phase_power(line_voltage=_q("400 V"), line_current=_q("50 A"), power_factor=1.5)
 
 
+def test_electrical_apparent_power_and_pf_correction():
+    import math
+
+    from anvilate.analysis import (
+        apparent_power_three_phase,
+        power_factor_correction_kvar,
+        three_phase_power,
+    )
+
+    # S = sqrt(3)*V*I; 400 V, 50 A -> 34.64 kVA, and S = P/pf.
+    s = apparent_power_three_phase(line_voltage=_q("400 V"), line_current=_q("50 A"))
+    assert s.to("kVA").magnitude == pytest.approx(math.sqrt(3) * 400 * 50 / 1000, rel=1e-9)
+    p = three_phase_power(line_voltage=_q("400 V"), line_current=_q("50 A"), power_factor=0.85)
+    assert s.to("kVA").magnitude == pytest.approx(p.to("kW").magnitude / 0.85, rel=1e-9)
+    # PF correction: Q_c = P*(tan(acos pf1) - tan(acos pf2)); 100 kW, 0.75 -> 0.95 = 55.3 kVAR.
+    qc = power_factor_correction_kvar(
+        real_power=_q("100 kW"), initial_power_factor=0.75, target_power_factor=0.95
+    )
+    expect = 100 * (math.tan(math.acos(0.75)) - math.tan(math.acos(0.95)))
+    assert qc.to("kVA").magnitude == pytest.approx(expect, rel=1e-9)
+    assert qc.to("kVA").magnitude > 0
+    # Correcting to a higher target needs more kVAR.
+    qc_more = power_factor_correction_kvar(
+        real_power=_q("100 kW"), initial_power_factor=0.75, target_power_factor=0.99
+    )
+    assert qc_more.to("kVA").magnitude > qc.to("kVA").magnitude
+    # Correcting "down" is rejected.
+    with pytest.raises(ValueError, match="must exceed"):
+        power_factor_correction_kvar(
+            real_power=_q("100 kW"), initial_power_factor=0.95, target_power_factor=0.75
+        )
+
+
 def test_drag_force_and_terminal_velocity():
     from anvilate.analysis import drag_force, terminal_velocity
 

@@ -15,13 +15,15 @@ power factor are the caller's; inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from math import sqrt
+from math import acos, sqrt, tan
 
 from ..units import Quantity
 
 __all__ = [
+    "apparent_power_three_phase",
     "conductor_resistance",
     "line_current_for_power",
+    "power_factor_correction_kvar",
     "three_phase_power",
     "voltage_drop_three_phase",
 ]
@@ -132,6 +134,53 @@ def voltage_drop_three_phase(
     cos_phi = power_factor
     sin_phi = sqrt(max(0.0, 1.0 - power_factor**2))
     return Quantity(magnitude=_SQRT3 * i * (r * cos_phi + x * sin_phi), unit="V")
+
+
+def apparent_power_three_phase(*, line_voltage: Quantity, line_current: Quantity) -> Quantity:
+    """The apparent power of a three-phase load, S = √3·V_LL·I.
+
+    The total volt-amperes a load presents, independent of power factor: S = √3·V_LL·I from the
+    ``line_voltage`` V_LL and ``line_current`` I. Transformers and generators are rated in kVA
+    because they must carry this full current whether or not it does real work — so apparent power,
+    not real power, sizes the supply. It relates to the real power by S = P/cosφ. Returns the
+    apparent power in kVA.
+    """
+    _check(line_voltage, "[electric_potential]", "line_voltage")
+    _check(line_current, "[current]", "line_current")
+    v = line_voltage.to("V").magnitude
+    i = line_current.to("A").magnitude
+    if v <= 0 or i <= 0:
+        raise ValueError("line_voltage and line_current must be positive")
+    return Quantity(magnitude=_SQRT3 * v * i / 1000.0, unit="kVA")
+
+
+def power_factor_correction_kvar(
+    *,
+    real_power: Quantity,
+    initial_power_factor: float,
+    target_power_factor: float,
+) -> Quantity:
+    """The capacitor reactive power to raise a load's power factor, Q_c = P·(tanφ₁ − tanφ₂).
+
+    A poor power factor makes a load draw more current (and pay demand penalties) than its real
+    power warrants; a capacitor bank supplies the reactive power locally to fix it. The rating
+    needed to raise the factor from ``initial_power_factor`` cosφ₁ to ``target_power_factor`` cosφ₂
+    is Q_c = P·(tanφ₁ − tanφ₂), from the load's ``real_power`` P. The target must be higher than the
+    initial (you correct *up* toward unity). Returns the reactive capacitor rating — numerically in
+    kVAR — as a kVA-dimensioned quantity (reactive power shares the volt-ampere dimension).
+    """
+    _check(real_power, "[power]", "real_power")
+    p = real_power.to("kW").magnitude
+    if p <= 0:
+        raise ValueError("real_power must be positive")
+    if not 0.0 < initial_power_factor <= 1.0:
+        raise ValueError(f"initial_power_factor must be in (0, 1]; got {initial_power_factor}")
+    if not 0.0 < target_power_factor <= 1.0:
+        raise ValueError(f"target_power_factor must be in (0, 1]; got {target_power_factor}")
+    if target_power_factor <= initial_power_factor:
+        raise ValueError("target_power_factor must exceed initial_power_factor (correcting upward)")
+    q_c = p * (tan(acos(initial_power_factor)) - tan(acos(target_power_factor)))
+    return Quantity(magnitude=q_c, unit="kVA")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
