@@ -13226,3 +13226,23 @@ def test_aisc_round_hss_flexural_strength_spans_the_three_ranges():
     # Past D/t = 0.45E/Fy = 260.9 the section is too thin for §F8.
     with pytest.raises(ValueError, match="applicability"):
         aisc_round_hss_flexural_strength(diameter=_q("600 mm"), thickness=_q("2 mm"), **base)
+
+
+def test_aisc_web_shear_strength_yields_then_buckles():
+    from anvilate.analysis import aisc_web_shear_strength
+
+    base = {
+        "overall_depth": _q("400 mm"),
+        "web_thickness": _q("10 mm"),
+        "web_yield": _q("345 MPa"),
+        "elastic_modulus": _q("200000 MPa"),
+    }
+    # Stocky web (h/t_w = 40 <= 61.2): shear yielding, C_v1 = 1.0 -> 0.6*Fy*A_w.
+    stocky = aisc_web_shear_strength(clear_web_depth=_q("400 mm"), **base)
+    assert stocky.to("kN").magnitude == pytest.approx(0.6 * 345 * 400 * 10 / 1000, rel=1e-9)
+    # Slender web (h/t_w = 100 > 61.2): shear buckling knocks C_v1 below 1.
+    slender = aisc_web_shear_strength(clear_web_depth=_q("1000 mm"), **base)
+    threshold = 1.10 * (5.34 * 200000 / 345) ** 0.5
+    c_v1 = threshold / 100
+    assert slender.to("kN").magnitude == pytest.approx(0.6 * 345 * 400 * 10 * c_v1 / 1000, rel=1e-9)
+    assert slender.to("kN").magnitude < stocky.to("kN").magnitude

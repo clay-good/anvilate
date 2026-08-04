@@ -83,6 +83,7 @@ __all__ = [
     "aisc_web_crippling_strength",
     "aisc_web_compression_buckling_strength",
     "aisc_round_hss_flexural_strength",
+    "aisc_web_shear_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
@@ -812,6 +813,53 @@ def aisc_round_hss_flexural_strength(
         m_n = 0.33 * e / dt * s
     m_n = min(m_n, m_p)
     return Quantity(magnitude=m_n / 1.0e6, unit="kN*m")
+
+
+def aisc_web_shear_strength(
+    *,
+    overall_depth: Quantity,
+    web_thickness: Quantity,
+    clear_web_depth: Quantity,
+    web_yield: Quantity,
+    elastic_modulus: Quantity,
+    shear_buckling_coefficient: float = 5.34,
+) -> Quantity:
+    """The AISC 360 §G2.1 nominal web shear strength V_n = 0.6·F_y·A_w·C_v1.
+
+    A beam's web carries the transverse shear, and §G checks it two ways in one formula.
+    A stocky web reaches shear yielding at 0.6·F_y·A_w over the web area A_w = d·t_w; a
+    slender web buckles in shear first, and the web shear coefficient C_v1 knocks the
+    strength down: C_v1 = 1.0 while h/t_w ≤ 1.10·√(k_v·E/F_y), then 1.10·√(k_v·E/F_y)/(h/t_w)
+    beyond it. ``overall_depth`` d, ``web_thickness`` t_w, ``clear_web_depth`` h (flat
+    web between fillets), ``web_yield`` F_y, ``elastic_modulus`` E, and the plate
+    ``shear_buckling_coefficient`` k_v — 5.34 for an unstiffened web (the default),
+    higher with transverse stiffeners. (§G2.1(a) also grants φ_v = 1.00 to stocky rolled
+    I-shapes; that is a resistance-factor bonus, not a change to this nominal strength.)
+    Returns V_n in kN.
+    """
+    _require(overall_depth, "[length]", "overall_depth")
+    _require(web_thickness, "[length]", "web_thickness")
+    _require(clear_web_depth, "[length]", "clear_web_depth")
+    _require(web_yield, "[pressure]", "web_yield")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    d = overall_depth.to("mm").magnitude
+    tw = web_thickness.to("mm").magnitude
+    h = clear_web_depth.to("mm").magnitude
+    fy = web_yield.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if d <= 0 or tw <= 0 or h <= 0 or fy <= 0 or e <= 0:
+        raise ValueError(
+            "overall_depth, web_thickness, clear_web_depth, web_yield, and "
+            "elastic_modulus must be positive"
+        )
+    if shear_buckling_coefficient <= 0:
+        raise ValueError("shear_buckling_coefficient must be positive")
+    h_tw = h / tw
+    threshold = 1.10 * (shear_buckling_coefficient * e / fy) ** 0.5
+    c_v1 = 1.0 if h_tw <= threshold else threshold / h_tw
+    a_w = d * tw
+    v_n = 0.6 * fy * a_w * c_v1
+    return Quantity(magnitude=v_n / 1000.0, unit="kN")
 
 
 def shear_flow(

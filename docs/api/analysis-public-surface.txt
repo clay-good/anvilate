@@ -56,6 +56,7 @@ beam.aisc_round_hss_flexural_strength
 beam.aisc_web_compression_buckling_strength
 beam.aisc_web_crippling_strength
 beam.aisc_web_local_yielding_strength
+beam.aisc_web_shear_strength
 beam.max_transverse_shear_stress
 beam.overhang_tip_load
 beam.overhang_uniform_load
