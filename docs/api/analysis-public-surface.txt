@@ -457,8 +457,10 @@ open_channel.hydraulic_radius
 open_channel.manning_flow_rate
 open_channel.manning_flow_velocity
 open_channel.minimum_specific_energy_rectangular
+open_channel.rectangular_weir_flow
 open_channel.specific_energy
 open_channel.trapezoidal_channel_properties
+open_channel.triangular_weir_flow
 pump.affinity_flow_rate
 pump.affinity_head
 pump.affinity_power

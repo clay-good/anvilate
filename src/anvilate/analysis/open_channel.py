@@ -20,7 +20,7 @@ channel carrying unit discharge q = Q/b. Inputs and outputs are dimension-checke
 
 from __future__ import annotations
 
-from math import acos, sin, sqrt
+from math import acos, radians, sin, sqrt, tan
 
 from ..units import Quantity
 
@@ -34,8 +34,10 @@ __all__ = [
     "manning_flow_rate",
     "manning_flow_velocity",
     "minimum_specific_energy_rectangular",
+    "rectangular_weir_flow",
     "specific_energy",
     "trapezoidal_channel_properties",
+    "triangular_weir_flow",
 ]
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
@@ -309,6 +311,65 @@ def circular_channel_properties(
         "hydraulic_radius": Quantity(magnitude=area / perimeter, unit="m"),
         "top_width": Quantity(magnitude=top_width, unit="m"),
     }
+
+
+def rectangular_weir_flow(
+    *,
+    discharge_coefficient: float,
+    crest_length: Quantity,
+    head: Quantity,
+) -> Quantity:
+    """The discharge over a sharp-crested rectangular weir, Q = C_d·(2/3)·b·√(2g)·H^(3/2).
+
+    A weir gauges open-channel flow the way an orifice gauges pipe flow: dam the stream, and the
+    discharge follows from the head of water backed up over the crest. For a rectangular weir,
+    Q = C_d·(2/3)·b·√(2g)·H^(3/2). ``discharge_coefficient`` C_d (~0.62 for a sharp crest),
+    ``crest_length`` b (the weir width), and ``head`` H (the upstream water surface above the
+    crest). The 3/2 power means a modest rise in head is a large rise in flow. Returns the discharge
+    in m³/s.
+    """
+    _check(crest_length, "[length]", "crest_length")
+    _check(head, "[length]", "head")
+    b = crest_length.to("m").magnitude
+    h = head.to("m").magnitude
+    if not 0.0 < discharge_coefficient <= 1.0:
+        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+    if b <= 0 or h <= 0:
+        raise ValueError("crest_length and head must be positive")
+    q = discharge_coefficient * (2.0 / 3.0) * b * sqrt(2.0 * _GRAVITY) * h**1.5
+    return Quantity(magnitude=q, unit="m**3/s")
+
+
+def triangular_weir_flow(
+    *,
+    discharge_coefficient: float,
+    notch_angle: float,
+    head: Quantity,
+) -> Quantity:
+    """The discharge over a V-notch (triangular) weir, Q = C_d·(8/15)·tan(θ/2)·√(2g)·H^(5/2).
+
+    A V-notch weir measures small flows more precisely than a rectangular one, because its opening
+    narrows toward the bottom so even a trickle produces a readable head: Q = C_d·(8/15)·tan(θ/2)·
+    √(2g)·H^(5/2). ``discharge_coefficient`` C_d (~0.58), the ``notch_angle`` θ of the vee (degrees,
+    commonly 90°), and the ``head`` H above the notch vertex. The steep 5/2 power gives it its fine
+    low-flow resolution. Returns the discharge in m³/s.
+    """
+    _check(head, "[length]", "head")
+    h = head.to("m").magnitude
+    if not 0.0 < discharge_coefficient <= 1.0:
+        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+    if not 0.0 < notch_angle < 180.0:
+        raise ValueError(f"notch_angle must be in (0, 180) degrees; got {notch_angle}")
+    if h <= 0:
+        raise ValueError("head must be positive")
+    q = (
+        discharge_coefficient
+        * (8.0 / 15.0)
+        * tan(radians(notch_angle) / 2.0)
+        * sqrt(2.0 * _GRAVITY)
+        * h**2.5
+    )
+    return Quantity(magnitude=q, unit="m**3/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

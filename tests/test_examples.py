@@ -283,6 +283,15 @@ def test_trapezoidal_canal_capacity_example_carries_and_is_subcritical():
     assert c["froude"] < 1.0
 
 
+def test_weir_flow_gauging_example_vnotch_reads_lower():
+    namespace = runpy.run_path(str(_EXAMPLES / "weir_flow_gauging.py"))
+    w = namespace["weir_discharges"]()
+    # At the same head the V-notch passes far less than the 1 m rectangular crest.
+    assert w["vnotch_lps"] < w["rectangular_lps"]
+    assert w["rectangular_lps"] == pytest.approx(301, abs=5)
+    assert w["vnotch_lps"] == pytest.approx(68, abs=3)
+
+
 def test_spillway_stilling_basin_example_jump_dissipates_energy():
     namespace = runpy.run_path(str(_EXAMPLES / "spillway_stilling_basin.py"))
     d = namespace["jump_design"]()

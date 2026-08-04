@@ -13857,6 +13857,33 @@ def test_hazen_williams_head_loss_and_capacity_round_trip():
         )
 
 
+def test_weir_flow_rectangular_and_vnotch():
+    import math
+
+    from anvilate.analysis import rectangular_weir_flow, triangular_weir_flow
+
+    g = 9.80665
+    # Rectangular: Q = Cd*(2/3)*b*sqrt(2g)*H^1.5; Cd=0.62, b=1, H=0.3 -> 0.301 m^3/s.
+    qr = rectangular_weir_flow(discharge_coefficient=0.62, crest_length=_q("1 m"), head=_q("0.3 m"))
+    assert qr.to("m**3/s").magnitude == pytest.approx(
+        0.62 * (2 / 3) * 1 * math.sqrt(2 * g) * 0.3**1.5, rel=1e-9
+    )
+    # V-notch: Q = Cd*(8/15)*tan(theta/2)*sqrt(2g)*H^2.5; 90 deg -> tan45=1.
+    qv = triangular_weir_flow(discharge_coefficient=0.58, notch_angle=90.0, head=_q("0.3 m"))
+    assert qv.to("m**3/s").magnitude == pytest.approx(
+        0.58 * (8 / 15) * math.tan(math.radians(45)) * math.sqrt(2 * g) * 0.3**2.5, rel=1e-9
+    )
+    # At the same head, the V-notch passes far less than a 1 m rectangular crest.
+    assert qv.to("m**3/s").magnitude < qr.to("m**3/s").magnitude
+    # The steeper power makes the V-notch head-sensitive: doubling head multiplies flow by 2^2.5.
+    qv_double = triangular_weir_flow(discharge_coefficient=0.58, notch_angle=90.0, head=_q("0.6 m"))
+    assert qv_double.to("m**3/s").magnitude / qv.to("m**3/s").magnitude == pytest.approx(
+        2**2.5, rel=1e-9
+    )
+    with pytest.raises(ValueError, match="notch_angle"):
+        triangular_weir_flow(discharge_coefficient=0.58, notch_angle=200.0, head=_q("0.3 m"))
+
+
 def test_specific_energy_and_minimum():
     from anvilate.analysis import (
         critical_depth_rectangular,
