@@ -162,6 +162,19 @@ def test_beam_bearing_web_checks_example_is_governed_by_crippling():
     assert crippling == pytest.approx(212.6, abs=0.5)
 
 
+def test_hss_beam_flexure_shear_example_flags_flange_local_buckling():
+    namespace = runpy.run_path(str(_EXAMPLES / "hss_beam_flexure_shear.py"))
+    result = namespace["hss_beam_capacity"]()
+    m_p = result["plastic_moment"].to("kN*m").magnitude
+    m_n = result["flexural_strength"].to("kN*m").magnitude
+    # The noncompact flange makes §F7 local buckling cut the strength below the plastic
+    # moment a naive F_y*Z hand check would use — here about 7% lower.
+    assert m_n < m_p
+    assert (m_p - m_n) / m_p == pytest.approx(0.068, abs=0.01)
+    # Shear (§G5) carries a large margin, as it does for most compact-to-noncompact HSS.
+    assert result["shear_strength"].to("kN").magnitude > 500
+
+
 def test_machine_on_floor_beam_example_recovers_margin_from_the_real_position():
     namespace = runpy.run_path(str(_EXAMPLES / "machine_on_floor_beam.py"))
     card = namespace["screen_floor_beam"]()
