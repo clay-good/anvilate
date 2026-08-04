@@ -55,6 +55,7 @@ __all__ = [
     "counterflow_effectiveness",
     "parallel_flow_effectiveness",
     "crossflow_both_unmixed_effectiveness",
+    "counterflow_ntu_for_effectiveness",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -1197,4 +1198,31 @@ def crossflow_both_unmixed_effectiveness(*, ntu: float, capacity_ratio: float) -
         return 1.0 - exp(-ntu)
     return 1.0 - exp(
         (1.0 / capacity_ratio) * ntu**0.22 * (exp(-capacity_ratio * ntu**0.78) - 1.0)
+    )
+
+
+def counterflow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio: float) -> float:
+    """The NTU a counterflow exchanger needs for a target effectiveness (the sizing form).
+
+    The design inverse of :func:`counterflow_effectiveness`: given a required
+    ``effectiveness`` ε and the stream balance ``capacity_ratio`` C_r, the number of
+    transfer units (hence U·A) the exchanger must have,
+
+        NTU = 1/(C_r − 1)·ln[(ε − 1)/(ε·C_r − 1)]   (C_r < 1),
+        NTU = ε/(1 − ε)                             (C_r = 1).
+
+    A counterflow exchanger can reach any ε < 1, so ``effectiveness`` must be in
+    (0, 1) and ``capacity_ratio`` in [0, 1]. Size the area from NTU = U·A/C_min.
+    Returns the required (dimensionless) NTU.
+    """
+    if not 0 < effectiveness < 1:
+        raise ValueError(f"effectiveness must be in (0, 1); got {effectiveness}")
+    if not 0 <= capacity_ratio <= 1:
+        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+    if capacity_ratio == 1:
+        return effectiveness / (1.0 - effectiveness)
+    if capacity_ratio == 0:
+        return -log(1.0 - effectiveness)
+    return (1.0 / (capacity_ratio - 1.0)) * log(
+        (effectiveness - 1.0) / (effectiveness * capacity_ratio - 1.0)
     )

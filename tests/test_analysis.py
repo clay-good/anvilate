@@ -12759,3 +12759,21 @@ def test_aisc_flexural_buckling_stress_chapter_e_curve():
     assert stocky.to("MPa").magnitude > slender.to("MPa").magnitude
     with pytest.raises(ValueError, match="must be positive"):
         aisc_flexural_buckling_stress(yield_strength=fy, euler_stress=_q("0 MPa"))
+
+
+def test_counterflow_ntu_for_effectiveness_inverts_the_forward():
+    from anvilate.analysis import counterflow_effectiveness, counterflow_ntu_for_effectiveness
+
+    # Round-trip: the NTU sized for a target ε reproduces that ε through the forward.
+    for cr in (0.0, 0.5, 1.0):
+        target = 0.75
+        ntu = counterflow_ntu_for_effectiveness(effectiveness=target, capacity_ratio=cr)
+        assert counterflow_effectiveness(ntu=ntu, capacity_ratio=cr) == pytest.approx(
+            target, rel=1e-9
+        )
+    # A higher target effectiveness needs a larger exchanger.
+    small = counterflow_ntu_for_effectiveness(effectiveness=0.6, capacity_ratio=0.5)
+    big = counterflow_ntu_for_effectiveness(effectiveness=0.9, capacity_ratio=0.5)
+    assert big > small
+    with pytest.raises(ValueError, match="effectiveness must be in"):
+        counterflow_ntu_for_effectiveness(effectiveness=1.0, capacity_ratio=0.5)
