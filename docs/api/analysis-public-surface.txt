@@ -721,6 +721,9 @@ rivet.riveted_joint_efficiency
 road_curve.banked_curve_max_speed
 road_curve.ideal_superelevation_rate
 road_curve.minimum_curve_radius
+road_curve.braking_distance
+road_curve.perception_reaction_distance
+road_curve.stopping_sight_distance
 scotch_yoke.scotch_yoke_acceleration
 scotch_yoke.scotch_yoke_displacement
 scotch_yoke.scotch_yoke_velocity

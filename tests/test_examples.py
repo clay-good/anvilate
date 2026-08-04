@@ -745,6 +745,17 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_stopping_sight_distance_grade_example_downgrade_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "stopping_sight_distance_grade.py"))
+    s = namespace["sight_distance_by_grade"]()
+    # 110 km/h AASHTO: ~214 m level, ~232 m on a 4% downgrade.
+    assert s["level_m"] == pytest.approx(213.7, abs=1.0)
+    assert s["downgrade_m"] == pytest.approx(231.6, abs=1.0)
+    # The downgrade always needs more sight distance than the level case.
+    assert s["extra_m"] > 0
+    assert s["downgrade_m"] > s["level_m"]
+
+
 def test_hydraulic_motor_drive_example_sizes_from_displacement():
     namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_motor_drive.py"))
     d = namespace["size_hydraulic_drive"]()

@@ -13,6 +13,13 @@ superelevation rate is e = v²/(g·R) — the cross-slope that lets a car round 
 design speed. Turned around, the fastest a given curve can be taken before the tires slide out is
 v_max = √(g·R·(e + f)/(1 − e·f)). The friction factor and superelevation rate are the caller's from
 the AASHTO tables; the balance is here.
+
+The other half of curve design is being able to *see* far enough to stop. The stopping sight
+distance is the reaction distance a vehicle covers while the driver perceives and reacts (d_r = v·t,
+the speed times the perception-reaction time) plus the braking distance it then needs to halt
+(d_b = v²/(2·(a + g·G)), the speed squared over twice the deceleration, with the road grade G
+helping on an upgrade and hurting on a downgrade). Their sum, SSD = v·t + v²/(2·(a + g·G)), is the
+sight line a horizontal or crest curve has to provide — the check that pairs with the cornering one.
 """
 
 from __future__ import annotations
@@ -23,8 +30,11 @@ from ..units import Quantity
 
 __all__ = [
     "banked_curve_max_speed",
+    "braking_distance",
     "ideal_superelevation_rate",
     "minimum_curve_radius",
+    "perception_reaction_distance",
+    "stopping_sight_distance",
 ]
 
 _GRAVITY = 9.80665  # m/s²
@@ -100,6 +110,76 @@ def banked_curve_max_speed(
     if numerator <= 0:
         raise ValueError("superelevation_rate + side_friction_factor must be positive")
     return Quantity(magnitude=sqrt(_GRAVITY * r * numerator / denominator), unit="m/s")
+
+
+def braking_distance(
+    *,
+    speed: Quantity,
+    deceleration: Quantity,
+    grade: float = 0.0,
+) -> Quantity:
+    """The distance to brake to a stop, d = v²/(2·(a + g·G)) (AASHTO).
+
+    How far a vehicle travels braking from ``speed`` v to a stop at a ``deceleration`` a (AASHTO
+    takes a ≈ 3.4 m/s² for design): d = v²/(2·(a + g·G)). The road ``grade`` G (a decimal, positive
+    uphill) adds its gravity component g·G to the braking on an upgrade and subtracts it on a
+    downgrade — which is why a steep downgrade lengthens the stop and governs sight-distance design.
+    Feeds :func:`stopping_sight_distance`. Raises if a downgrade overwhelms the braking
+    (a + g·G ≤ 0, no net deceleration). Returns the braking distance in metres.
+    """
+    _check(speed, "[length]/[time]", "speed")
+    _check(deceleration, "[length]/[time]**2", "deceleration")
+    v = speed.to("m/s").magnitude
+    a = deceleration.to("m/s**2").magnitude
+    if v < 0:
+        raise ValueError("speed must be non-negative")
+    if a <= 0:
+        raise ValueError("deceleration must be positive")
+    effective = a + _GRAVITY * grade
+    if effective <= 0:
+        raise ValueError("a + g·grade must be positive (the downgrade overwhelms the braking)")
+    return Quantity(magnitude=v**2 / (2.0 * effective), unit="m")
+
+
+def perception_reaction_distance(*, speed: Quantity, reaction_time: Quantity) -> Quantity:
+    """The distance covered before braking begins, d = v·t.
+
+    How far a vehicle travels at ``speed`` v during the ``reaction_time`` t the driver takes to
+    perceive a hazard and move to the brake — before any deceleration starts: d = v·t. AASHTO uses
+    t = 2.5 s for stopping sight distance. It is the first term of :func:`stopping_sight_distance`,
+    and because it is linear in speed it dominates the sight requirement at low speeds where the
+    braking term is small. Returns the reaction distance in metres.
+    """
+    _check(speed, "[length]/[time]", "speed")
+    _check(reaction_time, "[time]", "reaction_time")
+    v = speed.to("m/s").magnitude
+    t = reaction_time.to("s").magnitude
+    if v < 0:
+        raise ValueError("speed must be non-negative")
+    if t < 0:
+        raise ValueError("reaction_time must be non-negative")
+    return Quantity(magnitude=v * t, unit="m")
+
+
+def stopping_sight_distance(
+    *,
+    speed: Quantity,
+    deceleration: Quantity,
+    reaction_time: Quantity,
+    grade: float = 0.0,
+) -> Quantity:
+    """The stopping sight distance, SSD = v·t + v²/(2·(a + g·G)) (AASHTO).
+
+    The sight line a road must give a driver to stop safely: the
+    :func:`perception_reaction_distance` v·t covered while reacting plus the
+    :func:`braking_distance` v²/(2·(a + g·G)) needed to halt, from the ``speed`` v, the
+    ``deceleration`` a, the ``reaction_time`` t, and the road ``grade`` G (decimal, positive up).
+    This is the distance a horizontal or crest vertical curve must keep clear of obstructions — the
+    check that complements :func:`minimum_curve_radius`. Returns the sight distance in metres.
+    """
+    reaction = perception_reaction_distance(speed=speed, reaction_time=reaction_time)
+    braking = braking_distance(speed=speed, deceleration=deceleration, grade=grade)
+    return Quantity(magnitude=reaction.to("m").magnitude + braking.to("m").magnitude, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

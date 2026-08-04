@@ -15027,6 +15027,44 @@ def test_road_curve_superelevation_and_max_speed():
         )
 
 
+def test_road_stopping_sight_distance_reaction_plus_braking_with_grade():
+    from anvilate.analysis import (
+        braking_distance,
+        perception_reaction_distance,
+        stopping_sight_distance,
+    )
+
+    g = 9.80665
+    # 100 km/h = 27.778 m/s; AASHTO a = 3.4 m/s^2, t = 2.5 s.
+    speed = _q("27.7778 m/s")
+    decel = _q("3.4 m/s**2")
+
+    # Reaction distance d_r = v*t = 27.778*2.5 ~ 69.4 m.
+    dr = perception_reaction_distance(speed=speed, reaction_time=_q("2.5 s"))
+    assert dr.to("m").magnitude == pytest.approx(27.7778 * 2.5, rel=1e-6)
+
+    # Braking distance on the level d_b = v^2/(2a) ~ 113.5 m.
+    db = braking_distance(speed=speed, deceleration=decel)
+    assert db.to("m").magnitude == pytest.approx(27.7778**2 / (2 * 3.4), rel=1e-9)
+
+    # SSD is the sum ~ 182.9 m (AASHTO tabulates ~185 m for 100 km/h).
+    ssd = stopping_sight_distance(speed=speed, deceleration=decel, reaction_time=_q("2.5 s"))
+    assert ssd.to("m").magnitude == pytest.approx(
+        dr.to("m").magnitude + db.to("m").magnitude, rel=1e-12
+    )
+    assert ssd.to("m").magnitude == pytest.approx(182.9, abs=0.5)
+
+    # A downgrade lengthens braking (gravity fights the brakes); an upgrade shortens it.
+    down = braking_distance(speed=speed, deceleration=decel, grade=-0.03)
+    up = braking_distance(speed=speed, deceleration=decel, grade=0.03)
+    assert down.to("m").magnitude > db.to("m").magnitude > up.to("m").magnitude
+    assert down.to("m").magnitude == pytest.approx(27.7778**2 / (2 * (3.4 - g * 0.03)), rel=1e-9)
+
+    # Guardrail: a steep downgrade that overwhelms the braking is non-physical.
+    with pytest.raises(ValueError, match="overwhelms the braking"):
+        braking_distance(speed=speed, deceleration=_q("0.2 m/s**2"), grade=-0.5)
+
+
 def test_compressible_flow_stagnation_pressure_and_density_ratios():
     from anvilate.analysis import (
         stagnation_density_ratio,
