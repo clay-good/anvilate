@@ -550,6 +550,15 @@ def test_stack_vortex_lock_in_example_flags_common_wind():
     assert s["reduced_velocity_at_lock_in"] == pytest.approx(5.0, rel=1e-6)
 
 
+def test_engine_cycle_efficiency_example_higher_compression_wins():
+    namespace = runpy.run_path(str(_EXAMPLES / "engine_cycle_efficiency.py"))
+    c = namespace["cycle_efficiencies"]()
+    # At equal compression the diesel cycle is a touch below the Otto.
+    assert c["diesel_r10"] < c["otto_r10"]
+    # But the diesel's much higher compression ratio overtakes the knock-limited gasoline engine.
+    assert c["diesel_r18"] > c["otto_r10"]
+
+
 def test_boiler_combustion_air_example_flue_confirms_excess():
     namespace = runpy.run_path(str(_EXAMPLES / "boiler_combustion_air.py"))
     t = namespace["combustion_tune"]()

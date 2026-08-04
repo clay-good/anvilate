@@ -14035,6 +14035,35 @@ def test_vortex_shedding_frequency_lock_in_and_reduced_velocity():
         )
 
 
+def test_power_cycle_efficiencies_otto_diesel_brayton():
+    from anvilate.analysis import (
+        brayton_cycle_efficiency,
+        diesel_cycle_efficiency,
+        otto_cycle_efficiency,
+    )
+
+    # Otto: 1 - 1/r^(g-1); r=8, g=1.4 -> 56.5%.
+    otto = otto_cycle_efficiency(compression_ratio=8)
+    assert otto == pytest.approx(1 - 1 / 8**0.4, rel=1e-9)
+    assert otto == pytest.approx(0.565, abs=1e-3)
+
+    # Brayton: 1 - 1/rp^((g-1)/g); rp=10 -> 48.2%.
+    brayton = brayton_cycle_efficiency(pressure_ratio=10)
+    assert brayton == pytest.approx(1 - 1 / 10 ** (0.4 / 1.4), rel=1e-9)
+
+    # Diesel: r=18, rc=2 -> 63.2%.
+    diesel = diesel_cycle_efficiency(compression_ratio=18, cutoff_ratio=2)
+    expected = 1 - (1 / 18**0.4) * (2**1.4 - 1) / (1.4 * (2 - 1))
+    assert diesel == pytest.approx(expected, rel=1e-9)
+
+    # The Diesel cycle reduces to the Otto efficiency as the cutoff ratio approaches 1.
+    diesel_limit = diesel_cycle_efficiency(compression_ratio=8, cutoff_ratio=1.000001)
+    assert diesel_limit == pytest.approx(otto, abs=1e-4)
+
+    with pytest.raises(ValueError, match="compression_ratio"):
+        otto_cycle_efficiency(compression_ratio=1.0)
+
+
 def test_combustion_air_fuel_ratio_and_excess_air():
     from anvilate.analysis import (
         actual_air_fuel_ratio,
