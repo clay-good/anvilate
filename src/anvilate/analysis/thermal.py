@@ -15,7 +15,7 @@ absolute ``degC`` reading.
 
 from __future__ import annotations
 
-from math import exp, log, pi, sqrt, tanh
+from math import erf, exp, log, pi, sqrt, tanh
 
 from pydantic import BaseModel, ConfigDict
 
@@ -61,6 +61,8 @@ __all__ = [
     "biot_number",
     "lumped_capacitance_time_constant",
     "lumped_capacitance_cooling_time",
+    "semi_infinite_solid_temperature_rise",
+    "semi_infinite_solid_surface_flux",
     "radiation_heat_transfer",
     "radiation_heat_transfer_coefficient",
 ]
@@ -1387,6 +1389,84 @@ def lumped_capacitance_cooling_time(
     if theta >= theta_0:
         raise ValueError("target_excess_temperature must be below initial_excess_temperature")
     return Quantity(magnitude=tau * log(theta_0 / theta), unit="s")
+
+
+def semi_infinite_solid_temperature_rise(
+    *,
+    surface_step_change: Quantity,
+    depth: Quantity,
+    time: Quantity,
+    thermal_diffusivity: Quantity,
+) -> Quantity:
+    """The temperature rise at depth in a semi-infinite solid after a surface step (Incropera 5.7).
+
+    When one face of a thick body is suddenly held at a new temperature — a quenched slab, a
+    weld heat-affected zone, the ground after a cold snap — the change diffuses inward, and
+    for early times (before it reaches the far side) the body behaves as *semi-infinite*.
+    The rise at depth x and time t is ΔT(x, t) = ΔT_s·erfc(x/(2·√(α·t))), where ΔT_s is the
+    sudden surface step and erfc the complementary error function. ``surface_step_change``
+    ΔT_s = T_surface − T_initial (a temperature difference), ``depth`` x below the surface,
+    ``time`` t since the step, and ``thermal_diffusivity`` α = k/(ρ·c_p). At the surface the
+    rise equals ΔT_s; it decays with depth over the thermal penetration depth ~ √(α·t). Add
+    the result to the initial temperature for the actual temperature. Returns the temperature
+    rise at that point (a difference in kelvin).
+    """
+    _require(surface_step_change, "[temperature]", "surface_step_change")
+    _require(depth, "[length]", "depth")
+    _require(time, "[time]", "time")
+    if not thermal_diffusivity.has_dimension("[length]**2 / [time]"):
+        raise ValueError(
+            f"thermal_diffusivity must be a [length]**2/[time] quantity; got "
+            f"{thermal_diffusivity.dimensionality}"
+        )
+    delta_ts = surface_step_change.to("K").magnitude
+    x = depth.to("m").magnitude
+    t = time.to("s").magnitude
+    alpha = thermal_diffusivity.to("m**2/s").magnitude
+    if x < 0:
+        raise ValueError(f"depth must be non-negative; got {depth}")
+    if t <= 0 or alpha <= 0:
+        raise ValueError("time and thermal_diffusivity must be positive")
+    eta = x / (2.0 * sqrt(alpha * t))
+    return Quantity(magnitude=delta_ts * (1.0 - erf(eta)), unit="K")
+
+
+def semi_infinite_solid_surface_flux(
+    *,
+    surface_step_change: Quantity,
+    time: Quantity,
+    thermal_conductivity: Quantity,
+    thermal_diffusivity: Quantity,
+) -> Quantity:
+    """The surface heat flux q₀'' = k·ΔT_s/√(π·α·t) drawn by a semi-infinite solid.
+
+    The companion to :func:`semi_infinite_solid_temperature_rise`: to hold the surface at
+    its stepped temperature, heat must flow across the face, and for the constant-surface-
+    temperature case that instantaneous flux is q₀'' = k·ΔT_s/√(π·α·t). ``surface_step_change``
+    ΔT_s = T_surface − T_initial, ``time`` t since the step, ``thermal_conductivity`` k, and
+    ``thermal_diffusivity`` α. The flux is huge just after the step (it diverges as t → 0)
+    and decays as 1/√t as the thermal layer thickens — the reason a quench pulls the most
+    heat in the first instants. Returns the surface heat flux in W/m² (its magnitude).
+    """
+    _require(surface_step_change, "[temperature]", "surface_step_change")
+    _require(time, "[time]", "time")
+    if not thermal_conductivity.has_dimension("[power] / [length] / [temperature]"):
+        raise ValueError(
+            f"thermal_conductivity must be a [power]/[length]/[temperature] quantity; got "
+            f"{thermal_conductivity.dimensionality}"
+        )
+    if not thermal_diffusivity.has_dimension("[length]**2 / [time]"):
+        raise ValueError(
+            f"thermal_diffusivity must be a [length]**2/[time] quantity; got "
+            f"{thermal_diffusivity.dimensionality}"
+        )
+    delta_ts = abs(surface_step_change.to("K").magnitude)
+    t = time.to("s").magnitude
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    alpha = thermal_diffusivity.to("m**2/s").magnitude
+    if t <= 0 or k <= 0 or alpha <= 0:
+        raise ValueError("time, thermal_conductivity, and thermal_diffusivity must be positive")
+    return Quantity(magnitude=k * delta_ts / sqrt(pi * alpha * t), unit="W/m**2")
 
 
 def radiation_heat_transfer(

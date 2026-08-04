@@ -13362,6 +13362,54 @@ def test_fillet_weld_directional_strength_transverse_is_50pct_stronger():
         fillet_weld_directional_strength(load_angle=math.pi, **kw)
 
 
+def test_semi_infinite_solid_temperature_rise_and_surface_flux():
+    import math
+
+    from anvilate.analysis import (
+        semi_infinite_solid_surface_flux,
+        semi_infinite_solid_temperature_rise,
+    )
+
+    kw = {"depth": _q("10 mm"), "time": _q("100 s"), "thermal_diffusivity": _q("1.2e-5 m**2/s")}
+    # dT(x,t) = dT_s * erfc(x/(2*sqrt(a*t))): eta = 0.1443, erfc = 0.838 -> 503 K of a 600 K step.
+    rise = semi_infinite_solid_temperature_rise(surface_step_change=_q("600 K"), **kw)
+    eta = 0.01 / (2 * math.sqrt(1.2e-5 * 100))
+    assert rise.to("K").magnitude == pytest.approx(600 * math.erfc(eta), rel=1e-9)
+    assert rise.to("K").magnitude == pytest.approx(503, abs=2)
+    # At the surface (x=0) the whole step is felt; deep down it vanishes.
+    at_surface = semi_infinite_solid_temperature_rise(
+        surface_step_change=_q("600 K"),
+        depth=_q("0 mm"),
+        time=_q("100 s"),
+        thermal_diffusivity=_q("1.2e-5 m**2/s"),
+    )
+    assert at_surface.to("K").magnitude == pytest.approx(600.0, rel=1e-12)
+    deep = semi_infinite_solid_temperature_rise(
+        surface_step_change=_q("600 K"),
+        depth=_q("200 mm"),
+        time=_q("100 s"),
+        thermal_diffusivity=_q("1.2e-5 m**2/s"),
+    )
+    assert deep.to("K").magnitude < rise.to("K").magnitude
+    # Surface flux q0'' = k*dT_s/sqrt(pi*a*t): k=50, 600 K, decays as 1/sqrt(t).
+    flux = semi_infinite_solid_surface_flux(
+        surface_step_change=_q("600 K"),
+        time=_q("100 s"),
+        thermal_conductivity=_q("50 W/(m*K)"),
+        thermal_diffusivity=_q("1.2e-5 m**2/s"),
+    )
+    assert flux.to("W/m**2").magnitude == pytest.approx(
+        50 * 600 / math.sqrt(math.pi * 1.2e-5 * 100), rel=1e-9
+    )
+    later = semi_infinite_solid_surface_flux(
+        surface_step_change=_q("600 K"),
+        time=_q("400 s"),
+        thermal_conductivity=_q("50 W/(m*K)"),
+        thermal_diffusivity=_q("1.2e-5 m**2/s"),
+    )
+    assert later.to("W/m**2").magnitude == pytest.approx(flux.to("W/m**2").magnitude / 2, rel=1e-9)
+
+
 def test_crossflow_effectiveness_sits_between_parallel_and_counterflow():
     from anvilate.analysis import (
         counterflow_effectiveness,

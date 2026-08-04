@@ -563,6 +563,8 @@ thermal.heat_exchanger_duty
 thermal.heat_exchanger_ntu
 thermal.log_mean_temperature_difference
 thermal.lumped_capacitance_cooling_time
+thermal.semi_infinite_solid_surface_flux
+thermal.semi_infinite_solid_temperature_rise
 thermal.lumped_capacitance_time_constant
 thermal.fin_efficiency
 thermal.flat_plate_forced_convection_coefficient
