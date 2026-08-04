@@ -25,7 +25,12 @@ __all__ = [
     "rc_tension_steel_for_moment",
     "rc_concrete_shear_strength",
     "rc_column_axial_strength",
+    "rc_beta1",
+    "rc_net_tensile_strain",
 ]
+
+# ACI 318 ultimate concrete compressive strain (the strain-diagram anchor).
+_ACI_CONCRETE_ULTIMATE_STRAIN = 0.003
 
 _ACI_STRESS_BLOCK_FACTOR = 0.85  # the 0.85·f'c Whitney stress-block intensity
 
@@ -212,3 +217,51 @@ def rc_column_axial_strength(
         raise ValueError(f"steel_area ({steel_area}) must be below the gross area ({gross_area})")
     po_n = _ACI_STRESS_BLOCK_FACTOR * fc * (ag - ast) + fy * ast
     return Quantity(magnitude=po_n / 1000.0, unit="kN")
+
+
+def rc_beta1(*, concrete_strength: Quantity) -> float:
+    """The ACI 318 stress-block depth factor β₁ from the concrete strength.
+
+    The ratio of the equivalent rectangular stress-block depth a to the neutral-axis
+    depth c (ACI 318-19 Table 22.2.2.4.3): β₁ = 0.85 for f'c ≤ 28 MPa, decreasing by
+    0.05 for each 7 MPa above 28, and floored at 0.65 for f'c ≥ 55 MPa — stronger,
+    more brittle concrete keeps a shallower compression zone. ``concrete_strength`` is
+    f'c. Returns the dimensionless β₁ in [0.65, 0.85].
+    """
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    fc = concrete_strength.to("MPa").magnitude
+    if fc <= 0:
+        raise ValueError(f"concrete_strength must be positive; got {concrete_strength}")
+    if fc <= 28.0:
+        return 0.85
+    if fc >= 55.0:
+        return 0.65
+    return 0.85 - 0.05 * (fc - 28.0) / 7.0
+
+
+def rc_net_tensile_strain(
+    *,
+    stress_block_depth: Quantity,
+    effective_depth: Quantity,
+    concrete_strength: Quantity,
+) -> float:
+    """The ACI 318 net tensile strain ε_t at the extreme steel — the ductility measure.
+
+    From the linear strain diagram (concrete at 0.003 on the compression face), the
+    tension steel strain is ε_t = 0.003·(d − c)/c, where c = a/β₁ is the neutral-axis
+    depth, ``stress_block_depth`` a is :func:`rc_stress_block_depth`, and
+    ``effective_depth`` d the depth to the steel. ε_t ≥ 0.005 is *tension-controlled*
+    (ductile, φ = 0.90); ε_t ≤ f_y/E_s is compression-controlled (brittle, φ = 0.65);
+    between is the transition. ``concrete_strength`` sets β₁. Returns the dimensionless
+    ε_t.
+    """
+    _require(stress_block_depth, "[length]", "stress_block_depth")
+    _require(effective_depth, "[length]", "effective_depth")
+    a = stress_block_depth.to("mm").magnitude
+    d = effective_depth.to("mm").magnitude
+    if a <= 0 or d <= 0:
+        raise ValueError("stress_block_depth and effective_depth must be positive")
+    c = a / rc_beta1(concrete_strength=concrete_strength)
+    if c >= d:
+        raise ValueError("the neutral axis reaches the steel; check the inputs")
+    return _ACI_CONCRETE_ULTIMATE_STRAIN * (d - c) / c

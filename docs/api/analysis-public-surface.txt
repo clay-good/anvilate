@@ -411,6 +411,8 @@ rigging.sling_tension_factor
 rigging.tackle_lead_line_tension
 rigging.tackle_mechanical_advantage
 reinforced_concrete.rc_beam_nominal_moment
+reinforced_concrete.rc_beta1
+reinforced_concrete.rc_net_tensile_strain
 reinforced_concrete.rc_column_axial_strength
 reinforced_concrete.rc_concrete_shear_strength
 reinforced_concrete.rc_stress_block_depth

@@ -12856,3 +12856,24 @@ def test_rc_column_axial_strength_aci():
             concrete_strength=_q("30 MPa"),
             steel_yield=_q("420 MPa"),
         )
+
+
+def test_rc_beta1_and_net_tensile_strain_ductility():
+    from anvilate.analysis import rc_beta1, rc_net_tensile_strain, rc_stress_block_depth
+
+    # beta1: 0.85 at/below 28 MPa, dropping 0.05 per 7 MPa, floored at 0.65.
+    assert rc_beta1(concrete_strength=_q("25 MPa")) == pytest.approx(0.85)
+    assert rc_beta1(concrete_strength=_q("30 MPa")) == pytest.approx(0.85 - 0.05 * 2 / 7, rel=1e-9)
+    assert rc_beta1(concrete_strength=_q("60 MPa")) == pytest.approx(0.65)
+    # For the 1500 mm² beam: a=82.35, c=a/beta1, eps_t ~ 0.0137 -> tension-controlled.
+    a = rc_stress_block_depth(
+        steel_area=_q("1500 mm**2"),
+        steel_yield=_q("420 MPa"),
+        concrete_strength=_q("30 MPa"),
+        beam_width=_q("300 mm"),
+    )
+    eps_t = rc_net_tensile_strain(
+        stress_block_depth=a, effective_depth=_q("550 mm"), concrete_strength=_q("30 MPa")
+    )
+    assert eps_t == pytest.approx(0.0137, abs=0.0005)
+    assert eps_t >= 0.005  # ductile, phi = 0.90
