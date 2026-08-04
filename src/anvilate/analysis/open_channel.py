@@ -28,6 +28,8 @@ __all__ = [
     "circular_channel_properties",
     "critical_depth_rectangular",
     "froude_number",
+    "hydraulic_jump_downstream_depth",
+    "hydraulic_jump_energy_loss",
     "hydraulic_radius",
     "manning_flow_rate",
     "manning_flow_velocity",
@@ -145,6 +147,57 @@ def critical_depth_rectangular(*, flow_rate: Quantity, channel_width: Quantity) 
         raise ValueError("flow_rate and channel_width must be positive")
     unit_discharge = q_total / b
     return Quantity(magnitude=(unit_discharge**2 / _GRAVITY) ** (1.0 / 3.0), unit="m")
+
+
+def hydraulic_jump_downstream_depth(
+    *,
+    upstream_depth: Quantity,
+    upstream_froude_number: float,
+) -> Quantity:
+    """The downstream (sequent) depth of a hydraulic jump, y₂ = (y₁/2)·(√(1 + 8·Fr₁²) − 1).
+
+    Where fast, shallow supercritical flow slams into slower water — below a spillway or a sluice
+    gate — it leaps up in a turbulent hydraulic jump to a deeper, subcritical depth. The two depths
+    are tied by the momentum equation: y₂ = (y₁/2)·(√(1 + 8·Fr₁²) − 1). ``upstream_depth`` y₁ is the
+    supercritical depth and ``upstream_froude_number`` Fr₁ (> 1) its Froude number from
+    :func:`froude_number`. The jump is the workhorse energy dissipator of stilling-basin design.
+    Returns the downstream depth y₂ in meters.
+    """
+    _check(upstream_depth, "[length]", "upstream_depth")
+    y1 = upstream_depth.to("m").magnitude
+    if y1 <= 0:
+        raise ValueError("upstream_depth must be positive")
+    if upstream_froude_number <= 1.0:
+        raise ValueError(
+            f"upstream_froude_number must exceed 1 (supercritical) for a jump; "
+            f"got {upstream_froude_number}"
+        )
+    y2 = (y1 / 2.0) * (sqrt(1.0 + 8.0 * upstream_froude_number**2) - 1.0)
+    return Quantity(magnitude=y2, unit="m")
+
+
+def hydraulic_jump_energy_loss(
+    *,
+    upstream_depth: Quantity,
+    downstream_depth: Quantity,
+) -> Quantity:
+    """The head (energy) dissipated across a hydraulic jump, ΔE = (y₂ − y₁)³/(4·y₁·y₂).
+
+    A hydraulic jump is violent on purpose — it exists to burn kinetic energy so the flow leaves a
+    spillway tame. The specific energy it destroys is ΔE = (y₂ − y₁)³/(4·y₁·y₂), from the
+    ``upstream_depth`` y₁ and ``downstream_depth`` y₂ (from
+    :func:`hydraulic_jump_downstream_depth`). The stronger the jump (the larger the depth ratio),
+    the more head it dissipates. Returns the energy loss as a head in meters.
+    """
+    _check(upstream_depth, "[length]", "upstream_depth")
+    _check(downstream_depth, "[length]", "downstream_depth")
+    y1 = upstream_depth.to("m").magnitude
+    y2 = downstream_depth.to("m").magnitude
+    if y1 <= 0 or y2 <= 0:
+        raise ValueError("upstream_depth and downstream_depth must be positive")
+    if y2 < y1:
+        raise ValueError("downstream_depth must be at least the upstream depth (a jump raises it)")
+    return Quantity(magnitude=(y2 - y1) ** 3 / (4.0 * y1 * y2), unit="m")
 
 
 def trapezoidal_channel_properties(

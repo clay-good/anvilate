@@ -451,6 +451,8 @@ o_ring.o_ring_stretch_fraction
 open_channel.circular_channel_properties
 open_channel.critical_depth_rectangular
 open_channel.froude_number
+open_channel.hydraulic_jump_downstream_depth
+open_channel.hydraulic_jump_energy_loss
 open_channel.hydraulic_radius
 open_channel.manning_flow_rate
 open_channel.manning_flow_velocity

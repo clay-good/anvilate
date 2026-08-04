@@ -283,6 +283,15 @@ def test_trapezoidal_canal_capacity_example_carries_and_is_subcritical():
     assert c["froude"] < 1.0
 
 
+def test_spillway_stilling_basin_example_jump_dissipates_energy():
+    namespace = runpy.run_path(str(_EXAMPLES / "spillway_stilling_basin.py"))
+    d = namespace["jump_design"]()
+    # The jump raises the water several-fold and burns real energy.
+    assert d["sequent_depth_m"] == pytest.approx(1.34, abs=0.03)
+    assert d["depth_ratio"] > 4.0
+    assert d["energy_loss_m"] == pytest.approx(0.70, abs=0.03)
+
+
 def test_pump_selection_from_line_example_chains_to_a_motor():
     namespace = runpy.run_path(str(_EXAMPLES / "pump_selection_from_line.py"))
     d = namespace["pump_duty"]()

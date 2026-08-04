@@ -13905,6 +13905,34 @@ def test_manning_open_channel_flow():
         manning_flow_velocity(roughness_coefficient=0.013, hydraulic_radius=r, channel_slope=0.0)
 
 
+def test_hydraulic_jump_depth_and_energy_loss():
+    import math
+
+    from anvilate.analysis import (
+        hydraulic_jump_downstream_depth,
+        hydraulic_jump_energy_loss,
+    )
+
+    # y2 = (y1/2)*(sqrt(1+8*Fr1^2)-1); y1=0.3, Fr1=3.5 -> ~1.34 m.
+    y2 = hydraulic_jump_downstream_depth(upstream_depth=_q("0.3 m"), upstream_froude_number=3.5)
+    expect = (0.3 / 2) * (math.sqrt(1 + 8 * 3.5**2) - 1)
+    assert y2.to("m").magnitude == pytest.approx(expect, rel=1e-9)
+    assert y2.to("m").magnitude > 0.3  # the jump raises the water
+    # A stronger jump (higher Fr1) gives a larger sequent depth.
+    y2_strong = hydraulic_jump_downstream_depth(
+        upstream_depth=_q("0.3 m"), upstream_froude_number=6.0
+    )
+    assert y2_strong.to("m").magnitude > y2.to("m").magnitude
+    # Energy loss ΔE = (y2-y1)^3/(4*y1*y2).
+    dE = hydraulic_jump_energy_loss(upstream_depth=_q("0.3 m"), downstream_depth=y2)
+    y2m = y2.to("m").magnitude
+    assert dE.to("m").magnitude == pytest.approx((y2m - 0.3) ** 3 / (4 * 0.3 * y2m), rel=1e-9)
+    assert dE.to("m").magnitude > 0
+    # A jump only forms in supercritical flow.
+    with pytest.raises(ValueError, match="supercritical"):
+        hydraulic_jump_downstream_depth(upstream_depth=_q("0.3 m"), upstream_froude_number=0.8)
+
+
 def test_froude_number_and_critical_depth_agree_on_regime():
     from anvilate.analysis import critical_depth_rectangular, froude_number
 
