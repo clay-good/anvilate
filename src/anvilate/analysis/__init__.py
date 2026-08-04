@@ -42,7 +42,9 @@ modules:
   buckling moment of an unbraced beam, and the empirical Rankine-Gordon column
   stress; and the AISC 360 steel checks — the §E3 flexural buckling stress, the
   §F2 lateral-torsional bracing limits L_p and L_r with the inelastic-LTB moment
-  between them, and the §H1.1 beam-column interaction (uniaxial or biaxial)
+  between them, the §H1.1 beam-column interaction (uniaxial or biaxial), and the
+  alignment-chart effective-length factor K of a framed column (braced and sway)
+  from its joint stiffness ratios
 - :mod:`~anvilate.analysis.torsion` — the torque a power/speed makes, solid and
   hollow shaft torsion, twist, torsional stiffness, and the shaft diameter a
   torque requires — the static von Mises size and the DE-Goodman and DE-Gerber
@@ -445,6 +447,8 @@ from .cold_formed_steel import (
 from .column import (
     ColumnEnd,
     aisc_beam_column_interaction,
+    aisc_effective_length_factor_braced,
+    aisc_effective_length_factor_sway,
     aisc_flexural_buckling_stress,
     aisc_inelastic_ltb_limit,
     aisc_inelastic_ltb_moment,
@@ -1237,6 +1241,8 @@ __all__ = [
     "aisc_flexural_buckling_stress",
     "aisc_plastic_bracing_limit",
     "aisc_beam_column_interaction",
+    "aisc_effective_length_factor_braced",
+    "aisc_effective_length_factor_sway",
     "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
     "transition_slenderness",

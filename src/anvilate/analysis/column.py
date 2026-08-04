@@ -39,6 +39,8 @@ __all__ = [
     "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
     "aisc_beam_column_interaction",
+    "aisc_effective_length_factor_braced",
+    "aisc_effective_length_factor_sway",
 ]
 
 
@@ -592,3 +594,42 @@ def aisc_beam_column_interaction(
     if axial_ratio >= 0.2:
         return axial_ratio + (8.0 / 9.0) * bending_ratio
     return axial_ratio / 2.0 + bending_ratio
+
+
+def aisc_effective_length_factor_braced(*, g_top: float, g_bottom: float) -> float:
+    """The effective-length factor K of a braced-frame column from its joint stiffness ratios.
+
+    A real column is neither perfectly pinned nor fixed; its ends are held by the beams
+    framing in, and the AISC alignment chart reads the effective-length factor K from the
+    joint stiffness ratio G = Σ(E·I/L)_columns / Σ(E·I/L)_girders at each end. This is the
+    Dumonteil closed-form fit to the *braced* (sidesway-prevented) chart:
+    K = (3·G_A·G_B + 1.4·(G_A + G_B) + 0.64) / (3·G_A·G_B + 2·(G_A + G_B) + 1.28). ``g_top``
+    G_A and ``g_bottom`` G_B are the stiffness ratios at the two ends (AISC recommends
+    G ≈ 1.0 for a nominally fixed base and G ≈ 10 for a nominally pinned one, since a real
+    footing is neither ideal). K runs from 0.5 (both ends fixed) to 1.0 (both pinned) and is
+    always ≤ 1 for a braced frame, so bracing always helps. Feed K·L to the slenderness and
+    buckling checks. Returns the dimensionless K.
+    """
+    if g_top < 0 or g_bottom < 0:
+        raise ValueError("g_top and g_bottom must be non-negative")
+    a, b = g_top, g_bottom
+    return (3.0 * a * b + 1.4 * (a + b) + 0.64) / (3.0 * a * b + 2.0 * (a + b) + 1.28)
+
+
+def aisc_effective_length_factor_sway(*, g_top: float, g_bottom: float) -> float:
+    """The effective-length factor K of a sway-frame column from its joint stiffness ratios.
+
+    The unbraced (sidesway-permitted) companion to
+    :func:`aisc_effective_length_factor_braced`: when a frame can lean, its columns are far
+    more slender than the braced case, and K exceeds 1.0 — often well above 2. The Dumonteil
+    fit to the sway alignment chart is
+    K = √[(1.6·G_A·G_B + 4·(G_A + G_B) + 7.5) / (G_A + G_B + 7.5)], with ``g_top`` G_A and
+    ``g_bottom`` G_B the joint stiffness ratios (G ≈ 1 for a fixed base, ≈ 10 for a pinned
+    one). K = 1.0 with both ends fixed and grows without bound as the ends approach pinned
+    (a sway frame on pinned columns is a mechanism). The large K is why an unbraced frame's
+    columns govern — bracing or a moment frame is what tames it. Returns the dimensionless K.
+    """
+    if g_top < 0 or g_bottom < 0:
+        raise ValueError("g_top and g_bottom must be non-negative")
+    a, b = g_top, g_bottom
+    return ((1.6 * a * b + 4.0 * (a + b) + 7.5) / (a + b + 7.5)) ** 0.5

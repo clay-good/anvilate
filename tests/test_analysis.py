@@ -13721,6 +13721,32 @@ def test_aisc_inelastic_ltb_limit_matches_manual_w18x50():
     assert l_r_hi.to("ft").magnitude < l_r.to("ft").magnitude
 
 
+def test_aisc_alignment_chart_effective_length_factors():
+    from anvilate.analysis import (
+        aisc_effective_length_factor_braced,
+        aisc_effective_length_factor_sway,
+    )
+
+    # Braced frame: both ends fixed (G=0) -> K = 0.5; both ~pinned (G large) -> K -> 1.
+    assert aisc_effective_length_factor_braced(g_top=0.0, g_bottom=0.0) == pytest.approx(0.5)
+    assert aisc_effective_length_factor_braced(g_top=50.0, g_bottom=50.0) == pytest.approx(
+        1.0, abs=0.02
+    )
+    # A typical braced column (G = 1, 2) reads K ~ 0.82 off the chart, always <= 1.
+    mid = aisc_effective_length_factor_braced(g_top=1.0, g_bottom=2.0)
+    assert mid == pytest.approx(0.816, abs=0.005)
+    assert mid < 1.0
+    # Sway frame: both ends fixed -> K = 1.0, and it exceeds 1 (and the braced value) as
+    # soon as the joints soften.
+    assert aisc_effective_length_factor_sway(g_top=0.0, g_bottom=0.0) == pytest.approx(1.0)
+    sway = aisc_effective_length_factor_sway(g_top=1.0, g_bottom=2.0)
+    assert sway == pytest.approx(1.47, abs=0.02)
+    assert sway > 1.0
+    assert sway > mid  # a sway frame's column is always more slender than the braced one
+    with pytest.raises(ValueError, match="non-negative"):
+        aisc_effective_length_factor_braced(g_top=-1.0, g_bottom=1.0)
+
+
 def test_aisc_beam_column_interaction_h11_both_branches():
     from anvilate.analysis import aisc_beam_column_interaction
 
