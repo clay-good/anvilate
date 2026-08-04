@@ -13995,6 +13995,41 @@ def test_thermal_degree_day_heating_and_cooling_energy():
         )
 
 
+def test_thermal_fourier_number():
+    from anvilate.analysis import fourier_number
+
+    # Fo = alpha*t/L^2; 1e-5 m^2/s, 100 s, 0.05 m -> 0.4.
+    fo = fourier_number(
+        thermal_diffusivity=_q("1e-5 m**2/s"),
+        time=_q("100 s"),
+        characteristic_length=_q("0.05 m"),
+    )
+    assert fo == pytest.approx(1e-5 * 100 / 0.05**2, rel=1e-9)
+    assert fo == pytest.approx(0.4, rel=1e-9)
+
+    # Fourier grows linearly with time (dimensionless clock).
+    fo2 = fourier_number(
+        thermal_diffusivity=_q("1e-5 m**2/s"),
+        time=_q("200 s"),
+        characteristic_length=_q("0.05 m"),
+    )
+    assert fo2 == pytest.approx(2 * fo, rel=1e-9)
+    # ...and inversely with the square of length.
+    fo_big = fourier_number(
+        thermal_diffusivity=_q("1e-5 m**2/s"),
+        time=_q("100 s"),
+        characteristic_length=_q("0.1 m"),
+    )
+    assert fo_big == pytest.approx(fo / 4, rel=1e-9)
+
+    with pytest.raises(ValueError, match="characteristic_length"):
+        fourier_number(
+            thermal_diffusivity=_q("1e-5 m**2/s"),
+            time=_q("100 s"),
+            characteristic_length=_q("0 m"),
+        )
+
+
 def test_thermal_grashof_and_rayleigh_numbers():
     from anvilate.analysis import grashof_number, rayleigh_number
 

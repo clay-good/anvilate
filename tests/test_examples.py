@@ -756,6 +756,16 @@ def test_home_heating_degree_days_example_heat_pump_cuts_energy():
     assert s["furnace_kwh"] / s["heat_pump_kwh"] == pytest.approx(3.0 / 0.9, rel=1e-6)
 
 
+def test_quenched_billet_transient_example_biot_and_fourier():
+    namespace = runpy.run_path(str(_EXAMPLES / "quenched_billet_transient.py"))
+    q = namespace["quench_regime"]()
+    # Bi = 0.25 (above the 0.1 lumped limit) and Fo = 1.25 (past the 0.2 one-term mark).
+    assert q["biot"] == pytest.approx(0.25, abs=0.01)
+    assert q["biot"] > 0.1
+    assert q["fourier"] == pytest.approx(1.25, abs=0.02)
+    assert q["fourier"] > 0.2
+
+
 def test_heated_panel_convection_regime_example_height_flips_regime():
     namespace = runpy.run_path(str(_EXAMPLES / "heated_panel_convection_regime.py"))
     r = namespace["panel_regimes"]()

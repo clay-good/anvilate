@@ -69,6 +69,7 @@ __all__ = [
     "counterflow_ntu_for_effectiveness",
     "parallel_flow_ntu_for_effectiveness",
     "biot_number",
+    "fourier_number",
     "lumped_capacitance_time_constant",
     "lumped_capacitance_cooling_time",
     "semi_infinite_solid_temperature_rise",
@@ -1643,6 +1644,36 @@ def biot_number(
     if h <= 0 or lc <= 0 or k <= 0:
         raise ValueError("all inputs must be positive")
     return h * lc / k
+
+
+def fourier_number(
+    *,
+    thermal_diffusivity: Quantity,
+    time: Quantity,
+    characteristic_length: Quantity,
+) -> float:
+    """The Fourier number Fo = α·t/L² — the dimensionless time of a transient.
+
+    A dimensionless clock for heat diffusion: Fo = α·t/L², from the ``thermal_diffusivity`` α (= k/ρ
+    c_p), the elapsed ``time`` t, and the ``characteristic_length`` L. It measures how far a thermal
+    disturbance has soaked into a body relative to its size — small Fo means the transient is barely
+    begun (the core has not felt the surface change), and past Fo ≈ 0.2 the transient is
+    well-developed, which is where the one-term Heisler-chart approximation becomes accurate. With
+    the Biot number (:func:`biot_number`) it is the pair that governs all transient conduction.
+    Returns
+    the dimensionless Fo.
+    """
+    _require(thermal_diffusivity, "[length]**2/[time]", "thermal_diffusivity")
+    _require(time, "[time]", "time")
+    _require(characteristic_length, "[length]", "characteristic_length")
+    alpha = thermal_diffusivity.to("m**2/s").magnitude
+    t = time.to("s").magnitude
+    length = characteristic_length.to("m").magnitude
+    if alpha <= 0 or length <= 0:
+        raise ValueError("thermal_diffusivity and characteristic_length must be positive")
+    if t < 0:
+        raise ValueError("time must be non-negative")
+    return alpha * t / length**2
 
 
 def lumped_capacitance_time_constant(
