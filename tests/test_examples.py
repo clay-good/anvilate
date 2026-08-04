@@ -745,6 +745,18 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_hydraulic_motor_drive_example_sizes_from_displacement():
+    namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_motor_drive.py"))
+    d = namespace["size_hydraulic_drive"]()
+    # 50 cc/rev at 1500 rpm, 95% volumetric -> ~71 L/min.
+    assert d["flow_lpm"] == pytest.approx(71.25, abs=0.1)
+    # 200 bar across 50 cc/rev, 90% mechanical -> ~143 N*m.
+    assert d["torque_nm"] == pytest.approx(143.2, abs=0.5)
+    # The motor runs a little under the 1500 rpm pump because both leak.
+    assert d["motor_rpm"] == pytest.approx(1353.75, abs=1.0)
+    assert d["motor_rpm"] < 1500.0
+
+
 def test_cooling_tower_approach_example_rates_by_approach():
     namespace = runpy.run_path(str(_EXAMPLES / "cooling_tower_approach.py"))
     p = namespace["tower_performance"]()

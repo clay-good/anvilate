@@ -134,6 +134,10 @@ modules:
 - :mod:`~anvilate.analysis.hydraulic_cylinder` — fluid-cylinder actuator sizing:
   the extend and retract force (bore vs annular area), the extend and retract speed
   from the supply flow, and the rod-side pressure intensification of a blocked stroke
+- :mod:`~anvilate.analysis.hydraulic_motor` — rotary positive-displacement pump/motor:
+  the pump flow Q = D·N·η_v a displacement delivers, the motor torque T = D·Δp/(2π)·η_m
+  a pressure drop produces, and the motor speed N = Q·η_v/D a supply flow drives — the
+  rotary complement of hydraulic_cylinder, distinct from the centrifugal pump module
 - :mod:`~anvilate.analysis.pneumatics` — compressed-air systems: the receiver hold-up
   time V·Δp/(Q·p_atm) and the receiver volume a required hold-up needs
 - :mod:`~anvilate.analysis.compressible_flow` — gas dynamics: the speed of sound √(γRT),
@@ -1072,6 +1076,11 @@ from .hydraulic_cylinder import (
     cylinder_retract_speed,
     cylinder_rodside_intensified_pressure,
 )
+from .hydraulic_motor import (
+    hydraulic_motor_speed,
+    hydraulic_motor_torque,
+    hydraulic_pump_flow_rate,
+)
 from .hydro_power import (
     hydro_flow_for_power,
     hydro_net_head,
@@ -1759,6 +1768,9 @@ __all__ = [
     "hydro_net_head",
     "hydro_turbine_power",
     "hydro_flow_for_power",
+    "hydraulic_pump_flow_rate",
+    "hydraulic_motor_torque",
+    "hydraulic_motor_speed",
     "accumulator_size_for_volume",
     "accumulator_usable_volume",
     "inverse_square_attenuation",

@@ -12615,6 +12615,50 @@ def test_specific_film_ratio_sets_the_lubrication_regime():
         )
 
 
+def test_hydraulic_motor_pump_flow_torque_and_speed():
+    from math import pi
+
+    from anvilate.analysis import (
+        hydraulic_motor_speed,
+        hydraulic_motor_torque,
+        hydraulic_pump_flow_rate,
+    )
+
+    disp = _q("50 cm**3")  # 50 cc/rev
+
+    # Ideal pump flow: Q = D*N; 50 cc/rev * 1500 rpm = 75 L/min.
+    q_ideal = hydraulic_pump_flow_rate(displacement=disp, rotational_speed=_q("1500 rpm"))
+    assert q_ideal.to("L/min").magnitude == pytest.approx(75.0, rel=1e-9)
+    # Volumetric efficiency scales the delivered flow down linearly.
+    q_real = hydraulic_pump_flow_rate(
+        displacement=disp, rotational_speed=_q("1500 rpm"), volumetric_efficiency=0.95
+    )
+    assert q_real.to("L/min").magnitude == pytest.approx(75.0 * 0.95, rel=1e-9)
+
+    # Motor torque: T = D*dp/(2*pi); 50e-6 m^3 * 200 bar / 2pi = 159.15 N*m ideal.
+    t_ideal = hydraulic_motor_torque(displacement=disp, pressure_drop=_q("200 bar"))
+    assert t_ideal.to("N*m").magnitude == pytest.approx(50e-6 * 200e5 / (2 * pi), rel=1e-9)
+    # Mechanical efficiency trims the delivered torque.
+    t_real = hydraulic_motor_torque(
+        displacement=disp, pressure_drop=_q("200 bar"), mechanical_efficiency=0.90
+    )
+    assert t_real.to("N*m").magnitude == pytest.approx(t_ideal.to("N*m").magnitude * 0.90, rel=1e-9)
+
+    # The pump/motor relation round-trips: feeding the ideal 75 L/min back into the same
+    # displacement drives it at the original 1500 rpm.
+    n = hydraulic_motor_speed(flow_rate=q_ideal, displacement=disp)
+    assert n.to("rpm").magnitude == pytest.approx(1500.0, rel=1e-9)
+    # Leakage means the real motor turns slower than the ideal Q/D.
+    n_real = hydraulic_motor_speed(flow_rate=q_ideal, displacement=disp, volumetric_efficiency=0.95)
+    assert n_real.to("rpm").magnitude == pytest.approx(1500.0 * 0.95, rel=1e-9)
+
+    # Guardrails: efficiencies are fractions, displacement must be positive.
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        hydraulic_motor_torque(
+            displacement=disp, pressure_drop=_q("200 bar"), mechanical_efficiency=1.5
+        )
+
+
 def test_hydraulic_cylinder_force_and_speed_rod_asymmetry():
     from math import pi
 
