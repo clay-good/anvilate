@@ -517,6 +517,7 @@ illumination.lighting_power_density
 illumination.lumen_method_illuminance
 illumination.lumen_method_luminaire_count
 illumination.point_source_illuminance
+illumination.room_cavity_ratio
 impact.SUDDENLY_APPLIED_FACTOR
 impact.horizontal_impact_force
 impact.impact_factor

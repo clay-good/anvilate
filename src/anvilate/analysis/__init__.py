@@ -255,7 +255,8 @@ modules:
   moment under opposing loads, and external-pressure buckling load
 - :mod:`~anvilate.analysis.illumination` — lighting design: point-source
   inverse-square cosine illuminance, the lumen method (room illuminance and
-  its luminaire-count inverse), and installed lighting power density
+  its luminaire-count inverse), the room cavity ratio that sets the coefficient
+  of utilization, and installed lighting power density
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1044,6 +1045,7 @@ from .illumination import (
     lumen_method_illuminance,
     lumen_method_luminaire_count,
     point_source_illuminance,
+    room_cavity_ratio,
 )
 from .impact import (
     SUDDENLY_APPLIED_FACTOR,
@@ -2106,6 +2108,7 @@ __all__ = [
     "point_source_illuminance",
     "lumen_method_illuminance",
     "lumen_method_luminaire_count",
+    "room_cavity_ratio",
     "lighting_power_density",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",

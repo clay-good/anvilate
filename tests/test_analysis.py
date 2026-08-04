@@ -13662,6 +13662,21 @@ def test_illumination_point_source_and_lumen_method():
         )
 
 
+def test_room_cavity_ratio():
+    from anvilate.analysis import room_cavity_ratio
+
+    # RCR = 5*h*(L+W)/(L*W): 2 m, 10x8 -> 5*2*18/80 = 2.25.
+    rcr = room_cavity_ratio(cavity_height=_q("2 m"), room_length=_q("10 m"), room_width=_q("8 m"))
+    assert rcr == pytest.approx(5 * 2 * (10 + 8) / (10 * 8), rel=1e-12)
+    # A taller cavity (deeper room) raises the ratio.
+    taller = room_cavity_ratio(
+        cavity_height=_q("4 m"), room_length=_q("10 m"), room_width=_q("8 m")
+    )
+    assert taller == pytest.approx(2 * rcr, rel=1e-9)
+    with pytest.raises(ValueError, match="must be positive"):
+        room_cavity_ratio(cavity_height=_q("0 m"), room_length=_q("10 m"), room_width=_q("8 m"))
+
+
 def test_illumination_lighting_power_density():
     from anvilate.analysis import lighting_power_density
 

@@ -923,6 +923,15 @@ def test_worker_noise_dose_scorecard_example_niosh_is_stricter():
     assert r["niosh_dose_percent"] > r["osha_dose_percent"]
 
 
+def test_office_lighting_cavity_ratio_example_tall_room_needs_more():
+    namespace = runpy.run_path(str(_EXAMPLES / "office_lighting_cavity_ratio.py"))
+    f = namespace["fixture_counts"]()
+    # The tall cavity doubles the RCR and needs more fixtures for the same target.
+    assert f["low_rcr"] == pytest.approx(1.75, abs=0.01)
+    assert f["tall_rcr"] == pytest.approx(3.5, abs=0.01)
+    assert f["tall_fixtures"] > f["low_fixtures"]
+
+
 def test_office_lighting_layout_example_installed_grid_clears_target():
     namespace = runpy.run_path(str(_EXAMPLES / "office_lighting_layout.py"))
     r = namespace["lighting_layout"]()

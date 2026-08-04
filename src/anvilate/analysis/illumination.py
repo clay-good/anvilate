@@ -31,7 +31,35 @@ __all__ = [
     "lumen_method_illuminance",
     "lumen_method_luminaire_count",
     "point_source_illuminance",
+    "room_cavity_ratio",
 ]
+
+
+def room_cavity_ratio(
+    *,
+    cavity_height: Quantity,
+    room_length: Quantity,
+    room_width: Quantity,
+) -> float:
+    """The room cavity ratio RCR = 5·h·(L + W)/(L·W) that sets the coefficient of utilization.
+
+    The lumen method's coefficient of utilization (the CU fed to :func:`lumen_method_illuminance`)
+    is read from a photometric table against the room's cavity ratio — a single number capturing how
+    tall and narrow the room is between the luminaires and the work plane. RCR = 5·h·(L + W)/(L·W)
+    from the ``cavity_height`` h (luminaires down to the work plane), the ``room_length`` L, and the
+    ``room_width`` W. A low, wide room has a small RCR and a high CU (light reaches the plane before
+    the walls absorb it); a tall, narrow room has a large RCR and a low CU. Returns the
+    dimensionless RCR.
+    """
+    _check(cavity_height, "[length]", "cavity_height")
+    _check(room_length, "[length]", "room_length")
+    _check(room_width, "[length]", "room_width")
+    h = cavity_height.to("m").magnitude
+    length = room_length.to("m").magnitude
+    width = room_width.to("m").magnitude
+    if h <= 0 or length <= 0 or width <= 0:
+        raise ValueError("cavity_height, room_length, and room_width must be positive")
+    return 5.0 * h * (length + width) / (length * width)
 
 
 def point_source_illuminance(
