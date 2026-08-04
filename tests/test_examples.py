@@ -162,6 +162,16 @@ def test_beam_bearing_web_checks_example_is_governed_by_crippling():
     assert crippling == pytest.approx(212.6, abs=0.5)
 
 
+def test_spur_gear_agma_example_is_governed_by_pitting():
+    namespace = runpy.run_path(str(_EXAMPLES / "spur_gear_agma_check.py"))
+    utils = namespace["gear_utilizations"]()
+    # Both modes pass, but the flanks (pitting) run a higher utilization than the tooth
+    # root (bending) — the pitting-limited case a bending-only check misses.
+    assert utils["pitting"] > utils["bending"]
+    assert utils["bending"] < 1.0 and utils["pitting"] < 1.0
+    assert utils["pitting"] == pytest.approx(0.69, abs=0.03)
+
+
 def test_plate_girder_design_example_shows_web_penalty_and_shear_reserve():
     namespace = runpy.run_path(str(_EXAMPLES / "plate_girder_design.py"))
     caps = namespace["girder_capacities"]()
