@@ -32,7 +32,13 @@ __all__ = [
     "rc_minimum_flexural_steel",
     "rc_maximum_tension_controlled_steel",
     "rc_two_way_shear_strength",
+    "rc_cracking_moment",
+    "rc_effective_moment_of_inertia",
 ]
+
+# ACI 318-19 §24.2.3.5 uses the reduced effective cracking moment (2/3)·M_cr.
+_ACI_EFFECTIVE_CRACKING_FRACTION = 2.0 / 3.0
+_ACI_MODULUS_OF_RUPTURE_FACTOR = 0.62  # f_r = 0.62·√f'c (MPa)
 
 # The tension-controlled neutral-axis ratio c/d at ε_t = 0.005 (with ε_cu = 0.003):
 # c/d = 0.003 / (0.003 + 0.005) = 0.375.
@@ -456,3 +462,74 @@ def rc_two_way_shear_strength(
         0.083 * (2.0 + column_position_factor * d / bo) * lam_root,
     )
     return Quantity(magnitude=stress * bo * d / 1000.0, unit="kN")
+
+
+def rc_cracking_moment(
+    *,
+    concrete_strength: Quantity,
+    gross_inertia: Quantity,
+    extreme_tension_distance: Quantity,
+    lightweight_factor: float = 1.0,
+) -> Quantity:
+    """The ACI 318 cracking moment M_cr = f_r·I_g/y_t of a concrete section.
+
+    The moment at which the concrete's tension face first cracks — below it the beam
+    acts uncracked, above it a crack propagates and the stiffness drops. The modulus
+    of rupture is f_r = 0.62·λ·√f'c (ACI 318-19 §19.2.3.1); ``gross_inertia`` I_g is the
+    uncracked (gross) second moment of area and ``extreme_tension_distance`` y_t the
+    distance from the centroid to the extreme tension fibre. ``concrete_strength`` f'c
+    and ``lightweight_factor`` λ are the caller's. Returns M_cr in kN·m.
+    """
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    _require(gross_inertia, "[length]**4", "gross_inertia")
+    _require(extreme_tension_distance, "[length]", "extreme_tension_distance")
+    fc = concrete_strength.to("MPa").magnitude
+    ig = gross_inertia.to("mm**4").magnitude
+    yt = extreme_tension_distance.to("mm").magnitude
+    if fc <= 0 or ig <= 0 or yt <= 0:
+        raise ValueError(
+            "concrete_strength, gross_inertia, and extreme_tension_distance must be positive"
+        )
+    if lightweight_factor <= 0:
+        raise ValueError(f"lightweight_factor must be positive; got {lightweight_factor}")
+    fr = _ACI_MODULUS_OF_RUPTURE_FACTOR * lightweight_factor * sqrt(fc)
+    return Quantity(magnitude=fr * ig / yt / 1.0e6, unit="kN*m")
+
+
+def rc_effective_moment_of_inertia(
+    *,
+    cracked_inertia: Quantity,
+    gross_inertia: Quantity,
+    cracking_moment: Quantity,
+    applied_moment: Quantity,
+) -> Quantity:
+    """The ACI 318-19 effective moment of inertia I_e for deflection (Bischoff).
+
+    A cracked beam is stiffer than its fully-cracked section (uncracked lengths
+    between cracks help), so deflection uses an I between I_cr and I_g that tightens
+    toward I_cr as the load grows (ACI 318-19 §24.2.3.5):
+
+        I_e = I_g                                                   for M_a ≤ ⅔·M_cr,
+        I_e = I_cr / [1 − (⅔·M_cr/M_a)²·(1 − I_cr/I_g)]             for M_a > ⅔·M_cr,
+
+    where ``cracked_inertia`` I_cr, ``gross_inertia`` I_g, ``cracking_moment`` M_cr
+    (from :func:`rc_cracking_moment`), and ``applied_moment`` M_a is the service moment.
+    Returns I_e in mm⁴.
+    """
+    _require(cracked_inertia, "[length]**4", "cracked_inertia")
+    _require(gross_inertia, "[length]**4", "gross_inertia")
+    _require(cracking_moment, "[force] * [length]", "cracking_moment")
+    _require(applied_moment, "[force] * [length]", "applied_moment")
+    icr = cracked_inertia.to("mm**4").magnitude
+    ig = gross_inertia.to("mm**4").magnitude
+    mcr = cracking_moment.to("N*mm").magnitude
+    ma = applied_moment.to("N*mm").magnitude
+    if icr <= 0 or ig <= 0 or mcr <= 0 or ma <= 0:
+        raise ValueError("all inertias and moments must be positive")
+    if icr > ig:
+        raise ValueError("cracked_inertia cannot exceed gross_inertia")
+    if ma <= _ACI_EFFECTIVE_CRACKING_FRACTION * mcr:
+        return Quantity(magnitude=ig, unit="mm**4")
+    ratio = _ACI_EFFECTIVE_CRACKING_FRACTION * mcr / ma
+    ie = icr / (1.0 - ratio**2 * (1.0 - icr / ig))
+    return Quantity(magnitude=ie, unit="mm**4")

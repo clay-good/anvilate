@@ -13023,3 +13023,31 @@ def test_radiation_heat_transfer_and_linearized_coefficient():
             surface_temperature=_q("400 K"),
             surroundings_temperature=_q("300 K"),
         )
+
+
+def test_rc_cracking_moment_and_effective_inertia_bischoff():
+    from anvilate.analysis import rc_cracking_moment, rc_effective_moment_of_inertia
+
+    # M_cr = 0.62*sqrt(f'c)*I_g/y_t: 30 MPa, I_g=8e9 mm4, y_t=300 -> 90.6 kN.m.
+    mcr = rc_cracking_moment(
+        concrete_strength=_q("30 MPa"),
+        gross_inertia=_q("8e9 mm**4"),
+        extreme_tension_distance=_q("300 mm"),
+    )
+    assert mcr.to("kN*m").magnitude == pytest.approx(0.62 * 30**0.5 * 8e9 / 300 / 1e6, rel=1e-9)
+    # Below (2/3)*M_cr the section is uncracked -> I_e = I_g.
+    uncracked = rc_effective_moment_of_inertia(
+        cracked_inertia=_q("3e9 mm**4"),
+        gross_inertia=_q("8e9 mm**4"),
+        cracking_moment=mcr,
+        applied_moment=_q("40 kN*m"),
+    )
+    assert uncracked.to("mm**4").magnitude == pytest.approx(8e9, rel=1e-12)
+    # Loaded past cracking, I_e falls between I_cr and I_g (Bischoff) ~ 3.89e9.
+    ie = rc_effective_moment_of_inertia(
+        cracked_inertia=_q("3e9 mm**4"),
+        gross_inertia=_q("8e9 mm**4"),
+        cracking_moment=mcr,
+        applied_moment=_q("120 kN*m"),
+    )
+    assert 3e9 < ie.to("mm**4").magnitude < 8e9
