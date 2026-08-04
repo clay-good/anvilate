@@ -2785,6 +2785,26 @@ def test_gasket_flange_leak_example_tightness_governs():
     assert card.status is CheckStatus.FAIL
 
 
+def test_pump_station_electromechanical_capstone_feeder_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "pump_station_electromechanical.py"))
+    card = namespace["screen_station"]()
+    by_name = {e.name: e for e in card.entries}
+    # The hydraulics are all comfortable...
+    assert "safety factor 3.45" in by_name["cavitation margin (NPSHa vs NPSHr)"].detail
+    assert "safety factor 1.54" in by_name["inlet reliability (suction specific speed)"].detail
+    assert "safety factor 1.17" in by_name["motor rating vs shaft power"].detail
+    assert by_name["cavitation margin (NPSHa vs NPSHr)"].passed
+    assert by_name["inlet reliability (suction specific speed)"].passed
+    assert by_name["motor rating vs shaft power"].passed
+    # ...but the undersized feeder over a long run governs and fails the station.
+    feeder = by_name["feeder voltage drop vs 3% limit"]
+    assert feeder.status is CheckStatus.FAIL
+    assert "safety factor 0.65" in feeder.detail
+    assert card.status is CheckStatus.FAIL
+    # The feeder is the single binding constraint -- every other check passes.
+    assert sum(1 for e in card.entries if not e.passed) == 1
+
+
 def test_hydraulic_cylinder_cap_capstone_seal_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_cylinder_cap.py"))
     card = namespace["screen_cap"]()
