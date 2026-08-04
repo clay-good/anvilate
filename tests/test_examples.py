@@ -328,6 +328,15 @@ def test_square_footing_shape_depth_example_recovers_capacity():
     assert r["strip_kpa"] == pytest.approx(1488, abs=5)
 
 
+def test_inclined_load_footing_example_loses_capacity():
+    namespace = runpy.run_path(str(_EXAMPLES / "inclined_load_footing.py"))
+    r = namespace["inclined_capacity"]()
+    # The horizontal thrust derates the bearing capacity below the vertical-only value.
+    assert r["inclined_kpa"] < r["vertical_kpa"]
+    assert r["ratio"] == pytest.approx(0.66, abs=0.03)
+    assert r["vertical_kpa"] == pytest.approx(1488, abs=5)
+
+
 def test_air_compressor_duty_example_brackets_power_and_heat():
     namespace = runpy.run_path(str(_EXAMPLES / "air_compressor_duty.py"))
     d = namespace["compressor_duty"]()

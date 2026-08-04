@@ -35,6 +35,7 @@ from ..units import Quantity
 __all__ = [
     "bearing_capacity_factors",
     "bearing_depth_factors",
+    "bearing_inclination_factors",
     "bearing_shape_factors",
     "consolidation_settlement",
     "consolidation_time",
@@ -208,6 +209,44 @@ def _nq_tan_phi(phi_radians: float) -> float:
     """N_q·tanφ, the denominator in the Hansen/Vesić d_c depth factor."""
     n_q = exp(pi * tan(phi_radians)) * tan(pi / 4.0 + phi_radians / 2.0) ** 2
     return n_q * tan(phi_radians)
+
+
+def bearing_inclination_factors(
+    *,
+    vertical_load: Quantity,
+    horizontal_load: Quantity,
+    friction_angle: float,
+) -> dict[str, float]:
+    """The Meyerhof inclination factors that derate bearing capacity for an inclined load.
+
+    A load that is not purely vertical — a footing also carrying a horizontal thrust from wind,
+    earth pressure, or a braced frame — mobilizes less bearing capacity, because part of the
+    soil's strength is spent resisting sliding. Meyerhof's inclination factors depend on the load's
+    angle from vertical α = arctan(H/V): i_c = i_q = (1 − α/90°)² and i_γ = (1 − α/φ)² (zero once α
+    exceeds φ, where the γ-term vanishes). ``vertical_load`` V, ``horizontal_load`` H, and
+    ``friction_angle`` φ (degrees). Multiply each bearing-capacity term by its factor, alongside the
+    shape and depth factors. Returns a dict with keys ``"i_c"``, ``"i_q"``, ``"i_gamma"``.
+    """
+    _require(vertical_load, "[force]", "vertical_load")
+    _require(horizontal_load, "[force]", "horizontal_load")
+    _check_friction_angle(friction_angle)
+    v = vertical_load.to("kN").magnitude
+    h = horizontal_load.to("kN").magnitude
+    if v <= 0:
+        raise ValueError("vertical_load must be positive")
+    if h < 0:
+        raise ValueError("horizontal_load must be non-negative")
+    from math import atan, degrees
+
+    alpha = degrees(atan(h / v))
+    i_cq = (1.0 - alpha / 90.0) ** 2
+    if friction_angle == 0.0:
+        i_gamma = 1.0 if alpha == 0.0 else 0.0
+    elif alpha >= friction_angle:
+        i_gamma = 0.0
+    else:
+        i_gamma = (1.0 - alpha / friction_angle) ** 2
+    return {"i_c": i_cq, "i_q": i_cq, "i_gamma": i_gamma}
 
 
 def terzaghi_bearing_capacity(

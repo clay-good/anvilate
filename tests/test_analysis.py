@@ -13332,6 +13332,36 @@ def test_bearing_depth_factors_hansen():
     assert d0["d_q"] == pytest.approx(1.0, rel=1e-12)
 
 
+def test_bearing_inclination_factors_meyerhof():
+    import math
+
+    from anvilate.analysis import bearing_inclination_factors
+
+    # H=200, V=1000 -> alpha=11.31 deg; i_c=i_q=(1-a/90)^2, i_gamma=(1-a/phi)^2.
+    i = bearing_inclination_factors(
+        vertical_load=_q("1000 kN"), horizontal_load=_q("200 kN"), friction_angle=30.0
+    )
+    alpha = math.degrees(math.atan(200 / 1000))
+    assert i["i_c"] == pytest.approx((1 - alpha / 90) ** 2, rel=1e-9)
+    assert i["i_q"] == i["i_c"]
+    assert i["i_gamma"] == pytest.approx((1 - alpha / 30) ** 2, rel=1e-9)
+    assert i["i_gamma"] < i["i_c"]  # the self-weight term is hit hardest
+    # A purely vertical load leaves every factor at 1.
+    vert = bearing_inclination_factors(
+        vertical_load=_q("1000 kN"), horizontal_load=_q("0 kN"), friction_angle=30.0
+    )
+    assert vert["i_c"] == pytest.approx(1.0) and vert["i_gamma"] == pytest.approx(1.0)
+    # Once the load angle reaches the friction angle the gamma-term vanishes.
+    steep = bearing_inclination_factors(
+        vertical_load=_q("1000 kN"), horizontal_load=_q("1000 kN"), friction_angle=30.0
+    )
+    assert steep["i_gamma"] == pytest.approx(0.0)
+    with pytest.raises(ValueError, match="vertical_load must be positive"):
+        bearing_inclination_factors(
+            vertical_load=_q("0 kN"), horizontal_load=_q("200 kN"), friction_angle=30.0
+        )
+
+
 def test_terzaghi_bearing_capacity_sums_three_terms():
     from anvilate.analysis import bearing_capacity_factors, terzaghi_bearing_capacity
 
