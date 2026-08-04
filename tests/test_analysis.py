@@ -13784,6 +13784,27 @@ def test_electrical_transformer_full_load_and_fault_current():
         transformer_available_fault_current(full_load_current=fla, impedance_percent=0.0)
 
 
+def test_thermal_wien_peak_wavelength_and_inverse():
+    from anvilate.analysis import wien_peak_wavelength, wien_temperature_from_peak
+
+    b = 2.897771955e-3  # m*K
+    # lambda_max = b/T; the Sun (~5778 K) peaks near 500 nm.
+    peak = wien_peak_wavelength(temperature=_q("5778 K"))
+    assert peak.to("m").magnitude == pytest.approx(b / 5778, rel=1e-9)
+    assert peak.to("nm").magnitude == pytest.approx(502, abs=2)
+
+    # Higher temperature -> shorter peak wavelength.
+    hotter = wien_peak_wavelength(temperature=_q("10000 K"))
+    assert hotter.to("m").magnitude < peak.to("m").magnitude
+
+    # The inverse round-trips: T = b/lambda_max.
+    t = wien_temperature_from_peak(peak_wavelength=peak)
+    assert t.to("K").magnitude == pytest.approx(5778, rel=1e-9)
+
+    with pytest.raises(ValueError, match="positive"):
+        wien_peak_wavelength(temperature=_q("0 K"))
+
+
 def test_thermal_guided_cantilever_expansion_loop_leg():
     import math
 

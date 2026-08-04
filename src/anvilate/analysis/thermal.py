@@ -73,9 +73,12 @@ __all__ = [
     "semi_infinite_solid_surface_flux",
     "radiation_heat_transfer",
     "radiation_heat_transfer_coefficient",
+    "wien_peak_wavelength",
+    "wien_temperature_from_peak",
 ]
 
 _STEFAN_BOLTZMANN = 5.670374419e-8  # W/(m²·K⁴)
+_WIEN_DISPLACEMENT = 2.897771955e-3  # m·K, Wien's displacement constant
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
 # The laminar–turbulent transition Reynolds number for external flow over a flat
@@ -1791,3 +1794,35 @@ def radiation_heat_transfer_coefficient(
         raise ValueError("the absolute temperatures must be positive")
     hr = emissivity * _STEFAN_BOLTZMANN * (ts**2 + tsur**2) * (ts + tsur)
     return Quantity(magnitude=hr, unit="W/(m**2*K)")
+
+
+def wien_peak_wavelength(*, temperature: Quantity) -> Quantity:
+    """The wavelength of peak blackbody emission, λ_max = b/T (Wien's displacement law).
+
+    A hot body radiates across a spectrum, but the wavelength it emits most strongly shifts
+    inversely with its absolute ``temperature``: λ_max = b/T, with b = 2.8978×10⁻³ m·K. It is why a
+    heating element glows dull red, then orange, then white as it climbs — the peak marching out of
+    infrared and up through the visible — and why the Sun (≈ 5800 K) peaks in green at about 500 nm
+    while a room-temperature object peaks deep in the infrared near 10 µm. Returns the peak
+    wavelength as a length.
+    """
+    _require(temperature, "[temperature]", "temperature")
+    t = temperature.to("K").magnitude
+    if t <= 0:
+        raise ValueError("temperature must be positive (absolute)")
+    return Quantity(magnitude=_WIEN_DISPLACEMENT / t, unit="m")
+
+
+def wien_temperature_from_peak(*, peak_wavelength: Quantity) -> Quantity:
+    """The blackbody temperature from its peak emission wavelength, T = b/λ_max (Wien inverted).
+
+    The inverse of :func:`wien_peak_wavelength`: measure the wavelength a hot body radiates most
+    strongly and Wien's law gives its temperature, T = b/λ_max, with b = 2.8978×10⁻³ m·K. This is
+    how a spectral (color) pyrometer takes the temperature of something too hot or too far to touch
+    — a furnace, a filament, a star. Returns the temperature in kelvin.
+    """
+    _require(peak_wavelength, "[length]", "peak_wavelength")
+    lam = peak_wavelength.to("m").magnitude
+    if lam <= 0:
+        raise ValueError("peak_wavelength must be positive")
+    return Quantity(magnitude=_WIEN_DISPLACEMENT / lam, unit="K")

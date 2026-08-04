@@ -773,6 +773,8 @@ thermal.parallel_flow_ntu_for_effectiveness
 thermal.parallel_thermal_resistance
 thermal.radiation_heat_transfer
 thermal.radiation_heat_transfer_coefficient
+thermal.wien_peak_wavelength
+thermal.wien_temperature_from_peak
 thermal.series_thermal_resistance
 thermal.shrink_fit_assembly_temperature
 thermal.temperature_rise

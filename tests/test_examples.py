@@ -674,6 +674,16 @@ def test_timber_header_shear_governs_example_shear_beats_bending():
     assert namespace["bearing_margin"]() > 1.5
 
 
+def test_pyrometer_color_temperature_example_peak_shifts_and_inverts():
+    namespace = runpy.run_path(str(_EXAMPLES / "pyrometer_color_temperature.py"))
+    g = namespace["glow_colors"]()
+    # The peak wavelength shortens as temperature rises.
+    assert g["peak_nm_800K"] > g["peak_nm_1500K"] > g["peak_nm_5800K"]
+    assert g["peak_nm_5800K"] == pytest.approx(500, abs=2)
+    # The pyrometer inverts a 500 nm peak back to ~5800 K.
+    assert g["inferred_T_from_500nm"] == pytest.approx(5796, abs=5)
+
+
 def test_steam_line_expansion_loop_example_sizes_the_leg():
     namespace = runpy.run_path(str(_EXAMPLES / "steam_line_expansion_loop.py"))
     s = namespace["loop_sizing"]()

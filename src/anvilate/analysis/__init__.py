@@ -1333,6 +1333,8 @@ from .thermal import (
     through_wall_gradient_thermal_stress,
     triaxial_constrained_thermal_stress,
     vertical_plate_natural_convection_coefficient,
+    wien_peak_wavelength,
+    wien_temperature_from_peak,
 )
 from .torsion import (
     elliptical_bar_torsional_stress,
@@ -2229,6 +2231,8 @@ __all__ = [
     "semi_infinite_solid_surface_flux",
     "radiation_heat_transfer",
     "radiation_heat_transfer_coefficient",
+    "wien_peak_wavelength",
+    "wien_temperature_from_peak",
     "archard_wear_volume",
     "archard_wear_depth",
     "sliding_distance_for_wear_depth",
