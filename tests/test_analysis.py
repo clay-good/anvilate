@@ -12935,3 +12935,44 @@ def test_rc_reinforcement_limits_bracket_the_example_beam():
     assert as_max.to("mm**2").magnitude == pytest.approx(3141, abs=2)
     # The 1500 mm² example beam sits between the limits — adequate and ductile.
     assert as_min.to("mm**2").magnitude < 1500 < as_max.to("mm**2").magnitude
+
+
+def test_lumped_capacitance_transient_cooling():
+    from anvilate.analysis import (
+        biot_number,
+        lumped_capacitance_cooling_time,
+        lumped_capacitance_time_constant,
+    )
+
+    # A steel part: Bi = h*L_c/k = 20*0.005/50 = 0.002 << 0.1 -> lumped model valid.
+    bi = biot_number(
+        heat_transfer_coefficient=_q("20 W/(m**2*K)"),
+        characteristic_length=_q("5 mm"),
+        thermal_conductivity=_q("50 W/(m*K)"),
+    )
+    assert bi == pytest.approx(0.002, rel=1e-9)
+    assert bi < 0.1
+    # tau = rho*V*c_p/(h*A) ~ 903 s.
+    tau = lumped_capacitance_time_constant(
+        density=_q("7850 kg/m**3"),
+        volume=_q("1e-4 m**3"),
+        specific_heat=_q("460 J/(kg*K)"),
+        heat_transfer_coefficient=_q("20 W/(m**2*K)"),
+        surface_area=_q("0.02 m**2"),
+    )
+    assert tau.to("s").magnitude == pytest.approx(7850 * 1e-4 * 460 / (20 * 0.02), rel=1e-9)
+    # Cooling from 100 K to 10 K excess takes tau*ln(10) ~ 2079 s.
+    from math import log as _log
+
+    t = lumped_capacitance_cooling_time(
+        initial_excess_temperature=_q("100 K"),
+        target_excess_temperature=_q("10 K"),
+        time_constant=tau,
+    )
+    assert t.to("s").magnitude == pytest.approx(tau.to("s").magnitude * _log(10), rel=1e-9)
+    with pytest.raises(ValueError, match="must be below initial"):
+        lumped_capacitance_cooling_time(
+            initial_excess_temperature=_q("10 K"),
+            target_excess_temperature=_q("100 K"),
+            time_constant=tau,
+        )

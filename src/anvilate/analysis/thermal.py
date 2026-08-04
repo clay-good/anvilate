@@ -57,6 +57,9 @@ __all__ = [
     "crossflow_both_unmixed_effectiveness",
     "counterflow_ntu_for_effectiveness",
     "parallel_flow_ntu_for_effectiveness",
+    "biot_number",
+    "lumped_capacitance_time_constant",
+    "lumped_capacitance_cooling_time",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -1241,3 +1244,99 @@ def parallel_flow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio:
             f"1/(1+C_r); got {effectiveness}"
         )
     return -log(1.0 - effectiveness * (1.0 + capacity_ratio)) / (1.0 + capacity_ratio)
+
+
+def biot_number(
+    *,
+    heat_transfer_coefficient: Quantity,
+    characteristic_length: Quantity,
+    thermal_conductivity: Quantity,
+) -> float:
+    """The Biot number Bi = h·L_c/k — whether a body cools as one lump.
+
+    The ratio of a body's internal conduction resistance to its surface convection
+    resistance. When Bi < 0.1 the inside stays nearly uniform in temperature as the
+    body heats or cools, so the lumped-capacitance model (a single temperature vs
+    time) applies; above that an internal gradient develops and a distributed solution
+    is needed. ``characteristic_length`` L_c is the volume-to-surface-area ratio V/A,
+    ``heat_transfer_coefficient`` h the surface coefficient, and
+    ``thermal_conductivity`` k the body's. Returns the dimensionless Bi.
+    """
+    _require(
+        heat_transfer_coefficient,
+        "[power] / [length]**2 / [temperature]",
+        "heat_transfer_coefficient",
+    )
+    _require(characteristic_length, "[length]", "characteristic_length")
+    _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
+    h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
+    lc = characteristic_length.to("m").magnitude
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    if h <= 0 or lc <= 0 or k <= 0:
+        raise ValueError("all inputs must be positive")
+    return h * lc / k
+
+
+def lumped_capacitance_time_constant(
+    *,
+    density: Quantity,
+    volume: Quantity,
+    specific_heat: Quantity,
+    heat_transfer_coefficient: Quantity,
+    surface_area: Quantity,
+) -> Quantity:
+    """The lumped-capacitance thermal time constant τ = ρ·V·c_p/(h·A) (seconds).
+
+    How fast a body (small Biot number — see :func:`biot_number`) responds to a step
+    change in its surroundings: its temperature difference from the ambient decays as
+    exp(−t/τ), reaching 63% of the change in one τ. ``density`` ρ, ``volume`` V, and
+    ``specific_heat`` c_p are the body's thermal mass; ``heat_transfer_coefficient`` h
+    and ``surface_area`` A its heat-loss path. A heavy, insulated body has a long τ (it
+    coasts through temperature swings); a light, well-cooled one a short τ. Returns τ
+    in seconds.
+    """
+    _require(density, "[mass] / [length]**3", "density")
+    _require(volume, "[length]**3", "volume")
+    _require(specific_heat, "[energy] / [mass] / [temperature]", "specific_heat")
+    _require(
+        heat_transfer_coefficient,
+        "[power] / [length]**2 / [temperature]",
+        "heat_transfer_coefficient",
+    )
+    _require(surface_area, "[area]", "surface_area")
+    rho = density.to("kg/m**3").magnitude
+    v = volume.to("m**3").magnitude
+    cp = specific_heat.to("J/(kg*K)").magnitude
+    h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
+    a = surface_area.to("m**2").magnitude
+    if min(rho, v, cp, h, a) <= 0:
+        raise ValueError("all inputs must be positive")
+    return Quantity(magnitude=rho * v * cp / (h * a), unit="s")
+
+
+def lumped_capacitance_cooling_time(
+    *,
+    initial_excess_temperature: Quantity,
+    target_excess_temperature: Quantity,
+    time_constant: Quantity,
+) -> Quantity:
+    """The time t = τ·ln(θ_0/θ) for a lumped body to cool to a target (seconds).
+
+    Inverting the exponential decay θ(t) = θ_0·exp(−t/τ): the time for the body's
+    excess temperature over the ambient to fall from ``initial_excess_temperature`` θ_0
+    to ``target_excess_temperature`` θ, given the ``time_constant`` τ from
+    :func:`lumped_capacitance_time_constant`. Both excess temperatures are differences
+    over the ambient (kelvin), with the target below the initial. Returns the time in
+    seconds.
+    """
+    _require(initial_excess_temperature, "[temperature]", "initial_excess_temperature")
+    _require(target_excess_temperature, "[temperature]", "target_excess_temperature")
+    _require(time_constant, "[time]", "time_constant")
+    theta_0 = initial_excess_temperature.to("K").magnitude
+    theta = target_excess_temperature.to("K").magnitude
+    tau = time_constant.to("s").magnitude
+    if theta_0 <= 0 or theta <= 0 or tau <= 0:
+        raise ValueError("the excess temperatures and time constant must be positive")
+    if theta >= theta_0:
+        raise ValueError("target_excess_temperature must be below initial_excess_temperature")
+    return Quantity(magnitude=tau * log(theta_0 / theta), unit="s")
