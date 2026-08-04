@@ -6775,6 +6775,31 @@ def test_clamped_circular_cover_thickness_inverts_the_rim_stress():
     assert stress.to("MPa").magnitude == pytest.approx(100.0, rel=1e-6)
 
 
+def test_base_plate_thickness_inverts_the_bending_stress():
+    from anvilate.analysis import base_plate_thickness_for_bearing
+
+    # f_p = 6.25 MPa under an 80 mm cantilever within 250 MPa yield:
+    #   t = l*sqrt(3*f_p/Fy) = 80*sqrt(3*6.25/250) = 21.91 mm.
+    t = base_plate_thickness_for_bearing(
+        bearing_pressure=_q("6.25 MPa"),
+        cantilever_length=_q("80 mm"),
+        allowable_stress=_q("250 MPa"),
+    )
+    assert t.to("mm").magnitude == pytest.approx(80 * (3 * 6.25 / 250) ** 0.5, rel=1e-9)
+    # A plate of exactly this thickness is worked to the yield: sigma = 3*f_p*l^2/t^2.
+    tv = t.to("mm").magnitude
+    sigma = 3 * 6.25 * 80**2 / tv**2
+    assert sigma == pytest.approx(250.0, rel=1e-9)
+    # Thickness scales with the square root of the required margin.
+    with_sf = base_plate_thickness_for_bearing(
+        bearing_pressure=_q("6.25 MPa"),
+        cantilever_length=_q("80 mm"),
+        allowable_stress=_q("250 MPa"),
+        required_safety_factor=2.0,
+    )
+    assert with_sf.to("mm").magnitude == pytest.approx(2.0**0.5 * tv, rel=1e-9)
+
+
 def test_clamped_circular_cover_thickness_scales_with_sqrt_margin():
     base = clamped_circular_plate_thickness_for_pressure(
         pressure=_q("1 MPa"), diameter=_q("300 mm"), allowable_stress=_q("100 MPa")

@@ -46,6 +46,7 @@ __all__ = [
     "simply_supported_annular_plate_uniform_load",
     "clamped_annular_plate_uniform_load",
     "clamped_circular_plate_thickness_for_pressure",
+    "base_plate_thickness_for_bearing",
     "plate_buckling_stress",
     "plate_shear_buckling_coefficient",
     "plate_compression_buckling_coefficient",
@@ -464,6 +465,45 @@ def clamped_circular_plate_thickness_for_pressure(
     if sigma <= 0:
         raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
     t_min = radius * sqrt(3 * required_safety_factor * q / (4 * sigma))
+    return Quantity(magnitude=t_min, unit="mm")
+
+
+def base_plate_thickness_for_bearing(
+    *,
+    bearing_pressure: Quantity,
+    cantilever_length: Quantity,
+    allowable_stress: Quantity,
+    required_safety_factor: float = 1.0,
+) -> Quantity:
+    """The least thickness of a column base plate to hold its bearing pressure in bending.
+
+    A base plate spreads a column's load onto the concrete below, and the plate bends as
+    a cantilever of length l from the column face out to the plate edge, carrying the
+    uniform bearing pressure f_p. That cantilever raises an extreme-fibre stress
+    σ = 3·f_p·l²/t² (moment f_p·l²/2 over the section modulus t²/6); the sizing inverse
+    demands it stay within σ_allow/n, giving t_min = l·√(3·n·f_p/σ_allow). ``bearing_pressure``
+    f_p is the pressure under the plate (the column load over the plate area, or the
+    concrete-bearing result), ``cantilever_length`` l the governing overhang (the larger of
+    the AISC Design Guide 1 dimensions m, n, and λn'), ``allowable_stress`` σ_allow the
+    plate's yield, and ``required_safety_factor`` n the margin on it. This is the sizing
+    complement to the plate-bending stress the structural pack screens. Returns the
+    minimum thickness in mm.
+    """
+    _require(bearing_pressure, "[pressure]", "bearing_pressure")
+    _require(cantilever_length, "[length]", "cantilever_length")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if required_safety_factor <= 0:
+        raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
+    f_p = bearing_pressure.to("MPa").magnitude
+    length = cantilever_length.to("mm").magnitude
+    sigma = allowable_stress.to("MPa").magnitude
+    if f_p <= 0:
+        raise ValueError(f"bearing_pressure must be positive; got {bearing_pressure}")
+    if length <= 0:
+        raise ValueError(f"cantilever_length must be positive; got {cantilever_length}")
+    if sigma <= 0:
+        raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+    t_min = length * sqrt(3 * required_safety_factor * f_p / sigma)
     return Quantity(magnitude=t_min, unit="mm")
 
 

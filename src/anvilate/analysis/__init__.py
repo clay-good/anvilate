@@ -689,6 +689,7 @@ from .o_ring import (
 from .plate import (
     DEFAULT_POISSON_RATIO,
     PlateBendingResult,
+    base_plate_thickness_for_bearing,
     clamped_annular_plate_uniform_load,
     clamped_circular_plate_center_load_deflection,
     clamped_circular_plate_thickness_for_pressure,
@@ -1386,6 +1387,7 @@ __all__ = [
     "simply_supported_annular_plate_uniform_load",
     "clamped_annular_plate_uniform_load",
     "clamped_circular_plate_thickness_for_pressure",
+    "base_plate_thickness_for_bearing",
     "plate_buckling_stress",
     "plate_shear_buckling_coefficient",
     "plate_compression_buckling_coefficient",
