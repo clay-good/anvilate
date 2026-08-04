@@ -515,6 +515,18 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_office_lighting_layout_example_installed_grid_clears_target():
+    namespace = runpy.run_path(str(_EXAMPLES / "office_lighting_layout.py"))
+    r = namespace["lighting_layout"]()
+    # The lumen-method inverse asks for ~19; the 5x4 grid of 20 clears 400 lux with margin.
+    assert r["required_count"] == pytest.approx(19.0, abs=0.5)
+    assert r["installed_count"] == 20
+    assert r["achieved_lux"] > 400.0
+    # High-bay point source: brightest directly below, dimmer offset to the side.
+    assert r["highbay_below_lux"] == pytest.approx(555.6, abs=1.0)
+    assert r["highbay_offset_lux"] < r["highbay_below_lux"]
+
+
 def test_motor_feeder_voltage_drop_example_bigger_conductor_passes():
     namespace = runpy.run_path(str(_EXAMPLES / "motor_feeder_voltage_drop.py"))
     f = namespace["feeder_check"]()

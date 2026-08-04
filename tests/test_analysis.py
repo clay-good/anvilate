@@ -13301,6 +13301,61 @@ def test_acoustics_sabine_reverberation_time():
         sabine_reverberation_time(volume=_q("0 m**3"), total_absorption=_q("20 m**2"))
 
 
+def test_illumination_point_source_and_lumen_method():
+    import math
+
+    from anvilate.analysis import (
+        lumen_method_illuminance,
+        lumen_method_luminaire_count,
+        point_source_illuminance,
+    )
+
+    # Point source E = I*cos(theta)/d^2. 1000 cd at 2 m, head-on -> 250 lux.
+    e = point_source_illuminance(luminous_intensity=_q("1000 cd"), distance=_q("2 m"))
+    assert e.to("lux").magnitude == pytest.approx(250.0, rel=1e-9)
+    # A 60-degree tilt halves it (cos 60 = 0.5).
+    tilted = point_source_illuminance(
+        luminous_intensity=_q("1000 cd"), distance=_q("2 m"), incidence_angle=math.radians(60)
+    )
+    assert tilted.to("lux").magnitude == pytest.approx(125.0, rel=1e-9)
+
+    # Lumen method E = n*phi*CU*LLF/A. 20 x 3000 lm, CU 0.6, LLF 0.8, 100 m^2 -> 288 lux.
+    room = lumen_method_illuminance(
+        luminaire_count=20,
+        lumens_per_luminaire=_q("3000 lumen"),
+        coefficient_of_utilization=0.6,
+        light_loss_factor=0.8,
+        area=_q("100 m**2"),
+    )
+    assert room.to("lux").magnitude == pytest.approx(288.0, rel=1e-9)
+
+    # The inverse returns the exact fractional count for a target; round-trips.
+    n = lumen_method_luminaire_count(
+        target_illuminance=_q("288 lux"),
+        area=_q("100 m**2"),
+        lumens_per_luminaire=_q("3000 lumen"),
+        coefficient_of_utilization=0.6,
+        light_loss_factor=0.8,
+    )
+    assert n == pytest.approx(20.0, rel=1e-9)
+
+    # Guards: dimensions and coefficient range.
+    with pytest.raises(ValueError, match="length"):
+        point_source_illuminance(luminous_intensity=_q("1000 cd"), distance=_q("2 m**2"))
+    with pytest.raises(ValueError, match="within"):
+        point_source_illuminance(
+            luminous_intensity=_q("1000 cd"), distance=_q("2 m"), incidence_angle=2.0
+        )
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        lumen_method_illuminance(
+            luminaire_count=20,
+            lumens_per_luminaire=_q("3000 lumen"),
+            coefficient_of_utilization=1.2,
+            light_loss_factor=0.8,
+            area=_q("100 m**2"),
+        )
+
+
 def test_electrical_three_phase_power_current_and_voltage_drop():
     import math
 
