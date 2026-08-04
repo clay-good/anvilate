@@ -13495,6 +13495,33 @@ def test_masonry_combined_stress_ratio_governs_over_either_alone():
         masonry_allowable_flexural_stress(masonry_strength=_q("-1 MPa"))
 
 
+def test_rankine_passive_pressure_cohesive():
+    import math
+
+    from anvilate.analysis import (
+        rankine_active_pressure_cohesive,
+        rankine_passive_pressure_cohesive,
+    )
+
+    # sigma_p = K_p*gamma*z + 2c*sqrt(K_p); phi=30, K_p=tan^2(60)=3, c=15, gamma=18, z=2.
+    k_p = math.tan(math.radians(60)) ** 2
+    sp = rankine_passive_pressure_cohesive(
+        depth=_q("2 m"), unit_weight=_q("18 kN/m**3"), friction_angle=30.0, cohesion=_q("15 kPa")
+    )
+    assert sp.to("kPa").magnitude == pytest.approx(k_p * 18 * 2 + 2 * 15 * math.sqrt(k_p), rel=1e-9)
+    # Cohesion ADDS to passive (unlike active, where it subtracts), so passive dwarfs active.
+    sa = rankine_active_pressure_cohesive(
+        depth=_q("2 m"), unit_weight=_q("18 kN/m**3"), friction_angle=30.0, cohesion=_q("15 kPa")
+    )
+    assert sp.to("kPa").magnitude > sa.to("kPa").magnitude
+    assert sp.to("kPa").magnitude > 0
+    # Even at the surface (z=0) passive pressure is positive from the cohesion term.
+    surface = rankine_passive_pressure_cohesive(
+        depth=_q("0 m"), unit_weight=_q("18 kN/m**3"), friction_angle=30.0, cohesion=_q("15 kPa")
+    )
+    assert surface.to("kPa").magnitude == pytest.approx(2 * 15 * math.sqrt(k_p), rel=1e-9)
+
+
 def test_rankine_sloped_backfill_coefficient():
     import math
 

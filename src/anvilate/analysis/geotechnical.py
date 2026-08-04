@@ -51,6 +51,7 @@ __all__ = [
     "pile_skin_friction_capacity",
     "rankine_active_pressure_cohesive",
     "rankine_earth_pressure_coefficient",
+    "rankine_passive_pressure_cohesive",
     "rankine_lateral_thrust",
     "rankine_sloped_backfill_coefficient",
     "tension_crack_depth",
@@ -141,6 +142,37 @@ def rankine_active_pressure_cohesive(
     k_a = rankine_earth_pressure_coefficient(friction_angle=friction_angle)
     sigma_a = k_a * gamma * z - 2.0 * c * sqrt(k_a)
     return Quantity(magnitude=sigma_a, unit="kPa")
+
+
+def rankine_passive_pressure_cohesive(
+    *,
+    depth: Quantity,
+    unit_weight: Quantity,
+    friction_angle: float,
+    cohesion: Quantity,
+) -> Quantity:
+    """The Rankine passive earth pressure in a cohesive (c-φ) soil, σ_p = K_p·γ·z + 2c·√K_p.
+
+    The resistance a soil offers when a structure pushes *into* it — the toe of a retaining wall, an
+    anchor block, the buried face of a sheet pile. Here cohesion *adds* to the pressure (the soil
+    clings together as it is compressed): σ_p = K_p·γ·z + 2c·√K_p, from the ``depth`` z,
+    ``unit_weight`` γ, ``friction_angle`` φ (giving the passive K_p), and ``cohesion`` c. Passive
+    pressure is much larger than active — often an order of magnitude — which is why the passive toe
+    can anchor a wall, though it is frequently discounted because it needs large movement to
+    mobilize. Returns σ_p in kPa; multiply by area for the resisting force.
+    """
+    _require(depth, "[length]", "depth")
+    _require(unit_weight, "[force]/[length]**3", "unit_weight")
+    _require(cohesion, "[pressure]", "cohesion")
+    _check_friction_angle(friction_angle)
+    z = depth.to("m").magnitude
+    gamma = unit_weight.to("kN/m**3").magnitude
+    c = cohesion.to("kPa").magnitude
+    if z < 0 or gamma <= 0 or c < 0:
+        raise ValueError("depth non-negative, unit_weight positive, cohesion non-negative")
+    k_p = rankine_earth_pressure_coefficient(friction_angle=friction_angle, passive=True)
+    sigma_p = k_p * gamma * z + 2.0 * c * sqrt(k_p)
+    return Quantity(magnitude=sigma_p, unit="kPa")
 
 
 def tension_crack_depth(

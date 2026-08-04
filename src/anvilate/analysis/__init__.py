@@ -322,7 +322,7 @@ modules:
   matrix properties and volume fraction
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
-  (with the cohesive-soil active pressure and its tension-crack depth, and the
+  (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
   sloped-backfill coefficient for an embankment behind the wall),
   the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing (with
   Vesić shape and depth factors and Meyerhof load-inclination factors that correct it for
@@ -822,6 +822,7 @@ from .geotechnical import (
     rankine_active_pressure_cohesive,
     rankine_earth_pressure_coefficient,
     rankine_lateral_thrust,
+    rankine_passive_pressure_cohesive,
     rankine_sloped_backfill_coefficient,
     retaining_wall_overturning_factor,
     retaining_wall_sliding_factor,
@@ -1279,6 +1280,7 @@ __all__ = [
     "rankine_active_pressure_cohesive",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
+    "rankine_passive_pressure_cohesive",
     "rankine_sloped_backfill_coefficient",
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
