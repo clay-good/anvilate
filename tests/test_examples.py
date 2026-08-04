@@ -162,6 +162,19 @@ def test_beam_bearing_web_checks_example_is_governed_by_crippling():
     assert crippling == pytest.approx(212.6, abs=0.5)
 
 
+def test_plate_girder_design_example_shows_web_penalty_and_shear_reserve():
+    namespace = runpy.run_path(str(_EXAMPLES / "plate_girder_design.py"))
+    caps = namespace["girder_capacities"]()
+    r_pg = caps["bending_reduction"].magnitude
+    # The slender web penalizes bending (R_pg < 1) ...
+    assert 0.9 < r_pg < 1.0
+    assert caps["moment"].to("kN*m").magnitude == pytest.approx(3884, abs=20)
+    # ... but stiffening it mobilizes tension-field action for a large shear reserve.
+    stiffened = caps["stiffened_shear"].to("kN").magnitude
+    unstiffened = caps["unstiffened_shear"].to("kN").magnitude
+    assert stiffened > 1.5 * unstiffened
+
+
 def test_bolted_tension_splice_example_is_governed_by_block_shear():
     namespace = runpy.run_path(str(_EXAMPLES / "bolted_tension_splice.py"))
     caps = namespace["splice_capacities"]()
