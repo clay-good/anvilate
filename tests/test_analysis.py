@@ -4733,6 +4733,33 @@ def test_thin_open_strip_torsion_constant_is_b_t_cubed_over_three():
     assert j.to("mm**4").magnitude == pytest.approx(4166.667, rel=1e-5)
 
 
+def test_open_section_torsion_constant_sums_the_legs():
+    from anvilate.analysis import open_section_torsion_constant, thin_open_strip_torsion_constant
+
+    # A W-shape: two 200x20 flanges + a 200x10 web -> J = 2*(200*20^3/3) + 200*10^3/3.
+    j = open_section_torsion_constant(
+        rectangles=[
+            (_q("200 mm"), _q("20 mm")),
+            (_q("200 mm"), _q("20 mm")),
+            (_q("200 mm"), _q("10 mm")),
+        ]
+    )
+    expect = 2 * (200 * 20**3 / 3) + 200 * 10**3 / 3
+    assert j.to("mm**4").magnitude == pytest.approx(expect, rel=1e-9)
+    # It is exactly the sum of each leg's own single-strip J.
+    legs = sum(
+        thin_open_strip_torsion_constant(width=w, thickness=t).to("mm**4").magnitude
+        for w, t in [
+            (_q("200 mm"), _q("20 mm")),
+            (_q("200 mm"), _q("20 mm")),
+            (_q("200 mm"), _q("10 mm")),
+        ]
+    )
+    assert j.to("mm**4").magnitude == pytest.approx(legs, rel=1e-12)
+    with pytest.raises(ValueError, match="non-empty"):
+        open_section_torsion_constant(rectangles=[])
+
+
 def test_thin_open_strip_torsional_stress_matches_worked_example():
     # 50 N*m on the 100x5 strip: tau = 3T/(b*t^2) = 3*50000/(100*25) = 60 MPa,
     # and this equals the T*t/J identity.

@@ -612,6 +612,7 @@ torsion.shaft_torsional_stress
 torsion.shaft_twist_angle
 torsion.shaft_von_mises_stress
 torsion.thin_closed_tube_torsional_stress
+torsion.open_section_torsion_constant
 torsion.thin_open_strip_torsion_constant
 torsion.thin_open_strip_torsional_stress
 torsion.thin_open_strip_twist_angle

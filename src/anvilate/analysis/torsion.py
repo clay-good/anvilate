@@ -21,6 +21,7 @@ arithmetic runs through Pint.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import pi, sqrt
 
 from ..units import Quantity
@@ -44,6 +45,7 @@ __all__ = [
     "rectangular_tube_torsional_stress",
     "rectangular_tube_twist_angle",
     "thin_open_strip_torsion_constant",
+    "open_section_torsion_constant",
     "thin_open_strip_torsional_stress",
     "thin_open_strip_twist_angle",
     "rectangular_bar_torsion_constant",
@@ -592,6 +594,33 @@ def thin_open_strip_torsion_constant(*, width: Quantity, thickness: Quantity) ->
     """
     b, t = _thin_open_strip_dims(width, thickness)
     return Quantity(magnitude=b * t**3 / 3, unit="mm**4")
+
+
+def open_section_torsion_constant(
+    *,
+    rectangles: Sequence[tuple[Quantity, Quantity]],
+) -> Quantity:
+    """The Saint-Venant torsion constant J = Σ(b·t³/3) of a built-up thin open section.
+
+    An open section built from rectangular elements — an I-shape (two flanges + a web), a
+    channel, an angle, a zee — carries torsion only across its thin walls, and its torsion
+    constant is the sum of each leg's own b·t³/3 (:func:`thin_open_strip_torsion_constant`).
+    ``rectangles`` is a sequence of ``(long_dimension, thickness)`` pairs, one per leg (for a
+    W-shape: each flange as (flange_width, flange_thickness) and the web as (web_height,
+    web_thickness)). This is the J the lateral-torsional-buckling and open-section-twist
+    checks consume; it is a thin-wall estimate, so a rolled shape with generous fillets runs
+    perhaps 10% higher than this (use the section table's J when you have it). Returns J in
+    mm⁴.
+    """
+    if not rectangles:
+        raise ValueError("rectangles must be a non-empty sequence")
+    total = 0.0
+    for i, rect in enumerate(rectangles):
+        if len(rect) != 2:
+            raise ValueError(f"rectangles[{i}] must be a (long_dimension, thickness) pair")
+        b, t = _thin_open_strip_dims(rect[0], rect[1])
+        total += b * t**3 / 3.0
+    return Quantity(magnitude=total, unit="mm**4")
 
 
 def thin_open_strip_torsional_stress(
