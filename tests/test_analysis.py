@@ -13538,6 +13538,42 @@ def test_pump_specific_speed_classifies_the_duty():
         )
 
 
+def test_hydrostatic_pressure_and_force():
+    from anvilate.analysis import hydrostatic_force_on_plane, hydrostatic_pressure
+
+    # p = rho*g*h = 1000*9.80665*3 = 29.42 kPa.
+    p = hydrostatic_pressure(depth=_q("3 m"), density=_q("1000 kg/m**3"))
+    assert p.to("kPa").magnitude == pytest.approx(1000 * 9.80665 * 3 / 1000, rel=1e-9)
+    # F = rho*g*h_c*A on a 2x3 m gate (h_c=1.5, A=6) = 88.26 kN.
+    f = hydrostatic_force_on_plane(
+        density=_q("1000 kg/m**3"), centroid_depth=_q("1.5 m"), area=_q("6 m**2")
+    )
+    assert f.to("kN").magnitude == pytest.approx(1000 * 9.80665 * 1.5 * 6 / 1000, rel=1e-9)
+    # Pressure at the surface is zero gauge.
+    assert (
+        hydrostatic_pressure(depth=_q("0 m"), density=_q("1000 kg/m**3")).to("kPa").magnitude == 0
+    )
+    with pytest.raises(ValueError, match="positive"):
+        hydrostatic_pressure(depth=_q("3 m"), density=_q("0 kg/m**3"))
+
+
+def test_center_of_pressure_below_centroid_and_buoyancy():
+    from anvilate.analysis import buoyant_force, center_of_pressure_depth
+
+    # Surface-piercing vertical rectangle: I_c = b*h^3/12 = 2*27/12 = 4.5 m^4;
+    # h_cp = h_c + I_c/(h_c*A) = 1.5 + 4.5/(1.5*6) = 2.0 m = 2/3 of the 3 m depth.
+    y_cp = center_of_pressure_depth(
+        centroid_depth=_q("1.5 m"), area=_q("6 m**2"), second_moment=_q("4.5 m**4")
+    )
+    assert y_cp.to("m").magnitude == pytest.approx(2.0, rel=1e-9)
+    assert y_cp.to("m").magnitude > 1.5  # always below the centroid
+    # Archimedes: F_b = rho*g*V = 1000*9.80665*0.5 = 4.903 kN.
+    f_b = buoyant_force(displaced_volume=_q("0.5 m**3"), fluid_density=_q("1000 kg/m**3"))
+    assert f_b.to("kN").magnitude == pytest.approx(1000 * 9.80665 * 0.5 / 1000, rel=1e-9)
+    with pytest.raises(ValueError, match="positive"):
+        buoyant_force(displaced_volume=_q("0 m**3"), fluid_density=_q("1000 kg/m**3"))
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 

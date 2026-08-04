@@ -286,6 +286,17 @@ def test_pump_selection_from_line_example_chains_to_a_motor():
     assert d["specific_speed"] < 1.0
 
 
+def test_submerged_gate_hinge_example_center_of_pressure_below_centroid():
+    namespace = runpy.run_path(str(_EXAMPLES / "submerged_gate_hinge.py"))
+    g = namespace["gate_loads"]()
+    assert g["base_pressure_kpa"] == pytest.approx(29.4, abs=0.2)
+    assert g["force_kn"] == pytest.approx(88.3, abs=0.5)
+    # The resultant acts at two-thirds of the depth for a surface-piercing gate — below the
+    # centroid, the whole point of the check.
+    assert g["center_of_pressure_m"] == pytest.approx(2.0, abs=0.01)
+    assert g["center_of_pressure_m"] > g["centroid_depth_m"]
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

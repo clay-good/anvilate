@@ -331,6 +331,10 @@ flywheel.rotating_solid_disc_tangential_stress
 fourbar.fourbar_transmission_angle
 fourbar.fourbar_type
 fourbar.is_grashof
+fluid_statics.buoyant_force
+fluid_statics.center_of_pressure_depth
+fluid_statics.hydrostatic_force_on_plane
+fluid_statics.hydrostatic_pressure
 fracture.critical_crack_length
 fracture.paris_law_crack_growth_rate
 fracture.crack_tip_plastic_zone_size

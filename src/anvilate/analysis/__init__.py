@@ -112,6 +112,9 @@ modules:
 - :mod:`~anvilate.analysis.hydraulic_cylinder` — fluid-cylinder actuator sizing:
   the extend and retract force (bore vs annular area), the extend and retract speed
   from the supply flow, and the rod-side pressure intensification of a blocked stroke
+- :mod:`~anvilate.analysis.fluid_statics` — fluid statics: the hydrostatic pressure
+  ρ·g·h, the resultant force on a submerged plane surface and its center-of-pressure
+  depth, and the Archimedes buoyant force on a submerged body
 - :mod:`~anvilate.analysis.pipe_flow` — incompressible pipe hydraulics: the Reynolds
   number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
   Darcy-Weisbach friction head loss and fitting minor losses, and the pressure drop
@@ -648,6 +651,12 @@ from .fatigue import (
     weld_size_corrected_detail_category,
     weld_size_effect_factor,
 )
+from .fluid_statics import (
+    buoyant_force,
+    center_of_pressure_depth,
+    hydrostatic_force_on_plane,
+    hydrostatic_pressure,
+)
 from .flywheel import (
     coefficient_of_fluctuation,
     flywheel_energy_fluctuation,
@@ -1155,6 +1164,10 @@ __all__ = [
     "minor_loss_head",
     "pipe_pressure_drop",
     "reynolds_number",
+    "buoyant_force",
+    "center_of_pressure_depth",
+    "hydrostatic_force_on_plane",
+    "hydrostatic_pressure",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",
