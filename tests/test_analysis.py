@@ -12882,6 +12882,52 @@ def test_nds_column_stability_factor_ylinen_and_euler_stress():
         )
 
 
+def test_aluminum_buckling_stress_two_regions():
+    import math
+
+    from anvilate.analysis import aluminum_buckling_stress
+
+    kw = {
+        "intercept": _q("267 MPa"),
+        "slope": _q("1.63 MPa"),
+        "intersection_slenderness": 66.0,
+        "elastic_modulus": _q("69600 MPa"),
+    }
+    # Inelastic straight line (lambda = 40 < C = 66): F = B - D*lambda = 201.8 MPa.
+    inelastic = aluminum_buckling_stress(slenderness=40.0, **kw)
+    assert inelastic.to("MPa").magnitude == pytest.approx(267 - 1.63 * 40, rel=1e-9)
+    # Elastic Euler curve (lambda = 80 > C): F = pi^2*E/lambda^2 = 107.3 MPa.
+    elastic = aluminum_buckling_stress(slenderness=80.0, **kw)
+    assert elastic.to("MPa").magnitude == pytest.approx(math.pi**2 * 69600 / 80**2, rel=1e-9)
+    assert elastic.to("MPa").magnitude < inelastic.to("MPa").magnitude
+    # The two branches are near-continuous at the intersection C.
+    at_c = aluminum_buckling_stress(slenderness=66.0, **kw)
+    just_past = aluminum_buckling_stress(slenderness=66.01, **kw)
+    assert at_c.to("MPa").magnitude == pytest.approx(just_past.to("MPa").magnitude, abs=3)
+
+
+def test_aluminum_tension_stress_lesser_of_yield_and_rupture():
+    from anvilate.analysis import aluminum_tension_stress
+
+    # k_t = 1.0: yield governs (240 < 260).
+    yield_governs = aluminum_tension_stress(
+        yield_strength=_q("240 MPa"), ultimate_strength=_q("260 MPa")
+    )
+    assert yield_governs.to("MPa").magnitude == pytest.approx(240.0, rel=1e-9)
+    # k_t = 1.25 derates rupture below yield, so rupture governs (260/1.25 = 208).
+    rupture_governs = aluminum_tension_stress(
+        yield_strength=_q("240 MPa"),
+        ultimate_strength=_q("260 MPa"),
+        tension_coefficient=1.25,
+    )
+    assert rupture_governs.to("MPa").magnitude == pytest.approx(260 / 1.25, rel=1e-9)
+    assert rupture_governs.to("MPa").magnitude < yield_governs.to("MPa").magnitude
+    with pytest.raises(ValueError, match="at least 1.0"):
+        aluminum_tension_stress(
+            yield_strength=_q("240 MPa"), ultimate_strength=_q("260 MPa"), tension_coefficient=0.9
+        )
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 

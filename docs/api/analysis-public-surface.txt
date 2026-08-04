@@ -8,6 +8,8 @@
 adhesive.cylindrical_bond_axial_capacity
 adhesive.cylindrical_bond_torque_capacity
 adhesive.lap_joint_average_shear_stress
+aluminum.aluminum_buckling_stress
+aluminum.aluminum_tension_stress
 axial.axial_elongation
 axial.axial_stiffness
 axial.axial_stress

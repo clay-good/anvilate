@@ -268,6 +268,10 @@ modules:
 - :mod:`~anvilate.analysis.cold_formed_steel` — the AISI S100 effective-width method
   (Winter): the plate slenderness λ that decides whether a thin compression element is
   fully effective, and the reduced effective width above the limit
+- :mod:`~anvilate.analysis.aluminum` — Aluminum Design Manual member checks: the
+  unified straight-line/Euler buckling stress from the alloy-temper's buckling
+  constants (column, beam, or local buckling), and the tension stress F = min(F_ty,
+  F_tu/k_t)
 
 Note: :mod:`~anvilate.analysis.pressure_vessel` also carries the ASME VIII head forms
 (ellipsoidal, torispherical, hemispherical/sphere — each sizing and MAWP) and the
@@ -284,6 +288,10 @@ from .adhesive import (
     cylindrical_bond_axial_capacity,
     cylindrical_bond_torque_capacity,
     lap_joint_average_shear_stress,
+)
+from .aluminum import (
+    aluminum_buckling_stress,
+    aluminum_tension_stress,
 )
 from .axial import (
     axial_elongation,
@@ -1041,6 +1049,8 @@ from .worm import (
 
 __all__ = [
     "DEFAULT_POISSON_RATIO",
+    "aluminum_buckling_stress",
+    "aluminum_tension_stress",
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",

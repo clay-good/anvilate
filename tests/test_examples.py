@@ -183,6 +183,16 @@ def test_gear_shaft_assembly_example_sizes_three_subsystems():
     assert result["bearing_life_hours"] > 50000
 
 
+def test_aluminum_ladder_rail_example_is_buckling_governed():
+    namespace = runpy.run_path(str(_EXAMPLES / "aluminum_ladder_rail.py"))
+    r = namespace["rail_strengths"]()
+    # Aluminum's low modulus makes the slender strut buckle far below the material
+    # strength it reaches in tension.
+    assert r["buckling_stress_mpa"] < r["tension_stress_mpa"]
+    assert r["buckling_stress_mpa"] == pytest.approx(107, abs=3)
+    assert r["tension_stress_mpa"] == pytest.approx(240, abs=1)
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()
