@@ -39,6 +39,9 @@ __all__ = [
     "consolidation_time_factor",
     "eccentric_base_pressure",
     "infinite_slope_factor_of_safety",
+    "pile_allowable_capacity",
+    "pile_end_bearing_capacity",
+    "pile_skin_friction_capacity",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
     "retaining_wall_overturning_factor",
@@ -451,3 +454,85 @@ def vertical_stress_increase_2to1(
         raise ValueError("depth must be non-negative")
     delta_sigma = q0 * b * lo / ((b + z) * (lo + z))
     return Quantity(magnitude=delta_sigma, unit="kPa")
+
+
+def pile_skin_friction_capacity(
+    *,
+    adhesion_factor: float,
+    undrained_shear_strength: Quantity,
+    diameter: Quantity,
+    length: Quantity,
+) -> Quantity:
+    """The shaft (skin-friction) capacity of a pile in clay by the α-method.
+
+    A pile carries much of its load in friction along its shaft. The α-method sets that unit
+    friction as a fraction of the soil's strength, f_s = α·c_u, and integrates it over the shaft
+    surface: Q_s = α·c_u·(π·D·L). ``adhesion_factor`` α (about 1.0 for soft clay down toward 0.5
+    for stiff), ``undrained_shear_strength`` c_u, ``diameter`` D, and embedded ``length`` L. For a
+    slender pile this term usually dominates the end bearing — see
+    :func:`pile_end_bearing_capacity`. Returns the shaft capacity in kN.
+    """
+    _require(undrained_shear_strength, "[pressure]", "undrained_shear_strength")
+    _require(diameter, "[length]", "diameter")
+    _require(length, "[length]", "length")
+    cu = undrained_shear_strength.to("kPa").magnitude
+    d = diameter.to("m").magnitude
+    lo = length.to("m").magnitude
+    if not 0.0 < adhesion_factor <= 1.0:
+        raise ValueError(f"adhesion_factor must be in (0, 1]; got {adhesion_factor}")
+    if cu <= 0 or d <= 0 or lo <= 0:
+        raise ValueError("undrained_shear_strength, diameter, and length must be positive")
+    q_s = adhesion_factor * cu * pi * d * lo
+    return Quantity(magnitude=q_s, unit="kN")
+
+
+def pile_end_bearing_capacity(
+    *,
+    undrained_shear_strength: Quantity,
+    diameter: Quantity,
+    bearing_factor: float = 9.0,
+) -> Quantity:
+    """The end-bearing (tip) capacity of a pile in clay, Q_p = N_c·c_u·A_tip.
+
+    The load a pile carries on its tip, from the deep bearing-capacity relation with the cohesion
+    term only: Q_p = N_c·c_u·(π·D²/4). ``undrained_shear_strength`` c_u and ``diameter`` D, with the
+    ``bearing_factor`` N_c taken as 9 for a deep pile in clay (the standard value). Usually the
+    smaller part of a slender pile's capacity next to :func:`pile_skin_friction_capacity`. Returns
+    the tip capacity in kN.
+    """
+    _require(undrained_shear_strength, "[pressure]", "undrained_shear_strength")
+    _require(diameter, "[length]", "diameter")
+    cu = undrained_shear_strength.to("kPa").magnitude
+    d = diameter.to("m").magnitude
+    if cu <= 0 or d <= 0:
+        raise ValueError("undrained_shear_strength and diameter must be positive")
+    if bearing_factor <= 0:
+        raise ValueError("bearing_factor must be positive")
+    area = pi * d**2 / 4.0
+    q_p = bearing_factor * cu * area
+    return Quantity(magnitude=q_p, unit="kN")
+
+
+def pile_allowable_capacity(
+    *,
+    skin_friction: Quantity,
+    end_bearing: Quantity,
+    factor_of_safety: float,
+) -> Quantity:
+    """The allowable axial load of a pile, (Q_s + Q_p) / FS.
+
+    The working load a pile can carry: the ultimate capacity — shaft ``skin_friction`` Q_s from
+    :func:`pile_skin_friction_capacity` plus ``end_bearing`` Q_p from
+    :func:`pile_end_bearing_capacity` — divided by a global ``factor_of_safety`` (typically 2.5–3
+    for piles, reflecting the uncertainty in soil parameters and installation). Returns the
+    allowable capacity in kN.
+    """
+    _require(skin_friction, "[force]", "skin_friction")
+    _require(end_bearing, "[force]", "end_bearing")
+    q_s = skin_friction.to("kN").magnitude
+    q_p = end_bearing.to("kN").magnitude
+    if q_s <= 0 or q_p <= 0:
+        raise ValueError("skin_friction and end_bearing must be positive")
+    if factor_of_safety <= 0:
+        raise ValueError("factor_of_safety must be positive")
+    return Quantity(magnitude=(q_s + q_p) / factor_of_safety, unit="kN")

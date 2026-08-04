@@ -309,6 +309,16 @@ def test_slope_stability_rain_example_cohesion_holds_until_saturation():
     assert f["saturated"] == pytest.approx(1.07, abs=0.05)
 
 
+def test_friction_pile_capacity_example_shaft_carries_the_load():
+    namespace = runpy.run_path(str(_EXAMPLES / "friction_pile_capacity.py"))
+    p = namespace["pile_capacity"]()
+    assert p["shaft_kn"] == pytest.approx(990, abs=5)
+    assert p["tip_kn"] == pytest.approx(85, abs=3)
+    # The shaft carries the large majority — the whole point of a friction pile.
+    assert p["shaft_fraction"] > 0.9
+    assert p["allowable_kn"] == pytest.approx(430, abs=5)
+
+
 def test_air_compressor_duty_example_brackets_power_and_heat():
     namespace = runpy.run_path(str(_EXAMPLES / "air_compressor_duty.py"))
     d = namespace["compressor_duty"]()

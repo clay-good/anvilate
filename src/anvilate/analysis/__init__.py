@@ -302,7 +302,8 @@ modules:
   the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing,
   Terzaghi 1D consolidation settlement with its time-rate factor, retaining-wall
   external stability (overturning, sliding, and eccentric base-pressure) checks, the
-  infinite-slope factor of safety, and the 2:1 vertical stress increase under a footing
+  infinite-slope factor of safety, the 2:1 vertical stress increase under a footing, and
+  the α-method pile capacity (shaft skin friction plus end bearing) for deep foundations
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
   unreinforced member, the axial capacity of a reinforced masonry column, and the
@@ -764,6 +765,9 @@ from .geotechnical import (
     consolidation_time_factor,
     eccentric_base_pressure,
     infinite_slope_factor_of_safety,
+    pile_allowable_capacity,
+    pile_end_bearing_capacity,
+    pile_skin_friction_capacity,
     rankine_earth_pressure_coefficient,
     rankine_lateral_thrust,
     retaining_wall_overturning_factor,
@@ -1174,6 +1178,9 @@ __all__ = [
     "consolidation_time_factor",
     "eccentric_base_pressure",
     "infinite_slope_factor_of_safety",
+    "pile_allowable_capacity",
+    "pile_end_bearing_capacity",
+    "pile_skin_friction_capacity",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
     "retaining_wall_overturning_factor",

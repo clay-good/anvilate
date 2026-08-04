@@ -13534,6 +13534,41 @@ def test_vertical_stress_increase_2to1_spread():
     assert deeper.to("kPa").magnitude < ds.to("kPa").magnitude
 
 
+def test_pile_capacity_alpha_method_shaft_dominates():
+    import math
+
+    from anvilate.analysis import (
+        pile_allowable_capacity,
+        pile_end_bearing_capacity,
+        pile_skin_friction_capacity,
+    )
+
+    # Shaft: Q_s = alpha*c_u*pi*D*L = 0.7*75*pi*0.4*15 = 989.6 kN.
+    shaft = pile_skin_friction_capacity(
+        adhesion_factor=0.7,
+        undrained_shear_strength=_q("75 kPa"),
+        diameter=_q("0.4 m"),
+        length=_q("15 m"),
+    )
+    assert shaft.to("kN").magnitude == pytest.approx(0.7 * 75 * math.pi * 0.4 * 15, rel=1e-9)
+    # Tip: Q_p = N_c*c_u*pi*D^2/4 = 9*75*pi*0.16/4 = 84.8 kN.
+    tip = pile_end_bearing_capacity(undrained_shear_strength=_q("75 kPa"), diameter=_q("0.4 m"))
+    assert tip.to("kN").magnitude == pytest.approx(9 * 75 * math.pi * 0.4**2 / 4, rel=1e-9)
+    # For a slender pile the shaft carries the large majority of the load.
+    assert shaft.to("kN").magnitude > 9 * tip.to("kN").magnitude
+    # Allowable = (Q_s + Q_p)/FS.
+    allowable = pile_allowable_capacity(skin_friction=shaft, end_bearing=tip, factor_of_safety=2.5)
+    total = shaft.to("kN").magnitude + tip.to("kN").magnitude
+    assert allowable.to("kN").magnitude == pytest.approx(total / 2.5, rel=1e-9)
+    with pytest.raises(ValueError, match="adhesion_factor"):
+        pile_skin_friction_capacity(
+            adhesion_factor=1.5,
+            undrained_shear_strength=_q("75 kPa"),
+            diameter=_q("0.4 m"),
+            length=_q("15 m"),
+        )
+
+
 def test_reynolds_number_and_friction_factor_regimes():
     from anvilate.analysis import darcy_friction_factor, reynolds_number
 
