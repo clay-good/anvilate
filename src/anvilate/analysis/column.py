@@ -40,6 +40,8 @@ __all__ = [
     "aisc_elastic_ltb_stress",
     "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
+    "aisc_flange_local_buckling_moment",
+    "aisc_slender_flange_moment",
     "aisc_beam_column_interaction",
     "aisc_effective_length_factor_braced",
     "aisc_effective_length_factor_sway",
@@ -429,6 +431,81 @@ def aisc_inelastic_ltb_moment(
         )
     mn = moment_gradient_factor * (mp - (mp - mr) * (lb - lp) / (lr - lp))
     return Quantity(magnitude=min(mn, mp), unit="kN*m")
+
+
+def aisc_flange_local_buckling_moment(
+    *,
+    plastic_moment: Quantity,
+    residual_yield_moment: Quantity,
+    flange_slenderness: float,
+    plastic_limit: float,
+    noncompact_limit: float,
+) -> Quantity:
+    """The AISC 360 §F3.2(a) flexural strength M_n limited by flange local buckling.
+
+    When a beam's compression flange is noncompact, it buckles locally before the section reaches
+    its plastic moment, and the strength drops linearly with flange slenderness the same way that
+    inelastic LTB drops with unbraced length:
+
+        M_n = M_p − (M_p − 0.7·F_y·S_x)·(λ − λ_pf)/(λ_rf − λ_pf).
+
+    ``plastic_moment`` M_p and ``residual_yield_moment`` 0.7·F_y·S_x are the anchors,
+    ``flange_slenderness`` λ = b_f/(2·t_f) the flange's slenderness, and ``plastic_limit`` λ_pf and
+    ``noncompact_limit`` λ_rf its two limits (from
+    :func:`~anvilate.analysis.flexural_flange_slenderness_limits`). At or below λ_pf the flange is
+    compact and M_n is M_p; a slender flange (λ > λ_rf) buckles elastically — use
+    :func:`aisc_slender_flange_moment`. Returns M_n in kN·m.
+    """
+    _require(plastic_moment, "[force] * [length]", "plastic_moment")
+    _require(residual_yield_moment, "[force] * [length]", "residual_yield_moment")
+    mp = plastic_moment.to("kN*m").magnitude
+    mr = residual_yield_moment.to("kN*m").magnitude
+    if mp <= 0 or mr <= 0:
+        raise ValueError("plastic_moment and residual_yield_moment must be positive")
+    if flange_slenderness < 0:
+        raise ValueError("flange_slenderness must be non-negative")
+    if not 0 < plastic_limit < noncompact_limit:
+        raise ValueError("require 0 < plastic_limit < noncompact_limit")
+    if flange_slenderness <= plastic_limit:
+        return Quantity(magnitude=mp, unit="kN*m")
+    if flange_slenderness > noncompact_limit:
+        raise ValueError(
+            "flange is slender (λ > λ_rf) — flange buckles elastically; use "
+            "aisc_slender_flange_moment"
+        )
+    mn = mp - (mp - mr) * (flange_slenderness - plastic_limit) / (noncompact_limit - plastic_limit)
+    return Quantity(magnitude=mn, unit="kN*m")
+
+
+def aisc_slender_flange_moment(
+    *,
+    elastic_modulus: Quantity,
+    elastic_section_modulus: Quantity,
+    flange_slenderness: float,
+    flange_buckling_coefficient: float,
+) -> Quantity:
+    """The AISC 360 §F3.2(b) flexural strength M_n of a slender-flange section, 0.9·E·k_c·S_x/λ².
+
+    A slender compression flange (λ = b_f/(2·t_f) beyond the noncompact limit λ_rf, the plate-girder
+    case) buckles while still elastic, so its strength is set by elastic plate buckling rather than
+    yielding: M_n = 0.9·E·k_c·S_x/λ². ``elastic_modulus`` E and ``elastic_section_modulus`` S_x are
+    the section's, ``flange_slenderness`` λ the flange's, and ``flange_buckling_coefficient`` k_c =
+    4/√(h/t_w) bounded to [0.35, 0.76] (from the web slenderness — the caller's, per §F3.2). The
+    strength falls with the square of flange slenderness, which is why thin wide flanges are
+    inefficient. Returns M_n in kN·m.
+    """
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    _require(elastic_section_modulus, "[length]**3", "elastic_section_modulus")
+    e = elastic_modulus.to("MPa").magnitude
+    if e <= 0:
+        raise ValueError("elastic_modulus must be positive")
+    if flange_slenderness <= 0:
+        raise ValueError("flange_slenderness must be positive")
+    if not 0.35 <= flange_buckling_coefficient <= 0.76:
+        raise ValueError("flange_buckling_coefficient k_c must be in [0.35, 0.76]")
+    mn = 0.9 * elastic_modulus.pint * flange_buckling_coefficient * elastic_section_modulus.pint
+    mn = mn / flange_slenderness**2
+    return Quantity(magnitude=float(mn.to("kN*m").magnitude), unit="kN*m")
 
 
 def transition_slenderness(*, yield_strength: Quantity, elastic_modulus: Quantity) -> float:

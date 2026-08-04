@@ -211,10 +211,12 @@ column.aisc_effective_length_factor_braced
 column.aisc_effective_length_factor_sway
 column.aisc_effective_radius_of_gyration
 column.aisc_elastic_ltb_stress
+column.aisc_flange_local_buckling_moment
 column.aisc_inelastic_ltb_moment
 column.aisc_moment_amplifier_b1
 column.aisc_moment_amplifier_b2
 column.aisc_plastic_bracing_limit
+column.aisc_slender_flange_moment
 column.euler_buckling_load
 column.euler_critical_stress
 column.euler_second_moment_for_load

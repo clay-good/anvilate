@@ -48,7 +48,8 @@ modules:
   buckling moment of an unbraced beam, and the empirical Rankine-Gordon column
   stress; and the AISC 360 steel checks — the §E3 flexural buckling stress, the
   §F2 lateral-torsional bracing limits L_p and L_r with the inelastic-LTB moment
-  between them, the §H1.1 beam-column interaction (uniaxial or biaxial), and the
+  between them, the §F3 flange-local-buckling moment (noncompact interpolation and
+  slender-flange elastic form), the §H1.1 beam-column interaction (uniaxial or biaxial), and the
   alignment-chart effective-length factor K of a framed column (braced and sway)
   from its joint stiffness ratios, and the §C2 second-order moment amplifiers B₁
   (member P-δ) and B₂ (story P-Δ)
@@ -584,12 +585,14 @@ from .column import (
     aisc_effective_length_factor_sway,
     aisc_effective_radius_of_gyration,
     aisc_elastic_ltb_stress,
+    aisc_flange_local_buckling_moment,
     aisc_flexural_buckling_stress,
     aisc_inelastic_ltb_limit,
     aisc_inelastic_ltb_moment,
     aisc_moment_amplifier_b1,
     aisc_moment_amplifier_b2,
     aisc_plastic_bracing_limit,
+    aisc_slender_flange_moment,
     euler_buckling_load,
     euler_critical_stress,
     euler_second_moment_for_load,
@@ -1768,6 +1771,8 @@ __all__ = [
     "aisc_elastic_ltb_stress",
     "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
+    "aisc_flange_local_buckling_moment",
+    "aisc_slender_flange_moment",
     "transition_slenderness",
     "stoichiometric_air_fuel_ratio",
     "excess_air_from_flue_oxygen",

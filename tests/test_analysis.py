@@ -13863,6 +13863,75 @@ def test_energy_storage_capacity_energy_and_backup_time():
         )
 
 
+def test_aisc_flange_local_buckling_and_slender_flange_moment():
+    from anvilate.analysis import (
+        aisc_flange_local_buckling_moment,
+        aisc_slender_flange_moment,
+    )
+
+    mp = _q("5050 kip*inch")  # F_y*Z for a W18x50
+    mr = _q("3111.5 kip*inch")  # 0.7*F_y*S_x
+    lpf, lrf = 9.15, 24.08
+
+    # Compact flange (below lpf) develops the full M_p.
+    compact = aisc_flange_local_buckling_moment(
+        plastic_moment=mp,
+        residual_yield_moment=mr,
+        flange_slenderness=6.5,
+        plastic_limit=lpf,
+        noncompact_limit=lrf,
+    )
+    assert compact.to("kip*inch").magnitude == pytest.approx(5050.0, rel=1e-9)
+
+    # At lrf the noncompact interpolation lands exactly on the residual-yield moment.
+    at_lrf = aisc_flange_local_buckling_moment(
+        plastic_moment=mp,
+        residual_yield_moment=mr,
+        flange_slenderness=lrf,
+        plastic_limit=lpf,
+        noncompact_limit=lrf,
+    )
+    assert at_lrf.to("kip*inch").magnitude == pytest.approx(3111.5, rel=1e-6)
+
+    # Midway (lambda=15) interpolates linearly.
+    mid = aisc_flange_local_buckling_moment(
+        plastic_moment=mp,
+        residual_yield_moment=mr,
+        flange_slenderness=15.0,
+        plastic_limit=lpf,
+        noncompact_limit=lrf,
+    )
+    expected = 5050 - (5050 - 3111.5) * (15 - lpf) / (lrf - lpf)
+    assert mid.to("kip*inch").magnitude == pytest.approx(expected, rel=1e-9)
+
+    # A slender flange (lambda > lrf) routes to the elastic form and raises here.
+    with pytest.raises(ValueError, match="slender"):
+        aisc_flange_local_buckling_moment(
+            plastic_moment=mp,
+            residual_yield_moment=mr,
+            flange_slenderness=30.0,
+            plastic_limit=lpf,
+            noncompact_limit=lrf,
+        )
+
+    # Slender-flange moment M_n = 0.9*E*k_c*S_x/lambda^2.
+    slender = aisc_slender_flange_moment(
+        elastic_modulus=_q("29000 ksi"),
+        elastic_section_modulus=_q("88.9 in**3"),
+        flange_slenderness=30.0,
+        flange_buckling_coefficient=0.5,
+    )
+    expected_slender = 0.9 * 29000 * 0.5 * 88.9 / 30.0**2  # kip*inch
+    assert slender.to("kip*inch").magnitude == pytest.approx(expected_slender, rel=1e-6)
+    with pytest.raises(ValueError, match=r"\[0.35, 0.76\]"):
+        aisc_slender_flange_moment(
+            elastic_modulus=_q("29000 ksi"),
+            elastic_section_modulus=_q("88.9 in**3"),
+            flange_slenderness=30.0,
+            flange_buckling_coefficient=0.9,
+        )
+
+
 def test_aisc_flexural_compactness_classification():
     import math
 

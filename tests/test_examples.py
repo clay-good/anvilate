@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_noncompact_flange_beam_strength_example_penalizes_below_mp():
+    namespace = runpy.run_path(str(_EXAMPLES / "noncompact_flange_beam_strength.py"))
+    r = namespace["flange_governed_strength"]()
+    assert r["flange_class"] == "noncompact"
+    # The noncompact flange knocks the plastic moment down (~16%).
+    assert r["nominal_moment_kip_in"] < r["plastic_moment_kip_in"]
+    assert r["reduction_percent"] == pytest.approx(16.0, abs=1.0)
+
+
 def test_beam_flexural_compactness_example_slender_web_reclassifies():
     namespace = runpy.run_path(str(_EXAMPLES / "beam_flexural_compactness.py"))
     c = namespace["classify_sections"]()
