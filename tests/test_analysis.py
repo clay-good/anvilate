@@ -12939,6 +12939,24 @@ def test_composite_poisson_and_shear_modulus():
         composite_major_poisson_ratio(fiber_fraction=0.6, fiber_poisson=0.6, matrix_poisson=0.35)
 
 
+def test_off_axis_modulus_collapses_off_the_fiber_axis():
+    from anvilate.analysis import off_axis_modulus
+
+    kw = {
+        "longitudinal_modulus": _q("139400 MPa"),
+        "transverse_modulus": _q("8555 MPa"),
+        "shear_modulus": _q("3181 MPa"),
+        "major_poisson": 0.26,
+    }
+    # At 0 degrees the modulus is E1; at 90 degrees it is E2.
+    assert off_axis_modulus(angle=0.0, **kw).to("MPa").magnitude == pytest.approx(139400, rel=1e-6)
+    assert off_axis_modulus(angle=90.0, **kw).to("MPa").magnitude == pytest.approx(8555, rel=1e-6)
+    # At 45 degrees the shear term dominates and E_x collapses near the transverse value.
+    at_45 = off_axis_modulus(angle=45.0, **kw)
+    assert at_45.to("MPa").magnitude == pytest.approx(9202, abs=50)
+    assert at_45.to("MPa").magnitude < 0.1 * 139400  # a fraction of the on-axis stiffness
+
+
 def test_tsai_hill_failure_index():
     from anvilate.analysis import tsai_hill_failure_index
 

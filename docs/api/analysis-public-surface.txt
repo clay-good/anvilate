@@ -14,6 +14,7 @@ composite.composite_longitudinal_cte
 composite.composite_major_poisson_ratio
 composite.composite_shear_modulus_inverse_rule
 composite.critical_fiber_length
+composite.off_axis_modulus
 composite.rule_of_mixtures_modulus
 composite.rule_of_mixtures_strength
 composite.transverse_modulus_inverse_rule

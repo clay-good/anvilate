@@ -22,6 +22,8 @@ this module evaluates the closed forms. Inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
+from math import cos, radians, sin
+
 from ..units import Quantity
 
 __all__ = [
@@ -33,6 +35,7 @@ __all__ = [
     "composite_longitudinal_cte",
     "critical_fiber_length",
     "tsai_hill_failure_index",
+    "off_axis_modulus",
 ]
 
 
@@ -283,3 +286,45 @@ def tsai_hill_failure_index(
     if x <= 0 or y <= 0 or s <= 0:
         raise ValueError("the strengths must be positive")
     return (s1 / x) ** 2 - s1 * s2 / x**2 + (s2 / y) ** 2 + (t12 / s) ** 2
+
+
+def off_axis_modulus(
+    *,
+    angle: float,
+    longitudinal_modulus: Quantity,
+    transverse_modulus: Quantity,
+    shear_modulus: Quantity,
+    major_poisson: float,
+) -> Quantity:
+    """The apparent modulus E_x of a lamina loaded at an angle θ to its fibers.
+
+    Rotate the load off the fiber axis and the ply's stiffness collapses toward its weak
+    directions — the transformation of the four ply constants into the loading axis:
+
+        1/E_x = cos⁴θ/E₁ + (1/G₁₂ − 2·ν₁₂/E₁)·sin²θ·cos²θ + sin⁴θ/E₂.
+
+    At θ = 0 it is the stiff E₁, at 90° the soft E₂, and near 45° the shear term dominates
+    and E_x drops close to E₂ even though the fibers are only halfway turned — the reason a
+    single off-axis ply is a poor structural choice and laminates stack 0/±45/90 plies.
+    ``angle`` θ is the load direction relative to the fibers **in degrees**,
+    ``longitudinal_modulus`` E₁, ``transverse_modulus`` E₂, ``shear_modulus`` G₁₂, and
+    ``major_poisson`` ν₁₂ (the four ply constants, e.g. from the rule-of-mixtures functions).
+    Returns E_x in MPa.
+    """
+    _require(longitudinal_modulus, "[pressure]", "longitudinal_modulus")
+    _require(transverse_modulus, "[pressure]", "transverse_modulus")
+    _require(shear_modulus, "[pressure]", "shear_modulus")
+    e1 = longitudinal_modulus.to("MPa").magnitude
+    e2 = transverse_modulus.to("MPa").magnitude
+    g12 = shear_modulus.to("MPa").magnitude
+    if e1 <= 0 or e2 <= 0 or g12 <= 0:
+        raise ValueError("the moduli must be positive")
+    if not -0.5 < major_poisson < 1.0:
+        raise ValueError(f"major_poisson is out of a physical range; got {major_poisson}")
+    theta = radians(angle)
+    c = cos(theta)
+    s = sin(theta)
+    compliance = c**4 / e1 + (1.0 / g12 - 2.0 * major_poisson / e1) * s**2 * c**2 + s**4 / e2
+    if compliance <= 0:
+        raise ValueError("the computed compliance is non-positive; check the ply constants")
+    return Quantity(magnitude=1.0 / compliance, unit="MPa")
