@@ -13009,6 +13009,27 @@ def test_nds_column_stability_factor_ylinen_and_euler_stress():
         )
 
 
+def test_solar_pv_array_power_daily_energy_and_sizing():
+    from anvilate.analysis import pv_array_power, pv_array_size_for_load, pv_daily_energy
+
+    # P = G*A*eta; 1000 W/m^2, 1.6 m^2, 0.20 -> 320 W.
+    p = pv_array_power(irradiance=_q("1000 W/m**2"), area=_q("1.6 m**2"), module_efficiency=0.20)
+    assert p.to("W").magnitude == pytest.approx(320.0, rel=1e-9)
+
+    # Daily energy E = P*PSH*D; 5 kW, 5 h, 0.8 -> 20 kWh.
+    e = pv_daily_energy(rated_power=_q("5 kW"), peak_sun_hours=_q("5 hour"), derate_factor=0.8)
+    assert e.to("kWh").magnitude == pytest.approx(20.0, rel=1e-9)
+
+    # The inverse round-trips: sizing for 20 kWh/day at the same site gives 5 kW.
+    size = pv_array_size_for_load(
+        daily_energy_demand=_q("20 kWh"), peak_sun_hours=_q("5 hour"), derate_factor=0.8
+    )
+    assert size.to("kW").magnitude == pytest.approx(5.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        pv_array_power(irradiance=_q("1000 W/m**2"), area=_q("1.6 m**2"), module_efficiency=1.5)
+
+
 def test_prestress_load_balancing_and_cracking_moment():
     from anvilate.analysis import (
         prestress_balanced_load,

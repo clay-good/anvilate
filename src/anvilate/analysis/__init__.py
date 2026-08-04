@@ -161,6 +161,9 @@ modules:
 - :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, and the runtime
   a given bank delivers
+- :mod:`~anvilate.analysis.solar_pv` — photovoltaic array sizing: a module's power
+  (P = G·A·η), the daily energy an array yields (E = P·PSH·D), and the array rating
+  a daily load needs — pairs with energy_storage for off-grid design
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, and the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface
@@ -1163,6 +1166,11 @@ from .snapfit import (
     snap_fit_permissible_deflection,
     snap_fit_strain,
 )
+from .solar_pv import (
+    pv_array_power,
+    pv_array_size_for_load,
+    pv_daily_energy,
+)
 from .spring import (
     BELLEVILLE_PLATEAU_RATIO,
     SPRING_END_CLAMPED_FREE,
@@ -1453,6 +1461,9 @@ __all__ = [
     "battery_bank_capacity",
     "usable_battery_energy",
     "battery_backup_time",
+    "pv_array_power",
+    "pv_daily_energy",
+    "pv_array_size_for_load",
     "inverse_square_attenuation",
     "mass_law_transmission_loss",
     "noise_dose_fraction",

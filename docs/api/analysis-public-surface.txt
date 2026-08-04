@@ -659,6 +659,9 @@ snapfit.snap_fit_deflection_force
 snapfit.snap_fit_mating_force
 snapfit.snap_fit_permissible_deflection
 snapfit.snap_fit_strain
+solar_pv.pv_array_power
+solar_pv.pv_array_size_for_load
+solar_pv.pv_daily_energy
 spring.BELLEVILLE_PLATEAU_RATIO
 spring.SPRING_END_CLAMPED_FREE
 spring.SPRING_END_FIXED_HINGED

@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_off_grid_cabin_solar_battery_example_sizes_both():
+    namespace = runpy.run_path(str(_EXAMPLES / "off_grid_cabin_solar_battery.py"))
+    s = namespace["off_grid_sizing"]()
+    # 6 kWh/day at 4.5 sun hours, 0.78 derate -> ~1709 W array.
+    assert s["array_watts"] == pytest.approx(1709.0, abs=5.0)
+    # 250 W average over 2 days at 48 V, 50% DoD, 90% -> ~556 Ah.
+    assert s["bank_amp_hours"] == pytest.approx(555.6, abs=2.0)
+
+
 def test_post_tensioned_beam_balancing_example_uniform_stress_at_balance():
     namespace = runpy.run_path(str(_EXAMPLES / "post_tensioned_beam_balancing.py"))
     b = namespace["beam_balancing"]()
