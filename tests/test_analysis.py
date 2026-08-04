@@ -13401,6 +13401,81 @@ def test_eccentric_base_pressure_middle_third_and_uplift():
         )
 
 
+def test_infinite_slope_factor_of_safety_dry_cohesive_and_saturated():
+    import math
+
+    from anvilate.analysis import infinite_slope_factor_of_safety
+
+    # Dry cohesionless slope reduces to tan(phi)/tan(beta): phi=30, beta=20 -> 1.586.
+    dry_cohesionless = infinite_slope_factor_of_safety(
+        cohesion=_q("0 kPa"),
+        friction_angle=30.0,
+        unit_weight=_q("18 kN/m**3"),
+        depth=_q("3 m"),
+        slope_angle=20.0,
+    )
+    assert dry_cohesionless == pytest.approx(
+        math.tan(math.radians(30)) / math.tan(math.radians(20)), rel=1e-9
+    )
+    # Cohesion raises the factor of safety above the frictional-only value.
+    with_c = infinite_slope_factor_of_safety(
+        cohesion=_q("10 kPa"),
+        friction_angle=30.0,
+        unit_weight=_q("18 kN/m**3"),
+        depth=_q("3 m"),
+        slope_angle=20.0,
+    )
+    assert with_c > dry_cohesionless
+    assert with_c == pytest.approx(2.162, abs=0.005)
+    # Pore pressure erodes the effective normal stress, so the factor of safety drops.
+    with_water = infinite_slope_factor_of_safety(
+        cohesion=_q("10 kPa"),
+        friction_angle=30.0,
+        unit_weight=_q("18 kN/m**3"),
+        depth=_q("3 m"),
+        slope_angle=20.0,
+        pore_pressure=_q("20 kPa"),
+    )
+    assert with_water < with_c
+    with pytest.raises(ValueError, match="slope_angle"):
+        infinite_slope_factor_of_safety(
+            cohesion=_q("10 kPa"),
+            friction_angle=30.0,
+            unit_weight=_q("18 kN/m**3"),
+            depth=_q("3 m"),
+            slope_angle=95.0,
+        )
+
+
+def test_vertical_stress_increase_2to1_spread():
+    from anvilate.analysis import vertical_stress_increase_2to1
+
+    # dsigma = q0*B*L/((B+z)(L+z)); q0=100, B=2, L=3, z=2 -> 100*6/(4*5) = 30 kPa.
+    ds = vertical_stress_increase_2to1(
+        applied_pressure=_q("100 kPa"),
+        footing_width=_q("2 m"),
+        footing_length=_q("3 m"),
+        depth=_q("2 m"),
+    )
+    assert ds.to("kPa").magnitude == pytest.approx(100 * 6 / (4 * 5), rel=1e-9)
+    # At the footing base (z=0) the full contact pressure is recovered.
+    at_base = vertical_stress_increase_2to1(
+        applied_pressure=_q("100 kPa"),
+        footing_width=_q("2 m"),
+        footing_length=_q("3 m"),
+        depth=_q("0 m"),
+    )
+    assert at_base.to("kPa").magnitude == pytest.approx(100.0, rel=1e-12)
+    # The stress keeps falling with depth as the load spreads.
+    deeper = vertical_stress_increase_2to1(
+        applied_pressure=_q("100 kPa"),
+        footing_width=_q("2 m"),
+        footing_length=_q("3 m"),
+        depth=_q("5 m"),
+    )
+    assert deeper.to("kPa").magnitude < ds.to("kPa").magnitude
+
+
 def test_reynolds_number_and_friction_factor_regimes():
     from anvilate.analysis import darcy_friction_factor, reynolds_number
 

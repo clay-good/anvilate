@@ -28,7 +28,7 @@ all outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
 
 from __future__ import annotations
 
-from math import exp, log10, pi, radians, tan
+from math import cos, exp, log10, pi, radians, sin, tan
 
 from ..units import Quantity
 
@@ -38,11 +38,13 @@ __all__ = [
     "consolidation_time",
     "consolidation_time_factor",
     "eccentric_base_pressure",
+    "infinite_slope_factor_of_safety",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
     "terzaghi_bearing_capacity",
+    "vertical_stress_increase_2to1",
 ]
 
 
@@ -373,3 +375,79 @@ def eccentric_base_pressure(
         "q_max": Quantity(magnitude=q_max, unit="kPa"),
         "q_min": Quantity(magnitude=q_min, unit="kPa"),
     }
+
+
+def infinite_slope_factor_of_safety(
+    *,
+    cohesion: Quantity,
+    friction_angle: float,
+    unit_weight: Quantity,
+    depth: Quantity,
+    slope_angle: float,
+    pore_pressure: Quantity | None = None,
+) -> float:
+    """The factor of safety against sliding of a long, uniform (infinite) slope.
+
+    A shallow soil layer on a long planar slope slides on a plane parallel to the surface when the
+    shear the slope's weight drives exceeds the soil's strength on that plane. The ratio of the two
+    is FS = [c + (γ·z·cos²β − u)·tanφ] / (γ·z·sinβ·cosβ): a cohesion term c, plus friction on the
+    effective normal stress (the overburden γ·z·cos²β less any ``pore_pressure`` u), over the
+    driving shear. ``cohesion`` c, ``friction_angle`` φ (degrees), ``unit_weight`` γ, ``depth`` z
+    to the failure plane, and ``slope_angle`` β (degrees). For a dry cohesionless slope this
+    reduces to the familiar tanφ/tanβ. Returns FS — below 1 the slope fails.
+    """
+    _require(cohesion, "[pressure]", "cohesion")
+    _require(unit_weight, "[force]/[length]**3", "unit_weight")
+    _require(depth, "[length]", "depth")
+    _check_friction_angle(friction_angle)
+    if not 0.0 < slope_angle < 90.0:
+        raise ValueError(f"slope_angle must be in (0, 90) degrees; got {slope_angle}")
+    c = cohesion.to("kPa").magnitude
+    gamma = unit_weight.to("kN/m**3").magnitude
+    z = depth.to("m").magnitude
+    if c < 0 or gamma <= 0 or z <= 0:
+        raise ValueError("cohesion non-negative, unit_weight and depth positive")
+    beta = radians(slope_angle)
+    phi = radians(friction_angle)
+    u = 0.0
+    if pore_pressure is not None:
+        _require(pore_pressure, "[pressure]", "pore_pressure")
+        u = pore_pressure.to("kPa").magnitude
+        if u < 0:
+            raise ValueError("pore_pressure must be non-negative")
+    normal = gamma * z * cos(beta) ** 2 - u
+    resisting = c + normal * tan(phi)
+    driving = gamma * z * sin(beta) * cos(beta)
+    return resisting / driving
+
+
+def vertical_stress_increase_2to1(
+    *,
+    applied_pressure: Quantity,
+    footing_width: Quantity,
+    footing_length: Quantity,
+    depth: Quantity,
+) -> Quantity:
+    """The vertical stress increase under a footing by the 2:1 spread approximation.
+
+    A footing's bearing pressure does not reach far below it undiminished — it spreads out and
+    weakens with depth. The simple 2:1 method assumes the load spreads on a 2-vertical-to-1-
+    horizontal wedge, so at ``depth`` z below a rectangular footing the added stress is
+    Δσ = q₀·B·L / [(B + z)·(L + z)]. ``applied_pressure`` q₀ is the contact pressure and
+    ``footing_width`` B and ``footing_length`` L its plan dimensions. This is the Δσ that drives
+    :func:`consolidation_settlement` in the soil below. Returns Δσ in kPa.
+    """
+    _require(applied_pressure, "[pressure]", "applied_pressure")
+    _require(footing_width, "[length]", "footing_width")
+    _require(footing_length, "[length]", "footing_length")
+    _require(depth, "[length]", "depth")
+    q0 = applied_pressure.to("kPa").magnitude
+    b = footing_width.to("m").magnitude
+    lo = footing_length.to("m").magnitude
+    z = depth.to("m").magnitude
+    if q0 <= 0 or b <= 0 or lo <= 0:
+        raise ValueError("applied_pressure, footing_width, and footing_length must be positive")
+    if z < 0:
+        raise ValueError("depth must be non-negative")
+    delta_sigma = q0 * b * lo / ((b + z) * (lo + z))
+    return Quantity(magnitude=delta_sigma, unit="kPa")

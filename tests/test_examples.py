@@ -297,6 +297,18 @@ def test_submerged_gate_hinge_example_center_of_pressure_below_centroid():
     assert g["center_of_pressure_m"] > g["centroid_depth_m"]
 
 
+def test_slope_stability_rain_example_cohesion_holds_until_saturation():
+    namespace = runpy.run_path(str(_EXAMPLES / "slope_stability_rain.py"))
+    f = namespace["slope_factors"]()
+    # Friction alone can't hold a slope steeper than the friction angle.
+    assert f["friction_only"] < 1.0
+    # Cohesion makes it comfortably stable when dry.
+    assert f["dry"] > 1.4
+    # Saturation (pore pressure) erodes the margin back toward 1.
+    assert f["dry"] > f["saturated"] > 1.0
+    assert f["saturated"] == pytest.approx(1.07, abs=0.05)
+
+
 def test_orifice_meter_sizing_example_reads_and_sizes():
     namespace = runpy.run_path(str(_EXAMPLES / "orifice_meter_sizing.py"))
     r = namespace["meter_readings"]()

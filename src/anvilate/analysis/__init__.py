@@ -296,8 +296,9 @@ modules:
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall,
   the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing,
-  Terzaghi 1D consolidation settlement with its time-rate factor, and retaining-wall
-  external stability (overturning, sliding, and eccentric base-pressure) checks
+  Terzaghi 1D consolidation settlement with its time-rate factor, retaining-wall
+  external stability (overturning, sliding, and eccentric base-pressure) checks, the
+  infinite-slope factor of safety, and the 2:1 vertical stress increase under a footing
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
   unreinforced member, the axial capacity of a reinforced masonry column, and the
@@ -752,11 +753,13 @@ from .geotechnical import (
     consolidation_time,
     consolidation_time_factor,
     eccentric_base_pressure,
+    infinite_slope_factor_of_safety,
     rankine_earth_pressure_coefficient,
     rankine_lateral_thrust,
     retaining_wall_overturning_factor,
     retaining_wall_sliding_factor,
     terzaghi_bearing_capacity,
+    vertical_stress_increase_2to1,
 )
 from .hydraulic_cylinder import (
     cylinder_extend_force,
@@ -1158,11 +1161,13 @@ __all__ = [
     "consolidation_time",
     "consolidation_time_factor",
     "eccentric_base_pressure",
+    "infinite_slope_factor_of_safety",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
     "retaining_wall_overturning_factor",
     "retaining_wall_sliding_factor",
     "terzaghi_bearing_capacity",
+    "vertical_stress_increase_2to1",
     "critical_depth_rectangular",
     "froude_number",
     "hydraulic_radius",
