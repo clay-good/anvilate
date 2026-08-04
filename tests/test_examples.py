@@ -162,6 +162,18 @@ def test_beam_bearing_web_checks_example_is_governed_by_crippling():
     assert crippling == pytest.approx(212.6, abs=0.5)
 
 
+def test_bolted_tension_splice_example_is_governed_by_block_shear():
+    namespace = runpy.run_path(str(_EXAMPLES / "bolted_tension_splice.py"))
+    caps = namespace["splice_capacities"]()
+    yielding = caps["yielding"].to("kN").magnitude
+    rupture = caps["rupture"].to("kN").magnitude
+    block = caps["block_shear"].to("kN").magnitude
+    # Both member checks pass at higher loads, but the end block tears out first —
+    # block shear (~450 kN) governs below net rupture (~544) and yielding (~621).
+    assert block < rupture < yielding
+    assert block == pytest.approx(450, abs=5)
+
+
 def test_hss_beam_flexure_shear_example_flags_flange_local_buckling():
     namespace = runpy.run_path(str(_EXAMPLES / "hss_beam_flexure_shear.py"))
     result = namespace["hss_beam_capacity"]()
