@@ -19,6 +19,8 @@ composite.rule_of_mixtures_modulus
 composite.rule_of_mixtures_strength
 composite.transverse_modulus_inverse_rule
 composite.tsai_hill_failure_index
+masonry.masonry_allowable_axial_stress
+masonry.masonry_column_axial_capacity
 axial.axial_elongation
 axial.axial_stiffness
 axial.axial_stress

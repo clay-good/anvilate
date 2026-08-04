@@ -202,6 +202,19 @@ def test_aluminum_ladder_rail_example_is_buckling_governed():
     assert r["tension_stress_mpa"] == pytest.approx(240, abs=1)
 
 
+def test_masonry_wall_slenderness_example_is_slenderness_governed():
+    namespace = runpy.run_path(str(_EXAMPLES / "masonry_wall_slenderness.py"))
+    a = namespace["wall_allowables"]()
+    # The allowable stress falls monotonically as the wall gets more slender.
+    assert a["Fa_hr_30_mpa"] > a["Fa_hr_60_mpa"] > a["Fa_hr_90_mpa"]
+    # A slender wall (h/r = 90) has shed nearly 40% of the stocky (h/r = 30) allowable
+    # before the block is anywhere near its strength.
+    assert a["Fa_hr_90_mpa"] / a["Fa_hr_30_mpa"] < 0.65
+    # Reinforcement adds a steel term the plain pier never had.
+    assert a["pier_reinforced_kn"] > a["pier_plain_kn"]
+    assert a["pier_reinforced_kn"] == pytest.approx(308, abs=3)
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

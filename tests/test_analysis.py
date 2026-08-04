@@ -13081,6 +13081,52 @@ def test_aluminum_tension_stress_lesser_of_yield_and_rupture():
         )
 
 
+def test_masonry_allowable_axial_stress_two_slenderness_branches():
+    from anvilate.analysis import masonry_allowable_axial_stress
+
+    # Stocky branch (h/r = 50 <= 99): F_a = 0.25*f'm*[1-(h/140r)^2].
+    stocky = masonry_allowable_axial_stress(masonry_strength=_q("10 MPa"), slenderness_ratio=50.0)
+    assert stocky.to("MPa").magnitude == pytest.approx(0.25 * 10 * (1 - (50 / 140) ** 2), rel=1e-9)
+    # Slender branch (h/r = 120 > 99): F_a = 0.25*f'm*(70r/h)^2.
+    slender = masonry_allowable_axial_stress(masonry_strength=_q("10 MPa"), slenderness_ratio=120.0)
+    assert slender.to("MPa").magnitude == pytest.approx(0.25 * 10 * (70 / 120) ** 2, rel=1e-9)
+    assert slender.to("MPa").magnitude < stocky.to("MPa").magnitude
+    # The two branches meet exactly at the h/r = 99 crossover (140/99/70 are chosen for it).
+    at_99 = masonry_allowable_axial_stress(masonry_strength=_q("10 MPa"), slenderness_ratio=99.0)
+    just_past = masonry_allowable_axial_stress(
+        masonry_strength=_q("10 MPa"), slenderness_ratio=99.0001
+    )
+    assert at_99.to("MPa").magnitude == pytest.approx(just_past.to("MPa").magnitude, rel=1e-4)
+    with pytest.raises(ValueError, match="positive"):
+        masonry_allowable_axial_stress(masonry_strength=_q("10 MPa"), slenderness_ratio=-1.0)
+    with pytest.raises(ValueError, match="pressure"):
+        masonry_allowable_axial_stress(masonry_strength=_q("10 mm"), slenderness_ratio=50.0)
+
+
+def test_masonry_column_axial_capacity_adds_a_steel_term():
+    from anvilate.analysis import masonry_column_axial_capacity
+
+    base = {
+        "masonry_strength": _q("10 MPa"),
+        "net_area": _q("1e5 mm**2"),
+        "slenderness_ratio": 50.0,
+    }
+    # Plain column: P_a = 0.25*f'm*A_n * slenderness factor, no steel.
+    plain = masonry_column_axial_capacity(**base)
+    factor = 1 - (50 / 140) ** 2
+    assert plain.to("kN").magnitude == pytest.approx(0.25 * 10 * 1e5 * factor / 1000, rel=1e-9)
+    # Reinforced: the 0.65*A_st*F_s term lifts it (four bars at 165 MPa -> 293 kN).
+    reinforced = masonry_column_axial_capacity(
+        steel_area=_q("800 mm**2"), steel_allowable_stress=_q("165 MPa"), **base
+    )
+    expect = (0.25 * 10 * 1e5 + 0.65 * 800 * 165) * factor / 1000
+    assert reinforced.to("kN").magnitude == pytest.approx(expect, rel=1e-9)
+    assert reinforced.to("kN").magnitude > plain.to("kN").magnitude
+    # Giving only one of the steel pair is an error, not a silent plain column.
+    with pytest.raises(ValueError, match="both be given"):
+        masonry_column_axial_capacity(steel_area=_q("800 mm**2"), **base)
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 

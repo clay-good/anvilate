@@ -276,6 +276,9 @@ modules:
   mixtures): the longitudinal (iso-strain) modulus and strength, and the transverse
   (iso-stress inverse-rule) modulus of a unidirectional laminate from its fiber and
   matrix properties and volume fraction
+- :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
+  slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
+  unreinforced member, and the axial capacity of a reinforced masonry column
 
 Note: :mod:`~anvilate.analysis.pressure_vessel` also carries the ASME VIII head forms
 (ellipsoidal, torispherical, hemispherical/sphere — each sizing and MAWP) and the
@@ -748,6 +751,10 @@ from .living_hinge import (
     living_hinge_fold_strain,
     living_hinge_web_length_for_strain,
 )
+from .masonry import (
+    masonry_allowable_axial_stress,
+    masonry_column_axial_capacity,
+)
 from .nds_timber import (
     LoadDuration,
     nds_adjusted_design_value,
@@ -1075,6 +1082,8 @@ __all__ = [
     "critical_fiber_length",
     "tsai_hill_failure_index",
     "off_axis_modulus",
+    "masonry_allowable_axial_stress",
+    "masonry_column_axial_capacity",
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",
