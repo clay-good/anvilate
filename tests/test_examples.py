@@ -3159,6 +3159,18 @@ def test_hydraulic_meter_out_intensification_example_rod_ratio_governs():
     assert thin.status is CheckStatus.PASS
 
 
+def test_cylinder_regeneration_circuit_example_trades_force_for_speed():
+    namespace = runpy.run_path(str(_EXAMPLES / "cylinder_regeneration_circuit.py"))
+    m = namespace["extend_modes"]()
+    # Regen is faster than a normal extend but weaker.
+    assert m["regen_speed_mms"] > m["normal_speed_mms"]
+    assert m["regen_force_kn"] < m["normal_force_kn"]
+    assert m["regen_force_kn"] == pytest.approx(77, abs=1)
+    assert m["regen_speed_mms"] == pytest.approx(173, abs=1)
+    # The 120 kN forming load exceeds the regen force but not the full extend force.
+    assert m["regen_force_kn"] < 120 < m["normal_force_kn"]
+
+
 def test_gear_pair_layout_example_undercut_governs_the_pinion():
     namespace = runpy.run_path(str(_EXAMPLES / "gear_pair_layout.py"))
     coarse = namespace["screen_pinion"]()

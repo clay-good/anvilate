@@ -972,6 +972,8 @@ from .hvac_duct import (
 from .hydraulic_cylinder import (
     cylinder_extend_force,
     cylinder_extend_speed,
+    cylinder_regen_extend_force,
+    cylinder_regen_extend_speed,
     cylinder_retract_force,
     cylinder_retract_speed,
     cylinder_rodside_intensified_pressure,
@@ -1827,6 +1829,8 @@ __all__ = [
     "cylinder_retract_force",
     "cylinder_extend_speed",
     "cylinder_retract_speed",
+    "cylinder_regen_extend_force",
+    "cylinder_regen_extend_speed",
     "cylinder_rodside_intensified_pressure",
     "slider_crank_displacement",
     "slider_crank_velocity",

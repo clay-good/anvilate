@@ -12611,6 +12611,36 @@ def test_hydraulic_cylinder_force_and_speed_rod_asymmetry():
         )
 
 
+def test_cylinder_regeneration_trades_force_for_speed_over_the_rod_area():
+    from math import pi
+
+    from anvilate.analysis import (
+        cylinder_extend_force,
+        cylinder_extend_speed,
+        cylinder_regen_extend_force,
+        cylinder_regen_extend_speed,
+    )
+
+    kw = {"bore_diameter": _q("100 mm"), "rod_diameter": _q("70 mm")}
+    # Regen force and speed both act over the rod's own cross-section (pi/4 * d^2).
+    rf = cylinder_regen_extend_force(pressure=_q("20 MPa"), **kw)
+    assert rf.to("kN").magnitude == pytest.approx(20 * pi / 4 * 70**2 / 1000, rel=1e-12)
+    rv = cylinder_regen_extend_speed(flow_rate=_q("40 L/min"), **kw)
+    assert rv.to("mm/s").magnitude == pytest.approx(
+        _q("40 L/min").to("mm**3/s").magnitude / (pi / 4 * 70**2), rel=1e-12
+    )
+    # Regen is weaker but faster than a normal extend, by the same (bore/rod)^2 ratio.
+    ext_f = cylinder_extend_force(pressure=_q("20 MPa"), bore_diameter=_q("100 mm"))
+    ext_v = cylinder_extend_speed(flow_rate=_q("40 L/min"), bore_diameter=_q("100 mm"))
+    ratio = (100 / 70) ** 2
+    assert ext_f.to("kN").magnitude / rf.to("kN").magnitude == pytest.approx(ratio, rel=1e-9)
+    assert rv.to("mm/s").magnitude / ext_v.to("mm/s").magnitude == pytest.approx(ratio, rel=1e-9)
+    with pytest.raises(ValueError, match="rod_diameter .* must be smaller than the bore"):
+        cylinder_regen_extend_force(
+            pressure=_q("20 MPa"), bore_diameter=_q("70 mm"), rod_diameter=_q("70 mm")
+        )
+
+
 def test_belt_tight_tension_for_power_inverts_the_transmitted_power():
     from anvilate.analysis import (
         belt_slack_tension,

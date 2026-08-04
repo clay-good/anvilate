@@ -32,6 +32,8 @@ __all__ = [
     "cylinder_retract_force",
     "cylinder_extend_speed",
     "cylinder_retract_speed",
+    "cylinder_regen_extend_force",
+    "cylinder_regen_extend_speed",
     "cylinder_rodside_intensified_pressure",
 ]
 
@@ -135,6 +137,54 @@ def cylinder_retract_speed(
     if q <= 0:
         raise ValueError(f"flow_rate must be positive; got {flow_rate}")
     return Quantity(magnitude=q / (pi / 4.0 * (bore**2 - rod**2)), unit="mm/s")
+
+
+def cylinder_regen_extend_force(
+    *, pressure: Quantity, rod_diameter: Quantity, bore_diameter: Quantity
+) -> Quantity:
+    """The regenerative-circuit extend force F = p·(π/4)·d² of a fluid cylinder.
+
+    In a regeneration (differential) circuit the rod-side oil is routed back to join the pump
+    flow into the cap side, so supply pressure acts on *both* faces of the piston. The two
+    thrusts cancel over the annulus and the net extend force is just pressure over the rod's own
+    cross-section: ``pressure`` p times (π/4)·``rod_diameter``². That is far less than the normal
+    :func:`cylinder_extend_force`, the price paid for the speed that
+    :func:`cylinder_regen_extend_speed` buys — a differential circuit is for a fast, light approach
+    stroke, not for pushing the load.
+    ``bore_diameter`` D is required only to check the rod fits (d < D). Returns the force in kN.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    p = pressure.to("MPa").magnitude
+    bore = _bore(bore_diameter)
+    rod = _rod(rod_diameter, bore)
+    if p <= 0:
+        raise ValueError(f"pressure must be positive; got {pressure}")
+    force_n = p * pi / 4.0 * rod**2  # MPa*mm^2 = N; net force acts over the rod area
+    return Quantity(magnitude=force_n / 1000.0, unit="kN")
+
+
+def cylinder_regen_extend_speed(
+    *, flow_rate: Quantity, rod_diameter: Quantity, bore_diameter: Quantity
+) -> Quantity:
+    """The regenerative-circuit extend speed v = Q/(π/4·d²) of a fluid cylinder.
+
+    With the rod-side oil fed back into the cap side, the pump only has to supply the difference
+    between the two sides — the rod's cross-section area — so the piston extends as if filling
+    just (π/4)·``rod_diameter``²: ``flow_rate`` Q over that small area. The rod moves much *faster*
+    than the normal :func:`cylinder_extend_speed` (the smaller the rod, the bigger the gain), at
+    the cost of the reduced :func:`cylinder_regen_extend_force`. ``bore_diameter`` D is required
+    only to check the rod fits (d < D). Returns the speed in mm/s.
+    """
+    if not flow_rate.has_dimension("[length]**3 / [time]"):
+        raise ValueError(
+            f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}"
+        )
+    q = flow_rate.to("mm**3/s").magnitude
+    bore = _bore(bore_diameter)
+    rod = _rod(rod_diameter, bore)
+    if q <= 0:
+        raise ValueError(f"flow_rate must be positive; got {flow_rate}")
+    return Quantity(magnitude=q / (pi / 4.0 * rod**2), unit="mm/s")
 
 
 def cylinder_rodside_intensified_pressure(
