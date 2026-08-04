@@ -886,6 +886,7 @@ wear.archard_wear_volume
 wear.sliding_contact_pv
 wear.sliding_distance_for_wear_depth
 ventilation.air_changes_per_hour
+ventilation.airflow_for_air_changes
 ventilation.breathing_zone_outdoor_airflow
 ventilation.dilution_airflow
 vortex_shedding.lock_in_velocity

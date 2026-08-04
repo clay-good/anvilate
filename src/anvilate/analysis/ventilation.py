@@ -24,6 +24,7 @@ from ..units import Quantity
 
 __all__ = [
     "air_changes_per_hour",
+    "airflow_for_air_changes",
     "breathing_zone_outdoor_airflow",
     "dilution_airflow",
 ]
@@ -75,6 +76,27 @@ def air_changes_per_hour(*, airflow: Quantity, room_volume: Quantity) -> float:
     if v <= 0:
         raise ValueError("room_volume must be positive")
     return (airflow.pint / room_volume.pint).to("1/hour").magnitude
+
+
+def airflow_for_air_changes(
+    *,
+    air_changes_per_hour: float,
+    room_volume: Quantity,
+) -> Quantity:
+    """The airflow a target air-change rate needs, Q = ACH·V (the sizing inverse).
+
+    The design direction of :func:`air_changes_per_hour`: a code or infection-control standard sets
+    a minimum air-change rate, and this returns the supply airflow that meets it — the
+    ``air_changes_per_hour`` ACH times the ``room_volume`` V, Q = ACH·V. A lab wanting 6 air changes
+    an hour in a 200 m³ room needs 1,200 m³/h. Returns the required airflow in m³/s.
+    """
+    _check(room_volume, "[length]**3", "room_volume")
+    v = room_volume.to("m**3").magnitude
+    if air_changes_per_hour <= 0:
+        raise ValueError("air_changes_per_hour must be positive")
+    if v <= 0:
+        raise ValueError("room_volume must be positive")
+    return Quantity(magnitude=air_changes_per_hour * v / 3600.0, unit="m**3/s")
 
 
 def dilution_airflow(

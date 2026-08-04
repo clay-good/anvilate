@@ -89,7 +89,8 @@ modules:
   ratio that sets the lubrication regime
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
 - :mod:`~anvilate.analysis.ventilation` — indoor-air-quality airflow: ASHRAE 62.1
-  breathing-zone outdoor air, air changes per hour, and contaminant dilution airflow
+  breathing-zone outdoor air, air changes per hour and the airflow a target rate
+  needs, and contaminant dilution airflow
 - :mod:`~anvilate.analysis.vortex_shedding` — flow-induced vibration: the Strouhal
   shedding frequency f_s = St·V/D, the lock-in velocity that resonates a structure,
   and the reduced velocity that screens the risk
@@ -1495,6 +1496,7 @@ from .torsion import (
 )
 from .ventilation import (
     air_changes_per_hour,
+    airflow_for_air_changes,
     breathing_zone_outdoor_airflow,
     dilution_airflow,
 )
@@ -2434,6 +2436,7 @@ __all__ = [
     "sliding_contact_pv",
     "breathing_zone_outdoor_airflow",
     "air_changes_per_hour",
+    "airflow_for_air_changes",
     "dilution_airflow",
     "vortex_shedding_frequency",
     "lock_in_velocity",

@@ -13772,6 +13772,16 @@ def test_ventilation_outdoor_air_changes_and_dilution():
     ach = air_changes_per_hour(airflow=_q("550 ft**3/min"), room_volume=_q("50000 ft**3"))
     assert ach == pytest.approx(0.66, rel=1e-6)
 
+    # Inverse: Q = ACH*V. 8 ACH in a 180 m^3 room -> 1440 m^3/h = 0.4 m^3/s.
+    from anvilate.analysis import airflow_for_air_changes
+
+    flow = airflow_for_air_changes(air_changes_per_hour=8.0, room_volume=_q("180 m**3"))
+    assert flow.to("m**3/s").magnitude == pytest.approx(8 * 180 / 3600, rel=1e-9)
+    # It round-trips with air_changes_per_hour.
+    assert air_changes_per_hour(airflow=flow, room_volume=_q("180 m**3")) == pytest.approx(8.0)
+    with pytest.raises(ValueError, match="air_changes_per_hour must be positive"):
+        airflow_for_air_changes(air_changes_per_hour=0.0, room_volume=_q("180 m**3"))
+
     # Dilution Q = K*G/C. G/C = 10 g/min / 0.001 g/ft^3 = 10,000 cfm; K=5 -> 50,000 cfm.
     q = dilution_airflow(
         contaminant_generation_rate=_q("10 g/min"),

@@ -938,6 +938,15 @@ def test_welding_shop_ventilation_example_dilution_dwarfs_comfort():
     assert s["dilution_ach"] > 50.0
 
 
+def test_lab_ventilation_air_changes_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "lab_ventilation_air_changes.py"))
+    f = namespace["lab_airflow"]()
+    # 8 ACH on a 180 m3 room is 0.40 m3/s; the office rate is a quarter of it.
+    assert f["lab_flow_m3s"] == pytest.approx(0.40, abs=0.005)
+    assert f["office_flow_m3s"] == pytest.approx(0.10, abs=0.005)
+    assert f["recovered_ach"] == pytest.approx(8.0, rel=1e-6)
+
+
 def test_office_ventilation_scorecard_example_lab_fails_on_air_changes():
     namespace = runpy.run_path(str(_EXAMPLES / "office_ventilation_scorecard.py"))
     r = namespace["zone_scorecards"]()
