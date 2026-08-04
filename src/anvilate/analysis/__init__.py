@@ -181,7 +181,12 @@ modules:
   temperature rise of a held bar, the triaxial (fully-constrained) thermal stress,
   the through-wall linear-gradient bending stress of a restrained wall,
   shrink-fit assembly temperature, CTE-mismatch (differential) joint stress, and the
-  Timoshenko bimetallic-strip curvature and cantilever tip deflection
+  Timoshenko bimetallic-strip curvature and cantilever tip deflection; plus
+  heat-transfer screening — conduction/convection/spreading thermal resistances and
+  their series/parallel network, the temperature rise Q·R and its junction-margin
+  scorecard, straight-fin efficiency and the fin-array count a target resistance
+  needs, and the flat-plate forced (laminar and turbulent) and vertical-plate natural
+  convection coefficients with their validity ranges
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -210,8 +215,10 @@ modules:
   Smith-Watson-Topper equivalent reversed stresses, the fatigue notch factor
   (with the Neuber and Peterson notch sensitivities that feed it),
   the steel endurance-limit estimate with its Marin correction to the real
-  part, the Basquin S-N finite-life law, and
-  Palmgren-Miner cumulative damage over a load spectrum
+  part, the Basquin S-N finite-life law,
+  Palmgren-Miner cumulative damage over a load spectrum, and the EN 1993-1-9 weld
+  detail-category fatigue curve (endurance and allowable-range, the thickness
+  size-effect, and a spectrum scorecard that will not pass without a chosen category)
 - :mod:`~anvilate.analysis.gasket` — bolted-flange gasket bolt loads (ASME VIII
   Appendix 2): the gasket seating load (π·b·G·y), the operating load (hydrostatic
   end force plus the m-factor residual gasket reaction), and the governing (larger)
@@ -226,6 +233,19 @@ modules:
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
   (assembly) force over the lead-in ramp
+- :mod:`~anvilate.analysis.nds_timber` — the NDS wood adjusted design value
+  F' = F·∏Cᵢ (the reference value times its visible factor chain, with the Table
+  2.3.2 load-duration factor), the bending scorecard (not evaluated without a
+  reference value), the column stability factor C_P (Ylinen) and its Euler buckling
+  stress, and the §3.9.2 combined bending + axial interaction
+- :mod:`~anvilate.analysis.cold_formed_steel` — the AISI S100 effective-width method
+  (Winter): the plate slenderness λ that decides whether a thin compression element is
+  fully effective, and the reduced effective width above the limit
+
+Note: :mod:`~anvilate.analysis.pressure_vessel` also carries the ASME VIII head forms
+(ellipsoidal, torispherical, hemispherical/sphere — each sizing and MAWP) and the
+ASME B31.3 process-piping checks (straight-pipe wall and rating with the ordered-wall
+gross-up, branch reinforcement area, and the displacement stress-range allowable).
 
 Further analytical cases land here as they are built out (see
 openspec/specs/validation-gauntlet/).
