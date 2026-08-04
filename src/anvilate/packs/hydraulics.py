@@ -12,19 +12,31 @@ selection.
 
 from __future__ import annotations
 
+from math import pi
+
 from pydantic import BaseModel, ConfigDict
 
-from ..analysis import pump_hydraulic_power, pump_shaft_power
+from ..analysis import (
+    darcy_friction_factor,
+    darcy_weisbach_head_loss,
+    minor_loss_head,
+    pump_hydraulic_power,
+    pump_shaft_power,
+    reynolds_number,
+)
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
+    "PipeRun",
     "PumpDuty",
+    "screen_pipe_run",
     "screen_pump_duty",
 ]
 
 _MOTOR_REFERENCE = "Pump shaft power P = ρgQH/η"
 _NPSH_REFERENCE = "NPSH available vs required (cavitation margin)"
+_PIPE_REFERENCE = "Darcy-Weisbach friction + fitting minor losses"
 
 
 class PumpDuty(BaseModel):
@@ -80,3 +92,66 @@ def screen_pump_duty(
         "NPSH margin", computed=npsh_sf, required=npsh_margin_factor
     ).model_copy(update={"reference": _NPSH_REFERENCE})
     return Scorecard(entries=(motor_entry, npsh_entry))
+
+
+class PipeRun(BaseModel):
+    """A pressurized pipe run and the head available to drive it, and its screen inputs.
+
+    ``flow_rate`` Q, inside ``diameter`` D, ``length`` L, and wall ``roughness`` ε set the friction
+    loss; ``fitting_loss_coefficient`` ΣK is the summed minor-loss coefficient of the valves, bends,
+    and fittings; and ``kinematic_viscosity`` ν is the fluid's (water is ~1e-6 m²/s). The
+    ``available_head`` is the head the source (a pump, a reservoir) can supply against the losses.
+    """
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    flow_rate: Quantity
+    diameter: Quantity
+    length: Quantity
+    roughness: Quantity
+    fitting_loss_coefficient: float
+    kinematic_viscosity: Quantity
+    available_head: Quantity
+
+
+def screen_pipe_run(pipe: PipeRun) -> Scorecard:
+    """Screen a :class:`PipeRun` for head budget and return its scorecard.
+
+    Computes the mean velocity, the Darcy-Weisbach friction head, and the fitting minor losses, sums
+    them, and screens the ``available_head`` against that total demand. Returns a
+    :class:`~anvilate.scorecard.Scorecard` with a cited PASS/FAIL entry — the run works only if the
+    source can supply more head than the pipe and fittings consume.
+    """
+    d = pipe.diameter.to("m").magnitude
+    velocity = Quantity(
+        magnitude=pipe.flow_rate.to("m**3/s").magnitude / (pi / 4 * d**2), unit="m/s"
+    )
+    reynolds = reynolds_number(
+        velocity=velocity, diameter=pipe.diameter, kinematic_viscosity=pipe.kinematic_viscosity
+    )
+    friction_factor = darcy_friction_factor(
+        reynolds=reynolds,
+        relative_roughness=pipe.roughness.to("m").magnitude / d,
+    )
+    friction = (
+        darcy_weisbach_head_loss(
+            friction_factor=friction_factor,
+            length=pipe.length,
+            diameter=pipe.diameter,
+            velocity=velocity,
+        )
+        .to("m")
+        .magnitude
+    )
+    minor = (
+        minor_loss_head(loss_coefficient=pipe.fitting_loss_coefficient, velocity=velocity)
+        .to("m")
+        .magnitude
+    )
+    total_loss = friction + minor
+    available = pipe.available_head.to("m").magnitude
+    ratio = available / total_loss if total_loss > 0 else None
+    entry = ScorecardEntry.from_safety_factor(
+        "head budget", computed=ratio, required=1.0
+    ).model_copy(update={"reference": _PIPE_REFERENCE})
+    return Scorecard(entries=(entry,))

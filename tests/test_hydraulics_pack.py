@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from anvilate.packs.hydraulics import PumpDuty, screen_pump_duty
+from anvilate.packs.hydraulics import (
+    PipeRun,
+    PumpDuty,
+    screen_pipe_run,
+    screen_pump_duty,
+)
 from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
 
@@ -44,3 +49,27 @@ def test_pump_duty_low_npsh_alone_fails_only_that_check():
     card = screen_pump_duty(_duty(npsh_available=_q("4.2 m")))
     assert card.status is CheckStatus.FAIL
     assert {e.name for e in card.failures()} == {"NPSH margin"}
+
+
+def _pipe(**overrides) -> PipeRun:
+    fields = {
+        "flow_rate": _q("0.05 m**3/s"),
+        "diameter": _q("0.15 m"),
+        "length": _q("100 m"),
+        "roughness": _q("0.045 mm"),
+        "fitting_loss_coefficient": 5.0,
+        "kinematic_viscosity": _q("1e-6 m**2/s"),
+        "available_head": _q("10 m"),
+    }
+    fields.update(overrides)
+    return PipeRun(**fields)
+
+
+def test_pipe_run_passes_with_enough_head_fails_without():
+    ok = screen_pipe_run(_pipe())
+    assert ok.status is CheckStatus.PASS
+    (entry,) = ok.entries
+    assert entry.name == "head budget"
+    assert entry.reference is not None
+    short = screen_pipe_run(_pipe(available_head=_q("5 m")))
+    assert short.status is CheckStatus.FAIL
