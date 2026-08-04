@@ -79,8 +79,9 @@ modules:
   shear force, and the bolt count a torque requires
 - :mod:`~anvilate.analysis.creep` — high-temperature creep-rupture screening by the
   Larson-Miller parameter P = T·(C + log10 t_r): the parameter from a temperature and
-  rupture time, and its inverses for the rupture life and the limiting service
-  temperature a required life allows
+  rupture time, its inverses for the rupture life and the limiting service temperature a
+  required life allows, and the Robinson life-fraction damage Σ(t_i/t_r,i) of a
+  varying-condition service spectrum
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
   (millions of revolutions and running hours) and the dynamic rating a target life
   requires, static load safety factor, the
@@ -475,6 +476,7 @@ from .coupling import (
 )
 from .creep import (
     LARSON_MILLER_CONSTANT,
+    creep_life_fraction_damage,
     larson_miller_parameter,
     larson_miller_rupture_life,
     larson_miller_temperature_limit,
@@ -1518,6 +1520,7 @@ __all__ = [
     "larson_miller_parameter",
     "larson_miller_rupture_life",
     "larson_miller_temperature_limit",
+    "creep_life_fraction_damage",
     "spring_index",
     "wahl_factor",
     "spring_shear_stress",

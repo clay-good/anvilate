@@ -11579,6 +11579,30 @@ def test_larson_miller_parameter_and_inverses_round_trip():
         larson_miller_parameter(temperature=_q("811 K"), rupture_time=_q("0 hour"))
 
 
+def test_creep_life_fraction_damage_robinson_rule():
+    from anvilate.analysis import creep_life_fraction_damage
+
+    # D = sum(t_i/t_r,i): three blocks -> 1000/10000 + 2000/8000 + 500/2000 = 0.60.
+    d = creep_life_fraction_damage(
+        service_times=[_q("1000 hour"), _q("2000 hour"), _q("500 hour")],
+        rupture_lives=[_q("10000 hour"), _q("8000 hour"), _q("2000 hour")],
+    )
+    assert d == pytest.approx(0.1 + 0.25 + 0.25, rel=1e-9)
+    assert d < 1.0  # survives
+    # Reaching D = 1 is the rupture prediction.
+    spent = creep_life_fraction_damage(
+        service_times=[_q("5000 hour"), _q("4000 hour")],
+        rupture_lives=[_q("10000 hour"), _q("8000 hour")],
+    )
+    assert spent == pytest.approx(1.0, rel=1e-9)
+    # Mismatched spectrum lengths are rejected.
+    with pytest.raises(ValueError, match="same length"):
+        creep_life_fraction_damage(
+            service_times=[_q("1000 hour")],
+            rupture_lives=[_q("10000 hour"), _q("8000 hour")],
+        )
+
+
 def test_agma_module_inverse_round_trips_the_bending_stress():
     from anvilate.analysis import agma_bending_stress, agma_module_for_bending_stress
 

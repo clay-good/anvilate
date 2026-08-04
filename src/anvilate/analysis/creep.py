@@ -21,6 +21,7 @@ on a Celsius scale.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import log10
 
 from ..units import Quantity
@@ -34,6 +35,7 @@ __all__ = [
     "larson_miller_parameter",
     "larson_miller_rupture_life",
     "larson_miller_temperature_limit",
+    "creep_life_fraction_damage",
 ]
 
 
@@ -120,3 +122,39 @@ def larson_miller_temperature_limit(
             "the rupture time is too short for this constant"
         )
     return Quantity(magnitude=parameter / denominator, unit="K")
+
+
+def creep_life_fraction_damage(
+    *,
+    service_times: Sequence[Quantity],
+    rupture_lives: Sequence[Quantity],
+) -> float:
+    """The Robinson life-fraction creep damage D = Σ(t_i/t_r,i) of a service spectrum.
+
+    The creep analog of the Palmgren-Miner fatigue rule
+    (:func:`~anvilate.analysis.miner_cumulative_damage`): a component rarely spends its
+    whole life at one temperature and stress, and Robinson's linear rule sums the fraction
+    of rupture life used in each operating block. Each ``service_times`` t_i (the time held
+    at operating condition i) consumes t_i/t_r,i of the life, where ``rupture_lives`` t_r,i
+    is the Larson-Miller rupture life at that condition (from
+    :func:`larson_miller_rupture_life`). Creep rupture is predicted when D reaches 1.0, so D
+    is the fraction of creep life used and 1 − D the fraction remaining. The two sequences
+    pair block-for-block and must be the same non-empty length; the times must be
+    non-negative and the rupture lives positive. Returns the dimensionless damage D.
+    """
+    if len(service_times) != len(rupture_lives):
+        raise ValueError("service_times and rupture_lives must have the same length")
+    if not service_times:
+        raise ValueError("service_times and rupture_lives must be non-empty")
+    total = 0.0
+    for i, (t_service, t_rupture) in enumerate(zip(service_times, rupture_lives, strict=True)):
+        _require(t_service, "[time]", f"service_times[{i}]")
+        _require(t_rupture, "[time]", f"rupture_lives[{i}]")
+        used = t_service.to("hour").magnitude
+        life = t_rupture.to("hour").magnitude
+        if used < 0:
+            raise ValueError(f"service_times[{i}] must be non-negative; got {t_service}")
+        if life <= 0:
+            raise ValueError(f"rupture_lives[{i}] must be positive; got {t_rupture}")
+        total += used / life
+    return total

@@ -173,6 +173,7 @@ coupling.flange_coupling_bolt_count
 coupling.flange_coupling_bolt_force
 coupling.flange_coupling_torque
 creep.LARSON_MILLER_CONSTANT
+creep.creep_life_fraction_damage
 creep.larson_miller_parameter
 creep.larson_miller_rupture_life
 creep.larson_miller_temperature_limit
