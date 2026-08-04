@@ -12670,6 +12670,25 @@ def test_asme_b313_allowable_displacement_stress_range():
         )
 
 
+def test_asme_b313_bend_stress_intensification():
+    from anvilate.analysis import asme_b313_bend_stress_intensification
+
+    # h = T*R1/r2^2 = 6*150/52^2 = 0.333; i_i = 0.9/h^(2/3), i_o = 0.75/h^(2/3).
+    i_in, i_out = asme_b313_bend_stress_intensification(
+        wall_thickness=_q("6 mm"), bend_radius=_q("150 mm"), mean_radius=_q("52 mm")
+    )
+    h = 6 * 150 / 52**2
+    assert i_in == pytest.approx(0.9 / h ** (2 / 3), rel=1e-9)
+    assert i_out == pytest.approx(0.75 / h ** (2 / 3), rel=1e-9)
+    # The in-plane factor is always the larger of the two.
+    assert i_in > i_out > 1.0
+    # A long-radius, thick-walled bend (large h) drives the SIFs down to the 1.0 floor.
+    stiff_in, stiff_out = asme_b313_bend_stress_intensification(
+        wall_thickness=_q("20 mm"), bend_radius=_q("600 mm"), mean_radius=_q("52 mm")
+    )
+    assert stiff_in == 1.0 and stiff_out == 1.0
+
+
 def test_asme_conical_head_thickness_reduces_to_the_cylinder_at_zero_angle():
     from anvilate.analysis import asme_conical_head_thickness
 

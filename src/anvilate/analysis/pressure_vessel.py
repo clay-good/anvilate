@@ -46,6 +46,7 @@ __all__ = [
     "asme_b313_minimum_ordered_wall",
     "asme_b313_branch_required_reinforcement_area",
     "asme_b313_allowable_displacement_stress_range",
+    "asme_b313_bend_stress_intensification",
     "thick_wall_cylinder",
     "thin_wall_sphere_stress",
     "thin_wall_sphere_diametral_growth",
@@ -744,6 +745,41 @@ def asme_b313_allowable_displacement_stress_range(
     if sc <= 0 or sh <= 0:
         raise ValueError("cold_allowable and hot_allowable must be positive")
     return Quantity(magnitude=stress_range_factor * (1.25 * sc + 0.25 * sh), unit="MPa")
+
+
+def asme_b313_bend_stress_intensification(
+    *,
+    wall_thickness: Quantity,
+    bend_radius: Quantity,
+    mean_radius: Quantity,
+) -> tuple[float, float]:
+    """The ASME B31.3 Appendix D stress-intensification factors of a welding elbow / bend.
+
+    A pipe bend is more flexible *and* more highly stressed than the straight pipe it
+    replaces: as the line expands, the bend ovalizes, concentrating the bending stress.
+    B31.3 rolls that into a stress-intensification factor (SIF) i that multiplies the
+    nominal bending stress in the displacement-stress check
+    (:func:`asme_b313_allowable_displacement_stress_range`). For a welding elbow the SIFs
+    come from the flexibility characteristic h = T·R₁/r₂²: the in-plane factor is
+    i_i = 0.9/h^(2/3) and the out-of-plane factor i_o = 0.75/h^(2/3), each floored at 1.0
+    (a fitting is never less severe than straight pipe). ``wall_thickness`` T,
+    ``bend_radius`` R₁ (the elbow's centreline bend radius), and ``mean_radius`` r₂ (the
+    mean radius of the pipe wall, (D_o − T)/2). A long-radius, thick-walled bend (large h)
+    has SIFs near 1; a short-radius thin bend concentrates stress the most. Returns the
+    pair (in-plane, out-of-plane) as dimensionless factors.
+    """
+    _require(wall_thickness, "[length]", "wall_thickness")
+    _require(bend_radius, "[length]", "bend_radius")
+    _require(mean_radius, "[length]", "mean_radius")
+    t = wall_thickness.to("mm").magnitude
+    r1 = bend_radius.to("mm").magnitude
+    r2 = mean_radius.to("mm").magnitude
+    if t <= 0 or r1 <= 0 or r2 <= 0:
+        raise ValueError("wall_thickness, bend_radius, and mean_radius must be positive")
+    h = t * r1 / r2**2
+    in_plane = max(0.9 / h ** (2.0 / 3.0), 1.0)
+    out_of_plane = max(0.75 / h ** (2.0 / 3.0), 1.0)
+    return in_plane, out_of_plane
 
 
 class ThickWallStress(BaseModel):
