@@ -494,6 +494,16 @@ def test_cooling_coil_load_example_latent_is_a_big_share():
     assert c["latent_fraction"] > 0.4
 
 
+def test_chiller_second_law_efficiency_example_ranking_flips():
+    namespace = runpy.run_path(str(_EXAMPLES / "chiller_second_law_efficiency.py"))
+    g = namespace["chiller_grades"]()
+    # By COP the easy-duty chiller looks better; by second-law efficiency the hard-duty one wins.
+    assert g["easy_cop"] > g["hard_cop"]
+    assert g["hard_eta2"] > g["easy_eta2"]
+    assert g["easy_eta2"] == pytest.approx(0.40, abs=0.01)
+    assert g["hard_eta2"] == pytest.approx(0.55, abs=0.01)
+
+
 def test_heat_pump_cold_day_example_cop_collapses():
     namespace = runpy.run_path(str(_EXAMPLES / "heat_pump_cold_day.py"))
     p = namespace["heat_pump_performance"]()

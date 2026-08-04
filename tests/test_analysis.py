@@ -15013,6 +15013,20 @@ def test_refrigeration_carnot_and_actual_cop():
         carnot_cop_cooling(cold_temperature=_q("318.15 K"), hot_temperature=_q("278.15 K"))
 
 
+def test_refrigeration_second_law_efficiency():
+    from anvilate.analysis import second_law_efficiency
+
+    # eta_II = COP/COP_Carnot: 3.5/7.0 = 0.5.
+    assert second_law_efficiency(actual_cop=3.5, carnot_cop=7.0) == pytest.approx(0.5, rel=1e-12)
+    # It grades the machine, not the duty: a lower-COP unit on a harder lift can score higher.
+    easy = second_law_efficiency(actual_cop=4.0, carnot_cop=10.0)
+    hard = second_law_efficiency(actual_cop=3.2, carnot_cop=5.8)
+    assert hard > easy  # the lower-COP chiller is the better machine
+    # It cannot exceed 1 (beating Carnot is impossible).
+    with pytest.raises(ValueError, match="cannot exceed the Carnot COP"):
+        second_law_efficiency(actual_cop=8.0, carnot_cop=7.0)
+
+
 def test_psychrometric_moist_air_properties():
     import math
 

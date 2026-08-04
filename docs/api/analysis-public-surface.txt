@@ -678,6 +678,7 @@ rigging.tackle_mechanical_advantage
 refrigeration.carnot_cop_cooling
 refrigeration.carnot_cop_heating
 refrigeration.coefficient_of_performance
+refrigeration.second_law_efficiency
 reinforced_concrete.rc_beam_nominal_moment
 reinforced_concrete.rc_doubly_reinforced_moment
 reinforced_concrete.rc_t_beam_moment

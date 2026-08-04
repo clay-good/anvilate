@@ -24,6 +24,7 @@ __all__ = [
     "carnot_cop_cooling",
     "carnot_cop_heating",
     "coefficient_of_performance",
+    "second_law_efficiency",
 ]
 
 
@@ -81,6 +82,28 @@ def coefficient_of_performance(*, capacity: Quantity, power_input: Quantity) -> 
     if q <= 0 or w <= 0:
         raise ValueError("capacity and power_input must be positive")
     return q / w
+
+
+def second_law_efficiency(*, actual_cop: float, carnot_cop: float) -> float:
+    """The second-law (exergetic) efficiency of a cycle, η_II = COP/COP_Carnot.
+
+    How close a real machine comes to the thermodynamic ceiling: the ``actual_cop`` (from
+    :func:`coefficient_of_performance`) over the ``carnot_cop`` for the same reservoirs (from
+    :func:`carnot_cop_cooling` or :func:`carnot_cop_heating`). Unlike the COP itself — which shrinks
+    as the temperature lift grows even for a perfect machine — the second-law efficiency isolates
+    how good the *machine* is, independent of how hard the duty is: a good vapor-compression chiller
+    sits near 0.5, a poor one well below. It cannot exceed 1 (that would beat Carnot). Returns the
+    dimensionless efficiency.
+    """
+    if actual_cop <= 0:
+        raise ValueError("actual_cop must be positive")
+    if carnot_cop <= 0:
+        raise ValueError("carnot_cop must be positive")
+    if actual_cop > carnot_cop:
+        raise ValueError(
+            "actual_cop cannot exceed the Carnot COP (that would beat the ideal cycle)"
+        )
+    return actual_cop / carnot_cop
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
