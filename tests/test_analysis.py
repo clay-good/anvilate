@@ -12420,3 +12420,38 @@ def test_nds_combined_bending_compression_interaction_and_amplification():
     # When f_c reaches F_cE the member has buckled: the interaction is undefined.
     with pytest.raises(ValueError, match="has buckled"):
         nds_combined_bending_compression(**{**kw, "compression_stress": _q("1000 psi")})
+
+
+def test_flat_plate_turbulent_convection_and_its_validity_window():
+    from anvilate.analysis import (
+        flat_plate_forced_convection_coefficient,
+        flat_plate_turbulent_convection_coefficient,
+    )
+
+    air = {
+        "thermal_conductivity": _q("0.026 W/(m*K)"),
+        "kinematic_viscosity": _q("1.6e-5 m**2/s"),
+        "prandtl_number": 0.71,
+    }
+    # 50 m/s over a 1 m plate: Re = 3.1e6 (turbulent), h ≈ 135 W/m²·K.
+    h = flat_plate_turbulent_convection_coefficient(
+        fluid_velocity=_q("50 m/s"), plate_length=_q("1 m"), **air
+    )
+    assert h is not None
+    re = 50.0 * 1.0 / 1.6e-5
+    nu = 0.037 * re**0.8 * 0.71 ** (1.0 / 3.0)
+    assert h.to("W/(m**2*K)").magnitude == pytest.approx(nu * 0.026 / 1.0, rel=1e-9)
+    # In the laminar regime the turbulent correlation declines (use the laminar one).
+    assert (
+        flat_plate_turbulent_convection_coefficient(
+            fluid_velocity=_q("5 m/s"), plate_length=_q("0.1 m"), **air
+        )
+        is None
+    )
+    # And the laminar function declines the turbulent regime — the two cover the split.
+    assert (
+        flat_plate_forced_convection_coefficient(
+            fluid_velocity=_q("50 m/s"), plate_length=_q("1 m"), **air
+        )
+        is None
+    )

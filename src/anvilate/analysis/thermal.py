@@ -42,6 +42,7 @@ __all__ = [
     "fin_efficiency",
     "junction_temperature_scorecard",
     "flat_plate_forced_convection_coefficient",
+    "flat_plate_turbulent_convection_coefficient",
     "vertical_plate_natural_convection_coefficient",
     "circular_source_spreading_resistance",
     "fin_array_count_for_resistance",
@@ -754,6 +755,46 @@ def flat_plate_forced_convection_coefficient(
     if reynolds > _FLAT_PLATE_LAMINAR_RE:
         return None  # turbulent: out of the laminar correlation's validity range
     nusselt = 0.664 * reynolds**0.5 * prandtl_number ** (1.0 / 3.0)
+    return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")
+
+
+def flat_plate_turbulent_convection_coefficient(
+    *,
+    fluid_velocity: Quantity,
+    plate_length: Quantity,
+    thermal_conductivity: Quantity,
+    kinematic_viscosity: Quantity,
+    prandtl_number: float,
+) -> Quantity | None:
+    """The average convection coefficient h for turbulent flow over a flat plate.
+
+    The Incropera correlation for fully turbulent external forced convection:
+    Nu = 0.037·Re_L^(4/5)·Pr^(1/3), h = Nu·k/L. The turbulent counterpart of
+    :func:`flat_plate_forced_convection_coefficient` — the one to use when that
+    function returns ``None`` because the flow has gone turbulent. Arguments are as
+    there. Returns ``None`` when Re_L is outside the correlation's validity range
+    (5×10⁵ ≤ Re_L ≤ 10⁷): below it the flow is laminar (use the laminar function),
+    above it the correlation extrapolates. Otherwise returns h in W/(m²·K).
+    """
+    _require(fluid_velocity, "[velocity]", "fluid_velocity")
+    _require(plate_length, "[length]", "plate_length")
+    _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
+    _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
+    v = fluid_velocity.to("m/s").magnitude
+    length_m = plate_length.to("m").magnitude
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    if min(v, length_m, k, nu) <= 0:
+        raise ValueError(
+            "fluid_velocity, plate_length, thermal_conductivity, and kinematic_viscosity "
+            "must be positive"
+        )
+    if prandtl_number <= 0:
+        raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
+    reynolds = v * length_m / nu
+    if reynolds < _FLAT_PLATE_LAMINAR_RE or reynolds > 1.0e7:
+        return None  # laminar below, or out of the turbulent correlation's range above
+    nusselt = 0.037 * reynolds**0.8 * prandtl_number ** (1.0 / 3.0)
     return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")
 
 
