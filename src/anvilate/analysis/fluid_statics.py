@@ -21,6 +21,7 @@ from ..units import Quantity
 
 __all__ = [
     "buoyant_force",
+    "capillary_rise",
     "center_of_pressure_depth",
     "hydrostatic_force_on_plane",
     "hydrostatic_pressure",
@@ -177,6 +178,39 @@ def righting_moment(
     if not 0.0 <= heel_angle < 90.0:
         raise ValueError(f"heel_angle must be in [0, 90) degrees; got {heel_angle}")
     return Quantity(magnitude=w * gm * sin(radians(heel_angle)), unit="kN*m")
+
+
+def capillary_rise(
+    *,
+    surface_tension: Quantity,
+    contact_angle: float,
+    density: Quantity,
+    tube_radius: Quantity,
+) -> Quantity:
+    """The height liquid climbs (or drops) in a fine tube by surface tension, h = 2σ·cosθ/(ρ·g·r).
+
+    A wetting liquid pulls itself up a narrow tube against gravity until the surface-tension force
+    around the meniscus balances the weight of the raised column: h = 2σ·cosθ/(ρ·g·r).
+    ``surface_tension`` σ is the liquid's (0.0728 N/m for water in air), ``contact_angle`` θ the
+    wetting angle (0° for water on clean glass; above 90° the liquid is *depressed*, as mercury is),
+    ``density`` ρ, and ``tube_radius`` r the tube (or pore) radius. The rise grows as the tube
+    narrows, which is why it dominates in heat-pipe wicks, soil pores, and paper — and is negligible
+    in anything you'd call a pipe. Returns the rise in mm (negative for a non-wetting liquid).
+    """
+    _check(surface_tension, "[force]/[length]", "surface_tension")
+    _check(density, "[mass]/[length]**3", "density")
+    _check(tube_radius, "[length]", "tube_radius")
+    from math import cos, radians
+
+    sigma = surface_tension.to("N/m").magnitude
+    rho = density.to("kg/m**3").magnitude
+    r = tube_radius.to("m").magnitude
+    if sigma <= 0 or rho <= 0 or r <= 0:
+        raise ValueError("surface_tension, density, and tube_radius must be positive")
+    if not 0.0 <= contact_angle <= 180.0:
+        raise ValueError(f"contact_angle must be in [0, 180] degrees; got {contact_angle}")
+    h = 2.0 * sigma * cos(radians(contact_angle)) / (rho * _GRAVITY * r)
+    return Quantity(magnitude=h * 1000.0, unit="mm")
 
 
 def stack_effect_pressure(

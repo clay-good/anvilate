@@ -127,8 +127,9 @@ modules:
 - :mod:`~anvilate.analysis.fluid_statics` — fluid statics: the hydrostatic pressure
   ρ·g·h, the resultant force on a submerged plane surface and its center-of-pressure
   depth, the Archimedes buoyant force on a submerged body, the metacentric height and
-  righting moment that decide a floating body's stability, and the stack-effect pressure
-  that air buoyancy draws over a building or chimney height
+  righting moment that decide a floating body's stability, the stack-effect pressure that
+  air buoyancy draws over a building or chimney height, and the capillary rise of a liquid
+  in a fine tube or pore
 - :mod:`~anvilate.analysis.pipe_flow` — incompressible pipe hydraulics: the Reynolds
   number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
   Darcy-Weisbach friction head loss and fitting minor losses, the pressure drop ρ·g·h a
@@ -710,6 +711,7 @@ from .flow_measurement import (
 )
 from .fluid_statics import (
     buoyant_force,
+    capillary_rise,
     center_of_pressure_depth,
     hydrostatic_force_on_plane,
     hydrostatic_pressure,
@@ -1325,6 +1327,7 @@ __all__ = [
     "obstruction_meter_flow_rate",
     "pitot_velocity",
     "buoyant_force",
+    "capillary_rise",
     "center_of_pressure_depth",
     "hydrostatic_force_on_plane",
     "hydrostatic_pressure",

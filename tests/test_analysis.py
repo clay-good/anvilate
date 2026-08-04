@@ -14559,6 +14559,45 @@ def test_center_of_pressure_below_centroid_and_buoyancy():
         buoyant_force(displaced_volume=_q("0 m**3"), fluid_density=_q("1000 kg/m**3"))
 
 
+def test_capillary_rise_water_and_mercury():
+    from anvilate.analysis import capillary_rise
+
+    # h = 2*sigma*cos(theta)/(rho*g*r); water (theta=0) in a 0.5 mm-radius tube -> ~29.7 mm.
+    h = capillary_rise(
+        surface_tension=_q("0.0728 N/m"),
+        contact_angle=0.0,
+        density=_q("1000 kg/m**3"),
+        tube_radius=_q("0.5 mm"),
+    )
+    assert h.to("mm").magnitude == pytest.approx(
+        2 * 0.0728 / (1000 * 9.80665 * 0.0005) * 1000, rel=1e-9
+    )
+    assert h.to("mm").magnitude == pytest.approx(29.7, abs=0.2)
+    # A narrower tube climbs higher (inverse in r).
+    h_narrow = capillary_rise(
+        surface_tension=_q("0.0728 N/m"),
+        contact_angle=0.0,
+        density=_q("1000 kg/m**3"),
+        tube_radius=_q("0.25 mm"),
+    )
+    assert h_narrow.to("mm").magnitude == pytest.approx(2 * h.to("mm").magnitude, rel=1e-9)
+    # A non-wetting liquid (contact angle > 90) is depressed, not raised.
+    depressed = capillary_rise(
+        surface_tension=_q("0.485 N/m"),
+        contact_angle=140.0,
+        density=_q("13534 kg/m**3"),
+        tube_radius=_q("0.5 mm"),
+    )
+    assert depressed.to("mm").magnitude < 0
+    with pytest.raises(ValueError, match="contact_angle"):
+        capillary_rise(
+            surface_tension=_q("0.0728 N/m"),
+            contact_angle=200.0,
+            density=_q("1000 kg/m**3"),
+            tube_radius=_q("0.5 mm"),
+        )
+
+
 def test_stack_effect_pressure():
     from anvilate.analysis import stack_effect_pressure
 

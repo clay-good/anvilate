@@ -359,6 +359,7 @@ flow_measurement.differential_pressure_for_flow
 flow_measurement.obstruction_meter_flow_rate
 flow_measurement.pitot_velocity
 fluid_statics.buoyant_force
+fluid_statics.capillary_rise
 fluid_statics.center_of_pressure_depth
 fluid_statics.hydrostatic_force_on_plane
 fluid_statics.hydrostatic_pressure
