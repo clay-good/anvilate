@@ -954,6 +954,15 @@ def test_column_load_combinations_example_lrfd_exceeds_asd():
     assert d["lrfd_kn"] > d["asd_kn"]
 
 
+def test_roof_step_snow_drift_example_drift_dwarfs_balanced():
+    namespace = runpy.run_path(str(_EXAMPLES / "roof_step_snow_drift.py"))
+    d = namespace["drift_surcharge"]()
+    assert d["balanced_kpa"] == pytest.approx(0.84, abs=0.01)
+    assert d["drift_height_m"] == pytest.approx(1.16, abs=0.02)
+    # The peak drift surcharge is several times the balanced snow load.
+    assert d["drift_surcharge_kpa"] > 3 * d["balanced_kpa"]
+
+
 def test_cold_storage_roof_snow_example_freezer_carries_more():
     namespace = runpy.run_path(str(_EXAMPLES / "cold_storage_roof_snow.py"))
     r = namespace["roof_snow_loads"]()

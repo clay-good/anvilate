@@ -239,7 +239,9 @@ modules:
   stability coefficient (θ = Pₓ·Δ/(Vₓ·hsx·Cd)) and its stability ceiling, the
   combined seismic load effect E = ρ·Q_E ± 0.2·SDS·D fed to the combinations, the
   flat- and sloped-roof snow loads
-  (pf = 0.7·Ce·Ct·Is·pg, ps = Cs·pf), the tributary-area live-load reduction
+  (pf = 0.7·Ce·Ct·Is·pg, ps = Cs·pf), the snow density and leeward drift height
+  (hd = 0.416·lu^⅓·(pg+0.479)^¼ − 0.457) for a drift surcharge, the
+  tributary-area live-load reduction
   (L = L0·(0.25 + 4.57/√(KLL·AT))), and the ponded-water rain load
   (R = 0.0098·(ds + dh))
 - :mod:`~anvilate.analysis.curved_beam` — Winkler curved-beam bending
@@ -607,6 +609,7 @@ from .building_loads import (
     approximate_fundamental_period,
     components_cladding_net_pressure,
     flat_roof_snow_load,
+    leeward_snow_drift_height,
     rain_load,
     reduced_live_load,
     seismic_base_shear,
@@ -619,6 +622,7 @@ from .building_loads import (
     seismic_stability_coefficient_limit,
     seismic_vertical_force_distribution,
     sloped_roof_snow_load,
+    snow_density,
     wind_design_pressure,
     wind_velocity_pressure,
 )
@@ -1925,6 +1929,8 @@ __all__ = [
     "seismic_load_effect",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
+    "snow_density",
+    "leeward_snow_drift_height",
     "reduced_live_load",
     "rain_load",
     "CurvedBeamStress",

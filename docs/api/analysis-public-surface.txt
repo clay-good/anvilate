@@ -198,6 +198,7 @@ building_loads.allowable_story_drift
 building_loads.approximate_fundamental_period
 building_loads.components_cladding_net_pressure
 building_loads.flat_roof_snow_load
+building_loads.leeward_snow_drift_height
 building_loads.rain_load
 building_loads.reduced_live_load
 building_loads.seismic_base_shear
@@ -210,6 +211,7 @@ building_loads.seismic_stability_coefficient
 building_loads.seismic_stability_coefficient_limit
 building_loads.seismic_vertical_force_distribution
 building_loads.sloped_roof_snow_load
+building_loads.snow_density
 building_loads.wind_design_pressure
 building_loads.wind_velocity_pressure
 cable.catenary_arc_length

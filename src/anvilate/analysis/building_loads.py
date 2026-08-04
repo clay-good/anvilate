@@ -46,6 +46,8 @@ __all__ = [
     "seismic_load_effect",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
+    "snow_density",
+    "leeward_snow_drift_height",
     "reduced_live_load",
     "rain_load",
 ]
@@ -533,6 +535,47 @@ def sloped_roof_snow_load(
     if not 0 <= slope_factor <= 1:
         raise ValueError(f"slope_factor must lie in [0, 1]; got {slope_factor}")
     return Quantity(magnitude=slope_factor * pf, unit="kPa")
+
+
+def snow_density(*, ground_snow_load: Quantity) -> Quantity:
+    """The ASCE 7 snow density γ = 0.426·pg + 2.2 ≤ 4.7 kN/m³ (Eq 7.7-1).
+
+    Snow gets denser as it deepens, and ASCE 7 ties the density to the ``ground_snow_load`` pg:
+    γ = 0.426·pg + 2.2, capped at 4.7 kN/m³. The density converts a drift *height* (see
+    :func:`leeward_snow_drift_height`) into the surcharge *pressure* it imposes, pd = γ·hd. Returns
+    the snow density in kN/m³.
+    """
+    _check(ground_snow_load, "[pressure]", "ground_snow_load")
+    pg = ground_snow_load.to("kPa").magnitude
+    if pg <= 0:
+        raise ValueError("ground_snow_load must be positive")
+    return Quantity(magnitude=min(0.426 * pg + 2.2, 4.7), unit="kN/m**3")
+
+
+def leeward_snow_drift_height(
+    *,
+    upwind_fetch: Quantity,
+    ground_snow_load: Quantity,
+) -> Quantity:
+    """The ASCE 7 leeward snow drift height hd = 0.416·lu^(1/3)·(pg + 0.479)^(1/4) − 0.457 (§7.7).
+
+    Wind scours snow off an upper roof and piles it into a triangular drift against a taller wall,
+    parapet, or roof step — a surcharge on top of the balanced snow that is a leading cause of roof
+    collapse. Its height comes from the empirical fit hd = 0.416·``upwind_fetch``^(1/3)·
+    (``ground_snow_load`` + 0.479)^(1/4) − 0.457, with lu (the length of roof feeding snow to the
+    drift) in metres, pg in kPa, and hd in metres. Multiply by the :func:`snow_density` to get the
+    peak drift surcharge pd = γ·hd, which adds to the balanced :func:`flat_roof_snow_load`. A long
+    upwind fetch and a heavy ground snow build the tallest drifts. Returns the drift height in
+    metres (clamped at zero for very short fetches).
+    """
+    _check(upwind_fetch, "[length]", "upwind_fetch")
+    _check(ground_snow_load, "[pressure]", "ground_snow_load")
+    lu = upwind_fetch.to("m").magnitude
+    pg = ground_snow_load.to("kPa").magnitude
+    if lu <= 0 or pg <= 0:
+        raise ValueError("upwind_fetch and ground_snow_load must be positive")
+    hd = 0.416 * lu ** (1.0 / 3.0) * (pg + 0.479) ** 0.25 - 0.457
+    return Quantity(magnitude=max(hd, 0.0), unit="m")
 
 
 def reduced_live_load(

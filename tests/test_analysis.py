@@ -15407,6 +15407,25 @@ def test_asce7_lrfd_and_asd_load_combinations_governing():
         asce7_lrfd_factored_load(dead=_q("100 kN"), live=_q("5 MPa"))
 
 
+def test_snow_density_and_leeward_drift_height():
+    from anvilate.analysis import leeward_snow_drift_height, snow_density
+
+    # gamma = 0.426*pg + 2.2, capped at 4.7: 1.436 kPa -> 2.812 kN/m^3.
+    g = snow_density(ground_snow_load=_q("1.436 kPa"))
+    assert g.to("kN/m**3").magnitude == pytest.approx(0.426 * 1.436 + 2.2, rel=1e-9)
+    # The density is capped at 4.7 for very heavy ground snow.
+    assert snow_density(ground_snow_load=_q("20 kPa")).to("kN/m**3").magnitude == pytest.approx(4.7)
+    # hd = 0.416*lu^(1/3)*(pg+0.479)^(1/4) - 0.457: 30.48 m, 1.436 kPa -> 1.072 m
+    # (matches the US form 0.43*lu_ft^(1/3)*(pg_psf+10)^(1/4) - 1.5 = 3.52 ft).
+    hd = leeward_snow_drift_height(upwind_fetch=_q("30.48 m"), ground_snow_load=_q("1.436 kPa"))
+    assert hd.to("m").magnitude == pytest.approx(1.072, abs=0.005)
+    # A longer upwind fetch builds a taller drift.
+    taller = leeward_snow_drift_height(upwind_fetch=_q("60 m"), ground_snow_load=_q("1.436 kPa"))
+    assert taller.to("m").magnitude > hd.to("m").magnitude
+    with pytest.raises(ValueError, match="upwind_fetch and ground_snow_load"):
+        leeward_snow_drift_height(upwind_fetch=_q("0 m"), ground_snow_load=_q("1.436 kPa"))
+
+
 def test_rain_load_is_the_hydrostatic_head_of_ponded_water():
     from anvilate.analysis import rain_load
 
