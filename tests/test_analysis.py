@@ -15881,6 +15881,41 @@ def test_joukowsky_surge_pressure_and_wave_period():
         surge_wave_period(pipe_length=_q("500 m"), wave_speed=_q("0 m/s"))
 
 
+def test_pressure_wave_speed_korteweg():
+    from anvilate.analysis import pressure_wave_speed
+
+    kw = {
+        "fluid_bulk_modulus": _q("2.2 GPa"),
+        "fluid_density": _q("1000 kg/m**3"),
+        "pipe_diameter": _q("500 mm"),
+        "wall_thickness": _q("10 mm"),
+        "wall_elastic_modulus": _q("200 GPa"),
+    }
+    # a = sqrt((K/rho)/(1 + K*d/(E*t))) = sqrt(2.2e6/1.55) = 1191 m/s for water in steel.
+    a = pressure_wave_speed(**kw)
+    assert a.to("m/s").magnitude == pytest.approx(1191.4, rel=1e-4)
+
+    # A stiffer or thicker wall approaches the rigid-pipe acoustic speed sqrt(K/rho) = 1483 m/s.
+    rigid = pressure_wave_speed(
+        fluid_bulk_modulus=_q("2.2 GPa"),
+        fluid_density=_q("1000 kg/m**3"),
+        pipe_diameter=_q("500 mm"),
+        wall_thickness=_q("10 mm"),
+        wall_elastic_modulus=_q("2e8 GPa"),  # near-rigid
+    )
+    assert rigid.to("m/s").magnitude == pytest.approx(1483.2, rel=1e-3)
+    assert a.to("m/s").magnitude < rigid.to("m/s").magnitude
+
+    with pytest.raises(ValueError, match="positive"):
+        pressure_wave_speed(
+            fluid_bulk_modulus=_q("2.2 GPa"),
+            fluid_density=_q("1000 kg/m**3"),
+            pipe_diameter=_q("500 mm"),
+            wall_thickness=_q("0 mm"),
+            wall_elastic_modulus=_q("200 GPa"),
+        )
+
+
 def test_hazen_williams_head_loss_and_capacity_round_trip():
     from anvilate.analysis import hazen_williams_flow_capacity, hazen_williams_head_loss
 

@@ -1001,6 +1001,8 @@ def test_tank_drain_down_example_slow_tail():
 def test_water_hammer_valve_closure_example_surge_dwarfs_working():
     namespace = runpy.run_path(str(_EXAMPLES / "water_hammer_valve_closure.py"))
     s = namespace["surge_check"]()
+    # The wave speed is derived (Korteweg) from the steel pipe, not assumed: ~1191 m/s.
+    assert s["wave_speed_ms"] == pytest.approx(1191, abs=5)
     # The surge is several times the working pressure.
     assert s["surge_over_working"] > 3.0
     assert s["surge_kpa"] == pytest.approx(3000, abs=50)

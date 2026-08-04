@@ -21,7 +21,7 @@ directly as h_f = 10.67·L·Q^1.852/(C^1.852·D^4.87). Inputs and outputs are di
 
 from __future__ import annotations
 
-from math import log10
+from math import log10, sqrt
 
 from ..units import Quantity
 
@@ -35,6 +35,7 @@ __all__ = [
     "joukowsky_surge_pressure",
     "minor_loss_head",
     "pipe_pressure_drop",
+    "pressure_wave_speed",
     "reynolds_number",
     "surge_wave_period",
 ]
@@ -239,6 +240,41 @@ def hydraulic_diameter(*, flow_area: Quantity, wetted_perimeter: Quantity) -> Qu
     if a <= 0 or p <= 0:
         raise ValueError("flow_area and wetted_perimeter must be positive")
     return Quantity(magnitude=4.0 * a / p, unit="m")
+
+
+def pressure_wave_speed(
+    *,
+    fluid_bulk_modulus: Quantity,
+    fluid_density: Quantity,
+    pipe_diameter: Quantity,
+    wall_thickness: Quantity,
+    wall_elastic_modulus: Quantity,
+) -> Quantity:
+    """The water-hammer wave celerity in an elastic pipe, a = √[(K/ρ) / (1 + K·d/(E·t))] (Korteweg).
+
+    The pressure-wave speed that :func:`joukowsky_surge_pressure` and :func:`surge_wave_period`
+    both take as a given is itself a closed form. In a rigid pipe the wave travels at the fluid's
+    acoustic speed √(K/ρ) (≈1483 m/s for water); a real pipe's wall stretches under the surge and
+    stores some of the energy, slowing the wave by the Korteweg correction 1 + K·d/(E·t).
+    ``fluid_bulk_modulus`` K (~2.2 GPa for water) and ``fluid_density`` ρ are the fluid's;
+    ``pipe_diameter`` d, ``wall_thickness`` t, and ``wall_elastic_modulus`` E (~200 GPa for steel)
+    are the pipe's. A thin-walled or soft pipe (small E·t) drops the celerity sharply — the reason
+    plastic pipe hammers softer than steel. Returns the wave speed in m/s.
+    """
+    _check(fluid_bulk_modulus, "[pressure]", "fluid_bulk_modulus")
+    _check(fluid_density, "[mass]/[length]**3", "fluid_density")
+    _check(pipe_diameter, "[length]", "pipe_diameter")
+    _check(wall_thickness, "[length]", "wall_thickness")
+    _check(wall_elastic_modulus, "[pressure]", "wall_elastic_modulus")
+    k = fluid_bulk_modulus.to("Pa").magnitude
+    rho = fluid_density.to("kg/m**3").magnitude
+    d = pipe_diameter.to("m").magnitude
+    t = wall_thickness.to("m").magnitude
+    e = wall_elastic_modulus.to("Pa").magnitude
+    if k <= 0 or rho <= 0 or d <= 0 or t <= 0 or e <= 0:
+        raise ValueError("all inputs must be positive")
+    a = sqrt((k / rho) / (1.0 + (k * d) / (e * t)))
+    return Quantity(magnitude=a, unit="m/s")
 
 
 def joukowsky_surge_pressure(

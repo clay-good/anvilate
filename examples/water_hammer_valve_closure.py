@@ -6,9 +6,11 @@ of water abruptly turns its momentum into a pressure wave that races back up the
 Joukowsky equation says that surge is enormous. This example takes water flowing at 2.5 m/s in a
 500 m steel line at an 800 kPa working pressure and shows the surge from an instant valve closure
 is several megapascals — many times the working pressure, well past what the pipe is rated for.
-It also gives the critical closure time: close the valve slower than the wave's round-trip and the
-surge eases off, which is the whole reason large valves are geared to close slowly. The steady
-pressure was never the danger; the transient is.
+The wave speed is not assumed but derived from the pipe and fluid via the Korteweg formula: water's
+2.2 GPa stiffness in a 500 mm / 10 mm steel line gives ~1191 m/s. It also gives the critical closure
+time: close the valve slower than the wave's round-trip and the surge eases off, which is the whole
+reason large valves are geared to close slowly. The steady pressure was never the danger; the
+transient is.
 
 Run it directly (``python examples/water_hammer_valve_closure.py``);
 :func:`surge_check` is also exercised in the test suite.
@@ -16,29 +18,44 @@ Run it directly (``python examples/water_hammer_valve_closure.py``);
 
 from __future__ import annotations
 
-from anvilate.analysis import joukowsky_surge_pressure, surge_wave_period
+from anvilate.analysis import (
+    joukowsky_surge_pressure,
+    pressure_wave_speed,
+    surge_wave_period,
+)
 from anvilate.units import Quantity
 
 DENSITY = Quantity.parse("1000 kg/m**3")
-WAVE_SPEED = Quantity.parse("1200 m/s")  # water in steel pipe
+BULK_MODULUS = Quantity.parse("2.2 GPa")  # water
+PIPE_DIAMETER = Quantity.parse("500 mm")
+WALL_THICKNESS = Quantity.parse("10 mm")
+STEEL_MODULUS = Quantity.parse("200 GPa")
 FLOW_VELOCITY = Quantity.parse("2.5 m/s")  # stopped to zero on closure
 PIPE_LENGTH = Quantity.parse("500 m")
 WORKING_PRESSURE = Quantity.parse("800 kPa")
 
 
 def surge_check() -> dict[str, float]:
-    """Return the surge pressure (kPa), its ratio to working pressure, and the critical time (s)."""
+    """Return the wave speed (m/s), surge (kPa), its ratio to working, and the critical time (s)."""
+    wave_speed = pressure_wave_speed(
+        fluid_bulk_modulus=BULK_MODULUS,
+        fluid_density=DENSITY,
+        pipe_diameter=PIPE_DIAMETER,
+        wall_thickness=WALL_THICKNESS,
+        wall_elastic_modulus=STEEL_MODULUS,
+    )
     surge = (
         joukowsky_surge_pressure(
-            density=DENSITY, wave_speed=WAVE_SPEED, velocity_change=FLOW_VELOCITY
+            density=DENSITY, wave_speed=wave_speed, velocity_change=FLOW_VELOCITY
         )
         .to("kPa")
         .magnitude
     )
     critical_time = (
-        surge_wave_period(pipe_length=PIPE_LENGTH, wave_speed=WAVE_SPEED).to("s").magnitude
+        surge_wave_period(pipe_length=PIPE_LENGTH, wave_speed=wave_speed).to("s").magnitude
     )
     return {
+        "wave_speed_ms": wave_speed.to("m/s").magnitude,
         "surge_kpa": surge,
         "surge_over_working": surge / WORKING_PRESSURE.to("kPa").magnitude,
         "critical_closure_s": critical_time,
@@ -49,6 +66,7 @@ def main() -> None:
     s = surge_check()
     surge_mpa = s["surge_kpa"] / 1000.0
     print(f"working pressure : {WORKING_PRESSURE.to('kPa').magnitude:.0f} kPa")
+    print(f"wave celerity (Korteweg) : {s['wave_speed_ms']:.0f} m/s")
     print(f"water-hammer surge : {surge_mpa:.1f} MPa ({s['surge_over_working']:.0f}x working)")
     print(f"critical closure : {s['critical_closure_s']:.2f} s — close slower than this to ease it")
     print("  -> the steady pressure is fine; the transient from a fast closure is what bursts it")

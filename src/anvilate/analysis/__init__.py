@@ -1065,6 +1065,7 @@ from .pipe_flow import (
     joukowsky_surge_pressure,
     minor_loss_head,
     pipe_pressure_drop,
+    pressure_wave_speed,
     reynolds_number,
     surge_wave_period,
 )
@@ -1538,6 +1539,7 @@ __all__ = [
     "joukowsky_surge_pressure",
     "minor_loss_head",
     "pipe_pressure_drop",
+    "pressure_wave_speed",
     "reynolds_number",
     "surge_wave_period",
     "differential_pressure_for_flow",

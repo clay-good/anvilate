@@ -567,6 +567,7 @@ pipe_flow.hydraulic_diameter
 pipe_flow.joukowsky_surge_pressure
 pipe_flow.minor_loss_head
 pipe_flow.pipe_pressure_drop
+pipe_flow.pressure_wave_speed
 pipe_flow.reynolds_number
 pipe_flow.surge_wave_period
 pneumatics.air_receiver_holdup_time
