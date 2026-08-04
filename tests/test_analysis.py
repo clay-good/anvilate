@@ -12877,3 +12877,24 @@ def test_rc_beta1_and_net_tensile_strain_ductility():
     )
     assert eps_t == pytest.approx(0.0137, abs=0.0005)
     assert eps_t >= 0.005  # ductile, phi = 0.90
+
+
+def test_rc_development_length_aci():
+    from anvilate.analysis import rc_development_length
+
+    # l_d = (f_y*psi_t*psi_e*d_b)/(c*lambda*sqrt(f'c)): No.19 (19 mm), 420/30 MPa -> 694 mm.
+    ld = rc_development_length(
+        bar_diameter=_q("19 mm"), steel_yield=_q("420 MPa"), concrete_strength=_q("30 MPa")
+    )
+    assert ld.to("mm").magnitude == pytest.approx(420 * 19 / (2.1 * 30**0.5), rel=1e-9)
+    # A top bar (psi_t=1.3) and an epoxy coating (psi_e=1.5) both lengthen it.
+    top_epoxy = rc_development_length(
+        bar_diameter=_q("19 mm"),
+        steel_yield=_q("420 MPa"),
+        concrete_strength=_q("30 MPa"),
+        location_factor=1.3,
+        coating_factor=1.5,
+    )
+    assert top_epoxy.to("mm").magnitude == pytest.approx(
+        1.3 * 1.5 * ld.to("mm").magnitude, rel=1e-9
+    )

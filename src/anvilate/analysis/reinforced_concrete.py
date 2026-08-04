@@ -27,6 +27,7 @@ __all__ = [
     "rc_column_axial_strength",
     "rc_beta1",
     "rc_net_tensile_strain",
+    "rc_development_length",
 ]
 
 # ACI 318 ultimate concrete compressive strain (the strain-diagram anchor).
@@ -265,3 +266,47 @@ def rc_net_tensile_strain(
     if c >= d:
         raise ValueError("the neutral axis reaches the steel; check the inputs")
     return _ACI_CONCRETE_ULTIMATE_STRAIN * (d - c) / c
+
+
+def rc_development_length(
+    *,
+    bar_diameter: Quantity,
+    steel_yield: Quantity,
+    concrete_strength: Quantity,
+    location_factor: float = 1.0,
+    coating_factor: float = 1.0,
+    lightweight_factor: float = 1.0,
+    size_spacing_constant: float = 2.1,
+) -> Quantity:
+    """The ACI 318 tension development length l_d = (f_y·ψ_t·ψ_e·d_b)/(c·λ·√f'c).
+
+    The straight-bar embedment a deformed bar needs to develop its yield in tension
+    (ACI 318-19 §25.4.2, the simplified form). ``bar_diameter`` d_b, ``steel_yield``
+    f_y, and ``concrete_strength`` f'c set the base length; ``location_factor`` ψ_t
+    (1.3 for "top" bars with ≥ 300 mm of concrete cast below, else 1.0),
+    ``coating_factor`` ψ_e (up to 1.5 for epoxy-coated bars), and
+    ``lightweight_factor`` λ (0.75 lightweight) modify it. ``size_spacing_constant`` is
+    the denominator constant from the simplified table — 2.1 for No. 19 and smaller
+    with adequate cover and spacing, 1.7 for No. 22 and larger (or halve for confined
+    cases) — exposed so the caller picks the row. Returns l_d in mm.
+    """
+    _require(bar_diameter, "[length]", "bar_diameter")
+    _require(steel_yield, "[pressure]", "steel_yield")
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    db = bar_diameter.to("mm").magnitude
+    fy = steel_yield.to("MPa").magnitude
+    fc = concrete_strength.to("MPa").magnitude
+    if db <= 0 or fy <= 0 or fc <= 0:
+        raise ValueError("bar_diameter, steel_yield, and concrete_strength must be positive")
+    for factor, label in (
+        (location_factor, "location_factor"),
+        (coating_factor, "coating_factor"),
+        (lightweight_factor, "lightweight_factor"),
+        (size_spacing_constant, "size_spacing_constant"),
+    ):
+        if factor <= 0:
+            raise ValueError(f"{label} must be positive; got {factor}")
+    ld = (fy * location_factor * coating_factor * db) / (
+        size_spacing_constant * lightweight_factor * sqrt(fc)
+    )
+    return Quantity(magnitude=ld, unit="mm")
