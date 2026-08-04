@@ -38,6 +38,7 @@ __all__ = [
     "aisc_plastic_bracing_limit",
     "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
+    "aisc_beam_column_interaction",
 ]
 
 
@@ -534,3 +535,60 @@ def rankine_gordon_stress(
     if sc <= 0:
         raise ValueError(f"crushing_stress must be positive; got {crushing_stress}")
     return Quantity(magnitude=sc / (1.0 + rankine_constant * slenderness_ratio**2), unit="MPa")
+
+
+def aisc_beam_column_interaction(
+    *,
+    axial_demand: Quantity,
+    axial_capacity: Quantity,
+    major_moment_demand: Quantity,
+    major_moment_capacity: Quantity,
+    minor_moment_demand: Quantity | None = None,
+    minor_moment_capacity: Quantity | None = None,
+) -> float:
+    """The AISC 360 §H1.1 combined axial-and-flexure interaction ratio (≤ 1 passes).
+
+    A member carrying both compression (or tension) and bending is checked with one
+    unity equation that trades axial demand against bending demand. §H1.1 uses two forms
+    depending on how axial-dominated the member is, with P_r/P_c the axial ratio and
+    (M_rx/M_cx + M_ry/M_cy) the summed bending ratio about both axes:
+
+        P_r/P_c ≥ 0.2:  P_r/P_c + (8/9)·(M_rx/M_cx + M_ry/M_cy)
+        P_r/P_c < 0.2:  P_r/(2·P_c) + (M_rx/M_cx + M_ry/M_cy).
+
+    ``axial_demand`` P_r and ``axial_capacity`` P_c (the available axial strength),
+    ``major_moment_demand`` M_rx and ``major_moment_capacity`` M_cx, and optionally
+    ``minor_moment_demand`` M_ry with ``minor_moment_capacity`` M_cy for biaxial bending.
+    Capacities are the available strengths (φ·nominal for LRFD, nominal/Ω for ASD) — feed
+    demands and capacities in the same basis. Returns the interaction ratio; a value at or
+    below 1.0 passes, above 1.0 the member is overloaded.
+    """
+    _require(axial_demand, "[force]", "axial_demand")
+    _require(axial_capacity, "[force]", "axial_capacity")
+    _require(major_moment_demand, "[force] * [length]", "major_moment_demand")
+    _require(major_moment_capacity, "[force] * [length]", "major_moment_capacity")
+    pc = axial_capacity.to("kN").magnitude
+    mcx = major_moment_capacity.to("kN*m").magnitude
+    if pc <= 0 or mcx <= 0:
+        raise ValueError("axial_capacity and major_moment_capacity must be positive")
+    pr = axial_demand.to("kN").magnitude
+    mrx = major_moment_demand.to("kN*m").magnitude
+    if pr < 0 or mrx < 0:
+        raise ValueError("axial_demand and major_moment_demand must be non-negative")
+    bending_ratio = mrx / mcx
+    if minor_moment_demand is not None:
+        _require(minor_moment_demand, "[force] * [length]", "minor_moment_demand")
+        if minor_moment_capacity is None:
+            raise ValueError("minor_moment_capacity is required when minor_moment_demand is given")
+        _require(minor_moment_capacity, "[force] * [length]", "minor_moment_capacity")
+        mcy = minor_moment_capacity.to("kN*m").magnitude
+        mry = minor_moment_demand.to("kN*m").magnitude
+        if mcy <= 0:
+            raise ValueError("minor_moment_capacity must be positive")
+        if mry < 0:
+            raise ValueError("minor_moment_demand must be non-negative")
+        bending_ratio += mry / mcy
+    axial_ratio = pr / pc
+    if axial_ratio >= 0.2:
+        return axial_ratio + (8.0 / 9.0) * bending_ratio
+    return axial_ratio / 2.0 + bending_ratio

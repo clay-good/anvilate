@@ -13169,6 +13169,47 @@ def test_aisc_inelastic_ltb_limit_matches_manual_w18x50():
     assert l_r_hi.to("ft").magnitude < l_r.to("ft").magnitude
 
 
+def test_aisc_beam_column_interaction_h11_both_branches():
+    from anvilate.analysis import aisc_beam_column_interaction
+
+    # Axial-dominated (P_r/P_c = 0.5 >= 0.2): 0.5 + (8/9)*(120/300) = 0.856.
+    high_axial = aisc_beam_column_interaction(
+        axial_demand=_q("500 kN"),
+        axial_capacity=_q("1000 kN"),
+        major_moment_demand=_q("120 kN*m"),
+        major_moment_capacity=_q("300 kN*m"),
+    )
+    assert high_axial == pytest.approx(0.5 + (8 / 9) * (120 / 300), rel=1e-9)
+    # Bending-dominated (P_r/P_c = 0.1 < 0.2): 0.1/2 + 120/300 = 0.45.
+    low_axial = aisc_beam_column_interaction(
+        axial_demand=_q("100 kN"),
+        axial_capacity=_q("1000 kN"),
+        major_moment_demand=_q("120 kN*m"),
+        major_moment_capacity=_q("300 kN*m"),
+    )
+    assert low_axial == pytest.approx(0.1 / 2 + 120 / 300, rel=1e-9)
+    # Biaxial bending adds the minor-axis term.
+    biaxial = aisc_beam_column_interaction(
+        axial_demand=_q("500 kN"),
+        axial_capacity=_q("1000 kN"),
+        major_moment_demand=_q("120 kN*m"),
+        major_moment_capacity=_q("300 kN*m"),
+        minor_moment_demand=_q("30 kN*m"),
+        minor_moment_capacity=_q("100 kN*m"),
+    )
+    assert biaxial == pytest.approx(0.5 + (8 / 9) * (120 / 300 + 30 / 100), rel=1e-9)
+    assert biaxial > high_axial
+    # A minor-axis demand without its capacity is rejected.
+    with pytest.raises(ValueError, match="minor_moment_capacity is required"):
+        aisc_beam_column_interaction(
+            axial_demand=_q("500 kN"),
+            axial_capacity=_q("1000 kN"),
+            major_moment_demand=_q("120 kN*m"),
+            major_moment_capacity=_q("300 kN*m"),
+            minor_moment_demand=_q("30 kN*m"),
+        )
+
+
 def test_aisc_inelastic_ltb_moment_interpolates_between_lp_and_lr():
     from anvilate.analysis import aisc_inelastic_ltb_moment
 
