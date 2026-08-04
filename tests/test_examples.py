@@ -504,6 +504,15 @@ def test_heat_pump_cold_day_example_cop_collapses():
     assert p["cold_power_kw"] / p["mild_power_kw"] > 1.5
 
 
+def test_machine_sound_power_survey_example_power_then_pressure():
+    namespace = runpy.run_path(str(_EXAMPLES / "machine_sound_power_survey.py"))
+    s = namespace["survey_and_predict"]()
+    # 85 dB intensity over 10 m^2 -> 95 dB power level.
+    assert s["sound_power_level_db"] == pytest.approx(95.0, abs=0.1)
+    # The predicted operator level is below the source power level.
+    assert s["operator_pressure_level_db"] < s["sound_power_level_db"]
+
+
 def test_machine_noise_placement_example_corner_adds_9db():
     namespace = runpy.run_path(str(_EXAMPLES / "machine_noise_placement.py"))
     lv = namespace["operator_levels"]()

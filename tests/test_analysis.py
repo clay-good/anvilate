@@ -13467,6 +13467,27 @@ def test_acoustics_mass_law_transmission_loss():
         mass_law_transmission_loss(frequency=_q("0 Hz"), surface_density=_q("10 kg/m**2"))
 
 
+def test_acoustics_sound_power_level_from_intensity():
+    import math
+
+    from anvilate.analysis import sound_power_level_from_intensity
+
+    # L_w = L_I + 10*log10(S); 75 dB over 6 m^2 -> 82.8 dB.
+    lw = sound_power_level_from_intensity(intensity_level=75.0, measurement_area=_q("6 m**2"))
+    assert lw == pytest.approx(75 + 10 * math.log10(6), rel=1e-9)
+    # Over a 1 m^2 surface the power level equals the intensity level.
+    assert sound_power_level_from_intensity(
+        intensity_level=80.0, measurement_area=_q("1 m**2")
+    ) == pytest.approx(80.0, abs=1e-9)
+    # Doubling the surface area adds ~3 dB.
+    small = sound_power_level_from_intensity(intensity_level=75.0, measurement_area=_q("5 m**2"))
+    big = sound_power_level_from_intensity(intensity_level=75.0, measurement_area=_q("10 m**2"))
+    assert big - small == pytest.approx(10 * math.log10(2), abs=1e-9)
+
+    with pytest.raises(ValueError, match="measurement_area"):
+        sound_power_level_from_intensity(intensity_level=75.0, measurement_area=_q("0 m**2"))
+
+
 def test_acoustics_sound_pressure_from_power_level():
     import math
 

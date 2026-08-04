@@ -28,6 +28,7 @@ __all__ = [
     "permissible_exposure_time",
     "sabine_reverberation_time",
     "sound_level_sum",
+    "sound_power_level_from_intensity",
     "sound_pressure_from_power_level",
 ]
 
@@ -157,6 +158,27 @@ def noise_dose_fraction(*, exposure_time: Quantity, permissible_time: Quantity) 
     if t <= 0:
         raise ValueError("permissible_time must be positive")
     return c / t
+
+
+def sound_power_level_from_intensity(
+    *,
+    intensity_level: float,
+    measurement_area: Quantity,
+) -> float:
+    """The sound power level of a source from a measured intensity, L_w = L_I + 10·log₁₀(S/S₀).
+
+    The intensity method of sound-power determination (ISO 9614): scanning a sound-intensity probe
+    over a surface enclosing the source gives the average ``intensity_level`` L_I (dB re 1 pW/m²),
+    and the total power radiated through that surface is L_w = L_I + 10·log₁₀(S/S₀), from the
+    ``measurement_area`` S (S₀ = 1 m²). Unlike a pressure measurement, intensity rejects steady
+    background noise, so this works on a noisy plant floor without an anechoic room. Over a 1 m²
+    surface L_w equals L_I. Returns the sound power level in dB.
+    """
+    _check(measurement_area, "[length]**2", "measurement_area")
+    s = measurement_area.to("m**2").magnitude
+    if s <= 0:
+        raise ValueError("measurement_area must be positive")
+    return intensity_level + 10.0 * log10(s)
 
 
 def sound_pressure_from_power_level(

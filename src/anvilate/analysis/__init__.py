@@ -418,6 +418,7 @@ from .acoustics import (
     permissible_exposure_time,
     sabine_reverberation_time,
     sound_level_sum,
+    sound_power_level_from_intensity,
     sound_pressure_from_power_level,
 )
 from .adhesive import (
@@ -1590,6 +1591,7 @@ __all__ = [
     "permissible_exposure_time",
     "sabine_reverberation_time",
     "sound_level_sum",
+    "sound_power_level_from_intensity",
     "sound_pressure_from_power_level",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",

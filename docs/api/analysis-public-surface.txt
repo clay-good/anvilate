@@ -11,6 +11,7 @@ acoustics.noise_dose_fraction
 acoustics.permissible_exposure_time
 acoustics.sabine_reverberation_time
 acoustics.sound_level_sum
+acoustics.sound_power_level_from_intensity
 acoustics.sound_pressure_from_power_level
 adhesive.cylindrical_bond_axial_capacity
 adhesive.cylindrical_bond_torque_capacity
