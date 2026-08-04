@@ -13863,6 +13863,28 @@ def test_energy_storage_capacity_energy_and_backup_time():
         )
 
 
+def test_warping_constant_doubly_symmetric_matches_aisc_manual():
+    from anvilate.analysis import warping_constant_doubly_symmetric
+
+    # C_w = I_y*h^2/4; W18x50 (I_y = 40.1 in^4, h = d - t_f = 17.43 in) -> AISC Manual 3040 in^6.
+    cw = warping_constant_doubly_symmetric(
+        weak_axis_moment_of_inertia=_q("40.1 in**4"), flange_centroid_distance=_q("17.43 in")
+    )
+    assert cw.to("in**6").magnitude == pytest.approx(40.1 * 17.43**2 / 4, rel=1e-9)
+    assert cw.to("in**6").magnitude == pytest.approx(3040.0, rel=5e-3)
+
+    # C_w scales with the square of the flange spacing: a deeper section warps far more stiffly.
+    deep = warping_constant_doubly_symmetric(
+        weak_axis_moment_of_inertia=_q("40.1 in**4"), flange_centroid_distance=_q("34.86 in")
+    )
+    assert deep.to("in**6").magnitude == pytest.approx(4 * cw.to("in**6").magnitude, rel=1e-9)
+
+    with pytest.raises(ValueError, match="length"):
+        warping_constant_doubly_symmetric(
+            weak_axis_moment_of_inertia=_q("40.1 in**3"), flange_centroid_distance=_q("17.43 in")
+        )
+
+
 def test_vortex_shedding_frequency_lock_in_and_reduced_velocity():
     from anvilate.analysis import (
         lock_in_velocity,

@@ -27,6 +27,7 @@ __all__ = [
     "CompositeBeamStresses",
     "composite_beam_bending_stresses",
     "channel_shear_center",
+    "warping_constant_doubly_symmetric",
     "CompoundSection",
     "compound_section_properties",
     "compound_plastic_section_modulus",
@@ -389,6 +390,36 @@ def channel_shear_center(*, flange_width: Quantity, web_height: Quantity) -> Qua
     if b <= 0 or h <= 0:
         raise ValueError("flange_width and web_height must be positive")
     return _mm(3.0 * b**2 / (h + 6.0 * b))
+
+
+def warping_constant_doubly_symmetric(
+    *,
+    weak_axis_moment_of_inertia: Quantity,
+    flange_centroid_distance: Quantity,
+) -> Quantity:
+    """The warping constant of a doubly-symmetric I-section, C_w = I_y·h²/4.
+
+    When an open section twists, its flanges bend in their own plane and resist the twist by
+    *warping* — a stiffness the St-Venant torsion constant J does not capture. For a
+    doubly-symmetric I-shape the warping constant is C_w = I_y·h²/4, from the
+    ``weak_axis_moment_of_inertia`` I_y and the ``flange_centroid_distance`` h (the distance between
+    the two flange centroids, ≈ d − t_f). It is the companion to
+    :func:`~anvilate.analysis.open_section_torsion_constant` J: together they set a beam's
+    lateral-torsional buckling resistance and its response to non-uniform torsion — a deep,
+    wide-flange section warps far more stiffly than a shallow one. Returns C_w as a length⁶ value.
+    """
+    if not weak_axis_moment_of_inertia.has_dimension("[length]**4"):
+        raise ValueError(
+            f"weak_axis_moment_of_inertia must be a [length]**4 quantity; got "
+            f"{weak_axis_moment_of_inertia.dimensionality}"
+        )
+    h = _require_length(flange_centroid_distance, "flange_centroid_distance")
+    if weak_axis_moment_of_inertia.to("mm**4").magnitude <= 0:
+        raise ValueError("weak_axis_moment_of_inertia must be positive")
+    if h <= 0:
+        raise ValueError("flange_centroid_distance must be positive")
+    cw = weak_axis_moment_of_inertia.pint * flange_centroid_distance.pint**2 / 4.0
+    return Quantity(magnitude=float(cw.to("mm**6").magnitude), unit="mm**6")
 
 
 class CompoundSection(BaseModel):

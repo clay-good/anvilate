@@ -37,7 +37,8 @@ modules:
   and the compression/shear-buckling coefficients
 - :mod:`~anvilate.analysis.section` — ``CrossSection`` bundling area, second
   moment, extreme fibre, section modulus, and radius of gyration; the bending
-  stress a moment makes and the minimum section modulus it requires
+  stress a moment makes and the minimum section modulus it requires; the channel
+  shear centre and the doubly-symmetric warping constant C_w = I_y·h²/4
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   the minimum section second moment a load requires, the eccentric-load secant
   stress, the Perry-Robertson imperfect-column stress, the lateral-torsional
@@ -1151,6 +1152,7 @@ from .section import (
     compound_plastic_section_modulus,
     compound_section_properties,
     required_section_modulus,
+    warping_constant_doubly_symmetric,
 )
 from .servo import (
     inertia_matching_gear_ratio,
@@ -1578,6 +1580,7 @@ __all__ = [
     "CompositeBeamStresses",
     "composite_beam_bending_stresses",
     "channel_shear_center",
+    "warping_constant_doubly_symmetric",
     "CompoundSection",
     "compound_section_properties",
     "compound_plastic_section_modulus",

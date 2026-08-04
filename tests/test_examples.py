@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_wide_flange_torsional_properties_example_matches_manual():
+    namespace = runpy.run_path(str(_EXAMPLES / "wide_flange_torsional_properties.py"))
+    t = namespace["w18x50_torsion"]()
+    # Thin-wall J runs a little under the Manual's 1.24 in^4; C_w is essentially exact.
+    assert t["j_in4"] == pytest.approx(1.18, abs=0.05)
+    assert t["j_in4"] < 1.24
+    assert t["cw_in6"] == pytest.approx(3040.0, rel=5e-3)
+
+
 def test_stack_vortex_lock_in_example_flags_common_wind():
     namespace = runpy.run_path(str(_EXAMPLES / "stack_vortex_lock_in.py"))
     s = namespace["stack_viv_screen"]()

@@ -635,6 +635,7 @@ section.CompoundSection
 section.CrossSection
 section.bending_stress
 section.channel_shear_center
+section.warping_constant_doubly_symmetric
 section.composite_beam_bending_stresses
 section.compound_plastic_section_modulus
 section.compound_section_properties
