@@ -6,8 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from anvilate.packs.geotechnical import (
+    InfiniteSlope,
     RetainingWall,
     ShallowFooting,
+    screen_infinite_slope,
     screen_retaining_wall,
     screen_shallow_footing,
 )
@@ -92,3 +94,24 @@ def test_retaining_wall_underbuilt_fails_both():
     )
     assert card.status is CheckStatus.FAIL
     assert {e.name for e in card.failures()} == {"overturning", "sliding"}
+
+
+def test_infinite_slope_dry_passes_saturated_fails():
+    import math
+
+    dry = InfiniteSlope(
+        cohesion=_q("20 kPa"),
+        friction_angle=30.0,
+        unit_weight=_q("19 kN/m**3"),
+        depth=_q("2.5 m"),
+        slope_angle=35.0,
+    )
+    dry_card = screen_infinite_slope(dry)
+    assert dry_card.status is CheckStatus.PASS
+    (entry,) = dry_card.entries
+    assert entry.name == "slope stability"
+    assert entry.reference is not None
+    # Add seepage pore pressure after rain; the same slope now fails.
+    u = 9.81 * 2.5 * math.cos(math.radians(35)) ** 2
+    wet = dry.model_copy(update={"pore_pressure": _q(f"{u} kPa")})
+    assert screen_infinite_slope(wet).status is CheckStatus.FAIL

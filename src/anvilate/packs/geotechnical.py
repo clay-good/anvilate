@@ -19,6 +19,7 @@ from ..analysis import (
     bearing_capacity_factors,
     bearing_depth_factors,
     bearing_shape_factors,
+    infinite_slope_factor_of_safety,
     rankine_lateral_thrust,
     retaining_wall_overturning_factor,
     retaining_wall_sliding_factor,
@@ -28,8 +29,10 @@ from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
+    "InfiniteSlope",
     "RetainingWall",
     "ShallowFooting",
+    "screen_infinite_slope",
     "screen_retaining_wall",
     "screen_shallow_footing",
 ]
@@ -37,6 +40,7 @@ __all__ = [
 _BEARING_REFERENCE = "Terzaghi bearing capacity with Vesić shape/depth factors"
 _OVERTURNING_REFERENCE = "Rankine active thrust, moment balance about the toe"
 _SLIDING_REFERENCE = "Rankine active thrust, base friction resistance"
+_SLOPE_REFERENCE = "Infinite-slope limit equilibrium"
 
 
 class ShallowFooting(BaseModel):
@@ -187,3 +191,47 @@ def screen_retaining_wall(
         "sliding", computed=fs_sliding, required=sliding_safety_factor
     ).model_copy(update={"reference": _SLIDING_REFERENCE})
     return Scorecard(entries=(overturning, sliding))
+
+
+class InfiniteSlope(BaseModel):
+    """A long, uniform (infinite) slope and what its stability screen needs.
+
+    The failure plane runs parallel to the surface at ``depth`` z. The soil is described by its
+    ``cohesion`` c, ``friction_angle`` φ (degrees), and ``unit_weight`` γ, and the ground by its
+    ``slope_angle`` β (degrees). An optional ``pore_pressure`` u on the failure plane represents
+    seepage after rain — the case that most often triggers failure; omit it for the dry slope.
+    """
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    cohesion: Quantity
+    friction_angle: float
+    unit_weight: Quantity
+    depth: Quantity
+    slope_angle: float
+    pore_pressure: Quantity | None = None
+
+
+def screen_infinite_slope(
+    slope: InfiniteSlope,
+    *,
+    required_safety_factor: float = 1.5,
+) -> Scorecard:
+    """Screen an :class:`InfiniteSlope` for sliding stability and return its scorecard.
+
+    Computes the infinite-slope factor of safety (including any pore pressure) and screens it
+    against ``required_safety_factor`` (1.5 is common for a permanent slope). Returns a
+    :class:`~anvilate.scorecard.Scorecard` with a cited PASS/FAIL stability entry, no silent green.
+    """
+    factor_of_safety = infinite_slope_factor_of_safety(
+        cohesion=slope.cohesion,
+        friction_angle=slope.friction_angle,
+        unit_weight=slope.unit_weight,
+        depth=slope.depth,
+        slope_angle=slope.slope_angle,
+        pore_pressure=slope.pore_pressure,
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "slope stability", computed=factor_of_safety, required=required_safety_factor
+    ).model_copy(update={"reference": _SLOPE_REFERENCE})
+    return Scorecard(entries=(entry,))
