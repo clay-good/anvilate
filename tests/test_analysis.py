@@ -13856,6 +13856,25 @@ def test_rc_beta1_and_net_tensile_strain_ductility():
     assert eps_t >= 0.005  # ductile, phi = 0.90
 
 
+def test_rc_strength_reduction_factor_transition():
+    from anvilate.analysis import rc_strength_reduction_factor
+
+    fy = _q("420 MPa")  # eps_ty = 420/200000 = 0.0021
+    # Compression-controlled (eps_t below yield strain): phi = 0.65.
+    assert rc_strength_reduction_factor(net_tensile_strain=0.001, steel_yield=fy) == 0.65
+    # Tension-controlled (eps_t well past 0.0051): phi = 0.90.
+    assert rc_strength_reduction_factor(net_tensile_strain=0.024, steel_yield=fy) == 0.90
+    # In the transition (eps_ty < eps_t < eps_ty+0.003) phi ramps linearly.
+    mid = rc_strength_reduction_factor(net_tensile_strain=0.004, steel_yield=fy)
+    assert mid == pytest.approx(0.65 + 0.25 * (0.004 - 0.0021) / 0.003, rel=1e-9)
+    assert 0.65 < mid < 0.90
+    # A spiral column uses 0.75 at the compression-controlled end.
+    spiral = rc_strength_reduction_factor(
+        net_tensile_strain=0.001, steel_yield=fy, compression_controlled_factor=0.75
+    )
+    assert spiral == 0.75
+
+
 def test_rc_development_length_aci():
     from anvilate.analysis import rc_development_length
 

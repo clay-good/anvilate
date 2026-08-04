@@ -30,6 +30,7 @@ __all__ = [
     "rc_column_balanced_point",
     "rc_beta1",
     "rc_net_tensile_strain",
+    "rc_strength_reduction_factor",
     "rc_development_length",
     "rc_max_bar_spacing_crack_control",
     "rc_minimum_flexural_steel",
@@ -486,6 +487,50 @@ def rc_net_tensile_strain(
     if c >= d:
         raise ValueError("the neutral axis reaches the steel; check the inputs")
     return _ACI_CONCRETE_ULTIMATE_STRAIN * (d - c) / c
+
+
+def rc_strength_reduction_factor(
+    *,
+    net_tensile_strain: float,
+    steel_yield: Quantity,
+    steel_modulus: Quantity | None = None,
+    compression_controlled_factor: float = 0.65,
+) -> float:
+    """The ACI 318 strength-reduction factor φ from the net tensile strain.
+
+    ACI rewards ductility with a higher φ: a section that fails with the steel well past
+    yield (tension-controlled) is trusted at φ = 0.90, while a brittle compression-controlled
+    section is held to φ = 0.65 (tied) or 0.75 (spiral), with a linear transition between
+    (ACI 318-19 §21.2.2). The break points are the steel yield strain ε_ty = f_y/E_s and
+    ε_ty + 0.003: φ = 0.90 at or above the upper, ``compression_controlled_factor`` at or
+    below the lower, and φ = φ_cc + (0.90 − φ_cc)·(ε_t − ε_ty)/0.003 in between.
+    ``net_tensile_strain`` ε_t (from :func:`rc_net_tensile_strain`), ``steel_yield`` f_y,
+    ``steel_modulus`` E_s (default 200 GPa), and ``compression_controlled_factor`` (0.65 tied,
+    0.75 spiral). Multiply φ by the nominal strength for the design strength. Returns the
+    dimensionless φ in [φ_cc, 0.90].
+    """
+    _require(steel_yield, "[pressure]", "steel_yield")
+    if steel_modulus is None:
+        steel_modulus = Quantity(magnitude=_ACI_STEEL_MODULUS_MPA, unit="MPa")
+    _require(steel_modulus, "[pressure]", "steel_modulus")
+    fy = steel_yield.to("MPa").magnitude
+    es = steel_modulus.to("MPa").magnitude
+    if fy <= 0 or es <= 0:
+        raise ValueError("steel_yield and steel_modulus must be positive")
+    if net_tensile_strain < 0:
+        raise ValueError(f"net_tensile_strain must be non-negative; got {net_tensile_strain}")
+    if not 0 < compression_controlled_factor <= 0.90:
+        raise ValueError("compression_controlled_factor must be in (0, 0.90]")
+    strain_yield = fy / es
+    tension_controlled = strain_yield + 0.003
+    if net_tensile_strain <= strain_yield:
+        return compression_controlled_factor
+    if net_tensile_strain >= tension_controlled:
+        return 0.90
+    return (
+        compression_controlled_factor
+        + (0.90 - compression_controlled_factor) * (net_tensile_strain - strain_yield) / 0.003
+    )
 
 
 def rc_development_length(
