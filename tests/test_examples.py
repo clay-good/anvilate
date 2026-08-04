@@ -965,6 +965,21 @@ def test_cold_storage_roof_snow_example_freezer_carries_more():
     assert r["freezer_sloped_kpa"] < r["freezer_flat_kpa"]
 
 
+def test_floor_beam_vibration_governs_capstone():
+    namespace = runpy.run_path(str(_EXAMPLES / "floor_beam_vibration_governs.py"))
+    card = namespace["screen_floor_beam"]()
+    by_name = {e.name: e for e in card.entries}
+    # Strength and deflection are comfortable...
+    assert by_name["bending strength"].passed
+    assert by_name["live-load deflection (L/360)"].passed
+    assert "safety factor 4.26" in by_name["bending strength"].detail
+    # ...but the long, light span fails the walking-vibration check, which governs.
+    vibration = by_name["walking vibration (DG11)"]
+    assert vibration.status is CheckStatus.FAIL
+    assert "safety factor 0.47" in vibration.detail
+    assert card.status is CheckStatus.FAIL
+
+
 def test_office_floor_vibration_example_springy_bay_fails():
     namespace = runpy.run_path(str(_EXAMPLES / "office_floor_vibration.py"))
     r = namespace["floor_ratios"]()
