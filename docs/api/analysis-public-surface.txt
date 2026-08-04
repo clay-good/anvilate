@@ -469,9 +469,11 @@ pipe_flow.darcy_friction_factor
 pipe_flow.darcy_weisbach_head_loss
 pipe_flow.hazen_williams_flow_capacity
 pipe_flow.hazen_williams_head_loss
+pipe_flow.joukowsky_surge_pressure
 pipe_flow.minor_loss_head
 pipe_flow.pipe_pressure_drop
 pipe_flow.reynolds_number
+pipe_flow.surge_wave_period
 pneumatics.air_receiver_holdup_time
 pneumatics.air_receiver_volume_for_demand
 plate.DEFAULT_POISSON_RATIO

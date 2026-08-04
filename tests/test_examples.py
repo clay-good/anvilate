@@ -429,6 +429,16 @@ def test_orifice_meter_sizing_example_reads_and_sizes():
     assert r["full_scale_drop_kpa"] > 20.0
 
 
+def test_water_hammer_valve_closure_example_surge_dwarfs_working():
+    namespace = runpy.run_path(str(_EXAMPLES / "water_hammer_valve_closure.py"))
+    s = namespace["surge_check"]()
+    # The surge is several times the working pressure.
+    assert s["surge_over_working"] > 3.0
+    assert s["surge_kpa"] == pytest.approx(3000, abs=50)
+    # The critical closure time is the wave round-trip, well under a second here.
+    assert s["critical_closure_s"] == pytest.approx(0.83, abs=0.02)
+
+
 def test_vfd_pump_energy_saving_example_cube_law():
     namespace = runpy.run_path(str(_EXAMPLES / "vfd_pump_energy_saving.py"))
     op = namespace["vfd_operating_point"]()

@@ -13808,6 +13808,27 @@ def test_darcy_weisbach_head_loss_and_pressure_drop():
         )
 
 
+def test_joukowsky_surge_pressure_and_wave_period():
+    from anvilate.analysis import joukowsky_surge_pressure, surge_wave_period
+
+    # dp = rho*a*dv = 1000*1200*2 = 2.4 MPa — enormous vs any working pressure.
+    dp = joukowsky_surge_pressure(
+        density=_q("1000 kg/m**3"), wave_speed=_q("1200 m/s"), velocity_change=_q("2 m/s")
+    )
+    assert dp.to("Pa").magnitude == pytest.approx(1000 * 1200 * 2, rel=1e-9)
+    assert dp.to("MPa").magnitude == pytest.approx(2.4, rel=1e-9)
+    # The surge scales linearly with the velocity stopped.
+    dp_half = joukowsky_surge_pressure(
+        density=_q("1000 kg/m**3"), wave_speed=_q("1200 m/s"), velocity_change=_q("1 m/s")
+    )
+    assert dp_half.to("Pa").magnitude == pytest.approx(dp.to("Pa").magnitude / 2, rel=1e-9)
+    # Critical closure time is the wave round-trip 2L/a.
+    t = surge_wave_period(pipe_length=_q("500 m"), wave_speed=_q("1200 m/s"))
+    assert t.to("s").magnitude == pytest.approx(2 * 500 / 1200, rel=1e-9)
+    with pytest.raises(ValueError, match="positive"):
+        surge_wave_period(pipe_length=_q("500 m"), wave_speed=_q("0 m/s"))
+
+
 def test_hazen_williams_head_loss_and_capacity_round_trip():
     from anvilate.analysis import hazen_williams_flow_capacity, hazen_williams_head_loss
 

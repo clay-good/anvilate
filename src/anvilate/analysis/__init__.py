@@ -128,8 +128,9 @@ modules:
 - :mod:`~anvilate.analysis.pipe_flow` — incompressible pipe hydraulics: the Reynolds
   number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
   Darcy-Weisbach friction head loss and fitting minor losses, the pressure drop ρ·g·h a
-  pump must overcome, and the empirical Hazen-Williams head loss and flow capacity for
-  water mains
+  pump must overcome, the empirical Hazen-Williams head loss and flow capacity for
+  water mains, and the Joukowsky water-hammer surge pressure with its critical
+  valve-closure time
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), the Froude number
   and rectangular critical depth that classify the flow as sub- or supercritical, the
@@ -873,9 +874,11 @@ from .pipe_flow import (
     darcy_weisbach_head_loss,
     hazen_williams_flow_capacity,
     hazen_williams_head_loss,
+    joukowsky_surge_pressure,
     minor_loss_head,
     pipe_pressure_drop,
     reynolds_number,
+    surge_wave_period,
 )
 from .plate import (
     DEFAULT_POISSON_RATIO,
@@ -1247,9 +1250,11 @@ __all__ = [
     "darcy_weisbach_head_loss",
     "hazen_williams_flow_capacity",
     "hazen_williams_head_loss",
+    "joukowsky_surge_pressure",
     "minor_loss_head",
     "pipe_pressure_drop",
     "reynolds_number",
+    "surge_wave_period",
     "differential_pressure_for_flow",
     "obstruction_meter_flow_rate",
     "pitot_velocity",

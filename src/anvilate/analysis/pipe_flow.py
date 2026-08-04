@@ -30,9 +30,11 @@ __all__ = [
     "darcy_weisbach_head_loss",
     "hazen_williams_flow_capacity",
     "hazen_williams_head_loss",
+    "joukowsky_surge_pressure",
     "minor_loss_head",
     "pipe_pressure_drop",
     "reynolds_number",
+    "surge_wave_period",
 ]
 
 # Hazen-Williams SI constant and exponents: h_f = 10.67*L*Q^1.852 / (C^1.852 * D^4.87),
@@ -216,6 +218,54 @@ def hazen_williams_flow_capacity(
     numerator = h_f * roughness_coefficient**_HW_FLOW_EXPONENT * d**_HW_DIAMETER_EXPONENT
     q = (numerator / (_HW_CONSTANT * lo)) ** (1.0 / _HW_FLOW_EXPONENT)
     return Quantity(magnitude=q, unit="m**3/s")
+
+
+def joukowsky_surge_pressure(
+    *,
+    density: Quantity,
+    wave_speed: Quantity,
+    velocity_change: Quantity,
+) -> Quantity:
+    """The Joukowsky water-hammer pressure surge from a sudden change in flow, Δp = ρ·a·Δv.
+
+    Stopping a column of moving liquid abruptly — slamming a valve shut, a pump tripping — converts
+    its momentum into a pressure spike that races back up the pipe as a wave: Δp = ρ·a·Δv. The surge
+    is startlingly large (halting water at just 2 m/s can spike the pressure by ~2.4 MPa), which is
+    why it bursts pipes and why valves are closed slowly. ``density`` ρ, ``wave_speed`` a (the
+    pressure-wave celerity, ~1200–1400 m/s for water in steel pipe), and ``velocity_change`` Δv (the
+    change in flow velocity). The surge only reaches this full value for a closure faster than the
+    wave round-trip — see :func:`surge_wave_period`. Returns the pressure rise in kPa.
+    """
+    _check(density, "[mass]/[length]**3", "density")
+    _check(wave_speed, "[length]/[time]", "wave_speed")
+    _check(velocity_change, "[length]/[time]", "velocity_change")
+    rho = density.to("kg/m**3").magnitude
+    a = wave_speed.to("m/s").magnitude
+    dv = velocity_change.to("m/s").magnitude
+    if rho <= 0 or a <= 0:
+        raise ValueError("density and wave_speed must be positive")
+    if dv < 0:
+        raise ValueError("velocity_change must be non-negative")
+    return Quantity(magnitude=rho * a * dv / 1000.0, unit="kPa")
+
+
+def surge_wave_period(*, pipe_length: Quantity, wave_speed: Quantity) -> Quantity:
+    """The pressure-wave round-trip time 2L/a — the critical valve-closure time for water hammer.
+
+    A pressure wave launched by a closing valve travels to the far end of the pipe and reflects
+    back in a time 2L/a. Close the valve faster than this and the flow is stopped before any relief
+    arrives, so the full :func:`joukowsky_surge_pressure` develops; close it slower and the surge is
+    reduced roughly in proportion. ``pipe_length`` L is the distance to the reservoir or reflection
+    point and ``wave_speed`` a the pressure-wave celerity. Returns the critical closure time in
+    seconds.
+    """
+    _check(pipe_length, "[length]", "pipe_length")
+    _check(wave_speed, "[length]/[time]", "wave_speed")
+    lo = pipe_length.to("m").magnitude
+    a = wave_speed.to("m/s").magnitude
+    if lo <= 0 or a <= 0:
+        raise ValueError("pipe_length and wave_speed must be positive")
+    return Quantity(magnitude=2.0 * lo / a, unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
