@@ -13155,6 +13155,32 @@ def test_wind_power_density_turbine_power_and_betz_limit():
         )
 
 
+def test_pv_cell_temperature_and_derating():
+    from anvilate.analysis import pv_cell_temperature, pv_temperature_derated_power
+    from anvilate.units import Quantity
+
+    # T_cell = T_amb + (NOCT-20)*G/800: 35 + 25*900/800 = 63.125 C.
+    cell = pv_cell_temperature(
+        ambient_temperature=Quantity(magnitude=35.0, unit="degC"),
+        irradiance=_q("900 W/m**2"),
+        noct=Quantity(magnitude=45.0, unit="degC"),
+    )
+    assert cell.to("degC").magnitude == pytest.approx(35 + (45 - 20) * 900 / 800, rel=1e-9)
+    # P = P_stc*(1 + gamma*(T_cell - 25)): 400*(1 - 0.0038*38.125) -> ~342 W.
+    p = pv_temperature_derated_power(
+        rated_power=_q("400 W"), cell_temperature=cell, temperature_coefficient=-0.0038
+    )
+    assert p.to("W").magnitude == pytest.approx(400 * (1 - 0.0038 * (63.125 - 25)), rel=1e-9)
+    assert p.to("W").magnitude < 400  # a hot cell loses output
+    # At the 25 C STC reference the derating is exactly 1.
+    stc = pv_temperature_derated_power(
+        rated_power=_q("400 W"),
+        cell_temperature=Quantity(magnitude=25.0, unit="degC"),
+        temperature_coefficient=-0.0038,
+    )
+    assert stc.to("W").magnitude == pytest.approx(400.0, rel=1e-12)
+
+
 def test_solar_pv_array_power_daily_energy_and_sizing():
     from anvilate.analysis import pv_array_power, pv_array_size_for_load, pv_daily_energy
 

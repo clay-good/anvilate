@@ -24,7 +24,9 @@ from ..units import Quantity
 __all__ = [
     "pv_array_power",
     "pv_array_size_for_load",
+    "pv_cell_temperature",
     "pv_daily_energy",
+    "pv_temperature_derated_power",
 ]
 
 
@@ -96,6 +98,60 @@ def pv_array_size_for_load(
         raise ValueError("peak_sun_hours must be positive")
     power = daily_energy_demand.pint / (peak_sun_hours.pint * derate_factor)
     return Quantity(magnitude=float(power.to("W").magnitude), unit="W")
+
+
+def pv_cell_temperature(
+    *,
+    ambient_temperature: Quantity,
+    irradiance: Quantity,
+    noct: Quantity,
+) -> Quantity:
+    """The PV cell operating temperature, T_cell = T_amb + (NOCT − 20)·G/800.
+
+    A panel in the sun runs far hotter than the air around it, and that is what erodes its output.
+    The nominal-operating-cell-temperature model estimates it from the ``ambient_temperature``
+    T_amb, the plane-of-array ``irradiance`` G, and the module's ``noct`` (the cell temperature at
+    800 W/m², 20 °C air, from the datasheet): T_cell = T_amb + (NOCT − 20)·G/800. Full sun on a hot
+    day can put a cell 25–30 °C above ambient. Feed the result to
+    :func:`pv_temperature_derated_power`. Returns the cell temperature in °C.
+    """
+    _check(ambient_temperature, "[temperature]", "ambient_temperature")
+    _check(irradiance, "[power]/[area]", "irradiance")
+    _check(noct, "[temperature]", "noct")
+    t_amb = ambient_temperature.to("degC").magnitude
+    g = irradiance.to("W/m**2").magnitude
+    noct_c = noct.to("degC").magnitude
+    if g < 0:
+        raise ValueError("irradiance must be non-negative")
+    return Quantity(magnitude=t_amb + (noct_c - 20.0) * g / 800.0, unit="degC")
+
+
+def pv_temperature_derated_power(
+    *,
+    rated_power: Quantity,
+    cell_temperature: Quantity,
+    temperature_coefficient: float,
+) -> Quantity:
+    """The temperature-derated PV power, P = P_stc·[1 + γ·(T_cell − 25)].
+
+    A module's nameplate is measured at a 25 °C cell (Standard Test Conditions), but a real cell
+    runs hotter and makes less power. The derated output is
+    P = ``rated_power``·[1 + γ·(``cell_temperature`` − 25)], where the ``temperature_coefficient`` γ
+    of power is the datasheet value — negative, about −0.003 to −0.005 per °C for silicon. A cell at
+    60 °C loses roughly 12–17% against its nameplate,
+    which is why a rooftop array's summer output falls short of its rating even in full sun. Returns
+    the derated power in W.
+    """
+    _check(rated_power, "[power]", "rated_power")
+    _check(cell_temperature, "[temperature]", "cell_temperature")
+    p_stc = rated_power.to("W").magnitude
+    t_cell = cell_temperature.to("degC").magnitude
+    if p_stc <= 0:
+        raise ValueError("rated_power must be positive")
+    factor = 1.0 + temperature_coefficient * (t_cell - 25.0)
+    if factor < 0:
+        raise ValueError("temperature_coefficient and cell_temperature give a non-physical power")
+    return Quantity(magnitude=p_stc * factor, unit="W")
 
 
 def _fraction(value: float, name: str) -> None:

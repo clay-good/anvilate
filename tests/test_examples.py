@@ -727,6 +727,15 @@ def test_wind_turbine_power_curve_example_cube_law():
     assert t["betz_limit"] == pytest.approx(16 / 27, rel=1e-9)
 
 
+def test_pv_summer_derating_example_hot_cell_loses_power():
+    namespace = runpy.run_path(str(_EXAMPLES / "pv_summer_derating.py"))
+    m = namespace["module_output"]()
+    # The summer cell runs ~63 C and loses output; the cooler spring cell keeps more.
+    assert m["summer_cell_c"] == pytest.approx(63.1, abs=0.2)
+    assert m["summer_power_w"] < m["spring_power_w"]
+    assert m["summer_power_w"] < 400.0
+
+
 def test_off_grid_cabin_solar_battery_example_sizes_both():
     namespace = runpy.run_path(str(_EXAMPLES / "off_grid_cabin_solar_battery.py"))
     s = namespace["off_grid_sizing"]()
