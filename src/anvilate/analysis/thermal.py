@@ -15,7 +15,7 @@ absolute ``degC`` reading.
 
 from __future__ import annotations
 
-from math import log, pi, sqrt, tanh
+from math import exp, log, pi, sqrt, tanh
 
 from pydantic import BaseModel, ConfigDict
 
@@ -51,6 +51,8 @@ __all__ = [
     "log_mean_temperature_difference",
     "heat_exchanger_area_for_duty",
     "heat_exchanger_duty",
+    "heat_exchanger_ntu",
+    "counterflow_effectiveness",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -1101,3 +1103,52 @@ def heat_exchanger_duty(
     if u <= 0 or a <= 0 or lmtd <= 0:
         raise ValueError("overall_coefficient, area, and the LMTD must be positive")
     return Quantity(magnitude=u * a * lmtd, unit="W")
+
+
+def heat_exchanger_ntu(
+    *,
+    overall_coefficient: Quantity,
+    area: Quantity,
+    min_heat_capacity_rate: Quantity,
+) -> float:
+    """The number of transfer units NTU = U·A/C_min of a heat exchanger.
+
+    A dimensionless size — how many transfer units the exchanger carries relative to
+    the weaker stream's heat capacity rate. ``overall_coefficient`` U and ``area`` A
+    are the exchanger's, and ``min_heat_capacity_rate`` C_min is the smaller of the
+    two stream ṁ·c_p products (a ``[power]/[temperature]`` quantity, W/K). Feeds
+    :func:`counterflow_effectiveness`. Returns the dimensionless NTU.
+    """
+    _require(overall_coefficient, "[power] / [length]**2 / [temperature]", "overall_coefficient")
+    _require(area, "[area]", "area")
+    _require(min_heat_capacity_rate, "[power] / [temperature]", "min_heat_capacity_rate")
+    u = overall_coefficient.to("W/(m**2*K)").magnitude
+    a = area.to("m**2").magnitude
+    c_min = min_heat_capacity_rate.to("W/K").magnitude
+    if u <= 0 or a <= 0 or c_min <= 0:
+        raise ValueError("overall_coefficient, area, and min_heat_capacity_rate must be positive")
+    return u * a / c_min
+
+
+def counterflow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
+    """The effectiveness ε of a counterflow heat exchanger (the ε-NTU method).
+
+    When the outlet temperatures are unknown, the effectiveness — the actual heat
+    transfer as a fraction of the thermodynamic maximum — is found from the size and
+    the stream balance rather than an LMTD. For counterflow,
+
+        ε = [1 − exp(−NTU·(1 − C_r))] / [1 − C_r·exp(−NTU·(1 − C_r))]   (C_r < 1),
+        ε = NTU/(1 + NTU)                                              (C_r = 1),
+
+    where ``ntu`` is :func:`heat_exchanger_ntu` and ``capacity_ratio`` C_r = C_min/C_max
+    (0 to 1). The actual duty is then ε·C_min·(T_hot,in − T_cold,in). ``ntu`` must be
+    non-negative and ``capacity_ratio`` in [0, 1]. Returns ε in [0, 1].
+    """
+    if ntu < 0:
+        raise ValueError(f"ntu must be non-negative; got {ntu}")
+    if not 0 <= capacity_ratio <= 1:
+        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+    if capacity_ratio == 1:
+        return ntu / (1.0 + ntu)
+    exponent = exp(-ntu * (1.0 - capacity_ratio))
+    return (1.0 - exponent) / (1.0 - capacity_ratio * exponent)

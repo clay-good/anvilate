@@ -12646,3 +12646,26 @@ def test_lmtd_and_heat_exchanger_sizing_round_trip():
         overall_coefficient=_q("500 W/(m**2*K)"), area=area, log_mean_temperature_difference=lmtd
     )
     assert duty.to("W").magnitude == pytest.approx(50000.0, rel=1e-9)
+
+
+def test_effectiveness_ntu_counterflow():
+    from anvilate.analysis import counterflow_effectiveness, heat_exchanger_ntu
+
+    # NTU = U*A/C_min: 500 W/m²K over 2 m² with C_min = 250 W/K -> NTU = 4.
+    ntu = heat_exchanger_ntu(
+        overall_coefficient=_q("500 W/(m**2*K)"),
+        area=_q("2 m**2"),
+        min_heat_capacity_rate=_q("250 W/K"),
+    )
+    assert ntu == pytest.approx(4.0, rel=1e-9)
+    # Counterflow effectiveness at NTU=2, C_r=0.5 -> 0.7746 (hand calc).
+    eps = counterflow_effectiveness(ntu=2.0, capacity_ratio=0.5)
+    assert eps == pytest.approx(0.7746, abs=0.001)
+    assert 0 <= eps <= 1
+    # C_r = 1 uses the ε = NTU/(1+NTU) branch.
+    balanced = counterflow_effectiveness(ntu=2.0, capacity_ratio=1.0)
+    assert balanced == pytest.approx(2.0 / 3.0, rel=1e-9)
+    # More NTU always helps but with diminishing returns (ε -> 1).
+    assert counterflow_effectiveness(ntu=10.0, capacity_ratio=0.5) > eps
+    with pytest.raises(ValueError, match="capacity_ratio must lie in"):
+        counterflow_effectiveness(ntu=2.0, capacity_ratio=1.5)
