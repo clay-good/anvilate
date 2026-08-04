@@ -36,6 +36,7 @@ __all__ = [
     "rankine_gordon_stress",
     "aisc_flexural_buckling_stress",
     "aisc_plastic_bracing_limit",
+    "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
 ]
 
@@ -232,6 +233,53 @@ def aisc_plastic_bracing_limit(
     if ry <= 0 or fy <= 0 or e <= 0:
         raise ValueError("all inputs must be positive")
     return Quantity(magnitude=1.76 * ry * sqrt(e / fy), unit="mm")
+
+
+def aisc_inelastic_ltb_limit(
+    *,
+    effective_radius_of_gyration: Quantity,
+    torsion_constant: Quantity,
+    elastic_section_modulus: Quantity,
+    flange_centroid_distance: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+    section_coefficient: float = 1.0,
+) -> Quantity:
+    """The AISC 360 §F2 limiting unbraced length L_r for inelastic lateral-torsional buckling.
+
+    L_r is the brace spacing beyond which a beam buckles *elastically* rather than
+    inelastically — the upper anchor of the sloping line that :func:`aisc_inelastic_ltb_moment`
+    interpolates from L_p (:func:`aisc_plastic_bracing_limit`). AISC 360 Eq. F2-5:
+
+        L_r = 1.95·r_ts·(E/(0.7·F_y))·√( J·c/(S_x·h_o) + √((J·c/(S_x·h_o))² + 6.76·(0.7·F_y/E)²) ).
+
+    ``effective_radius_of_gyration`` r_ts (the LTB radius of gyration, r_ts² = √(I_y·C_w)/S_x),
+    ``torsion_constant`` J, ``elastic_section_modulus`` S_x (strong axis),
+    ``flange_centroid_distance`` h_o (between flange centroids), ``yield_strength`` F_y,
+    ``elastic_modulus`` E, and ``section_coefficient`` c — 1.0 for a doubly-symmetric
+    I-shape (the default), (h_o/2)·√(I_y/C_w) for a channel. The 0.7·F_y term is the
+    flange stress net of residual stress. Returns L_r in mm.
+    """
+    _require(effective_radius_of_gyration, "[length]", "effective_radius_of_gyration")
+    _require(torsion_constant, "[length]**4", "torsion_constant")
+    _require(elastic_section_modulus, "[length]**3", "elastic_section_modulus")
+    _require(flange_centroid_distance, "[length]", "flange_centroid_distance")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    rts = effective_radius_of_gyration.to("mm").magnitude
+    j = torsion_constant.to("mm**4").magnitude
+    sx = elastic_section_modulus.to("mm**3").magnitude
+    ho = flange_centroid_distance.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if min(rts, j, sx, ho, fy, e) <= 0:
+        raise ValueError("all inputs must be positive")
+    if section_coefficient <= 0:
+        raise ValueError(f"section_coefficient must be positive; got {section_coefficient}")
+    term = j * section_coefficient / (sx * ho)
+    f_ratio = 0.7 * fy / e
+    l_r = 1.95 * rts * (1.0 / f_ratio) * sqrt(term + sqrt(term**2 + 6.76 * f_ratio**2))
+    return Quantity(magnitude=l_r, unit="mm")
 
 
 def aisc_inelastic_ltb_moment(

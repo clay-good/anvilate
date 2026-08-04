@@ -418,6 +418,7 @@ from .cold_formed_steel import (
 from .column import (
     ColumnEnd,
     aisc_flexural_buckling_stress,
+    aisc_inelastic_ltb_limit,
     aisc_inelastic_ltb_moment,
     aisc_plastic_bracing_limit,
     euler_buckling_load,
@@ -1170,6 +1171,7 @@ __all__ = [
     "euler_critical_stress",
     "aisc_flexural_buckling_stress",
     "aisc_plastic_bracing_limit",
+    "aisc_inelastic_ltb_limit",
     "aisc_inelastic_ltb_moment",
     "transition_slenderness",
     "johnson_critical_stress",

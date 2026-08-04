@@ -13072,6 +13072,32 @@ def test_aisc_plastic_bracing_limit_lp():
     assert softer.to("mm").magnitude > lp.to("mm").magnitude
 
 
+def test_aisc_inelastic_ltb_limit_matches_manual_w18x50():
+    from anvilate.analysis import aisc_inelastic_ltb_limit
+
+    # AISC Manual W18x50 (imperial): L_r = 16.9 ft. r_ts=1.98in, J=1.24in^4,
+    # S_x=88.9in^3, h_o=17.4in, F_y=50ksi, E=29000ksi, c=1.
+    l_r = aisc_inelastic_ltb_limit(
+        effective_radius_of_gyration=_q("1.98 in"),
+        torsion_constant=_q("1.24 in**4"),
+        elastic_section_modulus=_q("88.9 in**3"),
+        flange_centroid_distance=_q("17.4 in"),
+        yield_strength=_q("50 ksi"),
+        elastic_modulus=_q("29000 ksi"),
+    )
+    assert l_r.to("ft").magnitude == pytest.approx(16.9, abs=0.1)
+    # A higher grade (more residual-stress-relative flange stress) shortens L_r.
+    l_r_hi = aisc_inelastic_ltb_limit(
+        effective_radius_of_gyration=_q("1.98 in"),
+        torsion_constant=_q("1.24 in**4"),
+        elastic_section_modulus=_q("88.9 in**3"),
+        flange_centroid_distance=_q("17.4 in"),
+        yield_strength=_q("65 ksi"),
+        elastic_modulus=_q("29000 ksi"),
+    )
+    assert l_r_hi.to("ft").magnitude < l_r.to("ft").magnitude
+
+
 def test_aisc_inelastic_ltb_moment_interpolates_between_lp_and_lr():
     from anvilate.analysis import aisc_inelastic_ltb_moment
 
