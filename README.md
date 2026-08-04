@@ -76,7 +76,7 @@ Over 45 runnable examples, each executed in CI so they stay honest. A few:
 |---|---|
 | `machine_on_floor_beam.py` | Declaring where a load *actually* sits recovers real margin the worst-case mid-span guess throws away (FAIL 1.19 → PASS 1.58). |
 | `beam_bearing_web_checks.py` | A beam's end reaction is checked two ways (AISC §J10.2 web yielding *and* §J10.3 crippling); the thin web buckles at 213 kN before it crushes at 316 kN, so crippling governs. |
-| `hss_beam_flexure_shear.py` | A square HSS with a noncompact flange: the naive plastic moment reads 394 kN·m, but AISC §F7 flange local buckling cuts the real capacity to 368 kN·m (7% lower). |
+| `hss_beam_flexure_shear.py` | A square HSS with a noncompact flange: the naive plastic moment reads 394 kN·m, but AISC §F7 flange local buckling cuts the real capacity to 368 kN·m (7% lower). See [hot-rolled steel](docs/hot-rolled-steel.md). |
 | `bolted_tension_splice.py` | Gross yielding (621 kN) and net-section rupture (544 kN) both pass, but AISC §J4.3 block shear tears the end block out first at 450 kN — the limit state a member-only check never sees. |
 | `plate_girder_design.py` | A deep welded girder: the slender web docks bending 5.6% (AISC §F5 R_pg) yet, once stiffened, nearly doubles the shear via §G2.2 tension-field action (832 → 1468 kN). |
 | `spur_gear_agma_check.py` | An AGMA spur gear checked for both tooth-root bending and surface pitting — pitting runs the higher utilization (0.69 vs 0.39), the mode a Lewis bending-only check never flags. |
