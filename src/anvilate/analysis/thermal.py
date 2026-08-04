@@ -56,6 +56,7 @@ __all__ = [
     "parallel_flow_effectiveness",
     "crossflow_both_unmixed_effectiveness",
     "counterflow_ntu_for_effectiveness",
+    "parallel_flow_ntu_for_effectiveness",
 ]
 
 _THERMAL_RESISTANCE_UNIT = "K/W"
@@ -1226,3 +1227,23 @@ def counterflow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio: f
     return (1.0 / (capacity_ratio - 1.0)) * log(
         (effectiveness - 1.0) / (effectiveness * capacity_ratio - 1.0)
     )
+
+
+def parallel_flow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio: float) -> float:
+    """The NTU a parallel-flow exchanger needs for a target effectiveness (sizing form).
+
+    The design inverse of :func:`parallel_flow_effectiveness`:
+    NTU = −ln[1 − ε·(1 + C_r)]/(1 + C_r). Because parallel flow caps out at
+    ε_max = 1/(1 + C_r), a ``effectiveness`` at or above that ceiling is unreachable
+    at any size and is rejected — a signal to switch to counterflow.
+    ``capacity_ratio`` C_r in [0, 1]. Returns the required (dimensionless) NTU.
+    """
+    if not 0 <= capacity_ratio <= 1:
+        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+    ceiling = 1.0 / (1.0 + capacity_ratio)
+    if not 0 < effectiveness < ceiling:
+        raise ValueError(
+            f"effectiveness must be in (0, {ceiling:.4g}) — parallel flow cannot exceed "
+            f"1/(1+C_r); got {effectiveness}"
+        )
+    return -log(1.0 - effectiveness * (1.0 + capacity_ratio)) / (1.0 + capacity_ratio)

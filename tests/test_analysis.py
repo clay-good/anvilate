@@ -12777,3 +12777,14 @@ def test_counterflow_ntu_for_effectiveness_inverts_the_forward():
     assert big > small
     with pytest.raises(ValueError, match="effectiveness must be in"):
         counterflow_ntu_for_effectiveness(effectiveness=1.0, capacity_ratio=0.5)
+
+
+def test_parallel_flow_ntu_inverse_and_the_effectiveness_ceiling():
+    from anvilate.analysis import parallel_flow_effectiveness, parallel_flow_ntu_for_effectiveness
+
+    # Round-trip against the forward.
+    ntu = parallel_flow_ntu_for_effectiveness(effectiveness=0.6, capacity_ratio=0.5)
+    assert parallel_flow_effectiveness(ntu=ntu, capacity_ratio=0.5) == pytest.approx(0.6, rel=1e-9)
+    # Parallel flow caps at 1/(1+C_r) = 0.667 for C_r=0.5; asking for more is rejected.
+    with pytest.raises(ValueError, match="cannot exceed"):
+        parallel_flow_ntu_for_effectiveness(effectiveness=0.7, capacity_ratio=0.5)

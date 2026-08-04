@@ -511,6 +511,7 @@ thermal.vertical_plate_natural_convection_coefficient
 thermal.junction_temperature_scorecard
 thermal.free_thermal_expansion
 thermal.parallel_flow_effectiveness
+thermal.parallel_flow_ntu_for_effectiveness
 thermal.parallel_thermal_resistance
 thermal.series_thermal_resistance
 thermal.shrink_fit_assembly_temperature
