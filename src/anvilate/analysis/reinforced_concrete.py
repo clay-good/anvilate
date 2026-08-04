@@ -26,6 +26,7 @@ __all__ = [
     "rc_t_beam_moment",
     "rc_tension_steel_for_moment",
     "rc_concrete_shear_strength",
+    "rc_shear_reinforcement_strength",
     "rc_column_axial_strength",
     "rc_column_balanced_point",
     "rc_beta1",
@@ -334,6 +335,38 @@ def rc_concrete_shear_strength(
         raise ValueError(f"lightweight_factor must be positive; got {lightweight_factor}")
     vc_n = 0.17 * lightweight_factor * sqrt(fc) * b * d
     return Quantity(magnitude=vc_n / 1000.0, unit="kN")
+
+
+def rc_shear_reinforcement_strength(
+    *,
+    stirrup_area: Quantity,
+    stirrup_yield: Quantity,
+    effective_depth: Quantity,
+    stirrup_spacing: Quantity,
+) -> Quantity:
+    """The ACI 318 shear strength V_s = A_v·f_yt·d/s carried by vertical stirrups.
+
+    Beyond the concrete's own shear (:func:`rc_concrete_shear_strength`), stirrups crossing
+    the diagonal crack carry the rest: each set at spacing s develops V_s = A_v·f_yt·d/s,
+    where A_v is the total stirrup area cutting the crack (both legs of a closed tie), and
+    the total factored shear must reach V_u/φ ≤ V_c + V_s (ACI 318-19 §22.5.1.1).
+    ``stirrup_area`` A_v, ``stirrup_yield`` f_yt, ``effective_depth`` d, and
+    ``stirrup_spacing`` s. Closer spacing or a larger bar raises V_s, but §22.5.1.2 caps it
+    at 0.66·√f'c·b_w·d — past that the concrete diagonal crushes and a bigger section is
+    needed rather than more stirrups. Returns V_s in kN.
+    """
+    _require(stirrup_area, "[area]", "stirrup_area")
+    _require(stirrup_yield, "[pressure]", "stirrup_yield")
+    _require(effective_depth, "[length]", "effective_depth")
+    _require(stirrup_spacing, "[length]", "stirrup_spacing")
+    av = stirrup_area.to("mm**2").magnitude
+    fyt = stirrup_yield.to("MPa").magnitude
+    d = effective_depth.to("mm").magnitude
+    s = stirrup_spacing.to("mm").magnitude
+    if av <= 0 or fyt <= 0 or d <= 0 or s <= 0:
+        raise ValueError("all inputs must be positive")
+    vs_n = av * fyt * d / s
+    return Quantity(magnitude=vs_n / 1000.0, unit="kN")
 
 
 def rc_column_axial_strength(

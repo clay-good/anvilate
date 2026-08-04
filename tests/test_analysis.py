@@ -13708,6 +13708,34 @@ def test_rc_concrete_shear_strength_aci():
     assert light.to("kN").magnitude == pytest.approx(0.75 * vc.to("kN").magnitude, rel=1e-9)
 
 
+def test_rc_shear_reinforcement_strength_aci():
+    from anvilate.analysis import rc_concrete_shear_strength, rc_shear_reinforcement_strength
+
+    # V_s = A_v*f_yt*d/s: 157 mm2 stirrups, 420 MPa, d=550, s=200 -> 181 kN.
+    v_s = rc_shear_reinforcement_strength(
+        stirrup_area=_q("157 mm**2"),
+        stirrup_yield=_q("420 MPa"),
+        effective_depth=_q("550 mm"),
+        stirrup_spacing=_q("200 mm"),
+    )
+    assert v_s.to("kN").magnitude == pytest.approx(157 * 420 * 550 / 200 / 1000, rel=1e-9)
+    assert v_s.to("kN").magnitude == pytest.approx(181, abs=1)
+    # Halving the spacing doubles the stirrup shear.
+    tighter = rc_shear_reinforcement_strength(
+        stirrup_area=_q("157 mm**2"),
+        stirrup_yield=_q("420 MPa"),
+        effective_depth=_q("550 mm"),
+        stirrup_spacing=_q("100 mm"),
+    )
+    assert tighter.to("kN").magnitude == pytest.approx(2 * v_s.to("kN").magnitude, rel=1e-9)
+    # The total nominal shear is V_c + V_s.
+    v_c = rc_concrete_shear_strength(
+        concrete_strength=_q("30 MPa"), beam_width=_q("300 mm"), effective_depth=_q("550 mm")
+    )
+    total = v_c.to("kN").magnitude + v_s.to("kN").magnitude
+    assert total > v_c.to("kN").magnitude
+
+
 def test_rc_column_axial_strength_aci():
     from anvilate.analysis import rc_column_axial_strength
 
