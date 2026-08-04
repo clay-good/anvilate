@@ -226,6 +226,15 @@ def test_clay_backfill_tension_crack_example():
     assert p["base_pressure_kpa"] > 0
 
 
+def test_masonry_wall_scorecard_example_combined_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "masonry_wall_scorecard.py"))
+    w = namespace["wall_scorecards"]()
+    assert w["light_status"] == "pass"
+    assert w["design_status"] == "fail"
+    # The combined axial+flexure check is what fails under design wind (gravity axial passes).
+    assert "combined axial + flexure" in w["design_failures"]
+
+
 def test_pump_duty_scorecard_example_sound_passes_marginal_fails():
     namespace = runpy.run_path(str(_EXAMPLES / "pump_duty_scorecard.py"))
     d = namespace["duty_scorecards"]()
