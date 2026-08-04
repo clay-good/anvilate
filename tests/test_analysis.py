@@ -12816,3 +12816,21 @@ def test_rc_beam_moment_and_steel_inverse_round_trip():
         rc_tension_steel_for_moment(
             required_moment=_q("5000 kN*m"), effective_depth=_q("550 mm"), **kw
         )
+
+
+def test_rc_concrete_shear_strength_aci():
+    from anvilate.analysis import rc_concrete_shear_strength
+
+    # V_c = 0.17*lambda*sqrt(f'c)*b*d: 30 MPa, 300x550 -> 153.6 kN.
+    vc = rc_concrete_shear_strength(
+        concrete_strength=_q("30 MPa"), beam_width=_q("300 mm"), effective_depth=_q("550 mm")
+    )
+    assert vc.to("kN").magnitude == pytest.approx(0.17 * 30**0.5 * 300 * 550 / 1000, rel=1e-9)
+    # Lightweight concrete (lambda=0.75) carries less shear.
+    light = rc_concrete_shear_strength(
+        concrete_strength=_q("30 MPa"),
+        beam_width=_q("300 mm"),
+        effective_depth=_q("550 mm"),
+        lightweight_factor=0.75,
+    )
+    assert light.to("kN").magnitude == pytest.approx(0.75 * vc.to("kN").magnitude, rel=1e-9)

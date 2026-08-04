@@ -23,6 +23,7 @@ __all__ = [
     "rc_stress_block_depth",
     "rc_beam_nominal_moment",
     "rc_tension_steel_for_moment",
+    "rc_concrete_shear_strength",
 ]
 
 _ACI_STRESS_BLOCK_FACTOR = 0.85  # the 0.85·f'c Whitney stress-block intensity
@@ -143,3 +144,35 @@ def rc_tension_steel_for_moment(
         )
     tension_force = (coeff * d - sqrt(discriminant)) / 2.0
     return Quantity(magnitude=tension_force / fy, unit="mm**2")
+
+
+def rc_concrete_shear_strength(
+    *,
+    concrete_strength: Quantity,
+    beam_width: Quantity,
+    effective_depth: Quantity,
+    lightweight_factor: float = 1.0,
+) -> Quantity:
+    """The ACI 318 concrete shear strength V_c = 0.17·λ·√f'c·b_w·d of a beam.
+
+    The shear a reinforced-concrete beam carries in the concrete alone, before any
+    stirrups (ACI 318-19 §22.5.5.1, the simplified form for a member without axial
+    load): V_c = 0.17·λ·√f'c·b_w·d, where ``concrete_strength`` f'c is the cylinder
+    strength, ``beam_width`` b_w the web width, ``effective_depth`` d the depth to the
+    tension steel, and ``lightweight_factor`` λ the concrete-weight factor (1.0
+    normalweight, 0.75 all-lightweight). When the factored shear exceeds φ·V_c
+    (φ = 0.75) the section needs stirrups; above φ·(V_c + V_s,max) a larger section is
+    required. f'c and λ are the caller's inputs. Returns V_c in kN.
+    """
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    _require(beam_width, "[length]", "beam_width")
+    _require(effective_depth, "[length]", "effective_depth")
+    fc = concrete_strength.to("MPa").magnitude
+    b = beam_width.to("mm").magnitude
+    d = effective_depth.to("mm").magnitude
+    if fc <= 0 or b <= 0 or d <= 0:
+        raise ValueError("concrete_strength, beam_width, and effective_depth must be positive")
+    if lightweight_factor <= 0:
+        raise ValueError(f"lightweight_factor must be positive; got {lightweight_factor}")
+    vc_n = 0.17 * lightweight_factor * sqrt(fc) * b * d
+    return Quantity(magnitude=vc_n / 1000.0, unit="kN")
