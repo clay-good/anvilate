@@ -15335,6 +15335,21 @@ def test_asce7_lrfd_and_asd_load_combinations_governing():
         asce7_lrfd_factored_load(dead=_q("100 kN"), live=_q("5 MPa"))
 
 
+def test_rain_load_is_the_hydrostatic_head_of_ponded_water():
+    from anvilate.analysis import rain_load
+
+    # R = 0.0098*(ds + dh); 50 + 25 mm -> 0.735 kPa, which is the weight of 75 mm of water.
+    r = rain_load(static_head=_q("50 mm"), hydraulic_head=_q("25 mm"))
+    assert r.to("kPa").magnitude == pytest.approx(0.0098 * 75, rel=1e-12)
+    # It matches the hydrostatic head rho*g*h of 75 mm of water within the rounded constant.
+    assert r.to("kPa").magnitude == pytest.approx(1000 * 9.81 * 0.075 / 1000, rel=2e-3)
+    # More head (a smaller secondary drain) is a larger load.
+    bigger = rain_load(static_head=_q("50 mm"), hydraulic_head=_q("60 mm"))
+    assert bigger.to("kPa").magnitude > r.to("kPa").magnitude
+    with pytest.raises(ValueError, match="non-negative"):
+        rain_load(static_head=_q("-10 mm"), hydraulic_head=_q("25 mm"))
+
+
 def test_reduced_live_load_regimes():
     from anvilate.analysis import reduced_live_load
 

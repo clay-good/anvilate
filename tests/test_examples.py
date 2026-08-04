@@ -965,6 +965,15 @@ def test_cold_storage_roof_snow_example_freezer_carries_more():
     assert r["freezer_sloped_kpa"] < r["freezer_flat_kpa"]
 
 
+def test_flat_roof_rain_vs_snow_example_rain_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "flat_roof_rain_vs_snow.py"))
+    r = namespace["roof_loads"]()
+    # The blocked-drain rain load narrowly governs over the flat-roof snow.
+    assert r["snow_kpa"] == pytest.approx(0.84, abs=0.01)
+    assert r["rain_kpa"] == pytest.approx(0.88, abs=0.01)
+    assert r["rain_kpa"] > r["snow_kpa"]
+
+
 def test_column_live_load_reduction_example_cuts_the_demand():
     namespace = runpy.run_path(str(_EXAMPLES / "column_live_load_reduction.py"))
     c = namespace["column_live_load"]()

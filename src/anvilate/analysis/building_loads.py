@@ -38,10 +38,12 @@ __all__ = [
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
     "reduced_live_load",
+    "rain_load",
 ]
 
 _LIVE_LOAD_REDUCTION_CONSTANT = 4.57  # ASCE 7 Eq 4.7-1 (SI), = 15/sqrt(0.0929 m^2/ft^2)
 _LIVE_LOAD_REDUCTION_THRESHOLD = 37.16  # m^2 (= 400 ft^2); no reduction below this KLL*AT
+_RAIN_LOAD_CONSTANT = 0.0098  # ASCE 7 Eq 8.3-1 (SI): unit weight of water in kPa per mm of head
 
 _VELOCITY_PRESSURE_CONSTANT = 0.613  # = 1/2 * rho_air (1.225 kg/m^3), SI ASCE 7 form
 _FLAT_ROOF_SNOW_CONSTANT = 0.7  # ASCE 7 Eq 7.3-1 exposure/thermal baseline
@@ -282,6 +284,26 @@ def reduced_live_load(
     reduced = l0 * (0.25 + _LIVE_LOAD_REDUCTION_CONSTANT / sqrt(influence))
     floor = (0.40 if supports_multiple_floors else 0.50) * l0
     return Quantity(magnitude=max(reduced, floor), unit="kPa")
+
+
+def rain_load(*, static_head: Quantity, hydraulic_head: Quantity) -> Quantity:
+    """The ASCE 7 rain load R = 0.0098·(ds + dh) — the weight of ponded water on a roof (§8.3).
+
+    A roof must be designed for the water that stands on it when its primary drain is blocked and
+    flow backs up to the secondary (overflow) drainage. The load is just the hydrostatic weight of
+    that pond: ``static_head`` ds (the depth of water at the secondary drain's inlet when the
+    primary is blocked) plus ``hydraulic_head`` dh (the extra depth needed to drive the design flow
+    through the secondary drainage), times water's unit weight — R = 0.0098·(ds + dh), heads in mm
+    and R in kPa. The heads come from the drainage layout and the design rainfall; a small secondary
+    drain (large dh) is what makes rain govern. Returns the rain load in kPa.
+    """
+    _check(static_head, "[length]", "static_head")
+    _check(hydraulic_head, "[length]", "hydraulic_head")
+    ds = static_head.to("mm").magnitude
+    dh = hydraulic_head.to("mm").magnitude
+    if ds < 0 or dh < 0:
+        raise ValueError("static_head and hydraulic_head must be non-negative")
+    return Quantity(magnitude=_RAIN_LOAD_CONSTANT * (ds + dh), unit="kPa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
