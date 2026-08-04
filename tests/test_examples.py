@@ -162,6 +162,16 @@ def test_beam_bearing_web_checks_example_is_governed_by_crippling():
     assert crippling == pytest.approx(212.6, abs=0.5)
 
 
+def test_gear_shaft_assembly_example_sizes_three_subsystems():
+    namespace = runpy.run_path(str(_EXAMPLES / "gear_shaft_assembly.py"))
+    result = namespace["size_the_shaft_assembly"]()
+    # The DE-Goodman fatigue diameter drives the design (~28.5 mm, rounded to 30).
+    assert result["shaft_diameter_mm"] == pytest.approx(28.5, abs=0.5)
+    # The key length and bearing life follow from that shaft, each a real number.
+    assert 10 < result["key_length_mm"] < 30
+    assert result["bearing_life_hours"] > 50000
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()
