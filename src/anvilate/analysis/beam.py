@@ -91,6 +91,7 @@ __all__ = [
     "aisc_plate_girder_flange_stress",
     "aisc_tension_field_shear_strength",
     "aisc_web_shear_strength",
+    "two_span_continuous_middle_moment",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
@@ -1243,6 +1244,41 @@ def aisc_web_shear_strength(
     a_w = d * tw
     v_n = 0.6 * fy * a_w * c_v1
     return Quantity(magnitude=v_n / 1000.0, unit="kN")
+
+
+def two_span_continuous_middle_moment(
+    *,
+    span_1: Quantity,
+    span_2: Quantity,
+    udl_1: Quantity,
+    udl_2: Quantity,
+) -> Quantity:
+    """The interior-support moment of a two-span continuous beam (Clapeyron's three-moment).
+
+    A beam continuous over three supports is statically indeterminate — the middle support
+    is redundant — and Clapeyron's three-moment equation solves for the hogging moment it
+    develops. With simply-supported ends and a uniform load on each span,
+    M = −(w₁·L₁³ + w₂·L₂³)/(8·(L₁ + L₂)). ``span_1`` L₁ and ``span_2`` L₂ are the two span
+    lengths and ``udl_1`` w₁, ``udl_2`` w₂ the uniform loads on them (force per length). The
+    result is negative (hogging) — the top fibre over the support is in tension, which is
+    where a continuous beam is checked and where its reinforcement or its heaviest section
+    goes. For equal spans and loads it reduces to the classic −w·L²/8, larger in magnitude
+    than either span's own w·L²/8 sagging peak. Returns the moment in kN·m.
+    """
+    _require(span_1, "[length]", "span_1")
+    _require(span_2, "[length]", "span_2")
+    if not udl_1.has_dimension("[force] / [length]"):
+        raise ValueError(f"udl_1 must be a force-per-length quantity; got {udl_1.dimensionality}")
+    if not udl_2.has_dimension("[force] / [length]"):
+        raise ValueError(f"udl_2 must be a force-per-length quantity; got {udl_2.dimensionality}")
+    l1 = span_1.to("m").magnitude
+    l2 = span_2.to("m").magnitude
+    w1 = udl_1.to("kN/m").magnitude
+    w2 = udl_2.to("kN/m").magnitude
+    if l1 <= 0 or l2 <= 0:
+        raise ValueError("span_1 and span_2 must be positive")
+    moment = -(w1 * l1**3 + w2 * l2**3) / (8.0 * (l1 + l2))
+    return Quantity(magnitude=moment, unit="kN*m")
 
 
 def shear_flow(

@@ -14139,6 +14139,32 @@ def test_aisc_inelastic_ltb_moment_interpolates_between_lp_and_lr():
         aisc_inelastic_ltb_moment(unbraced_length=_q("6000 mm"), **kw)
 
 
+def test_two_span_continuous_middle_moment_three_moment_equation():
+    from anvilate.analysis import two_span_continuous_middle_moment
+
+    # Equal spans and loads: M = -w*L^2/8 (the classic result).
+    m = two_span_continuous_middle_moment(
+        span_1=_q("6 m"), span_2=_q("6 m"), udl_1=_q("10 kN/m"), udl_2=_q("10 kN/m")
+    )
+    assert m.to("kN*m").magnitude == pytest.approx(-10 * 6**2 / 8, rel=1e-9)
+    assert m.to("kN*m").magnitude == pytest.approx(-45.0, rel=1e-9)
+    # The hogging support moment exceeds either span's own sagging peak (w*L^2/8) in
+    # magnitude — the reason a continuous beam is checked over the support.
+    span_peak = 10 * 6**2 / 8
+    assert abs(m.to("kN*m").magnitude) >= span_peak
+    # Unequal spans: the longer, heavier span drives the moment.
+    uneven = two_span_continuous_middle_moment(
+        span_1=_q("8 m"), span_2=_q("4 m"), udl_1=_q("12 kN/m"), udl_2=_q("6 kN/m")
+    )
+    assert uneven.to("kN*m").magnitude == pytest.approx(
+        -(12 * 8**3 + 6 * 4**3) / (8 * (8 + 4)), rel=1e-9
+    )
+    with pytest.raises(ValueError, match="force-per-length"):
+        two_span_continuous_middle_moment(
+            span_1=_q("6 m"), span_2=_q("6 m"), udl_1=_q("10 kN"), udl_2=_q("10 kN/m")
+        )
+
+
 def test_aisc_web_local_yielding_interior_vs_end():
     from anvilate.analysis import aisc_web_local_yielding_strength
 

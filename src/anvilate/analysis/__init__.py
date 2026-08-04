@@ -369,6 +369,7 @@ from .beam import (
     simply_supported_uniform_load,
     simply_supported_uniform_load_support_slope,
     span_deflection_limit,
+    two_span_continuous_middle_moment,
 )
 from .beam_foundation import (
     beam_on_elastic_foundation_max_deflection,
@@ -1161,6 +1162,7 @@ __all__ = [
     "aisc_web_crippling_strength",
     "aisc_web_local_yielding_strength",
     "aisc_web_shear_strength",
+    "two_span_continuous_middle_moment",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
