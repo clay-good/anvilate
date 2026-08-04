@@ -13112,6 +13112,38 @@ def test_aisc_web_local_yielding_interior_vs_end():
     assert end.to("kN").magnitude < interior.to("kN").magnitude
 
 
+def test_aisc_bearing_length_for_web_yielding_inverts_the_forward_check():
+    from anvilate.analysis import (
+        aisc_bearing_length_for_web_yielding,
+        aisc_web_local_yielding_strength,
+    )
+
+    # Solving for N at the forward check's 862.5 kN reaction recovers N = 100 mm.
+    n = aisc_bearing_length_for_web_yielding(
+        required_reaction=_q("862.5 kN"),
+        web_yield=_q("345 MPa"),
+        web_thickness=_q("10 mm"),
+        fillet_distance=_q("30 mm"),
+    )
+    assert n.to("mm").magnitude == pytest.approx(100.0, rel=1e-9)
+    # Feeding that N back into the forward check reproduces the reaction.
+    back = aisc_web_local_yielding_strength(
+        web_yield=_q("345 MPa"),
+        web_thickness=_q("10 mm"),
+        fillet_distance=_q("30 mm"),
+        bearing_length=n,
+    )
+    assert back.to("kN").magnitude == pytest.approx(862.5, rel=1e-9)
+    # When the web already carries the load over its fillet spread, N clamps to zero.
+    zero = aisc_bearing_length_for_web_yielding(
+        required_reaction=_q("100 kN"),
+        web_yield=_q("345 MPa"),
+        web_thickness=_q("10 mm"),
+        fillet_distance=_q("30 mm"),
+    )
+    assert zero.to("mm").magnitude == 0.0
+
+
 def test_aisc_web_crippling_interior_vs_end():
     from anvilate.analysis import aisc_web_crippling_strength
 

@@ -79,6 +79,7 @@ __all__ = [
     "propped_cantilever_plastic_collapse_udl",
     "max_transverse_shear_stress",
     "aisc_web_local_yielding_strength",
+    "aisc_bearing_length_for_web_yielding",
     "aisc_web_crippling_strength",
     "aisc_web_compression_buckling_strength",
     "shear_flow",
@@ -621,6 +622,43 @@ def aisc_web_local_yielding_strength(
     coefficient = 2.5 if at_member_end else 5.0
     rn_n = fyw * tw * (coefficient * k + n)
     return Quantity(magnitude=rn_n / 1000.0, unit="kN")
+
+
+def aisc_bearing_length_for_web_yielding(
+    *,
+    required_reaction: Quantity,
+    web_yield: Quantity,
+    web_thickness: Quantity,
+    fillet_distance: Quantity,
+    at_member_end: bool = False,
+) -> Quantity:
+    """The minimum bearing length N so the web local yielding strength meets a reaction.
+
+    The design inverse of :func:`aisc_web_local_yielding_strength`: given the reaction a
+    seat or bearing must deliver, solve R_n = F_yw·t_w·(C·k + N) for the bearing length
+    N = R/(F_yw·t_w) − C·k. That is the seat width (or the stiff-bearing length of a
+    bearing plate) a detailer needs so the web does not crush — the number the forward
+    check leaves you to back into by trial. ``required_reaction`` R, ``web_yield`` F_yw,
+    ``web_thickness`` t_w, and ``fillet_distance`` k as in the forward check;
+    ``at_member_end`` picks the spread coefficient C (2.5 at an end, 5.0 interior). When
+    the web alone already carries the reaction over its fillet spread the result clamps
+    to zero (no bearing length is required). Returns N in mm.
+    """
+    _require(required_reaction, "[force]", "required_reaction")
+    _require(web_yield, "[pressure]", "web_yield")
+    _require(web_thickness, "[length]", "web_thickness")
+    _require(fillet_distance, "[length]", "fillet_distance")
+    r = required_reaction.to("N").magnitude
+    fyw = web_yield.to("MPa").magnitude
+    tw = web_thickness.to("mm").magnitude
+    k = fillet_distance.to("mm").magnitude
+    if r <= 0 or fyw <= 0 or tw <= 0 or k <= 0:
+        raise ValueError(
+            "required_reaction, web_yield, web_thickness, and fillet_distance must be positive"
+        )
+    coefficient = 2.5 if at_member_end else 5.0
+    n_mm = r / (fyw * tw) - coefficient * k
+    return Quantity(magnitude=max(0.0, n_mm), unit="mm")
 
 
 def aisc_web_crippling_strength(
