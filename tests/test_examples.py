@@ -729,6 +729,15 @@ def test_ups_battery_bank_sizing_example_shallower_dod_shortens_runtime():
     assert b["shallow_runtime_h"] == pytest.approx(1.6, abs=0.05)
 
 
+def test_busbar_skin_effect_example_depth_falls_with_frequency():
+    namespace = runpy.run_path(str(_EXAMPLES / "busbar_skin_effect.py"))
+    d = namespace["copper_skin_depths"]()
+    # Skin depth shrinks steeply with frequency.
+    assert d["depth_mm_60hz"] > d["depth_mm_10khz"] > d["depth_mm_1mhz"]
+    assert d["depth_mm_60hz"] == pytest.approx(8.42, abs=0.05)
+    assert d["depth_mm_1mhz"] == pytest.approx(0.065, abs=0.002)
+
+
 def test_ground_electrode_sizing_example_soil_dominates():
     namespace = runpy.run_path(str(_EXAMPLES / "ground_electrode_sizing.py"))
     g = namespace["grounding_study"]()

@@ -13728,6 +13728,32 @@ def test_electrical_apparent_power_and_pf_correction():
         )
 
 
+def test_electrical_skin_depth():
+    import math
+
+    from anvilate.analysis import skin_depth
+
+    mu0 = 4e-7 * math.pi
+    # delta = sqrt(rho/(pi*f*mu)); copper (1.68e-8) at 60 Hz -> ~8.4 mm.
+    d = skin_depth(resistivity=_q("1.68e-8 ohm*m"), frequency=_q("60 Hz"))
+    assert d.to("m").magnitude == pytest.approx(math.sqrt(1.68e-8 / (math.pi * 60 * mu0)), rel=1e-9)
+    assert d.to("mm").magnitude == pytest.approx(8.42, abs=0.05)
+
+    # Skin depth falls as 1/sqrt(f): 100x the frequency -> 1/10 the depth.
+    d100 = skin_depth(resistivity=_q("1.68e-8 ohm*m"), frequency=_q("6000 Hz"))
+    assert d.to("m").magnitude / d100.to("m").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    # A magnetic material (high relative permeability) has a much thinner skin.
+    steel = skin_depth(
+        resistivity=_q("1e-7 ohm*m"), frequency=_q("60 Hz"), relative_permeability=100.0
+    )
+    copper_same = skin_depth(resistivity=_q("1e-7 ohm*m"), frequency=_q("60 Hz"))
+    assert steel.to("m").magnitude < copper_same.to("m").magnitude
+
+    with pytest.raises(ValueError, match="frequency"):
+        skin_depth(resistivity=_q("1.68e-8 ohm*m"), frequency=_q("0 Hz"))
+
+
 def test_electrical_ground_rod_and_parallel_electrodes():
     import math
 

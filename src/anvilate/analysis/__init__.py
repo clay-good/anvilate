@@ -173,8 +173,8 @@ modules:
   work): three-phase real and apparent power, the line current a load draws, conductor
   resistance ρ·L/A, the three-phase voltage drop along a feeder, the capacitor kVAR to
   correct a poor power factor, the transformer full-load and available fault current
-  (the AIC rating downstream gear must interrupt), and the Dwight earthing resistance of
-  a driven ground rod and of rods in parallel
+  (the AIC rating downstream gear must interrupt), the Dwight earthing resistance of
+  a driven ground rod and of rods in parallel, and the AC skin depth √(ρ/(π·f·μ))
 - :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, and the runtime
   a given bank delivers
@@ -735,6 +735,7 @@ from .electrical import (
     line_current_for_power,
     parallel_ground_electrodes_resistance,
     power_factor_correction_kvar,
+    skin_depth,
     three_phase_power,
     transformer_available_fault_current,
     transformer_full_load_current,
@@ -1538,6 +1539,7 @@ __all__ = [
     "conductor_resistance",
     "line_current_for_power",
     "power_factor_correction_kvar",
+    "skin_depth",
     "three_phase_power",
     "transformer_full_load_current",
     "transformer_available_fault_current",

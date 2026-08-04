@@ -29,6 +29,7 @@ __all__ = [
     "line_current_for_power",
     "parallel_ground_electrodes_resistance",
     "power_factor_correction_kvar",
+    "skin_depth",
     "three_phase_power",
     "transformer_available_fault_current",
     "transformer_full_load_current",
@@ -36,6 +37,7 @@ __all__ = [
 ]
 
 _SQRT3 = sqrt(3.0)
+_VACUUM_PERMEABILITY = 4.0e-7 * pi  # H/m (μ₀)
 
 
 def three_phase_power(
@@ -281,6 +283,36 @@ def parallel_ground_electrodes_resistance(
     if r1 <= 0:
         raise ValueError("single_rod_resistance must be positive")
     return Quantity(magnitude=r1 / (rod_count * arrangement_efficiency), unit="ohm")
+
+
+def skin_depth(
+    *,
+    resistivity: Quantity,
+    frequency: Quantity,
+    relative_permeability: float = 1.0,
+) -> Quantity:
+    """The AC skin depth of a conductor, δ = √(ρ/(π·f·μ)).
+
+    Alternating current does not use a conductor's full section — it crowds toward the surface, and
+    the depth at which the current density has fallen to 1/e is δ = √(ρ/(π·f·μ)), from the material
+    ``resistivity`` ρ, the ``frequency`` f, and the permeability μ = ``relative_permeability``·μ₀
+    (μ_r = 1 for copper and aluminum, hundreds for steel). It shrinks with the square root of
+    frequency: copper is ~8.5 mm deep at 60 Hz but only ~65 µm at 1 MHz, which is why high-frequency
+    conductors are stranded (litz wire) or hollow, and why induction heating cooks only the surface.
+    Returns the skin depth as a length.
+    """
+    _check(resistivity, "[resistance]*[length]", "resistivity")
+    _check(frequency, "1/[time]", "frequency")
+    rho = resistivity.to("ohm*m").magnitude
+    f = frequency.to("Hz").magnitude
+    if rho <= 0:
+        raise ValueError("resistivity must be positive")
+    if f <= 0:
+        raise ValueError("frequency must be positive")
+    if relative_permeability <= 0:
+        raise ValueError("relative_permeability must be positive")
+    mu = relative_permeability * _VACUUM_PERMEABILITY
+    return Quantity(magnitude=sqrt(rho / (pi * f * mu)), unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
