@@ -774,6 +774,14 @@ def test_steam_line_expansion_loop_example_sizes_the_leg():
     assert s["leg_length_m"] == pytest.approx(11.6, abs=0.5)
 
 
+def test_ahu_mixed_air_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "ahu_mixed_air.py"))
+    m = namespace["mixed_air"]()
+    # The mix is mass-weighted toward the larger return stream.
+    assert m["mixed_temperature_c"] == pytest.approx(26.75, rel=1e-6)
+    assert m["mixed_humidity_ratio"] == pytest.approx(0.012, rel=1e-6)
+
+
 def test_cooling_coil_sensible_latent_split_example_typical_shr():
     namespace = runpy.run_path(str(_EXAMPLES / "cooling_coil_sensible_latent_split.py"))
     c = namespace["coil_load_split"]()

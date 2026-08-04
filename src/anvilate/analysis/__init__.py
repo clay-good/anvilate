@@ -211,8 +211,9 @@ modules:
   second-law efficiency (COP over Carnot) that grades the machine itself
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
   Magnus saturation vapor pressure, the humidity ratio and relative humidity, the dew-point
-  temperature, the moist-air enthalpy and cooling-coil load for capacity sizing, and the
-  sensible/latent split with the sensible heat ratio SHR = Q_s/(Q_s + Q_l)
+  temperature, the moist-air enthalpy and cooling-coil load for capacity sizing, the
+  sensible/latent split with the sensible heat ratio SHR = Q_s/(Q_s + Q_l), and the
+  adiabatic mixing of two air streams (mass-weighted temperature and humidity ratio)
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -1216,6 +1217,8 @@ from .prestressed_concrete import (
     prestress_cracking_moment,
 )
 from .psychrometrics import (
+    adiabatic_mixing_humidity_ratio,
+    adiabatic_mixing_temperature,
     cooling_coil_load,
     dew_point_temperature,
     humidity_ratio,
@@ -1642,6 +1645,8 @@ __all__ = [
     "optimal_stage_pressure_ratio",
     "air_receiver_holdup_time",
     "air_receiver_volume_for_demand",
+    "adiabatic_mixing_temperature",
+    "adiabatic_mixing_humidity_ratio",
     "cooling_coil_load",
     "dew_point_temperature",
     "humidity_ratio",

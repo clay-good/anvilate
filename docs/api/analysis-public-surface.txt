@@ -573,6 +573,8 @@ open_channel.rectangular_weir_flow
 open_channel.specific_energy
 open_channel.trapezoidal_channel_properties
 open_channel.triangular_weir_flow
+psychrometrics.adiabatic_mixing_humidity_ratio
+psychrometrics.adiabatic_mixing_temperature
 psychrometrics.cooling_coil_load
 psychrometrics.dew_point_temperature
 psychrometrics.humidity_ratio

@@ -22,6 +22,8 @@ from math import exp, log
 from ..units import Quantity
 
 __all__ = [
+    "adiabatic_mixing_temperature",
+    "adiabatic_mixing_humidity_ratio",
     "cooling_coil_load",
     "dew_point_temperature",
     "humidity_ratio",
@@ -139,6 +141,62 @@ def moist_air_enthalpy(*, temperature: Quantity, humidity_ratio: float) -> Quant
     t = temperature.to("degC").magnitude
     h = _CP_DRY_AIR * t + humidity_ratio * (_LATENT_HEAT_0C + _CP_WATER_VAPOR * t)
     return Quantity(magnitude=h, unit="kJ/kg")
+
+
+def adiabatic_mixing_temperature(
+    *,
+    mass_flow_1: Quantity,
+    temperature_1: Quantity,
+    mass_flow_2: Quantity,
+    temperature_2: Quantity,
+) -> Quantity:
+    """The temperature of two mixed air streams, T = (ṁ₁·T₁ + ṁ₂·T₂)/(ṁ₁ + ṁ₂).
+
+    When two air streams merge with no heat added — the return and outdoor air joining in an
+    air-handler's mixing box — the mixed temperature is the mass-weighted average of the two:
+    T = (``mass_flow_1``·``temperature_1`` + ``mass_flow_2``·``temperature_2``)/(ṁ₁ + ṁ₂). The mixed
+    point lands on the straight line between the two on a psychrometric chart, nearer the larger
+    stream. Pair it with :func:`adiabatic_mixing_humidity_ratio` for the full mixed state. Returns
+    the mixed dry-bulb temperature in °C.
+    """
+    _check(mass_flow_1, "[mass]/[time]", "mass_flow_1")
+    _check(mass_flow_2, "[mass]/[time]", "mass_flow_2")
+    _check(temperature_1, "[temperature]", "temperature_1")
+    _check(temperature_2, "[temperature]", "temperature_2")
+    m1 = mass_flow_1.to("kg/s").magnitude
+    m2 = mass_flow_2.to("kg/s").magnitude
+    t1 = temperature_1.to("degC").magnitude
+    t2 = temperature_2.to("degC").magnitude
+    if m1 <= 0 or m2 <= 0:
+        raise ValueError("mass flows must be positive")
+    return Quantity(magnitude=(m1 * t1 + m2 * t2) / (m1 + m2), unit="degC")
+
+
+def adiabatic_mixing_humidity_ratio(
+    *,
+    mass_flow_1: Quantity,
+    humidity_ratio_1: float,
+    mass_flow_2: Quantity,
+    humidity_ratio_2: float,
+) -> float:
+    """The humidity ratio of two mixed air streams, W = (ṁ₁·W₁ + ṁ₂·W₂)/(ṁ₁ + ṁ₂).
+
+    The moisture of the merged stream is the mass-weighted average of the two humidity ratios:
+    W = (``mass_flow_1``·``humidity_ratio_1`` + ``mass_flow_2``·``humidity_ratio_2``)/(ṁ₁ + ṁ₂).
+    ``humidity_ratio_1``/``humidity_ratio_2`` are in kg water per kg dry air (from
+    :func:`humidity_ratio`). This is the companion of :func:`adiabatic_mixing_temperature`; together
+    they fix the mixed air condition an air-handler's coil then has to treat. Returns the
+    dimensionless mixed humidity ratio (kg/kg).
+    """
+    _check(mass_flow_1, "[mass]/[time]", "mass_flow_1")
+    _check(mass_flow_2, "[mass]/[time]", "mass_flow_2")
+    m1 = mass_flow_1.to("kg/s").magnitude
+    m2 = mass_flow_2.to("kg/s").magnitude
+    if m1 <= 0 or m2 <= 0:
+        raise ValueError("mass flows must be positive")
+    if humidity_ratio_1 < 0 or humidity_ratio_2 < 0:
+        raise ValueError("humidity ratios must be non-negative")
+    return (m1 * humidity_ratio_1 + m2 * humidity_ratio_2) / (m1 + m2)
 
 
 def cooling_coil_load(

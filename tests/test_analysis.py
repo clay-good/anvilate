@@ -15066,6 +15066,48 @@ def test_psychrometric_moist_air_properties():
         humidity_ratio(vapor_pressure=_q("200000 Pa"), total_pressure=_q("101325 Pa"))
 
 
+def test_adiabatic_air_mixing():
+    from anvilate.analysis import (
+        adiabatic_mixing_humidity_ratio,
+        adiabatic_mixing_temperature,
+    )
+    from anvilate.units import Quantity
+
+    # Mass-weighted: 3 kg/s at 24 C + 1 kg/s at 35 C -> (72+35)/4 = 26.75 C.
+    t = adiabatic_mixing_temperature(
+        mass_flow_1=_q("3 kg/s"),
+        temperature_1=Quantity(magnitude=24.0, unit="degC"),
+        mass_flow_2=_q("1 kg/s"),
+        temperature_2=Quantity(magnitude=35.0, unit="degC"),
+    )
+    assert t.to("degC").magnitude == pytest.approx((3 * 24 + 1 * 35) / 4, rel=1e-9)
+    # The mix lands nearer the larger (return) stream than the midpoint.
+    assert t.to("degC").magnitude < (24 + 35) / 2
+    # Humidity ratio is mass-weighted too: (3*0.010 + 1*0.018)/4 = 0.012.
+    w = adiabatic_mixing_humidity_ratio(
+        mass_flow_1=_q("3 kg/s"),
+        humidity_ratio_1=0.010,
+        mass_flow_2=_q("1 kg/s"),
+        humidity_ratio_2=0.018,
+    )
+    assert w == pytest.approx((3 * 0.010 + 1 * 0.018) / 4, rel=1e-9)
+    # Equal flows give the plain average.
+    t_eq = adiabatic_mixing_temperature(
+        mass_flow_1=_q("2 kg/s"),
+        temperature_1=Quantity(magnitude=20.0, unit="degC"),
+        mass_flow_2=_q("2 kg/s"),
+        temperature_2=Quantity(magnitude=30.0, unit="degC"),
+    )
+    assert t_eq.to("degC").magnitude == pytest.approx(25.0, rel=1e-9)
+    with pytest.raises(ValueError, match="mass flows must be positive"):
+        adiabatic_mixing_humidity_ratio(
+            mass_flow_1=_q("0 kg/s"),
+            humidity_ratio_1=0.010,
+            mass_flow_2=_q("1 kg/s"),
+            humidity_ratio_2=0.018,
+        )
+
+
 def test_moist_air_enthalpy_and_cooling_coil_load():
     from anvilate.analysis import cooling_coil_load, moist_air_enthalpy
 
