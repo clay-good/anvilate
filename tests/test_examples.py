@@ -720,6 +720,15 @@ def test_motor_feeder_scorecard_example_long_run_fails_on_drop():
     assert r["long_failures"] == "voltage drop"
 
 
+def test_dc_link_capacitor_energy_example_stores_hundreds_of_joules():
+    namespace = runpy.run_path(str(_EXAMPLES / "dc_link_capacitor_energy.py"))
+    d = namespace["dc_link_design"]()
+    # 1500 uF at 650 V stores ~317 J.
+    assert d["stored_energy_j"] == pytest.approx(317.0, abs=2.0)
+    # The LC filter (2 mH, 1500 uF) rings near 92 Hz.
+    assert d["resonant_frequency_hz"] == pytest.approx(92.0, abs=1.0)
+
+
 def test_ups_battery_bank_sizing_example_shallower_dod_shortens_runtime():
     namespace = runpy.run_path(str(_EXAMPLES / "ups_battery_bank_sizing.py"))
     b = namespace["bank_sizing"]()

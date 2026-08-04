@@ -175,6 +175,9 @@ modules:
   correct a poor power factor, the transformer full-load and available fault current
   (the AIC rating downstream gear must interrupt), the Dwight earthing resistance of
   a driven ground rod and of rods in parallel, and the AC skin depth √(ρ/(π·f·μ))
+- :mod:`~anvilate.analysis.reactive_circuit` — reactive components: the energy a
+  capacitor (½·C·V²) and an inductor (½·L·I²) store, and the LC resonant frequency
+  f₀ = 1/(2π·√(L·C))
 - :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, and the runtime
   a given bank delivers
@@ -1132,6 +1135,11 @@ from .pump import (
     pump_shaft_power,
     pump_specific_speed,
 )
+from .reactive_circuit import (
+    capacitor_stored_energy,
+    inductor_stored_energy,
+    lc_resonant_frequency,
+)
 from .refrigeration import (
     carnot_cop_cooling,
     carnot_cop_heating,
@@ -1474,6 +1482,9 @@ __all__ = [
     "pump_hydraulic_power",
     "pump_shaft_power",
     "pump_specific_speed",
+    "capacitor_stored_energy",
+    "inductor_stored_energy",
+    "lc_resonant_frequency",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",

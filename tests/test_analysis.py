@@ -13944,6 +13944,36 @@ def test_thermal_cylindrical_conduction_and_critical_radius():
         )
 
 
+def test_reactive_circuit_stored_energy_and_lc_resonance():
+    import math
+
+    from anvilate.analysis import (
+        capacitor_stored_energy,
+        inductor_stored_energy,
+        lc_resonant_frequency,
+    )
+
+    # E = 0.5*C*V^2; 1000 uF at 400 V -> 80 J.
+    ce = capacitor_stored_energy(capacitance=_q("1000 uF"), voltage=_q("400 V"))
+    assert ce.to("J").magnitude == pytest.approx(0.5 * 1e-3 * 400**2, rel=1e-9)
+    # Quadratic in voltage: double the voltage, four times the energy.
+    ce2 = capacitor_stored_energy(capacitance=_q("1000 uF"), voltage=_q("800 V"))
+    assert ce2.to("J").magnitude == pytest.approx(4 * ce.to("J").magnitude, rel=1e-9)
+
+    # E = 0.5*L*I^2; 10 mH at 20 A -> 2 J.
+    le = inductor_stored_energy(inductance=_q("10 mH"), current=_q("20 A"))
+    assert le.to("J").magnitude == pytest.approx(0.5 * 10e-3 * 20**2, rel=1e-9)
+
+    # f0 = 1/(2*pi*sqrt(L*C)); 10 mH, 1000 uF -> ~50.3 Hz.
+    f0 = lc_resonant_frequency(inductance=_q("10 mH"), capacitance=_q("1000 uF"))
+    assert f0.to("Hz").magnitude == pytest.approx(
+        1 / (2 * math.pi * math.sqrt(10e-3 * 1e-3)), rel=1e-9
+    )
+
+    with pytest.raises(ValueError, match="capacitance"):
+        capacitor_stored_energy(capacitance=_q("0 uF"), voltage=_q("400 V"))
+
+
 def test_energy_storage_capacity_energy_and_backup_time():
     from anvilate.analysis import (
         battery_backup_time,

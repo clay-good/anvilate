@@ -539,6 +539,9 @@ pump.npsh_margin
 pump.pump_hydraulic_power
 pump.pump_shaft_power
 pump.pump_specific_speed
+reactive_circuit.capacitor_stored_energy
+reactive_circuit.inductor_stored_energy
+reactive_circuit.lc_resonant_frequency
 pipe_flow.cavitation_number
 pipe_flow.darcy_friction_factor
 pipe_flow.darcy_weisbach_head_loss
