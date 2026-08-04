@@ -13241,6 +13241,92 @@ def test_terzaghi_bearing_capacity_sums_three_terms():
         )
 
 
+def test_consolidation_settlement_normally_consolidated():
+    import math
+
+    from anvilate.analysis import consolidation_settlement
+
+    # NC: S = (C_c*H/(1+e0))*log10(sf/s0) = (0.3*3/1.8)*log10(150/100) = 88.0 mm.
+    s = consolidation_settlement(
+        compression_index=0.30,
+        initial_void_ratio=0.80,
+        layer_thickness=_q("3 m"),
+        initial_effective_stress=_q("100 kPa"),
+        stress_increment=_q("50 kPa"),
+    )
+    expect = 0.30 * 3 / 1.8 * math.log10(150 / 100) * 1000
+    assert s.to("mm").magnitude == pytest.approx(expect, rel=1e-9)
+    assert s.to("mm").magnitude == pytest.approx(88.0, abs=0.1)
+
+
+def test_consolidation_settlement_overconsolidated_cases():
+    import math
+
+    from anvilate.analysis import consolidation_settlement
+
+    common = {
+        "compression_index": 0.30,
+        "recompression_index": 0.05,
+        "initial_void_ratio": 0.80,
+        "layer_thickness": _q("3 m"),
+        "initial_effective_stress": _q("80 kPa"),
+        "preconsolidation_stress": _q("120 kPa"),
+    }
+    # Final stress crosses sigma_c: C_r from 80->120, then C_c from 120->200.
+    crossing = consolidation_settlement(stress_increment=_q("120 kPa"), **common)
+    coeff = 3 / 1.8
+    expect_cross = (
+        0.05 * coeff * math.log10(120 / 80) + 0.30 * coeff * math.log10(200 / 120)
+    ) * 1000
+    assert crossing.to("mm").magnitude == pytest.approx(expect_cross, rel=1e-9)
+    # Final stress stays below sigma_c: recompression curve only, far softer response.
+    below = consolidation_settlement(stress_increment=_q("20 kPa"), **common)
+    expect_below = 0.05 * coeff * math.log10(100 / 80) * 1000
+    assert below.to("mm").magnitude == pytest.approx(expect_below, rel=1e-9)
+    assert below.to("mm").magnitude < crossing.to("mm").magnitude
+    # An overconsolidated clay settles less than if it were normally consolidated.
+    nc = consolidation_settlement(
+        compression_index=0.30,
+        initial_void_ratio=0.80,
+        layer_thickness=_q("3 m"),
+        initial_effective_stress=_q("80 kPa"),
+        stress_increment=_q("120 kPa"),
+    )
+    assert crossing.to("mm").magnitude < nc.to("mm").magnitude
+    with pytest.raises(ValueError, match="recompression_index"):
+        consolidation_settlement(
+            compression_index=0.30,
+            initial_void_ratio=0.80,
+            layer_thickness=_q("3 m"),
+            initial_effective_stress=_q("80 kPa"),
+            stress_increment=_q("50 kPa"),
+            preconsolidation_stress=_q("120 kPa"),
+        )
+
+
+def test_consolidation_time_factor_and_time():
+    import math
+
+    from anvilate.analysis import consolidation_time, consolidation_time_factor
+
+    # Parabolic branch (U <= 60%): T_v = (pi/4)*U^2; U=50% -> 0.196.
+    assert consolidation_time_factor(degree_of_consolidation=50.0) == pytest.approx(
+        (math.pi / 4) * 0.5**2, rel=1e-9
+    )
+    # Log branch (U > 60%): U=90% -> 0.848 (published).
+    tv90 = consolidation_time_factor(degree_of_consolidation=90.0)
+    assert tv90 == pytest.approx(0.848, abs=0.001)
+    # t = T_v*H_dr^2/c_v: 0.848*9/1 = 7.63 years.
+    t = consolidation_time(
+        time_factor=tv90,
+        drainage_path_length=_q("3 m"),
+        coefficient_of_consolidation=_q("1 m**2/year"),
+    )
+    assert t.to("year").magnitude == pytest.approx(tv90 * 9 / 1, rel=1e-9)
+    with pytest.raises(ValueError, match="0, 100"):
+        consolidation_time_factor(degree_of_consolidation=100.0)
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 

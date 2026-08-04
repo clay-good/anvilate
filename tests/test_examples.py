@@ -227,6 +227,17 @@ def test_strip_footing_bearing_example_deeper_founding_lifts_capacity():
     assert cap["q_ult_D0.5_kpa"] == pytest.approx(1322, abs=5)
 
 
+def test_clay_layer_settlement_example_fails_serviceability_over_years():
+    namespace = runpy.run_path(str(_EXAMPLES / "clay_layer_settlement.py"))
+    s = namespace["settlement_summary"]()
+    # The soil is strong but the layer consolidates far past a 25 mm serviceability limit.
+    assert s["ultimate_settlement_mm"] == pytest.approx(97, abs=2)
+    assert s["ultimate_settlement_mm"] > 25.0
+    # Reaching 90% consolidation takes years, not days — T_v(90%) = 0.848.
+    assert s["time_factor"] == pytest.approx(0.848, abs=0.001)
+    assert s["years_to_target"] > 5.0
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

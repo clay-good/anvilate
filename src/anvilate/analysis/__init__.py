@@ -278,7 +278,8 @@ modules:
   matrix properties and volume fraction
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall,
-  and the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing
+  the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing, and
+  Terzaghi 1D consolidation settlement with its time-rate factor
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
   unreinforced member, the axial capacity of a reinforced masonry column, and the
@@ -718,6 +719,9 @@ from .geneva import (
 )
 from .geotechnical import (
     bearing_capacity_factors,
+    consolidation_settlement,
+    consolidation_time,
+    consolidation_time_factor,
     rankine_earth_pressure_coefficient,
     rankine_lateral_thrust,
     terzaghi_bearing_capacity,
@@ -1096,6 +1100,9 @@ __all__ = [
     "tsai_hill_failure_index",
     "off_axis_modulus",
     "bearing_capacity_factors",
+    "consolidation_settlement",
+    "consolidation_time",
+    "consolidation_time_factor",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
     "terzaghi_bearing_capacity",

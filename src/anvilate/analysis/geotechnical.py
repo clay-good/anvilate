@@ -16,18 +16,27 @@ term, and a self-weight term, each scaled by a dimensionless bearing-capacity fa
 depends only on φ. :func:`bearing_capacity_factors` returns N_c, N_q, N_γ from the standard
 closed forms (N_q from Reissner, N_c from Prandtl, N_γ from Vesić's 2(N_q+1)·tanφ).
 
+*Consolidation settlement* (Terzaghi 1D): a clay layer squeezed by an added stress Δσ gives up
+pore water and settles by S = (C·H/(1+e₀))·log₁₀(σ_f/σ₀), the compressibility index C being the
+virgin C_c above the preconsolidation stress σ_c and the stiffer recompression C_r below it —
+:func:`consolidation_settlement` handles the normally-consolidated, recompression-only, and
+crossing cases. How long it takes follows from the time factor T_v(U) and t = T_v·H_dr²/c_v.
+
 Angles are passed in degrees (a bare float, as elsewhere in this library); other inputs and
 all outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
 """
 
 from __future__ import annotations
 
-from math import exp, pi, radians, tan
+from math import exp, log10, pi, radians, tan
 
 from ..units import Quantity
 
 __all__ = [
     "bearing_capacity_factors",
+    "consolidation_settlement",
+    "consolidation_time",
+    "consolidation_time_factor",
     "rankine_earth_pressure_coefficient",
     "rankine_lateral_thrust",
     "terzaghi_bearing_capacity",
@@ -151,3 +160,105 @@ def terzaghi_bearing_capacity(
         raise ValueError("unit_weight and width must be positive")
     q_ult = c * bearing_factor_c + q * bearing_factor_q + 0.5 * gamma * b * bearing_factor_gamma
     return Quantity(magnitude=q_ult, unit="kPa")
+
+
+def consolidation_settlement(
+    *,
+    compression_index: float,
+    initial_void_ratio: float,
+    layer_thickness: Quantity,
+    initial_effective_stress: Quantity,
+    stress_increment: Quantity,
+    preconsolidation_stress: Quantity | None = None,
+    recompression_index: float | None = None,
+) -> Quantity:
+    """The Terzaghi 1D primary consolidation settlement of a clay layer under an added stress.
+
+    A saturated clay layer loaded by Δσ consolidates as its void ratio drops along the
+    e–log σ' curve: S = (C·H/(1+e₀))·log₁₀(σ_f/σ₀). Which slope C applies depends on the
+    preconsolidation stress σ_c. A normally consolidated clay (no ``preconsolidation_stress``, or
+    σ_c ≤ σ₀) rides the virgin curve at ``compression_index`` C_c throughout. An overconsolidated
+    clay uses the flatter ``recompression_index`` C_r while the stress stays below σ_c, and if the
+    final stress σ₀ + Δσ crosses σ_c the settlement splits — C_r from σ₀ to σ_c plus C_c from σ_c
+    to σ_f. ``initial_void_ratio`` e₀, ``layer_thickness`` H, ``initial_effective_stress`` σ₀ (the
+    mid-layer overburden), and ``stress_increment`` Δσ complete the inputs; give
+    ``preconsolidation_stress`` and ``recompression_index`` together for the overconsolidated
+    cases. Returns the settlement in mm.
+    """
+    _require(layer_thickness, "[length]", "layer_thickness")
+    _require(initial_effective_stress, "[pressure]", "initial_effective_stress")
+    _require(stress_increment, "[pressure]", "stress_increment")
+    h = layer_thickness.to("m").magnitude
+    s0 = initial_effective_stress.to("kPa").magnitude
+    ds = stress_increment.to("kPa").magnitude
+    if compression_index <= 0 or initial_void_ratio <= 0:
+        raise ValueError("compression_index and initial_void_ratio must be positive")
+    if h <= 0 or s0 <= 0 or ds < 0:
+        raise ValueError("layer_thickness and stresses must be positive (increment non-negative)")
+    sf = s0 + ds
+    coeff = h / (1.0 + initial_void_ratio)
+
+    if preconsolidation_stress is None:
+        strain = compression_index * coeff * log10(sf / s0)
+        return Quantity(magnitude=strain * 1000.0, unit="mm")
+
+    _require(preconsolidation_stress, "[pressure]", "preconsolidation_stress")
+    sc = preconsolidation_stress.to("kPa").magnitude
+    if recompression_index is None or recompression_index <= 0:
+        raise ValueError(
+            "recompression_index must be given and positive when preconsolidation_stress is set"
+        )
+    if sc < s0:
+        raise ValueError("preconsolidation_stress must be at least the initial effective stress")
+
+    if sf <= sc:
+        # Wholly on the recompression curve.
+        strain = recompression_index * coeff * log10(sf / s0)
+    else:
+        # Recompression up to sigma_c, then virgin compression beyond it.
+        strain = recompression_index * coeff * log10(sc / s0) + compression_index * coeff * log10(
+            sf / sc
+        )
+    return Quantity(magnitude=strain * 1000.0, unit="mm")
+
+
+def consolidation_time_factor(*, degree_of_consolidation: float) -> float:
+    """The Terzaghi dimensionless time factor T_v for a given average degree of consolidation U.
+
+    The nondimensional time in the 1D consolidation solution, from the standard two-branch fit to
+    the theoretical U–T_v curve: T_v = (π/4)·U² for U ≤ 60% and T_v = 1.781 − 0.933·log₁₀(100 − U%)
+    beyond, with U as a percentage. ``degree_of_consolidation`` U is the percent of ultimate
+    settlement reached (0–100, exclusive of 100). Feed the result to :func:`consolidation_time` to
+    get the elapsed time. Returns the dimensionless T_v.
+    """
+    u = degree_of_consolidation
+    if not 0.0 <= u < 100.0:
+        raise ValueError(f"degree_of_consolidation must be in [0, 100) percent; got {u}")
+    if u <= 60.0:
+        return (pi / 4.0) * (u / 100.0) ** 2
+    return 1.781 - 0.933 * log10(100.0 - u)
+
+
+def consolidation_time(
+    *,
+    time_factor: float,
+    drainage_path_length: Quantity,
+    coefficient_of_consolidation: Quantity,
+) -> Quantity:
+    """The elapsed time to reach a given consolidation time factor T_v.
+
+    Inverting the time factor's definition T_v = c_v·t/H_dr² for the time: t = T_v·H_dr²/c_v.
+    ``time_factor`` T_v comes from :func:`consolidation_time_factor`, ``drainage_path_length`` H_dr
+    is the longest path water travels to a drainage boundary (the full layer thickness for
+    single-sided drainage, half of it for double-sided), and ``coefficient_of_consolidation`` c_v
+    is the soil's consolidation rate (units of area over time). Returns the time in years.
+    """
+    _require(drainage_path_length, "[length]", "drainage_path_length")
+    _require(coefficient_of_consolidation, "[length]**2/[time]", "coefficient_of_consolidation")
+    h_dr = drainage_path_length.to("m").magnitude
+    c_v = coefficient_of_consolidation.to("m**2/year").magnitude
+    if time_factor < 0:
+        raise ValueError("time_factor must be non-negative")
+    if h_dr <= 0 or c_v <= 0:
+        raise ValueError("drainage_path_length and coefficient_of_consolidation must be positive")
+    return Quantity(magnitude=time_factor * h_dr**2 / c_v, unit="year")
