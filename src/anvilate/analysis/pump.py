@@ -28,6 +28,8 @@ __all__ = [
     "affinity_head",
     "affinity_flow_rate",
     "affinity_power",
+    "npsh_available",
+    "npsh_margin",
     "pump_hydraulic_power",
     "pump_shaft_power",
     "pump_specific_speed",
@@ -150,6 +152,62 @@ def affinity_power(*, power: Quantity, speed_ratio: float) -> Quantity:
     if p <= 0:
         raise ValueError("power must be positive")
     return Quantity(magnitude=p * speed_ratio**3, unit="W")
+
+
+def npsh_available(
+    *,
+    atmospheric_pressure: Quantity,
+    vapor_pressure: Quantity,
+    density: Quantity,
+    static_suction_head: Quantity,
+    suction_friction_loss: Quantity,
+) -> Quantity:
+    """The net positive suction head available at a pump inlet, NPSH_a.
+
+    Whether a pump cavitates depends on how much the pressure at its inlet exceeds the liquid's
+    vapor pressure, expressed as a head: NPSH_a = (p_atm − p_v)/(ρ·g) + h_s − h_f.
+    ``atmospheric_pressure`` p_atm acts on the source surface, ``vapor_pressure`` p_v is the
+    liquid's vapor pressure at the
+    pumping temperature, ``density`` ρ the liquid density, ``static_suction_head`` h_s the height of
+    the source surface above the pump centerline (positive for a flooded suction, negative when the
+    pump must lift the liquid from below), and ``suction_friction_loss`` h_f the head lost in the
+    suction line. Compare against the pump's required NPSH with :func:`npsh_margin`. Returns NPSH_a
+    in meters.
+    """
+    _check(atmospheric_pressure, "[pressure]", "atmospheric_pressure")
+    _check(vapor_pressure, "[pressure]", "vapor_pressure")
+    _check(density, "[mass]/[length]**3", "density")
+    _check(static_suction_head, "[length]", "static_suction_head")
+    _check(suction_friction_loss, "[length]", "suction_friction_loss")
+    p_atm = atmospheric_pressure.to("Pa").magnitude
+    p_v = vapor_pressure.to("Pa").magnitude
+    rho = density.to("kg/m**3").magnitude
+    h_s = static_suction_head.to("m").magnitude
+    h_f = suction_friction_loss.to("m").magnitude
+    if p_atm <= 0 or rho <= 0:
+        raise ValueError("atmospheric_pressure and density must be positive")
+    if p_v < 0 or h_f < 0:
+        raise ValueError("vapor_pressure and suction_friction_loss must be non-negative")
+    npsh = (p_atm - p_v) / (rho * _GRAVITY) + h_s - h_f
+    return Quantity(magnitude=npsh, unit="m")
+
+
+def npsh_margin(*, npsh_available: Quantity, npsh_required: Quantity) -> Quantity:
+    """The cavitation margin, NPSH_available − NPSH_required.
+
+    A pump runs free of cavitation only while the suction head it *has* stays above the head it
+    *needs*: the margin NPSH_a − NPSH_r. ``npsh_available`` comes from :func:`npsh_available` and
+    ``npsh_required`` from the pump manufacturer's curve. A positive margin (a cushion of ~0.5–1 m
+    is usual) means no cavitation; a negative one means the pump cavitates. Returns the margin in
+    meters.
+    """
+    _check(npsh_available, "[length]", "npsh_available")
+    _check(npsh_required, "[length]", "npsh_required")
+    a = npsh_available.to("m").magnitude
+    r = npsh_required.to("m").magnitude
+    if r < 0:
+        raise ValueError("npsh_required must be non-negative")
+    return Quantity(magnitude=a - r, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

@@ -13814,6 +13814,46 @@ def test_pump_affinity_laws_scale_by_speed_ratio():
         affinity_power(power=_q("14 kW"), speed_ratio=0.0)
 
 
+def test_npsh_available_and_margin():
+    from anvilate.analysis import npsh_available, npsh_margin
+
+    # NPSH_a = (p_atm - p_v)/(rho*g) + h_s - h_f; lift 3 m, 1.5 m friction -> 5.61 m.
+    a = npsh_available(
+        atmospheric_pressure=_q("101.325 kPa"),
+        vapor_pressure=_q("2.34 kPa"),
+        density=_q("998 kg/m**3"),
+        static_suction_head=_q("-3 m"),
+        suction_friction_loss=_q("1.5 m"),
+    )
+    expect = (101325 - 2340) / (998 * 9.80665) - 3 - 1.5
+    assert a.to("m").magnitude == pytest.approx(expect, rel=1e-9)
+    # A flooded suction (source above the pump) raises NPSH_a.
+    flooded = npsh_available(
+        atmospheric_pressure=_q("101.325 kPa"),
+        vapor_pressure=_q("2.34 kPa"),
+        density=_q("998 kg/m**3"),
+        static_suction_head=_q("2 m"),
+        suction_friction_loss=_q("1.5 m"),
+    )
+    assert flooded.to("m").magnitude > a.to("m").magnitude
+    # Margin is NPSH_a - NPSH_r; positive here means no cavitation.
+    m = npsh_margin(npsh_available=a, npsh_required=_q("4 m"))
+    assert m.to("m").magnitude == pytest.approx(a.to("m").magnitude - 4.0, rel=1e-9)
+    assert m.to("m").magnitude > 0
+    # Higher vapor pressure (hotter liquid) erodes the available NPSH toward cavitation.
+    hot = npsh_available(
+        atmospheric_pressure=_q("101.325 kPa"),
+        vapor_pressure=_q("47.4 kPa"),
+        density=_q("972 kg/m**3"),
+        static_suction_head=_q("-3 m"),
+        suction_friction_loss=_q("1.5 m"),
+    )
+    assert hot.to("m").magnitude < a.to("m").magnitude
+    assert npsh_margin(npsh_available=hot, npsh_required=_q("4 m")).to("m").magnitude < 0
+    with pytest.raises(ValueError, match="non-negative"):
+        npsh_margin(npsh_available=a, npsh_required=_q("-1 m"))
+
+
 def test_hydrostatic_pressure_and_force():
     from anvilate.analysis import hydrostatic_force_on_plane, hydrostatic_pressure
 

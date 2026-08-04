@@ -370,6 +370,17 @@ def test_vfd_pump_energy_saving_example_cube_law():
     assert op["power_fraction"] < 0.55
 
 
+def test_pump_npsh_cavitation_example_hot_water_cavitates():
+    namespace = runpy.run_path(str(_EXAMPLES / "pump_npsh_cavitation.py"))
+    s = namespace["suction_margins"]()
+    # Cold water has a positive cavitation margin; hot water goes negative.
+    assert s["cold_margin_m"] > 0
+    assert s["hot_margin_m"] < 0
+    assert s["cold_margin_m"] == pytest.approx(1.6, abs=0.2)
+    # The vapor pressure rise drops the available NPSH sharply.
+    assert s["hot_npsh_available_m"] < s["cold_npsh_available_m"]
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

@@ -447,6 +447,8 @@ open_channel.manning_flow_velocity
 pump.affinity_flow_rate
 pump.affinity_head
 pump.affinity_power
+pump.npsh_available
+pump.npsh_margin
 pump.pump_hydraulic_power
 pump.pump_shaft_power
 pump.pump_specific_speed
