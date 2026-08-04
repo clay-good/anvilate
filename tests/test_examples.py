@@ -1062,6 +1062,21 @@ def test_seismic_p_delta_stability_example_soft_story_amplifies():
     assert s["theta_max"] == pytest.approx(0.125, rel=1e-6)
 
 
+def test_seismic_elf_design_capstone_drift_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "seismic_elf_design.py"))
+    card = namespace["screen_seismic_design"]()
+    by_name = {e.name: e for e in card.entries}
+    # Both serviceability checks pass, but drift is the tight one and P-delta is comfortable.
+    assert card.status is CheckStatus.PASS
+    assert "safety factor 1.12" in by_name["story drift vs 0.020h limit"].detail
+    assert "safety factor 2.24" in by_name["P-delta stability vs ceiling"].detail
+    drift_sf = by_name["story drift vs 0.020h limit"].safety_factor
+    pdelta_sf = by_name["P-delta stability vs ceiling"].safety_factor
+    assert drift_sf < pdelta_sf  # drift governs
+    # The long-period cap pulls the governing Cs below the 0.125 SDS/R plateau.
+    assert namespace["_governing_cs"]() < 0.125
+
+
 def test_seismic_story_drift_check_example_amplification_matters():
     namespace = runpy.run_path(str(_EXAMPLES / "seismic_story_drift_check.py"))
     d = namespace["drift_check"]()
