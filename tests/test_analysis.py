@@ -3294,6 +3294,39 @@ def test_forging_true_strain_flow_stress_and_open_die_load():
         )
 
 
+def test_rolling_max_draft_contact_length_and_force():
+    from math import sqrt
+
+    from anvilate.analysis import maximum_draft, rolling_contact_length, rolling_force
+
+    # Max draft the rolls can bite: dh_max = mu^2*R; 0.3^2 * 250 mm = 22.5 mm.
+    dmax = maximum_draft(roll_radius=_q("250 mm"), friction_coefficient=0.3)
+    assert dmax.to("mm").magnitude == pytest.approx(0.09 * 250, rel=1e-9)
+
+    # Contact length L = sqrt(R*dh); sqrt(250*5) = 35.36 mm.
+    length = rolling_contact_length(roll_radius=_q("250 mm"), draft=_q("5 mm"))
+    assert length.to("mm").magnitude == pytest.approx(sqrt(250 * 5), rel=1e-9)
+
+    # Rolling force F = Y*w*L; 200 MPa * 200 mm * 35.36 mm = 1414 kN.
+    f = rolling_force(flow_stress=_q("200 MPa"), strip_width=_q("200 mm"), contact_length=length)
+    assert f.to("kN").magnitude == pytest.approx(
+        200e6 * 0.2 * sqrt(250 * 5) / 1000 / 1000, rel=1e-9
+    )
+
+    # A larger roll spreads the same draft over a longer bite, so the force rises with radius.
+    length_big = rolling_contact_length(roll_radius=_q("400 mm"), draft=_q("5 mm"))
+    f_big = rolling_force(
+        flow_stress=_q("200 MPa"), strip_width=_q("200 mm"), contact_length=length_big
+    )
+    assert f_big.to("kN").magnitude > f.to("kN").magnitude
+
+    # Guardrails: a bigger roll and more friction allow a deeper bite; draft must be positive.
+    dmax_big = maximum_draft(roll_radius=_q("400 mm"), friction_coefficient=0.3)
+    assert dmax_big.to("mm").magnitude > dmax.to("mm").magnitude
+    with pytest.raises(ValueError, match="draft must be positive"):
+        rolling_contact_length(roll_radius=_q("250 mm"), draft=_q("0 mm"))
+
+
 def test_flywheel_inertia_and_energy_round_trip():
     # A press flywheel smoothing a 5000 J energy swing at 200 rpm mean speed to a
     # coefficient of fluctuation of 0.05 needs I = dE/(omega^2*Cs) = 227.97 kg*m^2.

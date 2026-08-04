@@ -426,6 +426,9 @@ modules:
 - :mod:`~anvilate.analysis.forging` — open-die (bulk-deformation) forging: the true
   strain ε = ln(h₀/h₁) of an upset, the Hollomon flow stress σ = K·εⁿ that work-
   hardening sets, and the press load F = σ·π·r²·(1 + 2μr/(3h)) with its friction hill
+- :mod:`~anvilate.analysis.rolling` — flat rolling: the maximum draft Δh_max = μ²·R
+  the rolls can bite, the roll-strip contact length L = √(R·Δh), and the roll
+  separating force F = Y_avg·w·L the mill stand must carry
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -1379,6 +1382,11 @@ from .road_curve import (
     perception_reaction_distance,
     stopping_sight_distance,
 )
+from .rolling import (
+    maximum_draft,
+    rolling_contact_length,
+    rolling_force,
+)
 from .scotch_yoke import (
     scotch_yoke_acceleration,
     scotch_yoke_displacement,
@@ -1933,6 +1941,9 @@ __all__ = [
     "braking_distance",
     "perception_reaction_distance",
     "stopping_sight_distance",
+    "maximum_draft",
+    "rolling_contact_length",
+    "rolling_force",
     "rc_stress_block_depth",
     "rc_beam_nominal_moment",
     "rc_doubly_reinforced_moment",

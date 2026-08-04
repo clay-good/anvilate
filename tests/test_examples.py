@@ -745,6 +745,19 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_power_w"] < 400.0
 
 
+def test_rolling_pass_schedule_example_bite_limit_and_force():
+    namespace = runpy.run_path(str(_EXAMPLES / "rolling_pass_schedule.py"))
+    p = namespace["rolling_pass"]()
+    # Bite limit mu^2*R = 0.09*250 = 22.5 mm.
+    assert p["max_draft_mm"] == pytest.approx(22.5, rel=1e-9)
+    # A 5 mm pass: 35.4 mm contact, ~1414 kN force.
+    assert p["contact_length_mm"] == pytest.approx(35.36, abs=0.05)
+    assert p["force_kn"] == pytest.approx(1414.2, abs=1.0)
+    # 5 mm fits the bite limit; a greedy 30 mm does not.
+    assert p["wanted_feasible"] is True
+    assert p["greedy_feasible"] is False
+
+
 def test_forging_press_sizing_example_friction_hill_dominates():
     namespace = runpy.run_path(str(_EXAMPLES / "forging_press_sizing.py"))
     p = namespace["press_sizing"]()

@@ -737,6 +737,9 @@ road_curve.minimum_curve_radius
 road_curve.braking_distance
 road_curve.perception_reaction_distance
 road_curve.stopping_sight_distance
+rolling.maximum_draft
+rolling.rolling_contact_length
+rolling.rolling_force
 scotch_yoke.scotch_yoke_acceleration
 scotch_yoke.scotch_yoke_displacement
 scotch_yoke.scotch_yoke_velocity
