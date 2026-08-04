@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_post_tensioned_beam_balancing_example_uniform_stress_at_balance():
+    namespace = runpy.run_path(str(_EXAMPLES / "post_tensioned_beam_balancing.py"))
+    b = namespace["beam_balancing"]()
+    assert b["balanced_load_kn_m"] == pytest.approx(25.0, rel=1e-6)
+    # Under the balanced load the bottom fibre is uniform -P/A = -10 MPa (no bending).
+    assert b["stress_at_balance_mpa"] == pytest.approx(-10.0, rel=1e-6)
+    assert b["cracking_moment_kn_m"] == pytest.approx(720.0, rel=1e-3)
+
+
 def test_timber_header_shear_governs_example_shear_beats_bending():
     namespace = runpy.run_path(str(_EXAMPLES / "timber_header_shear_governs.py"))
     card = namespace["header_scorecard"]()

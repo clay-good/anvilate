@@ -13009,6 +13009,57 @@ def test_nds_column_stability_factor_ylinen_and_euler_stress():
         )
 
 
+def test_prestress_load_balancing_and_cracking_moment():
+    from anvilate.analysis import (
+        prestress_balanced_load,
+        prestress_bottom_fiber_stress,
+        prestress_cracking_moment,
+    )
+
+    # w_b = 8*P*e/L^2; 1500 kN, 0.3 m drape, 12 m -> 25 kN/m.
+    w = prestress_balanced_load(
+        prestress_force=_q("1500 kN"), tendon_drape=_q("0.3 m"), span=_q("12 m")
+    )
+    assert w.to("kN/m").magnitude == pytest.approx(8 * 1500e3 * 0.3 / 144 / 1000, rel=1e-9)
+
+    # Under the balanced moment M = P*e, the fibre stress collapses to -P/A.
+    balanced_moment = _q("450 kN*m")  # 1500 kN * 0.3 m
+    f = prestress_bottom_fiber_stress(
+        applied_moment=balanced_moment,
+        prestress_force=_q("1500 kN"),
+        area=_q("0.15 m**2"),
+        tendon_eccentricity=_q("0.3 m"),
+        section_modulus=_q("0.02 m**3"),
+    )
+    assert f.to("MPa").magnitude == pytest.approx(-1500e3 / 0.15 / 1e6, rel=1e-9)  # -P/A = -10 MPa
+
+    # Cracking moment M_cr = f_r*S + P*(S/A + e).
+    mcr = prestress_cracking_moment(
+        prestress_force=_q("1500 kN"),
+        area=_q("0.15 m**2"),
+        tendon_eccentricity=_q("0.3 m"),
+        section_modulus=_q("0.02 m**3"),
+        modulus_of_rupture=_q("3.5 MPa"),
+    )
+    expected = (3.5e6 * 0.02 + 1500e3 * (0.02 / 0.15 + 0.3)) / 1000
+    assert mcr.to("kN*m").magnitude == pytest.approx(expected, rel=1e-9)
+
+    # Self-consistency: applying M_cr makes the bottom fibre reach exactly +f_r.
+    at_crack = prestress_bottom_fiber_stress(
+        applied_moment=mcr,
+        prestress_force=_q("1500 kN"),
+        area=_q("0.15 m**2"),
+        tendon_eccentricity=_q("0.3 m"),
+        section_modulus=_q("0.02 m**3"),
+    )
+    assert at_crack.to("MPa").magnitude == pytest.approx(3.5, rel=1e-6)
+
+    with pytest.raises(ValueError, match="tendon_drape"):
+        prestress_balanced_load(
+            prestress_force=_q("1500 kN"), tendon_drape=_q("0 m"), span=_q("12 m")
+        )
+
+
 def test_nds_shear_stress_scorecard_and_bearing_area_factor():
     from anvilate.analysis import (
         nds_bearing_area_factor,

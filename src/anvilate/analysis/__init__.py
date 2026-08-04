@@ -359,6 +359,10 @@ modules:
   unreinforced member, the axial capacity of a reinforced masonry column, and the
   combined axial-plus-flexure unity check f_a/F_a + f_b/F_b that governs a wall under
   gravity and out-of-plane wind
+- :mod:`~anvilate.analysis.prestressed_concrete` — T. Y. Lin load balancing: the
+  uniform load a parabolic tendon balances (w_b = 8·P·e/L²), the service bottom-fibre
+  stress (which collapses to −P/A under the balanced load), and the cracking moment
+  M_cr = f_r·S + P·(S/A + e)
 
 Note: :mod:`~anvilate.analysis.pressure_vessel` also carries the ASME VIII head forms
 (ellipsoidal, torispherical, hemispherical/sphere — each sizing and MAWP) and the
@@ -1044,6 +1048,11 @@ from .pressure_vessel import (
     thin_wall_sphere_diametral_growth,
     thin_wall_sphere_stress,
     thin_wall_thickness_for_pressure,
+)
+from .prestressed_concrete import (
+    prestress_balanced_load,
+    prestress_bottom_fiber_stress,
+    prestress_cracking_moment,
 )
 from .psychrometrics import (
     cooling_coil_load,
@@ -1932,6 +1941,9 @@ __all__ = [
     "power_screw_efficiency",
     "power_screw_is_self_locking",
     "power_screw_collar_torque",
+    "prestress_balanced_load",
+    "prestress_bottom_fiber_stress",
+    "prestress_cracking_moment",
     "worm_gear_ratio",
     "worm_lead_angle",
     "worm_gear_efficiency",
