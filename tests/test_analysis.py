@@ -12543,3 +12543,22 @@ def test_asme_b313_allowable_displacement_stress_range():
         asme_b313_allowable_displacement_stress_range(
             cold_allowable=_q("138 MPa"), hot_allowable=_q("130 MPa"), stress_range_factor=0.0
         )
+
+
+def test_asme_conical_head_thickness_reduces_to_the_cylinder_at_zero_angle():
+    from anvilate.analysis import asme_conical_head_thickness
+
+    kw = {"pressure": _q("2 MPa"), "diameter": _q("1000 mm"), "allowable_stress": _q("138 MPa")}
+    # alpha=0 is a cylinder: t = P*D/(2*(S*E-0.6*P)).
+    straight = asme_conical_head_thickness(half_apex_angle_deg=0.0, **kw)
+    assert straight.to("mm").magnitude == pytest.approx(2 * 1000 / (2 * (138 - 0.6 * 2)), rel=1e-9)
+    # A steeper cone needs more wall (1/cos alpha).
+    cone = asme_conical_head_thickness(half_apex_angle_deg=30.0, **kw)
+    assert cone.to("mm").magnitude > straight.to("mm").magnitude
+    from math import cos, radians
+
+    assert cone.to("mm").magnitude == pytest.approx(
+        straight.to("mm").magnitude / cos(radians(30)), rel=1e-9
+    )
+    with pytest.raises(ValueError, match="half_apex_angle_deg must lie in"):
+        asme_conical_head_thickness(half_apex_angle_deg=90.0, **kw)

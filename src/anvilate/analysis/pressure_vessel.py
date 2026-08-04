@@ -17,7 +17,7 @@ checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from math import radians, sin, sqrt
+from math import cos, radians, sin, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
@@ -39,6 +39,7 @@ __all__ = [
     "asme_torispherical_head_mawp",
     "asme_spherical_shell_thickness",
     "asme_spherical_shell_mawp",
+    "asme_conical_head_thickness",
     "asme_b313_pipe_wall_thickness",
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
@@ -487,6 +488,49 @@ def asme_spherical_shell_mawp(
     if t <= 0 or r <= 0 or s <= 0:
         raise ValueError("thickness, radius, and allowable_stress must be positive")
     return Quantity(magnitude=2.0 * s * joint_efficiency * t / (r + 0.2 * t), unit="MPa")
+
+
+def asme_conical_head_thickness(
+    *,
+    pressure: Quantity,
+    diameter: Quantity,
+    allowable_stress: Quantity,
+    half_apex_angle_deg: float,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 UG-32(g) wall for a conical head or reducer,
+    t = P·D/(2·cos α·(S·E − 0.6·P)).
+
+    A cone (a reducer between two shell diameters, or a conical end) carries the same
+    hoop mechanics as a cylinder but on a slant, so its wall is the cylinder form
+    divided by cos α — steeper cones need more wall. ``pressure`` P is the internal
+    design pressure, ``diameter`` D the inside diameter at the point checked (largest
+    at the base), ``allowable_stress`` S the code allowable, ``half_apex_angle_deg``
+    α the cone's half-apex angle (0 is a cylinder; the code limits a plain cone to
+    α ≤ 30°, above which a knuckle or toriconical transition is required), and
+    ``joint_efficiency`` E the weld efficiency. Requires S·E > 0.6·P. Returns the
+    minimum thickness in mm.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(diameter, "[length]", "diameter")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 <= half_apex_angle_deg < 90:
+        raise ValueError(f"half_apex_angle_deg must lie in [0, 90); got {half_apex_angle_deg}")
+    if not 0 < joint_efficiency <= 1:
+        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+    p = pressure.to("MPa").magnitude
+    d = diameter.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if p <= 0 or d <= 0 or s <= 0:
+        raise ValueError("pressure, diameter, and allowable_stress must be positive")
+    denominator = s * joint_efficiency - 0.6 * p
+    if denominator <= 0:
+        raise ValueError(
+            f"S·E ({s * joint_efficiency:.4g} MPa) must exceed 0.6·P ({0.6 * p:.4g} MPa)"
+        )
+    return Quantity(
+        magnitude=p * d / (2.0 * cos(radians(half_apex_angle_deg)) * denominator), unit="mm"
+    )
 
 
 def asme_b313_pipe_wall_thickness(
