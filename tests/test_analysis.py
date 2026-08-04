@@ -553,6 +553,23 @@ def test_simply_supported_offset_load_degenerates_to_the_center_case():
     )
 
 
+def test_channel_shear_center_offset():
+    from anvilate.analysis import channel_shear_center
+
+    # e = 3*b^2/(h + 6*b): b=50, h=100 -> 3*2500/400 = 18.75 mm from the web.
+    e = channel_shear_center(flange_width=_q("50 mm"), web_height=_q("100 mm"))
+    assert e.to("mm").magnitude == pytest.approx(3 * 50**2 / (100 + 6 * 50), rel=1e-12)
+    assert e.to("mm").magnitude == pytest.approx(18.75, rel=1e-6)
+    # A wider flange pushes the shear centre further out from the web.
+    wider = channel_shear_center(flange_width=_q("80 mm"), web_height=_q("100 mm"))
+    assert wider.to("mm").magnitude > e.to("mm").magnitude
+    # A deeper web pulls it back toward the web.
+    deeper = channel_shear_center(flange_width=_q("50 mm"), web_height=_q("300 mm"))
+    assert deeper.to("mm").magnitude < e.to("mm").magnitude
+    with pytest.raises(ValueError, match="must be positive"):
+        channel_shear_center(flange_width=_q("0 mm"), web_height=_q("100 mm"))
+
+
 def test_composite_beam_bending_stresses_flitch_and_homogeneous_limit():
     from anvilate.analysis import bending_stress, composite_beam_bending_stresses
 

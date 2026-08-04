@@ -470,6 +470,7 @@ scotch_yoke.scotch_yoke_velocity
 section.CompositeBeamStresses
 section.CrossSection
 section.bending_stress
+section.channel_shear_center
 section.composite_beam_bending_stresses
 section.required_section_modulus
 servo.inertia_matching_gear_ratio

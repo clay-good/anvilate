@@ -25,6 +25,7 @@ __all__ = [
     "required_section_modulus",
     "CompositeBeamStresses",
     "composite_beam_bending_stresses",
+    "channel_shear_center",
 ]
 
 
@@ -364,3 +365,23 @@ def composite_beam_bending_stresses(
         bottom_fibre_stress=Quantity(magnitude=sigma_bottom, unit="MPa"),
         top_fibre_stress=Quantity(magnitude=sigma_top, unit="MPa"),
     )
+
+
+def channel_shear_center(*, flange_width: Quantity, web_height: Quantity) -> Quantity:
+    """The shear-centre offset e = 3·b²/(h + 6·b) of a thin-walled channel from its web.
+
+    An open section like a channel has no closed shear path, so a transverse load that does
+    not pass through its *shear centre* twists it as well as bends it — the reason a channel
+    purlin or girt loaded through its web rotates unless it is restrained. For a uniform
+    thin-walled channel the shear centre lies outside the web, on the side away from the
+    flanges, at e = 3·b²/(h + 6·b) from the web centreline (thickness cancels out).
+    ``flange_width`` b is the flange width from the web centreline to the flange tip, and
+    ``web_height`` h the web depth between the flange centrelines. A wider flange pushes the
+    shear centre further out; a deep web pulls it back toward the web. Load through this
+    point (or restrain the twist) to keep the channel in pure bending. Returns e in mm.
+    """
+    b = _require_length(flange_width, "flange_width")
+    h = _require_length(web_height, "web_height")
+    if b <= 0 or h <= 0:
+        raise ValueError("flange_width and web_height must be positive")
+    return _mm(3.0 * b**2 / (h + 6.0 * b))

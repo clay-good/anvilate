@@ -827,6 +827,7 @@ from .section import (
     CompositeBeamStresses,
     CrossSection,
     bending_stress,
+    channel_shear_center,
     composite_beam_bending_stresses,
     required_section_modulus,
 )
@@ -1088,6 +1089,7 @@ __all__ = [
     "required_section_modulus",
     "CompositeBeamStresses",
     "composite_beam_bending_stresses",
+    "channel_shear_center",
     "neutral_axis_radius",
     "bend_allowance",
     "outside_setback",
