@@ -15469,6 +15469,48 @@ def test_seismic_design_story_drift_and_allowable():
         )
 
 
+def test_seismic_stability_coefficient_and_limit():
+    from anvilate.analysis import (
+        seismic_stability_coefficient,
+        seismic_stability_coefficient_limit,
+    )
+
+    # theta = Px*Delta/(Vx*hsx*Cd): 5000*0.044/(800*4*5.5) = 0.0125.
+    theta = seismic_stability_coefficient(
+        story_gravity_load=_q("5000 kN"),
+        design_story_drift=_q("44 mm"),
+        story_shear=_q("800 kN"),
+        story_height=_q("4 m"),
+        deflection_amplification_factor=5.5,
+    )
+    assert theta == pytest.approx(5000 * 0.044 / (800 * 4 * 5.5), rel=1e-9)
+    assert theta < 0.10  # P-delta negligible here
+    # More gravity load or more drift raises theta; more shear or stiffness lowers it.
+    heavier = seismic_stability_coefficient(
+        story_gravity_load=_q("15000 kN"),
+        design_story_drift=_q("44 mm"),
+        story_shear=_q("800 kN"),
+        story_height=_q("4 m"),
+        deflection_amplification_factor=5.5,
+    )
+    assert heavier > theta
+    # theta_max = 0.5/(beta*Cd), capped at 0.25.
+    assert seismic_stability_coefficient_limit(
+        deflection_amplification_factor=5.5
+    ) == pytest.approx(0.5 / 5.5, rel=1e-12)
+    assert seismic_stability_coefficient_limit(
+        deflection_amplification_factor=1.5
+    ) == pytest.approx(0.25, rel=1e-12)
+    with pytest.raises(ValueError, match="story_shear"):
+        seismic_stability_coefficient(
+            story_gravity_load=_q("5000 kN"),
+            design_story_drift=_q("44 mm"),
+            story_shear=_q("0 kN"),
+            story_height=_q("4 m"),
+            deflection_amplification_factor=5.5,
+        )
+
+
 def test_building_loads_flat_and_sloped_roof_snow():
     from anvilate.analysis import flat_roof_snow_load, sloped_roof_snow_load
 

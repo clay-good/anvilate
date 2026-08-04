@@ -231,8 +231,9 @@ modules:
   pressure it drives, the seismic response coefficient (Cs = SDS·Ie/R) and the
   equivalent-lateral-force base shear V = Cs·W and its vertical distribution to
   each floor (Fx = V·wx·hx^k/Σwi·hi^k), the Cd-amplified design story drift
-  (Δ = Cd·δxe/Ie) and the allowable drift it is checked against, the flat- and
-  sloped-roof snow loads
+  (Δ = Cd·δxe/Ie) and the allowable drift it is checked against, the P-delta
+  stability coefficient (θ = Pₓ·Δ/(Vₓ·hsx·Cd)) and its stability ceiling, the
+  flat- and sloped-roof snow loads
   (pf = 0.7·Ce·Ct·Is·pg, ps = Cs·pf), the tributary-area live-load reduction
   (L = L0·(0.25 + 4.57/√(KLL·AT))), and the ponded-water rain load
   (R = 0.0098·(ds + dh))
@@ -604,6 +605,8 @@ from .building_loads import (
     seismic_base_shear,
     seismic_design_story_drift,
     seismic_response_coefficient,
+    seismic_stability_coefficient,
+    seismic_stability_coefficient_limit,
     seismic_vertical_force_distribution,
     sloped_roof_snow_load,
     wind_design_pressure,
@@ -1903,6 +1906,8 @@ __all__ = [
     "seismic_vertical_force_distribution",
     "seismic_design_story_drift",
     "allowable_story_drift",
+    "seismic_stability_coefficient",
+    "seismic_stability_coefficient_limit",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
     "reduced_live_load",

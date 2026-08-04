@@ -1032,6 +1032,17 @@ def test_column_live_load_reduction_example_cuts_the_demand():
     assert c["lrfd_reduced_kpa"] < c["lrfd_unreduced_kpa"]
 
 
+def test_seismic_p_delta_stability_example_soft_story_amplifies():
+    namespace = runpy.run_path(str(_EXAMPLES / "seismic_p_delta_stability.py"))
+    s = namespace["stability_check"]()
+    # The stiff story's P-delta is negligible; the soft story crosses the 0.10 threshold.
+    assert s["stiff_theta"] < 0.10
+    assert s["soft_theta"] == pytest.approx(0.110, abs=0.002)
+    # The soft story is still under the stability ceiling (stable, but must be amplified).
+    assert 0.10 <= s["soft_theta"] < s["theta_max"]
+    assert s["theta_max"] == pytest.approx(0.125, rel=1e-6)
+
+
 def test_seismic_story_drift_check_example_amplification_matters():
     namespace = runpy.run_path(str(_EXAMPLES / "seismic_story_drift_check.py"))
     d = namespace["drift_check"]()

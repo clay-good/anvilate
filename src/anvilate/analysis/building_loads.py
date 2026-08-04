@@ -37,6 +37,8 @@ __all__ = [
     "seismic_vertical_force_distribution",
     "seismic_design_story_drift",
     "allowable_story_drift",
+    "seismic_stability_coefficient",
+    "seismic_stability_coefficient_limit",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
     "reduced_live_load",
@@ -250,6 +252,63 @@ def allowable_story_drift(
     if drift_limit_ratio <= 0:
         raise ValueError("drift_limit_ratio must be positive")
     return Quantity(magnitude=drift_limit_ratio * h, unit="mm")
+
+
+def seismic_stability_coefficient(
+    *,
+    story_gravity_load: Quantity,
+    design_story_drift: Quantity,
+    story_shear: Quantity,
+    story_height: Quantity,
+    deflection_amplification_factor: float,
+) -> float:
+    """The ASCE 7 P-delta stability coefficient θ = Pₓ·Δ/(Vₓ·hsx·Cd) (§12.8.7).
+
+    When a swaying story carries gravity load, that weight acting through the sway adds an
+    overturning demand the first-order analysis missed — the P-delta effect. The stability
+    coefficient measures how big it is: ``story_gravity_load`` Pₓ (the total weight above the
+    story), the ``design_story_drift`` Δ (the amplified drift from
+    :func:`seismic_design_story_drift`), the
+    ``story_shear`` Vₓ, the ``story_height`` hsx, and the ``deflection_amplification_factor`` Cd.
+    Below θ = 0.10 P-delta is negligible and may be ignored; above it the drift and forces must be
+    amplified by 1/(1 − θ); above :func:`seismic_stability_coefficient_limit` the story is unstable.
+    Returns the dimensionless θ.
+    """
+    _check(story_gravity_load, "[force]", "story_gravity_load")
+    _check(design_story_drift, "[length]", "design_story_drift")
+    _check(story_shear, "[force]", "story_shear")
+    _check(story_height, "[length]", "story_height")
+    px = story_gravity_load.to("kN").magnitude
+    drift = design_story_drift.to("m").magnitude
+    vx = story_shear.to("kN").magnitude
+    h = story_height.to("m").magnitude
+    if px <= 0 or vx <= 0 or h <= 0:
+        raise ValueError("story_gravity_load, story_shear, and story_height must be positive")
+    if drift < 0:
+        raise ValueError("design_story_drift must be non-negative")
+    if deflection_amplification_factor <= 0:
+        raise ValueError("deflection_amplification_factor must be positive")
+    return px * drift / (vx * h * deflection_amplification_factor)
+
+
+def seismic_stability_coefficient_limit(
+    *,
+    deflection_amplification_factor: float,
+    demand_capacity_ratio: float = 1.0,
+) -> float:
+    """The ASCE 7 maximum stability coefficient θ_max = 0.5/(β·Cd) ≤ 0.25 (§12.8.7).
+
+    The ceiling on the P-delta stability coefficient above which a story is considered unstable and
+    must be stiffened. ``deflection_amplification_factor`` Cd and ``demand_capacity_ratio`` β (the
+    ratio of the story shear demand to its capacity, conservatively taken as 1.0 when unknown) set
+    θ_max = 0.5/(β·Cd), but never more than 0.25. Compare the θ from
+    :func:`seismic_stability_coefficient` against this. Returns the dimensionless θ_max.
+    """
+    if deflection_amplification_factor <= 0:
+        raise ValueError("deflection_amplification_factor must be positive")
+    if not 0 < demand_capacity_ratio <= 1.0:
+        raise ValueError("demand_capacity_ratio must be in (0, 1]")
+    return min(0.5 / (demand_capacity_ratio * deflection_amplification_factor), 0.25)
 
 
 def flat_roof_snow_load(
