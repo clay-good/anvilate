@@ -84,6 +84,7 @@ __all__ = [
     "aisc_web_compression_buckling_strength",
     "aisc_round_hss_flexural_strength",
     "aisc_round_hss_shear_strength",
+    "aisc_rectangular_hss_shear_strength",
     "aisc_web_shear_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
@@ -859,6 +860,55 @@ def aisc_round_hss_shear_strength(
     f_cr_b = 0.78 * e / dt**1.5
     f_cr = min(max(f_cr_a, f_cr_b), 0.6 * fy)
     v_n = f_cr * ag / 2.0
+    return Quantity(magnitude=v_n / 1000.0, unit="kN")
+
+
+def aisc_rectangular_hss_shear_strength(
+    *,
+    web_height: Quantity,
+    thickness: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+    shear_buckling_coefficient: float = 5.0,
+) -> Quantity:
+    """The AISC 360 §G5 shear strength V_n = 0.6·F_y·A_w·C_v2 of a rectangular HSS.
+
+    A box section shears through its two side walls, so A_w = 2·h·t, and §G5 uses the
+    three-branch web shear coefficient C_v2 (not the two-branch C_v1 of an I-shape web):
+    C_v2 = 1.0 while h/t ≤ 1.10·√(k_v·E/F_y); then 1.10·√(k_v·E/F_y)/(h/t) up to
+    1.37·√(k_v·E/F_y); then 1.51·k_v·E/((h/t)²·F_y) beyond, where the thin wall buckles
+    in the inelastic-then-elastic ranges. ``web_height`` h is the flat width of the wall
+    resisting shear (conservatively the overall depth less three wall thicknesses),
+    ``thickness`` t the wall thickness, ``yield_strength`` F_y, ``elastic_modulus`` E,
+    and ``shear_buckling_coefficient`` k_v = 5.0 for a rectangular HSS. A stocky wall
+    yields at 0.6·F_y·A_w; a slender wall buckles below it. Returns V_n in kN.
+    """
+    _require(web_height, "[length]", "web_height")
+    _require(thickness, "[length]", "thickness")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    h = web_height.to("mm").magnitude
+    t = thickness.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if h <= 0 or t <= 0 or fy <= 0 or e <= 0:
+        raise ValueError(
+            "web_height, thickness, yield_strength, and elastic_modulus must be positive"
+        )
+    if shear_buckling_coefficient <= 0:
+        raise ValueError("shear_buckling_coefficient must be positive")
+    h_t = h / t
+    kv = shear_buckling_coefficient
+    limit_1 = 1.10 * (kv * e / fy) ** 0.5
+    limit_2 = 1.37 * (kv * e / fy) ** 0.5
+    if h_t <= limit_1:
+        c_v2 = 1.0
+    elif h_t <= limit_2:
+        c_v2 = limit_1 / h_t
+    else:
+        c_v2 = 1.51 * kv * e / (h_t**2 * fy)
+    a_w = 2.0 * h * t
+    v_n = 0.6 * fy * a_w * c_v2
     return Quantity(magnitude=v_n / 1000.0, unit="kN")
 
 

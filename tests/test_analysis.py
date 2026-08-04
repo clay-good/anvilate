@@ -13273,3 +13273,24 @@ def test_aisc_round_hss_shear_strength_caps_at_shear_yield():
     f_cr_a = 1.60 * 200000 / ((2000 / 200) ** 0.5 * 200**1.25)
     assert thin.to("kN").magnitude == pytest.approx(f_cr_a * ag_thin / 2 / 1000, rel=1e-9)
     assert f_cr_a < 0.6 * 345
+
+
+def test_aisc_rectangular_hss_shear_strength_three_branches():
+    from anvilate.analysis import aisc_rectangular_hss_shear_strength
+
+    base = {"yield_strength": _q("345 MPa"), "elastic_modulus": _q("200000 MPa")}
+    # limit_1 = 1.10*sqrt(5*E/Fy) = 59.2, limit_2 = 1.37*sqrt(...) = 73.8.
+    # Stocky wall (h/t = 17): shear yielding, C_v2 = 1.0, A_w = 2*h*t.
+    stocky = aisc_rectangular_hss_shear_strength(
+        web_height=_q("170 mm"), thickness=_q("10 mm"), **base
+    )
+    assert stocky.to("kN").magnitude == pytest.approx(0.6 * 345 * 2 * 170 * 10 / 1000, rel=1e-9)
+    # Slender wall (h/t = 117 > 73.8): inelastic/elastic buckling, inverse-square branch.
+    slender = aisc_rectangular_hss_shear_strength(
+        web_height=_q("585 mm"), thickness=_q("5 mm"), **base
+    )
+    c_v2 = 1.51 * 5.0 * 200000 / (117**2 * 345)
+    assert slender.to("kN").magnitude == pytest.approx(
+        0.6 * 345 * 2 * 585 * 5 * c_v2 / 1000, rel=1e-9
+    )
+    assert c_v2 < 1.0
