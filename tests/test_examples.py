@@ -515,6 +515,17 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_worker_noise_dose_scorecard_example_niosh_is_stricter():
+    namespace = runpy.run_path(str(_EXAMPLES / "worker_noise_dose_scorecard.py"))
+    r = namespace["exposure_scorecards"]()
+    # The ~94 dBA combined level over 6 h fails both standards.
+    assert r["osha_status"] == "fail"
+    assert r["niosh_status"] == "fail"
+    assert r["osha_dose_percent"] > 100.0
+    # NIOSH's tighter criterion and exchange rate multiply the dose well past OSHA's.
+    assert r["niosh_dose_percent"] > r["osha_dose_percent"]
+
+
 def test_office_lighting_layout_example_installed_grid_clears_target():
     namespace = runpy.run_path(str(_EXAMPLES / "office_lighting_layout.py"))
     r = namespace["lighting_layout"]()

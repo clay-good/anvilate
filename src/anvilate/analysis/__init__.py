@@ -365,6 +365,8 @@ from __future__ import annotations
 from .acoustics import (
     inverse_square_attenuation,
     mass_law_transmission_loss,
+    noise_dose_fraction,
+    permissible_exposure_time,
     sabine_reverberation_time,
     sound_level_sum,
 )
@@ -1407,6 +1409,8 @@ __all__ = [
     "voltage_drop_three_phase",
     "inverse_square_attenuation",
     "mass_law_transmission_loss",
+    "noise_dose_fraction",
+    "permissible_exposure_time",
     "sabine_reverberation_time",
     "sound_level_sum",
     "masonry_allowable_axial_stress",

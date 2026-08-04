@@ -7,6 +7,8 @@
 # replacement for at least one minor release) before deleting its line.
 acoustics.inverse_square_attenuation
 acoustics.mass_law_transmission_loss
+acoustics.noise_dose_fraction
+acoustics.permissible_exposure_time
 acoustics.sabine_reverberation_time
 acoustics.sound_level_sum
 adhesive.cylindrical_bond_axial_capacity

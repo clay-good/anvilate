@@ -24,6 +24,8 @@ from ..units import Quantity
 __all__ = [
     "inverse_square_attenuation",
     "mass_law_transmission_loss",
+    "noise_dose_fraction",
+    "permissible_exposure_time",
     "sabine_reverberation_time",
     "sound_level_sum",
 ]
@@ -106,6 +108,54 @@ def sabine_reverberation_time(*, volume: Quantity, total_absorption: Quantity) -
     if v <= 0 or a <= 0:
         raise ValueError("volume and total_absorption must be positive")
     return Quantity(magnitude=0.161 * v / a, unit="s")
+
+
+def permissible_exposure_time(
+    *,
+    sound_level: float,
+    criterion_level: float,
+    exchange_rate: float,
+    criterion_duration: Quantity,
+) -> Quantity:
+    """The time a steady noise level may be endured, T = T₀ / 2^((L − L_c)/q).
+
+    Hearing-conservation standards trade level against time on a fixed exchange rate: every ``q`` dB
+    (the ``exchange_rate``) above the ``criterion_level`` L_c halves the permissible time. Starting
+    from the reference exposure — ``criterion_duration`` T₀ (the shift the criterion level is set
+    for, typically 8 h) — the time a worker may spend at ``sound_level`` L is
+    T = T₀ / 2^((L − L_c)/q). The criterion level and exchange rate are the standard's own values,
+    supplied by the caller: OSHA uses L_c = 90 dBA with q = 5 dB, NIOSH L_c = 85 dBA with q = 3 dB.
+    Returns the permissible exposure time as a Quantity in the units of the criterion duration.
+    """
+    _check(criterion_duration, "[time]", "criterion_duration")
+    if exchange_rate <= 0:
+        raise ValueError("exchange_rate (dB) must be positive")
+    t0 = criterion_duration.to("hour").magnitude
+    if t0 <= 0:
+        raise ValueError("criterion_duration must be positive")
+    t = t0 / 2.0 ** ((sound_level - criterion_level) / exchange_rate)
+    return Quantity(magnitude=t, unit="hour")
+
+
+def noise_dose_fraction(*, exposure_time: Quantity, permissible_time: Quantity) -> float:
+    """The noise dose a single exposure accrues, D = C/T (1.0 is the full permissible dose).
+
+    A worker's dose is the time actually spent at a level, ``exposure_time`` C, over the permissible
+    time at that level, ``permissible_time`` T (from :func:`permissible_exposure_time`): D = C/T. A
+    dose of 1.0 means the worker has reached the standard's limit for the shift; above 1.0 the
+    permissible exposure has been exceeded. (For several different levels across a shift the total
+    dose is the sum of each interval's C/T — combine the fractions this returns.) Returns the dose
+    as a dimensionless fraction; multiply by 100 for the percent dose the standards report.
+    """
+    _check(exposure_time, "[time]", "exposure_time")
+    _check(permissible_time, "[time]", "permissible_time")
+    c = exposure_time.to("hour").magnitude
+    t = permissible_time.to("hour").magnitude
+    if c < 0:
+        raise ValueError("exposure_time must be non-negative")
+    if t <= 0:
+        raise ValueError("permissible_time must be positive")
+    return c / t
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
