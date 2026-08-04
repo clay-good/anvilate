@@ -451,6 +451,8 @@ geneva.geneva_crank_radius
 geneva.geneva_driven_radius
 geneva.geneva_dwell_fraction
 geneva.geneva_index_angle
+hvac_duct.circular_equivalent_diameter
+hvac_duct.fan_power
 hydraulic_cylinder.cylinder_extend_force
 hydraulic_cylinder.cylinder_extend_speed
 hydraulic_cylinder.cylinder_retract_force

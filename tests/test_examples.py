@@ -515,6 +515,15 @@ def test_plant_noise_exposure_example_loudest_dominates():
     assert a["safe_distance_m"] > 1.0
 
 
+def test_rectangular_duct_sizing_example_equivalent_exceeds_hydraulic():
+    namespace = runpy.run_path(str(_EXAMPLES / "rectangular_duct_sizing.py"))
+    r = namespace["duct_and_fan"]()
+    # The ASHRAE equivalent diameter is larger than the hydraulic 4A/P.
+    assert r["equivalent_mm"] > r["hydraulic_mm"]
+    assert r["equivalent_mm"] == pytest.approx(381.0, abs=2.0)
+    assert r["fan_watts"] == pytest.approx(774.0, abs=2.0)
+
+
 def test_clarifier_particle_settling_example_d_squared_law():
     namespace = runpy.run_path(str(_EXAMPLES / "clarifier_particle_settling.py"))
     r = namespace["settling_times"]()

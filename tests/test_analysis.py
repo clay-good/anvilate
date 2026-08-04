@@ -13863,6 +13863,25 @@ def test_energy_storage_capacity_energy_and_backup_time():
         )
 
 
+def test_hvac_duct_equivalent_diameter_and_fan_power():
+    from anvilate.analysis import circular_equivalent_diameter, fan_power
+
+    # D_e = 1.30*(a*b)^0.625/(a+b)^0.25; 400 x 200 mm -> ~305 mm.
+    de = circular_equivalent_diameter(width=_q("400 mm"), height=_q("200 mm"))
+    expected = 1.30 * (0.4 * 0.2) ** 0.625 / (0.4 + 0.2) ** 0.25
+    assert de.to("m").magnitude == pytest.approx(expected, rel=1e-9)
+    # The equivalent diameter exceeds the hydraulic diameter 4A/P (= 266.7 mm here).
+    hydraulic = 4 * (0.4 * 0.2) / (2 * (0.4 + 0.2))
+    assert de.to("m").magnitude > hydraulic
+
+    # Fan power P = Q*dp/eta; 1 m^3/s, 500 Pa, 0.6 -> 833 W.
+    p = fan_power(flow_rate=_q("1 m**3/s"), total_pressure=_q("500 Pa"), fan_efficiency=0.6)
+    assert p.to("W").magnitude == pytest.approx(500 / 0.6, rel=1e-9)
+
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        fan_power(flow_rate=_q("1 m**3/s"), total_pressure=_q("500 Pa"), fan_efficiency=1.5)
+
+
 def test_drag_force_and_terminal_velocity():
     from anvilate.analysis import drag_force, terminal_velocity
 

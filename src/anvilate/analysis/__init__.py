@@ -169,6 +169,8 @@ modules:
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
   low-Reynolds Stokes settling velocity and drag on a small sphere
+- :mod:`~anvilate.analysis.hvac_duct` — air-duct sizing: the ASHRAE circular equivalent
+  diameter of a rectangular duct (equal friction), and the fan shaft power P = Q·Δp/η
 - :mod:`~anvilate.analysis.refrigeration` — refrigeration and heat-pump cycle performance:
   the Carnot cooling and heating COP ceilings and the actual COP = Q/W
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
@@ -897,6 +899,10 @@ from .geotechnical import (
     tension_crack_depth,
     terzaghi_bearing_capacity,
     vertical_stress_increase_2to1,
+)
+from .hvac_duct import (
+    circular_equivalent_diameter,
+    fan_power,
 )
 from .hydraulic_cylinder import (
     cylinder_extend_force,
@@ -1675,6 +1681,8 @@ __all__ = [
     "geneva_driven_radius",
     "geneva_advance_fraction",
     "geneva_dwell_fraction",
+    "circular_equivalent_diameter",
+    "fan_power",
     "cylinder_extend_force",
     "cylinder_retract_force",
     "cylinder_extend_speed",
