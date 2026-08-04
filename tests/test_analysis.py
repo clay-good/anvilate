@@ -11420,6 +11420,42 @@ def test_agma_bending_stress_derates_the_lewis_form():
         agma_bending_stress(geometry_factor=0.0, **kw)
 
 
+def test_agma_contact_stress_derated_pitting():
+    import math
+
+    from anvilate.analysis import agma_contact_stress
+
+    # C_p = sqrt(1/(pi*(2*(1-0.3^2)/200000))) = 187 sqrt(MPa); with the derating factors
+    # sigma_c = C_p*sqrt(W_t*K_o*K_v*K_s*K_H*C_f/(d_w1*b*I)) = 923 MPa.
+    sigma = agma_contact_stress(
+        tangential_load=_q("5000 N"),
+        pinion_pitch_diameter=_q("100 mm"),
+        face_width=_q("40 mm"),
+        geometry_factor=0.1,
+        modulus_pinion=_q("200000 MPa"),
+        modulus_gear=_q("200000 MPa"),
+        overload_factor=1.25,
+        dynamic_factor=1.2,
+        load_distribution_factor=1.3,
+    )
+    c_p = (1 / (math.pi * (2 * (1 - 0.3**2) / 200000))) ** 0.5
+    expect = c_p * (5000 * 1.25 * 1.2 * 1.0 * 1.3 * 1.0 / (100 * 40 * 0.1)) ** 0.5
+    assert sigma.to("MPa").magnitude == pytest.approx(expect, rel=1e-9)
+    assert c_p == pytest.approx(187.0, abs=1.0)
+    # The derating factors enter under the root, so they raise the stress by their sqrt.
+    plain = agma_contact_stress(
+        tangential_load=_q("5000 N"),
+        pinion_pitch_diameter=_q("100 mm"),
+        face_width=_q("40 mm"),
+        geometry_factor=0.1,
+        modulus_pinion=_q("200000 MPa"),
+        modulus_gear=_q("200000 MPa"),
+    )
+    assert sigma.to("MPa").magnitude == pytest.approx(
+        plain.to("MPa").magnitude * (1.25 * 1.2 * 1.3) ** 0.5, rel=1e-9
+    )
+
+
 def test_lewis_module_inverse_round_trips_the_bending_stress():
     from anvilate.analysis import lewis_bending_stress, lewis_module_for_bending_stress
 

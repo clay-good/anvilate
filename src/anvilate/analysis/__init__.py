@@ -610,6 +610,7 @@ from .gasket import (
 from .gear import (
     PlanetaryTorques,
     agma_bending_stress,
+    agma_contact_stress,
     barth_velocity_factor,
     base_tangent_length,
     bevel_gear_axial_load,
@@ -1338,6 +1339,7 @@ __all__ = [
     "lewis_bending_stress",
     "lewis_module_for_bending_stress",
     "agma_bending_stress",
+    "agma_contact_stress",
     "gear_contact_stress",
     "spur_gear_contact_ratio",
     "minimum_teeth_to_avoid_undercut",

@@ -59,6 +59,7 @@ __all__ = [
     "lewis_bending_stress",
     "lewis_module_for_bending_stress",
     "agma_bending_stress",
+    "agma_contact_stress",
     "gear_contact_stress",
     "spur_gear_contact_ratio",
     "minimum_teeth_to_avoid_undercut",
@@ -477,6 +478,79 @@ def gear_contact_stress(
         diameter2=Quantity(magnitude=d2 * sin(phi), unit="mm"),
     )
     return result.max_contact_pressure
+
+
+def agma_contact_stress(
+    *,
+    tangential_load: Quantity,
+    pinion_pitch_diameter: Quantity,
+    face_width: Quantity,
+    geometry_factor: float,
+    modulus_pinion: Quantity,
+    modulus_gear: Quantity,
+    poisson_pinion: float = 0.3,
+    poisson_gear: float = 0.3,
+    overload_factor: float = 1.0,
+    dynamic_factor: float = 1.0,
+    size_factor: float = 1.0,
+    load_distribution_factor: float = 1.0,
+    surface_condition_factor: float = 1.0,
+) -> Quantity:
+    """The AGMA 2001 / ISO 6336 pitting-resistance (contact) stress with derating factors.
+
+    The pitting companion to :func:`agma_bending_stress`: gears must survive surface
+    fatigue as well as tooth-root bending, and AGMA rates it as
+    σ_c = C_p·√(W_t·K_o·K_v·K_s·K_H·C_f/(d_w1·b·I)). The elastic coefficient C_p =
+    √(1/(π·((1−ν₁²)/E₁ + (1−ν₂²)/E₂))) is built from each body's ``modulus`` and
+    ``poisson`` (≈187 √MPa for steel on steel). ``tangential_load`` W_t,
+    ``pinion_pitch_diameter`` d_w1, ``face_width`` b, and ``geometry_factor`` I (the AGMA
+    pitting geometry factor, supplied from the charts) set the mesh; the same
+    ``overload_factor`` K_o, ``dynamic_factor`` K_v, ``size_factor`` K_s, and
+    ``load_distribution_factor`` K_H as in bending, plus a ``surface_condition_factor`` C_f,
+    each default to 1.0. Unlike bending, the factors enter under the square root. Screen
+    against the material's allowable contact stress. Returns the contact stress in MPa.
+    """
+    _require(tangential_load, "[force]", "tangential_load")
+    _require(pinion_pitch_diameter, "[length]", "pinion_pitch_diameter")
+    _require(face_width, "[length]", "face_width")
+    _require(modulus_pinion, "[pressure]", "modulus_pinion")
+    _require(modulus_gear, "[pressure]", "modulus_gear")
+    if geometry_factor <= 0:
+        raise ValueError(f"geometry_factor (AGMA I) must be positive; got {geometry_factor}")
+    wt = tangential_load.to("N").magnitude
+    dw1 = pinion_pitch_diameter.to("mm").magnitude
+    b = face_width.to("mm").magnitude
+    e1 = modulus_pinion.to("MPa").magnitude
+    e2 = modulus_gear.to("MPa").magnitude
+    if dw1 <= 0 or b <= 0 or e1 <= 0 or e2 <= 0:
+        raise ValueError("pinion_pitch_diameter, face_width, and both moduli must be positive")
+    for nu, name in ((poisson_pinion, "poisson_pinion"), (poisson_gear, "poisson_gear")):
+        if not 0 <= nu < 0.5:
+            raise ValueError(f"{name} must be in [0, 0.5); got {nu}")
+    factors = {
+        "overload_factor": overload_factor,
+        "dynamic_factor": dynamic_factor,
+        "size_factor": size_factor,
+        "load_distribution_factor": load_distribution_factor,
+        "surface_condition_factor": surface_condition_factor,
+    }
+    for name, value in factors.items():
+        if value <= 0:
+            raise ValueError(f"{name} must be positive; got {value}")
+    elastic_coefficient = (
+        1.0 / (pi * ((1.0 - poisson_pinion**2) / e1 + (1.0 - poisson_gear**2) / e2))
+    ) ** 0.5
+    derated_load = (
+        wt
+        * overload_factor
+        * dynamic_factor
+        * size_factor
+        * load_distribution_factor
+        * surface_condition_factor
+        / (dw1 * b * geometry_factor)
+    )
+    stress = elastic_coefficient * derated_load**0.5
+    return Quantity(magnitude=stress, unit="MPa")
 
 
 def _check_tooth_count(count: int, name: str) -> int:
