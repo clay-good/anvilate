@@ -35,6 +35,7 @@ __all__ = [
     "lateral_torsional_buckling_moment",
     "rankine_gordon_stress",
     "aisc_flexural_buckling_stress",
+    "aisc_plastic_bracing_limit",
 ]
 
 
@@ -202,6 +203,34 @@ def aisc_flexural_buckling_stress(
     else:
         fcr = 0.877 * fe
     return Quantity(magnitude=fcr, unit="MPa")
+
+
+def aisc_plastic_bracing_limit(
+    *,
+    minor_radius_of_gyration: Quantity,
+    yield_strength: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The AISC 360 laterally-unbraced length L_p = 1.76·r_y·√(E/F_y) for full plastic
+    bending.
+
+    An I-shaped beam can reach its full plastic moment M_p only if its compression
+    flange is braced against lateral-torsional buckling at a spacing no greater than
+    L_p (AISC 360 §F2.2): L_p = 1.76·r_y·√(E/F_y), where ``minor_radius_of_gyration``
+    r_y is the section's weak-axis radius of gyration, ``yield_strength`` F_y, and
+    ``elastic_modulus`` E. Beyond L_p the moment capacity falls — first linearly (the
+    inelastic-LTB range up to L_r), then elastically. A stockier section (large r_y) or
+    a lower-strength steel tolerates a longer unbraced length. Returns L_p in mm.
+    """
+    _require(minor_radius_of_gyration, "[length]", "minor_radius_of_gyration")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    ry = minor_radius_of_gyration.to("mm").magnitude
+    fy = yield_strength.to("MPa").magnitude
+    e = elastic_modulus.to("MPa").magnitude
+    if ry <= 0 or fy <= 0 or e <= 0:
+        raise ValueError("all inputs must be positive")
+    return Quantity(magnitude=1.76 * ry * sqrt(e / fy), unit="mm")
 
 
 def transition_slenderness(*, yield_strength: Quantity, elastic_modulus: Quantity) -> float:

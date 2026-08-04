@@ -13051,3 +13051,22 @@ def test_rc_cracking_moment_and_effective_inertia_bischoff():
         applied_moment=_q("120 kN*m"),
     )
     assert 3e9 < ie.to("mm**4").magnitude < 8e9
+
+
+def test_aisc_plastic_bracing_limit_lp():
+    from anvilate.analysis import aisc_plastic_bracing_limit
+
+    # L_p = 1.76*r_y*sqrt(E/F_y): r_y=40 mm, 345/200000 MPa -> 1695 mm.
+    lp = aisc_plastic_bracing_limit(
+        minor_radius_of_gyration=_q("40 mm"),
+        yield_strength=_q("345 MPa"),
+        elastic_modulus=_q("200000 MPa"),
+    )
+    assert lp.to("mm").magnitude == pytest.approx(1.76 * 40 * (200000 / 345) ** 0.5, rel=1e-9)
+    # A lower-strength steel tolerates a longer unbraced length.
+    softer = aisc_plastic_bracing_limit(
+        minor_radius_of_gyration=_q("40 mm"),
+        yield_strength=_q("250 MPa"),
+        elastic_modulus=_q("200000 MPa"),
+    )
+    assert softer.to("mm").magnitude > lp.to("mm").magnitude

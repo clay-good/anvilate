@@ -408,6 +408,7 @@ from .cold_formed_steel import (
 from .column import (
     ColumnEnd,
     aisc_flexural_buckling_stress,
+    aisc_plastic_bracing_limit,
     euler_buckling_load,
     euler_critical_stress,
     euler_second_moment_for_load,
@@ -1147,6 +1148,7 @@ __all__ = [
     "slenderness_ratio",
     "euler_critical_stress",
     "aisc_flexural_buckling_stress",
+    "aisc_plastic_bracing_limit",
     "transition_slenderness",
     "johnson_critical_stress",
     "secant_column_max_stress",

@@ -133,6 +133,7 @@ clutch.disc_clutch_force_for_torque
 clutch.disc_clutch_torque
 column.ColumnEnd
 column.aisc_flexural_buckling_stress
+column.aisc_plastic_bracing_limit
 column.euler_buckling_load
 column.euler_critical_stress
 column.euler_second_moment_for_load
