@@ -29,7 +29,13 @@ __all__ = [
     "rc_net_tensile_strain",
     "rc_development_length",
     "rc_max_bar_spacing_crack_control",
+    "rc_minimum_flexural_steel",
+    "rc_maximum_tension_controlled_steel",
 ]
+
+# The tension-controlled neutral-axis ratio c/d at ε_t = 0.005 (with ε_cu = 0.003):
+# c/d = 0.003 / (0.003 + 0.005) = 0.375.
+_TENSION_CONTROLLED_C_OVER_D = 0.375
 
 # ACI 318 ultimate concrete compressive strain (the strain-diagram anchor).
 _ACI_CONCRETE_ULTIMATE_STRAIN = 0.003
@@ -341,3 +347,63 @@ def rc_max_bar_spacing_crack_control(
     if spacing <= 0:
         raise ValueError("the cover and steel stress leave no permissible spacing; check inputs")
     return Quantity(magnitude=spacing, unit="mm")
+
+
+def rc_minimum_flexural_steel(
+    *,
+    concrete_strength: Quantity,
+    steel_yield: Quantity,
+    beam_width: Quantity,
+    effective_depth: Quantity,
+) -> Quantity:
+    """The ACI 318 minimum flexural steel A_s,min = max(0.25·√f'c/f_y, 1.4/f_y)·b_w·d.
+
+    A beam needs enough tension steel that it does not fail more abruptly cracked than
+    uncracked (ACI 318-19 §9.6.1.2): A_s,min is the larger of 0.25·√f'c/f_y and 1.4/f_y
+    times b_w·d. ``concrete_strength`` f'c, ``steel_yield`` f_y, ``beam_width`` b_w, and
+    ``effective_depth`` d describe the section. Returns A_s,min in mm².
+    """
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    _require(steel_yield, "[pressure]", "steel_yield")
+    _require(beam_width, "[length]", "beam_width")
+    _require(effective_depth, "[length]", "effective_depth")
+    fc = concrete_strength.to("MPa").magnitude
+    fy = steel_yield.to("MPa").magnitude
+    b = beam_width.to("mm").magnitude
+    d = effective_depth.to("mm").magnitude
+    if fc <= 0 or fy <= 0 or b <= 0 or d <= 0:
+        raise ValueError("all inputs must be positive")
+    ratio = max(0.25 * sqrt(fc) / fy, 1.4 / fy)
+    return Quantity(magnitude=ratio * b * d, unit="mm**2")
+
+
+def rc_maximum_tension_controlled_steel(
+    *,
+    concrete_strength: Quantity,
+    steel_yield: Quantity,
+    beam_width: Quantity,
+    effective_depth: Quantity,
+) -> Quantity:
+    """The tension steel that keeps a beam tension-controlled (ductile), A_s,max.
+
+    The most reinforcement a singly-reinforced section can carry while its extreme
+    steel strain stays at the tension-controlled limit ε_t = 0.005 (so φ = 0.90). At
+    that limit the neutral axis sits at c = 0.375·d, the stress block at a = β₁·c, and
+    force balance gives A_s,max = 0.85·β₁·(f'c/f_y)·0.375·b·d. ``concrete_strength`` f'c
+    sets β₁; the other arguments are as in :func:`rc_minimum_flexural_steel`. Steel
+    above this pushes the section into the transition/compression-controlled range
+    (falling φ, less warning) and calls for compression steel. Returns A_s,max in mm².
+    """
+    _require(concrete_strength, "[pressure]", "concrete_strength")
+    _require(steel_yield, "[pressure]", "steel_yield")
+    _require(beam_width, "[length]", "beam_width")
+    _require(effective_depth, "[length]", "effective_depth")
+    fc = concrete_strength.to("MPa").magnitude
+    fy = steel_yield.to("MPa").magnitude
+    b = beam_width.to("mm").magnitude
+    d = effective_depth.to("mm").magnitude
+    if fc <= 0 or fy <= 0 or b <= 0 or d <= 0:
+        raise ValueError("all inputs must be positive")
+    beta1 = rc_beta1(concrete_strength=concrete_strength)
+    ratio = _ACI_STRESS_BLOCK_FACTOR * beta1 * (fc / fy) * _TENSION_CONTROLLED_C_OVER_D
+    return Quantity(magnitude=ratio * b * d, unit="mm**2")

@@ -12913,3 +12913,25 @@ def test_rc_max_bar_spacing_crack_control_aci():
         steel_service_stress=_q("280 MPa"), clear_cover=_q("60 mm")
     )
     assert more_cover.to("mm").magnitude < s.to("mm").magnitude
+
+
+def test_rc_reinforcement_limits_bracket_the_example_beam():
+    from anvilate.analysis import (
+        rc_maximum_tension_controlled_steel,
+        rc_minimum_flexural_steel,
+    )
+
+    kw = {
+        "concrete_strength": _q("30 MPa"),
+        "steel_yield": _q("420 MPa"),
+        "beam_width": _q("300 mm"),
+        "effective_depth": _q("550 mm"),
+    }
+    as_min = rc_minimum_flexural_steel(**kw)
+    as_max = rc_maximum_tension_controlled_steel(**kw)
+    assert as_min.to("mm**2").magnitude == pytest.approx(
+        max(0.25 * 30**0.5 / 420, 1.4 / 420) * 300 * 550, rel=1e-9
+    )
+    assert as_max.to("mm**2").magnitude == pytest.approx(3141, abs=2)
+    # The 1500 mm² example beam sits between the limits — adequate and ductile.
+    assert as_min.to("mm**2").magnitude < 1500 < as_max.to("mm**2").magnitude
