@@ -299,7 +299,8 @@ modules:
   matrix properties and volume fraction
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall,
-  the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing,
+  the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing (with
+  Vesić shape and depth factors that correct it for a rectangular embedded footing),
   Terzaghi 1D consolidation settlement with its time-rate factor, retaining-wall
   external stability (overturning, sliding, and eccentric base-pressure) checks, the
   infinite-slope factor of safety, the 2:1 vertical stress increase under a footing, and
@@ -760,6 +761,8 @@ from .geneva import (
 )
 from .geotechnical import (
     bearing_capacity_factors,
+    bearing_depth_factors,
+    bearing_shape_factors,
     consolidation_settlement,
     consolidation_time,
     consolidation_time_factor,
@@ -1173,6 +1176,8 @@ __all__ = [
     "tsai_hill_failure_index",
     "off_axis_modulus",
     "bearing_capacity_factors",
+    "bearing_depth_factors",
+    "bearing_shape_factors",
     "consolidation_settlement",
     "consolidation_time",
     "consolidation_time_factor",

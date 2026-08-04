@@ -34,6 +34,8 @@ from ..units import Quantity
 
 __all__ = [
     "bearing_capacity_factors",
+    "bearing_depth_factors",
+    "bearing_shape_factors",
     "consolidation_settlement",
     "consolidation_time",
     "consolidation_time_factor",
@@ -132,6 +134,80 @@ def bearing_capacity_factors(*, friction_angle: float) -> dict[str, float]:
         n_c = (n_q - 1.0) / tan(phi)
     n_gamma = 2.0 * (n_q + 1.0) * tan(phi)
     return {"N_c": n_c, "N_q": n_q, "N_gamma": n_gamma}
+
+
+def bearing_shape_factors(
+    *,
+    footing_width: Quantity,
+    footing_length: Quantity,
+    friction_angle: float,
+    bearing_factor_nq: float,
+    bearing_factor_nc: float,
+) -> dict[str, float]:
+    """The Vesić shape factors that correct strip bearing capacity for a rectangular footing.
+
+    Terzaghi's bearing equation is for an infinitely long strip; a real rectangular or square
+    footing is stronger in the cohesion and surcharge terms but weaker in the self-weight term.
+    The Vesić shape factors capture that from the width-to-length ratio B/L:
+    s_c = 1 + (B/L)(N_q/N_c), s_q = 1 + (B/L)·tanφ, and s_γ = 1 − 0.4·(B/L). ``footing_width`` B
+    (the shorter side),
+    ``footing_length`` L, ``friction_angle`` φ (degrees), and the ``bearing_factor_nq``/``_nc`` from
+    :func:`bearing_capacity_factors`. Multiply each term of the bearing capacity by its factor.
+    Returns a dict with keys ``"s_c"``, ``"s_q"``, ``"s_gamma"``.
+    """
+    _require(footing_width, "[length]", "footing_width")
+    _require(footing_length, "[length]", "footing_length")
+    _check_friction_angle(friction_angle)
+    b = footing_width.to("m").magnitude
+    lo = footing_length.to("m").magnitude
+    if b <= 0 or lo <= 0:
+        raise ValueError("footing_width and footing_length must be positive")
+    if b > lo:
+        raise ValueError("footing_width must be the shorter side (B <= L)")
+    if bearing_factor_nq <= 0 or bearing_factor_nc <= 0:
+        raise ValueError("bearing_factor_nq and bearing_factor_nc must be positive")
+    ratio = b / lo
+    s_c = 1.0 + ratio * (bearing_factor_nq / bearing_factor_nc)
+    s_q = 1.0 + ratio * tan(radians(friction_angle))
+    s_gamma = 1.0 - 0.4 * ratio
+    return {"s_c": s_c, "s_q": s_q, "s_gamma": s_gamma}
+
+
+def bearing_depth_factors(
+    *,
+    footing_width: Quantity,
+    embedment_depth: Quantity,
+    friction_angle: float,
+) -> dict[str, float]:
+    """The Hansen/Vesić depth factors that credit a footing's embedment in bearing capacity.
+
+    Soil beside an embedded footing adds shear resistance the surface bearing equation ignores, so
+    depth factors raise the capacity. For a shallow footing (D ≤ B) the Hansen/Vesić forms are
+    d_q = 1 + 2·tanφ·(1 − sinφ)²·(D/B), d_c = d_q − (1 − d_q)/(N_q·tanφ) (or 1 + 0.4·(D/B) when
+    φ = 0), and d_γ = 1. ``footing_width`` B, ``embedment_depth`` D (founding depth below grade),
+    and ``friction_angle`` φ (degrees). Multiply each bearing-capacity term by its factor. Returns a
+    dict with keys ``"d_c"``, ``"d_q"``, ``"d_gamma"``.
+    """
+    _require(footing_width, "[length]", "footing_width")
+    _require(embedment_depth, "[length]", "embedment_depth")
+    _check_friction_angle(friction_angle)
+    b = footing_width.to("m").magnitude
+    d = embedment_depth.to("m").magnitude
+    if b <= 0 or d < 0:
+        raise ValueError("footing_width must be positive and embedment_depth non-negative")
+    ratio = d / b
+    phi = radians(friction_angle)
+    if friction_angle == 0.0:
+        return {"d_c": 1.0 + 0.4 * ratio, "d_q": 1.0, "d_gamma": 1.0}
+    d_q = 1.0 + 2.0 * tan(phi) * (1.0 - sin(phi)) ** 2 * ratio
+    d_c = d_q - (1.0 - d_q) / _nq_tan_phi(phi)
+    return {"d_c": d_c, "d_q": d_q, "d_gamma": 1.0}
+
+
+def _nq_tan_phi(phi_radians: float) -> float:
+    """N_q·tanφ, the denominator in the Hansen/Vesić d_c depth factor."""
+    n_q = exp(pi * tan(phi_radians)) * tan(pi / 4.0 + phi_radians / 2.0) ** 2
+    return n_q * tan(phi_radians)
 
 
 def terzaghi_bearing_capacity(

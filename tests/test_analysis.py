@@ -13271,6 +13271,67 @@ def test_bearing_capacity_factors_match_vesic_and_phi_zero_limit():
     assert f0["N_gamma"] == pytest.approx(0.0, abs=1e-12)
 
 
+def test_bearing_shape_factors_vesic():
+    import math
+
+    from anvilate.analysis import bearing_capacity_factors, bearing_shape_factors
+
+    n = bearing_capacity_factors(friction_angle=30.0)
+    s = bearing_shape_factors(
+        footing_width=_q("2 m"),
+        footing_length=_q("3 m"),
+        friction_angle=30.0,
+        bearing_factor_nq=n["N_q"],
+        bearing_factor_nc=n["N_c"],
+    )
+    ratio = 2 / 3
+    assert s["s_c"] == pytest.approx(1 + ratio * (n["N_q"] / n["N_c"]), rel=1e-9)
+    assert s["s_q"] == pytest.approx(1 + ratio * math.tan(math.radians(30)), rel=1e-9)
+    assert s["s_gamma"] == pytest.approx(1 - 0.4 * ratio, rel=1e-9)
+    # Cohesion and surcharge terms gain, the self-weight term loses a little.
+    assert s["s_c"] > 1 and s["s_q"] > 1 and s["s_gamma"] < 1
+    # A square footing (B = L) has the strongest shape correction.
+    s_sq = bearing_shape_factors(
+        footing_width=_q("2 m"),
+        footing_length=_q("2 m"),
+        friction_angle=30.0,
+        bearing_factor_nq=n["N_q"],
+        bearing_factor_nc=n["N_c"],
+    )
+    assert s_sq["s_c"] > s["s_c"]
+    with pytest.raises(ValueError, match="shorter side"):
+        bearing_shape_factors(
+            footing_width=_q("3 m"),
+            footing_length=_q("2 m"),
+            friction_angle=30.0,
+            bearing_factor_nq=n["N_q"],
+            bearing_factor_nc=n["N_c"],
+        )
+
+
+def test_bearing_depth_factors_hansen():
+    from anvilate.analysis import bearing_depth_factors
+
+    # phi=30, D/B=0.75: d_q = 1 + 2*tan(phi)*(1-sin(phi))^2*(D/B) ~ 1.217, d_gamma = 1.
+    d = bearing_depth_factors(
+        footing_width=_q("2 m"), embedment_depth=_q("1.5 m"), friction_angle=30.0
+    )
+    assert d["d_q"] == pytest.approx(1.217, abs=0.002)
+    assert d["d_c"] == pytest.approx(1.237, abs=0.002)
+    assert d["d_gamma"] == pytest.approx(1.0, rel=1e-12)
+    # Deeper embedment credits more capacity.
+    d_deep = bearing_depth_factors(
+        footing_width=_q("2 m"), embedment_depth=_q("2 m"), friction_angle=30.0
+    )
+    assert d_deep["d_q"] > d["d_q"]
+    # phi = 0 uses the special d_c = 1 + 0.4*(D/B) form, d_q = 1.
+    d0 = bearing_depth_factors(
+        footing_width=_q("2 m"), embedment_depth=_q("1 m"), friction_angle=0.0
+    )
+    assert d0["d_c"] == pytest.approx(1 + 0.4 * 0.5, rel=1e-9)
+    assert d0["d_q"] == pytest.approx(1.0, rel=1e-12)
+
+
 def test_terzaghi_bearing_capacity_sums_three_terms():
     from anvilate.analysis import bearing_capacity_factors, terzaghi_bearing_capacity
 

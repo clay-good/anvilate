@@ -20,6 +20,8 @@ composite.rule_of_mixtures_strength
 composite.transverse_modulus_inverse_rule
 composite.tsai_hill_failure_index
 geotechnical.bearing_capacity_factors
+geotechnical.bearing_depth_factors
+geotechnical.bearing_shape_factors
 geotechnical.consolidation_settlement
 geotechnical.consolidation_time
 geotechnical.consolidation_time_factor

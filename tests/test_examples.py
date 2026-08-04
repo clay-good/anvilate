@@ -319,6 +319,15 @@ def test_friction_pile_capacity_example_shaft_carries_the_load():
     assert p["allowable_kn"] == pytest.approx(430, abs=5)
 
 
+def test_square_footing_shape_depth_example_recovers_capacity():
+    namespace = runpy.run_path(str(_EXAMPLES / "square_footing_shape_depth.py"))
+    r = namespace["corrected_bearing"]()
+    # The shape and depth corrections add substantial capacity over the strip estimate.
+    assert r["corrected_kpa"] > r["strip_kpa"]
+    assert r["ratio"] == pytest.approx(1.6, abs=0.05)
+    assert r["strip_kpa"] == pytest.approx(1488, abs=5)
+
+
 def test_air_compressor_duty_example_brackets_power_and_heat():
     namespace = runpy.run_path(str(_EXAMPLES / "air_compressor_duty.py"))
     d = namespace["compressor_duty"]()
