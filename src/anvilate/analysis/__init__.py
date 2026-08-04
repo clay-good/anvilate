@@ -4,6 +4,8 @@ The T1 validation tier screens a design with handbook closed-form solutions
 (Roark, Shigley) before any FEA — fast, deterministic, and unit-checked. The
 modules:
 
+- :mod:`~anvilate.analysis.accumulator` — gas-charged hydraulic accumulators: the usable
+  fluid volume delivered between two pressures, and its inverse (the size a duty needs)
 - :mod:`~anvilate.analysis.acoustics` — machinery-noise arithmetic (for plant/industrial
   work): the decibel sum of several sources and the inverse-square distance attenuation
 - :mod:`~anvilate.analysis.adhesive` — bonded joints: the lap-joint average shear
@@ -415,6 +417,10 @@ openspec/specs/validation-gauntlet/).
 
 from __future__ import annotations
 
+from .accumulator import (
+    accumulator_size_for_volume,
+    accumulator_usable_volume,
+)
 from .acoustics import (
     inverse_square_attenuation,
     mass_law_transmission_loss,
@@ -1598,6 +1604,8 @@ __all__ = [
     "pv_array_power",
     "pv_daily_energy",
     "pv_array_size_for_load",
+    "accumulator_size_for_volume",
+    "accumulator_usable_volume",
     "inverse_square_attenuation",
     "mass_law_transmission_loss",
     "noise_dose_fraction",

@@ -5,6 +5,8 @@
 # public symbol, add it to the module's __all__ AND to this file in the same
 # change. To remove one, follow the deprecation policy (deprecate with a
 # replacement for at least one minor release) before deleting its line.
+accumulator.accumulator_size_for_volume
+accumulator.accumulator_usable_volume
 acoustics.inverse_square_attenuation
 acoustics.mass_law_transmission_loss
 acoustics.noise_dose_fraction

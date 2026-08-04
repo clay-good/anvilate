@@ -679,6 +679,15 @@ def test_fuel_injector_droplet_breakup_example_velocity_squared():
     assert w["weber_spray"] / w["weber_dribble"] == pytest.approx((80 / 2) ** 2, rel=1e-6)
 
 
+def test_emergency_accumulator_sizing_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "emergency_accumulator_sizing.py"))
+    r = namespace["clamp_accumulator"]()
+    # Sizing a 3.6 L adiabatic stroke lands near a 10 L bottle...
+    assert r["size_l"] == pytest.approx(9.94, rel=1e-2)
+    # ...and that same bottle delivers more on a slow (isothermal) cycle.
+    assert r["isothermal_l"] > 3.6
+
+
 def test_clarifier_particle_settling_example_d_squared_law():
     namespace = runpy.run_path(str(_EXAMPLES / "clarifier_particle_settling.py"))
     r = namespace["settling_times"]()

@@ -14696,6 +14696,50 @@ def test_fluid_statics_weber_number():
         )
 
 
+def test_accumulator_usable_volume_and_size_round_trip():
+    from anvilate.analysis import accumulator_size_for_volume, accumulator_usable_volume
+
+    # 10 L bottle, 90 bar precharge, 100->200 bar. Adiabatic (n=1.4):
+    # dV = 10*[(90/100)^(1/1.4) - (90/200)^(1/1.4)] = 3.622 L.
+    dv = accumulator_usable_volume(
+        total_volume=_q("10 L"),
+        precharge_pressure=_q("90 bar"),
+        minimum_pressure=_q("100 bar"),
+        maximum_pressure=_q("200 bar"),
+    )
+    assert dv.to("L").magnitude == pytest.approx(3.622, rel=1e-3)
+
+    # Isothermal (n=1) is V0*P0*(1/P1 - 1/P2) = 10*90*(1/100 - 1/200) = 4.5 L,
+    # and a slow cycle always delivers more than a fast one from the same bottle.
+    dv_iso = accumulator_usable_volume(
+        total_volume=_q("10 L"),
+        precharge_pressure=_q("90 bar"),
+        minimum_pressure=_q("100 bar"),
+        maximum_pressure=_q("200 bar"),
+        polytropic_exponent=1.0,
+    )
+    assert dv_iso.to("L").magnitude == pytest.approx(4.5, rel=1e-9)
+    assert dv_iso.to("L").magnitude > dv.to("L").magnitude
+
+    # The inverse recovers the 10 L bottle from its own delivery.
+    size = accumulator_size_for_volume(
+        required_volume=dv,
+        precharge_pressure=_q("90 bar"),
+        minimum_pressure=_q("100 bar"),
+        maximum_pressure=_q("200 bar"),
+    )
+    assert size.to("L").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    # Precharge above the minimum working pressure draws no fluid -> guarded.
+    with pytest.raises(ValueError, match="precharge_pressure"):
+        accumulator_usable_volume(
+            total_volume=_q("10 L"),
+            precharge_pressure=_q("120 bar"),
+            minimum_pressure=_q("100 bar"),
+            maximum_pressure=_q("200 bar"),
+        )
+
+
 def test_drag_force_and_terminal_velocity():
     from anvilate.analysis import drag_force, terminal_velocity
 
