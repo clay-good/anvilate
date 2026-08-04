@@ -13092,3 +13092,21 @@ def test_aisc_inelastic_ltb_moment_interpolates_between_lp_and_lr():
     # Beyond L_r the elastic form governs, so this refuses.
     with pytest.raises(ValueError, match="elastic LTB governs"):
         aisc_inelastic_ltb_moment(unbraced_length=_q("6000 mm"), **kw)
+
+
+def test_aisc_web_local_yielding_interior_vs_end():
+    from anvilate.analysis import aisc_web_local_yielding_strength
+
+    kw = {
+        "web_yield": _q("345 MPa"),
+        "web_thickness": _q("10 mm"),
+        "fillet_distance": _q("30 mm"),
+        "bearing_length": _q("100 mm"),
+    }
+    # Interior: R_n = F_yw*t_w*(5k+N) = 862.5 kN.
+    interior = aisc_web_local_yielding_strength(**kw)
+    assert interior.to("kN").magnitude == pytest.approx(345 * 10 * (5 * 30 + 100) / 1000, rel=1e-9)
+    # An end load spreads one way only (2.5k) -> less strength.
+    end = aisc_web_local_yielding_strength(at_member_end=True, **kw)
+    assert end.to("kN").magnitude == pytest.approx(345 * 10 * (2.5 * 30 + 100) / 1000, rel=1e-9)
+    assert end.to("kN").magnitude < interior.to("kN").magnitude

@@ -78,6 +78,7 @@ __all__ = [
     "fixed_fixed_plastic_collapse_udl",
     "propped_cantilever_plastic_collapse_udl",
     "max_transverse_shear_stress",
+    "aisc_web_local_yielding_strength",
     "shear_flow",
     "fastener_spacing_for_shear_flow",
     "deflection_scorecard",
@@ -579,6 +580,45 @@ def max_transverse_shear_stress(
         raise ValueError(f"form_factor must be positive; got {form_factor}")
     stress = form_factor * shear_force.pint / area.pint
     return _as_quantity(stress, "MPa")
+
+
+def aisc_web_local_yielding_strength(
+    *,
+    web_yield: Quantity,
+    web_thickness: Quantity,
+    fillet_distance: Quantity,
+    bearing_length: Quantity,
+    at_member_end: bool = False,
+) -> Quantity:
+    """The AISC 360 §J10.2 web local yielding strength at a concentrated load.
+
+    A concentrated load (a support reaction or a bearing point) spreads from the
+    flange into the web at roughly 1:1 (2.5:1 through the fillet), and the web yields
+    over that spread length: R_n = F_yw·t_w·(C·k + N). ``web_yield`` F_yw is the web's
+    yield, ``web_thickness`` t_w the web thickness, ``fillet_distance`` k the distance
+    from the outer flange face to the web toe of the fillet, and ``bearing_length`` N
+    the length of bearing. ``at_member_end`` picks the spread coefficient C — 2.5 for a
+    load within a member depth of the end (one-sided spread), 5.0 for an interior load
+    (two-sided). A thicker web, a deeper fillet, or a longer bearing all raise the
+    strength; a thin web at a short bearing is where beams crush at their supports.
+    Returns R_n in kN.
+    """
+    _require(web_yield, "[pressure]", "web_yield")
+    _require(web_thickness, "[length]", "web_thickness")
+    _require(fillet_distance, "[length]", "fillet_distance")
+    _require(bearing_length, "[length]", "bearing_length")
+    fyw = web_yield.to("MPa").magnitude
+    tw = web_thickness.to("mm").magnitude
+    k = fillet_distance.to("mm").magnitude
+    n = bearing_length.to("mm").magnitude
+    if fyw <= 0 or tw <= 0 or k <= 0 or n < 0:
+        raise ValueError(
+            "web_yield, web_thickness, and fillet_distance must be positive and "
+            "bearing_length non-negative"
+        )
+    coefficient = 2.5 if at_member_end else 5.0
+    rn_n = fyw * tw * (coefficient * k + n)
+    return Quantity(magnitude=rn_n / 1000.0, unit="kN")
 
 
 def shear_flow(
