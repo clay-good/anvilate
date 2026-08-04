@@ -1073,9 +1073,7 @@ def heat_exchanger_area_for_duty(
     """
     _require(duty, "[power]", "duty")
     _require(overall_coefficient, "[power] / [length]**2 / [temperature]", "overall_coefficient")
-    _require(
-        log_mean_temperature_difference, "[temperature]", "log_mean_temperature_difference"
-    )
+    _require(log_mean_temperature_difference, "[temperature]", "log_mean_temperature_difference")
     q = duty.to("W").magnitude
     u = overall_coefficient.to("W/(m**2*K)").magnitude
     lmtd = log_mean_temperature_difference.to("K").magnitude
@@ -1098,9 +1096,7 @@ def heat_exchanger_duty(
     """
     _require(overall_coefficient, "[power] / [length]**2 / [temperature]", "overall_coefficient")
     _require(area, "[area]", "area")
-    _require(
-        log_mean_temperature_difference, "[temperature]", "log_mean_temperature_difference"
-    )
+    _require(log_mean_temperature_difference, "[temperature]", "log_mean_temperature_difference")
     u = overall_coefficient.to("W/(m**2*K)").magnitude
     a = area.to("m**2").magnitude
     lmtd = log_mean_temperature_difference.to("K").magnitude
@@ -1197,9 +1193,7 @@ def crossflow_both_unmixed_effectiveness(*, ntu: float, capacity_ratio: float) -
         raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
     if capacity_ratio == 0 or ntu == 0:
         return 1.0 - exp(-ntu)
-    return 1.0 - exp(
-        (1.0 / capacity_ratio) * ntu**0.22 * (exp(-capacity_ratio * ntu**0.78) - 1.0)
-    )
+    return 1.0 - exp((1.0 / capacity_ratio) * ntu**0.22 * (exp(-capacity_ratio * ntu**0.78) - 1.0))
 
 
 def counterflow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio: float) -> float:
