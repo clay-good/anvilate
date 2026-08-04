@@ -13781,6 +13781,27 @@ def test_ventilation_outdoor_air_changes_and_dilution():
         )
 
 
+def test_motor_locked_rotor_current():
+    import math
+
+    from anvilate.analysis import motor_locked_rotor_current
+
+    # I_LR = code_kVA/hp * hp * 1000 / (sqrt(3)*V): 6.0 kVA/hp, 20 hp, 460 V -> 150.6 A.
+    lrc = motor_locked_rotor_current(
+        rated_power=_q("20 hp"), line_voltage=_q("460 V"), code_kva_per_hp=6.0
+    )
+    assert lrc.to("A").magnitude == pytest.approx(6.0 * 20 * 1000 / (math.sqrt(3) * 460), rel=1e-9)
+    # A higher code letter (bigger kVA/hp) means a larger inrush.
+    high = motor_locked_rotor_current(
+        rated_power=_q("20 hp"), line_voltage=_q("460 V"), code_kva_per_hp=9.0
+    )
+    assert high.to("A").magnitude > lrc.to("A").magnitude
+    with pytest.raises(ValueError, match="code_kva_per_hp"):
+        motor_locked_rotor_current(
+            rated_power=_q("20 hp"), line_voltage=_q("460 V"), code_kva_per_hp=0.0
+        )
+
+
 def test_motor_synchronous_speed_and_slip():
     from anvilate.analysis import motor_slip, motor_synchronous_speed
 

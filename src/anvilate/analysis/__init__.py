@@ -180,7 +180,8 @@ modules:
 - :mod:`~anvilate.analysis.electrical` — electrical feeder sizing (for plant/industrial
   work): three-phase real and apparent power, the line current a load draws, the motor
   full-load current (input over efficiency) and its NEC 125% branch-circuit ampacity,
-  the motor synchronous speed (120·f/p) and slip, conductor resistance ρ·L/A, the
+  the motor synchronous speed (120·f/p) and slip, the locked-rotor starting current
+  from the NEMA code letter, conductor resistance ρ·L/A, the
   three-phase voltage drop along a feeder, the capacitor kVAR to
   correct a poor power factor, the transformer full-load and available fault current
   (the AIC rating downstream gear must interrupt), the Dwight earthing resistance of
@@ -812,6 +813,7 @@ from .electrical import (
     line_current_for_power,
     motor_branch_circuit_ampacity,
     motor_full_load_current,
+    motor_locked_rotor_current,
     motor_slip,
     motor_synchronous_speed,
     parallel_ground_electrodes_resistance,
@@ -1666,6 +1668,7 @@ __all__ = [
     "motor_branch_circuit_ampacity",
     "motor_synchronous_speed",
     "motor_slip",
+    "motor_locked_rotor_current",
     "power_factor_correction_kvar",
     "skin_depth",
     "three_phase_power",

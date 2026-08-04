@@ -31,6 +31,7 @@ __all__ = [
     "motor_branch_circuit_ampacity",
     "motor_synchronous_speed",
     "motor_slip",
+    "motor_locked_rotor_current",
     "parallel_ground_electrodes_resistance",
     "power_factor_correction_kvar",
     "skin_depth",
@@ -161,6 +162,34 @@ def motor_slip(*, synchronous_speed: Quantity, rotor_speed: Quantity) -> float:
     if n > ns:
         raise ValueError("rotor_speed cannot exceed synchronous_speed for a motor")
     return (ns - n) / ns
+
+
+def motor_locked_rotor_current(
+    *,
+    rated_power: Quantity,
+    line_voltage: Quantity,
+    code_kva_per_hp: float,
+) -> Quantity:
+    """The locked-rotor (starting) current of a motor, I_LR = kVA/hp·hp·1000/(√3·V) (NEC 430.7).
+
+    At the instant a motor starts, its rotor is still and it behaves like a short-circuited
+    transformer, drawing a large inrush — typically five to eight times the running current. The
+    NEC reads that current off the motor's NEMA code letter, which gives the locked-rotor apparent
+    power per horsepower: I_LR = ``code_kva_per_hp``·P·1000/(√3·``line_voltage``), with the
+    ``rated_power`` P taken in horsepower. ``code_kva_per_hp`` is the table value for the code
+    letter (about 3.15 for a low-inrush 'B' motor up to ~10 for a high-inrush 'V'). This current
+    sizes the starting protection and drives the voltage dip the rest of the plant sees at start.
+    Returns the locked-rotor current in amperes.
+    """
+    _check(rated_power, "[power]", "rated_power")
+    _check(line_voltage, "[electric_potential]", "line_voltage")
+    hp = rated_power.to("hp").magnitude
+    v = line_voltage.to("V").magnitude
+    if hp <= 0 or v <= 0:
+        raise ValueError("rated_power and line_voltage must be positive")
+    if code_kva_per_hp <= 0:
+        raise ValueError("code_kva_per_hp must be positive")
+    return Quantity(magnitude=code_kva_per_hp * hp * 1000.0 / (_SQRT3 * v), unit="A")
 
 
 def motor_branch_circuit_ampacity(

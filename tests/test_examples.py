@@ -1147,6 +1147,15 @@ def test_wind_vs_seismic_base_shear_example_seismic_governs():
     assert d["seismic_shear_kn"] > d["wind_shear_kn"]
 
 
+def test_motor_starting_inrush_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "motor_starting_inrush.py"))
+    s = namespace["starting_currents"]()
+    # The locked-rotor current is several times the running current.
+    assert s["locked_rotor_a"] == pytest.approx(151, abs=1)
+    assert s["inrush_ratio"] > 5.0
+    assert s["locked_rotor_a"] > s["full_load_a"]
+
+
 def test_induction_motor_speed_slip_example():
     namespace = runpy.run_path(str(_EXAMPLES / "induction_motor_speed_slip.py"))
     s = namespace["motor_speeds"]()
