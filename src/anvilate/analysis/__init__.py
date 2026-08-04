@@ -134,8 +134,9 @@ modules:
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), the Froude number
   and rectangular critical depth that classify the flow as sub- or supercritical, the
-  flow geometry of trapezoidal (canal) and partially-full circular (culvert) sections, and
-  the hydraulic jump (sequent depth and energy dissipated) below a spillway
+  flow geometry of trapezoidal (canal) and partially-full circular (culvert) sections, the
+  hydraulic jump (sequent depth and energy dissipated) below a spillway, and the specific
+  energy E = y + V²/2g with its critical-depth minimum
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -867,6 +868,8 @@ from .open_channel import (
     hydraulic_radius,
     manning_flow_rate,
     manning_flow_velocity,
+    minimum_specific_energy_rectangular,
+    specific_energy,
     trapezoidal_channel_properties,
 )
 from .pipe_flow import (
@@ -1245,6 +1248,8 @@ __all__ = [
     "pump_shaft_power",
     "pump_specific_speed",
     "manning_flow_velocity",
+    "minimum_specific_energy_rectangular",
+    "specific_energy",
     "trapezoidal_channel_properties",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",

@@ -13857,6 +13857,36 @@ def test_hazen_williams_head_loss_and_capacity_round_trip():
         )
 
 
+def test_specific_energy_and_minimum():
+    from anvilate.analysis import (
+        critical_depth_rectangular,
+        minimum_specific_energy_rectangular,
+        specific_energy,
+    )
+
+    # E = y + V^2/(2g); y=1, V=1.73 -> 1.153 m.
+    e = specific_energy(depth=_q("1 m"), velocity=_q("1.73 m/s"))
+    assert e.to("m").magnitude == pytest.approx(1 + 1.73**2 / (2 * 9.80665), rel=1e-9)
+    # At zero velocity the specific energy is just the depth.
+    assert specific_energy(depth=_q("1 m"), velocity=_q("0 m/s")).to(
+        "m"
+    ).magnitude == pytest.approx(1.0)
+    # E_min = 1.5*y_c for a rectangular channel.
+    y_c = critical_depth_rectangular(flow_rate=_q("5.19 m**3/s"), channel_width=_q("3 m"))
+    e_min = minimum_specific_energy_rectangular(
+        flow_rate=_q("5.19 m**3/s"), channel_width=_q("3 m")
+    )
+    assert e_min.to("m").magnitude == pytest.approx(1.5 * y_c.to("m").magnitude, rel=1e-9)
+    # The specific energy at any real depth is at least the minimum.
+    at_critical = specific_energy(
+        depth=y_c,
+        velocity=_q("3.043 m/s"),  # V at critical for this Q and width
+    )
+    assert at_critical.to("m").magnitude >= e_min.to("m").magnitude - 0.02
+    with pytest.raises(ValueError, match="positive"):
+        specific_energy(depth=_q("0 m"), velocity=_q("1 m/s"))
+
+
 def test_trapezoidal_channel_properties():
     import math
 

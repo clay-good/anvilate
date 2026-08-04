@@ -33,6 +33,8 @@ __all__ = [
     "hydraulic_radius",
     "manning_flow_rate",
     "manning_flow_velocity",
+    "minimum_specific_energy_rectangular",
+    "specific_energy",
     "trapezoidal_channel_properties",
 ]
 
@@ -128,6 +130,42 @@ def froude_number(*, velocity: Quantity, hydraulic_depth: Quantity) -> float:
     if v <= 0 or y <= 0:
         raise ValueError("velocity and hydraulic_depth must be positive")
     return v / sqrt(_GRAVITY * y)
+
+
+def specific_energy(*, depth: Quantity, velocity: Quantity) -> Quantity:
+    """The specific energy of open-channel flow, E = y + V²/(2g).
+
+    The flow's energy measured from the channel bed — its depth (pressure) head plus its velocity
+    head: E = y + V²/(2g), from the flow ``depth`` y and mean ``velocity`` V. Specific energy is the
+    currency of open-channel transitions: a sluice gate, a step, or a weir works by trading depth
+    against velocity at constant (or reduced) E, and for a given E and discharge there are two
+    possible depths (one sub-, one supercritical). It bottoms out at the critical depth (see
+    :func:`minimum_specific_energy_rectangular`). Returns E in meters.
+    """
+    _check(depth, "[length]", "depth")
+    _check(velocity, "[length]/[time]", "velocity")
+    y = depth.to("m").magnitude
+    v = velocity.to("m/s").magnitude
+    if y <= 0 or v < 0:
+        raise ValueError("depth must be positive and velocity non-negative")
+    return Quantity(magnitude=y + v**2 / (2.0 * _GRAVITY), unit="m")
+
+
+def minimum_specific_energy_rectangular(
+    *,
+    flow_rate: Quantity,
+    channel_width: Quantity,
+) -> Quantity:
+    """The minimum specific energy of a rectangular channel, E_min = 1.5·y_c.
+
+    For a fixed discharge, a rectangular channel cannot carry the flow below a floor of specific
+    energy — and that floor sits exactly at the critical depth, with the tidy result
+    E_min = 1.5·y_c. Any real flow needs at least this much energy; a channel or a control structure
+    operating near it is at critical flow. ``flow_rate`` Q and ``channel_width`` b give y_c via
+    :func:`critical_depth_rectangular`. Returns E_min in meters.
+    """
+    y_c = critical_depth_rectangular(flow_rate=flow_rate, channel_width=channel_width)
+    return Quantity(magnitude=1.5 * y_c.to("m").magnitude, unit="m")
 
 
 def critical_depth_rectangular(*, flow_rate: Quantity, channel_width: Quantity) -> Quantity:
