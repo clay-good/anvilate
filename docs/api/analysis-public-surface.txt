@@ -344,6 +344,8 @@ living_hinge.living_hinge_web_length_for_strain
 nds_timber.LoadDuration
 nds_timber.nds_adjusted_design_value
 nds_timber.nds_bending_scorecard
+nds_timber.nds_column_stability_factor
+nds_timber.nds_euler_buckling_stress
 nds_timber.nds_load_duration_factor
 o_ring.o_ring_gland_fill_fraction
 o_ring.o_ring_squeeze_fraction

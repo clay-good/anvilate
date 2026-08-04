@@ -633,6 +633,8 @@ from .nds_timber import (
     LoadDuration,
     nds_adjusted_design_value,
     nds_bending_scorecard,
+    nds_column_stability_factor,
+    nds_euler_buckling_stress,
     nds_load_duration_factor,
 )
 from .o_ring import (
@@ -1220,6 +1222,8 @@ __all__ = [
     "nds_load_duration_factor",
     "nds_adjusted_design_value",
     "nds_bending_scorecard",
+    "nds_euler_buckling_stress",
+    "nds_column_stability_factor",
     "o_ring_squeeze_fraction",
     "o_ring_gland_fill_fraction",
     "o_ring_stretch_fraction",

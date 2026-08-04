@@ -12305,3 +12305,28 @@ def test_nds_bending_scorecard_not_evaluated_without_a_reference_value():
     )
     assert unrated.status is CheckStatus.NOT_EVALUATED
     assert "reference design value" in unrated.detail
+
+
+def test_nds_column_stability_factor_ylinen_and_euler_stress():
+    from anvilate.analysis import nds_column_stability_factor, nds_euler_buckling_stress
+
+    # F_cE = 0.822*E'_min/(le/d)^2: 580,000 psi at le/d=20 -> ~1192 psi.
+    fce = nds_euler_buckling_stress(min_modulus=_q("580000 psi"), slenderness_ratio=20.0)
+    assert fce.to("psi").magnitude == pytest.approx(0.822 * 580000 / 400, rel=1e-9)
+    # Ylinen C_P for F_cE=1000, F*_c=1500, c=0.8 -> 0.5399 (hand calc).
+    cp = nds_column_stability_factor(
+        euler_buckling_stress=_q("1000 psi"), reference_compression=_q("1500 psi")
+    )
+    assert cp == pytest.approx(0.5399, abs=0.001)
+    assert 0 < cp <= 1
+    # A stubbier column (much higher F_cE) approaches no buckling penalty.
+    stubby = nds_column_stability_factor(
+        euler_buckling_stress=_q("100000 psi"), reference_compression=_q("1500 psi")
+    )
+    assert stubby > 0.98
+    with pytest.raises(ValueError, match="c must lie in"):
+        nds_column_stability_factor(
+            euler_buckling_stress=_q("1000 psi"),
+            reference_compression=_q("1500 psi"),
+            c=1.5,
+        )

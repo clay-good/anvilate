@@ -17,7 +17,10 @@
       the beam-stability C_L and size C_F factors enter through the caller's chain.
       Dedicated C_L/C_F derivations are a follow-up.
 - [ ] 2.2 Shear and bearing
-- [ ] 2.3 Compression with column stability factor and slenderness limit
+- [~] 2.3 Compression with column stability factor — `nds_euler_buckling_stress`
+      (F_cE = 0.822·E'_min/(l_e/d)²) and `nds_column_stability_factor` (the Ylinen C_P,
+      §3.7.1) compose into the adjusted compression value F'_c = F*_c·C_P. The l_e/d
+      slenderness limit (≤ 50) guard and a compression scorecard are follow-ups.
 - [ ] 2.4 Combined bending + axial interaction
 
 ## 3. Tests & examples

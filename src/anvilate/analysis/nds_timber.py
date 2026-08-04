@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
-from math import prod
+from math import prod, sqrt
 
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
@@ -28,7 +28,13 @@ __all__ = [
     "nds_load_duration_factor",
     "nds_adjusted_design_value",
     "nds_bending_scorecard",
+    "nds_euler_buckling_stress",
+    "nds_column_stability_factor",
 ]
+
+# NDS §3.7.1 buckling coefficient and the c parameter of the Ylinen column formula.
+_NDS_EULER_COEFFICIENT = 0.822
+_NDS_YLINEN_C_SAWN = 0.8  # sawn lumber (0.9 glulam, 0.85 round timber poles)
 
 
 class LoadDuration(StrEnum):
@@ -129,3 +135,64 @@ def nds_bending_scorecard(
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
         update={"reference": "NDS"}
     )
+
+
+def nds_euler_buckling_stress(
+    *,
+    min_modulus: Quantity,
+    slenderness_ratio: float,
+) -> Quantity:
+    """The NDS §3.7.1 column Euler critical buckling stress F_cE = 0.822·E'_min/(l_e/d)².
+
+    The elastic buckling stress that sets the column stability factor: ``min_modulus``
+    E'_min is the adjusted modulus for stability (the reduced 5th-percentile modulus
+    from the NDS tables, times its own factor chain — caller-supplied), and
+    ``slenderness_ratio`` l_e/d is the effective length over the least cross-section
+    dimension. A stubbier column (small l_e/d) buckles at a higher stress. Returns
+    F_cE as a stress in the modulus's kind.
+    """
+    if not min_modulus.has_dimension("[pressure]"):
+        raise ValueError(
+            f"min_modulus must be a [pressure] quantity; got {min_modulus.dimensionality}"
+        )
+    e = min_modulus.to("MPa").magnitude
+    if e <= 0:
+        raise ValueError(f"min_modulus must be positive; got {min_modulus}")
+    if slenderness_ratio <= 0:
+        raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+    return Quantity(magnitude=_NDS_EULER_COEFFICIENT * e / slenderness_ratio**2, unit="MPa")
+
+
+def nds_column_stability_factor(
+    *,
+    euler_buckling_stress: Quantity,
+    reference_compression: Quantity,
+    c: float = _NDS_YLINEN_C_SAWN,
+) -> float:
+    """The NDS §3.7.1 column stability factor C_P (the Ylinen column equation).
+
+    C_P knocks the compression-parallel design value down for buckling:
+
+        α = F_cE / F*_c,
+        C_P = (1 + α)/(2c) − √{[(1 + α)/(2c)]² − α/c},
+
+    where ``euler_buckling_stress`` F_cE is from :func:`nds_euler_buckling_stress`,
+    ``reference_compression`` F*_c is the compression-parallel value adjusted by every
+    factor *except* C_P itself, and ``c`` is the Ylinen parameter (0.8 sawn lumber,
+    0.9 glulam, 0.85 round poles). A very stubby column gives C_P → 1 (no buckling
+    penalty); a slender one drives it toward zero. Multiply F*_c by C_P for the
+    adjusted compression value F'_c. ``c`` must lie in (0, 1]. Returns C_P in (0, 1].
+    """
+    if not euler_buckling_stress.has_dimension("[pressure]"):
+        raise ValueError("euler_buckling_stress must be a [pressure] quantity")
+    if not reference_compression.has_dimension("[pressure]"):
+        raise ValueError("reference_compression must be a [pressure] quantity")
+    if not 0 < c <= 1:
+        raise ValueError(f"c must lie in (0, 1]; got {c}")
+    fce = euler_buckling_stress.to("MPa").magnitude
+    fc_star = reference_compression.to("MPa").magnitude
+    if fce <= 0 or fc_star <= 0:
+        raise ValueError("euler_buckling_stress and reference_compression must be positive")
+    alpha = fce / fc_star
+    half = (1.0 + alpha) / (2.0 * c)
+    return half - sqrt(half**2 - alpha / c)
