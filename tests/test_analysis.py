@@ -12485,3 +12485,22 @@ def test_asme_head_mawp_round_trips_the_thickness():
         thickness=t_ell, crown_radius=_q("1000 mm"), allowable_stress=s
     )
     assert same_wall.to("MPa").magnitude < p_ell.to("MPa").magnitude
+
+
+def test_asme_spherical_shell_thickness_is_half_the_cylinder_and_round_trips():
+    from anvilate.analysis import (
+        asme_cylinder_thickness,
+        asme_spherical_shell_mawp,
+        asme_spherical_shell_thickness,
+    )
+
+    kw = {"pressure": _q("2 MPa"), "radius": _q("500 mm"), "allowable_stress": _q("138 MPa")}
+    t = asme_spherical_shell_thickness(**kw)
+    assert t.to("mm").magnitude == pytest.approx(2 * 500 / (2 * 138 - 0.2 * 2), rel=1e-9)
+    # A sphere needs about half the wall of a cylinder of the same radius.
+    cyl = asme_cylinder_thickness(**kw)
+    assert t.to("mm").magnitude < cyl.to("mm").magnitude
+    assert t.to("mm").magnitude == pytest.approx(cyl.to("mm").magnitude / 2, rel=0.02)
+    # The MAWP inverse recovers the design pressure.
+    p = asme_spherical_shell_mawp(thickness=t, radius=_q("500 mm"), allowable_stress=_q("138 MPa"))
+    assert p.to("MPa").magnitude == pytest.approx(2.0, rel=1e-9)

@@ -37,6 +37,8 @@ __all__ = [
     "asme_torispherical_head_thickness",
     "asme_ellipsoidal_head_mawp",
     "asme_torispherical_head_mawp",
+    "asme_spherical_shell_thickness",
+    "asme_spherical_shell_mawp",
     "asme_b313_pipe_wall_thickness",
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
@@ -419,6 +421,70 @@ def _asme_head_mawp(
     numerator = numer_leading * s * joint_efficiency * t
     denominator = length_coefficient * length_mm + denom_factor * t
     return Quantity(magnitude=numerator / denominator, unit="MPa")
+
+
+def asme_spherical_shell_thickness(
+    *,
+    pressure: Quantity,
+    radius: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 UG-27(d) wall for a sphere or hemispherical head,
+    t = P·R/(2·S·E − 0.2·P).
+
+    A sphere carries pressure in two membrane directions at once, so it needs only
+    about half the wall of a cylinder of the same radius — which is why a
+    hemispherical head is the thinnest (and, formed, the most expensive) vessel end.
+    ``pressure`` P is the internal design pressure, ``radius`` R the inside radius,
+    ``allowable_stress`` S the code allowable, and ``joint_efficiency`` E the weld
+    efficiency. Requires 2·S·E > 0.2·P. Returns the minimum thickness in mm.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(radius, "[length]", "radius")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 < joint_efficiency <= 1:
+        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+    p = pressure.to("MPa").magnitude
+    r = radius.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if p <= 0 or r <= 0 or s <= 0:
+        raise ValueError("pressure, radius, and allowable_stress must be positive")
+    denominator = 2.0 * s * joint_efficiency - 0.2 * p
+    if denominator <= 0:
+        raise ValueError(
+            f"2·S·E ({2 * s * joint_efficiency:.4g} MPa) must exceed 0.2·P "
+            f"({0.2 * p:.4g} MPa); the pressure is too high for a thin-wall sphere"
+        )
+    return Quantity(magnitude=p * r / denominator, unit="mm")
+
+
+def asme_spherical_shell_mawp(
+    *,
+    thickness: Quantity,
+    radius: Quantity,
+    allowable_stress: Quantity,
+    joint_efficiency: float = 1.0,
+) -> Quantity:
+    """The ASME VIII-1 MAWP of a sphere or hemispherical head,
+    P = 2·S·E·t/(R + 0.2·t).
+
+    The rating inverse of :func:`asme_spherical_shell_thickness`: the maximum
+    allowable working pressure a sphere of ``thickness`` t and inside ``radius`` R
+    carries at code ``allowable_stress`` S and weld ``joint_efficiency`` E. All
+    positive, E in (0, 1]. Returns the MAWP in MPa.
+    """
+    _require(thickness, "[length]", "thickness")
+    _require(radius, "[length]", "radius")
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    if not 0 < joint_efficiency <= 1:
+        raise ValueError(f"joint_efficiency must lie in (0, 1]; got {joint_efficiency}")
+    t = thickness.to("mm").magnitude
+    r = radius.to("mm").magnitude
+    s = allowable_stress.to("MPa").magnitude
+    if t <= 0 or r <= 0 or s <= 0:
+        raise ValueError("thickness, radius, and allowable_stress must be positive")
+    return Quantity(magnitude=2.0 * s * joint_efficiency * t / (r + 0.2 * t), unit="MPa")
 
 
 def asme_b313_pipe_wall_thickness(
