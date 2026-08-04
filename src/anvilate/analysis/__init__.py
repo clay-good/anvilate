@@ -276,6 +276,9 @@ modules:
   mixtures): the longitudinal (iso-strain) modulus and strength, and the transverse
   (iso-stress inverse-rule) modulus of a unidirectional laminate from its fiber and
   matrix properties and volume fraction
+- :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
+  active/passive earth-pressure coefficients and resultant thrust on a retaining wall,
+  and the Terzaghi bearing-capacity factors and ultimate pressure of a strip footing
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
   unreinforced member, the axial capacity of a reinforced masonry column, and the
@@ -713,6 +716,12 @@ from .geneva import (
     geneva_dwell_fraction,
     geneva_index_angle,
 )
+from .geotechnical import (
+    bearing_capacity_factors,
+    rankine_earth_pressure_coefficient,
+    rankine_lateral_thrust,
+    terzaghi_bearing_capacity,
+)
 from .hydraulic_cylinder import (
     cylinder_extend_force,
     cylinder_extend_speed,
@@ -1086,6 +1095,10 @@ __all__ = [
     "critical_fiber_length",
     "tsai_hill_failure_index",
     "off_axis_modulus",
+    "bearing_capacity_factors",
+    "rankine_earth_pressure_coefficient",
+    "rankine_lateral_thrust",
+    "terzaghi_bearing_capacity",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

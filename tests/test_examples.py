@@ -216,6 +216,17 @@ def test_masonry_wall_slenderness_example_combined_check_governs():
     assert a["combined_unity"] == pytest.approx(1.01, abs=0.02)
 
 
+def test_strip_footing_bearing_example_deeper_founding_lifts_capacity():
+    namespace = runpy.run_path(str(_EXAMPLES / "strip_footing_bearing.py"))
+    cap = namespace["footing_capacity"]()
+    # Founding the same footing deeper adds surcharge (q = gamma*D_f) and raises capacity.
+    assert cap["q_ult_D1.5_kpa"] > cap["q_ult_D0.5_kpa"]
+    assert cap["q_allow_D1.5_kpa"] > cap["q_allow_D0.5_kpa"]
+    # The allowable is the ultimate over the factor of safety of 3.
+    assert cap["q_allow_D0.5_kpa"] == pytest.approx(cap["q_ult_D0.5_kpa"] / 3.0, rel=1e-9)
+    assert cap["q_ult_D0.5_kpa"] == pytest.approx(1322, abs=5)
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

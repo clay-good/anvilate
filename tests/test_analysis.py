@@ -13159,6 +13159,88 @@ def test_masonry_combined_stress_ratio_governs_over_either_alone():
         masonry_allowable_flexural_stress(masonry_strength=_q("-1 MPa"))
 
 
+def test_rankine_earth_pressure_coefficient_active_and_passive():
+    import math
+
+    from anvilate.analysis import rankine_earth_pressure_coefficient
+
+    # phi = 30: K_a = tan^2(30) = 1/3, K_p = tan^2(60) = 3 — reciprocals.
+    ka = rankine_earth_pressure_coefficient(friction_angle=30.0)
+    kp = rankine_earth_pressure_coefficient(friction_angle=30.0, passive=True)
+    assert ka == pytest.approx(1.0 / 3.0, rel=1e-9)
+    assert kp == pytest.approx(3.0, rel=1e-9)
+    assert ka * kp == pytest.approx(1.0, rel=1e-9)
+    # At phi = 0 the soil behaves hydrostatically: K_a = K_p = 1.
+    assert rankine_earth_pressure_coefficient(friction_angle=0.0) == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="0, 90"):
+        rankine_earth_pressure_coefficient(friction_angle=90.0)
+    # Sanity vs the raw trig for an off-round angle.
+    ka37 = rankine_earth_pressure_coefficient(friction_angle=37.0)
+    assert ka37 == pytest.approx(math.tan(math.radians(45 - 37 / 2)) ** 2, rel=1e-12)
+
+
+def test_rankine_lateral_thrust_triangle_plus_surcharge():
+    from anvilate.analysis import rankine_lateral_thrust
+
+    kw = {"unit_weight": _q("18 kN/m**3"), "height": _q("4 m"), "friction_angle": 30.0}
+    # Soil triangle alone: P_a = 1/2 * K_a * gamma * H^2 = 0.5*(1/3)*18*16 = 48 kN/m.
+    soil = rankine_lateral_thrust(**kw)
+    assert soil.to("kN/m").magnitude == pytest.approx(48.0, rel=1e-9)
+    # A 10 kPa surcharge adds a rectangle K_a*q*H = (1/3)*10*4 = 13.33 kN/m.
+    with_q = rankine_lateral_thrust(surcharge=_q("10 kPa"), **kw)
+    assert with_q.to("kN/m").magnitude == pytest.approx(48.0 + (1 / 3) * 10 * 4, rel=1e-9)
+    # Passive thrust uses K_p = 3, nine times the active soil triangle.
+    passive = rankine_lateral_thrust(passive=True, **kw)
+    assert passive.to("kN/m").magnitude == pytest.approx(9 * 48.0, rel=1e-9)
+    with pytest.raises(ValueError, match="positive"):
+        rankine_lateral_thrust(unit_weight=_q("18 kN/m**3"), height=_q("0 m"), friction_angle=30.0)
+
+
+def test_bearing_capacity_factors_match_vesic_and_phi_zero_limit():
+    import math
+
+    from anvilate.analysis import bearing_capacity_factors
+
+    # phi = 30: published Vesic factors N_c=30.14, N_q=18.40, N_gamma=22.40.
+    f = bearing_capacity_factors(friction_angle=30.0)
+    assert f["N_q"] == pytest.approx(18.40, abs=0.01)
+    assert f["N_c"] == pytest.approx(30.14, abs=0.01)
+    assert f["N_gamma"] == pytest.approx(22.40, abs=0.01)
+    # phi = 0 (undrained): N_q = 1, N_c = pi + 2 = 5.14, N_gamma = 0 — the Prandtl limit.
+    f0 = bearing_capacity_factors(friction_angle=0.0)
+    assert f0["N_q"] == pytest.approx(1.0, rel=1e-9)
+    assert f0["N_c"] == pytest.approx(math.pi + 2.0, rel=1e-9)
+    assert f0["N_gamma"] == pytest.approx(0.0, abs=1e-12)
+
+
+def test_terzaghi_bearing_capacity_sums_three_terms():
+    from anvilate.analysis import bearing_capacity_factors, terzaghi_bearing_capacity
+
+    f = bearing_capacity_factors(friction_angle=30.0)
+    q_ult = terzaghi_bearing_capacity(
+        cohesion=_q("25 kPa"),
+        surcharge=_q("18 kPa"),
+        unit_weight=_q("18 kN/m**3"),
+        width=_q("2 m"),
+        bearing_factor_c=f["N_c"],
+        bearing_factor_q=f["N_q"],
+        bearing_factor_gamma=f["N_gamma"],
+    )
+    expect = 25 * f["N_c"] + 18 * f["N_q"] + 0.5 * 18 * 2 * f["N_gamma"]
+    assert q_ult.to("kPa").magnitude == pytest.approx(expect, rel=1e-9)
+    assert q_ult.to("kPa").magnitude == pytest.approx(1488.0, abs=1.0)
+    with pytest.raises(ValueError, match="non-negative"):
+        terzaghi_bearing_capacity(
+            cohesion=_q("-1 kPa"),
+            surcharge=_q("18 kPa"),
+            unit_weight=_q("18 kN/m**3"),
+            width=_q("2 m"),
+            bearing_factor_c=f["N_c"],
+            bearing_factor_q=f["N_q"],
+            bearing_factor_gamma=f["N_gamma"],
+        )
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 
