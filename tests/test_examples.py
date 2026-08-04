@@ -404,6 +404,17 @@ def test_inclined_load_footing_example_loses_capacity():
     assert r["vertical_kpa"] == pytest.approx(1488, abs=5)
 
 
+def test_blower_mach_limit_example_fast_jet_is_compressible():
+    namespace = runpy.run_path(str(_EXAMPLES / "blower_mach_limit.py"))
+    d = namespace["duct_mach_check"]()
+    assert d["speed_of_sound_ms"] == pytest.approx(340, abs=2)
+    # The normal duct stays well within the incompressible regime; the fast jet crosses M~0.3.
+    assert d["normal_mach"] < 0.3
+    assert d["fast_mach"] > 0.3
+    # The fast jet warms measurably at a stagnation point.
+    assert d["fast_stagnation_rise_c"] > 5.0
+
+
 def test_air_compressor_duty_example_brackets_power_and_heat():
     namespace = runpy.run_path(str(_EXAMPLES / "air_compressor_duty.py"))
     d = namespace["compressor_duty"]()

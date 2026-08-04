@@ -114,6 +114,8 @@ modules:
   from the supply flow, and the rod-side pressure intensification of a blocked stroke
 - :mod:`~anvilate.analysis.pneumatics` — compressed-air systems: the receiver hold-up
   time V·Δp/(Q·p_atm) and the receiver volume a required hold-up needs
+- :mod:`~anvilate.analysis.compressible_flow` — gas dynamics: the speed of sound √(γRT),
+  the Mach number, and the stagnation-to-static temperature ratio for high-speed gas flow
 - :mod:`~anvilate.analysis.gas_compression` — gas compression: the ideal-gas density,
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
@@ -552,6 +554,11 @@ from .composite import (
     rule_of_mixtures_strength,
     transverse_modulus_inverse_rule,
     tsai_hill_failure_index,
+)
+from .compressible_flow import (
+    mach_number,
+    speed_of_sound,
+    stagnation_temperature_ratio,
 )
 from .contact import (
     HertzContact,
@@ -1335,6 +1342,9 @@ __all__ = [
     "terminal_velocity",
     "tank_drain_time",
     "torricelli_efflux_velocity",
+    "mach_number",
+    "speed_of_sound",
+    "stagnation_temperature_ratio",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

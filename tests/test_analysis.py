@@ -13239,6 +13239,54 @@ def test_moist_air_enthalpy_and_cooling_coil_load():
         )
 
 
+def test_compressible_flow_speed_of_sound_mach_and_stagnation():
+    import math
+
+    from anvilate.analysis import (
+        mach_number,
+        speed_of_sound,
+        stagnation_temperature_ratio,
+    )
+
+    # a = sqrt(gamma*R*T); air at 288.15 K -> ~340 m/s.
+    a = speed_of_sound(
+        temperature=_q("288.15 K"),
+        heat_capacity_ratio=1.4,
+        specific_gas_constant=_q("287 J/(kg*K)"),
+    )
+    assert a.to("m/s").magnitude == pytest.approx(math.sqrt(1.4 * 287 * 288.15), rel=1e-9)
+    assert a.to("m/s").magnitude == pytest.approx(340, abs=1)
+    # Warmer air carries sound faster.
+    assert (
+        speed_of_sound(
+            temperature=_q("308.15 K"),
+            heat_capacity_ratio=1.4,
+            specific_gas_constant=_q("287 J/(kg*K)"),
+        )
+        .to("m/s")
+        .magnitude
+        > a.to("m/s").magnitude
+    )
+    # Mach = V/a.
+    m = mach_number(velocity=_q("170 m/s"), speed_of_sound=a)
+    assert m == pytest.approx(170 / a.to("m/s").magnitude, rel=1e-9)
+    assert m == pytest.approx(0.5, abs=0.001)
+    # Stagnation ratio T0/T = 1 + (gamma-1)/2*M^2; at M=1 for air it is 1.2.
+    assert stagnation_temperature_ratio(mach_number=1.0, heat_capacity_ratio=1.4) == pytest.approx(
+        1.2, rel=1e-9
+    )
+    # It is ~1 at low Mach and grows with M^2.
+    assert stagnation_temperature_ratio(mach_number=0.1, heat_capacity_ratio=1.4) == pytest.approx(
+        1 + 0.2 * 0.01, rel=1e-9
+    )
+    with pytest.raises(ValueError, match="heat_capacity_ratio"):
+        speed_of_sound(
+            temperature=_q("288.15 K"),
+            heat_capacity_ratio=1.0,
+            specific_gas_constant=_q("287 J/(kg*K)"),
+        )
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 
