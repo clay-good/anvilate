@@ -112,6 +112,9 @@ modules:
 - :mod:`~anvilate.analysis.hydraulic_cylinder` — fluid-cylinder actuator sizing:
   the extend and retract force (bore vs annular area), the extend and retract speed
   from the supply flow, and the rod-side pressure intensification of a blocked stroke
+- :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
+  orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
+  inverse, and the pitot-tube point velocity √(2Δp/ρ)
 - :mod:`~anvilate.analysis.fluid_statics` — fluid statics: the hydrostatic pressure
   ρ·g·h, the resultant force on a submerged plane surface and its center-of-pressure
   depth, and the Archimedes buoyant force on a submerged body
@@ -651,6 +654,11 @@ from .fatigue import (
     weld_size_corrected_detail_category,
     weld_size_effect_factor,
 )
+from .flow_measurement import (
+    differential_pressure_for_flow,
+    obstruction_meter_flow_rate,
+    pitot_velocity,
+)
 from .fluid_statics import (
     buoyant_force,
     center_of_pressure_depth,
@@ -1164,6 +1172,9 @@ __all__ = [
     "minor_loss_head",
     "pipe_pressure_drop",
     "reynolds_number",
+    "differential_pressure_for_flow",
+    "obstruction_meter_flow_rate",
+    "pitot_velocity",
     "buoyant_force",
     "center_of_pressure_depth",
     "hydrostatic_force_on_plane",

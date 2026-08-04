@@ -297,6 +297,17 @@ def test_submerged_gate_hinge_example_center_of_pressure_below_centroid():
     assert g["center_of_pressure_m"] > g["centroid_depth_m"]
 
 
+def test_orifice_meter_sizing_example_reads_and_sizes():
+    namespace = runpy.run_path(str(_EXAMPLES / "orifice_meter_sizing.py"))
+    r = namespace["meter_readings"]()
+    # A measured 20 kPa drop reads about 7.8 L/s.
+    assert r["operating_flow_lps"] == pytest.approx(7.8, abs=0.2)
+    # The 12 L/s full-scale flow sits at a much larger drop than the 20 kPa operating point
+    # (flow ~ sqrt(dp)), which is what sets the transmitter range.
+    assert r["full_scale_drop_kpa"] == pytest.approx(47, abs=2)
+    assert r["full_scale_drop_kpa"] > 20.0
+
+
 def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     namespace = runpy.run_path(str(_EXAMPLES / "turbine_blade_creep_life.py"))
     summary = namespace["creep_life_summary"]()

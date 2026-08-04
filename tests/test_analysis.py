@@ -13574,6 +13574,63 @@ def test_center_of_pressure_below_centroid_and_buoyancy():
         buoyant_force(displaced_volume=_q("0 m**3"), fluid_density=_q("1000 kg/m**3"))
 
 
+def test_obstruction_meter_flow_and_pressure_round_trip():
+    import math
+
+    from anvilate.analysis import (
+        differential_pressure_for_flow,
+        obstruction_meter_flow_rate,
+    )
+
+    kw = {
+        "discharge_coefficient": 0.61,
+        "throat_diameter": _q("50 mm"),
+        "pipe_diameter": _q("100 mm"),
+        "density": _q("1000 kg/m**3"),
+    }
+    # Q = Cd*A/sqrt(1-beta^4)*sqrt(2*dp/rho); beta=0.5, dp=20 kPa -> 7.82 L/s.
+    q = obstruction_meter_flow_rate(pressure_drop=_q("20 kPa"), **kw)
+    beta = 0.5
+    area = math.pi / 4 * 0.05**2
+    expect = 0.61 * area / math.sqrt(1 - beta**4) * math.sqrt(2 * 20000 / 1000)
+    assert q.to("m**3/s").magnitude == pytest.approx(expect, rel=1e-9)
+    # The pressure-drop inverse recovers the original 20 kPa exactly.
+    dp = differential_pressure_for_flow(flow_rate=q, **kw)
+    assert dp.to("kPa").magnitude == pytest.approx(20.0, rel=1e-9)
+    # A larger orifice (higher beta) passes more flow at the same drop.
+    q_big = obstruction_meter_flow_rate(
+        discharge_coefficient=0.61,
+        throat_diameter=_q("70 mm"),
+        pipe_diameter=_q("100 mm"),
+        density=_q("1000 kg/m**3"),
+        pressure_drop=_q("20 kPa"),
+    )
+    assert q_big.to("m**3/s").magnitude > q.to("m**3/s").magnitude
+    with pytest.raises(ValueError, match="smaller than pipe_diameter"):
+        obstruction_meter_flow_rate(
+            discharge_coefficient=0.61,
+            throat_diameter=_q("100 mm"),
+            pipe_diameter=_q("100 mm"),
+            density=_q("1000 kg/m**3"),
+            pressure_drop=_q("20 kPa"),
+        )
+
+
+def test_pitot_velocity_from_dynamic_pressure():
+    import math
+
+    from anvilate.analysis import pitot_velocity
+
+    # V = sqrt(2*dp/rho); 500 Pa in air (rho=1.204) -> 28.8 m/s.
+    v = pitot_velocity(dynamic_pressure=_q("500 Pa"), density=_q("1.204 kg/m**3"))
+    assert v.to("m/s").magnitude == pytest.approx(math.sqrt(2 * 500 / 1.204), rel=1e-9)
+    # Four times the dynamic pressure doubles the velocity (square-root law).
+    v4 = pitot_velocity(dynamic_pressure=_q("2000 Pa"), density=_q("1.204 kg/m**3"))
+    assert v4.to("m/s").magnitude == pytest.approx(2 * v.to("m/s").magnitude, rel=1e-9)
+    with pytest.raises(ValueError, match="positive"):
+        pitot_velocity(dynamic_pressure=_q("500 Pa"), density=_q("0 kg/m**3"))
+
+
 def test_aisi_effective_width_winter_reduces_a_slender_element():
     from anvilate.analysis import aisi_effective_width, aisi_plate_slenderness
 

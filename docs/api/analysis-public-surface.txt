@@ -331,6 +331,9 @@ flywheel.rotating_solid_disc_tangential_stress
 fourbar.fourbar_transmission_angle
 fourbar.fourbar_type
 fourbar.is_grashof
+flow_measurement.differential_pressure_for_flow
+flow_measurement.obstruction_meter_flow_rate
+flow_measurement.pitot_velocity
 fluid_statics.buoyant_force
 fluid_statics.center_of_pressure_depth
 fluid_statics.hydrostatic_force_on_plane
