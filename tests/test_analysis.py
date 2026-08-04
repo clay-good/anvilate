@@ -13781,6 +13781,27 @@ def test_ventilation_outdoor_air_changes_and_dilution():
         )
 
 
+def test_motor_synchronous_speed_and_slip():
+    from anvilate.analysis import motor_slip, motor_synchronous_speed
+
+    # Ns = 120*f/p: 60 Hz, 4 poles -> 1800 rpm.
+    ns = motor_synchronous_speed(line_frequency=_q("60 Hz"), poles=4)
+    assert ns.to("rpm").magnitude == pytest.approx(1800.0, rel=1e-12)
+    # Doubling the poles halves the speed.
+    assert motor_synchronous_speed(line_frequency=_q("60 Hz"), poles=8).to(
+        "rpm"
+    ).magnitude == pytest.approx(900.0, rel=1e-12)
+    # slip = (Ns - N)/Ns: 1750 rpm on 1800 -> 0.0278.
+    s = motor_slip(synchronous_speed=ns, rotor_speed=_q("1750 rpm"))
+    assert s == pytest.approx((1800 - 1750) / 1800, rel=1e-9)
+    # A locked (stalled) rotor is slip 1; running near synchronous is slip near 0.
+    assert motor_slip(synchronous_speed=ns, rotor_speed=_q("0 rpm")) == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="poles must be a positive even integer"):
+        motor_synchronous_speed(line_frequency=_q("60 Hz"), poles=3)
+    with pytest.raises(ValueError, match="cannot exceed synchronous_speed"):
+        motor_slip(synchronous_speed=ns, rotor_speed=_q("1900 rpm"))
+
+
 def test_motor_full_load_current_and_branch_circuit():
     import math
 

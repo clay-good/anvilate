@@ -1147,6 +1147,15 @@ def test_wind_vs_seismic_base_shear_example_seismic_governs():
     assert d["seismic_shear_kn"] > d["wind_shear_kn"]
 
 
+def test_induction_motor_speed_slip_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "induction_motor_speed_slip.py"))
+    s = namespace["motor_speeds"]()
+    # The 2-pole motor is twice the 4-pole speed; the 4-pole slip is a few percent.
+    assert s["two_pole_rpm"] == pytest.approx(3600.0, rel=1e-9)
+    assert s["four_pole_rpm"] == pytest.approx(1800.0, rel=1e-9)
+    assert s["full_load_slip"] == pytest.approx((1800 - 1750) / 1800, rel=1e-9)
+
+
 def test_motor_branch_circuit_example_efficiency_and_nec_factor():
     namespace = runpy.run_path(str(_EXAMPLES / "motor_branch_circuit.py"))
     m = namespace["motor_circuit"]()

@@ -29,6 +29,8 @@ __all__ = [
     "line_current_for_power",
     "motor_full_load_current",
     "motor_branch_circuit_ampacity",
+    "motor_synchronous_speed",
+    "motor_slip",
     "parallel_ground_electrodes_resistance",
     "power_factor_correction_kvar",
     "skin_depth",
@@ -119,6 +121,46 @@ def motor_full_load_current(
     if not 0.0 < efficiency <= 1.0:
         raise ValueError(f"efficiency must be in (0, 1]; got {efficiency}")
     return Quantity(magnitude=p / (_SQRT3 * v * power_factor * efficiency), unit="A")
+
+
+def motor_synchronous_speed(*, line_frequency: Quantity, poles: int) -> Quantity:
+    """The synchronous speed of an AC motor, Ns = 120·f/p.
+
+    The speed at which the stator's rotating magnetic field turns, set entirely by the supply
+    ``line_frequency`` f and the number of ``poles`` p: Ns = 120·f/p (in rpm, with f in Hz). An
+    induction motor runs a little below this and a synchronous motor exactly at it. The pole count
+    is even (2, 4, 6, …), so a 60 Hz motor turns at 3600, 1800, 1200, … rpm. Returns the synchronous
+    speed in rpm.
+    """
+    _check(line_frequency, "1/[time]", "line_frequency")
+    f = line_frequency.to("Hz").magnitude
+    if f <= 0:
+        raise ValueError("line_frequency must be positive")
+    if poles <= 0 or poles % 2 != 0:
+        raise ValueError(f"poles must be a positive even integer; got {poles}")
+    return Quantity(magnitude=120.0 * f / poles, unit="rpm")
+
+
+def motor_slip(*, synchronous_speed: Quantity, rotor_speed: Quantity) -> float:
+    """The slip of an induction motor, s = (Ns − N)/Ns.
+
+    An induction motor's rotor must turn slightly slower than the field to induce the current that
+    makes its torque, and the fractional lag is the slip: s = (``synchronous_speed`` −
+    ``rotor_speed``)/``synchronous_speed``. It is near zero at no load and rises to a few percent at
+    full load (the rotor frequency is s·f). A slip of 1 is a locked (stalled) rotor. Returns the
+    dimensionless slip.
+    """
+    _check(synchronous_speed, "1/[time]", "synchronous_speed")
+    _check(rotor_speed, "1/[time]", "rotor_speed")
+    ns = synchronous_speed.to("rpm").magnitude
+    n = rotor_speed.to("rpm").magnitude
+    if ns <= 0:
+        raise ValueError("synchronous_speed must be positive")
+    if n < 0:
+        raise ValueError("rotor_speed must be non-negative")
+    if n > ns:
+        raise ValueError("rotor_speed cannot exceed synchronous_speed for a motor")
+    return (ns - n) / ns
 
 
 def motor_branch_circuit_ampacity(
