@@ -35,6 +35,8 @@ __all__ = [
     "seismic_response_coefficient",
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
+    "seismic_design_story_drift",
+    "allowable_story_drift",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
     "reduced_live_load",
@@ -199,6 +201,55 @@ def seismic_vertical_force_distribution(
         products.append(wm * hm**distribution_exponent)
     total = sum(products)
     return tuple(Quantity(magnitude=v * p / total, unit="kN") for p in products)
+
+
+def seismic_design_story_drift(
+    *,
+    elastic_story_drift: Quantity,
+    deflection_amplification_factor: float,
+    importance_factor: float = 1.0,
+) -> Quantity:
+    """The ASCE 7 design story drift Δ = Cd·δxe/Ie (§12.8.6).
+
+    A seismic analysis is run with the *reduced* design forces (the base shear already divided by
+    R), so the story deflections it produces, ``elastic_story_drift`` δxe, are only a fraction of
+    what the structure will really sway when it yields. ASCE 7 recovers the expected inelastic drift
+    by scaling that elastic value up by the ``deflection_amplification_factor`` Cd (a system trait,
+    close to R) and down by the ``importance_factor`` Ie: Δ = Cd·δxe/Ie. This is the drift to check
+    against :func:`allowable_story_drift` — using the raw elastic δxe understates the real sway by
+    the factor Cd, a common and unconservative error. Returns the amplified design drift in mm.
+    """
+    _check(elastic_story_drift, "[length]", "elastic_story_drift")
+    dxe = elastic_story_drift.to("mm").magnitude
+    if dxe < 0:
+        raise ValueError("elastic_story_drift must be non-negative")
+    if deflection_amplification_factor <= 0:
+        raise ValueError("deflection_amplification_factor must be positive")
+    if importance_factor <= 0:
+        raise ValueError("importance_factor must be positive")
+    return Quantity(magnitude=deflection_amplification_factor * dxe / importance_factor, unit="mm")
+
+
+def allowable_story_drift(
+    *,
+    story_height: Quantity,
+    drift_limit_ratio: float,
+) -> Quantity:
+    """The ASCE 7 allowable story drift Δa = ratio·hsx (Table 12.12-1).
+
+    The sway a story is permitted, as a fraction of its height: ``drift_limit_ratio`` (0.020·hsx for
+    most buildings, tighter for brittle cladding or essential facilities, looser for low masonry)
+    times the ``story_height`` hsx. Compare the design drift from :func:`seismic_design_story_drift`
+    against this — a drift within the limit protects the cladding, partitions, and P-delta
+    stability. Returns the allowable drift in mm.
+    """
+    _check(story_height, "[length]", "story_height")
+    h = story_height.to("mm").magnitude
+    if h <= 0:
+        raise ValueError("story_height must be positive")
+    if drift_limit_ratio <= 0:
+        raise ValueError("drift_limit_ratio must be positive")
+    return Quantity(magnitude=drift_limit_ratio * h, unit="mm")
 
 
 def flat_roof_snow_load(

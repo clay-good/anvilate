@@ -15444,6 +15444,31 @@ def test_seismic_vertical_force_distribution_sums_to_base_shear():
         )
 
 
+def test_seismic_design_story_drift_and_allowable():
+    from anvilate.analysis import allowable_story_drift, seismic_design_story_drift
+
+    # Design drift = Cd*delta_xe/Ie: 5.5 * 8 / 1 = 44 mm -- the amplified inelastic sway.
+    drift = seismic_design_story_drift(
+        elastic_story_drift=_q("8 mm"), deflection_amplification_factor=5.5
+    )
+    assert drift.to("mm").magnitude == pytest.approx(44.0, rel=1e-12)
+    # The amplification makes the real drift many times the raw elastic value.
+    assert drift.to("mm").magnitude > 8.0
+    # A higher importance factor (a more essential building) reduces the design drift.
+    important = seismic_design_story_drift(
+        elastic_story_drift=_q("8 mm"), deflection_amplification_factor=5.5, importance_factor=1.5
+    )
+    assert important.to("mm").magnitude == pytest.approx(44.0 / 1.5, rel=1e-9)
+    # Allowable = ratio * story height: 0.020 * 4000 = 80 mm.
+    allowable = allowable_story_drift(story_height=_q("4 m"), drift_limit_ratio=0.020)
+    assert allowable.to("mm").magnitude == pytest.approx(80.0, rel=1e-12)
+    assert drift.to("mm").magnitude < allowable.to("mm").magnitude
+    with pytest.raises(ValueError, match="deflection_amplification_factor"):
+        seismic_design_story_drift(
+            elastic_story_drift=_q("8 mm"), deflection_amplification_factor=0.0
+        )
+
+
 def test_building_loads_flat_and_sloped_roof_snow():
     from anvilate.analysis import flat_roof_snow_load, sloped_roof_snow_load
 

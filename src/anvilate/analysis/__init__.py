@@ -230,7 +230,9 @@ modules:
   the wind velocity pressure (0.613·Kz·Kzt·Kd·Ke·V²) and the surface design
   pressure it drives, the seismic response coefficient (Cs = SDS·Ie/R) and the
   equivalent-lateral-force base shear V = Cs·W and its vertical distribution to
-  each floor (Fx = V·wx·hx^k/Σwi·hi^k), the flat- and sloped-roof snow loads
+  each floor (Fx = V·wx·hx^k/Σwi·hi^k), the Cd-amplified design story drift
+  (Δ = Cd·δxe/Ie) and the allowable drift it is checked against, the flat- and
+  sloped-roof snow loads
   (pf = 0.7·Ce·Ct·Is·pg, ps = Cs·pf), the tributary-area live-load reduction
   (L = L0·(0.25 + 4.57/√(KLL·AT))), and the ponded-water rain load
   (R = 0.0098·(ds + dh))
@@ -595,10 +597,12 @@ from .brake import (
     short_shoe_normal_force,
 )
 from .building_loads import (
+    allowable_story_drift,
     flat_roof_snow_load,
     rain_load,
     reduced_live_load,
     seismic_base_shear,
+    seismic_design_story_drift,
     seismic_response_coefficient,
     seismic_vertical_force_distribution,
     sloped_roof_snow_load,
@@ -1897,6 +1901,8 @@ __all__ = [
     "seismic_response_coefficient",
     "seismic_base_shear",
     "seismic_vertical_force_distribution",
+    "seismic_design_story_drift",
+    "allowable_story_drift",
     "flat_roof_snow_load",
     "sloped_roof_snow_load",
     "reduced_live_load",

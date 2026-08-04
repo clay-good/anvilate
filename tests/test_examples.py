@@ -1032,6 +1032,17 @@ def test_column_live_load_reduction_example_cuts_the_demand():
     assert c["lrfd_reduced_kpa"] < c["lrfd_unreduced_kpa"]
 
 
+def test_seismic_story_drift_check_example_amplification_matters():
+    namespace = runpy.run_path(str(_EXAMPLES / "seismic_story_drift_check.py"))
+    d = namespace["drift_check"]()
+    # The Cd-amplified drift is 5.5x the raw elastic value...
+    assert d["amplified_mm"] == pytest.approx(66.0, abs=0.5)
+    assert d["amplified_mm"] > d["elastic_mm"]
+    # ...and the raw drift falsely looks far more comfortable than the real check allows.
+    assert d["elastic_mm"] < d["allowable_mm"]
+    assert d["amplified_mm"] < d["allowable_mm"]
+
+
 def test_seismic_story_forces_example_top_heavy():
     namespace = runpy.run_path(str(_EXAMPLES / "seismic_story_forces.py"))
     s = namespace["story_forces"]()
