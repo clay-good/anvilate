@@ -194,6 +194,9 @@ brake.differential_band_brake_is_self_locking
 brake.short_shoe_brake_torque
 brake.short_shoe_is_self_locking
 brake.short_shoe_normal_force
+broaching.broaching_teeth_in_cut
+broaching.broaching_cutting_force
+broaching.broaching_pull_capacity
 building_loads.allowable_story_drift
 building_loads.approximate_fundamental_period
 building_loads.components_cladding_net_pressure

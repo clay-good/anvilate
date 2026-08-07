@@ -808,6 +808,19 @@ def test_surface_grinding_specific_energy_example_governs_on_heat():
     assert d["specific_energy_j_mm3"] > 10.0
 
 
+def test_broach_pull_force_margin_example_tension_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "broach_pull_force_margin.py"))
+    d = namespace["broach_margin"]()
+    # Three teeth in cut: floor(25/8).
+    assert d["teeth_in_cut"] == 3
+    # Cutting force 2500 MPa * 3 * 12 mm * 0.06 mm = 5.4 kN.
+    assert d["cutting_force_kn"] == pytest.approx(5.4, abs=0.01)
+    # Pull capacity 300 MPa * 120 mm^2 = 36 kN, a margin of ~6.7x over the cut.
+    assert d["pull_capacity_kn"] == pytest.approx(36.0, abs=0.05)
+    assert d["margin"] == pytest.approx(36.0 / 5.4, abs=0.05)
+    assert d["margin"] > 1.0  # the broach survives the stroke
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

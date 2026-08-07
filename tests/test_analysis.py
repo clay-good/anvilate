@@ -15853,6 +15853,57 @@ def test_grinding_removal_rate_chip_thickness_and_specific_energy():
         grinding_specific_removal_rate(depth_of_cut=_q("5 s"), workpiece_speed=_q("200 mm/s"))
 
 
+def test_broaching_teeth_force_and_pull_capacity():
+    from anvilate.analysis import (
+        broaching_cutting_force,
+        broaching_pull_capacity,
+        broaching_teeth_in_cut,
+    )
+
+    # Teeth in cut n = floor(L/p); floor(25/8) = 3.
+    teeth = broaching_teeth_in_cut(workpiece_length=_q("25 mm"), tooth_pitch=_q("8 mm"))
+    assert teeth == 3
+    # A workpiece shorter than one pitch still has at least one tooth cutting.
+    assert broaching_teeth_in_cut(workpiece_length=_q("5 mm"), tooth_pitch=_q("8 mm")) == 1
+
+    # Cutting force F = k_s*n*w*t; 2500 MPa * 3 * 12 mm * 0.06 mm = 5400 N = 5.4 kN.
+    f = broaching_cutting_force(
+        specific_cutting_force=_q("2500 MPa"),
+        teeth_in_cut=teeth,
+        cut_width=_q("12 mm"),
+        rise_per_tooth=_q("0.06 mm"),
+    )
+    assert f.to("kN").magnitude == pytest.approx(5.4, rel=1e-9)
+    # A deeper bite per tooth raises the force proportionally.
+    f_deep = broaching_cutting_force(
+        specific_cutting_force=_q("2500 MPa"),
+        teeth_in_cut=teeth,
+        cut_width=_q("12 mm"),
+        rise_per_tooth=_q("0.12 mm"),
+    )
+    assert f_deep.to("kN").magnitude == pytest.approx(2 * f.to("kN").magnitude, rel=1e-9)
+
+    # Pull capacity F_max = sigma*A_root; 300 MPa * 120 mm^2 = 36 kN, well above the 5.4 kN cut.
+    cap = broaching_pull_capacity(allowable_stress=_q("300 MPa"), root_area=_q("120 mm**2"))
+    assert cap.to("kN").magnitude == pytest.approx(36.0, rel=1e-9)
+    assert cap.to("kN").magnitude > f.to("kN").magnitude
+
+    # Guardrails: positive inputs and a whole-number tooth count.
+    with pytest.raises(ValueError, match="tooth_pitch must be positive"):
+        broaching_teeth_in_cut(workpiece_length=_q("25 mm"), tooth_pitch=_q("0 mm"))
+    with pytest.raises(ValueError, match="teeth_in_cut must be an integer of at least 1"):
+        broaching_cutting_force(
+            specific_cutting_force=_q("2500 MPa"),
+            teeth_in_cut=0,
+            cut_width=_q("12 mm"),
+            rise_per_tooth=_q("0.06 mm"),
+        )
+    with pytest.raises(ValueError, match="root_area must be positive"):
+        broaching_pull_capacity(allowable_stress=_q("300 MPa"), root_area=_q("0 mm**2"))
+    with pytest.raises(ValueError, match="allowable_stress must be a"):
+        broaching_pull_capacity(allowable_stress=_q("5 mm"), root_area=_q("120 mm**2"))
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

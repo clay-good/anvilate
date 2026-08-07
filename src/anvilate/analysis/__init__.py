@@ -445,6 +445,9 @@ modules:
 - :mod:`~anvilate.analysis.grinding` — surface-grinding process signature: the specific
   removal rate Q′_w = a_e·v_w, the equivalent chip thickness h_eq = Q′_w/v_s that tracks
   grain force and burn, and the specific energy u = P/(b·Q′_w) that sets the surface heat
+- :mod:`~anvilate.analysis.broaching` — broaching in a single stroke: the teeth in cut
+  n = ⌊L/p⌋, the cutting force F = k_s·n·w·t, and the pull-broach tensile capacity
+  F_max = σ_allow·A_root that caps the load before the bar snaps
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -672,6 +675,11 @@ from .brake import (
     short_shoe_brake_torque,
     short_shoe_is_self_locking,
     short_shoe_normal_force,
+)
+from .broaching import (
+    broaching_cutting_force,
+    broaching_pull_capacity,
+    broaching_teeth_in_cut,
 )
 from .building_loads import (
     allowable_story_drift,
@@ -2131,6 +2139,9 @@ __all__ = [
     "short_shoe_normal_force",
     "short_shoe_brake_torque",
     "short_shoe_is_self_locking",
+    "broaching_teeth_in_cut",
+    "broaching_cutting_force",
+    "broaching_pull_capacity",
     "wind_velocity_pressure",
     "wind_design_pressure",
     "components_cladding_net_pressure",
