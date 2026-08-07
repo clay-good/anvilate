@@ -908,6 +908,18 @@ def test_casting_gating_choke_and_sprue_example_sizes_the_gate():
     assert d["sprue_taper_ratio"] > 1.0
 
 
+def test_thermoforming_wall_thinning_example_deeper_draw_needs_thicker_blank():
+    namespace = runpy.run_path(str(_EXAMPLES / "thermoforming_wall_thinning.py"))
+    d = namespace["thermoforming_case"]()
+    # Areal draw ratio 200000/90000 = 2.222.
+    assert d["areal_draw_ratio"] == pytest.approx(2.2222, abs=0.001)
+    # A 2 mm sheet thins to ~0.9 mm average wall.
+    assert d["average_wall_mm"] == pytest.approx(0.9, abs=0.005)
+    # To leave a 0.5 mm wall the blank must start at ~1.11 mm — thicker than the wall.
+    assert d["gauge_for_half_mm_wall_mm"] == pytest.approx(1.111, abs=0.005)
+    assert d["gauge_for_half_mm_wall_mm"] > 0.5
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

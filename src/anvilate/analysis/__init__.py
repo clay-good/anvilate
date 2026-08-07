@@ -477,6 +477,9 @@ modules:
   force F = A·p a mould needs (and the inverse max projected area a machine's tonnage
   allows), and the cooling time t = (s²/π²α)·ln[…] that dominates the cycle (goes as
   wall thickness squared) — the process side of snapfit/living_hinge part design
+- :mod:`~anvilate.analysis.thermoforming` — vacuum-forming by conservation of volume: the
+  areal draw ratio S = A_part/A_sheet, the average wall t_avg = t_sheet/S it thins to, and
+  the starting sheet gauge t_sheet = t_min·S a target wall needs
 - :mod:`~anvilate.analysis.nds_timber` — the NDS wood adjusted design value
   F' = F·∏Cᵢ (the reference value times its visible factor chain, with the Table
   2.3.2 load-duration factor), the bending scorecard (not evaluated without a
@@ -1660,6 +1663,11 @@ from .thermal import (
     wien_peak_wavelength,
     wien_temperature_from_peak,
 )
+from .thermoforming import (
+    thermoforming_areal_draw_ratio,
+    thermoforming_average_wall_thickness,
+    thermoforming_sheet_gauge_for_wall,
+)
 from .torsion import (
     elliptical_bar_torsional_stress,
     elliptical_bar_twist_angle,
@@ -2714,6 +2722,9 @@ __all__ = [
     "radiation_heat_transfer_coefficient",
     "wien_peak_wavelength",
     "wien_temperature_from_peak",
+    "thermoforming_areal_draw_ratio",
+    "thermoforming_average_wall_thickness",
+    "thermoforming_sheet_gauge_for_wall",
     "archard_wear_volume",
     "archard_wear_depth",
     "sliding_distance_for_wear_depth",

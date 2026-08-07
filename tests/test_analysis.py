@@ -16286,6 +16286,41 @@ def test_casting_gating_fill_time_choke_inverse_and_sprue_taper():
         )
 
 
+def test_thermoforming_draw_ratio_wall_thinning_and_gauge_inverse():
+    from anvilate.analysis import (
+        thermoforming_areal_draw_ratio,
+        thermoforming_average_wall_thickness,
+        thermoforming_sheet_gauge_for_wall,
+    )
+
+    # Areal draw ratio S = A_part/A_sheet; 200000/90000 = 2.2222.
+    s = thermoforming_areal_draw_ratio(part_area=_q("200000 mm**2"), sheet_area=_q("90000 mm**2"))
+    assert s == pytest.approx(200000 / 90000, rel=1e-9)
+
+    # Average wall t_avg = t_sheet/S; 2 mm / 2.2222 = 0.9 mm.
+    w = thermoforming_average_wall_thickness(sheet_thickness=_q("2 mm"), areal_draw_ratio=s)
+    assert w.to("mm").magnitude == pytest.approx(0.9, rel=1e-9)
+    # A deeper draw (bigger S) thins the wall further.
+    w_deep = thermoforming_average_wall_thickness(sheet_thickness=_q("2 mm"), areal_draw_ratio=4.0)
+    assert w_deep.to("mm").magnitude < w.to("mm").magnitude
+
+    # Gauge inverse t_sheet = t_min*S round-trips: the wall from that gauge is exactly t_min.
+    gauge = thermoforming_sheet_gauge_for_wall(
+        minimum_wall_thickness=_q("0.5 mm"), areal_draw_ratio=s
+    )
+    assert gauge.to("mm").magnitude == pytest.approx(0.5 * (200000 / 90000), rel=1e-9)
+    wall_back = thermoforming_average_wall_thickness(sheet_thickness=gauge, areal_draw_ratio=s)
+    assert wall_back.to("mm").magnitude == pytest.approx(0.5, rel=1e-9)
+
+    # Guardrails: part must exceed sheet, draw ratio >= 1, dimensions checked.
+    with pytest.raises(ValueError, match="part_area must exceed sheet_area"):
+        thermoforming_areal_draw_ratio(part_area=_q("90000 mm**2"), sheet_area=_q("90000 mm**2"))
+    with pytest.raises(ValueError, match="areal_draw_ratio must be at least 1"):
+        thermoforming_average_wall_thickness(sheet_thickness=_q("2 mm"), areal_draw_ratio=0.5)
+    with pytest.raises(ValueError, match="sheet_thickness must be a"):
+        thermoforming_average_wall_thickness(sheet_thickness=_q("2 mm**2"), areal_draw_ratio=2.0)
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,
