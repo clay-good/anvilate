@@ -833,6 +833,18 @@ def test_drill_press_torque_limit_example_torque_governs():
     assert d["feed_used_mm"] < d["feed_ceiling_mm"]
 
 
+def test_ecm_gap_regulation_example_gap_self_regulates():
+    namespace = runpy.run_path(str(_EXAMPLES / "ecm_gap_regulation.py"))
+    d = namespace["ecm_operating_point"]()
+    # 1000 A -> ~2.2 cm^3/min, 100 A/cm^2 -> ~2.2 mm/min.
+    assert d["removal_rate_cm3_min"] == pytest.approx(2.2, abs=0.05)
+    assert d["feed_rate_mm_min"] == pytest.approx(2.2, abs=0.05)
+    # Equilibrium gap ~0.3 mm, halving to ~0.15 mm at double the feed.
+    assert d["gap_mm"] == pytest.approx(0.3, abs=0.005)
+    assert d["gap_double_feed_mm"] == pytest.approx(0.15, abs=0.005)
+    assert d["gap_double_feed_mm"] < d["gap_mm"]
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

@@ -15964,6 +15964,64 @@ def test_drilling_removal_rate_torque_and_feed_limit():
         )
 
 
+def test_ecm_removal_rate_feed_rate_and_self_regulating_gap():
+    from anvilate.analysis import (
+        ecm_equilibrium_gap,
+        ecm_feed_rate,
+        ecm_material_removal_rate,
+    )
+
+    ew = 27.925  # iron, equivalent weight g/equiv
+    rho = _q("7.87 g/cm**3")
+    faraday = 96485.332
+
+    # Removal rate Q = I*EW/(rho*F); 1000 A -> ~2.207 cm^3/min.
+    q = ecm_material_removal_rate(current=_q("1000 A"), equivalent_weight=ew, density=rho)
+    expected_q = 1000 * ew / (7.87 * faraday) * 60.0
+    assert q.to("cm**3/min").magnitude == pytest.approx(expected_q, rel=1e-9)
+    # Charge-driven: the rate ignores hardness and scales linearly with current.
+    q2 = ecm_material_removal_rate(current=_q("2000 A"), equivalent_weight=ew, density=rho)
+    assert q2.to("cm**3/min").magnitude == pytest.approx(2 * q.to("cm**3/min").magnitude, rel=1e-9)
+
+    # Feed rate f = J*EW/(rho*F); 100 A/cm^2 -> ~2.206 mm/min.
+    f = ecm_feed_rate(current_density=_q("100 A/cm**2"), equivalent_weight=ew, density=rho)
+    expected_f = 100 * ew / (7.87 * faraday) * 10.0 * 60.0
+    assert f.to("mm/min").magnitude == pytest.approx(expected_f, rel=1e-9)
+
+    # Equilibrium gap at that feed matches Ohm's law: g = kappa*U/J = 0.2*15/100 = 0.03 cm = 0.3 mm.
+    g = ecm_equilibrium_gap(
+        electrolyte_conductivity=_q("0.2 S/cm"),
+        applied_voltage=_q("15 V"),
+        feed_rate=f,
+        equivalent_weight=ew,
+        density=rho,
+    )
+    assert g.to("mm").magnitude == pytest.approx(0.3, rel=1e-6)
+    # Self-regulation: a faster feed forces a proportionally smaller gap (toward the short-circuit).
+    g_fast = ecm_equilibrium_gap(
+        electrolyte_conductivity=_q("0.2 S/cm"),
+        applied_voltage=_q("15 V"),
+        feed_rate=_q("4.4130454 mm/min"),
+        equivalent_weight=ew,
+        density=rho,
+    )
+    assert g_fast.to("mm").magnitude == pytest.approx(0.15, rel=1e-4)
+
+    # Guardrails: positive inputs and correct dimensions.
+    with pytest.raises(ValueError, match="equivalent_weight must be positive"):
+        ecm_material_removal_rate(current=_q("1000 A"), equivalent_weight=0.0, density=rho)
+    with pytest.raises(ValueError, match="feed_rate must be positive"):
+        ecm_equilibrium_gap(
+            electrolyte_conductivity=_q("0.2 S/cm"),
+            applied_voltage=_q("15 V"),
+            feed_rate=_q("0 mm/min"),
+            equivalent_weight=ew,
+            density=rho,
+        )
+    with pytest.raises(ValueError, match="current must be a"):
+        ecm_material_removal_rate(current=_q("1000 V"), equivalent_weight=ew, density=rho)
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

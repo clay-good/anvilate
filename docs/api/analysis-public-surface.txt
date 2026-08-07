@@ -383,6 +383,9 @@ dynamics.transmissibility
 dynamics.tuned_mass_damper_optimal_damping
 dynamics.tuned_mass_damper_optimal_frequency_ratio
 dynamics.two_rotor_torsional_natural_frequency
+ecm.ecm_material_removal_rate
+ecm.ecm_feed_rate
+ecm.ecm_equilibrium_gap
 fastener.NUT_FACTOR_AS_RECEIVED
 fastener.aisc_tension_member_design_strength
 fastener.block_shear_strength

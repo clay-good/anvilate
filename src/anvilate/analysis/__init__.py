@@ -451,6 +451,9 @@ modules:
 - :mod:`~anvilate.analysis.drilling` — twist drilling sized on torque: the removal rate
   MRR = (π/4)·d²·f·N, the spindle torque M = u·f·d²/8, and the feed a torque limit allows
   f_max = 8·M_limit/(u·d²) before the drill stalls
+- :mod:`~anvilate.analysis.ecm` — electrochemical machining by Faraday dissolution: the
+  removal rate Q = I·EW/(ρ·F), the feed rate f = J·EW/(ρ·F), and the self-regulating gap
+  g = κ·U·EW/(ρ·F·f) that shorts out if the feed is pushed too fast
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -903,6 +906,11 @@ from .dynamics import (
     tuned_mass_damper_optimal_damping,
     tuned_mass_damper_optimal_frequency_ratio,
     two_rotor_torsional_natural_frequency,
+)
+from .ecm import (
+    ecm_equilibrium_gap,
+    ecm_feed_rate,
+    ecm_material_removal_rate,
 )
 from .electrical import (
     apparent_power_three_phase,
@@ -2256,6 +2264,9 @@ __all__ = [
     "clamped_annular_plate_fundamental_frequency",
     "torsional_natural_frequency",
     "two_rotor_torsional_natural_frequency",
+    "ecm_material_removal_rate",
+    "ecm_feed_rate",
+    "ecm_equilibrium_gap",
     "solid_disc_polar_mass_moment",
     "annular_disc_polar_mass_moment",
     "frequency_scorecard",
