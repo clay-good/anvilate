@@ -442,6 +442,9 @@ modules:
 - :mod:`~anvilate.analysis.wire_drawing` — wire/rod drawing: the draw stress
   σ_d = Y·ln(A₀/A_f)·(1 + μ/tan α), the draw force F = σ_d·A_f, and the maximum
   area reduction per pass r_max = 1 − exp(−1/(1 + μ/tan α)) before the wire snaps
+- :mod:`~anvilate.analysis.grinding` — surface-grinding process signature: the specific
+  removal rate Q′_w = a_e·v_w, the equivalent chip thickness h_eq = Q′_w/v_s that tracks
+  grain force and burn, and the specific energy u = P/(b·Q′_w) that sets the surface heat
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -1117,6 +1120,11 @@ from .geotechnical import (
     tension_crack_depth,
     terzaghi_bearing_capacity,
     vertical_stress_increase_2to1,
+)
+from .grinding import (
+    grinding_equivalent_chip_thickness,
+    grinding_specific_energy,
+    grinding_specific_removal_rate,
 )
 from .hvac_duct import (
     circular_equivalent_diameter,
@@ -2346,6 +2354,9 @@ __all__ = [
     "profile_shift_sum_for_center_distance",
     "gear_train_value",
     "gear_train_efficiency",
+    "grinding_specific_removal_rate",
+    "grinding_equivalent_chip_thickness",
+    "grinding_specific_energy",
     "reverted_train_is_coaxial",
     "planetary_planet_teeth",
     "planetary_can_assemble",

@@ -795,6 +795,19 @@ def test_wire_drawing_pass_limit_example_reduction_capped_by_strength():
     assert d["stress_ratio"] < 1.0  # the wire survives the pass
 
 
+def test_surface_grinding_specific_energy_example_governs_on_heat():
+    namespace = runpy.run_path(str(_EXAMPLES / "surface_grinding_specific_energy.py"))
+    d = namespace["grinding_pass"]()
+    # Q'_w = a_e*v_w = 0.02*200 = 4 mm^3/(mm*s).
+    assert d["specific_removal_rate_mm2_s"] == pytest.approx(4.0, abs=0.01)
+    # h_eq = Q'_w/v_s = 4/30000 mm = 0.133 um; a faster wheel peels a thinner ribbon.
+    assert d["equivalent_chip_thickness_um"] == pytest.approx(0.1333, abs=0.001)
+    assert d["equivalent_chip_thickness_fast_um"] < d["equivalent_chip_thickness_um"]
+    # u = P/(b*Q'_w) = 2400/(20*4) = 30 J/mm^3 — an order of magnitude above a turning cut.
+    assert d["specific_energy_j_mm3"] == pytest.approx(30.0, abs=0.1)
+    assert d["specific_energy_j_mm3"] > 10.0
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

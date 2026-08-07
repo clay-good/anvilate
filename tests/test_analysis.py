@@ -15813,6 +15813,46 @@ def test_conveyor_mass_flow_belt_speed_inverse_and_lift_power():
         )
 
 
+def test_grinding_removal_rate_chip_thickness_and_specific_energy():
+    from anvilate.analysis import (
+        grinding_equivalent_chip_thickness,
+        grinding_specific_energy,
+        grinding_specific_removal_rate,
+    )
+
+    # Specific removal rate Q'_w = a_e*v_w; 0.02 mm * 200 mm/s = 4 mm^3/(mm*s).
+    q = grinding_specific_removal_rate(depth_of_cut=_q("0.02 mm"), workpiece_speed=_q("200 mm/s"))
+    assert q.to("mm**2/s").magnitude == pytest.approx(4.0, rel=1e-9)
+
+    # Equivalent chip thickness h_eq = Q'_w/v_s; 4 / 30000 mm/s = 1.333e-4 mm = 0.1333 um.
+    h = grinding_equivalent_chip_thickness(specific_removal_rate=q, wheel_speed=_q("30 m/s"))
+    assert h.to("micrometer").magnitude == pytest.approx(4.0 / 30000.0 * 1000.0, rel=1e-9)
+    # A faster wheel at fixed throughput peels a thinner ribbon (runs cooler per grain).
+    h_fast = grinding_equivalent_chip_thickness(specific_removal_rate=q, wheel_speed=_q("60 m/s"))
+    assert h_fast.to("micrometer").magnitude < h.to("micrometer").magnitude
+
+    # Specific energy u = P/(b*Q'_w); 2400 W / (20 mm * 4 mm^2/s = 80 mm^3/s) = 30 J/mm^3.
+    u = grinding_specific_energy(
+        power=_q("2400 W"), specific_removal_rate=q, wheel_width=_q("20 mm")
+    )
+    assert u.to("J/mm**3").magnitude == pytest.approx(30.0, rel=1e-9)
+    # Grinding specific energy is an order of magnitude above chip-forming cuts.
+    assert u.to("J/mm**3").magnitude > 10.0
+
+    # Guardrails: each input must be positive.
+    with pytest.raises(ValueError, match="depth_of_cut must be positive"):
+        grinding_specific_removal_rate(depth_of_cut=_q("0 mm"), workpiece_speed=_q("200 mm/s"))
+    with pytest.raises(ValueError, match="wheel_speed must be positive"):
+        grinding_equivalent_chip_thickness(specific_removal_rate=q, wheel_speed=_q("0 m/s"))
+    with pytest.raises(ValueError, match="wheel_width must be positive"):
+        grinding_specific_energy(
+            power=_q("2400 W"), specific_removal_rate=q, wheel_width=_q("0 mm")
+        )
+    # Guardrail: dimensional mismatch is rejected.
+    with pytest.raises(ValueError, match="depth_of_cut must be a"):
+        grinding_specific_removal_rate(depth_of_cut=_q("5 s"), workpiece_speed=_q("200 mm/s"))
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,
