@@ -920,6 +920,17 @@ def test_thermoforming_wall_thinning_example_deeper_draw_needs_thicker_blank():
     assert d["gauge_for_half_mm_wall_mm"] > 0.5
 
 
+def test_nickel_plating_time_example_faraday_sets_tank_time():
+    namespace = runpy.run_path(str(_EXAMPLES / "nickel_plating_time.py"))
+    d = namespace["nickel_plating"]()
+    # 25 um over 100 cm^2 at 10 A, 95% efficiency needs ~12.8 min.
+    assert d["plating_time_min"] == pytest.approx(12.8, abs=0.1)
+    # About 2.2 g of nickel deposited in that time.
+    assert d["mass_deposited_g"] == pytest.approx(2.23, abs=0.02)
+    # Thickness checks back to the 25 um spec (round-trip).
+    assert d["thickness_check_um"] == pytest.approx(25.0, abs=0.05)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

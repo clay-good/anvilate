@@ -469,6 +469,9 @@ modules:
 - :mod:`~anvilate.analysis.shot_peening` — shot-peening coverage by Avrami statistics: the
   coverage rate λ = (π·d²/4)·φ, the coverage C = 1 − exp(−λ·t), and the exposure a target
   coverage needs t = −ln(1 − C)/λ (100% unreachable, so 98% is "full coverage")
+- :mod:`~anvilate.analysis.electroplating` — electroplating by Faraday deposition: the mass
+  plated m = EW·I·t·η/F, the coating thickness δ = EW·I·t·η/(F·ρ·A), and the run time a
+  target thickness needs t = δ·F·ρ·A/(EW·I·η) — the deposition mirror of ecm/corrosion
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -963,6 +966,11 @@ from .electrical import (
     transformer_full_load_current,
     voltage_drop_single_phase,
     voltage_drop_three_phase,
+)
+from .electroplating import (
+    electroplating_deposition_thickness,
+    electroplating_mass_deposited,
+    electroplating_time_for_thickness,
 )
 from .energy_storage import (
     battery_backup_time,
@@ -1926,6 +1934,9 @@ __all__ = [
     "parallel_ground_electrodes_resistance",
     "voltage_drop_single_phase",
     "voltage_drop_three_phase",
+    "electroplating_mass_deposited",
+    "electroplating_deposition_thickness",
+    "electroplating_time_for_thickness",
     "battery_bank_capacity",
     "usable_battery_energy",
     "battery_backup_time",

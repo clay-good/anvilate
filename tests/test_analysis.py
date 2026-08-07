@@ -16321,6 +16321,77 @@ def test_thermoforming_draw_ratio_wall_thinning_and_gauge_inverse():
         thermoforming_average_wall_thickness(sheet_thickness=_q("2 mm**2"), areal_draw_ratio=2.0)
 
 
+def test_electroplating_mass_thickness_and_time_inverse():
+    from anvilate.analysis import (
+        electroplating_deposition_thickness,
+        electroplating_mass_deposited,
+        electroplating_time_for_thickness,
+    )
+
+    ew = 29.34  # nickel, g/equiv
+    rho = _q("8.9 g/cm**3")
+    faraday = 96485.332
+
+    # Mass m = EW*I*t*eta/F; 10 A, 3600 s, eta 0.95 -> ~10.40 g.
+    m = electroplating_mass_deposited(
+        current=_q("10 A"), plating_time=_q("3600 s"), equivalent_weight=ew, current_efficiency=0.95
+    )
+    assert m.to("g").magnitude == pytest.approx(ew * 10 * 3600 * 0.95 / faraday, rel=1e-9)
+    # Charge-driven: double the current, double the mass.
+    m2 = electroplating_mass_deposited(
+        current=_q("20 A"), plating_time=_q("3600 s"), equivalent_weight=ew, current_efficiency=0.95
+    )
+    assert m2.to("g").magnitude == pytest.approx(2 * m.to("g").magnitude, rel=1e-9)
+
+    # Thickness delta = m/(rho*A); 10.40 g / (8.9 g/cm^3 * 100 cm^2) = 0.01169 cm = 116.9 um.
+    d = electroplating_deposition_thickness(
+        current=_q("10 A"),
+        plating_time=_q("3600 s"),
+        plated_area=_q("100 cm**2"),
+        equivalent_weight=ew,
+        density=rho,
+        current_efficiency=0.95,
+    )
+    expected_d = (ew * 10 * 3600 * 0.95 / faraday) / (8.9 * 100) * 1.0e4
+    assert d.to("micrometer").magnitude == pytest.approx(expected_d, rel=1e-9)
+
+    # Time inverse round-trips: the time for that thickness reproduces 3600 s = 60 min.
+    t = electroplating_time_for_thickness(
+        target_thickness=d,
+        current=_q("10 A"),
+        plated_area=_q("100 cm**2"),
+        equivalent_weight=ew,
+        density=rho,
+        current_efficiency=0.95,
+    )
+    assert t.to("min").magnitude == pytest.approx(60.0, rel=1e-9)
+
+    # Guardrails: fractional efficiency, positive inputs, dimensions checked.
+    with pytest.raises(ValueError, match="current_efficiency must be a fraction"):
+        electroplating_mass_deposited(
+            current=_q("10 A"),
+            plating_time=_q("3600 s"),
+            equivalent_weight=ew,
+            current_efficiency=1.5,
+        )
+    with pytest.raises(ValueError, match="target_thickness must be positive"):
+        electroplating_time_for_thickness(
+            target_thickness=_q("0 micrometer"),
+            current=_q("10 A"),
+            plated_area=_q("100 cm**2"),
+            equivalent_weight=ew,
+            density=rho,
+            current_efficiency=0.95,
+        )
+    with pytest.raises(ValueError, match="current must be a"):
+        electroplating_mass_deposited(
+            current=_q("10 V"),
+            plating_time=_q("3600 s"),
+            equivalent_weight=ew,
+            current_efficiency=0.95,
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,
