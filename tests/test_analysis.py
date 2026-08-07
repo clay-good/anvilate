@@ -16145,6 +16145,51 @@ def test_edm_discharge_energy_duty_factor_and_removal_rate():
         )
 
 
+def test_centrifugal_casting_g_factor_speed_inverse_and_wall_pressure():
+    from anvilate.analysis import (
+        centrifugal_g_factor,
+        centrifugal_speed_for_g_factor,
+        centrifugal_wall_pressure,
+    )
+
+    # G = omega^2*r/g; 1000 rpm = 104.72 rad/s, r=0.1 m: 104.72^2*0.1/9.80665 = 111.8.
+    g = centrifugal_g_factor(rotational_speed=_q("1000 rpm"), radius=_q("0.1 m"))
+    omega = 1000 * 2 * pi / 60
+    assert g == pytest.approx(omega * omega * 0.1 / 9.80665, rel=1e-9)
+
+    # Speed inverse omega = sqrt(G*g/r); round-trips back to the same G.
+    speed = centrifugal_speed_for_g_factor(g_factor=100.0, radius=_q("0.1 m"))
+    assert centrifugal_g_factor(rotational_speed=speed, radius=_q("0.1 m")) == pytest.approx(
+        100.0, rel=1e-9
+    )
+    # A larger mold reaches the same G at a lower speed.
+    speed_big = centrifugal_speed_for_g_factor(g_factor=100.0, radius=_q("0.4 m"))
+    assert speed_big.to("rpm").magnitude < speed.to("rpm").magnitude
+
+    # Wall pressure p = 0.5*rho*omega^2*(r_o^2 - r_i^2).
+    p = centrifugal_wall_pressure(
+        rotational_speed=_q("1000 rpm"),
+        density=_q("7000 kg/m**3"),
+        inner_radius=_q("0.1 m"),
+        outer_radius=_q("0.12 m"),
+    )
+    expected_p = 0.5 * 7000 * omega * omega * (0.12**2 - 0.1**2) / 1.0e6
+    assert p.to("MPa").magnitude == pytest.approx(expected_p, rel=1e-9)
+
+    # Guardrails: positive inputs and r_o > r_i.
+    with pytest.raises(ValueError, match="g_factor must be positive"):
+        centrifugal_speed_for_g_factor(g_factor=0.0, radius=_q("0.1 m"))
+    with pytest.raises(ValueError, match="outer_radius must be greater than inner_radius"):
+        centrifugal_wall_pressure(
+            rotational_speed=_q("1000 rpm"),
+            density=_q("7000 kg/m**3"),
+            inner_radius=_q("0.12 m"),
+            outer_radius=_q("0.1 m"),
+        )
+    with pytest.raises(ValueError, match="radius must be a"):
+        centrifugal_g_factor(rotational_speed=_q("1000 rpm"), radius=_q("5 s"))
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

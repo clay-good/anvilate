@@ -430,6 +430,9 @@ modules:
 - :mod:`~anvilate.analysis.casting` — metal-casting solidification: the casting modulus
   M = V/A that governs freezing, Chvorinov's solidification time t = B·M², and the
   riser modulus M_r ≈ 1.2·M that makes the riser freeze last and take the shrinkage
+- :mod:`~anvilate.analysis.centrifugal_casting` — casting in a spinning mold: the G-factor
+  G = ω²·r/g that sets quality, the spin speed ω = √(G·g/r) to reach it, and the
+  metallostatic wall pressure p = ½·ρ·ω²·(r_o² − r_i²) that packs the outer skin
 - :mod:`~anvilate.analysis.forging` — open-die (bulk-deformation) forging: the true
   strain ε = ln(h₀/h₁) of an upset, the Hollomon flow stress σ = K·εⁿ that work-
   hardening sets, and the press load F = σ·π·r²·(1 + 2μr/(3h)) with its friction hill
@@ -735,6 +738,11 @@ from .casting import (
     casting_modulus,
     chvorinov_solidification_time,
     riser_modulus_for_feeding,
+)
+from .centrifugal_casting import (
+    centrifugal_g_factor,
+    centrifugal_speed_for_g_factor,
+    centrifugal_wall_pressure,
 )
 from .chain import (
     chain_length_in_pitches,
@@ -2130,6 +2138,9 @@ __all__ = [
     "casting_modulus",
     "chvorinov_solidification_time",
     "riser_modulus_for_feeding",
+    "centrifugal_g_factor",
+    "centrifugal_speed_for_g_factor",
+    "centrifugal_wall_pressure",
     "parabolic_cable_sag",
     "parabolic_cable_max_tension",
     "parabolic_cable_length",

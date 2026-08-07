@@ -873,6 +873,17 @@ def test_edm_roughing_vs_finishing_example_energy_trades_off():
     assert finish["mrr_mm3_min"] < rough["mrr_mm3_min"]
 
 
+def test_centrifugal_cast_pipe_speed_example_g_factor_sets_speed():
+    namespace = runpy.run_path(str(_EXAMPLES / "centrifugal_cast_pipe_speed.py"))
+    d = namespace["centrifugal_cast_setup"]()
+    # 90 G at a 75 mm bore radius needs ~1036 rpm.
+    assert d["speed_rpm"] == pytest.approx(1036.0, abs=2.0)
+    # The G-factor checks back out at the design value.
+    assert d["achieved_g_factor"] == pytest.approx(90.0, rel=1e-6)
+    # Metallostatic wall pressure ~0.10 MPa.
+    assert d["wall_pressure_mpa"] == pytest.approx(0.10, abs=0.01)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()
