@@ -235,6 +235,9 @@ casting.riser_modulus_for_feeding
 centrifugal_casting.centrifugal_g_factor
 centrifugal_casting.centrifugal_speed_for_g_factor
 centrifugal_casting.centrifugal_wall_pressure
+casting_gating.gating_fill_time
+casting_gating.gating_choke_area
+casting_gating.sprue_taper_ratio
 chain.chain_length_in_pitches
 chain.chain_speed
 chain.chain_working_tension

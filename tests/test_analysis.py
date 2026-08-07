@@ -16227,6 +16227,65 @@ def test_shot_peening_coverage_rate_law_and_time_inverse():
         peening_impact_coverage_rate(dimple_diameter=_q("0.3 mm"), impact_flux=_q("500 1/s"))
 
 
+def test_casting_gating_fill_time_choke_inverse_and_sprue_taper():
+    from anvilate.analysis import (
+        gating_choke_area,
+        gating_fill_time,
+        sprue_taper_ratio,
+    )
+
+    # Fill time t = V/(C_d*A*sqrt(2gh)); 2000 cm^3, 2 cm^2 choke, 0.2 m head, C_d 0.8.
+    t = gating_fill_time(
+        casting_volume=_q("2000 cm**3"),
+        choke_area=_q("2 cm**2"),
+        effective_head=_q("0.2 m"),
+        discharge_coefficient=0.8,
+    )
+    v = (2 * 9.80665 * 0.2) ** 0.5
+    expected_t = 0.002 / (0.8 * 2e-4 * v)
+    assert t.to("s").magnitude == pytest.approx(expected_t, rel=1e-9)
+
+    # Choke inverse round-trips back to the 2 cm^2 = 200 mm^2 choke.
+    a = gating_choke_area(
+        casting_volume=_q("2000 cm**3"),
+        fill_time=t,
+        effective_head=_q("0.2 m"),
+        discharge_coefficient=0.8,
+    )
+    assert a.to("mm**2").magnitude == pytest.approx(200.0, rel=1e-9)
+    # A larger head fills faster (needs a smaller choke for the same time).
+    a_high = gating_choke_area(
+        casting_volume=_q("2000 cm**3"),
+        fill_time=t,
+        effective_head=_q("0.8 m"),
+        discharge_coefficient=0.8,
+    )
+    assert a_high.to("mm**2").magnitude < a.to("mm**2").magnitude
+
+    # Sprue taper A_top/A_bottom = sqrt(h_bottom/h_top); sqrt(0.22/0.02) = sqrt(11) = 3.317.
+    ratio = sprue_taper_ratio(top_head=_q("0.02 m"), bottom_head=_q("0.22 m"))
+    assert ratio == pytest.approx(11.0**0.5, rel=1e-9)
+    assert ratio > 1.0  # the sprue narrows toward the base
+
+    # Guardrails: fractional C_d, positive inputs, falling sprue.
+    with pytest.raises(ValueError, match="discharge_coefficient must be a fraction"):
+        gating_fill_time(
+            casting_volume=_q("2000 cm**3"),
+            choke_area=_q("2 cm**2"),
+            effective_head=_q("0.2 m"),
+            discharge_coefficient=1.5,
+        )
+    with pytest.raises(ValueError, match="bottom_head must be greater than top_head"):
+        sprue_taper_ratio(top_head=_q("0.22 m"), bottom_head=_q("0.02 m"))
+    with pytest.raises(ValueError, match="casting_volume must be a"):
+        gating_fill_time(
+            casting_volume=_q("2000 mm**2"),
+            choke_area=_q("2 cm**2"),
+            effective_head=_q("0.2 m"),
+            discharge_coefficient=0.8,
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

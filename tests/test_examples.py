@@ -896,6 +896,18 @@ def test_shot_peening_coverage_time_example_saturates_toward_full():
     assert d["coverage_at_200_percent"] < 1.0
 
 
+def test_casting_gating_choke_and_sprue_example_sizes_the_gate():
+    namespace = runpy.run_path(str(_EXAMPLES / "casting_gating_choke_and_sprue.py"))
+    d = namespace["gating_design"]()
+    # 2000 cm^3 in 5 s under 0.2 m head needs a ~252 mm^2 choke.
+    assert d["choke_area_mm2"] == pytest.approx(252.0, abs=1.0)
+    # That choke fills in the target 5 s (round-trip).
+    assert d["fill_time_s"] == pytest.approx(5.0, abs=0.01)
+    # Sprue taper sqrt(0.22/0.02) = 3.317, wider at the top.
+    assert d["sprue_taper_ratio"] == pytest.approx(3.317, abs=0.005)
+    assert d["sprue_taper_ratio"] > 1.0
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

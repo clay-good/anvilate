@@ -433,6 +433,9 @@ modules:
 - :mod:`~anvilate.analysis.centrifugal_casting` — casting in a spinning mold: the G-factor
   G = ω²·r/g that sets quality, the spin speed ω = √(G·g/r) to reach it, and the
   metallostatic wall pressure p = ½·ρ·ω²·(r_o² − r_i²) that packs the outer skin
+- :mod:`~anvilate.analysis.casting_gating` — gating-system flow: the mold fill time
+  t = V/(C_d·A·√(2gh)), the choke area A = V/(C_d·t·√(2gh)) for a target time, and the
+  anti-aspiration sprue taper A_top/A_bottom = √(h_bottom/h_top)
 - :mod:`~anvilate.analysis.forging` — open-die (bulk-deformation) forging: the true
   strain ε = ln(h₀/h₁) of an upset, the Hollomon flow stress σ = K·εⁿ that work-
   hardening sets, and the press load F = σ·π·r²·(1 + 2μr/(3h)) with its friction hill
@@ -741,6 +744,11 @@ from .casting import (
     casting_modulus,
     chvorinov_solidification_time,
     riser_modulus_for_feeding,
+)
+from .casting_gating import (
+    gating_choke_area,
+    gating_fill_time,
+    sprue_taper_ratio,
 )
 from .centrifugal_casting import (
     centrifugal_g_factor,
@@ -2152,6 +2160,9 @@ __all__ = [
     "centrifugal_g_factor",
     "centrifugal_speed_for_g_factor",
     "centrifugal_wall_pressure",
+    "gating_fill_time",
+    "gating_choke_area",
+    "sprue_taper_ratio",
     "parabolic_cable_sag",
     "parabolic_cable_max_tension",
     "parabolic_cable_length",
