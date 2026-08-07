@@ -16190,6 +16190,43 @@ def test_centrifugal_casting_g_factor_speed_inverse_and_wall_pressure():
         centrifugal_g_factor(rotational_speed=_q("1000 rpm"), radius=_q("5 s"))
 
 
+def test_shot_peening_coverage_rate_law_and_time_inverse():
+    from anvilate.analysis import (
+        peening_coverage,
+        peening_impact_coverage_rate,
+        peening_time_for_coverage,
+    )
+
+    # lambda = (pi/4 d^2)*phi; (pi/4)(0.3^2)(500) = 35.343 per s.
+    lam = peening_impact_coverage_rate(
+        dimple_diameter=_q("0.3 mm"), impact_flux=_q("500 1/(mm**2*s)")
+    )
+    assert lam.to("1/s").magnitude == pytest.approx(pi / 4 * 0.09 * 500, rel=1e-9)
+
+    # Coverage C = 1 - exp(-lambda*t); at 0.1 s -> 1 - exp(-3.5343) = 0.9708.
+    c = peening_coverage(coverage_rate=lam, exposure_time=_q("0.1 s"))
+    assert c == pytest.approx(0.97082, abs=1e-5)
+    # Coverage starts at zero and rises with exposure.
+    assert peening_coverage(coverage_rate=lam, exposure_time=_q("0 s")) == pytest.approx(0.0)
+
+    # Time inverse round-trips: the coverage at t_for(0.98) is 0.98.
+    t98 = peening_time_for_coverage(coverage_rate=lam, target_coverage=0.98)
+    assert peening_coverage(coverage_rate=lam, exposure_time=t98) == pytest.approx(0.98, rel=1e-9)
+    # 200% coverage (twice the 98% time) reaches 1 - 0.02^2 = 0.9996.
+    t_double = _q(f"{2 * t98.to('s').magnitude} s")
+    assert peening_coverage(coverage_rate=lam, exposure_time=t_double) == pytest.approx(
+        0.9996, rel=1e-6
+    )
+
+    # Guardrails: positive inputs, coverage strictly in (0, 1), dimensions checked.
+    with pytest.raises(ValueError, match="target_coverage must be a fraction"):
+        peening_time_for_coverage(coverage_rate=lam, target_coverage=1.0)
+    with pytest.raises(ValueError, match="impact_flux must be positive"):
+        peening_impact_coverage_rate(dimple_diameter=_q("0.3 mm"), impact_flux=_q("0 1/(mm**2*s)"))
+    with pytest.raises(ValueError, match="impact_flux must be a"):
+        peening_impact_coverage_rate(dimple_diameter=_q("0.3 mm"), impact_flux=_q("500 1/s"))
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

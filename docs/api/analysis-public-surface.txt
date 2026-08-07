@@ -805,6 +805,9 @@ sheetmetal.stripping_force
 sheetmetal.springback_factor
 sheetmetal.sprung_bend_radius
 sheetmetal.sprung_bend_angle
+shot_peening.peening_impact_coverage_rate
+shot_peening.peening_coverage
+shot_peening.peening_time_for_coverage
 slider_crank.slider_crank_acceleration
 slider_crank.slider_crank_displacement
 slider_crank.slider_crank_piston_side_thrust

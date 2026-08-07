@@ -884,6 +884,18 @@ def test_centrifugal_cast_pipe_speed_example_g_factor_sets_speed():
     assert d["wall_pressure_mpa"] == pytest.approx(0.10, abs=0.01)
 
 
+def test_shot_peening_coverage_time_example_saturates_toward_full():
+    namespace = runpy.run_path(str(_EXAMPLES / "shot_peening_coverage_time.py"))
+    d = namespace["peening_schedule"]()
+    # Coverage rate ~35.3 per s.
+    assert d["coverage_rate_per_s"] == pytest.approx(35.34, abs=0.05)
+    # 98% coverage in ~0.111 s.
+    assert d["full_coverage_time_s"] == pytest.approx(0.1107, abs=0.001)
+    # Doubling exposure (200%) reaches ~99.96%, showing the diminishing return.
+    assert d["coverage_at_200_percent"] == pytest.approx(0.9996, abs=1e-4)
+    assert d["coverage_at_200_percent"] < 1.0
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

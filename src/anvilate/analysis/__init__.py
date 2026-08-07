@@ -463,6 +463,9 @@ modules:
 - :mod:`~anvilate.analysis.edm` — electrical discharge machining by spark erosion: the
   discharge energy per pulse E = U·I·t_on, the duty factor τ = t_on/(t_on + t_off), and the
   removal rate MRR = k·I·τ — the roughing-versus-finishing trade made numerical
+- :mod:`~anvilate.analysis.shot_peening` — shot-peening coverage by Avrami statistics: the
+  coverage rate λ = (π·d²/4)·φ, the coverage C = 1 − exp(−λ·t), and the exposure a target
+  coverage needs t = −ln(1 − C)/λ (100% unreachable, so 98% is "full coverage")
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -1512,6 +1515,11 @@ from .sheetmetal import (
     sprung_bend_radius,
     stripping_force,
 )
+from .shot_peening import (
+    peening_coverage,
+    peening_impact_coverage_rate,
+    peening_time_for_coverage,
+)
 from .slider_crank import (
     slider_crank_acceleration,
     slider_crank_displacement,
@@ -2028,6 +2036,9 @@ __all__ = [
     "shear_cutting_force",
     "round_hole_punching_force",
     "stripping_force",
+    "peening_impact_coverage_rate",
+    "peening_coverage",
+    "peening_time_for_coverage",
     "cup_blank_diameter",
     "draw_ratio",
     "deep_draw_force",
