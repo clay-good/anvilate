@@ -457,6 +457,9 @@ modules:
 - :mod:`~anvilate.analysis.laser_cutting` — laser cutting as a power balance: the specific
   removal energy e_m = c·ΔT + L_f, the cutting speed v = η·P/(ρ·t·w·e_m), and the greatest
   thickness a laser can sever t_max = η·P/(ρ·v·w·e_m)
+- :mod:`~anvilate.analysis.edm` — electrical discharge machining by spark erosion: the
+  discharge energy per pulse E = U·I·t_on, the duty factor τ = t_on/(t_on + t_off), and the
+  removal rate MRR = k·I·τ — the roughing-versus-finishing trade made numerical
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -914,6 +917,11 @@ from .ecm import (
     ecm_equilibrium_gap,
     ecm_feed_rate,
     ecm_material_removal_rate,
+)
+from .edm import (
+    edm_discharge_energy,
+    edm_duty_factor,
+    edm_material_removal_rate,
 )
 from .electrical import (
     apparent_power_three_phase,
@@ -2275,6 +2283,9 @@ __all__ = [
     "ecm_material_removal_rate",
     "ecm_feed_rate",
     "ecm_equilibrium_gap",
+    "edm_discharge_energy",
+    "edm_duty_factor",
+    "edm_material_removal_rate",
     "solid_disc_polar_mass_moment",
     "annular_disc_polar_mass_moment",
     "frequency_scorecard",

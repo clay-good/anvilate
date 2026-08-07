@@ -857,6 +857,22 @@ def test_laser_cut_thickness_limit_example_power_governs():
     assert d["max_thickness_at_2m_min_mm"] > 5.0
 
 
+def test_edm_roughing_vs_finishing_example_energy_trades_off():
+    namespace = runpy.run_path(str(_EXAMPLES / "edm_roughing_vs_finishing.py"))
+    d = namespace["edm_settings"]()
+    rough, finish = d["roughing"], d["finishing"]
+    # Roughing: 50 mJ/spark, 50% duty, 20 mm^3/min.
+    assert rough["energy_mj"] == pytest.approx(50.0, abs=0.05)
+    assert rough["duty_factor"] == pytest.approx(0.5, abs=0.001)
+    assert rough["mrr_mm3_min"] == pytest.approx(20.0, abs=0.05)
+    # Finishing: 1 mJ/spark (1/50th the crater), ~17% duty, ~1.33 mm^3/min.
+    assert finish["energy_mj"] == pytest.approx(1.0, abs=0.02)
+    assert finish["duty_factor"] == pytest.approx(10 / 60, abs=0.005)
+    # The finish buys surface at the cost of speed: far less energy and far less removal.
+    assert finish["energy_mj"] < rough["energy_mj"]
+    assert finish["mrr_mm3_min"] < rough["mrr_mm3_min"]
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

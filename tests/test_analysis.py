@@ -16098,6 +16098,53 @@ def test_laser_cutting_removal_energy_speed_and_thickness_ceiling():
         )
 
 
+def test_edm_discharge_energy_duty_factor_and_removal_rate():
+    from anvilate.analysis import (
+        edm_discharge_energy,
+        edm_duty_factor,
+        edm_material_removal_rate,
+    )
+
+    # E = U*I*t_on; 25 V * 20 A * 100 us = 0.05 J = 50 mJ.
+    e = edm_discharge_energy(
+        gap_voltage=_q("25 V"), peak_current=_q("20 A"), pulse_on_time=_q("100 us")
+    )
+    assert e.to("mJ").magnitude == pytest.approx(50.0, rel=1e-9)
+
+    # Duty factor tau = t_on/(t_on+t_off); 100/(100+100) = 0.5.
+    tau = edm_duty_factor(pulse_on_time=_q("100 us"), pulse_off_time=_q("100 us"))
+    assert tau == pytest.approx(0.5, rel=1e-9)
+    # More off time (better flushing) lowers the duty factor.
+    tau_low = edm_duty_factor(pulse_on_time=_q("100 us"), pulse_off_time=_q("300 us"))
+    assert tau_low == pytest.approx(0.25, rel=1e-9)
+    assert tau_low < tau
+
+    # MRR = k*I*tau; 2 mm^3/(min*A) * 20 A * 0.5 = 20 mm^3/min.
+    mrr = edm_material_removal_rate(
+        erosion_coefficient=_q("2 mm**3/(min*A)"), peak_current=_q("20 A"), duty_factor=tau
+    )
+    assert mrr.to("mm**3/min").magnitude == pytest.approx(20.0, rel=1e-9)
+    # Removal tracks average current: halve the current, halve the rate.
+    mrr_half = edm_material_removal_rate(
+        erosion_coefficient=_q("2 mm**3/(min*A)"), peak_current=_q("10 A"), duty_factor=tau
+    )
+    assert mrr_half.to("mm**3/min").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    # Guardrails: positive inputs, fraction duty, correct dimensions.
+    with pytest.raises(ValueError, match="pulse_on_time must be positive"):
+        edm_discharge_energy(
+            gap_voltage=_q("25 V"), peak_current=_q("20 A"), pulse_on_time=_q("0 us")
+        )
+    with pytest.raises(ValueError, match="duty_factor must be a fraction"):
+        edm_material_removal_rate(
+            erosion_coefficient=_q("2 mm**3/(min*A)"), peak_current=_q("20 A"), duty_factor=1.5
+        )
+    with pytest.raises(ValueError, match="erosion_coefficient must be a"):
+        edm_material_removal_rate(
+            erosion_coefficient=_q("2 mm**3/min"), peak_current=_q("20 A"), duty_factor=0.5
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

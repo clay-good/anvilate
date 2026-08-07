@@ -386,6 +386,9 @@ dynamics.two_rotor_torsional_natural_frequency
 ecm.ecm_material_removal_rate
 ecm.ecm_feed_rate
 ecm.ecm_equilibrium_gap
+edm.edm_discharge_energy
+edm.edm_duty_factor
+edm.edm_material_removal_rate
 fastener.NUT_FACTOR_AS_RECEIVED
 fastener.aisc_tension_member_design_strength
 fastener.block_shear_strength
