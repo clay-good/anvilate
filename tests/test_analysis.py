@@ -16392,6 +16392,58 @@ def test_electroplating_mass_thickness_and_time_inverse():
         )
 
 
+def test_spot_weld_heat_current_inverse_and_nugget_energy():
+    from anvilate.analysis import (
+        spot_weld_current_for_heat,
+        spot_weld_heat_generated,
+        spot_weld_nugget_melting_energy,
+    )
+
+    # Joule heat Q = I^2*R*t; (10 kA)^2 * 100 uohm * 0.2 s = 2000 J.
+    q = spot_weld_heat_generated(
+        weld_current=_q("10 kA"), contact_resistance=_q("100 uohm"), weld_time=_q("0.2 s")
+    )
+    assert q.to("J").magnitude == pytest.approx(1e8 * 1e-4 * 0.2, rel=1e-9)
+    # Quadratic in current: double the current, quadruple the heat.
+    q2 = spot_weld_heat_generated(
+        weld_current=_q("20 kA"), contact_resistance=_q("100 uohm"), weld_time=_q("0.2 s")
+    )
+    assert q2.to("J").magnitude == pytest.approx(4 * q.to("J").magnitude, rel=1e-9)
+
+    # Current inverse I = sqrt(Q/(R*t)) round-trips back to 10 kA.
+    i = spot_weld_current_for_heat(
+        target_heat=q, contact_resistance=_q("100 uohm"), weld_time=_q("0.2 s")
+    )
+    assert i.to("kA").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    # Nugget melting energy E = rho*V*(c*dT + L_f); 7850*25e-9*(500*1480+270000) = 198.2 J.
+    e = spot_weld_nugget_melting_energy(
+        nugget_volume=_q("25 mm**3"),
+        density=_q("7850 kg/m**3"),
+        specific_heat=_q("500 J/(kg*K)"),
+        temperature_rise=_q("1480 K"),
+        latent_heat_of_fusion=_q("270 kJ/kg"),
+    )
+    expected_e = 7850 * 25e-9 * (500 * 1480 + 270000)
+    assert e.to("J").magnitude == pytest.approx(expected_e, rel=1e-9)
+    # The nugget needs far less than the Joule heat generated — a low thermal efficiency.
+    assert e.to("J").magnitude < 0.2 * q.to("J").magnitude
+
+    # Guardrails: positive inputs and correct dimensions.
+    with pytest.raises(ValueError, match="weld_current must be positive"):
+        spot_weld_heat_generated(
+            weld_current=_q("0 kA"), contact_resistance=_q("100 uohm"), weld_time=_q("0.2 s")
+        )
+    with pytest.raises(ValueError, match="target_heat must be positive"):
+        spot_weld_current_for_heat(
+            target_heat=_q("0 J"), contact_resistance=_q("100 uohm"), weld_time=_q("0.2 s")
+        )
+    with pytest.raises(ValueError, match="contact_resistance must be a"):
+        spot_weld_heat_generated(
+            weld_current=_q("10 kA"), contact_resistance=_q("100 V"), weld_time=_q("0.2 s")
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

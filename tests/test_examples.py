@@ -931,6 +931,19 @@ def test_nickel_plating_time_example_faraday_sets_tank_time():
     assert d["thickness_check_um"] == pytest.approx(25.0, abs=0.05)
 
 
+def test_spot_weld_schedule_efficiency_example_needs_kiloamperes():
+    namespace = runpy.run_path(str(_EXAMPLES / "spot_weld_schedule_efficiency.py"))
+    d = namespace["spot_weld_schedule"]()
+    # Nugget melting energy ~198 J.
+    assert d["nugget_energy_j"] == pytest.approx(198.2, abs=1.0)
+    # At 10% efficiency the machine generates ~1982 J.
+    assert d["required_heat_j"] == pytest.approx(1982.0, abs=5.0)
+    # That heat over 100 uohm and 0.2 s needs ~10 kA.
+    assert d["weld_current_ka"] == pytest.approx(9.95, abs=0.1)
+    # The current back-produces the required heat (round-trip through Joule's law).
+    assert d["check_heat_j"] == pytest.approx(d["required_heat_j"], rel=1e-6)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

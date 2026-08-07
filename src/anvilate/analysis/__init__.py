@@ -472,6 +472,9 @@ modules:
 - :mod:`~anvilate.analysis.electroplating` — electroplating by Faraday deposition: the mass
   plated m = EW·I·t·η/F, the coating thickness δ = EW·I·t·η/(F·ρ·A), and the run time a
   target thickness needs t = δ·F·ρ·A/(EW·I·η) — the deposition mirror of ecm/corrosion
+- :mod:`~anvilate.analysis.resistance_welding` — resistance spot welding by Joule heating:
+  the heat Q = I²·R·t, the current a schedule needs I = √(Q/(R·t)), and the nugget melting
+  energy E = ρ·V·(c·ΔT + L_f) whose ratio to Q is the low thermal efficiency
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -1466,6 +1469,11 @@ from .reinforced_concrete import (
     rc_tension_steel_for_moment,
     rc_two_way_shear_strength,
 )
+from .resistance_welding import (
+    spot_weld_current_for_heat,
+    spot_weld_heat_generated,
+    spot_weld_nugget_melting_energy,
+)
 from .rigging import (
     sling_horizontal_force,
     sling_leg_tension,
@@ -2103,6 +2111,9 @@ __all__ = [
     "rc_two_way_shear_strength",
     "rc_cracking_moment",
     "rc_effective_moment_of_inertia",
+    "spot_weld_heat_generated",
+    "spot_weld_current_for_heat",
+    "spot_weld_nugget_melting_energy",
     "sling_tension_factor",
     "sling_leg_tension",
     "sling_horizontal_force",
