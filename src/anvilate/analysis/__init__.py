@@ -454,6 +454,9 @@ modules:
 - :mod:`~anvilate.analysis.ecm` — electrochemical machining by Faraday dissolution: the
   removal rate Q = I·EW/(ρ·F), the feed rate f = J·EW/(ρ·F), and the self-regulating gap
   g = κ·U·EW/(ρ·F·f) that shorts out if the feed is pushed too fast
+- :mod:`~anvilate.analysis.laser_cutting` — laser cutting as a power balance: the specific
+  removal energy e_m = c·ΔT + L_f, the cutting speed v = η·P/(ρ·t·w·e_m), and the greatest
+  thickness a laser can sever t_max = η·P/(ρ·v·w·e_m)
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -1214,6 +1217,11 @@ from .keys import (
     key_shear_stress,
     key_tangential_force,
     spline_torque_capacity,
+)
+from .laser_cutting import (
+    laser_cutting_speed,
+    laser_max_cut_thickness,
+    laser_specific_removal_energy,
 )
 from .living_hinge import (
     living_hinge_fold_strain,
@@ -2402,6 +2410,9 @@ __all__ = [
     "KeyLengthRequirement",
     "key_length_for_torque",
     "spline_torque_capacity",
+    "laser_specific_removal_energy",
+    "laser_cutting_speed",
+    "laser_max_cut_thickness",
     "living_hinge_fold_strain",
     "living_hinge_web_length_for_strain",
     "asce7_lrfd_factored_load",

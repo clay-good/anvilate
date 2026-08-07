@@ -16022,6 +16022,82 @@ def test_ecm_removal_rate_feed_rate_and_self_regulating_gap():
         ecm_material_removal_rate(current=_q("1000 V"), equivalent_weight=ew, density=rho)
 
 
+def test_laser_cutting_removal_energy_speed_and_thickness_ceiling():
+    from anvilate.analysis import (
+        laser_cutting_speed,
+        laser_max_cut_thickness,
+        laser_specific_removal_energy,
+    )
+
+    # e_m = c*dT + L_f; 500*1480 + 270000 = 1.01e6 J/kg = 1.01 MJ/kg.
+    e_m = laser_specific_removal_energy(
+        specific_heat=_q("500 J/(kg*K)"),
+        temperature_rise=_q("1480 K"),
+        latent_heat_of_fusion=_q("270 kJ/kg"),
+    )
+    assert e_m.to("MJ/kg").magnitude == pytest.approx(1.01, rel=1e-9)
+
+    # v = eta*P/(rho*t*w*e_m); 0.4*2000/(7850*0.005*0.0003*1.01e6) = 4.036 m/min.
+    v = laser_cutting_speed(
+        beam_power=_q("2000 W"),
+        coupling_efficiency=0.4,
+        thickness=_q("5 mm"),
+        kerf_width=_q("0.3 mm"),
+        density=_q("7850 kg/m**3"),
+        specific_removal_energy=e_m,
+    )
+    expected_v = 0.4 * 2000 / (7850 * 0.005 * 0.0003 * 1.01e6) * 60.0
+    assert v.to("m/min").magnitude == pytest.approx(expected_v, rel=1e-9)
+
+    # The thickness ceiling inverts the balance and round-trips: t_max at v equals the input t.
+    t_max = laser_max_cut_thickness(
+        beam_power=_q("2000 W"),
+        coupling_efficiency=0.4,
+        cutting_speed=v,
+        kerf_width=_q("0.3 mm"),
+        density=_q("7850 kg/m**3"),
+        specific_removal_energy=e_m,
+    )
+    assert t_max.to("mm").magnitude == pytest.approx(5.0, rel=1e-9)
+    # A slower cut reaches thicker plate.
+    t_slow = laser_max_cut_thickness(
+        beam_power=_q("2000 W"),
+        coupling_efficiency=0.4,
+        cutting_speed=_q("2 m/min"),
+        kerf_width=_q("0.3 mm"),
+        density=_q("7850 kg/m**3"),
+        specific_removal_energy=e_m,
+    )
+    assert t_slow.to("mm").magnitude == pytest.approx(10.09, abs=0.02)
+    assert t_slow.to("mm").magnitude > t_max.to("mm").magnitude
+
+    # Guardrails: efficiency is a fraction, inputs positive, dimensions checked.
+    with pytest.raises(ValueError, match="coupling_efficiency must be a fraction"):
+        laser_cutting_speed(
+            beam_power=_q("2000 W"),
+            coupling_efficiency=1.5,
+            thickness=_q("5 mm"),
+            kerf_width=_q("0.3 mm"),
+            density=_q("7850 kg/m**3"),
+            specific_removal_energy=e_m,
+        )
+    with pytest.raises(ValueError, match="temperature_rise must be positive"):
+        laser_specific_removal_energy(
+            specific_heat=_q("500 J/(kg*K)"),
+            temperature_rise=_q("0 K"),
+            latent_heat_of_fusion=_q("270 kJ/kg"),
+        )
+    with pytest.raises(ValueError, match="beam_power must be a"):
+        laser_cutting_speed(
+            beam_power=_q("2000 N"),
+            coupling_efficiency=0.4,
+            thickness=_q("5 mm"),
+            kerf_width=_q("0.3 mm"),
+            density=_q("7850 kg/m**3"),
+            specific_removal_energy=e_m,
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

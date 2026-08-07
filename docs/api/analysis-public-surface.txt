@@ -581,6 +581,9 @@ keys.key_length_for_torque
 keys.key_shear_stress
 keys.key_tangential_force
 keys.spline_torque_capacity
+laser_cutting.laser_specific_removal_energy
+laser_cutting.laser_cutting_speed
+laser_cutting.laser_max_cut_thickness
 living_hinge.living_hinge_fold_strain
 living_hinge.living_hinge_web_length_for_strain
 load_combinations.asce7_asd_factored_load

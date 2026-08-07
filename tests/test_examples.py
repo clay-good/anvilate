@@ -845,6 +845,18 @@ def test_ecm_gap_regulation_example_gap_self_regulates():
     assert d["gap_double_feed_mm"] < d["gap_mm"]
 
 
+def test_laser_cut_thickness_limit_example_power_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "laser_cut_thickness_limit.py"))
+    d = namespace["laser_cut_envelope"]()
+    # e_m = c*dT + L_f = 1.01 MJ/kg.
+    assert d["specific_removal_energy_mj_kg"] == pytest.approx(1.01, abs=0.005)
+    # 2 kW at 40% coupling severs 5 mm steel at ~4 m/min.
+    assert d["speed_on_5mm_m_min"] == pytest.approx(4.04, abs=0.05)
+    # At a reliable 2 m/min the ceiling is ~10 mm; slower reaches thicker plate than the 5 mm cut.
+    assert d["max_thickness_at_2m_min_mm"] == pytest.approx(10.09, abs=0.05)
+    assert d["max_thickness_at_2m_min_mm"] > 5.0
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()
