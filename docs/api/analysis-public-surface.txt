@@ -312,6 +312,9 @@ drag.jet_impact_force
 drag.stokes_drag_force
 drag.stokes_settling_velocity
 drag.terminal_velocity
+drilling.drilling_material_removal_rate
+drilling.drilling_torque
+drilling.drilling_feed_for_torque_limit
 electrical.apparent_power_three_phase
 electrical.conductor_resistance
 electrical.ground_rod_resistance

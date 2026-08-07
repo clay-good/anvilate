@@ -448,6 +448,9 @@ modules:
 - :mod:`~anvilate.analysis.broaching` — broaching in a single stroke: the teeth in cut
   n = ⌊L/p⌋, the cutting force F = k_s·n·w·t, and the pull-broach tensile capacity
   F_max = σ_allow·A_root that caps the load before the bar snaps
+- :mod:`~anvilate.analysis.drilling` — twist drilling sized on torque: the removal rate
+  MRR = (π/4)·d²·f·N, the spindle torque M = u·f·d²/8, and the feed a torque limit allows
+  f_max = 8·M_limit/(u·d²) before the drill stalls
 - :mod:`~anvilate.analysis.snapfit` — constant-section cantilever snap-fit design by
   strain: the permissible deflection a material allowable permits, the peak root strain
   a required undercut imposes, the finger deflection (spring) force, and the mating
@@ -850,6 +853,11 @@ from .drag import (
     stokes_drag_force,
     stokes_settling_velocity,
     terminal_velocity,
+)
+from .drilling import (
+    drilling_feed_for_torque_limit,
+    drilling_material_removal_rate,
+    drilling_torque,
 )
 from .dynamics import (
     STANDARD_GRAVITY,
@@ -1832,6 +1840,9 @@ __all__ = [
     "stokes_settling_velocity",
     "stokes_drag_force",
     "terminal_velocity",
+    "drilling_material_removal_rate",
+    "drilling_torque",
+    "drilling_feed_for_torque_limit",
     "tank_drain_time",
     "torricelli_efflux_velocity",
     "choked_mass_flow_rate",

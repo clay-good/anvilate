@@ -15904,6 +15904,66 @@ def test_broaching_teeth_force_and_pull_capacity():
         broaching_pull_capacity(allowable_stress=_q("5 mm"), root_area=_q("120 mm**2"))
 
 
+def test_drilling_removal_rate_torque_and_feed_limit():
+    from anvilate.analysis import (
+        drilling_feed_for_torque_limit,
+        drilling_material_removal_rate,
+        drilling_torque,
+    )
+
+    # MRR = (pi/4)*d^2*f*N; (pi/4)*100*0.2*500 = 7853.98 mm^3/min = 7.854 cm^3/min.
+    mrr = drilling_material_removal_rate(
+        drill_diameter=_q("10 mm"),
+        feed_per_revolution=_q("0.2 mm"),
+        spindle_speed=_q("500 revolution/minute"),
+    )
+    assert mrr.to("cm**3/min").magnitude == pytest.approx(pi / 4 * 100 * 0.2 * 500 / 1000)
+
+    # Torque M = u*f*d^2/8; 2 J/mm^3 * 0.2 mm * 100 mm^2 / 8 = 5 N*m.
+    m = drilling_torque(
+        specific_cutting_energy=_q("2 J/mm**3"),
+        feed_per_revolution=_q("0.2 mm"),
+        drill_diameter=_q("10 mm"),
+    )
+    assert m.to("N*m").magnitude == pytest.approx(5.0, rel=1e-9)
+    # A drill twice the diameter needs four times the torque (M ~ d^2).
+    m_big = drilling_torque(
+        specific_cutting_energy=_q("2 J/mm**3"),
+        feed_per_revolution=_q("0.2 mm"),
+        drill_diameter=_q("20 mm"),
+    )
+    assert m_big.to("N*m").magnitude == pytest.approx(4 * m.to("N*m").magnitude, rel=1e-9)
+
+    # Feed inverse f_max = 8*M_limit/(u*d^2); 8*10/(2000 N/mm^2 * 100 mm^2) = 0.4 mm/rev.
+    f_max = drilling_feed_for_torque_limit(
+        torque_limit=_q("10 N*m"),
+        specific_cutting_energy=_q("2 J/mm**3"),
+        drill_diameter=_q("10 mm"),
+    )
+    assert f_max.to("mm").magnitude == pytest.approx(0.4, rel=1e-9)
+    # It round-trips: the torque at f_max equals the limit.
+    m_at_limit = drilling_torque(
+        specific_cutting_energy=_q("2 J/mm**3"),
+        feed_per_revolution=f_max,
+        drill_diameter=_q("10 mm"),
+    )
+    assert m_at_limit.to("N*m").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    # Guardrails: positive inputs and correct dimensions.
+    with pytest.raises(ValueError, match="drill_diameter must be positive"):
+        drilling_torque(
+            specific_cutting_energy=_q("2 J/mm**3"),
+            feed_per_revolution=_q("0.2 mm"),
+            drill_diameter=_q("0 mm"),
+        )
+    with pytest.raises(ValueError, match="torque_limit must be a"):
+        drilling_feed_for_torque_limit(
+            torque_limit=_q("10 N"),
+            specific_cutting_energy=_q("2 J/mm**3"),
+            drill_diameter=_q("10 mm"),
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

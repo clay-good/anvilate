@@ -821,6 +821,18 @@ def test_broach_pull_force_margin_example_tension_governs():
     assert d["margin"] > 1.0  # the broach survives the stroke
 
 
+def test_drill_press_torque_limit_example_torque_governs():
+    namespace = runpy.run_path(str(_EXAMPLES / "drill_press_torque_limit.py"))
+    d = namespace["drill_duty"]()
+    # 12 mm drill at 0.2 mm/rev, 600 rpm: MRR ~13.6 cm^3/min.
+    assert d["removal_rate_cm3_min"] == pytest.approx(13.57, abs=0.05)
+    # Torque u*f*d^2/8 = 2000 MPa * 0.2 mm * 144 mm^2 / 8 = 7.2 N*m, under the 10 N*m rating.
+    assert d["torque_nm"] == pytest.approx(7.2, abs=0.01)
+    # Feed ceiling at 10 N*m: 8*10/(2000*144) = 0.278 mm/rev; the 0.2 used sits inside it.
+    assert d["feed_ceiling_mm"] == pytest.approx(0.2778, abs=0.001)
+    assert d["feed_used_mm"] < d["feed_ceiling_mm"]
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()
