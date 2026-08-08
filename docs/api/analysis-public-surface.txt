@@ -701,6 +701,9 @@ pump.pump_hydraulic_power
 pump.pump_shaft_power
 pump.pump_specific_speed
 pump.pump_suction_specific_speed
+radioactivity.decay_constant_from_half_life
+radioactivity.remaining_activity
+radioactivity.time_for_activity_decay
 reactive_circuit.capacitor_stored_energy
 reactive_circuit.inductor_stored_energy
 reactive_circuit.lc_resonant_frequency

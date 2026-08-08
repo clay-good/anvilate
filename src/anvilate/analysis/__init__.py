@@ -434,6 +434,9 @@ modules:
 - :mod:`~anvilate.analysis.piezoelectric` — piezoelectric transducers: the charge a force
   generates Q = d33·F (direct effect — sensors, harvesters), the open-circuit voltage a stress
   produces V = g33·σ·t, and the force behind a measured charge F = Q/d33 (piezo load-washer readout)
+- :mod:`~anvilate.analysis.radioactivity` — radioactive decay: the decay constant λ = ln2/T½ a
+  half-life fixes, the activity remaining after a time A = A0·2^(−t/T½), and the storage time to
+  decay to a target activity t = T½·log2(A0/A)
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -1579,6 +1582,11 @@ from .pump import (
     pump_specific_speed,
     pump_suction_specific_speed,
 )
+from .radioactivity import (
+    decay_constant_from_half_life,
+    remaining_activity,
+    time_for_activity_decay,
+)
 from .reactive_circuit import (
     capacitor_stored_energy,
     inductor_stored_energy,
@@ -2398,6 +2406,9 @@ __all__ = [
     "piezoelectric_charge",
     "piezoelectric_open_circuit_voltage",
     "piezoelectric_force_from_charge",
+    "decay_constant_from_half_life",
+    "remaining_activity",
+    "time_for_activity_decay",
     "belt_length",
     "belt_wrap_angle",
     "crossed_belt_length",

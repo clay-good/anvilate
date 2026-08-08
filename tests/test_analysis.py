@@ -20853,6 +20853,51 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_radioactivity_decay_constant_remaining_activity_and_time():
+    from math import log, log2
+
+    from anvilate.analysis import (
+        decay_constant_from_half_life,
+        remaining_activity,
+        time_for_activity_decay,
+    )
+
+    # lambda = ln(2)/T_half; Co-60 5.27 yr.
+    lam = decay_constant_from_half_life(half_life=_q("5.27 yr"))
+    assert lam.to("1/yr").magnitude == pytest.approx(log(2) / 5.27, rel=1e-9)
+
+    # A = A0*2^(-t/T_half); after exactly one half-life the activity halves.
+    a_one = remaining_activity(
+        initial_activity=_q("100 GBq"), elapsed_time=_q("5.27 yr"), half_life=_q("5.27 yr")
+    )
+    assert a_one.to("GBq").magnitude == pytest.approx(50.0, rel=1e-9)
+    a_ten = remaining_activity(
+        initial_activity=_q("100 GBq"), elapsed_time=_q("10 yr"), half_life=_q("5.27 yr")
+    )
+    assert a_ten.to("GBq").magnitude == pytest.approx(100.0 * 2 ** (-10 / 5.27), rel=1e-9)
+
+    # Inverse: time to fall to a target activity, t = T_half*log2(A0/A).
+    t = time_for_activity_decay(
+        initial_activity=_q("100 GBq"), final_activity=_q("10 GBq"), half_life=_q("5.27 yr")
+    )
+    assert t.to("yr").magnitude == pytest.approx(5.27 * log2(10.0), rel=1e-9)
+    # Round-trip: the activity remaining at that time equals the target.
+    a_back = remaining_activity(
+        initial_activity=_q("100 GBq"), elapsed_time=t, half_life=_q("5.27 yr")
+    )
+    assert a_back.to("GBq").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    # Guardrails: positive half-life, target not above initial, dimensions checked.
+    with pytest.raises(ValueError, match="half_life must be positive"):
+        decay_constant_from_half_life(half_life=_q("0 s"))
+    with pytest.raises(ValueError, match="final_activity must not exceed"):
+        time_for_activity_decay(
+            initial_activity=_q("10 GBq"), final_activity=_q("100 GBq"), half_life=_q("5.27 yr")
+        )
+    with pytest.raises(ValueError, match="half_life must be a"):
+        decay_constant_from_half_life(half_life=_q("5.27 kg"))
+
+
 def test_piezoelectric_charge_voltage_and_force_inverse():
     from anvilate.analysis import (
         piezoelectric_charge,

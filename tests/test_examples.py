@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_cobalt60_source_decay_example_constant_activity_and_time():
+    namespace = runpy.run_path(str(_EXAMPLES / "cobalt60_source_decay.py"))
+    d = namespace["source_decay"]()
+    # Co-60 5.27 yr: lambda ~0.132/yr, ~26.8 GBq after 10 yr, ~17.5 yr to 10 GBq.
+    assert d["decay_constant_per_year"] == pytest.approx(0.1315, abs=0.001)
+    assert d["activity_after_10yr_gbq"] == pytest.approx(26.84, abs=0.05)
+    assert d["time_to_10pct_yr"] == pytest.approx(17.51, abs=0.05)
+
+
 def test_piezo_force_sensor_example_charge_voltage_and_force():
     namespace = runpy.run_path(str(_EXAMPLES / "piezo_force_sensor.py"))
     d = namespace["force_sensor"]()
