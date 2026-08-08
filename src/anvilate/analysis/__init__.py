@@ -451,9 +451,9 @@ modules:
 - :mod:`~anvilate.analysis.reliability` — Weibull reliability: the survival R(t) = exp(−(t/η)^β),
   the hazard rate h(t) = (β/η)·(t/η)^(β−1) (infant-mortality/constant/wear-out as β ≷ 1), and the
   mean time to failure η·Γ(1+1/β)
-- :mod:`~anvilate.analysis.radar` — Doppler radar: the two-way Doppler shift f_d = 2·v·f0/c of an
-  echo, the radial velocity a measured shift implies v = f_d·c/(2·f0) (speed gun), and the maximum
-  unambiguous velocity v_max = PRF·c/(4·f0) beyond which a pulse-Doppler radar aliases
+- :mod:`~anvilate.analysis.radar` — radar Doppler and range equation: the two-way Doppler shift
+  f_d = 2·v·f0/c and the speed-gun inverse, the maximum unambiguous velocity PRF·c/(4·f0) and range
+  c/(2·PRF), and the range equation — echo power P_t·G²·λ²·σ/((4π)³·R⁴) and detection range R_max
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1913,8 +1913,11 @@ from .quantum import (
     photoelectric_threshold_frequency,
 )
 from .radar import (
+    max_unambiguous_range,
     max_unambiguous_velocity,
     radar_doppler_shift,
+    radar_max_range,
+    radar_received_power,
     radial_velocity_from_doppler,
 )
 from .radiation_shielding import (
@@ -3240,6 +3243,9 @@ __all__ = [
     "radar_doppler_shift",
     "radial_velocity_from_doppler",
     "max_unambiguous_velocity",
+    "max_unambiguous_range",
+    "radar_received_power",
+    "radar_max_range",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

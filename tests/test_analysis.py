@@ -22334,6 +22334,81 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_radar_range_equation_received_power_and_unambiguous_range():
+    from math import pi
+
+    from anvilate.analysis import (
+        max_unambiguous_range,
+        radar_max_range,
+        radar_received_power,
+    )
+
+    p_t = _q("1e6 W")
+    lam = _q("0.03 m")
+    sigma = Quantity(magnitude=1.0, unit="m**2")
+
+    # Detection range R_max = [Pt*G^2*lam^2*sigma/((4pi)^3*Pmin)]^(1/4); ~46.1 km.
+    r_max = radar_max_range(
+        transmit_power=p_t,
+        antenna_gain=1000.0,
+        wavelength=lam,
+        target_cross_section=sigma,
+        min_detectable_power=_q("1e-13 W"),
+    )
+    expected = (1e6 * 1000.0**2 * 0.03**2 * 1.0 / ((4 * pi) ** 3 * 1e-13)) ** 0.25
+    assert r_max.to("m").magnitude == pytest.approx(expected, rel=1e-9)
+    assert r_max.to("km").magnitude == pytest.approx(46.15, abs=0.05)
+
+    # At the detection range the echo power equals the minimum detectable power (consistency).
+    echo = radar_received_power(
+        transmit_power=p_t,
+        antenna_gain=1000.0,
+        wavelength=lam,
+        target_cross_section=sigma,
+        target_range=r_max,
+    )
+    assert echo.to("W").magnitude == pytest.approx(1e-13, rel=1e-9)
+    # Echo power falls as the fourth power of range: doubling range cuts it 16x.
+    near = radar_received_power(
+        transmit_power=p_t,
+        antenna_gain=1000.0,
+        wavelength=lam,
+        target_cross_section=sigma,
+        target_range=_q("10 km"),
+    )
+    far = radar_received_power(
+        transmit_power=p_t,
+        antenna_gain=1000.0,
+        wavelength=lam,
+        target_cross_section=sigma,
+        target_range=_q("20 km"),
+    )
+    assert near.to("W").magnitude == pytest.approx(16.0 * far.to("W").magnitude, rel=1e-9)
+
+    # Max unambiguous range R_u = c/(2*PRF); 1 kHz -> ~149.9 km.
+    r_u = max_unambiguous_range(pulse_repetition_frequency=_q("1000 Hz"))
+    assert r_u.to("m").magnitude == pytest.approx(299792458.0 / 2000.0, rel=1e-12)
+    assert r_u.to("km").magnitude == pytest.approx(149.9, abs=0.1)
+
+    # Guardrails: positive gain and power.
+    with pytest.raises(ValueError, match="antenna_gain must be positive"):
+        radar_max_range(
+            transmit_power=p_t,
+            antenna_gain=0.0,
+            wavelength=lam,
+            target_cross_section=sigma,
+            min_detectable_power=_q("1e-13 W"),
+        )
+    with pytest.raises(ValueError, match="transmit_power must be a"):
+        radar_received_power(
+            transmit_power=_q("1e6 J"),
+            antenna_gain=1000.0,
+            wavelength=lam,
+            target_cross_section=sigma,
+            target_range=_q("10 km"),
+        )
+
+
 def test_universal_joint_speed_ratio_max_and_fluctuation():
     from math import cos, radians
 

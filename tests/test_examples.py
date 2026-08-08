@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_radar_range_budget_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "radar_range_budget.py"))
+    d = namespace["radar_range_budget"]()
+    # X-band radar: ~46 km detection, echo at 1e-13 W floor, ~150 km unambiguous.
+    assert d["detection_range_km"] == pytest.approx(46.15, abs=0.05)
+    assert d["echo_power_at_rmax_w"] == pytest.approx(1e-13, rel=1e-6)
+    assert d["unambiguous_range_km"] == pytest.approx(149.9, abs=0.1)
+
+
 def test_driveshaft_universal_joint_example():
     namespace = runpy.run_path(str(_EXAMPLES / "driveshaft_universal_joint.py"))
     d = namespace["joint_speed_ripple"]()
