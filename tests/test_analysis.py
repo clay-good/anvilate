@@ -20853,6 +20853,47 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_dc_dc_converter_buck_boost_and_buck_boost_topologies():
+    from anvilate.analysis import (
+        boost_output_voltage,
+        buck_boost_output_voltage,
+        buck_output_voltage,
+    )
+
+    v_in = _q("12 V")
+
+    # Buck steps down (V_out = D*V_in); boost steps up (V_out = V_in/(1-D)).
+    assert buck_output_voltage(input_voltage=v_in, duty_cycle=0.4).to("V").magnitude == (
+        pytest.approx(4.8, rel=1e-9)
+    )
+    assert boost_output_voltage(input_voltage=v_in, duty_cycle=0.4).to("V").magnitude == (
+        pytest.approx(20.0, rel=1e-9)
+    )
+    # Buck-boost = V_in*D/(1-D): steps down below D=0.5, up above.
+    assert buck_boost_output_voltage(input_voltage=v_in, duty_cycle=0.4).to("V").magnitude == (
+        pytest.approx(8.0, rel=1e-9)
+    )
+    assert buck_boost_output_voltage(input_voltage=v_in, duty_cycle=0.6).to("V").magnitude == (
+        pytest.approx(18.0, rel=1e-9)
+    )
+    # At D=0.5 the buck-boost is unity gain.
+    assert buck_boost_output_voltage(input_voltage=v_in, duty_cycle=0.5).to("V").magnitude == (
+        pytest.approx(12.0, rel=1e-9)
+    )
+
+    # Buck output is always <= input; boost always >= input.
+    assert buck_output_voltage(input_voltage=v_in, duty_cycle=0.9).to("V").magnitude < 12.0
+    assert boost_output_voltage(input_voltage=v_in, duty_cycle=0.1).to("V").magnitude > 12.0
+
+    # Guardrails: duty cycle strictly in (0, 1), dimensions checked.
+    with pytest.raises(ValueError, match="duty_cycle must be in"):
+        buck_output_voltage(input_voltage=v_in, duty_cycle=1.0)
+    with pytest.raises(ValueError, match="duty_cycle must be in"):
+        boost_output_voltage(input_voltage=v_in, duty_cycle=0.0)
+    with pytest.raises(ValueError, match="input_voltage must be a"):
+        buck_output_voltage(input_voltage=_q("12 A"), duty_cycle=0.4)
+
+
 def test_transformer_ideal_voltage_current_and_impedance_transformation():
     from anvilate.analysis import (
         transformer_reflected_impedance,

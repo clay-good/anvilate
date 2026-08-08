@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_dc_dc_converter_topologies_example_outputs():
+    namespace = runpy.run_path(str(_EXAMPLES / "dc_dc_converter_topologies.py"))
+    d = namespace["converter_outputs"]()
+    # 12 V at D=0.4: buck 4.8 V, boost 20 V, buck-boost 8 V.
+    assert d["buck_v"] == pytest.approx(4.8, rel=1e-9)
+    assert d["boost_v"] == pytest.approx(20.0, rel=1e-9)
+    assert d["buck_boost_v"] == pytest.approx(8.0, rel=1e-9)
+
+
 def test_transformer_impedance_match_example_ports():
     namespace = runpy.run_path(str(_EXAMPLES / "transformer_impedance_match.py"))
     d = namespace["transformer_ports"]()

@@ -219,6 +219,9 @@ modules:
 - :mod:`~anvilate.analysis.diode` — semiconductor-diode (Shockley) behavior: the thermal voltage
   V_T = k·T/q, the ideal-diode current I = I_s·(e^(V/(n·V_T)) − 1), and the forward voltage at a
   target current V = n·V_T·ln(I/I_s + 1) — the operating point of a rectifier or LED
+- :mod:`~anvilate.analysis.dc_dc_converter` — switching-regulator transfer functions (ideal, CCM):
+  the buck V_out = D·V_in (step-down), the boost V_out = V_in/(1−D) (step-up), and the buck-boost
+  V_out = V_in·D/(1−D) (either), all set by the duty cycle D
 - :mod:`~anvilate.analysis.magnetics` — magnetic actuators: the solenoid field B = μ₀·n·I,
   the Maxwell magnetic pressure p = B²/(2·μ₀), and the electromagnet holding force
   F = B²·A/(2·μ₀) — for clamps, lifting magnets, and magnetic bearings
@@ -1011,6 +1014,11 @@ from .curved_beam import (
     thin_ring_diametral_deflection,
     thin_ring_max_moment,
     trapezoidal_curved_beam_stress,
+)
+from .dc_dc_converter import (
+    boost_output_voltage,
+    buck_boost_output_voltage,
+    buck_output_voltage,
 )
 from .diode import (
     diode_current,
@@ -2087,6 +2095,9 @@ __all__ = [
     "thermal_voltage",
     "diode_current",
     "diode_voltage",
+    "buck_output_voltage",
+    "boost_output_voltage",
+    "buck_boost_output_voltage",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",
