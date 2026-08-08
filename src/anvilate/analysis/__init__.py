@@ -210,7 +210,9 @@ modules:
 - :mod:`~anvilate.analysis.rocket_propulsion` — ideal rocket nozzle and mission: the exhaust
   velocity v_e = √(2γ/(γ−1)·R·T_c·(1 − (p_e/p_c)^((γ−1)/γ))), the thrust
   F = ṁ·v_e + (p_e − p_a)·A_e and specific impulse I_sp = F/(ṁ·g₀), and the Tsiolkovsky
-  Δv = I_sp·g₀·ln(m₀/m_f) with the propellant fraction ζ = 1 − exp(−Δv/(I_sp·g₀)) it needs
+  Δv = I_sp·g₀·ln(m₀/m_f) with the propellant fraction ζ = 1 − exp(−Δv/(I_sp·g₀)) it needs; and
+  the performance split — characteristic velocity c* = p_c·A_t/ṁ (chamber), thrust coefficient
+  C_F = F/(p_c·A_t) (nozzle), and the thrust F = C_F·p_c·A_t a throat sizes to
 - :mod:`~anvilate.analysis.orbital_mechanics` — two-body coasting and transfers: the circular
   orbital speed v = √(μ/r), the Kepler period T = 2π·√(r³/μ), the escape velocity
   v_esc = √(2μ/r) = √2·v_circ, the Hohmann two-burn transfer Δv's and coast time t = π·√(a³/μ),
@@ -2021,11 +2023,14 @@ from .road_curve import (
     stopping_sight_distance,
 )
 from .rocket_propulsion import (
+    characteristic_velocity,
     rocket_delta_v,
     rocket_exhaust_velocity,
     rocket_propellant_mass_fraction,
     rocket_specific_impulse,
     rocket_thrust,
+    thrust_coefficient,
+    thrust_from_coefficient,
 )
 from .rolling import (
     maximum_draft,
@@ -2841,6 +2846,9 @@ __all__ = [
     "rocket_specific_impulse",
     "rocket_delta_v",
     "rocket_propellant_mass_fraction",
+    "characteristic_velocity",
+    "thrust_coefficient",
+    "thrust_from_coefficient",
     "maximum_draft",
     "rolling_contact_length",
     "rolling_force",

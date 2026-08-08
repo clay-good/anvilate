@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_rocket_engine_performance_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "rocket_engine_performance.py"))
+    d = namespace["engine_performance"]()
+    # 7 MPa, 0.01 m^2 throat: c* 1750 m/s, C_F ~1.43, 100 kN reproduced.
+    assert d["characteristic_velocity_m_s"] == pytest.approx(1750.0, rel=1e-9)
+    assert d["thrust_coefficient"] == pytest.approx(1.42857, abs=1e-4)
+    assert d["thrust_kn"] == pytest.approx(100.0, rel=1e-9)
+
+
 def test_hydrogen_balmer_line_example():
     namespace = runpy.run_path(str(_EXAMPLES / "hydrogen_balmer_line.py"))
     d = namespace["balmer_alpha_line"]()

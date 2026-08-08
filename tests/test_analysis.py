@@ -22334,6 +22334,44 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_rocket_characteristic_velocity_and_thrust_coefficient():
+    from anvilate.analysis import (
+        characteristic_velocity,
+        thrust_coefficient,
+        thrust_from_coefficient,
+    )
+
+    p_c = _q("7 MPa")
+    a_t = Quantity(magnitude=0.01, unit="m**2")
+
+    # c* = p_c*A_t/mdot; 7 MPa, 0.01 m^2, 40 kg/s -> 1750 m/s.
+    c_star = characteristic_velocity(
+        chamber_pressure=p_c, throat_area=a_t, mass_flow_rate=_q("40 kg/s")
+    )
+    assert c_star.to("m/s").magnitude == pytest.approx(7e6 * 0.01 / 40.0, rel=1e-9)
+    assert c_star.to("m/s").magnitude == pytest.approx(1750.0, rel=1e-9)
+
+    # C_F = F/(p_c*A_t); 100 kN -> ~1.4286.
+    c_f = thrust_coefficient(thrust=_q("100 kN"), chamber_pressure=p_c, throat_area=a_t)
+    assert c_f == pytest.approx(1e5 / (7e6 * 0.01), rel=1e-9)
+    assert c_f == pytest.approx(1.42857, abs=1e-4)
+
+    # Forward F = C_F*p_c*A_t round-trips the thrust.
+    thrust = thrust_from_coefficient(thrust_coefficient=c_f, chamber_pressure=p_c, throat_area=a_t)
+    assert thrust.to("N").magnitude == pytest.approx(1e5, rel=1e-9)
+
+    # The product c* * C_F is the effective exhaust velocity (Isp*g0).
+    assert c_star.to("m/s").magnitude * c_f == pytest.approx(2500.0, rel=1e-9)
+
+    # Guardrails: positive inputs and correct dimensions.
+    with pytest.raises(ValueError, match="mass_flow_rate must be positive"):
+        characteristic_velocity(chamber_pressure=p_c, throat_area=a_t, mass_flow_rate=_q("0 kg/s"))
+    with pytest.raises(ValueError, match="thrust_coefficient must be positive"):
+        thrust_from_coefficient(thrust_coefficient=0.0, chamber_pressure=p_c, throat_area=a_t)
+    with pytest.raises(ValueError, match="chamber_pressure must be a"):
+        thrust_coefficient(thrust=_q("100 kN"), chamber_pressure=_q("7 m"), throat_area=a_t)
+
+
 def test_bohr_energy_levels_orbit_radius_and_rydberg_wavelength():
     from anvilate.analysis import (
         bohr_energy_level,

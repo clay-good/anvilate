@@ -974,6 +974,9 @@ rocket_propulsion.rocket_thrust
 rocket_propulsion.rocket_specific_impulse
 rocket_propulsion.rocket_delta_v
 rocket_propulsion.rocket_propellant_mass_fraction
+rocket_propulsion.characteristic_velocity
+rocket_propulsion.thrust_coefficient
+rocket_propulsion.thrust_from_coefficient
 rolling.maximum_draft
 rolling.rolling_contact_length
 rolling.rolling_force

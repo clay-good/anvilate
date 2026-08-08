@@ -14,6 +14,13 @@ momentum, F = ṁ·v_e + (p_e − p_a)·A_e — the jet momentum ṁ·v_e plus t
 exit pressure differs from the ambient p_a, which is why an engine makes more thrust in vacuum than
 at sea level. Dividing thrust by the propellant weight flow gives the specific impulse
 I_sp = F/(ṁ·g₀), the seconds of thrust per unit weight of propellant — the headline efficiency.
+
+Performance splits cleanly into two factors. The characteristic velocity c* = p_c·A_t/ṁ measures the
+combustion chamber alone — how much chamber pressure the propellant makes for a given throat flow —
+while the thrust coefficient C_F = F/(p_c·A_t) measures the nozzle's conversion of that pressure
+into thrust. Their product is the effective exhaust velocity (c* · C_F = I_sp · g₀), so a test
+firing that measures thrust, chamber pressure, and flow can attribute a shortfall to the chamber or
+the nozzle.
 """
 
 from __future__ import annotations
@@ -25,11 +32,14 @@ from ..units import Quantity
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
 __all__ = [
+    "characteristic_velocity",
     "rocket_delta_v",
     "rocket_exhaust_velocity",
     "rocket_propellant_mass_fraction",
     "rocket_specific_impulse",
     "rocket_thrust",
+    "thrust_coefficient",
+    "thrust_from_coefficient",
 ]
 
 
@@ -182,6 +192,78 @@ def rocket_propellant_mass_fraction(*, delta_v: Quantity, specific_impulse: Quan
     if isp <= 0:
         raise ValueError("specific_impulse must be positive")
     return 1.0 - exp(-dv / (isp * STANDARD_GRAVITY_M_PER_S2))
+
+
+def characteristic_velocity(
+    *, chamber_pressure: Quantity, throat_area: Quantity, mass_flow_rate: Quantity
+) -> Quantity:
+    """The characteristic velocity, c* = p_c·A_t/ṁ.
+
+    A measure of the combustion chamber's performance alone, independent of the nozzle: from the
+    ``chamber_pressure`` p_c, the ``throat_area`` A_t, and the ``mass_flow_rate`` ṁ, c* = p_c·A_t/ṁ.
+    A higher c* means the propellant makes more chamber pressure per unit of throat flow — better
+    combustion. Returns the characteristic velocity in m/s.
+    """
+    _check(chamber_pressure, "[pressure]", "chamber_pressure")
+    _check(throat_area, "[area]", "throat_area")
+    _check(mass_flow_rate, "[mass]/[time]", "mass_flow_rate")
+    p_c = chamber_pressure.to("Pa").magnitude
+    a_t = throat_area.to("m**2").magnitude
+    mdot = mass_flow_rate.to("kg/s").magnitude
+    if p_c <= 0:
+        raise ValueError("chamber_pressure must be positive")
+    if a_t <= 0:
+        raise ValueError("throat_area must be positive")
+    if mdot <= 0:
+        raise ValueError("mass_flow_rate must be positive")
+    return Quantity(magnitude=p_c * a_t / mdot, unit="m/s")
+
+
+def thrust_coefficient(
+    *, thrust: Quantity, chamber_pressure: Quantity, throat_area: Quantity
+) -> float:
+    """The nozzle thrust coefficient, C_F = F/(p_c·A_t).
+
+    A measure of how well the nozzle turns chamber pressure into thrust: from the ``thrust`` F, the
+    ``chamber_pressure`` p_c, and the ``throat_area`` A_t, C_F = F/(p_c·A_t). It runs from about 1.2
+    (poorly expanded) to near 1.9 (a large vacuum bell), and multiplied by c* gives the effective
+    exhaust velocity. Returns the thrust coefficient as a plain float.
+    """
+    _check(thrust, "[force]", "thrust")
+    _check(chamber_pressure, "[pressure]", "chamber_pressure")
+    _check(throat_area, "[area]", "throat_area")
+    f = thrust.to("N").magnitude
+    p_c = chamber_pressure.to("Pa").magnitude
+    a_t = throat_area.to("m**2").magnitude
+    if f <= 0:
+        raise ValueError("thrust must be positive")
+    if p_c <= 0:
+        raise ValueError("chamber_pressure must be positive")
+    if a_t <= 0:
+        raise ValueError("throat_area must be positive")
+    return f / (p_c * a_t)
+
+
+def thrust_from_coefficient(
+    *, thrust_coefficient: float, chamber_pressure: Quantity, throat_area: Quantity
+) -> Quantity:
+    """The thrust from the coefficient, F = C_F·p_c·A_t.
+
+    The thrust a nozzle produces, from the ``thrust_coefficient`` C_F, the ``chamber_pressure`` p_c,
+    and the ``throat_area`` A_t: F = C_F·p_c·A_t. This is how a design sizes the throat for a target
+    thrust once the chamber pressure and expected C_F are set. Returns the thrust in N.
+    """
+    _check(chamber_pressure, "[pressure]", "chamber_pressure")
+    _check(throat_area, "[area]", "throat_area")
+    p_c = chamber_pressure.to("Pa").magnitude
+    a_t = throat_area.to("m**2").magnitude
+    if thrust_coefficient <= 0:
+        raise ValueError("thrust_coefficient must be positive")
+    if p_c <= 0:
+        raise ValueError("chamber_pressure must be positive")
+    if a_t <= 0:
+        raise ValueError("throat_area must be positive")
+    return Quantity(magnitude=thrust_coefficient * p_c * a_t, unit="N")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
