@@ -22334,6 +22334,50 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_second_order_step_response_overshoot_peak_and_settling():
+    from math import exp, pi, sqrt
+
+    from anvilate.analysis import (
+        step_response_peak_time,
+        step_response_percent_overshoot,
+        step_response_settling_time,
+    )
+
+    # omega_n = 10 rad/s -> f_n = 10/(2*pi) Hz.
+    fn = Quantity(magnitude=10.0 / (2 * pi), unit="Hz")
+
+    # Percent overshoot depends only on zeta; 0.5 -> ~16.3%.
+    po = step_response_percent_overshoot(damping_ratio=0.5)
+    assert po == pytest.approx(100 * exp(-0.5 * pi / sqrt(1 - 0.25)), rel=1e-9)
+    assert po == pytest.approx(16.30, abs=0.05)
+    # More damping means less overshoot.
+    assert step_response_percent_overshoot(damping_ratio=0.7) < po
+    assert step_response_percent_overshoot(damping_ratio=0.7) < 5.0
+
+    # Peak time t_p = pi/(omega_n*sqrt(1-zeta^2)); ~0.363 s.
+    tp = step_response_peak_time(natural_frequency=fn, damping_ratio=0.5)
+    assert tp.to("s").magnitude == pytest.approx(pi / (10.0 * sqrt(1 - 0.25)), rel=1e-9)
+    assert tp.to("s").magnitude == pytest.approx(0.3628, abs=0.001)
+
+    # Settling time t_s = 4/(zeta*omega_n); ~0.8 s.
+    ts = step_response_settling_time(natural_frequency=fn, damping_ratio=0.5)
+    assert ts.to("s").magnitude == pytest.approx(4.0 / (0.5 * 10.0), rel=1e-9)
+    assert ts.to("s").magnitude == pytest.approx(0.8, rel=1e-9)
+    # Heavier damping settles faster.
+    ts_heavy = step_response_settling_time(natural_frequency=fn, damping_ratio=0.8)
+    assert ts_heavy.to("s").magnitude < ts.to("s").magnitude
+
+    # Guardrails: underdamped (0<zeta<1), positive natural frequency.
+    with pytest.raises(ValueError, match="damping_ratio must lie in"):
+        step_response_percent_overshoot(damping_ratio=1.0)
+    with pytest.raises(ValueError, match="damping_ratio must be positive"):
+        step_response_percent_overshoot(damping_ratio=0.0)
+    with pytest.raises(ValueError, match="natural_frequency must be positive"):
+        step_response_peak_time(
+            natural_frequency=Quantity(magnitude=0.0, unit="Hz"), damping_ratio=0.5
+        )
+
+
 def test_process_capability_cp_cpk_and_defect_rate():
     from math import erf, sqrt
 

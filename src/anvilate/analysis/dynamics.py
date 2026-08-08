@@ -39,6 +39,9 @@ __all__ = [
     "fixed_fixed_center_mass_frequency",
     "string_natural_frequency",
     "damped_natural_frequency",
+    "step_response_percent_overshoot",
+    "step_response_settling_time",
+    "step_response_peak_time",
     "logarithmic_decrement",
     "quality_factor",
     "critical_damping_coefficient",
@@ -343,6 +346,55 @@ def damped_natural_frequency(*, natural_frequency: Quantity, damping_ratio: floa
     if fn <= 0:
         raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
     return Quantity(magnitude=fn * sqrt(1.0 - zeta**2), unit="Hz")
+
+
+def step_response_percent_overshoot(*, damping_ratio: float) -> float:
+    """The step-response percent overshoot PO = 100·exp(−ζπ/√(1 − ζ²)).
+
+    How far an underdamped second-order system's step response shoots past its final value, as a
+    percentage, from the ``damping_ratio`` ζ: PO = 100·exp(−ζπ/√(1 − ζ²)). It depends only on ζ —
+    about 16% at ζ = 0.5, under 5% by ζ = 0.7 — so ζ is chosen to trade responsiveness against
+    overshoot. Returns the percent overshoot as a plain float.
+    """
+    zeta = _check_damping_ratio(damping_ratio)
+    if zeta == 0.0:
+        raise ValueError("damping_ratio must be positive for a finite overshoot")
+    return 100.0 * exp(-zeta * pi / sqrt(1.0 - zeta**2))
+
+
+def step_response_settling_time(*, natural_frequency: Quantity, damping_ratio: float) -> Quantity:
+    """The 2% settling time t_s = 4/(ζ·ω_n) of a second-order step response.
+
+    The time for an underdamped system's step response to settle within 2% of its final value, from
+    the undamped ``natural_frequency`` f_n (ω_n = 2π·f_n) and the ``damping_ratio`` ζ:
+    t_s ≈ 4/(ζ·ω_n). More damping or a higher natural frequency settles it faster. Returns the
+    settling time in s.
+    """
+    _require(natural_frequency, "[frequency]", "natural_frequency")
+    zeta = _check_damping_ratio(damping_ratio)
+    fn = natural_frequency.to("Hz").magnitude
+    if fn <= 0:
+        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+    if zeta == 0.0:
+        raise ValueError("damping_ratio must be positive for a finite settling time")
+    omega_n = 2.0 * pi * fn
+    return Quantity(magnitude=4.0 / (zeta * omega_n), unit="s")
+
+
+def step_response_peak_time(*, natural_frequency: Quantity, damping_ratio: float) -> Quantity:
+    """The peak time t_p = π/(ω_n·√(1 − ζ²)) of a second-order step response.
+
+    The time an underdamped system's step response takes to reach its first (highest) peak, from the
+    undamped ``natural_frequency`` f_n (ω_n = 2π·f_n) and the ``damping_ratio`` ζ:
+    t_p = π/(ω_n·√(1 − ζ²)) = π/ω_d, one half-period of the damped oscillation. Returns t_p in s.
+    """
+    _require(natural_frequency, "[frequency]", "natural_frequency")
+    zeta = _check_damping_ratio(damping_ratio)
+    fn = natural_frequency.to("Hz").magnitude
+    if fn <= 0:
+        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+    omega_n = 2.0 * pi * fn
+    return Quantity(magnitude=pi / (omega_n * sqrt(1.0 - zeta**2)), unit="s")
 
 
 def logarithmic_decrement(*, damping_ratio: float) -> float:

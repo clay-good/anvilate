@@ -632,7 +632,8 @@ modules:
   multi-mass combination, distributed-mass beam
   fundamentals, taut-string/cable transverse modes, disc-on-shaft and two-rotor
   drivetrain torsional modes,
-  and damped-vibration measures (damped frequency, log decrement, quality factor,
+  and damped-vibration measures (damped frequency, the second-order step-response
+  percent overshoot / settling time / peak time, log decrement, quality factor,
   critical damping coefficient, isolator transmissibility and its design inverse
   (the mount natural frequency and static deflection a target isolation needs),
   forced-response dynamic
@@ -1348,6 +1349,9 @@ from .dynamics import (
     simply_supported_plate_fundamental_frequency,
     solid_disc_polar_mass_moment,
     spring_surge_frequency,
+    step_response_peak_time,
+    step_response_percent_overshoot,
+    step_response_settling_time,
     string_natural_frequency,
     torsional_natural_frequency,
     transmissibility,
@@ -3281,6 +3285,9 @@ __all__ = [
     "fixed_fixed_center_mass_frequency",
     "string_natural_frequency",
     "damped_natural_frequency",
+    "step_response_percent_overshoot",
+    "step_response_settling_time",
+    "step_response_peak_time",
     "logarithmic_decrement",
     "quality_factor",
     "critical_damping_coefficient",

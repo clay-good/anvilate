@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_servo_step_response_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "servo_step_response.py"))
+    d = namespace["servo_step_response"]()
+    # zeta=0.5, omega_n=10: ~16.3% overshoot, 0.363 s peak, 0.8 s settle.
+    assert d["percent_overshoot"] == pytest.approx(16.30, abs=0.05)
+    assert d["peak_time_s"] == pytest.approx(0.3628, abs=0.001)
+    assert d["settling_time_s"] == pytest.approx(0.8, rel=1e-6)
+
+
 def test_machining_process_capability_example():
     namespace = runpy.run_path(str(_EXAMPLES / "machining_process_capability.py"))
     d = namespace["shaft_capability"]()
