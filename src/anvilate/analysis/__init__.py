@@ -303,6 +303,9 @@ modules:
   inverse-square cosine illuminance, the lumen method (room illuminance and
   its luminaire-count inverse), the room cavity ratio that sets the coefficient
   of utilization, and installed lighting power density
+- :mod:`~anvilate.analysis.optics` — geometric optics for optomechanical design: the thin-lens
+  image distance d_i = f·d_o/(d_o − f), the transverse magnification m = −d_i/d_o, and the
+  Rayleigh diffraction limit θ = 1.22·λ/D on resolving power
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1370,6 +1373,11 @@ from .open_channel import (
     specific_energy,
     trapezoidal_channel_properties,
     triangular_weir_flow,
+)
+from .optics import (
+    diffraction_limited_angular_resolution,
+    lens_transverse_magnification,
+    thin_lens_image_distance,
 )
 from .orbital_mechanics import (
     circular_orbit_velocity,
@@ -2546,6 +2554,9 @@ __all__ = [
     "lumen_method_luminaire_count",
     "room_cavity_ratio",
     "lighting_power_density",
+    "thin_lens_image_distance",
+    "lens_transverse_magnification",
+    "diffraction_limited_angular_resolution",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

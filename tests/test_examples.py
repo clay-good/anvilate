@@ -1095,6 +1095,17 @@ def test_doppler_speed_gun_example_recovers_the_source_speed():
     assert d["mach_cone_angle_deg"] == pytest.approx(30.0, abs=0.01)
 
 
+def test_camera_lens_and_resolution_example_image_and_diffraction_limit():
+    namespace = runpy.run_path(str(_EXAMPLES / "camera_lens_and_resolution.py"))
+    d = namespace["lens_system"]()
+    # 50 mm lens, 2 m object -> image ~51.3 mm behind the lens, magnification ~-0.026.
+    assert d["image_distance_mm"] == pytest.approx(51.28, abs=0.05)
+    assert d["magnification"] == pytest.approx(-0.02564, abs=0.0005)
+    assert d["magnification"] < 0
+    # Diffraction limit at 550 nm, 25 mm aperture ~5.5 arcsec.
+    assert d["resolution_arcsec"] == pytest.approx(5.54, abs=0.05)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

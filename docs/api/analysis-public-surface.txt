@@ -650,6 +650,9 @@ open_channel.rectangular_weir_flow
 open_channel.specific_energy
 open_channel.trapezoidal_channel_properties
 open_channel.triangular_weir_flow
+optics.thin_lens_image_distance
+optics.lens_transverse_magnification
+optics.diffraction_limited_angular_resolution
 orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity

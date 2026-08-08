@@ -16006,6 +16006,48 @@ def test_doppler_shift_velocity_inverse_and_mach_cone():
         )
 
 
+def test_optics_thin_lens_magnification_and_diffraction_limit():
+    from anvilate.analysis import (
+        diffraction_limited_angular_resolution,
+        lens_transverse_magnification,
+        thin_lens_image_distance,
+    )
+
+    # Thin lens d_i = f*d_o/(d_o-f); 50 mm lens, 200 mm object -> 66.67 mm image.
+    d_i = thin_lens_image_distance(focal_length=_q("50 mm"), object_distance=_q("200 mm"))
+    assert d_i.to("mm").magnitude == pytest.approx(50 * 200 / (200 - 50), rel=1e-9)
+    # An object inside the focal length gives a virtual (negative) image.
+    d_virtual = thin_lens_image_distance(focal_length=_q("50 mm"), object_distance=_q("30 mm"))
+    assert d_virtual.to("mm").magnitude < 0
+
+    # Magnification m = -d_i/d_o; here -66.67/200 = -0.333 (inverted, reduced).
+    m = lens_transverse_magnification(object_distance=_q("200 mm"), image_distance=d_i)
+    assert m == pytest.approx(-d_i.to("mm").magnitude / 200, rel=1e-9)
+    assert m < 0  # real image is inverted
+
+    # Rayleigh diffraction limit theta = 1.22*lambda/D; 550 nm over 50 mm -> ~2.77 arcsec.
+    theta = diffraction_limited_angular_resolution(
+        wavelength=_q("550 nm"), aperture_diameter=_q("50 mm")
+    )
+    assert theta.to("rad").magnitude == pytest.approx(1.22 * 550e-9 / 0.05, rel=1e-9)
+    assert theta.to("arcsecond").magnitude == pytest.approx(2.768, abs=0.005)
+    # A larger aperture resolves a finer (smaller) angle.
+    theta_big = diffraction_limited_angular_resolution(
+        wavelength=_q("550 nm"), aperture_diameter=_q("100 mm")
+    )
+    assert theta_big.to("rad").magnitude < theta.to("rad").magnitude
+
+    # Guardrails: object at the focus images at infinity, positive inputs, dimensions checked.
+    with pytest.raises(ValueError, match="object_distance must differ from focal_length"):
+        thin_lens_image_distance(focal_length=_q("50 mm"), object_distance=_q("50 mm"))
+    with pytest.raises(ValueError, match="aperture_diameter must be positive"):
+        diffraction_limited_angular_resolution(
+            wavelength=_q("550 nm"), aperture_diameter=_q("0 mm")
+        )
+    with pytest.raises(ValueError, match="focal_length must be a"):
+        thin_lens_image_distance(focal_length=_q("50 s"), object_distance=_q("200 mm"))
+
+
 def test_broaching_teeth_force_and_pull_capacity():
     from anvilate.analysis import (
         broaching_cutting_force,
