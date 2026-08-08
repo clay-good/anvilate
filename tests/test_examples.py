@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_receiver_noise_figure_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "receiver_noise_figure.py"))
+    d = namespace["receiver_chain"]()
+    # LNA (1 dB, 20 dB gain) then mixer (10 dB): ~1.3 dB; reversed ~10 dB.
+    assert d["lna_first_nf_db"] == pytest.approx(1.3, abs=0.1)
+    assert d["lna_first_noise_temp_k"] == pytest.approx(101.0, abs=2.0)
+    assert d["mixer_first_nf_db"] == pytest.approx(10.0, abs=0.1)
+
+
 def test_satellite_dish_antenna_example():
     namespace = runpy.run_path(str(_EXAMPLES / "satellite_dish_antenna.py"))
     d = namespace["dish_design"]()

@@ -22,6 +22,9 @@ modules:
 - :mod:`~anvilate.analysis.channel_capacity` — information-theory link capacity: the Shannon-Hartley
   limit C = B·log2(1+SNR), the bandwidth a target capacity needs B = C/log2(1+SNR), and the
   noiseless Nyquist M-level capacity 2·B·log2(M) (bits per second)
+- :mod:`~anvilate.analysis.noise_figure` — RF receiver noise: the linear noise factor from a dB
+  figure, the Friis cascade F = F1 + (F2−1)/G1 + … (why the first stage dominates), and the
+  equivalent noise temperature T_e = (F−1)·T0
 - :mod:`~anvilate.analysis.arrhenius` — thermally-activated reaction rates: the rate constant
   k = A·e^(−Ea/RT), the acceleration factor k2/k1 = e^((Ea/R)(1/T1−1/T2)) between two temperatures
   (accelerated life testing), and the activation energy Ea extracted from two measured rates
@@ -1537,6 +1540,11 @@ from .nernst import (
     nernst_reaction_quotient,
     nernst_slope,
 )
+from .noise_figure import (
+    cascade_noise_factor,
+    equivalent_noise_temperature,
+    noise_factor_from_figure,
+)
 from .o_ring import (
     o_ring_gland_fill_fraction,
     o_ring_squeeze_fraction,
@@ -2416,6 +2424,9 @@ __all__ = [
     "shannon_capacity",
     "shannon_required_bandwidth",
     "nyquist_channel_capacity",
+    "noise_factor_from_figure",
+    "cascade_noise_factor",
+    "equivalent_noise_temperature",
     "arrhenius_rate_constant",
     "arrhenius_rate_ratio",
     "arrhenius_activation_energy",

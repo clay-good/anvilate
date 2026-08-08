@@ -682,6 +682,9 @@ nds_timber.nds_load_duration_factor
 nernst.nernst_potential
 nernst.nernst_reaction_quotient
 nernst.nernst_slope
+noise_figure.cascade_noise_factor
+noise_figure.equivalent_noise_temperature
+noise_figure.noise_factor_from_figure
 o_ring.o_ring_gland_fill_fraction
 o_ring.o_ring_squeeze_fraction
 o_ring.o_ring_stretch_fraction

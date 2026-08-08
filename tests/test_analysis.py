@@ -20985,6 +20985,49 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_noise_figure_factor_cascade_and_temperature():
+    from anvilate.analysis import (
+        cascade_noise_factor,
+        equivalent_noise_temperature,
+        noise_factor_from_figure,
+    )
+
+    # F = 10^(NF/10); 3 dB -> ~2, 0 dB -> 1.
+    assert noise_factor_from_figure(noise_figure_db=3.0) == pytest.approx(10**0.3, rel=1e-9)
+    assert noise_factor_from_figure(noise_figure_db=0.0) == pytest.approx(1.0, rel=1e-12)
+
+    # Friis cascade: LNA (F=1.26, G=100) then mixer (F=10) -> ~1.35, first stage dominates.
+    f1 = noise_factor_from_figure(noise_figure_db=1.0)
+    f2 = noise_factor_from_figure(noise_figure_db=10.0)
+    total = cascade_noise_factor(stage_noise_factors=[f1, f2], stage_gains=[100.0, 100.0])
+    assert total == pytest.approx(f1 + (f2 - 1) / 100.0, rel=1e-9)
+    # Total is barely above the first stage's own factor.
+    assert total < f1 + 0.15
+    # Reversing the order (noisy mixer first) is far worse.
+    reversed_total = cascade_noise_factor(stage_noise_factors=[f2, f1], stage_gains=[100.0, 100.0])
+    assert reversed_total > total
+    assert reversed_total == pytest.approx(f2 + (f1 - 1) / 100.0, rel=1e-9)
+
+    # Equivalent noise temperature T_e = (F-1)*T0; default T0 = 290 K.
+    te = equivalent_noise_temperature(noise_factor=noise_factor_from_figure(noise_figure_db=3.0))
+    assert te.to("K").magnitude == pytest.approx((10**0.3 - 1) * 290, rel=1e-9)
+    # A custom reference temperature scales it.
+    te77 = equivalent_noise_temperature(
+        noise_factor=2.0, reference_temperature=Quantity(magnitude=77.0, unit="K")
+    )
+    assert te77.to("K").magnitude == pytest.approx(1.0 * 77.0, rel=1e-9)
+
+    # Guardrails: non-negative NF, factor>=1, matching list lengths, non-empty chain.
+    with pytest.raises(ValueError, match="noise_figure_db must be non-negative"):
+        noise_factor_from_figure(noise_figure_db=-1.0)
+    with pytest.raises(ValueError, match="noise_factor must be at least 1"):
+        equivalent_noise_temperature(noise_factor=0.5)
+    with pytest.raises(ValueError, match="one gain per stage"):
+        cascade_noise_factor(stage_noise_factors=[f1, f2], stage_gains=[100.0])
+    with pytest.raises(ValueError, match="must not be empty"):
+        cascade_noise_factor(stage_noise_factors=[], stage_gains=[])
+
+
 def test_antenna_aperture_gain_beamwidth_and_dish_sizing():
     from math import pi, sqrt
 
