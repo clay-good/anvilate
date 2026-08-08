@@ -20985,6 +20985,43 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_fresnel_reflectance_slab_transmittance_and_brewster_angle():
+    from math import atan, degrees
+
+    from anvilate.analysis import (
+        brewster_angle,
+        fresnel_normal_reflectance,
+        slab_transmittance,
+    )
+
+    # R = ((n1-n2)/(n1+n2))^2; air (1.0) to glass (1.5) -> 0.04.
+    r = fresnel_normal_reflectance(incident_index=1.0, transmitted_index=1.5)
+    assert r == pytest.approx(((1.0 - 1.5) / (1.0 + 1.5)) ** 2, rel=1e-12)
+    assert r == pytest.approx(0.04, rel=1e-9)
+    # Reflectance is symmetric in the two indices.
+    assert fresnel_normal_reflectance(incident_index=1.5, transmitted_index=1.0) == pytest.approx(
+        r, rel=1e-12
+    )
+    # A higher-index medium reflects more.
+    assert fresnel_normal_reflectance(incident_index=1.0, transmitted_index=2.4) > r
+
+    # Slab transmittance = (1-R)^2 for the two faces; ~0.9216 for glass.
+    t = slab_transmittance(incident_index=1.0, slab_index=1.5)
+    assert t == pytest.approx((1 - 0.04) ** 2, rel=1e-9)
+    assert t == pytest.approx(0.9216, rel=1e-9)
+
+    # Brewster angle theta_B = arctan(n2/n1); ~56.3 deg for air to glass.
+    b = brewster_angle(incident_index=1.0, transmitted_index=1.5)
+    assert b == pytest.approx(degrees(atan(1.5 / 1.0)), rel=1e-12)
+    assert b == pytest.approx(56.31, abs=0.01)
+
+    # Guardrails: positive indices.
+    with pytest.raises(ValueError, match="incident_index must be positive"):
+        fresnel_normal_reflectance(incident_index=0.0, transmitted_index=1.5)
+    with pytest.raises(ValueError, match="transmitted_index must be positive"):
+        brewster_angle(incident_index=1.0, transmitted_index=0.0)
+
+
 def test_cyclotron_frequency_larmor_radius_and_mass_inverse():
     from math import pi
 

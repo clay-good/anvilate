@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_glass_surface_reflection_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "glass_surface_reflection.py"))
+    d = namespace["glass_reflection"]()
+    # Air-glass (1.5): 4% surface reflectance, ~92% slab transmittance, ~56 deg Brewster.
+    assert d["surface_reflectance_percent"] == pytest.approx(4.0, rel=1e-9)
+    assert d["slab_transmittance_percent"] == pytest.approx(92.16, abs=0.01)
+    assert d["brewster_angle_deg"] == pytest.approx(56.31, abs=0.01)
+
+
 def test_cyclotron_mass_spectrometer_example():
     namespace = runpy.run_path(str(_EXAMPLES / "cyclotron_mass_spectrometer.py"))
     d = namespace["mass_spectrometry"]()

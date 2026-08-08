@@ -269,6 +269,9 @@ modules:
 - :mod:`~anvilate.analysis.thin_film` — anti-reflection coatings: the quarter-wave thickness
   t = λ/(4n) that cancels a reflection, the ideal coating index n = √(n_medium·n_substrate), and the
   wavelength λ = 4·n·t a given coating is tuned to
+- :mod:`~anvilate.analysis.fresnel` — surface reflection: the normal-incidence reflectance
+  R = ((n1−n2)/(n1+n2))² (4% at an air-glass face), the two-surface slab transmittance (1−R)², and
+  the Brewster polarizing angle arctan(n2/n1) — the bare reflection AR coatings fight
 - :mod:`~anvilate.analysis.magnetics` — magnetic actuators: the solenoid field B = μ₀·n·I,
   the Maxwell magnetic pressure p = B²/(2·μ₀), and the electromagnet holding force
   F = B²·A/(2·μ₀) — for clamps, lifting magnets, and magnetic bearings
@@ -1348,6 +1351,11 @@ from .fracture import (
     plane_strain_thickness_requirement,
     stress_intensity_factor,
 )
+from .fresnel import (
+    brewster_angle,
+    fresnel_normal_reflectance,
+    slab_transmittance,
+)
 from .gas_compression import (
     adiabatic_compression_power,
     adiabatic_discharge_temperature,
@@ -2297,6 +2305,9 @@ __all__ = [
     "quarter_wave_thickness",
     "optimal_ar_coating_index",
     "thin_film_tuned_wavelength",
+    "fresnel_normal_reflectance",
+    "slab_transmittance",
+    "brewster_angle",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",

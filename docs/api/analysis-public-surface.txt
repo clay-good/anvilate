@@ -552,6 +552,9 @@ fracture.crack_tip_plastic_zone_size
 fracture.paris_law_cycles_to_failure
 fracture.plane_strain_thickness_requirement
 fracture.stress_intensity_factor
+fresnel.brewster_angle
+fresnel.fresnel_normal_reflectance
+fresnel.slab_transmittance
 gas_compression.adiabatic_compression_power
 gas_compression.adiabatic_discharge_temperature
 gas_compression.ideal_gas_density
