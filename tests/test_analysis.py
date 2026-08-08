@@ -22334,6 +22334,51 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_centripetal_acceleration_force_and_cornering_speed():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        centripetal_acceleration,
+        centripetal_force,
+        maximum_cornering_speed,
+    )
+
+    g = 9.80665
+
+    # a = v^2/r; 25 m/s on 50 m -> 12.5 m/s^2.
+    a = centripetal_acceleration(velocity=_q("25 m/s"), radius=_q("50 m"))
+    assert a.to("m/s**2").magnitude == pytest.approx(25.0**2 / 50.0, rel=1e-9)
+    assert a.to("m/s**2").magnitude == pytest.approx(12.5, rel=1e-9)
+    # Acceleration climbs with the square of speed.
+    a2 = centripetal_acceleration(velocity=_q("50 m/s"), radius=_q("50 m"))
+    assert a2.to("m/s**2").magnitude == pytest.approx(4.0 * a.to("m/s**2").magnitude, rel=1e-9)
+
+    # F = m*v^2/r; 1000 kg -> 12500 N, equal to m*a.
+    f = centripetal_force(mass=_q("1000 kg"), velocity=_q("25 m/s"), radius=_q("50 m"))
+    assert f.to("N").magnitude == pytest.approx(1000.0 * 25.0**2 / 50.0, rel=1e-9)
+    assert f.to("N").magnitude == pytest.approx(1000.0 * a.to("m/s**2").magnitude, rel=1e-9)
+    assert f.to("N").magnitude == pytest.approx(12500.0, rel=1e-9)
+
+    # v_max = sqrt(mu*g*r); dry pavement mu=0.8 on 50 m -> ~19.81 m/s.
+    v_max = maximum_cornering_speed(friction_coefficient=0.8, radius=_q("50 m"))
+    assert v_max.to("m/s").magnitude == pytest.approx(sqrt(0.8 * g * 50.0), rel=1e-9)
+    assert v_max.to("m/s").magnitude == pytest.approx(19.81, abs=0.01)
+    # A slicker road (lower mu) lowers the safe cornering speed.
+    v_ice = maximum_cornering_speed(friction_coefficient=0.2, radius=_q("50 m"))
+    assert v_ice.to("m/s").magnitude < v_max.to("m/s").magnitude
+    # At v_max the required centripetal force just equals the available friction (mu*m*g).
+    f_at_vmax = centripetal_force(mass=_q("1000 kg"), velocity=v_max, radius=_q("50 m"))
+    assert f_at_vmax.to("N").magnitude == pytest.approx(0.8 * 1000.0 * g, rel=1e-9)
+
+    # Guardrails: positive radius/friction, correct dimensions.
+    with pytest.raises(ValueError, match="radius must be positive"):
+        centripetal_acceleration(velocity=_q("25 m/s"), radius=_q("0 m"))
+    with pytest.raises(ValueError, match="friction_coefficient must be positive"):
+        maximum_cornering_speed(friction_coefficient=0.0, radius=_q("50 m"))
+    with pytest.raises(ValueError, match="velocity must be a"):
+        centripetal_acceleration(velocity=_q("25 m"), radius=_q("50 m"))
+
+
 def test_linear_momentum_impulse_and_average_impact_force():
     from anvilate.analysis import (
         average_impact_force,

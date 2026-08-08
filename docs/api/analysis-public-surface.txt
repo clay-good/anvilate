@@ -314,6 +314,9 @@ channel_capacity.shannon_required_bandwidth
 chemical_equilibrium.gibbs_free_energy_change
 chemical_equilibrium.equilibrium_constant
 chemical_equilibrium.vant_hoff_constant_ratio
+circular_motion.centripetal_acceleration
+circular_motion.centripetal_force
+circular_motion.maximum_cornering_speed
 clutch.UNIFORM_PRESSURE
 clutch.UNIFORM_WEAR
 clutch.brake_absorbed_energy

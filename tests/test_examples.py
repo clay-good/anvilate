@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_car_cornering_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "car_cornering.py"))
+    d = namespace["cornering_dynamics"]()
+    # 25 m/s on 50 m: 12.5 m/s^2, 12500 N, ~19.8 m/s max no-slip speed.
+    assert d["centripetal_acceleration_m_s2"] == pytest.approx(12.5, rel=1e-9)
+    assert d["centripetal_force_n"] == pytest.approx(12500.0, rel=1e-9)
+    assert d["max_cornering_speed_m_s"] == pytest.approx(19.81, abs=0.01)
+
+
 def test_car_crash_impulse_example():
     namespace = runpy.run_path(str(_EXAMPLES / "car_crash_impulse.py"))
     d = namespace["crash_dynamics"]()

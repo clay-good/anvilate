@@ -28,6 +28,9 @@ modules:
 - :mod:`~anvilate.analysis.chemical_equilibrium` — reaction thermodynamics: the Gibbs free energy
   ΔG = ΔH − T·ΔS (spontaneity), the equilibrium constant K = exp(−ΔG/RT), and the van 't Hoff shift
   K₂/K₁ = exp(−(ΔH/R)(1/T₂−1/T₁)) of K with temperature
+- :mod:`~anvilate.analysis.circular_motion` — uniform circular motion: the centripetal acceleration
+  v²/r, the centripetal force m·v²/r, and the maximum no-slip cornering speed √(µ·g·r) on a flat
+  curve
 - :mod:`~anvilate.analysis.noise_figure` — RF receiver noise: the linear noise factor from a dB
   figure, the Friis cascade F = F1 + (F2−1)/G1 + … (why the first stage dominates), and the
   equivalent noise temperature T_e = (F−1)·T0
@@ -1105,6 +1108,11 @@ from .chemical_equilibrium import (
     equilibrium_constant,
     gibbs_free_energy_change,
     vant_hoff_constant_ratio,
+)
+from .circular_motion import (
+    centripetal_acceleration,
+    centripetal_force,
+    maximum_cornering_speed,
 )
 from .clutch import (
     UNIFORM_PRESSURE,
@@ -2808,6 +2816,9 @@ __all__ = [
     "gibbs_free_energy_change",
     "equilibrium_constant",
     "vant_hoff_constant_ratio",
+    "centripetal_acceleration",
+    "centripetal_force",
+    "maximum_cornering_speed",
     "noise_factor_from_figure",
     "cascade_noise_factor",
     "equivalent_noise_temperature",
