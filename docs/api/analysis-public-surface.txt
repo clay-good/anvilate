@@ -102,6 +102,9 @@ axial.circular_area
 axial.required_axial_area
 ball_screw.ball_screw_back_drive_torque
 ball_screw.ball_screw_drive_torque
+battery_peukert.peukert_effective_capacity
+battery_peukert.peukert_exponent_from_two_rates
+battery_peukert.peukert_runtime
 beam.BeamBendingResult
 beam.SHEAR_FORM_CIRCULAR
 beam.SHEAR_FORM_RECTANGULAR

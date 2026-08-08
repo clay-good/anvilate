@@ -20985,6 +20985,66 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_battery_peukert_runtime_capacity_and_exponent():
+    from anvilate.analysis import (
+        peukert_effective_capacity,
+        peukert_exponent_from_two_rates,
+        peukert_runtime,
+    )
+
+    kw = {
+        "rated_capacity": _q("100 A*hr"),
+        "rated_current": _q("5 A"),
+        "peukert_exponent": 1.2,
+    }
+
+    # t = (C/I_r)*(I_r/I)^k; 100 Ah at 5 A drawn at 20 A -> ~3.79 hr (< the naive 5 hr).
+    t = peukert_runtime(discharge_current=_q("20 A"), **kw)
+    assert t.to("hr").magnitude == pytest.approx(20.0 * (5 / 20) ** 1.2, rel=1e-9)
+    assert t.to("hr").magnitude < 100.0 / 20.0
+
+    # At the rated current an ideal-ratio battery gives exactly the rated runtime.
+    t_rated = peukert_runtime(discharge_current=_q("5 A"), **kw)
+    assert t_rated.to("hr").magnitude == pytest.approx(20.0, rel=1e-9)
+
+    # Effective capacity C_eff = C*(I_r/I)^(k-1); ~76 Ah at 20 A, equals I*t.
+    c = peukert_effective_capacity(discharge_current=_q("20 A"), **kw)
+    assert c.to("A*hr").magnitude == pytest.approx(100 * (5 / 20) ** 0.2, rel=1e-9)
+    assert c.to("A*hr").magnitude == pytest.approx(20 * t.to("hr").magnitude, rel=1e-9)
+    # At the rated current the full capacity is delivered.
+    c_rated = peukert_effective_capacity(discharge_current=_q("5 A"), **kw)
+    assert c_rated.to("A*hr").magnitude == pytest.approx(100.0, rel=1e-9)
+
+    # Exponent inverse recovers k=1.2 from the two (current, runtime) points.
+    k = peukert_exponent_from_two_rates(
+        current_low=_q("5 A"), runtime_low=_q("20 hr"), current_high=_q("20 A"), runtime_high=t
+    )
+    assert k == pytest.approx(1.2, rel=1e-9)
+
+    # Guardrails: exponent >= 1, high current must exceed low, dimensions checked.
+    with pytest.raises(ValueError, match="peukert_exponent must be at least 1"):
+        peukert_runtime(
+            rated_capacity=_q("100 A*hr"),
+            rated_current=_q("5 A"),
+            discharge_current=_q("20 A"),
+            peukert_exponent=0.9,
+        )
+    with pytest.raises(ValueError, match="current_high must exceed current_low"):
+        peukert_exponent_from_two_rates(
+            current_low=_q("20 A"),
+            runtime_low=_q("4 hr"),
+            current_high=_q("5 A"),
+            runtime_high=_q("20 hr"),
+        )
+    with pytest.raises(ValueError, match="rated_capacity must be a"):
+        peukert_runtime(
+            rated_capacity=_q("100 A"),
+            rated_current=_q("5 A"),
+            discharge_current=_q("20 A"),
+            peukert_exponent=1.2,
+        )
+
+
 def test_solar_cell_fill_factor_max_power_and_efficiency():
     from anvilate.analysis import fill_factor, solar_cell_efficiency, solar_cell_max_power
 

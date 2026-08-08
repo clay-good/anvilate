@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_battery_fast_discharge_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "battery_fast_discharge.py"))
+    d = namespace["fast_discharge"]()
+    # 100 Ah at 5 A, k=1.2, drawn at 20 A: ~3.79 hr, ~76 Ah; exponent recovers 1.2.
+    assert d["runtime_at_20a_hr"] == pytest.approx(3.789, abs=0.01)
+    assert d["delivered_capacity_ah"] == pytest.approx(75.79, abs=0.1)
+    assert d["recovered_exponent"] == pytest.approx(1.2, rel=1e-9)
+
+
 def test_solar_cell_iv_example():
     namespace = runpy.run_path(str(_EXAMPLES / "solar_cell_iv.py"))
     d = namespace["grade_cell"]()

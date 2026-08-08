@@ -274,6 +274,9 @@ modules:
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, the runtime
   a given bank delivers, and the round-trip efficiency and the delivered energy
   it yields (E_out = E_stored·η)
+- :mod:`~anvilate.analysis.battery_peukert` — Peukert discharge-rate derating: the runtime at a
+  high current t = (C/I_r)·(I_r/I)^k, the capacity actually delivered C·(I_r/I)^(k−1), and the
+  Peukert exponent fitted from two discharge tests — the fast-drain penalty energy_storage ignores
 - :mod:`~anvilate.analysis.solar_cell` — photovoltaic cell I-V characterization: the fill factor
   FF = (V_mp·I_mp)/(V_oc·I_sc), the maximum power P_max = FF·V_oc·I_sc, and the conversion
   efficiency η = P_max/(G·A) — the cell-level metrics behind the array power of solar_pv
@@ -750,6 +753,11 @@ from .axial import (
 from .ball_screw import (
     ball_screw_back_drive_torque,
     ball_screw_drive_torque,
+)
+from .battery_peukert import (
+    peukert_effective_capacity,
+    peukert_exponent_from_two_rates,
+    peukert_runtime,
 )
 from .beam import (
     SHEAR_FORM_CIRCULAR,
@@ -2399,6 +2407,9 @@ __all__ = [
     "battery_backup_time",
     "battery_round_trip_efficiency",
     "battery_delivered_energy",
+    "peukert_runtime",
+    "peukert_effective_capacity",
+    "peukert_exponent_from_two_rates",
     "extrusion_ratio",
     "extrusion_pressure",
     "extrusion_force",
