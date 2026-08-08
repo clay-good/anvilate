@@ -23,9 +23,14 @@ from math import pi, sqrt
 
 from ..units import Quantity
 
+_PARABOLIC_BEAMWIDTH_CONSTANT = 70.0  # deg, θ ≈ k·λ/D for a typical parabolic dish taper
+
 __all__ = [
+    "aperture_antenna_gain",
+    "dish_diameter_for_gain",
     "free_space_path_loss",
     "max_line_of_sight_range",
+    "parabolic_beamwidth",
     "received_power",
 ]
 
@@ -118,6 +123,70 @@ def max_line_of_sight_range(
         raise ValueError("wavelength must be positive")
     d = (lam / (4.0 * pi)) * sqrt(p_t * transmit_gain * receive_gain / p_min)
     return Quantity(magnitude=d, unit="m")
+
+
+def aperture_antenna_gain(
+    *, aperture_area: Quantity, wavelength: Quantity, efficiency: float = 1.0
+) -> float:
+    """The aperture-antenna gain, G = efficiency * 4*pi*A/lambda^2.
+
+    The peak gain of an aperture antenna (a dish, horn, or array) of effective ``aperture_area`` A
+    at ``wavelength`` lambda, scaled by an aperture ``efficiency`` (typically 0.5-0.7 for a dish):
+    G = efficiency * 4*pi*A/lambda^2. Gain rises with area and with frequency (shorter wavelength),
+    so a big dish at high frequency is very directive. Returns the linear power gain (10*log10 for
+    dBi).
+    """
+    _check(aperture_area, "[area]", "aperture_area")
+    _check(wavelength, "[length]", "wavelength")
+    a = aperture_area.to("m**2").magnitude
+    lam = wavelength.to("m").magnitude
+    if a <= 0:
+        raise ValueError("aperture_area must be positive")
+    if lam <= 0:
+        raise ValueError("wavelength must be positive")
+    if not 0.0 < efficiency <= 1.0:
+        raise ValueError("efficiency must be in (0, 1]")
+    return efficiency * 4.0 * pi * a / (lam * lam)
+
+
+def parabolic_beamwidth(*, diameter: Quantity, wavelength: Quantity) -> float:
+    """The parabolic-dish half-power beamwidth, theta ≈ 70*lambda/D (degrees).
+
+    The approximate -3 dB beamwidth of a parabolic dish of ``diameter`` D at ``wavelength`` lambda,
+    theta ≈ 70*lambda/D (the constant depends on the illumination taper; 70 is a common value). A
+    larger dish or shorter wavelength narrows the beam, trading coverage for gain and pointing
+    tightness. Returns the beamwidth in degrees.
+    """
+    _check(diameter, "[length]", "diameter")
+    _check(wavelength, "[length]", "wavelength")
+    d = diameter.to("m").magnitude
+    lam = wavelength.to("m").magnitude
+    if d <= 0:
+        raise ValueError("diameter must be positive")
+    if lam <= 0:
+        raise ValueError("wavelength must be positive")
+    return _PARABOLIC_BEAMWIDTH_CONSTANT * lam / d
+
+
+def dish_diameter_for_gain(
+    *, gain: float, wavelength: Quantity, efficiency: float = 1.0
+) -> Quantity:
+    """The dish diameter for a target gain, D = (lambda/pi)*sqrt(G/efficiency).
+
+    The sizing inverse of :func:`aperture_antenna_gain` for a circular dish: the ``diameter`` a dish
+    needs to reach a target linear ``gain`` G at ``wavelength`` lambda, given the aperture
+    ``efficiency``, from G = efficiency*(pi*D/lambda)^2: D = (lambda/pi)*sqrt(G/efficiency). It
+    turns a link's required gain into a physical antenna size. Returns the diameter in m.
+    """
+    _check(wavelength, "[length]", "wavelength")
+    lam = wavelength.to("m").magnitude
+    if gain <= 0:
+        raise ValueError("gain must be positive")
+    if lam <= 0:
+        raise ValueError("wavelength must be positive")
+    if not 0.0 < efficiency <= 1.0:
+        raise ValueError("efficiency must be in (0, 1]")
+    return Quantity(magnitude=(lam / pi) * sqrt(gain / efficiency), unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

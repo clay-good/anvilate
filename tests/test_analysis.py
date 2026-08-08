@@ -20985,6 +20985,42 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_antenna_aperture_gain_beamwidth_and_dish_sizing():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        aperture_antenna_gain,
+        dish_diameter_for_gain,
+        parabolic_beamwidth,
+    )
+
+    lam = _q("0.03 m")  # 10 GHz
+
+    # G = eff*4*pi*A/lambda^2; 1 m^2 at 60% eff -> ~39.2 dBi linear.
+    g = aperture_antenna_gain(aperture_area=_q("1 m**2"), wavelength=lam, efficiency=0.6)
+    assert g == pytest.approx(0.6 * 4 * pi * 1.0 / 0.03**2, rel=1e-9)
+    # Gain rises with area.
+    g2 = aperture_antenna_gain(aperture_area=_q("2 m**2"), wavelength=lam, efficiency=0.6)
+    assert g2 == pytest.approx(2 * g, rel=1e-9)
+
+    # Beamwidth ~70*lambda/D; 3 m dish -> 0.7 deg.
+    bw = parabolic_beamwidth(diameter=_q("3 m"), wavelength=lam)
+    assert bw == pytest.approx(70 * 0.03 / 3, rel=1e-9)
+    assert bw == pytest.approx(0.7, abs=0.001)
+
+    # Dish diameter for a target gain, D = (lambda/pi)*sqrt(G/eff).
+    d = dish_diameter_for_gain(gain=g, wavelength=lam, efficiency=0.6)
+    assert d.to("m").magnitude == pytest.approx((0.03 / pi) * sqrt(g / 0.6), rel=1e-9)
+
+    # Guardrails: efficiency in (0,1], positive gain/area, dimensions checked.
+    with pytest.raises(ValueError, match="efficiency must be in"):
+        aperture_antenna_gain(aperture_area=_q("1 m**2"), wavelength=lam, efficiency=1.5)
+    with pytest.raises(ValueError, match="gain must be positive"):
+        dish_diameter_for_gain(gain=0.0, wavelength=lam, efficiency=0.6)
+    with pytest.raises(ValueError, match="aperture_area must be a"):
+        aperture_antenna_gain(aperture_area=_q("1 m"), wavelength=lam, efficiency=0.6)
+
+
 def test_channel_capacity_shannon_bandwidth_inverse_and_nyquist():
     from math import log2
 

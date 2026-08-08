@@ -15,9 +15,10 @@ modules:
 - :mod:`~anvilate.analysis.adhesive` — bonded joints: the lap-joint average shear
   stress against the datasheet lap-shear strength, and the axial and torque
   capacity of a cylindrical retaining-compound bond
-- :mod:`~anvilate.analysis.antenna` — free-space RF link (Friis): the free-space path loss
-  (4π·d/λ)², the received power P_t·G_t·G_r·(λ/4π·d)² a link delivers, and the maximum
-  line-of-sight range for a receiver's sensitivity (gains as linear ratios, not dBi)
+- :mod:`~anvilate.analysis.antenna` — free-space RF link (Friis) and aperture antennas: the
+  free-space path loss (4π·d/λ)², the received power P_t·G_t·G_r·(λ/4π·d)², the maximum
+  line-of-sight range, plus the aperture gain η·4π·A/λ², the beamwidth ≈70·λ/D, and the dish
+  diameter a target gain needs (gains as linear ratios, not dBi)
 - :mod:`~anvilate.analysis.channel_capacity` — information-theory link capacity: the Shannon-Hartley
   limit C = B·log2(1+SNR), the bandwidth a target capacity needs B = C/log2(1+SNR), and the
   noiseless Nyquist M-level capacity 2·B·log2(M) (bits per second)
@@ -715,8 +716,11 @@ from .aluminum import (
     aluminum_tension_stress,
 )
 from .antenna import (
+    aperture_antenna_gain,
+    dish_diameter_for_gain,
     free_space_path_loss,
     max_line_of_sight_range,
+    parabolic_beamwidth,
     received_power,
 )
 from .arrhenius import (
@@ -2406,6 +2410,9 @@ __all__ = [
     "free_space_path_loss",
     "received_power",
     "max_line_of_sight_range",
+    "aperture_antenna_gain",
+    "parabolic_beamwidth",
+    "dish_diameter_for_gain",
     "shannon_capacity",
     "shannon_required_bandwidth",
     "nyquist_channel_capacity",

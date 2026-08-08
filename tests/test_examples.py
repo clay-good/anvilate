@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_satellite_dish_antenna_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "satellite_dish_antenna.py"))
+    d = namespace["dish_design"]()
+    # 3 m dish at 10 GHz, 60% eff: ~48 dBi, ~0.7 deg beamwidth; 45 dBi -> ~2.2 m.
+    assert d["dish_gain_dbi"] == pytest.approx(47.7, abs=0.3)
+    assert d["beamwidth_deg"] == pytest.approx(0.7, abs=0.01)
+    assert d["diameter_for_45dbi_m"] == pytest.approx(2.19, abs=0.05)
+
+
 def test_wifi_channel_capacity_example():
     namespace = runpy.run_path(str(_EXAMPLES / "wifi_channel_capacity.py"))
     d = namespace["link_capacity"]()
