@@ -234,6 +234,9 @@ modules:
 - :mod:`~anvilate.analysis.dc_dc_converter` — switching-regulator transfer functions (ideal, CCM):
   the buck V_out = D·V_in (step-down), the boost V_out = V_in/(1−D) (step-up), and the buck-boost
   V_out = V_in·D/(1−D) (either), all set by the duty cycle D
+- :mod:`~anvilate.analysis.diffusion` — Fickian mass transport: the steady flux J = D·ΔC/L through
+  a barrier (Fick's first law), the penetration length x = √(D·t) a diffusion front reaches, and the
+  time t = x²/D to diffuse a distance — the mass-transport analog of heat conduction
 - :mod:`~anvilate.analysis.magnetics` — magnetic actuators: the solenoid field B = μ₀·n·I,
   the Maxwell magnetic pressure p = B²/(2·μ₀), and the electromagnet holding force
   F = B²·A/(2·μ₀) — for clamps, lifting magnets, and magnetic bearings
@@ -1044,6 +1047,11 @@ from .dc_dc_converter import (
     boost_output_voltage,
     buck_boost_output_voltage,
     buck_output_voltage,
+)
+from .diffusion import (
+    diffusion_length,
+    diffusion_time,
+    steady_diffusion_flux,
 )
 from .diode import (
     diode_current,
@@ -2138,6 +2146,9 @@ __all__ = [
     "buck_output_voltage",
     "boost_output_voltage",
     "buck_boost_output_voltage",
+    "steady_diffusion_flux",
+    "diffusion_length",
+    "diffusion_time",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",

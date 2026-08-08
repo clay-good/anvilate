@@ -1185,6 +1185,14 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_transdermal_patch_diffusion_example_flux_and_lag():
+    namespace = runpy.run_path(str(_EXAMPLES / "transdermal_patch_diffusion.py"))
+    d = namespace["patch_delivery"]()
+    # D=1e-11, 50 um, 200 mol/m^3: J=4e-5 mol/(m^2 s); lag ~250 s.
+    assert d["steady_flux_mol_m2_s"] == pytest.approx(4e-5, rel=1e-6)
+    assert d["membrane_crossing_time_s"] == pytest.approx(250.0, rel=1e-6)
+
+
 def test_vacuum_mean_free_path_example_speeds_and_path():
     namespace = runpy.run_path(str(_EXAMPLES / "vacuum_mean_free_path.py"))
     d = namespace["vacuum_regime"]()

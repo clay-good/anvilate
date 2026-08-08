@@ -20853,6 +20853,57 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_diffusion_flux_length_and_time_inverse():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        diffusion_length,
+        diffusion_time,
+        steady_diffusion_flux,
+    )
+
+    D = Quantity(magnitude=1e-9, unit="m**2/s")
+
+    # Fick I: J = D*Delta_C/L.
+    j = steady_diffusion_flux(
+        diffusivity=D,
+        concentration_difference=Quantity(magnitude=100.0, unit="mol/m**3"),
+        thickness=_q("1 mm"),
+    )
+    assert j.to("mol/(m**2*s)").magnitude == pytest.approx(1e-9 * 100 / 1e-3, rel=1e-9)
+    # A thinner layer passes proportionally more flux.
+    j_thin = steady_diffusion_flux(
+        diffusivity=D,
+        concentration_difference=Quantity(magnitude=100.0, unit="mol/m**3"),
+        thickness=_q("0.5 mm"),
+    )
+    assert j_thin.to("mol/(m**2*s)").magnitude == pytest.approx(2 * j.to("mol/(m**2*s)").magnitude)
+
+    # Penetration length x = sqrt(D*t); grows as sqrt(time).
+    x = diffusion_length(diffusivity=D, time=_q("3600 s"))
+    assert x.to("m").magnitude == pytest.approx(sqrt(1e-9 * 3600), rel=1e-9)
+    x4 = diffusion_length(diffusivity=D, time=_q("14400 s"))  # 4x time -> 2x length
+    assert x4.to("m").magnitude == pytest.approx(2 * x.to("m").magnitude, rel=1e-9)
+
+    # Time inverse round-trips: t = x^2/D recovers the time behind a length.
+    t = diffusion_time(diffusion_length=x, diffusivity=D)
+    assert t.to("s").magnitude == pytest.approx(3600.0, rel=1e-9)
+
+    # Guardrails: positive thickness/diffusivity, non-negative time, dimensions checked.
+    with pytest.raises(ValueError, match="thickness must be positive"):
+        steady_diffusion_flux(
+            diffusivity=D,
+            concentration_difference=Quantity(magnitude=100.0, unit="mol/m**3"),
+            thickness=_q("0 mm"),
+        )
+    with pytest.raises(ValueError, match="diffusivity must be positive"):
+        diffusion_time(
+            diffusion_length=_q("1 mm"), diffusivity=Quantity(magnitude=0.0, unit="m**2/s")
+        )
+    with pytest.raises(ValueError, match="diffusivity must be a"):
+        diffusion_length(diffusivity=_q("1 m**2"), time=_q("3600 s"))
+
+
 def test_kinetic_theory_molecular_speeds_and_mean_free_path():
     from math import pi, sqrt
 
