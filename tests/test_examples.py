@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_compton_gamma_scatter_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "compton_gamma_scatter.py"))
+    d = namespace["gamma_scatter"]()
+    # 10 pm photon, 90 deg: shift 2.43 pm, scattered 12.43 pm, electron ~24 keV.
+    assert d["wavelength_shift_pm"] == pytest.approx(2.426, abs=0.005)
+    assert d["scattered_wavelength_pm"] == pytest.approx(12.426, abs=0.01)
+    assert d["electron_energy_kev"] == pytest.approx(24.21, abs=0.1)
+
+
 def test_nuclear_mass_energy_example():
     namespace = runpy.run_path(str(_EXAMPLES / "nuclear_mass_energy.py"))
     d = namespace["nuclear_energetics"]()

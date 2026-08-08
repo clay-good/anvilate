@@ -530,6 +530,9 @@ modules:
 - :mod:`~anvilate.analysis.mass_energy` — mass-energy equivalence: the rest energy E = m·c² (≈90 TJ
   per gram, the nuclear-yield accounting), its mass-from-energy inverse m = E/c², and the binding
   energy per nucleon B/A (peaks near iron — fusion and fission both release energy toward it)
+- :mod:`~anvilate.analysis.compton` — Compton scattering: the wavelength shift Δλ = λ_C·(1−cos θ)
+  (λ_C = 2.426 pm, angle-only), the scattered photon wavelength λ + Δλ, and the recoil electron
+  energy h·c·(1/λ − 1/λ′) — the dominant medium-energy gamma interaction
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -1056,6 +1059,11 @@ from .compressible_flow import (
     stagnation_density_ratio,
     stagnation_pressure_ratio,
     stagnation_temperature_ratio,
+)
+from .compton import (
+    compton_electron_energy,
+    compton_scattered_wavelength,
+    compton_wavelength_shift,
 )
 from .condensation import (
     condensation_rate,
@@ -2736,6 +2744,9 @@ __all__ = [
     "mass_energy",
     "mass_from_energy",
     "binding_energy_per_nucleon",
+    "compton_wavelength_shift",
+    "compton_scattered_wavelength",
+    "compton_electron_energy",
     "belt_length",
     "belt_wrap_angle",
     "crossed_belt_length",

@@ -20985,6 +20985,54 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_compton_wavelength_shift_scattered_and_electron_energy():
+    from math import cos, radians
+
+    from anvilate.analysis import (
+        compton_electron_energy,
+        compton_scattered_wavelength,
+        compton_wavelength_shift,
+    )
+
+    lam_c = 6.62607015e-34 / (9.1093837015e-31 * 299792458.0)
+
+    # Delta_lambda = lambda_C*(1-cos theta); 90 deg -> lambda_C (~2.426 pm).
+    s = compton_wavelength_shift(scattering_angle=90.0)
+    assert s.to("m").magnitude == pytest.approx(lam_c * (1 - cos(radians(90))), rel=1e-9)
+    assert s.to("pm").magnitude == pytest.approx(2.426, abs=0.001)
+    # Forward scatter shifts nothing; backscatter shifts by 2*lambda_C.
+    assert compton_wavelength_shift(scattering_angle=0.0).to("m").magnitude == pytest.approx(
+        0.0, abs=1e-18
+    )
+    assert compton_wavelength_shift(scattering_angle=180.0).to("m").magnitude == pytest.approx(
+        2 * lam_c, rel=1e-9
+    )
+
+    # Scattered wavelength = incident + shift.
+    inc = Quantity(magnitude=1e-11, unit="m")
+    sc = compton_scattered_wavelength(incident_wavelength=inc, scattering_angle=90.0)
+    assert sc.to("m").magnitude == pytest.approx(1e-11 + lam_c, rel=1e-9)
+    assert sc.to("m").magnitude > inc.to("m").magnitude  # always redshifted
+
+    # Electron energy = h*c*(1/lambda - 1/lambda'); ~24 keV here.
+    e = compton_electron_energy(incident_wavelength=inc, scattering_angle=90.0)
+    hc = 6.62607015e-34 * 299792458.0
+    assert e.to("J").magnitude == pytest.approx(hc * (1 / 1e-11 - 1 / (1e-11 + lam_c)), rel=1e-9)
+    assert e.to("J").magnitude / 1.602176634e-19 / 1e3 == pytest.approx(24.21, abs=0.05)
+    # Forward scatter gives the electron no energy.
+    assert compton_electron_energy(incident_wavelength=inc, scattering_angle=0.0).to(
+        "J"
+    ).magnitude == pytest.approx(0.0, abs=1e-25)
+
+    # Guardrails: angle range, positive wavelength, dimensions checked.
+    with pytest.raises(ValueError, match="scattering_angle must be in"):
+        compton_wavelength_shift(scattering_angle=200.0)
+    with pytest.raises(ValueError, match="incident_wavelength must be positive"):
+        compton_scattered_wavelength(incident_wavelength=_q("0 m"), scattering_angle=90.0)
+    with pytest.raises(ValueError, match="incident_wavelength must be a"):
+        compton_scattered_wavelength(incident_wavelength=_q("1e-11 J"), scattering_angle=90.0)
+
+
 def test_mass_energy_equivalence_and_binding_energy_per_nucleon():
     from anvilate.analysis import (
         binding_energy_per_nucleon,
