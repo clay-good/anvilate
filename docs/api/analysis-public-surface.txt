@@ -269,6 +269,9 @@ chain.chain_speed
 chain.chain_working_tension
 chain.chordal_speed_variation
 chain.minimum_sprocket_teeth_for_chordal_variation
+channel_capacity.nyquist_channel_capacity
+channel_capacity.shannon_capacity
+channel_capacity.shannon_required_bandwidth
 clutch.UNIFORM_PRESSURE
 clutch.UNIFORM_WEAR
 clutch.brake_absorbed_energy

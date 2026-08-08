@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_wifi_channel_capacity_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "wifi_channel_capacity.py"))
+    d = namespace["link_capacity"]()
+    # 20 MHz, SNR 100: ~133 Mbit/s; 100 Mbit/s needs ~15 MHz; 4-level Nyquist -> 80 Mbit/s.
+    assert d["shannon_capacity_mbit_s"] == pytest.approx(133.16, abs=0.1)
+    assert d["bandwidth_for_100mbit_mhz"] == pytest.approx(15.02, abs=0.05)
+    assert d["nyquist_4level_mbit_s"] == pytest.approx(80.0, rel=1e-9)
+
+
 def test_lens_ar_coating_example_index_thickness_and_tuned():
     namespace = runpy.run_path(str(_EXAMPLES / "lens_ar_coating.py"))
     d = namespace["ar_coating_design"]()

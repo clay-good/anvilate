@@ -18,6 +18,9 @@ modules:
 - :mod:`~anvilate.analysis.antenna` — free-space RF link (Friis): the free-space path loss
   (4π·d/λ)², the received power P_t·G_t·G_r·(λ/4π·d)² a link delivers, and the maximum
   line-of-sight range for a receiver's sensitivity (gains as linear ratios, not dBi)
+- :mod:`~anvilate.analysis.channel_capacity` — information-theory link capacity: the Shannon-Hartley
+  limit C = B·log2(1+SNR), the bandwidth a target capacity needs B = C/log2(1+SNR), and the
+  noiseless Nyquist M-level capacity 2·B·log2(M) (bits per second)
 - :mod:`~anvilate.analysis.arrhenius` — thermally-activated reaction rates: the rate constant
   k = A·e^(−Ea/RT), the acceleration factor k2/k1 = e^((Ea/R)(1/T1−1/T2)) between two temperatures
   (accelerated life testing), and the activation energy Ea extracted from two measured rates
@@ -933,6 +936,11 @@ from .chain import (
     chain_working_tension,
     chordal_speed_variation,
     minimum_sprocket_teeth_for_chordal_variation,
+)
+from .channel_capacity import (
+    nyquist_channel_capacity,
+    shannon_capacity,
+    shannon_required_bandwidth,
 )
 from .clutch import (
     UNIFORM_PRESSURE,
@@ -2398,6 +2406,9 @@ __all__ = [
     "free_space_path_loss",
     "received_power",
     "max_line_of_sight_range",
+    "shannon_capacity",
+    "shannon_required_bandwidth",
+    "nyquist_channel_capacity",
     "arrhenius_rate_constant",
     "arrhenius_rate_ratio",
     "arrhenius_activation_energy",

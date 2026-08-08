@@ -20985,6 +20985,45 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_channel_capacity_shannon_bandwidth_inverse_and_nyquist():
+    from math import log2
+
+    from anvilate.analysis import (
+        nyquist_channel_capacity,
+        shannon_capacity,
+        shannon_required_bandwidth,
+    )
+
+    B = Quantity(magnitude=20e6, unit="Hz")
+
+    # C = B*log2(1+SNR); 20 MHz, SNR 100 -> ~133 Mbit/s.
+    c = shannon_capacity(bandwidth=B, signal_to_noise_ratio=100.0)
+    assert c == pytest.approx(20e6 * log2(101), rel=1e-9)
+    assert c / 1e6 == pytest.approx(133.16, abs=0.05)
+    # Doubling bandwidth doubles capacity.
+    c2 = shannon_capacity(
+        bandwidth=Quantity(magnitude=40e6, unit="Hz"), signal_to_noise_ratio=100.0
+    )
+    assert c2 == pytest.approx(2 * c, rel=1e-9)
+
+    # Bandwidth inverse round-trips the capacity back to 20 MHz.
+    bw = shannon_required_bandwidth(capacity=c, signal_to_noise_ratio=100.0)
+    assert bw.to("Hz").magnitude == pytest.approx(20e6, rel=1e-9)
+
+    # Nyquist noiseless C = 2*B*log2(M); 20 MHz, 4 levels -> 80 Mbit/s.
+    n = nyquist_channel_capacity(bandwidth=B, signal_levels=4)
+    assert n == pytest.approx(2 * 20e6 * log2(4), rel=1e-9)
+    assert n / 1e6 == pytest.approx(80.0, rel=1e-9)
+
+    # Guardrails: SNR non-negative (positive for the inverse), >=2 signal levels, dimensions.
+    with pytest.raises(ValueError, match="signal_to_noise_ratio must be non-negative"):
+        shannon_capacity(bandwidth=B, signal_to_noise_ratio=-1.0)
+    with pytest.raises(ValueError, match="signal_levels must be at least 2"):
+        nyquist_channel_capacity(bandwidth=B, signal_levels=1)
+    with pytest.raises(ValueError, match="bandwidth must be a"):
+        shannon_capacity(bandwidth=_q("20 m"), signal_to_noise_ratio=100.0)
+
+
 def test_thin_film_ar_coating_thickness_index_and_tuned_wavelength():
     from math import sqrt
 
