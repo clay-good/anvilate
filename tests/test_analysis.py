@@ -20853,6 +20853,41 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_photon_energy_wavelength_inverse_and_flux():
+    from anvilate.analysis import (
+        photon_energy,
+        photon_flux,
+        photon_wavelength_from_energy,
+    )
+
+    hc = 6.62607015e-34 * 299792458.0
+
+    # E = h*c/lambda; 500 nm green -> ~2.48 eV.
+    e = photon_energy(wavelength=_q("500 nm"))
+    assert e.to("J").magnitude == pytest.approx(hc / 500e-9, rel=1e-9)
+    assert e.to("eV").magnitude == pytest.approx(2.4797, abs=0.001)
+
+    # Wavelength inverse round-trips the energy back to 500 nm.
+    lam = photon_wavelength_from_energy(energy=e)
+    assert lam.to("nm").magnitude == pytest.approx(500.0, rel=1e-9)
+    # A 1.12 eV silicon band gap corresponds to ~1107 nm.
+    cutoff = photon_wavelength_from_energy(energy=_q("1.12 eV"))
+    assert cutoff.to("nm").magnitude == pytest.approx(1107.0, abs=1.0)
+
+    # Flux Phi = P/E_photon; 1 mW at 500 nm -> ~2.52e15 /s.
+    flux = photon_flux(optical_power=_q("1 mW"), wavelength=_q("500 nm"))
+    assert flux.to("1/s").magnitude == pytest.approx(1e-3 / e.to("J").magnitude, rel=1e-9)
+    assert flux.to("1/s").magnitude == pytest.approx(2.517e15, rel=1e-3)
+
+    # Guardrails: positive wavelength/energy, non-negative power, dimensions checked.
+    with pytest.raises(ValueError, match="wavelength must be positive"):
+        photon_energy(wavelength=_q("0 nm"))
+    with pytest.raises(ValueError, match="energy must be positive"):
+        photon_wavelength_from_energy(energy=_q("0 eV"))
+    with pytest.raises(ValueError, match="wavelength must be a"):
+        photon_energy(wavelength=_q("500 THz"))
+
+
 def test_coriolis_acceleration_parameter_and_rossby_number():
     from math import radians, sin
 

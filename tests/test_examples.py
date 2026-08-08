@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_photodiode_photon_budget_example_energy_flux_and_cutoff():
+    namespace = runpy.run_path(str(_EXAMPLES / "photodiode_photon_budget.py"))
+    d = namespace["photon_budget"]()
+    # 500 nm -> 2.48 eV; 1 mW -> ~2.52e15 /s; Si 1.12 eV -> ~1107 nm.
+    assert d["green_photon_energy_ev"] == pytest.approx(2.4797, abs=0.001)
+    assert d["photon_flux_per_s"] == pytest.approx(2.517e15, rel=1e-3)
+    assert d["silicon_cutoff_nm"] == pytest.approx(1107.0, abs=1.0)
+
+
 def test_coriolis_weather_scale_example_parameter_and_rossby():
     namespace = runpy.run_path(str(_EXAMPLES / "coriolis_weather_scale.py"))
     d = namespace["rotation_matters"]()

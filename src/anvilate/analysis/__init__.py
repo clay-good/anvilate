@@ -328,6 +328,9 @@ modules:
   diffraction limit θ = 1.22·λ/D on resolving power, the lens speed side — the f-number
   N = f/D, the focused Airy spot d = 2.44·λ·N, and the hyperfocal distance H = f²/(N·c); and
   refraction — Snell's law, the total-internal-reflection critical angle, and fibre NA
+- :mod:`~anvilate.analysis.photon` — photon (Planck) quanta: the photon energy E = h·c/λ, the
+  wavelength matching an energy λ = h·c/E (e.g. a semiconductor band gap), and the photon flux
+  Φ = P·λ/(h·c) a beam of a given optical power delivers — for detectors, solar cells, and LEDs
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1467,6 +1470,11 @@ from .orbital_mechanics import (
     orbital_period,
     semi_major_axis_from_apsides,
     vis_viva_velocity,
+)
+from .photon import (
+    photon_energy,
+    photon_flux,
+    photon_wavelength_from_energy,
 )
 from .piezoelectric import (
     piezoelectric_charge,
@@ -2710,6 +2718,9 @@ __all__ = [
     "snell_refraction_angle",
     "critical_angle",
     "fiber_numerical_aperture",
+    "photon_energy",
+    "photon_wavelength_from_energy",
+    "photon_flux",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

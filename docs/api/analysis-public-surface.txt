@@ -716,6 +716,9 @@ reactive_circuit.lc_resonant_frequency
 reactive_circuit.rc_cutoff_frequency
 reactive_circuit.rc_time_constant
 reactive_circuit.rl_time_constant
+photon.photon_energy
+photon.photon_flux
+photon.photon_wavelength_from_energy
 piezoelectric.piezoelectric_charge
 piezoelectric.piezoelectric_force_from_charge
 piezoelectric.piezoelectric_open_circuit_voltage
