@@ -22334,6 +22334,53 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_process_capability_cp_cpk_and_defect_rate():
+    from math import erf, sqrt
+
+    from anvilate.analysis import (
+        expected_defect_rate_ppm,
+        process_capability_index,
+        process_capability_ratio,
+    )
+
+    # Cp = (USL-LSL)/(6*sigma); 9.5..10.5 with sigma 0.1 -> 1.667.
+    cp = process_capability_index(upper_spec_limit=10.5, lower_spec_limit=9.5, process_std_dev=0.1)
+    assert cp == pytest.approx((10.5 - 9.5) / (6 * 0.1), rel=1e-12)
+    assert cp == pytest.approx(1.6667, abs=0.001)
+
+    # Cpk = min(USL-mean, mean-LSL)/(3*sigma); off-center at 10.1 -> 1.333 (< Cp).
+    cpk = process_capability_ratio(
+        upper_spec_limit=10.5, lower_spec_limit=9.5, process_mean=10.1, process_std_dev=0.1
+    )
+    assert cpk == pytest.approx(min(0.4, 0.6) / (3 * 0.1), rel=1e-12)
+    assert cpk == pytest.approx(1.3333, abs=0.001)
+    assert cpk < cp
+    # A centered process has Cpk equal to Cp.
+    cpk_centered = process_capability_ratio(
+        upper_spec_limit=10.5, lower_spec_limit=9.5, process_mean=10.0, process_std_dev=0.1
+    )
+    assert cpk_centered == pytest.approx(cp, rel=1e-9)
+
+    # Defect rate PPM = 1e6*Phi(-3*Cpk); Cpk=1.0 ~1350 ppm, 1.33 ~33 ppm, 1.5 ~3.4 ppm.
+    def phi(z):
+        return 0.5 * (1 + erf(z / sqrt(2)))
+
+    ppm = expected_defect_rate_ppm(capability_index=1.0)
+    assert ppm == pytest.approx(1e6 * phi(-3.0), rel=1e-12)
+    assert ppm == pytest.approx(1350.0, abs=1.0)
+    assert expected_defect_rate_ppm(capability_index=1.3333) == pytest.approx(31.67, abs=0.5)
+    # A more capable process (higher Cpk) makes fewer defects.
+    assert expected_defect_rate_ppm(capability_index=1.5) < expected_defect_rate_ppm(
+        capability_index=1.0
+    )
+
+    # Guardrails: USL above LSL, positive sigma.
+    with pytest.raises(ValueError, match="upper_spec_limit must exceed lower_spec_limit"):
+        process_capability_index(upper_spec_limit=9.5, lower_spec_limit=10.5, process_std_dev=0.1)
+    with pytest.raises(ValueError, match="process_std_dev must be positive"):
+        process_capability_index(upper_spec_limit=10.5, lower_spec_limit=9.5, process_std_dev=0.0)
+
+
 def test_npv_benefit_cost_ratio_and_depreciation():
     from anvilate.analysis import (
         annuity_present_value,

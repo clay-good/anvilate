@@ -502,6 +502,9 @@ modules:
 - :mod:`~anvilate.analysis.projectile` — drag-free launch trajectory (conveyor discharge,
   jet/spray throw, safe fragment distance): the range R = v²·sin(2θ)/g, the peak height
   H = v²·sin²θ/(2g), and the time of flight t = 2·v·sin θ/g
+- :mod:`~anvilate.analysis.process_capability` — SPC process capability: the potential index
+  Cp = (USL−LSL)/(6σ), the centering-adjusted Cpk = min(USL−µ, µ−LSL)/(3σ), and the expected defect
+  rate 10⁶·Φ(−3·Cpk) ppm a normal process yields
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, the inertia a speed-smoothing target requires and the thin-rim
   mass that inertia needs, the rotating
@@ -1987,6 +1990,11 @@ from .prestressed_concrete import (
     prestress_balanced_load,
     prestress_bottom_fiber_stress,
     prestress_cracking_moment,
+)
+from .process_capability import (
+    expected_defect_rate_ppm,
+    process_capability_index,
+    process_capability_ratio,
 )
 from .projectile import (
     projectile_max_height,
@@ -3594,6 +3602,9 @@ __all__ = [
     "prestress_balanced_load",
     "prestress_bottom_fiber_stress",
     "prestress_cracking_moment",
+    "process_capability_index",
+    "process_capability_ratio",
+    "expected_defect_rate_ppm",
     "projectile_range",
     "projectile_max_height",
     "projectile_time_of_flight",

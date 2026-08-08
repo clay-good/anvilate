@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_machining_process_capability_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "machining_process_capability.py"))
+    d = namespace["shaft_capability"]()
+    # Cp 1.67, Cpk 1.33, ~31.7 ppm.
+    assert d["cp"] == pytest.approx(1.6667, abs=0.001)
+    assert d["cpk"] == pytest.approx(1.3333, abs=0.001)
+    assert d["defect_rate_ppm"] == pytest.approx(31.67, abs=0.5)
+
+
 def test_project_appraisal_example():
     namespace = runpy.run_path(str(_EXAMPLES / "project_appraisal.py"))
     d = namespace["project_appraisal"]()
