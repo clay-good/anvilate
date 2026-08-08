@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_point_charge_field_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "point_charge_field.py"))
+    d = namespace["point_charge_electrostatics"]()
+    # Two 1 uC at 1 m: ~8.99 mN; field at 10 cm ~899 kV/m; potential ~89.9 kV.
+    assert d["coulomb_force_mn"] == pytest.approx(8.9876, abs=0.001)
+    assert d["field_kv_m"] == pytest.approx(898.8, abs=0.5)
+    assert d["potential_kv"] == pytest.approx(89.88, abs=0.05)
+
+
 def test_compressed_air_cylinder_example():
     namespace = runpy.run_path(str(_EXAMPLES / "compressed_air_cylinder.py"))
     d = namespace["cylinder_gas_state"]()

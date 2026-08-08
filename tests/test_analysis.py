@@ -22334,6 +22334,45 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_coulomb_force_field_and_potential():
+    from anvilate.analysis import (
+        coulomb_force,
+        electric_field_point_charge,
+        electric_potential_point_charge,
+    )
+
+    k = 8.9875517873681764e9
+
+    # Coulomb's law F = k*q1*q2/r^2; two 1 uC at 1 m repel with ~8.99 mN.
+    f = coulomb_force(charge1=_q("1 uC"), charge2=_q("1 uC"), separation=_q("1 m"))
+    assert f.to("N").magnitude == pytest.approx(k * 1e-6 * 1e-6 / 1.0, rel=1e-9)
+    assert f.to("N").magnitude == pytest.approx(8.9876e-3, abs=1e-6)
+    # Opposite charges attract (negative force).
+    f_attract = coulomb_force(charge1=_q("1 uC"), charge2=_q("-1 uC"), separation=_q("1 m"))
+    assert f_attract.to("N").magnitude < 0
+    # Inverse-square: doubling separation quarters the force.
+    f2 = coulomb_force(charge1=_q("1 uC"), charge2=_q("1 uC"), separation=_q("2 m"))
+    assert f2.to("N").magnitude == pytest.approx(f.to("N").magnitude / 4.0, rel=1e-9)
+
+    # Field E = k*q/r^2; 1 uC at 0.1 m -> ~899 kV/m.
+    e = electric_field_point_charge(charge=_q("1 uC"), distance=_q("0.1 m"))
+    assert e.to("V/m").magnitude == pytest.approx(k * 1e-6 / 0.01, rel=1e-9)
+    assert e.to("V/m").magnitude == pytest.approx(8.9876e5, rel=1e-4)
+
+    # Potential V = k*q/r; 1 uC at 0.1 m -> ~89.9 kV, falling only as 1/r.
+    v = electric_potential_point_charge(charge=_q("1 uC"), distance=_q("0.1 m"))
+    assert v.to("V").magnitude == pytest.approx(k * 1e-6 / 0.1, rel=1e-9)
+    assert v.to("V").magnitude == pytest.approx(8.9876e4, rel=1e-4)
+    # Potential = field * distance for a point charge (E = V/r here).
+    assert e.to("V/m").magnitude == pytest.approx(v.to("V").magnitude / 0.1, rel=1e-9)
+
+    # Guardrails: positive separation/distance, charge dimension.
+    with pytest.raises(ValueError, match="separation must be positive"):
+        coulomb_force(charge1=_q("1 uC"), charge2=_q("1 uC"), separation=_q("0 m"))
+    with pytest.raises(ValueError, match="charge must be a"):
+        electric_field_point_charge(charge=_q("1 A"), distance=_q("0.1 m"))
+
+
 def test_ideal_gas_law_pressure_volume_and_moles():
     from anvilate.analysis import (
         ideal_gas_moles,

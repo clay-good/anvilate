@@ -714,6 +714,9 @@ modules:
 - :mod:`~anvilate.analysis.electroplating` — electroplating by Faraday deposition: the mass
   plated m = EW·I·t·η/F, the coating thickness δ = EW·I·t·η/(F·ρ·A), and the run time a
   target thickness needs t = δ·F·ρ·A/(EW·I·η) — the deposition mirror of ecm/corrosion
+- :mod:`~anvilate.analysis.electrostatics` — Coulomb electrostatics: the force k·q₁·q₂/r² between
+  point charges, the field E = k·q/r² a charge sets up, and the potential V = k·q/r — the
+  charge-based mirror of gravitation
 - :mod:`~anvilate.analysis.resistance_welding` — resistance spot welding by Joule heating:
   the heat Q = I²·R·t, the current a schedule needs I = √(Q/(R·t)), and the nugget melting
   energy E = ρ·V·(c·ΔT + L_f) whose ratio to Q is the low thermal efficiency
@@ -1361,6 +1364,11 @@ from .electroplating import (
     electroplating_deposition_thickness,
     electroplating_mass_deposited,
     electroplating_time_for_thickness,
+)
+from .electrostatics import (
+    coulomb_force,
+    electric_field_point_charge,
+    electric_potential_point_charge,
 )
 from .energy_storage import (
     battery_backup_time,
@@ -2682,6 +2690,9 @@ __all__ = [
     "electroplating_mass_deposited",
     "electroplating_deposition_thickness",
     "electroplating_time_for_thickness",
+    "coulomb_force",
+    "electric_field_point_charge",
+    "electric_potential_point_charge",
     "battery_bank_capacity",
     "usable_battery_energy",
     "battery_backup_time",
