@@ -209,8 +209,9 @@ modules:
   from the NEMA code letter, conductor resistance ρ·L/A, the
   three-phase voltage drop along a feeder, the capacitor kVAR to
   correct a poor power factor, the transformer full-load and available fault current
-  (the AIC rating downstream gear must interrupt), the Dwight earthing resistance of
-  a driven ground rod and of rods in parallel, and the AC skin depth √(ρ/(π·f·μ))
+  (the AIC rating downstream gear must interrupt), the ideal-transformer voltage/current/
+  impedance transformation (V_s = V_p/n, I_s = I_p·n, Z_p = n²·Z_s), the Dwight earthing
+  resistance of a driven ground rod and of rods in parallel, and the AC skin depth √(ρ/(π·f·μ))
 - :mod:`~anvilate.analysis.reactive_circuit` — reactive components: the energy a
   capacitor (½·C·V²) and an inductor (½·L·I²) store, the RC/RL first-order time
   constants and the RC filter cutoff f_c = 1/(2π·R·C), and the LC resonant frequency
@@ -1099,6 +1100,9 @@ from .electrical import (
     three_phase_power,
     transformer_available_fault_current,
     transformer_full_load_current,
+    transformer_reflected_impedance,
+    transformer_secondary_current,
+    transformer_secondary_voltage,
     voltage_drop_single_phase,
     voltage_drop_three_phase,
 )
@@ -2196,6 +2200,9 @@ __all__ = [
     "three_phase_power",
     "transformer_full_load_current",
     "transformer_available_fault_current",
+    "transformer_secondary_voltage",
+    "transformer_secondary_current",
+    "transformer_reflected_impedance",
     "ground_rod_resistance",
     "parallel_ground_electrodes_resistance",
     "voltage_drop_single_phase",

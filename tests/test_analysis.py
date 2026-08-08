@@ -20853,6 +20853,36 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_transformer_ideal_voltage_current_and_impedance_transformation():
+    from anvilate.analysis import (
+        transformer_reflected_impedance,
+        transformer_secondary_current,
+        transformer_secondary_voltage,
+    )
+
+    # 10:1 step-down: V_s = V_p/n, I_s = I_p*n (power conserved), Z_p = n^2*Z_s.
+    v_s = transformer_secondary_voltage(primary_voltage=_q("240 V"), turns_ratio=10.0)
+    assert v_s.to("V").magnitude == pytest.approx(24.0, rel=1e-12)
+    i_s = transformer_secondary_current(primary_current=_q("1 A"), turns_ratio=10.0)
+    assert i_s.to("A").magnitude == pytest.approx(10.0, rel=1e-12)
+    # Power is conserved across the ideal transformer: V_p*I_p == V_s*I_s.
+    assert (240.0 * 1.0) == pytest.approx(v_s.to("V").magnitude * i_s.to("A").magnitude, rel=1e-12)
+    z_p = transformer_reflected_impedance(secondary_impedance=_q("8 ohm"), turns_ratio=10.0)
+    assert z_p.to("ohm").magnitude == pytest.approx(800.0, rel=1e-12)
+
+    # A step-up transformer (n < 1) raises voltage and lowers current.
+    v_up = transformer_secondary_voltage(primary_voltage=_q("120 V"), turns_ratio=0.5)
+    assert v_up.to("V").magnitude == pytest.approx(240.0, rel=1e-12)
+
+    # Guardrails: positive turns ratio and impedance, dimensions checked.
+    with pytest.raises(ValueError, match="turns_ratio must be positive"):
+        transformer_secondary_voltage(primary_voltage=_q("240 V"), turns_ratio=0.0)
+    with pytest.raises(ValueError, match="secondary_impedance must be positive"):
+        transformer_reflected_impedance(secondary_impedance=_q("0 ohm"), turns_ratio=10.0)
+    with pytest.raises(ValueError, match="primary_voltage must be a"):
+        transformer_secondary_voltage(primary_voltage=_q("240 A"), turns_ratio=10.0)
+
+
 def test_antenna_friis_path_loss_received_power_and_range():
     from math import pi
 

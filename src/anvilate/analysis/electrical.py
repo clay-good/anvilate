@@ -9,8 +9,9 @@ usual acceptance check is that the drop stays under a few percent of the nominal
 at the end of a long feeder still sees enough voltage to start and run.
 
 Beyond sizing the feeder, the module also gives the transformer full-load and available fault
-current that set downstream interrupting ratings, and the Dwight earthing resistance of a driven
-ground rod (and rods in parallel). These are first-cut design values, not a full protection-
+current that set downstream interrupting ratings, the ideal-transformer voltage/current/impedance
+transformation (V_s = V_p/n, I_s = I_p·n, Z_p = n²·Z_s), and the Dwight earthing resistance of a
+driven ground rod (and rods in parallel). These are first-cut design values, not a full protection-
 coordination or arc-flash study. Resistivity, reactance, power factor, and the grounding combining
 factor are the caller's; inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
@@ -38,6 +39,9 @@ __all__ = [
     "three_phase_power",
     "transformer_available_fault_current",
     "transformer_full_load_current",
+    "transformer_secondary_voltage",
+    "transformer_secondary_current",
+    "transformer_reflected_impedance",
     "voltage_drop_single_phase",
     "voltage_drop_three_phase",
 ]
@@ -390,6 +394,56 @@ def transformer_available_fault_current(
     if impedance_percent <= 0:
         raise ValueError("impedance_percent must be positive")
     return Quantity(magnitude=i_fla * 100.0 / impedance_percent, unit="A")
+
+
+def transformer_secondary_voltage(*, primary_voltage: Quantity, turns_ratio: float) -> Quantity:
+    """The ideal-transformer secondary voltage, V_s = V_p/n.
+
+    An ideal transformer scales voltage by its ``turns_ratio`` n = N_p/N_s: the secondary sees
+    V_s = V_p/n from the ``primary_voltage`` V_p. A step-down transformer (n > 1) lowers the
+    voltage; n < 1 steps it up. This is the ratio behind every power adapter and distribution
+    transformer, distinct from the kVA-based full-load sizing of
+    :func:`transformer_full_load_current`. Returns the secondary voltage in V.
+    """
+    _check(primary_voltage, "[electric_potential]", "primary_voltage")
+    v_p = primary_voltage.to("V").magnitude
+    if turns_ratio <= 0:
+        raise ValueError("turns_ratio must be positive")
+    return Quantity(magnitude=v_p / turns_ratio, unit="V")
+
+
+def transformer_secondary_current(*, primary_current: Quantity, turns_ratio: float) -> Quantity:
+    """The ideal-transformer secondary current, I_s = I_p·n.
+
+    Current transforms inversely to voltage in an ideal (loss-free) transformer, so the secondary
+    carries I_s = I_p·n from the ``primary_current`` I_p and ``turns_ratio`` n = N_p/N_s. A
+    step-down transformer (n > 1) that lowers voltage raises current in proportion, conserving V·I —
+    the reason a low-voltage secondary needs heavier conductors. Returns the secondary current in A.
+    """
+    _check(primary_current, "[current]", "primary_current")
+    i_p = primary_current.to("A").magnitude
+    if turns_ratio <= 0:
+        raise ValueError("turns_ratio must be positive")
+    return Quantity(magnitude=i_p * turns_ratio, unit="A")
+
+
+def transformer_reflected_impedance(
+    *, secondary_impedance: Quantity, turns_ratio: float
+) -> Quantity:
+    """The impedance reflected to the primary, Z_p = n²·Z_s.
+
+    A load impedance on the secondary appears from the primary side scaled by the square of the
+    ``turns_ratio`` n = N_p/N_s: Z_p = n²·Z_s, from the ``secondary_impedance`` Z_s. This is how a
+    transformer matches a load to a source (impedance matching), and why a step-down transformer
+    makes a low load impedance look large to the source. Returns the reflected impedance in ohm.
+    """
+    _check(secondary_impedance, "[electric_potential]/[current]", "secondary_impedance")
+    z_s = secondary_impedance.to("ohm").magnitude
+    if z_s <= 0:
+        raise ValueError("secondary_impedance must be positive")
+    if turns_ratio <= 0:
+        raise ValueError("turns_ratio must be positive")
+    return Quantity(magnitude=turns_ratio * turns_ratio * z_s, unit="ohm")
 
 
 def ground_rod_resistance(

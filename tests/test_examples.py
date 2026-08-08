@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_transformer_impedance_match_example_ports():
+    namespace = runpy.run_path(str(_EXAMPLES / "transformer_impedance_match.py"))
+    d = namespace["transformer_ports"]()
+    # 10:1, 240 V, 1 A, 8 ohm load: 24 V, 10 A, 800 ohm reflected.
+    assert d["secondary_voltage_v"] == pytest.approx(24.0, rel=1e-12)
+    assert d["secondary_current_a"] == pytest.approx(10.0, rel=1e-12)
+    assert d["reflected_impedance_ohm"] == pytest.approx(800.0, rel=1e-12)
+
+
 def test_wifi_link_budget_example_received_power_and_range():
     namespace = runpy.run_path(str(_EXAMPLES / "wifi_link_budget.py"))
     d = namespace["link_budget"]()
