@@ -557,6 +557,9 @@ geneva.geneva_index_angle
 grinding.grinding_specific_removal_rate
 grinding.grinding_equivalent_chip_thickness
 grinding.grinding_specific_energy
+gyroscope.gyroscopic_spin_angular_momentum
+gyroscope.gyroscopic_precession_rate
+gyroscope.gyroscopic_reaction_moment
 hvac_duct.circular_equivalent_diameter
 hvac_duct.fan_power
 hvac_duct.fan_total_pressure

@@ -15853,6 +15853,55 @@ def test_grinding_removal_rate_chip_thickness_and_specific_energy():
         grinding_specific_removal_rate(depth_of_cut=_q("5 s"), workpiece_speed=_q("200 mm/s"))
 
 
+def test_gyroscopic_angular_momentum_precession_and_reaction_moment():
+    from math import pi
+
+    from anvilate.analysis import (
+        gyroscopic_precession_rate,
+        gyroscopic_reaction_moment,
+        gyroscopic_spin_angular_momentum,
+    )
+
+    # Spin angular momentum L = I*omega; 500 kg*m^2 at 3000 rpm (314.16 rad/s) = 157080 N*m*s.
+    omega = 3000 * 2 * pi / 60
+    lam = gyroscopic_spin_angular_momentum(
+        polar_moment_of_inertia=_q("500 kg*m**2"), spin_speed=_q("3000 rpm")
+    )
+    assert lam.to("N*m*s").magnitude == pytest.approx(500 * omega, rel=1e-9)
+
+    # Reaction moment M = I*omega*Omega; a 6 deg/s turn -> 16449 N*m.
+    m = gyroscopic_reaction_moment(
+        polar_moment_of_inertia=_q("500 kg*m**2"),
+        spin_speed=_q("3000 rpm"),
+        precession_rate=_q("6 deg/s"),
+    )
+    expected_m = 500 * omega * (6 * pi / 180)
+    assert m.to("N*m").magnitude == pytest.approx(expected_m, rel=1e-9)
+    # A faster spin makes the reaction couple larger for the same turn.
+    m_fast = gyroscopic_reaction_moment(
+        polar_moment_of_inertia=_q("500 kg*m**2"),
+        spin_speed=_q("6000 rpm"),
+        precession_rate=_q("6 deg/s"),
+    )
+    assert m_fast.to("N*m").magnitude == pytest.approx(2 * m.to("N*m").magnitude, rel=1e-9)
+
+    # Precession rate Omega = M/(I*omega) inverts the reaction moment: round-trips to 6 deg/s.
+    om = gyroscopic_precession_rate(
+        applied_moment=m, polar_moment_of_inertia=_q("500 kg*m**2"), spin_speed=_q("3000 rpm")
+    )
+    assert om.to("deg/s").magnitude == pytest.approx(6.0, rel=1e-9)
+
+    # Guardrails: positive inputs and correct dimensions.
+    with pytest.raises(ValueError, match="spin_speed must be positive"):
+        gyroscopic_spin_angular_momentum(
+            polar_moment_of_inertia=_q("500 kg*m**2"), spin_speed=_q("0 rpm")
+        )
+    with pytest.raises(ValueError, match="polar_moment_of_inertia must be a"):
+        gyroscopic_spin_angular_momentum(
+            polar_moment_of_inertia=_q("500 kg"), spin_speed=_q("3000 rpm")
+        )
+
+
 def test_broaching_teeth_force_and_pull_capacity():
     from anvilate.analysis import (
         broaching_cutting_force,

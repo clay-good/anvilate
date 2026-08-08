@@ -413,6 +413,9 @@ modules:
   centrifugal force, the counterweight that balances it, and the ISO 1940
   balance-grade permissible eccentricity;
   and the Den Hartog tuned-mass-damper optimal tuning
+- :mod:`~anvilate.analysis.gyroscope` — rigid-rotor gyroscopic effects: the spin angular
+  momentum L = I·ω, the precession rate Ω = M/(I·ω) an applied moment produces, and the
+  reaction couple M = I·ω·Ω a forced precession puts on the bearings
 - :mod:`~anvilate.analysis.stress` — von Mises and octahedral-shear combination,
   the plane principal stresses and their orientation angle, the maximum shear,
   Tresca, combined axial+bending, and the Inglis elliptical-hole
@@ -1228,6 +1231,11 @@ from .grinding import (
     grinding_equivalent_chip_thickness,
     grinding_specific_energy,
     grinding_specific_removal_rate,
+)
+from .gyroscope import (
+    gyroscopic_precession_rate,
+    gyroscopic_reaction_moment,
+    gyroscopic_spin_angular_momentum,
 )
 from .hvac_duct import (
     circular_equivalent_diameter,
@@ -2564,6 +2572,9 @@ __all__ = [
     "grinding_specific_removal_rate",
     "grinding_equivalent_chip_thickness",
     "grinding_specific_energy",
+    "gyroscopic_spin_angular_momentum",
+    "gyroscopic_precession_rate",
+    "gyroscopic_reaction_moment",
     "reverted_train_is_coaxial",
     "planetary_planet_teeth",
     "planetary_can_assemble",

@@ -1058,6 +1058,16 @@ def test_gto_vis_viva_example_perigee_faster_than_apogee():
     assert d["specific_energy_mj_kg"] < 0
 
 
+def test_ship_turbine_gyroscopic_load_example_couple_in_a_turn():
+    namespace = runpy.run_path(str(_EXAMPLES / "ship_turbine_gyroscopic_load.py"))
+    d = namespace["turbine_gyro_load"]()
+    # Spin angular momentum ~157080 N*m*s, reaction couple ~16.4 kN*m in a 6 deg/s turn.
+    assert d["spin_angular_momentum_nms"] == pytest.approx(157080.0, abs=5.0)
+    assert d["reaction_moment_kn_m"] == pytest.approx(16.449, abs=0.01)
+    # The couple precesses the axis at exactly the ship's turn rate (round-trip).
+    assert d["precession_rate_deg_s"] == pytest.approx(6.0, abs=0.001)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()
