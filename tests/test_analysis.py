@@ -20975,6 +20975,75 @@ def test_screw_conveyor_capacity_mass_and_speed_inverse():
         screw_conveyor_mass_capacity(volumetric_capacity=q, bulk_density=_q("800 kg"))
 
 
+def test_turbomachinery_euler_head_tip_speed_and_vane_angle():
+    from math import pi, radians, tan
+
+    from anvilate.analysis import (
+        blade_tip_speed,
+        euler_head,
+        impeller_outlet_swirl_velocity,
+    )
+
+    g = 9.80665
+
+    # Tip speed U = pi*D*N; 300 mm impeller at 1450 rpm (no 2*pi rad-per-rev factor).
+    u = blade_tip_speed(diameter=_q("0.3 m"), rotational_speed=_q("1450 rpm"))
+    expected_u = pi * 0.3 * (1450.0 / 60.0)
+    assert u.to("m/s").magnitude == pytest.approx(expected_u, rel=1e-9)
+
+    # A rad/s input for the same speed gives the same tip speed.
+    u_rad = blade_tip_speed(diameter=_q("0.3 m"), rotational_speed=_q("151.8436454 rad/s"))
+    assert u_rad.to("m/s").magnitude == pytest.approx(expected_u, rel=1e-6)
+
+    # Outlet swirl c_theta = U - c_m/tan(beta); backward-curved 25 deg vane.
+    ct = impeller_outlet_swirl_velocity(
+        blade_speed=u, meridional_velocity=_q("3 m/s"), blade_angle=25.0
+    )
+    expected_ct = expected_u - 3.0 / tan(radians(25.0))
+    assert ct.to("m/s").magnitude == pytest.approx(expected_ct, rel=1e-9)
+
+    # A radial 90 deg vane recovers the full swirl (c_theta = U).
+    ct_radial = impeller_outlet_swirl_velocity(
+        blade_speed=u, meridional_velocity=_q("3 m/s"), blade_angle=90.0
+    )
+    assert ct_radial.to("m/s").magnitude == pytest.approx(expected_u, rel=1e-9)
+
+    # Euler head H = U2*c_theta2/g with no inlet swirl; backward vane ~38 m, radial ~53 m.
+    h = euler_head(outlet_blade_speed=u, outlet_swirl_velocity=ct)
+    assert h.to("m").magnitude == pytest.approx(expected_u * expected_ct / g, rel=1e-9)
+    assert h.to("m").magnitude == pytest.approx(37.96, abs=0.05)
+    h_radial = euler_head(outlet_blade_speed=u, outlet_swirl_velocity=ct_radial)
+    assert h_radial.to("m").magnitude > h.to("m").magnitude
+    assert h_radial.to("m").magnitude == pytest.approx(52.9, abs=0.1)
+
+    # Inlet pre-swirl reduces the head: H = (U2*c_theta2 - U1*c_theta1)/g.
+    h_preswirl = euler_head(
+        outlet_blade_speed=u,
+        outlet_swirl_velocity=ct,
+        inlet_blade_speed=_q("10 m/s"),
+        inlet_swirl_velocity=_q("2 m/s"),
+    )
+    assert h_preswirl.to("m").magnitude == pytest.approx(
+        (expected_u * expected_ct - 10.0 * 2.0) / g, rel=1e-9
+    )
+    assert h_preswirl.to("m").magnitude < h.to("m").magnitude
+
+    # Guardrails: blade angle range, positive inputs, dimensions, and non-positive head rejected.
+    with pytest.raises(ValueError, match="blade_angle must be in"):
+        impeller_outlet_swirl_velocity(
+            blade_speed=u, meridional_velocity=_q("3 m/s"), blade_angle=0.0
+        )
+    with pytest.raises(ValueError, match="rotational_speed must be a"):
+        blade_tip_speed(diameter=_q("0.3 m"), rotational_speed=_q("1450 m"))
+    with pytest.raises(ValueError, match="Euler head is non-positive"):
+        euler_head(
+            outlet_blade_speed=_q("10 m/s"),
+            outlet_swirl_velocity=_q("5 m/s"),
+            inlet_blade_speed=_q("20 m/s"),
+            inlet_swirl_velocity=_q("5 m/s"),
+        )
+
+
 def test_rc_cracking_moment_and_effective_inertia_bischoff():
     from anvilate.analysis import rc_cracking_moment, rc_effective_moment_of_inertia
 

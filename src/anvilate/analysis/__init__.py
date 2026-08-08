@@ -271,6 +271,10 @@ modules:
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
   when the same pump runs at a new speed, and the available NPSH and cavitation margin
   at the suction
+- :mod:`~anvilate.analysis.turbomachinery` — impeller Euler head: the blade tip speed
+  U = π·D·N, the outlet swirl velocity c_θ = U − c_m/tan β from the vane-angle velocity
+  triangle (backward/radial/forward-curved), and the Euler head H = (U₂·c_θ2 − U₁·c_θ1)/g —
+  the loss-free ceiling the delivered head of :mod:`~anvilate.analysis.pump` falls below
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -1852,6 +1856,11 @@ from .torsion import (
     triangular_bar_torsional_stress,
     triangular_bar_twist_angle,
 )
+from .turbomachinery import (
+    blade_tip_speed,
+    euler_head,
+    impeller_outlet_swirl_velocity,
+)
 from .vehicle import (
     grade_resistance_force,
     rolling_resistance_force,
@@ -1979,6 +1988,9 @@ __all__ = [
     "pump_shaft_power",
     "pump_specific_speed",
     "pump_suction_specific_speed",
+    "blade_tip_speed",
+    "impeller_outlet_swirl_velocity",
+    "euler_head",
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",

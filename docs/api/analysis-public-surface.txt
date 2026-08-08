@@ -1027,6 +1027,9 @@ torsion.thin_open_strip_twist_angle
 torsion.torque_from_power
 torsion.triangular_bar_torsional_stress
 torsion.triangular_bar_twist_angle
+turbomachinery.blade_tip_speed
+turbomachinery.euler_head
+turbomachinery.impeller_outlet_swirl_velocity
 wear.archard_wear_depth
 wear.archard_wear_volume
 wear.sliding_contact_pv

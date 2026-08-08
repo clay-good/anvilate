@@ -1185,6 +1185,17 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_impeller_euler_head_example_tip_speed_and_vane_penalty():
+    namespace = runpy.run_path(str(_EXAMPLES / "impeller_euler_head.py"))
+    d = namespace["impeller_head"]()
+    # 300 mm impeller at 1450 rpm -> ~22.8 m/s tip speed.
+    assert d["tip_speed_m_s"] == pytest.approx(22.78, abs=0.05)
+    # Backward-curved 25 deg vane ~38 m; radial 90 deg vane ~53 m (more head, less stable).
+    assert d["backward_vane_head_m"] == pytest.approx(37.96, abs=0.1)
+    assert d["radial_vane_head_m"] == pytest.approx(52.9, abs=0.1)
+    assert d["radial_vane_head_m"] > d["backward_vane_head_m"]
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()
