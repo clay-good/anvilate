@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_gps_and_accelerator_relativity_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "gps_and_accelerator_relativity.py"))
+    d = namespace["relativistic_effects"]()
+    # Electron at 0.9c: ~0.66 MeV; muon at 0.99c: gamma ~7.09, 2.2 us -> ~15.6 us.
+    assert d["electron_kinetic_energy_mev"] == pytest.approx(0.6613, abs=0.002)
+    assert d["muon_lorentz_factor"] == pytest.approx(7.089, abs=0.01)
+    assert d["muon_dilated_lifetime_us"] == pytest.approx(15.6, abs=0.1)
+
+
 def test_photocathode_electron_wavelength_example():
     namespace = runpy.run_path(str(_EXAMPLES / "photocathode_and_electron_wavelength.py"))
     d = namespace["quantum_instruments"]()

@@ -20853,6 +20853,50 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_relativity_lorentz_time_dilation_and_kinetic_energy():
+    from anvilate.analysis import (
+        lorentz_factor,
+        relativistic_kinetic_energy,
+        time_dilation,
+    )
+
+    c = 299792458.0
+
+    # gamma = 1/sqrt(1-(v/c)^2); ~1 at rest, 2.294 at 0.9c.
+    assert lorentz_factor(velocity=Quantity(magnitude=0.0, unit="m/s")) == pytest.approx(1.0)
+    g = lorentz_factor(velocity=Quantity(magnitude=0.9 * c, unit="m/s"))
+    assert g == pytest.approx(1 / (1 - 0.81) ** 0.5, rel=1e-9)
+    assert g == pytest.approx(2.2942, abs=0.001)
+
+    # Time dilation t = gamma*t0.
+    t = time_dilation(proper_time=_q("1 s"), velocity=Quantity(magnitude=0.9 * c, unit="m/s"))
+    assert t.to("s").magnitude == pytest.approx(g * 1.0, rel=1e-9)
+
+    # Relativistic KE = (gamma-1)*m*c^2; electron at 0.9c ~ 0.661 MeV.
+    ke = relativistic_kinetic_energy(
+        mass=Quantity(magnitude=9.1093837015e-31, unit="kg"),
+        velocity=Quantity(magnitude=0.9 * c, unit="m/s"),
+    )
+    assert ke.to("J").magnitude == pytest.approx((g - 1) * 9.1093837015e-31 * c * c, rel=1e-9)
+    assert ke.to("J").magnitude / 1.602176634e-19 / 1e6 == pytest.approx(0.6613, abs=0.001)
+    # At low speed KE approaches the classical (1/2)m v^2.
+    v_slow = 1000.0  # m/s
+    ke_slow = relativistic_kinetic_energy(
+        mass=Quantity(magnitude=1.0, unit="kg"),
+        velocity=Quantity(magnitude=v_slow, unit="m/s"),
+    )
+    # (Loose tolerance: (gamma-1) loses precision to float cancellation at tiny v.)
+    assert ke_slow.to("J").magnitude == pytest.approx(0.5 * 1.0 * v_slow**2, rel=1e-4)
+
+    # Guardrails: velocity must be below c, positive mass, dimensions checked.
+    with pytest.raises(ValueError, match="below the speed of light"):
+        lorentz_factor(velocity=Quantity(magnitude=c, unit="m/s"))
+    with pytest.raises(ValueError, match="below the speed of light"):
+        time_dilation(proper_time=_q("1 s"), velocity=Quantity(magnitude=1.1 * c, unit="m/s"))
+    with pytest.raises(ValueError, match="velocity must be a"):
+        lorentz_factor(velocity=_q("100 m"))
+
+
 def test_quantum_photoelectric_and_de_broglie():
     from anvilate.analysis import (
         de_broglie_wavelength,

@@ -363,6 +363,9 @@ modules:
 - :mod:`~anvilate.analysis.quantum` — photoelectric and matter-wave quanta: the photoelectron
   energy KE = h·f − φ, the threshold frequency f0 = φ/h below which no electron escapes, and the
   de Broglie wavelength λ = h/(m·v) behind electron-microscope resolution
+- :mod:`~anvilate.analysis.relativity` — special relativity: the Lorentz factor γ = 1/√(1−(v/c)²),
+  the time dilation t = γ·t0 of a moving clock (GPS, muons), and the relativistic kinetic energy
+  (γ−1)·m·c² an accelerator must supply
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1730,6 +1733,11 @@ from .reinforced_concrete import (
     rc_tension_steel_for_moment,
     rc_two_way_shear_strength,
 )
+from .relativity import (
+    lorentz_factor,
+    relativistic_kinetic_energy,
+    time_dilation,
+)
 from .resistance_welding import (
     spot_weld_current_for_heat,
     spot_weld_heat_generated,
@@ -2839,6 +2847,9 @@ __all__ = [
     "photoelectric_max_kinetic_energy",
     "photoelectric_threshold_frequency",
     "de_broglie_wavelength",
+    "lorentz_factor",
+    "time_dilation",
+    "relativistic_kinetic_energy",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",
