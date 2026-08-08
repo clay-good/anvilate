@@ -289,6 +289,8 @@ modules:
 - :mod:`~anvilate.analysis.pn_junction` — pn-junction electrostatics (abrupt): the built-in
   potential V_bi = (kT/q)·ln(N_A·N_D/n_i²), the depletion width W = √(2ε·V_bi/q·(1/N_A+1/N_D)), and
   the junction capacitance ε/W per area (the varactor's tunable capacitance)
+- :mod:`~anvilate.analysis.dc_circuit` — DC resistive basics: Ohm's law V = I·R, the resistive
+  (Joule) power P = I²·R a resistor dissipates, and the parallel equivalent R = 1/Σ(1/Rᵢ)
 - :mod:`~anvilate.analysis.dc_dc_converter` — switching-regulator transfer functions (ideal, CCM):
   the buck V_out = D·V_in (step-down), the boost V_out = V_in/(1−D) (step-up), and the buck-boost
   V_out = V_in·D/(1−D) (either), all set by the duty cycle D
@@ -1246,6 +1248,11 @@ from .data_converter import (
     effective_number_of_bits,
     quantization_snr,
     quantization_step,
+)
+from .dc_circuit import (
+    ohms_law_voltage,
+    parallel_resistance,
+    resistive_power,
 )
 from .dc_dc_converter import (
     boost_output_voltage,
@@ -2803,6 +2810,9 @@ __all__ = [
     "quantization_snr",
     "quantization_step",
     "effective_number_of_bits",
+    "ohms_law_voltage",
+    "resistive_power",
+    "parallel_resistance",
     "arrhenius_rate_constant",
     "arrhenius_rate_ratio",
     "arrhenius_activation_energy",

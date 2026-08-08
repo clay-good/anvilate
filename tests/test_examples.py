@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_resistor_network_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "resistor_network.py"))
+    d = namespace["resistor_network"]()
+    # 2 A/10 ohm: 20 V, 40 W; 10||20 -> 6.67 ohm.
+    assert d["voltage_v"] == pytest.approx(20.0, rel=1e-9)
+    assert d["power_w"] == pytest.approx(40.0, rel=1e-9)
+    assert d["parallel_resistance_ohm"] == pytest.approx(6.6667, abs=0.001)
+
+
 def test_parallel_plate_capacitor_example():
     namespace = runpy.run_path(str(_EXAMPLES / "parallel_plate_capacitor.py"))
     d = namespace["capacitor_state"]()

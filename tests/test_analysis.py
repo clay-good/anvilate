@@ -22334,6 +22334,47 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_ohms_law_resistive_power_and_parallel_resistance():
+    from anvilate.analysis import (
+        ohms_law_voltage,
+        parallel_resistance,
+        resistive_power,
+    )
+
+    # Ohm's law V = I*R; 2 A through 10 ohm -> 20 V.
+    v = ohms_law_voltage(current=_q("2 A"), resistance=_q("10 ohm"))
+    assert v.to("V").magnitude == pytest.approx(20.0, rel=1e-9)
+
+    # Resistive power P = I^2*R; 2 A, 10 ohm -> 40 W.
+    p = resistive_power(current=_q("2 A"), resistance=_q("10 ohm"))
+    assert p.to("W").magnitude == pytest.approx(2.0**2 * 10.0, rel=1e-9)
+    assert p.to("W").magnitude == pytest.approx(40.0, rel=1e-9)
+    # It equals V*I with the Ohm's-law voltage (consistency).
+    assert p.to("W").magnitude == pytest.approx(v.to("V").magnitude * 2.0, rel=1e-9)
+    # Power rises with the square of current: double the current, quadruple the power.
+    p2 = resistive_power(current=_q("4 A"), resistance=_q("10 ohm"))
+    assert p2.to("W").magnitude == pytest.approx(4.0 * p.to("W").magnitude, rel=1e-9)
+
+    # Parallel resistance R = 1/sum(1/Ri); 10 || 20 -> 6.667 ohm, below both branches.
+    r_par = parallel_resistance(resistances=[_q("10 ohm"), _q("20 ohm")])
+    assert r_par.to("ohm").magnitude == pytest.approx(1.0 / (1 / 10.0 + 1 / 20.0), rel=1e-9)
+    assert r_par.to("ohm").magnitude == pytest.approx(6.6667, abs=0.001)
+    assert r_par.to("ohm").magnitude < 10.0
+    # Two equal resistors in parallel give half the resistance.
+    r_equal = parallel_resistance(resistances=[_q("10 ohm"), _q("10 ohm")])
+    assert r_equal.to("ohm").magnitude == pytest.approx(5.0, rel=1e-9)
+    # A single resistor in parallel is just itself.
+    assert parallel_resistance(resistances=[_q("10 ohm")]).to("ohm").magnitude == pytest.approx(
+        10.0, rel=1e-9
+    )
+
+    # Guardrails: empty list, positive resistances, correct dimensions.
+    with pytest.raises(ValueError, match="at least one resistor"):
+        parallel_resistance(resistances=[])
+    with pytest.raises(ValueError, match="resistance must be a"):
+        ohms_law_voltage(current=_q("2 A"), resistance=_q("10 V"))
+
+
 def test_parallel_plate_capacitance_charge_and_field():
     from anvilate.analysis import (
         capacitor_charge,
