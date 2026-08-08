@@ -550,6 +550,9 @@ modules:
   centrifugal force, the counterweight that balances it, and the ISO 1940
   balance-grade permissible eccentricity;
   and the Den Hartog tuned-mass-damper optimal tuning
+- :mod:`~anvilate.analysis.elastic_constants` — isotropic elastic-constant conversions: the bulk
+  modulus K = E/(3(1−2ν)), the Lamé first parameter λ = Eν/((1+ν)(1−2ν)), and Young's modulus from
+  bulk and shear E = 9KG/(3K+G) — the constants an FEA solver or the wave-speed relations need
 - :mod:`~anvilate.analysis.elastic_waves` — elastic wave speeds in solids: the thin-bar longitudinal
   speed √(E/ρ), the shear (transverse) speed √(G/ρ), and the bulk P-wave speed √((K+4G/3)/ρ) — the
   velocities behind ultrasonic NDT and P/S-wave seismology
@@ -1214,6 +1217,11 @@ from .edm import (
     edm_discharge_energy,
     edm_duty_factor,
     edm_material_removal_rate,
+)
+from .elastic_constants import (
+    bulk_modulus_from_youngs_poisson,
+    lame_first_parameter,
+    youngs_modulus_from_bulk_shear,
 )
 from .elastic_waves import (
     bar_wave_speed,
@@ -2944,6 +2952,9 @@ __all__ = [
     "edm_discharge_energy",
     "edm_duty_factor",
     "edm_material_removal_rate",
+    "bulk_modulus_from_youngs_poisson",
+    "lame_first_parameter",
+    "youngs_modulus_from_bulk_shear",
     "bar_wave_speed",
     "shear_wave_speed",
     "bulk_longitudinal_wave_speed",

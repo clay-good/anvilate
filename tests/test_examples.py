@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_elastic_constants_conversion_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "elastic_constants_conversion.py"))
+    d = namespace["convert_constants"]()
+    # Steel E=200 GPa, nu=0.3: K~167 GPa, lambda~115 GPa; E round-trips to 200 GPa.
+    assert d["bulk_modulus_gpa"] == pytest.approx(166.667, abs=0.01)
+    assert d["lame_parameter_gpa"] == pytest.approx(115.385, abs=0.01)
+    assert d["recovered_youngs_gpa"] == pytest.approx(200.0, rel=1e-6)
+
+
 def test_steel_ultrasonic_wave_speeds_example():
     namespace = runpy.run_path(str(_EXAMPLES / "steel_ultrasonic_wave_speeds.py"))
     d = namespace["steel_wave_speeds"]()

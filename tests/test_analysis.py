@@ -20985,6 +20985,42 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_elastic_constants_bulk_lame_and_youngs_conversions():
+    from anvilate.analysis import (
+        bulk_modulus_from_youngs_poisson,
+        lame_first_parameter,
+        youngs_modulus_from_bulk_shear,
+    )
+
+    # K = E/(3(1-2nu)); steel E=200 GPa, nu=0.3 -> ~166.7 GPa.
+    k = bulk_modulus_from_youngs_poisson(elastic_modulus=_q("200 GPa"), poisson_ratio=0.3)
+    assert k.to("Pa").magnitude == pytest.approx(200e9 / (3 * (1 - 2 * 0.3)), rel=1e-9)
+    assert k.to("GPa").magnitude == pytest.approx(166.667, abs=0.01)
+    # K rises as nu approaches 0.5 (incompressible).
+    k49 = bulk_modulus_from_youngs_poisson(elastic_modulus=_q("200 GPa"), poisson_ratio=0.49)
+    assert k49.to("Pa").magnitude > k.to("Pa").magnitude
+
+    # Lame lambda = E*nu/((1+nu)(1-2nu)); ~115.4 GPa; zero at nu=0.
+    lam = lame_first_parameter(elastic_modulus=_q("200 GPa"), poisson_ratio=0.3)
+    assert lam.to("Pa").magnitude == pytest.approx(200e9 * 0.3 / (1.3 * 0.4), rel=1e-9)
+    assert lame_first_parameter(elastic_modulus=_q("200 GPa"), poisson_ratio=0.0).to(
+        "Pa"
+    ).magnitude == pytest.approx(0.0, abs=1e-3)
+
+    # E = 9KG/(3K+G) round-trips: from K and G=E/2(1+nu) recover E.
+    g = Quantity(magnitude=200.0 / (2 * 1.3), unit="GPa")
+    e = youngs_modulus_from_bulk_shear(bulk_modulus=k, shear_modulus=g)
+    assert e.to("GPa").magnitude == pytest.approx(200.0, rel=1e-6)
+
+    # Guardrails: poisson in (-1, 0.5), positive moduli, dimensions checked.
+    with pytest.raises(ValueError, match="poisson_ratio must be in"):
+        bulk_modulus_from_youngs_poisson(elastic_modulus=_q("200 GPa"), poisson_ratio=0.5)
+    with pytest.raises(ValueError, match="bulk_modulus must be positive"):
+        youngs_modulus_from_bulk_shear(bulk_modulus=_q("0 GPa"), shear_modulus=g)
+    with pytest.raises(ValueError, match="elastic_modulus must be a"):
+        bulk_modulus_from_youngs_poisson(elastic_modulus=_q("200 kg"), poisson_ratio=0.3)
+
+
 def test_elastic_wave_speeds_bar_shear_and_bulk():
     from math import sqrt
 
