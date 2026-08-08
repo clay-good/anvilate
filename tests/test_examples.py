@@ -1084,6 +1084,17 @@ def test_muffler_and_pipe_resonance_example_open_vs_closed():
     )
 
 
+def test_doppler_speed_gun_example_recovers_the_source_speed():
+    namespace = runpy.run_path(str(_EXAMPLES / "doppler_speed_gun.py"))
+    d = namespace["moving_source"]()
+    # 1000 Hz from a 30 m/s approaching source heard as ~1096 Hz.
+    assert d["shifted_frequency_hz"] == pytest.approx(1095.85, abs=0.1)
+    # The Doppler inverse recovers the 30 m/s closing speed.
+    assert d["recovered_speed_m_s"] == pytest.approx(30.0, abs=0.01)
+    # Mach cone half-angle at Mach 2 is 30 degrees.
+    assert d["mach_cone_angle_deg"] == pytest.approx(30.0, abs=0.01)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

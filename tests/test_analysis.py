@@ -15949,6 +15949,63 @@ def test_acoustic_helmholtz_and_pipe_resonances():
         open_pipe_resonance_frequency(speed_of_sound=_q("343 m"), pipe_length=_q("1 m"))
 
 
+def test_doppler_shift_velocity_inverse_and_mach_cone():
+    from math import asin, degrees
+
+    from anvilate.analysis import (
+        doppler_shifted_frequency,
+        doppler_velocity_from_shift,
+        mach_cone_angle,
+    )
+
+    c = _q("343 m/s")
+
+    # Approaching source raises the pitch: f' = f*(c+0)/(c-v_s); 1000 Hz at 30 m/s -> 1095.8 Hz.
+    f_up = doppler_shifted_frequency(
+        source_frequency=_q("1000 Hz"),
+        speed_of_sound=c,
+        source_velocity=_q("30 m/s"),
+        observer_velocity=_q("0 m/s"),
+    )
+    assert f_up.to("Hz").magnitude == pytest.approx(1000 * 343 / (343 - 30), rel=1e-9)
+    assert f_up.to("Hz").magnitude > 1000  # pitch rises approaching
+    # A receding source (negative source velocity) lowers the pitch.
+    f_down = doppler_shifted_frequency(
+        source_frequency=_q("1000 Hz"),
+        speed_of_sound=c,
+        source_velocity=_q("-30 m/s"),
+        observer_velocity=_q("0 m/s"),
+    )
+    assert f_down.to("Hz").magnitude < 1000
+
+    # Inverse recovers the closing speed from the shift: 1000 -> 1095.8 Hz gives 30 m/s.
+    v = doppler_velocity_from_shift(
+        source_frequency=_q("1000 Hz"), observed_frequency=f_up, speed_of_sound=c
+    )
+    assert v.to("m/s").magnitude == pytest.approx(30.0, rel=1e-9)
+
+    # Mach cone half-angle mu = arcsin(1/M); M=2 -> 30 deg.
+    assert mach_cone_angle(mach_number=2.0) == pytest.approx(degrees(asin(0.5)), rel=1e-9)
+    assert mach_cone_angle(mach_number=2.0) == pytest.approx(30.0, rel=1e-9)
+    # A faster source narrows the cone.
+    assert mach_cone_angle(mach_number=4.0) < mach_cone_angle(mach_number=2.0)
+
+    # Guardrails: source below the speed of sound, supersonic Mach, dimensions checked.
+    with pytest.raises(ValueError, match="source_velocity must be below the speed of sound"):
+        doppler_shifted_frequency(
+            source_frequency=_q("1000 Hz"),
+            speed_of_sound=c,
+            source_velocity=_q("400 m/s"),
+            observer_velocity=_q("0 m/s"),
+        )
+    with pytest.raises(ValueError, match="mach_number must exceed 1"):
+        mach_cone_angle(mach_number=0.8)
+    with pytest.raises(ValueError, match="source_frequency must be a"):
+        doppler_velocity_from_shift(
+            source_frequency=_q("1000 m"), observed_frequency=_q("1096 Hz"), speed_of_sound=c
+        )
+
+
 def test_broaching_teeth_force_and_pull_capacity():
     from anvilate.analysis import (
         broaching_cutting_force,

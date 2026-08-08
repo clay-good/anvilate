@@ -17,14 +17,17 @@ decibel numbers (a dimensionless ratio); distances are dimension-checked
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import log10, pi, sqrt
+from math import asin, degrees, log10, pi, sqrt
 
 from ..units import Quantity
 
 __all__ = [
     "closed_pipe_resonance_frequency",
+    "doppler_shifted_frequency",
+    "doppler_velocity_from_shift",
     "helmholtz_resonator_frequency",
     "inverse_square_attenuation",
+    "mach_cone_angle",
     "mass_law_transmission_loss",
     "noise_dose_fraction",
     "open_pipe_resonance_frequency",
@@ -289,6 +292,81 @@ def closed_pipe_resonance_frequency(
     if not isinstance(mode, int) or mode < 1:
         raise ValueError("mode must be an integer of at least 1")
     return Quantity(magnitude=(2 * mode - 1) * c / (4.0 * length), unit="Hz")
+
+
+def doppler_shifted_frequency(
+    *,
+    source_frequency: Quantity,
+    speed_of_sound: Quantity,
+    source_velocity: Quantity,
+    observer_velocity: Quantity,
+) -> Quantity:
+    """The Doppler-shifted frequency, f' = f·(c + v_o)/(c − v_s).
+
+    The frequency a moving observer hears from a moving source: from the ``source_frequency`` f, the
+    ``speed_of_sound`` c, the ``source_velocity`` v_s, and the ``observer_velocity`` v_o (each taken
+    positive when that party moves *toward* the other), f' = f·(c + v_o)/(c − v_s). Closing the gap
+    raises the pitch, opening it lowers it — the up-then-down of a passing siren. The source speed
+    must stay below the speed of sound. Returns the observed frequency in Hz.
+    """
+    _check(source_frequency, "1/[time]", "source_frequency")
+    _check(speed_of_sound, "[length]/[time]", "speed_of_sound")
+    _check(source_velocity, "[length]/[time]", "source_velocity")
+    _check(observer_velocity, "[length]/[time]", "observer_velocity")
+    f = source_frequency.to("Hz").magnitude
+    c = speed_of_sound.to("m/s").magnitude
+    v_s = source_velocity.to("m/s").magnitude
+    v_o = observer_velocity.to("m/s").magnitude
+    if f <= 0:
+        raise ValueError("source_frequency must be positive")
+    if c <= 0:
+        raise ValueError("speed_of_sound must be positive")
+    if v_s >= c:
+        raise ValueError("source_velocity must be below the speed of sound")
+    if v_o <= -c:
+        raise ValueError("observer_velocity must exceed minus the speed of sound")
+    return Quantity(magnitude=f * (c + v_o) / (c - v_s), unit="Hz")
+
+
+def doppler_velocity_from_shift(
+    *, source_frequency: Quantity, observed_frequency: Quantity, speed_of_sound: Quantity
+) -> Quantity:
+    """The source speed from a Doppler shift, v_s = c·(f' − f)/f'.
+
+    Inverting the Doppler relation (:func:`doppler_shifted_frequency`) for a stationary observer:
+    the speed at which a source approaches, recovered from the ``source_frequency`` f it emits, the
+    ``observed_frequency`` f' measured, and the ``speed_of_sound`` c, v_s = c·(f' − f)/f'. A shift
+    up (f' > f) gives a positive closing speed; a shift down, a negative (receding) one. It is how
+    Doppler radar, sonar, and acoustic tachometry turn a frequency into a target's velocity. Returns
+    the source velocity in m/s (positive when approaching).
+    """
+    _check(source_frequency, "1/[time]", "source_frequency")
+    _check(observed_frequency, "1/[time]", "observed_frequency")
+    _check(speed_of_sound, "[length]/[time]", "speed_of_sound")
+    f = source_frequency.to("Hz").magnitude
+    f_obs = observed_frequency.to("Hz").magnitude
+    c = speed_of_sound.to("m/s").magnitude
+    if f <= 0:
+        raise ValueError("source_frequency must be positive")
+    if f_obs <= 0:
+        raise ValueError("observed_frequency must be positive")
+    if c <= 0:
+        raise ValueError("speed_of_sound must be positive")
+    return Quantity(magnitude=c * (f_obs - f) / f_obs, unit="m/s")
+
+
+def mach_cone_angle(*, mach_number: float) -> float:
+    """The Mach cone half-angle, μ = arcsin(1/M).
+
+    The half-angle of the shock cone a supersonic source drags behind it: from the ``mach_number`` M
+    (which must exceed 1), μ = arcsin(1/M). The pressure disturbances a subsonic source makes outrun
+    it, but a supersonic one leaves them behind on a cone whose angle narrows as it goes faster —
+    the Mach cone that trails a bullet or an airplane and arrives as the crack of a sonic boom.
+    Returns the cone half-angle in degrees.
+    """
+    if mach_number <= 1.0:
+        raise ValueError(f"mach_number must exceed 1 (a Mach cone needs M > 1); got {mach_number}")
+    return degrees(asin(1.0 / mach_number))
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

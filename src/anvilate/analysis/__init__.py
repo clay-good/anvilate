@@ -9,7 +9,9 @@ modules:
 - :mod:`~anvilate.analysis.acoustics` — machinery-noise arithmetic (for plant/industrial
   work): the decibel sum of several sources and the inverse-square distance attenuation;
   plus acoustic resonance — the Helmholtz resonator f = (c/2π)·√(A/(V·L)) and the open-
-  (n·c/2L) and closed-pipe ((2n−1)·c/4L) resonant modes
+  (n·c/2L) and closed-pipe ((2n−1)·c/4L) resonant modes; and moving-source acoustics — the
+  Doppler-shifted frequency f' = f·(c + v_o)/(c − v_s), the source speed a shift implies, and
+  the Mach cone half-angle μ = arcsin(1/M) of a supersonic source
 - :mod:`~anvilate.analysis.adhesive` — bonded joints: the lap-joint average shear
   stress against the datasheet lap-shear strength, and the axial and torque
   capacity of a cylindrical retaining-compound bond
@@ -576,8 +578,11 @@ from .accumulator import (
 )
 from .acoustics import (
     closed_pipe_resonance_frequency,
+    doppler_shifted_frequency,
+    doppler_velocity_from_shift,
     helmholtz_resonator_frequency,
     inverse_square_attenuation,
+    mach_cone_angle,
     mass_law_transmission_loss,
     noise_dose_fraction,
     open_pipe_resonance_frequency,
@@ -2071,6 +2076,9 @@ __all__ = [
     "helmholtz_resonator_frequency",
     "open_pipe_resonance_frequency",
     "closed_pipe_resonance_frequency",
+    "doppler_shifted_frequency",
+    "doppler_velocity_from_shift",
+    "mach_cone_angle",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",
