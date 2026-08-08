@@ -401,7 +401,9 @@ modules:
   their series/parallel network, the temperature rise Q·R and its junction-margin
   scorecard, straight-fin efficiency and the fin-array count a target resistance
   needs, and the flat-plate forced (laminar and turbulent) and vertical-plate natural
-  convection coefficients with their validity ranges
+  convection coefficients with their validity ranges; plus radiation exchange — the two-surface
+  gray-body network, the Hottel crossed-strings view factor, the view-factor reciprocity
+  relation, and the 1/(N+1) radiation-shield reduction factor
 - :mod:`~anvilate.analysis.condensation` — Nusselt filmwise condensation (phase-change
   heat transfer): the vertical-plate coefficient h = 0.943·[…/(μ·ΔT·L)]^¼ and the
   horizontal-tube form (0.729/D), and the condensate rate ṁ = h·A·ΔT/h_fg they drive
@@ -1745,6 +1747,7 @@ from .thermal import (
     counterflow_effectiveness,
     counterflow_ntu_for_effectiveness,
     critical_insulation_radius,
+    crossed_strings_view_factor,
     crossflow_both_unmixed_effectiveness,
     cylindrical_conduction_resistance,
     degree_day_cooling_energy,
@@ -1774,6 +1777,7 @@ from .thermal import (
     parallel_thermal_resistance,
     radiation_heat_transfer,
     radiation_heat_transfer_coefficient,
+    radiation_shield_reduction_factor,
     radiation_two_surface_exchange,
     rayleigh_number,
     semi_infinite_solid_surface_flux,
@@ -1787,6 +1791,7 @@ from .thermal import (
     through_wall_gradient_thermal_stress,
     triaxial_constrained_thermal_stress,
     vertical_plate_natural_convection_coefficient,
+    view_factor_reciprocity,
     wien_peak_wavelength,
     wien_temperature_from_peak,
 )
@@ -2919,6 +2924,9 @@ __all__ = [
     "radiation_heat_transfer",
     "radiation_two_surface_exchange",
     "radiation_heat_transfer_coefficient",
+    "crossed_strings_view_factor",
+    "view_factor_reciprocity",
+    "radiation_shield_reduction_factor",
     "wien_peak_wavelength",
     "wien_temperature_from_peak",
     "thermoforming_areal_draw_ratio",

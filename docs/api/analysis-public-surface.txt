@@ -973,6 +973,9 @@ thermal.parallel_thermal_resistance
 thermal.radiation_heat_transfer
 thermal.radiation_two_surface_exchange
 thermal.radiation_heat_transfer_coefficient
+thermal.crossed_strings_view_factor
+thermal.view_factor_reciprocity
+thermal.radiation_shield_reduction_factor
 thermal.wien_peak_wavelength
 thermal.wien_temperature_from_peak
 thermal.series_thermal_resistance

@@ -1156,6 +1156,15 @@ def test_highway_cruise_power_example_hills_dominate():
     assert d["grade_power_kw"] > 2 * d["flat_power_kw"]
 
 
+def test_radiation_shield_and_view_factor_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "radiation_shield_and_view_factor.py"))
+    d = namespace["radiation_geometry"]()
+    # Parallel strips F12 ~0.414; reciprocity to a 2x surface halves it; 3 shields -> 25%.
+    assert d["view_factor_1_to_2"] == pytest.approx(0.4142, abs=0.001)
+    assert d["reciprocity_view_factor_2_to_1"] == pytest.approx(0.2071, abs=0.001)
+    assert d["shield_reduction_factor"] == pytest.approx(0.25, rel=1e-9)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

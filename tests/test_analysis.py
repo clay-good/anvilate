@@ -20805,6 +20805,54 @@ def test_radiation_two_surface_exchange_parallel_plates_and_shield():
         )
 
 
+def test_view_factor_crossed_strings_reciprocity_and_shield():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        crossed_strings_view_factor,
+        radiation_shield_reduction_factor,
+        view_factor_reciprocity,
+    )
+
+    # Two 1 m parallel strips 1 m apart, directly opposed: F12 = (sqrt2 + sqrt2 - 1 - 1)/2 = 0.414.
+    d = _q(f"{sqrt(2)} m")
+    f12 = crossed_strings_view_factor(
+        crossed_string_1=d,
+        crossed_string_2=d,
+        uncrossed_string_1=_q("1 m"),
+        uncrossed_string_2=_q("1 m"),
+        surface_1_width=_q("1 m"),
+    )
+    assert f12 == pytest.approx((2 * sqrt(2) - 2) / 2, rel=1e-9)
+    assert 0.0 <= f12 <= 1.0
+
+    # Reciprocity F21 = A1*F12/A2; a 1 m^2 surface to a 2 m^2 one halves the factor.
+    f21 = view_factor_reciprocity(area_1=_q("1 m**2"), view_factor_1_to_2=f12, area_2=_q("2 m**2"))
+    assert f21 == pytest.approx(f12 / 2, rel=1e-9)
+
+    # Radiation shields: N=3 -> flux is 1/(3+1) = 0.25 of the unshielded value.
+    assert radiation_shield_reduction_factor(number_of_shields=3) == pytest.approx(0.25, rel=1e-9)
+    # No shield leaves the flux unchanged (factor 1); more shields cut it further.
+    assert radiation_shield_reduction_factor(number_of_shields=0) == pytest.approx(1.0, rel=1e-9)
+    assert radiation_shield_reduction_factor(
+        number_of_shields=9
+    ) < radiation_shield_reduction_factor(number_of_shields=3)
+
+    # Guardrails: string assignment giving F outside [0,1] is rejected; N must be non-negative int.
+    with pytest.raises(ValueError, match="outside"):
+        crossed_strings_view_factor(
+            crossed_string_1=_q("10 m"),
+            crossed_string_2=_q("10 m"),
+            uncrossed_string_1=_q("0 m"),
+            uncrossed_string_2=_q("0 m"),
+            surface_1_width=_q("1 m"),
+        )
+    with pytest.raises(ValueError, match="number_of_shields must be a non-negative integer"):
+        radiation_shield_reduction_factor(number_of_shields=-1)
+    with pytest.raises(ValueError, match="area_1 must be positive"):
+        view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
+
+
 def test_rc_cracking_moment_and_effective_inertia_bischoff():
     from anvilate.analysis import rc_cracking_moment, rc_effective_moment_of_inertia
 

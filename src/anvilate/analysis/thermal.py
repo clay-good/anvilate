@@ -77,6 +77,9 @@ __all__ = [
     "radiation_heat_transfer",
     "radiation_two_surface_exchange",
     "radiation_heat_transfer_coefficient",
+    "crossed_strings_view_factor",
+    "view_factor_reciprocity",
+    "radiation_shield_reduction_factor",
     "wien_peak_wavelength",
     "wien_temperature_from_peak",
 ]
@@ -1955,3 +1958,82 @@ def wien_temperature_from_peak(*, peak_wavelength: Quantity) -> Quantity:
     if lam <= 0:
         raise ValueError("peak_wavelength must be positive")
     return Quantity(magnitude=_WIEN_DISPLACEMENT / lam, unit="K")
+
+
+def crossed_strings_view_factor(
+    *,
+    crossed_string_1: Quantity,
+    crossed_string_2: Quantity,
+    uncrossed_string_1: Quantity,
+    uncrossed_string_2: Quantity,
+    surface_1_width: Quantity,
+) -> float:
+    """Hottel's crossed-strings view factor, F₁₂ = (Σ crossed − Σ uncrossed)/(2·w₁).
+
+    The view factor between two infinitely long surfaces of arbitrary 2D cross-section, by Hottel's
+    crossed-strings construction: stretch imaginary strings between the four edge pairs, then
+    F₁₂ = (crossed_1 + crossed_2 − uncrossed_1 − uncrossed_2)/(2·``surface_1_width``). The two
+    ``crossed_string`` lengths connect opposite edges (they cross the gap), the two
+    ``uncrossed_string`` lengths connect same-side edges, and w₁ is the width of surface 1. It fits
+    tilted, offset, and blocked geometries that closed-form charts do not. Returns the view factor
+    F₁₂ (dimensionless, 0 to 1).
+    """
+    _require(crossed_string_1, "[length]", "crossed_string_1")
+    _require(crossed_string_2, "[length]", "crossed_string_2")
+    _require(uncrossed_string_1, "[length]", "uncrossed_string_1")
+    _require(uncrossed_string_2, "[length]", "uncrossed_string_2")
+    _require(surface_1_width, "[length]", "surface_1_width")
+    c1 = crossed_string_1.to("m").magnitude
+    c2 = crossed_string_2.to("m").magnitude
+    u1 = uncrossed_string_1.to("m").magnitude
+    u2 = uncrossed_string_2.to("m").magnitude
+    w1 = surface_1_width.to("m").magnitude
+    if w1 <= 0:
+        raise ValueError("surface_1_width must be positive")
+    if min(c1, c2, u1, u2) < 0:
+        raise ValueError("string lengths must be non-negative")
+    f12 = (c1 + c2 - u1 - u2) / (2.0 * w1)
+    if not 0.0 <= f12 <= 1.0:
+        raise ValueError(
+            f"computed view factor {f12:.4f} is outside [0, 1]; check the string assignments"
+        )
+    return f12
+
+
+def view_factor_reciprocity(
+    *, area_1: Quantity, view_factor_1_to_2: float, area_2: Quantity
+) -> float:
+    """The reciprocity relation for view factors, F₂₁ = A₁·F₁₂/A₂.
+
+    The complementary view factor from the reciprocity theorem A₁·F₁₂ = A₂·F₂₁: from the ``area_1``
+    A₁, the known ``view_factor_1_to_2`` F₁₂, and the ``area_2`` A₂, F₂₁ = A₁·F₁₂/A₂. It converts a
+    view factor known one way into the other — so a small surface facing a large one sees a large
+    fraction of it while the large one sees only a little back. Returns the view factor F₂₁
+    (dimensionless).
+    """
+    _require(area_1, "[area]", "area_1")
+    _require(area_2, "[area]", "area_2")
+    a1 = area_1.to("m**2").magnitude
+    a2 = area_2.to("m**2").magnitude
+    if a1 <= 0:
+        raise ValueError("area_1 must be positive")
+    if a2 <= 0:
+        raise ValueError("area_2 must be positive")
+    if not 0.0 <= view_factor_1_to_2 <= 1.0:
+        raise ValueError("view_factor_1_to_2 must be in [0, 1]")
+    return a1 * view_factor_1_to_2 / a2
+
+
+def radiation_shield_reduction_factor(*, number_of_shields: int) -> float:
+    """The radiation-shield reduction factor, q_shielded/q_unshielded = 1/(N + 1).
+
+    How much radiant heat transfer between two large parallel surfaces is cut by inserting ``N``
+    thin shields of the same emissivity between them: q_shielded/q_unshielded = 1/(N + 1). A shield
+    halves the flux, three quarters it, and so on — the principle of multi-layer insulation (MLI) on
+    spacecraft, of the shields in a cryostat, and of a firefighter's reflective blanket. It assumes
+    all surfaces share one emissivity; differing emissivities shift the factor but not the 1/(N+1)
+    trend. Returns the reduction factor (dimensionless, 0 to 1).
+    """
+    if not isinstance(number_of_shields, int) or number_of_shields < 0:
+        raise ValueError("number_of_shields must be a non-negative integer")
+    return 1.0 / (number_of_shields + 1)
