@@ -276,6 +276,9 @@ clutch.clutch_engagement_energy
 clutch.cone_clutch_torque
 clutch.disc_clutch_force_for_torque
 clutch.disc_clutch_torque
+colligative.boiling_point_elevation
+colligative.freezing_point_depression
+colligative.osmotic_pressure
 column.ColumnEnd
 column.aisc_flexural_buckling_stress
 column.aisc_inelastic_ltb_limit

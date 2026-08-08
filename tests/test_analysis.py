@@ -20853,6 +20853,61 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_colligative_osmotic_pressure_freezing_and_boiling_point():
+    from anvilate.analysis import (
+        boiling_point_elevation,
+        freezing_point_depression,
+        osmotic_pressure,
+    )
+
+    R = 8.314462618
+    T = Quantity(magnitude=298.15, unit="K")
+
+    # pi = i*c*R*T; 1 mol/L ideal solute at 25 C -> ~24.8 bar.
+    pi = osmotic_pressure(concentration=Quantity(magnitude=1.0, unit="mol/L"), temperature=T)
+    assert pi.to("Pa").magnitude == pytest.approx(1000.0 * R * 298.15, rel=1e-9)
+    assert pi.to("bar").magnitude == pytest.approx(24.79, abs=0.05)
+    # NaCl (i=2) doubles the osmotic pressure at the same molarity.
+    pi_nacl = osmotic_pressure(
+        concentration=Quantity(magnitude=1.0, unit="mol/L"), temperature=T, vant_hoff_factor=2.0
+    )
+    assert pi_nacl.to("Pa").magnitude == pytest.approx(2 * pi.to("Pa").magnitude, rel=1e-9)
+
+    # Delta_Tf = i*Kf*b; water Kf=1.86, 1 molal -> 1.86 K (i=1), 3.72 K for NaCl.
+    dtf = freezing_point_depression(
+        molality=Quantity(magnitude=1.0, unit="mol/kg"),
+        cryoscopic_constant=Quantity(magnitude=1.86, unit="K*kg/mol"),
+    )
+    assert dtf.to("K").magnitude == pytest.approx(1.86, rel=1e-9)
+    dtf_nacl = freezing_point_depression(
+        molality=Quantity(magnitude=1.0, unit="mol/kg"),
+        cryoscopic_constant=Quantity(magnitude=1.86, unit="K*kg/mol"),
+        vant_hoff_factor=2.0,
+    )
+    assert dtf_nacl.to("K").magnitude == pytest.approx(3.72, rel=1e-9)
+
+    # Delta_Tb = i*Kb*b; water Kb=0.512, 1 molal -> 0.512 K, much weaker than freezing.
+    dtb = boiling_point_elevation(
+        molality=Quantity(magnitude=1.0, unit="mol/kg"),
+        ebullioscopic_constant=Quantity(magnitude=0.512, unit="K*kg/mol"),
+    )
+    assert dtb.to("K").magnitude == pytest.approx(0.512, rel=1e-9)
+    assert dtb.to("K").magnitude < dtf.to("K").magnitude
+
+    # Guardrails: positive van 't Hoff factor and constants, dimensions checked.
+    with pytest.raises(ValueError, match="vant_hoff_factor must be positive"):
+        osmotic_pressure(
+            concentration=Quantity(magnitude=1.0, unit="mol/L"), temperature=T, vant_hoff_factor=0.0
+        )
+    with pytest.raises(ValueError, match="cryoscopic_constant must be positive"):
+        freezing_point_depression(
+            molality=Quantity(magnitude=1.0, unit="mol/kg"),
+            cryoscopic_constant=Quantity(magnitude=0.0, unit="K*kg/mol"),
+        )
+    with pytest.raises(ValueError, match="concentration must be a"):
+        osmotic_pressure(concentration=_q("1 mol"), temperature=T)
+
+
 def test_spectroscopy_absorbance_transmittance_and_concentration_inverse():
     from anvilate.analysis import (
         absorbance,

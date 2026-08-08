@@ -1185,6 +1185,14 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_road_salt_and_osmosis_example_freezing_and_pressure():
+    namespace = runpy.run_path(str(_EXAMPLES / "road_salt_and_osmosis.py"))
+    d = namespace["salt_water_properties"]()
+    # 1 molal NaCl (i=2): ~3.7 K depression; 0.6 mol/L NaCl: ~30 bar osmotic.
+    assert d["freezing_point_depression_k"] == pytest.approx(3.72, rel=1e-9)
+    assert d["osmotic_pressure_bar"] == pytest.approx(29.7, abs=0.2)
+
+
 def test_colorimetry_concentration_example_absorbance_and_recovery():
     namespace = runpy.run_path(str(_EXAMPLES / "colorimetry_concentration.py"))
     d = namespace["assay_sample"]()

@@ -113,6 +113,9 @@ modules:
 - :mod:`~anvilate.analysis.nernst` — Nernst electrochemistry: the cell potential
   E = E0 − (RT/nF)·ln Q away from standard conditions, the ~59 mV/decade Nernst slope
   2.303·RT/(nF) of a potentiometric sensor, and the reaction quotient a measured potential implies
+- :mod:`~anvilate.analysis.colligative` — colligative properties (particle-count only): the osmotic
+  pressure π = i·c·R·T (reverse-osmosis floor), the freezing-point depression ΔTf = i·Kf·b (road
+  salt, antifreeze), and the boiling-point elevation ΔTb = i·Kb·b
 - :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque, per-bolt
   shear force, and the bolt count a torque requires
 - :mod:`~anvilate.analysis.creep` — high-temperature creep-rupture screening by the
@@ -915,6 +918,11 @@ from .clutch import (
 from .cold_formed_steel import (
     aisi_effective_width,
     aisi_plate_slenderness,
+)
+from .colligative import (
+    boiling_point_elevation,
+    freezing_point_depression,
+    osmotic_pressure,
 )
 from .column import (
     ColumnEnd,
@@ -3008,6 +3016,9 @@ __all__ = [
     "nernst_potential",
     "nernst_slope",
     "nernst_reaction_quotient",
+    "osmotic_pressure",
+    "freezing_point_depression",
+    "boiling_point_elevation",
     "LARSON_MILLER_CONSTANT",
     "larson_miller_parameter",
     "larson_miller_rupture_life",
