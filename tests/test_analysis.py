@@ -22334,6 +22334,55 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_laminar_boundary_layer_thickness_skin_friction_and_drag():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        laminar_boundary_layer_thickness,
+        laminar_plate_drag_coefficient,
+        laminar_skin_friction_coefficient,
+    )
+
+    u = _q("20 m/s")
+    nu = Quantity(magnitude=1.5e-5, unit="m**2/s")
+    x = _q("0.1 m")
+    re_x = 20.0 * 0.1 / 1.5e-5  # 133333
+
+    # Blasius thickness delta = 5*x/sqrt(Re_x).
+    delta = laminar_boundary_layer_thickness(
+        freestream_velocity=u, distance=x, kinematic_viscosity=nu
+    )
+    assert delta.to("m").magnitude == pytest.approx(5.0 * 0.1 / sqrt(re_x), rel=1e-9)
+    # The layer thickens downstream as sqrt(x): 4x the distance -> 2x the thickness.
+    delta4 = laminar_boundary_layer_thickness(
+        freestream_velocity=u, distance=_q("0.4 m"), kinematic_viscosity=nu
+    )
+    assert delta4.to("m").magnitude == pytest.approx(2.0 * delta.to("m").magnitude, rel=1e-9)
+
+    # Local skin friction C_f = 0.664/sqrt(Re_x).
+    cf = laminar_skin_friction_coefficient(
+        freestream_velocity=u, distance=x, kinematic_viscosity=nu
+    )
+    assert cf == pytest.approx(0.664 / sqrt(re_x), rel=1e-9)
+
+    # Average plate drag C_D = 1.328/sqrt(Re_L) is exactly twice the trailing-edge C_f.
+    cd = laminar_plate_drag_coefficient(
+        freestream_velocity=u, plate_length=x, kinematic_viscosity=nu
+    )
+    assert cd == pytest.approx(1.328 / sqrt(re_x), rel=1e-9)
+    assert cd == pytest.approx(2.0 * cf, rel=1e-9)
+
+    # Guardrails: positive, dimensioned inputs.
+    with pytest.raises(ValueError, match="freestream_velocity must be positive"):
+        laminar_skin_friction_coefficient(
+            freestream_velocity=_q("0 m/s"), distance=x, kinematic_viscosity=nu
+        )
+    with pytest.raises(ValueError, match="kinematic_viscosity must be a"):
+        laminar_boundary_layer_thickness(
+            freestream_velocity=u, distance=x, kinematic_viscosity=_q("1.5 m/s")
+        )
+
+
 def test_barometric_pressure_scale_height_and_altitude_inverse():
     from math import exp, log
 

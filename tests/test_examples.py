@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_flat_plate_boundary_layer_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "flat_plate_boundary_layer.py"))
+    d = namespace["plate_boundary_layer"]()
+    # Air at 20 m/s over 0.1 m: ~1.37 mm layer, C_f ~0.0018, C_D ~0.0036.
+    assert d["boundary_layer_thickness_mm"] == pytest.approx(1.369, abs=0.005)
+    assert d["skin_friction_coefficient"] == pytest.approx(0.001818, abs=1e-5)
+    assert d["plate_drag_coefficient"] == pytest.approx(0.003636, abs=1e-5)
+
+
 def test_barometric_altimeter_example():
     namespace = runpy.run_path(str(_EXAMPLES / "barometric_altimeter.py"))
     d = namespace["altimeter_readings"]()

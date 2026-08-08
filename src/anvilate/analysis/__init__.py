@@ -522,6 +522,9 @@ modules:
 - :mod:`~anvilate.analysis.boiling` — nucleate boiling: the Rohsenow flux
   q″ = μ_l·h_fg·√(g·Δρ/σ)·[c_pl·ΔT_e/(C_sf·h_fg·Pr^n)]³, its ΔT_e inverse, and Zuber's
   critical-heat-flux burnout limit q″_max = 0.149·h_fg·√ρ_v·[σ·g·Δρ]^¼
+- :mod:`~anvilate.analysis.boundary_layer` — laminar flat-plate (Blasius) boundary layer: the
+  thickness δ = 5·x/√Re_x, the local skin-friction coefficient C_f = 0.664/√Re_x, and the average
+  plate drag coefficient C_D = 1.328/√Re_L (all for Re below the ~5e5 laminar-turbulent transition)
 - :mod:`~anvilate.analysis.thermoelectric` — solid-state Peltier/Seebeck devices: the
   Seebeck voltage V = α·ΔT, the net cooling Q_c = α·I·T_c − ½·I²·R − K·ΔT, and the
   single-stage cooling limit ΔT_max = ½·(α²/(R·K))·T_c²
@@ -916,6 +919,11 @@ from .boiling import (
     critical_heat_flux,
     nucleate_boiling_excess_temperature,
     nucleate_boiling_heat_flux,
+)
+from .boundary_layer import (
+    laminar_boundary_layer_thickness,
+    laminar_plate_drag_coefficient,
+    laminar_skin_friction_coefficient,
 )
 from .brake import (
     band_brake_max_lining_pressure,
@@ -2780,6 +2788,9 @@ __all__ = [
     "nucleate_boiling_heat_flux",
     "nucleate_boiling_excess_temperature",
     "critical_heat_flux",
+    "laminar_boundary_layer_thickness",
+    "laminar_skin_friction_coefficient",
+    "laminar_plate_drag_coefficient",
     "seebeck_voltage",
     "peltier_cooling_rate",
     "thermoelectric_max_temperature_difference",
