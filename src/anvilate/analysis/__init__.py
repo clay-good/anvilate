@@ -215,6 +215,10 @@ modules:
 - :mod:`~anvilate.analysis.magnetics` — magnetic actuators: the solenoid field B = μ₀·n·I,
   the Maxwell magnetic pressure p = B²/(2·μ₀), and the electromagnet holding force
   F = B²·A/(2·μ₀) — for clamps, lifting magnets, and magnetic bearings
+- :mod:`~anvilate.analysis.hall_effect` — Hall-effect sensing: the transverse Hall voltage
+  V_H = I·B/(n·q·t) a field induces across a biased sample, the field a Hall sensor reports
+  from it (B = V_H·n·q·t/I), and the semiconductor carrier density a Hall measurement reveals
+  (n = I·B/(q·t·V_H))
 - :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, the runtime
   a given bank delivers, and the round-trip efficiency and the delivered energy
@@ -1290,6 +1294,11 @@ from .gyroscope import (
     gyroscopic_precession_rate,
     gyroscopic_reaction_moment,
     gyroscopic_spin_angular_momentum,
+)
+from .hall_effect import (
+    hall_carrier_density,
+    hall_flux_density_from_voltage,
+    hall_voltage,
 )
 from .hvac_duct import (
     circular_equivalent_diameter,
@@ -2728,6 +2737,9 @@ __all__ = [
     "solenoid_magnetic_field",
     "magnetic_pressure",
     "electromagnet_holding_force",
+    "hall_voltage",
+    "hall_flux_density_from_voltage",
+    "hall_carrier_density",
     "LoadDuration",
     "nds_load_duration_factor",
     "nds_adjusted_design_value",

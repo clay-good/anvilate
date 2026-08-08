@@ -571,6 +571,9 @@ grinding.grinding_specific_energy
 gyroscope.gyroscopic_spin_angular_momentum
 gyroscope.gyroscopic_precession_rate
 gyroscope.gyroscopic_reaction_moment
+hall_effect.hall_carrier_density
+hall_effect.hall_flux_density_from_voltage
+hall_effect.hall_voltage
 hvac_duct.circular_equivalent_diameter
 hvac_duct.fan_power
 hvac_duct.fan_total_pressure

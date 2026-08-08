@@ -20853,6 +20853,69 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_hall_effect_voltage_field_and_carrier_density_inverses():
+    from anvilate.analysis import (
+        hall_carrier_density,
+        hall_flux_density_from_voltage,
+        hall_voltage,
+    )
+
+    q = 1.602176634e-19
+    n_density = Quantity(magnitude=1e22, unit="1/m**3")
+
+    # V_H = I*B/(n*q*t); 1 mA, 0.1 T, n=1e22 /m^3, 0.5 mm -> ~0.125 mV.
+    v = hall_voltage(
+        current=_q("1 mA"),
+        flux_density=_q("0.1 T"),
+        carrier_density=n_density,
+        thickness=_q("0.5 mm"),
+    )
+    expected_v = 1e-3 * 0.1 / (1e22 * q * 5e-4)
+    assert v.to("V").magnitude == pytest.approx(expected_v, rel=1e-9)
+
+    # A thinner sample gives a proportionally larger signal.
+    v_thin = hall_voltage(
+        current=_q("1 mA"),
+        flux_density=_q("0.1 T"),
+        carrier_density=n_density,
+        thickness=_q("0.25 mm"),
+    )
+    assert v_thin.to("V").magnitude == pytest.approx(2 * v.to("V").magnitude, rel=1e-9)
+
+    # Magnetometer inverse recovers the field; the other inverse recovers the carrier density.
+    b = hall_flux_density_from_voltage(
+        hall_voltage=v, current=_q("1 mA"), carrier_density=n_density, thickness=_q("0.5 mm")
+    )
+    assert b.to("T").magnitude == pytest.approx(0.1, rel=1e-9)
+    n = hall_carrier_density(
+        current=_q("1 mA"), flux_density=_q("0.1 T"), thickness=_q("0.5 mm"), hall_voltage=v
+    )
+    assert n.to("1/m**3").magnitude == pytest.approx(1e22, rel=1e-9)
+
+    # Guardrails: positive geometry/carriers, non-zero voltage, dimensions checked.
+    with pytest.raises(ValueError, match="thickness must be positive"):
+        hall_voltage(
+            current=_q("1 mA"),
+            flux_density=_q("0.1 T"),
+            carrier_density=n_density,
+            thickness=_q("0 mm"),
+        )
+    with pytest.raises(ValueError, match="hall_voltage must be non-zero"):
+        hall_carrier_density(
+            current=_q("1 mA"),
+            flux_density=_q("0.1 T"),
+            thickness=_q("0.5 mm"),
+            hall_voltage=_q("0 V"),
+        )
+    with pytest.raises(ValueError, match="flux_density must be a"):
+        hall_voltage(
+            current=_q("1 mA"),
+            flux_density=_q("0.1 T/s"),
+            carrier_density=n_density,
+            thickness=_q("0.5 mm"),
+        )
+
+
 def test_strain_gauge_bridge_output_and_strain_inverse():
     from anvilate.analysis import (
         gauge_strain_from_resistance,

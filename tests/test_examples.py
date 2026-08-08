@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_hall_sensor_example_voltage_field_and_carrier_density():
+    namespace = runpy.run_path(str(_EXAMPLES / "hall_sensor_and_characterization.py"))
+    d = namespace["hall_readings"]()
+    # 1 mA, 0.1 T, n=1e22 /m^3, 0.5 mm -> ~0.125 mV.
+    assert d["hall_voltage_mv"] == pytest.approx(0.1248, abs=0.0005)
+    assert d["recovered_field_t"] == pytest.approx(0.1, rel=1e-9)
+    assert d["recovered_carrier_density"] == pytest.approx(1e22, rel=1e-9)
+
+
 def test_strain_gauge_load_cell_example_bridge_output_and_stress():
     namespace = runpy.run_path(str(_EXAMPLES / "strain_gauge_load_cell.py"))
     d = namespace["read_load_cell"]()
