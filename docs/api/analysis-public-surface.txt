@@ -1022,6 +1022,9 @@ wear.archard_wear_depth
 wear.archard_wear_volume
 wear.sliding_contact_pv
 wear.sliding_distance_for_wear_depth
+vehicle.rolling_resistance_force
+vehicle.grade_resistance_force
+vehicle.tractive_power
 ventilation.air_changes_per_hour
 ventilation.airflow_for_air_changes
 ventilation.breathing_zone_outdoor_airflow

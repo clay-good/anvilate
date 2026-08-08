@@ -562,6 +562,9 @@ modules:
   the friction-free ideal superelevation rate, the maximum speed a banked curve can be
   taken at, and the stopping sight distance SSD = v·t + v²/(2·(a+g·G)) — reaction plus
   braking, grade-adjusted — that a curve must keep clear
+- :mod:`~anvilate.analysis.vehicle` — vehicle road load for drivetrain/EV sizing: the rolling
+  resistance F = C_rr·m·g, the grade resistance F = m·g·sin θ, and the tractive power P = F·v
+  a steady speed demands (aerodynamic drag from :mod:`~anvilate.analysis.drag`)
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
   unreinforced member, the axial capacity of a reinforced masonry column, and the
@@ -1828,6 +1831,11 @@ from .torsion import (
     triangular_bar_torsional_stress,
     triangular_bar_twist_angle,
 )
+from .vehicle import (
+    grade_resistance_force,
+    rolling_resistance_force,
+    tractive_power,
+)
 from .ventilation import (
     air_changes_per_hour,
     airflow_for_air_changes,
@@ -2699,6 +2707,9 @@ __all__ = [
     "elliptical_bar_twist_angle",
     "triangular_bar_torsional_stress",
     "triangular_bar_twist_angle",
+    "rolling_resistance_force",
+    "grade_resistance_force",
+    "tractive_power",
     "thin_closed_tube_torsional_stress",
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",

@@ -11992,6 +11992,46 @@ def test_projectile_range_height_and_time_of_flight():
         projectile_range(launch_speed=_q("10 m"), launch_angle=30.0)
 
 
+def test_vehicle_rolling_grade_resistance_and_tractive_power():
+    from math import radians, sin
+
+    from anvilate.analysis import (
+        grade_resistance_force,
+        rolling_resistance_force,
+        tractive_power,
+    )
+
+    g = 9.80665
+
+    # Rolling resistance F = C_rr*m*g; 1500 kg at 0.012 -> 176.5 N.
+    f_rr = rolling_resistance_force(
+        vehicle_mass=_q("1500 kg"), rolling_resistance_coefficient=0.012
+    )
+    assert f_rr.to("N").magnitude == pytest.approx(0.012 * 1500 * g, rel=1e-9)
+
+    # Grade resistance F = m*g*sin(theta); 5 deg -> 1282 N; zero on the flat.
+    f_g = grade_resistance_force(vehicle_mass=_q("1500 kg"), grade_angle=5.0)
+    assert f_g.to("N").magnitude == pytest.approx(1500 * g * sin(radians(5)), rel=1e-9)
+    assert grade_resistance_force(vehicle_mass=_q("1500 kg"), grade_angle=0.0).to(
+        "N"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+
+    # Tractive power P = F*v; 489 N at 27.78 m/s -> 13.59 kW.
+    p = tractive_power(tractive_force=_q("489 N"), speed=_q("27.78 m/s"))
+    assert p.to("kW").magnitude == pytest.approx(489 * 27.78 / 1000, rel=1e-9)
+    # Power scales with speed for a fixed force.
+    p2 = tractive_power(tractive_force=_q("489 N"), speed=_q("55.56 m/s"))
+    assert p2.to("kW").magnitude == pytest.approx(2 * p.to("kW").magnitude, rel=1e-9)
+
+    # Guardrails: positive mass/speed, angle range, dimensions checked.
+    with pytest.raises(ValueError, match="vehicle_mass must be positive"):
+        rolling_resistance_force(vehicle_mass=_q("0 kg"), rolling_resistance_coefficient=0.012)
+    with pytest.raises(ValueError, match="grade_angle must be in"):
+        grade_resistance_force(vehicle_mass=_q("1500 kg"), grade_angle=120.0)
+    with pytest.raises(ValueError, match="tractive_force must be a"):
+        tractive_power(tractive_force=_q("489 W"), speed=_q("27.78 m/s"))
+
+
 def test_sheetmetal_bend_geometry_is_self_consistent():
     from math import radians
 

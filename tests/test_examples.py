@@ -1144,6 +1144,18 @@ def test_conveyor_discharge_trajectory_example_places_the_chute():
     assert d["time_of_flight_s"] == pytest.approx(0.209, abs=0.002)
 
 
+def test_highway_cruise_power_example_hills_dominate():
+    namespace = runpy.run_path(str(_EXAMPLES / "highway_cruise_power.py"))
+    d = namespace["cruise_power"]()
+    # Rolling ~177 N, aero ~312 N; flat cruise ~13.6 kW.
+    assert d["rolling_force_n"] == pytest.approx(176.5, abs=1.0)
+    assert d["aero_force_n"] == pytest.approx(312.0, abs=1.0)
+    assert d["flat_power_kw"] == pytest.approx(13.6, abs=0.1)
+    # A 5% grade more than doubles the power.
+    assert d["grade_power_kw"] == pytest.approx(34.0, abs=0.5)
+    assert d["grade_power_kw"] > 2 * d["flat_power_kw"]
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()
