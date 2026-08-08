@@ -22334,6 +22334,47 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_solar_declination_noon_altitude_and_air_mass():
+    from math import radians, sin
+
+    from anvilate.analysis import (
+        air_mass,
+        solar_altitude_at_noon,
+        solar_declination,
+    )
+
+    # Cooper's equation: +23.45 deg at the June solstice, ~0 at the equinox, -23.45 in December.
+    d_summer = solar_declination(day_of_year=172)
+    assert d_summer.to("degree").magnitude == pytest.approx(23.45, abs=0.02)
+    d_equinox = solar_declination(day_of_year=81)
+    assert d_equinox.to("degree").magnitude == pytest.approx(0.0, abs=0.5)
+    d_winter = solar_declination(day_of_year=355)
+    assert d_winter.to("degree").magnitude == pytest.approx(-23.45, abs=0.05)
+
+    # Solar-noon altitude alpha = 90 - |lat - decl|; 40N in summer -> 73.45 deg.
+    alt_summer = solar_altitude_at_noon(latitude=40.0, declination=23.45)
+    assert alt_summer.to("degree").magnitude == pytest.approx(73.45, rel=1e-9)
+    # Winter sun sits far lower.
+    alt_winter = solar_altitude_at_noon(latitude=40.0, declination=-23.45)
+    assert alt_winter.to("degree").magnitude == pytest.approx(26.55, rel=1e-9)
+    assert alt_winter.to("degree").magnitude < alt_summer.to("degree").magnitude
+
+    # Air mass AM = 1/sin(alpha); 1.0 at zenith, 1.5 at ~41.81 deg (AM1.5).
+    assert air_mass(solar_altitude=90.0) == pytest.approx(1.0, rel=1e-12)
+    assert air_mass(solar_altitude=41.81) == pytest.approx(1.5, abs=0.001)
+    assert air_mass(solar_altitude=73.45) == pytest.approx(1.0 / sin(radians(73.45)), rel=1e-9)
+    # A lower sun means a longer path.
+    assert air_mass(solar_altitude=30.0) > air_mass(solar_altitude=60.0)
+
+    # Guardrails: valid day range, latitude range, positive altitude.
+    with pytest.raises(ValueError, match="day_of_year must be in"):
+        solar_declination(day_of_year=400)
+    with pytest.raises(ValueError, match="latitude must be in"):
+        solar_altitude_at_noon(latitude=100.0, declination=0.0)
+    with pytest.raises(ValueError, match="solar_altitude must be in"):
+        air_mass(solar_altitude=0.0)
+
+
 def test_adc_quantization_snr_step_and_enob():
     from anvilate.analysis import (
         effective_number_of_bits,

@@ -1025,6 +1025,9 @@ snapfit.snap_fit_strain
 solar_cell.fill_factor
 solar_cell.solar_cell_efficiency
 solar_cell.solar_cell_max_power
+solar_geometry.solar_declination
+solar_geometry.solar_altitude_at_noon
+solar_geometry.air_mass
 solar_pv.pv_array_power
 solar_pv.pv_cell_temperature
 solar_pv.pv_temperature_derated_power

@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_summer_solar_position_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "summer_solar_position.py"))
+    d = namespace["solstice_sun_position"]()
+    # 40N, day 172: +23.45 deg declination, 73.45 deg noon altitude, ~1.04 air mass.
+    assert d["declination_deg"] == pytest.approx(23.45, abs=0.02)
+    assert d["noon_altitude_deg"] == pytest.approx(73.45, abs=0.02)
+    assert d["air_mass"] == pytest.approx(1.043, abs=0.005)
+
+
 def test_adc_resolution_example():
     namespace = runpy.run_path(str(_EXAMPLES / "adc_resolution.py"))
     d = namespace["adc_resolution"]()

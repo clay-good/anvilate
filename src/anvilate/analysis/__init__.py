@@ -310,6 +310,9 @@ modules:
 - :mod:`~anvilate.analysis.solar_cell` — photovoltaic cell I-V characterization: the fill factor
   FF = (V_mp·I_mp)/(V_oc·I_sc), the maximum power P_max = FF·V_oc·I_sc, and the conversion
   efficiency η = P_max/(G·A) — the cell-level metrics behind the array power of solar_pv
+- :mod:`~anvilate.analysis.solar_geometry` — solar position geometry: the declination
+  δ = 23.45°·sin(360·(284+n)/365) (Cooper), the solar-noon altitude α = 90° − |φ − δ|, and the
+  atmospheric air mass AM = 1/sin(α) (the AM1.5 rating point) — the resource behind solar_pv
 - :mod:`~anvilate.analysis.solar_pv` — photovoltaic array sizing: a module's power
   (P = G·A·η), the daily energy an array yields (E = P·PSH·D), the array rating
   a daily load needs, and the cell-temperature (NOCT) and its power derating
@@ -2085,6 +2088,11 @@ from .solar_cell import (
     solar_cell_efficiency,
     solar_cell_max_power,
 )
+from .solar_geometry import (
+    air_mass,
+    solar_altitude_at_noon,
+    solar_declination,
+)
 from .solar_pv import (
     pv_array_power,
     pv_array_size_for_load,
@@ -2608,6 +2616,9 @@ __all__ = [
     "fill_factor",
     "solar_cell_max_power",
     "solar_cell_efficiency",
+    "solar_declination",
+    "solar_altitude_at_noon",
+    "air_mass",
     "pv_array_power",
     "pv_daily_energy",
     "pv_array_size_for_load",
