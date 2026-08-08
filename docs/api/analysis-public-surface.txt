@@ -641,6 +641,9 @@ open_channel.rectangular_weir_flow
 open_channel.specific_energy
 open_channel.trapezoidal_channel_properties
 open_channel.triangular_weir_flow
+orbital_mechanics.circular_orbit_velocity
+orbital_mechanics.orbital_period
+orbital_mechanics.escape_velocity
 psychrometrics.adiabatic_mixing_humidity_ratio
 psychrometrics.adiabatic_mixing_temperature
 psychrometrics.coil_bypass_factor

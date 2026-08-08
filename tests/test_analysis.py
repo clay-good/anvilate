@@ -17118,6 +17118,40 @@ def test_rocket_delta_v_and_propellant_mass_fraction():
         )
 
 
+def test_orbital_mechanics_circular_velocity_period_and_escape():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        circular_orbit_velocity,
+        escape_velocity,
+        orbital_period,
+    )
+
+    mu = _q("3.986e14 m**3/s**2")  # Earth
+    r = _q("6771 km")  # 400 km altitude
+
+    # Circular orbital speed v = sqrt(mu/r) ~ 7672.6 m/s.
+    v = circular_orbit_velocity(gravitational_parameter=mu, orbital_radius=r)
+    assert v.to("m/s").magnitude == pytest.approx(sqrt(3.986e14 / 6.771e6), rel=1e-9)
+    # A higher orbit is slower.
+    v_high = circular_orbit_velocity(gravitational_parameter=mu, orbital_radius=_q("42164 km"))
+    assert v_high.to("m/s").magnitude < v.to("m/s").magnitude
+
+    # Kepler period T = 2*pi*sqrt(r^3/mu) ~ 5545 s (92.4 min).
+    t = orbital_period(gravitational_parameter=mu, orbital_radius=r)
+    assert t.to("s").magnitude == pytest.approx(2 * pi * sqrt((6.771e6) ** 3 / 3.986e14), rel=1e-9)
+
+    # Escape velocity v_esc = sqrt(2*mu/r) is exactly sqrt(2) times the circular speed.
+    v_esc = escape_velocity(gravitational_parameter=mu, orbital_radius=r)
+    assert v_esc.to("m/s").magnitude == pytest.approx(sqrt(2) * v.to("m/s").magnitude, rel=1e-9)
+
+    # Guardrails: positive inputs and correct dimensions.
+    with pytest.raises(ValueError, match="orbital_radius must be positive"):
+        circular_orbit_velocity(gravitational_parameter=mu, orbital_radius=_q("0 km"))
+    with pytest.raises(ValueError, match="gravitational_parameter must be a"):
+        escape_velocity(gravitational_parameter=_q("3.986e14 m**2/s**2"), orbital_radius=r)
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 

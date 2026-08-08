@@ -1023,6 +1023,17 @@ def test_rocket_delta_v_budget_example_single_stage_impossible():
     assert d["orbital_propellant_fraction"] > 0.95  # structurally impossible -> staging
 
 
+def test_leo_orbit_and_escape_example_escape_is_sqrt2_times_orbital():
+    namespace = runpy.run_path(str(_EXAMPLES / "leo_orbit_and_escape.py"))
+    d = namespace["leo_orbit"]()
+    # LEO circular speed ~7.67 km/s, period ~92 min, escape ~10.85 km/s.
+    assert d["orbital_speed_km_s"] == pytest.approx(7.673, abs=0.005)
+    assert d["period_min"] == pytest.approx(92.4, abs=0.2)
+    assert d["escape_velocity_km_s"] == pytest.approx(10.851, abs=0.005)
+    # Escape is exactly sqrt(2) times the circular speed.
+    assert d["escape_velocity_km_s"] == pytest.approx(2**0.5 * d["orbital_speed_km_s"], rel=1e-9)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()
