@@ -20853,6 +20853,43 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_strain_gauge_bridge_output_and_strain_inverse():
+    from anvilate.analysis import (
+        gauge_strain_from_resistance,
+        strain_from_bridge_output,
+        wheatstone_bridge_output,
+    )
+
+    # dR/R = GF*epsilon, so epsilon = (dR/R)/GF; GF=2.0, dR/R=0.002 -> 1000 microstrain.
+    eps = gauge_strain_from_resistance(resistance_change_ratio=0.002, gauge_factor=2.0)
+    assert eps == pytest.approx(0.001, rel=1e-12)
+
+    # Quarter bridge V_o/V_ex = GF*epsilon/4; full bridge is 4x the quarter output.
+    quarter = wheatstone_bridge_output(gauge_factor=2.0, strain=0.001, active_arms=1)
+    half = wheatstone_bridge_output(gauge_factor=2.0, strain=0.001, active_arms=2)
+    full = wheatstone_bridge_output(gauge_factor=2.0, strain=0.001, active_arms=4)
+    assert quarter == pytest.approx(0.0005, rel=1e-12)
+    assert half == pytest.approx(0.001, rel=1e-12)
+    assert full == pytest.approx(0.002, rel=1e-12)
+    assert full == pytest.approx(4 * quarter, rel=1e-12)
+
+    # The inverse round-trips a bridge reading back to strain for each configuration.
+    assert strain_from_bridge_output(
+        output_ratio=quarter, gauge_factor=2.0, active_arms=1
+    ) == pytest.approx(0.001, rel=1e-12)
+    assert strain_from_bridge_output(
+        output_ratio=full, gauge_factor=2.0, active_arms=4
+    ) == pytest.approx(0.001, rel=1e-12)
+
+    # Guardrails: positive gauge factor, and only 1/2/4 active arms.
+    with pytest.raises(ValueError, match="gauge_factor must be positive"):
+        wheatstone_bridge_output(gauge_factor=0.0, strain=0.001)
+    with pytest.raises(ValueError, match="active_arms must be"):
+        wheatstone_bridge_output(gauge_factor=2.0, strain=0.001, active_arms=3)
+    with pytest.raises(ValueError, match="active_arms must be"):
+        strain_from_bridge_output(output_ratio=0.001, gauge_factor=2.0, active_arms=0)
+
+
 def test_bulk_solids_beverloo_discharge_orifice_inverse_and_stockpile():
     from math import pi, sqrt, tan
 

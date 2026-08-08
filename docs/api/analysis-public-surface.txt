@@ -916,6 +916,9 @@ spring.spring_stored_energy
 spring.springs_in_parallel
 spring.springs_in_series
 spring.wahl_factor
+strain_gauge.gauge_strain_from_resistance
+strain_gauge.strain_from_bridge_output
+strain_gauge.wheatstone_bridge_output
 stress.CombinedNormalStress
 stress.combine_axial_bending
 stress.concentrated_stress

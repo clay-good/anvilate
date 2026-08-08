@@ -423,6 +423,10 @@ modules:
 - :mod:`~anvilate.analysis.thermoelectric` — solid-state Peltier/Seebeck devices: the
   Seebeck voltage V = α·ΔT, the net cooling Q_c = α·I·T_c − ½·I²·R − K·ΔT, and the
   single-stage cooling limit ΔT_max = ½·(α²/(R·K))·T_c²
+- :mod:`~anvilate.analysis.strain_gauge` — strain-gauge instrumentation: the strain from a
+  gauge's fractional resistance change ε = (ΔR/R)/GF, the Wheatstone-bridge output ratio
+  V_o/V_ex = n·GF·ε/4 (n = 1/2/4 for quarter/half/full bridge), and the inverse that turns a
+  bridge reading back into strain (and, via E, the stress the part carries)
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -1740,6 +1744,11 @@ from .spring import (
     springs_in_series,
     wahl_factor,
 )
+from .strain_gauge import (
+    gauge_strain_from_resistance,
+    strain_from_bridge_output,
+    wheatstone_bridge_output,
+)
 from .stress import (
     CombinedNormalStress,
     combine_axial_bending,
@@ -2366,6 +2375,9 @@ __all__ = [
     "seebeck_voltage",
     "peltier_cooling_rate",
     "thermoelectric_max_temperature_difference",
+    "gauge_strain_from_resistance",
+    "wheatstone_bridge_output",
+    "strain_from_bridge_output",
     "belt_length",
     "belt_wrap_angle",
     "crossed_belt_length",

@@ -1185,6 +1185,17 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_strain_gauge_load_cell_example_bridge_output_and_stress():
+    namespace = runpy.run_path(str(_EXAMPLES / "strain_gauge_load_cell.py"))
+    d = namespace["read_load_cell"]()
+    # GF 2.0 at 1000 microstrain: quarter 0.5 mV/V, full 2.0 mV/V.
+    assert d["quarter_bridge_mv_per_v"] == pytest.approx(0.5, rel=1e-9)
+    assert d["full_bridge_mv_per_v"] == pytest.approx(2.0, rel=1e-9)
+    assert d["recovered_strain"] == pytest.approx(0.001, rel=1e-9)
+    # 200 GPa * 0.001 = 200 MPa.
+    assert d["stress_mpa"] == pytest.approx(200.0, rel=1e-9)
+
+
 def test_centrifuge_clarification_example_velocity_and_time():
     namespace = runpy.run_path(str(_EXAMPLES / "centrifuge_clarification.py"))
     d = namespace["clarify_suspension"]()
