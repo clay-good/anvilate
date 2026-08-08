@@ -34,6 +34,9 @@ modules:
 - :mod:`~anvilate.analysis.plasma` — plasma physics: the electron plasma frequency f_p (the radio
   cutoff of the ionosphere), the Debye screening length λ_D = √(ε₀·k·T/(n·e²)), and the plasma
   parameter N_D (particles in a Debye sphere; ≫1 for a true collective plasma)
+- :mod:`~anvilate.analysis.cyclotron` — charged-particle motion in a magnetic field: the cyclotron
+  frequency f_c = q·B/(2π·m) (speed-independent), the Larmor orbit radius r = m·v/(q·B), and the
+  mass-spectrometry inverse m = q·B/(2π·f_c)
 - :mod:`~anvilate.analysis.arrhenius` — thermally-activated reaction rates: the rate constant
   k = A·e^(−Ea/RT), the acceleration factor k2/k1 = e^((Ea/R)(1/T1−1/T2)) between two temperatures
   (accelerated life testing), and the activation energy Ea extracted from two measured rates
@@ -1102,6 +1105,11 @@ from .curved_beam import (
     thin_ring_diametral_deflection,
     thin_ring_max_moment,
     trapezoidal_curved_beam_stress,
+)
+from .cyclotron import (
+    cyclotron_frequency,
+    cyclotron_mass_from_frequency,
+    larmor_radius,
 )
 from .dc_dc_converter import (
     boost_output_voltage,
@@ -2490,6 +2498,9 @@ __all__ = [
     "plasma_frequency",
     "debye_length",
     "plasma_parameter",
+    "cyclotron_frequency",
+    "larmor_radius",
+    "cyclotron_mass_from_frequency",
     "arrhenius_rate_constant",
     "arrhenius_rate_ratio",
     "arrhenius_activation_energy",

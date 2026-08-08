@@ -20985,6 +20985,54 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_cyclotron_frequency_larmor_radius_and_mass_inverse():
+    from math import pi
+
+    from anvilate.analysis import (
+        cyclotron_frequency,
+        cyclotron_mass_from_frequency,
+        larmor_radius,
+    )
+
+    q = Quantity(magnitude=1.602176634e-19, unit="C")
+    b = _q("1 T")
+    m = Quantity(magnitude=1.67262192369e-27, unit="kg")
+
+    # f_c = q*B/(2*pi*m); proton in 1 T -> ~15.2 MHz.
+    f = cyclotron_frequency(charge=q, magnetic_flux_density=b, mass=m)
+    assert f.to("Hz").magnitude == pytest.approx(
+        1.602176634e-19 * 1.0 / (2 * pi * 1.67262192369e-27), rel=1e-9
+    )
+    assert f.to("MHz").magnitude == pytest.approx(15.245, abs=0.01)
+    # Frequency is independent of speed but scales with field.
+    f2 = cyclotron_frequency(charge=q, magnetic_flux_density=_q("2 T"), mass=m)
+    assert f2.to("Hz").magnitude == pytest.approx(2 * f.to("Hz").magnitude, rel=1e-9)
+
+    # Larmor radius r = m*v/(q*B); grows with speed.
+    r = larmor_radius(mass=m, speed=_q("1e6 m/s"), charge=q, magnetic_flux_density=b)
+    assert r.to("m").magnitude == pytest.approx(
+        1.67262192369e-27 * 1e6 / (1.602176634e-19 * 1.0), rel=1e-9
+    )
+    r2 = larmor_radius(mass=m, speed=_q("2e6 m/s"), charge=q, magnetic_flux_density=b)
+    assert r2.to("m").magnitude == pytest.approx(2 * r.to("m").magnitude, rel=1e-9)
+
+    # Mass inverse round-trips the frequency back to the proton mass.
+    m_back = cyclotron_mass_from_frequency(charge=q, magnetic_flux_density=b, frequency=f)
+    assert m_back.to("kg").magnitude == pytest.approx(1.67262192369e-27, rel=1e-9)
+
+    # Guardrails: positive charge/field/mass/frequency, dimensions checked.
+    with pytest.raises(ValueError, match="mass must be positive"):
+        cyclotron_frequency(
+            charge=q, magnetic_flux_density=b, mass=Quantity(magnitude=0.0, unit="kg")
+        )
+    with pytest.raises(ValueError, match="frequency must be positive"):
+        cyclotron_mass_from_frequency(
+            charge=q, magnetic_flux_density=b, frequency=Quantity(magnitude=0.0, unit="Hz")
+        )
+    with pytest.raises(ValueError, match="magnetic_flux_density must be a"):
+        cyclotron_frequency(charge=q, magnetic_flux_density=_q("1 A"), mass=m)
+
+
 def test_plasma_frequency_debye_length_and_parameter():
     from math import pi, sqrt
 

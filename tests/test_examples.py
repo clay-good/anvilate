@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_cyclotron_mass_spectrometer_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "cyclotron_mass_spectrometer.py"))
+    d = namespace["mass_spectrometry"]()
+    # Proton in 1 T: f_c ~15.2 MHz, Larmor ~1.04 cm; mass recovers to proton mass.
+    assert d["cyclotron_frequency_mhz"] == pytest.approx(15.245, abs=0.01)
+    assert d["larmor_radius_cm"] == pytest.approx(1.044, abs=0.005)
+    assert d["recovered_mass_kg"] == pytest.approx(1.6726e-27, rel=1e-4)
+
+
 def test_laboratory_plasma_example():
     namespace = runpy.run_path(str(_EXAMPLES / "laboratory_plasma.py"))
     d = namespace["characterize_plasma"]()

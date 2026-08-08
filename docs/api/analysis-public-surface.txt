@@ -354,6 +354,9 @@ curved_beam.thin_ring_buckling_pressure
 curved_beam.thin_ring_diametral_deflection
 curved_beam.thin_ring_max_moment
 curved_beam.trapezoidal_curved_beam_stress
+cyclotron.cyclotron_frequency
+cyclotron.cyclotron_mass_from_frequency
+cyclotron.larmor_radius
 dc_dc_converter.boost_output_voltage
 dc_dc_converter.buck_boost_output_voltage
 dc_dc_converter.buck_output_voltage
