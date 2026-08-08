@@ -20853,6 +20853,56 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_thermal_noise_voltage_power_and_current():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        johnson_noise_current,
+        johnson_noise_power,
+        johnson_noise_voltage,
+    )
+
+    k = 1.380649e-23
+    T = Quantity(magnitude=290.0, unit="K")
+    B = Quantity(magnitude=1e4, unit="Hz")
+
+    # V = sqrt(4*k*T*R*B); 1 kohm, 290 K, 10 kHz -> ~0.40 uV.
+    v = johnson_noise_voltage(resistance=_q("1 kohm"), temperature=T, bandwidth=B)
+    assert v.to("V").magnitude == pytest.approx(sqrt(4 * k * 290 * 1000 * 1e4), rel=1e-9)
+    assert v.to("uV").magnitude == pytest.approx(0.4002, abs=0.001)
+
+    # Available noise power P = k*T*B, independent of R; ~-134 dBm.
+    p = johnson_noise_power(temperature=T, bandwidth=B)
+    assert p.to("W").magnitude == pytest.approx(k * 290 * 1e4, rel=1e-9)
+    from math import log10
+
+    assert 10 * log10(p.to("W").magnitude / 1e-3) == pytest.approx(-134.0, abs=0.2)
+
+    # I = sqrt(4*k*T*B/R); the current dual.
+    i = johnson_noise_current(resistance=_q("1 kohm"), temperature=T, bandwidth=B)
+    assert i.to("A").magnitude == pytest.approx(sqrt(4 * k * 290 * 1e4 / 1000), rel=1e-9)
+    # V = I*R for Johnson noise (voltage and current duals of the same source).
+    assert v.to("V").magnitude == pytest.approx(i.to("A").magnitude * 1000.0, rel=1e-9)
+
+    # Cooling and narrowing bandwidth both reduce the noise voltage.
+    v_cold = johnson_noise_voltage(
+        resistance=_q("1 kohm"), temperature=Quantity(magnitude=77.0, unit="K"), bandwidth=B
+    )
+    assert v_cold.to("V").magnitude < v.to("V").magnitude
+    v_narrow = johnson_noise_voltage(
+        resistance=_q("1 kohm"), temperature=T, bandwidth=Quantity(magnitude=2.5e3, unit="Hz")
+    )
+    assert v_narrow.to("V").magnitude == pytest.approx(v.to("V").magnitude / 2, rel=1e-9)
+
+    # Guardrails: positive resistance/temperature, non-negative bandwidth, dimensions checked.
+    with pytest.raises(ValueError, match="resistance must be positive"):
+        johnson_noise_voltage(resistance=_q("0 ohm"), temperature=T, bandwidth=B)
+    with pytest.raises(ValueError, match="temperature must be positive"):
+        johnson_noise_power(temperature=Quantity(magnitude=0.0, unit="K"), bandwidth=B)
+    with pytest.raises(ValueError, match="resistance must be a"):
+        johnson_noise_voltage(resistance=_q("1 V"), temperature=T, bandwidth=B)
+
+
 def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
     from anvilate.analysis import (
         max_unambiguous_velocity,

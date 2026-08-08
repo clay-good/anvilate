@@ -1052,6 +1052,9 @@ thermal.view_factor_reciprocity
 thermal.radiation_shield_reduction_factor
 thermal.wien_peak_wavelength
 thermal.wien_temperature_from_peak
+thermal_noise.johnson_noise_current
+thermal_noise.johnson_noise_power
+thermal_noise.johnson_noise_voltage
 thermal.series_thermal_resistance
 thermal.shrink_fit_assembly_temperature
 thermal.temperature_rise

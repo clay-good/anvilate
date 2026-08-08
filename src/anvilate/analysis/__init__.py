@@ -235,6 +235,9 @@ modules:
 - :mod:`~anvilate.analysis.dc_dc_converter` — switching-regulator transfer functions (ideal, CCM):
   the buck V_out = D·V_in (step-down), the boost V_out = V_in/(1−D) (step-up), and the buck-boost
   V_out = V_in·D/(1−D) (either), all set by the duty cycle D
+- :mod:`~anvilate.analysis.thermal_noise` — Johnson-Nyquist thermal noise: the noise voltage
+  V = √(4·k·T·R·B), the available noise power k·T·B (the −174 dBm/Hz floor at 290 K), and the noise
+  current √(4·k·T·B/R) — the electrical noise floor every amplifier and sensor sits on
 - :mod:`~anvilate.analysis.diffusion` — Fickian mass transport: the steady flux J = D·ΔC/L through
   a barrier (Fick's first law), the penetration length x = √(D·t) a diffusion front reaches, and the
   time t = x²/D to diffuse a distance — the mass-transport analog of heat conduction
@@ -1994,6 +1997,11 @@ from .thermal import (
     wien_peak_wavelength,
     wien_temperature_from_peak,
 )
+from .thermal_noise import (
+    johnson_noise_current,
+    johnson_noise_power,
+    johnson_noise_voltage,
+)
 from .thermoelectric import (
     peltier_cooling_rate,
     seebeck_voltage,
@@ -2182,6 +2190,9 @@ __all__ = [
     "buck_output_voltage",
     "boost_output_voltage",
     "buck_boost_output_voltage",
+    "johnson_noise_voltage",
+    "johnson_noise_power",
+    "johnson_noise_current",
     "steady_diffusion_flux",
     "diffusion_length",
     "diffusion_time",

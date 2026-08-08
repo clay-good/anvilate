@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_amplifier_noise_floor_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "amplifier_noise_floor.py"))
+    d = namespace["noise_floor"]()
+    # 1 kohm, 290 K, 10 kHz: ~0.40 uV, -134 dBm; cooled to 77 K -> ~0.21 uV.
+    assert d["room_noise_voltage_uv"] == pytest.approx(0.4002, abs=0.002)
+    assert d["noise_power_dbm"] == pytest.approx(-134.0, abs=0.3)
+    assert d["cryo_noise_voltage_uv"] == pytest.approx(0.2063, abs=0.002)
+
+
 def test_police_radar_speed_gun_example():
     namespace = runpy.run_path(str(_EXAMPLES / "police_radar_speed_gun.py"))
     d = namespace["speed_gun"]()
