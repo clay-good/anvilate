@@ -22,6 +22,9 @@ modules:
 - :mod:`~anvilate.analysis.channel_capacity` — information-theory link capacity: the Shannon-Hartley
   limit C = B·log2(1+SNR), the bandwidth a target capacity needs B = C/log2(1+SNR), and the
   noiseless Nyquist M-level capacity 2·B·log2(M) (bits per second)
+- :mod:`~anvilate.analysis.chemical_equilibrium` — reaction thermodynamics: the Gibbs free energy
+  ΔG = ΔH − T·ΔS (spontaneity), the equilibrium constant K = exp(−ΔG/RT), and the van 't Hoff shift
+  K₂/K₁ = exp(−(ΔH/R)(1/T₂−1/T₁)) of K with temperature
 - :mod:`~anvilate.analysis.noise_figure` — RF receiver noise: the linear noise factor from a dB
   figure, the Friis cascade F = F1 + (F2−1)/G1 + … (why the first stage dominates), and the
   equivalent noise temperature T_e = (F−1)·T0
@@ -1025,6 +1028,11 @@ from .channel_capacity import (
     nyquist_channel_capacity,
     shannon_capacity,
     shannon_required_bandwidth,
+)
+from .chemical_equilibrium import (
+    equilibrium_constant,
+    gibbs_free_energy_change,
+    vant_hoff_constant_ratio,
 )
 from .clutch import (
     UNIFORM_PRESSURE,
@@ -2607,6 +2615,9 @@ __all__ = [
     "shannon_capacity",
     "shannon_required_bandwidth",
     "nyquist_channel_capacity",
+    "gibbs_free_energy_change",
+    "equilibrium_constant",
+    "vant_hoff_constant_ratio",
     "noise_factor_from_figure",
     "cascade_noise_factor",
     "equivalent_noise_temperature",

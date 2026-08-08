@@ -22334,6 +22334,78 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_gibbs_equilibrium_constant_and_vant_hoff_shift():
+    from math import exp
+
+    from anvilate.analysis import (
+        equilibrium_constant,
+        gibbs_free_energy_change,
+        vant_hoff_constant_ratio,
+    )
+
+    R = 8.314462618
+
+    # Gibbs dG = dH - T*dS; exothermic, entropy-losing reaction at 298 K -> -32996 J/mol.
+    dg = gibbs_free_energy_change(
+        enthalpy_change=_q("-92000 J/mol"),
+        temperature=Quantity(magnitude=298.0, unit="K"),
+        entropy_change=Quantity(magnitude=-198.0, unit="J/(mol*K)"),
+    )
+    assert dg.to("J/mol").magnitude == pytest.approx(-92000.0 - 298.0 * (-198.0), rel=1e-9)
+    assert dg.to("J/mol").magnitude == pytest.approx(-32996.0, rel=1e-9)
+
+    # Equilibrium constant K = exp(-dG/(R*T)); ~6.08e5 (product-favored).
+    k = equilibrium_constant(
+        gibbs_free_energy_change=dg, temperature=Quantity(magnitude=298.0, unit="K")
+    )
+    assert k == pytest.approx(exp(32996.0 / (R * 298.0)), rel=1e-9)
+    assert k == pytest.approx(6.075e5, rel=1e-3)
+    assert k > 1.0
+    # A positive dG gives K < 1 (reactant-favored).
+    k_pos = equilibrium_constant(
+        gibbs_free_energy_change=_q("10000 J/mol"),
+        temperature=Quantity(magnitude=298.0, unit="K"),
+    )
+    assert k_pos < 1.0
+
+    # van 't Hoff: heating an exothermic reaction (dH<0) collapses K -> ratio << 1.
+    ratio = vant_hoff_constant_ratio(
+        enthalpy_change=_q("-92000 J/mol"),
+        temperature_low=Quantity(magnitude=298.0, unit="K"),
+        temperature_high=Quantity(magnitude=498.0, unit="K"),
+    )
+    assert ratio == pytest.approx(exp(-(-92000.0 / R) * (1 / 498.0 - 1 / 298.0)), rel=1e-9)
+    assert ratio == pytest.approx(3.34e-7, rel=1e-2)
+    assert ratio < 1.0
+    # An endothermic reaction (dH>0) instead gains K on heating.
+    ratio_endo = vant_hoff_constant_ratio(
+        enthalpy_change=_q("50000 J/mol"),
+        temperature_low=Quantity(magnitude=298.0, unit="K"),
+        temperature_high=Quantity(magnitude=498.0, unit="K"),
+    )
+    assert ratio_endo > 1.0
+
+    # Guardrails: absolute temperature, high>low, correct dimensions.
+    with pytest.raises(ValueError, match="temperature must be positive"):
+        gibbs_free_energy_change(
+            enthalpy_change=_q("-92000 J/mol"),
+            temperature=Quantity(magnitude=-5.0, unit="K"),
+            entropy_change=Quantity(magnitude=-198.0, unit="J/(mol*K)"),
+        )
+    with pytest.raises(ValueError, match="temperature_high must exceed"):
+        vant_hoff_constant_ratio(
+            enthalpy_change=_q("50000 J/mol"),
+            temperature_low=Quantity(magnitude=498.0, unit="K"),
+            temperature_high=Quantity(magnitude=298.0, unit="K"),
+        )
+    with pytest.raises(ValueError, match="enthalpy_change must be a"):
+        gibbs_free_energy_change(
+            enthalpy_change=_q("-92000 J"),
+            temperature=Quantity(magnitude=298.0, unit="K"),
+            entropy_change=Quantity(magnitude=-198.0, unit="J/(mol*K)"),
+        )
+
+
 def test_weibull_reliability_hazard_rate_and_mean_life():
     from math import exp, gamma
 

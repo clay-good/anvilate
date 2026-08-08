@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_ammonia_synthesis_equilibrium_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "ammonia_synthesis_equilibrium.py"))
+    d = namespace["ammonia_equilibrium"]()
+    # dG ~ -33 kJ/mol, K ~6.08e5 at 298 K, van 't Hoff ratio ~3.34e-7.
+    assert d["gibbs_free_energy_kj_mol"] == pytest.approx(-32.996, abs=0.01)
+    assert d["equilibrium_constant"] == pytest.approx(6.075e5, rel=1e-3)
+    assert d["vant_hoff_ratio_298_to_498"] == pytest.approx(3.34e-7, rel=1e-2)
+
+
 def test_pump_bearing_reliability_example():
     namespace = runpy.run_path(str(_EXAMPLES / "pump_bearing_reliability.py"))
     d = namespace["bearing_reliability"]()
