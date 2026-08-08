@@ -22334,6 +22334,54 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_fiber_chromatic_dispersion_bit_rate_and_reach():
+    from anvilate.analysis import (
+        chromatic_dispersion_broadening,
+        dispersion_limited_bit_rate,
+        dispersion_limited_distance,
+    )
+
+    d_param = Quantity(magnitude=17.0, unit="ps/(nm*km)")  # SMF at 1550 nm
+    dlam = Quantity(magnitude=0.1, unit="nm")
+
+    # Broadening Δτ = D*L*Δλ; 17 ps/(nm km) over 100 km with 0.1 nm -> 170 ps.
+    dtau = chromatic_dispersion_broadening(
+        dispersion_parameter=d_param, length=_q("100 km"), spectral_width=dlam
+    )
+    assert dtau.to("s").magnitude == pytest.approx(170e-12, rel=1e-9)
+    # Broadening is linear in length: double the span, double the spread.
+    dtau2 = chromatic_dispersion_broadening(
+        dispersion_parameter=d_param, length=_q("200 km"), spectral_width=dlam
+    )
+    assert dtau2.to("s").magnitude == pytest.approx(2.0 * dtau.to("s").magnitude, rel=1e-9)
+
+    # Bit rate B = 1/(4*Δτ); 170 ps -> ~1.47 Gbit/s.
+    b = dispersion_limited_bit_rate(pulse_broadening=dtau)
+    assert b.to("1/s").magnitude == pytest.approx(1.0 / (4.0 * 170e-12), rel=1e-9)
+    assert b.to("1/s").magnitude == pytest.approx(1.471e9, rel=1e-3)
+
+    # Reach L = 1/(4*B*D*Δλ); 2.5 Gbit/s -> ~58.8 km.
+    reach = dispersion_limited_distance(
+        bit_rate=Quantity(magnitude=2.5e9, unit="1/s"),
+        dispersion_parameter=d_param,
+        spectral_width=dlam,
+    )
+    assert reach.to("km").magnitude == pytest.approx(58.82, abs=0.05)
+    # Consistency: the reach at the 100 km link's own limiting bit rate is 100 km.
+    reach_self = dispersion_limited_distance(
+        bit_rate=b, dispersion_parameter=d_param, spectral_width=dlam
+    )
+    assert reach_self.to("km").magnitude == pytest.approx(100.0, rel=1e-6)
+
+    # Guardrails: positive bit rate, correct dimensions.
+    with pytest.raises(ValueError, match="pulse_broadening must be positive"):
+        dispersion_limited_bit_rate(pulse_broadening=_q("0 s"))
+    with pytest.raises(ValueError, match="dispersion_parameter must be a"):
+        chromatic_dispersion_broadening(
+            dispersion_parameter=_q("17 s"), length=_q("100 km"), spectral_width=dlam
+        )
+
+
 def test_washburn_capillary_pressure_penetration_and_time():
     from math import sqrt
 

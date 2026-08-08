@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_singlemode_fiber_link_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "singlemode_fiber_link.py"))
+    d = namespace["fiber_dispersion_limits"]()
+    # SMF over 100 km: ~170 ps broadening, ~1.47 Gbit/s limit, ~58.8 km reach at 2.5 Gbit/s.
+    assert d["pulse_broadening_ps"] == pytest.approx(170.0, rel=1e-6)
+    assert d["bit_rate_gbit_s"] == pytest.approx(1.4706, abs=0.001)
+    assert d["reach_at_2p5g_km"] == pytest.approx(58.82, abs=0.05)
+
+
 def test_paper_towel_wicking_example():
     namespace = runpy.run_path(str(_EXAMPLES / "paper_towel_wicking.py"))
     d = namespace["paper_wicking"]()

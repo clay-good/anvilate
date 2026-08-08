@@ -424,6 +424,9 @@ modules:
   diffraction limit θ = 1.22·λ/D on resolving power, the lens speed side — the f-number
   N = f/D, the focused Airy spot d = 2.44·λ·N, and the hyperfocal distance H = f²/(N·c); and
   refraction — Snell's law, the total-internal-reflection critical angle, and fibre NA
+- :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
+  Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
+  L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
 - :mod:`~anvilate.analysis.photon` — photon (Planck) quanta: the photon energy E = h·c/λ, the
   wavelength matching an energy λ = h·c/E (e.g. a semiconductor band gap), and the photon flux
   Φ = P·λ/(h·c) a beam of a given optical power delivers — for detectors, solar cells, and LEDs
@@ -1386,6 +1389,11 @@ from .fatigue import (
     weld_fatigue_scorecard,
     weld_size_corrected_detail_category,
     weld_size_effect_factor,
+)
+from .fiber_optics import (
+    chromatic_dispersion_broadening,
+    dispersion_limited_bit_rate,
+    dispersion_limited_distance,
 )
 from .flow_measurement import (
     differential_pressure_for_flow,
@@ -3178,6 +3186,9 @@ __all__ = [
     "snell_refraction_angle",
     "critical_angle",
     "fiber_numerical_aperture",
+    "chromatic_dispersion_broadening",
+    "dispersion_limited_bit_rate",
+    "dispersion_limited_distance",
     "photon_energy",
     "photon_wavelength_from_energy",
     "photon_flux",
