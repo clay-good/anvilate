@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_nuclear_mass_energy_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "nuclear_mass_energy.py"))
+    d = namespace["nuclear_energetics"]()
+    # 1 g -> ~90 TJ; 200 MeV fission -> ~3.6e-28 kg; U-235 ~7.6 MeV/nucleon.
+    assert d["gram_mass_energy_tj"] == pytest.approx(89.876, abs=0.01)
+    assert d["fission_mass_defect_kg"] == pytest.approx(3.565e-28, rel=1e-3)
+    assert d["u235_binding_per_nucleon_mev"] == pytest.approx(7.591, abs=0.01)
+
+
 def test_glass_surface_reflection_example():
     namespace = runpy.run_path(str(_EXAMPLES / "glass_surface_reflection.py"))
     d = namespace["glass_reflection"]()

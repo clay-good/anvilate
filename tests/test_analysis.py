@@ -20985,6 +20985,45 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_mass_energy_equivalence_and_binding_energy_per_nucleon():
+    from anvilate.analysis import (
+        binding_energy_per_nucleon,
+        mass_energy,
+        mass_from_energy,
+    )
+
+    c = 299792458.0
+
+    # E = m*c^2; 1 g -> ~90 TJ.
+    e = mass_energy(mass=_q("1 g"))
+    assert e.to("J").magnitude == pytest.approx(0.001 * c**2, rel=1e-9)
+    assert e.to("J").magnitude / 1e12 == pytest.approx(89.876, abs=0.01)
+
+    # Mass-from-energy inverse round-trips back to 1 g.
+    m = mass_from_energy(energy=e)
+    assert m.to("kg").magnitude == pytest.approx(0.001, rel=1e-9)
+    # A 200 MeV fission corresponds to a tiny mass defect.
+    m_fission = mass_from_energy(energy=_q("200 MeV"))
+    assert m_fission.to("kg").magnitude == pytest.approx(200 * 1.602176634e-13 / c**2, rel=1e-9)
+
+    # Binding energy per nucleon B/A; U-235 ~7.6 MeV.
+    be = binding_energy_per_nucleon(
+        binding_energy=Quantity(magnitude=1783.9, unit="MeV"), nucleon_count=235
+    )
+    assert be.to("MeV").magnitude == pytest.approx(1783.9 / 235, rel=1e-9)
+    assert be.to("MeV").magnitude == pytest.approx(7.591, abs=0.01)
+
+    # Guardrails: non-negative mass/energy, positive nucleon count, dimensions checked.
+    with pytest.raises(ValueError, match="nucleon_count must be a positive integer"):
+        binding_energy_per_nucleon(
+            binding_energy=Quantity(magnitude=1783.9, unit="MeV"), nucleon_count=0
+        )
+    with pytest.raises(ValueError, match="mass must be non-negative"):
+        mass_energy(mass=_q("-1 g"))
+    with pytest.raises(ValueError, match="mass must be a"):
+        mass_energy(mass=_q("1 J"))
+
+
 def test_fresnel_reflectance_slab_transmittance_and_brewster_angle():
     from math import atan, degrees
 

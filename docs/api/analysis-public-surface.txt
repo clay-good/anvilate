@@ -95,6 +95,9 @@ masonry.masonry_allowable_axial_stress
 masonry.masonry_allowable_flexural_stress
 masonry.masonry_column_axial_capacity
 masonry.masonry_combined_stress_ratio
+mass_energy.binding_energy_per_nucleon
+mass_energy.mass_energy
+mass_energy.mass_from_energy
 axial.axial_elongation
 axial.axial_stiffness
 axial.axial_stress

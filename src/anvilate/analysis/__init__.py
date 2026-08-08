@@ -527,6 +527,9 @@ modules:
 - :mod:`~anvilate.analysis.radiation_shielding` — gamma/x-ray shielding (narrow-beam Beer-Lambert):
   the transmitted fraction T = e^(−μ·x), the half-value layer HVL = ln2/μ that halves the beam, and
   the shield thickness for a target transmission x = −ln(T)/μ
+- :mod:`~anvilate.analysis.mass_energy` — mass-energy equivalence: the rest energy E = m·c² (≈90 TJ
+  per gram, the nuclear-yield accounting), its mass-from-energy inverse m = E/c², and the binding
+  energy per nucleon B/A (peaks near iron — fusion and fission both release energy toward it)
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -1561,6 +1564,11 @@ from .masonry import (
     masonry_allowable_flexural_stress,
     masonry_column_axial_capacity,
     masonry_combined_stress_ratio,
+)
+from .mass_energy import (
+    binding_energy_per_nucleon,
+    mass_energy,
+    mass_from_energy,
 )
 from .nds_timber import (
     LoadDuration,
@@ -2725,6 +2733,9 @@ __all__ = [
     "radiation_transmission_fraction",
     "half_value_layer",
     "shield_thickness_for_transmission",
+    "mass_energy",
+    "mass_from_energy",
+    "binding_energy_per_nucleon",
     "belt_length",
     "belt_wrap_angle",
     "crossed_belt_length",
