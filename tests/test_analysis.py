@@ -11913,6 +11913,43 @@ def test_machining_cutting_speed_mrr_and_taylor_tool_life():
         cutting_speed(diameter=_q("0 mm"), spindle_speed=_q("1000 rpm"))
 
 
+def test_magnetics_solenoid_field_pressure_and_holding_force():
+    from math import pi
+
+    from anvilate.analysis import (
+        electromagnet_holding_force,
+        magnetic_pressure,
+        solenoid_magnetic_field,
+    )
+
+    mu0 = 4e-7 * pi
+
+    # Solenoid field B = mu0*n*I; 1000 turns/m at 2 A -> 2.513 mT.
+    b = solenoid_magnetic_field(turns_per_length=_q("1000 1/m"), current=_q("2 A"))
+    assert b.to("T").magnitude == pytest.approx(mu0 * 1000 * 2, rel=1e-9)
+
+    # Magnetic pressure p = B^2/(2*mu0); 1 T -> 0.3979 MPa.
+    p = magnetic_pressure(magnetic_flux_density=_q("1 T"))
+    assert p.to("MPa").magnitude == pytest.approx(1.0 / (2 * mu0) / 1e6, rel=1e-9)
+    # Quadratic in field: doubling B quadruples the pressure.
+    p2 = magnetic_pressure(magnetic_flux_density=_q("2 T"))
+    assert p2.to("MPa").magnitude == pytest.approx(4 * p.to("MPa").magnitude, rel=1e-9)
+
+    # Holding force F = B^2*A/(2*mu0); 1 T over 100 cm^2 -> ~3.98 kN.
+    f = electromagnet_holding_force(magnetic_flux_density=_q("1 T"), pole_area=_q("100 cm**2"))
+    assert f.to("kN").magnitude == pytest.approx(1.0 * 0.01 / (2 * mu0) / 1000, rel=1e-9)
+    # Force is pressure times area (consistency between the two).
+    assert f.to("N").magnitude == pytest.approx(p.to("Pa").magnitude * 0.01, rel=1e-9)
+
+    # Guardrails: positive inputs and correct dimensions.
+    with pytest.raises(ValueError, match="current must be positive"):
+        solenoid_magnetic_field(turns_per_length=_q("1000 1/m"), current=_q("0 A"))
+    with pytest.raises(ValueError, match="magnetic_flux_density must be a"):
+        magnetic_pressure(magnetic_flux_density=_q("1 A"))
+    with pytest.raises(ValueError, match="pole_area must be positive"):
+        electromagnet_holding_force(magnetic_flux_density=_q("1 T"), pole_area=_q("0 cm**2"))
+
+
 def test_sheetmetal_bend_geometry_is_self_consistent():
     from math import radians
 

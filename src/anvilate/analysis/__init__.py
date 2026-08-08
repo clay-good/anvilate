@@ -212,6 +212,9 @@ modules:
   capacitor (½·C·V²) and an inductor (½·L·I²) store, the RC/RL first-order time
   constants and the RC filter cutoff f_c = 1/(2π·R·C), and the LC resonant frequency
   f₀ = 1/(2π·√(L·C))
+- :mod:`~anvilate.analysis.magnetics` — magnetic actuators: the solenoid field B = μ₀·n·I,
+  the Maxwell magnetic pressure p = B²/(2·μ₀), and the electromagnet holding force
+  F = B²·A/(2·μ₀) — for clamps, lifting magnets, and magnetic bearings
 - :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, the runtime
   a given bank delivers, and the round-trip efficiency and the delivered energy
@@ -1335,6 +1338,11 @@ from .machining import (
     material_removal_rate,
     spindle_speed_for_cutting_speed,
     taylor_tool_life,
+)
+from .magnetics import (
+    electromagnet_holding_force,
+    magnetic_pressure,
+    solenoid_magnetic_field,
 )
 from .masonry import (
     masonry_allowable_axial_stress,
@@ -2639,6 +2647,9 @@ __all__ = [
     "spindle_speed_for_cutting_speed",
     "material_removal_rate",
     "taylor_tool_life",
+    "solenoid_magnetic_field",
+    "magnetic_pressure",
+    "electromagnet_holding_force",
     "LoadDuration",
     "nds_load_duration_factor",
     "nds_adjusted_design_value",

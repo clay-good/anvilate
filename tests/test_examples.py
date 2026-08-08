@@ -1126,6 +1126,15 @@ def test_fiber_optic_acceptance_example_refraction_and_trapping():
     assert d["acceptance_half_angle_deg"] == pytest.approx(14.03, abs=0.05)
 
 
+def test_lifting_magnet_holding_force_example_coil_to_clamp():
+    namespace = runpy.run_path(str(_EXAMPLES / "lifting_magnet_holding_force.py"))
+    d = namespace["lifting_magnet"]()
+    # Bare coil 2.5 mT; 1 T pole -> 0.40 MPa pressure -> ~4.0 kN over 100 cm^2.
+    assert d["coil_field_mt"] == pytest.approx(2.513, abs=0.005)
+    assert d["pole_pressure_mpa"] == pytest.approx(0.398, abs=0.002)
+    assert d["holding_force_kn"] == pytest.approx(3.979, abs=0.01)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()
