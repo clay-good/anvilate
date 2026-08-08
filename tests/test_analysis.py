@@ -22334,6 +22334,53 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_kinetic_potential_energy_and_work_done():
+    from anvilate.analysis import (
+        gravitational_potential_energy,
+        kinetic_energy,
+        work_done,
+    )
+
+    g = 9.80665
+
+    # KE = 0.5*m*v^2; 1000 kg at 20 m/s -> 200 kJ.
+    ke = kinetic_energy(mass=_q("1000 kg"), velocity=_q("20 m/s"))
+    assert ke.to("J").magnitude == pytest.approx(0.5 * 1000.0 * 20.0**2, rel=1e-9)
+    assert ke.to("J").magnitude == pytest.approx(200000.0, rel=1e-9)
+    # KE grows with the square of speed: double speed, quadruple energy.
+    ke2 = kinetic_energy(mass=_q("1000 kg"), velocity=_q("40 m/s"))
+    assert ke2.to("J").magnitude == pytest.approx(4.0 * ke.to("J").magnitude, rel=1e-9)
+
+    # PE = m*g*h; 1000 kg at 10 m -> ~98066 J with default gravity.
+    pe = gravitational_potential_energy(mass=_q("1000 kg"), height=_q("10 m"))
+    assert pe.to("J").magnitude == pytest.approx(1000.0 * g * 10.0, rel=1e-9)
+    assert pe.to("J").magnitude == pytest.approx(98066.5, abs=0.5)
+    # A user-supplied gravity (the Moon) gives less potential energy.
+    pe_moon = gravitational_potential_energy(
+        mass=_q("1000 kg"), height=_q("10 m"), gravity=Quantity(magnitude=1.62, unit="m/s**2")
+    )
+    assert pe_moon.to("J").magnitude == pytest.approx(1000.0 * 1.62 * 10.0, rel=1e-9)
+    assert pe_moon.to("J").magnitude < pe.to("J").magnitude
+
+    # Work W = F*d; 500 N over 3 m -> 1500 J.
+    w = work_done(force=_q("500 N"), distance=_q("3 m"))
+    assert w.to("J").magnitude == pytest.approx(500.0 * 3.0, rel=1e-9)
+    assert w.to("J").magnitude == pytest.approx(1500.0, rel=1e-9)
+    # Work-energy theorem: the work to accelerate from rest to 20 m/s equals the KE gained.
+    w_accel = work_done(force=_q("1000 N"), distance=_q("200 m"))
+    assert w_accel.to("J").magnitude == pytest.approx(ke.to("J").magnitude, rel=1e-9)
+
+    # Guardrails: positive mass/gravity, correct dimensions.
+    with pytest.raises(ValueError, match="mass must be positive"):
+        kinetic_energy(mass=_q("0 kg"), velocity=_q("20 m/s"))
+    with pytest.raises(ValueError, match="gravity must be positive"):
+        gravitational_potential_energy(
+            mass=_q("1000 kg"), height=_q("10 m"), gravity=Quantity(magnitude=-1.0, unit="m/s**2")
+        )
+    with pytest.raises(ValueError, match="force must be a"):
+        work_done(force=_q("500 kg"), distance=_q("3 m"))
+
+
 def test_ohms_law_resistive_power_and_parallel_resistance():
     from anvilate.analysis import (
         ohms_law_voltage,

@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_roller_coaster_energy_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "roller_coaster_energy.py"))
+    d = namespace["coaster_energy"]()
+    # 1000 kg at 20 m/s: 200 kJ KE, ~98 kJ PE at 10 m, 1.5 kJ work.
+    assert d["kinetic_energy_kj"] == pytest.approx(200.0, rel=1e-9)
+    assert d["potential_energy_kj"] == pytest.approx(98.07, abs=0.01)
+    assert d["drive_work_kj"] == pytest.approx(1.5, rel=1e-9)
+
+
 def test_resistor_network_example():
     namespace = runpy.run_path(str(_EXAMPLES / "resistor_network.py"))
     d = namespace["resistor_network"]()

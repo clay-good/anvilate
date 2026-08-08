@@ -109,6 +109,9 @@ modules:
   self-locking condition, and the collar (thrust-bearing) friction torque
 - :mod:`~anvilate.analysis.ball_screw` — ball-screw drive torque T = F·L/(2π·η) and
   the back-driving torque T_b = F·L·η_b/(2π) a holding brake must resist (not self-locking)
+- :mod:`~anvilate.analysis.work_energy` — classical work-energy basics: the kinetic energy
+  ½·m·v², the gravitational potential energy m·g·h, and the work W = F·d a constant force does
+  (the low-speed, energy-method companion to relativity and impact)
 - :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
   mesh efficiency, the efficiency-corrected wheel output torque, the self-locking
   condition, and the input tangential and separating (radial) tooth forces
@@ -2463,6 +2466,11 @@ from .wire_rope import (
     wire_rope_equivalent_bending_load,
     wire_rope_sheave_pressure,
 )
+from .work_energy import (
+    gravitational_potential_energy,
+    kinetic_energy,
+    work_done,
+)
 from .worm import (
     worm_gear_efficiency,
     worm_gear_ratio,
@@ -3749,6 +3757,9 @@ __all__ = [
     "minimum_sheave_diameter_for_bending_stress",
     "wire_rope_equivalent_bending_load",
     "wire_rope_sheave_pressure",
+    "kinetic_energy",
+    "gravitational_potential_energy",
+    "work_done",
     "drum_working_radius",
     "drum_line_pull",
     "drum_rope_capacity",
