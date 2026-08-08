@@ -153,9 +153,10 @@ modules:
   velocity v_e = √(2γ/(γ−1)·R·T_c·(1 − (p_e/p_c)^((γ−1)/γ))), the thrust
   F = ṁ·v_e + (p_e − p_a)·A_e and specific impulse I_sp = F/(ṁ·g₀), and the Tsiolkovsky
   Δv = I_sp·g₀·ln(m₀/m_f) with the propellant fraction ζ = 1 − exp(−Δv/(I_sp·g₀)) it needs
-- :mod:`~anvilate.analysis.orbital_mechanics` — two-body coasting: the circular orbital speed
-  v = √(μ/r), the Kepler period T = 2π·√(r³/μ), and the escape velocity
-  v_esc = √(2μ/r) = √2·v_circ
+- :mod:`~anvilate.analysis.orbital_mechanics` — two-body coasting and transfers: the circular
+  orbital speed v = √(μ/r), the Kepler period T = 2π·√(r³/μ), the escape velocity
+  v_esc = √(2μ/r) = √2·v_circ, and the Hohmann two-burn transfer Δv's and coast time
+  t = π·√(a³/μ)
 - :mod:`~anvilate.analysis.combustion` — furnace/boiler combustion: the stoichiometric
   air-fuel ratio from an ultimate analysis, the excess air read from flue-gas oxygen
   (EA = O₂/(20.9−O₂)), the actual air-fuel ratio a burner runs at, and the Siegert dry
@@ -1354,6 +1355,9 @@ from .open_channel import (
 from .orbital_mechanics import (
     circular_orbit_velocity,
     escape_velocity,
+    hohmann_first_burn_delta_v,
+    hohmann_second_burn_delta_v,
+    hohmann_transfer_time,
     orbital_period,
 )
 from .pipe_flow import (
@@ -1909,6 +1913,9 @@ __all__ = [
     "circular_orbit_velocity",
     "orbital_period",
     "escape_velocity",
+    "hohmann_first_burn_delta_v",
+    "hohmann_second_burn_delta_v",
+    "hohmann_transfer_time",
     "cavitation_number",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",

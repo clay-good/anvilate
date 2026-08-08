@@ -23,6 +23,9 @@ from ..units import Quantity
 __all__ = [
     "circular_orbit_velocity",
     "escape_velocity",
+    "hohmann_first_burn_delta_v",
+    "hohmann_second_burn_delta_v",
+    "hohmann_transfer_time",
     "orbital_period",
 ]
 
@@ -89,6 +92,75 @@ def escape_velocity(*, gravitational_parameter: Quantity, orbital_radius: Quanti
     if r <= 0:
         raise ValueError("orbital_radius must be positive")
     return Quantity(magnitude=sqrt(2.0 * mu / r), unit="m/s")
+
+
+def _hohmann_inputs(
+    gravitational_parameter: Quantity, initial_radius: Quantity, final_radius: Quantity
+) -> tuple[float, float, float, float]:
+    """Validate and return (mu, r1, r2, a) in SI for a Hohmann transfer."""
+    _check(gravitational_parameter, "[length]**3/[time]**2", "gravitational_parameter")
+    _check(initial_radius, "[length]", "initial_radius")
+    _check(final_radius, "[length]", "final_radius")
+    mu = gravitational_parameter.to("m**3/s**2").magnitude
+    r1 = initial_radius.to("m").magnitude
+    r2 = final_radius.to("m").magnitude
+    if mu <= 0:
+        raise ValueError("gravitational_parameter must be positive")
+    if r1 <= 0:
+        raise ValueError("initial_radius must be positive")
+    if r2 <= 0:
+        raise ValueError("final_radius must be positive")
+    if r2 == r1:
+        raise ValueError("final_radius must differ from initial_radius (a transfer changes orbit)")
+    return mu, r1, r2, (r1 + r2) / 2.0
+
+
+def hohmann_first_burn_delta_v(
+    *, gravitational_parameter: Quantity, initial_radius: Quantity, final_radius: Quantity
+) -> Quantity:
+    """The first Hohmann burn, Δv₁ = √(μ(2/r₁ − 1/a)) − √(μ/r₁).
+
+    The velocity change that lifts a spacecraft from its circular ``initial_radius`` r₁ onto the
+    transfer ellipse whose semi-major axis is a = (r₁ + r₂)/2 (with the ``final_radius`` r₂): from
+    the ``gravitational_parameter`` μ, Δv₁ = √(μ(2/r₁ − 1/a)) − √(μ/r₁). It is positive (a prograde
+    speed-up) for raising an orbit and negative for lowering one; the propulsive cost is its
+    magnitude, and the total is |Δv₁| + |Δv₂| (:func:`hohmann_second_burn_delta_v`). Returns Δv₁ in
+    m/s.
+    """
+    mu, r1, _r2, a = _hohmann_inputs(gravitational_parameter, initial_radius, final_radius)
+    dv1 = sqrt(mu * (2.0 / r1 - 1.0 / a)) - sqrt(mu / r1)
+    return Quantity(magnitude=dv1, unit="m/s")
+
+
+def hohmann_second_burn_delta_v(
+    *, gravitational_parameter: Quantity, initial_radius: Quantity, final_radius: Quantity
+) -> Quantity:
+    """The second Hohmann burn, Δv₂ = √(μ/r₂) − √(μ(2/r₂ − 1/a)).
+
+    The velocity change that circularizes the spacecraft at the ``final_radius`` r₂, where the
+    transfer ellipse (semi-major axis a = (r₁ + r₂)/2, from the ``initial_radius`` r₁) meets the
+    target orbit: from the ``gravitational_parameter`` μ, Δv₂ = √(μ/r₂) − √(μ(2/r₂ − 1/a)). Like the
+    first burn it is positive for raising an orbit; the total transfer cost is
+    |Δv₁| + |Δv₂| (:func:`hohmann_first_burn_delta_v`). Returns Δv₂ in m/s.
+    """
+    mu, _r1, r2, a = _hohmann_inputs(gravitational_parameter, initial_radius, final_radius)
+    dv2 = sqrt(mu / r2) - sqrt(mu * (2.0 / r2 - 1.0 / a))
+    return Quantity(magnitude=dv2, unit="m/s")
+
+
+def hohmann_transfer_time(
+    *, gravitational_parameter: Quantity, initial_radius: Quantity, final_radius: Quantity
+) -> Quantity:
+    """The Hohmann coast time, t = π·√(a³/μ).
+
+    The time the spacecraft spends coasting on the transfer ellipse — half its full period — between
+    the two burns: from the ``gravitational_parameter`` μ and the semi-major axis a = (r₁ + r₂)/2
+    of the ``initial_radius`` r₁ and ``final_radius`` r₂, t = π·√(a³/μ). It is fixed once the orbits
+    are chosen and can run to hours or months, setting the wait a mission plans around (a LEO-to-GEO
+    transfer takes about five hours). Returns the transfer time in s.
+    """
+    mu, _r1, _r2, a = _hohmann_inputs(gravitational_parameter, initial_radius, final_radius)
+    return Quantity(magnitude=pi * sqrt(a**3 / mu), unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

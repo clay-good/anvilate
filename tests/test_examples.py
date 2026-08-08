@@ -1034,6 +1034,17 @@ def test_leo_orbit_and_escape_example_escape_is_sqrt2_times_orbital():
     assert d["escape_velocity_km_s"] == pytest.approx(2**0.5 * d["orbital_speed_km_s"], rel=1e-9)
 
 
+def test_leo_to_geo_hohmann_example_total_delta_v():
+    namespace = runpy.run_path(str(_EXAMPLES / "leo_to_geo_hohmann.py"))
+    d = namespace["hohmann_transfer"]()
+    # LEO->GEO Hohmann: first burn ~2.40 km/s, second ~1.46 km/s, total ~3.86 km/s.
+    assert d["first_burn_km_s"] == pytest.approx(2.399, abs=0.005)
+    assert d["second_burn_km_s"] == pytest.approx(1.457, abs=0.005)
+    assert d["total_delta_v_km_s"] == pytest.approx(3.857, abs=0.005)
+    # Coast time ~5.3 hours.
+    assert d["transfer_time_hours"] == pytest.approx(5.29, abs=0.02)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

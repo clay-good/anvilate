@@ -17152,6 +17152,50 @@ def test_orbital_mechanics_circular_velocity_period_and_escape():
         escape_velocity(gravitational_parameter=_q("3.986e14 m**2/s**2"), orbital_radius=r)
 
 
+def test_hohmann_transfer_burns_and_coast_time():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        hohmann_first_burn_delta_v,
+        hohmann_second_burn_delta_v,
+        hohmann_transfer_time,
+    )
+
+    mu = _q("3.986e14 m**3/s**2")
+    r1 = _q("6771 km")  # LEO
+    r2 = _q("42164 km")  # GEO
+    mu_v, r1_v, r2_v = 3.986e14, 6.771e6, 4.2164e7
+    a = (r1_v + r2_v) / 2
+
+    # First burn Δv1 = sqrt(mu(2/r1 - 1/a)) - sqrt(mu/r1) ~ 2399.5 m/s.
+    dv1 = hohmann_first_burn_delta_v(gravitational_parameter=mu, initial_radius=r1, final_radius=r2)
+    expected_dv1 = sqrt(mu_v * (2 / r1_v - 1 / a)) - sqrt(mu_v / r1_v)
+    assert dv1.to("m/s").magnitude == pytest.approx(expected_dv1, rel=1e-9)
+
+    # Second burn Δv2 = sqrt(mu/r2) - sqrt(mu(2/r2 - 1/a)) ~ 1457.2 m/s.
+    dv2 = hohmann_second_burn_delta_v(
+        gravitational_parameter=mu, initial_radius=r1, final_radius=r2
+    )
+    expected_dv2 = sqrt(mu_v / r2_v) - sqrt(mu_v * (2 / r2_v - 1 / a))
+    assert dv2.to("m/s").magnitude == pytest.approx(expected_dv2, rel=1e-9)
+    # Total LEO->GEO Hohmann Δv is the well-known ~3.86 km/s.
+    total = dv1.to("km/s").magnitude + dv2.to("km/s").magnitude
+    assert total == pytest.approx(3.857, abs=0.005)
+
+    # Coast time t = pi*sqrt(a^3/mu) ~ 5.29 hours.
+    t = hohmann_transfer_time(gravitational_parameter=mu, initial_radius=r1, final_radius=r2)
+    assert t.to("s").magnitude == pytest.approx(pi * sqrt(a**3 / mu_v), rel=1e-9)
+    assert t.to("s").magnitude / 3600 == pytest.approx(5.29, abs=0.02)
+
+    # Guardrails: the transfer must change orbit, and inputs are dimension-checked.
+    with pytest.raises(ValueError, match="final_radius must differ from initial_radius"):
+        hohmann_transfer_time(gravitational_parameter=mu, initial_radius=r1, final_radius=r1)
+    with pytest.raises(ValueError, match="initial_radius must be a"):
+        hohmann_first_burn_delta_v(
+            gravitational_parameter=mu, initial_radius=_q("6771 s"), final_radius=r2
+        )
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 
