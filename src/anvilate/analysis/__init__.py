@@ -431,6 +431,9 @@ modules:
   gauge's fractional resistance change ε = (ΔR/R)/GF, the Wheatstone-bridge output ratio
   V_o/V_ex = n·GF·ε/4 (n = 1/2/4 for quarter/half/full bridge), and the inverse that turns a
   bridge reading back into strain (and, via E, the stress the part carries)
+- :mod:`~anvilate.analysis.piezoelectric` — piezoelectric transducers: the charge a force
+  generates Q = d33·F (direct effect — sensors, harvesters), the open-circuit voltage a stress
+  produces V = g33·σ·t, and the force behind a measured charge F = Q/d33 (piezo load-washer readout)
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -1451,6 +1454,11 @@ from .orbital_mechanics import (
     semi_major_axis_from_apsides,
     vis_viva_velocity,
 )
+from .piezoelectric import (
+    piezoelectric_charge,
+    piezoelectric_force_from_charge,
+    piezoelectric_open_circuit_voltage,
+)
 from .pipe_flow import (
     cavitation_number,
     darcy_friction_factor,
@@ -2387,6 +2395,9 @@ __all__ = [
     "gauge_strain_from_resistance",
     "wheatstone_bridge_output",
     "strain_from_bridge_output",
+    "piezoelectric_charge",
+    "piezoelectric_open_circuit_voltage",
+    "piezoelectric_force_from_charge",
     "belt_length",
     "belt_wrap_angle",
     "crossed_belt_length",

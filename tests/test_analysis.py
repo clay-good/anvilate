@@ -20853,6 +20853,47 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_piezoelectric_charge_voltage_and_force_inverse():
+    from anvilate.analysis import (
+        piezoelectric_charge,
+        piezoelectric_force_from_charge,
+        piezoelectric_open_circuit_voltage,
+    )
+
+    d33 = Quantity(magnitude=593e-12, unit="C/N")
+    g33 = Quantity(magnitude=19.7e-3, unit="V*m/N")
+
+    # Q = d33*F; 593 pC/N at 100 N -> 59.3 nC.
+    q = piezoelectric_charge(charge_coefficient=d33, force=_q("100 N"))
+    assert q.to("C").magnitude == pytest.approx(593e-12 * 100, rel=1e-12)
+    assert q.to("nC").magnitude == pytest.approx(59.3, rel=1e-9)
+
+    # Charge scales linearly with force.
+    q2 = piezoelectric_charge(charge_coefficient=d33, force=_q("200 N"))
+    assert q2.to("C").magnitude == pytest.approx(2 * q.to("C").magnitude, rel=1e-12)
+
+    # V = g33*sigma*t; 1 MPa over a 2 mm gap -> 39.4 V.
+    v = piezoelectric_open_circuit_voltage(
+        voltage_coefficient=g33, stress=_q("1 MPa"), thickness=_q("2 mm")
+    )
+    assert v.to("V").magnitude == pytest.approx(19.7e-3 * 1e6 * 2e-3, rel=1e-9)
+    assert v.to("V").magnitude == pytest.approx(39.4, rel=1e-6)
+
+    # Force inverse round-trips the charge back to 100 N.
+    f = piezoelectric_force_from_charge(charge=q, charge_coefficient=d33)
+    assert f.to("N").magnitude == pytest.approx(100.0, rel=1e-9)
+
+    # Guardrails: positive thickness/coefficient, dimensions checked.
+    with pytest.raises(ValueError, match="thickness must be positive"):
+        piezoelectric_open_circuit_voltage(
+            voltage_coefficient=g33, stress=_q("1 MPa"), thickness=_q("0 mm")
+        )
+    with pytest.raises(ValueError, match="charge_coefficient must be a"):
+        piezoelectric_charge(charge_coefficient=_q("593 pF"), force=_q("100 N"))
+    with pytest.raises(ValueError, match="force must be a"):
+        piezoelectric_charge(charge_coefficient=d33, force=_q("100 Pa"))
+
+
 def test_hall_effect_voltage_field_and_carrier_density_inverses():
     from anvilate.analysis import (
         hall_carrier_density,

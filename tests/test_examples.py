@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_piezo_force_sensor_example_charge_voltage_and_force():
+    namespace = runpy.run_path(str(_EXAMPLES / "piezo_force_sensor.py"))
+    d = namespace["force_sensor"]()
+    # PZT-5H, 100 N -> 59.3 nC; 1 MPa over 2 mm -> 39.4 V; force round-trips.
+    assert d["charge_nc"] == pytest.approx(59.3, rel=1e-6)
+    assert d["open_circuit_voltage_v"] == pytest.approx(39.4, rel=1e-6)
+    assert d["recovered_force_n"] == pytest.approx(100.0, rel=1e-9)
+
+
 def test_hall_sensor_example_voltage_field_and_carrier_density():
     namespace = runpy.run_path(str(_EXAMPLES / "hall_sensor_and_characterization.py"))
     d = namespace["hall_readings"]()
