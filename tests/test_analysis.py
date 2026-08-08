@@ -22334,6 +22334,56 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_weibull_reliability_hazard_rate_and_mean_life():
+    from math import exp, gamma
+
+    from anvilate.analysis import (
+        weibull_hazard_rate,
+        weibull_mean_life,
+        weibull_reliability,
+    )
+
+    eta = _q("1000 hour")
+
+    # R(t) = exp(-(t/eta)^beta); wear-out shape 2.0 at 500 h -> 0.7788.
+    r = weibull_reliability(time=_q("500 hour"), characteristic_life=eta, shape=2.0)
+    assert r == pytest.approx(exp(-((0.5) ** 2.0)), rel=1e-9)
+    assert r == pytest.approx(0.7788, abs=0.0005)
+    # At t = eta the reliability is 1/e regardless of shape.
+    r_at_eta = weibull_reliability(time=_q("1000 hour"), characteristic_life=eta, shape=3.7)
+    assert r_at_eta == pytest.approx(exp(-1.0), rel=1e-9)
+    # Reliability starts at 1 and decreases with age.
+    assert weibull_reliability(time=_q("0 hour"), characteristic_life=eta, shape=2.0) == 1.0
+
+    # Hazard h(t) = (beta/eta)*(t/eta)^(beta-1); at 500 h with beta=2 it is 0.001/h.
+    h = weibull_hazard_rate(time=_q("500 hour"), characteristic_life=eta, shape=2.0)
+    assert h.to("1/hour").magnitude == pytest.approx((2.0 / 1000.0) * (0.5) ** 1.0, rel=1e-9)
+    assert h.to("1/hour").magnitude == pytest.approx(0.001, rel=1e-9)
+    # For beta > 1 the hazard rises with age (wear-out).
+    h_late = weibull_hazard_rate(time=_q("800 hour"), characteristic_life=eta, shape=2.0)
+    assert h_late.to("1/hour").magnitude > h.to("1/hour").magnitude
+    # For beta = 1 the hazard is constant (exponential model): h = 1/eta everywhere.
+    h1 = weibull_hazard_rate(time=_q("300 hour"), characteristic_life=eta, shape=1.0)
+    h2 = weibull_hazard_rate(time=_q("900 hour"), characteristic_life=eta, shape=1.0)
+    assert h1.to("1/hour").magnitude == pytest.approx(h2.to("1/hour").magnitude, rel=1e-9)
+    assert h1.to("1/hour").magnitude == pytest.approx(1.0 / 1000.0, rel=1e-9)
+
+    # Mean life MTTF = eta*Gamma(1 + 1/beta); ~886 h for beta=2, exactly eta for beta=1.
+    mttf = weibull_mean_life(characteristic_life=eta, shape=2.0)
+    assert mttf.to("hour").magnitude == pytest.approx(1000.0 * gamma(1.5), rel=1e-9)
+    assert mttf.to("hour").magnitude == pytest.approx(886.23, abs=0.01)
+    mttf_exp = weibull_mean_life(characteristic_life=eta, shape=1.0)
+    assert mttf_exp.to("hour").magnitude == pytest.approx(1000.0, rel=1e-9)
+
+    # Guardrails: positive shape/life, and the hazard diverges at t=0 for beta<1.
+    with pytest.raises(ValueError, match="shape must be positive"):
+        weibull_reliability(time=_q("500 hour"), characteristic_life=eta, shape=0.0)
+    with pytest.raises(ValueError, match="hazard rate diverges at t = 0"):
+        weibull_hazard_rate(time=_q("0 hour"), characteristic_life=eta, shape=0.5)
+    with pytest.raises(ValueError, match="characteristic_life must be a"):
+        weibull_mean_life(characteristic_life=_q("1000 N"), shape=2.0)
+
+
 def test_rotor_hover_induced_velocity_power_and_figure_of_merit():
     from math import pi, sqrt
 

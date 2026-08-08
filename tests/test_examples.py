@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_pump_bearing_reliability_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "pump_bearing_reliability.py"))
+    d = namespace["bearing_reliability"]()
+    # eta=1000 h, beta=2: R(500)~0.779, hazard 0.001/h, MTTF ~886 h.
+    assert d["reliability_at_500h"] == pytest.approx(0.7788, abs=0.0005)
+    assert d["hazard_rate_per_hour"] == pytest.approx(0.001, rel=1e-6)
+    assert d["mean_time_to_failure_h"] == pytest.approx(886.23, abs=0.01)
+
+
 def test_helicopter_hover_example():
     namespace = runpy.run_path(str(_EXAMPLES / "helicopter_hover.py"))
     d = namespace["rotor_hover"]()

@@ -426,6 +426,9 @@ modules:
 - :mod:`~anvilate.analysis.relativity` — special relativity: the Lorentz factor γ = 1/√(1−(v/c)²),
   the time dilation t = γ·t0 of a moving clock (GPS, muons), and the relativistic kinetic energy
   (γ−1)·m·c² an accelerator must supply
+- :mod:`~anvilate.analysis.reliability` — Weibull reliability: the survival R(t) = exp(−(t/η)^β),
+  the hazard rate h(t) = (β/η)·(t/η)^(β−1) (infant-mortality/constant/wear-out as β ≷ 1), and the
+  mean time to failure η·Γ(1+1/β)
 - :mod:`~anvilate.analysis.radar` — Doppler radar: the two-way Doppler shift f_d = 2·v·f0/c of an
   echo, the radial velocity a measured shift implies v = f_d·c/(2·f0) (speed gun), and the maximum
   unambiguous velocity v_max = PRF·c/(4·f0) beyond which a pulse-Doppler radar aliases
@@ -1915,6 +1918,11 @@ from .relativity import (
     relativistic_kinetic_energy,
     time_dilation,
 )
+from .reliability import (
+    weibull_hazard_rate,
+    weibull_mean_life,
+    weibull_reliability,
+)
 from .resistance_welding import (
     spot_weld_current_for_heat,
     spot_weld_heat_generated,
@@ -3145,6 +3153,9 @@ __all__ = [
     "lorentz_factor",
     "time_dilation",
     "relativistic_kinetic_energy",
+    "weibull_reliability",
+    "weibull_hazard_rate",
+    "weibull_mean_life",
     "radar_doppler_shift",
     "radial_velocity_from_doppler",
     "max_unambiguous_velocity",
