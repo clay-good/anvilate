@@ -16554,6 +16554,72 @@ def test_film_condensation_coefficients_and_condensate_rate():
         )
 
 
+def test_nucleate_boiling_flux_superheat_inverse_and_critical_heat_flux():
+    from anvilate.analysis import (
+        critical_heat_flux,
+        nucleate_boiling_excess_temperature,
+        nucleate_boiling_heat_flux,
+    )
+
+    props = {
+        "liquid_viscosity": _q("2.79e-4 Pa*s"),
+        "latent_heat": _q("2257 kJ/kg"),
+        "liquid_density": _q("957.9 kg/m**3"),
+        "vapor_density": _q("0.5956 kg/m**3"),
+        "surface_tension": _q("0.0589 N/m"),
+    }
+    rohsenow = {
+        "liquid_specific_heat": _q("4217 J/(kg*K)"),
+        "surface_fluid_coefficient": 0.013,
+        "prandtl_number": 1.76,
+        "fluid_exponent": 1.0,
+    }
+
+    # Rohsenow flux at 10 K superheat for water/copper -> ~136903 W/m^2 (verified vs correlation).
+    q = nucleate_boiling_heat_flux(excess_temperature=_q("10 K"), **props, **rohsenow)
+    prefactor = 2.79e-4 * 2257e3 * (9.80665 * (957.9 - 0.5956) / 0.0589) ** 0.5
+    bracket = 4217 * 10 / (0.013 * 2257e3 * 1.76**1.0)
+    assert q.to("W/m**2").magnitude == pytest.approx(prefactor * bracket**3, rel=1e-9)
+    # Cubic in superheat: doubling the excess temperature multiplies the flux eightfold.
+    q_hot = nucleate_boiling_heat_flux(excess_temperature=_q("20 K"), **props, **rohsenow)
+    assert q_hot.to("W/m**2").magnitude == pytest.approx(8 * q.to("W/m**2").magnitude, rel=1e-9)
+
+    # Superheat inverse round-trips: the ΔT_e for that flux reproduces 10 K.
+    dte = nucleate_boiling_excess_temperature(heat_flux=q, **props, **rohsenow)
+    assert dte.to("K").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    # Zuber critical heat flux for water at 1 atm ~ 1.26 MW/m^2.
+    chf = critical_heat_flux(
+        latent_heat=_q("2257 kJ/kg"),
+        liquid_density=_q("957.9 kg/m**3"),
+        vapor_density=_q("0.5956 kg/m**3"),
+        surface_tension=_q("0.0589 N/m"),
+    )
+    expected_chf = 0.149 * 2257e3 * 0.5956**0.5 * (0.0589 * 9.80665 * (957.9 - 0.5956)) ** 0.25
+    assert chf.to("W/m**2").magnitude == pytest.approx(expected_chf, rel=1e-9)
+    assert chf.to("W/m**2").magnitude / 1e6 == pytest.approx(1.259, abs=0.01)
+    # The 10 K operating point sits well below the critical heat flux.
+    assert q.to("W/m**2").magnitude < 0.2 * chf.to("W/m**2").magnitude
+
+    # Guardrails: positive inputs, vapor lighter than liquid, dimensions checked.
+    with pytest.raises(ValueError, match="excess_temperature must be positive"):
+        nucleate_boiling_heat_flux(excess_temperature=_q("0 K"), **props, **rohsenow)
+    with pytest.raises(ValueError, match="vapor_density must be less than liquid_density"):
+        critical_heat_flux(
+            latent_heat=_q("2257 kJ/kg"),
+            liquid_density=_q("1 kg/m**3"),
+            vapor_density=_q("2 kg/m**3"),
+            surface_tension=_q("0.0589 N/m"),
+        )
+    with pytest.raises(ValueError, match="surface_tension must be a"):
+        critical_heat_flux(
+            latent_heat=_q("2257 kJ/kg"),
+            liquid_density=_q("957.9 kg/m**3"),
+            vapor_density=_q("0.5956 kg/m**3"),
+            surface_tension=_q("0.0589 N"),
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

@@ -967,6 +967,18 @@ def test_steam_condenser_coefficient_example_tube_beats_plate():
     assert d["condensate_rate_kg_s"] == pytest.approx(0.148, abs=0.005)
 
 
+def test_boiling_burnout_margin_example_runs_below_critical_heat_flux():
+    namespace = runpy.run_path(str(_EXAMPLES / "boiling_burnout_margin.py"))
+    d = namespace["boiling_margin"]()
+    # Rohsenow flux at 10 K superheat ~137 kW/m^2.
+    assert d["operating_flux_kw_m2"] == pytest.approx(137.0, abs=1.0)
+    # Zuber critical heat flux ~1.26 MW/m^2.
+    assert d["critical_heat_flux_mw_m2"] == pytest.approx(1.259, abs=0.01)
+    # Running at ~11% of burnout — a comfortable margin.
+    assert d["fraction_of_burnout"] == pytest.approx(0.109, abs=0.005)
+    assert d["fraction_of_burnout"] < 1.0
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

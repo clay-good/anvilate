@@ -380,6 +380,9 @@ modules:
 - :mod:`~anvilate.analysis.condensation` — Nusselt filmwise condensation (phase-change
   heat transfer): the vertical-plate coefficient h = 0.943·[…/(μ·ΔT·L)]^¼ and the
   horizontal-tube form (0.729/D), and the condensate rate ṁ = h·A·ΔT/h_fg they drive
+- :mod:`~anvilate.analysis.boiling` — nucleate boiling: the Rohsenow flux
+  q″ = μ_l·h_fg·√(g·Δρ/σ)·[c_pl·ΔT_e/(C_sf·h_fg·Pr^n)]³, its ΔT_e inverse, and Zuber's
+  critical-heat-flux burnout limit q″_max = 0.149·h_fg·√ρ_v·[σ·g·Δρ]^¼
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -701,6 +704,11 @@ from .belt import (
     crossed_belt_length,
     crossed_belt_wrap_angle,
     vee_belt_effective_friction,
+)
+from .boiling import (
+    critical_heat_flux,
+    nucleate_boiling_excess_temperature,
+    nucleate_boiling_heat_flux,
 )
 from .brake import (
     band_brake_max_lining_pressure,
@@ -2190,6 +2198,9 @@ __all__ = [
     "belt_max_transmissible_force_at_speed",
     "belt_speed_for_max_power",
     "vee_belt_effective_friction",
+    "nucleate_boiling_heat_flux",
+    "nucleate_boiling_excess_temperature",
+    "critical_heat_flux",
     "belt_length",
     "belt_wrap_angle",
     "crossed_belt_length",

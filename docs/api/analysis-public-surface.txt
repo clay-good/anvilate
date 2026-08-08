@@ -189,6 +189,9 @@ belt.capstan_tension_ratio
 belt.crossed_belt_length
 belt.crossed_belt_wrap_angle
 belt.vee_belt_effective_friction
+boiling.nucleate_boiling_heat_flux
+boiling.nucleate_boiling_excess_temperature
+boiling.critical_heat_flux
 brake.band_brake_max_lining_pressure
 brake.band_brake_tight_tension_for_torque
 brake.band_brake_torque
