@@ -1013,6 +1013,16 @@ def test_rocket_engine_thrust_example_vacuum_beats_sea_level():
     assert d["specific_impulse_sea_s"] == pytest.approx(250.5, abs=0.5)
 
 
+def test_rocket_delta_v_budget_example_single_stage_impossible():
+    namespace = runpy.run_path(str(_EXAMPLES / "rocket_delta_v_budget.py"))
+    d = namespace["delta_v_budget"]()
+    # Stage Δv ~2952 m/s for a 3.33 mass ratio at 250 s.
+    assert d["stage_delta_v_m_s"] == pytest.approx(2951.7, abs=1.0)
+    # A 9400 m/s orbital budget on one 250 s stage needs ~98% propellant.
+    assert d["orbital_propellant_fraction"] == pytest.approx(0.978, abs=0.003)
+    assert d["orbital_propellant_fraction"] > 0.95  # structurally impossible -> staging
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

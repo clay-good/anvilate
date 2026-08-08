@@ -18,14 +18,16 @@ I_sp = F/(ṁ·g₀), the seconds of thrust per unit weight of propellant — th
 
 from __future__ import annotations
 
-from math import sqrt
+from math import exp, log, sqrt
 
 from ..units import Quantity
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
 __all__ = [
+    "rocket_delta_v",
     "rocket_exhaust_velocity",
+    "rocket_propellant_mass_fraction",
     "rocket_specific_impulse",
     "rocket_thrust",
 ]
@@ -130,6 +132,56 @@ def rocket_specific_impulse(*, thrust: Quantity, mass_flow_rate: Quantity) -> Qu
     if m_dot <= 0:
         raise ValueError("mass_flow_rate must be positive")
     return Quantity(magnitude=f / (m_dot * STANDARD_GRAVITY_M_PER_S2), unit="s")
+
+
+def rocket_delta_v(
+    *, specific_impulse: Quantity, initial_mass: Quantity, final_mass: Quantity
+) -> Quantity:
+    """The Tsiolkovsky rocket equation, Δv = I_sp·g₀·ln(m₀/m_f).
+
+    The velocity change a stage can achieve, the single most important number in mission design:
+    from the ``specific_impulse`` I_sp, standard gravity g₀, and the mass ratio of the
+    ``initial_mass`` m₀ (fuelled) to the ``final_mass`` m_f (burnt out), Δv = I_sp·g₀·ln(m₀/m_f).
+    The logarithm is unforgiving — because m_f includes the structure and payload that cannot be
+    shed, doubling the Δv needs the mass ratio *squared*, which is why big Δv budgets force staging.
+    Returns the velocity change in m/s.
+    """
+    _check(specific_impulse, "[time]", "specific_impulse")
+    _check(initial_mass, "[mass]", "initial_mass")
+    _check(final_mass, "[mass]", "final_mass")
+    isp = specific_impulse.to("s").magnitude
+    m0 = initial_mass.to("kg").magnitude
+    mf = final_mass.to("kg").magnitude
+    if isp <= 0:
+        raise ValueError("specific_impulse must be positive")
+    if m0 <= 0:
+        raise ValueError("initial_mass must be positive")
+    if mf <= 0:
+        raise ValueError("final_mass must be positive")
+    if mf >= m0:
+        raise ValueError("final_mass must be less than initial_mass (propellant is burnt)")
+    return Quantity(magnitude=isp * STANDARD_GRAVITY_M_PER_S2 * log(m0 / mf), unit="m/s")
+
+
+def rocket_propellant_mass_fraction(*, delta_v: Quantity, specific_impulse: Quantity) -> float:
+    """The propellant mass fraction a Δv needs, ζ = 1 − exp(−Δv/(I_sp·g₀)).
+
+    Inverting the rocket equation (:func:`rocket_delta_v`) for the mass budget: the fraction of the
+    stage's initial mass that must be propellant to reach a required ``delta_v`` at a
+    ``specific_impulse`` I_sp, ζ = m_prop/m₀ = 1 − exp(−Δv/(I_sp·g₀)). It rises steeply toward 1 as
+    the demanded Δv grows — a Δv equal to the exhaust velocity already needs 63% propellant —
+    leaving ever less mass for structure and payload, the fundamental squeeze of rocketry. Returns
+    the propellant mass fraction (0 to 1).
+    """
+    _check(delta_v, "[length]/[time]", "delta_v")
+    _check(specific_impulse, "[time]", "specific_impulse")
+    dv = delta_v.to("m/s").magnitude
+    isp = specific_impulse.to("s").magnitude
+    if dv <= 0:
+        raise ValueError("delta_v must be positive")
+    if isp <= 0:
+        raise ValueError("specific_impulse must be positive")
+    return 1.0 - exp(-dv / (isp * STANDARD_GRAVITY_M_PER_S2))
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

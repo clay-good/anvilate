@@ -787,6 +787,8 @@ road_curve.stopping_sight_distance
 rocket_propulsion.rocket_exhaust_velocity
 rocket_propulsion.rocket_thrust
 rocket_propulsion.rocket_specific_impulse
+rocket_propulsion.rocket_delta_v
+rocket_propulsion.rocket_propellant_mass_fraction
 rolling.maximum_draft
 rolling.rolling_contact_length
 rolling.rolling_force

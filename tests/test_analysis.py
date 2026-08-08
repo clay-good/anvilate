@@ -17073,6 +17073,51 @@ def test_rocket_exhaust_velocity_thrust_and_specific_impulse():
         )
 
 
+def test_rocket_delta_v_and_propellant_mass_fraction():
+    from math import exp, log
+
+    from anvilate.analysis import rocket_delta_v, rocket_propellant_mass_fraction
+
+    # Tsiolkovsky Δv = Isp*g0*ln(m0/mf); 250 s, 100 t -> 30 t (ratio 3.333) = 2951.7 m/s.
+    dv = rocket_delta_v(
+        specific_impulse=_q("250 s"),
+        initial_mass=_q("100000 kg"),
+        final_mass=_q("30000 kg"),
+    )
+    assert dv.to("m/s").magnitude == pytest.approx(250 * 9.80665 * log(100000 / 30000), rel=1e-9)
+    # A bigger mass ratio yields more Δv.
+    dv_big = rocket_delta_v(
+        specific_impulse=_q("250 s"),
+        initial_mass=_q("100000 kg"),
+        final_mass=_q("20000 kg"),
+    )
+    assert dv_big.to("m/s").magnitude > dv.to("m/s").magnitude
+
+    # Propellant fraction zeta = 1 - exp(-Δv/(Isp*g0)); round-trips against the Δv above.
+    zeta = rocket_propellant_mass_fraction(delta_v=dv, specific_impulse=_q("250 s"))
+    assert zeta == pytest.approx(1.0 - 30000 / 100000, rel=1e-9)  # 1 - mf/m0 = 0.70
+    # A Δv equal to the exhaust velocity (Isp*g0) needs the classic 1 - 1/e = 63.2%.
+    ve = _q(f"{250 * 9.80665} m/s")
+    zeta_ve = rocket_propellant_mass_fraction(delta_v=ve, specific_impulse=_q("250 s"))
+    assert zeta_ve == pytest.approx(1.0 - exp(-1.0), rel=1e-9)
+
+    # Guardrails: burnt-out mass below fuelled mass, positive inputs, dimensions checked.
+    with pytest.raises(ValueError, match="final_mass must be less than initial_mass"):
+        rocket_delta_v(
+            specific_impulse=_q("250 s"),
+            initial_mass=_q("30000 kg"),
+            final_mass=_q("100000 kg"),
+        )
+    with pytest.raises(ValueError, match="delta_v must be positive"):
+        rocket_propellant_mass_fraction(delta_v=_q("0 m/s"), specific_impulse=_q("250 s"))
+    with pytest.raises(ValueError, match="specific_impulse must be a"):
+        rocket_delta_v(
+            specific_impulse=_q("250 m"),
+            initial_mass=_q("100000 kg"),
+            final_mass=_q("30000 kg"),
+        )
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 
