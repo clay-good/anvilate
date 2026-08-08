@@ -20985,6 +20985,44 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_photometry_luminous_efficacy_flux_and_efficiency():
+    from anvilate.analysis import (
+        luminous_efficacy,
+        luminous_efficiency,
+        luminous_flux_from_power,
+    )
+
+    # efficacy = flux/power; 800 lm at 8 W -> 100 lm/W.
+    e = luminous_efficacy(
+        luminous_flux=Quantity(magnitude=800.0, unit="lm"), electrical_power=_q("8 W")
+    )
+    assert e.to("lm/W").magnitude == pytest.approx(100.0, rel=1e-12)
+    # An incandescent at 60 W for the same output is far less efficacious.
+    e_inc = luminous_efficacy(
+        luminous_flux=Quantity(magnitude=800.0, unit="lm"), electrical_power=_q("60 W")
+    )
+    assert e_inc.to("lm/W").magnitude < e.to("lm/W").magnitude
+
+    # Flux inverse round-trips: P*efficacy recovers 800 lm.
+    flux = luminous_flux_from_power(electrical_power=_q("8 W"), luminous_efficacy=e)
+    assert flux.to("lm").magnitude == pytest.approx(800.0, rel=1e-9)
+
+    # Efficiency = efficacy/683; 100 lm/W -> ~14.6%.
+    eff = luminous_efficiency(luminous_efficacy=e)
+    assert eff == pytest.approx(100.0 / 683.0, rel=1e-9)
+    assert eff == pytest.approx(0.1464, abs=0.001)
+
+    # Guardrails: positive power, non-negative efficacy, dimensions checked.
+    with pytest.raises(ValueError, match="electrical_power must be positive"):
+        luminous_efficacy(
+            luminous_flux=Quantity(magnitude=800.0, unit="lm"), electrical_power=_q("0 W")
+        )
+    with pytest.raises(ValueError, match="luminous_flux must be a"):
+        luminous_efficacy(luminous_flux=_q("800 W"), electrical_power=_q("8 W"))
+    with pytest.raises(ValueError, match="luminous_efficacy must be a"):
+        luminous_efficiency(luminous_efficacy=_q("100 W"))
+
+
 def test_battery_peukert_runtime_capacity_and_exponent():
     from anvilate.analysis import (
         peukert_effective_capacity,

@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_led_vs_incandescent_efficacy_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "led_vs_incandescent_efficacy.py"))
+    d = namespace["efficacy_comparison"]()
+    # 800 lm: LED 8 W -> 100 lm/W; incandescent 60 W -> ~13 lm/W; LED ~15% efficient.
+    assert d["led_efficacy_lm_w"] == pytest.approx(100.0, rel=1e-9)
+    assert d["incandescent_efficacy_lm_w"] == pytest.approx(13.33, abs=0.05)
+    assert d["led_efficiency_percent"] == pytest.approx(14.64, abs=0.1)
+
+
 def test_battery_fast_discharge_example():
     namespace = runpy.run_path(str(_EXAMPLES / "battery_fast_discharge.py"))
     d = namespace["fast_discharge"]()

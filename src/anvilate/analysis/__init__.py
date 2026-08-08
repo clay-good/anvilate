@@ -380,6 +380,9 @@ modules:
   inverse-square cosine illuminance, the lumen method (room illuminance and
   its luminaire-count inverse), the room cavity ratio that sets the coefficient
   of utilization, and installed lighting power density
+- :mod:`~anvilate.analysis.photometry` — luminous efficacy: the lamp efficacy Φ_v/P (lm/W), the
+  luminous flux P·efficacy a lamp emits, and the overall luminous efficiency efficacy/683 (fraction
+  of the 555 nm ideal) — the source-side efficiency feeding the lumen method
 - :mod:`~anvilate.analysis.optics` — geometric optics for optomechanical design: the thin-lens
   image distance d_i = f·d_o/(d_o − f), the transverse magnification m = −d_i/d_o, the Rayleigh
   diffraction limit θ = 1.22·λ/D on resolving power, the lens speed side — the f-number
@@ -1610,6 +1613,11 @@ from .orbital_mechanics import (
     orbital_period,
     semi_major_axis_from_apsides,
     vis_viva_velocity,
+)
+from .photometry import (
+    luminous_efficacy,
+    luminous_efficiency,
+    luminous_flux_from_power,
 )
 from .photon import (
     photon_energy,
@@ -2954,6 +2962,9 @@ __all__ = [
     "lumen_method_luminaire_count",
     "room_cavity_ratio",
     "lighting_power_density",
+    "luminous_efficacy",
+    "luminous_flux_from_power",
+    "luminous_efficiency",
     "thin_lens_image_distance",
     "lens_transverse_magnification",
     "diffraction_limited_angular_resolution",

@@ -767,6 +767,9 @@ reactive_circuit.lc_resonant_frequency
 reactive_circuit.rc_cutoff_frequency
 reactive_circuit.rc_time_constant
 reactive_circuit.rl_time_constant
+photometry.luminous_efficacy
+photometry.luminous_efficiency
+photometry.luminous_flux_from_power
 photon.photon_energy
 photon.photon_flux
 photon.photon_wavelength_from_energy
