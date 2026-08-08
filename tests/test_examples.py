@@ -1175,6 +1175,16 @@ def test_hopper_feed_and_stockpile_example_sizes_outlet_and_pile():
     assert d["stockpile_tonnes"] == pytest.approx(1100.0, abs=5.0)
 
 
+def test_screw_conveyor_feeder_example_rates_and_speed():
+    namespace = runpy.run_path(str(_EXAMPLES / "screw_conveyor_feeder.py"))
+    d = namespace["feeder_rating"]()
+    # 250 mm screw, 60 mm core, 250 mm pitch, 0.3 fill, 750 kg/m^3 at 45 rpm.
+    assert d["rated_volume_m3_h"] == pytest.approx(9.37, abs=0.05)
+    assert d["rated_mass_t_h"] == pytest.approx(7.03, abs=0.05)
+    # A 15 t/h target needs ~96 rpm (linear in speed).
+    assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

@@ -263,6 +263,9 @@ modules:
 - :mod:`~anvilate.analysis.bulk_solids` — granular handling: the Beverloo hopper discharge
   rate W = C·ρ·√g·(D − k·d)^2.5 and its orifice-sizing inverse, and the conical stockpile
   volume V = (π/3)·R³·tan φ
+- :mod:`~anvilate.analysis.screw_conveyor` — screw-conveyor (auger) capacity: the volumetric
+  throughput Q = (π/4)(D²−d²)·P·N·f swept by the flight, the mass rate ṁ = Q·ρ it feeds, and
+  the screw speed a target capacity needs (N = Q/[(π/4)(D²−d²)·P·f])
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -1619,6 +1622,11 @@ from .scotch_yoke import (
     scotch_yoke_displacement,
     scotch_yoke_velocity,
 )
+from .screw_conveyor import (
+    screw_conveyor_mass_capacity,
+    screw_conveyor_speed_for_capacity,
+    screw_conveyor_volumetric_capacity,
+)
 from .section import (
     CompositeBeamStresses,
     CompoundSection,
@@ -2414,6 +2422,9 @@ __all__ = [
     "beverloo_discharge_rate",
     "beverloo_orifice_for_rate",
     "conical_stockpile_volume",
+    "screw_conveyor_volumetric_capacity",
+    "screw_conveyor_mass_capacity",
+    "screw_conveyor_speed_for_capacity",
     "components_cladding_net_pressure",
     "seismic_response_coefficient",
     "seismic_response_coefficient_upper_limit",

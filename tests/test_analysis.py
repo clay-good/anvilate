@@ -20907,6 +20907,74 @@ def test_bulk_solids_beverloo_discharge_orifice_inverse_and_stockpile():
         )
 
 
+def test_screw_conveyor_capacity_mass_and_speed_inverse():
+    from math import pi
+
+    from anvilate.analysis import (
+        screw_conveyor_mass_capacity,
+        screw_conveyor_speed_for_capacity,
+        screw_conveyor_volumetric_capacity,
+    )
+
+    # Q = (pi/4)(D^2 - d^2)*P*N*f; 250 mm screw, 60 mm core, 250 mm pitch, 60 rpm, 0.3 fill.
+    q = screw_conveyor_volumetric_capacity(
+        screw_diameter=_q("0.25 m"),
+        shaft_diameter=_q("0.06 m"),
+        pitch=_q("0.25 m"),
+        rotational_speed=_q("60 rpm"),
+        fill_fraction=0.3,
+    )
+    # 60 rpm is exactly 1 rev/s, so N counts one revolution per second (no 2*pi factor).
+    expected_q = pi / 4 * (0.25**2 - 0.06**2) * 0.25 * 1.0 * 0.3  # m^3/s
+    assert q.to("m**3/s").magnitude == pytest.approx(expected_q, rel=1e-9)
+    assert q.to("m**3/h").magnitude == pytest.approx(12.49, rel=1e-3)
+
+    # A rad/s input for the same 1 rev/s gives the same throughput (no rad-per-rev error).
+    q_rad = screw_conveyor_volumetric_capacity(
+        screw_diameter=_q("0.25 m"),
+        shaft_diameter=_q("0.06 m"),
+        pitch=_q("0.25 m"),
+        rotational_speed=_q("6.283185307 rad/s"),
+        fill_fraction=0.3,
+    )
+    assert q_rad.to("m**3/s").magnitude == pytest.approx(expected_q, rel=1e-6)
+
+    # Mass rate is Q*rho: ~10 t/h at 800 kg/m^3.
+    m = screw_conveyor_mass_capacity(volumetric_capacity=q, bulk_density=_q("800 kg/m**3"))
+    assert m.to("kg/s").magnitude == pytest.approx(expected_q * 800, rel=1e-9)
+    assert m.to("t/hr").magnitude == pytest.approx(9.99, rel=1e-3)
+
+    # Speed inverse round-trips back to 60 rpm for the same capacity and geometry.
+    n = screw_conveyor_speed_for_capacity(
+        volumetric_capacity=q,
+        screw_diameter=_q("0.25 m"),
+        shaft_diameter=_q("0.06 m"),
+        pitch=_q("0.25 m"),
+        fill_fraction=0.3,
+    )
+    assert n.to("rpm").magnitude == pytest.approx(60.0, rel=1e-9)
+
+    # Guardrails: shaft must be smaller than the screw, fill in (0, 1], dimensions checked.
+    with pytest.raises(ValueError, match="shaft_diameter must be less"):
+        screw_conveyor_volumetric_capacity(
+            screw_diameter=_q("0.1 m"),
+            shaft_diameter=_q("0.1 m"),
+            pitch=_q("0.1 m"),
+            rotational_speed=_q("60 rpm"),
+            fill_fraction=0.3,
+        )
+    with pytest.raises(ValueError, match="fill_fraction must be in"):
+        screw_conveyor_volumetric_capacity(
+            screw_diameter=_q("0.25 m"),
+            shaft_diameter=_q("0.06 m"),
+            pitch=_q("0.25 m"),
+            rotational_speed=_q("60 rpm"),
+            fill_fraction=1.5,
+        )
+    with pytest.raises(ValueError, match="bulk_density must be a"):
+        screw_conveyor_mass_capacity(volumetric_capacity=q, bulk_density=_q("800 kg"))
+
+
 def test_rc_cracking_moment_and_effective_inertia_bischoff():
     from anvilate.analysis import rc_cracking_moment, rc_effective_moment_of_inertia
 

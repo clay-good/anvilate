@@ -831,6 +831,9 @@ rolling.rolling_force
 scotch_yoke.scotch_yoke_acceleration
 scotch_yoke.scotch_yoke_displacement
 scotch_yoke.scotch_yoke_velocity
+screw_conveyor.screw_conveyor_mass_capacity
+screw_conveyor.screw_conveyor_speed_for_capacity
+screw_conveyor.screw_conveyor_volumetric_capacity
 section.CompositeBeamStresses
 section.CompoundSection
 section.CrossSection
