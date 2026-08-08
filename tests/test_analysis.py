@@ -20985,6 +20985,47 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_waveguide_cutoff_guide_wavelength_and_phase_velocity():
+    from anvilate.analysis import (
+        rectangular_waveguide_cutoff_frequency,
+        waveguide_guide_wavelength,
+        waveguide_phase_velocity,
+    )
+
+    c = 299792458.0
+
+    # f_c = c/(2a); WR-90 (22.86 mm) -> ~6.56 GHz.
+    fc = rectangular_waveguide_cutoff_frequency(broad_dimension=_q("22.86 mm"))
+    assert fc.to("Hz").magnitude == pytest.approx(c / (2 * 0.02286), rel=1e-9)
+    assert fc.to("GHz").magnitude == pytest.approx(6.557, abs=0.005)
+    # A wider guide has a lower cutoff.
+    fc_wide = rectangular_waveguide_cutoff_frequency(broad_dimension=_q("45 mm"))
+    assert fc_wide.to("Hz").magnitude < fc.to("Hz").magnitude
+
+    f = Quantity(magnitude=10e9, unit="Hz")
+    # Guide wavelength is longer than free-space, and phase velocity exceeds c.
+    lg = waveguide_guide_wavelength(operating_frequency=f, cutoff_frequency=fc)
+    assert lg.to("m").magnitude == pytest.approx(
+        (c / 10e9) / (1 - (fc.to("Hz").magnitude / 10e9) ** 2) ** 0.5, rel=1e-9
+    )
+    assert lg.to("m").magnitude > c / 10e9  # longer than free-space 30 mm
+    vp = waveguide_phase_velocity(operating_frequency=f, cutoff_frequency=fc)
+    assert vp.to("m/s").magnitude > c
+    # Group velocity relation: v_p * v_g = c^2, so v_g < c.
+    v_g = c * c / vp.to("m/s").magnitude
+    assert v_g < c
+
+    # Guardrails: must be above cutoff to propagate, positive dimension.
+    with pytest.raises(ValueError, match="must exceed the cutoff"):
+        waveguide_guide_wavelength(
+            operating_frequency=Quantity(magnitude=5e9, unit="Hz"), cutoff_frequency=fc
+        )
+    with pytest.raises(ValueError, match="broad_dimension must be positive"):
+        rectangular_waveguide_cutoff_frequency(broad_dimension=_q("0 mm"))
+    with pytest.raises(ValueError, match="broad_dimension must be a"):
+        rectangular_waveguide_cutoff_frequency(broad_dimension=_q("22.86 s"))
+
+
 def test_transmission_line_reflection_vswr_and_return_loss():
     from math import log10
 

@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_wr90_waveguide_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "wr90_waveguide.py"))
+    d = namespace["wr90_dispersion"]()
+    # WR-90: cutoff ~6.56 GHz; at 10 GHz guide wl ~39.7 mm, v_p ~1.32c.
+    assert d["cutoff_frequency_ghz"] == pytest.approx(6.557, abs=0.005)
+    assert d["guide_wavelength_mm"] == pytest.approx(39.707, abs=0.05)
+    assert d["phase_velocity_over_c"] == pytest.approx(1.3245, abs=0.001)
+
+
 def test_antenna_feedline_match_example():
     namespace = runpy.run_path(str(_EXAMPLES / "antenna_feedline_match.py"))
     d = namespace["feedline_match"]()

@@ -28,6 +28,9 @@ modules:
 - :mod:`~anvilate.analysis.transmission_line` — RF impedance matching: the reflection coefficient
   Γ = (Z_L−Z_0)/(Z_L+Z_0), the voltage standing-wave ratio (1+|Γ|)/(1−|Γ|), and the return loss
   −20·log10|Γ| — how well a load is matched to a line
+- :mod:`~anvilate.analysis.waveguide` — rectangular-waveguide dispersion (TE10): the cutoff
+  f_c = c/(2a), the guide wavelength λ_g = (c/f)/√(1−(f_c/f)²), and the phase velocity
+  v_p = c/√(1−(f_c/f)²) (which exceeds c) above cutoff
 - :mod:`~anvilate.analysis.arrhenius` — thermally-activated reaction rates: the rate constant
   k = A·e^(−Ea/RT), the acceleration factor k2/k1 = e^((Ea/R)(1/T1−1/T2)) between two temperatures
   (accelerated life testing), and the activation energy Ea extracted from two measured rates
@@ -2108,6 +2111,11 @@ from .vortex_shedding import (
     reduced_velocity,
     vortex_shedding_frequency,
 )
+from .waveguide import (
+    rectangular_waveguide_cutoff_frequency,
+    waveguide_guide_wavelength,
+    waveguide_phase_velocity,
+)
 from .wear import (
     archard_wear_depth,
     archard_wear_volume,
@@ -2438,6 +2446,9 @@ __all__ = [
     "reflection_coefficient",
     "voltage_standing_wave_ratio",
     "return_loss",
+    "rectangular_waveguide_cutoff_frequency",
+    "waveguide_guide_wavelength",
+    "waveguide_phase_velocity",
     "arrhenius_rate_constant",
     "arrhenius_rate_ratio",
     "arrhenius_activation_energy",
