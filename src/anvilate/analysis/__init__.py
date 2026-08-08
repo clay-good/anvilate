@@ -178,8 +178,10 @@ modules:
 - :mod:`~anvilate.analysis.compressible_flow` — gas dynamics: the speed of sound √(γRT),
   the Mach number, the stagnation-to-static temperature ratio, the critical pressure
   ratio and choked mass flow that size a relief valve, the isentropic area ratio A/A*
-  that sets a converging-diverging nozzle's exit Mach, and the normal-shock (Rankine-
-  Hugoniot) downstream Mach, pressure jump, and irreversible stagnation-pressure loss
+  that sets a converging-diverging nozzle's exit Mach, the normal-shock (Rankine-
+  Hugoniot) downstream Mach, pressure jump, and irreversible stagnation-pressure loss,
+  and the supersonic-expansion Prandtl-Meyer angle ν(M), the Mach angle asin(1/M), and
+  the maximum turning angle ν(∞) an attached expansion fan can negotiate
 - :mod:`~anvilate.analysis.gas_compression` — gas compression: the ideal-gas density,
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
@@ -1063,10 +1065,13 @@ from .compressible_flow import (
     choked_mass_flow_rate,
     critical_pressure_ratio,
     isentropic_area_ratio,
+    mach_angle,
     mach_number,
+    maximum_turning_angle,
     normal_shock_downstream_mach,
     normal_shock_pressure_ratio,
     normal_shock_stagnation_pressure_ratio,
+    prandtl_meyer_angle,
     speed_of_sound,
     stagnation_density_ratio,
     stagnation_pressure_ratio,
@@ -2462,6 +2467,9 @@ __all__ = [
     "normal_shock_downstream_mach",
     "normal_shock_pressure_ratio",
     "normal_shock_stagnation_pressure_ratio",
+    "prandtl_meyer_angle",
+    "mach_angle",
+    "maximum_turning_angle",
     "film_condensation_vertical_plate_coefficient",
     "film_condensation_horizontal_tube_coefficient",
     "condensation_rate",

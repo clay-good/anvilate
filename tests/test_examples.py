@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_supersonic_expansion_fan_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "supersonic_expansion_fan.py"))
+    d = namespace["expansion_fan_angles"]()
+    # Air at Mach 2: nu ~26.4 deg, Mach angle 30 deg, max turning ~130.5 deg.
+    assert d["prandtl_meyer_angle_deg"] == pytest.approx(26.38, abs=0.01)
+    assert d["mach_angle_deg"] == pytest.approx(30.0, abs=1e-6)
+    assert d["maximum_turning_angle_deg"] == pytest.approx(130.45, abs=0.01)
+
+
 def test_optical_instrument_magnification_example():
     namespace = runpy.run_path(str(_EXAMPLES / "optical_instrument_magnification.py"))
     d = namespace["instrument_powers"]()

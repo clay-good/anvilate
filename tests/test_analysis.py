@@ -17390,6 +17390,44 @@ def test_normal_shock_downstream_mach_pressure_and_stagnation_ratios():
         normal_shock_pressure_ratio(upstream_mach=2.0, heat_capacity_ratio=1.0)
 
 
+def test_prandtl_meyer_mach_angle_and_maximum_turning_angle():
+    from anvilate.analysis import (
+        mach_angle,
+        maximum_turning_angle,
+        prandtl_meyer_angle,
+    )
+
+    # Prandtl-Meyer function for air (gamma 1.4): nu(1) = 0, nu(2) = 26.38 deg (tabulated).
+    assert prandtl_meyer_angle(mach_number=1.0, heat_capacity_ratio=1.4).to(
+        "degree"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+    nu2 = prandtl_meyer_angle(mach_number=2.0, heat_capacity_ratio=1.4)
+    assert nu2.to("degree").magnitude == pytest.approx(26.38, abs=0.01)
+    # nu grows monotonically with Mach number as the flow expands.
+    nu3 = prandtl_meyer_angle(mach_number=3.0, heat_capacity_ratio=1.4)
+    assert nu3.to("degree").magnitude == pytest.approx(49.76, abs=0.01)
+    assert nu3.to("degree").magnitude > nu2.to("degree").magnitude
+
+    # Mach angle asin(1/M): 90 deg at M=1, 30 deg at M=2, tightening as M rises.
+    assert mach_angle(mach_number=1.0).to("degree").magnitude == pytest.approx(90.0, abs=1e-9)
+    assert mach_angle(mach_number=2.0).to("degree").magnitude == pytest.approx(30.0, abs=1e-9)
+    assert mach_angle(mach_number=4.0).to("degree").magnitude < 30.0
+
+    # Maximum turning angle nu(inf) for air is the tabulated 130.45 deg.
+    nu_max = maximum_turning_angle(heat_capacity_ratio=1.4)
+    assert nu_max.to("degree").magnitude == pytest.approx(130.45, abs=0.01)
+    # Every finite-Mach Prandtl-Meyer angle stays below the maximum.
+    assert nu3.to("degree").magnitude < nu_max.to("degree").magnitude
+
+    # Guardrails: expansion relations need supersonic flow and gamma > 1.
+    with pytest.raises(ValueError, match="mach_number must be at least 1"):
+        prandtl_meyer_angle(mach_number=0.8, heat_capacity_ratio=1.4)
+    with pytest.raises(ValueError, match="mach_number must be at least 1"):
+        mach_angle(mach_number=0.5)
+    with pytest.raises(ValueError, match="heat_capacity_ratio must exceed 1"):
+        maximum_turning_angle(heat_capacity_ratio=1.0)
+
+
 def test_rocket_exhaust_velocity_thrust_and_specific_impulse():
     from anvilate.analysis import (
         rocket_exhaust_velocity,

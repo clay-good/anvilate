@@ -17,7 +17,7 @@ the gas constant R are properties the caller supplies. Inputs and outputs are di
 
 from __future__ import annotations
 
-from math import sqrt
+from math import asin, atan, degrees, sqrt
 
 from ..units import Quantity
 
@@ -25,10 +25,13 @@ __all__ = [
     "choked_mass_flow_rate",
     "critical_pressure_ratio",
     "isentropic_area_ratio",
+    "mach_angle",
     "mach_number",
+    "maximum_turning_angle",
     "normal_shock_downstream_mach",
     "normal_shock_pressure_ratio",
     "normal_shock_stagnation_pressure_ratio",
+    "prandtl_meyer_angle",
     "speed_of_sound",
     "stagnation_density_ratio",
     "stagnation_pressure_ratio",
@@ -261,6 +264,52 @@ def normal_shock_stagnation_pressure_ratio(
     term1 = (((g + 1.0) * m1_sq / 2.0) / (1.0 + (g - 1.0) / 2.0 * m1_sq)) ** (g / (g - 1.0))
     term2 = ((g + 1.0) / (2.0 * g * m1_sq - (g - 1.0))) ** (1.0 / (g - 1.0))
     return term1 * term2
+
+
+def prandtl_meyer_angle(*, mach_number: float, heat_capacity_ratio: float) -> Quantity:
+    """The Prandtl-Meyer angle, ν(M), of a supersonic expansion fan.
+
+    The angle through which a supersonic flow turns as it expands isentropically from M = 1 (where
+    ν = 0) to the ``mach_number`` M, from the ``heat_capacity_ratio`` γ:
+    ν = √((γ+1)/(γ−1))·atan(√((γ−1)/(γ+1)·(M²−1))) − atan(√(M²−1)). Turning a supersonic stream
+    around a convex corner by an angle Δθ raises its Mach number so that ν grows by Δθ. Returns the
+    Prandtl-Meyer angle in degrees.
+    """
+    if mach_number < 1.0:
+        raise ValueError(f"mach_number must be at least 1 (supersonic); got {mach_number}")
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    g = heat_capacity_ratio
+    m2 = mach_number * mach_number - 1.0
+    ratio = (g + 1.0) / (g - 1.0)
+    nu = sqrt(ratio) * atan(sqrt(m2 / ratio)) - atan(sqrt(m2))
+    return Quantity(magnitude=degrees(nu), unit="degree")
+
+
+def mach_angle(*, mach_number: float) -> Quantity:
+    """The Mach angle, µ = asin(1/M), of a supersonic disturbance.
+
+    The half-angle of the Mach cone (or the inclination of a Mach line) trailing a body moving at
+    the ``mach_number`` M through a compressible medium: µ = asin(1/M). At M = 1 the cone opens to
+    90°; as M rises the cone tightens around the flight path. Returns the Mach angle in degrees.
+    """
+    if mach_number < 1.0:
+        raise ValueError(f"mach_number must be at least 1 (supersonic); got {mach_number}")
+    return Quantity(magnitude=degrees(asin(1.0 / mach_number)), unit="degree")
+
+
+def maximum_turning_angle(*, heat_capacity_ratio: float) -> Quantity:
+    """The maximum Prandtl-Meyer turning angle, ν(∞) = (π/2)·(√((γ+1)/(γ−1)) − 1).
+
+    The greatest angle through which a supersonic flow can turn by expansion, reached in the limit
+    M → ∞, from the ``heat_capacity_ratio`` γ: ν_max = (π/2)·(√((γ+1)/(γ−1)) − 1) — about 130.5°
+    for air (γ = 1.4). A convex turn steeper than this cannot be negotiated by an attached
+    expansion; the flow separates into a vacuum. Returns the maximum turning angle in degrees.
+    """
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    ratio = (heat_capacity_ratio + 1.0) / (heat_capacity_ratio - 1.0)
+    return Quantity(magnitude=90.0 * (sqrt(ratio) - 1.0), unit="degree")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
