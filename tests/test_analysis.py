@@ -22334,6 +22334,51 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_lensmaker_lens_power_and_combined_focal_length():
+    from anvilate.analysis import (
+        combined_thin_lens_focal_length,
+        lens_power,
+        lensmaker_focal_length,
+    )
+
+    # Lensmaker 1/f = (n-1)(1/R1 - 1/R2); symmetric biconvex n=1.5, R=+/-0.1 m -> f=0.1 m.
+    f = lensmaker_focal_length(
+        refractive_index=1.5,
+        radius1=_q("0.1 m"),
+        radius2=Quantity(magnitude=-0.1, unit="m"),
+    )
+    assert f.to("m").magnitude == pytest.approx(0.1, rel=1e-9)
+    # A higher-index glass makes a stronger (shorter-focal-length) lens for the same shape.
+    f_high = lensmaker_focal_length(
+        refractive_index=1.7,
+        radius1=_q("0.1 m"),
+        radius2=Quantity(magnitude=-0.1, unit="m"),
+    )
+    assert f_high.to("m").magnitude < f.to("m").magnitude
+
+    # Lens power P = 1/f; 0.1 m focal length -> 10 diopters.
+    p = lens_power(focal_length=f)
+    assert p.to("1/m").magnitude == pytest.approx(10.0, rel=1e-9)
+    # A diverging (negative-f) lens has negative power.
+    p_neg = lens_power(focal_length=Quantity(magnitude=-0.25, unit="m"))
+    assert p_neg.to("1/m").magnitude == pytest.approx(-4.0, rel=1e-9)
+
+    # Two thin lenses in contact combine powers: 1/f = 1/f1 + 1/f2.
+    combined = combined_thin_lens_focal_length(focal_length1=f, focal_length2=_q("0.2 m"))
+    assert combined.to("m").magnitude == pytest.approx(1.0 / (1.0 / 0.1 + 1.0 / 0.2), rel=1e-9)
+    assert combined.to("m").magnitude == pytest.approx(0.0667, abs=0.0005)
+    # The combination is stronger (shorter focal length) than either lens alone.
+    assert combined.to("m").magnitude < f.to("m").magnitude
+
+    # Guardrails: index above 1, nonzero radii/focal lengths.
+    with pytest.raises(ValueError, match="refractive_index must exceed 1"):
+        lensmaker_focal_length(
+            refractive_index=1.0, radius1=_q("0.1 m"), radius2=Quantity(magnitude=-0.1, unit="m")
+        )
+    with pytest.raises(ValueError, match="focal_length must be nonzero"):
+        lens_power(focal_length=_q("0 m"))
+
+
 def test_motional_faraday_and_self_induced_emf():
     from anvilate.analysis import (
         faraday_induced_emf,

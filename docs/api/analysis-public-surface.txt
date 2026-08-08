@@ -784,6 +784,9 @@ optics.hyperfocal_distance
 optics.snell_refraction_angle
 optics.critical_angle
 optics.fiber_numerical_aperture
+optics.lensmaker_focal_length
+optics.lens_power
+optics.combined_thin_lens_focal_length
 orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity

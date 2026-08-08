@@ -12,6 +12,11 @@ magnification m = −d_i/d_o, negative when the image is inverted. Geometry alon
 shrink without limit, but the wave nature of light sets a floor: an aperture of diameter D cannot
 resolve two points closer than the Rayleigh angle θ = 1.22·λ/D at wavelength λ — the diffraction
 limit that caps the resolving power of every telescope, microscope, and camera lens.
+
+The focal length itself comes from the lens's shape: the lensmaker's equation
+1/f = (n − 1)·(1/R₁ − 1/R₂) fixes f from the refractive index n and the two surface radii, its
+reciprocal is the lens power in diopters, and two thin lenses in contact combine as
+1/f = 1/f₁ + 1/f₂.
 """
 
 from __future__ import annotations
@@ -23,13 +28,16 @@ from ..units import Quantity
 RAYLEIGH_CONSTANT = 1.22
 
 __all__ = [
+    "combined_thin_lens_focal_length",
     "critical_angle",
     "diffraction_limited_angular_resolution",
     "diffraction_limited_spot_diameter",
     "fiber_numerical_aperture",
     "hyperfocal_distance",
     "lens_f_number",
+    "lens_power",
     "lens_transverse_magnification",
+    "lensmaker_focal_length",
     "snell_refraction_angle",
     "thin_lens_image_distance",
 ]
@@ -223,6 +231,65 @@ def fiber_numerical_aperture(*, core_index: float, cladding_index: float) -> flo
     if cladding_index >= core_index:
         raise ValueError("core_index must exceed cladding_index (light guides in the denser core)")
     return sqrt(core_index * core_index - cladding_index * cladding_index)
+
+
+def lensmaker_focal_length(
+    *, refractive_index: float, radius1: Quantity, radius2: Quantity
+) -> Quantity:
+    """The lensmaker's focal length, 1/f = (n − 1)·(1/R₁ − 1/R₂).
+
+    The focal length of a thin lens from its shape: the ``refractive_index`` n and the two surface
+    radii ``radius1`` R₁ (front) and ``radius2`` R₂ (back), 1/f = (n − 1)·(1/R₁ − 1/R₂).
+    Radii are signed — positive when the centre of curvature is on the outgoing (transmitted) side —
+    so a biconvex lens takes R₁ > 0 and R₂ < 0. Returns the focal length in m.
+    """
+    _check(radius1, "[length]", "radius1")
+    _check(radius2, "[length]", "radius2")
+    r1 = radius1.to("m").magnitude
+    r2 = radius2.to("m").magnitude
+    if refractive_index <= 1.0:
+        raise ValueError("refractive_index must exceed 1")
+    if r1 == 0.0 or r2 == 0.0:
+        raise ValueError("surface radii must be nonzero")
+    inv_f = (refractive_index - 1.0) * (1.0 / r1 - 1.0 / r2)
+    if inv_f == 0.0:
+        raise ValueError("the two surfaces give zero net power (flat or afocal lens)")
+    return Quantity(magnitude=1.0 / inv_f, unit="m")
+
+
+def lens_power(*, focal_length: Quantity) -> Quantity:
+    """The lens power (in diopters), P = 1/f.
+
+    The optical power of a lens, the reciprocal of its ``focal_length`` f: P = 1/f, in diopters
+    (1/m). A converging lens has positive power, a diverging one negative; the eye's prescription is
+    quoted this way. Returns the power in 1/m (diopters).
+    """
+    _check(focal_length, "[length]", "focal_length")
+    f = focal_length.to("m").magnitude
+    if f == 0.0:
+        raise ValueError("focal_length must be nonzero")
+    return Quantity(magnitude=1.0 / f, unit="1/m")
+
+
+def combined_thin_lens_focal_length(
+    *, focal_length1: Quantity, focal_length2: Quantity
+) -> Quantity:
+    """The combined focal length of two thin lenses in contact, 1/f = 1/f₁ + 1/f₂.
+
+    The effective focal length of two thin lenses placed in contact, from ``focal_length1`` f₁ and
+    ``focal_length2`` f₂: 1/f = 1/f₁ + 1/f₂ — their powers add. This is how a doublet or a stacked
+    pair behaves. Returns the combined focal length in m.
+    """
+    _check(focal_length1, "[length]", "focal_length1")
+    _check(focal_length2, "[length]", "focal_length2")
+    f1 = focal_length1.to("m").magnitude
+    f2 = focal_length2.to("m").magnitude
+    if f1 == 0.0 or f2 == 0.0:
+        raise ValueError("focal lengths must be nonzero")
+    inv_f = 1.0 / f1 + 1.0 / f2
+    if inv_f == 0.0:
+        raise ValueError("the two lenses cancel (afocal combination)")
+    return Quantity(magnitude=1.0 / inv_f, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

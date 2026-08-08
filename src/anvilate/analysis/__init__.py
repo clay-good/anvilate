@@ -448,8 +448,10 @@ modules:
 - :mod:`~anvilate.analysis.optics` — geometric optics for optomechanical design: the thin-lens
   image distance d_i = f·d_o/(d_o − f), the transverse magnification m = −d_i/d_o, the Rayleigh
   diffraction limit θ = 1.22·λ/D on resolving power, the lens speed side — the f-number
-  N = f/D, the focused Airy spot d = 2.44·λ·N, and the hyperfocal distance H = f²/(N·c); and
-  refraction — Snell's law, the total-internal-reflection critical angle, and fibre NA
+  N = f/D, the focused Airy spot d = 2.44·λ·N, and the hyperfocal distance H = f²/(N·c);
+  refraction — Snell's law, the total-internal-reflection critical angle, and fibre NA; and lens
+  design — the lensmaker's f from (n−1)(1/R₁−1/R₂), the diopter power 1/f, and two thin lenses in
+  contact combining as 1/f = 1/f₁ + 1/f₂
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
@@ -1795,13 +1797,16 @@ from .optical_instruments import (
     telescope_angular_magnification,
 )
 from .optics import (
+    combined_thin_lens_focal_length,
     critical_angle,
     diffraction_limited_angular_resolution,
     diffraction_limited_spot_diameter,
     fiber_numerical_aperture,
     hyperfocal_distance,
     lens_f_number,
+    lens_power,
     lens_transverse_magnification,
+    lensmaker_focal_length,
     snell_refraction_angle,
     thin_lens_image_distance,
 )
@@ -3325,6 +3330,9 @@ __all__ = [
     "snell_refraction_angle",
     "critical_angle",
     "fiber_numerical_aperture",
+    "lensmaker_focal_length",
+    "lens_power",
+    "combined_thin_lens_focal_length",
     "chromatic_dispersion_broadening",
     "dispersion_limited_bit_rate",
     "dispersion_limited_distance",

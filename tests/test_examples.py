@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_biconvex_lens_design_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "biconvex_lens_design.py"))
+    d = namespace["lens_design"]()
+    # Biconvex crown glass: 100 mm focal length, 10 diopters, ~66.7 mm combined.
+    assert d["focal_length_mm"] == pytest.approx(100.0, rel=1e-9)
+    assert d["power_diopters"] == pytest.approx(10.0, rel=1e-9)
+    assert d["combined_focal_length_mm"] == pytest.approx(66.67, abs=0.05)
+
+
 def test_generator_induction_example():
     namespace = runpy.run_path(str(_EXAMPLES / "generator_induction.py"))
     d = namespace["induction_voltages"]()
