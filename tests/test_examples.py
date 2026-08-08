@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_lens_ar_coating_example_index_thickness_and_tuned():
+    namespace = runpy.run_path(str(_EXAMPLES / "lens_ar_coating.py"))
+    d = namespace["ar_coating_design"]()
+    # Glass 1.52: ideal ~1.23; MgF2 for 550 nm -> ~100 nm; tuned back to 550 nm.
+    assert d["ideal_coating_index"] == pytest.approx(1.233, abs=0.005)
+    assert d["mgf2_thickness_nm"] == pytest.approx(99.64, abs=0.1)
+    assert d["tuned_wavelength_nm"] == pytest.approx(550.0, rel=1e-9)
+
+
 def test_xrd_and_grating_example_angles_and_spacing():
     namespace = runpy.run_path(str(_EXAMPLES / "xrd_and_grating.py"))
     d = namespace["diffraction_angles"]()

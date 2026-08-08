@@ -247,6 +247,9 @@ modules:
 - :mod:`~anvilate.analysis.diffraction` — wave diffraction: the Bragg reflection angle
   θ = arcsin(n·λ/2d) and its crystal-plane-spacing inverse d = n·λ/(2·sinθ) (X-ray diffraction), and
   the grating diffraction angle θ = arcsin(m·λ/D) that disperses a spectrum
+- :mod:`~anvilate.analysis.thin_film` — anti-reflection coatings: the quarter-wave thickness
+  t = λ/(4n) that cancels a reflection, the ideal coating index n = √(n_medium·n_substrate), and the
+  wavelength λ = 4·n·t a given coating is tuned to
 - :mod:`~anvilate.analysis.magnetics` — magnetic actuators: the solenoid field B = μ₀·n·I,
   the Maxwell magnetic pressure p = B²/(2·μ₀), and the electromagnet holding force
   F = B²·A/(2·μ₀) — for clamps, lifting magnets, and magnetic bearings
@@ -2020,6 +2023,11 @@ from .thermoforming import (
     thermoforming_average_wall_thickness,
     thermoforming_sheet_gauge_for_wall,
 )
+from .thin_film import (
+    optimal_ar_coating_index,
+    quarter_wave_thickness,
+    thin_film_tuned_wavelength,
+)
 from .torsion import (
     elliptical_bar_torsional_stress,
     elliptical_bar_twist_angle,
@@ -2210,6 +2218,9 @@ __all__ = [
     "bragg_angle",
     "bragg_plane_spacing",
     "grating_diffraction_angle",
+    "quarter_wave_thickness",
+    "optimal_ar_coating_index",
+    "thin_film_tuned_wavelength",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",

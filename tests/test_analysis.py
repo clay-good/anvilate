@@ -20985,6 +20985,41 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_thin_film_ar_coating_thickness_index_and_tuned_wavelength():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        optimal_ar_coating_index,
+        quarter_wave_thickness,
+        thin_film_tuned_wavelength,
+    )
+
+    # Quarter-wave t = lambda/(4n); 550 nm on MgF2 (n=1.38) -> ~99.6 nm.
+    t = quarter_wave_thickness(wavelength=_q("550 nm"), coating_index=1.38)
+    assert t.to("m").magnitude == pytest.approx(550e-9 / (4 * 1.38), rel=1e-9)
+    assert t.to("nm").magnitude == pytest.approx(99.64, abs=0.05)
+
+    # Ideal index = sqrt(n_medium*n_substrate); glass 1.52 in air -> ~1.233.
+    n = optimal_ar_coating_index(substrate_index=1.52)
+    assert n == pytest.approx(sqrt(1.0 * 1.52), rel=1e-9)
+    # In a denser medium the ideal index rises.
+    n_water = optimal_ar_coating_index(substrate_index=1.52, medium_index=1.33)
+    assert n_water == pytest.approx(sqrt(1.33 * 1.52), rel=1e-9)
+    assert n_water > n
+
+    # Tuned-wavelength inverse round-trips the quarter-wave thickness back to 550 nm.
+    lam = thin_film_tuned_wavelength(thickness=t, coating_index=1.38)
+    assert lam.to("nm").magnitude == pytest.approx(550.0, rel=1e-9)
+
+    # Guardrails: positive index/wavelength/thickness.
+    with pytest.raises(ValueError, match="coating_index must be positive"):
+        quarter_wave_thickness(wavelength=_q("550 nm"), coating_index=0.0)
+    with pytest.raises(ValueError, match="substrate_index must be positive"):
+        optimal_ar_coating_index(substrate_index=0.0)
+    with pytest.raises(ValueError, match="wavelength must be a"):
+        quarter_wave_thickness(wavelength=_q("550 J"), coating_index=1.38)
+
+
 def test_diffraction_bragg_angle_spacing_inverse_and_grating():
     from math import asin, degrees
 

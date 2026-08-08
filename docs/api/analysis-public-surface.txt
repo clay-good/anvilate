@@ -1058,6 +1058,9 @@ thermal.wien_temperature_from_peak
 thermal_noise.johnson_noise_current
 thermal_noise.johnson_noise_power
 thermal_noise.johnson_noise_voltage
+thin_film.optimal_ar_coating_index
+thin_film.quarter_wave_thickness
+thin_film.thin_film_tuned_wavelength
 thermal.series_thermal_resistance
 thermal.shrink_fit_assembly_temperature
 thermal.temperature_rise
