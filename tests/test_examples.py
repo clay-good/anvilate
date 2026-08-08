@@ -1115,6 +1115,17 @@ def test_lens_speed_and_depth_example_f_number_trade():
     assert d["hyperfocal_m"] == pytest.approx(10.417, abs=0.02)
 
 
+def test_fiber_optic_acceptance_example_refraction_and_trapping():
+    namespace = runpy.run_path(str(_EXAMPLES / "fiber_optic_acceptance.py"))
+    d = namespace["fiber_optics"]()
+    # Air->glass 30 deg refracts to ~19.5 deg; glass critical angle ~41.8 deg.
+    assert d["refracted_angle_deg"] == pytest.approx(19.471, abs=0.005)
+    assert d["critical_angle_deg"] == pytest.approx(41.81, abs=0.01)
+    # Fibre NA ~0.24, acceptance half-angle ~14 deg.
+    assert d["fiber_numerical_aperture"] == pytest.approx(0.2425, abs=0.001)
+    assert d["acceptance_half_angle_deg"] == pytest.approx(14.03, abs=0.05)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

@@ -656,6 +656,9 @@ optics.diffraction_limited_angular_resolution
 optics.lens_f_number
 optics.diffraction_limited_spot_diameter
 optics.hyperfocal_distance
+optics.snell_refraction_angle
+optics.critical_angle
+optics.fiber_numerical_aperture
 orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity

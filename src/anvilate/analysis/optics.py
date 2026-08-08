@@ -16,16 +16,21 @@ limit that caps the resolving power of every telescope, microscope, and camera l
 
 from __future__ import annotations
 
+from math import asin, degrees, radians, sin, sqrt
+
 from ..units import Quantity
 
 RAYLEIGH_CONSTANT = 1.22
 
 __all__ = [
+    "critical_angle",
     "diffraction_limited_angular_resolution",
     "diffraction_limited_spot_diameter",
+    "fiber_numerical_aperture",
     "hyperfocal_distance",
     "lens_f_number",
     "lens_transverse_magnification",
+    "snell_refraction_angle",
     "thin_lens_image_distance",
 ]
 
@@ -158,6 +163,66 @@ def hyperfocal_distance(
     if c <= 0:
         raise ValueError("circle_of_confusion must be positive")
     return Quantity(magnitude=f * f / (f_number * c), unit="mm").to("m")
+
+
+def snell_refraction_angle(
+    *, incident_angle: float, incident_index: float, refracted_index: float
+) -> float:
+    """The refracted ray angle by Snell's law, θ₂ = arcsin(n₁·sin θ₁/n₂).
+
+    The angle a ray bends to on crossing between media: from the ``incident_angle`` θ₁ (degrees from
+    the surface normal), the ``incident_index`` n₁ of the medium it comes from, and the
+    ``refracted_index`` n₂ it enters, n₁·sin θ₁ = n₂·sin θ₂. Entering a denser medium (n₂ > n₁)
+    turns the ray toward the normal; leaving one bends it away. If the ray leaving a denser medium
+    need sin θ₂ > 1 it cannot refract at all — it totally internally reflects
+    (:func:`critical_angle`). Returns the refracted angle in degrees.
+    """
+    if not 0.0 <= incident_angle < 90.0:
+        raise ValueError("incident_angle must be in [0, 90) degrees from the normal")
+    if incident_index <= 0:
+        raise ValueError("incident_index must be positive")
+    if refracted_index <= 0:
+        raise ValueError("refracted_index must be positive")
+    sin_theta2 = incident_index * sin(radians(incident_angle)) / refracted_index
+    if sin_theta2 > 1.0:
+        raise ValueError("no refraction: total internal reflection (n1*sin(theta1) exceeds n2)")
+    return degrees(asin(sin_theta2))
+
+
+def critical_angle(*, incident_index: float, transmitted_index: float) -> float:
+    """The critical angle for total internal reflection, θ_c = arcsin(n₂/n₁).
+
+    The incidence angle past which a ray in a denser medium can no longer escape into a rarer one
+    and is totally internally reflected: from the ``incident_index`` n₁ (the denser medium) and the
+    ``transmitted_index`` n₂ (the rarer one, n₂ < n₁), θ_c = arcsin(n₂/n₁). Beyond it all the light
+    stays inside — the effect that guides light down an optical fibre and lights a prism periscope.
+    Returns the critical angle in degrees.
+    """
+    if incident_index <= 0:
+        raise ValueError("incident_index must be positive")
+    if transmitted_index <= 0:
+        raise ValueError("transmitted_index must be positive")
+    if transmitted_index >= incident_index:
+        raise ValueError("incident_index must exceed transmitted_index (need a dense-to-rare step)")
+    return degrees(asin(transmitted_index / incident_index))
+
+
+def fiber_numerical_aperture(*, core_index: float, cladding_index: float) -> float:
+    """The optical-fibre numerical aperture, NA = √(n_core² − n_clad²).
+
+    The light-gathering power of a step-index fibre — the sine of the half-angle of the cone it
+    accepts — set by total internal reflection at the core-cladding boundary: from the
+    ``core_index`` n_core and ``cladding_index`` n_clad (slightly lower), NA = √(n_core² − n_clad²).
+    A larger index contrast accepts a wider cone (easier coupling) but spreads pulses more by modal
+    dispersion, the trade behind multi-mode versus single-mode fibre. Returns the NA (unitless).
+    """
+    if core_index <= 0:
+        raise ValueError("core_index must be positive")
+    if cladding_index <= 0:
+        raise ValueError("cladding_index must be positive")
+    if cladding_index >= core_index:
+        raise ValueError("core_index must exceed cladding_index (light guides in the denser core)")
+    return sqrt(core_index * core_index - cladding_index * cladding_index)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

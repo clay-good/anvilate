@@ -305,8 +305,9 @@ modules:
   of utilization, and installed lighting power density
 - :mod:`~anvilate.analysis.optics` — geometric optics for optomechanical design: the thin-lens
   image distance d_i = f·d_o/(d_o − f), the transverse magnification m = −d_i/d_o, the Rayleigh
-  diffraction limit θ = 1.22·λ/D on resolving power, and the lens speed side — the f-number
-  N = f/D, the focused Airy spot d = 2.44·λ·N, and the hyperfocal distance H = f²/(N·c)
+  diffraction limit θ = 1.22·λ/D on resolving power, the lens speed side — the f-number
+  N = f/D, the focused Airy spot d = 2.44·λ·N, and the hyperfocal distance H = f²/(N·c); and
+  refraction — Snell's law, the total-internal-reflection critical angle, and fibre NA
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1376,11 +1377,14 @@ from .open_channel import (
     triangular_weir_flow,
 )
 from .optics import (
+    critical_angle,
     diffraction_limited_angular_resolution,
     diffraction_limited_spot_diameter,
+    fiber_numerical_aperture,
     hyperfocal_distance,
     lens_f_number,
     lens_transverse_magnification,
+    snell_refraction_angle,
     thin_lens_image_distance,
 )
 from .orbital_mechanics import (
@@ -2564,6 +2568,9 @@ __all__ = [
     "lens_f_number",
     "diffraction_limited_spot_diameter",
     "hyperfocal_distance",
+    "snell_refraction_angle",
+    "critical_angle",
+    "fiber_numerical_aperture",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

@@ -16086,6 +16086,40 @@ def test_optics_f_number_airy_spot_and_hyperfocal():
         lens_f_number(focal_length=_q("50 mm"), aperture_diameter=_q("25 s"))
 
 
+def test_optics_snell_critical_angle_and_fiber_na():
+    from math import asin, degrees, sin
+
+    from anvilate.analysis import (
+        critical_angle,
+        fiber_numerical_aperture,
+        snell_refraction_angle,
+    )
+
+    # Snell air->glass at 30 deg: theta2 = arcsin(1*sin30/1.5) = 19.47 deg.
+    t2 = snell_refraction_angle(incident_angle=30.0, incident_index=1.0, refracted_index=1.5)
+    assert t2 == pytest.approx(degrees(asin(sin(0.5235987755982988) / 1.5)), abs=1e-6)
+    assert t2 == pytest.approx(19.471, abs=0.005)
+    assert t2 < 30.0  # bends toward the normal entering a denser medium
+
+    # Critical angle glass->air: arcsin(1/1.5) = 41.81 deg.
+    theta_c = critical_angle(incident_index=1.5, transmitted_index=1.0)
+    assert theta_c == pytest.approx(degrees(asin(1 / 1.5)), rel=1e-9)
+    assert theta_c == pytest.approx(41.81, abs=0.01)
+
+    # Fibre NA = sqrt(n_core^2 - n_clad^2); 1.48/1.46 -> 0.2425.
+    na = fiber_numerical_aperture(core_index=1.48, cladding_index=1.46)
+    assert na == pytest.approx((1.48**2 - 1.46**2) ** 0.5, rel=1e-9)
+    assert na == pytest.approx(0.2425, abs=0.001)
+
+    # Guardrails: TIR raises for Snell, denser-to-rarer required, core denser than cladding.
+    with pytest.raises(ValueError, match="total internal reflection"):
+        snell_refraction_angle(incident_angle=60.0, incident_index=1.5, refracted_index=1.0)
+    with pytest.raises(ValueError, match="incident_index must exceed transmitted_index"):
+        critical_angle(incident_index=1.0, transmitted_index=1.5)
+    with pytest.raises(ValueError, match="core_index must exceed cladding_index"):
+        fiber_numerical_aperture(core_index=1.46, cladding_index=1.48)
+
+
 def test_broaching_teeth_force_and_pull_capacity():
     from anvilate.analysis import (
         broaching_cutting_force,
