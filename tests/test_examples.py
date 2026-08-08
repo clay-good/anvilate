@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_wave_relation_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "wave_relation.py"))
+    d = namespace["wave_quantities"]()
+    # 343 m/s sound, 3 m FM wavelength, ~600 THz green light.
+    assert d["sound_speed_m_s"] == pytest.approx(343.2, abs=0.1)
+    assert d["fm_wavelength_m"] == pytest.approx(2.998, abs=0.001)
+    assert d["green_light_frequency_thz"] == pytest.approx(599.6, abs=0.5)
+
+
 def test_car_cornering_example():
     namespace = runpy.run_path(str(_EXAMPLES / "car_cornering.py"))
     d = namespace["cornering_dynamics"]()

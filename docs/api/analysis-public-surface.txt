@@ -1262,6 +1262,9 @@ ventilation.dilution_airflow
 vortex_shedding.lock_in_velocity
 vortex_shedding.reduced_velocity
 vortex_shedding.vortex_shedding_frequency
+wave.wave_speed
+wave.wavelength_from_frequency
+wave.frequency_from_wavelength
 waveguide.rectangular_waveguide_cutoff_frequency
 waveguide.waveguide_guide_wavelength
 waveguide.waveguide_phase_velocity

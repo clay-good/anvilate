@@ -37,6 +37,8 @@ modules:
 - :mod:`~anvilate.analysis.transmission_line` — RF impedance matching: the reflection coefficient
   Γ = (Z_L−Z_0)/(Z_L+Z_0), the voltage standing-wave ratio (1+|Γ|)/(1−|Γ|), and the return loss
   −20·log10|Γ| — how well a load is matched to a line
+- :mod:`~anvilate.analysis.wave` — the universal wave relation v = f·λ solved each way: the wave
+  speed f·λ, the wavelength v/f a frequency produces, and the frequency v/λ a wavelength gives
 - :mod:`~anvilate.analysis.waveguide` — rectangular-waveguide dispersion (TE10): the cutoff
   f_c = c/(2a), the guide wavelength λ_g = (c/f)/√(1−(f_c/f)²), and the phase velocity
   v_p = c/√(1−(f_c/f)²) (which exceeds c) above cutoff
@@ -2429,6 +2431,11 @@ from .vortex_shedding import (
     reduced_velocity,
     vortex_shedding_frequency,
 )
+from .wave import (
+    frequency_from_wavelength,
+    wave_speed,
+    wavelength_from_frequency,
+)
 from .waveguide import (
     rectangular_waveguide_cutoff_frequency,
     waveguide_guide_wavelength,
@@ -3765,6 +3772,9 @@ __all__ = [
     "vortex_shedding_frequency",
     "lock_in_velocity",
     "reduced_velocity",
+    "wave_speed",
+    "wavelength_from_frequency",
+    "frequency_from_wavelength",
     "FILLET_THROAT_FACTOR",
     "fillet_weld_throat_stress",
     "fillet_weld_leg_for_load",

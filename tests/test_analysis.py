@@ -22334,6 +22334,47 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_wave_speed_wavelength_and_frequency():
+    from anvilate.analysis import (
+        frequency_from_wavelength,
+        wave_speed,
+        wavelength_from_frequency,
+    )
+
+    c = 299792458.0
+
+    # v = f*lambda; 440 Hz, 0.78 m -> ~343 m/s (speed of sound).
+    v = wave_speed(frequency=_q("440 Hz"), wavelength=_q("0.78 m"))
+    assert v.to("m/s").magnitude == pytest.approx(440.0 * 0.78, rel=1e-9)
+    assert v.to("m/s").magnitude == pytest.approx(343.2, abs=0.1)
+
+    # lambda = v/f; 100 MHz at light speed -> 3 m.
+    lam = wavelength_from_frequency(
+        frequency=Quantity(magnitude=100e6, unit="Hz"),
+        wave_speed=Quantity(magnitude=c, unit="m/s"),
+    )
+    assert lam.to("m").magnitude == pytest.approx(c / 100e6, rel=1e-9)
+    assert lam.to("m").magnitude == pytest.approx(2.998, abs=0.001)
+
+    # f = v/lambda; 500 nm green light -> ~6.0e14 Hz.
+    f = frequency_from_wavelength(
+        wavelength=Quantity(magnitude=500e-9, unit="m"),
+        wave_speed=Quantity(magnitude=c, unit="m/s"),
+    )
+    assert f.to("Hz").magnitude == pytest.approx(c / 500e-9, rel=1e-9)
+    assert f.to("Hz").magnitude == pytest.approx(5.996e14, rel=1e-3)
+
+    # The three are mutually consistent: solving forward then back round-trips.
+    lam_back = wavelength_from_frequency(frequency=f, wave_speed=Quantity(magnitude=c, unit="m/s"))
+    assert lam_back.to("m").magnitude == pytest.approx(500e-9, rel=1e-9)
+
+    # Guardrails: positive inputs, correct dimensions.
+    with pytest.raises(ValueError, match="frequency must be positive"):
+        wave_speed(frequency=_q("0 Hz"), wavelength=_q("0.78 m"))
+    with pytest.raises(ValueError, match="wave_speed must be a"):
+        wavelength_from_frequency(frequency=_q("100 Hz"), wave_speed=_q("343 m"))
+
+
 def test_centripetal_acceleration_force_and_cornering_speed():
     from math import sqrt
 
