@@ -20853,6 +20853,48 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_diffraction_bragg_angle_spacing_inverse_and_grating():
+    from math import asin, degrees
+
+    from anvilate.analysis import (
+        bragg_angle,
+        bragg_plane_spacing,
+        grating_diffraction_angle,
+    )
+
+    # Bragg: theta = arcsin(n*lambda/(2*d)); Cu K-alpha off 0.314 nm planes -> ~14.2 deg.
+    theta = bragg_angle(wavelength=_q("0.154 nm"), plane_spacing=_q("0.314 nm"))
+    assert theta == pytest.approx(degrees(asin(0.154 / (2 * 0.314))), rel=1e-9)
+    assert theta == pytest.approx(14.195, abs=0.01)
+    # Second order diffracts to a larger angle.
+    theta2 = bragg_angle(wavelength=_q("0.154 nm"), plane_spacing=_q("0.314 nm"), order=2)
+    assert theta2 > theta
+
+    # Spacing inverse round-trips the angle back to 0.314 nm.
+    d = bragg_plane_spacing(wavelength=_q("0.154 nm"), angle=theta)
+    assert d.to("nm").magnitude == pytest.approx(0.314, rel=1e-9)
+
+    # Grating: theta = arcsin(m*lambda/D); 550 nm through 600 lines/mm -> ~19.3 deg.
+    groove = Quantity(magnitude=1.0 / 600e3, unit="m")
+    gtheta = grating_diffraction_angle(wavelength=_q("550 nm"), groove_spacing=groove)
+    assert gtheta == pytest.approx(degrees(asin(550e-9 / (1.0 / 600e3))), rel=1e-9)
+    # Longer wavelength diffracts to a larger angle (dispersion).
+    gtheta_red = grating_diffraction_angle(wavelength=_q("650 nm"), groove_spacing=groove)
+    assert gtheta_red > gtheta
+
+    # Guardrails: no reflection when n*lambda > 2*d, positive order, angle range, dimensions.
+    with pytest.raises(ValueError, match="no Bragg reflection"):
+        bragg_angle(wavelength=_q("1 nm"), plane_spacing=_q("0.3 nm"))
+    with pytest.raises(ValueError, match="no diffraction at this order"):
+        grating_diffraction_angle(
+            wavelength=_q("2 um"), groove_spacing=Quantity(magnitude=1e-6, unit="m")
+        )
+    with pytest.raises(ValueError, match="angle must be in"):
+        bragg_plane_spacing(wavelength=_q("0.154 nm"), angle=0.0)
+    with pytest.raises(ValueError, match="wavelength must be a"):
+        bragg_angle(wavelength=_q("0.154 J"), plane_spacing=_q("0.314 nm"))
+
+
 def test_relativity_lorentz_time_dilation_and_kinetic_energy():
     from anvilate.analysis import (
         lorentz_factor,

@@ -238,6 +238,9 @@ modules:
 - :mod:`~anvilate.analysis.diffusion` — Fickian mass transport: the steady flux J = D·ΔC/L through
   a barrier (Fick's first law), the penetration length x = √(D·t) a diffusion front reaches, and the
   time t = x²/D to diffuse a distance — the mass-transport analog of heat conduction
+- :mod:`~anvilate.analysis.diffraction` — wave diffraction: the Bragg reflection angle
+  θ = arcsin(n·λ/2d) and its crystal-plane-spacing inverse d = n·λ/(2·sinθ) (X-ray diffraction), and
+  the grating diffraction angle θ = arcsin(m·λ/D) that disperses a spectrum
 - :mod:`~anvilate.analysis.magnetics` — magnetic actuators: the solenoid field B = μ₀·n·I,
   the Maxwell magnetic pressure p = B²/(2·μ₀), and the electromagnet holding force
   F = B²·A/(2·μ₀) — for clamps, lifting magnets, and magnetic bearings
@@ -1054,6 +1057,11 @@ from .dc_dc_converter import (
     boost_output_voltage,
     buck_boost_output_voltage,
     buck_output_voltage,
+)
+from .diffraction import (
+    bragg_angle,
+    bragg_plane_spacing,
+    grating_diffraction_angle,
 )
 from .diffusion import (
     diffusion_length,
@@ -2169,6 +2177,9 @@ __all__ = [
     "steady_diffusion_flux",
     "diffusion_length",
     "diffusion_time",
+    "bragg_angle",
+    "bragg_plane_spacing",
+    "grating_diffraction_angle",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",

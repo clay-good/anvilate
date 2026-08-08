@@ -348,6 +348,9 @@ curved_beam.trapezoidal_curved_beam_stress
 dc_dc_converter.boost_output_voltage
 dc_dc_converter.buck_boost_output_voltage
 dc_dc_converter.buck_output_voltage
+diffraction.bragg_angle
+diffraction.bragg_plane_spacing
+diffraction.grating_diffraction_angle
 diffusion.diffusion_length
 diffusion.diffusion_time
 diffusion.steady_diffusion_flux

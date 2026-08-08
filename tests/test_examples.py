@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_xrd_and_grating_example_angles_and_spacing():
+    namespace = runpy.run_path(str(_EXAMPLES / "xrd_and_grating.py"))
+    d = namespace["diffraction_angles"]()
+    # Cu K-alpha off 0.314 nm planes -> ~14.2 deg; spacing recovers; 550 nm grating -> ~19.3 deg.
+    assert d["bragg_angle_deg"] == pytest.approx(14.195, abs=0.01)
+    assert d["recovered_spacing_nm"] == pytest.approx(0.314, rel=1e-9)
+    assert d["grating_angle_deg"] == pytest.approx(19.269, abs=0.01)
+
+
 def test_gps_and_accelerator_relativity_example():
     namespace = runpy.run_path(str(_EXAMPLES / "gps_and_accelerator_relativity.py"))
     d = namespace["relativistic_effects"]()
