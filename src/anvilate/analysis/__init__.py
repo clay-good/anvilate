@@ -165,6 +165,9 @@ modules:
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
   and power of a multi-stage machine
+- :mod:`~anvilate.analysis.kinetic_theory` — kinetic theory of gases: the rms molecular speed
+  √(3RT/M), the mean molecular speed √(8RT/(πM)), and the mean free path k·T/(√2·π·d²·P)
+  between collisions — the molecular picture behind effusion, diffusion, and rarefied flow
 - :mod:`~anvilate.analysis.rocket_propulsion` — ideal rocket nozzle and mission: the exhaust
   velocity v_e = √(2γ/(γ−1)·R·T_c·(1 − (p_e/p_c)^((γ−1)/γ))), the thrust
   F = ṁ·v_e + (p_e − p_a)·A_e and specific impulse I_sp = F/(ṁ·g₀), and the Tsiolkovsky
@@ -1435,6 +1438,11 @@ from .keys import (
     key_tangential_force,
     spline_torque_capacity,
 )
+from .kinetic_theory import (
+    mean_free_path,
+    mean_molecular_speed,
+    rms_molecular_speed,
+)
 from .laser_cutting import (
     laser_cutting_speed,
     laser_max_cut_thickness,
@@ -2178,6 +2186,9 @@ __all__ = [
     "isothermal_compression_power",
     "multistage_compression_power",
     "optimal_stage_pressure_ratio",
+    "rms_molecular_speed",
+    "mean_molecular_speed",
+    "mean_free_path",
     "air_receiver_holdup_time",
     "air_receiver_volume_for_demand",
     "adiabatic_mixing_temperature",

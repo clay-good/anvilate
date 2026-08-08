@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_vacuum_mean_free_path_example_speeds_and_path():
+    namespace = runpy.run_path(str(_EXAMPLES / "vacuum_mean_free_path.py"))
+    d = namespace["vacuum_regime"]()
+    # N2 at 300 K: v_rms ~517, v_mean ~476 m/s; mfp at 0.1 Pa ~68 mm.
+    assert d["rms_speed_m_s"] == pytest.approx(516.96, abs=0.5)
+    assert d["mean_speed_m_s"] == pytest.approx(476.29, abs=0.5)
+    assert d["mean_free_path_mm_at_0p1pa"] == pytest.approx(68.1, abs=0.5)
+
+
 def test_road_salt_and_osmosis_example_freezing_and_pressure():
     namespace = runpy.run_path(str(_EXAMPLES / "road_salt_and_osmosis.py"))
     d = namespace["salt_water_properties"]()

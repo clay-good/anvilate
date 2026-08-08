@@ -20853,6 +20853,64 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_kinetic_theory_molecular_speeds_and_mean_free_path():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        mean_free_path,
+        mean_molecular_speed,
+        rms_molecular_speed,
+    )
+
+    R = 8.314462618
+    k = 1.380649e-23
+    T = Quantity(magnitude=300.0, unit="K")
+    M = Quantity(magnitude=0.028, unit="kg/mol")
+
+    # v_rms = sqrt(3*R*T/M); N2 at 300 K -> ~517 m/s.
+    v_rms = rms_molecular_speed(temperature=T, molar_mass=M)
+    assert v_rms.to("m/s").magnitude == pytest.approx(sqrt(3 * R * 300 / 0.028), rel=1e-9)
+    assert v_rms.to("m/s").magnitude == pytest.approx(516.96, abs=0.1)
+
+    # v_mean = sqrt(8*R*T/(pi*M)); ~92% of v_rms.
+    v_mean = mean_molecular_speed(temperature=T, molar_mass=M)
+    assert v_mean.to("m/s").magnitude == pytest.approx(sqrt(8 * R * 300 / (pi * 0.028)), rel=1e-9)
+    assert v_mean.to("m/s").magnitude < v_rms.to("m/s").magnitude
+    assert v_mean.to("m/s").magnitude / v_rms.to("m/s").magnitude == pytest.approx(
+        sqrt(8 / (3 * pi)), rel=1e-9
+    )
+
+    # lambda = k*T/(sqrt(2)*pi*d^2*P); air at 1 atm -> ~67 nm.
+    mfp = mean_free_path(
+        temperature=T,
+        pressure=_q("101325 Pa"),
+        molecular_diameter=Quantity(magnitude=3.7e-10, unit="m"),
+    )
+    assert mfp.to("m").magnitude == pytest.approx(
+        k * 300 / (sqrt(2) * pi * (3.7e-10) ** 2 * 101325), rel=1e-9
+    )
+    assert mfp.to("nm").magnitude == pytest.approx(67.21, abs=0.1)
+    # Mean free path is inversely proportional to pressure.
+    mfp_low = mean_free_path(
+        temperature=T,
+        pressure=_q("10132.5 Pa"),
+        molecular_diameter=Quantity(magnitude=3.7e-10, unit="m"),
+    )
+    assert mfp_low.to("m").magnitude == pytest.approx(10 * mfp.to("m").magnitude, rel=1e-9)
+
+    # Guardrails: positive temperature/mass/pressure/diameter, dimensions checked.
+    with pytest.raises(ValueError, match="molar_mass must be positive"):
+        rms_molecular_speed(temperature=T, molar_mass=Quantity(magnitude=0.0, unit="kg/mol"))
+    with pytest.raises(ValueError, match="pressure must be positive"):
+        mean_free_path(
+            temperature=T,
+            pressure=_q("0 Pa"),
+            molecular_diameter=Quantity(magnitude=3.7e-10, unit="m"),
+        )
+    with pytest.raises(ValueError, match="molar_mass must be a"):
+        rms_molecular_speed(temperature=T, molar_mass=_q("0.028 kg"))
+
+
 def test_colligative_osmotic_pressure_freezing_and_boiling_point():
     from anvilate.analysis import (
         boiling_point_elevation,
