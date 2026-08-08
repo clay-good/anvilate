@@ -1185,6 +1185,14 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_accelerated_life_test_example_factor_and_activation_energy():
+    namespace = runpy.run_path(str(_EXAMPLES / "accelerated_life_test.py"))
+    d = namespace["accelerated_test"]()
+    # 80 kJ/mol, 55 C -> 85 C: ~11.7x acceleration; Ea recovers to 80 kJ/mol.
+    assert d["acceleration_factor"] == pytest.approx(11.7, abs=0.2)
+    assert d["recovered_activation_energy_kj_mol"] == pytest.approx(80.0, rel=1e-6)
+
+
 def test_dc_dc_converter_topologies_example_outputs():
     namespace = runpy.run_path(str(_EXAMPLES / "dc_dc_converter_topologies.py"))
     d = namespace["converter_outputs"]()

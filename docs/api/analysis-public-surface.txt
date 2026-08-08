@@ -33,6 +33,9 @@ aluminum.aluminum_tension_stress
 antenna.free_space_path_loss
 antenna.max_line_of_sight_range
 antenna.received_power
+arrhenius.arrhenius_activation_energy
+arrhenius.arrhenius_rate_constant
+arrhenius.arrhenius_rate_ratio
 compressible_flow.choked_mass_flow_rate
 compressible_flow.critical_pressure_ratio
 compressible_flow.isentropic_area_ratio

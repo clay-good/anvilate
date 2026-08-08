@@ -20853,6 +20853,67 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
+    from math import exp, log
+
+    from anvilate.analysis import (
+        arrhenius_activation_energy,
+        arrhenius_rate_constant,
+        arrhenius_rate_ratio,
+    )
+
+    R = 8.314462618
+
+    # k = A*exp(-Ea/(R*T)).
+    k = arrhenius_rate_constant(
+        pre_exponential_factor=Quantity(magnitude=1e13, unit="1/s"),
+        activation_energy=_q("80 kJ/mol"),
+        temperature=Quantity(magnitude=300.0, unit="K"),
+    )
+    assert k.to("1/s").magnitude == pytest.approx(1e13 * exp(-80000 / (R * 300)), rel=1e-9)
+
+    # Acceleration factor k2/k1 = exp((Ea/R)*(1/T1 - 1/T2)).
+    ratio = arrhenius_rate_ratio(
+        activation_energy=_q("80 kJ/mol"),
+        temperature_low=Quantity(magnitude=300.0, unit="K"),
+        temperature_high=Quantity(magnitude=310.0, unit="K"),
+    )
+    assert ratio == pytest.approx(exp((80000 / R) * (1 / 300 - 1 / 310)), rel=1e-9)
+    assert ratio > 1.0
+
+    # Activation-energy inverse recovers Ea from two rates at the same two temperatures.
+    ea = arrhenius_activation_energy(
+        rate_constant_low=Quantity(magnitude=1.0, unit="1/s"),
+        rate_constant_high=Quantity(magnitude=ratio, unit="1/s"),
+        temperature_low=Quantity(magnitude=300.0, unit="K"),
+        temperature_high=Quantity(magnitude=310.0, unit="K"),
+    )
+    assert ea.to("J/mol").magnitude == pytest.approx(80000.0, rel=1e-9)
+    # It is the Arrhenius-plot slope: Ea = R*ln(k2/k1)/(1/T1 - 1/T2).
+    assert ea.to("J/mol").magnitude == pytest.approx(R * log(ratio) / (1 / 300 - 1 / 310), rel=1e-9)
+
+    # Guardrails: high temp must exceed low, rate rises with T, positive/dimensioned inputs.
+    with pytest.raises(ValueError, match="temperature_high must exceed"):
+        arrhenius_rate_ratio(
+            activation_energy=_q("80 kJ/mol"),
+            temperature_low=Quantity(magnitude=310.0, unit="K"),
+            temperature_high=Quantity(magnitude=300.0, unit="K"),
+        )
+    with pytest.raises(ValueError, match="rate_constant_high must exceed"):
+        arrhenius_activation_energy(
+            rate_constant_low=Quantity(magnitude=2.0, unit="1/s"),
+            rate_constant_high=Quantity(magnitude=1.0, unit="1/s"),
+            temperature_low=Quantity(magnitude=300.0, unit="K"),
+            temperature_high=Quantity(magnitude=310.0, unit="K"),
+        )
+    with pytest.raises(ValueError, match="activation_energy must be a"):
+        arrhenius_rate_constant(
+            pre_exponential_factor=Quantity(magnitude=1e13, unit="1/s"),
+            activation_energy=_q("80 kJ"),
+            temperature=Quantity(magnitude=300.0, unit="K"),
+        )
+
+
 def test_dc_dc_converter_buck_boost_and_buck_boost_topologies():
     from anvilate.analysis import (
         boost_output_voltage,
