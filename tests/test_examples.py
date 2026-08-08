@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_tungsten_cathode_emission_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "tungsten_cathode_emission.py"))
+    d = namespace["cathode_emission"]()
+    # Tungsten at 2500 K: ~6369 A/m^2 Richardson, 0.12 eV Schottky, ~73806 A/m^2 Child-Langmuir.
+    assert d["richardson_current_a_m2"] == pytest.approx(6369.2, abs=1.0)
+    assert d["schottky_lowering_ev"] == pytest.approx(0.1200, abs=0.001)
+    assert d["child_langmuir_current_a_m2"] == pytest.approx(73806.0, abs=1.0)
+
+
 def test_flat_plate_boundary_layer_example():
     namespace = runpy.run_path(str(_EXAMPLES / "flat_plate_boundary_layer.py"))
     d = namespace["plate_boundary_layer"]()

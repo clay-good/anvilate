@@ -356,6 +356,9 @@ modules:
   U = π·D·N, the outlet swirl velocity c_θ = U − c_m/tan β from the vane-angle velocity
   triangle (backward/radial/forward-curved), and the Euler head H = (U₂·c_θ2 − U₁·c_θ1)/g —
   the loss-free ceiling the delivered head of :mod:`~anvilate.analysis.pump` falls below
+- :mod:`~anvilate.analysis.vacuum_electronics` — vacuum electron emission: the Richardson-Dushman
+  saturation current J = A·T²·exp(−W/kT), the Schottky field lowering ΔW = √(e³·E/(4π·ε₀)) of the
+  work function, and the Child-Langmuir space-charge-limited current J = (4/9)·ε₀·√(2e/m)·V^{3/2}/d²
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -2212,6 +2215,11 @@ from .turbomachinery import (
     euler_head,
     impeller_outlet_swirl_velocity,
 )
+from .vacuum_electronics import (
+    child_langmuir_current_density,
+    schottky_barrier_lowering,
+    thermionic_current_density,
+)
 from .vehicle import (
     grade_resistance_force,
     rolling_resistance_force,
@@ -2347,6 +2355,9 @@ __all__ = [
     "blade_tip_speed",
     "impeller_outlet_swirl_velocity",
     "euler_head",
+    "thermionic_current_density",
+    "schottky_barrier_lowering",
+    "child_langmuir_current_density",
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",

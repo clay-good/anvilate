@@ -1164,6 +1164,9 @@ transmission_line.voltage_standing_wave_ratio
 turbomachinery.blade_tip_speed
 turbomachinery.euler_head
 turbomachinery.impeller_outlet_swirl_velocity
+vacuum_electronics.thermionic_current_density
+vacuum_electronics.schottky_barrier_lowering
+vacuum_electronics.child_langmuir_current_density
 wear.archard_wear_depth
 wear.archard_wear_volume
 wear.sliding_contact_pv

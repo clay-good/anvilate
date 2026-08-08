@@ -22454,6 +22454,89 @@ def test_barometric_pressure_scale_height_and_altitude_inverse():
         scale_height(temperature=Quantity(magnitude=288.15, unit="Pa"))
 
 
+def test_thermionic_schottky_and_child_langmuir_emission():
+    from math import exp, pi, sqrt
+
+    from anvilate.analysis import (
+        child_langmuir_current_density,
+        schottky_barrier_lowering,
+        thermionic_current_density,
+    )
+
+    k = 1.380649e-23
+    q = 1.602176634e-19
+    eps0 = 8.8541878128e-12
+    me = 9.1093837015e-31
+    a0 = 1.20173e6
+
+    # Richardson-Dushman: tungsten (W=4.5 eV) at 2500 K emits ~6369 A/m^2.
+    j = thermionic_current_density(
+        temperature=Quantity(magnitude=2500.0, unit="K"),
+        work_function=Quantity(magnitude=4.5, unit="eV"),
+    )
+    w_j = 4.5 * q
+    assert j.to("A/m**2").magnitude == pytest.approx(
+        a0 * 2500.0**2 * exp(-w_j / (k * 2500.0)), rel=1e-9
+    )
+    assert j.to("A/m**2").magnitude == pytest.approx(6369.2, abs=1.0)
+    # Hotter cathode emits far more (steep exponential).
+    j_hot = thermionic_current_density(
+        temperature=Quantity(magnitude=2700.0, unit="K"),
+        work_function=Quantity(magnitude=4.5, unit="eV"),
+    )
+    assert j_hot.to("A/m**2").magnitude > 5.0 * j.to("A/m**2").magnitude
+    # A user-supplied Richardson constant scales the current linearly.
+    j_half = thermionic_current_density(
+        temperature=Quantity(magnitude=2500.0, unit="K"),
+        work_function=Quantity(magnitude=4.5, unit="eV"),
+        richardson_constant=Quantity(magnitude=6.0e5, unit="A/(m**2*K**2)"),
+    )
+    assert j_half.to("A/m**2").magnitude == pytest.approx(
+        (6.0e5 / a0) * j.to("A/m**2").magnitude, rel=1e-9
+    )
+
+    # Schottky barrier lowering: ~0.12 eV at 10 MV/m, scaling as sqrt(E).
+    dw = schottky_barrier_lowering(electric_field=Quantity(magnitude=1e7, unit="V/m"))
+    assert dw.to("J").magnitude == pytest.approx(sqrt(q**3 * 1e7 / (4.0 * pi * eps0)), rel=1e-9)
+    assert dw.to("eV").magnitude == pytest.approx(0.1200, abs=0.001)
+    dw4 = schottky_barrier_lowering(electric_field=Quantity(magnitude=4e7, unit="V/m"))
+    assert dw4.to("eV").magnitude == pytest.approx(2.0 * dw.to("eV").magnitude, rel=1e-9)
+
+    # Child-Langmuir: 1 kV over a 1 mm gap gives ~73806 A/m^2, rising as V^1.5.
+    jcl = child_langmuir_current_density(
+        anode_voltage=Quantity(magnitude=1000.0, unit="V"),
+        gap=Quantity(magnitude=1e-3, unit="m"),
+    )
+    coeff = (4.0 / 9.0) * eps0 * sqrt(2.0 * q / me)
+    assert jcl.to("A/m**2").magnitude == pytest.approx(coeff * 1000.0**1.5 / 1e-3**2, rel=1e-9)
+    assert jcl.to("A/m**2").magnitude == pytest.approx(73806.0, abs=1.0)
+    # Doubling the gap quarters the current (inverse-square in d).
+    jcl_2d = child_langmuir_current_density(
+        anode_voltage=Quantity(magnitude=1000.0, unit="V"),
+        gap=Quantity(magnitude=2e-3, unit="m"),
+    )
+    assert jcl_2d.to("A/m**2").magnitude == pytest.approx(
+        jcl.to("A/m**2").magnitude / 4.0, rel=1e-9
+    )
+
+    # Guardrails: positive, dimensioned inputs.
+    with pytest.raises(ValueError, match="temperature must be positive"):
+        thermionic_current_density(
+            temperature=Quantity(magnitude=-10.0, unit="K"),
+            work_function=Quantity(magnitude=4.5, unit="eV"),
+        )
+    with pytest.raises(ValueError, match="work_function must be a"):
+        thermionic_current_density(
+            temperature=Quantity(magnitude=2500.0, unit="K"),
+            work_function=Quantity(magnitude=4.5, unit="V"),
+        )
+    with pytest.raises(ValueError, match="gap must be positive"):
+        child_langmuir_current_density(
+            anode_voltage=Quantity(magnitude=1000.0, unit="V"),
+            gap=Quantity(magnitude=0.0, unit="m"),
+        )
+
+
 def test_dc_dc_converter_buck_boost_and_buck_boost_topologies():
     from anvilate.analysis import (
         boost_output_voltage,
