@@ -1106,6 +1106,15 @@ def test_camera_lens_and_resolution_example_image_and_diffraction_limit():
     assert d["resolution_arcsec"] == pytest.approx(5.54, abs=0.05)
 
 
+def test_lens_speed_and_depth_example_f_number_trade():
+    namespace = runpy.run_path(str(_EXAMPLES / "lens_speed_and_depth.py"))
+    d = namespace["lens_speed"]()
+    # 50 mm at 25 mm aperture is f/2; Airy spot ~2.7 um; f/8 hyperfocal ~10.4 m.
+    assert d["f_number"] == pytest.approx(2.0, rel=1e-9)
+    assert d["airy_spot_um"] == pytest.approx(2.684, abs=0.005)
+    assert d["hyperfocal_m"] == pytest.approx(10.417, abs=0.02)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

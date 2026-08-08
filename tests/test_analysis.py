@@ -16048,6 +16048,44 @@ def test_optics_thin_lens_magnification_and_diffraction_limit():
         thin_lens_image_distance(focal_length=_q("50 s"), object_distance=_q("200 mm"))
 
 
+def test_optics_f_number_airy_spot_and_hyperfocal():
+    from anvilate.analysis import (
+        diffraction_limited_spot_diameter,
+        hyperfocal_distance,
+        lens_f_number,
+    )
+
+    # f-number N = f/D; 50 mm / 25 mm = 2 (f/2).
+    n = lens_f_number(focal_length=_q("50 mm"), aperture_diameter=_q("25 mm"))
+    assert n == pytest.approx(2.0, rel=1e-9)
+
+    # Airy spot d = 2.44*lambda*N; 550 nm at f/2 -> 2.684 um.
+    spot = diffraction_limited_spot_diameter(wavelength=_q("550 nm"), f_number=n)
+    assert spot.to("micrometer").magnitude == pytest.approx(2.44 * 550e-9 * 2 * 1e6, rel=1e-9)
+    # Stopping down (higher N) blurs the focused spot.
+    spot_stopped = diffraction_limited_spot_diameter(wavelength=_q("550 nm"), f_number=8.0)
+    assert spot_stopped.to("micrometer").magnitude > spot.to("micrometer").magnitude
+
+    # Hyperfocal H = f^2/(N*c); 50 mm, f/8, 0.03 mm CoC -> 10.417 m.
+    h = hyperfocal_distance(
+        focal_length=_q("50 mm"), f_number=8.0, circle_of_confusion=_q("0.03 mm")
+    )
+    assert h.to("m").magnitude == pytest.approx(50**2 / (8 * 0.03) / 1000, rel=1e-9)
+    # A wider aperture (lower N) pushes the hyperfocal distance farther out.
+    h_wide = hyperfocal_distance(
+        focal_length=_q("50 mm"), f_number=2.0, circle_of_confusion=_q("0.03 mm")
+    )
+    assert h_wide.to("m").magnitude > h.to("m").magnitude
+
+    # Guardrails: positive inputs and correct dimensions.
+    with pytest.raises(ValueError, match="f_number must be positive"):
+        diffraction_limited_spot_diameter(wavelength=_q("550 nm"), f_number=0.0)
+    with pytest.raises(ValueError, match="circle_of_confusion must be positive"):
+        hyperfocal_distance(focal_length=_q("50 mm"), f_number=8.0, circle_of_confusion=_q("0 mm"))
+    with pytest.raises(ValueError, match="aperture_diameter must be a"):
+        lens_f_number(focal_length=_q("50 mm"), aperture_diameter=_q("25 s"))
+
+
 def test_broaching_teeth_force_and_pull_capacity():
     from anvilate.analysis import (
         broaching_cutting_force,

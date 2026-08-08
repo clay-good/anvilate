@@ -304,8 +304,9 @@ modules:
   its luminaire-count inverse), the room cavity ratio that sets the coefficient
   of utilization, and installed lighting power density
 - :mod:`~anvilate.analysis.optics` — geometric optics for optomechanical design: the thin-lens
-  image distance d_i = f·d_o/(d_o − f), the transverse magnification m = −d_i/d_o, and the
-  Rayleigh diffraction limit θ = 1.22·λ/D on resolving power
+  image distance d_i = f·d_o/(d_o − f), the transverse magnification m = −d_i/d_o, the Rayleigh
+  diffraction limit θ = 1.22·λ/D on resolving power, and the lens speed side — the f-number
+  N = f/D, the focused Airy spot d = 2.44·λ·N, and the hyperfocal distance H = f²/(N·c)
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1376,6 +1377,9 @@ from .open_channel import (
 )
 from .optics import (
     diffraction_limited_angular_resolution,
+    diffraction_limited_spot_diameter,
+    hyperfocal_distance,
+    lens_f_number,
     lens_transverse_magnification,
     thin_lens_image_distance,
 )
@@ -2557,6 +2561,9 @@ __all__ = [
     "thin_lens_image_distance",
     "lens_transverse_magnification",
     "diffraction_limited_angular_resolution",
+    "lens_f_number",
+    "diffraction_limited_spot_diameter",
+    "hyperfocal_distance",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

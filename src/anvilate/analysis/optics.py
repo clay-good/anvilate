@@ -22,6 +22,9 @@ RAYLEIGH_CONSTANT = 1.22
 
 __all__ = [
     "diffraction_limited_angular_resolution",
+    "diffraction_limited_spot_diameter",
+    "hyperfocal_distance",
+    "lens_f_number",
     "lens_transverse_magnification",
     "thin_lens_image_distance",
 ]
@@ -92,6 +95,69 @@ def diffraction_limited_angular_resolution(
     if d <= 0:
         raise ValueError("aperture_diameter must be positive")
     return Quantity(magnitude=RAYLEIGH_CONSTANT * lam / d, unit="rad")
+
+
+def lens_f_number(*, focal_length: Quantity, aperture_diameter: Quantity) -> float:
+    """The f-number (focal ratio), N = f/D.
+
+    The relative aperture of a lens, the ratio of its ``focal_length`` f to its
+    ``aperture_diameter`` D, N = f/D. A low f-number is a "fast" lens — a wide aperture that gathers
+    much light and gives shallow depth of field — while a high f-number is "slow" but deeper in
+    focus; each full stop (√2 in N) halves the light. It sets both the focused spot size
+    (:func:`diffraction_limited_spot_diameter`) and the depth of field
+    (:func:`hyperfocal_distance`). Returns the f-number (dimensionless).
+    """
+    _check(focal_length, "[length]", "focal_length")
+    _check(aperture_diameter, "[length]", "aperture_diameter")
+    f = focal_length.to("mm").magnitude
+    d = aperture_diameter.to("mm").magnitude
+    if f <= 0:
+        raise ValueError("focal_length must be positive")
+    if d <= 0:
+        raise ValueError("aperture_diameter must be positive")
+    return f / d
+
+
+def diffraction_limited_spot_diameter(*, wavelength: Quantity, f_number: float) -> Quantity:
+    """The Airy spot diameter at focus, d = 2.44·λ·N.
+
+    The diameter of the central Airy disk a diffraction-limited lens focuses a point to: from the
+    ``wavelength`` λ and the ``f_number`` N (from :func:`lens_f_number`), d = 2.44·λ·N. It is the
+    smallest spot the lens can make, so it sets the tightest focus of a laser and the pixel size to
+    pair a sensor with — stopping down (raising N) blurs the spot even as it deepens the focus.
+    Returns the spot diameter in micrometres.
+    """
+    _check(wavelength, "[length]", "wavelength")
+    lam = wavelength.to("m").magnitude
+    if lam <= 0:
+        raise ValueError("wavelength must be positive")
+    if f_number <= 0:
+        raise ValueError("f_number must be positive")
+    return Quantity(magnitude=2.44 * lam * f_number, unit="m").to("micrometer")
+
+
+def hyperfocal_distance(
+    *, focal_length: Quantity, f_number: float, circle_of_confusion: Quantity
+) -> Quantity:
+    """The hyperfocal distance, H = f²/(N·c).
+
+    The focus distance beyond which everything is acceptably sharp, from the near limit at H/2 out
+    to infinity: from the ``focal_length`` f, the ``f_number`` N (from :func:`lens_f_number`), and
+    the ``circle_of_confusion`` c (the largest blur spot still read as a point on the sensor),
+    H = f²/(N·c). Focus there and depth of field is deepest; a longer lens or a wider aperture
+    (lower N) pushes H farther out and shrinks that depth. Returns the hyperfocal distance in m.
+    """
+    _check(focal_length, "[length]", "focal_length")
+    _check(circle_of_confusion, "[length]", "circle_of_confusion")
+    f = focal_length.to("mm").magnitude
+    c = circle_of_confusion.to("mm").magnitude
+    if f <= 0:
+        raise ValueError("focal_length must be positive")
+    if f_number <= 0:
+        raise ValueError("f_number must be positive")
+    if c <= 0:
+        raise ValueError("circle_of_confusion must be positive")
+    return Quantity(magnitude=f * f / (f_number * c), unit="mm").to("m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
