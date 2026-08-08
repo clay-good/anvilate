@@ -26,7 +26,10 @@ __all__ = [
     "hohmann_first_burn_delta_v",
     "hohmann_second_burn_delta_v",
     "hohmann_transfer_time",
+    "orbit_specific_energy",
     "orbital_period",
+    "semi_major_axis_from_apsides",
+    "vis_viva_velocity",
 ]
 
 
@@ -92,6 +95,80 @@ def escape_velocity(*, gravitational_parameter: Quantity, orbital_radius: Quanti
     if r <= 0:
         raise ValueError("orbital_radius must be positive")
     return Quantity(magnitude=sqrt(2.0 * mu / r), unit="m/s")
+
+
+def vis_viva_velocity(
+    *, gravitational_parameter: Quantity, radius: Quantity, semi_major_axis: Quantity
+) -> Quantity:
+    """The vis-viva orbital speed, v = √(μ(2/r − 1/a)).
+
+    The master equation for orbital velocity: the speed of a body at radius r on any conic orbit of
+    semi-major axis a, from the ``gravitational_parameter`` μ, the ``radius`` r from the focus, and
+    the ``semi_major_axis`` a — v = √(μ(2/r − 1/a)). It reduces to the circular speed √(μ/r) when
+    a = r (:func:`circular_orbit_velocity`), gives the fast perigee and slow apogee speeds of an
+    ellipse at its two apsides, and generalizes to escape (a → ∞) and hyperbolic (a < 0) orbits.
+    Returns the orbital velocity in m/s.
+    """
+    _check(gravitational_parameter, "[length]**3/[time]**2", "gravitational_parameter")
+    _check(radius, "[length]", "radius")
+    _check(semi_major_axis, "[length]", "semi_major_axis")
+    mu = gravitational_parameter.to("m**3/s**2").magnitude
+    r = radius.to("m").magnitude
+    a = semi_major_axis.to("m").magnitude
+    if mu <= 0:
+        raise ValueError("gravitational_parameter must be positive")
+    if r <= 0:
+        raise ValueError("radius must be positive")
+    if a <= 0:
+        raise ValueError("semi_major_axis must be positive")
+    term = 2.0 / r - 1.0 / a
+    if term <= 0:
+        raise ValueError("radius must be within the orbit (2/r must exceed 1/a)")
+    return Quantity(magnitude=sqrt(mu * term), unit="m/s")
+
+
+def orbit_specific_energy(
+    *, gravitational_parameter: Quantity, semi_major_axis: Quantity
+) -> Quantity:
+    """The specific orbital energy, ε = −μ/(2a).
+
+    The total mechanical energy per unit mass of an orbit, which depends only on the semi-major
+    axis: from the ``gravitational_parameter`` μ and the ``semi_major_axis`` a, ε = −μ/(2a). It is
+    negative for a bound (elliptical) orbit, exactly zero for a parabolic escape trajectory, and
+    positive for a hyperbolic flyby, so its sign tells whether a trajectory is captured or escapes.
+    Every burn that changes energy changes a, and vice versa. Returns the specific energy in J/kg.
+    """
+    _check(gravitational_parameter, "[length]**3/[time]**2", "gravitational_parameter")
+    _check(semi_major_axis, "[length]", "semi_major_axis")
+    mu = gravitational_parameter.to("m**3/s**2").magnitude
+    a = semi_major_axis.to("m").magnitude
+    if mu <= 0:
+        raise ValueError("gravitational_parameter must be positive")
+    if a <= 0:
+        raise ValueError("semi_major_axis must be positive")
+    return Quantity(magnitude=-mu / (2.0 * a), unit="J/kg")
+
+
+def semi_major_axis_from_apsides(
+    *, periapsis_radius: Quantity, apoapsis_radius: Quantity
+) -> Quantity:
+    """The semi-major axis of an ellipse, a = (r_p + r_a)/2.
+
+    The semi-major axis of an elliptical orbit from its two apsides: the ``periapsis_radius`` r_p
+    (closest approach) and the ``apoapsis_radius`` r_a (the farthest point), both measured from the
+    focus, a = (r_p + r_a)/2 — the mean of the extremes. It is the quantity the period
+    (:func:`orbital_period`), the energy (:func:`orbit_specific_energy`), and the vis-viva speed
+    (:func:`vis_viva_velocity`) all key on, so sizing an ellipse starts here. Returns a in km.
+    """
+    _check(periapsis_radius, "[length]", "periapsis_radius")
+    _check(apoapsis_radius, "[length]", "apoapsis_radius")
+    r_p = periapsis_radius.to("m").magnitude
+    r_a = apoapsis_radius.to("m").magnitude
+    if r_p <= 0:
+        raise ValueError("periapsis_radius must be positive")
+    if r_a < r_p:
+        raise ValueError("apoapsis_radius must not be less than periapsis_radius")
+    return Quantity(magnitude=(r_p + r_a) / 2.0, unit="m").to("km")
 
 
 def _hohmann_inputs(

@@ -1045,6 +1045,19 @@ def test_leo_to_geo_hohmann_example_total_delta_v():
     assert d["transfer_time_hours"] == pytest.approx(5.29, abs=0.02)
 
 
+def test_gto_vis_viva_example_perigee_faster_than_apogee():
+    namespace = runpy.run_path(str(_EXAMPLES / "gto_vis_viva.py"))
+    d = namespace["transfer_orbit"]()
+    # Semi-major axis 24468 km; perigee ~10.07 km/s, apogee ~1.62 km/s.
+    assert d["semi_major_axis_km"] == pytest.approx(24467.5, abs=1.0)
+    assert d["perigee_speed_km_s"] == pytest.approx(10.072, abs=0.005)
+    assert d["apogee_speed_km_s"] == pytest.approx(1.617, abs=0.005)
+    assert d["perigee_speed_km_s"] > d["apogee_speed_km_s"]
+    # Specific energy negative -> bound orbit.
+    assert d["specific_energy_mj_kg"] == pytest.approx(-8.15, abs=0.05)
+    assert d["specific_energy_mj_kg"] < 0
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

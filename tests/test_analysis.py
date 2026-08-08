@@ -17196,6 +17196,47 @@ def test_hohmann_transfer_burns_and_coast_time():
         )
 
 
+def test_vis_viva_specific_energy_and_semi_major_axis():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        orbit_specific_energy,
+        semi_major_axis_from_apsides,
+        vis_viva_velocity,
+    )
+
+    mu = _q("3.986e14 m**3/s**2")
+    mu_v = 3.986e14
+
+    # Semi-major axis a = (r_p + r_a)/2; (6771 + 42164)/2 = 24467.5 km.
+    a = semi_major_axis_from_apsides(periapsis_radius=_q("6771 km"), apoapsis_radius=_q("42164 km"))
+    assert a.to("km").magnitude == pytest.approx(24467.5, rel=1e-9)
+    a_m = 24467500.0
+
+    # Vis-viva v = sqrt(mu(2/r - 1/a)); perigee ~10072 m/s, apogee ~1617 m/s.
+    v_p = vis_viva_velocity(gravitational_parameter=mu, radius=_q("6771 km"), semi_major_axis=a)
+    assert v_p.to("m/s").magnitude == pytest.approx(sqrt(mu_v * (2 / 6.771e6 - 1 / a_m)), rel=1e-9)
+    v_a = vis_viva_velocity(gravitational_parameter=mu, radius=_q("42164 km"), semi_major_axis=a)
+    assert v_a.to("m/s").magnitude == pytest.approx(sqrt(mu_v * (2 / 4.2164e7 - 1 / a_m)), rel=1e-9)
+    assert v_p.to("m/s").magnitude > v_a.to("m/s").magnitude  # fast at perigee, slow at apogee
+    # Vis-viva reduces to the circular speed when the radius equals the semi-major axis.
+    v_circ = vis_viva_velocity(gravitational_parameter=mu, radius=a, semi_major_axis=a)
+    assert v_circ.to("m/s").magnitude == pytest.approx(sqrt(mu_v / a_m), rel=1e-9)
+
+    # Specific energy eps = -mu/(2a) is negative for a bound orbit.
+    eps = orbit_specific_energy(gravitational_parameter=mu, semi_major_axis=a)
+    assert eps.to("J/kg").magnitude == pytest.approx(-mu_v / (2 * a_m), rel=1e-9)
+    assert eps.to("J/kg").magnitude < 0
+
+    # Guardrails: apoapsis >= periapsis, radius within the orbit, dimensions checked.
+    with pytest.raises(ValueError, match="apoapsis_radius must not be less than periapsis_radius"):
+        semi_major_axis_from_apsides(periapsis_radius=_q("42164 km"), apoapsis_radius=_q("6771 km"))
+    with pytest.raises(ValueError, match="radius must be within the orbit"):
+        vis_viva_velocity(gravitational_parameter=mu, radius=_q("100000 km"), semi_major_axis=a)
+    with pytest.raises(ValueError, match="semi_major_axis must be a"):
+        orbit_specific_energy(gravitational_parameter=mu, semi_major_axis=_q("24467 s"))
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 

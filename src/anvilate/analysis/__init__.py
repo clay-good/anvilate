@@ -155,8 +155,9 @@ modules:
   Δv = I_sp·g₀·ln(m₀/m_f) with the propellant fraction ζ = 1 − exp(−Δv/(I_sp·g₀)) it needs
 - :mod:`~anvilate.analysis.orbital_mechanics` — two-body coasting and transfers: the circular
   orbital speed v = √(μ/r), the Kepler period T = 2π·√(r³/μ), the escape velocity
-  v_esc = √(2μ/r) = √2·v_circ, and the Hohmann two-burn transfer Δv's and coast time
-  t = π·√(a³/μ)
+  v_esc = √(2μ/r) = √2·v_circ, the Hohmann two-burn transfer Δv's and coast time t = π·√(a³/μ),
+  and the elliptical vis-viva speed v = √(μ(2/r − 1/a)), specific energy ε = −μ/(2a), and
+  semi-major axis a = (r_p + r_a)/2
 - :mod:`~anvilate.analysis.combustion` — furnace/boiler combustion: the stoichiometric
   air-fuel ratio from an ultimate analysis, the excess air read from flue-gas oxygen
   (EA = O₂/(20.9−O₂)), the actual air-fuel ratio a burner runs at, and the Siegert dry
@@ -1358,7 +1359,10 @@ from .orbital_mechanics import (
     hohmann_first_burn_delta_v,
     hohmann_second_burn_delta_v,
     hohmann_transfer_time,
+    orbit_specific_energy,
     orbital_period,
+    semi_major_axis_from_apsides,
+    vis_viva_velocity,
 )
 from .pipe_flow import (
     cavitation_number,
@@ -1916,6 +1920,9 @@ __all__ = [
     "hohmann_first_burn_delta_v",
     "hohmann_second_burn_delta_v",
     "hohmann_transfer_time",
+    "vis_viva_velocity",
+    "orbit_specific_energy",
+    "semi_major_axis_from_apsides",
     "cavitation_number",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
