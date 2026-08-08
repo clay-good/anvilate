@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_helicopter_hover_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "helicopter_hover.py"))
+    d = namespace["rotor_hover"]()
+    # 5 kN thrust on a 2 m rotor: ~12.74 m/s downwash, ~63.7 kW ideal, FM ~0.75.
+    assert d["induced_velocity_m_s"] == pytest.approx(12.74, abs=0.01)
+    assert d["ideal_hover_power_kw"] == pytest.approx(63.719, abs=0.01)
+    assert d["figure_of_merit"] == pytest.approx(0.7496, abs=0.001)
+
+
 def test_light_aircraft_wing_example():
     namespace = runpy.run_path(str(_EXAMPLES / "light_aircraft_wing.py"))
     d = namespace["wing_performance"]()

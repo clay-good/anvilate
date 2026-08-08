@@ -632,6 +632,9 @@ modules:
 - :mod:`~anvilate.analysis.rolling` — flat rolling: the maximum draft Δh_max = μ²·R
   the rolls can bite, the roll-strip contact length L = √(R·Δh), and the roll
   separating force F = Y_avg·w·L the mill stand must carry
+- :mod:`~anvilate.analysis.rotor_momentum` — rotor hover (actuator-disk momentum theory): the
+  induced downwash v_h = √(T/(2·ρ·A)), the ideal hover power P = T^{3/2}/√(2·ρ·A), and the figure
+  of merit FM = P_ideal/P_actual that rates a real rotor's hover efficiency
 - :mod:`~anvilate.analysis.extrusion` — direct extrusion: the extrusion ratio
   R = A₀/A_f, the ram pressure p = Y_avg·ln(R)/η (ideal work over a deformation
   efficiency), and the ram force F = p·A₀ that sizes the press
@@ -1948,6 +1951,11 @@ from .rolling import (
     rolling_contact_length,
     rolling_force,
 )
+from .rotor_momentum import (
+    figure_of_merit,
+    hover_induced_velocity,
+    ideal_hover_power,
+)
 from .scotch_yoke import (
     scotch_yoke_acceleration,
     scotch_yoke_displacement,
@@ -2724,6 +2732,9 @@ __all__ = [
     "maximum_draft",
     "rolling_contact_length",
     "rolling_force",
+    "hover_induced_velocity",
+    "ideal_hover_power",
+    "figure_of_merit",
     "rc_stress_block_depth",
     "rc_beam_nominal_moment",
     "rc_doubly_reinforced_moment",

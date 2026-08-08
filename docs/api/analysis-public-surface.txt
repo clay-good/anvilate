@@ -944,6 +944,9 @@ rocket_propulsion.rocket_propellant_mass_fraction
 rolling.maximum_draft
 rolling.rolling_contact_length
 rolling.rolling_force
+rotor_momentum.hover_induced_velocity
+rotor_momentum.ideal_hover_power
+rotor_momentum.figure_of_merit
 scotch_yoke.scotch_yoke_acceleration
 scotch_yoke.scotch_yoke_displacement
 scotch_yoke.scotch_yoke_velocity

@@ -22334,6 +22334,51 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_rotor_hover_induced_velocity_power_and_figure_of_merit():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        figure_of_merit,
+        hover_induced_velocity,
+        ideal_hover_power,
+    )
+
+    thrust = _q("5000 N")
+    rho = _q("1.225 kg/m**3")
+    area = Quantity(magnitude=pi * 4.0, unit="m**2")  # 2 m radius
+    a = pi * 4.0
+
+    # Induced velocity v_h = sqrt(T/(2*rho*A)); ~12.74 m/s.
+    v_h = hover_induced_velocity(thrust=thrust, air_density=rho, disk_area=area)
+    assert v_h.to("m/s").magnitude == pytest.approx(sqrt(5000.0 / (2 * 1.225 * a)), rel=1e-9)
+    assert v_h.to("m/s").magnitude == pytest.approx(12.74, abs=0.01)
+
+    # Ideal hover power P = T^1.5/sqrt(2*rho*A) = T*v_h; ~63719 W.
+    power = ideal_hover_power(thrust=thrust, air_density=rho, disk_area=area)
+    assert power.to("W").magnitude == pytest.approx(5000.0**1.5 / sqrt(2 * 1.225 * a), rel=1e-9)
+    assert power.to("W").magnitude == pytest.approx(5000.0 * v_h.to("m/s").magnitude, rel=1e-9)
+    assert power.to("W").magnitude == pytest.approx(63718.7, abs=1.0)
+    # A bigger disk hovers on less power for the same thrust.
+    power_big = ideal_hover_power(
+        thrust=thrust, air_density=rho, disk_area=Quantity(magnitude=pi * 16.0, unit="m**2")
+    )
+    assert power_big.to("W").magnitude < power.to("W").magnitude
+
+    # Figure of merit FM = P_ideal/P_actual; 63719/85000 ~ 0.75.
+    fm = figure_of_merit(thrust=thrust, air_density=rho, disk_area=area, actual_power=_q("85000 W"))
+    assert fm == pytest.approx(power.to("W").magnitude / 85000.0, rel=1e-9)
+    assert fm == pytest.approx(0.7496, abs=0.001)
+    assert 0.0 < fm < 1.0  # a real rotor never beats the ideal disk
+
+    # Guardrails: positive, dimensioned inputs.
+    with pytest.raises(ValueError, match="thrust must be positive"):
+        hover_induced_velocity(thrust=_q("0 N"), air_density=rho, disk_area=area)
+    with pytest.raises(ValueError, match="actual_power must be positive"):
+        figure_of_merit(thrust=thrust, air_density=rho, disk_area=area, actual_power=_q("0 W"))
+    with pytest.raises(ValueError, match="disk_area must be a"):
+        ideal_hover_power(thrust=thrust, air_density=rho, disk_area=_q("12 m"))
+
+
 def test_wing_lift_induced_drag_and_stall_speed():
     from math import pi, sqrt
 
