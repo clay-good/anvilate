@@ -956,6 +956,9 @@ snapfit.snap_fit_deflection_force
 snapfit.snap_fit_mating_force
 snapfit.snap_fit_permissible_deflection
 snapfit.snap_fit_strain
+solar_cell.fill_factor
+solar_cell.solar_cell_efficiency
+solar_cell.solar_cell_max_power
 solar_pv.pv_array_power
 solar_pv.pv_cell_temperature
 solar_pv.pv_temperature_derated_power

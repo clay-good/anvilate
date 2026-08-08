@@ -20985,6 +20985,52 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_solar_cell_fill_factor_max_power_and_efficiency():
+    from anvilate.analysis import fill_factor, solar_cell_efficiency, solar_cell_max_power
+
+    # FF = (V_mp*I_mp)/(V_oc*I_sc); a good mono cell -> ~0.785.
+    ff = fill_factor(
+        max_power_voltage=_q("0.57 V"),
+        max_power_current=_q("8.9 A"),
+        open_circuit_voltage=_q("0.68 V"),
+        short_circuit_current=_q("9.5 A"),
+    )
+    assert ff == pytest.approx((0.57 * 8.9) / (0.68 * 9.5), rel=1e-9)
+    assert ff == pytest.approx(0.7853, abs=0.001)
+
+    # P_max = FF*V_oc*I_sc equals V_mp*I_mp at the maximum-power point.
+    p = solar_cell_max_power(
+        open_circuit_voltage=_q("0.68 V"), short_circuit_current=_q("9.5 A"), fill_factor=ff
+    )
+    assert p.to("W").magnitude == pytest.approx(0.57 * 8.9, rel=1e-9)
+
+    # eta = P_max/(G*A); 5.07 W over 0.0243 m^2 at 1000 W/m^2 -> ~20.8%.
+    eta = solar_cell_efficiency(
+        max_power=p,
+        irradiance=Quantity(magnitude=1000.0, unit="W/m**2"),
+        cell_area=Quantity(magnitude=0.156**2, unit="m**2"),
+    )
+    assert eta == pytest.approx(p.to("W").magnitude / (1000 * 0.156**2), rel=1e-9)
+    assert eta == pytest.approx(0.2085, abs=0.001)
+
+    # Guardrails: max-power point can't exceed V_oc/I_sc; fill factor in (0,1]; dimensions.
+    with pytest.raises(ValueError, match="max_power_voltage cannot exceed"):
+        fill_factor(
+            max_power_voltage=_q("0.7 V"),
+            max_power_current=_q("8.9 A"),
+            open_circuit_voltage=_q("0.68 V"),
+            short_circuit_current=_q("9.5 A"),
+        )
+    with pytest.raises(ValueError, match="fill_factor must be in"):
+        solar_cell_max_power(
+            open_circuit_voltage=_q("0.68 V"), short_circuit_current=_q("9.5 A"), fill_factor=1.5
+        )
+    with pytest.raises(ValueError, match="irradiance must be a"):
+        solar_cell_efficiency(
+            max_power=p, irradiance=_q("1000 W"), cell_area=Quantity(magnitude=0.02, unit="m**2")
+        )
+
+
 def test_waveguide_cutoff_guide_wavelength_and_phase_velocity():
     from anvilate.analysis import (
         rectangular_waveguide_cutoff_frequency,

@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_solar_cell_iv_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "solar_cell_iv.py"))
+    d = namespace["grade_cell"]()
+    # Mono cell: FF ~0.785, P_max ~5.07 W, efficiency ~20.8%.
+    assert d["fill_factor"] == pytest.approx(0.7853, abs=0.001)
+    assert d["max_power_w"] == pytest.approx(5.073, abs=0.01)
+    assert d["efficiency_percent"] == pytest.approx(20.85, abs=0.1)
+
+
 def test_wr90_waveguide_example():
     namespace = runpy.run_path(str(_EXAMPLES / "wr90_waveguide.py"))
     d = namespace["wr90_dispersion"]()

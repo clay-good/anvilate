@@ -274,6 +274,9 @@ modules:
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, the runtime
   a given bank delivers, and the round-trip efficiency and the delivered energy
   it yields (E_out = E_stored·η)
+- :mod:`~anvilate.analysis.solar_cell` — photovoltaic cell I-V characterization: the fill factor
+  FF = (V_mp·I_mp)/(V_oc·I_sc), the maximum power P_max = FF·V_oc·I_sc, and the conversion
+  efficiency η = P_max/(G·A) — the cell-level metrics behind the array power of solar_pv
 - :mod:`~anvilate.analysis.solar_pv` — photovoltaic array sizing: a module's power
   (P = G·A·η), the daily energy an array yields (E = P·PSH·D), the array rating
   a daily load needs, and the cell-temperature (NOCT) and its power derating
@@ -1902,6 +1905,11 @@ from .snapfit import (
     snap_fit_permissible_deflection,
     snap_fit_strain,
 )
+from .solar_cell import (
+    fill_factor,
+    solar_cell_efficiency,
+    solar_cell_max_power,
+)
 from .solar_pv import (
     pv_array_power,
     pv_array_size_for_load,
@@ -2394,6 +2402,9 @@ __all__ = [
     "extrusion_ratio",
     "extrusion_pressure",
     "extrusion_force",
+    "fill_factor",
+    "solar_cell_max_power",
+    "solar_cell_efficiency",
     "pv_array_power",
     "pv_daily_energy",
     "pv_array_size_for_load",
