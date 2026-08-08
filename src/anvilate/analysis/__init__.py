@@ -40,6 +40,9 @@ modules:
 - :mod:`~anvilate.analysis.arrhenius` — thermally-activated reaction rates: the rate constant
   k = A·e^(−Ea/RT), the acceleration factor k2/k1 = e^((Ea/R)(1/T1−1/T2)) between two temperatures
   (accelerated life testing), and the activation energy Ea extracted from two measured rates
+- :mod:`~anvilate.analysis.atmosphere` — barometric (isothermal-atmosphere) law: the pressure
+  p = p0·exp(−h/H) that decays exponentially with altitude, the scale height H = R·T/(M·g)
+  (~8.4 km for air), and the altimeter inverse h = H·ln(p0/p) recovering altitude from pressure
 - :mod:`~anvilate.analysis.axial` — direct axial stress, section area, the
   minimum area an axial load requires, and the axial elongation and stiffness
 - :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
@@ -774,6 +777,11 @@ from .arrhenius import (
     arrhenius_activation_energy,
     arrhenius_rate_constant,
     arrhenius_rate_ratio,
+)
+from .atmosphere import (
+    barometric_altitude,
+    barometric_pressure,
+    scale_height,
 )
 from .axial import (
     axial_elongation,
@@ -2574,6 +2582,9 @@ __all__ = [
     "arrhenius_rate_constant",
     "arrhenius_rate_ratio",
     "arrhenius_activation_energy",
+    "barometric_altitude",
+    "barometric_pressure",
+    "scale_height",
     "CompactnessClass",
     "classify_flexural_element",
     "flexural_flange_slenderness_limits",

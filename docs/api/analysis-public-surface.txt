@@ -39,6 +39,9 @@ antenna.received_power
 arrhenius.arrhenius_activation_energy
 arrhenius.arrhenius_rate_constant
 arrhenius.arrhenius_rate_ratio
+atmosphere.barometric_altitude
+atmosphere.barometric_pressure
+atmosphere.scale_height
 compressible_flow.choked_mass_flow_rate
 compressible_flow.critical_pressure_ratio
 compressible_flow.isentropic_area_ratio

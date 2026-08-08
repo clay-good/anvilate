@@ -22334,6 +22334,77 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_barometric_pressure_scale_height_and_altitude_inverse():
+    from math import exp, log
+
+    from anvilate.analysis import (
+        barometric_altitude,
+        barometric_pressure,
+        scale_height,
+    )
+
+    R = 8.314462618
+    g = 9.80665
+    M = 0.0289647  # dry air
+
+    # Scale height H = R*T/(M*g); air at 288.15 K is about 8.43 km.
+    h_scale = scale_height(temperature=Quantity(magnitude=288.15, unit="K"))
+    expected_h = R * 288.15 / (M * g)
+    assert h_scale.to("m").magnitude == pytest.approx(expected_h, rel=1e-9)
+    assert h_scale.to("m").magnitude == pytest.approx(8434.6, abs=1.0)
+
+    # Barometric pressure p = p0*exp(-h/H); at 2000 m over a 101325 Pa datum, ~79935 Pa.
+    p0 = Quantity(magnitude=101325.0, unit="Pa")
+    p = barometric_pressure(
+        sea_level_pressure=p0,
+        altitude=Quantity(magnitude=2000.0, unit="m"),
+        temperature=Quantity(magnitude=288.15, unit="K"),
+    )
+    assert p.to("Pa").magnitude == pytest.approx(101325.0 * exp(-2000.0 / expected_h), rel=1e-9)
+    assert p.to("Pa").magnitude == pytest.approx(79935.0, abs=1.0)
+    # At the datum (h = 0) the pressure is exactly the sea-level value.
+    p_datum = barometric_pressure(
+        sea_level_pressure=p0,
+        altitude=Quantity(magnitude=0.0, unit="m"),
+        temperature=Quantity(magnitude=288.15, unit="K"),
+    )
+    assert p_datum.to("Pa").magnitude == pytest.approx(101325.0, rel=1e-12)
+
+    # Altitude inverse h = H*ln(p0/p) round-trips the barometric pressure.
+    alt = barometric_altitude(
+        sea_level_pressure=p0,
+        pressure=p,
+        temperature=Quantity(magnitude=288.15, unit="K"),
+    )
+    assert alt.to("m").magnitude == pytest.approx(2000.0, rel=1e-9)
+    # And matches the closed form directly for a 90 kPa reading.
+    alt90 = barometric_altitude(
+        sea_level_pressure=p0,
+        pressure=Quantity(magnitude=90000.0, unit="Pa"),
+        temperature=Quantity(magnitude=288.15, unit="K"),
+    )
+    assert alt90.to("m").magnitude == pytest.approx(expected_h * log(101325.0 / 90000.0), rel=1e-9)
+
+    # A lighter gas (helium, ~0.004 kg/mol) makes a much taller atmosphere.
+    h_he = scale_height(
+        temperature=Quantity(magnitude=288.15, unit="K"),
+        molar_mass=Quantity(magnitude=0.004, unit="kg/mol"),
+    )
+    assert h_he.to("m").magnitude > h_scale.to("m").magnitude
+
+    # Guardrails: pressure cannot exceed the datum, and inputs must be positive/dimensioned.
+    with pytest.raises(ValueError, match="pressure must not exceed sea_level_pressure"):
+        barometric_altitude(
+            sea_level_pressure=p0,
+            pressure=Quantity(magnitude=110000.0, unit="Pa"),
+            temperature=Quantity(magnitude=288.15, unit="K"),
+        )
+    with pytest.raises(ValueError, match="temperature must be positive"):
+        scale_height(temperature=Quantity(magnitude=-5.0, unit="K"))
+    with pytest.raises(ValueError, match="temperature must be a"):
+        scale_height(temperature=Quantity(magnitude=288.15, unit="Pa"))
+
+
 def test_dc_dc_converter_buck_boost_and_buck_boost_topologies():
     from anvilate.analysis import (
         boost_output_voltage,

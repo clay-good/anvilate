@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_barometric_altimeter_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "barometric_altimeter.py"))
+    d = namespace["altimeter_readings"]()
+    # Air at 15 degC: scale height ~8.43 km, ~79935 Pa at 2 km, ~1000 m for 90 kPa.
+    assert d["scale_height_km"] == pytest.approx(8.4346, abs=0.001)
+    assert d["pressure_at_2km_pa"] == pytest.approx(79935.0, abs=1.0)
+    assert d["altitude_for_90kpa_m"] == pytest.approx(999.9, abs=1.0)
+
+
 def test_supersonic_expansion_fan_example():
     namespace = runpy.run_path(str(_EXAMPLES / "supersonic_expansion_fan.py"))
     d = namespace["expansion_fan_angles"]()
