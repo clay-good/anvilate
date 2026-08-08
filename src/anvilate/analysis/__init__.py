@@ -444,6 +444,9 @@ modules:
 - :mod:`~anvilate.analysis.photon` — photon (Planck) quanta: the photon energy E = h·c/λ, the
   wavelength matching an energy λ = h·c/E (e.g. a semiconductor band gap), and the photon flux
   Φ = P·λ/(h·c) a beam of a given optical power delivers — for detectors, solar cells, and LEDs
+- :mod:`~anvilate.analysis.radiation_pressure` — light momentum and radiation pressure: the photon
+  momentum p = h/λ, the radiation pressure P = (1+R)·I/c on a surface of reflectivity R, and the
+  radiation force (1+R)·I·A/c that drives a solar sail
 - :mod:`~anvilate.analysis.spectroscopy` — Beer-Lambert absorption: the absorbance A = ε·c·l, the
   transmittance T = 10^(−A) a sample passes, and the concentration a measured absorbance implies
   c = A/(ε·l) — the working equation of UV-Vis colorimetry
@@ -1939,6 +1942,11 @@ from .radar import (
     radar_received_power,
     radial_velocity_from_doppler,
 )
+from .radiation_pressure import (
+    photon_momentum,
+    radiation_force,
+    radiation_pressure,
+)
 from .radiation_shielding import (
     half_value_layer,
     radiation_transmission_fraction,
@@ -2953,6 +2961,9 @@ __all__ = [
     "decay_constant_from_half_life",
     "remaining_activity",
     "time_for_activity_decay",
+    "photon_momentum",
+    "radiation_pressure",
+    "radiation_force",
     "radiation_transmission_fraction",
     "half_value_layer",
     "shield_thickness_for_transmission",

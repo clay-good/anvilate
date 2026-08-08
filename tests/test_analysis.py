@@ -22334,6 +22334,48 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_photon_momentum_radiation_pressure_and_force():
+    from anvilate.analysis import (
+        photon_momentum,
+        radiation_force,
+        radiation_pressure,
+    )
+
+    c = 299792458.0
+    h = 6.62607015e-34
+
+    # Photon momentum p = h/lambda; 500 nm -> ~1.325e-27 kg m/s.
+    p = photon_momentum(wavelength=Quantity(magnitude=500e-9, unit="m"))
+    assert p.to("kg*m/s").magnitude == pytest.approx(h / 500e-9, rel=1e-9)
+    assert p.to("kg*m/s").magnitude == pytest.approx(1.3252e-27, abs=1e-31)
+    # Shorter wavelength carries more momentum.
+    p_uv = photon_momentum(wavelength=Quantity(magnitude=250e-9, unit="m"))
+    assert p_uv.to("kg*m/s").magnitude == pytest.approx(2.0 * p.to("kg*m/s").magnitude, rel=1e-9)
+
+    # Radiation pressure P = (1+R)*I/c; absorber ~4.54 uPa, mirror ~9.08 uPa.
+    i = _q("1361 W/m**2")
+    p_absorb = radiation_pressure(intensity=i, reflectivity=0.0)
+    assert p_absorb.to("Pa").magnitude == pytest.approx(1361.0 / c, rel=1e-9)
+    assert p_absorb.to("Pa").magnitude * 1e6 == pytest.approx(4.540, abs=0.01)
+    p_mirror = radiation_pressure(intensity=i, reflectivity=1.0)
+    assert p_mirror.to("Pa").magnitude == pytest.approx(2.0 * p_absorb.to("Pa").magnitude, rel=1e-9)
+
+    # Radiation force F = (1+R)*I*A/c; 100 m^2 mirror -> ~0.908 mN.
+    f = radiation_force(intensity=i, area=Quantity(magnitude=100.0, unit="m**2"), reflectivity=1.0)
+    assert f.to("N").magnitude == pytest.approx(2.0 * 1361.0 * 100.0 / c, rel=1e-9)
+    assert f.to("N").magnitude * 1e3 == pytest.approx(0.9080, abs=0.001)
+    # Force is pressure times area.
+    assert f.to("N").magnitude == pytest.approx(p_mirror.to("Pa").magnitude * 100.0, rel=1e-9)
+
+    # Guardrails: reflectivity in [0, 1], positive wavelength/area.
+    with pytest.raises(ValueError, match="reflectivity must be in"):
+        radiation_pressure(intensity=i, reflectivity=1.5)
+    with pytest.raises(ValueError, match="wavelength must be positive"):
+        photon_momentum(wavelength=_q("0 m"))
+    with pytest.raises(ValueError, match="intensity must be a"):
+        radiation_force(intensity=_q("1361 W"), area=Quantity(magnitude=100.0, unit="m**2"))
+
+
 def test_rocket_characteristic_velocity_and_thrust_coefficient():
     from anvilate.analysis import (
         characteristic_velocity,

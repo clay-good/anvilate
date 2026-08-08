@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_solar_sail_thrust_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "solar_sail_thrust.py"))
+    d = namespace["solar_sail_thrust"]()
+    # Solar constant, 500 nm, 100 m^2 mirror: ~1.3e-27 kg m/s, ~9.08 uPa, ~0.908 mN.
+    assert d["photon_momentum_kg_m_s"] == pytest.approx(1.3252e-27, abs=1e-31)
+    assert d["radiation_pressure_upa"] == pytest.approx(9.080, abs=0.01)
+    assert d["sail_force_mn"] == pytest.approx(0.9080, abs=0.001)
+
+
 def test_rocket_engine_performance_example():
     namespace = runpy.run_path(str(_EXAMPLES / "rocket_engine_performance.py"))
     d = namespace["engine_performance"]()

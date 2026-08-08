@@ -809,6 +809,9 @@ radar.radial_velocity_from_doppler
 radar.max_unambiguous_range
 radar.radar_received_power
 radar.radar_max_range
+radiation_pressure.photon_momentum
+radiation_pressure.radiation_pressure
+radiation_pressure.radiation_force
 radiation_shielding.half_value_layer
 radiation_shielding.radiation_transmission_fraction
 radiation_shielding.shield_thickness_for_transmission
