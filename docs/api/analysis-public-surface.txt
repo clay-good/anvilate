@@ -100,6 +100,9 @@ geotechnical.seepage_velocity
 geotechnical.tension_crack_depth
 geotechnical.terzaghi_bearing_capacity
 geotechnical.vertical_stress_increase_2to1
+governor.watt_governor_height
+governor.watt_governor_speed
+governor.porter_governor_height
 masonry.masonry_allowable_axial_stress
 masonry.masonry_allowable_flexural_stress
 masonry.masonry_column_axial_capacity

@@ -22334,6 +22334,63 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_watt_and_porter_governor_height_and_speed():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        porter_governor_height,
+        watt_governor_height,
+        watt_governor_speed,
+    )
+
+    g = 9.80665
+
+    # Watt height h = g/omega^2; 10 rad/s -> ~98.1 mm.
+    h = watt_governor_height(angular_speed=Quantity(magnitude=10.0, unit="rad/s"))
+    assert h.to("m").magnitude == pytest.approx(g / 100.0, rel=1e-9)
+    assert h.to("m").magnitude * 1000.0 == pytest.approx(98.07, abs=0.02)
+    # Height falls with the square of speed: double the speed, quarter the height.
+    h2 = watt_governor_height(angular_speed=Quantity(magnitude=20.0, unit="rad/s"))
+    assert h2.to("m").magnitude == pytest.approx(h.to("m").magnitude / 4.0, rel=1e-9)
+
+    # Speed inverse omega = sqrt(g/h) round-trips the Watt height.
+    speed = watt_governor_speed(height=h)
+    assert speed.to("rad/s").magnitude == pytest.approx(10.0, rel=1e-9)
+    assert speed.to("rad/s").magnitude == pytest.approx(sqrt(g / h.to("m").magnitude), rel=1e-9)
+
+    # Genuine angular conversion: an rpm input converts through 2*pi (not treated as rev-count).
+    h_rpm = watt_governor_height(angular_speed=Quantity(magnitude=300.0, unit="rpm"))
+    omega_rpm = 300.0 * 2 * 3.141592653589793 / 60.0
+    assert h_rpm.to("m").magnitude == pytest.approx(g / omega_rpm**2, rel=1e-6)
+
+    # Porter height = (g/omega^2)*(m+M)/m; a 5 kg load on 1 kg balls lifts it 6x.
+    porter = porter_governor_height(
+        angular_speed=Quantity(magnitude=10.0, unit="rad/s"),
+        ball_mass=_q("1 kg"),
+        central_load=_q("5 kg"),
+    )
+    assert porter.to("m").magnitude == pytest.approx((g / 100.0) * 6.0, rel=1e-9)
+    # With no central load the Porter governor reduces to the Watt case.
+    porter0 = porter_governor_height(
+        angular_speed=Quantity(magnitude=10.0, unit="rad/s"),
+        ball_mass=_q("1 kg"),
+        central_load=_q("0 kg"),
+    )
+    assert porter0.to("m").magnitude == pytest.approx(h.to("m").magnitude, rel=1e-9)
+
+    # Guardrails: positive speed, ball mass, dimensioned height.
+    with pytest.raises(ValueError, match="angular_speed must be positive"):
+        watt_governor_height(angular_speed=Quantity(magnitude=0.0, unit="rad/s"))
+    with pytest.raises(ValueError, match="ball_mass must be positive"):
+        porter_governor_height(
+            angular_speed=Quantity(magnitude=10.0, unit="rad/s"),
+            ball_mass=_q("0 kg"),
+            central_load=_q("5 kg"),
+        )
+    with pytest.raises(ValueError, match="height must be a"):
+        watt_governor_speed(height=_q("5 s"))
+
+
 def test_radar_range_equation_received_power_and_unambiguous_range():
     from math import pi
 

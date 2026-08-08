@@ -467,6 +467,9 @@ modules:
   spinning disc's peak centre stress and its full radial/tangential stress
   distribution at any radius, and the annular (bored) disc's bore stress and full
   radial/tangential distribution
+- :mod:`~anvilate.analysis.governor` — centrifugal (flyball) governor: the Watt height h = g/ω²
+  that sets an engine speed, the running speed ω = √(g/h) a measured height implies, and the Porter
+  height h = (g/ω²)·(m+M)/m that a central load raises
 - :mod:`~anvilate.analysis.gear` — spur-gear transmitted/radial/normal tooth loads,
   bevel-gear radial/axial (thrust) resolution about the pitch cone, helical-gear
   axial thrust, radial load, and virtual tooth number, pitch-line
@@ -1555,6 +1558,11 @@ from .geotechnical import (
     terzaghi_bearing_capacity,
     vertical_stress_increase_2to1,
 )
+from .governor import (
+    porter_governor_height,
+    watt_governor_height,
+    watt_governor_speed,
+)
 from .grinding import (
     grinding_equivalent_chip_thickness,
     grinding_specific_energy,
@@ -2423,6 +2431,9 @@ __all__ = [
     "tension_crack_depth",
     "terzaghi_bearing_capacity",
     "vertical_stress_increase_2to1",
+    "watt_governor_height",
+    "watt_governor_speed",
+    "porter_governor_height",
     "circular_channel_properties",
     "critical_depth_rectangular",
     "froude_number",

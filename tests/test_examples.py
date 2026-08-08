@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_flyball_governor_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "flyball_governor.py"))
+    d = namespace["governor_operating_point"]()
+    # 10 rad/s: ~98 mm Watt height, 10 rad/s back, ~588 mm Porter with 5 kg load.
+    assert d["watt_height_mm"] == pytest.approx(98.07, abs=0.02)
+    assert d["speed_from_height_rad_s"] == pytest.approx(10.0, rel=1e-9)
+    assert d["porter_height_mm"] == pytest.approx(588.4, abs=0.1)
+
+
 def test_radar_range_budget_example():
     namespace = runpy.run_path(str(_EXAMPLES / "radar_range_budget.py"))
     d = namespace["radar_range_budget"]()
