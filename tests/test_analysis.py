@@ -22334,6 +22334,46 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_npv_benefit_cost_ratio_and_depreciation():
+    from anvilate.analysis import (
+        annuity_present_value,
+        benefit_cost_ratio,
+        net_present_value,
+        straight_line_depreciation,
+    )
+
+    # NPV = sum(CFt/(1+i)^t); -50000 then 15000*5 at 10% -> ~$6861.80.
+    cash_flows = [-50000.0] + [15000.0] * 5
+    npv = net_present_value(cash_flows=cash_flows, rate=0.10)
+    assert npv == pytest.approx(sum(cf / 1.10**t for t, cf in enumerate(cash_flows)), rel=1e-12)
+    assert npv == pytest.approx(6861.80, abs=0.01)
+    # NPV equals -cost + PV of the benefit annuity.
+    pv_ben = annuity_present_value(payment=15000.0, rate=0.10, periods=5)
+    assert npv == pytest.approx(-50000.0 + pv_ben, rel=1e-9)
+    # A higher discount rate lowers the NPV.
+    npv_high = net_present_value(cash_flows=cash_flows, rate=0.20)
+    assert npv_high < npv
+
+    # Benefit-cost ratio = PV(benefits)/PV(costs); >1 means the project pays.
+    bcr = benefit_cost_ratio(present_value_benefits=pv_ben, present_value_costs=50000.0)
+    assert bcr == pytest.approx(pv_ben / 50000.0, rel=1e-12)
+    assert bcr == pytest.approx(1.1372, abs=0.001)
+    assert bcr > 1.0
+
+    # Straight-line depreciation D = (C-S)/n; $60000, $10000 salvage, 10 yr -> $5000/yr.
+    dep = straight_line_depreciation(initial_cost=60000.0, salvage_value=10000.0, useful_life=10)
+    assert dep == pytest.approx((60000.0 - 10000.0) / 10.0, rel=1e-12)
+    assert dep == pytest.approx(5000.0, rel=1e-9)
+
+    # Guardrails: non-empty cash flows, positive costs/life, salvage below cost.
+    with pytest.raises(ValueError, match="cash_flows must contain at least one"):
+        net_present_value(cash_flows=[], rate=0.1)
+    with pytest.raises(ValueError, match="present_value_costs must be positive"):
+        benefit_cost_ratio(present_value_benefits=100.0, present_value_costs=0.0)
+    with pytest.raises(ValueError, match="salvage_value must not exceed initial_cost"):
+        straight_line_depreciation(initial_cost=10000.0, salvage_value=12000.0, useful_life=5)
+
+
 def test_annuity_future_value_loan_payment_and_payback():
     from anvilate.analysis import (
         annuity_future_value,

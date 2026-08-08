@@ -462,6 +462,9 @@ engineering_economics.annuity_present_value
 engineering_economics.annuity_future_value
 engineering_economics.loan_payment
 engineering_economics.simple_payback_period
+engineering_economics.net_present_value
+engineering_economics.benefit_cost_ratio
+engineering_economics.straight_line_depreciation
 extrusion.extrusion_ratio
 extrusion.extrusion_pressure
 extrusion.extrusion_force

@@ -16,13 +16,18 @@ periods is a count.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 __all__ = [
     "annuity_future_value",
     "annuity_present_value",
+    "benefit_cost_ratio",
     "future_value",
     "loan_payment",
+    "net_present_value",
     "present_value",
     "simple_payback_period",
+    "straight_line_depreciation",
 ]
 
 
@@ -118,3 +123,52 @@ def simple_payback_period(*, initial_cost: float, annual_cash_flow: float) -> fl
     if annual_cash_flow <= 0:
         raise ValueError("annual_cash_flow must be positive")
     return initial_cost / annual_cash_flow
+
+
+def net_present_value(*, cash_flows: Sequence[float], rate: float) -> float:
+    """The net present value, NPV = Σ CFₜ/(1+i)^t.
+
+    The present value of a whole project's cash-flow stream ``cash_flows`` (period 0 first, usually
+    the negative initial cost, then the returns), discounted at the per-period ``rate`` i (a
+    decimal): NPV = Σ CFₜ/(1+i)^t over t = 0…n. A positive NPV means the project earns more than the
+    discount rate — the standard accept/reject test. Returns the NPV as a plain float.
+    """
+    if len(cash_flows) == 0:
+        raise ValueError("cash_flows must contain at least one period")
+    if rate <= -1.0:
+        raise ValueError("rate must be greater than -1")
+    return sum(cf / (1.0 + rate) ** t for t, cf in enumerate(cash_flows))
+
+
+def benefit_cost_ratio(*, present_value_benefits: float, present_value_costs: float) -> float:
+    """The benefit-cost ratio, B/C = PV(benefits)/PV(costs).
+
+    The ratio of the present value of a project's benefits ``present_value_benefits`` to the present
+    value of its costs ``present_value_costs``: B/C = PV(benefits)/PV(costs). A ratio above 1 means
+    the discounted benefits outweigh the costs — the go/no-go test used in public-works appraisal.
+    Returns the ratio as a plain float.
+    """
+    if present_value_costs <= 0:
+        raise ValueError("present_value_costs must be positive")
+    if present_value_benefits < 0:
+        raise ValueError("present_value_benefits must be non-negative")
+    return present_value_benefits / present_value_costs
+
+
+def straight_line_depreciation(
+    *, initial_cost: float, salvage_value: float, useful_life: float
+) -> float:
+    """The straight-line depreciation, D = (C − S)/n.
+
+    The constant amount an asset loses in value each period under straight-line accounting, from the
+    ``initial_cost`` C, the ``salvage_value`` S at end of life, and the ``useful_life`` n periods:
+    D = (C − S)/n. It writes the depreciable base off evenly over the life. Returns the per-period
+    depreciation as a plain float.
+    """
+    if useful_life <= 0:
+        raise ValueError("useful_life must be positive")
+    if initial_cost < 0 or salvage_value < 0:
+        raise ValueError("costs must be non-negative")
+    if salvage_value > initial_cost:
+        raise ValueError("salvage_value must not exceed initial_cost")
+    return (initial_cost - salvage_value) / useful_life
