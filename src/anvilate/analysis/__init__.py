@@ -360,6 +360,9 @@ modules:
 - :mod:`~anvilate.analysis.spectroscopy` — Beer-Lambert absorption: the absorbance A = ε·c·l, the
   transmittance T = 10^(−A) a sample passes, and the concentration a measured absorbance implies
   c = A/(ε·l) — the working equation of UV-Vis colorimetry
+- :mod:`~anvilate.analysis.quantum` — photoelectric and matter-wave quanta: the photoelectron
+  energy KE = h·f − φ, the threshold frequency f0 = φ/h below which no electron escapes, and the
+  de Broglie wavelength λ = h/(m·v) behind electron-microscope resolution
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1676,6 +1679,11 @@ from .pump import (
     pump_specific_speed,
     pump_suction_specific_speed,
 )
+from .quantum import (
+    de_broglie_wavelength,
+    photoelectric_max_kinetic_energy,
+    photoelectric_threshold_frequency,
+)
 from .radiation_shielding import (
     half_value_layer,
     radiation_transmission_fraction,
@@ -2828,6 +2836,9 @@ __all__ = [
     "absorbance",
     "transmittance_from_absorbance",
     "concentration_from_absorbance",
+    "photoelectric_max_kinetic_energy",
+    "photoelectric_threshold_frequency",
+    "de_broglie_wavelength",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

@@ -20853,6 +20853,57 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_quantum_photoelectric_and_de_broglie():
+    from anvilate.analysis import (
+        de_broglie_wavelength,
+        photoelectric_max_kinetic_energy,
+        photoelectric_threshold_frequency,
+    )
+
+    h = 6.62607015e-34
+    eV = 1.602176634e-19
+
+    # KE_max = h*f - phi; 1e15 Hz on a 2 eV surface -> ~2.14 eV.
+    ke = photoelectric_max_kinetic_energy(
+        frequency=Quantity(magnitude=1e15, unit="Hz"), work_function=_q("2 eV")
+    )
+    assert ke.to("J").magnitude == pytest.approx(h * 1e15 - 2 * eV, rel=1e-9)
+    assert ke.to("eV").magnitude == pytest.approx(2.1357, abs=0.001)
+
+    # Threshold f0 = phi/h; below it, no photoemission (raises).
+    f0 = photoelectric_threshold_frequency(work_function=_q("2 eV"))
+    assert f0.to("Hz").magnitude == pytest.approx(2 * eV / h, rel=1e-9)
+    with pytest.raises(ValueError, match="below the threshold"):
+        photoelectric_max_kinetic_energy(
+            frequency=Quantity(magnitude=1e14, unit="Hz"), work_function=_q("2 eV")
+        )
+    # A photon exactly at threshold has zero surplus, which also raises (no net emission).
+    with pytest.raises(ValueError, match="below the threshold"):
+        photoelectric_max_kinetic_energy(frequency=f0, work_function=_q("2 eV"))
+
+    # de Broglie lambda = h/(m*v); a 1e6 m/s electron -> ~0.73 nm.
+    lam = de_broglie_wavelength(
+        mass=Quantity(magnitude=9.1093837015e-31, unit="kg"), velocity=_q("1e6 m/s")
+    )
+    assert lam.to("m").magnitude == pytest.approx(h / (9.1093837015e-31 * 1e6), rel=1e-9)
+    assert lam.to("nm").magnitude == pytest.approx(0.7274, abs=0.001)
+    # Faster particle -> shorter wavelength (inverse in speed).
+    lam2 = de_broglie_wavelength(
+        mass=Quantity(magnitude=9.1093837015e-31, unit="kg"), velocity=_q("2e6 m/s")
+    )
+    assert lam2.to("m").magnitude == pytest.approx(lam.to("m").magnitude / 2, rel=1e-9)
+
+    # Guardrails: positive work function/mass/velocity, dimensions checked.
+    with pytest.raises(ValueError, match="work_function must be positive"):
+        photoelectric_threshold_frequency(work_function=_q("0 eV"))
+    with pytest.raises(ValueError, match="velocity must be positive"):
+        de_broglie_wavelength(
+            mass=Quantity(magnitude=9.1093837015e-31, unit="kg"), velocity=_q("0 m/s")
+        )
+    with pytest.raises(ValueError, match="work_function must be a"):
+        photoelectric_threshold_frequency(work_function=_q("2 V"))
+
+
 def test_hagen_poiseuille_flow_pressure_and_radius_inverses():
     from math import pi
 

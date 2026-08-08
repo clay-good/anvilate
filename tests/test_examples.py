@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_photocathode_electron_wavelength_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "photocathode_and_electron_wavelength.py"))
+    d = namespace["quantum_instruments"]()
+    # 2 eV work function: threshold ~484 THz; 1e15 Hz -> 2.14 eV; 1e6 m/s electron -> 0.73 nm.
+    assert d["threshold_frequency_thz"] == pytest.approx(483.6, abs=0.5)
+    assert d["photoelectron_energy_ev"] == pytest.approx(2.1357, abs=0.001)
+    assert d["electron_wavelength_nm"] == pytest.approx(0.7274, abs=0.001)
+
+
 def test_microchannel_laminar_flow_example_flow_pressure_radius():
     namespace = runpy.run_path(str(_EXAMPLES / "microchannel_laminar_flow.py"))
     d = namespace["size_microchannel"]()
