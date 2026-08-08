@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_generator_induction_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "generator_induction.py"))
+    d = namespace["induction_voltages"]()
+    # 1.0 V motional, 10 V Faraday, 100 V self-induced.
+    assert d["motional_emf_v"] == pytest.approx(1.0, rel=1e-9)
+    assert d["faraday_emf_v"] == pytest.approx(10.0, rel=1e-9)
+    assert d["self_induced_emf_v"] == pytest.approx(100.0, rel=1e-9)
+
+
 def test_point_charge_field_example():
     namespace = runpy.run_path(str(_EXAMPLES / "point_charge_field.py"))
     d = namespace["point_charge_electrostatics"]()

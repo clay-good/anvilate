@@ -275,6 +275,9 @@ modules:
   (the AIC rating downstream gear must interrupt), the ideal-transformer voltage/current/
   impedance transformation (V_s = V_p/n, I_s = I_p·n, Z_p = n²·Z_s), the Dwight earthing
   resistance of a driven ground rod and of rods in parallel, and the AC skin depth √(ρ/(π·f·μ))
+- :mod:`~anvilate.analysis.electromagnetic_induction` — Faraday induction: the motional EMF = B·L·v
+  of a moving conductor, the Faraday EMF = N·ΔΦ/Δt from a changing flux, and the self-induced
+  back-EMF = L·ΔI/Δt that opposes a current change
 - :mod:`~anvilate.analysis.reactive_circuit` — reactive components: the energy a
   capacitor (½·C·V²) and an inductor (½·L·I²) store, the RC/RL first-order time
   constants and the RC filter cutoff f_c = 1/(2π·R·C), and the LC resonant frequency
@@ -1359,6 +1362,11 @@ from .electrical import (
     transformer_secondary_voltage,
     voltage_drop_single_phase,
     voltage_drop_three_phase,
+)
+from .electromagnetic_induction import (
+    faraday_induced_emf,
+    motional_emf,
+    self_induced_emf,
 )
 from .electroplating import (
     electroplating_deposition_thickness,
@@ -2687,6 +2695,9 @@ __all__ = [
     "parallel_ground_electrodes_resistance",
     "voltage_drop_single_phase",
     "voltage_drop_three_phase",
+    "motional_emf",
+    "faraday_induced_emf",
+    "self_induced_emf",
     "electroplating_mass_deposited",
     "electroplating_deposition_thickness",
     "electroplating_time_for_thickness",

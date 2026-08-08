@@ -22334,6 +22334,69 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_motional_faraday_and_self_induced_emf():
+    from anvilate.analysis import (
+        faraday_induced_emf,
+        motional_emf,
+        self_induced_emf,
+    )
+
+    # Motional EMF = B*L*v; 0.5 T, 0.2 m, 10 m/s -> 1.0 V.
+    e_m = motional_emf(
+        magnetic_flux_density=Quantity(magnitude=0.5, unit="T"),
+        conductor_length=Quantity(magnitude=0.2, unit="m"),
+        velocity=Quantity(magnitude=10.0, unit="m/s"),
+    )
+    assert e_m.to("V").magnitude == pytest.approx(0.5 * 0.2 * 10.0, rel=1e-9)
+    assert e_m.to("V").magnitude == pytest.approx(1.0, rel=1e-9)
+    # Faster motion induces proportionally more voltage.
+    e_m2 = motional_emf(
+        magnetic_flux_density=Quantity(magnitude=0.5, unit="T"),
+        conductor_length=Quantity(magnitude=0.2, unit="m"),
+        velocity=Quantity(magnitude=20.0, unit="m/s"),
+    )
+    assert e_m2.to("V").magnitude == pytest.approx(2.0, rel=1e-9)
+
+    # Faraday EMF = N*dPhi/dt; 100 turns, 0.01 Wb, 0.1 s -> 10 V.
+    e_f = faraday_induced_emf(
+        turns=100.0,
+        flux_change=Quantity(magnitude=0.01, unit="Wb"),
+        time_interval=Quantity(magnitude=0.1, unit="s"),
+    )
+    assert e_f.to("V").magnitude == pytest.approx(100.0 * 0.01 / 0.1, rel=1e-9)
+    assert e_f.to("V").magnitude == pytest.approx(10.0, rel=1e-9)
+    # Magnitude is returned even for a decreasing flux.
+    e_f_neg = faraday_induced_emf(
+        turns=100.0,
+        flux_change=Quantity(magnitude=-0.01, unit="Wb"),
+        time_interval=Quantity(magnitude=0.1, unit="s"),
+    )
+    assert e_f_neg.to("V").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    # Self-induced back-EMF = L*dI/dt; 0.5 H, 2 A, 10 ms -> 100 V.
+    e_l = self_induced_emf(
+        inductance=Quantity(magnitude=0.5, unit="H"),
+        current_change=Quantity(magnitude=2.0, unit="A"),
+        time_interval=Quantity(magnitude=0.01, unit="s"),
+    )
+    assert e_l.to("V").magnitude == pytest.approx(0.5 * 2.0 / 0.01, rel=1e-9)
+    assert e_l.to("V").magnitude == pytest.approx(100.0, rel=1e-9)
+
+    # Guardrails: positive length/turns/inductance, dimensioned inputs.
+    with pytest.raises(ValueError, match="turns must be positive"):
+        faraday_induced_emf(
+            turns=0.0,
+            flux_change=Quantity(magnitude=0.01, unit="Wb"),
+            time_interval=Quantity(magnitude=0.1, unit="s"),
+        )
+    with pytest.raises(ValueError, match="inductance must be a"):
+        self_induced_emf(
+            inductance=Quantity(magnitude=0.5, unit="H*m"),
+            current_change=Quantity(magnitude=2.0, unit="A"),
+            time_interval=Quantity(magnitude=0.01, unit="s"),
+        )
+
+
 def test_coulomb_force_field_and_potential():
     from anvilate.analysis import (
         coulomb_force,
