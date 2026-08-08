@@ -22334,6 +22334,71 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_ideal_gas_law_pressure_volume_and_moles():
+    from anvilate.analysis import (
+        ideal_gas_moles,
+        ideal_gas_pressure,
+        ideal_gas_volume,
+    )
+
+    R = 8.314462618
+
+    # P = nRT/V; 1 mol in 22.4 L at 273.15 K -> ~101.4 kPa (about one atmosphere).
+    p = ideal_gas_pressure(
+        amount=_q("1 mol"),
+        volume=Quantity(magnitude=0.0224, unit="m**3"),
+        temperature=Quantity(magnitude=273.15, unit="K"),
+    )
+    assert p.to("Pa").magnitude == pytest.approx(1.0 * R * 273.15 / 0.0224, rel=1e-9)
+    assert p.to("Pa").magnitude == pytest.approx(101388.0, abs=5.0)
+
+    # V = nRT/P; 2 mol at 200 kPa, 300 K -> ~0.0249 m^3.
+    v = ideal_gas_volume(
+        amount=_q("2 mol"),
+        pressure=Quantity(magnitude=200000.0, unit="Pa"),
+        temperature=Quantity(magnitude=300.0, unit="K"),
+    )
+    assert v.to("m**3").magnitude == pytest.approx(2.0 * R * 300.0 / 200000.0, rel=1e-9)
+
+    # n = PV/(RT); the moles inverse round-trips the pressure calculation.
+    n = ideal_gas_moles(
+        pressure=p,
+        volume=Quantity(magnitude=0.0224, unit="m**3"),
+        temperature=Quantity(magnitude=273.15, unit="K"),
+    )
+    assert n.to("mol").magnitude == pytest.approx(1.0, rel=1e-9)
+    # 50 L cylinder at 20 MPa, 15 C holds ~417 mol.
+    n_cyl = ideal_gas_moles(
+        pressure=Quantity(magnitude=20e6, unit="Pa"),
+        volume=Quantity(magnitude=0.05, unit="m**3"),
+        temperature=Quantity(magnitude=288.15, unit="K"),
+    )
+    assert n_cyl.to("mol").magnitude == pytest.approx(20e6 * 0.05 / (R * 288.15), rel=1e-9)
+    assert n_cyl.to("mol").magnitude == pytest.approx(417.4, abs=0.5)
+
+    # Doubling temperature at fixed n and V doubles the pressure (Gay-Lussac).
+    p2 = ideal_gas_pressure(
+        amount=_q("1 mol"),
+        volume=Quantity(magnitude=0.0224, unit="m**3"),
+        temperature=Quantity(magnitude=546.30, unit="K"),
+    )
+    assert p2.to("Pa").magnitude == pytest.approx(2.0 * p.to("Pa").magnitude, rel=1e-9)
+
+    # Guardrails: absolute temperature, positive amount, correct dimensions.
+    with pytest.raises(ValueError, match="temperature must be positive"):
+        ideal_gas_pressure(
+            amount=_q("1 mol"),
+            volume=Quantity(magnitude=0.0224, unit="m**3"),
+            temperature=Quantity(magnitude=-5.0, unit="K"),
+        )
+    with pytest.raises(ValueError, match="amount must be a"):
+        ideal_gas_pressure(
+            amount=_q("1 kg"),
+            volume=Quantity(magnitude=0.0224, unit="m**3"),
+            temperature=Quantity(magnitude=273.15, unit="K"),
+        )
+
+
 def test_sensible_latent_heat_and_mixing_temperature():
     from anvilate.analysis import (
         latent_heat,

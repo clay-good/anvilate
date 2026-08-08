@@ -207,6 +207,9 @@ modules:
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
   and power of a multi-stage machine
+- :mod:`~anvilate.analysis.ideal_gas` — the ideal gas law PV = nRT solved for each variable: the
+  pressure nRT/V, the volume nRT/P, and the amount PV/(RT) a cylinder holds (moles form, distinct
+  from gas_compression's mass-density ρ = PM/RT)
 - :mod:`~anvilate.analysis.kinetic_theory` — kinetic theory of gases: the rms molecular speed
   √(3RT/M), the mean molecular speed √(8RT/(πM)), and the mean free path k·T/(√2·π·d²·P)
   between collisions — the molecular picture behind effusion, diffusion, and rarefied flow
@@ -1632,6 +1635,11 @@ from .hydro_power import (
     hydro_net_head,
     hydro_turbine_power,
 )
+from .ideal_gas import (
+    ideal_gas_moles,
+    ideal_gas_pressure,
+    ideal_gas_volume,
+)
 from .illumination import (
     lighting_power_density,
     lumen_method_illuminance,
@@ -2702,6 +2710,9 @@ __all__ = [
     "hydro_net_head",
     "hydro_turbine_power",
     "hydro_flow_for_power",
+    "ideal_gas_pressure",
+    "ideal_gas_volume",
+    "ideal_gas_moles",
     "hydraulic_pump_flow_rate",
     "hydraulic_motor_torque",
     "hydraulic_motor_speed",

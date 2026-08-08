@@ -677,6 +677,9 @@ hydraulic_motor.hydraulic_motor_speed
 hydro_power.hydro_net_head
 hydro_power.hydro_turbine_power
 hydro_power.hydro_flow_for_power
+ideal_gas.ideal_gas_pressure
+ideal_gas.ideal_gas_volume
+ideal_gas.ideal_gas_moles
 illumination.lighting_power_density
 illumination.lumen_method_illuminance
 illumination.lumen_method_luminaire_count

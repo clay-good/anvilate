@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_compressed_air_cylinder_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "compressed_air_cylinder.py"))
+    d = namespace["cylinder_gas_state"]()
+    # 1 mol/22.4 L/0 C ~101 kPa; 2 mol/200 kPa/300 K ~24.9 L; 50 L/20 MPa/15 C ~417 mol.
+    assert d["confined_pressure_kpa"] == pytest.approx(101.39, abs=0.05)
+    assert d["released_volume_l"] == pytest.approx(24.94, abs=0.05)
+    assert d["cylinder_moles"] == pytest.approx(417.4, abs=0.5)
+
+
 def test_ice_water_calorimetry_example():
     namespace = runpy.run_path(str(_EXAMPLES / "ice_water_calorimetry.py"))
     d = namespace["calorimetry_quantities"]()
