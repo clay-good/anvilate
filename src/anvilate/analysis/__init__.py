@@ -202,6 +202,9 @@ modules:
   the pump flow Q = D·N·η_v a displacement delivers, the motor torque T = D·Δp/(2π)·η_m
   a pressure drop produces, and the motor speed N = Q·η_v/D a supply flow drives — the
   rotary complement of hydraulic_cylinder, distinct from the centrifugal pump module
+- :mod:`~anvilate.analysis.hydraulic_press` — Pascal hydraulic press (the fluid lever): the
+  transmitted pressure F_in/A_in, the multiplied output force F_in·(A_out/A_in), and the input
+  stroke s_out·(A_out/A_in) — force gained, stroke paid, work conserved
 - :mod:`~anvilate.analysis.pneumatics` — compressed-air systems: the receiver hold-up
   time V·Δp/(Q·p_atm) and the receiver volume a required hold-up needs
 - :mod:`~anvilate.analysis.polarization` — light polarization (Malus's law): the transmitted
@@ -1703,6 +1706,11 @@ from .hydraulic_motor import (
     hydraulic_motor_torque,
     hydraulic_pump_flow_rate,
 )
+from .hydraulic_press import (
+    hydraulic_press_input_stroke,
+    hydraulic_press_output_force,
+    hydraulic_press_transmitted_pressure,
+)
 from .hydro_power import (
     hydro_flow_for_power,
     hydro_net_head,
@@ -2836,6 +2844,9 @@ __all__ = [
     "hydraulic_pump_flow_rate",
     "hydraulic_motor_torque",
     "hydraulic_motor_speed",
+    "hydraulic_press_transmitted_pressure",
+    "hydraulic_press_output_force",
+    "hydraulic_press_input_stroke",
     "accumulator_size_for_volume",
     "accumulator_usable_volume",
     "inverse_square_attenuation",

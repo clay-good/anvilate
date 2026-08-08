@@ -22334,6 +22334,48 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_hydraulic_press_force_pressure_and_stroke():
+    from anvilate.analysis import (
+        hydraulic_press_input_stroke,
+        hydraulic_press_output_force,
+        hydraulic_press_transmitted_pressure,
+    )
+
+    a_in = Quantity(magnitude=0.001, unit="m**2")
+    a_out = Quantity(magnitude=0.01, unit="m**2")
+
+    # p = F_in/A_in; 100 N on 0.001 m^2 -> 100 kPa.
+    p = hydraulic_press_transmitted_pressure(input_force=_q("100 N"), input_piston_area=a_in)
+    assert p.to("Pa").magnitude == pytest.approx(100.0 / 0.001, rel=1e-12)
+    assert p.to("Pa").magnitude == pytest.approx(100000.0, rel=1e-9)
+
+    # F_out = F_in*(A_out/A_in); 10:1 area ratio -> 1000 N.
+    f = hydraulic_press_output_force(
+        input_force=_q("100 N"), input_piston_area=a_in, output_piston_area=a_out
+    )
+    assert f.to("N").magnitude == pytest.approx(100.0 * 0.01 / 0.001, rel=1e-12)
+    assert f.to("N").magnitude == pytest.approx(1000.0, rel=1e-9)
+    # The output force is also the transmitted pressure times the output area.
+    assert f.to("N").magnitude == pytest.approx(p.to("Pa").magnitude * 0.01, rel=1e-9)
+
+    # s_in = s_out*(A_out/A_in); to lift 0.05 m, input moves 0.5 m.
+    s = hydraulic_press_input_stroke(
+        output_stroke=_q("0.05 m"), input_piston_area=a_in, output_piston_area=a_out
+    )
+    assert s.to("m").magnitude == pytest.approx(0.05 * 0.01 / 0.001, rel=1e-12)
+    assert s.to("m").magnitude == pytest.approx(0.5, rel=1e-9)
+    # Work is conserved: F_in*s_in == F_out*s_out.
+    assert 100.0 * s.to("m").magnitude == pytest.approx(f.to("N").magnitude * 0.05, rel=1e-9)
+
+    # Guardrails: positive areas, non-negative force, correct dimensions.
+    with pytest.raises(ValueError, match="input_piston_area must be positive"):
+        hydraulic_press_transmitted_pressure(
+            input_force=_q("100 N"), input_piston_area=Quantity(magnitude=0.0, unit="m**2")
+        )
+    with pytest.raises(ValueError, match="input_force must be a"):
+        hydraulic_press_transmitted_pressure(input_force=_q("100 Pa"), input_piston_area=a_in)
+
+
 def test_coulomb_friction_force_repose_and_incline():
     from math import atan, cos, degrees, radians, sin
 

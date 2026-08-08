@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_hydraulic_press_lift_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_press_lift.py"))
+    d = namespace["press_performance"]()
+    # 100 kPa, 1000 N (10x), 0.5 m input stroke.
+    assert d["transmitted_pressure_kpa"] == pytest.approx(100.0, rel=1e-9)
+    assert d["output_force_n"] == pytest.approx(1000.0, rel=1e-9)
+    assert d["input_stroke_m"] == pytest.approx(0.5, rel=1e-9)
+
+
 def test_crate_on_ramp_example():
     namespace = runpy.run_path(str(_EXAMPLES / "crate_on_ramp.py"))
     d = namespace["crate_friction"]()
