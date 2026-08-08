@@ -22334,6 +22334,41 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_present_future_value_and_annuity():
+    from anvilate.analysis import (
+        annuity_present_value,
+        future_value,
+        present_value,
+    )
+
+    # PV = F/(1+i)^n; $10000 in 5 yr at 8% -> $6805.83.
+    pv = present_value(future_value=10000.0, rate=0.08, periods=5)
+    assert pv == pytest.approx(10000.0 / 1.08**5, rel=1e-12)
+    assert pv == pytest.approx(6805.83, abs=0.01)
+
+    # FV = P*(1+i)^n is the exact inverse; round-trips back to $10000.
+    fv = future_value(present_value=pv, rate=0.08, periods=5)
+    assert fv == pytest.approx(10000.0, rel=1e-9)
+    # A higher discount rate makes a future amount worth less today.
+    pv_high = present_value(future_value=10000.0, rate=0.12, periods=5)
+    assert pv_high < pv
+
+    # Annuity PV = A*[1-(1+i)^-n]/i; $1000/yr for 10 yr at 8% -> $6710.08.
+    annuity = annuity_present_value(payment=1000.0, rate=0.08, periods=10)
+    assert annuity == pytest.approx(1000.0 * (1 - 1.08**-10) / 0.08, rel=1e-12)
+    assert annuity == pytest.approx(6710.08, abs=0.01)
+    # At zero interest the annuity is just the undiscounted sum of payments.
+    assert annuity_present_value(payment=1000.0, rate=0.0, periods=10) == pytest.approx(
+        10000.0, rel=1e-12
+    )
+
+    # Guardrails: rate above -1, non-negative periods.
+    with pytest.raises(ValueError, match="rate must be greater than -1"):
+        present_value(future_value=10000.0, rate=-1.0, periods=5)
+    with pytest.raises(ValueError, match="periods must be non-negative"):
+        future_value(present_value=1000.0, rate=0.08, periods=-1)
+
+
 def test_wave_speed_wavelength_and_frequency():
     from anvilate.analysis import (
         frequency_from_wavelength,

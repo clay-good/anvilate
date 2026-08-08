@@ -456,6 +456,9 @@ energy_storage.battery_bank_capacity
 energy_storage.battery_delivered_energy
 energy_storage.battery_round_trip_efficiency
 energy_storage.usable_battery_energy
+engineering_economics.present_value
+engineering_economics.future_value
+engineering_economics.annuity_present_value
 extrusion.extrusion_ratio
 extrusion.extrusion_pressure
 extrusion.extrusion_force
