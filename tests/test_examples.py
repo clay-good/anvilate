@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_crate_on_ramp_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "crate_on_ramp.py"))
+    d = namespace["crate_friction"]()
+    # 1000 N, mu 0.3: 300 N friction, 16.7 deg repose, ~624 N up a 20-deg ramp.
+    assert d["friction_force_n"] == pytest.approx(300.0, rel=1e-9)
+    assert d["angle_of_repose_deg"] == pytest.approx(16.70, abs=0.01)
+    assert d["ramp_haul_force_n"] == pytest.approx(623.9, abs=0.1)
+
+
 def test_servo_step_response_example():
     namespace = runpy.run_path(str(_EXAMPLES / "servo_step_response.py"))
     d = namespace["servo_step_response"]()

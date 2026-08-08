@@ -323,6 +323,9 @@ modules:
 - :mod:`~anvilate.analysis.fresnel` — surface reflection: the normal-incidence reflectance
   R = ((n1−n2)/(n1+n2))² (4% at an air-glass face), the two-surface slab transmittance (1−R)², and
   the Brewster polarizing angle arctan(n2/n1) — the bare reflection AR coatings fight
+- :mod:`~anvilate.analysis.friction` — dry (Coulomb) friction: the friction force F = µ·N, the
+  angle of repose θ = arctan(µ) a slope or stockpile stands at, and the force W·(sin θ + µ·cos θ)
+  to drag a load up an incline
 - :mod:`~anvilate.analysis.magnetics` — magnetic actuators and circuits: the solenoid field
   B = μ₀·n·I, the Maxwell magnetic pressure p = B²/(2·μ₀), the electromagnet holding force
   F = B²·A/(2·μ₀), and the magnetic circuit (Hopkinson's law) — MMF = N·I, reluctance
@@ -1560,6 +1563,11 @@ from .fresnel import (
     fresnel_normal_reflectance,
     slab_transmittance,
 )
+from .friction import (
+    angle_of_repose,
+    force_to_slide_up_incline,
+    friction_force,
+)
 from .gas_compression import (
     adiabatic_compression_power,
     adiabatic_discharge_temperature,
@@ -2641,6 +2649,9 @@ __all__ = [
     "fresnel_normal_reflectance",
     "slab_transmittance",
     "brewster_angle",
+    "friction_force",
+    "angle_of_repose",
+    "force_to_slide_up_incline",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",

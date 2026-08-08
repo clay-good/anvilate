@@ -22334,6 +22334,54 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_coulomb_friction_force_repose_and_incline():
+    from math import atan, cos, degrees, radians, sin
+
+    from anvilate.analysis import (
+        angle_of_repose,
+        force_to_slide_up_incline,
+        friction_force,
+    )
+
+    # F = mu*N; 1000 N normal at mu 0.3 -> 300 N.
+    f = friction_force(normal_force=_q("1000 N"), friction_coefficient=0.3)
+    assert f.to("N").magnitude == pytest.approx(0.3 * 1000.0, rel=1e-12)
+    assert f.to("N").magnitude == pytest.approx(300.0, rel=1e-9)
+    # Friction is proportional to the normal force.
+    f2 = friction_force(normal_force=_q("2000 N"), friction_coefficient=0.3)
+    assert f2.to("N").magnitude == pytest.approx(2.0 * f.to("N").magnitude, rel=1e-9)
+
+    # Angle of repose theta = arctan(mu); mu 0.3 -> 16.70 deg.
+    repose = angle_of_repose(friction_coefficient=0.3)
+    assert repose.to("degree").magnitude == pytest.approx(degrees(atan(0.3)), rel=1e-9)
+    assert repose.to("degree").magnitude == pytest.approx(16.70, abs=0.01)
+    # A grippier surface stands at a steeper angle.
+    assert angle_of_repose(friction_coefficient=1.0).to("degree").magnitude == pytest.approx(
+        45.0, rel=1e-9
+    )
+
+    # Force up incline F = W*(sin theta + mu*cos theta); W1000, 20 deg, mu0.3 -> ~623.9 N.
+    haul = force_to_slide_up_incline(
+        weight=_q("1000 N"), incline_angle=20.0, friction_coefficient=0.3
+    )
+    expected = 1000.0 * (sin(radians(20)) + 0.3 * cos(radians(20)))
+    assert haul.to("N").magnitude == pytest.approx(expected, rel=1e-9)
+    assert haul.to("N").magnitude == pytest.approx(623.9, abs=0.1)
+    # On the flat (0 deg) the haul force is just the friction force.
+    haul_flat = force_to_slide_up_incline(
+        weight=_q("1000 N"), incline_angle=0.0, friction_coefficient=0.3
+    )
+    assert haul_flat.to("N").magnitude == pytest.approx(300.0, rel=1e-9)
+
+    # Guardrails: non-negative mu/normal, incline in [0, 90).
+    with pytest.raises(ValueError, match="friction_coefficient must be non-negative"):
+        friction_force(normal_force=_q("1000 N"), friction_coefficient=-0.1)
+    with pytest.raises(ValueError, match="incline_angle must be in"):
+        force_to_slide_up_incline(weight=_q("1000 N"), incline_angle=90.0, friction_coefficient=0.3)
+    with pytest.raises(ValueError, match="normal_force must be a"):
+        friction_force(normal_force=_q("1000 kg"), friction_coefficient=0.3)
+
+
 def test_second_order_step_response_overshoot_peak_and_settling():
     from math import exp, pi, sqrt
 
