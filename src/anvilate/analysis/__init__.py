@@ -550,6 +550,9 @@ modules:
   centrifugal force, the counterweight that balances it, and the ISO 1940
   balance-grade permissible eccentricity;
   and the Den Hartog tuned-mass-damper optimal tuning
+- :mod:`~anvilate.analysis.elastic_waves` — elastic wave speeds in solids: the thin-bar longitudinal
+  speed √(E/ρ), the shear (transverse) speed √(G/ρ), and the bulk P-wave speed √((K+4G/3)/ρ) — the
+  velocities behind ultrasonic NDT and P/S-wave seismology
 - :mod:`~anvilate.analysis.gyroscope` — rigid-rotor gyroscopic effects: the spin angular
   momentum L = I·ω, the precession rate Ω = M/(I·ω) an applied moment produces, and the
   reaction couple M = I·ω·Ω a forced precession puts on the bearings
@@ -1211,6 +1214,11 @@ from .edm import (
     edm_discharge_energy,
     edm_duty_factor,
     edm_material_removal_rate,
+)
+from .elastic_waves import (
+    bar_wave_speed,
+    bulk_longitudinal_wave_speed,
+    shear_wave_speed,
 )
 from .electrical import (
     apparent_power_three_phase,
@@ -2936,6 +2944,9 @@ __all__ = [
     "edm_discharge_energy",
     "edm_duty_factor",
     "edm_material_removal_rate",
+    "bar_wave_speed",
+    "shear_wave_speed",
+    "bulk_longitudinal_wave_speed",
     "solid_disc_polar_mass_moment",
     "annular_disc_polar_mass_moment",
     "frequency_scorecard",

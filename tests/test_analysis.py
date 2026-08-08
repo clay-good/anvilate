@@ -20985,6 +20985,47 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_elastic_wave_speeds_bar_shear_and_bulk():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        bar_wave_speed,
+        bulk_longitudinal_wave_speed,
+        shear_wave_speed,
+    )
+
+    rho = Quantity(magnitude=7850.0, unit="kg/m**3")
+
+    # Bar v = sqrt(E/rho); steel -> ~5050 m/s.
+    bar = bar_wave_speed(elastic_modulus=_q("200 GPa"), density=rho)
+    assert bar.to("m/s").magnitude == pytest.approx(sqrt(200e9 / 7850), rel=1e-9)
+    assert bar.to("m/s").magnitude == pytest.approx(5047.5, abs=0.5)
+
+    # Shear v_s = sqrt(G/rho); slower than the bar wave (G < E).
+    shear = shear_wave_speed(shear_modulus=_q("80 GPa"), density=rho)
+    assert shear.to("m/s").magnitude == pytest.approx(sqrt(80e9 / 7850), rel=1e-9)
+    assert shear.to("m/s").magnitude < bar.to("m/s").magnitude
+
+    # Bulk P-wave v_p = sqrt((K + 4G/3)/rho); the fastest of the three.
+    p = bulk_longitudinal_wave_speed(
+        bulk_modulus=_q("160 GPa"), shear_modulus=_q("80 GPa"), density=rho
+    )
+    assert p.to("m/s").magnitude == pytest.approx(sqrt((160e9 + 4 * 80e9 / 3) / 7850), rel=1e-9)
+    assert p.to("m/s").magnitude == pytest.approx(5828.4, abs=0.5)
+    assert p.to("m/s").magnitude > bar.to("m/s").magnitude
+    assert p.to("m/s").magnitude > shear.to("m/s").magnitude
+
+    # Guardrails: positive moduli/density, dimensions checked.
+    with pytest.raises(ValueError, match="density must be positive"):
+        bar_wave_speed(
+            elastic_modulus=_q("200 GPa"), density=Quantity(magnitude=0.0, unit="kg/m**3")
+        )
+    with pytest.raises(ValueError, match="shear_modulus must be positive"):
+        shear_wave_speed(shear_modulus=_q("0 GPa"), density=rho)
+    with pytest.raises(ValueError, match="elastic_modulus must be a"):
+        bar_wave_speed(elastic_modulus=_q("200 kg"), density=rho)
+
+
 def test_compton_wavelength_shift_scattered_and_electron_energy():
     from math import cos, radians
 

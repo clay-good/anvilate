@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_steel_ultrasonic_wave_speeds_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "steel_ultrasonic_wave_speeds.py"))
+    d = namespace["steel_wave_speeds"]()
+    # Steel: bar ~5050, shear ~3190, P-wave ~5830 m/s.
+    assert d["bar_wave_speed_m_s"] == pytest.approx(5047.5, abs=1.0)
+    assert d["shear_wave_speed_m_s"] == pytest.approx(3192.3, abs=1.0)
+    assert d["p_wave_speed_m_s"] == pytest.approx(5828.4, abs=1.0)
+
+
 def test_compton_gamma_scatter_example():
     namespace = runpy.run_path(str(_EXAMPLES / "compton_gamma_scatter.py"))
     d = namespace["gamma_scatter"]()

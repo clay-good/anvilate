@@ -463,6 +463,9 @@ ecm.ecm_equilibrium_gap
 edm.edm_discharge_energy
 edm.edm_duty_factor
 edm.edm_material_removal_rate
+elastic_waves.bar_wave_speed
+elastic_waves.bulk_longitudinal_wave_speed
+elastic_waves.shear_wave_speed
 fastener.NUT_FACTOR_AS_RECEIVED
 fastener.aisc_tension_member_design_strength
 fastener.block_shear_strength
