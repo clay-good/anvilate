@@ -112,6 +112,9 @@ modules:
 - :mod:`~anvilate.analysis.work_energy` — classical work-energy basics: the kinetic energy
   ½·m·v², the gravitational potential energy m·g·h, and the work W = F·d a constant force does
   (the low-speed, energy-method companion to relativity and impact)
+- :mod:`~anvilate.analysis.momentum` — classical momentum-impulse basics: the linear momentum
+  p = m·v, the impulse J = F·Δt (= Δp), and the average collision force m·Δv/Δt behind crumple
+  zones and airbags
 - :mod:`~anvilate.analysis.worm` — worm-drive reduction ratio, lead angle,
   mesh efficiency, the efficiency-corrected wheel output torque, the self-locking
   condition, and the input tangential and separating (radial) tooth forces
@@ -1753,6 +1756,11 @@ from .mass_energy import (
     mass_energy,
     mass_from_energy,
 )
+from .momentum import (
+    average_impact_force,
+    impulse,
+    linear_momentum,
+)
 from .nds_timber import (
     LoadDuration,
     nds_adjusted_design_value,
@@ -3055,6 +3063,9 @@ __all__ = [
     "mass_energy",
     "mass_from_energy",
     "binding_energy_per_nucleon",
+    "linear_momentum",
+    "impulse",
+    "average_impact_force",
     "compton_wavelength_shift",
     "compton_scattered_wavelength",
     "compton_electron_energy",

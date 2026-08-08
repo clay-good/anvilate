@@ -22334,6 +22334,48 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_linear_momentum_impulse_and_average_impact_force():
+    from anvilate.analysis import (
+        average_impact_force,
+        impulse,
+        linear_momentum,
+    )
+
+    # p = m*v; 1000 kg at 20 m/s -> 20000 kg m/s.
+    p = linear_momentum(mass=_q("1000 kg"), velocity=_q("20 m/s"))
+    assert p.to("kg*m/s").magnitude == pytest.approx(1000.0 * 20.0, rel=1e-9)
+    assert p.to("kg*m/s").magnitude == pytest.approx(20000.0, rel=1e-9)
+
+    # J = F*dt; 500 N for 3 s -> 1500 N*s.
+    j = impulse(force=_q("500 N"), time_interval=_q("3 s"))
+    assert j.to("N*s").magnitude == pytest.approx(500.0 * 3.0, rel=1e-9)
+    assert j.to("N*s").magnitude == pytest.approx(1500.0, rel=1e-9)
+    # Impulse and momentum share a dimension (impulse-momentum theorem).
+    assert j.to("kg*m/s").magnitude == pytest.approx(1500.0, rel=1e-9)
+
+    # Average impact force F = m*dv/dt; stopping 1000 kg from 20 m/s in 0.1 s -> 200 kN.
+    f = average_impact_force(
+        mass=_q("1000 kg"), velocity_change=_q("20 m/s"), time_interval=_q("0.1 s")
+    )
+    assert f.to("N").magnitude == pytest.approx(1000.0 * 20.0 / 0.1, rel=1e-9)
+    assert f.to("N").magnitude == pytest.approx(200000.0, rel=1e-9)
+    # Stretching the stopping time (a crumple zone) cuts the force proportionally.
+    f_soft = average_impact_force(
+        mass=_q("1000 kg"), velocity_change=_q("20 m/s"), time_interval=_q("0.5 s")
+    )
+    assert f_soft.to("N").magnitude == pytest.approx(f.to("N").magnitude / 5.0, rel=1e-9)
+    # The crash impulse equals the momentum change (F*dt = m*dv).
+    assert f.to("N").magnitude * 0.1 == pytest.approx(p.to("kg*m/s").magnitude, rel=1e-9)
+
+    # Guardrails: positive mass and time, correct dimensions.
+    with pytest.raises(ValueError, match="mass must be positive"):
+        linear_momentum(mass=_q("0 kg"), velocity=_q("20 m/s"))
+    with pytest.raises(ValueError, match="time_interval must be positive"):
+        impulse(force=_q("500 N"), time_interval=_q("0 s"))
+    with pytest.raises(ValueError, match="force must be a"):
+        impulse(force=_q("500 kg"), time_interval=_q("3 s"))
+
+
 def test_kinetic_potential_energy_and_work_done():
     from anvilate.analysis import (
         gravitational_potential_energy,

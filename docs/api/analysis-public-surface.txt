@@ -116,6 +116,9 @@ masonry.masonry_combined_stress_ratio
 mass_energy.binding_energy_per_nucleon
 mass_energy.mass_energy
 mass_energy.mass_from_energy
+momentum.linear_momentum
+momentum.impulse
+momentum.average_impact_force
 axial.axial_elongation
 axial.axial_stiffness
 axial.axial_stress

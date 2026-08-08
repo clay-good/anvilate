@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_car_crash_impulse_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "car_crash_impulse.py"))
+    d = namespace["crash_dynamics"]()
+    # 1000 kg at 20 m/s: 20000 kg m/s, 1500 N s, 200 kN for a 0.1 s stop.
+    assert d["momentum_kg_m_s"] == pytest.approx(20000.0, rel=1e-9)
+    assert d["impulse_n_s"] == pytest.approx(1500.0, rel=1e-9)
+    assert d["crash_force_kn"] == pytest.approx(200.0, rel=1e-9)
+
+
 def test_roller_coaster_energy_example():
     namespace = runpy.run_path(str(_EXAMPLES / "roller_coaster_energy.py"))
     d = namespace["coaster_energy"]()
