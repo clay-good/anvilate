@@ -15902,6 +15902,53 @@ def test_gyroscopic_angular_momentum_precession_and_reaction_moment():
         )
 
 
+def test_acoustic_helmholtz_and_pipe_resonances():
+    from anvilate.analysis import (
+        closed_pipe_resonance_frequency,
+        helmholtz_resonator_frequency,
+        open_pipe_resonance_frequency,
+    )
+
+    c = _q("343 m/s")
+
+    # Helmholtz f = (c/2pi)*sqrt(A/(V*L)); 5 cm^2, 1 L, 2 cm neck -> ~273 Hz.
+    f_h = helmholtz_resonator_frequency(
+        speed_of_sound=c,
+        neck_area=_q("5 cm**2"),
+        cavity_volume=_q("1 L"),
+        neck_length=_q("2 cm"),
+    )
+    expected_h = 343 / (2 * pi) * (5e-4 / (1e-3 * 0.02)) ** 0.5
+    assert f_h.to("Hz").magnitude == pytest.approx(expected_h, rel=1e-9)
+
+    # Open pipe f_n = n*c/(2L); 1 m -> 171.5 Hz fundamental, 343 Hz second mode (all harmonics).
+    o1 = open_pipe_resonance_frequency(speed_of_sound=c, pipe_length=_q("1 m"))
+    o2 = open_pipe_resonance_frequency(speed_of_sound=c, pipe_length=_q("1 m"), mode=2)
+    assert o1.to("Hz").magnitude == pytest.approx(171.5, rel=1e-9)
+    assert o2.to("Hz").magnitude == pytest.approx(343.0, rel=1e-9)
+
+    # Closed pipe f_n = (2n-1)*c/(4L); fundamental 85.75 Hz (octave below the open pipe), odd only.
+    c1 = closed_pipe_resonance_frequency(speed_of_sound=c, pipe_length=_q("1 m"))
+    c2 = closed_pipe_resonance_frequency(speed_of_sound=c, pipe_length=_q("1 m"), mode=2)
+    assert c1.to("Hz").magnitude == pytest.approx(85.75, rel=1e-9)
+    assert c1.to("Hz").magnitude == pytest.approx(o1.to("Hz").magnitude / 2, rel=1e-9)
+    # Second closed mode is the 3rd harmonic (2*2-1=3), not the 2nd.
+    assert c2.to("Hz").magnitude == pytest.approx(3 * 85.75, rel=1e-9)
+
+    # Guardrails: whole-number mode, positive inputs, dimensions checked.
+    with pytest.raises(ValueError, match="mode must be an integer of at least 1"):
+        open_pipe_resonance_frequency(speed_of_sound=c, pipe_length=_q("1 m"), mode=0)
+    with pytest.raises(ValueError, match="cavity_volume must be positive"):
+        helmholtz_resonator_frequency(
+            speed_of_sound=c,
+            neck_area=_q("5 cm**2"),
+            cavity_volume=_q("0 L"),
+            neck_length=_q("2 cm"),
+        )
+    with pytest.raises(ValueError, match="speed_of_sound must be a"):
+        open_pipe_resonance_frequency(speed_of_sound=_q("343 m"), pipe_length=_q("1 m"))
+
+
 def test_broaching_teeth_force_and_pull_capacity():
     from anvilate.analysis import (
         broaching_cutting_force,

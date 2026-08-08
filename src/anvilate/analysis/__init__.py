@@ -7,7 +7,9 @@ modules:
 - :mod:`~anvilate.analysis.accumulator` — gas-charged hydraulic accumulators: the usable
   fluid volume delivered between two pressures, and its inverse (the size a duty needs)
 - :mod:`~anvilate.analysis.acoustics` — machinery-noise arithmetic (for plant/industrial
-  work): the decibel sum of several sources and the inverse-square distance attenuation
+  work): the decibel sum of several sources and the inverse-square distance attenuation;
+  plus acoustic resonance — the Helmholtz resonator f = (c/2π)·√(A/(V·L)) and the open-
+  (n·c/2L) and closed-pipe ((2n−1)·c/4L) resonant modes
 - :mod:`~anvilate.analysis.adhesive` — bonded joints: the lap-joint average shear
   stress against the datasheet lap-shear strength, and the axial and torque
   capacity of a cylindrical retaining-compound bond
@@ -573,9 +575,12 @@ from .accumulator import (
     accumulator_usable_volume,
 )
 from .acoustics import (
+    closed_pipe_resonance_frequency,
+    helmholtz_resonator_frequency,
     inverse_square_attenuation,
     mass_law_transmission_loss,
     noise_dose_fraction,
+    open_pipe_resonance_frequency,
     permissible_exposure_time,
     sabine_reverberation_time,
     sound_level_sum,
@@ -2063,6 +2068,9 @@ __all__ = [
     "sound_level_sum",
     "sound_power_level_from_intensity",
     "sound_pressure_from_power_level",
+    "helmholtz_resonator_frequency",
+    "open_pipe_resonance_frequency",
+    "closed_pipe_resonance_frequency",
     "masonry_allowable_axial_stress",
     "masonry_allowable_flexural_stress",
     "masonry_column_axial_capacity",

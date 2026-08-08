@@ -17,14 +17,17 @@ decibel numbers (a dimensionless ratio); distances are dimension-checked
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import log10, pi
+from math import log10, pi, sqrt
 
 from ..units import Quantity
 
 __all__ = [
+    "closed_pipe_resonance_frequency",
+    "helmholtz_resonator_frequency",
     "inverse_square_attenuation",
     "mass_law_transmission_loss",
     "noise_dose_fraction",
+    "open_pipe_resonance_frequency",
     "permissible_exposure_time",
     "sabine_reverberation_time",
     "sound_level_sum",
@@ -204,6 +207,88 @@ def sound_pressure_from_power_level(
     if directivity_factor <= 0:
         raise ValueError("directivity_factor must be positive")
     return sound_power_level + 10.0 * log10(directivity_factor / (4.0 * pi * r**2))
+
+
+def helmholtz_resonator_frequency(
+    *,
+    speed_of_sound: Quantity,
+    neck_area: Quantity,
+    cavity_volume: Quantity,
+    neck_length: Quantity,
+) -> Quantity:
+    """The Helmholtz resonance, f = (c/2π)·√(A/(V·L)).
+
+    The natural frequency of a cavity-and-neck resonator — the plug of air in the ``neck_area`` A of
+    ``neck_length`` L bouncing on the springiness of the ``cavity_volume`` V — from the
+    ``speed_of_sound`` c, f = (c/2π)·√(A/(V·L)). It is the tone a blown bottle sounds, the tuning of
+    bass-reflex port, and the frequency a Helmholtz muffler or cavity absorber is built to kill.
+    Returns the resonant frequency in Hz.
+    """
+    _check(speed_of_sound, "[length]/[time]", "speed_of_sound")
+    _check(neck_area, "[area]", "neck_area")
+    _check(cavity_volume, "[volume]", "cavity_volume")
+    _check(neck_length, "[length]", "neck_length")
+    c = speed_of_sound.to("m/s").magnitude
+    a = neck_area.to("m**2").magnitude
+    v = cavity_volume.to("m**3").magnitude
+    length = neck_length.to("m").magnitude
+    if c <= 0:
+        raise ValueError("speed_of_sound must be positive")
+    if a <= 0:
+        raise ValueError("neck_area must be positive")
+    if v <= 0:
+        raise ValueError("cavity_volume must be positive")
+    if length <= 0:
+        raise ValueError("neck_length must be positive")
+    return Quantity(magnitude=c / (2.0 * pi) * sqrt(a / (v * length)), unit="Hz")
+
+
+def open_pipe_resonance_frequency(
+    *, speed_of_sound: Quantity, pipe_length: Quantity, mode: int = 1
+) -> Quantity:
+    """The open-pipe resonance, f_n = n·c/(2L).
+
+    The resonant frequencies of a pipe open at both ends (or the acoustic modes between two parallel
+    room surfaces): from the ``speed_of_sound`` c, the ``pipe_length`` L, and the harmonic ``mode``
+    n, f_n = n·c/(2L). A pipe open at both ends supports all integer harmonics, the full series
+    n = 1, 2, 3, …; the fundamental is c/(2L). It is the pitch of a flute or an open organ pipe and
+    the axial modes that colour a room. Returns the resonant frequency in Hz.
+    """
+    _check(speed_of_sound, "[length]/[time]", "speed_of_sound")
+    _check(pipe_length, "[length]", "pipe_length")
+    c = speed_of_sound.to("m/s").magnitude
+    length = pipe_length.to("m").magnitude
+    if c <= 0:
+        raise ValueError("speed_of_sound must be positive")
+    if length <= 0:
+        raise ValueError("pipe_length must be positive")
+    if not isinstance(mode, int) or mode < 1:
+        raise ValueError("mode must be an integer of at least 1")
+    return Quantity(magnitude=mode * c / (2.0 * length), unit="Hz")
+
+
+def closed_pipe_resonance_frequency(
+    *, speed_of_sound: Quantity, pipe_length: Quantity, mode: int = 1
+) -> Quantity:
+    """The closed-pipe resonance, f_n = (2n − 1)·c/(4L).
+
+    The resonant frequencies of a pipe closed at one end and open at the other: from the
+    ``speed_of_sound`` c, the ``pipe_length`` L, and the harmonic ``mode`` n, f_n = (2n − 1)·c/(4L).
+    A closed pipe fits only a quarter-wave and its odd multiples, so it supports only odd harmonics
+    (1, 3, 5, …) and its fundamental c/(4L) is an octave below an open pipe of the same length — the
+    reason a stopped organ pipe sounds deep for its size. Returns the resonant frequency in Hz.
+    """
+    _check(speed_of_sound, "[length]/[time]", "speed_of_sound")
+    _check(pipe_length, "[length]", "pipe_length")
+    c = speed_of_sound.to("m/s").magnitude
+    length = pipe_length.to("m").magnitude
+    if c <= 0:
+        raise ValueError("speed_of_sound must be positive")
+    if length <= 0:
+        raise ValueError("pipe_length must be positive")
+    if not isinstance(mode, int) or mode < 1:
+        raise ValueError("mode must be an integer of at least 1")
+    return Quantity(magnitude=(2 * mode - 1) * c / (4.0 * length), unit="Hz")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

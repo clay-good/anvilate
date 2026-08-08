@@ -1068,6 +1068,22 @@ def test_ship_turbine_gyroscopic_load_example_couple_in_a_turn():
     assert d["precession_rate_deg_s"] == pytest.approx(6.0, abs=0.001)
 
 
+def test_muffler_and_pipe_resonance_example_open_vs_closed():
+    namespace = runpy.run_path(str(_EXAMPLES / "muffler_and_pipe_resonance.py"))
+    d = namespace["resonances"]()
+    # Helmholtz ~273 Hz.
+    assert d["helmholtz_hz"] == pytest.approx(272.95, abs=0.5)
+    # Open pipe 172/343 Hz (all harmonics); closed pipe 86/257 Hz (odd, octave lower).
+    assert d["open_pipe_fundamental_hz"] == pytest.approx(171.5, abs=0.1)
+    assert d["open_pipe_second_hz"] == pytest.approx(343.0, abs=0.1)
+    assert d["closed_pipe_fundamental_hz"] == pytest.approx(85.75, abs=0.1)
+    assert d["closed_pipe_second_hz"] == pytest.approx(257.25, abs=0.1)
+    # Closed fundamental is an octave (half) below the open fundamental.
+    assert d["closed_pipe_fundamental_hz"] == pytest.approx(
+        d["open_pipe_fundamental_hz"] / 2, rel=1e-9
+    )
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()
