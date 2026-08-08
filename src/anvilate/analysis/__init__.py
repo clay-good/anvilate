@@ -309,6 +309,9 @@ modules:
   in the wind (cube law), the P = ½·ρ·A·V³·C_p a rotor delivers, the Betz limit
   16/27 ceiling on the power coefficient, the tip speed ratio λ = ω·R/V, and the
   capacity factor CF = E/(P·t)
+- :mod:`~anvilate.analysis.wing_aerodynamics` — finite-wing aerodynamics: the lift force
+  L = ½·ρ·V²·S·C_L, the induced-drag coefficient C_Di = C_L²/(π·e·AR) that a lifting finite-span
+  wing pays, and the stall speed V = √(2·W/(ρ·S·C_L,max)) below which the wing cannot hold weight
 - :mod:`~anvilate.analysis.hydro_power` — hydro-turbine power: the net head a
   turbine sees after penstock loss (H_net = H_gross − h_loss), the P = ρ·g·Q·H·η
   a plant delivers (linear in flow and head), and the flow a target output needs
@@ -2273,6 +2276,11 @@ from .wind_power import (
     wind_turbine_power,
     wind_turbine_tip_speed_ratio,
 )
+from .wing_aerodynamics import (
+    induced_drag_coefficient,
+    lift_force,
+    stall_speed,
+)
 from .wire_drawing import (
     wire_drawing_force,
     wire_drawing_max_reduction,
@@ -3503,6 +3511,9 @@ __all__ = [
     "wind_turbine_power",
     "wind_turbine_tip_speed_ratio",
     "capacity_factor",
+    "lift_force",
+    "induced_drag_coefficient",
+    "stall_speed",
     "wire_drawing_stress",
     "wire_drawing_force",
     "wire_drawing_max_reduction",

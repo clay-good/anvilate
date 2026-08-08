@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_light_aircraft_wing_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "light_aircraft_wing.py"))
+    d = namespace["wing_performance"]()
+    # Light aircraft: ~12250 N lift, C_Di ~0.0133, stall ~28.6 m/s.
+    assert d["lift_force_n"] == pytest.approx(12250.0, rel=1e-6)
+    assert d["induced_drag_coefficient"] == pytest.approx(0.013263, abs=1e-5)
+    assert d["stall_speed_m_s"] == pytest.approx(28.57, abs=0.01)
+
+
 def test_tungsten_cathode_emission_example():
     namespace = runpy.run_path(str(_EXAMPLES / "tungsten_cathode_emission.py"))
     d = namespace["cathode_emission"]()

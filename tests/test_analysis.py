@@ -22334,6 +22334,64 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_wing_lift_induced_drag_and_stall_speed():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        induced_drag_coefficient,
+        lift_force,
+        stall_speed,
+    )
+
+    rho = _q("1.225 kg/m**3")
+    s = _q("16 m**2")
+
+    # Lift L = 0.5*rho*V^2*S*C_L; 12250 N for the worked case.
+    lift = lift_force(air_density=rho, airspeed=_q("50 m/s"), wing_area=s, lift_coefficient=0.5)
+    assert lift.to("N").magnitude == pytest.approx(0.5 * 1.225 * 2500.0 * 16.0 * 0.5, rel=1e-9)
+    assert lift.to("N").magnitude == pytest.approx(12250.0, rel=1e-9)
+    # Lift scales with the square of airspeed: doubling V quadruples lift.
+    lift2 = lift_force(air_density=rho, airspeed=_q("100 m/s"), wing_area=s, lift_coefficient=0.5)
+    assert lift2.to("N").magnitude == pytest.approx(4.0 * lift.to("N").magnitude, rel=1e-9)
+
+    # Induced drag C_Di = C_L^2/(pi*e*AR); 0.01326 for C_L=0.5, AR=7.5, e=0.8.
+    cdi = induced_drag_coefficient(lift_coefficient=0.5, aspect_ratio=7.5, oswald_efficiency=0.8)
+    assert cdi == pytest.approx(0.25 / (pi * 0.8 * 7.5), rel=1e-9)
+    assert cdi == pytest.approx(0.013263, abs=1e-5)
+    # A higher-aspect wing pays less induced drag for the same lift.
+    cdi_long = induced_drag_coefficient(
+        lift_coefficient=0.5, aspect_ratio=15.0, oswald_efficiency=0.8
+    )
+    assert cdi_long < cdi
+    # Default Oswald efficiency is the ideal elliptical value of 1.0.
+    cdi_ideal = induced_drag_coefficient(lift_coefficient=0.5, aspect_ratio=7.5)
+    assert cdi_ideal == pytest.approx(0.25 / (pi * 7.5), rel=1e-9)
+
+    # Stall speed V = sqrt(2*W/(rho*S*C_Lmax)); ~28.57 m/s for the worked case.
+    v_stall = stall_speed(
+        weight=_q("12000 N"), air_density=rho, wing_area=s, max_lift_coefficient=1.5
+    )
+    assert v_stall.to("m/s").magnitude == pytest.approx(
+        sqrt(2 * 12000 / (1.225 * 16 * 1.5)), rel=1e-9
+    )
+    assert v_stall.to("m/s").magnitude == pytest.approx(28.57, abs=0.01)
+    # A heavier aircraft stalls faster.
+    v_heavy = stall_speed(
+        weight=_q("18000 N"), air_density=rho, wing_area=s, max_lift_coefficient=1.5
+    )
+    assert v_heavy.to("m/s").magnitude > v_stall.to("m/s").magnitude
+
+    # Guardrails: Oswald efficiency in (0, 1], positive dimensioned inputs.
+    with pytest.raises(ValueError, match="oswald_efficiency must be in"):
+        induced_drag_coefficient(lift_coefficient=0.5, aspect_ratio=7.5, oswald_efficiency=1.5)
+    with pytest.raises(ValueError, match="aspect_ratio must be positive"):
+        induced_drag_coefficient(lift_coefficient=0.5, aspect_ratio=0.0)
+    with pytest.raises(ValueError, match="wing_area must be a"):
+        lift_force(
+            air_density=rho, airspeed=_q("50 m/s"), wing_area=_q("16 m"), lift_coefficient=0.5
+        )
+
+
 def test_laminar_boundary_layer_thickness_skin_friction_and_drag():
     from math import sqrt
 
