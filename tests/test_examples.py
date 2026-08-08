@@ -1000,6 +1000,19 @@ def test_normal_shock_inlet_loss_example_static_up_total_lost():
     assert d["stagnation_pressure_recovery"] < 1.0  # total pressure is destroyed
 
 
+def test_rocket_engine_thrust_example_vacuum_beats_sea_level():
+    namespace = runpy.run_path(str(_EXAMPLES / "rocket_engine_thrust.py"))
+    d = namespace["engine_performance"]()
+    # Ideal exhaust velocity ~2457 m/s.
+    assert d["exhaust_velocity_m_s"] == pytest.approx(2456.7, abs=1.0)
+    # Sea-level thrust ~246 kN (perfectly expanded), vacuum ~276 kN (+30 kN pressure term).
+    assert d["thrust_sea_level_kn"] == pytest.approx(245.67, abs=0.1)
+    assert d["thrust_vacuum_kn"] == pytest.approx(275.67, abs=0.1)
+    assert d["thrust_vacuum_kn"] - d["thrust_sea_level_kn"] == pytest.approx(30.0, abs=0.1)
+    # Sea-level specific impulse ~251 s.
+    assert d["specific_impulse_sea_s"] == pytest.approx(250.5, abs=0.5)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

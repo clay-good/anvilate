@@ -17004,6 +17004,75 @@ def test_normal_shock_downstream_mach_pressure_and_stagnation_ratios():
         normal_shock_pressure_ratio(upstream_mach=2.0, heat_capacity_ratio=1.0)
 
 
+def test_rocket_exhaust_velocity_thrust_and_specific_impulse():
+    from anvilate.analysis import (
+        rocket_exhaust_velocity,
+        rocket_specific_impulse,
+        rocket_thrust,
+    )
+
+    # Exhaust velocity v_e = sqrt(2g/(g-1)*R*T_c*(1 - (p_e/p_c)^((g-1)/g))); ~2456.7 m/s.
+    v_e = rocket_exhaust_velocity(
+        chamber_temperature=_q("3000 K"),
+        chamber_pressure=_q("5 MPa"),
+        exit_pressure=_q("0.1 MPa"),
+        specific_gas_constant=_q("350 J/(kg*K)"),
+        heat_capacity_ratio=1.2,
+    )
+    g = 1.2
+    expected_ve = (2 * g / (g - 1) * 350 * 3000 * (1 - (0.1 / 5) ** ((g - 1) / g))) ** 0.5
+    assert v_e.to("m/s").magnitude == pytest.approx(expected_ve, rel=1e-9)
+
+    # Sea-level thrust (perfectly expanded, p_e = p_a) is pure momentum: 100*2456.7 = 245.67 kN.
+    thrust_sea = rocket_thrust(
+        mass_flow_rate=_q("100 kg/s"),
+        exhaust_velocity=v_e,
+        exit_pressure=_q("0.1 MPa"),
+        ambient_pressure=_q("0.1 MPa"),
+        exit_area=_q("0.3 m**2"),
+    )
+    assert thrust_sea.to("kN").magnitude == pytest.approx(100 * expected_ve / 1000, rel=1e-9)
+
+    # Vacuum thrust adds the pressure term (p_e - 0)*A_e = 0.1e6*0.3 = 30 kN.
+    thrust_vac = rocket_thrust(
+        mass_flow_rate=_q("100 kg/s"),
+        exhaust_velocity=v_e,
+        exit_pressure=_q("0.1 MPa"),
+        ambient_pressure=_q("0 Pa"),
+        exit_area=_q("0.3 m**2"),
+    )
+    assert thrust_vac.to("kN").magnitude == pytest.approx(
+        thrust_sea.to("kN").magnitude + 30.0, rel=1e-9
+    )
+    assert thrust_vac.to("kN").magnitude > thrust_sea.to("kN").magnitude
+
+    # Specific impulse I_sp = F/(m_dot*g0); 245670/(100*9.80665) = 250.5 s.
+    isp = rocket_specific_impulse(thrust=thrust_sea, mass_flow_rate=_q("100 kg/s"))
+    assert isp.to("s").magnitude == pytest.approx(
+        thrust_sea.to("N").magnitude / (100 * 9.80665), rel=1e-9
+    )
+
+    # Guardrails: nozzle must expand (p_e < p_c), positive inputs, gamma > 1.
+    with pytest.raises(ValueError, match="exit_pressure must be less than chamber_pressure"):
+        rocket_exhaust_velocity(
+            chamber_temperature=_q("3000 K"),
+            chamber_pressure=_q("0.1 MPa"),
+            exit_pressure=_q("5 MPa"),
+            specific_gas_constant=_q("350 J/(kg*K)"),
+            heat_capacity_ratio=1.2,
+        )
+    with pytest.raises(ValueError, match="thrust must be positive"):
+        rocket_specific_impulse(thrust=_q("0 N"), mass_flow_rate=_q("100 kg/s"))
+    with pytest.raises(ValueError, match="mass_flow_rate must be a"):
+        rocket_thrust(
+            mass_flow_rate=_q("100 kg"),
+            exhaust_velocity=v_e,
+            exit_pressure=_q("0.1 MPa"),
+            ambient_pressure=_q("0 Pa"),
+            exit_area=_q("0.3 m**2"),
+        )
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 

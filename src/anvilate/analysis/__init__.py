@@ -149,6 +149,9 @@ modules:
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
   and power of a multi-stage machine
+- :mod:`~anvilate.analysis.rocket_propulsion` — ideal rocket nozzle: the exhaust velocity
+  v_e = √(2γ/(γ−1)·R·T_c·(1 − (p_e/p_c)^((γ−1)/γ))), the thrust F = ṁ·v_e + (p_e − p_a)·A_e,
+  and the specific impulse I_sp = F/(ṁ·g₀)
 - :mod:`~anvilate.analysis.combustion` — furnace/boiler combustion: the stoichiometric
   air-fuel ratio from an ultimate analysis, the excess air read from flue-gas oxygen
   (EA = O₂/(20.9−O₂)), the actual air-fuel ratio a burner runs at, and the Siegert dry
@@ -1519,6 +1522,11 @@ from .road_curve import (
     perception_reaction_distance,
     stopping_sight_distance,
 )
+from .rocket_propulsion import (
+    rocket_exhaust_velocity,
+    rocket_specific_impulse,
+    rocket_thrust,
+)
 from .rolling import (
     maximum_draft,
     rolling_contact_length,
@@ -2130,6 +2138,9 @@ __all__ = [
     "braking_distance",
     "perception_reaction_distance",
     "stopping_sight_distance",
+    "rocket_exhaust_velocity",
+    "rocket_thrust",
+    "rocket_specific_impulse",
     "maximum_draft",
     "rolling_contact_length",
     "rolling_force",

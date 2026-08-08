@@ -784,6 +784,9 @@ road_curve.minimum_curve_radius
 road_curve.braking_distance
 road_curve.perception_reaction_distance
 road_curve.stopping_sight_distance
+rocket_propulsion.rocket_exhaust_velocity
+rocket_propulsion.rocket_thrust
+rocket_propulsion.rocket_specific_impulse
 rolling.maximum_draft
 rolling.rolling_contact_length
 rolling.rolling_force
