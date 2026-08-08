@@ -20985,6 +20985,52 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_plasma_frequency_debye_length_and_parameter():
+    from math import pi, sqrt
+
+    from anvilate.analysis import debye_length, plasma_frequency, plasma_parameter
+
+    e = 1.602176634e-19
+    eps0 = 8.8541878128e-12
+    me = 9.1093837015e-31
+    k = 1.380649e-23
+    n = Quantity(magnitude=1e18, unit="1/m**3")
+    T = Quantity(magnitude=11604.5, unit="K")
+
+    # f_p = (1/2pi)*sqrt(n*e^2/(eps0*m_e)); 1e18 /m^3 -> ~9 GHz.
+    fp = plasma_frequency(electron_density=n)
+    assert fp.to("Hz").magnitude == pytest.approx(
+        sqrt(1e18 * e**2 / (eps0 * me)) / (2 * pi), rel=1e-9
+    )
+    assert fp.to("GHz").magnitude == pytest.approx(8.979, abs=0.01)
+    # Plasma frequency scales with sqrt(density).
+    fp4 = plasma_frequency(electron_density=Quantity(magnitude=4e18, unit="1/m**3"))
+    assert fp4.to("Hz").magnitude == pytest.approx(2 * fp.to("Hz").magnitude, rel=1e-9)
+
+    # Debye length lambda_D = sqrt(eps0*k*T/(n*e^2)); ~7.4 um here.
+    lam = debye_length(electron_density=n, electron_temperature=T)
+    assert lam.to("m").magnitude == pytest.approx(
+        sqrt(eps0 * k * 11604.5 / (1e18 * e**2)), rel=1e-9
+    )
+    assert lam.to("um").magnitude == pytest.approx(7.434, abs=0.01)
+    # A hotter plasma screens over a longer distance.
+    lam_hot = debye_length(
+        electron_density=n, electron_temperature=Quantity(magnitude=46418.0, unit="K")
+    )
+    assert lam_hot.to("m").magnitude > lam.to("m").magnitude
+
+    # Plasma parameter N_D = (4/3)*pi*lambda_D^3*n >> 1 for a real plasma.
+    n_d = plasma_parameter(electron_density=n, electron_temperature=T)
+    assert n_d == pytest.approx((4 / 3) * pi * lam.to("m").magnitude ** 3 * 1e18, rel=1e-9)
+    assert n_d > 1000
+
+    # Guardrails: positive density/temperature, dimensions checked.
+    with pytest.raises(ValueError, match="electron_temperature must be positive"):
+        debye_length(electron_density=n, electron_temperature=Quantity(magnitude=0.0, unit="K"))
+    with pytest.raises(ValueError, match="electron_density must be a"):
+        plasma_frequency(electron_density=_q("1e18 1/m"))
+
+
 def test_photometry_luminous_efficacy_flux_and_efficiency():
     from anvilate.analysis import (
         luminous_efficacy,

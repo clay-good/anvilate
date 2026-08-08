@@ -31,6 +31,9 @@ modules:
 - :mod:`~anvilate.analysis.waveguide` — rectangular-waveguide dispersion (TE10): the cutoff
   f_c = c/(2a), the guide wavelength λ_g = (c/f)/√(1−(f_c/f)²), and the phase velocity
   v_p = c/√(1−(f_c/f)²) (which exceeds c) above cutoff
+- :mod:`~anvilate.analysis.plasma` — plasma physics: the electron plasma frequency f_p (the radio
+  cutoff of the ionosphere), the Debye screening length λ_D = √(ε₀·k·T/(n·e²)), and the plasma
+  parameter N_D (particles in a Debye sphere; ≫1 for a true collective plasma)
 - :mod:`~anvilate.analysis.arrhenius` — thermally-activated reaction rates: the rate constant
   k = A·e^(−Ea/RT), the acceleration factor k2/k1 = e^((Ea/R)(1/T1−1/T2)) between two temperatures
   (accelerated life testing), and the activation energy Ea extracted from two measured rates
@@ -1646,6 +1649,11 @@ from .pipe_flow import (
     reynolds_number,
     surge_wave_period,
 )
+from .plasma import (
+    debye_length,
+    plasma_frequency,
+    plasma_parameter,
+)
 from .plate import (
     DEFAULT_POISSON_RATIO,
     PlateBendingResult,
@@ -2479,6 +2487,9 @@ __all__ = [
     "rectangular_waveguide_cutoff_frequency",
     "waveguide_guide_wavelength",
     "waveguide_phase_velocity",
+    "plasma_frequency",
+    "debye_length",
+    "plasma_parameter",
     "arrhenius_rate_constant",
     "arrhenius_rate_ratio",
     "arrhenius_activation_energy",

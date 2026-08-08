@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_laboratory_plasma_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "laboratory_plasma.py"))
+    d = namespace["characterize_plasma"]()
+    # 1e18 /m^3, 1 eV: f_p ~9 GHz, Debye ~7.4 um, N_D ~1721.
+    assert d["plasma_frequency_ghz"] == pytest.approx(8.979, abs=0.01)
+    assert d["debye_length_um"] == pytest.approx(7.434, abs=0.01)
+    assert d["plasma_parameter"] == pytest.approx(1720.9, abs=1.0)
+
+
 def test_led_vs_incandescent_efficacy_example():
     namespace = runpy.run_path(str(_EXAMPLES / "led_vs_incandescent_efficacy.py"))
     d = namespace["efficacy_comparison"]()

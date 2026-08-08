@@ -791,6 +791,9 @@ pipe_flow.pipe_pressure_drop
 pipe_flow.pressure_wave_speed
 pipe_flow.reynolds_number
 pipe_flow.surge_wave_period
+plasma.debye_length
+plasma.plasma_frequency
+plasma.plasma_parameter
 pneumatics.air_receiver_holdup_time
 pneumatics.air_receiver_volume_for_demand
 plate.DEFAULT_POISSON_RATIO
