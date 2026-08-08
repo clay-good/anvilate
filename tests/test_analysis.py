@@ -20853,6 +20853,45 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_diode_thermal_voltage_current_and_voltage_inverse():
+    from math import expm1, log
+
+    from anvilate.analysis import diode_current, diode_voltage, thermal_voltage
+
+    k = 1.380649e-23
+    q = 1.602176634e-19
+    T = Quantity(magnitude=300.0, unit="K")
+    v_t = k * 300.0 / q
+
+    # V_T = k*T/q ~ 25.85 mV at 300 K.
+    assert thermal_voltage(temperature=T).to("V").magnitude == pytest.approx(v_t, rel=1e-9)
+
+    # I = I_s*(exp(V/(n*V_T)) - 1); 1 pA, 0.6 V -> ~12 mA.
+    i = diode_current(saturation_current=_q("1 pA"), voltage=_q("0.6 V"), temperature=T)
+    assert i.to("A").magnitude == pytest.approx(1e-12 * expm1(0.6 / v_t), rel=1e-9)
+    assert i.to("mA").magnitude == pytest.approx(12.01, abs=0.05)
+
+    # V = n*V_T*ln(I/I_s + 1); 1 mA -> ~0.536 V; round-trips through diode_current.
+    v = diode_voltage(current=_q("1 mA"), saturation_current=_q("1 pA"), temperature=T)
+    assert v.to("V").magnitude == pytest.approx(v_t * log(1e-3 / 1e-12 + 1), rel=1e-9)
+    i_back = diode_current(saturation_current=_q("1 pA"), voltage=v, temperature=T)
+    assert i_back.to("mA").magnitude == pytest.approx(1.0, rel=1e-9)
+
+    # Higher temperature raises the thermal voltage.
+    v_hot = thermal_voltage(temperature=Quantity(magnitude=350.0, unit="K"))
+    assert v_hot.to("V").magnitude > thermal_voltage(temperature=T).to("V").magnitude
+
+    # Guardrails: positive Is/current/ideality/temperature, dimensions checked.
+    with pytest.raises(ValueError, match="saturation_current must be positive"):
+        diode_current(saturation_current=_q("0 A"), voltage=_q("0.6 V"), temperature=T)
+    with pytest.raises(ValueError, match="ideality_factor must be positive"):
+        diode_current(
+            saturation_current=_q("1 pA"), voltage=_q("0.6 V"), temperature=T, ideality_factor=0.0
+        )
+    with pytest.raises(ValueError, match="temperature must be a"):
+        thermal_voltage(temperature=_q("300 J"))
+
+
 def test_photon_energy_wavelength_inverse_and_flux():
     from anvilate.analysis import (
         photon_energy,

@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_led_operating_point_example_thermal_voltage_and_current():
+    namespace = runpy.run_path(str(_EXAMPLES / "led_operating_point.py"))
+    d = namespace["operating_point"]()
+    # 300 K: V_T ~25.9 mV; 1 mA needs ~0.536 V; 0.6 V passes ~12 mA.
+    assert d["thermal_voltage_mv"] == pytest.approx(25.852, abs=0.01)
+    assert d["forward_voltage_for_1ma_v"] == pytest.approx(0.536, abs=0.001)
+    assert d["current_at_0p6v_ma"] == pytest.approx(12.01, abs=0.05)
+
+
 def test_photodiode_photon_budget_example_energy_flux_and_cutoff():
     namespace = runpy.run_path(str(_EXAMPLES / "photodiode_photon_budget.py"))
     d = namespace["photon_budget"]()

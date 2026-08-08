@@ -212,6 +212,9 @@ modules:
   capacitor (½·C·V²) and an inductor (½·L·I²) store, the RC/RL first-order time
   constants and the RC filter cutoff f_c = 1/(2π·R·C), and the LC resonant frequency
   f₀ = 1/(2π·√(L·C))
+- :mod:`~anvilate.analysis.diode` — semiconductor-diode (Shockley) behavior: the thermal voltage
+  V_T = k·T/q, the ideal-diode current I = I_s·(e^(V/(n·V_T)) − 1), and the forward voltage at a
+  target current V = n·V_T·ln(I/I_s + 1) — the operating point of a rectifier or LED
 - :mod:`~anvilate.analysis.magnetics` — magnetic actuators: the solenoid field B = μ₀·n·I,
   the Maxwell magnetic pressure p = B²/(2·μ₀), and the electromagnet holding force
   F = B²·A/(2·μ₀) — for clamps, lifting magnets, and magnetic bearings
@@ -999,6 +1002,11 @@ from .curved_beam import (
     thin_ring_diametral_deflection,
     thin_ring_max_moment,
     trapezoidal_curved_beam_stress,
+)
+from .diode import (
+    diode_current,
+    diode_voltage,
+    thermal_voltage,
 )
 from .drag import (
     drag_force,
@@ -2064,6 +2072,9 @@ __all__ = [
     "rc_time_constant",
     "rl_time_constant",
     "rc_cutoff_frequency",
+    "thermal_voltage",
+    "diode_current",
+    "diode_voltage",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",

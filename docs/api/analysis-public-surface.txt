@@ -336,6 +336,9 @@ curved_beam.thin_ring_buckling_pressure
 curved_beam.thin_ring_diametral_deflection
 curved_beam.thin_ring_max_moment
 curved_beam.trapezoidal_curved_beam_stress
+diode.diode_current
+diode.diode_voltage
+diode.thermal_voltage
 drag.drag_force
 drag.jet_impact_force
 drag.stokes_drag_force
