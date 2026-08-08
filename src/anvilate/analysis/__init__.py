@@ -251,6 +251,9 @@ modules:
 - :mod:`~anvilate.analysis.diode` — semiconductor-diode (Shockley) behavior: the thermal voltage
   V_T = k·T/q, the ideal-diode current I = I_s·(e^(V/(n·V_T)) − 1), and the forward voltage at a
   target current V = n·V_T·ln(I/I_s + 1) — the operating point of a rectifier or LED
+- :mod:`~anvilate.analysis.pn_junction` — pn-junction electrostatics (abrupt): the built-in
+  potential V_bi = (kT/q)·ln(N_A·N_D/n_i²), the depletion width W = √(2ε·V_bi/q·(1/N_A+1/N_D)), and
+  the junction capacitance ε/W per area (the varactor's tunable capacitance)
 - :mod:`~anvilate.analysis.dc_dc_converter` — switching-regulator transfer functions (ideal, CCM):
   the buck V_out = D·V_in (step-down), the boost V_out = V_in/(1−D) (step-up), and the buck-boost
   V_out = V_in·D/(1−D) (either), all set by the duty cycle D
@@ -1728,6 +1731,11 @@ from .plate import (
     simply_supported_plate_center_patch_load,
     simply_supported_plate_uniform_load,
 )
+from .pn_junction import (
+    built_in_potential,
+    depletion_width,
+    junction_capacitance_per_area,
+)
 from .pneumatics import (
     air_receiver_holdup_time,
     air_receiver_volume_for_demand,
@@ -2327,6 +2335,9 @@ __all__ = [
     "thermal_voltage",
     "diode_current",
     "diode_voltage",
+    "built_in_potential",
+    "depletion_width",
+    "junction_capacitance_per_area",
     "buck_output_voltage",
     "boost_output_voltage",
     "buck_boost_output_voltage",

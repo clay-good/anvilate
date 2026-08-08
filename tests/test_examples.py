@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_silicon_pn_junction_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "silicon_pn_junction.py"))
+    d = namespace["junction_electrostatics"]()
+    # Silicon junction: V_bi ~0.71 V, W ~0.43 um, ~24 nF/cm^2.
+    assert d["built_in_potential_v"] == pytest.approx(0.7143, abs=0.001)
+    assert d["depletion_width_um"] == pytest.approx(0.4298, abs=0.001)
+    assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
+
+
 def test_optical_instrument_magnification_example():
     namespace = runpy.run_path(str(_EXAMPLES / "optical_instrument_magnification.py"))
     d = namespace["instrument_powers"]()

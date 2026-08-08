@@ -20985,6 +20985,79 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_pn_junction_built_in_potential_depletion_and_capacitance():
+    from math import log, sqrt
+
+    from anvilate.analysis import (
+        built_in_potential,
+        depletion_width,
+        junction_capacitance_per_area,
+    )
+
+    k = 1.380649e-23
+    q = 1.602176634e-19
+    n = lambda x: Quantity(magnitude=x, unit="1/m**3")  # noqa: E731
+    eps = Quantity(magnitude=11.7 * 8.8541878128e-12, unit="F/m")
+
+    # V_bi = (k*T/q)*ln(N_A*N_D/n_i^2); silicon -> ~0.71 V.
+    v_bi = built_in_potential(
+        acceptor_density=n(1e22),
+        donor_density=n(1e22),
+        intrinsic_density=n(1e16),
+        temperature=Quantity(magnitude=300.0, unit="K"),
+    )
+    assert v_bi.to("V").magnitude == pytest.approx(
+        (k * 300 / q) * log(1e22 * 1e22 / 1e32), rel=1e-9
+    )
+    assert v_bi.to("V").magnitude == pytest.approx(0.7143, abs=0.001)
+    # Heavier doping raises the built-in potential.
+    v_hi = built_in_potential(
+        acceptor_density=n(1e24),
+        donor_density=n(1e22),
+        intrinsic_density=n(1e16),
+        temperature=Quantity(magnitude=300.0, unit="K"),
+    )
+    assert v_hi.to("V").magnitude > v_bi.to("V").magnitude
+
+    # W = sqrt(2*eps*V_bi/q*(1/N_A + 1/N_D)); ~0.43 um.
+    w = depletion_width(
+        built_in_potential=v_bi, permittivity=eps, acceptor_density=n(1e22), donor_density=n(1e22)
+    )
+    assert w.to("m").magnitude == pytest.approx(
+        sqrt(2 * eps.to("F/m").magnitude * v_bi.to("V").magnitude / q * (1 / 1e22 + 1 / 1e22)),
+        rel=1e-9,
+    )
+    assert w.to("um").magnitude == pytest.approx(0.4298, abs=0.001)
+
+    # C/A = eps/W; falls as the depletion widens.
+    c = junction_capacitance_per_area(permittivity=eps, depletion_width=w)
+    assert c.to("F/m**2").magnitude == pytest.approx(
+        eps.to("F/m").magnitude / w.to("m").magnitude, rel=1e-9
+    )
+    c_wide = junction_capacitance_per_area(permittivity=eps, depletion_width=_q("1 um"))
+    assert c_wide.to("F/m**2").magnitude < c.to("F/m**2").magnitude
+
+    # Guardrails: positive densities/temperature/permittivity, dimensions checked.
+    with pytest.raises(ValueError, match="intrinsic_density must be positive"):
+        built_in_potential(
+            acceptor_density=n(1e22),
+            donor_density=n(1e22),
+            intrinsic_density=n(0.0),
+            temperature=Quantity(magnitude=300.0, unit="K"),
+        )
+    with pytest.raises(ValueError, match="permittivity must be positive"):
+        junction_capacitance_per_area(
+            permittivity=Quantity(magnitude=0.0, unit="F/m"), depletion_width=_q("0.4 um")
+        )
+    with pytest.raises(ValueError, match="acceptor_density must be a"):
+        built_in_potential(
+            acceptor_density=_q("1e22 1/m"),
+            donor_density=n(1e22),
+            intrinsic_density=n(1e16),
+            temperature=Quantity(magnitude=300.0, unit="K"),
+        )
+
+
 def test_optical_instrument_magnifications():
     from anvilate.analysis import (
         magnifier_angular_magnification,
