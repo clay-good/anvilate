@@ -1221,6 +1221,14 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_heisenberg_uncertainty_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "heisenberg_uncertainty.py"))
+    d = namespace["uncertainty_limits"]()
+    # 0.1 nm -> ~5.27e-25 kg m/s; 1 ns -> ~3.29e-7 eV.
+    assert d["momentum_uncertainty_kg_m_s"] == pytest.approx(5.2729e-25, abs=1e-29)
+    assert d["energy_uncertainty_ev"] == pytest.approx(3.2911e-7, rel=1e-3)
+
+
 def test_earth_gravitation_example():
     namespace = runpy.run_path(str(_EXAMPLES / "earth_gravitation.py"))
     d = namespace["earth_gravity_chain"]()

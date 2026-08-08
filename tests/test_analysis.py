@@ -22334,6 +22334,46 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_heisenberg_uncertainty_minima():
+    from anvilate.analysis import (
+        minimum_energy_uncertainty,
+        minimum_momentum_uncertainty,
+        minimum_position_uncertainty,
+    )
+
+    hbar = 1.054571817e-34
+
+    # Δp = hbar/(2*Δx); 0.1 nm confinement -> ~5.27e-25 kg m/s.
+    dp = minimum_momentum_uncertainty(position_uncertainty=Quantity(magnitude=1e-10, unit="m"))
+    assert dp.to("kg*m/s").magnitude == pytest.approx(hbar / (2 * 1e-10), rel=1e-9)
+    assert dp.to("kg*m/s").magnitude == pytest.approx(5.2729e-25, abs=1e-29)
+
+    # Δx = hbar/(2*Δp) is the exact inverse; round-trips the confinement.
+    dx = minimum_position_uncertainty(momentum_uncertainty=dp)
+    assert dx.to("m").magnitude == pytest.approx(1e-10, rel=1e-9)
+    # Tighter confinement forces a larger momentum spread.
+    dp_tight = minimum_momentum_uncertainty(
+        position_uncertainty=Quantity(magnitude=0.5e-10, unit="m")
+    )
+    assert dp_tight.to("kg*m/s").magnitude == pytest.approx(
+        2.0 * dp.to("kg*m/s").magnitude, rel=1e-9
+    )
+
+    # ΔE = hbar/(2*Δt); a 1 ns state -> ~3.29e-7 eV natural linewidth.
+    de = minimum_energy_uncertainty(lifetime=Quantity(magnitude=1e-9, unit="s"))
+    assert de.to("J").magnitude == pytest.approx(hbar / (2 * 1e-9), rel=1e-9)
+    assert de.to("eV").magnitude == pytest.approx(3.2911e-7, rel=1e-3)
+    # A shorter-lived state has a broader energy.
+    de_fast = minimum_energy_uncertainty(lifetime=Quantity(magnitude=1e-12, unit="s"))
+    assert de_fast.to("J").magnitude > de.to("J").magnitude
+
+    # Guardrails: positive, dimensioned inputs.
+    with pytest.raises(ValueError, match="position_uncertainty must be positive"):
+        minimum_momentum_uncertainty(position_uncertainty=_q("0 m"))
+    with pytest.raises(ValueError, match="lifetime must be a"):
+        minimum_energy_uncertainty(lifetime=_q("1 m"))
+
+
 def test_newtonian_gravitation_force_surface_gravity_and_mu():
     from anvilate.analysis import (
         gravitational_force,

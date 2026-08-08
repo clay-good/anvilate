@@ -453,9 +453,9 @@ modules:
 - :mod:`~anvilate.analysis.spectroscopy` — Beer-Lambert absorption: the absorbance A = ε·c·l, the
   transmittance T = 10^(−A) a sample passes, and the concentration a measured absorbance implies
   c = A/(ε·l) — the working equation of UV-Vis colorimetry
-- :mod:`~anvilate.analysis.quantum` — photoelectric and matter-wave quanta: the photoelectron
-  energy KE = h·f − φ, the threshold frequency f0 = φ/h below which no electron escapes, and the
-  de Broglie wavelength λ = h/(m·v) behind electron-microscope resolution
+- :mod:`~anvilate.analysis.quantum` — photoelectric, matter-wave, and uncertainty quanta: the
+  photoelectron energy KE = h·f − φ, the threshold frequency f0 = φ/h, the de Broglie wavelength
+  λ = h/(m·v), and the Heisenberg minima Δp = ℏ/(2·Δx), Δx = ℏ/(2·Δp), and ΔE = ℏ/(2·Δt)
 - :mod:`~anvilate.analysis.relativity` — special relativity: the Lorentz factor γ = 1/√(1−(v/c)²),
   the time dilation t = γ·t0 of a moving clock (GPS, muons), the relativistic kinetic energy
   (γ−1)·m·c², the length contraction L0/γ, the relativistic momentum γ·m·v, and the relativistic
@@ -1939,6 +1939,9 @@ from .pump import (
 )
 from .quantum import (
     de_broglie_wavelength,
+    minimum_energy_uncertainty,
+    minimum_momentum_uncertainty,
+    minimum_position_uncertainty,
     photoelectric_max_kinetic_energy,
     photoelectric_threshold_frequency,
 )
@@ -3290,6 +3293,9 @@ __all__ = [
     "photoelectric_max_kinetic_energy",
     "photoelectric_threshold_frequency",
     "de_broglie_wavelength",
+    "minimum_momentum_uncertainty",
+    "minimum_position_uncertainty",
+    "minimum_energy_uncertainty",
     "lorentz_factor",
     "time_dilation",
     "relativistic_kinetic_energy",

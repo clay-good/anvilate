@@ -13,6 +13,12 @@ photoelectric equation). Below the threshold frequency f0 = phi/h no photon has 
 electron escapes, however bright the light. Separately, a particle of momentum p = m*v behaves as a
 wave of wavelength lambda = h/p — tiny for everyday objects but nanometre-scale for a fast electron,
 which is why electron microscopes out-resolve light ones.
+
+A third relation bounds how precisely nature allows two conjugate quantities to be known at once:
+Heisenberg's uncertainty principle, Δx·Δp ≥ ℏ/2 for position and momentum (and ΔE·Δt ≥ ℏ/2 for
+energy and time). Confining a particle to a small Δx forces a large momentum spread, and a
+short-lived state has a correspondingly broad energy (its natural linewidth). These give the minimum
+uncertainties at the equality (best case).
 """
 
 from __future__ import annotations
@@ -20,9 +26,13 @@ from __future__ import annotations
 from ..units import Quantity
 
 _PLANCK_CONSTANT = 6.62607015e-34  # J*s
+_HBAR = 1.054571817e-34  # J*s, reduced Planck constant
 
 __all__ = [
     "de_broglie_wavelength",
+    "minimum_energy_uncertainty",
+    "minimum_momentum_uncertainty",
+    "minimum_position_uncertainty",
     "photoelectric_max_kinetic_energy",
     "photoelectric_threshold_frequency",
 ]
@@ -85,6 +95,51 @@ def de_broglie_wavelength(*, mass: Quantity, velocity: Quantity) -> Quantity:
     if v <= 0:
         raise ValueError("velocity must be positive")
     return Quantity(magnitude=_PLANCK_CONSTANT / (m * v), unit="m")
+
+
+def minimum_momentum_uncertainty(*, position_uncertainty: Quantity) -> Quantity:
+    """The minimum momentum uncertainty, Δp = ℏ/(2·Δx).
+
+    The smallest momentum spread compatible with a position spread ``position_uncertainty`` Δx, from
+    Heisenberg's principle at the equality: Δp = ℏ/(2·Δx). Pinning a particle to a tighter Δx forces
+    a larger momentum uncertainty — the reason a confined electron cannot sit still. Returns the
+    momentum uncertainty in kg*m/s.
+    """
+    _check(position_uncertainty, "[length]", "position_uncertainty")
+    dx = position_uncertainty.to("m").magnitude
+    if dx <= 0:
+        raise ValueError("position_uncertainty must be positive")
+    return Quantity(magnitude=_HBAR / (2.0 * dx), unit="kg*m/s")
+
+
+def minimum_position_uncertainty(*, momentum_uncertainty: Quantity) -> Quantity:
+    """The minimum position uncertainty, Δx = ℏ/(2·Δp).
+
+    The smallest position spread compatible with a momentum spread ``momentum_uncertainty`` Δp, the
+    inverse of :func:`minimum_momentum_uncertainty`: Δx = ℏ/(2·Δp). A well-defined momentum
+    (small Δp) means the particle is delocalized over a large Δx. Returns the position uncertainty
+    in m.
+    """
+    _check(momentum_uncertainty, "[momentum]", "momentum_uncertainty")
+    dp = momentum_uncertainty.to("kg*m/s").magnitude
+    if dp <= 0:
+        raise ValueError("momentum_uncertainty must be positive")
+    return Quantity(magnitude=_HBAR / (2.0 * dp), unit="m")
+
+
+def minimum_energy_uncertainty(*, lifetime: Quantity) -> Quantity:
+    """The minimum energy uncertainty, ΔE = ℏ/(2·Δt).
+
+    The smallest energy spread of a state that lives for a time ``lifetime`` Δt, from the
+    energy-time uncertainty relation: ΔE = ℏ/(2·Δt). A short-lived excited state has a broad energy,
+    the natural linewidth of a spectral line, wider for faster-decaying states. Returns the energy
+    uncertainty in J (convert to eV).
+    """
+    _check(lifetime, "[time]", "lifetime")
+    dt = lifetime.to("s").magnitude
+    if dt <= 0:
+        raise ValueError("lifetime must be positive")
+    return Quantity(magnitude=_HBAR / (2.0 * dt), unit="J")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
