@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_polarizer_attenuator_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "polarizer_attenuator.py"))
+    d = namespace["polarizer_attenuation"]()
+    # 1000 W/m^2 unpolarized: 500 after first, 375 through 30-deg analyzer, 60 deg for 25%.
+    assert d["after_first_polarizer_w_m2"] == pytest.approx(500.0, rel=1e-9)
+    assert d["after_analyzer_w_m2"] == pytest.approx(375.0, rel=1e-9)
+    assert d["angle_for_25pct_deg"] == pytest.approx(60.0, abs=0.01)
+
+
 def test_ammonia_synthesis_equilibrium_example():
     namespace = runpy.run_path(str(_EXAMPLES / "ammonia_synthesis_equilibrium.py"))
     d = namespace["ammonia_equilibrium"]()

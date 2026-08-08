@@ -22334,6 +22334,47 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_malus_law_transmission_inverse_and_unpolarized_half():
+    from math import cos, pi, radians
+
+    from anvilate.analysis import (
+        malus_angle_for_intensity,
+        malus_transmitted_intensity,
+        unpolarized_transmitted_intensity,
+    )
+
+    i0 = _q("100 W/m**2")
+
+    # Malus's law I = I0*cos^2(theta): 75% at 30 deg, 50% at 45 deg, 0 at 90 deg.
+    i30 = malus_transmitted_intensity(incident_intensity=i0, angle=radians(30.0))
+    assert i30.to("W/m**2").magnitude == pytest.approx(100.0 * cos(radians(30.0)) ** 2, rel=1e-9)
+    assert i30.to("W/m**2").magnitude == pytest.approx(75.0, rel=1e-9)
+    i45 = malus_transmitted_intensity(incident_intensity=i0, angle=radians(45.0))
+    assert i45.to("W/m**2").magnitude == pytest.approx(50.0, rel=1e-9)
+    i90 = malus_transmitted_intensity(incident_intensity=i0, angle=pi / 2)
+    assert i90.to("W/m**2").magnitude == pytest.approx(0.0, abs=1e-12)
+    # Aligned axes pass everything.
+    i0pass = malus_transmitted_intensity(incident_intensity=i0, angle=0.0)
+    assert i0pass.to("W/m**2").magnitude == pytest.approx(100.0, rel=1e-9)
+
+    # Inverse: the angle that passes a quarter of the intensity is 60 deg.
+    theta = malus_angle_for_intensity(incident_intensity=i0, transmitted_intensity=_q("25 W/m**2"))
+    assert theta == pytest.approx(radians(60.0), rel=1e-9)
+    # Round-trip: feeding the inverse angle back into Malus recovers the intensity.
+    back = malus_transmitted_intensity(incident_intensity=i0, angle=theta)
+    assert back.to("W/m**2").magnitude == pytest.approx(25.0, rel=1e-9)
+
+    # Unpolarized light: an ideal polarizer passes exactly half, regardless of orientation.
+    half = unpolarized_transmitted_intensity(incident_intensity=i0)
+    assert half.to("W/m**2").magnitude == pytest.approx(50.0, rel=1e-9)
+
+    # Guardrails: transmitted cannot exceed incident, intensities dimensioned.
+    with pytest.raises(ValueError, match="transmitted_intensity must not exceed"):
+        malus_angle_for_intensity(incident_intensity=i0, transmitted_intensity=_q("150 W/m**2"))
+    with pytest.raises(ValueError, match="incident_intensity must be a"):
+        malus_transmitted_intensity(incident_intensity=_q("100 W"), angle=0.0)
+
+
 def test_gibbs_equilibrium_constant_and_vant_hoff_shift():
     from math import exp
 

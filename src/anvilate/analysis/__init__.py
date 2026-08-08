@@ -181,6 +181,9 @@ modules:
   rotary complement of hydraulic_cylinder, distinct from the centrifugal pump module
 - :mod:`~anvilate.analysis.pneumatics` — compressed-air systems: the receiver hold-up
   time V·Δp/(Q·p_atm) and the receiver volume a required hold-up needs
+- :mod:`~anvilate.analysis.polarization` — light polarization (Malus's law): the transmitted
+  intensity I = I₀·cos²θ through an analyzer, the analyzer angle arccos(√(I/I₀)) for a target
+  attenuation, and the I₀/2 an ideal polarizer passes of unpolarized light
 - :mod:`~anvilate.analysis.compressible_flow` — gas dynamics: the speed of sound √(γRT),
   the Mach number, the stagnation-to-static temperature ratio, the critical pressure
   ratio and choked mass flow that size a relief valve, the isentropic area ratio A/A*
@@ -1781,6 +1784,11 @@ from .pneumatics import (
     air_receiver_holdup_time,
     air_receiver_volume_for_demand,
 )
+from .polarization import (
+    malus_angle_for_intensity,
+    malus_transmitted_intensity,
+    unpolarized_transmitted_intensity,
+)
 from .power_cycles import (
     brayton_cycle_efficiency,
     carnot_efficiency,
@@ -2479,6 +2487,9 @@ __all__ = [
     "mean_free_path",
     "air_receiver_holdup_time",
     "air_receiver_volume_for_demand",
+    "malus_transmitted_intensity",
+    "malus_angle_for_intensity",
+    "unpolarized_transmitted_intensity",
     "adiabatic_mixing_temperature",
     "adiabatic_mixing_humidity_ratio",
     "coil_bypass_factor",
