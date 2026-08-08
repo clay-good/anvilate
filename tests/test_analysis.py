@@ -20985,6 +20985,44 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_optical_instrument_magnifications():
+    from anvilate.analysis import (
+        magnifier_angular_magnification,
+        microscope_magnification,
+        telescope_angular_magnification,
+    )
+
+    # Telescope M = f_o/f_e; 1000/25 -> 40.
+    assert telescope_angular_magnification(
+        objective_focal_length=_q("1000 mm"), eyepiece_focal_length=_q("25 mm")
+    ) == pytest.approx(40.0, rel=1e-12)
+
+    # Magnifier M = D/f; 250 mm near point over 50 mm -> 5, and scales with a custom near point.
+    assert magnifier_angular_magnification(focal_length=_q("50 mm")) == pytest.approx(
+        5.0, rel=1e-12
+    )
+    assert magnifier_angular_magnification(
+        focal_length=_q("50 mm"), near_point=_q("200 mm")
+    ) == pytest.approx(4.0, rel=1e-12)
+
+    # Microscope M = (L/f_o)*(D/f_e); 160/4 * 250/25 -> 400.
+    assert microscope_magnification(
+        tube_length=_q("160 mm"),
+        objective_focal_length=_q("4 mm"),
+        eyepiece_focal_length=_q("25 mm"),
+    ) == pytest.approx((160 / 4) * (250 / 25), rel=1e-12)
+
+    # Guardrails: positive focal lengths, positive near point, dimensions checked.
+    with pytest.raises(ValueError, match="eyepiece_focal_length must be positive"):
+        telescope_angular_magnification(
+            objective_focal_length=_q("1000 mm"), eyepiece_focal_length=_q("0 mm")
+        )
+    with pytest.raises(ValueError, match="near_point must be positive"):
+        magnifier_angular_magnification(focal_length=_q("50 mm"), near_point=_q("0 mm"))
+    with pytest.raises(ValueError, match="focal_length must be a"):
+        magnifier_angular_magnification(focal_length=_q("50 s"))
+
+
 def test_elastic_constants_bulk_lame_and_youngs_conversions():
     from anvilate.analysis import (
         bulk_modulus_from_youngs_poisson,

@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_optical_instrument_magnification_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "optical_instrument_magnification.py"))
+    d = namespace["instrument_powers"]()
+    # Telescope 40x, magnifier 5x, microscope 400x.
+    assert d["telescope_magnification"] == pytest.approx(40.0, rel=1e-12)
+    assert d["magnifier_magnification"] == pytest.approx(5.0, rel=1e-12)
+    assert d["microscope_magnification"] == pytest.approx(400.0, rel=1e-12)
+
+
 def test_elastic_constants_conversion_example():
     namespace = runpy.run_path(str(_EXAMPLES / "elastic_constants_conversion.py"))
     d = namespace["convert_constants"]()

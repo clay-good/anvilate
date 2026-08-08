@@ -392,6 +392,9 @@ modules:
 - :mod:`~anvilate.analysis.photometry` — luminous efficacy: the lamp efficacy Φ_v/P (lm/W), the
   luminous flux P·efficacy a lamp emits, and the overall luminous efficiency efficacy/683 (fraction
   of the 555 nm ideal) — the source-side efficiency feeding the lumen method
+- :mod:`~anvilate.analysis.optical_instruments` — visual-instrument angular magnification: the
+  telescope M = f_o/f_e, the simple magnifier M = D/f (D the 250 mm near point), and the compound
+  microscope M = (L/f_o)·(D/f_e) — distinct from the single-lens imaging of optics
 - :mod:`~anvilate.analysis.optics` — geometric optics for optomechanical design: the thin-lens
   image distance d_i = f·d_o/(d_o − f), the transverse magnification m = −d_i/d_o, the Rayleigh
   diffraction limit θ = 1.22·λ/D on resolving power, the lens speed side — the f-number
@@ -1642,6 +1645,11 @@ from .open_channel import (
     specific_energy,
     trapezoidal_channel_properties,
     triangular_weir_flow,
+)
+from .optical_instruments import (
+    magnifier_angular_magnification,
+    microscope_magnification,
+    telescope_angular_magnification,
 )
 from .optics import (
     critical_angle,
@@ -3042,6 +3050,9 @@ __all__ = [
     "luminous_efficacy",
     "luminous_flux_from_power",
     "luminous_efficiency",
+    "telescope_angular_magnification",
+    "magnifier_angular_magnification",
+    "microscope_magnification",
     "thin_lens_image_distance",
     "lens_transverse_magnification",
     "diffraction_limited_angular_resolution",
