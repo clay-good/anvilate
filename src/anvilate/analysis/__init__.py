@@ -171,6 +171,9 @@ modules:
 - :mod:`~anvilate.analysis.cable` — uniformly loaded cable (parabolic) midspan
   sag, peak support tension, and developed arc length, and the exact catenary
   (heavy-cable) sag, arc length, and peak tension
+- :mod:`~anvilate.analysis.calorimetry` — sensible and latent heat: the sensible heat Q = m·c·ΔT to
+  change a temperature, the latent heat Q = m·L of a phase change, and the mixing equilibrium
+  temperature (m₁c₁T₁ + m₂c₂T₂)/(m₁c₁ + m₂c₂) two bodies settle at
 - :mod:`~anvilate.analysis.cam` — cam-follower rise kinematics (SHM, cycloidal,
   parabolic, and 3-4-5 polynomial profiles): follower displacement, velocity, and
   acceleration at a cam angle, the translating roller-follower pressure angle, and
@@ -1030,6 +1033,11 @@ from .cable import (
     parabolic_cable_length,
     parabolic_cable_max_tension,
     parabolic_cable_sag,
+)
+from .calorimetry import (
+    latent_heat,
+    mixing_equilibrium_temperature,
+    sensible_heat,
 )
 from .cam import (
     CamMotion,
@@ -2999,6 +3007,9 @@ __all__ = [
     "minimum_sprocket_teeth_for_chordal_variation",
     "chain_speed",
     "chain_working_tension",
+    "sensible_heat",
+    "latent_heat",
+    "mixing_equilibrium_temperature",
     "CamMotion",
     "cam_follower_motion",
     "cam_pressure_angle",

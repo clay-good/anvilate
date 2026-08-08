@@ -279,6 +279,9 @@ cable.catenary_sag
 cable.parabolic_cable_length
 cable.parabolic_cable_max_tension
 cable.parabolic_cable_sag
+calorimetry.sensible_heat
+calorimetry.latent_heat
+calorimetry.mixing_equilibrium_temperature
 cam.CamMotion
 cam.cam_base_circle_for_pressure_angle
 cam.cam_follower_motion

@@ -22334,6 +22334,71 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_sensible_latent_heat_and_mixing_temperature():
+    from anvilate.analysis import (
+        latent_heat,
+        mixing_equilibrium_temperature,
+        sensible_heat,
+    )
+
+    c_water = Quantity(magnitude=4186.0, unit="J/(kg*K)")
+
+    # Sensible heat Q = m*c*dT; 2 kg water, 30 K -> 251160 J.
+    q = sensible_heat(
+        mass=_q("2 kg"),
+        specific_heat=c_water,
+        temperature_change=Quantity(magnitude=30.0, unit="K"),
+    )
+    assert q.to("J").magnitude == pytest.approx(2.0 * 4186.0 * 30.0, rel=1e-9)
+    assert q.to("J").magnitude == pytest.approx(251160.0, rel=1e-9)
+    # Cooling gives a negative sensible heat.
+    q_cool = sensible_heat(
+        mass=_q("2 kg"),
+        specific_heat=c_water,
+        temperature_change=Quantity(magnitude=-30.0, unit="K"),
+    )
+    assert q_cool.to("J").magnitude == pytest.approx(-251160.0, rel=1e-9)
+
+    # Latent heat Q = m*L; melting 0.5 kg ice (334 kJ/kg) -> 167000 J.
+    q_l = latent_heat(
+        mass=_q("0.5 kg"), specific_latent_heat=Quantity(magnitude=334000.0, unit="J/kg")
+    )
+    assert q_l.to("J").magnitude == pytest.approx(0.5 * 334000.0, rel=1e-9)
+    assert q_l.to("J").magnitude == pytest.approx(167000.0, rel=1e-9)
+
+    # Mixing: equal masses of the same fluid meet at the average temperature.
+    t_mix = mixing_equilibrium_temperature(
+        mass1=_q("1 kg"),
+        specific_heat1=c_water,
+        temperature1=Quantity(magnitude=353.15, unit="K"),
+        mass2=_q("1 kg"),
+        specific_heat2=c_water,
+        temperature2=Quantity(magnitude=293.15, unit="K"),
+    )
+    assert t_mix.to("K").magnitude == pytest.approx(323.15, rel=1e-9)
+    # The result lies between the two starting temperatures, weighted by heat capacity.
+    t_weighted = mixing_equilibrium_temperature(
+        mass1=_q("3 kg"),
+        specific_heat1=c_water,
+        temperature1=Quantity(magnitude=353.15, unit="K"),
+        mass2=_q("1 kg"),
+        specific_heat2=c_water,
+        temperature2=Quantity(magnitude=293.15, unit="K"),
+    )
+    assert t_weighted.to("K").magnitude == pytest.approx((3 * 353.15 + 293.15) / 4.0, rel=1e-9)
+    assert 293.15 < t_weighted.to("K").magnitude < 353.15
+
+    # Guardrails: positive mass/specific heat, absolute temperature, correct dimensions.
+    with pytest.raises(ValueError, match="mass must be positive"):
+        sensible_heat(
+            mass=_q("0 kg"),
+            specific_heat=c_water,
+            temperature_change=Quantity(magnitude=30.0, unit="K"),
+        )
+    with pytest.raises(ValueError, match="specific_latent_heat must be a"):
+        latent_heat(mass=_q("0.5 kg"), specific_latent_heat=_q("334 J"))
+
+
 def test_heisenberg_uncertainty_minima():
     from anvilate.analysis import (
         minimum_energy_uncertainty,

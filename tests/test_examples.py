@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_ice_water_calorimetry_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "ice_water_calorimetry.py"))
+    d = namespace["calorimetry_quantities"]()
+    # 2 kg water 30 K -> 251 kJ; 0.5 kg ice -> 167 kJ; mix 80/20 C -> 50 C.
+    assert d["sensible_heat_kj"] == pytest.approx(251.16, abs=0.01)
+    assert d["latent_heat_kj"] == pytest.approx(167.0, rel=1e-6)
+    assert d["mixing_temperature_c"] == pytest.approx(50.0, abs=0.01)
+
+
 def test_heisenberg_uncertainty_example():
     namespace = runpy.run_path(str(_EXAMPLES / "heisenberg_uncertainty.py"))
     d = namespace["uncertainty_limits"]()
