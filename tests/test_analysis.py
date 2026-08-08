@@ -20853,6 +20853,46 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_op_amp_gains_and_gain_bandwidth_tradeoff():
+    from anvilate.analysis import (
+        gain_bandwidth_limited_bandwidth,
+        inverting_gain,
+        noninverting_gain,
+    )
+
+    # Non-inverting A = 1 + Rf/Rg; 90k/10k -> 10.
+    assert noninverting_gain(
+        feedback_resistance=_q("90 kohm"), ground_resistance=_q("10 kohm")
+    ) == pytest.approx(10.0, rel=1e-12)
+    # A unity follower (Rf=0) has gain 1.
+    assert noninverting_gain(
+        feedback_resistance=_q("0 ohm"), ground_resistance=_q("10 kohm")
+    ) == pytest.approx(1.0, rel=1e-12)
+
+    # Inverting A = -Rf/Rin; 100k/10k -> -10 (phase-flipped).
+    assert inverting_gain(
+        feedback_resistance=_q("100 kohm"), input_resistance=_q("10 kohm")
+    ) == pytest.approx(-10.0, rel=1e-12)
+
+    # GBW tradeoff: f = GBW/|A|; 10 MHz part at gain 10 -> 1 MHz, at gain 100 -> 100 kHz.
+    gbw = Quantity(magnitude=10e6, unit="Hz")
+    bw10 = gain_bandwidth_limited_bandwidth(gain_bandwidth_product=gbw, closed_loop_gain=10.0)
+    assert bw10.to("Hz").magnitude == pytest.approx(1e6, rel=1e-12)
+    bw100 = gain_bandwidth_limited_bandwidth(gain_bandwidth_product=gbw, closed_loop_gain=100.0)
+    assert bw100.to("Hz").magnitude == pytest.approx(1e5, rel=1e-12)
+    # Bandwidth uses the magnitude of the (possibly negative) gain.
+    bw_inv = gain_bandwidth_limited_bandwidth(gain_bandwidth_product=gbw, closed_loop_gain=-10.0)
+    assert bw_inv.to("Hz").magnitude == pytest.approx(1e6, rel=1e-12)
+
+    # Guardrails: positive ground/input resistance, non-zero gain, positive GBW, dimensions.
+    with pytest.raises(ValueError, match="ground_resistance must be positive"):
+        noninverting_gain(feedback_resistance=_q("90 kohm"), ground_resistance=_q("0 ohm"))
+    with pytest.raises(ValueError, match="closed_loop_gain must be non-zero"):
+        gain_bandwidth_limited_bandwidth(gain_bandwidth_product=gbw, closed_loop_gain=0.0)
+    with pytest.raises(ValueError, match="feedback_resistance must be a"):
+        inverting_gain(feedback_resistance=_q("90 kV"), input_resistance=_q("10 kohm"))
+
+
 def test_thermal_noise_voltage_power_and_current():
     from math import sqrt
 

@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_preamp_gain_bandwidth_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "preamp_gain_bandwidth.py"))
+    d = namespace["preamp_design"]()
+    # 90k/10k -> gain 10; 10 MHz GBW: 1000 kHz at gain 10, 100 kHz at gain 100.
+    assert d["stage_gain"] == pytest.approx(10.0, rel=1e-12)
+    assert d["bandwidth_at_gain_10_khz"] == pytest.approx(1000.0, rel=1e-9)
+    assert d["bandwidth_at_gain_100_khz"] == pytest.approx(100.0, rel=1e-9)
+
+
 def test_amplifier_noise_floor_example():
     namespace = runpy.run_path(str(_EXAMPLES / "amplifier_noise_floor.py"))
     d = namespace["noise_floor"]()

@@ -238,6 +238,9 @@ modules:
 - :mod:`~anvilate.analysis.thermal_noise` — Johnson-Nyquist thermal noise: the noise voltage
   V = √(4·k·T·R·B), the available noise power k·T·B (the −174 dBm/Hz floor at 290 K), and the noise
   current √(4·k·T·B/R) — the electrical noise floor every amplifier and sensor sits on
+- :mod:`~anvilate.analysis.op_amp` — ideal op-amp stages: the non-inverting gain 1 + Rf/Rg, the
+  inverting gain −Rf/Rin, and the gain-bandwidth tradeoff f = GBW/|A| that caps a stage's bandwidth
+  as its gain rises
 - :mod:`~anvilate.analysis.diffusion` — Fickian mass transport: the steady flux J = D·ΔC/L through
   a barrier (Fick's first law), the penetration length x = √(D·t) a diffusion front reaches, and the
   time t = x²/D to diffuse a distance — the mass-transport analog of heat conduction
@@ -1524,6 +1527,11 @@ from .o_ring import (
     o_ring_squeeze_fraction,
     o_ring_stretch_fraction,
 )
+from .op_amp import (
+    gain_bandwidth_limited_bandwidth,
+    inverting_gain,
+    noninverting_gain,
+)
 from .open_channel import (
     broad_crested_weir_flow,
     circular_channel_properties,
@@ -2193,6 +2201,9 @@ __all__ = [
     "johnson_noise_voltage",
     "johnson_noise_power",
     "johnson_noise_current",
+    "noninverting_gain",
+    "inverting_gain",
+    "gain_bandwidth_limited_bandwidth",
     "steady_diffusion_flux",
     "diffusion_length",
     "diffusion_time",
