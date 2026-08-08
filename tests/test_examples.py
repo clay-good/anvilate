@@ -1135,6 +1135,15 @@ def test_lifting_magnet_holding_force_example_coil_to_clamp():
     assert d["holding_force_kn"] == pytest.approx(3.979, abs=0.01)
 
 
+def test_conveyor_discharge_trajectory_example_places_the_chute():
+    namespace = runpy.run_path(str(_EXAMPLES / "conveyor_discharge_trajectory.py"))
+    d = namespace["discharge_trajectory"]()
+    # 3 m/s at 20 deg: ~0.59 m throw, ~5.4 cm peak, ~0.21 s aloft.
+    assert d["range_m"] == pytest.approx(0.590, abs=0.005)
+    assert d["peak_height_m"] == pytest.approx(0.0537, abs=0.001)
+    assert d["time_of_flight_s"] == pytest.approx(0.209, abs=0.002)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

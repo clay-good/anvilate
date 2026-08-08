@@ -314,6 +314,9 @@ modules:
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
+- :mod:`~anvilate.analysis.projectile` — drag-free launch trajectory (conveyor discharge,
+  jet/spray throw, safe fragment distance): the range R = v²·sin(2θ)/g, the peak height
+  H = v²·sin²θ/(2g), and the time of flight t = 2·v·sin θ/g
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, the inertia a speed-smoothing target requires and the thin-rim
   mass that inertia needs, the rotating
@@ -1494,6 +1497,11 @@ from .prestressed_concrete import (
     prestress_balanced_load,
     prestress_bottom_fiber_stress,
     prestress_cracking_moment,
+)
+from .projectile import (
+    projectile_max_height,
+    projectile_range,
+    projectile_time_of_flight,
 )
 from .psychrometrics import (
     adiabatic_mixing_humidity_ratio,
@@ -2722,6 +2730,9 @@ __all__ = [
     "prestress_balanced_load",
     "prestress_bottom_fiber_stress",
     "prestress_cracking_moment",
+    "projectile_range",
+    "projectile_max_height",
+    "projectile_time_of_flight",
     "worm_gear_ratio",
     "worm_lead_angle",
     "worm_gear_efficiency",

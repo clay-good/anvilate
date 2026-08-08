@@ -744,6 +744,9 @@ power_screw.power_screw_raise_torque
 prestressed_concrete.prestress_balanced_load
 prestressed_concrete.prestress_bottom_fiber_stress
 prestressed_concrete.prestress_cracking_moment
+projectile.projectile_range
+projectile.projectile_max_height
+projectile.projectile_time_of_flight
 pressure_vessel.ThickWallSphereStress
 pressure_vessel.ThickWallStress
 pressure_vessel.ThinWallStress

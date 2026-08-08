@@ -11950,6 +11950,48 @@ def test_magnetics_solenoid_field_pressure_and_holding_force():
         electromagnet_holding_force(magnetic_flux_density=_q("1 T"), pole_area=_q("0 cm**2"))
 
 
+def test_projectile_range_height_and_time_of_flight():
+    from math import radians, sin
+
+    from anvilate.analysis import (
+        projectile_max_height,
+        projectile_range,
+        projectile_time_of_flight,
+    )
+
+    v = _q("10 m/s")
+
+    # Range R = v^2*sin(2theta)/g; 10 m/s at 30 deg -> 8.831 m.
+    r = projectile_range(launch_speed=v, launch_angle=30.0)
+    assert r.to("m").magnitude == pytest.approx(100 * sin(radians(60)) / 9.80665, rel=1e-9)
+    # Range is maximum at 45 deg and equal for complementary angles (30 and 60).
+    r45 = projectile_range(launch_speed=v, launch_angle=45.0)
+    r60 = projectile_range(launch_speed=v, launch_angle=60.0)
+    assert r45.to("m").magnitude > r.to("m").magnitude
+    assert r60.to("m").magnitude == pytest.approx(r.to("m").magnitude, rel=1e-9)
+
+    # Peak height H = v^2*sin^2(theta)/(2g); 30 deg -> 1.2746 m.
+    h = projectile_max_height(launch_speed=v, launch_angle=30.0)
+    assert h.to("m").magnitude == pytest.approx(
+        100 * sin(radians(30)) ** 2 / (2 * 9.80665), rel=1e-9
+    )
+    # Unlike range, height keeps rising toward a vertical launch.
+    h_steep = projectile_max_height(launch_speed=v, launch_angle=60.0)
+    assert h_steep.to("m").magnitude > h.to("m").magnitude
+
+    # Time of flight t = 2*v*sin(theta)/g; 30 deg -> 1.0197 s.
+    t = projectile_time_of_flight(launch_speed=v, launch_angle=30.0)
+    assert t.to("s").magnitude == pytest.approx(2 * 10 * sin(radians(30)) / 9.80665, rel=1e-9)
+
+    # Guardrails: speed positive, angle within range.
+    with pytest.raises(ValueError, match="launch_speed must be positive"):
+        projectile_range(launch_speed=_q("0 m/s"), launch_angle=30.0)
+    with pytest.raises(ValueError, match="launch_angle must be in"):
+        projectile_range(launch_speed=v, launch_angle=90.0)
+    with pytest.raises(ValueError, match="launch_speed must be a"):
+        projectile_range(launch_speed=_q("10 m"), launch_angle=30.0)
+
+
 def test_sheetmetal_bend_geometry_is_self_consistent():
     from math import radians
 
