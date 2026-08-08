@@ -22334,6 +22334,46 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_bohr_energy_levels_orbit_radius_and_rydberg_wavelength():
+    from anvilate.analysis import (
+        bohr_energy_level,
+        bohr_orbit_radius,
+        rydberg_transition_wavelength,
+    )
+
+    # Bohr energy E_n = -13.606*Z^2/n^2 eV; hydrogen ground state -13.606 eV.
+    e1 = bohr_energy_level(principal_quantum_number=1)
+    assert e1.to("eV").magnitude == pytest.approx(-13.6057, abs=0.001)
+    e2 = bohr_energy_level(principal_quantum_number=2)
+    assert e2.to("eV").magnitude == pytest.approx(-13.6057 / 4.0, rel=1e-6)
+    assert e2.to("eV").magnitude > e1.to("eV").magnitude  # less bound, climbs toward zero
+    # He+ (Z=2) ground state is 4x deeper than hydrogen.
+    e1_he = bohr_energy_level(principal_quantum_number=1, atomic_number=2)
+    assert e1_he.to("eV").magnitude == pytest.approx(4.0 * e1.to("eV").magnitude, rel=1e-9)
+
+    # Bohr radius r_n = n^2 * a0 / Z; ground state ~52.9 pm, n=2 four times that.
+    r1 = bohr_orbit_radius(principal_quantum_number=1)
+    assert r1.to("m").magnitude == pytest.approx(5.29177e-11, rel=1e-5)
+    r2 = bohr_orbit_radius(principal_quantum_number=2)
+    assert r2.to("m").magnitude == pytest.approx(4.0 * r1.to("m").magnitude, rel=1e-9)
+    # A higher nuclear charge pulls the orbit in.
+    r1_he = bohr_orbit_radius(principal_quantum_number=1, atomic_number=2)
+    assert r1_he.to("m").magnitude == pytest.approx(r1.to("m").magnitude / 2.0, rel=1e-9)
+
+    # Rydberg: Balmer-alpha (3->2) is the 656 nm red line; Lyman-alpha (2->1) is 121.5 nm UV.
+    balmer = rydberg_transition_wavelength(lower_level=2, upper_level=3)
+    assert balmer.to("m").magnitude * 1e9 == pytest.approx(656.1, abs=0.5)
+    lyman = rydberg_transition_wavelength(lower_level=1, upper_level=2)
+    assert lyman.to("m").magnitude * 1e9 == pytest.approx(121.5, abs=0.5)
+    assert lyman.to("m").magnitude < balmer.to("m").magnitude  # Lyman is higher-energy/shorter
+
+    # Guardrails: valid quantum numbers, upper above lower.
+    with pytest.raises(ValueError, match="principal_quantum_number must be"):
+        bohr_energy_level(principal_quantum_number=0)
+    with pytest.raises(ValueError, match="upper_level must exceed lower_level"):
+        rydberg_transition_wavelength(lower_level=3, upper_level=2)
+
+
 def test_relativistic_length_momentum_and_doppler():
     from anvilate.analysis import (
         length_contraction,

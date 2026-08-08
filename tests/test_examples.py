@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_hydrogen_balmer_line_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "hydrogen_balmer_line.py"))
+    d = namespace["balmer_alpha_line"]()
+    # Hydrogen: n=2 at -3.401 eV, ~212 pm radius, 656 nm Balmer-alpha.
+    assert d["energy_n2_ev"] == pytest.approx(-3.401, abs=0.005)
+    assert d["radius_n2_pm"] == pytest.approx(211.7, abs=0.5)
+    assert d["balmer_alpha_nm"] == pytest.approx(656.1, abs=0.5)
+
+
 def test_relativistic_spaceship_example():
     namespace = runpy.run_path(str(_EXAMPLES / "relativistic_spaceship.py"))
     d = namespace["spaceship_relativity"]()

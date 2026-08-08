@@ -49,6 +49,9 @@ modules:
 - :mod:`~anvilate.analysis.atmosphere` — barometric (isothermal-atmosphere) law: the pressure
   p = p0·exp(−h/H) that decays exponentially with altitude, the scale height H = R·T/(M·g)
   (~8.4 km for air), and the altimeter inverse h = H·ln(p0/p) recovering altitude from pressure
+- :mod:`~anvilate.analysis.atomic_spectra` — hydrogen-like Bohr model: the energy level
+  E_n = −13.606·Z²/n² eV, the orbit radius r_n = n²·a₀/Z, and the Rydberg transition wavelength
+  1/λ = R·Z²·(1/n₁²−1/n₂²) (hydrogen's 656 nm Balmer line)
 - :mod:`~anvilate.analysis.axial` — direct axial stress, section area, the
   minimum area an axial load requires, and the axial elongation and stiffness
 - :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
@@ -823,6 +826,11 @@ from .atmosphere import (
     barometric_altitude,
     barometric_pressure,
     scale_height,
+)
+from .atomic_spectra import (
+    bohr_energy_level,
+    bohr_orbit_radius,
+    rydberg_transition_wavelength,
 )
 from .axial import (
     axial_elongation,
@@ -2721,6 +2729,9 @@ __all__ = [
     "barometric_altitude",
     "barometric_pressure",
     "scale_height",
+    "bohr_energy_level",
+    "bohr_orbit_radius",
+    "rydberg_transition_wavelength",
     "CompactnessClass",
     "classify_flexural_element",
     "flexural_flange_slenderness_limits",
