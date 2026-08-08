@@ -347,6 +347,9 @@ modules:
 - :mod:`~anvilate.analysis.photon` — photon (Planck) quanta: the photon energy E = h·c/λ, the
   wavelength matching an energy λ = h·c/E (e.g. a semiconductor band gap), and the photon flux
   Φ = P·λ/(h·c) a beam of a given optical power delivers — for detectors, solar cells, and LEDs
+- :mod:`~anvilate.analysis.spectroscopy` — Beer-Lambert absorption: the absorbance A = ε·c·l, the
+  transmittance T = 10^(−A) a sample passes, and the concentration a measured absorbance implies
+  c = A/(ε·l) — the working equation of UV-Vis colorimetry
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1811,6 +1814,11 @@ from .solar_thermal import (
     collector_useful_heat,
     flat_plate_collector_efficiency,
 )
+from .spectroscopy import (
+    absorbance,
+    concentration_from_absorbance,
+    transmittance_from_absorbance,
+)
 from .spring import (
     BELLEVILLE_PLATEAU_RATIO,
     SPRING_END_CLAMPED_FREE,
@@ -2780,6 +2788,9 @@ __all__ = [
     "photon_energy",
     "photon_wavelength_from_energy",
     "photon_flux",
+    "absorbance",
+    "transmittance_from_absorbance",
+    "concentration_from_absorbance",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

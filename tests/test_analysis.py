@@ -20853,6 +20853,54 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_spectroscopy_absorbance_transmittance_and_concentration_inverse():
+    from anvilate.analysis import (
+        absorbance,
+        concentration_from_absorbance,
+        transmittance_from_absorbance,
+    )
+
+    eps = Quantity(magnitude=6000.0, unit="L/(mol*cm)")
+
+    # A = eps*c*l; 6000 L/(mol*cm), 1e-4 mol/L, 1 cm -> A = 0.6.
+    a = absorbance(
+        molar_absorptivity=eps,
+        concentration=Quantity(magnitude=1e-4, unit="mol/L"),
+        path_length=_q("1 cm"),
+    )
+    assert a == pytest.approx(0.6, rel=1e-9)
+    # Absorbance is linear in concentration and in path length.
+    a2 = absorbance(
+        molar_absorptivity=eps,
+        concentration=Quantity(magnitude=2e-4, unit="mol/L"),
+        path_length=_q("1 cm"),
+    )
+    assert a2 == pytest.approx(2 * a, rel=1e-9)
+
+    # T = 10^(-A); A=0.6 -> ~25.1%, A=1 -> 10%, A=2 -> 1%.
+    assert transmittance_from_absorbance(absorbance=a) == pytest.approx(10 ** (-0.6), rel=1e-9)
+    assert transmittance_from_absorbance(absorbance=1.0) == pytest.approx(0.1, rel=1e-12)
+    assert transmittance_from_absorbance(absorbance=2.0) == pytest.approx(0.01, rel=1e-12)
+
+    # Concentration inverse round-trips A=0.6 back to 1e-4 mol/L.
+    c = concentration_from_absorbance(absorbance=a, molar_absorptivity=eps, path_length=_q("1 cm"))
+    assert c.to("mol/L").magnitude == pytest.approx(1e-4, rel=1e-9)
+
+    # Guardrails: non-negative absorbance, positive epsilon/path, dimensions checked.
+    with pytest.raises(ValueError, match="absorbance must be non-negative"):
+        transmittance_from_absorbance(absorbance=-0.1)
+    with pytest.raises(ValueError, match="path_length must be positive"):
+        absorbance(
+            molar_absorptivity=eps,
+            concentration=Quantity(magnitude=1e-4, unit="mol/L"),
+            path_length=_q("0 cm"),
+        )
+    with pytest.raises(ValueError, match="molar_absorptivity must be a"):
+        concentration_from_absorbance(
+            absorbance=0.6, molar_absorptivity=_q("6000 1/cm"), path_length=_q("1 cm")
+        )
+
+
 def test_nernst_potential_slope_and_reaction_quotient_inverse():
     from math import log
 

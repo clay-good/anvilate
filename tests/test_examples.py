@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_colorimetry_concentration_example_absorbance_and_recovery():
+    namespace = runpy.run_path(str(_EXAMPLES / "colorimetry_concentration.py"))
+    d = namespace["assay_sample"]()
+    # 6000 L/(mol*cm), 1e-4 mol/L, 1 cm: A=0.6, T~25%, c recovers to 1e-4 mol/L.
+    assert d["absorbance"] == pytest.approx(0.6, rel=1e-9)
+    assert d["transmittance_percent"] == pytest.approx(25.12, abs=0.05)
+    assert d["recovered_concentration_mol_l"] == pytest.approx(1e-4, rel=1e-9)
+
+
 def test_ph_electrode_nernst_example_slope_and_ph():
     namespace = runpy.run_path(str(_EXAMPLES / "ph_electrode_nernst.py"))
     d = namespace["read_ph_electrode"]()
