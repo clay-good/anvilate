@@ -20853,6 +20853,48 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_coriolis_acceleration_parameter_and_rossby_number():
+    from math import radians, sin
+
+    from anvilate.analysis import (
+        coriolis_acceleration,
+        coriolis_parameter,
+        rossby_number,
+    )
+
+    omega = Quantity(magnitude=7.292e-5, unit="rad/s")
+
+    # a_c = 2*Omega*v.
+    a = coriolis_acceleration(angular_velocity=omega, velocity=_q("10 m/s"))
+    assert a.to("m/s**2").magnitude == pytest.approx(2 * 7.292e-5 * 10, rel=1e-9)
+
+    # f = 2*Omega*sin(lat); zero at the equator, 2*Omega at the pole.
+    f45 = coriolis_parameter(angular_velocity=omega, latitude=45.0)
+    assert f45.to("1/s").magnitude == pytest.approx(2 * 7.292e-5 * sin(radians(45)), rel=1e-9)
+    assert coriolis_parameter(angular_velocity=omega, latitude=0.0).to("1/s").magnitude == (
+        pytest.approx(0.0, abs=1e-15)
+    )
+    assert coriolis_parameter(angular_velocity=omega, latitude=90.0).to("1/s").magnitude == (
+        pytest.approx(2 * 7.292e-5, rel=1e-9)
+    )
+
+    # Ro = U/(f*L); a synoptic weather system is well below 1 (rotation dominates).
+    ro = rossby_number(velocity=_q("10 m/s"), coriolis_parameter=f45, length_scale=_q("1000 km"))
+    assert ro == pytest.approx(10.0 / (f45.to("1/s").magnitude * 1e6), rel=1e-9)
+    assert ro < 0.2
+    # Shrinking the length scale by 1e6 (to a 1 m sink) raises Ro by 1e6 (rotation negligible).
+    ro_sink = rossby_number(velocity=_q("10 m/s"), coriolis_parameter=f45, length_scale=_q("1 m"))
+    assert ro_sink == pytest.approx(1e6 * ro, rel=1e-9)
+
+    # Guardrails: latitude range, positive rotation, positive length scale, dimensions checked.
+    with pytest.raises(ValueError, match="latitude must be in"):
+        coriolis_parameter(angular_velocity=omega, latitude=100.0)
+    with pytest.raises(ValueError, match="length_scale must be positive"):
+        rossby_number(velocity=_q("10 m/s"), coriolis_parameter=f45, length_scale=_q("0 m"))
+    with pytest.raises(ValueError, match="angular_velocity must be a"):
+        coriolis_acceleration(angular_velocity=_q("10 m/s"), velocity=_q("10 m/s"))
+
+
 def test_radiation_shielding_transmission_hvl_and_thickness_inverse():
     from math import exp, log
 

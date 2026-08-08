@@ -314,6 +314,9 @@ conveyor.conveyor_lift_power
 cooling_tower.cooling_tower_range
 cooling_tower.cooling_tower_approach
 cooling_tower.cooling_tower_effectiveness
+coriolis.coriolis_acceleration
+coriolis.coriolis_parameter
+coriolis.rossby_number
 corrosion.corrosion_penetration_rate
 corrosion.faraday_corrosion_rate
 corrosion.remaining_wall_life

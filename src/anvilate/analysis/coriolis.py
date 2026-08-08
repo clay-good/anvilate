@@ -1,0 +1,107 @@
+"""T1 analytical Coriolis / rotating-frame checks (closed-form).
+
+In a rotating reference frame a moving body feels the Coriolis acceleration, at right angles to its
+velocity and to the rotation axis. It is why weather systems and ocean currents turn, why a Foucault
+pendulum precesses, why a long-range shell drifts sideways, and how a Coriolis mass flowmeter senses
+flow. This is a distinct effect from the centrifugal field of :mod:`anvilate.analysis.centrifuge`
+(which acts radially on anything in the frame): the Coriolis term acts only on motion, and across
+the velocity.
+
+The Coriolis acceleration is a_c = 2 * Omega * v for motion perpendicular to the rotation axis, from
+the frame's angular rate Omega and the body's speed v. On a rotating planet the vertical part of the
+rotation sets the Coriolis parameter f = 2 * Omega * sin(latitude), the local Coriolis frequency
+that governs geophysical flow. Whether rotation matters to a flow is measured by the Rossby number
+Ro = U / (f * L), the ratio of inertial to Coriolis forces over a length scale L: Ro much below 1
+means rotation dominates (large-scale weather), Ro much above 1 means it is negligible (a draining
+sink).
+"""
+
+from __future__ import annotations
+
+from math import radians, sin
+
+from ..units import Quantity
+
+__all__ = [
+    "coriolis_acceleration",
+    "coriolis_parameter",
+    "rossby_number",
+]
+
+
+def coriolis_acceleration(*, angular_velocity: Quantity, velocity: Quantity) -> Quantity:
+    """The Coriolis acceleration, a_c = 2 * Omega * v.
+
+    The deflecting acceleration a body feels in a frame rotating at ``angular_velocity`` Omega while
+    moving at ``velocity`` v perpendicular to the rotation axis, a_c = 2 * Omega * v. It acts across
+    the motion, so it turns the path without changing speed. Returns the acceleration in
+    m/s**2.
+    """
+    if not angular_velocity.has_dimension("1/[time]"):
+        raise ValueError(
+            f"angular_velocity must be a 1/[time] quantity; got "
+            f"{angular_velocity.dimensionality} ({angular_velocity})"
+        )
+    _check(velocity, "[length]/[time]", "velocity")
+    omega = angular_velocity.to("rad/s").magnitude
+    v = velocity.to("m/s").magnitude
+    if omega <= 0:
+        raise ValueError("angular_velocity must be positive")
+    if v < 0:
+        raise ValueError("velocity must be non-negative")
+    return Quantity(magnitude=2.0 * omega * v, unit="m/s**2")
+
+
+def coriolis_parameter(*, angular_velocity: Quantity, latitude: float) -> Quantity:
+    """The Coriolis parameter, f = 2 * Omega * sin(latitude).
+
+    The local Coriolis frequency on a rotating planet: from the planet's ``angular_velocity`` Omega
+    and the ``latitude`` (degrees), f = 2 * Omega * sin(latitude). It is zero at the equator and
+    largest at the poles, and it sets the inertial-oscillation period and the strength of
+    geostrophic balance in weather and ocean flow. Returns the Coriolis parameter in 1/s.
+    """
+    if not angular_velocity.has_dimension("1/[time]"):
+        raise ValueError(
+            f"angular_velocity must be a 1/[time] quantity; got "
+            f"{angular_velocity.dimensionality} ({angular_velocity})"
+        )
+    omega = angular_velocity.to("rad/s").magnitude
+    if omega <= 0:
+        raise ValueError("angular_velocity must be positive")
+    if not -90.0 <= latitude <= 90.0:
+        raise ValueError("latitude must be in [-90, 90] degrees")
+    return Quantity(magnitude=2.0 * omega * sin(radians(latitude)), unit="1/s")
+
+
+def rossby_number(
+    *, velocity: Quantity, coriolis_parameter: Quantity, length_scale: Quantity
+) -> float:
+    """The Rossby number, Ro = U / (f * L).
+
+    The dimensionless ratio of inertial to Coriolis forces for a flow of speed ``velocity`` U over a
+    ``length_scale`` L at a ``coriolis_parameter`` f, Ro = U / (f * L). Ro much below 1 means
+    rotation dominates (synoptic weather, ocean gyres); Ro much above 1 means it is negligible
+    (a bathtub vortex). Returns the Rossby number as a plain float.
+    """
+    _check(velocity, "[length]/[time]", "velocity")
+    if not coriolis_parameter.has_dimension("1/[time]"):
+        raise ValueError(
+            f"coriolis_parameter must be a 1/[time] quantity; got "
+            f"{coriolis_parameter.dimensionality} ({coriolis_parameter})"
+        )
+    _check(length_scale, "[length]", "length_scale")
+    u = velocity.to("m/s").magnitude
+    f = coriolis_parameter.to("1/s").magnitude
+    length = length_scale.to("m").magnitude
+    if f <= 0:
+        raise ValueError("coriolis_parameter must be positive")
+    if length <= 0:
+        raise ValueError("length_scale must be positive")
+    return u / (f * length)
+
+
+def _check(value: Quantity, expected: str, name: str) -> None:
+    if not value.has_dimension(expected):
+        raise ValueError(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        )

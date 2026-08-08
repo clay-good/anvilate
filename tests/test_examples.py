@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_coriolis_weather_scale_example_parameter_and_rossby():
+    namespace = runpy.run_path(str(_EXAMPLES / "coriolis_weather_scale.py"))
+    d = namespace["rotation_matters"]()
+    # 45 deg on Earth: f ~1.03e-4 /s; weather Ro ~0.10; sink Ro ~1e6x larger.
+    assert d["coriolis_parameter_per_s"] == pytest.approx(1.031e-4, abs=0.005e-4)
+    assert d["weather_rossby"] == pytest.approx(0.097, abs=0.005)
+    assert d["sink_rossby"] == pytest.approx(1e6 * d["weather_rossby"], rel=1e-9)
+
+
 def test_gamma_shield_thickness_example_hvl_transmission_and_thickness():
     namespace = runpy.run_path(str(_EXAMPLES / "gamma_shield_thickness.py"))
     d = namespace["size_lead_shield"]()

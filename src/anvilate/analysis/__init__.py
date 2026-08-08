@@ -243,6 +243,9 @@ modules:
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
   low-Reynolds Stokes settling velocity and drag on a small sphere
+- :mod:`~anvilate.analysis.coriolis` — rotating-frame / geophysical effects: the Coriolis
+  acceleration a = 2·Ω·v on a moving body, the Coriolis parameter f = 2·Ω·sin(lat) that sets
+  geophysical flow, and the Rossby number Ro = U/(f·L) that says whether rotation dominates
 - :mod:`~anvilate.analysis.hvac_duct` — air-duct sizing: the ASHRAE circular equivalent
   diameter of a rectangular duct (equal friction), the fan total pressure Pt = Ps + Pv,
   and the fan shaft power P = Q·Δp/η
@@ -961,6 +964,11 @@ from .cooling_tower import (
     cooling_tower_approach,
     cooling_tower_effectiveness,
     cooling_tower_range,
+)
+from .coriolis import (
+    coriolis_acceleration,
+    coriolis_parameter,
+    rossby_number,
 )
 from .corrosion import (
     corrosion_penetration_rate,
@@ -2118,6 +2126,9 @@ __all__ = [
     "cooling_tower_range",
     "cooling_tower_approach",
     "cooling_tower_effectiveness",
+    "coriolis_acceleration",
+    "coriolis_parameter",
+    "rossby_number",
     "conveyor_mass_flow",
     "belt_speed_for_capacity",
     "conveyor_lift_power",
