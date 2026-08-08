@@ -22334,6 +22334,61 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_magnetic_circuit_mmf_reluctance_and_flux():
+    from math import pi
+
+    from anvilate.analysis import (
+        magnetic_flux,
+        magnetic_reluctance,
+        magnetomotive_force,
+    )
+
+    mu0 = 4.0e-7 * pi
+
+    # MMF = N*I; 300 turns at 1.5 A -> 450 ampere-turns.
+    mmf = magnetomotive_force(turns=300.0, current=_q("1.5 A"))
+    assert mmf.to("A").magnitude == pytest.approx(450.0, rel=1e-12)
+
+    # Reluctance R = l/(mu0*mur*A); iron path -> ~596831 /H.
+    r = magnetic_reluctance(
+        path_length=_q("0.6 m"),
+        area=Quantity(magnitude=4e-4, unit="m**2"),
+        relative_permeability=2000.0,
+    )
+    assert r.to("1/H").magnitude == pytest.approx(0.6 / (mu0 * 2000.0 * 4e-4), rel=1e-9)
+    assert r.to("1/H").magnitude == pytest.approx(596831.0, abs=5.0)
+    # Higher permeability lowers reluctance proportionally.
+    r_soft = magnetic_reluctance(
+        path_length=_q("0.6 m"),
+        area=Quantity(magnitude=4e-4, unit="m**2"),
+        relative_permeability=4000.0,
+    )
+    assert r_soft.to("1/H").magnitude == pytest.approx(r.to("1/H").magnitude / 2.0, rel=1e-9)
+
+    # Hopkinson: flux = MMF/R -> ~7.54e-4 Wb; B = flux/A ~ 1.88 T.
+    flux = magnetic_flux(magnetomotive_force=mmf, reluctance=r)
+    assert flux.to("Wb").magnitude == pytest.approx(450.0 / r.to("1/H").magnitude, rel=1e-9)
+    assert flux.to("Wb").magnitude == pytest.approx(7.540e-4, rel=1e-3)
+    b = flux.to("Wb").magnitude / 4e-4
+    assert b == pytest.approx(1.885, abs=0.005)
+    # Air core (default mur=1) has vastly higher reluctance and thus tiny flux.
+    r_air = magnetic_reluctance(path_length=_q("0.6 m"), area=Quantity(magnitude=4e-4, unit="m**2"))
+    flux_air = magnetic_flux(magnetomotive_force=mmf, reluctance=r_air)
+    assert flux_air.to("Wb").magnitude < flux.to("Wb").magnitude / 1000.0
+
+    # Guardrails: positive, dimensioned inputs.
+    with pytest.raises(ValueError, match="turns must be positive"):
+        magnetomotive_force(turns=0.0, current=_q("1.5 A"))
+    with pytest.raises(ValueError, match="relative_permeability must be positive"):
+        magnetic_reluctance(
+            path_length=_q("0.6 m"),
+            area=Quantity(magnitude=4e-4, unit="m**2"),
+            relative_permeability=0.0,
+        )
+    with pytest.raises(ValueError, match="reluctance must be a"):
+        magnetic_flux(magnetomotive_force=mmf, reluctance=_q("5 ohm"))
+
+
 def test_malus_law_transmission_inverse_and_unpolarized_half():
     from math import cos, pi, radians
 

@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_iron_core_magnetic_circuit_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "iron_core_magnetic_circuit.py"))
+    d = namespace["core_flux"]()
+    # 300 turns, 1.5 A, iron ring: 450 A-turns, ~596831 /H, ~0.754 mWb.
+    assert d["mmf_ampere_turns"] == pytest.approx(450.0, rel=1e-12)
+    assert d["reluctance_per_henry"] == pytest.approx(596831.0, abs=5.0)
+    assert d["flux_mwb"] == pytest.approx(0.7540, rel=1e-3)
+
+
 def test_polarizer_attenuator_example():
     namespace = runpy.run_path(str(_EXAMPLES / "polarizer_attenuator.py"))
     d = namespace["polarizer_attenuation"]()

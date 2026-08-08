@@ -702,6 +702,9 @@ machining.taylor_tool_life
 magnetics.solenoid_magnetic_field
 magnetics.magnetic_pressure
 magnetics.electromagnet_holding_force
+magnetics.magnetomotive_force
+magnetics.magnetic_reluctance
+magnetics.magnetic_flux
 nds_timber.LoadDuration
 nds_timber.nds_adjusted_design_value
 nds_timber.nds_bearing_area_factor

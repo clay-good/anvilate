@@ -12,6 +12,12 @@ p = B²/(2·μ₀) — the pull a magnetic field exerts on iron, about 0.4 MPa a
 pole face of area A, that pressure becomes the holding force F = B²·A/(2·μ₀) an electromagnet makes
 across its gap. Because the force goes as the square of the field, a lifting magnet's grip falls off
 sharply as an air gap or a rusty surface weakens the field it can drive.
+
+The field a real core carries follows the *magnetic circuit* — the magnetic analogue of Ohm's law
+(Hopkinson's law). A coil provides a magnetomotive force MMF = N·I (the "voltage"), the core path
+opposes flux with a reluctance R = l/(μ·A) (the "resistance"), and the flux that results is
+Φ = MMF/R (the "current"). A high-permeability iron path has low reluctance, so a modest coil drives
+a large flux — which is why transformers, motors, and relays are built around iron cores.
 """
 
 from __future__ import annotations
@@ -24,7 +30,10 @@ VACUUM_PERMEABILITY = 4.0e-7 * pi  # μ₀, T·m/A
 
 __all__ = [
     "electromagnet_holding_force",
+    "magnetic_flux",
     "magnetic_pressure",
+    "magnetic_reluctance",
+    "magnetomotive_force",
     "solenoid_magnetic_field",
 ]
 
@@ -84,6 +93,66 @@ def electromagnet_holding_force(
     if a <= 0:
         raise ValueError("pole_area must be positive")
     return Quantity(magnitude=b * b * a / (2.0 * VACUUM_PERMEABILITY) / 1000.0, unit="kN")
+
+
+def magnetomotive_force(*, turns: float, current: Quantity) -> Quantity:
+    """The magnetomotive force of a coil, MMF = N·I.
+
+    The magnetic "driving voltage" a coil of ``turns`` N carrying a ``current`` I applies to a
+    magnetic circuit: MMF = N·I, in ampere-turns. It is what drives flux around the core against its
+    reluctance (:func:`magnetic_reluctance`). Returns the magnetomotive force in A (ampere-turns).
+    """
+    _check(current, "[current]", "current")
+    if turns <= 0:
+        raise ValueError("turns must be positive")
+    i = current.to("A").magnitude
+    if i <= 0:
+        raise ValueError("current must be positive")
+    return Quantity(magnitude=turns * i, unit="A")
+
+
+def magnetic_reluctance(
+    *, path_length: Quantity, area: Quantity, relative_permeability: float = 1.0
+) -> Quantity:
+    """The magnetic reluctance of a core path, R = l/(μ₀·μ_r·A).
+
+    The opposition a magnetic path presents to flux, the analogue of electrical resistance: from the
+    ``path_length`` l, the cross-sectional ``area`` A, and the ``relative_permeability`` μ_r
+    (defaulting to 1 for air), R = l/(μ₀·μ_r·A). A high-permeability iron path (large μ_r) has low
+    reluctance, so it carries much more flux for the same drive. Returns the reluctance in 1/H
+    (ampere-turns per weber).
+    """
+    _check(path_length, "[length]", "path_length")
+    _check(area, "[area]", "area")
+    ell = path_length.to("m").magnitude
+    a = area.to("m**2").magnitude
+    if ell <= 0:
+        raise ValueError("path_length must be positive")
+    if a <= 0:
+        raise ValueError("area must be positive")
+    if relative_permeability <= 0:
+        raise ValueError("relative_permeability must be positive")
+    r = ell / (VACUUM_PERMEABILITY * relative_permeability * a)
+    return Quantity(magnitude=r, unit="1/H")
+
+
+def magnetic_flux(*, magnetomotive_force: Quantity, reluctance: Quantity) -> Quantity:
+    """The magnetic flux in a circuit, Φ = MMF/R (Hopkinson's law).
+
+    The flux a magnetic circuit carries, the analogue of Ohm's-law current: the
+    ``magnetomotive_force`` MMF over the ``reluctance`` R, Φ = MMF/R. Dividing by the core area
+    gives the flux density B that the actuator and holding-force relations use. Returns the flux
+    in Wb.
+    """
+    _check(magnetomotive_force, "[current]", "magnetomotive_force")
+    _check(reluctance, "1/[inductance]", "reluctance")
+    mmf = magnetomotive_force.to("A").magnitude
+    r = reluctance.to("1/H").magnitude
+    if mmf < 0:
+        raise ValueError("magnetomotive_force must be non-negative")
+    if r <= 0:
+        raise ValueError("reluctance must be positive")
+    return Quantity(magnitude=mmf / r, unit="Wb")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

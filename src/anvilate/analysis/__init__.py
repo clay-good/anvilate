@@ -286,9 +286,10 @@ modules:
 - :mod:`~anvilate.analysis.fresnel` — surface reflection: the normal-incidence reflectance
   R = ((n1−n2)/(n1+n2))² (4% at an air-glass face), the two-surface slab transmittance (1−R)², and
   the Brewster polarizing angle arctan(n2/n1) — the bare reflection AR coatings fight
-- :mod:`~anvilate.analysis.magnetics` — magnetic actuators: the solenoid field B = μ₀·n·I,
-  the Maxwell magnetic pressure p = B²/(2·μ₀), and the electromagnet holding force
-  F = B²·A/(2·μ₀) — for clamps, lifting magnets, and magnetic bearings
+- :mod:`~anvilate.analysis.magnetics` — magnetic actuators and circuits: the solenoid field
+  B = μ₀·n·I, the Maxwell magnetic pressure p = B²/(2·μ₀), the electromagnet holding force
+  F = B²·A/(2·μ₀), and the magnetic circuit (Hopkinson's law) — MMF = N·I, reluctance
+  R = l/(μ·A), and flux Φ = MMF/R
 - :mod:`~anvilate.analysis.hall_effect` — Hall-effect sensing: the transverse Hall voltage
   V_H = I·B/(n·q·t) a field induces across a biased sample, the field a Hall sensor reports
   from it (B = V_H·n·q·t/I), and the semiconductor carrier density a Hall measurement reveals
@@ -1630,7 +1631,10 @@ from .machining import (
 )
 from .magnetics import (
     electromagnet_holding_force,
+    magnetic_flux,
     magnetic_pressure,
+    magnetic_reluctance,
+    magnetomotive_force,
     solenoid_magnetic_field,
 )
 from .masonry import (
@@ -3252,6 +3256,9 @@ __all__ = [
     "solenoid_magnetic_field",
     "magnetic_pressure",
     "electromagnet_holding_force",
+    "magnetomotive_force",
+    "magnetic_reluctance",
+    "magnetic_flux",
     "hall_voltage",
     "hall_flux_density_from_voltage",
     "hall_carrier_density",
