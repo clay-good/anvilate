@@ -384,6 +384,9 @@ modules:
   force makes (T = F·dx/dθ)
 - :mod:`~anvilate.analysis.scotch_yoke` — scotch-yoke pure simple-harmonic
   displacement, velocity, and acceleration (the infinite-rod slider-crank limit)
+- :mod:`~anvilate.analysis.universal_joint` — Cardan (Hooke) universal-joint kinematics: the
+  instantaneous speed ratio cosβ/(1−sin²β·cos²θ), the maximum ratio 1/cosβ, and the peak-to-peak
+  speed fluctuation 1/cosβ − cosβ that a single joint's angle produces
 - :mod:`~anvilate.analysis.fourbar` — four-bar linkage Grashof rotatability
   criterion, mechanism-type classification, and the transmission angle at a given
   input angle
@@ -2286,6 +2289,11 @@ from .turbomachinery import (
     euler_head,
     impeller_outlet_swirl_velocity,
 )
+from .universal_joint import (
+    universal_joint_max_speed_ratio,
+    universal_joint_speed_fluctuation,
+    universal_joint_speed_ratio,
+)
 from .vacuum_electronics import (
     child_langmuir_current_density,
     schottky_barrier_lowering,
@@ -2431,6 +2439,9 @@ __all__ = [
     "blade_tip_speed",
     "impeller_outlet_swirl_velocity",
     "euler_head",
+    "universal_joint_speed_ratio",
+    "universal_joint_max_speed_ratio",
+    "universal_joint_speed_fluctuation",
     "thermionic_current_density",
     "schottky_barrier_lowering",
     "child_langmuir_current_density",

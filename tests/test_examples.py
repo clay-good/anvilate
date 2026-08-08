@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_driveshaft_universal_joint_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "driveshaft_universal_joint.py"))
+    d = namespace["joint_speed_ripple"]()
+    # 20 deg joint: peak ratio ~1.064, max ~1.064, fluctuation ~0.125.
+    assert d["ratio_at_input_0deg"] == pytest.approx(1.0642, abs=0.001)
+    assert d["max_speed_ratio"] == pytest.approx(1.0642, abs=0.001)
+    assert d["peak_to_peak_fluctuation"] == pytest.approx(0.1245, abs=0.001)
+
+
 def test_summer_solar_position_example():
     namespace = runpy.run_path(str(_EXAMPLES / "summer_solar_position.py"))
     d = namespace["solstice_sun_position"]()

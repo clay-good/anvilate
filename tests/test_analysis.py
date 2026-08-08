@@ -22334,6 +22334,46 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_universal_joint_speed_ratio_max_and_fluctuation():
+    from math import cos, radians
+
+    from anvilate.analysis import (
+        universal_joint_max_speed_ratio,
+        universal_joint_speed_fluctuation,
+        universal_joint_speed_ratio,
+    )
+
+    beta = 20.0
+    cb = cos(radians(beta))
+
+    # Instantaneous ratio peaks at input 0 (=1/cosβ) and dips at 90 (=cosβ).
+    r0 = universal_joint_speed_ratio(shaft_angle=beta, input_angle=0.0)
+    assert r0 == pytest.approx(1.0 / cb, rel=1e-9)
+    assert r0 == pytest.approx(1.0642, abs=0.001)
+    r90 = universal_joint_speed_ratio(shaft_angle=beta, input_angle=90.0)
+    assert r90 == pytest.approx(cb, rel=1e-9)
+    assert r90 == pytest.approx(0.9397, abs=0.001)
+    # At zero misalignment the drive is uniform (ratio 1 everywhere).
+    assert universal_joint_speed_ratio(shaft_angle=0.0, input_angle=37.0) == pytest.approx(1.0)
+
+    # Max ratio = 1/cosβ, matching the θ=0 instantaneous value.
+    rmax = universal_joint_max_speed_ratio(shaft_angle=beta)
+    assert rmax == pytest.approx(1.0 / cb, rel=1e-9)
+    assert rmax == pytest.approx(r0, rel=1e-9)
+
+    # Fluctuation = 1/cosβ - cosβ; ~0.1245 at 20 deg, growing with angle.
+    fluct = universal_joint_speed_fluctuation(shaft_angle=beta)
+    assert fluct == pytest.approx(1.0 / cb - cb, rel=1e-9)
+    assert fluct == pytest.approx(0.1245, abs=0.001)
+    assert universal_joint_speed_fluctuation(shaft_angle=30.0) > fluct
+
+    # Guardrails: the shaft angle must be a valid acute misalignment.
+    with pytest.raises(ValueError, match="shaft_angle must be in"):
+        universal_joint_speed_ratio(shaft_angle=90.0, input_angle=0.0)
+    with pytest.raises(ValueError, match="shaft_angle must be in"):
+        universal_joint_max_speed_ratio(shaft_angle=-5.0)
+
+
 def test_solar_declination_noon_altitude_and_air_mass():
     from math import radians, sin
 
