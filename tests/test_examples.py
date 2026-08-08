@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_adc_resolution_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "adc_resolution.py"))
+    d = namespace["adc_resolution"]()
+    # 12-bit, 10 V: 74.0 dB ideal SNR, 2.44 mV step, ~11.0 ENOB at 68 dB.
+    assert d["ideal_snr_db"] == pytest.approx(74.0, abs=0.01)
+    assert d["quantization_step_mv"] == pytest.approx(2.4414, abs=1e-3)
+    assert d["effective_number_of_bits"] == pytest.approx(11.0, abs=0.02)
+
+
 def test_singlemode_fiber_link_example():
     namespace = runpy.run_path(str(_EXAMPLES / "singlemode_fiber_link.py"))
     d = namespace["fiber_dispersion_limits"]()

@@ -22334,6 +22334,41 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_adc_quantization_snr_step_and_enob():
+    from anvilate.analysis import (
+        effective_number_of_bits,
+        quantization_snr,
+        quantization_step,
+    )
+
+    # Ideal SNR = 6.02*N + 1.76 dB; 12 bits -> 74.0 dB.
+    snr = quantization_snr(bits=12)
+    assert snr == pytest.approx(6.02 * 12 + 1.76, rel=1e-12)
+    assert snr == pytest.approx(74.0, abs=0.01)
+    # Each added bit buys ~6.02 dB.
+    assert quantization_snr(bits=13) - snr == pytest.approx(6.02, rel=1e-12)
+
+    # Quantization step LSB = V_FS/2^N; 10 V over 12 bits -> 2.441 mV.
+    step = quantization_step(full_scale_voltage=_q("10 V"), bits=12)
+    assert step.to("V").magnitude == pytest.approx(10.0 / 2**12, rel=1e-12)
+    assert step.to("V").magnitude * 1000.0 == pytest.approx(2.4414, abs=1e-3)
+    # One more bit halves the step.
+    step13 = quantization_step(full_scale_voltage=_q("10 V"), bits=13)
+    assert step13.to("V").magnitude == pytest.approx(step.to("V").magnitude / 2.0, rel=1e-12)
+
+    # ENOB = (SNR - 1.76)/6.02 inverts the SNR rule: an ideal 12-bit SNR gives back 12.0.
+    assert effective_number_of_bits(snr_db=snr) == pytest.approx(12.0, rel=1e-9)
+    # A real part measured below its nominal SNR delivers fewer effective bits.
+    assert effective_number_of_bits(snr_db=68.0) == pytest.approx((68.0 - 1.76) / 6.02, rel=1e-12)
+    assert effective_number_of_bits(snr_db=68.0) == pytest.approx(11.0, abs=0.02)
+
+    # Guardrails: positive bits, dimensioned full-scale voltage.
+    with pytest.raises(ValueError, match="bits must be positive"):
+        quantization_snr(bits=0)
+    with pytest.raises(ValueError, match="full_scale_voltage must be a"):
+        quantization_step(full_scale_voltage=_q("10 A"), bits=12)
+
+
 def test_fiber_chromatic_dispersion_bit_rate_and_reach():
     from anvilate.analysis import (
         chromatic_dispersion_broadening,

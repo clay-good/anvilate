@@ -22,6 +22,9 @@ modules:
 - :mod:`~anvilate.analysis.channel_capacity` — information-theory link capacity: the Shannon-Hartley
   limit C = B·log2(1+SNR), the bandwidth a target capacity needs B = C/log2(1+SNR), and the
   noiseless Nyquist M-level capacity 2·B·log2(M) (bits per second)
+- :mod:`~anvilate.analysis.data_converter` — ADC quantization: the ideal SNR = 6.02·N + 1.76 dB
+  ("6 dB per bit"), the quantization step LSB = V_FS/2^N, and the effective number of bits
+  ENOB = (SNR−1.76)/6.02 a measured SNR implies
 - :mod:`~anvilate.analysis.chemical_equilibrium` — reaction thermodynamics: the Gibbs free energy
   ΔG = ΔH − T·ΔS (spontaneity), the equilibrium constant K = exp(−ΔG/RT), and the van 't Hoff shift
   K₂/K₁ = exp(−(ΔH/R)(1/T₂−1/T₁)) of K with temperature
@@ -1192,6 +1195,11 @@ from .cyclotron import (
     cyclotron_frequency,
     cyclotron_mass_from_frequency,
     larmor_radius,
+)
+from .data_converter import (
+    effective_number_of_bits,
+    quantization_snr,
+    quantization_step,
 )
 from .dc_dc_converter import (
     boost_output_voltage,
@@ -2664,6 +2672,9 @@ __all__ = [
     "cyclotron_frequency",
     "larmor_radius",
     "cyclotron_mass_from_frequency",
+    "quantization_snr",
+    "quantization_step",
+    "effective_number_of_bits",
     "arrhenius_rate_constant",
     "arrhenius_rate_ratio",
     "arrhenius_activation_energy",
