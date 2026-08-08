@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_gamma_shield_thickness_example_hvl_transmission_and_thickness():
+    namespace = runpy.run_path(str(_EXAMPLES / "gamma_shield_thickness.py"))
+    d = namespace["size_lead_shield"]()
+    # Lead mu 0.0668 /mm: HVL ~10.4 mm, ~3.5% through 50 mm, ~103 mm for 1000-fold.
+    assert d["half_value_layer_mm"] == pytest.approx(10.376, abs=0.05)
+    assert d["transmission_through_50mm"] == pytest.approx(0.03544, abs=0.0005)
+    assert d["thickness_for_1000x_mm"] == pytest.approx(103.41, abs=0.5)
+
+
 def test_cobalt60_source_decay_example_constant_activity_and_time():
     namespace = runpy.run_path(str(_EXAMPLES / "cobalt60_source_decay.py"))
     d = namespace["source_decay"]()

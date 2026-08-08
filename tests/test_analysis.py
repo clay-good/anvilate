@@ -20853,6 +20853,50 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_radiation_shielding_transmission_hvl_and_thickness_inverse():
+    from math import exp, log
+
+    from anvilate.analysis import (
+        half_value_layer,
+        radiation_transmission_fraction,
+        shield_thickness_for_transmission,
+    )
+
+    mu = Quantity(magnitude=0.0668, unit="1/mm")
+
+    # HVL = ln(2)/mu.
+    hvl = half_value_layer(attenuation_coefficient=mu)
+    assert hvl.to("mm").magnitude == pytest.approx(log(2) / 0.0668, rel=1e-9)
+
+    # Transmission T = exp(-mu*x); through one HVL exactly half passes.
+    t_hvl = radiation_transmission_fraction(attenuation_coefficient=mu, thickness=hvl)
+    assert t_hvl == pytest.approx(0.5, rel=1e-9)
+    t_50 = radiation_transmission_fraction(
+        attenuation_coefficient=mu, thickness=Quantity(magnitude=50.0, unit="mm")
+    )
+    assert t_50 == pytest.approx(exp(-0.0668 * 50), rel=1e-9)
+
+    # Inverse: thickness for a target transmission, x = -ln(T)/mu; round-trips.
+    x = shield_thickness_for_transmission(attenuation_coefficient=mu, transmission_fraction=0.001)
+    assert x.to("mm").magnitude == pytest.approx(-log(0.001) / 0.0668, rel=1e-9)
+    t_back = radiation_transmission_fraction(attenuation_coefficient=mu, thickness=x)
+    assert t_back == pytest.approx(0.001, rel=1e-9)
+
+    # n half-value layers give 2^-n transmission.
+    two_hvl = Quantity(magnitude=2 * hvl.to("mm").magnitude, unit="mm")
+    assert radiation_transmission_fraction(
+        attenuation_coefficient=mu, thickness=two_hvl
+    ) == pytest.approx(0.25, rel=1e-9)
+
+    # Guardrails: positive mu, transmission in (0, 1], dimensions checked.
+    with pytest.raises(ValueError, match="attenuation_coefficient must be positive"):
+        half_value_layer(attenuation_coefficient=Quantity(magnitude=0.0, unit="1/mm"))
+    with pytest.raises(ValueError, match="transmission_fraction must be in"):
+        shield_thickness_for_transmission(attenuation_coefficient=mu, transmission_fraction=1.5)
+    with pytest.raises(ValueError, match="attenuation_coefficient must be a"):
+        half_value_layer(attenuation_coefficient=_q("0.0668 mm"))
+
+
 def test_radioactivity_decay_constant_remaining_activity_and_time():
     from math import log, log2
 

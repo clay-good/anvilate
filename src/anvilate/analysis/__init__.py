@@ -437,6 +437,9 @@ modules:
 - :mod:`~anvilate.analysis.radioactivity` — radioactive decay: the decay constant λ = ln2/T½ a
   half-life fixes, the activity remaining after a time A = A0·2^(−t/T½), and the storage time to
   decay to a target activity t = T½·log2(A0/A)
+- :mod:`~anvilate.analysis.radiation_shielding` — gamma/x-ray shielding (narrow-beam Beer-Lambert):
+  the transmitted fraction T = e^(−μ·x), the half-value layer HVL = ln2/μ that halves the beam, and
+  the shield thickness for a target transmission x = −ln(T)/μ
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -1582,6 +1585,11 @@ from .pump import (
     pump_specific_speed,
     pump_suction_specific_speed,
 )
+from .radiation_shielding import (
+    half_value_layer,
+    radiation_transmission_fraction,
+    shield_thickness_for_transmission,
+)
 from .radioactivity import (
     decay_constant_from_half_life,
     remaining_activity,
@@ -2409,6 +2417,9 @@ __all__ = [
     "decay_constant_from_half_life",
     "remaining_activity",
     "time_for_activity_decay",
+    "radiation_transmission_fraction",
+    "half_value_layer",
+    "shield_thickness_for_transmission",
     "belt_length",
     "belt_wrap_angle",
     "crossed_belt_length",

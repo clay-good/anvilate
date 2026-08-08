@@ -701,6 +701,9 @@ pump.pump_hydraulic_power
 pump.pump_shaft_power
 pump.pump_specific_speed
 pump.pump_suction_specific_speed
+radiation_shielding.half_value_layer
+radiation_shielding.radiation_transmission_fraction
+radiation_shielding.shield_thickness_for_transmission
 radioactivity.decay_constant_from_half_life
 radioactivity.remaining_activity
 radioactivity.time_for_activity_decay
