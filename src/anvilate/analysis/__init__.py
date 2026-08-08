@@ -448,6 +448,9 @@ modules:
 - :mod:`~anvilate.analysis.wire_drawing` — wire/rod drawing: the draw stress
   σ_d = Y·ln(A₀/A_f)·(1 + μ/tan α), the draw force F = σ_d·A_f, and the maximum
   area reduction per pass r_max = 1 − exp(−1/(1 + μ/tan α)) before the wire snaps
+- :mod:`~anvilate.analysis.shear_spinning` — metal spinning by the sine law: the spun wall
+  t_f = t₀·sin α, the thickness reduction r = 1 − sin α, and the cone half-angle a target
+  wall needs α = arcsin(t_f/t₀) — steep cones exceed one-pass spinnability
 - :mod:`~anvilate.analysis.grinding` — surface-grinding process signature: the specific
   removal rate Q′_w = a_e·v_w, the equivalent chip thickness h_eq = Q′_w/v_s that tracks
   grain force and burn, and the specific energy u = P/(b·Q′_w) that sets the surface heat
@@ -1524,6 +1527,11 @@ from .servo import (
     trapezoidal_move_acceleration,
     trapezoidal_move_peak_velocity,
 )
+from .shear_spinning import (
+    shear_spinning_half_angle_for_thickness,
+    shear_spinning_reduction,
+    shear_spinning_wall_thickness,
+)
 from .sheetmetal import (
     air_bending_force,
     bend_allowance,
@@ -2126,6 +2134,9 @@ __all__ = [
     "rms_torque_over_cycle",
     "trapezoidal_move_peak_velocity",
     "trapezoidal_move_acceleration",
+    "shear_spinning_wall_thickness",
+    "shear_spinning_reduction",
+    "shear_spinning_half_angle_for_thickness",
     "max_transverse_shear_stress",
     "aisc_bearing_length_for_web_yielding",
     "aisc_round_hss_flexural_strength",

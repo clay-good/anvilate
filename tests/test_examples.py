@@ -944,6 +944,18 @@ def test_spot_weld_schedule_efficiency_example_needs_kiloamperes():
     assert d["check_heat_j"] == pytest.approx(d["required_heat_j"], rel=1e-6)
 
 
+def test_shear_spinning_sine_law_example_steep_cone_needs_stages():
+    namespace = runpy.run_path(str(_EXAMPLES / "shear_spinning_sine_law.py"))
+    d = namespace["spinning_case"]()
+    # 30 deg cone from 4 mm -> 2 mm wall, a 50% reduction.
+    assert d["wall_at_30deg_mm"] == pytest.approx(2.0, abs=0.005)
+    assert d["reduction_at_30deg"] == pytest.approx(0.5, abs=1e-6)
+    # A 1.5 mm wall needs a ~22 deg cone, a 62.5% reduction (steeper, likely staged).
+    assert d["angle_for_1p5mm_deg"] == pytest.approx(22.02, abs=0.1)
+    assert d["reduction_for_1p5mm"] == pytest.approx(0.625, abs=0.002)
+    assert d["reduction_for_1p5mm"] > d["reduction_at_30deg"]
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

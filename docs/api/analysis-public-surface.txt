@@ -798,6 +798,9 @@ servo.reflected_load_inertia
 servo.rms_torque_over_cycle
 servo.trapezoidal_move_acceleration
 servo.trapezoidal_move_peak_velocity
+shear_spinning.shear_spinning_wall_thickness
+shear_spinning.shear_spinning_reduction
+shear_spinning.shear_spinning_half_angle_for_thickness
 sheetmetal.air_bending_force
 sheetmetal.bend_allowance
 sheetmetal.bend_deduction

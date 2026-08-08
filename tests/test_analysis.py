@@ -16444,6 +16444,45 @@ def test_spot_weld_heat_current_inverse_and_nugget_energy():
         )
 
 
+def test_shear_spinning_sine_law_reduction_and_angle_inverse():
+    from math import asin, degrees, radians, sin
+
+    from anvilate.analysis import (
+        shear_spinning_half_angle_for_thickness,
+        shear_spinning_reduction,
+        shear_spinning_wall_thickness,
+    )
+
+    # Sine law t_f = t0*sin(alpha); 4 mm * sin(30) = 2 mm.
+    w = shear_spinning_wall_thickness(blank_thickness=_q("4 mm"), half_cone_angle=30.0)
+    assert w.to("mm").magnitude == pytest.approx(4.0 * sin(radians(30.0)), rel=1e-9)
+    # A steeper cone thins the wall further.
+    w_steep = shear_spinning_wall_thickness(blank_thickness=_q("4 mm"), half_cone_angle=15.0)
+    assert w_steep.to("mm").magnitude < w.to("mm").magnitude
+
+    # Reduction r = 1 - sin(alpha); 30 deg -> 0.5.
+    r = shear_spinning_reduction(half_cone_angle=30.0)
+    assert r == pytest.approx(0.5, rel=1e-9)
+    assert shear_spinning_reduction(half_cone_angle=15.0) == pytest.approx(1.0 - sin(radians(15.0)))
+
+    # Angle inverse alpha = arcsin(t_f/t0) round-trips: 2 mm from 4 mm -> 30 deg.
+    a = shear_spinning_half_angle_for_thickness(
+        blank_thickness=_q("4 mm"), final_thickness=_q("2 mm")
+    )
+    assert a == pytest.approx(degrees(asin(0.5)), rel=1e-9)
+    assert a == pytest.approx(30.0, rel=1e-9)
+
+    # Guardrails: angle in (0, 90), final < blank, dimensions checked.
+    with pytest.raises(ValueError, match="half_cone_angle must be in"):
+        shear_spinning_wall_thickness(blank_thickness=_q("4 mm"), half_cone_angle=0.0)
+    with pytest.raises(ValueError, match="final_thickness must be smaller than blank_thickness"):
+        shear_spinning_half_angle_for_thickness(
+            blank_thickness=_q("4 mm"), final_thickness=_q("5 mm")
+        )
+    with pytest.raises(ValueError, match="blank_thickness must be a"):
+        shear_spinning_wall_thickness(blank_thickness=_q("4 s"), half_cone_angle=30.0)
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,
