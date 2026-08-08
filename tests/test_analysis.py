@@ -20853,6 +20853,60 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_bulk_solids_beverloo_discharge_orifice_inverse_and_stockpile():
+    from math import pi, sqrt, tan
+
+    from anvilate.analysis import (
+        beverloo_discharge_rate,
+        beverloo_orifice_for_rate,
+        conical_stockpile_volume,
+    )
+
+    g = 9.80665
+
+    # Beverloo W = C*rho*sqrt(g)*(D-k*d)^2.5; 100 mm orifice, 5 mm particles, 1500 kg/m3.
+    w = beverloo_discharge_rate(
+        orifice_diameter=_q("0.1 m"),
+        particle_diameter=_q("5 mm"),
+        bulk_density=_q("1500 kg/m**3"),
+    )
+    expected_w = 0.58 * 1500 * sqrt(g) * (0.1 - 1.4 * 0.005) ** 2.5
+    assert w.to("kg/s").magnitude == pytest.approx(expected_w, rel=1e-9)
+    # A bigger opening discharges much faster (2.5 power).
+    w_big = beverloo_discharge_rate(
+        orifice_diameter=_q("0.2 m"),
+        particle_diameter=_q("5 mm"),
+        bulk_density=_q("1500 kg/m**3"),
+    )
+    assert w_big.to("kg/s").magnitude > 5 * w.to("kg/s").magnitude
+
+    # Orifice inverse round-trips back to the 100 mm opening.
+    d_o = beverloo_orifice_for_rate(
+        mass_flow=w, particle_diameter=_q("5 mm"), bulk_density=_q("1500 kg/m**3")
+    )
+    assert d_o.to("mm").magnitude == pytest.approx(100.0, rel=1e-6)
+
+    # Conical stockpile V = (pi/3)*R^3*tan(phi); R=10 m, 35 deg -> 733 m^3.
+    v = conical_stockpile_volume(base_radius=_q("10 m"), angle_of_repose=35.0)
+    assert v.to("m**3").magnitude == pytest.approx(pi / 3 * 1000 * tan(35 * pi / 180), rel=1e-9)
+
+    # Guardrails: opening must exceed k*particle (else arching), positive inputs, angle range.
+    with pytest.raises(ValueError, match="arches"):
+        beverloo_discharge_rate(
+            orifice_diameter=_q("5 mm"),
+            particle_diameter=_q("5 mm"),
+            bulk_density=_q("1500 kg/m**3"),
+        )
+    with pytest.raises(ValueError, match="angle_of_repose must be in"):
+        conical_stockpile_volume(base_radius=_q("10 m"), angle_of_repose=95.0)
+    with pytest.raises(ValueError, match="bulk_density must be a"):
+        beverloo_discharge_rate(
+            orifice_diameter=_q("0.1 m"),
+            particle_diameter=_q("5 mm"),
+            bulk_density=_q("1500 kg"),
+        )
+
+
 def test_rc_cracking_moment_and_effective_inertia_bischoff():
     from anvilate.analysis import rc_cracking_moment, rc_effective_moment_of_inertia
 

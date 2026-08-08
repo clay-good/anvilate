@@ -1165,6 +1165,16 @@ def test_radiation_shield_and_view_factor_example():
     assert d["shield_reduction_factor"] == pytest.approx(0.25, rel=1e-9)
 
 
+def test_hopper_feed_and_stockpile_example_sizes_outlet_and_pile():
+    namespace = runpy.run_path(str(_EXAMPLES / "hopper_feed_and_stockpile.py"))
+    d = namespace["bulk_handling"]()
+    # Outlet ~113 mm for 10 kg/s; it passes ~10 kg/s; stockpile ~733 m^3 (~1100 t).
+    assert d["outlet_diameter_mm"] == pytest.approx(113.2, abs=0.5)
+    assert d["discharge_rate_kg_s"] == pytest.approx(10.0, abs=0.05)
+    assert d["stockpile_volume_m3"] == pytest.approx(733.3, abs=1.0)
+    assert d["stockpile_tonnes"] == pytest.approx(1100.0, abs=5.0)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

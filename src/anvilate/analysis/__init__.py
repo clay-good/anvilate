@@ -260,6 +260,9 @@ modules:
   mass flow ṁ = ρ·A·v it carries, the belt speed a target throughput needs
   (v = ṁ/(ρ·A)), and the irreducible lift power P = ṁ·g·H to raise the material —
   distinct from the power-transmission belts of :mod:`~anvilate.analysis.belt`
+- :mod:`~anvilate.analysis.bulk_solids` — granular handling: the Beverloo hopper discharge
+  rate W = C·ρ·√g·(D − k·d)^2.5 and its orifice-sizing inverse, and the conical stockpile
+  volume V = (π/3)·R³·tan φ
 - :mod:`~anvilate.analysis.pump` — pump sizing: the hydraulic power ρ·g·Q·H, the shaft
   power P/η the driver must supply, the dimensionless specific speed that picks the
   impeller type, the affinity laws that scale flow, head, and power (∝ N, N², N³)
@@ -790,6 +793,11 @@ from .building_loads import (
     snow_density,
     wind_design_pressure,
     wind_velocity_pressure,
+)
+from .bulk_solids import (
+    beverloo_discharge_rate,
+    beverloo_orifice_for_rate,
+    conical_stockpile_volume,
 )
 from .cable import (
     catenary_arc_length,
@@ -2403,6 +2411,9 @@ __all__ = [
     "broaching_pull_capacity",
     "wind_velocity_pressure",
     "wind_design_pressure",
+    "beverloo_discharge_rate",
+    "beverloo_orifice_for_rate",
+    "conical_stockpile_volume",
     "components_cladding_net_pressure",
     "seismic_response_coefficient",
     "seismic_response_coefficient_upper_limit",

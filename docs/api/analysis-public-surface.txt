@@ -234,6 +234,9 @@ building_loads.sloped_roof_snow_load
 building_loads.snow_density
 building_loads.wind_design_pressure
 building_loads.wind_velocity_pressure
+bulk_solids.beverloo_discharge_rate
+bulk_solids.beverloo_orifice_for_rate
+bulk_solids.conical_stockpile_volume
 cable.catenary_arc_length
 cable.catenary_max_tension
 cable.catenary_sag
