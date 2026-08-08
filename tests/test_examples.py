@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_relativistic_spaceship_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "relativistic_spaceship.py"))
+    d = namespace["spaceship_relativity"]()
+    # 0.6c (gamma 1.25): 80 m contracted, ~2.25e11 kg m/s momentum, 50 MHz redshift.
+    assert d["contracted_length_m"] == pytest.approx(80.0, rel=1e-9)
+    assert d["momentum_kg_m_s"] == pytest.approx(1.25 * 1000.0 * 0.6 * 299792458.0, rel=1e-9)
+    assert d["received_frequency_mhz"] == pytest.approx(50.0, rel=1e-9)
+
+
 def test_flyball_governor_example():
     namespace = runpy.run_path(str(_EXAMPLES / "flyball_governor.py"))
     d = namespace["governor_operating_point"]()

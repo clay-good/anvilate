@@ -11,7 +11,10 @@ The Lorentz factor is gamma = 1/sqrt(1 - (v/c)^2), the multiplier on every relat
 is 1 at rest and diverges as v -> c. A moving clock's ticks stretch by it, so a proper time interval
 t0 is observed as gamma * t0 (time dilation). The kinetic energy is not (1/2)m v^2 but the full
 (gamma - 1) m c^2, which climbs toward infinity as the speed approaches c — the reason no massive
-object can be pushed to light speed.
+object can be pushed to light speed. Length contracts by the same factor (L = L0/gamma), momentum
+grows past the classical m*v to gamma*m*v, and light itself shifts frequency by the relativistic
+Doppler factor sqrt((1 +/- beta)/(1 -/+ beta)) — a redshift for a receding source, a blueshift for
+an approaching one.
 
 Speeds must be below c; the factor is undefined at or above it.
 """
@@ -25,8 +28,11 @@ from ..units import Quantity
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 
 __all__ = [
+    "length_contraction",
     "lorentz_factor",
+    "relativistic_doppler_frequency",
     "relativistic_kinetic_energy",
+    "relativistic_momentum",
     "time_dilation",
 ]
 
@@ -78,6 +84,66 @@ def relativistic_kinetic_energy(*, mass: Quantity, velocity: Quantity) -> Quanti
         raise ValueError("mass must be positive")
     gamma = lorentz_factor(velocity=velocity)
     return Quantity(magnitude=(gamma - 1.0) * m * _SPEED_OF_LIGHT * _SPEED_OF_LIGHT, unit="J")
+
+
+def length_contraction(*, proper_length: Quantity, velocity: Quantity) -> Quantity:
+    """The contracted length, L = L0/gamma.
+
+    The length of a moving object along its direction of motion as seen by a stationary observer:
+    the ``proper_length`` L0 in the object's own frame, shrunk by the Lorentz factor of the
+    ``velocity`` v, L = L0/gamma. It is the spatial mirror of time dilation. The speed must be below
+    c. Returns the contracted length in m.
+    """
+    _check(proper_length, "[length]", "proper_length")
+    ell0 = proper_length.to("m").magnitude
+    if ell0 < 0:
+        raise ValueError("proper_length must be non-negative")
+    gamma = lorentz_factor(velocity=velocity)
+    return Quantity(magnitude=ell0 / gamma, unit="m")
+
+
+def relativistic_momentum(*, mass: Quantity, velocity: Quantity) -> Quantity:
+    """The relativistic momentum, p = gamma * m * v.
+
+    The momentum of a mass moving at relativistic speed: the ``mass`` m and ``velocity`` v give
+    p = gamma * m * v, exceeding the classical m*v and diverging as v approaches c. It is why a fast
+    particle grows ever harder to deflect. The speed must be below c. Returns the momentum in
+    kg*m/s.
+    """
+    _check(mass, "[mass]", "mass")
+    _check(velocity, "[length]/[time]", "velocity")
+    m = mass.to("kg").magnitude
+    v = velocity.to("m/s").magnitude
+    if m <= 0:
+        raise ValueError("mass must be positive")
+    gamma = lorentz_factor(velocity=velocity)
+    return Quantity(magnitude=gamma * m * v, unit="kg*m/s")
+
+
+def relativistic_doppler_frequency(
+    *, source_frequency: Quantity, velocity: Quantity, approaching: bool = False
+) -> Quantity:
+    """The relativistic Doppler frequency, f = f0*sqrt((1 +/- beta)/(1 -/+ beta)).
+
+    The frequency a moving light source appears to have, from the ``source_frequency`` f0 and the
+    relative ``velocity`` v: for a source ``approaching`` the observer f = f0*sqrt((1+β)/(1−β))
+    (blueshift), and for a receding one f = f0*sqrt((1−β)/(1+β)) (redshift), with
+    beta = v/c. Unlike the classical Doppler effect it applies to light and folds in time dilation.
+    The speed must be below c. Returns the observed frequency in Hz.
+    """
+    _check(source_frequency, "1/[time]", "source_frequency")
+    _check(velocity, "[length]/[time]", "velocity")
+    f0 = source_frequency.to("Hz").magnitude
+    v = velocity.to("m/s").magnitude
+    if f0 <= 0:
+        raise ValueError("source_frequency must be positive")
+    if v < 0:
+        raise ValueError("velocity must be non-negative")
+    if v >= _SPEED_OF_LIGHT:
+        raise ValueError("velocity must be below the speed of light")
+    beta = v / _SPEED_OF_LIGHT
+    ratio = sqrt((1.0 + beta) / (1.0 - beta)) if approaching else sqrt((1.0 - beta) / (1.0 + beta))
+    return Quantity(magnitude=f0 * ratio, unit="Hz")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

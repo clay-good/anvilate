@@ -22334,6 +22334,52 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_relativistic_length_momentum_and_doppler():
+    from anvilate.analysis import (
+        length_contraction,
+        relativistic_doppler_frequency,
+        relativistic_momentum,
+    )
+
+    c = 299792458.0
+    v = Quantity(magnitude=0.6 * c, unit="m/s")  # gamma = 1.25
+
+    # Length contraction L = L0/gamma; 100 m -> 80 m at 0.6c.
+    length = length_contraction(proper_length=_q("100 m"), velocity=v)
+    assert length.to("m").magnitude == pytest.approx(80.0, rel=1e-9)
+    # At rest there is no contraction.
+    assert length_contraction(proper_length=_q("100 m"), velocity=_q("0 m/s")).to(
+        "m"
+    ).magnitude == pytest.approx(100.0, rel=1e-12)
+
+    # Relativistic momentum p = gamma*m*v; exceeds the classical m*v by the Lorentz factor.
+    p = relativistic_momentum(mass=_q("1000 kg"), velocity=v)
+    assert p.to("kg*m/s").magnitude == pytest.approx(1.25 * 1000.0 * 0.6 * c, rel=1e-9)
+    assert p.to("kg*m/s").magnitude > 1000.0 * 0.6 * c  # above the classical value
+
+    # Relativistic Doppler: a receding source redshifts, an approaching one blueshifts.
+    recede = relativistic_doppler_frequency(
+        source_frequency=_q("100 MHz"), velocity=v, approaching=False
+    )
+    assert recede.to("MHz").magnitude == pytest.approx(50.0, rel=1e-9)
+    approach = relativistic_doppler_frequency(
+        source_frequency=_q("100 MHz"), velocity=v, approaching=True
+    )
+    assert approach.to("MHz").magnitude == pytest.approx(200.0, rel=1e-9)
+    # Redshift and blueshift factors are reciprocal for the same speed.
+    assert recede.to("MHz").magnitude * approach.to("MHz").magnitude == pytest.approx(
+        100.0**2, rel=1e-9
+    )
+
+    # Guardrails: speed below c, positive mass and frequency.
+    with pytest.raises(ValueError, match="velocity must be below the speed of light"):
+        length_contraction(proper_length=_q("100 m"), velocity=Quantity(magnitude=c, unit="m/s"))
+    with pytest.raises(ValueError, match="mass must be positive"):
+        relativistic_momentum(mass=_q("0 kg"), velocity=v)
+    with pytest.raises(ValueError, match="source_frequency must be positive"):
+        relativistic_doppler_frequency(source_frequency=_q("0 Hz"), velocity=v)
+
+
 def test_watt_and_porter_governor_height_and_speed():
     from math import sqrt
 

@@ -949,6 +949,9 @@ reinforced_concrete.rc_two_way_shear_strength
 relativity.lorentz_factor
 relativity.relativistic_kinetic_energy
 relativity.time_dilation
+relativity.length_contraction
+relativity.relativistic_momentum
+relativity.relativistic_doppler_frequency
 reliability.weibull_reliability
 reliability.weibull_hazard_rate
 reliability.weibull_mean_life

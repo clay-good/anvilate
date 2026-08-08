@@ -446,8 +446,9 @@ modules:
   energy KE = h·f − φ, the threshold frequency f0 = φ/h below which no electron escapes, and the
   de Broglie wavelength λ = h/(m·v) behind electron-microscope resolution
 - :mod:`~anvilate.analysis.relativity` — special relativity: the Lorentz factor γ = 1/√(1−(v/c)²),
-  the time dilation t = γ·t0 of a moving clock (GPS, muons), and the relativistic kinetic energy
-  (γ−1)·m·c² an accelerator must supply
+  the time dilation t = γ·t0 of a moving clock (GPS, muons), the relativistic kinetic energy
+  (γ−1)·m·c², the length contraction L0/γ, the relativistic momentum γ·m·v, and the relativistic
+  Doppler shift f0·√((1±β)/(1∓β)) (redshift/blueshift)
 - :mod:`~anvilate.analysis.reliability` — Weibull reliability: the survival R(t) = exp(−(t/η)^β),
   the hazard rate h(t) = (β/η)·(t/η)^(β−1) (infant-mortality/constant/wear-out as β ≷ 1), and the
   mean time to failure η·Γ(1+1/β)
@@ -1975,8 +1976,11 @@ from .reinforced_concrete import (
     rc_two_way_shear_strength,
 )
 from .relativity import (
+    length_contraction,
     lorentz_factor,
+    relativistic_doppler_frequency,
     relativistic_kinetic_energy,
+    relativistic_momentum,
     time_dilation,
 )
 from .reliability import (
@@ -3248,6 +3252,9 @@ __all__ = [
     "lorentz_factor",
     "time_dilation",
     "relativistic_kinetic_energy",
+    "length_contraction",
+    "relativistic_momentum",
+    "relativistic_doppler_frequency",
     "weibull_reliability",
     "weibull_hazard_rate",
     "weibull_mean_life",
