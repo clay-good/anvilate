@@ -661,6 +661,9 @@ nds_timber.nds_column_stability_factor
 nds_timber.nds_combined_bending_compression
 nds_timber.nds_euler_buckling_stress
 nds_timber.nds_load_duration_factor
+nernst.nernst_potential
+nernst.nernst_reaction_quotient
+nernst.nernst_slope
 o_ring.o_ring_gland_fill_fraction
 o_ring.o_ring_squeeze_fraction
 o_ring.o_ring_stretch_fraction

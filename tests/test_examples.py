@@ -1185,6 +1185,14 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_ph_electrode_nernst_example_slope_and_ph():
+    namespace = runpy.run_path(str(_EXAMPLES / "ph_electrode_nernst.py"))
+    d = namespace["read_ph_electrode"]()
+    # 25 C, one electron: ~59.2 mV/decade; -0.1775 V reads pH ~3.
+    assert d["nernst_slope_mv_per_decade"] == pytest.approx(59.159, abs=0.05)
+    assert d["implied_ph"] == pytest.approx(3.0, abs=0.05)
+
+
 def test_accelerated_life_test_example_factor_and_activation_energy():
     namespace = runpy.run_path(str(_EXAMPLES / "accelerated_life_test.py"))
     d = namespace["accelerated_test"]()

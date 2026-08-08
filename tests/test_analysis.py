@@ -20853,6 +20853,69 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_nernst_potential_slope_and_reaction_quotient_inverse():
+    from math import log
+
+    from anvilate.analysis import (
+        nernst_potential,
+        nernst_reaction_quotient,
+        nernst_slope,
+    )
+
+    R = 8.314462618
+    F = 96485.33212
+    T = Quantity(magnitude=298.15, unit="K")
+
+    # At Q=1 the cell sits at its standard potential.
+    e_std = nernst_potential(
+        standard_potential=_q("1.10 V"),
+        temperature=T,
+        electrons_transferred=2,
+        reaction_quotient=1.0,
+    )
+    assert e_std.to("V").magnitude == pytest.approx(1.10, rel=1e-12)
+    # Q<1 raises the potential by the Nernst term.
+    e = nernst_potential(
+        standard_potential=_q("1.10 V"),
+        temperature=T,
+        electrons_transferred=2,
+        reaction_quotient=0.01,
+    )
+    assert e.to("V").magnitude == pytest.approx(1.10 - (R * 298.15 / (2 * F)) * log(0.01), rel=1e-9)
+
+    # Nernst slope ~59.2 mV/decade for one electron at 25 C.
+    slope = nernst_slope(temperature=T, electrons_transferred=1)
+    assert slope.to("mV").magnitude == pytest.approx(59.159, abs=0.01)
+    # Two electrons halve the slope.
+    assert nernst_slope(temperature=T, electrons_transferred=2).to("mV").magnitude == pytest.approx(
+        slope.to("mV").magnitude / 2, rel=1e-9
+    )
+
+    # Reaction-quotient inverse round-trips the potential back to Q.
+    q = nernst_reaction_quotient(
+        standard_potential=_q("1.10 V"), potential=e, temperature=T, electrons_transferred=2
+    )
+    assert q == pytest.approx(0.01, rel=1e-9)
+
+    # Guardrails: positive Q, positive electron count, positive temperature, dimensions checked.
+    with pytest.raises(ValueError, match="reaction_quotient must be positive"):
+        nernst_potential(
+            standard_potential=_q("1.10 V"),
+            temperature=T,
+            electrons_transferred=2,
+            reaction_quotient=0.0,
+        )
+    with pytest.raises(ValueError, match="electrons_transferred must be a positive integer"):
+        nernst_slope(temperature=T, electrons_transferred=0)
+    with pytest.raises(ValueError, match="standard_potential must be a"):
+        nernst_potential(
+            standard_potential=_q("1.10 A"),
+            temperature=T,
+            electrons_transferred=2,
+            reaction_quotient=1.0,
+        )
+
+
 def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
     from math import exp, log
 

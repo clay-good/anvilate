@@ -110,6 +110,9 @@ modules:
 - :mod:`~anvilate.analysis.corrosion` — electrochemical metal loss: the ASTM G1
   weight-loss penetration rate, the Faraday rate from a corrosion current density,
   and the remaining wall life above a retirement thickness
+- :mod:`~anvilate.analysis.nernst` — Nernst electrochemistry: the cell potential
+  E = E0 − (RT/nF)·ln Q away from standard conditions, the ~59 mV/decade Nernst slope
+  2.303·RT/(nF) of a potentiometric sensor, and the reaction quotient a measured potential implies
 - :mod:`~anvilate.analysis.coupling` — rigid flange-coupling torque, per-bolt
   shear force, and the bolt count a torque requires
 - :mod:`~anvilate.analysis.creep` — high-temperature creep-rupture screening by the
@@ -1462,6 +1465,11 @@ from .nds_timber import (
     nds_load_duration_factor,
     nds_shear_scorecard,
     nds_shear_stress,
+)
+from .nernst import (
+    nernst_potential,
+    nernst_reaction_quotient,
+    nernst_slope,
 )
 from .o_ring import (
     o_ring_gland_fill_fraction,
@@ -2986,6 +2994,9 @@ __all__ = [
     "corrosion_penetration_rate",
     "faraday_corrosion_rate",
     "remaining_wall_life",
+    "nernst_potential",
+    "nernst_slope",
+    "nernst_reaction_quotient",
     "LARSON_MILLER_CONSTANT",
     "larson_miller_parameter",
     "larson_miller_rupture_life",
