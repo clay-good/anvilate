@@ -377,6 +377,9 @@ modules:
   scorecard, straight-fin efficiency and the fin-array count a target resistance
   needs, and the flat-plate forced (laminar and turbulent) and vertical-plate natural
   convection coefficients with their validity ranges
+- :mod:`~anvilate.analysis.condensation` — Nusselt filmwise condensation (phase-change
+  heat transfer): the vertical-plate coefficient h = 0.943·[…/(μ·ΔT·L)]^¼ and the
+  horizontal-tube form (0.729/D), and the condensate rate ṁ = h·A·ΔT/h_fg they drive
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -841,6 +844,11 @@ from .compressible_flow import (
     stagnation_density_ratio,
     stagnation_pressure_ratio,
     stagnation_temperature_ratio,
+)
+from .condensation import (
+    condensation_rate,
+    film_condensation_horizontal_tube_coefficient,
+    film_condensation_vertical_plate_coefficient,
 )
 from .contact import (
     HertzContact,
@@ -1933,6 +1941,9 @@ __all__ = [
     "mach_number",
     "speed_of_sound",
     "stagnation_temperature_ratio",
+    "film_condensation_vertical_plate_coefficient",
+    "film_condensation_horizontal_tube_coefficient",
+    "condensation_rate",
     "apparent_power_three_phase",
     "conductor_resistance",
     "line_current_for_power",

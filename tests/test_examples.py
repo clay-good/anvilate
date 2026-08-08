@@ -956,6 +956,17 @@ def test_shear_spinning_sine_law_example_steep_cone_needs_stages():
     assert d["reduction_for_1p5mm"] > d["reduction_at_30deg"]
 
 
+def test_steam_condenser_coefficient_example_tube_beats_plate():
+    namespace = runpy.run_path(str(_EXAMPLES / "steam_condenser_coefficient.py"))
+    d = namespace["condenser_duty"]()
+    # Vertical plate ~5738 W/m^2K, horizontal tube ~11155 (roughly double).
+    assert d["plate_coefficient"] == pytest.approx(5738.0, abs=5.0)
+    assert d["tube_coefficient"] == pytest.approx(11155.0, abs=5.0)
+    assert d["tube_coefficient"] > d["plate_coefficient"]
+    # Condensate rate over 2 m^2 at the tube coefficient ~0.15 kg/s.
+    assert d["condensate_rate_kg_s"] == pytest.approx(0.148, abs=0.005)
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

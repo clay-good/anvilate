@@ -16483,6 +16483,77 @@ def test_shear_spinning_sine_law_reduction_and_angle_inverse():
         shear_spinning_wall_thickness(blank_thickness=_q("4 s"), half_cone_angle=30.0)
 
 
+def test_film_condensation_coefficients_and_condensate_rate():
+    from anvilate.analysis import (
+        condensation_rate,
+        film_condensation_horizontal_tube_coefficient,
+        film_condensation_vertical_plate_coefficient,
+    )
+
+    props = {
+        "liquid_density": _q("965 kg/m**3"),
+        "vapor_density": _q("0.6 kg/m**3"),
+        "liquid_thermal_conductivity": _q("0.68 W/(m*K)"),
+        "liquid_viscosity": _q("3.15e-4 Pa*s"),
+        "latent_heat": _q("2257 kJ/kg"),
+        "temperature_difference": _q("15 K"),
+    }
+
+    # Nusselt vertical plate, L = 1 m -> ~5738 W/m^2K (verified against the closed form).
+    numerator = 965 * (965 - 0.6) * 9.80665 * 2257e3 * 0.68**3
+    h_plate = film_condensation_vertical_plate_coefficient(plate_height=_q("1 m"), **props)
+    expected_plate = 0.943 * (numerator / (3.15e-4 * 15 * 1.0)) ** 0.25
+    assert h_plate.to("W/(m**2*K)").magnitude == pytest.approx(expected_plate, rel=1e-9)
+
+    # Horizontal tube (0.729, D = 0.025 m) -> higher coefficient (shorter drainage path).
+    h_tube = film_condensation_horizontal_tube_coefficient(tube_diameter=_q("25 mm"), **props)
+    expected_tube = 0.729 * (numerator / (3.15e-4 * 15 * 0.025)) ** 0.25
+    assert h_tube.to("W/(m**2*K)").magnitude == pytest.approx(expected_tube, rel=1e-9)
+    assert h_tube.to("W/(m**2*K)").magnitude > h_plate.to("W/(m**2*K)").magnitude
+    # A taller plate drains a thicker film and gives a lower average coefficient (h ~ L^-0.25).
+    h_tall = film_condensation_vertical_plate_coefficient(plate_height=_q("4 m"), **props)
+    assert h_tall.to("W/(m**2*K)").magnitude < h_plate.to("W/(m**2*K)").magnitude
+
+    # Condensate rate mdot = h*A*dT/h_fg.
+    rate = condensation_rate(
+        heat_transfer_coefficient=h_tube,
+        area=_q("2 m**2"),
+        temperature_difference=_q("15 K"),
+        latent_heat=_q("2257 kJ/kg"),
+    )
+    expected_rate = expected_tube * 2 * 15 / 2257e3
+    assert rate.to("kg/s").magnitude == pytest.approx(expected_rate, rel=1e-9)
+
+    # Guardrails: vapor lighter than liquid, positive inputs, dimensions checked.
+    with pytest.raises(ValueError, match="vapor_density must be less than liquid_density"):
+        film_condensation_vertical_plate_coefficient(
+            plate_height=_q("1 m"),
+            liquid_density=_q("1 kg/m**3"),
+            vapor_density=_q("2 kg/m**3"),
+            liquid_thermal_conductivity=_q("0.68 W/(m*K)"),
+            liquid_viscosity=_q("3.15e-4 Pa*s"),
+            latent_heat=_q("2257 kJ/kg"),
+            temperature_difference=_q("15 K"),
+        )
+    with pytest.raises(ValueError, match="temperature_difference must be positive"):
+        condensation_rate(
+            heat_transfer_coefficient=_q("5000 W/(m**2*K)"),
+            area=_q("2 m**2"),
+            temperature_difference=_q("0 K"),
+            latent_heat=_q("2257 kJ/kg"),
+        )
+    with pytest.raises(ValueError, match="liquid_viscosity must be a"):
+        film_condensation_vertical_plate_coefficient(
+            plate_height=_q("1 m"),
+            liquid_density=_q("965 kg/m**3"),
+            vapor_density=_q("0.6 kg/m**3"),
+            liquid_thermal_conductivity=_q("0.68 W/(m*K)"),
+            liquid_viscosity=_q("3.15e-4 m"),
+            latent_heat=_q("2257 kJ/kg"),
+            temperature_difference=_q("15 K"),
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,
