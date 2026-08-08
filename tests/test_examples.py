@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_police_radar_speed_gun_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "police_radar_speed_gun.py"))
+    d = namespace["speed_gun"]()
+    # 10.5 GHz, 30 m/s: ~2101 Hz shift; recovers 30 m/s; 5 kHz PRF -> ~35.7 m/s max.
+    assert d["doppler_shift_hz"] == pytest.approx(2101.45, abs=0.5)
+    assert d["recovered_speed_m_s"] == pytest.approx(30.0, rel=1e-9)
+    assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
+
+
 def test_xrd_and_grating_example_angles_and_spacing():
     namespace = runpy.run_path(str(_EXAMPLES / "xrd_and_grating.py"))
     d = namespace["diffraction_angles"]()

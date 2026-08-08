@@ -369,6 +369,9 @@ modules:
 - :mod:`~anvilate.analysis.relativity` — special relativity: the Lorentz factor γ = 1/√(1−(v/c)²),
   the time dilation t = γ·t0 of a moving clock (GPS, muons), and the relativistic kinetic energy
   (γ−1)·m·c² an accelerator must supply
+- :mod:`~anvilate.analysis.radar` — Doppler radar: the two-way Doppler shift f_d = 2·v·f0/c of an
+  echo, the radial velocity a measured shift implies v = f_d·c/(2·f0) (speed gun), and the maximum
+  unambiguous velocity v_max = PRF·c/(4·f0) beyond which a pulse-Doppler radar aliases
 - :mod:`~anvilate.analysis.impact` — drop / suddenly-applied shock-load
   amplification factor and the horizontal (kinetic-energy) impact force
   (energy method)
@@ -1695,6 +1698,11 @@ from .quantum import (
     photoelectric_max_kinetic_energy,
     photoelectric_threshold_frequency,
 )
+from .radar import (
+    max_unambiguous_velocity,
+    radar_doppler_shift,
+    radial_velocity_from_doppler,
+)
 from .radiation_shielding import (
     half_value_layer,
     radiation_transmission_fraction,
@@ -2861,6 +2869,9 @@ __all__ = [
     "lorentz_factor",
     "time_dilation",
     "relativistic_kinetic_energy",
+    "radar_doppler_shift",
+    "radial_velocity_from_doppler",
+    "max_unambiguous_velocity",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

@@ -20853,6 +20853,48 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
+    from anvilate.analysis import (
+        max_unambiguous_velocity,
+        radar_doppler_shift,
+        radial_velocity_from_doppler,
+    )
+
+    c = 299792458.0
+    f0 = Quantity(magnitude=10.5e9, unit="Hz")
+
+    # f_d = 2*v*f0/c; 30 m/s at 10.5 GHz -> ~2101 Hz (twice the one-way shift).
+    fd = radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m/s"))
+    assert fd.to("Hz").magnitude == pytest.approx(2 * 30 * 10.5e9 / c, rel=1e-9)
+    assert fd.to("Hz").magnitude == pytest.approx(2101.45, abs=0.1)
+
+    # Velocity inverse round-trips the shift back to 30 m/s.
+    v = radial_velocity_from_doppler(transmit_frequency=f0, doppler_shift=fd)
+    assert v.to("m/s").magnitude == pytest.approx(30.0, rel=1e-9)
+
+    # Max unambiguous velocity v_max = PRF*c/(4*f0); rises with PRF.
+    v_max = max_unambiguous_velocity(
+        transmit_frequency=f0, pulse_repetition_frequency=Quantity(magnitude=5000.0, unit="Hz")
+    )
+    assert v_max.to("m/s").magnitude == pytest.approx(5000 * c / (4 * 10.5e9), rel=1e-9)
+    v_max2 = max_unambiguous_velocity(
+        transmit_frequency=f0, pulse_repetition_frequency=Quantity(magnitude=10000.0, unit="Hz")
+    )
+    assert v_max2.to("m/s").magnitude == pytest.approx(2 * v_max.to("m/s").magnitude, rel=1e-9)
+
+    # Guardrails: positive transmit frequency and PRF, dimensions checked.
+    with pytest.raises(ValueError, match="transmit_frequency must be positive"):
+        radar_doppler_shift(
+            transmit_frequency=Quantity(magnitude=0.0, unit="Hz"), radial_velocity=_q("30 m/s")
+        )
+    with pytest.raises(ValueError, match="pulse_repetition_frequency must be positive"):
+        max_unambiguous_velocity(
+            transmit_frequency=f0, pulse_repetition_frequency=Quantity(magnitude=0.0, unit="Hz")
+        )
+    with pytest.raises(ValueError, match="radial_velocity must be a"):
+        radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
+
+
 def test_diffraction_bragg_angle_spacing_inverse_and_grating():
     from math import asin, degrees
 
