@@ -25,6 +25,9 @@ modules:
 - :mod:`~anvilate.analysis.noise_figure` — RF receiver noise: the linear noise factor from a dB
   figure, the Friis cascade F = F1 + (F2−1)/G1 + … (why the first stage dominates), and the
   equivalent noise temperature T_e = (F−1)·T0
+- :mod:`~anvilate.analysis.transmission_line` — RF impedance matching: the reflection coefficient
+  Γ = (Z_L−Z_0)/(Z_L+Z_0), the voltage standing-wave ratio (1+|Γ|)/(1−|Γ|), and the return loss
+  −20·log10|Γ| — how well a load is matched to a line
 - :mod:`~anvilate.analysis.arrhenius` — thermally-activated reaction rates: the rate constant
   k = A·e^(−Ea/RT), the acceleration factor k2/k1 = e^((Ea/R)(1/T1−1/T2)) between two temperatures
   (accelerated life testing), and the activation energy Ea extracted from two measured rates
@@ -2079,6 +2082,11 @@ from .torsion import (
     triangular_bar_torsional_stress,
     triangular_bar_twist_angle,
 )
+from .transmission_line import (
+    reflection_coefficient,
+    return_loss,
+    voltage_standing_wave_ratio,
+)
 from .turbomachinery import (
     blade_tip_speed,
     euler_head,
@@ -2427,6 +2435,9 @@ __all__ = [
     "noise_factor_from_figure",
     "cascade_noise_factor",
     "equivalent_noise_temperature",
+    "reflection_coefficient",
+    "voltage_standing_wave_ratio",
+    "return_loss",
     "arrhenius_rate_constant",
     "arrhenius_rate_ratio",
     "arrhenius_activation_energy",

@@ -1212,6 +1212,15 @@ def test_police_radar_speed_gun_example():
     assert d["max_unambiguous_speed_m_s"] == pytest.approx(35.69, abs=0.1)
 
 
+def test_antenna_feedline_match_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "antenna_feedline_match.py"))
+    d = namespace["feedline_match"]()
+    # 75 ohm on 50 ohm: Gamma 0.2, VSWR 1.5, RL ~14 dB.
+    assert d["reflection_coefficient"] == pytest.approx(0.2, rel=1e-9)
+    assert d["vswr"] == pytest.approx(1.5, rel=1e-9)
+    assert d["return_loss_db"] == pytest.approx(13.979, abs=0.02)
+
+
 def test_receiver_noise_figure_example():
     namespace = runpy.run_path(str(_EXAMPLES / "receiver_noise_figure.py"))
     d = namespace["receiver_chain"]()

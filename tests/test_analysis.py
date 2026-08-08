@@ -20985,6 +20985,45 @@ def test_radar_doppler_shift_velocity_inverse_and_unambiguous_limit():
         radar_doppler_shift(transmit_frequency=f0, radial_velocity=_q("30 m"))
 
 
+def test_transmission_line_reflection_vswr_and_return_loss():
+    from math import log10
+
+    from anvilate.analysis import (
+        reflection_coefficient,
+        return_loss,
+        voltage_standing_wave_ratio,
+    )
+
+    # Gamma = (Z_L - Z_0)/(Z_L + Z_0); 75 on 50 -> 0.2.
+    g = reflection_coefficient(load_impedance=_q("75 ohm"), characteristic_impedance=_q("50 ohm"))
+    assert g == pytest.approx(0.2, rel=1e-9)
+    # A perfect match reflects nothing; a load below the line gives a negative Gamma.
+    assert reflection_coefficient(
+        load_impedance=_q("50 ohm"), characteristic_impedance=_q("50 ohm")
+    ) == pytest.approx(0.0, abs=1e-12)
+    assert (
+        reflection_coefficient(load_impedance=_q("25 ohm"), characteristic_impedance=_q("50 ohm"))
+        < 0
+    )
+
+    # VSWR = (1+|G|)/(1-|G|); Gamma 0.2 -> 1.5, perfect match -> 1.
+    assert voltage_standing_wave_ratio(reflection_coefficient=g) == pytest.approx(1.5, rel=1e-9)
+    assert voltage_standing_wave_ratio(reflection_coefficient=0.0) == pytest.approx(1.0, rel=1e-12)
+
+    # Return loss RL = -20*log10(|G|); Gamma 0.2 -> ~14 dB.
+    assert return_loss(reflection_coefficient=g) == pytest.approx(-20 * log10(0.2), rel=1e-9)
+    # A smaller reflection is a larger return loss.
+    assert return_loss(reflection_coefficient=0.02) > return_loss(reflection_coefficient=0.2)
+
+    # Guardrails: positive Z_0, |Gamma|<1 for VSWR, non-zero for return loss.
+    with pytest.raises(ValueError, match="characteristic_impedance must be positive"):
+        reflection_coefficient(load_impedance=_q("75 ohm"), characteristic_impedance=_q("0 ohm"))
+    with pytest.raises(ValueError, match="must be below 1"):
+        voltage_standing_wave_ratio(reflection_coefficient=1.0)
+    with pytest.raises(ValueError, match="must be non-zero"):
+        return_loss(reflection_coefficient=0.0)
+
+
 def test_noise_figure_factor_cascade_and_temperature():
     from anvilate.analysis import (
         cascade_noise_factor,
