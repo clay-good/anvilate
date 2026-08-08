@@ -383,6 +383,9 @@ modules:
 - :mod:`~anvilate.analysis.boiling` — nucleate boiling: the Rohsenow flux
   q″ = μ_l·h_fg·√(g·Δρ/σ)·[c_pl·ΔT_e/(C_sf·h_fg·Pr^n)]³, its ΔT_e inverse, and Zuber's
   critical-heat-flux burnout limit q″_max = 0.149·h_fg·√ρ_v·[σ·g·Δρ]^¼
+- :mod:`~anvilate.analysis.thermoelectric` — solid-state Peltier/Seebeck devices: the
+  Seebeck voltage V = α·ΔT, the net cooling Q_c = α·I·T_c − ½·I²·R − K·ΔT, and the
+  single-stage cooling limit ΔT_max = ½·(α²/(R·K))·T_c²
 - :mod:`~anvilate.analysis.dynamics` — modal screens: SDOF and Rayleigh
   estimates, the mass-on-beam frequencies (cantilever tip, simply-supported and
   fixed-fixed central, with the Rayleigh beam-mass correction), the Dunkerley
@@ -1703,6 +1706,11 @@ from .thermal import (
     wien_peak_wavelength,
     wien_temperature_from_peak,
 )
+from .thermoelectric import (
+    peltier_cooling_rate,
+    seebeck_voltage,
+    thermoelectric_max_temperature_difference,
+)
 from .thermoforming import (
     thermoforming_areal_draw_ratio,
     thermoforming_average_wall_thickness,
@@ -2201,6 +2209,9 @@ __all__ = [
     "nucleate_boiling_heat_flux",
     "nucleate_boiling_excess_temperature",
     "critical_heat_flux",
+    "seebeck_voltage",
+    "peltier_cooling_rate",
+    "thermoelectric_max_temperature_difference",
     "belt_length",
     "belt_wrap_angle",
     "crossed_belt_length",

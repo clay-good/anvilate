@@ -979,6 +979,16 @@ def test_boiling_burnout_margin_example_runs_below_critical_heat_flux():
     assert d["fraction_of_burnout"] < 1.0
 
 
+def test_tec_cooler_limit_example_joule_heat_caps_cooling():
+    namespace = runpy.run_path(str(_EXAMPLES / "tec_cooler_limit.py"))
+    d = namespace["tec_operating_point"]()
+    # Seebeck voltage 2.0 V, net cooling 25 W, single-stage ceiling ~98 K.
+    assert d["seebeck_voltage_v"] == pytest.approx(2.0, abs=0.01)
+    assert d["net_cooling_w"] == pytest.approx(25.0, abs=0.1)
+    assert d["max_temperature_difference_k"] == pytest.approx(98.0, abs=0.5)
+    assert d["max_temperature_difference_k"] > 40.0  # the 40 K duty is inside the ceiling
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

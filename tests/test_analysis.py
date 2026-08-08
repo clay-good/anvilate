@@ -16620,6 +16620,61 @@ def test_nucleate_boiling_flux_superheat_inverse_and_critical_heat_flux():
         )
 
 
+def test_thermoelectric_seebeck_peltier_and_max_temperature_difference():
+    from anvilate.analysis import (
+        peltier_cooling_rate,
+        seebeck_voltage,
+        thermoelectric_max_temperature_difference,
+    )
+
+    # Seebeck V = alpha*dT; 0.05 V/K * 40 K = 2.0 V.
+    v = seebeck_voltage(seebeck_coefficient=_q("0.05 V/K"), temperature_difference=_q("40 K"))
+    assert v.to("V").magnitude == pytest.approx(2.0, rel=1e-9)
+
+    # Peltier cooling Q_c = alpha*I*T_c - 0.5*I^2*R - K*dT; 70 - 25 - 20 = 25 W.
+    q = peltier_cooling_rate(
+        seebeck_coefficient=_q("0.05 V/K"),
+        current=_q("5 A"),
+        cold_temperature=_q("280 K"),
+        electrical_resistance=_q("2 ohm"),
+        thermal_conductance=_q("0.5 W/K"),
+        temperature_difference=_q("40 K"),
+    )
+    assert q.to("W").magnitude == pytest.approx(0.05 * 5 * 280 - 0.5 * 25 * 2 - 0.5 * 40, rel=1e-9)
+    # Joule heat grows with current squared, so past the optimum more current cools less.
+    q_high = peltier_cooling_rate(
+        seebeck_coefficient=_q("0.05 V/K"),
+        current=_q("20 A"),
+        cold_temperature=_q("280 K"),
+        electrical_resistance=_q("2 ohm"),
+        thermal_conductance=_q("0.5 W/K"),
+        temperature_difference=_q("40 K"),
+    )
+    assert q_high.to("W").magnitude < q.to("W").magnitude  # 280 - 400 - 20 < 0
+
+    # Single-stage limit dT_max = 0.5*(alpha^2/(R*K))*T_c^2; 0.5*0.0025*280^2 = 98 K.
+    dt_max = thermoelectric_max_temperature_difference(
+        seebeck_coefficient=_q("0.05 V/K"),
+        electrical_resistance=_q("2 ohm"),
+        thermal_conductance=_q("0.5 W/K"),
+        cold_temperature=_q("280 K"),
+    )
+    assert dt_max.to("K").magnitude == pytest.approx(0.5 * (0.05**2 / (2 * 0.5)) * 280**2, rel=1e-9)
+
+    # Guardrails: positive inputs and correct dimensions.
+    with pytest.raises(ValueError, match="temperature_difference must be positive"):
+        seebeck_voltage(seebeck_coefficient=_q("0.05 V/K"), temperature_difference=_q("0 K"))
+    with pytest.raises(ValueError, match="seebeck_coefficient must be a"):
+        seebeck_voltage(seebeck_coefficient=_q("0.05 V"), temperature_difference=_q("40 K"))
+    with pytest.raises(ValueError, match="thermal_conductance must be a"):
+        thermoelectric_max_temperature_difference(
+            seebeck_coefficient=_q("0.05 V/K"),
+            electrical_resistance=_q("2 ohm"),
+            thermal_conductance=_q("0.5 W"),
+            cold_temperature=_q("280 K"),
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,
