@@ -14,6 +14,10 @@ Put the two together and the energy sloshes between them at the LC resonant freq
 f₀ = 1/(2π·√(L·C)) — the tuning of a filter, the ring of a switching node, the frequency a tank
 circuit selects. Paired instead with a resistor, a single reactive element gives a first-order
 response with time constant τ = R·C (or L/R) and an RC filter corner at f_c = 1/(2π·R·C).
+
+Before any of that, a capacitor's capacitance comes from its geometry: a parallel-plate capacitor of
+area A and gap d has C = ε₀·ε_r·A/d, it holds charge Q = C·V at voltage V, and the field between its
+plates is the uniform E = V/d.
 """
 
 from __future__ import annotations
@@ -22,10 +26,15 @@ from math import pi, sqrt
 
 from ..units import Quantity
 
+_VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m
+
 __all__ = [
+    "capacitor_charge",
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",
+    "parallel_plate_capacitance",
+    "parallel_plate_field",
     "rc_cutoff_frequency",
     "rc_time_constant",
     "rl_time_constant",
@@ -137,6 +146,61 @@ def rc_cutoff_frequency(*, resistance: Quantity, capacitance: Quantity) -> Quant
     if r <= 0 or c <= 0:
         raise ValueError("resistance and capacitance must be positive")
     return Quantity(magnitude=1.0 / (2.0 * pi * r * c), unit="Hz")
+
+
+def parallel_plate_capacitance(
+    *, plate_area: Quantity, separation: Quantity, relative_permittivity: float = 1.0
+) -> Quantity:
+    """The parallel-plate capacitance, C = ε₀·ε_r·A/d.
+
+    The capacitance of two parallel plates of ``plate_area`` A separated by a gap ``separation`` d,
+    with a dielectric of ``relative_permittivity`` ε_r (1 for vacuum/air): C = ε₀·ε_r·A/d. Larger
+    plates, a thinner gap, or a higher-permittivity dielectric all raise it. Returns the capacitance
+    in F.
+    """
+    _check(plate_area, "[area]", "plate_area")
+    _check(separation, "[length]", "separation")
+    a = plate_area.to("m**2").magnitude
+    d = separation.to("m").magnitude
+    if a <= 0:
+        raise ValueError("plate_area must be positive")
+    if d <= 0:
+        raise ValueError("separation must be positive")
+    if relative_permittivity < 1.0:
+        raise ValueError("relative_permittivity must be at least 1")
+    return Quantity(magnitude=_VACUUM_PERMITTIVITY * relative_permittivity * a / d, unit="F")
+
+
+def capacitor_charge(*, capacitance: Quantity, voltage: Quantity) -> Quantity:
+    """The stored charge, Q = C·V.
+
+    The charge a capacitor of ``capacitance`` C holds at ``voltage`` V: Q = C·V. It is the charge a
+    circuit must supply to bring the capacitor to that voltage, and what it releases on discharge.
+    Returns the charge in C (coulombs).
+    """
+    _check(capacitance, "[capacitance]", "capacitance")
+    _check(voltage, "[electric_potential]", "voltage")
+    c = capacitance.to("F").magnitude
+    v = voltage.to("V").magnitude
+    if c <= 0:
+        raise ValueError("capacitance must be positive")
+    return Quantity(magnitude=c * v, unit="C")
+
+
+def parallel_plate_field(*, voltage: Quantity, separation: Quantity) -> Quantity:
+    """The field between parallel plates, E = V/d.
+
+    The uniform electric field between two parallel plates at ``voltage`` V separated by a gap
+    ``separation`` d: E = V/d. It sets the dielectric stress — exceed the material's breakdown
+    strength and the capacitor arcs over. Returns the field in V/m.
+    """
+    _check(voltage, "[electric_potential]", "voltage")
+    _check(separation, "[length]", "separation")
+    v = voltage.to("V").magnitude
+    d = separation.to("m").magnitude
+    if d <= 0:
+        raise ValueError("separation must be positive")
+    return Quantity(magnitude=v / d, unit="V/m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

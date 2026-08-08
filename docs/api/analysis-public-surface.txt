@@ -845,6 +845,9 @@ reactive_circuit.lc_resonant_frequency
 reactive_circuit.rc_cutoff_frequency
 reactive_circuit.rc_time_constant
 reactive_circuit.rl_time_constant
+reactive_circuit.parallel_plate_capacitance
+reactive_circuit.capacitor_charge
+reactive_circuit.parallel_plate_field
 photometry.luminous_efficacy
 photometry.luminous_efficiency
 photometry.luminous_flux_from_power

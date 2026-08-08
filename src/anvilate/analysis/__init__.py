@@ -280,8 +280,9 @@ modules:
   back-EMF = L·ΔI/Δt that opposes a current change
 - :mod:`~anvilate.analysis.reactive_circuit` — reactive components: the energy a
   capacitor (½·C·V²) and an inductor (½·L·I²) store, the RC/RL first-order time
-  constants and the RC filter cutoff f_c = 1/(2π·R·C), and the LC resonant frequency
-  f₀ = 1/(2π·√(L·C))
+  constants and the RC filter cutoff f_c = 1/(2π·R·C), the LC resonant frequency
+  f₀ = 1/(2π·√(L·C)), and the parallel-plate capacitor — capacitance ε₀·ε_r·A/d, charge
+  Q = C·V, and plate field E = V/d
 - :mod:`~anvilate.analysis.diode` — semiconductor-diode (Shockley) behavior: the thermal voltage
   V_T = k·T/q, the ideal-diode current I = I_s·(e^(V/(n·V_T)) − 1), and the forward voltage at a
   target current V = n·V_T·ln(I/I_s + 1) — the operating point of a rectifier or LED
@@ -2006,9 +2007,12 @@ from .radioactivity import (
     time_for_activity_decay,
 )
 from .reactive_circuit import (
+    capacitor_charge,
     capacitor_stored_energy,
     inductor_stored_energy,
     lc_resonant_frequency,
+    parallel_plate_capacitance,
+    parallel_plate_field,
     rc_cutoff_frequency,
     rc_time_constant,
     rl_time_constant,
@@ -2541,6 +2545,9 @@ __all__ = [
     "rc_time_constant",
     "rl_time_constant",
     "rc_cutoff_frequency",
+    "parallel_plate_capacitance",
+    "capacitor_charge",
+    "parallel_plate_field",
     "thermal_voltage",
     "diode_current",
     "diode_voltage",

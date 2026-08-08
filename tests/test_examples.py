@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_parallel_plate_capacitor_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "parallel_plate_capacitor.py"))
+    d = namespace["capacitor_state"]()
+    # 0.01 m^2, 1 mm air: ~88.5 pF, ~8.85 nC at 100 V, 100 kV/m field.
+    assert d["capacitance_pf"] == pytest.approx(88.54, abs=0.05)
+    assert d["charge_nc"] == pytest.approx(8.854, abs=0.005)
+    assert d["field_kv_m"] == pytest.approx(100.0, rel=1e-9)
+
+
 def test_biconvex_lens_design_example():
     namespace = runpy.run_path(str(_EXAMPLES / "biconvex_lens_design.py"))
     d = namespace["lens_design"]()

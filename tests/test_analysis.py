@@ -22334,6 +22334,49 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_parallel_plate_capacitance_charge_and_field():
+    from anvilate.analysis import (
+        capacitor_charge,
+        parallel_plate_capacitance,
+        parallel_plate_field,
+    )
+
+    eps0 = 8.8541878128e-12
+    area = Quantity(magnitude=0.01, unit="m**2")
+    gap = Quantity(magnitude=1e-3, unit="m")
+
+    # C = eps0*eps_r*A/d; air gap -> ~88.5 pF.
+    c = parallel_plate_capacitance(plate_area=area, separation=gap, relative_permittivity=1.0)
+    assert c.to("F").magnitude == pytest.approx(eps0 * 0.01 / 1e-3, rel=1e-9)
+    assert c.to("F").magnitude * 1e12 == pytest.approx(88.54, abs=0.05)
+    # A dielectric of permittivity 4 quadruples the capacitance.
+    c_diel = parallel_plate_capacitance(plate_area=area, separation=gap, relative_permittivity=4.0)
+    assert c_diel.to("F").magnitude == pytest.approx(4.0 * c.to("F").magnitude, rel=1e-9)
+    # Halving the gap doubles the capacitance.
+    c_thin = parallel_plate_capacitance(
+        plate_area=area, separation=Quantity(magnitude=0.5e-3, unit="m")
+    )
+    assert c_thin.to("F").magnitude == pytest.approx(2.0 * c.to("F").magnitude, rel=1e-9)
+
+    # Q = C*V; 88.5 pF at 100 V -> ~8.85 nC.
+    q = capacitor_charge(capacitance=c, voltage=_q("100 V"))
+    assert q.to("C").magnitude == pytest.approx(c.to("F").magnitude * 100.0, rel=1e-9)
+    assert q.to("C").magnitude * 1e9 == pytest.approx(8.854, abs=0.005)
+
+    # E = V/d; 100 V over 1 mm -> 100 kV/m.
+    e = parallel_plate_field(voltage=_q("100 V"), separation=gap)
+    assert e.to("V/m").magnitude == pytest.approx(100.0 / 1e-3, rel=1e-9)
+    assert e.to("V/m").magnitude == pytest.approx(100000.0, rel=1e-9)
+
+    # Guardrails: permittivity >= 1, positive geometry, correct dimensions.
+    with pytest.raises(ValueError, match="relative_permittivity must be at least 1"):
+        parallel_plate_capacitance(plate_area=area, separation=gap, relative_permittivity=0.5)
+    with pytest.raises(ValueError, match="separation must be positive"):
+        parallel_plate_field(voltage=_q("100 V"), separation=_q("0 m"))
+    with pytest.raises(ValueError, match="capacitance must be a"):
+        capacitor_charge(capacitance=_q("100 V"), voltage=_q("100 V"))
+
+
 def test_lensmaker_lens_power_and_combined_focal_length():
     from anvilate.analysis import (
         combined_thin_lens_focal_length,
