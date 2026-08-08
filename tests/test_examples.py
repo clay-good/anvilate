@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_paper_towel_wicking_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "paper_towel_wicking.py"))
+    d = namespace["paper_wicking"]()
+    # 10 um pores, water: ~14.6 kPa suction, ~19.1 mm in 1 s, ~6.9 s to 50 mm.
+    assert d["capillary_pressure_kpa"] == pytest.approx(14.56, abs=0.01)
+    assert d["penetration_1s_mm"] == pytest.approx(19.079, abs=0.01)
+    assert d["time_to_50mm_s"] == pytest.approx(6.868, abs=0.01)
+
+
 def test_iron_core_magnetic_circuit_example():
     namespace = runpy.run_path(str(_EXAMPLES / "iron_core_magnetic_circuit.py"))
     d = namespace["core_flux"]()

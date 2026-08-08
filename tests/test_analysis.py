@@ -22334,6 +22334,61 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_washburn_capillary_pressure_penetration_and_time():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        washburn_capillary_pressure,
+        washburn_penetration_length,
+        washburn_penetration_time,
+    )
+
+    sigma = _q("0.0728 N/m")
+    r = Quantity(magnitude=1e-5, unit="m")
+    mu = Quantity(magnitude=0.001, unit="Pa*s")
+
+    # Young-Laplace suction Δp = 2σ·cosθ/r; perfect wetting -> 14560 Pa.
+    p = washburn_capillary_pressure(surface_tension=sigma, pore_radius=r, contact_angle=0.0)
+    assert p.to("Pa").magnitude == pytest.approx(2 * 0.0728 / 1e-5, rel=1e-9)
+    assert p.to("Pa").magnitude == pytest.approx(14560.0, rel=1e-9)
+
+    # Washburn L = sqrt(σ·r·cosθ·t/(2μ)); ~19.08 mm in 1 s.
+    length = washburn_penetration_length(
+        surface_tension=sigma, pore_radius=r, viscosity=mu, time=_q("1 s"), contact_angle=0.0
+    )
+    assert length.to("m").magnitude == pytest.approx(
+        sqrt(0.0728 * 1e-5 * 1.0 / (2 * 0.001)), rel=1e-9
+    )
+    assert length.to("m").magnitude == pytest.approx(0.019079, abs=1e-5)
+    # The front advances as sqrt(t): 4x the time -> 2x the distance.
+    length4 = washburn_penetration_length(
+        surface_tension=sigma, pore_radius=r, viscosity=mu, time=_q("4 s"), contact_angle=0.0
+    )
+    assert length4.to("m").magnitude == pytest.approx(2.0 * length.to("m").magnitude, rel=1e-9)
+
+    # Time inverse t = 2μL²/(σ·r·cosθ) round-trips the penetration length.
+    t_back = washburn_penetration_time(
+        surface_tension=sigma, pore_radius=r, viscosity=mu, length=length, contact_angle=0.0
+    )
+    assert t_back.to("s").magnitude == pytest.approx(1.0, rel=1e-9)
+    # Time grows with the square of distance: reaching 50 mm takes ~6.87 s.
+    t50 = washburn_penetration_time(
+        surface_tension=sigma, pore_radius=r, viscosity=mu, length=_q("0.05 m"), contact_angle=0.0
+    )
+    assert t50.to("s").magnitude == pytest.approx(2 * 0.001 * 0.05**2 / (0.0728 * 1e-5), rel=1e-9)
+    assert t50.to("s").magnitude == pytest.approx(6.868, abs=0.01)
+
+    # Guardrails: a non-wetting angle (>=90 deg) cannot wick in; dimensioned inputs.
+    with pytest.raises(ValueError, match="contact_angle must be below 90"):
+        washburn_penetration_length(
+            surface_tension=sigma, pore_radius=r, viscosity=mu, time=_q("1 s"), contact_angle=95.0
+        )
+    with pytest.raises(ValueError, match="viscosity must be a"):
+        washburn_penetration_length(
+            surface_tension=sigma, pore_radius=r, viscosity=_q("0.001 Pa"), time=_q("1 s")
+        )
+
+
 def test_magnetic_circuit_mmf_reluctance_and_flux():
     from math import pi
 

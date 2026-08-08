@@ -274,6 +274,9 @@ cam.CamMotion
 cam.cam_base_circle_for_pressure_angle
 cam.cam_follower_motion
 cam.cam_pressure_angle
+capillary_flow.washburn_capillary_pressure
+capillary_flow.washburn_penetration_length
+capillary_flow.washburn_penetration_time
 casting.casting_modulus
 casting.chvorinov_solidification_time
 casting.riser_modulus_for_feeding

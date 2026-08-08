@@ -169,6 +169,9 @@ modules:
   parabolic, and 3-4-5 polynomial profiles): follower displacement, velocity, and
   acceleration at a cam angle, the translating roller-follower pressure angle, and
   the minimum base circle a maximum pressure angle allows
+- :mod:`~anvilate.analysis.capillary_flow` — capillary imbibition (Washburn): the Young-Laplace
+  suction Δp = 2σ·cosθ/r, the wicking penetration L = √(σ·r·cosθ·t/(2μ)) that grows as √t, and the
+  time t = 2μL²/(σ·r·cosθ) to reach a distance (the dynamic partner to static capillary rise)
 - :mod:`~anvilate.analysis.geneva` — external Geneva (intermittent-indexing)
   mechanism geometry: index angle, crank and driven engagement radii, and the
   advance/dwell fraction of the cycle
@@ -1001,6 +1004,11 @@ from .cam import (
     cam_base_circle_for_pressure_angle,
     cam_follower_motion,
     cam_pressure_angle,
+)
+from .capillary_flow import (
+    washburn_capillary_pressure,
+    washburn_penetration_length,
+    washburn_penetration_time,
 )
 from .casting import (
     casting_modulus,
@@ -2892,6 +2900,9 @@ __all__ = [
     "cam_follower_motion",
     "cam_pressure_angle",
     "cam_base_circle_for_pressure_angle",
+    "washburn_capillary_pressure",
+    "washburn_penetration_length",
+    "washburn_penetration_time",
     "casting_modulus",
     "chvorinov_solidification_time",
     "riser_modulus_for_feeding",
