@@ -30,6 +30,9 @@ aisc_compactness.flexural_flange_slenderness_limits
 aisc_compactness.flexural_web_slenderness_limits
 aluminum.aluminum_buckling_stress
 aluminum.aluminum_tension_stress
+antenna.free_space_path_loss
+antenna.max_line_of_sight_range
+antenna.received_power
 compressible_flow.choked_mass_flow_rate
 compressible_flow.critical_pressure_ratio
 compressible_flow.isentropic_area_ratio

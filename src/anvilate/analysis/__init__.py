@@ -15,6 +15,9 @@ modules:
 - :mod:`~anvilate.analysis.adhesive` — bonded joints: the lap-joint average shear
   stress against the datasheet lap-shear strength, and the axial and torque
   capacity of a cylindrical retaining-compound bond
+- :mod:`~anvilate.analysis.antenna` — free-space RF link (Friis): the free-space path loss
+  (4π·d/λ)², the received power P_t·G_t·G_r·(λ/4π·d)² a link delivers, and the maximum
+  line-of-sight range for a receiver's sensitivity (gains as linear ratios, not dBi)
 - :mod:`~anvilate.analysis.axial` — direct axial stress, section area, the
   minimum area an axial load requires, and the axial elongation and stiffness
 - :mod:`~anvilate.analysis.beam` — bending (cantilever / simply-supported /
@@ -663,6 +666,11 @@ from .aisc_compactness import (
 from .aluminum import (
     aluminum_buckling_stress,
     aluminum_tension_stress,
+)
+from .antenna import (
+    free_space_path_loss,
+    max_line_of_sight_range,
+    received_power,
 )
 from .axial import (
     axial_elongation,
@@ -2240,6 +2248,9 @@ __all__ = [
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",
+    "free_space_path_loss",
+    "received_power",
+    "max_line_of_sight_range",
     "CompactnessClass",
     "classify_flexural_element",
     "flexural_flange_slenderness_limits",

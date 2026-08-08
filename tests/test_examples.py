@@ -1185,6 +1185,14 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_wifi_link_budget_example_received_power_and_range():
+    namespace = runpy.run_path(str(_EXAMPLES / "wifi_link_budget.py"))
+    d = namespace["link_budget"]()
+    # 2.4 GHz, 100 mW, 1.64 gains: ~-55.8 dBm at 100 m; ~2.9 km to a -85 dBm receiver.
+    assert d["received_power_dbm_at_100m"] == pytest.approx(-55.8, abs=0.2)
+    assert d["max_range_km"] == pytest.approx(2.9, abs=0.1)
+
+
 def test_led_operating_point_example_thermal_voltage_and_current():
     namespace = runpy.run_path(str(_EXAMPLES / "led_operating_point.py"))
     d = namespace["operating_point"]()

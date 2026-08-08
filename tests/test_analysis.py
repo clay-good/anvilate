@@ -20853,6 +20853,66 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_antenna_friis_path_loss_received_power_and_range():
+    from math import pi
+
+    from anvilate.analysis import (
+        free_space_path_loss,
+        max_line_of_sight_range,
+        received_power,
+    )
+
+    lam = _q("0.12491 m")  # 2.4 GHz
+
+    # FSPL = (4*pi*d/lambda)^2.
+    fspl = free_space_path_loss(distance=_q("100 m"), wavelength=lam)
+    assert fspl == pytest.approx((4 * pi * 100 / 0.12491) ** 2, rel=1e-9)
+    # Doubling the distance quadruples the loss.
+    fspl2 = free_space_path_loss(distance=_q("200 m"), wavelength=lam)
+    assert fspl2 == pytest.approx(4 * fspl, rel=1e-9)
+
+    # Friis P_r = P_t*G_t*G_r*(lambda/(4*pi*d))^2.
+    p_r = received_power(
+        transmit_power=_q("100 mW"),
+        transmit_gain=1.64,
+        receive_gain=1.64,
+        distance=_q("100 m"),
+        wavelength=lam,
+    )
+    expected = 0.1 * 1.64 * 1.64 * (0.12491 / (4 * pi * 100)) ** 2
+    assert p_r.to("W").magnitude == pytest.approx(expected, rel=1e-9)
+
+    # Range inverse round-trips: feeding P_r back as the sensitivity recovers 100 m.
+    d = max_line_of_sight_range(
+        transmit_power=_q("100 mW"),
+        transmit_gain=1.64,
+        receive_gain=1.64,
+        receiver_sensitivity=p_r,
+        wavelength=lam,
+    )
+    assert d.to("m").magnitude == pytest.approx(100.0, rel=1e-9)
+
+    # Guardrails: positive gains/powers/lengths, dimensions checked.
+    with pytest.raises(ValueError, match="transmit_gain must be positive"):
+        received_power(
+            transmit_power=_q("100 mW"),
+            transmit_gain=0.0,
+            receive_gain=1.64,
+            distance=_q("100 m"),
+            wavelength=lam,
+        )
+    with pytest.raises(ValueError, match="receiver_sensitivity must be positive"):
+        max_line_of_sight_range(
+            transmit_power=_q("100 mW"),
+            transmit_gain=1.64,
+            receive_gain=1.64,
+            receiver_sensitivity=_q("0 W"),
+            wavelength=lam,
+        )
+    with pytest.raises(ValueError, match="distance must be a"):
+        free_space_path_loss(distance=_q("100 s"), wavelength=lam)
+
+
 def test_diode_thermal_voltage_current_and_voltage_inverse():
     from math import expm1, log
 
