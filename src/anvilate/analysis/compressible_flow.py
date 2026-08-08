@@ -26,6 +26,9 @@ __all__ = [
     "critical_pressure_ratio",
     "isentropic_area_ratio",
     "mach_number",
+    "normal_shock_downstream_mach",
+    "normal_shock_pressure_ratio",
+    "normal_shock_stagnation_pressure_ratio",
     "speed_of_sound",
     "stagnation_density_ratio",
     "stagnation_pressure_ratio",
@@ -196,6 +199,68 @@ def choked_mass_flow_rate(
     g = heat_capacity_ratio
     flux = p0 * sqrt(g / (r * t0)) * (2.0 / (g + 1.0)) ** ((g + 1.0) / (2.0 * (g - 1.0)))
     return Quantity(magnitude=discharge_coefficient * a * flux, unit="kg/s")
+
+
+def _require_supersonic(upstream_mach: float) -> None:
+    if upstream_mach <= 1.0:
+        raise ValueError(f"upstream_mach must exceed 1 (a shock needs M > 1); got {upstream_mach}")
+
+
+def normal_shock_downstream_mach(*, upstream_mach: float, heat_capacity_ratio: float) -> float:
+    """The Mach number behind a normal shock, M₂² = ((γ−1)M₁² + 2)/(2γM₁² − (γ−1)).
+
+    A normal shock decelerates a supersonic stream abruptly to subsonic: from the ``upstream_mach``
+    M₁ (which must exceed 1) and the ``heat_capacity_ratio`` γ, the downstream Mach is
+    M₂ = √[((γ−1)M₁² + 2)/(2γM₁² − (γ−1))]. The result is always below 1 — the flow behind any
+    normal shock is subsonic — and it falls as the incoming Mach rises. Returns the downstream Mach
+    number (dimensionless).
+    """
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    _require_supersonic(upstream_mach)
+    g = heat_capacity_ratio
+    m1_sq = upstream_mach * upstream_mach
+    m2_sq = ((g - 1.0) * m1_sq + 2.0) / (2.0 * g * m1_sq - (g - 1.0))
+    return sqrt(m2_sq)
+
+
+def normal_shock_pressure_ratio(*, upstream_mach: float, heat_capacity_ratio: float) -> float:
+    """The static pressure jump across a normal shock, p₂/p₁ = (2γM₁² − (γ−1))/(γ+1).
+
+    The pressure rises discontinuously across a normal shock: from the ``upstream_mach`` M₁ (> 1)
+    and the ``heat_capacity_ratio`` γ, p₂/p₁ = (2γM₁² − (γ−1))/(γ+1). It grows without bound as M₁
+    rises —
+    a Mach-2 shock in air multiplies the static pressure by 4.5 — which is why supersonic inlets and
+    blast waves develop such steep pressure fronts. Returns the pressure ratio (dimensionless, > 1).
+    """
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    _require_supersonic(upstream_mach)
+    g = heat_capacity_ratio
+    m1_sq = upstream_mach * upstream_mach
+    return (2.0 * g * m1_sq - (g - 1.0)) / (g + 1.0)
+
+
+def normal_shock_stagnation_pressure_ratio(
+    *, upstream_mach: float, heat_capacity_ratio: float
+) -> float:
+    """The stagnation-pressure recovery across a normal shock, p₀₂/p₀₁.
+
+    A normal shock is irreversible, so it destroys stagnation (total) pressure even as static
+    pressure jumps: from the ``upstream_mach`` M₁ (> 1) and the ``heat_capacity_ratio`` γ,
+    p₀₂/p₀₁ = [((γ+1)M₁²/2)/(1 + (γ−1)/2·M₁²)]^(γ/(γ−1))·[(γ+1)/(2γM₁² − (γ−1))]^(1/(γ−1)). It
+    is 1 at M₁ = 1 and falls steadily as the shock strengthens (about 0.72 at Mach 2) — the loss a
+    supersonic inlet pays and the reason strong shocks are avoided. Returns the total-pressure ratio
+    (dimensionless, 0 to 1).
+    """
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    _require_supersonic(upstream_mach)
+    g = heat_capacity_ratio
+    m1_sq = upstream_mach * upstream_mach
+    term1 = (((g + 1.0) * m1_sq / 2.0) / (1.0 + (g - 1.0) / 2.0 * m1_sq)) ** (g / (g - 1.0))
+    term2 = ((g + 1.0) / (2.0 * g * m1_sq - (g - 1.0))) ** (1.0 / (g - 1.0))
+    return term1 * term2
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

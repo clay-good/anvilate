@@ -142,8 +142,9 @@ modules:
   time V·Δp/(Q·p_atm) and the receiver volume a required hold-up needs
 - :mod:`~anvilate.analysis.compressible_flow` — gas dynamics: the speed of sound √(γRT),
   the Mach number, the stagnation-to-static temperature ratio, the critical pressure
-  ratio and choked mass flow that size a relief valve, and the isentropic area ratio A/A*
-  that sets a converging-diverging nozzle's exit Mach
+  ratio and choked mass flow that size a relief valve, the isentropic area ratio A/A*
+  that sets a converging-diverging nozzle's exit Mach, and the normal-shock (Rankine-
+  Hugoniot) downstream Mach, pressure jump, and irreversible stagnation-pressure loss
 - :mod:`~anvilate.analysis.gas_compression` — gas compression: the ideal-gas density,
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
@@ -851,6 +852,9 @@ from .compressible_flow import (
     critical_pressure_ratio,
     isentropic_area_ratio,
     mach_number,
+    normal_shock_downstream_mach,
+    normal_shock_pressure_ratio,
+    normal_shock_stagnation_pressure_ratio,
     speed_of_sound,
     stagnation_density_ratio,
     stagnation_pressure_ratio,
@@ -1957,6 +1961,9 @@ __all__ = [
     "mach_number",
     "speed_of_sound",
     "stagnation_temperature_ratio",
+    "normal_shock_downstream_mach",
+    "normal_shock_pressure_ratio",
+    "normal_shock_stagnation_pressure_ratio",
     "film_condensation_vertical_plate_coefficient",
     "film_condensation_horizontal_tube_coefficient",
     "condensation_rate",

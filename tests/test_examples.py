@@ -989,6 +989,17 @@ def test_tec_cooler_limit_example_joule_heat_caps_cooling():
     assert d["max_temperature_difference_k"] > 40.0  # the 40 K duty is inside the ceiling
 
 
+def test_normal_shock_inlet_loss_example_static_up_total_lost():
+    namespace = runpy.run_path(str(_EXAMPLES / "normal_shock_inlet_loss.py"))
+    d = namespace["normal_shock"]()
+    # Mach-2 shock: downstream Mach 0.577 (subsonic), p2/p1 = 4.5, p02/p01 ~ 0.721.
+    assert d["downstream_mach"] == pytest.approx(0.5774, abs=0.001)
+    assert d["downstream_mach"] < 1.0
+    assert d["static_pressure_ratio"] == pytest.approx(4.5, abs=0.01)
+    assert d["stagnation_pressure_recovery"] == pytest.approx(0.7209, abs=0.001)
+    assert d["stagnation_pressure_recovery"] < 1.0  # total pressure is destroyed
+
+
 def test_aluminium_extrusion_press_example_ratio_pressure_force():
     namespace = runpy.run_path(str(_EXAMPLES / "aluminium_extrusion_press.py"))
     e = namespace["extrusion_press"]()

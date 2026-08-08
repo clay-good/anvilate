@@ -16969,6 +16969,41 @@ def test_choked_flow_critical_ratio_and_mass_flow():
     assert m2.to("kg/s").magnitude == pytest.approx(2 * m.to("kg/s").magnitude, rel=1e-9)
 
 
+def test_normal_shock_downstream_mach_pressure_and_stagnation_ratios():
+    from anvilate.analysis import (
+        normal_shock_downstream_mach,
+        normal_shock_pressure_ratio,
+        normal_shock_stagnation_pressure_ratio,
+    )
+
+    # Classic Mach-2 normal shock in air (gamma 1.4): M2 = 0.5774.
+    m2 = normal_shock_downstream_mach(upstream_mach=2.0, heat_capacity_ratio=1.4)
+    assert m2 == pytest.approx(0.57735, abs=1e-4)
+    assert m2 < 1.0  # flow behind any normal shock is subsonic
+    # A stronger shock leaves a lower downstream Mach.
+    m2_strong = normal_shock_downstream_mach(upstream_mach=3.0, heat_capacity_ratio=1.4)
+    assert m2_strong < m2
+
+    # Static pressure ratio p2/p1 = (2*g*M1^2 - (g-1))/(g+1); Mach 2 -> 4.5.
+    pr = normal_shock_pressure_ratio(upstream_mach=2.0, heat_capacity_ratio=1.4)
+    assert pr == pytest.approx(4.5, rel=1e-9)
+    assert pr > 1.0
+
+    # Stagnation-pressure recovery p02/p01 for Mach 2 is the tabulated 0.7209.
+    p0 = normal_shock_stagnation_pressure_ratio(upstream_mach=2.0, heat_capacity_ratio=1.4)
+    assert p0 == pytest.approx(0.7209, abs=0.0005)
+    assert 0.0 < p0 < 1.0  # a shock always destroys stagnation pressure
+    # An infinitesimally weak shock (M1 -> 1) recovers essentially all stagnation pressure.
+    p0_weak = normal_shock_stagnation_pressure_ratio(upstream_mach=1.001, heat_capacity_ratio=1.4)
+    assert p0_weak == pytest.approx(1.0, abs=1e-6)
+
+    # Guardrails: the flow must be supersonic and gamma > 1.
+    with pytest.raises(ValueError, match="upstream_mach must exceed 1"):
+        normal_shock_downstream_mach(upstream_mach=0.8, heat_capacity_ratio=1.4)
+    with pytest.raises(ValueError, match="heat_capacity_ratio must exceed 1"):
+        normal_shock_pressure_ratio(upstream_mach=2.0, heat_capacity_ratio=1.0)
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 
