@@ -17,9 +17,12 @@ periods is a count.
 from __future__ import annotations
 
 __all__ = [
+    "annuity_future_value",
     "annuity_present_value",
     "future_value",
+    "loan_payment",
     "present_value",
+    "simple_payback_period",
 ]
 
 
@@ -65,3 +68,53 @@ def annuity_present_value(*, payment: float, rate: float, periods: float) -> flo
     if rate == 0.0:
         return payment * periods
     return payment * (1.0 - (1.0 + rate) ** (-periods)) / rate
+
+
+def annuity_future_value(*, payment: float, rate: float, periods: float) -> float:
+    """The future value of a uniform series, FV = A·[(1+i)^n − 1]/i.
+
+    The accumulated value after ``periods`` n of a stream of equal ``payment`` A amounts, one each
+    period, growing at the per-period ``rate`` i (a decimal): FV = A·[(1+i)^n − 1]/i (and FV = A·n
+    when i = 0). This is the sinking-fund result — how a regular saving grows into a target sum.
+    Returns the future value as a plain float.
+    """
+    if rate <= -1.0:
+        raise ValueError("rate must be greater than -1")
+    if periods < 0:
+        raise ValueError("periods must be non-negative")
+    if rate == 0.0:
+        return payment * periods
+    return payment * ((1.0 + rate) ** periods - 1.0) / rate
+
+
+def loan_payment(*, principal: float, rate: float, periods: float) -> float:
+    """The level loan payment (capital recovery), A = P·i(1+i)^n/[(1+i)^n − 1].
+
+    The equal payment that amortizes a ``principal`` P over ``periods`` n at the per-period ``rate``
+    i (a decimal): A = P·i(1+i)^n/[(1+i)^n − 1] (and A = P/n when i = 0). It is the mortgage or
+    equipment-loan installment, the inverse of the annuity present value. Returns the payment as a
+    plain float.
+    """
+    if rate <= -1.0:
+        raise ValueError("rate must be greater than -1")
+    if periods <= 0:
+        raise ValueError("periods must be positive")
+    if rate == 0.0:
+        return principal / periods
+    factor = rate * (1.0 + rate) ** periods / ((1.0 + rate) ** periods - 1.0)
+    return principal * factor
+
+
+def simple_payback_period(*, initial_cost: float, annual_cash_flow: float) -> float:
+    """The simple payback period, n = C/A.
+
+    The time for a project's net ``annual_cash_flow`` A (savings or income) to recover its
+    ``initial_cost`` C, ignoring the time value of money: n = C/A. A quick first screen — a shorter
+    payback is more attractive, though it says nothing about cash flows past the payback point.
+    Returns the payback period in the same time unit as the cash-flow period, as a plain float.
+    """
+    if initial_cost < 0:
+        raise ValueError("initial_cost must be non-negative")
+    if annual_cash_flow <= 0:
+        raise ValueError("annual_cash_flow must be positive")
+    return initial_cost / annual_cash_flow

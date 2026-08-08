@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_equipment_financing_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "equipment_financing.py"))
+    d = namespace["equipment_financing"]()
+    # 8%: $1490.29/yr loan, $14486.56 savings FV, 6.25 yr payback.
+    assert d["annual_loan_payment_usd"] == pytest.approx(1490.29, abs=0.01)
+    assert d["savings_future_value_usd"] == pytest.approx(14486.56, abs=0.01)
+    assert d["payback_period_years"] == pytest.approx(6.25, rel=1e-9)
+
+
 def test_project_economics_example():
     namespace = runpy.run_path(str(_EXAMPLES / "project_economics.py"))
     d = namespace["project_economics"]()

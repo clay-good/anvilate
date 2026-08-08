@@ -336,8 +336,9 @@ modules:
   a given bank delivers, and the round-trip efficiency and the delivered energy
   it yields (E_out = E_stored·η)
 - :mod:`~anvilate.analysis.engineering_economics` — time value of money for economic screening: the
-  present value F/(1+i)^n of a future amount, the future value P·(1+i)^n of a present one, and the
-  present value A·[1−(1+i)^−n]/i of a uniform payment series
+  present value F/(1+i)^n of a future amount, the future value P·(1+i)^n of a present one, the
+  present and future value of a uniform payment series, the level loan payment (capital recovery),
+  and the simple payback period C/A
 - :mod:`~anvilate.analysis.battery_peukert` — Peukert discharge-rate derating: the runtime at a
   high current t = (C/I_r)·(I_r/I)^k, the capacity actually delivered C·(I_r/I)^(k−1), and the
   Peukert exponent fitted from two discharge tests — the fast-drain penalty energy_storage ignores
@@ -1415,9 +1416,12 @@ from .energy_storage import (
     usable_battery_energy,
 )
 from .engineering_economics import (
+    annuity_future_value,
     annuity_present_value,
     future_value,
+    loan_payment,
     present_value,
+    simple_payback_period,
 )
 from .extrusion import (
     extrusion_force,
@@ -2770,6 +2774,9 @@ __all__ = [
     "present_value",
     "future_value",
     "annuity_present_value",
+    "annuity_future_value",
+    "loan_payment",
+    "simple_payback_period",
     "peukert_runtime",
     "peukert_effective_capacity",
     "peukert_exponent_from_two_rates",

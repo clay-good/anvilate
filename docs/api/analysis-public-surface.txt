@@ -459,6 +459,9 @@ energy_storage.usable_battery_energy
 engineering_economics.present_value
 engineering_economics.future_value
 engineering_economics.annuity_present_value
+engineering_economics.annuity_future_value
+engineering_economics.loan_payment
+engineering_economics.simple_payback_period
 extrusion.extrusion_ratio
 extrusion.extrusion_pressure
 extrusion.extrusion_force

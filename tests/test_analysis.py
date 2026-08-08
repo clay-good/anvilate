@@ -22334,6 +22334,47 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_annuity_future_value_loan_payment_and_payback():
+    from anvilate.analysis import (
+        annuity_future_value,
+        annuity_present_value,
+        loan_payment,
+        simple_payback_period,
+    )
+
+    # Annuity FV = A*[(1+i)^n-1]/i; $1000/yr for 10 yr at 8% -> $14486.56.
+    fv = annuity_future_value(payment=1000.0, rate=0.08, periods=10)
+    assert fv == pytest.approx(1000.0 * (1.08**10 - 1) / 0.08, rel=1e-12)
+    assert fv == pytest.approx(14486.56, abs=0.01)
+    # It is the present-value annuity compounded forward n periods.
+    pv = annuity_present_value(payment=1000.0, rate=0.08, periods=10)
+    assert fv == pytest.approx(pv * 1.08**10, rel=1e-9)
+    # Zero interest: just the sum of payments.
+    assert annuity_future_value(payment=1000.0, rate=0.0, periods=10) == pytest.approx(10000.0)
+
+    # Loan payment A = P*i(1+i)^n/[(1+i)^n-1]; $10000 over 10 yr at 8% -> $1490.29/yr.
+    a = loan_payment(principal=10000.0, rate=0.08, periods=10)
+    assert a == pytest.approx(10000.0 * 0.08 * 1.08**10 / (1.08**10 - 1), rel=1e-12)
+    assert a == pytest.approx(1490.29, abs=0.01)
+    # Capital recovery is the inverse of the present-value annuity: paying A discounts back to P.
+    assert annuity_present_value(payment=a, rate=0.08, periods=10) == pytest.approx(
+        10000.0, rel=1e-9
+    )
+    # Zero interest: the principal spread evenly.
+    assert loan_payment(principal=10000.0, rate=0.0, periods=10) == pytest.approx(1000.0)
+
+    # Simple payback n = C/A; $50000 recovered at $8000/yr -> 6.25 yr.
+    n = simple_payback_period(initial_cost=50000.0, annual_cash_flow=8000.0)
+    assert n == pytest.approx(50000.0 / 8000.0, rel=1e-12)
+    assert n == pytest.approx(6.25, rel=1e-9)
+
+    # Guardrails: positive periods for a loan, positive cash flow for payback.
+    with pytest.raises(ValueError, match="periods must be positive"):
+        loan_payment(principal=10000.0, rate=0.08, periods=0)
+    with pytest.raises(ValueError, match="annual_cash_flow must be positive"):
+        simple_payback_period(initial_cost=50000.0, annual_cash_flow=0.0)
+
+
 def test_present_future_value_and_annuity():
     from anvilate.analysis import (
         annuity_present_value,
