@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_centrifuge_clarification_example_velocity_and_time():
+    namespace = runpy.run_path(str(_EXAMPLES / "centrifuge_clarification.py"))
+    d = namespace["clarify_suspension"]()
+    # 1 um, 1050 kg/m^3 particle at 10,000 rpm, 100 mm wall -> ~0.30 mm/s.
+    assert d["wall_velocity_mm_s"] == pytest.approx(0.305, abs=0.005)
+    # Surface (50 mm) to wall (100 mm) in ~228 s.
+    assert d["settling_time_s"] == pytest.approx(227.5, abs=1.0)
+
+
 def test_impeller_euler_head_example_tip_speed_and_vane_penalty():
     namespace = runpy.run_path(str(_EXAMPLES / "impeller_euler_head.py"))
     d = namespace["impeller_head"]()

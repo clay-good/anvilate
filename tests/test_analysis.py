@@ -20975,6 +20975,76 @@ def test_screw_conveyor_capacity_mass_and_speed_inverse():
         screw_conveyor_mass_capacity(volumetric_capacity=q, bulk_density=_q("800 kg"))
 
 
+def test_centrifuge_sedimentation_velocity_and_settling_time():
+    from math import log, pi
+
+    from anvilate.analysis import (
+        centrifugal_sedimentation_velocity,
+        centrifuge_settling_time,
+    )
+
+    common = {
+        "particle_diameter": _q("1 um"),
+        "density_particle": _q("1050 kg/m**3"),
+        "density_fluid": _q("1000 kg/m**3"),
+        "viscosity": _q("0.001 Pa*s"),
+    }
+    omega = 2 * pi * (10000.0 / 60.0)  # rad/s; omega^2*r is a genuine angular acceleration
+
+    # v = d^2 * (rho_p - rho_f) * omega^2 * r / (18 * mu) at the 100 mm wall.
+    v = centrifugal_sedimentation_velocity(
+        radius=_q("0.1 m"), rotational_speed=_q("10000 rpm"), **common
+    )
+    expected_v = (1e-6) ** 2 * 50.0 * omega**2 * 0.1 / (18 * 0.001)
+    assert v.to("m/s").magnitude == pytest.approx(expected_v, rel=1e-9)
+
+    # t = 18 * mu * ln(r_o / r_i) / (omega^2 * d^2 * delta_rho); ~228 s.
+    t = centrifuge_settling_time(
+        inner_radius=_q("0.05 m"),
+        outer_radius=_q("0.1 m"),
+        rotational_speed=_q("10000 rpm"),
+        **common,
+    )
+    expected_t = 18 * 0.001 * log(0.1 / 0.05) / (omega**2 * (1e-6) ** 2 * 50.0)
+    assert t.to("s").magnitude == pytest.approx(expected_t, rel=1e-9)
+    assert t.to("s").magnitude == pytest.approx(227.5, abs=1.0)
+
+    # Twice the speed sediments 4x faster and settles in a quarter of the time (omega^2 scaling).
+    v2 = centrifugal_sedimentation_velocity(
+        radius=_q("0.1 m"), rotational_speed=_q("20000 rpm"), **common
+    )
+    assert v2.to("m/s").magnitude == pytest.approx(4 * v.to("m/s").magnitude, rel=1e-9)
+    t2 = centrifuge_settling_time(
+        inner_radius=_q("0.05 m"),
+        outer_radius=_q("0.1 m"),
+        rotational_speed=_q("20000 rpm"),
+        **common,
+    )
+    assert t2.to("s").magnitude == pytest.approx(t.to("s").magnitude / 4, rel=1e-9)
+
+    # Guardrails: particle must be denser than fluid, radii ordered, dimensions checked.
+    with pytest.raises(ValueError, match="density_particle must exceed"):
+        centrifugal_sedimentation_velocity(
+            radius=_q("0.1 m"),
+            rotational_speed=_q("10000 rpm"),
+            particle_diameter=_q("1 um"),
+            density_particle=_q("1000 kg/m**3"),
+            density_fluid=_q("1050 kg/m**3"),
+            viscosity=_q("0.001 Pa*s"),
+        )
+    with pytest.raises(ValueError, match="inner_radius must be positive and less"):
+        centrifuge_settling_time(
+            inner_radius=_q("0.1 m"),
+            outer_radius=_q("0.05 m"),
+            rotational_speed=_q("10000 rpm"),
+            **common,
+        )
+    with pytest.raises(ValueError, match="rotational_speed must be a"):
+        centrifugal_sedimentation_velocity(
+            radius=_q("0.1 m"), rotational_speed=_q("10000 m"), **common
+        )
+
+
 def test_turbomachinery_euler_head_tip_speed_and_vane_angle():
     from math import pi, radians, tan
 

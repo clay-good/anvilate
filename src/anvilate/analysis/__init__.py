@@ -482,6 +482,11 @@ modules:
 - :mod:`~anvilate.analysis.centrifugal_casting` — casting in a spinning mold: the G-factor
   G = ω²·r/g that sets quality, the spin speed ω = √(G·g/r) to reach it, and the
   metallostatic wall pressure p = ½·ρ·ω²·(r_o² − r_i²) that packs the outer skin
+- :mod:`~anvilate.analysis.centrifuge` — centrifugal separation: the Stokes sedimentation
+  velocity in a centrifugal field v = d²·Δρ·ω²·r/(18·μ), and the settling time for a particle
+  to reach the wall t = 18·μ·ln(r_o/r_i)/(ω²·d²·Δρ) — the radius-integrated tubular/decanter
+  sizing relation (the field itself is the G-factor of
+  :mod:`~anvilate.analysis.centrifugal_casting`)
 - :mod:`~anvilate.analysis.casting_gating` — gating-system flow: the mold fill time
   t = V/(C_d·A·√(2gh)), the choke area A = V/(C_d·t·√(2gh)) for a target time, and the
   anti-aspiration sprue taper A_top/A_bottom = √(h_bottom/h_top)
@@ -834,6 +839,10 @@ from .centrifugal_casting import (
     centrifugal_g_factor,
     centrifugal_speed_for_g_factor,
     centrifugal_wall_pressure,
+)
+from .centrifuge import (
+    centrifugal_sedimentation_velocity,
+    centrifuge_settling_time,
 )
 from .chain import (
     chain_length_in_pitches,
@@ -2379,6 +2388,8 @@ __all__ = [
     "centrifugal_g_factor",
     "centrifugal_speed_for_g_factor",
     "centrifugal_wall_pressure",
+    "centrifugal_sedimentation_velocity",
+    "centrifuge_settling_time",
     "gating_fill_time",
     "gating_choke_area",
     "sprue_taper_ratio",
