@@ -752,6 +752,9 @@ piezoelectric.piezoelectric_open_circuit_voltage
 pipe_flow.cavitation_number
 pipe_flow.darcy_friction_factor
 pipe_flow.darcy_weisbach_head_loss
+pipe_flow.hagen_poiseuille_flow_rate
+pipe_flow.hagen_poiseuille_pressure_drop
+pipe_flow.hagen_poiseuille_radius_for_flow
 pipe_flow.hazen_williams_flow_capacity
 pipe_flow.hazen_williams_head_loss
 pipe_flow.hydraulic_diameter

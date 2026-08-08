@@ -202,8 +202,9 @@ modules:
   pump must overcome, the empirical Hazen-Williams head loss and flow capacity for
   water mains, the hydraulic diameter that carries the round-pipe relations over to a
   non-circular duct, the Joukowsky water-hammer surge pressure with its critical
-  valve-closure time, and the cavitation number σ = (p−p_v)/(½·ρ·V²) that screens a
-  valve or orifice for cavitation
+  valve-closure time, the cavitation number σ = (p−p_v)/(½·ρ·V²) that screens a
+  valve or orifice for cavitation, and the laminar Hagen-Poiseuille flow Q = π·ΔP·r⁴/(8·μ·L)
+  with its pressure- and radius-sizing inverses (microchannels, capillaries, viscometry)
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), the Froude number
   and rectangular critical depth that classify the flow as sub- or supercritical, the
@@ -1556,6 +1557,9 @@ from .pipe_flow import (
     cavitation_number,
     darcy_friction_factor,
     darcy_weisbach_head_loss,
+    hagen_poiseuille_flow_rate,
+    hagen_poiseuille_pressure_drop,
+    hagen_poiseuille_radius_for_flow,
     hazen_williams_flow_capacity,
     hazen_williams_head_loss,
     hydraulic_diameter,
@@ -2169,6 +2173,9 @@ __all__ = [
     "cavitation_number",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
+    "hagen_poiseuille_flow_rate",
+    "hagen_poiseuille_pressure_drop",
+    "hagen_poiseuille_radius_for_flow",
     "hazen_williams_flow_capacity",
     "hazen_williams_head_loss",
     "hydraulic_diameter",

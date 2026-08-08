@@ -21,7 +21,7 @@ directly as h_f = 10.67·L·Q^1.852/(C^1.852·D^4.87). Inputs and outputs are di
 
 from __future__ import annotations
 
-from math import log10, sqrt
+from math import log10, pi, sqrt
 
 from ..units import Quantity
 
@@ -29,6 +29,9 @@ __all__ = [
     "cavitation_number",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",
+    "hagen_poiseuille_flow_rate",
+    "hagen_poiseuille_pressure_drop",
+    "hagen_poiseuille_radius_for_flow",
     "hazen_williams_flow_capacity",
     "hazen_williams_head_loss",
     "hydraulic_diameter",
@@ -358,6 +361,94 @@ def cavitation_number(
     if p_v < 0:
         raise ValueError("vapor_pressure must be non-negative")
     return (p - p_v) / (0.5 * rho * v**2)
+
+
+def hagen_poiseuille_flow_rate(
+    *, pressure_drop: Quantity, radius: Quantity, viscosity: Quantity, length: Quantity
+) -> Quantity:
+    """The laminar volumetric flow rate, Q = π·ΔP·r⁴/(8·μ·L) (Hagen-Poiseuille).
+
+    The exact laminar-flow solution for a round tube: the flow a ``pressure_drop`` ΔP drives through
+    a tube of ``radius`` r and ``length`` L filled with a fluid of ``viscosity`` μ,
+    Q = π·ΔP·r⁴/(8·μ·L). The fourth-power dependence on radius makes it very sensitive to bore —
+    halving the radius cuts the flow sixteenfold. Valid only in laminar flow (Re ≲ 2300), unlike the
+    turbulent Darcy-Weisbach and Hazen-Williams laws. Returns the flow rate in m**3/s.
+    """
+    _check(pressure_drop, "[pressure]", "pressure_drop")
+    _check(radius, "[length]", "radius")
+    _check(viscosity, "[pressure]*[time]", "viscosity")
+    _check(length, "[length]", "length")
+    dp = pressure_drop.to("Pa").magnitude
+    r = radius.to("m").magnitude
+    mu = viscosity.to("Pa*s").magnitude
+    length_m = length.to("m").magnitude
+    if r <= 0:
+        raise ValueError("radius must be positive")
+    if mu <= 0:
+        raise ValueError("viscosity must be positive")
+    if length_m <= 0:
+        raise ValueError("length must be positive")
+    return Quantity(magnitude=pi * dp * r**4 / (8.0 * mu * length_m), unit="m**3/s")
+
+
+def hagen_poiseuille_pressure_drop(
+    *, flow_rate: Quantity, radius: Quantity, viscosity: Quantity, length: Quantity
+) -> Quantity:
+    """The laminar pressure drop, ΔP = 8·μ·L·Q/(π·r⁴).
+
+    The pressure inverse of :func:`hagen_poiseuille_flow_rate`: the drop needed to push a
+    ``flow_rate`` Q through a tube of ``radius`` r and ``length`` L against a ``viscosity`` μ,
+    ΔP = 8·μ·L·Q/(π·r⁴). It is the pump head a laminar line (a capillary, a microchannel, a viscous
+    transfer line) demands, and it soars as the bore narrows. Valid in laminar flow. Returns the
+    pressure drop in Pa.
+    """
+    _check(flow_rate, "[volume]/[time]", "flow_rate")
+    _check(radius, "[length]", "radius")
+    _check(viscosity, "[pressure]*[time]", "viscosity")
+    _check(length, "[length]", "length")
+    q = flow_rate.to("m**3/s").magnitude
+    r = radius.to("m").magnitude
+    mu = viscosity.to("Pa*s").magnitude
+    length_m = length.to("m").magnitude
+    if q < 0:
+        raise ValueError("flow_rate must be non-negative")
+    if r <= 0:
+        raise ValueError("radius must be positive")
+    if mu <= 0:
+        raise ValueError("viscosity must be positive")
+    if length_m <= 0:
+        raise ValueError("length must be positive")
+    return Quantity(magnitude=8.0 * mu * length_m * q / (pi * r**4), unit="Pa")
+
+
+def hagen_poiseuille_radius_for_flow(
+    *, flow_rate: Quantity, pressure_drop: Quantity, viscosity: Quantity, length: Quantity
+) -> Quantity:
+    """The tube radius for a target laminar flow, r = (8·μ·L·Q/(π·ΔP))^(1/4).
+
+    The geometry inverse of :func:`hagen_poiseuille_flow_rate`: the bore ``radius`` a tube needs to
+    pass a target ``flow_rate`` Q under an available ``pressure_drop`` ΔP, for a fluid of
+    ``viscosity`` μ over a ``length`` L, r = (8·μ·L·Q/(π·ΔP))^(1/4). The quarter-power means the
+    radius barely changes for large flow changes — sizing a microchannel or capillary. Returns the
+    radius in m.
+    """
+    _check(flow_rate, "[volume]/[time]", "flow_rate")
+    _check(pressure_drop, "[pressure]", "pressure_drop")
+    _check(viscosity, "[pressure]*[time]", "viscosity")
+    _check(length, "[length]", "length")
+    q = flow_rate.to("m**3/s").magnitude
+    dp = pressure_drop.to("Pa").magnitude
+    mu = viscosity.to("Pa*s").magnitude
+    length_m = length.to("m").magnitude
+    if q <= 0:
+        raise ValueError("flow_rate must be positive")
+    if dp <= 0:
+        raise ValueError("pressure_drop must be positive")
+    if mu <= 0:
+        raise ValueError("viscosity must be positive")
+    if length_m <= 0:
+        raise ValueError("length must be positive")
+    return Quantity(magnitude=(8.0 * mu * length_m * q / (pi * dp)) ** 0.25, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

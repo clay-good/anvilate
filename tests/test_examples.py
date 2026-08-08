@@ -1185,6 +1185,15 @@ def test_screw_conveyor_feeder_example_rates_and_speed():
     assert d["speed_for_target_rpm"] == pytest.approx(96.1, abs=0.5)
 
 
+def test_microchannel_laminar_flow_example_flow_pressure_radius():
+    namespace = runpy.run_path(str(_EXAMPLES / "microchannel_laminar_flow.py"))
+    d = namespace["size_microchannel"]()
+    # 100 um radius, 50 mm, water, 10 kPa: ~7.9 uL/s; 1 uL/s needs ~1.3 kPa; radius ~60 um.
+    assert d["flow_at_10kpa_ul_s"] == pytest.approx(7.85, abs=0.1)
+    assert d["pressure_for_1ul_s_kpa"] == pytest.approx(1.27, abs=0.05)
+    assert d["radius_for_1ul_s_um"] == pytest.approx(59.7, abs=0.5)
+
+
 def test_transdermal_patch_diffusion_example_flux_and_lag():
     namespace = runpy.run_path(str(_EXAMPLES / "transdermal_patch_diffusion.py"))
     d = namespace["patch_delivery"]()

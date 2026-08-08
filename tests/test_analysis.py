@@ -20853,6 +20853,61 @@ def test_view_factor_crossed_strings_reciprocity_and_shield():
         view_factor_reciprocity(area_1=_q("0 m**2"), view_factor_1_to_2=0.4, area_2=_q("2 m**2"))
 
 
+def test_hagen_poiseuille_flow_pressure_and_radius_inverses():
+    from math import pi
+
+    from anvilate.analysis import (
+        hagen_poiseuille_flow_rate,
+        hagen_poiseuille_pressure_drop,
+        hagen_poiseuille_radius_for_flow,
+    )
+
+    mu = _q("0.001 Pa*s")
+
+    # Q = pi*dP*r^4/(8*mu*L); 1 mm radius, 1 m, 1000 Pa water.
+    q = hagen_poiseuille_flow_rate(
+        pressure_drop=_q("1000 Pa"), radius=_q("1 mm"), viscosity=mu, length=_q("1 m")
+    )
+    assert q.to("m**3/s").magnitude == pytest.approx(
+        pi * 1000 * (1e-3) ** 4 / (8 * 1e-3 * 1.0), rel=1e-9
+    )
+
+    # Fourth-power radius law: doubling the radius raises flow 16x.
+    q_big = hagen_poiseuille_flow_rate(
+        pressure_drop=_q("1000 Pa"), radius=_q("2 mm"), viscosity=mu, length=_q("1 m")
+    )
+    assert q_big.to("m**3/s").magnitude == pytest.approx(16 * q.to("m**3/s").magnitude, rel=1e-9)
+
+    # Pressure inverse round-trips back to 1000 Pa.
+    dp = hagen_poiseuille_pressure_drop(
+        flow_rate=q, radius=_q("1 mm"), viscosity=mu, length=_q("1 m")
+    )
+    assert dp.to("Pa").magnitude == pytest.approx(1000.0, rel=1e-9)
+
+    # Radius inverse round-trips back to 1 mm.
+    r = hagen_poiseuille_radius_for_flow(
+        flow_rate=q, pressure_drop=_q("1000 Pa"), viscosity=mu, length=_q("1 m")
+    )
+    assert r.to("mm").magnitude == pytest.approx(1.0, rel=1e-9)
+
+    # Guardrails: positive radius/viscosity/length, dimensions checked.
+    with pytest.raises(ValueError, match="radius must be positive"):
+        hagen_poiseuille_flow_rate(
+            pressure_drop=_q("1000 Pa"), radius=_q("0 mm"), viscosity=mu, length=_q("1 m")
+        )
+    with pytest.raises(ValueError, match="pressure_drop must be positive"):
+        hagen_poiseuille_radius_for_flow(
+            flow_rate=q, pressure_drop=_q("0 Pa"), viscosity=mu, length=_q("1 m")
+        )
+    with pytest.raises(ValueError, match="viscosity must be a"):
+        hagen_poiseuille_flow_rate(
+            pressure_drop=_q("1000 Pa"),
+            radius=_q("1 mm"),
+            viscosity=_q("0.001 Pa"),
+            length=_q("1 m"),
+        )
+
+
 def test_diffusion_flux_length_and_time_inverse():
     from math import sqrt
 
