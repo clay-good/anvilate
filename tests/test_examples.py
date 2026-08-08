@@ -1221,6 +1221,15 @@ def test_silicon_pn_junction_example():
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
 
 
+def test_earth_gravitation_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "earth_gravitation.py"))
+    d = namespace["earth_gravity_chain"]()
+    # Earth: g ~9.82 m/s^2, mu ~3.986e14, ~7672 m/s at 6771 km.
+    assert d["surface_gravity_m_s2"] == pytest.approx(9.82, abs=0.01)
+    assert d["gravitational_parameter_m3_s2"] == pytest.approx(3.9859e14, rel=1e-3)
+    assert d["low_orbit_speed_m_s"] == pytest.approx(7672.0, abs=2.0)
+
+
 def test_solar_sail_thrust_example():
     namespace = runpy.run_path(str(_EXAMPLES / "solar_sail_thrust.py"))
     d = namespace["solar_sail_thrust"]()

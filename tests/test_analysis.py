@@ -22334,6 +22334,66 @@ def test_arrhenius_rate_constant_ratio_and_activation_energy_inverse():
         )
 
 
+def test_newtonian_gravitation_force_surface_gravity_and_mu():
+    from anvilate.analysis import (
+        gravitational_force,
+        gravitational_parameter,
+        surface_gravity,
+    )
+
+    G = 6.67430e-11
+
+    # Newton's law F = G*m1*m2/r^2; Earth-Moon pull ~1.98e20 N.
+    f = gravitational_force(
+        mass1=Quantity(magnitude=5.972e24, unit="kg"),
+        mass2=Quantity(magnitude=7.342e22, unit="kg"),
+        separation=Quantity(magnitude=3.844e8, unit="m"),
+    )
+    assert f.to("N").magnitude == pytest.approx(G * 5.972e24 * 7.342e22 / 3.844e8**2, rel=1e-9)
+    assert f.to("N").magnitude == pytest.approx(1.98e20, rel=0.01)
+    # Inverse-square: doubling the separation quarters the force.
+    f2 = gravitational_force(
+        mass1=Quantity(magnitude=5.972e24, unit="kg"),
+        mass2=Quantity(magnitude=7.342e22, unit="kg"),
+        separation=Quantity(magnitude=2 * 3.844e8, unit="m"),
+    )
+    assert f2.to("N").magnitude == pytest.approx(f.to("N").magnitude / 4.0, rel=1e-9)
+
+    # Surface gravity g = G*M/R^2; Earth ~9.82 m/s^2.
+    g = surface_gravity(
+        mass=Quantity(magnitude=5.972e24, unit="kg"),
+        radius=Quantity(magnitude=6.371e6, unit="m"),
+    )
+    assert g.to("m/s**2").magnitude == pytest.approx(G * 5.972e24 / 6.371e6**2, rel=1e-9)
+    assert g.to("m/s**2").magnitude == pytest.approx(9.82, abs=0.01)
+
+    # Standard gravitational parameter mu = G*M; Earth ~3.986e14 m^3/s^2.
+    mu = gravitational_parameter(mass=Quantity(magnitude=5.972e24, unit="kg"))
+    assert mu.to("m**3/s**2").magnitude == pytest.approx(G * 5.972e24, rel=1e-12)
+    assert mu.to("m**3/s**2").magnitude == pytest.approx(3.986e14, rel=1e-3)
+    # It feeds the orbital relations: a 6771 km orbit circles at ~7672 m/s.
+    from anvilate.analysis import circular_orbit_velocity
+
+    v = circular_orbit_velocity(
+        gravitational_parameter=mu, orbital_radius=Quantity(magnitude=6.771e6, unit="m")
+    )
+    assert v.to("m/s").magnitude == pytest.approx(7672.0, abs=2.0)
+
+    # Guardrails: positive masses and separation.
+    with pytest.raises(ValueError, match="masses must be positive"):
+        gravitational_force(
+            mass1=Quantity(magnitude=0.0, unit="kg"),
+            mass2=Quantity(magnitude=1.0, unit="kg"),
+            separation=Quantity(magnitude=1.0, unit="m"),
+        )
+    with pytest.raises(ValueError, match="radius must be positive"):
+        surface_gravity(
+            mass=Quantity(magnitude=5.972e24, unit="kg"), radius=Quantity(magnitude=0.0, unit="m")
+        )
+    with pytest.raises(ValueError, match="mass must be a"):
+        gravitational_parameter(mass=Quantity(magnitude=5.0, unit="m"))
+
+
 def test_photon_momentum_radiation_pressure_and_force():
     from anvilate.analysis import (
         photon_momentum,

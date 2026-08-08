@@ -213,6 +213,9 @@ modules:
   Δv = I_sp·g₀·ln(m₀/m_f) with the propellant fraction ζ = 1 − exp(−Δv/(I_sp·g₀)) it needs; and
   the performance split — characteristic velocity c* = p_c·A_t/ṁ (chamber), thrust coefficient
   C_F = F/(p_c·A_t) (nozzle), and the thrust F = C_F·p_c·A_t a throat sizes to
+- :mod:`~anvilate.analysis.gravitation` — Newtonian gravitation: the force F = G·m₁·m₂/r², the
+  surface gravity g = G·M/R², and the standard gravitational parameter μ = G·M that feeds the
+  orbital-mechanics relations (turning a body's mass into the motion around it)
 - :mod:`~anvilate.analysis.orbital_mechanics` — two-body coasting and transfers: the circular
   orbital speed v = √(μ/r), the Kepler period T = 2π·√(r³/μ), the escape velocity
   v_esc = √(2μ/r) = √2·v_circ, the Hohmann two-burn transfer Δv's and coast time t = π·√(a³/μ),
@@ -1577,6 +1580,11 @@ from .governor import (
     watt_governor_height,
     watt_governor_speed,
 )
+from .gravitation import (
+    gravitational_force,
+    gravitational_parameter,
+    surface_gravity,
+)
 from .grinding import (
     grinding_equivalent_chip_thickness,
     grinding_specific_energy,
@@ -2459,6 +2467,9 @@ __all__ = [
     "watt_governor_height",
     "watt_governor_speed",
     "porter_governor_height",
+    "gravitational_force",
+    "surface_gravity",
+    "gravitational_parameter",
     "circular_channel_properties",
     "critical_depth_rectangular",
     "froude_number",

@@ -106,6 +106,9 @@ geotechnical.vertical_stress_increase_2to1
 governor.watt_governor_height
 governor.watt_governor_speed
 governor.porter_governor_height
+gravitation.gravitational_force
+gravitation.surface_gravity
+gravitation.gravitational_parameter
 masonry.masonry_allowable_axial_stress
 masonry.masonry_allowable_flexural_stress
 masonry.masonry_column_axial_capacity
