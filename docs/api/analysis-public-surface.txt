@@ -227,6 +227,10 @@ bearing.bearing_equivalent_static_load
 bearing.bearing_life_hours
 bearing.bearing_rating_for_life
 bearing.bearing_reliability_life_factor
+bearing.bearing_ball_pass_frequency_outer
+bearing.bearing_ball_pass_frequency_inner
+bearing.bearing_fundamental_train_frequency
+bearing.bearing_ball_spin_frequency
 bearing.bearing_static_safety_factor
 belt.belt_centrifugal_tension
 belt.belt_length

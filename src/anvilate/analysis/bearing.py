@@ -45,6 +45,10 @@ __all__ = [
     "bearing_equivalent_dynamic_load",
     "bearing_equivalent_static_load",
     "bearing_reliability_life_factor",
+    "bearing_ball_pass_frequency_outer",
+    "bearing_ball_pass_frequency_inner",
+    "bearing_fundamental_train_frequency",
+    "bearing_ball_spin_frequency",
 ]
 
 
@@ -53,6 +57,36 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def _defect_frequency_inputs(
+    rotational_frequency: Quantity,
+    number_of_rolling_elements: int,
+    rolling_element_diameter: Quantity,
+    pitch_diameter: Quantity,
+    contact_angle: float,
+) -> tuple[float, int, float]:
+    """Validate the shared inputs and return (f_r in rev/s, N_b, ratio (d/D)·cos φ)."""
+    from math import cos, radians
+
+    _require(rotational_frequency, "[frequency]", "rotational_frequency")
+    _require(rolling_element_diameter, "[length]", "rolling_element_diameter")
+    _require(pitch_diameter, "[length]", "pitch_diameter")
+    # Shaft speed as a revolution count: rpm/60 gives rev/s, avoiding pint's 2π Hz↔rpm mismatch.
+    fr = rotational_frequency.to("rpm").magnitude / 60.0
+    d = rolling_element_diameter.to("mm").magnitude
+    pd = pitch_diameter.to("mm").magnitude
+    if fr < 0:
+        raise ValueError("rotational_frequency must be non-negative")
+    if number_of_rolling_elements < 1:
+        raise ValueError("number_of_rolling_elements must be at least 1")
+    if d <= 0 or pd <= 0:
+        raise ValueError("rolling_element_diameter and pitch_diameter must be positive")
+    if d >= pd:
+        raise ValueError("rolling_element_diameter must be smaller than pitch_diameter")
+    if not -90.0 < contact_angle < 90.0:
+        raise ValueError(f"contact_angle must be in (-90, 90) degrees; got {contact_angle}")
+    return fr, number_of_rolling_elements, (d / pd) * cos(radians(contact_angle))
 
 
 def bearing_basic_rating_life(
@@ -248,3 +282,110 @@ def bearing_reliability_life_factor(
     if weibull_slope <= 0:
         raise ValueError(f"weibull_slope must be positive; got {weibull_slope}")
     return (log(1.0 / reliability) / log(1.0 / 0.90)) ** (1.0 / weibull_slope)
+
+
+def bearing_ball_pass_frequency_outer(
+    *,
+    rotational_frequency: Quantity,
+    number_of_rolling_elements: int,
+    rolling_element_diameter: Quantity,
+    pitch_diameter: Quantity,
+    contact_angle: float = 0.0,
+) -> Quantity:
+    """The ball-pass frequency, outer race (BPFO), (N_b/2)·f_r·(1 − (d/D)·cos φ).
+
+    The rate at which rolling elements pass a single defect on the stationary outer race, from the
+    shaft ``rotational_frequency`` f_r, the ``number_of_rolling_elements`` N_b, the
+    ``rolling_element_diameter`` d, the ``pitch_diameter`` D, and the ``contact_angle`` φ (degrees):
+    BPFO = (N_b/2)·f_r·(1 − (d/D)·cos φ). A spectral peak here (and its harmonics) is the signature
+    of outer-race spalling in vibration condition monitoring. Returns the frequency in Hz.
+    """
+    fr, nb, ratio = _defect_frequency_inputs(
+        rotational_frequency,
+        number_of_rolling_elements,
+        rolling_element_diameter,
+        pitch_diameter,
+        contact_angle,
+    )
+    return Quantity(magnitude=(nb / 2.0) * fr * (1.0 - ratio), unit="Hz")
+
+
+def bearing_ball_pass_frequency_inner(
+    *,
+    rotational_frequency: Quantity,
+    number_of_rolling_elements: int,
+    rolling_element_diameter: Quantity,
+    pitch_diameter: Quantity,
+    contact_angle: float = 0.0,
+) -> Quantity:
+    """The ball-pass frequency, inner race (BPFI), (N_b/2)·f_r·(1 + (d/D)·cos φ).
+
+    The rate at which rolling elements pass a defect on the rotating inner race: BPFI =
+    (N_b/2)·f_r·(1 + (d/D)·cos φ), from the same inputs as
+    :func:`bearing_ball_pass_frequency_outer`. It is always higher than the BPFO, and their sum
+    equals N_b·f_r. A BPFI peak — usually modulated by the shaft speed because the defect moves in
+    and out of the load zone — signals inner-race spalling. Returns the frequency in Hz.
+    """
+    fr, nb, ratio = _defect_frequency_inputs(
+        rotational_frequency,
+        number_of_rolling_elements,
+        rolling_element_diameter,
+        pitch_diameter,
+        contact_angle,
+    )
+    return Quantity(magnitude=(nb / 2.0) * fr * (1.0 + ratio), unit="Hz")
+
+
+def bearing_fundamental_train_frequency(
+    *,
+    rotational_frequency: Quantity,
+    number_of_rolling_elements: int,
+    rolling_element_diameter: Quantity,
+    pitch_diameter: Quantity,
+    contact_angle: float = 0.0,
+) -> Quantity:
+    """The fundamental train (cage) frequency (FTF), (f_r/2)·(1 − (d/D)·cos φ).
+
+    The rotation rate of the cage carrying the rolling elements: FTF = (f_r/2)·(1 − (d/D)·cos φ),
+    a little under half the shaft speed. A peak at the FTF (or its sidebands around the ball-pass
+    frequencies) points to a cage fault or looseness. It equals the BPFO divided by the number of
+    rolling elements. Returns the frequency in Hz.
+    """
+    fr, _nb, ratio = _defect_frequency_inputs(
+        rotational_frequency,
+        number_of_rolling_elements,
+        rolling_element_diameter,
+        pitch_diameter,
+        contact_angle,
+    )
+    return Quantity(magnitude=(fr / 2.0) * (1.0 - ratio), unit="Hz")
+
+
+def bearing_ball_spin_frequency(
+    *,
+    rotational_frequency: Quantity,
+    number_of_rolling_elements: int,
+    rolling_element_diameter: Quantity,
+    pitch_diameter: Quantity,
+    contact_angle: float = 0.0,
+) -> Quantity:
+    """The ball (roller) spin frequency (BSF), (D/2d)·f_r·(1 − ((d/D)·cos φ)²).
+
+    The rate at which a rolling element turns about its own axis: BSF =
+    (D/2d)·f_r·(1 − ((d/D)·cos φ)²), from the shaft ``rotational_frequency`` f_r, the
+    ``rolling_element_diameter`` d, the ``pitch_diameter`` D, and the ``contact_angle`` φ. A defect
+    on a rolling element strikes each race once per revolution, so 2·BSF (often modulated by the
+    cage frequency) is the tell-tale of a ball or roller fault. Returns the frequency in Hz.
+    """
+    _require(rolling_element_diameter, "[length]", "rolling_element_diameter")
+    _require(pitch_diameter, "[length]", "pitch_diameter")
+    fr, _nb, ratio = _defect_frequency_inputs(
+        rotational_frequency,
+        number_of_rolling_elements,
+        rolling_element_diameter,
+        pitch_diameter,
+        contact_angle,
+    )
+    d = rolling_element_diameter.to("mm").magnitude
+    pd = pitch_diameter.to("mm").magnitude
+    return Quantity(magnitude=(pd / (2.0 * d)) * fr * (1.0 - ratio * ratio), unit="Hz")

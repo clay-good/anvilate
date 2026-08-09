@@ -11815,6 +11815,60 @@ def test_bearing_reliability_life_factor_reproduces_the_iso281_table():
         bearing_reliability_life_factor(reliability=1.0)
 
 
+def test_bearing_defect_frequencies_and_the_bpfo_bpfi_identity():
+    from anvilate.analysis import (
+        bearing_ball_pass_frequency_inner,
+        bearing_ball_pass_frequency_outer,
+        bearing_ball_spin_frequency,
+        bearing_fundamental_train_frequency,
+    )
+
+    # 8-ball bearing, 8 mm balls on a 40 mm pitch, 1800 rpm (30 rev/s), zero contact angle.
+    kw = {
+        "rotational_frequency": _q("1800 rpm"),
+        "number_of_rolling_elements": 8,
+        "rolling_element_diameter": _q("8 mm"),
+        "pitch_diameter": _q("40 mm"),
+    }
+    bpfo = bearing_ball_pass_frequency_outer(**kw)
+    bpfi = bearing_ball_pass_frequency_inner(**kw)
+    ftf = bearing_fundamental_train_frequency(**kw)
+    bsf = bearing_ball_spin_frequency(**kw)
+
+    # BPFO = (N/2)*fr*(1 - d/D) = 4*30*0.8 = 96 Hz; BPFI = 4*30*1.2 = 144 Hz.
+    assert bpfo.to("Hz").magnitude == pytest.approx(96.0, rel=1e-9)
+    assert bpfi.to("Hz").magnitude == pytest.approx(144.0, rel=1e-9)
+    # The defining identity: BPFO + BPFI = N * fr.
+    assert (bpfo.to("Hz").magnitude + bpfi.to("Hz").magnitude) == pytest.approx(8 * 30.0, rel=1e-12)
+    # FTF = (fr/2)*(1 - d/D) = 12 Hz, a bit under half shaft speed; equals BPFO/N.
+    assert ftf.to("Hz").magnitude == pytest.approx(12.0, rel=1e-9)
+    assert ftf.to("Hz").magnitude == pytest.approx(bpfo.to("Hz").magnitude / 8, rel=1e-9)
+    # BSF = (D/2d)*fr*(1 - (d/D)^2) = 2.5*30*0.96 = 72 Hz.
+    assert bsf.to("Hz").magnitude == pytest.approx(72.0, rel=1e-9)
+
+    # A revolutions-per-second input gives the same result (rpm/60 handling).
+    bpfo_rev = bearing_ball_pass_frequency_outer(
+        rotational_frequency=_q("30 turn/s"),
+        number_of_rolling_elements=8,
+        rolling_element_diameter=_q("8 mm"),
+        pitch_diameter=_q("40 mm"),
+    )
+    assert bpfo_rev.to("Hz").magnitude == pytest.approx(96.0, rel=1e-9)
+
+    # A nonzero contact angle lowers the (d/D)cos(phi) term, raising BPFO toward N/2*fr.
+    bpfo_angled = bearing_ball_pass_frequency_outer(contact_angle=40.0, **kw)
+    assert bpfo_angled.to("Hz").magnitude > bpfo.to("Hz").magnitude
+
+    # Guardrails: element smaller than pitch, at least one element, contact angle in range.
+    with pytest.raises(ValueError, match="smaller than pitch_diameter"):
+        bearing_ball_pass_frequency_outer(
+            rotational_frequency=_q("1800 rpm"),
+            number_of_rolling_elements=8,
+            rolling_element_diameter=_q("50 mm"),
+            pitch_diameter=_q("40 mm"),
+        )
+
+
 def test_bolt_and_member_stiffness_give_a_typical_joint_constant():
     from math import log, pi
 

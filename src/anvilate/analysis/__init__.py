@@ -173,8 +173,9 @@ modules:
 - :mod:`~anvilate.analysis.bearing` — rolling-bearing ISO 281 basic rating life
   (millions of revolutions and running hours) and the dynamic rating a target life
   requires, static load safety factor, the
-  combined-load equivalent dynamic and static loads, and the reliability
-  life-adjustment factor a₁
+  combined-load equivalent dynamic and static loads, the reliability
+  life-adjustment factor a₁, and the four rolling-element defect frequencies (ball-pass outer/inner,
+  cage/train, and ball-spin) that flag raceway and element faults in vibration monitoring
 - :mod:`~anvilate.analysis.belt` — belt / capstan (Euler-Eytelwein) friction:
   tension ratio, slack tension, transmissible force (still and at speed, with
   centrifugal tension and the max-power belt speed), V-belt wedge friction,
@@ -1029,9 +1030,13 @@ from .bearing import (
     BALL_BEARING_LIFE_EXPONENT,
     BEARING_WEIBULL_SLOPE,
     ROLLER_BEARING_LIFE_EXPONENT,
+    bearing_ball_pass_frequency_inner,
+    bearing_ball_pass_frequency_outer,
+    bearing_ball_spin_frequency,
     bearing_basic_rating_life,
     bearing_equivalent_dynamic_load,
     bearing_equivalent_static_load,
+    bearing_fundamental_train_frequency,
     bearing_life_hours,
     bearing_rating_for_life,
     bearing_reliability_life_factor,
@@ -3224,6 +3229,10 @@ __all__ = [
     "bearing_equivalent_dynamic_load",
     "bearing_equivalent_static_load",
     "bearing_reliability_life_factor",
+    "bearing_ball_pass_frequency_outer",
+    "bearing_ball_pass_frequency_inner",
+    "bearing_fundamental_train_frequency",
+    "bearing_ball_spin_frequency",
     "capstan_tension_ratio",
     "belt_slack_tension",
     "belt_max_transmissible_force",
