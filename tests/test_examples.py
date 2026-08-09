@@ -490,6 +490,18 @@ def test_clausius_clapeyron_altitude_boiling_example():
     assert a["recovered_latent_heat_kj_mol"] == pytest.approx(40.66, abs=0.05)
 
 
+def test_temperature_sensor_pt100_vs_thermistor_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "temperature_sensor_pt100_vs_thermistor.py"))
+    s = namespace["sensor_readings"]()
+    # Pt100 at 60 C: 100*(1 + 0.00385*60) = 123.1 ohm.
+    assert s["pt100_ohm"] == pytest.approx(123.1, abs=0.1)
+    # NTC drops from 10 kohm (25 C) to ~2.5 kohm at 60 C.
+    assert s["thermistor_kohm"] == pytest.approx(2.49, abs=0.05)
+    assert s["thermistor_kohm"] < 10.0
+    # The Pt100 resistance converts back to 60 C.
+    assert s["pt100_temperature_c"] == pytest.approx(60.0, abs=0.05)
+
+
 def test_clarifier_primary_sizing_example():
     namespace = runpy.run_path(str(_EXAMPLES / "clarifier_primary_sizing.py"))
     c = namespace["clarifier_loadings"]()

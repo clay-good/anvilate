@@ -662,6 +662,9 @@ modules:
   gauge's fractional resistance change ε = (ΔR/R)/GF, the Wheatstone-bridge output ratio
   V_o/V_ex = n·GF·ε/4 (n = 1/2/4 for quarter/half/full bridge), and the inverse that turns a
   bridge reading back into strain (and, via E, the stress the part carries)
+- :mod:`~anvilate.analysis.temperature_sensor` — resistance temperature sensors: the platinum RTD
+  R = R₀·[1 + α·(T − T₀)] with its temperature inverse (a Pt100's near-linear reading), and the NTC
+  thermistor R = R₀·exp[β·(1/T − 1/T₀)] (the exponential β-parameter model)
 - :mod:`~anvilate.analysis.piezoelectric` — piezoelectric transducers: the charge a force
   generates Q = d33·F (direct effect — sensors, harvesters), the open-circuit voltage a stress
   produces V = g33·σ·t, and the force behind a measured charge F = Q/d33 (piezo load-washer readout)
@@ -2449,6 +2452,11 @@ from .tank_flow import (
     tank_drain_time,
     torricelli_efflux_velocity,
 )
+from .temperature_sensor import (
+    rtd_resistance,
+    rtd_temperature,
+    thermistor_resistance,
+)
 from .thermal import (
     DifferentialThermalStress,
     bimetallic_strip_curvature,
@@ -2900,6 +2908,9 @@ __all__ = [
     "drilling_feed_for_torque_limit",
     "tank_drain_time",
     "torricelli_efflux_velocity",
+    "rtd_resistance",
+    "rtd_temperature",
+    "thermistor_resistance",
     "choked_mass_flow_rate",
     "critical_pressure_ratio",
     "isentropic_area_ratio",

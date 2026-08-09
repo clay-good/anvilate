@@ -1211,6 +1211,9 @@ stress.von_mises_principal
 stress.yield_safety_factor
 tank_flow.tank_drain_time
 tank_flow.torricelli_efflux_velocity
+temperature_sensor.rtd_resistance
+temperature_sensor.rtd_temperature
+temperature_sensor.thermistor_resistance
 thermal.DifferentialThermalStress
 thermal.bimetallic_strip_curvature
 thermal.bimetallic_strip_tip_deflection

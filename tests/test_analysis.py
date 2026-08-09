@@ -25810,6 +25810,77 @@ def test_strain_gauge_bridge_output_and_strain_inverse():
         strain_from_bridge_output(output_ratio=0.001, gauge_factor=2.0, active_arms=0)
 
 
+def test_rtd_and_thermistor_temperature_sensors():
+    from math import exp
+
+    from anvilate.analysis import (
+        rtd_resistance,
+        rtd_temperature,
+        thermistor_resistance,
+    )
+
+    # Pt100: R = R0*(1 + alpha*(T-T0)); 100 ohm at 0 C, alpha 0.00385 -> 138.5 ohm at 100 C.
+    r = rtd_resistance(
+        reference_resistance=_q("100 ohm"),
+        temperature_coefficient=0.00385,
+        temperature=_q("373.15 K"),
+        reference_temperature=_q("273.15 K"),
+    )
+    assert r.to("ohm").magnitude == pytest.approx(100 * (1 + 0.00385 * 100), rel=1e-9)
+    assert r.to("ohm").magnitude == pytest.approx(138.5, rel=1e-9)
+    # At the reference temperature it reads exactly R0.
+    assert rtd_resistance(
+        reference_resistance=_q("100 ohm"),
+        temperature_coefficient=0.00385,
+        temperature=_q("273.15 K"),
+        reference_temperature=_q("273.15 K"),
+    ).to("ohm").magnitude == pytest.approx(100.0, rel=1e-12)
+
+    # The inverse round-trips: 138.5 ohm -> 100 C.
+    t = rtd_temperature(
+        resistance=r,
+        reference_resistance=_q("100 ohm"),
+        temperature_coefficient=0.00385,
+        reference_temperature=_q("273.15 K"),
+    )
+    assert t.to("K").magnitude - 273.15 == pytest.approx(100.0, rel=1e-9)
+
+    # NTC thermistor R = R0*exp[beta*(1/T - 1/T0)]: 10k at 25 C, beta 3950 -> ~3.59k at 50 C.
+    r_ntc = thermistor_resistance(
+        reference_resistance=_q("10 kohm"),
+        beta_constant=_q("3950 K"),
+        temperature=_q("323.15 K"),
+        reference_temperature=_q("298.15 K"),
+    )
+    expected = 10000 * exp(3950 * (1 / 323.15 - 1 / 298.15))
+    assert r_ntc.to("ohm").magnitude == pytest.approx(expected, rel=1e-9)
+    assert r_ntc.to("kohm").magnitude == pytest.approx(3.59, abs=0.02)
+    # NTC resistance falls as temperature rises (negative coefficient).
+    r_hot = thermistor_resistance(
+        reference_resistance=_q("10 kohm"),
+        beta_constant=_q("3950 K"),
+        temperature=_q("348.15 K"),
+        reference_temperature=_q("298.15 K"),
+    )
+    assert r_hot.to("ohm").magnitude < r_ntc.to("ohm").magnitude
+
+    # Guardrails: positive beta and non-zero alpha.
+    with pytest.raises(ValueError, match="beta_constant must be positive"):
+        thermistor_resistance(
+            reference_resistance=_q("10 kohm"),
+            beta_constant=_q("0 K"),
+            temperature=_q("323.15 K"),
+            reference_temperature=_q("298.15 K"),
+        )
+    with pytest.raises(ValueError, match="temperature_coefficient must be non-zero"):
+        rtd_temperature(
+            resistance=_q("138.5 ohm"),
+            reference_resistance=_q("100 ohm"),
+            temperature_coefficient=0.0,
+            reference_temperature=_q("273.15 K"),
+        )
+
+
 def test_bulk_solids_beverloo_discharge_orifice_inverse_and_stockpile():
     from math import pi, sqrt, tan
 
