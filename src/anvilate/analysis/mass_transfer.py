@@ -14,8 +14,15 @@ velocity and concentration boundary layers. The Sherwood number Sh = k_c·L/D_AB
 Nusselt number: the dimensionless convective mass-transfer coefficient a correlation returns. The
 Lewis number Le = α/D_AB compares thermal to mass diffusivity and equals Sc/Pr — it governs whether
 heat or species diffuses faster, the number behind the wet-bulb/adiabatic-saturation coincidence in
-air-water systems (Le ≈ 1). All three are pure dimensionless ratios returned as plain floats; the
-inputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+air-water systems (Le ≈ 1). These three are pure dimensionless ratios.
+
+The last three functions are the Chilton-Colburn analogy that ties momentum, heat, and mass transfer
+together — the reason a friction or heat-transfer measurement predicts the other two. The Stanton
+number St = Nu/(Re·Pr) is the heat-transfer coefficient made dimensionless; the Colburn j-factor
+j_H = St·Pr^(2/3) collapses the Prandtl dependence so that j_H = j_M = C_f/2; and the analogy then
+converts a heat-transfer coefficient h into its mass-transfer twin k_c = h/(ρ·c_p·Le^(2/3)).
+All results are dimensionless plain floats except the recovered mass-transfer coefficient (a
+velocity); the inputs are dimension-checked :class:`~anvilate.units.Quantity` values.
 """
 
 from __future__ import annotations
@@ -26,6 +33,9 @@ __all__ = [
     "schmidt_number",
     "sherwood_number",
     "lewis_number",
+    "stanton_number",
+    "colburn_j_factor",
+    "chilton_colburn_mass_transfer_coefficient",
 ]
 
 
@@ -98,6 +108,76 @@ def lewis_number(*, thermal_diffusivity: Quantity, mass_diffusivity: Quantity) -
     if d <= 0:
         raise ValueError("mass_diffusivity must be positive")
     return alpha / d
+
+
+def stanton_number(
+    *, nusselt_number: float, reynolds_number: float, prandtl_number: float
+) -> float:
+    """The Stanton number, St = Nu/(Re·Pr).
+
+    The convective heat-transfer coefficient in dimensionless form: St = Nu/(Re·Pr), from the
+    ``nusselt_number`` Nu, ``reynolds_number`` Re, and ``prandtl_number`` Pr. It measures the heat
+    actually transferred against the heat the flow could carry, and is the group the Reynolds and
+    Chilton-Colburn analogies work in. Returns the dimensionless Stanton number as a plain float.
+    """
+    if reynolds_number <= 0:
+        raise ValueError("reynolds_number must be positive")
+    if prandtl_number <= 0:
+        raise ValueError("prandtl_number must be positive")
+    if nusselt_number < 0:
+        raise ValueError("nusselt_number must be non-negative")
+    return nusselt_number / (reynolds_number * prandtl_number)
+
+
+def colburn_j_factor(*, stanton_number: float, prandtl_number: float) -> float:
+    """The Colburn j-factor for heat transfer, j_H = St·Pr^(2/3).
+
+    The Stanton number with its Prandtl dependence scaled out: j_H = St·Pr^(2/3), from the
+    ``stanton_number`` St and ``prandtl_number`` Pr. The Chilton-Colburn analogy states j_H = j_M =
+    C_f/2, so this single number ties the heat transfer to the friction factor and (through the
+    mass-transfer j-factor built with Sc in place of Pr) to the mass transfer. Returns the
+    dimensionless j-factor as a plain float.
+    """
+    if stanton_number < 0:
+        raise ValueError("stanton_number must be non-negative")
+    if prandtl_number <= 0:
+        raise ValueError("prandtl_number must be positive")
+    return stanton_number * prandtl_number ** (2.0 / 3.0)
+
+
+def chilton_colburn_mass_transfer_coefficient(
+    *,
+    heat_transfer_coefficient: Quantity,
+    density: Quantity,
+    specific_heat: Quantity,
+    lewis_number: float,
+) -> Quantity:
+    """The mass-transfer coefficient from the heat-transfer one, k_c = h/(ρ·c_p·Le^(2/3)).
+
+    The Chilton-Colburn analogy's payoff: convert a known convective ``heat_transfer_coefficient`` h
+    into its mass-transfer twin k_c = h/(ρ·c_p·Le^(2/3)), from the fluid ``density`` ρ,
+    ``specific_heat`` c_p, and ``lewis_number`` Le = α/D_AB. It lets a drying rate be predicted
+    from a heat-transfer correlation (or measurement) without a separate mass-transfer
+    experiment; when Le ≈ 1 the two coefficients differ only through ρ·c_p. Returns k_c in m/s.
+    """
+    _check(
+        heat_transfer_coefficient,
+        "[power] / [length]**2 / [temperature]",
+        "heat_transfer_coefficient",
+    )
+    _check(density, "[mass] / [length]**3", "density")
+    _check(specific_heat, "[energy]/[mass]/[temperature]", "specific_heat")
+    h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
+    rho = density.to("kg/m**3").magnitude
+    cp = specific_heat.to("J/(kg*K)").magnitude
+    if h < 0:
+        raise ValueError("heat_transfer_coefficient must be non-negative")
+    if rho <= 0 or cp <= 0:
+        raise ValueError("density and specific_heat must be positive")
+    if lewis_number <= 0:
+        raise ValueError("lewis_number must be positive")
+    kc = h / (rho * cp * lewis_number ** (2.0 / 3.0))
+    return Quantity(magnitude=kc, unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

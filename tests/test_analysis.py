@@ -17890,6 +17890,59 @@ def test_mass_transfer_dimensionless_groups_and_analogy_identity():
         lewis_number(thermal_diffusivity=alpha, mass_diffusivity=_q("3 m/s"))
 
 
+def test_chilton_colburn_analogy_ties_friction_heat_and_mass():
+    from anvilate.analysis import (
+        chilton_colburn_mass_transfer_coefficient,
+        colburn_j_factor,
+        stanton_number,
+    )
+
+    # St = Nu/(Re*Pr): Nu 100, Re 10000, Pr 0.7 -> ~0.01429.
+    st = stanton_number(nusselt_number=100.0, reynolds_number=10000.0, prandtl_number=0.7)
+    assert st == pytest.approx(100.0 / (10000.0 * 0.7), rel=1e-12)
+    assert st == pytest.approx(0.01429, abs=1e-5)
+
+    # Colburn j_H = St*Pr^(2/3).
+    j = colburn_j_factor(stanton_number=st, prandtl_number=0.7)
+    assert j == pytest.approx(st * 0.7 ** (2.0 / 3.0), rel=1e-12)
+
+    # Chilton-Colburn analogy j_H = C_f/2: a friction factor gives the Stanton number back.
+    # With C_f = 2*j_H, St = j_H/Pr^(2/3) recovers st.
+    cf = 2.0 * j
+    st_from_friction = (cf / 2.0) / 0.7 ** (2.0 / 3.0)
+    assert st_from_friction == pytest.approx(st, rel=1e-12)
+
+    # k_c = h/(rho*cp*Le^(2/3)): h 50, rho 1.184, cp 1007, Le 0.854 -> ~0.0466 m/s.
+    kc = chilton_colburn_mass_transfer_coefficient(
+        heat_transfer_coefficient=_q("50 W/(m**2*K)"),
+        density=_q("1.184 kg/m**3"),
+        specific_heat=_q("1007 J/(kg*K)"),
+        lewis_number=0.854,
+    )
+    expected_kc = 50.0 / (1.184 * 1007.0 * 0.854 ** (2.0 / 3.0))
+    assert kc.to("m/s").magnitude == pytest.approx(expected_kc, rel=1e-9)
+    assert kc.to("m/s").magnitude == pytest.approx(0.0466, abs=0.0005)
+    # At Le = 1 the analogy reduces to k_c = h/(rho*cp) exactly.
+    kc_le1 = chilton_colburn_mass_transfer_coefficient(
+        heat_transfer_coefficient=_q("50 W/(m**2*K)"),
+        density=_q("1.184 kg/m**3"),
+        specific_heat=_q("1007 J/(kg*K)"),
+        lewis_number=1.0,
+    )
+    assert kc_le1.to("m/s").magnitude == pytest.approx(50.0 / (1.184 * 1007.0), rel=1e-12)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="reynolds_number must be positive"):
+        stanton_number(nusselt_number=100.0, reynolds_number=0.0, prandtl_number=0.7)
+    with pytest.raises(ValueError, match="lewis_number must be positive"):
+        chilton_colburn_mass_transfer_coefficient(
+            heat_transfer_coefficient=_q("50 W/(m**2*K)"),
+            density=_q("1.184 kg/m**3"),
+            specific_heat=_q("1007 J/(kg*K)"),
+            lewis_number=0.0,
+        )
+
+
 def test_masonry_allowable_axial_stress_two_slenderness_branches():
     from anvilate.analysis import masonry_allowable_axial_stress
 
