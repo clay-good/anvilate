@@ -24009,6 +24009,72 @@ def test_sensible_latent_heat_and_mixing_temperature():
         latent_heat(mass=_q("0.5 kg"), specific_latent_heat=_q("334 J"))
 
 
+def test_clausius_clapeyron_vapor_pressure_boiling_and_latent_heat():
+    from math import exp
+
+    from anvilate.analysis import (
+        clausius_clapeyron_boiling_temperature,
+        clausius_clapeyron_enthalpy_of_vaporization,
+        clausius_clapeyron_vapor_pressure,
+    )
+
+    R = 8.314462618
+    water = _q("40660 J/mol")  # latent heat of water
+
+    # P = P1*exp[(dH/R)*(1/T1 - 1/T)]: water at 350 K from its 100 C / 1 atm anchor -> ~42.6 kPa.
+    p = clausius_clapeyron_vapor_pressure(
+        reference_pressure=_q("101325 Pa"),
+        reference_temperature=_q("373.15 K"),
+        temperature=_q("350 K"),
+        enthalpy_of_vaporization=water,
+    )
+    expected = 101325 * exp((40660 / R) * (1 / 373.15 - 1 / 350))
+    assert p.to("Pa").magnitude == pytest.approx(expected, rel=1e-9)
+    assert p.to("kPa").magnitude == pytest.approx(42.6, abs=0.2)
+    # Vapor pressure climbs with temperature; at the anchor it returns exactly 1 atm.
+    assert clausius_clapeyron_vapor_pressure(
+        reference_pressure=_q("101325 Pa"),
+        reference_temperature=_q("373.15 K"),
+        temperature=_q("373.15 K"),
+        enthalpy_of_vaporization=water,
+    ).to("Pa").magnitude == pytest.approx(101325.0, rel=1e-9)
+
+    # Boiling temperature at 70 kPa (~3000 m) -> ~90 C, below the sea-level 100 C.
+    t_boil = clausius_clapeyron_boiling_temperature(
+        reference_pressure=_q("101325 Pa"),
+        reference_temperature=_q("373.15 K"),
+        pressure=_q("70 kPa"),
+        enthalpy_of_vaporization=water,
+    )
+    assert t_boil.to("K").magnitude - 273.15 == pytest.approx(89.8, abs=0.3)
+    assert t_boil.to("K").magnitude < 373.15
+
+    # Two (P, T) points recover the latent heat (the ln P vs 1/T slope).
+    dh = clausius_clapeyron_enthalpy_of_vaporization(
+        pressure1=_q("101325 Pa"),
+        temperature1=_q("373.15 K"),
+        pressure2=p,
+        temperature2=_q("350 K"),
+    )
+    assert dh.to("kJ/mol").magnitude == pytest.approx(40.66, abs=0.02)
+
+    # Guardrails: the two temperatures must differ; positive enthalpy.
+    with pytest.raises(ValueError, match="must differ"):
+        clausius_clapeyron_enthalpy_of_vaporization(
+            pressure1=_q("101325 Pa"),
+            temperature1=_q("373.15 K"),
+            pressure2=_q("70 kPa"),
+            temperature2=_q("373.15 K"),
+        )
+    with pytest.raises(ValueError, match="enthalpy_of_vaporization must be positive"):
+        clausius_clapeyron_vapor_pressure(
+            reference_pressure=_q("101325 Pa"),
+            reference_temperature=_q("373.15 K"),
+            temperature=_q("350 K"),
+            enthalpy_of_vaporization=_q("0 J/mol"),
+        )
+
+
 def test_heisenberg_uncertainty_minima():
     from anvilate.analysis import (
         minimum_energy_uncertainty,

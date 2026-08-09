@@ -480,6 +480,16 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_clausius_clapeyron_altitude_boiling_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "clausius_clapeyron_altitude_boiling.py"))
+    a = namespace["altitude_boiling"]()
+    # Water boils at ~90 C at 70 kPa (~3000 m), below the 100 C sea-level value.
+    assert a["boiling_temperature_c"] == pytest.approx(89.8, abs=0.3)
+    assert a["boiling_temperature_c"] < 100.0
+    # The two points recover the 40.66 kJ/mol latent heat we started from.
+    assert a["recovered_latent_heat_kj_mol"] == pytest.approx(40.66, abs=0.05)
+
+
 def test_clarifier_primary_sizing_example():
     namespace = runpy.run_path(str(_EXAMPLES / "clarifier_primary_sizing.py"))
     c = namespace["clarifier_loadings"]()

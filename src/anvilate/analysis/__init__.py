@@ -36,6 +36,10 @@ modules:
   hydraulic retention time τ = V/Q, the surface overflow rate Q/A (the critical settling velocity a
   particle must beat to be captured, pairing with the Stokes settling velocity of the drag module),
   and the weir loading rate Q/L
+- :mod:`~anvilate.analysis.clausius_clapeyron` — Clausius-Clapeyron vapor-pressure relations from
+  the latent heat: the vapor pressure P = P₁·exp[(ΔH_vap/R)·(1/T₁ − 1/T)] at a temperature, the
+  boiling temperature at a pressure (why water boils cooler up a mountain), and the enthalpy of
+  vaporization ΔH_vap = −R·ln(P₂/P₁)/(1/T₂ − 1/T₁) from two vapor-pressure points
 - :mod:`~anvilate.analysis.noise_figure` — RF receiver noise: the linear noise factor from a dB
   figure, the Friis cascade F = F1 + (F2−1)/G1 + … (why the first stage dominates), and the
   equivalent noise temperature T_e = (F−1)·T0
@@ -1189,6 +1193,11 @@ from .clarifier import (
     hydraulic_retention_time,
     surface_overflow_rate,
     weir_loading_rate,
+)
+from .clausius_clapeyron import (
+    clausius_clapeyron_boiling_temperature,
+    clausius_clapeyron_enthalpy_of_vaporization,
+    clausius_clapeyron_vapor_pressure,
 )
 from .clutch import (
     UNIFORM_PRESSURE,
@@ -3034,6 +3043,9 @@ __all__ = [
     "hydraulic_retention_time",
     "surface_overflow_rate",
     "weir_loading_rate",
+    "clausius_clapeyron_vapor_pressure",
+    "clausius_clapeyron_enthalpy_of_vaporization",
+    "clausius_clapeyron_boiling_temperature",
     "noise_factor_from_figure",
     "cascade_noise_factor",
     "equivalent_noise_temperature",
