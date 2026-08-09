@@ -59,6 +59,9 @@ __all__ = [
     "horizontal_plate_natural_convection_coefficient",
     "circular_source_spreading_resistance",
     "fin_array_count_for_resistance",
+    "overall_heat_transfer_coefficient",
+    "fouling_factor_from_coefficients",
+    "cleanliness_factor",
     "log_mean_temperature_difference",
     "heat_exchanger_area_for_duty",
     "heat_exchanger_duty",
@@ -1405,6 +1408,107 @@ def fin_array_count_for_resistance(
         )
     count = (1.0 / (h * r) - a_base) / (fin_efficiency * a_f)
     return max(count, 0.0)
+
+
+def overall_heat_transfer_coefficient(
+    *,
+    inside_coefficient: Quantity,
+    outside_coefficient: Quantity,
+    wall_thickness: Quantity,
+    wall_conductivity: Quantity,
+    inside_fouling_factor: Quantity | None = None,
+    outside_fouling_factor: Quantity | None = None,
+) -> Quantity:
+    """The overall heat-transfer coefficient U from the series resistances (plane wall).
+
+    The U that :func:`heat_exchanger_duty` and :func:`heat_exchanger_area_for_duty` consume, built
+    from the resistances in series through a flat wall: 1/U = 1/h_i + R″_f,i + t/k + R″_f,o + 1/h_o,
+    from the inside and outside film coefficients ``inside_coefficient`` h_i and
+    ``outside_coefficient`` h_o (the convection correlations in this module supply them), the
+    ``wall_thickness`` t and ``wall_conductivity`` k, and optional per-area fouling resistances
+    ``inside_fouling_factor`` and ``outside_fouling_factor`` R″_f (m²·K/W, default clean). The
+    smallest coefficient dominates 1/U, so U never exceeds the weakest film. Returns U in W/(m²·K).
+    """
+    _require(inside_coefficient, "[power] / [length]**2 / [temperature]", "inside_coefficient")
+    _require(outside_coefficient, "[power] / [length]**2 / [temperature]", "outside_coefficient")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    _require(wall_conductivity, "[power] / [length] / [temperature]", "wall_conductivity")
+    hi = inside_coefficient.to("W/(m**2*K)").magnitude
+    ho = outside_coefficient.to("W/(m**2*K)").magnitude
+    t = wall_thickness.to("m").magnitude
+    k = wall_conductivity.to("W/(m*K)").magnitude
+    if hi <= 0 or ho <= 0 or k <= 0:
+        raise ValueError("film coefficients and wall_conductivity must be positive")
+    if t < 0:
+        raise ValueError("wall_thickness must be non-negative")
+    rfi = 0.0
+    if inside_fouling_factor is not None:
+        _require(
+            inside_fouling_factor, "[length]**2 * [temperature] / [power]", "inside_fouling_factor"
+        )
+        rfi = inside_fouling_factor.to("m**2*K/W").magnitude
+    rfo = 0.0
+    if outside_fouling_factor is not None:
+        _require(
+            outside_fouling_factor,
+            "[length]**2 * [temperature] / [power]",
+            "outside_fouling_factor",
+        )
+        rfo = outside_fouling_factor.to("m**2*K/W").magnitude
+    if rfi < 0 or rfo < 0:
+        raise ValueError("fouling factors must be non-negative")
+    resistance = 1.0 / hi + rfi + t / k + rfo + 1.0 / ho
+    return Quantity(magnitude=1.0 / resistance, unit="W/(m**2*K)")
+
+
+def fouling_factor_from_coefficients(
+    *,
+    clean_coefficient: Quantity,
+    service_coefficient: Quantity,
+) -> Quantity:
+    """The fouling resistance implied by a drop in U, R″_f = 1/U_service − 1/U_clean.
+
+    The extra per-area thermal resistance fouling has added, backed out of the clean and fouled
+    overall coefficients: R″_f = 1/``service_coefficient`` − 1/``clean_coefficient``. It is the
+    design allowance a TEMA fouling factor represents, and the quantity to compare against
+    tabulated values when deciding cleaning intervals. The service coefficient must not exceed the
+    clean one (fouling only adds resistance). Returns R″_f in m²·K/W.
+    """
+    _require(clean_coefficient, "[power] / [length]**2 / [temperature]", "clean_coefficient")
+    _require(service_coefficient, "[power] / [length]**2 / [temperature]", "service_coefficient")
+    uc = clean_coefficient.to("W/(m**2*K)").magnitude
+    us = service_coefficient.to("W/(m**2*K)").magnitude
+    if uc <= 0 or us <= 0:
+        raise ValueError("clean_coefficient and service_coefficient must be positive")
+    if us > uc:
+        raise ValueError(
+            "service_coefficient cannot exceed clean_coefficient (fouling adds resistance)"
+        )
+    return Quantity(magnitude=1.0 / us - 1.0 / uc, unit="m**2*K/W")
+
+
+def cleanliness_factor(
+    *,
+    service_coefficient: Quantity,
+    clean_coefficient: Quantity,
+) -> float:
+    """The cleanliness factor, CF = U_service/U_clean.
+
+    The fouled overall coefficient as a fraction of the clean one: CF =
+    ``service_coefficient``/``clean_coefficient``, the dimensionless condition metric used to grade
+    a heat exchanger's fouling state (1.0 is spotless; ~0.85 a common design target). It is the
+    ratio companion to the additive :func:`fouling_factor_from_coefficients`. The service
+    coefficient must not exceed the clean one. Returns the dimensionless cleanliness factor.
+    """
+    _require(service_coefficient, "[power] / [length]**2 / [temperature]", "service_coefficient")
+    _require(clean_coefficient, "[power] / [length]**2 / [temperature]", "clean_coefficient")
+    us = service_coefficient.to("W/(m**2*K)").magnitude
+    uc = clean_coefficient.to("W/(m**2*K)").magnitude
+    if us <= 0 or uc <= 0:
+        raise ValueError("service_coefficient and clean_coefficient must be positive")
+    if us > uc:
+        raise ValueError("service_coefficient cannot exceed clean_coefficient")
+    return us / uc
 
 
 def log_mean_temperature_difference(

@@ -608,9 +608,12 @@ modules:
   their series/parallel network, the temperature rise Q·R and its junction-margin
   scorecard, straight-fin efficiency and the fin-array count a target resistance
   needs, and the flat-plate forced (laminar and turbulent) and vertical-plate natural
-  convection coefficients with their validity ranges; plus radiation exchange — the two-surface
-  gray-body network, the Hottel crossed-strings view factor, the view-factor reciprocity
-  relation, and the 1/(N+1) radiation-shield reduction factor
+  convection coefficients with their validity ranges; plus heat-exchanger sizing — the LMTD,
+  duty Q = U·A·ΔT_lm and its area/NTU inverses, the effectiveness-NTU relations, and now the
+  overall coefficient U = 1/(1/h_i + R″_f,i + t/k + R″_f,o + 1/h_o) built from the film, wall, and
+  fouling resistances, with the fouling factor and cleanliness factor a drop in U implies; plus
+  radiation exchange — the two-surface gray-body network, the Hottel crossed-strings view factor,
+  the view-factor reciprocity relation, and the 1/(N+1) radiation-shield reduction factor
 - :mod:`~anvilate.analysis.condensation` — Nusselt filmwise condensation (phase-change
   heat transfer): the vertical-plate coefficient h = 0.943·[…/(μ·ΔT·L)]^¼ and the
   horizontal-tube form (0.729/D), and the condensate rate ṁ = h·A·ΔT/h_fg they drive
@@ -2371,6 +2374,7 @@ from .thermal import (
     bimetallic_strip_tip_deflection,
     biot_number,
     circular_source_spreading_resistance,
+    cleanliness_factor,
     conduction_thermal_resistance,
     confined_liquid_thermal_pressure,
     constrained_thermal_stress,
@@ -2389,6 +2393,7 @@ from .thermal import (
     fin_efficiency,
     flat_plate_forced_convection_coefficient,
     flat_plate_turbulent_convection_coefficient,
+    fouling_factor_from_coefficients,
     fourier_number,
     free_thermal_expansion,
     grashof_number,
@@ -2403,6 +2408,7 @@ from .thermal import (
     log_mean_temperature_difference,
     lumped_capacitance_cooling_time,
     lumped_capacitance_time_constant,
+    overall_heat_transfer_coefficient,
     parallel_flow_effectiveness,
     parallel_flow_ntu_for_effectiveness,
     parallel_thermal_resistance,
@@ -3855,6 +3861,9 @@ __all__ = [
     "horizontal_plate_natural_convection_coefficient",
     "circular_source_spreading_resistance",
     "fin_array_count_for_resistance",
+    "overall_heat_transfer_coefficient",
+    "fouling_factor_from_coefficients",
+    "cleanliness_factor",
     "log_mean_temperature_difference",
     "heat_exchanger_area_for_duty",
     "heat_exchanger_duty",

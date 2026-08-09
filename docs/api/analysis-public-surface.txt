@@ -1195,6 +1195,9 @@ thermal.counterflow_ntu_for_effectiveness
 thermal.crossflow_both_unmixed_effectiveness
 thermal.heat_exchanger_duty
 thermal.heat_exchanger_ntu
+thermal.overall_heat_transfer_coefficient
+thermal.fouling_factor_from_coefficients
+thermal.cleanliness_factor
 thermal.log_mean_temperature_difference
 thermal.lumped_capacitance_cooling_time
 thermal.semi_infinite_solid_surface_flux

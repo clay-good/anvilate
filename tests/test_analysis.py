@@ -20303,6 +20303,53 @@ def test_lmtd_and_heat_exchanger_sizing_round_trip():
     assert duty.to("W").magnitude == pytest.approx(50000.0, rel=1e-9)
 
 
+def test_overall_heat_transfer_coefficient_series_resistances_and_fouling():
+    from anvilate.analysis import (
+        cleanliness_factor,
+        fouling_factor_from_coefficients,
+        overall_heat_transfer_coefficient,
+    )
+
+    kw = {
+        "inside_coefficient": _q("5000 W/(m**2*K)"),
+        "outside_coefficient": _q("1000 W/(m**2*K)"),
+        "wall_thickness": _q("2 mm"),
+        "wall_conductivity": _q("50 W/(m*K)"),
+    }
+    # Clean: 1/U = 1/5000 + 0.002/50 + 1/1000 = 0.00124 -> U = 806.5 W/m2K.
+    u_clean = overall_heat_transfer_coefficient(**kw)
+    inv = 1 / 5000 + 0.002 / 50 + 1 / 1000
+    assert u_clean.to("W/(m**2*K)").magnitude == pytest.approx(1 / inv, rel=1e-9)
+    assert u_clean.to("W/(m**2*K)").magnitude == pytest.approx(806.5, abs=0.5)
+    # U is capped below the weakest film (1000) — the outside coefficient dominates 1/U.
+    assert u_clean.to("W/(m**2*K)").magnitude < 1000
+
+    # Fouling adds resistance and drops U.
+    u_foul = overall_heat_transfer_coefficient(
+        inside_fouling_factor=_q("0.0002 m**2*K/W"),
+        outside_fouling_factor=_q("0.0009 m**2*K/W"),
+        **kw,
+    )
+    assert u_foul.to("W/(m**2*K)").magnitude == pytest.approx(1 / (inv + 0.0011), rel=1e-9)
+    assert u_foul.to("W/(m**2*K)").magnitude < u_clean.to("W/(m**2*K)").magnitude
+
+    # The fouling factor backed out of the two coefficients equals the resistance actually added.
+    rf = fouling_factor_from_coefficients(clean_coefficient=u_clean, service_coefficient=u_foul)
+    assert rf.to("m**2*K/W").magnitude == pytest.approx(0.0011, rel=1e-6)
+    # Cleanliness factor is the ratio U_service/U_clean.
+    cf = cleanliness_factor(service_coefficient=u_foul, clean_coefficient=u_clean)
+    assert cf == pytest.approx(
+        u_foul.to("W/(m**2*K)").magnitude / u_clean.to("W/(m**2*K)").magnitude, rel=1e-12
+    )
+    assert cf == pytest.approx(0.53, abs=0.01)
+
+    # Guardrails: a fouled coefficient cannot exceed the clean one.
+    with pytest.raises(ValueError, match="cannot exceed clean_coefficient"):
+        fouling_factor_from_coefficients(
+            clean_coefficient=_q("400 W/(m**2*K)"), service_coefficient=_q("800 W/(m**2*K)")
+        )
+
+
 def test_effectiveness_ntu_counterflow():
     from anvilate.analysis import counterflow_effectiveness, heat_exchanger_ntu
 
