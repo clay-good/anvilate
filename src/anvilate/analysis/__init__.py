@@ -387,7 +387,9 @@ modules:
   capacity factor CF = E/(P·t)
 - :mod:`~anvilate.analysis.wing_aerodynamics` — finite-wing aerodynamics: the lift force
   L = ½·ρ·V²·S·C_L, the induced-drag coefficient C_Di = C_L²/(π·e·AR) that a lifting finite-span
-  wing pays, and the stall speed V = √(2·W/(ρ·S·C_L,max)) below which the wing cannot hold weight
+  wing pays, the stall speed V = √(2·W/(ρ·S·C_L,max)) below which the wing cannot hold weight, the
+  lift-to-drag (glide) ratio L/D = C_L/C_D with the still-air glide range R = (L/D)·h it gives, and
+  the wing loading W/S that sizes the whole design
 - :mod:`~anvilate.analysis.hydro_power` — hydro-turbine power: the net head a
   turbine sees after penstock loss (H_net = H_gross − h_loss), the P = ρ·g·Q·H·η
   a plant delivers (linear in flow and head), and the flow a target output needs
@@ -2596,9 +2598,12 @@ from .wind_power import (
     wind_turbine_tip_speed_ratio,
 )
 from .wing_aerodynamics import (
+    glide_range,
     induced_drag_coefficient,
     lift_force,
+    lift_to_drag_ratio,
     stall_speed,
+    wing_loading,
 )
 from .wire_drawing import (
     wire_drawing_force,
@@ -3985,6 +3990,9 @@ __all__ = [
     "lift_force",
     "induced_drag_coefficient",
     "stall_speed",
+    "lift_to_drag_ratio",
+    "glide_range",
+    "wing_loading",
     "wire_drawing_stress",
     "wire_drawing_force",
     "wire_drawing_max_reduction",

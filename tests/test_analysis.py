@@ -24665,6 +24665,41 @@ def test_wing_lift_induced_drag_and_stall_speed():
         )
 
 
+def test_wing_lift_to_drag_glide_range_and_wing_loading():
+    from anvilate.analysis import (
+        glide_range,
+        lift_to_drag_ratio,
+        wing_loading,
+    )
+
+    # L/D = C_L/C_D: 1.2/0.08 = 15 (a light-aircraft glide ratio).
+    ld = lift_to_drag_ratio(lift_coefficient=1.2, drag_coefficient=0.08)
+    assert ld == pytest.approx(15.0, rel=1e-12)
+    # A cleaner (lower-drag) wing glides farther per unit height.
+    assert lift_to_drag_ratio(lift_coefficient=1.2, drag_coefficient=0.04) > ld
+
+    # Glide range R = (L/D)*h: 15 * 1000 m = 15 km still-air glide.
+    r = glide_range(lift_to_drag_ratio=ld, altitude=_q("1000 m"))
+    assert r.to("m").magnitude == pytest.approx(15000.0, rel=1e-12)
+    assert r.to("km").magnitude == pytest.approx(15.0, rel=1e-12)
+    # A sailplane at L/D=45 from the same height glides three times as far.
+    assert glide_range(lift_to_drag_ratio=45.0, altitude=_q("1000 m")).to("km").magnitude == (
+        pytest.approx(45.0, rel=1e-12)
+    )
+
+    # Wing loading W/S: 12000 N over 16 m^2 = 750 Pa.
+    wl = wing_loading(weight=_q("12000 N"), wing_area=_q("16 m**2"))
+    assert wl.to("Pa").magnitude == pytest.approx(750.0, rel=1e-12)
+    # A bigger wing at the same weight lowers the loading (slower, gentler flight).
+    assert wing_loading(weight=_q("12000 N"), wing_area=_q("24 m**2")).to("Pa").magnitude < 750.0
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="drag_coefficient must be positive"):
+        lift_to_drag_ratio(lift_coefficient=1.2, drag_coefficient=0.0)
+    with pytest.raises(ValueError, match="wing_area must be positive"):
+        wing_loading(weight=_q("12000 N"), wing_area=_q("0 m**2"))
+
+
 def test_laminar_boundary_layer_thickness_skin_friction_and_drag():
     from math import sqrt
 

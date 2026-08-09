@@ -25,6 +25,9 @@ __all__ = [
     "induced_drag_coefficient",
     "lift_force",
     "stall_speed",
+    "lift_to_drag_ratio",
+    "glide_range",
+    "wing_loading",
 ]
 
 
@@ -103,6 +106,59 @@ def stall_speed(
     if max_lift_coefficient <= 0:
         raise ValueError("max_lift_coefficient must be positive")
     return Quantity(magnitude=sqrt(2.0 * w / (rho * s * max_lift_coefficient)), unit="m/s")
+
+
+def lift_to_drag_ratio(*, lift_coefficient: float, drag_coefficient: float) -> float:
+    """The lift-to-drag ratio (glide ratio), L/D = C_L/C_D.
+
+    The single number that grades aerodynamic efficiency: L/D = ``lift_coefficient`` C_L /
+    ``drag_coefficient`` C_D (the total drag, parasite plus induced). It is the glide ratio — how
+    far a wing travels forward per unit of height lost with no thrust — and it sets the cruise range
+    and best-glide performance. A trainer runs 10–15, a sailplane 40–60. Both coefficients are
+    dimensionless and taken at the same flight condition. Returns the dimensionless L/D.
+    """
+    if lift_coefficient < 0:
+        raise ValueError("lift_coefficient must be non-negative")
+    if drag_coefficient <= 0:
+        raise ValueError("drag_coefficient must be positive")
+    return lift_coefficient / drag_coefficient
+
+
+def glide_range(*, lift_to_drag_ratio: float, altitude: Quantity) -> Quantity:
+    """The still-air glide range, R = (L/D)·h.
+
+    How far an unpowered aircraft glides from a given height: R = ``lift_to_drag_ratio`` ·
+    ``altitude`` h. It follows from the glide ratio (see :func:`lift_to_drag_ratio`) — the distance
+    is the height lost times L/D — and is independent of weight (a heavier aircraft glides
+    the same distance, just faster). Returns the glide range in metres.
+    """
+    _check(altitude, "[length]", "altitude")
+    h = altitude.to("m").magnitude
+    if lift_to_drag_ratio < 0:
+        raise ValueError("lift_to_drag_ratio must be non-negative")
+    if h < 0:
+        raise ValueError("altitude must be non-negative")
+    return Quantity(magnitude=lift_to_drag_ratio * h, unit="m")
+
+
+def wing_loading(*, weight: Quantity, wing_area: Quantity) -> Quantity:
+    """The wing loading, W/S.
+
+    The weight a wing carries per unit of its planform area: W/S, from the ``weight`` W and the
+    ``wing_area`` S. It is the primary sizing parameter behind stall speed (which rises with its
+    square root), turn rate, and ride quality — a low wing loading gives slow, gentle flight and
+    short field lengths, a high one gives fast, smooth cruise. Returns the wing loading in Pa
+    (N/m²).
+    """
+    _check(weight, "[force]", "weight")
+    _check(wing_area, "[area]", "wing_area")
+    w = weight.to("N").magnitude
+    s = wing_area.to("m**2").magnitude
+    if w < 0:
+        raise ValueError("weight must be non-negative")
+    if s <= 0:
+        raise ValueError("wing_area must be positive")
+    return Quantity(magnitude=w / s, unit="Pa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
