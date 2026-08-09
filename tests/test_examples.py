@@ -466,6 +466,20 @@ def test_exergy_waste_heat_example_shows_the_lost_work():
     assert c["destroyed_gouy_stodola_kw"] == pytest.approx(c["destroyed_kw"], rel=1e-6)
 
 
+def test_real_gas_co2_cylinder_example_shows_the_deviation():
+    namespace = runpy.run_path(str(_EXAMPLES / "real_gas_co2_cylinder.py"))
+    d = namespace["co2_deviation"]()
+    # At the ideal molar volume, Van der Waals predicts ~46 bar, well below the 60 bar ideal.
+    assert d["ideal_pressure_bar"] == pytest.approx(60.0, rel=1e-6)
+    assert d["vdw_pressure_bar"] < d["ideal_pressure_bar"]
+    assert d["vdw_pressure_bar"] == pytest.approx(45.8, abs=1.0)
+    # Z is well below 1 — the gas is denser than ideal.
+    assert d["compressibility_factor"] == pytest.approx(0.76, abs=0.02)
+    assert d["compressibility_factor"] < 1.0
+    # The real molar volume it implies is smaller than the ideal one.
+    assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
+
+
 def test_clarifier_primary_sizing_example():
     namespace = runpy.run_path(str(_EXAMPLES / "clarifier_primary_sizing.py"))
     c = namespace["clarifier_loadings"]()

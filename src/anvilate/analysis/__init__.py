@@ -234,6 +234,9 @@ modules:
 - :mod:`~anvilate.analysis.ideal_gas` — the ideal gas law PV = nRT solved for each variable: the
   pressure nRT/V, the volume nRT/P, and the amount PV/(RT) a cylinder holds (moles form, distinct
   from gas_compression's mass-density ρ = PM/RT)
+- :mod:`~anvilate.analysis.real_gas` — real (non-ideal) gas behaviour beyond PV = nRT: the
+  compressibility factor Z = P·v̄/(R·T) that measures the deviation, the real molar volume
+  v̄ = Z·R·T/P it implies, and the Van der Waals equation P = R·T/(v̄ − b) − a/v̄²
 - :mod:`~anvilate.analysis.kinetic_theory` — kinetic theory of gases: the rms molecular speed
   √(3RT/M), the mean molecular speed √(8RT/(πM)), and the mean free path k·T/(√2·π·d²·P)
   between collisions — the molecular picture behind effusion, diffusion, and rarefied flow
@@ -2189,6 +2192,11 @@ from .reactive_circuit import (
     rc_time_constant,
     rl_time_constant,
 )
+from .real_gas import (
+    compressibility_factor,
+    real_gas_molar_volume,
+    van_der_waals_pressure,
+)
 from .refrigeration import (
     carnot_cop_cooling,
     carnot_cop_heating,
@@ -2740,6 +2748,9 @@ __all__ = [
     "rc_time_constant",
     "rl_time_constant",
     "rc_cutoff_frequency",
+    "compressibility_factor",
+    "real_gas_molar_volume",
+    "van_der_waals_pressure",
     "parallel_plate_capacitance",
     "capacitor_charge",
     "parallel_plate_field",

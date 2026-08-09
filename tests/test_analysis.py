@@ -23889,6 +23889,61 @@ def test_ideal_gas_law_pressure_volume_and_moles():
         )
 
 
+def test_real_gas_compressibility_molar_volume_and_van_der_waals():
+    from anvilate.analysis import (
+        compressibility_factor,
+        real_gas_molar_volume,
+        van_der_waals_pressure,
+    )
+
+    R = 8.314462618
+
+    # Z = P*v/(R*T): at the ideal molar volume v = RT/P, Z is exactly 1.
+    v_ideal = _q(f"{R * 273.15 / 101325.0} m**3/mol")
+    z_ideal = compressibility_factor(
+        pressure=_q("101325 Pa"), molar_volume=v_ideal, temperature=_q("273.15 K")
+    )
+    assert z_ideal == pytest.approx(1.0, rel=1e-9)
+
+    # A gas 5% denser than ideal (v 5% smaller) has Z = 0.95.
+    v_dense = _q(f"{0.95 * R * 273.15 / 101325.0} m**3/mol")
+    z_dense = compressibility_factor(
+        pressure=_q("101325 Pa"), molar_volume=v_dense, temperature=_q("273.15 K")
+    )
+    assert z_dense == pytest.approx(0.95, rel=1e-9)
+
+    # Real molar volume v = Z*R*T/P inverts it: at Z=0.95 the volume is 0.95x ideal.
+    v_real = real_gas_molar_volume(
+        pressure=_q("101325 Pa"), temperature=_q("273.15 K"), compressibility_factor=0.95
+    )
+    assert v_real.to("m**3/mol").magnitude == pytest.approx(0.95 * R * 273.15 / 101325.0, rel=1e-9)
+
+    # Van der Waals P = RT/(v-b) - a/v^2 for CO2 at 300 K, v = 0.02 m^3/mol.
+    a, b, v = 0.3640, 4.267e-5, 0.02
+    p_vdw = van_der_waals_pressure(
+        temperature=_q("300 K"),
+        molar_volume=_q("0.02 m**3/mol"),
+        cohesion_a=_q("0.3640 Pa*m**6/mol**2"),
+        covolume_b=_q("4.267e-5 m**3/mol"),
+    )
+    assert p_vdw.to("Pa").magnitude == pytest.approx(R * 300.0 / (v - b) - a / v**2, rel=1e-9)
+    # Below the ideal RT/v because attraction (the a term) dominates at this density.
+    assert p_vdw.to("Pa").magnitude < R * 300.0 / v
+
+    # Guardrails: molar volume must exceed the covolume; positive P/T for Z.
+    with pytest.raises(ValueError, match="must exceed the covolume"):
+        van_der_waals_pressure(
+            temperature=_q("300 K"),
+            molar_volume=_q("2e-5 m**3/mol"),
+            cohesion_a=_q("0.3640 Pa*m**6/mol**2"),
+            covolume_b=_q("4.267e-5 m**3/mol"),
+        )
+    with pytest.raises(ValueError, match="compressibility_factor must be positive"):
+        real_gas_molar_volume(
+            pressure=_q("101325 Pa"), temperature=_q("273.15 K"), compressibility_factor=0.0
+        )
+
+
 def test_sensible_latent_heat_and_mixing_temperature():
     from anvilate.analysis import (
         latent_heat,

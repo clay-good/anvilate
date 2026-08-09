@@ -915,6 +915,9 @@ reactive_circuit.rl_time_constant
 reactive_circuit.parallel_plate_capacitance
 reactive_circuit.capacitor_charge
 reactive_circuit.parallel_plate_field
+real_gas.compressibility_factor
+real_gas.real_gas_molar_volume
+real_gas.van_der_waals_pressure
 photometry.luminous_efficacy
 photometry.luminous_efficiency
 photometry.luminous_flux_from_power
