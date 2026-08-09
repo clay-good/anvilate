@@ -418,6 +418,20 @@ def test_gas_transport_hot_air_example_properties_climb_with_temperature():
     assert p["hot_prandtl"] == pytest.approx(0.64, abs=0.02)
 
 
+def test_mass_transfer_wet_bulb_example_lewis_near_one():
+    namespace = runpy.run_path(str(_EXAMPLES / "mass_transfer_wet_bulb.py"))
+    g = namespace["air_water_groups"]()
+    # Water vapor in air: the textbook Schmidt ~0.6 and Lewis ~0.85.
+    assert g["schmidt"] == pytest.approx(0.60, abs=0.01)
+    assert g["lewis"] == pytest.approx(0.854, abs=0.01)
+    # Lewis is close to 1 — the whole reason wet-bulb ~ adiabatic-saturation for air-water.
+    assert 0.8 < g["lewis"] < 1.0
+    # The analogy identity Le = Sc/Pr closes tightly with consistent air properties.
+    assert g["lewis"] == pytest.approx(g["lewis_via_sc_over_pr"], rel=2e-3)
+    # The Sherwood number is the dimensionless mass-transfer coefficient for the plate.
+    assert g["sherwood"] == pytest.approx(42.3, abs=0.5)
+
+
 def test_friction_pile_capacity_example_shaft_carries_the_load():
     namespace = runpy.run_path(str(_EXAMPLES / "friction_pile_capacity.py"))
     p = namespace["pile_capacity"]()

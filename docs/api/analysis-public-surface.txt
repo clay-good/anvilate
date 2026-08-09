@@ -116,6 +116,9 @@ masonry.masonry_combined_stress_ratio
 mass_energy.binding_energy_per_nucleon
 mass_energy.mass_energy
 mass_energy.mass_from_energy
+mass_transfer.schmidt_number
+mass_transfer.sherwood_number
+mass_transfer.lewis_number
 momentum.linear_momentum
 momentum.impulse
 momentum.average_impact_force

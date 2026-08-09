@@ -17836,6 +17836,60 @@ def test_sutherland_transport_properties_and_prandtl_number():
         )
 
 
+def test_mass_transfer_dimensionless_groups_and_analogy_identity():
+    from anvilate.analysis import (
+        lewis_number,
+        prandtl_number,
+        schmidt_number,
+        sherwood_number,
+    )
+
+    nu = _q("1.56e-5 m**2/s")  # air kinematic viscosity ~25 C
+    alpha = _q("2.22e-5 m**2/s")  # air thermal diffusivity
+    d_ab = _q("2.60e-5 m**2/s")  # water vapor in air
+
+    # Sc = nu/D_AB: ~0.6 for water vapor in air.
+    sc = schmidt_number(kinematic_viscosity=nu, mass_diffusivity=d_ab)
+    assert sc == pytest.approx(1.56e-5 / 2.60e-5, rel=1e-12)
+    assert sc == pytest.approx(0.60, abs=0.01)
+
+    # Sh = k_c*L/D_AB.
+    sh = sherwood_number(
+        mass_transfer_coefficient=_q("0.011 m/s"),
+        characteristic_length=_q("0.1 m"),
+        mass_diffusivity=d_ab,
+    )
+    assert sh == pytest.approx(0.011 * 0.1 / 2.60e-5, rel=1e-12)
+
+    # Le = alpha/D_AB: ~0.85 for air-water, close to 1.
+    le = lewis_number(thermal_diffusivity=alpha, mass_diffusivity=d_ab)
+    assert le == pytest.approx(2.22e-5 / 2.60e-5, rel=1e-12)
+    assert le == pytest.approx(0.85, abs=0.02)
+
+    # The heat-and-mass-transfer analogy identity Le = Sc/Pr, with Pr = nu/alpha built from
+    # consistent air properties (mu*cp/k = nu/alpha since rho cancels).
+    pr = prandtl_number(
+        dynamic_viscosity=_q("1.847e-5 Pa*s"),
+        specific_heat=_q("1007 J/(kg*K)"),
+        thermal_conductivity=_q("0.02647 W/(m*K)"),
+    )
+    assert le == pytest.approx(sc / pr, rel=2e-3)
+    assert all(isinstance(x, float) for x in (sc, sh, le))
+
+    # Guardrails: diffusivity strictly positive; the others non-negative.
+    with pytest.raises(ValueError, match="mass_diffusivity must be positive"):
+        schmidt_number(kinematic_viscosity=nu, mass_diffusivity=_q("0 m**2/s"))
+    with pytest.raises(ValueError, match="characteristic_length must be positive"):
+        sherwood_number(
+            mass_transfer_coefficient=_q("0.011 m/s"),
+            characteristic_length=_q("0 m"),
+            mass_diffusivity=d_ab,
+        )
+    # A dimension mismatch (a velocity where a diffusivity is wanted) is rejected.
+    with pytest.raises(ValueError, match="mass_diffusivity"):
+        lewis_number(thermal_diffusivity=alpha, mass_diffusivity=_q("3 m/s"))
+
+
 def test_masonry_allowable_axial_stress_two_slenderness_branches():
     from anvilate.analysis import masonry_allowable_axial_stress
 

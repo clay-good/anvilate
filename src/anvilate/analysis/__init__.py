@@ -633,6 +633,9 @@ modules:
 - :mod:`~anvilate.analysis.mass_energy` — mass-energy equivalence: the rest energy E = m·c² (≈90 TJ
   per gram, the nuclear-yield accounting), its mass-from-energy inverse m = E/c², and the binding
   energy per nucleon B/A (peaks near iron — fusion and fission both release energy toward it)
+- :mod:`~anvilate.analysis.mass_transfer` — convective mass-transfer dimensionless groups: the
+  Schmidt number Sc = ν/D_AB (the Prandtl twin), the Sherwood number Sh = k_c·L/D_AB (the Nusselt
+  twin), and the Lewis number Le = α/D_AB = Sc/Pr behind the air-water wet-bulb coincidence
 - :mod:`~anvilate.analysis.compton` — Compton scattering: the wavelength shift Δλ = λ_C·(1−cos θ)
   (λ_C = 2.426 pm, angle-only), the scattered photon wavelength λ + Δλ, and the recoil electron
   energy h·c·(1/λ − 1/λ′) — the dominant medium-energy gamma interaction
@@ -1813,6 +1816,11 @@ from .mass_energy import (
     binding_energy_per_nucleon,
     mass_energy,
     mass_from_energy,
+)
+from .mass_transfer import (
+    lewis_number,
+    schmidt_number,
+    sherwood_number,
 )
 from .momentum import (
     average_impact_force,
@@ -3152,6 +3160,9 @@ __all__ = [
     "mass_energy",
     "mass_from_energy",
     "binding_energy_per_nucleon",
+    "schmidt_number",
+    "sherwood_number",
+    "lewis_number",
     "linear_momentum",
     "impulse",
     "average_impact_force",
