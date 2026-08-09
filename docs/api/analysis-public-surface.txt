@@ -776,6 +776,9 @@ machining.cutting_speed
 machining.spindle_speed_for_cutting_speed
 machining.material_removal_rate
 machining.taylor_tool_life
+machining.theoretical_surface_roughness
+machining.peak_to_valley_roughness
+machining.feed_for_surface_roughness
 magnetics.solenoid_magnetic_field
 magnetics.magnetic_pressure
 magnetics.electromagnet_holding_force

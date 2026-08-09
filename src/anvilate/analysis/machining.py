@@ -29,6 +29,9 @@ __all__ = [
     "material_removal_rate",
     "spindle_speed_for_cutting_speed",
     "taylor_tool_life",
+    "theoretical_surface_roughness",
+    "peak_to_valley_roughness",
+    "feed_for_surface_roughness",
 ]
 
 
@@ -122,6 +125,69 @@ def taylor_tool_life(
     if not 0.0 < taylor_exponent < 1.0:
         raise ValueError(f"taylor_exponent must be in (0, 1); got {taylor_exponent}")
     return Quantity(magnitude=(c / v) ** (1.0 / taylor_exponent), unit="min")
+
+
+def theoretical_surface_roughness(*, feed: Quantity, tool_nose_radius: Quantity) -> Quantity:
+    """The theoretical turned surface roughness, Ra ≈ f²/(32·r).
+
+    The ideal-geometry arithmetic-average roughness a single-point (turning) tool leaves as its nose
+    traces feed marks: Ra ≈ ``feed``²/(32·``tool_nose_radius``), with ``feed`` f the per-revolution
+    advance (a length) and ``tool_nose_radius`` r the tool-tip radius. A finer feed or a larger nose
+    radius smooths the finish quadratically and linearly. It is a lower bound — the real finish is
+    rougher from built-up edge, vibration, and tool wear. Returns Ra in µm.
+    """
+    _check(feed, "[length]", "feed")
+    _check(tool_nose_radius, "[length]", "tool_nose_radius")
+    f = feed.to("mm").magnitude
+    r = tool_nose_radius.to("mm").magnitude
+    if f <= 0:
+        raise ValueError("feed must be positive")
+    if r <= 0:
+        raise ValueError("tool_nose_radius must be positive")
+    ra_mm = f * f / (32.0 * r)
+    return Quantity(magnitude=ra_mm * 1000.0, unit="micrometer")
+
+
+def peak_to_valley_roughness(*, feed: Quantity, tool_nose_radius: Quantity) -> Quantity:
+    """The theoretical peak-to-valley roughness, Rt ≈ f²/(8·r).
+
+    The maximum height of the feed-mark cusps a turning tool leaves: Rt ≈
+    ``feed``²/(8·``tool_nose_radius``), from the per-revolution ``feed`` f and the
+    ``tool_nose_radius`` r. It is four times the arithmetic-average
+    :func:`theoretical_surface_roughness` (Rt = 4·Ra for this ideal geometry), and is the measure a
+    peak-to-valley spec or a sealing-surface requirement is written against. Returns Rt in µm.
+    """
+    _check(feed, "[length]", "feed")
+    _check(tool_nose_radius, "[length]", "tool_nose_radius")
+    f = feed.to("mm").magnitude
+    r = tool_nose_radius.to("mm").magnitude
+    if f <= 0:
+        raise ValueError("feed must be positive")
+    if r <= 0:
+        raise ValueError("tool_nose_radius must be positive")
+    rt_mm = f * f / (8.0 * r)
+    return Quantity(magnitude=rt_mm * 1000.0, unit="micrometer")
+
+
+def feed_for_surface_roughness(
+    *, target_roughness: Quantity, tool_nose_radius: Quantity
+) -> Quantity:
+    """The feed that meets a roughness target, f = √(32·r·Ra).
+
+    The sizing inverse of :func:`theoretical_surface_roughness`: the coarsest per-revolution feed
+    that still holds a ``target_roughness`` Ra with a given ``tool_nose_radius`` r, f = √(32·r·Ra).
+    Running at this feed maximizes the removal rate (productivity) without breaching the finish
+    spec. Returns the feed in mm.
+    """
+    _check(target_roughness, "[length]", "target_roughness")
+    _check(tool_nose_radius, "[length]", "tool_nose_radius")
+    ra_mm = target_roughness.to("mm").magnitude
+    r = tool_nose_radius.to("mm").magnitude
+    if ra_mm <= 0:
+        raise ValueError("target_roughness must be positive")
+    if r <= 0:
+        raise ValueError("tool_nose_radius must be positive")
+    return Quantity(magnitude=(32.0 * r * ra_mm) ** 0.5, unit="mm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

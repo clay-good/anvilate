@@ -713,7 +713,9 @@ modules:
   angle a press brake must overbend to beat
 - :mod:`~anvilate.analysis.machining` — metal-cutting parameters: the surface cutting
   speed V = π·D·N and its spindle-speed inverse N = V/(π·D), the material removal rate
-  MRR = V·f·d, and the Taylor tool life T = (C/V)^(1/n) that trades speed for edge life
+  MRR = V·f·d, the Taylor tool life T = (C/V)^(1/n) that trades speed for edge life, and the
+  theoretical turned-surface roughness Ra ≈ f²/(32·r) and peak-to-valley Rt ≈ f²/(8·r) with the
+  feed f = √(32·r·Ra) that meets a finish target
 - :mod:`~anvilate.analysis.casting` — metal-casting solidification: the casting modulus
   M = V/A that governs freezing, Chvorinov's solidification time t = B·M², and the
   riser modulus M_r ≈ 1.2·M that makes the riser freeze last and take the shrinkage
@@ -1822,9 +1824,12 @@ from .load_combinations import (
 )
 from .machining import (
     cutting_speed,
+    feed_for_surface_roughness,
     material_removal_rate,
+    peak_to_valley_roughness,
     spindle_speed_for_cutting_speed,
     taylor_tool_life,
+    theoretical_surface_roughness,
 )
 from .magnetics import (
     electromagnet_holding_force,
@@ -3618,6 +3623,9 @@ __all__ = [
     "spindle_speed_for_cutting_speed",
     "material_removal_rate",
     "taylor_tool_life",
+    "theoretical_surface_roughness",
+    "peak_to_valley_roughness",
+    "feed_for_surface_roughness",
     "solenoid_magnetic_field",
     "magnetic_pressure",
     "electromagnet_holding_force",

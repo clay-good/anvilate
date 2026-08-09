@@ -11913,6 +11913,38 @@ def test_machining_cutting_speed_mrr_and_taylor_tool_life():
         cutting_speed(diameter=_q("0 mm"), spindle_speed=_q("1000 rpm"))
 
 
+def test_machining_theoretical_surface_roughness_and_feed_inverse():
+    from anvilate.analysis import (
+        feed_for_surface_roughness,
+        peak_to_valley_roughness,
+        theoretical_surface_roughness,
+    )
+
+    # Ra = f^2/(32*r): f=0.2 mm/rev, r=0.8 mm -> 1.5625 um.
+    ra = theoretical_surface_roughness(feed=_q("0.2 mm"), tool_nose_radius=_q("0.8 mm"))
+    assert ra.to("micrometer").magnitude == pytest.approx(0.2**2 / (32 * 0.8) * 1000, rel=1e-9)
+    assert ra.to("micrometer").magnitude == pytest.approx(1.5625, abs=0.001)
+
+    # Rt = f^2/(8*r) = 4*Ra for the ideal geometry.
+    rt = peak_to_valley_roughness(feed=_q("0.2 mm"), tool_nose_radius=_q("0.8 mm"))
+    assert rt.to("micrometer").magnitude == pytest.approx(
+        4 * ra.to("micrometer").magnitude, rel=1e-9
+    )
+
+    # A finer feed smooths the finish quadratically: halving f quarters Ra.
+    ra_fine = theoretical_surface_roughness(feed=_q("0.1 mm"), tool_nose_radius=_q("0.8 mm"))
+    assert ra_fine.to("micrometer").magnitude == pytest.approx(
+        ra.to("micrometer").magnitude / 4, rel=1e-9
+    )
+
+    # Feed inverse f = sqrt(32*r*Ra) round-trips to the feed that produced Ra.
+    f_back = feed_for_surface_roughness(target_roughness=ra, tool_nose_radius=_q("0.8 mm"))
+    assert f_back.to("mm").magnitude == pytest.approx(0.2, rel=1e-9)
+
+    with pytest.raises(ValueError, match="tool_nose_radius must be positive"):
+        theoretical_surface_roughness(feed=_q("0.2 mm"), tool_nose_radius=_q("0 mm"))
+
+
 def test_magnetics_solenoid_field_pressure_and_holding_force():
     from math import pi
 
