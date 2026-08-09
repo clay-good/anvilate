@@ -455,6 +455,19 @@ def test_dc_motor_operating_point_example():
     assert p["terminal_voltage_v"] == pytest.approx(p["back_emf_v"] + 3.0, rel=1e-6)
 
 
+def test_clarifier_primary_sizing_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "clarifier_primary_sizing.py"))
+    c = namespace["clarifier_loadings"]()
+    # 12,000 m3/day in a 720 m3 basin -> ~1.44 h retention.
+    assert c["retention_time_h"] == pytest.approx(1.44, abs=0.02)
+    # Overflow rate 12000/240 m2 = 50 m3/m2.day, a typical primary value.
+    assert c["overflow_rate_m_day"] == pytest.approx(50.0, rel=1e-6)
+    # It is a velocity — the capture settling velocity.
+    assert c["overflow_rate_mm_s"] == pytest.approx(50000.0 / 86400.0, rel=1e-6)
+    # Weir loading 12000/50 = 240 m3/m.day, within the usual 250 limit.
+    assert c["weir_loading_m2_day"] == pytest.approx(240.0, rel=1e-6)
+
+
 def test_friction_pile_capacity_example_shaft_carries_the_load():
     namespace = runpy.run_path(str(_EXAMPLES / "friction_pile_capacity.py"))
     p = namespace["pile_capacity"]()

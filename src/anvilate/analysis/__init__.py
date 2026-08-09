@@ -32,6 +32,10 @@ modules:
 - :mod:`~anvilate.analysis.circular_motion` — uniform circular motion: the centripetal acceleration
   v²/r, the centripetal force m·v²/r, and the maximum no-slip cornering speed √(µ·g·r) on a flat
   curve
+- :mod:`~anvilate.analysis.clarifier` — sedimentation-basin / clarifier hydraulic design: the
+  hydraulic retention time τ = V/Q, the surface overflow rate Q/A (the critical settling velocity a
+  particle must beat to be captured, pairing with the Stokes settling velocity of the drag module),
+  and the weir loading rate Q/L
 - :mod:`~anvilate.analysis.noise_figure` — RF receiver noise: the linear noise factor from a dB
   figure, the Friis cascade F = F1 + (F2−1)/G1 + … (why the first stage dominates), and the
   equivalent noise temperature T_e = (F−1)·T0
@@ -1167,6 +1171,11 @@ from .circular_motion import (
     centripetal_acceleration,
     centripetal_force,
     maximum_cornering_speed,
+)
+from .clarifier import (
+    hydraulic_retention_time,
+    surface_overflow_rate,
+    weir_loading_rate,
 )
 from .clutch import (
     UNIFORM_PRESSURE,
@@ -2991,6 +3000,9 @@ __all__ = [
     "centripetal_acceleration",
     "centripetal_force",
     "maximum_cornering_speed",
+    "hydraulic_retention_time",
+    "surface_overflow_rate",
+    "weir_loading_rate",
     "noise_factor_from_figure",
     "cascade_noise_factor",
     "equivalent_noise_temperature",

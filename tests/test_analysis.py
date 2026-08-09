@@ -23309,6 +23309,41 @@ def test_centripetal_acceleration_force_and_cornering_speed():
         centripetal_acceleration(velocity=_q("25 m"), radius=_q("50 m"))
 
 
+def test_clarifier_retention_overflow_and_weir_loading():
+    from anvilate.analysis import (
+        hydraulic_retention_time,
+        surface_overflow_rate,
+        weir_loading_rate,
+    )
+
+    # HRT = V/Q: 1000 m^3 basin at 500 m^3/h -> 2 h.
+    hrt = hydraulic_retention_time(volume=_q("1000 m**3"), flow_rate=_q("500 m**3/hour"))
+    assert hrt.to("hour").magnitude == pytest.approx(2.0, rel=1e-12)
+    # A slower flow lengthens the retention time.
+    hrt_slow = hydraulic_retention_time(volume=_q("1000 m**3"), flow_rate=_q("250 m**3/hour"))
+    assert hrt_slow.to("hour").magnitude == pytest.approx(4.0, rel=1e-12)
+
+    # SOR = Q/A: 12000 m^3/day over 100 m^2 -> 120 m/day, a velocity (~1.39 mm/s).
+    sor = surface_overflow_rate(flow_rate=_q("12000 m**3/day"), surface_area=_q("100 m**2"))
+    assert sor.to("m/day").magnitude == pytest.approx(120.0, rel=1e-12)
+    assert sor.to("mm/s").magnitude == pytest.approx(120000.0 / 86400.0, rel=1e-9)
+    # SOR is a velocity — directly comparable to a particle's settling velocity for capture.
+    assert sor.has_dimension("[length]/[time]")
+    # A bigger surface lowers the overflow rate, catching finer particles.
+    sor_big = surface_overflow_rate(flow_rate=_q("12000 m**3/day"), surface_area=_q("200 m**2"))
+    assert sor_big.to("m/day").magnitude < sor.to("m/day").magnitude
+
+    # Weir loading Q/L: 12000 m^3/day over a 50 m weir -> 240 m^2/day (m^3/m.day).
+    wlr = weir_loading_rate(flow_rate=_q("12000 m**3/day"), weir_length=_q("50 m"))
+    assert wlr.to("m**2/day").magnitude == pytest.approx(240.0, rel=1e-12)
+
+    # Guardrails: positive flow denominators, dimensions checked.
+    with pytest.raises(ValueError, match="surface_area must be positive"):
+        surface_overflow_rate(flow_rate=_q("12000 m**3/day"), surface_area=_q("0 m**2"))
+    with pytest.raises(ValueError, match="flow_rate must be a"):
+        hydraulic_retention_time(volume=_q("1000 m**3"), flow_rate=_q("500 m**3"))
+
+
 def test_linear_momentum_impulse_and_average_impact_force():
     from anvilate.analysis import (
         average_impact_force,

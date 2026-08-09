@@ -325,6 +325,9 @@ chemical_equilibrium.vant_hoff_constant_ratio
 circular_motion.centripetal_acceleration
 circular_motion.centripetal_force
 circular_motion.maximum_cornering_speed
+clarifier.hydraulic_retention_time
+clarifier.surface_overflow_rate
+clarifier.weir_loading_rate
 clutch.UNIFORM_PRESSURE
 clutch.UNIFORM_WEAR
 clutch.brake_absorbed_energy
