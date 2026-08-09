@@ -323,6 +323,9 @@ modules:
 - :mod:`~anvilate.analysis.dc_dc_converter` — switching-regulator transfer functions (ideal, CCM):
   the buck V_out = D·V_in (step-down), the boost V_out = V_in/(1−D) (step-up), and the buck-boost
   V_out = V_in·D/(1−D) (either), all set by the duty cycle D
+- :mod:`~anvilate.analysis.dc_motor` — DC (permanent-magnet) motor constants: the back-EMF
+  E = K_e·ω a spinning motor generates, the torque T = K_t·I current produces (K_e and K_t equal in
+  SI), and the terminal voltage V = E + I·R_a a driver must supply
 - :mod:`~anvilate.analysis.thermal_noise` — Johnson-Nyquist thermal noise: the noise voltage
   V = √(4·k·T·R·B), the available noise power k·T·B (the −174 dBm/Hz floor at 290 K), and the noise
   current √(4·k·T·B/R) — the electrical noise floor every amplifier and sensor sits on
@@ -1321,6 +1324,11 @@ from .dc_dc_converter import (
     boost_output_voltage,
     buck_boost_output_voltage,
     buck_output_voltage,
+)
+from .dc_motor import (
+    dc_motor_back_emf,
+    dc_motor_terminal_voltage,
+    dc_motor_torque,
 )
 from .diffraction import (
     bragg_angle,
@@ -2709,6 +2717,9 @@ __all__ = [
     "buck_output_voltage",
     "boost_output_voltage",
     "buck_boost_output_voltage",
+    "dc_motor_back_emf",
+    "dc_motor_torque",
+    "dc_motor_terminal_voltage",
     "johnson_noise_voltage",
     "johnson_noise_power",
     "johnson_noise_current",

@@ -444,6 +444,17 @@ def test_isentropic_efficiency_compressor_example_real_stage_costs_more():
     assert s["recovered_efficiency"] == pytest.approx(0.82, rel=1e-6)
 
 
+def test_dc_motor_operating_point_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "dc_motor_operating_point.py"))
+    p = namespace["operating_point"]()
+    # 3000 rpm = 314.16 rad/s * 0.05 = 15.71 V back-EMF.
+    assert p["back_emf_v"] == pytest.approx(15.71, abs=0.02)
+    # Torque is set by current alone: 0.05 * 2 = 0.1 N.m.
+    assert p["torque_nm"] == pytest.approx(0.1, rel=1e-6)
+    # Terminal voltage = back-EMF + I*R_a = 15.71 + 3 = 18.71 V.
+    assert p["terminal_voltage_v"] == pytest.approx(p["back_emf_v"] + 3.0, rel=1e-6)
+
+
 def test_friction_pile_capacity_example_shaft_carries_the_load():
     namespace = runpy.run_path(str(_EXAMPLES / "friction_pile_capacity.py"))
     p = namespace["pile_capacity"]()

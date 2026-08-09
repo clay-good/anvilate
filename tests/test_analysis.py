@@ -24909,6 +24909,43 @@ def test_dc_dc_converter_buck_boost_and_buck_boost_topologies():
         buck_output_voltage(input_voltage=_q("12 A"), duty_cycle=0.4)
 
 
+def test_dc_motor_back_emf_torque_and_terminal_voltage():
+    from anvilate.analysis import (
+        dc_motor_back_emf,
+        dc_motor_terminal_voltage,
+        dc_motor_torque,
+    )
+
+    # E = K_e*omega: 0.05 V*s/rad at 300 rad/s -> 15 V.
+    e = dc_motor_back_emf(back_emf_constant=_q("0.05 V*s/rad"), angular_speed=_q("300 rad/s"))
+    assert e.to("V").magnitude == pytest.approx(15.0, rel=1e-12)
+    # Back-EMF rises with speed.
+    e2 = dc_motor_back_emf(back_emf_constant=_q("0.05 V*s/rad"), angular_speed=_q("600 rad/s"))
+    assert e2.to("V").magnitude == pytest.approx(30.0, rel=1e-12)
+
+    # T = K_t*I: 0.05 N*m/A at 2 A -> 0.1 N*m (torque is set by current alone).
+    t = dc_motor_torque(torque_constant=_q("0.05 N*m/A"), armature_current=_q("2 A"))
+    assert t.to("N*m").magnitude == pytest.approx(0.1, rel=1e-12)
+
+    # V = E + I*R_a: 15 V back-EMF + 2 A * 1.5 ohm = 18 V.
+    v = dc_motor_terminal_voltage(
+        back_emf=e, armature_current=_q("2 A"), armature_resistance=_q("1.5 ohm")
+    )
+    assert v.to("V").magnitude == pytest.approx(18.0, rel=1e-12)
+    # At stall (zero speed -> zero back-EMF) the whole terminal voltage drives current through R_a.
+    e_stall = dc_motor_back_emf(back_emf_constant=_q("0.05 V*s/rad"), angular_speed=_q("0 rad/s"))
+    v_stall = dc_motor_terminal_voltage(
+        back_emf=e_stall, armature_current=_q("2 A"), armature_resistance=_q("1.5 ohm")
+    )
+    assert v_stall.to("V").magnitude == pytest.approx(3.0, rel=1e-12)
+
+    # Guardrails: non-negative inputs, dimensions checked.
+    with pytest.raises(ValueError, match="angular_speed must be non-negative"):
+        dc_motor_back_emf(back_emf_constant=_q("0.05 V*s/rad"), angular_speed=_q("-10 rad/s"))
+    with pytest.raises(ValueError, match="torque_constant must be a"):
+        dc_motor_torque(torque_constant=_q("0.05 N*m"), armature_current=_q("2 A"))
+
+
 def test_transformer_ideal_voltage_current_and_impedance_transformation():
     from anvilate.analysis import (
         transformer_reflected_impedance,

@@ -415,6 +415,9 @@ dc_circuit.parallel_resistance
 dc_dc_converter.boost_output_voltage
 dc_dc_converter.buck_boost_output_voltage
 dc_dc_converter.buck_output_voltage
+dc_motor.dc_motor_back_emf
+dc_motor.dc_motor_torque
+dc_motor.dc_motor_terminal_voltage
 diffraction.bragg_angle
 diffraction.bragg_plane_spacing
 diffraction.grating_diffraction_angle
