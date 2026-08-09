@@ -1216,6 +1216,8 @@ thermal.semi_infinite_solid_surface_flux
 thermal.semi_infinite_solid_temperature_rise
 thermal.lumped_capacitance_time_constant
 thermal.fin_efficiency
+thermal.fin_effectiveness
+thermal.fin_thermal_resistance
 thermal.dittus_boelter_convection_coefficient
 thermal.laminar_tube_convection_coefficient
 thermal.flat_plate_forced_convection_coefficient

@@ -11360,6 +11360,44 @@ def test_fin_efficiency_falls_from_one_as_the_fin_lengthens():
         fin_efficiency(length=_q("0 mm"), **kw)
 
 
+def test_fin_effectiveness_and_resistance_beyond_efficiency():
+    from anvilate.analysis import (
+        fin_effectiveness,
+        fin_thermal_resistance,
+        parallel_thermal_resistance,
+    )
+
+    # eps_fin = eta*A_f/A_c,b: a fin with a big surface-to-footprint ratio is very effective.
+    eps = fin_effectiveness(
+        fin_efficiency=0.9,
+        fin_surface_area=_q("0.02 m**2"),
+        base_cross_section_area=_q("1e-4 m**2"),
+    )
+    assert eps == pytest.approx(0.9 * 0.02 / 1e-4, rel=1e-12)
+    assert eps == pytest.approx(180.0, rel=1e-9)
+    assert eps > 2  # comfortably worth adding the fin
+
+    # R_fin = 1/(eta*h*A_f).
+    r_fin = fin_thermal_resistance(
+        fin_efficiency=0.9,
+        heat_transfer_coefficient=_q("50 W/(m**2*K)"),
+        fin_surface_area=_q("0.02 m**2"),
+    )
+    assert r_fin.to("K/W").magnitude == pytest.approx(1.0 / (0.9 * 50 * 0.02), rel=1e-9)
+    assert r_fin.to("K/W").magnitude == pytest.approx(1.1111, abs=0.001)
+    # It slots into the resistance network: two identical fins in parallel halve the resistance.
+    two = parallel_thermal_resistance(r_fin, r_fin)
+    assert two.to("K/W").magnitude == pytest.approx(r_fin.to("K/W").magnitude / 2, rel=1e-9)
+
+    # Guardrails: efficiency in (0, 1], positive areas.
+    with pytest.raises(ValueError, match="fin_efficiency must be in"):
+        fin_effectiveness(
+            fin_efficiency=1.5,
+            fin_surface_area=_q("0.02 m**2"),
+            base_cross_section_area=_q("1e-4 m**2"),
+        )
+
+
 def test_junction_temperature_scorecard_screens_the_rise_against_a_budget():
     from anvilate.analysis import junction_temperature_scorecard
     from anvilate.scorecard import CheckStatus

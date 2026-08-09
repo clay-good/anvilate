@@ -47,6 +47,8 @@ __all__ = [
     "parallel_thermal_resistance",
     "temperature_rise",
     "fin_efficiency",
+    "fin_effectiveness",
+    "fin_thermal_resistance",
     "junction_temperature_scorecard",
     "dittus_boelter_convection_coefficient",
     "laminar_tube_convection_coefficient",
@@ -951,6 +953,61 @@ def fin_efficiency(
     m = sqrt(h * p / (k * a_c))
     ml = m * length_m
     return tanh(ml) / ml
+
+
+def fin_effectiveness(
+    *,
+    fin_efficiency: float,
+    fin_surface_area: Quantity,
+    base_cross_section_area: Quantity,
+) -> float:
+    """A fin's effectiveness, ε_fin = η·A_f/A_c,b.
+
+    Whether adding the fin is worth it at all: ε_fin is the heat the fin moves divided by the heat
+    the bare base area would have shed, ε_fin = ``fin_efficiency`` η · ``fin_surface_area`` A_f /
+    ``base_cross_section_area`` A_c,b (the fin's footprint). Distinct from the efficiency (which
+    compares a fin to an ideal isothermal one), effectiveness compares having the fin to not having
+    it: a fin is only justified when ε_fin ≳ 2, and high-conductivity, thin, closely spaced fins
+    push it well above that. Returns the dimensionless effectiveness.
+    """
+    _require(fin_surface_area, "[area]", "fin_surface_area")
+    _require(base_cross_section_area, "[area]", "base_cross_section_area")
+    a_f = fin_surface_area.to("m**2").magnitude
+    a_c = base_cross_section_area.to("m**2").magnitude
+    if not 0.0 < fin_efficiency <= 1.0:
+        raise ValueError(f"fin_efficiency must be in (0, 1]; got {fin_efficiency}")
+    if a_f <= 0 or a_c <= 0:
+        raise ValueError("fin_surface_area and base_cross_section_area must be positive")
+    return fin_efficiency * a_f / a_c
+
+
+def fin_thermal_resistance(
+    *,
+    fin_efficiency: float,
+    heat_transfer_coefficient: Quantity,
+    fin_surface_area: Quantity,
+) -> Quantity:
+    """A single fin's thermal resistance, R_fin = 1/(η·h·A_f).
+
+    The conduction-plus-convection resistance of one fin between its base and the fluid: R_fin =
+    1/(``fin_efficiency`` η · ``heat_transfer_coefficient`` h · ``fin_surface_area`` A_f). It drops
+    straight into the series/parallel resistance network (:func:`series_thermal_resistance`,
+    :func:`parallel_thermal_resistance`) — a fin sits in parallel with the exposed base between the
+    surface and the fluid. A more efficient or larger fin lowers it. Returns the resistance in K/W.
+    """
+    _require(
+        heat_transfer_coefficient,
+        "[power] / [length]**2 / [temperature]",
+        "heat_transfer_coefficient",
+    )
+    _require(fin_surface_area, "[area]", "fin_surface_area")
+    h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
+    a_f = fin_surface_area.to("m**2").magnitude
+    if not 0.0 < fin_efficiency <= 1.0:
+        raise ValueError(f"fin_efficiency must be in (0, 1]; got {fin_efficiency}")
+    if h <= 0 or a_f <= 0:
+        raise ValueError("heat_transfer_coefficient and fin_surface_area must be positive")
+    return Quantity(magnitude=1.0 / (fin_efficiency * h * a_f), unit="K/W")
 
 
 def junction_temperature_scorecard(

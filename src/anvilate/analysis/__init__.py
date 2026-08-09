@@ -612,7 +612,8 @@ modules:
   Timoshenko bimetallic-strip curvature and cantilever tip deflection; plus
   heat-transfer screening — conduction/convection/spreading thermal resistances and
   their series/parallel network, the temperature rise Q·R and its junction-margin
-  scorecard, straight-fin efficiency and the fin-array count a target resistance
+  scorecard, straight-fin efficiency with its effectiveness ε_fin = η·A_f/A_c go/no-go metric and
+  single-fin resistance 1/(η·h·A_f), the fin-array count a target resistance
   needs, and the flat-plate forced (laminar and turbulent) and vertical-plate natural
   convection coefficients with their validity ranges; plus heat-exchanger sizing — the LMTD,
   duty Q = U·A·ΔT_lm and its area/NTU inverses, the effectiveness-NTU relations, and now the
@@ -2410,7 +2411,9 @@ from .thermal import (
     differential_thermal_stress,
     dittus_boelter_convection_coefficient,
     fin_array_count_for_resistance,
+    fin_effectiveness,
     fin_efficiency,
+    fin_thermal_resistance,
     flat_plate_forced_convection_coefficient,
     flat_plate_turbulent_convection_coefficient,
     fouling_factor_from_coefficients,
@@ -3881,6 +3884,8 @@ __all__ = [
     "parallel_thermal_resistance",
     "temperature_rise",
     "fin_efficiency",
+    "fin_effectiveness",
+    "fin_thermal_resistance",
     "junction_temperature_scorecard",
     "dittus_boelter_convection_coefficient",
     "laminar_tube_convection_coefficient",
