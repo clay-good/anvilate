@@ -25,6 +25,9 @@ __all__ = [
     "carnot_cop_heating",
     "coefficient_of_performance",
     "second_law_efficiency",
+    "refrigeration_effect",
+    "compressor_work_of_compression",
+    "refrigerant_mass_flow_rate",
 ]
 
 
@@ -104,6 +107,76 @@ def second_law_efficiency(*, actual_cop: float, carnot_cop: float) -> float:
             "actual_cop cannot exceed the Carnot COP (that would beat the ideal cycle)"
         )
     return actual_cop / carnot_cop
+
+
+def refrigeration_effect(
+    *,
+    evaporator_inlet_enthalpy: Quantity,
+    evaporator_outlet_enthalpy: Quantity,
+) -> Quantity:
+    """The refrigeration effect per unit mass, q_L = h_out − h_in across the evaporator.
+
+    The useful cooling each kilogram of refrigerant carries away in the evaporator: q_L =
+    ``evaporator_outlet_enthalpy`` − ``evaporator_inlet_enthalpy`` (h₁ − h₄ in cycle notation, the
+    outlet being the compressor-inlet vapor and the inlet the low-quality mixture leaving the
+    expansion valve). It is the numerator of the cycle COP and, divided into a cooling load, sets
+    the refrigerant flow (see :func:`refrigerant_mass_flow_rate`). The outlet enthalpy must exceed
+    the inlet (the refrigerant absorbs heat). Returns the effect in kJ/kg.
+    """
+    _check(evaporator_inlet_enthalpy, "[energy]/[mass]", "evaporator_inlet_enthalpy")
+    _check(evaporator_outlet_enthalpy, "[energy]/[mass]", "evaporator_outlet_enthalpy")
+    h_in = evaporator_inlet_enthalpy.to("kJ/kg").magnitude
+    h_out = evaporator_outlet_enthalpy.to("kJ/kg").magnitude
+    if h_out <= h_in:
+        raise ValueError("evaporator_outlet_enthalpy must exceed the inlet (heat is absorbed)")
+    return Quantity(magnitude=h_out - h_in, unit="kJ/kg")
+
+
+def compressor_work_of_compression(
+    *,
+    compressor_inlet_enthalpy: Quantity,
+    compressor_outlet_enthalpy: Quantity,
+) -> Quantity:
+    """The compressor work per unit mass, w_c = h_out − h_in across the compressor.
+
+    The shaft work each kilogram of refrigerant costs in the compressor: w_c =
+    ``compressor_outlet_enthalpy`` − ``compressor_inlet_enthalpy`` (h₂ − h₁), the enthalpy rise as
+    the vapor is squeezed from evaporator to condenser pressure. It is the denominator of the cycle
+    COP (COP = q_L/w_c with the :func:`refrigeration_effect`), and the condenser must reject their
+    sum q_H = q_L + w_c. The outlet enthalpy must exceed the inlet (work is added). Returns the work
+    in kJ/kg.
+    """
+    _check(compressor_inlet_enthalpy, "[energy]/[mass]", "compressor_inlet_enthalpy")
+    _check(compressor_outlet_enthalpy, "[energy]/[mass]", "compressor_outlet_enthalpy")
+    h_in = compressor_inlet_enthalpy.to("kJ/kg").magnitude
+    h_out = compressor_outlet_enthalpy.to("kJ/kg").magnitude
+    if h_out <= h_in:
+        raise ValueError("compressor_outlet_enthalpy must exceed the inlet (work is added)")
+    return Quantity(magnitude=h_out - h_in, unit="kJ/kg")
+
+
+def refrigerant_mass_flow_rate(
+    *,
+    cooling_capacity: Quantity,
+    refrigeration_effect: Quantity,
+) -> Quantity:
+    """The refrigerant circulation rate, ṁ = Q_L/q_L.
+
+    The mass of refrigerant a cycle must circulate to meet a cooling load: ṁ =
+    ``cooling_capacity`` Q_L divided by the ``refrigeration_effect`` q_L (from
+    :func:`refrigeration_effect`). It sizes the compressor's swept volume and the line diameters —
+    a small refrigeration effect (a low-lift or wet cycle) demands a high flow for the same duty.
+    Returns the mass flow rate in kg/s.
+    """
+    _check(cooling_capacity, "[power]", "cooling_capacity")
+    _check(refrigeration_effect, "[energy]/[mass]", "refrigeration_effect")
+    q = cooling_capacity.to("kW").magnitude
+    qe = refrigeration_effect.to("kJ/kg").magnitude
+    if q <= 0:
+        raise ValueError("cooling_capacity must be positive")
+    if qe <= 0:
+        raise ValueError("refrigeration_effect must be positive")
+    return Quantity(magnitude=q / qe, unit="kg/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

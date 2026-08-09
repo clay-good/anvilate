@@ -15953,6 +15953,55 @@ def test_refrigeration_second_law_efficiency():
         second_law_efficiency(actual_cop=8.0, carnot_cop=7.0)
 
 
+def test_vapor_compression_cycle_effect_work_and_mass_flow():
+    from anvilate.analysis import (
+        coefficient_of_performance,
+        compressor_work_of_compression,
+        refrigerant_mass_flow_rate,
+        refrigeration_effect,
+    )
+
+    # R-134a-like state enthalpies (kJ/kg): h1=240 (evap out), h2=275 (comp out),
+    # h3=h4=95 (condenser out / after throttle).
+    q_l = refrigeration_effect(
+        evaporator_inlet_enthalpy=_q("95 kJ/kg"), evaporator_outlet_enthalpy=_q("240 kJ/kg")
+    )
+    assert q_l.to("kJ/kg").magnitude == pytest.approx(145.0, rel=1e-12)
+    w_c = compressor_work_of_compression(
+        compressor_inlet_enthalpy=_q("240 kJ/kg"), compressor_outlet_enthalpy=_q("275 kJ/kg")
+    )
+    assert w_c.to("kJ/kg").magnitude == pytest.approx(35.0, rel=1e-12)
+
+    # The enthalpy-based COP = q_L/w_c matches the generic Q/W form.
+    cop = q_l.to("kJ/kg").magnitude / w_c.to("kJ/kg").magnitude
+    assert cop == pytest.approx(145 / 35, rel=1e-12)
+    assert cop == pytest.approx(4.143, abs=0.001)
+
+    # Condenser rejects the sum: q_H = q_L + w_c = 180 kJ/kg (cycle energy balance).
+    assert q_l.to("kJ/kg").magnitude + w_c.to("kJ/kg").magnitude == pytest.approx(180.0, rel=1e-12)
+
+    # Mass flow ṁ = Q_L/q_L: a 10 kW load with 145 kJ/kg effect -> 0.069 kg/s.
+    mdot = refrigerant_mass_flow_rate(cooling_capacity=_q("10 kW"), refrigeration_effect=q_l)
+    assert mdot.to("kg/s").magnitude == pytest.approx(10 / 145, rel=1e-9)
+    # A generic COP from the total duties agrees: Q_L = ṁ*q_L, W = ṁ*w_c.
+    q_load = _q("10 kW")
+    power = (
+        refrigerant_mass_flow_rate(cooling_capacity=q_load, refrigeration_effect=q_l)
+        .to("kg/s")
+        .magnitude
+        * w_c.to("kJ/kg").magnitude
+    )  # kW
+    assert coefficient_of_performance(
+        capacity=q_load, power_input=_q(f"{power} kW")
+    ) == pytest.approx(cop, rel=1e-9)
+
+    # Guardrails: enthalpy must rise across evaporator and compressor.
+    with pytest.raises(ValueError, match="evaporator_outlet_enthalpy must exceed"):
+        refrigeration_effect(
+            evaporator_inlet_enthalpy=_q("240 kJ/kg"), evaporator_outlet_enthalpy=_q("95 kJ/kg")
+        )
+
+
 def test_conveyor_mass_flow_belt_speed_inverse_and_lift_power():
     from anvilate.analysis import (
         belt_speed_for_capacity,

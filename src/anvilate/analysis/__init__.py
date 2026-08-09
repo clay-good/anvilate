@@ -399,8 +399,10 @@ modules:
   diameter of a rectangular duct (equal friction), the fan total pressure Pt = Ps + Pv,
   and the fan shaft power P = Q·Δp/η
 - :mod:`~anvilate.analysis.refrigeration` — refrigeration and heat-pump cycle performance:
-  the Carnot cooling and heating COP ceilings, the actual COP = Q/W, and the
-  second-law efficiency (COP over Carnot) that grades the machine itself
+  the Carnot cooling and heating COP ceilings, the actual COP = Q/W, the
+  second-law efficiency (COP over Carnot) that grades the machine itself, and the
+  vapor-compression cycle from state enthalpies — the refrigeration effect q_L, the compressor
+  work w_c, and the refrigerant mass flow ṁ = Q_L/q_L a cooling load circulates
 - :mod:`~anvilate.analysis.psychrometrics` — moist-air properties for HVAC and drying: the
   Magnus saturation vapor pressure, the humidity ratio and relative humidity, the dew-point
   temperature, the moist-air enthalpy and cooling-coil load for capacity sizing, the
@@ -2149,6 +2151,9 @@ from .refrigeration import (
     carnot_cop_cooling,
     carnot_cop_heating,
     coefficient_of_performance,
+    compressor_work_of_compression,
+    refrigerant_mass_flow_rate,
+    refrigeration_effect,
     second_law_efficiency,
 )
 from .reinforced_concrete import (
@@ -2801,6 +2806,9 @@ __all__ = [
     "carnot_cop_heating",
     "coefficient_of_performance",
     "second_law_efficiency",
+    "refrigeration_effect",
+    "compressor_work_of_compression",
+    "refrigerant_mass_flow_rate",
     "cooling_tower_range",
     "cooling_tower_approach",
     "cooling_tower_effectiveness",
