@@ -15634,6 +15634,81 @@ def test_carnot_efficiency_and_heat_engine_second_law():
         heat_engine_second_law_efficiency(thermal_efficiency=0.80, carnot_efficiency=eta_c)
 
 
+def test_exergy_of_heat_flow_exergy_and_gouy_stodola():
+    from anvilate.analysis import (
+        exergy_of_heat,
+        flow_exergy,
+        irreversibility_from_entropy_generation,
+    )
+
+    # X_Q = Q*(1 - T0/T): 1000 kW at 800 K, dead state 300 K -> 625 kW (the Carnot fraction).
+    xq = exergy_of_heat(
+        heat=_q("1000 kW"), source_temperature=_q("800 K"), dead_state_temperature=_q("300 K")
+    )
+    assert xq.to("kW").magnitude == pytest.approx(1000 * (1 - 300 / 800), rel=1e-12)
+    assert xq.to("kW").magnitude == pytest.approx(625.0, rel=1e-9)
+    # The energy form works too, and heat right at the dead state carries zero exergy.
+    xq_j = exergy_of_heat(
+        heat=_q("1000 kJ"), source_temperature=_q("800 K"), dead_state_temperature=_q("300 K")
+    )
+    assert xq_j.to("kJ").magnitude == pytest.approx(625.0, rel=1e-9)
+    assert exergy_of_heat(
+        heat=_q("1000 kW"), source_temperature=_q("300 K"), dead_state_temperature=_q("300 K")
+    ).to("kW").magnitude == pytest.approx(0.0, abs=1e-9)
+
+    # Flow exergy psi = dh - T0*ds: 500 kJ/kg, 1.0 kJ/kg.K, 300 K -> 200 kJ/kg.
+    psi = flow_exergy(
+        enthalpy_difference=_q("500 kJ/kg"),
+        entropy_difference=_q("1.0 kJ/(kg*K)"),
+        dead_state_temperature=_q("300 K"),
+    )
+    assert psi.to("kJ/kg").magnitude == pytest.approx(500 - 300 * 1.0, rel=1e-12)
+
+    # Gouy-Stodola I = T0*S_gen, in both rate and total forms.
+    idot = irreversibility_from_entropy_generation(
+        entropy_generation=_q("2 kW/K"), dead_state_temperature=_q("300 K")
+    )
+    assert idot.to("kW").magnitude == pytest.approx(600.0, rel=1e-12)
+    itot = irreversibility_from_entropy_generation(
+        entropy_generation=_q("2 kJ/K"), dead_state_temperature=_q("300 K")
+    )
+    assert itot.to("kJ").magnitude == pytest.approx(600.0, rel=1e-12)
+
+    # The two exergy views agree: the exergy lost moving Q from T_hot to T_cold equals T0*S_gen,
+    # with S_gen = Q*(1/T_cold - 1/T_hot).
+    q = 1000.0  # kW
+    hot = (
+        exergy_of_heat(
+            heat=_q("1000 kW"), source_temperature=_q("1800 K"), dead_state_temperature=_q("300 K")
+        )
+        .to("kW")
+        .magnitude
+    )
+    cold = (
+        exergy_of_heat(
+            heat=_q("1000 kW"), source_temperature=_q("360 K"), dead_state_temperature=_q("300 K")
+        )
+        .to("kW")
+        .magnitude
+    )
+    s_gen = q * (1 / 360 - 1 / 1800)  # kW/K
+    idestroyed = irreversibility_from_entropy_generation(
+        entropy_generation=Quantity(magnitude=s_gen, unit="kW/K"),
+        dead_state_temperature=_q("300 K"),
+    )
+    assert idestroyed.to("kW").magnitude == pytest.approx(hot - cold, rel=1e-9)
+
+    # Guardrails: source not colder than dead state; entropy generation non-negative.
+    with pytest.raises(ValueError, match="at least the dead_state_temperature"):
+        exergy_of_heat(
+            heat=_q("1000 kW"), source_temperature=_q("250 K"), dead_state_temperature=_q("300 K")
+        )
+    with pytest.raises(ValueError, match="non-negative"):
+        irreversibility_from_entropy_generation(
+            entropy_generation=_q("-2 kW/K"), dead_state_temperature=_q("300 K")
+        )
+
+
 def test_siegert_flue_gas_loss_and_combustion_efficiency():
     from anvilate.analysis import combustion_efficiency, siegert_dry_flue_gas_loss
     from anvilate.units import Quantity

@@ -369,6 +369,10 @@ modules:
   present and future value of a uniform payment series, the level loan payment (capital recovery),
   the simple payback period C/A, the net present value ΣCFₜ/(1+i)^t of a cash-flow stream, the
   benefit-cost ratio, and straight-line depreciation (C−S)/n
+- :mod:`~anvilate.analysis.exergy` — exergy (availability / Second-Law) analysis: the exergy of
+  heat X_Q = Q·(1 − T₀/T) (its Carnot-weighted available-work content), the specific flow exergy
+  ψ = Δh − T₀·Δs of a stream, and the Gouy-Stodola exergy destruction İ = T₀·Ṡ_gen — the lost work
+  a First-Law energy balance can never show
 - :mod:`~anvilate.analysis.battery_peukert` — Peukert discharge-rate derating: the runtime at a
   high current t = (C/I_r)·(I_r/I)^k, the capacity actually delivered C·(I_r/I)^(k−1), and the
   Peukert exponent fitted from two discharge tests — the fast-drain penalty energy_storage ignores
@@ -1501,6 +1505,11 @@ from .engineering_economics import (
     present_value,
     simple_payback_period,
     straight_line_depreciation,
+)
+from .exergy import (
+    exergy_of_heat,
+    flow_exergy,
+    irreversibility_from_entropy_generation,
 )
 from .extrusion import (
     extrusion_force,
@@ -2937,6 +2946,9 @@ __all__ = [
     "peukert_runtime",
     "peukert_effective_capacity",
     "peukert_exponent_from_two_rates",
+    "exergy_of_heat",
+    "flow_exergy",
+    "irreversibility_from_entropy_generation",
     "extrusion_ratio",
     "extrusion_pressure",
     "extrusion_force",

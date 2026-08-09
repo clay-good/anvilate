@@ -488,6 +488,9 @@ engineering_economics.simple_payback_period
 engineering_economics.net_present_value
 engineering_economics.benefit_cost_ratio
 engineering_economics.straight_line_depreciation
+exergy.exergy_of_heat
+exergy.flow_exergy
+exergy.irreversibility_from_entropy_generation
 extrusion.extrusion_ratio
 extrusion.extrusion_pressure
 extrusion.extrusion_force

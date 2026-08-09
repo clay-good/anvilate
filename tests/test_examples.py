@@ -455,6 +455,17 @@ def test_dc_motor_operating_point_example():
     assert p["terminal_voltage_v"] == pytest.approx(p["back_emf_v"] + 3.0, rel=1e-6)
 
 
+def test_exergy_waste_heat_example_shows_the_lost_work():
+    namespace = runpy.run_path(str(_EXAMPLES / "exergy_waste_heat.py"))
+    c = namespace["heat_exergy_cascade"]()
+    # 1000 kW at 1800 K carries ~833 kW of exergy; at 360 K only ~167 kW.
+    assert c["flame_exergy_kw"] == pytest.approx(1000 * (1 - 300 / 1800), abs=1.0)
+    assert c["water_exergy_kw"] == pytest.approx(1000 * (1 - 300 / 360), abs=1.0)
+    # The exergy destroyed is the difference, and the Gouy-Stodola route agrees exactly.
+    assert c["destroyed_kw"] == pytest.approx(667.0, abs=1.0)
+    assert c["destroyed_gouy_stodola_kw"] == pytest.approx(c["destroyed_kw"], rel=1e-6)
+
+
 def test_clarifier_primary_sizing_example():
     namespace = runpy.run_path(str(_EXAMPLES / "clarifier_primary_sizing.py"))
     c = namespace["clarifier_loadings"]()
