@@ -299,7 +299,9 @@ modules:
   three-phase voltage drop along a feeder, the capacitor kVAR to
   correct a poor power factor, the transformer full-load and available fault current
   (the AIC rating downstream gear must interrupt), the ideal-transformer voltage/current/
-  impedance transformation (V_s = V_p/n, I_s = I_p·n, Z_p = n²·Z_s), the Dwight earthing
+  impedance transformation (V_s = V_p/n, I_s = I_p·n, Z_p = n²·Z_s), the transformer efficiency
+  and copper/core-loss split with the √(P_fe/P_cu) load of peak efficiency and the voltage
+  regulation (V_nl−V_fl)/V_fl, the Dwight earthing
   resistance of a driven ground rod and of rods in parallel, and the AC skin depth √(ρ/(π·f·μ))
 - :mod:`~anvilate.analysis.electromagnetic_induction` — Faraday induction: the motional EMF = B·L·v
   of a moving conductor, the Faraday EMF = N·ΔΦ/Δt from a changing flux, and the self-induced
@@ -1422,10 +1424,13 @@ from .electrical import (
     skin_depth,
     three_phase_power,
     transformer_available_fault_current,
+    transformer_efficiency,
     transformer_full_load_current,
+    transformer_maximum_efficiency_load_fraction,
     transformer_reflected_impedance,
     transformer_secondary_current,
     transformer_secondary_voltage,
+    transformer_voltage_regulation,
     voltage_drop_single_phase,
     voltage_drop_three_phase,
 )
@@ -2843,6 +2848,9 @@ __all__ = [
     "transformer_secondary_voltage",
     "transformer_secondary_current",
     "transformer_reflected_impedance",
+    "transformer_efficiency",
+    "transformer_maximum_efficiency_load_fraction",
+    "transformer_voltage_regulation",
     "ground_rod_resistance",
     "parallel_ground_electrodes_resistance",
     "voltage_drop_single_phase",

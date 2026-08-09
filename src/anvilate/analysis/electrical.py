@@ -42,6 +42,9 @@ __all__ = [
     "transformer_secondary_voltage",
     "transformer_secondary_current",
     "transformer_reflected_impedance",
+    "transformer_efficiency",
+    "transformer_maximum_efficiency_load_fraction",
+    "transformer_voltage_regulation",
     "voltage_drop_single_phase",
     "voltage_drop_three_phase",
 ]
@@ -444,6 +447,80 @@ def transformer_reflected_impedance(
     if turns_ratio <= 0:
         raise ValueError("turns_ratio must be positive")
     return Quantity(magnitude=turns_ratio * turns_ratio * z_s, unit="ohm")
+
+
+def transformer_efficiency(
+    *,
+    output_power: Quantity,
+    copper_loss: Quantity,
+    core_loss: Quantity,
+) -> float:
+    """A transformer's efficiency, η = P_out/(P_out + P_cu + P_fe).
+
+    The fraction of throughput a transformer delivers after its two losses: η =
+    ``output_power``/(``output_power`` + ``copper_loss`` + ``core_loss``). The ``copper_loss`` P_cu
+    (I²R in the windings) grows with load, while the ``core_loss`` P_fe (hysteresis and eddy
+    currents in the iron) is essentially constant once energized. Distribution transformers reach
+    the high 90s%. Returns the efficiency as a fraction (multiply by 100 for percent).
+    """
+    _check(output_power, "[power]", "output_power")
+    _check(copper_loss, "[power]", "copper_loss")
+    _check(core_loss, "[power]", "core_loss")
+    p_out = output_power.to("W").magnitude
+    p_cu = copper_loss.to("W").magnitude
+    p_fe = core_loss.to("W").magnitude
+    if p_out <= 0:
+        raise ValueError("output_power must be positive")
+    if p_cu < 0 or p_fe < 0:
+        raise ValueError("copper_loss and core_loss must be non-negative")
+    return p_out / (p_out + p_cu + p_fe)
+
+
+def transformer_maximum_efficiency_load_fraction(
+    *,
+    core_loss: Quantity,
+    rated_copper_loss: Quantity,
+) -> float:
+    """The load at which a transformer is most efficient, x = √(P_fe/P_cu,rated).
+
+    Efficiency peaks where the load-dependent copper loss equals the fixed core loss. Because the
+    copper loss scales with the square of load, that happens at the fraction of rated load
+    x = √(``core_loss``/``rated_copper_loss``), from the constant ``core_loss`` P_fe and the
+    ``rated_copper_loss`` P_cu at full load. Transformers are deliberately designed so this falls
+    near the typical operating load (often ~0.5–0.7 of rated). Returns the load fraction (0–1 for a
+    transformer whose core loss is below its rated copper loss).
+    """
+    _check(core_loss, "[power]", "core_loss")
+    _check(rated_copper_loss, "[power]", "rated_copper_loss")
+    p_fe = core_loss.to("W").magnitude
+    p_cu = rated_copper_loss.to("W").magnitude
+    if p_fe < 0:
+        raise ValueError("core_loss must be non-negative")
+    if p_cu <= 0:
+        raise ValueError("rated_copper_loss must be positive")
+    return (p_fe / p_cu) ** 0.5
+
+
+def transformer_voltage_regulation(
+    *,
+    no_load_voltage: Quantity,
+    full_load_voltage: Quantity,
+) -> float:
+    """A transformer's voltage regulation, VR = (V_nl − V_fl)/V_fl.
+
+    How much the secondary voltage sags from no load to full load, as a fraction of the full-load
+    value: VR = (``no_load_voltage`` − ``full_load_voltage``)/``full_load_voltage``. It measures the
+    drop across the winding impedance under load; a stiff (well-regulated) transformer keeps it to a
+    few percent. The full-load voltage must be positive and normally below the no-load value.
+    Returns the regulation as a fraction (multiply by 100 for percent).
+    """
+    _check(no_load_voltage, "[electric_potential]", "no_load_voltage")
+    _check(full_load_voltage, "[electric_potential]", "full_load_voltage")
+    v_nl = no_load_voltage.to("V").magnitude
+    v_fl = full_load_voltage.to("V").magnitude
+    if v_nl <= 0 or v_fl <= 0:
+        raise ValueError("no_load_voltage and full_load_voltage must be positive")
+    return (v_nl - v_fl) / v_fl
 
 
 def ground_rod_resistance(

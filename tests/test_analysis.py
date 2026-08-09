@@ -24788,6 +24788,51 @@ def test_transformer_ideal_voltage_current_and_impedance_transformation():
         transformer_secondary_voltage(primary_voltage=_q("240 A"), turns_ratio=10.0)
 
 
+def test_transformer_efficiency_losses_and_voltage_regulation():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        transformer_efficiency,
+        transformer_maximum_efficiency_load_fraction,
+        transformer_voltage_regulation,
+    )
+
+    # eta = P_out/(P_out + P_cu + P_fe): 100 kW out, 1.5 kW copper, 0.5 kW core -> 98.04%.
+    eta = transformer_efficiency(
+        output_power=_q("100 kW"), copper_loss=_q("1.5 kW"), core_loss=_q("0.5 kW")
+    )
+    assert eta == pytest.approx(100 / (100 + 1.5 + 0.5), rel=1e-12)
+    assert eta == pytest.approx(0.9804, abs=0.0005)
+    # A lossless transformer is 100% efficient.
+    assert transformer_efficiency(
+        output_power=_q("100 kW"), copper_loss=_q("0 kW"), core_loss=_q("0 kW")
+    ) == pytest.approx(1.0, rel=1e-12)
+
+    # Peak efficiency falls at x = sqrt(P_fe/P_cu,rated): 0.5/1.5 -> 0.577 of rated load.
+    x = transformer_maximum_efficiency_load_fraction(
+        core_loss=_q("0.5 kW"), rated_copper_loss=_q("1.5 kW")
+    )
+    assert x == pytest.approx(sqrt(0.5 / 1.5), rel=1e-12)
+    assert x == pytest.approx(0.577, abs=0.001)
+
+    # VR = (V_nl - V_fl)/V_fl: 2400 no-load to 2300 full-load -> 4.35%.
+    vr = transformer_voltage_regulation(
+        no_load_voltage=_q("2400 V"), full_load_voltage=_q("2300 V")
+    )
+    assert vr == pytest.approx((2400 - 2300) / 2300, rel=1e-12)
+    assert vr == pytest.approx(0.0435, abs=0.0005)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="output_power must be positive"):
+        transformer_efficiency(
+            output_power=_q("0 kW"), copper_loss=_q("1 kW"), core_loss=_q("1 kW")
+        )
+    with pytest.raises(ValueError, match="rated_copper_loss must be positive"):
+        transformer_maximum_efficiency_load_fraction(
+            core_loss=_q("0.5 kW"), rated_copper_loss=_q("0 kW")
+        )
+
+
 def test_antenna_friis_path_loss_received_power_and_range():
     from math import pi
 
