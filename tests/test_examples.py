@@ -432,6 +432,18 @@ def test_mass_transfer_wet_bulb_example_lewis_near_one():
     assert g["sherwood"] == pytest.approx(42.3, abs=0.5)
 
 
+def test_isentropic_efficiency_compressor_example_real_stage_costs_more():
+    namespace = runpy.run_path(str(_EXAMPLES / "isentropic_efficiency_compressor.py"))
+    s = namespace["compressor_stage"]()
+    # Isentropic discharge 523 K; the real stage overshoots to 572 K.
+    assert s["isentropic_outlet_k"] == pytest.approx(523.1, abs=0.5)
+    assert s["actual_outlet_k"] == pytest.approx(572.1, abs=0.5)
+    assert s["actual_outlet_k"] > s["isentropic_outlet_k"]
+    # Work penalty is 1/eta = 1/0.82 = 1.22x, and the efficiency round-trips.
+    assert s["work_penalty_factor"] == pytest.approx(1.0 / 0.82, rel=1e-6)
+    assert s["recovered_efficiency"] == pytest.approx(0.82, rel=1e-6)
+
+
 def test_friction_pile_capacity_example_shaft_carries_the_load():
     namespace = runpy.run_path(str(_EXAMPLES / "friction_pile_capacity.py"))
     p = namespace["pile_capacity"]()

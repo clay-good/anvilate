@@ -254,6 +254,10 @@ modules:
   (η = 1 − 1/r_p^((γ−1)/γ)) ideal thermal efficiencies, the Carnot ceiling
   η = 1 − T_c/T_h no engine can beat, and the second-law efficiency η/η_Carnot
   that grades a real engine against it
+- :mod:`~anvilate.analysis.isentropic_efficiency` — turbomachinery isentropic (adiabatic)
+  efficiency: the compressor η_c = (T₂ₛ − T₁)/(T₂ₐ − T₁) and turbine η_t = (T₁ − T₂ₐ)/(T₁ − T₂ₛ)
+  that bridge the reversible ideal to a real stage, and the actual discharge temperature
+  T₂ₐ = T₁ + (T₂ₛ − T₁)/η_c a real compressor reaches
 - :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
   orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
   inverse, the pitot-tube point velocity √(2Δp/ρ), and its forward dynamic pressure ½ρV²
@@ -1759,6 +1763,11 @@ from .interference import (
     interference_fit,
     interference_for_contact_pressure,
     interference_torque_capacity,
+)
+from .isentropic_efficiency import (
+    compressor_actual_discharge_temperature,
+    compressor_isentropic_efficiency,
+    turbine_isentropic_efficiency,
 )
 from .journal_bearing import (
     journal_bearing_minimum_film_thickness,
@@ -3710,6 +3719,9 @@ __all__ = [
     "interference_for_contact_pressure",
     "interference_axial_capacity",
     "interference_torque_capacity",
+    "compressor_isentropic_efficiency",
+    "turbine_isentropic_efficiency",
+    "compressor_actual_discharge_temperature",
     "petroff_friction_torque",
     "petroff_friction_power",
     "journal_bearing_unit_load",

@@ -17943,6 +17943,69 @@ def test_chilton_colburn_analogy_ties_friction_heat_and_mass():
         )
 
 
+def test_turbomachinery_isentropic_efficiency_and_actual_discharge():
+    from anvilate.analysis import (
+        adiabatic_discharge_temperature,
+        compressor_actual_discharge_temperature,
+        compressor_isentropic_efficiency,
+        turbine_isentropic_efficiency,
+    )
+
+    # Compressor: T2s from the adiabatic relation (300 K, 7:1, k=1.4) -> 523.1 K.
+    t2s = adiabatic_discharge_temperature(
+        inlet_temperature=_q("300 K"), pressure_ratio=7.0, heat_capacity_ratio=1.4
+    )
+    assert t2s.to("K").magnitude == pytest.approx(300 * 7.0 ** (0.4 / 1.4), rel=1e-9)
+
+    # Actual discharge T2a = T1 + (T2s-T1)/eta_c: at eta_c=0.82 -> ~572.1 K (hotter than ideal).
+    t2a = compressor_actual_discharge_temperature(
+        inlet_temperature=_q("300 K"),
+        isentropic_outlet_temperature=t2s,
+        isentropic_efficiency=0.82,
+    )
+    expected_t2a = 300 + (t2s.to("K").magnitude - 300) / 0.82
+    assert t2a.to("K").magnitude == pytest.approx(expected_t2a, rel=1e-9)
+    assert t2a.to("K").magnitude > t2s.to("K").magnitude  # real machine runs hotter
+
+    # The efficiency round-trips: recovering eta_c from the temperatures returns 0.82.
+    eta_c = compressor_isentropic_efficiency(
+        inlet_temperature=_q("300 K"),
+        isentropic_outlet_temperature=t2s,
+        actual_outlet_temperature=t2a,
+    )
+    assert eta_c == pytest.approx(0.82, rel=1e-9)
+    # A perfect (eta=1) compressor discharges exactly at the isentropic temperature.
+    t2a_ideal = compressor_actual_discharge_temperature(
+        inlet_temperature=_q("300 K"),
+        isentropic_outlet_temperature=t2s,
+        isentropic_efficiency=1.0,
+    )
+    assert t2a_ideal.to("K").magnitude == pytest.approx(t2s.to("K").magnitude, rel=1e-12)
+
+    # Turbine: eta_t = (T1-T2a)/(T1-T2s). 1200 K in, isentropic 700 K, actual 760 K -> 0.88.
+    eta_t = turbine_isentropic_efficiency(
+        inlet_temperature=_q("1200 K"),
+        actual_outlet_temperature=_q("760 K"),
+        isentropic_outlet_temperature=_q("700 K"),
+    )
+    assert eta_t == pytest.approx((1200 - 760) / (1200 - 700), rel=1e-12)
+    assert eta_t == pytest.approx(0.88, rel=1e-9)
+
+    # Guardrails: a compressor cannot end up cooler than isentropic (eta > 1 is unphysical here).
+    with pytest.raises(ValueError, match="isentropic_efficiency must be in"):
+        compressor_actual_discharge_temperature(
+            inlet_temperature=_q("300 K"),
+            isentropic_outlet_temperature=t2s,
+            isentropic_efficiency=1.5,
+        )
+    with pytest.raises(ValueError, match="actual_outlet_temperature must be below"):
+        turbine_isentropic_efficiency(
+            inlet_temperature=_q("1200 K"),
+            actual_outlet_temperature=_q("1300 K"),
+            isentropic_outlet_temperature=_q("700 K"),
+        )
+
+
 def test_masonry_allowable_axial_stress_two_slenderness_branches():
     from anvilate.analysis import masonry_allowable_axial_stress
 
