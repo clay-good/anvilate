@@ -255,10 +255,11 @@ modules:
   (η = 1 − 1/r_p^((γ−1)/γ)) ideal thermal efficiencies, the Carnot ceiling
   η = 1 − T_c/T_h no engine can beat, and the second-law efficiency η/η_Carnot
   that grades a real engine against it
-- :mod:`~anvilate.analysis.isentropic_efficiency` — turbomachinery isentropic (adiabatic)
+- :mod:`~anvilate.analysis.isentropic_efficiency` — turbomachinery isentropic and polytropic
   efficiency: the compressor η_c = (T₂ₛ − T₁)/(T₂ₐ − T₁) and turbine η_t = (T₁ − T₂ₐ)/(T₁ − T₂ₛ)
-  that bridge the reversible ideal to a real stage, and the actual discharge temperature
-  T₂ₐ = T₁ + (T₂ₛ − T₁)/η_c a real compressor reaches
+  that bridge the reversible ideal to a real stage, the actual discharge temperature
+  T₂ₐ = T₁ + (T₂ₛ − T₁)/η_c a real compressor reaches, and the polytropic (small-stage) efficiency
+  with its isentropic conversion (η_c < η_p on compression, η_t > η_p on expansion)
 - :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
   orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
   inverse, the pitot-tube point velocity √(2Δp/ρ), and its forward dynamic pressure ½ρV²
@@ -1770,7 +1771,10 @@ from .interference import (
 from .isentropic_efficiency import (
     compressor_actual_discharge_temperature,
     compressor_isentropic_efficiency,
+    compressor_isentropic_from_polytropic,
+    compressor_polytropic_efficiency,
     turbine_isentropic_efficiency,
+    turbine_isentropic_from_polytropic,
 )
 from .journal_bearing import (
     journal_bearing_minimum_film_thickness,
@@ -3727,6 +3731,9 @@ __all__ = [
     "compressor_isentropic_efficiency",
     "turbine_isentropic_efficiency",
     "compressor_actual_discharge_temperature",
+    "compressor_polytropic_efficiency",
+    "compressor_isentropic_from_polytropic",
+    "turbine_isentropic_from_polytropic",
     "petroff_friction_torque",
     "petroff_friction_power",
     "journal_bearing_unit_load",

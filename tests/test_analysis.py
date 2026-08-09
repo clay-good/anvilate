@@ -18038,6 +18038,51 @@ def test_turbomachinery_isentropic_efficiency_and_actual_discharge():
         )
 
 
+def test_polytropic_efficiency_reheat_effect_flips_between_compressor_and_turbine():
+    from anvilate.analysis import (
+        compressor_isentropic_from_polytropic,
+        compressor_polytropic_efficiency,
+        turbine_isentropic_from_polytropic,
+    )
+
+    # Compressor: eta_isen = (r^x - 1)/(r^(x/eta_p) - 1), r=7, k=1.4, eta_p=0.85 -> ~0.805.
+    eta_c = compressor_isentropic_from_polytropic(
+        pressure_ratio=7.0, polytropic_efficiency=0.85, heat_capacity_ratio=1.4
+    )
+    x = 0.4 / 1.4
+    assert eta_c == pytest.approx((7.0**x - 1) / (7.0 ** (x / 0.85) - 1), rel=1e-12)
+    assert eta_c == pytest.approx(0.805, abs=0.002)
+    # The reheat effect: a compressor's isentropic efficiency is worse than its polytropic.
+    assert eta_c < 0.85
+
+    # Turbine: eta_isen = (1 - r^(-x*eta_p))/(1 - r^(-x)) -> ~0.883, better than polytropic.
+    eta_t = turbine_isentropic_from_polytropic(
+        pressure_ratio=7.0, polytropic_efficiency=0.85, heat_capacity_ratio=1.4
+    )
+    assert eta_t == pytest.approx((1 - 7.0 ** (-x * 0.85)) / (1 - 7.0**-x), rel=1e-12)
+    assert eta_t == pytest.approx(0.883, abs=0.002)
+    assert eta_t > 0.85  # expansion reheat helps the turbine
+
+    # Round-trip: the polytropic read from an actual discharge temperature converts back to the
+    # isentropic efficiency that produced it. A 7:1 stage at eta_isen=0.82 discharges to 572.1 K.
+    eta_p = compressor_polytropic_efficiency(
+        inlet_temperature=_q("300 K"),
+        actual_outlet_temperature=_q("572.1 K"),
+        pressure_ratio=7.0,
+        heat_capacity_ratio=1.4,
+    )
+    eta_c_back = compressor_isentropic_from_polytropic(
+        pressure_ratio=7.0, polytropic_efficiency=eta_p, heat_capacity_ratio=1.4
+    )
+    assert eta_c_back == pytest.approx(0.82, abs=0.002)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="pressure_ratio must exceed 1"):
+        compressor_isentropic_from_polytropic(pressure_ratio=1.0, polytropic_efficiency=0.85)
+    with pytest.raises(ValueError, match="polytropic_efficiency must be in"):
+        turbine_isentropic_from_polytropic(pressure_ratio=7.0, polytropic_efficiency=1.5)
+
+
 def test_masonry_allowable_axial_stress_two_slenderness_branches():
     from anvilate.analysis import masonry_allowable_axial_stress
 
