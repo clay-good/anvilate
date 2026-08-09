@@ -27,6 +27,8 @@ __all__ = [
     "pv_cell_temperature",
     "pv_daily_energy",
     "pv_temperature_derated_power",
+    "pv_specific_yield",
+    "pv_performance_ratio",
 ]
 
 
@@ -152,6 +154,57 @@ def pv_temperature_derated_power(
     if factor < 0:
         raise ValueError("temperature_coefficient and cell_temperature give a non-physical power")
     return Quantity(magnitude=p_stc * factor, unit="W")
+
+
+def pv_specific_yield(*, energy: Quantity, rated_power: Quantity) -> Quantity:
+    """A PV system's specific (final) yield, Y_f = E/P_rated.
+
+    The energy a PV system produces per unit of its rated (nameplate) DC power over a period:
+    Y_f = ``energy`` E / ``rated_power`` P_rated (the IEC 61724 final yield). Reported in kWh/kWp,
+    it is dimensionally a time — the number of hours the array would need to run at full nameplate
+    power to make the same energy — so a site with 1600 kWh/kWp per year yields the equivalent of
+    1600 full-power hours. It normalizes production across system sizes for comparison. Returns the
+    specific yield in hours (numerically kWh/kWp).
+    """
+    _check(energy, "[energy]", "energy")
+    _check(rated_power, "[power]", "rated_power")
+    e = energy.to("kWh").magnitude
+    p = rated_power.to("kW").magnitude
+    if e < 0:
+        raise ValueError("energy must be non-negative")
+    if p <= 0:
+        raise ValueError("rated_power must be positive")
+    return Quantity(magnitude=e / p, unit="hour")
+
+
+def pv_performance_ratio(
+    *,
+    energy: Quantity,
+    rated_power: Quantity,
+    peak_sun_hours: Quantity,
+) -> float:
+    """A PV system's performance ratio, PR = E/(P_rated·H).
+
+    The quality metric that grades a real PV plant against its ideal potential: PR =
+    ``energy`` E / (``rated_power`` P_rated · ``peak_sun_hours`` H), where H is the in-plane
+    irradiation expressed as equivalent hours at 1000 W/m² (the reference yield). Equivalently it is
+    the specific yield over the reference yield. PR strips out the resource so only the losses
+    remain — soiling, temperature, wiring, inverter, downtime — so a well-run plant sits at
+    0.75–0.85 regardless of how sunny its site is. Returns the dimensionless performance ratio.
+    """
+    _check(energy, "[energy]", "energy")
+    _check(rated_power, "[power]", "rated_power")
+    _check(peak_sun_hours, "[time]", "peak_sun_hours")
+    e = energy.to("kWh").magnitude
+    p = rated_power.to("kW").magnitude
+    h = peak_sun_hours.to("hour").magnitude
+    if e < 0:
+        raise ValueError("energy must be non-negative")
+    if p <= 0:
+        raise ValueError("rated_power must be positive")
+    if h <= 0:
+        raise ValueError("peak_sun_hours must be positive")
+    return e / (p * h)
 
 
 def _fraction(value: float, name: str) -> None:

@@ -375,8 +375,10 @@ modules:
   atmospheric air mass AM = 1/sin(α) (the AM1.5 rating point) — the resource behind solar_pv
 - :mod:`~anvilate.analysis.solar_pv` — photovoltaic array sizing: a module's power
   (P = G·A·η), the daily energy an array yields (E = P·PSH·D), the array rating
-  a daily load needs, and the cell-temperature (NOCT) and its power derating
-  (P = P_stc·[1 + γ·(T_cell − 25)]) — pairs with energy_storage for off-grid design
+  a daily load needs, the cell-temperature (NOCT) and its power derating
+  (P = P_stc·[1 + γ·(T_cell − 25)]), and the IEC 61724 plant KPIs — the specific yield
+  Y_f = E/P_rated (kWh/kWp) and the performance ratio PR = E/(P_rated·H) that grades a real
+  plant against its potential — pairs with energy_storage for off-grid design
 - :mod:`~anvilate.analysis.solar_thermal` — flat-plate collector performance: the
   instantaneous efficiency η = η₀ − a₁·ΔT/G − a₂·ΔT²/G from the collector test curve,
   the useful heat it delivers (Q = η·G·A), and the no-flow stagnation temperature
@@ -2336,6 +2338,8 @@ from .solar_pv import (
     pv_array_size_for_load,
     pv_cell_temperature,
     pv_daily_energy,
+    pv_performance_ratio,
+    pv_specific_yield,
     pv_temperature_derated_power,
 )
 from .solar_thermal import (
@@ -2930,6 +2934,8 @@ __all__ = [
     "pv_array_size_for_load",
     "pv_cell_temperature",
     "pv_temperature_derated_power",
+    "pv_specific_yield",
+    "pv_performance_ratio",
     "flat_plate_collector_efficiency",
     "collector_useful_heat",
     "collector_stagnation_temperature",

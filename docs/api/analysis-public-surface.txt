@@ -1139,6 +1139,8 @@ solar_pv.pv_cell_temperature
 solar_pv.pv_temperature_derated_power
 solar_pv.pv_array_size_for_load
 solar_pv.pv_daily_energy
+solar_pv.pv_specific_yield
+solar_pv.pv_performance_ratio
 solar_thermal.flat_plate_collector_efficiency
 solar_thermal.collector_useful_heat
 solar_thermal.collector_stagnation_temperature

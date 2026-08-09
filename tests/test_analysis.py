@@ -13857,6 +13857,38 @@ def test_solar_pv_array_power_daily_energy_and_sizing():
         pv_array_power(irradiance=_q("1000 W/m**2"), area=_q("1.6 m**2"), module_efficiency=1.5)
 
 
+def test_pv_specific_yield_and_performance_ratio():
+    from anvilate.analysis import pv_performance_ratio, pv_specific_yield
+
+    # Specific yield Y_f = E/P_rated: 1600 kWh over a 1 kWp array -> 1600 kWh/kWp (= h).
+    y = pv_specific_yield(energy=_q("1600 kWh"), rated_power=_q("1 kW"))
+    assert y.to("hour").magnitude == pytest.approx(1600.0, rel=1e-9)
+    # Yield is per rated kW, so a 4 kWp array making 6400 kWh has the same specific yield.
+    y2 = pv_specific_yield(energy=_q("6400 kWh"), rated_power=_q("4 kW"))
+    assert y2.to("hour").magnitude == pytest.approx(1600.0, rel=1e-9)
+
+    # PR = E/(P_rated*H): 1600 kWh, 1 kWp, 2000 peak-sun-hours -> 0.80.
+    pr = pv_performance_ratio(
+        energy=_q("1600 kWh"), rated_power=_q("1 kW"), peak_sun_hours=_q("2000 hour")
+    )
+    assert pr == pytest.approx(0.8, rel=1e-9)
+    # PR strips out the resource: a sunnier site (more sun hours) making proportionally more
+    # energy has the same PR — it grades the losses, not the weather.
+    pr_sunny = pv_performance_ratio(
+        energy=_q("2400 kWh"), rated_power=_q("1 kW"), peak_sun_hours=_q("3000 hour")
+    )
+    assert pr_sunny == pytest.approx(0.8, rel=1e-9)
+    # A well-run plant sits in the 0.75-0.85 band.
+    assert 0.75 <= pr <= 0.85
+
+    with pytest.raises(ValueError, match="rated_power must be positive"):
+        pv_specific_yield(energy=_q("1600 kWh"), rated_power=_q("0 kW"))
+    with pytest.raises(ValueError, match="peak_sun_hours must be positive"):
+        pv_performance_ratio(
+            energy=_q("1600 kWh"), rated_power=_q("1 kW"), peak_sun_hours=_q("0 hour")
+        )
+
+
 def test_hydro_turbine_power_net_head_and_flow_inverse():
     from anvilate.analysis import (
         hydro_flow_for_power,
