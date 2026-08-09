@@ -11,8 +11,10 @@ air-fuel ratio from the fuel's ultimate analysis.
 No real furnace runs at exactly stoichiometric — a little extra (excess) air ensures complete
 burning. The amount is read straight from the flue gas: the leftover oxygen the burner did not use
 is EA = O₂/(20.9 − O₂), the standard combustion-tuning relation. Too little excess air wastes fuel
-as unburned carbon; too much carries heat up the stack. The fuel composition is the caller's from an
-ultimate analysis; the balances are here.
+as unburned carbon; too much carries heat up the stack. The dimensionless way to say the same
+thing is the equivalence ratio φ = AFR_stoich/AFR_actual = 1/(1 + EA): φ < 1 is a lean
+(excess-air) mixture, φ = 1 stoichiometric, φ > 1 rich (fuel excess). The fuel composition is the
+caller's from an ultimate analysis; the balances are here.
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ from ..units import Quantity
 __all__ = [
     "actual_air_fuel_ratio",
     "excess_air_from_flue_oxygen",
+    "equivalence_ratio",
+    "equivalence_ratio_from_excess_air",
     "siegert_dry_flue_gas_loss",
     "combustion_efficiency",
     "stoichiometric_air_fuel_ratio",
@@ -97,6 +101,39 @@ def actual_air_fuel_ratio(
     if excess_air_fraction < 0:
         raise ValueError("excess_air_fraction must be non-negative")
     return stoichiometric_air_fuel_ratio * (1.0 + excess_air_fraction)
+
+
+def equivalence_ratio(
+    *,
+    stoichiometric_air_fuel_ratio: float,
+    actual_air_fuel_ratio: float,
+) -> float:
+    """The equivalence ratio, φ = AFR_stoich/AFR_actual.
+
+    The dimensionless measure of how rich or lean a mixture burns: φ =
+    ``stoichiometric_air_fuel_ratio``/``actual_air_fuel_ratio``. φ < 1 is lean (excess air, the
+    normal furnace condition), φ = 1 is stoichiometric, and φ > 1 is rich (fuel excess, incomplete
+    combustion). It is the standard way to state the mixture strength independent of the particular
+    fuel. Both ratios must be positive. Returns the dimensionless equivalence ratio.
+    """
+    if stoichiometric_air_fuel_ratio <= 0:
+        raise ValueError("stoichiometric_air_fuel_ratio must be positive")
+    if actual_air_fuel_ratio <= 0:
+        raise ValueError("actual_air_fuel_ratio must be positive")
+    return stoichiometric_air_fuel_ratio / actual_air_fuel_ratio
+
+
+def equivalence_ratio_from_excess_air(*, excess_air_fraction: float) -> float:
+    """The equivalence ratio from the excess air, φ = 1/(1 + EA).
+
+    The equivalence ratio expressed directly from the ``excess_air_fraction`` EA: φ = 1/(1 + EA),
+    the algebraic twin of :func:`equivalence_ratio` since AFR_actual = AFR_stoich·(1 + EA). Zero
+    excess air is stoichiometric (φ = 1); 20% excess air gives φ ≈ 0.83 (lean). The excess-air
+    fraction must be greater than −1. Returns the dimensionless equivalence ratio.
+    """
+    if excess_air_fraction <= -1.0:
+        raise ValueError("excess_air_fraction must be greater than -1")
+    return 1.0 / (1.0 + excess_air_fraction)
 
 
 def siegert_dry_flue_gas_loss(

@@ -247,8 +247,9 @@ modules:
   semi-major axis a = (r_p + r_a)/2
 - :mod:`~anvilate.analysis.combustion` — furnace/boiler combustion: the stoichiometric
   air-fuel ratio from an ultimate analysis, the excess air read from flue-gas oxygen
-  (EA = O₂/(20.9−O₂)), the actual air-fuel ratio a burner runs at, and the Siegert dry
-  flue-gas loss and the combustion efficiency it leaves
+  (EA = O₂/(20.9−O₂)), the actual air-fuel ratio a burner runs at, the equivalence ratio
+  φ = AFR_stoich/AFR_actual = 1/(1+EA) that grades lean/rich, and the Siegert dry flue-gas
+  loss and the combustion efficiency it leaves
 - :mod:`~anvilate.analysis.power_cycles` — air-standard power-cycle efficiencies: the
   Otto (η = 1 − 1/r^(γ−1)), Diesel (with a cutoff ratio), and Brayton gas-turbine
   (η = 1 − 1/r_p^((γ−1)/γ)) ideal thermal efficiencies, the Carnot ceiling
@@ -1192,6 +1193,8 @@ from .column import (
 from .combustion import (
     actual_air_fuel_ratio,
     combustion_efficiency,
+    equivalence_ratio,
+    equivalence_ratio_from_excess_air,
     excess_air_from_flue_oxygen,
     siegert_dry_flue_gas_loss,
     stoichiometric_air_fuel_ratio,
@@ -3325,6 +3328,8 @@ __all__ = [
     "stoichiometric_air_fuel_ratio",
     "excess_air_from_flue_oxygen",
     "actual_air_fuel_ratio",
+    "equivalence_ratio",
+    "equivalence_ratio_from_excess_air",
     "siegert_dry_flue_gas_loss",
     "combustion_efficiency",
     "johnson_critical_stress",

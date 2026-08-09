@@ -15511,6 +15511,38 @@ def test_combustion_air_fuel_ratio_and_excess_air():
         excess_air_from_flue_oxygen(flue_oxygen_percent=21.0)
 
 
+def test_combustion_equivalence_ratio_grades_lean_and_rich():
+    from anvilate.analysis import (
+        equivalence_ratio,
+        equivalence_ratio_from_excess_air,
+    )
+
+    # phi = AFR_stoich/AFR_actual: 17.2 / 20.6 ~ 0.835 (lean, excess air).
+    phi = equivalence_ratio(stoichiometric_air_fuel_ratio=17.2, actual_air_fuel_ratio=20.6)
+    assert phi == pytest.approx(17.2 / 20.6, rel=1e-12)
+    assert phi < 1.0  # lean
+
+    # phi = 1/(1+EA): the two definitions agree since AFR_actual = AFR_stoich*(1+EA).
+    ea = 0.2
+    phi_from_ea = equivalence_ratio_from_excess_air(excess_air_fraction=ea)
+    assert phi_from_ea == pytest.approx(1.0 / 1.2, rel=1e-12)
+    phi_matched = equivalence_ratio(
+        stoichiometric_air_fuel_ratio=17.2, actual_air_fuel_ratio=17.2 * (1 + ea)
+    )
+    assert phi_from_ea == pytest.approx(phi_matched, rel=1e-12)
+
+    # Stoichiometric is phi = 1; a rich mixture (less air than stoich) is phi > 1.
+    assert equivalence_ratio_from_excess_air(excess_air_fraction=0.0) == pytest.approx(1.0)
+    rich = equivalence_ratio(stoichiometric_air_fuel_ratio=17.2, actual_air_fuel_ratio=15.0)
+    assert rich > 1.0
+
+    # Guards.
+    with pytest.raises(ValueError, match="actual_air_fuel_ratio must be positive"):
+        equivalence_ratio(stoichiometric_air_fuel_ratio=17.2, actual_air_fuel_ratio=0.0)
+    with pytest.raises(ValueError, match="greater than -1"):
+        equivalence_ratio_from_excess_air(excess_air_fraction=-1.0)
+
+
 def test_open_channel_rational_method_peak_runoff():
     from anvilate.analysis import rational_method_peak_runoff
 

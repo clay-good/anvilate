@@ -359,6 +359,8 @@ column.secant_column_max_stress
 column.slenderness_ratio
 column.transition_slenderness
 combustion.actual_air_fuel_ratio
+combustion.equivalence_ratio
+combustion.equivalence_ratio_from_excess_air
 combustion.excess_air_from_flue_oxygen
 combustion.combustion_efficiency
 combustion.siegert_dry_flue_gas_loss
