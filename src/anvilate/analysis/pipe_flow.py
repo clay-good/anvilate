@@ -36,6 +36,9 @@ __all__ = [
     "hazen_williams_head_loss",
     "hydraulic_diameter",
     "joukowsky_surge_pressure",
+    "laminar_hydrodynamic_entry_length",
+    "laminar_thermal_entry_length",
+    "turbulent_entry_length",
     "minor_loss_head",
     "pipe_pressure_drop",
     "pressure_wave_speed",
@@ -76,6 +79,75 @@ def reynolds_number(
     if v <= 0 or d <= 0 or nu <= 0:
         raise ValueError("velocity, diameter, and kinematic_viscosity must be positive")
     return v * d / nu
+
+
+def laminar_hydrodynamic_entry_length(*, reynolds: float, diameter: Quantity) -> Quantity:
+    """The laminar hydrodynamic entry length, L_h = 0.05·Re·D.
+
+    The pipe length over which the velocity profile develops from flat to fully parabolic:
+    L_h = 0.05·``reynolds``·``diameter`` D (laminar). Downstream of it the flow is hydrodynamically
+    developed, where the Hagen-Poiseuille and fully-developed friction relations apply; upstream the
+    wall shear (and pressure gradient) is higher. The entry can be metres long even in a modest
+    laminar pipe, so a short line may never fully develop. Valid for laminar flow (Re ≤ 2300); for
+    turbulent flow use :func:`turbulent_entry_length`. Returns the entry length in metres.
+    """
+    _check(diameter, "[length]", "diameter")
+    d = diameter.to("m").magnitude
+    if reynolds <= 0:
+        raise ValueError("reynolds must be positive")
+    if d <= 0:
+        raise ValueError("diameter must be positive")
+    if reynolds > _LAMINAR_LIMIT:
+        raise ValueError(
+            f"the laminar entry-length form applies for Re <= {_LAMINAR_LIMIT}; "
+            "use turbulent_entry_length for turbulent flow"
+        )
+    return Quantity(magnitude=0.05 * reynolds * d, unit="m")
+
+
+def laminar_thermal_entry_length(
+    *, reynolds: float, prandtl: float, diameter: Quantity
+) -> Quantity:
+    """The laminar thermal entry length, L_t = 0.05·Re·Pr·D.
+
+    The pipe length over which the temperature profile develops, longer than the hydrodynamic one by
+    the Prandtl number: L_t = 0.05·``reynolds``·``prandtl``·``diameter`` D (laminar). For oils
+    (Pr in the hundreds) the thermal entry can be enormous, so the flow is thermally developing over
+    the whole heated length and the constant-Nusselt fully-developed value badly under-predicts the
+    coefficient. For Pr < 1 (liquid metals) the thermal profile develops first instead. Valid for
+    laminar flow (Re ≤ 2300). Returns the thermal entry length in metres.
+    """
+    _check(diameter, "[length]", "diameter")
+    d = diameter.to("m").magnitude
+    if reynolds <= 0:
+        raise ValueError("reynolds must be positive")
+    if prandtl <= 0:
+        raise ValueError("prandtl must be positive")
+    if d <= 0:
+        raise ValueError("diameter must be positive")
+    if reynolds > _LAMINAR_LIMIT:
+        raise ValueError(
+            f"the laminar entry-length form applies for Re <= {_LAMINAR_LIMIT}; "
+            "use turbulent_entry_length for turbulent flow"
+        )
+    return Quantity(magnitude=0.05 * reynolds * prandtl * d, unit="m")
+
+
+def turbulent_entry_length(*, diameter: Quantity) -> Quantity:
+    """The turbulent entry length, L ≈ 10·D.
+
+    In turbulent pipe flow the profiles develop far faster than in laminar flow and, to first order,
+    independently of the Reynolds number: the hydrodynamic and thermal entry lengths are both about
+    L ≈ 10·``diameter`` D (the common engineering estimate, with the fully-developed condition
+    reached somewhere between 10 and 60 diameters). Beyond a short entry a turbulent line is
+    effectively fully developed everywhere, which is why the fully-developed correlations are
+    usually safe for it. Returns the entry length in metres.
+    """
+    _check(diameter, "[length]", "diameter")
+    d = diameter.to("m").magnitude
+    if d <= 0:
+        raise ValueError("diameter must be positive")
+    return Quantity(magnitude=10.0 * d, unit="m")
 
 
 def darcy_friction_factor(*, reynolds: float, relative_roughness: float = 0.0) -> float:

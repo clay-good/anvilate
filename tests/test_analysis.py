@@ -19260,6 +19260,35 @@ def test_reynolds_number_and_friction_factor_regimes():
         darcy_friction_factor(reynolds=-1.0)
 
 
+def test_pipe_entry_lengths_laminar_and_turbulent():
+    from anvilate.analysis import (
+        laminar_hydrodynamic_entry_length,
+        laminar_thermal_entry_length,
+        turbulent_entry_length,
+    )
+
+    # Laminar hydrodynamic entry L_h = 0.05*Re*D: Re=2000, D=0.05 m -> 5 m.
+    lh = laminar_hydrodynamic_entry_length(reynolds=2000.0, diameter=_q("0.05 m"))
+    assert lh.to("m").magnitude == pytest.approx(0.05 * 2000 * 0.05, rel=1e-12)
+    assert lh.to("m").magnitude == pytest.approx(5.0, rel=1e-9)
+
+    # Thermal entry L_t = 0.05*Re*Pr*D is longer by the Prandtl number (water Pr=7 -> 35 m).
+    lt = laminar_thermal_entry_length(reynolds=2000.0, prandtl=7.0, diameter=_q("0.05 m"))
+    assert lt.to("m").magnitude == pytest.approx(7.0 * lh.to("m").magnitude, rel=1e-12)
+    assert lt.to("m").magnitude == pytest.approx(35.0, rel=1e-9)
+
+    # Turbulent entry ~ 10*D, independent of Re: D=0.05 m -> 0.5 m (far shorter than laminar).
+    lturb = turbulent_entry_length(diameter=_q("0.05 m"))
+    assert lturb.to("m").magnitude == pytest.approx(0.5, rel=1e-12)
+    assert lturb.to("m").magnitude < lh.to("m").magnitude
+
+    # The laminar forms refuse a turbulent Reynolds number.
+    with pytest.raises(ValueError, match="laminar entry-length form applies"):
+        laminar_hydrodynamic_entry_length(reynolds=5000.0, diameter=_q("0.05 m"))
+    with pytest.raises(ValueError, match="laminar entry-length form applies"):
+        laminar_thermal_entry_length(reynolds=5000.0, prandtl=7.0, diameter=_q("0.05 m"))
+
+
 def test_darcy_weisbach_head_loss_and_pressure_drop():
     import math
 

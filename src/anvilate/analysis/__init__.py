@@ -277,8 +277,10 @@ modules:
   water mains, the hydraulic diameter that carries the round-pipe relations over to a
   non-circular duct, the Joukowsky water-hammer surge pressure with its critical
   valve-closure time, the cavitation number σ = (p−p_v)/(½·ρ·V²) that screens a
-  valve or orifice for cavitation, and the laminar Hagen-Poiseuille flow Q = π·ΔP·r⁴/(8·μ·L)
-  with its pressure- and radius-sizing inverses (microchannels, capillaries, viscometry)
+  valve or orifice for cavitation, the laminar Hagen-Poiseuille flow Q = π·ΔP·r⁴/(8·μ·L)
+  with its pressure- and radius-sizing inverses (microchannels, capillaries, viscometry), and the
+  hydrodynamic (0.05·Re·D) and thermal (0.05·Re·Pr·D) entry lengths — with the ≈10·D turbulent
+  estimate — that say where the fully-developed friction and heat-transfer correlations start
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), the Froude number
   and rectangular critical depth that classify the flow as sub- or supercritical, the
@@ -1956,11 +1958,14 @@ from .pipe_flow import (
     hazen_williams_head_loss,
     hydraulic_diameter,
     joukowsky_surge_pressure,
+    laminar_hydrodynamic_entry_length,
+    laminar_thermal_entry_length,
     minor_loss_head,
     pipe_pressure_drop,
     pressure_wave_speed,
     reynolds_number,
     surge_wave_period,
+    turbulent_entry_length,
 )
 from .plasma import (
     debye_length,
@@ -2731,6 +2736,9 @@ __all__ = [
     "hazen_williams_head_loss",
     "hydraulic_diameter",
     "joukowsky_surge_pressure",
+    "laminar_hydrodynamic_entry_length",
+    "laminar_thermal_entry_length",
+    "turbulent_entry_length",
     "minor_loss_head",
     "pipe_pressure_drop",
     "pressure_wave_speed",

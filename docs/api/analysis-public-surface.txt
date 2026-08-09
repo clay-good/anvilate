@@ -911,6 +911,9 @@ pipe_flow.hazen_williams_flow_capacity
 pipe_flow.hazen_williams_head_loss
 pipe_flow.hydraulic_diameter
 pipe_flow.joukowsky_surge_pressure
+pipe_flow.laminar_hydrodynamic_entry_length
+pipe_flow.laminar_thermal_entry_length
+pipe_flow.turbulent_entry_length
 pipe_flow.minor_loss_head
 pipe_flow.pipe_pressure_drop
 pipe_flow.pressure_wave_speed
