@@ -27,6 +27,8 @@ _PARABOLIC_BEAMWIDTH_CONSTANT = 70.0  # deg, θ ≈ k·λ/D for a typical parabo
 
 __all__ = [
     "aperture_antenna_gain",
+    "effective_aperture",
+    "aperture_efficiency",
     "dish_diameter_for_gain",
     "free_space_path_loss",
     "max_line_of_sight_range",
@@ -187,6 +189,54 @@ def dish_diameter_for_gain(
     if not 0.0 < efficiency <= 1.0:
         raise ValueError("efficiency must be in (0, 1]")
     return Quantity(magnitude=(lam / pi) * sqrt(gain / efficiency), unit="m")
+
+
+def effective_aperture(*, gain: float, wavelength: Quantity) -> Quantity:
+    """The effective aperture of an antenna, A_e = G·λ²/(4π).
+
+    The equivalent capture area any antenna presents to an incoming wave, from its linear ``gain`` G
+    and the ``wavelength`` λ: A_e = G·λ²/(4π). Unlike :func:`aperture_antenna_gain` (which is for a
+    physical aperture), this holds for every antenna — even a wire — and is the quantity the Friis
+    equation uses on the receive side (the received power is the incident power density times A_e).
+    A higher-gain antenna gathers from a larger effective area. Returns the effective aperture (m²).
+    """
+    _check(wavelength, "[length]", "wavelength")
+    lam = wavelength.to("m").magnitude
+    if gain <= 0:
+        raise ValueError("gain must be positive")
+    if lam <= 0:
+        raise ValueError("wavelength must be positive")
+    return Quantity(magnitude=gain * lam * lam / (4.0 * pi), unit="m**2")
+
+
+def aperture_efficiency(*, gain: float, physical_area: Quantity, wavelength: Quantity) -> float:
+    """An aperture antenna's efficiency, η_ap = A_e/A_phys = G·λ²/(4π·A_phys).
+
+    How much of a dish or horn's physical area actually works, from its linear ``gain`` G, its
+    ``physical_area`` A_phys, and the ``wavelength`` λ: η_ap = G·λ²/(4π·A_phys), the effective
+    aperture (:func:`effective_aperture`) over the physical one. It is the design inverse of the
+    ``efficiency`` input to :func:`aperture_antenna_gain`; real dishes run 0.5–0.7, the shortfall
+    coming from spillover, illumination taper, blockage, and surface error. The result must not
+    exceed 1 (the effective area cannot beat the physical area). Returns the dimensionless
+    efficiency.
+    """
+    _check(physical_area, "[area]", "physical_area")
+    _check(wavelength, "[length]", "wavelength")
+    a_phys = physical_area.to("m**2").magnitude
+    lam = wavelength.to("m").magnitude
+    if gain <= 0:
+        raise ValueError("gain must be positive")
+    if a_phys <= 0:
+        raise ValueError("physical_area must be positive")
+    if lam <= 0:
+        raise ValueError("wavelength must be positive")
+    eta = gain * lam * lam / (4.0 * pi * a_phys)
+    if eta > 1.0:
+        raise ValueError(
+            "computed aperture efficiency exceeds 1 (effective area cannot exceed the physical "
+            "area — check the gain, area, and wavelength)"
+        )
+    return eta
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

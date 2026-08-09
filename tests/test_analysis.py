@@ -22260,6 +22260,38 @@ def test_antenna_aperture_gain_beamwidth_and_dish_sizing():
         aperture_antenna_gain(aperture_area=_q("1 m"), wavelength=lam, efficiency=0.6)
 
 
+def test_antenna_effective_aperture_and_efficiency_round_trip():
+    from math import pi
+
+    from anvilate.analysis import (
+        aperture_antenna_gain,
+        aperture_efficiency,
+        effective_aperture,
+    )
+
+    lam = _q("0.03 m")  # 10 GHz
+
+    # A 1 m^2 dish at 60% efficiency has a gain, and its effective aperture is 0.6 m^2.
+    g = aperture_antenna_gain(aperture_area=_q("1 m**2"), wavelength=lam, efficiency=0.6)
+    a_e = effective_aperture(gain=g, wavelength=lam)
+    assert a_e.to("m**2").magnitude == pytest.approx(g * 0.03**2 / (4 * pi), rel=1e-9)
+    assert a_e.to("m**2").magnitude == pytest.approx(0.6, rel=1e-9)  # eff * physical area
+
+    # The aperture efficiency backed out of the gain and physical area returns the 0.6 input.
+    eta = aperture_efficiency(gain=g, physical_area=_q("1 m**2"), wavelength=lam)
+    assert eta == pytest.approx(0.6, rel=1e-9)
+
+    # A higher-gain antenna gathers from a larger effective area.
+    assert (
+        effective_aperture(gain=2 * g, wavelength=lam).to("m**2").magnitude
+        > a_e.to("m**2").magnitude
+    )
+
+    # Guardrail: an effective area beyond the physical one is unphysical.
+    with pytest.raises(ValueError, match="exceeds 1"):
+        aperture_efficiency(gain=g, physical_area=_q("0.1 m**2"), wavelength=lam)
+
+
 def test_channel_capacity_shannon_bandwidth_inverse_and_nyquist():
     from math import log2
 

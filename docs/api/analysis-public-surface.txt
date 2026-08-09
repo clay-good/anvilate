@@ -31,6 +31,8 @@ aisc_compactness.flexural_web_slenderness_limits
 aluminum.aluminum_buckling_stress
 aluminum.aluminum_tension_stress
 antenna.aperture_antenna_gain
+antenna.effective_aperture
+antenna.aperture_efficiency
 antenna.dish_diameter_for_gain
 antenna.free_space_path_loss
 antenna.max_line_of_sight_range
