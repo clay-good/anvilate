@@ -700,6 +700,8 @@ gear.planetary_can_assemble
 gear.planetary_planet_teeth
 gear.planetary_speed
 gear.planetary_torques
+gear.gear_mesh_frequency
+gear.gear_tooth_repeat_frequency
 gear.profile_shift_sum_for_center_distance
 gear.reverted_train_is_coaxial
 gear.spur_gear_contact_ratio

@@ -9430,6 +9430,37 @@ def test_gear_train_efficiency_compounds_the_mesh_losses():
         gear_train_efficiency(mesh_efficiencies=[0.0])
 
 
+def test_gear_mesh_and_tooth_repeat_frequencies():
+    from anvilate.analysis import gear_mesh_frequency, gear_tooth_repeat_frequency
+
+    # GMF = N*f_r: 30 teeth at 1800 rpm (30 rev/s) -> 900 Hz.
+    gmf = gear_mesh_frequency(tooth_count=30, rotational_frequency=_q("1800 rpm"))
+    assert gmf.to("Hz").magnitude == pytest.approx(900.0, rel=1e-9)
+    # It is the same from the mating gear: 40 teeth at the gear's slower speed (22.5 rev/s =
+    # 1350 rpm) gives the same 900 Hz.
+    gmf_gear = gear_mesh_frequency(tooth_count=40, rotational_frequency=_q("1350 rpm"))
+    assert gmf_gear.to("Hz").magnitude == pytest.approx(900.0, rel=1e-9)
+
+    # TRF = GMF/lcm(N_p, N_g): 30 & 40 -> lcm 120 -> 7.5 Hz.
+    trf = gear_tooth_repeat_frequency(
+        pinion_teeth=30, gear_teeth=40, pinion_rotational_frequency=_q("1800 rpm")
+    )
+    assert trf.to("Hz").magnitude == pytest.approx(7.5, rel=1e-9)
+    # Coprime (hunting-tooth) counts spread wear: lcm = N_p*N_g, so the TRF is far lower.
+    trf_coprime = gear_tooth_repeat_frequency(
+        pinion_teeth=29, gear_teeth=40, pinion_rotational_frequency=_q("1800 rpm")
+    )
+    assert trf_coprime.to("Hz").magnitude == pytest.approx(29 * 30 / (29 * 40), rel=1e-9)
+    assert trf_coprime.to("Hz").magnitude < trf.to("Hz").magnitude
+
+    # A rev/s input matches the rpm input.
+    gmf_rev = gear_mesh_frequency(tooth_count=30, rotational_frequency=_q("30 turn/s"))
+    assert gmf_rev.to("Hz").magnitude == pytest.approx(900.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        gear_mesh_frequency(tooth_count=0, rotational_frequency=_q("1800 rpm"))
+
+
 def test_perry_robertson_perfect_column_recovers_yield_or_euler():
     from math import pi, sqrt
 

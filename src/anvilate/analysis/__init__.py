@@ -563,7 +563,8 @@ modules:
   and the operating pressure angle and profile-shift sum for a non-standard centre,
   and train kinematics (signed compound-train value, reverted coaxial constraint,
   planetary Willis-equation speeds and ideal torque split, whole-tooth planet and
-  assembly checks)
+  assembly checks), and the vibration-diagnostic mesh frequency GMF = N·f_r and
+  tooth-repeat (hunting) frequency GMF/lcm(N_p, N_g)
 - :mod:`~anvilate.analysis.fastener` — bolt torque-tension, bearing, shear, the
   ISO 898 tensile stress area / axial stress, the proof load and recommended
   preload, thread-stripping engagement, and
@@ -1662,6 +1663,7 @@ from .gear import (
     bevel_pitch_cone_angle,
     gear_center_distance,
     gear_contact_stress,
+    gear_mesh_frequency,
     gear_module_for_center_distance,
     gear_normal_load,
     gear_outside_diameter,
@@ -1669,6 +1671,7 @@ from .gear import (
     gear_radial_load,
     gear_root_diameter,
     gear_tangential_load,
+    gear_tooth_repeat_frequency,
     gear_tooth_thickness_at_radius,
     gear_train_efficiency,
     gear_train_value,
@@ -3665,6 +3668,8 @@ __all__ = [
     "planetary_speed",
     "PlanetaryTorques",
     "planetary_torques",
+    "gear_mesh_frequency",
+    "gear_tooth_repeat_frequency",
     "key_tangential_force",
     "key_shear_stress",
     "key_bearing_stress",

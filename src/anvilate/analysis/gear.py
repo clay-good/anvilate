@@ -83,6 +83,8 @@ __all__ = [
     "planetary_speed",
     "PlanetaryTorques",
     "planetary_torques",
+    "gear_mesh_frequency",
+    "gear_tooth_repeat_frequency",
 ]
 
 
@@ -1246,3 +1248,50 @@ def planetary_torques(
         ring_torque=Quantity(magnitude=scale * ratios["ring"], unit="N*m"),
         carrier_torque=Quantity(magnitude=scale * ratios["carrier"], unit="N*m"),
     )
+
+
+def gear_mesh_frequency(*, tooth_count: int, rotational_frequency: Quantity) -> Quantity:
+    """The gear mesh frequency, GMF = N·f_r.
+
+    The rate at which teeth engage: GMF = ``tooth_count`` N · ``rotational_frequency`` f_r (the
+    shaft speed of that gear). It is the same for both gears in a mesh — N_pinion·f_pinion =
+    N_gear·f_gear — so either side gives it. The GMF and its harmonics dominate a gearbox vibration
+    spectrum, and sidebands spaced at shaft speed around them flag eccentricity or a local tooth
+    fault. Pass the shaft speed as a revolution count (rpm or rev/s). Returns the frequency in Hz.
+    """
+    n = _check_tooth_count(tooth_count, "tooth_count")
+    _require(rotational_frequency, "[frequency]", "rotational_frequency")
+    # Shaft speed as a revolution count: rpm/60 → rev/s, avoiding pint's 2π Hz↔rpm mismatch.
+    fr = rotational_frequency.to("rpm").magnitude / 60.0
+    if fr < 0:
+        raise ValueError("rotational_frequency must be non-negative")
+    return Quantity(magnitude=n * fr, unit="Hz")
+
+
+def gear_tooth_repeat_frequency(
+    *,
+    pinion_teeth: int,
+    gear_teeth: int,
+    pinion_rotational_frequency: Quantity,
+) -> Quantity:
+    """The tooth-repeat (hunting) frequency, TRF = GMF/lcm(N_p, N_g).
+
+    The rate at which a *specific* pinion tooth returns to mesh with a *specific* gear tooth: TRF =
+    GMF / lcm(``pinion_teeth`` N_p, ``gear_teeth`` N_g), with GMF = N_p times the
+    ``pinion_rotational_frequency``. A tooth pair repeats every lcm(N_p, N_g) meshes, so coprime
+    tooth counts (a hunting-tooth design) give the lowest TRF and spread wear over every tooth
+    combination — a long tooth-repeat period is
+    deliberate. A rise in the TRF component points to a matched pair of tooth faults, one on each
+    gear. Returns the frequency in Hz.
+    """
+    from math import gcd
+
+    n_p = _check_tooth_count(pinion_teeth, "pinion_teeth")
+    n_g = _check_tooth_count(gear_teeth, "gear_teeth")
+    _require(pinion_rotational_frequency, "[frequency]", "pinion_rotational_frequency")
+    fr = pinion_rotational_frequency.to("rpm").magnitude / 60.0
+    if fr < 0:
+        raise ValueError("pinion_rotational_frequency must be non-negative")
+    gmf = n_p * fr
+    lcm = n_p * n_g // gcd(n_p, n_g)
+    return Quantity(magnitude=gmf / lcm, unit="Hz")
