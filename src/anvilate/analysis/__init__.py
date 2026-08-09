@@ -221,6 +221,10 @@ modules:
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
   and power of a multi-stage machine
+- :mod:`~anvilate.analysis.gas_transport` — temperature-dependent gas transport properties: the
+  Sutherland-law dynamic viscosity µ_ref·(T/T_ref)^1.5·(T_ref+S)/(T+S) and thermal conductivity
+  that both climb with temperature, and the Prandtl number Pr = µ·c_p/k that feeds the convection
+  correlations
 - :mod:`~anvilate.analysis.ideal_gas` — the ideal gas law PV = nRT solved for each variable: the
   pressure nRT/V, the volume nRT/P, and the amount PV/(RT) a cylinder holds (moles form, distinct
   from gas_compression's mass-density ρ = PM/RT)
@@ -1579,6 +1583,11 @@ from .gas_compression import (
     multistage_compression_power,
     optimal_stage_pressure_ratio,
 )
+from .gas_transport import (
+    prandtl_number,
+    sutherland_thermal_conductivity,
+    sutherland_viscosity,
+)
 from .gasket import (
     gasket_operating_load,
     gasket_seating_load,
@@ -2711,6 +2720,9 @@ __all__ = [
     "isothermal_compression_power",
     "multistage_compression_power",
     "optimal_stage_pressure_ratio",
+    "sutherland_viscosity",
+    "sutherland_thermal_conductivity",
+    "prandtl_number",
     "rms_molecular_speed",
     "mean_molecular_speed",
     "mean_free_path",

@@ -17750,6 +17750,92 @@ def test_adiabatic_discharge_temperature_rises_with_ratio():
         )
 
 
+def test_sutherland_transport_properties_and_prandtl_number():
+    from anvilate.analysis import (
+        prandtl_number,
+        sutherland_thermal_conductivity,
+        sutherland_viscosity,
+    )
+
+    mu_ref = _q("1.716e-5 Pa*s")
+    k_ref = _q("0.0241 W/(m*K)")
+    t_ref = _q("273.15 K")
+
+    # At the reference temperature the law returns the reference value exactly.
+    mu0 = sutherland_viscosity(
+        temperature=t_ref,
+        reference_viscosity=mu_ref,
+        reference_temperature=t_ref,
+        sutherland_constant=_q("110.4 K"),
+    )
+    assert mu0.to("Pa*s").magnitude == pytest.approx(1.716e-5, rel=1e-12)
+
+    # mu = mu_ref*(T/T_ref)^1.5*(T_ref+S)/(T+S): air at 300 K -> ~1.846e-5 Pa.s.
+    mu = sutherland_viscosity(
+        temperature=_q("300 K"),
+        reference_viscosity=mu_ref,
+        reference_temperature=t_ref,
+        sutherland_constant=_q("110.4 K"),
+    )
+    expected_mu = 1.716e-5 * (300 / 273.15) ** 1.5 * (273.15 + 110.4) / (300 + 110.4)
+    assert mu.to("Pa*s").magnitude == pytest.approx(expected_mu, rel=1e-9)
+    assert mu.to("Pa*s").magnitude == pytest.approx(1.846e-5, abs=0.005e-5)
+    # A gas thickens as it heats — viscosity rises with temperature.
+    mu_hot = sutherland_viscosity(
+        temperature=_q("800 K"),
+        reference_viscosity=mu_ref,
+        reference_temperature=t_ref,
+        sutherland_constant=_q("110.4 K"),
+    )
+    assert mu_hot.to("Pa*s").magnitude > mu.to("Pa*s").magnitude
+
+    # Thermal conductivity follows the same three-halves law with its own S; air 300 K -> ~0.0262.
+    k = sutherland_thermal_conductivity(
+        temperature=_q("300 K"),
+        reference_conductivity=k_ref,
+        reference_temperature=t_ref,
+        sutherland_constant=_q("194 K"),
+    )
+    expected_k = 0.0241 * (300 / 273.15) ** 1.5 * (273.15 + 194) / (300 + 194)
+    assert k.to("W/(m*K)").magnitude == pytest.approx(expected_k, rel=1e-9)
+    assert k.to("W/(m*K)").magnitude == pytest.approx(0.0262, abs=0.0005)
+
+    # Pr = mu*cp/k: with the 300 K air properties and cp = 1005 -> ~0.71.
+    pr = prandtl_number(
+        dynamic_viscosity=mu,
+        specific_heat=_q("1005 J/(kg*K)"),
+        thermal_conductivity=k,
+    )
+    assert pr == pytest.approx(
+        mu.to("Pa*s").magnitude * 1005 / k.to("W/(m*K)").magnitude, rel=1e-12
+    )
+    assert pr == pytest.approx(0.71, abs=0.01)
+    assert isinstance(pr, float)
+
+    # Guardrails: absolute temperatures must be positive; conductivity strictly positive.
+    with pytest.raises(ValueError, match="positive absolute"):
+        sutherland_viscosity(
+            temperature=_q("0 K"),
+            reference_viscosity=mu_ref,
+            reference_temperature=t_ref,
+            sutherland_constant=_q("110.4 K"),
+        )
+    with pytest.raises(ValueError, match="thermal_conductivity must be positive"):
+        prandtl_number(
+            dynamic_viscosity=mu,
+            specific_heat=_q("1005 J/(kg*K)"),
+            thermal_conductivity=_q("0 W/(m*K)"),
+        )
+    # Dimension checks reject the wrong physical quantity.
+    with pytest.raises(ValueError, match="reference_viscosity"):
+        sutherland_viscosity(
+            temperature=_q("300 K"),
+            reference_viscosity=_q("5 kg"),
+            reference_temperature=t_ref,
+            sutherland_constant=_q("110.4 K"),
+        )
+
+
 def test_masonry_allowable_axial_stress_two_slenderness_branches():
     from anvilate.analysis import masonry_allowable_axial_stress
 

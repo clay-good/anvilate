@@ -636,6 +636,9 @@ gas_compression.ideal_gas_density
 gas_compression.isothermal_compression_power
 gas_compression.multistage_compression_power
 gas_compression.optimal_stage_pressure_ratio
+gas_transport.sutherland_viscosity
+gas_transport.sutherland_thermal_conductivity
+gas_transport.prandtl_number
 gasket.gasket_operating_load
 gasket.gasket_seating_load
 gasket.governing_gasket_bolt_load

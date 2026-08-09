@@ -402,6 +402,22 @@ def test_slope_stability_rain_example_cohesion_holds_until_saturation():
     assert f["saturated"] == pytest.approx(1.07, abs=0.05)
 
 
+def test_gas_transport_hot_air_example_properties_climb_with_temperature():
+    namespace = runpy.run_path(str(_EXAMPLES / "gas_transport_hot_air.py"))
+    p = namespace["hot_air_properties"]()
+    # Room-temperature air: the textbook values Sutherland's law reproduces.
+    assert p["cold_viscosity_upa_s"] == pytest.approx(18.46, abs=0.1)
+    assert p["cold_conductivity_mw_mk"] == pytest.approx(26.2, abs=0.3)
+    assert p["cold_prandtl"] == pytest.approx(0.707, abs=0.01)
+    # Heating to furnace temperature nearly doubles the viscosity and more than
+    # doubles the conductivity — the whole reason a gas calc can't reuse a cold value.
+    assert p["hot_viscosity_upa_s"] > p["cold_viscosity_upa_s"]
+    assert p["viscosity_ratio"] == pytest.approx(1.96, abs=0.05)
+    assert p["conductivity_ratio"] == pytest.approx(2.16, abs=0.05)
+    # The Prandtl number barely moves — which is why correlations lean on Pr ~ 0.7.
+    assert p["hot_prandtl"] == pytest.approx(0.64, abs=0.02)
+
+
 def test_friction_pile_capacity_example_shaft_carries_the_load():
     namespace = runpy.run_path(str(_EXAMPLES / "friction_pile_capacity.py"))
     p = namespace["pile_capacity"]()
