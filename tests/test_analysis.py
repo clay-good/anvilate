@@ -16634,6 +16634,43 @@ def test_gyroscopic_angular_momentum_precession_and_reaction_moment():
         )
 
 
+def test_acoustics_impedance_and_interface_reflection_transmission():
+    from anvilate.analysis import (
+        acoustic_impedance,
+        acoustic_reflection_coefficient,
+        acoustic_transmission_coefficient,
+    )
+
+    # Z = rho*c; water 1000 kg/m^3 * 1480 m/s = 1.48 MRayl.
+    z_water = acoustic_impedance(density=_q("1000 kg/m**3"), wave_speed=_q("1480 m/s"))
+    assert z_water.to("kg/(m**2*s)").magnitude == pytest.approx(1.48e6, rel=1e-9)
+    z_steel = acoustic_impedance(density=_q("7800 kg/m**3"), wave_speed=_q("5900 m/s"))
+
+    # R = ((Z2-Z1)/(Z2+Z1))^2; water->steel reflects ~88%.
+    r = acoustic_reflection_coefficient(impedance_1=z_water, impedance_2=z_steel)
+    z1, z2 = 1.48e6, 7800 * 5900
+    assert r == pytest.approx(((z2 - z1) / (z2 + z1)) ** 2, rel=1e-9)
+    assert r == pytest.approx(0.879, abs=0.002)
+
+    # T = 4*Z1*Z2/(Z1+Z2)^2, and R + T = 1 (energy conserved).
+    t = acoustic_transmission_coefficient(impedance_1=z_water, impedance_2=z_steel)
+    assert t == pytest.approx(4 * z1 * z2 / (z1 + z2) ** 2, rel=1e-9)
+    assert r + t == pytest.approx(1.0, rel=1e-9)
+
+    # Matched impedances reflect nothing and transmit everything.
+    assert acoustic_reflection_coefficient(
+        impedance_1=z_water, impedance_2=z_water
+    ) == pytest.approx(0.0, abs=1e-12)
+    assert acoustic_transmission_coefficient(
+        impedance_1=z_water, impedance_2=z_water
+    ) == pytest.approx(1.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="wave_speed must be positive"):
+        acoustic_impedance(density=_q("1000 kg/m**3"), wave_speed=_q("0 m/s"))
+    with pytest.raises(ValueError, match="impedance_1 must be a"):
+        acoustic_reflection_coefficient(impedance_1=_q("5 kg"), impedance_2=z_steel)
+
+
 def test_acoustic_helmholtz_and_pipe_resonances():
     from anvilate.analysis import (
         closed_pipe_resonance_frequency,

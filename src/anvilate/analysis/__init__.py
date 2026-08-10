@@ -13,7 +13,10 @@ modules:
   Doppler-shifted frequency f' = f·(c + v_o)/(c − v_s), the source speed a shift implies, and
   the Mach cone half-angle μ = arcsin(1/M) of a supersonic source; plus room acoustics — the
   partition mass-law transmission loss, the Sabine reverberation time, and the room constant
-  R = S·ᾱ/(1−ᾱ) with the critical distance d_c = 0.141·√(Q·R) where the reverberant field takes over
+  R = S·ᾱ/(1−ᾱ) with the critical distance d_c = 0.141·√(Q·R) where the reverberant field takes
+  over; plus ultrasonic-NDT interface acoustics — the characteristic impedance Z = ρ·c and the
+  intensity reflection ((Z₂−Z₁)/(Z₂+Z₁))² and transmission 4·Z₁·Z₂/(Z₁+Z₂)² coefficients at a
+  boundary
 - :mod:`~anvilate.analysis.adhesive` — bonded joints: the lap-joint average shear
   stress against the datasheet lap-shear strength, and the axial and torque
   capacity of a cylindrical retaining-compound bond
@@ -928,6 +931,9 @@ from .acid_base import (
     henderson_hasselbalch_ph,
 )
 from .acoustics import (
+    acoustic_impedance,
+    acoustic_reflection_coefficient,
+    acoustic_transmission_coefficient,
     closed_pipe_resonance_frequency,
     critical_distance,
     doppler_shifted_frequency,
@@ -3156,6 +3162,9 @@ __all__ = [
     "sound_level_sum",
     "sound_power_level_from_intensity",
     "sound_pressure_from_power_level",
+    "acoustic_impedance",
+    "acoustic_reflection_coefficient",
+    "acoustic_transmission_coefficient",
     "helmholtz_resonator_frequency",
     "open_pipe_resonance_frequency",
     "closed_pipe_resonance_frequency",

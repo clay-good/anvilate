@@ -22,6 +22,9 @@ from math import asin, degrees, log10, pi, sqrt
 from ..units import Quantity
 
 __all__ = [
+    "acoustic_impedance",
+    "acoustic_reflection_coefficient",
+    "acoustic_transmission_coefficient",
     "closed_pipe_resonance_frequency",
     "doppler_shifted_frequency",
     "doppler_velocity_from_shift",
@@ -409,6 +412,65 @@ def mach_cone_angle(*, mach_number: float) -> float:
     if mach_number <= 1.0:
         raise ValueError(f"mach_number must exceed 1 (a Mach cone needs M > 1); got {mach_number}")
     return degrees(asin(1.0 / mach_number))
+
+
+def acoustic_impedance(*, density: Quantity, wave_speed: Quantity) -> Quantity:
+    """The characteristic acoustic impedance, Z = ρ·c.
+
+    The resistance a medium offers to a sound wave: its ``density`` ρ times the ``wave_speed`` c,
+    Z = ρ·c. It is what governs how sound reflects and transmits at a boundary — a large impedance
+    mismatch (as between tissue and air) bounces almost all the sound back, which is why ultrasound
+    needs a coupling gel. Water is ~1.48 MRayl, steel ~46 MRayl. Feed two of these to
+    :func:`acoustic_reflection_coefficient`. Returns the impedance in kg/(m²·s) (the Rayl).
+    """
+    _check(density, "[mass]/[length]**3", "density")
+    _check(wave_speed, "[length]/[time]", "wave_speed")
+    rho = density.to("kg/m**3").magnitude
+    c = wave_speed.to("m/s").magnitude
+    if rho <= 0:
+        raise ValueError("density must be positive")
+    if c <= 0:
+        raise ValueError("wave_speed must be positive")
+    return Quantity(magnitude=rho * c, unit="kg/(m**2*s)")
+
+
+def acoustic_reflection_coefficient(*, impedance_1: Quantity, impedance_2: Quantity) -> float:
+    """The acoustic intensity reflection coefficient, R = ((Z₂ − Z₁)/(Z₂ + Z₁))².
+
+    The fraction of a sound wave's intensity reflected at a normal-incidence boundary between two
+    media of acoustic impedance ``impedance_1`` Z₁ and ``impedance_2`` Z₂ (from
+    :func:`acoustic_impedance`): R = ((Z₂ − Z₁)/(Z₂ + Z₁))². Matched impedances (Z₁ = Z₂) reflect
+    nothing and pass the wave through; a large mismatch reflects nearly all of it — the physics an
+    ultrasonic flaw detector uses to see a crack (a steel-to-air interface) as a bright echo.
+    Returns the dimensionless reflection coefficient (0 to 1) as a plain float.
+    """
+    _check(impedance_1, "[mass]/([length]**2*[time])", "impedance_1")
+    _check(impedance_2, "[mass]/([length]**2*[time])", "impedance_2")
+    z1 = impedance_1.to("kg/(m**2*s)").magnitude
+    z2 = impedance_2.to("kg/(m**2*s)").magnitude
+    if z1 <= 0 or z2 <= 0:
+        raise ValueError("acoustic impedances must be positive")
+    return ((z2 - z1) / (z2 + z1)) ** 2
+
+
+def acoustic_transmission_coefficient(*, impedance_1: Quantity, impedance_2: Quantity) -> float:
+    """The acoustic intensity transmission coefficient, T = 4·Z₁·Z₂/(Z₁ + Z₂)².
+
+    The fraction of a sound wave's intensity transmitted across a normal-incidence boundary between
+    media of acoustic impedance ``impedance_1`` Z₁ and ``impedance_2`` Z₂: T = 4·Z₁·Z₂/(Z₁ + Z₂)²,
+    the complement of the reflection coefficient (T + R = 1, see
+    :func:`acoustic_reflection_coefficient`). It peaks at 1 for matched impedances and collapses for
+    a large mismatch — the reason a thin matching layer is bonded to an ultrasonic transducer to
+    couple it to the part. Returns the dimensionless transmission coefficient (0 to 1) as a plain
+    float.
+    """
+    _check(impedance_1, "[mass]/([length]**2*[time])", "impedance_1")
+    _check(impedance_2, "[mass]/([length]**2*[time])", "impedance_2")
+    z1 = impedance_1.to("kg/(m**2*s)").magnitude
+    z2 = impedance_2.to("kg/(m**2*s)").magnitude
+    if z1 <= 0 or z2 <= 0:
+        raise ValueError("acoustic impedances must be positive")
+    return 4.0 * z1 * z2 / (z1 + z2) ** 2
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
