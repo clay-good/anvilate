@@ -307,9 +307,10 @@ modules:
   with its pressure- and radius-sizing inverses (microchannels, capillaries, viscometry), and the
   hydrodynamic (0.05·Re·D) and thermal (0.05·Re·Pr·D) entry lengths — with the ≈10·D turbulent
   estimate — that say where the fully-developed friction and heat-transfer correlations start
-- :mod:`~anvilate.analysis.packed_bed` — packed-bed flow: the Ergun pressure drop (viscous
-  Kozeny-Carman plus inertial Burke-Plummer terms) through a bed of particles, and the bed void
-  fraction ε = 1 − ρ_bulk/ρ_p from the bulk and particle densities
+- :mod:`~anvilate.analysis.packed_bed` — packed- and fluidized-bed flow: the Ergun pressure drop
+  (viscous Kozeny-Carman plus inertial Burke-Plummer terms) through a bed of particles, the bed void
+  fraction ε = 1 − ρ_bulk/ρ_p from the bulk and particle densities, and the minimum fluidization
+  velocity U_mf = d_p²·(ρ_p−ρ)·g·ε³/(150·μ·(1−ε)) at which the bed lifts into a fluidized state
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), the Froude number
   and rectangular critical depth that classify the flow as sub- or supercritical, the
@@ -2069,6 +2070,7 @@ from .orbital_mechanics import (
 )
 from .packed_bed import (
     ergun_pressure_drop,
+    minimum_fluidization_velocity,
     packed_bed_void_fraction,
 )
 from .photodetector import (
@@ -3736,6 +3738,7 @@ __all__ = [
     "lumen_method_illuminance",
     "lumen_method_luminaire_count",
     "ergun_pressure_drop",
+    "minimum_fluidization_velocity",
     "packed_bed_void_fraction",
     "photodiode_responsivity",
     "photodiode_current",

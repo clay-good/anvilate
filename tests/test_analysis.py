@@ -24578,6 +24578,42 @@ def test_packed_bed_ergun_pressure_drop_and_void_fraction():
         )
 
 
+def test_packed_bed_minimum_fluidization_velocity():
+    from anvilate.analysis import minimum_fluidization_velocity
+
+    # U_mf = dp^2*(rho_p-rho)*g*eps^3/(150*mu*(1-eps)); 100 um sand -> ~0.015 m/s.
+    u_mf = minimum_fluidization_velocity(
+        particle_diameter=_q("100 um"),
+        particle_density=_q("2500 kg/m**3"),
+        fluid_density=_q("1.2 kg/m**3"),
+        fluid_viscosity=_q("1.8e-5 Pa*s"),
+        void_fraction=0.45,
+    )
+    dp, rho_p, rho, mu, eps, g = 1e-4, 2500.0, 1.2, 1.8e-5, 0.45, 9.80665
+    expected = dp**2 * (rho_p - rho) * g * eps**3 / (150 * mu * (1 - eps))
+    assert u_mf.to("m/s").magnitude == pytest.approx(expected, rel=1e-9)
+    assert u_mf.to("m/s").magnitude == pytest.approx(0.0150, abs=0.001)
+
+    # U_mf goes as the square of particle diameter: a 2x particle -> 4x velocity.
+    u_big = minimum_fluidization_velocity(
+        particle_diameter=_q("200 um"),
+        particle_density=_q("2500 kg/m**3"),
+        fluid_density=_q("1.2 kg/m**3"),
+        fluid_viscosity=_q("1.8e-5 Pa*s"),
+        void_fraction=0.45,
+    )
+    assert u_big.to("m/s").magnitude / u_mf.to("m/s").magnitude == pytest.approx(4.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="particle_density must exceed fluid_density"):
+        minimum_fluidization_velocity(
+            particle_diameter=_q("100 um"),
+            particle_density=_q("1.0 kg/m**3"),
+            fluid_density=_q("1.2 kg/m**3"),
+            fluid_viscosity=_q("1.8e-5 Pa*s"),
+            void_fraction=0.45,
+        )
+
+
 def test_reactor_damkohler_and_first_order_conversions():
     from math import exp
 

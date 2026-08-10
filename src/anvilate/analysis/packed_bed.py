@@ -21,8 +21,11 @@ from __future__ import annotations
 
 from ..units import Quantity
 
+_GRAVITY = 9.80665  # m/s^2, standard gravity
+
 __all__ = [
     "ergun_pressure_drop",
+    "minimum_fluidization_velocity",
     "packed_bed_void_fraction",
 ]
 
@@ -93,6 +96,47 @@ def packed_bed_void_fraction(*, bulk_density: Quantity, particle_density: Quanti
     if rho_bulk > rho_p:
         raise ValueError("bulk_density cannot exceed particle_density (ε < 0 is impossible)")
     return 1.0 - rho_bulk / rho_p
+
+
+def minimum_fluidization_velocity(
+    *,
+    particle_diameter: Quantity,
+    particle_density: Quantity,
+    fluid_density: Quantity,
+    fluid_viscosity: Quantity,
+    void_fraction: float,
+) -> Quantity:
+    """The minimum fluidization velocity, U_mf = d_p²·(ρ_p−ρ)·g·ε³/(150·μ·(1−ε)).
+
+    The superficial velocity at which an upward gas flow just lifts a packed bed into a fluidized
+    state — where the bed pressure drop equals the bed weight per area: from the
+    ``particle_diameter`` d_p, the ``particle_density`` ρ_p, the ``fluid_density`` ρ, the
+    ``fluid_viscosity`` μ, and the voidage ``void_fraction`` ε at minimum fluidization,
+    U_mf = d_p²·(ρ_p−ρ)·g·ε³/(150·μ·(1−ε)). This
+    is the laminar (small-particle) limit of the Ergun equation, valid for fine particles where the
+    viscous term dominates; below U_mf the bed is a fixed bed (:func:`ergun_pressure_drop`), above
+    it the particles are suspended. It sets the operating window of a fluidized-bed reactor or
+    dryer. Returns the minimum fluidization velocity in m/s.
+    """
+    _check(particle_diameter, "[length]", "particle_diameter")
+    _check(particle_density, "[mass]/[length]**3", "particle_density")
+    _check(fluid_density, "[mass]/[length]**3", "fluid_density")
+    _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
+    if not 0.0 < void_fraction < 1.0:
+        raise ValueError(f"void_fraction must be in (0, 1); got {void_fraction}")
+    dp = particle_diameter.to("m").magnitude
+    rho_p = particle_density.to("kg/m**3").magnitude
+    rho = fluid_density.to("kg/m**3").magnitude
+    mu = fluid_viscosity.to("Pa*s").magnitude
+    if dp <= 0:
+        raise ValueError("particle_diameter must be positive")
+    if mu <= 0:
+        raise ValueError("fluid_viscosity must be positive")
+    if rho_p <= rho:
+        raise ValueError("particle_density must exceed fluid_density for the bed to fluidize")
+    eps = void_fraction
+    u_mf = dp**2 * (rho_p - rho) * _GRAVITY * eps**3 / (150.0 * mu * (1.0 - eps))
+    return Quantity(magnitude=u_mf, unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
