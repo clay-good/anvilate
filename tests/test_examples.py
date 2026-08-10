@@ -480,6 +480,16 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_reverse_osmosis_seawater_flux_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "reverse_osmosis_seawater_flux.py"))
+    d = namespace["seawater_ro_performance"]()
+    # Net driving pressure 60-28 = 32 bar at 1 LMH/bar -> 32 LMH.
+    assert d["water_flux_lmh"] == pytest.approx(32.0, rel=1e-6)
+    # C_p = J_s/J_w ~ 1.97 kg/m3; rejection ~0.944.
+    assert d["permeate_concentration_kg_m3"] == pytest.approx(1.97, abs=0.02)
+    assert d["salt_rejection"] == pytest.approx(0.944, abs=0.005)
+
+
 def test_cyclone_dust_collector_cut_size_example():
     namespace = runpy.run_path(str(_EXAMPLES / "cyclone_dust_collector_cut_size.py"))
     d = namespace["cyclone_performance"]()

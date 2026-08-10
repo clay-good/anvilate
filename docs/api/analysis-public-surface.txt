@@ -130,6 +130,9 @@ mass_transfer.chilton_colburn_mass_transfer_coefficient
 measurement_uncertainty.standard_uncertainty_of_mean
 measurement_uncertainty.combined_standard_uncertainty
 measurement_uncertainty.expanded_uncertainty
+membrane.reverse_osmosis_water_flux
+membrane.membrane_salt_flux
+membrane.salt_rejection
 momentum.linear_momentum
 momentum.impulse
 momentum.average_impact_force

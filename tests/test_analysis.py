@@ -24289,6 +24289,52 @@ def test_ideal_gas_law_pressure_volume_and_moles():
         )
 
 
+def test_membrane_reverse_osmosis_fluxes_and_rejection():
+    from anvilate.analysis import (
+        membrane_salt_flux,
+        reverse_osmosis_water_flux,
+        salt_rejection,
+    )
+
+    # J_w = A*(dP - dpi); 1 LMH/bar * (60-28) bar = 32 LMH.
+    j_w = reverse_osmosis_water_flux(
+        water_permeability=_q("1 L/(m**2*hour*bar)"),
+        applied_pressure=_q("60 bar"),
+        osmotic_pressure_difference=_q("28 bar"),
+    )
+    assert j_w.to("L/(m**2*hour)").magnitude == pytest.approx(32.0, rel=1e-9)
+
+    # J_s = B*dC; 5e-7 m/s * 35 kg/m3 = 1.75e-5 kg/(m2 s) = 63 g/(m2 h).
+    j_s = membrane_salt_flux(
+        salt_permeability=_q("5e-7 m/s"), concentration_difference=_q("35 kg/m**3")
+    )
+    assert j_s.to("kg/(m**2*s)").magnitude == pytest.approx(5e-7 * 35, rel=1e-9)
+    assert j_s.to("g/(m**2*hour)").magnitude == pytest.approx(63.0, rel=1e-6)
+
+    # Rejection R = 1 - Cp/Cf.
+    r = salt_rejection(
+        permeate_concentration=_q("0.2 kg/m**3"), feed_concentration=_q("35 kg/m**3")
+    )
+    assert r == pytest.approx(1 - 0.2 / 35, rel=1e-12)
+    assert isinstance(r, float)
+
+    # Below the osmotic pressure there is no net permeation.
+    with pytest.raises(ValueError, match="must exceed the osmotic pressure"):
+        reverse_osmosis_water_flux(
+            water_permeability=_q("1 L/(m**2*hour*bar)"),
+            applied_pressure=_q("20 bar"),
+            osmotic_pressure_difference=_q("28 bar"),
+        )
+    with pytest.raises(ValueError, match="cannot exceed feed_concentration"):
+        salt_rejection(permeate_concentration=_q("40 kg/m**3"), feed_concentration=_q("35 kg/m**3"))
+    with pytest.raises(ValueError, match="water_permeability must be a"):
+        reverse_osmosis_water_flux(
+            water_permeability=_q("1 m/s"),
+            applied_pressure=_q("60 bar"),
+            osmotic_pressure_difference=_q("28 bar"),
+        )
+
+
 def test_cyclone_cut_diameter_and_collection_efficiency():
     from math import pi, sqrt
 

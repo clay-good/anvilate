@@ -579,6 +579,8 @@ modules:
 - :mod:`~anvilate.analysis.measurement_uncertainty` — ISO GUM measurement uncertainty: the Type A
   standard uncertainty of a mean u = s/√n, the combined standard uncertainty u_c = √(Σuᵢ²) from
   independent contributions, and the expanded uncertainty U = k·u_c reported at a coverage factor
+- :mod:`~anvilate.analysis.membrane` — reverse-osmosis membrane transport (solution-diffusion): the
+  water flux J_w = A·(ΔP − Δπ), the salt flux J_s = B·ΔC, and the salt rejection R = 1 − C_p/C_f
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, the inertia a speed-smoothing target requires and the thin-rim
   mass that inertia needs, the rotating
@@ -1975,6 +1977,11 @@ from .measurement_uncertainty import (
     combined_standard_uncertainty,
     expanded_uncertainty,
     standard_uncertainty_of_mean,
+)
+from .membrane import (
+    membrane_salt_flux,
+    reverse_osmosis_water_flux,
+    salt_rejection,
 )
 from .momentum import (
     average_impact_force,
@@ -3429,6 +3436,9 @@ __all__ = [
     "standard_uncertainty_of_mean",
     "combined_standard_uncertainty",
     "expanded_uncertainty",
+    "reverse_osmosis_water_flux",
+    "membrane_salt_flux",
+    "salt_rejection",
     "linear_momentum",
     "impulse",
     "average_impact_force",
