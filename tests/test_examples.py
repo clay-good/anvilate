@@ -480,6 +480,16 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_cyclone_dust_collector_cut_size_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "cyclone_dust_collector_cut_size.py"))
+    d = namespace["cyclone_performance"]()
+    # Lapple cut diameter ~5.08 µm.
+    assert d["cut_diameter_um"] == pytest.approx(5.08, abs=0.05)
+    # A 10 µm particle (~2x the cut) is collected ~80%.
+    assert d["efficiency_10um"] == pytest.approx(0.795, abs=0.01)
+    assert d["efficiency_10um"] > 0.5
+
+
 def test_comminution_ball_mill_energy_example():
     namespace = runpy.run_path(str(_EXAMPLES / "comminution_ball_mill_energy.py"))
     d = namespace["ball_mill_grinding_energy"]()

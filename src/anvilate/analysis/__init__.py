@@ -56,6 +56,9 @@ modules:
 - :mod:`~anvilate.analysis.plasma` — plasma physics: the electron plasma frequency f_p (the radio
   cutoff of the ionosphere), the Debye screening length λ_D = √(ε₀·k·T/(n·e²)), and the plasma
   parameter N_D (particles in a Debye sphere; ≫1 for a true collective plasma)
+- :mod:`~anvilate.analysis.cyclone` — gas cyclone dust separator: the Lapple cut diameter
+  d_pc = √[9·μ·B/(2π·N_e·V_i·(ρ_p−ρ))] collected at 50%, and the fractional collection efficiency
+  η = 1/(1 + (d_pc/d_p)²) of any particle size
 - :mod:`~anvilate.analysis.cyclotron` — charged-particle motion in a magnetic field: the cyclotron
   frequency f_c = q·B/(2π·m) (speed-independent), the Larmor orbit radius r = m·v/(q·B), and the
   mass-spectrometry inverse m = q·B/(2π·f_c)
@@ -1376,6 +1379,10 @@ from .curved_beam import (
     thin_ring_diametral_deflection,
     thin_ring_max_moment,
     trapezoidal_curved_beam_stress,
+)
+from .cyclone import (
+    cyclone_collection_efficiency,
+    cyclone_cut_diameter,
 )
 from .cyclotron import (
     cyclotron_frequency,
@@ -3544,6 +3551,8 @@ __all__ = [
     "thin_ring_diametral_deflection",
     "thin_ring_max_moment",
     "thin_ring_buckling_pressure",
+    "cyclone_cut_diameter",
+    "cyclone_collection_efficiency",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",

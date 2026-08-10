@@ -24289,6 +24289,64 @@ def test_ideal_gas_law_pressure_volume_and_moles():
         )
 
 
+def test_cyclone_cut_diameter_and_collection_efficiency():
+    from math import pi, sqrt
+
+    from anvilate.analysis import cyclone_collection_efficiency, cyclone_cut_diameter
+
+    # Lapple d_pc = sqrt(9*mu*B / (2*pi*Ne*Vi*(rho_p - rho))).
+    d50 = cyclone_cut_diameter(
+        gas_viscosity=_q("1.8e-5 Pa*s"),
+        inlet_width=_q("0.15 m"),
+        effective_turns=5.0,
+        inlet_velocity=_q("15 m/s"),
+        particle_density=_q("2000 kg/m**3"),
+        gas_density=_q("1.2 kg/m**3"),
+    )
+    expected = sqrt(9 * 1.8e-5 * 0.15 / (2 * pi * 5.0 * 15 * (2000 - 1.2)))
+    assert d50.to("m").magnitude == pytest.approx(expected, rel=1e-9)
+    assert d50.to("um").magnitude == pytest.approx(5.08, abs=0.02)
+
+    # Efficiency η = 1/(1+(d_pc/d_p)^2); a particle AT the cut is collected exactly 50%.
+    assert cyclone_collection_efficiency(particle_diameter=d50, cut_diameter=d50) == pytest.approx(
+        0.5, rel=1e-12
+    )
+    # Larger than the cut -> more collected; finer -> less.
+    eta_big = cyclone_collection_efficiency(particle_diameter=_q("20 um"), cut_diameter=d50)
+    eta_small = cyclone_collection_efficiency(particle_diameter=_q("2 um"), cut_diameter=d50)
+    assert eta_big > 0.5 > eta_small
+
+    # A denser particle separates more easily (smaller cut diameter).
+    d50_dense = cyclone_cut_diameter(
+        gas_viscosity=_q("1.8e-5 Pa*s"),
+        inlet_width=_q("0.15 m"),
+        effective_turns=5.0,
+        inlet_velocity=_q("15 m/s"),
+        particle_density=_q("8000 kg/m**3"),
+        gas_density=_q("1.2 kg/m**3"),
+    )
+    assert d50_dense.to("m").magnitude < d50.to("m").magnitude
+
+    with pytest.raises(ValueError, match="particle_density must exceed gas_density"):
+        cyclone_cut_diameter(
+            gas_viscosity=_q("1.8e-5 Pa*s"),
+            inlet_width=_q("0.15 m"),
+            effective_turns=5.0,
+            inlet_velocity=_q("15 m/s"),
+            particle_density=_q("1.0 kg/m**3"),
+            gas_density=_q("1.2 kg/m**3"),
+        )
+    with pytest.raises(ValueError, match="gas_viscosity must be a"):
+        cyclone_cut_diameter(
+            gas_viscosity=_q("1.8e-5 Pa"),
+            inlet_width=_q("0.15 m"),
+            effective_turns=5.0,
+            inlet_velocity=_q("15 m/s"),
+            particle_density=_q("2000 kg/m**3"),
+            gas_density=_q("1.2 kg/m**3"),
+        )
+
+
 def test_comminution_rittinger_kick_and_bond_laws():
     from math import log
 
