@@ -750,6 +750,8 @@ gyroscope.gyroscopic_reaction_moment
 hall_effect.hall_carrier_density
 hall_effect.hall_flux_density_from_voltage
 hall_effect.hall_voltage
+hall_petch.hall_petch_yield_strength
+hall_petch.hall_petch_grain_diameter_for_yield
 hvac_duct.circular_equivalent_diameter
 hvac_duct.fan_power
 hvac_duct.fan_total_pressure

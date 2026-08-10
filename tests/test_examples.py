@@ -480,6 +480,15 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_hall_petch_grain_refinement_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "hall_petch_grain_refinement.py"))
+    d = namespace["grain_refinement_target"]()
+    # At 40 um: 50 + 0.74/sqrt(40e-6) ~ 167 MPa.
+    assert d["current_yield_mpa"] == pytest.approx(167.0, abs=1.0)
+    # For 300 MPa: [0.74/(250e6/1e6... )]^2 ~ 8.8 um.
+    assert d["required_grain_um"] == pytest.approx(8.76, abs=0.1)
+
+
 def test_reverse_osmosis_seawater_flux_example():
     namespace = runpy.run_path(str(_EXAMPLES / "reverse_osmosis_seawater_flux.py"))
     d = namespace["seawater_ro_performance"]()

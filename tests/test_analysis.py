@@ -25749,6 +25749,47 @@ def test_weibull_reliability_hazard_rate_and_mean_life():
         weibull_mean_life(characteristic_life=_q("1000 N"), shape=2.0)
 
 
+def test_hall_petch_yield_strength_and_grain_size_inverse():
+    from anvilate.analysis import (
+        hall_petch_grain_diameter_for_yield,
+        hall_petch_yield_strength,
+    )
+
+    # σ_y = σ_0 + k*d^-0.5; 50 MPa + 0.74 MPa*sqrt(m) at 10 um -> ~284 MPa.
+    sigma_0 = _q("50 MPa")
+    k = _q("0.74 MPa*m**0.5")
+    sy = hall_petch_yield_strength(
+        friction_stress=sigma_0, strengthening_coefficient=k, grain_diameter=_q("10 um")
+    )
+    expected = 50e6 + 0.74e6 * (10e-6) ** -0.5
+    assert sy.to("Pa").magnitude == pytest.approx(expected, rel=1e-9)
+    assert sy.to("MPa").magnitude == pytest.approx(284.0, abs=0.5)
+
+    # Finer grain -> higher strength (the d^-1/2 term grows).
+    sy_fine = hall_petch_yield_strength(
+        friction_stress=sigma_0, strengthening_coefficient=k, grain_diameter=_q("1 um")
+    )
+    assert sy_fine.to("MPa").magnitude > sy.to("MPa").magnitude
+
+    # The design inverse round-trips the grain size.
+    d = hall_petch_grain_diameter_for_yield(
+        friction_stress=sigma_0, strengthening_coefficient=k, yield_strength=sy
+    )
+    assert d.to("um").magnitude == pytest.approx(10.0, rel=1e-6)
+
+    # A target at or below the friction stress is impossible; dimensions checked.
+    with pytest.raises(ValueError, match="must exceed friction_stress"):
+        hall_petch_grain_diameter_for_yield(
+            friction_stress=sigma_0, strengthening_coefficient=k, yield_strength=_q("40 MPa")
+        )
+    with pytest.raises(ValueError, match="strengthening_coefficient must be a"):
+        hall_petch_yield_strength(
+            friction_stress=sigma_0,
+            strengthening_coefficient=_q("0.74 MPa"),
+            grain_diameter=_q("10 um"),
+        )
+
+
 def test_reliability_availability_and_series_parallel_systems():
     from anvilate.analysis import (
         parallel_system_reliability,

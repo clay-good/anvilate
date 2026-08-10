@@ -387,6 +387,9 @@ modules:
   V_H = I·B/(n·q·t) a field induces across a biased sample, the field a Hall sensor reports
   from it (B = V_H·n·q·t/I), and the semiconductor carrier density a Hall measurement reveals
   (n = I·B/(q·t·V_H))
+- :mod:`~anvilate.analysis.hall_petch` — grain-size strengthening: the Hall-Petch yield strength
+  σ_y = σ_0 + k·d^(−1/2) that grain refinement produces, and the grain size d = [k/(σ_y−σ_0)]²
+  a target strength requires
 - :mod:`~anvilate.analysis.energy_storage` — battery/UPS backup sizing: the bank
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, the runtime
   a given bank delivers, and the round-trip efficiency and the delivered energy
@@ -1837,6 +1840,10 @@ from .hall_effect import (
     hall_carrier_density,
     hall_flux_density_from_voltage,
     hall_voltage,
+)
+from .hall_petch import (
+    hall_petch_grain_diameter_for_yield,
+    hall_petch_yield_strength,
 )
 from .hvac_duct import (
     circular_equivalent_diameter,
@@ -3890,6 +3897,8 @@ __all__ = [
     "hall_voltage",
     "hall_flux_density_from_voltage",
     "hall_carrier_density",
+    "hall_petch_yield_strength",
+    "hall_petch_grain_diameter_for_yield",
     "LoadDuration",
     "nds_load_duration_factor",
     "nds_adjusted_design_value",
