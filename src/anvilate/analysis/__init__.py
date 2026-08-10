@@ -31,6 +31,8 @@ modules:
 - :mod:`~anvilate.analysis.chemical_equilibrium` — reaction thermodynamics: the Gibbs free energy
   ΔG = ΔH − T·ΔS (spontaneity), the equilibrium constant K = exp(−ΔG/RT), and the van 't Hoff shift
   K₂/K₁ = exp(−(ΔH/R)(1/T₂−1/T₁)) of K with temperature
+- :mod:`~anvilate.analysis.acid_base` — acid-base buffers: the Henderson-Hasselbalch buffer pH
+  pH = pKa + log₁₀([A⁻]/[HA]), and the base-to-acid ratio [A⁻]/[HA] = 10^(pH−pKa) a target pH needs
 - :mod:`~anvilate.analysis.circular_motion` — uniform circular motion: the centripetal acceleration
   v²/r, the centripetal force m·v²/r, and the maximum no-slip cornering speed √(µ·g·r) on a flat
   curve
@@ -920,6 +922,10 @@ from __future__ import annotations
 from .accumulator import (
     accumulator_size_for_volume,
     accumulator_usable_volume,
+)
+from .acid_base import (
+    buffer_ratio_for_ph,
+    henderson_hasselbalch_ph,
 )
 from .acoustics import (
     closed_pipe_resonance_frequency,
@@ -3138,6 +3144,8 @@ __all__ = [
     "hydraulic_press_input_stroke",
     "accumulator_size_for_volume",
     "accumulator_usable_volume",
+    "henderson_hasselbalch_ph",
+    "buffer_ratio_for_ph",
     "inverse_square_attenuation",
     "mass_law_transmission_loss",
     "room_constant",

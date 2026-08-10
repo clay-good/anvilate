@@ -480,6 +480,15 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_acetate_buffer_ph_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "acetate_buffer_ph.py"))
+    d = namespace["acetate_buffer"]()
+    # pH = 4.76 + log10(0.20/0.10) = 5.06.
+    assert d["buffer_ph"] == pytest.approx(5.061, abs=0.005)
+    # ratio for pH 5.00 = 10^(5.00-4.76) ~ 1.74.
+    assert d["ratio_for_target_ph"] == pytest.approx(1.738, abs=0.01)
+
+
 def test_hall_petch_grain_refinement_example():
     namespace = runpy.run_path(str(_EXAMPLES / "hall_petch_grain_refinement.py"))
     d = namespace["grain_refinement_target"]()

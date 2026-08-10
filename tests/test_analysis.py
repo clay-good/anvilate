@@ -25749,6 +25749,54 @@ def test_weibull_reliability_hazard_rate_and_mean_life():
         weibull_mean_life(characteristic_life=_q("1000 N"), shape=2.0)
 
 
+def test_acid_base_henderson_hasselbalch_ph_and_buffer_ratio():
+    from math import log10
+
+    from anvilate.analysis import buffer_ratio_for_ph, henderson_hasselbalch_ph
+
+    # pH = pKa + log10([A-]/[HA]); 4.76 + log10(0.2/0.1) = 5.06.
+    ph = henderson_hasselbalch_ph(
+        pka=4.76,
+        conjugate_base_concentration=_q("0.2 mol/L"),
+        weak_acid_concentration=_q("0.1 mol/L"),
+    )
+    assert ph == pytest.approx(4.76 + log10(2.0), rel=1e-12)
+    assert isinstance(ph, float)
+
+    # Equal concentrations give pH = pKa (maximum buffering).
+    assert henderson_hasselbalch_ph(
+        pka=4.76,
+        conjugate_base_concentration=_q("0.1 mol/L"),
+        weak_acid_concentration=_q("0.1 mol/L"),
+    ) == pytest.approx(4.76, rel=1e-12)
+
+    # Only the ratio matters: any consistent unit gives the same pH.
+    assert henderson_hasselbalch_ph(
+        pka=4.76,
+        conjugate_base_concentration=_q("20 mmol/L"),
+        weak_acid_concentration=_q("10 mmol/L"),
+    ) == pytest.approx(ph, rel=1e-12)
+
+    # The inverse ratio round-trips: [A-]/[HA] = 10^(pH - pKa).
+    r = buffer_ratio_for_ph(pka=4.76, ph=ph)
+    assert r == pytest.approx(2.0, rel=1e-9)
+    # A pH one unit above the pKa needs a 10:1 base-to-acid ratio.
+    assert buffer_ratio_for_ph(pka=4.76, ph=5.76) == pytest.approx(10.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="weak_acid_concentration must be positive"):
+        henderson_hasselbalch_ph(
+            pka=4.76,
+            conjugate_base_concentration=_q("0.2 mol/L"),
+            weak_acid_concentration=_q("0 mol/L"),
+        )
+    with pytest.raises(ValueError, match="conjugate_base_concentration must be a"):
+        henderson_hasselbalch_ph(
+            pka=4.76,
+            conjugate_base_concentration=_q("0.2 mol"),
+            weak_acid_concentration=_q("0.1 mol/L"),
+        )
+
+
 def test_hall_petch_yield_strength_and_grain_size_inverse():
     from anvilate.analysis import (
         hall_petch_grain_diameter_for_yield,

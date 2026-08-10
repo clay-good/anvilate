@@ -7,6 +7,8 @@
 # replacement for at least one minor release) before deleting its line.
 accumulator.accumulator_size_for_volume
 accumulator.accumulator_usable_volume
+acid_base.henderson_hasselbalch_ph
+acid_base.buffer_ratio_for_ph
 acoustics.inverse_square_attenuation
 acoustics.mass_law_transmission_loss
 acoustics.room_constant
