@@ -14015,6 +14015,45 @@ def test_hydro_turbine_power_net_head_and_flow_inverse():
         hydro_net_head(gross_head=_q("10 m"), head_loss=_q("10 m"))
 
 
+def test_hydro_power_tidal_barrage_energy_and_average_power():
+    from anvilate.analysis import tidal_average_power, tidal_barrage_energy
+
+    # E = 0.5*rho*g*A*h^2; 10 km^2 basin, 8 m range, seawater -> ~894 MWh.
+    e = tidal_barrage_energy(
+        basin_area=_q("10 km**2"), tidal_range=_q("8 m"), water_density=_q("1025 kg/m**3")
+    )
+    assert e.to("J").magnitude == pytest.approx(0.5 * 1025 * 9.80665 * 10e6 * 8**2, rel=1e-9)
+    assert e.to("MWh").magnitude == pytest.approx(893.5, abs=1.0)
+
+    # Yield scales with the square of the tidal range: double the range -> 4x the energy.
+    e_big = tidal_barrage_energy(
+        basin_area=_q("10 km**2"), tidal_range=_q("16 m"), water_density=_q("1025 kg/m**3")
+    )
+    assert e_big.to("J").magnitude / e.to("J").magnitude == pytest.approx(4.0, rel=1e-9)
+
+    # Average power spreads one tide over the semidiurnal period (~12.42 h).
+    p = tidal_average_power(
+        basin_area=_q("10 km**2"),
+        tidal_range=_q("8 m"),
+        tidal_period=_q("12.42 hour"),
+        water_density=_q("1025 kg/m**3"),
+    )
+    assert p.to("W").magnitude == pytest.approx(e.to("J").magnitude / (12.42 * 3600), rel=1e-9)
+    assert p.to("MW").magnitude == pytest.approx(72.0, abs=1.0)
+
+    with pytest.raises(ValueError, match="basin_area, tidal_range, and water_density"):
+        tidal_barrage_energy(
+            basin_area=_q("0 km**2"), tidal_range=_q("8 m"), water_density=_q("1025 kg/m**3")
+        )
+    with pytest.raises(ValueError, match="tidal_period must be positive"):
+        tidal_average_power(
+            basin_area=_q("10 km**2"),
+            tidal_range=_q("8 m"),
+            tidal_period=_q("0 s"),
+            water_density=_q("1025 kg/m**3"),
+        )
+
+
 def test_solar_thermal_collector_efficiency_useful_heat_and_stagnation():
     from anvilate.analysis import (
         collector_stagnation_temperature,

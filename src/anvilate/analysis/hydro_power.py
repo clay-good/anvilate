@@ -27,6 +27,8 @@ __all__ = [
     "hydro_flow_for_power",
     "hydro_net_head",
     "hydro_turbine_power",
+    "tidal_average_power",
+    "tidal_barrage_energy",
 ]
 
 
@@ -111,6 +113,59 @@ def hydro_flow_for_power(
         raise ValueError(f"overall_efficiency must be in (0, 1]; got {overall_efficiency}")
     q = p / (rho * _GRAVITY * h * overall_efficiency)
     return Quantity(magnitude=q, unit="m**3/s")
+
+
+def tidal_barrage_energy(
+    *,
+    basin_area: Quantity,
+    tidal_range: Quantity,
+    water_density: Quantity,
+) -> Quantity:
+    """The tidal-barrage energy per tide, E = ½·ρ·g·A·h².
+
+    The gravitational potential energy captured when a barrage traps a basin of water over one tidal
+    cycle: from the ``basin_area`` A, the ``tidal_range`` h (high-water minus low-water level), and
+    the ``water_density`` ρ (~1025 kg/m³ for seawater), E = ½·ρ·g·A·h². The trapped water sits on
+    average h/2 above the drained level, and its weight ρ·g·A·h gives the ½·ρ·g·A·h² — so the yield
+    scales with the *square* of the tidal range, which is why only high-range estuaries are viable.
+    Turbine and cycle efficiency (typically ~0.25–0.4 of this ideal) are the caller's to apply.
+    Returns the ideal energy per tide in J.
+    """
+    _check(basin_area, "[length]**2", "basin_area")
+    _check(tidal_range, "[length]", "tidal_range")
+    _check(water_density, "[mass]/[length]**3", "water_density")
+    a = basin_area.to("m**2").magnitude
+    h = tidal_range.to("m").magnitude
+    rho = water_density.to("kg/m**3").magnitude
+    if a <= 0 or h <= 0 or rho <= 0:
+        raise ValueError("basin_area, tidal_range, and water_density must be positive")
+    return Quantity(magnitude=0.5 * rho * _GRAVITY * a * h * h, unit="J")
+
+
+def tidal_average_power(
+    *,
+    basin_area: Quantity,
+    tidal_range: Quantity,
+    tidal_period: Quantity,
+    water_density: Quantity,
+) -> Quantity:
+    """The average tidal-barrage power, P = E/T = ½·ρ·g·A·h²/T.
+
+    The ideal average power a barrage delivers, spreading one tide's energy
+    (:func:`tidal_barrage_energy`) over the ``tidal_period`` T (about 12.42 h for the semidiurnal
+    tide): P = ½·ρ·g·A·h²/T, from the ``basin_area`` A, the ``tidal_range`` h, and the
+    ``water_density`` ρ. It is the ideal ceiling for a single-basin ebb-generation scheme; the real
+    output is a fraction of it after turbine, generator, and cycle losses. Returns the average power
+    in W.
+    """
+    _check(tidal_period, "[time]", "tidal_period")
+    period = tidal_period.to("s").magnitude
+    if period <= 0:
+        raise ValueError("tidal_period must be positive")
+    energy = tidal_barrage_energy(
+        basin_area=basin_area, tidal_range=tidal_range, water_density=water_density
+    )
+    return Quantity(magnitude=energy.to("J").magnitude / period, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

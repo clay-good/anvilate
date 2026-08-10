@@ -776,6 +776,8 @@ hydraulic_press.hydraulic_press_input_stroke
 hydro_power.hydro_net_head
 hydro_power.hydro_turbine_power
 hydro_power.hydro_flow_for_power
+hydro_power.tidal_barrage_energy
+hydro_power.tidal_average_power
 ideal_gas.ideal_gas_pressure
 ideal_gas.ideal_gas_volume
 ideal_gas.ideal_gas_moles

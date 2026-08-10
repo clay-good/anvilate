@@ -439,7 +439,9 @@ modules:
 - :mod:`~anvilate.analysis.hydro_power` — hydro-turbine power: the net head a
   turbine sees after penstock loss (H_net = H_gross − h_loss), the P = ρ·g·Q·H·η
   a plant delivers (linear in flow and head), and the flow a target output needs
-  (Q = P/(ρ·g·H·η)) — completes the renewable set with solar_pv/solar_thermal/wind_power
+  (Q = P/(ρ·g·H·η)); plus tidal-barrage energy E = ½·ρ·g·A·h² per tide (scaling with the *square*
+  of the tidal range) and its average power E/T — completes the renewable set with
+  solar_pv/solar_thermal/wind_power
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
@@ -1887,6 +1889,8 @@ from .hydro_power import (
     hydro_flow_for_power,
     hydro_net_head,
     hydro_turbine_power,
+    tidal_average_power,
+    tidal_barrage_energy,
 )
 from .ideal_gas import (
     ideal_gas_moles,
@@ -3147,6 +3151,8 @@ __all__ = [
     "hydro_net_head",
     "hydro_turbine_power",
     "hydro_flow_for_power",
+    "tidal_barrage_energy",
+    "tidal_average_power",
     "ideal_gas_pressure",
     "ideal_gas_volume",
     "ideal_gas_moles",
