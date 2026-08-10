@@ -470,6 +470,9 @@ modules:
 - :mod:`~anvilate.analysis.vacuum_electronics` — vacuum electron emission: the Richardson-Dushman
   saturation current J = A·T²·exp(−W/kT), the Schottky field lowering ΔW = √(e³·E/(4π·ε₀)) of the
   work function, and the Child-Langmuir space-charge-limited current J = (4/9)·ε₀·√(2e/m)·V^{3/2}/d²
+- :mod:`~anvilate.analysis.vapor_liquid_equilibrium` — ideal (Raoult's-law) VLE for distillation:
+  the partial pressure p_i = x_i·P_i*, the relative volatility α = P_light*/P_heavy*, and the binary
+  equilibrium vapor composition y = α·x/(1 + (α−1)·x)
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -2646,6 +2649,11 @@ from .vacuum_electronics import (
     schottky_barrier_lowering,
     thermionic_current_density,
 )
+from .vapor_liquid_equilibrium import (
+    equilibrium_vapor_mole_fraction,
+    raoult_partial_pressure,
+    relative_volatility,
+)
 from .vehicle import (
     grade_resistance_force,
     rolling_resistance_force,
@@ -2811,6 +2819,9 @@ __all__ = [
     "thermionic_current_density",
     "schottky_barrier_lowering",
     "child_langmuir_current_density",
+    "raoult_partial_pressure",
+    "relative_volatility",
+    "equilibrium_vapor_mole_fraction",
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",

@@ -24289,6 +24289,45 @@ def test_ideal_gas_law_pressure_volume_and_moles():
         )
 
 
+def test_vapor_liquid_equilibrium_raoult_relative_volatility_and_vapor_composition():
+    from anvilate.analysis import (
+        equilibrium_vapor_mole_fraction,
+        raoult_partial_pressure,
+        relative_volatility,
+    )
+
+    # Raoult: p_i = x_i*P_i*; 0.4 * 178 kPa = 71.2 kPa.
+    p = raoult_partial_pressure(liquid_mole_fraction=0.4, pure_vapor_pressure=_q("178 kPa"))
+    assert p.to("kPa").magnitude == pytest.approx(0.4 * 178, rel=1e-9)
+
+    # Relative volatility α = P_light*/P_heavy*; 178/74.
+    alpha = relative_volatility(
+        light_vapor_pressure=_q("178 kPa"), heavy_vapor_pressure=_q("74 kPa")
+    )
+    assert alpha == pytest.approx(178 / 74, rel=1e-12)
+    assert isinstance(alpha, float)
+
+    # Equilibrium vapor y = α*x/(1+(α-1)*x); vapor is richer in the light component.
+    y = equilibrium_vapor_mole_fraction(liquid_mole_fraction=0.4, relative_volatility=alpha)
+    assert y == pytest.approx(alpha * 0.4 / (1 + (alpha - 1) * 0.4), rel=1e-12)
+    assert y > 0.4
+
+    # Endpoints are fixed points (x=0 -> y=0, x=1 -> y=1) for any α.
+    assert equilibrium_vapor_mole_fraction(liquid_mole_fraction=0.0, relative_volatility=3.0) == 0.0
+    assert equilibrium_vapor_mole_fraction(liquid_mole_fraction=1.0, relative_volatility=3.0) == 1.0
+    # α = 1 means no separation: y = x.
+    assert equilibrium_vapor_mole_fraction(
+        liquid_mole_fraction=0.4, relative_volatility=1.0
+    ) == pytest.approx(0.4, rel=1e-12)
+
+    with pytest.raises(ValueError, match="liquid_mole_fraction must be in"):
+        raoult_partial_pressure(liquid_mole_fraction=1.5, pure_vapor_pressure=_q("178 kPa"))
+    with pytest.raises(ValueError, match="vapor pressures must be positive"):
+        relative_volatility(light_vapor_pressure=_q("0 kPa"), heavy_vapor_pressure=_q("74 kPa"))
+    with pytest.raises(ValueError, match="light_vapor_pressure must be a"):
+        relative_volatility(light_vapor_pressure=_q("178 kg"), heavy_vapor_pressure=_q("74 kPa"))
+
+
 def test_packed_bed_ergun_pressure_drop_and_void_fraction():
     from anvilate.analysis import ergun_pressure_drop, packed_bed_void_fraction
 

@@ -480,6 +480,18 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_distillation_benzene_toluene_equilibrium_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "distillation_benzene_toluene_equilibrium.py"))
+    d = namespace["benzene_toluene_stage"]()
+    # α = 178/74 ≈ 2.41.
+    assert d["relative_volatility"] == pytest.approx(178 / 74, rel=1e-9)
+    # Raoult: 0.40 * 178 = 71.2 kPa.
+    assert d["benzene_partial_pressure_kpa"] == pytest.approx(71.2, rel=1e-6)
+    # Vapor is richer in benzene than the 0.40 liquid.
+    assert d["vapor_benzene_fraction"] == pytest.approx(0.616, abs=0.01)
+    assert d["vapor_benzene_fraction"] > 0.40
+
+
 def test_packed_bed_reactor_pressure_drop_example():
     namespace = runpy.run_path(str(_EXAMPLES / "packed_bed_reactor_pressure_drop.py"))
     d = namespace["packed_bed_drop"]()
