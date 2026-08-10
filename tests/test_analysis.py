@@ -16611,6 +16611,47 @@ def test_acoustic_helmholtz_and_pipe_resonances():
         open_pipe_resonance_frequency(speed_of_sound=_q("343 m"), pipe_length=_q("1 m"))
 
 
+def test_acoustics_vibrating_string_frequency_and_wave_speed():
+    from math import sqrt
+
+    from anvilate.analysis import string_wave_speed, vibrating_string_frequency
+
+    # High-E guitar string: T ~ 71.2 N, mu ~ 3.09e-4 kg/m, L = 0.648 m -> ~329.6 Hz.
+    tension = _q("71.2 N")
+    mu = Quantity(magnitude=3.09e-4, unit="kg/m")
+    length = _q("0.648 m")
+
+    v = string_wave_speed(tension=tension, linear_mass_density=mu)
+    assert v.to("m/s").magnitude == pytest.approx(sqrt(71.2 / 3.09e-4), rel=1e-9)
+
+    f1 = vibrating_string_frequency(tension=tension, linear_mass_density=mu, string_length=length)
+    assert f1.to("Hz").magnitude == pytest.approx(sqrt(71.2 / 3.09e-4) / (2 * 0.648), rel=1e-9)
+
+    # Fundamental equals v/(2L); nth harmonic is n times the fundamental.
+    assert f1.to("Hz").magnitude == pytest.approx(v.to("m/s").magnitude / (2 * 0.648), rel=1e-9)
+    f3 = vibrating_string_frequency(
+        tension=tension, linear_mass_density=mu, string_length=length, mode=3
+    )
+    assert f3.to("Hz").magnitude == pytest.approx(3 * f1.to("Hz").magnitude, rel=1e-9)
+
+    # Quadrupling the tension doubles the pitch (f ∝ sqrt(T)).
+    f_tight = vibrating_string_frequency(
+        tension=_q("284.8 N"), linear_mass_density=mu, string_length=length
+    )
+    assert f_tight.to("Hz").magnitude == pytest.approx(2 * f1.to("Hz").magnitude, rel=1e-9)
+
+    with pytest.raises(ValueError, match="tension must be positive"):
+        string_wave_speed(tension=_q("0 N"), linear_mass_density=mu)
+    with pytest.raises(ValueError, match="mode must be an integer of at least 1"):
+        vibrating_string_frequency(
+            tension=tension, linear_mass_density=mu, string_length=length, mode=0
+        )
+    with pytest.raises(ValueError, match="linear_mass_density must be a"):
+        vibrating_string_frequency(
+            tension=tension, linear_mass_density=_q("3.09e-4 kg"), string_length=length
+        )
+
+
 def test_doppler_shift_velocity_inverse_and_mach_cone():
     from math import asin, degrees
 

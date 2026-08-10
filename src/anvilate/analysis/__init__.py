@@ -911,6 +911,8 @@ from .acoustics import (
     sound_level_sum,
     sound_power_level_from_intensity,
     sound_pressure_from_power_level,
+    string_wave_speed,
+    vibrating_string_frequency,
 )
 from .adhesive import (
     cylindrical_bond_axial_capacity,
@@ -3059,6 +3061,8 @@ __all__ = [
     "helmholtz_resonator_frequency",
     "open_pipe_resonance_frequency",
     "closed_pipe_resonance_frequency",
+    "string_wave_speed",
+    "vibrating_string_frequency",
     "doppler_shifted_frequency",
     "doppler_velocity_from_shift",
     "mach_cone_angle",
