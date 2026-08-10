@@ -15786,6 +15786,45 @@ def test_carnot_efficiency_and_heat_engine_second_law():
         heat_engine_second_law_efficiency(thermal_efficiency=0.80, carnot_efficiency=eta_c)
 
 
+def test_power_cycles_bsfc_and_brake_thermal_efficiency():
+    from anvilate.analysis import (
+        brake_specific_fuel_consumption,
+        brake_thermal_efficiency,
+    )
+
+    # BSFC = m_dot/P; 6.5 g/s at 100 kW -> 6.5e-8 kg/J = 234 g/kWh.
+    bsfc = brake_specific_fuel_consumption(fuel_mass_flow=_q("6.5 g/s"), brake_power=_q("100 kW"))
+    assert bsfc.to("kg/J").magnitude == pytest.approx(0.0065 / 100000, rel=1e-9)
+    assert bsfc.to("g/(kW*hour)").magnitude == pytest.approx(234.0, rel=1e-6)
+
+    # Brake thermal efficiency η = P/(m_dot*LHV); 100 kW, 6.5 g/s, 44 MJ/kg -> ~0.35.
+    eta = brake_thermal_efficiency(
+        brake_power=_q("100 kW"),
+        fuel_mass_flow=_q("6.5 g/s"),
+        fuel_heating_value=_q("44 MJ/kg"),
+    )
+    assert eta == pytest.approx(100000 / (0.0065 * 44e6), rel=1e-9)
+    assert eta == pytest.approx(0.3497, abs=1e-3)
+
+    # Identity η = 1/(BSFC*LHV).
+    assert eta == pytest.approx(1.0 / (bsfc.to("kg/J").magnitude * 44e6), rel=1e-9)
+
+    with pytest.raises(ValueError, match="brake_power must be positive"):
+        brake_specific_fuel_consumption(fuel_mass_flow=_q("6.5 g/s"), brake_power=_q("0 W"))
+    with pytest.raises(ValueError, match=r"η > 1 is impossible"):
+        brake_thermal_efficiency(
+            brake_power=_q("100 kW"),
+            fuel_mass_flow=_q("0.001 g/s"),
+            fuel_heating_value=_q("44 MJ/kg"),
+        )
+    with pytest.raises(ValueError, match="fuel_heating_value must be a"):
+        brake_thermal_efficiency(
+            brake_power=_q("100 kW"),
+            fuel_mass_flow=_q("6.5 g/s"),
+            fuel_heating_value=_q("44 MJ"),
+        )
+
+
 def test_exergy_of_heat_flow_exergy_and_gouy_stodola():
     from anvilate.analysis import (
         exergy_of_heat,

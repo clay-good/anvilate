@@ -2116,6 +2116,8 @@ from .polarization import (
     unpolarized_transmitted_intensity,
 )
 from .power_cycles import (
+    brake_specific_fuel_consumption,
+    brake_thermal_efficiency,
     brayton_cycle_efficiency,
     carnot_efficiency,
     diesel_cycle_efficiency,
@@ -3883,6 +3885,8 @@ __all__ = [
     "brayton_cycle_efficiency",
     "carnot_efficiency",
     "heat_engine_second_law_efficiency",
+    "brake_specific_fuel_consumption",
+    "brake_thermal_efficiency",
     "lead_angle",
     "power_screw_raise_torque",
     "power_screw_raise_load",

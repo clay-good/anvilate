@@ -27,6 +27,8 @@ from __future__ import annotations
 from ..units import Quantity
 
 __all__ = [
+    "brake_specific_fuel_consumption",
+    "brake_thermal_efficiency",
     "brayton_cycle_efficiency",
     "carnot_efficiency",
     "diesel_cycle_efficiency",
@@ -139,6 +141,69 @@ def heat_engine_second_law_efficiency(
             "thermal_efficiency cannot exceed the Carnot efficiency (that would beat Carnot)"
         )
     return thermal_efficiency / carnot_efficiency
+
+
+def brake_specific_fuel_consumption(
+    *,
+    fuel_mass_flow: Quantity,
+    brake_power: Quantity,
+) -> Quantity:
+    """The brake specific fuel consumption, BSFC = m_dot_fuel / P_brake.
+
+    How much fuel a real engine burns per unit of useful work: the ``fuel_mass_flow`` m_dot_fuel
+    divided by the ``brake_power`` P delivered at the shaft, BSFC = m_dot_fuel/P. It is the standard
+    field measure of engine economy — a modern diesel runs ~200 g/kWh, a gasoline engine ~250-350,
+    and lower is better. Because it folds the fuel's energy content and the engine's efficiency into
+    one number, it is what a dyno reports and what :func:`brake_thermal_efficiency` converts into a
+    true efficiency once the fuel's heating value is known. Returns the BSFC in kg/J (convert to the
+    familiar g/kWh with ``.to("g/(kW*hour)")``).
+    """
+    _check(fuel_mass_flow, "[mass]/[time]", "fuel_mass_flow")
+    _check(brake_power, "[power]", "brake_power")
+    m_dot = fuel_mass_flow.to("kg/s").magnitude
+    p = brake_power.to("W").magnitude
+    if m_dot < 0:
+        raise ValueError("fuel_mass_flow must be non-negative")
+    if p <= 0:
+        raise ValueError("brake_power must be positive")
+    return Quantity(magnitude=m_dot / p, unit="kg/J")
+
+
+def brake_thermal_efficiency(
+    *,
+    brake_power: Quantity,
+    fuel_mass_flow: Quantity,
+    fuel_heating_value: Quantity,
+) -> float:
+    """The brake thermal efficiency, η = P_brake / (m_dot_fuel · LHV).
+
+    The fraction of the fuel's chemical energy a real engine turns into shaft work: the
+    ``brake_power`` P over the fuel energy burned per unit time, m_dot_fuel·LHV, from the
+    ``fuel_mass_flow`` m_dot_fuel and the fuel's ``fuel_heating_value`` LHV (lower heating value,
+    ~44 MJ/kg for gasoline or diesel). It equals 1/(BSFC·LHV) with the BSFC of
+    :func:`brake_specific_fuel_consumption`, and is the measured efficiency to feed
+    :func:`heat_engine_second_law_efficiency` — distinct from the ideal air-standard cycle
+    efficiencies (Otto/Diesel/Brayton), which are the ceiling this works toward. Real engines reach
+    ~0.30-0.45. Returns the dimensionless efficiency (0 to 1).
+    """
+    _check(brake_power, "[power]", "brake_power")
+    _check(fuel_mass_flow, "[mass]/[time]", "fuel_mass_flow")
+    _check(fuel_heating_value, "[energy]/[mass]", "fuel_heating_value")
+    p = brake_power.to("W").magnitude
+    m_dot = fuel_mass_flow.to("kg/s").magnitude
+    lhv = fuel_heating_value.to("J/kg").magnitude
+    if p <= 0:
+        raise ValueError("brake_power must be positive")
+    if m_dot <= 0:
+        raise ValueError("fuel_mass_flow must be positive")
+    if lhv <= 0:
+        raise ValueError("fuel_heating_value must be positive")
+    eta = p / (m_dot * lhv)
+    if eta > 1.0:
+        raise ValueError(
+            "brake_power exceeds the fuel energy rate (η > 1 is impossible); check inputs"
+        )
+    return eta
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
