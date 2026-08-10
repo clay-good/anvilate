@@ -480,6 +480,17 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_reactor_pfr_vs_cstr_conversion_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "reactor_pfr_vs_cstr_conversion.py"))
+    d = namespace["reactor_conversion"]()
+    # Da = k*tau = 0.5 * 4 = 2.
+    assert d["damkohler_number"] == pytest.approx(2.0, rel=1e-9)
+    # PFR X = 1 - exp(-2) ~ 0.865; CSTR X = 2/3 ~ 0.667. PFR out-converts CSTR.
+    assert d["pfr_conversion"] == pytest.approx(0.8646647, abs=1e-6)
+    assert d["cstr_conversion"] == pytest.approx(2.0 / 3.0, rel=1e-9)
+    assert d["pfr_conversion"] > d["cstr_conversion"]
+
+
 def test_clausius_clapeyron_altitude_boiling_example():
     namespace = runpy.run_path(str(_EXAMPLES / "clausius_clapeyron_altitude_boiling.py"))
     a = namespace["altitude_boiling"]()

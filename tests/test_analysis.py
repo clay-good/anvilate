@@ -24225,6 +24225,42 @@ def test_ideal_gas_law_pressure_volume_and_moles():
         )
 
 
+def test_reactor_damkohler_and_first_order_conversions():
+    from math import exp
+
+    from anvilate.analysis import (
+        cstr_conversion_first_order,
+        damkohler_number_first_order,
+        pfr_conversion_first_order,
+    )
+
+    # Da = k*tau; 0.5 /s over 4 s -> 2.
+    da = damkohler_number_first_order(rate_constant=_q("0.5 1/s"), residence_time=_q("4 s"))
+    assert da == pytest.approx(2.0, rel=1e-12)
+
+    # PFR X = 1 - exp(-Da); CSTR X = Da/(1+Da). PFR converts more at the same Da.
+    x_pfr = pfr_conversion_first_order(damkohler_number=da)
+    x_cstr = cstr_conversion_first_order(damkohler_number=da)
+    assert x_pfr == pytest.approx(1 - exp(-2.0), rel=1e-12)
+    assert x_cstr == pytest.approx(2.0 / 3.0, rel=1e-12)
+    assert x_pfr > x_cstr
+
+    # Both conversions vanish at Da = 0 and approach 1 as Da grows.
+    assert pfr_conversion_first_order(damkohler_number=0.0) == 0.0
+    assert cstr_conversion_first_order(damkohler_number=0.0) == 0.0
+    assert pfr_conversion_first_order(damkohler_number=1e6) == pytest.approx(1.0, abs=1e-9)
+    assert cstr_conversion_first_order(damkohler_number=1e6) == pytest.approx(1.0, abs=1e-5)
+
+    # Units minutes work; a 1 /min constant over 2 min gives Da = 2 as well.
+    da_min = damkohler_number_first_order(rate_constant=_q("1 1/min"), residence_time=_q("2 min"))
+    assert da_min == pytest.approx(2.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="rate_constant must be a"):
+        damkohler_number_first_order(rate_constant=_q("0.5 s"), residence_time=_q("4 s"))
+    with pytest.raises(ValueError, match="damkohler_number must be non-negative"):
+        pfr_conversion_first_order(damkohler_number=-1.0)
+
+
 def test_real_gas_compressibility_molar_volume_and_van_der_waals():
     from anvilate.analysis import (
         compressibility_factor,

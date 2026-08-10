@@ -245,6 +245,9 @@ modules:
 - :mod:`~anvilate.analysis.real_gas` — real (non-ideal) gas behaviour beyond PV = nRT: the
   compressibility factor Z = P·v̄/(R·T) that measures the deviation, the real molar volume
   v̄ = Z·R·T/P it implies, and the Van der Waals equation P = R·T/(v̄ − b) − a/v̄²
+- :mod:`~anvilate.analysis.reactor` — isothermal first-order reactor design: the Damköhler number
+  Da = k·τ, and the conversions it sets for a plug-flow reactor X = 1 − exp(−Da) and a
+  stirred-tank reactor X = Da/(1 + Da)
 - :mod:`~anvilate.analysis.kinetic_theory` — kinetic theory of gases: the rms molecular speed
   √(3RT/M), the mean molecular speed √(8RT/(πM)), and the mean free path k·T/(√2·π·d²·P)
   between collisions — the molecular picture behind effusion, diffusion, and rarefied flow
@@ -2235,6 +2238,11 @@ from .reactive_circuit import (
     rc_time_constant,
     rl_time_constant,
 )
+from .reactor import (
+    cstr_conversion_first_order,
+    damkohler_number_first_order,
+    pfr_conversion_first_order,
+)
 from .real_gas import (
     compressibility_factor,
     real_gas_molar_volume,
@@ -2797,6 +2805,9 @@ __all__ = [
     "rc_time_constant",
     "rl_time_constant",
     "rc_cutoff_frequency",
+    "damkohler_number_first_order",
+    "pfr_conversion_first_order",
+    "cstr_conversion_first_order",
     "compressibility_factor",
     "real_gas_molar_volume",
     "van_der_waals_pressure",

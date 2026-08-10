@@ -932,6 +932,9 @@ reactive_circuit.rl_time_constant
 reactive_circuit.parallel_plate_capacitance
 reactive_circuit.capacitor_charge
 reactive_circuit.parallel_plate_field
+reactor.damkohler_number_first_order
+reactor.pfr_conversion_first_order
+reactor.cstr_conversion_first_order
 real_gas.compressibility_factor
 real_gas.real_gas_molar_volume
 real_gas.van_der_waals_pressure
