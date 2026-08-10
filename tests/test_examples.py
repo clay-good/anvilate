@@ -480,6 +480,15 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_vacuum_chamber_pump_down_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "vacuum_chamber_pump_down.py"))
+    d = namespace["chamber_pump_down"]()
+    # t = (100/10)*ln(1000/1) ~ 69 s.
+    assert d["pump_down_time_s"] == pytest.approx(69.08, abs=0.1)
+    # Q = 10 L/s * 1 mbar = 10 mbar*L/s.
+    assert d["throughput_mbar_l_per_s"] == pytest.approx(10.0, rel=1e-6)
+
+
 def test_acetate_buffer_ph_example():
     namespace = runpy.run_path(str(_EXAMPLES / "acetate_buffer_ph.py"))
     d = namespace["acetate_buffer"]()

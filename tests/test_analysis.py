@@ -25786,6 +25786,45 @@ def test_weibull_reliability_hazard_rate_and_mean_life():
         weibull_mean_life(characteristic_life=_q("1000 N"), shape=2.0)
 
 
+def test_vacuum_system_pump_down_time_and_throughput():
+    from math import log
+
+    from anvilate.analysis import vacuum_pump_down_time, vacuum_throughput
+
+    # t = (V/S)*ln(P1/P2); 100 L / 10 L/s * ln(1000/1) ~ 69 s.
+    t = vacuum_pump_down_time(
+        chamber_volume=_q("100 L"),
+        pumping_speed=_q("10 L/s"),
+        initial_pressure=_q("1000 mbar"),
+        final_pressure=_q("1 mbar"),
+    )
+    assert t.to("s").magnitude == pytest.approx(100 / 10 * log(1000 / 1), rel=1e-9)
+    assert t.to("s").magnitude == pytest.approx(69.08, abs=0.1)
+
+    # Each further decade costs the same (V/S)*ln(10); pumping to 0.1 mbar adds one decade.
+    t2 = vacuum_pump_down_time(
+        chamber_volume=_q("100 L"),
+        pumping_speed=_q("10 L/s"),
+        initial_pressure=_q("1000 mbar"),
+        final_pressure=_q("0.1 mbar"),
+    )
+    assert (t2.to("s").magnitude - t.to("s").magnitude) == pytest.approx(10 * log(10), rel=1e-9)
+
+    # Q = S*P; 10 L/s at 1 mbar = 10 mbar*L/s.
+    q = vacuum_throughput(pumping_speed=_q("10 L/s"), pressure=_q("1 mbar"))
+    assert q.to("mbar*L/s").magnitude == pytest.approx(10.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="final_pressure must be below initial_pressure"):
+        vacuum_pump_down_time(
+            chamber_volume=_q("100 L"),
+            pumping_speed=_q("10 L/s"),
+            initial_pressure=_q("1 mbar"),
+            final_pressure=_q("1000 mbar"),
+        )
+    with pytest.raises(ValueError, match="pumping_speed must be a"):
+        vacuum_throughput(pumping_speed=_q("10 L"), pressure=_q("1 mbar"))
+
+
 def test_acid_base_henderson_hasselbalch_ph_and_buffer_ratio():
     from math import log10
 

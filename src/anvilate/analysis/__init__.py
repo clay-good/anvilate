@@ -488,6 +488,8 @@ modules:
 - :mod:`~anvilate.analysis.vacuum_electronics` — vacuum electron emission: the Richardson-Dushman
   saturation current J = A·T²·exp(−W/kT), the Schottky field lowering ΔW = √(e³·E/(4π·ε₀)) of the
   work function, and the Child-Langmuir space-charge-limited current J = (4/9)·ε₀·√(2e/m)·V^{3/2}/d²
+- :mod:`~anvilate.analysis.vacuum_system` — vacuum pump-down: the ideal pump-down time
+  t = (V/S)·ln(P₁/P₂) and the throughput Q = S·P (gas load) that sizes a pump against a leak
 - :mod:`~anvilate.analysis.vapor_liquid_equilibrium` — ideal (Raoult's-law) VLE for distillation:
   the partial pressure p_i = x_i·P_i*, the relative volatility α = P_light*/P_heavy*, the binary
   equilibrium vapor composition y = α·x/(1 + (α−1)·x), and the Fenske minimum stages
@@ -2708,6 +2710,10 @@ from .vacuum_electronics import (
     schottky_barrier_lowering,
     thermionic_current_density,
 )
+from .vacuum_system import (
+    vacuum_pump_down_time,
+    vacuum_throughput,
+)
 from .vapor_liquid_equilibrium import (
     equilibrium_vapor_mole_fraction,
     fenske_minimum_stages,
@@ -2879,6 +2885,8 @@ __all__ = [
     "thermionic_current_density",
     "schottky_barrier_lowering",
     "child_langmuir_current_density",
+    "vacuum_pump_down_time",
+    "vacuum_throughput",
     "raoult_partial_pressure",
     "relative_volatility",
     "equilibrium_vapor_mole_fraction",
