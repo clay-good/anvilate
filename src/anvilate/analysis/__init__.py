@@ -551,6 +551,9 @@ modules:
 - :mod:`~anvilate.analysis.process_capability` — SPC process capability: the potential index
   Cp = (USL−LSL)/(6σ), the centering-adjusted Cpk = min(USL−µ, µ−LSL)/(3σ), and the expected defect
   rate 10⁶·Φ(−3·Cpk) ppm a normal process yields
+- :mod:`~anvilate.analysis.measurement_uncertainty` — ISO GUM measurement uncertainty: the Type A
+  standard uncertainty of a mean u = s/√n, the combined standard uncertainty u_c = √(Σuᵢ²) from
+  independent contributions, and the expanded uncertainty U = k·u_c reported at a coverage factor
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, the inertia a speed-smoothing target requires and the thin-rim
   mass that inertia needs, the rotating
@@ -1916,6 +1919,11 @@ from .mass_transfer import (
     schmidt_number,
     sherwood_number,
     stanton_number,
+)
+from .measurement_uncertainty import (
+    combined_standard_uncertainty,
+    expanded_uncertainty,
+    standard_uncertainty_of_mean,
 )
 from .momentum import (
     average_impact_force,
@@ -3322,6 +3330,9 @@ __all__ = [
     "stanton_number",
     "colburn_j_factor",
     "chilton_colburn_mass_transfer_coefficient",
+    "standard_uncertainty_of_mean",
+    "combined_standard_uncertainty",
+    "expanded_uncertainty",
     "linear_momentum",
     "impulse",
     "average_impact_force",

@@ -23267,6 +23267,51 @@ def test_process_capability_cp_cpk_and_defect_rate():
         process_capability_index(upper_spec_limit=10.5, lower_spec_limit=9.5, process_std_dev=0.0)
 
 
+def test_gum_measurement_uncertainty_budget():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        combined_standard_uncertainty,
+        expanded_uncertainty,
+        standard_uncertainty_of_mean,
+    )
+
+    # Type A: u = s/sqrt(n); s=0.30 um over 10 readings -> 0.0949 um.
+    u_a = standard_uncertainty_of_mean(standard_deviation=_q("0.30 um"), sample_size=10)
+    assert u_a.to("um").magnitude == pytest.approx(0.30 / sqrt(10), rel=1e-9)
+    # More readings tighten the mean by only sqrt(n): 4x readings halves it.
+    u_a4 = standard_uncertainty_of_mean(standard_deviation=_q("0.30 um"), sample_size=40)
+    assert u_a4.to("um").magnitude == pytest.approx(u_a.to("um").magnitude / 2, rel=1e-9)
+
+    # Combined u_c = sqrt(sum of squares) of independent contributions.
+    u_c = combined_standard_uncertainty(u_a, _q("0.12 um"), _q("0.08 um"))
+    expected = sqrt((0.30 / sqrt(10)) ** 2 + 0.12**2 + 0.08**2)
+    assert u_c.to("um").magnitude == pytest.approx(expected, rel=1e-9)
+    assert u_c.to("um").magnitude == pytest.approx(0.173, abs=0.002)
+    # Components add in quadrature, so u_c never falls below the largest single one.
+    assert u_c.to("um").magnitude >= 0.12
+
+    # Mixed-but-compatible units combine correctly: 100 um and 0.2 mm -> sqrt(0.1^2+0.2^2) mm.
+    u_mixed = combined_standard_uncertainty(_q("100 um"), _q("0.2 mm"))
+    assert u_mixed.to("mm").magnitude == pytest.approx(sqrt(0.1**2 + 0.2**2), rel=1e-9)
+
+    # Expanded U = k*u_c; k=2 (~95%) doubles it, k=3 triples it.
+    big_u = expanded_uncertainty(combined_standard_uncertainty=u_c, coverage_factor=2.0)
+    assert big_u.to("um").magnitude == pytest.approx(2 * u_c.to("um").magnitude, rel=1e-12)
+    big_u3 = expanded_uncertainty(combined_standard_uncertainty=u_c, coverage_factor=3.0)
+    assert big_u3.to("um").magnitude == pytest.approx(1.5 * big_u.to("um").magnitude, rel=1e-12)
+
+    # Guardrails: sample size >= 1, at least one component, same dimension, positive k.
+    with pytest.raises(ValueError, match="sample_size must be an integer"):
+        standard_uncertainty_of_mean(standard_deviation=_q("0.3 um"), sample_size=0)
+    with pytest.raises(ValueError, match="at least one component"):
+        combined_standard_uncertainty()
+    with pytest.raises(ValueError, match="share a dimension"):
+        combined_standard_uncertainty(_q("0.1 mm"), _q("0.1 K"))
+    with pytest.raises(ValueError, match="coverage_factor must be positive"):
+        expanded_uncertainty(combined_standard_uncertainty=u_c, coverage_factor=0.0)
+
+
 def test_npv_benefit_cost_ratio_and_depreciation():
     from anvilate.analysis import (
         annuity_present_value,

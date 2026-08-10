@@ -502,6 +502,18 @@ def test_temperature_sensor_pt100_vs_thermistor_example():
     assert s["pt100_temperature_c"] == pytest.approx(60.0, abs=0.05)
 
 
+def test_measurement_uncertainty_gauge_block_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "measurement_uncertainty_gauge_block.py"))
+    b = namespace["uncertainty_budget"]()
+    # Type A repeatability of the mean: 0.30/sqrt(10) ~ 0.095 um.
+    assert b["type_a_um"] == pytest.approx(0.095, abs=0.002)
+    # Combined ~0.17 um, dominated by the largest contributors.
+    assert b["combined_um"] == pytest.approx(0.173, abs=0.003)
+    assert b["combined_um"] > b["type_a_um"]
+    # Expanded at k=2 is twice the combined -> ~0.35 um.
+    assert b["expanded_um"] == pytest.approx(2 * b["combined_um"], rel=1e-6)
+
+
 def test_clarifier_primary_sizing_example():
     namespace = runpy.run_path(str(_EXAMPLES / "clarifier_primary_sizing.py"))
     c = namespace["clarifier_loadings"]()
