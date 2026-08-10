@@ -33,6 +33,7 @@ __all__ = [
     "schmidt_number",
     "sherwood_number",
     "lewis_number",
+    "mass_peclet_number",
     "stanton_number",
     "colburn_j_factor",
     "chilton_colburn_mass_transfer_coefficient",
@@ -108,6 +109,36 @@ def lewis_number(*, thermal_diffusivity: Quantity, mass_diffusivity: Quantity) -
     if d <= 0:
         raise ValueError("mass_diffusivity must be positive")
     return alpha / d
+
+
+def mass_peclet_number(
+    *,
+    velocity: Quantity,
+    characteristic_length: Quantity,
+    mass_diffusivity: Quantity,
+) -> float:
+    """The mass-transfer Péclet number, Pe = V·L/D_AB.
+
+    The ratio of species carried by bulk flow to species spread by molecular diffusion:
+    Pe = V·L/D_AB, from the flow ``velocity`` V, the ``characteristic_length`` L, and the
+    ``mass_diffusivity`` D_AB. It is the mass-transfer analog of the thermal Péclet number
+    (:func:`anvilate.analysis.peclet_number`) and equals the product of the Reynolds and Schmidt
+    numbers, Pe = Re·Sc. At high Pe advection dominates and a plume is swept downstream before it
+    can diffuse sideways; at low Pe diffusion smears it out — the number that sizes concentration
+    entry lengths and axial dispersion in a reactor or a packed bed. Returns the dimensionless
+    Péclet number as a plain float.
+    """
+    _check(velocity, "[length] / [time]", "velocity")
+    _check(characteristic_length, "[length]", "characteristic_length")
+    _check(mass_diffusivity, "[length]**2 / [time]", "mass_diffusivity")
+    v = velocity.to("m/s").magnitude
+    length = characteristic_length.to("m").magnitude
+    d = mass_diffusivity.to("m**2/s").magnitude
+    if length <= 0 or d <= 0:
+        raise ValueError("characteristic_length and mass_diffusivity must be positive")
+    if v < 0:
+        raise ValueError("velocity must be non-negative")
+    return v * length / d
 
 
 def stanton_number(

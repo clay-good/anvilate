@@ -18474,6 +18474,30 @@ def test_mass_transfer_dimensionless_groups_and_analogy_identity():
         lewis_number(thermal_diffusivity=alpha, mass_diffusivity=_q("3 m/s"))
 
 
+def test_mass_transfer_peclet_number_equals_reynolds_times_schmidt():
+    from anvilate.analysis import mass_peclet_number, schmidt_number
+
+    nu = _q("1.56e-5 m**2/s")
+    d_ab = _q("2.60e-5 m**2/s")
+    vel = _q("3 m/s")
+    length = _q("0.05 m")
+
+    # Pe = V*L/D_AB.
+    pe = mass_peclet_number(velocity=vel, characteristic_length=length, mass_diffusivity=d_ab)
+    assert pe == pytest.approx(3 * 0.05 / 2.60e-5, rel=1e-12)
+
+    # Identity Pe = Re*Sc, with Re = V*L/nu.
+    re = 3 * 0.05 / 1.56e-5
+    sc = schmidt_number(kinematic_viscosity=nu, mass_diffusivity=d_ab)
+    assert pe == pytest.approx(re * sc, rel=1e-12)
+    assert isinstance(pe, float)
+
+    with pytest.raises(ValueError, match="mass_diffusivity"):
+        mass_peclet_number(
+            velocity=vel, characteristic_length=length, mass_diffusivity=_q("0 m**2/s")
+        )
+
+
 def test_chilton_colburn_analogy_ties_friction_heat_and_mass():
     from anvilate.analysis import (
         chilton_colburn_mass_transfer_coefficient,
