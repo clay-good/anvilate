@@ -877,6 +877,8 @@ optics.diffraction_limited_angular_resolution
 optics.lens_f_number
 optics.diffraction_limited_spot_diameter
 optics.hyperfocal_distance
+optics.depth_of_field_near_limit
+optics.depth_of_field_far_limit
 optics.snell_refraction_angle
 optics.critical_angle
 optics.fiber_numerical_aperture

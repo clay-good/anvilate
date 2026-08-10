@@ -21,7 +21,7 @@ reciprocal is the lens power in diopters, and two thin lenses in contact combine
 
 from __future__ import annotations
 
-from math import asin, degrees, radians, sin, sqrt
+from math import asin, degrees, inf, radians, sin, sqrt
 
 from ..units import Quantity
 
@@ -30,6 +30,8 @@ RAYLEIGH_CONSTANT = 1.22
 __all__ = [
     "combined_thin_lens_focal_length",
     "critical_angle",
+    "depth_of_field_far_limit",
+    "depth_of_field_near_limit",
     "diffraction_limited_angular_resolution",
     "diffraction_limited_spot_diameter",
     "fiber_numerical_aperture",
@@ -171,6 +173,50 @@ def hyperfocal_distance(
     if c <= 0:
         raise ValueError("circle_of_confusion must be positive")
     return Quantity(magnitude=f * f / (f_number * c), unit="mm").to("m")
+
+
+def depth_of_field_near_limit(
+    *, hyperfocal_distance: Quantity, focus_distance: Quantity
+) -> Quantity:
+    """The near limit of depth of field, D_n = H·s/(H + s).
+
+    The closest distance rendered acceptably sharp when a lens is focused at ``focus_distance`` s:
+    from the ``hyperfocal_distance`` H (from :func:`hyperfocal_distance`), D_n = H·s/(H + s) (the
+    standard thin-lens form for focus distances well beyond the focal length). Everything from here
+    out to the far limit (:func:`depth_of_field_far_limit`) is in focus; focusing at the hyperfocal
+    distance pulls this near limit back to H/2, the deepest field a lens gives. Returns the near
+    limit in m.
+    """
+    _check(hyperfocal_distance, "[length]", "hyperfocal_distance")
+    _check(focus_distance, "[length]", "focus_distance")
+    h = hyperfocal_distance.to("m").magnitude
+    s = focus_distance.to("m").magnitude
+    if h <= 0 or s <= 0:
+        raise ValueError("hyperfocal_distance and focus_distance must be positive")
+    return Quantity(magnitude=h * s / (h + s), unit="m")
+
+
+def depth_of_field_far_limit(
+    *, hyperfocal_distance: Quantity, focus_distance: Quantity
+) -> Quantity:
+    """The far limit of depth of field, D_f = H·s/(H − s).
+
+    The farthest distance rendered acceptably sharp when a lens is focused at ``focus_distance`` s:
+    from the ``hyperfocal_distance`` H (from :func:`hyperfocal_distance`), D_f = H·s/(H − s) (the
+    standard thin-lens form). When the focus reaches the hyperfocal distance (s = H) the denominator
+    vanishes and the far limit runs to infinity — so any focus at or beyond H keeps everything sharp
+    to the horizon, and this function returns infinity there. Returns the far limit in m (``inf``
+    when the depth of field extends to infinity).
+    """
+    _check(hyperfocal_distance, "[length]", "hyperfocal_distance")
+    _check(focus_distance, "[length]", "focus_distance")
+    h = hyperfocal_distance.to("m").magnitude
+    s = focus_distance.to("m").magnitude
+    if h <= 0 or s <= 0:
+        raise ValueError("hyperfocal_distance and focus_distance must be positive")
+    if s >= h:
+        return Quantity(magnitude=inf, unit="m")
+    return Quantity(magnitude=h * s / (h - s), unit="m")
 
 
 def snell_refraction_angle(

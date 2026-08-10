@@ -16818,6 +16818,45 @@ def test_optics_f_number_airy_spot_and_hyperfocal():
         lens_f_number(focal_length=_q("50 mm"), aperture_diameter=_q("25 s"))
 
 
+def test_optics_depth_of_field_near_and_far_limits():
+    from math import inf
+
+    from anvilate.analysis import (
+        depth_of_field_far_limit,
+        depth_of_field_near_limit,
+        hyperfocal_distance,
+    )
+
+    h = hyperfocal_distance(
+        focal_length=_q("50 mm"), f_number=8.0, circle_of_confusion=_q("0.03 mm")
+    )
+    hm = h.to("m").magnitude  # ~10.417 m
+
+    # D_near = H*s/(H+s), D_far = H*s/(H-s); focus at 5 m.
+    d_near = depth_of_field_near_limit(hyperfocal_distance=h, focus_distance=_q("5 m"))
+    d_far = depth_of_field_far_limit(hyperfocal_distance=h, focus_distance=_q("5 m"))
+    assert d_near.to("m").magnitude == pytest.approx(hm * 5 / (hm + 5), rel=1e-9)
+    assert d_far.to("m").magnitude == pytest.approx(hm * 5 / (hm - 5), rel=1e-9)
+    # The focus distance lies inside the depth of field, near < s < far.
+    assert d_near.to("m").magnitude < 5.0 < d_far.to("m").magnitude
+
+    # Focusing at the hyperfocal distance pulls the near limit to H/2 and the far limit to infinity.
+    d_near_h = depth_of_field_near_limit(hyperfocal_distance=h, focus_distance=h)
+    d_far_h = depth_of_field_far_limit(hyperfocal_distance=h, focus_distance=h)
+    assert d_near_h.to("m").magnitude == pytest.approx(hm / 2, rel=1e-9)
+    assert d_far_h.to("m").magnitude == inf
+    # Beyond the hyperfocal distance the far limit stays infinite.
+    assert (
+        depth_of_field_far_limit(hyperfocal_distance=h, focus_distance=_q("50 m")).to("m").magnitude
+        == inf
+    )
+
+    with pytest.raises(ValueError, match="focus_distance must be positive"):
+        depth_of_field_near_limit(hyperfocal_distance=h, focus_distance=_q("0 m"))
+    with pytest.raises(ValueError, match="hyperfocal_distance must be a"):
+        depth_of_field_far_limit(hyperfocal_distance=_q("10 s"), focus_distance=_q("5 m"))
+
+
 def test_optics_snell_critical_angle_and_fiber_na():
     from math import asin, degrees, sin
 

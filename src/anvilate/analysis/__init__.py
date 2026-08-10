@@ -537,7 +537,8 @@ modules:
 - :mod:`~anvilate.analysis.optics` — geometric optics for optomechanical design: the thin-lens
   image distance d_i = f·d_o/(d_o − f), the transverse magnification m = −d_i/d_o, the Rayleigh
   diffraction limit θ = 1.22·λ/D on resolving power, the lens speed side — the f-number
-  N = f/D, the focused Airy spot d = 2.44·λ·N, and the hyperfocal distance H = f²/(N·c);
+  N = f/D, the focused Airy spot d = 2.44·λ·N, the hyperfocal distance H = f²/(N·c), and the
+  depth-of-field near and far limits H·s/(H ± s) it sets (far limit → ∞ at the hyperfocal distance);
   refraction — Snell's law, the total-internal-reflection critical angle, and fibre NA; and lens
   design — the lensmaker's f from (n−1)(1/R₁−1/R₂), the diopter power 1/f, and two thin lenses in
   contact combining as 1/f = 1/f₁ + 1/f₂
@@ -2048,6 +2049,8 @@ from .optical_instruments import (
 from .optics import (
     combined_thin_lens_focal_length,
     critical_angle,
+    depth_of_field_far_limit,
+    depth_of_field_near_limit,
     diffraction_limited_angular_resolution,
     diffraction_limited_spot_diameter,
     fiber_numerical_aperture,
@@ -3764,6 +3767,8 @@ __all__ = [
     "lens_f_number",
     "diffraction_limited_spot_diameter",
     "hyperfocal_distance",
+    "depth_of_field_near_limit",
+    "depth_of_field_far_limit",
     "snell_refraction_angle",
     "critical_angle",
     "fiber_numerical_aperture",
