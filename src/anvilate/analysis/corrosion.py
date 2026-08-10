@@ -21,12 +21,16 @@ caller's material values; the assessment belongs to the integrity engineer.
 
 from __future__ import annotations
 
+from math import log10
+
 from ..units import Quantity
 
 __all__ = [
     "corrosion_penetration_rate",
     "faraday_corrosion_rate",
     "remaining_wall_life",
+    "tafel_overpotential",
+    "stern_geary_corrosion_current",
 ]
 
 
@@ -114,6 +118,69 @@ def remaining_wall_life(
         raise ValueError("corrosion_rate must be positive")
     life = (current_thickness.pint - minimum_thickness.pint) / corrosion_rate.pint
     return Quantity(magnitude=float(life.to("year").magnitude), unit="year")
+
+
+def tafel_overpotential(
+    *,
+    current_density: Quantity,
+    exchange_current_density: Quantity,
+    tafel_slope: Quantity,
+) -> Quantity:
+    """The activation overpotential by the Tafel equation, η = b·log₁₀(i/i₀).
+
+    How far an electrode must be driven from equilibrium to sustain a net current: η =
+    ``tafel_slope`` b · log₁₀(``current_density`` i / ``exchange_current_density`` i₀). The
+    ``tafel_slope`` b (volts per decade of current) is the electrode-kinetics steepness, and i₀ the
+    exchange current density at equilibrium. Every tenfold rise in current costs one more Tafel
+    slope of overpotential — a fast electrode (large i₀, small b) needs little. The current must be
+    at least the exchange current. Returns the overpotential in volts.
+    """
+    _check(current_density, "[current]/[length]**2", "current_density")
+    _check(exchange_current_density, "[current]/[length]**2", "exchange_current_density")
+    _check(tafel_slope, "[electric_potential]", "tafel_slope")
+    i = current_density.to("A/m**2").magnitude
+    i0 = exchange_current_density.to("A/m**2").magnitude
+    b = tafel_slope.to("V").magnitude
+    if i0 <= 0:
+        raise ValueError("exchange_current_density must be positive")
+    if i < i0:
+        raise ValueError("current_density must be at least the exchange_current_density")
+    if b <= 0:
+        raise ValueError("tafel_slope must be positive")
+    return Quantity(magnitude=b * log10(i / i0), unit="V")
+
+
+def stern_geary_corrosion_current(
+    *,
+    polarization_resistance: Quantity,
+    anodic_tafel_slope: Quantity,
+    cathodic_tafel_slope: Quantity,
+) -> Quantity:
+    """The corrosion current from linear polarization, i_corr = B/R_p (Stern-Geary).
+
+    The corrosion current density an LPR (linear polarization resistance) test yields:
+    i_corr = B/``polarization_resistance``, with the Stern-Geary coefficient B =
+    b_a·b_c/(2.303·(b_a + b_c)) from the ``anodic_tafel_slope`` and ``cathodic_tafel_slope``.
+    The ``polarization_resistance`` R_p is the area-specific slope of potential over current near
+    the corrosion potential (Ω·m²) — a large R_p means a slow-corroding, protected surface. Feed the
+    result to :func:`faraday_corrosion_rate` for the penetration rate. Returns i_corr in A/m².
+    """
+    _check(
+        polarization_resistance,
+        "[electric_potential] * [length]**2 / [current]",
+        "polarization_resistance",
+    )
+    _check(anodic_tafel_slope, "[electric_potential]", "anodic_tafel_slope")
+    _check(cathodic_tafel_slope, "[electric_potential]", "cathodic_tafel_slope")
+    r_p = polarization_resistance.to("ohm*m**2").magnitude
+    b_a = anodic_tafel_slope.to("V").magnitude
+    b_c = cathodic_tafel_slope.to("V").magnitude
+    if r_p <= 0:
+        raise ValueError("polarization_resistance must be positive")
+    if b_a <= 0 or b_c <= 0:
+        raise ValueError("Tafel slopes must be positive")
+    b_stern_geary = b_a * b_c / (2.303 * (b_a + b_c))
+    return Quantity(magnitude=b_stern_geary / r_p, unit="A/m**2")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

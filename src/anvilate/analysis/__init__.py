@@ -162,7 +162,9 @@ modules:
   the plain-bearing PV (pressure × velocity) factor against its overheating limit
 - :mod:`~anvilate.analysis.corrosion` — electrochemical metal loss: the ASTM G1
   weight-loss penetration rate, the Faraday rate from a corrosion current density,
-  and the remaining wall life above a retirement thickness
+  the remaining wall life above a retirement thickness, and the electrode kinetics that supply the
+  corrosion current — the Tafel activation overpotential η = b·log₁₀(i/i₀) and the Stern-Geary
+  i_corr = B/R_p from a linear-polarization-resistance test
 - :mod:`~anvilate.analysis.nernst` — Nernst electrochemistry: the cell potential
   E = E0 − (RT/nF)·ln Q away from standard conditions, the ~59 mV/decade Nernst slope
   2.303·RT/(nF) of a potentiometric sensor, and the reaction quotient a measured potential implies
@@ -1330,6 +1332,8 @@ from .corrosion import (
     corrosion_penetration_rate,
     faraday_corrosion_rate,
     remaining_wall_life,
+    stern_geary_corrosion_current,
+    tafel_overpotential,
 )
 from .coupling import (
     flange_coupling_bolt_count,
@@ -3922,6 +3926,8 @@ __all__ = [
     "corrosion_penetration_rate",
     "faraday_corrosion_rate",
     "remaining_wall_life",
+    "tafel_overpotential",
+    "stern_geary_corrosion_current",
     "nernst_potential",
     "nernst_slope",
     "nernst_reaction_quotient",

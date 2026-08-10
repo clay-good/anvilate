@@ -402,6 +402,8 @@ coriolis.rossby_number
 corrosion.corrosion_penetration_rate
 corrosion.faraday_corrosion_rate
 corrosion.remaining_wall_life
+corrosion.tafel_overpotential
+corrosion.stern_geary_corrosion_current
 coupling.flange_coupling_bolt_count
 coupling.flange_coupling_bolt_force
 coupling.flange_coupling_torque

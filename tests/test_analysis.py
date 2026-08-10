@@ -14692,6 +14692,70 @@ def test_corrosion_penetration_rate_faraday_and_remaining_life():
         )
 
 
+def test_corrosion_tafel_overpotential_and_stern_geary_feed_the_faraday_rate():
+    from math import log10
+
+    from anvilate.analysis import (
+        faraday_corrosion_rate,
+        stern_geary_corrosion_current,
+        tafel_overpotential,
+    )
+
+    # Tafel eta = b*log10(i/i0): a decade of current (i=10*i0) at b=0.12 V -> 0.12 V.
+    eta = tafel_overpotential(
+        current_density=_q("1 A/m**2"),
+        exchange_current_density=_q("0.1 A/m**2"),
+        tafel_slope=_q("0.12 V"),
+    )
+    assert eta.to("V").magnitude == pytest.approx(0.12 * log10(10), rel=1e-9)
+    assert eta.to("V").magnitude == pytest.approx(0.12, rel=1e-9)
+    # At the exchange current the overpotential is zero (equilibrium).
+    assert tafel_overpotential(
+        current_density=_q("0.1 A/m**2"),
+        exchange_current_density=_q("0.1 A/m**2"),
+        tafel_slope=_q("0.12 V"),
+    ).to("V").magnitude == pytest.approx(0.0, abs=1e-12)
+
+    # Stern-Geary i_corr = B/R_p, B = b_a*b_c/(2.303*(b_a+b_c)).
+    i_corr = stern_geary_corrosion_current(
+        polarization_resistance=_q("1000 ohm*cm**2"),
+        anodic_tafel_slope=_q("0.12 V"),
+        cathodic_tafel_slope=_q("0.12 V"),
+    )
+    b_sg = 0.12 * 0.12 / (2.303 * (0.12 + 0.12))
+    assert i_corr.to("A/m**2").magnitude == pytest.approx(
+        b_sg / 0.1, rel=1e-9
+    )  # 1000 ohm*cm2 = 0.1 ohm*m2
+    assert i_corr.to("uA/cm**2").magnitude == pytest.approx(26.05, abs=0.1)
+
+    # It feeds faraday_corrosion_rate: ~26 uA/cm^2 on steel gives ~0.3 mm/yr.
+    cr = faraday_corrosion_rate(
+        corrosion_current_density=i_corr, equivalent_weight=27.9, density=_q("7.87 g/cm**3")
+    )
+    assert cr.to("mm/year").magnitude == pytest.approx(0.302, abs=0.01)
+    # A larger polarization resistance (better protection) means less corrosion current.
+    i_low = stern_geary_corrosion_current(
+        polarization_resistance=_q("10000 ohm*cm**2"),
+        anodic_tafel_slope=_q("0.12 V"),
+        cathodic_tafel_slope=_q("0.12 V"),
+    )
+    assert i_low.to("A/m**2").magnitude < i_corr.to("A/m**2").magnitude
+
+    # Guardrails: current not below the exchange current; positive R_p.
+    with pytest.raises(ValueError, match="at least the exchange"):
+        tafel_overpotential(
+            current_density=_q("0.05 A/m**2"),
+            exchange_current_density=_q("0.1 A/m**2"),
+            tafel_slope=_q("0.12 V"),
+        )
+    with pytest.raises(ValueError, match="polarization_resistance must be positive"):
+        stern_geary_corrosion_current(
+            polarization_resistance=_q("0 ohm*cm**2"),
+            anodic_tafel_slope=_q("0.12 V"),
+            cathodic_tafel_slope=_q("0.12 V"),
+        )
+
+
 def test_ventilation_outdoor_air_changes_and_dilution():
     from anvilate.analysis import (
         air_changes_per_hour,
