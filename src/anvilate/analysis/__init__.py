@@ -1881,6 +1881,7 @@ from .keys import (
     spline_torque_capacity,
 )
 from .kinetic_theory import (
+    knudsen_number,
     mean_free_path,
     mean_molecular_speed,
     rms_molecular_speed,
@@ -2894,6 +2895,7 @@ __all__ = [
     "rms_molecular_speed",
     "mean_molecular_speed",
     "mean_free_path",
+    "knudsen_number",
     "air_receiver_holdup_time",
     "air_receiver_volume_for_demand",
     "malus_transmitted_intensity",

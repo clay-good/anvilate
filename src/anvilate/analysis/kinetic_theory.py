@@ -26,6 +26,7 @@ _GAS_CONSTANT = 8.314462618  # J/(mol*K)
 _BOLTZMANN = 1.380649e-23  # J/K
 
 __all__ = [
+    "knudsen_number",
     "mean_free_path",
     "mean_molecular_speed",
     "rms_molecular_speed",
@@ -92,6 +93,28 @@ def mean_free_path(
     if d <= 0:
         raise ValueError("molecular_diameter must be positive")
     return Quantity(magnitude=_BOLTZMANN * t / (sqrt(2.0) * pi * d * d * p), unit="m")
+
+
+def knudsen_number(*, mean_free_path: Quantity, characteristic_length: Quantity) -> float:
+    """The Knudsen number, Kn = lambda/L.
+
+    The ratio of the molecular ``mean_free_path`` lambda to a flow's ``characteristic_length`` L
+    (a channel width, particle diameter, or gap): Kn = lambda/L. It decides whether a gas behaves
+    as a continuum or as discrete molecules. Kn < 0.01 is continuum flow (Navier-Stokes holds);
+    0.01–0.1 is the slip regime (velocity slips at the wall); 0.1–10 is transitional; and Kn > 10
+    is free-molecular flow, where molecules cross the gap without colliding — the regime of high
+    vacuum, MEMS microchannels, and aerosol particles smaller than the mean free path. Pair with
+    :func:`mean_free_path` to size the transition. Returns the dimensionless Knudsen number.
+    """
+    _check(mean_free_path, "[length]", "mean_free_path")
+    _check(characteristic_length, "[length]", "characteristic_length")
+    lam = mean_free_path.to("m").magnitude
+    length = characteristic_length.to("m").magnitude
+    if lam < 0:
+        raise ValueError("mean_free_path must be non-negative")
+    if length <= 0:
+        raise ValueError("characteristic_length must be positive")
+    return lam / length
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

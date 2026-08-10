@@ -792,6 +792,7 @@ keys.key_length_for_torque
 keys.key_shear_stress
 keys.key_tangential_force
 keys.spline_torque_capacity
+kinetic_theory.knudsen_number
 kinetic_theory.mean_free_path
 kinetic_theory.mean_molecular_speed
 kinetic_theory.rms_molecular_speed

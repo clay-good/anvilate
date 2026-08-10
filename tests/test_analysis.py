@@ -23033,6 +23033,32 @@ def test_kinetic_theory_molecular_speeds_and_mean_free_path():
         rms_molecular_speed(temperature=T, molar_mass=_q("0.028 kg"))
 
 
+def test_kinetic_theory_knudsen_number():
+    from anvilate.analysis import knudsen_number
+
+    # Kn = lambda/L; 67 nm mean free path in a 1 um channel -> 0.067 (slip regime).
+    kn = knudsen_number(
+        mean_free_path=Quantity(magnitude=67e-9, unit="m"),
+        characteristic_length=_q("1 um"),
+    )
+    assert kn == pytest.approx(67e-9 / 1e-6, rel=1e-12)
+    assert 0.01 < kn < 0.1  # slip flow
+
+    # Same mean free path in a 1 mm gap -> continuum (Kn << 0.01).
+    kn_big = knudsen_number(
+        mean_free_path=Quantity(magnitude=67e-9, unit="m"),
+        characteristic_length=_q("1 mm"),
+    )
+    assert kn_big < 0.01
+    assert kn / kn_big == pytest.approx(1000.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="characteristic_length must be positive"):
+        knudsen_number(
+            mean_free_path=Quantity(magnitude=67e-9, unit="m"),
+            characteristic_length=_q("0 m"),
+        )
+
+
 def test_colligative_osmotic_pressure_freezing_and_boiling_point():
     from anvilate.analysis import (
         boiling_point_elevation,
