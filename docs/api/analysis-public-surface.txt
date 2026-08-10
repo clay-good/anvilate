@@ -489,6 +489,9 @@ energy_storage.battery_backup_time
 energy_storage.battery_bank_capacity
 energy_storage.battery_delivered_energy
 energy_storage.battery_round_trip_efficiency
+energy_storage.c_rate
+energy_storage.current_from_c_rate
+energy_storage.discharge_time_from_c_rate
 energy_storage.usable_battery_energy
 engineering_economics.present_value
 engineering_economics.future_value

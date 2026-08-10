@@ -15440,6 +15440,37 @@ def test_energy_storage_capacity_energy_and_backup_time():
         )
 
 
+def test_energy_storage_c_rate_current_and_discharge_time():
+    from anvilate.analysis import c_rate, current_from_c_rate, discharge_time_from_c_rate
+
+    cap = _q("100 A*hour")
+
+    # C-rate = I/C; 50 A on a 100 Ah pack -> 0.5C.
+    cr = c_rate(current=_q("50 A"), capacity=cap)
+    assert cr == pytest.approx(0.5, rel=1e-12)
+    assert isinstance(cr, float)
+
+    # Inverse: I = C-rate*C round-trips the 50 A.
+    i = current_from_c_rate(c_rate=cr, capacity=cap)
+    assert i.to("A").magnitude == pytest.approx(50.0, rel=1e-12)
+    # A 2C draw on the same pack needs 200 A.
+    assert current_from_c_rate(c_rate=2.0, capacity=cap).to("A").magnitude == pytest.approx(
+        200.0, rel=1e-12
+    )
+
+    # Ideal discharge time t = 1/C-rate; 0.5C lasts 2 h, 2C half an hour.
+    assert discharge_time_from_c_rate(c_rate=0.5).to("hour").magnitude == pytest.approx(2.0)
+    assert discharge_time_from_c_rate(c_rate=2.0).to("hour").magnitude == pytest.approx(0.5)
+
+    # Consistency: current at C-rate, then C-rate back, recovers the rate.
+    assert c_rate(current=i, capacity=cap) == pytest.approx(cr, rel=1e-12)
+
+    with pytest.raises(ValueError, match="capacity must be a"):
+        c_rate(current=_q("50 A"), capacity=_q("100 A"))
+    with pytest.raises(ValueError, match="c_rate must be positive"):
+        discharge_time_from_c_rate(c_rate=0.0)
+
+
 def test_aisc_flange_local_buckling_and_slender_flange_moment():
     from anvilate.analysis import (
         aisc_flange_local_buckling_moment,

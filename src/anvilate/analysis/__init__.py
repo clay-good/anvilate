@@ -1525,6 +1525,9 @@ from .energy_storage import (
     battery_bank_capacity,
     battery_delivered_energy,
     battery_round_trip_efficiency,
+    c_rate,
+    current_from_c_rate,
+    discharge_time_from_c_rate,
     usable_battery_energy,
 )
 from .engineering_economics import (
@@ -3010,6 +3013,9 @@ __all__ = [
     "battery_backup_time",
     "battery_round_trip_efficiency",
     "battery_delivered_energy",
+    "c_rate",
+    "current_from_c_rate",
+    "discharge_time_from_c_rate",
     "present_value",
     "future_value",
     "annuity_present_value",
