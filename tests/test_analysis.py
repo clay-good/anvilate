@@ -24289,6 +24289,55 @@ def test_ideal_gas_law_pressure_volume_and_moles():
         )
 
 
+def test_comminution_rittinger_kick_and_bond_laws():
+    from math import log
+
+    from anvilate.analysis import (
+        bond_comminution_work,
+        kick_comminution_energy,
+        rittinger_comminution_energy,
+    )
+
+    # Rittinger E = C_R*(1/x2 - 1/x1); C_R=10 J*m/kg, 10 mm -> 1 mm -> 9000 J/kg.
+    e_r = rittinger_comminution_energy(
+        rittinger_constant=_q("10 J*m/kg"), feed_size=_q("10 mm"), product_size=_q("1 mm")
+    )
+    assert e_r.to("J/kg").magnitude == pytest.approx(10 * (1 / 0.001 - 1 / 0.01), rel=1e-9)
+
+    # Kick E = C_K*ln(x1/x2); C_K=20 J/kg, ratio 10 -> 20*ln(10).
+    e_k = kick_comminution_energy(
+        kick_constant=_q("20 J/kg"), feed_size=_q("10 mm"), product_size=_q("1 mm")
+    )
+    assert e_k.to("J/kg").magnitude == pytest.approx(20 * log(10), rel=1e-9)
+
+    # Bond W = Wi*(10/sqrt(P80) - 10/sqrt(F80)); Wi=12 kWh/t, 10000->100 um -> 10.8 kWh/t.
+    w = bond_comminution_work(
+        bond_work_index=_q("12 kW*hour/tonne"),
+        feed_size_80=_q("10000 um"),
+        product_size_80=_q("100 um"),
+    )
+    assert w.to("kW*hour/tonne").magnitude == pytest.approx(
+        12 * (10 / 100**0.5 - 10 / 10000**0.5), rel=1e-9
+    )
+    assert w.to("kW*hour/tonne").magnitude == pytest.approx(10.8, rel=1e-9)
+
+    # Grinding only makes particles smaller: product > feed is rejected in every law.
+    with pytest.raises(ValueError, match="cannot exceed feed_size"):
+        rittinger_comminution_energy(
+            rittinger_constant=_q("10 J*m/kg"), feed_size=_q("1 mm"), product_size=_q("10 mm")
+        )
+    with pytest.raises(ValueError, match="cannot exceed feed_size_80"):
+        bond_comminution_work(
+            bond_work_index=_q("12 kW*hour/tonne"),
+            feed_size_80=_q("100 um"),
+            product_size_80=_q("10000 um"),
+        )
+    with pytest.raises(ValueError, match="kick_constant must be a"):
+        kick_comminution_energy(
+            kick_constant=_q("20 J"), feed_size=_q("10 mm"), product_size=_q("1 mm")
+        )
+
+
 def test_fuel_cell_reversible_voltage_thermodynamic_and_voltage_efficiency():
     from anvilate.analysis import (
         reversible_cell_voltage,

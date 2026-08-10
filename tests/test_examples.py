@@ -480,6 +480,15 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_comminution_ball_mill_energy_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "comminution_ball_mill_energy.py"))
+    d = namespace["ball_mill_grinding_energy"]()
+    # Bond: 12*(10/sqrt(100) - 10/sqrt(10000)) = 10.8 kWh/t.
+    assert d["bond_work_kwh_per_tonne"] == pytest.approx(10.8, rel=1e-6)
+    # Rittinger with C_R = 1 J*m/kg: (1/1e-4 - 1/1e-2) = 9900 J/kg = 9.9 kJ/kg.
+    assert d["rittinger_energy_kj_per_kg"] == pytest.approx(9.9, rel=1e-6)
+
+
 def test_fuel_cell_hydrogen_efficiency_example():
     namespace = runpy.run_path(str(_EXAMPLES / "fuel_cell_hydrogen_efficiency.py"))
     d = namespace["hydrogen_cell_efficiency"]()

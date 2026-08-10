@@ -383,6 +383,9 @@ combustion.excess_air_from_flue_oxygen
 combustion.combustion_efficiency
 combustion.siegert_dry_flue_gas_loss
 combustion.stoichiometric_air_fuel_ratio
+comminution.rittinger_comminution_energy
+comminution.kick_comminution_energy
+comminution.bond_comminution_work
 cold_formed_steel.aisi_effective_width
 cold_formed_steel.aisi_plate_slenderness
 contact.HertzContact

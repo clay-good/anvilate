@@ -270,6 +270,9 @@ modules:
   (EA = O₂/(20.9−O₂)), the actual air-fuel ratio a burner runs at, the equivalence ratio
   φ = AFR_stoich/AFR_actual = 1/(1+EA) that grades lean/rich, and the Siegert dry flue-gas
   loss and the combustion efficiency it leaves
+- :mod:`~anvilate.analysis.comminution` — size-reduction energy laws: Rittinger's (n = 2,
+  E = C_R·(1/x₂ − 1/x₁), fine grinding), Kick's (n = 1, E = C_K·ln(x₁/x₂), coarse crushing), and
+  Bond's (n = 1.5, W = W_i·(10/√P₈₀ − 10/√F₈₀), the mill-sizing standard)
 - :mod:`~anvilate.analysis.power_cycles` — air-standard power-cycle efficiencies: the
   Otto (η = 1 − 1/r^(γ−1)), Diesel (with a cutoff ratio), and Brayton gas-turbine
   (η = 1 − 1/r_p^((γ−1)/γ)) ideal thermal efficiencies, the Carnot ceiling
@@ -1279,6 +1282,11 @@ from .combustion import (
     excess_air_from_flue_oxygen,
     siegert_dry_flue_gas_loss,
     stoichiometric_air_fuel_ratio,
+)
+from .comminution import (
+    bond_comminution_work,
+    kick_comminution_energy,
+    rittinger_comminution_energy,
 )
 from .composite import (
     composite_longitudinal_cte,
@@ -3563,6 +3571,9 @@ __all__ = [
     "equivalence_ratio_from_excess_air",
     "siegert_dry_flue_gas_loss",
     "combustion_efficiency",
+    "rittinger_comminution_energy",
+    "kick_comminution_energy",
+    "bond_comminution_work",
     "johnson_critical_stress",
     "secant_column_max_stress",
     "perry_robertson_stress",
