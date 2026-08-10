@@ -17,11 +17,15 @@ Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` value
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import exp, gamma
 
 from ..units import Quantity
 
 __all__ = [
+    "parallel_system_reliability",
+    "series_system_reliability",
+    "steady_state_availability",
     "weibull_hazard_rate",
     "weibull_mean_life",
     "weibull_reliability",
@@ -88,6 +92,65 @@ def weibull_mean_life(*, characteristic_life: Quantity, shape: float) -> Quantit
     if shape <= 0:
         raise ValueError("shape must be positive")
     return Quantity(magnitude=eta * gamma(1.0 + 1.0 / shape), unit="s")
+
+
+def steady_state_availability(*, mtbf: Quantity, mttr: Quantity) -> float:
+    """The steady-state availability, A = MTBF/(MTBF + MTTR).
+
+    The long-run fraction of time a repairable system is up and working: from the mean time between
+    failures ``mtbf`` and the mean time to repair ``mttr``, A = MTBF/(MTBF + MTTR). It is the
+    headline maintainability metric — "five nines" means A = 0.99999 — and it improves with either a
+    more reliable system (longer MTBF) or faster repair (shorter MTTR). Returns the dimensionless
+    availability (0 to 1) as a plain float.
+    """
+    _check(mtbf, "[time]", "mtbf")
+    _check(mttr, "[time]", "mttr")
+    up = mtbf.to("s").magnitude
+    down = mttr.to("s").magnitude
+    if up <= 0:
+        raise ValueError("mtbf must be positive")
+    if down < 0:
+        raise ValueError("mttr must be non-negative")
+    return up / (up + down)
+
+
+def series_system_reliability(*, component_reliabilities: Sequence[float]) -> float:
+    """The reliability of a series system, R = Π R_i.
+
+    The probability that every component of a series system survives — the system fails if *any* one
+    does — is the product of the individual ``component_reliabilities`` R_i: R = R_1·R_2·…·R_n. A
+    series system is always less reliable than its weakest part, and adding components only lowers
+    it, which is why long unredundant chains are fragile. Each reliability must be in [0, 1].
+    Returns the system reliability (0 to 1) as a plain float.
+    """
+    if len(component_reliabilities) == 0:
+        raise ValueError("component_reliabilities must contain at least one component")
+    product = 1.0
+    for r in component_reliabilities:
+        if not 0.0 <= r <= 1.0:
+            raise ValueError(f"each reliability must be in [0, 1]; got {r}")
+        product *= r
+    return product
+
+
+def parallel_system_reliability(*, component_reliabilities: Sequence[float]) -> float:
+    """The reliability of a parallel (redundant) system, R = 1 − Π(1 − R_i).
+
+    The probability that at least one component of a parallel system survives — the system fails
+    only if *all* of them do — is one minus the product of the individual failure probabilities:
+    R = 1 − (1 − R_1)·(1 − R_2)·…·(1 − R_n), from the ``component_reliabilities`` R_i. Redundancy
+    makes a parallel system more reliable than its best part, and adding parallel legs only raises
+    it — the basis of fault-tolerant design. Each reliability must be in [0, 1]. Returns the system
+    reliability (0 to 1) as a plain float.
+    """
+    if len(component_reliabilities) == 0:
+        raise ValueError("component_reliabilities must contain at least one component")
+    failure_product = 1.0
+    for r in component_reliabilities:
+        if not 0.0 <= r <= 1.0:
+            raise ValueError(f"each reliability must be in [0, 1]; got {r}")
+        failure_product *= 1.0 - r
+    return 1.0 - failure_product
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

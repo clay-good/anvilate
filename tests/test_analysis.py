@@ -25710,6 +25710,42 @@ def test_weibull_reliability_hazard_rate_and_mean_life():
         weibull_mean_life(characteristic_life=_q("1000 N"), shape=2.0)
 
 
+def test_reliability_availability_and_series_parallel_systems():
+    from anvilate.analysis import (
+        parallel_system_reliability,
+        series_system_reliability,
+        steady_state_availability,
+    )
+
+    # A = MTBF/(MTBF+MTTR); 1000 h up, 10 h repair -> 0.9901.
+    a = steady_state_availability(mtbf=_q("1000 hour"), mttr=_q("10 hour"))
+    assert a == pytest.approx(1000 / 1010, rel=1e-12)
+    assert isinstance(a, float)
+    # Faster repair raises availability.
+    assert steady_state_availability(mtbf=_q("1000 hour"), mttr=_q("1 hour")) > a
+
+    # Series R = product; three 0.95 components -> 0.857 (weaker than any part).
+    r_series = series_system_reliability(component_reliabilities=[0.95, 0.95, 0.95])
+    assert r_series == pytest.approx(0.95**3, rel=1e-12)
+    assert r_series < 0.95
+
+    # Parallel R = 1 - product of failure probs; three 0.95 -> 0.999875 (stronger than any part).
+    r_parallel = parallel_system_reliability(component_reliabilities=[0.95, 0.95, 0.95])
+    assert r_parallel == pytest.approx(1 - 0.05**3, rel=1e-12)
+    assert r_parallel > 0.95
+
+    # A single component gives back its own reliability either way.
+    assert series_system_reliability(component_reliabilities=[0.8]) == pytest.approx(0.8)
+    assert parallel_system_reliability(component_reliabilities=[0.8]) == pytest.approx(0.8)
+
+    with pytest.raises(ValueError, match="mtbf must be positive"):
+        steady_state_availability(mtbf=_q("0 hour"), mttr=_q("10 hour"))
+    with pytest.raises(ValueError, match="each reliability must be in"):
+        series_system_reliability(component_reliabilities=[0.95, 1.2])
+    with pytest.raises(ValueError, match="at least one component"):
+        parallel_system_reliability(component_reliabilities=[])
+
+
 def test_rotor_hover_induced_velocity_power_and_figure_of_merit():
     from math import pi, sqrt
 

@@ -564,8 +564,9 @@ modules:
   (γ−1)·m·c², the length contraction L0/γ, the relativistic momentum γ·m·v, and the relativistic
   Doppler shift f0·√((1±β)/(1∓β)) (redshift/blueshift)
 - :mod:`~anvilate.analysis.reliability` — Weibull reliability: the survival R(t) = exp(−(t/η)^β),
-  the hazard rate h(t) = (β/η)·(t/η)^(β−1) (infant-mortality/constant/wear-out as β ≷ 1), and the
-  mean time to failure η·Γ(1+1/β)
+  the hazard rate h(t) = (β/η)·(t/η)^(β−1) (infant-mortality/constant/wear-out as β ≷ 1), the
+  mean time to failure η·Γ(1+1/β), the steady-state availability A = MTBF/(MTBF+MTTR), and the
+  series (Π R_i) and parallel (1 − Π(1−R_i)) system-reliability composition rules
 - :mod:`~anvilate.analysis.radar` — radar Doppler and range equation: the two-way Doppler shift
   f_d = 2·v·f0/c and the speed-gun inverse, the maximum unambiguous velocity PRF·c/(4·f0) and range
   c/(2·PRF), and the range equation — echo power P_t·G²·λ²·σ/((4π)³·R⁴) and detection range R_max
@@ -2334,6 +2335,9 @@ from .relativity import (
     time_dilation,
 )
 from .reliability import (
+    parallel_system_reliability,
+    series_system_reliability,
+    steady_state_availability,
     weibull_hazard_rate,
     weibull_mean_life,
     weibull_reliability,
@@ -3790,6 +3794,9 @@ __all__ = [
     "weibull_reliability",
     "weibull_hazard_rate",
     "weibull_mean_life",
+    "steady_state_availability",
+    "series_system_reliability",
+    "parallel_system_reliability",
     "radar_doppler_shift",
     "radial_velocity_from_doppler",
     "max_unambiguous_velocity",
