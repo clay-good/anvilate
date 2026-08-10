@@ -17635,6 +17635,41 @@ def test_thermoelectric_seebeck_peltier_and_max_temperature_difference():
         )
 
 
+def test_thermoelectric_figure_of_merit_and_zt():
+    from anvilate.analysis import (
+        thermoelectric_figure_of_merit,
+        thermoelectric_max_temperature_difference,
+        thermoelectric_zt,
+    )
+
+    # Z = alpha^2/(R*K); 0.05^2/(2*0.5) = 0.0025 /K.
+    z = thermoelectric_figure_of_merit(
+        seebeck_coefficient=_q("0.05 V/K"),
+        electrical_resistance=_q("2 ohm"),
+        thermal_conductance=_q("0.5 W/K"),
+    )
+    assert z.to("1/K").magnitude == pytest.approx(0.0025, rel=1e-9)
+
+    # It is the same Z that sets dT_max = 0.5*Z*T_c^2 (consistency with the ceiling formula).
+    dt_max = thermoelectric_max_temperature_difference(
+        seebeck_coefficient=_q("0.05 V/K"),
+        electrical_resistance=_q("2 ohm"),
+        thermal_conductance=_q("0.5 W/K"),
+        cold_temperature=_q("280 K"),
+    )
+    assert dt_max.to("K").magnitude == pytest.approx(0.5 * z.to("1/K").magnitude * 280**2, rel=1e-9)
+
+    # ZT = Z*T; 0.0025 /K * 300 K = 0.75 (dimensionless plain float).
+    zt = thermoelectric_zt(figure_of_merit=z, temperature=_q("300 K"))
+    assert zt == pytest.approx(0.75, rel=1e-9)
+    assert isinstance(zt, float)
+
+    with pytest.raises(ValueError, match="temperature must be positive"):
+        thermoelectric_zt(figure_of_merit=z, temperature=_q("0 K"))
+    with pytest.raises(ValueError, match="figure_of_merit must be a"):
+        thermoelectric_zt(figure_of_merit=_q("0.0025 K"), temperature=_q("300 K"))
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,

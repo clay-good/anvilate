@@ -2572,7 +2572,9 @@ from .thermal_noise import (
 from .thermoelectric import (
     peltier_cooling_rate,
     seebeck_voltage,
+    thermoelectric_figure_of_merit,
     thermoelectric_max_temperature_difference,
+    thermoelectric_zt,
 )
 from .thermoforming import (
     thermoforming_areal_draw_ratio,
@@ -3350,6 +3352,8 @@ __all__ = [
     "laminar_plate_drag_coefficient",
     "seebeck_voltage",
     "peltier_cooling_rate",
+    "thermoelectric_figure_of_merit",
+    "thermoelectric_zt",
     "thermoelectric_max_temperature_difference",
     "gauge_strain_from_resistance",
     "wheatstone_bridge_output",

@@ -24,6 +24,8 @@ from ..units import Quantity
 __all__ = [
     "peltier_cooling_rate",
     "seebeck_voltage",
+    "thermoelectric_figure_of_merit",
+    "thermoelectric_zt",
     "thermoelectric_max_temperature_difference",
 ]
 
@@ -92,6 +94,58 @@ def peltier_cooling_rate(
         raise ValueError("temperature_difference must be non-negative")
     q_c = alpha * i * t_c - 0.5 * i * i * r - k * dt
     return Quantity(magnitude=q_c, unit="W")
+
+
+def thermoelectric_figure_of_merit(
+    *,
+    seebeck_coefficient: Quantity,
+    electrical_resistance: Quantity,
+    thermal_conductance: Quantity,
+) -> Quantity:
+    """The thermoelectric figure of merit, Z = α²/(R·K).
+
+    The device figure of merit that sets how good a thermoelectric module is: Z = α²/(R·K), from the
+    ``seebeck_coefficient`` α, the ``electrical_resistance`` R, and the ``thermal_conductance`` K.
+    A high α makes voltage, but a low R (to limit Joule heating) and a low K (to limit conduction
+    leaking heat back down the gradient) matter just as much — Z packages the three-way trade-off
+    into one number. It sets the single-stage cooling limit
+    (:func:`thermoelectric_max_temperature_difference`, ΔT_max = ½·Z·T_c²) and, multiplied by
+    temperature, the dimensionless ZT (:func:`thermoelectric_zt`). Returns Z in units of 1/K.
+    """
+    _check(seebeck_coefficient, "[electric_potential]/[temperature]", "seebeck_coefficient")
+    _check(electrical_resistance, "[resistance]", "electrical_resistance")
+    _check(thermal_conductance, "[power]/[temperature]", "thermal_conductance")
+    alpha = seebeck_coefficient.to("V/K").magnitude
+    r = electrical_resistance.to("ohm").magnitude
+    k = thermal_conductance.to("W/K").magnitude
+    if alpha <= 0:
+        raise ValueError("seebeck_coefficient must be positive")
+    if r <= 0:
+        raise ValueError("electrical_resistance must be positive")
+    if k <= 0:
+        raise ValueError("thermal_conductance must be positive")
+    return Quantity(magnitude=alpha * alpha / (r * k), unit="1/K")
+
+
+def thermoelectric_zt(*, figure_of_merit: Quantity, temperature: Quantity) -> float:
+    """The dimensionless thermoelectric figure of merit, ZT = Z·T.
+
+    The benchmark by which thermoelectric materials and modules are ranked: the ``figure_of_merit``
+    Z (from :func:`thermoelectric_figure_of_merit`, units 1/K) times the absolute ``temperature`` T
+    at which the device operates. ZT is dimensionless — around 1 for commercial bismuth-telluride
+    near room temperature, and ZT ≳ 2–3 is the target for thermoelectric power generation to rival
+    other converters. A higher ZT means both a colder single-stage ΔT_max as a cooler and a higher
+    Carnot-fraction efficiency as a generator. Returns the dimensionless ZT as a plain float.
+    """
+    _check(figure_of_merit, "1/[temperature]", "figure_of_merit")
+    _check(temperature, "[temperature]", "temperature")
+    z = figure_of_merit.to("1/K").magnitude
+    t = temperature.to("K").magnitude
+    if z < 0:
+        raise ValueError("figure_of_merit must be non-negative")
+    if t <= 0:
+        raise ValueError("temperature must be positive (absolute, in K)")
+    return z * t
 
 
 def thermoelectric_max_temperature_difference(
