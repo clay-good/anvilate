@@ -38,8 +38,6 @@ __all__ = [
     "sound_level_sum",
     "sound_power_level_from_intensity",
     "sound_pressure_from_power_level",
-    "string_wave_speed",
-    "vibrating_string_frequency",
 ]
 
 
@@ -336,60 +334,6 @@ def closed_pipe_resonance_frequency(
     if not isinstance(mode, int) or mode < 1:
         raise ValueError("mode must be an integer of at least 1")
     return Quantity(magnitude=(2 * mode - 1) * c / (4.0 * length), unit="Hz")
-
-
-def string_wave_speed(*, tension: Quantity, linear_mass_density: Quantity) -> Quantity:
-    """The transverse wave speed on a stretched string, v = sqrt(T/μ).
-
-    The speed a transverse wave travels along a string under tension: from the ``tension`` T and the
-    ``linear_mass_density`` μ (mass per unit length), v = sqrt(T/μ). Tighter or lighter strings carry
-    waves faster, which is what raises their pitch. This is distinct from the longitudinal bar-wave
-    speed sqrt(E/ρ) (:mod:`anvilate.analysis.elastic_waves`): here the restoring force is the applied
-    tension, not the material's stiffness. Returns the wave speed in m/s.
-    """
-    _check(tension, "[force]", "tension")
-    _check(linear_mass_density, "[mass]/[length]", "linear_mass_density")
-    t = tension.to("N").magnitude
-    mu = linear_mass_density.to("kg/m").magnitude
-    if t <= 0:
-        raise ValueError("tension must be positive")
-    if mu <= 0:
-        raise ValueError("linear_mass_density must be positive")
-    return Quantity(magnitude=sqrt(t / mu), unit="m/s")
-
-
-def vibrating_string_frequency(
-    *,
-    tension: Quantity,
-    linear_mass_density: Quantity,
-    string_length: Quantity,
-    mode: int = 1,
-) -> Quantity:
-    """The vibrating-string resonance, f_n = (n/2L)·sqrt(T/μ).
-
-    The natural frequencies of a string fixed at both ends: from the ``tension`` T, the
-    ``linear_mass_density`` μ, the vibrating ``string_length`` L, and the harmonic ``mode`` n,
-    f_n = (n/2L)·sqrt(T/μ) = n·v/(2L) with the wave speed v of :func:`string_wave_speed`. A string
-    supports the full harmonic series n = 1, 2, 3, …; the fundamental n = 1 is the note it sounds.
-    This is how a guitar or piano string is tuned — pitch rises with the square root of tension and
-    falls with length and mass — and how a taut cable's vibration frequency reveals its tension.
-    Returns the resonant frequency in Hz.
-    """
-    _check(tension, "[force]", "tension")
-    _check(linear_mass_density, "[mass]/[length]", "linear_mass_density")
-    _check(string_length, "[length]", "string_length")
-    t = tension.to("N").magnitude
-    mu = linear_mass_density.to("kg/m").magnitude
-    length = string_length.to("m").magnitude
-    if t <= 0:
-        raise ValueError("tension must be positive")
-    if mu <= 0:
-        raise ValueError("linear_mass_density must be positive")
-    if length <= 0:
-        raise ValueError("string_length must be positive")
-    if not isinstance(mode, int) or mode < 1:
-        raise ValueError("mode must be an integer of at least 1")
-    return Quantity(magnitude=mode * sqrt(t / mu) / (2.0 * length), unit="Hz")
 
 
 def doppler_shifted_frequency(
