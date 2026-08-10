@@ -481,8 +481,9 @@ modules:
   saturation current J = A·T²·exp(−W/kT), the Schottky field lowering ΔW = √(e³·E/(4π·ε₀)) of the
   work function, and the Child-Langmuir space-charge-limited current J = (4/9)·ε₀·√(2e/m)·V^{3/2}/d²
 - :mod:`~anvilate.analysis.vapor_liquid_equilibrium` — ideal (Raoult's-law) VLE for distillation:
-  the partial pressure p_i = x_i·P_i*, the relative volatility α = P_light*/P_heavy*, and the binary
-  equilibrium vapor composition y = α·x/(1 + (α−1)·x)
+  the partial pressure p_i = x_i·P_i*, the relative volatility α = P_light*/P_heavy*, the binary
+  equilibrium vapor composition y = α·x/(1 + (α−1)·x), and the Fenske minimum stages
+  N_min = ln[(x_D/(1−x_D))·((1−x_B)/x_B)]/ln(α) at total reflux
 - :mod:`~anvilate.analysis.slider_crank` — slider-crank (piston) exact
   displacement from top dead centre, slider velocity, slider acceleration, the
   connecting-rod obliquity side thrust on the piston, and the crank torque a piston
@@ -2683,6 +2684,7 @@ from .vacuum_electronics import (
 )
 from .vapor_liquid_equilibrium import (
     equilibrium_vapor_mole_fraction,
+    fenske_minimum_stages,
     raoult_partial_pressure,
     relative_volatility,
 )
@@ -2854,6 +2856,7 @@ __all__ = [
     "raoult_partial_pressure",
     "relative_volatility",
     "equilibrium_vapor_mole_fraction",
+    "fenske_minimum_stages",
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",

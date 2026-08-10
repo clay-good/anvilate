@@ -18,10 +18,13 @@ volatility are plain floats in [0, 1] and > 0; vapor pressures are dimension-che
 
 from __future__ import annotations
 
+from math import log
+
 from ..units import Quantity
 
 __all__ = [
     "equilibrium_vapor_mole_fraction",
+    "fenske_minimum_stages",
     "raoult_partial_pressure",
     "relative_volatility",
 ]
@@ -88,6 +91,46 @@ def equilibrium_vapor_mole_fraction(
     x = liquid_mole_fraction
     alpha = relative_volatility
     return alpha * x / (1.0 + (alpha - 1.0) * x)
+
+
+def fenske_minimum_stages(
+    *,
+    distillate_light_fraction: float,
+    bottoms_light_fraction: float,
+    relative_volatility: float,
+) -> float:
+    """The Fenske minimum number of stages, N_min = ln[(x_D/(1−x_D))·((1−x_B)/x_B)] / ln(α).
+
+    The fewest theoretical stages a binary distillation needs to reach the specified split,
+    evaluated at total reflux where separation per stage is greatest: from the light-component mole
+    fraction in the ``distillate_light_fraction`` x_D (the top product), the
+    ``bottoms_light_fraction`` x_B (the bottom product), and the ``relative_volatility`` α (from
+    :func:`relative_volatility`), N_min = ln[(x_D/(1−x_D))·((1−x_B)/x_B)] / ln(α). It is the floor
+    on column height — a real column at finite reflux always needs more — and the starting
+    point of every short-cut distillation design. The count includes the reboiler as one stage. A
+    larger α or a looser split lowers it; α → 1 sends it to infinity (no separation is possible).
+    Returns the minimum number of theoretical stages as a plain float.
+    """
+    if not 0.0 < distillate_light_fraction < 1.0:
+        raise ValueError(
+            f"distillate_light_fraction must be in (0, 1); got {distillate_light_fraction}"
+        )
+    if not 0.0 < bottoms_light_fraction < 1.0:
+        raise ValueError(f"bottoms_light_fraction must be in (0, 1); got {bottoms_light_fraction}")
+    if relative_volatility <= 1.0:
+        raise ValueError(
+            "relative_volatility must exceed 1 (no separation is possible at α ≤ 1); got "
+            f"{relative_volatility}"
+        )
+    x_d = distillate_light_fraction
+    x_b = bottoms_light_fraction
+    if x_d <= x_b:
+        raise ValueError(
+            "distillate_light_fraction must exceed bottoms_light_fraction "
+            "(the distillate is the light-enriched product)"
+        )
+    separation = (x_d / (1.0 - x_d)) * ((1.0 - x_b) / x_b)
+    return log(separation) / log(relative_volatility)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

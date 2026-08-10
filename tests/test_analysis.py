@@ -24518,6 +24518,45 @@ def test_vapor_liquid_equilibrium_raoult_relative_volatility_and_vapor_compositi
         relative_volatility(light_vapor_pressure=_q("178 kg"), heavy_vapor_pressure=_q("74 kPa"))
 
 
+def test_vapor_liquid_equilibrium_fenske_minimum_stages():
+    from math import log
+
+    from anvilate.analysis import fenske_minimum_stages
+
+    # N_min = ln[(x_D/(1-x_D))*((1-x_B)/x_B)]/ln(α); 0.95/0.05 split at α=2.4 -> ~6.73.
+    n = fenske_minimum_stages(
+        distillate_light_fraction=0.95,
+        bottoms_light_fraction=0.05,
+        relative_volatility=2.4,
+    )
+    expected = log((0.95 / 0.05) * (0.95 / 0.05)) / log(2.4)
+    assert n == pytest.approx(expected, rel=1e-12)
+    assert n == pytest.approx(6.727, abs=0.01)
+    assert isinstance(n, float)
+
+    # A higher relative volatility needs fewer stages for the same split.
+    n_easy = fenske_minimum_stages(
+        distillate_light_fraction=0.95,
+        bottoms_light_fraction=0.05,
+        relative_volatility=5.0,
+    )
+    assert n_easy < n
+
+    # α = 1 cannot separate; a distillate no richer than the bottoms is rejected.
+    with pytest.raises(ValueError, match="relative_volatility must exceed 1"):
+        fenske_minimum_stages(
+            distillate_light_fraction=0.95,
+            bottoms_light_fraction=0.05,
+            relative_volatility=1.0,
+        )
+    with pytest.raises(ValueError, match="must exceed bottoms_light_fraction"):
+        fenske_minimum_stages(
+            distillate_light_fraction=0.05,
+            bottoms_light_fraction=0.95,
+            relative_volatility=2.4,
+        )
+
+
 def test_packed_bed_ergun_pressure_drop_and_void_fraction():
     from anvilate.analysis import ergun_pressure_drop, packed_bed_void_fraction
 
