@@ -16124,6 +16124,85 @@ def test_fluid_statics_weber_number():
         )
 
 
+def test_fluid_statics_bond_number():
+    from anvilate.analysis import bond_number
+
+    # Bo = d_rho*g*L^2/sigma; water-in-air 997 kg/m^3, 1 mm, 0.0728 N/m -> ~0.1343.
+    bo = bond_number(
+        density_difference=_q("997 kg/m**3"),
+        characteristic_length=_q("1 mm"),
+        surface_tension=_q("0.0728 N/m"),
+    )
+    assert bo == pytest.approx(997 * 9.80665 * 1e-6 / 0.0728, rel=1e-9)
+
+    # Bond grows with the square of length: a 10x drop -> 100x Bond.
+    big = bond_number(
+        density_difference=_q("997 kg/m**3"),
+        characteristic_length=_q("10 mm"),
+        surface_tension=_q("0.0728 N/m"),
+    )
+    assert big / bo == pytest.approx(100.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="density_difference"):
+        bond_number(
+            density_difference=_q("0 kg/m**3"),
+            characteristic_length=_q("1 mm"),
+            surface_tension=_q("0.0728 N/m"),
+        )
+
+
+def test_fluid_statics_capillary_number():
+    from anvilate.analysis import capillary_number
+
+    # Ca = mu*V/sigma; 0.001 Pa*s, 0.5 m/s, 0.0728 N/m -> ~0.00687.
+    ca = capillary_number(
+        dynamic_viscosity=_q("0.001 Pa*s"),
+        velocity=_q("0.5 m/s"),
+        surface_tension=_q("0.0728 N/m"),
+    )
+    assert ca == pytest.approx(0.001 * 0.5 / 0.0728, rel=1e-9)
+
+    with pytest.raises(ValueError, match="dynamic_viscosity"):
+        capillary_number(
+            dynamic_viscosity=_q("0 Pa*s"),
+            velocity=_q("0.5 m/s"),
+            surface_tension=_q("0.0728 N/m"),
+        )
+
+
+def test_fluid_statics_ohnesorge_number_matches_weber_reynolds_identity():
+    from anvilate.analysis import ohnesorge_number, weber_number
+
+    mu = _q("0.00089 Pa*s")
+    rho = _q("997 kg/m**3")
+    length = _q("1 mm")
+    sigma = _q("0.0728 N/m")
+    vel = _q("2 m/s")
+
+    oh = ohnesorge_number(
+        dynamic_viscosity=mu,
+        density=rho,
+        characteristic_length=length,
+        surface_tension=sigma,
+    )
+    assert oh == pytest.approx(0.00089 / (997 * 0.0728 * 1e-3) ** 0.5, rel=1e-9)
+
+    # The defining identity: Oh = sqrt(We)/Re, independent of velocity.
+    we = weber_number(
+        density=rho, velocity=vel, characteristic_length=length, surface_tension=sigma
+    )
+    re = 997 * 2.0 * 1e-3 / 0.00089  # Re = rho*V*L/mu
+    assert oh == pytest.approx(we**0.5 / re, rel=1e-9)
+
+    with pytest.raises(ValueError, match="surface_tension"):
+        ohnesorge_number(
+            dynamic_viscosity=mu,
+            density=rho,
+            characteristic_length=length,
+            surface_tension=_q("0 N/m"),
+        )
+
+
 def test_accumulator_usable_volume_and_size_round_trip():
     from anvilate.analysis import accumulator_size_for_volume, accumulator_usable_volume
 

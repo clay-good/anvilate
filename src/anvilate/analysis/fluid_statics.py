@@ -27,6 +27,9 @@ __all__ = [
     "hydrostatic_pressure",
     "metacentric_height",
     "righting_moment",
+    "bond_number",
+    "capillary_number",
+    "ohnesorge_number",
     "stack_effect_pressure",
     "weber_number",
 ]
@@ -278,6 +281,99 @@ def weber_number(
     if v < 0:
         raise ValueError("velocity must be non-negative")
     return rho * v**2 * length / sigma
+
+
+def bond_number(
+    *,
+    density_difference: Quantity,
+    characteristic_length: Quantity,
+    surface_tension: Quantity,
+) -> float:
+    """The Bond (Eötvös) number, Bo = Δρ·g·L²/σ.
+
+    The ratio of gravity/buoyancy to surface tension across a two-phase interface: Bo = Δρ·g·L²/σ,
+    from the ``density_difference`` Δρ between the two phases, the ``characteristic_length`` L (a
+    drop, bubble, or tube radius), and the ``surface_tension`` σ. When Bo ≪ 1 surface tension
+    dominates and a drop or bubble stays spherical and a meniscus climbs a capillary; when Bo ≫ 1
+    gravity flattens the interface and buoyancy detaches the bubble. It sets whether capillary or
+    gravitational effects govern — the deciding number for capillary rise, bubble departure, and
+    droplet shape. Returns the dimensionless Bond number.
+    """
+    _check(density_difference, "[mass]/[length]**3", "density_difference")
+    _check(characteristic_length, "[length]", "characteristic_length")
+    _check(surface_tension, "[force]/[length]", "surface_tension")
+    d_rho = density_difference.to("kg/m**3").magnitude
+    length = characteristic_length.to("m").magnitude
+    sigma = surface_tension.to("N/m").magnitude
+    if d_rho <= 0 or length <= 0:
+        raise ValueError("density_difference and characteristic_length must be positive")
+    if sigma <= 0:
+        raise ValueError("surface_tension must be positive")
+    return d_rho * _GRAVITY * length**2 / sigma
+
+
+def capillary_number(
+    *,
+    dynamic_viscosity: Quantity,
+    velocity: Quantity,
+    surface_tension: Quantity,
+) -> float:
+    """The capillary number, Ca = μ·V/σ.
+
+    The ratio of viscous drag to surface tension at a moving interface: Ca = μ·V/σ, from the
+    ``dynamic_viscosity`` μ, interface ``velocity`` V, and ``surface_tension`` σ. At low Ca surface
+    tension holds the interface's shape and capillary forces trap residual fluid (a drop resists
+    being pushed through a pore); at high Ca viscous forces smear and elongate it. It governs
+    two-phase displacement in porous media, coating film thickness, and the onset of viscous
+    fingering. Returns the dimensionless capillary number.
+    """
+    _check(dynamic_viscosity, "[pressure]*[time]", "dynamic_viscosity")
+    _check(velocity, "[length]/[time]", "velocity")
+    _check(surface_tension, "[force]/[length]", "surface_tension")
+    mu = dynamic_viscosity.to("Pa*s").magnitude
+    v = velocity.to("m/s").magnitude
+    sigma = surface_tension.to("N/m").magnitude
+    if mu <= 0:
+        raise ValueError("dynamic_viscosity must be positive")
+    if sigma <= 0:
+        raise ValueError("surface_tension must be positive")
+    if v < 0:
+        raise ValueError("velocity must be non-negative")
+    return mu * v / sigma
+
+
+def ohnesorge_number(
+    *,
+    dynamic_viscosity: Quantity,
+    density: Quantity,
+    characteristic_length: Quantity,
+    surface_tension: Quantity,
+) -> float:
+    """The Ohnesorge number, Oh = μ/√(ρ·σ·L).
+
+    A viscosity-scaled group for atomization and droplet breakup: Oh = μ/√(ρ·σ·L), from the
+    ``dynamic_viscosity`` μ, ``density`` ρ, drop or jet ``characteristic_length`` L, and
+    ``surface_tension`` σ. It measures viscous forces against the geometric mean of inertia and
+    surface tension, and is exactly Oh = √We/Re — independent of velocity, so it characterizes the
+    fluid and length scale alone. Low Oh liquids (like water) break into clean droplets; high Oh
+    liquids resist breakup and form long ligaments. Together with the Weber number it maps the
+    regimes of a spray, an inkjet, or a fuel injector. Returns the dimensionless Ohnesorge number.
+    """
+    _check(dynamic_viscosity, "[pressure]*[time]", "dynamic_viscosity")
+    _check(density, "[mass]/[length]**3", "density")
+    _check(characteristic_length, "[length]", "characteristic_length")
+    _check(surface_tension, "[force]/[length]", "surface_tension")
+    mu = dynamic_viscosity.to("Pa*s").magnitude
+    rho = density.to("kg/m**3").magnitude
+    length = characteristic_length.to("m").magnitude
+    sigma = surface_tension.to("N/m").magnitude
+    if mu <= 0:
+        raise ValueError("dynamic_viscosity must be positive")
+    if rho <= 0 or length <= 0:
+        raise ValueError("density and characteristic_length must be positive")
+    if sigma <= 0:
+        raise ValueError("surface_tension must be positive")
+    return mu / (rho * sigma * length) ** 0.5
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

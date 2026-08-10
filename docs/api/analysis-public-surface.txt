@@ -645,12 +645,15 @@ flow_measurement.differential_pressure_for_flow
 flow_measurement.obstruction_meter_flow_rate
 flow_measurement.dynamic_pressure
 flow_measurement.pitot_velocity
+fluid_statics.bond_number
 fluid_statics.buoyant_force
+fluid_statics.capillary_number
 fluid_statics.capillary_rise
 fluid_statics.center_of_pressure_depth
 fluid_statics.hydrostatic_force_on_plane
 fluid_statics.hydrostatic_pressure
 fluid_statics.metacentric_height
+fluid_statics.ohnesorge_number
 fluid_statics.righting_moment
 fluid_statics.stack_effect_pressure
 fluid_statics.weber_number
