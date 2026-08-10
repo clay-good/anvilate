@@ -480,6 +480,15 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_packed_bed_reactor_pressure_drop_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "packed_bed_reactor_pressure_drop.py"))
+    d = namespace["packed_bed_drop"]()
+    # ε = 1 - 960/1600 = 0.40.
+    assert d["void_fraction"] == pytest.approx(0.40, rel=1e-9)
+    # Ergun drop over the 2 m bed is ~1.07 kPa.
+    assert d["pressure_drop_kpa"] == pytest.approx(1.07, abs=0.05)
+
+
 def test_reactor_pfr_vs_cstr_conversion_example():
     namespace = runpy.run_path(str(_EXAMPLES / "reactor_pfr_vs_cstr_conversion.py"))
     d = namespace["reactor_conversion"]()

@@ -24250,6 +24250,66 @@ def test_ideal_gas_law_pressure_volume_and_moles():
         )
 
 
+def test_packed_bed_ergun_pressure_drop_and_void_fraction():
+    from anvilate.analysis import ergun_pressure_drop, packed_bed_void_fraction
+
+    # ε = 1 - ρ_bulk/ρ_p; 960/1600 -> 0.40.
+    eps = packed_bed_void_fraction(
+        bulk_density=_q("960 kg/m**3"), particle_density=_q("1600 kg/m**3")
+    )
+    assert eps == pytest.approx(0.40, rel=1e-12)
+    assert isinstance(eps, float)
+
+    # Ergun: ΔP = L*[150*(1-ε)²/ε³*μU/dp² + 1.75*(1-ε)/ε³*ρU²/dp].
+    dp = ergun_pressure_drop(
+        bed_length=_q("2 m"),
+        particle_diameter=_q("5 mm"),
+        void_fraction=eps,
+        superficial_velocity=_q("0.3 m/s"),
+        fluid_density=_q("1.2 kg/m**3"),
+        fluid_viscosity=_q("1.8e-5 Pa*s"),
+    )
+    e, d_p, u, rho, mu, length = 0.40, 0.005, 0.3, 1.2, 1.8e-5, 2.0
+    visc = 150 * (1 - e) ** 2 / e**3 * mu * u / d_p**2
+    inert = 1.75 * (1 - e) / e**3 * rho * u**2 / d_p
+    assert dp.to("Pa").magnitude == pytest.approx((visc + inert) * length, rel=1e-9)
+
+    # At low velocity the viscous term dominates and ΔP is ~linear in U; quadruple U and the
+    # inertial term makes the drop grow faster than 4x.
+    dp4 = ergun_pressure_drop(
+        bed_length=_q("2 m"),
+        particle_diameter=_q("5 mm"),
+        void_fraction=eps,
+        superficial_velocity=_q("1.2 m/s"),
+        fluid_density=_q("1.2 kg/m**3"),
+        fluid_viscosity=_q("1.8e-5 Pa*s"),
+    )
+    assert dp4.to("Pa").magnitude > 4 * dp.to("Pa").magnitude
+
+    with pytest.raises(ValueError, match="void_fraction must be in"):
+        ergun_pressure_drop(
+            bed_length=_q("2 m"),
+            particle_diameter=_q("5 mm"),
+            void_fraction=1.5,
+            superficial_velocity=_q("0.3 m/s"),
+            fluid_density=_q("1.2 kg/m**3"),
+            fluid_viscosity=_q("1.8e-5 Pa*s"),
+        )
+    with pytest.raises(ValueError, match="cannot exceed particle_density"):
+        packed_bed_void_fraction(
+            bulk_density=_q("1600 kg/m**3"), particle_density=_q("960 kg/m**3")
+        )
+    with pytest.raises(ValueError, match="fluid_viscosity must be a"):
+        ergun_pressure_drop(
+            bed_length=_q("2 m"),
+            particle_diameter=_q("5 mm"),
+            void_fraction=eps,
+            superficial_velocity=_q("0.3 m/s"),
+            fluid_density=_q("1.2 kg/m**3"),
+            fluid_viscosity=_q("1.8e-5 Pa"),
+        )
+
+
 def test_reactor_damkohler_and_first_order_conversions():
     from math import exp
 
