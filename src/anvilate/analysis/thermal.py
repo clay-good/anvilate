@@ -75,6 +75,7 @@ __all__ = [
     "parallel_flow_ntu_for_effectiveness",
     "biot_number",
     "fourier_number",
+    "peclet_number",
     "lumped_capacitance_time_constant",
     "lumped_capacitance_cooling_time",
     "semi_infinite_solid_temperature_rise",
@@ -1839,6 +1840,35 @@ def fourier_number(
     if t < 0:
         raise ValueError("time must be non-negative")
     return alpha * t / length**2
+
+
+def peclet_number(
+    *,
+    velocity: Quantity,
+    characteristic_length: Quantity,
+    thermal_diffusivity: Quantity,
+) -> float:
+    """The thermal Péclet number Pe = V·L/α — advection vs conduction of heat.
+
+    The ratio of heat carried by bulk flow to heat spread by conduction: Pe = V·L/α, from the flow
+    ``velocity`` V, the ``characteristic_length`` L, and the ``thermal_diffusivity`` α = k/(ρ·c_p).
+    It equals the product of the Reynolds and Prandtl numbers, Pe = Re·Pr. At low Pe conduction
+    dominates and the temperature field is nearly symmetric; at high Pe the flow sweeps heat
+    downstream before it can diffuse, which is why forced-convection heat exchangers and thermal
+    entry lengths scale with it. The same group with mass diffusivity in place of α is the
+    mass-transfer Péclet number (Pe = Re·Sc). Returns the dimensionless Pe.
+    """
+    _require(velocity, "[length]/[time]", "velocity")
+    _require(characteristic_length, "[length]", "characteristic_length")
+    _require(thermal_diffusivity, "[length]**2/[time]", "thermal_diffusivity")
+    v = velocity.to("m/s").magnitude
+    length = characteristic_length.to("m").magnitude
+    alpha = thermal_diffusivity.to("m**2/s").magnitude
+    if length <= 0 or alpha <= 0:
+        raise ValueError("characteristic_length and thermal_diffusivity must be positive")
+    if v < 0:
+        raise ValueError("velocity must be non-negative")
+    return v * length / alpha
 
 
 def lumped_capacitance_time_constant(

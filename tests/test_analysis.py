@@ -15230,6 +15230,32 @@ def test_thermal_fourier_number():
         )
 
 
+def test_thermal_peclet_number():
+    from anvilate.analysis import peclet_number
+
+    # Pe = V*L/alpha; 2 m/s, 0.05 m, 2e-5 m^2/s -> 5000.
+    pe = peclet_number(
+        velocity=_q("2 m/s"),
+        characteristic_length=_q("0.05 m"),
+        thermal_diffusivity=_q("2e-5 m**2/s"),
+    )
+    assert pe == pytest.approx(2 * 0.05 / 2e-5, rel=1e-9)
+    assert pe == pytest.approx(5000.0, rel=1e-9)
+
+    # Pe = Re*Pr identity: Re = V*L/nu, Pr = nu/alpha, so Pe = V*L/alpha.
+    nu = 1.5e-5  # kinematic viscosity, m^2/s
+    re = 2 * 0.05 / nu
+    pr = nu / 2e-5
+    assert pe == pytest.approx(re * pr, rel=1e-9)
+
+    with pytest.raises(ValueError, match="thermal_diffusivity"):
+        peclet_number(
+            velocity=_q("2 m/s"),
+            characteristic_length=_q("0.05 m"),
+            thermal_diffusivity=_q("0 m**2/s"),
+        )
+
+
 def test_thermal_grashof_and_rayleigh_numbers():
     from anvilate.analysis import grashof_number, rayleigh_number
 

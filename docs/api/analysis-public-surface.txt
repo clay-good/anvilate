@@ -1276,6 +1276,7 @@ thermal.guided_cantilever_leg_length
 thermal.parallel_flow_effectiveness
 thermal.parallel_flow_ntu_for_effectiveness
 thermal.parallel_thermal_resistance
+thermal.peclet_number
 thermal.radiation_heat_transfer
 thermal.radiation_two_surface_exchange
 thermal.radiation_heat_transfer_coefficient
