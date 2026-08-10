@@ -369,6 +369,9 @@ modules:
 - :mod:`~anvilate.analysis.friction` — dry (Coulomb) friction: the friction force F = µ·N, the
   angle of repose θ = arctan(µ) a slope or stockpile stands at, and the force W·(sin θ + µ·cos θ)
   to drag a load up an incline
+- :mod:`~anvilate.analysis.fuel_cell` — fuel-cell performance: the reversible voltage
+  E_rev = −ΔG/(n·F), the thermodynamic (max) efficiency η = ΔG/ΔH, and the voltage efficiency
+  η_V = V_cell/E_rev that grades a cell against its reversible potential
 - :mod:`~anvilate.analysis.magnetics` — magnetic actuators and circuits: the solenoid field
   B = μ₀·n·I, the Maxwell magnetic pressure p = B²/(2·μ₀), the electromagnet holding force
   F = B²·A/(2·μ₀), and the magnetic circuit (Hopkinson's law) — MMF = N·I, reluctance
@@ -1686,6 +1689,11 @@ from .friction import (
     force_to_slide_up_incline,
     friction_force,
 )
+from .fuel_cell import (
+    reversible_cell_voltage,
+    thermodynamic_efficiency,
+    voltage_efficiency,
+)
 from .gas_compression import (
     adiabatic_compression_power,
     adiabatic_discharge_temperature,
@@ -2870,6 +2878,9 @@ __all__ = [
     "friction_force",
     "angle_of_repose",
     "force_to_slide_up_incline",
+    "reversible_cell_voltage",
+    "thermodynamic_efficiency",
+    "voltage_efficiency",
     "manning_flow_velocity",
     "broad_crested_weir_flow",
     "minimum_specific_energy_rectangular",

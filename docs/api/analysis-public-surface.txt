@@ -673,6 +673,9 @@ fresnel.slab_transmittance
 friction.friction_force
 friction.angle_of_repose
 friction.force_to_slide_up_incline
+fuel_cell.reversible_cell_voltage
+fuel_cell.thermodynamic_efficiency
+fuel_cell.voltage_efficiency
 gas_compression.adiabatic_compression_power
 gas_compression.adiabatic_discharge_temperature
 gas_compression.ideal_gas_density

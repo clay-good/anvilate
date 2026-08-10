@@ -24289,6 +24289,43 @@ def test_ideal_gas_law_pressure_volume_and_moles():
         )
 
 
+def test_fuel_cell_reversible_voltage_thermodynamic_and_voltage_efficiency():
+    from anvilate.analysis import (
+        reversible_cell_voltage,
+        thermodynamic_efficiency,
+        voltage_efficiency,
+    )
+
+    F = 96485.33212
+
+    # E_rev = -ΔG/(n*F); H2/O2: 237 kJ/mol, n=2 -> 1.229 V.
+    e_rev = reversible_cell_voltage(
+        gibbs_free_energy_change=_q("-237 kJ/mol"), electrons_transferred=2
+    )
+    assert e_rev.to("V").magnitude == pytest.approx(237000 / (2 * F), rel=1e-9)
+    assert e_rev.to("V").magnitude == pytest.approx(1.229, abs=0.005)
+
+    # η_max = ΔG/ΔH; 237/286 ≈ 0.829 (HHV).
+    eta = thermodynamic_efficiency(
+        gibbs_free_energy_change=_q("-237 kJ/mol"), enthalpy_change=_q("-286 kJ/mol")
+    )
+    assert eta == pytest.approx(237 / 286, rel=1e-12)
+    assert isinstance(eta, float)
+
+    # η_V = V/E_rev; 0.70 / 1.229 ≈ 0.57.
+    eta_v = voltage_efficiency(cell_voltage=_q("0.70 V"), reversible_voltage=e_rev)
+    assert eta_v == pytest.approx(0.70 / e_rev.to("V").magnitude, rel=1e-12)
+    assert eta_v < 1.0
+
+    # Guardrails: a non-spontaneous ΔG, a voltage above reversible, and dimensions.
+    with pytest.raises(ValueError, match="must be negative"):
+        reversible_cell_voltage(gibbs_free_energy_change=_q("237 kJ/mol"), electrons_transferred=2)
+    with pytest.raises(ValueError, match=r"η_V > 1 is impossible"):
+        voltage_efficiency(cell_voltage=_q("1.5 V"), reversible_voltage=e_rev)
+    with pytest.raises(ValueError, match="gibbs_free_energy_change must be a"):
+        reversible_cell_voltage(gibbs_free_energy_change=_q("-237 kJ"), electrons_transferred=2)
+
+
 def test_vapor_liquid_equilibrium_raoult_relative_volatility_and_vapor_composition():
     from anvilate.analysis import (
         equilibrium_vapor_mole_fraction,

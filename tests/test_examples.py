@@ -480,6 +480,20 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
 
 
+def test_fuel_cell_hydrogen_efficiency_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "fuel_cell_hydrogen_efficiency.py"))
+    d = namespace["hydrogen_cell_efficiency"]()
+    # E_rev = 237000/(2*96485) ≈ 1.229 V.
+    assert d["reversible_voltage_v"] == pytest.approx(1.229, abs=0.005)
+    # η_max = 237/286 ≈ 0.829; η_V = 0.70/1.229 ≈ 0.57.
+    assert d["thermodynamic_efficiency"] == pytest.approx(237 / 286, rel=1e-6)
+    assert d["voltage_efficiency"] == pytest.approx(0.57, abs=0.01)
+    # Overall is the product, ~0.47.
+    assert d["overall_efficiency"] == pytest.approx(
+        d["thermodynamic_efficiency"] * d["voltage_efficiency"], rel=1e-9
+    )
+
+
 def test_distillation_benzene_toluene_equilibrium_example():
     namespace = runpy.run_path(str(_EXAMPLES / "distillation_benzene_toluene_equilibrium.py"))
     d = namespace["benzene_toluene_stage"]()
