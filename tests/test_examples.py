@@ -514,6 +514,17 @@ def test_measurement_uncertainty_gauge_block_example():
     assert b["expanded_um"] == pytest.approx(2 * b["combined_um"], rel=1e-6)
 
 
+def test_photodetector_receiver_snr_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "photodetector_receiver_snr.py"))
+    s = namespace["receiver_snr"]()
+    # 1550 nm InGaAs at eta=0.8 -> ~1 A/W; 1 uW -> 1 uA photocurrent.
+    assert s["responsivity_a_w"] == pytest.approx(1.0, abs=0.02)
+    assert s["photocurrent_ua"] == pytest.approx(1.0, abs=0.02)
+    # Shot noise over 1 GHz is ~18 nA (18000 pA), giving ~35 dB shot-noise-limited SNR.
+    assert s["shot_noise_pa"] == pytest.approx(17900.0, rel=0.05)
+    assert s["snr_db"] == pytest.approx(35.0, abs=1.0)
+
+
 def test_clarifier_primary_sizing_example():
     namespace = runpy.run_path(str(_EXAMPLES / "clarifier_primary_sizing.py"))
     c = namespace["clarifier_loadings"]()

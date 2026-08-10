@@ -25614,6 +25614,46 @@ def test_photon_energy_wavelength_inverse_and_flux():
         photon_energy(wavelength=_q("500 THz"))
 
 
+def test_photodiode_responsivity_current_and_shot_noise():
+    from anvilate.analysis import (
+        photodiode_current,
+        photodiode_responsivity,
+        shot_noise_current,
+    )
+
+    q = 1.602176634e-19
+    hc = 6.62607015e-34 * 299792458.0
+
+    # R = eta*q*lambda/(h*c); eta 0.8 at 1550 nm -> ~1.0 A/W for InGaAs.
+    r = photodiode_responsivity(quantum_efficiency=0.8, wavelength=_q("1550 nm"))
+    assert r.to("A/W").magnitude == pytest.approx(0.8 * q * 1550e-9 / hc, rel=1e-9)
+    assert r.to("A/W").magnitude == pytest.approx(1.0, abs=0.01)
+    # Responsivity rises with wavelength for the same quantum efficiency.
+    r_short = photodiode_responsivity(quantum_efficiency=0.8, wavelength=_q("850 nm"))
+    assert r_short.to("A/W").magnitude < r.to("A/W").magnitude
+
+    # I = R*P; 1 A/W at 1 mW -> 1 mA.
+    i = photodiode_current(responsivity=r, optical_power=_q("1 mW"))
+    assert i.to("mA").magnitude == pytest.approx(r.to("A/W").magnitude, rel=1e-9)
+
+    # Shot noise i_n = sqrt(2*q*I*B); 1 mA over 1 GHz -> ~0.566 uA.
+    i_n = shot_noise_current(current=i, bandwidth=_q("1 GHz"))
+    assert i_n.to("A").magnitude == pytest.approx(
+        (2 * q * i.to("A").magnitude * 1e9) ** 0.5, rel=1e-9
+    )
+    assert i_n.to("uA").magnitude == pytest.approx(0.566, abs=0.005)
+    # Shot noise grows only with the square root of current: 4x current doubles it.
+    i_n4 = shot_noise_current(current=_q("4 mA"), bandwidth=_q("1 GHz"))
+    i_n1 = shot_noise_current(current=_q("1 mA"), bandwidth=_q("1 GHz"))
+    assert i_n4.to("A").magnitude == pytest.approx(2 * i_n1.to("A").magnitude, rel=1e-9)
+
+    # Guardrails: efficiency in (0, 1], dimensions checked.
+    with pytest.raises(ValueError, match="quantum_efficiency must be in"):
+        photodiode_responsivity(quantum_efficiency=1.5, wavelength=_q("1550 nm"))
+    with pytest.raises(ValueError, match="responsivity must be a"):
+        photodiode_current(responsivity=_q("1 A"), optical_power=_q("1 mW"))
+
+
 def test_coriolis_acceleration_parameter_and_rossby_number():
     from math import radians, sin
 

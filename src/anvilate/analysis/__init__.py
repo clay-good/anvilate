@@ -525,6 +525,9 @@ modules:
 - :mod:`~anvilate.analysis.photon` — photon (Planck) quanta: the photon energy E = h·c/λ, the
   wavelength matching an energy λ = h·c/E (e.g. a semiconductor band gap), and the photon flux
   Φ = P·λ/(h·c) a beam of a given optical power delivers — for detectors, solar cells, and LEDs
+- :mod:`~anvilate.analysis.photodetector` — photodiode / optical-receiver detection: the
+  responsivity R = η·q·λ/(h·c) (amps per watt of light), the photocurrent I = R·P_opt it delivers,
+  and the fundamental shot-noise current i_n = √(2·q·I·B) that floors a receiver's signal-to-noise
 - :mod:`~anvilate.analysis.radiation_pressure` — light momentum and radiation pressure: the photon
   momentum p = h/λ, the radiation pressure P = (1+R)·I/c on a surface of reflectivity R, and the
   radiation force (1+R)·I·A/c that drives a solar sail
@@ -2012,6 +2015,11 @@ from .orbital_mechanics import (
     orbital_period,
     semi_major_axis_from_apsides,
     vis_viva_velocity,
+)
+from .photodetector import (
+    photodiode_current,
+    photodiode_responsivity,
+    shot_noise_current,
 )
 from .photometry import (
     luminous_efficacy,
@@ -3630,6 +3638,9 @@ __all__ = [
     "point_source_illuminance",
     "lumen_method_illuminance",
     "lumen_method_luminaire_count",
+    "photodiode_responsivity",
+    "photodiode_current",
+    "shot_noise_current",
     "room_cavity_ratio",
     "lighting_power_density",
     "luminous_efficacy",
