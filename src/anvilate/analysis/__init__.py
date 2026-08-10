@@ -840,6 +840,9 @@ modules:
 - :mod:`~anvilate.analysis.laser_cutting` — laser cutting as a power balance: the specific
   removal energy e_m = c·ΔT + L_f, the cutting speed v = η·P/(ρ·t·w·e_m), and the greatest
   thickness a laser can sever t_max = η·P/(ρ·v·w·e_m)
+- :mod:`~anvilate.analysis.level_turn` — steady coordinated level-turn flight mechanics: the load
+  factor n = 1/cos φ a bank imposes (and its inverse), the turn radius R = V²/(g·tan φ) and rate
+  ω = g·tan φ/V, the accelerated stall speed V_s·√n, and the bank a target turn rate needs
 - :mod:`~anvilate.analysis.edm` — electrical discharge machining by spark erosion: the
   discharge energy per pulse E = U·I·t_on, the duty factor τ = t_on/(t_on + t_off), and the
   removal rate MRR = k·I·τ — the roughing-versus-finishing trade made numerical
@@ -1956,6 +1959,14 @@ from .laser_cutting import (
     laser_cutting_speed,
     laser_max_cut_thickness,
     laser_specific_removal_energy,
+)
+from .level_turn import (
+    accelerated_stall_speed,
+    bank_angle_for_load_factor,
+    bank_angle_for_turn_rate,
+    load_factor_from_bank_angle,
+    turn_radius,
+    turn_rate,
 )
 from .living_hinge import (
     living_hinge_fold_strain,
@@ -3908,6 +3919,12 @@ __all__ = [
     "laser_specific_removal_energy",
     "laser_cutting_speed",
     "laser_max_cut_thickness",
+    "load_factor_from_bank_angle",
+    "bank_angle_for_load_factor",
+    "turn_radius",
+    "turn_rate",
+    "accelerated_stall_speed",
+    "bank_angle_for_turn_rate",
     "living_hinge_fold_strain",
     "living_hinge_web_length_for_strain",
     "asce7_lrfd_factored_load",

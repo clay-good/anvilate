@@ -5440,3 +5440,15 @@ def test_sheave_repair_from_inverse_example_repairs_in_one_solve():
     assert "safety factor 1.50" in repaired_bending.detail
     assert after.status is CheckStatus.OVER_MARGIN  # only the over-heavy rope remains
     assert after.passed
+
+
+def test_base_to_final_turn_example_bank_governs_the_stall():
+    namespace = runpy.run_path(str(_EXAMPLES / "base_to_final_turn.py"))
+    steep = namespace["screen_base_to_final_turn"]()
+    # The 60-degree bank drives the 2 g accelerated stall above pattern speed -> FAIL.
+    assert steep.status is CheckStatus.FAIL
+    assert steep.entries[0].name == "approach speed vs accelerated stall"
+    # Easing to a 30-degree bank restores the 1.3 Vs approach margin.
+    shallow = namespace["screen_disciplined_turn"]()
+    assert shallow.entries[0].passed
+    assert shallow.status is CheckStatus.PASS

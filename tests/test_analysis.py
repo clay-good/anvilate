@@ -27906,3 +27906,65 @@ def test_aisc_minor_axis_flexural_strength_yield_cap_and_flb():
         flange_width=_q("500 mm"), flange_thickness=_q("10 mm"), **base
     )
     assert slender.to("kN*m").magnitude == pytest.approx(0.69 * E / 25**2 * Sy / 1e6, rel=1e-9)
+
+
+def test_level_turn_bank_load_factor_radius_rate_and_stall():
+    from math import cos, degrees, radians, sqrt, tan
+
+    from anvilate.analysis import level_turn as lt
+
+    g = 9.80665
+    # Load factor from bank angle: 60 deg -> 2 g, and level flight (0 deg) -> 1 g.
+    assert lt.load_factor_from_bank_angle(bank_angle=60.0) == pytest.approx(2.0, rel=1e-12)
+    assert lt.load_factor_from_bank_angle(bank_angle=0.0) == pytest.approx(1.0, rel=1e-12)
+    assert lt.load_factor_from_bank_angle(bank_angle=45.0) == pytest.approx(
+        1.0 / cos(radians(45.0)), rel=1e-12
+    )
+    # Bank-for-load-factor is the exact inverse.
+    assert lt.bank_angle_for_load_factor(load_factor=2.0) == pytest.approx(60.0, rel=1e-9)
+    n = lt.load_factor_from_bank_angle(bank_angle=37.0)
+    assert lt.bank_angle_for_load_factor(load_factor=n) == pytest.approx(37.0, rel=1e-9)
+
+    # Turn radius R = V^2/(g*tan(phi)); rate omega = g*tan(phi)/V (and omega = V/R).
+    speed = _q("100 m/s")
+    r = lt.turn_radius(speed=speed, bank_angle=45.0)
+    assert r.to("m").magnitude == pytest.approx(100.0**2 / (g * tan(radians(45.0))), rel=1e-12)
+    rate = lt.turn_rate(speed=speed, bank_angle=45.0)
+    assert rate.to("deg/s").magnitude == pytest.approx(
+        degrees(g * tan(radians(45.0)) / 100.0), rel=1e-12
+    )
+    # Consistency: omega [rad/s] * R = V.
+    assert rate.to("rad/s").magnitude * r.to("m").magnitude == pytest.approx(100.0, rel=1e-12)
+    # Steeper bank -> tighter radius, faster rate.
+    assert lt.turn_radius(speed=speed, bank_angle=60.0).to("m").magnitude < r.to("m").magnitude
+    assert (
+        lt.turn_rate(speed=speed, bank_angle=60.0).to("deg/s").magnitude
+        > rate.to("deg/s").magnitude
+    )
+
+    # Accelerated stall: Vs(n) = Vs*sqrt(n); at 2 g the 50 kn stall rises by sqrt(2).
+    vs = lt.accelerated_stall_speed(level_stall_speed=_q("50 knot"), load_factor=2.0)
+    assert vs.to("knot").magnitude == pytest.approx(50.0 * sqrt(2.0), rel=1e-12)
+    assert lt.accelerated_stall_speed(level_stall_speed=_q("50 knot"), load_factor=1.0).to(
+        "knot"
+    ).magnitude == pytest.approx(50.0, rel=1e-12)
+
+    # Bank for a target turn rate is the inverse of turn_rate.
+    phi = lt.bank_angle_for_turn_rate(speed=speed, turn_rate=_q("3 deg/s"))
+    assert lt.turn_rate(speed=speed, bank_angle=phi).to("deg/s").magnitude == pytest.approx(
+        3.0, rel=1e-9
+    )
+
+    # Domain guards.
+    with pytest.raises(ValueError, match=r"bank_angle .* \[0, 90\)"):
+        lt.load_factor_from_bank_angle(bank_angle=90.0)
+    with pytest.raises(ValueError, match="load_factor must be at least 1"):
+        lt.bank_angle_for_load_factor(load_factor=0.5)
+    with pytest.raises(ValueError, match=r"bank_angle .* \(0, 90\)"):
+        lt.turn_radius(speed=speed, bank_angle=0.0)
+    with pytest.raises(ValueError, match="load_factor must be at least 1"):
+        lt.accelerated_stall_speed(level_stall_speed=_q("50 knot"), load_factor=0.9)
+    with pytest.raises(ValueError, match="turn_rate must be positive"):
+        lt.bank_angle_for_turn_rate(speed=speed, turn_rate=_q("0 deg/s"))
+    with pytest.raises(ValueError, match="speed must be a"):
+        lt.turn_radius(speed=_q("100 m"), bank_angle=45.0)
