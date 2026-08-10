@@ -29,6 +29,8 @@ __all__ = [
     "inverse_square_attenuation",
     "mach_cone_angle",
     "mass_law_transmission_loss",
+    "room_constant",
+    "critical_distance",
     "noise_dose_fraction",
     "open_pipe_resonance_frequency",
     "permissible_exposure_time",
@@ -116,6 +118,46 @@ def sabine_reverberation_time(*, volume: Quantity, total_absorption: Quantity) -
     if v <= 0 or a <= 0:
         raise ValueError("volume and total_absorption must be positive")
     return Quantity(magnitude=0.161 * v / a, unit="s")
+
+
+def room_constant(
+    *, total_surface_area: Quantity, average_absorption_coefficient: float
+) -> Quantity:
+    """The room constant, R = S·ᾱ/(1 − ᾱ).
+
+    The measure of how much a room soaks up its own reverberant sound: R = ``total_surface_area`` S
+    · ``average_absorption_coefficient`` ᾱ / (1 − ᾱ). A live, hard room (small ᾱ) has a small R and
+    a strong reverberant field; a dead, absorptive room has a large R. It sets the steady reverb
+    level a source builds up and, with the source directivity, the critical distance (see
+    :func:`critical_distance`). ᾱ must lie in (0, 1). Returns the room constant in m² (sabins).
+    """
+    _check(total_surface_area, "[length]**2", "total_surface_area")
+    s = total_surface_area.to("m**2").magnitude
+    if s <= 0:
+        raise ValueError("total_surface_area must be positive")
+    if not 0.0 < average_absorption_coefficient < 1.0:
+        raise ValueError("average_absorption_coefficient must be in (0, 1)")
+    a_bar = average_absorption_coefficient
+    return Quantity(magnitude=s * a_bar / (1.0 - a_bar), unit="m**2")
+
+
+def critical_distance(*, room_constant: Quantity, directivity_factor: float = 1.0) -> Quantity:
+    """The critical (reverberation) distance, d_c = 0.141·√(Q·R).
+
+    The distance from a source at which the direct sound and the reverberant field are equal:
+    d_c = 0.141·√(``directivity_factor`` Q · ``room_constant`` R). Closer than d_c the direct sound
+    dominates (move the listener or talker in and the level rises with 1/r); beyond it the room's
+    reverberant field takes over and the level flattens out — so a PA loudspeaker or a machine's
+    noise stops getting quieter with distance past d_c. Q is 1 for an omnidirectional source, 2 near
+    a wall, 4 in a corner. Returns the critical distance in metres.
+    """
+    _check(room_constant, "[length]**2", "room_constant")
+    r = room_constant.to("m**2").magnitude
+    if r <= 0:
+        raise ValueError("room_constant must be positive")
+    if directivity_factor <= 0:
+        raise ValueError("directivity_factor must be positive")
+    return Quantity(magnitude=0.141 * (directivity_factor * r) ** 0.5, unit="m")
 
 
 def permissible_exposure_time(

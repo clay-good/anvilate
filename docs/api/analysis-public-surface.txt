@@ -9,6 +9,8 @@ accumulator.accumulator_size_for_volume
 accumulator.accumulator_usable_volume
 acoustics.inverse_square_attenuation
 acoustics.mass_law_transmission_loss
+acoustics.room_constant
+acoustics.critical_distance
 acoustics.noise_dose_fraction
 acoustics.permissible_exposure_time
 acoustics.sabine_reverberation_time

@@ -14525,6 +14525,37 @@ def test_acoustics_sabine_reverberation_time():
         sabine_reverberation_time(volume=_q("0 m**3"), total_absorption=_q("20 m**2"))
 
 
+def test_acoustics_room_constant_and_critical_distance():
+    from math import sqrt
+
+    from anvilate.analysis import critical_distance, room_constant
+
+    # R = S*a/(1-a): 1000 m^2 surface at a=0.2 -> 250 m^2 sabins.
+    r = room_constant(total_surface_area=_q("1000 m**2"), average_absorption_coefficient=0.2)
+    assert r.to("m**2").magnitude == pytest.approx(1000 * 0.2 / 0.8, rel=1e-12)
+    assert r.to("m**2").magnitude == pytest.approx(250.0, rel=1e-9)
+    # A more absorptive (deader) room has a larger room constant.
+    r_dead = room_constant(total_surface_area=_q("1000 m**2"), average_absorption_coefficient=0.5)
+    assert r_dead.to("m**2").magnitude > r.to("m**2").magnitude
+
+    # d_c = 0.141*sqrt(Q*R); omnidirectional (Q=1) on R=250 -> 2.23 m.
+    dc = critical_distance(room_constant=r, directivity_factor=1.0)
+    assert dc.to("m").magnitude == pytest.approx(0.141 * sqrt(1.0 * 250.0), rel=1e-9)
+    assert dc.to("m").magnitude == pytest.approx(2.23, abs=0.01)
+    # A more directive source (near a wall, Q=2) throws the direct field farther, so d_c grows.
+    dc_wall = critical_distance(room_constant=r, directivity_factor=2.0)
+    assert dc_wall.to("m").magnitude == pytest.approx(0.141 * sqrt(2.0 * 250.0), rel=1e-9)
+    assert dc_wall.to("m").magnitude > dc.to("m").magnitude
+
+    # Guardrails: absorption in (0, 1), positive directivity, correct dimensions.
+    with pytest.raises(ValueError, match="average_absorption_coefficient must be in"):
+        room_constant(total_surface_area=_q("1000 m**2"), average_absorption_coefficient=1.0)
+    with pytest.raises(ValueError, match="directivity_factor must be positive"):
+        critical_distance(room_constant=r, directivity_factor=0.0)
+    with pytest.raises(ValueError, match="total_surface_area must be a"):
+        room_constant(total_surface_area=_q("1000 m"), average_absorption_coefficient=0.2)
+
+
 def test_illumination_point_source_and_lumen_method():
     import math
 
