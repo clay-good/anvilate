@@ -49,6 +49,7 @@ __all__ = [
     "asme_b313_bend_stress_intensification",
     "asme_b313_displacement_stress",
     "thick_wall_cylinder",
+    "thick_wall_cylinder_stress_at_radius",
     "thin_wall_sphere_stress",
     "thin_wall_sphere_diametral_growth",
     "thick_wall_sphere",
@@ -917,6 +918,53 @@ def thick_wall_cylinder(
     return ThickWallStress(
         hoop_stress=Quantity(magnitude=p * (ro**2 + ri**2) / denom, unit="MPa"),
         radial_stress=Quantity(magnitude=-p, unit="MPa"),
+        longitudinal_stress=Quantity(magnitude=longitudinal, unit="MPa"),
+    )
+
+
+def thick_wall_cylinder_stress_at_radius(
+    *,
+    pressure: Quantity,
+    inner_radius: Quantity,
+    wall_thickness: Quantity,
+    radius: Quantity,
+    closed_ends: bool = True,
+) -> ThickWallStress:
+    """The exact Lamé stresses at any radius in an internally-pressurized thick-wall cylinder.
+
+    :func:`thick_wall_cylinder` reports the bore, where the stress peaks; this gives the full
+    through-wall distribution the bore is one point of. At radius r (r_i ≤ r ≤ r_o) under internal
+    ``pressure`` p, the Lamé field is
+
+        σ_hoop  = p·r_i²/(r_o² − r_i²)·(1 + r_o²/r²),
+        σ_radial = p·r_i²/(r_o² − r_i²)·(1 − r_o²/r²),
+
+    with the axial ``longitudinal_stress`` constant across the wall (p·r_i²/(r_o² − r_i²) for closed
+    ends, 0 for open). Both fall monotonically from the bore to the OD — the hoop from its peak
+    p·(r_o² + r_i²)/(r_o² − r_i²) to 2·σ_long, the radial from −p to 0 — so a wall is worked hardest
+    at the bore and this quantifies the reserve deeper in. ``inner_radius`` r_i and
+    ``wall_thickness`` set r_o = r_i + t; ``radius`` r must lie within the wall. Returns the
+    :class:`ThickWallStress` at r.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    _require(inner_radius, "[length]", "inner_radius")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    _require(radius, "[length]", "radius")
+    p = pressure.to("MPa").magnitude
+    ri = inner_radius.to("mm").magnitude
+    t = wall_thickness.to("mm").magnitude
+    r = radius.to("mm").magnitude
+    if p <= 0 or ri <= 0 or t <= 0:
+        raise ValueError("pressure, inner_radius, and wall_thickness must be positive")
+    ro = ri + t
+    if not ri <= r <= ro:
+        raise ValueError(f"radius must lie within the wall [{ri}, {ro}] mm (bore to OD); got {r}")
+    denom = ro**2 - ri**2
+    coefficient = p * ri**2 / denom
+    longitudinal = coefficient if closed_ends else 0.0
+    return ThickWallStress(
+        hoop_stress=Quantity(magnitude=coefficient * (1.0 + ro**2 / r**2), unit="MPa"),
+        radial_stress=Quantity(magnitude=coefficient * (1.0 - ro**2 / r**2), unit="MPa"),
         longitudinal_stress=Quantity(magnitude=longitudinal, unit="MPa"),
     )
 

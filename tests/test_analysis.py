@@ -5412,6 +5412,59 @@ def test_thick_wall_recovers_the_thin_wall_membrane_and_always_exceeds_it():
     assert stubby.hoop_stress.to("MPa").magnitude > 2 * 25 / 10  # thin-wall reading
 
 
+def test_thick_wall_cylinder_stress_at_radius_matches_bore_od_and_lame_field():
+    from anvilate.analysis import thick_wall_cylinder_stress_at_radius
+
+    kw = {"pressure": _q("60 MPa"), "inner_radius": _q("25 mm"), "wall_thickness": _q("10 mm")}
+    # At the bore (r = r_i) it reproduces thick_wall_cylinder exactly.
+    bore = thick_wall_cylinder_stress_at_radius(radius=_q("25 mm"), **kw)
+    ref = thick_wall_cylinder(pressure=_q("60 MPa"), radius=_q("25 mm"), wall_thickness=_q("10 mm"))
+    assert bore.hoop_stress.to("MPa").magnitude == pytest.approx(
+        ref.hoop_stress.to("MPa").magnitude, rel=1e-12
+    )
+    assert bore.radial_stress.to("MPa").magnitude == pytest.approx(-60.0, rel=1e-12)
+    assert bore.longitudinal_stress.to("MPa").magnitude == pytest.approx(
+        ref.longitudinal_stress.to("MPa").magnitude, rel=1e-12
+    )
+
+    # At the OD (r = r_o = 35 mm): radial vanishes and hoop = 2*sigma_long.
+    od = thick_wall_cylinder_stress_at_radius(radius=_q("35 mm"), **kw)
+    assert od.radial_stress.to("MPa").magnitude == pytest.approx(0.0, abs=1e-9)
+    assert od.hoop_stress.to("MPa").magnitude == pytest.approx(
+        2 * od.longitudinal_stress.to("MPa").magnitude, rel=1e-12
+    )
+
+    # Explicit Lame field at the mid-wall radius r = 30 mm.
+    ri, ro, r, p = 25.0, 35.0, 30.0, 60.0
+    coeff = p * ri**2 / (ro**2 - ri**2)
+    mid = thick_wall_cylinder_stress_at_radius(radius=_q("30 mm"), **kw)
+    assert mid.hoop_stress.to("MPa").magnitude == pytest.approx(
+        coeff * (1 + ro**2 / r**2), rel=1e-12
+    )
+    assert mid.radial_stress.to("MPa").magnitude == pytest.approx(
+        coeff * (1 - ro**2 / r**2), rel=1e-12
+    )
+    # Both stresses fall monotonically from bore to OD.
+    assert (
+        bore.hoop_stress.to("MPa").magnitude
+        > mid.hoop_stress.to("MPa").magnitude
+        > od.hoop_stress.to("MPa").magnitude
+    )
+    assert (
+        bore.radial_stress.to("MPa").magnitude
+        < mid.radial_stress.to("MPa").magnitude
+        < od.radial_stress.to("MPa").magnitude
+    )
+
+    # Open ends drop the longitudinal stress to zero at any radius.
+    open_mid = thick_wall_cylinder_stress_at_radius(radius=_q("30 mm"), closed_ends=False, **kw)
+    assert open_mid.longitudinal_stress.to("MPa").magnitude == pytest.approx(0.0, abs=1e-12)
+
+    # A radius outside the wall is rejected.
+    with pytest.raises(ValueError, match="radius must lie within the wall"):
+        thick_wall_cylinder_stress_at_radius(radius=_q("40 mm"), **kw)
+
+
 def test_thick_wall_cylinder_rejects_bad_inputs():
     with pytest.raises(ValueError, match="must be positive"):
         thick_wall_cylinder(pressure=_q("2 MPa"), radius=_q("25 mm"), wall_thickness=_q("0 mm"))
