@@ -451,6 +451,7 @@ curved_beam.thin_ring_max_moment
 curved_beam.trapezoidal_curved_beam_stress
 cyclone.cyclone_cut_diameter
 cyclone.cyclone_collection_efficiency
+cyclone.cyclone_pressure_drop
 cyclotron.cyclotron_frequency
 cyclotron.cyclotron_mass_from_frequency
 cyclotron.larmor_radius

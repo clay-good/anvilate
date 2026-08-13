@@ -25443,6 +25443,33 @@ def test_cyclone_cut_diameter_and_collection_efficiency():
         )
 
 
+def test_cyclone_pressure_drop_scales_with_velocity_squared():
+    from anvilate.analysis import cyclone_pressure_drop
+
+    # dP = N_H*0.5*rho*v^2; 8 heads, 1.2 kg/m^3 air at 15 m/s -> 1080 Pa.
+    dp = cyclone_pressure_drop(inlet_velocity=_q("15 m/s"), gas_density=_q("1.2 kg/m**3"))
+    assert dp.to("Pa").magnitude == pytest.approx(8 * 0.5 * 1.2 * 15**2, rel=1e-12)
+    assert dp.to("Pa").magnitude == pytest.approx(1080.0, rel=1e-9)
+    # It rises with the square of inlet velocity: doubling v quadruples dP.
+    assert cyclone_pressure_drop(inlet_velocity=_q("30 m/s"), gas_density=_q("1.2 kg/m**3")).to(
+        "Pa"
+    ).magnitude == pytest.approx(4 * dp.to("Pa").magnitude, rel=1e-12)
+    # A custom velocity-head count scales it linearly.
+    assert cyclone_pressure_drop(
+        inlet_velocity=_q("15 m/s"), gas_density=_q("1.2 kg/m**3"), velocity_head_count=16.0
+    ).to("Pa").magnitude == pytest.approx(2 * dp.to("Pa").magnitude, rel=1e-12)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="inlet_velocity must be positive"):
+        cyclone_pressure_drop(inlet_velocity=_q("0 m/s"), gas_density=_q("1.2 kg/m**3"))
+    with pytest.raises(ValueError, match="velocity_head_count must be positive"):
+        cyclone_pressure_drop(
+            inlet_velocity=_q("15 m/s"), gas_density=_q("1.2 kg/m**3"), velocity_head_count=0.0
+        )
+    with pytest.raises(ValueError, match="gas_density must be a"):
+        cyclone_pressure_drop(inlet_velocity=_q("15 m/s"), gas_density=_q("1.2 kg"))
+
+
 def test_comminution_rittinger_kick_and_bond_laws():
     from math import log
 

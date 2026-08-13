@@ -26,6 +26,7 @@ from ..units import Quantity
 __all__ = [
     "cyclone_collection_efficiency",
     "cyclone_cut_diameter",
+    "cyclone_pressure_drop",
 ]
 
 
@@ -85,6 +86,35 @@ def cyclone_collection_efficiency(*, particle_diameter: Quantity, cut_diameter: 
     if d_pc <= 0:
         raise ValueError("cut_diameter must be positive")
     return 1.0 / (1.0 + (d_pc / d_p) ** 2)
+
+
+def cyclone_pressure_drop(
+    *,
+    inlet_velocity: Quantity,
+    gas_density: Quantity,
+    velocity_head_count: float = 8.0,
+) -> Quantity:
+    """The cyclone pressure drop, ΔP = N_H·½·ρ·v_in².
+
+    The energy the swirling gas spends crossing a cyclone, and so the fan power it costs: a fixed
+    number of inlet velocity heads, ΔP = ``velocity_head_count`` N_H · ½ · ``gas_density`` ρ ·
+    ``inlet_velocity`` v_in². N_H is a dimensionless geometry constant (about 8 for a standard
+    Stairmand cyclone) that rolls up the inlet, body, and vortex-finder losses. It rises with the
+    *square* of inlet velocity — the same velocity that sharpens the :func:`cyclone_cut_diameter` —
+    so finer cuts are paid for in pressure drop, the central design trade of a cyclone. Returns the
+    pressure drop in pascals.
+    """
+    _check(inlet_velocity, "[velocity]", "inlet_velocity")
+    _check(gas_density, "[mass]/[volume]", "gas_density")
+    v = inlet_velocity.to("m/s").magnitude
+    rho = gas_density.to("kg/m**3").magnitude
+    if v <= 0:
+        raise ValueError("inlet_velocity must be positive")
+    if rho <= 0:
+        raise ValueError("gas_density must be positive")
+    if velocity_head_count <= 0:
+        raise ValueError("velocity_head_count must be positive")
+    return Quantity(magnitude=velocity_head_count * 0.5 * rho * v**2, unit="Pa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

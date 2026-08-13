@@ -1449,6 +1449,7 @@ from .curved_beam import (
 from .cyclone import (
     cyclone_collection_efficiency,
     cyclone_cut_diameter,
+    cyclone_pressure_drop,
 )
 from .cyclotron import (
     cyclotron_frequency,
@@ -3780,6 +3781,7 @@ __all__ = [
     "thin_ring_buckling_pressure",
     "cyclone_cut_diameter",
     "cyclone_collection_efficiency",
+    "cyclone_pressure_drop",
     "ColumnEnd",
     "euler_buckling_load",
     "euler_second_moment_for_load",
