@@ -1193,6 +1193,7 @@ relativity.time_dilation
 relativity.length_contraction
 relativity.relativistic_momentum
 relativity.relativistic_doppler_frequency
+relativity.relativistic_velocity_addition
 reliability.weibull_reliability
 reliability.weibull_hazard_rate
 reliability.weibull_mean_life

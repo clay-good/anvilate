@@ -2478,6 +2478,7 @@ from .relativity import (
     relativistic_doppler_frequency,
     relativistic_kinetic_energy,
     relativistic_momentum,
+    relativistic_velocity_addition,
     time_dilation,
 )
 from .reliability import (
@@ -4054,6 +4055,7 @@ __all__ = [
     "length_contraction",
     "relativistic_momentum",
     "relativistic_doppler_frequency",
+    "relativistic_velocity_addition",
     "weibull_reliability",
     "weibull_hazard_rate",
     "weibull_mean_life",

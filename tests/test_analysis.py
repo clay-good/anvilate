@@ -26839,6 +26839,43 @@ def test_relativistic_length_momentum_and_doppler():
         relativistic_doppler_frequency(source_frequency=_q("0 Hz"), velocity=v)
 
 
+def test_relativistic_velocity_addition():
+    from anvilate.analysis import relativistic_velocity_addition
+
+    c = 299792458.0
+
+    # 0.5c added to 0.5c is 0.8c, not c: (0.5+0.5)/(1+0.25) = 0.8.
+    u = relativistic_velocity_addition(
+        first_velocity=Quantity(magnitude=0.5 * c, unit="m/s"),
+        second_velocity=Quantity(magnitude=0.5 * c, unit="m/s"),
+    )
+    assert u.to("m/s").magnitude == pytest.approx(0.8 * c, rel=1e-9)
+    # Adding a speed to light itself still gives exactly c (light is invariant).
+    u_light = relativistic_velocity_addition(
+        first_velocity=Quantity(magnitude=0.9 * c, unit="m/s"),
+        second_velocity=Quantity(magnitude=0.5 * c, unit="m/s"),
+    )
+    assert u_light.to("m/s").magnitude < c  # stays subluminal
+    # Opposing velocities (one negative) partially cancel and reduce toward the low-speed sum.
+    u_opp = relativistic_velocity_addition(
+        first_velocity=Quantity(magnitude=0.5 * c, unit="m/s"),
+        second_velocity=Quantity(magnitude=-0.5 * c, unit="m/s"),
+    )
+    assert u_opp.to("m/s").magnitude == pytest.approx(0.0, abs=1e-6)
+    # Low-speed limit recovers the classical sum.
+    u_slow = relativistic_velocity_addition(
+        first_velocity=_q("30 m/s"), second_velocity=_q("20 m/s")
+    )
+    assert u_slow.to("m/s").magnitude == pytest.approx(50.0, rel=1e-9)
+
+    # Guardrails: each speed must be below c.
+    with pytest.raises(ValueError, match="each speed must be below the speed of light"):
+        relativistic_velocity_addition(
+            first_velocity=Quantity(magnitude=c, unit="m/s"),
+            second_velocity=_q("10 m/s"),
+        )
+
+
 def test_watt_and_porter_governor_height_and_speed():
     from math import sqrt
 

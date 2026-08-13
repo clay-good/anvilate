@@ -33,6 +33,7 @@ __all__ = [
     "relativistic_doppler_frequency",
     "relativistic_kinetic_energy",
     "relativistic_momentum",
+    "relativistic_velocity_addition",
     "time_dilation",
 ]
 
@@ -144,6 +145,29 @@ def relativistic_doppler_frequency(
     beta = v / _SPEED_OF_LIGHT
     ratio = sqrt((1.0 + beta) / (1.0 - beta)) if approaching else sqrt((1.0 - beta) / (1.0 + beta))
     return Quantity(magnitude=f0 * ratio, unit="Hz")
+
+
+def relativistic_velocity_addition(
+    *, first_velocity: Quantity, second_velocity: Quantity
+) -> Quantity:
+    """The relativistic velocity addition, u = (u1 + u2)/(1 + u1*u2/c^2).
+
+    How two velocities combine when neither is small next to light speed: a body moving at
+    ``first_velocity`` u1 in one frame, itself carrying something at ``second_velocity`` u2, gives a
+    net speed u = (u1 + u2)/(1 + u1*u2/c^2) — not the classical u1 + u2. The denominator holds the
+    result below c no matter how close the parts are: 0.5c added to 0.5c is 0.8c, and light stays at
+    c in every frame. Speeds are along a common line (positive same-direction, negative opposing),
+    each below c. Returns the combined velocity in m/s.
+    """
+    _check(first_velocity, "[length]/[time]", "first_velocity")
+    _check(second_velocity, "[length]/[time]", "second_velocity")
+    u1 = first_velocity.to("m/s").magnitude
+    u2 = second_velocity.to("m/s").magnitude
+    if abs(u1) >= _SPEED_OF_LIGHT or abs(u2) >= _SPEED_OF_LIGHT:
+        raise ValueError("each speed must be below the speed of light")
+    c2 = _SPEED_OF_LIGHT * _SPEED_OF_LIGHT
+    u = (u1 + u2) / (1.0 + u1 * u2 / c2)
+    return Quantity(magnitude=u, unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
