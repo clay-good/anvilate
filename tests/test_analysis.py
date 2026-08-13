@@ -15542,6 +15542,40 @@ def test_thermal_wien_peak_wavelength_and_inverse():
         wien_peak_wavelength(temperature=_q("0 K"))
 
 
+def test_thermal_planetary_equilibrium_temperature():
+    from anvilate.analysis import planetary_equilibrium_temperature
+
+    sigma = 5.670374419e-8
+
+    # T = [S*(1-a)/(4*sigma)]^(1/4); Earth at 1361 W/m^2, albedo 0.3 -> 255 K.
+    t = planetary_equilibrium_temperature(solar_flux=_q("1361 W/m**2"), albedo=0.3)
+    assert t.to("K").magnitude == pytest.approx((1361 * 0.7 / (4 * sigma)) ** 0.25, rel=1e-12)
+    assert t.to("K").magnitude == pytest.approx(254.6, abs=0.5)
+    # A blacker body (lower albedo) absorbs more and runs hotter.
+    assert (
+        planetary_equilibrium_temperature(solar_flux=_q("1361 W/m**2"), albedo=0.1)
+        .to("K")
+        .magnitude
+        > t.to("K").magnitude
+    )
+    # Closer to the Sun (higher flux) is hotter, scaling as flux^(1/4): 16x flux -> 2x temp.
+    assert planetary_equilibrium_temperature(solar_flux=_q("21776 W/m**2"), albedo=0.3).to(
+        "K"
+    ).magnitude == pytest.approx(2 * t.to("K").magnitude, rel=1e-9)
+    # Zero albedo (perfect absorber) at Earth's flux -> 278.6 K.
+    assert planetary_equilibrium_temperature(solar_flux=_q("1361 W/m**2")).to(
+        "K"
+    ).magnitude == pytest.approx((1361 / (4 * sigma)) ** 0.25, rel=1e-12)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="albedo must lie in"):
+        planetary_equilibrium_temperature(solar_flux=_q("1361 W/m**2"), albedo=1.0)
+    with pytest.raises(ValueError, match="emissivity must lie in"):
+        planetary_equilibrium_temperature(solar_flux=_q("1361 W/m**2"), emissivity=0.0)
+    with pytest.raises(ValueError, match="solar_flux must be a"):
+        planetary_equilibrium_temperature(solar_flux=_q("1361 W"))
+
+
 def test_thermal_guided_cantilever_expansion_loop_leg():
     import math
 

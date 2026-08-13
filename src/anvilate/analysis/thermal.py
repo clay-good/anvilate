@@ -93,6 +93,7 @@ __all__ = [
     "radiation_shield_reduction_factor",
     "wien_peak_wavelength",
     "wien_temperature_from_peak",
+    "planetary_equilibrium_temperature",
 ]
 
 _STEFAN_BOLTZMANN = 5.670374419e-8  # W/(m²·K⁴)
@@ -2315,6 +2316,34 @@ def wien_temperature_from_peak(*, peak_wavelength: Quantity) -> Quantity:
     if lam <= 0:
         raise ValueError("peak_wavelength must be positive")
     return Quantity(magnitude=_WIEN_DISPLACEMENT / lam, unit="K")
+
+
+def planetary_equilibrium_temperature(
+    *,
+    solar_flux: Quantity,
+    albedo: float = 0.0,
+    emissivity: float = 1.0,
+) -> Quantity:
+    """The radiative-equilibrium temperature of a planet, T = [S·(1 − a)/(4·ε·σ)]^(1/4).
+
+    A body in space warms until it re-radiates exactly the sunlight it absorbs. A sphere intercepts
+    the beam over its disc (π·R²) but radiates over its whole surface (4·π·R²), so balancing
+    absorbed S·(1 − ``albedo``)·π·R² against emitted ``emissivity``·σ·4·π·R²·T⁴ gives
+    T = [S·(1 − a)/(4·ε·σ)]^(1/4), from the ``solar_flux`` S at the body's orbit (1361 W/m² at
+    Earth). It is the airless effective temperature — Earth's is 255 K (−18 °C), and the 33 K gap
+    to its real surface is the greenhouse effect this bare balance omits. ``albedo`` a and
+    ``emissivity`` ε are in [0, 1]. Returns the equilibrium temperature in kelvin.
+    """
+    _require(solar_flux, "[power]/[area]", "solar_flux")
+    s = solar_flux.to("W/m**2").magnitude
+    if s <= 0:
+        raise ValueError("solar_flux must be positive")
+    if not 0.0 <= albedo < 1.0:
+        raise ValueError("albedo must lie in [0, 1)")
+    if not 0.0 < emissivity <= 1.0:
+        raise ValueError("emissivity must lie in (0, 1]")
+    t = (s * (1.0 - albedo) / (4.0 * emissivity * _STEFAN_BOLTZMANN)) ** 0.25
+    return Quantity(magnitude=t, unit="K")
 
 
 def crossed_strings_view_factor(
