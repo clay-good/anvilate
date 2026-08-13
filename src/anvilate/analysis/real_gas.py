@@ -25,6 +25,8 @@ _GAS_CONSTANT = 8.314462618  # J/(mol*K), universal
 __all__ = [
     "compressibility_factor",
     "real_gas_molar_volume",
+    "reduced_pressure",
+    "reduced_temperature",
     "van_der_waals_pressure",
 ]
 
@@ -110,6 +112,49 @@ def van_der_waals_pressure(
     if v <= b:
         raise ValueError("molar_volume must exceed the covolume b (v̄ > b)")
     return Quantity(magnitude=_GAS_CONSTANT * t / (v - b) - a / (v * v), unit="Pa")
+
+
+def reduced_temperature(*, temperature: Quantity, critical_temperature: Quantity) -> float:
+    """The reduced temperature, T_r = T/T_c.
+
+    A gas's temperature measured against its own critical point: T_r = ``temperature`` T /
+    ``critical_temperature`` T_c, both absolute. It is one of the two corresponding-states
+    coordinates (with :func:`reduced_pressure`) that enter the generalized (Nelson-Obert)
+    compressibility chart — the principle that all gases at the same T_r and P_r share nearly the
+    same compressibility factor Z, so one chart serves every gas. T_r > 1 means the gas is above its
+    critical temperature and cannot be liquefied by pressure alone. Returns the dimensionless
+    reduced temperature.
+    """
+    _check(temperature, "[temperature]", "temperature")
+    _check(critical_temperature, "[temperature]", "critical_temperature")
+    t = temperature.to("K").magnitude
+    t_c = critical_temperature.to("K").magnitude
+    if t <= 0:
+        raise ValueError("temperature must be positive")
+    if t_c <= 0:
+        raise ValueError("critical_temperature must be positive")
+    return t / t_c
+
+
+def reduced_pressure(*, pressure: Quantity, critical_pressure: Quantity) -> float:
+    """The reduced pressure, P_r = P/P_c.
+
+    A gas's pressure measured against its own critical point: P_r = ``pressure`` P /
+    ``critical_pressure`` P_c. It is the second corresponding-states coordinate (with
+    :func:`reduced_temperature`) for the generalized compressibility chart, so a mixture of gases at
+    the same T_r and P_r deviate from ideal by nearly the same factor. Near P_r ≪ 1 the gas is
+    effectively ideal; the deviations grow as P_r approaches and passes 1. Returns the dimensionless
+    reduced pressure.
+    """
+    _check(pressure, "[pressure]", "pressure")
+    _check(critical_pressure, "[pressure]", "critical_pressure")
+    p = pressure.to("Pa").magnitude
+    p_c = critical_pressure.to("Pa").magnitude
+    if p <= 0:
+        raise ValueError("pressure must be positive")
+    if p_c <= 0:
+        raise ValueError("critical_pressure must be positive")
+    return p / p_c
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

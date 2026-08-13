@@ -25898,6 +25898,34 @@ def test_real_gas_compressibility_molar_volume_and_van_der_waals():
         )
 
 
+def test_real_gas_reduced_temperature_and_pressure():
+    from anvilate.analysis import reduced_pressure, reduced_temperature
+
+    # T_r = T/T_c; methane (T_c 190.6 K) at 300 K -> 1.574 (supercritical).
+    tr = reduced_temperature(temperature=_q("300 K"), critical_temperature=_q("190.6 K"))
+    assert tr == pytest.approx(300 / 190.6, rel=1e-12)
+    assert tr == pytest.approx(1.574, abs=0.001)
+    assert tr > 1.0  # above the critical temperature
+
+    # P_r = P/P_c; methane (P_c 4.60 MPa) at 2.3 MPa -> 0.5.
+    pr = reduced_pressure(pressure=_q("2.3 MPa"), critical_pressure=_q("4.60 MPa"))
+    assert pr == pytest.approx(2.3 / 4.60, rel=1e-12)
+    assert pr == pytest.approx(0.5, rel=1e-9)
+    # Both are simple ratios: doubling the state variable doubles the reduced value.
+    assert reduced_temperature(
+        temperature=_q("600 K"), critical_temperature=_q("190.6 K")
+    ) == pytest.approx(2 * tr, rel=1e-12)
+    assert reduced_pressure(
+        pressure=_q("4.60 MPa"), critical_pressure=_q("4.60 MPa")
+    ) == pytest.approx(1.0, rel=1e-12)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="critical_temperature must be positive"):
+        reduced_temperature(temperature=_q("300 K"), critical_temperature=_q("0 K"))
+    with pytest.raises(ValueError, match="pressure must be a"):
+        reduced_pressure(pressure=_q("2.3 m"), critical_pressure=_q("4.6 MPa"))
+
+
 def test_sensible_latent_heat_and_mixing_temperature():
     from anvilate.analysis import (
         latent_heat,

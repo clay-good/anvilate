@@ -1023,6 +1023,8 @@ reactor.pfr_conversion_first_order
 reactor.cstr_conversion_first_order
 real_gas.compressibility_factor
 real_gas.real_gas_molar_volume
+real_gas.reduced_temperature
+real_gas.reduced_pressure
 real_gas.van_der_waals_pressure
 packed_bed.ergun_pressure_drop
 packed_bed.minimum_fluidization_velocity

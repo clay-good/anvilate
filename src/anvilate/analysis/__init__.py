@@ -2424,6 +2424,8 @@ from .reactor import (
 from .real_gas import (
     compressibility_factor,
     real_gas_molar_volume,
+    reduced_pressure,
+    reduced_temperature,
     van_der_waals_pressure,
 )
 from .refrigeration import (
@@ -3045,6 +3047,8 @@ __all__ = [
     "cstr_conversion_first_order",
     "compressibility_factor",
     "real_gas_molar_volume",
+    "reduced_temperature",
+    "reduced_pressure",
     "van_der_waals_pressure",
     "parallel_plate_capacitance",
     "capacitor_charge",
