@@ -2885,8 +2885,10 @@ from .wave import (
 )
 from .waveguide import (
     rectangular_waveguide_cutoff_frequency,
+    waveguide_group_velocity,
     waveguide_guide_wavelength,
     waveguide_phase_velocity,
+    waveguide_te_wave_impedance,
 )
 from .wear import (
     archard_wear_depth,
@@ -3399,6 +3401,8 @@ __all__ = [
     "rectangular_waveguide_cutoff_frequency",
     "waveguide_guide_wavelength",
     "waveguide_phase_velocity",
+    "waveguide_group_velocity",
+    "waveguide_te_wave_impedance",
     "plasma_frequency",
     "debye_length",
     "plasma_parameter",

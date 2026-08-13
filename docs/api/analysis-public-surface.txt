@@ -1508,6 +1508,8 @@ wave.frequency_from_wavelength
 waveguide.rectangular_waveguide_cutoff_frequency
 waveguide.waveguide_guide_wavelength
 waveguide.waveguide_phase_velocity
+waveguide.waveguide_group_velocity
+waveguide.waveguide_te_wave_impedance
 weld.FILLET_THROAT_FACTOR
 weld.eccentric_weld_group_peak_stress
 weld.fillet_weld_design_strength

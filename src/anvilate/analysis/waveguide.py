@@ -21,11 +21,14 @@ from math import sqrt
 from ..units import Quantity
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
+_FREE_SPACE_IMPEDANCE = 376.730313668  # ohm, eta_0
 
 __all__ = [
     "rectangular_waveguide_cutoff_frequency",
+    "waveguide_group_velocity",
     "waveguide_guide_wavelength",
     "waveguide_phase_velocity",
+    "waveguide_te_wave_impedance",
 ]
 
 
@@ -89,6 +92,56 @@ def waveguide_phase_velocity(
     if f <= f_c:
         raise ValueError("operating_frequency must exceed the cutoff frequency to propagate")
     return Quantity(magnitude=_SPEED_OF_LIGHT / sqrt(1.0 - (f_c / f) ** 2), unit="m/s")
+
+
+def waveguide_group_velocity(
+    *, operating_frequency: Quantity, cutoff_frequency: Quantity
+) -> Quantity:
+    """The waveguide group velocity, v_g = c·√(1 − (f_c/f)²).
+
+    The speed at which energy and a signal's envelope actually travel down the guide — the physical
+    counterpart to the superluminal phase velocity (:func:`waveguide_phase_velocity`), with which it
+    obeys v_p·v_g = c². At ``operating_frequency`` f above the ``cutoff_frequency`` f_c,
+    v_g = c·√(1 − (f_c/f)²): it is always below c, and falls to zero as f approaches cutoff (where
+    the wave stops propagating). It sets the signal delay and the dispersion of a pulse through the
+    guide. The operating frequency must exceed cutoff. Returns v_g in m/s.
+    """
+    _check(operating_frequency, "1/[time]", "operating_frequency")
+    _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
+    f = operating_frequency.to("Hz").magnitude
+    f_c = cutoff_frequency.to("Hz").magnitude
+    if f <= 0:
+        raise ValueError("operating_frequency must be positive")
+    if f_c <= 0:
+        raise ValueError("cutoff_frequency must be positive")
+    if f <= f_c:
+        raise ValueError("operating_frequency must exceed the cutoff frequency to propagate")
+    return Quantity(magnitude=_SPEED_OF_LIGHT * sqrt(1.0 - (f_c / f) ** 2), unit="m/s")
+
+
+def waveguide_te_wave_impedance(
+    *, operating_frequency: Quantity, cutoff_frequency: Quantity
+) -> Quantity:
+    """The TE-mode wave impedance in a waveguide, Z_TE = η₀/√(1 − (f_c/f)²).
+
+    The ratio of transverse electric to magnetic field for a transverse-electric mode, which sets
+    how the guide matches to a load or another section: Z_TE = η₀/√(1 − (f_c/f)²), with the
+    free-space impedance η₀ ≈ 377 Ω, the ``operating_frequency`` f, and the ``cutoff_frequency``
+    f_c. It is *higher* than η₀ (and diverges at cutoff), the opposite of the TM-mode impedance — a
+    TE mode looks inductive relative to free space. The operating frequency must exceed cutoff.
+    Returns the wave impedance in ohms.
+    """
+    _check(operating_frequency, "1/[time]", "operating_frequency")
+    _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
+    f = operating_frequency.to("Hz").magnitude
+    f_c = cutoff_frequency.to("Hz").magnitude
+    if f <= 0:
+        raise ValueError("operating_frequency must be positive")
+    if f_c <= 0:
+        raise ValueError("cutoff_frequency must be positive")
+    if f <= f_c:
+        raise ValueError("operating_frequency must exceed the cutoff frequency to propagate")
+    return Quantity(magnitude=_FREE_SPACE_IMPEDANCE / sqrt(1.0 - (f_c / f) ** 2), unit="ohm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

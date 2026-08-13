@@ -23664,6 +23664,61 @@ def test_waveguide_cutoff_guide_wavelength_and_phase_velocity():
         rectangular_waveguide_cutoff_frequency(broad_dimension=_q("22.86 s"))
 
 
+def test_waveguide_group_velocity_and_te_wave_impedance():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        waveguide_group_velocity,
+        waveguide_phase_velocity,
+        waveguide_te_wave_impedance,
+    )
+
+    c = 299792458.0
+    eta0 = 376.730313668
+    f = Quantity(magnitude=10e9, unit="Hz")
+    fc = Quantity(magnitude=6.557e9, unit="Hz")
+    beta = sqrt(1 - (6.557e9 / 10e9) ** 2)
+
+    # v_g = c*sqrt(1-(fc/f)^2); below c, and v_p*v_g = c^2.
+    vg = waveguide_group_velocity(operating_frequency=f, cutoff_frequency=fc)
+    assert vg.to("m/s").magnitude == pytest.approx(c * beta, rel=1e-9)
+    assert vg.to("m/s").magnitude < c
+    vp = waveguide_phase_velocity(operating_frequency=f, cutoff_frequency=fc)
+    assert vp.to("m/s").magnitude * vg.to("m/s").magnitude == pytest.approx(c * c, rel=1e-6)
+    # Group velocity falls toward zero as the frequency nears cutoff.
+    assert (
+        waveguide_group_velocity(
+            operating_frequency=Quantity(magnitude=6.6e9, unit="Hz"), cutoff_frequency=fc
+        )
+        .to("m/s")
+        .magnitude
+        < vg.to("m/s").magnitude
+    )
+
+    # Z_TE = eta0/sqrt(1-(fc/f)^2); higher than free space (~499 ohm here).
+    z = waveguide_te_wave_impedance(operating_frequency=f, cutoff_frequency=fc)
+    assert z.to("ohm").magnitude == pytest.approx(eta0 / beta, rel=1e-9)
+    assert z.to("ohm").magnitude == pytest.approx(498.97, abs=0.1)
+    assert z.to("ohm").magnitude > eta0  # TE impedance exceeds free-space impedance
+    # It diverges toward cutoff.
+    assert (
+        waveguide_te_wave_impedance(
+            operating_frequency=Quantity(magnitude=6.6e9, unit="Hz"), cutoff_frequency=fc
+        )
+        .to("ohm")
+        .magnitude
+        > z.to("ohm").magnitude
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="must exceed the cutoff"):
+        waveguide_group_velocity(
+            operating_frequency=Quantity(magnitude=5e9, unit="Hz"), cutoff_frequency=fc
+        )
+    with pytest.raises(ValueError, match="cutoff_frequency must be a"):
+        waveguide_te_wave_impedance(operating_frequency=f, cutoff_frequency=_q("6.557 m"))
+
+
 def test_transmission_line_reflection_vswr_and_return_loss():
     from math import log10
 
