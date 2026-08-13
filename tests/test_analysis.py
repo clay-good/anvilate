@@ -15555,6 +15555,34 @@ def test_motor_synchronous_speed_and_slip():
         motor_slip(synchronous_speed=ns, rotor_speed=_q("1900 rpm"))
 
 
+def test_motor_slip_frequency():
+    from anvilate.analysis import motor_slip, motor_slip_frequency, motor_synchronous_speed
+
+    # f_r = s*f; 3% slip on a 60 Hz supply -> 1.8 Hz rotor frequency.
+    fr = motor_slip_frequency(slip=0.03, line_frequency=_q("60 Hz"))
+    assert fr.to("Hz").magnitude == pytest.approx(0.03 * 60, rel=1e-9)
+    assert fr.to("Hz").magnitude == pytest.approx(1.8, rel=1e-9)
+    # A locked rotor (slip 1) sees the full line frequency; synchronous (slip 0) sees DC.
+    assert motor_slip_frequency(slip=1.0, line_frequency=_q("60 Hz")).to(
+        "Hz"
+    ).magnitude == pytest.approx(60.0, rel=1e-9)
+    assert motor_slip_frequency(slip=0.0, line_frequency=_q("60 Hz")).to(
+        "Hz"
+    ).magnitude == pytest.approx(0.0, abs=1e-12)
+    # It chains from the measured slip of a running motor.
+    ns = motor_synchronous_speed(line_frequency=_q("60 Hz"), poles=4)
+    s = motor_slip(synchronous_speed=ns, rotor_speed=_q("1750 rpm"))
+    assert motor_slip_frequency(slip=s, line_frequency=_q("60 Hz")).to(
+        "Hz"
+    ).magnitude == pytest.approx(s * 60, rel=1e-9)
+
+    # Guardrails: slip in [0, 1], positive frequency, dimensions checked.
+    with pytest.raises(ValueError, match="slip must be in"):
+        motor_slip_frequency(slip=1.5, line_frequency=_q("60 Hz"))
+    with pytest.raises(ValueError, match="line_frequency must be a"):
+        motor_slip_frequency(slip=0.03, line_frequency=_q("60 V"))
+
+
 def test_motor_full_load_current_and_branch_circuit():
     import math
 

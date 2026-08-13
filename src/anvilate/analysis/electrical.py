@@ -32,6 +32,7 @@ __all__ = [
     "motor_branch_circuit_ampacity",
     "motor_synchronous_speed",
     "motor_slip",
+    "motor_slip_frequency",
     "motor_locked_rotor_current",
     "parallel_ground_electrodes_resistance",
     "power_factor_correction_kvar",
@@ -169,6 +170,25 @@ def motor_slip(*, synchronous_speed: Quantity, rotor_speed: Quantity) -> float:
     if n > ns:
         raise ValueError("rotor_speed cannot exceed synchronous_speed for a motor")
     return (ns - n) / ns
+
+
+def motor_slip_frequency(*, slip: float, line_frequency: Quantity) -> Quantity:
+    """The rotor (slip) frequency of an induction motor, f_r = s·f.
+
+    The frequency of the currents induced in the rotor bars: the ``slip`` s (from
+    :func:`motor_slip`) times the supply ``line_frequency`` f, f_r = s·f. Near synchronous speed the
+    rotor sees an almost DC field (a few Hz at full load), so rotor iron loss is small; at a locked
+    rotor (s = 1) it sees
+    the full line frequency. It is the quantity a slip-frequency-controlled or field-oriented drive
+    commands to set torque. The slip is a fraction in [0, 1]. Returns the rotor frequency in Hz.
+    """
+    _check(line_frequency, "1/[time]", "line_frequency")
+    if not 0.0 <= slip <= 1.0:
+        raise ValueError(f"slip must be in [0, 1]; got {slip}")
+    f = line_frequency.to("Hz").magnitude
+    if f <= 0:
+        raise ValueError("line_frequency must be positive")
+    return Quantity(magnitude=slip * f, unit="Hz")
 
 
 def motor_locked_rotor_current(

@@ -509,6 +509,7 @@ electrical.motor_branch_circuit_ampacity
 electrical.motor_full_load_current
 electrical.motor_locked_rotor_current
 electrical.motor_slip
+electrical.motor_slip_frequency
 electrical.motor_synchronous_speed
 electrical.parallel_ground_electrodes_resistance
 electrical.power_factor_correction_kvar
