@@ -1510,6 +1510,8 @@ from .diffusion import (
 from .diode import (
     diode_current,
     diode_voltage,
+    led_resistor_power,
+    led_series_resistor,
     thermal_voltage,
 )
 from .drag import (
@@ -3120,6 +3122,8 @@ __all__ = [
     "thermal_voltage",
     "diode_current",
     "diode_voltage",
+    "led_resistor_power",
+    "led_series_resistor",
     "built_in_potential",
     "depletion_width",
     "junction_capacitance_per_area",

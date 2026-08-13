@@ -494,6 +494,8 @@ diffusion.error_function_concentration
 diffusion.steady_diffusion_flux
 diode.diode_current
 diode.diode_voltage
+diode.led_resistor_power
+diode.led_series_resistor
 diode.thermal_voltage
 drag.archimedes_number
 drag.galilei_number

@@ -29354,6 +29354,37 @@ def test_photon_energy_wavelength_inverse_and_flux():
         photon_energy(wavelength=_q("500 THz"))
 
 
+def test_diode_led_series_resistor_and_power():
+    from anvilate.analysis import led_resistor_power, led_series_resistor
+
+    # R = (V_s - V_f)/I_f; 5 V supply, 2 V red LED, 20 mA -> 150 ohm.
+    r = led_series_resistor(
+        supply_voltage=_q("5 V"), forward_voltage=_q("2 V"), forward_current=_q("20 mA")
+    )
+    assert r.to("ohm").magnitude == pytest.approx((5 - 2) / 0.02, rel=1e-9)
+    assert r.to("ohm").magnitude == pytest.approx(150.0, rel=1e-9)
+
+    # P = (V_s - V_f)*I_f; the resistor dissipates 60 mW here.
+    p = led_resistor_power(
+        supply_voltage=_q("5 V"), forward_voltage=_q("2 V"), forward_current=_q("20 mA")
+    )
+    assert p.to("W").magnitude == pytest.approx((5 - 2) * 0.02, rel=1e-9)
+    assert p.to("mW").magnitude == pytest.approx(60.0, rel=1e-9)
+
+    # Consistency: P = I^2 * R.
+    assert p.to("W").magnitude == pytest.approx(0.02**2 * r.to("ohm").magnitude, rel=1e-9)
+
+    # No headroom (supply <= forward drop) is rejected for both.
+    with pytest.raises(ValueError, match="must exceed forward_voltage"):
+        led_series_resistor(
+            supply_voltage=_q("2 V"), forward_voltage=_q("2 V"), forward_current=_q("20 mA")
+        )
+    with pytest.raises(ValueError, match="forward_current"):
+        led_resistor_power(
+            supply_voltage=_q("5 V"), forward_voltage=_q("2 V"), forward_current=_q("0 mA")
+        )
+
+
 def test_photodiode_responsivity_current_and_shot_noise():
     from anvilate.analysis import (
         photodiode_current,

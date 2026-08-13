@@ -28,6 +28,8 @@ _ELEMENTARY_CHARGE = 1.602176634e-19  # C
 __all__ = [
     "diode_current",
     "diode_voltage",
+    "led_resistor_power",
+    "led_series_resistor",
     "thermal_voltage",
 ]
 
@@ -107,6 +109,65 @@ def diode_voltage(
         raise ValueError("ideality_factor must be positive")
     v_t = _BOLTZMANN * t / _ELEMENTARY_CHARGE
     return Quantity(magnitude=ideality_factor * v_t * log(i / i_s + 1.0), unit="V")
+
+
+def led_series_resistor(
+    *,
+    supply_voltage: Quantity,
+    forward_voltage: Quantity,
+    forward_current: Quantity,
+) -> Quantity:
+    """The current-limiting resistor for an LED, R = (V_supply − V_f)/I_f.
+
+    Because a diode's current rises exponentially with its voltage (see :func:`diode_current`), an
+    LED cannot be driven from a fixed voltage — a series resistor sets the current instead. The
+    resistor drops the excess supply voltage: R = (V_supply − V_f)/I_f, from the ``supply_voltage``
+    V_supply, the LED's ``forward_voltage`` V_f (its roughly fixed drop at the operating current),
+    and the desired ``forward_current`` I_f. The supply must exceed the forward drop or there is no
+    headroom to set the current. Returns the resistance in ohms.
+    """
+    _check(supply_voltage, "[electric_potential]", "supply_voltage")
+    _check(forward_voltage, "[electric_potential]", "forward_voltage")
+    _check(forward_current, "[current]", "forward_current")
+    v_s = supply_voltage.to("V").magnitude
+    v_f = forward_voltage.to("V").magnitude
+    i_f = forward_current.to("A").magnitude
+    if i_f <= 0:
+        raise ValueError("forward_current must be positive")
+    if v_s <= v_f:
+        raise ValueError(
+            "supply_voltage must exceed forward_voltage (no headroom to set the LED current)"
+        )
+    return Quantity(magnitude=(v_s - v_f) / i_f, unit="ohm")
+
+
+def led_resistor_power(
+    *,
+    supply_voltage: Quantity,
+    forward_voltage: Quantity,
+    forward_current: Quantity,
+) -> Quantity:
+    """The power dissipated in an LED's series resistor, P = (V_supply − V_f)·I_f.
+
+    The heat the current-limiting resistor must handle: P = (V_supply − V_f)·I_f, from the
+    ``supply_voltage`` V_supply, the LED ``forward_voltage`` V_f, and the ``forward_current`` I_f.
+    It is the number a resistor is rated against — a 1/4 W part is fine for an indicator LED but not
+    for a high-current string off a high supply, where the resistor wastes more power than the LED
+    uses. Returns the dissipation in watts.
+    """
+    _check(supply_voltage, "[electric_potential]", "supply_voltage")
+    _check(forward_voltage, "[electric_potential]", "forward_voltage")
+    _check(forward_current, "[current]", "forward_current")
+    v_s = supply_voltage.to("V").magnitude
+    v_f = forward_voltage.to("V").magnitude
+    i_f = forward_current.to("A").magnitude
+    if i_f <= 0:
+        raise ValueError("forward_current must be positive")
+    if v_s <= v_f:
+        raise ValueError(
+            "supply_voltage must exceed forward_voltage (no headroom to set the LED current)"
+        )
+    return Quantity(magnitude=(v_s - v_f) * i_f, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
