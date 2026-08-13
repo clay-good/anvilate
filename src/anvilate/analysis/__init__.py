@@ -1389,6 +1389,7 @@ from .condensation import (
     condensation_rate,
     film_condensation_horizontal_tube_coefficient,
     film_condensation_vertical_plate_coefficient,
+    jakob_number,
 )
 from .contact import (
     HertzContact,
@@ -3257,6 +3258,7 @@ __all__ = [
     "film_condensation_vertical_plate_coefficient",
     "film_condensation_horizontal_tube_coefficient",
     "condensation_rate",
+    "jakob_number",
     "apparent_power_three_phase",
     "conductor_resistance",
     "line_current_for_power",

@@ -18462,6 +18462,40 @@ def test_film_condensation_coefficients_and_condensate_rate():
         )
 
 
+def test_jakob_number():
+    from anvilate.analysis import jakob_number
+
+    # Ja = cp*dT/h_fg; water near 1 atm: 4180 J/kgK, 10 K, 2257 kJ/kg -> ~0.0185.
+    ja = jakob_number(
+        specific_heat=_q("4180 J/(kg*K)"),
+        temperature_difference=_q("10 K"),
+        latent_heat=_q("2257 kJ/kg"),
+    )
+    assert ja == pytest.approx(4180 * 10 / 2257e3, rel=1e-9)
+    assert ja < 1.0  # latent heat dominates for water
+    # Linear in the driving temperature difference.
+    ja2 = jakob_number(
+        specific_heat=_q("4180 J/(kg*K)"),
+        temperature_difference=_q("20 K"),
+        latent_heat=_q("2257 kJ/kg"),
+    )
+    assert ja2 == pytest.approx(2 * ja, rel=1e-9)
+
+    # Guardrails: positive inputs, dimensions checked.
+    with pytest.raises(ValueError, match="temperature_difference must be positive"):
+        jakob_number(
+            specific_heat=_q("4180 J/(kg*K)"),
+            temperature_difference=_q("0 K"),
+            latent_heat=_q("2257 kJ/kg"),
+        )
+    with pytest.raises(ValueError, match="latent_heat must be a"):
+        jakob_number(
+            specific_heat=_q("4180 J/(kg*K)"),
+            temperature_difference=_q("10 K"),
+            latent_heat=_q("2257 J"),
+        )
+
+
 def test_nucleate_boiling_flux_superheat_inverse_and_critical_heat_flux():
     from anvilate.analysis import (
         critical_heat_flux,

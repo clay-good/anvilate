@@ -171,10 +171,39 @@ def condensation_rate(
     return Quantity(magnitude=h * a * dt / h_fg, unit="kg/s")
 
 
+def jakob_number(
+    *, specific_heat: Quantity, temperature_difference: Quantity, latent_heat: Quantity
+) -> float:
+    """The Jakob number, Ja = c_p·ΔT/h_fg.
+
+    The ratio of sensible heat to latent heat in a phase change: from the liquid ``specific_heat``
+    c_p, the subcooling or superheat ``temperature_difference`` ΔT, and the ``latent_heat`` h_fg,
+    Ja = c_p·ΔT/h_fg. It measures how much sensible heating the condensate (or vapor) carries
+    alongside the latent heat of the change — small for water near atmospheric pressure, where the
+    latent heat dominates. It sets the h_fg' = h_fg·(1 + 0.68·Ja) correction to Nusselt's film
+    coefficient and scales the sensible load in boiling and melting. Returns the Jakob number as a
+    plain float.
+    """
+    _check(specific_heat, "[energy]/[mass]/[temperature]", "specific_heat")
+    _check(temperature_difference, "[temperature]", "temperature_difference")
+    _check(latent_heat, "[energy]/[mass]", "latent_heat")
+    cp = specific_heat.to("J/(kg*K)").magnitude
+    dt = temperature_difference.to("K").magnitude
+    h_fg = latent_heat.to("J/kg").magnitude
+    if cp <= 0:
+        raise ValueError("specific_heat must be positive")
+    if dt <= 0:
+        raise ValueError("temperature_difference must be positive")
+    if h_fg <= 0:
+        raise ValueError("latent_heat must be positive")
+    return cp * dt / h_fg
+
+
 __all__ = [
     "condensation_rate",
     "film_condensation_horizontal_tube_coefficient",
     "film_condensation_vertical_plate_coefficient",
+    "jakob_number",
 ]
 
 
