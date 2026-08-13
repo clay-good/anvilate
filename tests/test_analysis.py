@@ -31097,6 +31097,32 @@ def test_gaussian_beam_rayleigh_divergence_spread_and_focus():
         rayleigh_range(beam_waist=w0, wavelength=_q("1064 Hz"))
 
 
+def test_gaussian_beam_peak_intensity():
+    from math import pi
+
+    from anvilate.analysis import focused_spot_radius, gaussian_beam_peak_intensity
+
+    # I0 = 2*P/(pi*w^2); 1 W focused to a 10 um radius -> ~6.37 GW/m^2.
+    i0 = gaussian_beam_peak_intensity(power=_q("1 W"), beam_radius=_q("10 um"))
+    assert i0.to("W/m**2").magnitude == pytest.approx(2 * 1.0 / (pi * (10e-6) ** 2), rel=1e-9)
+    assert i0.to("W/m**2").magnitude == pytest.approx(6.366e9, rel=1e-3)
+
+    # The on-axis peak is exactly twice the power spread over the beam area (pi*w^2).
+    average = 1.0 / (pi * (10e-6) ** 2)
+    assert i0.to("W/m**2").magnitude == pytest.approx(2 * average, rel=1e-12)
+
+    # Peak intensity scales as 1/w^2: focusing a 2 mm beam to a tight spot concentrates it hugely.
+    spot = focused_spot_radius(
+        wavelength=_q("1064 nm"), focal_length=_q("100 mm"), input_beam_radius=_q("2 mm")
+    )
+    i0_focused = gaussian_beam_peak_intensity(power=_q("1 W"), beam_radius=spot)
+    i0_raw = gaussian_beam_peak_intensity(power=_q("1 W"), beam_radius=_q("2 mm"))
+    assert i0_focused.to("W/m**2").magnitude > 10000 * i0_raw.to("W/m**2").magnitude
+
+    with pytest.raises(ValueError, match="beam_radius must be positive"):
+        gaussian_beam_peak_intensity(power=_q("1 W"), beam_radius=_q("0 m"))
+
+
 def test_control_valve_flow_required_cv_and_authority():
     from math import sqrt
 

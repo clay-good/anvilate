@@ -28,6 +28,7 @@ __all__ = [
     "beam_divergence_half_angle",
     "beam_waist_for_divergence",
     "focused_spot_radius",
+    "gaussian_beam_peak_intensity",
 ]
 
 
@@ -138,6 +139,28 @@ def focused_spot_radius(
     if w <= 0:
         raise ValueError("input_beam_radius must be positive")
     return Quantity(magnitude=lam * f / (pi * w), unit="m")
+
+
+def gaussian_beam_peak_intensity(*, power: Quantity, beam_radius: Quantity) -> Quantity:
+    """The on-axis peak intensity of a Gaussian beam, I₀ = 2·P/(π·w²).
+
+    A Gaussian beam concentrates its ``power`` P toward the centre, so its on-axis intensity is
+    twice the power spread evenly over the beam area: I₀ = 2·P/(π·w²), from the total power and the
+    ``beam_radius`` w (the 1/e² radius at the plane of interest — use the focused-spot or waist
+    radius for the peak). This is the number that governs optical damage thresholds, self-focusing,
+    and nonlinear conversion — all set by the peak irradiance, not the average power — which is why
+    even a modest laser becomes destructive once focused to a small spot. Returns the peak intensity
+    in W/m².
+    """
+    _check(power, "[power]", "power")
+    _check(beam_radius, "[length]", "beam_radius")
+    p = power.to("W").magnitude
+    w = beam_radius.to("m").magnitude
+    if p < 0:
+        raise ValueError("power must be non-negative")
+    if w <= 0:
+        raise ValueError("beam_radius must be positive")
+    return Quantity(magnitude=2.0 * p / (pi * w**2), unit="W/m**2")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

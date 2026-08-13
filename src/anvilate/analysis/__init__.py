@@ -1848,6 +1848,7 @@ from .gaussian_beam import (
     beam_radius_at_distance,
     beam_waist_for_divergence,
     focused_spot_radius,
+    gaussian_beam_peak_intensity,
     rayleigh_range,
 )
 from .gear import (
@@ -4493,6 +4494,7 @@ __all__ = [
     "beam_divergence_half_angle",
     "beam_waist_for_divergence",
     "focused_spot_radius",
+    "gaussian_beam_peak_intensity",
     "confined_liquid_thermal_pressure",
     "constrained_thermal_stress",
     "thermal_shock_stress",
