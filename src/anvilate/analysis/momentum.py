@@ -16,12 +16,16 @@ dimension-checked :class:`~anvilate.units.Quantity` values.
 
 from __future__ import annotations
 
+from math import sqrt
+
 from ..units import Quantity
 
 __all__ = [
     "average_impact_force",
+    "coefficient_of_restitution_from_rebound",
     "impulse",
     "linear_momentum",
+    "rebound_height",
 ]
 
 
@@ -77,6 +81,49 @@ def average_impact_force(
     if dt <= 0:
         raise ValueError("time_interval must be positive")
     return Quantity(magnitude=abs(m * dv / dt), unit="N")
+
+
+def coefficient_of_restitution_from_rebound(
+    *, drop_height: Quantity, rebound_height: Quantity
+) -> float:
+    """The coefficient of restitution from a bounce test, e = √(h_rebound/h_drop).
+
+    The standard drop-and-bounce measurement of how elastic a collision is: a ball released from
+    ``drop_height`` h returns to ``rebound_height`` h′, and since the speeds at the floor scale as
+    √h, the coefficient of restitution is e = √(h′/h). It runs from 0 (a perfectly plastic impact
+    that keeps no rebound, like clay) to 1 (a perfectly elastic bounce that returns to the drop
+    height); a superball sits near 0.9, a tennis ball near 0.75. The rebound cannot exceed the drop
+    (energy is lost, not created), so h′ ≤ h. Returns the dimensionless coefficient of restitution.
+    """
+    _check(drop_height, "[length]", "drop_height")
+    _check(rebound_height, "[length]", "rebound_height")
+    h = drop_height.to("m").magnitude
+    h_r = rebound_height.to("m").magnitude
+    if h <= 0:
+        raise ValueError("drop_height must be positive")
+    if h_r < 0:
+        raise ValueError("rebound_height must be non-negative")
+    if h_r > h:
+        raise ValueError("rebound_height cannot exceed drop_height (a bounce cannot gain energy)")
+    return sqrt(h_r / h)
+
+
+def rebound_height(*, drop_height: Quantity, coefficient_of_restitution: float) -> Quantity:
+    """The bounce height for a given restitution, h′ = e²·h.
+
+    The height a ball dropped from ``drop_height`` h returns to, given the
+    ``coefficient_of_restitution`` e: because the rebound speed is e times the impact speed and
+    height scales with speed squared, h′ = e²·h. Each successive bounce is a factor e² lower, so the
+    ball settles in a geometric series — the reason a lively ball takes many quick bounces to stop.
+    ``coefficient_of_restitution`` is in [0, 1]. Returns the rebound height in metres.
+    """
+    _check(drop_height, "[length]", "drop_height")
+    h = drop_height.to("m").magnitude
+    if h < 0:
+        raise ValueError("drop_height must be non-negative")
+    if not 0.0 <= coefficient_of_restitution <= 1.0:
+        raise ValueError("coefficient_of_restitution must be in [0, 1]")
+    return Quantity(magnitude=coefficient_of_restitution**2 * h, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

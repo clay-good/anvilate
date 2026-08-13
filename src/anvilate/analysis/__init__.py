@@ -2140,8 +2140,10 @@ from .membrane import (
 )
 from .momentum import (
     average_impact_force,
+    coefficient_of_restitution_from_rebound,
     impulse,
     linear_momentum,
+    rebound_height,
 )
 from .naval_architecture import (
     block_coefficient,
@@ -3796,6 +3798,8 @@ __all__ = [
     "linear_momentum",
     "impulse",
     "average_impact_force",
+    "coefficient_of_restitution_from_rebound",
+    "rebound_height",
     "hull_speed",
     "hull_froude_number",
     "block_coefficient",

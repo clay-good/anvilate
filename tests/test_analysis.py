@@ -26306,6 +26306,42 @@ def test_linear_momentum_impulse_and_average_impact_force():
         impulse(force=_q("500 kg"), time_interval=_q("3 s"))
 
 
+def test_momentum_coefficient_of_restitution_and_rebound_height():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        coefficient_of_restitution_from_rebound,
+        rebound_height,
+    )
+
+    # e = sqrt(h_rebound/h_drop); dropped 1 m, bounced to 0.64 m -> e = 0.8.
+    e = coefficient_of_restitution_from_rebound(drop_height=_q("1 m"), rebound_height=_q("0.64 m"))
+    assert e == pytest.approx(sqrt(0.64), rel=1e-12)
+    assert e == pytest.approx(0.8, rel=1e-12)
+
+    # rebound_height inverts it: h' = e^2*h, so e=0.8 from 1 m returns 0.64 m.
+    h_r = rebound_height(drop_height=_q("1 m"), coefficient_of_restitution=0.8)
+    assert h_r.to("m").magnitude == pytest.approx(0.64, rel=1e-12)
+    # Round-trip: the restitution recovered from that rebound is the original e.
+    assert coefficient_of_restitution_from_rebound(
+        drop_height=_q("1 m"), rebound_height=h_r
+    ) == pytest.approx(0.8, rel=1e-9)
+
+    # Perfectly elastic (e=1) returns to the drop height; perfectly plastic (e=0) does not bounce.
+    assert rebound_height(drop_height=_q("2 m"), coefficient_of_restitution=1.0).to(
+        "m"
+    ).magnitude == pytest.approx(2.0, rel=1e-12)
+    assert rebound_height(drop_height=_q("2 m"), coefficient_of_restitution=0.0).to(
+        "m"
+    ).magnitude == pytest.approx(0.0, abs=1e-15)
+
+    # Guardrails: a bounce cannot gain energy, e in [0, 1].
+    with pytest.raises(ValueError, match="cannot exceed drop_height"):
+        coefficient_of_restitution_from_rebound(drop_height=_q("1 m"), rebound_height=_q("1.5 m"))
+    with pytest.raises(ValueError, match="coefficient_of_restitution must be in"):
+        rebound_height(drop_height=_q("1 m"), coefficient_of_restitution=1.5)
+
+
 def test_kinetic_potential_energy_and_work_done():
     from anvilate.analysis import (
         gravitational_potential_energy,

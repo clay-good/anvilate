@@ -154,6 +154,8 @@ membrane.salt_rejection
 momentum.linear_momentum
 momentum.impulse
 momentum.average_impact_force
+momentum.coefficient_of_restitution_from_rebound
+momentum.rebound_height
 axial.axial_elongation
 axial.axial_stiffness
 axial.axial_stress
