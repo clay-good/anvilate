@@ -28,6 +28,7 @@ from ..units import Quantity
 __all__ = [
     "cavitation_number",
     "darcy_friction_factor",
+    "dean_number",
     "darcy_weisbach_head_loss",
     "hagen_poiseuille_flow_rate",
     "hagen_poiseuille_pressure_drop",
@@ -79,6 +80,34 @@ def reynolds_number(
     if v <= 0 or d <= 0 or nu <= 0:
         raise ValueError("velocity, diameter, and kinematic_viscosity must be positive")
     return v * d / nu
+
+
+def dean_number(
+    *,
+    reynolds: float,
+    tube_diameter: Quantity,
+    coil_diameter: Quantity,
+) -> float:
+    """The Dean number of flow in a curved pipe, De = Re·√(d/D).
+
+    The dimensionless group that governs the secondary (Dean) vortices set up when flow is forced
+    around a bend: De = Re·√(d/D), from the straight-pipe ``reynolds`` number Re, the
+    ``tube_diameter`` d, and the coil or bend ``coil_diameter`` D (twice the radius of curvature of
+    the pipe's centreline). Curvature throws the faster core fluid outward, and the return flow
+    along the walls forms a counter-rotating vortex pair that boosts mixing and heat transfer while
+    delaying the transition to turbulence. Below roughly De ≈ 40 the secondary flow is negligible;
+    above it the Dean vortices dominate — the reason helical-coil heat exchangers and curved
+    reactor tubes outperform straight ones. Returns the dimensionless Dean number.
+    """
+    _check(tube_diameter, "[length]", "tube_diameter")
+    _check(coil_diameter, "[length]", "coil_diameter")
+    if reynolds <= 0:
+        raise ValueError("reynolds must be positive")
+    d = tube_diameter.to("m").magnitude
+    big_d = coil_diameter.to("m").magnitude
+    if d <= 0 or big_d <= 0:
+        raise ValueError("tube_diameter and coil_diameter must be positive")
+    return reynolds * (d / big_d) ** 0.5
 
 
 def laminar_hydrodynamic_entry_length(*, reynolds: float, diameter: Quantity) -> Quantity:

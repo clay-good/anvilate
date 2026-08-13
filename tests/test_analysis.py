@@ -21353,6 +21353,27 @@ def test_reynolds_number_and_friction_factor_regimes():
         darcy_friction_factor(reynolds=-1.0)
 
 
+def test_pipe_flow_dean_number_curved_pipe():
+    from anvilate.analysis import dean_number
+
+    # De = Re*sqrt(d/D): Re=1000, d=20 mm, D=200 mm -> 1000*sqrt(0.1) ~ 316.
+    de = dean_number(reynolds=1000.0, tube_diameter=_q("20 mm"), coil_diameter=_q("200 mm"))
+    assert de == pytest.approx(1000.0 * (0.02 / 0.2) ** 0.5, rel=1e-12)
+    assert de == pytest.approx(316.2277, abs=1e-3)
+
+    # A tighter coil (smaller D) at the same Re raises the Dean number.
+    tighter = dean_number(reynolds=1000.0, tube_diameter=_q("20 mm"), coil_diameter=_q("100 mm"))
+    assert tighter > de
+    # In the straight-pipe limit (D -> infinity) De -> 0.
+    nearly_straight = dean_number(
+        reynolds=1000.0, tube_diameter=_q("20 mm"), coil_diameter=_q("200000 m")
+    )
+    assert nearly_straight < 1.0
+
+    with pytest.raises(ValueError, match="reynolds"):
+        dean_number(reynolds=0.0, tube_diameter=_q("20 mm"), coil_diameter=_q("200 mm"))
+
+
 def test_pipe_entry_lengths_laminar_and_turbulent():
     from anvilate.analysis import (
         laminar_hydrodynamic_entry_length,
