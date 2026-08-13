@@ -24,7 +24,7 @@ returned in hertz.
 
 from __future__ import annotations
 
-from math import atan2, degrees, exp, pi, sqrt
+from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
@@ -57,6 +57,8 @@ __all__ = [
     "floor_vibration_peak_acceleration_ratio",
     "simple_pendulum_period",
     "physical_pendulum_period",
+    "conical_pendulum_period",
+    "conical_pendulum_speed",
     "tuned_mass_damper_optimal_frequency_ratio",
     "tuned_mass_damper_optimal_damping",
     "dunkerley_fundamental_frequency",
@@ -742,6 +744,54 @@ def physical_pendulum_period(
     if min(inertia, m, d) <= 0:
         raise ValueError("moment_of_inertia, mass, and pivot_distance must be positive")
     return Quantity(magnitude=2.0 * pi * sqrt(inertia / (m * g * d)), unit="s")
+
+
+def conical_pendulum_period(
+    *, string_length: Quantity, half_angle: float, gravity: Quantity = STANDARD_GRAVITY
+) -> Quantity:
+    """The period of a conical pendulum, T = 2π·√(L·cos θ/g).
+
+    Unlike a plane pendulum, a conical pendulum sweeps a horizontal circle at a fixed angle to the
+    vertical — a governor fly-ball, a tetherball, a swing-ride. Its period is T = 2π·√(L·cos θ/g),
+    from the ``string_length`` L, the cone ``half_angle`` θ (degrees from vertical), and ``gravity``
+    g. Only the *vertical* projection L·cos θ sets the period, so a wider swing (larger θ) speeds it
+    up, and as θ → 90° the period collapses toward zero. ``half_angle`` is in [0, 90). Returns the
+    period in seconds.
+    """
+    _require(string_length, "[length]", "string_length")
+    _require(gravity, "[acceleration]", "gravity")
+    ell = string_length.to("m").magnitude
+    g = gravity.to("m/s**2").magnitude
+    if ell <= 0:
+        raise ValueError("string_length must be positive")
+    if not 0.0 <= half_angle < 90.0:
+        raise ValueError("half_angle must be in [0, 90) degrees")
+    return Quantity(magnitude=2.0 * pi * sqrt(ell * cos(radians(half_angle)) / g), unit="s")
+
+
+def conical_pendulum_speed(
+    *, string_length: Quantity, half_angle: float, gravity: Quantity = STANDARD_GRAVITY
+) -> Quantity:
+    """The orbital speed of a conical pendulum, v = √(g·L·sin θ·tan θ).
+
+    How fast the bob travels around its horizontal circle of radius r = L·sin θ: balancing the
+    string tension's horizontal component against the centripetal demand gives
+    v = √(g·L·sin θ·tan θ), from the ``string_length`` L, the ``half_angle`` θ (degrees), and
+    ``gravity``
+    g. A steeper cone (larger θ) both widens the circle and demands more speed to hold it — which is
+    how a centrifugal governor converts speed into fly-ball angle. ``half_angle`` is in [0, 90).
+    Returns the orbital speed in m/s.
+    """
+    _require(string_length, "[length]", "string_length")
+    _require(gravity, "[acceleration]", "gravity")
+    ell = string_length.to("m").magnitude
+    g = gravity.to("m/s**2").magnitude
+    if ell <= 0:
+        raise ValueError("string_length must be positive")
+    if not 0.0 <= half_angle < 90.0:
+        raise ValueError("half_angle must be in [0, 90) degrees")
+    theta = radians(half_angle)
+    return Quantity(magnitude=sqrt(g * ell * sin(theta) * tan(theta)), unit="m/s")
 
 
 def _check_mass_ratio(mass_ratio: float) -> float:

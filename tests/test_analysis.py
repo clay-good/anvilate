@@ -11275,6 +11275,45 @@ def test_pendulum_periods():
         )
 
 
+def test_conical_pendulum_period_and_orbital_speed():
+    from math import cos, pi, radians, sin, sqrt, tan
+
+    from anvilate.analysis import conical_pendulum_period, conical_pendulum_speed
+
+    g = 9.80665
+
+    # T = 2*pi*sqrt(L*cos(theta)/g); 1 m string at 30 deg -> ~1.867 s.
+    t = conical_pendulum_period(string_length=_q("1 m"), half_angle=30.0)
+    assert t.to("s").magnitude == pytest.approx(2 * pi * sqrt(1 * cos(radians(30)) / g), rel=1e-12)
+    assert t.to("s").magnitude == pytest.approx(1.867, abs=0.001)
+    # A wider cone (larger theta) shortens the period; at theta->0 it matches a simple pendulum.
+    assert (
+        conical_pendulum_period(string_length=_q("1 m"), half_angle=60.0).to("s").magnitude
+        < t.to("s").magnitude
+    )
+    assert conical_pendulum_period(string_length=_q("1 m"), half_angle=0.0).to(
+        "s"
+    ).magnitude == pytest.approx(2 * pi * sqrt(1 / g), rel=1e-9)
+
+    # v = sqrt(g*L*sin(theta)*tan(theta)); 1 m at 30 deg -> ~1.683 m/s.
+    v = conical_pendulum_speed(string_length=_q("1 m"), half_angle=30.0)
+    assert v.to("m/s").magnitude == pytest.approx(
+        sqrt(g * 1 * sin(radians(30)) * tan(radians(30))), rel=1e-12
+    )
+    assert v.to("m/s").magnitude == pytest.approx(1.683, abs=0.001)
+    # A steeper cone demands more orbital speed.
+    assert (
+        conical_pendulum_speed(string_length=_q("1 m"), half_angle=60.0).to("m/s").magnitude
+        > v.to("m/s").magnitude
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="half_angle must be in"):
+        conical_pendulum_period(string_length=_q("1 m"), half_angle=90.0)
+    with pytest.raises(ValueError, match="string_length must be positive"):
+        conical_pendulum_speed(string_length=_q("0 m"), half_angle=30.0)
+
+
 def test_tuned_mass_damper_den_hartog_optimum():
     from math import sqrt
 
