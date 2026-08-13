@@ -20,6 +20,7 @@ from math import pi, sqrt
 from ..units import Quantity
 
 __all__ = [
+    "archimedes_number",
     "drag_force",
     "jet_impact_force",
     "stokes_drag_force",
@@ -184,6 +185,43 @@ def stokes_drag_force(
     if v < 0:
         raise ValueError("velocity must be non-negative")
     return Quantity(magnitude=3.0 * pi * mu * d * v, unit="N")
+
+
+def archimedes_number(
+    *,
+    particle_diameter: Quantity,
+    particle_density: Quantity,
+    fluid_density: Quantity,
+    fluid_viscosity: Quantity,
+) -> float:
+    """The Archimedes number of a particle in a fluid, Ar = g·d³·ρ_f·(ρ_p − ρ_f)/μ².
+
+    The velocity-free group that pits gravitational-buoyancy driving force against viscous
+    resistance: Ar = g·d³·ρ_f·(ρ_p − ρ_f)/μ², from the ``particle_diameter`` d, ``particle_density``
+    ρ_p, ``fluid_density`` ρ_f, and ``fluid_viscosity`` μ. Because it contains no velocity it can be
+    computed before the settling speed is known, and it fixes the flow regime that
+    :func:`stokes_settling_velocity` and :func:`terminal_velocity` must respect: Ar ≲ 18 is Stokes
+    creeping flow, the intermediate range runs to ~ 8.3×10⁴, and above that the Newton
+    quadratic-drag regime holds. It is the master variable for fluidized-bed and hindered-settling
+    correlations, where the minimum-fluidization and terminal Reynolds numbers are written directly
+    as functions of Ar. Returns the dimensionless Archimedes number (negative if the particle is
+    buoyant).
+    """
+    _check(particle_diameter, "[length]", "particle_diameter")
+    _check(particle_density, "[mass]/[length]**3", "particle_density")
+    _check(fluid_density, "[mass]/[length]**3", "fluid_density")
+    _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
+    d = particle_diameter.to("m").magnitude
+    rho_p = particle_density.to("kg/m**3").magnitude
+    rho_f = fluid_density.to("kg/m**3").magnitude
+    mu = fluid_viscosity.to("Pa*s").magnitude
+    if d <= 0:
+        raise ValueError("particle_diameter must be positive")
+    if rho_f <= 0:
+        raise ValueError("fluid_density must be positive")
+    if mu <= 0:
+        raise ValueError("fluid_viscosity must be positive")
+    return _GRAVITY * d**3 * rho_f * (rho_p - rho_f) / mu**2
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

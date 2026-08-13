@@ -14240,6 +14240,48 @@ def test_stokes_settling_velocity_and_drag_are_consistent():
         )
 
 
+def test_archimedes_number_settling_regime():
+    from anvilate.analysis import archimedes_number
+
+    # Ar = g*d^3*rho_f*(rho_p-rho_f)/mu^2; 100 um quartz in water -> ~16, Stokes regime (Ar < 18).
+    ar = archimedes_number(
+        particle_diameter=_q("100 um"),
+        particle_density=_q("2650 kg/m**3"),
+        fluid_density=_q("1000 kg/m**3"),
+        fluid_viscosity=_q("0.001 Pa*s"),
+    )
+    expected = 9.80665 * (1e-4) ** 3 * 1000 * (2650 - 1000) / (0.001) ** 2
+    assert ar == pytest.approx(expected, rel=1e-9)
+    assert ar < 18.0
+
+    # Ar scales with the cube of diameter: a 10x larger grain -> 1000x, out of the Stokes regime.
+    ar_big = archimedes_number(
+        particle_diameter=_q("1000 um"),
+        particle_density=_q("2650 kg/m**3"),
+        fluid_density=_q("1000 kg/m**3"),
+        fluid_viscosity=_q("0.001 Pa*s"),
+    )
+    assert ar_big == pytest.approx(ar * 1000.0, rel=1e-9)
+    assert ar_big > 18.0
+
+    # A buoyant particle (lighter than the fluid) gives a negative Archimedes number.
+    ar_buoyant = archimedes_number(
+        particle_diameter=_q("100 um"),
+        particle_density=_q("800 kg/m**3"),
+        fluid_density=_q("1000 kg/m**3"),
+        fluid_viscosity=_q("0.001 Pa*s"),
+    )
+    assert ar_buoyant < 0
+
+    with pytest.raises(ValueError, match="viscosity"):
+        archimedes_number(
+            particle_diameter=_q("100 um"),
+            particle_density=_q("2650 kg/m**3"),
+            fluid_density=_q("1000 kg/m**3"),
+            fluid_viscosity=_q("0 Pa*s"),
+        )
+
+
 def test_wind_turbine_tip_speed_ratio_and_capacity_factor():
     import math
 

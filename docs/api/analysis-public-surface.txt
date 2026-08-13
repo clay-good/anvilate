@@ -494,6 +494,7 @@ diffusion.steady_diffusion_flux
 diode.diode_current
 diode.diode_voltage
 diode.thermal_voltage
+drag.archimedes_number
 drag.drag_force
 drag.jet_impact_force
 drag.stokes_drag_force

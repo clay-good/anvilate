@@ -1509,6 +1509,7 @@ from .diode import (
     thermal_voltage,
 )
 from .drag import (
+    archimedes_number,
     drag_force,
     jet_impact_force,
     stokes_drag_force,
@@ -3246,6 +3247,7 @@ __all__ = [
     "conveyor_mass_flow",
     "belt_speed_for_capacity",
     "conveyor_lift_power",
+    "archimedes_number",
     "drag_force",
     "jet_impact_force",
     "stokes_settling_velocity",
