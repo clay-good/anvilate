@@ -16,12 +16,15 @@ so a 1 MHz-gain-bandwidth part run at a gain of 100 has only 10 kHz of bandwidth
 
 from __future__ import annotations
 
+from math import pi
+
 from ..units import Quantity
 
 __all__ = [
     "gain_bandwidth_limited_bandwidth",
     "inverting_gain",
     "noninverting_gain",
+    "slew_rate_full_power_bandwidth",
 ]
 
 
@@ -78,6 +81,29 @@ def gain_bandwidth_limited_bandwidth(
     if closed_loop_gain == 0:
         raise ValueError("closed_loop_gain must be non-zero")
     return Quantity(magnitude=gbw / abs(closed_loop_gain), unit="Hz")
+
+
+def slew_rate_full_power_bandwidth(
+    *, slew_rate: Quantity, peak_output_voltage: Quantity
+) -> Quantity:
+    """The full-power (slew-rate-limited) bandwidth, f = SR/(2π·V_peak).
+
+    A separate, *large-signal* limit from the small-signal :func:`gain_bandwidth_limited_bandwidth`:
+    a sine of amplitude V_peak has a maximum slope 2π·f·V_peak, so an op-amp of finite ``slew_rate``
+    SR can swing a full-amplitude ``peak_output_voltage`` V_peak only up to f = SR/(2π·V_peak)
+    before its output can no longer keep up and the sine distorts into a triangle. It is why a small
+    signal can pass a stage that a full-scale one cannot, and it sets the usable bandwidth for
+    large-amplitude outputs. Both inputs must be positive. Returns the full-power bandwidth in Hz.
+    """
+    _check(slew_rate, "[electric_potential]/[time]", "slew_rate")
+    _check(peak_output_voltage, "[electric_potential]", "peak_output_voltage")
+    sr = slew_rate.to("V/s").magnitude
+    v_peak = peak_output_voltage.to("V").magnitude
+    if sr <= 0:
+        raise ValueError("slew_rate must be positive")
+    if v_peak <= 0:
+        raise ValueError("peak_output_voltage must be positive")
+    return Quantity(magnitude=sr / (2.0 * pi * v_peak), unit="Hz")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

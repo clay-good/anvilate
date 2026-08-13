@@ -912,6 +912,7 @@ o_ring.o_ring_stretch_fraction
 op_amp.gain_bandwidth_limited_bandwidth
 op_amp.inverting_gain
 op_amp.noninverting_gain
+op_amp.slew_rate_full_power_bandwidth
 open_channel.broad_crested_weir_flow
 open_channel.circular_channel_properties
 open_channel.critical_depth_rectangular

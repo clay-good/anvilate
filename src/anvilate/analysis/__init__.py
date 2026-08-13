@@ -2131,6 +2131,7 @@ from .op_amp import (
     gain_bandwidth_limited_bandwidth,
     inverting_gain,
     noninverting_gain,
+    slew_rate_full_power_bandwidth,
 )
 from .open_channel import (
     broad_crested_weir_flow,
@@ -3069,6 +3070,7 @@ __all__ = [
     "noninverting_gain",
     "inverting_gain",
     "gain_bandwidth_limited_bandwidth",
+    "slew_rate_full_power_bandwidth",
     "steady_diffusion_flux",
     "diffusion_length",
     "diffusion_time",

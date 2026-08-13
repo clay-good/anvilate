@@ -22911,6 +22911,31 @@ def test_op_amp_gains_and_gain_bandwidth_tradeoff():
         inverting_gain(feedback_resistance=_q("90 kV"), input_resistance=_q("10 kohm"))
 
 
+def test_op_amp_slew_rate_full_power_bandwidth():
+    from math import pi
+
+    from anvilate.analysis import slew_rate_full_power_bandwidth
+
+    # f = SR/(2*pi*V_peak); 10 V/us slew, 10 V peak -> 159 kHz.
+    f = slew_rate_full_power_bandwidth(slew_rate=_q("10 V/us"), peak_output_voltage=_q("10 V"))
+    assert f.to("Hz").magnitude == pytest.approx(1e7 / (2 * pi * 10), rel=1e-9)
+    assert f.to("kHz").magnitude == pytest.approx(159.15, abs=0.05)
+    # A smaller output swing can go proportionally faster: half the peak -> double the bandwidth.
+    assert slew_rate_full_power_bandwidth(
+        slew_rate=_q("10 V/us"), peak_output_voltage=_q("5 V")
+    ).to("Hz").magnitude == pytest.approx(2 * f.to("Hz").magnitude, rel=1e-9)
+    # A faster op-amp (higher slew rate) extends the full-power bandwidth linearly.
+    assert slew_rate_full_power_bandwidth(
+        slew_rate=_q("20 V/us"), peak_output_voltage=_q("10 V")
+    ).to("Hz").magnitude == pytest.approx(2 * f.to("Hz").magnitude, rel=1e-9)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="peak_output_voltage must be positive"):
+        slew_rate_full_power_bandwidth(slew_rate=_q("10 V/us"), peak_output_voltage=_q("0 V"))
+    with pytest.raises(ValueError, match="slew_rate must be a"):
+        slew_rate_full_power_bandwidth(slew_rate=_q("10 V"), peak_output_voltage=_q("10 V"))
+
+
 def test_thermal_noise_voltage_power_and_current():
     from math import sqrt
 
