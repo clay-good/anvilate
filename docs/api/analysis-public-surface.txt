@@ -974,6 +974,7 @@ orbital_mechanics.hohmann_transfer_time
 orbital_mechanics.vis_viva_velocity
 orbital_mechanics.orbit_specific_energy
 orbital_mechanics.semi_major_axis_from_apsides
+orbital_mechanics.synodic_period
 psychrometrics.adiabatic_mixing_humidity_ratio
 psychrometrics.adiabatic_mixing_temperature
 psychrometrics.coil_bypass_factor

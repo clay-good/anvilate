@@ -19454,6 +19454,27 @@ def test_orbital_mechanics_circular_velocity_period_and_escape():
         escape_velocity(gravitational_parameter=_q("3.986e14 m**2/s**2"), orbital_radius=r)
 
 
+def test_orbital_mechanics_synodic_period():
+    from anvilate.analysis import synodic_period
+
+    # Earth (365.25 d) and Mars (686.98 d) -> ~779.9 d synodic (launch-window cadence).
+    syn = synodic_period(first_period=_q("365.25 day"), second_period=_q("686.98 day"))
+    assert syn.to("day").magnitude == pytest.approx(365.25 * 686.98 / (686.98 - 365.25), rel=1e-9)
+    assert syn.to("day").magnitude == pytest.approx(779.9, abs=0.5)
+    # Symmetric in the two periods (uses the absolute difference).
+    syn_rev = synodic_period(first_period=_q("686.98 day"), second_period=_q("365.25 day"))
+    assert syn_rev.to("day").magnitude == pytest.approx(syn.to("day").magnitude, rel=1e-12)
+    # Two periods close together beat slowly -> a long synodic period.
+    syn_close = synodic_period(first_period=_q("365.25 day"), second_period=_q("370 day"))
+    assert syn_close.to("day").magnitude > syn.to("day").magnitude
+
+    # Guardrails: distinct positive periods, dimensions checked.
+    with pytest.raises(ValueError, match="periods must differ"):
+        synodic_period(first_period=_q("365.25 day"), second_period=_q("365.25 day"))
+    with pytest.raises(ValueError, match="first_period must be a"):
+        synodic_period(first_period=_q("365.25 m"), second_period=_q("686.98 day"))
+
+
 def test_hohmann_transfer_burns_and_coast_time():
     from math import pi, sqrt
 

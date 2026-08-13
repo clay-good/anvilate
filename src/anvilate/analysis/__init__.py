@@ -2202,6 +2202,7 @@ from .orbital_mechanics import (
     orbit_specific_energy,
     orbital_period,
     semi_major_axis_from_apsides,
+    synodic_period,
     vis_viva_velocity,
 )
 from .packed_bed import (
@@ -3150,6 +3151,7 @@ __all__ = [
     "vis_viva_velocity",
     "orbit_specific_energy",
     "semi_major_axis_from_apsides",
+    "synodic_period",
     "cavitation_number",
     "darcy_friction_factor",
     "darcy_weisbach_head_loss",

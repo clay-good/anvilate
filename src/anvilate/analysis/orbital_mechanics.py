@@ -29,6 +29,7 @@ __all__ = [
     "orbit_specific_energy",
     "orbital_period",
     "semi_major_axis_from_apsides",
+    "synodic_period",
     "vis_viva_velocity",
 ]
 
@@ -74,6 +75,27 @@ def orbital_period(*, gravitational_parameter: Quantity, orbital_radius: Quantit
     if r <= 0:
         raise ValueError("orbital_radius must be positive")
     return Quantity(magnitude=2.0 * pi * sqrt(r**3 / mu), unit="s")
+
+
+def synodic_period(*, first_period: Quantity, second_period: Quantity) -> Quantity:
+    """The synodic period of two orbits, 1/T_syn = |1/T₁ − 1/T₂|.
+
+    How often two bodies orbiting the same primary line up again (conjunction to conjunction): from
+    their orbital periods ``first_period`` T₁ and ``second_period`` T₂, 1/T_syn = |1/T₁ − 1/T₂|, so
+    T_syn = T₁·T₂/|T₂ − T₁|. The faster body laps the slower one once per synodic period, which is
+    why Earth-Mars launch windows recur only about every 780 days (both periods near a year make the
+    beat long), and why the inner planets return to the same evening-sky position on their own
+    cadence. The two periods must differ. Returns the synodic period in the same time family (days).
+    """
+    _check(first_period, "[time]", "first_period")
+    _check(second_period, "[time]", "second_period")
+    t1 = first_period.to("s").magnitude
+    t2 = second_period.to("s").magnitude
+    if t1 <= 0 or t2 <= 0:
+        raise ValueError("orbital periods must be positive")
+    if t1 == t2:
+        raise ValueError("periods must differ (identical periods never lap: infinite synodic)")
+    return Quantity(magnitude=t1 * t2 / abs(t2 - t1), unit="s").to("day")
 
 
 def escape_velocity(*, gravitational_parameter: Quantity, orbital_radius: Quantity) -> Quantity:
