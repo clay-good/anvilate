@@ -1484,8 +1484,11 @@ from .dc_circuit import (
     resistive_power,
 )
 from .dc_dc_converter import (
+    boost_duty_cycle_for_output,
     boost_output_voltage,
+    buck_boost_duty_cycle_for_output,
     buck_boost_output_voltage,
+    buck_duty_cycle_for_output,
     buck_inductor_ripple_current,
     buck_minimum_inductance_for_ccm,
     buck_output_voltage,
@@ -3141,6 +3144,9 @@ __all__ = [
     "buck_output_voltage",
     "boost_output_voltage",
     "buck_boost_output_voltage",
+    "buck_duty_cycle_for_output",
+    "boost_duty_cycle_for_output",
+    "buck_boost_duty_cycle_for_output",
     "buck_inductor_ripple_current",
     "buck_output_voltage_ripple",
     "buck_minimum_inductance_for_ccm",

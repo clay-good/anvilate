@@ -29093,6 +29093,44 @@ def test_dc_dc_converter_buck_boost_and_buck_boost_topologies():
         buck_output_voltage(input_voltage=_q("12 A"), duty_cycle=0.4)
 
 
+def test_dc_dc_converter_duty_cycle_inverses():
+    from anvilate.analysis import (
+        boost_duty_cycle_for_output,
+        boost_output_voltage,
+        buck_boost_duty_cycle_for_output,
+        buck_boost_output_voltage,
+        buck_duty_cycle_for_output,
+        buck_output_voltage,
+    )
+
+    # Buck D = V_out/V_in; 12->5 V -> 0.4167, and it inverts buck_output_voltage exactly.
+    d_buck = buck_duty_cycle_for_output(input_voltage=_q("12 V"), output_voltage=_q("5 V"))
+    assert d_buck == pytest.approx(5 / 12, rel=1e-12)
+    assert buck_output_voltage(input_voltage=_q("12 V"), duty_cycle=d_buck).to(
+        "V"
+    ).magnitude == pytest.approx(5.0, rel=1e-9)
+
+    # Boost D = 1 - V_in/V_out; 5->12 V -> 0.5833, inverts boost_output_voltage.
+    d_boost = boost_duty_cycle_for_output(input_voltage=_q("5 V"), output_voltage=_q("12 V"))
+    assert d_boost == pytest.approx(1 - 5 / 12, rel=1e-12)
+    assert boost_output_voltage(input_voltage=_q("5 V"), duty_cycle=d_boost).to(
+        "V"
+    ).magnitude == pytest.approx(12.0, rel=1e-9)
+
+    # Buck-boost D = V_out/(V_in+V_out); 12->5 V -> 0.2941, inverts the magnitude relation.
+    d_bb = buck_boost_duty_cycle_for_output(input_voltage=_q("12 V"), output_voltage=_q("5 V"))
+    assert d_bb == pytest.approx(5 / 17, rel=1e-12)
+    assert buck_boost_output_voltage(input_voltage=_q("12 V"), duty_cycle=d_bb).to(
+        "V"
+    ).magnitude == pytest.approx(5.0, rel=1e-9)
+
+    # Topology limits: a buck can't step up, a boost can't step down.
+    with pytest.raises(ValueError, match="only steps down"):
+        buck_duty_cycle_for_output(input_voltage=_q("5 V"), output_voltage=_q("12 V"))
+    with pytest.raises(ValueError, match="only steps up"):
+        boost_duty_cycle_for_output(input_voltage=_q("12 V"), output_voltage=_q("5 V"))
+
+
 def test_dc_dc_converter_buck_inductor_ripple_output_ripple_and_ccm_inductance():
     from anvilate.analysis import (
         buck_inductor_ripple_current,

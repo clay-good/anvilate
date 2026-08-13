@@ -20,8 +20,11 @@ from __future__ import annotations
 from ..units import Quantity
 
 __all__ = [
+    "boost_duty_cycle_for_output",
     "boost_output_voltage",
+    "buck_boost_duty_cycle_for_output",
     "buck_boost_output_voltage",
+    "buck_duty_cycle_for_output",
     "buck_inductor_ripple_current",
     "buck_minimum_inductance_for_ccm",
     "buck_output_voltage",
@@ -44,6 +47,28 @@ def buck_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> Quanti
     return Quantity(magnitude=duty_cycle * v_in, unit="V")
 
 
+def buck_duty_cycle_for_output(*, input_voltage: Quantity, output_voltage: Quantity) -> float:
+    """The buck duty cycle for a target output, D = V_out/V_in.
+
+    The design inverse of :func:`buck_output_voltage`: the fraction of each switching cycle the
+    high-side switch must conduct to hold the ``output_voltage`` V_out from the ``input_voltage``
+    V_in is D = V_out/V_in. Because a buck only steps down, the output must be below the input (D in
+    (0, 1)); asking for V_out ≥ V_in is rejected. Assumes an ideal, continuous-conduction converter.
+    Returns the dimensionless duty cycle.
+    """
+    _check(input_voltage, "[electric_potential]", "input_voltage")
+    _check(output_voltage, "[electric_potential]", "output_voltage")
+    v_in = input_voltage.to("V").magnitude
+    v_out = output_voltage.to("V").magnitude
+    if v_in <= 0:
+        raise ValueError("input_voltage must be positive")
+    if v_out <= 0:
+        raise ValueError("output_voltage must be positive")
+    if v_out >= v_in:
+        raise ValueError("output_voltage must be below input_voltage (a buck only steps down)")
+    return v_out / v_in
+
+
 def boost_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> Quantity:
     """The boost (step-up) output voltage, V_out = V_in / (1 - D).
 
@@ -59,6 +84,28 @@ def boost_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> Quant
     return Quantity(magnitude=v_in / (1.0 - duty_cycle), unit="V")
 
 
+def boost_duty_cycle_for_output(*, input_voltage: Quantity, output_voltage: Quantity) -> float:
+    """The boost duty cycle for a target output, D = 1 − V_in/V_out.
+
+    The design inverse of :func:`boost_output_voltage`: the duty cycle needed to raise the
+    ``input_voltage`` V_in up to the ``output_voltage`` V_out is D = 1 − V_in/V_out. Because a boost
+    only steps up, the output must exceed the input; asking for V_out ≤ V_in is rejected. The duty
+    approaches 1 as the step-up ratio grows, where the ideal relation turns optimistic. Assumes an
+    ideal, continuous-conduction converter. Returns the dimensionless duty cycle.
+    """
+    _check(input_voltage, "[electric_potential]", "input_voltage")
+    _check(output_voltage, "[electric_potential]", "output_voltage")
+    v_in = input_voltage.to("V").magnitude
+    v_out = output_voltage.to("V").magnitude
+    if v_in <= 0:
+        raise ValueError("input_voltage must be positive")
+    if v_out <= 0:
+        raise ValueError("output_voltage must be positive")
+    if v_out <= v_in:
+        raise ValueError("output_voltage must exceed input_voltage (a boost only steps up)")
+    return 1.0 - v_in / v_out
+
+
 def buck_boost_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> Quantity:
     """The buck-boost output voltage magnitude, V_out = V_in * D / (1 - D).
 
@@ -72,6 +119,27 @@ def buck_boost_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> 
     if not 0.0 < duty_cycle < 1.0:
         raise ValueError("duty_cycle must be in (0, 1)")
     return Quantity(magnitude=v_in * duty_cycle / (1.0 - duty_cycle), unit="V")
+
+
+def buck_boost_duty_cycle_for_output(*, input_voltage: Quantity, output_voltage: Quantity) -> float:
+    """The buck-boost duty cycle for a target output, D = V_out/(V_in + V_out).
+
+    The design inverse of :func:`buck_boost_output_voltage`: for a target output magnitude V_out
+    from the ``input_voltage`` V_in, solving V_out = V_in·D/(1 − D) gives D = V_out/(V_in + V_out).
+    Because the topology spans both directions, any positive output is reachable — D < 0.5 steps
+    down, D > 0.5 steps up, and D = 0.5 gives unity. ``output_voltage`` is the magnitude (the
+    physical output is polarity-inverted). Assumes an ideal, continuous-conduction converter.
+    Returns the dimensionless duty cycle.
+    """
+    _check(input_voltage, "[electric_potential]", "input_voltage")
+    _check(output_voltage, "[electric_potential]", "output_voltage")
+    v_in = input_voltage.to("V").magnitude
+    v_out = output_voltage.to("V").magnitude
+    if v_in <= 0:
+        raise ValueError("input_voltage must be positive")
+    if v_out <= 0:
+        raise ValueError("output_voltage must be positive")
+    return v_out / (v_in + v_out)
 
 
 def buck_inductor_ripple_current(
