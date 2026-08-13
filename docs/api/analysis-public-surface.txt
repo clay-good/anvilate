@@ -60,6 +60,7 @@ atomic_spectra.rydberg_transition_wavelength
 atomic_spectra.moseley_k_alpha_wavelength
 compressible_flow.choked_mass_flow_rate
 compressible_flow.critical_pressure_ratio
+compressible_flow.eckert_number
 compressible_flow.isentropic_area_ratio
 compressible_flow.mach_number
 compressible_flow.speed_of_sound

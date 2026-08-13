@@ -18905,6 +18905,38 @@ def test_compressible_flow_speed_of_sound_mach_and_stagnation():
         )
 
 
+def test_compressible_flow_eckert_number():
+    from anvilate.analysis import eckert_number
+
+    # Ec = V^2/(cp*dT); air at 200 m/s, cp=1005 J/kgK, dT=50 K -> ~0.796.
+    ec = eckert_number(
+        velocity=_q("200 m/s"),
+        specific_heat=_q("1005 J/(kg*K)"),
+        temperature_difference=_q("50 K"),
+    )
+    assert ec == pytest.approx(200**2 / (1005 * 50), rel=1e-9)
+    # Quadratic in speed: double the velocity, four times the Eckert number.
+    ec2 = eckert_number(
+        velocity=_q("400 m/s"),
+        specific_heat=_q("1005 J/(kg*K)"),
+        temperature_difference=_q("50 K"),
+    )
+    assert ec2 == pytest.approx(4 * ec, rel=1e-9)
+    # Guardrails: positive specific heat and temperature difference.
+    with pytest.raises(ValueError, match="temperature_difference must be positive"):
+        eckert_number(
+            velocity=_q("200 m/s"),
+            specific_heat=_q("1005 J/(kg*K)"),
+            temperature_difference=_q("0 K"),
+        )
+    with pytest.raises(ValueError, match="velocity must be a"):
+        eckert_number(
+            velocity=_q("200 m"),
+            specific_heat=_q("1005 J/(kg*K)"),
+            temperature_difference=_q("50 K"),
+        )
+
+
 def test_choked_flow_critical_ratio_and_mass_flow():
     import math
 

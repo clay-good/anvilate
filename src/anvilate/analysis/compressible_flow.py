@@ -24,6 +24,7 @@ from ..units import Quantity
 __all__ = [
     "choked_mass_flow_rate",
     "critical_pressure_ratio",
+    "eckert_number",
     "isentropic_area_ratio",
     "mach_angle",
     "mach_number",
@@ -84,6 +85,33 @@ def mach_number(*, velocity: Quantity, speed_of_sound: Quantity) -> float:
     if a <= 0:
         raise ValueError("speed_of_sound must be positive")
     return v / a
+
+
+def eckert_number(
+    *, velocity: Quantity, specific_heat: Quantity, temperature_difference: Quantity
+) -> float:
+    """The Eckert number, Ec = V²/(c_p·ΔT).
+
+    The ratio of a flow's kinetic energy to its thermal enthalpy difference: from the ``velocity``
+    V, the ``specific_heat`` c_p, and the wall-to-stream ``temperature_difference`` ΔT,
+    Ec = V²/(c_p·ΔT). It measures how much viscous dissipation and kinetic heating matter in a
+    boundary layer — negligible at low speed but important in high-speed (compressible) flow, where
+    aerodynamic heating warms a re-entry body or a fast turbine blade. Related to the Brinkman
+    number by Br = Ec·Pr. Returns the dimensionless Eckert number.
+    """
+    _check(velocity, "[length]/[time]", "velocity")
+    _check(specific_heat, "[energy]/[mass]/[temperature]", "specific_heat")
+    _check(temperature_difference, "[temperature]", "temperature_difference")
+    v = velocity.to("m/s").magnitude
+    cp = specific_heat.to("J/(kg*K)").magnitude
+    dt = temperature_difference.to("K").magnitude
+    if v < 0:
+        raise ValueError("velocity must be non-negative")
+    if cp <= 0:
+        raise ValueError("specific_heat must be positive")
+    if dt <= 0:
+        raise ValueError("temperature_difference must be positive")
+    return v * v / (cp * dt)
 
 
 def stagnation_temperature_ratio(*, mach_number: float, heat_capacity_ratio: float) -> float:

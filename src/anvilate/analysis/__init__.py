@@ -1365,6 +1365,7 @@ from .composite import (
 from .compressible_flow import (
     choked_mass_flow_rate,
     critical_pressure_ratio,
+    eckert_number,
     isentropic_area_ratio,
     mach_angle,
     mach_number,
@@ -3241,6 +3242,7 @@ __all__ = [
     "thermocouple_temperature_from_voltage",
     "choked_mass_flow_rate",
     "critical_pressure_ratio",
+    "eckert_number",
     "isentropic_area_ratio",
     "stagnation_pressure_ratio",
     "stagnation_density_ratio",
