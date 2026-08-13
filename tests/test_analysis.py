@@ -10022,6 +10022,41 @@ def test_critical_fracture_stress_and_griffith_stress():
         )
 
 
+def test_strain_energy_release_rate_irwin_relation():
+    from anvilate.analysis import strain_energy_release_rate, stress_intensity_factor
+
+    k = _q("50 MPa*m**0.5")
+
+    # Plane stress G = K^2/E; 50 MPa-sqrt(m), 200 GPa -> 12500 J/m^2.
+    g = strain_energy_release_rate(stress_intensity=k, youngs_modulus=_q("200 GPa"))
+    assert g.to("J/m**2").magnitude == pytest.approx((50e6) ** 2 / 200e9, rel=1e-9)
+    assert g.to("J/m**2").magnitude == pytest.approx(12500.0, rel=1e-9)
+
+    # Plane strain uses E/(1-nu^2), releasing slightly less for the same K.
+    g_ps = strain_energy_release_rate(
+        stress_intensity=k, youngs_modulus=_q("200 GPa"), poisson_ratio=0.3, plane_strain=True
+    )
+    assert g_ps.to("J/m**2").magnitude == pytest.approx(12500.0 * (1 - 0.3**2), rel=1e-9)
+    assert g_ps.to("J/m**2").magnitude < g.to("J/m**2").magnitude
+
+    # It chains from the stress-intensity factor and grows with K^2.
+    ki = stress_intensity_factor(remote_stress=_q("100 MPa"), crack_length=_q("10 mm"))
+    g_chain = strain_energy_release_rate(stress_intensity=ki, youngs_modulus=_q("200 GPa"))
+    assert g_chain.to("J/m**2").magnitude == pytest.approx(
+        (ki.to("Pa*m**0.5").magnitude) ** 2 / 200e9, rel=1e-9
+    )
+
+    # Guardrails: positive modulus, valid Poisson for plane strain, dimensions checked.
+    with pytest.raises(ValueError, match="youngs_modulus must be positive"):
+        strain_energy_release_rate(stress_intensity=k, youngs_modulus=_q("0 GPa"))
+    with pytest.raises(ValueError, match="poisson_ratio must be in"):
+        strain_energy_release_rate(
+            stress_intensity=k, youngs_modulus=_q("200 GPa"), poisson_ratio=0.7, plane_strain=True
+        )
+    with pytest.raises(ValueError, match="stress_intensity must be a"):
+        strain_energy_release_rate(stress_intensity=_q("50 MPa"), youngs_modulus=_q("200 GPa"))
+
+
 def test_crack_tip_plastic_zone_and_thickness_requirement():
     from math import pi
 

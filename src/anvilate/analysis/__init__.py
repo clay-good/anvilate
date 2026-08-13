@@ -1786,6 +1786,7 @@ from .fracture import (
     paris_law_crack_growth_rate,
     paris_law_cycles_to_failure,
     plane_strain_thickness_requirement,
+    strain_energy_release_rate,
     stress_intensity_factor,
 )
 from .fresnel import (
@@ -4401,6 +4402,7 @@ __all__ = [
     "critical_crack_length",
     "critical_fracture_stress",
     "griffith_fracture_stress",
+    "strain_energy_release_rate",
     "paris_law_crack_growth_rate",
     "paris_law_cycles_to_failure",
     "crack_tip_plastic_zone_size",

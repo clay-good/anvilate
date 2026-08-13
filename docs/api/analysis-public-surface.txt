@@ -720,6 +720,7 @@ fluid_statics.weber_number
 fracture.critical_crack_length
 fracture.critical_fracture_stress
 fracture.griffith_fracture_stress
+fracture.strain_energy_release_rate
 fracture.paris_law_crack_growth_rate
 fracture.crack_tip_plastic_zone_size
 fracture.paris_law_cycles_to_failure

@@ -48,6 +48,7 @@ __all__ = [
     "critical_crack_length",
     "critical_fracture_stress",
     "griffith_fracture_stress",
+    "strain_energy_release_rate",
     "paris_law_crack_growth_rate",
     "paris_law_cycles_to_failure",
     "crack_tip_plastic_zone_size",
@@ -165,6 +166,34 @@ def griffith_fracture_stress(
         raise ValueError(f"crack_length must be positive; got {crack_length}")
     sigma = sqrt(2.0 * e * gamma / (pi * a))  # Pa
     return Quantity(magnitude=sigma / 1.0e6, unit="MPa")
+
+
+def strain_energy_release_rate(
+    *,
+    stress_intensity: Quantity,
+    youngs_modulus: Quantity,
+    poisson_ratio: float = 0.0,
+    plane_strain: bool = False,
+) -> Quantity:
+    """The strain-energy release rate (Irwin relation), G = K²/E'.
+
+    The elastic energy freed per unit of new crack area, tying the stress-intensity view of fracture
+    to Griffith's energy view: from the mode-I ``stress_intensity`` K (from
+    :func:`stress_intensity_factor`) and the ``youngs_modulus`` E, G = K²/E'. The effective modulus
+    E' is E in plane stress (thin sheets) and E/(1 − ν²) in ``plane_strain`` (thick sections, using
+    the ``poisson_ratio`` ν), so a constrained thick body releases slightly less energy for the same
+    K. Fracture runs when G reaches the material's toughness G_c = K_IC²/E'. Returns G in J/m².
+    """
+    _require(stress_intensity, "[pressure]*[length]**0.5", "stress_intensity")
+    _require(youngs_modulus, "[pressure]", "youngs_modulus")
+    k = stress_intensity.to("Pa*m**0.5").magnitude
+    e = youngs_modulus.to("Pa").magnitude
+    if e <= 0:
+        raise ValueError(f"youngs_modulus must be positive; got {youngs_modulus}")
+    if plane_strain and not -1.0 < poisson_ratio < 0.5:
+        raise ValueError("poisson_ratio must be in (-1, 0.5) for plane strain")
+    e_effective = e / (1.0 - poisson_ratio**2) if plane_strain else e
+    return Quantity(magnitude=k * k / e_effective, unit="J/m**2")
 
 
 def paris_law_crack_growth_rate(
