@@ -550,6 +550,7 @@ engineering_economics.straight_line_depreciation
 exergy.exergy_of_heat
 exergy.flow_exergy
 exergy.irreversibility_from_entropy_generation
+exergy.entropy_generation_heat_transfer
 extrusion.extrusion_ratio
 extrusion.extrusion_pressure
 extrusion.extrusion_force

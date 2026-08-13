@@ -1649,6 +1649,7 @@ from .engineering_economics import (
     straight_line_depreciation,
 )
 from .exergy import (
+    entropy_generation_heat_transfer,
     exergy_of_heat,
     flow_exergy,
     irreversibility_from_entropy_generation,
@@ -3299,6 +3300,7 @@ __all__ = [
     "exergy_of_heat",
     "flow_exergy",
     "irreversibility_from_entropy_generation",
+    "entropy_generation_heat_transfer",
     "extrusion_ratio",
     "extrusion_pressure",
     "extrusion_force",

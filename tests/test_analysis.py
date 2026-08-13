@@ -16448,6 +16448,49 @@ def test_exergy_of_heat_flow_exergy_and_gouy_stodola():
         )
 
 
+def test_exergy_entropy_generation_from_finite_dt_heat_transfer():
+    from anvilate.analysis import (
+        entropy_generation_heat_transfer,
+        irreversibility_from_entropy_generation,
+    )
+
+    # S_gen = Q*(1/T_c - 1/T_h); 1000 J from 500 K to 300 K -> 1.333 J/K.
+    s = entropy_generation_heat_transfer(
+        heat_transferred=_q("1000 J"), hot_temperature=_q("500 K"), cold_temperature=_q("300 K")
+    )
+    assert s.to("J/K").magnitude == pytest.approx(1000 * (1 / 300 - 1 / 500), rel=1e-9)
+    assert s.to("J/K").magnitude == pytest.approx(1.333, abs=0.001)
+    # A smaller temperature gap generates less entropy (more reversible).
+    assert (
+        entropy_generation_heat_transfer(
+            heat_transferred=_q("1000 J"), hot_temperature=_q("350 K"), cold_temperature=_q("300 K")
+        )
+        .to("J/K")
+        .magnitude
+        < s.to("J/K").magnitude
+    )
+    # It chains into Gouy-Stodola: I = T0*S_gen at a 300 K dead state -> 400 J destroyed.
+    assert irreversibility_from_entropy_generation(
+        entropy_generation=s, dead_state_temperature=_q("300 K")
+    ).to("J").magnitude == pytest.approx(300 * s.to("J/K").magnitude, rel=1e-9)
+
+    # A heat *rate* gives an entropy-generation rate in W/K.
+    s_rate = entropy_generation_heat_transfer(
+        heat_transferred=_q("1000 W"), hot_temperature=_q("500 K"), cold_temperature=_q("300 K")
+    )
+    assert s_rate.to("W/K").magnitude == pytest.approx(1000 * (1 / 300 - 1 / 500), rel=1e-9)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="hot_temperature must exceed cold_temperature"):
+        entropy_generation_heat_transfer(
+            heat_transferred=_q("1000 J"), hot_temperature=_q("300 K"), cold_temperature=_q("500 K")
+        )
+    with pytest.raises(ValueError, match="heat_transferred must be an"):
+        entropy_generation_heat_transfer(
+            heat_transferred=_q("1000 m"), hot_temperature=_q("500 K"), cold_temperature=_q("300 K")
+        )
+
+
 def test_siegert_flue_gas_loss_and_combustion_efficiency():
     from anvilate.analysis import combustion_efficiency, siegert_dry_flue_gas_loss
     from anvilate.units import Quantity
