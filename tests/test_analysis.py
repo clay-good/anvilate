@@ -23377,6 +23377,35 @@ def test_op_amp_slew_rate_full_power_bandwidth():
         slew_rate_full_power_bandwidth(slew_rate=_q("10 V"), peak_output_voltage=_q("10 V"))
 
 
+def test_op_amp_rise_time_from_bandwidth():
+    from anvilate.analysis import gain_bandwidth_limited_bandwidth, rise_time_from_bandwidth
+
+    # t_r = 0.35/f_3dB; 100 MHz -> 3.5 ns.
+    tr = rise_time_from_bandwidth(bandwidth=_q("100 MHz"))
+    assert tr.to("s").magnitude == pytest.approx(0.35 / 100e6, rel=1e-9)
+    assert tr.to("ns").magnitude == pytest.approx(3.5, rel=1e-9)
+    # A 350 MHz scope resolves a ~1 ns edge.
+    assert rise_time_from_bandwidth(bandwidth=_q("350 MHz")).to("ns").magnitude == pytest.approx(
+        1.0, rel=1e-9
+    )
+    # Wider bandwidth means proportionally faster edges.
+    tr_wide = rise_time_from_bandwidth(bandwidth=_q("200 MHz"))
+    assert tr_wide.to("s").magnitude == pytest.approx(tr.to("s").magnitude / 2, rel=1e-9)
+    # It chains from the gain-bandwidth-limited bandwidth of a stage.
+    bw = gain_bandwidth_limited_bandwidth(
+        gain_bandwidth_product=_q("10 MHz"), closed_loop_gain=10.0
+    )
+    assert rise_time_from_bandwidth(bandwidth=bw).to("s").magnitude == pytest.approx(
+        0.35 / bw.to("Hz").magnitude, rel=1e-9
+    )
+
+    # Guardrails: positive bandwidth, dimensions checked.
+    with pytest.raises(ValueError, match="bandwidth must be positive"):
+        rise_time_from_bandwidth(bandwidth=_q("0 Hz"))
+    with pytest.raises(ValueError, match="bandwidth must be a"):
+        rise_time_from_bandwidth(bandwidth=_q("100 V"))
+
+
 def test_thermal_noise_voltage_power_and_current():
     from math import sqrt
 

@@ -2144,6 +2144,7 @@ from .op_amp import (
     gain_bandwidth_limited_bandwidth,
     inverting_gain,
     noninverting_gain,
+    rise_time_from_bandwidth,
     slew_rate_full_power_bandwidth,
 )
 from .open_channel import (
@@ -3107,6 +3108,7 @@ __all__ = [
     "inverting_gain",
     "gain_bandwidth_limited_bandwidth",
     "slew_rate_full_power_bandwidth",
+    "rise_time_from_bandwidth",
     "steady_diffusion_flux",
     "diffusion_length",
     "diffusion_time",

@@ -24,6 +24,7 @@ __all__ = [
     "gain_bandwidth_limited_bandwidth",
     "inverting_gain",
     "noninverting_gain",
+    "rise_time_from_bandwidth",
     "slew_rate_full_power_bandwidth",
 ]
 
@@ -104,6 +105,23 @@ def slew_rate_full_power_bandwidth(
     if v_peak <= 0:
         raise ValueError("peak_output_voltage must be positive")
     return Quantity(magnitude=sr / (2.0 * pi * v_peak), unit="Hz")
+
+
+def rise_time_from_bandwidth(*, bandwidth: Quantity) -> Quantity:
+    """The 10-90% rise time of a first-order stage, t_r = 0.35/f_3dB.
+
+    The step-response speed that goes with a small-signal ``bandwidth``: a single-pole stage of
+    -3 dB bandwidth f_3dB settles from 10% to 90% of a step in t_r = 0.35/f_3dB. It is the
+    time-domain twin of the :func:`gain_bandwidth_limited_bandwidth` frequency limit — widen the
+    bandwidth and the edges get faster in exact proportion — and the rule of thumb an oscilloscope
+    or probe is specified by (a 350 MHz scope resolves a ~1 ns edge). The 0.35 constant is the
+    Gaussian/single-pole value. Returns the rise time in seconds.
+    """
+    _check(bandwidth, "1/[time]", "bandwidth")
+    f = bandwidth.to("Hz").magnitude
+    if f <= 0:
+        raise ValueError("bandwidth must be positive")
+    return Quantity(magnitude=0.35 / f, unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
