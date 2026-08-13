@@ -51,6 +51,8 @@ __all__ = [
     "janssen_silo_pressure",
     "pile_allowable_capacity",
     "pile_end_bearing_capacity",
+    "at_rest_earth_pressure_coefficient",
+    "overconsolidated_at_rest_coefficient",
     "pile_skin_friction_capacity",
     "rankine_active_pressure_cohesive",
     "rankine_earth_pressure_coefficient",
@@ -91,6 +93,46 @@ def rankine_earth_pressure_coefficient(*, friction_angle: float, passive: bool =
     if passive:
         return tan(radians(45.0 + friction_angle / 2.0)) ** 2
     return tan(radians(45.0 - friction_angle / 2.0)) ** 2
+
+
+def at_rest_earth_pressure_coefficient(*, friction_angle: float) -> float:
+    """The at-rest earth-pressure coefficient, K_0 = 1 − sin φ (Jaky).
+
+    The third earth-pressure state, between the active and passive extremes of
+    :func:`rankine_earth_pressure_coefficient`: the horizontal-to-vertical effective-stress ratio
+    of a soil that has not moved at all — the case for a rigid, unyielding wall (a braced
+    excavation, a basement wall) that cannot deflect enough to mobilize the active state. Jaky's
+    relation gives K_0 = 1 − sin φ for a normally consolidated soil from the drained friction angle
+    ``friction_angle`` φ (degrees). It sits above the active K_a and well below the passive K_p, so
+    a wall designed for active pressure but built rigid is under-designed. Returns the dimensionless
+    coefficient.
+    """
+    _check_friction_angle(friction_angle)
+    return 1.0 - sin(radians(friction_angle))
+
+
+def overconsolidated_at_rest_coefficient(
+    *, friction_angle: float, overconsolidation_ratio: float
+) -> float:
+    """The at-rest coefficient of an overconsolidated soil, K_0 = (1 − sin φ)·OCR^sin φ.
+
+    Soil that was once loaded more heavily than today (glacial till, an eroded or excavated site)
+    locks in higher horizontal stress, so its at-rest coefficient exceeds the normally-consolidated
+    Jaky value of :func:`at_rest_earth_pressure_coefficient`. The Mayne-Kulhawy relation scales it
+    by the overconsolidation ratio: K_0 = (1 − sin φ)·OCR^(sin φ), from the drained
+    ``friction_angle`` φ (degrees) and the ``overconsolidation_ratio`` OCR (≥ 1). A heavily
+    overconsolidated clay can reach K_0 > 1 (horizontal stress above vertical), which a retaining
+    or basement wall must be sized for. At OCR = 1 it recovers the Jaky value. Returns the
+    dimensionless coefficient.
+    """
+    _check_friction_angle(friction_angle)
+    if overconsolidation_ratio < 1.0:
+        raise ValueError(
+            f"overconsolidation_ratio must be at least 1; got {overconsolidation_ratio}"
+        )
+    return (1.0 - sin(radians(friction_angle))) * overconsolidation_ratio ** sin(
+        radians(friction_angle)
+    )
 
 
 def rankine_sloped_backfill_coefficient(*, friction_angle: float, backfill_slope: float) -> float:

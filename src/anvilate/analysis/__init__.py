@@ -1820,6 +1820,7 @@ from .geneva import (
 )
 from .geotechnical import (
     allowable_bearing_from_ultimate,
+    at_rest_earth_pressure_coefficient,
     bearing_capacity_factors,
     bearing_depth_factors,
     bearing_inclination_factors,
@@ -1832,6 +1833,7 @@ from .geotechnical import (
     eccentric_base_pressure,
     infinite_slope_factor_of_safety,
     janssen_silo_pressure,
+    overconsolidated_at_rest_coefficient,
     pile_allowable_capacity,
     pile_end_bearing_capacity,
     pile_skin_friction_capacity,
@@ -2885,6 +2887,8 @@ __all__ = [
     "pile_skin_friction_capacity",
     "rankine_active_pressure_cohesive",
     "rankine_earth_pressure_coefficient",
+    "at_rest_earth_pressure_coefficient",
+    "overconsolidated_at_rest_coefficient",
     "rankine_lateral_thrust",
     "rankine_passive_pressure_cohesive",
     "rankine_sloped_backfill_coefficient",

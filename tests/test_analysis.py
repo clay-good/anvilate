@@ -19556,6 +19556,44 @@ def test_rankine_earth_pressure_coefficient_active_and_passive():
     assert ka37 == pytest.approx(math.tan(math.radians(45 - 37 / 2)) ** 2, rel=1e-12)
 
 
+def test_at_rest_earth_pressure_jaky_and_overconsolidated():
+    from math import radians, sin
+
+    from anvilate.analysis import (
+        at_rest_earth_pressure_coefficient,
+        overconsolidated_at_rest_coefficient,
+        rankine_earth_pressure_coefficient,
+    )
+
+    # Jaky K_0 = 1 - sin(phi); phi=30 -> 0.5.
+    k0 = at_rest_earth_pressure_coefficient(friction_angle=30.0)
+    assert k0 == pytest.approx(1.0 - sin(radians(30.0)), rel=1e-12)
+    assert k0 == pytest.approx(0.5, rel=1e-12)
+    # At-rest sits between active and passive for the same soil.
+    ka = rankine_earth_pressure_coefficient(friction_angle=30.0)
+    kp = rankine_earth_pressure_coefficient(friction_angle=30.0, passive=True)
+    assert ka < k0 < kp
+    # A denser soil (higher phi) holds less horizontal stress at rest.
+    assert at_rest_earth_pressure_coefficient(friction_angle=40.0) < k0
+
+    # Mayne-Kulhawy: K_0 = (1 - sin phi) * OCR^(sin phi); at OCR=1 it recovers Jaky.
+    assert overconsolidated_at_rest_coefficient(
+        friction_angle=30.0, overconsolidation_ratio=1.0
+    ) == pytest.approx(k0, rel=1e-12)
+    # OCR=4, phi=30: 0.5 * 4^0.5 = 1.0 (horizontal stress reaches vertical).
+    oc = overconsolidated_at_rest_coefficient(friction_angle=30.0, overconsolidation_ratio=4.0)
+    assert oc == pytest.approx((1.0 - sin(radians(30.0))) * 4.0 ** sin(radians(30.0)), rel=1e-12)
+    assert oc == pytest.approx(1.0, rel=1e-9)
+    # Overconsolidation always raises the at-rest coefficient above the NC value.
+    assert oc > k0
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="0, 90"):
+        at_rest_earth_pressure_coefficient(friction_angle=95.0)
+    with pytest.raises(ValueError, match="overconsolidation_ratio must be at least 1"):
+        overconsolidated_at_rest_coefficient(friction_angle=30.0, overconsolidation_ratio=0.5)
+
+
 def test_rankine_lateral_thrust_triangle_plus_surcharge():
     from anvilate.analysis import rankine_lateral_thrust
 
