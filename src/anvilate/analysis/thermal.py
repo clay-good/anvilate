@@ -58,6 +58,7 @@ __all__ = [
     "sphere_crossflow_convection_coefficient",
     "grashof_number",
     "rayleigh_number",
+    "richardson_number",
     "vertical_plate_natural_convection_coefficient",
     "horizontal_cylinder_natural_convection_coefficient",
     "horizontal_plate_natural_convection_coefficient",
@@ -1340,6 +1341,40 @@ def rayleigh_number(*, grashof_number: float, prandtl_number: float) -> float:
     if prandtl_number <= 0:
         raise ValueError("prandtl_number must be positive")
     return grashof_number * prandtl_number
+
+
+def richardson_number(
+    *,
+    thermal_expansion_coefficient: Quantity,
+    temperature_difference: Quantity,
+    characteristic_length: Quantity,
+    velocity: Quantity,
+) -> float:
+    """The Richardson number Ri = g·β·ΔT·L/V² — buoyancy vs forced-flow inertia.
+
+    The ratio that decides whether heat transfer is driven by an imposed flow or by buoyancy:
+    Ri = g·β·ΔT·L/V², from the fluid's ``thermal_expansion_coefficient`` β, the surface-to-fluid
+    ``temperature_difference`` ΔT, the ``characteristic_length`` L, and the forced ``velocity`` V.
+    It equals the Grashof number over the Reynolds number squared, Ri = Gr/Re². When Ri ≪ 1 forced
+    convection dominates and buoyancy is a small correction; when Ri ≫ 1 natural convection takes
+    over and the imposed flow barely matters; near Ri ≈ 1 the two are comparable and the regime is
+    mixed convection, where the buoyancy either aids or opposes the flow. The same group with a
+    density gradient in place of β·ΔT is the stability criterion for stratified atmospheric and
+    ocean flows. Returns the dimensionless Richardson number.
+    """
+    _require(thermal_expansion_coefficient, "1/[temperature]", "thermal_expansion_coefficient")
+    _require(temperature_difference, "[temperature]", "temperature_difference")
+    _require(characteristic_length, "[length]", "characteristic_length")
+    _require(velocity, "[length]/[time]", "velocity")
+    beta = thermal_expansion_coefficient.to("1/K").magnitude
+    dt = abs(temperature_difference.to("K").magnitude)
+    length = characteristic_length.to("m").magnitude
+    v = velocity.to("m/s").magnitude
+    if length <= 0:
+        raise ValueError("characteristic_length must be positive")
+    if v <= 0:
+        raise ValueError("velocity must be positive")
+    return _STANDARD_GRAVITY * beta * dt * length / v**2
 
 
 def vertical_plate_natural_convection_coefficient(

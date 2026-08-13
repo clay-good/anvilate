@@ -1418,6 +1418,7 @@ thermal.grashof_number
 thermal.horizontal_cylinder_natural_convection_coefficient
 thermal.horizontal_plate_natural_convection_coefficient
 thermal.rayleigh_number
+thermal.richardson_number
 thermal.vertical_plate_natural_convection_coefficient
 thermal.junction_temperature_scorecard
 thermal.free_thermal_expansion

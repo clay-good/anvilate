@@ -16185,6 +16185,52 @@ def test_thermal_grashof_and_rayleigh_numbers():
         rayleigh_number(grashof_number=gr, prandtl_number=0.0)
 
 
+def test_thermal_richardson_number_and_grashof_reynolds_identity():
+    from anvilate.analysis import grashof_number, richardson_number
+
+    beta = _q("0.00333 1/K")
+    dt = _q("20 K")
+    length = _q("0.5 m")
+    nu = 1.5e-5  # kinematic viscosity, m^2/s
+    v = _q("2 m/s")
+
+    # Ri = g*beta*dT*L/V^2.
+    ri = richardson_number(
+        thermal_expansion_coefficient=beta,
+        temperature_difference=dt,
+        characteristic_length=length,
+        velocity=v,
+    )
+    assert ri == pytest.approx(9.80665 * 0.00333 * 20 * 0.5 / 2.0**2, rel=1e-9)
+
+    # Defining identity: Ri = Gr / Re^2, with Re = V*L/nu.
+    gr = grashof_number(
+        thermal_expansion_coefficient=beta,
+        temperature_difference=dt,
+        characteristic_length=length,
+        kinematic_viscosity=_q("1.5e-5 m**2/s"),
+    )
+    re = 2.0 * 0.5 / nu
+    assert ri == pytest.approx(gr / re**2, rel=1e-9)
+
+    # Ri falls as 1/V^2: doubling the forced velocity quarters it (toward forced convection).
+    ri_fast = richardson_number(
+        thermal_expansion_coefficient=beta,
+        temperature_difference=dt,
+        characteristic_length=length,
+        velocity=_q("4 m/s"),
+    )
+    assert ri_fast == pytest.approx(ri / 4.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="velocity"):
+        richardson_number(
+            thermal_expansion_coefficient=beta,
+            temperature_difference=dt,
+            characteristic_length=length,
+            velocity=_q("0 m/s"),
+        )
+
+
 def test_thermal_cylindrical_conduction_and_critical_radius():
     import math
 
