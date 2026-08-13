@@ -1511,6 +1511,7 @@ from .diode import (
 from .drag import (
     archimedes_number,
     drag_force,
+    galilei_number,
     jet_impact_force,
     stokes_drag_force,
     stokes_settling_velocity,
@@ -3250,6 +3251,7 @@ __all__ = [
     "belt_speed_for_capacity",
     "conveyor_lift_power",
     "archimedes_number",
+    "galilei_number",
     "drag_force",
     "jet_impact_force",
     "stokes_settling_velocity",

@@ -21,6 +21,7 @@ from ..units import Quantity
 
 __all__ = [
     "archimedes_number",
+    "galilei_number",
     "drag_force",
     "jet_impact_force",
     "stokes_drag_force",
@@ -222,6 +223,32 @@ def archimedes_number(
     if mu <= 0:
         raise ValueError("fluid_viscosity must be positive")
     return _GRAVITY * d**3 * rho_f * (rho_p - rho_f) / mu**2
+
+
+def galilei_number(
+    *,
+    characteristic_length: Quantity,
+    kinematic_viscosity: Quantity,
+) -> float:
+    """The Galilei (Galileo) number, Ga = g·L³/ν².
+
+    The velocity-free ratio of gravitational to viscous forces for a body or film of a single
+    fluid: Ga = g·L³/ν², from the ``characteristic_length`` L and the ``kinematic_viscosity`` ν. It
+    is the buoyancy group stripped of any density ratio — the :func:`archimedes_number` is exactly
+    Ar = Ga·(Δρ/ρ_f), so Galilei collapses to Archimedes when the two phases have comparable
+    density (a gas bubble in a liquid, where Δρ ≈ ρ). It is the base variable for falling-film,
+    bubble-rise, and packed-to-fluidized-bed correlations, in which the operating Reynolds number
+    is written directly as a function of Ga. Returns the dimensionless Galilei number.
+    """
+    _check(characteristic_length, "[length]", "characteristic_length")
+    _check(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
+    length = characteristic_length.to("m").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    if length <= 0:
+        raise ValueError("characteristic_length must be positive")
+    if nu <= 0:
+        raise ValueError("kinematic_viscosity must be positive")
+    return _GRAVITY * length**3 / nu**2
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

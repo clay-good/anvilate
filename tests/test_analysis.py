@@ -14282,6 +14282,31 @@ def test_archimedes_number_settling_regime():
         )
 
 
+def test_galilei_number_and_archimedes_identity():
+    from anvilate.analysis import archimedes_number, galilei_number
+
+    # Ga = g*L^3/nu^2; 1 mm length in water (nu=1e-6) -> ~9807.
+    ga = galilei_number(characteristic_length=_q("1 mm"), kinematic_viscosity=_q("1e-6 m**2/s"))
+    assert ga == pytest.approx(9.80665 * (1e-3) ** 3 / (1e-6) ** 2, rel=1e-9)
+
+    # Defining identity: Ar = Ga * (delta_rho / rho_f) for a particle at the same length and nu.
+    # Use nu = mu/rho_f consistently: mu = 1e-3 Pa*s, rho_f = 1000 -> nu = 1e-6 m^2/s.
+    ar = archimedes_number(
+        particle_diameter=_q("1 mm"),
+        particle_density=_q("2650 kg/m**3"),
+        fluid_density=_q("1000 kg/m**3"),
+        fluid_viscosity=_q("0.001 Pa*s"),
+    )
+    assert ar == pytest.approx(ga * (2650 - 1000) / 1000, rel=1e-9)
+
+    # Ga scales with the cube of length and is velocity-free.
+    ga_big = galilei_number(characteristic_length=_q("2 mm"), kinematic_viscosity=_q("1e-6 m**2/s"))
+    assert ga_big == pytest.approx(ga * 8.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="kinematic_viscosity"):
+        galilei_number(characteristic_length=_q("1 mm"), kinematic_viscosity=_q("0 m**2/s"))
+
+
 def test_wind_turbine_tip_speed_ratio_and_capacity_factor():
     import math
 
