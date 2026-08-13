@@ -22,6 +22,7 @@ from ..units import Quantity
 __all__ = [
     "faraday_induced_emf",
     "motional_emf",
+    "mutual_inductance_emf",
     "self_induced_emf",
 ]
 
@@ -90,6 +91,31 @@ def self_induced_emf(
     if dt <= 0:
         raise ValueError("time_interval must be positive")
     return Quantity(magnitude=abs(ell * di / dt), unit="V")
+
+
+def mutual_inductance_emf(
+    *, mutual_inductance: Quantity, current_change: Quantity, time_interval: Quantity
+) -> Quantity:
+    """The mutually-induced EMF, EMF = M·ΔI/Δt.
+
+    The voltage a changing current in one coil induces in a *second*, magnetically coupled coil: for
+    a ``mutual_inductance`` M shared by the pair, a primary current changing by ``current_change``
+    ΔI over ``time_interval`` Δt drives EMF = M·ΔI/Δt in the secondary. It is the transformer and
+    coupled-inductor principle — the M analogue of the :func:`self_induced_emf` L — and it is what
+    lets a signal cross a galvanic barrier or a switching current spike into a neighbouring trace.
+    Returns the EMF in V.
+    """
+    _check(mutual_inductance, "[inductance]", "mutual_inductance")
+    _check(current_change, "[current]", "current_change")
+    _check(time_interval, "[time]", "time_interval")
+    m = mutual_inductance.to("H").magnitude
+    di = current_change.to("A").magnitude
+    dt = time_interval.to("s").magnitude
+    if m <= 0:
+        raise ValueError("mutual_inductance must be positive")
+    if dt <= 0:
+        raise ValueError("time_interval must be positive")
+    return Quantity(magnitude=abs(m * di / dt), unit="V")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

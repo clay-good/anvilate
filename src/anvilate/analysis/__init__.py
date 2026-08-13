@@ -1617,6 +1617,7 @@ from .electrical import (
 from .electromagnetic_induction import (
     faraday_induced_emf,
     motional_emf,
+    mutual_inductance_emf,
     self_induced_emf,
 )
 from .electroplating import (
@@ -3276,6 +3277,7 @@ __all__ = [
     "motional_emf",
     "faraday_induced_emf",
     "self_induced_emf",
+    "mutual_inductance_emf",
     "electroplating_mass_deposited",
     "electroplating_deposition_thickness",
     "electroplating_time_for_thickness",

@@ -25603,6 +25603,45 @@ def test_motional_faraday_and_self_induced_emf():
         )
 
 
+def test_mutual_inductance_emf():
+    from anvilate.analysis import mutual_inductance_emf
+
+    # Mutual EMF = M*dI/dt; 0.2 H coupling, 3 A change over 5 ms -> 120 V in the secondary.
+    e_m = mutual_inductance_emf(
+        mutual_inductance=Quantity(magnitude=0.2, unit="H"),
+        current_change=Quantity(magnitude=3.0, unit="A"),
+        time_interval=Quantity(magnitude=0.005, unit="s"),
+    )
+    assert e_m.to("V").magnitude == pytest.approx(0.2 * 3.0 / 0.005, rel=1e-9)
+    assert e_m.to("V").magnitude == pytest.approx(120.0, rel=1e-9)
+    # Magnitude is returned for a falling primary current too.
+    e_neg = mutual_inductance_emf(
+        mutual_inductance=Quantity(magnitude=0.2, unit="H"),
+        current_change=Quantity(magnitude=-3.0, unit="A"),
+        time_interval=Quantity(magnitude=0.005, unit="s"),
+    )
+    assert e_neg.to("V").magnitude == pytest.approx(120.0, rel=1e-9)
+    # Guardrails: positive coupling and time, dimensioned inputs.
+    with pytest.raises(ValueError, match="mutual_inductance must be positive"):
+        mutual_inductance_emf(
+            mutual_inductance=Quantity(magnitude=0.0, unit="H"),
+            current_change=Quantity(magnitude=3.0, unit="A"),
+            time_interval=Quantity(magnitude=0.005, unit="s"),
+        )
+    with pytest.raises(ValueError, match="time_interval must be positive"):
+        mutual_inductance_emf(
+            mutual_inductance=Quantity(magnitude=0.2, unit="H"),
+            current_change=Quantity(magnitude=3.0, unit="A"),
+            time_interval=Quantity(magnitude=0.0, unit="s"),
+        )
+    with pytest.raises(ValueError, match="mutual_inductance must be a"):
+        mutual_inductance_emf(
+            mutual_inductance=Quantity(magnitude=0.2, unit="H*m"),
+            current_change=Quantity(magnitude=3.0, unit="A"),
+            time_interval=Quantity(magnitude=0.005, unit="s"),
+        )
+
+
 def test_coulomb_force_field_and_potential():
     from anvilate.analysis import (
         coulomb_force,
