@@ -456,6 +456,9 @@ dc_motor.dc_motor_terminal_voltage
 diffraction.bragg_angle
 diffraction.bragg_plane_spacing
 diffraction.grating_diffraction_angle
+diffraction.grating_resolving_power
+diffraction.grating_resolved_wavelength_separation
+diffraction.grating_angular_dispersion
 diffusion.diffusion_length
 diffusion.diffusion_time
 diffusion.steady_diffusion_flux

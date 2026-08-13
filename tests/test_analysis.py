@@ -23096,6 +23096,54 @@ def test_diffraction_bragg_angle_spacing_inverse_and_grating():
         bragg_angle(wavelength=_q("0.154 J"), plane_spacing=_q("0.314 nm"))
 
 
+def test_grating_resolving_power_wavelength_separation_and_angular_dispersion():
+    from math import cos, radians
+
+    from anvilate.analysis import (
+        grating_angular_dispersion,
+        grating_resolved_wavelength_separation,
+        grating_resolving_power,
+    )
+
+    # Resolving power R = m*N; order 2 over 10000 lit grooves -> 20000.
+    assert grating_resolving_power(order=2, illuminated_lines=10000) == pytest.approx(20000.0)
+    # Higher order and more lit grooves both raise it; it is independent of groove spacing.
+    assert grating_resolving_power(order=1, illuminated_lines=10000) == pytest.approx(10000.0)
+
+    # Resolved separation dlambda = lambda/(m*N): 500 nm at R=20000 -> 0.025 nm.
+    dlam = grating_resolved_wavelength_separation(
+        wavelength=_q("500 nm"), order=2, illuminated_lines=10000
+    )
+    assert dlam.to("nm").magnitude == pytest.approx(500.0 / 20000.0, rel=1e-12)
+    assert dlam.to("nm").magnitude == pytest.approx(0.025, abs=1e-6)
+    # R = lambda/dlambda ties the two together.
+    assert 500e-9 / dlam.to("m").magnitude == pytest.approx(
+        grating_resolving_power(order=2, illuminated_lines=10000), rel=1e-12
+    )
+
+    # Angular dispersion D = m/(D_g*cos(theta)); 600 lines/mm, order 2, at 10.6 deg.
+    groove = Quantity(magnitude=1.0 / 600e3, unit="m")
+    disp = grating_angular_dispersion(groove_spacing=groove, diffraction_angle=10.6, order=2)
+    assert disp.to("rad/m").magnitude == pytest.approx(
+        2.0 / ((1.0 / 600e3) * cos(radians(10.6))), rel=1e-12
+    )
+    # Dispersion grows toward grazing angles (larger theta -> larger D).
+    grazing = grating_angular_dispersion(groove_spacing=groove, diffraction_angle=40.0, order=2)
+    assert grazing.to("rad/m").magnitude > disp.to("rad/m").magnitude
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="illuminated_lines must be a positive integer"):
+        grating_resolving_power(order=1, illuminated_lines=0)
+    with pytest.raises(ValueError, match="order must be a positive integer"):
+        grating_resolved_wavelength_separation(
+            wavelength=_q("500 nm"), order=0, illuminated_lines=10000
+        )
+    with pytest.raises(ValueError, match="diffraction_angle must be in"):
+        grating_angular_dispersion(groove_spacing=groove, diffraction_angle=90.0, order=1)
+    with pytest.raises(ValueError, match="groove_spacing must be a"):
+        grating_angular_dispersion(groove_spacing=_q("1 s"), diffraction_angle=10.0, order=1)
+
+
 def test_relativity_lorentz_time_dilation_and_kinetic_energy():
     from anvilate.analysis import (
         lorentz_factor,

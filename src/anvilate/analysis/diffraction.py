@@ -17,7 +17,7 @@ implied sine stays at or below one; beyond that the geometry forbids it.
 
 from __future__ import annotations
 
-from math import asin, degrees, radians, sin
+from math import asin, cos, degrees, radians, sin
 
 from ..units import Quantity
 
@@ -25,6 +25,9 @@ __all__ = [
     "bragg_angle",
     "bragg_plane_spacing",
     "grating_diffraction_angle",
+    "grating_resolving_power",
+    "grating_resolved_wavelength_separation",
+    "grating_angular_dispersion",
 ]
 
 
@@ -97,6 +100,66 @@ def grating_diffraction_angle(
     if ratio > 1.0:
         raise ValueError("no diffraction at this order: m*lambda exceeds the groove spacing D")
     return degrees(asin(ratio))
+
+
+def grating_resolving_power(*, order: int = 1, illuminated_lines: int) -> float:
+    """The grating resolving power, R = m*N = lambda/dlambda.
+
+    How finely a grating can separate two close wavelengths: R = lambda/dlambda = m*N, set only by
+    the diffraction ``order`` m and the number of grooves ``illuminated_lines`` N the beam actually
+    covers — not by the groove spacing. Working in a higher order or flooding more of the grating
+    both sharpen it, which is why a spectrometer's resolution scales with beam width. ``order`` and
+    ``illuminated_lines`` are positive integers. Returns the dimensionless resolving power.
+    """
+    if order < 1:
+        raise ValueError("order must be a positive integer")
+    if illuminated_lines < 1:
+        raise ValueError("illuminated_lines must be a positive integer")
+    return float(order * illuminated_lines)
+
+
+def grating_resolved_wavelength_separation(
+    *, wavelength: Quantity, order: int = 1, illuminated_lines: int
+) -> Quantity:
+    """The smallest wavelength gap a grating resolves, dlambda = lambda/(m*N).
+
+    The application of :func:`grating_resolving_power`: two spectral lines near ``wavelength``
+    lambda are just separated (the Rayleigh criterion) when their spacing reaches lambda/(m*N),
+    for diffraction ``order`` m and ``illuminated_lines`` N grooves lit. A finer gap blurs into one
+    line. ``wavelength`` is a length; ``order`` and ``illuminated_lines`` are positive integers.
+    Returns the resolvable wavelength separation as a length.
+    """
+    _check(wavelength, "[length]", "wavelength")
+    lam = wavelength.to("m").magnitude
+    if lam <= 0:
+        raise ValueError("wavelength must be positive")
+    if order < 1:
+        raise ValueError("order must be a positive integer")
+    if illuminated_lines < 1:
+        raise ValueError("illuminated_lines must be a positive integer")
+    return Quantity(magnitude=lam / (order * illuminated_lines), unit="m")
+
+
+def grating_angular_dispersion(
+    *, groove_spacing: Quantity, diffraction_angle: float, order: int = 1
+) -> Quantity:
+    """The grating angular dispersion, D = dtheta/dlambda = m/(D_g*cos(theta)).
+
+    How fast a grating spreads angle with wavelength — the slope that sets how far apart a detector
+    sees two colors: differentiating the grating equation gives dtheta/dlambda = m/(D_g*cos(theta)),
+    for diffraction ``order`` m, groove spacing ``groove_spacing`` D_g, and the angle
+    ``diffraction_angle`` theta (degrees, in [0, 90)) from :func:`grating_diffraction_angle`.
+    Dispersion grows toward grazing angles and in higher orders. Returns the dispersion in rad/m.
+    """
+    _check(groove_spacing, "[length]", "groove_spacing")
+    d = groove_spacing.to("m").magnitude
+    if d <= 0:
+        raise ValueError("groove_spacing must be positive")
+    if order < 1:
+        raise ValueError("order must be a positive integer")
+    if not 0.0 <= diffraction_angle < 90.0:
+        raise ValueError("diffraction_angle must be in [0, 90) degrees")
+    return Quantity(magnitude=order / (d * cos(radians(diffraction_angle))), unit="rad/m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

@@ -1444,7 +1444,10 @@ from .dc_motor import (
 from .diffraction import (
     bragg_angle,
     bragg_plane_spacing,
+    grating_angular_dispersion,
     grating_diffraction_angle,
+    grating_resolved_wavelength_separation,
+    grating_resolving_power,
 )
 from .diffusion import (
     diffusion_length,
@@ -2952,6 +2955,9 @@ __all__ = [
     "bragg_angle",
     "bragg_plane_spacing",
     "grating_diffraction_angle",
+    "grating_resolving_power",
+    "grating_resolved_wavelength_separation",
+    "grating_angular_dispersion",
     "quarter_wave_thickness",
     "optimal_ar_coating_index",
     "thin_film_tuned_wavelength",
