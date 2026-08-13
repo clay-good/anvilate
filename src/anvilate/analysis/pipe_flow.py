@@ -30,6 +30,7 @@ __all__ = [
     "darcy_friction_factor",
     "dean_number",
     "darcy_weisbach_head_loss",
+    "graetz_number",
     "hagen_poiseuille_flow_rate",
     "hagen_poiseuille_pressure_drop",
     "hagen_poiseuille_radius_for_flow",
@@ -195,6 +196,40 @@ def laminar_thermal_entry_length(
             "use turbulent_entry_length for turbulent flow"
         )
     return Quantity(magnitude=0.05 * reynolds * prandtl * d, unit="m")
+
+
+def graetz_number(
+    *,
+    reynolds: float,
+    prandtl: float,
+    diameter: Quantity,
+    length: Quantity,
+) -> float:
+    """The Graetz number of developing laminar duct flow, Gz = (D/L)·Re·Pr.
+
+    An inverse dimensionless axial distance that measures how far a heated (or cooled) laminar duct
+    flow is from thermally fully developed: Gz = (D/L)·Re·Pr, from the ``reynolds`` number Re, the
+    ``prandtl`` number Pr, the ``diameter`` D, and the run ``length`` L from the start of heating. A
+    large Gz (short duct, fast or high-Pr flow) means the thermal boundary layer is still thin and
+    the local Nusselt number is well above its fully-developed value; as Gz falls below ~1 the flow
+    has become thermally developed and the constant-Nusselt result applies. Because the thermal
+    entry length is L_t = 0.05·Re·Pr·D, evaluating Gz there gives exactly 20 — the classic
+    developing/developed threshold. It is the argument of the Hausen and Sieder-Tate entry-region
+    Nusselt correlations. Returns the dimensionless Graetz number.
+    """
+    _check(diameter, "[length]", "diameter")
+    _check(length, "[length]", "length")
+    if reynolds <= 0:
+        raise ValueError("reynolds must be positive")
+    if prandtl <= 0:
+        raise ValueError("prandtl must be positive")
+    d = diameter.to("m").magnitude
+    ell = length.to("m").magnitude
+    if d <= 0:
+        raise ValueError("diameter must be positive")
+    if ell <= 0:
+        raise ValueError("length must be positive")
+    return (d / ell) * reynolds * prandtl
 
 
 def turbulent_entry_length(*, diameter: Quantity) -> Quantity:

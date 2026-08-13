@@ -21472,6 +21472,27 @@ def test_pipe_flow_womersley_number_pulsatile():
         )
 
 
+def test_pipe_flow_graetz_number_thermal_entry_anchor():
+    from anvilate.analysis import graetz_number, laminar_thermal_entry_length
+
+    # Gz = (D/L)*Re*Pr: Re=1000, Pr=7, D=0.02 m, L=1 m -> 0.02*1000*7 = 140.
+    gz = graetz_number(reynolds=1000.0, prandtl=7.0, diameter=_q("0.02 m"), length=_q("1 m"))
+    assert gz == pytest.approx(0.02 / 1.0 * 1000 * 7, rel=1e-12)
+    assert gz == pytest.approx(140.0, rel=1e-9)
+
+    # Anchor: evaluated at the thermal entry length L_t = 0.05*Re*Pr*D, Gz is exactly 20.
+    lt = laminar_thermal_entry_length(reynolds=1000.0, prandtl=7.0, diameter=_q("0.02 m"))
+    gz_at_entry = graetz_number(reynolds=1000.0, prandtl=7.0, diameter=_q("0.02 m"), length=lt)
+    assert gz_at_entry == pytest.approx(20.0, rel=1e-9)
+
+    # A longer duct is closer to thermally developed: Gz falls as 1/L.
+    gz_long = graetz_number(reynolds=1000.0, prandtl=7.0, diameter=_q("0.02 m"), length=_q("2 m"))
+    assert gz_long == pytest.approx(gz / 2.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="prandtl"):
+        graetz_number(reynolds=1000.0, prandtl=0.0, diameter=_q("0.02 m"), length=_q("1 m"))
+
+
 def test_pipe_entry_lengths_laminar_and_turbulent():
     from anvilate.analysis import (
         laminar_hydrodynamic_entry_length,
