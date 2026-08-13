@@ -17588,6 +17588,26 @@ def test_doppler_shift_velocity_inverse_and_mach_cone():
         )
 
 
+def test_acoustics_beat_frequency():
+    from anvilate.analysis import beat_frequency
+
+    # Two close tones beat at their difference: 440 Hz and 444 Hz -> 4 Hz.
+    fb = beat_frequency(frequency_1=_q("440 Hz"), frequency_2=_q("444 Hz"))
+    assert fb.to("Hz").magnitude == pytest.approx(4.0, rel=1e-9)
+    # Symmetric in its arguments (absolute difference).
+    fb_rev = beat_frequency(frequency_1=_q("444 Hz"), frequency_2=_q("440 Hz"))
+    assert fb_rev.to("Hz").magnitude == pytest.approx(4.0, rel=1e-9)
+    # Identical tones give no beat.
+    assert beat_frequency(frequency_1=_q("440 Hz"), frequency_2=_q("440 Hz")).to(
+        "Hz"
+    ).magnitude == pytest.approx(0.0, abs=1e-12)
+    # Guardrails: positive frequencies, dimensioned inputs.
+    with pytest.raises(ValueError, match="frequencies must be positive"):
+        beat_frequency(frequency_1=_q("0 Hz"), frequency_2=_q("440 Hz"))
+    with pytest.raises(ValueError, match="frequency_1 must be a"):
+        beat_frequency(frequency_1=_q("440 m"), frequency_2=_q("444 Hz"))
+
+
 def test_optics_thin_lens_magnification_and_diffraction_limit():
     from anvilate.analysis import (
         diffraction_limited_angular_resolution,

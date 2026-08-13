@@ -25,6 +25,7 @@ __all__ = [
     "acoustic_impedance",
     "acoustic_reflection_coefficient",
     "acoustic_transmission_coefficient",
+    "beat_frequency",
     "closed_pipe_resonance_frequency",
     "doppler_shifted_frequency",
     "doppler_velocity_from_shift",
@@ -431,6 +432,24 @@ def doppler_velocity_from_shift(
     if c <= 0:
         raise ValueError("speed_of_sound must be positive")
     return Quantity(magnitude=c * (f_obs - f) / f_obs, unit="m/s")
+
+
+def beat_frequency(*, frequency_1: Quantity, frequency_2: Quantity) -> Quantity:
+    """The beat frequency, f_beat = |f₁ − f₂|.
+
+    When two tones of nearly equal pitch sound together their amplitude swells and fades at the
+    difference of their frequencies: from ``frequency_1`` f₁ and ``frequency_2`` f₂,
+    f_beat = |f₁ − f₂|. It is the throb a musician nulls to zero when tuning one string against
+    another, and the same difference-frequency a heterodyne receiver mixes down to. Returns the beat
+    frequency in Hz.
+    """
+    _check(frequency_1, "1/[time]", "frequency_1")
+    _check(frequency_2, "1/[time]", "frequency_2")
+    f1 = frequency_1.to("Hz").magnitude
+    f2 = frequency_2.to("Hz").magnitude
+    if f1 <= 0 or f2 <= 0:
+        raise ValueError("frequencies must be positive")
+    return Quantity(magnitude=abs(f1 - f2), unit="Hz")
 
 
 def mach_cone_angle(*, mach_number: float) -> float:
