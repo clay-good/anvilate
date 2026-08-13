@@ -16,6 +16,7 @@ acoustics.acoustic_reflection_coefficient
 acoustics.acoustic_transmission_coefficient
 acoustics.room_constant
 acoustics.critical_distance
+acoustics.room_sound_pressure_level
 acoustics.noise_dose_fraction
 acoustics.permissible_exposure_time
 acoustics.sabine_reverberation_time

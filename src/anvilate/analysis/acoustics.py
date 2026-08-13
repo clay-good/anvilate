@@ -34,6 +34,7 @@ __all__ = [
     "mass_law_transmission_loss",
     "room_constant",
     "critical_distance",
+    "room_sound_pressure_level",
     "noise_dose_fraction",
     "open_pipe_resonance_frequency",
     "permissible_exposure_time",
@@ -161,6 +162,38 @@ def critical_distance(*, room_constant: Quantity, directivity_factor: float = 1.
     if directivity_factor <= 0:
         raise ValueError("directivity_factor must be positive")
     return Quantity(magnitude=0.141 * (directivity_factor * r) ** 0.5, unit="m")
+
+
+def room_sound_pressure_level(
+    *,
+    sound_power_level: float,
+    room_constant: Quantity,
+    distance: Quantity,
+    directivity_factor: float = 1.0,
+) -> float:
+    """The room sound-pressure level from a source, L_p = L_W + 10·log₁₀(Q/(4π·r²) + 4/R).
+
+    The steady sound level at a point in an enclosed room, adding the direct field that falls off as
+    1/r² to the diffuse reverberant field the room builds up: L_p = ``sound_power_level`` L_W +
+    10·log₁₀(Q/(4π·r²) + 4/R), from the source's ``directivity_factor`` Q, the ``distance`` r to the
+    listener, and the ``room_constant`` R (:func:`room_constant`). Close to the source (r < the
+    :func:`critical_distance`) the first term dominates and the level drops with distance; far out
+    the 4/R reverberant term flattens it, so a noisy machine in a live room stays loud everywhere.
+    It is the core prediction of industrial-noise and room-acoustics design. ``sound_power_level``
+    is a dB level; Q is 1 (free), 2 (wall), 4 (corner). Returns the sound-pressure level in dB.
+    """
+    _check(room_constant, "[length]**2", "room_constant")
+    _check(distance, "[length]", "distance")
+    r_const = room_constant.to("m**2").magnitude
+    r = distance.to("m").magnitude
+    if r_const <= 0:
+        raise ValueError("room_constant must be positive")
+    if r <= 0:
+        raise ValueError("distance must be positive")
+    if directivity_factor <= 0:
+        raise ValueError("directivity_factor must be positive")
+    field = directivity_factor / (4.0 * pi * r**2) + 4.0 / r_const
+    return sound_power_level + 10.0 * log10(field)
 
 
 def permissible_exposure_time(

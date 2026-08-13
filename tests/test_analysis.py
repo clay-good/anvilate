@@ -14812,6 +14812,53 @@ def test_acoustics_room_constant_and_critical_distance():
         room_constant(total_surface_area=_q("1000 m"), average_absorption_coefficient=0.2)
 
 
+def test_acoustics_room_sound_pressure_level_direct_and_reverberant_fields():
+    from math import log10, pi
+
+    from anvilate.analysis import critical_distance, room_sound_pressure_level
+
+    r_const = _q("50 m**2")
+    # L_p = L_W + 10*log10(Q/(4*pi*r^2) + 4/R); 100 dB source, 5 m, Q=1 -> ~89.2 dB.
+    lp = room_sound_pressure_level(
+        sound_power_level=100.0, room_constant=r_const, distance=_q("5 m")
+    )
+    expect = 100.0 + 10.0 * log10(1.0 / (4 * pi * 25.0) + 4.0 / 50.0)
+    assert lp == pytest.approx(expect, rel=1e-12)
+    assert lp == pytest.approx(89.2, abs=0.1)
+    assert isinstance(lp, float)
+
+    # Near the source the direct field dominates: halving the distance raises the level.
+    near = room_sound_pressure_level(
+        sound_power_level=100.0, room_constant=r_const, distance=_q("1 m")
+    )
+    assert near > lp
+    # Far out the reverberant 4/R term flattens the level: doubling distance barely changes it
+    # once well past the critical distance.
+    dc = critical_distance(room_constant=r_const).to("m").magnitude
+    far1 = room_sound_pressure_level(
+        sound_power_level=100.0, room_constant=r_const, distance=_q(f"{10 * dc} m")
+    )
+    far2 = room_sound_pressure_level(
+        sound_power_level=100.0, room_constant=r_const, distance=_q(f"{20 * dc} m")
+    )
+    assert abs(far2 - far1) < 0.2
+    # A deader room (bigger R) lowers the reverberant floor and thus the far-field level.
+    quieter = room_sound_pressure_level(
+        sound_power_level=100.0, room_constant=_q("200 m**2"), distance=_q(f"{10 * dc} m")
+    )
+    assert quieter < far1
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="distance must be positive"):
+        room_sound_pressure_level(
+            sound_power_level=100.0, room_constant=r_const, distance=_q("0 m")
+        )
+    with pytest.raises(ValueError, match="room_constant must be a"):
+        room_sound_pressure_level(
+            sound_power_level=100.0, room_constant=_q("50 m"), distance=_q("5 m")
+        )
+
+
 def test_illumination_point_source_and_lumen_method():
     import math
 
