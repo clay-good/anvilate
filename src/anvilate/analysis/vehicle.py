@@ -16,13 +16,14 @@ over a drive cycle, the fuel or battery draw.
 
 from __future__ import annotations
 
-from math import radians, sin
+from math import atan, degrees, radians, sin
 
 from ..units import Quantity
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
 __all__ = [
+    "ackermann_steer_angle",
     "grade_resistance_force",
     "rolling_resistance_force",
     "tractive_power",
@@ -86,6 +87,26 @@ def tractive_power(*, tractive_force: Quantity, speed: Quantity) -> Quantity:
     if v <= 0:
         raise ValueError("speed must be positive")
     return Quantity(magnitude=f * v / 1000.0, unit="kW")
+
+
+def ackermann_steer_angle(*, wheelbase: Quantity, turn_radius: Quantity) -> Quantity:
+    """The kinematic (Ackermann) steer angle, δ = arctan(L/R).
+
+    The steering angle a vehicle's front wheels need to hold a turn at low speed, from the geometry
+    of the bicycle model: the ``wheelbase`` L and the turn ``turn_radius`` R (to the rear axle)
+    give δ = arctan(L/R). A tighter turn (smaller R) or a longer wheelbase demands more lock, which
+    is why long vehicles need wide turning circles. It is the zero-slip reference the actual steer
+    angle departs from as cornering forces build. Returns the steer angle in degrees.
+    """
+    _check(wheelbase, "[length]", "wheelbase")
+    _check(turn_radius, "[length]", "turn_radius")
+    length = wheelbase.to("m").magnitude
+    r = turn_radius.to("m").magnitude
+    if length <= 0:
+        raise ValueError("wheelbase must be positive")
+    if r <= 0:
+        raise ValueError("turn_radius must be positive")
+    return Quantity(magnitude=degrees(atan(length / r)), unit="degree")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

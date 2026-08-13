@@ -1507,6 +1507,7 @@ wear.sliding_distance_for_wear_depth
 vehicle.rolling_resistance_force
 vehicle.grade_resistance_force
 vehicle.tractive_power
+vehicle.ackermann_steer_angle
 vehicle_stability.static_stability_factor
 vehicle_stability.rollover_threshold_speed
 vehicle_stability.lateral_load_transfer

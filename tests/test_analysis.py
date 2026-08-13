@@ -12436,6 +12436,28 @@ def test_vehicle_rolling_grade_resistance_and_tractive_power():
         tractive_power(tractive_force=_q("489 W"), speed=_q("27.78 m/s"))
 
 
+def test_vehicle_ackermann_steer_angle():
+    from math import atan, degrees
+
+    from anvilate.analysis import ackermann_steer_angle
+
+    # delta = arctan(L/R); 2.7 m wheelbase, 30 m radius -> ~5.14 deg.
+    d = ackermann_steer_angle(wheelbase=_q("2.7 m"), turn_radius=_q("30 m"))
+    assert d.to("degree").magnitude == pytest.approx(degrees(atan(2.7 / 30)), rel=1e-9)
+    assert d.to("degree").magnitude == pytest.approx(5.14, abs=0.01)
+    # A tighter turn needs more lock; a longer wheelbase needs more too.
+    d_tight = ackermann_steer_angle(wheelbase=_q("2.7 m"), turn_radius=_q("10 m"))
+    assert d_tight.to("degree").magnitude > d.to("degree").magnitude
+    d_long = ackermann_steer_angle(wheelbase=_q("3.5 m"), turn_radius=_q("30 m"))
+    assert d_long.to("degree").magnitude > d.to("degree").magnitude
+
+    # Guardrails: positive geometry, dimensions checked.
+    with pytest.raises(ValueError, match="turn_radius must be positive"):
+        ackermann_steer_angle(wheelbase=_q("2.7 m"), turn_radius=_q("0 m"))
+    with pytest.raises(ValueError, match="wheelbase must be a"):
+        ackermann_steer_angle(wheelbase=_q("2.7 s"), turn_radius=_q("30 m"))
+
+
 def test_vehicle_rollover_ssf_threshold_speed_and_load_transfer():
     from math import sqrt
 

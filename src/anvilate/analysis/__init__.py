@@ -2873,6 +2873,7 @@ from .vapor_liquid_equilibrium import (
     underwood_minimum_reflux,
 )
 from .vehicle import (
+    ackermann_steer_angle,
     grade_resistance_force,
     rolling_resistance_force,
     tractive_power,
@@ -4216,6 +4217,7 @@ __all__ = [
     "triangular_bar_torsional_stress",
     "triangular_bar_twist_angle",
     "rolling_resistance_force",
+    "ackermann_steer_angle",
     "grade_resistance_force",
     "tractive_power",
     "static_stability_factor",
