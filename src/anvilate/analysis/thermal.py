@@ -54,6 +54,8 @@ __all__ = [
     "laminar_tube_convection_coefficient",
     "flat_plate_forced_convection_coefficient",
     "flat_plate_turbulent_convection_coefficient",
+    "cylinder_crossflow_convection_coefficient",
+    "sphere_crossflow_convection_coefficient",
     "grashof_number",
     "rayleigh_number",
     "vertical_plate_natural_convection_coefficient",
@@ -1199,6 +1201,93 @@ def flat_plate_turbulent_convection_coefficient(
         return None  # laminar below, or out of the turbulent correlation's range above
     nusselt = 0.037 * reynolds**0.8 * prandtl_number ** (1.0 / 3.0)
     return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")
+
+
+def cylinder_crossflow_convection_coefficient(
+    *,
+    fluid_velocity: Quantity,
+    diameter: Quantity,
+    thermal_conductivity: Quantity,
+    kinematic_viscosity: Quantity,
+    prandtl_number: float,
+) -> Quantity | None:
+    """The average convection coefficient h for flow across a cylinder (Churchill-Bernstein).
+
+    External crossflow past a tube — a heat-exchanger tube in the wind, a hot-wire anemometer, a pin
+    fin — is a different geometry from the flat plate: the flow separates and wraps the back. The
+    Churchill-Bernstein correlation spans the whole practical range in one expression, with the
+    Reynolds number Re = V·D/ν and
+
+        Nu = 0.3 + [0.62·Re^0.5·Pr^(1/3) / (1 + (0.4/Pr)^(2/3))^0.25]·[1 + (Re/282000)^(5/8)]^(4/5),
+
+    and h = Nu·k/D. ``fluid_velocity`` V is the free-stream speed, ``diameter`` D the cylinder
+    diameter, ``thermal_conductivity`` k and ``kinematic_viscosity`` ν the fluid's, and
+    ``prandtl_number`` Pr its Prandtl number. Returns ``None`` when Re·Pr < 0.2 (below the
+    correlation's validity) rather than extrapolating; otherwise h in W/(m²·K).
+    """
+    _require(fluid_velocity, "[velocity]", "fluid_velocity")
+    _require(diameter, "[length]", "diameter")
+    _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
+    _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
+    v = fluid_velocity.to("m/s").magnitude
+    d = diameter.to("m").magnitude
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    if min(v, d, k, nu) <= 0 or prandtl_number <= 0:
+        raise ValueError(
+            "fluid_velocity, diameter, thermal_conductivity, kinematic_viscosity, and "
+            "prandtl_number must be positive"
+        )
+    reynolds = v * d / nu
+    if reynolds * prandtl_number < 0.2:
+        return None
+    nusselt = 0.3 + (0.62 * reynolds**0.5 * prandtl_number ** (1.0 / 3.0)) / (
+        1.0 + (0.4 / prandtl_number) ** (2.0 / 3.0)
+    ) ** 0.25 * (1.0 + (reynolds / 282000.0) ** (5.0 / 8.0)) ** (4.0 / 5.0)
+    return Quantity(magnitude=nusselt * k / d, unit="W/(m**2*K)")
+
+
+def sphere_crossflow_convection_coefficient(
+    *,
+    fluid_velocity: Quantity,
+    diameter: Quantity,
+    thermal_conductivity: Quantity,
+    kinematic_viscosity: Quantity,
+    prandtl_number: float,
+) -> Quantity | None:
+    """The average convection coefficient h for flow past a sphere (Whitaker).
+
+    A sphere in a stream — a droplet, a bead, a falling particle, a temperature probe — carries a
+    floor Nusselt of 2 (pure conduction into still fluid) plus a flow term. The Whitaker correlation
+    (with the viscosity-ratio correction dropped) is
+
+        Nu = 2 + (0.4·Re^0.5 + 0.06·Re^(2/3))·Pr^0.4,   Re = V·D/ν,
+
+    and h = Nu·k/D. Even at rest (V → 0, Re → 0) it returns the conduction limit Nu = 2, unlike the
+    plate and cylinder forms. ``fluid_velocity`` V, ``diameter`` D, ``thermal_conductivity`` k,
+    ``kinematic_viscosity`` ν, and ``prandtl_number`` Pr describe the case. Returns ``None`` when Re
+    exceeds ~76000 (above Whitaker's validity); otherwise h in W/(m²·K).
+    """
+    _require(fluid_velocity, "[velocity]", "fluid_velocity")
+    _require(diameter, "[length]", "diameter")
+    _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
+    _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
+    v = fluid_velocity.to("m/s").magnitude
+    d = diameter.to("m").magnitude
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    if v < 0:
+        raise ValueError("fluid_velocity must be non-negative")
+    if min(d, k, nu) <= 0 or prandtl_number <= 0:
+        raise ValueError(
+            "diameter, thermal_conductivity, kinematic_viscosity, and prandtl_number must be "
+            "positive"
+        )
+    reynolds = v * d / nu
+    if reynolds > 76000.0:
+        return None
+    nusselt = 2.0 + (0.4 * reynolds**0.5 + 0.06 * reynolds ** (2.0 / 3.0)) * prandtl_number**0.4
+    return Quantity(magnitude=nusselt * k / d, unit="W/(m**2*K)")
 
 
 def grashof_number(

@@ -21142,6 +21142,64 @@ def test_flat_plate_turbulent_convection_and_its_validity_window():
     )
 
 
+def test_cylinder_and_sphere_crossflow_convection_and_validity():
+    from anvilate.analysis import (
+        cylinder_crossflow_convection_coefficient,
+        sphere_crossflow_convection_coefficient,
+    )
+
+    air = {
+        "thermal_conductivity": _q("0.026 W/(m*K)"),
+        "kinematic_viscosity": _q("1.5e-5 m**2/s"),
+        "prandtl_number": 0.7,
+    }
+    # Churchill-Bernstein: air at 10 m/s across a 25 mm tube -> h ~ 74 W/m^2*K.
+    h_cyl = cylinder_crossflow_convection_coefficient(
+        fluid_velocity=_q("10 m/s"), diameter=_q("25 mm"), **air
+    )
+    assert h_cyl is not None
+    re = 10.0 * 0.025 / 1.5e-5
+    nu_cb = 0.3 + (0.62 * re**0.5 * 0.7 ** (1 / 3)) / (1 + (0.4 / 0.7) ** (2 / 3)) ** 0.25 * (
+        1 + (re / 282000) ** (5 / 8)
+    ) ** (4 / 5)
+    assert h_cyl.to("W/(m**2*K)").magnitude == pytest.approx(nu_cb * 0.026 / 0.025, rel=1e-9)
+    assert h_cyl.to("W/(m**2*K)").magnitude == pytest.approx(73.9, abs=0.5)
+
+    # Whitaker sphere at the same conditions -> h ~ 84 W/m^2*K (higher than the cylinder).
+    h_sph = sphere_crossflow_convection_coefficient(
+        fluid_velocity=_q("10 m/s"), diameter=_q("25 mm"), **air
+    )
+    assert h_sph is not None
+    nu_wh = 2 + (0.4 * re**0.5 + 0.06 * re ** (2 / 3)) * 0.7**0.4
+    assert h_sph.to("W/(m**2*K)").magnitude == pytest.approx(nu_wh * 0.026 / 0.025, rel=1e-9)
+    assert h_sph.to("W/(m**2*K)").magnitude > h_cyl.to("W/(m**2*K)").magnitude
+
+    # The sphere keeps the conduction floor Nu=2 at rest (V=0): h = 2*k/D.
+    h_still = sphere_crossflow_convection_coefficient(
+        fluid_velocity=_q("0 m/s"), diameter=_q("25 mm"), **air
+    )
+    assert h_still.to("W/(m**2*K)").magnitude == pytest.approx(2 * 0.026 / 0.025, rel=1e-12)
+
+    # Validity: Churchill-Bernstein declines Re*Pr < 0.2; Whitaker declines Re > 76000.
+    assert (
+        cylinder_crossflow_convection_coefficient(
+            fluid_velocity=_q("1e-5 m/s"), diameter=_q("25 mm"), **air
+        )
+        is None
+    )
+    assert (
+        sphere_crossflow_convection_coefficient(
+            fluid_velocity=_q("60 m/s"), diameter=_q("25 mm"), **air
+        )
+        is None
+    )
+    # Guardrail: a negative sphere velocity is rejected.
+    with pytest.raises(ValueError, match="fluid_velocity must be non-negative"):
+        sphere_crossflow_convection_coefficient(
+            fluid_velocity=_q("-1 m/s"), diameter=_q("25 mm"), **air
+        )
+
+
 def test_asme_head_mawp_round_trips_the_thickness():
     from anvilate.analysis import (
         asme_ellipsoidal_head_mawp,
