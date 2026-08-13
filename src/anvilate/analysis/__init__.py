@@ -1414,6 +1414,7 @@ from .cooling_tower import (
 from .coriolis import (
     coriolis_acceleration,
     coriolis_parameter,
+    foucault_precession_period,
     rossby_number,
 )
 from .corrosion import (
@@ -3209,6 +3210,7 @@ __all__ = [
     "cooling_tower_effectiveness",
     "coriolis_acceleration",
     "coriolis_parameter",
+    "foucault_precession_period",
     "rossby_number",
     "conveyor_mass_flow",
     "belt_speed_for_capacity",

@@ -25,8 +25,11 @@ from ..units import Quantity
 __all__ = [
     "coriolis_acceleration",
     "coriolis_parameter",
+    "foucault_precession_period",
     "rossby_number",
 ]
+
+_SIDEREAL_DAY_HOURS = 23.9344696  # h (one rotation of Earth relative to the stars)
 
 
 def coriolis_acceleration(*, angular_velocity: Quantity, velocity: Quantity) -> Quantity:
@@ -71,6 +74,28 @@ def coriolis_parameter(*, angular_velocity: Quantity, latitude: float) -> Quanti
     if not -90.0 <= latitude <= 90.0:
         raise ValueError("latitude must be in [-90, 90] degrees")
     return Quantity(magnitude=2.0 * omega * sin(radians(latitude)), unit="1/s")
+
+
+def foucault_precession_period(*, latitude: float) -> Quantity:
+    """The Foucault pendulum precession period, T = T_sidereal/sin|φ|.
+
+    A long pendulum's swing plane slowly rotates as the Earth turns beneath it — Foucault's 1851
+    proof that the planet spins. The plane completes one full turn in T = T_sidereal/sin|φ|, from
+    the ``latitude`` φ (degrees), where T_sidereal ≈ 23.934 h is one rotation relative to the
+    stars. At the pole the period is a full sidereal day; at 45° it is about 33.8 h; toward the
+    equator it
+    lengthens without bound (a pendulum there does not precess at all). ``latitude`` must be nonzero
+    and within ±90°. Returns the precession period in hours.
+    """
+    if not -90.0 <= latitude <= 90.0:
+        raise ValueError("latitude must be in [-90, 90] degrees")
+    s = abs(sin(radians(latitude)))
+    if s == 0.0:
+        raise ValueError(
+            "latitude must be nonzero: a Foucault pendulum at the equator does not precess "
+            "(infinite period)"
+        )
+    return Quantity(magnitude=_SIDEREAL_DAY_HOURS / s, unit="hour")
 
 
 def rossby_number(

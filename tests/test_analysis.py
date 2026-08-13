@@ -28456,6 +28456,34 @@ def test_coriolis_acceleration_parameter_and_rossby_number():
         coriolis_acceleration(angular_velocity=_q("10 m/s"), velocity=_q("10 m/s"))
 
 
+def test_foucault_pendulum_precession_period():
+    from math import radians, sin
+
+    from anvilate.analysis import foucault_precession_period
+
+    ts = 23.9344696  # sidereal day, hours
+
+    # T = T_sidereal/sin|lat|; at 45 deg -> ~33.85 h.
+    t = foucault_precession_period(latitude=45.0)
+    assert t.to("hour").magnitude == pytest.approx(ts / sin(radians(45)), rel=1e-9)
+    assert t.to("hour").magnitude == pytest.approx(33.85, abs=0.05)
+    # At the pole the plane turns once per sidereal day.
+    assert foucault_precession_period(latitude=90.0).to("hour").magnitude == pytest.approx(
+        ts, rel=1e-9
+    )
+    # The sign of latitude does not matter (|sin|), and lower latitudes precess more slowly.
+    assert foucault_precession_period(latitude=-45.0).to("hour").magnitude == pytest.approx(
+        t.to("hour").magnitude, rel=1e-12
+    )
+    assert foucault_precession_period(latitude=20.0).to("hour").magnitude > t.to("hour").magnitude
+
+    # Guardrails: the equator does not precess (infinite period), and latitude is bounded.
+    with pytest.raises(ValueError, match="does not precess"):
+        foucault_precession_period(latitude=0.0)
+    with pytest.raises(ValueError, match="latitude must be in"):
+        foucault_precession_period(latitude=100.0)
+
+
 def test_radiation_shielding_transmission_hvl_and_thickness_inverse():
     from math import exp, log
 
