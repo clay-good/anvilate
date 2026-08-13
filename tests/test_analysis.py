@@ -25807,6 +25807,60 @@ def test_heisenberg_uncertainty_minima():
         minimum_energy_uncertainty(lifetime=_q("1 m"))
 
 
+def test_particle_in_a_box_energy_levels_and_transition_wavelength():
+    from anvilate.analysis import (
+        particle_in_box_energy,
+        particle_in_box_transition_wavelength,
+    )
+
+    h = 6.62607015e-34
+    me = 9.1093837015e-31
+    c = 299792458.0
+    me_q = Quantity(magnitude=me, unit="kg")
+
+    # E_n = n^2*h^2/(8*m*L^2); electron in a 1 nm box, n=1 -> 0.376 eV.
+    e1 = particle_in_box_energy(quantum_number=1, particle_mass=me_q, box_length=_q("1 nm"))
+    assert e1.to("J").magnitude == pytest.approx(h**2 / (8 * me * 1e-9**2), rel=1e-12)
+    assert e1.to("eV").magnitude == pytest.approx(0.376, abs=0.001)
+    # Levels crowd upward as n^2: E_2 = 4*E_1, E_3 = 9*E_1.
+    e2 = particle_in_box_energy(quantum_number=2, particle_mass=me_q, box_length=_q("1 nm"))
+    assert e2.to("J").magnitude == pytest.approx(4 * e1.to("J").magnitude, rel=1e-12)
+    assert particle_in_box_energy(quantum_number=3, particle_mass=me_q, box_length=_q("1 nm")).to(
+        "J"
+    ).magnitude == pytest.approx(9 * e1.to("J").magnitude, rel=1e-12)
+    # A smaller box raises every level (quantum confinement): half the width -> 4x the energy.
+    assert particle_in_box_energy(quantum_number=1, particle_mass=me_q, box_length=_q("0.5 nm")).to(
+        "J"
+    ).magnitude == pytest.approx(4 * e1.to("J").magnitude, rel=1e-12)
+
+    # Transition wavelength lambda = h*c/(E_upper - E_lower); 1->2 in a 1 nm box.
+    lam = particle_in_box_transition_wavelength(
+        lower_level=1, upper_level=2, particle_mass=me_q, box_length=_q("1 nm")
+    )
+    dE = (4 - 1) * h**2 / (8 * me * 1e-9**2)
+    assert lam.to("m").magnitude == pytest.approx(h * c / dE, rel=1e-12)
+    assert lam.to("nm").magnitude == pytest.approx(1099.0, abs=1.0)
+    # A smaller box widens the gap and blue-shifts the transition.
+    assert (
+        particle_in_box_transition_wavelength(
+            lower_level=1, upper_level=2, particle_mass=me_q, box_length=_q("0.5 nm")
+        )
+        .to("nm")
+        .magnitude
+        < lam.to("nm").magnitude
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="quantum_number must be a positive integer"):
+        particle_in_box_energy(quantum_number=0, particle_mass=me_q, box_length=_q("1 nm"))
+    with pytest.raises(ValueError, match="upper_level must exceed lower_level"):
+        particle_in_box_transition_wavelength(
+            lower_level=2, upper_level=2, particle_mass=me_q, box_length=_q("1 nm")
+        )
+    with pytest.raises(ValueError, match="box_length must be a"):
+        particle_in_box_energy(quantum_number=1, particle_mass=me_q, box_length=_q("1 s"))
+
+
 def test_newtonian_gravitation_force_surface_gravity_and_mu():
     from anvilate.analysis import (
         gravitational_force,

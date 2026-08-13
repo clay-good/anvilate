@@ -976,6 +976,8 @@ quantum.photoelectric_threshold_frequency
 quantum.minimum_momentum_uncertainty
 quantum.minimum_position_uncertainty
 quantum.minimum_energy_uncertainty
+quantum.particle_in_box_energy
+quantum.particle_in_box_transition_wavelength
 radar.max_unambiguous_velocity
 radar.radar_doppler_shift
 radar.radial_velocity_from_doppler

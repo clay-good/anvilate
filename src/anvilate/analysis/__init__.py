@@ -2349,6 +2349,8 @@ from .quantum import (
     minimum_energy_uncertainty,
     minimum_momentum_uncertainty,
     minimum_position_uncertainty,
+    particle_in_box_energy,
+    particle_in_box_transition_wavelength,
     photoelectric_max_kinetic_energy,
     photoelectric_threshold_frequency,
 )
@@ -3966,6 +3968,8 @@ __all__ = [
     "minimum_momentum_uncertainty",
     "minimum_position_uncertainty",
     "minimum_energy_uncertainty",
+    "particle_in_box_energy",
+    "particle_in_box_transition_wavelength",
     "lorentz_factor",
     "time_dilation",
     "relativistic_kinetic_energy",

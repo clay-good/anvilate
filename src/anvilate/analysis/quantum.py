@@ -27,12 +27,15 @@ from ..units import Quantity
 
 _PLANCK_CONSTANT = 6.62607015e-34  # J*s
 _HBAR = 1.054571817e-34  # J*s, reduced Planck constant
+_SPEED_OF_LIGHT = 299792458.0  # m/s
 
 __all__ = [
     "de_broglie_wavelength",
     "minimum_energy_uncertainty",
     "minimum_momentum_uncertainty",
     "minimum_position_uncertainty",
+    "particle_in_box_energy",
+    "particle_in_box_transition_wavelength",
     "photoelectric_max_kinetic_energy",
     "photoelectric_threshold_frequency",
 ]
@@ -140,6 +143,68 @@ def minimum_energy_uncertainty(*, lifetime: Quantity) -> Quantity:
     if dt <= 0:
         raise ValueError("lifetime must be positive")
     return Quantity(magnitude=_HBAR / (2.0 * dt), unit="J")
+
+
+def particle_in_box_energy(
+    *, quantum_number: int, particle_mass: Quantity, box_length: Quantity
+) -> Quantity:
+    """The energy level of a particle in a 1-D box, E_n = n²·h²/(8·m·L²).
+
+    The canonical bound-state result: a particle of ``particle_mass`` m confined to an infinite
+    square well of width ``box_length`` L can only hold the discrete energies E_n = n²·h²/(8·m·L²),
+    indexed by the ``quantum_number`` n (1, 2, 3, …). The levels are quantized because only whole
+    numbers of half-wavelengths fit the box, and they crowd upward as n². The n = 1 level is the
+    zero-point energy — a confined particle can never be perfectly at rest — and the spacing widens
+    as the box shrinks, which is why quantum confinement (a smaller box) blue-shifts a quantum dot.
+    ``quantum_number`` is a positive integer. Returns the energy in joules.
+    """
+    _check(particle_mass, "[mass]", "particle_mass")
+    _check(box_length, "[length]", "box_length")
+    if quantum_number < 1:
+        raise ValueError("quantum_number must be a positive integer")
+    m = particle_mass.to("kg").magnitude
+    length = box_length.to("m").magnitude
+    if m <= 0:
+        raise ValueError("particle_mass must be positive")
+    if length <= 0:
+        raise ValueError("box_length must be positive")
+    energy = quantum_number**2 * _PLANCK_CONSTANT**2 / (8.0 * m * length**2)
+    return Quantity(magnitude=energy, unit="J")
+
+
+def particle_in_box_transition_wavelength(
+    *,
+    lower_level: int,
+    upper_level: int,
+    particle_mass: Quantity,
+    box_length: Quantity,
+) -> Quantity:
+    """The photon wavelength of a particle-in-a-box transition, λ = h·c/(E_upper − E_lower).
+
+    The colour a confined particle absorbs or emits when it jumps between two box levels: the photon
+    carries the energy gap ΔE = E_upper − E_lower of :func:`particle_in_box_energy`, so its
+    wavelength is λ = h·c/ΔE. This is the simplest model of a quantum dot or a conjugated dye — a
+    smaller
+    ``box_length`` L widens the gap and shifts the colour toward the blue, which is how quantum-dot
+    displays tune their colour by particle size. ``lower_level`` and ``upper_level`` are positive
+    integers with the upper above the lower. Returns the transition wavelength in metres.
+    """
+    _check(particle_mass, "[mass]", "particle_mass")
+    _check(box_length, "[length]", "box_length")
+    if lower_level < 1 or upper_level < 1:
+        raise ValueError("lower_level and upper_level must be positive integers")
+    if upper_level <= lower_level:
+        raise ValueError("upper_level must exceed lower_level")
+    m = particle_mass.to("kg").magnitude
+    length = box_length.to("m").magnitude
+    if m <= 0:
+        raise ValueError("particle_mass must be positive")
+    if length <= 0:
+        raise ValueError("box_length must be positive")
+    prefactor = _PLANCK_CONSTANT**2 / (8.0 * m * length**2)
+    delta_e = (upper_level**2 - lower_level**2) * prefactor
+    wavelength = _PLANCK_CONSTANT * _SPEED_OF_LIGHT / delta_e
+    return Quantity(magnitude=wavelength, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
