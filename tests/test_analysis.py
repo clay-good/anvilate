@@ -26371,6 +26371,42 @@ def test_ohms_law_resistive_power_and_parallel_resistance():
         ohms_law_voltage(current=_q("2 A"), resistance=_q("10 V"))
 
 
+def test_tolerance_stack_worst_case_and_rss():
+    from math import sqrt
+
+    from anvilate.analysis import rss_tolerance_stack, worst_case_tolerance_stack
+
+    tols = [_q("0.1 mm"), _q("0.1 mm"), _q("0.1 mm")]
+
+    # Worst case = sum of magnitudes = 0.3 mm.
+    wc = worst_case_tolerance_stack(tols)
+    assert wc.to("mm").magnitude == pytest.approx(0.3, rel=1e-12)
+
+    # RSS = sqrt(sum of squares) = sqrt(0.03) = 0.1732 mm, always tighter than worst case.
+    rss = rss_tolerance_stack(tols)
+    assert rss.to("mm").magnitude == pytest.approx(sqrt(3 * 0.1**2), rel=1e-12)
+    assert rss.to("mm").magnitude == pytest.approx(0.1732, abs=1e-4)
+    assert rss.to("mm").magnitude < wc.to("mm").magnitude
+
+    # For a single part the two methods agree (no statistical benefit).
+    one = [_q("0.2 mm")]
+    assert worst_case_tolerance_stack(one).to("mm").magnitude == pytest.approx(0.2, rel=1e-12)
+    assert rss_tolerance_stack(one).to("mm").magnitude == pytest.approx(0.2, rel=1e-12)
+
+    # Mixed units and magnitudes combine correctly (convert to mm first).
+    mixed = [_q("100 um"), _q("0.2 mm")]
+    assert worst_case_tolerance_stack(mixed).to("mm").magnitude == pytest.approx(0.3, rel=1e-9)
+    assert rss_tolerance_stack(mixed).to("mm").magnitude == pytest.approx(
+        sqrt(0.1**2 + 0.2**2), rel=1e-9
+    )
+
+    # Guardrails: empty list, correct dimensions.
+    with pytest.raises(ValueError, match="at least one part tolerance"):
+        worst_case_tolerance_stack([])
+    with pytest.raises(ValueError, match="must be a"):
+        rss_tolerance_stack([_q("0.1 s")])
+
+
 def test_dc_circuit_maximum_power_transfer():
     from anvilate.analysis import maximum_power_transfer, resistive_power
 

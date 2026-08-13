@@ -384,6 +384,9 @@ modules:
 - :mod:`~anvilate.analysis.thin_film` — anti-reflection coatings: the quarter-wave thickness
   t = λ/(4n) that cancels a reflection, the ideal coating index n = √(n_medium·n_substrate), and the
   wavelength λ = 4·n·t a given coating is tuned to
+- :mod:`~anvilate.analysis.tolerance_stack` — assembly tolerance stackup: the worst-case sum
+  T_wc = Σ|tᵢ| that is 100%-guaranteed and the statistical root-sum-square T_rss = √(Σtᵢ²) that
+  is the realistic spread for independent, capable processes
 - :mod:`~anvilate.analysis.fresnel` — surface reflection: the normal-incidence reflectance
   R = ((n1−n2)/(n1+n2))² (4% at an air-glass face), the two-surface slab transmittance (1−R)², and
   the Brewster polarizing angle arctan(n2/n1) — the bare reflection AR coatings fight
@@ -2850,6 +2853,10 @@ from .thin_film import (
     quarter_wave_thickness,
     thin_film_tuned_wavelength,
 )
+from .tolerance_stack import (
+    rss_tolerance_stack,
+    worst_case_tolerance_stack,
+)
 from .torsion import (
     elliptical_bar_torsional_stress,
     elliptical_bar_twist_angle,
@@ -3180,6 +3187,8 @@ __all__ = [
     "quarter_wave_thickness",
     "optimal_ar_coating_index",
     "thin_film_tuned_wavelength",
+    "rss_tolerance_stack",
+    "worst_case_tolerance_stack",
     "fresnel_normal_reflectance",
     "slab_transmittance",
     "brewster_angle",

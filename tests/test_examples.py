@@ -527,6 +527,15 @@ def test_cyclone_dust_collector_cut_size_example():
     assert d["efficiency_10um"] > 0.5
 
 
+def test_spacer_stack_tolerance_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "spacer_stack_tolerance.py"))
+    d = namespace["spacer_stack_tolerance"]()
+    # Five ±0.05 mm parts: worst case 0.25 mm, RSS sqrt(5)*0.05 = 0.1118 mm.
+    assert d["worst_case_mm"] == pytest.approx(0.25, rel=1e-9)
+    assert d["rss_mm"] == pytest.approx(5**0.5 * 0.05, rel=1e-9)
+    assert d["rss_mm"] < d["worst_case_mm"]
+
+
 def test_linear_regulator_heatsink_screen_example():
     namespace = runpy.run_path(str(_EXAMPLES / "linear_regulator_heatsink_screen.py"))
     d = namespace["regulator_thermal_screen"]()
