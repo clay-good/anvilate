@@ -527,6 +527,15 @@ def test_cyclone_dust_collector_cut_size_example():
     assert d["efficiency_10um"] > 0.5
 
 
+def test_linear_regulator_heatsink_screen_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "linear_regulator_heatsink_screen.py"))
+    d = namespace["regulator_thermal_screen"]()
+    # (12-5)*1 + 12*0.005 = 7.06 W dissipation; efficiency ~41.5%.
+    assert d["dissipation_W"] == pytest.approx(7.06, rel=1e-9)
+    assert d["efficiency"] == pytest.approx(5 / (12 * 1.005), rel=1e-9)
+    assert d["efficiency"] < 5 / 12
+
+
 def test_bench_supply_reservoir_capacitor_example():
     namespace = runpy.run_path(str(_EXAMPLES / "bench_supply_reservoir_capacitor.py"))
     d = namespace["bench_supply_filter"]()

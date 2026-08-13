@@ -658,6 +658,9 @@ modules:
 - :mod:`~anvilate.analysis.o_ring` — O-ring gland design geometry: the squeeze,
   gland-fill, and stretch fractions a groove must keep in band to seal without
   extruding or over-straining the ring
+- :mod:`~anvilate.analysis.linear_regulator` — linear voltage-regulator thermal screen:
+  the pass-element dissipation P = (V_in − V_out)·I_load + V_in·I_q and the efficiency
+  η = V_out·I_load/(V_in·(I_load + I_q)), capped at V_out/V_in
 - :mod:`~anvilate.analysis.living_hinge` — moulded living-hinge fold strain
   ε = θ·t/(2·L) and the minimum web length a permissible flexural strain requires
 - :mod:`~anvilate.analysis.load_combinations` — the governing ASCE 7 factored load
@@ -2062,6 +2065,10 @@ from .level_turn import (
     load_factor_from_bank_angle,
     turn_radius,
     turn_rate,
+)
+from .linear_regulator import (
+    linear_regulator_dissipation,
+    linear_regulator_efficiency,
 )
 from .living_hinge import (
     living_hinge_fold_strain,
@@ -4212,6 +4219,8 @@ __all__ = [
     "turn_rate",
     "accelerated_stall_speed",
     "bank_angle_for_turn_rate",
+    "linear_regulator_dissipation",
+    "linear_regulator_efficiency",
     "living_hinge_fold_strain",
     "living_hinge_web_length_for_strain",
     "asce7_lrfd_factored_load",

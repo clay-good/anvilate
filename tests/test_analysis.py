@@ -29388,6 +29388,50 @@ def test_photon_energy_wavelength_inverse_and_flux():
         photon_energy(wavelength=_q("500 THz"))
 
 
+def test_linear_regulator_dissipation_and_efficiency():
+    from anvilate.analysis import (
+        linear_regulator_dissipation,
+        linear_regulator_efficiency,
+    )
+
+    # P = (V_in - V_out)*I_load + V_in*I_q; 12->5 V at 1 A, 5 mA quiescent -> 7.06 W.
+    p = linear_regulator_dissipation(
+        input_voltage=_q("12 V"),
+        output_voltage=_q("5 V"),
+        load_current=_q("1 A"),
+        quiescent_current=_q("5 mA"),
+    )
+    assert p.to("W").magnitude == pytest.approx((12 - 5) * 1 + 12 * 0.005, rel=1e-9)
+    assert p.to("W").magnitude == pytest.approx(7.06, rel=1e-9)
+
+    # Quiescent current defaults to zero.
+    p0 = linear_regulator_dissipation(
+        input_voltage=_q("12 V"), output_voltage=_q("5 V"), load_current=_q("1 A")
+    )
+    assert p0.to("W").magnitude == pytest.approx(7.0, rel=1e-9)
+
+    # eta = V_out*I_load/(V_in*(I_load+I_q)); ~41.5%, and strictly below the V_out/V_in ceiling.
+    eta = linear_regulator_efficiency(
+        input_voltage=_q("12 V"),
+        output_voltage=_q("5 V"),
+        load_current=_q("1 A"),
+        quiescent_current=_q("5 mA"),
+    )
+    assert eta == pytest.approx(5 * 1 / (12 * 1.005), rel=1e-9)
+    assert eta < 5 / 12  # can never exceed the voltage ratio
+    # With no quiescent draw the efficiency equals exactly V_out/V_in.
+    eta0 = linear_regulator_efficiency(
+        input_voltage=_q("12 V"), output_voltage=_q("5 V"), load_current=_q("1 A")
+    )
+    assert eta0 == pytest.approx(5 / 12, rel=1e-12)
+
+    # A linear regulator cannot boost: input must exceed output.
+    with pytest.raises(ValueError, match="cannot boost"):
+        linear_regulator_dissipation(
+            input_voltage=_q("5 V"), output_voltage=_q("5 V"), load_current=_q("1 A")
+        )
+
+
 def test_diode_led_series_resistor_and_power():
     from anvilate.analysis import led_resistor_power, led_series_resistor
 

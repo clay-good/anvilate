@@ -895,6 +895,8 @@ level_turn.turn_radius
 level_turn.turn_rate
 level_turn.accelerated_stall_speed
 level_turn.bank_angle_for_turn_rate
+linear_regulator.linear_regulator_dissipation
+linear_regulator.linear_regulator_efficiency
 living_hinge.living_hinge_fold_strain
 living_hinge.living_hinge_web_length_for_strain
 load_combinations.asce7_asd_factored_load
