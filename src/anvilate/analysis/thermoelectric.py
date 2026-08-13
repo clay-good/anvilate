@@ -19,12 +19,15 @@ Z = α²/(R·K) — the coldest the module reaches with no heat load.
 
 from __future__ import annotations
 
+from math import sqrt
+
 from ..units import Quantity
 
 __all__ = [
     "peltier_cooling_rate",
     "seebeck_voltage",
     "thermoelectric_figure_of_merit",
+    "thermoelectric_max_cop",
     "thermoelectric_zt",
     "thermoelectric_max_temperature_difference",
 ]
@@ -182,6 +185,44 @@ def thermoelectric_max_temperature_difference(
         raise ValueError("cold_temperature must be positive (absolute, in K)")
     z = alpha * alpha / (r * k)
     return Quantity(magnitude=0.5 * z * t_c * t_c, unit="K")
+
+
+def thermoelectric_max_cop(
+    *,
+    figure_of_merit: Quantity,
+    cold_temperature: Quantity,
+    hot_temperature: Quantity,
+) -> float:
+    """The maximum COP of a thermoelectric cooler, COP_max = (T_c/ΔT)·(M − T_h/T_c)/(M + 1).
+
+    The best coefficient of performance a single-stage Peltier cooler reaches, pumping heat from the
+    ``cold_temperature`` T_c to the ``hot_temperature`` T_h with a device ``figure_of_merit`` Z
+    (from :func:`thermoelectric_figure_of_merit`): with M = √(1 + Z·T_m) at the mean temperature
+    T_m = (T_h + T_c)/2, COP_max = (T_c/(T_h − T_c))·(M − T_h/T_c)/(M + 1). It is the thermoelectric
+    analogue of the Carnot COP, which it approaches only as ZT → ∞; a real ZT ≈ 1 module manages a
+    small fraction of Carnot, the reason Peltier coolers are prized for convenience, not efficiency.
+    Returns the dimensionless maximum COP.
+    """
+    _check(figure_of_merit, "1/[temperature]", "figure_of_merit")
+    _check(cold_temperature, "[temperature]", "cold_temperature")
+    _check(hot_temperature, "[temperature]", "hot_temperature")
+    z = figure_of_merit.to("1/K").magnitude
+    t_c = cold_temperature.to("K").magnitude
+    t_h = hot_temperature.to("K").magnitude
+    if z < 0:
+        raise ValueError("figure_of_merit must be non-negative")
+    if t_c <= 0 or t_h <= 0:
+        raise ValueError("temperatures must be positive (absolute, in K)")
+    if t_h <= t_c:
+        raise ValueError("hot_temperature must exceed cold_temperature for cooling")
+    t_m = 0.5 * (t_h + t_c)
+    m = sqrt(1.0 + z * t_m)
+    if m <= t_h / t_c:
+        raise ValueError(
+            "figure_of_merit is too low to pump heat across this temperature difference "
+            "(COP would be non-positive)"
+        )
+    return (t_c / (t_h - t_c)) * (m - t_h / t_c) / (m + 1.0)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

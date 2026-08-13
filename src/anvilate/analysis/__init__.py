@@ -2795,6 +2795,7 @@ from .thermoelectric import (
     peltier_cooling_rate,
     seebeck_voltage,
     thermoelectric_figure_of_merit,
+    thermoelectric_max_cop,
     thermoelectric_max_temperature_difference,
     thermoelectric_zt,
 )
@@ -3681,6 +3682,7 @@ __all__ = [
     "peltier_cooling_rate",
     "thermoelectric_figure_of_merit",
     "thermoelectric_zt",
+    "thermoelectric_max_cop",
     "thermoelectric_max_temperature_difference",
     "gauge_strain_from_resistance",
     "wheatstone_bridge_output",

@@ -18896,6 +18896,47 @@ def test_thermoelectric_figure_of_merit_and_zt():
         thermoelectric_zt(figure_of_merit=_q("0.0025 K"), temperature=_q("300 K"))
 
 
+def test_thermoelectric_max_cop():
+    from math import sqrt
+
+    from anvilate.analysis import thermoelectric_max_cop
+
+    # COP_max = (Tc/dT)*(M - Th/Tc)/(M+1), M = sqrt(1 + Z*Tm).
+    z = _q("0.003 / K")
+    cop = thermoelectric_max_cop(
+        figure_of_merit=z, cold_temperature=_q("273 K"), hot_temperature=_q("300 K")
+    )
+    tm = (300 + 273) / 2
+    m = sqrt(1 + 0.003 * tm)
+    expected = (273 / 27) * (m - 300 / 273) / (m + 1)
+    assert cop == pytest.approx(expected, rel=1e-9)
+    assert cop == pytest.approx(1.132, abs=0.005)  # far below the Carnot 10.1
+    # A better material (higher Z) raises the COP toward the Carnot ceiling.
+    cop_better = thermoelectric_max_cop(
+        figure_of_merit=_q("0.05 / K"), cold_temperature=_q("273 K"), hot_temperature=_q("300 K")
+    )
+    carnot = 273 / 27
+    assert cop < cop_better < carnot
+
+    # Guardrails: hot above cold, and a too-low Z cannot pump across the gap.
+    with pytest.raises(ValueError, match="hot_temperature must exceed cold_temperature"):
+        thermoelectric_max_cop(
+            figure_of_merit=z, cold_temperature=_q("300 K"), hot_temperature=_q("300 K")
+        )
+    with pytest.raises(ValueError, match="figure_of_merit is too low"):
+        thermoelectric_max_cop(
+            figure_of_merit=_q("1e-6 / K"),
+            cold_temperature=_q("250 K"),
+            hot_temperature=_q("300 K"),
+        )
+    with pytest.raises(ValueError, match="figure_of_merit must be a"):
+        thermoelectric_max_cop(
+            figure_of_merit=_q("0.003 K"),
+            cold_temperature=_q("273 K"),
+            hot_temperature=_q("300 K"),
+        )
+
+
 def test_cooling_tower_range_approach_and_effectiveness():
     from anvilate.analysis import (
         cooling_tower_approach,
