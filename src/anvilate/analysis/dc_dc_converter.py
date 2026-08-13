@@ -25,6 +25,7 @@ __all__ = [
     "buck_boost_duty_cycle_for_output",
     "buck_boost_output_voltage",
     "buck_duty_cycle_for_output",
+    "buck_inductor_peak_current",
     "buck_inductor_ripple_current",
     "buck_minimum_inductance_for_ccm",
     "buck_output_voltage",
@@ -179,6 +180,32 @@ def buck_inductor_ripple_current(
         raise ValueError("switching_frequency must be positive")
     ripple = (v_in - v_out) * v_out / (v_in * ind * f_s)
     return Quantity(magnitude=ripple, unit="A")
+
+
+def buck_inductor_peak_current(
+    *,
+    load_current: Quantity,
+    ripple_current: Quantity,
+) -> Quantity:
+    """The buck inductor peak current, I_pk = I_load + ΔI_L/2.
+
+    In continuous conduction the inductor current is a triangle centred on the DC ``load_current``
+    I_load (which the average inductor current equals in a buck), swinging ±ΔI_L/2 about it, so its
+    crest is I_pk = I_load + ``ripple_current``/2 (ΔI_L from :func:`buck_inductor_ripple_current`).
+    This peak — not the average — is what the inductor's saturation rating and the switch's current
+    limit must clear: run the core past it and the inductance collapses, the ripple runs away, and
+    the switch current spikes. A distinct rating from the RMS/ripple that sizes the core loss.
+    Returns the peak inductor current in A.
+    """
+    _check(load_current, "[current]", "load_current")
+    _check(ripple_current, "[current]", "ripple_current")
+    i_load = load_current.to("A").magnitude
+    d_il = ripple_current.to("A").magnitude
+    if i_load < 0:
+        raise ValueError("load_current must be non-negative")
+    if d_il < 0:
+        raise ValueError("ripple_current must be non-negative")
+    return Quantity(magnitude=i_load + d_il / 2.0, unit="A")
 
 
 def buck_output_voltage_ripple(

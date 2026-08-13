@@ -29211,6 +29211,24 @@ def test_dc_dc_converter_buck_inductor_ripple_output_ripple_and_ccm_inductance()
         )
 
 
+def test_dc_dc_converter_buck_inductor_peak_current():
+    from anvilate.analysis import buck_inductor_peak_current
+
+    # I_pk = I_load + dI_L/2; 2 A load with 0.4 A ripple -> 2.2 A saturation rating.
+    i_pk = buck_inductor_peak_current(load_current=_q("2 A"), ripple_current=_q("0.4 A"))
+    assert i_pk.to("A").magnitude == pytest.approx(2.0 + 0.4 / 2, rel=1e-12)
+    assert i_pk.to("A").magnitude == pytest.approx(2.2, rel=1e-12)
+
+    # The peak always exceeds the average (DC load) current by half the ripple.
+    assert i_pk.to("A").magnitude > 2.0
+    # Zero ripple (ideal, infinite inductor) collapses the peak to the load current.
+    flat = buck_inductor_peak_current(load_current=_q("2 A"), ripple_current=_q("0 A"))
+    assert flat.to("A").magnitude == pytest.approx(2.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="ripple_current must be non-negative"):
+        buck_inductor_peak_current(load_current=_q("2 A"), ripple_current=_q("-0.1 A"))
+
+
 def test_dc_motor_back_emf_torque_and_terminal_voltage():
     from anvilate.analysis import (
         dc_motor_back_emf,
