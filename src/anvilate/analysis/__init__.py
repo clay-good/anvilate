@@ -1412,7 +1412,9 @@ from .coriolis import (
 from .corrosion import (
     corrosion_penetration_rate,
     faraday_corrosion_rate,
+    pitting_resistance_equivalent,
     remaining_wall_life,
+    sacrificial_anode_life,
     stern_geary_corrosion_current,
     tafel_overpotential,
 )
@@ -4254,6 +4256,8 @@ __all__ = [
     "remaining_wall_life",
     "tafel_overpotential",
     "stern_geary_corrosion_current",
+    "pitting_resistance_equivalent",
+    "sacrificial_anode_life",
     "nernst_potential",
     "nernst_slope",
     "nernst_reaction_quotient",

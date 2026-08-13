@@ -15155,6 +15155,63 @@ def test_corrosion_tafel_overpotential_and_stern_geary_feed_the_faraday_rate():
         )
 
 
+def test_corrosion_pren_and_sacrificial_anode_life():
+    from anvilate.analysis import (
+        pitting_resistance_equivalent,
+        sacrificial_anode_life,
+    )
+
+    # PREN = %Cr + 3.3*%Mo + 16*%N; 316 (17 Cr, 2.1 Mo, 0.05 N) -> 24.73.
+    pren = pitting_resistance_equivalent(
+        chromium_percent=17.0, molybdenum_percent=2.1, nitrogen_percent=0.05
+    )
+    assert pren == pytest.approx(17 + 3.3 * 2.1 + 16 * 0.05, rel=1e-12)
+    assert pren == pytest.approx(24.73, abs=0.01)
+    # A plain 304 (18 Cr, no Mo) scores lower; a super-duplex clears 40.
+    assert pitting_resistance_equivalent(chromium_percent=18.0) < pren
+    assert (
+        pitting_resistance_equivalent(
+            chromium_percent=25.0, molybdenum_percent=3.8, nitrogen_percent=0.27
+        )
+        > 40.0
+    )
+    # Molybdenum is 3.3x as effective as chromium, nitrogen 16x.
+    assert pitting_resistance_equivalent(
+        chromium_percent=10.0, molybdenum_percent=1.0
+    ) == pytest.approx(13.3, rel=1e-12)
+
+    # Anode life t = m*Q*u/I; 10 kg zinc (780 A*h/kg), u=0.85, 0.5 A -> ~1.51 yr.
+    life = sacrificial_anode_life(
+        anode_mass=_q("10 kg"),
+        anode_capacity=_q("780 A*hour/kg"),
+        protection_current=_q("0.5 A"),
+    )
+    assert life.to("hour").magnitude == pytest.approx(10 * 780 * 0.85 / 0.5, rel=1e-9)
+    assert life.to("year").magnitude == pytest.approx(1.513, abs=0.01)
+    # A larger anode lasts proportionally longer; more protection current drains it faster.
+    assert sacrificial_anode_life(
+        anode_mass=_q("20 kg"), anode_capacity=_q("780 A*hour/kg"), protection_current=_q("0.5 A")
+    ).to("year").magnitude == pytest.approx(2 * life.to("year").magnitude, rel=1e-9)
+    assert sacrificial_anode_life(
+        anode_mass=_q("10 kg"), anode_capacity=_q("780 A*hour/kg"), protection_current=_q("1.0 A")
+    ).to("year").magnitude == pytest.approx(life.to("year").magnitude / 2, rel=1e-9)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="chromium_percent must be positive"):
+        pitting_resistance_equivalent(chromium_percent=0.0, molybdenum_percent=2.0)
+    with pytest.raises(ValueError, match="utilization_factor must be in"):
+        sacrificial_anode_life(
+            anode_mass=_q("10 kg"),
+            anode_capacity=_q("780 A*hour/kg"),
+            protection_current=_q("0.5 A"),
+            utilization_factor=1.5,
+        )
+    with pytest.raises(ValueError, match="anode_capacity must be a"):
+        sacrificial_anode_life(
+            anode_mass=_q("10 kg"), anode_capacity=_q("780 A"), protection_current=_q("0.5 A")
+        )
+
+
 def test_ventilation_outdoor_air_changes_and_dilution():
     from anvilate.analysis import (
         air_changes_per_hour,

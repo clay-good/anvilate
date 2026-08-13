@@ -31,6 +31,8 @@ __all__ = [
     "remaining_wall_life",
     "tafel_overpotential",
     "stern_geary_corrosion_current",
+    "pitting_resistance_equivalent",
+    "sacrificial_anode_life",
 ]
 
 
@@ -181,6 +183,63 @@ def stern_geary_corrosion_current(
         raise ValueError("Tafel slopes must be positive")
     b_stern_geary = b_a * b_c / (2.303 * (b_a + b_c))
     return Quantity(magnitude=b_stern_geary / r_p, unit="A/m**2")
+
+
+def pitting_resistance_equivalent(
+    *,
+    chromium_percent: float,
+    molybdenum_percent: float = 0.0,
+    nitrogen_percent: float = 0.0,
+) -> float:
+    """The pitting resistance equivalent number, PREN = %Cr + 3.3·%Mo + 16·%N.
+
+    A single composition index ranking a stainless steel's resistance to chloride pitting: the
+    weighted sum of the alloying elements that stabilize the passive film — the ``chromium_percent``
+    %Cr, the ``molybdenum_percent`` %Mo (3.3× as effective), and the ``nitrogen_percent`` %N (16×),
+    PREN = %Cr + 3.3·%Mo + 16·%N. Higher is better: a 304 (~19) pits in mild chlorides, a 316 (~25)
+    resists more, and a super-duplex (> 40) survives seawater. It is a screening rank, not a
+    guaranteed threshold. Percentages are mass fractions in percent and must be non-negative.
+    Returns the dimensionless PREN.
+    """
+    if chromium_percent < 0 or molybdenum_percent < 0 or nitrogen_percent < 0:
+        raise ValueError("element percentages must be non-negative")
+    if chromium_percent <= 0:
+        raise ValueError("chromium_percent must be positive (a stainless steel needs chromium)")
+    return chromium_percent + 3.3 * molybdenum_percent + 16.0 * nitrogen_percent
+
+
+def sacrificial_anode_life(
+    *,
+    anode_mass: Quantity,
+    anode_capacity: Quantity,
+    protection_current: Quantity,
+    utilization_factor: float = 0.85,
+) -> Quantity:
+    """The service life of a sacrificial anode, t = m·Q·u/I.
+
+    How long a galvanic anode protects a structure before it is consumed: its ``anode_mass`` m times
+    its electrochemical ``anode_capacity`` Q (charge delivered per unit mass — about 780 A·h/kg for
+    zinc, 2000 for aluminium) and its ``utilization_factor`` u (the fraction usable before the anode
+    breaks up, ~0.85), divided by the ``protection_current`` I the cathodic-protection system draws:
+    t = m·Q·u/I. It sizes the anode mass a design life demands, the core of a cathodic-protection
+    calculation. ``utilization_factor`` is in (0, 1]. Returns the anode life in years.
+    """
+    _check(anode_mass, "[mass]", "anode_mass")
+    _check(anode_capacity, "[current]*[time]/[mass]", "anode_capacity")
+    _check(protection_current, "[current]", "protection_current")
+    m = anode_mass.to("kg").magnitude
+    q = anode_capacity.to("A*hour/kg").magnitude
+    i = protection_current.to("A").magnitude
+    if m <= 0:
+        raise ValueError("anode_mass must be positive")
+    if q <= 0:
+        raise ValueError("anode_capacity must be positive")
+    if i <= 0:
+        raise ValueError("protection_current must be positive")
+    if not 0.0 < utilization_factor <= 1.0:
+        raise ValueError("utilization_factor must be in (0, 1]")
+    life_hours = m * q * utilization_factor / i
+    return Quantity(magnitude=life_hours / 8766.0, unit="year")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

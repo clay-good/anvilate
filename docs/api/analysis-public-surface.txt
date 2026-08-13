@@ -430,6 +430,8 @@ corrosion.faraday_corrosion_rate
 corrosion.remaining_wall_life
 corrosion.tafel_overpotential
 corrosion.stern_geary_corrosion_current
+corrosion.pitting_resistance_equivalent
+corrosion.sacrificial_anode_life
 coupling.flange_coupling_bolt_count
 coupling.flange_coupling_bolt_force
 coupling.flange_coupling_torque
