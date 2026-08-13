@@ -29493,3 +29493,62 @@ def test_optical_interference_double_slit_single_slit_and_wavelength_inverse():
         )
     with pytest.raises(ValueError, match="wavelength must be a"):
         double_slit_fringe_angle(wavelength=_q("500 Hz"), slit_separation=_q("0.1 mm"))
+
+
+def test_naval_architecture_hull_speed_hull_froude_and_block_coefficient():
+    from math import pi, sqrt
+
+    from anvilate.analysis import block_coefficient, hull_froude_number, hull_speed
+
+    g = 9.80665
+
+    # Hull speed v = sqrt(g*L/(2*pi)); 12.19 m waterline -> 8.48 knots (~1.34*sqrt(40 ft)).
+    v = hull_speed(waterline_length=_q("12.19 m"))
+    assert v.to("m/s").magnitude == pytest.approx(sqrt(g * 12.19 / (2 * pi)), rel=1e-12)
+    assert v.to("knot").magnitude == pytest.approx(8.48, abs=0.02)
+    # Hull speed rises with the square root of length: 4x length -> 2x speed.
+    assert hull_speed(waterline_length=_q("48.76 m")).to("m/s").magnitude == pytest.approx(
+        2 * v.to("m/s").magnitude, rel=1e-9
+    )
+
+    # A hull at its hull speed sits at Froude number ~0.4.
+    fr_at_hull = hull_froude_number(speed=v, waterline_length=_q("12.19 m"))
+    assert fr_at_hull == pytest.approx(1.0 / sqrt(2 * pi), rel=1e-9)
+    assert fr_at_hull == pytest.approx(0.399, abs=0.001)
+    # Fr = v/sqrt(g*L); 10 m/s over a 100 m hull -> 0.319.
+    fr = hull_froude_number(speed=_q("10 m/s"), waterline_length=_q("100 m"))
+    assert fr == pytest.approx(10 / sqrt(g * 100), rel=1e-12)
+    assert fr == pytest.approx(0.319, abs=0.001)
+
+    # Block coefficient C_b = disp/(L*B*T); 5000 m^3 in 100x16x6 -> 0.521.
+    cb = block_coefficient(
+        displacement_volume=_q("5000 m**3"),
+        waterline_length=_q("100 m"),
+        beam=_q("16 m"),
+        draft=_q("6 m"),
+    )
+    assert cb == pytest.approx(5000 / (100 * 16 * 6), rel=1e-12)
+    assert cb == pytest.approx(0.521, abs=0.001)
+    # A fuller hull (more displaced volume in the same box) has a higher C_b.
+    assert (
+        block_coefficient(
+            displacement_volume=_q("8000 m**3"),
+            waterline_length=_q("100 m"),
+            beam=_q("16 m"),
+            draft=_q("6 m"),
+        )
+        > cb
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="waterline_length must be positive"):
+        hull_speed(waterline_length=_q("0 m"))
+    with pytest.raises(ValueError, match="block coefficient exceeds 1"):
+        block_coefficient(
+            displacement_volume=_q("20000 m**3"),
+            waterline_length=_q("100 m"),
+            beam=_q("16 m"),
+            draft=_q("6 m"),
+        )
+    with pytest.raises(ValueError, match="waterline_length must be a"):
+        hull_froude_number(speed=_q("10 m/s"), waterline_length=_q("100 s"))

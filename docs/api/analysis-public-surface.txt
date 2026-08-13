@@ -885,6 +885,9 @@ magnetics.magnetomotive_force
 magnetics.magnetic_reluctance
 magnetics.magnetic_flux
 magnetics.coil_inductance
+naval_architecture.hull_speed
+naval_architecture.hull_froude_number
+naval_architecture.block_coefficient
 nds_timber.LoadDuration
 nds_timber.nds_adjusted_design_value
 nds_timber.nds_bearing_area_factor

@@ -5512,3 +5512,15 @@ def test_double_slit_wavelength_bench_example_short_bench_fails():
     long_bench = namespace["screen_long_bench"]()
     assert long_bench.entries[0].passed
     assert long_bench.status is CheckStatus.PASS
+
+
+def test_trawler_hull_speed_example_short_hull_falls_short():
+    namespace = runpy.run_path(str(_EXAMPLES / "trawler_hull_speed.py"))
+    short = namespace["screen_short_hull"]()
+    # The 25 ft waterline's hull speed is below the 8-knot schedule -> FAIL.
+    assert short.status is CheckStatus.FAIL
+    assert short.entries[0].name == "hull speed vs scheduled speed"
+    # A longer waterline raises the hull speed above the schedule.
+    long_hull = namespace["screen_long_hull"]()
+    assert long_hull.entries[0].passed
+    assert long_hull.status is CheckStatus.PASS

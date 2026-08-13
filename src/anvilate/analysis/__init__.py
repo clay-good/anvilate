@@ -307,6 +307,9 @@ modules:
   air buoyancy draws over a building or chimney height, the capillary rise of a liquid
   in a fine tube or pore, and the Weber number We = ρ·V²·L/σ that screens a droplet or jet
   for surface-tension breakup
+- :mod:`~anvilate.analysis.naval_architecture` — displacement-hull naval architecture: the hull
+  speed v = √(g·L/(2π)) (the ~1.34·√L_ft-knot ceiling), the Froude number Fr = v/√(g·L), and the
+  block coefficient C_b = ∇/(L·B·T) that measures how full the underwater hull is
 - :mod:`~anvilate.analysis.pipe_flow` — incompressible pipe hydraulics: the Reynolds
   number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
   Darcy-Weisbach friction head loss and fitting minor losses, the pressure drop ρ·g·h a
@@ -2087,6 +2090,11 @@ from .momentum import (
     impulse,
     linear_momentum,
 )
+from .naval_architecture import (
+    block_coefficient,
+    hull_froude_number,
+    hull_speed,
+)
 from .nds_timber import (
     LoadDuration,
     nds_adjusted_design_value,
@@ -3634,6 +3642,9 @@ __all__ = [
     "linear_momentum",
     "impulse",
     "average_impact_force",
+    "hull_speed",
+    "hull_froude_number",
+    "block_coefficient",
     "compton_wavelength_shift",
     "compton_scattered_wavelength",
     "compton_electron_energy",
