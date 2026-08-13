@@ -1438,7 +1438,10 @@ from .dc_circuit import (
 from .dc_dc_converter import (
     boost_output_voltage,
     buck_boost_output_voltage,
+    buck_inductor_ripple_current,
+    buck_minimum_inductance_for_ccm,
     buck_output_voltage,
+    buck_output_voltage_ripple,
 )
 from .dc_motor import (
     dc_motor_back_emf,
@@ -2955,6 +2958,9 @@ __all__ = [
     "buck_output_voltage",
     "boost_output_voltage",
     "buck_boost_output_voltage",
+    "buck_inductor_ripple_current",
+    "buck_output_voltage_ripple",
+    "buck_minimum_inductance_for_ccm",
     "dc_motor_back_emf",
     "dc_motor_torque",
     "dc_motor_terminal_voltage",

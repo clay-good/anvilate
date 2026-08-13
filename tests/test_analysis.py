@@ -26695,6 +26695,86 @@ def test_dc_dc_converter_buck_boost_and_buck_boost_topologies():
         buck_output_voltage(input_voltage=_q("12 A"), duty_cycle=0.4)
 
 
+def test_dc_dc_converter_buck_inductor_ripple_output_ripple_and_ccm_inductance():
+    from anvilate.analysis import (
+        buck_inductor_ripple_current,
+        buck_minimum_inductance_for_ccm,
+        buck_output_voltage_ripple,
+    )
+
+    # dI_L = (V_in - V_out)*V_out/(V_in*L*f_s); 12->5 V, 22 uH, 500 kHz -> 0.265 A.
+    d_il = buck_inductor_ripple_current(
+        input_voltage=_q("12 V"),
+        output_voltage=_q("5 V"),
+        inductance=_q("22 uH"),
+        switching_frequency=_q("500 kHz"),
+    )
+    assert d_il.to("A").magnitude == pytest.approx((12 - 5) * 5 / (12 * 22e-6 * 500e3), rel=1e-9)
+    assert d_il.to("A").magnitude == pytest.approx(0.2652, abs=1e-3)
+    # A bigger inductor or faster switching lowers the ripple (inverse in both).
+    assert buck_inductor_ripple_current(
+        input_voltage=_q("12 V"),
+        output_voltage=_q("5 V"),
+        inductance=_q("44 uH"),
+        switching_frequency=_q("500 kHz"),
+    ).to("A").magnitude == pytest.approx(d_il.to("A").magnitude / 2, rel=1e-9)
+
+    # dV = dI_L/(8*C*f_s); 47 uF at 500 kHz -> ~1.41 mV.
+    d_v = buck_output_voltage_ripple(
+        inductor_ripple_current=d_il,
+        output_capacitance=_q("47 uF"),
+        switching_frequency=_q("500 kHz"),
+    )
+    assert d_v.to("V").magnitude == pytest.approx(
+        d_il.to("A").magnitude / (8 * 47e-6 * 500e3), rel=1e-9
+    )
+    assert d_v.to("mV").magnitude == pytest.approx(1.410, abs=1e-2)
+
+    # L_min for CCM = (1-D)*V_out/(2*I_out*f_s); D=5/12, 2 A load -> ~1.46 uH.
+    l_min = buck_minimum_inductance_for_ccm(
+        output_voltage=_q("5 V"),
+        load_current=_q("2 A"),
+        duty_cycle=5 / 12,
+        switching_frequency=_q("500 kHz"),
+    )
+    assert l_min.to("H").magnitude == pytest.approx((1 - 5 / 12) * 5 / (2 * 2 * 500e3), rel=1e-9)
+    assert l_min.to("uH").magnitude == pytest.approx(1.458, abs=1e-3)
+    # A lighter load raises the inductance needed to stay in continuous conduction.
+    assert (
+        buck_minimum_inductance_for_ccm(
+            output_voltage=_q("5 V"),
+            load_current=_q("1 A"),
+            duty_cycle=5 / 12,
+            switching_frequency=_q("500 kHz"),
+        )
+        .to("uH")
+        .magnitude
+        > l_min.to("uH").magnitude
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="a buck steps down"):
+        buck_inductor_ripple_current(
+            input_voltage=_q("5 V"),
+            output_voltage=_q("12 V"),
+            inductance=_q("22 uH"),
+            switching_frequency=_q("500 kHz"),
+        )
+    with pytest.raises(ValueError, match="duty_cycle must be in"):
+        buck_minimum_inductance_for_ccm(
+            output_voltage=_q("5 V"),
+            load_current=_q("2 A"),
+            duty_cycle=1.0,
+            switching_frequency=_q("500 kHz"),
+        )
+    with pytest.raises(ValueError, match="output_capacitance must be a"):
+        buck_output_voltage_ripple(
+            inductor_ripple_current=d_il,
+            output_capacitance=_q("47 uH"),
+            switching_frequency=_q("500 kHz"),
+        )
+
+
 def test_dc_motor_back_emf_torque_and_terminal_voltage():
     from anvilate.analysis import (
         dc_motor_back_emf,

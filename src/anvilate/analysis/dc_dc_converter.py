@@ -22,7 +22,10 @@ from ..units import Quantity
 __all__ = [
     "boost_output_voltage",
     "buck_boost_output_voltage",
+    "buck_inductor_ripple_current",
+    "buck_minimum_inductance_for_ccm",
     "buck_output_voltage",
+    "buck_output_voltage_ripple",
 ]
 
 
@@ -69,6 +72,108 @@ def buck_boost_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> 
     if not 0.0 < duty_cycle < 1.0:
         raise ValueError("duty_cycle must be in (0, 1)")
     return Quantity(magnitude=v_in * duty_cycle / (1.0 - duty_cycle), unit="V")
+
+
+def buck_inductor_ripple_current(
+    *,
+    input_voltage: Quantity,
+    output_voltage: Quantity,
+    inductance: Quantity,
+    switching_frequency: Quantity,
+) -> Quantity:
+    """The buck inductor peak-to-peak ripple current, ΔI_L = (V_in − V_out)·V_out/(V_in·L·f_s).
+
+    While the buck's high-side switch is on, the inductor sees V_in − V_out and its current ramps
+    up; over the on-time D/f_s (with D = V_out/V_in) that ramp is ΔI_L =
+    (V_in − V_out)·V_out/(V_in·L·f_s). It sizes the inductor: too small an L (or too low a
+    ``switching_frequency`` f_s) gives a large ripple that raises RMS current and can tip the
+    converter into discontinuous conduction. From the ``input_voltage`` V_in, the
+    ``output_voltage`` V_out (≤ V_in), the ``inductance`` L, and f_s.
+    Returns the peak-to-peak ripple current in A.
+    """
+    _check(input_voltage, "[electric_potential]", "input_voltage")
+    _check(output_voltage, "[electric_potential]", "output_voltage")
+    _check(inductance, "[inductance]", "inductance")
+    _check(switching_frequency, "1/[time]", "switching_frequency")
+    v_in = input_voltage.to("V").magnitude
+    v_out = output_voltage.to("V").magnitude
+    ind = inductance.to("H").magnitude
+    f_s = switching_frequency.to("Hz").magnitude
+    if v_in <= 0:
+        raise ValueError("input_voltage must be positive")
+    if not 0.0 < v_out <= v_in:
+        raise ValueError(
+            "output_voltage must be positive and at most input_voltage (a buck steps down)"
+        )
+    if ind <= 0:
+        raise ValueError("inductance must be positive")
+    if f_s <= 0:
+        raise ValueError("switching_frequency must be positive")
+    ripple = (v_in - v_out) * v_out / (v_in * ind * f_s)
+    return Quantity(magnitude=ripple, unit="A")
+
+
+def buck_output_voltage_ripple(
+    *,
+    inductor_ripple_current: Quantity,
+    output_capacitance: Quantity,
+    switching_frequency: Quantity,
+) -> Quantity:
+    """The buck output voltage ripple, ΔV = ΔI_L/(8·C·f_s).
+
+    The output capacitor absorbs the inductor's triangular ripple current, and the charge swing over
+    a cycle leaves a peak-to-peak voltage ripple ΔV = ΔI_L/(8·C·f_s) — from the
+    ``inductor_ripple_current`` ΔI_L (:func:`buck_inductor_ripple_current`), the
+    ``output_capacitance`` C, and the ``switching_frequency`` f_s. The 8 is the geometric factor for
+    a triangular charge waveform. It sizes the output cap for a ripple spec (ESR, ignored here, adds
+    to it). Returns the peak-to-peak output ripple voltage in V.
+    """
+    _check(inductor_ripple_current, "[current]", "inductor_ripple_current")
+    _check(output_capacitance, "[capacitance]", "output_capacitance")
+    _check(switching_frequency, "1/[time]", "switching_frequency")
+    d_il = inductor_ripple_current.to("A").magnitude
+    cap = output_capacitance.to("F").magnitude
+    f_s = switching_frequency.to("Hz").magnitude
+    if d_il < 0:
+        raise ValueError("inductor_ripple_current must be non-negative")
+    if cap <= 0:
+        raise ValueError("output_capacitance must be positive")
+    if f_s <= 0:
+        raise ValueError("switching_frequency must be positive")
+    return Quantity(magnitude=d_il / (8.0 * cap * f_s), unit="V")
+
+
+def buck_minimum_inductance_for_ccm(
+    *,
+    output_voltage: Quantity,
+    load_current: Quantity,
+    duty_cycle: float,
+    switching_frequency: Quantity,
+) -> Quantity:
+    """The buck critical inductance for continuous conduction, L_min = (1 − D)·V_out/(2·I_out·f_s).
+
+    Continuous conduction holds only while the inductor's average current exceeds half its ripple;
+    at the boundary that fixes a minimum inductance L_min = (1 − D)·V_out/(2·I_out·f_s), from the
+    ``output_voltage`` V_out, the ``load_current`` I_out, the ``duty_cycle`` D, and the
+    ``switching_frequency`` f_s. Below it the converter drops into discontinuous conduction, where
+    the output-voltage relation changes and control gets harder; a light load (small I_out) raises
+    the bar. Returns the minimum inductance in H.
+    """
+    _check(output_voltage, "[electric_potential]", "output_voltage")
+    _check(load_current, "[current]", "load_current")
+    _check(switching_frequency, "1/[time]", "switching_frequency")
+    v_out = output_voltage.to("V").magnitude
+    i_out = load_current.to("A").magnitude
+    f_s = switching_frequency.to("Hz").magnitude
+    if not 0.0 < duty_cycle < 1.0:
+        raise ValueError("duty_cycle must be in (0, 1)")
+    if v_out <= 0:
+        raise ValueError("output_voltage must be positive")
+    if i_out <= 0:
+        raise ValueError("load_current must be positive")
+    if f_s <= 0:
+        raise ValueError("switching_frequency must be positive")
+    return Quantity(magnitude=(1.0 - duty_cycle) * v_out / (2.0 * i_out * f_s), unit="H")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
