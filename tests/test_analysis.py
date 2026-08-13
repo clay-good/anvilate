@@ -25698,6 +25698,23 @@ def test_radar_range_equation_received_power_and_unambiguous_range():
         )
 
 
+def test_radar_range_resolution_from_pulse_width():
+    from anvilate.analysis import radar_range_resolution
+
+    # dR = c*tau/2; a 1 us pulse resolves ~149.9 m.
+    dr = radar_range_resolution(pulse_width=_q("1 us"))
+    assert dr.to("m").magnitude == pytest.approx(299792458.0 * 1e-6 / 2.0, rel=1e-12)
+    assert dr.to("m").magnitude == pytest.approx(149.9, abs=0.1)
+    # A shorter pulse resolves proportionally finer.
+    assert radar_range_resolution(pulse_width=_q("0.1 us")).to("m").magnitude == pytest.approx(
+        dr.to("m").magnitude / 10.0, rel=1e-12
+    )
+    with pytest.raises(ValueError, match="pulse_width must be positive"):
+        radar_range_resolution(pulse_width=_q("0 s"))
+    with pytest.raises(ValueError, match="pulse_width must be a"):
+        radar_range_resolution(pulse_width=_q("1 m"))
+
+
 def test_universal_joint_speed_ratio_max_and_fluctuation():
     from math import cos, radians
 

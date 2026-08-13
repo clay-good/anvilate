@@ -955,6 +955,7 @@ radar.radial_velocity_from_doppler
 radar.max_unambiguous_range
 radar.radar_received_power
 radar.radar_max_range
+radar.radar_range_resolution
 radiation_pressure.photon_momentum
 radiation_pressure.radiation_pressure
 radiation_pressure.radiation_force

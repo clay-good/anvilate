@@ -29,6 +29,7 @@ __all__ = [
     "max_unambiguous_velocity",
     "radar_doppler_shift",
     "radar_max_range",
+    "radar_range_resolution",
     "radar_received_power",
     "radial_velocity_from_doppler",
 ]
@@ -107,6 +108,23 @@ def max_unambiguous_range(*, pulse_repetition_frequency: Quantity) -> Quantity:
     if prf <= 0:
         raise ValueError("pulse_repetition_frequency must be positive")
     return Quantity(magnitude=_SPEED_OF_LIGHT / (2.0 * prf), unit="m")
+
+
+def radar_range_resolution(*, pulse_width: Quantity) -> Quantity:
+    """The radar range resolution, ΔR = c*τ/2.
+
+    The closest two targets can be along the line of sight and still give separable echoes: a pulse
+    of duration ``pulse_width`` τ fills c*τ of space, and because the range axis is folded by the
+    round trip the resolution is half that, ΔR = c*τ/2. A shorter pulse resolves finer, which is why
+    pulse-compression radars synthesize a very short effective τ from a long coded pulse. This is
+    the range-accuracy companion to the range-*ambiguity* limit of :func:`max_unambiguous_range`
+    (set by the PRF, not the pulse width). Returns the range resolution in m.
+    """
+    _check(pulse_width, "[time]", "pulse_width")
+    tau = pulse_width.to("s").magnitude
+    if tau <= 0:
+        raise ValueError("pulse_width must be positive")
+    return Quantity(magnitude=_SPEED_OF_LIGHT * tau / 2.0, unit="m")
 
 
 def radar_received_power(

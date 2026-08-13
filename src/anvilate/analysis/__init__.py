@@ -2312,6 +2312,7 @@ from .radar import (
     max_unambiguous_velocity,
     radar_doppler_shift,
     radar_max_range,
+    radar_range_resolution,
     radar_received_power,
     radial_velocity_from_doppler,
 )
@@ -3902,6 +3903,7 @@ __all__ = [
     "max_unambiguous_range",
     "radar_received_power",
     "radar_max_range",
+    "radar_range_resolution",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",
