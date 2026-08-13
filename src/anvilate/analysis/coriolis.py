@@ -25,6 +25,7 @@ from ..units import Quantity
 __all__ = [
     "coriolis_acceleration",
     "coriolis_parameter",
+    "ekman_number",
     "foucault_precession_period",
     "rossby_number",
 ]
@@ -123,6 +124,38 @@ def rossby_number(
     if length <= 0:
         raise ValueError("length_scale must be positive")
     return u / (f * length)
+
+
+def ekman_number(
+    *, kinematic_viscosity: Quantity, coriolis_parameter: Quantity, length_scale: Quantity
+) -> float:
+    """The Ekman number, Ek = ν / (f·L²).
+
+    The dimensionless ratio of viscous to Coriolis forces in a rotating flow: Ek = ν/(f·L²), from
+    the ``kinematic_viscosity`` ν, the ``coriolis_parameter`` f, and the ``length_scale`` L. It is
+    tiny for large-scale geophysical flow (rotation and pressure dominate, the interior is nearly
+    inviscid and geostrophic) and only becomes order one inside the thin Ekman boundary layer at the
+    bottom or surface, whose depth scales as √(ν/f). Together with the :func:`rossby_number` it
+    closes the rotating-flow force balance — Ro/Ek = U·L/ν is exactly the Reynolds number. Returns
+    the Ekman number as a plain float.
+    """
+    _check(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
+    if not coriolis_parameter.has_dimension("1/[time]"):
+        raise ValueError(
+            f"coriolis_parameter must be a 1/[time] quantity; got "
+            f"{coriolis_parameter.dimensionality} ({coriolis_parameter})"
+        )
+    _check(length_scale, "[length]", "length_scale")
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    f = coriolis_parameter.to("1/s").magnitude
+    length = length_scale.to("m").magnitude
+    if nu <= 0:
+        raise ValueError("kinematic_viscosity must be positive")
+    if f <= 0:
+        raise ValueError("coriolis_parameter must be positive")
+    if length <= 0:
+        raise ValueError("length_scale must be positive")
+    return nu / (f * length**2)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

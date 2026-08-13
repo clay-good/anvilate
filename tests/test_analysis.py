@@ -29236,6 +29236,39 @@ def test_coriolis_acceleration_parameter_and_rossby_number():
         coriolis_acceleration(angular_velocity=_q("10 m/s"), velocity=_q("10 m/s"))
 
 
+def test_coriolis_ekman_number_and_reynolds_identity():
+    from anvilate.analysis import ekman_number, rossby_number
+
+    f = _q("1e-4 1/s")  # mid-latitude Coriolis parameter
+
+    # Ek = nu/(f*L^2); ocean interior is tiny (rotation/pressure dominate, nearly inviscid).
+    ek = ekman_number(
+        kinematic_viscosity=_q("1e-6 m**2/s"), coriolis_parameter=f, length_scale=_q("1000 m")
+    )
+    assert ek == pytest.approx(1e-6 / (1e-4 * 1000**2), rel=1e-9)
+    assert ek < 1e-6
+
+    # Defining identity: Ro / Ek = U*L/nu = Reynolds number.
+    u = _q("0.1 m/s")
+    length = _q("1000 m")
+    ro = rossby_number(velocity=u, coriolis_parameter=f, length_scale=length)
+    reynolds = 0.1 * 1000 / 1e-6
+    assert ro / ek == pytest.approx(reynolds, rel=1e-9)
+
+    # Ek falls as 1/L^2: a 10x larger scale drops it 100x.
+    ek_big = ekman_number(
+        kinematic_viscosity=_q("1e-6 m**2/s"), coriolis_parameter=f, length_scale=_q("10000 m")
+    )
+    assert ek_big == pytest.approx(ek / 100.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="coriolis_parameter must be a"):
+        ekman_number(
+            kinematic_viscosity=_q("1e-6 m**2/s"),
+            coriolis_parameter=_q("1 m/s"),
+            length_scale=length,
+        )
+
+
 def test_foucault_pendulum_precession_period():
     from math import radians, sin
 
