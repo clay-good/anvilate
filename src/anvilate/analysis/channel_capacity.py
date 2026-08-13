@@ -26,7 +26,9 @@ from ..units import Quantity
 __all__ = [
     "nyquist_channel_capacity",
     "shannon_capacity",
+    "shannon_minimum_eb_n0",
     "shannon_required_bandwidth",
+    "spectral_efficiency",
 ]
 
 
@@ -77,6 +79,36 @@ def nyquist_channel_capacity(*, bandwidth: Quantity, signal_levels: int) -> floa
     if signal_levels < 2:
         raise ValueError("signal_levels must be at least 2")
     return 2.0 * b * log2(signal_levels)
+
+
+def spectral_efficiency(*, signal_to_noise_ratio: float) -> float:
+    """The Shannon spectral efficiency, η = log2(1 + SNR).
+
+    The bits per second each hertz of bandwidth can carry at the Shannon limit: η = C/B =
+    log2(1 + ``signal_to_noise_ratio``), the capacity of :func:`shannon_capacity` normalized by
+    bandwidth. It is the number a modulation scheme is measured against — a link needing 6 bit/s/Hz
+    must run at least a 63:1 (18 dB) SNR — and it climbs only logarithmically with SNR, so squeezing
+    more bits into a band costs exponentially more power. ``signal_to_noise_ratio`` is the linear
+    power ratio (not dB) and must be non-negative. Returns the spectral efficiency in bit/s/Hz.
+    """
+    if signal_to_noise_ratio < 0:
+        raise ValueError("signal_to_noise_ratio must be non-negative")
+    return log2(1.0 + signal_to_noise_ratio)
+
+
+def shannon_minimum_eb_n0(*, spectral_efficiency: float) -> float:
+    """The minimum energy-per-bit to noise density, Eb/N0 = (2^η − 1)/η.
+
+    The least energy per bit (relative to the noise power density) at which error-free communication
+    is possible for a target ``spectral_efficiency`` η: Eb/N0 = (2^η − 1)/η. As the spectral
+    efficiency falls toward zero it approaches the absolute Shannon limit ln2 ≈ 0.693 (−1.59 dB) —
+    the floor below which no scheme, however much bandwidth it spends, can communicate reliably.
+    Packing more bits per hertz (higher η) demands rapidly more energy per bit. The
+    ``spectral_efficiency`` η must be positive. Returns Eb/N0 as a linear ratio (10·log10 for dB).
+    """
+    if spectral_efficiency <= 0:
+        raise ValueError("spectral_efficiency must be positive")
+    return (2.0**spectral_efficiency - 1.0) / spectral_efficiency
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

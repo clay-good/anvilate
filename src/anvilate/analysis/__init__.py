@@ -1255,7 +1255,9 @@ from .chain import (
 from .channel_capacity import (
     nyquist_channel_capacity,
     shannon_capacity,
+    shannon_minimum_eb_n0,
     shannon_required_bandwidth,
+    spectral_efficiency,
 )
 from .chemical_equilibrium import (
     equilibrium_constant,
@@ -3322,6 +3324,8 @@ __all__ = [
     "shannon_capacity",
     "shannon_required_bandwidth",
     "nyquist_channel_capacity",
+    "spectral_efficiency",
+    "shannon_minimum_eb_n0",
     "gibbs_free_energy_change",
     "equilibrium_constant",
     "vant_hoff_constant_ratio",

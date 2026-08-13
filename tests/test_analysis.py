@@ -23607,6 +23607,40 @@ def test_channel_capacity_shannon_bandwidth_inverse_and_nyquist():
         shannon_capacity(bandwidth=_q("20 m"), signal_to_noise_ratio=100.0)
 
 
+def test_channel_capacity_spectral_efficiency_and_shannon_eb_n0_limit():
+    from math import log2, log10
+
+    from anvilate.analysis import (
+        shannon_capacity,
+        shannon_minimum_eb_n0,
+        spectral_efficiency,
+    )
+
+    # eta = log2(1+SNR); SNR 15 -> 4 bit/s/Hz.
+    eta = spectral_efficiency(signal_to_noise_ratio=15.0)
+    assert eta == pytest.approx(log2(16), rel=1e-12)
+    assert eta == pytest.approx(4.0, rel=1e-12)
+    # Consistency: eta = C/B from shannon_capacity.
+    c = shannon_capacity(bandwidth=Quantity(magnitude=1e6, unit="Hz"), signal_to_noise_ratio=15.0)
+    assert eta == pytest.approx(c / 1e6, rel=1e-12)
+
+    # Eb/N0 = (2^eta - 1)/eta; eta=4 -> 3.75 linear (5.74 dB).
+    ebn0 = shannon_minimum_eb_n0(spectral_efficiency=4.0)
+    assert ebn0 == pytest.approx((2**4 - 1) / 4, rel=1e-12)
+    assert 10 * log10(ebn0) == pytest.approx(5.74, abs=0.01)
+    # As eta -> 0 it approaches the absolute Shannon limit ln2 (-1.59 dB).
+    limit = shannon_minimum_eb_n0(spectral_efficiency=0.001)
+    assert 10 * log10(limit) == pytest.approx(-1.59, abs=0.01)
+    # Higher spectral efficiency demands more energy per bit.
+    assert shannon_minimum_eb_n0(spectral_efficiency=8.0) > ebn0
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="signal_to_noise_ratio must be non-negative"):
+        spectral_efficiency(signal_to_noise_ratio=-0.5)
+    with pytest.raises(ValueError, match="spectral_efficiency must be positive"):
+        shannon_minimum_eb_n0(spectral_efficiency=0.0)
+
+
 def test_thin_film_ar_coating_thickness_index_and_tuned_wavelength():
     from math import sqrt
 
