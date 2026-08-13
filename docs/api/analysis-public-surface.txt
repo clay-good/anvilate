@@ -1607,6 +1607,7 @@ wire_rope.wire_rope_sheave_pressure
 work_energy.kinetic_energy
 work_energy.gravitational_potential_energy
 work_energy.work_done
+work_energy.mechanical_power
 worm.worm_gear_efficiency
 worm.worm_gear_ratio
 worm.worm_is_self_locking

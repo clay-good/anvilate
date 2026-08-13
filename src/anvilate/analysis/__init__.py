@@ -3022,6 +3022,7 @@ from .wire_rope import (
 from .work_energy import (
     gravitational_potential_energy,
     kinetic_energy,
+    mechanical_power,
     work_done,
 )
 from .worm import (
@@ -4626,6 +4627,7 @@ __all__ = [
     "wire_rope_sheave_pressure",
     "kinetic_energy",
     "gravitational_potential_energy",
+    "mechanical_power",
     "work_done",
     "drum_working_radius",
     "drum_line_pull",

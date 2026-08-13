@@ -23,6 +23,7 @@ _STANDARD_GRAVITY = 9.80665  # m/s**2
 __all__ = [
     "gravitational_potential_energy",
     "kinetic_energy",
+    "mechanical_power",
     "work_done",
 ]
 
@@ -80,6 +81,23 @@ def work_done(*, force: Quantity, distance: Quantity) -> Quantity:
     f = force.to("N").magnitude
     d = distance.to("m").magnitude
     return Quantity(magnitude=f * d, unit="J")
+
+
+def mechanical_power(*, force: Quantity, velocity: Quantity) -> Quantity:
+    """The mechanical power of a force moving with the motion, P = F·v.
+
+    The rate at which a ``force`` F does work while its point of application moves at ``velocity`` v
+    along the line of the force: P = F·v — the time derivative of :func:`work_done`, and the
+    sustained power a drive must supply to hold a steady speed against a resisting force (drag, a
+    grade, friction). It is the translational twin of the rotational P = T·ω (see
+    :func:`~anvilate.analysis.torsion.torque_from_power`): a tractive force at a road speed, a winch
+    line pull at a haul rate, a piston force at a stroke velocity. Returns the power in W.
+    """
+    _check(force, "[force]", "force")
+    _check(velocity, "[velocity]", "velocity")
+    f = force.to("N").magnitude
+    v = velocity.to("m/s").magnitude
+    return Quantity(magnitude=f * v, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

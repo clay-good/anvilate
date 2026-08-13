@@ -26389,6 +26389,26 @@ def test_kinetic_potential_energy_and_work_done():
         work_done(force=_q("500 kg"), distance=_q("3 m"))
 
 
+def test_work_energy_mechanical_power():
+    from anvilate.analysis import mechanical_power, work_done
+
+    # P = F*v; 100 N at 5 m/s -> 500 W.
+    p = mechanical_power(force=_q("100 N"), velocity=_q("5 m/s"))
+    assert p.to("W").magnitude == pytest.approx(100.0 * 5.0, rel=1e-9)
+    assert p.to("W").magnitude == pytest.approx(500.0, rel=1e-9)
+
+    # Power is the time-rate of work: F*v = (F*d)/t, so covering d = v*t takes W = P*t of work.
+    w = work_done(force=_q("100 N"), distance=_q("50 m"))  # d = v*t = 5 m/s * 10 s
+    assert w.to("J").magnitude == pytest.approx(p.to("W").magnitude * 10.0, rel=1e-9)
+
+    # Holding the same speed against twice the force needs twice the power.
+    p2 = mechanical_power(force=_q("200 N"), velocity=_q("5 m/s"))
+    assert p2.to("W").magnitude == pytest.approx(2.0 * p.to("W").magnitude, rel=1e-9)
+
+    with pytest.raises(ValueError, match="force must be a"):
+        mechanical_power(force=_q("100 kg"), velocity=_q("5 m/s"))
+
+
 def test_ohms_law_resistive_power_and_parallel_resistance():
     from anvilate.analysis import (
         ohms_law_voltage,
