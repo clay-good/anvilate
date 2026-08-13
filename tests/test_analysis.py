@@ -5866,6 +5866,46 @@ def test_interference_holding_capacity_matches_hand_calc():
     assert torque.to("N*m").magnitude == pytest.approx(axial.to("N").magnitude * 0.020, rel=1e-6)
 
 
+def test_shrink_fit_temperature_rise():
+    from anvilate.analysis import shrink_fit_temperature_rise
+
+    # dT = delta/(alpha*d); 0.05 mm interference, Ø50 mm, steel alpha=12e-6/K -> 83.3 K.
+    dt = shrink_fit_temperature_rise(
+        diametral_interference=_q("0.05 mm"),
+        interface_diameter=_q("50 mm"),
+        thermal_expansion_coefficient=_q("12e-6 / K"),
+    )
+    assert dt.to("K").magnitude == pytest.approx(5e-5 / (12e-6 * 0.05), rel=1e-9)
+    assert dt.to("K").magnitude == pytest.approx(83.33, abs=0.01)
+    # A tighter fit or a lower expansion coefficient needs more heating.
+    dt_tight = shrink_fit_temperature_rise(
+        diametral_interference=_q("0.10 mm"),
+        interface_diameter=_q("50 mm"),
+        thermal_expansion_coefficient=_q("12e-6 / K"),
+    )
+    assert dt_tight.to("K").magnitude == pytest.approx(2 * dt.to("K").magnitude, rel=1e-9)
+    dt_low_alpha = shrink_fit_temperature_rise(
+        diametral_interference=_q("0.05 mm"),
+        interface_diameter=_q("50 mm"),
+        thermal_expansion_coefficient=_q("6e-6 / K"),
+    )
+    assert dt_low_alpha.to("K").magnitude == pytest.approx(2 * dt.to("K").magnitude, rel=1e-9)
+
+    # Guardrails: positive diameter and expansion coefficient, dimensions checked.
+    with pytest.raises(ValueError, match="thermal_expansion_coefficient must be positive"):
+        shrink_fit_temperature_rise(
+            diametral_interference=_q("0.05 mm"),
+            interface_diameter=_q("50 mm"),
+            thermal_expansion_coefficient=_q("0 / K"),
+        )
+    with pytest.raises(ValueError, match="interface_diameter must be a"):
+        shrink_fit_temperature_rise(
+            diametral_interference=_q("0.05 mm"),
+            interface_diameter=_q("50 s"),
+            thermal_expansion_coefficient=_q("12e-6 / K"),
+        )
+
+
 def test_interference_capacity_rejects_bad_friction():
     with pytest.raises(ValueError, match="friction_coefficient must be positive"):
         interference_axial_capacity(

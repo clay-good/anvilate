@@ -29,6 +29,7 @@ __all__ = [
     "interference_for_contact_pressure",
     "interference_axial_capacity",
     "interference_torque_capacity",
+    "shrink_fit_temperature_rise",
 ]
 
 
@@ -240,3 +241,34 @@ def interference_torque_capacity(
     )
     torque = axial.pint * (interface_diameter.pint / 2)
     return Quantity(magnitude=float(torque.to("N*m").magnitude), unit="N*m")
+
+
+def shrink_fit_temperature_rise(
+    *,
+    diametral_interference: Quantity,
+    interface_diameter: Quantity,
+    thermal_expansion_coefficient: Quantity,
+) -> Quantity:
+    """The heating needed to shrink-fit a hub, ΔT = δ/(α·d).
+
+    To assemble an interference fit without pressing, the hub is heated (or the shaft chilled) until
+    thermal expansion opens the bore by the diametral interference: from the
+    ``diametral_interference`` δ, the ``interface_diameter`` d, and the linear
+    ``thermal_expansion_coefficient`` α, ΔT = δ/(α·d). Add a working clearance to δ if the hub must
+    drop over the shaft freely. It is the practical assembly step behind the Lamé stresses of
+    :func:`interference_fit` — a large fit on a low-α steel can need a few hundred kelvin. Returns
+    the required temperature rise in K.
+    """
+    _require(diametral_interference, "[length]", "diametral_interference")
+    _require(interface_diameter, "[length]", "interface_diameter")
+    _require(thermal_expansion_coefficient, "1/[temperature]", "thermal_expansion_coefficient")
+    delta = diametral_interference.to("m").magnitude
+    d = interface_diameter.to("m").magnitude
+    alpha = thermal_expansion_coefficient.to("1/K").magnitude
+    if delta < 0:
+        raise ValueError("diametral_interference must be non-negative")
+    if d <= 0:
+        raise ValueError("interface_diameter must be positive")
+    if alpha <= 0:
+        raise ValueError("thermal_expansion_coefficient must be positive")
+    return Quantity(magnitude=delta / (alpha * d), unit="K")

@@ -2003,6 +2003,7 @@ from .interference import (
     interference_fit,
     interference_for_contact_pressure,
     interference_torque_capacity,
+    shrink_fit_temperature_rise,
 )
 from .isentropic_efficiency import (
     compressor_actual_discharge_temperature,
@@ -4315,6 +4316,7 @@ __all__ = [
     "interference_for_contact_pressure",
     "interference_axial_capacity",
     "interference_torque_capacity",
+    "shrink_fit_temperature_rise",
     "compressor_isentropic_efficiency",
     "turbine_isentropic_efficiency",
     "compressor_actual_discharge_temperature",
