@@ -57,6 +57,7 @@ __all__ = [
     "cylinder_crossflow_convection_coefficient",
     "sphere_crossflow_convection_coefficient",
     "grashof_number",
+    "marangoni_number",
     "rayleigh_number",
     "richardson_number",
     "vertical_plate_natural_convection_coefficient",
@@ -1375,6 +1376,49 @@ def richardson_number(
     if v <= 0:
         raise ValueError("velocity must be positive")
     return _STANDARD_GRAVITY * beta * dt * length / v**2
+
+
+def marangoni_number(
+    *,
+    surface_tension_temperature_gradient: Quantity,
+    temperature_difference: Quantity,
+    characteristic_length: Quantity,
+    dynamic_viscosity: Quantity,
+    thermal_diffusivity: Quantity,
+) -> float:
+    """The Marangoni number Ma = |dσ/dT|·ΔT·L/(μ·α) — thermocapillary vs diffusive transport.
+
+    The strength of surface-tension-driven (thermocapillary) convection along a free surface with a
+    temperature gradient: Ma = |dσ/dT|·ΔT·L/(μ·α), from the ``surface_tension_temperature_gradient``
+    dσ/dT, the ``temperature_difference`` ΔT along the surface, the ``characteristic_length`` L, the
+    ``dynamic_viscosity`` μ, and the ``thermal_diffusivity`` α. Because surface tension usually
+    drops with temperature, the cooler (higher-σ) surface pulls fluid toward it, and above a
+    critical Ma ≈ 80 that pull organises into steady thermocapillary cells; higher still it drives
+    the vigorous flow that stirs a weld pool, a floating-zone crystal, a solder joint, or a drying
+    paint film. It is the surface-tension analogue of the Rayleigh number, dominating over buoyancy
+    in thin layers and in microgravity. Returns the dimensionless Marangoni number.
+    """
+    _require(
+        surface_tension_temperature_gradient,
+        "[force] / [length] / [temperature]",
+        "surface_tension_temperature_gradient",
+    )
+    _require(temperature_difference, "[temperature]", "temperature_difference")
+    _require(characteristic_length, "[length]", "characteristic_length")
+    _require(dynamic_viscosity, "[pressure]*[time]", "dynamic_viscosity")
+    _require(thermal_diffusivity, "[length]**2/[time]", "thermal_diffusivity")
+    dsigma_dt = abs(surface_tension_temperature_gradient.to("N/(m*K)").magnitude)
+    dt = abs(temperature_difference.to("K").magnitude)
+    length = characteristic_length.to("m").magnitude
+    mu = dynamic_viscosity.to("Pa*s").magnitude
+    alpha = thermal_diffusivity.to("m**2/s").magnitude
+    if length <= 0:
+        raise ValueError("characteristic_length must be positive")
+    if mu <= 0:
+        raise ValueError("dynamic_viscosity must be positive")
+    if alpha <= 0:
+        raise ValueError("thermal_diffusivity must be positive")
+    return dsigma_dt * dt * length / (mu * alpha)
 
 
 def vertical_plate_natural_convection_coefficient(

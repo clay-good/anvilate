@@ -16231,6 +16231,41 @@ def test_thermal_richardson_number_and_grashof_reynolds_identity():
         )
 
 
+def test_thermal_marangoni_number_weld_pool():
+    from anvilate.analysis import marangoni_number
+
+    # Ma = |dsigma/dT|*dT*L/(mu*alpha); molten weld pool -> ~2.8e4 (strong thermocapillary flow).
+    ma = marangoni_number(
+        surface_tension_temperature_gradient=_q("-0.4e-3 N/(m*K)"),
+        temperature_difference=_q("500 K"),
+        characteristic_length=_q("5 mm"),
+        dynamic_viscosity=_q("6e-3 Pa*s"),
+        thermal_diffusivity=_q("6e-6 m**2/s"),
+    )
+    expected = 0.4e-3 * 500 * 5e-3 / (6e-3 * 6e-6)
+    assert ma == pytest.approx(expected, rel=1e-9)
+    assert ma > 80.0  # well above the ~80 onset of thermocapillary cells
+
+    # Sign of dsigma/dT does not matter (magnitude is used); a positive gradient gives the same Ma.
+    ma_pos = marangoni_number(
+        surface_tension_temperature_gradient=_q("0.4e-3 N/(m*K)"),
+        temperature_difference=_q("500 K"),
+        characteristic_length=_q("5 mm"),
+        dynamic_viscosity=_q("6e-3 Pa*s"),
+        thermal_diffusivity=_q("6e-6 m**2/s"),
+    )
+    assert ma_pos == pytest.approx(ma, rel=1e-12)
+
+    with pytest.raises(ValueError, match="thermal_diffusivity"):
+        marangoni_number(
+            surface_tension_temperature_gradient=_q("-0.4e-3 N/(m*K)"),
+            temperature_difference=_q("500 K"),
+            characteristic_length=_q("5 mm"),
+            dynamic_viscosity=_q("6e-3 Pa*s"),
+            thermal_diffusivity=_q("0 m**2/s"),
+        )
+
+
 def test_thermal_cylindrical_conduction_and_critical_radius():
     import math
 
