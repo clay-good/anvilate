@@ -17297,6 +17297,38 @@ def test_fluid_statics_ohnesorge_number_matches_weber_reynolds_identity():
         )
 
 
+def test_fluid_statics_morton_number_air_bubble_in_water():
+    from anvilate.analysis import morton_number
+
+    # Classic air bubble rising in water: Mo ~ 2.5e-11.
+    mo = morton_number(
+        dynamic_viscosity=_q("0.001 Pa*s"),
+        density_difference=_q("997 kg/m**3"),
+        density=_q("998 kg/m**3"),
+        surface_tension=_q("0.0728 N/m"),
+    )
+    expected = 9.80665 * 0.001**4 * 997 / (998**2 * 0.0728**3)
+    assert mo == pytest.approx(expected, rel=1e-9)
+    assert 1e-11 < mo < 1e-10
+
+    # Morton is velocity- and length-free: a more viscous liquid raises it steeply (μ⁴).
+    mo_viscous = morton_number(
+        dynamic_viscosity=_q("0.01 Pa*s"),
+        density_difference=_q("997 kg/m**3"),
+        density=_q("998 kg/m**3"),
+        surface_tension=_q("0.0728 N/m"),
+    )
+    assert mo_viscous == pytest.approx(mo * 1e4, rel=1e-9)
+
+    with pytest.raises(ValueError, match="surface_tension"):
+        morton_number(
+            dynamic_viscosity=_q("0.001 Pa*s"),
+            density_difference=_q("997 kg/m**3"),
+            density=_q("998 kg/m**3"),
+            surface_tension=_q("0 N/m"),
+        )
+
+
 def test_accumulator_usable_volume_and_size_round_trip():
     from anvilate.analysis import accumulator_size_for_volume, accumulator_usable_volume
 

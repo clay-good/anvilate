@@ -715,6 +715,7 @@ fluid_statics.center_of_pressure_depth
 fluid_statics.hydrostatic_force_on_plane
 fluid_statics.hydrostatic_pressure
 fluid_statics.metacentric_height
+fluid_statics.morton_number
 fluid_statics.ohnesorge_number
 fluid_statics.righting_moment
 fluid_statics.stack_effect_pressure

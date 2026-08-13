@@ -26,6 +26,7 @@ __all__ = [
     "hydrostatic_force_on_plane",
     "hydrostatic_pressure",
     "metacentric_height",
+    "morton_number",
     "righting_moment",
     "bond_number",
     "capillary_number",
@@ -374,6 +375,44 @@ def ohnesorge_number(
     if sigma <= 0:
         raise ValueError("surface_tension must be positive")
     return mu / (rho * sigma * length) ** 0.5
+
+
+def morton_number(
+    *,
+    dynamic_viscosity: Quantity,
+    density_difference: Quantity,
+    density: Quantity,
+    surface_tension: Quantity,
+) -> float:
+    """The Morton number, Mo = g·μ⁴·Δρ / (ρ²·σ³).
+
+    A pure material-property group for a bubble or drop rising in a quiescent liquid:
+    Mo = g·μ⁴·Δρ / (ρ²·σ³), from the continuous-phase ``dynamic_viscosity`` μ and ``density`` ρ,
+    the ``density_difference`` Δρ across the interface, and the ``surface_tension`` σ. Unlike the
+    Weber or Reynolds number it contains no velocity or length — it depends only on the fluids, so
+    it stays fixed as a bubble grows or accelerates. Paired with the Eötvös (Bond) number it fixes
+    a bubble's position on the Grace diagram, predicting whether it rises as a sphere, an
+    ellipsoid, or a wobbling spherical cap. Low Mo (like an air bubble in water, ~2.5×10⁻¹¹) gives
+    clean ellipsoidal bubbles; high Mo viscous liquids keep bubbles spherical. Returns the
+    dimensionless Morton number.
+    """
+    _check(dynamic_viscosity, "[pressure]*[time]", "dynamic_viscosity")
+    _check(density_difference, "[mass]/[length]**3", "density_difference")
+    _check(density, "[mass]/[length]**3", "density")
+    _check(surface_tension, "[force]/[length]", "surface_tension")
+    mu = dynamic_viscosity.to("Pa*s").magnitude
+    d_rho = density_difference.to("kg/m**3").magnitude
+    rho = density.to("kg/m**3").magnitude
+    sigma = surface_tension.to("N/m").magnitude
+    if mu <= 0:
+        raise ValueError("dynamic_viscosity must be positive")
+    if d_rho <= 0:
+        raise ValueError("density_difference must be positive")
+    if rho <= 0:
+        raise ValueError("density must be positive")
+    if sigma <= 0:
+        raise ValueError("surface_tension must be positive")
+    return _GRAVITY * mu**4 * d_rho / (rho**2 * sigma**3)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
