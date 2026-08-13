@@ -5500,3 +5500,15 @@ def test_batch_reactor_conversion_example_slow_batch_misses_spec():
     hot = namespace["screen_hot_batch"]()
     assert hot.entries[0].passed
     assert hot.status is CheckStatus.PASS
+
+
+def test_double_slit_wavelength_bench_example_short_bench_fails():
+    namespace = runpy.run_path(str(_EXAMPLES / "double_slit_wavelength_bench.py"))
+    short = namespace["screen_short_bench"]()
+    # The 1 m bench packs the fringes too fine to read cleanly -> FAIL.
+    assert short.status is CheckStatus.FAIL
+    assert short.entries[0].name == "fringe spacing vs readable limit"
+    # Doubling the screen distance widens the fringes past the readable limit.
+    long_bench = namespace["screen_long_bench"]()
+    assert long_bench.entries[0].passed
+    assert long_bench.status is CheckStatus.PASS

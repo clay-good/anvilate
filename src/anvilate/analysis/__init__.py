@@ -552,6 +552,9 @@ modules:
 - :mod:`~anvilate.analysis.optical_instruments` — visual-instrument angular magnification: the
   telescope M = f_o/f_e, the simple magnifier M = D/f (D the 250 mm near point), and the compound
   microscope M = (L/f_o)·(D/f_e) — distinct from the single-lens imaging of optics
+- :mod:`~anvilate.analysis.optical_interference` — two-beam and single-slit optical interference:
+  Young's double-slit fringe spacing Δy = λ·L/d and fringe angle arcsin(m·λ/d), the wavelength
+  inverse λ = Δy·d/L, and the single-slit diffraction minimum arcsin(m·λ/a)
 - :mod:`~anvilate.analysis.optics` — geometric optics for optomechanical design: the thin-lens
   image distance d_i = f·d_o/(d_o − f), the transverse magnification m = −d_i/d_o, the Rayleigh
   diffraction limit θ = 1.22·λ/D on resolving power, the lens speed side — the f-number
@@ -2133,6 +2136,12 @@ from .optical_instruments import (
     magnifier_angular_magnification,
     microscope_magnification,
     telescope_angular_magnification,
+)
+from .optical_interference import (
+    double_slit_fringe_angle,
+    double_slit_fringe_spacing,
+    single_slit_minimum_angle,
+    wavelength_from_fringe_spacing,
 )
 from .optics import (
     combined_thin_lens_focal_length,
@@ -3924,6 +3933,10 @@ __all__ = [
     "telescope_angular_magnification",
     "magnifier_angular_magnification",
     "microscope_magnification",
+    "double_slit_fringe_spacing",
+    "double_slit_fringe_angle",
+    "single_slit_minimum_angle",
+    "wavelength_from_fringe_spacing",
     "thin_lens_image_distance",
     "lens_transverse_magnification",
     "diffraction_limited_angular_resolution",

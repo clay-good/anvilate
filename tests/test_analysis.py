@@ -29191,3 +29191,61 @@ def test_reaction_kinetics_first_and_second_order_rate_laws():
         first_order_concentration(
             initial_concentration=_q("2 mol"), rate_constant=_q("0.5 1/hour"), time=_q("1 hour")
         )
+
+
+def test_optical_interference_double_slit_single_slit_and_wavelength_inverse():
+    from math import asin, degrees
+
+    from anvilate.analysis import (
+        double_slit_fringe_angle,
+        double_slit_fringe_spacing,
+        single_slit_minimum_angle,
+        wavelength_from_fringe_spacing,
+    )
+
+    # dy = lambda*L/d; 633 nm, 0.5 mm slits, 2 m screen -> 2.532 mm.
+    dy = double_slit_fringe_spacing(
+        wavelength=_q("633 nm"), slit_separation=_q("0.5 mm"), screen_distance=_q("2 m")
+    )
+    assert dy.to("mm").magnitude == pytest.approx(633e-9 * 2 / 0.5e-3 * 1000, rel=1e-12)
+    assert dy.to("mm").magnitude == pytest.approx(2.532, abs=0.001)
+    # Fringes spread with a farther screen and crowd with wider slit separation.
+    assert double_slit_fringe_spacing(
+        wavelength=_q("633 nm"), slit_separation=_q("0.5 mm"), screen_distance=_q("4 m")
+    ).to("mm").magnitude == pytest.approx(2 * dy.to("mm").magnitude, rel=1e-12)
+
+    # Wavelength inverse recovers 633 nm from the measured fringe spacing.
+    lam = wavelength_from_fringe_spacing(
+        fringe_spacing=dy, slit_separation=_q("0.5 mm"), screen_distance=_q("2 m")
+    )
+    assert lam.to("nm").magnitude == pytest.approx(633.0, rel=1e-9)
+
+    # Fringe angle theta = arcsin(m*lambda/d); 2nd order, 500 nm, 0.1 mm slits.
+    ang = double_slit_fringe_angle(wavelength=_q("500 nm"), slit_separation=_q("0.1 mm"), order=2)
+    assert ang == pytest.approx(degrees(asin(2 * 500e-9 / 0.1e-3)), rel=1e-12)
+    # The central maximum (m=0) is at zero degrees; higher orders diffract farther.
+    assert double_slit_fringe_angle(
+        wavelength=_q("500 nm"), slit_separation=_q("0.1 mm"), order=0
+    ) == pytest.approx(0.0, abs=1e-12)
+    assert (
+        double_slit_fringe_angle(wavelength=_q("500 nm"), slit_separation=_q("0.1 mm"), order=3)
+        > ang
+    )
+
+    # Single-slit first minimum theta = arcsin(m*lambda/a).
+    smin = single_slit_minimum_angle(wavelength=_q("500 nm"), slit_width=_q("0.05 mm"))
+    assert smin == pytest.approx(degrees(asin(500e-9 / 0.05e-3)), rel=1e-12)
+    # A narrower slit widens the central lobe (larger first-minimum angle).
+    assert single_slit_minimum_angle(wavelength=_q("500 nm"), slit_width=_q("0.025 mm")) > smin
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="no fringe at this order"):
+        double_slit_fringe_angle(wavelength=_q("2 um"), slit_separation=_q("1 um"), order=1)
+    with pytest.raises(ValueError, match="no m = 0 minimum"):
+        single_slit_minimum_angle(wavelength=_q("500 nm"), slit_width=_q("0.05 mm"), order=0)
+    with pytest.raises(ValueError, match="screen_distance must be positive"):
+        double_slit_fringe_spacing(
+            wavelength=_q("633 nm"), slit_separation=_q("0.5 mm"), screen_distance=_q("0 m")
+        )
+    with pytest.raises(ValueError, match="wavelength must be a"):
+        double_slit_fringe_angle(wavelength=_q("500 Hz"), slit_separation=_q("0.1 mm"))
