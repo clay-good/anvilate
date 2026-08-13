@@ -21121,6 +21121,38 @@ def test_vertical_stress_increase_2to1_spread():
     assert deeper.to("kPa").magnitude < ds.to("kPa").magnitude
 
 
+def test_boussinesq_point_load_stress():
+    from math import pi
+
+    from anvilate.analysis import boussinesq_point_load_stress
+
+    # On axis (r=0): dsigma = 3Q/(2*pi*z^2); 1000 kN at 2 m -> 119.4 kPa.
+    on_axis = boussinesq_point_load_stress(point_load=_q("1000 kN"), depth=_q("2 m"))
+    assert on_axis.to("kPa").magnitude == pytest.approx(3 * 1000 / (2 * pi * 4), rel=1e-9)
+    assert on_axis.to("kPa").magnitude == pytest.approx(119.37, abs=0.02)
+    # Off-axis at r=z the influence factor is (1/2)^2.5, so the stress drops sharply.
+    off_axis = boussinesq_point_load_stress(
+        point_load=_q("1000 kN"), depth=_q("2 m"), radial_offset=_q("2 m")
+    )
+    assert off_axis.to("kPa").magnitude == pytest.approx(
+        on_axis.to("kPa").magnitude * (1 + 1) ** -2.5, rel=1e-9
+    )
+    assert off_axis.to("kPa").magnitude < on_axis.to("kPa").magnitude
+    # It falls with the square of depth: twice as deep is a quarter of the stress (on axis).
+    deeper = boussinesq_point_load_stress(point_load=_q("1000 kN"), depth=_q("4 m"))
+    assert deeper.to("kPa").magnitude == pytest.approx(on_axis.to("kPa").magnitude / 4, rel=1e-9)
+
+    # Guardrails: positive load and depth, non-negative offset, dimensions checked.
+    with pytest.raises(ValueError, match="depth must be positive"):
+        boussinesq_point_load_stress(point_load=_q("1000 kN"), depth=_q("0 m"))
+    with pytest.raises(ValueError, match="radial_offset must be non-negative"):
+        boussinesq_point_load_stress(
+            point_load=_q("1000 kN"), depth=_q("2 m"), radial_offset=_q("-1 m")
+        )
+    with pytest.raises(ValueError, match="point_load must be a"):
+        boussinesq_point_load_stress(point_load=_q("1000 kPa"), depth=_q("2 m"))
+
+
 def test_pile_capacity_alpha_method_shaft_dominates():
     import math
 

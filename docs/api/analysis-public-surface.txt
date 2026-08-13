@@ -123,6 +123,7 @@ geotechnical.seepage_velocity
 geotechnical.tension_crack_depth
 geotechnical.terzaghi_bearing_capacity
 geotechnical.vertical_stress_increase_2to1
+geotechnical.boussinesq_point_load_stress
 governor.watt_governor_height
 governor.watt_governor_speed
 governor.porter_governor_height

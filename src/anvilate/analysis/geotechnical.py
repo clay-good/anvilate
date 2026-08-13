@@ -35,6 +35,7 @@ from ..units import Quantity
 __all__ = [
     "allowable_bearing_from_ultimate",
     "bearing_capacity_factors",
+    "boussinesq_point_load_stress",
     "bearing_depth_factors",
     "bearing_inclination_factors",
     "bearing_shape_factors",
@@ -790,6 +791,40 @@ def vertical_stress_increase_2to1(
     if z < 0:
         raise ValueError("depth must be non-negative")
     delta_sigma = q0 * b * lo / ((b + z) * (lo + z))
+    return Quantity(magnitude=delta_sigma, unit="kPa")
+
+
+def boussinesq_point_load_stress(
+    *,
+    point_load: Quantity,
+    depth: Quantity,
+    radial_offset: Quantity | None = None,
+) -> Quantity:
+    """The Boussinesq vertical stress under a point load, Δσ_z = (3Q/2πz²)·[1+(r/z)²]^(−5/2).
+
+    The exact elastic-half-space solution the 2:1 method (:func:`vertical_stress_increase_2to1`)
+    approximates: a concentrated surface ``point_load`` Q raises the vertical stress at ``depth`` z
+    and horizontal ``radial_offset`` r by Δσ_z = (3Q)/(2π·z²)·[1 + (r/z)²]^(−5/2). Directly beneath
+    the load (r = 0) it is 3Q/(2π·z²), falling with the square of depth and off to the sides — the
+    influence factor a settlement analysis integrates for a real footing. The result is independent
+    of the soil's stiffness (elastic theory). Omit ``radial_offset`` for the on-axis value. Returns
+    Δσ_z in kPa.
+    """
+    _require(point_load, "[force]", "point_load")
+    _require(depth, "[length]", "depth")
+    q = point_load.to("kN").magnitude
+    z = depth.to("m").magnitude
+    if q <= 0:
+        raise ValueError("point_load must be positive")
+    if z <= 0:
+        raise ValueError("depth must be positive")
+    r = 0.0 if radial_offset is None else radial_offset.to("m").magnitude
+    if radial_offset is not None:
+        _require(radial_offset, "[length]", "radial_offset")
+        if r < 0:
+            raise ValueError("radial_offset must be non-negative")
+    influence = (1.0 + (r / z) ** 2) ** (-2.5)
+    delta_sigma = 3.0 * q / (2.0 * pi * z**2) * influence
     return Quantity(magnitude=delta_sigma, unit="kPa")
 
 
