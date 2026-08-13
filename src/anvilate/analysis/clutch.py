@@ -22,7 +22,7 @@ wedge factor, not included). Force and radius inputs are dimension-checked
 
 from __future__ import annotations
 
-from math import radians, sin
+from math import radians, sin, sqrt
 
 from ..units import Quantity
 
@@ -37,6 +37,8 @@ __all__ = [
     "cone_clutch_torque",
     "clutch_engagement_energy",
     "brake_absorbed_energy",
+    "centrifugal_clutch_torque",
+    "centrifugal_clutch_engagement_speed",
 ]
 
 
@@ -198,3 +200,77 @@ def brake_absorbed_energy(*, inertia: Quantity, angular_velocity: Quantity) -> Q
     if i <= 0:
         raise ValueError("inertia must be positive")
     return Quantity(magnitude=0.5 * i * omega**2, unit="J")
+
+
+def centrifugal_clutch_torque(
+    *,
+    shoe_count: int,
+    shoe_mass: Quantity,
+    center_of_gravity_radius: Quantity,
+    angular_speed: Quantity,
+    drum_radius: Quantity,
+    friction_coefficient: float,
+    spring_force: Quantity,
+) -> Quantity:
+    """The torque a centrifugal clutch transmits, T = N·μ·(m·ω²·r − F_s)·R.
+
+    A centrifugal clutch engages itself with speed: each of the ``shoe_count`` N shoes of
+    ``shoe_mass`` m, its centre of gravity at ``center_of_gravity_radius`` r, is flung out against
+    the drum by the centrifugal force m·ω²·r at ``angular_speed`` ω, less the ``spring_force`` F_s
+    that holds it back below engagement. The net normal force, times the ``friction_coefficient`` μ
+    and the ``drum_radius`` R, gives the torque per shoe, so T = N·μ·(m·ω²·r − F_s)·R. Below the
+    engagement speed the springs win and the torque is zero (reported as 0, not negative) — the
+    self-engaging behaviour of a chainsaw, moped, or go-kart drive. Returns the torque in N·m.
+    """
+    _require(shoe_mass, "[mass]", "shoe_mass")
+    _require(center_of_gravity_radius, "[length]", "center_of_gravity_radius")
+    _require(angular_speed, "1/[time]", "angular_speed")
+    _require(drum_radius, "[length]", "drum_radius")
+    _require(spring_force, "[force]", "spring_force")
+    if shoe_count < 1:
+        raise ValueError("shoe_count must be a positive integer")
+    m = shoe_mass.to("kg").magnitude
+    r_cg = center_of_gravity_radius.to("m").magnitude
+    omega = angular_speed.to("rad/s").magnitude
+    r_drum = drum_radius.to("m").magnitude
+    f_spring = spring_force.to("N").magnitude
+    if m <= 0 or r_cg <= 0 or r_drum <= 0:
+        raise ValueError("shoe_mass, center_of_gravity_radius, and drum_radius must be positive")
+    if omega < 0:
+        raise ValueError("angular_speed must be non-negative")
+    if friction_coefficient <= 0:
+        raise ValueError("friction_coefficient must be positive")
+    if f_spring < 0:
+        raise ValueError("spring_force must be non-negative")
+    net_force = m * omega**2 * r_cg - f_spring
+    if net_force <= 0:
+        return Quantity(magnitude=0.0, unit="N*m")
+    return Quantity(magnitude=shoe_count * friction_coefficient * net_force * r_drum, unit="N*m")
+
+
+def centrifugal_clutch_engagement_speed(
+    *,
+    shoe_mass: Quantity,
+    center_of_gravity_radius: Quantity,
+    spring_force: Quantity,
+) -> Quantity:
+    """The speed at which a centrifugal clutch begins to engage, ω = √(F_s/(m·r)).
+
+    The clutch grips only once the centrifugal force on a shoe overcomes its retaining spring, so
+    the engagement speed is where m·ω²·r = F_s, i.e. ω = √(F_s/(m·r)) — from the ``spring_force``
+    F_s, the ``shoe_mass`` m, and the ``center_of_gravity_radius`` r. Below it the transmitted
+    torque is zero; the spring preload is chosen to set this idle-disengagement speed so the engine
+    can idle without driving the load. A stiffer spring or a lighter shoe raises it. Returns the
+    engagement speed in rad/s.
+    """
+    _require(shoe_mass, "[mass]", "shoe_mass")
+    _require(center_of_gravity_radius, "[length]", "center_of_gravity_radius")
+    _require(spring_force, "[force]", "spring_force")
+    m = shoe_mass.to("kg").magnitude
+    r_cg = center_of_gravity_radius.to("m").magnitude
+    f_spring = spring_force.to("N").magnitude
+    if m <= 0 or r_cg <= 0:
+        raise ValueError("shoe_mass and center_of_gravity_radius must be positive")
+    if f_spring <= 0:
+        raise ValueError("spring_force must be positive")
+    return Quantity(magnitude=sqrt(f_spring / (m * r_cg)), unit="rad/s")

@@ -15992,6 +15992,64 @@ def test_clutch_engagement_energy_and_brake_absorbed_energy():
         brake_absorbed_energy(inertia=_q("0 kg*m**2"), angular_velocity=_q("150 rad/s"))
 
 
+def test_centrifugal_clutch_torque_and_engagement_speed():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        centrifugal_clutch_engagement_speed,
+        centrifugal_clutch_torque,
+    )
+
+    kw = {
+        "shoe_count": 3,
+        "shoe_mass": _q("0.05 kg"),
+        "center_of_gravity_radius": _q("40 mm"),
+        "drum_radius": _q("60 mm"),
+        "friction_coefficient": 0.35,
+        "spring_force": _q("10 N"),
+    }
+    # T = N*mu*(m*w^2*r - F_s)*R; at 300 rad/s -> 10.71 N*m.
+    t = centrifugal_clutch_torque(angular_speed=_q("300 rad/s"), **kw)
+    net = 0.05 * 300**2 * 0.04 - 10.0
+    assert t.to("N*m").magnitude == pytest.approx(3 * 0.35 * net * 0.06, rel=1e-9)
+    assert t.to("N*m").magnitude == pytest.approx(10.71, abs=0.01)
+    # Torque climbs with the square of speed above engagement.
+    t2 = centrifugal_clutch_torque(angular_speed=_q("400 rad/s"), **kw)
+    assert t2.to("N*m").magnitude > t.to("N*m").magnitude
+
+    # Engagement speed w = sqrt(F_s/(m*r)); 10 N over 0.05 kg at 40 mm -> 70.7 rad/s.
+    w_eng = centrifugal_clutch_engagement_speed(
+        shoe_mass=_q("0.05 kg"), center_of_gravity_radius=_q("40 mm"), spring_force=_q("10 N")
+    )
+    assert w_eng.to("rad/s").magnitude == pytest.approx(sqrt(10.0 / (0.05 * 0.04)), rel=1e-9)
+    assert w_eng.to("rad/s").magnitude == pytest.approx(70.71, abs=0.01)
+    # Below engagement the springs win and the torque is exactly zero (not negative).
+    below = centrifugal_clutch_torque(angular_speed=_q("50 rad/s"), **kw)
+    assert below.to("N*m").magnitude == 0.0
+    # At the engagement speed the net force is zero, so torque is zero.
+    at_eng = centrifugal_clutch_torque(angular_speed=w_eng, **kw)
+    assert at_eng.to("N*m").magnitude == pytest.approx(0.0, abs=1e-9)
+    # A stiffer spring raises the engagement speed.
+    assert (
+        centrifugal_clutch_engagement_speed(
+            shoe_mass=_q("0.05 kg"), center_of_gravity_radius=_q("40 mm"), spring_force=_q("20 N")
+        )
+        .to("rad/s")
+        .magnitude
+        > w_eng.to("rad/s").magnitude
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="shoe_count must be a positive integer"):
+        centrifugal_clutch_torque(angular_speed=_q("300 rad/s"), **{**kw, "shoe_count": 0})
+    with pytest.raises(ValueError, match="spring_force must be positive"):
+        centrifugal_clutch_engagement_speed(
+            shoe_mass=_q("0.05 kg"), center_of_gravity_radius=_q("40 mm"), spring_force=_q("0 N")
+        )
+    with pytest.raises(ValueError, match="angular_speed must be a"):
+        centrifugal_clutch_torque(angular_speed=_q("300 m"), **kw)
+
+
 def test_ball_screw_drive_and_back_drive_torque():
     import math
 

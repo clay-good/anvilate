@@ -355,6 +355,8 @@ clausius_clapeyron.clausius_clapeyron_boiling_temperature
 clutch.UNIFORM_PRESSURE
 clutch.UNIFORM_WEAR
 clutch.brake_absorbed_energy
+clutch.centrifugal_clutch_torque
+clutch.centrifugal_clutch_engagement_speed
 clutch.clutch_engagement_energy
 clutch.cone_clutch_torque
 clutch.disc_clutch_force_for_torque
