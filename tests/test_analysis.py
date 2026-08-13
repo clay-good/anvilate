@@ -28756,3 +28756,57 @@ def test_gaussian_beam_rayleigh_divergence_spread_and_focus():
         beam_waist_for_divergence(divergence_half_angle=0.0, wavelength=lam)
     with pytest.raises(ValueError, match="wavelength must be a"):
         rayleigh_range(beam_waist=w0, wavelength=_q("1064 Hz"))
+
+
+def test_control_valve_flow_required_cv_and_authority():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        required_flow_coefficient,
+        valve_authority,
+        valve_flow_rate,
+    )
+
+    # Q = Cv*sqrt(dP/SG); Cv 80 at 10 psi on water -> ~253 gpm.
+    q = valve_flow_rate(flow_coefficient=80.0, pressure_drop=_q("10 psi"))
+    assert q.to("gallon/minute").magnitude == pytest.approx(80.0 * sqrt(10.0), rel=1e-12)
+    assert q.to("gallon/minute").magnitude == pytest.approx(252.98, abs=0.05)
+    # A denser fluid (higher SG) flows less for the same Cv and drop.
+    assert valve_flow_rate(
+        flow_coefficient=80.0, pressure_drop=_q("10 psi"), specific_gravity=4.0
+    ).to("gallon/minute").magnitude == pytest.approx(
+        q.to("gallon/minute").magnitude / 2.0, rel=1e-9
+    )
+
+    # Required Cv = Q/sqrt(dP/SG) inverts the flow relation.
+    cv = required_flow_coefficient(flow_rate=_q("200 gallon/minute"), pressure_drop=_q("10 psi"))
+    assert cv == pytest.approx(200.0 / sqrt(10.0), rel=1e-12)
+    assert cv == pytest.approx(63.25, abs=0.02)
+    # Round trip: a valve of exactly that Cv passes exactly the duty flow.
+    assert valve_flow_rate(flow_coefficient=cv, pressure_drop=_q("10 psi")).to(
+        "gallon/minute"
+    ).magnitude == pytest.approx(200.0, rel=1e-9)
+    # Allotting more pressure drop lowers the required Cv (sqrt relation).
+    assert required_flow_coefficient(
+        flow_rate=_q("200 gallon/minute"), pressure_drop=_q("40 psi")
+    ) == pytest.approx(cv / 2.0, rel=1e-12)
+
+    # Authority N = dPv/(dPv + dPs); 15 psi valve of a 20 psi loop -> 0.75.
+    n = valve_authority(valve_pressure_drop=_q("15 psi"), system_pressure_drop=_q("5 psi"))
+    assert n == pytest.approx(0.75, rel=1e-12)
+    # A valve taking a smaller share of the loop drop has lower authority.
+    assert valve_authority(valve_pressure_drop=_q("2 psi"), system_pressure_drop=_q("18 psi")) < n
+    # All the drop across the valve is full authority (N -> 1).
+    assert valve_authority(
+        valve_pressure_drop=_q("10 psi"), system_pressure_drop=_q("0 psi")
+    ) == pytest.approx(1.0, rel=1e-12)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="flow_coefficient must be positive"):
+        valve_flow_rate(flow_coefficient=0.0, pressure_drop=_q("10 psi"))
+    with pytest.raises(ValueError, match="pressure_drop must be positive"):
+        required_flow_coefficient(flow_rate=_q("200 gallon/minute"), pressure_drop=_q("0 psi"))
+    with pytest.raises(ValueError, match="total pressure drop must be positive"):
+        valve_authority(valve_pressure_drop=_q("0 psi"), system_pressure_drop=_q("0 psi"))
+    with pytest.raises(ValueError, match="pressure_drop must be a"):
+        valve_flow_rate(flow_coefficient=80.0, pressure_drop=_q("10 gallon/minute"))

@@ -5476,3 +5476,15 @@ def test_laser_cutter_beam_expander_example_widening_tightens_focus():
     expanded = namespace["screen_expanded_beam"]()
     assert expanded.entries[0].passed
     assert expanded.status is CheckStatus.PASS
+
+
+def test_control_valve_sizing_example_undersized_valve_fails():
+    namespace = runpy.run_path(str(_EXAMPLES / "control_valve_sizing.py"))
+    undersized = namespace["screen_undersized_valve"]()
+    # The Cv 50 valve falls short of the duty's required Cv -> FAIL.
+    assert undersized.status is CheckStatus.FAIL
+    assert undersized.entries[0].name == "rated Cv vs required Cv"
+    # The Cv 80 valve passes with margin.
+    selected = namespace["screen_selected_valve"]()
+    assert selected.entries[0].passed
+    assert selected.status is CheckStatus.PASS

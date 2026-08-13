@@ -159,6 +159,9 @@ modules:
   oil-film thickness from the eccentricity ratio, and the specific film (lambda)
   ratio that sets the lubrication regime
 - :mod:`~anvilate.analysis.contact` — Hertzian point (sphere) and line (cylinder) contact
+- :mod:`~anvilate.analysis.control_valve` — control-valve sizing (turbulent liquid): the flow
+  Q = Cv·√(ΔP/SG) a valve passes, the Cv a duty requires, and the valve authority
+  N = ΔP_valve/(ΔP_valve + ΔP_system) that governs controllability
 - :mod:`~anvilate.analysis.ventilation` — indoor-air-quality airflow: ASHRAE 62.1
   breathing-zone outdoor air, air changes per hour and the airflow a target rate
   needs, and contaminant dilution airflow
@@ -1372,6 +1375,11 @@ from .contact import (
     hertz_effective_modulus,
     hertz_sphere_approach,
     hertz_sphere_contact,
+)
+from .control_valve import (
+    required_flow_coefficient,
+    valve_authority,
+    valve_flow_rate,
 )
 from .conveyor import (
     belt_speed_for_capacity,
@@ -4167,6 +4175,9 @@ __all__ = [
     "hertz_sphere_approach",
     "HertzLineContact",
     "hertz_cylinder_contact",
+    "valve_flow_rate",
+    "required_flow_coefficient",
+    "valve_authority",
     "flange_coupling_torque",
     "flange_coupling_bolt_force",
     "flange_coupling_bolt_count",

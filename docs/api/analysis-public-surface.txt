@@ -406,6 +406,9 @@ contact.hertz_cylinder_contact
 contact.hertz_effective_modulus
 contact.hertz_sphere_approach
 contact.hertz_sphere_contact
+control_valve.valve_flow_rate
+control_valve.required_flow_coefficient
+control_valve.valve_authority
 conveyor.conveyor_mass_flow
 conveyor.belt_speed_for_capacity
 conveyor.conveyor_lift_power
