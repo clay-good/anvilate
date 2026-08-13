@@ -908,6 +908,10 @@ modules:
 - :mod:`~anvilate.analysis.vehicle` — vehicle road load for drivetrain/EV sizing: the rolling
   resistance F = C_rr·m·g, the grade resistance F = m·g·sin θ, and the tractive power P = F·v
   a steady speed demands (aerodynamic drag from :mod:`~anvilate.analysis.drag`)
+- :mod:`~anvilate.analysis.vehicle_stability` — vehicle rollover/tipping stability (the failure
+  mode before sliding): the static stability factor SSF = t/(2·h) that equals the rollover
+  threshold in g, the flat-curve rollover speed v = √(SSF·g·R), and the cornering lateral load
+  transfer ΔF = m·a_y·h/t
 - :mod:`~anvilate.analysis.masonry` — TMS 402 masonry allowable-stress design: the
   slenderness-reduced allowable axial stress F_a = 0.25·f'm·[1 − (h/140r)²] of an
   unreinforced member, the axial capacity of a reinforced masonry column, and the
@@ -2750,6 +2754,11 @@ from .vehicle import (
     rolling_resistance_force,
     tractive_power,
 )
+from .vehicle_stability import (
+    lateral_load_transfer,
+    rollover_threshold_speed,
+    static_stability_factor,
+)
 from .ventilation import (
     air_changes_per_hour,
     airflow_for_air_changes,
@@ -4008,6 +4017,9 @@ __all__ = [
     "rolling_resistance_force",
     "grade_resistance_force",
     "tractive_power",
+    "static_stability_factor",
+    "rollover_threshold_speed",
+    "lateral_load_transfer",
     "thin_closed_tube_torsional_stress",
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",

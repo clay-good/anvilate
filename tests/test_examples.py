@@ -5452,3 +5452,15 @@ def test_base_to_final_turn_example_bank_governs_the_stall():
     shallow = namespace["screen_disciplined_turn"]()
     assert shallow.entries[0].passed
     assert shallow.status is CheckStatus.PASS
+
+
+def test_roof_rack_rollover_example_raised_cg_tips_it():
+    namespace = runpy.run_path(str(_EXAMPLES / "roof_rack_rollover.py"))
+    loaded = namespace["screen_roof_loaded"]()
+    # The roof box raises the CG, dropping the rollover speed below the ramp speed -> FAIL.
+    assert loaded.status is CheckStatus.FAIL
+    assert loaded.entries[0].name == "rollover speed vs ramp speed"
+    # Empty, the low CG clears the same ramp at the same speed.
+    empty = namespace["screen_empty"]()
+    assert empty.entries[0].passed
+    assert empty.status is CheckStatus.PASS

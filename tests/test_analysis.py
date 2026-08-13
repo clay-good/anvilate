@@ -12187,6 +12187,73 @@ def test_vehicle_rolling_grade_resistance_and_tractive_power():
         tractive_power(tractive_force=_q("489 W"), speed=_q("27.78 m/s"))
 
 
+def test_vehicle_rollover_ssf_threshold_speed_and_load_transfer():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        lateral_load_transfer,
+        rollover_threshold_speed,
+        static_stability_factor,
+    )
+
+    g = 9.80665
+
+    # SSF = t/(2h); 1.6 m track over 0.65 m CG -> 1.231 (the rollover threshold in g).
+    ssf = static_stability_factor(track_width=_q("1.6 m"), center_of_gravity_height=_q("0.65 m"))
+    assert ssf == pytest.approx(1.6 / (2 * 0.65), rel=1e-12)
+    # A raised CG (roof load) lowers the SSF; a wider track raises it.
+    raised = static_stability_factor(track_width=_q("1.6 m"), center_of_gravity_height=_q("0.90 m"))
+    assert raised < ssf
+    assert (
+        static_stability_factor(track_width=_q("1.8 m"), center_of_gravity_height=_q("0.65 m"))
+        > ssf
+    )
+
+    # Rollover speed v = sqrt(SSF*g*R); SSF 0.889 on a 40 m ramp -> 18.67 m/s.
+    v = rollover_threshold_speed(static_stability_factor=raised, curve_radius=_q("40 m"))
+    assert v.to("m/s").magnitude == pytest.approx(sqrt(raised * g * 40.0), rel=1e-12)
+    assert v.to("m/s").magnitude == pytest.approx(18.67, abs=0.02)
+    # A wider curve or a more stable vehicle raises the threshold speed.
+    assert rollover_threshold_speed(static_stability_factor=raised, curve_radius=_q("80 m")).to(
+        "m/s"
+    ).magnitude == pytest.approx(v.to("m/s").magnitude * sqrt(2.0), rel=1e-12)
+
+    # Consistency: at the rollover speed the lateral acceleration v^2/R equals SSF*g.
+    lat_acc = v.to("m/s").magnitude ** 2 / 40.0
+    assert lat_acc == pytest.approx(raised * g, rel=1e-12)
+
+    # Load transfer dF = m*a_y*h/t; 2000 kg at 0.6 g, 0.7 m CG, 1.6 m track -> 5148 N.
+    df = lateral_load_transfer(
+        vehicle_mass=_q("2000 kg"),
+        lateral_acceleration=_q("5.883990 m/s**2"),
+        center_of_gravity_height=_q("0.7 m"),
+        track_width=_q("1.6 m"),
+    )
+    assert df.to("N").magnitude == pytest.approx(2000 * (0.6 * g) * 0.7 / 1.6, rel=1e-5)
+    # No cornering, no transfer.
+    assert lateral_load_transfer(
+        vehicle_mass=_q("2000 kg"),
+        lateral_acceleration=_q("0 m/s**2"),
+        center_of_gravity_height=_q("0.7 m"),
+        track_width=_q("1.6 m"),
+    ).to("N").magnitude == pytest.approx(0.0, abs=1e-12)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="center_of_gravity_height must be positive"):
+        static_stability_factor(track_width=_q("1.6 m"), center_of_gravity_height=_q("0 m"))
+    with pytest.raises(ValueError, match="static_stability_factor must be positive"):
+        rollover_threshold_speed(static_stability_factor=0.0, curve_radius=_q("40 m"))
+    with pytest.raises(ValueError, match="track_width must be a"):
+        static_stability_factor(track_width=_q("1.6 s"), center_of_gravity_height=_q("0.65 m"))
+    with pytest.raises(ValueError, match="lateral_acceleration must be a"):
+        lateral_load_transfer(
+            vehicle_mass=_q("2000 kg"),
+            lateral_acceleration=_q("5 m/s"),
+            center_of_gravity_height=_q("0.7 m"),
+            track_width=_q("1.6 m"),
+        )
+
+
 def test_sheetmetal_bend_geometry_is_self_consistent():
     from math import radians
 
