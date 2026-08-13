@@ -73,6 +73,9 @@ __all__ = [
     "crossflow_both_unmixed_effectiveness",
     "counterflow_ntu_for_effectiveness",
     "parallel_flow_ntu_for_effectiveness",
+    "shell_and_tube_effectiveness",
+    "shell_and_tube_ntu_for_effectiveness",
+    "crossflow_cmax_mixed_effectiveness",
     "biot_number",
     "fourier_number",
     "peclet_number",
@@ -1779,6 +1782,80 @@ def parallel_flow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio:
             f"1/(1+C_r); got {effectiveness}"
         )
     return -log(1.0 - effectiveness * (1.0 + capacity_ratio)) / (1.0 + capacity_ratio)
+
+
+def shell_and_tube_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
+    """The effectiveness ε of a 1-shell-pass shell-and-tube exchanger (the ε-NTU method).
+
+    The shell-and-tube exchanger — one shell pass over 2, 4, … tube passes — is the industrial
+    workhorse, and its baffled, part-counterflow-part-parallel path gives a distinct closed form,
+
+        ε₁ = 2 / { (1 + C_r) + √(1 + C_r²)·[1 + exp(−NTU·√(1 + C_r²))]
+                                          / [1 − exp(−NTU·√(1 + C_r²))] },
+
+    for ``ntu`` = :func:`heat_exchanger_ntu` and ``capacity_ratio`` C_r = C_min/C_max in [0, 1].
+    It sits below :func:`counterflow_effectiveness` and above :func:`parallel_flow_effectiveness`
+    for the same size, and at C_r = 0 (a boiler or condenser) reduces to 1 − exp(−NTU) like every
+    arrangement. ``ntu`` non-negative. Returns ε in [0, 1].
+    """
+    if ntu < 0:
+        raise ValueError(f"ntu must be non-negative; got {ntu}")
+    if not 0 <= capacity_ratio <= 1:
+        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+    if ntu == 0:
+        return 0.0
+    root = sqrt(1.0 + capacity_ratio**2)
+    e = exp(-ntu * root)
+    return 2.0 / ((1.0 + capacity_ratio) + root * (1.0 + e) / (1.0 - e))
+
+
+def shell_and_tube_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio: float) -> float:
+    """The NTU a 1-shell-pass shell-and-tube exchanger needs for a target effectiveness (sizing).
+
+    The design inverse of :func:`shell_and_tube_effectiveness`: with
+    E = [2/ε₁ − (1 + C_r)]/√(1 + C_r²),
+
+        NTU = −ln[(E − 1)/(E + 1)] / √(1 + C_r²).
+
+    A single shell pass cannot reach the counterflow ceiling — its maximum effectiveness is
+    ε_max = 2/[(1 + C_r) + √(1 + C_r²)] — so an ``effectiveness`` at or above that limit is
+    unreachable at any size and is rejected (add shell passes, or switch to counterflow).
+    ``capacity_ratio`` C_r in [0, 1]. Returns the required (dimensionless) NTU.
+    """
+    if not 0 <= capacity_ratio <= 1:
+        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+    root = sqrt(1.0 + capacity_ratio**2)
+    ceiling = 2.0 / ((1.0 + capacity_ratio) + root)
+    if not 0 < effectiveness < ceiling:
+        raise ValueError(
+            f"effectiveness must be in (0, {ceiling:.4g}) — one shell pass cannot exceed "
+            f"2/[(1+C_r)+√(1+C_r²)]; got {effectiveness}"
+        )
+    e_param = (2.0 / effectiveness - (1.0 + capacity_ratio)) / root
+    return -log((e_param - 1.0) / (e_param + 1.0)) / root
+
+
+def crossflow_cmax_mixed_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
+    """The effectiveness ε of a crossflow exchanger with the C_max stream mixed (ε-NTU).
+
+    The companion to :func:`crossflow_both_unmixed_effectiveness` for the common case where the
+    larger-capacity stream is free to mix laterally (an unbaffled gas side) while the C_min stream
+    stays unmixed (in tubes):
+
+        ε = (1/C_r)·{ 1 − exp[ −C_r·(1 − exp(−NTU)) ] },
+
+    an exact closed form (no approximation), for ``ntu`` = :func:`heat_exchanger_ntu` and
+    ``capacity_ratio`` C_r = C_min/C_max in (0, 1]. At C_r = 0 it reduces to 1 − exp(−NTU). Mixing
+    the C_max stream costs a little effectiveness versus both-unmixed. ``ntu`` non-negative. Returns
+    ε in [0, 1].
+    """
+    if ntu < 0:
+        raise ValueError(f"ntu must be non-negative; got {ntu}")
+    if not 0 <= capacity_ratio <= 1:
+        raise ValueError(f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}")
+    if capacity_ratio == 0:
+        return 1.0 - exp(-ntu)
+    return (1.0 / capacity_ratio) * (1.0 - exp(-capacity_ratio * (1.0 - exp(-ntu))))
 
 
 def biot_number(

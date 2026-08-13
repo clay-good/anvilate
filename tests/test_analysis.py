@@ -21541,6 +21541,58 @@ def test_parallel_flow_ntu_inverse_and_the_effectiveness_ceiling():
         parallel_flow_ntu_for_effectiveness(effectiveness=0.7, capacity_ratio=0.5)
 
 
+def test_shell_and_tube_effectiveness_ntu_inverse_and_crossflow_cmax_mixed():
+    from math import exp, sqrt
+
+    from anvilate.analysis import (
+        counterflow_effectiveness,
+        crossflow_both_unmixed_effectiveness,
+        crossflow_cmax_mixed_effectiveness,
+        parallel_flow_effectiveness,
+        shell_and_tube_effectiveness,
+        shell_and_tube_ntu_for_effectiveness,
+    )
+
+    # Shell-and-tube matches the Kays & London closed form at NTU=1.5, C_r=0.6.
+    root = sqrt(1.0 + 0.6**2)
+    e = exp(-1.5 * root)
+    expect = 2.0 / ((1.0 + 0.6) + root * (1.0 + e) / (1.0 - e))
+    eff = shell_and_tube_effectiveness(ntu=1.5, capacity_ratio=0.6)
+    assert eff == pytest.approx(expect, rel=1e-12)
+    # It sits between parallel-flow and counterflow for the same size.
+    assert parallel_flow_effectiveness(ntu=1.5, capacity_ratio=0.6) < eff
+    assert eff < counterflow_effectiveness(ntu=1.5, capacity_ratio=0.6)
+    # The NTU inverse round-trips exactly.
+    assert shell_and_tube_ntu_for_effectiveness(
+        effectiveness=eff, capacity_ratio=0.6
+    ) == pytest.approx(1.5, rel=1e-9)
+    # One shell pass has a ceiling 2/[(1+C_r)+√(1+C_r²)]; asking past it is rejected.
+    ceiling = 2.0 / ((1.0 + 0.6) + root)
+    with pytest.raises(ValueError, match="cannot exceed"):
+        shell_and_tube_ntu_for_effectiveness(effectiveness=ceiling, capacity_ratio=0.6)
+
+    # Crossflow with C_max mixed is an exact form; mixing costs a little vs both-unmixed.
+    mixed = crossflow_cmax_mixed_effectiveness(ntu=1.5, capacity_ratio=0.6)
+    assert mixed == pytest.approx((1.0 / 0.6) * (1.0 - exp(-0.6 * (1.0 - exp(-1.5)))), rel=1e-12)
+    assert mixed < crossflow_both_unmixed_effectiveness(ntu=1.5, capacity_ratio=0.6)
+
+    # Every arrangement collapses to 1 - exp(-NTU) as C_r -> 0 (a boiler/condenser).
+    limit = 1.0 - exp(-1.5)
+    assert shell_and_tube_effectiveness(ntu=1.5, capacity_ratio=0.0) == pytest.approx(
+        limit, rel=1e-9
+    )
+    assert crossflow_cmax_mixed_effectiveness(ntu=1.5, capacity_ratio=0.0) == pytest.approx(
+        limit, rel=1e-12
+    )
+    # Zero-size exchanger transfers nothing.
+    assert shell_and_tube_effectiveness(ntu=0.0, capacity_ratio=0.6) == 0.0
+    # Domain guards.
+    with pytest.raises(ValueError, match="ntu must be non-negative"):
+        shell_and_tube_effectiveness(ntu=-1.0, capacity_ratio=0.6)
+    with pytest.raises(ValueError, match="capacity_ratio must lie"):
+        crossflow_cmax_mixed_effectiveness(ntu=1.5, capacity_ratio=1.5)
+
+
 def test_rc_beam_moment_and_steel_inverse_round_trip():
     from anvilate.analysis import (
         rc_beam_nominal_moment,

@@ -1318,6 +1318,9 @@ thermal.free_thermal_expansion
 thermal.guided_cantilever_leg_length
 thermal.parallel_flow_effectiveness
 thermal.parallel_flow_ntu_for_effectiveness
+thermal.shell_and_tube_effectiveness
+thermal.shell_and_tube_ntu_for_effectiveness
+thermal.crossflow_cmax_mixed_effectiveness
 thermal.parallel_thermal_resistance
 thermal.peclet_number
 thermal.radiation_heat_transfer
