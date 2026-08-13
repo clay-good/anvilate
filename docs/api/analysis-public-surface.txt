@@ -20,6 +20,7 @@ acoustics.room_sound_pressure_level
 acoustics.noise_dose_fraction
 acoustics.permissible_exposure_time
 acoustics.sabine_reverberation_time
+acoustics.schroeder_frequency
 acoustics.sound_level_sum
 acoustics.sound_power_level_from_intensity
 acoustics.sound_pressure_from_power_level

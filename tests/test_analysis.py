@@ -15171,6 +15171,29 @@ def test_acoustics_sabine_reverberation_time():
         sabine_reverberation_time(volume=_q("0 m**3"), total_absorption=_q("20 m**2"))
 
 
+def test_acoustics_schroeder_frequency():
+    from math import sqrt
+
+    from anvilate.analysis import schroeder_frequency
+
+    # f_s = 2000*sqrt(T60/V); 0.5 s RT60 in a 50 m^3 room -> 200 Hz.
+    f = schroeder_frequency(reverberation_time=_q("0.5 s"), room_volume=_q("50 m**3"))
+    assert f.to("Hz").magnitude == pytest.approx(2000 * sqrt(0.5 / 50), rel=1e-9)
+    assert f.to("Hz").magnitude == pytest.approx(200.0, rel=1e-9)
+
+    # A bigger room (more, denser modes) drops the crossover: 8x volume -> 1/sqrt(8) the frequency.
+    f_big = schroeder_frequency(reverberation_time=_q("0.5 s"), room_volume=_q("400 m**3"))
+    assert f_big.to("Hz").magnitude == pytest.approx(f.to("Hz").magnitude / sqrt(8), rel=1e-9)
+    # A more reverberant room (longer RT60) pushes the crossover up.
+    f_live = schroeder_frequency(reverberation_time=_q("2 s"), room_volume=_q("50 m**3"))
+    assert f_live.to("Hz").magnitude > f.to("Hz").magnitude
+
+    with pytest.raises(ValueError, match="reverberation_time must be positive"):
+        schroeder_frequency(reverberation_time=_q("0 s"), room_volume=_q("50 m**3"))
+    with pytest.raises(ValueError, match="length"):
+        schroeder_frequency(reverberation_time=_q("0.5 s"), room_volume=_q("50 m**2"))
+
+
 def test_acoustics_room_constant_and_critical_distance():
     from math import sqrt
 

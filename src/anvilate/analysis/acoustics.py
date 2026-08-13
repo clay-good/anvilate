@@ -40,6 +40,7 @@ __all__ = [
     "open_pipe_resonance_frequency",
     "permissible_exposure_time",
     "sabine_reverberation_time",
+    "schroeder_frequency",
     "sound_level_sum",
     "sound_power_level_from_intensity",
     "sound_pressure_from_power_level",
@@ -123,6 +124,30 @@ def sabine_reverberation_time(*, volume: Quantity, total_absorption: Quantity) -
     if v <= 0 or a <= 0:
         raise ValueError("volume and total_absorption must be positive")
     return Quantity(magnitude=0.161 * v / a, unit="s")
+
+
+def schroeder_frequency(*, reverberation_time: Quantity, room_volume: Quantity) -> Quantity:
+    """The Schroeder (crossover) frequency of a room, f_s = 2000·√(T₆₀/V).
+
+    The frequency that divides a room's two acoustic regimes: f_s = 2000·√(T₆₀/V), from the
+    ``reverberation_time`` T₆₀ (see :func:`sabine_reverberation_time`) and the ``room_volume`` V.
+    Below f_s the room's individual standing-wave modes are sparse and stand apart, so the response
+    is lumpy and dominated by discrete resonances (the domain of bass traps and speaker/listener
+    placement); above it the modes overlap three or more to a bandwidth and merge into the
+    statistical, diffuse field that Sabine's equation assumes (the domain of broadband absorption).
+    A small, live room pushes f_s high — into the hundreds of hertz — leaving most of the bass
+    modal; a large hall drops it below the audible range. The 2000 constant is metric (T₆₀ in
+    seconds, V in m³). Returns the crossover frequency in hertz.
+    """
+    _check(reverberation_time, "[time]", "reverberation_time")
+    _check(room_volume, "[length]**3", "room_volume")
+    t60 = reverberation_time.to("s").magnitude
+    v = room_volume.to("m**3").magnitude
+    if t60 <= 0:
+        raise ValueError("reverberation_time must be positive")
+    if v <= 0:
+        raise ValueError("room_volume must be positive")
+    return Quantity(magnitude=2000.0 * sqrt(t60 / v), unit="Hz")
 
 
 def room_constant(
