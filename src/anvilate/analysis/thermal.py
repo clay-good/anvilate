@@ -46,6 +46,7 @@ __all__ = [
     "series_thermal_resistance",
     "parallel_thermal_resistance",
     "temperature_rise",
+    "heatsink_thermal_resistance_required",
     "fin_efficiency",
     "fin_effectiveness",
     "fin_thermal_resistance",
@@ -925,6 +926,50 @@ def temperature_rise(*, power: Quantity, thermal_resistance: Quantity) -> Quanti
     if q < 0 or r < 0:
         raise ValueError("power and thermal_resistance must be non-negative")
     return Quantity(magnitude=q * r, unit="K")
+
+
+def heatsink_thermal_resistance_required(
+    *,
+    power: Quantity,
+    allowable_temperature_rise: Quantity,
+    internal_thermal_resistance: Quantity | None = None,
+) -> Quantity:
+    """The largest heatsink resistance that keeps a junction in budget, θ_sa = ΔT/Q − θ_int.
+
+    The design inverse of :func:`temperature_rise`: a component dissipating ``power`` Q must keep
+    its junction-to-ambient rise within ``allowable_temperature_rise`` ΔT (the rated junction limit
+    above ambient), so the total path may be no more resistive than ΔT/Q. Subtracting the fixed
+    ``internal_thermal_resistance`` θ_int already inside the package and interface (junction-to-case
+    plus case-to-sink, zero if omitted) leaves the largest sink-to-ambient resistance the heatsink
+    may have: θ_sa = ΔT/Q − θ_int. A smaller number means a bigger heatsink (or forced air). Raises
+    if the internal resistance alone already blows the budget — no heatsink can rescue it, the part
+    must dissipate less or run cooler. Returns the allowable heatsink resistance in K/W.
+    """
+    _require(power, "[power]", "power")
+    _require(allowable_temperature_rise, "[temperature]", "allowable_temperature_rise")
+    q = power.to("W").magnitude
+    delta_t = allowable_temperature_rise.to("K").magnitude
+    if q <= 0:
+        raise ValueError("power must be positive")
+    if delta_t <= 0:
+        raise ValueError("allowable_temperature_rise must be positive")
+    theta_int = 0.0
+    if internal_thermal_resistance is not None:
+        _require(
+            internal_thermal_resistance, "[temperature] / [power]", "internal_thermal_resistance"
+        )
+        theta_int = internal_thermal_resistance.to(_THERMAL_RESISTANCE_UNIT).magnitude
+        if theta_int < 0:
+            raise ValueError("internal_thermal_resistance must be non-negative")
+    theta_total_max = delta_t / q
+    theta_sa = theta_total_max - theta_int
+    if theta_sa <= 0:
+        raise ValueError(
+            "the internal thermal resistance alone exceeds the junction budget "
+            f"(ΔT/Q = {theta_total_max:.3g} K/W ≤ internal {theta_int:.3g} K/W); "
+            "no heatsink can keep the junction in limit — reduce the power or raise the budget"
+        )
+    return Quantity(magnitude=theta_sa, unit=_THERMAL_RESISTANCE_UNIT)
 
 
 def fin_efficiency(

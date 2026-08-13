@@ -11591,6 +11591,37 @@ def test_thermal_resistance_network_sums_a_junction_to_ambient_path():
     assert parallel.to("K/W").magnitude == pytest.approx(2.0, rel=1e-12)
 
 
+def test_heatsink_thermal_resistance_required_inverts_temperature_rise():
+    from anvilate.analysis import heatsink_thermal_resistance_required, temperature_rise
+
+    # theta_total_max = dT/Q; a 7.06 W part with an 85 K budget -> 12.04 K/W total path.
+    theta_total = heatsink_thermal_resistance_required(
+        power=_q("7.06 W"), allowable_temperature_rise=_q("85 K")
+    )
+    assert theta_total.to("K/W").magnitude == pytest.approx(85.0 / 7.06, rel=1e-9)
+    # It exactly inverts temperature_rise: at theta_total the rise equals the budget.
+    rise = temperature_rise(power=_q("7.06 W"), thermal_resistance=theta_total)
+    assert rise.to("K").magnitude == pytest.approx(85.0, rel=1e-9)
+
+    # Subtracting the package/interface resistance leaves the allowable sink-to-ambient value.
+    theta_sa = heatsink_thermal_resistance_required(
+        power=_q("7.06 W"),
+        allowable_temperature_rise=_q("85 K"),
+        internal_thermal_resistance=_q("5 K/W"),
+    )
+    assert theta_sa.to("K/W").magnitude == pytest.approx(85.0 / 7.06 - 5.0, rel=1e-9)
+
+    # If the internal resistance alone blows the budget, no heatsink helps -> error.
+    with pytest.raises(ValueError, match="no heatsink"):
+        heatsink_thermal_resistance_required(
+            power=_q("20 W"),
+            allowable_temperature_rise=_q("85 K"),
+            internal_thermal_resistance=_q("5 K/W"),
+        )
+    with pytest.raises(ValueError, match="power must be positive"):
+        heatsink_thermal_resistance_required(power=_q("0 W"), allowable_temperature_rise=_q("85 K"))
+
+
 def test_fin_efficiency_falls_from_one_as_the_fin_lengthens():
     from anvilate.analysis import fin_efficiency
 

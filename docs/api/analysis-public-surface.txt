@@ -1461,6 +1461,7 @@ thin_film.thin_film_tuned_wavelength
 thermal.series_thermal_resistance
 thermal.shrink_fit_assembly_temperature
 thermal.temperature_rise
+thermal.heatsink_thermal_resistance_required
 thermal.thermal_buckling_temperature_rise
 thermal.thermal_shock_stress
 thermal.thermal_shock_temperature_limit
