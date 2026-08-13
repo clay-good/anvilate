@@ -461,6 +461,9 @@ modules:
 - :mod:`~anvilate.analysis.hvac_duct` — air-duct sizing: the ASHRAE circular equivalent
   diameter of a rectangular duct (equal friction), the fan total pressure Pt = Ps + Pv,
   and the fan shaft power P = Q·Δp/η
+- :mod:`~anvilate.analysis.rectifier` — full-wave rectifier capacitor-input filter: the
+  peak-to-peak ripple V_r = I/(2·f·C), the reservoir capacitor for a target ripple, the mean
+  DC output V_dc ≈ V_peak − I/(4·f·C), and the ripple factor γ = 1/(4·√3·f·R·C)
 - :mod:`~anvilate.analysis.refrigeration` — refrigeration and heat-pump cycle performance:
   the Carnot cooling and heating COP ceilings, the actual COP = Q/W, the
   second-law efficiency (COP over Carnot) that grades the machine itself, and the
@@ -2460,6 +2463,12 @@ from .real_gas import (
     reduced_temperature,
     van_der_waals_pressure,
 )
+from .rectifier import (
+    capacitor_filter_dc_voltage,
+    capacitor_filter_ripple_factor,
+    capacitor_filter_ripple_voltage,
+    filter_capacitance_for_ripple,
+)
 from .refrigeration import (
     carnot_cop_cooling,
     carnot_cop_heating,
@@ -3101,6 +3110,10 @@ __all__ = [
     "reduced_temperature",
     "reduced_pressure",
     "van_der_waals_pressure",
+    "capacitor_filter_dc_voltage",
+    "capacitor_filter_ripple_factor",
+    "capacitor_filter_ripple_voltage",
+    "filter_capacitance_for_ripple",
     "parallel_plate_capacitance",
     "capacitor_charge",
     "parallel_plate_field",

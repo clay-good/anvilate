@@ -15801,6 +15801,59 @@ def test_electrical_capacitance_for_reactive_power():
         )
 
 
+def test_rectifier_capacitor_filter():
+    import math
+
+    from anvilate.analysis import (
+        capacitor_filter_dc_voltage,
+        capacitor_filter_ripple_factor,
+        capacitor_filter_ripple_voltage,
+        filter_capacitance_for_ripple,
+    )
+
+    # V_r(pp) = I/(2*f*C); 1 A, 60 Hz, 10,000 uF -> 0.833 V pp.
+    vr = capacitor_filter_ripple_voltage(
+        load_current=_q("1 A"), frequency=_q("60 Hz"), capacitance=_q("10000 uF")
+    )
+    assert vr.to("V").magnitude == pytest.approx(1.0 / (2 * 60 * 0.01), rel=1e-9)
+    assert vr.to("V").magnitude == pytest.approx(0.8333, abs=1e-3)
+
+    # The inverse sizes the capacitor: C = I/(2*f*V_r); round-trips the ripple.
+    c = filter_capacitance_for_ripple(
+        load_current=_q("1 A"), frequency=_q("60 Hz"), ripple_voltage=vr
+    )
+    assert c.to("F").magnitude == pytest.approx(0.01, rel=1e-9)
+
+    # V_dc = V_peak - I/(4*f*C) sits half a ripple below the peak.
+    vdc = capacitor_filter_dc_voltage(
+        peak_voltage=_q("17 V"),
+        load_current=_q("1 A"),
+        frequency=_q("60 Hz"),
+        capacitance=_q("10000 uF"),
+    )
+    assert vdc.to("V").magnitude == pytest.approx(17.0 - vr.to("V").magnitude / 2, rel=1e-9)
+
+    # gamma = 1/(4*sqrt(3)*f*R*C); ~2% for this filter.
+    gamma = capacitor_filter_ripple_factor(
+        frequency=_q("60 Hz"), load_resistance=_q("12 ohm"), capacitance=_q("10000 uF")
+    )
+    assert gamma == pytest.approx(1.0 / (4 * math.sqrt(3) * 60 * 12 * 0.01), rel=1e-9)
+    assert gamma == pytest.approx(0.02, abs=0.001)
+
+    # Guardrails: too-small a capacitor breaks the small-ripple DC approximation.
+    with pytest.raises(ValueError, match="small-ripple"):
+        capacitor_filter_dc_voltage(
+            peak_voltage=_q("17 V"),
+            load_current=_q("1 A"),
+            frequency=_q("60 Hz"),
+            capacitance=_q("100 uF"),
+        )
+    with pytest.raises(ValueError, match="ripple_voltage"):
+        filter_capacitance_for_ripple(
+            load_current=_q("1 A"), frequency=_q("60 Hz"), ripple_voltage=_q("0 V")
+        )
+
+
 def test_electrical_skin_depth():
     import math
 

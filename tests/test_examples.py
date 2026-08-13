@@ -527,6 +527,17 @@ def test_cyclone_dust_collector_cut_size_example():
     assert d["efficiency_10um"] > 0.5
 
 
+def test_bench_supply_reservoir_capacitor_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "bench_supply_reservoir_capacitor.py"))
+    d = namespace["bench_supply_filter"]()
+    # C = I/(2*f*V_r) = 1/(2*60*1) -> ~8333 uF for 1 V ripple.
+    assert d["capacitor_needed_uF"] == pytest.approx(8333.3, abs=1.0)
+    # 10,000 uF part: ripple 0.83 V, DC output ~16.6 V, ripple factor ~2%.
+    assert d["ripple_pp_V"] == pytest.approx(0.833, abs=1e-3)
+    assert d["dc_output_V"] == pytest.approx(16.58, abs=0.05)
+    assert d["ripple_factor"] == pytest.approx(0.02, abs=0.001)
+
+
 def test_comminution_ball_mill_energy_example():
     namespace = runpy.run_path(str(_EXAMPLES / "comminution_ball_mill_energy.py"))
     d = namespace["ball_mill_grinding_energy"]()
