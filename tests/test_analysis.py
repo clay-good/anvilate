@@ -9969,6 +9969,59 @@ def test_stress_intensity_and_critical_crack_length_round_trip():
     assert ac_low.to("mm").magnitude == pytest.approx(4 * ac.to("mm").magnitude, rel=1e-12)
 
 
+def test_critical_fracture_stress_and_griffith_stress():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        critical_crack_length,
+        critical_fracture_stress,
+        griffith_fracture_stress,
+        stress_intensity_factor,
+    )
+
+    # sigma_c = K_IC/(Y*sqrt(pi*a)); 50 MPa-sqrt(m), 2 mm crack -> ~630.8 MPa.
+    sc = critical_fracture_stress(fracture_toughness=_q("50 MPa*m**0.5"), crack_length=_q("2 mm"))
+    assert sc.to("MPa").magnitude == pytest.approx(50 / sqrt(pi * 0.002), rel=1e-12)
+    assert sc.to("MPa").magnitude == pytest.approx(630.8, abs=0.1)
+    # Round trip: at that stress the SIF of the same crack equals the toughness.
+    ki = stress_intensity_factor(remote_stress=sc, crack_length=_q("2 mm"))
+    assert ki.to("MPa*m**0.5").magnitude == pytest.approx(50.0, rel=1e-9)
+    # And the critical crack length at that stress recovers the 2 mm flaw.
+    ac = critical_crack_length(fracture_toughness=_q("50 MPa*m**0.5"), remote_stress=sc)
+    assert ac.to("mm").magnitude == pytest.approx(2.0, rel=1e-9)
+    # An edge crack (Y=1.12) drops the allowable stress.
+    assert (
+        critical_fracture_stress(
+            fracture_toughness=_q("50 MPa*m**0.5"), crack_length=_q("2 mm"), geometry_factor=1.12
+        )
+        .to("MPa")
+        .magnitude
+        < sc.to("MPa").magnitude
+    )
+
+    # Griffith sigma_f = sqrt(2*E*gamma/(pi*a)); glass E=70 GPa, gamma=1 J/m^2, 10 um -> ~66.8 MPa.
+    sg = griffith_fracture_stress(
+        youngs_modulus=_q("70 GPa"), surface_energy=_q("1 J/m**2"), crack_length=_q("10 um")
+    )
+    assert sg.to("MPa").magnitude == pytest.approx(
+        sqrt(2 * 70e9 * 1.0 / (pi * 1e-5)) / 1e6, rel=1e-12
+    )
+    assert sg.to("MPa").magnitude == pytest.approx(66.76, abs=0.05)
+    # Fracture stress falls as 1/sqrt(a): a 4x longer flaw halves it.
+    sg_long = griffith_fracture_stress(
+        youngs_modulus=_q("70 GPa"), surface_energy=_q("1 J/m**2"), crack_length=_q("40 um")
+    )
+    assert sg_long.to("MPa").magnitude == pytest.approx(sg.to("MPa").magnitude / 2.0, rel=1e-9)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="crack_length must be positive"):
+        critical_fracture_stress(fracture_toughness=_q("50 MPa*m**0.5"), crack_length=_q("0 mm"))
+    with pytest.raises(ValueError, match="surface_energy must be a"):
+        griffith_fracture_stress(
+            youngs_modulus=_q("70 GPa"), surface_energy=_q("1 J"), crack_length=_q("10 um")
+        )
+
+
 def test_crack_tip_plastic_zone_and_thickness_requirement():
     from math import pi
 

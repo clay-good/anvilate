@@ -46,6 +46,8 @@ from ..units import Quantity
 __all__ = [
     "stress_intensity_factor",
     "critical_crack_length",
+    "critical_fracture_stress",
+    "griffith_fracture_stress",
     "paris_law_crack_growth_rate",
     "paris_law_cycles_to_failure",
     "crack_tip_plastic_zone_size",
@@ -108,6 +110,61 @@ def critical_crack_length(
         raise ValueError(f"remote_stress must be positive; got {remote_stress}")
     a_c = (kic / (geometry_factor * sigma)) ** 2 / pi  # metres
     return Quantity(magnitude=a_c * 1000.0, unit="mm")
+
+
+def critical_fracture_stress(
+    *, fracture_toughness: Quantity, crack_length: Quantity, geometry_factor: float = 1.0
+) -> Quantity:
+    """The critical fracture stress σ_c = K_IC/(Y·√(π·a)) for a known flaw.
+
+    The third member of the K_I = Y·σ·√(π·a) triple, and the stress companion of
+    :func:`critical_crack_length`: the remote stress at which a crack of a *known* length reaches
+    the fracture toughness and runs. ``fracture_toughness`` K_IC is the material's toughness (a
+    MPa·√m quantity), ``crack_length`` a the flaw length (half-length for a central through-crack),
+    and ``geometry_factor`` Y the shape/location factor as in :func:`stress_intensity_factor`. It
+    answers the acceptance question — with the largest flaw my inspection can miss, what stress dare
+    I apply? — so a longer undetected crack or a lower toughness cuts the allowable stress. Returns
+    the critical stress in MPa.
+    """
+    _require(fracture_toughness, "[pressure] * [length]**0.5", "fracture_toughness")
+    _require(crack_length, "[length]", "crack_length")
+    if geometry_factor <= 0:
+        raise ValueError(f"geometry_factor must be positive; got {geometry_factor}")
+    kic = fracture_toughness.to("MPa*m**0.5").magnitude
+    a = crack_length.to("m").magnitude
+    if a <= 0:
+        raise ValueError(f"crack_length must be positive; got {crack_length}")
+    return Quantity(magnitude=kic / (geometry_factor * sqrt(pi * a)), unit="MPa")
+
+
+def griffith_fracture_stress(
+    *, youngs_modulus: Quantity, surface_energy: Quantity, crack_length: Quantity
+) -> Quantity:
+    """The Griffith fracture stress σ_f = √(2·E·γ_s/(π·a)) of an ideally brittle solid.
+
+    The energy-based fracture criterion that predates the stress-intensity view: a crack grows only
+    when the elastic energy it releases exceeds the surface energy of the new faces it creates. For
+    a central crack of length a that gives σ_f = √(2·E·γ_s/(π·a)) from the ``youngs_modulus`` E and
+    the ``surface_energy`` γ_s (energy per unit created area, e.g. J/m²). It governs truly brittle
+    solids — glasses, ceramics — where no plastic zone blunts the tip; in a ductile metal the
+    effective γ must include the far larger plastic work, and the K_IC forms
+    (:func:`critical_fracture_stress`) are the practical route. ``crack_length`` a is the flaw
+    length. Returns the fracture stress in MPa.
+    """
+    _require(youngs_modulus, "[pressure]", "youngs_modulus")
+    _require(surface_energy, "[force]/[length]", "surface_energy")
+    _require(crack_length, "[length]", "crack_length")
+    e = youngs_modulus.to("Pa").magnitude
+    gamma = surface_energy.to("J/m**2").magnitude
+    a = crack_length.to("m").magnitude
+    if e <= 0:
+        raise ValueError(f"youngs_modulus must be positive; got {youngs_modulus}")
+    if gamma <= 0:
+        raise ValueError(f"surface_energy must be positive; got {surface_energy}")
+    if a <= 0:
+        raise ValueError(f"crack_length must be positive; got {crack_length}")
+    sigma = sqrt(2.0 * e * gamma / (pi * a))  # Pa
+    return Quantity(magnitude=sigma / 1.0e6, unit="MPa")
 
 
 def paris_law_crack_growth_rate(

@@ -687,6 +687,8 @@ fluid_statics.righting_moment
 fluid_statics.stack_effect_pressure
 fluid_statics.weber_number
 fracture.critical_crack_length
+fracture.critical_fracture_stress
+fracture.griffith_fracture_stress
 fracture.paris_law_crack_growth_rate
 fracture.crack_tip_plastic_zone_size
 fracture.paris_law_cycles_to_failure
