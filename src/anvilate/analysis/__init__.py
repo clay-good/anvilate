@@ -1742,6 +1742,9 @@ from .fiber_optics import (
     chromatic_dispersion_broadening,
     dispersion_limited_bit_rate,
     dispersion_limited_distance,
+    fiber_mode_count,
+    fiber_single_mode_cutoff_wavelength,
+    fiber_v_number,
 )
 from .flow_measurement import (
     differential_pressure_for_flow,
@@ -4102,6 +4105,9 @@ __all__ = [
     "chromatic_dispersion_broadening",
     "dispersion_limited_bit_rate",
     "dispersion_limited_distance",
+    "fiber_mode_count",
+    "fiber_single_mode_cutoff_wavelength",
+    "fiber_v_number",
     "photon_energy",
     "photon_wavelength_from_energy",
     "photon_flux",

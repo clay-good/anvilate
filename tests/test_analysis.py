@@ -28123,6 +28123,40 @@ def test_fiber_chromatic_dispersion_bit_rate_and_reach():
         )
 
 
+def test_fiber_v_number_mode_count_and_cutoff():
+    import math
+
+    from anvilate.analysis import (
+        fiber_mode_count,
+        fiber_single_mode_cutoff_wavelength,
+        fiber_v_number,
+    )
+
+    # V = (2*pi*a/lambda)*NA; SMF-28-like (a=4.1 um, NA=0.14) at 1550 nm -> ~2.33 (< 2.405).
+    v = fiber_v_number(core_radius=_q("4.1 um"), wavelength=_q("1550 nm"), numerical_aperture=0.14)
+    assert v == pytest.approx(2 * math.pi * 4.1e-6 / 1550e-9 * 0.14, rel=1e-9)
+    assert v < 2.405  # single-mode
+
+    # A multimode fiber (a=25 um, NA=0.2 at 850 nm) -> V ~ 37, M = V^2/2 ~ 683 modes.
+    v_mm = fiber_v_number(core_radius=_q("25 um"), wavelength=_q("850 nm"), numerical_aperture=0.2)
+    assert v_mm > 2.405
+    m = fiber_mode_count(v_number=v_mm)
+    assert m == pytest.approx(v_mm**2 / 2, rel=1e-12)
+    assert m == pytest.approx(683.0, abs=1.0)
+
+    # Cutoff wavelength lambda_c = 2*pi*a*NA/2.405; inverting V=2.405 for the SMF gives ~1500 nm,
+    # and evaluating the V-number at exactly lambda_c returns the 2.405 cutoff.
+    lam_c = fiber_single_mode_cutoff_wavelength(core_radius=_q("4.1 um"), numerical_aperture=0.14)
+    assert lam_c.to("nm").magnitude == pytest.approx(1499.6, abs=0.5)
+    v_at_cutoff = fiber_v_number(
+        core_radius=_q("4.1 um"), wavelength=lam_c, numerical_aperture=0.14
+    )
+    assert v_at_cutoff == pytest.approx(2.405, rel=1e-9)
+
+    with pytest.raises(ValueError, match="numerical_aperture"):
+        fiber_v_number(core_radius=_q("4.1 um"), wavelength=_q("1550 nm"), numerical_aperture=0.0)
+
+
 def test_washburn_capillary_pressure_penetration_and_time():
     from math import sqrt
 
