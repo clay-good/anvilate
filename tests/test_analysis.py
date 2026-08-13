@@ -28101,6 +28101,51 @@ def test_rtd_and_thermistor_temperature_sensors():
         )
 
 
+def test_thermocouple_seebeck_voltage_and_readback():
+    from anvilate.analysis import (
+        thermocouple_temperature_from_voltage,
+        thermocouple_voltage,
+    )
+
+    seebeck = _q("41 uV/K")  # type-K
+    hot = Quantity(magnitude=300.0, unit="degC")
+    cold = Quantity(magnitude=25.0, unit="degC")
+
+    # V = S*(T - T_ref); type-K at 300 C over a 25 C cold junction -> 11.275 mV.
+    v = thermocouple_voltage(
+        seebeck_coefficient=seebeck, measured_temperature=hot, reference_temperature=cold
+    )
+    assert v.to("mV").magnitude == pytest.approx(41e-6 * 275 * 1000, rel=1e-9)
+    assert v.to("mV").magnitude == pytest.approx(11.275, abs=0.001)
+    # At the reference temperature the EMF is zero.
+    assert thermocouple_voltage(
+        seebeck_coefficient=seebeck, measured_temperature=cold, reference_temperature=cold
+    ).to("mV").magnitude == pytest.approx(0.0, abs=1e-12)
+
+    # The readback inverts it with cold-junction compensation: 11.275 mV -> 300 C.
+    t = thermocouple_temperature_from_voltage(
+        thermocouple_voltage=v, seebeck_coefficient=seebeck, reference_temperature=cold
+    )
+    assert t.to("K").magnitude - 273.15 == pytest.approx(300.0, abs=1e-6)
+    # A wrong (higher) cold-junction reference biases the reading upward.
+    t_biased = thermocouple_temperature_from_voltage(
+        thermocouple_voltage=v,
+        seebeck_coefficient=seebeck,
+        reference_temperature=Quantity(magnitude=30.0, unit="degC"),
+    )
+    assert t_biased.to("K").magnitude > t.to("K").magnitude
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="seebeck_coefficient must be positive"):
+        thermocouple_voltage(
+            seebeck_coefficient=_q("0 uV/K"), measured_temperature=hot, reference_temperature=cold
+        )
+    with pytest.raises(ValueError, match="seebeck_coefficient must be a"):
+        thermocouple_voltage(
+            seebeck_coefficient=_q("41 uV"), measured_temperature=hot, reference_temperature=cold
+        )
+
+
 def test_bulk_solids_beverloo_discharge_orifice_inverse_and_stockpile():
     from math import pi, sqrt, tan
 

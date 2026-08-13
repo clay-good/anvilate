@@ -27,6 +27,8 @@ __all__ = [
     "rtd_resistance",
     "rtd_temperature",
     "thermistor_resistance",
+    "thermocouple_voltage",
+    "thermocouple_temperature_from_voltage",
 ]
 
 
@@ -126,6 +128,60 @@ def thermistor_resistance(
     if t <= 0 or t0 <= 0:
         raise ValueError("temperatures must be positive absolute (kelvin) values")
     return Quantity(magnitude=r0 * exp(beta * (1.0 / t - 1.0 / t0)), unit="ohm")
+
+
+def thermocouple_voltage(
+    *,
+    seebeck_coefficient: Quantity,
+    measured_temperature: Quantity,
+    reference_temperature: Quantity,
+) -> Quantity:
+    """A thermocouple's Seebeck EMF, V = S·(T − T_ref).
+
+    A junction of two dissimilar metals develops a small voltage set by the temperature *difference*
+    between the measuring and reference (cold) junctions: V = S·(``measured_temperature`` T −
+    ``reference_temperature`` T_ref), with ``seebeck_coefficient`` S the pair's thermoelectric
+    sensitivity (about 41 µV/K for a type-K couple). It is the third temperature sensor beside the
+    RTD (:func:`rtd_resistance`) and thermistor (:func:`thermistor_resistance`) — no excitation
+    current, wide range, but a tiny, cold-junction-referenced signal. Temperatures must be absolute
+    (their difference is what matters); a hotter measuring junction raises the EMF. Returns the
+    voltage in millivolts.
+    """
+    _check(seebeck_coefficient, "[electric_potential]/[temperature]", "seebeck_coefficient")
+    _check(measured_temperature, "[temperature]", "measured_temperature")
+    _check(reference_temperature, "[temperature]", "reference_temperature")
+    s = seebeck_coefficient.to("V/K").magnitude
+    t = measured_temperature.to("K").magnitude
+    t_ref = reference_temperature.to("K").magnitude
+    if s <= 0:
+        raise ValueError("seebeck_coefficient must be positive")
+    return Quantity(magnitude=s * (t - t_ref) * 1000.0, unit="mV")
+
+
+def thermocouple_temperature_from_voltage(
+    *,
+    thermocouple_voltage: Quantity,
+    seebeck_coefficient: Quantity,
+    reference_temperature: Quantity,
+) -> Quantity:
+    """The junction temperature from a thermocouple EMF, T = T_ref + V/S.
+
+    The readback inverse of :func:`thermocouple_voltage`, with cold-junction compensation built in:
+    a measured ``thermocouple_voltage`` V referenced to a known ``reference_temperature`` T_ref
+    (the cold junction, itself measured by an RTD or thermistor at the terminal block) gives the hot
+    junction's temperature T = T_ref + V/S, from the ``seebeck_coefficient`` S. This is exactly what
+    a thermocouple instrument computes — the raw EMF plus the cold-junction temperature — so a wrong
+    reference biases every reading. Returns the measured temperature in kelvin.
+    """
+    _check(thermocouple_voltage, "[electric_potential]", "thermocouple_voltage")
+    _check(seebeck_coefficient, "[electric_potential]/[temperature]", "seebeck_coefficient")
+    _check(reference_temperature, "[temperature]", "reference_temperature")
+    v = thermocouple_voltage.to("V").magnitude
+    s = seebeck_coefficient.to("V/K").magnitude
+    t_ref = reference_temperature.to("K").magnitude
+    if s <= 0:
+        raise ValueError("seebeck_coefficient must be positive")
+    return Quantity(magnitude=t_ref + v / s, unit="K")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

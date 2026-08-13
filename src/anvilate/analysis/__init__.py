@@ -2662,6 +2662,8 @@ from .temperature_sensor import (
     rtd_resistance,
     rtd_temperature,
     thermistor_resistance,
+    thermocouple_temperature_from_voltage,
+    thermocouple_voltage,
 )
 from .thermal import (
     DifferentialThermalStress,
@@ -3175,6 +3177,8 @@ __all__ = [
     "rtd_resistance",
     "rtd_temperature",
     "thermistor_resistance",
+    "thermocouple_voltage",
+    "thermocouple_temperature_from_voltage",
     "choked_mass_flow_rate",
     "critical_pressure_ratio",
     "isentropic_area_ratio",
