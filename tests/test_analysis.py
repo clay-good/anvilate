@@ -24839,6 +24839,58 @@ def test_vapor_liquid_equilibrium_fenske_minimum_stages():
         )
 
 
+def test_vapor_liquid_equilibrium_underwood_reflux_and_gilliland_stages():
+    from math import exp, sqrt
+
+    from anvilate.analysis import (
+        fenske_minimum_stages,
+        gilliland_actual_stages,
+        underwood_minimum_reflux,
+    )
+
+    a, xF, xD, xB = 2.5, 0.5, 0.95, 0.05
+
+    # Underwood R_min = [x_D/x_F - α(1-x_D)/(1-x_F)]/(α-1); here 1.10.
+    r_min = underwood_minimum_reflux(
+        distillate_light_fraction=xD, feed_light_fraction=xF, relative_volatility=a
+    )
+    assert r_min == pytest.approx((xD / xF - a * (1 - xD) / (1 - xF)) / (a - 1), rel=1e-12)
+    assert r_min == pytest.approx(1.10, abs=1e-9)
+    # A higher relative volatility (easier split) lowers the minimum reflux.
+    assert (
+        underwood_minimum_reflux(
+            distillate_light_fraction=xD, feed_light_fraction=xF, relative_volatility=4.0
+        )
+        < r_min
+    )
+
+    # Gilliland ties Fenske + Underwood to the real stage count at an operating reflux.
+    n_min = fenske_minimum_stages(
+        distillate_light_fraction=xD, bottoms_light_fraction=xB, relative_volatility=a
+    )
+    r = 1.5 * r_min
+    n = gilliland_actual_stages(minimum_stages=n_min, minimum_reflux_ratio=r_min, reflux_ratio=r)
+    x = (r - r_min) / (r + 1.0)
+    y = 1.0 - exp((1.0 + 54.4 * x) / (11.0 + 117.2 * x) * (x - 1.0) / sqrt(x))
+    assert n == pytest.approx((n_min + y) / (1.0 - y), rel=1e-12)
+    assert n == pytest.approx(12.60, abs=0.05)
+    # A real column always needs more stages than the total-reflux floor.
+    assert n > n_min
+    # More reflux -> fewer stages (approaching N_min as R grows).
+    assert (
+        gilliland_actual_stages(minimum_stages=n_min, minimum_reflux_ratio=r_min, reflux_ratio=3.0)
+        < n
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="relative_volatility must exceed 1"):
+        underwood_minimum_reflux(
+            distillate_light_fraction=xD, feed_light_fraction=xF, relative_volatility=1.0
+        )
+    with pytest.raises(ValueError, match="reflux_ratio must exceed minimum_reflux_ratio"):
+        gilliland_actual_stages(minimum_stages=n_min, minimum_reflux_ratio=1.10, reflux_ratio=1.10)
+
+
 def test_packed_bed_ergun_pressure_drop_and_void_fraction():
     from anvilate.analysis import ergun_pressure_drop, packed_bed_void_fraction
 

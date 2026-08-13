@@ -2748,8 +2748,10 @@ from .vacuum_system import (
 from .vapor_liquid_equilibrium import (
     equilibrium_vapor_mole_fraction,
     fenske_minimum_stages,
+    gilliland_actual_stages,
     raoult_partial_pressure,
     relative_volatility,
+    underwood_minimum_reflux,
 )
 from .vehicle import (
     grade_resistance_force,
@@ -2927,6 +2929,8 @@ __all__ = [
     "relative_volatility",
     "equilibrium_vapor_mole_fraction",
     "fenske_minimum_stages",
+    "underwood_minimum_reflux",
+    "gilliland_actual_stages",
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",

@@ -18,15 +18,17 @@ volatility are plain floats in [0, 1] and > 0; vapor pressures are dimension-che
 
 from __future__ import annotations
 
-from math import log
+from math import exp, log, sqrt
 
 from ..units import Quantity
 
 __all__ = [
     "equilibrium_vapor_mole_fraction",
     "fenske_minimum_stages",
+    "gilliland_actual_stages",
     "raoult_partial_pressure",
     "relative_volatility",
+    "underwood_minimum_reflux",
 ]
 
 
@@ -131,6 +133,72 @@ def fenske_minimum_stages(
         )
     separation = (x_d / (1.0 - x_d)) * ((1.0 - x_b) / x_b)
     return log(separation) / log(relative_volatility)
+
+
+def underwood_minimum_reflux(
+    *,
+    distillate_light_fraction: float,
+    feed_light_fraction: float,
+    relative_volatility: float,
+) -> float:
+    """The Underwood minimum reflux for a binary column, R_min = [x_D/x_F − α(1−x_D)/(1−x_F)]/(α−1).
+
+    The reflux ratio below which no column, however tall, can make the specified top product — the
+    other limiting case that brackets a real design (the reflux twin of the total-reflux
+    :func:`fenske_minimum_stages`). For a saturated-liquid feed of light-component fraction
+    ``feed_light_fraction`` x_F, a ``distillate_light_fraction`` x_D, and ``relative_volatility`` α,
+    R_min = [x_D/x_F − α·(1 − x_D)/(1 − x_F)]/(α − 1). Real columns run at 1.1–1.5× this; the closer
+    to R_min, the taller the column. Returns the minimum reflux ratio L/D as a plain float.
+    """
+    if not 0.0 < distillate_light_fraction < 1.0:
+        raise ValueError(
+            f"distillate_light_fraction must be in (0, 1); got {distillate_light_fraction}"
+        )
+    if not 0.0 < feed_light_fraction < 1.0:
+        raise ValueError(f"feed_light_fraction must be in (0, 1); got {feed_light_fraction}")
+    if relative_volatility <= 1.0:
+        raise ValueError(
+            "relative_volatility must exceed 1 (no separation is possible at α ≤ 1); got "
+            f"{relative_volatility}"
+        )
+    x_d = distillate_light_fraction
+    x_f = feed_light_fraction
+    r_min = (x_d / x_f - relative_volatility * (1.0 - x_d) / (1.0 - x_f)) / (
+        relative_volatility - 1.0
+    )
+    if r_min <= 0.0:
+        raise ValueError(
+            "the specified split needs no rectification at this feed (R_min ≤ 0); check that the "
+            "distillate is enriched in the light component relative to the feed"
+        )
+    return r_min
+
+
+def gilliland_actual_stages(
+    *, minimum_stages: float, minimum_reflux_ratio: float, reflux_ratio: float
+) -> float:
+    """The theoretical stages at an operating reflux, via the Gilliland (Molokanov) correlation.
+
+    The third leg of the Fenske-Underwood-Gilliland short-cut method: it interpolates between the
+    total-reflux floor N_min (:func:`fenske_minimum_stages`) and the minimum-reflux ceiling R_min
+    (:func:`underwood_minimum_reflux`) to the stage count N a real column needs at an operating
+    ``reflux_ratio`` R. With X = (R − R_min)/(R + 1), the Molokanov fit gives
+    Y = 1 − exp{[(1 + 54.4·X)/(11 + 117.2·X)]·(X − 1)/√X} and N = (N_min + Y)/(1 − Y).
+    ``reflux_ratio`` must exceed ``minimum_reflux_ratio`` (below R_min the split is unreachable).
+    Returns the number of theoretical stages as a plain float.
+    """
+    if minimum_stages <= 0.0:
+        raise ValueError(f"minimum_stages must be positive; got {minimum_stages}")
+    if minimum_reflux_ratio <= 0.0:
+        raise ValueError(f"minimum_reflux_ratio must be positive; got {minimum_reflux_ratio}")
+    if reflux_ratio <= minimum_reflux_ratio:
+        raise ValueError(
+            "reflux_ratio must exceed minimum_reflux_ratio (below R_min the split is unreachable); "
+            f"got reflux_ratio={reflux_ratio}, minimum_reflux_ratio={minimum_reflux_ratio}"
+        )
+    x = (reflux_ratio - minimum_reflux_ratio) / (reflux_ratio + 1.0)
+    y = 1.0 - exp((1.0 + 54.4 * x) / (11.0 + 117.2 * x) * (x - 1.0) / sqrt(x))
+    return (minimum_stages + y) / (1.0 - y)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
