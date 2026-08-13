@@ -80,6 +80,7 @@ __all__ = [
     "shell_and_tube_ntu_for_effectiveness",
     "crossflow_cmax_mixed_effectiveness",
     "biot_number",
+    "thermal_diffusivity",
     "fourier_number",
     "peclet_number",
     "lumped_capacitance_time_constant",
@@ -2014,6 +2015,36 @@ def biot_number(
     if h <= 0 or lc <= 0 or k <= 0:
         raise ValueError("all inputs must be positive")
     return h * lc / k
+
+
+def thermal_diffusivity(
+    *,
+    thermal_conductivity: Quantity,
+    density: Quantity,
+    specific_heat: Quantity,
+) -> Quantity:
+    """The thermal diffusivity, α = k/(ρ·c_p).
+
+    How fast a temperature disturbance spreads through a material, as opposed to how much heat it
+    conducts: from the ``thermal_conductivity`` k, the ``density`` ρ, and the ``specific_heat`` c_p,
+    α = k/(ρ·c_p). It is the property that sets the pace of every transient — the α in the Fourier
+    number (:func:`fourier_number`), the Péclet number (:func:`peclet_number`), and the √(α·t)
+    penetration depth of a thermal front. A metal (high k, α ~ 1e-4 m²/s) equalises temperature far
+    faster than a plastic or a gas of the same heat capacity. Returns the diffusivity in m²/s.
+    """
+    _require(thermal_conductivity, "[power]/[length]/[temperature]", "thermal_conductivity")
+    _require(density, "[mass]/[length]**3", "density")
+    _require(specific_heat, "[energy]/[mass]/[temperature]", "specific_heat")
+    k = thermal_conductivity.to("W/(m*K)").magnitude
+    rho = density.to("kg/m**3").magnitude
+    cp = specific_heat.to("J/(kg*K)").magnitude
+    if k <= 0:
+        raise ValueError("thermal_conductivity must be positive")
+    if rho <= 0:
+        raise ValueError("density must be positive")
+    if cp <= 0:
+        raise ValueError("specific_heat must be positive")
+    return Quantity(magnitude=k / (rho * cp), unit="m**2/s")
 
 
 def fourier_number(

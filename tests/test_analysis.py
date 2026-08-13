@@ -15841,6 +15841,45 @@ def test_thermal_fourier_number():
         )
 
 
+def test_thermal_diffusivity():
+    from anvilate.analysis import fourier_number, thermal_diffusivity
+
+    # alpha = k/(rho*cp); aluminium 237 W/mK, 2700 kg/m^3, 900 J/kgK -> ~9.75e-5 m^2/s.
+    alpha = thermal_diffusivity(
+        thermal_conductivity=_q("237 W/(m*K)"),
+        density=_q("2700 kg/m**3"),
+        specific_heat=_q("900 J/(kg*K)"),
+    )
+    assert alpha.to("m**2/s").magnitude == pytest.approx(237 / (2700 * 900), rel=1e-9)
+    assert alpha.to("m**2/s").magnitude == pytest.approx(9.75e-5, rel=1e-2)
+    # It feeds straight into the Fourier number.
+    fo = fourier_number(
+        thermal_diffusivity=alpha, time=_q("10 s"), characteristic_length=_q("0.02 m")
+    )
+    assert fo == pytest.approx(alpha.to("m**2/s").magnitude * 10 / 0.02**2, rel=1e-9)
+    # A denser, higher-heat-capacity material of the same k diffuses heat more slowly.
+    alpha_slow = thermal_diffusivity(
+        thermal_conductivity=_q("237 W/(m*K)"),
+        density=_q("5400 kg/m**3"),
+        specific_heat=_q("900 J/(kg*K)"),
+    )
+    assert alpha_slow.to("m**2/s").magnitude < alpha.to("m**2/s").magnitude
+
+    # Guardrails: positive properties, dimensions checked.
+    with pytest.raises(ValueError, match="density must be positive"):
+        thermal_diffusivity(
+            thermal_conductivity=_q("237 W/(m*K)"),
+            density=_q("0 kg/m**3"),
+            specific_heat=_q("900 J/(kg*K)"),
+        )
+    with pytest.raises(ValueError, match="thermal_conductivity must be a"):
+        thermal_diffusivity(
+            thermal_conductivity=_q("237 W/m"),
+            density=_q("2700 kg/m**3"),
+            specific_heat=_q("900 J/(kg*K)"),
+        )
+
+
 def test_thermal_peclet_number():
     from anvilate.analysis import peclet_number
 
