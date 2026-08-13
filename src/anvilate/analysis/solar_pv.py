@@ -26,6 +26,7 @@ __all__ = [
     "pv_array_size_for_load",
     "pv_cell_temperature",
     "pv_daily_energy",
+    "pv_fill_factor",
     "pv_temperature_derated_power",
     "pv_specific_yield",
     "pv_performance_ratio",
@@ -205,6 +206,42 @@ def pv_performance_ratio(
     if h <= 0:
         raise ValueError("peak_sun_hours must be positive")
     return e / (p * h)
+
+
+def pv_fill_factor(
+    *,
+    maximum_power: Quantity,
+    open_circuit_voltage: Quantity,
+    short_circuit_current: Quantity,
+) -> float:
+    """A solar cell's fill factor, FF = P_max/(V_oc·I_sc).
+
+    How square a photovoltaic cell's current-voltage curve is, and with it the cell's quality: the
+    ``maximum_power`` P_max at the maximum-power point over the product of the
+    ``open_circuit_voltage`` V_oc and ``short_circuit_current`` I_sc, FF = P_max/(V_oc·I_sc). V_oc
+    and I_sc bound the I-V curve, and FF is the fraction of that bounding rectangle the operating
+    point actually reaches — a good crystalline-silicon cell sits at 0.75–0.82, and series
+    resistance or recombination pulls it down. It ties the cell efficiency to the three measured
+    terminal quantities. Returns the dimensionless fill factor (0 to 1).
+    """
+    _check(maximum_power, "[power]", "maximum_power")
+    _check(open_circuit_voltage, "[electric_potential]", "open_circuit_voltage")
+    _check(short_circuit_current, "[current]", "short_circuit_current")
+    p_max = maximum_power.to("W").magnitude
+    v_oc = open_circuit_voltage.to("V").magnitude
+    i_sc = short_circuit_current.to("A").magnitude
+    if p_max <= 0:
+        raise ValueError("maximum_power must be positive")
+    if v_oc <= 0:
+        raise ValueError("open_circuit_voltage must be positive")
+    if i_sc <= 0:
+        raise ValueError("short_circuit_current must be positive")
+    ff = p_max / (v_oc * i_sc)
+    if ff > 1.0:
+        raise ValueError(
+            "maximum_power exceeds V_oc·I_sc (fill factor > 1 is impossible); check inputs"
+        )
+    return ff
 
 
 def _fraction(value: float, name: str) -> None:

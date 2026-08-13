@@ -14387,6 +14387,48 @@ def test_pv_specific_yield_and_performance_ratio():
         )
 
 
+def test_pv_fill_factor():
+    from anvilate.analysis import pv_fill_factor
+
+    # FF = P_max/(V_oc*I_sc); 4.5 W, 0.6 V, 9.5 A -> 0.789.
+    ff = pv_fill_factor(
+        maximum_power=_q("4.5 W"),
+        open_circuit_voltage=_q("0.6 V"),
+        short_circuit_current=_q("9.5 A"),
+    )
+    assert ff == pytest.approx(4.5 / (0.6 * 9.5), rel=1e-9)
+    assert ff == pytest.approx(0.789, abs=0.001)
+    # A good crystalline-silicon cell sits in the 0.75-0.82 band.
+    assert 0.7 <= ff <= 0.85
+    # More series-resistance loss (lower P_max at the same V_oc/I_sc) drops the fill factor.
+    ff_lossy = pv_fill_factor(
+        maximum_power=_q("3.8 W"),
+        open_circuit_voltage=_q("0.6 V"),
+        short_circuit_current=_q("9.5 A"),
+    )
+    assert ff_lossy < ff
+
+    # Guardrails: positive terminal quantities, and P_max cannot exceed V_oc*I_sc.
+    with pytest.raises(ValueError, match="short_circuit_current must be positive"):
+        pv_fill_factor(
+            maximum_power=_q("4.5 W"),
+            open_circuit_voltage=_q("0.6 V"),
+            short_circuit_current=_q("0 A"),
+        )
+    with pytest.raises(ValueError, match="fill factor > 1 is impossible"):
+        pv_fill_factor(
+            maximum_power=_q("6 W"),
+            open_circuit_voltage=_q("0.6 V"),
+            short_circuit_current=_q("9.5 A"),
+        )
+    with pytest.raises(ValueError, match="maximum_power must be a"):
+        pv_fill_factor(
+            maximum_power=_q("4.5 V"),
+            open_circuit_voltage=_q("0.6 V"),
+            short_circuit_current=_q("9.5 A"),
+        )
+
+
 def test_hydro_turbine_power_net_head_and_flow_inverse():
     from anvilate.analysis import (
         hydro_flow_for_power,
