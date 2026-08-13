@@ -496,6 +496,9 @@ modules:
   U = π·D·N, the outlet swirl velocity c_θ = U − c_m/tan β from the vane-angle velocity
   triangle (backward/radial/forward-curved), and the Euler head H = (U₂·c_θ2 − U₁·c_θ1)/g —
   the loss-free ceiling the delivered head of :mod:`~anvilate.analysis.pump` falls below
+- :mod:`~anvilate.analysis.ultrasonic_testing` — ultrasonic NDT geometry: the near-field length
+  N = D²·f/(4·c) (test beyond it), the far-field beam divergence θ = arcsin(1.22·c/(f·D)), and
+  the pulse-echo depth d = c·t/2 for thickness gauging and flaw sizing
 - :mod:`~anvilate.analysis.vacuum_electronics` — vacuum electron emission: the Richardson-Dushman
   saturation current J = A·T²·exp(−W/kT), the Schottky field lowering ΔW = √(e³·E/(4π·ε₀)) of the
   work function, and the Child-Langmuir space-charge-limited current J = (4/9)·ε₀·√(2e/m)·V^{3/2}/d²
@@ -2816,6 +2819,11 @@ from .turbomachinery import (
     impeller_outlet_swirl_velocity,
     stage_loading_coefficient,
 )
+from .ultrasonic_testing import (
+    near_field_length,
+    pulse_echo_thickness,
+    ultrasonic_beam_divergence,
+)
 from .universal_joint import (
     universal_joint_max_speed_ratio,
     universal_joint_speed_fluctuation,
@@ -3007,6 +3015,9 @@ __all__ = [
     "euler_head",
     "flow_coefficient",
     "stage_loading_coefficient",
+    "near_field_length",
+    "ultrasonic_beam_divergence",
+    "pulse_echo_thickness",
     "universal_joint_speed_ratio",
     "universal_joint_max_speed_ratio",
     "universal_joint_speed_fluctuation",

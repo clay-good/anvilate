@@ -5524,3 +5524,15 @@ def test_trawler_hull_speed_example_short_hull_falls_short():
     long_hull = namespace["screen_long_hull"]()
     assert long_hull.entries[0].passed
     assert long_hull.status is CheckStatus.PASS
+
+
+def test_ultrasonic_flaw_standoff_example_large_probe_buries_flaw():
+    namespace = runpy.run_path(str(_EXAMPLES / "ultrasonic_flaw_standoff.py"))
+    large = namespace["screen_large_probe"]()
+    # The 10 mm probe's near field swallows the 15 mm flaw -> FAIL.
+    assert large.status is CheckStatus.FAIL
+    assert large.entries[0].name == "flaw depth vs near-field length"
+    # A smaller probe shortens the near field and clears the flaw.
+    small = namespace["screen_small_probe"]()
+    assert small.entries[0].passed
+    assert small.status is CheckStatus.PASS

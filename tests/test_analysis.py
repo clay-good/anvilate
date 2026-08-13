@@ -29617,3 +29617,52 @@ def test_naval_architecture_hull_speed_hull_froude_and_block_coefficient():
         )
     with pytest.raises(ValueError, match="waterline_length must be a"):
         hull_froude_number(speed=_q("10 m/s"), waterline_length=_q("100 s"))
+
+
+def test_ultrasonic_testing_near_field_beam_divergence_and_pulse_echo():
+    from math import asin, degrees
+
+    from anvilate.analysis import (
+        near_field_length,
+        pulse_echo_thickness,
+        ultrasonic_beam_divergence,
+    )
+
+    probe = {"transducer_diameter": _q("10 mm"), "frequency": _q("5 MHz")}
+    steel = _q("5900 m/s")
+
+    # N = D^2*f/(4*c); 10 mm, 5 MHz in steel -> 21.2 mm.
+    n = near_field_length(sound_speed=steel, **probe)
+    assert n.to("m").magnitude == pytest.approx(0.01**2 * 5e6 / (4 * 5900), rel=1e-12)
+    assert n.to("mm").magnitude == pytest.approx(21.19, abs=0.02)
+    # Near field grows with the square of diameter: half the diameter -> quarter the near field.
+    assert near_field_length(
+        transducer_diameter=_q("5 mm"), frequency=_q("5 MHz"), sound_speed=steel
+    ).to("m").magnitude == pytest.approx(n.to("m").magnitude / 4, rel=1e-9)
+
+    # Beam divergence theta = arcsin(1.22*c/(f*D)); ~8.28 deg here.
+    div = ultrasonic_beam_divergence(sound_speed=steel, **probe)
+    assert div == pytest.approx(degrees(asin(1.22 * 5900 / (5e6 * 0.01))), rel=1e-12)
+    assert div == pytest.approx(8.28, abs=0.02)
+    # A smaller probe sprays a wider beam.
+    assert (
+        ultrasonic_beam_divergence(
+            transducer_diameter=_q("6 mm"), frequency=_q("5 MHz"), sound_speed=steel
+        )
+        > div
+    )
+
+    # Pulse-echo depth d = c*t/2; a 10 us round trip in steel -> 29.5 mm.
+    d = pulse_echo_thickness(time_of_flight=_q("10 us"), sound_speed=steel)
+    assert d.to("m").magnitude == pytest.approx(5900 * 10e-6 / 2, rel=1e-12)
+    assert d.to("mm").magnitude == pytest.approx(29.5, abs=0.01)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="beam is not directional"):
+        ultrasonic_beam_divergence(
+            transducer_diameter=_q("0.5 mm"), frequency=_q("1 MHz"), sound_speed=steel
+        )
+    with pytest.raises(ValueError, match="frequency must be positive"):
+        near_field_length(transducer_diameter=_q("10 mm"), frequency=_q("0 MHz"), sound_speed=steel)
+    with pytest.raises(ValueError, match="sound_speed must be a"):
+        pulse_echo_thickness(time_of_flight=_q("10 us"), sound_speed=_q("5900 m"))
