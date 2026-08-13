@@ -20629,6 +20629,37 @@ def test_pile_capacity_alpha_method_shaft_dominates():
         )
 
 
+def test_pile_group_efficiency_converse_labarre():
+    from math import atan, degrees
+
+    from anvilate.analysis import pile_group_efficiency
+
+    # Converse-Labarre; 3x4 group, 0.3 m piles at 0.9 m spacing -> 0.710.
+    eta = pile_group_efficiency(pile_diameter=_q("0.3 m"), spacing=_q("0.9 m"), rows=3, columns=4)
+    theta = degrees(atan(0.3 / 0.9))
+    assert eta == pytest.approx(1 - theta * ((3 - 1) * 4 + (4 - 1) * 3) / (90 * 3 * 4), rel=1e-12)
+    assert eta == pytest.approx(0.710, abs=0.001)
+    assert 0.0 < eta < 1.0
+    # Wider spacing (smaller theta) raises efficiency toward unity.
+    assert (
+        pile_group_efficiency(pile_diameter=_q("0.3 m"), spacing=_q("1.8 m"), rows=3, columns=4)
+        > eta
+    )
+    # A bigger group has more interior overlap, so lower efficiency at the same spacing.
+    assert (
+        pile_group_efficiency(pile_diameter=_q("0.3 m"), spacing=_q("0.9 m"), rows=5, columns=6)
+        < eta
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="rows and columns must be positive integers"):
+        pile_group_efficiency(pile_diameter=_q("0.3 m"), spacing=_q("0.9 m"), rows=0, columns=4)
+    with pytest.raises(ValueError, match="a group needs more than one pile"):
+        pile_group_efficiency(pile_diameter=_q("0.3 m"), spacing=_q("0.9 m"), rows=1, columns=1)
+    with pytest.raises(ValueError, match="spacing must be positive"):
+        pile_group_efficiency(pile_diameter=_q("0.3 m"), spacing=_q("0 m"), rows=3, columns=4)
+
+
 def test_torricelli_efflux_and_tank_drain_time():
     import math
 

@@ -28,7 +28,7 @@ all outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
 
 from __future__ import annotations
 
-from math import cos, exp, log10, pi, radians, sin, sqrt, tan
+from math import atan, cos, degrees, exp, log10, pi, radians, sin, sqrt, tan
 
 from ..units import Quantity
 
@@ -50,6 +50,7 @@ __all__ = [
     "infinite_slope_factor_of_safety",
     "janssen_silo_pressure",
     "pile_allowable_capacity",
+    "pile_group_efficiency",
     "pile_end_bearing_capacity",
     "at_rest_earth_pressure_coefficient",
     "overconsolidated_at_rest_coefficient",
@@ -992,3 +993,38 @@ def pile_allowable_capacity(
     if factor_of_safety <= 0:
         raise ValueError("factor_of_safety must be positive")
     return Quantity(magnitude=(q_s + q_p) / factor_of_safety, unit="kN")
+
+
+def pile_group_efficiency(
+    *,
+    pile_diameter: Quantity,
+    spacing: Quantity,
+    rows: int,
+    columns: int,
+) -> float:
+    """The Converse-Labarre pile-group efficiency, η = 1 − θ·[(m−1)n + (n−1)m]/(90·m·n).
+
+    Driven close together, piles share and overlap their stress zones, so a group carries less than
+    the sum of its isolated piles. The Converse-Labarre formula estimates the shortfall from the
+    geometry: with θ = arctan(``pile_diameter`` d / ``spacing`` s) in degrees and the group's
+    ``rows`` m and ``columns`` n, η = 1 − θ·[(m−1)·n + (n−1)·m]/(90·m·n). Tighter spacing (larger θ)
+    and bigger groups lower it; widely spaced piles (s ≳ 3d) approach unity. Multiply the
+    single-pile capacity by η·(number of piles) for the group's working capacity. Returns the
+    dimensionless efficiency (0 to 1).
+    """
+    _require(pile_diameter, "[length]", "pile_diameter")
+    _require(spacing, "[length]", "spacing")
+    d = pile_diameter.to("m").magnitude
+    s = spacing.to("m").magnitude
+    if d <= 0:
+        raise ValueError("pile_diameter must be positive")
+    if s <= 0:
+        raise ValueError("spacing must be positive")
+    if rows < 1 or columns < 1:
+        raise ValueError("rows and columns must be positive integers")
+    if rows == 1 and columns == 1:
+        raise ValueError("a group needs more than one pile (rows and columns not both 1)")
+    theta = degrees(atan(d / s))
+    m = rows
+    n = columns
+    return 1.0 - theta * ((m - 1) * n + (n - 1) * m) / (90.0 * m * n)

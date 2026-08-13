@@ -101,6 +101,7 @@ geotechnical.infinite_slope_factor_of_safety
 geotechnical.janssen_silo_pressure
 geotechnical.piping_factor_of_safety
 geotechnical.pile_allowable_capacity
+geotechnical.pile_group_efficiency
 geotechnical.pile_end_bearing_capacity
 geotechnical.pile_skin_friction_capacity
 geotechnical.rankine_active_pressure_cohesive
