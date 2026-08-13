@@ -2417,8 +2417,10 @@ from .reaction_kinetics import (
     second_order_half_life,
 )
 from .reactive_circuit import (
+    capacitive_reactance,
     capacitor_charge,
     capacitor_stored_energy,
+    inductive_reactance,
     inductor_stored_energy,
     lc_resonant_frequency,
     parallel_plate_capacitance,
@@ -3057,6 +3059,8 @@ __all__ = [
     "capacitor_stored_energy",
     "inductor_stored_energy",
     "lc_resonant_frequency",
+    "capacitive_reactance",
+    "inductive_reactance",
     "rc_time_constant",
     "rl_time_constant",
     "rc_cutoff_frequency",

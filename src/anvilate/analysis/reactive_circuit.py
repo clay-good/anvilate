@@ -29,8 +29,10 @@ from ..units import Quantity
 _VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m
 
 __all__ = [
+    "capacitive_reactance",
     "capacitor_charge",
     "capacitor_stored_energy",
+    "inductive_reactance",
     "inductor_stored_energy",
     "lc_resonant_frequency",
     "parallel_plate_capacitance",
@@ -92,6 +94,44 @@ def lc_resonant_frequency(*, inductance: Quantity, capacitance: Quantity) -> Qua
     if length <= 0 or c <= 0:
         raise ValueError("inductance and capacitance must be positive")
     return Quantity(magnitude=1.0 / (2.0 * pi * sqrt(length * c)), unit="Hz")
+
+
+def capacitive_reactance(*, capacitance: Quantity, frequency: Quantity) -> Quantity:
+    """The capacitive reactance, X_C = 1/(2π·f·C).
+
+    The opposition a capacitor presents to alternating current, X_C = 1/(2π·f·C), from the
+    ``capacitance`` C and the ``frequency`` f. It falls as the frequency rises, so a capacitor
+    blocks DC and low frequencies but passes high ones — the basis of coupling and bypass
+    capacitors and the high-pass corner of an RC filter. Returns the reactance in ohms.
+    """
+    _check(capacitance, "[capacitance]", "capacitance")
+    _check(frequency, "1/[time]", "frequency")
+    c = capacitance.to("F").magnitude
+    f = frequency.to("Hz").magnitude
+    if c <= 0:
+        raise ValueError("capacitance must be positive")
+    if f <= 0:
+        raise ValueError("frequency must be positive")
+    return Quantity(magnitude=1.0 / (2.0 * pi * f * c), unit="ohm")
+
+
+def inductive_reactance(*, inductance: Quantity, frequency: Quantity) -> Quantity:
+    """The inductive reactance, X_L = 2π·f·L.
+
+    The opposition an inductor presents to alternating current, X_L = 2π·f·L, from the
+    ``inductance`` L and the ``frequency`` f. It rises with frequency, so an inductor passes DC
+    freely but chokes high frequencies — the basis of chokes and the low-pass roll-off of an RL
+    filter, and the mirror of :func:`capacitive_reactance`. Returns the reactance in ohms.
+    """
+    _check(inductance, "[inductance]", "inductance")
+    _check(frequency, "1/[time]", "frequency")
+    length = inductance.to("H").magnitude
+    f = frequency.to("Hz").magnitude
+    if length <= 0:
+        raise ValueError("inductance must be positive")
+    if f <= 0:
+        raise ValueError("frequency must be positive")
+    return Quantity(magnitude=2.0 * pi * f * length, unit="ohm")
 
 
 def rc_time_constant(*, resistance: Quantity, capacitance: Quantity) -> Quantity:

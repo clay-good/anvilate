@@ -15963,6 +15963,40 @@ def test_reactive_circuit_stored_energy_and_lc_resonance():
         capacitor_stored_energy(capacitance=_q("0 uF"), voltage=_q("400 V"))
 
 
+def test_reactive_circuit_capacitive_and_inductive_reactance():
+    import math
+
+    from anvilate.analysis import capacitive_reactance, inductive_reactance
+
+    # X_C = 1/(2*pi*f*C); 100 uF at 60 Hz -> ~26.53 ohm.
+    xc = capacitive_reactance(capacitance=_q("100 uF"), frequency=_q("60 Hz"))
+    assert xc.to("ohm").magnitude == pytest.approx(1 / (2 * math.pi * 60 * 100e-6), rel=1e-9)
+    # Capacitive reactance falls as frequency rises (a capacitor passes highs).
+    xc_hi = capacitive_reactance(capacitance=_q("100 uF"), frequency=_q("120 Hz"))
+    assert xc_hi.to("ohm").magnitude == pytest.approx(xc.to("ohm").magnitude / 2, rel=1e-9)
+
+    # X_L = 2*pi*f*L; 100 mH at 60 Hz -> ~37.70 ohm.
+    xl = inductive_reactance(inductance=_q("100 mH"), frequency=_q("60 Hz"))
+    assert xl.to("ohm").magnitude == pytest.approx(2 * math.pi * 60 * 100e-3, rel=1e-9)
+    # Inductive reactance rises with frequency (an inductor chokes highs).
+    xl_hi = inductive_reactance(inductance=_q("100 mH"), frequency=_q("120 Hz"))
+    assert xl_hi.to("ohm").magnitude == pytest.approx(2 * xl.to("ohm").magnitude, rel=1e-9)
+
+    # At the LC resonant frequency the two reactances are equal (they cancel).
+    from anvilate.analysis import lc_resonant_frequency
+
+    f0 = lc_resonant_frequency(inductance=_q("100 mH"), capacitance=_q("100 uF"))
+    xc0 = capacitive_reactance(capacitance=_q("100 uF"), frequency=f0)
+    xl0 = inductive_reactance(inductance=_q("100 mH"), frequency=f0)
+    assert xc0.to("ohm").magnitude == pytest.approx(xl0.to("ohm").magnitude, rel=1e-9)
+
+    # Guardrails: positive component values and frequency.
+    with pytest.raises(ValueError, match="capacitance must be positive"):
+        capacitive_reactance(capacitance=_q("0 uF"), frequency=_q("60 Hz"))
+    with pytest.raises(ValueError, match="frequency must be positive"):
+        inductive_reactance(inductance=_q("100 mH"), frequency=_q("0 Hz"))
+
+
 def test_battery_round_trip_efficiency_and_delivered_energy():
     from anvilate.analysis import battery_delivered_energy, battery_round_trip_efficiency
 

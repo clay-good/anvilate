@@ -1016,6 +1016,8 @@ radioactivity.time_for_activity_decay
 reactive_circuit.capacitor_stored_energy
 reactive_circuit.inductor_stored_energy
 reactive_circuit.lc_resonant_frequency
+reactive_circuit.capacitive_reactance
+reactive_circuit.inductive_reactance
 reactive_circuit.rc_cutoff_frequency
 reactive_circuit.rc_time_constant
 reactive_circuit.rl_time_constant
