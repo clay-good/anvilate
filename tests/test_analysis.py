@@ -18606,6 +18606,45 @@ def test_normal_shock_downstream_mach_pressure_and_stagnation_ratios():
         normal_shock_pressure_ratio(upstream_mach=2.0, heat_capacity_ratio=1.0)
 
 
+def test_normal_shock_temperature_and_density_ratios_complete_rankine_hugoniot():
+    from anvilate.analysis import (
+        normal_shock_density_ratio,
+        normal_shock_pressure_ratio,
+        normal_shock_temperature_ratio,
+    )
+
+    # Mach-2 shock in air (gamma 1.4): rho2/rho1 = 2.667, T2/T1 = 1.6875 (tabulated).
+    rho = normal_shock_density_ratio(upstream_mach=2.0, heat_capacity_ratio=1.4)
+    assert rho == pytest.approx(2.4 * 4 / (0.4 * 4 + 2), rel=1e-12)
+    assert rho == pytest.approx(2.6667, abs=1e-3)
+    temp = normal_shock_temperature_ratio(upstream_mach=2.0, heat_capacity_ratio=1.4)
+    assert temp == pytest.approx(1.6875, abs=1e-4)
+
+    # Ideal-gas closure: p2/p1 = (rho2/rho1)*(T2/T1).
+    pr = normal_shock_pressure_ratio(upstream_mach=2.0, heat_capacity_ratio=1.4)
+    assert pr == pytest.approx(rho * temp, rel=1e-12)
+
+    # Density ratio saturates at (g+1)/(g-1) = 6 for air as the shock strengthens; T2/T1 does not.
+    rho_strong = normal_shock_density_ratio(upstream_mach=100.0, heat_capacity_ratio=1.4)
+    assert rho_strong < 6.0
+    assert rho_strong == pytest.approx(6.0, abs=0.01)
+    assert normal_shock_temperature_ratio(upstream_mach=5.0, heat_capacity_ratio=1.4) > temp
+
+    # Both ratios approach 1 as M1 -> 1 (an infinitesimally weak shock).
+    assert normal_shock_density_ratio(
+        upstream_mach=1.0001, heat_capacity_ratio=1.4
+    ) == pytest.approx(1.0, abs=1e-3)
+    assert normal_shock_temperature_ratio(
+        upstream_mach=1.0001, heat_capacity_ratio=1.4
+    ) == pytest.approx(1.0, abs=1e-3)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="upstream_mach must exceed 1"):
+        normal_shock_density_ratio(upstream_mach=0.5, heat_capacity_ratio=1.4)
+    with pytest.raises(ValueError, match="heat_capacity_ratio must exceed 1"):
+        normal_shock_temperature_ratio(upstream_mach=2.0, heat_capacity_ratio=1.0)
+
+
 def test_prandtl_meyer_mach_angle_and_maximum_turning_angle():
     from anvilate.analysis import (
         mach_angle,

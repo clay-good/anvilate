@@ -30,6 +30,8 @@ __all__ = [
     "maximum_turning_angle",
     "normal_shock_downstream_mach",
     "normal_shock_pressure_ratio",
+    "normal_shock_temperature_ratio",
+    "normal_shock_density_ratio",
     "normal_shock_stagnation_pressure_ratio",
     "prandtl_meyer_angle",
     "speed_of_sound",
@@ -242,6 +244,42 @@ def normal_shock_pressure_ratio(*, upstream_mach: float, heat_capacity_ratio: fl
     g = heat_capacity_ratio
     m1_sq = upstream_mach * upstream_mach
     return (2.0 * g * m1_sq - (g - 1.0)) / (g + 1.0)
+
+
+def normal_shock_temperature_ratio(*, upstream_mach: float, heat_capacity_ratio: float) -> float:
+    """The static temperature jump across a normal shock, T₂/T₁.
+
+    The gas heats as it crosses a normal shock, converting kinetic energy to thermal: from the
+    ``upstream_mach`` M₁ (> 1) and the ``heat_capacity_ratio`` γ,
+    T₂/T₁ = (2γM₁² − (γ−1))·(2 + (γ−1)M₁²)/((γ+1)²·M₁²) — equivalently the pressure ratio
+    (:func:`normal_shock_pressure_ratio`) divided by the density ratio
+    (:func:`normal_shock_density_ratio`) through the ideal-gas law. A Mach-2 shock in air raises the
+    static temperature by ~69 %, the aero-heating that punishes supersonic leading edges. Returns
+    the temperature ratio (dimensionless, > 1).
+    """
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    _require_supersonic(upstream_mach)
+    g = heat_capacity_ratio
+    m1_sq = upstream_mach * upstream_mach
+    return (2.0 * g * m1_sq - (g - 1.0)) * (2.0 + (g - 1.0) * m1_sq) / ((g + 1.0) ** 2 * m1_sq)
+
+
+def normal_shock_density_ratio(*, upstream_mach: float, heat_capacity_ratio: float) -> float:
+    """The density jump across a normal shock, ρ₂/ρ₁ = (γ+1)M₁²/((γ−1)M₁² + 2).
+
+    The gas compresses across a normal shock: from the ``upstream_mach`` M₁ (> 1) and the
+    ``heat_capacity_ratio`` γ, ρ₂/ρ₁ = (γ+1)M₁²/((γ−1)M₁² + 2). Unlike the pressure and temperature
+    ratios it does *not* grow without bound — it approaches a hard ceiling of (γ+1)/(γ−1) = 6 for
+    air however strong the shock, because a gas can only be squeezed so far. By continuity this is
+    the velocity drop u₁/u₂ across the shock. Returns the density ratio (dimensionless, > 1).
+    """
+    if heat_capacity_ratio <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
+    _require_supersonic(upstream_mach)
+    g = heat_capacity_ratio
+    m1_sq = upstream_mach * upstream_mach
+    return (g + 1.0) * m1_sq / ((g - 1.0) * m1_sq + 2.0)
 
 
 def normal_shock_stagnation_pressure_ratio(
