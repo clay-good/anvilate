@@ -27,6 +27,8 @@ __all__ = [
     "second_law_efficiency",
     "refrigeration_effect",
     "compressor_work_of_compression",
+    "condenser_heat_rejection",
+    "heat_rejection_ratio",
     "refrigerant_mass_flow_rate",
 ]
 
@@ -153,6 +155,47 @@ def compressor_work_of_compression(
     if h_out <= h_in:
         raise ValueError("compressor_outlet_enthalpy must exceed the inlet (work is added)")
     return Quantity(magnitude=h_out - h_in, unit="kJ/kg")
+
+
+def condenser_heat_rejection(
+    *,
+    refrigeration_effect: Quantity,
+    work_of_compression: Quantity,
+) -> Quantity:
+    """The heat rejected at the condenser per unit mass, q_H = q_L + w_c.
+
+    An energy balance on the cycle: whatever heat the evaporator absorbs plus the work the
+    compressor adds must leave at the condenser, so q_H = ``refrigeration_effect`` q_L +
+    ``work_of_compression`` w_c (both per unit mass, from :func:`refrigeration_effect` and
+    :func:`compressor_work_of_compression`). It is the duty the condenser and its fan or cooling
+    water must handle — always larger than the cooling effect, which is why the hot side of a fridge
+    or heat pump moves more heat than the cold side. Both inputs are specific energies. Returns the
+    heat rejection in kJ/kg.
+    """
+    _check(refrigeration_effect, "[energy]/[mass]", "refrigeration_effect")
+    _check(work_of_compression, "[energy]/[mass]", "work_of_compression")
+    q_l = refrigeration_effect.to("kJ/kg").magnitude
+    w_c = work_of_compression.to("kJ/kg").magnitude
+    if q_l <= 0:
+        raise ValueError("refrigeration_effect must be positive")
+    if w_c <= 0:
+        raise ValueError("work_of_compression must be positive")
+    return Quantity(magnitude=q_l + w_c, unit="kJ/kg")
+
+
+def heat_rejection_ratio(*, cooling_cop: float) -> float:
+    """The condenser-to-evaporator duty ratio, HRR = q_H/q_L = (COP + 1)/COP.
+
+    How much bigger the condenser duty is than the cooling effect, from the cooling coefficient of
+    performance ``cooling_cop`` alone: since q_H = q_L + w_c and COP = q_L/w_c, the ratio is
+    HRR = (COP + 1)/COP. A high-COP cycle rejects only a little more than it cools (HRR → 1); a
+    struggling cycle on a big temperature lift rejects far more, so the condenser must be sized
+    against this, not the cooling load. ``cooling_cop`` must be positive. Returns the dimensionless
+    heat-rejection ratio (> 1).
+    """
+    if cooling_cop <= 0:
+        raise ValueError("cooling_cop must be positive")
+    return (cooling_cop + 1.0) / cooling_cop
 
 
 def refrigerant_mass_flow_rate(

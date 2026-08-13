@@ -16806,6 +16806,47 @@ def test_vapor_compression_cycle_effect_work_and_mass_flow():
         )
 
 
+def test_refrigeration_condenser_rejection_and_heat_rejection_ratio():
+    from anvilate.analysis import (
+        coefficient_of_performance,
+        condenser_heat_rejection,
+        heat_rejection_ratio,
+    )
+
+    # q_H = q_L + w_c (cycle energy balance): 145 + 35 = 180 kJ/kg.
+    q_h = condenser_heat_rejection(
+        refrigeration_effect=_q("145 kJ/kg"), work_of_compression=_q("35 kJ/kg")
+    )
+    assert q_h.to("kJ/kg").magnitude == pytest.approx(180.0, rel=1e-12)
+    # The condenser always rejects more than the evaporator absorbs.
+    assert q_h.to("kJ/kg").magnitude > 145.0
+
+    # HRR = (COP + 1)/COP = q_H/q_L; COP = 145/35 = 4.143 -> HRR = 1.241.
+    cop = 145.0 / 35.0
+    hrr = heat_rejection_ratio(cooling_cop=cop)
+    assert hrr == pytest.approx((cop + 1.0) / cop, rel=1e-12)
+    assert hrr == pytest.approx(180.0 / 145.0, rel=1e-12)
+    # A generic COP from capacity/power feeds the same ratio.
+    cop_generic = coefficient_of_performance(capacity=_q("10 kW"), power_input=_q("2.5 kW"))
+    assert heat_rejection_ratio(cooling_cop=cop_generic) == pytest.approx(
+        (4.0 + 1.0) / 4.0, rel=1e-12
+    )
+    # A higher-COP cycle rejects proportionally less extra heat (HRR -> 1).
+    assert heat_rejection_ratio(cooling_cop=8.0) < hrr
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="work_of_compression must be positive"):
+        condenser_heat_rejection(
+            refrigeration_effect=_q("145 kJ/kg"), work_of_compression=_q("0 kJ/kg")
+        )
+    with pytest.raises(ValueError, match="cooling_cop must be positive"):
+        heat_rejection_ratio(cooling_cop=0.0)
+    with pytest.raises(ValueError, match="refrigeration_effect must be a"):
+        condenser_heat_rejection(
+            refrigeration_effect=_q("145 kJ"), work_of_compression=_q("35 kJ/kg")
+        )
+
+
 def test_conveyor_mass_flow_belt_speed_inverse_and_lift_power():
     from anvilate.analysis import (
         belt_speed_for_capacity,
