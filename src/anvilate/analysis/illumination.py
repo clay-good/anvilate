@@ -22,11 +22,13 @@ the convention elsewhere in the analysis package.
 
 from __future__ import annotations
 
-from math import cos
+from math import cos, pi
 
 from ..units import Quantity
 
 __all__ = [
+    "diffuse_surface_luminance",
+    "illuminance_for_target_luminance",
     "lighting_power_density",
     "lumen_method_illuminance",
     "lumen_method_luminaire_count",
@@ -87,6 +89,44 @@ def point_source_illuminance(
     intensity = luminous_intensity.to("cd").magnitude
     e = intensity * cos(incidence_angle) / d**2
     return Quantity(magnitude=e, unit="lux")
+
+
+def diffuse_surface_luminance(*, illuminance: Quantity, reflectance: float) -> Quantity:
+    """The luminance of a diffuse (Lambertian) surface, L = ρ·E/π.
+
+    Illuminance is the light falling *on* a surface; luminance is the brightness the eye actually
+    sees coming *off* it — and for a matte, perfectly diffusing surface the two relate by
+    L = ρ·E/π, from the ``illuminance`` E landing on it and its ``reflectance`` ρ (0 to 1). The π
+    converts the reflected flux (ρ·E per unit area) into the per-steradian luminance of a Lambertian
+    emitter. It is what turns a lighting-design illuminance target into the wall or desktop
+    brightness a person perceives, and the input to glare and contrast checks. ``reflectance`` must
+    be in (0, 1]. Returns the luminance as a Quantity in cd/m².
+    """
+    _check(illuminance, "[luminosity]/[area]", "illuminance")
+    _check_coefficient(reflectance, "reflectance")
+    e = illuminance.to("lux").magnitude
+    if e < 0:
+        raise ValueError("illuminance must be non-negative")
+    return Quantity(magnitude=reflectance * e / pi, unit="cd/m**2")
+
+
+def illuminance_for_target_luminance(*, target_luminance: Quantity, reflectance: float) -> Quantity:
+    """The illuminance a target surface brightness requires, E = π·L/ρ.
+
+    The design inverse of :func:`diffuse_surface_luminance`: to make a matte surface of
+    ``reflectance`` ρ appear at a ``target_luminance`` L (its perceived brightness), the light
+    landing on it must reach E = π·L/ρ. A darker surface (low ρ) needs proportionally more
+    illuminance to read as bright, which is why dark finishes drive up the lighting load.
+    ``target_luminance`` is a cd/m² quantity and ``reflectance`` must be in (0, 1]. Returns the
+    required illuminance as a Quantity in lux.
+    """
+    _check(target_luminance, "[luminosity]/[area]", "target_luminance")
+    if not 0.0 < reflectance <= 1.0:
+        raise ValueError(f"reflectance must be in (0, 1]; got {reflectance}")
+    lum = target_luminance.to("cd/m**2").magnitude
+    if lum < 0:
+        raise ValueError("target_luminance must be non-negative")
+    return Quantity(magnitude=pi * lum / reflectance, unit="lux")
 
 
 def lumen_method_illuminance(

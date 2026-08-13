@@ -14901,6 +14901,48 @@ def test_illumination_lighting_power_density():
         )
 
 
+def test_illumination_diffuse_luminance_and_target_inverse():
+    from math import pi
+
+    from anvilate.analysis import (
+        diffuse_surface_luminance,
+        illuminance_for_target_luminance,
+    )
+
+    # L = rho*E/pi; 500 lux on a rho=0.5 matte wall -> 79.6 cd/m^2.
+    lum = diffuse_surface_luminance(illuminance=_q("500 lux"), reflectance=0.5)
+    assert lum.to("cd/m**2").magnitude == pytest.approx(0.5 * 500 / pi, rel=1e-12)
+    assert lum.to("cd/m**2").magnitude == pytest.approx(79.58, abs=0.02)
+    # A darker surface reflects less, so it looks dimmer under the same light.
+    assert (
+        diffuse_surface_luminance(illuminance=_q("500 lux"), reflectance=0.2)
+        .to("cd/m**2")
+        .magnitude
+        < lum.to("cd/m**2").magnitude
+    )
+
+    # E = pi*L/rho inverts it: the illuminance to hit that luminance round-trips.
+    e = illuminance_for_target_luminance(target_luminance=lum, reflectance=0.5)
+    assert e.to("lux").magnitude == pytest.approx(500.0, rel=1e-9)
+    # A darker target needs proportionally more illuminance for the same brightness.
+    assert (
+        illuminance_for_target_luminance(target_luminance=_q("80 cd/m**2"), reflectance=0.25)
+        .to("lux")
+        .magnitude
+        > illuminance_for_target_luminance(target_luminance=_q("80 cd/m**2"), reflectance=0.5)
+        .to("lux")
+        .magnitude
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="reflectance must be in"):
+        diffuse_surface_luminance(illuminance=_q("500 lux"), reflectance=1.5)
+    with pytest.raises(ValueError, match="reflectance must be in"):
+        illuminance_for_target_luminance(target_luminance=_q("80 cd/m**2"), reflectance=0.0)
+    with pytest.raises(ValueError, match="illuminance must be a"):
+        diffuse_surface_luminance(illuminance=_q("500 cd"), reflectance=0.5)
+
+
 def test_corrosion_penetration_rate_faraday_and_remaining_life():
     from anvilate.analysis import (
         corrosion_penetration_rate,

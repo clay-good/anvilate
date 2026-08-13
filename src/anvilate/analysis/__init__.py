@@ -1942,6 +1942,8 @@ from .ideal_gas import (
     ideal_gas_volume,
 )
 from .illumination import (
+    diffuse_surface_luminance,
+    illuminance_for_target_luminance,
     lighting_power_density,
     lumen_method_illuminance,
     lumen_method_luminaire_count,
@@ -3875,6 +3877,8 @@ __all__ = [
     "flow_stress_power_law",
     "open_die_forging_load",
     "point_source_illuminance",
+    "diffuse_surface_luminance",
+    "illuminance_for_target_luminance",
     "lumen_method_illuminance",
     "lumen_method_luminaire_count",
     "ergun_pressure_drop",

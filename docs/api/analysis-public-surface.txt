@@ -808,6 +808,8 @@ hydro_power.tidal_average_power
 ideal_gas.ideal_gas_pressure
 ideal_gas.ideal_gas_volume
 ideal_gas.ideal_gas_moles
+illumination.diffuse_surface_luminance
+illumination.illuminance_for_target_luminance
 illumination.lighting_power_density
 illumination.lumen_method_illuminance
 illumination.lumen_method_luminaire_count
