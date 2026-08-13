@@ -21,6 +21,7 @@ from collections.abc import Sequence
 from ..units import Quantity
 
 __all__ = [
+    "maximum_power_transfer",
     "ohms_law_voltage",
     "parallel_resistance",
     "resistive_power",
@@ -59,6 +60,29 @@ def resistive_power(*, current: Quantity, resistance: Quantity) -> Quantity:
     if r < 0:
         raise ValueError("resistance must be non-negative")
     return Quantity(magnitude=i * i * r, unit="W")
+
+
+def maximum_power_transfer(*, source_voltage: Quantity, source_resistance: Quantity) -> Quantity:
+    """The maximum power a source can deliver to a load, P_max = V_s²/(4·R_s).
+
+    The maximum-power-transfer theorem: a source of open-circuit ``source_voltage`` V_s and internal
+    ``source_resistance`` R_s delivers the most power when the load is matched to the source
+    (R_load = R_s), and that peak is P_max = V_s²/(4·R_s). At the match the load and the internal
+    resistance drop equal halves of V_s, so exactly half the power is lost inside the source — the
+    transfer is efficient in power delivered but only 50% efficient, which is why power systems
+    deliberately run un-matched (R_load ≫ R_s) while signal and RF stages match for maximum
+    transfer. It caps what a battery, amplifier, antenna, or thermoelectric source can drive.
+    Returns the maximum load power in W.
+    """
+    _check(source_voltage, "[electric_potential]", "source_voltage")
+    _check(source_resistance, "[resistance]", "source_resistance")
+    v_s = source_voltage.to("V").magnitude
+    r_s = source_resistance.to("ohm").magnitude
+    if v_s < 0:
+        raise ValueError("source_voltage must be non-negative")
+    if r_s <= 0:
+        raise ValueError("source_resistance must be positive")
+    return Quantity(magnitude=v_s**2 / (4.0 * r_s), unit="W")
 
 
 def parallel_resistance(*, resistances: Sequence[Quantity]) -> Quantity:

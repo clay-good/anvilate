@@ -26342,6 +26342,30 @@ def test_ohms_law_resistive_power_and_parallel_resistance():
         ohms_law_voltage(current=_q("2 A"), resistance=_q("10 V"))
 
 
+def test_dc_circuit_maximum_power_transfer():
+    from anvilate.analysis import maximum_power_transfer, resistive_power
+
+    # P_max = V_s^2/(4*R_s); 12 V source, 4 ohm internal -> 9 W.
+    p_max = maximum_power_transfer(source_voltage=_q("12 V"), source_resistance=_q("4 ohm"))
+    assert p_max.to("W").magnitude == pytest.approx(12.0**2 / (4 * 4.0), rel=1e-9)
+    assert p_max.to("W").magnitude == pytest.approx(9.0, rel=1e-9)
+
+    # Cross-check: at the matched load R_load = R_s the current is V_s/(2*R_s) and the load
+    # dissipates exactly P_max.
+    i_matched = _q("12 V").to("V").magnitude / (2 * 4.0)  # 1.5 A
+    p_load = resistive_power(
+        current=Quantity(magnitude=i_matched, unit="A"), resistance=_q("4 ohm")
+    )
+    assert p_load.to("W").magnitude == pytest.approx(p_max.to("W").magnitude, rel=1e-9)
+
+    # A stiffer source (lower internal resistance) delivers more peak power at the same voltage.
+    p_stiff = maximum_power_transfer(source_voltage=_q("12 V"), source_resistance=_q("2 ohm"))
+    assert p_stiff.to("W").magnitude == pytest.approx(2 * p_max.to("W").magnitude, rel=1e-9)
+
+    with pytest.raises(ValueError, match="source_resistance must be positive"):
+        maximum_power_transfer(source_voltage=_q("12 V"), source_resistance=_q("0 ohm"))
+
+
 def test_parallel_plate_capacitance_charge_and_field():
     from anvilate.analysis import (
         capacitor_charge,

@@ -1479,6 +1479,7 @@ from .data_converter import (
     quantization_step,
 )
 from .dc_circuit import (
+    maximum_power_transfer,
     ohms_law_voltage,
     parallel_resistance,
     resistive_power,
@@ -3513,6 +3514,7 @@ __all__ = [
     "oversampling_ratio_for_bits",
     "aperture_jitter_snr_limit",
     "effective_number_of_bits",
+    "maximum_power_transfer",
     "ohms_law_voltage",
     "resistive_power",
     "parallel_resistance",

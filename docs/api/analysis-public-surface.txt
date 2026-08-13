@@ -471,6 +471,7 @@ data_converter.oversampling_ratio_for_bits
 data_converter.aperture_jitter_snr_limit
 data_converter.effective_number_of_bits
 dc_circuit.ohms_law_voltage
+dc_circuit.maximum_power_transfer
 dc_circuit.resistive_power
 dc_circuit.parallel_resistance
 dc_dc_converter.boost_output_voltage
