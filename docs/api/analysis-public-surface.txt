@@ -1054,6 +1054,8 @@ plasma.plasma_frequency
 plasma.plasma_parameter
 pneumatics.air_receiver_holdup_time
 pneumatics.air_receiver_volume_for_demand
+pneumatics.cylinder_air_consumption_per_stroke
+pneumatics.cylinder_free_air_demand
 polarization.malus_transmitted_intensity
 polarization.malus_angle_for_intensity
 polarization.unpolarized_transmitted_intensity

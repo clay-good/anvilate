@@ -16,11 +16,17 @@ and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
 
 from __future__ import annotations
 
+from math import pi
+
 from ..units import Quantity
+
+_STANDARD_ATMOSPHERE_PA = 101325.0
 
 __all__ = [
     "air_receiver_holdup_time",
     "air_receiver_volume_for_demand",
+    "cylinder_air_consumption_per_stroke",
+    "cylinder_free_air_demand",
 ]
 
 
@@ -87,6 +93,82 @@ def air_receiver_volume_for_demand(
     if p_max <= p_min:
         raise ValueError("max_pressure must exceed min_pressure")
     return Quantity(magnitude=q * t * p_atm / (p_max - p_min), unit="m**3")
+
+
+def cylinder_air_consumption_per_stroke(
+    *,
+    bore_diameter: Quantity,
+    stroke: Quantity,
+    gauge_supply_pressure: Quantity,
+    atmospheric_pressure: Quantity | None = None,
+) -> Quantity:
+    """The free air a pneumatic cylinder uses per stroke, V = (π/4)·D²·L·(p_g + p_atm)/p_atm.
+
+    A cylinder does not consume the swept volume of compressed air but the far larger *free*
+    (atmospheric) volume squeezed into it: by Boyle's law the swept volume (π/4)·``bore_diameter``
+    D²·``stroke`` L, filled to the absolute supply pressure p_g + p_atm, expands to
+    (π/4)·D²·L·(p_g + p_atm)/p_atm at atmosphere. From the ``gauge_supply_pressure`` p_g and the
+    ``atmospheric_pressure`` p_atm (default one standard atmosphere), it is the number a compressor
+    is sized against — a 7-bar cylinder eats about 8× its swept volume in free air. Returns the free
+    air per single stroke in litres.
+    """
+    _check(bore_diameter, "[length]", "bore_diameter")
+    _check(stroke, "[length]", "stroke")
+    _check(gauge_supply_pressure, "[pressure]", "gauge_supply_pressure")
+    d = bore_diameter.to("m").magnitude
+    length = stroke.to("m").magnitude
+    p_g = gauge_supply_pressure.to("Pa").magnitude
+    if atmospheric_pressure is None:
+        p_atm = _STANDARD_ATMOSPHERE_PA
+    else:
+        _check(atmospheric_pressure, "[pressure]", "atmospheric_pressure")
+        p_atm = atmospheric_pressure.to("Pa").magnitude
+    if d <= 0:
+        raise ValueError("bore_diameter must be positive")
+    if length <= 0:
+        raise ValueError("stroke must be positive")
+    if p_g <= 0:
+        raise ValueError("gauge_supply_pressure must be positive")
+    if p_atm <= 0:
+        raise ValueError("atmospheric_pressure must be positive")
+    swept = pi / 4.0 * d**2 * length
+    free_air = swept * (p_g + p_atm) / p_atm
+    return Quantity(magnitude=free_air * 1000.0, unit="liter")
+
+
+def cylinder_free_air_demand(
+    *,
+    bore_diameter: Quantity,
+    stroke: Quantity,
+    gauge_supply_pressure: Quantity,
+    cycle_rate: Quantity,
+    double_acting: bool = True,
+    atmospheric_pressure: Quantity | None = None,
+) -> Quantity:
+    """The free-air demand rate of a cycling pneumatic cylinder, Q = n_str·V_stroke·f.
+
+    The steady free-air flow a compressor must supply to keep a cylinder cycling: the per-stroke
+    consumption of :func:`cylinder_air_consumption_per_stroke` times the ``cycle_rate`` f (full
+    cycles per unit time), times the number of pressurized strokes per cycle — 2 for a
+    ``double_acting`` cylinder (both extend and retract draw air), 1 for a single-acting one (only
+    extend; a spring returns it). From the ``bore_diameter`` D, ``stroke`` L, the
+    ``gauge_supply_pressure`` p_g, and ``atmospheric_pressure`` p_atm (default 1 atm). This is the
+    sizing load a compressor and its receiver are matched to. Returns the free-air demand in L/min.
+    """
+    per_stroke = cylinder_air_consumption_per_stroke(
+        bore_diameter=bore_diameter,
+        stroke=stroke,
+        gauge_supply_pressure=gauge_supply_pressure,
+        atmospheric_pressure=atmospheric_pressure,
+    )
+    _check(cycle_rate, "1/[time]", "cycle_rate")
+    f = cycle_rate.to("1/min").magnitude
+    if f <= 0:
+        raise ValueError("cycle_rate must be positive")
+    strokes_per_cycle = 2.0 if double_acting else 1.0
+    return Quantity(
+        magnitude=per_stroke.to("liter").magnitude * strokes_per_cycle * f, unit="liter/min"
+    )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

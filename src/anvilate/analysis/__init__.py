@@ -2248,6 +2248,8 @@ from .pn_junction import (
 from .pneumatics import (
     air_receiver_holdup_time,
     air_receiver_volume_for_demand,
+    cylinder_air_consumption_per_stroke,
+    cylinder_free_air_demand,
 )
 from .polarization import (
     malus_angle_for_intensity,
@@ -3130,6 +3132,8 @@ __all__ = [
     "knudsen_number",
     "air_receiver_holdup_time",
     "air_receiver_volume_for_demand",
+    "cylinder_air_consumption_per_stroke",
+    "cylinder_free_air_demand",
     "malus_transmitted_intensity",
     "malus_angle_for_intensity",
     "unpolarized_transmitted_intensity",

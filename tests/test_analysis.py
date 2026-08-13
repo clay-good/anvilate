@@ -14666,6 +14666,60 @@ def test_air_receiver_holdup_and_sizing_round_trip():
         )
 
 
+def test_pneumatic_cylinder_air_consumption_and_free_air_demand():
+    from math import pi
+
+    from anvilate.analysis import (
+        cylinder_air_consumption_per_stroke,
+        cylinder_free_air_demand,
+    )
+
+    kw = {
+        "bore_diameter": _q("50 mm"),
+        "stroke": _q("200 mm"),
+        "gauge_supply_pressure": _q("6 bar"),
+    }
+    # V_free = (pi/4)*D^2*L*(p_g + p_atm)/p_atm; ~2.72 L per stroke (default 1 atm).
+    v = cylinder_air_consumption_per_stroke(**kw)
+    swept = pi / 4 * 0.05**2 * 0.2
+    assert v.to("liter").magnitude == pytest.approx(
+        swept * (6e5 + 101325.0) / 101325.0 * 1000, rel=1e-9
+    )
+    assert v.to("liter").magnitude == pytest.approx(2.718, abs=0.005)
+    # Free air is far larger than the swept volume (compression ratio ~6.9x here).
+    assert v.to("liter").magnitude > swept * 1000
+
+    # Double-acting demand = 2 * per-stroke * cycle_rate; 30 cycles/min -> ~163 L/min.
+    q_da = cylinder_free_air_demand(cycle_rate=_q("30 1/min"), **kw)
+    assert q_da.to("liter/min").magnitude == pytest.approx(
+        2 * v.to("liter").magnitude * 30, rel=1e-9
+    )
+    assert q_da.to("liter/min").magnitude == pytest.approx(163.08, abs=0.05)
+    # A single-acting cylinder draws air on only one stroke: half the demand.
+    q_sa = cylinder_free_air_demand(cycle_rate=_q("30 1/min"), double_acting=False, **kw)
+    assert q_sa.to("liter/min").magnitude == pytest.approx(
+        q_da.to("liter/min").magnitude / 2, rel=1e-9
+    )
+
+    # A supplied atmospheric pressure (e.g. altitude) overrides the default.
+    v_alt = cylinder_air_consumption_per_stroke(atmospheric_pressure=_q("80 kPa"), **kw)
+    assert v_alt.to("liter").magnitude == pytest.approx(
+        swept * (6e5 + 80000.0) / 80000.0 * 1000, rel=1e-9
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="gauge_supply_pressure must be positive"):
+        cylinder_air_consumption_per_stroke(
+            bore_diameter=_q("50 mm"), stroke=_q("200 mm"), gauge_supply_pressure=_q("0 bar")
+        )
+    with pytest.raises(ValueError, match="cycle_rate must be positive"):
+        cylinder_free_air_demand(cycle_rate=_q("0 1/min"), **kw)
+    with pytest.raises(ValueError, match="bore_diameter must be a"):
+        cylinder_air_consumption_per_stroke(
+            bore_diameter=_q("50 s"), stroke=_q("200 mm"), gauge_supply_pressure=_q("6 bar")
+        )
+
+
 def test_acoustics_level_sum_and_distance_attenuation():
     import math
 
