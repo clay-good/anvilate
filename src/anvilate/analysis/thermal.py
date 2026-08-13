@@ -71,6 +71,7 @@ __all__ = [
     "heat_exchanger_duty",
     "heat_exchanger_ntu",
     "counterflow_effectiveness",
+    "heat_exchanger_effectiveness_from_temperatures",
     "parallel_flow_effectiveness",
     "crossflow_both_unmixed_effectiveness",
     "counterflow_ntu_for_effectiveness",
@@ -1759,6 +1760,42 @@ def heat_exchanger_ntu(
     if u <= 0 or a <= 0 or c_min <= 0:
         raise ValueError("overall_coefficient, area, and min_heat_capacity_rate must be positive")
     return u * a / c_min
+
+
+def heat_exchanger_effectiveness_from_temperatures(
+    *,
+    minimum_capacity_inlet_temperature: Quantity,
+    minimum_capacity_outlet_temperature: Quantity,
+    opposite_inlet_temperature: Quantity,
+) -> float:
+    """The measured heat-exchanger effectiveness, ε = |ΔT_Cmin|/(T_hot,in − T_cold,in).
+
+    The effectiveness read from an operating exchanger's terminal temperatures, to compare against
+    the ε-NTU prediction (:func:`counterflow_effectiveness` and its siblings). The minimum-capacity
+    stream always sees the larger temperature change, so ε is its actual swing over the maximum
+    thermodynamically available — the full inlet-to-inlet difference: ε =
+    |``minimum_capacity_outlet_temperature`` − ``minimum_capacity_inlet_temperature``| /
+    |``opposite_inlet_temperature`` − ``minimum_capacity_inlet_temperature``|. Feed it the C_min
+    stream's own inlet and outlet plus the *other* stream's inlet (whether C_min is the hot or cold
+    side). An ε well below the design value flags fouling or bypassing. Temperatures are absolute.
+    Returns the dimensionless effectiveness (0 to 1).
+    """
+    _require(
+        minimum_capacity_inlet_temperature, "[temperature]", "minimum_capacity_inlet_temperature"
+    )
+    _require(
+        minimum_capacity_outlet_temperature, "[temperature]", "minimum_capacity_outlet_temperature"
+    )
+    _require(opposite_inlet_temperature, "[temperature]", "opposite_inlet_temperature")
+    t_in = minimum_capacity_inlet_temperature.to("K").magnitude
+    t_out = minimum_capacity_outlet_temperature.to("K").magnitude
+    t_other = opposite_inlet_temperature.to("K").magnitude
+    max_difference = abs(t_other - t_in)
+    if max_difference == 0:
+        raise ValueError(
+            "the two inlet temperatures are equal, so no heat can transfer (undefined ε)"
+        )
+    return abs(t_out - t_in) / max_difference
 
 
 def counterflow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:

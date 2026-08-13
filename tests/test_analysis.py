@@ -21898,6 +21898,51 @@ def test_overall_heat_transfer_coefficient_series_resistances_and_fouling():
         )
 
 
+def test_heat_exchanger_effectiveness_from_terminal_temperatures():
+    from anvilate.analysis import heat_exchanger_effectiveness_from_temperatures
+
+    # Hot stream is C_min: eps = (T_h,in - T_h,out)/(T_h,in - T_c,in) = (90-50)/(90-20) = 0.571.
+    eps = heat_exchanger_effectiveness_from_temperatures(
+        minimum_capacity_inlet_temperature=Quantity(magnitude=90, unit="degC"),
+        minimum_capacity_outlet_temperature=Quantity(magnitude=50, unit="degC"),
+        opposite_inlet_temperature=Quantity(magnitude=20, unit="degC"),
+    )
+    assert eps == pytest.approx(40 / 70, rel=1e-9)
+    assert eps == pytest.approx(0.571, abs=0.001)
+    assert 0.0 < eps < 1.0
+
+    # It also works when C_min is the cold stream (temperatures rising): (55-20)/(90-20) = 0.5.
+    eps_cold = heat_exchanger_effectiveness_from_temperatures(
+        minimum_capacity_inlet_temperature=Quantity(magnitude=20, unit="degC"),
+        minimum_capacity_outlet_temperature=Quantity(magnitude=55, unit="degC"),
+        opposite_inlet_temperature=Quantity(magnitude=90, unit="degC"),
+    )
+    assert eps_cold == pytest.approx(35 / 70, rel=1e-9)
+    # A bigger C_min temperature swing (better transfer) raises the effectiveness.
+    assert (
+        heat_exchanger_effectiveness_from_temperatures(
+            minimum_capacity_inlet_temperature=Quantity(magnitude=90, unit="degC"),
+            minimum_capacity_outlet_temperature=Quantity(magnitude=30, unit="degC"),
+            opposite_inlet_temperature=Quantity(magnitude=20, unit="degC"),
+        )
+        > eps
+    )
+
+    # Guardrails: equal inlet temperatures transfer no heat (undefined).
+    with pytest.raises(ValueError, match="no heat can transfer"):
+        heat_exchanger_effectiveness_from_temperatures(
+            minimum_capacity_inlet_temperature=Quantity(magnitude=50, unit="degC"),
+            minimum_capacity_outlet_temperature=Quantity(magnitude=45, unit="degC"),
+            opposite_inlet_temperature=Quantity(magnitude=50, unit="degC"),
+        )
+    with pytest.raises(ValueError, match="opposite_inlet_temperature must be a"):
+        heat_exchanger_effectiveness_from_temperatures(
+            minimum_capacity_inlet_temperature=Quantity(magnitude=90, unit="degC"),
+            minimum_capacity_outlet_temperature=Quantity(magnitude=50, unit="degC"),
+            opposite_inlet_temperature=_q("20 W"),
+        )
+
+
 def test_effectiveness_ntu_counterflow():
     from anvilate.analysis import counterflow_effectiveness, heat_exchanger_ntu
 
