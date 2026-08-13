@@ -1418,7 +1418,9 @@ from .conveyor import (
 )
 from .cooling_tower import (
     cooling_tower_approach,
+    cooling_tower_blowdown_rate,
     cooling_tower_effectiveness,
+    cooling_tower_makeup_rate,
     cooling_tower_range,
 )
 from .coriolis import (
@@ -3287,6 +3289,8 @@ __all__ = [
     "refrigerant_mass_flow_rate",
     "cooling_tower_range",
     "cooling_tower_approach",
+    "cooling_tower_blowdown_rate",
+    "cooling_tower_makeup_rate",
     "cooling_tower_effectiveness",
     "coriolis_acceleration",
     "coriolis_parameter",

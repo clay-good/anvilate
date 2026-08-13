@@ -19310,6 +19310,35 @@ def test_cooling_tower_range_approach_and_effectiveness():
         )
 
 
+def test_cooling_tower_blowdown_and_makeup_water_balance():
+    from anvilate.analysis import cooling_tower_blowdown_rate, cooling_tower_makeup_rate
+
+    e = _q("10 gallon/minute")
+
+    # B = E/(COC - 1); 10 gpm evaporation at 4 cycles -> 3.333 gpm blowdown.
+    b = cooling_tower_blowdown_rate(evaporation_rate=e, cycles_of_concentration=4.0)
+    assert b.to("gallon/minute").magnitude == pytest.approx(10.0 / (4 - 1), rel=1e-9)
+    assert b.to("gallon/minute").magnitude == pytest.approx(3.3333, abs=1e-3)
+    # Running more cycles shrinks the blowdown (saves water).
+    b8 = cooling_tower_blowdown_rate(evaporation_rate=e, cycles_of_concentration=8.0)
+    assert b8.to("gallon/minute").magnitude < b.to("gallon/minute").magnitude
+
+    # Makeup M = E + B + D; with no drift, 10 + 3.333 = 13.333 gpm.
+    m = cooling_tower_makeup_rate(evaporation_rate=e, blowdown_rate=b)
+    assert m.to("gallon/minute").magnitude == pytest.approx(13.3333, abs=1e-3)
+    # Including drift adds to the makeup.
+    m_drift = cooling_tower_makeup_rate(
+        evaporation_rate=e, blowdown_rate=b, drift_rate=_q("0.2 gallon/minute")
+    )
+    assert m_drift.to("gallon/minute").magnitude == pytest.approx(
+        m.to("gallon/minute").magnitude + 0.2, rel=1e-9
+    )
+
+    # Guardrail: cycles of concentration must exceed 1.
+    with pytest.raises(ValueError, match="cycles_of_concentration must be greater than 1"):
+        cooling_tower_blowdown_rate(evaporation_rate=e, cycles_of_concentration=1.0)
+
+
 def test_psychrometric_moist_air_properties():
     import math
 

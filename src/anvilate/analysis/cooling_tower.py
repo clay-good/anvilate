@@ -24,7 +24,9 @@ from ..units import Quantity
 
 __all__ = [
     "cooling_tower_approach",
+    "cooling_tower_blowdown_rate",
     "cooling_tower_effectiveness",
+    "cooling_tower_makeup_rate",
     "cooling_tower_range",
 ]
 
@@ -97,6 +99,61 @@ def cooling_tower_effectiveness(*, range_: Quantity, approach: Quantity) -> floa
     if a < 0:
         raise ValueError("approach must be a non-negative temperature difference")
     return r / (r + a)
+
+
+def cooling_tower_blowdown_rate(
+    *,
+    evaporation_rate: Quantity,
+    cycles_of_concentration: float,
+) -> Quantity:
+    """The cooling-tower blowdown rate, B = E/(COC − 1).
+
+    Evaporation leaves dissolved solids behind, so their concentration climbs until a bleed stream
+    (blowdown) carries them out. At steady state the salt balance fixes the blowdown from the
+    ``evaporation_rate`` E and the ``cycles_of_concentration`` COC (the ratio of circulating- to
+    makeup-water salt concentration): B = E/(COC − 1), drift neglected. Running more cycles (higher
+    COC) saves water by shrinking the blowdown, but only until scaling or corrosion limits force a
+    ceiling — which is why COC is the central water-treatment lever. COC must exceed 1 (you cannot
+    concentrate less than the makeup). Returns the blowdown rate in the evaporation rate's flow
+    units.
+    """
+    _check(evaporation_rate, "[volume]/[time]", "evaporation_rate")
+    e = evaporation_rate.to("m**3/s").magnitude
+    if e < 0:
+        raise ValueError("evaporation_rate must be non-negative")
+    if cycles_of_concentration <= 1.0:
+        raise ValueError("cycles_of_concentration must be greater than 1")
+    return Quantity(magnitude=e / (cycles_of_concentration - 1.0), unit="m**3/s")
+
+
+def cooling_tower_makeup_rate(
+    *,
+    evaporation_rate: Quantity,
+    blowdown_rate: Quantity,
+    drift_rate: Quantity | None = None,
+) -> Quantity:
+    """The cooling-tower makeup water rate, M = E + B + D.
+
+    A tower must replace every drop it loses, so the makeup equals the sum of the losses: the
+    ``evaporation_rate`` E (the useful loss that does the cooling), the ``blowdown_rate`` B (the
+    bleed that controls dissolved solids, see :func:`cooling_tower_blowdown_rate`), and the small
+    windage/``drift_rate`` D of entrained droplets (taken as zero if omitted). M = E + B + D is the
+    number that sizes the makeup supply and the water bill. Evaporation dominates, but blowdown is
+    the part water treatment can shrink. Returns the makeup rate in m³/s.
+    """
+    _check(evaporation_rate, "[volume]/[time]", "evaporation_rate")
+    _check(blowdown_rate, "[volume]/[time]", "blowdown_rate")
+    e = evaporation_rate.to("m**3/s").magnitude
+    b = blowdown_rate.to("m**3/s").magnitude
+    d = 0.0
+    if drift_rate is not None:
+        _check(drift_rate, "[volume]/[time]", "drift_rate")
+        d = drift_rate.to("m**3/s").magnitude
+        if d < 0:
+            raise ValueError("drift_rate must be non-negative")
+    if e < 0 or b < 0:
+        raise ValueError("evaporation_rate and blowdown_rate must be non-negative")
+    return Quantity(magnitude=e + b + d, unit="m**3/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

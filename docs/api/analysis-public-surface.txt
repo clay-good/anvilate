@@ -428,6 +428,8 @@ conveyor.belt_speed_for_capacity
 conveyor.conveyor_lift_power
 cooling_tower.cooling_tower_range
 cooling_tower.cooling_tower_approach
+cooling_tower.cooling_tower_blowdown_rate
+cooling_tower.cooling_tower_makeup_rate
 cooling_tower.cooling_tower_effectiveness
 coriolis.coriolis_acceleration
 coriolis.coriolis_parameter
