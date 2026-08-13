@@ -23782,6 +23782,56 @@ def test_antenna_aperture_gain_beamwidth_and_dish_sizing():
         aperture_antenna_gain(aperture_area=_q("1 m"), wavelength=lam, efficiency=0.6)
 
 
+def test_antenna_fresnel_zone_radius():
+    from math import sqrt
+
+    from anvilate.analysis import fresnel_zone_radius
+
+    # r = sqrt(n*lambda*d1*d2/(d1+d2)); 5 GHz (0.06 m) at midpath of a 10 km link -> 12.25 m.
+    r = fresnel_zone_radius(
+        wavelength=_q("0.06 m"),
+        distance_to_near_end=_q("5 km"),
+        distance_to_far_end=_q("5 km"),
+    )
+    assert r.to("m").magnitude == pytest.approx(sqrt(0.06 * 5000 * 5000 / 10000), rel=1e-12)
+    assert r.to("m").magnitude == pytest.approx(12.25, abs=0.01)
+    # The zone is widest at midpath: an off-center point has a smaller radius.
+    assert (
+        fresnel_zone_radius(
+            wavelength=_q("0.06 m"), distance_to_near_end=_q("1 km"), distance_to_far_end=_q("9 km")
+        )
+        .to("m")
+        .magnitude
+        < r.to("m").magnitude
+    )
+    # A longer wavelength (lower frequency) needs more clearance.
+    assert fresnel_zone_radius(
+        wavelength=_q("0.24 m"), distance_to_near_end=_q("5 km"), distance_to_far_end=_q("5 km")
+    ).to("m").magnitude == pytest.approx(2 * r.to("m").magnitude, rel=1e-9)
+    # Higher zones are larger (n scaling).
+    assert fresnel_zone_radius(
+        wavelength=_q("0.06 m"),
+        distance_to_near_end=_q("5 km"),
+        distance_to_far_end=_q("5 km"),
+        zone=4,
+    ).to("m").magnitude == pytest.approx(2 * r.to("m").magnitude, rel=1e-9)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="zone must be a positive integer"):
+        fresnel_zone_radius(
+            wavelength=_q("0.06 m"),
+            distance_to_near_end=_q("5 km"),
+            distance_to_far_end=_q("5 km"),
+            zone=0,
+        )
+    with pytest.raises(ValueError, match="wavelength must be a"):
+        fresnel_zone_radius(
+            wavelength=_q("0.06 s"),
+            distance_to_near_end=_q("5 km"),
+            distance_to_far_end=_q("5 km"),
+        )
+
+
 def test_antenna_effective_aperture_and_efficiency_round_trip():
     from math import pi
 

@@ -31,6 +31,7 @@ __all__ = [
     "aperture_efficiency",
     "dish_diameter_for_gain",
     "free_space_path_loss",
+    "fresnel_zone_radius",
     "max_line_of_sight_range",
     "parabolic_beamwidth",
     "received_power",
@@ -125,6 +126,38 @@ def max_line_of_sight_range(
         raise ValueError("wavelength must be positive")
     d = (lam / (4.0 * pi)) * sqrt(p_t * transmit_gain * receive_gain / p_min)
     return Quantity(magnitude=d, unit="m")
+
+
+def fresnel_zone_radius(
+    *,
+    wavelength: Quantity,
+    distance_to_near_end: Quantity,
+    distance_to_far_end: Quantity,
+    zone: int = 1,
+) -> Quantity:
+    """The Fresnel zone radius at a point on a radio path, r = √(n·λ·d₁·d₂/(d₁+d₂)).
+
+    A radio link is not a pencil ray but an ellipsoid of zones around the line of sight, and
+    keeping the first one mostly clear of obstacles is what makes the link behave like free space.
+    The radius of the ``zone`` n at a point ``distance_to_near_end`` d₁ from one antenna and
+    ``distance_to_far_end`` d₂ from the other is r = √(n·λ·d₁·d₂/(d₁+d₂)), from the ``wavelength``
+    λ. It is widest at midpath and grows with wavelength (lower frequencies need more clearance);
+    the rule of thumb is to keep 60 % of the first zone (n = 1) clear. ``zone`` is a positive
+    integer and the distances positive. Returns the Fresnel radius in metres.
+    """
+    _check(wavelength, "[length]", "wavelength")
+    _check(distance_to_near_end, "[length]", "distance_to_near_end")
+    _check(distance_to_far_end, "[length]", "distance_to_far_end")
+    lam = wavelength.to("m").magnitude
+    d1 = distance_to_near_end.to("m").magnitude
+    d2 = distance_to_far_end.to("m").magnitude
+    if lam <= 0:
+        raise ValueError("wavelength must be positive")
+    if d1 <= 0 or d2 <= 0:
+        raise ValueError("distance_to_near_end and distance_to_far_end must be positive")
+    if zone < 1:
+        raise ValueError("zone must be a positive integer")
+    return Quantity(magnitude=sqrt(zone * lam * d1 * d2 / (d1 + d2)), unit="m")
 
 
 def aperture_antenna_gain(
