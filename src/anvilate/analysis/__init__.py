@@ -2385,7 +2385,9 @@ from .relativity import (
     time_dilation,
 )
 from .reliability import (
+    k_out_of_n_reliability,
     parallel_system_reliability,
+    series_system_mtbf,
     series_system_reliability,
     steady_state_availability,
     weibull_hazard_rate,
@@ -3877,6 +3879,8 @@ __all__ = [
     "steady_state_availability",
     "series_system_reliability",
     "parallel_system_reliability",
+    "k_out_of_n_reliability",
+    "series_system_mtbf",
     "radar_doppler_shift",
     "radial_velocity_from_doppler",
     "max_unambiguous_velocity",

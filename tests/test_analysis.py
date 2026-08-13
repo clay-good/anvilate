@@ -26209,6 +26209,58 @@ def test_reliability_availability_and_series_parallel_systems():
         parallel_system_reliability(component_reliabilities=[])
 
 
+def test_reliability_k_out_of_n_redundancy_and_series_mtbf():
+    from math import comb
+
+    from anvilate.analysis import (
+        k_out_of_n_reliability,
+        parallel_system_reliability,
+        series_system_mtbf,
+        series_system_reliability,
+    )
+
+    # 3-of-4 at R=0.9: sum_{i=3}^{4} C(4,i) 0.9^i 0.1^(4-i) = 0.9477.
+    r = k_out_of_n_reliability(component_reliability=0.9, total_units=4, required_units=3)
+    expect = sum(comb(4, i) * 0.9**i * 0.1 ** (4 - i) for i in range(3, 5))
+    assert r == pytest.approx(expect, rel=1e-12)
+    assert r == pytest.approx(0.9477, abs=1e-4)
+    # It sits between the series (all 4) and parallel (any 1) bounds for the same units.
+    assert series_system_reliability(component_reliabilities=[0.9] * 4) < r
+    assert r < parallel_system_reliability(component_reliabilities=[0.9] * 4)
+    # k = n reduces to series; k = 1 reduces to parallel.
+    assert k_out_of_n_reliability(
+        component_reliability=0.9, total_units=4, required_units=4
+    ) == pytest.approx(0.9**4, rel=1e-12)
+    assert k_out_of_n_reliability(
+        component_reliability=0.9, total_units=4, required_units=1
+    ) == pytest.approx(1.0 - 0.1**4, rel=1e-12)
+    # Adding a spare (2-of-3 vs 2-of-2) raises reliability at fixed R.
+    assert k_out_of_n_reliability(
+        component_reliability=0.9, total_units=3, required_units=2
+    ) > k_out_of_n_reliability(component_reliability=0.9, total_units=2, required_units=2)
+
+    # Series MTBF = 1/sum(lambda); rates 1e-5,2e-5,3e-5 /h -> 16667 h.
+    mtbf = series_system_mtbf(
+        failure_rates=[_q("1e-5 / hour"), _q("2e-5 / hour"), _q("3e-5 / hour")]
+    )
+    assert mtbf.to("hour").magnitude == pytest.approx(1.0 / 6e-5, rel=1e-9)
+    # Adding a part in series shortens the MTBF (higher combined rate).
+    more = series_system_mtbf(
+        failure_rates=[_q("1e-5 / hour"), _q("2e-5 / hour"), _q("3e-5 / hour"), _q("1e-5 / hour")]
+    )
+    assert more.to("hour").magnitude < mtbf.to("hour").magnitude
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="required_units must not exceed total_units"):
+        k_out_of_n_reliability(component_reliability=0.9, total_units=3, required_units=4)
+    with pytest.raises(ValueError, match="component_reliability must be in"):
+        k_out_of_n_reliability(component_reliability=1.5, total_units=3, required_units=2)
+    with pytest.raises(ValueError, match="at least one failure rate must be positive"):
+        series_system_mtbf(failure_rates=[_q("0 / hour")])
+    with pytest.raises(ValueError, match="failure_rates entry must be a"):
+        series_system_mtbf(failure_rates=[_q("5 hour")])
+
+
 def test_rotor_hover_induced_velocity_power_and_figure_of_merit():
     from math import pi, sqrt
 

@@ -18,12 +18,14 @@ Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` value
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import exp, gamma
+from math import comb, exp, gamma
 
 from ..units import Quantity
 
 __all__ = [
+    "k_out_of_n_reliability",
     "parallel_system_reliability",
+    "series_system_mtbf",
     "series_system_reliability",
     "steady_state_availability",
     "weibull_hazard_rate",
@@ -151,6 +153,58 @@ def parallel_system_reliability(*, component_reliabilities: Sequence[float]) -> 
             raise ValueError(f"each reliability must be in [0, 1]; got {r}")
         failure_product *= 1.0 - r
     return 1.0 - failure_product
+
+
+def k_out_of_n_reliability(
+    *, component_reliability: float, total_units: int, required_units: int
+) -> float:
+    """The reliability of a k-out-of-n redundant system, R = Σ_{i=k}^{n} C(n,i)·R^i·(1−R)^(n−i).
+
+    The general redundancy form for n identical units of reliability ``component_reliability`` R
+    where any ``required_units`` k of ``total_units`` n keep the system up (a 2-of-3 voting logic, 3
+    of 4 engines, a spared array): the binomial sum of the ways at least k survive. It spans the
+    range between :func:`series_system_reliability` (k = n, all must work) and
+    :func:`parallel_system_reliability` (k = 1, any one will do), letting you size just enough
+    redundancy. R in [0, 1]; ``total_units`` and ``required_units`` positive integers with k ≤ n.
+    Returns the system reliability (0 to 1) as a plain float.
+    """
+    if not 0.0 <= component_reliability <= 1.0:
+        raise ValueError(f"component_reliability must be in [0, 1]; got {component_reliability}")
+    if total_units < 1:
+        raise ValueError("total_units must be a positive integer")
+    if required_units < 1:
+        raise ValueError("required_units must be a positive integer")
+    if required_units > total_units:
+        raise ValueError("required_units must not exceed total_units")
+    r = component_reliability
+    return sum(
+        comb(total_units, i) * r**i * (1.0 - r) ** (total_units - i)
+        for i in range(required_units, total_units + 1)
+    )
+
+
+def series_system_mtbf(*, failure_rates: Sequence[Quantity]) -> Quantity:
+    """The MTBF of a series system of constant-hazard parts, MTBF = 1/Σ λ_i.
+
+    For components whose failure rates add — a series system where any part failing stops the whole,
+    each with constant hazard λ_i — the system failure rate is the sum Σ λ_i and the mean time
+    between failures is its reciprocal, MTBF = 1/Σ λ_i. This is the parts-count reliability
+    prediction: more parts in series means a higher combined rate and a shorter MTBF. Each entry in
+    ``failure_rates`` is a rate (1/time) and must be non-negative, with at least one positive.
+    Returns the MTBF as a time.
+    """
+    if len(failure_rates) == 0:
+        raise ValueError("failure_rates must contain at least one component")
+    total_rate = 0.0
+    for rate in failure_rates:
+        _check(rate, "1/[time]", "failure_rates entry")
+        value = rate.to("1/s").magnitude
+        if value < 0:
+            raise ValueError("each failure rate must be non-negative")
+        total_rate += value
+    if total_rate <= 0:
+        raise ValueError("at least one failure rate must be positive")
+    return Quantity(magnitude=1.0 / total_rate, unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
