@@ -16118,6 +16118,43 @@ def test_thermal_peclet_number():
         )
 
 
+def test_thermal_brinkman_number_and_eckert_prandtl_identity():
+    from anvilate.analysis import brinkman_number
+
+    # Br = mu*V^2/(k*dT); a polymer melt (mu=1000, V=1, k=0.2, dT=10) -> 500 (strong self-heating).
+    br = brinkman_number(
+        dynamic_viscosity=_q("1000 Pa*s"),
+        velocity=_q("1 m/s"),
+        thermal_conductivity=_q("0.2 W/(m*K)"),
+        temperature_difference=_q("10 K"),
+    )
+    assert br == pytest.approx(1000 * 1.0**2 / (0.2 * 10), rel=1e-9)
+    assert br == pytest.approx(500.0, rel=1e-9)
+
+    # Defining identity: Br = Ec*Pr. Ec = V^2/(cp*dT), Pr = mu*cp/k -> Ec*Pr = mu*V^2/(k*dT).
+    cp = 2000.0  # J/(kg*K); it cancels, so any positive value reproduces Br
+    ec = 1.0**2 / (cp * 10)
+    pr = 1000 * cp / 0.2
+    assert br == pytest.approx(ec * pr, rel=1e-9)
+
+    # Viscous heating scales with the square of velocity.
+    br_fast = brinkman_number(
+        dynamic_viscosity=_q("1000 Pa*s"),
+        velocity=_q("2 m/s"),
+        thermal_conductivity=_q("0.2 W/(m*K)"),
+        temperature_difference=_q("10 K"),
+    )
+    assert br_fast == pytest.approx(4.0 * br, rel=1e-9)
+
+    with pytest.raises(ValueError, match="temperature_difference"):
+        brinkman_number(
+            dynamic_viscosity=_q("1000 Pa*s"),
+            velocity=_q("1 m/s"),
+            thermal_conductivity=_q("0.2 W/(m*K)"),
+            temperature_difference=_q("0 K"),
+        )
+
+
 def test_thermal_grashof_and_rayleigh_numbers():
     from anvilate.analysis import grashof_number, rayleigh_number
 

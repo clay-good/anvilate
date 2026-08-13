@@ -1376,6 +1376,7 @@ thermal.DifferentialThermalStress
 thermal.bimetallic_strip_curvature
 thermal.bimetallic_strip_tip_deflection
 thermal.biot_number
+thermal.brinkman_number
 thermal.circular_source_spreading_resistance
 thermal.conduction_thermal_resistance
 thermal.critical_insulation_radius
