@@ -958,6 +958,7 @@ optics.depth_of_field_far_limit
 optics.snell_refraction_angle
 optics.critical_angle
 optics.fiber_numerical_aperture
+optics.abbe_number
 optics.lensmaker_focal_length
 optics.lens_power
 optics.combined_thin_lens_focal_length

@@ -2174,6 +2174,7 @@ from .optical_interference import (
     wavelength_from_fringe_spacing,
 )
 from .optics import (
+    abbe_number,
     combined_thin_lens_focal_length,
     critical_angle,
     depth_of_field_far_limit,
@@ -4039,6 +4040,7 @@ __all__ = [
     "snell_refraction_angle",
     "critical_angle",
     "fiber_numerical_aperture",
+    "abbe_number",
     "lensmaker_focal_length",
     "lens_power",
     "combined_thin_lens_focal_length",

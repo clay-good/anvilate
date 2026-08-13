@@ -28,6 +28,7 @@ from ..units import Quantity
 RAYLEIGH_CONSTANT = 1.22
 
 __all__ = [
+    "abbe_number",
     "combined_thin_lens_focal_length",
     "critical_angle",
     "depth_of_field_far_limit",
@@ -277,6 +278,23 @@ def fiber_numerical_aperture(*, core_index: float, cladding_index: float) -> flo
     if cladding_index >= core_index:
         raise ValueError("core_index must exceed cladding_index (light guides in the denser core)")
     return sqrt(core_index * core_index - cladding_index * cladding_index)
+
+
+def abbe_number(*, index_d: float, index_F: float, index_C: float) -> float:
+    """The Abbe number, V_d = (n_d − 1)/(n_F − n_C).
+
+    How weakly a glass disperses colour, from its refractive index at three Fraunhofer lines: the
+    yellow ``index_d`` n_d (587.6 nm), the blue ``index_F`` n_F (486.1 nm), and the red ``index_C``
+    n_C (656.3 nm), V_d = (n_d − 1)/(n_F − n_C). A high Abbe number (crown glass, ~60) bends the
+    colours nearly together and shows little chromatic fringing; a low one (flint glass, ~30)
+    spreads them, and pairing a crown and a flint cancels the dispersion in an achromatic doublet.
+    Normal dispersion means n_F > n_C. Returns the Abbe number (unitless).
+    """
+    if index_d <= 1.0:
+        raise ValueError("index_d must exceed 1")
+    if index_F <= index_C:
+        raise ValueError("index_F must exceed index_C (normal dispersion: blue bends more)")
+    return (index_d - 1.0) / (index_F - index_C)
 
 
 def lensmaker_focal_length(

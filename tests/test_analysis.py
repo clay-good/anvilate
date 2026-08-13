@@ -17761,6 +17761,24 @@ def test_optics_snell_critical_angle_and_fiber_na():
         fiber_numerical_aperture(core_index=1.46, cladding_index=1.48)
 
 
+def test_optics_abbe_number():
+    from anvilate.analysis import abbe_number
+
+    # BK7 crown glass: n_d=1.5168, n_F=1.5224, n_C=1.5143 -> V ~ 64.2.
+    v = abbe_number(index_d=1.5168, index_F=1.5224, index_C=1.5143)
+    assert v == pytest.approx((1.5168 - 1) / (1.5224 - 1.5143), rel=1e-9)
+    assert v == pytest.approx(63.8, abs=0.5)  # high Abbe -> low dispersion (crown)
+    # A flint glass disperses more (closer n_F/n_C spread relative to n_d-1 gives a lower Abbe).
+    v_flint = abbe_number(index_d=1.6200, index_F=1.6320, index_C=1.6150)
+    assert v_flint < v  # flint spreads colour more than crown
+
+    # Guardrails: index above 1, normal dispersion (n_F > n_C).
+    with pytest.raises(ValueError, match="index_d must exceed 1"):
+        abbe_number(index_d=0.9, index_F=1.5224, index_C=1.5143)
+    with pytest.raises(ValueError, match="index_F must exceed index_C"):
+        abbe_number(index_d=1.5168, index_F=1.5143, index_C=1.5224)
+
+
 def test_broaching_teeth_force_and_pull_capacity():
     from anvilate.analysis import (
         broaching_cutting_force,
