@@ -2293,6 +2293,7 @@ from .power_cycles import (
     carnot_efficiency,
     diesel_cycle_efficiency,
     heat_engine_second_law_efficiency,
+    mean_effective_pressure,
     otto_cycle_efficiency,
 )
 from .power_screw import (
@@ -4246,6 +4247,7 @@ __all__ = [
     "brayton_cycle_efficiency",
     "carnot_efficiency",
     "heat_engine_second_law_efficiency",
+    "mean_effective_pressure",
     "brake_specific_fuel_consumption",
     "brake_thermal_efficiency",
     "lead_angle",

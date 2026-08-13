@@ -16602,6 +16602,26 @@ def test_power_cycles_bsfc_and_brake_thermal_efficiency():
         )
 
 
+def test_power_cycles_mean_effective_pressure():
+    from anvilate.analysis import mean_effective_pressure
+
+    # MEP = W_net/V_d; 500 J/cycle in 0.5 L -> 1e6 Pa = 1000 kPa = 10 bar.
+    mep = mean_effective_pressure(net_work_per_cycle=_q("500 J"), displacement_volume=_q("0.5 L"))
+    assert mep.to("kPa").magnitude == pytest.approx(500 / 0.5e-3 / 1000, rel=1e-9)
+    assert mep.to("bar").magnitude == pytest.approx(10.0, rel=1e-9)
+    # It divides out engine size: same work in twice the displacement halves the MEP.
+    mep_big = mean_effective_pressure(
+        net_work_per_cycle=_q("500 J"), displacement_volume=_q("1.0 L")
+    )
+    assert mep_big.to("kPa").magnitude == pytest.approx(mep.to("kPa").magnitude / 2, rel=1e-9)
+
+    # Guardrails: positive work and displacement, dimensions checked.
+    with pytest.raises(ValueError, match="displacement_volume must be positive"):
+        mean_effective_pressure(net_work_per_cycle=_q("500 J"), displacement_volume=_q("0 L"))
+    with pytest.raises(ValueError, match="net_work_per_cycle must be a"):
+        mean_effective_pressure(net_work_per_cycle=_q("500 N"), displacement_volume=_q("0.5 L"))
+
+
 def test_exergy_of_heat_flow_exergy_and_gouy_stodola():
     from anvilate.analysis import (
         exergy_of_heat,

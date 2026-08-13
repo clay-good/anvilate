@@ -33,6 +33,7 @@ __all__ = [
     "carnot_efficiency",
     "diesel_cycle_efficiency",
     "heat_engine_second_law_efficiency",
+    "mean_effective_pressure",
     "otto_cycle_efficiency",
 ]
 
@@ -204,6 +205,32 @@ def brake_thermal_efficiency(
             "brake_power exceeds the fuel energy rate (η > 1 is impossible); check inputs"
         )
     return eta
+
+
+def mean_effective_pressure(
+    *,
+    net_work_per_cycle: Quantity,
+    displacement_volume: Quantity,
+) -> Quantity:
+    """The mean effective pressure, MEP = W_net / V_d.
+
+    The constant pressure that, acting on the piston through one stroke, would produce the same net
+    work a cycle actually delivers: the ``net_work_per_cycle`` W_net over the
+    ``displacement_volume`` V_d, MEP = W_net/V_d. Because it divides out engine size, it is the
+    fairest way to compare how hard engines of different displacement are worked — a
+    naturally-aspirated gasoline engine peaks near 10 bar, a boosted one higher. Formed from brake
+    work it is the BMEP a dyno reports; from the ideal cycle work it is the indicated MEP. Returns
+    the MEP in kPa.
+    """
+    _check(net_work_per_cycle, "[energy]", "net_work_per_cycle")
+    _check(displacement_volume, "[volume]", "displacement_volume")
+    w = net_work_per_cycle.to("J").magnitude
+    v_d = displacement_volume.to("m**3").magnitude
+    if w <= 0:
+        raise ValueError("net_work_per_cycle must be positive")
+    if v_d <= 0:
+        raise ValueError("displacement_volume must be positive")
+    return Quantity(magnitude=w / v_d, unit="Pa").to("kPa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
