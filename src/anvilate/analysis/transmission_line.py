@@ -17,12 +17,15 @@ real (resistive) impedances; a complex load needs the full phasor form.
 
 from __future__ import annotations
 
-from math import log10
+from math import log10, sqrt
 
 from ..units import Quantity
 
 __all__ = [
+    "mismatch_loss",
+    "quarter_wave_transformer_impedance",
     "reflection_coefficient",
+    "reflection_coefficient_from_vswr",
     "return_loss",
     "voltage_standing_wave_ratio",
 ]
@@ -79,6 +82,61 @@ def return_loss(*, reflection_coefficient: float) -> float:
     if g > 1.0:
         raise ValueError("|reflection_coefficient| must not exceed 1")
     return -20.0 * log10(g)
+
+
+def mismatch_loss(*, reflection_coefficient: float) -> float:
+    """The mismatch loss, ML = -10*log10(1 - |Gamma|²).
+
+    The fraction of incident power *not* delivered to the load because it is reflected, in
+    decibels: ML = -10*log10(1 - |``reflection_coefficient``|²). Distinct from :func:`return_loss`
+    (which rates the reflected power) — mismatch loss rates the *transmitted* power lost, the number
+    a link budget docks for an imperfect match. A small Gamma barely costs anything (Gamma = 0.2
+    loses only 0.18 dB), which is why modest reflections are often tolerated. Returns the mismatch
+    loss in dB as a plain float (>= 0).
+    """
+    g = abs(reflection_coefficient)
+    if g >= 1.0:
+        raise ValueError("|reflection_coefficient| must be below 1 (a full reflection loses all)")
+    return -10.0 * log10(1.0 - g * g)
+
+
+def reflection_coefficient_from_vswr(*, voltage_standing_wave_ratio: float) -> float:
+    """The reflection-coefficient magnitude from VSWR, |Gamma| = (VSWR - 1)/(VSWR + 1).
+
+    The measurement inverse of :func:`voltage_standing_wave_ratio`: an instrument reads a standing-
+    wave ratio, and |Gamma| = (``voltage_standing_wave_ratio`` - 1)/(VSWR + 1) recovers the
+    reflection coefficient magnitude behind it (which then feeds :func:`return_loss` or
+    :func:`mismatch_loss`). A VSWR of 1 is a perfect match (Gamma = 0); as VSWR → ∞, |Gamma| → 1.
+    ``voltage_standing_wave_ratio`` must be at least 1. Returns the reflection coefficient magnitude
+    (0 to 1) as a plain float.
+    """
+    if voltage_standing_wave_ratio < 1.0:
+        raise ValueError("voltage_standing_wave_ratio must be at least 1")
+    s = voltage_standing_wave_ratio
+    return (s - 1.0) / (s + 1.0)
+
+
+def quarter_wave_transformer_impedance(
+    *, source_impedance: Quantity, load_impedance: Quantity
+) -> Quantity:
+    """The quarter-wave transformer impedance, Z_q = √(Z_0·Z_L).
+
+    A quarter-wavelength line of the right impedance matches two unequal impedances with no
+    reflection: the section must have Z_q = √(``source_impedance`` Z_0 · ``load_impedance`` Z_L),
+    the geometric mean of the two it joins. It is the classic narrowband matching trick — a 50 Ω to
+    a 100 Ω antenna wants a 70.7 Ω quarter-wave section — exact only at the frequency where the
+    section is truly λ/4. Both impedances must be positive resistances. Returns the transformer
+    characteristic impedance in ohms.
+    """
+    _check(source_impedance, "[resistance]", "source_impedance")
+    _check(load_impedance, "[resistance]", "load_impedance")
+    z0 = source_impedance.to("ohm").magnitude
+    zl = load_impedance.to("ohm").magnitude
+    if z0 <= 0:
+        raise ValueError("source_impedance must be positive")
+    if zl <= 0:
+        raise ValueError("load_impedance must be positive")
+    return Quantity(magnitude=sqrt(z0 * zl), unit="ohm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

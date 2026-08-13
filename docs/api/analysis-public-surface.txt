@@ -1460,6 +1460,9 @@ torsion.triangular_bar_twist_angle
 transmission_line.reflection_coefficient
 transmission_line.return_loss
 transmission_line.voltage_standing_wave_ratio
+transmission_line.mismatch_loss
+transmission_line.reflection_coefficient_from_vswr
+transmission_line.quarter_wave_transformer_impedance
 turbomachinery.blade_tip_speed
 turbomachinery.euler_head
 turbomachinery.flow_coefficient

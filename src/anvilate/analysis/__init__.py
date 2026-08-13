@@ -2816,7 +2816,10 @@ from .torsion import (
     triangular_bar_twist_angle,
 )
 from .transmission_line import (
+    mismatch_loss,
+    quarter_wave_transformer_impedance,
     reflection_coefficient,
+    reflection_coefficient_from_vswr,
     return_loss,
     voltage_standing_wave_ratio,
 )
@@ -3390,6 +3393,9 @@ __all__ = [
     "reflection_coefficient",
     "voltage_standing_wave_ratio",
     "return_loss",
+    "mismatch_loss",
+    "reflection_coefficient_from_vswr",
+    "quarter_wave_transformer_impedance",
     "rectangular_waveguide_cutoff_frequency",
     "waveguide_guide_wavelength",
     "waveguide_phase_velocity",

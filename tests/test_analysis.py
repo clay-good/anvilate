@@ -23703,6 +23703,57 @@ def test_transmission_line_reflection_vswr_and_return_loss():
         return_loss(reflection_coefficient=0.0)
 
 
+def test_transmission_line_mismatch_loss_vswr_inverse_and_quarter_wave():
+    from math import log10, sqrt
+
+    from anvilate.analysis import (
+        mismatch_loss,
+        quarter_wave_transformer_impedance,
+        reflection_coefficient_from_vswr,
+        voltage_standing_wave_ratio,
+    )
+
+    # ML = -10*log10(1 - |G|^2); Gamma 0.2 -> ~0.177 dB (small, transmitted-power loss).
+    ml = mismatch_loss(reflection_coefficient=0.2)
+    assert ml == pytest.approx(-10 * log10(1 - 0.04), rel=1e-9)
+    assert ml == pytest.approx(0.177, abs=0.001)
+    # A bigger reflection loses more transmitted power.
+    assert mismatch_loss(reflection_coefficient=0.5) > ml
+    # A perfect match loses nothing.
+    assert mismatch_loss(reflection_coefficient=0.0) == pytest.approx(0.0, abs=1e-12)
+
+    # |Gamma| = (VSWR-1)/(VSWR+1) inverts the VSWR relation: VSWR 1.5 -> 0.2.
+    g = reflection_coefficient_from_vswr(voltage_standing_wave_ratio=1.5)
+    assert g == pytest.approx(0.2, rel=1e-9)
+    # Round trip against the forward VSWR.
+    assert voltage_standing_wave_ratio(reflection_coefficient=g) == pytest.approx(1.5, rel=1e-9)
+    # A perfect match (VSWR 1) has zero reflection.
+    assert reflection_coefficient_from_vswr(voltage_standing_wave_ratio=1.0) == pytest.approx(
+        0.0, abs=1e-12
+    )
+
+    # Quarter-wave Z_q = sqrt(Z0*ZL); 50 to 100 ohm -> 70.7 ohm.
+    zq = quarter_wave_transformer_impedance(
+        source_impedance=_q("50 ohm"), load_impedance=_q("100 ohm")
+    )
+    assert zq.to("ohm").magnitude == pytest.approx(sqrt(50 * 100), rel=1e-12)
+    assert zq.to("ohm").magnitude == pytest.approx(70.71, abs=0.01)
+    # Matching equal impedances needs a section of the same impedance.
+    assert quarter_wave_transformer_impedance(
+        source_impedance=_q("50 ohm"), load_impedance=_q("50 ohm")
+    ).to("ohm").magnitude == pytest.approx(50.0, rel=1e-12)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="must be below 1"):
+        mismatch_loss(reflection_coefficient=1.0)
+    with pytest.raises(ValueError, match="voltage_standing_wave_ratio must be at least 1"):
+        reflection_coefficient_from_vswr(voltage_standing_wave_ratio=0.5)
+    with pytest.raises(ValueError, match="load_impedance must be a"):
+        quarter_wave_transformer_impedance(
+            source_impedance=_q("50 ohm"), load_impedance=_q("100 V")
+        )
+
+
 def test_noise_figure_factor_cascade_and_temperature():
     from anvilate.analysis import (
         cascade_noise_factor,
