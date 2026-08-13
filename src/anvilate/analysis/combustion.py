@@ -19,6 +19,8 @@ caller's from an ultimate analysis; the balances are here.
 
 from __future__ import annotations
 
+from math import sqrt
+
 from ..units import Quantity
 
 __all__ = [
@@ -29,7 +31,11 @@ __all__ = [
     "siegert_dry_flue_gas_loss",
     "combustion_efficiency",
     "stoichiometric_air_fuel_ratio",
+    "wobbe_index",
+    "lower_heating_value",
 ]
+
+_WATER_LATENT_HEAT_MJ_PER_KG = 2.442  # h_fg of water at 25 °C, MJ/kg
 
 _OXYGEN_MASS_FRACTION_AIR = 0.232  # kg O₂ per kg dry air
 _O2_PER_CARBON = 2.6667  # kg O₂ per kg C (C → CO₂, 32/12)
@@ -190,3 +196,68 @@ def combustion_efficiency(
     if efficiency <= 0:
         raise ValueError("the losses given exceed 100% (check the inputs)")
     return efficiency
+
+
+def wobbe_index(*, higher_heating_value: Quantity, gas_specific_gravity: float) -> Quantity:
+    """The Wobbe index, W = HHV/√(SG), the gas-interchangeability number.
+
+    Two fuel gases fire a given burner interchangeably — same heat output at the same nozzle
+    pressure — when they share a Wobbe index, not merely a heating value: the flow through a fixed
+    orifice scales as 1/√(density), so the delivered energy tracks HHV/√(SG). From the *volumetric*
+    ``higher_heating_value`` HHV (energy per unit volume) and the ``gas_specific_gravity`` SG (gas
+    density relative to air), W = HHV/√(SG). It is the number gas utilities hold within a band so
+    appliances run safely on gas from any source (pipeline, LNG, biogas). Returns the Wobbe index in
+    the same volumetric-energy units as the heating value.
+    """
+    if not higher_heating_value.has_dimension("[energy]/[volume]"):
+        raise ValueError(
+            "higher_heating_value must be a volumetric energy density (energy per volume); got "
+            f"{higher_heating_value.dimensionality} ({higher_heating_value})"
+        )
+    if gas_specific_gravity <= 0:
+        raise ValueError("gas_specific_gravity must be positive")
+    hhv = higher_heating_value.to("MJ/m**3").magnitude
+    return Quantity(magnitude=hhv / sqrt(gas_specific_gravity), unit="MJ/m**3")
+
+
+def lower_heating_value(
+    *,
+    higher_heating_value: Quantity,
+    water_mass_per_fuel_mass: float,
+    latent_heat: Quantity | None = None,
+) -> Quantity:
+    """The lower (net) heating value, LHV = HHV − w·h_fg.
+
+    The higher heating value counts the latent heat recovered by condensing the combustion water;
+    the lower (net) value — the practical one for a non-condensing appliance whose flue leaves the
+    water as vapour — subtracts it: LHV = HHV − w·h_fg, from the ``higher_heating_value`` HHV, the
+    ``water_mass_per_fuel_mass`` w (kg of water vapour produced per kg of fuel, from the fuel's
+    hydrogen content), and the water latent heat ``latent_heat`` h_fg (default 2.442 MJ/kg at
+    25 °C).
+    Hydrogen-rich fuels (natural gas) lose the most: methane's LHV is about 10% below its HHV.
+    ``higher_heating_value`` and ``latent_heat`` are per-unit-mass energies. Returns the LHV in the
+    same mass-specific units.
+    """
+    if not higher_heating_value.has_dimension("[energy]/[mass]"):
+        raise ValueError(
+            "higher_heating_value must be a mass-specific energy (energy per mass); got "
+            f"{higher_heating_value.dimensionality} ({higher_heating_value})"
+        )
+    if water_mass_per_fuel_mass < 0:
+        raise ValueError("water_mass_per_fuel_mass must be non-negative")
+    if latent_heat is None:
+        h_fg = _WATER_LATENT_HEAT_MJ_PER_KG
+    else:
+        if not latent_heat.has_dimension("[energy]/[mass]"):
+            raise ValueError(
+                "latent_heat must be a mass-specific energy (energy per mass); got "
+                f"{latent_heat.dimensionality} ({latent_heat})"
+            )
+        h_fg = latent_heat.to("MJ/kg").magnitude
+    hhv = higher_heating_value.to("MJ/kg").magnitude
+    lhv = hhv - water_mass_per_fuel_mass * h_fg
+    if lhv <= 0:
+        raise ValueError(
+            "the water latent-heat term exceeds the higher heating value (LHV ≤ 0); check inputs"
+        )
+    return Quantity(magnitude=lhv, unit="MJ/kg")

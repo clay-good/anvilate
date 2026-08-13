@@ -1318,8 +1318,10 @@ from .combustion import (
     equivalence_ratio,
     equivalence_ratio_from_excess_air,
     excess_air_from_flue_oxygen,
+    lower_heating_value,
     siegert_dry_flue_gas_loss,
     stoichiometric_air_fuel_ratio,
+    wobbe_index,
 )
 from .comminution import (
     bond_comminution_work,
@@ -3707,6 +3709,8 @@ __all__ = [
     "equivalence_ratio_from_excess_air",
     "siegert_dry_flue_gas_loss",
     "combustion_efficiency",
+    "wobbe_index",
+    "lower_heating_value",
     "rittinger_comminution_energy",
     "kick_comminution_energy",
     "bond_comminution_work",

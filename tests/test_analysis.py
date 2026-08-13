@@ -16208,6 +16208,54 @@ def test_combustion_equivalence_ratio_grades_lean_and_rich():
         equivalence_ratio_from_excess_air(excess_air_fraction=-1.0)
 
 
+def test_combustion_wobbe_index_and_lower_heating_value():
+    from math import sqrt
+
+    from anvilate.analysis import lower_heating_value, wobbe_index
+
+    # Wobbe W = HHV/sqrt(SG); natural gas ~38 MJ/m^3 at SG 0.6 -> ~49.1 MJ/m^3.
+    w = wobbe_index(higher_heating_value=_q("38 MJ/m**3"), gas_specific_gravity=0.6)
+    assert w.to("MJ/m**3").magnitude == pytest.approx(38.0 / sqrt(0.6), rel=1e-12)
+    assert w.to("MJ/m**3").magnitude == pytest.approx(49.06, abs=0.02)
+    # Two gases with equal Wobbe fire a burner interchangeably: a denser, richer gas
+    # can match a lighter, leaner one.
+    w2 = wobbe_index(higher_heating_value=_q("49.06 MJ/m**3"), gas_specific_gravity=1.0)
+    assert w2.to("MJ/m**3").magnitude == pytest.approx(w.to("MJ/m**3").magnitude, abs=0.01)
+    # A denser gas (higher SG) has a lower Wobbe for the same heating value.
+    assert (
+        wobbe_index(higher_heating_value=_q("38 MJ/m**3"), gas_specific_gravity=1.0)
+        .to("MJ/m**3")
+        .magnitude
+        < w.to("MJ/m**3").magnitude
+    )
+
+    # LHV = HHV - w*h_fg; methane HHV 55.5 MJ/kg, 2.25 kg water/kg fuel -> ~50.0 MJ/kg.
+    lhv = lower_heating_value(higher_heating_value=_q("55.5 MJ/kg"), water_mass_per_fuel_mass=2.25)
+    assert lhv.to("MJ/kg").magnitude == pytest.approx(55.5 - 2.25 * 2.442, rel=1e-9)
+    assert lhv.to("MJ/kg").magnitude == pytest.approx(50.0, abs=0.05)
+    # A dry fuel (no water produced) has LHV = HHV.
+    assert lower_heating_value(
+        higher_heating_value=_q("30 MJ/kg"), water_mass_per_fuel_mass=0.0
+    ).to("MJ/kg").magnitude == pytest.approx(30.0, rel=1e-12)
+    # An explicit latent heat overrides the default.
+    lhv_custom = lower_heating_value(
+        higher_heating_value=_q("55.5 MJ/kg"),
+        water_mass_per_fuel_mass=2.25,
+        latent_heat=_q("2.26 MJ/kg"),
+    )
+    assert lhv_custom.to("MJ/kg").magnitude == pytest.approx(55.5 - 2.25 * 2.26, rel=1e-9)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="gas_specific_gravity must be positive"):
+        wobbe_index(higher_heating_value=_q("38 MJ/m**3"), gas_specific_gravity=0.0)
+    with pytest.raises(ValueError, match="volumetric energy density"):
+        wobbe_index(higher_heating_value=_q("38 MJ/kg"), gas_specific_gravity=0.6)
+    with pytest.raises(ValueError, match="mass-specific energy"):
+        lower_heating_value(higher_heating_value=_q("38 MJ/m**3"), water_mass_per_fuel_mass=2.0)
+    with pytest.raises(ValueError, match="LHV"):
+        lower_heating_value(higher_heating_value=_q("5 MJ/kg"), water_mass_per_fuel_mass=3.0)
+
+
 def test_open_channel_rational_method_peak_runoff():
     from anvilate.analysis import rational_method_peak_runoff
 
