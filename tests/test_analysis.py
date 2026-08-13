@@ -11760,6 +11760,50 @@ def test_quality_factor():
         quality_factor(damping_ratio=0)
 
 
+def test_half_power_bandwidth_identifies_damping_and_q():
+    from anvilate.analysis import (
+        damping_ratio_from_half_power_bandwidth,
+        quality_factor,
+        quality_factor_from_half_power_bandwidth,
+    )
+
+    # Q = f_n/df; a 100 Hz peak with a 4 Hz half-power bandwidth -> Q = 25.
+    q = quality_factor_from_half_power_bandwidth(
+        resonant_frequency=_q("100 Hz"), half_power_bandwidth=_q("4 Hz")
+    )
+    assert q == pytest.approx(25.0, rel=1e-12)
+    # zeta = df/(2*f_n) = 0.02, and Q = 1/(2*zeta) ties the two together.
+    zeta = damping_ratio_from_half_power_bandwidth(
+        resonant_frequency=_q("100 Hz"), half_power_bandwidth=_q("4 Hz")
+    )
+    assert zeta == pytest.approx(0.02, rel=1e-12)
+    assert quality_factor(damping_ratio=zeta) == pytest.approx(q, rel=1e-12)
+    assert q == pytest.approx(1.0 / (2.0 * zeta), rel=1e-12)
+    # A narrower bandwidth (sharper peak) means less damping and higher Q.
+    assert (
+        damping_ratio_from_half_power_bandwidth(
+            resonant_frequency=_q("100 Hz"), half_power_bandwidth=_q("2 Hz")
+        )
+        < zeta
+    )
+    assert (
+        quality_factor_from_half_power_bandwidth(
+            resonant_frequency=_q("100 Hz"), half_power_bandwidth=_q("2 Hz")
+        )
+        > q
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="half_power_bandwidth must be positive"):
+        quality_factor_from_half_power_bandwidth(
+            resonant_frequency=_q("100 Hz"), half_power_bandwidth=_q("0 Hz")
+        )
+    with pytest.raises(ValueError, match="resonant_frequency must be a"):
+        damping_ratio_from_half_power_bandwidth(
+            resonant_frequency=_q("100 m"), half_power_bandwidth=_q("4 Hz")
+        )
+
+
 def test_critical_damping_coefficient():
     from math import sqrt
 

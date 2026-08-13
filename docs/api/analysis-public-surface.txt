@@ -564,6 +564,8 @@ dynamics.natural_frequency
 dynamics.natural_frequency_from_deflection
 dynamics.physical_pendulum_period
 dynamics.quality_factor
+dynamics.quality_factor_from_half_power_bandwidth
+dynamics.damping_ratio_from_half_power_bandwidth
 dynamics.resonance_phase_angle
 dynamics.rotating_unbalance_force
 dynamics.simple_pendulum_period

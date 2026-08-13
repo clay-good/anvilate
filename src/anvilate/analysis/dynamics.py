@@ -44,6 +44,8 @@ __all__ = [
     "step_response_peak_time",
     "logarithmic_decrement",
     "quality_factor",
+    "quality_factor_from_half_power_bandwidth",
+    "damping_ratio_from_half_power_bandwidth",
     "critical_damping_coefficient",
     "transmissibility",
     "isolation_scorecard",
@@ -425,6 +427,53 @@ def quality_factor(*, damping_ratio: float) -> float:
     if zeta <= 0:
         raise ValueError(f"damping_ratio must be positive for a finite Q; got {zeta}")
     return 1.0 / (2.0 * zeta)
+
+
+def quality_factor_from_half_power_bandwidth(
+    *, resonant_frequency: Quantity, half_power_bandwidth: Quantity
+) -> float:
+    """The quality factor Q = f_n/Δf measured from a resonance peak.
+
+    The experimental companion to :func:`quality_factor`: instead of a known damping ratio, it reads
+    Q straight off a measured frequency response as the ``resonant_frequency`` f_n divided by the
+    ``half_power_bandwidth`` Δf — the width between the two −3 dB (half-power) points either side of
+    the peak. A tall, narrow resonance (small Δf) gives a high Q. It is the standard way to identify
+    the sharpness of a mode from a swept-sine or FRF test. Both frequencies must be positive.
+    Returns the dimensionless quality factor.
+    """
+    _require(resonant_frequency, "[frequency]", "resonant_frequency")
+    _require(half_power_bandwidth, "[frequency]", "half_power_bandwidth")
+    f_n = resonant_frequency.to("Hz").magnitude
+    delta_f = half_power_bandwidth.to("Hz").magnitude
+    if f_n <= 0:
+        raise ValueError("resonant_frequency must be positive")
+    if delta_f <= 0:
+        raise ValueError("half_power_bandwidth must be positive")
+    return f_n / delta_f
+
+
+def damping_ratio_from_half_power_bandwidth(
+    *, resonant_frequency: Quantity, half_power_bandwidth: Quantity
+) -> float:
+    """The damping ratio ζ = Δf/(2·f_n) from the half-power bandwidth of a resonance.
+
+    The half-power (−3 dB) bandwidth method for identifying modal damping from a measured response:
+    the fraction of critical damping is ζ = Δf/(2·f_n), from the ``half_power_bandwidth`` Δf (the
+    width between the two points where the response power halves) and the ``resonant_frequency``.
+    It is the inverse of the whole forward chain — the reciprocal of twice :func:`quality_factor`
+    (ζ = 1/(2·Q)) — and the value a modal test reports. Valid for the light damping (ζ ≲ 0.1) where
+    the half-power approximation holds. Both frequencies must be positive. Returns the dimensionless
+    damping ratio.
+    """
+    _require(resonant_frequency, "[frequency]", "resonant_frequency")
+    _require(half_power_bandwidth, "[frequency]", "half_power_bandwidth")
+    f_n = resonant_frequency.to("Hz").magnitude
+    delta_f = half_power_bandwidth.to("Hz").magnitude
+    if f_n <= 0:
+        raise ValueError("resonant_frequency must be positive")
+    if delta_f <= 0:
+        raise ValueError("half_power_bandwidth must be positive")
+    return delta_f / (2.0 * f_n)
 
 
 def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
