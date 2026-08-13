@@ -506,6 +506,7 @@ drilling.drilling_material_removal_rate
 drilling.drilling_torque
 drilling.drilling_feed_for_torque_limit
 electrical.apparent_power_three_phase
+electrical.capacitance_for_reactive_power
 electrical.conductor_resistance
 electrical.ground_rod_resistance
 electrical.line_current_for_power

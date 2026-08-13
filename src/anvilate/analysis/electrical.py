@@ -34,6 +34,7 @@ __all__ = [
     "motor_slip",
     "motor_slip_frequency",
     "motor_locked_rotor_current",
+    "capacitance_for_reactive_power",
     "parallel_ground_electrodes_resistance",
     "power_factor_correction_kvar",
     "skin_depth",
@@ -379,6 +380,36 @@ def power_factor_correction_kvar(
         raise ValueError("target_power_factor must exceed initial_power_factor (correcting upward)")
     q_c = p * (tan(acos(initial_power_factor)) - tan(acos(target_power_factor)))
     return Quantity(magnitude=q_c, unit="kVA")
+
+
+def capacitance_for_reactive_power(
+    *,
+    reactive_power: Quantity,
+    voltage: Quantity,
+    frequency: Quantity,
+) -> Quantity:
+    """The capacitance that supplies a given reactive power, C = Q_c/(2π·f·V²).
+
+    Sizes the actual capacitor behind a reactive-power rating: a capacitor across a voltage draws
+    Q_c = V²/X_c = V²·(2π·f·C), so C = Q_c/(2π·f·V²), from the ``reactive_power`` Q_c, the
+    ``voltage`` V across it, and the supply ``frequency`` f. It is the physical follow-on to
+    :func:`power_factor_correction_kvar`, which gives the Q_c a correction bank must deliver but not
+    the microfarads to order — here they are, for a single-phase capacitor (or one leg of a bank, at
+    that leg's voltage). Returns the capacitance in farads.
+    """
+    _check(reactive_power, "[power]", "reactive_power")
+    _check(voltage, "[electric_potential]", "voltage")
+    _check(frequency, "1/[time]", "frequency")
+    q_c = reactive_power.to("VA").magnitude
+    v = voltage.to("V").magnitude
+    f = frequency.to("Hz").magnitude
+    if q_c <= 0:
+        raise ValueError("reactive_power must be positive")
+    if v <= 0:
+        raise ValueError("voltage must be positive")
+    if f <= 0:
+        raise ValueError("frequency must be positive")
+    return Quantity(magnitude=q_c / (2.0 * pi * f * v**2), unit="F")
 
 
 def transformer_full_load_current(*, apparent_power: Quantity, line_voltage: Quantity) -> Quantity:

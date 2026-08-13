@@ -1597,6 +1597,7 @@ from .elastic_waves import (
 )
 from .electrical import (
     apparent_power_three_phase,
+    capacitance_for_reactive_power,
     conductor_resistance,
     ground_rod_resistance,
     line_current_for_power,
@@ -3304,6 +3305,7 @@ __all__ = [
     "motor_slip",
     "motor_slip_frequency",
     "motor_locked_rotor_current",
+    "capacitance_for_reactive_power",
     "power_factor_correction_kvar",
     "skin_depth",
     "three_phase_power",

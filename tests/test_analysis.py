@@ -15772,6 +15772,35 @@ def test_electrical_apparent_power_and_pf_correction():
         )
 
 
+def test_electrical_capacitance_for_reactive_power():
+    import math
+
+    from anvilate.analysis import capacitance_for_reactive_power
+
+    # C = Q_c/(2*pi*f*V^2); 1 kVAR at 240 V, 60 Hz -> ~46 uF.
+    c = capacitance_for_reactive_power(
+        reactive_power=_q("1 kVA"), voltage=_q("240 V"), frequency=_q("60 Hz")
+    )
+    expected = 1000.0 / (2 * math.pi * 60 * 240**2)
+    assert c.to("F").magnitude == pytest.approx(expected, rel=1e-9)
+    assert c.to("uF").magnitude == pytest.approx(46.0, abs=0.5)
+
+    # The reactive power it draws round-trips: Q = V^2 * 2*pi*f*C.
+    q_back = 240**2 * 2 * math.pi * 60 * c.to("F").magnitude
+    assert q_back == pytest.approx(1000.0, rel=1e-9)
+
+    # Higher supply frequency needs proportionally less capacitance for the same kVAR.
+    c_400hz = capacitance_for_reactive_power(
+        reactive_power=_q("1 kVA"), voltage=_q("240 V"), frequency=_q("400 Hz")
+    )
+    assert c_400hz.to("F").magnitude == pytest.approx(c.to("F").magnitude * 60 / 400, rel=1e-9)
+
+    with pytest.raises(ValueError, match="voltage"):
+        capacitance_for_reactive_power(
+            reactive_power=_q("1 kVA"), voltage=_q("0 V"), frequency=_q("60 Hz")
+        )
+
+
 def test_electrical_skin_depth():
     import math
 
