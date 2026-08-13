@@ -25556,6 +25556,59 @@ def test_adc_quantization_snr_step_and_enob():
         quantization_step(full_scale_voltage=_q("10 A"), bits=12)
 
 
+def test_adc_quantization_noise_oversampling_and_jitter_limit():
+    from math import log10, pi, sqrt
+
+    from anvilate.analysis import (
+        aperture_jitter_snr_limit,
+        oversampling_ratio_for_bits,
+        oversampling_snr_gain,
+        quantization_noise_voltage,
+        quantization_snr,
+    )
+
+    # RMS quantization noise = LSB/sqrt(12) = V_FS/(2^N*sqrt(12)).
+    qn = quantization_noise_voltage(full_scale_voltage=_q("1 V"), bits=12)
+    assert qn.to("V").magnitude == pytest.approx(1.0 / (2**12 * sqrt(12.0)), rel=1e-12)
+    # A full-scale sine's RMS over that noise reproduces the ideal 6.02N+1.76 SNR.
+    sine_rms = (1.0 / 2.0) / sqrt(2.0)
+    snr_from_noise = 20.0 * log10(sine_rms / qn.to("V").magnitude)
+    assert snr_from_noise == pytest.approx(quantization_snr(bits=12), abs=0.01)
+    # One more bit halves the noise.
+    qn13 = quantization_noise_voltage(full_scale_voltage=_q("1 V"), bits=13)
+    assert qn13.to("V").magnitude == pytest.approx(qn.to("V").magnitude / 2.0, rel=1e-12)
+
+    # Oversampling: 10*log10(OSR) dB; OSR=16 -> 12.04 dB (~2 bits at 6.02 dB/bit).
+    assert oversampling_snr_gain(oversampling_ratio=16.0) == pytest.approx(
+        10.0 * log10(16.0), rel=1e-12
+    )
+    assert oversampling_snr_gain(oversampling_ratio=16.0) / 6.02 == pytest.approx(2.0, abs=0.001)
+    # Doubling the rate buys ~half a bit (3.01 dB).
+    assert oversampling_snr_gain(oversampling_ratio=2.0) == pytest.approx(3.0103, abs=1e-3)
+    # Inverse: gaining 2 effective bits needs OSR = 4^2 = 16, round-tripping the gain.
+    osr = oversampling_ratio_for_bits(extra_bits=2.0)
+    assert osr == pytest.approx(16.0, rel=1e-12)
+    assert oversampling_snr_gain(oversampling_ratio=osr) == pytest.approx(2.0 * 6.0206, abs=1e-3)
+
+    # Jitter ceiling: SNR = -20*log10(2*pi*f*t_j); 10 MHz, 1 ps -> ~84 dB.
+    jitter_snr = aperture_jitter_snr_limit(input_frequency=_q("10 MHz"), rms_jitter=_q("1 ps"))
+    assert jitter_snr == pytest.approx(-20.0 * log10(2.0 * pi * 10e6 * 1e-12), rel=1e-12)
+    assert jitter_snr == pytest.approx(84.04, abs=0.05)
+    # Halving the input frequency buys 6 dB.
+    slower = aperture_jitter_snr_limit(input_frequency=_q("5 MHz"), rms_jitter=_q("1 ps"))
+    assert slower - jitter_snr == pytest.approx(6.0206, abs=1e-3)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="oversampling_ratio must be at least 1"):
+        oversampling_snr_gain(oversampling_ratio=0.5)
+    with pytest.raises(ValueError, match="extra_bits must be non-negative"):
+        oversampling_ratio_for_bits(extra_bits=-1.0)
+    with pytest.raises(ValueError, match="rms_jitter must be positive"):
+        aperture_jitter_snr_limit(input_frequency=_q("10 MHz"), rms_jitter=_q("0 s"))
+    with pytest.raises(ValueError, match="input_frequency must be a"):
+        aperture_jitter_snr_limit(input_frequency=_q("10 V"), rms_jitter=_q("1 ps"))
+
+
 def test_fiber_chromatic_dispersion_bit_rate_and_reach():
     from anvilate.analysis import (
         chromatic_dispersion_broadening,

@@ -1418,7 +1418,11 @@ from .cyclotron import (
     larmor_radius,
 )
 from .data_converter import (
+    aperture_jitter_snr_limit,
     effective_number_of_bits,
+    oversampling_ratio_for_bits,
+    oversampling_snr_gain,
+    quantization_noise_voltage,
     quantization_snr,
     quantization_step,
 )
@@ -3246,6 +3250,10 @@ __all__ = [
     "cyclotron_mass_from_frequency",
     "quantization_snr",
     "quantization_step",
+    "quantization_noise_voltage",
+    "oversampling_snr_gain",
+    "oversampling_ratio_for_bits",
+    "aperture_jitter_snr_limit",
     "effective_number_of_bits",
     "ohms_law_voltage",
     "resistive_power",

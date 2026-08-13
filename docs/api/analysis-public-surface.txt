@@ -439,6 +439,10 @@ cyclotron.cyclotron_mass_from_frequency
 cyclotron.larmor_radius
 data_converter.quantization_snr
 data_converter.quantization_step
+data_converter.quantization_noise_voltage
+data_converter.oversampling_snr_gain
+data_converter.oversampling_ratio_for_bits
+data_converter.aperture_jitter_snr_limit
 data_converter.effective_number_of_bits
 dc_circuit.ohms_law_voltage
 dc_circuit.resistive_power
