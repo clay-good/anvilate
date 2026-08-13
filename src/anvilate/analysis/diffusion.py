@@ -16,13 +16,14 @@ questions — how fast matter crosses a barrier, and how far (or how long) a tra
 
 from __future__ import annotations
 
-from math import sqrt
+from math import erf, sqrt
 
 from ..units import Quantity
 
 __all__ = [
     "diffusion_length",
     "diffusion_time",
+    "error_function_concentration",
     "steady_diffusion_flux",
 ]
 
@@ -87,6 +88,41 @@ def diffusion_time(*, diffusion_length: Quantity, diffusivity: Quantity) -> Quan
     if d <= 0:
         raise ValueError("diffusivity must be positive")
     return Quantity(magnitude=x * x / d, unit="s")
+
+
+def error_function_concentration(
+    *,
+    surface_concentration: float,
+    initial_concentration: float,
+    depth: Quantity,
+    diffusivity: Quantity,
+    time: Quantity,
+) -> float:
+    """The concentration at depth and time in a semi-infinite solid, C = C_s − (C_s − C_0)·erf(z).
+
+    The transient solution of Fick's second law when a surface is held at a fixed concentration and
+    the solid is initially uniform — the carburizing / doping profile:
+    C(x, t) = C_s − (C_s − C_0)·erf(x/(2·√(D·t))), from the ``surface_concentration`` C_s, the
+    ``initial_concentration`` C_0, the ``depth`` x, the ``diffusivity`` D, and the ``time`` t. At
+    the surface C = C_s; deep in, C → C_0; the profile advances as the diffusion length √(D·t)
+    (:func:`diffusion_length`) grows, so reaching a target depth takes four times as long for twice
+    the depth. Concentrations are plain numbers in any consistent unit (wt %, mole fraction,
+    atoms/cm³) and the result is returned in that same unit.
+    """
+    _check(depth, "[length]", "depth")
+    _check(diffusivity, "[length]**2/[time]", "diffusivity")
+    _check(time, "[time]", "time")
+    x = depth.to("m").magnitude
+    d = diffusivity.to("m**2/s").magnitude
+    t = time.to("s").magnitude
+    if x < 0:
+        raise ValueError("depth must be non-negative")
+    if d <= 0:
+        raise ValueError("diffusivity must be positive")
+    if t <= 0:
+        raise ValueError("time must be positive")
+    z = x / (2.0 * sqrt(d * t))
+    return surface_concentration - (surface_concentration - initial_concentration) * erf(z)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

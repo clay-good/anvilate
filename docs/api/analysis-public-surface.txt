@@ -468,6 +468,7 @@ diffraction.grating_resolved_wavelength_separation
 diffraction.grating_angular_dispersion
 diffusion.diffusion_length
 diffusion.diffusion_time
+diffusion.error_function_concentration
 diffusion.steady_diffusion_flux
 diode.diode_current
 diode.diode_voltage

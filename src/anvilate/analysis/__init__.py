@@ -1464,6 +1464,7 @@ from .diffraction import (
 from .diffusion import (
     diffusion_length,
     diffusion_time,
+    error_function_concentration,
     steady_diffusion_flux,
 )
 from .diode import (
@@ -2995,6 +2996,7 @@ __all__ = [
     "steady_diffusion_flux",
     "diffusion_length",
     "diffusion_time",
+    "error_function_concentration",
     "bragg_angle",
     "bragg_plane_spacing",
     "grating_diffraction_angle",

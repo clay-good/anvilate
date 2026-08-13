@@ -23648,6 +23648,43 @@ def test_diffusion_flux_length_and_time_inverse():
         diffusion_length(diffusivity=_q("1 m**2"), time=_q("3600 s"))
 
 
+def test_diffusion_error_function_carburizing_profile():
+    from math import erf, sqrt
+
+    from anvilate.analysis import error_function_concentration
+
+    D = Quantity(magnitude=1e-11, unit="m**2/s")
+    kw = {"surface_concentration": 1.0, "initial_concentration": 0.2, "diffusivity": D}
+
+    # C(x,t) = C_s - (C_s - C_0)*erf(x/(2*sqrt(D*t))); 0.5 mm, 1 h -> ~0.25 wt%.
+    c = error_function_concentration(depth=_q("0.5 mm"), time=_q("3600 s"), **kw)
+    z = 0.5e-3 / (2 * sqrt(1e-11 * 3600))
+    assert c == pytest.approx(1.0 - 0.8 * erf(z), rel=1e-12)
+    assert c == pytest.approx(0.25, abs=0.01)
+    assert isinstance(c, float)
+
+    # At the surface (x=0) the concentration is exactly C_s.
+    assert error_function_concentration(depth=_q("0 mm"), time=_q("3600 s"), **kw) == pytest.approx(
+        1.0, rel=1e-12
+    )
+    # Deep in the solid the concentration approaches the initial value C_0.
+    deep = error_function_concentration(depth=_q("10 mm"), time=_q("3600 s"), **kw)
+    assert deep == pytest.approx(0.2, abs=1e-6)
+    # Longer time drives the concentration up at a fixed depth (the front advances).
+    later = error_function_concentration(depth=_q("0.5 mm"), time=_q("14400 s"), **kw)
+    assert later > c
+    # The profile depends on x and t only through x/sqrt(t): 2x depth at 4x time matches.
+    a = error_function_concentration(depth=_q("0.5 mm"), time=_q("3600 s"), **kw)
+    b = error_function_concentration(depth=_q("1.0 mm"), time=_q("14400 s"), **kw)
+    assert a == pytest.approx(b, rel=1e-12)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="time must be positive"):
+        error_function_concentration(depth=_q("0.5 mm"), time=_q("0 s"), **kw)
+    with pytest.raises(ValueError, match="depth must be a"):
+        error_function_concentration(depth=_q("0.5 s"), time=_q("3600 s"), **kw)
+
+
 def test_kinetic_theory_molecular_speeds_and_mean_free_path():
     from math import pi, sqrt
 
