@@ -26,6 +26,7 @@ _BOHR_RADIUS = 5.29177210903e-11  # m
 __all__ = [
     "bohr_energy_level",
     "bohr_orbit_radius",
+    "moseley_k_alpha_wavelength",
     "rydberg_transition_wavelength",
 ]
 
@@ -79,4 +80,21 @@ def rydberg_transition_wavelength(
     inv_lambda = (
         _RYDBERG_CONSTANT * atomic_number**2 * (1.0 / lower_level**2 - 1.0 / upper_level**2)
     )
+    return Quantity(magnitude=1.0 / inv_lambda, unit="m")
+
+
+def moseley_k_alpha_wavelength(*, atomic_number: int) -> Quantity:
+    """The characteristic K_α X-ray wavelength by Moseley's law, 1/λ = (3/4)·R·(Z − 1)².
+
+    When an inner (K-shell) electron is knocked out and an L-shell electron drops to fill it, the
+    atom emits a characteristic K_α X-ray. Moseley found its frequency rises with the square of the
+    atomic number, screened by one unit of nuclear charge: 1/λ = (3/4)·R·(``atomic_number`` Z − 1)²,
+    the Rydberg n = 2 → 1 transition seen by an effective charge (Z − 1). It is how Moseley ordered
+    the periodic table by Z rather than atomic weight, and it underlies X-ray fluorescence element
+    identification — copper's K_α is 1.54 Å. ``atomic_number`` must be at least 2. Returns the K_α
+    wavelength in metres.
+    """
+    if atomic_number < 2:
+        raise ValueError("atomic_number must be at least 2 (a K_alpha line needs an L shell)")
+    inv_lambda = 0.75 * _RYDBERG_CONSTANT * (atomic_number - 1) ** 2
     return Quantity(magnitude=1.0 / inv_lambda, unit="m")

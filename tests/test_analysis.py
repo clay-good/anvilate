@@ -26731,6 +26731,29 @@ def test_bohr_energy_levels_orbit_radius_and_rydberg_wavelength():
         rydberg_transition_wavelength(lower_level=3, upper_level=2)
 
 
+def test_moseley_k_alpha_x_ray_wavelength():
+    from anvilate.analysis import moseley_k_alpha_wavelength
+
+    R = 1.0973731568e7
+
+    # 1/lambda = (3/4)*R*(Z-1)^2; copper (Z=29) K_alpha -> ~1.55 angstrom.
+    lam = moseley_k_alpha_wavelength(atomic_number=29)
+    assert lam.to("m").magnitude == pytest.approx(1 / (0.75 * R * 28**2), rel=1e-12)
+    assert lam.to("angstrom").magnitude == pytest.approx(1.550, abs=0.005)
+    # A heavier element emits a shorter-wavelength (harder) K_alpha X-ray.
+    assert moseley_k_alpha_wavelength(atomic_number=42).to("m").magnitude < lam.to("m").magnitude
+    # Moseley's square-root-frequency law: sqrt(1/lambda) is linear in (Z-1).
+    lam_z13 = moseley_k_alpha_wavelength(atomic_number=13)
+    lam_z25 = moseley_k_alpha_wavelength(atomic_number=25)
+    assert (1 / lam_z25.to("m").magnitude) ** 0.5 / (1 / lam_z13.to("m").magnitude) ** 0.5 == (
+        pytest.approx((25 - 1) / (13 - 1), rel=1e-9)
+    )
+
+    # Guardrails: needs an L shell to drop from.
+    with pytest.raises(ValueError, match="atomic_number must be at least 2"):
+        moseley_k_alpha_wavelength(atomic_number=1)
+
+
 def test_relativistic_length_momentum_and_doppler():
     from anvilate.analysis import (
         length_contraction,

@@ -1020,6 +1020,7 @@ from .atmosphere import (
 from .atomic_spectra import (
     bohr_energy_level,
     bohr_orbit_radius,
+    moseley_k_alpha_wavelength,
     rydberg_transition_wavelength,
 )
 from .axial import (
@@ -3436,6 +3437,7 @@ __all__ = [
     "bohr_energy_level",
     "bohr_orbit_radius",
     "rydberg_transition_wavelength",
+    "moseley_k_alpha_wavelength",
     "CompactnessClass",
     "classify_flexural_element",
     "flexural_flange_slenderness_limits",

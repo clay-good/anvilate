@@ -56,6 +56,7 @@ atmosphere.scale_height
 atomic_spectra.bohr_energy_level
 atomic_spectra.bohr_orbit_radius
 atomic_spectra.rydberg_transition_wavelength
+atomic_spectra.moseley_k_alpha_wavelength
 compressible_flow.choked_mass_flow_rate
 compressible_flow.critical_pressure_ratio
 compressible_flow.isentropic_area_ratio
