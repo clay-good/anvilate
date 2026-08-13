@@ -259,6 +259,9 @@ modules:
 - :mod:`~anvilate.analysis.reactor` — isothermal first-order reactor design: the Damköhler number
   Da = k·τ, and the conversions it sets for a plug-flow reactor X = 1 − exp(−Da) and a
   stirred-tank reactor X = Da/(1 + Da)
+- :mod:`~anvilate.analysis.reaction_kinetics` — batch integrated rate laws: first-order decay
+  C = C₀·e^(−k·t) with its concentration-independent half-life ln2/k and the time −ln(1−X)/k a
+  target conversion needs; second-order C = C₀/(1 + k·C₀·t) with its C₀-dependent half-life 1/(k·C₀)
 - :mod:`~anvilate.analysis.kinetic_theory` — kinetic theory of gases: the rms molecular speed
   √(3RT/M), the mean molecular speed √(8RT/(πM)), and the mean free path k·T/(√2·π·d²·P)
   between collisions — the molecular picture behind effusion, diffusion, and rarefied flow
@@ -2360,6 +2363,13 @@ from .radioactivity import (
     remaining_activity,
     time_for_activity_decay,
 )
+from .reaction_kinetics import (
+    first_order_concentration,
+    first_order_half_life,
+    first_order_time_for_conversion,
+    second_order_concentration,
+    second_order_half_life,
+)
 from .reactive_circuit import (
     capacitor_charge,
     capacitor_stored_energy,
@@ -3559,6 +3569,11 @@ __all__ = [
     "decay_constant_from_half_life",
     "remaining_activity",
     "time_for_activity_decay",
+    "first_order_half_life",
+    "first_order_concentration",
+    "first_order_time_for_conversion",
+    "second_order_half_life",
+    "second_order_concentration",
     "photon_momentum",
     "radiation_pressure",
     "radiation_force",

@@ -28998,3 +28998,71 @@ def test_control_valve_flow_required_cv_and_authority():
         valve_authority(valve_pressure_drop=_q("0 psi"), system_pressure_drop=_q("0 psi"))
     with pytest.raises(ValueError, match="pressure_drop must be a"):
         valve_flow_rate(flow_coefficient=80.0, pressure_drop=_q("10 gallon/minute"))
+
+
+def test_reaction_kinetics_first_and_second_order_rate_laws():
+    from math import exp, log
+
+    from anvilate.analysis import (
+        first_order_concentration,
+        first_order_half_life,
+        first_order_time_for_conversion,
+        second_order_concentration,
+        second_order_half_life,
+    )
+
+    # First-order half-life t1/2 = ln2/k; concentration-independent.
+    t_half = first_order_half_life(rate_constant=_q("0.5 1/hour"))
+    assert t_half.to("hour").magnitude == pytest.approx(log(2) / 0.5, rel=1e-12)
+    assert t_half.to("hour").magnitude == pytest.approx(1.386, abs=0.001)
+
+    # First-order decay C = C0*exp(-k*t); at one half-life it is exactly C0/2.
+    c = first_order_concentration(
+        initial_concentration=_q("1 mol/L"), rate_constant=_q("0.5 1/hour"), time=_q("2 hour")
+    )
+    assert c.to("mol/L").magnitude == pytest.approx(1.0 * exp(-0.5 * 2), rel=1e-12)
+    at_half = first_order_concentration(
+        initial_concentration=_q("1 mol/L"), rate_constant=_q("0.5 1/hour"), time=t_half
+    )
+    assert at_half.to("mol/L").magnitude == pytest.approx(0.5, rel=1e-9)
+
+    # Time for conversion t = -ln(1-X)/k; 95% at k=0.5/hr -> ~5.99 hr.
+    t95 = first_order_time_for_conversion(rate_constant=_q("0.5 1/hour"), conversion=0.95)
+    assert t95.to("hour").magnitude == pytest.approx(-log(1 - 0.95) / 0.5, rel=1e-12)
+    assert t95.to("hour").magnitude == pytest.approx(5.991, abs=0.01)
+    # Each further nine costs a fixed increment: t(0.99) - t(0.9) == t(0.9).
+    t90 = first_order_time_for_conversion(rate_constant=_q("0.5 1/hour"), conversion=0.9)
+    t99 = first_order_time_for_conversion(rate_constant=_q("0.5 1/hour"), conversion=0.99)
+    assert (t99.to("hour").magnitude - t90.to("hour").magnitude) == pytest.approx(
+        t90.to("hour").magnitude, rel=1e-9
+    )
+
+    # Second-order half-life t1/2 = 1/(k*C0) DEPENDS on C0.
+    t2 = second_order_half_life(
+        rate_constant=_q("0.1 L/(mol*s)"), initial_concentration=_q("2 mol/L")
+    )
+    assert t2.to("s").magnitude == pytest.approx(1.0 / (0.1 * 2.0), rel=1e-9)
+    assert t2.to("s").magnitude == pytest.approx(5.0, rel=1e-9)
+    # Halving the starting concentration doubles the second-order half-life.
+    t2_dilute = second_order_half_life(
+        rate_constant=_q("0.1 L/(mol*s)"), initial_concentration=_q("1 mol/L")
+    )
+    assert t2_dilute.to("s").magnitude == pytest.approx(2 * t2.to("s").magnitude, rel=1e-9)
+
+    # Second-order decay C = C0/(1 + k*C0*t); at its half-life it equals C0/2.
+    c2 = second_order_concentration(
+        initial_concentration=_q("2 mol/L"), rate_constant=_q("0.1 L/(mol*s)"), time=t2
+    )
+    assert c2.to("mol/L").magnitude == pytest.approx(1.0, rel=1e-9)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="rate_constant must be positive"):
+        first_order_half_life(rate_constant=_q("0 1/hour"))
+    with pytest.raises(ValueError, match="conversion must be in"):
+        first_order_time_for_conversion(rate_constant=_q("0.5 1/hour"), conversion=1.0)
+    with pytest.raises(ValueError, match="rate_constant must be a"):
+        second_order_half_life(rate_constant=_q("0.1 1/s"), initial_concentration=_q("2 mol/L"))
+    with pytest.raises(ValueError, match="initial_concentration must be a"):
+        first_order_concentration(
+            initial_concentration=_q("2 mol"), rate_constant=_q("0.5 1/hour"), time=_q("1 hour")
+        )

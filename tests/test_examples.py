@@ -5488,3 +5488,15 @@ def test_control_valve_sizing_example_undersized_valve_fails():
     selected = namespace["screen_selected_valve"]()
     assert selected.entries[0].passed
     assert selected.status is CheckStatus.PASS
+
+
+def test_batch_reactor_conversion_example_slow_batch_misses_spec():
+    namespace = runpy.run_path(str(_EXAMPLES / "batch_reactor_conversion.py"))
+    slow = namespace["screen_slow_batch"]()
+    # The base-temperature batch cannot reach 95% conversion in the 2-hour hold -> FAIL.
+    assert slow.status is CheckStatus.FAIL
+    assert slow.entries[0].name == "available hold vs conversion time"
+    # Raising the rate constant fits the same hold.
+    hot = namespace["screen_hot_batch"]()
+    assert hot.entries[0].passed
+    assert hot.status is CheckStatus.PASS
