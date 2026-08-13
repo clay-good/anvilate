@@ -1115,6 +1115,8 @@ process_capability.expected_defect_rate_ppm
 projectile.projectile_range
 projectile.projectile_max_height
 projectile.projectile_time_of_flight
+projectile.projectile_launch_angle_for_range
+projectile.projectile_range_from_height
 pressure_vessel.ThickWallSphereStress
 pressure_vessel.ThickWallStress
 pressure_vessel.ThinWallStress

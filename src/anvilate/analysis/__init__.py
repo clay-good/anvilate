@@ -2338,8 +2338,10 @@ from .process_capability import (
     process_capability_ratio,
 )
 from .projectile import (
+    projectile_launch_angle_for_range,
     projectile_max_height,
     projectile_range,
+    projectile_range_from_height,
     projectile_time_of_flight,
 )
 from .psychrometrics import (
@@ -4234,6 +4236,8 @@ __all__ = [
     "projectile_range",
     "projectile_max_height",
     "projectile_time_of_flight",
+    "projectile_launch_angle_for_range",
+    "projectile_range_from_height",
     "worm_gear_ratio",
     "worm_lead_angle",
     "worm_gear_efficiency",

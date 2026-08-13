@@ -15,15 +15,17 @@ toward a vertical launch — the trade a designer balances when aiming a dischar
 
 from __future__ import annotations
 
-from math import radians, sin
+from math import asin, cos, degrees, radians, sin, sqrt
 
 from ..units import Quantity
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
 __all__ = [
+    "projectile_launch_angle_for_range",
     "projectile_max_height",
     "projectile_range",
+    "projectile_range_from_height",
     "projectile_time_of_flight",
 ]
 
@@ -81,6 +83,67 @@ def projectile_time_of_flight(*, launch_speed: Quantity, launch_angle: float) ->
     return Quantity(
         magnitude=2.0 * v * sin(radians(launch_angle)) / STANDARD_GRAVITY_M_PER_S2, unit="s"
     )
+
+
+def projectile_launch_angle_for_range(
+    *, launch_speed: Quantity, target_range: Quantity, high_trajectory: bool = False
+) -> float:
+    """The launch angle to reach a target range, θ = ½·arcsin(g·R/v²).
+
+    The aiming inverse of :func:`projectile_range`: to land a projectile at a horizontal
+    ``target_range`` R over level ground with ``launch_speed`` v, fire at θ = ½·arcsin(g·R/v²).
+    Every reachable range has *two* solutions summing to 90° — a flat, fast ``low`` shot (default)
+    and a high, lobbed one (``high_trajectory=True``) — merging at 45° for the maximum range
+    v²/g. A target beyond that maximum cannot be reached at this speed and is rejected. Returns the
+    launch angle in degrees.
+    """
+    _check(launch_speed, "[length]/[time]", "launch_speed")
+    _check(target_range, "[length]", "target_range")
+    v = launch_speed.to("m/s").magnitude
+    r = target_range.to("m").magnitude
+    if v <= 0:
+        raise ValueError("launch_speed must be positive")
+    if r <= 0:
+        raise ValueError("target_range must be positive")
+    ratio = STANDARD_GRAVITY_M_PER_S2 * r / (v * v)
+    if ratio > 1.0:
+        raise ValueError(
+            "target_range exceeds the maximum range v²/g at this speed (unreachable); "
+            "increase the launch speed"
+        )
+    low_angle = 0.5 * degrees(asin(ratio))
+    return 90.0 - low_angle if high_trajectory else low_angle
+
+
+def projectile_range_from_height(
+    *, launch_speed: Quantity, launch_angle: float, launch_height: Quantity
+) -> Quantity:
+    """The range of a projectile launched from a height, R = (v·cosθ/g)·(v·sinθ + √((v·sinθ)²+2gh)).
+
+    When the launch point sits a ``launch_height`` h above the landing plane — a ball thrown off a
+    cliff, a shell from a hilltop — the projectile flies farther than the level-ground
+    :func:`projectile_range`, because it spends extra time falling the last h. Solving the vertical
+    quadratic for the flight time and multiplying by the horizontal speed gives
+    R = (v·cosθ/g)·(v·sinθ + √((v·sinθ)² + 2·g·h)), from the ``launch_speed`` v and ``launch_angle``
+    θ (degrees). At h = 0 it reduces to the level-ground v²·sin(2θ)/g, and the optimal angle for the
+    maximum range drops below 45° as the height grows. Returns the range in metres.
+    """
+    _check(launch_speed, "[length]/[time]", "launch_speed")
+    _check(launch_height, "[length]", "launch_height")
+    v = launch_speed.to("m/s").magnitude
+    h = launch_height.to("m").magnitude
+    if v <= 0:
+        raise ValueError("launch_speed must be positive")
+    if h < 0:
+        raise ValueError("launch_height must be non-negative")
+    if not 0.0 <= launch_angle < 90.0:
+        raise ValueError("launch_angle must be in [0, 90) degrees")
+    theta = radians(launch_angle)
+    vy = v * sin(theta)
+    vx = v * cos(theta)
+    g = STANDARD_GRAVITY_M_PER_S2
+    r = (vx / g) * (vy + sqrt(vy * vy + 2.0 * g * h))
+    return Quantity(magnitude=r, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

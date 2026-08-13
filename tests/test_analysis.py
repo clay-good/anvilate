@@ -12297,6 +12297,66 @@ def test_projectile_range_height_and_time_of_flight():
         projectile_range(launch_speed=_q("10 m"), launch_angle=30.0)
 
 
+def test_projectile_launch_angle_inverse_and_range_from_height():
+    from math import asin, cos, degrees, radians, sin, sqrt
+
+    from anvilate.analysis import (
+        projectile_launch_angle_for_range,
+        projectile_range,
+        projectile_range_from_height,
+    )
+
+    g = 9.80665
+
+    # theta = 0.5*arcsin(g*R/v^2); 30 m/s to reach 50 m -> ~16.5 deg (low) or 73.5 (high).
+    low = projectile_launch_angle_for_range(launch_speed=_q("30 m/s"), target_range=_q("50 m"))
+    assert low == pytest.approx(0.5 * degrees(asin(g * 50 / 900)), rel=1e-9)
+    assert low == pytest.approx(16.51, abs=0.05)
+    high = projectile_launch_angle_for_range(
+        launch_speed=_q("30 m/s"), target_range=_q("50 m"), high_trajectory=True
+    )
+    assert high == pytest.approx(90.0 - low, rel=1e-9)
+    # Both angles hit the same range (round trip through projectile_range).
+    assert projectile_range(launch_speed=_q("30 m/s"), launch_angle=low).to(
+        "m"
+    ).magnitude == pytest.approx(50.0, rel=1e-6)
+    assert projectile_range(launch_speed=_q("30 m/s"), launch_angle=high).to(
+        "m"
+    ).magnitude == pytest.approx(50.0, rel=1e-6)
+    # A target beyond the maximum range v^2/g is unreachable.
+    with pytest.raises(ValueError, match="unreachable"):
+        projectile_launch_angle_for_range(launch_speed=_q("30 m/s"), target_range=_q("200 m"))
+
+    # Range from a height h > 0 exceeds the level-ground range at the same speed/angle.
+    r_h = projectile_range_from_height(
+        launch_speed=_q("20 m/s"), launch_angle=30.0, launch_height=_q("10 m")
+    )
+    vy = 20 * sin(radians(30))
+    vx = 20 * cos(radians(30))
+    assert r_h.to("m").magnitude == pytest.approx(
+        (vx / g) * (vy + sqrt(vy * vy + 2 * g * 10)), rel=1e-9
+    )
+    assert r_h.to("m").magnitude == pytest.approx(48.05, abs=0.1)
+    assert (
+        r_h.to("m").magnitude
+        > projectile_range(launch_speed=_q("20 m/s"), launch_angle=30.0).to("m").magnitude
+    )
+    # At zero height it reduces to the level-ground range.
+    assert projectile_range_from_height(
+        launch_speed=_q("20 m/s"), launch_angle=30.0, launch_height=_q("0 m")
+    ).to("m").magnitude == pytest.approx(
+        projectile_range(launch_speed=_q("20 m/s"), launch_angle=30.0).to("m").magnitude, rel=1e-9
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="launch_height must be non-negative"):
+        projectile_range_from_height(
+            launch_speed=_q("20 m/s"), launch_angle=30.0, launch_height=_q("-1 m")
+        )
+    with pytest.raises(ValueError, match="target_range must be a"):
+        projectile_launch_angle_for_range(launch_speed=_q("30 m/s"), target_range=_q("50 s"))
+
+
 def test_vehicle_rolling_grade_resistance_and_tractive_power():
     from math import radians, sin
 
