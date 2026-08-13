@@ -2475,7 +2475,9 @@ from .reactive_circuit import (
     parallel_plate_field,
     rc_cutoff_frequency,
     rc_time_constant,
+    resonator_bandwidth,
     rl_time_constant,
+    series_rlc_quality_factor,
 )
 from .reactor import (
     cstr_conversion_first_order,
@@ -3134,6 +3136,8 @@ __all__ = [
     "rc_time_constant",
     "rl_time_constant",
     "rc_cutoff_frequency",
+    "series_rlc_quality_factor",
+    "resonator_bandwidth",
     "damkohler_number_first_order",
     "pfr_conversion_first_order",
     "cstr_conversion_first_order",

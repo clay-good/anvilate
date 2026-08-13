@@ -16490,6 +16490,46 @@ def test_reactive_circuit_stored_energy_and_lc_resonance():
         capacitor_stored_energy(capacitance=_q("0 uF"), voltage=_q("400 V"))
 
 
+def test_reactive_circuit_quality_factor_and_bandwidth():
+    import math
+
+    from anvilate.analysis import (
+        lc_resonant_frequency,
+        resonator_bandwidth,
+        series_rlc_quality_factor,
+    )
+
+    # Q = (1/R)*sqrt(L/C); R=10, L=1 mH, C=1 uF -> ~3.16.
+    q = series_rlc_quality_factor(
+        resistance=_q("10 ohm"), inductance=_q("1 mH"), capacitance=_q("1 uF")
+    )
+    assert q == pytest.approx(math.sqrt(1e-3 / 1e-6) / 10, rel=1e-9)
+    assert q == pytest.approx(3.1623, abs=1e-3)
+
+    # Q = omega0*L/R identity, with omega0 = 2*pi*f0.
+    f0 = lc_resonant_frequency(inductance=_q("1 mH"), capacitance=_q("1 uF"))
+    omega0 = 2 * math.pi * f0.to("Hz").magnitude
+    assert q == pytest.approx(omega0 * 1e-3 / 10, rel=1e-9)
+
+    # A lower loss resistance sharpens the resonance (higher Q).
+    q_low_loss = series_rlc_quality_factor(
+        resistance=_q("5 ohm"), inductance=_q("1 mH"), capacitance=_q("1 uF")
+    )
+    assert q_low_loss == pytest.approx(2 * q, rel=1e-9)
+
+    # BW = f0/Q; a high-Q resonator is narrowband.
+    bw = resonator_bandwidth(resonant_frequency=f0, quality_factor=q)
+    assert bw.to("Hz").magnitude == pytest.approx(f0.to("Hz").magnitude / q, rel=1e-9)
+    assert bw.to("Hz").magnitude < f0.to("Hz").magnitude  # Q > 1 -> BW below f0
+
+    with pytest.raises(ValueError, match="resistance must be positive"):
+        series_rlc_quality_factor(
+            resistance=_q("0 ohm"), inductance=_q("1 mH"), capacitance=_q("1 uF")
+        )
+    with pytest.raises(ValueError, match="quality_factor must be positive"):
+        resonator_bandwidth(resonant_frequency=f0, quality_factor=0.0)
+
+
 def test_reactive_circuit_capacitive_and_inductive_reactance():
     import math
 

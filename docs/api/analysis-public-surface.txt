@@ -1054,6 +1054,8 @@ reactive_circuit.inductive_reactance
 reactive_circuit.rc_cutoff_frequency
 reactive_circuit.rc_time_constant
 reactive_circuit.rl_time_constant
+reactive_circuit.series_rlc_quality_factor
+reactive_circuit.resonator_bandwidth
 reactive_circuit.parallel_plate_capacitance
 reactive_circuit.capacitor_charge
 reactive_circuit.parallel_plate_field

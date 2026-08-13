@@ -39,7 +39,9 @@ __all__ = [
     "parallel_plate_field",
     "rc_cutoff_frequency",
     "rc_time_constant",
+    "resonator_bandwidth",
     "rl_time_constant",
+    "series_rlc_quality_factor",
 ]
 
 
@@ -94,6 +96,51 @@ def lc_resonant_frequency(*, inductance: Quantity, capacitance: Quantity) -> Qua
     if length <= 0 or c <= 0:
         raise ValueError("inductance and capacitance must be positive")
     return Quantity(magnitude=1.0 / (2.0 * pi * sqrt(length * c)), unit="Hz")
+
+
+def series_rlc_quality_factor(
+    *, resistance: Quantity, inductance: Quantity, capacitance: Quantity
+) -> float:
+    """The quality factor of a series RLC resonator, Q = (1/R)·√(L/C).
+
+    How sharply a series RLC circuit resonates — the ratio of energy stored to energy dissipated per
+    cycle: Q = (1/R)·√(L/C), from the loss ``resistance`` R, the ``inductance`` L, and the
+    ``capacitance`` C (equivalently Q = ω₀L/R at the :func:`lc_resonant_frequency`). A high Q gives
+    a tall, narrow resonance peak — a selective filter or a clean oscillator — while a low Q is
+    broad and heavily damped. It sets the resonance bandwidth (see :func:`resonator_bandwidth`) and
+    voltage magnification across the reactances at resonance. Returns the dimensionless quality
+    factor.
+    """
+    _check(resistance, "[resistance]", "resistance")
+    _check(inductance, "[inductance]", "inductance")
+    _check(capacitance, "[capacitance]", "capacitance")
+    r = resistance.to("ohm").magnitude
+    length = inductance.to("H").magnitude
+    c = capacitance.to("F").magnitude
+    if r <= 0:
+        raise ValueError("resistance must be positive")
+    if length <= 0 or c <= 0:
+        raise ValueError("inductance and capacitance must be positive")
+    return sqrt(length / c) / r
+
+
+def resonator_bandwidth(*, resonant_frequency: Quantity, quality_factor: float) -> Quantity:
+    """The −3 dB bandwidth of a resonator, BW = f₀/Q.
+
+    The width of the resonance peak between its half-power points: BW = f₀/Q, from the
+    ``resonant_frequency`` f₀ (see :func:`lc_resonant_frequency`) and the ``quality_factor`` Q (see
+    :func:`series_rlc_quality_factor`). A high-Q resonator has a narrow bandwidth — the basis of a
+    selective radio front-end or a stable oscillator — and a low-Q one passes a broad band. It is
+    the number that says whether a tuned circuit can separate two nearby channels. Returns the
+    bandwidth in hertz.
+    """
+    _check(resonant_frequency, "1/[time]", "resonant_frequency")
+    f0 = resonant_frequency.to("Hz").magnitude
+    if f0 <= 0:
+        raise ValueError("resonant_frequency must be positive")
+    if quality_factor <= 0:
+        raise ValueError("quality_factor must be positive")
+    return Quantity(magnitude=f0 / quality_factor, unit="Hz")
 
 
 def capacitive_reactance(*, capacitance: Quantity, frequency: Quantity) -> Quantity:
