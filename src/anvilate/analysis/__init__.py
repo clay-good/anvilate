@@ -557,6 +557,9 @@ modules:
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
+- :mod:`~anvilate.analysis.gaussian_beam` — Gaussian-beam (laser) propagation: the Rayleigh range
+  z_R = π·w₀²/λ, the spreading radius w(z) = w₀·√(1 + (z/z_R)²), the diffraction divergence
+  θ = λ/(π·w₀) and its waist inverse, and the focused spot w_f = λ·f/(π·w) a lens forms
 - :mod:`~anvilate.analysis.photon` — photon (Planck) quanta: the photon energy E = h·c/λ, the
   wavelength matching an energy λ = h·c/E (e.g. a semiconductor band gap), and the photon flux
   Φ = P·λ/(h·c) a beam of a given optical power delivers — for detectors, solar cells, and LEDs
@@ -1770,6 +1773,13 @@ from .gasket import (
     gasket_operating_load,
     gasket_seating_load,
     governing_gasket_bolt_load,
+)
+from .gaussian_beam import (
+    beam_divergence_half_angle,
+    beam_radius_at_distance,
+    beam_waist_for_divergence,
+    focused_spot_radius,
+    rayleigh_range,
 )
 from .gear import (
     PlanetaryTorques,
@@ -4220,6 +4230,11 @@ __all__ = [
     "gasket_seating_load",
     "gasket_operating_load",
     "governing_gasket_bolt_load",
+    "rayleigh_range",
+    "beam_radius_at_distance",
+    "beam_divergence_half_angle",
+    "beam_waist_for_divergence",
+    "focused_spot_radius",
     "confined_liquid_thermal_pressure",
     "constrained_thermal_stress",
     "thermal_shock_stress",

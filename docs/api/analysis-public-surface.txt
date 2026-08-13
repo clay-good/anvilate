@@ -715,6 +715,11 @@ gas_transport.prandtl_number
 gasket.gasket_operating_load
 gasket.gasket_seating_load
 gasket.governing_gasket_bolt_load
+gaussian_beam.rayleigh_range
+gaussian_beam.beam_radius_at_distance
+gaussian_beam.beam_divergence_half_angle
+gaussian_beam.beam_waist_for_divergence
+gaussian_beam.focused_spot_radius
 gear.PlanetaryTorques
 gear.barth_velocity_factor
 gear.base_tangent_length

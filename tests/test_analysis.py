@@ -28533,3 +28533,63 @@ def test_level_turn_bank_load_factor_radius_rate_and_stall():
         lt.bank_angle_for_turn_rate(speed=speed, turn_rate=_q("0 deg/s"))
     with pytest.raises(ValueError, match="speed must be a"):
         lt.turn_radius(speed=_q("100 m"), bank_angle=45.0)
+
+
+def test_gaussian_beam_rayleigh_divergence_spread_and_focus():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        beam_divergence_half_angle,
+        beam_radius_at_distance,
+        beam_waist_for_divergence,
+        focused_spot_radius,
+        rayleigh_range,
+    )
+
+    lam = _q("1064 nm")
+    w0 = _q("0.5 mm")
+
+    # z_R = pi*w0^2/lambda; 0.5 mm waist at 1064 nm -> ~738 mm.
+    zr = rayleigh_range(beam_waist=w0, wavelength=lam)
+    assert zr.to("m").magnitude == pytest.approx(pi * 0.5e-3**2 / 1.064e-6, rel=1e-12)
+    assert zr.to("mm").magnitude == pytest.approx(738.2, abs=0.5)
+    # A tighter waist collimates over a much shorter range (z_R ~ w0^2).
+    assert rayleigh_range(beam_waist=_q("0.25 mm"), wavelength=lam).to(
+        "m"
+    ).magnitude == pytest.approx(zr.to("m").magnitude / 4.0, rel=1e-9)
+
+    # w(z_R) = sqrt(2)*w0; at the waist w(0) = w0.
+    at_zr = beam_radius_at_distance(beam_waist=w0, wavelength=lam, distance=zr)
+    assert at_zr.to("mm").magnitude == pytest.approx(0.5 * sqrt(2.0), rel=1e-9)
+    at_0 = beam_radius_at_distance(beam_waist=w0, wavelength=lam, distance=_q("0 m"))
+    assert at_0.to("mm").magnitude == pytest.approx(0.5, rel=1e-12)
+
+    # Divergence theta = lambda/(pi*w0) (radians), and its waist inverse round-trips.
+    theta = beam_divergence_half_angle(beam_waist=w0, wavelength=lam)
+    assert theta == pytest.approx(1.064e-6 / (pi * 0.5e-3), rel=1e-12)
+    assert isinstance(theta, float)
+    w_back = beam_waist_for_divergence(divergence_half_angle=theta, wavelength=lam)
+    assert w_back.to("mm").magnitude == pytest.approx(0.5, rel=1e-9)
+    # Far from the waist the beam radius approaches theta*z (linear cone).
+    far = beam_radius_at_distance(beam_waist=w0, wavelength=lam, distance=_q("100 m"))
+    assert far.to("m").magnitude == pytest.approx(theta * 100.0, rel=1e-3)
+
+    # Focused spot w_f = lambda*f/(pi*w); 100 mm lens, 2 mm beam -> ~16.9 um.
+    spot = focused_spot_radius(
+        wavelength=lam, focal_length=_q("100 mm"), input_beam_radius=_q("2 mm")
+    )
+    assert spot.to("m").magnitude == pytest.approx(1.064e-6 * 0.1 / (pi * 2e-3), rel=1e-12)
+    assert spot.to("um").magnitude == pytest.approx(16.93, abs=0.05)
+    # Widening the input beam tightens the focus (w_f ~ 1/w): 2x beam -> half the spot.
+    spot_wide = focused_spot_radius(
+        wavelength=lam, focal_length=_q("100 mm"), input_beam_radius=_q("4 mm")
+    )
+    assert spot_wide.to("um").magnitude == pytest.approx(spot.to("um").magnitude / 2.0, rel=1e-9)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="beam_waist must be positive"):
+        rayleigh_range(beam_waist=_q("0 mm"), wavelength=lam)
+    with pytest.raises(ValueError, match="divergence_half_angle must be positive"):
+        beam_waist_for_divergence(divergence_half_angle=0.0, wavelength=lam)
+    with pytest.raises(ValueError, match="wavelength must be a"):
+        rayleigh_range(beam_waist=w0, wavelength=_q("1064 Hz"))

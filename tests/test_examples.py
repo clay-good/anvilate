@@ -5464,3 +5464,15 @@ def test_roof_rack_rollover_example_raised_cg_tips_it():
     empty = namespace["screen_empty"]()
     assert empty.entries[0].passed
     assert empty.status is CheckStatus.PASS
+
+
+def test_laser_cutter_beam_expander_example_widening_tightens_focus():
+    namespace = runpy.run_path(str(_EXAMPLES / "laser_cutter_beam_expander.py"))
+    raw = namespace["screen_raw_beam"]()
+    # The raw 2 mm beam focuses larger than the required kerf spot -> FAIL.
+    assert raw.status is CheckStatus.FAIL
+    assert raw.entries[0].name == "focused spot vs required kerf"
+    # A 2x beam expander halves the spot and clears the requirement.
+    expanded = namespace["screen_expanded_beam"]()
+    assert expanded.entries[0].passed
+    assert expanded.status is CheckStatus.PASS
