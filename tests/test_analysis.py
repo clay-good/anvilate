@@ -21416,6 +21416,37 @@ def test_pipe_flow_dean_number_curved_pipe():
         dean_number(reynolds=0.0, tube_diameter=_q("20 mm"), coil_diameter=_q("200 mm"))
 
 
+def test_pipe_flow_womersley_number_pulsatile():
+    import math
+
+    from anvilate.analysis import womersley_number
+
+    # alpha = R*sqrt(2*pi*f/nu); human aorta R=12.5 mm, f=1.2 Hz, blood nu=3.5e-3/1060 -> ~19.
+    alpha = womersley_number(
+        radius=_q("12.5 mm"),
+        frequency=_q("1.2 Hz"),
+        kinematic_viscosity=_q("3.301886792452830e-06 m**2/s"),
+    )
+    expected = 0.0125 * math.sqrt(2 * math.pi * 1.2 / 3.301886792452830e-06)
+    assert alpha == pytest.approx(expected, rel=1e-9)
+    assert 15.0 < alpha < 22.0
+
+    # Womersley scales with radius and with sqrt(frequency): 4x frequency -> 2x alpha.
+    alpha_fast = womersley_number(
+        radius=_q("12.5 mm"),
+        frequency=_q("4.8 Hz"),
+        kinematic_viscosity=_q("3.301886792452830e-06 m**2/s"),
+    )
+    assert alpha_fast == pytest.approx(2.0 * alpha, rel=1e-9)
+
+    with pytest.raises(ValueError, match="frequency"):
+        womersley_number(
+            radius=_q("12.5 mm"),
+            frequency=_q("0 Hz"),
+            kinematic_viscosity=_q("1e-6 m**2/s"),
+        )
+
+
 def test_pipe_entry_lengths_laminar_and_turbulent():
     from anvilate.analysis import (
         laminar_hydrodynamic_entry_length,

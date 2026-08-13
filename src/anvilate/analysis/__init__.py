@@ -2254,6 +2254,7 @@ from .pipe_flow import (
     reynolds_number,
     surge_wave_period,
     turbulent_entry_length,
+    womersley_number,
 )
 from .plasma import (
     debye_length,
@@ -3178,6 +3179,7 @@ __all__ = [
     "pressure_wave_speed",
     "reynolds_number",
     "surge_wave_period",
+    "womersley_number",
     "differential_pressure_for_flow",
     "obstruction_meter_flow_rate",
     "pitot_velocity",

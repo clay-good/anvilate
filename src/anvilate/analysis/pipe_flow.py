@@ -45,6 +45,7 @@ __all__ = [
     "pressure_wave_speed",
     "reynolds_number",
     "surge_wave_period",
+    "womersley_number",
 ]
 
 # Hazen-Williams SI constant and exponents: h_f = 10.67*L*Q^1.852 / (C^1.852 * D^4.87),
@@ -108,6 +109,40 @@ def dean_number(
     if d <= 0 or big_d <= 0:
         raise ValueError("tube_diameter and coil_diameter must be positive")
     return reynolds * (d / big_d) ** 0.5
+
+
+def womersley_number(
+    *,
+    radius: Quantity,
+    frequency: Quantity,
+    kinematic_viscosity: Quantity,
+) -> float:
+    """The Womersley number of pulsatile pipe flow, α = R·√(2π·f/ν).
+
+    The dimensionless group that sets the character of an oscillating internal flow: α = R·√(ω/ν)
+    with ω = 2π·f, from the pipe ``radius`` R, the oscillation ``frequency`` f, and the fluid's
+    ``kinematic_viscosity`` ν. It compares the transient (unsteady inertia) timescale to the
+    viscous-diffusion timescale across the pipe. When α ≲ 1 viscosity has time to diffuse across the
+    bore every cycle, so the flow stays quasi-steady with a parabolic Poiseuille profile in phase
+    with the driving pressure; when α ≫ 1 inertia dominates, the core moves as a flat plug that lags
+    the pressure gradient by up to 90° and shear concentrates in a thin wall layer. It is the master
+    parameter of hemodynamics (the aorta runs α ≈ 15) and of any reciprocating or acoustically
+    driven pipe flow. ``frequency`` is taken in hertz and converted to angular frequency internally.
+    Returns the dimensionless Womersley number.
+    """
+    _check(radius, "[length]", "radius")
+    _check(frequency, "1/[time]", "frequency")
+    _check(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
+    r = radius.to("m").magnitude
+    f = frequency.to("Hz").magnitude
+    nu = kinematic_viscosity.to("m**2/s").magnitude
+    if r <= 0:
+        raise ValueError("radius must be positive")
+    if f <= 0:
+        raise ValueError("frequency must be positive")
+    if nu <= 0:
+        raise ValueError("kinematic_viscosity must be positive")
+    return r * sqrt(2.0 * pi * f / nu)
 
 
 def laminar_hydrodynamic_entry_length(*, reynolds: float, diameter: Quantity) -> Quantity:
