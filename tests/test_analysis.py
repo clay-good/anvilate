@@ -26313,6 +26313,28 @@ def test_vapor_liquid_equilibrium_raoult_relative_volatility_and_vapor_compositi
         relative_volatility(light_vapor_pressure=_q("178 kg"), heavy_vapor_pressure=_q("74 kPa"))
 
 
+def test_vapor_liquid_equilibrium_henry_law():
+    from anvilate.analysis import henry_law_partial_pressure
+
+    # Henry: p_i = k_H*x_i; a dilute solute at x=1e-4 with k_H=1.63e5 kPa -> 16.3 kPa.
+    p = henry_law_partial_pressure(solute_mole_fraction=1e-4, henry_constant=_q("1.63e5 kPa"))
+    assert p.to("kPa").magnitude == pytest.approx(1e-4 * 1.63e5, rel=1e-9)
+    assert p.to("kPa").magnitude == pytest.approx(16.3, rel=1e-9)
+    # Linear in mole fraction (double the dissolved amount, double the overpressure).
+    p2 = henry_law_partial_pressure(solute_mole_fraction=2e-4, henry_constant=_q("1.63e5 kPa"))
+    assert p2.to("kPa").magnitude == pytest.approx(2 * p.to("kPa").magnitude, rel=1e-9)
+    # Nothing dissolved, no partial pressure.
+    assert henry_law_partial_pressure(solute_mole_fraction=0.0, henry_constant=_q("1.63e5 kPa")).to(
+        "kPa"
+    ).magnitude == pytest.approx(0.0, abs=1e-12)
+
+    # Guardrails: mole fraction in [0, 1], dimensions checked.
+    with pytest.raises(ValueError, match="solute_mole_fraction must be in"):
+        henry_law_partial_pressure(solute_mole_fraction=1.5, henry_constant=_q("1.63e5 kPa"))
+    with pytest.raises(ValueError, match="henry_constant must be a"):
+        henry_law_partial_pressure(solute_mole_fraction=1e-4, henry_constant=_q("1.63e5 kg"))
+
+
 def test_vapor_liquid_equilibrium_fenske_minimum_stages():
     from math import log
 

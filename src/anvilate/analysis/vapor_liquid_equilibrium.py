@@ -26,6 +26,7 @@ __all__ = [
     "equilibrium_vapor_mole_fraction",
     "fenske_minimum_stages",
     "gilliland_actual_stages",
+    "henry_law_partial_pressure",
     "raoult_partial_pressure",
     "relative_volatility",
     "underwood_minimum_reflux",
@@ -51,6 +52,27 @@ def raoult_partial_pressure(
     if p_pure < 0:
         raise ValueError("pure_vapor_pressure must be non-negative")
     return Quantity(magnitude=liquid_mole_fraction * p_pure, unit="kPa")
+
+
+def henry_law_partial_pressure(
+    *, solute_mole_fraction: float, henry_constant: Quantity
+) -> Quantity:
+    """The Henry's-law partial pressure of a dilute solute, p_i = k_H·x_i.
+
+    Where Raoult's law is exact for the near-pure solvent, Henry's law governs the *dilute solute*
+    end: a lightly dissolved gas or minor component exerts a partial pressure proportional to its
+    ``solute_mole_fraction`` x_i through its ``henry_constant`` k_H (a large pressure, empirical to
+    the solute-solvent pair), p_i = k_H·x_i. It is why a sealed soda holds CO₂ under pressure and
+    fizzes when opened, and how gas solubility is screened — double the overlying pressure and twice
+    as much gas dissolves. Returns the solute partial pressure in kPa.
+    """
+    _check(henry_constant, "[pressure]", "henry_constant")
+    if not 0.0 <= solute_mole_fraction <= 1.0:
+        raise ValueError(f"solute_mole_fraction must be in [0, 1]; got {solute_mole_fraction}")
+    k_h = henry_constant.to("kPa").magnitude
+    if k_h < 0:
+        raise ValueError("henry_constant must be non-negative")
+    return Quantity(magnitude=solute_mole_fraction * k_h, unit="kPa")
 
 
 def relative_volatility(*, light_vapor_pressure: Quantity, heavy_vapor_pressure: Quantity) -> float:
