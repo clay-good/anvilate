@@ -17,12 +17,17 @@ Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` value
 
 from __future__ import annotations
 
+from math import log, pi
+
 from ..units import Quantity
 
 _COULOMB_CONSTANT = 8.9875517873681764e9  # N*m**2/C**2, 1/(4*pi*eps0)
+_VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m (eps0)
 
 __all__ = [
+    "coaxial_capacitance",
     "coulomb_force",
+    "electric_field_energy_density",
     "electric_field_point_charge",
     "electric_potential_point_charge",
 ]
@@ -77,6 +82,62 @@ def electric_potential_point_charge(*, charge: Quantity, distance: Quantity) -> 
     if r <= 0:
         raise ValueError("distance must be positive")
     return Quantity(magnitude=_COULOMB_CONSTANT * q / r, unit="V")
+
+
+def electric_field_energy_density(
+    *, electric_field: Quantity, relative_permittivity: float = 1.0
+) -> Quantity:
+    """The energy stored per unit volume in an electric field, u = ½·ε₀·ε_r·E².
+
+    An electric field carries energy even in empty space: every cubic metre holds
+    u = ½·ε₀·ε_r·E², from the field strength ``electric_field`` E and the medium's
+    ``relative_permittivity`` ε_r (1 for vacuum/air, higher in a dielectric). It is why a charged
+    capacitor stores energy in the gap between its plates, and — integrated over the field volume —
+    it recovers the ½·C·V² of a capacitor. A dielectric packs in more energy at the same field, up
+    to its breakdown limit. ``electric_field`` E and ``relative_permittivity`` ε_r ≥ 1. Returns the
+    energy density in J/m³.
+    """
+    _check(electric_field, "[electric_potential]/[length]", "electric_field")
+    e = electric_field.to("V/m").magnitude
+    if relative_permittivity < 1.0:
+        raise ValueError("relative_permittivity must be at least 1")
+    return Quantity(
+        magnitude=0.5 * _VACUUM_PERMITTIVITY * relative_permittivity * e**2, unit="J/m**3"
+    )
+
+
+def coaxial_capacitance(
+    *,
+    length: Quantity,
+    inner_radius: Quantity,
+    outer_radius: Quantity,
+    relative_permittivity: float = 1.0,
+) -> Quantity:
+    """The capacitance of a coaxial cylinder pair, C = 2π·ε₀·ε_r·L/ln(b/a).
+
+    The capacitance between an inner conductor of radius a and a coaxial outer shield of radius b —
+    a coax cable, a cylindrical capacitor, a feedthrough: C = 2π·ε₀·``relative_permittivity`` ε_r ·
+    ``length`` L / ln(``outer_radius`` b / ``inner_radius`` a). Unlike the parallel-plate form the
+    field is radial, so the geometry enters through the log of the radius ratio — a snug shield (b
+    near a) gives a high capacitance per metre. ``outer_radius`` must exceed ``inner_radius`` and
+    ε_r ≥ 1. Returns the capacitance in farads.
+    """
+    _check(length, "[length]", "length")
+    _check(inner_radius, "[length]", "inner_radius")
+    _check(outer_radius, "[length]", "outer_radius")
+    length_m = length.to("m").magnitude
+    a = inner_radius.to("m").magnitude
+    b = outer_radius.to("m").magnitude
+    if length_m <= 0:
+        raise ValueError("length must be positive")
+    if a <= 0:
+        raise ValueError("inner_radius must be positive")
+    if b <= a:
+        raise ValueError("outer_radius must exceed inner_radius")
+    if relative_permittivity < 1.0:
+        raise ValueError("relative_permittivity must be at least 1")
+    c = 2.0 * pi * _VACUUM_PERMITTIVITY * relative_permittivity * length_m / log(b / a)
+    return Quantity(magnitude=c, unit="F")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

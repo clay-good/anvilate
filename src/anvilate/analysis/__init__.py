@@ -1620,7 +1620,9 @@ from .electroplating import (
     electroplating_time_for_thickness,
 )
 from .electrostatics import (
+    coaxial_capacitance,
     coulomb_force,
+    electric_field_energy_density,
     electric_field_point_charge,
     electric_potential_point_charge,
 )
@@ -3266,6 +3268,8 @@ __all__ = [
     "coulomb_force",
     "electric_field_point_charge",
     "electric_potential_point_charge",
+    "electric_field_energy_density",
+    "coaxial_capacitance",
     "battery_bank_capacity",
     "usable_battery_energy",
     "battery_backup_time",

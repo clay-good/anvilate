@@ -25344,6 +25344,63 @@ def test_coulomb_force_field_and_potential():
         electric_field_point_charge(charge=_q("1 A"), distance=_q("0.1 m"))
 
 
+def test_electric_field_energy_density_and_coaxial_capacitance():
+    from math import log, pi
+
+    from anvilate.analysis import coaxial_capacitance, electric_field_energy_density
+
+    e0 = 8.8541878128e-12
+
+    # u = 0.5*e0*er*E^2; 1 MV/m in vacuum -> 4.43 J/m^3.
+    u = electric_field_energy_density(electric_field=_q("1e6 V/m"))
+    assert u.to("J/m**3").magnitude == pytest.approx(0.5 * e0 * 1e12, rel=1e-9)
+    assert u.to("J/m**3").magnitude == pytest.approx(4.427, abs=0.001)
+    # It scales with the square of field and linearly with permittivity.
+    assert electric_field_energy_density(electric_field=_q("2e6 V/m")).to(
+        "J/m**3"
+    ).magnitude == pytest.approx(4 * u.to("J/m**3").magnitude, rel=1e-9)
+    assert electric_field_energy_density(
+        electric_field=_q("1e6 V/m"), relative_permittivity=3.0
+    ).to("J/m**3").magnitude == pytest.approx(3 * u.to("J/m**3").magnitude, rel=1e-9)
+
+    # Coaxial C = 2*pi*e0*er*L/ln(b/a); 1 m, 1/3 mm radii, er=2.3 -> ~116 pF.
+    c = coaxial_capacitance(
+        length=_q("1 m"),
+        inner_radius=_q("1 mm"),
+        outer_radius=_q("3 mm"),
+        relative_permittivity=2.3,
+    )
+    assert c.to("F").magnitude == pytest.approx(2 * pi * e0 * 2.3 * 1 / log(3), rel=1e-9)
+    assert c.to("pF").magnitude == pytest.approx(116.5, abs=0.1)
+    # A snugger shield (smaller b/a) raises capacitance per metre.
+    assert (
+        coaxial_capacitance(length=_q("1 m"), inner_radius=_q("1 mm"), outer_radius=_q("1.5 mm"))
+        .to("pF")
+        .magnitude
+        > coaxial_capacitance(length=_q("1 m"), inner_radius=_q("1 mm"), outer_radius=_q("3 mm"))
+        .to("pF")
+        .magnitude
+    )
+    # Capacitance is proportional to length.
+    assert coaxial_capacitance(
+        length=_q("2 m"), inner_radius=_q("1 mm"), outer_radius=_q("3 mm")
+    ).to("F").magnitude == pytest.approx(
+        2
+        * coaxial_capacitance(length=_q("1 m"), inner_radius=_q("1 mm"), outer_radius=_q("3 mm"))
+        .to("F")
+        .magnitude,
+        rel=1e-9,
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="outer_radius must exceed inner_radius"):
+        coaxial_capacitance(length=_q("1 m"), inner_radius=_q("3 mm"), outer_radius=_q("1 mm"))
+    with pytest.raises(ValueError, match="relative_permittivity must be at least 1"):
+        electric_field_energy_density(electric_field=_q("1e6 V/m"), relative_permittivity=0.5)
+    with pytest.raises(ValueError, match="electric_field must be a"):
+        electric_field_energy_density(electric_field=_q("1e6 V"))
+
+
 def test_ideal_gas_law_pressure_volume_and_moles():
     from anvilate.analysis import (
         ideal_gas_moles,
