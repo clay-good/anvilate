@@ -26224,6 +26224,40 @@ def test_magnetic_circuit_mmf_reluctance_and_flux():
         magnetic_flux(magnetomotive_force=mmf, reluctance=_q("5 ohm"))
 
 
+def test_coil_inductance_from_reluctance():
+    from anvilate.analysis import coil_inductance, magnetic_reluctance
+
+    # L = N^2/R; 500 turns on a 1e6 /H circuit -> 0.25 H.
+    reluctance = Quantity(magnitude=1e6, unit="1/H")
+    lind = coil_inductance(turns=500.0, reluctance=reluctance)
+    assert lind.to("H").magnitude == pytest.approx(500.0**2 / 1e6, rel=1e-12)
+    assert lind.to("H").magnitude == pytest.approx(0.25, rel=1e-12)
+    # Doubling the turns quadruples the inductance; halving the reluctance doubles it.
+    assert coil_inductance(turns=1000.0, reluctance=reluctance).to("H").magnitude == pytest.approx(
+        4 * lind.to("H").magnitude, rel=1e-12
+    )
+    assert coil_inductance(turns=500.0, reluctance=Quantity(magnitude=5e5, unit="1/H")).to(
+        "H"
+    ).magnitude == pytest.approx(2 * lind.to("H").magnitude, rel=1e-12)
+
+    # Consistency with the geometric route: R = l/(mu0*mur*A) then L = N^2/R.
+    r_iron = magnetic_reluctance(
+        path_length=_q("0.6 m"),
+        area=Quantity(magnitude=4e-4, unit="m**2"),
+        relative_permeability=2000.0,
+    )
+    l_iron = coil_inductance(turns=300.0, reluctance=r_iron)
+    assert l_iron.to("H").magnitude == pytest.approx(
+        300.0**2 / r_iron.to("1/H").magnitude, rel=1e-9
+    )
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="turns must be positive"):
+        coil_inductance(turns=0.0, reluctance=reluctance)
+    with pytest.raises(ValueError, match="reluctance must be a"):
+        coil_inductance(turns=500.0, reluctance=_q("5 ohm"))
+
+
 def test_malus_law_transmission_inverse_and_unpolarized_half():
     from math import cos, pi, radians
 

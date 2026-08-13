@@ -2019,6 +2019,7 @@ from .machining import (
     theoretical_surface_roughness,
 )
 from .magnetics import (
+    coil_inductance,
     electromagnet_holding_force,
     magnetic_flux,
     magnetic_pressure,
@@ -4011,6 +4012,7 @@ __all__ = [
     "magnetomotive_force",
     "magnetic_reluctance",
     "magnetic_flux",
+    "coil_inductance",
     "hall_voltage",
     "hall_flux_density_from_voltage",
     "hall_carrier_density",

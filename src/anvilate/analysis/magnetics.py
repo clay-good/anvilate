@@ -29,6 +29,7 @@ from ..units import Quantity
 VACUUM_PERMEABILITY = 4.0e-7 * pi  # μ₀, T·m/A
 
 __all__ = [
+    "coil_inductance",
     "electromagnet_holding_force",
     "magnetic_flux",
     "magnetic_pressure",
@@ -153,6 +154,26 @@ def magnetic_flux(*, magnetomotive_force: Quantity, reluctance: Quantity) -> Qua
     if r <= 0:
         raise ValueError("reluctance must be positive")
     return Quantity(magnitude=mmf / r, unit="Wb")
+
+
+def coil_inductance(*, turns: float, reluctance: Quantity) -> Quantity:
+    """The inductance of a coil on a magnetic circuit, L = N²/R.
+
+    The inductance a winding presents follows from its magnetic circuit: each of the ``turns`` N
+    links the flux the ampere-turns drive through the ``reluctance`` R
+    (:func:`magnetic_reluctance`), and the flux linkage per amp works out to L = N²/R. It is the
+    magnetic-circuit route to inductance — halve the reluctance (a better core, a shorter gap) and
+    the inductance doubles; double the turns and it quadruples. Feed the result to
+    ``reactive_circuit.inductor_stored_energy`` for the ½·L·I² the field holds. ``turns`` N is
+    positive and ``reluctance`` R a positive magnetic reluctance (1/H). Returns the inductance in H.
+    """
+    _check(reluctance, "1/[inductance]", "reluctance")
+    if turns <= 0:
+        raise ValueError("turns must be positive")
+    r = reluctance.to("1/H").magnitude
+    if r <= 0:
+        raise ValueError("reluctance must be positive")
+    return Quantity(magnitude=turns**2 / r, unit="H")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
