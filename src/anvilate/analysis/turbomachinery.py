@@ -27,7 +27,9 @@ _STANDARD_GRAVITY = Quantity(magnitude=9.80665, unit="m/s**2")
 __all__ = [
     "blade_tip_speed",
     "euler_head",
+    "flow_coefficient",
     "impeller_outlet_swirl_velocity",
+    "stage_loading_coefficient",
 ]
 
 
@@ -124,6 +126,48 @@ def euler_head(
             "Euler head is non-positive; the outlet swirl work does not exceed the inlet swirl work"
         )
     return Quantity(magnitude=head, unit="m")
+
+
+def flow_coefficient(*, axial_velocity: Quantity, blade_speed: Quantity) -> float:
+    """The turbomachine flow coefficient, φ = C_a/U.
+
+    The dimensionless throughput of a stage: the ``axial_velocity`` C_a (the through-flow velocity)
+    over the ``blade_speed`` U, φ = C_a/U. Together with the :func:`stage_loading_coefficient` it
+    fixes a stage's place on the Smith / Cordier chart, where efficiency contours live — a low φ is
+    a lightly loaded, large-diameter machine, a high φ a compact high-flow one. It is the same
+    similarity number that makes two geometrically similar stages run alike. Both velocities must
+    be positive. Returns the dimensionless flow coefficient.
+    """
+    _check(axial_velocity, "[length]/[time]", "axial_velocity")
+    _check(blade_speed, "[length]/[time]", "blade_speed")
+    c_a = axial_velocity.to("m/s").magnitude
+    u = blade_speed.to("m/s").magnitude
+    if c_a <= 0:
+        raise ValueError("axial_velocity must be positive")
+    if u <= 0:
+        raise ValueError("blade_speed must be positive")
+    return c_a / u
+
+
+def stage_loading_coefficient(*, specific_work: Quantity, blade_speed: Quantity) -> float:
+    """The turbomachine stage loading coefficient, ψ = Δh₀/U².
+
+    How hard a single stage works, made dimensionless: the ``specific_work`` Δh₀ (the stagnation
+    enthalpy change per unit mass the stage adds or extracts) over the square of the ``blade_speed``
+    U, ψ = Δh₀/U². A high ψ packs more work into one stage (fewer stages, but steeper blade turning
+    and more loss), a low ψ spreads it over many gentle stages. With the :func:`flow_coefficient`
+    it is the pair a compressor or turbine stage is designed and compared on. ``specific_work`` is
+    an energy per mass (m²/s²); U must be positive. Returns the dimensionless loading coefficient.
+    """
+    _check(specific_work, "[length]**2/[time]**2", "specific_work")
+    _check(blade_speed, "[length]/[time]", "blade_speed")
+    dh0 = specific_work.to("m**2/s**2").magnitude
+    u = blade_speed.to("m/s").magnitude
+    if dh0 <= 0:
+        raise ValueError("specific_work must be positive")
+    if u <= 0:
+        raise ValueError("blade_speed must be positive")
+    return dh0 / u**2
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

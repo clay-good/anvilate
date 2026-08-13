@@ -2781,7 +2781,9 @@ from .transmission_line import (
 from .turbomachinery import (
     blade_tip_speed,
     euler_head,
+    flow_coefficient,
     impeller_outlet_swirl_velocity,
+    stage_loading_coefficient,
 )
 from .universal_joint import (
     universal_joint_max_speed_ratio,
@@ -2971,6 +2973,8 @@ __all__ = [
     "blade_tip_speed",
     "impeller_outlet_swirl_velocity",
     "euler_head",
+    "flow_coefficient",
+    "stage_loading_coefficient",
     "universal_joint_speed_ratio",
     "universal_joint_max_speed_ratio",
     "universal_joint_speed_fluctuation",

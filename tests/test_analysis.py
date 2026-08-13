@@ -28235,6 +28235,34 @@ def test_turbomachinery_euler_head_tip_speed_and_vane_angle():
         )
 
 
+def test_turbomachinery_flow_and_stage_loading_coefficients():
+    from anvilate.analysis import flow_coefficient, stage_loading_coefficient
+
+    # phi = C_a/U; 150 m/s axial over a 300 m/s blade -> 0.5.
+    phi = flow_coefficient(axial_velocity=_q("150 m/s"), blade_speed=_q("300 m/s"))
+    assert phi == pytest.approx(0.5, rel=1e-12)
+    assert isinstance(phi, float)
+    # A faster blade at the same throughput lowers the flow coefficient.
+    assert flow_coefficient(axial_velocity=_q("150 m/s"), blade_speed=_q("600 m/s")) < phi
+
+    # psi = dh0/U^2; 45 kJ/kg over a 300 m/s blade -> 0.5.
+    psi = stage_loading_coefficient(specific_work=_q("45 kJ/kg"), blade_speed=_q("300 m/s"))
+    assert psi == pytest.approx(45000.0 / 300.0**2, rel=1e-12)
+    assert psi == pytest.approx(0.5, rel=1e-12)
+    # Loading falls with the square of blade speed: doubling U quarters psi.
+    assert stage_loading_coefficient(
+        specific_work=_q("45 kJ/kg"), blade_speed=_q("600 m/s")
+    ) == pytest.approx(psi / 4.0, rel=1e-12)
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="blade_speed must be positive"):
+        flow_coefficient(axial_velocity=_q("150 m/s"), blade_speed=_q("0 m/s"))
+    with pytest.raises(ValueError, match="specific_work must be positive"):
+        stage_loading_coefficient(specific_work=_q("0 J/kg"), blade_speed=_q("300 m/s"))
+    with pytest.raises(ValueError, match="specific_work must be a"):
+        stage_loading_coefficient(specific_work=_q("45 kJ"), blade_speed=_q("300 m/s"))
+
+
 def test_rc_cracking_moment_and_effective_inertia_bischoff():
     from anvilate.analysis import rc_cracking_moment, rc_effective_moment_of_inertia
 
