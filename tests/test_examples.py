@@ -527,6 +527,15 @@ def test_cyclone_dust_collector_cut_size_example():
     assert d["efficiency_10um"] > 0.5
 
 
+def test_sprinkler_remote_head_demand_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "sprinkler_remote_head_demand.py"))
+    d = namespace["remote_head_demand"]()
+    # P = (18/5.6)^2 ~ 10.3 psi, and that pressure delivers the 18 gpm back.
+    assert d["required_pressure_psi"] == pytest.approx((18 / 5.6) ** 2, rel=1e-6)
+    assert d["required_pressure_psi"] == pytest.approx(10.33, abs=0.02)
+    assert d["delivered_flow_gpm"] == pytest.approx(18.0, rel=1e-6)
+
+
 def test_coating_spec_wet_film_and_coverage_example():
     namespace = runpy.run_path(str(_EXAMPLES / "coating_spec_wet_film_and_coverage.py"))
     d = namespace["coating_spec"]()

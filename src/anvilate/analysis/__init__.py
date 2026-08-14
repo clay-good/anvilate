@@ -581,6 +581,9 @@ modules:
 - :mod:`~anvilate.analysis.fiber_optics` — fiber chromatic dispersion: the pulse broadening
   Δτ = D·L·Δλ over a link, the dispersion-limited bit rate B = 1/(4·Δτ), and the reach
   L = 1/(4·B·D·Δλ) a target bit rate allows before dispersion compensation is needed
+- :mod:`~anvilate.analysis.fire_protection` — fire-sprinkler hydraulics: the K-factor discharge
+  Q = K·√P a head delivers at a residual pressure, and the pressure P = (Q/K)² a target flow needs
+  at the most remote sprinkler
 - :mod:`~anvilate.analysis.gaussian_beam` — Gaussian-beam (laser) propagation: the Rayleigh range
   z_R = π·w₀²/λ, the spreading radius w(z) = w₀·√(1 + (z/z_R)²), the diffraction divergence
   θ = λ/(π·w₀) and its waist inverse, and the focused spot w_f = λ·f/(π·w) a lens forms
@@ -1772,6 +1775,10 @@ from .fiber_optics import (
     fiber_mode_count,
     fiber_single_mode_cutoff_wavelength,
     fiber_v_number,
+)
+from .fire_protection import (
+    sprinkler_discharge,
+    sprinkler_pressure_for_flow,
 )
 from .flow_measurement import (
     differential_pressure_for_flow,
@@ -4188,6 +4195,8 @@ __all__ = [
     "fiber_mode_count",
     "fiber_single_mode_cutoff_wavelength",
     "fiber_v_number",
+    "sprinkler_discharge",
+    "sprinkler_pressure_for_flow",
     "photon_energy",
     "photon_wavelength_from_energy",
     "photon_flux",

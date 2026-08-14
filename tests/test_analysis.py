@@ -3060,6 +3060,39 @@ def test_weld_heat_input_arc_power_and_travel_speed_inverse():
         weld_arc_power(arc_voltage=_q("25 V"), welding_current=_q("0 A"))
 
 
+def test_fire_sprinkler_discharge_and_pressure_inverse():
+    from math import sqrt
+
+    from anvilate.analysis import sprinkler_discharge, sprinkler_pressure_for_flow
+
+    k = _q("5.6 gallon/minute/psi**0.5")
+
+    # Q = K*sqrt(P); K=5.6 at 7 psi -> ~14.8 gpm.
+    q = sprinkler_discharge(k_factor=k, pressure=_q("7 psi"))
+    assert q.to("gallon/minute").magnitude == pytest.approx(5.6 * sqrt(7), rel=1e-9)
+    assert q.to("gallon/minute").magnitude == pytest.approx(14.82, abs=0.02)
+
+    # Flow follows the square root of pressure: 4x the pressure doubles the flow.
+    q4 = sprinkler_discharge(k_factor=k, pressure=_q("28 psi"))
+    assert q4.to("gallon/minute").magnitude == pytest.approx(
+        2 * q.to("gallon/minute").magnitude, rel=1e-9
+    )
+
+    # P = (Q/K)^2 inverts it: the pressure to deliver q recovers 7 psi.
+    p = sprinkler_pressure_for_flow(k_factor=k, flow_rate=q)
+    assert p.to("psi").magnitude == pytest.approx(7.0, rel=1e-9)
+    # An 18 gpm design flow needs (18/5.6)^2 ~ 10.3 psi.
+    p18 = sprinkler_pressure_for_flow(k_factor=k, flow_rate=_q("18 gallon/minute"))
+    assert p18.to("psi").magnitude == pytest.approx((18 / 5.6) ** 2, rel=1e-9)
+    assert p18.to("psi").magnitude == pytest.approx(10.33, abs=0.02)
+
+    # Guardrails: K carries the flow/sqrt-pressure dimension; pressure/flow are positive.
+    with pytest.raises(ValueError, match="k_factor must be a"):
+        sprinkler_discharge(k_factor=_q("5.6 gallon/minute"), pressure=_q("7 psi"))
+    with pytest.raises(ValueError, match="pressure must be non-negative"):
+        sprinkler_discharge(k_factor=k, pressure=_q("-1 psi"))
+
+
 def test_coating_film_thickness_and_coverage():
     from anvilate.analysis import (
         coating_dry_film_thickness,
