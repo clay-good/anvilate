@@ -1777,6 +1777,7 @@ from .fiber_optics import (
     fiber_v_number,
 )
 from .fire_protection import (
+    hydrant_flow_test,
     sprinkler_discharge,
     sprinkler_pressure_for_flow,
 )
@@ -4197,6 +4198,7 @@ __all__ = [
     "fiber_v_number",
     "sprinkler_discharge",
     "sprinkler_pressure_for_flow",
+    "hydrant_flow_test",
     "photon_energy",
     "photon_wavelength_from_energy",
     "photon_flux",

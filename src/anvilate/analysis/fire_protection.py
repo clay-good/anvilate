@@ -23,6 +23,7 @@ from ..units import Quantity
 _K_DIMENSION = "[volume] / [time] / [pressure]**0.5"
 
 __all__ = [
+    "hydrant_flow_test",
     "sprinkler_discharge",
     "sprinkler_pressure_for_flow",
 ]
@@ -76,6 +77,36 @@ def sprinkler_pressure_for_flow(*, k_factor: Quantity, flow_rate: Quantity) -> Q
     if q < 0:
         raise ValueError("flow_rate must be non-negative")
     return Quantity(magnitude=(q / k) ** 2, unit="psi")
+
+
+def hydrant_flow_test(
+    *,
+    outlet_diameter: Quantity,
+    pitot_pressure: Quantity,
+    discharge_coefficient: float = 0.9,
+) -> Quantity:
+    """The flow from a hydrant outlet in a flow test, Q = 29.83·c·d²·√P.
+
+    The standard fire-flow-test relation (NFPA 291): the water leaving a hydrant butt is
+    Q = 29.83·c·d²·√P, from the ``outlet_diameter`` d, the ``pitot_pressure`` P read at the outlet
+    with a pitot gauge, and the ``discharge_coefficient`` c for the outlet shape (0.90 for a smooth,
+    rounded outlet — the default; 0.80 for a square-edged one, 0.70 for one that projects into the
+    barrel). The 29.83 constant carries the customary units, so the diameter is taken in inches and
+    the pitot pressure in psi and the flow returned in gpm. It converts a field pitot reading into
+    the flow a hydrant was delivering, the raw data of a water-supply capacity test. Returns the
+    flow in gallons per minute.
+    """
+    _check(outlet_diameter, "[length]", "outlet_diameter")
+    _check(pitot_pressure, "[pressure]", "pitot_pressure")
+    if not 0.0 < discharge_coefficient <= 1.0:
+        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+    d = outlet_diameter.to("inch").magnitude
+    p = pitot_pressure.to("psi").magnitude
+    if d <= 0:
+        raise ValueError("outlet_diameter must be positive")
+    if p < 0:
+        raise ValueError("pitot_pressure must be non-negative")
+    return Quantity(magnitude=29.83 * discharge_coefficient * d**2 * sqrt(p), unit="gallon/minute")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

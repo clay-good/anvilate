@@ -3093,6 +3093,38 @@ def test_fire_sprinkler_discharge_and_pressure_inverse():
         sprinkler_discharge(k_factor=k, pressure=_q("-1 psi"))
 
 
+def test_fire_hydrant_flow_test():
+    from math import sqrt
+
+    from anvilate.analysis import hydrant_flow_test
+
+    # Q = 29.83*c*d^2*sqrt(P); a 2.5 in smooth outlet (c=0.9) at 20 psi pitot -> ~750 gpm.
+    q = hydrant_flow_test(outlet_diameter=_q("2.5 inch"), pitot_pressure=_q("20 psi"))
+    assert q.to("gallon/minute").magnitude == pytest.approx(
+        29.83 * 0.9 * 2.5**2 * sqrt(20), rel=1e-9
+    )
+    assert q.to("gallon/minute").magnitude == pytest.approx(750.4, abs=0.1)
+
+    # Flow scales with the square of outlet diameter: a 2x butt flows 4x.
+    q_big = hydrant_flow_test(outlet_diameter=_q("5 inch"), pitot_pressure=_q("20 psi"))
+    assert q_big.to("gallon/minute").magnitude == pytest.approx(
+        4 * q.to("gallon/minute").magnitude, rel=1e-9
+    )
+
+    # A rougher (square-edged) outlet coefficient reduces the flow proportionally.
+    q_rough = hydrant_flow_test(
+        outlet_diameter=_q("2.5 inch"), pitot_pressure=_q("20 psi"), discharge_coefficient=0.8
+    )
+    assert q_rough.to("gallon/minute").magnitude == pytest.approx(
+        q.to("gallon/minute").magnitude * 0.8 / 0.9, rel=1e-9
+    )
+
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        hydrant_flow_test(
+            outlet_diameter=_q("2.5 inch"), pitot_pressure=_q("20 psi"), discharge_coefficient=1.5
+        )
+
+
 def test_coating_film_thickness_and_coverage():
     from anvilate.analysis import (
         coating_dry_film_thickness,

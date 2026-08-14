@@ -713,6 +713,7 @@ fiber_optics.fiber_v_number
 fiber_optics.fiber_mode_count
 fiber_optics.fiber_single_mode_cutoff_wavelength
 fire_protection.sprinkler_discharge
+fire_protection.hydrant_flow_test
 fire_protection.sprinkler_pressure_for_flow
 flywheel.coefficient_of_fluctuation
 flywheel.flywheel_stored_energy
