@@ -1237,6 +1237,7 @@ from .cable import (
     parabolic_cable_sag,
 )
 from .calorimetry import (
+    flash_steam_fraction,
     latent_heat,
     mixing_equilibrium_temperature,
     sensible_heat,
@@ -3871,6 +3872,7 @@ __all__ = [
     "chain_working_tension",
     "sensible_heat",
     "latent_heat",
+    "flash_steam_fraction",
     "mixing_equilibrium_temperature",
     "CamMotion",
     "cam_follower_motion",

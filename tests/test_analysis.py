@@ -28123,6 +28123,43 @@ def test_sensible_latent_heat_and_mixing_temperature():
         latent_heat(mass=_q("0.5 kg"), specific_latent_heat=_q("334 J"))
 
 
+def test_calorimetry_flash_steam_fraction():
+    from anvilate.analysis import flash_steam_fraction
+
+    # 10 bar condensate (h_f1=762) flashed to 1 bar (h_f2=417, h_fg2=2258) -> ~15.3% flash steam.
+    x = flash_steam_fraction(
+        initial_liquid_enthalpy=_q("762 kJ/kg"),
+        final_liquid_enthalpy=_q("417 kJ/kg"),
+        final_latent_heat=_q("2258 kJ/kg"),
+    )
+    assert x == pytest.approx((762 - 417) / 2258, rel=1e-9)
+    assert x == pytest.approx(0.153, abs=1e-3)
+    assert 0.0 < x < 1.0
+
+    # A liquid already at the downstream saturation enthalpy makes no flash steam.
+    assert flash_steam_fraction(
+        initial_liquid_enthalpy=_q("417 kJ/kg"),
+        final_liquid_enthalpy=_q("417 kJ/kg"),
+        final_latent_heat=_q("2258 kJ/kg"),
+    ) == pytest.approx(0.0, abs=1e-12)
+
+    # A bigger pressure drop (lower downstream h_f2) flashes more.
+    x_deep = flash_steam_fraction(
+        initial_liquid_enthalpy=_q("762 kJ/kg"),
+        final_liquid_enthalpy=_q("340 kJ/kg"),
+        final_latent_heat=_q("2305 kJ/kg"),
+    )
+    assert x_deep > x
+
+    # A colder liquid than the downstream saturation cannot flash.
+    with pytest.raises(ValueError, match="does not flash"):
+        flash_steam_fraction(
+            initial_liquid_enthalpy=_q("300 kJ/kg"),
+            final_liquid_enthalpy=_q("417 kJ/kg"),
+            final_latent_heat=_q("2258 kJ/kg"),
+        )
+
+
 def test_clausius_clapeyron_vapor_pressure_boiling_and_latent_heat():
     from math import exp
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 from ..units import Quantity
 
 __all__ = [
+    "flash_steam_fraction",
     "latent_heat",
     "mixing_equilibrium_temperature",
     "sensible_heat",
@@ -48,6 +49,40 @@ def sensible_heat(
     if c <= 0:
         raise ValueError("specific_heat must be positive")
     return Quantity(magnitude=m * c * dt, unit="J")
+
+
+def flash_steam_fraction(
+    *,
+    initial_liquid_enthalpy: Quantity,
+    final_liquid_enthalpy: Quantity,
+    final_latent_heat: Quantity,
+) -> float:
+    """The fraction of a hot liquid that flashes to vapour on a pressure drop, x = Δh_f/h_fg2.
+
+    When a saturated (or hot) liquid is throttled to a lower pressure, the process is isenthalpic,
+    so the liquid arrives with more energy than a saturated liquid holds there and the surplus boils
+    part of it off. The vapour fraction is x = (``initial_liquid_enthalpy`` h_f1 −
+    ``final_liquid_enthalpy`` h_f2)/``final_latent_heat`` h_fg2, where h_f1 is the incoming liquid's
+    enthalpy, and h_f2 and h_fg2 are the saturated-liquid enthalpy and latent heat at the lower
+    pressure (from steam tables). It is the flash steam a condensate line, a boiler blowdown, or a
+    flash tank makes — energy worth recovering rather than venting. The initial enthalpy must exceed
+    the final saturated-liquid enthalpy (a hotter liquid than the downstream saturation), or nothing
+    flashes. Returns the dimensionless vapour mass fraction.
+    """
+    _check(initial_liquid_enthalpy, "[energy]/[mass]", "initial_liquid_enthalpy")
+    _check(final_liquid_enthalpy, "[energy]/[mass]", "final_liquid_enthalpy")
+    _check(final_latent_heat, "[energy]/[mass]", "final_latent_heat")
+    h_f1 = initial_liquid_enthalpy.to("J/kg").magnitude
+    h_f2 = final_liquid_enthalpy.to("J/kg").magnitude
+    h_fg2 = final_latent_heat.to("J/kg").magnitude
+    if h_fg2 <= 0:
+        raise ValueError("final_latent_heat must be positive")
+    if h_f1 < h_f2:
+        raise ValueError(
+            "initial_liquid_enthalpy must be at least the final saturated-liquid enthalpy "
+            "(a colder liquid does not flash)"
+        )
+    return (h_f1 - h_f2) / h_fg2
 
 
 def latent_heat(*, mass: Quantity, specific_latent_heat: Quantity) -> Quantity:
