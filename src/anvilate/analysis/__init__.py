@@ -1643,6 +1643,7 @@ from .electrical import (
     voltage_drop_three_phase,
 )
 from .electromagnetic_induction import (
+    coupling_coefficient,
     faraday_induced_emf,
     motional_emf,
     mutual_inductance_emf,
@@ -3385,6 +3386,7 @@ __all__ = [
     "faraday_induced_emf",
     "self_induced_emf",
     "mutual_inductance_emf",
+    "coupling_coefficient",
     "electroplating_mass_deposited",
     "electroplating_deposition_thickness",
     "electroplating_time_for_thickness",

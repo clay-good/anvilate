@@ -17,9 +17,12 @@ self-induced back-EMF = L·ΔI/Δt from its inductance L. Inputs and outputs are
 
 from __future__ import annotations
 
+from math import sqrt
+
 from ..units import Quantity
 
 __all__ = [
+    "coupling_coefficient",
     "faraday_induced_emf",
     "motional_emf",
     "mutual_inductance_emf",
@@ -116,6 +119,41 @@ def mutual_inductance_emf(
     if dt <= 0:
         raise ValueError("time_interval must be positive")
     return Quantity(magnitude=abs(m * di / dt), unit="V")
+
+
+def coupling_coefficient(
+    *,
+    mutual_inductance: Quantity,
+    primary_inductance: Quantity,
+    secondary_inductance: Quantity,
+) -> float:
+    """The magnetic coupling coefficient of two coils, k = M/√(L₁·L₂).
+
+    How tightly two coils share their flux: k = M/√(L₁·L₂), from the ``mutual_inductance`` M (see
+    :func:`mutual_inductance_emf`) and the two self-inductances ``primary_inductance`` L₁ and
+    ``secondary_inductance`` L₂. It runs from 0 (no shared flux, independent coils) to 1 (perfect
+    coupling, every field line links both — the ideal-transformer limit). A mains transformer on a
+    closed core runs k ≈ 0.98–0.999; a loosely coupled air-cored pair for wireless power or a
+    resonant tank may sit at 0.3–0.7, where leakage inductance (1 − k²)·L dominates the behaviour. k
+    cannot physically exceed 1, so M ≤ √(L₁·L₂); a value above it signals inconsistent inputs and is
+    rejected. Returns the dimensionless coupling coefficient.
+    """
+    _check(mutual_inductance, "[inductance]", "mutual_inductance")
+    _check(primary_inductance, "[inductance]", "primary_inductance")
+    _check(secondary_inductance, "[inductance]", "secondary_inductance")
+    m = mutual_inductance.to("H").magnitude
+    l1 = primary_inductance.to("H").magnitude
+    l2 = secondary_inductance.to("H").magnitude
+    if m < 0:
+        raise ValueError("mutual_inductance must be non-negative")
+    if l1 <= 0 or l2 <= 0:
+        raise ValueError("primary_inductance and secondary_inductance must be positive")
+    k = m / sqrt(l1 * l2)
+    if k > 1.0:
+        raise ValueError(
+            "mutual_inductance cannot exceed sqrt(L1*L2) (coupling coefficient would exceed 1)"
+        )
+    return k
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

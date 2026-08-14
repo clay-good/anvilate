@@ -26761,6 +26761,51 @@ def test_mutual_inductance_emf():
         )
 
 
+def test_electromagnetic_coupling_coefficient():
+    from math import sqrt
+
+    from anvilate.analysis import coupling_coefficient
+
+    # k = M/sqrt(L1*L2); M=0.9 mH, L1=L2=1 mH -> 0.9 (tight coupling).
+    k = coupling_coefficient(
+        mutual_inductance=_q("0.9 mH"),
+        primary_inductance=_q("1 mH"),
+        secondary_inductance=_q("1 mH"),
+    )
+    assert k == pytest.approx(0.9e-3 / sqrt(1e-3 * 1e-3), rel=1e-9)
+    assert k == pytest.approx(0.9, rel=1e-12)
+
+    # Unequal inductances: M=1 mH, L1=1 mH, L2=4 mH -> k = 1/sqrt(4) = 0.5.
+    k2 = coupling_coefficient(
+        mutual_inductance=_q("1 mH"),
+        primary_inductance=_q("1 mH"),
+        secondary_inductance=_q("4 mH"),
+    )
+    assert k2 == pytest.approx(0.5, rel=1e-12)
+
+    # Perfect coupling M = sqrt(L1*L2) gives k = 1 (the ideal-transformer limit).
+    k_ideal = coupling_coefficient(
+        mutual_inductance=_q("2 mH"),
+        primary_inductance=_q("1 mH"),
+        secondary_inductance=_q("4 mH"),
+    )
+    assert k_ideal == pytest.approx(1.0, rel=1e-12)
+
+    # M above sqrt(L1*L2) is physically impossible (k > 1) and is rejected.
+    with pytest.raises(ValueError, match="cannot exceed"):
+        coupling_coefficient(
+            mutual_inductance=_q("3 mH"),
+            primary_inductance=_q("1 mH"),
+            secondary_inductance=_q("4 mH"),
+        )
+    with pytest.raises(ValueError, match="must be positive"):
+        coupling_coefficient(
+            mutual_inductance=_q("0.5 mH"),
+            primary_inductance=_q("0 mH"),
+            secondary_inductance=_q("1 mH"),
+        )
+
+
 def test_coulomb_force_field_and_potential():
     from anvilate.analysis import (
         coulomb_force,
