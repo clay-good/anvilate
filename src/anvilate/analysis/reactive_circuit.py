@@ -37,6 +37,7 @@ __all__ = [
     "lc_resonant_frequency",
     "parallel_plate_capacitance",
     "parallel_plate_field",
+    "first_order_lowpass_gain",
     "rc_cutoff_frequency",
     "rc_time_constant",
     "resonator_bandwidth",
@@ -233,6 +234,28 @@ def rc_cutoff_frequency(*, resistance: Quantity, capacitance: Quantity) -> Quant
     if r <= 0 or c <= 0:
         raise ValueError("resistance and capacitance must be positive")
     return Quantity(magnitude=1.0 / (2.0 * pi * r * c), unit="Hz")
+
+
+def first_order_lowpass_gain(*, frequency: Quantity, cutoff_frequency: Quantity) -> float:
+    """The gain magnitude of a first-order low-pass filter, |H| = 1/√(1 + (f/f_c)²).
+
+    How much a single-pole RC low-pass passes a signal at ``frequency`` f relative to its cutoff:
+    |H| = 1/√(1 + (f/f_c)²), from f and the −3 dB ``cutoff_frequency`` f_c (see
+    :func:`rc_cutoff_frequency`). Well below f_c the gain is ~1 (the passband); at f_c it is 1/√2 ≈
+    0.707 (the −3 dB point); far above it rolls off as f_c/f, a first-order 20 dB/decade slope. It
+    is the number that says how much an anti-alias or noise filter attenuates a given interfering
+    frequency, and how far out the corner must sit to leave the signal band flat. Returns the
+    dimensionless voltage gain in (0, 1].
+    """
+    _check(frequency, "1/[time]", "frequency")
+    _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
+    f = frequency.to("Hz").magnitude
+    f_c = cutoff_frequency.to("Hz").magnitude
+    if f < 0:
+        raise ValueError("frequency must be non-negative")
+    if f_c <= 0:
+        raise ValueError("cutoff_frequency must be positive")
+    return 1.0 / (1.0 + (f / f_c) ** 2) ** 0.5
 
 
 def parallel_plate_capacitance(

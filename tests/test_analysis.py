@@ -16596,6 +16596,36 @@ def test_reactive_circuit_first_order_time_constants_and_cutoff():
         rc_time_constant(resistance=_q("0 ohm"), capacitance=_q("1 uF"))
 
 
+def test_reactive_circuit_first_order_lowpass_gain():
+    import math
+
+    from anvilate.analysis import first_order_lowpass_gain
+
+    fc = _q("1000 Hz")
+
+    # At the cutoff |H| = 1/sqrt(2) ~ 0.707 (the -3 dB point).
+    at_fc = first_order_lowpass_gain(frequency=fc, cutoff_frequency=fc)
+    assert at_fc == pytest.approx(1 / math.sqrt(2), rel=1e-12)
+
+    # In the passband (f << fc) the gain approaches 1.
+    passband = first_order_lowpass_gain(frequency=_q("10 Hz"), cutoff_frequency=fc)
+    assert passband == pytest.approx(1.0, abs=1e-3)
+
+    # A decade above the corner the gain is ~0.0995 (a first-order -20 dB/decade rolloff).
+    decade = first_order_lowpass_gain(frequency=_q("10000 Hz"), cutoff_frequency=fc)
+    assert decade == pytest.approx(1 / math.sqrt(1 + 100), rel=1e-12)
+    # ~ one decade of rolloff from the corner.
+    assert 20 * math.log10(at_fc / decade) == pytest.approx(17.0, abs=0.5)
+
+    # DC (f=0) passes unattenuated.
+    assert first_order_lowpass_gain(frequency=_q("0 Hz"), cutoff_frequency=fc) == pytest.approx(
+        1.0, rel=1e-12
+    )
+
+    with pytest.raises(ValueError, match="cutoff_frequency must be positive"):
+        first_order_lowpass_gain(frequency=fc, cutoff_frequency=_q("0 Hz"))
+
+
 def test_reactive_circuit_stored_energy_and_lc_resonance():
     import math
 
