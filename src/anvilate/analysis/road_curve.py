@@ -24,13 +24,16 @@ sight line a horizontal or crest curve has to provide — the check that pairs w
 
 from __future__ import annotations
 
-from math import sqrt
+from math import cos, sqrt, tan
 
 from ..units import Quantity
 
 __all__ = [
     "banked_curve_max_speed",
     "braking_distance",
+    "horizontal_curve_external_distance",
+    "horizontal_curve_length",
+    "horizontal_curve_tangent_length",
     "ideal_superelevation_rate",
     "minimum_curve_radius",
     "perception_reaction_distance",
@@ -180,6 +183,62 @@ def stopping_sight_distance(
     reaction = perception_reaction_distance(speed=speed, reaction_time=reaction_time)
     braking = braking_distance(speed=speed, deceleration=deceleration, grade=grade)
     return Quantity(magnitude=reaction.to("m").magnitude + braking.to("m").magnitude, unit="m")
+
+
+def horizontal_curve_tangent_length(*, radius: Quantity, deflection_angle: float) -> Quantity:
+    """The tangent length of a horizontal circular curve, T = R·tan(Δ/2).
+
+    The distance back along each tangent from the point where the two straights would meet (the PI)
+    to the start and end of the arc (the PC and PT): T = R·tan(Δ/2), from the curve ``radius`` R and
+    the ``deflection_angle`` Δ between the tangents (in radians). It is the setback a surveyor
+    measures from the intersection to stake the curve's ends, and it grows without bound as the
+    tangents approach a straight reversal (Δ → π). Returns the tangent length in metres.
+    """
+    _check(radius, "[length]", "radius")
+    _check_deflection(deflection_angle)
+    r = radius.to("m").magnitude
+    if r <= 0:
+        raise ValueError("radius must be positive")
+    return Quantity(magnitude=r * tan(deflection_angle / 2.0), unit="m")
+
+
+def horizontal_curve_length(*, radius: Quantity, deflection_angle: float) -> Quantity:
+    """The arc length of a horizontal circular curve, L = R·Δ.
+
+    The length of the curve itself, measured along the arc from the PC to the PT: L = R·Δ, from the
+    ``radius`` R and the ``deflection_angle`` Δ (in radians, which the arc-length formula requires).
+    It is the stationing a curve adds to an alignment and the length of pavement or rail the curve
+    consumes. A flatter (larger-radius) curve of the same deflection is proportionally longer.
+    Returns the curve length in metres.
+    """
+    _check(radius, "[length]", "radius")
+    _check_deflection(deflection_angle)
+    r = radius.to("m").magnitude
+    if r <= 0:
+        raise ValueError("radius must be positive")
+    return Quantity(magnitude=r * deflection_angle, unit="m")
+
+
+def horizontal_curve_external_distance(*, radius: Quantity, deflection_angle: float) -> Quantity:
+    """The external distance of a horizontal circular curve, E = R·(sec(Δ/2) − 1).
+
+    The distance from the intersection of the tangents (the PI) to the midpoint of the arc, measured
+    along the bisector: E = R·(1/cos(Δ/2) − 1), from the ``radius`` R and the ``deflection_angle`` Δ
+    (in radians). It is the clearance a curve needs on the outside of the bend — how far the arc
+    stands off from the corner — the number that decides whether a curve fits past an obstruction or
+    a right-of-way limit. Returns the external distance in metres.
+    """
+    _check(radius, "[length]", "radius")
+    _check_deflection(deflection_angle)
+    r = radius.to("m").magnitude
+    if r <= 0:
+        raise ValueError("radius must be positive")
+    return Quantity(magnitude=r * (1.0 / cos(deflection_angle / 2.0) - 1.0), unit="m")
+
+
+def _check_deflection(deflection_angle: float) -> None:
+    if not 0.0 < deflection_angle < 3.141592653589793:
+        raise ValueError(f"deflection_angle must be in (0, π) radians; got {deflection_angle}")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

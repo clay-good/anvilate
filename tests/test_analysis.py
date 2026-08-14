@@ -17771,6 +17771,43 @@ def test_road_curve_superelevation_and_max_speed():
         )
 
 
+def test_road_horizontal_curve_geometry():
+    from math import cos, pi, tan
+
+    from anvilate.analysis import (
+        horizontal_curve_external_distance,
+        horizontal_curve_length,
+        horizontal_curve_tangent_length,
+    )
+
+    r = _q("300 m")
+    delta = 0.5  # radians (~28.6 deg deflection)
+
+    # T = R*tan(delta/2); 300*tan(0.25) -> 76.6 m.
+    t = horizontal_curve_tangent_length(radius=r, deflection_angle=delta)
+    assert t.to("m").magnitude == pytest.approx(300 * tan(0.25), rel=1e-9)
+    assert t.to("m").magnitude == pytest.approx(76.60, abs=0.02)
+
+    # L = R*delta (arc length, delta in radians); 300*0.5 = 150 m exactly.
+    length = horizontal_curve_length(radius=r, deflection_angle=delta)
+    assert length.to("m").magnitude == pytest.approx(150.0, rel=1e-12)
+
+    # E = R*(sec(delta/2) - 1); 300*(1/cos(0.25) - 1) -> 9.63 m.
+    e = horizontal_curve_external_distance(radius=r, deflection_angle=delta)
+    assert e.to("m").magnitude == pytest.approx(300 * (1 / cos(0.25) - 1), rel=1e-9)
+    assert e.to("m").magnitude == pytest.approx(9.63, abs=0.02)
+
+    # A flatter (2x radius) curve of the same deflection has 2x the tangent, length, and external.
+    t2 = horizontal_curve_tangent_length(radius=_q("600 m"), deflection_angle=delta)
+    assert t2.to("m").magnitude == pytest.approx(2 * t.to("m").magnitude, rel=1e-9)
+
+    # Guardrails: deflection within (0, pi), positive radius.
+    with pytest.raises(ValueError, match=r"\(0, π\) radians"):
+        horizontal_curve_length(radius=r, deflection_angle=pi)
+    with pytest.raises(ValueError, match="radius must be positive"):
+        horizontal_curve_tangent_length(radius=_q("0 m"), deflection_angle=delta)
+
+
 def test_road_stopping_sight_distance_reaction_plus_braking_with_grade():
     from anvilate.analysis import (
         braking_distance,
