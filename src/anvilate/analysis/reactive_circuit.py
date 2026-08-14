@@ -37,6 +37,7 @@ __all__ = [
     "lc_resonant_frequency",
     "parallel_plate_capacitance",
     "parallel_plate_field",
+    "first_order_highpass_gain",
     "first_order_lowpass_gain",
     "rc_cutoff_frequency",
     "rc_time_constant",
@@ -256,6 +257,29 @@ def first_order_lowpass_gain(*, frequency: Quantity, cutoff_frequency: Quantity)
     if f_c <= 0:
         raise ValueError("cutoff_frequency must be positive")
     return 1.0 / (1.0 + (f / f_c) ** 2) ** 0.5
+
+
+def first_order_highpass_gain(*, frequency: Quantity, cutoff_frequency: Quantity) -> float:
+    """The gain magnitude of a first-order high-pass filter, |H| = 1/√(1 + (f_c/f)²).
+
+    The complement of :func:`first_order_lowpass_gain`: a single-pole RC high-pass passes
+    ``frequency`` f relative to its ``cutoff_frequency`` f_c as |H| = 1/√(1 + (f_c/f)²) =
+    (f/f_c)/√(1 + (f/f_c)²). It blocks DC (|H| → 0 as f → 0), reaches 1/√2 (−3 dB) at the corner,
+    and approaches 1 well above it — the response of an AC-coupling capacitor, a DC-blocking
+    input, or a rumble filter. Its squared magnitude and the low-pass's sum to 1 at every frequency
+    (the two split the spectrum at f_c). Returns the dimensionless voltage gain in [0, 1).
+    """
+    _check(frequency, "1/[time]", "frequency")
+    _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
+    f = frequency.to("Hz").magnitude
+    f_c = cutoff_frequency.to("Hz").magnitude
+    if f < 0:
+        raise ValueError("frequency must be non-negative")
+    if f_c <= 0:
+        raise ValueError("cutoff_frequency must be positive")
+    if f == 0.0:
+        return 0.0
+    return 1.0 / (1.0 + (f_c / f) ** 2) ** 0.5
 
 
 def parallel_plate_capacitance(

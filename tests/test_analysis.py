@@ -16626,6 +16626,35 @@ def test_reactive_circuit_first_order_lowpass_gain():
         first_order_lowpass_gain(frequency=fc, cutoff_frequency=_q("0 Hz"))
 
 
+def test_reactive_circuit_first_order_highpass_gain():
+    import math
+
+    from anvilate.analysis import first_order_highpass_gain, first_order_lowpass_gain
+
+    fc = _q("1000 Hz")
+
+    # At the cutoff |H| = 1/sqrt(2) ~ 0.707 (the -3 dB point), same as the low-pass.
+    at_fc = first_order_highpass_gain(frequency=fc, cutoff_frequency=fc)
+    assert at_fc == pytest.approx(1 / math.sqrt(2), rel=1e-12)
+
+    # It blocks DC (f=0 -> 0) and passes high frequency (f >> fc -> 1).
+    assert first_order_highpass_gain(frequency=_q("0 Hz"), cutoff_frequency=fc) == pytest.approx(
+        0.0, abs=1e-15
+    )
+    assert first_order_highpass_gain(
+        frequency=_q("100000 Hz"), cutoff_frequency=fc
+    ) == pytest.approx(1.0, abs=1e-3)
+
+    # The high-pass and low-pass squared magnitudes sum to 1 at every frequency.
+    for freq in ("100 Hz", "1000 Hz", "5000 Hz"):
+        hp = first_order_highpass_gain(frequency=_q(freq), cutoff_frequency=fc)
+        lp = first_order_lowpass_gain(frequency=_q(freq), cutoff_frequency=fc)
+        assert hp**2 + lp**2 == pytest.approx(1.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="cutoff_frequency must be positive"):
+        first_order_highpass_gain(frequency=fc, cutoff_frequency=_q("0 Hz"))
+
+
 def test_reactive_circuit_stored_energy_and_lc_resonance():
     import math
 
