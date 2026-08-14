@@ -16938,6 +16938,36 @@ def test_reactive_circuit_capacitive_and_inductive_reactance():
         inductive_reactance(inductance=_q("100 mH"), frequency=_q("0 Hz"))
 
 
+def test_reactive_circuit_reactance_to_component_inverses():
+    from anvilate.analysis import (
+        capacitance_for_reactance,
+        capacitive_reactance,
+        inductance_for_reactance,
+        inductive_reactance,
+    )
+
+    # C = 1/(2*pi*f*X_C); 50 ohm at 1 MHz -> ~3.18 nF, and it inverts capacitive_reactance.
+    c = capacitance_for_reactance(reactance=_q("50 ohm"), frequency=_q("1 MHz"))
+    assert c.to("nF").magnitude == pytest.approx(3.183, abs=1e-3)
+    assert capacitive_reactance(capacitance=c, frequency=_q("1 MHz")).to(
+        "ohm"
+    ).magnitude == pytest.approx(50.0, rel=1e-9)
+
+    # L = X_L/(2*pi*f); 50 ohm at 1 MHz -> ~7.96 uH, and it inverts inductive_reactance.
+    li = inductance_for_reactance(reactance=_q("50 ohm"), frequency=_q("1 MHz"))
+    assert li.to("uH").magnitude == pytest.approx(7.958, abs=1e-3)
+    assert inductive_reactance(inductance=li, frequency=_q("1 MHz")).to(
+        "ohm"
+    ).magnitude == pytest.approx(50.0, rel=1e-9)
+
+    # A smaller target reactance needs a bigger cap (and a smaller inductor).
+    c_low = capacitance_for_reactance(reactance=_q("25 ohm"), frequency=_q("1 MHz"))
+    assert c_low.to("nF").magnitude == pytest.approx(2 * c.to("nF").magnitude, rel=1e-9)
+
+    with pytest.raises(ValueError, match="reactance must be positive"):
+        capacitance_for_reactance(reactance=_q("0 ohm"), frequency=_q("1 MHz"))
+
+
 def test_battery_round_trip_efficiency_and_delivered_energy():
     from anvilate.analysis import battery_delivered_energy, battery_round_trip_efficiency
 

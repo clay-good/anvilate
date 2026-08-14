@@ -37,6 +37,8 @@ __all__ = [
     "lc_resonant_frequency",
     "parallel_plate_capacitance",
     "parallel_plate_field",
+    "capacitance_for_reactance",
+    "inductance_for_reactance",
     "first_order_highpass_gain",
     "first_order_lowpass_gain",
     "rc_charging_voltage",
@@ -182,6 +184,45 @@ def inductive_reactance(*, inductance: Quantity, frequency: Quantity) -> Quantit
     if f <= 0:
         raise ValueError("frequency must be positive")
     return Quantity(magnitude=2.0 * pi * f * length, unit="ohm")
+
+
+def capacitance_for_reactance(*, reactance: Quantity, frequency: Quantity) -> Quantity:
+    """The capacitor for a target reactance, C = 1/(2π·f·X_C).
+
+    The design inverse of :func:`capacitive_reactance`: the capacitance that presents a chosen
+    ``reactance`` X_C at a ``frequency`` f is C = 1/(2π·f·X_C). It is how a coupling or bypass
+    capacitor is picked so its reactance is small compared with the impedance it faces at the
+    frequency of interest, and how the shunt capacitor of an impedance-matching network is sized to
+    a target reactance. Returns the capacitance in farads.
+    """
+    _check(reactance, "[resistance]", "reactance")
+    _check(frequency, "1/[time]", "frequency")
+    x = reactance.to("ohm").magnitude
+    f = frequency.to("Hz").magnitude
+    if x <= 0:
+        raise ValueError("reactance must be positive")
+    if f <= 0:
+        raise ValueError("frequency must be positive")
+    return Quantity(magnitude=1.0 / (2.0 * pi * f * x), unit="F")
+
+
+def inductance_for_reactance(*, reactance: Quantity, frequency: Quantity) -> Quantity:
+    """The inductor for a target reactance, L = X_L/(2π·f).
+
+    The design inverse of :func:`inductive_reactance`: the inductance that presents a chosen
+    ``reactance`` X_L at a ``frequency`` f is L = X_L/(2π·f). It sizes a choke to a target
+    impedance, or the series inductor of a matching network to a needed reactance — the mirror of
+    :func:`capacitance_for_reactance`. Returns the inductance in henries.
+    """
+    _check(reactance, "[resistance]", "reactance")
+    _check(frequency, "1/[time]", "frequency")
+    x = reactance.to("ohm").magnitude
+    f = frequency.to("Hz").magnitude
+    if x <= 0:
+        raise ValueError("reactance must be positive")
+    if f <= 0:
+        raise ValueError("frequency must be positive")
+    return Quantity(magnitude=x / (2.0 * pi * f), unit="H")
 
 
 def rc_time_constant(*, resistance: Quantity, capacitance: Quantity) -> Quantity:
