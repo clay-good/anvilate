@@ -22,7 +22,7 @@ counts are positive whole numbers.
 
 from __future__ import annotations
 
-from math import acos, ceil, cos, pi
+from math import acos, ceil, cos, pi, sin
 
 from ..units import Quantity
 
@@ -30,6 +30,7 @@ __all__ = [
     "chain_length_in_pitches",
     "chordal_speed_variation",
     "minimum_sprocket_teeth_for_chordal_variation",
+    "sprocket_pitch_diameter",
     "chain_speed",
     "chain_working_tension",
 ]
@@ -96,6 +97,25 @@ def chordal_speed_variation(*, sprocket_teeth: int) -> float:
     """
     n = _check_teeth(sprocket_teeth, "sprocket_teeth")
     return 1.0 - cos(pi / n)
+
+
+def sprocket_pitch_diameter(*, chain_pitch: Quantity, sprocket_teeth: int) -> Quantity:
+    """The pitch diameter of a chain sprocket, D = p/sin(π/N).
+
+    The diameter of the pitch circle the chain rollers ride on: because the ``sprocket_teeth`` N
+    rollers sit on a regular polygon of side equal to the ``chain_pitch`` p, the circumscribed
+    circle has D = p/sin(π/N). It is the diameter that sets a chain drive's speed ratio and centre
+    distance (and, with the pitch, the chordal action of :func:`chordal_speed_variation`). More
+    teeth pack the same pitch onto a larger, smoother circle — D grows nearly linearly with N once
+    past a dozen teeth. ``sprocket_teeth`` is a positive whole number. Returns the pitch diameter in
+    millimetres.
+    """
+    _require(chain_pitch, "[length]", "chain_pitch")
+    n = _check_teeth(sprocket_teeth, "sprocket_teeth")
+    p = chain_pitch.to("mm").magnitude
+    if p <= 0:
+        raise ValueError("chain_pitch must be positive")
+    return Quantity(magnitude=p / sin(pi / n), unit="mm")
 
 
 def minimum_sprocket_teeth_for_chordal_variation(*, max_variation: float) -> int:

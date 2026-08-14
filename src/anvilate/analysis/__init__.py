@@ -1277,6 +1277,7 @@ from .chain import (
     chain_working_tension,
     chordal_speed_variation,
     minimum_sprocket_teeth_for_chordal_variation,
+    sprocket_pitch_diameter,
 )
 from .channel_capacity import (
     nyquist_channel_capacity,
@@ -3865,6 +3866,7 @@ __all__ = [
     "chain_length_in_pitches",
     "chordal_speed_variation",
     "minimum_sprocket_teeth_for_chordal_variation",
+    "sprocket_pitch_diameter",
     "chain_speed",
     "chain_working_tension",
     "sensible_heat",

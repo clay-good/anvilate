@@ -9135,6 +9135,27 @@ def test_chain_length_in_pitches_and_chordal_speed_variation():
     assert chordal_speed_variation(sprocket_teeth=23) < chordal_speed_variation(sprocket_teeth=17)
 
 
+def test_chain_sprocket_pitch_diameter():
+    from math import pi, sin
+
+    from anvilate.analysis import sprocket_pitch_diameter
+
+    # D = p/sin(pi/N); 12.7 mm pitch (ANSI #40, 1/2"), 17 teeth -> ~69.1 mm.
+    d = sprocket_pitch_diameter(chain_pitch=_q("12.7 mm"), sprocket_teeth=17)
+    assert d.to("mm").magnitude == pytest.approx(12.7 / sin(pi / 17), rel=1e-12)
+    assert d.to("mm").magnitude == pytest.approx(69.12, abs=0.02)
+
+    # More teeth -> a larger pitch circle at the same pitch.
+    d_big = sprocket_pitch_diameter(chain_pitch=_q("12.7 mm"), sprocket_teeth=34)
+    assert d_big.to("mm").magnitude > d.to("mm").magnitude
+    # A speed ratio equals the pitch-diameter ratio, which for equal pitch is the tooth ratio.
+    ratio = d_big.to("mm").magnitude / d.to("mm").magnitude
+    assert ratio == pytest.approx(sin(pi / 17) / sin(pi / 34), rel=1e-12)
+
+    with pytest.raises(ValueError, match="positive whole number of teeth"):
+        sprocket_pitch_diameter(chain_pitch=_q("12.7 mm"), sprocket_teeth=0)
+
+
 def test_chain_drive_rejects_bad_inputs():
     with pytest.raises(ValueError, match="positive whole number of teeth"):
         chain_length_in_pitches(
