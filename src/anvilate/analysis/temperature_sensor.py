@@ -19,7 +19,7 @@ of magnitude across a modest span. Temperatures must be absolute; the coefficien
 
 from __future__ import annotations
 
-from math import exp
+from math import exp, log
 
 from ..units import Quantity
 
@@ -27,6 +27,7 @@ __all__ = [
     "rtd_resistance",
     "rtd_temperature",
     "thermistor_resistance",
+    "thermistor_temperature",
     "thermocouple_voltage",
     "thermocouple_temperature_from_voltage",
 ]
@@ -128,6 +129,40 @@ def thermistor_resistance(
     if t <= 0 or t0 <= 0:
         raise ValueError("temperatures must be positive absolute (kelvin) values")
     return Quantity(magnitude=r0 * exp(beta * (1.0 / t - 1.0 / t0)), unit="ohm")
+
+
+def thermistor_temperature(
+    *,
+    resistance: Quantity,
+    reference_resistance: Quantity,
+    beta_constant: Quantity,
+    reference_temperature: Quantity,
+) -> Quantity:
+    """The temperature from an NTC thermistor's resistance, T = 1/(1/T₀ + ln(R/R₀)/β).
+
+    The read-out inverse of :func:`thermistor_resistance`: solving R = R₀·exp[β·(1/T − 1/T₀)] for
+    temperature gives T = 1/(1/T₀ + ln(R/R₀)/β), from the measured ``resistance`` R, the
+    ``reference_resistance`` R₀ at ``reference_temperature`` T₀, and the material ``beta_constant``
+    β. It
+    is how a datalogger turns a thermistor's measured resistance back into a temperature — rising R
+    reads colder (the negative temperature coefficient). Temperatures must be absolute. Returns the
+    temperature in kelvin.
+    """
+    _check(resistance, "[resistance]", "resistance")
+    _check(reference_resistance, "[resistance]", "reference_resistance")
+    _check(beta_constant, "[temperature]", "beta_constant")
+    _check(reference_temperature, "[temperature]", "reference_temperature")
+    r = resistance.to("ohm").magnitude
+    r0 = reference_resistance.to("ohm").magnitude
+    beta = beta_constant.to("K").magnitude
+    t0 = reference_temperature.to("K").magnitude
+    if r <= 0 or r0 <= 0:
+        raise ValueError("resistance and reference_resistance must be positive")
+    if beta <= 0:
+        raise ValueError("beta_constant must be positive")
+    if t0 <= 0:
+        raise ValueError("reference_temperature must be positive absolute (kelvin)")
+    return Quantity(magnitude=1.0 / (1.0 / t0 + log(r / r0) / beta), unit="K")
 
 
 def thermocouple_voltage(

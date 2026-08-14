@@ -2785,6 +2785,7 @@ from .temperature_sensor import (
     rtd_resistance,
     rtd_temperature,
     thermistor_resistance,
+    thermistor_temperature,
     thermocouple_temperature_from_voltage,
     thermocouple_voltage,
 )
@@ -3371,6 +3372,7 @@ __all__ = [
     "rtd_resistance",
     "rtd_temperature",
     "thermistor_resistance",
+    "thermistor_temperature",
     "thermocouple_voltage",
     "thermocouple_temperature_from_voltage",
     "choked_mass_flow_rate",

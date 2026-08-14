@@ -30840,6 +30840,32 @@ def test_rtd_and_thermistor_temperature_sensors():
         )
 
 
+def test_thermistor_temperature_inverts_the_beta_model():
+    from anvilate.analysis import thermistor_resistance, thermistor_temperature
+
+    kw = {
+        "reference_resistance": _q("10 kohm"),
+        "beta_constant": _q("3950 K"),
+        "reference_temperature": _q("298.15 K"),
+    }
+
+    # thermistor_temperature exactly inverts thermistor_resistance.
+    r = thermistor_resistance(temperature=_q("323.15 K"), **kw)
+    t = thermistor_temperature(resistance=r, **kw)
+    assert t.to("K").magnitude == pytest.approx(323.15, rel=1e-9)
+
+    # At the reference resistance it reads exactly the reference temperature.
+    assert thermistor_temperature(resistance=_q("10 kohm"), **kw).to(
+        "K"
+    ).magnitude == pytest.approx(298.15, rel=1e-12)
+    # A higher measured resistance reads colder (negative temperature coefficient).
+    t_cold = thermistor_temperature(resistance=_q("30 kohm"), **kw)
+    assert t_cold.to("K").magnitude < 298.15
+
+    with pytest.raises(ValueError, match="resistance and reference_resistance must be positive"):
+        thermistor_temperature(resistance=_q("0 kohm"), **kw)
+
+
 def test_thermocouple_seebeck_voltage_and_readback():
     from anvilate.analysis import (
         thermocouple_temperature_from_voltage,
