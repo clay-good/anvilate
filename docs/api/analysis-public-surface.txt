@@ -1061,6 +1061,7 @@ reactive_circuit.capacitive_reactance
 reactive_circuit.inductive_reactance
 reactive_circuit.first_order_highpass_gain
 reactive_circuit.first_order_lowpass_gain
+reactive_circuit.rc_charging_voltage
 reactive_circuit.rc_cutoff_frequency
 reactive_circuit.rc_time_constant
 reactive_circuit.rl_time_constant

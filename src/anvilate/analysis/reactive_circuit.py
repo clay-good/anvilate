@@ -22,7 +22,7 @@ plates is the uniform E = V/d.
 
 from __future__ import annotations
 
-from math import pi, sqrt
+from math import exp, pi, sqrt
 
 from ..units import Quantity
 
@@ -39,6 +39,7 @@ __all__ = [
     "parallel_plate_field",
     "first_order_highpass_gain",
     "first_order_lowpass_gain",
+    "rc_charging_voltage",
     "rc_cutoff_frequency",
     "rc_time_constant",
     "resonator_bandwidth",
@@ -199,6 +200,34 @@ def rc_time_constant(*, resistance: Quantity, capacitance: Quantity) -> Quantity
     if r <= 0 or c <= 0:
         raise ValueError("resistance and capacitance must be positive")
     return Quantity(magnitude=r * c, unit="s")
+
+
+def rc_charging_voltage(
+    *, supply_voltage: Quantity, time: Quantity, time_constant: Quantity
+) -> Quantity:
+    """The capacitor voltage while charging through a resistor, V(t) = V_s·(1 − e^(−t/τ)).
+
+    The RC step response — the electrical twin of the lumped-capacitance thermal transient: a
+    capacitor charged toward a ``supply_voltage`` V_s through a resistor rises as
+    V(t) = V_s·(1 − e^(−t/``time``)), from the ``time_constant`` τ = R·C (see
+    :func:`rc_time_constant`). It reaches 63% of V_s after one τ, 95% after three, and ~99% after
+    five (effectively settled). It sets when an RC delay crosses a logic threshold, how fast a
+    sample-and-hold acquires, and the turn-on ramp of a soft-start — the discharge from an initial
+    V₀ follows the same shape decayed, V₀·e^(−t/τ). Returns the capacitor voltage in volts.
+    """
+    _check(supply_voltage, "[electric_potential]", "supply_voltage")
+    _check(time, "[time]", "time")
+    _check(time_constant, "[time]", "time_constant")
+    v_s = supply_voltage.to("V").magnitude
+    t = time.to("s").magnitude
+    tau = time_constant.to("s").magnitude
+    if v_s <= 0:
+        raise ValueError("supply_voltage must be positive")
+    if t < 0:
+        raise ValueError("time must be non-negative")
+    if tau <= 0:
+        raise ValueError("time_constant must be positive")
+    return Quantity(magnitude=v_s * (1.0 - exp(-t / tau)), unit="V")
 
 
 def rl_time_constant(*, inductance: Quantity, resistance: Quantity) -> Quantity:

@@ -16626,6 +16626,33 @@ def test_reactive_circuit_first_order_lowpass_gain():
         first_order_lowpass_gain(frequency=fc, cutoff_frequency=_q("0 Hz"))
 
 
+def test_reactive_circuit_rc_charging_voltage():
+    from math import exp
+
+    from anvilate.analysis import rc_charging_voltage
+
+    tau = _q("1 ms")
+
+    # V(t) = V_s*(1 - e^(-t/tau)); after one tau -> 63% of 5 V.
+    v = rc_charging_voltage(supply_voltage=_q("5 V"), time=_q("1 ms"), time_constant=tau)
+    assert v.to("V").magnitude == pytest.approx(5 * (1 - exp(-1)), rel=1e-12)
+    assert v.to("V").magnitude == pytest.approx(3.161, abs=1e-3)
+
+    # At t=0 the capacitor is empty; after ~5 tau it is essentially at the supply.
+    assert rc_charging_voltage(supply_voltage=_q("5 V"), time=_q("0 ms"), time_constant=tau).to(
+        "V"
+    ).magnitude == pytest.approx(0.0, abs=1e-12)
+    nearly = rc_charging_voltage(supply_voltage=_q("5 V"), time=_q("5 ms"), time_constant=tau)
+    assert nearly.to("V").magnitude == pytest.approx(5 * (1 - exp(-5)), rel=1e-12)
+    assert nearly.to("V").magnitude > 0.99 * 5
+
+    # It approaches but never exceeds the supply voltage.
+    assert v.to("V").magnitude < 5.0
+
+    with pytest.raises(ValueError, match="time_constant must be positive"):
+        rc_charging_voltage(supply_voltage=_q("5 V"), time=_q("1 ms"), time_constant=_q("0 s"))
+
+
 def test_reactive_circuit_first_order_highpass_gain():
     import math
 
