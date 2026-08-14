@@ -950,6 +950,10 @@ modules:
   unreinforced member, the axial capacity of a reinforced masonry column, and the
   combined axial-plus-flexure unity check f_a/F_a + f_b/F_b that governs a wall under
   gravity and out-of-plane wind
+- :mod:`~anvilate.analysis.reinforced_concrete` — ACI 318 reinforced-concrete design: the
+  Whitney stress-block depth a = A_s·f_y/(0.85·f'c·b) and nominal flexural moment
+  M_n = A_s·f_y·(d − a/2), the concrete and steel shear strengths V_c and V_s, the
+  development length, and the balanced-section and cracking-moment checks
 - :mod:`~anvilate.analysis.prestressed_concrete` — T. Y. Lin load balancing: the
   uniform load a parabolic tendon balances (w_b = 8·P·e/L²), the service bottom-fibre
   stress (which collapses to −P/A under the balanced load), and the cracking moment
