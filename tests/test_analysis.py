@@ -8506,7 +8506,7 @@ def test_belleville_washer_almen_laszlo_curve():
     from math import log, pi
 
     # De=40/Di=20 (C=2 -> K1=0.6889), t=2, cone height h=1, steel: at y=0.5 mm
-    # F = 4*E*y/((1-nu^2)*K1*De^2) * [(h-y)(h-y/2)+t^2] = 1797 N.
+    # F = 4*E*y/((1-nu^2)*K1*De^2) * [t*(h-y)(h-y/2)+t^3] = 3594 N (Almen-Laszlo/DIN 2092).
     kwargs = {
         "thickness": _q("2 mm"),
         "cone_height": _q("1 mm"),
@@ -8516,14 +8516,14 @@ def test_belleville_washer_almen_laszlo_curve():
     }
     k1 = (6.0 / (pi * log(2.0))) * (0.5) ** 2
     force = belleville_washer_force(deflection=_q("0.5 mm"), **kwargs)
-    expected = 4.0 * 206000.0 * 0.5 / (0.91 * k1 * 1600.0) * ((0.5) * (0.75) + 4.0)
+    expected = 4.0 * 206000.0 * 0.5 / (0.91 * k1 * 1600.0) * (2.0 * (0.5) * (0.75) + 8.0)
     assert force.to("N").magnitude == pytest.approx(expected, rel=1e-12)
-    assert force.to("N").magnitude == pytest.approx(1797.1, rel=1e-4)
-    # The flat load is the y=h endpoint of the same curve (only t^2 survives).
+    assert force.to("N").magnitude == pytest.approx(3594.4, rel=1e-4)
+    # The flat load is the y=h endpoint of the same curve (only the t^3 term survives).
     flat = belleville_flat_load(**kwargs)
     at_h = belleville_washer_force(deflection=_q("1 mm"), **kwargs)
     assert flat.to("N").magnitude == pytest.approx(at_h.to("N").magnitude, rel=1e-12)
-    assert flat.to("N").magnitude == pytest.approx(3286.2, rel=1e-4)
+    assert flat.to("N").magnitude == pytest.approx(6572.6, rel=1e-4)
     # A shallow disc (h/t = 0.1) is essentially a linear spring.
     shallow = {**kwargs, "cone_height": _q("0.2 mm")}
     f1 = belleville_washer_force(deflection=_q("0.1 mm"), **shallow)

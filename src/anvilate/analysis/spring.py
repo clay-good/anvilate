@@ -526,7 +526,7 @@ def belleville_washer_force(
     poisson_ratio: float = 0.3,
 ) -> Quantity:
     """The load a Belleville (disc) washer carries at a given flattening,
-    F(y) = 4·E·y / ((1−ν²)·K₁·D_e²) · [(h − y)·(h − y/2) + t²]  (Almen-Laszlo).
+    F(y) = 4·E·y / ((1−ν²)·K₁·D_e²) · [t·(h − y)·(h − y/2) + t³]  (Almen-Laszlo).
 
     A coned disc of ``thickness`` t and free ``cone_height`` h (the axial cone
     rise, free height minus t), ``outer_diameter``/``inner_diameter`` D_e/D_i,
@@ -551,7 +551,9 @@ def belleville_washer_force(
     e = elastic_modulus.to("MPa").magnitude
     if e <= 0:
         raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
-    force = 4.0 * e * y / ((1.0 - poisson_ratio**2) * k1 * de**2) * ((h - y) * (h - y / 2.0) + t**2)
+    force = (
+        4.0 * e * y / ((1.0 - poisson_ratio**2) * k1 * de**2) * (t * (h - y) * (h - y / 2.0) + t**3)
+    )
     return Quantity(magnitude=force, unit="N")
 
 
@@ -565,10 +567,10 @@ def belleville_flat_load(
     poisson_ratio: float = 0.3,
 ) -> Quantity:
     """The load that presses a Belleville washer flat,
-    F_flat = 4·E·h·t² / ((1−ν²)·K₁·D_e²).
+    F_flat = 4·E·h·t³ / ((1−ν²)·K₁·D_e²).
 
     :func:`belleville_washer_force` evaluated at full deflection y = h — the
-    quadratic cone terms vanish and only the t² plate-bending term is left. The
+    quadratic cone terms vanish and only the t³ plate-bending term is left. The
     usual catalogue anchor point (and the preload a bolt stack reaches when the
     washers go flat). Arguments as there. Returns the force in newtons.
     """
@@ -579,7 +581,7 @@ def belleville_flat_load(
     e = elastic_modulus.to("MPa").magnitude
     if e <= 0:
         raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
-    force = 4.0 * e * h * t**2 / ((1.0 - poisson_ratio**2) * k1 * de**2)
+    force = 4.0 * e * h * t**3 / ((1.0 - poisson_ratio**2) * k1 * de**2)
     return Quantity(magnitude=force, unit="N")
 
 
