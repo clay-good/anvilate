@@ -23,6 +23,7 @@ _GAS_CONSTANT = 8.314462618  # J/(mol*K), universal
 __all__ = [
     "ideal_gas_moles",
     "ideal_gas_pressure",
+    "ideal_gas_temperature",
     "ideal_gas_volume",
 ]
 
@@ -91,6 +92,30 @@ def ideal_gas_moles(*, pressure: Quantity, volume: Quantity, temperature: Quanti
     if t <= 0:
         raise ValueError("temperature must be positive (absolute temperature)")
     return Quantity(magnitude=p * v / (_GAS_CONSTANT * t), unit="mol")
+
+
+def ideal_gas_temperature(*, pressure: Quantity, volume: Quantity, amount: Quantity) -> Quantity:
+    """The ideal-gas temperature, T = PV/(nR).
+
+    The absolute temperature a fixed amount of gas must be at, from the ``pressure`` P, the
+    ``volume`` V, and the ``amount`` n (in moles): T = PV/(nR). It closes the PV = nRT set alongside
+    :func:`ideal_gas_pressure`, :func:`ideal_gas_volume`, and :func:`ideal_gas_moles` — the
+    rearrangement a gas thermometer uses, reading temperature from a known quantity of gas at
+    measured pressure and volume. Returns the temperature in kelvin.
+    """
+    _check(pressure, "[pressure]", "pressure")
+    _check(volume, "[volume]", "volume")
+    _check(amount, "[substance]", "amount")
+    p = pressure.to("Pa").magnitude
+    v = volume.to("m**3").magnitude
+    n = amount.to("mol").magnitude
+    if p <= 0:
+        raise ValueError("pressure must be positive")
+    if v <= 0:
+        raise ValueError("volume must be positive")
+    if n <= 0:
+        raise ValueError("amount must be positive")
+    return Quantity(magnitude=p * v / (n * _GAS_CONSTANT), unit="K")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

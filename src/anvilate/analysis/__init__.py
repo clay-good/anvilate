@@ -2009,6 +2009,7 @@ from .hydro_power import (
 from .ideal_gas import (
     ideal_gas_moles,
     ideal_gas_pressure,
+    ideal_gas_temperature,
     ideal_gas_volume,
 )
 from .illumination import (
@@ -3451,6 +3452,7 @@ __all__ = [
     "ideal_gas_pressure",
     "ideal_gas_volume",
     "ideal_gas_moles",
+    "ideal_gas_temperature",
     "hydraulic_pump_flow_rate",
     "hydraulic_motor_torque",
     "hydraulic_motor_speed",

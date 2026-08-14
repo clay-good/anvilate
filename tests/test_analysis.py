@@ -27053,6 +27053,39 @@ def test_ideal_gas_law_pressure_volume_and_moles():
         )
 
 
+def test_ideal_gas_temperature_completes_the_rearrangement_set():
+    from anvilate.analysis import ideal_gas_pressure, ideal_gas_temperature
+
+    R = 8.314462618
+
+    # T = PV/(nR); 1 mol at ~101.4 kPa in 22.4 L -> ~273.15 K.
+    t = ideal_gas_temperature(
+        pressure=Quantity(magnitude=101388.0, unit="Pa"),
+        volume=Quantity(magnitude=0.0224, unit="m**3"),
+        amount=_q("1 mol"),
+    )
+    assert t.to("K").magnitude == pytest.approx(101388.0 * 0.0224 / (1.0 * R), rel=1e-9)
+    assert t.to("K").magnitude == pytest.approx(273.15, abs=0.05)
+
+    # It exactly inverts ideal_gas_pressure: the T that produces a pressure recovers that pressure.
+    p = ideal_gas_pressure(
+        amount=_q("2 mol"),
+        volume=Quantity(magnitude=0.05, unit="m**3"),
+        temperature=Quantity(magnitude=350.0, unit="K"),
+    )
+    t_back = ideal_gas_temperature(
+        pressure=p, volume=Quantity(magnitude=0.05, unit="m**3"), amount=_q("2 mol")
+    )
+    assert t_back.to("K").magnitude == pytest.approx(350.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="amount must be positive"):
+        ideal_gas_temperature(
+            pressure=Quantity(magnitude=101325.0, unit="Pa"),
+            volume=Quantity(magnitude=0.0224, unit="m**3"),
+            amount=_q("0 mol"),
+        )
+
+
 def test_membrane_reverse_osmosis_fluxes_and_rejection():
     from anvilate.analysis import (
         membrane_salt_flux,
