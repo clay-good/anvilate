@@ -3060,6 +3060,49 @@ def test_weld_heat_input_arc_power_and_travel_speed_inverse():
         weld_arc_power(arc_voltage=_q("25 V"), welding_current=_q("0 A"))
 
 
+def test_coating_film_thickness_and_coverage():
+    from anvilate.analysis import (
+        coating_dry_film_thickness,
+        coating_theoretical_coverage,
+        coating_wet_film_thickness,
+    )
+
+    # DFT = WFT*VS; 200 um wet at 50% solids -> 100 um dry.
+    dft = coating_dry_film_thickness(wet_film_thickness=_q("200 um"), volume_solids_fraction=0.5)
+    assert dft.to("um").magnitude == pytest.approx(100.0, rel=1e-12)
+
+    # WFT = DFT/VS inverts it: to leave 100 um dry at 50% solids apply 200 um wet.
+    wft = coating_wet_film_thickness(dry_film_thickness=_q("100 um"), volume_solids_fraction=0.5)
+    assert wft.to("um").magnitude == pytest.approx(200.0, rel=1e-12)
+    # Round-trip through the pair.
+    assert coating_dry_film_thickness(wet_film_thickness=wft, volume_solids_fraction=0.5).to(
+        "um"
+    ).magnitude == pytest.approx(100.0, rel=1e-9)
+
+    # A lower-solids paint needs a wetter film for the same dry thickness.
+    wft_low = coating_wet_film_thickness(
+        dry_film_thickness=_q("100 um"), volume_solids_fraction=0.25
+    )
+    assert wft_low.to("um").magnitude == pytest.approx(400.0, rel=1e-12)
+
+    # Coverage = VS/DFT; 50% solids at 100 um -> 5 m^2/L.
+    cov = coating_theoretical_coverage(volume_solids_fraction=0.5, dry_film_thickness=_q("100 um"))
+    assert cov.to("m**2/L").magnitude == pytest.approx(5.0, rel=1e-9)
+    # A thinner film covers proportionally more area per litre.
+    cov_thin = coating_theoretical_coverage(
+        volume_solids_fraction=0.5, dry_film_thickness=_q("50 um")
+    )
+    assert cov_thin.to("m**2/L").magnitude == pytest.approx(
+        2 * cov.to("m**2/L").magnitude, rel=1e-9
+    )
+
+    # Guardrails: volume solids is a fraction in (0, 1], positive dry film for coverage.
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        coating_dry_film_thickness(wet_film_thickness=_q("200 um"), volume_solids_fraction=1.5)
+    with pytest.raises(ValueError, match="dry_film_thickness must be positive"):
+        coating_theoretical_coverage(volume_solids_fraction=0.5, dry_film_thickness=_q("0 um"))
+
+
 def test_welding_carbon_equivalent_iiw():
     from anvilate.analysis import carbon_equivalent_iiw
 

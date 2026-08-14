@@ -146,6 +146,9 @@ modules:
   (uniform-wear and uniform-pressure), the clamp force a torque requires, and the
   engagement slip energy ½·(I₁I₂/(I₁+I₂))·Δω² and brake absorbed energy ½·I·ω²
   the friction faces must dissipate
+- :mod:`~anvilate.analysis.coating` — protective-coating film thickness and coverage: the dry film
+  DFT = WFT·VS from the wet film and volume solids, the wet film WFT = DFT/VS to apply for a target
+  dry thickness, and the theoretical coverage VS/DFT a paint take-off is built on
 - :mod:`~anvilate.analysis.pressure_vessel` — thin-wall cylinder and sphere,
   exact Lamé thick-wall cylinder (closed or open ends) and sphere, the wall
   thickness a pressure requires (membrane and ASME VIII code form) and the ASME
@@ -1309,6 +1312,11 @@ from .clutch import (
     cone_clutch_torque,
     disc_clutch_force_for_torque,
     disc_clutch_torque,
+)
+from .coating import (
+    coating_dry_film_thickness,
+    coating_theoretical_coverage,
+    coating_wet_film_thickness,
 )
 from .cold_formed_steel import (
     aisi_effective_width,
@@ -3998,6 +4006,9 @@ __all__ = [
     "brake_absorbed_energy",
     "centrifugal_clutch_torque",
     "centrifugal_clutch_engagement_speed",
+    "coating_dry_film_thickness",
+    "coating_wet_film_thickness",
+    "coating_theoretical_coverage",
     "STANDARD_GRAVITY",
     "natural_frequency",
     "natural_frequency_from_deflection",

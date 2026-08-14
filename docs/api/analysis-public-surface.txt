@@ -377,6 +377,9 @@ clutch.clutch_engagement_energy
 clutch.cone_clutch_torque
 clutch.disc_clutch_force_for_torque
 clutch.disc_clutch_torque
+coating.coating_dry_film_thickness
+coating.coating_wet_film_thickness
+coating.coating_theoretical_coverage
 colligative.boiling_point_elevation
 colligative.freezing_point_depression
 colligative.osmotic_pressure

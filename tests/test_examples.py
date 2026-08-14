@@ -527,6 +527,16 @@ def test_cyclone_dust_collector_cut_size_example():
     assert d["efficiency_10um"] > 0.5
 
 
+def test_coating_spec_wet_film_and_coverage_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "coating_spec_wet_film_and_coverage.py"))
+    d = namespace["coating_spec"]()
+    # 125 um DFT at 60% VS: WFT = 125/0.6 = 208 um, coverage = 0.6/125um = 4.8 m^2/L.
+    assert d["wet_film_um"] == pytest.approx(125 / 0.6, rel=1e-9)
+    assert d["coverage_m2_per_L"] == pytest.approx(4.8, rel=1e-6)
+    # 400 m^2 / 4.8 m^2/L ~ 83 L (theoretical, before losses).
+    assert d["paint_litres"] == pytest.approx(400 / 4.8, rel=1e-6)
+
+
 def test_spacer_stack_tolerance_example():
     namespace = runpy.run_path(str(_EXAMPLES / "spacer_stack_tolerance.py"))
     d = namespace["spacer_stack_tolerance"]()
