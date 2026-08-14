@@ -89,6 +89,7 @@ __all__ = [
     "brinkman_number",
     "lumped_capacitance_time_constant",
     "lumped_capacitance_cooling_time",
+    "lumped_capacitance_excess_temperature",
     "semi_infinite_solid_temperature_rise",
     "semi_infinite_solid_surface_flux",
     "radiation_heat_transfer",
@@ -2331,6 +2332,38 @@ def lumped_capacitance_cooling_time(
     if theta >= theta_0:
         raise ValueError("target_excess_temperature must be below initial_excess_temperature")
     return Quantity(magnitude=tau * log(theta_0 / theta), unit="s")
+
+
+def lumped_capacitance_excess_temperature(
+    *,
+    initial_excess_temperature: Quantity,
+    time: Quantity,
+    time_constant: Quantity,
+) -> Quantity:
+    """The excess temperature of a cooling lumped body, θ(t) = θ_0·exp(−t/τ).
+
+    The forward of :func:`lumped_capacitance_cooling_time` and the transient a body follows under
+    Newton's law of cooling: its temperature difference over the ambient decays exponentially from
+    ``initial_excess_temperature`` θ_0 with the ``time_constant`` τ (from
+    :func:`lumped_capacitance_time_constant`), reaching θ(t) = θ_0·exp(−t/``time``). After one τ the
+    excess has fallen to 37% of its start, after three τ to 5% (effectively settled). Add the result
+    back to the ambient for the actual temperature. Valid for a small Biot number (see
+    :func:`biot_number`), where the body stays nearly uniform. Returns the excess temperature (a
+    difference in kelvin).
+    """
+    _require(initial_excess_temperature, "[temperature]", "initial_excess_temperature")
+    _require(time, "[time]", "time")
+    _require(time_constant, "[time]", "time_constant")
+    theta_0 = initial_excess_temperature.to("K").magnitude
+    t = time.to("s").magnitude
+    tau = time_constant.to("s").magnitude
+    if theta_0 <= 0:
+        raise ValueError("initial_excess_temperature must be positive")
+    if t < 0:
+        raise ValueError("time must be non-negative")
+    if tau <= 0:
+        raise ValueError("time_constant must be positive")
+    return Quantity(magnitude=theta_0 * exp(-t / tau), unit="K")
 
 
 def semi_infinite_solid_temperature_rise(

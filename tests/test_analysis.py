@@ -24061,6 +24061,49 @@ def test_lumped_capacitance_transient_cooling():
         )
 
 
+def test_lumped_capacitance_excess_temperature_forward_transient():
+    from math import exp
+
+    from anvilate.analysis import (
+        lumped_capacitance_cooling_time,
+        lumped_capacitance_excess_temperature,
+    )
+
+    tau = _q("100 s")
+
+    # theta(t) = theta_0*exp(-t/tau); after one tau the excess is 37% of the start.
+    theta = lumped_capacitance_excess_temperature(
+        initial_excess_temperature=_q("80 K"), time=_q("100 s"), time_constant=tau
+    )
+    assert theta.to("K").magnitude == pytest.approx(80 * exp(-1), rel=1e-12)
+    assert theta.to("K").magnitude == pytest.approx(29.43, abs=0.01)
+
+    # At t=0 the excess is the full initial value; after 3 tau it has settled to ~5%.
+    assert lumped_capacitance_excess_temperature(
+        initial_excess_temperature=_q("80 K"), time=_q("0 s"), time_constant=tau
+    ).to("K").magnitude == pytest.approx(80.0, rel=1e-12)
+    settled = lumped_capacitance_excess_temperature(
+        initial_excess_temperature=_q("80 K"), time=_q("300 s"), time_constant=tau
+    )
+    assert settled.to("K").magnitude / 80.0 == pytest.approx(exp(-3), rel=1e-12)
+
+    # It inverts lumped_capacitance_cooling_time: the time to reach an excess recovers that excess.
+    t = lumped_capacitance_cooling_time(
+        initial_excess_temperature=_q("80 K"),
+        target_excess_temperature=_q("20 K"),
+        time_constant=tau,
+    )
+    back = lumped_capacitance_excess_temperature(
+        initial_excess_temperature=_q("80 K"), time=t, time_constant=tau
+    )
+    assert back.to("K").magnitude == pytest.approx(20.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="time_constant must be positive"):
+        lumped_capacitance_excess_temperature(
+            initial_excess_temperature=_q("80 K"), time=_q("100 s"), time_constant=_q("0 s")
+        )
+
+
 def test_rc_two_way_punching_shear_min_of_three():
     from anvilate.analysis import rc_two_way_shear_strength
 
