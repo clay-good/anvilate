@@ -3060,6 +3060,29 @@ def test_weld_heat_input_arc_power_and_travel_speed_inverse():
         weld_arc_power(arc_voltage=_q("25 V"), welding_current=_q("0 A"))
 
 
+def test_welding_carbon_equivalent_iiw():
+    from anvilate.analysis import carbon_equivalent_iiw
+
+    # CE = C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15; a mild structural steel -> ~0.47% (preheat range).
+    ce = carbon_equivalent_iiw(carbon=0.20, manganese=1.4, chromium=0.1, nickel=0.1, copper=0.2)
+    assert ce == pytest.approx(0.20 + 1.4 / 6 + (0.1) / 5 + (0.1 + 0.2) / 15, rel=1e-12)
+    assert ce == pytest.approx(0.4733, abs=1e-3)
+
+    # A low-carbon, unalloyed steel welds readily (CE well below ~0.40).
+    ce_mild = carbon_equivalent_iiw(carbon=0.10, manganese=0.5)
+    assert ce_mild == pytest.approx(0.10 + 0.5 / 6, rel=1e-12)
+    assert ce_mild < 0.40
+
+    # Omitted alloying elements default to zero (plain carbon steel).
+    assert carbon_equivalent_iiw(carbon=0.25) == pytest.approx(0.25, rel=1e-12)
+
+    # Guardrails: carbon must be present, contents non-negative.
+    with pytest.raises(ValueError, match="carbon content must be positive"):
+        carbon_equivalent_iiw(carbon=0.0, manganese=1.0)
+    with pytest.raises(ValueError, match="manganese content must be non-negative"):
+        carbon_equivalent_iiw(carbon=0.2, manganese=-0.1)
+
+
 def test_fillet_weld_throat_stress_worked_example():
     # 20 kN on a 6 mm x 100 mm fillet: throat = 0.707*6*100 = 424.2 mm^2,
     #   tau = 20000/424.2 = 47.15 MPa.

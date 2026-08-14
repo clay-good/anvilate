@@ -20,6 +20,7 @@ from __future__ import annotations
 from ..units import Quantity
 
 __all__ = [
+    "carbon_equivalent_iiw",
     "weld_arc_power",
     "weld_heat_input",
     "weld_travel_speed_for_heat_input",
@@ -92,6 +93,50 @@ def weld_travel_speed_for_heat_input(
         raise ValueError("heat_input must be positive")
     speed = thermal_efficiency * power.to("W").magnitude / q_joules_per_mm
     return Quantity(magnitude=speed, unit="mm/s")
+
+
+def carbon_equivalent_iiw(
+    *,
+    carbon: float,
+    manganese: float = 0.0,
+    chromium: float = 0.0,
+    molybdenum: float = 0.0,
+    vanadium: float = 0.0,
+    nickel: float = 0.0,
+    copper: float = 0.0,
+) -> float:
+    """The IIW carbon equivalent, CE = C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15.
+
+    A single number that rolls a steel's alloy content into its weldability — how prone the
+    heat-affected zone is to hard, crack-susceptible martensite: CE = C + Mn/6 + (Cr+Mo+V)/5 +
+    (Ni+Cu)/15 (the International Institute of Welding formula), from the alloying-element contents
+    ``carbon``, ``manganese``, ``chromium``, ``molybdenum``, ``vanadium``, ``nickel``, and
+    ``copper``, each in **weight percent**. Below about CE = 0.40% a steel welds readily; from
+    ~0.40 to 0.60% it needs preheat and controlled cooling to avoid hydrogen cracking; above ~0.60%
+    it is difficult and demands high preheat and low-hydrogen practice. It is the metallurgical
+    companion to :func:`weld_heat_input` — heat input sets the cooling rate, CE sets how dangerous a
+    fast quench is — and the number a welding procedure is qualified against. Returns the carbon
+    equivalent in weight percent.
+    """
+    for name, value in (
+        ("carbon", carbon),
+        ("manganese", manganese),
+        ("chromium", chromium),
+        ("molybdenum", molybdenum),
+        ("vanadium", vanadium),
+        ("nickel", nickel),
+        ("copper", copper),
+    ):
+        if value < 0:
+            raise ValueError(f"{name} content must be non-negative; got {value}")
+    if carbon <= 0:
+        raise ValueError(f"carbon content must be positive; got {carbon}")
+    return (
+        carbon
+        + manganese / 6.0
+        + (chromium + molybdenum + vanadium) / 5.0
+        + (nickel + copper) / 15.0
+    )
 
 
 def _fraction(value: float, name: str) -> None:

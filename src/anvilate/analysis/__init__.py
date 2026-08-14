@@ -2999,6 +2999,7 @@ from .weld import (
     weld_base_metal_shear_strength,
 )
 from .welding_heat import (
+    carbon_equivalent_iiw,
     weld_arc_power,
     weld_heat_input,
     weld_travel_speed_for_heat_input,
@@ -4649,6 +4650,7 @@ __all__ = [
     "fillet_weld_directional_strength",
     "weld_base_metal_shear_strength",
     "eccentric_weld_group_peak_stress",
+    "carbon_equivalent_iiw",
     "weld_arc_power",
     "weld_heat_input",
     "weld_travel_speed_for_heat_input",
