@@ -34,6 +34,7 @@ __all__ = [
     "fresnel_zone_radius",
     "max_line_of_sight_range",
     "parabolic_beamwidth",
+    "radiation_resistance_short_dipole",
     "received_power",
 ]
 
@@ -270,6 +271,29 @@ def aperture_efficiency(*, gain: float, physical_area: Quantity, wavelength: Qua
             "area — check the gain, area, and wavelength)"
         )
     return eta
+
+
+def radiation_resistance_short_dipole(*, length: Quantity, wavelength: Quantity) -> Quantity:
+    """The radiation resistance of a short dipole, R_r = 80·π²·(L/λ)².
+
+    The equivalent resistance that accounts for the power a Hertzian (electrically short) dipole
+    radiates away: R_r = 80·π²·(L/λ)², from the total dipole ``length`` L and the ``wavelength`` λ,
+    valid while L ≪ λ (below about λ/10). It falls with the square of the length-to-wavelength
+    ratio, so a very short antenna has a tiny radiation resistance — a few ohms or less — which is
+    swamped by ohmic loss (killing efficiency, η = R_r/(R_r + R_loss)) and is hard to match to a
+    source. This is the fundamental penalty of making an antenna much smaller than a wavelength, and
+    why a half-wave dipole (~73 Ω, outside this short-dipole form) is the practical baseline.
+    Returns the radiation resistance in ohms.
+    """
+    _check(length, "[length]", "length")
+    _check(wavelength, "[length]", "wavelength")
+    ell = length.to("m").magnitude
+    lam = wavelength.to("m").magnitude
+    if ell <= 0:
+        raise ValueError("length must be positive")
+    if lam <= 0:
+        raise ValueError("wavelength must be positive")
+    return Quantity(magnitude=80.0 * pi**2 * (ell / lam) ** 2, unit="ohm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

@@ -48,6 +48,7 @@ antenna.free_space_path_loss
 antenna.fresnel_zone_radius
 antenna.max_line_of_sight_range
 antenna.parabolic_beamwidth
+antenna.radiation_resistance_short_dipole
 antenna.received_power
 arrhenius.arrhenius_activation_energy
 arrhenius.arrhenius_rate_constant

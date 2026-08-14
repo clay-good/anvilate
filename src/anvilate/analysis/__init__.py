@@ -1016,6 +1016,7 @@ from .antenna import (
     fresnel_zone_radius,
     max_line_of_sight_range,
     parabolic_beamwidth,
+    radiation_resistance_short_dipole,
     received_power,
 )
 from .arrhenius import (
@@ -3491,6 +3492,7 @@ __all__ = [
     "effective_aperture",
     "aperture_efficiency",
     "parabolic_beamwidth",
+    "radiation_resistance_short_dipole",
     "dish_diameter_for_gain",
     "shannon_capacity",
     "shannon_required_bandwidth",

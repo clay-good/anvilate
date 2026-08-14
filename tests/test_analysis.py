@@ -25062,6 +25062,27 @@ def test_antenna_fresnel_zone_radius():
         )
 
 
+def test_antenna_radiation_resistance_short_dipole():
+    from math import pi
+
+    from anvilate.analysis import radiation_resistance_short_dipole
+
+    # R_r = 80*pi^2*(L/lambda)^2; L/lambda = 0.1 -> ~7.9 ohm.
+    r = radiation_resistance_short_dipole(length=_q("0.1 m"), wavelength=_q("1 m"))
+    assert r.to("ohm").magnitude == pytest.approx(80 * pi**2 * 0.1**2, rel=1e-9)
+    assert r.to("ohm").magnitude == pytest.approx(7.896, abs=1e-3)
+
+    # It falls with the square of L/lambda: a 10x shorter antenna has 100x less radiation R.
+    r_tiny = radiation_resistance_short_dipole(length=_q("0.01 m"), wavelength=_q("1 m"))
+    assert r_tiny.to("ohm").magnitude == pytest.approx(r.to("ohm").magnitude / 100, rel=1e-9)
+    assert r_tiny.to("ohm").magnitude < 0.1  # tiny -> hard to match, inefficient
+
+    with pytest.raises(ValueError, match="wavelength must be positive"):
+        radiation_resistance_short_dipole(length=_q("0.1 m"), wavelength=_q("0 m"))
+    with pytest.raises(ValueError, match="length must be a"):
+        radiation_resistance_short_dipole(length=_q("0.1 s"), wavelength=_q("1 m"))
+
+
 def test_antenna_effective_aperture_and_efficiency_round_trip():
     from math import pi
 
