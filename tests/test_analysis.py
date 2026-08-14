@@ -29088,6 +29088,34 @@ def test_wing_lift_induced_drag_and_stall_speed():
         )
 
 
+def test_wing_lift_coefficient_required_inverts_lift_force():
+    from anvilate.analysis import lift_coefficient_required, lift_force
+
+    rho = _q("1.225 kg/m**3")
+    s = _q("16 m**2")
+
+    # C_L = 2*L/(rho*V^2*S); inverting the worked lift case (12250 N at 50 m/s) returns C_L = 0.5.
+    cl = lift_coefficient_required(
+        lift=_q("12250 N"), air_density=rho, airspeed=_q("50 m/s"), wing_area=s
+    )
+    assert cl == pytest.approx(2 * 12250.0 / (1.225 * 2500.0 * 16.0), rel=1e-9)
+    assert cl == pytest.approx(0.5, rel=1e-9)
+    # It exactly inverts lift_force: feeding the C_L back reproduces the lift.
+    back = lift_force(air_density=rho, airspeed=_q("50 m/s"), wing_area=s, lift_coefficient=cl)
+    assert back.to("N").magnitude == pytest.approx(12250.0, rel=1e-9)
+
+    # Required C_L falls with the square of speed: flying 2x faster needs 1/4 the C_L.
+    cl_fast = lift_coefficient_required(
+        lift=_q("12250 N"), air_density=rho, airspeed=_q("100 m/s"), wing_area=s
+    )
+    assert cl_fast == pytest.approx(cl / 4.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="airspeed must be positive"):
+        lift_coefficient_required(
+            lift=_q("12250 N"), air_density=rho, airspeed=_q("0 m/s"), wing_area=s
+        )
+
+
 def test_wing_lift_to_drag_glide_range_and_wing_loading():
     from anvilate.analysis import (
         glide_range,

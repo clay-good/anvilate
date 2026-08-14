@@ -1596,6 +1596,7 @@ wind_power.capacity_factor
 wind_power.wind_turbine_power
 wind_power.wind_turbine_tip_speed_ratio
 wing_aerodynamics.lift_force
+wing_aerodynamics.lift_coefficient_required
 wing_aerodynamics.induced_drag_coefficient
 wing_aerodynamics.stall_speed
 wing_aerodynamics.lift_to_drag_ratio

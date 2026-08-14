@@ -3007,6 +3007,7 @@ from .wind_power import (
 from .wing_aerodynamics import (
     glide_range,
     induced_drag_coefficient,
+    lift_coefficient_required,
     lift_force,
     lift_to_drag_ratio,
     stall_speed,
@@ -4646,6 +4647,7 @@ __all__ = [
     "wind_turbine_tip_speed_ratio",
     "capacity_factor",
     "lift_force",
+    "lift_coefficient_required",
     "induced_drag_coefficient",
     "stall_speed",
     "lift_to_drag_ratio",

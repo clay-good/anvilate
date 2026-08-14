@@ -23,6 +23,7 @@ from ..units import Quantity
 
 __all__ = [
     "induced_drag_coefficient",
+    "lift_coefficient_required",
     "lift_force",
     "stall_speed",
     "lift_to_drag_ratio",
@@ -58,6 +59,41 @@ def lift_force(
     if s <= 0:
         raise ValueError("wing_area must be positive")
     return Quantity(magnitude=0.5 * rho * v * v * s * lift_coefficient, unit="N")
+
+
+def lift_coefficient_required(
+    *,
+    lift: Quantity,
+    air_density: Quantity,
+    airspeed: Quantity,
+    wing_area: Quantity,
+) -> float:
+    """The lift coefficient a wing must fly at, C_L = 2·L/(ρ·V²·S).
+
+    The design inverse of :func:`lift_force`: to carry a required ``lift`` L (the weight, in level
+    flight) at a given ``air_density`` ρ, ``airspeed`` V, and ``wing_area`` S, the wing must operate
+    at C_L = 2·L/(ρ·V²·S). Because it falls with the square of speed, a wing cruises at a low C_L
+    (small angle of attack) and must climb toward its C_L,max — and toward the stall — as it slows.
+    Comparing the required C_L against the airfoil's C_L,max is the check that the aircraft can
+    actually hold altitude at that speed. Returns the dimensionless lift coefficient.
+    """
+    _check(lift, "[force]", "lift")
+    _check(air_density, "[mass]/[volume]", "air_density")
+    _check(airspeed, "[velocity]", "airspeed")
+    _check(wing_area, "[area]", "wing_area")
+    lift_n = lift.to("N").magnitude
+    rho = air_density.to("kg/m**3").magnitude
+    v = airspeed.to("m/s").magnitude
+    s = wing_area.to("m**2").magnitude
+    if lift_n < 0:
+        raise ValueError("lift must be non-negative")
+    if rho <= 0:
+        raise ValueError("air_density must be positive")
+    if v <= 0:
+        raise ValueError("airspeed must be positive")
+    if s <= 0:
+        raise ValueError("wing_area must be positive")
+    return 2.0 * lift_n / (rho * v * v * s)
 
 
 def induced_drag_coefficient(
