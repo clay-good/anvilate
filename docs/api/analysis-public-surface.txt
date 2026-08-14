@@ -154,6 +154,7 @@ membrane.membrane_salt_flux
 membrane.salt_rejection
 momentum.linear_momentum
 momentum.impulse
+momentum.angular_impulse
 momentum.average_impact_force
 momentum.coefficient_of_restitution_from_rebound
 momentum.rebound_height

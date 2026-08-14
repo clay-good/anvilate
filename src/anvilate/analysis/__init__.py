@@ -2143,6 +2143,7 @@ from .membrane import (
     salt_rejection,
 )
 from .momentum import (
+    angular_impulse,
     average_impact_force,
     coefficient_of_restitution_from_rebound,
     impulse,
@@ -3809,6 +3810,7 @@ __all__ = [
     "salt_rejection",
     "linear_momentum",
     "impulse",
+    "angular_impulse",
     "average_impact_force",
     "coefficient_of_restitution_from_rebound",
     "rebound_height",

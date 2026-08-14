@@ -21,6 +21,7 @@ from math import sqrt
 from ..units import Quantity
 
 __all__ = [
+    "angular_impulse",
     "average_impact_force",
     "coefficient_of_restitution_from_rebound",
     "impulse",
@@ -58,6 +59,25 @@ def impulse(*, force: Quantity, time_interval: Quantity) -> Quantity:
     if dt <= 0:
         raise ValueError("time_interval must be positive")
     return Quantity(magnitude=f * dt, unit="N*s")
+
+
+def angular_impulse(*, torque: Quantity, time_interval: Quantity) -> Quantity:
+    """The angular impulse, H = τ·Δt.
+
+    The rotational twin of :func:`impulse`: a constant ``torque`` τ acting for a ``time_interval``
+    Δt delivers an angular impulse H = τ·Δt, and by the angular impulse-momentum theorem that equals
+    the change in angular momentum ΔL = I·Δω it produces. It is how a brief torque — a motor's
+    start-up pulse, a wrench's tap, a reaction wheel's slew — is sized to spin a rotor up to a
+    target speed, or how a short, hard torque is traded for a gentle, sustained one. Returns the
+    angular impulse in N·m·s (equivalently kg·m²/s, the angular-momentum unit).
+    """
+    _check(torque, "[force]*[length]", "torque")
+    _check(time_interval, "[time]", "time_interval")
+    t = torque.to("N*m").magnitude
+    dt = time_interval.to("s").magnitude
+    if dt <= 0:
+        raise ValueError("time_interval must be positive")
+    return Quantity(magnitude=t * dt, unit="N*m*s")
 
 
 def average_impact_force(

@@ -26433,6 +26433,26 @@ def test_linear_momentum_impulse_and_average_impact_force():
         impulse(force=_q("500 kg"), time_interval=_q("3 s"))
 
 
+def test_momentum_angular_impulse():
+    from anvilate.analysis import angular_impulse
+
+    # H = tau*dt; 5 N*m for 3 s -> 15 N*m*s.
+    h = angular_impulse(torque=_q("5 N*m"), time_interval=_q("3 s"))
+    assert h.to("N*m*s").magnitude == pytest.approx(5.0 * 3.0, rel=1e-9)
+    assert h.to("N*m*s").magnitude == pytest.approx(15.0, rel=1e-9)
+    # It carries the angular-momentum dimension (kg*m^2/s), the change it produces.
+    assert h.to("kg*m**2/s").magnitude == pytest.approx(15.0, rel=1e-9)
+
+    # Half the torque over the same time delivers half the angular impulse.
+    h_half = angular_impulse(torque=_q("2.5 N*m"), time_interval=_q("3 s"))
+    assert h_half.to("N*m*s").magnitude == pytest.approx(h.to("N*m*s").magnitude / 2, rel=1e-9)
+
+    with pytest.raises(ValueError, match="time_interval must be positive"):
+        angular_impulse(torque=_q("5 N*m"), time_interval=_q("0 s"))
+    with pytest.raises(ValueError, match="torque must be a"):
+        angular_impulse(torque=_q("5 N"), time_interval=_q("3 s"))
+
+
 def test_momentum_coefficient_of_restitution_and_rebound_height():
     from math import sqrt
 
