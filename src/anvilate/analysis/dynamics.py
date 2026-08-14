@@ -77,6 +77,7 @@ __all__ = [
     "two_rotor_torsional_natural_frequency",
     "solid_disc_polar_mass_moment",
     "annular_disc_polar_mass_moment",
+    "parallel_axis_mass_moment",
     "spring_surge_frequency",
     "rotating_unbalance_force",
     "balance_correction_mass",
@@ -1364,6 +1365,35 @@ def solid_disc_polar_mass_moment(*, mass: Quantity, diameter: Quantity) -> Quant
     if m <= 0 or d <= 0:
         raise ValueError("mass and diameter must be positive")
     return Quantity(magnitude=m * d**2 / 8, unit="kg*m**2")
+
+
+def parallel_axis_mass_moment(
+    *, centroidal_moment: Quantity, mass: Quantity, axis_distance: Quantity
+) -> Quantity:
+    """The parallel-axis theorem, I = I_cm + m·d².
+
+    Shifts a mass moment of inertia from a body's own centre of mass to any parallel axis a
+    distance away: I = I_cm + m·d², from the ``centroidal_moment`` I_cm (the moment about the
+    centroidal axis, e.g. from :func:`solid_disc_polar_mass_moment`), the ``mass`` m, and the
+    ``axis_distance`` d between the two axes. The added m·d² term is always positive, so the
+    centroidal axis is the one of least inertia and any offset raises it — the reason a disc swung
+    about its rim (I = 1.5·m·r²) resists rotation three times as much as about its centre, and the
+    step that turns a compound pendulum's or an unbalanced rotor's centroidal inertia into its
+    inertia about the actual pivot. Returns the shifted mass moment in kg·m².
+    """
+    _require(centroidal_moment, "[mass]*[length]**2", "centroidal_moment")
+    _require(mass, "[mass]", "mass")
+    _require(axis_distance, "[length]", "axis_distance")
+    i_cm = centroidal_moment.to("kg*m**2").magnitude
+    m = mass.to("kg").magnitude
+    d = axis_distance.to("m").magnitude
+    if i_cm < 0:
+        raise ValueError("centroidal_moment must be non-negative")
+    if m <= 0:
+        raise ValueError("mass must be positive")
+    if d < 0:
+        raise ValueError("axis_distance must be non-negative")
+    return Quantity(magnitude=i_cm + m * d**2, unit="kg*m**2")
 
 
 def annular_disc_polar_mass_moment(

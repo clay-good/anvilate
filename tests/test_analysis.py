@@ -7704,6 +7704,41 @@ def test_annular_disc_polar_mass_moment():
         )
 
 
+def test_parallel_axis_mass_moment_shifts_to_an_offset_axis():
+    from anvilate.analysis import (
+        parallel_axis_mass_moment,
+        solid_disc_polar_mass_moment,
+    )
+
+    # A solid disc: I_cm = 0.5*m*r^2. 10 kg, 0.4 m dia (r=0.2) -> 0.2 kg*m^2.
+    i_cm = solid_disc_polar_mass_moment(mass=_q("10 kg"), diameter=_q("0.4 m"))
+    assert i_cm.to("kg*m**2").magnitude == pytest.approx(0.2, rel=1e-12)
+
+    # Shift to the rim (d = r = 0.2 m): I = I_cm + m*d^2 = 0.2 + 10*0.04 = 0.6 = 1.5*m*r^2.
+    i_rim = parallel_axis_mass_moment(
+        centroidal_moment=i_cm, mass=_q("10 kg"), axis_distance=_q("0.2 m")
+    )
+    assert i_rim.to("kg*m**2").magnitude == pytest.approx(0.2 + 10 * 0.2**2, rel=1e-12)
+    assert i_rim.to("kg*m**2").magnitude == pytest.approx(1.5 * 10 * 0.2**2, rel=1e-12)
+
+    # Zero offset leaves the centroidal moment unchanged (the axis of least inertia).
+    i_same = parallel_axis_mass_moment(
+        centroidal_moment=i_cm, mass=_q("10 kg"), axis_distance=_q("0 m")
+    )
+    assert i_same.to("kg*m**2").magnitude == pytest.approx(0.2, rel=1e-12)
+    # Any offset only ever raises the inertia (the m*d^2 term is positive).
+    assert i_rim.to("kg*m**2").magnitude > i_cm.to("kg*m**2").magnitude
+
+    with pytest.raises(ValueError, match="mass must be positive"):
+        parallel_axis_mass_moment(
+            centroidal_moment=i_cm, mass=_q("0 kg"), axis_distance=_q("0.2 m")
+        )
+    with pytest.raises(ValueError, match="centroidal_moment must be a"):
+        parallel_axis_mass_moment(
+            centroidal_moment=_q("0.2 kg"), mass=_q("10 kg"), axis_distance=_q("0.2 m")
+        )
+
+
 def test_beam_fundamental_rejects_bad_inputs():
     with pytest.raises(ValueError, match="mass_per_length must be a"):
         cantilever_fundamental_frequency(
