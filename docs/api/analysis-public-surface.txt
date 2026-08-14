@@ -709,6 +709,7 @@ fiber_optics.fiber_v_number
 fiber_optics.fiber_mode_count
 fiber_optics.fiber_single_mode_cutoff_wavelength
 flywheel.coefficient_of_fluctuation
+flywheel.flywheel_stored_energy
 flywheel.flywheel_energy_fluctuation
 flywheel.flywheel_inertia_for_fluctuation
 flywheel.rim_flywheel_mass

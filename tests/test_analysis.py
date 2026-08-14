@@ -3438,6 +3438,30 @@ def test_flywheel_inertia_and_energy_round_trip():
     )
 
 
+def test_flywheel_stored_energy():
+    from anvilate.analysis import flywheel_energy_fluctuation, flywheel_stored_energy
+
+    # E = 0.5*I*omega^2; 0.5 kg*m^2 at 3000 rpm (314.16 rad/s) -> ~24.7 kJ.
+    e = flywheel_stored_energy(inertia=_q("0.5 kg*m**2"), speed=_q("3000 rpm"))
+    omega = _q("3000 rpm").to("rad/s").magnitude
+    assert e.to("J").magnitude == pytest.approx(0.5 * 0.5 * omega**2, rel=1e-9)
+    assert e.to("J").magnitude == pytest.approx(24674.0, abs=1.0)
+
+    # Energy rises with the square of speed: doubling the rpm quadruples the stored energy.
+    e2 = flywheel_stored_energy(inertia=_q("0.5 kg*m**2"), speed=_q("6000 rpm"))
+    assert e2.to("J").magnitude == pytest.approx(4.0 * e.to("J").magnitude, rel=1e-9)
+
+    # The usable fluctuation is only a fraction (2*Cs) of the total store: at Cs=0.05, dE/E = 0.1.
+    total = flywheel_stored_energy(inertia=_q("10 kg*m**2"), speed=_q("200 rpm"))
+    swing = flywheel_energy_fluctuation(
+        inertia=_q("10 kg*m**2"), mean_speed=_q("200 rpm"), coefficient_of_fluctuation=0.05
+    )
+    assert swing.to("J").magnitude / total.to("J").magnitude == pytest.approx(2 * 0.05, rel=1e-9)
+
+    with pytest.raises(ValueError, match="speed must be positive"):
+        flywheel_stored_energy(inertia=_q("0.5 kg*m**2"), speed=_q("0 rpm"))
+
+
 def test_coefficient_of_fluctuation_from_speed_swing():
     # 205/195 rpm about a 200 mean: Cs = (205-195)/200 = 0.05.
     cs = coefficient_of_fluctuation(max_speed=_q("205 rpm"), min_speed=_q("195 rpm"))

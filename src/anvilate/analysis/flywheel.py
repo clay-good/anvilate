@@ -33,6 +33,7 @@ from ..units import Quantity
 
 __all__ = [
     "coefficient_of_fluctuation",
+    "flywheel_stored_energy",
     "flywheel_energy_fluctuation",
     "flywheel_inertia_for_fluctuation",
     "rim_flywheel_mass",
@@ -76,6 +77,26 @@ def coefficient_of_fluctuation(*, max_speed: Quantity, min_speed: Quantity) -> f
             f"max_speed ({max_speed}) must exceed min_speed ({min_speed}) for a speed ripple"
         )
     return (wmax - wmin) / ((wmax + wmin) / 2.0)
+
+
+def flywheel_stored_energy(*, inertia: Quantity, speed: Quantity) -> Quantity:
+    """The rotational kinetic energy a flywheel stores, E = ½·I·ω².
+
+    The total energy held in a spinning rotor — the rotational twin of ½·m·v² — from the mass moment
+    of ``inertia`` I and the shaft ``speed`` ω: E = ½·I·ω². It is the whole energy reservoir of a
+    flywheel energy-storage system, of which :func:`flywheel_energy_fluctuation` is only the usable
+    swing (ΔE = I·ω²·C_s) kept within the speed-ripple band. Because it rises with the *square* of
+    speed, spinning faster is the cheapest way to store more — the reason modern flywheels run at
+    very high rpm rather than being made massive. ``inertia`` must be a mass·length² and ``speed`` a
+    positive rotational frequency (rpm or rad/s). Returns the stored energy in joules.
+    """
+    _require(inertia, "[mass] * [length]**2", "inertia")
+    _require(speed, "[frequency]", "speed")
+    i = inertia.to("kg*m**2").magnitude
+    omega = speed.to("rad/s").magnitude
+    if omega <= 0:
+        raise ValueError(f"speed must be positive; got {speed}")
+    return Quantity(magnitude=0.5 * i * omega**2, unit="J")
 
 
 def flywheel_energy_fluctuation(
