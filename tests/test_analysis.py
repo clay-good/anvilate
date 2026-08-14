@@ -10471,6 +10471,37 @@ def test_damped_vibration_measures():
     assert delta == pytest.approx(2 * pi * 0.05, rel=2e-3)
 
 
+def test_damping_ratio_from_log_decrement_inverts_the_forward():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        damping_ratio_from_log_decrement,
+        logarithmic_decrement,
+    )
+
+    # zeta = delta/sqrt(4*pi^2 + delta^2); exact inverse of logarithmic_decrement.
+    delta = logarithmic_decrement(damping_ratio=0.05)
+    zeta = damping_ratio_from_log_decrement(log_decrement=delta)
+    assert zeta == pytest.approx(0.05, rel=1e-12)
+    assert zeta == pytest.approx(delta / sqrt(4 * pi**2 + delta**2), rel=1e-12)
+
+    # It round-trips at heavier damping too, where delta ~ 2*pi*zeta breaks down.
+    delta_heavy = logarithmic_decrement(damping_ratio=0.3)
+    assert damping_ratio_from_log_decrement(log_decrement=delta_heavy) == pytest.approx(
+        0.3, rel=1e-12
+    )
+
+    # Zero decrement means no damping.
+    assert damping_ratio_from_log_decrement(log_decrement=0.0) == pytest.approx(0.0, abs=1e-15)
+    # Light-damping approximation zeta ~ delta/(2*pi) holds for small delta.
+    assert damping_ratio_from_log_decrement(log_decrement=0.1) == pytest.approx(
+        0.1 / (2 * pi), rel=1e-3
+    )
+
+    with pytest.raises(ValueError, match="log_decrement must be non-negative"):
+        damping_ratio_from_log_decrement(log_decrement=-0.1)
+
+
 def test_transmissibility_isolation_crossover():
     from math import sqrt
 

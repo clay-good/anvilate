@@ -605,6 +605,7 @@ dynamics.frequency_scorecard
 dynamics.isolator_natural_frequency_for_transmissibility
 dynamics.isolator_static_deflection_for_transmissibility
 dynamics.logarithmic_decrement
+dynamics.damping_ratio_from_log_decrement
 dynamics.natural_frequency
 dynamics.natural_frequency_from_deflection
 dynamics.physical_pendulum_period

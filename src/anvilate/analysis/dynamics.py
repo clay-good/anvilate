@@ -43,6 +43,7 @@ __all__ = [
     "step_response_settling_time",
     "step_response_peak_time",
     "logarithmic_decrement",
+    "damping_ratio_from_log_decrement",
     "quality_factor",
     "quality_factor_from_half_power_bandwidth",
     "damping_ratio_from_half_power_bandwidth",
@@ -412,6 +413,22 @@ def logarithmic_decrement(*, damping_ratio: float) -> float:
     """
     zeta = _check_damping_ratio(damping_ratio)
     return 2.0 * pi * zeta / sqrt(1.0 - zeta**2)
+
+
+def damping_ratio_from_log_decrement(*, log_decrement: float) -> float:
+    """The damping ratio ζ = δ/√(4π² + δ²) from a measured logarithmic decrement.
+
+    The exact inverse of :func:`logarithmic_decrement`: given the ``log_decrement`` δ read from a
+    free-vibration decay trace (the natural log of the ratio of two successive peaks, or 1/n times
+    the log over n cycles), the fraction of critical damping is ζ = δ/√(4π² + δ²). It is the value a
+    ring-down (log-decrement) test actually reports — the companion to
+    :func:`damping_ratio_from_half_power_bandwidth` for the time-domain method. For light damping it
+    reduces to the familiar ζ ≈ δ/(2π), but this exact form stays valid up to heavy damping.
+    ``log_decrement`` must be non-negative. Returns the dimensionless damping ratio in [0, 1).
+    """
+    if log_decrement < 0:
+        raise ValueError(f"log_decrement must be non-negative; got {log_decrement}")
+    return log_decrement / sqrt(4.0 * pi**2 + log_decrement**2)
 
 
 def quality_factor(*, damping_ratio: float) -> float:
