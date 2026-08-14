@@ -28,6 +28,7 @@ from ..units import Quantity
 
 __all__ = [
     "torque_from_power",
+    "power_from_torque",
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",
@@ -88,6 +89,27 @@ def torque_from_power(*, power: Quantity, rotational_speed: Quantity) -> Quantit
     if power.to("W").magnitude <= 0:
         raise ValueError(f"power must be positive; got {power}")
     return _as_quantity(power.pint / rotational_speed.pint, "N*m")
+
+
+def power_from_torque(*, torque: Quantity, rotational_speed: Quantity) -> Quantity:
+    """The shaft power P = T·ω a torque transmits at a rotational speed.
+
+    The forward pair of :func:`torque_from_power`, and the rotational twin of the translational
+    P = F·v: a shaft carrying ``torque`` T while turning at angular speed ω delivers power
+    P = T·ω. It is the dynamometer reading — measure the torque a brake absorbs and the speed it
+    turns, and the product is the power the machine produces. ``rotational_speed`` is the shaft
+    speed — pass it as **rpm or rad/s** (an angular measure that carries the 2π). ``torque`` must be
+    a torque and ``rotational_speed`` a positive rotational frequency. Returns the power in watts.
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(rotational_speed, "[frequency]", "rotational_speed")
+    t = torque.to("N*m").magnitude
+    omega = rotational_speed.to("rad/s").magnitude
+    if t <= 0:
+        raise ValueError(f"torque must be positive; got {torque}")
+    if omega <= 0:
+        raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
+    return Quantity(magnitude=t * omega, unit="W")
 
 
 def polar_second_moment_solid(diameter: Quantity) -> Quantity:

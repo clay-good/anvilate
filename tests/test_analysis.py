@@ -4920,6 +4920,30 @@ def test_torque_from_power_rejects_bad_inputs():
         torque_from_power(power=_q("30 kW"), rotational_speed=_q("0 rpm"))
 
 
+def test_power_from_torque_is_the_forward_pair():
+    from math import pi
+
+    from anvilate.analysis import power_from_torque, torque_from_power
+
+    # P = T*omega; 100 N*m at 3000 rpm (314.16 rad/s) -> 31.4 kW.
+    p = power_from_torque(torque=_q("100 N*m"), rotational_speed=_q("3000 rpm"))
+    assert p.to("W").magnitude == pytest.approx(100.0 * 2 * pi * 3000 / 60, rel=1e-9)
+    assert p.to("kW").magnitude == pytest.approx(31.416, abs=1e-2)
+
+    # rad/s input gives the same power (both carry the 2*pi).
+    same = power_from_torque(torque=_q("100 N*m"), rotational_speed=_q("314.159265 rad/s"))
+    assert same.to("W").magnitude == pytest.approx(p.to("W").magnitude, rel=1e-6)
+
+    # It exactly inverts torque_from_power: the torque that carries P at omega recovers P.
+    t = torque_from_power(power=p, rotational_speed=_q("3000 rpm"))
+    assert t.to("N*m").magnitude == pytest.approx(100.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="torque must be a"):
+        power_from_torque(torque=_q("100 N"), rotational_speed=_q("3000 rpm"))
+    with pytest.raises(ValueError, match="rotational_speed must be positive"):
+        power_from_torque(torque=_q("100 N*m"), rotational_speed=_q("0 rpm"))
+
+
 def test_shaft_diameter_for_torque_inverts_the_shear_check():
     # 500 N*m within a 40 MPa allowable needs d = (16*T/(pi*tau))^(1/3)
     #   = (16*500000/(pi*40))^(1/3) = 39.92 mm.
