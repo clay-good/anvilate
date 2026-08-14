@@ -1545,6 +1545,7 @@ from .drilling import (
 )
 from .dynamics import (
     STANDARD_GRAVITY,
+    angular_acceleration_from_torque,
     annular_disc_polar_mass_moment,
     balance_correction_mass,
     balance_quality_permissible_eccentricity,
@@ -4045,6 +4046,7 @@ __all__ = [
     "bar_wave_speed",
     "shear_wave_speed",
     "bulk_longitudinal_wave_speed",
+    "angular_acceleration_from_torque",
     "solid_disc_polar_mass_moment",
     "annular_disc_polar_mass_moment",
     "parallel_axis_mass_moment",

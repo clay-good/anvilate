@@ -75,6 +75,7 @@ __all__ = [
     "clamped_annular_plate_fundamental_frequency",
     "torsional_natural_frequency",
     "two_rotor_torsional_natural_frequency",
+    "angular_acceleration_from_torque",
     "solid_disc_polar_mass_moment",
     "annular_disc_polar_mass_moment",
     "parallel_axis_mass_moment",
@@ -1349,6 +1350,24 @@ def clamped_annular_plate_fundamental_frequency(
         thickness=thickness,
         elastic_modulus=elastic_modulus,
     )
+
+
+def angular_acceleration_from_torque(*, torque: Quantity, moment_of_inertia: Quantity) -> Quantity:
+    """The angular acceleration a torque produces, α = τ/I (Newton's second law for rotation).
+
+    The rotational analogue of a = F/m: a net ``torque`` τ on a body of mass ``moment_of_inertia`` I
+    spins it up at α = τ/I. It is how a motor's torque and a rotor's inertia set the spin-up rate,
+    how long a drive takes to reach speed, and the deceleration a brake torque imposes — the same
+    inertia (from :func:`solid_disc_polar_mass_moment` or :func:`parallel_axis_mass_moment`) that
+    resists it. Returns the angular acceleration in rad/s².
+    """
+    _require(torque, "[force] * [length]", "torque")
+    _require(moment_of_inertia, "[mass] * [length]**2", "moment_of_inertia")
+    t = torque.to("N*m").magnitude
+    i = moment_of_inertia.to("kg*m**2").magnitude
+    if i <= 0:
+        raise ValueError(f"moment_of_inertia must be positive; got {moment_of_inertia}")
+    return Quantity(magnitude=t / i, unit="rad/s**2")
 
 
 def solid_disc_polar_mass_moment(*, mass: Quantity, diameter: Quantity) -> Quantity:

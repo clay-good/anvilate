@@ -7752,6 +7752,28 @@ def test_annular_disc_polar_mass_moment():
         )
 
 
+def test_angular_acceleration_from_torque():
+    from anvilate.analysis import angular_acceleration_from_torque
+
+    # alpha = tau/I; 50 N*m on a 0.5 kg*m^2 rotor -> 100 rad/s^2.
+    a = angular_acceleration_from_torque(torque=_q("50 N*m"), moment_of_inertia=_q("0.5 kg*m**2"))
+    assert a.to("rad/s**2").magnitude == pytest.approx(50.0 / 0.5, rel=1e-12)
+    assert a.to("rad/s**2").magnitude == pytest.approx(100.0, rel=1e-12)
+
+    # More inertia (a heavier rotor) accelerates slower for the same torque.
+    a_heavy = angular_acceleration_from_torque(
+        torque=_q("50 N*m"), moment_of_inertia=_q("1 kg*m**2")
+    )
+    assert a_heavy.to("rad/s**2").magnitude == pytest.approx(
+        a.to("rad/s**2").magnitude / 2, rel=1e-12
+    )
+
+    with pytest.raises(ValueError, match="moment_of_inertia must be positive"):
+        angular_acceleration_from_torque(torque=_q("50 N*m"), moment_of_inertia=_q("0 kg*m**2"))
+    with pytest.raises(ValueError, match="torque must be a"):
+        angular_acceleration_from_torque(torque=_q("50 N"), moment_of_inertia=_q("0.5 kg*m**2"))
+
+
 def test_parallel_axis_mass_moment_shifts_to_an_offset_axis():
     from anvilate.analysis import (
         parallel_axis_mass_moment,
