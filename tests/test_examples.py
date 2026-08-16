@@ -12,6 +12,17 @@ from anvilate.scorecard import CheckStatus
 _EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
 
+def test_every_example_is_executed_by_this_file():
+    # An example nobody runs is an example nobody notices breaking. The contract
+    # gate only requires each analysis module to be *mentioned* somewhere under
+    # examples/, so a new example file could ship and never execute in CI.
+    text = Path(__file__).read_text()
+    unexecuted = sorted(p.name for p in _EXAMPLES.glob("*.py") if p.name not in text)
+    assert not unexecuted, (
+        f"examples with no test in tests/test_examples.py (they never run in CI): {unexecuted}"
+    )
+
+
 def test_cantilever_bracket_example_screens_to_a_failing_scorecard():
     # run_path executes the module without triggering its __main__ block.
     namespace = runpy.run_path(str(_EXAMPLES / "cantilever_bracket_check.py"))
