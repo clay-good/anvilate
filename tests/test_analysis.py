@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from math import pi
+from math import pi, sin
 
 import pytest
 
@@ -11086,10 +11086,25 @@ def test_thin_ring_diametral_deflection_and_moment():
         second_moment=_q("1000 mm**4"),
     )
     assert stiffer.to("mm").magnitude == pytest.approx(d.to("mm").magnitude / 2, rel=1e-12)
-    # Peak moment M = P*R*(1/2 - 1/pi) ~ 0.1817*P*R at the load points.
+    # Peak moment at the load points: Roark's 0.3183*P*R = P*R/pi (the 90-degree moment is the
+    # smaller 0.1817*P*R, and the two sum to P*R/2). Pinned to the Roark coefficient rather than
+    # to the implementation's own expression, so a swapped extremum cannot pass.
     m = thin_ring_max_moment(load=_q("500 N"), radius=_q("100 mm"))
-    assert m.to("N*mm").magnitude == pytest.approx(500 * 100 * (0.5 - 1 / pi), rel=1e-12)
-    assert m.to("N*mm").magnitude == pytest.approx(9084.5, rel=1e-3)
+    assert m.to("N*mm").magnitude == pytest.approx(0.3183 * 500 * 100, rel=1e-3)
+    assert m.to("N*mm").magnitude == pytest.approx(15915.5, rel=1e-4)
+    # Cross-check that the moment and the deflection describe the SAME ring. Castigliano on
+    # M(t) = M0 - (P*R/2)*sin(t) gives delta = 4*R/(EI) * integral of M*dM/dP over a quarter,
+    # which reproduces the module's own (pi/4 - 2/pi) coefficient only for M0 = P*R/pi.
+    m0 = m.to("N*mm").magnitude / 500 / 100  # the coefficient the module returns
+    steps = 200001
+    dt = (pi / 2) / (steps - 1)
+    total = 0.0
+    for k in range(steps):
+        t = k * dt
+        weight = 0.5 if k in (0, steps - 1) else 1.0
+        moment = m0 - 0.5 * sin(t)
+        total += weight * moment * moment * dt
+    assert 4 * total == pytest.approx(pi / 4 - 2 / pi, rel=1e-6)
     with pytest.raises(ValueError, match="radius must be positive"):
         thin_ring_max_moment(load=_q("500 N"), radius=_q("0 mm"))
     with pytest.raises(ValueError, match="second_moment must be a"):

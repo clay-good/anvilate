@@ -319,14 +319,16 @@ def thin_ring_diametral_deflection(
 
 
 def thin_ring_max_moment(*, load: Quantity, radius: Quantity) -> Quantity:
-    """The peak bending moment M = P·R·(1/2 − 1/π) in a diametrally loaded thin ring.
+    """The peak bending moment M = P·R/π in a diametrally loaded thin ring.
 
     The bending moment in a thin circular ring pulled apart by two opposite radial
-    loads P peaks at the load points at M = P·R·(1/2 − 1/π) ≈ 0.182·P·R (opening the
-    ring there); at 90° it reverses to M = P·R·(1/π − ...), smaller in magnitude.
-    ``load`` P is one of the load pair and ``radius`` R the ring centreline radius.
-    Combine it with the section modulus for the fibre stress. Returns the maximum
-    bending moment in N·mm.
+    loads P peaks *at the load points*, where M = P·R/π ≈ 0.318·P·R; at 90° from them
+    it reverses sign and falls to P·R·(1/2 − 1/π) ≈ 0.182·P·R. (The two extrema sum
+    to P·R/2, which is why they are easy to swap.) ``load`` P is one of the load pair
+    and ``radius`` R the ring centreline radius. Combine it with the section modulus
+    for the fibre stress. The same moment distribution integrates to the
+    (π/4 − 2/π)·P·R³/(E·I) of :func:`thin_ring_diametral_deflection`. Returns the
+    maximum bending moment in N·mm.
     """
     _require(load, "[force]", "load")
     _require(radius, "[length]", "radius")
@@ -334,7 +336,7 @@ def thin_ring_max_moment(*, load: Quantity, radius: Quantity) -> Quantity:
     r = radius.to("mm").magnitude
     if r <= 0:
         raise ValueError(f"radius must be positive; got {radius}")
-    return Quantity(magnitude=p * r * (0.5 - 1.0 / pi), unit="N*mm")
+    return Quantity(magnitude=p * r / pi, unit="N*mm")
 
 
 def thin_ring_buckling_pressure(
