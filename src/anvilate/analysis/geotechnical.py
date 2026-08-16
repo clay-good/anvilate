@@ -349,8 +349,10 @@ def bearing_depth_factors(
 
     Soil beside an embedded footing adds shear resistance the surface bearing equation ignores, so
     depth factors raise the capacity. For a shallow footing (D ≤ B) the Hansen/Vesić forms are
-    d_q = 1 + 2·tanφ·(1 − sinφ)²·(D/B), d_c = d_q − (1 − d_q)/(N_q·tanφ) (or 1 + 0.4·(D/B) when
-    φ = 0), and d_γ = 1. ``footing_width`` B, ``embedment_depth`` D (founding depth below grade),
+    d_q = 1 + 2·tanφ·(1 − sinφ)²·(D/B), d_c = d_q − (1 − d_q)/(N_c·tanφ) (or 1 + 0.4·(D/B) when
+    φ = 0), and d_γ = 1. Because N_c = (N_q − 1)·cotφ, that denominator is identically N_q − 1,
+    and taking it to zero recovers the φ = 0 branch — the two forms agree in the limit.
+    ``footing_width`` B, ``embedment_depth`` D (founding depth below grade),
     and ``friction_angle`` φ (degrees). Multiply each bearing-capacity term by its factor. Returns a
     dict with keys ``"d_c"``, ``"d_q"``, ``"d_gamma"``.
     """
@@ -366,14 +368,17 @@ def bearing_depth_factors(
     if friction_angle == 0.0:
         return {"d_c": 1.0 + 0.4 * ratio, "d_q": 1.0, "d_gamma": 1.0}
     d_q = 1.0 + 2.0 * tan(phi) * (1.0 - sin(phi)) ** 2 * ratio
-    d_c = d_q - (1.0 - d_q) / _nq_tan_phi(phi)
+    d_c = d_q - (1.0 - d_q) / _nc_tan_phi(phi)
     return {"d_c": d_c, "d_q": d_q, "d_gamma": 1.0}
 
 
-def _nq_tan_phi(phi_radians: float) -> float:
-    """N_q·tanφ, the denominator in the Hansen/Vesić d_c depth factor."""
+def _nc_tan_phi(phi_radians: float) -> float:
+    """N_c·tanφ, the denominator in the Hansen/Vesić d_c depth factor.
+
+    N_c = (N_q − 1)·cotφ, so N_c·tanφ is simply N_q − 1.
+    """
     n_q = exp(pi * tan(phi_radians)) * tan(pi / 4.0 + phi_radians / 2.0) ** 2
-    return n_q * tan(phi_radians)
+    return n_q - 1.0
 
 
 def bearing_inclination_factors(

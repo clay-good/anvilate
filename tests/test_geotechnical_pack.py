@@ -43,7 +43,7 @@ def test_shallow_footing_passes_at_service_load():
     (entry,) = card.entries
     assert entry.name == "bearing capacity"
     assert entry.status is CheckStatus.PASS
-    assert "safety factor 3.33" in entry.detail
+    assert "safety factor 3.32" in entry.detail
     # The check cites the theory it implements (no silent green, and traceable).
     assert entry.reference is not None
     assert "Terzaghi" in entry.reference

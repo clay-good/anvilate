@@ -271,7 +271,7 @@ def test_spread_footing_scorecard_example_passes_then_fails():
     # The service load passes the bearing check; the overload fails it — a cited pass/fail.
     assert s["service_status"] == "pass"
     assert s["overloaded_status"] == "fail"
-    assert "3.33" in s["service_detail"]
+    assert "3.32" in s["service_detail"]
 
 
 def test_strip_footing_bearing_example_deeper_founding_lifts_capacity():

@@ -22027,7 +22027,7 @@ def test_bearing_depth_factors_hansen():
         footing_width=_q("2 m"), embedment_depth=_q("1.5 m"), friction_angle=30.0
     )
     assert d["d_q"] == pytest.approx(1.217, abs=0.002)
-    assert d["d_c"] == pytest.approx(1.237, abs=0.002)
+    assert d["d_c"] == pytest.approx(1.2289, abs=0.002)
     assert d["d_gamma"] == pytest.approx(1.0, rel=1e-12)
     # Deeper embedment credits more capacity.
     d_deep = bearing_depth_factors(
@@ -22040,6 +22040,19 @@ def test_bearing_depth_factors_hansen():
     )
     assert d0["d_c"] == pytest.approx(1 + 0.4 * 0.5, rel=1e-9)
     assert d0["d_q"] == pytest.approx(1.0, rel=1e-12)
+    # The two branches must MEET: d_c from the general form has to converge on the phi = 0 form
+    # as phi -> 0. This is what pins the N_c*tan(phi) = N_q - 1 denominator -- using N_q*tan(phi)
+    # instead sends the limit to 2.0 against the phi = 0 branch's 1.2, an 67% step at the seam.
+    # (The exact limit is 1 + 2/(pi+2)*(D/B) = 1.1945; the 0.4 in the phi = 0 branch is the
+    # handbook rounding of 0.389, which is the whole residual difference.)
+    for tiny in (1.0, 0.1, 0.01):
+        near_zero = bearing_depth_factors(
+            footing_width=_q("2 m"), embedment_depth=_q("1 m"), friction_angle=tiny
+        )
+        assert near_zero["d_c"] == pytest.approx(1 + 2 / (pi + 2) * 0.5, abs=0.002)
+        assert near_zero["d_c"] == pytest.approx(d0["d_c"], abs=0.01)
+    # d_c exceeds d_q for a real friction angle (the cohesion term gets the larger credit).
+    assert d["d_c"] > d["d_q"]
 
 
 def test_bearing_inclination_factors_meyerhof():
