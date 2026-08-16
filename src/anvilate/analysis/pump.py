@@ -33,6 +33,7 @@ __all__ = [
     "pump_hydraulic_power",
     "pump_shaft_power",
     "pump_specific_speed",
+    "pump_temperature_rise",
     "pump_suction_specific_speed",
 ]
 
@@ -80,6 +81,38 @@ def pump_shaft_power(*, hydraulic_power: Quantity, efficiency: float) -> Quantit
     if not 0.0 < efficiency <= 1.0:
         raise ValueError(f"efficiency must be in (0, 1]; got {efficiency}")
     return Quantity(magnitude=p / efficiency, unit="W")
+
+
+def pump_temperature_rise(
+    *,
+    head: Quantity,
+    efficiency: float,
+    specific_heat: Quantity,
+) -> Quantity:
+    """The temperature rise a pump imparts to its own liquid, ΔT = g·H·(1 − η)/(c_p·η).
+
+    Everything the pump does not turn into head becomes heat, and that heat has nowhere to go but
+    into the liquid passing through: ΔT = g·``head``·(1 − ``efficiency``)/(``specific_heat``·η).
+    The mass flow cancels out — more flow carries away more heat but also absorbs more of it — so
+    the rise depends only on head and efficiency. That is exactly why it matters at low flow: as a
+    centrifugal pump is throttled toward shut-off its efficiency collapses while its head rises, so
+    ΔT climbs steeply just as there is less liquid to carry the heat out. This is the API 610
+    minimum-continuous-flow screen — heat the liquid enough and it flashes at the impeller eye,
+    which shows up as a loss of the NPSH margin :func:`npsh_margin` checks. At a normal duty
+    (50 m, 75% efficient, water) the rise is a negligible 0.04 K; at 200 m and 40% it is 0.7 K, and
+    at shut-off it runs away. Returns the temperature rise in K.
+    """
+    _check(head, "[length]", "head")
+    _check(specific_heat, "[energy]/([mass]*[temperature])", "specific_heat")
+    h = head.to("m").magnitude
+    cp = specific_heat.to("J/(kg*K)").magnitude
+    if h < 0:
+        raise ValueError("head must be non-negative")
+    if cp <= 0:
+        raise ValueError("specific_heat must be positive")
+    if not 0.0 < efficiency <= 1.0:
+        raise ValueError(f"efficiency must be in (0, 1]; got {efficiency}")
+    return Quantity(magnitude=_GRAVITY * h * (1.0 - efficiency) / (cp * efficiency), unit="K")
 
 
 def pump_specific_speed(

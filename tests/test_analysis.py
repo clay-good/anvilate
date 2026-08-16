@@ -23032,6 +23032,37 @@ def test_pump_power_hydraulic_and_shaft():
         pump_shaft_power(hydraulic_power=p_hyd, efficiency=1.5)
 
 
+def test_pump_temperature_rise():
+    from anvilate.analysis import pump_temperature_rise
+
+    water = _q("4186 J/(kg*K)")
+    # A normal duty barely warms the liquid: 50 m at 75% efficiency -> 0.04 K.
+    normal = pump_temperature_rise(head=_q("50 m"), efficiency=0.75, specific_heat=water)
+    assert normal.to("K").magnitude == pytest.approx(0.039045, rel=1e-4)
+    # High head at collapsed efficiency is where it starts to matter: 200 m at 40% -> 0.70 K.
+    low_flow = pump_temperature_rise(head=_q("200 m"), efficiency=0.40, specific_heat=water)
+    assert low_flow.to("K").magnitude == pytest.approx(0.70282, rel=1e-4)
+    assert low_flow.to("K").magnitude > normal.to("K").magnitude
+    # Toward shut-off it runs away: at 20% efficiency the same head gives 1.87 K.
+    shutoff = pump_temperature_rise(head=_q("200 m"), efficiency=0.20, specific_heat=water)
+    assert shutoff.to("K").magnitude == pytest.approx(1.87418, rel=1e-4)
+    # A perfect pump adds no heat at all.
+    assert pump_temperature_rise(head=_q("200 m"), efficiency=1.0, specific_heat=water).to(
+        "K"
+    ).magnitude == pytest.approx(0.0, abs=1e-12)
+    # The rise is linear in head, and a liquid with half the specific heat warms twice as much.
+    assert pump_temperature_rise(head=_q("100 m"), efficiency=0.75, specific_heat=water).to(
+        "K"
+    ).magnitude == pytest.approx(2 * normal.to("K").magnitude, rel=1e-12)
+    assert pump_temperature_rise(
+        head=_q("50 m"), efficiency=0.75, specific_heat=_q("2093 J/(kg*K)")
+    ).to("K").magnitude == pytest.approx(2 * normal.to("K").magnitude, rel=1e-12)
+    with pytest.raises(ValueError):
+        pump_temperature_rise(head=_q("50 m"), efficiency=0.0, specific_heat=water)
+    with pytest.raises(ValueError):
+        pump_temperature_rise(head=_q("50 kg"), efficiency=0.75, specific_heat=water)
+
+
 def test_pump_specific_speed_classifies_the_duty():
     import math
 
