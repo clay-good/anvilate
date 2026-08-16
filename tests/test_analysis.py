@@ -23382,7 +23382,17 @@ def test_aisi_effective_width_winter_reduces_a_slender_element():
     b = aisi_effective_width(flat_width=_q("100 mm"), thickness=_q("1.5 mm"), **kw)
     rho = (1 - 0.22 / lam) / lam
     assert b.to("mm").magnitude == pytest.approx(rho * 100.0, rel=1e-9)
+    assert b.to("mm").magnitude == pytest.approx(58.65, rel=1e-3)  # pinned, not re-derived
     assert b.to("mm").magnitude < 100.0  # reduced
+    # Winter's 0.22 is pinned by continuity, not by re-typing it: at the AISI slenderness limit
+    # lambda = 0.673 the reduction factor must come out to 1.0, meeting the fully-effective
+    # branch without a step. Only 0.22 does that -- 0.25 would give 0.934, a visible jump.
+    # For this steel that limit falls at w/t = 31.036, i.e. w = 46.554 mm at t = 1.5 mm.
+    assert aisi_plate_slenderness(
+        flat_width=_q("46.554 mm"), thickness=_q("1.5 mm"), **kw
+    ) == pytest.approx(0.673, rel=1e-3)
+    at_limit = aisi_effective_width(flat_width=_q("46.554 mm"), thickness=_q("1.5 mm"), **kw)
+    assert at_limit.to("mm").magnitude == pytest.approx(46.554, rel=1e-3)
 
     # A thick, compact element (lambda <= 0.673) is fully effective: b = w.
     full = aisi_effective_width(flat_width=_q("100 mm"), thickness=_q("3.5 mm"), **kw)
@@ -25933,6 +25943,17 @@ def test_antenna_aperture_gain_beamwidth_and_dish_sizing():
     # Dish diameter for a target gain, D = (lambda/pi)*sqrt(G/eff).
     d = dish_diameter_for_gain(gain=g, wavelength=lam, efficiency=0.6)
     assert d.to("m").magnitude == pytest.approx((0.03 / pi) * sqrt(g / 0.6), rel=1e-9)
+    # The real round trip, which re-typing the formula above cannot check: g was produced by a
+    # 1 m^2 aperture, so the diameter it inverts to must enclose exactly that area.
+    assert pi * d.to("m").magnitude ** 2 / 4 == pytest.approx(1.0, rel=1e-9)
+    assert d.to("m").magnitude == pytest.approx(2 / sqrt(pi), rel=1e-9)  # 1.1284 m
+    # A 3 m dish at 10 GHz: an independent sizing point at 0.6 efficiency.
+    g_3m = aperture_antenna_gain(
+        aperture_area=_q(f"{pi * 9 / 4} m**2"), wavelength=lam, efficiency=0.6
+    )
+    assert dish_diameter_for_gain(gain=g_3m, wavelength=lam, efficiency=0.6).to(
+        "m"
+    ).magnitude == pytest.approx(3.0, rel=1e-9)
 
     # Guardrails: efficiency in (0,1], positive gain/area, dimensions checked.
     with pytest.raises(ValueError, match="efficiency must be in"):
