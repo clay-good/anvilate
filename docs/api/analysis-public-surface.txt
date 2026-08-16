@@ -1107,6 +1107,8 @@ real_gas.compressibility_factor
 real_gas.real_gas_molar_volume
 real_gas.reduced_temperature
 real_gas.reduced_pressure
+real_gas.van_der_waals_cohesion_a
+real_gas.van_der_waals_covolume_b
 real_gas.van_der_waals_pressure
 rectifier.capacitor_filter_dc_voltage
 rectifier.capacitor_filter_ripple_factor

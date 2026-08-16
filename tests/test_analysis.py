@@ -28670,6 +28670,66 @@ def test_real_gas_compressibility_molar_volume_and_van_der_waals():
         )
 
 
+def test_real_gas_van_der_waals_constants_from_critical_point():
+    from anvilate.analysis import (
+        van_der_waals_cohesion_a,
+        van_der_waals_covolume_b,
+        van_der_waals_pressure,
+    )
+
+    # CO2: T_c = 304.13 K, P_c = 7.3773 MPa.
+    co2 = {
+        "critical_temperature": Quantity(magnitude=304.13, unit="K"),
+        "critical_pressure": _q("7.3773 MPa"),
+    }
+    a = van_der_waals_cohesion_a(**co2)
+    b = van_der_waals_covolume_b(**co2)
+    # Reproduces the tabulated CO2 constants (a ~ 0.364 Pa*m^6/mol^2, b ~ 4.27e-5 m^3/mol).
+    assert a.magnitude == pytest.approx(0.3656565, rel=1e-6)
+    assert a.unit == "Pa*m**6/mol**2"
+    assert b.magnitude == pytest.approx(4.284558e-5, rel=1e-6)
+    assert b.unit == "m**3/mol"
+
+    # The closed loop that proves both: the critical point sits at v_c = 3b, so feeding the
+    # constants back into the equation of state at (T_c, 3b) must return P_c exactly.
+    p_c = van_der_waals_pressure(
+        temperature=co2["critical_temperature"],
+        molar_volume=Quantity(magnitude=3.0 * b.magnitude, unit="m**3/mol"),
+        cohesion_a=a,
+        covolume_b=b,
+    )
+    assert p_c.magnitude == pytest.approx(7.3773e6, rel=1e-12)
+
+    # The same two conditions force the critical compressibility to the universal 3/8.
+    z_c = 7.3773e6 * 3.0 * b.magnitude / (8.314462618 * 304.13)
+    assert z_c == pytest.approx(0.375, rel=1e-12)
+
+    # A second gas, independently: N2 (126.2 K, 3.394 MPa) -> the tabulated 0.137, 3.87e-5.
+    n2 = {
+        "critical_temperature": Quantity(magnitude=126.2, unit="K"),
+        "critical_pressure": _q("3.394 MPa"),
+    }
+    assert van_der_waals_cohesion_a(**n2).magnitude == pytest.approx(0.137, rel=2e-3)
+    assert van_der_waals_covolume_b(**n2).magnitude == pytest.approx(3.87e-5, rel=2e-3)
+
+    # Guardrails: positive absolute critical temperature and pressure; dimensions checked.
+    with pytest.raises(ValueError, match="critical_temperature must be positive"):
+        van_der_waals_cohesion_a(
+            critical_temperature=Quantity(magnitude=0.0, unit="K"),
+            critical_pressure=_q("7.3773 MPa"),
+        )
+    with pytest.raises(ValueError, match="critical_pressure must be positive"):
+        van_der_waals_covolume_b(
+            critical_temperature=Quantity(magnitude=304.13, unit="K"),
+            critical_pressure=Quantity(magnitude=0.0, unit="Pa"),
+        )
+    with pytest.raises(ValueError, match="critical_pressure must be a"):
+        van_der_waals_cohesion_a(
+            critical_temperature=Quantity(magnitude=304.13, unit="K"),
+            critical_pressure=_q("1 m"),
+        )
+
+
 def test_real_gas_reduced_temperature_and_pressure():
     from anvilate.analysis import reduced_pressure, reduced_temperature
 

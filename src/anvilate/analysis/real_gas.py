@@ -27,6 +27,8 @@ __all__ = [
     "real_gas_molar_volume",
     "reduced_pressure",
     "reduced_temperature",
+    "van_der_waals_cohesion_a",
+    "van_der_waals_covolume_b",
     "van_der_waals_pressure",
 ]
 
@@ -112,6 +114,56 @@ def van_der_waals_pressure(
     if v <= b:
         raise ValueError("molar_volume must exceed the covolume b (v̄ > b)")
     return Quantity(magnitude=_GAS_CONSTANT * t / (v - b) - a / (v * v), unit="Pa")
+
+
+def van_der_waals_cohesion_a(
+    *, critical_temperature: Quantity, critical_pressure: Quantity
+) -> Quantity:
+    """The Van der Waals cohesion constant from the critical point, a = 27·R²·T_c²/(64·P_c).
+
+    :func:`van_der_waals_pressure` takes the cohesion constant a as given and the user has had to
+    look it up. It is not an independent property: the Van der Waals isotherm has an inflection at
+    the critical point (∂P/∂v̄ = ∂²P/∂v̄² = 0), and solving those two conditions pins a and b to the
+    ``critical_temperature`` T_c and ``critical_pressure`` P_c the module's own
+    :func:`reduced_temperature` and :func:`reduced_pressure` already take. Hence
+    a = 27·R²·T_c²/(64·P_c), the strength of the intermolecular pull inferred from the conditions
+    where that pull just manages to condense the gas. Temperature must be absolute. Returns the
+    cohesion constant in Pa·m⁶/mol².
+    """
+    _check(critical_temperature, "[temperature]", "critical_temperature")
+    _check(critical_pressure, "[pressure]", "critical_pressure")
+    t_c = critical_temperature.to("K").magnitude
+    p_c = critical_pressure.to("Pa").magnitude
+    if t_c <= 0:
+        raise ValueError("critical_temperature must be positive absolute (kelvin)")
+    if p_c <= 0:
+        raise ValueError("critical_pressure must be positive")
+    a = 27.0 * _GAS_CONSTANT**2 * t_c**2 / (64.0 * p_c)
+    return Quantity(magnitude=a, unit="Pa*m**6/mol**2")
+
+
+def van_der_waals_covolume_b(
+    *, critical_temperature: Quantity, critical_pressure: Quantity
+) -> Quantity:
+    """The Van der Waals covolume from the critical point, b = R·T_c/(8·P_c).
+
+    The companion of :func:`van_der_waals_cohesion_a`, from the same pair of critical-point
+    conditions: b = R·``critical_temperature`` T_c/(8·``critical_pressure`` P_c), the volume the
+    molecules themselves occupy. The two together make :func:`van_der_waals_pressure` computable
+    from tabulated critical properties alone, which is the form real data comes in. They also fix
+    the critical molar volume at v̄_c = 3·b, so feeding both constants back into the equation of
+    state at T_c and v̄ = 3·b returns P_c exactly — the closed loop that checks them. Temperature
+    must be absolute. Returns the covolume in m³/mol.
+    """
+    _check(critical_temperature, "[temperature]", "critical_temperature")
+    _check(critical_pressure, "[pressure]", "critical_pressure")
+    t_c = critical_temperature.to("K").magnitude
+    p_c = critical_pressure.to("Pa").magnitude
+    if t_c <= 0:
+        raise ValueError("critical_temperature must be positive absolute (kelvin)")
+    if p_c <= 0:
+        raise ValueError("critical_pressure must be positive")
+    return Quantity(magnitude=_GAS_CONSTANT * t_c / (8.0 * p_c), unit="m**3/mol")
 
 
 def reduced_temperature(*, temperature: Quantity, critical_temperature: Quantity) -> float:

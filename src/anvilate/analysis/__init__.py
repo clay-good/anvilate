@@ -263,7 +263,8 @@ modules:
   from gas_compression's mass-density ρ = PM/RT)
 - :mod:`~anvilate.analysis.real_gas` — real (non-ideal) gas behaviour beyond PV = nRT: the
   compressibility factor Z = P·v̄/(R·T) that measures the deviation, the real molar volume
-  v̄ = Z·R·T/P it implies, and the Van der Waals equation P = R·T/(v̄ − b) − a/v̄²
+  v̄ = Z·R·T/P it implies, the Van der Waals equation P = R·T/(v̄ − b) − a/v̄², and its two
+  constants a = 27R²T_c²/(64P_c) and b = R·T_c/(8P_c) recovered from the critical point
 - :mod:`~anvilate.analysis.reactor` — isothermal first-order reactor design: the Damköhler number
   Da = k·τ, and the conversions it sets for a plug-flow reactor X = 1 − exp(−Da) and a
   stirred-tank reactor X = Da/(1 + Da)
@@ -2567,6 +2568,8 @@ from .real_gas import (
     real_gas_molar_volume,
     reduced_pressure,
     reduced_temperature,
+    van_der_waals_cohesion_a,
+    van_der_waals_covolume_b,
     van_der_waals_pressure,
 )
 from .rectifier import (
@@ -3243,6 +3246,8 @@ __all__ = [
     "reduced_temperature",
     "reduced_pressure",
     "van_der_waals_pressure",
+    "van_der_waals_cohesion_a",
+    "van_der_waals_covolume_b",
     "capacitor_filter_dc_voltage",
     "capacitor_filter_ripple_factor",
     "capacitor_filter_ripple_voltage",
