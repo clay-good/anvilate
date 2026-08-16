@@ -34,6 +34,7 @@ _BOLTZMANN = 1.380649e-23  # J/K
 _VACUUM_PERMEABILITY = 1.25663706212e-6  # H/m
 
 __all__ = [
+    "alfven_speed",
     "debye_length",
     "plasma_beta",
     "plasma_frequency",
@@ -133,3 +134,31 @@ def plasma_beta(
     if b <= 0:
         raise ValueError("magnetic_flux_density must be positive")
     return 2.0 * _VACUUM_PERMEABILITY * n * _BOLTZMANN * t / (b * b)
+
+
+def alfven_speed(*, magnetic_flux_density: Quantity, mass_density: Quantity) -> Quantity:
+    """The Alfven speed, v_A = B/sqrt(mu0*rho).
+
+    The speed at which a transverse kink in a magnetic field line travels through the plasma frozen
+    to it, from the ``magnetic_flux_density`` B and the plasma ``mass_density`` rho. It is the
+    signal speed of a magnetized plasma the way the sound speed is the signal speed of a gas, and
+    it sets how fast a confined plasma can respond to a disturbance: the growth time of the ideal
+    MHD instabilities that end a tokamak discharge is the machine size divided by this speed, which
+    is why they are measured in microseconds.
+
+    :func:`plasma_beta` is exactly twice the squared ratio of the isothermal sound speed to this
+    one, so beta below one is the same statement as the Alfven speed exceeding the sound speed and
+    the field, not the pressure, dominating the dynamics. The speeds are enormous: a fusion plasma
+    at 10^20 deuterons per cubic metre in 5 T runs at 7.7e6 m/s, and the solar corona at 100 G is
+    comparable. The formula is non-relativistic and overstates the speed once it approaches c, which
+    happens in the tenuous plasmas of pulsar magnetospheres. Returns the Alfven speed in m/s.
+    """
+    _check(magnetic_flux_density, "[magnetic_field]", "magnetic_flux_density")
+    _check(mass_density, "[mass]/[volume]", "mass_density")
+    b = magnetic_flux_density.to("T").magnitude
+    rho = mass_density.to("kg/m**3").magnitude
+    if b < 0:
+        raise ValueError("magnetic_flux_density must be non-negative")
+    if rho <= 0:
+        raise ValueError("mass_density must be positive")
+    return Quantity(magnitude=b / sqrt(_VACUUM_PERMEABILITY * rho), unit="m/s")

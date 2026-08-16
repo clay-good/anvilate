@@ -34415,3 +34415,124 @@ def test_ultrasonic_testing_near_field_beam_divergence_and_pulse_echo():
         near_field_length(transducer_diameter=_q("10 mm"), frequency=_q("0 MHz"), sound_speed=steel)
     with pytest.raises(ValueError, match="sound_speed must be a"):
         pulse_echo_thickness(time_of_flight=_q("10 us"), sound_speed=_q("5900 m"))
+
+
+def test_alfven_speed_against_the_magnetic_pressure_that_drives_it():
+    from anvilate.analysis import alfven_speed, magnetic_pressure
+
+    # A fusion plasma: 1e20 deuterons/m^3 (rho = 3.344e-7 kg/m^3) in 5 T.
+    rho = Quantity(magnitude=3.3435837724e-7, unit="kg/m**3")
+    v_a = alfven_speed(magnetic_flux_density=_q("5 T"), mass_density=rho)
+    assert v_a.to("m/s").magnitude == pytest.approx(7_713_632.9, rel=1e-6)
+    assert v_a.unit == "m/s"
+
+    # The physical content, cross-checked against another module: the Alfven speed is the speed
+    # whose kinetic energy density 0.5*rho*v^2 equals exactly the magnetic pressure B^2/(2*mu0)
+    # that magnetics.magnetic_pressure computes.
+    kinetic = 0.5 * rho.magnitude * v_a.to("m/s").magnitude ** 2
+    assert kinetic == pytest.approx(
+        magnetic_pressure(magnetic_flux_density=_q("5 T")).to("Pa").magnitude, rel=1e-8
+    )
+
+    # Linear in B and inverse-square-root in density.
+    doubled = alfven_speed(magnetic_flux_density=_q("10 T"), mass_density=rho)
+    assert doubled.to("m/s").magnitude == pytest.approx(2.0 * v_a.to("m/s").magnitude, rel=1e-12)
+    denser = alfven_speed(
+        magnetic_flux_density=_q("5 T"),
+        mass_density=Quantity(magnitude=4.0 * rho.magnitude, unit="kg/m**3"),
+    )
+    assert denser.to("m/s").magnitude == pytest.approx(v_a.to("m/s").magnitude / 2.0, rel=1e-12)
+
+    # A zero field carries no wave; a zero or negative density is not a plasma.
+    assert (
+        alfven_speed(magnetic_flux_density=_q("0 T"), mass_density=rho).to("m/s").magnitude == 0.0
+    )
+    with pytest.raises(ValueError):
+        alfven_speed(
+            magnetic_flux_density=_q("5 T"), mass_density=Quantity(magnitude=0.0, unit="kg/m**3")
+        )
+    with pytest.raises(ValueError):
+        alfven_speed(magnetic_flux_density=_q("5 kg"), mass_density=rho)
+
+
+def test_condensation_tube_bank_coefficient_row_penalty():
+    from anvilate.analysis import condensation_tube_bank_coefficient
+
+    h_1 = Quantity(magnitude=9000.0, unit="W/(m**2*K)")
+
+    # A four-row column delivers 4^-0.25 = 70.7% of the isolated-tube coefficient.
+    h_4 = condensation_tube_bank_coefficient(single_tube_coefficient=h_1, tube_rows=4)
+    assert h_4.to("W/(m**2*K)").magnitude == pytest.approx(6363.9610, rel=1e-6)
+    assert h_4.to("W/(m**2*K)").magnitude / 9000.0 == pytest.approx(0.70710678, rel=1e-8)
+
+    # Ten rows: 56.2%. The penalty grows, but slowly — it is a quarter power.
+    h_10 = condensation_tube_bank_coefficient(single_tube_coefficient=h_1, tube_rows=10)
+    assert h_10.to("W/(m**2*K)").magnitude == pytest.approx(5061.0719, rel=1e-6)
+
+    # A single row is the single tube, unchanged, and the caller's unit survives.
+    h_1_back = condensation_tube_bank_coefficient(single_tube_coefficient=h_1, tube_rows=1)
+    assert h_1_back.to("W/(m**2*K)").magnitude == pytest.approx(9000.0, rel=1e-12)
+    assert h_1_back.has_dimension("[power]/([area]*[temperature])")
+
+    # Always a penalty, never a bonus, and monotonically decreasing in the row count.
+    previous = 9000.0
+    for rows in (2, 3, 5, 20):
+        value = (
+            condensation_tube_bank_coefficient(single_tube_coefficient=h_1, tube_rows=rows)
+            .to("W/(m**2*K)")
+            .magnitude
+        )
+        assert value < previous
+        previous = value
+
+    with pytest.raises(ValueError):
+        condensation_tube_bank_coefficient(single_tube_coefficient=h_1, tube_rows=0.5)
+    with pytest.raises(ValueError):
+        condensation_tube_bank_coefficient(single_tube_coefficient=_q("9000 W"), tube_rows=4)
+
+
+def test_declining_balance_depreciation_front_loads_and_totals_the_depreciable_base():
+    from anvilate.analysis import declining_balance_depreciation, straight_line_depreciation
+
+    asset = {"initial_cost": 50_000.0, "salvage_value": 5_000.0, "useful_life": 5.0}
+
+    # Double-declining balance takes 2/5 of the book value each year: 20,000 in year 1 against
+    # straight-line's 9,000.
+    charges = [declining_balance_depreciation(**asset, period=k) for k in range(1, 6)]
+    assert charges[0] == pytest.approx(20_000.0, rel=1e-12)
+    assert straight_line_depreciation(**asset) == pytest.approx(9_000.0, rel=1e-12)
+    assert charges[:4] == [
+        pytest.approx(v, rel=1e-9) for v in (20_000.0, 12_000.0, 7_200.0, 4_320.0)
+    ]
+    assert isinstance(charges[0], float)
+
+    # The salvage floor: the raw geometric charge in year 5 would be 2,592, but only 1,480 of
+    # book value remains above salvage, so the clamp bites.
+    assert charges[4] == pytest.approx(1_480.0, rel=1e-9)
+    assert charges[4] < 0.4 * (50_000.0 * 0.6**4)
+
+    # The clamp is what makes the total right: the five charges write off exactly C - S, the same
+    # depreciable base straight-line spreads evenly.
+    assert sum(charges) == pytest.approx(45_000.0, rel=1e-9)
+    assert sum(charges) == pytest.approx(5.0 * straight_line_depreciation(**asset), rel=1e-9)
+
+    # Front-loaded: more written off by the midpoint than straight-line, never more in total.
+    assert sum(charges[:2]) > 2.0 * straight_line_depreciation(**asset)
+
+    # Past the useful life the book value is already at salvage and nothing further is charged.
+    assert declining_balance_depreciation(**asset, period=6) == 0.0
+
+    # A factor of 1 degenerates to the 1/n rate; 150%-declining balance sits between.
+    single = declining_balance_depreciation(**asset, period=1, factor=1.0)
+    one_fifty = declining_balance_depreciation(**asset, period=1, factor=1.5)
+    assert single == pytest.approx(10_000.0, rel=1e-12)
+    assert single < one_fifty < charges[0]
+
+    with pytest.raises(ValueError):
+        declining_balance_depreciation(**asset, period=0)
+    with pytest.raises(ValueError):
+        declining_balance_depreciation(**asset, period=1, factor=6.0)
+    with pytest.raises(ValueError):
+        declining_balance_depreciation(
+            initial_cost=1_000.0, salvage_value=2_000.0, useful_life=5.0, period=1
+        )

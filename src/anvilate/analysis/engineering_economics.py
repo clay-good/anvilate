@@ -23,6 +23,7 @@ __all__ = [
     "annuity_future_value",
     "annuity_present_value",
     "benefit_cost_ratio",
+    "declining_balance_depreciation",
     "future_value",
     "loan_payment",
     "net_present_value",
@@ -209,3 +210,48 @@ def discounted_payback_period(
             f"the interest {initial_cost * rate} on the initial cost at a rate of {rate}"
         )
     return -log(1.0 - initial_cost * rate / annual_cash_flow) / log(1.0 + rate)
+
+
+def declining_balance_depreciation(
+    *,
+    initial_cost: float,
+    salvage_value: float,
+    useful_life: float,
+    period: int,
+    factor: float = 2.0,
+) -> float:
+    """The declining-balance charge, D_k = C·r·(1−r)^(k−1) with r = f/n, floored at salvage.
+
+    :func:`straight_line_depreciation` writes an asset off evenly; this writes it off fast. Each
+    period takes a fixed fraction r = ``factor`` f divided by the ``useful_life`` n of whatever
+    book value is left, so the book value after k−1 periods is C·(1−r)^(k−1) from the
+    ``initial_cost`` C and the charge in ``period`` k is r times that. The default f = 2 is the
+    double-declining-balance method used for most equipment.
+
+    The point is the front-loading: a $50,000 machine over 5 years charges $20,000 in year 1
+    against straight-line's $9,000, which pulls the tax shield forward and changes which of two
+    designs wins on present value even when their lifetime costs match. The charge is floored so
+    the book value never falls below the ``salvage_value`` S — that clamp bites in the last
+    period or two, and once book value has reached salvage the charge is zero, which is why the
+    raw geometric series alone is wrong late in life. Periods are 1-indexed. Money amounts are
+    plain floats in consistent units. Returns the depreciation charged in that period as a plain
+    float.
+    """
+    if useful_life <= 0:
+        raise ValueError("useful_life must be positive")
+    if initial_cost < 0 or salvage_value < 0:
+        raise ValueError("costs must be non-negative")
+    if salvage_value > initial_cost:
+        raise ValueError("salvage_value must not exceed initial_cost")
+    if period < 1:
+        raise ValueError("period must be a positive 1-indexed period")
+    if factor <= 0:
+        raise ValueError("factor must be positive")
+    rate = factor / useful_life
+    if rate >= 1.0:
+        raise ValueError(
+            f"factor/useful_life must be below 1: a rate of {rate} writes the asset off entirely "
+            "in the first period"
+        )
+    opening_book_value = initial_cost * (1.0 - rate) ** (period - 1)
+    return min(opening_book_value * rate, max(0.0, opening_book_value - salvage_value))

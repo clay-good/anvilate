@@ -1492,6 +1492,7 @@ from .compton import (
 from .condensation import (
     condensation_modified_latent_heat,
     condensation_rate,
+    condensation_tube_bank_coefficient,
     film_condensation_horizontal_tube_coefficient,
     film_condensation_vertical_plate_coefficient,
     jakob_number,
@@ -1772,6 +1773,7 @@ from .engineering_economics import (
     annuity_future_value,
     annuity_present_value,
     benefit_cost_ratio,
+    declining_balance_depreciation,
     discounted_payback_period,
     future_value,
     loan_payment,
@@ -2413,6 +2415,7 @@ from .pipe_flow import (
     womersley_number,
 )
 from .plasma import (
+    alfven_speed,
     debye_length,
     plasma_beta,
     plasma_frequency,
@@ -3540,6 +3543,7 @@ __all__ = [
     "condensation_rate",
     "jakob_number",
     "condensation_modified_latent_heat",
+    "condensation_tube_bank_coefficient",
     "apparent_power_three_phase",
     "conductor_resistance",
     "line_current_for_power",
@@ -3593,6 +3597,7 @@ __all__ = [
     "annuity_future_value",
     "loan_payment",
     "simple_payback_period",
+    "declining_balance_depreciation",
     "discounted_payback_period",
     "net_present_value",
     "benefit_cost_ratio",
@@ -3721,6 +3726,7 @@ __all__ = [
     "plasma_frequency",
     "debye_length",
     "plasma_parameter",
+    "alfven_speed",
     "plasma_beta",
     "cyclotron_frequency",
     "larmor_radius",

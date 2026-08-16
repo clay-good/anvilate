@@ -86,6 +86,7 @@ condensation.film_condensation_horizontal_tube_coefficient
 condensation.condensation_rate
 condensation.jakob_number
 condensation.condensation_modified_latent_heat
+condensation.condensation_tube_bank_coefficient
 composite.composite_longitudinal_cte
 composite.composite_major_poisson_ratio
 composite.composite_shear_modulus_inverse_rule
@@ -593,6 +594,7 @@ engineering_economics.net_present_value
 engineering_economics.benefit_cost_ratio
 engineering_economics.straight_line_depreciation
 engineering_economics.discounted_payback_period
+engineering_economics.declining_balance_depreciation
 exergy.exergy_of_heat
 exergy.flow_exergy
 exergy.irreversibility_from_entropy_generation
@@ -1171,6 +1173,7 @@ plasma.debye_length
 plasma.plasma_frequency
 plasma.plasma_parameter
 plasma.plasma_beta
+plasma.alfven_speed
 pneumatics.air_receiver_holdup_time
 pneumatics.air_receiver_volume_for_demand
 pneumatics.cylinder_air_consumption_per_stroke

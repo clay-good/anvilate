@@ -201,6 +201,7 @@ def jakob_number(
 
 __all__ = [
     "condensation_rate",
+    "condensation_tube_bank_coefficient",
     "film_condensation_horizontal_tube_coefficient",
     "film_condensation_vertical_plate_coefficient",
     "condensation_modified_latent_heat",
@@ -249,3 +250,37 @@ def condensation_modified_latent_heat(
         raise ValueError("temperature_difference must be non-negative")
     jakob = c_p * delta_t / h_fg
     return Quantity(magnitude=h_fg * (1.0 + 0.68 * jakob), unit="J/kg").to(latent_heat.unit)
+
+
+def condensation_tube_bank_coefficient(
+    *, single_tube_coefficient: Quantity, tube_rows: float
+) -> Quantity:
+    """The vertical-tier tube-bank coefficient, h_N = h_1·N^−1/4.
+
+    :func:`film_condensation_horizontal_tube_coefficient` sizes one tube in isolation, but a
+    condenser stacks tubes in vertical columns and the condensate from every tube above drains onto
+    the one below. The film arriving at row N is already thick, so the average coefficient over
+    ``tube_rows`` N tiers falls below the ``single_tube_coefficient`` h_1. Nusselt's treatment of
+    the bank as one tall tube of diameter N·D carries the same −1/4 exponent the single-tube result
+    has on diameter, giving h_N = h_1·N^−1/4.
+
+    The penalty is real and easy to forget: a four-row column delivers 71% of the single-tube
+    coefficient and a ten-row column 56%, so a bank sized on the isolated-tube number is
+    optimistic by that factor on area. Count rows in a vertical column, not tubes in the shell —
+    tubes side by side do not drain onto each other. The relation is idealized: it assumes
+    laminar film drainage between tiers, and real banks do somewhat better because the falling
+    condensate splashes and ripples the film, so it is the conservative bound. N = 1 returns h_1
+    unchanged. Returns the row-averaged coefficient in the units of ``single_tube_coefficient``.
+    """
+    _check(
+        single_tube_coefficient,
+        "[power]/([area]*[temperature])",
+        "single_tube_coefficient",
+    )
+    h_1 = single_tube_coefficient.to("W/(m**2*K)").magnitude
+    if h_1 <= 0:
+        raise ValueError("single_tube_coefficient must be positive")
+    if tube_rows < 1:
+        raise ValueError("tube_rows must be at least 1")
+    h_n = h_1 * tube_rows**-0.25
+    return Quantity(magnitude=h_n, unit="W/(m**2*K)").to(single_tube_coefficient.unit)
