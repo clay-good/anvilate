@@ -15489,6 +15489,92 @@ def test_acoustics_mass_law_transmission_loss():
         mass_law_transmission_loss(frequency=_q("0 Hz"), surface_density=_q("10 kg/m**2"))
 
 
+def test_acoustics_permissible_exposure_time_matches_osha_and_niosh_tables():
+    from anvilate.analysis import permissible_exposure_time
+
+    osha = {
+        "criterion_level": 90.0,
+        "exchange_rate": 5.0,
+        "criterion_duration": _q("8 hour"),
+    }
+    # OSHA 29 CFR 1910.95 Table G-16, read straight off the published table.
+    for level, hours in ((90, 8.0), (95, 4.0), (100, 2.0), (105, 1.0), (110, 0.5), (115, 0.25)):
+        assert permissible_exposure_time(sound_level=float(level), **osha).to(
+            "hour"
+        ).magnitude == pytest.approx(hours, rel=1e-9)
+    niosh = {
+        "criterion_level": 85.0,
+        "exchange_rate": 3.0,
+        "criterion_duration": _q("8 hour"),
+    }
+    # The NIOSH REL table (3 dB exchange): 85 dBA for 8 h, halving every 3 dB.
+    for level, minutes in ((85, 480.0), (88, 240.0), (94, 60.0), (97, 30.0), (100, 15.0)):
+        assert permissible_exposure_time(sound_level=float(level), **niosh).to(
+            "minute"
+        ).magnitude == pytest.approx(minutes, rel=1e-9)
+    # NIOSH allows only 47.6 min at 95 dBA where OSHA allows 4 hours -- the exchange-rate gap
+    # that makes the two standards disagree by 5x on the same shop floor.
+    assert permissible_exposure_time(sound_level=95.0, **niosh).to("minute").magnitude == (
+        pytest.approx(47.62, rel=1e-3)
+    )
+    # Below the criterion level the allowance grows rather than clipping at the shift length.
+    assert permissible_exposure_time(sound_level=85.0, **osha).to("hour").magnitude == (
+        pytest.approx(16.0, rel=1e-9)
+    )
+    with pytest.raises(ValueError):
+        permissible_exposure_time(
+            sound_level=95.0,
+            criterion_level=90.0,
+            exchange_rate=0.0,
+            criterion_duration=_q("8 hour"),
+        )
+    with pytest.raises(ValueError):
+        permissible_exposure_time(
+            sound_level=95.0,
+            criterion_level=90.0,
+            exchange_rate=5.0,
+            criterion_duration=_q("8 kg"),
+        )
+
+
+def test_acoustics_noise_dose_fraction():
+    from anvilate.analysis import noise_dose_fraction, permissible_exposure_time
+
+    osha = {
+        "criterion_level": 90.0,
+        "exchange_rate": 5.0,
+        "criterion_duration": _q("8 hour"),
+    }
+    # A full 8-hour shift at the 90 dBA criterion is exactly the permissible dose.
+    assert noise_dose_fraction(
+        exposure_time=_q("8 hour"),
+        permissible_time=permissible_exposure_time(sound_level=90.0, **osha),
+    ) == pytest.approx(1.0, rel=1e-9)
+    # The same shift at 95 dBA (4 h permitted) is double the dose -- 200% in OSHA's reporting.
+    assert noise_dose_fraction(
+        exposure_time=_q("8 hour"),
+        permissible_time=permissible_exposure_time(sound_level=95.0, **osha),
+    ) == pytest.approx(2.0, rel=1e-9)
+    # Partial exposures add: 4 h at 95 dBA plus 2 h at 100 dBA is 1.0 + 1.0 = 2.0.
+    part_a = noise_dose_fraction(
+        exposure_time=_q("4 hour"),
+        permissible_time=permissible_exposure_time(sound_level=95.0, **osha),
+    )
+    part_b = noise_dose_fraction(
+        exposure_time=_q("2 hour"),
+        permissible_time=permissible_exposure_time(sound_level=100.0, **osha),
+    )
+    assert part_a + part_b == pytest.approx(2.0, rel=1e-9)
+    # No exposure is no dose.
+    assert noise_dose_fraction(
+        exposure_time=_q("0 hour"), permissible_time=_q("4 hour")
+    ) == pytest.approx(0.0, abs=1e-12)
+    with pytest.raises(ValueError):
+        noise_dose_fraction(exposure_time=_q("-1 hour"), permissible_time=_q("4 hour"))
+    with pytest.raises(ValueError):
+        noise_dose_fraction(exposure_time=_q("1 hour"), permissible_time=_q("0 hour"))
+
+
 def test_acoustics_sound_power_level_from_intensity():
     import math
 
@@ -19586,16 +19672,26 @@ def test_film_condensation_coefficients_and_condensate_rate():
         "temperature_difference": _q("15 K"),
     }
 
-    # Nusselt vertical plate, L = 1 m -> ~5738 W/m^2K (verified against the closed form).
+    # Nusselt vertical plate, L = 1 m. Pinned as an absolute number rather than by re-typing the
+    # implementation's own bracket, so a squared conductivity or a dropped density factor cannot
+    # change both sides together and pass.
     numerator = 965 * (965 - 0.6) * 9.80665 * 2257e3 * 0.68**3
     h_plate = film_condensation_vertical_plate_coefficient(plate_height=_q("1 m"), **props)
     expected_plate = 0.943 * (numerator / (3.15e-4 * 15 * 1.0)) ** 0.25
     assert h_plate.to("W/(m**2*K)").magnitude == pytest.approx(expected_plate, rel=1e-9)
+    assert h_plate.to("W/(m**2*K)").magnitude == pytest.approx(5737.9, rel=1e-4)
 
     # Horizontal tube (0.729, D = 0.025 m) -> higher coefficient (shorter drainage path).
     h_tube = film_condensation_horizontal_tube_coefficient(tube_diameter=_q("25 mm"), **props)
     expected_tube = 0.729 * (numerator / (3.15e-4 * 15 * 0.025)) ** 0.25
     assert h_tube.to("W/(m**2*K)").magnitude == pytest.approx(expected_tube, rel=1e-9)
+    assert h_tube.to("W/(m**2*K)").magnitude == pytest.approx(11155.3, rel=1e-4)
+    # The two correlations differ only by their leading constant and length scale, so their ratio
+    # is exactly (0.729/0.943)*(L/D)^0.25 -- an identity that a wrong bracket would NOT preserve
+    # only if the bracket differed between them, so the absolute pins above carry that load.
+    assert h_tube.to("W/(m**2*K)").magnitude / h_plate.to("W/(m**2*K)").magnitude == (
+        pytest.approx((0.729 / 0.943) * (1.0 / 0.025) ** 0.25, rel=1e-9)
+    )
     assert h_tube.to("W/(m**2*K)").magnitude > h_plate.to("W/(m**2*K)").magnitude
     # A taller plate drains a thicker film and gives a lower average coefficient (h ~ L^-0.25).
     h_tall = film_condensation_vertical_plate_coefficient(plate_height=_q("4 m"), **props)
@@ -19758,6 +19854,10 @@ def test_nucleate_boiling_flux_superheat_inverse_and_critical_heat_flux():
     prefactor = 2.79e-4 * 2257e3 * (9.80665 * (957.9 - 0.5956) / 0.0589) ** 0.5
     bracket = 4217 * 10 / (0.013 * 2257e3 * 1.76**1.0)
     assert q.to("W/m**2").magnitude == pytest.approx(prefactor * bracket**3, rel=1e-9)
+    # Pinned absolutely too: the re-derivation above shares the implementation's algebra, so on
+    # its own it could not catch a wrong power or a dropped property. 1.369e5 W/m2 sits on the
+    # published water/copper nucleate-boiling curve at 10 K of superheat.
+    assert q.to("W/m**2").magnitude == pytest.approx(1.36903e5, rel=1e-4)
     # Cubic in superheat: doubling the excess temperature multiplies the flux eightfold.
     q_hot = nucleate_boiling_heat_flux(excess_temperature=_q("20 K"), **props, **rohsenow)
     assert q_hot.to("W/m**2").magnitude == pytest.approx(8 * q.to("W/m**2").magnitude, rel=1e-9)
