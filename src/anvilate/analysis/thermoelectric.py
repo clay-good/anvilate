@@ -28,6 +28,7 @@ __all__ = [
     "seebeck_voltage",
     "thermoelectric_figure_of_merit",
     "thermoelectric_max_cop",
+    "thermoelectric_max_efficiency",
     "thermoelectric_zt",
     "thermoelectric_max_temperature_difference",
 ]
@@ -185,6 +186,42 @@ def thermoelectric_max_temperature_difference(
         raise ValueError("cold_temperature must be positive (absolute, in K)")
     z = alpha * alpha / (r * k)
     return Quantity(magnitude=0.5 * z * t_c * t_c, unit="K")
+
+
+def thermoelectric_max_efficiency(
+    *,
+    figure_of_merit: Quantity,
+    cold_temperature: Quantity,
+    hot_temperature: Quantity,
+) -> float:
+    """The maximum efficiency of a thermoelectric generator, η_max = η_C·(M − 1)/(M + T_c/T_h).
+
+    Run the same module backwards — hold a temperature difference across it instead of driving
+    current through it — and it generates power instead of pumping heat. This is the generation
+    counterpart of :func:`thermoelectric_max_cop`: with M = √(1 + Z·T_m) at the mean temperature
+    T_m = (T_h + T_c)/2, the best efficiency a single stage reaches converting heat drawn at the
+    ``hot_temperature`` T_h and rejected at the ``cold_temperature`` T_c is
+    η_max = ((T_h − T_c)/T_h)·(M − 1)/(M + T_c/T_h) — the Carnot efficiency times a material penalty
+    set entirely by the device ``figure_of_merit`` Z (from :func:`thermoelectric_figure_of_merit`).
+    The penalty is severe: a good ZT ≈ 1 module reaches only about a fifth of Carnot, which is why
+    thermoelectric generators are chosen for having no moving parts (spacecraft RTGs, waste-heat
+    scavengers) rather than for efficiency. It approaches Carnot only as ZT → ∞. Returns the
+    dimensionless maximum efficiency.
+    """
+    _check(figure_of_merit, "1/[temperature]", "figure_of_merit")
+    _check(cold_temperature, "[temperature]", "cold_temperature")
+    _check(hot_temperature, "[temperature]", "hot_temperature")
+    z = figure_of_merit.to("1/K").magnitude
+    t_c = cold_temperature.to("K").magnitude
+    t_h = hot_temperature.to("K").magnitude
+    if z < 0:
+        raise ValueError("figure_of_merit must be non-negative")
+    if t_c <= 0 or t_h <= 0:
+        raise ValueError("temperatures must be positive (absolute, in K)")
+    if t_h <= t_c:
+        raise ValueError("hot_temperature must exceed cold_temperature to generate power")
+    m = sqrt(1.0 + z * 0.5 * (t_h + t_c))
+    return (t_h - t_c) / t_h * (m - 1.0) / (m + t_c / t_h)
 
 
 def thermoelectric_max_cop(

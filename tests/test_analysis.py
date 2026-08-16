@@ -19873,6 +19873,48 @@ def test_thermoelectric_figure_of_merit_and_zt():
         thermoelectric_zt(figure_of_merit=_q("0.0025 K"), temperature=_q("300 K"))
 
 
+def test_thermoelectric_max_efficiency():
+    from anvilate.analysis import thermoelectric_max_efficiency
+
+    # Z = 0.0025 /K between 300 K and 500 K puts ZT_m at exactly 1 (T_m = 400 K).
+    eta = thermoelectric_max_efficiency(
+        figure_of_merit=_q("0.0025 1/K"),
+        cold_temperature=_q("300 K"),
+        hot_temperature=_q("500 K"),
+    )
+    carnot = (500.0 - 300.0) / 500.0
+    assert eta == pytest.approx(0.082258, rel=1e-5)
+    # The textbook result for a good ZT ~ 1 module: about a fifth of Carnot.
+    assert eta / carnot == pytest.approx(0.2056, rel=1e-3)
+    assert eta < carnot
+    # A better material converts more; the limit as ZT -> infinity is Carnot itself.
+    better = thermoelectric_max_efficiency(
+        figure_of_merit=_q("0.005 1/K"),
+        cold_temperature=_q("300 K"),
+        hot_temperature=_q("500 K"),
+    )
+    assert better > eta
+    ideal = thermoelectric_max_efficiency(
+        figure_of_merit=_q("1000 1/K"),
+        cold_temperature=_q("300 K"),
+        hot_temperature=_q("500 K"),
+    )
+    assert ideal == pytest.approx(carnot, rel=5e-3)
+    assert ideal < carnot
+    # A useless material (Z = 0) generates nothing.
+    assert thermoelectric_max_efficiency(
+        figure_of_merit=_q("0 1/K"),
+        cold_temperature=_q("300 K"),
+        hot_temperature=_q("500 K"),
+    ) == pytest.approx(0.0, abs=1e-12)
+    with pytest.raises(ValueError):
+        thermoelectric_max_efficiency(
+            figure_of_merit=_q("0.0025 1/K"),
+            cold_temperature=_q("500 K"),
+            hot_temperature=_q("300 K"),
+        )
+
+
 def test_thermoelectric_max_cop():
     from math import sqrt
 

@@ -751,7 +751,9 @@ modules:
   C_f = 0.0592/Re_x^(1/5), and C_D = 0.074/Re_L^(1/5) — the regime real plates and hulls run in
 - :mod:`~anvilate.analysis.thermoelectric` — solid-state Peltier/Seebeck devices: the
   Seebeck voltage V = α·ΔT, the net cooling Q_c = α·I·T_c − ½·I²·R − K·ΔT, and the
-  single-stage cooling limit ΔT_max = ½·(α²/(R·K))·T_c²
+  single-stage cooling limit ΔT_max = ½·(α²/(R·K))·T_c², the Peltier COP ceiling, and — running the
+  same module backwards as a generator — the efficiency limit η_C·(M−1)/(M+T_c/T_h), about a fifth
+  of Carnot at ZT ≈ 1
 - :mod:`~anvilate.analysis.strain_gauge` — strain-gauge instrumentation: the strain from a
   gauge's fractional resistance change ε = (ΔR/R)/GF, the Wheatstone-bridge output ratio
   V_o/V_ex = n·GF·ε/4 (n = 1/2/4 for quarter/half/full bridge), and the inverse that turns a
@@ -2910,6 +2912,7 @@ from .thermoelectric import (
     seebeck_voltage,
     thermoelectric_figure_of_merit,
     thermoelectric_max_cop,
+    thermoelectric_max_efficiency,
     thermoelectric_max_temperature_difference,
     thermoelectric_zt,
 )
@@ -3854,6 +3857,7 @@ __all__ = [
     "thermoelectric_figure_of_merit",
     "thermoelectric_zt",
     "thermoelectric_max_cop",
+    "thermoelectric_max_efficiency",
     "thermoelectric_max_temperature_difference",
     "gauge_strain_from_resistance",
     "wheatstone_bridge_output",
