@@ -25398,6 +25398,37 @@ def test_transmission_line_reflection_vswr_and_return_loss():
         return_loss(reflection_coefficient=0.0)
 
 
+def test_coaxial_characteristic_impedance():
+    from anvilate.analysis import coaxial_characteristic_impedance, reflection_coefficient
+
+    # RG-58-like PTFE coax: a = 0.406 mm, b = 1.47 mm, eps_r = 2.1 -> ~53 ohm.
+    z0 = coaxial_characteristic_impedance(
+        inner_radius=_q("0.406 mm"), outer_radius=_q("1.47 mm"), relative_permittivity=2.1
+    )
+    assert z0.to("ohm").magnitude == pytest.approx(53.236, rel=1e-4)
+    # The 50 ohm standard is the air-line ratio b/a = 2.3.
+    air = coaxial_characteristic_impedance(inner_radius=_q("1 mm"), outer_radius=_q("2.3 mm"))
+    assert air.to("ohm").magnitude == pytest.approx(50.0, abs=0.1)
+    # Only the ratio matters: scaling both radii leaves Z_0 unchanged.
+    scaled = coaxial_characteristic_impedance(inner_radius=_q("10 mm"), outer_radius=_q("23 mm"))
+    assert scaled.to("ohm").magnitude == pytest.approx(air.to("ohm").magnitude, rel=1e-12)
+    # A dielectric drops Z_0 by sqrt(eps_r).
+    ptfe = coaxial_characteristic_impedance(
+        inner_radius=_q("1 mm"), outer_radius=_q("2.3 mm"), relative_permittivity=4.0
+    )
+    assert ptfe.to("ohm").magnitude == pytest.approx(air.to("ohm").magnitude / 2.0, rel=1e-12)
+    # It feeds the matching chain: a 50 ohm line into a 50 ohm load is a perfect match.
+    assert reflection_coefficient(
+        load_impedance=_q("50 ohm"), characteristic_impedance=air
+    ) == pytest.approx(0.0, abs=1e-3)
+    with pytest.raises(ValueError):
+        coaxial_characteristic_impedance(inner_radius=_q("2 mm"), outer_radius=_q("1 mm"))
+    with pytest.raises(ValueError):
+        coaxial_characteristic_impedance(
+            inner_radius=_q("1 mm"), outer_radius=_q("2 mm"), relative_permittivity=0.5
+        )
+
+
 def test_transmission_line_mismatch_loss_vswr_inverse_and_quarter_wave():
     from math import log10, sqrt
 

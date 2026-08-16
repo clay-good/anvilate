@@ -17,11 +17,12 @@ real (resistive) impedances; a complex load needs the full phasor form.
 
 from __future__ import annotations
 
-from math import log10, sqrt
+from math import log, log10, pi, sqrt
 
 from ..units import Quantity
 
 __all__ = [
+    "coaxial_characteristic_impedance",
     "mismatch_loss",
     "quarter_wave_transformer_impedance",
     "reflection_coefficient",
@@ -29,6 +30,43 @@ __all__ = [
     "return_loss",
     "voltage_standing_wave_ratio",
 ]
+
+
+_VACUUM_PERMEABILITY = 4e-7 * pi
+_VACUUM_PERMITTIVITY = 8.8541878128e-12
+
+
+def coaxial_characteristic_impedance(
+    *,
+    inner_radius: Quantity,
+    outer_radius: Quantity,
+    relative_permittivity: float = 1.0,
+) -> Quantity:
+    """The characteristic impedance of a coaxial line from its geometry, Z_0 = (eta/2pi)*ln(b/a).
+
+    Every other function here *consumes* a characteristic impedance; this is the one that produces
+    it. For a coax of ``inner_radius`` a (the center conductor), ``outer_radius`` b (the shield),
+    and a dielectric of ``relative_permittivity`` eps_r between them,
+    Z_0 = sqrt(mu_0/eps_0)/(2*pi*sqrt(eps_r)) * ln(b/a) = (59.96/sqrt(eps_r))*ln(b/a) ohm. Only the
+    *ratio* b/a matters, not the absolute size — which is why a thin coax and a rigid line can share
+    the same 50 ohm impedance, and why the 50 and 75 ohm standards are really the geometry ratios
+    2.3 and 3.5 in air. Filling the line with a dielectric drops Z_0 by sqrt(eps_r), so a PTFE coax
+    needs a fatter center conductor than an air line of the same impedance. Feed the result to
+    :func:`reflection_coefficient` or :func:`quarter_wave_transformer_impedance`. Returns the
+    characteristic impedance in ohm.
+    """
+    _check(inner_radius, "[length]", "inner_radius")
+    _check(outer_radius, "[length]", "outer_radius")
+    a = inner_radius.to("m").magnitude
+    b = outer_radius.to("m").magnitude
+    if a <= 0:
+        raise ValueError("inner_radius must be positive")
+    if b <= a:
+        raise ValueError("outer_radius must exceed inner_radius")
+    if relative_permittivity < 1:
+        raise ValueError("relative_permittivity must be at least 1")
+    eta = sqrt(_VACUUM_PERMEABILITY / _VACUUM_PERMITTIVITY)
+    return Quantity(magnitude=eta / (2 * pi * sqrt(relative_permittivity)) * log(b / a), unit="ohm")
 
 
 def reflection_coefficient(

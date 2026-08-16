@@ -52,7 +52,8 @@ modules:
   equivalent noise temperature T_e = (F−1)·T0
 - :mod:`~anvilate.analysis.transmission_line` — RF impedance matching: the reflection coefficient
   Γ = (Z_L−Z_0)/(Z_L+Z_0), the voltage standing-wave ratio (1+|Γ|)/(1−|Γ|), and the return loss
-  −20·log10|Γ| — how well a load is matched to a line
+  −20·log10|Γ| — how well a load is matched to a line; plus the coaxial characteristic impedance
+  Z_0 = (59.96/√ε_r)·ln(b/a) the geometry itself sets, the source of the Z_0 the three above consume
 - :mod:`~anvilate.analysis.wave` — the universal wave relation v = f·λ solved each way: the wave
   speed f·λ, the wavelength v/f a frequency produces, and the frequency v/λ a wavelength gives
 - :mod:`~anvilate.analysis.waveguide` — rectangular-waveguide dispersion (TE10): the cutoff
@@ -2938,6 +2939,7 @@ from .torsion import (
     triangular_bar_twist_angle,
 )
 from .transmission_line import (
+    coaxial_characteristic_impedance,
     mismatch_loss,
     quarter_wave_transformer_impedance,
     reflection_coefficient,
@@ -3446,6 +3448,7 @@ __all__ = [
     "electric_potential_point_charge",
     "electric_field_energy_density",
     "coaxial_capacitance",
+    "coaxial_characteristic_impedance",
     "battery_bank_capacity",
     "usable_battery_energy",
     "battery_backup_time",
