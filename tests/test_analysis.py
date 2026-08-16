@@ -15126,6 +15126,55 @@ def test_prestress_load_balancing_and_cracking_moment():
         )
 
 
+def test_prestress_top_fiber_stress_governs_at_transfer():
+    from anvilate.analysis import prestress_bottom_fiber_stress, prestress_top_fiber_stress
+
+    section = {
+        "prestress_force": _q("1500 kN"),
+        "area": _q("0.25 m**2"),
+        "tendon_eccentricity": _q("0.20 m"),
+        "section_modulus": _q("0.03 m**3"),
+    }
+
+    # In service (M = 200 kN*m) both fibres are in compression, top less so.
+    top = prestress_top_fiber_stress(applied_moment=_q("200 kN*m"), **section)
+    bottom = prestress_bottom_fiber_stress(applied_moment=_q("200 kN*m"), **section)
+    assert top.to("MPa").magnitude == pytest.approx(-2.66667, rel=1e-5)
+    assert bottom.to("MPa").magnitude == pytest.approx(-9.33333, rel=1e-5)
+
+    # At transfer (self-weight only, M = 100 kN*m) the top fibre goes into TENSION —
+    # the release check, and the one the bottom-fibre function cannot see.
+    top_transfer = prestress_top_fiber_stress(applied_moment=_q("100 kN*m"), **section)
+    bottom_transfer = prestress_bottom_fiber_stress(applied_moment=_q("100 kN*m"), **section)
+    assert top_transfer.to("MPa").magnitude == pytest.approx(+0.66667, rel=1e-5)
+    assert top_transfer.to("MPa").magnitude > 0  # tension
+    assert bottom_transfer.to("MPa").magnitude == pytest.approx(-12.66667, rel=1e-5)
+    assert bottom_transfer.to("MPa").magnitude < 0  # still compression: it reveals nothing
+
+    # It is NOT a sign flip of the bottom-fibre expression: two of three terms reverse.
+    assert top.to("MPa").magnitude != pytest.approx(-bottom.to("MPa").magnitude, rel=1e-6)
+
+    # Self-consistency with the balanced-load result: at M = P*e both fibres reach exactly -P/A.
+    balanced = _q("300 kN*m")  # 1500 kN * 0.20 m
+    both = (
+        prestress_top_fiber_stress(applied_moment=balanced, **section),
+        prestress_bottom_fiber_stress(applied_moment=balanced, **section),
+    )
+    for f in both:
+        assert f.to("MPa").magnitude == pytest.approx(-1500e3 / 0.25 / 1e6, rel=1e-9)  # -6 MPa
+
+    with pytest.raises(ValueError, match="section_modulus must be positive"):
+        prestress_top_fiber_stress(
+            applied_moment=_q("200 kN*m"),
+            prestress_force=_q("1500 kN"),
+            area=_q("0.25 m**2"),
+            tendon_eccentricity=_q("0.20 m"),
+            section_modulus=Quantity(magnitude=0.0, unit="m**3"),
+        )
+    with pytest.raises(ValueError, match="applied_moment must be a"):
+        prestress_top_fiber_stress(applied_moment=_q("200 kN"), **section)
+
+
 def test_nds_shear_stress_scorecard_and_bearing_area_factor():
     from anvilate.analysis import (
         nds_bearing_area_factor,
@@ -22702,6 +22751,52 @@ def test_pipe_entry_lengths_laminar_and_turbulent():
         laminar_hydrodynamic_entry_length(reynolds=5000.0, diameter=_q("0.05 m"))
     with pytest.raises(ValueError, match="laminar entry-length form applies"):
         laminar_thermal_entry_length(reynolds=5000.0, prandtl=7.0, diameter=_q("0.05 m"))
+
+
+def test_pipe_flow_wall_shear_stress_matches_the_head_loss_force_balance():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        darcy_friction_factor,
+        darcy_weisbach_head_loss,
+        wall_shear_stress,
+    )
+
+    rho, v, length, diameter = 998.0, 2.0, 10.0, 0.1
+    f = darcy_friction_factor(reynolds=1e5, relative_roughness=0.0005)
+    assert f == pytest.approx(0.0204149, rel=1e-5)
+
+    tau = wall_shear_stress(friction_factor=f, density=_q("998 kg/m**3"), velocity=_q("2 m/s"))
+    assert tau.to("Pa").magnitude == pytest.approx(f * rho * v * v / 8.0, rel=1e-12)
+    assert tau.unit == "Pa"
+
+    # The check that pins the factor of 8: a control volume of pipe balances the pressure
+    # drop on its ends against the shear on its wall, tau_w = dp*D/(4L). Independent route,
+    # through the module's own head-loss function.
+    h_f = darcy_weisbach_head_loss(
+        friction_factor=f, length=_q("10 m"), diameter=_q("0.1 m"), velocity=_q("2 m/s")
+    )
+    dp = rho * 9.80665 * h_f.to("m").magnitude
+    assert tau.to("Pa").magnitude == pytest.approx(dp * diameter / (4.0 * length), rel=1e-9)
+
+    # Round number for the erosion-corrosion screen: f = 0.02 water at 2 m/s -> 9.98 Pa,
+    # friction velocity u* = sqrt(tau/rho) = 0.1 m/s.
+    round_tau = wall_shear_stress(
+        friction_factor=0.02, density=_q("998 kg/m**3"), velocity=_q("2 m/s")
+    )
+    assert round_tau.to("Pa").magnitude == pytest.approx(9.98, rel=1e-9)
+    assert sqrt(round_tau.to("Pa").magnitude / rho) == pytest.approx(0.1, rel=1e-9)
+
+    # Quadratic in velocity: doubling the flow quadruples the wall shear.
+    faster = wall_shear_stress(
+        friction_factor=0.02, density=_q("998 kg/m**3"), velocity=_q("4 m/s")
+    )
+    assert faster.to("Pa").magnitude / round_tau.to("Pa").magnitude == pytest.approx(4.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="friction_factor must be positive"):
+        wall_shear_stress(friction_factor=0.0, density=_q("998 kg/m**3"), velocity=_q("2 m/s"))
+    with pytest.raises(ValueError, match="density must be a"):
+        wall_shear_stress(friction_factor=0.02, density=_q("998 kg"), velocity=_q("2 m/s"))
 
 
 def test_darcy_weisbach_head_loss_and_pressure_drop():
@@ -32076,6 +32171,49 @@ def test_centrifuge_sedimentation_velocity_and_settling_time():
         centrifugal_sedimentation_velocity(
             radius=_q("0.1 m"), rotational_speed=_q("10000 m"), **common
         )
+
+
+def test_turbomachinery_stanitz_slip_factor_steps_down_from_euler():
+    from math import pi
+
+    from anvilate.analysis import (
+        blade_tip_speed,
+        euler_head,
+        impeller_outlet_swirl_velocity,
+        stanitz_slip_factor,
+    )
+
+    # sigma = 1 - 0.63*pi/Z, pinned against the closed form and against round values.
+    assert stanitz_slip_factor(blade_count=5) == pytest.approx(1 - 0.63 * pi / 5, rel=1e-12)
+    assert stanitz_slip_factor(blade_count=5) == pytest.approx(0.604159, rel=1e-6)
+    assert stanitz_slip_factor(blade_count=7) == pytest.approx(0.717257, rel=1e-6)
+    assert stanitz_slip_factor(blade_count=12) == pytest.approx(0.835066, rel=1e-6)
+    assert isinstance(stanitz_slip_factor(blade_count=7), float)
+
+    # Monotonic in blade count and bounded in (0, 1) — more blades slip less, never fully.
+    factors = [stanitz_slip_factor(blade_count=z) for z in range(3, 30)]
+    assert all(a < b for a, b in zip(factors, factors[1:], strict=False))
+    assert all(0.0 < s < 1.0 for s in factors)
+
+    # The point of it: applied to the module's own Euler chain, a 7-blade 300 mm impeller at
+    # 1750 rpm loses 28% of the loss-free head — 53.0 m of Euler head becomes 38.0 m.
+    u = blade_tip_speed(diameter=_q("0.30 m"), rotational_speed=_q("1750 rpm"))
+    c_theta = impeller_outlet_swirl_velocity(
+        blade_speed=u, meridional_velocity=_q("4 m/s"), blade_angle=25.0
+    )
+    h_euler = euler_head(outlet_blade_speed=u, outlet_swirl_velocity=c_theta)
+    assert h_euler.to("m").magnitude == pytest.approx(53.009, rel=1e-3)
+    h_actual = h_euler.to("m").magnitude * stanitz_slip_factor(blade_count=7)
+    assert h_actual == pytest.approx(38.02, rel=1e-3)
+    assert h_actual < h_euler.to("m").magnitude
+
+    # Guardrails: whole blades only, and the correlation needs Z > 0.63*pi ~ 1.98.
+    with pytest.raises(ValueError, match="whole number of blades"):
+        stanitz_slip_factor(blade_count=6.5)
+    with pytest.raises(ValueError, match=r"must exceed 0.63\*pi"):
+        stanitz_slip_factor(blade_count=1)
+    with pytest.raises(ValueError, match=r"must exceed 0.63\*pi"):
+        stanitz_slip_factor(blade_count=0)
 
 
 def test_turbomachinery_euler_head_tip_speed_and_vane_angle():

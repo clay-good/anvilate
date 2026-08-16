@@ -8,8 +8,11 @@ chosen part of the gravity load.
 A parabolic tendon with drape (sag) e under a force P over a span L exerts a uniform upward load
 w_b = 8·P·e/L² — the balanced load. Set it equal to the gravity load and the beam carries that load
 in pure axial compression, with no bending at all: the extreme-fibre stress collapses to −P/A. Away
-from balance, the extreme-fibre stress is f = M/S − P/A − P·e/S (tension positive), the service
-check that keeps a beam from cracking or over-compressing.
+from balance, the bottom-fibre stress is f = M/S − P/A − P·e/S (tension positive), the service
+check that keeps a beam from cracking or over-compressing. The top fibre needs its own expression,
+f = −M/S_t − P/A + P·e/S_t: two of the three terms flip, and the section modulus is the one measured
+to the top. That is the check that governs at transfer, when the prestress is full and only
+self-weight resists it, and the eccentric force puts the *top* in tension.
 
 The cracking moment — the applied moment that first opens the bottom fibre — is
 M_cr = f_r·S + P·(S/A + e), the prestress decompression plus the concrete's modulus of rupture. The
@@ -25,6 +28,7 @@ __all__ = [
     "prestress_balanced_load",
     "prestress_bottom_fiber_stress",
     "prestress_cracking_moment",
+    "prestress_top_fiber_stress",
 ]
 
 
@@ -86,6 +90,46 @@ def prestress_bottom_fiber_stress(
     e = tendon_eccentricity.to("m").magnitude
     s = section_modulus.to("m**3").magnitude
     stress = m / s - p / a - p * e / s
+    return Quantity(magnitude=stress / 1e6, unit="MPa")
+
+
+def prestress_top_fiber_stress(
+    *,
+    applied_moment: Quantity,
+    prestress_force: Quantity,
+    area: Quantity,
+    tendon_eccentricity: Quantity,
+    section_modulus: Quantity,
+) -> Quantity:
+    """The top-fibre stress of a prestressed beam, f = −M/S_t − P/A + P·e/S_t (tension positive).
+
+    The other half of the service check that :func:`prestress_bottom_fiber_stress` starts, and the
+    half that usually governs. From the ``applied_moment`` M, ``prestress_force`` P, section
+    ``area`` A, ``tendon_eccentricity`` e (below the centroid), and ``section_modulus``
+    S_t = I/c_top measured to the *top* fibre: f = −M/S_t − P/A + P·e/S_t. It is not a sign flip of
+    the bottom-fibre expression — the moment and eccentricity terms reverse while the axial term
+    does not, and S_t differs from the bottom modulus for any asymmetric section, so the two must be
+    called separately with their own moduli. The case to watch is transfer: with the prestress at
+    full force and only self-weight to resist it, the eccentric force hogs the beam and drives the
+    top fibre into *tension*, which is what cracks a girder at release and what the bottom-fibre
+    check cannot see. Under exactly the balanced load (M = P·e) it reduces to the uniform axial
+    −P/A, matching the bottom fibre. Returns the stress in MPa.
+    """
+    _check(applied_moment, "[force]*[length]", "applied_moment")
+    _check(prestress_force, "[force]", "prestress_force")
+    _check(area, "[length]**2", "area")
+    _check(tendon_eccentricity, "[length]", "tendon_eccentricity")
+    _check(section_modulus, "[length]**3", "section_modulus")
+    if area.to("m**2").magnitude <= 0:
+        raise ValueError("area must be positive")
+    if section_modulus.to("m**3").magnitude <= 0:
+        raise ValueError("section_modulus must be positive")
+    m = applied_moment.to("N*m").magnitude
+    p = prestress_force.to("N").magnitude
+    a = area.to("m**2").magnitude
+    e = tendon_eccentricity.to("m").magnitude
+    s = section_modulus.to("m**3").magnitude
+    stress = -m / s - p / a + p * e / s
     return Quantity(magnitude=stress / 1e6, unit="MPa")
 
 

@@ -15,8 +15,12 @@ run: :func:`reynolds_number` → :func:`darcy_friction_factor` → :func:`darcy_
 
 For water distribution the empirical Hazen-Williams equation is the common shortcut — it needs
 only a roughness coefficient C (no Reynolds number or friction factor), giving the head loss
-directly as h_f = 10.67·L·Q^1.852/(C^1.852·D^4.87). Inputs and outputs are dimension-checked
-:class:`~anvilate.units.Quantity` values.
+directly as h_f = 10.67·L·Q^1.852/(C^1.852·D^4.87).
+
+The same friction factor also fixes the shear the flow exerts on the pipe wall itself,
+τ_w = f·ρ·V²/8 — not a pressure cost but a surface one, and the quantity erosion-corrosion
+velocity limits, inhibitor-film survival, and sediment scour are actually written against. Inputs
+and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
 """
 
 from __future__ import annotations
@@ -46,6 +50,7 @@ __all__ = [
     "pressure_wave_speed",
     "reynolds_number",
     "surge_wave_period",
+    "wall_shear_stress",
     "womersley_number",
 ]
 
@@ -110,6 +115,33 @@ def dean_number(
     if d <= 0 or big_d <= 0:
         raise ValueError("tube_diameter and coil_diameter must be positive")
     return reynolds * (d / big_d) ** 0.5
+
+
+def wall_shear_stress(*, friction_factor: float, density: Quantity, velocity: Quantity) -> Quantity:
+    """The shear a pipe flow exerts on its wall, τ_w = f·ρ·V²/8.
+
+    From the Darcy ``friction_factor`` f of :func:`darcy_friction_factor`, the fluid ``density`` ρ,
+    and the mean ``velocity`` V: τ_w = f·ρ·V²/8. The head loss of
+    :func:`darcy_weisbach_head_loss` is the same friction seen as an energy cost; this is it seen
+    as a surface traction, and it is the form the limits are written in — erosion-corrosion
+    thresholds, the shear an inhibitor film can survive, the scour that keeps a sewer
+    self-cleansing.
+
+    The 8 belongs to the *Darcy* friction factor. The Fanning factor, common in chemical
+    engineering, is a quarter of the Darcy value and pairs with τ_w = f_F·ρ·V²/2 — the same stress
+    by a different route, and a factor-of-four error if the two conventions are crossed. This
+    module's :func:`darcy_friction_factor` returns Darcy, which is what this function expects.
+    Returns the wall shear stress in Pa.
+    """
+    _check(density, "[mass]/[length]**3", "density")
+    _check(velocity, "[length]/[time]", "velocity")
+    rho = density.to("kg/m**3").magnitude
+    v = velocity.to("m/s").magnitude
+    if friction_factor <= 0:
+        raise ValueError("friction_factor must be positive")
+    if rho <= 0:
+        raise ValueError("density must be positive")
+    return Quantity(magnitude=friction_factor * rho * v * v / 8.0, unit="Pa")
 
 
 def womersley_number(

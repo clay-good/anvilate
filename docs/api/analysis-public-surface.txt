@@ -1151,6 +1151,7 @@ pipe_flow.pressure_wave_speed
 pipe_flow.reynolds_number
 pipe_flow.surge_wave_period
 pipe_flow.womersley_number
+pipe_flow.wall_shear_stress
 plasma.debye_length
 plasma.plasma_frequency
 plasma.plasma_parameter
@@ -1198,6 +1199,7 @@ power_screw.power_screw_raise_torque
 prestressed_concrete.prestress_balanced_load
 prestressed_concrete.prestress_bottom_fiber_stress
 prestressed_concrete.prestress_cracking_moment
+prestressed_concrete.prestress_top_fiber_stress
 process_capability.process_capability_index
 process_capability.process_capability_ratio
 process_capability.expected_defect_rate_ppm
@@ -1580,6 +1582,7 @@ turbomachinery.euler_head
 turbomachinery.flow_coefficient
 turbomachinery.impeller_outlet_swirl_velocity
 turbomachinery.stage_loading_coefficient
+turbomachinery.stanitz_slip_factor
 ultrasonic_testing.near_field_length
 ultrasonic_testing.ultrasonic_beam_divergence
 ultrasonic_testing.pulse_echo_thickness

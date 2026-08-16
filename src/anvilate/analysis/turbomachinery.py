@@ -30,6 +30,7 @@ __all__ = [
     "flow_coefficient",
     "impeller_outlet_swirl_velocity",
     "stage_loading_coefficient",
+    "stanitz_slip_factor",
 ]
 
 
@@ -168,6 +169,33 @@ def stage_loading_coefficient(*, specific_work: Quantity, blade_speed: Quantity)
     if u <= 0:
         raise ValueError("blade_speed must be positive")
     return dh0 / u**2
+
+
+def stanitz_slip_factor(*, blade_count: int) -> float:
+    """The Stanitz slip factor of a centrifugal impeller, σ = 1 − 0.63·π/Z.
+
+    :func:`euler_head` is the loss-free ceiling, and this is the first and largest step down from
+    it. A real impeller has a finite number of blades, so the flow between them does not follow the
+    blade angle exactly: it retains a relative eddy that reduces the outlet swirl and therefore the
+    head. Stanitz's correlation for radial-ish blades puts the deficit at σ = 1 − 0.63·π/``Z`` from
+    the ``blade_count`` Z alone, and the head the impeller actually imparts is H = σ·H_Euler.
+
+    Slip is not a loss — no energy is dissipated, the impeller simply transfers less than the blade
+    geometry suggests — so it applies before, and on top of, the hydraulic efficiency. It is also
+    large: a 7-blade impeller slips to σ = 0.717, meaning the Euler head overstates the deliverable
+    head by 39%, which is why a screening calculation that stops at Euler is optimistic by a margin
+    no efficiency factor accounts for. More blades slip less but block and rub more, so real
+    impellers land at 5-9. Requires Z > 0.63·π ≈ 1.98 (below that the correlation goes non-physical
+    and is meaningless anyway). Returns the dimensionless slip factor, between 0 and 1.
+    """
+    if int(blade_count) != blade_count:
+        raise ValueError(f"blade_count must be a whole number of blades; got {blade_count}")
+    z = int(blade_count)
+    if z <= 0.63 * pi:
+        raise ValueError(
+            f"blade_count must exceed 0.63*pi ~ 1.98 for the Stanitz correlation; got {z}"
+        )
+    return 1.0 - 0.63 * pi / z
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

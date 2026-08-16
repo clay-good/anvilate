@@ -333,7 +333,9 @@ modules:
   valve or orifice for cavitation, the laminar Hagen-Poiseuille flow Q = π·ΔP·r⁴/(8·μ·L)
   with its pressure- and radius-sizing inverses (microchannels, capillaries, viscometry), and the
   hydrodynamic (0.05·Re·D) and thermal (0.05·Re·Pr·D) entry lengths — with the ≈10·D turbulent
-  estimate — that say where the fully-developed friction and heat-transfer correlations start
+  estimate — that say where the fully-developed friction and heat-transfer correlations start, and
+  the wall shear stress τ_w = f·ρ·V²/8 the same friction exerts on the pipe surface (the form
+  erosion-corrosion and scour limits are written in)
 - :mod:`~anvilate.analysis.packed_bed` — packed- and fluidized-bed flow: the Ergun pressure drop
   (viscous Kozeny-Carman plus inertial Burke-Plummer terms) through a bed of particles, the bed void
   fraction ε = 1 − ρ_bulk/ρ_p from the bulk and particle densities, and the minimum fluidization
@@ -522,7 +524,8 @@ modules:
 - :mod:`~anvilate.analysis.turbomachinery` — impeller Euler head: the blade tip speed
   U = π·D·N, the outlet swirl velocity c_θ = U − c_m/tan β from the vane-angle velocity
   triangle (backward/radial/forward-curved), and the Euler head H = (U₂·c_θ2 − U₁·c_θ1)/g —
-  the loss-free ceiling the delivered head of :mod:`~anvilate.analysis.pump` falls below
+  the loss-free ceiling the delivered head of :mod:`~anvilate.analysis.pump` falls below, plus the
+  Stanitz slip factor σ = 1 − 0.63π/Z that steps down from that ceiling for a finite blade count
 - :mod:`~anvilate.analysis.ultrasonic_testing` — ultrasonic NDT geometry: the near-field length
   N = D²·f/(4·c) (test beyond it), the far-field beam divergence θ = arcsin(1.22·c/(f·D)), and
   the pulse-echo depth d = c·t/2 for thickness gauging and flaw sizing
@@ -988,8 +991,9 @@ modules:
   development length, and the balanced-section and cracking-moment checks
 - :mod:`~anvilate.analysis.prestressed_concrete` — T. Y. Lin load balancing: the
   uniform load a parabolic tendon balances (w_b = 8·P·e/L²), the service bottom-fibre
-  stress (which collapses to −P/A under the balanced load), and the cracking moment
-  M_cr = f_r·S + P·(S/A + e)
+  stress (which collapses to −P/A under the balanced load), the top-fibre stress that governs at
+  transfer (two of its three terms flip, and it is the one that shows the release tension), and the
+  cracking moment M_cr = f_r·S + P·(S/A + e)
 
 Note: :mod:`~anvilate.analysis.pressure_vessel` also carries the ASME VIII head forms
 (ellipsoidal, torispherical, hemispherical/sphere — each sizing and MAWP) and the
@@ -2362,6 +2366,7 @@ from .pipe_flow import (
     reynolds_number,
     surge_wave_period,
     turbulent_entry_length,
+    wall_shear_stress,
     womersley_number,
 )
 from .plasma import (
@@ -2459,6 +2464,7 @@ from .prestressed_concrete import (
     prestress_balanced_load,
     prestress_bottom_fiber_stress,
     prestress_cracking_moment,
+    prestress_top_fiber_stress,
 )
 from .process_capability import (
     expected_defect_rate_ppm,
@@ -3002,6 +3008,7 @@ from .turbomachinery import (
     flow_coefficient,
     impeller_outlet_swirl_velocity,
     stage_loading_coefficient,
+    stanitz_slip_factor,
 )
 from .ultrasonic_testing import (
     near_field_length,
@@ -3211,6 +3218,7 @@ __all__ = [
     "euler_head",
     "flow_coefficient",
     "stage_loading_coefficient",
+    "stanitz_slip_factor",
     "near_field_length",
     "ultrasonic_beam_divergence",
     "pulse_echo_thickness",
@@ -3360,6 +3368,7 @@ __all__ = [
     "reynolds_number",
     "surge_wave_period",
     "womersley_number",
+    "wall_shear_stress",
     "differential_pressure_for_flow",
     "obstruction_meter_flow_rate",
     "orifice_permanent_pressure_loss",
@@ -4512,6 +4521,7 @@ __all__ = [
     "prestress_balanced_load",
     "prestress_bottom_fiber_stress",
     "prestress_cracking_moment",
+    "prestress_top_fiber_stress",
     "process_capability_index",
     "process_capability_ratio",
     "expected_defect_rate_ppm",
