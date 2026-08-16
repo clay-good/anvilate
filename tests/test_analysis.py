@@ -17580,6 +17580,70 @@ def test_warping_constant_doubly_symmetric_matches_aisc_manual():
         )
 
 
+def test_scruton_number_says_whether_lock_in_matters():
+    from math import pi
+
+    from anvilate.analysis import scruton_number
+
+    chimney = {
+        "mass_per_unit_length": _q("1000 kg/m"),
+        "damping_ratio": 0.01,
+        "characteristic_length": _q("3 m"),
+    }
+
+    # Sc = 4*pi*m*zeta/(rho*D^2). Steel chimney in air -> 11.4, a manageable response.
+    in_air = scruton_number(fluid_density=_q("1.225 kg/m**3"), **chimney)
+    assert in_air == pytest.approx(4 * pi * 1000 * 0.01 / (1.225 * 9.0), rel=1e-12)
+    assert in_air == pytest.approx(11.3981, rel=1e-5)
+    assert isinstance(in_air, float)
+
+    # The same structure in water: rho is ~800x higher, so Sc collapses to 0.014 and the
+    # response goes from manageable to destructive. That contrast is the whole point.
+    in_water = scruton_number(fluid_density=_q("1000 kg/m**3"), **chimney)
+    assert in_water == pytest.approx(0.0139626, rel=1e-5)
+    assert in_air / in_water == pytest.approx(1000.0 / 1.225, rel=1e-12)
+
+    # Mass and damping enter only as their product: ballast and a damper buy the same thing.
+    doubled_mass = scruton_number(
+        mass_per_unit_length=_q("2000 kg/m"),
+        damping_ratio=0.01,
+        characteristic_length=_q("3 m"),
+        fluid_density=_q("1.225 kg/m**3"),
+    )
+    doubled_damping = scruton_number(
+        mass_per_unit_length=_q("1000 kg/m"),
+        damping_ratio=0.02,
+        characteristic_length=_q("3 m"),
+        fluid_density=_q("1.225 kg/m**3"),
+    )
+    assert doubled_mass == pytest.approx(doubled_damping, rel=1e-12)
+    assert doubled_mass == pytest.approx(2 * in_air, rel=1e-12)
+
+    # Inverse-square in the diameter presented to the flow.
+    fatter = scruton_number(
+        mass_per_unit_length=_q("1000 kg/m"),
+        damping_ratio=0.01,
+        characteristic_length=_q("6 m"),
+        fluid_density=_q("1.225 kg/m**3"),
+    )
+    assert in_air / fatter == pytest.approx(4.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="damping_ratio must be positive"):
+        scruton_number(
+            mass_per_unit_length=_q("1000 kg/m"),
+            damping_ratio=0.0,
+            characteristic_length=_q("3 m"),
+            fluid_density=_q("1.225 kg/m**3"),
+        )
+    with pytest.raises(ValueError, match="mass_per_unit_length must be a"):
+        scruton_number(
+            mass_per_unit_length=_q("1000 kg"),
+            damping_ratio=0.01,
+            characteristic_length=_q("3 m"),
+            fluid_density=_q("1.225 kg/m**3"),
+        )
+
+
 def test_vortex_shedding_frequency_lock_in_and_reduced_velocity():
     from anvilate.analysis import (
         lock_in_velocity,
@@ -25649,6 +25713,53 @@ def test_cyclotron_frequency_larmor_radius_and_mass_inverse():
         cyclotron_frequency(charge=q, magnetic_flux_density=_q("1 A"), mass=m)
 
 
+def test_plasma_beta_against_the_magnetic_pressure_it_divides_by():
+    from anvilate.analysis import magnetic_pressure, plasma_beta
+
+    # A high-field tokamak: n = 1e20 m^-3, T = 1.16e8 K (10 keV), B = 5 T -> beta = 1.61%.
+    beta = plasma_beta(
+        electron_density=Quantity(magnitude=1e20, unit="1/m**3"),
+        temperature=Quantity(magnitude=1.16e8, unit="K"),
+        magnetic_flux_density=_q("5 T"),
+    )
+    assert beta == pytest.approx(0.0161006, rel=1e-5)
+    assert isinstance(beta, float)
+
+    # Self-consistency across modules: beta is the plasma pressure n*k*T divided by exactly the
+    # magnetic pressure B^2/(2*mu0) that magnetics.magnetic_pressure computes.
+    p_plasma = 1e20 * 1.380649e-23 * 1.16e8  # Pa
+    p_magnetic = magnetic_pressure(magnetic_flux_density=_q("5 T")).to("Pa").magnitude
+    assert beta == pytest.approx(p_plasma / p_magnetic, rel=1e-9)
+
+    # Inverse-square in B: halving the field quadruples beta.
+    weak = plasma_beta(
+        electron_density=Quantity(magnitude=1e20, unit="1/m**3"),
+        temperature=Quantity(magnitude=1.16e8, unit="K"),
+        magnetic_flux_density=_q("2.5 T"),
+    )
+    assert weak / beta == pytest.approx(4.0, rel=1e-12)
+
+    # Linear in density and in temperature.
+    denser = plasma_beta(
+        electron_density=Quantity(magnitude=3e20, unit="1/m**3"),
+        temperature=Quantity(magnitude=1.16e8, unit="K"),
+        magnetic_flux_density=_q("5 T"),
+    )
+    assert denser / beta == pytest.approx(3.0, rel=1e-12)
+
+    ok = {
+        "electron_density": Quantity(magnitude=1e20, unit="1/m**3"),
+        "temperature": Quantity(magnitude=1.16e8, unit="K"),
+        "magnetic_flux_density": _q("5 T"),
+    }
+    with pytest.raises(ValueError, match="temperature must be a positive absolute"):
+        plasma_beta(**{**ok, "temperature": Quantity(magnitude=0.0, unit="K")})
+    with pytest.raises(ValueError, match="magnetic_flux_density must be positive"):
+        plasma_beta(**{**ok, "magnetic_flux_density": Quantity(magnitude=0.0, unit="T")})
+    with pytest.raises(ValueError, match="magnetic_flux_density must be a"):
+        plasma_beta(**{**ok, "magnetic_flux_density": _q("1 m")})
+
+
 def test_plasma_frequency_debye_length_and_parameter():
     from math import pi, sqrt
 
@@ -28727,6 +28838,55 @@ def test_packed_bed_minimum_fluidization_velocity():
         )
 
 
+def test_reactor_cstr_series_spans_the_two_ideal_limits():
+    from anvilate.analysis import (
+        cstr_conversion_first_order,
+        cstr_series_conversion_first_order,
+        pfr_conversion_first_order,
+    )
+
+    da = 4.0
+
+    # n = 1 reproduces the single stirred tank EXACTLY.
+    assert cstr_series_conversion_first_order(damkohler_number=da, stages=1) == pytest.approx(
+        cstr_conversion_first_order(damkohler_number=da), rel=1e-15
+    )
+    assert cstr_series_conversion_first_order(damkohler_number=da, stages=1) == pytest.approx(
+        0.8, rel=1e-12
+    )
+
+    # Staging climbs monotonically toward the plug-flow ceiling and never passes it.
+    pfr = pfr_conversion_first_order(damkohler_number=da)
+    assert pfr == pytest.approx(0.9816844, rel=1e-6)
+    staged = [
+        cstr_series_conversion_first_order(damkohler_number=da, stages=n) for n in range(1, 25)
+    ]
+    assert all(a < b for a, b in zip(staged, staged[1:], strict=False))
+    assert all(x < pfr for x in staged)
+    assert cstr_series_conversion_first_order(damkohler_number=da, stages=3) == pytest.approx(
+        0.921283, rel=1e-6
+    )
+    assert cstr_series_conversion_first_order(damkohler_number=da, stages=10) == pytest.approx(
+        0.965428, rel=1e-6
+    )
+
+    # n -> infinity reproduces the plug-flow reactor, since (1 + Da/n)^n -> e^Da.
+    assert cstr_series_conversion_first_order(
+        damkohler_number=da, stages=10_000_000
+    ) == pytest.approx(pfr, rel=1e-6)
+
+    # Zero Damkohler converts nothing at any stage count.
+    assert cstr_series_conversion_first_order(damkohler_number=0.0, stages=7) == 0.0
+    assert isinstance(cstr_series_conversion_first_order(damkohler_number=da, stages=3), float)
+
+    with pytest.raises(ValueError, match="damkohler_number must be non-negative"):
+        cstr_series_conversion_first_order(damkohler_number=-1.0, stages=3)
+    with pytest.raises(ValueError, match="whole number of tanks"):
+        cstr_series_conversion_first_order(damkohler_number=da, stages=2.5)
+    with pytest.raises(ValueError, match="stages must be at least 1"):
+        cstr_series_conversion_first_order(damkohler_number=da, stages=0)
+
+
 def test_reactor_damkohler_and_first_order_conversions():
     from math import exp
 
@@ -30152,6 +30312,47 @@ def test_gibbs_equilibrium_constant_and_vant_hoff_shift():
         )
 
 
+def test_weibull_life_for_reliability_inverts_the_survival_curve():
+    from math import e
+
+    from anvilate.analysis import weibull_life_for_reliability, weibull_reliability
+
+    eta = _q("10000 hour")
+
+    # B10 life: the age at which 90% still survive. eta = 10,000 h, beta = 2 -> 3245.93 h.
+    b10 = weibull_life_for_reliability(reliability=0.90, characteristic_life=eta, shape=2.0)
+    assert b10.to("hour").magnitude == pytest.approx(3245.9285, rel=1e-6)
+
+    # Exact round trip against the forward function, at several shapes and reliabilities.
+    for shape in (0.7, 1.0, 2.0, 3.5):
+        for target in (0.99, 0.90, 0.50, 0.10):
+            life = weibull_life_for_reliability(
+                reliability=target, characteristic_life=eta, shape=shape
+            )
+            assert weibull_reliability(
+                time=life, characteristic_life=eta, shape=shape
+            ) == pytest.approx(target, rel=1e-12)
+
+    # R = 1/e returns eta exactly for ANY shape — the definition of the characteristic life.
+    for shape in (0.5, 1.0, 2.0, 3.7):
+        assert weibull_life_for_reliability(
+            reliability=1.0 / e, characteristic_life=eta, shape=shape
+        ).to("hour").magnitude == pytest.approx(10000.0, rel=1e-12)
+
+    # A stricter reliability target always buys less life.
+    b1 = weibull_life_for_reliability(reliability=0.99, characteristic_life=eta, shape=2.0)
+    assert b1.to("hour").magnitude < b10.to("hour").magnitude
+
+    with pytest.raises(ValueError, match="reliability must be strictly between 0 and 1"):
+        weibull_life_for_reliability(reliability=1.0, characteristic_life=eta, shape=2.0)
+    with pytest.raises(ValueError, match="reliability must be strictly between 0 and 1"):
+        weibull_life_for_reliability(reliability=0.0, characteristic_life=eta, shape=2.0)
+    with pytest.raises(ValueError, match="shape must be positive"):
+        weibull_life_for_reliability(reliability=0.9, characteristic_life=eta, shape=0.0)
+    with pytest.raises(ValueError, match="characteristic_life must be a"):
+        weibull_life_for_reliability(reliability=0.9, characteristic_life=_q("1 m"), shape=2.0)
+
+
 def test_weibull_reliability_hazard_rate_and_mean_life():
     from math import exp, gamma
 
@@ -30698,6 +30899,77 @@ def test_turbulent_boundary_layer_thickness_skin_friction_and_drag():
             freestream_velocity=_q("20 m/s"),
             kinematic_viscosity=_q("1.5e-5 m^2/s"),
         )
+
+
+def test_boundary_layer_integral_thicknesses_and_shape_factor():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        boundary_layer_shape_factor,
+        laminar_boundary_layer_thickness,
+        laminar_displacement_thickness,
+        laminar_momentum_thickness,
+        laminar_plate_drag_coefficient,
+    )
+
+    flow = {
+        "freestream_velocity": _q("5 m/s"),
+        "kinematic_viscosity": _q("1.5e-5 m**2/s"),
+    }
+    x = 0.5
+    re_x = 5.0 * x / 1.5e-5  # 166,667
+
+    delta = laminar_boundary_layer_thickness(distance=_q("0.5 m"), **flow)
+    d_star = laminar_displacement_thickness(distance=_q("0.5 m"), **flow)
+    theta = laminar_momentum_thickness(distance=_q("0.5 m"), **flow)
+
+    assert d_star.to("m").magnitude == pytest.approx(1.721 * x / sqrt(re_x), rel=1e-12)
+    assert theta.to("m").magnitude == pytest.approx(0.664 * x / sqrt(re_x), rel=1e-12)
+    assert d_star.to("m").magnitude == pytest.approx(0.00210779, rel=1e-5)
+    assert theta.to("m").magnitude == pytest.approx(0.000813231, rel=1e-5)
+
+    # Ordering that any real profile must satisfy: theta < delta* < delta.
+    assert theta.to("m").magnitude < d_star.to("m").magnitude < delta.to("m").magnitude
+
+    # The check that pins the momentum thickness as a LENGTH rather than a coefficient:
+    # von Karman says the friction drag on one side is D = rho*U^2*theta, which must equal
+    # the same drag from the module's own plate drag coefficient, 0.5*rho*U^2*C_D*L.
+    rho, u, length = 1.2, 5.0, 0.5
+    c_d = laminar_plate_drag_coefficient(plate_length=_q("0.5 m"), **flow)
+    assert rho * u**2 * theta.to("m").magnitude == pytest.approx(
+        0.5 * rho * u**2 * c_d * length, rel=1e-12
+    )
+
+    # Shape factor H = delta*/theta = 1.721/0.664 = 2.59, the Blasius laminar value, and it is
+    # independent of station and of flow conditions — that is what makes it a shape.
+    h = boundary_layer_shape_factor(displacement_thickness=d_star, momentum_thickness=theta)
+    assert h == pytest.approx(1.721 / 0.664, rel=1e-12)
+    assert h == pytest.approx(2.5919, rel=1e-4)
+    assert isinstance(h, float)
+    far = {
+        "displacement_thickness": laminar_displacement_thickness(distance=_q("3 m"), **flow),
+        "momentum_thickness": laminar_momentum_thickness(distance=_q("3 m"), **flow),
+    }
+    assert boundary_layer_shape_factor(**far) == pytest.approx(h, rel=1e-12)
+
+    # A turbulent profile is fuller, so its shape factor is much lower (~1.29 for the 1/7 law,
+    # delta* = delta/8 and theta = 7*delta/72).
+    turbulent = boundary_layer_shape_factor(
+        displacement_thickness=Quantity(magnitude=1.0 / 8.0, unit="m"),
+        momentum_thickness=Quantity(magnitude=7.0 / 72.0, unit="m"),
+    )
+    assert turbulent == pytest.approx(9.0 / 7.0, rel=1e-12)
+    assert turbulent < h
+
+    # Guardrails.
+    with pytest.raises(ValueError, match="distance must be positive"):
+        laminar_momentum_thickness(distance=_q("0 m"), **flow)
+    with pytest.raises(ValueError, match="momentum_thickness must be positive"):
+        boundary_layer_shape_factor(
+            displacement_thickness=d_star, momentum_thickness=Quantity(magnitude=0.0, unit="m")
+        )
+    with pytest.raises(ValueError, match="displacement_thickness must be a"):
+        boundary_layer_shape_factor(displacement_thickness=_q("1 s"), momentum_thickness=theta)
 
 
 def test_laminar_boundary_layer_thickness_skin_friction_and_drag():

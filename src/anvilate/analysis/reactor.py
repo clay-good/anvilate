@@ -24,6 +24,7 @@ from ..units import Quantity
 __all__ = [
     "damkohler_number_first_order",
     "cstr_conversion_first_order",
+    "cstr_series_conversion_first_order",
     "pfr_conversion_first_order",
 ]
 
@@ -76,6 +77,31 @@ def cstr_conversion_first_order(*, damkohler_number: float) -> float:
     if damkohler_number < 0:
         raise ValueError("damkohler_number must be non-negative")
     return damkohler_number / (1.0 + damkohler_number)
+
+
+def cstr_series_conversion_first_order(*, damkohler_number: float, stages: int) -> float:
+    """The conversion of n equal stirred tanks in series, X = 1 − 1/(1 + Da/n)ⁿ.
+
+    :func:`cstr_conversion_first_order` and :func:`pfr_conversion_first_order` are the two limiting
+    ideal reactors; this is the cascade that spans them, and the one industry actually builds. The
+    same total residence time is split over ``stages`` n equal tanks, so each sees a Damköhler
+    number Da/n, and applying the single-tank result n times gives X = 1 − 1/(1 + Da/n)ⁿ from the
+    total ``damkohler_number`` Da = k·τ_total (:func:`damkohler_number_first_order`).
+
+    Staging recovers most of the plug-flow advantage without a tube: at Da = 4 one tank converts
+    80.0%, three tanks 92.1%, ten tanks 96.5%, against the PFR ceiling of 98.2%. Both limits are
+    exact — n = 1 reproduces :func:`cstr_conversion_first_order`, and n → ∞ reproduces
+    :func:`pfr_conversion_first_order`, since (1 + Da/n)ⁿ → e^Da. Returns the conversion (0 to 1)
+    as a plain float.
+    """
+    if damkohler_number < 0:
+        raise ValueError("damkohler_number must be non-negative")
+    if int(stages) != stages:
+        raise ValueError(f"stages must be a whole number of tanks; got {stages}")
+    n = int(stages)
+    if n < 1:
+        raise ValueError(f"stages must be at least 1; got {n}")
+    return 1.0 - 1.0 / (1.0 + damkohler_number / n) ** n
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

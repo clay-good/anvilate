@@ -18,7 +18,7 @@ Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` value
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import comb, exp, gamma
+from math import comb, exp, gamma, log
 
 from ..units import Quantity
 
@@ -30,6 +30,7 @@ __all__ = [
     "steady_state_availability",
     "weibull_hazard_rate",
     "weibull_mean_life",
+    "weibull_life_for_reliability",
     "weibull_reliability",
 ]
 
@@ -53,6 +54,32 @@ def weibull_reliability(*, time: Quantity, characteristic_life: Quantity, shape:
     if shape <= 0:
         raise ValueError("shape must be positive")
     return exp(-((t / eta) ** shape))
+
+
+def weibull_life_for_reliability(
+    *, reliability: float, characteristic_life: Quantity, shape: float
+) -> Quantity:
+    """The age at which a stated fraction still survives, t = η·(−ln R)^(1/β).
+
+    The inverse of :func:`weibull_reliability`, and the direction design actually asks in: not
+    "what fraction survives to this age" but "what age can I quote at this survival fraction".
+    From the target ``reliability`` R (a plain float in (0, 1)), the ``characteristic_life`` η, and
+    the ``shape`` β: t = η·(−ln R)^(1/β). At R = 0.90 it is the B10 life every bearing, pump, and
+    gearbox is rated on; at R = 0.01 the B1 life a critical component is held to.
+
+    R = 1/e = 0.3679 returns η exactly for any β, which is what makes η "the characteristic life".
+    Note the deliberate asymmetry with :func:`weibull_reliability`: reliability is a probability, so
+    it is a plain float, while the life returned is a time. Returns the life in seconds.
+    """
+    _check(characteristic_life, "[time]", "characteristic_life")
+    eta = characteristic_life.to("s").magnitude
+    if not 0.0 < reliability < 1.0:
+        raise ValueError(f"reliability must be strictly between 0 and 1; got {reliability}")
+    if eta <= 0:
+        raise ValueError("characteristic_life must be positive")
+    if shape <= 0:
+        raise ValueError("shape must be positive")
+    return Quantity(magnitude=eta * (-log(reliability)) ** (1.0 / shape), unit="s")
 
 
 def weibull_hazard_rate(*, time: Quantity, characteristic_life: Quantity, shape: float) -> Quantity:

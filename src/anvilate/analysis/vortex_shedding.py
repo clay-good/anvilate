@@ -16,15 +16,25 @@ The reduced velocity V_r = V/(f_n·D) is the dimensionless flow speed that colle
 one number — lock-in centres on V_r ≈ 1/St (about 5 for a cylinder), and a design is screened by
 whether its operating V_r lands in that band. The Strouhal number is the caller's from a table; the
 relations are here.
+
+Reduced velocity says *whether* the flow speed lands in the lock-in band; it does not say whether
+landing there matters. That is the Scruton number Sc = 4π·m·ζ/(ρ·D²), the mass-damping parameter —
+the structure's mass and damping measured against the fluid's density. A heavy, well-damped body in
+air has a large Sc and barely responds even at resonance; a light or lightly damped one in water has
+a small Sc and can be shaken apart. The two together are the screen: reduced velocity for the speed,
+Scruton for the consequence.
 """
 
 from __future__ import annotations
+
+from math import pi
 
 from ..units import Quantity
 
 __all__ = [
     "lock_in_velocity",
     "reduced_velocity",
+    "scruton_number",
     "vortex_shedding_frequency",
 ]
 
@@ -100,6 +110,48 @@ def reduced_velocity(
     if v <= 0 or f_n <= 0 or d <= 0:
         raise ValueError("velocity, natural_frequency, and characteristic_length must be positive")
     return v / (f_n * d)
+
+
+def scruton_number(
+    *,
+    mass_per_unit_length: Quantity,
+    damping_ratio: float,
+    fluid_density: Quantity,
+    characteristic_length: Quantity,
+) -> float:
+    """The Scruton (mass-damping) number, Sc = 4π·m·ζ/(ρ·D²).
+
+    The dimensionless group that decides how hard a body responds when
+    :func:`reduced_velocity` says it is in the lock-in band. From the ``mass_per_unit_length`` m of
+    the structure, its ``damping_ratio`` ζ (a plain float, from
+    :func:`anvilate.analysis.dynamics.damping_ratio_from_log_decrement` if the decay is measured),
+    the ``fluid_density`` ρ, and the ``characteristic_length`` D across the flow:
+    Sc = 4π·m·ζ/(ρ·D²). The numerator is what resists being shaken, the denominator the fluid doing
+    the shaking.
+
+    Lock-in velocity and reduced velocity between them locate the resonance but say nothing about
+    its amplitude; this does. Roughly, Sc below about 10 means vortex-induced vibration amplitudes
+    of order the diameter and a real fatigue problem, while a few tens make the response
+    negligible — which is why a steel chimney in air is usually fine and the same slenderness in
+    water, where ρ is 800 times higher, is not. It is also the design lever: mass and damping enter
+    only as their product, so a tuned damper and added ballast buy the same thing. Returns the
+    dimensionless Scruton number as a plain float.
+    """
+    _check(mass_per_unit_length, "[mass]/[length]", "mass_per_unit_length")
+    _check(fluid_density, "[mass]/[length]**3", "fluid_density")
+    _check(characteristic_length, "[length]", "characteristic_length")
+    m = mass_per_unit_length.to("kg/m").magnitude
+    rho = fluid_density.to("kg/m**3").magnitude
+    d = characteristic_length.to("m").magnitude
+    if m <= 0:
+        raise ValueError("mass_per_unit_length must be positive")
+    if damping_ratio <= 0:
+        raise ValueError("damping_ratio must be positive")
+    if rho <= 0:
+        raise ValueError("fluid_density must be positive")
+    if d <= 0:
+        raise ValueError("characteristic_length must be positive")
+    return 4.0 * pi * m * damping_ratio / (rho * d * d)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

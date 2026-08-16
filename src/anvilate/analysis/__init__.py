@@ -61,7 +61,9 @@ modules:
   v_p = c/√(1−(f_c/f)²) (which exceeds c) above cutoff
 - :mod:`~anvilate.analysis.plasma` — plasma physics: the electron plasma frequency f_p (the radio
   cutoff of the ionosphere), the Debye screening length λ_D = √(ε₀·k·T/(n·e²)), and the plasma
-  parameter N_D (particles in a Debye sphere; ≫1 for a true collective plasma)
+  parameter N_D (particles in a Debye sphere; ≫1 for a true collective plasma), and the plasma
+  beta β = 2μ₀nkT/B² — plasma pressure against magnetic pressure, the figure of merit of magnetic
+  confinement
 - :mod:`~anvilate.analysis.cyclone` — gas cyclone dust separator: the Lapple cut diameter
   d_pc = √[9·μ·B/(2π·N_e·V_i·(ρ_p−ρ))] collected at 50%, and the fractional collection efficiency
   η = 1/(1 + (d_pc/d_p)²) of any particle size
@@ -173,7 +175,8 @@ modules:
   needs, and contaminant dilution airflow
 - :mod:`~anvilate.analysis.vortex_shedding` — flow-induced vibration: the Strouhal
   shedding frequency f_s = St·V/D, the lock-in velocity that resonates a structure,
-  and the reduced velocity that screens the risk
+  the reduced velocity that screens the risk, and the Scruton mass-damping number
+  Sc = 4π·m·ζ/(ρ·D²) that says whether landing in the lock-in band actually matters
 - :mod:`~anvilate.analysis.wear` — Archard sliding-wear law: the worn volume and wear
   depth of a sliding contact, the sliding distance (wear life) a depth limit allows, and
   the plain-bearing PV (pressure × velocity) factor against its overheating limit
@@ -267,7 +270,8 @@ modules:
   constants a = 27R²T_c²/(64P_c) and b = R·T_c/(8P_c) recovered from the critical point
 - :mod:`~anvilate.analysis.reactor` — isothermal first-order reactor design: the Damköhler number
   Da = k·τ, and the conversions it sets for a plug-flow reactor X = 1 − exp(−Da) and a
-  stirred-tank reactor X = Da/(1 + Da)
+  stirred-tank reactor X = Da/(1 + Da) — plus the n-tanks-in-series cascade
+  X = 1 − 1/(1 + Da/n)ⁿ that spans between those two limits
 - :mod:`~anvilate.analysis.reaction_kinetics` — batch integrated rate laws: first-order decay
   C = C₀·e^(−k·t) with its concentration-independent half-life ln2/k and the time −ln(1−X)/k a
   target conversion needs; second-order C = C₀/(1 + k·C₀·t) with its C₀-dependent half-life 1/(k·C₀)
@@ -634,7 +638,8 @@ modules:
 - :mod:`~anvilate.analysis.reliability` — Weibull reliability: the survival R(t) = exp(−(t/η)^β),
   the hazard rate h(t) = (β/η)·(t/η)^(β−1) (infant-mortality/constant/wear-out as β ≷ 1), the
   mean time to failure η·Γ(1+1/β), the steady-state availability A = MTBF/(MTBF+MTTR), and the
-  series (Π R_i) and parallel (1 − Π(1−R_i)) system-reliability composition rules
+  series (Π R_i) and parallel (1 − Π(1−R_i)) system-reliability composition rules, and the design
+  inverse t = η·(−ln R)^(1/β) that turns a target reliability into a B10-style life
 - :mod:`~anvilate.analysis.radar` — radar Doppler and range equation: the two-way Doppler shift
   f_d = 2·v·f0/c and the speed-gun inverse, the maximum unambiguous velocity PRF·c/(4·f0) and range
   c/(2·PRF), and the range equation — echo power P_t·G²·λ²·σ/((4π)³·R⁴) and detection range R_max
@@ -764,7 +769,10 @@ modules:
   thickness δ = 5·x/√Re_x, the local skin-friction coefficient C_f = 0.664/√Re_x, and the average
   plate drag coefficient C_D = 1.328/√Re_L (all for Re below the ~5e5 laminar-turbulent transition);
   plus the 1/7-power-law turbulent counterparts past transition — δ = 0.37·x/Re_x^(1/5),
-  C_f = 0.0592/Re_x^(1/5), and C_D = 0.074/Re_L^(1/5) — the regime real plates and hulls run in
+  C_f = 0.0592/Re_x^(1/5), and C_D = 0.074/Re_L^(1/5) — the regime real plates and hulls run in;
+  plus the integral thicknesses the conservation laws are actually written in, the displacement
+  δ* = 1.721·x/√Re_x (the effective area a duct loses) and the momentum θ = 0.664·x/√Re_x (drag is
+  ρU²θ), with their ratio the shape factor H = δ*/θ that warns of separation
 - :mod:`~anvilate.analysis.thermoelectric` — solid-state Peltier/Seebeck devices: the
   Seebeck voltage V = α·ΔT, the net cooling Q_c = α·I·T_c − ½·I²·R − K·ΔT, and the
   single-stage cooling limit ΔT_max = ½·(α²/(R·K))·T_c², the Peltier COP ceiling, and — running the
@@ -1223,7 +1231,10 @@ from .boiling import (
     nucleate_boiling_heat_flux,
 )
 from .boundary_layer import (
+    boundary_layer_shape_factor,
     laminar_boundary_layer_thickness,
+    laminar_displacement_thickness,
+    laminar_momentum_thickness,
     laminar_plate_drag_coefficient,
     laminar_skin_friction_coefficient,
     turbulent_boundary_layer_thickness,
@@ -2371,6 +2382,7 @@ from .pipe_flow import (
 )
 from .plasma import (
     debye_length,
+    plasma_beta,
     plasma_frequency,
     plasma_parameter,
 )
@@ -2570,6 +2582,7 @@ from .reactive_circuit import (
 )
 from .reactor import (
     cstr_conversion_first_order,
+    cstr_series_conversion_first_order,
     damkohler_number_first_order,
     pfr_conversion_first_order,
 )
@@ -2637,6 +2650,7 @@ from .reliability import (
     series_system_reliability,
     steady_state_availability,
     weibull_hazard_rate,
+    weibull_life_for_reliability,
     weibull_mean_life,
     weibull_reliability,
 )
@@ -3060,6 +3074,7 @@ from .ventilation import (
 from .vortex_shedding import (
     lock_in_velocity,
     reduced_velocity,
+    scruton_number,
     vortex_shedding_frequency,
 )
 from .wave import (
@@ -3257,6 +3272,7 @@ __all__ = [
     "damkohler_number_first_order",
     "pfr_conversion_first_order",
     "cstr_conversion_first_order",
+    "cstr_series_conversion_first_order",
     "compressibility_factor",
     "real_gas_molar_volume",
     "reduced_temperature",
@@ -3660,6 +3676,7 @@ __all__ = [
     "plasma_frequency",
     "debye_length",
     "plasma_parameter",
+    "plasma_beta",
     "cyclotron_frequency",
     "larmor_radius",
     "cyclotron_mass_from_frequency",
@@ -3896,6 +3913,9 @@ __all__ = [
     "film_boiling_coefficient",
     "minimum_film_boiling_heat_flux",
     "laminar_boundary_layer_thickness",
+    "laminar_displacement_thickness",
+    "laminar_momentum_thickness",
+    "boundary_layer_shape_factor",
     "laminar_skin_friction_coefficient",
     "laminar_plate_drag_coefficient",
     "seebeck_voltage",
@@ -4331,6 +4351,7 @@ __all__ = [
     "relativistic_doppler_frequency",
     "relativistic_velocity_addition",
     "weibull_reliability",
+    "weibull_life_for_reliability",
     "weibull_hazard_rate",
     "weibull_mean_life",
     "steady_state_availability",
@@ -4773,6 +4794,7 @@ __all__ = [
     "vortex_shedding_frequency",
     "lock_in_velocity",
     "reduced_velocity",
+    "scruton_number",
     "wave_speed",
     "wavelength_from_frequency",
     "frequency_from_wavelength",

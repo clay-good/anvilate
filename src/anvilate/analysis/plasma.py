@@ -14,6 +14,11 @@ sqrt(eps0*k*T/(n*e^2)) is the distance over which the plasma screens out an elec
 the density and the electron temperature T. A collection of charges is a true plasma only when many
 particles sit within a Debye sphere, the plasma parameter N_D = (4/3)*pi*lambda_D^3*n being far
 above one; otherwise it is just an ionized gas, not a collective medium.
+
+Confining a plasma magnetically adds a fourth number, the plasma beta: beta = 2*mu0*n*k*T/B^2, the
+plasma's own pressure measured against the magnetic pressure holding it. It is the headline figure
+of merit of every tokamak and stellarator, because a magnetic bottle can only contain what it can
+out-push — beta above a few percent is hard, and beta of order one is the limit.
 """
 
 from __future__ import annotations
@@ -26,9 +31,11 @@ _ELEMENTARY_CHARGE = 1.602176634e-19  # C
 _VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m
 _ELECTRON_MASS = 9.1093837015e-31  # kg
 _BOLTZMANN = 1.380649e-23  # J/K
+_VACUUM_PERMEABILITY = 1.25663706212e-6  # H/m
 
 __all__ = [
     "debye_length",
+    "plasma_beta",
     "plasma_frequency",
     "plasma_parameter",
 ]
@@ -92,3 +99,37 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def plasma_beta(
+    *, electron_density: Quantity, temperature: Quantity, magnetic_flux_density: Quantity
+) -> float:
+    """The plasma beta, β = 2·μ₀·n·k·T/B².
+
+    The ratio of the plasma's kinetic pressure to the magnetic pressure confining it:
+    β = n·k·T/(B²/2μ₀), from the ``electron_density`` n, the absolute ``temperature`` T, and the
+    ``magnetic_flux_density`` B. The denominator is exactly the magnetic pressure of
+    :func:`anvilate.analysis.magnetics.magnetic_pressure`; this is the number that says whether the
+    field can hold the plasma at all.
+
+    It is the figure of merit magnetic confinement is judged on, and it is a hard one: a high-field
+    tokamak at 10 keV and 10²⁰ m⁻³ in 5 T runs β ≈ 1.6%, and pushing much past a few percent
+    invites pressure-driven instabilities. Since fusion power goes as the pressure squared while
+    the magnets cost the field squared, β is directly the economic efficiency of the confinement
+    scheme. β ≥ 1 means the plasma is not confined by the field at all. This is the single-species
+    (electron) beta; a two-species plasma at equal ion and electron temperature carries twice this.
+    Temperature must be absolute. Returns the dimensionless beta as a plain float.
+    """
+    _check(electron_density, "1/[length]**3", "electron_density")
+    _check(temperature, "[temperature]", "temperature")
+    _check(magnetic_flux_density, "[magnetic_field]", "magnetic_flux_density")
+    n = electron_density.to("1/m**3").magnitude
+    t = temperature.to("K").magnitude
+    b = magnetic_flux_density.to("T").magnitude
+    if n <= 0:
+        raise ValueError("electron_density must be positive")
+    if t <= 0:
+        raise ValueError("temperature must be a positive absolute temperature")
+    if b <= 0:
+        raise ValueError("magnetic_flux_density must be positive")
+    return 2.0 * _VACUUM_PERMEABILITY * n * _BOLTZMANN * t / (b * b)

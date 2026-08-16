@@ -290,6 +290,9 @@ boundary_layer.laminar_plate_drag_coefficient
 boundary_layer.turbulent_boundary_layer_thickness
 boundary_layer.turbulent_skin_friction_coefficient
 boundary_layer.turbulent_plate_drag_coefficient
+boundary_layer.laminar_displacement_thickness
+boundary_layer.laminar_momentum_thickness
+boundary_layer.boundary_layer_shape_factor
 brake.band_brake_max_lining_pressure
 brake.band_brake_tight_tension_for_torque
 brake.band_brake_torque
@@ -1104,6 +1107,7 @@ reaction_kinetics.second_order_concentration
 reactor.damkohler_number_first_order
 reactor.pfr_conversion_first_order
 reactor.cstr_conversion_first_order
+reactor.cstr_series_conversion_first_order
 real_gas.compressibility_factor
 real_gas.real_gas_molar_volume
 real_gas.reduced_temperature
@@ -1155,6 +1159,7 @@ pipe_flow.wall_shear_stress
 plasma.debye_length
 plasma.plasma_frequency
 plasma.plasma_parameter
+plasma.plasma_beta
 pneumatics.air_receiver_holdup_time
 pneumatics.air_receiver_volume_for_demand
 pneumatics.cylinder_air_consumption_per_stroke
@@ -1288,6 +1293,7 @@ reliability.series_system_reliability
 reliability.parallel_system_reliability
 reliability.k_out_of_n_reliability
 reliability.series_system_mtbf
+reliability.weibull_life_for_reliability
 resistance_welding.spot_weld_heat_generated
 resistance_welding.spot_weld_current_for_heat
 resistance_welding.spot_weld_nugget_melting_energy
@@ -1621,6 +1627,7 @@ ventilation.dilution_airflow
 vortex_shedding.lock_in_velocity
 vortex_shedding.reduced_velocity
 vortex_shedding.vortex_shedding_frequency
+vortex_shedding.scruton_number
 wave.wave_speed
 wave.wavelength_from_frequency
 wave.frequency_from_wavelength
