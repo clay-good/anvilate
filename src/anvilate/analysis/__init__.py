@@ -736,7 +736,9 @@ modules:
   critical-heat-flux burnout limit q″_max = 0.149·h_fg·√ρ_v·[σ·g·Δρ]^¼
 - :mod:`~anvilate.analysis.boundary_layer` — laminar flat-plate (Blasius) boundary layer: the
   thickness δ = 5·x/√Re_x, the local skin-friction coefficient C_f = 0.664/√Re_x, and the average
-  plate drag coefficient C_D = 1.328/√Re_L (all for Re below the ~5e5 laminar-turbulent transition)
+  plate drag coefficient C_D = 1.328/√Re_L (all for Re below the ~5e5 laminar-turbulent transition);
+  plus the 1/7-power-law turbulent counterparts past transition — δ = 0.37·x/Re_x^(1/5),
+  C_f = 0.0592/Re_x^(1/5), and C_D = 0.074/Re_L^(1/5) — the regime real plates and hulls run in
 - :mod:`~anvilate.analysis.thermoelectric` — solid-state Peltier/Seebeck devices: the
   Seebeck voltage V = α·ΔT, the net cooling Q_c = α·I·T_c − ½·I²·R − K·ΔT, and the
   single-stage cooling limit ΔT_max = ½·(α²/(R·K))·T_c²
@@ -1190,6 +1192,9 @@ from .boundary_layer import (
     laminar_boundary_layer_thickness,
     laminar_plate_drag_coefficient,
     laminar_skin_friction_coefficient,
+    turbulent_boundary_layer_thickness,
+    turbulent_plate_drag_coefficient,
+    turbulent_skin_friction_coefficient,
 )
 from .brake import (
     band_brake_max_lining_pressure,
@@ -3292,6 +3297,9 @@ __all__ = [
     "laminar_hydrodynamic_entry_length",
     "laminar_thermal_entry_length",
     "turbulent_entry_length",
+    "turbulent_boundary_layer_thickness",
+    "turbulent_plate_drag_coefficient",
+    "turbulent_skin_friction_coefficient",
     "minor_loss_head",
     "pipe_pressure_drop",
     "pressure_wave_speed",

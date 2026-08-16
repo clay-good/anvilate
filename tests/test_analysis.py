@@ -29788,6 +29788,47 @@ def test_wing_lift_to_drag_glide_range_and_wing_loading():
         wing_loading(weight=_q("12000 N"), wing_area=_q("0 m**2"))
 
 
+def test_turbulent_boundary_layer_thickness_skin_friction_and_drag():
+    from anvilate.analysis import (
+        laminar_boundary_layer_thickness,
+        laminar_skin_friction_coefficient,
+        turbulent_boundary_layer_thickness,
+        turbulent_plate_drag_coefficient,
+        turbulent_skin_friction_coefficient,
+    )
+
+    # U = 20 m/s, x = 2 m, nu = 1.5e-5 m2/s -> Re_x = 2.667e6, well past transition.
+    kwargs = {
+        "freestream_velocity": _q("20 m/s"),
+        "kinematic_viscosity": _q("1.5e-5 m^2/s"),
+    }
+    delta = turbulent_boundary_layer_thickness(distance=_q("2 m"), **kwargs)
+    assert delta.to("m").magnitude == pytest.approx(0.038374, rel=1e-4)
+    c_f = turbulent_skin_friction_coefficient(distance=_q("2 m"), **kwargs)
+    assert c_f == pytest.approx(0.00306993, rel=1e-5)
+    c_d = turbulent_plate_drag_coefficient(plate_length=_q("2 m"), **kwargs)
+    assert c_d == pytest.approx(0.00383741, rel=1e-5)
+    # Integrating x^(-1/5) puts C_D at exactly 1.25x the trailing-edge C_f (2x when laminar).
+    assert c_d / c_f == pytest.approx(1.25, rel=1e-12)
+    # A turbulent layer is thicker and drags harder than the laminar solution at the same station.
+    assert (
+        delta.to("m").magnitude
+        > laminar_boundary_layer_thickness(distance=_q("2 m"), **kwargs).to("m").magnitude
+    )
+    assert c_f > laminar_skin_friction_coefficient(distance=_q("2 m"), **kwargs)
+    # It grows as x^0.8, so doubling x thickens it by 2^0.8 = 1.741 (laminar would be 2^0.5).
+    far = turbulent_boundary_layer_thickness(distance=_q("4 m"), **kwargs)
+    assert far.to("m").magnitude / delta.to("m").magnitude == pytest.approx(2.0**0.8, rel=1e-12)
+    with pytest.raises(ValueError):
+        turbulent_skin_friction_coefficient(distance=_q("-1 m"), **kwargs)
+    with pytest.raises(ValueError):
+        turbulent_boundary_layer_thickness(
+            distance=_q("5 kg"),
+            freestream_velocity=_q("20 m/s"),
+            kinematic_viscosity=_q("1.5e-5 m^2/s"),
+        )
+
+
 def test_laminar_boundary_layer_thickness_skin_friction_and_drag():
     from math import sqrt
 

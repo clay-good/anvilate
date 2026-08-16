@@ -38,6 +38,9 @@ __all__ = [
     "laminar_boundary_layer_thickness",
     "laminar_plate_drag_coefficient",
     "laminar_skin_friction_coefficient",
+    "turbulent_boundary_layer_thickness",
+    "turbulent_plate_drag_coefficient",
+    "turbulent_skin_friction_coefficient",
 ]
 
 
@@ -92,6 +95,69 @@ def laminar_plate_drag_coefficient(
     _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
     re_l = _reynolds(freestream_velocity, plate_length, kinematic_viscosity)
     return 1.328 / sqrt(re_l)
+
+
+def turbulent_boundary_layer_thickness(
+    *, freestream_velocity: Quantity, distance: Quantity, kinematic_viscosity: Quantity
+) -> Quantity:
+    """The turbulent boundary-layer thickness, δ = 0.37*x/Re_x^(1/5).
+
+    Past transition (Re_x above ~5e5) the Blasius solution no longer applies, and the layer follows
+    the empirical 1/7-power velocity profile instead: δ = 0.37*x/Re_x^(1/5), from the
+    ``freestream_velocity`` U, the ``distance`` x from the leading edge, and the
+    ``kinematic_viscosity`` ν, with Re_x = U*x/ν. Turbulent mixing carries free-stream momentum down
+    to the wall, so the layer is markedly thicker than the laminar δ at the same Re and grows nearly
+    linearly in x (as x^0.8) rather than as √x. This is the regime real plates, hulls, and fuselages
+    actually run in. Assumes the layer is turbulent from the leading edge. Returns the
+    boundary-layer thickness in m.
+    """
+    _check(freestream_velocity, "[velocity]", "freestream_velocity")
+    _check(distance, "[length]", "distance")
+    _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
+    re_x = _reynolds(freestream_velocity, distance, kinematic_viscosity)
+    x = distance.to("m").magnitude
+    return Quantity(magnitude=0.37 * x / re_x**0.2, unit="m")
+
+
+def turbulent_skin_friction_coefficient(
+    *, freestream_velocity: Quantity, distance: Quantity, kinematic_viscosity: Quantity
+) -> float:
+    """The turbulent local skin-friction coefficient, C_f = 0.0592/Re_x^(1/5).
+
+    The dimensionless local wall shear τ_w/(½ρU²) once the layer has tripped to turbulence, the
+    counterpart of :func:`laminar_skin_friction_coefficient`: C_f = 0.0592/Re_x^(1/5), from the
+    ``freestream_velocity`` U, the ``distance`` x from the leading edge, and the
+    ``kinematic_viscosity`` ν, with Re_x = U*x/ν. It decays far more slowly downstream than the
+    laminar 1/√Re_x, and sits well above it at the same station — the steep near-wall velocity
+    gradient of a turbulent profile is exactly why tripping a layer costs friction drag. Valid for
+    roughly 5e5 < Re_x < 1e7. Returns the skin-friction coefficient as a plain float.
+    """
+    _check(freestream_velocity, "[velocity]", "freestream_velocity")
+    _check(distance, "[length]", "distance")
+    _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
+    re_x = _reynolds(freestream_velocity, distance, kinematic_viscosity)
+    return 0.0592 / re_x**0.2
+
+
+def turbulent_plate_drag_coefficient(
+    *, freestream_velocity: Quantity, plate_length: Quantity, kinematic_viscosity: Quantity
+) -> float:
+    """The turbulent average plate drag coefficient, C_D = 0.074/Re_L^(1/5).
+
+    The friction drag coefficient of one side of a flat plate of length L in a fully turbulent
+    layer, the local C_f integrated over the plate: C_D = 0.074/Re_L^(1/5), from the
+    ``freestream_velocity`` U, the ``plate_length`` L, and the ``kinematic_viscosity`` ν, with
+    Re_L = U*L/ν. The integration
+    of x^(−1/5) puts it at exactly 1.25× the trailing-edge C_f (against 2× in the laminar case).
+    Assumes turbulence from the leading edge, which overstates drag when the laminar run is a
+    significant fraction of the plate. Valid for roughly 5e5 < Re_L < 1e7. Returns the drag
+    coefficient as a plain float.
+    """
+    _check(freestream_velocity, "[velocity]", "freestream_velocity")
+    _check(plate_length, "[length]", "plate_length")
+    _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
+    re_l = _reynolds(freestream_velocity, plate_length, kinematic_viscosity)
+    return 0.074 / re_l**0.2
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
