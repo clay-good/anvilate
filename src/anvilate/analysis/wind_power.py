@@ -22,12 +22,46 @@ from ..units import Quantity
 __all__ = [
     "BETZ_LIMIT",
     "wind_power_density",
+    "wind_shear_speed",
     "wind_turbine_power",
     "wind_turbine_tip_speed_ratio",
     "capacity_factor",
 ]
 
 BETZ_LIMIT = 16.0 / 27.0  # ≈ 0.593, the maximum fraction of wind power any turbine can extract
+
+
+def wind_shear_speed(
+    *,
+    reference_speed: Quantity,
+    reference_height: Quantity,
+    target_height: Quantity,
+    shear_exponent: float = 0.14,
+) -> Quantity:
+    """The wind speed at hub height from a lower measurement, V₂ = V₁·(h₂/h₁)^α.
+
+    Wind resource is measured on a met mast tens of metres up and the turbine runs a hundred metres
+    up, so every number in this module starts with a speed that has to be carried to hub height
+    first. The power-law (Hellmann) profile does it: V₂ = ``reference_speed``·(``target_height``/
+    ``reference_height``)^``shear_exponent``, with α ≈ 0.14 (the "1/7 power law") over open terrain,
+    ~0.10 over water, and 0.25 or more over forest and built-up ground, where surface roughness
+    drags the lower air back hardest. Because power goes as V³, a modest shear gain is a large
+    energy gain — which is the whole argument for taller towers. Returns the wind speed at the
+    target height in m/s.
+    """
+    _check(reference_speed, "[length]/[time]", "reference_speed")
+    _check(reference_height, "[length]", "reference_height")
+    _check(target_height, "[length]", "target_height")
+    v1 = reference_speed.to("m/s").magnitude
+    h1 = reference_height.to("m").magnitude
+    h2 = target_height.to("m").magnitude
+    if v1 < 0:
+        raise ValueError("reference_speed must be non-negative")
+    if h1 <= 0 or h2 <= 0:
+        raise ValueError("reference_height and target_height must be positive")
+    if shear_exponent < 0:
+        raise ValueError("shear_exponent must be non-negative")
+    return Quantity(magnitude=v1 * (h2 / h1) ** shear_exponent, unit="m/s")
 
 
 def wind_power_density(*, air_density: Quantity, wind_speed: Quantity) -> Quantity:

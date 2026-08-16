@@ -14654,6 +14654,50 @@ def test_wind_turbine_tip_speed_ratio_and_capacity_factor():
         )
 
 
+def test_wind_shear_speed():
+    from anvilate.analysis import wind_power_density, wind_shear_speed
+
+    # 6 m/s on a 10 m met mast, carried to an 80 m hub over open terrain (alpha = 0.14).
+    hub = wind_shear_speed(
+        reference_speed=_q("6 m/s"), reference_height=_q("10 m"), target_height=_q("80 m")
+    )
+    assert hub.to("m/s").magnitude == pytest.approx(8.02757, rel=1e-5)
+    # The cube law turns that 34% speed gain into 2.39x the power density -- the tower argument.
+    rho = _q("1.225 kg/m^3")
+    low = wind_power_density(air_density=rho, wind_speed=_q("6 m/s"))
+    high = wind_power_density(air_density=rho, wind_speed=hub)
+    assert high.to("W/m^2").magnitude / low.to("W/m^2").magnitude == pytest.approx(2.395, rel=1e-3)
+    # At the reference height the profile is the identity.
+    same = wind_shear_speed(
+        reference_speed=_q("6 m/s"), reference_height=_q("10 m"), target_height=_q("10 m")
+    )
+    assert same.to("m/s").magnitude == pytest.approx(6.0, rel=1e-12)
+    # Rougher ground shears harder, so the same mast reading implies more wind aloft.
+    forest = wind_shear_speed(
+        reference_speed=_q("6 m/s"),
+        reference_height=_q("10 m"),
+        target_height=_q("80 m"),
+        shear_exponent=0.25,
+    )
+    assert forest.to("m/s").magnitude > hub.to("m/s").magnitude
+    # A zero exponent is a uniform profile (no shear at all).
+    flat = wind_shear_speed(
+        reference_speed=_q("6 m/s"),
+        reference_height=_q("10 m"),
+        target_height=_q("80 m"),
+        shear_exponent=0.0,
+    )
+    assert flat.to("m/s").magnitude == pytest.approx(6.0, rel=1e-12)
+    with pytest.raises(ValueError):
+        wind_shear_speed(
+            reference_speed=_q("6 m/s"), reference_height=_q("0 m"), target_height=_q("80 m")
+        )
+    with pytest.raises(ValueError):
+        wind_shear_speed(
+            reference_speed=_q("6 kg"), reference_height=_q("10 m"), target_height=_q("80 m")
+        )
+
+
 def test_wind_power_density_turbine_power_and_betz_limit():
     import math
 

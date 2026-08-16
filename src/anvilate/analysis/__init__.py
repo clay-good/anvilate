@@ -446,7 +446,8 @@ modules:
 - :mod:`~anvilate.analysis.wind_power` — wind-turbine power: the ½·ρ·V³ power density
   in the wind (cube law), the P = ½·ρ·A·V³·C_p a rotor delivers, the Betz limit
   16/27 ceiling on the power coefficient, the tip speed ratio λ = ω·R/V, and the
-  capacity factor CF = E/(P·t)
+  capacity factor CF = E/(P·t), plus the power-law (Hellmann) wind shear V₂ = V₁·(h₂/h₁)^α that
+  carries a met-mast measurement up to hub height — the input every formula above starts from
 - :mod:`~anvilate.analysis.wing_aerodynamics` — finite-wing aerodynamics: the lift force
   L = ½·ρ·V²·S·C_L, the induced-drag coefficient C_Di = C_L²/(π·e·AR) that a lifting finite-span
   wing pays, the stall speed V = √(2·W/(ρ·S·C_L,max)) below which the wing cannot hold weight, the
@@ -3051,6 +3052,7 @@ from .wind_power import (
     BETZ_LIMIT,
     capacity_factor,
     wind_power_density,
+    wind_shear_speed,
     wind_turbine_power,
     wind_turbine_tip_speed_ratio,
 )
@@ -4724,6 +4726,7 @@ __all__ = [
     "drum_rope_capacity",
     "BETZ_LIMIT",
     "wind_power_density",
+    "wind_shear_speed",
     "wind_turbine_power",
     "wind_turbine_tip_speed_ratio",
     "capacity_factor",
