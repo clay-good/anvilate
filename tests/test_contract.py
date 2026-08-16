@@ -1,9 +1,11 @@
 """The analysis-library contract gates (openspec: analysis-library).
 
-Three promises the library makes are enforced here rather than by convention:
+Four promises the library makes are enforced here rather than by convention:
 
 - the public surface is explicitly enumerated (``docs/api/analysis-public-surface.txt``),
   so an addition is a deliberate act and a removal has to face the deprecation policy;
+- every analysis module is listed in the package docstring's module index, so a module
+  cannot ship without appearing in the API docs;
 - the package aggregate ``__all__`` and the per-module ``__all__`` lists agree, so a
   symbol cannot be public in a module yet silently missing from ``anvilate.analysis``;
 - every analysis module is exercised by at least one runnable example under
@@ -99,6 +101,26 @@ def test_every_module_has_a_runnable_example():
         if not pattern.search(example_text):
             uncovered.append(name)
     assert not uncovered, f"analysis modules with no runnable example under examples/: {uncovered}"
+
+
+def test_every_module_is_listed_in_the_package_docstring():
+    # The package docstring is the library's table of contents: one ``- :mod:`` bullet
+    # per analysis module. A module that ships without its bullet is invisible to
+    # anyone reading the API docs, and the manifest gate above cannot see the omission
+    # because it only compares symbols.
+    listed = set(
+        re.findall(r"^- :mod:`~anvilate\.analysis\.(\w+)`", analysis_pkg.__doc__ or "", re.M)
+    )
+    modules = set(_module_names())
+    unlisted = sorted(modules - listed)
+    stale = sorted(listed - modules)
+    assert not unlisted, (
+        "analysis modules with no ``- :mod:`` bullet in the anvilate.analysis package "
+        f"docstring: {unlisted}"
+    )
+    assert not stale, (
+        f"the anvilate.analysis package docstring lists modules that no longer exist: {stale}"
+    )
 
 
 def test_every_public_callable_has_a_docstring():
