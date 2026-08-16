@@ -28160,6 +28160,59 @@ def test_membrane_reverse_osmosis_fluxes_and_rejection():
         )
 
 
+def test_membrane_permeate_concentration_closes_the_chain():
+    from anvilate.analysis import (
+        membrane_permeate_concentration,
+        membrane_salt_flux,
+        reverse_osmosis_water_flux,
+        salt_rejection,
+    )
+
+    # C_p = J_s/J_w: 0.35 g/(m2 h) of salt in 18 L/(m2 h) of water -> 19.44 mg/L.
+    c_p = membrane_permeate_concentration(
+        salt_flux=_q("0.35 g/(m**2*hour)"), water_flux=_q("18 L/(m**2*hour)")
+    )
+    assert c_p.to("g/L").magnitude == pytest.approx(0.35 / 18.0, rel=1e-12)
+    assert c_p.to("mg/L").magnitude == pytest.approx(19.4444, rel=1e-5)
+
+    # End to end from the two membrane permeabilities, the chain the module is built as:
+    # A = 1 LMH/bar at 60 bar against 28 bar osmotic -> 32 LMH; B = 2e-8 m/s on 35 g/L -> 2.52
+    # g/(m2 h); together 78.75 mg/L of permeate, i.e. 99.775% rejection against seawater.
+    j_w = reverse_osmosis_water_flux(
+        water_permeability=_q("1 L/(m**2*hour*bar)"),
+        applied_pressure=_q("60 bar"),
+        osmotic_pressure_difference=_q("28 bar"),
+    )
+    j_s = membrane_salt_flux(
+        salt_permeability=_q("2e-8 m/s"), concentration_difference=_q("35 kg/m**3")
+    )
+    permeate = membrane_permeate_concentration(salt_flux=j_s, water_flux=j_w)
+    assert permeate.to("mg/L").magnitude == pytest.approx(78.75, rel=1e-9)
+    assert salt_rejection(
+        permeate_concentration=permeate, feed_concentration=_q("35 g/L")
+    ) == pytest.approx(0.99775, rel=1e-9)
+
+    # Pressure lifts the water flux but not the salt flux, so pushing harder dilutes the permeate.
+    harder = reverse_osmosis_water_flux(
+        water_permeability=_q("1 L/(m**2*hour*bar)"),
+        applied_pressure=_q("92 bar"),
+        osmotic_pressure_difference=_q("28 bar"),
+    )
+    diluted = membrane_permeate_concentration(salt_flux=j_s, water_flux=harder)
+    # Double the net driving pressure -> exactly half the permeate concentration.
+    assert permeate.to("g/L").magnitude / diluted.to("g/L").magnitude == pytest.approx(
+        2.0, rel=1e-12
+    )
+
+    # Guardrails: positive water flux, non-negative salt flux; dimensions checked.
+    with pytest.raises(ValueError, match="water_flux must be positive"):
+        membrane_permeate_concentration(
+            salt_flux=_q("0.35 g/(m**2*hour)"), water_flux=Quantity(magnitude=0.0, unit="m/s")
+        )
+    with pytest.raises(ValueError, match="salt_flux must be a"):
+        membrane_permeate_concentration(salt_flux=_q("1 kg"), water_flux=_q("18 L/(m**2*hour)"))
+
+
 def test_cyclone_cut_diameter_and_collection_efficiency():
     from math import pi, sqrt
 
@@ -30091,6 +30144,81 @@ def test_vacuum_system_pump_down_time_and_throughput():
         )
     with pytest.raises(ValueError, match="pumping_speed must be a"):
         vacuum_throughput(pumping_speed=_q("10 L"), pressure=_q("1 mbar"))
+
+
+def test_vacuum_system_line_conductance_throttles_the_pump():
+    from anvilate.analysis import (
+        effective_pumping_speed,
+        mean_molecular_speed,
+        molecular_flow_tube_conductance,
+        vacuum_pump_down_time,
+    )
+
+    # Air at 20 C: M = 28.9647 g/mol -> v_bar = 462.91 m/s.
+    v_bar = mean_molecular_speed(
+        temperature=Quantity(magnitude=293.15, unit="K"),
+        molar_mass=_q("28.9647 g/mol"),
+    )
+    assert v_bar.magnitude == pytest.approx(462.911, rel=1e-5)
+
+    # A 50 mm bore, 1 m long line: C = (pi/12)*v_bar*d^3/L = 15.15 L/s.
+    c = molecular_flow_tube_conductance(
+        mean_molecular_speed=v_bar, tube_diameter=_q("50 mm"), tube_length=_q("1 m")
+    )
+    assert c.magnitude == pytest.approx(0.01514873, rel=1e-6)
+    assert c.unit == "m**3/s"
+    # Cross-checked against the handbook shorthand C[L/s] = 12.1*d_cm^3/L_cm for air at 20 C.
+    assert c.magnitude * 1000 == pytest.approx(12.1 * 5.0**3 / 100.0, rel=2e-3)
+
+    # Cubic in diameter: doubling the bore multiplies the conductance by exactly 8.
+    wide = molecular_flow_tube_conductance(
+        mean_molecular_speed=v_bar, tube_diameter=_q("100 mm"), tube_length=_q("1 m")
+    )
+    assert wide.magnitude / c.magnitude == pytest.approx(8.0, rel=1e-12)
+
+    # The point of the pair: a 100 L/s pump behind that line delivers 13.2 L/s, 13% of nameplate.
+    pump = _q("100 L/s")
+    s_eff = effective_pumping_speed(pumping_speed=pump, conductance=c)
+    assert s_eff.magnitude == pytest.approx(0.01315579, rel=1e-6)
+    assert s_eff.magnitude / pump.to("m**3/s").magnitude == pytest.approx(0.1315579, rel=1e-6)
+
+    # Series law: the result is below BOTH inputs, and the reciprocals add exactly.
+    assert s_eff.magnitude < c.magnitude
+    assert s_eff.magnitude < pump.to("m**3/s").magnitude
+    assert 1.0 / s_eff.magnitude == pytest.approx(
+        1.0 / pump.to("m**3/s").magnitude + 1.0 / c.magnitude, rel=1e-12
+    )
+
+    # An infinitely good line returns the pump untouched.
+    assert effective_pumping_speed(
+        pumping_speed=pump, conductance=_q("1e9 m**3/s")
+    ).magnitude == pytest.approx(pump.to("m**3/s").magnitude, rel=1e-8)
+
+    # Pump-down time stretches by exactly the reciprocal of the delivered fraction.
+    kw = {
+        "chamber_volume": _q("100 L"),
+        "initial_pressure": _q("1000 mbar"),
+        "final_pressure": _q("1 mbar"),
+    }
+    ideal = vacuum_pump_down_time(pumping_speed=pump, **kw)
+    real = vacuum_pump_down_time(pumping_speed=s_eff, **kw)
+    assert real.magnitude / ideal.magnitude == pytest.approx(1.0 / 0.1315579, rel=1e-6)
+
+    # Guardrails: positive speed, diameter, length, conductance; dimensions checked.
+    with pytest.raises(ValueError, match="tube_diameter and tube_length must be positive"):
+        molecular_flow_tube_conductance(
+            mean_molecular_speed=v_bar, tube_diameter=_q("0 mm"), tube_length=_q("1 m")
+        )
+    with pytest.raises(ValueError, match="mean_molecular_speed must be a"):
+        molecular_flow_tube_conductance(
+            mean_molecular_speed=_q("1 m"), tube_diameter=_q("50 mm"), tube_length=_q("1 m")
+        )
+    with pytest.raises(ValueError, match="pumping_speed and conductance must be positive"):
+        effective_pumping_speed(
+            pumping_speed=pump, conductance=Quantity(magnitude=0.0, unit="m**3/s")
+        )
+    with pytest.raises(ValueError, match="conductance must be a"):
+        effective_pumping_speed(pumping_speed=pump, conductance=_q("1 m"))
 
 
 def test_acid_base_henderson_hasselbalch_ph_and_buffer_ratio():

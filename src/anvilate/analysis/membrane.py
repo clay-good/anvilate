@@ -22,6 +22,7 @@ from __future__ import annotations
 from ..units import Quantity
 
 __all__ = [
+    "membrane_permeate_concentration",
     "membrane_salt_flux",
     "reverse_osmosis_water_flux",
     "salt_rejection",
@@ -82,6 +83,29 @@ def membrane_salt_flux(
         raise ValueError("concentration_difference must be non-negative")
     flux = b * dc  # kg/(m^2*s)
     return Quantity(magnitude=flux, unit="kg/(m**2*s)").to("g/(m**2*hour)")
+
+
+def membrane_permeate_concentration(*, salt_flux: Quantity, water_flux: Quantity) -> Quantity:
+    """The permeate concentration, C_p = J_s/J_w.
+
+    The salt left in the product water: the ``salt_flux`` J_s of :func:`membrane_salt_flux` divided
+    by the ``water_flux`` J_w of :func:`reverse_osmosis_water_flux`, C_p = J_s/J_w — mass of salt
+    per volume of water, both arriving through the same square metre of membrane. This is the link
+    that makes the module's chain run end to end: the two fluxes are computed from the membrane's
+    permeabilities, and :func:`salt_rejection` needs exactly this concentration to grade them.
+    Because pressure lifts J_w but leaves J_s nearly alone, C_p falls as the system is pushed
+    harder — the reason a membrane makes purer water at higher flux. Returns the permeate
+    concentration in g/L (mg/L, i.e. ppm, is the same number times 1000).
+    """
+    _check(salt_flux, "[mass]/[length]**2/[time]", "salt_flux")
+    _check(water_flux, "[length]/[time]", "water_flux")
+    j_s = salt_flux.to("kg/(m**2*s)").magnitude
+    j_w = water_flux.to("m/s").magnitude
+    if j_s < 0:
+        raise ValueError("salt_flux must be non-negative")
+    if j_w <= 0:
+        raise ValueError("water_flux must be positive")
+    return Quantity(magnitude=j_s / j_w, unit="kg/m**3").to("g/L")
 
 
 def salt_rejection(*, permeate_concentration: Quantity, feed_concentration: Quantity) -> float:

@@ -12,15 +12,23 @@ mbar·L/s or Pa·m³/s) — the same physical quantity at any point in the line,
 size a pump against a known leak or outgassing rate: the pump must provide S = Q/P at the operating
 pressure P. Pumping speed, volume, and pressures are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Both of those take the pumping speed at the chamber, which is never the pump's nameplate speed. The
+line between them throttles the flow: a tube of diameter d and length L has a molecular-flow
+conductance C = (pi/12)*v_bar*d**3/L, and pump and line act in series, S_eff = S*C/(S + C). Because
+the conductance goes as d**3, a modest line can cost most of the pump — and the pump-down time above
+scales on whatever speed actually reaches the chamber, not the one on the datasheet.
 """
 
 from __future__ import annotations
 
-from math import log
+from math import log, pi
 
 from ..units import Quantity
 
 __all__ = [
+    "effective_pumping_speed",
+    "molecular_flow_tube_conductance",
     "vacuum_pump_down_time",
     "vacuum_throughput",
 ]
@@ -79,6 +87,59 @@ def vacuum_throughput(*, pumping_speed: Quantity, pressure: Quantity) -> Quantit
     if p < 0:
         raise ValueError("pressure must be non-negative")
     return Quantity(magnitude=s * p, unit="Pa*m**3/s")
+
+
+def molecular_flow_tube_conductance(
+    *,
+    mean_molecular_speed: Quantity,
+    tube_diameter: Quantity,
+    tube_length: Quantity,
+) -> Quantity:
+    """A long round tube's molecular-flow conductance, C = (π/12)·v̄·d³/L.
+
+    In molecular flow — below roughly 10⁻³ mbar, where molecules cross the tube without colliding
+    with each other — a pipe does not resist flow viscously but simply limits how many molecules
+    happen to make it through. For a long round tube of ``tube_diameter`` d and ``tube_length`` L
+    the Knudsen result is C = (π/12)·v̄·d³/L, from the ``mean_molecular_speed`` v̄ of the gas
+    (:func:`anvilate.analysis.kinetic_theory.mean_molecular_speed`, which needs only the temperature
+    and molar mass). Conductance has the units of a pumping speed because that is what it is: the
+    largest speed the line itself can deliver, however big the pump. The cube of the diameter is the
+    whole design lesson — halving the bore costs a factor of eight, so vacuum lines are short and
+    fat. Valid for L ≫ d; a short tube or an aperture conducts more than this predicts. Returns the
+    conductance in m³/s.
+    """
+    _check(mean_molecular_speed, "[length]/[time]", "mean_molecular_speed")
+    _check(tube_diameter, "[length]", "tube_diameter")
+    _check(tube_length, "[length]", "tube_length")
+    v_bar = mean_molecular_speed.to("m/s").magnitude
+    d = tube_diameter.to("m").magnitude
+    length = tube_length.to("m").magnitude
+    if v_bar <= 0:
+        raise ValueError("mean_molecular_speed must be positive")
+    if d <= 0 or length <= 0:
+        raise ValueError("tube_diameter and tube_length must be positive")
+    return Quantity(magnitude=pi / 12.0 * v_bar * d**3 / length, unit="m**3/s")
+
+
+def effective_pumping_speed(*, pumping_speed: Quantity, conductance: Quantity) -> Quantity:
+    """The pumping speed actually delivered at the chamber, S_eff = S·C/(S + C).
+
+    A pump of ``pumping_speed`` S connected through a line of ``conductance`` C
+    (:func:`molecular_flow_tube_conductance`) evacuates the chamber at neither of those speeds but
+    at their series combination, 1/S_eff = 1/S + 1/C, so S_eff = S·C/(S + C). It is the same
+    resistances-in-series law as two conductors in a circuit, and it has the same consequence: the
+    smaller of the two dominates, and S_eff can never exceed either. This is the correction that
+    keeps :func:`vacuum_pump_down_time` honest — a large pump behind a restrictive line delivers a
+    fraction of its nameplate speed, and the pump-down time stretches by exactly the reciprocal of
+    that fraction. Returns the effective pumping speed in m³/s.
+    """
+    _check(pumping_speed, "[volume]/[time]", "pumping_speed")
+    _check(conductance, "[volume]/[time]", "conductance")
+    s = pumping_speed.to("m**3/s").magnitude
+    c = conductance.to("m**3/s").magnitude
+    if s <= 0 or c <= 0:
+        raise ValueError("pumping_speed and conductance must be positive")
+    return Quantity(magnitude=s * c / (s + c), unit="m**3/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

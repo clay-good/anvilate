@@ -530,7 +530,9 @@ modules:
   saturation current J = A·T²·exp(−W/kT), the Schottky field lowering ΔW = √(e³·E/(4π·ε₀)) of the
   work function, and the Child-Langmuir space-charge-limited current J = (4/9)·ε₀·√(2e/m)·V^{3/2}/d²
 - :mod:`~anvilate.analysis.vacuum_system` — vacuum pump-down: the ideal pump-down time
-  t = (V/S)·ln(P₁/P₂) and the throughput Q = S·P (gas load) that sizes a pump against a leak
+  t = (V/S)·ln(P₁/P₂), the throughput Q = S·P (gas load) that sizes a pump against a leak, and the
+  line that throttles them — molecular-flow tube conductance C = (π/12)·v̄·d³/L and the series
+  effective speed S_eff = S·C/(S + C) the chamber actually sees
 - :mod:`~anvilate.analysis.vapor_liquid_equilibrium` — ideal (Raoult's-law) VLE for distillation:
   the partial pressure p_i = x_i·P_i*, the relative volatility α = P_light*/P_heavy*, the binary
   equilibrium vapor composition y = α·x/(1 + (α−1)·x), and the Fenske minimum stages
@@ -646,7 +648,8 @@ modules:
   standard uncertainty of a mean u = s/√n, the combined standard uncertainty u_c = √(Σuᵢ²) from
   independent contributions, and the expanded uncertainty U = k·u_c reported at a coverage factor
 - :mod:`~anvilate.analysis.membrane` — reverse-osmosis membrane transport (solution-diffusion): the
-  water flux J_w = A·(ΔP − Δπ), the salt flux J_s = B·ΔC, and the salt rejection R = 1 − C_p/C_f
+  water flux J_w = A·(ΔP − Δπ), the salt flux J_s = B·ΔC, the permeate concentration C_p = J_s/J_w
+  the two of them imply, and the salt rejection R = 1 − C_p/C_f that grades it
 - :mod:`~anvilate.analysis.flywheel` — flywheel energy fluctuation, coefficient
   of fluctuation, the inertia a speed-smoothing target requires and the thin-rim
   mass that inertia needs, the rotating
@@ -2203,6 +2206,7 @@ from .measurement_uncertainty import (
     standard_uncertainty_of_mean,
 )
 from .membrane import (
+    membrane_permeate_concentration,
     membrane_salt_flux,
     reverse_osmosis_water_flux,
     salt_rejection,
@@ -3015,6 +3019,8 @@ from .vacuum_electronics import (
     thermionic_current_density,
 )
 from .vacuum_system import (
+    effective_pumping_speed,
+    molecular_flow_tube_conductance,
     vacuum_pump_down_time,
     vacuum_throughput,
 )
@@ -3215,6 +3221,8 @@ __all__ = [
     "schottky_barrier_lowering",
     "child_langmuir_current_density",
     "vacuum_pump_down_time",
+    "molecular_flow_tube_conductance",
+    "effective_pumping_speed",
     "vacuum_throughput",
     "raoult_partial_pressure",
     "henry_law_partial_pressure",
@@ -3924,6 +3932,7 @@ __all__ = [
     "expanded_uncertainty",
     "reverse_osmosis_water_flux",
     "membrane_salt_flux",
+    "membrane_permeate_concentration",
     "salt_rejection",
     "linear_momentum",
     "impulse",
