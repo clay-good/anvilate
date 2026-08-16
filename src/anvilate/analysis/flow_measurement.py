@@ -28,6 +28,7 @@ __all__ = [
     "differential_pressure_for_flow",
     "dynamic_pressure",
     "obstruction_meter_flow_rate",
+    "orifice_permanent_pressure_loss",
     "pitot_velocity",
 ]
 
@@ -69,6 +70,49 @@ def obstruction_meter_flow_rate(
     area = pi / 4.0 * d**2
     q = discharge_coefficient * area / sqrt(1.0 - beta**4) * sqrt(2.0 * dp / rho)
     return Quantity(magnitude=q, unit="m**3/s")
+
+
+def orifice_permanent_pressure_loss(
+    *,
+    pressure_drop: Quantity,
+    discharge_coefficient: float,
+    throat_diameter: Quantity,
+    pipe_diameter: Quantity,
+) -> Quantity:
+    """The unrecovered pressure loss across an orifice plate (ISO 5167-2).
+
+    The Δp a differential-pressure meter *measures* is not the pressure it *costs*: downstream of
+    the restriction the jet re-expands and recovers part of it, and only the rest is lost for good
+    to turbulence. That permanent loss is the pumping bill the meter charges forever, and it is what
+    decides orifice versus venturi on anything with a real energy budget. From the measured
+    ``pressure_drop`` Δp, the ``discharge_coefficient`` C_d, and the β = d/D set by
+    ``throat_diameter`` d and ``pipe_diameter`` D:
+
+        Δϖ = Δp·(√(1 − β⁴(1 − C_d²)) − C_d·β²)/(√(1 − β⁴(1 − C_d²)) + C_d·β²)
+
+    A small β (a hard squeeze, a large readable Δp) loses almost all of it — about 95% at β = 0.2,
+    falling to roughly 63% at β = 0.6 and 45% at β = 0.75 — so the pressure drop that buys
+    measurement resolution is bought back in permanent pump work. A venturi's gradual diffuser
+    recovers far more, which is the whole reason to pay for one. Returns the permanent loss in Pa.
+    """
+    _check(pressure_drop, "[pressure]", "pressure_drop")
+    _check(throat_diameter, "[length]", "throat_diameter")
+    _check(pipe_diameter, "[length]", "pipe_diameter")
+    dp = pressure_drop.to("Pa").magnitude
+    d = throat_diameter.to("m").magnitude
+    big_d = pipe_diameter.to("m").magnitude
+    if not 0.0 < discharge_coefficient <= 1.0:
+        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+    if dp < 0:
+        raise ValueError("pressure_drop must be non-negative")
+    if d <= 0 or big_d <= 0:
+        raise ValueError("throat_diameter and pipe_diameter must be positive")
+    if d >= big_d:
+        raise ValueError("throat_diameter must be smaller than pipe_diameter")
+    beta = d / big_d
+    root = sqrt(1.0 - beta**4 * (1.0 - discharge_coefficient**2))
+    recovered = discharge_coefficient * beta**2
+    return Quantity(magnitude=dp * (root - recovered) / (root + recovered), unit="Pa")
 
 
 def differential_pressure_for_flow(

@@ -23020,6 +23020,60 @@ def test_metacentric_height_and_righting_moment():
         righting_moment(weight=_q("196.1 kN"), metacentric_height=_q("-0.1 m"), heel_angle=10.0)
 
 
+def test_orifice_permanent_pressure_loss():
+    from anvilate.analysis import orifice_permanent_pressure_loss
+
+    # beta = 0.6, C_d = 0.61: published ISO 5167 loss charts read ~63% of the measured drop.
+    loss = orifice_permanent_pressure_loss(
+        pressure_drop=_q("50 kPa"),
+        discharge_coefficient=0.61,
+        throat_diameter=_q("60 mm"),
+        pipe_diameter=_q("100 mm"),
+    )
+    assert loss.to("kPa").magnitude == pytest.approx(31.359, rel=1e-4)
+
+    # The loss curve falls steeply with beta: ~95% at 0.2, ~45% at 0.75.
+    def ratio(beta):
+        return (
+            orifice_permanent_pressure_loss(
+                pressure_drop=_q("50 kPa"),
+                discharge_coefficient=0.61,
+                throat_diameter=_q(f"{100 * beta} mm"),
+                pipe_diameter=_q("100 mm"),
+            )
+            .to("kPa")
+            .magnitude
+            / 50.0
+        )
+
+    assert ratio(0.2) == pytest.approx(0.953, abs=0.005)
+    assert ratio(0.75) == pytest.approx(0.446, abs=0.005)
+    assert ratio(0.2) > ratio(0.5) > ratio(0.75)
+    # The loss can never exceed the measured drop, and is a fixed fraction of it.
+    assert loss.to("kPa").magnitude < 50.0
+    doubled = orifice_permanent_pressure_loss(
+        pressure_drop=_q("100 kPa"),
+        discharge_coefficient=0.61,
+        throat_diameter=_q("60 mm"),
+        pipe_diameter=_q("100 mm"),
+    )
+    assert doubled.to("kPa").magnitude == pytest.approx(2 * loss.to("kPa").magnitude, rel=1e-12)
+    with pytest.raises(ValueError):
+        orifice_permanent_pressure_loss(
+            pressure_drop=_q("50 kPa"),
+            discharge_coefficient=0.61,
+            throat_diameter=_q("120 mm"),
+            pipe_diameter=_q("100 mm"),
+        )
+    with pytest.raises(ValueError):
+        orifice_permanent_pressure_loss(
+            pressure_drop=_q("50 kPa"),
+            discharge_coefficient=1.5,
+            throat_diameter=_q("60 mm"),
+            pipe_diameter=_q("100 mm"),
+        )
+
+
 def test_obstruction_meter_flow_and_pressure_round_trip():
     import math
 

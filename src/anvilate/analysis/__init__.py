@@ -305,7 +305,9 @@ modules:
   with its isentropic conversion (η_c < η_p on compression, η_t > η_p on expansion)
 - :mod:`~anvilate.analysis.flow_measurement` — differential-pressure flow metering: the
   orifice/venturi/nozzle discharge Q = C_d·A/√(1−β⁴)·√(2Δp/ρ), its pressure-drop sizing
-  inverse, the pitot-tube point velocity √(2Δp/ρ), and its forward dynamic pressure ½ρV²
+  inverse, the pitot-tube point velocity √(2Δp/ρ), and its forward dynamic pressure ½ρV²; plus the
+  ISO 5167-2 permanent (unrecovered) loss an orifice plate charges — the pumping bill left after
+  the jet re-expands, which is what decides orifice against venturi
 - :mod:`~anvilate.analysis.fluid_statics` — fluid statics: the hydrostatic pressure
   ρ·g·h, the resultant force on a submerged plane surface and its center-of-pressure
   depth, the Archimedes buoyant force on a submerged body, the metacentric height and
@@ -1808,6 +1810,7 @@ from .flow_measurement import (
     differential_pressure_for_flow,
     dynamic_pressure,
     obstruction_meter_flow_rate,
+    orifice_permanent_pressure_loss,
     pitot_velocity,
 )
 from .fluid_statics import (
@@ -3318,6 +3321,7 @@ __all__ = [
     "womersley_number",
     "differential_pressure_for_flow",
     "obstruction_meter_flow_rate",
+    "orifice_permanent_pressure_loss",
     "pitot_velocity",
     "dynamic_pressure",
     "bond_number",

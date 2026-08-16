@@ -745,6 +745,7 @@ fourbar.fourbar_type
 fourbar.is_grashof
 flow_measurement.differential_pressure_for_flow
 flow_measurement.obstruction_meter_flow_rate
+flow_measurement.orifice_permanent_pressure_loss
 flow_measurement.dynamic_pressure
 flow_measurement.pitot_velocity
 fluid_statics.bond_number
