@@ -1747,7 +1747,7 @@ def test_radar_range_budget_example():
     d = namespace["radar_range_budget"]()
     # X-band radar: ~46 km detection, echo at 1e-13 W floor, ~150 km unambiguous.
     assert d["detection_range_km"] == pytest.approx(46.15, abs=0.05)
-    assert d["echo_power_at_rmax_w"] == pytest.approx(1e-13, rel=1e-6)
+    assert d["echo_power_at_rmax_w"] * 1e13 == pytest.approx(1.0, rel=1e-6)
     assert d["unambiguous_range_km"] == pytest.approx(149.9, abs=0.1)
 
 
@@ -1927,7 +1927,7 @@ def test_nuclear_mass_energy_example():
     d = namespace["nuclear_energetics"]()
     # 1 g -> ~90 TJ; 200 MeV fission -> ~3.6e-28 kg; U-235 ~7.6 MeV/nucleon.
     assert d["gram_mass_energy_tj"] == pytest.approx(89.876, abs=0.01)
-    assert d["fission_mass_defect_kg"] == pytest.approx(3.565e-28, rel=1e-3)
+    assert d["fission_mass_defect_kg"] * 1e28 == pytest.approx(3.565, rel=1e-3)
     assert d["u235_binding_per_nucleon_mev"] == pytest.approx(7.591, abs=0.01)
 
 
@@ -1946,7 +1946,7 @@ def test_cyclotron_mass_spectrometer_example():
     # Proton in 1 T: f_c ~15.2 MHz, Larmor ~1.04 cm; mass recovers to proton mass.
     assert d["cyclotron_frequency_mhz"] == pytest.approx(15.245, abs=0.01)
     assert d["larmor_radius_cm"] == pytest.approx(1.044, abs=0.005)
-    assert d["recovered_mass_kg"] == pytest.approx(1.6726e-27, rel=1e-4)
+    assert d["recovered_mass_kg"] * 1e27 == pytest.approx(1.6726, rel=1e-4)
 
 
 def test_laboratory_plasma_example():

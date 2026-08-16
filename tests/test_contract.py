@@ -14,6 +14,7 @@ Four promises the library makes are enforced here rather than by convention:
 
 from __future__ import annotations
 
+import ast
 import importlib
 import pkgutil
 import re
@@ -24,6 +25,7 @@ import anvilate.analysis as analysis_pkg
 _REPO = Path(__file__).resolve().parent.parent
 _MANIFEST = _REPO / "docs" / "api" / "analysis-public-surface.txt"
 _EXAMPLES = _REPO / "examples"
+_TESTS = Path(__file__).resolve().parent
 
 
 def _module_names() -> list[str]:
@@ -374,3 +376,37 @@ def test_declared_derivations_cite_their_source():
     for entry in _structural_entries():
         if entry.derivation is not None:
             assert entry.derivation.citation, f"{entry.name} has a derivation with no citation"
+
+
+def test_no_assertion_is_disarmed_by_the_approx_absolute_floor():
+    # pytest.approx applies a DEFAULT abs=1e-12 alongside whatever rel= is written, and
+    # takes whichever tolerance is looser. On a sub-nanoscale quantity that floor is
+    # enormous relative to the value itself — for a 1.67e-27 kg proton mass it is 1e15
+    # times the number — so the rel= is silently disarmed and the assertion degenerates
+    # to "the answer is small". That is a silent green of exactly the kind this library
+    # exists to refuse: a formula wrong by orders of magnitude still passes.
+    #
+    # Fix such a site by asserting in a scaled unit (pm, ps, pW, u) so the magnitude is
+    # order-one, or by passing an explicit abs= sized to the value. Comparisons against
+    # a literal zero are exempt: there the absolute floor is the whole point.
+    offenders = []
+    for path in sorted(_TESTS.glob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name != "approx" or not node.args:
+                continue
+            if any(keyword.arg == "abs" for keyword in node.keywords):
+                continue
+            try:
+                expected = ast.literal_eval(node.args[0])
+            except ValueError:
+                continue
+            if isinstance(expected, (int, float)) and 0 < abs(expected) < 1e-9:
+                offenders.append(f"{path.name}:{node.lineno} approx({expected!r}) with no abs=")
+    assert not offenders, (
+        "these assertions are swamped by pytest.approx's default abs=1e-12, so their rel= "
+        f"tolerance does nothing; assert in a scaled unit or pass an explicit abs=: {offenders}"
+    )

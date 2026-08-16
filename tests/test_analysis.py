@@ -11256,6 +11256,23 @@ def test_rotating_annular_disc_stress_distribution():
     peak = rotating_annular_disc_radial_stress(**kw, radius=_q(f"{r_peak} mm")).to("MPa").magnitude
     lower = rotating_annular_disc_radial_stress(**kw, radius=_q("150 mm")).to("MPa").magnitude
     assert peak > lower > 0
+    # Pin the MAGNITUDE, not just the ordering: everything above (zeros at the free edges,
+    # peak > lower) is scale-invariant, so a wrong constant — the (3+nu)/8 coefficient, an
+    # omega-vs-2*pi*N slip, a density unit error — would survive all of it untouched.
+    # The peak is checked against the independent closed form
+    # sigma_max = (3+nu)/8*rho*w^2*(Ro-Ri)^2.
+    omega = 3000.0 * 2.0 * math.pi / 60.0
+    assert peak == pytest.approx((3.3 / 8.0) * 7850.0 * omega**2 * (0.3 - 0.1) ** 2 / 1e6, rel=1e-9)
+    assert peak == pytest.approx(12.783605, rel=1e-6)
+    assert lower == pytest.approx(11.984630, rel=1e-6)
+    assert rotating_annular_disc_radial_stress(**kw, radius=_q("250 mm")).to(
+        "MPa"
+    ).magnitude == pytest.approx(7.382532, rel=1e-6)
+    # The distribution is symmetric in r about the geometric mean: any pair with r1*r2 = Ri*Ro
+    # carries the same radial stress, so 150 mm and 200 mm must agree exactly.
+    assert rotating_annular_disc_radial_stress(**kw, radius=_q("200 mm")).to(
+        "MPa"
+    ).magnitude == pytest.approx(lower, rel=1e-12)
     with pytest.raises(ValueError, match="radius .* must lie between the inner and outer radii"):
         rotating_annular_disc_tangential_stress(**kw, radius=_q("50 mm"))
 
@@ -13488,6 +13505,11 @@ def test_agma_module_inverse_round_trips_the_bending_stress():
         tangential_load=_q("5000 N"), module=module, face_width=_q("40 mm"), **factors
     )
     assert back.to("MPa").magnitude == pytest.approx(121.9, rel=1e-9)
+    # Pin the module itself. The round trip above is an algebraic identity: scaling BOTH
+    # agma_bending_stress and its inverse by the same factor leaves it green, so it proves
+    # they are consistent, not that either is right. Hand-check:
+    # m = W_t/(b*sigma) * (K_o*K_v*K_H/Y_J) = 5000/(0.040*121.9e6) * (1.25*1.2*1.3/0.4).
+    assert module.to("mm").magnitude == pytest.approx(4.99897457, rel=1e-8)
     # A stronger steel (higher allowable) permits a smaller module.
     smaller = agma_module_for_bending_stress(
         tangential_load=_q("5000 N"),
@@ -14141,6 +14163,11 @@ def test_hydraulic_cylinder_force_and_speed_rod_asymmetry():
         flow_rate=_q("20 L/min"), bore_diameter=_q("63 mm"), rod_diameter=_q("36 mm")
     )
     assert ret_v.to("mm/s").magnitude > ext_v.to("mm/s").magnitude
+    # Pin both speeds. The ordering above and the power identity below are BOTH invariant
+    # under a common scale on the two speeds, so neither would notice a shared unit slip.
+    # v = Q/A: 20 L/min over the pi/4*63^2 bore, and over the bore-minus-rod annulus.
+    assert ext_v.to("mm/s").magnitude == pytest.approx(106.932019, rel=1e-8)
+    assert ret_v.to("mm/s").magnitude == pytest.approx(158.777846, rel=1e-8)
     # Force x speed is conserved between strokes (both equal p*Q, the hydraulic power).
     assert ext.to("kN").magnitude * ext_v.to("mm/s").magnitude == pytest.approx(
         ret.to("kN").magnitude * ret_v.to("mm/s").magnitude, rel=1e-9
@@ -14196,6 +14223,12 @@ def test_belt_tight_tension_for_power_inverts_the_transmitted_power():
     t2 = belt_slack_tension(tight_tension=t1, friction_coefficient=0.3, wrap_angle=2.9)
     power = belt_transmitted_power(tight_tension=t1, slack_tension=t2, belt_speed=_q("10 m/s"))
     assert power.to("W").magnitude == pytest.approx(5000.0, rel=1e-9)
+    # Pin the tensions themselves. The round trip above is an identity that holds for ANY
+    # capstan ratio r, since T1*(1 - 1/r)*v is 5 kW by construction — a wrong exp(mu*theta)
+    # would sail through it. These come from r = exp(0.3*2.9) and T1 - T2 = P/v = 500 N.
+    assert t1.to("N").magnitude == pytest.approx(860.513438, rel=1e-8)
+    assert t2.to("N").magnitude == pytest.approx(360.513438, rel=1e-8)
+    assert t1.to("N").magnitude - t2.to("N").magnitude == pytest.approx(500.0, rel=1e-9)
     # More wrap (a bigger pulley or an idler) needs less tight tension for the same power.
     more_wrap = belt_tight_tension_for_power(
         power=_q("5 kW"), belt_speed=_q("10 m/s"), friction_coefficient=0.3, wrap_angle=3.5
@@ -25698,7 +25731,9 @@ def test_cyclotron_frequency_larmor_radius_and_mass_inverse():
 
     # Mass inverse round-trips the frequency back to the proton mass.
     m_back = cyclotron_mass_from_frequency(charge=q, magnetic_flux_density=b, frequency=f)
-    assert m_back.to("kg").magnitude == pytest.approx(1.67262192369e-27, rel=1e-9)
+    # Scaled to yoctograms so rel= governs: pytest.approx defaults to abs=1e-12, which on a
+    # 1e-27 value is 1e15 times the number itself and would pass for any small mass at all.
+    assert m_back.to("kg").magnitude * 1e27 == pytest.approx(1.67262192369, rel=1e-9)
 
     # Guardrails: positive charge/field/mass/frequency, dimensions checked.
     with pytest.raises(ValueError, match="mass must be positive"):
@@ -26775,7 +26810,8 @@ def test_diffusion_stokes_einstein_diffusivity():
     d = stokes_einstein_diffusivity(
         temperature=room, dynamic_viscosity=water, particle_radius=_q("0.5 nm")
     )
-    assert d.magnitude == pytest.approx(4.907462e-10, rel=1e-6)
+    # Scaled so rel= governs rather than being swamped by the default abs=1e-12.
+    assert d.magnitude * 1e10 == pytest.approx(4.907462, rel=1e-6)
     assert d.unit == "m**2/s"
     # Pinned independently against the closed form, not against the implementation.
     assert d.magnitude == pytest.approx(
@@ -29250,7 +29286,7 @@ def test_heisenberg_uncertainty_minima():
 
     # Δx = hbar/(2*Δp) is the exact inverse; round-trips the confinement.
     dx = minimum_position_uncertainty(momentum_uncertainty=dp)
-    assert dx.to("m").magnitude == pytest.approx(1e-10, rel=1e-9)
+    assert dx.to("pm").magnitude == pytest.approx(100.0, rel=1e-9)
     # Tighter confinement forces a larger momentum spread.
     dp_tight = minimum_momentum_uncertainty(
         position_uncertainty=Quantity(magnitude=0.5e-10, unit="m")
@@ -29487,7 +29523,7 @@ def test_bohr_energy_levels_orbit_radius_and_rydberg_wavelength():
 
     # Bohr radius r_n = n^2 * a0 / Z; ground state ~52.9 pm, n=2 four times that.
     r1 = bohr_orbit_radius(principal_quantum_number=1)
-    assert r1.to("m").magnitude == pytest.approx(5.29177e-11, rel=1e-5)
+    assert r1.to("pm").magnitude == pytest.approx(52.9177, rel=1e-5)
     r2 = bohr_orbit_radius(principal_quantum_number=2)
     assert r2.to("m").magnitude == pytest.approx(4.0 * r1.to("m").magnitude, rel=1e-9)
     # A higher nuclear charge pulls the orbit in.
@@ -29704,7 +29740,7 @@ def test_radar_range_equation_received_power_and_unambiguous_range():
         target_cross_section=sigma,
         target_range=r_max,
     )
-    assert echo.to("W").magnitude == pytest.approx(1e-13, rel=1e-9)
+    assert echo.to("W").magnitude * 1e13 == pytest.approx(1.0, rel=1e-9)
     # Echo power falls as the fourth power of range: doubling range cuts it 16x.
     near = radar_received_power(
         transmit_power=p_t,
@@ -29987,7 +30023,7 @@ def test_fiber_chromatic_dispersion_bit_rate_and_reach():
     dtau = chromatic_dispersion_broadening(
         dispersion_parameter=d_param, length=_q("100 km"), spectral_width=dlam
     )
-    assert dtau.to("s").magnitude == pytest.approx(170e-12, rel=1e-9)
+    assert dtau.to("ps").magnitude == pytest.approx(170.0, rel=1e-9)
     # Broadening is linear in length: double the span, double the spread.
     dtau2 = chromatic_dispersion_broadening(
         dispersion_parameter=d_param, length=_q("200 km"), spectral_width=dlam
