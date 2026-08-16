@@ -17,14 +17,16 @@ computed angles are returned as dimension-checked :class:`~anvilate.units.Quanti
 
 from __future__ import annotations
 
-from math import radians, sin
+from math import acos, degrees, radians, sin, tan
 
 from ..units import Quantity
 
 __all__ = [
     "air_mass",
+    "daylight_hours",
     "solar_altitude_at_noon",
     "solar_declination",
+    "sunset_hour_angle",
 ]
 
 
@@ -55,6 +57,49 @@ def solar_altitude_at_noon(*, latitude: float, declination: float) -> Quantity:
         raise ValueError(f"declination must be in -23.45..23.45 degrees; got {declination}")
     alpha = 90.0 - abs(latitude - declination)
     return Quantity(magnitude=alpha, unit="degree")
+
+
+def sunset_hour_angle(*, latitude: float, declination: float) -> Quantity:
+    """The sunset hour angle, ω_s = arccos(−tan φ · tan δ).
+
+    How far the sun travels from solar noon to the horizon, expressed as an angle the earth turns
+    through (15° per hour). From the site ``latitude`` φ and the solar ``declination`` δ, both plain
+    floats in degrees: ω_s = arccos(−tan φ · tan δ). It is exactly 90° at every equinox and at the
+    equator all year — the six-hour afternoon that makes every day twelve hours long there — and
+    swings either side of that as the declination moves into or away from the site's hemisphere.
+    Together with :func:`solar_altitude_at_noon` (how HIGH the sun gets) it fixes the other half of
+    the resource: how LONG it is up, which :func:`daylight_hours` converts to time. Raises inside
+    the polar circles when the sun does not rise or set at all (|tan φ · tan δ| > 1). Returns the
+    sunset hour angle in degrees.
+    """
+    if not -90.0 <= latitude <= 90.0:
+        raise ValueError(f"latitude must be in -90..90 degrees; got {latitude}")
+    if not -23.45 <= declination <= 23.45:
+        raise ValueError(f"declination must be in -23.45..23.45 degrees; got {declination}")
+    cosine = -tan(radians(latitude)) * tan(radians(declination))
+    if not -1.0 <= cosine <= 1.0:
+        raise ValueError(
+            f"the sun neither rises nor sets at latitude {latitude}° with declination "
+            f"{declination}° (polar day or polar night), so there is no sunset hour angle"
+        )
+    return Quantity(magnitude=degrees(acos(cosine)), unit="degree")
+
+
+def daylight_hours(*, latitude: float, declination: float) -> Quantity:
+    """The length of the day, N = (2/15)·ω_s.
+
+    The hours between sunrise and sunset at the site ``latitude`` φ on a day of solar
+    ``declination`` δ (both plain floats in degrees). The earth turns 15° per hour, and the sun is
+    up for twice the sunset hour angle of :func:`sunset_hour_angle`, so N = 2·ω_s/15. This is the
+    number a daily energy yield is built on — the irradiance model says how strong the sun is, this
+    says for how long — and it is why a summer day at 51°N is worth roughly 16 collector-hours
+    against 8 in midwinter. It is exactly 12 h at the equinoxes everywhere, and 12 h all year on
+    the equator. Purely geometric: it takes the sun as a point and ignores atmospheric refraction
+    and the solar disc, which together add a few minutes to a real sunrise-to-sunset day. Raises
+    inside the polar circles, where the sun does not rise or set. Returns the day length in hours.
+    """
+    omega = sunset_hour_angle(latitude=latitude, declination=declination)
+    return Quantity(magnitude=2.0 * omega.to("degree").magnitude / 15.0, unit="hour")
 
 
 def air_mass(*, solar_altitude: float) -> float:

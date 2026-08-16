@@ -29367,6 +29367,47 @@ def test_universal_joint_speed_ratio_max_and_fluctuation():
         universal_joint_max_speed_ratio(shaft_angle=-5.0)
 
 
+def test_sunset_hour_angle_and_daylight_hours():
+    from anvilate.analysis import daylight_hours, sunset_hour_angle
+
+    # The defining property: at an equinox (delta = 0) the day is exactly 12 hours everywhere,
+    # and the sun sets exactly 90 degrees (six hours) after noon.
+    for lat in (-60.0, -23.0, 0.0, 40.0, 51.5, 66.0):
+        assert sunset_hour_angle(latitude=lat, declination=0.0).to(
+            "degree"
+        ).magnitude == pytest.approx(90.0, rel=1e-9)
+        assert daylight_hours(latitude=lat, declination=0.0).to("hour").magnitude == (
+            pytest.approx(12.0, rel=1e-9)
+        )
+    # On the equator every day is 12 hours long, whatever the declination.
+    assert daylight_hours(latitude=0.0, declination=23.45).to("hour").magnitude == (
+        pytest.approx(12.0, rel=1e-9)
+    )
+    # 40 N at the June solstice: 14.85 h, and the December solstice is its complement to 24 h.
+    june = daylight_hours(latitude=40.0, declination=23.45).to("hour").magnitude
+    december = daylight_hours(latitude=40.0, declination=-23.45).to("hour").magnitude
+    assert june == pytest.approx(14.846, rel=1e-4)
+    assert december == pytest.approx(9.154, rel=1e-4)
+    assert june + december == pytest.approx(24.0, rel=1e-9)
+    # London (51.5 N) gets a longer summer day than 40 N -- the higher latitude, the more extreme.
+    assert daylight_hours(latitude=51.5, declination=23.45).to("hour").magnitude == (
+        pytest.approx(16.406, rel=1e-4)
+    )
+    # The southern hemisphere mirrors it: 40 S in June is 40 N in December.
+    assert daylight_hours(latitude=-40.0, declination=23.45).to("hour").magnitude == (
+        pytest.approx(december, rel=1e-9)
+    )
+    # Inside the polar circle the sun does not set at all, so there is no answer to give.
+    with pytest.raises(ValueError, match="polar day or polar night"):
+        sunset_hour_angle(latitude=70.0, declination=23.45)
+    with pytest.raises(ValueError, match="polar day or polar night"):
+        daylight_hours(latitude=70.0, declination=23.45)
+    with pytest.raises(ValueError, match="latitude must be"):
+        daylight_hours(latitude=100.0, declination=0.0)
+    with pytest.raises(ValueError, match="declination must be"):
+        daylight_hours(latitude=40.0, declination=40.0)
+
+
 def test_solar_declination_noon_altitude_and_air_mass():
     from math import radians, sin
 

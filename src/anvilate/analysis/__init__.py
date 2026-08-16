@@ -440,7 +440,9 @@ modules:
   efficiency η = P_max/(G·A) — the cell-level metrics behind the array power of solar_pv
 - :mod:`~anvilate.analysis.solar_geometry` — solar position geometry: the declination
   δ = 23.45°·sin(360·(284+n)/365) (Cooper), the solar-noon altitude α = 90° − |φ − δ|, and the
-  atmospheric air mass AM = 1/sin(α) (the AM1.5 rating point) — the resource behind solar_pv
+  atmospheric air mass AM = 1/sin(α) (the AM1.5 rating point) — the resource behind solar_pv; plus
+  how LONG the sun is up beside how HIGH it gets — the sunset hour angle ω_s = arccos(−tanφ·tanδ)
+  and the day length N = 2·ω_s/15 (exactly 12 h at every equinox; raises inside the polar circles)
 - :mod:`~anvilate.analysis.solar_pv` — photovoltaic array sizing: a module's power
   (P = G·A·η), the daily energy an array yields (E = P·PSH·D), the array rating
   a daily load needs, the cell-temperature (NOCT) and its power derating
@@ -2749,8 +2751,10 @@ from .solar_cell import (
 )
 from .solar_geometry import (
     air_mass,
+    daylight_hours,
     solar_altitude_at_noon,
     solar_declination,
+    sunset_hour_angle,
 )
 from .solar_pv import (
     pv_array_power,
@@ -3524,7 +3528,9 @@ __all__ = [
     "solar_cell_max_power",
     "solar_cell_efficiency",
     "solar_declination",
+    "daylight_hours",
     "solar_altitude_at_noon",
+    "sunset_hour_angle",
     "air_mass",
     "pv_array_power",
     "pv_daily_energy",
