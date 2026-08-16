@@ -254,7 +254,8 @@ def film_boiling_coefficient(
     otherwise left uncovered, and the boiling mirror of the film condensation in
     :mod:`anvilate.analysis.condensation`. Bromley's correlation for a horizontal cylinder:
     h = 0.62·[k_v³·ρ_v·(ρ_l − ρ_v)·g·h′_fg/(μ_v·D·ΔT_e)]^¼ with the corrected latent heat
-    h′_fg = h_fg + 0.8·c_pv·ΔT_e (the vapor leaves superheated, not saturated). Properties are the
+    h′_fg = h_fg + 0.8·c_pv·ΔT_e (the vapor leaves superheated, not saturated; the 0.8 is
+    Incropera's coefficient — Bromley's original paper uses 0.4). Properties are the
     *vapor's* — ``vapor_conductivity`` k_v, ``vapor_density`` ρ_v, ``vapor_specific_heat`` c_pv, and
     ``vapor_viscosity`` μ_v, evaluated at the film temperature — with the ``liquid_density`` ρ_l,
     the ``cylinder_diameter`` D, and the surface superheat ``excess_temperature`` ΔT_e. The result

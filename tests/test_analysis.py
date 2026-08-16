@@ -19682,30 +19682,25 @@ def test_film_boiling_minimum_flux_and_bromley_coefficient():
     assert q_max.to("W/m^2").magnitude / q_min.to("W/m^2").magnitude == pytest.approx(
         66.4, rel=1e-2
     )
-    # Bromley film boiling on a 10 mm cylinder at 550 K of superheat.
-    h = film_boiling_coefficient(
-        vapor_conductivity=_q("0.0741 W/(m*K)"),
-        vapor_density=_q("0.4157 kg/m^3"),
-        liquid_density=_q("957.9 kg/m^3"),
-        latent_heat=_q("2.257e6 J/kg"),
-        vapor_specific_heat=_q("2290 J/(kg*K)"),
-        vapor_viscosity=_q("2.426e-5 Pa*s"),
-        cylinder_diameter=_q("10 mm"),
-        excess_temperature=_q("550 K"),
-    )
-    # Film boiling is O(100) W/(m2*K) -- two orders below a nucleate coefficient.
-    assert h.to("W/(m^2*K)").magnitude == pytest.approx(275.27, rel=1e-4)
+    # Bromley film boiling on a 6 mm cylinder in water at 1 atm, wall at 623 K (dTe = 250 K).
+    # The vapor properties are a consistent state point: steam at the 498 K film temperature,
+    # 1 atm (Incropera Table A.4 at 500 K). Cross-check on the density: the ideal gas gives
+    # p/(R_v*T) = 101325/(461.5*500) = 0.439 kg/m3, against the tabulated 0.4405.
+    steam = {
+        "vapor_conductivity": _q("0.0339 W/(m*K)"),
+        "vapor_density": _q("0.4405 kg/m^3"),
+        "liquid_density": _q("957.9 kg/m^3"),
+        "latent_heat": _q("2.257e6 J/kg"),
+        "vapor_specific_heat": _q("1975 J/(kg*K)"),
+        "vapor_viscosity": _q("17.0e-6 Pa*s"),
+        "excess_temperature": _q("250 K"),
+    }
+    h = film_boiling_coefficient(cylinder_diameter=_q("6 mm"), **steam)
+    # Film boiling runs 100-300 W/(m2*K) -- two orders below a nucleate coefficient.
+    assert h.to("W/(m^2*K)").magnitude == pytest.approx(223.07, rel=1e-4)
+    assert 100.0 < h.to("W/(m^2*K)").magnitude < 300.0
     # A fatter cylinder holds a thicker blanket, so the coefficient falls as D^(-1/4).
-    fat = film_boiling_coefficient(
-        vapor_conductivity=_q("0.0741 W/(m*K)"),
-        vapor_density=_q("0.4157 kg/m^3"),
-        liquid_density=_q("957.9 kg/m^3"),
-        latent_heat=_q("2.257e6 J/kg"),
-        vapor_specific_heat=_q("2290 J/(kg*K)"),
-        vapor_viscosity=_q("2.426e-5 Pa*s"),
-        cylinder_diameter=_q("160 mm"),
-        excess_temperature=_q("550 K"),
-    )
+    fat = film_boiling_coefficient(cylinder_diameter=_q("96 mm"), **steam)
     assert fat.to("W/(m^2*K)").magnitude == pytest.approx(
         h.to("W/(m^2*K)").magnitude / 2.0, rel=1e-9
     )
@@ -19718,14 +19713,7 @@ def test_film_boiling_minimum_flux_and_bromley_coefficient():
         )
     with pytest.raises(ValueError):
         film_boiling_coefficient(
-            vapor_conductivity=_q("0.0741 W/(m*K)"),
-            vapor_density=_q("0.4157 kg/m^3"),
-            liquid_density=_q("957.9 kg/m^3"),
-            latent_heat=_q("2.257e6 J/kg"),
-            vapor_specific_heat=_q("2290 J/(kg*K)"),
-            vapor_viscosity=_q("2.426e-5 Pa*s"),
-            cylinder_diameter=_q("10 mm"),
-            excess_temperature=_q("-5 K"),
+            cylinder_diameter=_q("6 mm"), **dict(steam, excess_temperature=_q("-5 K"))
         )
 
 
