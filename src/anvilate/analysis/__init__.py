@@ -251,7 +251,9 @@ modules:
 - :mod:`~anvilate.analysis.gas_compression` — gas compression: the ideal-gas density,
   the isothermal and adiabatic compression power that bracket a compressor's duty, the
   adiabatic discharge temperature that sets intercooling, and the optimal per-stage ratio
-  and power of a multi-stage machine
+  and power of a multi-stage machine; plus the reciprocating machine's volumetric efficiency
+  η_v = 1 − C·(r^(1/n) − 1), the clearance re-expansion derate that decides how much gas is
+  actually delivered and why a single stage stops near 4:1
 - :mod:`~anvilate.analysis.gas_transport` — temperature-dependent gas transport properties: the
   Sutherland-law dynamic viscosity µ_ref·(T/T_ref)^1.5·(T_ref+S)/(T+S) and thermal conductivity
   that both climb with temperature, and the Prandtl number Pr = µ·c_p/k that feeds the convection
@@ -1891,6 +1893,7 @@ from .fuel_cell import (
 from .gas_compression import (
     adiabatic_compression_power,
     adiabatic_discharge_temperature,
+    compressor_volumetric_efficiency,
     ideal_gas_density,
     isothermal_compression_power,
     multistage_compression_power,
@@ -3350,6 +3353,7 @@ __all__ = [
     "weber_number",
     "adiabatic_compression_power",
     "adiabatic_discharge_temperature",
+    "compressor_volumetric_efficiency",
     "ideal_gas_density",
     "isothermal_compression_power",
     "multistage_compression_power",

@@ -21,6 +21,7 @@ from ..units import Quantity
 __all__ = [
     "adiabatic_compression_power",
     "adiabatic_discharge_temperature",
+    "compressor_volumetric_efficiency",
     "ideal_gas_density",
     "isothermal_compression_power",
     "multistage_compression_power",
@@ -135,6 +136,41 @@ def adiabatic_discharge_temperature(
         raise ValueError(f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}")
     k = heat_capacity_ratio
     return Quantity(magnitude=t1 * pressure_ratio ** ((k - 1.0) / k), unit="K")
+
+
+def compressor_volumetric_efficiency(
+    *,
+    clearance_fraction: float,
+    pressure_ratio: float,
+    polytropic_exponent: float,
+) -> float:
+    """The volumetric efficiency of a reciprocating compressor, η_v = 1 − C·(r^(1/n) − 1).
+
+    The rest of this module computes the *ideal* work a compression needs; this is the derate that
+    decides how much gas the machine actually delivers. A piston compressor cannot sweep its
+    cylinder empty — the ``clearance_fraction`` C (clearance volume over swept volume, typically
+    4–12%) stays full of high-pressure gas at the end of the stroke, and that gas re-expands on the
+    way back down before the suction valve can open, stealing induction stroke. What it steals
+    grows with the ``pressure_ratio`` r = p_2/p_1: η_v = 1 − C·(r^(1/n) − 1), with the
+    ``polytropic_exponent`` n of the re-expansion. This is why a single stage is limited to a
+    pressure ratio around 4:1 in practice and why staging exists — push r high enough
+    (r = (1 + 1/C)^n, about 42:1 at C = 6%) and the re-expansion fills the whole stroke, the
+    compressor breathes nothing, and delivery goes to zero. Multiply the swept volume by this to
+    get the actual induced volume. Returns the dimensionless volumetric efficiency.
+    """
+    if not 0.0 <= clearance_fraction < 1.0:
+        raise ValueError(f"clearance_fraction must be in [0, 1); got {clearance_fraction}")
+    if pressure_ratio < 1.0:
+        raise ValueError(f"pressure_ratio must be at least 1; got {pressure_ratio}")
+    if polytropic_exponent <= 0.0:
+        raise ValueError(f"polytropic_exponent must be positive; got {polytropic_exponent}")
+    efficiency = 1.0 - clearance_fraction * (pressure_ratio ** (1.0 / polytropic_exponent) - 1.0)
+    if efficiency <= 0.0:
+        raise ValueError(
+            "the clearance re-expansion fills the whole stroke at this pressure ratio, so the "
+            "compressor delivers nothing (volumetric efficiency has fallen to zero)"
+        )
+    return efficiency
 
 
 def optimal_stage_pressure_ratio(*, overall_pressure_ratio: float, stages: int) -> float:

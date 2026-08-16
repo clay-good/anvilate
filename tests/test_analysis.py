@@ -20854,6 +20854,49 @@ def test_vis_viva_specific_energy_and_semi_major_axis():
         orbit_specific_energy(gravitational_parameter=mu, semi_major_axis=_q("24467 s"))
 
 
+def test_compressor_volumetric_efficiency():
+    from anvilate.analysis import compressor_volumetric_efficiency
+
+    # 6% clearance at a 4:1 ratio with n = 1.30 -> 88.6% (a typical air-compressor datapoint).
+    ev = compressor_volumetric_efficiency(
+        clearance_fraction=0.06, pressure_ratio=4.0, polytropic_exponent=1.30
+    )
+    assert ev == pytest.approx(0.88571, rel=1e-4)
+    # No clearance means no re-expansion loss at any ratio.
+    assert compressor_volumetric_efficiency(
+        clearance_fraction=0.0, pressure_ratio=8.0, polytropic_exponent=1.30
+    ) == pytest.approx(1.0, rel=1e-12)
+    # No compression means no loss either.
+    assert compressor_volumetric_efficiency(
+        clearance_fraction=0.06, pressure_ratio=1.0, polytropic_exponent=1.30
+    ) == pytest.approx(1.0, rel=1e-12)
+    # The loss grows with pressure ratio -- the reason single stages stop near 4:1.
+    high = compressor_volumetric_efficiency(
+        clearance_fraction=0.06, pressure_ratio=8.0, polytropic_exponent=1.30
+    )
+    assert high == pytest.approx(0.76295, rel=1e-4)
+    assert high < ev
+    # The loss is exactly proportional to the clearance fraction.
+    doubled = compressor_volumetric_efficiency(
+        clearance_fraction=0.12, pressure_ratio=4.0, polytropic_exponent=1.30
+    )
+    assert 1.0 - doubled == pytest.approx(2 * (1.0 - ev), rel=1e-12)
+    # Past r = (1 + 1/C)^n the re-expansion fills the whole stroke and delivery ceases:
+    # (1 + 1/0.06)^1.3 = 41.8, so a 50:1 single stage breathes nothing.
+    with pytest.raises(ValueError, match="delivers nothing"):
+        compressor_volumetric_efficiency(
+            clearance_fraction=0.06, pressure_ratio=50.0, polytropic_exponent=1.30
+        )
+    with pytest.raises(ValueError):
+        compressor_volumetric_efficiency(
+            clearance_fraction=1.0, pressure_ratio=4.0, polytropic_exponent=1.30
+        )
+    with pytest.raises(ValueError):
+        compressor_volumetric_efficiency(
+            clearance_fraction=0.06, pressure_ratio=0.5, polytropic_exponent=1.30
+        )
+
+
 def test_ideal_gas_density_and_compression_power():
     import math
 
