@@ -34780,3 +34780,219 @@ def test_helical_face_contact_ratio_is_the_overlap_a_spur_gear_cannot_have():
         helical_face_contact_ratio(
             face_width=_q("40 mm"), normal_module=_q("3 mm"), helix_angle=90.0
         )
+
+
+def test_junction_peak_electric_field_integrates_back_to_the_built_in_potential():
+    from anvilate.analysis import (
+        built_in_potential,
+        depletion_width,
+        junction_peak_electric_field,
+    )
+
+    doping = {
+        "acceptor_density": Quantity(magnitude=1e23, unit="1/m**3"),
+        "donor_density": Quantity(magnitude=1e21, unit="1/m**3"),
+    }
+    permittivity = Quantity(magnitude=11.7 * 8.8541878128e-12, unit="F/m")
+    v_bi = built_in_potential(
+        **doping,
+        intrinsic_density=Quantity(magnitude=1e16, unit="1/m**3"),
+        temperature=Quantity(magnitude=300.0, unit="K"),
+    )
+    width = depletion_width(built_in_potential=v_bi, permittivity=permittivity, **doping)
+    assert v_bi.to("V").magnitude == pytest.approx(0.7143171519879805, rel=1e-12)
+    assert width.to("um").magnitude == pytest.approx(0.9659025728247301, rel=1e-12)
+
+    field = junction_peak_electric_field(built_in_potential=v_bi, depletion_width=width)
+    assert field.to("MV/m").magnitude == pytest.approx(1.479066672115798, rel=1e-12)
+
+    # The identity that makes it more than a formula: the field profile is triangular, so its
+    # area 0.5*E_max*W must be exactly the potential it supports.
+    assert 0.5 * field.to("V/m").magnitude * width.to("m").magnitude == pytest.approx(
+        v_bi.to("V").magnitude, rel=1e-12
+    )
+
+    # Independent route, straight from Poisson on the lightly doped side: E = q*N_D*x_n/eps with
+    # x_n = W*N_A/(N_A + N_D). Same number, no shared algebra with the 2*V/W form.
+    x_n = width.to("m").magnitude * 1e23 / (1e23 + 1e21)
+    assert field.to("V/m").magnitude == pytest.approx(
+        1.602176634e-19 * 1e21 * x_n / permittivity.to("F/m").magnitude, rel=1e-9
+    )
+
+    # Comfortably under silicon's ~30 MV/m avalanche field at equilibrium, as it must be -- but
+    # reverse bias adds to the potential and the field climbs faster than the width grows.
+    assert field.to("MV/m").magnitude < 30.0
+    reverse = Quantity(magnitude=v_bi.to("V").magnitude + 20.0, unit="V")
+    biased_width = depletion_width(built_in_potential=reverse, permittivity=permittivity, **doping)
+    biased_field = junction_peak_electric_field(
+        built_in_potential=reverse, depletion_width=biased_width
+    )
+    assert biased_field.to("MV/m").magnitude > 5.0 * field.to("MV/m").magnitude
+
+    with pytest.raises(ValueError):
+        junction_peak_electric_field(
+            built_in_potential=Quantity(magnitude=0.0, unit="V"), depletion_width=width
+        )
+    with pytest.raises(ValueError):
+        junction_peak_electric_field(built_in_potential=v_bi, depletion_width=_q("5 kg"))
+
+
+def test_ittc_friction_coefficient_sits_above_the_flat_plate_line():
+    from anvilate.analysis import ittc_friction_coefficient, turbulent_plate_drag_coefficient
+
+    # 100 m waterline at 15 knots (7.717 m/s), nu = 1.19e-6 m^2/s -> Re = 6.485e8.
+    reynolds = 100.0 * 7.717 / 1.19e-6
+    assert reynolds == pytest.approx(6.48487394957983e8, rel=1e-9)
+    c_f = ittc_friction_coefficient(reynolds_number=reynolds)
+    assert c_f == pytest.approx(0.0016163095521283663, rel=1e-12)
+    assert isinstance(c_f, float)
+
+    # 2500 m^2 of wetted surface at 1025 kg/m^3: 123 kN of friction, ~950 kW effective power.
+    resistance_n = c_f * 0.5 * 1025.0 * 7.717**2 * 2500.0
+    assert resistance_n / 1e3 == pytest.approx(123.36, rel=1e-3)
+    assert resistance_n * 7.717 / 1e3 == pytest.approx(951.98, rel=1e-3)
+
+    # The standard deliberately sits a few percent ABOVE a true flat-plate line, because it
+    # absorbs some three-dimensional form effect. The sign of that gap is the self-consistency
+    # test, checked against the library's own turbulent plate result at matched Re.
+    for velocity, length, nu in ((10.0, 15.0, 1.5e-5), (30.0, 5.0, 1.5e-5)):
+        plate = turbulent_plate_drag_coefficient(
+            freestream_velocity=Quantity(magnitude=velocity, unit="m/s"),
+            plate_length=Quantity(magnitude=length, unit="m"),
+            kinematic_viscosity=Quantity(magnitude=nu, unit="m**2/s"),
+        )
+        ittc = ittc_friction_coefficient(reynolds_number=velocity * length / nu)
+        assert ittc > plate
+        assert ittc / plate < 1.2
+
+    # Falls monotonically with Reynolds number -- a bigger, faster ship is more slippery per unit
+    # area, which is why friction does not simply scale with displacement.
+    previous = 1.0
+    for re in (1e6, 1e7, 1e8, 1e9):
+        value = ittc_friction_coefficient(reynolds_number=re)
+        assert value < previous
+        previous = value
+    assert ittc_friction_coefficient(reynolds_number=1e7) == pytest.approx(0.0030, rel=1e-9)
+
+    with pytest.raises(ValueError):
+        ittc_friction_coefficient(reynolds_number=100.0)
+
+
+def test_specific_detectivity_normalises_out_the_area_and_bandwidth():
+    from anvilate.analysis import (
+        noise_equivalent_power,
+        photodiode_current,
+        photodiode_responsivity,
+        shot_noise_current,
+        specific_detectivity,
+    )
+
+    responsivity = photodiode_responsivity(quantum_efficiency=0.8, wavelength=_q("1550 nm"))
+    current = photodiode_current(responsivity=responsivity, optical_power=_q("1 uW"))
+    nep = noise_equivalent_power(
+        noise_current=shot_noise_current(current=current, bandwidth=_q("1 Hz")),
+        responsivity=responsivity,
+    )
+    assert nep.to("W").magnitude * 1e13 == pytest.approx(5.660340034737638, rel=1e-9)
+
+    d_star = specific_detectivity(
+        noise_equivalent_power=nep, active_area=_q("1 mm**2"), bandwidth=_q("1 Hz")
+    )
+    # 1.77e11 Jones -- the right order for a shot-noise-limited InGaAs photodiode.
+    assert d_star.to("cm*Hz**0.5/W").magnitude / 1e11 == pytest.approx(1.7666783159, rel=1e-9)
+
+    # The definition, inverted: D* * NEP / sqrt(A*B) is exactly 1 by construction, and the area
+    # must be in cm^2 for the answer to be in Jones.
+    area_cm2 = 0.01
+    assert d_star.to("cm*Hz**0.5/W").magnitude * nep.to("W").magnitude / math.sqrt(
+        area_cm2 * 1.0
+    ) == pytest.approx(1.0, rel=1e-12)
+
+    # The whole point: NEP alone cannot compare detectors of different size, D* can. Quadruple
+    # the area at the same technology (NEP grows as sqrt(A)) and D* is unchanged.
+    bigger_nep = Quantity(magnitude=nep.to("W").magnitude * 2.0, unit="W")
+    assert specific_detectivity(
+        noise_equivalent_power=bigger_nep, active_area=_q("4 mm**2"), bandwidth=_q("1 Hz")
+    ).to("cm*Hz**0.5/W").magnitude == pytest.approx(d_star.to("cm*Hz**0.5/W").magnitude, rel=1e-12)
+    # A quieter detector of the same size scores higher.
+    assert specific_detectivity(
+        noise_equivalent_power=Quantity(magnitude=nep.to("W").magnitude / 2.0, unit="W"),
+        active_area=_q("1 mm**2"),
+        bandwidth=_q("1 Hz"),
+    ).to("cm*Hz**0.5/W").magnitude == pytest.approx(
+        2.0 * d_star.to("cm*Hz**0.5/W").magnitude, rel=1e-12
+    )
+
+    with pytest.raises(ValueError):
+        specific_detectivity(
+            noise_equivalent_power=Quantity(magnitude=0.0, unit="W"),
+            active_area=_q("1 mm**2"),
+            bandwidth=_q("1 Hz"),
+        )
+    with pytest.raises(ValueError):
+        specific_detectivity(
+            noise_equivalent_power=nep, active_area=_q("1 mm"), bandwidth=_q("1 Hz")
+        )
+
+
+def test_fiber_volume_fraction_from_weight_fraction_closes_the_data_sheet_gap():
+    from anvilate.analysis import (
+        fiber_volume_fraction_from_weight_fraction,
+        rule_of_mixtures_modulus,
+    )
+
+    carbon_epoxy = {
+        "fiber_density": Quantity(magnitude=1800.0, unit="kg/m**3"),
+        "matrix_density": Quantity(magnitude=1200.0, unit="kg/m**3"),
+    }
+    v_f = fiber_volume_fraction_from_weight_fraction(fiber_weight_fraction=0.60, **carbon_epoxy)
+    assert v_f == pytest.approx(0.5, rel=1e-12)
+    assert isinstance(v_f, float)
+
+    # Round trip through the rule-of-mixtures density the module already implies: rho_c is the
+    # Voigt average, and W_f = V_f*rho_f/rho_c must return the weight fraction we started from.
+    rho_c = v_f * 1800.0 + (1.0 - v_f) * 1200.0
+    assert rho_c == pytest.approx(1500.0, rel=1e-12)
+    assert v_f * 1800.0 / rho_c == pytest.approx(0.60, rel=1e-12)
+
+    # Fibers are denser than resin, so V_f < W_f always -- which makes feeding a weight fraction
+    # in where a volume fraction belongs consistently UNCONSERVATIVE.
+    for w_f in (0.1, 0.3, 0.5, 0.6, 0.8, 0.9):
+        assert (
+            fiber_volume_fraction_from_weight_fraction(fiber_weight_fraction=w_f, **carbon_epoxy)
+            < w_f
+        )
+
+    # Quantify it on the module's own consumer: 139.4 GPa on the weight fraction against the
+    # correct 116.75 -- 19% stiff, with nothing dimensional to signal the mistake.
+    plies = {"fiber_modulus": _q("230 GPa"), "matrix_modulus": _q("3.5 GPa")}
+    wrong = rule_of_mixtures_modulus(fiber_fraction=0.60, **plies).to("GPa").magnitude
+    right = rule_of_mixtures_modulus(fiber_fraction=v_f, **plies).to("GPa").magnitude
+    assert wrong == pytest.approx(139.4, rel=1e-9)
+    assert right == pytest.approx(116.75, rel=1e-9)
+    assert wrong / right == pytest.approx(1.1940042826552464, rel=1e-9)
+
+    # When the phases have the same density the two fractions coincide, and the endpoints are
+    # exact regardless.
+    same = {
+        "fiber_density": Quantity(magnitude=1400.0, unit="kg/m**3"),
+        "matrix_density": Quantity(magnitude=1400.0, unit="kg/m**3"),
+    }
+    assert fiber_volume_fraction_from_weight_fraction(
+        fiber_weight_fraction=0.42, **same
+    ) == pytest.approx(0.42, rel=1e-12)
+    assert (
+        fiber_volume_fraction_from_weight_fraction(fiber_weight_fraction=0.0, **carbon_epoxy) == 0.0
+    )
+    assert (
+        fiber_volume_fraction_from_weight_fraction(fiber_weight_fraction=1.0, **carbon_epoxy) == 1.0
+    )
+
+    with pytest.raises(ValueError):
+        fiber_volume_fraction_from_weight_fraction(fiber_weight_fraction=1.2, **carbon_epoxy)
+    with pytest.raises(ValueError):
+        fiber_volume_fraction_from_weight_fraction(
+            fiber_weight_fraction=0.5,
+            fiber_density=_q("1800 kg"),
+            matrix_density=Quantity(magnitude=1200.0, unit="kg/m**3"),
+        )

@@ -19,6 +19,8 @@ dimension-checked :class:`~anvilate.units.Quantity` values.
 
 from __future__ import annotations
 
+from math import sqrt
+
 from ..units import Quantity
 
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
@@ -26,6 +28,7 @@ _PLANCK = 6.62607015e-34  # J*s
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 
 __all__ = [
+    "specific_detectivity",
     "photodiode_responsivity",
     "photodiode_current",
     "shot_noise_current",
@@ -122,3 +125,40 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def specific_detectivity(
+    *, noise_equivalent_power: Quantity, active_area: Quantity, bandwidth: Quantity
+) -> Quantity:
+    """The specific detectivity, D* = sqrt(A·B)/NEP.
+
+    The area- and bandwidth-normalised sensitivity of a detector, in Jones (cm·sqrt(Hz)/W). It is
+    the figure that makes two detectors comparable when :func:`noise_equivalent_power` alone
+    cannot: NEP grows as the square root of both the active area and the measurement bandwidth, so
+    a large slow detector always looks worse than a small fast one on NEP even when the material
+    is identical. Dividing that scaling out leaves a property of the detector technology rather
+    than of the part number.
+
+    From the ``noise_equivalent_power`` NEP, the ``active_area`` A, and the ``bandwidth`` B:
+    D* = sqrt(A·B)/NEP, and higher is better. A shot-noise-limited InGaAs photodiode at 1550 nm
+    over a 1 mm² area comes out near 1.8×10¹¹ Jones; cooled HgCdTe reaches 10¹¹ and above in the
+    infrared, while a room-temperature thermal detector sits orders of magnitude below.
+
+    The unit is conventionally cm·sqrt(Hz)/W rather than SI, which is why the numbers match the
+    ones quoted on datasheets. Use the same bandwidth the NEP was measured over — mixing a 1 Hz
+    NEP with a system bandwidth inflates D* by the square root of the ratio. Returns the specific
+    detectivity in cm·Hz**0.5/W.
+    """
+    _check(noise_equivalent_power, "[power]", "noise_equivalent_power")
+    _check(active_area, "[area]", "active_area")
+    _check(bandwidth, "[frequency]", "bandwidth")
+    nep = noise_equivalent_power.to("W").magnitude
+    area_cm2 = active_area.to("cm**2").magnitude
+    b = bandwidth.to("Hz").magnitude
+    if nep <= 0:
+        raise ValueError("noise_equivalent_power must be positive")
+    if area_cm2 <= 0:
+        raise ValueError("active_area must be positive")
+    if b <= 0:
+        raise ValueError("bandwidth must be positive")
+    return Quantity(magnitude=sqrt(area_cm2 * b) / nep, unit="cm*Hz**0.5/W")

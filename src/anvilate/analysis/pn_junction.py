@@ -24,6 +24,7 @@ _BOLTZMANN = 1.380649e-23  # J/K
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
 
 __all__ = [
+    "junction_peak_electric_field",
     "built_in_potential",
     "depletion_width",
     "junction_capacitance_per_area",
@@ -118,3 +119,37 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def junction_peak_electric_field(
+    *, built_in_potential: Quantity, depletion_width: Quantity
+) -> Quantity:
+    """The peak junction field, E_max = 2·V_bi/W.
+
+    The maximum electric field in an abrupt p-n junction, reached at the metallurgical junction
+    itself. The space charge is uniform on each side, so by Poisson's equation the field rises
+    linearly through each depletion region to a peak at the junction, and the area under that
+    triangle is the potential it supports — hence E_max = 2·V_bi/W from the
+    ``built_in_potential`` V_bi and the ``depletion_width`` W that :func:`depletion_width` gives.
+
+    This is the number that says whether a junction survives. Silicon avalanches near 30 MV/m,
+    and a diode sized only by :func:`depletion_width` and :func:`junction_capacitance_per_area`
+    can pass both and still break down, because neither looks at the field. At equilibrium the
+    margin is usually large — a 10²³/10²¹ m⁻³ silicon junction peaks at 1.5 MV/m — but reverse
+    bias adds to the potential while the width grows only as its square root, so the field climbs
+    and the margin tightens fast on a varactor swept over its range.
+
+    Pass the *total* junction potential: at equilibrium that is V_bi, and under a reverse bias V_R
+    it is V_bi + V_R, with W evaluated at the same bias. The abrupt-junction assumption makes this
+    an upper bound for a graded junction, which spreads the same potential over a gentler profile.
+    Returns the peak field in V/m.
+    """
+    _check(built_in_potential, "[electric_potential]", "built_in_potential")
+    _check(depletion_width, "[length]", "depletion_width")
+    v = built_in_potential.to("V").magnitude
+    w = depletion_width.to("m").magnitude
+    if v <= 0:
+        raise ValueError("built_in_potential must be positive")
+    if w <= 0:
+        raise ValueError("depletion_width must be positive")
+    return Quantity(magnitude=2.0 * v / w, unit="V/m")

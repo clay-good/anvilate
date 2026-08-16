@@ -17,13 +17,14 @@ Froude number and block coefficient are plain floats.
 
 from __future__ import annotations
 
-from math import pi, sqrt
+from math import log10, pi, sqrt
 
 from ..units import Quantity
 
 _STANDARD_GRAVITY = 9.80665  # m/s**2
 
 __all__ = [
+    "ittc_friction_coefficient",
     "hull_speed",
     "hull_froude_number",
     "block_coefficient",
@@ -139,3 +140,32 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def ittc_friction_coefficient(*, reynolds_number: float) -> float:
+    """The ITTC-1957 friction line, C_F = 0.075/(log₁₀(Re) − 2)².
+
+    The skin-friction coefficient of a ship hull, from the ``reynolds_number`` Re built on the
+    waterline length. The module gives hull speed, Froude number, and block coefficient — all of
+    them the wave-making side of resistance — and had nothing for the viscous side, which is 70 to
+    80 percent of a slow ship's drag and therefore most of the installed power.
+
+    Froude's insight is that hull resistance splits into a frictional part scaling with Reynolds
+    number and a residuary part scaling with Froude number; this correlation line is the
+    frictional half, fitted to towing-tank plank data and used to scale model results to full
+    size. A 100 m waterline at 15 knots runs Re = 6.5×10⁸ and C_F = 0.00162, so with 2500 m² of
+    wetted surface the friction alone is 123 kN — about 950 kW of effective power before any
+    wave-making at all.
+
+    It sits deliberately a few percent above a true flat-plate line (compare
+    :func:`anvilate.analysis.boundary_layer.turbulent_plate_drag_coefficient` at the same Re),
+    because the correlation absorbs some three-dimensional form effect; that offset is a feature
+    of the standard, not an error. Multiply by the dynamic pressure and the wetted surface to get
+    the frictional resistance. Re must exceed 100 for the fit to mean anything. Returns the
+    friction coefficient as a plain float.
+    """
+    if reynolds_number <= 100.0:
+        raise ValueError(
+            f"reynolds_number must exceed 100 for the ITTC correlation; got {reynolds_number}"
+        )
+    return 0.075 / (log10(reynolds_number) - 2.0) ** 2

@@ -1459,6 +1459,7 @@ from .composite import (
     composite_major_poisson_ratio,
     composite_shear_modulus_inverse_rule,
     critical_fiber_length,
+    fiber_volume_fraction_from_weight_fraction,
     off_axis_modulus,
     rule_of_mixtures_modulus,
     rule_of_mixtures_strength,
@@ -2271,6 +2272,7 @@ from .naval_architecture import (
     block_coefficient,
     hull_froude_number,
     hull_speed,
+    ittc_friction_coefficient,
     roll_period,
 )
 from .nds_timber import (
@@ -2376,6 +2378,7 @@ from .photodetector import (
     photodiode_current,
     photodiode_responsivity,
     shot_noise_current,
+    specific_detectivity,
 )
 from .photometry import (
     luminous_efficacy,
@@ -2445,6 +2448,7 @@ from .pn_junction import (
     built_in_potential,
     depletion_width,
     junction_capacitance_per_area,
+    junction_peak_electric_field,
 )
 from .pneumatics import (
     air_receiver_holdup_time,
@@ -3214,6 +3218,7 @@ __all__ = [
     "critical_fiber_length",
     "tsai_hill_failure_index",
     "off_axis_modulus",
+    "fiber_volume_fraction_from_weight_fraction",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",
@@ -3337,6 +3342,7 @@ __all__ = [
     "built_in_potential",
     "depletion_width",
     "junction_capacitance_per_area",
+    "junction_peak_electric_field",
     "buck_output_voltage",
     "boost_output_voltage",
     "buck_boost_output_voltage",
@@ -4029,6 +4035,7 @@ __all__ = [
     "hull_froude_number",
     "block_coefficient",
     "roll_period",
+    "ittc_friction_coefficient",
     "compton_wavelength_shift",
     "compton_scattered_wavelength",
     "compton_electron_energy",
@@ -4353,6 +4360,7 @@ __all__ = [
     "photodiode_current",
     "shot_noise_current",
     "noise_equivalent_power",
+    "specific_detectivity",
     "room_cavity_ratio",
     "lighting_power_density",
     "luminous_efficacy",

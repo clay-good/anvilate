@@ -27,6 +27,7 @@ from math import cos, radians, sin
 from ..units import Quantity
 
 __all__ = [
+    "fiber_volume_fraction_from_weight_fraction",
     "rule_of_mixtures_modulus",
     "transverse_modulus_inverse_rule",
     "rule_of_mixtures_strength",
@@ -328,3 +329,39 @@ def off_axis_modulus(
     if compliance <= 0:
         raise ValueError("the computed compliance is non-positive; check the ply constants")
     return Quantity(magnitude=1.0 / compliance, unit="MPa")
+
+
+def fiber_volume_fraction_from_weight_fraction(
+    *, fiber_weight_fraction: float, fiber_density: Quantity, matrix_density: Quantity
+) -> float:
+    """The fiber volume fraction from a weight fraction, V_f = (W_f/ρ_f)/(W_f/ρ_f + W_m/ρ_m).
+
+    Every function in this module consumes the fiber *volume* fraction V_f, and the module
+    docstring says V_f is the caller's input — but prepreg, tow, and resin-content data sheets are
+    quoted by *weight*. This converts, from the ``fiber_weight_fraction`` W_f and the two
+    densities: divide each phase's mass fraction by its density to get relative volumes, then
+    normalise.
+
+    Feeding a weight fraction straight in where a volume fraction belongs is a silent and
+    consistently unconservative error, because fibers are denser than resin so V_f < W_f always.
+    Carbon/epoxy at W_f = 0.60 with ρ_f = 1800 and ρ_m = 1200 kg/m³ is V_f = 0.50, and
+    :func:`rule_of_mixtures_modulus` reports 139.4 GPa on the weight fraction against the correct
+    116.7 — **19% stiff**, propagating into :func:`rule_of_mixtures_strength`,
+    :func:`tsai_hill_failure_index`, and :func:`composite_longitudinal_cte` with nothing
+    dimensional to signal it, since both fractions are plain floats in (0, 1).
+
+    The composite density falls out of the same numbers as ρ_c = V_f·ρ_f + (1 − V_f)·ρ_m, and
+    W_f = V_f·ρ_f/ρ_c inverts it exactly. When the two densities are equal, volume and weight
+    fractions coincide. Returns the fiber volume fraction as a plain float.
+    """
+    _require(fiber_density, "[mass]/[volume]", "fiber_density")
+    _require(matrix_density, "[mass]/[volume]", "matrix_density")
+    if not 0.0 <= fiber_weight_fraction <= 1.0:
+        raise ValueError(f"fiber_weight_fraction must lie in [0, 1]; got {fiber_weight_fraction}")
+    rho_f = fiber_density.to("kg/m**3").magnitude
+    rho_m = matrix_density.to("kg/m**3").magnitude
+    if rho_f <= 0 or rho_m <= 0:
+        raise ValueError("fiber_density and matrix_density must be positive")
+    fiber_volume = fiber_weight_fraction / rho_f
+    matrix_volume = (1.0 - fiber_weight_fraction) / rho_m
+    return fiber_volume / (fiber_volume + matrix_volume)
