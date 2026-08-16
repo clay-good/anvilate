@@ -12,11 +12,15 @@ J = D * Delta_C / L (Fick's first law), from the diffusivity D. Time enters thro
 spreading: a diffusion front advances a characteristic distance x = sqrt(D * t) in a time t (the
 Einstein relation), so the time to diffuse a distance is t = x^2 / D. These fix the two practical
 questions — how fast matter crosses a barrier, and how far (or how long) a transient front reaches.
+
+Every one of those relations takes the diffusivity D as given. For a dilute solute in a liquid the
+Stokes-Einstein relation supplies it from first principles, D = k_B*T / (6*pi*mu*r), balancing the
+thermal energy driving the random walk against the Stokes drag resisting it.
 """
 
 from __future__ import annotations
 
-from math import erf, sqrt
+from math import erf, pi, sqrt
 
 from ..units import Quantity
 
@@ -25,7 +29,10 @@ __all__ = [
     "diffusion_time",
     "error_function_concentration",
     "steady_diffusion_flux",
+    "stokes_einstein_diffusivity",
 ]
+
+_BOLTZMANN = 1.380649e-23  # J/K
 
 
 def steady_diffusion_flux(
@@ -123,6 +130,39 @@ def error_function_concentration(
         raise ValueError("time must be positive")
     z = x / (2.0 * sqrt(d * t))
     return surface_concentration - (surface_concentration - initial_concentration) * erf(z)
+
+
+def stokes_einstein_diffusivity(
+    *, temperature: Quantity, dynamic_viscosity: Quantity, particle_radius: Quantity
+) -> Quantity:
+    """The Stokes-Einstein diffusivity of a dilute solute, D = k_B*T / (6*pi*mu*r).
+
+    Every other relation in this module takes the diffusivity as given; this one computes it. A
+    particle of ``particle_radius`` r suspended in a liquid of ``dynamic_viscosity`` mu at absolute
+    ``temperature`` T is kicked by thermal motion and resisted by Stokes drag, and the balance of
+    the two fixes how fast it spreads: D = k_B*T/(6*pi*mu*r), with k_B = 1.380649e-23 J/K. The
+    6*pi*mu*r
+    group is exactly the Stokes drag coefficient of
+    :func:`anvilate.analysis.drag.stokes_drag_force`, which is why the relation holds only in the
+    creeping-flow, dilute, spherical-particle regime it was derived for — a rough screening number
+    for a protein, a nanoparticle, or a small molecule in solution, not a value for a concentrated
+    suspension or a gas. Bigger particles and thicker solvents diffuse more slowly, in direct
+    inverse proportion, and warming helps only weakly except through its effect on mu. Returns the
+    diffusivity in m**2/s.
+    """
+    _check(temperature, "[temperature]", "temperature")
+    _check(dynamic_viscosity, "[mass]/([length]*[time])", "dynamic_viscosity")
+    _check(particle_radius, "[length]", "particle_radius")
+    t = temperature.to("K").magnitude
+    mu = dynamic_viscosity.to("Pa*s").magnitude
+    r = particle_radius.to("m").magnitude
+    if t <= 0:
+        raise ValueError("temperature must be a positive absolute temperature")
+    if mu <= 0:
+        raise ValueError("dynamic_viscosity must be positive")
+    if r <= 0:
+        raise ValueError("particle_radius must be positive")
+    return Quantity(magnitude=_BOLTZMANN * t / (6.0 * pi * mu * r), unit="m**2/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

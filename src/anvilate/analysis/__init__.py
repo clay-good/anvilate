@@ -389,7 +389,8 @@ modules:
   as its gain rises
 - :mod:`~anvilate.analysis.diffusion` — Fickian mass transport: the steady flux J = D·ΔC/L through
   a barrier (Fick's first law), the penetration length x = √(D·t) a diffusion front reaches, and the
-  time t = x²/D to diffuse a distance — the mass-transport analog of heat conduction
+  time t = x²/D to diffuse a distance — the mass-transport analog of heat conduction — plus the
+  Stokes-Einstein diffusivity D = k_B·T/(6πμr) that supplies the D every one of them consumes
 - :mod:`~anvilate.analysis.diffraction` — wave diffraction: the Bragg reflection angle
   θ = arcsin(n·λ/2d) and its crystal-plane-spacing inverse d = n·λ/(2·sinθ) (X-ray diffraction), and
   the grating diffraction angle θ = arcsin(m·λ/D) that disperses a spectrum
@@ -1571,6 +1572,7 @@ from .diffusion import (
     diffusion_time,
     error_function_concentration,
     steady_diffusion_flux,
+    stokes_einstein_diffusivity,
 )
 from .diode import (
     diode_current,
@@ -3281,6 +3283,7 @@ __all__ = [
     "diffusion_length",
     "diffusion_time",
     "error_function_concentration",
+    "stokes_einstein_diffusivity",
     "bragg_angle",
     "bragg_plane_spacing",
     "grating_diffraction_angle",

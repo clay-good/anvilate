@@ -26553,6 +26553,61 @@ def test_diffusion_flux_length_and_time_inverse():
         diffusion_length(diffusivity=_q("1 m**2"), time=_q("3600 s"))
 
 
+def test_diffusion_stokes_einstein_diffusivity():
+    from math import pi
+
+    from anvilate.analysis import (
+        diffusion_time,
+        stokes_drag_force,
+        stokes_einstein_diffusivity,
+    )
+
+    water = Quantity(magnitude=8.9e-4, unit="Pa*s")  # 25 C
+    room = Quantity(magnitude=298.15, unit="K")
+
+    # A small solute (r = 0.5 nm) in water at 25 C: D ~ 5e-10 m^2/s, the textbook value.
+    d = stokes_einstein_diffusivity(
+        temperature=room, dynamic_viscosity=water, particle_radius=_q("0.5 nm")
+    )
+    assert d.magnitude == pytest.approx(4.907462e-10, rel=1e-6)
+    assert d.unit == "m**2/s"
+    # Pinned independently against the closed form, not against the implementation.
+    assert d.magnitude == pytest.approx(
+        1.380649e-23 * 298.15 / (6 * pi * 8.9e-4 * 0.5e-9), rel=1e-12
+    )
+
+    # Self-consistency: the 6*pi*mu*r group IS the Stokes drag coefficient the drag module
+    # computes, so D must equal k_B*T divided by the drag force at unit velocity.
+    coefficient = stokes_drag_force(
+        fluid_viscosity=water, particle_diameter=_q("1.0 nm"), velocity=_q("1.0 m/s")
+    )
+    assert d.magnitude == pytest.approx(1.380649e-23 * 298.15 / coefficient.magnitude, rel=1e-12)
+
+    # Strictly inverse in radius: a 100x bigger particle diffuses 100x slower.
+    big = stokes_einstein_diffusivity(
+        temperature=room, dynamic_viscosity=water, particle_radius=_q("50 nm")
+    )
+    assert d.magnitude / big.magnitude == pytest.approx(100.0, rel=1e-12)
+
+    # It feeds the rest of the module: that solute needs ~34 min to spread across a millimetre.
+    assert diffusion_time(diffusion_length=_q("1 mm"), diffusivity=d).magnitude == pytest.approx(
+        2037.713, rel=1e-6
+    )
+
+    # Guardrails: positive absolute temperature, viscosity, radius; dimensions checked.
+    ok = {"temperature": room, "dynamic_viscosity": water, "particle_radius": _q("0.5 nm")}
+    with pytest.raises(ValueError, match="temperature must be a positive"):
+        stokes_einstein_diffusivity(**{**ok, "temperature": Quantity(magnitude=0.0, unit="K")})
+    with pytest.raises(ValueError, match="dynamic_viscosity must be positive"):
+        stokes_einstein_diffusivity(
+            **{**ok, "dynamic_viscosity": Quantity(magnitude=0.0, unit="Pa*s")}
+        )
+    with pytest.raises(ValueError, match="particle_radius must be positive"):
+        stokes_einstein_diffusivity(**{**ok, "particle_radius": _q("0 nm")})
+    with pytest.raises(ValueError, match="particle_radius must be a"):
+        stokes_einstein_diffusivity(**{**ok, "particle_radius": _q("1 s")})
+
+
 def test_diffusion_error_function_carburizing_profile():
     from math import erf, sqrt
 
