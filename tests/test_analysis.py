@@ -20739,6 +20739,36 @@ def test_orbital_mechanics_synodic_period():
         synodic_period(first_period=_q("365.25 m"), second_period=_q("686.98 day"))
 
 
+def test_hohmann_phase_angle():
+    from anvilate.analysis import hohmann_phase_angle
+
+    # Earth -> Mars (1.0 AU to 1.5237 AU): the textbook departure window has Mars ~44.3 deg ahead.
+    assert hohmann_phase_angle(
+        initial_radius=_q("1.0 au"), final_radius=_q("1.5237 au")
+    ) == pytest.approx(44.35, rel=1e-3)
+    # Earth -> Venus is inward, so the target must TRAIL: the angle comes out negative.
+    inward = hohmann_phase_angle(initial_radius=_q("1.0 au"), final_radius=_q("0.7233 au"))
+    assert inward == pytest.approx(-54.04, rel=1e-3)
+    # LEO -> GEO, the workhorse transfer.
+    assert hohmann_phase_angle(
+        initial_radius=_q("6678 km"), final_radius=_q("42164 km")
+    ) == pytest.approx(100.66, rel=1e-3)
+    # It depends only on the radius ratio, not the absolute scale.
+    assert hohmann_phase_angle(
+        initial_radius=_q("1000 km"), final_radius=_q("2000 km")
+    ) == pytest.approx(
+        hohmann_phase_angle(initial_radius=_q("1e6 km"), final_radius=_q("2e6 km")), rel=1e-12
+    )
+    # A barely-outward transfer needs the target almost alongside.
+    assert hohmann_phase_angle(
+        initial_radius=_q("10000 km"), final_radius=_q("10001 km")
+    ) == pytest.approx(0.0, abs=0.02)
+    with pytest.raises(ValueError):
+        hohmann_phase_angle(initial_radius=_q("7000 km"), final_radius=_q("7000 km"))
+    with pytest.raises(ValueError):
+        hohmann_phase_angle(initial_radius=_q("7000 kg"), final_radius=_q("42164 km"))
+
+
 def test_hohmann_transfer_burns_and_coast_time():
     from math import pi, sqrt
 

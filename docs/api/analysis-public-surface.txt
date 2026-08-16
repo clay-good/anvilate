@@ -1019,6 +1019,7 @@ orbital_mechanics.circular_orbit_velocity
 orbital_mechanics.orbital_period
 orbital_mechanics.escape_velocity
 orbital_mechanics.hohmann_first_burn_delta_v
+orbital_mechanics.hohmann_phase_angle
 orbital_mechanics.hohmann_second_burn_delta_v
 orbital_mechanics.hohmann_transfer_time
 orbital_mechanics.vis_viva_velocity

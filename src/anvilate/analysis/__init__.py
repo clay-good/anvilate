@@ -284,7 +284,9 @@ modules:
   orbital speed v = √(μ/r), the Kepler period T = 2π·√(r³/μ), the escape velocity
   v_esc = √(2μ/r) = √2·v_circ, the Hohmann two-burn transfer Δv's and coast time t = π·√(a³/μ),
   and the elliptical vis-viva speed v = √(μ(2/r − 1/a)), specific energy ε = −μ/(2a), and
-  semi-major axis a = (r_p + r_a)/2
+  semi-major axis a = (r_p + r_a)/2; plus the launch-window geometry to go with the synodic
+  cadence — the departure phase angle φ = π·(1 − ((r₁+r₂)/(2r₂))^1.5) the target must lead by
+  (about 44° for Earth→Mars)
 - :mod:`~anvilate.analysis.combustion` — furnace/boiler combustion: the stoichiometric
   air-fuel ratio from an ultimate analysis, the excess air read from flue-gas oxygen
   (EA = O₂/(20.9−O₂)), the actual air-fuel ratio a burner runs at, the equivalence ratio
@@ -2289,6 +2291,7 @@ from .orbital_mechanics import (
     circular_orbit_velocity,
     escape_velocity,
     hohmann_first_burn_delta_v,
+    hohmann_phase_angle,
     hohmann_second_burn_delta_v,
     hohmann_transfer_time,
     orbit_specific_energy,
@@ -3296,6 +3299,7 @@ __all__ = [
     "orbital_period",
     "escape_velocity",
     "hohmann_first_burn_delta_v",
+    "hohmann_phase_angle",
     "hohmann_second_burn_delta_v",
     "hohmann_transfer_time",
     "vis_viva_velocity",

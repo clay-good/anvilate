@@ -16,7 +16,7 @@ entirely, leaving on a parabolic escape trajectory, is v_esc = √(2μ/r) = √2
 
 from __future__ import annotations
 
-from math import pi, sqrt
+from math import degrees, pi, sqrt
 
 from ..units import Quantity
 
@@ -24,6 +24,7 @@ __all__ = [
     "circular_orbit_velocity",
     "escape_velocity",
     "hohmann_first_burn_delta_v",
+    "hohmann_phase_angle",
     "hohmann_second_burn_delta_v",
     "hohmann_transfer_time",
     "orbit_specific_energy",
@@ -191,6 +192,35 @@ def semi_major_axis_from_apsides(
     if r_a < r_p:
         raise ValueError("apoapsis_radius must not be less than periapsis_radius")
     return Quantity(magnitude=(r_p + r_a) / 2.0, unit="m").to("km")
+
+
+def hohmann_phase_angle(
+    *,
+    initial_radius: Quantity,
+    final_radius: Quantity,
+) -> float:
+    """The departure phase angle for a Hohmann transfer, φ = π·(1 − ((r₁+r₂)/(2·r₂))^1.5).
+
+    The transfer burns say how much velocity a trip costs and :func:`hohmann_transfer_time` says
+    how long it takes; :func:`synodic_period` says how often the chance comes round. This is the
+    piece that says *when to go*: where the target must be, relative to the spacecraft, at the
+    moment of the departure burn. The transfer takes half the transfer-ellipse period, and the
+    target has to arrive at the far apse at exactly that moment, so it must lead the departure
+    point by φ = π·(1 − ((r₁+r₂)/(2·r₂))^1.5), from the ``initial_radius`` r₁ and ``final_radius``
+    r₂ (both measured from the central body's centre). For an outward transfer φ is positive — the
+    target leads (Earth→Mars wants Mars about 44° ahead) — and for an inward one it is negative,
+    meaning the target must trail. Missing the window means waiting one synodic period. Returns the
+    phase angle in **degrees**.
+    """
+    _check(initial_radius, "[length]", "initial_radius")
+    _check(final_radius, "[length]", "final_radius")
+    r1 = initial_radius.to("m").magnitude
+    r2 = final_radius.to("m").magnitude
+    if r1 <= 0 or r2 <= 0:
+        raise ValueError("initial_radius and final_radius must be positive")
+    if r1 == r2:
+        raise ValueError("final_radius must differ from initial_radius (a transfer changes orbit)")
+    return degrees(pi * (1.0 - ((r1 + r2) / (2.0 * r2)) ** 1.5))
 
 
 def _hohmann_inputs(
