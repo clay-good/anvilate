@@ -6332,7 +6332,11 @@ def test_goodman_scorecard_uses_db_endurance_and_honours_no_silent_green():
         ultimate_strength=a36.ultimate_strength.quantity,
         required=1.5,
     )
-    assert evaluated.status in (CheckStatus.PASS, CheckStatus.FAIL)  # it ran
+    # Pin the number, not just the verdict: n = 1/(50/200 + 20/400) = 1/0.30. Asserting only
+    # "it ran" leaves the wrapper free to scale the safety factor by any finite amount.
+    assert evaluated.safety_factor == pytest.approx(10.0 / 3.0, rel=1e-12)
+    assert evaluated.required_safety_factor == 1.5
+    assert evaluated.status is CheckStatus.PASS
     # SS-304 has no endurance limit -> NOT_EVALUATED, never a silent pass.
     ss304 = db.get("SS-304")
     assert ss304.endurance_limit is None
@@ -6406,7 +6410,22 @@ def test_soderberg_scorecard_honours_no_silent_green():
         yield_strength=_q("250 MPa"),
         required=1.5,
     )
-    assert evaluated.status in (CheckStatus.PASS, CheckStatus.FAIL)
+    # Pin the number, not just the verdict: n = 1/(50/180 + 20/250).
+    assert evaluated.safety_factor == pytest.approx(2.795031055900621, rel=1e-12)
+    assert evaluated.status is CheckStatus.PASS
+    # Soderberg measures the mean stress against yield rather than ultimate, and a real material
+    # yields well below it, so for the same endurance limit Soderberg is always the more
+    # conservative of the two -- the module says so and nothing checked it.
+    goodman_same = goodman_scorecard(
+        "fatigue",
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q("20 MPa"),
+        endurance_limit=_q("180 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        required=1.5,
+    )
+    assert goodman_same.safety_factor == pytest.approx(1.0 / (50 / 180 + 20 / 400), rel=1e-12)
+    assert evaluated.safety_factor < goodman_same.safety_factor
     # No listed endurance limit -> NOT_EVALUATED, never a silent pass.
     gap = soderberg_scorecard(
         "fatigue",
@@ -10836,6 +10855,10 @@ def test_isolation_scorecard_flags_the_amplification_region():
         "mount", frequency_ratio=4.0, damping_ratio=0.05, required_transmissibility=0.2
     )
     assert good.status is CheckStatus.PASS
+    # Pin the margin itself. A PASS verdict here survives any scaling above ~0.36x, because the
+    # true margin carries 2.8x of slack -- TR = sqrt(1+(2*0.05*4)^2)/sqrt((1-16)^2+(2*0.05*4)^2)
+    # = 0.0717766..., so the margin is 0.2/TR.
+    assert good.safety_factor == pytest.approx(2.786420271788604, rel=1e-12)
 
     # A stiff mount below r = sqrt(2) does not isolate — it amplifies — and the entry
     # says so explicitly rather than reporting a bare number.
@@ -10844,6 +10867,9 @@ def test_isolation_scorecard_flags_the_amplification_region():
     )
     assert bad.status is CheckStatus.FAIL
     assert "amplifies" in bad.detail and "√2" in bad.detail
+    # The FAIL here comes from the r < sqrt(2) branch alone, so it holds whatever the number is.
+    # Pin the number too: at resonance TR = 10.0498756..., so the margin is far below one.
+    assert 1e3 * bad.safety_factor == pytest.approx(19.90074380419979, rel=1e-12)
 
     with pytest.raises(ValueError, match="required_transmissibility must be in"):
         isolation_scorecard(
