@@ -592,6 +592,7 @@ engineering_economics.simple_payback_period
 engineering_economics.net_present_value
 engineering_economics.benefit_cost_ratio
 engineering_economics.straight_line_depreciation
+engineering_economics.discounted_payback_period
 exergy.exergy_of_heat
 exergy.flow_exergy
 exergy.irreversibility_from_entropy_generation
@@ -886,6 +887,7 @@ hydro_power.hydro_turbine_power
 hydro_power.hydro_flow_for_power
 hydro_power.tidal_barrage_energy
 hydro_power.tidal_average_power
+hydro_power.turbine_specific_speed
 ideal_gas.ideal_gas_pressure
 ideal_gas.ideal_gas_volume
 ideal_gas.ideal_gas_moles
@@ -965,6 +967,7 @@ magnetics.coil_inductance
 naval_architecture.hull_speed
 naval_architecture.hull_froude_number
 naval_architecture.block_coefficient
+naval_architecture.roll_period
 nds_timber.LoadDuration
 nds_timber.nds_adjusted_design_value
 nds_timber.nds_bearing_area_factor
@@ -1127,6 +1130,7 @@ rectifier.filter_capacitance_for_ripple
 packed_bed.ergun_pressure_drop
 packed_bed.minimum_fluidization_velocity
 packed_bed.packed_bed_void_fraction
+packed_bed.specific_surface_area
 photodetector.photodiode_responsivity
 photodetector.photodiode_current
 photodetector.shot_noise_current
@@ -1384,6 +1388,7 @@ snapfit.snap_fit_strain
 solar_cell.fill_factor
 solar_cell.solar_cell_efficiency
 solar_cell.solar_cell_max_power
+solar_cell.solar_cell_open_circuit_voltage
 solar_geometry.solar_declination
 solar_geometry.solar_altitude_at_noon
 solar_geometry.sunset_hour_angle

@@ -27,6 +27,7 @@ __all__ = [
     "hull_speed",
     "hull_froude_number",
     "block_coefficient",
+    "roll_period",
 ]
 
 
@@ -104,6 +105,33 @@ def block_coefficient(
             "(check the inputs)"
         )
     return c_b
+
+
+def roll_period(*, roll_radius_of_gyration: Quantity, metacentric_height: Quantity) -> Quantity:
+    """A vessel's natural roll period, T = 2π·k/√(g·GM).
+
+    A ship rolling about its long axis is a pendulum: the righting moment restores it and its
+    rotational inertia resists, giving T = 2π·k/√(g·GM) from the ``roll_radius_of_gyration`` k
+    about the roll axis (typically 0.35-0.40 of the beam) and the ``metacentric_height`` GM that
+    :func:`anvilate.analysis.fluid_statics.metacentric_height` computes.
+
+    GM is the stability number, but it is not free: it appears under a square root in the
+    denominator, so a stiff ship — large GM, very stable in the naval-architecture sense — has a
+    *short* roll period and snaps back violently, which is punishing for crew, cargo lashings, and
+    deck equipment. A tender ship with small GM rolls slowly and comfortably but has less reserve
+    to right itself. Choosing GM is therefore choosing a roll period, and the comfort criterion
+    usually binds before the stability one. It also names the wave-encounter period to avoid:
+    a seaway that matches T rolls the ship in resonance. Returns the roll period in seconds.
+    """
+    _check(roll_radius_of_gyration, "[length]", "roll_radius_of_gyration")
+    _check(metacentric_height, "[length]", "metacentric_height")
+    k = roll_radius_of_gyration.to("m").magnitude
+    gm = metacentric_height.to("m").magnitude
+    if k <= 0:
+        raise ValueError("roll_radius_of_gyration must be positive")
+    if gm <= 0:
+        raise ValueError("metacentric_height must be positive (a negative GM is unstable)")
+    return Quantity(magnitude=2.0 * pi * k / sqrt(_STANDARD_GRAVITY * gm), unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

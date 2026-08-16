@@ -19,6 +19,8 @@ a steady flow is such a dependable resource: the power is there whenever the wat
 
 from __future__ import annotations
 
+from math import sqrt
+
 from ..units import Quantity
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
@@ -29,6 +31,7 @@ __all__ = [
     "hydro_turbine_power",
     "tidal_average_power",
     "tidal_barrage_energy",
+    "turbine_specific_speed",
 ]
 
 
@@ -166,6 +169,48 @@ def tidal_average_power(
         basin_area=basin_area, tidal_range=tidal_range, water_density=water_density
     )
     return Quantity(magnitude=energy.to("J").magnitude / period, unit="W")
+
+
+def turbine_specific_speed(
+    *,
+    rotational_speed: Quantity,
+    power: Quantity,
+    density: Quantity,
+    head: Quantity,
+) -> float:
+    """The dimensionless turbine specific speed, Ω_s = ω·√(P/ρ)/(g·H)^1.25.
+
+    The shape parameter that answers the first question in any hydro scheme: Pelton, Francis, or
+    Kaplan? The module sizes head, flow, and power but had no similarity group, so nothing said
+    which machine those numbers call for. From the ``rotational_speed`` ω, the ``power`` P, the
+    water ``density`` ρ, and the net ``head`` H (of :func:`hydro_net_head`):
+    Ω_s = ω·√(P/ρ)/(g·H)^1.25.
+
+    Roughly: below ~0.2 an impulse Pelton wheel (high head, low flow), 0.3-2.5 a reaction Francis
+    runner, above ~2.5 an axial Kaplan (low head, high flow). It is deliberately *not* the pump
+    group of :func:`anvilate.analysis.pump.pump_specific_speed`, which is built on flow with a 3/4
+    exponent — a turbine is specified by the power it must deliver, not the flow it must pass, so
+    the group carries √P and an exponent of 5/4 instead. The two are different similarity numbers
+    and are not interchangeable. Rotational speed may be given in rpm or rad/s. Returns the
+    dimensionless specific speed as a plain float.
+    """
+    _check(rotational_speed, "1/[time]", "rotational_speed")
+    _check(power, "[power]", "power")
+    _check(density, "[mass]/[length]**3", "density")
+    _check(head, "[length]", "head")
+    omega = rotational_speed.to("rad/s").magnitude
+    p_w = power.to("W").magnitude
+    rho = density.to("kg/m**3").magnitude
+    h = head.to("m").magnitude
+    if omega <= 0:
+        raise ValueError("rotational_speed must be positive")
+    if p_w <= 0:
+        raise ValueError("power must be positive")
+    if rho <= 0:
+        raise ValueError("density must be positive")
+    if h <= 0:
+        raise ValueError("head must be positive")
+    return omega * sqrt(p_w / rho) / (_GRAVITY * h) ** 1.25
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

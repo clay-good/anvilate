@@ -12,16 +12,27 @@ the open-circuit voltage V_oc and short-circuit current I_sc — 0.7-0.85 for go
 series resistance rounds the knee. The maximum power is then P_max = FF*V_oc*I_sc, and the
 efficiency is eta = P_max/(irradiance*area), the fraction of incident sunlight the cell turns into
 electricity (about 15-22% for commercial silicon at 1000 W/m^2).
+
+All three take V_oc as given. It follows in closed form from the cell's own diode: at open circuit
+the photocurrent recirculates through the junction, giving V_oc = (n*k*T/q)*ln(I_L/I_0 + 1) — a
+logarithm in the light and a falling function of temperature, which is why a panel loses voltage on
+a hot roof.
 """
 
 from __future__ import annotations
 
+from math import log
+
 from ..units import Quantity
+
+_BOLTZMANN = 1.380649e-23  # J/K
+_ELEMENTARY_CHARGE = 1.602176634e-19  # C
 
 __all__ = [
     "fill_factor",
     "solar_cell_efficiency",
     "solar_cell_max_power",
+    "solar_cell_open_circuit_voltage",
 ]
 
 
@@ -106,6 +117,47 @@ def solar_cell_efficiency(
     if a <= 0:
         raise ValueError("cell_area must be positive")
     return p / (g * a)
+
+
+def solar_cell_open_circuit_voltage(
+    *,
+    photocurrent: Quantity,
+    saturation_current: Quantity,
+    temperature: Quantity,
+    ideality_factor: float = 1.0,
+) -> Quantity:
+    """A solar cell's open-circuit voltage, V_oc = (n·k·T/q)·ln(I_L/I₀ + 1).
+
+    V_oc feeds every function in this module and none of them could produce it. It is not an
+    independent property: at open circuit the photocurrent has nowhere to go but back through the
+    cell's own diode, and the voltage that forces that balance is
+    V_oc = (n·k·T/q)·ln(``photocurrent`` I_L/``saturation_current`` I₀ + 1), with n the
+    ``ideality_factor`` and k·T/q the thermal voltage of
+    :func:`anvilate.analysis.diode.thermal_voltage` at absolute ``temperature`` T.
+
+    The logarithm is why V_oc barely moves with light: ten times the irradiance buys only
+    n·k·T/q·ln10 ≈ 60 mV per decade, which is why a panel's voltage is nearly constant through
+    the day while its current tracks the sun. Temperature is the opposite story and the one that
+    matters in the field — I₀ climbs so steeply with T that V_oc *falls* about 2 mV/K, so a hot
+    roof costs real output, and the sign of that coefficient is the single most-missed fact in
+    array sizing. Temperature must be absolute. Returns the open-circuit voltage in V.
+    """
+    _check(photocurrent, "[current]", "photocurrent")
+    _check(saturation_current, "[current]", "saturation_current")
+    _check(temperature, "[temperature]", "temperature")
+    i_l = photocurrent.to("A").magnitude
+    i_0 = saturation_current.to("A").magnitude
+    t = temperature.to("K").magnitude
+    if i_l <= 0:
+        raise ValueError("photocurrent must be positive")
+    if i_0 <= 0:
+        raise ValueError("saturation_current must be positive")
+    if t <= 0:
+        raise ValueError("temperature must be a positive absolute temperature")
+    if ideality_factor <= 0:
+        raise ValueError("ideality_factor must be positive")
+    thermal_voltage = _BOLTZMANN * t / _ELEMENTARY_CHARGE
+    return Quantity(magnitude=ideality_factor * thermal_voltage * log(i_l / i_0 + 1.0), unit="V")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

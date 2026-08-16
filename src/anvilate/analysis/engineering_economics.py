@@ -17,6 +17,7 @@ periods is a count.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from math import log
 
 __all__ = [
     "annuity_future_value",
@@ -26,6 +27,7 @@ __all__ = [
     "loan_payment",
     "net_present_value",
     "present_value",
+    "discounted_payback_period",
     "simple_payback_period",
     "straight_line_depreciation",
 ]
@@ -172,3 +174,38 @@ def straight_line_depreciation(
     if salvage_value > initial_cost:
         raise ValueError("salvage_value must not exceed initial_cost")
     return (initial_cost - salvage_value) / useful_life
+
+
+def discounted_payback_period(
+    *, initial_cost: float, annual_cash_flow: float, rate: float
+) -> float:
+    """The payback period with the time value of money, n = −ln(1 − C·i/A)/ln(1 + i).
+
+    :func:`simple_payback_period` divides cost by cash flow and its own docstring concedes it
+    ignores the time value of money. This is the honest version: set the present value of an
+    ``annual_cash_flow`` A over n periods, discounted at ``rate`` i, equal to the ``initial_cost``
+    C, and solve. Inverting the annuity relation A·[1 − (1+i)^−n]/i = C gives
+    n = −ln(1 − C·i/A)/ln(1+i).
+
+    It is always longer than the simple figure and the gap widens fast with the discount rate — a
+    $250,000 project returning $60,000 a year pays back in 4.17 years undiscounted but 5.27 at 8%.
+    The logarithm also surfaces a failure the simple form hides: if C·i ≥ A the annual flow never
+    covers the interest on the capital and the project never pays back at any horizon, which
+    raises here rather than returning a plausible number. Cost, cash flow, and rate are plain
+    floats in consistent units, the rate as a decimal per period. Returns the number of periods as
+    a plain float.
+    """
+    if initial_cost <= 0:
+        raise ValueError("initial_cost must be positive")
+    if annual_cash_flow <= 0:
+        raise ValueError("annual_cash_flow must be positive")
+    if rate <= -1.0:
+        raise ValueError("rate must exceed -1 (a decimal per period, not a percent)")
+    if rate == 0.0:
+        return initial_cost / annual_cash_flow
+    if initial_cost * rate >= annual_cash_flow:
+        raise ValueError(
+            f"the project never pays back: the annual cash flow {annual_cash_flow} does not cover "
+            f"the interest {initial_cost * rate} on the initial cost at a rate of {rate}"
+        )
+    return -log(1.0 - initial_cost * rate / annual_cash_flow) / log(1.0 + rate)

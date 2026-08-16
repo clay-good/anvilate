@@ -15028,6 +15028,71 @@ def test_hydro_turbine_power_net_head_and_flow_inverse():
         hydro_net_head(gross_head=_q("10 m"), head_loss=_q("10 m"))
 
 
+def test_hydro_turbine_specific_speed_picks_the_runner():
+    from math import pi, sqrt
+
+    from anvilate.analysis import turbine_specific_speed
+
+    site = {
+        "power": _q("5 MW"),
+        "density": _q("998 kg/m**3"),
+        "head": _q("40 m"),
+    }
+    # Omega_s = w*sqrt(P/rho)/(g*H)^1.25; 300 rpm on 5 MW at 40 m -> 1.27, Francis territory.
+    omega_s = turbine_specific_speed(rotational_speed=_q("300 rpm"), **site)
+    omega = 300.0 * 2.0 * pi / 60.0
+    assert omega_s == pytest.approx(omega * sqrt(5e6 / 998.0) / (9.80665 * 40.0) ** 1.25, rel=1e-12)
+    assert omega_s == pytest.approx(1.273778, rel=1e-6)
+    assert isinstance(omega_s, float)
+
+    # The equivalent metric engineering form N*sqrt(P_kW)/H^1.25 lands in the Francis band 80-400.
+    assert 300.0 * sqrt(5000.0) / 40.0**1.25 == pytest.approx(210.878, rel=1e-5)
+
+    # A rad/s input for the same shaft speed gives the same number.
+    assert turbine_specific_speed(
+        rotational_speed=Quantity(magnitude=omega, unit="rad/s"), **site
+    ) == pytest.approx(omega_s, rel=1e-9)
+
+    # High head drives it down toward the Pelton range; low head up toward Kaplan.
+    high_head = turbine_specific_speed(
+        rotational_speed=_q("300 rpm"),
+        power=_q("5 MW"),
+        density=_q("998 kg/m**3"),
+        head=_q("400 m"),
+    )
+    low_head = turbine_specific_speed(
+        rotational_speed=_q("300 rpm"), power=_q("5 MW"), density=_q("998 kg/m**3"), head=_q("8 m")
+    )
+    assert high_head < omega_s < low_head
+    # Exponent 5/4, not 3/4: a 10x head cuts the group by 10^1.25 = 17.78.
+    assert omega_s / high_head == pytest.approx(10.0**1.25, rel=1e-12)
+    # Square root in power, linear in speed.
+    assert turbine_specific_speed(
+        rotational_speed=_q("600 rpm"), **site
+    ) / omega_s == pytest.approx(2.0, rel=1e-12)
+    assert turbine_specific_speed(
+        rotational_speed=_q("300 rpm"),
+        power=_q("20 MW"),
+        density=_q("998 kg/m**3"),
+        head=_q("40 m"),
+    ) / omega_s == pytest.approx(2.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="head must be positive"):
+        turbine_specific_speed(
+            rotational_speed=_q("300 rpm"),
+            power=_q("5 MW"),
+            density=_q("998 kg/m**3"),
+            head=_q("0 m"),
+        )
+    with pytest.raises(ValueError, match="power must be a"):
+        turbine_specific_speed(
+            rotational_speed=_q("300 rpm"),
+            power=_q("5 J"),
+            density=_q("998 kg/m**3"),
+            head=_q("40 m"),
+        )
+
+
 def test_hydro_power_tidal_barrage_energy_and_average_power():
     from anvilate.analysis import tidal_average_power, tidal_barrage_energy
 
@@ -26149,6 +26214,64 @@ def test_battery_peukert_runtime_capacity_and_exponent():
         )
 
 
+def test_solar_cell_open_circuit_voltage_from_the_diode_balance():
+    from math import log
+
+    from anvilate.analysis import solar_cell_open_circuit_voltage, thermal_voltage
+
+    cell = {
+        "photocurrent": _q("8 A"),
+        "saturation_current": _q("1e-10 A"),
+        "temperature": Quantity(magnitude=298.15, unit="K"),
+    }
+    # V_oc = (n*k*T/q)*ln(I_L/I0 + 1); silicon at 25 C -> 0.645 V, the familiar cell voltage.
+    v_oc = solar_cell_open_circuit_voltage(**cell)
+    assert v_oc.to("V").magnitude == pytest.approx(0.6450197, rel=1e-6)
+    assert v_oc.unit == "V"
+
+    # Built on exactly the thermal voltage the diode module computes.
+    v_t = thermal_voltage(temperature=Quantity(magnitude=298.15, unit="K")).to("V").magnitude
+    assert v_oc.to("V").magnitude == pytest.approx(v_t * log(8.0 / 1e-10 + 1.0), rel=1e-12)
+
+    # Logarithmic in light: a decade more irradiance buys only n*k*T/q*ln10 = 59.2 mV,
+    # which is why a panel's voltage barely moves through the day while its current tracks the sun.
+    brighter = solar_cell_open_circuit_voltage(
+        photocurrent=_q("80 A"),
+        saturation_current=_q("1e-10 A"),
+        temperature=Quantity(magnitude=298.15, unit="K"),
+    )
+    assert (brighter.to("V").magnitude - v_oc.to("V").magnitude) * 1000 == pytest.approx(
+        59.159, rel=1e-4
+    )
+
+    # The ideality factor scales it directly.
+    assert solar_cell_open_circuit_voltage(ideality_factor=2.0, **cell).to(
+        "V"
+    ).magnitude == pytest.approx(2.0 * v_oc.to("V").magnitude, rel=1e-12)
+    assert solar_cell_open_circuit_voltage(ideality_factor=1.0, **cell).to(
+        "V"
+    ).magnitude == pytest.approx(v_oc.to("V").magnitude, rel=1e-12)
+
+    with pytest.raises(ValueError, match="saturation_current must be positive"):
+        solar_cell_open_circuit_voltage(
+            photocurrent=_q("8 A"),
+            saturation_current=Quantity(magnitude=0.0, unit="A"),
+            temperature=Quantity(magnitude=298.15, unit="K"),
+        )
+    with pytest.raises(ValueError, match="temperature must be a positive absolute"):
+        solar_cell_open_circuit_voltage(
+            photocurrent=_q("8 A"),
+            saturation_current=_q("1e-10 A"),
+            temperature=Quantity(magnitude=0.0, unit="K"),
+        )
+    with pytest.raises(ValueError, match="photocurrent must be a"):
+        solar_cell_open_circuit_voltage(
+            photocurrent=_q("8 V"),
+            saturation_current=_q("1e-10 A"),
+            temperature=Quantity(magnitude=298.15, unit="K"),
+        )
+
+
 def test_solar_cell_fill_factor_max_power_and_efficiency():
     from anvilate.analysis import fill_factor, solar_cell_efficiency, solar_cell_max_power
 
@@ -27674,6 +27797,51 @@ def test_npv_benefit_cost_ratio_and_depreciation():
         straight_line_depreciation(initial_cost=10000.0, salvage_value=12000.0, useful_life=5)
 
 
+def test_discounted_payback_period_against_the_annuity_it_inverts():
+    from anvilate.analysis import (
+        annuity_present_value,
+        discounted_payback_period,
+        simple_payback_period,
+    )
+
+    # $250,000 returning $60,000/yr: 4.17 years undiscounted, 5.27 at 8%.
+    simple = simple_payback_period(initial_cost=250_000.0, annual_cash_flow=60_000.0)
+    assert simple == pytest.approx(4.1666667, rel=1e-6)
+    discounted = discounted_payback_period(
+        initial_cost=250_000.0, annual_cash_flow=60_000.0, rate=0.08
+    )
+    assert discounted == pytest.approx(5.2684462, rel=1e-6)
+    assert isinstance(discounted, float)
+
+    # The check that makes it more than a formula: feeding the period back into the module's
+    # own annuity_present_value must recover the initial cost exactly.
+    assert annuity_present_value(payment=60_000.0, rate=0.08, periods=discounted) == pytest.approx(
+        250_000.0, rel=1e-9
+    )
+
+    # Always longer than the simple figure, and the gap widens with the discount rate.
+    periods = [
+        discounted_payback_period(initial_cost=250_000.0, annual_cash_flow=60_000.0, rate=r)
+        for r in (0.02, 0.05, 0.08, 0.15)
+    ]
+    assert all(p > simple for p in periods)
+    assert all(a < b for a, b in zip(periods, periods[1:], strict=False))
+
+    # At a zero discount rate it degenerates to the simple payback exactly.
+    assert discounted_payback_period(
+        initial_cost=250_000.0, annual_cash_flow=60_000.0, rate=0.0
+    ) == pytest.approx(simple, rel=1e-12)
+
+    # The failure the simple form hides: when the annual flow cannot cover the interest on the
+    # capital, the project never pays back at any horizon. Raise rather than return a number.
+    with pytest.raises(ValueError, match="never pays back"):
+        discounted_payback_period(initial_cost=250_000.0, annual_cash_flow=20_000.0, rate=0.08)
+    with pytest.raises(ValueError, match="initial_cost must be positive"):
+        discounted_payback_period(initial_cost=0.0, annual_cash_flow=60_000.0, rate=0.08)
+    with pytest.raises(ValueError, match="annual_cash_flow must be positive"):
+        discounted_payback_period(initial_cost=250_000.0, annual_cash_flow=0.0, rate=0.08)
+
+
 def test_annuity_future_value_loan_payment_and_payback():
     from anvilate.analysis import (
         annuity_future_value,
@@ -29046,6 +29214,39 @@ def test_packed_bed_ergun_pressure_drop_and_void_fraction():
             fluid_density=_q("1.2 kg/m**3"),
             fluid_viscosity=_q("1.8e-5 Pa"),
         )
+
+
+def test_packed_bed_specific_surface_area():
+    from anvilate.analysis import specific_surface_area
+
+    # a_v = 6*(1-eps)/d_p; 5 mm packing at 40% voidage -> 720 m2 per m3 of bed.
+    a_v = specific_surface_area(void_fraction=0.4, particle_diameter=_q("5 mm"))
+    assert a_v.to("1/m").magnitude == pytest.approx(6 * 0.6 / 0.005, rel=1e-12)
+    assert a_v.to("1/m").magnitude == pytest.approx(720.0, rel=1e-9)
+    assert a_v.unit == "1/m"
+
+    # Inverse in particle size: halving the packing diameter doubles the area.
+    finer = specific_surface_area(void_fraction=0.4, particle_diameter=_q("2.5 mm"))
+    assert finer.to("1/m").magnitude / a_v.to("1/m").magnitude == pytest.approx(2.0, rel=1e-12)
+
+    # Linear in the solid fraction: a looser bed has proportionally less surface.
+    loose = specific_surface_area(void_fraction=0.7, particle_diameter=_q("5 mm"))
+    assert loose.to("1/m").magnitude / a_v.to("1/m").magnitude == pytest.approx(
+        0.3 / 0.6, rel=1e-12
+    )
+    # An all-void "bed" has no surface at all.
+    assert specific_surface_area(void_fraction=0.0, particle_diameter=_q("5 mm")).to(
+        "1/m"
+    ).magnitude == pytest.approx(1200.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="void_fraction must be in 0..1"):
+        specific_surface_area(void_fraction=1.0, particle_diameter=_q("5 mm"))
+    with pytest.raises(ValueError, match="void_fraction must be in 0..1"):
+        specific_surface_area(void_fraction=40.0, particle_diameter=_q("5 mm"))
+    with pytest.raises(ValueError, match="particle_diameter must be positive"):
+        specific_surface_area(void_fraction=0.4, particle_diameter=_q("0 mm"))
+    with pytest.raises(ValueError, match="particle_diameter must be a"):
+        specific_surface_area(void_fraction=0.4, particle_diameter=_q("1 s"))
 
 
 def test_packed_bed_minimum_fluidization_velocity():
@@ -33884,6 +34085,35 @@ def test_optical_interference_double_slit_single_slit_and_wavelength_inverse():
         )
     with pytest.raises(ValueError, match="wavelength must be a"):
         double_slit_fringe_angle(wavelength=_q("500 Hz"), slit_separation=_q("0.1 mm"))
+
+
+def test_naval_architecture_roll_period_trades_against_stability():
+    from math import pi, sqrt
+
+    from anvilate.analysis import roll_period
+
+    # T = 2*pi*k/sqrt(g*GM); k = 2.1 m, GM = 0.9 m -> 4.44 s.
+    t = roll_period(roll_radius_of_gyration=_q("2.1 m"), metacentric_height=_q("0.9 m"))
+    assert t.to("s").magnitude == pytest.approx(2 * pi * 2.1 / sqrt(9.80665 * 0.9), rel=1e-12)
+    assert t.to("s").magnitude == pytest.approx(4.441376, rel=1e-6)
+    assert t.unit == "s"
+
+    # The trade the function exists to show: a STIFFER ship (bigger GM) rolls FASTER,
+    # inverse-square-root, so quadrupling GM halves the period and doubles the snap.
+    stiff = roll_period(roll_radius_of_gyration=_q("2.1 m"), metacentric_height=_q("3.6 m"))
+    assert t.to("s").magnitude / stiff.to("s").magnitude == pytest.approx(2.0, rel=1e-12)
+    assert stiff.to("s").magnitude < t.to("s").magnitude
+
+    # Linear in the radius of gyration: mass carried further out rolls more slowly.
+    wide = roll_period(roll_radius_of_gyration=_q("4.2 m"), metacentric_height=_q("0.9 m"))
+    assert wide.to("s").magnitude / t.to("s").magnitude == pytest.approx(2.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="metacentric_height must be positive"):
+        roll_period(roll_radius_of_gyration=_q("2.1 m"), metacentric_height=_q("0 m"))
+    with pytest.raises(ValueError, match="roll_radius_of_gyration must be positive"):
+        roll_period(roll_radius_of_gyration=_q("0 m"), metacentric_height=_q("0.9 m"))
+    with pytest.raises(ValueError, match="metacentric_height must be a"):
+        roll_period(roll_radius_of_gyration=_q("2.1 m"), metacentric_height=_q("1 s"))
 
 
 def test_naval_architecture_hull_speed_hull_froude_and_block_coefficient():

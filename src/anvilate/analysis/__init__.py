@@ -327,7 +327,8 @@ modules:
   for surface-tension breakup
 - :mod:`~anvilate.analysis.naval_architecture` — displacement-hull naval architecture: the hull
   speed v = √(g·L/(2π)) (the ~1.34·√L_ft-knot ceiling), the Froude number Fr = v/√(g·L), and the
-  block coefficient C_b = ∇/(L·B·T) that measures how full the underwater hull is
+  block coefficient C_b = ∇/(L·B·T) that measures how full the underwater hull is, and the natural
+  roll period T = 2π·k/√(g·GM) — the comfort criterion that usually binds before stability does
 - :mod:`~anvilate.analysis.pipe_flow` — incompressible pipe hydraulics: the Reynolds
   number, the Darcy friction factor (laminar 64/Re and turbulent Swamee-Jain), the
   Darcy-Weisbach friction head loss and fitting minor losses, the pressure drop ρ·g·h a
@@ -344,7 +345,9 @@ modules:
 - :mod:`~anvilate.analysis.packed_bed` — packed- and fluidized-bed flow: the Ergun pressure drop
   (viscous Kozeny-Carman plus inertial Burke-Plummer terms) through a bed of particles, the bed void
   fraction ε = 1 − ρ_bulk/ρ_p from the bulk and particle densities, and the minimum fluidization
-  velocity U_mf = d_p²·(ρ_p−ρ)·g·ε³/(150·μ·(1−ε)) at which the bed lifts into a fluidized state
+  velocity U_mf = d_p²·(ρ_p−ρ)·g·ε³/(150·μ·(1−ε)) at which the bed lifts into a fluidized state,
+  plus the specific surface area a_v = 6(1−ε)/d_p the Ergun constants are built on — the catalyst,
+  adsorption, and transfer area that packing size trades against pressure drop
 - :mod:`~anvilate.analysis.open_channel` — free-surface open-channel flow: the hydraulic
   radius, Manning's velocity and discharge V,Q = (1/n)·R^(2/3)·S^(1/2), the Froude number
   and rectangular critical depth that classify the flow as sub- or supercritical, the
@@ -438,7 +441,8 @@ modules:
   present value F/(1+i)^n of a future amount, the future value P·(1+i)^n of a present one, the
   present and future value of a uniform payment series, the level loan payment (capital recovery),
   the simple payback period C/A, the net present value ΣCFₜ/(1+i)^t of a cash-flow stream, the
-  benefit-cost ratio, and straight-line depreciation (C−S)/n
+  benefit-cost ratio, straight-line depreciation (C−S)/n, and the discounted payback period
+  n = −ln(1 − C·i/A)/ln(1+i) that the simple one's own docstring admits it is missing
 - :mod:`~anvilate.analysis.exergy` — exergy (availability / Second-Law) analysis: the exergy of
   heat X_Q = Q·(1 − T₀/T) (its Carnot-weighted available-work content), the specific flow exergy
   ψ = Δh − T₀·Δs of a stream, and the Gouy-Stodola exergy destruction İ = T₀·Ṡ_gen — the lost work
@@ -448,7 +452,9 @@ modules:
   Peukert exponent fitted from two discharge tests — the fast-drain penalty energy_storage ignores
 - :mod:`~anvilate.analysis.solar_cell` — photovoltaic cell I-V characterization: the fill factor
   FF = (V_mp·I_mp)/(V_oc·I_sc), the maximum power P_max = FF·V_oc·I_sc, and the conversion
-  efficiency η = P_max/(G·A) — the cell-level metrics behind the array power of solar_pv
+  efficiency η = P_max/(G·A) — the cell-level metrics behind the array power of solar_pv — and the
+  open-circuit voltage V_oc = (n·k·T/q)·ln(I_L/I₀ + 1) all three of them consume, logarithmic in
+  light and falling with temperature
 - :mod:`~anvilate.analysis.solar_geometry` — solar position geometry: the declination
   δ = 23.45°·sin(360·(284+n)/365) (Cooper), the solar-noon altitude α = 90° − |φ − δ|, and the
   atmospheric air mass AM = 1/sin(α) (the AM1.5 rating point) — the resource behind solar_pv; plus
@@ -479,7 +485,9 @@ modules:
   a plant delivers (linear in flow and head), and the flow a target output needs
   (Q = P/(ρ·g·H·η)); plus tidal-barrage energy E = ½·ρ·g·A·h² per tide (scaling with the *square*
   of the tidal range) and its average power E/T — completes the renewable set with
-  solar_pv/solar_thermal/wind_power
+  solar_pv/solar_thermal/wind_power; plus the turbine specific speed
+  Ω_s = ω·√(P/ρ)/(g·H)^1.25 that picks Pelton, Francis, or Kaplan (a power-based group, distinct
+  from the flow-based pump one)
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
@@ -1757,6 +1765,7 @@ from .engineering_economics import (
     annuity_future_value,
     annuity_present_value,
     benefit_cost_ratio,
+    discounted_payback_period,
     future_value,
     loan_payment,
     net_present_value,
@@ -2097,6 +2106,7 @@ from .hydro_power import (
     hydro_turbine_power,
     tidal_average_power,
     tidal_barrage_energy,
+    turbine_specific_speed,
 )
 from .ideal_gas import (
     ideal_gas_moles,
@@ -2249,6 +2259,7 @@ from .naval_architecture import (
     block_coefficient,
     hull_froude_number,
     hull_speed,
+    roll_period,
 )
 from .nds_timber import (
     LoadDuration,
@@ -2346,6 +2357,7 @@ from .packed_bed import (
     ergun_pressure_drop,
     minimum_fluidization_velocity,
     packed_bed_void_fraction,
+    specific_surface_area,
 )
 from .photodetector import (
     photodiode_current,
@@ -2788,6 +2800,7 @@ from .solar_cell import (
     fill_factor,
     solar_cell_efficiency,
     solar_cell_max_power,
+    solar_cell_open_circuit_voltage,
 )
 from .solar_geometry import (
     air_mass,
@@ -3568,6 +3581,7 @@ __all__ = [
     "annuity_future_value",
     "loan_payment",
     "simple_payback_period",
+    "discounted_payback_period",
     "net_present_value",
     "benefit_cost_ratio",
     "straight_line_depreciation",
@@ -3583,6 +3597,7 @@ __all__ = [
     "extrusion_force",
     "fill_factor",
     "solar_cell_max_power",
+    "solar_cell_open_circuit_voltage",
     "solar_cell_efficiency",
     "solar_declination",
     "daylight_hours",
@@ -3604,6 +3619,7 @@ __all__ = [
     "hydro_turbine_power",
     "hydro_flow_for_power",
     "tidal_barrage_energy",
+    "turbine_specific_speed",
     "tidal_average_power",
     "ideal_gas_pressure",
     "ideal_gas_volume",
@@ -3988,6 +4004,7 @@ __all__ = [
     "hull_speed",
     "hull_froude_number",
     "block_coefficient",
+    "roll_period",
     "compton_wavelength_shift",
     "compton_scattered_wavelength",
     "compton_electron_energy",
@@ -4307,6 +4324,7 @@ __all__ = [
     "ergun_pressure_drop",
     "minimum_fluidization_velocity",
     "packed_bed_void_fraction",
+    "specific_surface_area",
     "photodiode_responsivity",
     "photodiode_current",
     "shot_noise_current",

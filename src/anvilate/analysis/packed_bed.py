@@ -27,6 +27,7 @@ __all__ = [
     "ergun_pressure_drop",
     "minimum_fluidization_velocity",
     "packed_bed_void_fraction",
+    "specific_surface_area",
 ]
 
 
@@ -137,6 +138,34 @@ def minimum_fluidization_velocity(
     eps = void_fraction
     u_mf = dp**2 * (rho_p - rho) * _GRAVITY * eps**3 / (150.0 * mu * (1.0 - eps))
     return Quantity(magnitude=u_mf, unit="m/s")
+
+
+def specific_surface_area(*, void_fraction: float, particle_diameter: Quantity) -> Quantity:
+    """A packed bed's interfacial area per unit bed volume, a_v = 6·(1−ε)/d_p.
+
+    The surface the fluid actually meets, per cubic metre of bed. A sphere of diameter d_p has a
+    surface-to-volume ratio of 6/d_p, and a fraction (1 − ``void_fraction`` ε) of the bed volume is
+    solid, so a_v = 6·(1−ε)/d_p from the ``particle_diameter`` d_p. This is the quantity Ergun's
+    150 and 1.75 constants (:func:`ergun_pressure_drop`) are built on, and the module consumed both
+    ε and d_p without ever exposing it.
+
+    It is the number that decides everything the bed is for: catalyst activity, adsorption
+    capacity, and the heat- and mass-transfer area of a packed column all scale with it, and so
+    does the pressure drop, which is the trade. Inverse in particle size — halving the packing
+    diameter doubles the area and costs four times the drop — which is why packing size is the
+    central design choice in a reactor or a scrubber. Assumes spherical particles; multiply by a
+    sphericity below 1 for irregular packing. Returns the specific surface area in 1/m (m² of
+    surface per m³ of bed).
+    """
+    _check(particle_diameter, "[length]", "particle_diameter")
+    d_p = particle_diameter.to("m").magnitude
+    if not 0.0 <= void_fraction < 1.0:
+        raise ValueError(
+            f"void_fraction must be in 0..1 (a fraction, not a percent); got {void_fraction}"
+        )
+    if d_p <= 0:
+        raise ValueError("particle_diameter must be positive")
+    return Quantity(magnitude=6.0 * (1.0 - void_fraction) / d_p, unit="1/m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
