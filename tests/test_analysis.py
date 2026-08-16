@@ -19978,6 +19978,38 @@ def test_coil_bypass_factor():
         )
 
 
+def test_moist_air_specific_volume():
+    from anvilate.analysis import moist_air_specific_volume
+
+    # ASHRAE chart at 25 C, sea level, W = 0.010 reads v ~ 0.858 m3/kg of dry air.
+    v = moist_air_specific_volume(
+        temperature=_q("298.15 K"), pressure=_q("101325 Pa"), humidity_ratio=0.010
+    )
+    assert v.to("m^3/kg").magnitude == pytest.approx(0.85820, rel=1e-4)
+    # Moisture makes air lighter: the humid parcel takes more volume per kg of dry air.
+    dry = moist_air_specific_volume(
+        temperature=_q("298.15 K"), pressure=_q("101325 Pa"), humidity_ratio=0.0
+    )
+    assert dry.to("m^3/kg").magnitude < v.to("m^3/kg").magnitude
+    # Dry air is the plain ideal gas v = R*T/p.
+    assert dry.to("m^3/kg").magnitude == pytest.approx(287.042 * 298.15 / 101325, rel=1e-9)
+    # It closes the volumetric-to-mass bridge the load functions need: 1 m3/s / v = mdot.
+    assert 1.0 / v.to("m^3/kg").magnitude == pytest.approx(1.16522, rel=1e-4)
+    # Hotter air is less dense, so a fixed volumetric fan moves less mass.
+    hot = moist_air_specific_volume(
+        temperature=_q("313.15 K"), pressure=_q("101325 Pa"), humidity_ratio=0.010
+    )
+    assert hot.to("m^3/kg").magnitude > v.to("m^3/kg").magnitude
+    with pytest.raises(ValueError):
+        moist_air_specific_volume(
+            temperature=_q("298.15 K"), pressure=_q("101325 Pa"), humidity_ratio=-0.01
+        )
+    with pytest.raises(ValueError):
+        moist_air_specific_volume(
+            temperature=_q("298.15 K"), pressure=_q("5 kg"), humidity_ratio=0.01
+        )
+
+
 def test_moist_air_enthalpy_and_cooling_coil_load():
     from anvilate.analysis import cooling_coil_load, moist_air_enthalpy
 

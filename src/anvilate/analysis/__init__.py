@@ -481,7 +481,9 @@ modules:
   sensible/latent split with the sensible heat ratio SHR = Q_s/(Q_s + Q_l), the
   adiabatic mixing of two air streams (mass-weighted temperature and humidity ratio),
   the cooling-coil bypass factor against its apparent dew point, and the direct
-  evaporative-cooler saturation effectiveness toward the wet-bulb
+  evaporative-cooler saturation effectiveness toward the wet-bulb; plus the moist-air specific
+  volume v = R_da·T·(1 + 1.608·W)/p that turns a volumetric air flow into the dry-air mass flow
+  every load above is written in
 - :mod:`~anvilate.analysis.cooling_tower` — cooling-tower performance against the
   wet-bulb floor: the range R = T_hot − T_cold it cools the water, the approach
   A = T_cold − T_wb that measures tower capability, and the effectiveness
@@ -2437,6 +2439,7 @@ from .psychrometrics import (
     humidity_ratio,
     latent_heat_load,
     moist_air_enthalpy,
+    moist_air_specific_volume,
     relative_humidity,
     saturation_vapor_pressure,
     sensible_heat_load,
@@ -3341,6 +3344,7 @@ __all__ = [
     "latent_heat_load",
     "sensible_heat_ratio",
     "moist_air_enthalpy",
+    "moist_air_specific_volume",
     "relative_humidity",
     "saturation_vapor_pressure",
     "carnot_cop_cooling",

@@ -1025,6 +1025,7 @@ psychrometrics.dew_point_temperature
 psychrometrics.humidity_ratio
 psychrometrics.latent_heat_load
 psychrometrics.moist_air_enthalpy
+psychrometrics.moist_air_specific_volume
 psychrometrics.relative_humidity
 psychrometrics.saturation_vapor_pressure
 psychrometrics.sensible_heat_load

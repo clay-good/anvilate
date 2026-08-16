@@ -31,6 +31,7 @@ __all__ = [
     "humidity_ratio",
     "latent_heat_load",
     "moist_air_enthalpy",
+    "moist_air_specific_volume",
     "relative_humidity",
     "saturation_vapor_pressure",
     "sensible_heat_load",
@@ -50,6 +51,8 @@ _MAGNUS_B = 17.625
 _MAGNUS_C = 243.04
 # Mass ratio of water vapor to dry air (M_water / M_air = 18.015 / 28.966).
 _MASS_RATIO = 0.62198
+# Specific gas constant of dry air, R/M_air (J per kg per K).
+_R_DRY_AIR = 287.042
 
 
 def saturation_vapor_pressure(*, temperature: Quantity) -> Quantity:
@@ -143,6 +146,39 @@ def moist_air_enthalpy(*, temperature: Quantity, humidity_ratio: float) -> Quant
     t = temperature.to("degC").magnitude
     h = _CP_DRY_AIR * t + humidity_ratio * (_LATENT_HEAT_0C + _CP_WATER_VAPOR * t)
     return Quantity(magnitude=h, unit="kJ/kg")
+
+
+def moist_air_specific_volume(
+    *,
+    temperature: Quantity,
+    pressure: Quantity,
+    humidity_ratio: float,
+) -> Quantity:
+    """The specific volume of moist air, v = R_da·T·(1 + 1.608·W)/p (m³ per kg dry air).
+
+    The bridge between the volumetric flow an air system is actually specified in (CFM, m³/s) and
+    the *dry-air mass flow* every load in this module wants: v = R_da·T·(1 + W/0.622)/p, with
+    R_da = 287.042 J/(kg·K), ``temperature`` T absolute, ``pressure`` p barometric, and
+    ``humidity_ratio`` W in kg water per kg dry air (from :func:`humidity_ratio`). It is the
+    ideal-gas volume of a kg of dry air plus the vapor riding along with it, so the moisture term
+    makes humid air *less* dense, not more. Divide a volumetric flow by v to get the ṁ that
+    :func:`sensible_heat_load`, :func:`latent_heat_load`, and :func:`cooling_coil_load` need — and
+    note that v rises with temperature, which is why a fan rated in CFM moves less mass on a hot
+    day. Returns the specific volume in m³ per kg of dry air.
+    """
+    _check(temperature, "[temperature]", "temperature")
+    _check(pressure, "[pressure]", "pressure")
+    t = temperature.to("K").magnitude
+    p = pressure.to("Pa").magnitude
+    if t <= 0:
+        raise ValueError("temperature must be above absolute zero")
+    if p <= 0:
+        raise ValueError("pressure must be positive")
+    if humidity_ratio < 0:
+        raise ValueError("humidity_ratio must be non-negative")
+    return Quantity(
+        magnitude=_R_DRY_AIR * t * (1.0 + humidity_ratio / _MASS_RATIO) / p, unit="m^3/kg"
+    )
 
 
 def adiabatic_mixing_temperature(
