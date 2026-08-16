@@ -25,6 +25,7 @@ from math import pi
 from ..units import Quantity
 
 __all__ = [
+    "petroff_friction_coefficient",
     "petroff_friction_torque",
     "petroff_friction_power",
     "journal_bearing_unit_load",
@@ -234,3 +235,51 @@ def specific_film_ratio(
         raise ValueError("journal_roughness and bush_roughness must be positive")
     composite = (ra_j**2 + ra_b**2) ** 0.5
     return h0 / composite
+
+
+def petroff_friction_coefficient(
+    *,
+    journal_radius: Quantity,
+    radial_clearance: Quantity,
+    viscosity: Quantity,
+    speed: Quantity,
+    unit_load: Quantity,
+) -> float:
+    """The Petroff friction coefficient, f = 2·π²·(μ·N/P)·(r/c).
+
+    The module docstring names this number — "the friction coefficient follows from the bearing
+    load as f = T_f/(W·r)" — and no function computed it. It is the coefficient of friction of a
+    lightly loaded, near-concentric journal bearing: the Petroff friction torque
+    (:func:`petroff_friction_torque`) divided by the load times the radius, which reduces to
+    2·π² times the bearing characteristic μ·N/P times the clearance ratio r/c.
+
+    Equivalently f = 2·π²·S·(c/r) from the :func:`sommerfeld_number` S, which is the form worth
+    remembering, because it says the friction and the film thickness move together: the same
+    design change that thickens the film also costs power. A 50 mm journal at 1800 rpm carrying
+    5 kN on a 0.02 Pa·s oil through a 25 µm clearance runs f = 0.0059.
+
+    The factor is easy to get wrong. Petroff's *torque* carries 4·π² and the *coefficient* carries
+    2·π², because the unit load P is referred to the projected area 2·r·L while the torque is
+    referred to the full circumference — dropping that is a silent 2× error on the bearing's heat
+    load. Like the rest of the Petroff set this is the concentric-shaft bound and understates
+    friction for a heavily loaded bearing running at a real eccentricity. Returns the coefficient
+    as a plain float.
+    """
+    _require(journal_radius, "[length]", "journal_radius")
+    _require(radial_clearance, "[length]", "radial_clearance")
+    _require(viscosity, "[pressure] * [time]", "viscosity")
+    _require(unit_load, "[pressure]", "unit_load")
+    if not speed.has_dimension("[frequency]"):
+        raise ValueError(
+            f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})"
+        )
+    r = journal_radius.to("m").magnitude
+    c = radial_clearance.to("m").magnitude
+    mu = viscosity.to("Pa*s").magnitude
+    n = speed.to("rad/s").magnitude / (2.0 * pi)
+    p_load = unit_load.to("Pa").magnitude
+    if c <= 0 or r <= 0:
+        raise ValueError("journal_radius and radial_clearance must be positive")
+    if mu <= 0 or n <= 0 or p_load <= 0:
+        raise ValueError("viscosity, speed, and unit_load must be positive")
+    return 2.0 * pi**2 * (mu * n / p_load) * (r / c)

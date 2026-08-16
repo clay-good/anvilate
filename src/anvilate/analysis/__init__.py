@@ -1996,6 +1996,7 @@ from .gear import (
     gear_tooth_thickness_at_radius,
     gear_train_efficiency,
     gear_train_value,
+    helical_face_contact_ratio,
     helical_gear_axial_thrust,
     helical_gear_radial_load,
     helical_virtual_teeth,
@@ -2162,6 +2163,7 @@ from .isentropic_efficiency import (
 from .journal_bearing import (
     journal_bearing_minimum_film_thickness,
     journal_bearing_unit_load,
+    petroff_friction_coefficient,
     petroff_friction_power,
     petroff_friction_torque,
     sommerfeld_number,
@@ -2540,6 +2542,7 @@ from .psychrometrics import (
     saturation_vapor_pressure,
     sensible_heat_load,
     sensible_heat_ratio,
+    wet_bulb_temperature,
 )
 from .pump import (
     affinity_flow_rate,
@@ -3471,6 +3474,7 @@ __all__ = [
     "coil_bypass_factor",
     "cooling_coil_load",
     "evaporative_cooler_effectiveness",
+    "wet_bulb_temperature",
     "dew_point_temperature",
     "humidity_ratio",
     "sensible_heat_load",
@@ -4446,6 +4450,7 @@ __all__ = [
     "agma_contact_stress",
     "agma_module_for_bending_stress",
     "gear_contact_stress",
+    "helical_face_contact_ratio",
     "spur_gear_contact_ratio",
     "minimum_teeth_to_avoid_undercut",
     "involute_function",
@@ -4663,6 +4668,7 @@ __all__ = [
     "journal_bearing_unit_load",
     "sommerfeld_number",
     "journal_bearing_minimum_film_thickness",
+    "petroff_friction_coefficient",
     "specific_film_ratio",
     "hertz_effective_modulus",
     "aisi_plate_slenderness",

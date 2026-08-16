@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from math import pi, sin
 
 import pytest
@@ -34601,3 +34602,181 @@ def test_worm_gear_efficiency_refuses_to_return_a_negative_efficiency():
     # bites at far lower friction. A self-locking worm still has a healthy forward efficiency.
     assert worm_is_self_locking(lead_angle=5.0, friction_coefficient=0.1)
     assert worm_gear_efficiency(lead_angle=5.0, friction_coefficient=0.1) > 0.45
+
+
+def test_wet_bulb_temperature_and_the_evaporative_cooler_it_feeds():
+    from anvilate.analysis import evaporative_cooler_effectiveness, wet_bulb_temperature
+
+    def wb_c(t_c, rh):
+        return (
+            wet_bulb_temperature(
+                dry_bulb_temperature=Quantity(magnitude=t_c + 273.15, unit="K"),
+                relative_humidity=rh,
+            )
+            .to("K")
+            .magnitude
+            - 273.15
+        )
+
+    # Air at 30 degC / 50% RH has a wet bulb of 22.3 degC (ASHRAE chart ~22.0).
+    assert wb_c(30.0, 0.50) == pytest.approx(22.2968, rel=1e-4)
+    assert wb_c(35.0, 0.20) == pytest.approx(19.3021, rel=1e-4)
+    assert wb_c(40.0, 0.10) == pytest.approx(18.5074, rel=1e-4)
+
+    # At saturation the wet bulb IS the dry bulb -- reproduced to within the fit's own 0.3 K band,
+    # which is the honest statement, not an exact identity.
+    for t_c in (10.0, 20.0, 30.0, 40.0):
+        assert wb_c(t_c, 1.0) == pytest.approx(t_c, abs=0.3)
+
+    # The wet bulb never exceeds the dry bulb and rises monotonically with humidity: the
+    # depression is what evaporative cooling has to work with.
+    previous = -100.0
+    for rh in (0.1, 0.3, 0.5, 0.7, 0.9, 1.0):
+        value = wb_c(30.0, rh)
+        assert previous < value <= 30.0 + 0.3
+        previous = value
+
+    # The point of the function: it closes the loop the module could not. Feed it straight into
+    # evaporative_cooler_effectiveness, which consumes an entering wet bulb and had no source.
+    entering_dry = Quantity(magnitude=35.0 + 273.15, unit="K")
+    entering_wet = wet_bulb_temperature(dry_bulb_temperature=entering_dry, relative_humidity=0.20)
+    # A cooler that reaches 80% of the available depression.
+    depression = entering_dry.to("K").magnitude - entering_wet.to("K").magnitude
+    leaving = Quantity(magnitude=entering_dry.to("K").magnitude - 0.8 * depression, unit="K")
+    assert evaporative_cooler_effectiveness(
+        entering_dry_bulb=entering_dry,
+        leaving_dry_bulb=leaving,
+        entering_wet_bulb=entering_wet,
+    ) == pytest.approx(0.8, rel=1e-9)
+    # Phoenix vs Houston: the same 30 degC air offers 7.7 K of cooling at 50% RH and 1.4 at 90%.
+    assert 30.0 - wb_c(30.0, 0.50) == pytest.approx(7.7032, rel=1e-4)
+    assert 30.0 - wb_c(30.0, 0.90) == pytest.approx(1.3804, rel=1e-4)
+
+    with pytest.raises(ValueError):
+        wet_bulb_temperature(
+            dry_bulb_temperature=Quantity(magnitude=303.15, unit="K"), relative_humidity=0.0
+        )
+    with pytest.raises(ValueError):
+        wet_bulb_temperature(
+            dry_bulb_temperature=Quantity(magnitude=303.15, unit="K"), relative_humidity=1.5
+        )
+    with pytest.raises(ValueError):
+        wet_bulb_temperature(dry_bulb_temperature=_q("5 m"), relative_humidity=0.5)
+
+
+def test_petroff_friction_coefficient_against_the_torque_and_sommerfeld_it_reduces_to():
+    from anvilate.analysis import (
+        petroff_friction_coefficient,
+        petroff_friction_torque,
+        sommerfeld_number,
+    )
+
+    bearing = {
+        "journal_radius": _q("25 mm"),
+        "radial_clearance": _q("25 um"),
+        "viscosity": _q("0.02 Pa*s"),
+        "speed": _q("1800 rpm"),
+    }
+    load = _q("5 kN")
+    unit_load = _q("2 MPa")  # 5 kN over the 25 mm x 2 x 50 mm projected area
+
+    f = petroff_friction_coefficient(**bearing, unit_load=unit_load)
+    assert f == pytest.approx(0.005921762640653615, rel=1e-12)
+    assert isinstance(f, float)
+
+    # Route 1: it must be exactly the module's own friction torque over load times radius.
+    torque = petroff_friction_torque(**bearing, bearing_length=_q("50 mm"))
+    assert f == pytest.approx(
+        torque.to("N*m").magnitude / (load.to("N").magnitude * 0.025), rel=1e-12
+    )
+
+    # Route 2: f = 2*pi^2*S*(c/r) from the module's own Sommerfeld number. This is the identity
+    # that pins the factor -- the torque carries 4*pi^2 and the coefficient 2*pi^2, and getting
+    # that wrong is a silent 2x on the bearing's heat load.
+    s = sommerfeld_number(**bearing, unit_load=unit_load)
+    assert f == pytest.approx(2.0 * math.pi**2 * s * (25e-6 / 25e-3), rel=1e-12)
+    assert f != pytest.approx(4.0 * math.pi**2 * s * (25e-6 / 25e-3), rel=1e-3)
+
+    # Linear in viscosity and speed, inverse in load.
+    assert petroff_friction_coefficient(
+        **{**bearing, "viscosity": _q("0.04 Pa*s")}, unit_load=unit_load
+    ) == pytest.approx(2.0 * f, rel=1e-12)
+    assert petroff_friction_coefficient(**bearing, unit_load=_q("4 MPa")) == pytest.approx(
+        f / 2.0, rel=1e-12
+    )
+
+    with pytest.raises(ValueError):
+        petroff_friction_coefficient(**bearing, unit_load=_q("0 MPa"))
+    with pytest.raises(ValueError):
+        petroff_friction_coefficient(**{**bearing, "speed": _q("1800 N")}, unit_load=unit_load)
+
+
+def test_helical_face_contact_ratio_is_the_overlap_a_spur_gear_cannot_have():
+    from anvilate.analysis import (
+        helical_face_contact_ratio,
+        helical_gear_axial_thrust,
+        spur_gear_contact_ratio,
+    )
+
+    # 3 mm normal module, 20 degree helix, 40 mm face.
+    m_f = helical_face_contact_ratio(
+        face_width=_q("40 mm"), normal_module=_q("3 mm"), helix_angle=20.0
+    )
+    assert m_f == pytest.approx(1.4515785719274317, rel=1e-12)
+    assert isinstance(m_f, float)
+
+    # It is the face width measured in axial pitches, p_x = pi*m_n/sin(psi) = 27.556 mm.
+    axial_pitch_mm = math.pi * 3.0 / math.sin(math.radians(20.0))
+    assert axial_pitch_mm == pytest.approx(27.5562072722576, rel=1e-12)
+    assert m_f == pytest.approx(40.0 / axial_pitch_mm, rel=1e-12)
+
+    # Same number by the transverse route, m_t = m_n/cos(psi): m_F = F*tan(psi)/(pi*m_t).
+    m_t = 3.0 / math.cos(math.radians(20.0))
+    assert m_f == pytest.approx(40.0 * math.tan(math.radians(20.0)) / (math.pi * m_t), rel=1e-12)
+
+    # A spur gear has no overlap at all -- exactly the case spur_gear_contact_ratio covers, and
+    # exactly when the module's own helical_gear_axial_thrust returns zero.
+    assert (
+        helical_face_contact_ratio(
+            face_width=_q("40 mm"), normal_module=_q("3 mm"), helix_angle=0.0
+        )
+        == 0.0
+    )
+    assert helical_gear_axial_thrust(tangential_load=_q("1 kN"), helix_angle=0.0).to(
+        "N"
+    ).magnitude == pytest.approx(0.0, abs=1e-12)
+
+    # The total contact ratio is the transverse plus the face; the helix is what lifts a 20/40
+    # pair from 1.6 to over 3.
+    m_p = spur_gear_contact_ratio(
+        module=_q("3 mm"), pinion_teeth=20, gear_teeth=40, pressure_angle=20.0
+    )
+    assert m_p == pytest.approx(1.6350, rel=1e-3)
+    assert m_p + m_f == pytest.approx(3.0866, rel=1e-3)
+
+    # Proportional to face width, and rising with helix angle -- the two knobs a designer has.
+    assert helical_face_contact_ratio(
+        face_width=_q("80 mm"), normal_module=_q("3 mm"), helix_angle=20.0
+    ) == pytest.approx(2.0 * m_f, rel=1e-12)
+    assert (
+        helical_face_contact_ratio(
+            face_width=_q("40 mm"), normal_module=_q("3 mm"), helix_angle=30.0
+        )
+        > m_f
+    )
+    # A face width picked from bending stress alone can land under the m_F >= 1 rule.
+    assert (
+        helical_face_contact_ratio(
+            face_width=_q("25 mm"), normal_module=_q("3 mm"), helix_angle=20.0
+        )
+        < 1.0
+    )
+
+    with pytest.raises(ValueError):
+        helical_face_contact_ratio(
+            face_width=_q("0 mm"), normal_module=_q("3 mm"), helix_angle=20.0
+        )
+    with pytest.raises(ValueError):
+        helical_face_contact_ratio(
+            face_width=_q("40 mm"), normal_module=_q("3 mm"), helix_angle=90.0
+        )

@@ -45,6 +45,7 @@ _BARTH_FACTORS = {
 }
 
 __all__ = [
+    "helical_face_contact_ratio",
     "gear_tangential_load",
     "gear_radial_load",
     "gear_normal_load",
@@ -1295,3 +1296,38 @@ def gear_tooth_repeat_frequency(
     gmf = n_p * fr
     lcm = n_p * n_g // gcd(n_p, n_g)
     return Quantity(magnitude=gmf / lcm, unit="Hz")
+
+
+def helical_face_contact_ratio(
+    *, face_width: Quantity, normal_module: Quantity, helix_angle: float
+) -> float:
+    """The helical face (overlap) contact ratio, m_F = F·sin(ψ)/(π·m_n).
+
+    The number of axial pitches spanned by the face width — the overlap a helix buys and a spur
+    gear cannot have. The module computes the spur transverse contact ratio
+    (:func:`spur_gear_contact_ratio`), the axial thrust a helix costs
+    (:func:`helical_gear_axial_thrust`), and the virtual tooth count
+    (:func:`helical_virtual_teeth`), but not the quantity that is the whole reason to cut the
+    helix in the first place.
+
+    From the ``face_width`` F, the ``normal_module`` m_n, and the ``helix_angle`` ψ in degrees,
+    m_F = F/p_x with the axial pitch p_x = π·m_n/sin(ψ). A 3 mm normal module at 20° with a 40 mm
+    face gives m_F = 1.45, so at least one extra tooth pair is always engaging somewhere along the
+    face and the mesh stiffness never steps — that is the quiet running.
+
+    The design rule is m_F ≥ 1.0, preferably 1.15 or more to cover manufacturing scatter. A face
+    width picked from bending stress alone can easily land below it, at which point the gear pays
+    the axial thrust of a helix without buying the smoothness. m_F → 0 as ψ → 0, which is exactly
+    the spur case. Add it to the transverse contact ratio for the total. Returns the face contact
+    ratio as a plain float.
+    """
+    _require(face_width, "[length]", "face_width")
+    _require(normal_module, "[length]", "normal_module")
+    psi = _check_helix_angle(helix_angle)
+    f = face_width.to("mm").magnitude
+    mn = normal_module.to("mm").magnitude
+    if f <= 0:
+        raise ValueError("face_width must be positive")
+    if mn <= 0:
+        raise ValueError("normal_module must be positive")
+    return f * sin(psi) / (pi * mn)

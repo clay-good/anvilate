@@ -852,6 +852,7 @@ gear.gear_tooth_repeat_frequency
 gear.profile_shift_sum_for_center_distance
 gear.reverted_train_is_coaxial
 gear.spur_gear_contact_ratio
+gear.helical_face_contact_ratio
 geneva.geneva_advance_fraction
 geneva.geneva_crank_radius
 geneva.geneva_driven_radius
@@ -926,6 +927,7 @@ journal_bearing.petroff_friction_power
 journal_bearing.petroff_friction_torque
 journal_bearing.sommerfeld_number
 journal_bearing.specific_film_ratio
+journal_bearing.petroff_friction_coefficient
 keys.KeyLengthRequirement
 keys.key_bearing_stress
 keys.key_length_for_torque
@@ -1048,6 +1050,7 @@ psychrometrics.adiabatic_mixing_temperature
 psychrometrics.coil_bypass_factor
 psychrometrics.cooling_coil_load
 psychrometrics.evaporative_cooler_effectiveness
+psychrometrics.wet_bulb_temperature
 psychrometrics.dew_point_temperature
 psychrometrics.humidity_ratio
 psychrometrics.latent_heat_load

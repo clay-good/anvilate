@@ -17,11 +17,12 @@ Inputs and outputs are dimension-checked.
 
 from __future__ import annotations
 
-from math import exp, log
+from math import atan, exp, log, sqrt
 
 from ..units import Quantity
 
 __all__ = [
+    "wet_bulb_temperature",
     "adiabatic_mixing_temperature",
     "adiabatic_mixing_humidity_ratio",
     "coil_bypass_factor",
@@ -399,3 +400,45 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def wet_bulb_temperature(*, dry_bulb_temperature: Quantity, relative_humidity: float) -> Quantity:
+    """The wet-bulb temperature (Stull 2011 explicit fit).
+
+    The temperature a wetted thermometer settles at in a moving airstream — the lowest temperature
+    evaporation alone can reach, and the reference every evaporative process is measured against.
+    :func:`evaporative_cooler_effectiveness` consumes an entering wet bulb and the module had no
+    way to produce one.
+
+    There is no closed form from first principles: the psychrometric relation is implicit in T_wb,
+    so this is Stull's empirical inversion, in degrees Celsius with the ``relative_humidity`` φ
+    expressed as a percentage RH = 100·φ:
+
+        T_wb = T·atan(0.151977·√(RH + 8.313659)) + atan(T + RH) − atan(RH − 1.676331)
+               + 0.00391838·RH^1.5·atan(0.023101·RH) − 4.686035
+
+    The wet-bulb *depression* is the whole story of evaporative cooling. Air at 30 °C and 50% RH
+    has a wet bulb of 22.3 °C, so a perfect evaporative cooler could shed 7.7 K; the same air at
+    90% RH could shed barely 1.4 K. That is why swamp coolers work in Phoenix and not in Houston,
+    and it is invisible from the dry-bulb temperature alone.
+
+    The fit is good to about 0.3 K over the range that matters for building HVAC — dry bulb
+    between −20 and 50 °C at relative humidities above roughly 5% — and degrades outside it. At
+    saturation the wet bulb equals the dry bulb, which the fit reproduces to within its own error
+    band rather than exactly, so do not use it as an equality test. ``dry_bulb_temperature`` is an
+    absolute Quantity and ``relative_humidity`` a plain fraction in (0, 1]. Returns the wet-bulb
+    temperature in K.
+    """
+    _check(dry_bulb_temperature, "[temperature]", "dry_bulb_temperature")
+    if not 0.0 < relative_humidity <= 1.0:
+        raise ValueError(f"relative_humidity must be a fraction in (0, 1]; got {relative_humidity}")
+    t_c = dry_bulb_temperature.to("K").magnitude - 273.15
+    rh = 100.0 * relative_humidity
+    t_wb = (
+        t_c * atan(0.151977 * sqrt(rh + 8.313659))
+        + atan(t_c + rh)
+        - atan(rh - 1.676331)
+        + 0.00391838 * rh**1.5 * atan(0.023101 * rh)
+        - 4.686035
+    )
+    return Quantity(magnitude=t_wb + 273.15, unit="K")
