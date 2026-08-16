@@ -20,9 +20,36 @@ from ..units import Quantity
 
 __all__ = [
     "decay_constant_from_half_life",
+    "specific_activity",
     "remaining_activity",
     "time_for_activity_decay",
 ]
+
+
+_AVOGADRO = 6.02214076e23  # 1/mol (exact, SI definition)
+
+
+def specific_activity(*, half_life: Quantity, molar_mass: Quantity) -> Quantity:
+    """The specific activity of a pure nuclide, a = ln(2)·N_A/(T_half·M).
+
+    :func:`remaining_activity` starts from an activity someone hands you; this is where that number
+    comes from. A gram of a pure nuclide holds N_A/M atoms, each decaying at the rate λ = ln(2)/
+    T_half, so its activity per unit mass is a = λ·N_A/M = ln(2)·N_A/(``half_life``·``molar_mass``).
+    It is how sources are actually specified and priced, and it explains why short-lived nuclides
+    are so fierce: activity is inversely proportional to half-life, so I-131 (8 days) carries about
+    110 times the activity per gram of Co-60 (5.3 years), and a medical dose of it is a speck.
+    ``molar_mass`` M is the nuclide's atomic mass (59.9338 g/mol for Co-60). Returns the specific
+    activity in Bq/g — call ``.to("Ci/g")`` for curies.
+    """
+    _check(half_life, "[time]", "half_life")
+    _check(molar_mass, "[mass]/[substance]", "molar_mass")
+    t_half = half_life.to("s").magnitude
+    m = molar_mass.to("g/mol").magnitude
+    if t_half <= 0:
+        raise ValueError("half_life must be positive")
+    if m <= 0:
+        raise ValueError("molar_mass must be positive")
+    return Quantity(magnitude=log(2.0) * _AVOGADRO / (t_half * m), unit="Bq/g")
 
 
 def decay_constant_from_half_life(*, half_life: Quantity) -> Quantity:

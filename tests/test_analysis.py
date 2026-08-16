@@ -31202,6 +31202,34 @@ def test_radiation_shielding_transmission_hvl_and_thickness_inverse():
         half_value_layer(attenuation_coefficient=_q("0.0668 mm"))
 
 
+def test_radioactivity_specific_activity():
+    from anvilate.analysis import specific_activity
+
+    # Three published specific activities, each an independent external anchor.
+    # Co-60: T = 5.2714 yr, M = 59.9338 g/mol -> ~1131 Ci/g.
+    co60 = specific_activity(half_life=_q("5.2714 year"), molar_mass=_q("59.9338 g/mol"))
+    assert co60.to("Ci/g").magnitude == pytest.approx(1131.6, rel=1e-3)
+    assert co60.to("Bq/g").magnitude == pytest.approx(4.187e13, rel=1e-3)
+    # Cs-137: T = 30.08 yr, M = 136.907 g/mol -> ~87 Ci/g.
+    cs137 = specific_activity(half_life=_q("30.08 year"), molar_mass=_q("136.907 g/mol"))
+    assert cs137.to("Ci/g").magnitude == pytest.approx(86.8, rel=2e-3)
+    # I-131: T = 8.0252 days, M = 130.906 g/mol -> ~124,000 Ci/g.
+    i131 = specific_activity(half_life=_q("8.0252 day"), molar_mass=_q("130.906 g/mol"))
+    assert i131.to("Ci/g").magnitude == pytest.approx(1.243e5, rel=1e-3)
+    # A short half-life is a fierce source: I-131 carries ~110x the activity per gram of Co-60,
+    # its 240x shorter half-life partly offset by its 2.2x heavier atom.
+    assert i131.to("Bq/g").magnitude / co60.to("Bq/g").magnitude == pytest.approx(110.0, rel=0.02)
+    # Activity is inversely proportional to half-life and to molar mass.
+    half = specific_activity(half_life=_q("2.63570 year"), molar_mass=_q("59.9338 g/mol"))
+    assert half.to("Bq/g").magnitude == pytest.approx(2 * co60.to("Bq/g").magnitude, rel=1e-9)
+    heavy = specific_activity(half_life=_q("5.2714 year"), molar_mass=_q("119.8676 g/mol"))
+    assert heavy.to("Bq/g").magnitude == pytest.approx(co60.to("Bq/g").magnitude / 2, rel=1e-9)
+    with pytest.raises(ValueError):
+        specific_activity(half_life=_q("0 year"), molar_mass=_q("59.9338 g/mol"))
+    with pytest.raises(ValueError):
+        specific_activity(half_life=_q("5.2714 year"), molar_mass=_q("59.9338 g"))
+
+
 def test_radioactivity_decay_constant_remaining_activity_and_time():
     from math import log, log2
 

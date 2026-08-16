@@ -770,7 +770,9 @@ modules:
   produces V = g33·σ·t, and the force behind a measured charge F = Q/d33 (piezo load-washer readout)
 - :mod:`~anvilate.analysis.radioactivity` — radioactive decay: the decay constant λ = ln2/T½ a
   half-life fixes, the activity remaining after a time A = A0·2^(−t/T½), and the storage time to
-  decay to a target activity t = T½·log2(A0/A)
+  decay to a target activity t = T½·log2(A0/A); plus the specific activity a = ln2·N_A/(T½·M) of a
+  pure nuclide — where the A0 the others consume comes from, and why a short half-life makes a
+  speck of material fierce (Co-60 ≈ 1131 Ci/g)
 - :mod:`~anvilate.analysis.radiation_shielding` — gamma/x-ray shielding (narrow-beam Beer-Lambert):
   the transmitted fraction T = e^(−μ·x), the half-value layer HVL = ln2/μ that halves the beam, and
   the shield thickness for a target transmission x = −ln(T)/μ
@@ -2518,6 +2520,7 @@ from .radiation_shielding import (
 from .radioactivity import (
     decay_constant_from_half_life,
     remaining_activity,
+    specific_activity,
     time_for_activity_decay,
 )
 from .reaction_kinetics import (
@@ -3874,6 +3877,7 @@ __all__ = [
     "piezoelectric_open_circuit_voltage",
     "piezoelectric_force_from_charge",
     "decay_constant_from_half_life",
+    "specific_activity",
     "remaining_activity",
     "time_for_activity_decay",
     "first_order_half_life",
