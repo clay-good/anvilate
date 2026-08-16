@@ -198,7 +198,7 @@ def cutting_power(*, specific_cutting_force: Quantity, material_removal_rate: Qu
     asked whether the machine can turn it. That is one product: the ``specific_cutting_force`` k_s,
     the energy it takes to remove unit volume of the workpiece material (≈ 2000 MPa for medium
     carbon steel, ≈ 700 for aluminium; the same material constant
-    :func:`anvilate.analysis.broaching.broaching_force` already takes), times the
+    :func:`anvilate.analysis.broaching.broaching_cutting_force` already takes), times the
     ``material_removal_rate`` of :func:`material_removal_rate`.
 
     Pressure times volumetric flow is power — Pa·m³/s = W exactly — which is what makes this worth

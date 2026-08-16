@@ -34562,3 +34562,42 @@ def test_declining_balance_depreciation_front_loads_and_totals_the_depreciable_b
         declining_balance_depreciation(
             initial_cost=1_000.0, salvage_value=2_000.0, useful_life=5.0, period=1
         )
+
+
+def test_worm_gear_efficiency_refuses_to_return_a_negative_efficiency():
+    from anvilate.analysis import worm_gear_efficiency, worm_is_self_locking, worm_output_torque
+
+    # Normal worm territory is unaffected: a fine single-start worm and a coarse one.
+    assert worm_gear_efficiency(lead_angle=5.0, friction_coefficient=0.05) == pytest.approx(
+        0.6259689197263194, rel=1e-12
+    )
+    assert worm_gear_efficiency(lead_angle=30.0, friction_coefficient=0.05) == pytest.approx(
+        0.8905237885286725, rel=1e-12
+    )
+    # A frictionless mesh is lossless, whatever the lead.
+    assert worm_gear_efficiency(lead_angle=20.0, friction_coefficient=0.0) == 1.0
+
+    # The correlation is only valid while mu*tan(lambda) < cos(phi_n). Past that limit it used to
+    # return a NEGATIVE efficiency, which propagated as a sign-flipped output torque.
+    for lam, mu in ((85.0, 0.1), (80.0, 0.3), (45.0, 1.0)):
+        with pytest.raises(ValueError, match="cannot drive forward"):
+            worm_gear_efficiency(lead_angle=lam, friction_coefficient=mu)
+        with pytest.raises(ValueError, match="cannot drive forward"):
+            worm_output_torque(
+                input_torque=_q("10 N*m"),
+                worm_starts=1,
+                gear_teeth=40,
+                lead_angle=lam,
+                friction_coefficient=mu,
+            )
+
+    # Everything the guard admits is a real efficiency in (0, 1].
+    for lam in (1.0, 5.0, 15.0, 30.0, 45.0, 60.0):
+        for mu in (0.0, 0.01, 0.05, 0.1, 0.2):
+            eta = worm_gear_efficiency(lead_angle=lam, friction_coefficient=mu)
+            assert 0.0 < eta <= 1.0
+
+    # The guard is NOT the self-locking condition -- that is mu >= cos(phi_n)*tan(lambda), which
+    # bites at far lower friction. A self-locking worm still has a healthy forward efficiency.
+    assert worm_is_self_locking(lead_angle=5.0, friction_coefficient=0.1)
+    assert worm_gear_efficiency(lead_angle=5.0, friction_coefficient=0.1) > 0.45

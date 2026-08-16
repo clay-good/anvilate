@@ -5,7 +5,7 @@ duty cycle D — rather than by burning off the excess as a linear regulator doe
 non-isolated topologies each convert the input a different way: the buck steps voltage down, the
 boost steps it up, and the buck-boost can do either (with an inverted output). These ideal transfer
 functions (loss-free, continuous-conduction) are the first sizing step for any point-of-load supply,
-and they are distinct from the fixed-ratio :func:`anvilate.analysis.electrical` transformer (which
+and they are distinct from the fixed-ratio :mod:`anvilate.analysis.electrical` transformer (which
 needs AC and cannot change its ratio on the fly).
 
 For the buck, V_out = D * V_in, always at or below the input. For the boost, V_out = V_in / (1 - D),

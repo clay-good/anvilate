@@ -140,10 +140,29 @@ def worm_gear_efficiency(
     (μ = 0) returns 1.0; efficiency climbs with lead angle, which is why
     multi-start worms drive harder but self-lock less. Returns the dimensionless
     η in (0, 1].
+
+    The form is only valid while μ·tan λ < cos φ_n. At that limit the friction
+    component cancels the driving component and the worm cannot turn the wheel at
+    all in the forward direction; past it the expression goes negative, which is
+    not a low efficiency but a meaningless one. That case raises rather than
+    returning a negative number, because η multiplies straight through
+    :func:`worm_output_torque` and divides :func:`worm_tangential_force`, and a
+    negative η there is a sign-flipped torque handed to whatever sizes the
+    downstream shaft. Note this is a different condition from self-locking
+    (:func:`worm_is_self_locking`, μ ≥ cos φ_n·tan λ), which concerns the wheel
+    back-driving the worm and is reached at far lower friction — a normal worm is
+    self-locking with a perfectly healthy forward efficiency.
     """
     lam = _check_lead_angle(lead_angle)
     mu = _check_friction(friction_coefficient)
     phi_n = _check_pressure_angle(normal_pressure_angle)
+    if mu * tan(lam) >= cos(phi_n):
+        raise ValueError(
+            f"the mesh cannot drive forward: friction_coefficient {friction_coefficient} times "
+            f"tan(lead_angle {lead_angle} deg) = {mu * tan(lam)} is not below "
+            f"cos(normal_pressure_angle {normal_pressure_angle} deg) = {cos(phi_n)}, so the "
+            "efficiency correlation is outside its range of validity"
+        )
     numerator = cos(phi_n) - mu * tan(lam)
     denominator = cos(phi_n) + mu / tan(lam)
     return numerator / denominator
