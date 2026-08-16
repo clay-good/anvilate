@@ -3,8 +3,10 @@
 A cooling-water loop needs a control valve to pass 200 gpm of water with 10 psi of pressure drop
 allotted to the valve. The turbulent-liquid valve equation Q = Cv*sqrt(dP/SG) inverts to a required
 flow coefficient Cv = Q/sqrt(dP/SG) = 200/sqrt(10) = 63.2. A 2-inch valve on the shelf is rated
-Cv 50 -- below the duty. Selected anyway, it runs pinned near wide open and still cannot pass 200 gpm
-at only 10 psi; the loop starves. The safety factor of rated-to-required Cv is 0.79, under one, which
+Cv 50 -- below the duty. Selected anyway, it runs pinned near wide open and still cannot pass
+200 gpm
+at only 10 psi; the loop starves. The safety factor of rated-to-required Cv is 0.79, under one,
+which
 is the tell that the valve is undersized before it is ever installed.
 
 Stepping up to a 3-inch valve rated Cv 80 clears it: 80 vs the 63.2 required is a safety factor of

@@ -1,14 +1,16 @@
 """Worked example: the ultrasonic probe that cannot resolve a flaw in its near field.
 
-An inspector needs to size a suspected flaw 15 mm deep in a steel forging (sound speed 5900 m/s). The
-first probe reached for is a 10 mm, 5 MHz element. Its near-field length -- the chaotic zone where the
+An inspector needs to size a suspected flaw 15 mm deep in a steel forging (sound speed 5900 m/s).
+The first probe reached for is a 10 mm, 5 MHz element. Its near-field length -- the chaotic zone
+where the
 on-axis beam pressure swings through maxima and minima -- is N = D^2*f/(4*c) = 21.2 mm. The flaw at
 15 mm sits *inside* that near field, so its echo amplitude is unreliable and any size read off it is
 suspect: a safety factor of 0.71 on flaw-depth-over-near-field, under one, which is the signal the
 inspection is unsound before it starts.
 
 Swapping to a smaller 6 mm element (same 5 MHz) shrinks the near field, because N grows with the
-square of the diameter: N falls to 7.6 mm, so the 15 mm flaw now lies well into the clean far field --
+square of the diameter: N falls to 7.6 mm, so the 15 mm flaw now lies well into the clean far
+field --
 a safety factor of 1.97 -- where its echo can be trusted and sized. The trade is a wider, less
 directional beam, but the flaw is now in the part of the field the detector can actually measure.
 

@@ -13,7 +13,8 @@ conversion time to 1.5 hours -- a safety factor of 1.33 -- so the same 2-hour ho
 target with margin. The reaction, not the schedule, moved.
 
 The lesson is that batch time is spent against the reaction's own clock: size the hold to
--ln(1 - X)/k for the target conversion, and if it does not fit, change the rate constant (temperature,
+-ln(1 - X)/k for the target conversion, and if it does not fit, change the rate constant
+(temperature,
 catalyst), because chasing the last nines of conversion by waiting is exponentially expensive.
 
 Run it directly (``python examples/batch_reactor_conversion.py``);

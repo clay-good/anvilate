@@ -13,7 +13,8 @@ beam to 4 mm at the lens, and the same lens now forms an 8.5 um spot -- a safety
 comfortably inside spec. The kerf tightens and the edge cleans up.
 
 The lesson is that focus quality is won at the beam, not the lens or the power supply: a wide,
-well-collimated beam filling the focusing optic makes the tightest spot, which is why every precision
+well-collimated beam filling the focusing optic makes the tightest spot, which is why every
+precision
 laser tool expands its beam before the final lens.
 
 Run it directly (``python examples/laser_cutter_beam_expander.py``);

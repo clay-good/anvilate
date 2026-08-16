@@ -2,7 +2,8 @@
 
 A teaching lab measures a helium-neon laser's wavelength (633 nm) with a double slit. The slide has
 its two slits 0.5 mm apart, and the screen sits 1 m away. Young's law puts the bright fringes a
-distance dy = lambda*L/d = 633e-9 * 1 / 0.5e-3 = 1.27 mm apart. The lab rule is that a fringe pattern
+distance dy = lambda*L/d = 633e-9 * 1 / 0.5e-3 = 1.27 mm apart. The lab rule is that a fringe
+pattern
 is only readable when the bands are at least 2 mm apart -- closer than that and a student cannot
 count them cleanly against a millimetre ruler. At 1.27 mm the pattern fails that check, a safety
 factor of 0.63, and the measured wavelength comes out noisy.

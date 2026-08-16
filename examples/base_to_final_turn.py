@@ -11,7 +11,8 @@ with the secant of bank.
 
 The fix is not more airspeed but *less bank*. Held to a 30-degree bank the load factor is only
 n = 1.15 g, the accelerated stall speed falls to 50.√1.15 = 53.7 knots, and 70 knots now clears it
-with a 1.30 margin -- exactly the 1.3.V_s the approach wants. The turn is wider and takes longer, but
+with a 1.30 margin -- exactly the 1.3.V_s the approach wants. The turn is wider and takes longer,
+but
 a wide turn flown is better than a tight one stalled.
 
 The lesson is that bank angle, not airspeed, is the lever in a low-speed turn: every degree of bank
