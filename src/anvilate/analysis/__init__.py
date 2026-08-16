@@ -734,7 +734,10 @@ modules:
   horizontal-tube form (0.729/D), and the condensate rate ṁ = h·A·ΔT/h_fg they drive
 - :mod:`~anvilate.analysis.boiling` — nucleate boiling: the Rohsenow flux
   q″ = μ_l·h_fg·√(g·Δρ/σ)·[c_pl·ΔT_e/(C_sf·h_fg·Pr^n)]³, its ΔT_e inverse, and Zuber's
-  critical-heat-flux burnout limit q″_max = 0.149·h_fg·√ρ_v·[σ·g·Δρ]^¼
+  critical-heat-flux burnout limit q″_max = 0.149·h_fg·√ρ_v·[σ·g·Δρ]^¼; plus the film-boiling
+  regime past burnout — the Zuber-Berenson minimum flux 0.09·ρ_v·h_fg·[g·σ·Δρ/(ρ_l+ρ_v)²]^¼ at which
+  the vapor blanket collapses (the Leidenfrost point), and the Bromley coefficient
+  h = 0.62·[k_v³·ρ_v·Δρ·g·h′_fg/(μ_v·D·ΔT_e)]^¼ across the blanket on a horizontal cylinder
 - :mod:`~anvilate.analysis.boundary_layer` — laminar flat-plate (Blasius) boundary layer: the
   thickness δ = 5·x/√Re_x, the local skin-friction coefficient C_f = 0.664/√Re_x, and the average
   plate drag coefficient C_D = 1.328/√Re_L (all for Re below the ~5e5 laminar-turbulent transition);
@@ -1186,6 +1189,8 @@ from .belt import (
 )
 from .boiling import (
     critical_heat_flux,
+    film_boiling_coefficient,
+    minimum_film_boiling_heat_flux,
     nucleate_boiling_excess_temperature,
     nucleate_boiling_heat_flux,
 )
@@ -3827,6 +3832,8 @@ __all__ = [
     "nucleate_boiling_heat_flux",
     "nucleate_boiling_excess_temperature",
     "critical_heat_flux",
+    "film_boiling_coefficient",
+    "minimum_film_boiling_heat_flux",
     "laminar_boundary_layer_thickness",
     "laminar_skin_friction_coefficient",
     "laminar_plate_drag_coefficient",

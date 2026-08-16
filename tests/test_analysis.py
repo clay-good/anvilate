@@ -19618,6 +19618,75 @@ def test_jakob_number():
         )
 
 
+def test_film_boiling_minimum_flux_and_bromley_coefficient():
+    from anvilate.analysis import (
+        critical_heat_flux,
+        film_boiling_coefficient,
+        minimum_film_boiling_heat_flux,
+    )
+
+    # Saturated water at 1 atm.
+    water = {
+        "latent_heat": _q("2.257e6 J/kg"),
+        "liquid_density": _q("957.9 kg/m^3"),
+        "vapor_density": _q("0.5956 kg/m^3"),
+        "surface_tension": _q("0.0589 N/m"),
+    }
+    q_min = minimum_film_boiling_heat_flux(**water)
+    # Textbook Leidenfrost minimum for water at 1 atm is ~19 kW/m2.
+    assert q_min.to("W/m^2").magnitude == pytest.approx(18949.8, rel=1e-4)
+    # It sits far below Zuber's burnout ceiling -- the hysteresis of the boiling curve.
+    q_max = critical_heat_flux(**water)
+    assert q_max.to("W/m^2").magnitude / q_min.to("W/m^2").magnitude == pytest.approx(
+        66.4, rel=1e-2
+    )
+    # Bromley film boiling on a 10 mm cylinder at 550 K of superheat.
+    h = film_boiling_coefficient(
+        vapor_conductivity=_q("0.0741 W/(m*K)"),
+        vapor_density=_q("0.4157 kg/m^3"),
+        liquid_density=_q("957.9 kg/m^3"),
+        latent_heat=_q("2.257e6 J/kg"),
+        vapor_specific_heat=_q("2290 J/(kg*K)"),
+        vapor_viscosity=_q("2.426e-5 Pa*s"),
+        cylinder_diameter=_q("10 mm"),
+        excess_temperature=_q("550 K"),
+    )
+    # Film boiling is O(100) W/(m2*K) -- two orders below a nucleate coefficient.
+    assert h.to("W/(m^2*K)").magnitude == pytest.approx(275.27, rel=1e-4)
+    # A fatter cylinder holds a thicker blanket, so the coefficient falls as D^(-1/4).
+    fat = film_boiling_coefficient(
+        vapor_conductivity=_q("0.0741 W/(m*K)"),
+        vapor_density=_q("0.4157 kg/m^3"),
+        liquid_density=_q("957.9 kg/m^3"),
+        latent_heat=_q("2.257e6 J/kg"),
+        vapor_specific_heat=_q("2290 J/(kg*K)"),
+        vapor_viscosity=_q("2.426e-5 Pa*s"),
+        cylinder_diameter=_q("160 mm"),
+        excess_temperature=_q("550 K"),
+    )
+    assert fat.to("W/(m^2*K)").magnitude == pytest.approx(
+        h.to("W/(m^2*K)").magnitude / 2.0, rel=1e-9
+    )
+    with pytest.raises(ValueError):
+        minimum_film_boiling_heat_flux(
+            latent_heat=_q("2.257e6 J/kg"),
+            liquid_density=_q("0.5 kg/m^3"),
+            vapor_density=_q("0.5956 kg/m^3"),
+            surface_tension=_q("0.0589 N/m"),
+        )
+    with pytest.raises(ValueError):
+        film_boiling_coefficient(
+            vapor_conductivity=_q("0.0741 W/(m*K)"),
+            vapor_density=_q("0.4157 kg/m^3"),
+            liquid_density=_q("957.9 kg/m^3"),
+            latent_heat=_q("2.257e6 J/kg"),
+            vapor_specific_heat=_q("2290 J/(kg*K)"),
+            vapor_viscosity=_q("2.426e-5 Pa*s"),
+            cylinder_diameter=_q("10 mm"),
+            excess_temperature=_q("-5 K"),
+        )
+
+
 def test_nucleate_boiling_flux_superheat_inverse_and_critical_heat_flux():
     from anvilate.analysis import (
         critical_heat_flux,

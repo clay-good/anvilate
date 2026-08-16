@@ -26,6 +26,8 @@ STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
 __all__ = [
     "critical_heat_flux",
+    "film_boiling_coefficient",
+    "minimum_film_boiling_heat_flux",
     "nucleate_boiling_excess_temperature",
     "nucleate_boiling_heat_flux",
 ]
@@ -192,6 +194,111 @@ def critical_heat_flux(
         0.149 * h_fg * sqrt(rho_v) * (sigma * STANDARD_GRAVITY_M_PER_S2 * (rho_l - rho_v)) ** 0.25
     )
     return Quantity(magnitude=q_max, unit="W/m**2")
+
+
+def minimum_film_boiling_heat_flux(
+    *,
+    latent_heat: Quantity,
+    liquid_density: Quantity,
+    vapor_density: Quantity,
+    surface_tension: Quantity,
+) -> Quantity:
+    """The Zuber-Berenson minimum film-boiling flux, q″_min = 0.09·ρ_v·h_fg·[g·σ·Δρ/(ρ_l+ρ_v)²]^¼.
+
+    The *lower* bound of the boiling curve, and the companion of :func:`critical_heat_flux`: the
+    flux at which a stable vapor blanket can no longer sustain itself and collapses back into
+    nucleate boiling (the Leidenfrost point). From the ``latent_heat`` h_fg, the ``liquid_density``
+    ρ_l, the ``vapor_density`` ρ_v, and the ``surface_tension`` σ. A surface driven past the
+    critical heat flux jumps to film boiling and then has to be cooled all the way down below this
+    much smaller flux before it recovers — the hysteresis that makes a burnout so hard to walk back,
+    and the number that sets quench rates in heat treating. For water at 1 atm it is near
+    19 kW/m**2, some 66× below the critical flux. Returns the flux in W/m**2.
+    """
+    _check(latent_heat, "[energy]/[mass]", "latent_heat")
+    _check(liquid_density, "[mass]/[length]**3", "liquid_density")
+    _check(vapor_density, "[mass]/[length]**3", "vapor_density")
+    _check(surface_tension, "[force]/[length]", "surface_tension")
+    h_fg = latent_heat.to("J/kg").magnitude
+    rho_l = liquid_density.to("kg/m**3").magnitude
+    rho_v = vapor_density.to("kg/m**3").magnitude
+    sigma = surface_tension.to("N/m").magnitude
+    if h_fg <= 0:
+        raise ValueError("latent_heat must be positive")
+    if rho_l <= 0:
+        raise ValueError("liquid_density must be positive")
+    if rho_v <= 0:
+        raise ValueError("vapor_density must be positive")
+    if rho_v >= rho_l:
+        raise ValueError("vapor_density must be less than liquid_density")
+    if sigma <= 0:
+        raise ValueError("surface_tension must be positive")
+    bracket = STANDARD_GRAVITY_M_PER_S2 * sigma * (rho_l - rho_v) / (rho_l + rho_v) ** 2
+    return Quantity(magnitude=0.09 * rho_v * h_fg * bracket**0.25, unit="W/m**2")
+
+
+def film_boiling_coefficient(
+    *,
+    vapor_conductivity: Quantity,
+    vapor_density: Quantity,
+    liquid_density: Quantity,
+    latent_heat: Quantity,
+    vapor_specific_heat: Quantity,
+    vapor_viscosity: Quantity,
+    cylinder_diameter: Quantity,
+    excess_temperature: Quantity,
+) -> Quantity:
+    """The Bromley film-boiling coefficient on a horizontal cylinder, h = 0.62·[...]^¼.
+
+    Once the surface is blanketed in vapor, heat no longer crosses by bubble agitation but by
+    conduction and convection through the vapor film — the regime :mod:`anvilate.analysis.boiling`
+    otherwise left uncovered, and the boiling mirror of the film condensation in
+    :mod:`anvilate.analysis.condensation`. Bromley's correlation for a horizontal cylinder:
+    h = 0.62·[k_v³·ρ_v·(ρ_l − ρ_v)·g·h′_fg/(μ_v·D·ΔT_e)]^¼ with the corrected latent heat
+    h′_fg = h_fg + 0.8·c_pv·ΔT_e (the vapor leaves superheated, not saturated). Properties are the
+    *vapor's* — ``vapor_conductivity`` k_v, ``vapor_density`` ρ_v, ``vapor_specific_heat`` c_pv, and
+    ``vapor_viscosity`` μ_v, evaluated at the film temperature — with the ``liquid_density`` ρ_l,
+    the ``cylinder_diameter`` D, and the surface superheat ``excess_temperature`` ΔT_e. The result
+    is two orders of magnitude below a nucleate coefficient, which is exactly why the surface
+    temperature leaps when a boiling crisis blankets it. Radiation across the film matters above
+    roughly 300 °C of superheat and is not included here. Returns the coefficient in W/(m**2*K).
+    """
+    _check(vapor_conductivity, "[power]/([length]*[temperature])", "vapor_conductivity")
+    _check(vapor_density, "[mass]/[length]**3", "vapor_density")
+    _check(liquid_density, "[mass]/[length]**3", "liquid_density")
+    _check(latent_heat, "[energy]/[mass]", "latent_heat")
+    _check(vapor_specific_heat, "[energy]/([mass]*[temperature])", "vapor_specific_heat")
+    _check(vapor_viscosity, "[pressure]*[time]", "vapor_viscosity")
+    _check(cylinder_diameter, "[length]", "cylinder_diameter")
+    _check(excess_temperature, "[temperature]", "excess_temperature")
+    k_v = vapor_conductivity.to("W/(m*K)").magnitude
+    rho_v = vapor_density.to("kg/m**3").magnitude
+    rho_l = liquid_density.to("kg/m**3").magnitude
+    h_fg = latent_heat.to("J/kg").magnitude
+    c_pv = vapor_specific_heat.to("J/(kg*K)").magnitude
+    mu_v = vapor_viscosity.to("Pa*s").magnitude
+    d = cylinder_diameter.to("m").magnitude
+    dte = excess_temperature.to("K").magnitude
+    if k_v <= 0:
+        raise ValueError("vapor_conductivity must be positive")
+    if rho_v <= 0:
+        raise ValueError("vapor_density must be positive")
+    if rho_l <= rho_v:
+        raise ValueError("liquid_density must exceed vapor_density")
+    if h_fg <= 0:
+        raise ValueError("latent_heat must be positive")
+    if c_pv <= 0:
+        raise ValueError("vapor_specific_heat must be positive")
+    if mu_v <= 0:
+        raise ValueError("vapor_viscosity must be positive")
+    if d <= 0:
+        raise ValueError("cylinder_diameter must be positive")
+    if dte <= 0:
+        raise ValueError("excess_temperature must be positive")
+    h_fg_corrected = h_fg + 0.8 * c_pv * dte
+    bracket = (k_v**3 * rho_v * (rho_l - rho_v) * STANDARD_GRAVITY_M_PER_S2 * h_fg_corrected) / (
+        mu_v * d * dte
+    )
+    return Quantity(magnitude=0.62 * bracket**0.25, unit="W/(m**2*K)")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
