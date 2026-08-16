@@ -29991,6 +29991,43 @@ def test_laminar_boundary_layer_thickness_skin_friction_and_drag():
         )
 
 
+def test_lapse_rate_pressure_matches_the_isa_table():
+    from anvilate.analysis import barometric_pressure, lapse_rate_pressure
+
+    isa = {"sea_level_pressure": _q("101325 Pa"), "sea_level_temperature": _q("288.15 K")}
+    # The published ISA table: 54.020 kPa at 5 km, 22.632 kPa at the 11 km tropopause.
+    assert lapse_rate_pressure(altitude=_q("5000 m"), **isa).to("Pa").magnitude == pytest.approx(
+        54020.1, rel=1e-5
+    )
+    assert lapse_rate_pressure(altitude=_q("11000 m"), **isa).to("Pa").magnitude == pytest.approx(
+        22632.3, rel=1e-5
+    )
+    # Sea level returns the datum exactly.
+    assert lapse_rate_pressure(altitude=_q("0 m"), **isa).to("Pa").magnitude == pytest.approx(
+        101325.0, rel=1e-12
+    )
+    # The real troposphere cools with height, so its air is denser than an isothermal column at T0
+    # and the pressure aloft is lower than the barometric formula predicts.
+    iso = barometric_pressure(
+        sea_level_pressure=_q("101325 Pa"), altitude=_q("5000 m"), temperature=_q("288.15 K")
+    )
+    assert (
+        lapse_rate_pressure(altitude=_q("5000 m"), **isa).to("Pa").magnitude
+        < iso.to("Pa").magnitude
+    )
+    # A caller-supplied lapse rate is honored.
+    steep = lapse_rate_pressure(altitude=_q("5000 m"), lapse_rate=_q("0.009 K/m"), **isa)
+    assert (
+        steep.to("Pa").magnitude
+        < lapse_rate_pressure(altitude=_q("5000 m"), **isa).to("Pa").magnitude
+    )
+    # Above T0/L the model's temperature would pass absolute zero.
+    with pytest.raises(ValueError):
+        lapse_rate_pressure(altitude=_q("50000 m"), **isa)
+    with pytest.raises(ValueError):
+        lapse_rate_pressure(altitude=_q("5000 m"), lapse_rate=_q("-0.001 K/m"), **isa)
+
+
 def test_barometric_pressure_scale_height_and_altitude_inverse():
     from math import exp, log
 

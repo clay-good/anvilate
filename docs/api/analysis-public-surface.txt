@@ -54,6 +54,7 @@ arrhenius.arrhenius_activation_energy
 arrhenius.arrhenius_rate_constant
 arrhenius.arrhenius_rate_ratio
 atmosphere.barometric_altitude
+atmosphere.lapse_rate_pressure
 atmosphere.barometric_pressure
 atmosphere.scale_height
 atomic_spectra.bohr_energy_level

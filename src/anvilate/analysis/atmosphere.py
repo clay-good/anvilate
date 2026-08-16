@@ -24,10 +24,12 @@ from ..units import Quantity
 _UNIVERSAL_GAS_CONSTANT = 8.314462618  # J/(mol*K)
 _STANDARD_GRAVITY = 9.80665  # m/s**2
 _MOLAR_MASS_AIR = 0.0289647  # kg/mol, dry air
+_ISA_LAPSE_RATE = 0.0065  # K/m, the ISA troposphere temperature gradient
 
 __all__ = [
     "barometric_altitude",
     "barometric_pressure",
+    "lapse_rate_pressure",
     "scale_height",
 ]
 
@@ -108,6 +110,54 @@ def barometric_altitude(
     m = _molar_mass_value(molar_mass)
     scale = _UNIVERSAL_GAS_CONSTANT * t / (m * _STANDARD_GRAVITY)
     return Quantity(magnitude=scale * log(p0 / p), unit="m")
+
+
+def lapse_rate_pressure(
+    *,
+    sea_level_pressure: Quantity,
+    altitude: Quantity,
+    sea_level_temperature: Quantity,
+    lapse_rate: Quantity | None = None,
+    molar_mass: Quantity | None = None,
+) -> Quantity:
+    """The standard-atmosphere pressure at altitude, p = p0*(1 - L*h/T0)^(g*M/(R*L)).
+
+    The isothermal :func:`barometric_pressure` above assumes the column is all one temperature; the
+    real troposphere cools with height at a lapse rate L of about 6.5 K/km, and that is the model
+    the ISA tables, altimeter settings, and every aircraft performance chart are built on. Because
+    the air aloft is colder — and so denser — than an isothermal column, the pressure falls as a
+    *power law* rather than an exponential: p = p0*(1 - L*h/T0)^(g*M/(R*L)), from the
+    ``sea_level_pressure`` p0, the ``altitude`` h, the absolute ``sea_level_temperature`` T0, the
+    ``lapse_rate`` L (defaulting to the ISA 0.0065 K/m), and the gas ``molar_mass`` M (defaulting to
+    dry air). The exponent is 5.2559 for the ISA constants. Valid through the troposphere, up to the
+    ~11 km tropopause where the lapse rate goes to zero and the isothermal form takes over again;
+    the altitude must stay below T0/L, where the model's temperature would reach absolute zero.
+    Returns the pressure in Pa.
+    """
+    _check(sea_level_pressure, "[pressure]", "sea_level_pressure")
+    _check(altitude, "[length]", "altitude")
+    _check(sea_level_temperature, "[temperature]", "sea_level_temperature")
+    p0 = sea_level_pressure.to("Pa").magnitude
+    h = altitude.to("m").magnitude
+    t0 = sea_level_temperature.to("K").magnitude
+    if p0 <= 0:
+        raise ValueError("sea_level_pressure must be positive")
+    if t0 <= 0:
+        raise ValueError("sea_level_temperature must be positive (absolute temperature)")
+    if lapse_rate is None:
+        rate = _ISA_LAPSE_RATE
+    else:
+        _check(lapse_rate, "[temperature]/[length]", "lapse_rate")
+        rate = lapse_rate.to("K/m").magnitude
+        if rate <= 0:
+            raise ValueError("lapse_rate must be positive (temperature falling with height)")
+    if h >= t0 / rate:
+        raise ValueError(
+            "altitude is at or above T0/L, where the lapse-rate model reaches absolute zero"
+        )
+    m = _molar_mass_value(molar_mass)
+    exponent = _STANDARD_GRAVITY * m / (_UNIVERSAL_GAS_CONSTANT * rate)
+    return Quantity(magnitude=p0 * (1.0 - rate * h / t0) ** exponent, unit="Pa")
 
 
 def _molar_mass_value(molar_mass: Quantity | None) -> float:

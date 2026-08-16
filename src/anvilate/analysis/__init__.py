@@ -73,7 +73,9 @@ modules:
   (accelerated life testing), and the activation energy Ea extracted from two measured rates
 - :mod:`~anvilate.analysis.atmosphere` — barometric (isothermal-atmosphere) law: the pressure
   p = p0·exp(−h/H) that decays exponentially with altitude, the scale height H = R·T/(M·g)
-  (~8.4 km for air), and the altimeter inverse h = H·ln(p0/p) recovering altitude from pressure
+  (~8.4 km for air), and the altimeter inverse h = H·ln(p0/p) recovering altitude from pressure;
+  plus the ISA troposphere the real tables use, p = p0·(1 − L·h/T0)^(g·M/(R·L)) — a power law, not
+  an exponential, because the air aloft cools at ~6.5 K/km and so stays denser
 - :mod:`~anvilate.analysis.atomic_spectra` — hydrogen-like Bohr model: the energy level
   E_n = −13.606·Z²/n² eV, the orbit radius r_n = n²·a₀/Z, and the Rydberg transition wavelength
   1/λ = R·Z²·(1/n₁²−1/n₂²) (hydrogen's 656 nm Balmer line)
@@ -1046,6 +1048,7 @@ from .arrhenius import (
 from .atmosphere import (
     barometric_altitude,
     barometric_pressure,
+    lapse_rate_pressure,
     scale_height,
 )
 from .atomic_spectra import (
@@ -3619,6 +3622,7 @@ __all__ = [
     "arrhenius_activation_energy",
     "barometric_altitude",
     "barometric_pressure",
+    "lapse_rate_pressure",
     "scale_height",
     "bohr_energy_level",
     "bohr_orbit_radius",
