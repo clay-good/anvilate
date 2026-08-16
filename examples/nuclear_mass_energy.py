@@ -19,7 +19,7 @@ Run it directly (``python examples/nuclear_mass_energy.py``);
 
 from __future__ import annotations
 
-from anvilate.analysis import binding_energy_per_nucleon, mass_energy, mass_from_energy
+from anvilate.analysis import binding_energy_per_nucleon, mass_from_energy, rest_energy
 from anvilate.units import Quantity
 
 ONE_GRAM = Quantity.parse("1 g")
@@ -30,7 +30,7 @@ U235_NUCLEONS = 235
 
 def nuclear_energetics() -> dict[str, float]:
     """Return the gram-mass energy (TJ), the fission mass defect (kg), and U-235 binding/nucleon."""
-    gram_energy = mass_energy(mass=ONE_GRAM)
+    gram_energy = rest_energy(mass=ONE_GRAM)
     fission_mass = mass_from_energy(energy=FISSION_ENERGY)
     be_per_nucleon = binding_energy_per_nucleon(
         binding_energy=U235_BINDING_ENERGY, nucleon_count=U235_NUCLEONS

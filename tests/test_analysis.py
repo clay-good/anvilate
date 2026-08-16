@@ -25903,14 +25903,14 @@ def test_compton_wavelength_shift_scattered_and_electron_energy():
 def test_mass_energy_equivalence_and_binding_energy_per_nucleon():
     from anvilate.analysis import (
         binding_energy_per_nucleon,
-        mass_energy,
         mass_from_energy,
+        rest_energy,
     )
 
     c = 299792458.0
 
     # E = m*c^2; 1 g -> ~90 TJ.
-    e = mass_energy(mass=_q("1 g"))
+    e = rest_energy(mass=_q("1 g"))
     assert e.to("J").magnitude == pytest.approx(0.001 * c**2, rel=1e-9)
     assert e.to("J").magnitude / 1e12 == pytest.approx(89.876, abs=0.01)
 
@@ -25934,9 +25934,9 @@ def test_mass_energy_equivalence_and_binding_energy_per_nucleon():
             binding_energy=Quantity(magnitude=1783.9, unit="MeV"), nucleon_count=0
         )
     with pytest.raises(ValueError, match="mass must be non-negative"):
-        mass_energy(mass=_q("-1 g"))
+        rest_energy(mass=_q("-1 g"))
     with pytest.raises(ValueError, match="mass must be a"):
-        mass_energy(mass=_q("1 J"))
+        rest_energy(mass=_q("1 J"))
 
 
 def test_fresnel_oblique_s_and_p_reflectances():
@@ -30016,7 +30016,7 @@ def test_photon_momentum_radiation_pressure_and_force():
     from anvilate.analysis import (
         photon_momentum,
         radiation_force,
-        radiation_pressure,
+        radiation_pressure_from_intensity,
     )
 
     c = 299792458.0
@@ -30032,10 +30032,10 @@ def test_photon_momentum_radiation_pressure_and_force():
 
     # Radiation pressure P = (1+R)*I/c; absorber ~4.54 uPa, mirror ~9.08 uPa.
     i = _q("1361 W/m**2")
-    p_absorb = radiation_pressure(intensity=i, reflectivity=0.0)
+    p_absorb = radiation_pressure_from_intensity(intensity=i, reflectivity=0.0)
     assert p_absorb.to("Pa").magnitude == pytest.approx(1361.0 / c, rel=1e-9)
     assert p_absorb.to("Pa").magnitude * 1e6 == pytest.approx(4.540, abs=0.01)
-    p_mirror = radiation_pressure(intensity=i, reflectivity=1.0)
+    p_mirror = radiation_pressure_from_intensity(intensity=i, reflectivity=1.0)
     assert p_mirror.to("Pa").magnitude == pytest.approx(2.0 * p_absorb.to("Pa").magnitude, rel=1e-9)
 
     # Radiation force F = (1+R)*I*A/c; 100 m^2 mirror -> ~0.908 mN.
@@ -30047,7 +30047,7 @@ def test_photon_momentum_radiation_pressure_and_force():
 
     # Guardrails: reflectivity in [0, 1], positive wavelength/area.
     with pytest.raises(ValueError, match="reflectivity must be in"):
-        radiation_pressure(intensity=i, reflectivity=1.5)
+        radiation_pressure_from_intensity(intensity=i, reflectivity=1.5)
     with pytest.raises(ValueError, match="wavelength must be positive"):
         photon_momentum(wavelength=_q("0 m"))
     with pytest.raises(ValueError, match="intensity must be a"):

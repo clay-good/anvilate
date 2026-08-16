@@ -22,12 +22,12 @@ _SPEED_OF_LIGHT = 299792458.0  # m/s
 
 __all__ = [
     "binding_energy_per_nucleon",
-    "mass_energy",
+    "rest_energy",
     "mass_from_energy",
 ]
 
 
-def mass_energy(*, mass: Quantity) -> Quantity:
+def rest_energy(*, mass: Quantity) -> Quantity:
     """The rest energy of a mass, E = m*c^2.
 
     The energy equivalent of a ``mass`` m: E = m*c^2. For a whole object this is its rest energy;
@@ -44,7 +44,7 @@ def mass_energy(*, mass: Quantity) -> Quantity:
 def mass_from_energy(*, energy: Quantity) -> Quantity:
     """The mass equivalent of an energy, m = E/c^2.
 
-    The inverse of :func:`mass_energy`: the mass an ``energy`` E is equivalent to, m = E/c^2. It is
+    The inverse of :func:`rest_energy`: the mass an ``energy`` E is equivalent to, m = E/c^2. It is
     the (tiny) mass an energetic photon or reaction carries, and the mass a system loses when it
     radiates energy away. Returns the mass in kg.
     """

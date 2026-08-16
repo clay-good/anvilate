@@ -18,6 +18,7 @@ import ast
 import importlib
 import pkgutil
 import re
+import types
 from pathlib import Path
 
 import anvilate.analysis as analysis_pkg
@@ -123,6 +124,26 @@ def test_every_module_is_listed_in_the_package_docstring():
     assert not stale, (
         f"the anvilate.analysis package docstring lists modules that no longer exist: {stale}"
     )
+
+
+def test_no_exported_symbol_shadows_its_own_module():
+    # The package re-exports every module's symbols into one flat namespace, so a function
+    # whose name equals a module stem rebinds the package attribute over the submodule:
+    # ``import anvilate.analysis.radiation_pressure as m`` then binds the *function*, and
+    # ``m.photon_momentum`` raises AttributeError. The manifest and __all__ gates above cannot
+    # see this, because both sides of the comparison agree -- only the attribute type differs.
+    modules = set(_module_names())
+    shadowed = sorted(modules & set(analysis_pkg.__all__))
+    assert not shadowed, (
+        "exported symbols that collide with an analysis module name, making "
+        f"``import anvilate.analysis.<name> as m`` return the function instead: {shadowed}"
+    )
+    # And prove the property directly rather than only by name comparison.
+    for name in _module_names():
+        attribute = getattr(analysis_pkg, name)
+        assert isinstance(attribute, types.ModuleType), (
+            f"anvilate.analysis.{name} resolves to {attribute!r}, not the submodule"
+        )
 
 
 def test_every_public_callable_has_a_docstring():

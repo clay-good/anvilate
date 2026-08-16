@@ -19,7 +19,7 @@ from __future__ import annotations
 from anvilate.analysis import (
     photon_momentum,
     radiation_force,
-    radiation_pressure,
+    radiation_pressure_from_intensity,
 )
 from anvilate.units import Quantity
 
@@ -32,7 +32,9 @@ REFLECTIVITY = 1.0  # perfect mirror
 def solar_sail_thrust() -> dict[str, float]:
     """Return the photon momentum, the mirror radiation pressure, and the sail force."""
     momentum = photon_momentum(wavelength=WAVELENGTH)
-    pressure = radiation_pressure(intensity=SOLAR_CONSTANT, reflectivity=REFLECTIVITY)
+    pressure = radiation_pressure_from_intensity(
+        intensity=SOLAR_CONSTANT, reflectivity=REFLECTIVITY
+    )
     force = radiation_force(intensity=SOLAR_CONSTANT, area=SAIL_AREA, reflectivity=REFLECTIVITY)
     return {
         "photon_momentum_kg_m_s": momentum.to("kg*m/s").magnitude,

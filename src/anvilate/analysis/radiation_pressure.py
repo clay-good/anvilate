@@ -24,7 +24,7 @@ _SPEED_OF_LIGHT = 299792458.0  # m/s
 __all__ = [
     "photon_momentum",
     "radiation_force",
-    "radiation_pressure",
+    "radiation_pressure_from_intensity",
 ]
 
 
@@ -42,7 +42,9 @@ def photon_momentum(*, wavelength: Quantity) -> Quantity:
     return Quantity(magnitude=_PLANCK / lam, unit="kg*m/s")
 
 
-def radiation_pressure(*, intensity: Quantity, reflectivity: float = 0.0) -> Quantity:
+def radiation_pressure_from_intensity(
+    *, intensity: Quantity, reflectivity: float = 0.0
+) -> Quantity:
     """The radiation pressure, P = (1 + R)·I/c.
 
     The pressure a light beam of ``intensity`` I exerts on a surface of ``reflectivity`` R:

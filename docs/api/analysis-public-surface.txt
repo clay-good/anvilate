@@ -140,7 +140,7 @@ masonry.masonry_allowable_flexural_stress
 masonry.masonry_column_axial_capacity
 masonry.masonry_combined_stress_ratio
 mass_energy.binding_energy_per_nucleon
-mass_energy.mass_energy
+mass_energy.rest_energy
 mass_energy.mass_from_energy
 mass_transfer.schmidt_number
 mass_transfer.sherwood_number
@@ -1083,7 +1083,7 @@ radar.radar_received_power
 radar.radar_max_range
 radar.radar_range_resolution
 radiation_pressure.photon_momentum
-radiation_pressure.radiation_pressure
+radiation_pressure.radiation_pressure_from_intensity
 radiation_pressure.radiation_force
 radiation_shielding.half_value_layer
 radiation_shielding.radiation_transmission_fraction

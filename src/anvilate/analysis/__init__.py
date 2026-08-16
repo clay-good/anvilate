@@ -2234,8 +2234,8 @@ from .masonry import (
 )
 from .mass_energy import (
     binding_energy_per_nucleon,
-    mass_energy,
     mass_from_energy,
+    rest_energy,
 )
 from .mass_transfer import (
     chilton_colburn_mass_transfer_coefficient,
@@ -2575,7 +2575,7 @@ from .radar import (
 from .radiation_pressure import (
     photon_momentum,
     radiation_force,
-    radiation_pressure,
+    radiation_pressure_from_intensity,
 )
 from .radiation_shielding import (
     half_value_layer,
@@ -3993,12 +3993,12 @@ __all__ = [
     "second_order_half_life",
     "second_order_concentration",
     "photon_momentum",
-    "radiation_pressure",
+    "radiation_pressure_from_intensity",
     "radiation_force",
     "radiation_transmission_fraction",
     "half_value_layer",
     "shield_thickness_for_transmission",
-    "mass_energy",
+    "rest_energy",
     "mass_from_energy",
     "binding_energy_per_nucleon",
     "schmidt_number",
