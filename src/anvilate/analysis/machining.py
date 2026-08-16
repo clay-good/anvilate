@@ -25,6 +25,7 @@ from math import pi
 from ..units import Quantity
 
 __all__ = [
+    "cutting_power",
     "cutting_speed",
     "material_removal_rate",
     "spindle_speed_for_cutting_speed",
@@ -188,6 +189,34 @@ def feed_for_surface_roughness(
     if r <= 0:
         raise ValueError("tool_nose_radius must be positive")
     return Quantity(magnitude=(32.0 * r * ra_mm) ** 0.5, unit="mm")
+
+
+def cutting_power(*, specific_cutting_force: Quantity, material_removal_rate: Quantity) -> Quantity:
+    """The spindle power a cut demands, P_c = k_s·MRR.
+
+    The module sizes the cut — speed, feed, depth, removal rate, tool life, finish — but never
+    asked whether the machine can turn it. That is one product: the ``specific_cutting_force`` k_s,
+    the energy it takes to remove unit volume of the workpiece material (≈ 2000 MPa for medium
+    carbon steel, ≈ 700 for aluminium; the same material constant
+    :func:`anvilate.analysis.broaching.broaching_force` already takes), times the
+    ``material_removal_rate`` of :func:`material_removal_rate`.
+
+    Pressure times volumetric flow is power — Pa·m³/s = W exactly — which is what makes this worth
+    unit-checking rather than eyeballing: a 150 m/min, 0.25 mm/rev, 3 mm roughing pass in steel
+    removes 112.5 cm³/min and asks 3.75 kW at the cutter, so a nominal 7.5 kW spindle at ~75%
+    drive efficiency is working hard. This is power at the cut; divide by the machine's efficiency
+    for what the motor must supply, and note it says nothing about torque at low spindle speeds,
+    which is the other way a heavy cut stalls. Returns the cutting power in W.
+    """
+    _check(specific_cutting_force, "[pressure]", "specific_cutting_force")
+    _check(material_removal_rate, "[volume]/[time]", "material_removal_rate")
+    k_s = specific_cutting_force.to("Pa").magnitude
+    mrr = material_removal_rate.to("m**3/s").magnitude
+    if k_s <= 0:
+        raise ValueError("specific_cutting_force must be positive")
+    if mrr < 0:
+        raise ValueError("material_removal_rate must be non-negative")
+    return Quantity(magnitude=k_s * mrr, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

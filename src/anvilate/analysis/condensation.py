@@ -203,6 +203,7 @@ __all__ = [
     "condensation_rate",
     "film_condensation_horizontal_tube_coefficient",
     "film_condensation_vertical_plate_coefficient",
+    "condensation_modified_latent_heat",
     "jakob_number",
 ]
 
@@ -212,3 +213,39 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def condensation_modified_latent_heat(
+    *, latent_heat: Quantity, specific_heat: Quantity, temperature_difference: Quantity
+) -> Quantity:
+    """The Rohsenow-corrected latent heat, h_fg' = h_fg·(1 + 0.68·Ja).
+
+    :func:`jakob_number`'s own docstring names this correction and the module never applied it.
+    Nusselt's film analysis assumes the condensate leaves at the saturation temperature, but the
+    film is subcooled — it drains down a wall colder than saturation — so each kilogram carries
+    away sensible heat on top of its latent heat, and the effective release is larger than h_fg.
+    Rohsenow's integration of the film's actual temperature profile puts the surcharge at
+    0.68·Ja: h_fg' = ``latent_heat`` h_fg·(1 + 0.68·Ja), with Ja = c_p·ΔT/h_fg from the liquid
+    ``specific_heat`` c_p and the ``temperature_difference`` ΔT between saturation and the wall.
+
+    Substitute it for h_fg in :func:`film_condensation_vertical_plate_coefficient`,
+    :func:`film_condensation_horizontal_tube_coefficient`, or :func:`condensation_rate`. The
+    correction is small where Ja is small — steam at ΔT = 10 K gains 1.3% — and grows with the
+    subcooling, so it matters for a deeply subcooled surface or a low-latent-heat refrigerant. It
+    is always positive, so the uncorrected form is conservative on coefficient and unconservative
+    on condensate rate. Returns the modified latent heat in the units of ``latent_heat``.
+    """
+    _check(latent_heat, "[energy]/[mass]", "latent_heat")
+    _check(specific_heat, "[energy]/([mass]*[temperature])", "specific_heat")
+    _check(temperature_difference, "[temperature]", "temperature_difference")
+    h_fg = latent_heat.to("J/kg").magnitude
+    c_p = specific_heat.to("J/(kg*K)").magnitude
+    delta_t = temperature_difference.to("K").magnitude
+    if h_fg <= 0:
+        raise ValueError("latent_heat must be positive")
+    if c_p <= 0:
+        raise ValueError("specific_heat must be positive")
+    if delta_t < 0:
+        raise ValueError("temperature_difference must be non-negative")
+    jakob = c_p * delta_t / h_fg
+    return Quantity(magnitude=h_fg * (1.0 + 0.68 * jakob), unit="J/kg").to(latent_heat.unit)

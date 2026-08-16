@@ -32,6 +32,7 @@ __all__ = [
     "combustion_efficiency",
     "stoichiometric_air_fuel_ratio",
     "wobbe_index",
+    "adiabatic_flame_temperature",
     "lower_heating_value",
 ]
 
@@ -261,3 +262,58 @@ def lower_heating_value(
             "the water latent-heat term exceeds the higher heating value (LHV ≤ 0); check inputs"
         )
     return Quantity(magnitude=lhv, unit="MJ/kg")
+
+
+def adiabatic_flame_temperature(
+    *,
+    lower_heating_value: Quantity,
+    air_fuel_ratio: float,
+    product_specific_heat: Quantity,
+    inlet_temperature: Quantity,
+) -> Quantity:
+    """The constant-c_p adiabatic flame temperature, T_ad = T₀ + LHV/[(1 + AFR)·c_p].
+
+    The temperature the products would reach if every joule released stayed in them. The module
+    already computes both inputs it needs — the ``lower_heating_value`` LHV from
+    :func:`lower_heating_value` and the ``air_fuel_ratio`` AFR from
+    :func:`stoichiometric_air_fuel_ratio` or :func:`actual_air_fuel_ratio` — but stopped short of
+    the number those two exist to produce. Burning 1 kg of fuel with AFR kg of air makes (1 + AFR)
+    kg of products, so the release LHV is spread over that mass at the mean
+    ``product_specific_heat`` c_p, lifting them from the ``inlet_temperature`` T₀:
+    T_ad = T₀ + LHV/[(1 + AFR)·c_p].
+
+    This is what sizes refractory, picks burner and liner alloys, and sets the NOx expectation,
+    and it is the lever excess air pulls: the heat is fixed but the mass to heat is not, so going
+    from stoichiometric AFR = 15 to 20% excess air at AFR = 18 drops a 2486 K flame to 2140 K.
+    Treat it as an upper bound — it is adiabatic (no wall or radiation loss) and takes c_p as
+    constant, where a real flame both loses heat and dissociates CO₂ and H₂O endothermically above
+    roughly 2000 K, so measured temperatures run several hundred kelvin below this. Temperatures
+    must be absolute. Returns the adiabatic flame temperature in K.
+    """
+    if not lower_heating_value.has_dimension("[energy]/[mass]"):
+        raise ValueError(
+            "lower_heating_value must be a mass-specific energy (energy per mass); got "
+            f"{lower_heating_value.dimensionality} ({lower_heating_value})"
+        )
+    if not product_specific_heat.has_dimension("[energy]/([mass]*[temperature])"):
+        raise ValueError(
+            "product_specific_heat must be a specific heat (energy per mass per temperature); got "
+            f"{product_specific_heat.dimensionality} ({product_specific_heat})"
+        )
+    if not inlet_temperature.has_dimension("[temperature]"):
+        raise ValueError(
+            "inlet_temperature must be a temperature; got "
+            f"{inlet_temperature.dimensionality} ({inlet_temperature})"
+        )
+    lhv = lower_heating_value.to("J/kg").magnitude
+    c_p = product_specific_heat.to("J/(kg*K)").magnitude
+    t_0 = inlet_temperature.to("K").magnitude
+    if lhv <= 0:
+        raise ValueError("lower_heating_value must be positive")
+    if air_fuel_ratio <= 0:
+        raise ValueError("air_fuel_ratio must be positive")
+    if c_p <= 0:
+        raise ValueError("product_specific_heat must be positive")
+    if t_0 <= 0:
+        raise ValueError("inlet_temperature must be a positive absolute temperature")
+    return Quantity(magnitude=t_0 + lhv / ((1.0 + air_fuel_ratio) * c_p), unit="K")

@@ -12693,6 +12693,44 @@ def test_machining_cutting_speed_mrr_and_taylor_tool_life():
         cutting_speed(diameter=_q("0 mm"), spindle_speed=_q("1000 rpm"))
 
 
+def test_machining_cutting_power_sizes_the_spindle():
+    from anvilate.analysis import cutting_power, material_removal_rate
+
+    # A steel roughing pass: 150 m/min, 0.25 mm/rev, 3 mm deep -> 112.5 cm3/min.
+    mrr = material_removal_rate(
+        cutting_speed=_q("150 m/min"), feed=_q("0.25 mm"), depth_of_cut=_q("3 mm")
+    )
+    assert mrr.to("cm**3/min").magnitude == pytest.approx(112.5, rel=1e-9)
+
+    # P = k_s*MRR; 2000 MPa specific cutting force -> 3.75 kW at the cutter.
+    power = cutting_power(specific_cutting_force=_q("2000 MPa"), material_removal_rate=mrr)
+    assert power.to("W").magnitude == pytest.approx(2000e6 * 112.5e-6 / 60.0, rel=1e-9)
+    assert power.to("kW").magnitude == pytest.approx(3.75, rel=1e-9)
+    assert power.unit == "W"
+
+    # Pressure times volumetric flow really is power: an independent unit route agrees.
+    assert power.to("W").magnitude == pytest.approx(
+        _q("2000 MPa").to("Pa").magnitude * mrr.to("m**3/s").magnitude, rel=1e-12
+    )
+
+    # Linear in both factors: aluminium at 700 MPa asks 35% of the steel power.
+    aluminium = cutting_power(specific_cutting_force=_q("700 MPa"), material_removal_rate=mrr)
+    assert aluminium.to("kW").magnitude / power.to("kW").magnitude == pytest.approx(0.35, rel=1e-12)
+    doubled = material_removal_rate(
+        cutting_speed=_q("300 m/min"), feed=_q("0.25 mm"), depth_of_cut=_q("3 mm")
+    )
+    assert cutting_power(specific_cutting_force=_q("2000 MPa"), material_removal_rate=doubled).to(
+        "kW"
+    ).magnitude == pytest.approx(7.5, rel=1e-9)
+
+    with pytest.raises(ValueError, match="specific_cutting_force must be positive"):
+        cutting_power(
+            specific_cutting_force=Quantity(magnitude=0.0, unit="Pa"), material_removal_rate=mrr
+        )
+    with pytest.raises(ValueError, match="specific_cutting_force must be a"):
+        cutting_power(specific_cutting_force=_q("2000 N"), material_removal_rate=mrr)
+
+
 def test_machining_theoretical_surface_roughness_and_feed_inverse():
     from anvilate.analysis import (
         feed_for_surface_roughness,
@@ -18044,6 +18082,55 @@ def test_combustion_equivalence_ratio_grades_lean_and_rich():
         equivalence_ratio_from_excess_air(excess_air_fraction=-1.0)
 
 
+def test_combustion_adiabatic_flame_temperature():
+    from anvilate.analysis import adiabatic_flame_temperature
+
+    base = {
+        "lower_heating_value": _q("42 MJ/kg"),
+        "product_specific_heat": _q("1200 J/(kg*K)"),
+        "inlet_temperature": Quantity(magnitude=298.15, unit="K"),
+    }
+
+    # T_ad = T0 + LHV/[(1+AFR)*c_p]; stoichiometric hydrocarbon at AFR = 15 -> 2486 K.
+    stoich = adiabatic_flame_temperature(air_fuel_ratio=15.0, **base)
+    assert stoich.to("K").magnitude == pytest.approx(298.15 + 42e6 / (16.0 * 1200.0), rel=1e-12)
+    assert stoich.to("K").magnitude == pytest.approx(2485.65, rel=1e-6)
+    assert stoich.unit == "K"
+
+    # 20% excess air (AFR 15 -> 18) dilutes the same heat over more mass: 2486 K -> 2140 K.
+    lean = adiabatic_flame_temperature(air_fuel_ratio=18.0, **base)
+    assert lean.to("K").magnitude == pytest.approx(2140.2553, rel=1e-6)
+    assert lean.to("K").magnitude < stoich.to("K").magnitude
+
+    # The rise above inlet is what scales; more air always cools, monotonically.
+    rises = [
+        adiabatic_flame_temperature(air_fuel_ratio=afr, **base).to("K").magnitude - 298.15
+        for afr in (14.0, 16.0, 20.0, 30.0)
+    ]
+    assert all(a > b for a, b in zip(rises, rises[1:], strict=False))
+    # Doubling (1 + AFR) exactly halves the temperature rise.
+    assert rises[0] / (
+        adiabatic_flame_temperature(air_fuel_ratio=29.0, **base).to("K").magnitude - 298.15
+    ) == pytest.approx(2.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="air_fuel_ratio must be positive"):
+        adiabatic_flame_temperature(air_fuel_ratio=0.0, **base)
+    with pytest.raises(ValueError, match="inlet_temperature must be a positive absolute"):
+        adiabatic_flame_temperature(
+            lower_heating_value=_q("42 MJ/kg"),
+            air_fuel_ratio=15.0,
+            product_specific_heat=_q("1200 J/(kg*K)"),
+            inlet_temperature=Quantity(magnitude=0.0, unit="K"),
+        )
+    with pytest.raises(ValueError, match="lower_heating_value must be a"):
+        adiabatic_flame_temperature(
+            lower_heating_value=_q("42 MJ"),
+            air_fuel_ratio=15.0,
+            product_specific_heat=_q("1200 J/(kg*K)"),
+            inlet_temperature=Quantity(magnitude=298.15, unit="K"),
+        )
+
+
 def test_combustion_wobbe_index_and_lower_heating_value():
     from math import sqrt
 
@@ -19880,6 +19967,65 @@ def test_film_condensation_coefficients_and_condensate_rate():
             liquid_viscosity=_q("3.15e-4 m"),
             latent_heat=_q("2257 kJ/kg"),
             temperature_difference=_q("15 K"),
+        )
+
+
+def test_condensation_modified_latent_heat_rohsenow_correction():
+    from anvilate.analysis import condensation_modified_latent_heat, jakob_number
+
+    water = {
+        "latent_heat": _q("2257 kJ/kg"),
+        "specific_heat": _q("4216 J/(kg*K)"),
+        "temperature_difference": _q("10 K"),
+    }
+
+    # h_fg' = h_fg*(1 + 0.68*Ja), with Ja from the module's own jakob_number.
+    ja = jakob_number(**water)
+    assert ja == pytest.approx(0.01867966, rel=1e-6)
+    corrected = condensation_modified_latent_heat(**water)
+    assert corrected.to("kJ/kg").magnitude == pytest.approx(2257.0 * (1 + 0.68 * ja), rel=1e-12)
+    assert corrected.to("kJ/kg").magnitude == pytest.approx(2285.6688, rel=1e-6)
+    # Steam at a 10 K subcooling gains 1.27% — small, but always in the same direction.
+    assert corrected.to("J/kg").magnitude / 2257000.0 - 1.0 == pytest.approx(0.012702, rel=1e-4)
+
+    # It preserves the caller's unit rather than forcing SI.
+    assert corrected.unit == "kJ / kg"
+
+    # Always an increase, and it grows with the subcooling — linearly in delta_T.
+    for delta in ("1 K", "10 K", "40 K"):
+        bigger = condensation_modified_latent_heat(
+            latent_heat=_q("2257 kJ/kg"),
+            specific_heat=_q("4216 J/(kg*K)"),
+            temperature_difference=_q(delta),
+        )
+        assert bigger.to("kJ/kg").magnitude >= 2257.0
+    deep = condensation_modified_latent_heat(
+        latent_heat=_q("2257 kJ/kg"),
+        specific_heat=_q("4216 J/(kg*K)"),
+        temperature_difference=_q("40 K"),
+    )
+    assert (deep.to("kJ/kg").magnitude - 2257.0) / (
+        corrected.to("kJ/kg").magnitude - 2257.0
+    ) == pytest.approx(4.0, rel=1e-12)
+
+    # Zero subcooling is the uncorrected Nusselt case exactly.
+    assert condensation_modified_latent_heat(
+        latent_heat=_q("2257 kJ/kg"),
+        specific_heat=_q("4216 J/(kg*K)"),
+        temperature_difference=_q("0 K"),
+    ).to("kJ/kg").magnitude == pytest.approx(2257.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="latent_heat must be positive"):
+        condensation_modified_latent_heat(
+            latent_heat=Quantity(magnitude=0.0, unit="J/kg"),
+            specific_heat=_q("4216 J/(kg*K)"),
+            temperature_difference=_q("10 K"),
+        )
+    with pytest.raises(ValueError, match="specific_heat must be a"):
+        condensation_modified_latent_heat(
+            latent_heat=_q("2257 kJ/kg"),
+            specific_heat=_q("4216 J/kg"),
+            temperature_difference=_q("10 K"),
         )
 
 
@@ -25659,6 +25805,70 @@ def test_mass_energy_equivalence_and_binding_energy_per_nucleon():
         mass_energy(mass=_q("-1 g"))
     with pytest.raises(ValueError, match="mass must be a"):
         mass_energy(mass=_q("1 J"))
+
+
+def test_fresnel_oblique_s_and_p_reflectances():
+    from anvilate.analysis import (
+        brewster_angle,
+        fresnel_normal_reflectance,
+        fresnel_p_reflectance,
+        fresnel_s_reflectance,
+    )
+
+    glass = {"incident_index": 1.0, "transmitted_index": 1.5}
+
+    # At normal incidence the plane of incidence is undefined and both collapse to the
+    # module's own normal-incidence reflectance, 4% for air-glass.
+    normal = fresnel_normal_reflectance(**glass)
+    assert fresnel_s_reflectance(incidence_angle=0.0, **glass) == pytest.approx(normal, rel=1e-12)
+    assert fresnel_p_reflectance(incidence_angle=0.0, **glass) == pytest.approx(normal, rel=1e-12)
+    assert normal == pytest.approx(0.04, rel=1e-9)
+
+    # R_p vanishes EXACTLY at the Brewster angle the module already computes. That zero is
+    # the cross-check no ratio test could give, and it is what polarizing filters exploit.
+    theta_b = brewster_angle(**glass)
+    assert theta_b == pytest.approx(56.309932, rel=1e-6)
+    assert fresnel_p_reflectance(incidence_angle=theta_b, **glass) == pytest.approx(0.0, abs=1e-15)
+    assert fresnel_s_reflectance(incidence_angle=theta_b, **glass) == pytest.approx(
+        0.147929, rel=1e-5
+    )
+
+    # Pinned values across the range.
+    assert fresnel_s_reflectance(incidence_angle=45.0, **glass) == pytest.approx(
+        0.09201336, rel=1e-7
+    )
+    assert fresnel_p_reflectance(incidence_angle=45.0, **glass) == pytest.approx(
+        0.00846646, rel=1e-6
+    )
+    assert fresnel_s_reflectance(incidence_angle=60.0, **glass) == pytest.approx(
+        0.17657149, rel=1e-7
+    )
+    assert fresnel_p_reflectance(incidence_angle=60.0, **glass) == pytest.approx(
+        0.00180194, rel=1e-5
+    )
+
+    # s is reflected at least as strongly as p at EVERY angle — the reason reflected
+    # glare is s-polarized — and s rises monotonically toward 1 at grazing incidence.
+    angles = [0.0, 10.0, 30.0, 45.0, 56.3, 70.0, 85.0, 89.0]
+    s_values = [fresnel_s_reflectance(incidence_angle=a, **glass) for a in angles]
+    for a, s_value in zip(angles, s_values, strict=False):
+        assert s_value >= fresnel_p_reflectance(incidence_angle=a, **glass) - 1e-15
+        assert 0.0 <= s_value <= 1.0
+    assert all(a < b for a, b in zip(s_values, s_values[1:], strict=False))
+    assert fresnel_s_reflectance(incidence_angle=89.0, **glass) == pytest.approx(0.9395, rel=1e-3)
+
+    # R_p is NOT monotonic: it dips to zero at Brewster and climbs again after.
+    assert fresnel_p_reflectance(incidence_angle=70.0, **glass) > fresnel_p_reflectance(
+        incidence_angle=56.3, **glass
+    )
+
+    # Going the dense-to-rare way, past the critical angle there is no transmitted ray at all.
+    with pytest.raises(ValueError, match="total internal reflection"):
+        fresnel_s_reflectance(incident_index=1.5, transmitted_index=1.0, incidence_angle=45.0)
+    with pytest.raises(ValueError, match="incidence_angle must be in 0..90"):
+        fresnel_p_reflectance(incidence_angle=90.0, **glass)
+    with pytest.raises(ValueError, match="refractive indices must be positive"):
+        fresnel_s_reflectance(incident_index=0.0, transmitted_index=1.5, incidence_angle=30.0)
 
 
 def test_fresnel_reflectance_slab_transmittance_and_brewster_angle():
@@ -32215,6 +32425,78 @@ def test_rtd_and_thermistor_temperature_sensors():
             reference_resistance=_q("100 ohm"),
             temperature_coefficient=0.0,
             reference_temperature=_q("273.15 K"),
+        )
+
+
+def test_thermistor_beta_constant_fits_two_calibration_points():
+    from anvilate.analysis import thermistor_beta_constant, thermistor_resistance
+
+    r_25 = _q("10 kohm")
+    t_25 = Quantity(magnitude=298.15, unit="K")
+    t_85 = Quantity(magnitude=358.15, unit="K")
+
+    # Generate the second datasheet point with the module's own forward model at beta = 3950 K,
+    # then recover beta from the two points: an exact round trip through a different formula.
+    r_85 = thermistor_resistance(
+        reference_resistance=r_25,
+        beta_constant=Quantity(magnitude=3950.0, unit="K"),
+        temperature=t_85,
+        reference_temperature=t_25,
+    )
+    assert r_85.to("ohm").magnitude == pytest.approx(1086.6708, rel=1e-6)
+
+    beta = thermistor_beta_constant(
+        first_resistance=r_25,
+        first_temperature=t_25,
+        second_resistance=r_85,
+        second_temperature=t_85,
+    )
+    assert beta.to("K").magnitude == pytest.approx(3950.0, rel=1e-12)
+    assert beta.unit == "K"
+
+    # Symmetric in the two points: swapping them flips both signs and leaves beta unchanged.
+    swapped = thermistor_beta_constant(
+        first_resistance=r_85,
+        first_temperature=t_85,
+        second_resistance=r_25,
+        second_temperature=t_25,
+    )
+    assert swapped.to("K").magnitude == pytest.approx(beta.to("K").magnitude, rel=1e-12)
+
+    # The reference resistance cancels: a 100 kohm part with the same beta fits the same beta.
+    big = thermistor_resistance(
+        reference_resistance=_q("100 kohm"),
+        beta_constant=Quantity(magnitude=3950.0, unit="K"),
+        temperature=t_85,
+        reference_temperature=t_25,
+    )
+    assert thermistor_beta_constant(
+        first_resistance=_q("100 kohm"),
+        first_temperature=t_25,
+        second_resistance=big,
+        second_temperature=t_85,
+    ).to("K").magnitude == pytest.approx(3950.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="calibration temperatures must differ"):
+        thermistor_beta_constant(
+            first_resistance=r_25,
+            first_temperature=t_25,
+            second_resistance=r_85,
+            second_temperature=t_25,
+        )
+    with pytest.raises(ValueError, match="resistances must be positive"):
+        thermistor_beta_constant(
+            first_resistance=Quantity(magnitude=0.0, unit="ohm"),
+            first_temperature=t_25,
+            second_resistance=r_85,
+            second_temperature=t_85,
+        )
+    with pytest.raises(ValueError, match="first_resistance must be a"):
+        thermistor_beta_constant(
+            first_resistance=_q("1 m"),
+            first_temperature=t_25,
+            second_resistance=r_85,
+            second_temperature=t_85,
         )
 
 

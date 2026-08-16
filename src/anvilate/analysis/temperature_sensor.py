@@ -26,6 +26,7 @@ from ..units import Quantity
 __all__ = [
     "rtd_resistance",
     "rtd_temperature",
+    "thermistor_beta_constant",
     "thermistor_resistance",
     "thermistor_temperature",
     "thermocouple_voltage",
@@ -224,3 +225,41 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def thermistor_beta_constant(
+    *,
+    first_resistance: Quantity,
+    first_temperature: Quantity,
+    second_resistance: Quantity,
+    second_temperature: Quantity,
+) -> Quantity:
+    """An NTC thermistor's β from two calibration points, β = ln(R₁/R₂)/(1/T₁ − 1/T₂).
+
+    Both :func:`thermistor_resistance` and :func:`thermistor_temperature` consume β and neither
+    could produce it. It is not a quantity anyone measures directly — it is fitted, from the two
+    (temperature, resistance) pairs an NTC datasheet quotes, usually 25 °C and 85 °C. Taking the
+    ratio of the β-model at the two points cancels the reference resistance entirely and leaves
+    β = ln(R₁/R₂)/(1/T₁ − 1/T₂), from the ``first_resistance`` R₁ at ``first_temperature`` T₁ and
+    the ``second_resistance`` R₂ at ``second_temperature`` T₂.
+
+    This completes the module's third sensor: the RTD and the thermocouple already ship both
+    directions, and the thermistor had the forward and read-out but not the calibration leg. The
+    two temperatures must differ and both be absolute; the sign works out either way round, since
+    an NTC's resistance falls as temperature rises. Returns the β constant as a temperature in K.
+    """
+    _check(first_resistance, "[resistance]", "first_resistance")
+    _check(second_resistance, "[resistance]", "second_resistance")
+    _check(first_temperature, "[temperature]", "first_temperature")
+    _check(second_temperature, "[temperature]", "second_temperature")
+    r_1 = first_resistance.to("ohm").magnitude
+    r_2 = second_resistance.to("ohm").magnitude
+    t_1 = first_temperature.to("K").magnitude
+    t_2 = second_temperature.to("K").magnitude
+    if r_1 <= 0 or r_2 <= 0:
+        raise ValueError("resistances must be positive")
+    if t_1 <= 0 or t_2 <= 0:
+        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    if t_1 == t_2:
+        raise ValueError("the two calibration temperatures must differ to fit a beta constant")
+    return Quantity(magnitude=log(r_1 / r_2) / (1.0 / t_1 - 1.0 / t_2), unit="K")

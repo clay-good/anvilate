@@ -298,7 +298,8 @@ modules:
   air-fuel ratio from an ultimate analysis, the excess air read from flue-gas oxygen
   (EA = O₂/(20.9−O₂)), the actual air-fuel ratio a burner runs at, the equivalence ratio
   φ = AFR_stoich/AFR_actual = 1/(1+EA) that grades lean/rich, and the Siegert dry flue-gas
-  loss and the combustion efficiency it leaves
+  loss and the combustion efficiency it leaves, plus the adiabatic flame temperature
+  T₀ + LHV/[(1+AFR)·c_p] that the heating value and air-fuel ratio exist to produce
 - :mod:`~anvilate.analysis.comminution` — size-reduction energy laws: Rittinger's (n = 2,
   E = C_R·(1/x₂ − 1/x₁), fine grinding), Kick's (n = 1, E = C_K·ln(x₁/x₂), coarse crushing), and
   Bond's (n = 1.5, W = W_i·(10/√P₈₀ − 10/√F₈₀), the mill-sizing standard)
@@ -409,7 +410,9 @@ modules:
   is the realistic spread for independent, capable processes
 - :mod:`~anvilate.analysis.fresnel` — surface reflection: the normal-incidence reflectance
   R = ((n1−n2)/(n1+n2))² (4% at an air-glass face), the two-surface slab transmittance (1−R)², and
-  the Brewster polarizing angle arctan(n2/n1) — the bare reflection AR coatings fight
+  the Brewster polarizing angle arctan(n2/n1) — the bare reflection AR coatings fight — and the
+  full oblique-incidence pair R_s and R_p, which split apart with angle (R_p vanishing exactly at
+  Brewster) and are why polarized lenses cut glare
 - :mod:`~anvilate.analysis.friction` — dry (Coulomb) friction: the friction force F = µ·N, the
   angle of repose θ = arctan(µ) a slope or stockpile stands at, and the force W·(sin θ + µ·cos θ)
   to drag a load up an incline
@@ -758,7 +761,8 @@ modules:
   the view-factor reciprocity relation, and the 1/(N+1) radiation-shield reduction factor
 - :mod:`~anvilate.analysis.condensation` — Nusselt filmwise condensation (phase-change
   heat transfer): the vertical-plate coefficient h = 0.943·[…/(μ·ΔT·L)]^¼ and the
-  horizontal-tube form (0.729/D), and the condensate rate ṁ = h·A·ΔT/h_fg they drive
+  horizontal-tube form (0.729/D), the condensate rate ṁ = h·A·ΔT/h_fg they drive, and the
+  Rohsenow film-subcooling correction h_fg' = h_fg·(1 + 0.68·Ja) to feed back into them
 - :mod:`~anvilate.analysis.boiling` — nucleate boiling: the Rohsenow flux
   q″ = μ_l·h_fg·√(g·Δρ/σ)·[c_pl·ΔT_e/(C_sf·h_fg·Pr^n)]³, its ΔT_e inverse, and Zuber's
   critical-heat-flux burnout limit q″_max = 0.149·h_fg·√ρ_v·[σ·g·Δρ]^¼; plus the film-boiling
@@ -784,7 +788,8 @@ modules:
   bridge reading back into strain (and, via E, the stress the part carries)
 - :mod:`~anvilate.analysis.temperature_sensor` — resistance temperature sensors: the platinum RTD
   R = R₀·[1 + α·(T − T₀)] with its temperature inverse (a Pt100's near-linear reading), and the NTC
-  thermistor R = R₀·exp[β·(1/T − 1/T₀)] (the exponential β-parameter model)
+  thermistor R = R₀·exp[β·(1/T − 1/T₀)] (the exponential β-parameter model) with the
+  β = ln(R₁/R₂)/(1/T₁ − 1/T₂) fit that recovers it from two datasheet calibration points
 - :mod:`~anvilate.analysis.piezoelectric` — piezoelectric transducers: the charge a force
   generates Q = d33·F (direct effect — sensors, harvesters), the open-circuit voltage a stress
   produces V = g33·σ·t, and the force behind a measured charge F = Q/d33 (piezo load-washer readout)
@@ -868,7 +873,8 @@ modules:
   speed V = π·D·N and its spindle-speed inverse N = V/(π·D), the material removal rate
   MRR = V·f·d, the Taylor tool life T = (C/V)^(1/n) that trades speed for edge life, and the
   theoretical turned-surface roughness Ra ≈ f²/(32·r) and peak-to-valley Rt ≈ f²/(8·r) with the
-  feed f = √(32·r·Ra) that meets a finish target
+  feed f = √(32·r·Ra) that meets a finish target, and the spindle power P = k_s·MRR the cut
+  actually demands
 - :mod:`~anvilate.analysis.casting` — metal-casting solidification: the casting modulus
   M = V/A that governs freezing, Chvorinov's solidification time t = B·M², and the
   riser modulus M_r ≈ 1.2·M that makes the riser freeze last and take the shrinkage
@@ -1418,6 +1424,7 @@ from .column import (
 )
 from .combustion import (
     actual_air_fuel_ratio,
+    adiabatic_flame_temperature,
     combustion_efficiency,
     equivalence_ratio,
     equivalence_ratio_from_excess_air,
@@ -1468,6 +1475,7 @@ from .compton import (
     compton_wavelength_shift,
 )
 from .condensation import (
+    condensation_modified_latent_heat,
     condensation_rate,
     film_condensation_horizontal_tube_coefficient,
     film_condensation_vertical_plate_coefficient,
@@ -1905,6 +1913,8 @@ from .fracture import (
 from .fresnel import (
     brewster_angle,
     fresnel_normal_reflectance,
+    fresnel_p_reflectance,
+    fresnel_s_reflectance,
     slab_transmittance,
 )
 from .friction import (
@@ -2178,6 +2188,7 @@ from .load_combinations import (
     asce7_lrfd_factored_load,
 )
 from .machining import (
+    cutting_power,
     cutting_speed,
     feed_for_surface_roughness,
     material_removal_rate,
@@ -2862,6 +2873,7 @@ from .tank_flow import (
 from .temperature_sensor import (
     rtd_resistance,
     rtd_temperature,
+    thermistor_beta_constant,
     thermistor_resistance,
     thermistor_temperature,
     thermocouple_temperature_from_voltage,
@@ -3333,6 +3345,8 @@ __all__ = [
     "rss_tolerance_stack",
     "worst_case_tolerance_stack",
     "fresnel_normal_reflectance",
+    "fresnel_s_reflectance",
+    "fresnel_p_reflectance",
     "slab_transmittance",
     "brewster_angle",
     "friction_force",
@@ -3476,6 +3490,7 @@ __all__ = [
     "rtd_temperature",
     "thermistor_resistance",
     "thermistor_temperature",
+    "thermistor_beta_constant",
     "thermocouple_voltage",
     "thermocouple_temperature_from_voltage",
     "choked_mass_flow_rate",
@@ -3499,6 +3514,7 @@ __all__ = [
     "film_condensation_horizontal_tube_coefficient",
     "condensation_rate",
     "jakob_number",
+    "condensation_modified_latent_heat",
     "apparent_power_three_phase",
     "conductor_resistance",
     "line_current_for_power",
@@ -4127,6 +4143,7 @@ __all__ = [
     "combustion_efficiency",
     "wobbe_index",
     "lower_heating_value",
+    "adiabatic_flame_temperature",
     "rittinger_comminution_energy",
     "kick_comminution_energy",
     "bond_comminution_work",
@@ -4443,6 +4460,7 @@ __all__ = [
     "cutting_speed",
     "spindle_speed_for_cutting_speed",
     "material_removal_rate",
+    "cutting_power",
     "taylor_tool_life",
     "theoretical_surface_roughness",
     "peak_to_valley_roughness",

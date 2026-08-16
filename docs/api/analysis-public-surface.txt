@@ -85,6 +85,7 @@ condensation.film_condensation_vertical_plate_coefficient
 condensation.film_condensation_horizontal_tube_coefficient
 condensation.condensation_rate
 condensation.jakob_number
+condensation.condensation_modified_latent_heat
 composite.composite_longitudinal_cte
 composite.composite_major_poisson_ratio
 composite.composite_shear_modulus_inverse_rule
@@ -429,6 +430,7 @@ combustion.siegert_dry_flue_gas_loss
 combustion.stoichiometric_air_fuel_ratio
 combustion.wobbe_index
 combustion.lower_heating_value
+combustion.adiabatic_flame_temperature
 comminution.rittinger_comminution_energy
 comminution.kick_comminution_energy
 comminution.bond_comminution_work
@@ -780,6 +782,8 @@ fracture.stress_intensity_factor
 fresnel.brewster_angle
 fresnel.fresnel_normal_reflectance
 fresnel.slab_transmittance
+fresnel.fresnel_s_reflectance
+fresnel.fresnel_p_reflectance
 friction.friction_force
 friction.angle_of_repose
 friction.force_to_slide_up_incline
@@ -950,6 +954,7 @@ machining.taylor_tool_life
 machining.theoretical_surface_roughness
 machining.peak_to_valley_roughness
 machining.feed_for_surface_roughness
+machining.cutting_power
 magnetics.solenoid_magnetic_field
 magnetics.magnetic_pressure
 magnetics.electromagnet_holding_force
@@ -1450,6 +1455,7 @@ temperature_sensor.thermistor_resistance
 temperature_sensor.thermistor_temperature
 temperature_sensor.thermocouple_voltage
 temperature_sensor.thermocouple_temperature_from_voltage
+temperature_sensor.thermistor_beta_constant
 thermal.DifferentialThermalStress
 thermal.bimetallic_strip_curvature
 thermal.bimetallic_strip_tip_deflection
