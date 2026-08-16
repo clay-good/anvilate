@@ -9669,6 +9669,48 @@ def test_fourbar_rejects_non_closable_and_bad_inputs():
         )
 
 
+def test_fourbar_time_ratio_and_rocker_swing():
+    from anvilate.analysis import (
+        fourbar_rocker_swing_angle,
+        fourbar_time_ratio,
+        fourbar_type,
+    )
+
+    crank_rocker = {
+        "ground": _q("100 mm"),
+        "input_link": _q("40 mm"),
+        "coupler": _q("120 mm"),
+        "output_link": _q("110 mm"),
+    }
+    assert fourbar_type(**crank_rocker) == "crank-rocker"
+    # Both values were confirmed independently by sweeping the crank through 360 degrees in
+    # 0.01-degree steps: the output angle ranges over 54.68569 degrees, and its two extremes
+    # occur at crank angles 211.66 degrees apart, i.e. 180 + the 31.66-degree advance angle.
+    assert fourbar_rocker_swing_angle(**crank_rocker) == pytest.approx(54.68569, rel=1e-6)
+    assert fourbar_time_ratio(**crank_rocker) == pytest.approx(1.426931, rel=1e-6)
+    # A time ratio is a quick-return measure: never below 1, and 1 only with no advance angle.
+    assert fourbar_time_ratio(**crank_rocker) > 1.0
+    # A longer crank swings the rocker further.
+    longer = dict(crank_rocker, input_link=_q("50 mm"))
+    assert fourbar_rocker_swing_angle(**longer) > fourbar_rocker_swing_angle(**crank_rocker)
+    # A coupler no longer than the crank has no folded toggle, so the input cannot crank.
+    with pytest.raises(ValueError):
+        fourbar_time_ratio(
+            ground=_q("100 mm"),
+            input_link=_q("120 mm"),
+            coupler=_q("120 mm"),
+            output_link=_q("110 mm"),
+        )
+    # A double-rocker has no toggle positions at all.
+    with pytest.raises(ValueError):
+        fourbar_rocker_swing_angle(
+            ground=_q("110 mm"),
+            input_link=_q("100 mm"),
+            coupler=_q("40 mm"),
+            output_link=_q("120 mm"),
+        )
+
+
 def test_fourbar_transmission_angle_law_of_cosines():
     from math import acos, cos, degrees, radians, sqrt
 

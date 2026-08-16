@@ -29,6 +29,8 @@ from ..units import Quantity
 __all__ = [
     "is_grashof",
     "fourbar_type",
+    "fourbar_rocker_swing_angle",
+    "fourbar_time_ratio",
     "fourbar_transmission_angle",
 ]
 
@@ -120,6 +122,98 @@ def fourbar_type(
     if shortest_name == "coupler":
         return "double-rocker"
     return "crank-rocker"
+
+
+def _toggle_cosines(r1: float, r2: float, r3: float, r4: float) -> tuple[float, float]:
+    """The two crank-collinear (toggle) configurations of a crank-rocker.
+
+    Returns the extended (r2+r3) and folded (r3-r2) diagonal lengths, raising if the
+    input link cannot act as the crank.
+    """
+    if r3 <= r2:
+        raise ValueError(
+            "the coupler must be longer than the input link for the input to crank "
+            "through its folded toggle position"
+        )
+    return r2 + r3, r3 - r2
+
+
+def _toggle_angle(numerator: float, denominator: float, what: str) -> float:
+    if denominator == 0:
+        raise ValueError(f"the {what} toggle position is degenerate for these link lengths")
+    value = numerator / denominator
+    if not -1.0 <= value <= 1.0:
+        raise ValueError(
+            f"the linkage has no {what} toggle position, so the input link is not a crank "
+            "(fourbar_time_ratio and fourbar_rocker_swing_angle need a crank-rocker)"
+        )
+    return acos(value)
+
+
+def fourbar_time_ratio(
+    *,
+    ground: Quantity,
+    input_link: Quantity,
+    coupler: Quantity,
+    output_link: Quantity,
+) -> float:
+    """The quick-return time ratio of a crank-rocker, Q = (180° + α)/(180° − α).
+
+    A crank-rocker driven at constant speed does not take the same time going out as coming back:
+    the rocker's two extreme positions occur when the crank is collinear with the coupler, and those
+    two crank angles are not 180° apart. The gap is the *advance angle* α, and the time ratio
+    Q = (180° + α)/(180° − α) is the working-stroke-to-return-stroke ratio it produces — the number
+    a quick-return mechanism (shaper, pump, feeder) is actually specified by. From the loop-order
+    lengths ``ground`` r₁, ``input_link`` r₂ (the crank), ``coupler`` r₃, and ``output_link`` r₄,
+    the toggle crank angles are θ_ext = acos((r₁² + (r₂+r₃)² − r₄²)/(2·r₁·(r₂+r₃))) and
+    θ_fold = acos((r₁² + (r₃−r₂)² − r₄²)/(2·r₁·(r₃−r₂))), with α = |θ_fold − θ_ext|. A symmetric
+    linkage has α = 0 and Q = 1 (no quick return); the larger α, the more asymmetric the strokes.
+    Raises if the input link is not a crank. Returns Q as a plain float (≥ 1 by construction).
+    """
+    lengths = _lengths_mm(ground, input_link, coupler, output_link)
+    r1, r2, r3, r4 = (
+        lengths["ground"],
+        lengths["input"],
+        lengths["coupler"],
+        lengths["output"],
+    )
+    extended, folded = _toggle_cosines(r1, r2, r3, r4)
+    theta_ext = _toggle_angle(r1**2 + extended**2 - r4**2, 2.0 * r1 * extended, "extended")
+    theta_fold = _toggle_angle(r1**2 + folded**2 - r4**2, 2.0 * r1 * folded, "folded")
+    advance = abs(degrees(theta_fold) - degrees(theta_ext))
+    if advance >= 180.0:
+        raise ValueError("the advance angle must be below 180° for a time ratio to be defined")
+    return (180.0 + advance) / (180.0 - advance)
+
+
+def fourbar_rocker_swing_angle(
+    *,
+    ground: Quantity,
+    input_link: Quantity,
+    coupler: Quantity,
+    output_link: Quantity,
+) -> float:
+    """The total swing of a crank-rocker's output, ψ between its two toggle positions.
+
+    How far the rocker actually travels — the stroke the linkage delivers, and the first number
+    a crank-rocker is sized for. The output reaches its extremes in the same two crank-collinear
+    configurations that set the time ratio (:func:`fourbar_time_ratio`), so the swing follows from
+    the law of cosines on the ground/output diagonal at each:
+    ψ = |acos((r₁²+r₄²−(r₂+r₃)²)/(2·r₁·r₄)) − acos((r₁²+r₄²−(r₃−r₂)²)/(2·r₁·r₄))|, from the
+    loop-order lengths ``ground`` r₁, ``input_link`` r₂ (the crank), ``coupler`` r₃, and
+    ``output_link`` r₄. Raises if the input link is not a crank. Returns the swing in **degrees**.
+    """
+    lengths = _lengths_mm(ground, input_link, coupler, output_link)
+    r1, r2, r3, r4 = (
+        lengths["ground"],
+        lengths["input"],
+        lengths["coupler"],
+        lengths["output"],
+    )
+    extended, folded = _toggle_cosines(r1, r2, r3, r4)
+    psi_ext = _toggle_angle(r1**2 + r4**2 - extended**2, 2.0 * r1 * r4, "extended")
+    psi_fold = _toggle_angle(r1**2 + r4**2 - folded**2, 2.0 * r1 * r4, "folded")
+    return abs(degrees(psi_fold) - degrees(psi_ext))
 
 
 def fourbar_transmission_angle(

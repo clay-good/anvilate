@@ -741,6 +741,8 @@ forging.forging_true_strain
 forging.flow_stress_power_law
 forging.open_die_forging_load
 fourbar.fourbar_transmission_angle
+fourbar.fourbar_time_ratio
+fourbar.fourbar_rocker_swing_angle
 fourbar.fourbar_type
 fourbar.is_grashof
 flow_measurement.differential_pressure_for_flow

@@ -536,7 +536,9 @@ modules:
   speed fluctuation 1/cosβ − cosβ that a single joint's angle produces
 - :mod:`~anvilate.analysis.fourbar` — four-bar linkage Grashof rotatability
   criterion, mechanism-type classification, and the transmission angle at a given
-  input angle
+  input angle; plus the two numbers a crank-rocker is actually specified by — the
+  rocker swing ψ between its toggle positions and the quick-return time ratio
+  Q = (180°+α)/(180°−α) the advance angle α produces
 - :mod:`~anvilate.analysis.brake` — band-brake torque, the tight-side tension a
   torque requires, the peak lining pressure, and the simple/differential lever
   force; short-shoe (block) brake lever statics; the self-energizing /
@@ -1850,6 +1852,8 @@ from .forging import (
     open_die_forging_load,
 )
 from .fourbar import (
+    fourbar_rocker_swing_angle,
+    fourbar_time_ratio,
     fourbar_transmission_angle,
     fourbar_type,
     is_grashof,
@@ -3969,6 +3973,8 @@ __all__ = [
     "scotch_yoke_acceleration",
     "is_grashof",
     "fourbar_type",
+    "fourbar_rocker_swing_angle",
+    "fourbar_time_ratio",
     "fourbar_transmission_angle",
     "band_brake_torque",
     "band_brake_tight_tension_for_torque",
