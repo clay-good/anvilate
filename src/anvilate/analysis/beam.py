@@ -941,6 +941,12 @@ def aisc_plate_girder_bending_factor(
     a_w = min(hc * tw / (bfc * tfc), 10.0)
     limit = 5.7 * (e / fy) ** 0.5
     r_pg = 1.0 - (a_w / (1200.0 + 300.0 * a_w)) * (hc / tw - limit)
+    if r_pg <= 0.0:
+        raise ValueError(
+            f"web slenderness h_c/t_w = {hc / tw:.0f} drives the F5 reduction factor to "
+            f"{r_pg:.3f}, at or below zero — the girder is far outside the range the §F5 "
+            "linear reduction covers (AISC caps web slenderness separately in §F13.2)"
+        )
     return min(r_pg, 1.0)
 
 

@@ -32536,12 +32536,20 @@ def test_aisc_plate_girder_bending_factor_penalizes_slender_webs():
     limit = 5.7 * (200000 / 345) ** 0.5
     expect = 1 - (a_w / (1200 + 300 * a_w)) * (1500 / 8 - limit)
     assert slender == pytest.approx(expect, rel=1e-9)
+    assert slender == pytest.approx(0.94416, abs=5e-5)  # pinned, not only re-derived
     assert slender < 1.0
     # A stocky web (h_c/t_w below the slenderness limit) takes no penalty: R_pg = 1.
     stocky = aisc_plate_girder_bending_factor(
         web_clear_depth=_q("800 mm"), web_thickness=_q("12 mm"), **base
     )
     assert stocky == 1.0
+    # R_pg is a reduction factor, so it must stay in (0, 1]. A web slender enough to drive the
+    # F5 linear reduction to zero is outside what the clause covers, and used to come back
+    # NEGATIVE -- which would have flipped the sign of the girder moment it multiplies.
+    with pytest.raises(ValueError, match="outside the range"):
+        aisc_plate_girder_bending_factor(
+            web_clear_depth=_q("5000 mm"), web_thickness=_q("4 mm"), **base
+        )
 
 
 def test_aisc_minor_axis_flexural_strength_yield_cap_and_flb():

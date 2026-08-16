@@ -237,7 +237,8 @@ def permissible_exposure_time(
     for, typically 8 h) — the time a worker may spend at ``sound_level`` L is
     T = T₀ / 2^((L − L_c)/q). The criterion level and exchange rate are the standard's own values,
     supplied by the caller: OSHA uses L_c = 90 dBA with q = 5 dB, NIOSH L_c = 85 dBA with q = 3 dB.
-    Returns the permissible exposure time as a Quantity in the units of the criterion duration.
+    Returns the permissible exposure time in hours (call ``.to("minute")`` for the short
+    allowances a high level gives).
     """
     _check(criterion_duration, "[time]", "criterion_duration")
     if exchange_rate <= 0:
