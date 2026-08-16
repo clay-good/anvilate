@@ -25,6 +25,7 @@ _FREE_SPACE_IMPEDANCE = 376.730313668  # ohm, eta_0
 
 __all__ = [
     "rectangular_waveguide_cutoff_frequency",
+    "rectangular_waveguide_mode_cutoff_frequency",
     "waveguide_group_velocity",
     "waveguide_guide_wavelength",
     "waveguide_phase_velocity",
@@ -142,6 +143,45 @@ def waveguide_te_wave_impedance(
     if f <= f_c:
         raise ValueError("operating_frequency must exceed the cutoff frequency to propagate")
     return Quantity(magnitude=_FREE_SPACE_IMPEDANCE / sqrt(1.0 - (f_c / f) ** 2), unit="ohm")
+
+
+def rectangular_waveguide_mode_cutoff_frequency(
+    *,
+    broad_dimension: Quantity,
+    narrow_dimension: Quantity,
+    mode_m: int = 1,
+    mode_n: int = 0,
+) -> Quantity:
+    """Any TE_mn / TM_mn mode's cutoff frequency, f_c = (c/2)·√((m/a)² + (n/b)²).
+
+    The general form that :func:`rectangular_waveguide_cutoff_frequency` gives only the dominant
+    case of. From the ``broad_dimension`` a, the ``narrow_dimension`` b, and the mode indices
+    ``mode_m`` and ``mode_n`` (half-wave variations across a and b respectively):
+    f_c = (c/2)·√((m/a)² + (n/b)²). At m = 1, n = 0 it reduces exactly to c/(2a), the dominant TE10
+    result.
+
+    The reason to have it is the *second* mode, not the first. A waveguide is only useful over the
+    band where exactly one mode propagates, and the top of that band is set by whichever higher
+    mode cuts on next — TE20 at c/a for a standard 2:1 guide, giving the familiar single-mode
+    octave. Run a guide above that and power splits between modes with different phase velocities,
+    which shows up as dispersion and unrepeatable phase rather than as an obvious failure. Both
+    indices must be non-negative and not both zero (there is no TE00 mode). Returns f_c in Hz.
+    """
+    _check(broad_dimension, "[length]", "broad_dimension")
+    _check(narrow_dimension, "[length]", "narrow_dimension")
+    a = broad_dimension.to("m").magnitude
+    b = narrow_dimension.to("m").magnitude
+    if a <= 0 or b <= 0:
+        raise ValueError("broad_dimension and narrow_dimension must be positive")
+    if int(mode_m) != mode_m or int(mode_n) != mode_n:
+        raise ValueError(f"mode indices must be whole numbers; got m = {mode_m}, n = {mode_n}")
+    m, n = int(mode_m), int(mode_n)
+    if m < 0 or n < 0:
+        raise ValueError(f"mode indices must be non-negative; got m = {m}, n = {n}")
+    if m == 0 and n == 0:
+        raise ValueError("there is no TE00 mode: the mode indices must not both be zero")
+    cutoff = 0.5 * _SPEED_OF_LIGHT * sqrt((m / a) ** 2 + (n / b) ** 2)
+    return Quantity(magnitude=cutoff, unit="Hz")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

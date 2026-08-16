@@ -29,6 +29,7 @@ __all__ = [
     "knudsen_number",
     "mean_free_path",
     "mean_molecular_speed",
+    "most_probable_molecular_speed",
     "rms_molecular_speed",
 ]
 
@@ -115,6 +116,33 @@ def knudsen_number(*, mean_free_path: Quantity, characteristic_length: Quantity)
     if length <= 0:
         raise ValueError("characteristic_length must be positive")
     return lam / length
+
+
+def most_probable_molecular_speed(*, temperature: Quantity, molar_mass: Quantity) -> Quantity:
+    """The most probable molecular speed, v_p = sqrt(2*R*T/M).
+
+    The peak of the Maxwell-Boltzmann distribution — the single speed more molecules have than any
+    other — from the absolute ``temperature`` T and the ``molar_mass`` M: v_p = sqrt(2*R*T/M). It
+    completes the three speeds the distribution defines, alongside
+    :func:`mean_molecular_speed` and :func:`rms_molecular_speed`, and it is always the smallest of
+    them: the distribution has a long high-speed tail, which drags the arithmetic mean above the
+    peak and the root-mean-square above that. Their ratio is fixed at sqrt(2) : sqrt(8/pi) :
+    sqrt(3) = 1 : 1.128 : 1.225 for every gas at every temperature, so the three never cross and
+    quoting the wrong one is a 22% error rather than a qualitative one.
+
+    v_p is the speed that appears in the Boltzmann factor itself, so it is the natural scale for
+    doppler line widths, molecular-beam velocity distributions, and escape-velocity arguments about
+    whether a planet keeps its atmosphere. Returns the speed in m/s.
+    """
+    _check(temperature, "[temperature]", "temperature")
+    _check(molar_mass, "[mass]/[substance]", "molar_mass")
+    t = temperature.to("K").magnitude
+    m = molar_mass.to("kg/mol").magnitude
+    if t <= 0:
+        raise ValueError("temperature must be positive (absolute temperature)")
+    if m <= 0:
+        raise ValueError("molar_mass must be positive")
+    return Quantity(magnitude=sqrt(2.0 * _GAS_CONSTANT * t / m), unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

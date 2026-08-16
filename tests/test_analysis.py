@@ -18307,6 +18307,47 @@ def test_road_curve_superelevation_and_max_speed():
         )
 
 
+def test_road_horizontal_curve_middle_ordinate():
+    from math import cos, radians
+
+    from anvilate.analysis import (
+        horizontal_curve_external_distance,
+        horizontal_curve_middle_ordinate,
+    )
+
+    radius = _q("300 m")
+    delta = radians(40.0)
+
+    # M = R*(1 - cos(delta/2)); 300 m radius through a 40 degree deflection -> 18.09 m.
+    m = horizontal_curve_middle_ordinate(radius=radius, deflection_angle=delta)
+    assert m.to("m").magnitude == pytest.approx(300.0 * (1 - cos(delta / 2)), rel=1e-12)
+    assert m.to("m").magnitude == pytest.approx(18.092214, rel=1e-6)
+    assert m.unit == "m"
+
+    # Self-consistency with the external distance already in the module: E = R*(sec(d/2) - 1)
+    # and M = R*(1 - cos(d/2)) differ by exactly a factor of cos(delta/2), since both measure
+    # the same sagitta from opposite sides of the arc.
+    e = horizontal_curve_external_distance(radius=radius, deflection_angle=delta)
+    assert m.to("m").magnitude / e.to("m").magnitude == pytest.approx(cos(delta / 2), rel=1e-12)
+    assert m.to("m").magnitude < e.to("m").magnitude
+
+    # Linear in radius, and it grows with the deflection: a sharper bend hides more.
+    assert horizontal_curve_middle_ordinate(radius=_q("600 m"), deflection_angle=delta).to(
+        "m"
+    ).magnitude / m.to("m").magnitude == pytest.approx(2.0, rel=1e-12)
+    sharper = horizontal_curve_middle_ordinate(radius=radius, deflection_angle=radians(90.0))
+    assert sharper.to("m").magnitude > m.to("m").magnitude
+    # A half-turn puts the arc's midpoint a full radius off the chord.
+    assert horizontal_curve_middle_ordinate(
+        radius=radius, deflection_angle=radians(180.0) - 1e-12
+    ).to("m").magnitude == pytest.approx(300.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="deflection_angle must be in"):
+        horizontal_curve_middle_ordinate(radius=radius, deflection_angle=0.0)
+    with pytest.raises(ValueError, match="radius must be a"):
+        horizontal_curve_middle_ordinate(radius=_q("300 s"), deflection_angle=delta)
+
+
 def test_road_horizontal_curve_geometry():
     from math import cos, pi, tan
 
@@ -26359,6 +26400,54 @@ def test_waveguide_cutoff_guide_wavelength_and_phase_velocity():
         rectangular_waveguide_cutoff_frequency(broad_dimension=_q("22.86 s"))
 
 
+def test_waveguide_higher_order_mode_cutoffs_bound_the_single_mode_band():
+    from anvilate.analysis import (
+        rectangular_waveguide_cutoff_frequency,
+        rectangular_waveguide_mode_cutoff_frequency,
+    )
+
+    # WR-90 X-band guide: 22.86 x 10.16 mm.
+    guide = {"broad_dimension": _q("22.86 mm"), "narrow_dimension": _q("10.16 mm")}
+
+    # TE10 reduces EXACTLY to the module's existing dominant-mode c/(2a).
+    te10 = rectangular_waveguide_mode_cutoff_frequency(mode_m=1, mode_n=0, **guide)
+    assert te10.to("GHz").magnitude == pytest.approx(
+        rectangular_waveguide_cutoff_frequency(broad_dimension=_q("22.86 mm")).to("GHz").magnitude,
+        rel=1e-12,
+    )
+    assert te10.to("GHz").magnitude == pytest.approx(6.557140, rel=1e-6)
+
+    # The next mode up is what fixes the TOP of the usable band. For a 2:1 guide TE20 sits at
+    # exactly twice TE10 — the familiar single-mode octave that WR-90's 8.2-12.4 GHz band sits in.
+    te20 = rectangular_waveguide_mode_cutoff_frequency(mode_m=2, mode_n=0, **guide)
+    assert te20.to("GHz").magnitude == pytest.approx(13.114281, rel=1e-6)
+    assert te20.to("GHz").magnitude / te10.to("GHz").magnitude == pytest.approx(2.0, rel=1e-12)
+    assert te10.to("GHz").magnitude < 8.2 < 12.4 < te20.to("GHz").magnitude
+
+    # TE01 and TE11 are higher still, so TE20 really is the band limit here.
+    te01 = rectangular_waveguide_mode_cutoff_frequency(mode_m=0, mode_n=1, **guide)
+    te11 = rectangular_waveguide_mode_cutoff_frequency(mode_m=1, mode_n=1, **guide)
+    assert te01.to("GHz").magnitude == pytest.approx(14.753566, rel=1e-6)
+    assert te11.to("GHz").magnitude == pytest.approx(16.145086, rel=1e-6)
+    assert te20.to("GHz").magnitude < te01.to("GHz").magnitude < te11.to("GHz").magnitude
+
+    # TE11 is the Pythagorean combination of the two single-index cutoffs.
+    assert te11.to("GHz").magnitude == pytest.approx(
+        (te10.to("GHz").magnitude ** 2 + te01.to("GHz").magnitude ** 2) ** 0.5, rel=1e-12
+    )
+
+    with pytest.raises(ValueError, match="no TE00 mode"):
+        rectangular_waveguide_mode_cutoff_frequency(mode_m=0, mode_n=0, **guide)
+    with pytest.raises(ValueError, match="must be non-negative"):
+        rectangular_waveguide_mode_cutoff_frequency(mode_m=-1, mode_n=0, **guide)
+    with pytest.raises(ValueError, match="must be whole numbers"):
+        rectangular_waveguide_mode_cutoff_frequency(mode_m=1.5, mode_n=0, **guide)
+    with pytest.raises(ValueError, match="narrow_dimension must be positive"):
+        rectangular_waveguide_mode_cutoff_frequency(
+            broad_dimension=_q("22.86 mm"), narrow_dimension=_q("0 mm"), mode_m=1, mode_n=0
+        )
+
+
 def test_waveguide_group_velocity_and_te_wave_impedance():
     from math import sqrt
 
@@ -27218,6 +27307,68 @@ def test_diffusion_error_function_carburizing_profile():
         error_function_concentration(depth=_q("0.5 mm"), time=_q("0 s"), **kw)
     with pytest.raises(ValueError, match="depth must be a"):
         error_function_concentration(depth=_q("0.5 s"), time=_q("3600 s"), **kw)
+
+
+def test_kinetic_theory_most_probable_speed_completes_the_three():
+    from math import pi, sqrt
+
+    from anvilate.analysis import (
+        mean_molecular_speed,
+        most_probable_molecular_speed,
+        rms_molecular_speed,
+    )
+
+    nitrogen = {
+        "temperature": Quantity(magnitude=300.0, unit="K"),
+        "molar_mass": _q("28.0134 g/mol"),
+    }
+    v_p = most_probable_molecular_speed(**nitrogen)
+    v_mean = mean_molecular_speed(**nitrogen)
+    v_rms = rms_molecular_speed(**nitrogen)
+
+    assert v_p.to("m/s").magnitude == pytest.approx(
+        sqrt(2 * 8.314462618 * 300.0 / 0.0280134), rel=1e-12
+    )
+    assert v_p.to("m/s").magnitude == pytest.approx(421.9974, rel=1e-6)
+    assert v_p.unit == "m/s"
+
+    # The peak is always the SMALLEST of the three — the distribution's high-speed tail drags
+    # the mean above it and the rms above that — and the ratios are universal.
+    assert v_p.to("m/s").magnitude < v_mean.to("m/s").magnitude < v_rms.to("m/s").magnitude
+    assert v_mean.to("m/s").magnitude / v_p.to("m/s").magnitude == pytest.approx(
+        sqrt(8 / pi) / sqrt(2), rel=1e-12
+    )
+    assert v_rms.to("m/s").magnitude / v_p.to("m/s").magnitude == pytest.approx(
+        sqrt(1.5), rel=1e-12
+    )
+    assert v_mean.to("m/s").magnitude / v_p.to("m/s").magnitude == pytest.approx(1.128379, rel=1e-6)
+    assert v_rms.to("m/s").magnitude / v_p.to("m/s").magnitude == pytest.approx(1.224745, rel=1e-6)
+
+    # Those ratios hold for every gas at every temperature — that is what makes them universal.
+    helium = most_probable_molecular_speed(
+        temperature=Quantity(magnitude=1000.0, unit="K"), molar_mass=_q("4.0026 g/mol")
+    )
+    helium_rms = rms_molecular_speed(
+        temperature=Quantity(magnitude=1000.0, unit="K"), molar_mass=_q("4.0026 g/mol")
+    )
+    assert helium_rms.to("m/s").magnitude / helium.to("m/s").magnitude == pytest.approx(
+        sqrt(1.5), rel=1e-12
+    )
+
+    # Square root in temperature, inverse square root in molar mass.
+    hot = most_probable_molecular_speed(
+        temperature=Quantity(magnitude=1200.0, unit="K"), molar_mass=_q("28.0134 g/mol")
+    )
+    assert hot.to("m/s").magnitude / v_p.to("m/s").magnitude == pytest.approx(2.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="temperature must be positive"):
+        most_probable_molecular_speed(
+            temperature=Quantity(magnitude=0.0, unit="K"), molar_mass=_q("28 g/mol")
+        )
+    with pytest.raises(ValueError, match="molar_mass must be a"):
+        most_probable_molecular_speed(
+            temperature=Quantity(magnitude=300.0, unit="K"), molar_mass=_q("28 g")
+        )
 
 
 def test_kinetic_theory_molecular_speeds_and_mean_free_path():
@@ -32155,6 +32306,48 @@ def test_diode_led_series_resistor_and_power():
         led_resistor_power(
             supply_voltage=_q("5 V"), forward_voltage=_q("2 V"), forward_current=_q("0 mA")
         )
+
+
+def test_photodetector_noise_equivalent_power_is_the_link_budget_floor():
+    from anvilate.analysis import (
+        noise_equivalent_power,
+        photodiode_current,
+        photodiode_responsivity,
+        shot_noise_current,
+    )
+
+    # A 1550 nm InGaAs photodiode at 80% quantum efficiency: R ~ 1.0 A/W.
+    r = photodiode_responsivity(quantum_efficiency=0.8, wavelength=_q("1550 nm"))
+    assert r.to("A/W").magnitude == pytest.approx(1.0001274, rel=1e-6)
+
+    # 1 uW of light -> 1 uA, whose shot noise in a 1 Hz band is 0.566 pA.
+    i = photodiode_current(responsivity=r, optical_power=_q("1 uW"))
+    i_n = shot_noise_current(current=i, bandwidth=_q("1 Hz"))
+    assert i_n.to("pA").magnitude == pytest.approx(0.5661061, rel=1e-6)
+
+    # NEP = i_n/R: the optical power that would produce exactly that noise current.
+    nep = noise_equivalent_power(noise_current=i_n, responsivity=r)
+    assert nep.to("pW").magnitude == pytest.approx(0.566034, rel=1e-6)
+    assert nep.unit == "W"
+    assert nep.to("W").magnitude == pytest.approx(
+        i_n.to("A").magnitude / r.to("A/W").magnitude, rel=1e-12
+    )
+
+    # The closing identity: a signal AT the NEP produces a photocurrent equal to the noise.
+    at_floor = photodiode_current(responsivity=r, optical_power=nep)
+    assert at_floor.to("A").magnitude == pytest.approx(i_n.to("A").magnitude, rel=1e-12)
+
+    # NEP grows as sqrt(bandwidth), which is why a slower receiver sees further:
+    # a 100x wider band costs exactly 10x the sensitivity floor.
+    wide = noise_equivalent_power(
+        noise_current=shot_noise_current(current=i, bandwidth=_q("100 Hz")), responsivity=r
+    )
+    assert wide.to("W").magnitude / nep.to("W").magnitude == pytest.approx(10.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="responsivity must be positive"):
+        noise_equivalent_power(noise_current=i_n, responsivity=Quantity(magnitude=0.0, unit="A/W"))
+    with pytest.raises(ValueError, match="responsivity must be a"):
+        noise_equivalent_power(noise_current=i_n, responsivity=_q("1 A"))
 
 
 def test_photodiode_responsivity_current_and_shot_noise():

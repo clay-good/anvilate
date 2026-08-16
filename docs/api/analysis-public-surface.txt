@@ -934,6 +934,7 @@ kinetic_theory.knudsen_number
 kinetic_theory.mean_free_path
 kinetic_theory.mean_molecular_speed
 kinetic_theory.rms_molecular_speed
+kinetic_theory.most_probable_molecular_speed
 laser_cutting.laser_specific_removal_energy
 laser_cutting.laser_cutting_speed
 laser_cutting.laser_max_cut_thickness
@@ -1134,6 +1135,7 @@ packed_bed.specific_surface_area
 photodetector.photodiode_responsivity
 photodetector.photodiode_current
 photodetector.shot_noise_current
+photodetector.noise_equivalent_power
 photometry.luminous_efficacy
 photometry.luminous_efficiency
 photometry.luminous_flux_from_power
@@ -1317,6 +1319,7 @@ road_curve.stopping_sight_distance
 road_curve.horizontal_curve_tangent_length
 road_curve.horizontal_curve_length
 road_curve.horizontal_curve_external_distance
+road_curve.horizontal_curve_middle_ordinate
 rocket_propulsion.rocket_exhaust_velocity
 rocket_propulsion.rocket_thrust
 rocket_propulsion.rocket_specific_impulse
@@ -1647,6 +1650,7 @@ waveguide.waveguide_guide_wavelength
 waveguide.waveguide_phase_velocity
 waveguide.waveguide_group_velocity
 waveguide.waveguide_te_wave_impedance
+waveguide.rectangular_waveguide_mode_cutoff_frequency
 weld.FILLET_THROAT_FACTOR
 weld.eccentric_weld_group_peak_stress
 weld.fillet_weld_design_strength

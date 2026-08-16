@@ -58,7 +58,8 @@ modules:
   speed f·λ, the wavelength v/f a frequency produces, and the frequency v/λ a wavelength gives
 - :mod:`~anvilate.analysis.waveguide` — rectangular-waveguide dispersion (TE10): the cutoff
   f_c = c/(2a), the guide wavelength λ_g = (c/f)/√(1−(f_c/f)²), and the phase velocity
-  v_p = c/√(1−(f_c/f)²) (which exceeds c) above cutoff
+  v_p = c/√(1−(f_c/f)²) (which exceeds c) above cutoff; plus the general TE_mn/TM_mn cutoff
+  (c/2)·√((m/a)²+(n/b)²), which is what fixes the TOP of the single-mode band
 - :mod:`~anvilate.analysis.plasma` — plasma physics: the electron plasma frequency f_p (the radio
   cutoff of the ionosphere), the Debye screening length λ_D = √(ε₀·k·T/(n·e²)), and the plasma
   parameter N_D (particles in a Debye sphere; ≫1 for a true collective plasma), and the plasma
@@ -277,7 +278,9 @@ modules:
   target conversion needs; second-order C = C₀/(1 + k·C₀·t) with its C₀-dependent half-life 1/(k·C₀)
 - :mod:`~anvilate.analysis.kinetic_theory` — kinetic theory of gases: the rms molecular speed
   √(3RT/M), the mean molecular speed √(8RT/(πM)), and the mean free path k·T/(√2·π·d²·P)
-  between collisions — the molecular picture behind effusion, diffusion, and rarefied flow
+  between collisions — the molecular picture behind effusion, diffusion, and rarefied flow — plus
+  the most probable speed √(2RT/M), completing the three Maxwell-Boltzmann speeds whose ratio is
+  fixed at 1 : 1.128 : 1.225 for every gas
 - :mod:`~anvilate.analysis.rocket_propulsion` — ideal rocket nozzle and mission: the exhaust
   velocity v_e = √(2γ/(γ−1)·R·T_c·(1 − (p_e/p_c)^((γ−1)/γ))), the thrust
   F = ṁ·v_e + (p_e − p_a)·A_e and specific impulse I_sp = F/(ṁ·g₀), and the Tsiolkovsky
@@ -632,7 +635,9 @@ modules:
   Φ = P·λ/(h·c) a beam of a given optical power delivers — for detectors, solar cells, and LEDs
 - :mod:`~anvilate.analysis.photodetector` — photodiode / optical-receiver detection: the
   responsivity R = η·q·λ/(h·c) (amps per watt of light), the photocurrent I = R·P_opt it delivers,
-  and the fundamental shot-noise current i_n = √(2·q·I·B) that floors a receiver's signal-to-noise
+  and the fundamental shot-noise current i_n = √(2·q·I·B) that floors a receiver's signal-to-noise,
+  plus the noise-equivalent power NEP = i_n/R those two imply — the sensitivity floor where a link
+  budget stops
 - :mod:`~anvilate.analysis.radiation_pressure` — light momentum and radiation pressure: the photon
   momentum p = h/λ, the radiation pressure P = (1+R)·I/c on a surface of reflectivity R, and the
   radiation force (1+R)·I·A/c that drives a solar sail
@@ -994,7 +999,9 @@ modules:
   distance (AASHTO): the minimum curve radius a design speed needs (R = v²/(g·(e+f))),
   the friction-free ideal superelevation rate, the maximum speed a banked curve can be
   taken at, and the stopping sight distance SSD = v·t + v²/(2·(a+g·G)) — reaction plus
-  braking, grade-adjusted — that a curve must keep clear
+  braking, grade-adjusted — that a curve must keep clear, and the middle ordinate
+  M = R(1 − cos(Δ/2)), the fourth standard curve element and the horizontal sightline offset a
+  barrier or cut slope must clear on the inside of the bend
 - :mod:`~anvilate.analysis.vehicle` — vehicle road load for drivetrain/EV sizing: the rolling
   resistance F = C_rr·m·g, the grade resistance F = m·g·sin θ, and the tractive power P = F·v
   a steady speed demands (aerodynamic drag from :mod:`~anvilate.analysis.drag`)
@@ -2170,6 +2177,7 @@ from .kinetic_theory import (
     knudsen_number,
     mean_free_path,
     mean_molecular_speed,
+    most_probable_molecular_speed,
     rms_molecular_speed,
 )
 from .laser_cutting import (
@@ -2360,6 +2368,7 @@ from .packed_bed import (
     specific_surface_area,
 )
 from .photodetector import (
+    noise_equivalent_power,
     photodiode_current,
     photodiode_responsivity,
     shot_noise_current,
@@ -2698,6 +2707,7 @@ from .road_curve import (
     braking_distance,
     horizontal_curve_external_distance,
     horizontal_curve_length,
+    horizontal_curve_middle_ordinate,
     horizontal_curve_tangent_length,
     ideal_superelevation_rate,
     minimum_curve_radius,
@@ -3109,6 +3119,7 @@ from .wave import (
 )
 from .waveguide import (
     rectangular_waveguide_cutoff_frequency,
+    rectangular_waveguide_mode_cutoff_frequency,
     waveguide_group_velocity,
     waveguide_guide_wavelength,
     waveguide_phase_velocity,
@@ -3442,6 +3453,7 @@ __all__ = [
     "prandtl_number",
     "rms_molecular_speed",
     "mean_molecular_speed",
+    "most_probable_molecular_speed",
     "mean_free_path",
     "knudsen_number",
     "air_receiver_holdup_time",
@@ -3701,6 +3713,7 @@ __all__ = [
     "reflection_coefficient_from_vswr",
     "quarter_wave_transformer_impedance",
     "rectangular_waveguide_cutoff_frequency",
+    "rectangular_waveguide_mode_cutoff_frequency",
     "waveguide_guide_wavelength",
     "waveguide_phase_velocity",
     "waveguide_group_velocity",
@@ -3839,6 +3852,7 @@ __all__ = [
     "horizontal_curve_tangent_length",
     "horizontal_curve_length",
     "horizontal_curve_external_distance",
+    "horizontal_curve_middle_ordinate",
     "perception_reaction_distance",
     "stopping_sight_distance",
     "rocket_exhaust_velocity",
@@ -4328,6 +4342,7 @@ __all__ = [
     "photodiode_responsivity",
     "photodiode_current",
     "shot_noise_current",
+    "noise_equivalent_power",
     "room_cavity_ratio",
     "lighting_power_density",
     "luminous_efficacy",

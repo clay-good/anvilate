@@ -29,6 +29,7 @@ __all__ = [
     "photodiode_responsivity",
     "photodiode_current",
     "shot_noise_current",
+    "noise_equivalent_power",
 ]
 
 
@@ -87,6 +88,33 @@ def shot_noise_current(*, current: Quantity, bandwidth: Quantity) -> Quantity:
     if b < 0:
         raise ValueError("bandwidth must be non-negative")
     return Quantity(magnitude=(2.0 * _ELEMENTARY_CHARGE * i * b) ** 0.5, unit="A")
+
+
+def noise_equivalent_power(*, noise_current: Quantity, responsivity: Quantity) -> Quantity:
+    """A detector's noise-equivalent power, NEP = i_n/R.
+
+    The optical power that would produce a signal exactly equal to the noise — the detector's
+    sensitivity floor, and the figure of merit datasheets are compared on. Both inputs are already
+    computed here: the ``noise_current`` i_n of :func:`shot_noise_current` and the ``responsivity``
+    R of :func:`photodiode_responsivity`. Since :func:`photodiode_current` is I = R·P, the power
+    that makes I equal the noise is simply NEP = i_n/R.
+
+    It is the point where the link budget stops: any received power below NEP is buried, so NEP
+    sets the maximum reach of an optical link and the minimum detectable signal of an instrument.
+    Because shot noise grows as √B, NEP does too, which is why a slower receiver sees further —
+    and why the figure is usually quoted normalized as W/√Hz, obtained by dividing by √B (or by
+    passing a 1 Hz bandwidth to :func:`shot_noise_current`). Returns the noise-equivalent power in
+    W.
+    """
+    _check(noise_current, "[current]", "noise_current")
+    _check(responsivity, "[current]/[power]", "responsivity")
+    i_n = noise_current.to("A").magnitude
+    r = responsivity.to("A/W").magnitude
+    if i_n < 0:
+        raise ValueError("noise_current must be non-negative")
+    if r <= 0:
+        raise ValueError("responsivity must be positive")
+    return Quantity(magnitude=i_n / r, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

@@ -33,6 +33,7 @@ __all__ = [
     "braking_distance",
     "horizontal_curve_external_distance",
     "horizontal_curve_length",
+    "horizontal_curve_middle_ordinate",
     "horizontal_curve_tangent_length",
     "ideal_superelevation_rate",
     "minimum_curve_radius",
@@ -234,6 +235,28 @@ def horizontal_curve_external_distance(*, radius: Quantity, deflection_angle: fl
     if r <= 0:
         raise ValueError("radius must be positive")
     return Quantity(magnitude=r * (1.0 / cos(deflection_angle / 2.0) - 1.0), unit="m")
+
+
+def horizontal_curve_middle_ordinate(*, radius: Quantity, deflection_angle: float) -> Quantity:
+    """The middle ordinate of a horizontal circular curve, M = R·(1 − cos(Δ/2)).
+
+    The fourth standard curve element, beside the tangent length, arc length, and external distance
+    already here: the distance from the midpoint of the long chord to the midpoint of the arc,
+    M = R·(1 − cos(Δ/2)), from the ``radius`` R and the ``deflection_angle`` Δ (in radians).
+
+    Where the external distance of :func:`horizontal_curve_external_distance` measures clearance on
+    the *outside* of the bend, this measures it on the *inside*, and that is the safety-critical
+    one: M is exactly the lateral offset from the driver's line of sight across the chord to the
+    inside of the curve, so it is the horizontal sightline offset that says how far back a
+    barrier, cut slope, or building must be cleared for a driver to see around the bend. It is
+    also what field crews stake the curve's midpoint from. Returns the middle ordinate in metres.
+    """
+    _check(radius, "[length]", "radius")
+    _check_deflection(deflection_angle)
+    r = radius.to("m").magnitude
+    if r <= 0:
+        raise ValueError("radius must be positive")
+    return Quantity(magnitude=r * (1.0 - cos(deflection_angle / 2.0)), unit="m")
 
 
 def _check_deflection(deflection_angle: float) -> None:
