@@ -422,12 +422,19 @@ def wet_bulb_temperature(*, dry_bulb_temperature: Quantity, relative_humidity: f
     90% RH could shed barely 1.4 K. That is why swamp coolers work in Phoenix and not in Houston,
     and it is invisible from the dry-bulb temperature alone.
 
-    The fit is good to about 0.3 K over the range that matters for building HVAC — dry bulb
-    between −20 and 50 °C at relative humidities above roughly 5% — and degrades outside it. At
-    saturation the wet bulb equals the dry bulb, which the fit reproduces to within its own error
-    band rather than exactly, so do not use it as an equality test. ``dry_bulb_temperature`` is an
-    absolute Quantity and ``relative_humidity`` a plain fraction in (0, 1]. Returns the wet-bulb
-    temperature in K.
+    The fit is good to about 0.3 K over most of the range that matters for building HVAC — dry
+    bulb between −20 and 50 °C at relative humidities above roughly 5% — but Stull's paper
+    excludes one corner of that box: cold air that is also dry. Below about −10 °C at low humidity
+    the fit overshoots, and by −20 °C at 5% RH it returns a wet bulb 2.4 K *above* the dry bulb,
+    which is thermodynamically impossible. Rather than hand that back, the function checks its own
+    answer against the physical bound T_wb ≤ T_db and raises when the correlation has left its
+    range — a screening number that is known-wrong is worse than no number.
+
+    At saturation the wet bulb equals the dry bulb, which the fit reproduces to within its own
+    error band rather than exactly (it can read a few hundredths of a kelvin high), so do not use
+    it as an equality test; the bound check tolerates that much overshoot.
+    ``dry_bulb_temperature`` is an absolute Quantity and ``relative_humidity`` a plain fraction in
+    (0, 1]. Returns the wet-bulb temperature in K.
     """
     _check(dry_bulb_temperature, "[temperature]", "dry_bulb_temperature")
     if not 0.0 < relative_humidity <= 1.0:
@@ -441,4 +448,14 @@ def wet_bulb_temperature(*, dry_bulb_temperature: Quantity, relative_humidity: f
         + 0.00391838 * rh**1.5 * atan(0.023101 * rh)
         - 4.686035
     )
+    # The fit's own sanity check: evaporation cannot drive a thermometer above the dry bulb, so a
+    # wet bulb over it means Stull's correlation has left its range (the cold, dry corner his
+    # paper excludes). The 0.25 K allowance covers the documented overshoot near saturation.
+    if t_wb > t_c + 0.25:
+        raise ValueError(
+            f"the Stull wet-bulb fit is out of range at {t_c:.1f} degC and "
+            f"{100.0 * relative_humidity:.0f}% RH: it returns a wet bulb of {t_wb:.2f} degC, above "
+            f"the dry bulb, which evaporation cannot reach. The fit is not valid for air that is "
+            f"both cold and dry; use a psychrometric chart or table there."
+        )
     return Quantity(magnitude=t_wb + 273.15, unit="K")

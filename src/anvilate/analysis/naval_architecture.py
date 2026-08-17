@@ -161,11 +161,18 @@ def ittc_friction_coefficient(*, reynolds_number: float) -> float:
     :func:`anvilate.analysis.boundary_layer.turbulent_plate_drag_coefficient` at the same Re),
     because the correlation absorbs some three-dimensional form effect; that offset is a feature
     of the standard, not an error. Multiply by the dynamic pressure and the wetted surface to get
-    the frictional resistance. Re must exceed 100 for the fit to mean anything. Returns the
-    friction coefficient as a plain float.
+    the frictional resistance.
+
+    The correlation has a pole at Re = 10², where log₁₀Re − 2 vanishes, and returns absurd values
+    on the way there — 4×10¹⁷ just above it, 4016 at Re = 101 — so the guard sits at Re = 10⁵
+    instead. That is the low end of the towing-tank data the line was fitted to; below it the flow
+    is not the fully turbulent boundary layer the line describes, and any real hull or model runs
+    Re ≥ 10⁶ anyway. Returns the friction coefficient as a plain float.
     """
-    if reynolds_number <= 100.0:
+    if reynolds_number < 1.0e5:
         raise ValueError(
-            f"reynolds_number must exceed 100 for the ITTC correlation; got {reynolds_number}"
+            f"reynolds_number must be at least 1e5 for the ITTC-57 correlation, which is fitted "
+            f"to turbulent plank data and blows up toward its pole at Re = 100; "
+            f"got {reynolds_number}"
         )
     return 0.075 / (log10(reynolds_number) - 2.0) ** 2

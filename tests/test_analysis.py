@@ -34663,6 +34663,22 @@ def test_wet_bulb_temperature_and_the_evaporative_cooler_it_feeds():
     with pytest.raises(ValueError):
         wet_bulb_temperature(dry_bulb_temperature=_q("5 m"), relative_humidity=0.5)
 
+    # Cold AND dry is the corner Stull's paper excludes: the fit returns a wet bulb ABOVE the dry
+    # bulb there (-17.59 degC against a -20 degC dry bulb), which evaporation cannot reach. The
+    # function checks its own answer against that bound rather than handing back the impossible
+    # number -- the whole point of the guard, since nothing about the input looks wrong.
+    for rh in (0.05, 0.10, 0.20):
+        with pytest.raises(ValueError, match="out of range"):
+            wet_bulb_temperature(
+                dry_bulb_temperature=Quantity(magnitude=253.15, unit="K"), relative_humidity=rh
+            )
+    # Ten degrees warmer the fit is back inside its range and the bound holds with room to spare.
+    assert wb_c(-10.0, 0.05) == pytest.approx(-12.39609722129154, rel=1e-9)
+    assert wb_c(-10.0, 0.05) < -10.0
+    # Saturation is the near-miss the 0.25 K allowance exists for: the fit reads a touch high
+    # without being wrong, so it must still return rather than raise.
+    assert wb_c(30.0, 1.0) == pytest.approx(30.0, abs=0.25)
+
 
 def test_petroff_friction_coefficient_against_the_torque_and_sommerfeld_it_reduces_to():
     from anvilate.analysis import (
@@ -34876,6 +34892,15 @@ def test_ittc_friction_coefficient_sits_above_the_flat_plate_line():
 
     with pytest.raises(ValueError):
         ittc_friction_coefficient(reynolds_number=100.0)
+
+    # The old guard sat at Re = 100 -- right on the correlation's pole, where log10(Re) - 2
+    # vanishes -- so it admitted arbitrarily large nonsense just above it: 3.98e17 at
+    # Re = 100.0000001, 4016 at Re = 101. A skin-friction coefficient cannot be 4e17.
+    for re in (100.0000001, 101.0, 150.0, 1e4, 99999.0):
+        with pytest.raises(ValueError, match="at least 1e5"):
+            ittc_friction_coefficient(reynolds_number=re)
+    # 1e5 itself is the low end of the towing-tank data the line was fitted to, and is accepted.
+    assert ittc_friction_coefficient(reynolds_number=1e5) == pytest.approx(0.008333333333, rel=1e-9)
 
 
 def test_specific_detectivity_normalises_out_the_area_and_bandwidth():
