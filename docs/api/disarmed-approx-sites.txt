@@ -22,21 +22,15 @@
 # order-one, or pass an explicit abs= sized to the value, then delete the line. Three
 # entries were paid off the day this list was created — the three that had NO sibling
 # doing the pinning, and were therefore assertions in name only.
-test_analysis.py::test_bohr_energy_levels_orbit_radius_and_rydberg_wavelength
-test_analysis.py::test_compton_wavelength_shift_scattered_and_electron_energy
-test_analysis.py::test_diffusion_stokes_einstein_diffusivity
-test_analysis.py::test_electric_field_energy_density_and_coaxial_capacitance
-test_analysis.py::test_fiber_chromatic_dispersion_bit_rate_and_reach
-test_analysis.py::test_fluid_statics_morton_number_air_bubble_in_water
-test_analysis.py::test_heisenberg_uncertainty_minima
-test_analysis.py::test_mass_energy_equivalence_and_binding_energy_per_nucleon
-test_analysis.py::test_moseley_k_alpha_x_ray_wavelength
-test_analysis.py::test_parallel_plate_capacitance_charge_and_field
-test_analysis.py::test_particle_in_a_box_energy_levels_and_transition_wavelength
-test_analysis.py::test_photon_energy_wavelength_inverse_and_flux
-test_analysis.py::test_photon_momentum_radiation_pressure_and_force
-test_analysis.py::test_quantum_photoelectric_and_de_broglie
-test_analysis.py::test_radar_range_equation_received_power_and_unambiguous_range
-test_analysis.py::test_relativity_lorentz_time_dilation_and_kinetic_energy
-test_analysis.py::test_thermal_noise_voltage_power_and_current
-test_analysis.py::test_thermionic_schottky_and_child_langmuir_emission
+#
+# 2026-08-17: the list reached ZERO. All eighteen entries were armed by making the
+# absolute floor explicit — `rel=1e-9, abs=0` — at the thirty-five sites involved.
+# `abs=0` is not a way around the gate; it is the assertion stating what it always
+# meant: compare relatively, and do not fall back to an absolute floor that is 1e15
+# times the value being checked. The arming was PROVEN, not assumed: perturbing
+# Planck's constant by one part in 1e6 previously passed all four tests that use it,
+# and now fails three of them.
+#
+# The gate stays. It is cheap, it runs on every full suite, and the next sub-nanoscale
+# assertion someone writes will be caught the first time it runs rather than by an
+# audit two months later.

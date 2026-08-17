@@ -20150,7 +20150,7 @@ def test_fluid_statics_morton_number_air_bubble_in_water():
         surface_tension=_q("0.0728 N/m"),
     )
     expected = 9.80665 * 0.001**4 * 997 / (998**2 * 0.0728**3)
-    assert mo == pytest.approx(expected, rel=1e-9)
+    assert mo == pytest.approx(expected, rel=1e-9, abs=0)
     assert 1e-11 < mo < 1e-10
 
     # Morton is velocity- and length-free: a more viscous liquid raises it steeply (μ⁴).
@@ -27714,14 +27714,14 @@ def test_thermal_noise_voltage_power_and_current():
 
     # Available noise power P = k*T*B, independent of R; ~-134 dBm.
     p = johnson_noise_power(temperature=T, bandwidth=B)
-    assert p.to("W").magnitude == pytest.approx(k * 290 * 1e4, rel=1e-9)
+    assert p.to("W").magnitude == pytest.approx(k * 290 * 1e4, rel=1e-9, abs=0)
     from math import log10
 
     assert 10 * log10(p.to("W").magnitude / 1e-3) == pytest.approx(-134.0, abs=0.2)
 
     # I = sqrt(4*k*T*B/R); the current dual.
     i = johnson_noise_current(resistance=_q("1 kohm"), temperature=T, bandwidth=B)
-    assert i.to("A").magnitude == pytest.approx(sqrt(4 * k * 290 * 1e4 / 1000), rel=1e-9)
+    assert i.to("A").magnitude == pytest.approx(sqrt(4 * k * 290 * 1e4 / 1000), rel=1e-9, abs=0)
     # V = I*R for Johnson noise (voltage and current duals of the same source).
     assert v.to("V").magnitude == pytest.approx(i.to("A").magnitude * 1000.0, rel=1e-9)
 
@@ -28042,26 +28042,28 @@ def test_compton_wavelength_shift_scattered_and_electron_energy():
 
     # Delta_lambda = lambda_C*(1-cos theta); 90 deg -> lambda_C (~2.426 pm).
     s = compton_wavelength_shift(scattering_angle=90.0)
-    assert s.to("m").magnitude == pytest.approx(lam_c * (1 - cos(radians(90))), rel=1e-9)
+    assert s.to("m").magnitude == pytest.approx(lam_c * (1 - cos(radians(90))), rel=1e-9, abs=0)
     assert s.to("pm").magnitude == pytest.approx(2.426, abs=0.001)
     # Forward scatter shifts nothing; backscatter shifts by 2*lambda_C.
     assert compton_wavelength_shift(scattering_angle=0.0).to("m").magnitude == pytest.approx(
         0.0, abs=1e-18
     )
     assert compton_wavelength_shift(scattering_angle=180.0).to("m").magnitude == pytest.approx(
-        2 * lam_c, rel=1e-9
+        2 * lam_c, rel=1e-9, abs=0
     )
 
     # Scattered wavelength = incident + shift.
     inc = Quantity(magnitude=1e-11, unit="m")
     sc = compton_scattered_wavelength(incident_wavelength=inc, scattering_angle=90.0)
-    assert sc.to("m").magnitude == pytest.approx(1e-11 + lam_c, rel=1e-9)
+    assert sc.to("m").magnitude == pytest.approx(1e-11 + lam_c, rel=1e-9, abs=0)
     assert sc.to("m").magnitude > inc.to("m").magnitude  # always redshifted
 
     # Electron energy = h*c*(1/lambda - 1/lambda'); ~24 keV here.
     e = compton_electron_energy(incident_wavelength=inc, scattering_angle=90.0)
     hc = 6.62607015e-34 * 299792458.0
-    assert e.to("J").magnitude == pytest.approx(hc * (1 / 1e-11 - 1 / (1e-11 + lam_c)), rel=1e-9)
+    assert e.to("J").magnitude == pytest.approx(
+        hc * (1 / 1e-11 - 1 / (1e-11 + lam_c)), rel=1e-9, abs=0
+    )
     assert e.to("J").magnitude / 1.602176634e-19 / 1e3 == pytest.approx(24.21, abs=0.05)
     # Forward scatter gives the electron no energy.
     assert compton_electron_energy(incident_wavelength=inc, scattering_angle=0.0).to(
@@ -28096,7 +28098,9 @@ def test_mass_energy_equivalence_and_binding_energy_per_nucleon():
     assert m.to("kg").magnitude == pytest.approx(0.001, rel=1e-9)
     # A 200 MeV fission corresponds to a tiny mass defect.
     m_fission = mass_from_energy(energy=_q("200 MeV"))
-    assert m_fission.to("kg").magnitude == pytest.approx(200 * 1.602176634e-13 / c**2, rel=1e-9)
+    assert m_fission.to("kg").magnitude == pytest.approx(
+        200 * 1.602176634e-13 / c**2, rel=1e-9, abs=0
+    )
 
     # Binding energy per nucleon B/A; U-235 ~7.6 MeV.
     be = binding_energy_per_nucleon(
@@ -29347,7 +29351,9 @@ def test_relativity_lorentz_time_dilation_and_kinetic_energy():
         mass=Quantity(magnitude=9.1093837015e-31, unit="kg"),
         velocity=Quantity(magnitude=0.9 * c, unit="m/s"),
     )
-    assert ke.to("J").magnitude == pytest.approx((g - 1) * 9.1093837015e-31 * c * c, rel=1e-9)
+    assert ke.to("J").magnitude == pytest.approx(
+        (g - 1) * 9.1093837015e-31 * c * c, rel=1e-9, abs=0
+    )
     assert ke.to("J").magnitude / 1.602176634e-19 / 1e6 == pytest.approx(0.6613, abs=0.001)
     # At low speed KE approaches the classical (1/2)m v^2.
     v_slow = 1000.0  # m/s
@@ -29381,7 +29387,7 @@ def test_quantum_photoelectric_and_de_broglie():
     ke = photoelectric_max_kinetic_energy(
         frequency=Quantity(magnitude=1e15, unit="Hz"), work_function=_q("2 eV")
     )
-    assert ke.to("J").magnitude == pytest.approx(h * 1e15 - 2 * eV, rel=1e-9)
+    assert ke.to("J").magnitude == pytest.approx(h * 1e15 - 2 * eV, rel=1e-9, abs=0)
     assert ke.to("eV").magnitude == pytest.approx(2.1357, abs=0.001)
 
     # Threshold f0 = phi/h; below it, no photoemission (raises).
@@ -29399,13 +29405,13 @@ def test_quantum_photoelectric_and_de_broglie():
     lam = de_broglie_wavelength(
         mass=Quantity(magnitude=9.1093837015e-31, unit="kg"), velocity=_q("1e6 m/s")
     )
-    assert lam.to("m").magnitude == pytest.approx(h / (9.1093837015e-31 * 1e6), rel=1e-9)
+    assert lam.to("m").magnitude == pytest.approx(h / (9.1093837015e-31 * 1e6), rel=1e-9, abs=0)
     assert lam.to("nm").magnitude == pytest.approx(0.7274, abs=0.001)
     # Faster particle -> shorter wavelength (inverse in speed).
     lam2 = de_broglie_wavelength(
         mass=Quantity(magnitude=9.1093837015e-31, unit="kg"), velocity=_q("2e6 m/s")
     )
-    assert lam2.to("m").magnitude == pytest.approx(lam.to("m").magnitude / 2, rel=1e-9)
+    assert lam2.to("m").magnitude == pytest.approx(lam.to("m").magnitude / 2, rel=1e-9, abs=0)
 
     # Guardrails: positive work function/mass/velocity, dimensions checked.
     with pytest.raises(ValueError, match="work_function must be positive"):
@@ -29545,7 +29551,7 @@ def test_diffusion_stokes_einstein_diffusivity():
     assert d.unit == "m**2/s"
     # Pinned independently against the closed form, not against the implementation.
     assert d.magnitude == pytest.approx(
-        1.380649e-23 * 298.15 / (6 * pi * 8.9e-4 * 0.5e-9), rel=1e-12
+        1.380649e-23 * 298.15 / (6 * pi * 8.9e-4 * 0.5e-9), rel=1e-12, abs=0
     )
 
     # Self-consistency: the 6*pi*mu*r group IS the Stokes drag coefficient the drag module
@@ -29553,7 +29559,9 @@ def test_diffusion_stokes_einstein_diffusivity():
     coefficient = stokes_drag_force(
         fluid_viscosity=water, particle_diameter=_q("1.0 nm"), velocity=_q("1.0 m/s")
     )
-    assert d.magnitude == pytest.approx(1.380649e-23 * 298.15 / coefficient.magnitude, rel=1e-12)
+    assert d.magnitude == pytest.approx(
+        1.380649e-23 * 298.15 / coefficient.magnitude, rel=1e-12, abs=0
+    )
 
     # Strictly inverse in radius: a 100x bigger particle diffuses 100x slower.
     big = stokes_einstein_diffusivity(
@@ -30777,16 +30785,16 @@ def test_parallel_plate_capacitance_charge_and_field():
 
     # C = eps0*eps_r*A/d; air gap -> ~88.5 pF.
     c = parallel_plate_capacitance(plate_area=area, separation=gap, relative_permittivity=1.0)
-    assert c.to("F").magnitude == pytest.approx(eps0 * 0.01 / 1e-3, rel=1e-9)
+    assert c.to("F").magnitude == pytest.approx(eps0 * 0.01 / 1e-3, rel=1e-9, abs=0)
     assert c.to("F").magnitude * 1e12 == pytest.approx(88.54, abs=0.05)
     # A dielectric of permittivity 4 quadruples the capacitance.
     c_diel = parallel_plate_capacitance(plate_area=area, separation=gap, relative_permittivity=4.0)
-    assert c_diel.to("F").magnitude == pytest.approx(4.0 * c.to("F").magnitude, rel=1e-9)
+    assert c_diel.to("F").magnitude == pytest.approx(4.0 * c.to("F").magnitude, rel=1e-9, abs=0)
     # Halving the gap doubles the capacitance.
     c_thin = parallel_plate_capacitance(
         plate_area=area, separation=Quantity(magnitude=0.5e-3, unit="m")
     )
-    assert c_thin.to("F").magnitude == pytest.approx(2.0 * c.to("F").magnitude, rel=1e-9)
+    assert c_thin.to("F").magnitude == pytest.approx(2.0 * c.to("F").magnitude, rel=1e-9, abs=0)
 
     # Q = C*V; 88.5 pF at 100 V -> ~8.85 nC.
     q = capacitor_charge(capacitance=c, voltage=_q("100 V"))
@@ -31064,7 +31072,7 @@ def test_electric_field_energy_density_and_coaxial_capacitance():
         outer_radius=_q("3 mm"),
         relative_permittivity=2.3,
     )
-    assert c.to("F").magnitude == pytest.approx(2 * pi * e0 * 2.3 * 1 / log(3), rel=1e-9)
+    assert c.to("F").magnitude == pytest.approx(2 * pi * e0 * 2.3 * 1 / log(3), rel=1e-9, abs=0)
     assert c.to("pF").magnitude == pytest.approx(116.5, abs=0.1)
     # A snugger shield (smaller b/a) raises capacitance per metre.
     assert (
@@ -31084,6 +31092,7 @@ def test_electric_field_energy_density_and_coaxial_capacitance():
         .to("F")
         .magnitude,
         rel=1e-9,
+        abs=0,
     )
 
     # Guardrails.
@@ -32151,7 +32160,7 @@ def test_heisenberg_uncertainty_minima():
 
     # Δp = hbar/(2*Δx); 0.1 nm confinement -> ~5.27e-25 kg m/s.
     dp = minimum_momentum_uncertainty(position_uncertainty=Quantity(magnitude=1e-10, unit="m"))
-    assert dp.to("kg*m/s").magnitude == pytest.approx(hbar / (2 * 1e-10), rel=1e-9)
+    assert dp.to("kg*m/s").magnitude == pytest.approx(hbar / (2 * 1e-10), rel=1e-9, abs=0)
     assert dp.to("kg*m/s").magnitude == pytest.approx(5.2729e-25, abs=1e-29)
 
     # Δx = hbar/(2*Δp) is the exact inverse; round-trips the confinement.
@@ -32162,12 +32171,12 @@ def test_heisenberg_uncertainty_minima():
         position_uncertainty=Quantity(magnitude=0.5e-10, unit="m")
     )
     assert dp_tight.to("kg*m/s").magnitude == pytest.approx(
-        2.0 * dp.to("kg*m/s").magnitude, rel=1e-9
+        2.0 * dp.to("kg*m/s").magnitude, rel=1e-9, abs=0
     )
 
     # ΔE = hbar/(2*Δt); a 1 ns state -> ~3.29e-7 eV natural linewidth.
     de = minimum_energy_uncertainty(lifetime=Quantity(magnitude=1e-9, unit="s"))
-    assert de.to("J").magnitude == pytest.approx(hbar / (2 * 1e-9), rel=1e-9)
+    assert de.to("J").magnitude == pytest.approx(hbar / (2 * 1e-9), rel=1e-9, abs=0)
     assert de.to("eV").magnitude == pytest.approx(3.2911e-7, rel=1e-3)
     # A shorter-lived state has a broader energy.
     de_fast = minimum_energy_uncertainty(lifetime=Quantity(magnitude=1e-12, unit="s"))
@@ -32193,18 +32202,18 @@ def test_particle_in_a_box_energy_levels_and_transition_wavelength():
 
     # E_n = n^2*h^2/(8*m*L^2); electron in a 1 nm box, n=1 -> 0.376 eV.
     e1 = particle_in_box_energy(quantum_number=1, particle_mass=me_q, box_length=_q("1 nm"))
-    assert e1.to("J").magnitude == pytest.approx(h**2 / (8 * me * 1e-9**2), rel=1e-12)
+    assert e1.to("J").magnitude == pytest.approx(h**2 / (8 * me * 1e-9**2), rel=1e-12, abs=0)
     assert e1.to("eV").magnitude == pytest.approx(0.376, abs=0.001)
     # Levels crowd upward as n^2: E_2 = 4*E_1, E_3 = 9*E_1.
     e2 = particle_in_box_energy(quantum_number=2, particle_mass=me_q, box_length=_q("1 nm"))
-    assert e2.to("J").magnitude == pytest.approx(4 * e1.to("J").magnitude, rel=1e-12)
+    assert e2.to("J").magnitude == pytest.approx(4 * e1.to("J").magnitude, rel=1e-12, abs=0)
     assert particle_in_box_energy(quantum_number=3, particle_mass=me_q, box_length=_q("1 nm")).to(
         "J"
-    ).magnitude == pytest.approx(9 * e1.to("J").magnitude, rel=1e-12)
+    ).magnitude == pytest.approx(9 * e1.to("J").magnitude, rel=1e-12, abs=0)
     # A smaller box raises every level (quantum confinement): half the width -> 4x the energy.
     assert particle_in_box_energy(quantum_number=1, particle_mass=me_q, box_length=_q("0.5 nm")).to(
         "J"
-    ).magnitude == pytest.approx(4 * e1.to("J").magnitude, rel=1e-12)
+    ).magnitude == pytest.approx(4 * e1.to("J").magnitude, rel=1e-12, abs=0)
 
     # Transition wavelength lambda = h*c/(E_upper - E_lower); 1->2 in a 1 nm box.
     lam = particle_in_box_transition_wavelength(
@@ -32306,11 +32315,13 @@ def test_photon_momentum_radiation_pressure_and_force():
 
     # Photon momentum p = h/lambda; 500 nm -> ~1.325e-27 kg m/s.
     p = photon_momentum(wavelength=Quantity(magnitude=500e-9, unit="m"))
-    assert p.to("kg*m/s").magnitude == pytest.approx(h / 500e-9, rel=1e-9)
+    assert p.to("kg*m/s").magnitude == pytest.approx(h / 500e-9, rel=1e-9, abs=0)
     assert p.to("kg*m/s").magnitude == pytest.approx(1.3252e-27, abs=1e-31)
     # Shorter wavelength carries more momentum.
     p_uv = photon_momentum(wavelength=Quantity(magnitude=250e-9, unit="m"))
-    assert p_uv.to("kg*m/s").magnitude == pytest.approx(2.0 * p.to("kg*m/s").magnitude, rel=1e-9)
+    assert p_uv.to("kg*m/s").magnitude == pytest.approx(
+        2.0 * p.to("kg*m/s").magnitude, rel=1e-9, abs=0
+    )
 
     # Radiation pressure P = (1+R)*I/c; absorber ~4.54 uPa, mirror ~9.08 uPa.
     i = _q("1361 W/m**2")
@@ -32395,10 +32406,10 @@ def test_bohr_energy_levels_orbit_radius_and_rydberg_wavelength():
     r1 = bohr_orbit_radius(principal_quantum_number=1)
     assert r1.to("pm").magnitude == pytest.approx(52.9177, rel=1e-5)
     r2 = bohr_orbit_radius(principal_quantum_number=2)
-    assert r2.to("m").magnitude == pytest.approx(4.0 * r1.to("m").magnitude, rel=1e-9)
+    assert r2.to("m").magnitude == pytest.approx(4.0 * r1.to("m").magnitude, rel=1e-9, abs=0)
     # A higher nuclear charge pulls the orbit in.
     r1_he = bohr_orbit_radius(principal_quantum_number=1, atomic_number=2)
-    assert r1_he.to("m").magnitude == pytest.approx(r1.to("m").magnitude / 2.0, rel=1e-9)
+    assert r1_he.to("m").magnitude == pytest.approx(r1.to("m").magnitude / 2.0, rel=1e-9, abs=0)
 
     # Rydberg: Balmer-alpha (3->2) is the 656 nm red line; Lyman-alpha (2->1) is 121.5 nm UV.
     balmer = rydberg_transition_wavelength(lower_level=2, upper_level=3)
@@ -32421,7 +32432,7 @@ def test_moseley_k_alpha_x_ray_wavelength():
 
     # 1/lambda = (3/4)*R*(Z-1)^2; copper (Z=29) K_alpha -> ~1.55 angstrom.
     lam = moseley_k_alpha_wavelength(atomic_number=29)
-    assert lam.to("m").magnitude == pytest.approx(1 / (0.75 * R * 28**2), rel=1e-12)
+    assert lam.to("m").magnitude == pytest.approx(1 / (0.75 * R * 28**2), rel=1e-12, abs=0)
     assert lam.to("angstrom").magnitude == pytest.approx(1.550, abs=0.005)
     # A heavier element emits a shorter-wavelength (harder) K_alpha X-ray.
     assert moseley_k_alpha_wavelength(atomic_number=42).to("m").magnitude < lam.to("m").magnitude
@@ -32626,7 +32637,7 @@ def test_radar_range_equation_received_power_and_unambiguous_range():
         target_cross_section=sigma,
         target_range=_q("20 km"),
     )
-    assert near.to("W").magnitude == pytest.approx(16.0 * far.to("W").magnitude, rel=1e-9)
+    assert near.to("W").magnitude == pytest.approx(16.0 * far.to("W").magnitude, rel=1e-9, abs=0)
 
     # Max unambiguous range R_u = c/(2*PRF); 1 kHz -> ~149.9 km.
     r_u = max_unambiguous_range(pulse_repetition_frequency=_q("1000 Hz"))
@@ -32907,7 +32918,7 @@ def test_fiber_chromatic_dispersion_bit_rate_and_reach():
     dtau2 = chromatic_dispersion_broadening(
         dispersion_parameter=d_param, length=_q("200 km"), spectral_width=dlam
     )
-    assert dtau2.to("s").magnitude == pytest.approx(2.0 * dtau.to("s").magnitude, rel=1e-9)
+    assert dtau2.to("s").magnitude == pytest.approx(2.0 * dtau.to("s").magnitude, rel=1e-9, abs=0)
 
     # Bit rate B = 1/(4*Δτ); 170 ps -> ~1.47 Gbit/s.
     b = dispersion_limited_bit_rate(pulse_broadening=dtau)
@@ -34160,7 +34171,9 @@ def test_thermionic_schottky_and_child_langmuir_emission():
 
     # Schottky barrier lowering: ~0.12 eV at 10 MV/m, scaling as sqrt(E).
     dw = schottky_barrier_lowering(electric_field=Quantity(magnitude=1e7, unit="V/m"))
-    assert dw.to("J").magnitude == pytest.approx(sqrt(q**3 * 1e7 / (4.0 * pi * eps0)), rel=1e-9)
+    assert dw.to("J").magnitude == pytest.approx(
+        sqrt(q**3 * 1e7 / (4.0 * pi * eps0)), rel=1e-9, abs=0
+    )
     assert dw.to("eV").magnitude == pytest.approx(0.1200, abs=0.001)
     dw4 = schottky_barrier_lowering(electric_field=Quantity(magnitude=4e7, unit="V/m"))
     assert dw4.to("eV").magnitude == pytest.approx(2.0 * dw.to("eV").magnitude, rel=1e-9)
@@ -34599,7 +34612,7 @@ def test_photon_energy_wavelength_inverse_and_flux():
 
     # E = h*c/lambda; 500 nm green -> ~2.48 eV.
     e = photon_energy(wavelength=_q("500 nm"))
-    assert e.to("J").magnitude == pytest.approx(hc / 500e-9, rel=1e-9)
+    assert e.to("J").magnitude == pytest.approx(hc / 500e-9, rel=1e-9, abs=0)
     assert e.to("eV").magnitude == pytest.approx(2.4797, abs=0.001)
 
     # Wavelength inverse round-trips the energy back to 500 nm.
