@@ -48,6 +48,7 @@ antenna.effective_aperture
 antenna.aperture_efficiency
 antenna.dish_diameter_for_gain
 antenna.free_space_path_loss
+antenna.antenna_far_field_distance
 antenna.fresnel_zone_radius
 antenna.max_line_of_sight_range
 antenna.parabolic_beamwidth

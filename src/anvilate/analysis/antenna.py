@@ -30,6 +30,7 @@ __all__ = [
     "effective_aperture",
     "aperture_efficiency",
     "dish_diameter_for_gain",
+    "antenna_far_field_distance",
     "free_space_path_loss",
     "fresnel_zone_radius",
     "max_line_of_sight_range",
@@ -294,6 +295,39 @@ def radiation_resistance_short_dipole(*, length: Quantity, wavelength: Quantity)
     if lam <= 0:
         raise ValueError("wavelength must be positive")
     return Quantity(magnitude=80.0 * pi**2 * (ell / lam) ** 2, unit="ohm")
+
+
+def antenna_far_field_distance(*, aperture_diameter: Quantity, wavelength: Quantity) -> Quantity:
+    """The start of the far field, R = 2·D²/λ (Fraunhofer distance).
+
+    :func:`aperture_antenna_gain`, :func:`parabolic_beamwidth`, :func:`received_power` and
+    :func:`free_space_path_loss` all describe an antenna's far-field behaviour, and none of them
+    said where the far field begins.
+
+    Closer than R the wavefront from one edge of the aperture and from its centre differ by enough
+    path length to interfere: the beam has not yet formed, the gain is not the gain, and the
+    pattern is not the pattern. R = 2·D²/λ is the conventional boundary — the range at which that
+    edge-to-centre path difference falls to λ/16.
+
+    A 1.2 m dish at 12 GHz needs 115 m. That is the trap: range-testing or siting such a dish at
+    20 m measures something that is not the antenna's far-field gain, and a link budget built from
+    :func:`free_space_path_loss` does not hold to a target inside it. The distance grows with the
+    *square* of the aperture, so bigger dishes get much harder to characterise — doubling the
+    diameter quadruples the range needed.
+
+    Named ``antenna_far_field_distance`` rather than the bare form because
+    :func:`anvilate.analysis.ultrasonic_testing.near_field_length` already occupies the acoustic
+    analogue of this idea in the same flat namespace. Returns the far-field distance in m.
+    """
+    _check(aperture_diameter, "[length]", "aperture_diameter")
+    _check(wavelength, "[length]", "wavelength")
+    d = aperture_diameter.to("m").magnitude
+    lam = wavelength.to("m").magnitude
+    if d <= 0:
+        raise ValueError(f"aperture_diameter must be positive; got {aperture_diameter}")
+    if lam <= 0:
+        raise ValueError(f"wavelength must be positive; got {wavelength}")
+    return Quantity(magnitude=2.0 * d * d / lam, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

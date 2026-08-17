@@ -27589,6 +27589,48 @@ def test_antenna_aperture_gain_beamwidth_and_dish_sizing():
         aperture_antenna_gain(aperture_area=_q("1 m"), wavelength=lam, efficiency=0.6)
 
 
+def test_antenna_far_field_distance_bounds_where_the_gain_is_the_gain():
+    from anvilate.analysis import antenna_far_field_distance, free_space_path_loss
+
+    # A 1.2 m dish at 12 GHz (lambda = 24.98 mm).
+    wavelength = Quantity(magnitude=299792458.0 / 12e9, unit="m")
+    assert wavelength.magnitude == pytest.approx(0.024982704833333334, rel=1e-12)
+    distance = (
+        antenna_far_field_distance(aperture_diameter=_q("1.2 m"), wavelength=wavelength)
+        .to("m")
+        .magnitude
+    )
+    assert distance == pytest.approx(115.27968, rel=1e-6)
+
+    # It grows with the SQUARE of the aperture, so bigger dishes get much harder to
+    # characterise -- doubling the diameter quadruples the range needed.
+    doubled = (
+        antenna_far_field_distance(aperture_diameter=_q("2.4 m"), wavelength=wavelength)
+        .to("m")
+        .magnitude
+    )
+    assert doubled / distance == pytest.approx(4.0, rel=1e-12)
+    # And inversely with wavelength: the same dish at a higher frequency needs more range.
+    higher = (
+        antenna_far_field_distance(
+            aperture_diameter=_q("1.2 m"),
+            wavelength=Quantity(magnitude=299792458.0 / 24e9, unit="m"),
+        )
+        .to("m")
+        .magnitude
+    )
+    assert higher / distance == pytest.approx(2.0, rel=1e-12)
+
+    # The practical point: a 20 m test range is well inside the far field of this dish, so the
+    # gain measured there is not the antenna's gain and a path-loss link budget does not hold to
+    # a target that close. Both numbers are computable; only the second one is meaningful.
+    assert distance > 20.0
+    assert free_space_path_loss(distance=_q("115.28 m"), wavelength=wavelength) > 0.0
+
+    with pytest.raises(ValueError, match="aperture_diameter must be positive"):
+        antenna_far_field_distance(aperture_diameter=_q("0 m"), wavelength=wavelength)
+
+
 def test_antenna_fresnel_zone_radius():
     from math import sqrt
 

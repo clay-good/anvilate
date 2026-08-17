@@ -1086,6 +1086,7 @@ from .aluminum import (
     aluminum_tension_stress,
 )
 from .antenna import (
+    antenna_far_field_distance,
     aperture_antenna_gain,
     aperture_efficiency,
     dish_diameter_for_gain,
@@ -3728,6 +3729,7 @@ __all__ = [
     "lap_joint_average_shear_stress",
     "cylindrical_bond_axial_capacity",
     "cylindrical_bond_torque_capacity",
+    "antenna_far_field_distance",
     "free_space_path_loss",
     "received_power",
     "max_line_of_sight_range",
