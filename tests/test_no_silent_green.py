@@ -17,6 +17,8 @@ Two families:
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from anvilate.analysis import CrossSection
@@ -381,3 +383,185 @@ def test_unloaded_structural_connections_are_not_evaluated(build):
         (e.name, e.status) for e in card.entries
     ]
     assert all(e.safety_factor is None for e in card.entries)
+
+
+# --- Mutation-found gaps: behavior that ran under test and was asserted by nothing ----
+#
+# Every test below exists because a deliberate mutation of the code it covers left the
+# suite green. An 88-mutation pass against the code landed 2026-08-17 left 40 real
+# survivors; these are the ones where a wrong edit would change a number a reader
+# believes.
+
+
+def test_pipe_flow_area_is_computed_from_the_bore_not_the_outside_diameter():
+    """`flow_area`'s only assertion was `> 0`, so it could be built from the OD and stay
+    green — a 25% overstatement feeding every velocity and pressure-drop screen that
+    starts from a pipe designation."""
+    from anvilate.standards import default_pipe_schedule_table
+
+    pipe = default_pipe_schedule_table().get("4", "40")
+    bore = 114.3 - 2 * 6.02
+    assert pipe.inside_diameter.to("mm").magnitude == pytest.approx(bore, rel=1e-12)
+    assert pipe.flow_area.to("mm**2").magnitude == pytest.approx(math.pi * bore**2 / 4, rel=1e-12)
+    # Named so the failure says which mistake was made: the OD area is 10261 mm² and
+    # pi*d**2/2 is 16426, against the true 8213.
+    assert pipe.flow_area.to("mm**2").magnitude == pytest.approx(8213.0, abs=1.0)
+    assert pipe.flow_area.to("mm**2").magnitude < math.pi * 114.3**2 / 4
+
+
+def test_std_and_xs_diverge_at_the_first_size_where_they_part_not_only_at_the_last():
+    """The module's headline claim is that STD and XS are not aliases for 40 and 80. It
+    was checked only at NPS 24; the first sizes where they part were free to be
+    re-aliased."""
+    from anvilate.standards import default_pipe_schedule_table
+
+    table = default_pipe_schedule_table()
+
+    def wall(nps: str, schedule: str) -> float:
+        return table.get(nps, schedule).wall_thickness.quantity.to("mm").magnitude
+
+    # NPS 12 is where STD stops tracking Schedule 40, and NPS 10 where XS stops tracking 80.
+    assert wall("10", "STD") == pytest.approx(wall("10", "40"), rel=1e-12)
+    assert wall("12", "STD") == pytest.approx(9.53, rel=1e-12)
+    assert wall("12", "40") == pytest.approx(10.31, rel=1e-12)
+    assert wall("12", "STD") < wall("12", "40")
+
+    assert wall("8", "XS") == pytest.approx(wall("8", "80"), rel=1e-12)
+    assert wall("10", "XS") == pytest.approx(12.70, rel=1e-12)
+    assert wall("10", "80") == pytest.approx(15.09, rel=1e-12)
+    assert wall("10", "XS") < wall("10", "80")
+
+    # And the held-flat property itself: past their divergence both stay constant.
+    assert len({wall(n, "STD") for n in ("12", "14", "16", "18", "20", "24")}) == 1
+    assert len({wall(n, "XS") for n in ("10", "12", "16", "20", "24")}) == 1
+
+
+def test_the_miter_bend_honours_the_quality_factor_it_accepts():
+    """Every call in the suite left E at 1.0, so the term could be dropped entirely. E is
+    0.85 for ERW and 0.80 for furnace butt-welded pipe — an 18% unconservative rating."""
+    from anvilate.analysis import asme_b313_miter_bend_pressure
+
+    common = {
+        "allowable_stress": _q("138 MPa"),
+        "wall_thickness": _q("6.02 mm"),
+        "mean_radius": _q("54.14 mm"),
+        "miter_angle": 22.5,
+    }
+    seamless = asme_b313_miter_bend_pressure(**common).to("MPa").magnitude
+    erw = asme_b313_miter_bend_pressure(quality_factor=0.85, **common).to("MPa").magnitude
+    # The whole expression is linear in E, so the ratio is exact.
+    assert erw == pytest.approx(seamless * 0.85, rel=1e-12)
+    assert asme_b313_miter_bend_pressure(quality_factor=0.8, **common).to(
+        "MPa"
+    ).magnitude == pytest.approx(seamless * 0.8, rel=1e-12)
+
+    # The steep branch's 1.25 coefficient was the one number in the function nothing
+    # asserted — dropping it to 1.0 rates a 45° cut 21% high.
+    steep = asme_b313_miter_bend_pressure(**{**common, "miter_angle": 45.0}).to("MPa").magnitude
+    base = 138.0 * 6.02 / 54.14
+    expected = base / (1.0 + 1.25 * math.tan(math.radians(45.0)) * math.sqrt(54.14 / 6.02))
+    assert steep == pytest.approx(expected, rel=1e-9)
+
+
+def test_the_documented_limit_constants_are_pinned_at_their_own_seams():
+    """Two of the five new limits were tested so far past the seam that the constant
+    itself was free: Stokes survived 1.0 -> 20.0, fluidization 20 -> 200."""
+    from anvilate.analysis import minimum_fluidization_velocity, stokes_settling_velocity
+
+    water = {
+        "particle_density": _q("2650 kg/m**3"),
+        "fluid_density": _q("998 kg/m**3"),
+        "fluid_viscosity": _q("1e-3 Pa*s"),
+    }
+    # 0.103 mm quartz sits at Re = 0.98, just inside; 0.105 mm is just outside. Tested
+    # at the seam so the constant itself is pinned — 1.0 survived being widened to 20.0
+    # when the only inputs sat at Re = 898.
+    inside = stokes_settling_velocity(particle_diameter=_q("0.103 mm"), **water)
+    assert 0.9 < 998 * inside.to("m/s").magnitude * 0.103e-3 / 1e-3 < 1.0
+    with pytest.raises(ValueError, match="Reynolds number"):
+        stokes_settling_velocity(particle_diameter=_q("0.105 mm"), **water)
+
+    air = {
+        "particle_density": _q("2650 kg/m**3"),
+        "fluid_density": _q("1.2 kg/m**3"),
+        "fluid_viscosity": _q("1.8e-5 Pa*s"),
+        "void_fraction": 0.4,
+    }
+    # 0.65 mm sand sits at Re_mf = 18.8, just inside; 0.664 mm is just outside. Same
+    # reason: 20 survived being widened to 200 when the only input sat at Re_mf = 126.
+    ok = minimum_fluidization_velocity(particle_diameter=_q("0.65 mm"), **air)
+    assert 18.0 < 1.2 * ok.to("m/s").magnitude * 0.65e-3 / 1.8e-5 < 20.0
+    with pytest.raises(ValueError, match="particle Reynolds number"):
+        minimum_fluidization_velocity(particle_diameter=_q("0.664 mm"), **air)
+
+
+def test_a_negative_tolerance_cannot_silently_reject_every_allowable():
+    """Without the guard a negative band makes `is_valid_at` unsatisfiable, so every
+    B31.3 check downgrades to NOT_EVALUATED — the failure this library exists to prevent,
+    arriving as a blanket of not-evaluated greens nobody reads."""
+    from anvilate.analysis import AllowableStress
+
+    allowable = AllowableStress(
+        value=_q("138 MPa"), temperature=_q("477.6 K"), material="A106-B", source="Table A-1"
+    )
+    assert allowable.is_valid_at(_q("477.6 K"))
+    with pytest.raises(ValueError, match="must not be negative"):
+        allowable.is_valid_at(_q("477.6 K"), tolerance=_q("-10 K"))
+    # A zero band is legitimate and means "the exact row, nothing else".
+    assert allowable.is_valid_at(_q("477.6 K"), tolerance=_q("0 K"))
+    assert not allowable.is_valid_at(_q("477.0 K"), tolerance=_q("0 K"))
+
+
+def test_the_pressure_scorecard_boundaries_sit_exactly_where_the_clamp_puts_them():
+    """`available_wall` clamps to exactly 0.0, so the scorecard's `available <= 0` branch
+    is reached at the boundary and not one step past it."""
+    from anvilate.analysis import AllowableStress, asme_b313_pressure_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    allowable = AllowableStress(
+        value=_q("138 MPa"), temperature=_q("477.6 K"), material="A106-B", source="Table A-1"
+    )
+    common = {
+        "design_temperature": _q("477.6 K"),
+        "outside_diameter": _q("114.3 mm"),
+        "allowable": allowable,
+    }
+    # A wall exactly consumed by its allowances: 6.02 * 0.875 = 5.2675 mm.
+    exact = asme_b313_pressure_scorecard(
+        "line",
+        design_pressure=_q("5 MPa"),
+        nominal_wall=_q("6.02 mm"),
+        corrosion_allowance=_q("5.2675 mm"),
+        **common,
+    )
+    assert exact.status is CheckStatus.NOT_EVALUATED
+    assert "whole nominal wall" in exact.detail
+    # A hair less allowance leaves a sliver, which rates and fails rather than vanishing.
+    sliver = asme_b313_pressure_scorecard(
+        "line",
+        design_pressure=_q("5 MPa"),
+        nominal_wall=_q("6.02 mm"),
+        corrosion_allowance=_q("5.26 mm"),
+        **common,
+    )
+    assert sliver.status is CheckStatus.FAIL
+    # A zero design pressure is nothing to screen against, not a check that passed.
+    assert (
+        asme_b313_pressure_scorecard(
+            "line", design_pressure=_q("0 MPa"), nominal_wall=_q("6.02 mm"), **common
+        ).status
+        is CheckStatus.NOT_EVALUATED
+    )
+
+
+def test_the_small_deflection_limit_sits_at_a_half_not_merely_below_five():
+    """0.5 -> 5.0 was killed; 0.5 -> 0.75 was not, so the constant was pinned only loosely."""
+    from anvilate.analysis.plate import PlateBendingResult
+
+    for ratio, inside in ((0.49, True), (0.5, True), (0.51, False), (0.74, False)):
+        result = PlateBendingResult(
+            max_bending_stress=_q("100 MPa"),
+            max_deflection=_q("1 mm"),
+            small_deflection_ratio=ratio,
+        )
+        assert result.is_small_deflection is inside, ratio

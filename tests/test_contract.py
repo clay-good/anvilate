@@ -587,6 +587,23 @@ def test_every_inverse_shaped_symbol_has_a_recorded_pairing_decision():
         "than a design inverse:\n  " + "\n  ".join(unrecorded)
     )
 
+    # The pattern itself has to keep working. Narrowing it — dropping `required_`, say —
+    # shrinks the candidate set to a subset of what is already recorded, so
+    # `candidates - recorded` stays empty and the gate goes green while silently ceasing
+    # to notice every future `required_*` inverse. A mutation pass walked straight
+    # through that, so each alternative is asserted to still match something recorded.
+    for fragment, example in (
+        ("required_", "section.required_section_modulus"),
+        ("_for_", "torsion.shaft_diameter_for_torque"),
+        ("_from_", "dynamics.natural_frequency_from_deflection"),
+        ("minimum_", "wire_rope.minimum_sheave_diameter_for_bending_stress"),
+    ):
+        assert example in recorded, f"the inventory lost its {fragment!r} exemplar"
+        assert _INVERSE_NAME.search(example.split(".", 1)[1]), (
+            f"_INVERSE_NAME no longer matches {example!r}, so the gate has stopped "
+            f"discovering {fragment!r} inverses entirely"
+        )
+
     # The name pattern is a discovery heuristic, not the definition: a pair recorded
     # deliberately may not look inverse-shaped (asme_b313_pipe_wall_thickness is the
     # rating inverse of asme_b313_pipe_pressure and matches nothing). So staleness is

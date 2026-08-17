@@ -159,4 +159,15 @@
     a swept grid return a wet bulb below the module's own exact dew point, worst 0.198 K.
     Inside the declared +/-0.3 K fit accuracy, so the reportable part is the asymmetry: the
     module decided impossible answers should raise and guarded only one bound.
+- **Mutation pass 2026-08-17 (88 mutations, 45 killed, 40 real survivors).** The eight
+  highest-value survivors are now pinned in `tests/test_no_silent_green.py` and
+  `tests/test_contract.py`, each verified by re-applying its mutation. **Still open, and
+  recorded rather than pretended away:** 102 of the 108 pipe-schedule rows are pinned
+  structurally (one OD per NPS, wall monotonic in schedule, wall < OD/2) plus about ten
+  specific values, so an individual wall in the middle of the table can still be
+  perturbed with the suite green. Value-pinning all 108 would be a transcription of the
+  transcription and would catch nothing a structural check does not; the honest mitigation
+  is that the structural invariants catch systematic slips and the divergence points are
+  now pinned explicitly. Also open and low-value: the three `_engineering_order` guard
+  clauses (label-only, no number changes) and four assertions over currently-empty sets.
 
