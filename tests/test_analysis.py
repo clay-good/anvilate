@@ -13036,6 +13036,61 @@ def test_vehicle_ackermann_steer_angle():
         ackermann_steer_angle(wheelbase=_q("2.7 s"), turn_radius=_q("30 m"))
 
 
+def test_understeer_gradient_separates_the_stable_car_from_the_one_that_spins():
+    from anvilate.analysis import understeer_gradient, vehicle_characteristic_speed
+
+    # 12 kN car, 7 kN on the front, C_f = 60 kN/rad, C_r = 55 kN/rad -> mildly understeering.
+    gradient = understeer_gradient(
+        front_axle_load=_q("7 kN"),
+        rear_axle_load=_q("5 kN"),
+        front_cornering_stiffness=_q("60 kN"),
+        rear_cornering_stiffness=_q("55 kN"),
+    )
+    assert gradient == pytest.approx(0.025757575757575757, rel=1e-12)
+    assert gradient > 0.0
+
+    # K > 0 means the front slips more: the car runs wide and needs more steering with speed.
+    # That is what every production car is tuned for, and V_char is the yardstick -- the speed at
+    # which it needs TWICE its low-speed Ackermann angle for the same radius.
+    speed = vehicle_characteristic_speed(understeer_gradient=gradient, wheelbase=_q("2.7 m"))
+    assert speed.to("m/s").magnitude == pytest.approx(32.061934824740106, rel=1e-9)
+    assert speed.to("km/hour").magnitude == pytest.approx(115.42, rel=1e-3)
+
+    # Balanced axles give exactly neutral steer -- the seam between the two behaviours.
+    assert understeer_gradient(
+        front_axle_load=_q("6 kN"),
+        rear_axle_load=_q("6 kN"),
+        front_cornering_stiffness=_q("60 kN"),
+        rear_cornering_stiffness=_q("60 kN"),
+    ) == pytest.approx(0.0, abs=1e-15)
+
+    # Move the mass rearward and the sign flips: the rear slips more, the car turns in tighter
+    # than commanded, and above a critical speed the yaw response DIVERGES. Nothing in the
+    # library previously distinguished this from the stable case -- it passes every rollover
+    # check unchanged.
+    oversteering = understeer_gradient(
+        front_axle_load=_q("5 kN"),
+        rear_axle_load=_q("7 kN"),
+        front_cornering_stiffness=_q("60 kN"),
+        rear_cornering_stiffness=_q("55 kN"),
+    )
+    assert oversteering == pytest.approx(-0.04393939393939393, rel=1e-12)
+    assert oversteering < 0.0
+
+    # A characteristic speed is refused for K <= 0 rather than quietly returning a number that
+    # reads reassuring but is really the boundary of a spin: for K < 0 the same expression with
+    # |K| is the CRITICAL speed, a different quantity with a different meaning.
+    with pytest.raises(ValueError, match="CRITICAL speed"):
+        vehicle_characteristic_speed(understeer_gradient=oversteering, wheelbase=_q("2.7 m"))
+    with pytest.raises(ValueError, match="must be positive for a characteristic speed"):
+        vehicle_characteristic_speed(understeer_gradient=0.0, wheelbase=_q("2.7 m"))
+
+    # A more strongly understeering car has a LOWER characteristic speed -- it needs the extra
+    # steering sooner.
+    stronger = vehicle_characteristic_speed(understeer_gradient=0.10, wheelbase=_q("2.7 m"))
+    assert stronger.to("m/s").magnitude < speed.to("m/s").magnitude
+
+
 def test_vehicle_rollover_ssf_threshold_speed_and_load_transfer():
     from math import sqrt
 

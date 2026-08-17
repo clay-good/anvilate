@@ -3133,6 +3133,8 @@ from .vehicle_stability import (
     lateral_load_transfer,
     rollover_threshold_speed,
     static_stability_factor,
+    understeer_gradient,
+    vehicle_characteristic_speed,
 )
 from .ventilation import (
     air_changes_per_hour,
@@ -4630,6 +4632,8 @@ __all__ = [
     "static_stability_factor",
     "rollover_threshold_speed",
     "lateral_load_transfer",
+    "understeer_gradient",
+    "vehicle_characteristic_speed",
     "thin_closed_tube_torsional_stress",
     "PlateBendingResult",
     "simply_supported_plate_uniform_load",

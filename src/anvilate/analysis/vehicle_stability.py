@@ -28,6 +28,8 @@ __all__ = [
     "static_stability_factor",
     "rollover_threshold_speed",
     "lateral_load_transfer",
+    "understeer_gradient",
+    "vehicle_characteristic_speed",
 ]
 
 
@@ -101,6 +103,85 @@ def lateral_load_transfer(
     if t <= 0:
         raise ValueError("track_width must be positive")
     return Quantity(magnitude=m * a_y * h / t, unit="N")
+
+
+def understeer_gradient(
+    *,
+    front_axle_load: Quantity,
+    rear_axle_load: Quantity,
+    front_cornering_stiffness: Quantity,
+    rear_cornering_stiffness: Quantity,
+) -> float:
+    """The understeer gradient, K = W_f/C_f − W_r/C_r (rad per g).
+
+    This module covered rollover — the vehicle tipping over — and nothing covered the other half
+    of stability: whether the car goes where it is pointed. :func:`anvilate.analysis.vehicle.
+    ackermann_steer_angle` gives the neutral-steer bicycle model with no correction for how hard
+    each axle's tyres are actually working.
+
+    K compares the two axles' slip demands. Each axle needs slip angle proportional to its share
+    of the lateral load over its cornering stiffness, and the *difference* decides the behaviour:
+
+    - **K > 0, understeer.** The front slips more, so the car runs wide and needs more steering as
+      it goes faster. Stable — this is what every production car is tuned for.
+    - **K = 0, neutral steer.** Steering angle is independent of speed.
+    - **K < 0, oversteer.** The rear slips more and the car turns in tighter than commanded. It is
+      stable only below a critical speed; above it the response diverges.
+
+    A 12 kN car with 7 kN on the front, C_f = 60 kN/rad and C_r = 55 kN/rad gives K = 0.02576
+    rad/g — mildly understeering. Nothing in the library previously distinguished that from a
+    rear-biased setup with K < 0, which goes unstable above its critical speed while passing every
+    existing stability check. Pair with :func:`vehicle_characteristic_speed`.
+
+    Axle loads are forces (they must sum to the vehicle weight); cornering stiffnesses are force
+    per radian of slip. Returns K as a plain float in radians per g.
+    """
+    _check(front_axle_load, "[force]", "front_axle_load")
+    _check(rear_axle_load, "[force]", "rear_axle_load")
+    _check(front_cornering_stiffness, "[force]", "front_cornering_stiffness")
+    _check(rear_cornering_stiffness, "[force]", "rear_cornering_stiffness")
+    w_f = front_axle_load.to("N").magnitude
+    w_r = rear_axle_load.to("N").magnitude
+    c_f = front_cornering_stiffness.to("N").magnitude
+    c_r = rear_cornering_stiffness.to("N").magnitude
+    if w_f <= 0 or w_r <= 0:
+        raise ValueError("front_axle_load and rear_axle_load must be positive")
+    if c_f <= 0 or c_r <= 0:
+        raise ValueError("cornering stiffnesses must be positive")
+    return w_f / c_f - w_r / c_r
+
+
+def vehicle_characteristic_speed(*, understeer_gradient: float, wheelbase: Quantity) -> Quantity:
+    """The characteristic speed of an understeering car, V = √(L·g/K).
+
+    The speed that gives the understeer gradient from :func:`understeer_gradient` its physical
+    meaning: an understeering vehicle needs *twice* its low-speed Ackermann steering angle to hold
+    the same radius at V_char. It is the natural yardstick for how strongly a car understeers —
+    a low characteristic speed means a lot of extra steering is needed early.
+
+    With K = 0.02576 rad/g and a 2.7 m wheelbase, V_char is 32.1 m/s (115 km/h).
+
+    The same expression evaluated with |K| for an **oversteering** car (K < 0) gives the *critical*
+    speed instead, and that number means something far more serious: above it the yaw response
+    diverges and the vehicle is open-loop unstable. This function refuses K ≤ 0 rather than
+    quietly returning a speed that looks reassuring but is the boundary of a spin — an
+    oversteering setup needs the critical-speed interpretation, stated explicitly, not a value
+    that reads like a characteristic speed.
+
+    Returns the characteristic speed in m/s.
+    """
+    _check(wheelbase, "[length]", "wheelbase")
+    length = wheelbase.to("m").magnitude
+    if length <= 0:
+        raise ValueError(f"wheelbase must be positive; got {wheelbase}")
+    if understeer_gradient <= 0:
+        raise ValueError(
+            f"understeer_gradient must be positive for a characteristic speed; got "
+            f"{understeer_gradient}. A neutral car (K = 0) has none, and for an oversteering car "
+            f"(K < 0) the same expression with |K| is the CRITICAL speed above which the yaw "
+            f"response diverges -- a different quantity with a different meaning."
+        )
+    return Quantity(magnitude=sqrt(length * 9.80665 / understeer_gradient), unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
