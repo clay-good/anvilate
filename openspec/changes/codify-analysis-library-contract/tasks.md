@@ -50,8 +50,20 @@
 
 ## 3. Docs
 
-- [ ] 3.1 Contributor doc: the seven contract rules with examples
-- [ ] 3.2 User doc: what a citation on a result means and how to verify it
+- [x] 3.1 Contributor doc: the seven contract rules with examples —
+      [`docs/contributing-analysis.md`](../../../docs/contributing-analysis.md). Each
+      rule names the gate that enforces it, and says plainly where there is none (rule 2,
+      unit-typed inputs, has the least automated cover). Carries the two unit traps this
+      library has actually been bitten by (`.to("K")` on a delta, `.to("Hz")` on an
+      angular rate) and closes on the rule behind the rules: a check must not be able to
+      report a green it did not earn.
+- [x] 3.2 User doc: what a citation on a result means and how to verify it —
+      [`docs/citations.md`](../../../docs/citations.md). Says what the claim IS (the
+      relation is transcribed from the named source, its sharp limits are enforced, your
+      inputs were used as given) and, at equal length, what it is NOT (not a code stamp,
+      not a certification of the inputs, not a promise that every limit state was
+      checked, and not full coverage — the 22.8% debt is named on the page). Four
+      verification steps, starting with re-doing the substituted line's arithmetic.
 
 ## Recorded decisions (from the 2026-08-17 five-lens audit)
 
