@@ -30,6 +30,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "coefficient_of_fluctuation",
@@ -68,8 +69,8 @@ def coefficient_of_fluctuation(*, max_speed: Quantity, min_speed: Quantity) -> f
     """
     _require(max_speed, "[frequency]", "max_speed")
     _require(min_speed, "[frequency]", "min_speed")
-    wmax = max_speed.to("rad/s").magnitude
-    wmin = min_speed.to("rad/s").magnitude
+    wmax = angular_speed_rad_per_s(max_speed, name="max_speed")
+    wmin = angular_speed_rad_per_s(min_speed, name="min_speed")
     if wmin <= 0:
         raise ValueError(f"min_speed must be positive; got {min_speed}")
     if wmax <= wmin:
@@ -93,7 +94,7 @@ def flywheel_stored_energy(*, inertia: Quantity, speed: Quantity) -> Quantity:
     _require(inertia, "[mass] * [length]**2", "inertia")
     _require(speed, "[frequency]", "speed")
     i = inertia.to("kg*m**2").magnitude
-    omega = speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(speed, name="speed")
     if omega <= 0:
         raise ValueError(f"speed must be positive; got {speed}")
     return Quantity(magnitude=0.5 * i * omega**2, unit="J")
@@ -121,7 +122,7 @@ def flywheel_energy_fluctuation(
             f"coefficient_of_fluctuation must be positive; got {coefficient_of_fluctuation}"
         )
     i = inertia.to("kg*m**2").magnitude
-    omega = mean_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(mean_speed, name="mean_speed")
     if omega <= 0:
         raise ValueError(f"mean_speed must be positive; got {mean_speed}")
     return Quantity(magnitude=i * omega**2 * coefficient_of_fluctuation, unit="J")
@@ -150,7 +151,7 @@ def flywheel_inertia_for_fluctuation(
             f"coefficient_of_fluctuation must be positive; got {coefficient_of_fluctuation}"
         )
     de = energy_fluctuation.to("J").magnitude
-    omega = mean_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(mean_speed, name="mean_speed")
     if omega <= 0:
         raise ValueError(f"mean_speed must be positive; got {mean_speed}")
     inertia = de / (omega**2 * coefficient_of_fluctuation)
@@ -200,7 +201,7 @@ def rotating_rim_hoop_stress(
     _require(rotational_speed, "[frequency]", "rotational_speed")
     rho = density.to("kg/m**3").magnitude
     r = mean_radius.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if r <= 0:
         raise ValueError(f"mean_radius must be positive; got {mean_radius}")
     if omega <= 0:
@@ -260,7 +261,7 @@ def rotating_rim_radial_growth(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     rho = density.to("kg/m**3").magnitude
     r = mean_radius.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     e = elastic_modulus.to("Pa").magnitude
     if r <= 0:
         raise ValueError(f"mean_radius must be positive; got {mean_radius}")
@@ -297,7 +298,7 @@ def rotating_solid_disc_max_stress(
         raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
     rho = density.to("kg/m**3").magnitude
     r = outer_radius.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if r <= 0:
         raise ValueError(f"outer_radius must be positive; got {outer_radius}")
     if omega <= 0:
@@ -323,7 +324,7 @@ def _rotating_disc_inputs(
     rho = density.to("kg/m**3").magnitude
     big_r = outer_radius.to("m").magnitude
     r = radius.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if big_r <= 0:
         raise ValueError(f"outer_radius must be positive; got {outer_radius}")
     if omega <= 0:
@@ -415,7 +416,7 @@ def rotating_annular_disc_bore_stress(
     rho = density.to("kg/m**3").magnitude
     ro = outer_radius.to("m").magnitude
     ri = inner_radius.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if ri <= 0:
         raise ValueError(f"inner_radius must be positive; got {inner_radius}")
     if ro <= ri:
@@ -446,7 +447,7 @@ def _annular_disc_inputs(
     ro = outer_radius.to("m").magnitude
     ri = inner_radius.to("m").magnitude
     r = radius.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if ri <= 0:
         raise ValueError(f"inner_radius must be positive; got {inner_radius}")
     if ro <= ri:

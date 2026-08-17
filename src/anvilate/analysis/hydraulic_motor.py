@@ -22,6 +22,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import revolutions_per_second
 
 __all__ = [
     "hydraulic_motor_speed",
@@ -48,7 +49,7 @@ def hydraulic_pump_flow_rate(
     _check(rotational_speed, "1/[time]", "rotational_speed")
     _fraction(volumetric_efficiency, "volumetric_efficiency")
     d = displacement.to("m**3").magnitude
-    rev_per_second = rotational_speed.to("rad/s").magnitude / (2.0 * pi)
+    rev_per_second = revolutions_per_second(rotational_speed, name="rotational_speed")
     if d <= 0:
         raise ValueError("displacement must be positive")
     if rev_per_second < 0:

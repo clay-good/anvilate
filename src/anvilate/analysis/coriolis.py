@@ -21,6 +21,7 @@ from __future__ import annotations
 from math import radians, sin
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "coriolis_acceleration",
@@ -47,7 +48,7 @@ def coriolis_acceleration(*, angular_velocity: Quantity, velocity: Quantity) -> 
             f"{angular_velocity.dimensionality} ({angular_velocity})"
         )
     _check(velocity, "[length]/[time]", "velocity")
-    omega = angular_velocity.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(angular_velocity, name="angular_velocity")
     v = velocity.to("m/s").magnitude
     if omega <= 0:
         raise ValueError("angular_velocity must be positive")
@@ -69,7 +70,7 @@ def coriolis_parameter(*, angular_velocity: Quantity, latitude: float) -> Quanti
             f"angular_velocity must be a 1/[time] quantity; got "
             f"{angular_velocity.dimensionality} ({angular_velocity})"
         )
-    omega = angular_velocity.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(angular_velocity, name="angular_velocity")
     if omega <= 0:
         raise ValueError("angular_velocity must be positive")
     if not -90.0 <= latitude <= 90.0:

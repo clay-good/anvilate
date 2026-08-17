@@ -31,6 +31,7 @@ from __future__ import annotations
 from math import cos, radians, sin, sqrt
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "slider_crank_displacement",
@@ -103,7 +104,7 @@ def slider_crank_velocity(
             f"{crank_speed.dimensionality} ({crank_speed})"
         )
     theta = radians(crank_angle)
-    omega = crank_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(crank_speed, name="crank_speed")
     root = sqrt(length**2 - (r * sin(theta)) ** 2)
     dx_dtheta_mm = r * sin(theta) * (1.0 + r * cos(theta) / root)
     return Quantity(magnitude=dx_dtheta_mm / 1000.0 * omega, unit="m/s")
@@ -134,7 +135,7 @@ def slider_crank_acceleration(
             f"{crank_speed.dimensionality} ({crank_speed})"
         )
     theta = radians(crank_angle)
-    omega = crank_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(crank_speed, name="crank_speed")
     root = sqrt(length**2 - (r * sin(theta)) ** 2)
     d2x_dtheta2_mm = r * cos(theta) + r**2 * (
         cos(2.0 * theta) / root + r**2 * sin(theta) ** 2 * cos(theta) ** 2 / root**3

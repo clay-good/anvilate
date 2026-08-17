@@ -22,6 +22,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
 
@@ -198,7 +199,7 @@ def turbine_specific_speed(
     _check(power, "[power]", "power")
     _check(density, "[mass]/[length]**3", "density")
     _check(head, "[length]", "head")
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     p_w = power.to("W").magnitude
     rho = density.to("kg/m**3").magnitude
     h = head.to("m").magnitude

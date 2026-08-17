@@ -34,6 +34,7 @@ from math import acos, atan2, ceil, cos, degrees, pi, prod, radians, sin, sqrt, 
 from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 from .contact import hertz_cylinder_contact
 
 # Barth velocity-factor constants Kv = (A + f(V))/A, by tooth manufacturing quality:
@@ -286,7 +287,8 @@ def pitch_line_velocity(*, pitch_diameter: Quantity, rotational_speed: Quantity)
             f"{rotational_speed.dimensionality} ({rotational_speed})"
         )
     d = pitch_diameter.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude  # V = omega * r = pi * d * n
+    # V = omega * r = pi * d * n
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if d <= 0:
         raise ValueError(f"pitch_diameter must be positive; got {pitch_diameter}")
     if omega <= 0:

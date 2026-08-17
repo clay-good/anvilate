@@ -18,6 +18,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "BETZ_LIMIT",
@@ -133,7 +134,7 @@ def wind_turbine_tip_speed_ratio(
     _check(rotor_speed, "1/[time]", "rotor_speed")
     _check(rotor_radius, "[length]", "rotor_radius")
     _check(wind_speed, "[length]/[time]", "wind_speed")
-    omega = rotor_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotor_speed, name="rotor_speed")
     r = rotor_radius.to("m").magnitude
     v = wind_speed.to("m/s").magnitude
     if omega <= 0 or r <= 0 or v <= 0:

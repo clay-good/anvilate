@@ -20,6 +20,7 @@ from __future__ import annotations
 from math import acos, atan, cos, degrees, radians, sqrt, tan
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 _STANDARD_GRAVITY = 9.80665  # m/s**2
 
@@ -139,7 +140,7 @@ def bank_angle_for_turn_rate(*, speed: Quantity, turn_rate: Quantity) -> float:
     v = speed.to("m/s").magnitude
     if v <= 0:
         raise ValueError("speed must be positive")
-    omega = turn_rate.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(turn_rate, name="turn_rate")
     if omega <= 0:
         raise ValueError("turn_rate must be positive")
     return degrees(atan(omega * v / _STANDARD_GRAVITY))

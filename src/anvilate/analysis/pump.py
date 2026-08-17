@@ -23,6 +23,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "affinity_head",
@@ -133,7 +134,7 @@ def pump_specific_speed(
     _check(rotational_speed, "1/[time]", "rotational_speed")
     _check(flow_rate, "[length]**3/[time]", "flow_rate")
     _check(head, "[length]", "head")
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     q = flow_rate.to("m**3/s").magnitude
     h = head.to("m").magnitude
     if omega <= 0 or q <= 0 or h <= 0:
@@ -161,7 +162,7 @@ def pump_suction_specific_speed(
     _check(rotational_speed, "1/[time]", "rotational_speed")
     _check(flow_rate, "[length]**3/[time]", "flow_rate")
     _check(npsh_required, "[length]", "npsh_required")
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     q = flow_rate.to("m**3/s").magnitude
     npshr = npsh_required.to("m").magnitude
     if omega <= 0 or q <= 0 or npshr <= 0:

@@ -25,6 +25,7 @@ from __future__ import annotations
 from math import radians, sin, sqrt
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 UNIFORM_WEAR = "uniform_wear"
 UNIFORM_PRESSURE = "uniform_pressure"
@@ -176,7 +177,7 @@ def clutch_engagement_energy(
     _require(speed_difference, "1/[time]", "speed_difference")
     i1 = driving_inertia.to("kg*m**2").magnitude
     i2 = driven_inertia.to("kg*m**2").magnitude
-    d_omega = speed_difference.to("rad/s").magnitude
+    d_omega = angular_speed_rad_per_s(speed_difference, name="speed_difference")
     if i1 <= 0 or i2 <= 0:
         raise ValueError("driving_inertia and driven_inertia must be positive")
     reduced = i1 * i2 / (i1 + i2)
@@ -196,7 +197,7 @@ def brake_absorbed_energy(*, inertia: Quantity, angular_velocity: Quantity) -> Q
     _require(inertia, "[mass]*[length]**2", "inertia")
     _require(angular_velocity, "1/[time]", "angular_velocity")
     i = inertia.to("kg*m**2").magnitude
-    omega = angular_velocity.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(angular_velocity, name="angular_velocity")
     if i <= 0:
         raise ValueError("inertia must be positive")
     return Quantity(magnitude=0.5 * i * omega**2, unit="J")
@@ -231,7 +232,7 @@ def centrifugal_clutch_torque(
         raise ValueError("shoe_count must be a positive integer")
     m = shoe_mass.to("kg").magnitude
     r_cg = center_of_gravity_radius.to("m").magnitude
-    omega = angular_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(angular_speed, name="angular_speed")
     r_drum = drum_radius.to("m").magnitude
     f_spring = spring_force.to("N").magnitude
     if m <= 0 or r_cg <= 0 or r_drum <= 0:

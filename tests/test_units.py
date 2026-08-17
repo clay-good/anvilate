@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Annotated
 
 import pytest
@@ -16,6 +17,11 @@ from anvilate.units import (
     render,
     render_dual,
     require_dimension,
+)
+from anvilate.units.rotation import (
+    AmbiguousRotationalSpeedError,
+    angular_speed_rad_per_s,
+    revolutions_per_second,
 )
 
 # --- Requirement: Mixed-unit input is accepted everywhere ---
@@ -126,3 +132,31 @@ def test_dimension_error_is_raised_directly_by_validator():
     checker = require_dimension("[pressure]", name="stress")
     with pytest.raises(DimensionError):
         checker(Quantity.parse("10 mm"))
+
+
+def test_angular_speed_accepts_every_spelling_that_names_an_angle():
+    # Scenario: 100 rpm written four ways. All four name an angle, so all four
+    # must land on the same omega -- 10.4720 rad/s, i.e. 1.66667 rev/s.
+    for unit, magnitude in (
+        ("rpm", 100.0),
+        ("revolution/minute", 100.0),
+        ("turn/s", 100.0 / 60.0),
+        ("rad/s", 100.0 * 2.0 * math.pi / 60.0),
+    ):
+        speed = Quantity(magnitude=magnitude, unit=unit)
+        assert angular_speed_rad_per_s(speed, name="speed") == pytest.approx(10.47197551, rel=1e-9)
+        assert revolutions_per_second(speed, name="speed") == pytest.approx(1.666666667, rel=1e-9)
+
+
+@pytest.mark.parametrize("unit", ["Hz", "1/s", "1/min", "1/hour"])
+def test_angular_speed_refuses_a_bare_inverse_time(unit):
+    # Pint's radian is dimensionless, so Hz and rad/s share a dimensionality and
+    # differ by 2*pi. Accepting either spelling would silently return one of them
+    # 6.28x wrong -- and always unconservative -- so the guard refuses outright.
+    with pytest.raises(AmbiguousRotationalSpeedError, match="bare inverse time"):
+        angular_speed_rad_per_s(Quantity(magnitude=100.0, unit=unit), name="roll_speed")
+
+
+def test_ambiguous_rotational_speed_error_names_the_parameter():
+    with pytest.raises(AmbiguousRotationalSpeedError, match="roll_speed"):
+        revolutions_per_second(Quantity(magnitude=100.0, unit="Hz"), name="roll_speed")

@@ -20,6 +20,7 @@ speed the back-EMF takes most of it. Inputs and outputs are dimension-checked
 from __future__ import annotations
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "dc_motor_back_emf",
@@ -39,7 +40,7 @@ def dc_motor_back_emf(*, back_emf_constant: Quantity, angular_speed: Quantity) -
     _check(back_emf_constant, "[energy]/[current]", "back_emf_constant")
     _check(angular_speed, "1/[time]", "angular_speed")
     ke = back_emf_constant.to("V*s/rad").magnitude
-    omega = angular_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(angular_speed, name="angular_speed")
     if ke < 0:
         raise ValueError("back_emf_constant must be non-negative")
     if omega < 0:

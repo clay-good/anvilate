@@ -25,6 +25,7 @@ from __future__ import annotations
 from math import acos, ceil, cos, pi, sin
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "chain_length_in_pitches",
@@ -156,7 +157,7 @@ def chain_speed(
     p = chain_pitch.to("m").magnitude
     if p <= 0:
         raise ValueError(f"chain_pitch must be positive; got {chain_pitch}")
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if omega <= 0:
         raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
     rev_per_second = omega / (2.0 * pi)

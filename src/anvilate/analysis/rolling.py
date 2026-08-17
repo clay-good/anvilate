@@ -23,6 +23,7 @@ from __future__ import annotations
 from math import pi, sqrt
 
 from ..units import Quantity
+from ..units.rotation import revolutions_per_second
 
 __all__ = [
     "rolling_power",
@@ -134,7 +135,7 @@ def rolling_power(
         )
     f = rolling_force.to("N").magnitude
     length = contact_length.to("m").magnitude
-    n = roll_speed.to("rad/s").magnitude / (2.0 * pi)
+    n = revolutions_per_second(roll_speed, name="roll_speed")
     if f <= 0:
         raise ValueError("rolling_force must be positive")
     if length <= 0:

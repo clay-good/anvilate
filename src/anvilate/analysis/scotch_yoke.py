@@ -22,6 +22,7 @@ from __future__ import annotations
 from math import cos, radians, sin
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "scotch_yoke_displacement",
@@ -51,7 +52,7 @@ def _speed_rad_s(crank_speed: Quantity) -> float:
             f"crank_speed must be a rotational-speed ([frequency]) quantity; got "
             f"{crank_speed.dimensionality} ({crank_speed})"
         )
-    return crank_speed.to("rad/s").magnitude
+    return angular_speed_rad_per_s(crank_speed, name="crank_speed")
 
 
 def scotch_yoke_displacement(*, crank_radius: Quantity, crank_angle: float) -> Quantity:

@@ -21,6 +21,7 @@ rotating machine's mounts are sized for.
 from __future__ import annotations
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "gyroscopic_precession_rate",
@@ -43,7 +44,7 @@ def gyroscopic_spin_angular_momentum(
     _check(polar_moment_of_inertia, "[mass]*[length]**2", "polar_moment_of_inertia")
     _check(spin_speed, "1/[time]", "spin_speed")
     inertia = polar_moment_of_inertia.to("kg*m**2").magnitude
-    omega = spin_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(spin_speed, name="spin_speed")
     if inertia <= 0:
         raise ValueError("polar_moment_of_inertia must be positive")
     if omega <= 0:
@@ -68,7 +69,7 @@ def gyroscopic_precession_rate(
     _check(spin_speed, "1/[time]", "spin_speed")
     moment = applied_moment.to("N*m").magnitude
     inertia = polar_moment_of_inertia.to("kg*m**2").magnitude
-    omega = spin_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(spin_speed, name="spin_speed")
     if moment <= 0:
         raise ValueError("applied_moment must be positive")
     if inertia <= 0:
@@ -94,8 +95,8 @@ def gyroscopic_reaction_moment(
     _check(spin_speed, "1/[time]", "spin_speed")
     _check(precession_rate, "1/[time]", "precession_rate")
     inertia = polar_moment_of_inertia.to("kg*m**2").magnitude
-    omega = spin_speed.to("rad/s").magnitude
-    precession = precession_rate.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(spin_speed, name="spin_speed")
+    precession = angular_speed_rad_per_s(precession_rate, name="precession_rate")
     if inertia <= 0:
         raise ValueError("polar_moment_of_inertia must be positive")
     if omega <= 0:

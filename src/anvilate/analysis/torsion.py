@@ -25,6 +25,7 @@ from collections.abc import Sequence
 from math import pi, sqrt
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "torque_from_power",
@@ -84,7 +85,7 @@ def torque_from_power(*, power: Quantity, rotational_speed: Quantity) -> Quantit
     """
     _require(power, "[power]", "power")
     _require(rotational_speed, "[frequency]", "rotational_speed")
-    if rotational_speed.to("rad/s").magnitude <= 0:
+    if angular_speed_rad_per_s(rotational_speed, name="rotational_speed") <= 0:
         raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
     if power.to("W").magnitude <= 0:
         raise ValueError(f"power must be positive; got {power}")
@@ -104,7 +105,7 @@ def power_from_torque(*, torque: Quantity, rotational_speed: Quantity) -> Quanti
     _require(torque, "[force] * [length]", "torque")
     _require(rotational_speed, "[frequency]", "rotational_speed")
     t = torque.to("N*m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if t <= 0:
         raise ValueError(f"torque must be positive; got {torque}")
     if omega <= 0:

@@ -21,6 +21,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 # Standard gravitational acceleration.
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
@@ -44,7 +45,7 @@ def centrifugal_g_factor(*, rotational_speed: Quantity, radius: Quantity) -> flo
     """
     _check(rotational_speed, "1/[time]", "rotational_speed")
     _check(radius, "[length]", "radius")
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     r = radius.to("m").magnitude
     if omega <= 0:
         raise ValueError("rotational_speed must be positive")
@@ -91,7 +92,7 @@ def centrifugal_wall_pressure(
     _check(density, "[mass]/[length]**3", "density")
     _check(inner_radius, "[length]", "inner_radius")
     _check(outer_radius, "[length]", "outer_radius")
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     rho = density.to("kg/m**3").magnitude
     r_i = inner_radius.to("m").magnitude
     r_o = outer_radius.to("m").magnitude

@@ -23,6 +23,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s, revolutions_per_second
 
 __all__ = [
     "petroff_friction_coefficient",
@@ -59,7 +60,7 @@ def _petroff_torque_nm(
             f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})"
         )
     mu = viscosity.to("Pa*s").magnitude
-    n = speed.to("rad/s").magnitude / (2.0 * pi)  # revolutions per second
+    n = revolutions_per_second(speed, name="speed")  # revolutions per second
     r = journal_radius.to("m").magnitude
     ell = bearing_length.to("m").magnitude
     c = radial_clearance.to("m").magnitude
@@ -111,7 +112,7 @@ def petroff_friction_power(
     power in watts.
     """
     torque = _petroff_torque_nm(viscosity, speed, journal_radius, bearing_length, radial_clearance)
-    omega = speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(speed, name="speed")
     return Quantity(magnitude=torque * omega, unit="W")
 
 
@@ -169,7 +170,7 @@ def sommerfeld_number(
     r = journal_radius.to("m").magnitude
     c = radial_clearance.to("m").magnitude
     mu = viscosity.to("Pa*s").magnitude
-    n = speed.to("rad/s").magnitude / (2.0 * pi)
+    n = revolutions_per_second(speed, name="speed")
     p = unit_load.to("Pa").magnitude
     if c <= 0 or r <= 0:
         raise ValueError("journal_radius and radial_clearance must be positive")
@@ -276,7 +277,7 @@ def petroff_friction_coefficient(
     r = journal_radius.to("m").magnitude
     c = radial_clearance.to("m").magnitude
     mu = viscosity.to("Pa*s").magnitude
-    n = speed.to("rad/s").magnitude / (2.0 * pi)
+    n = revolutions_per_second(speed, name="speed")
     p_load = unit_load.to("Pa").magnitude
     if c <= 0 or r <= 0:
         raise ValueError("journal_radius and radial_clearance must be positive")

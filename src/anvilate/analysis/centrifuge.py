@@ -24,6 +24,7 @@ from __future__ import annotations
 from math import log
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "centrifugal_sedimentation_velocity",
@@ -63,7 +64,7 @@ def centrifugal_sedimentation_velocity(
     rho_f = density_fluid.to("kg/m**3").magnitude
     mu = viscosity.to("Pa*s").magnitude
     r = radius.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if d <= 0:
         raise ValueError("particle_diameter must be positive")
     if mu <= 0:
@@ -114,7 +115,7 @@ def centrifuge_settling_time(
     mu = viscosity.to("Pa*s").magnitude
     r_i = inner_radius.to("m").magnitude
     r_o = outer_radius.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if d <= 0:
         raise ValueError("particle_diameter must be positive")
     if mu <= 0:

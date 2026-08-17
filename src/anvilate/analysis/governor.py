@@ -21,6 +21,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 _GRAVITY = 9.80665  # m/s**2
 
@@ -39,7 +40,7 @@ def watt_governor_height(*, angular_speed: Quantity) -> Quantity:
     sensitive the faster it runs. Returns the governor height in m.
     """
     _check(angular_speed, "1/[time]", "angular_speed")
-    omega = angular_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(angular_speed, name="angular_speed")
     if omega <= 0:
         raise ValueError("angular_speed must be positive")
     return Quantity(magnitude=_GRAVITY / (omega * omega), unit="m")
@@ -73,7 +74,7 @@ def porter_governor_height(
     _check(angular_speed, "1/[time]", "angular_speed")
     _check(ball_mass, "[mass]", "ball_mass")
     _check(central_load, "[mass]", "central_load")
-    omega = angular_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(angular_speed, name="angular_speed")
     m = ball_mass.to("kg").magnitude
     big_m = central_load.to("kg").magnitude
     if omega <= 0:

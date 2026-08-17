@@ -37,6 +37,7 @@ from math import atan2, cos, degrees, pi, radians, sin, sqrt, tan
 from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 
 __all__ = [
     "CamMotion",
@@ -113,7 +114,7 @@ def cam_follower_motion(
     ell = rise.to("m").magnitude
     beta = radians(rise_angle)
     theta = radians(cam_angle)
-    omega = cam_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(cam_speed, name="cam_speed")
     frac = theta / beta  # 0 .. 1 across the rise
     if profile == "shm":
         y = (ell / 2.0) * (1.0 - cos(pi * frac))

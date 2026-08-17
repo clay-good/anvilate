@@ -28,6 +28,7 @@ from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
+from ..units.rotation import angular_speed_rad_per_s
 from .plate import DEFAULT_POISSON_RATIO
 
 __all__ = [
@@ -1539,7 +1540,7 @@ def rotating_unbalance_force(
     _require(rotational_speed, "[frequency]", "rotational_speed")
     m = unbalance_mass.to("kg").magnitude
     e = eccentricity.to("m").magnitude
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if m <= 0 or e <= 0 or omega <= 0:
         raise ValueError("unbalance_mass, eccentricity, and rotational_speed must be positive")
     return Quantity(magnitude=m * e * omega**2, unit="N")
@@ -1587,7 +1588,7 @@ def balance_quality_permissible_eccentricity(
     if balance_grade <= 0:
         raise ValueError(f"balance_grade must be positive; got {balance_grade}")
     _require(rotational_speed, "[frequency]", "rotational_speed")
-    omega = rotational_speed.to("rad/s").magnitude
+    omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if omega <= 0:
         raise ValueError(f"rotational_speed must be positive; got {rotational_speed}")
     # G is in mm/s; e_per = G/omega in mm, converted to micrometres.
