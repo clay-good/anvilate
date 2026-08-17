@@ -1,0 +1,127 @@
+# Sources this library cites, one token per line.
+#
+# A public analysis symbol carries a citation when this token appears in its own
+# docstring or in its module's docstring. This is the vocabulary the citation gate in
+# tests/test_contract.py checks against — the list is curated rather than inferred, so
+# adding a source here is a deliberate act and the gate cannot be satisfied by accident.
+#
+# Add a token when you cite a source the list does not yet name. Do not add a token to
+# make a gate failure go away: the failure means a function does not say where its
+# formula comes from, and the fix is to say.
+
+# --- Codes and standards bodies
+AASHTO
+ACI
+AGMA
+AISC
+AISI
+ANSI
+API
+ASCE
+ASHRAE
+ASME
+ASTM
+AWS
+AWWA
+CSA
+DIN
+Eurocode
+EN 199
+EN ISO
+IEC
+IEEE
+IES
+ISO
+JIS
+NDS
+NEC
+NEMA
+NFPA
+NIOSH
+OSHA
+SAE
+TMS
+
+# --- Handbooks and texts
+Bergman
+Blevins
+Crane TP
+Cengel
+Incropera
+Machinery's Handbook
+Marks
+Mischke
+Norton
+Perry
+Peterson
+Roark
+Shigley
+Timoshenko
+Young
+
+# --- Named methods, laws, and correlations
+Archard
+Basquin
+Bernoulli
+Bredt
+Carnot
+Churchill
+Coffin
+Colebrook
+Coulomb
+Darcy
+Doppler
+Duhamel
+Dushman
+Ergun
+Euler
+Eyring
+Faraday
+Gerber
+Gilliland
+Goodman
+Hagen
+Hazen
+Hertz
+Irwin
+Kirchhoff
+Lamé
+Lame
+Lewis
+Manning
+Miner
+Mises
+Mohr
+Navier
+Nusselt
+Palmgren
+Paris
+Peukert
+Poisson
+Prandtl
+Rankine
+Rayleigh
+Reynolds
+Rohsenow
+Sabine
+Schiller
+Sieder
+Stokes
+Terzaghi
+Tresca
+Vesić
+Vesic
+Wahl
+Wen-Yu
+Whitaker
+Wien
+Ylinen
+Zuber
+
+# --- Clause and table references (a symbol that points at a numbered provision)
+§
+Annex
+Appendix
+Chapter
+Clause
+Table

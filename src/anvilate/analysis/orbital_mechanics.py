@@ -12,6 +12,10 @@ go once around follows from Kepler's third law, T = 2π·√(r³/μ), growing wi
 of radius — the reason geostationary satellites sit far out. And the speed to break free of the body
 entirely, leaving on a parabolic escape trajectory, is v_esc = √(2μ/r) = √2·v_circ — always exactly
 √2 times the local circular speed, the extra velocity a mission to another body must find.
+
+Sources: Vallado, *Fundamentals of Astrodynamics and Applications*, and
+Curtis, *Orbital Mechanics for Engineering Students*, for the two-body, transfer and
+rendezvous relations.
 """
 
 from __future__ import annotations

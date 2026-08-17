@@ -13,6 +13,9 @@ always at or above it, rising steeply as D approaches 1. For the buck-boost, V_o
 (magnitude; the real output is inverted), below the input for D < 0.5 and above it for D > 0.5. In
 every case the duty cycle is the single control knob, and these relations set the operating D a
 target output needs.
+
+Sources: Erickson & Maksimovic, *Fundamentals of Power Electronics*, for the
+buck/boost conversion ratios, ripple and continuous-conduction boundary relations.
 """
 
 from __future__ import annotations

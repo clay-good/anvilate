@@ -13,6 +13,10 @@ life η (the age by which 63.2% have failed) and the dimensionless shape β. The
 failure rate is the hazard h(t) = (β/η)·(t/η)^(β−1), rising, constant, or falling as β is above,
 at, or below 1. The mean time to failure follows from the gamma function, MTTF = η·Γ(1 + 1/β).
 Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: MIL-HDBK-217 and IEC 61709 for the failure-rate conventions;
+O'Connor & Kleyner, *Practical Reliability Engineering*, for the reliability,
+availability and Weibull relations.
 """
 
 from __future__ import annotations

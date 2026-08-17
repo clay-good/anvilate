@@ -11,6 +11,10 @@ dimension-checked :class:`~anvilate.units.Quantity` values.
 
 ``ΔT`` is a temperature *difference* — pass it in kelvin or ``delta_degC``, not an
 absolute ``degC`` reading.
+
+Sources: Incropera & DeWitt / Bergman, *Fundamentals of Heat and Mass Transfer*
+(conduction, convection, and the resistance network); Roark's *Formulas for Stress and
+Strain* for the restrained-expansion thermal stress.
 """
 
 from __future__ import annotations

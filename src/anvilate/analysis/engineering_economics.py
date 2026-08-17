@@ -12,6 +12,10 @@ series of equal payments A each period — a loan, a lease, an annual saving —
 PV = A·[1 − (1+i)^−n]/i, the lump sum equivalent to the whole stream. Money amounts are plain
 numbers (dimensionless), the rate is a per-period decimal fraction (0.08 for 8%), and the number of
 periods is a count.
+
+Sources: standard engineering-economy texts (Blank & Tarquin, *Engineering
+Economy*; Newnan, *Engineering Economic Analysis*) for the time-value, annuity and
+depreciation formulas.
 """
 
 from __future__ import annotations

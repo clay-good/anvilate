@@ -15,6 +15,9 @@ Inverting it for a receiver's minimum usable power gives the maximum line-of-sig
 d = (lambda/(4*pi)) * sqrt(P_t * G_t * G_r / P_r_min) — the reach a link can be expected to hold.
 
 Gains here are linear power ratios (not dBi); convert a dBi figure with G = 10^(dBi/10) first.
+
+Sources: Balanis, *Antenna Theory: Analysis and Design*, for the aperture-gain,
+beamwidth and far-field relations; ITU-R P.525 for free-space path loss.
 """
 
 from __future__ import annotations

@@ -431,3 +431,92 @@ def test_no_assertion_is_disarmed_by_the_approx_absolute_floor():
         "these assertions are swamped by pytest.approx's default abs=1e-12, so their rel= "
         f"tolerance does nothing; assert in a scaled unit or pass an explicit abs=: {offenders}"
     )
+
+
+def _citation_authorities() -> list[str]:
+    path = _REPO / "docs" / "api" / "citation-authorities.txt"
+    return [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+
+def _uncited_manifest() -> set[str]:
+    path = _REPO / "docs" / "api" / "uncited-symbols.txt"
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
+def _uncited_symbols() -> set[str]:
+    """Public analysis symbols naming no source, in their own docstring or their module's."""
+    import importlib
+    import inspect
+
+    authorities = _citation_authorities()
+
+    def cited(text: str) -> bool:
+        return any(token in text for token in authorities)
+
+    missing: set[str] = set()
+    for entry in _manifest_surface():
+        module_name, _, symbol = entry.partition(".")
+        try:
+            module = importlib.import_module(f"anvilate.analysis.{module_name}")
+            obj = getattr(module, symbol)
+        except (ImportError, AttributeError):  # pragma: no cover - the surface gate catches this
+            continue
+        if not (cited(inspect.getdoc(obj) or "") or cited(inspect.getdoc(module) or "")):
+            missing.add(entry)
+    return missing
+
+
+def test_every_new_public_check_names_its_source():
+    """The citation gate, held as a ratchet: the debt can only go down.
+
+    "Every check cites its clause" is the library's contract, and a little over a third
+    of the public surface does not yet keep it. Backfilling all of it at once would mean
+    attaching sources to formulas nobody re-read, which is worse than an honest gap. So
+    the outstanding symbols are enumerated in ``docs/api/uncited-symbols.txt`` and this
+    test holds the line in both directions: a NEW public symbol must name a source, and a
+    listed symbol that has since been cited must be struck off. Neither the list nor the
+    silence can drift.
+    """
+    uncited = _uncited_symbols()
+    recorded = _uncited_manifest()
+
+    newly_uncited = sorted(uncited - recorded)
+    assert not newly_uncited, (
+        "public analysis symbols that name no source and are not recorded as known debt.\n"
+        "Name the source in the docstring (or the module's, if the whole module follows "
+        "one text) using a token from docs/api/citation-authorities.txt — do NOT add the "
+        "symbol to docs/api/uncited-symbols.txt:\n  " + "\n  ".join(newly_uncited)
+    )
+
+    now_cited = sorted(recorded - uncited)
+    assert not now_cited, (
+        "these symbols are recorded as uncited but now name a source. Strike them from "
+        "docs/api/uncited-symbols.txt so the debt stays honest:\n  " + "\n  ".join(now_cited)
+    )
+
+
+def test_the_citation_gate_can_actually_detect_a_missing_source():
+    """A gate nobody has watched fail is a gate nobody knows works."""
+    authorities = _citation_authorities()
+
+    def cited(text: str) -> bool:
+        return any(token in text for token in authorities)
+
+    assert cited("The AISC 360-22 §F2 flexural strength.")
+    assert cited("Roark's Formulas for Stress and Strain, Table 8.1.")
+    assert cited("The Terzaghi bearing capacity.")
+    # A docstring that explains the physics beautifully and never says where it came
+    # from is exactly what this gate is for.
+    assert not cited(
+        "The stress in a member, which is the load over the area — a relation so "
+        "familiar that nobody writes down where it comes from."
+    )
+    assert not cited("")

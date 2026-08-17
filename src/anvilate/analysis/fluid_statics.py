@@ -13,6 +13,10 @@ dam's overturning check.
 A fully or partly submerged body feels the buoyant force of the fluid it displaces,
 F_b = ρ·g·V (Archimedes). Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Cengel & Cimbala, *Fluid Mechanics: Fundamentals and Applications*,
+and White, *Fluid Mechanics*, for the hydrostatic pressure, submerged-surface resultant,
+and buoyancy relations.
 """
 
 from __future__ import annotations

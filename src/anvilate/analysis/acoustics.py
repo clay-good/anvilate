@@ -12,6 +12,10 @@ A point source in the open loses level with distance by the inverse-square law, 
 L₂ = L₁ − 20·log₁₀(r₂/r₁) — a clean 6 dB drop for every doubling of distance. Levels are plain
 decibel numbers (a dimensionless ratio); distances are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Beranek & Ver, *Noise and Vibration Control Engineering*, for the
+room-acoustics and sound-level relations; Sabine's and Eyring's reverberation equations
+as given there; OSHA 1910.95 and the NIOSH REL for the exposure criteria.
 """
 
 from __future__ import annotations

@@ -13,6 +13,10 @@ stream's by the factor T₀/T = 1 + (γ−1)/2·M². That rise is negligible at 
 sonic, and it is why high-speed compressor and turbine parts run hot. The specific-heat ratio γ and
 the gas constant R are properties the caller supplies. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Shapiro, *The Dynamics and Thermodynamics of Compressible Fluid
+Flow*, and NACA Report 1135 for the isentropic and normal-shock relations; Cengel &
+Cimbala, *Fluid Mechanics*, for the nozzle and choked-flow forms.
 """
 
 from __future__ import annotations

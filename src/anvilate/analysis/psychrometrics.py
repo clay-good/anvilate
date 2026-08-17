@@ -13,6 +13,9 @@ water — the temperature where that happens is the dew point, the inverse of th
 Temperatures are :class:`~anvilate.units.Quantity` values (pass them in kelvin — ``"298.15 K"`` —
 since pint can't parse an offset ``"25 degC"`` literal; ``.to("degC")`` on a result works fine).
 Inputs and outputs are dimension-checked.
+
+Sources: ASHRAE *Handbook — Fundamentals*, Chapter 1 (Psychrometrics), for the
+moist-air state relations and the saturation vapor-pressure correlation.
 """
 
 from __future__ import annotations

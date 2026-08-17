@@ -25,6 +25,9 @@ over a die opening ``V`` (k ≈ 1.33 for a wiping air bend).
 
 Bend angles are plain-float degrees values (the units layer carries no angles);
 every length, strength, and force is a dimension-checked :class:`~anvilate.units.Quantity`.
+
+Sources: *Machinery's Handbook* for the bend-allowance and K-factor conventions;
+standard press-brake and blanking-force practice.
 """
 
 from __future__ import annotations

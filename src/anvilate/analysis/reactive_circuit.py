@@ -18,6 +18,9 @@ response with time constant τ = R·C (or L/R) and an RC filter corner at f_c = 
 Before any of that, a capacitor's capacitance comes from its geometry: a parallel-plate capacitor of
 area A and gap d has C = ε₀·ε_r·A/d, it holds charge Q = C·V at voltage V, and the field between its
 plates is the uniform E = V/d.
+
+Sources: standard AC circuit theory (Nilsson & Riedel, *Electric Circuits*;
+Irwin, *Basic Engineering Circuit Analysis*) for reactance, resonance and quality factor.
 """
 
 from __future__ import annotations

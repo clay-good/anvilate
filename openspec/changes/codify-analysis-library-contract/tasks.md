@@ -2,14 +2,34 @@
 
 ## 1. Audit & codify
 
-- [ ] 1.1 Citation coverage audit across the ~495-symbol public surface; backfill gaps
+- [~] 1.1 Citation coverage audit across the public surface; backfill gaps — audited all
+      1,745 manifest symbols against a curated authority list
+      (`docs/api/citation-authorities.txt`): **47% named no source**, in their own
+      docstring or their module's. Backfilled the fourteen worst-covered modules by
+      giving each module docstring a real `Sources:` attribution (thermal, electrical,
+      reactive_circuit, acoustics, sheetmetal, compressible_flow, psychrometrics,
+      fluid_statics, engineering_economics, orbital_mechanics, antenna, combustion,
+      reliability, dc_dc_converter), which took the gap to 36%. The remaining 630 are
+      enumerated in `docs/api/uncited-symbols.txt` and held by the ratchet gate (2.1).
+      **Deliberately not backfilled wholesale:** attaching a source to a formula nobody
+      re-read would be a citation that means nothing, which is worse than an honest gap.
+      Pay the list down module by module as each is next touched.
 - [x] 1.2 Enumerate the public API explicitly (single source of truth for the surface:
       `docs/api/analysis-public-surface.txt`, enforced by `tests/test_contract.py`)
 - [ ] 1.3 Inventory design inverses and their forward-check pairings
 
 ## 2. CI enforcement
 
-- [ ] 2.1 Citation-required gate for new public functions
+- [x] 2.1 Citation-required gate for new public functions —
+      `test_every_new_public_check_names_its_source` in `tests/test_contract.py`, held as
+      a **ratchet in both directions**: a public symbol naming no source and not recorded
+      in `docs/api/uncited-symbols.txt` fails, and a symbol *on* that list which has since
+      been cited fails too, so the debt cannot go stale and the count can only fall. A
+      citation is any token from `docs/api/citation-authorities.txt` — a curated list, so
+      the gate cannot be satisfied by an accidental word. Both directions were verified by
+      injecting the failure into a copy: a new uncited public function, and a listed symbol
+      given a source. A second test proves the detector itself distinguishes a cited
+      docstring from a beautifully-written uncited one.
 - [ ] 2.2 Worked-example anchor presence check (every public function maps to a sourced test)
 - [x] 2.3 Example-per-module coverage gate (`tests/test_contract.py`; backfilled the six
       uncovered modules: clutch, coupling, impact, journal_bearing, rivet, scotch_yoke)

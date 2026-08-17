@@ -15,6 +15,10 @@ driven ground rod (and rods in parallel). These are first-cut design values, not
 coordination or arc-flash study. Resistivity, reactance, power factor, and the grounding combining
 factor are the caller's; inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: IEEE Std 141 (Red Book) and NFPA 70 (NEC) for the feeder, ampacity and
+voltage-drop conventions; standard three-phase and transformer relations as given in
+any power-systems text.
 """
 
 from __future__ import annotations

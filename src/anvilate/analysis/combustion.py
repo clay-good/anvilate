@@ -15,6 +15,9 @@ as unburned carbon; too much carries heat up the stack. The dimensionless way to
 thing is the equivalence ratio φ = AFR_stoich/AFR_actual = 1/(1 + EA): φ < 1 is a lean
 (excess-air) mixture, φ = 1 stoichiometric, φ > 1 rich (fuel excess). The fuel composition is the
 caller's from an ultimate analysis; the balances are here.
+
+Sources: Turns, *An Introduction to Combustion*, and Cengel & Boles,
+*Thermodynamics*, for the stoichiometry, heating-value and flue-gas relations.
 """
 
 from __future__ import annotations
