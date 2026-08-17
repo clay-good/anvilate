@@ -15951,6 +15951,113 @@ def test_acoustics_level_sum_and_distance_attenuation():
         sound_level_sum(levels=[])
 
 
+def test_composite_transmission_loss_is_governed_by_the_weakest_element():
+    from anvilate.analysis import composite_transmission_loss
+
+    # A uniform partition must return its own rating exactly -- the degenerate case that proves
+    # the area weighting cancels correctly.
+    assert composite_transmission_loss(
+        areas=[_q("20 m**2")], transmission_losses=[50.0]
+    ) == pytest.approx(50.0, rel=1e-12)
+    # Two elements of equal rating likewise combine to that rating, whatever the split.
+    assert composite_transmission_loss(
+        areas=[_q("18 m**2"), _q("2 m**2")], transmission_losses=[40.0, 40.0]
+    ) == pytest.approx(40.0, rel=1e-12)
+
+    # The point of the function: 2 m^2 of 25 dB glazing in an 18 m^2 wall rated 50 dB gives
+    # 34.88 dB, not 50. A tenth of the area passes ~30x the energy the wall does, so designing
+    # the wall to 50 dB and then cutting a window in it loses 15 dB.
+    composite = composite_transmission_loss(
+        areas=[_q("18 m**2"), _q("2 m**2")], transmission_losses=[50.0, 25.0]
+    )
+    assert composite == pytest.approx(34.878123840092876, rel=1e-12)
+    assert 50.0 - composite == pytest.approx(15.12, abs=0.01)
+
+    # A hole is TL = 0, and 1% of open area caps the partition near 20 dB no matter what the
+    # wall is made of -- the sanity check every noise-control layout needs.
+    assert composite_transmission_loss(
+        areas=[_q("19.8 m**2"), _q("0.2 m**2")], transmission_losses=[50.0, 0.0]
+    ) == pytest.approx(19.995702611485658, rel=1e-12)
+
+    # Improving the BEST element buys almost nothing while the worst one stands: pushing the wall
+    # from 50 to 70 dB moves the composite by hundredths of a decibel.
+    better_wall = composite_transmission_loss(
+        areas=[_q("18 m**2"), _q("2 m**2")], transmission_losses=[70.0, 25.0]
+    )
+    assert better_wall - composite == pytest.approx(0.12064031199877, abs=1e-6)
+    assert better_wall - composite < 0.15
+    # Fixing the worst element is what moves it.
+    better_glazing = composite_transmission_loss(
+        areas=[_q("18 m**2"), _q("2 m**2")], transmission_losses=[50.0, 40.0]
+    )
+    assert better_glazing - composite > 10.0
+
+    # The composite can never beat the best element nor fall below the worst.
+    assert 25.0 < composite < 50.0
+
+    with pytest.raises(ValueError, match="same length"):
+        composite_transmission_loss(areas=[_q("18 m**2")], transmission_losses=[50.0, 25.0])
+
+
+def test_coincidence_critical_frequency_lands_in_the_speech_band():
+    from anvilate.analysis import coincidence_critical_frequency
+
+    # 6 mm float glass: the handbook value is ~2000 Hz.
+    glass = (
+        coincidence_critical_frequency(
+            thickness=_q("6 mm"),
+            density=_q("2500 kg/m**3"),
+            youngs_modulus=_q("70 GPa"),
+            poissons_ratio=0.22,
+        )
+        .to("Hz")
+        .magnitude
+    )
+    assert glass == pytest.approx(1992.947899697757, rel=1e-9)
+    assert glass == pytest.approx(2000.0, rel=0.01)
+
+    # 12.7 mm gypsum board, the other everyday partition material.
+    gypsum = (
+        coincidence_critical_frequency(
+            thickness=_q("12.7 mm"),
+            density=_q("700 kg/m**3"),
+            youngs_modulus=_q("2.5 GPa"),
+            poissons_ratio=0.30,
+        )
+        .to("Hz")
+        .magnitude
+    )
+    assert gypsum == pytest.approx(2578.0716647834934, rel=1e-9)
+    # Both sit squarely in the speech band, which is why a real window or stud wall
+    # underperforms the mass law exactly where it matters most.
+    assert 500.0 < glass < 4000.0
+    assert 500.0 < gypsum < 4000.0
+
+    # The inverse thickness dependence is the design lever AND the trap: bending stiffness rises
+    # as t^3 while mass rises as t, so a THICKER panel of the same material dips LOWER, exactly
+    # opposite to the mass-law intuition that thicker is always better.
+    thicker = (
+        coincidence_critical_frequency(
+            thickness=_q("12 mm"),
+            density=_q("2500 kg/m**3"),
+            youngs_modulus=_q("70 GPa"),
+            poissons_ratio=0.22,
+        )
+        .to("Hz")
+        .magnitude
+    )
+    assert thicker < glass
+    assert thicker == pytest.approx(glass / 2.0, rel=1e-9)  # f_c goes as 1/t exactly
+
+    with pytest.raises(ValueError, match="thickness must be positive"):
+        coincidence_critical_frequency(
+            thickness=_q("0 mm"),
+            density=_q("2500 kg/m**3"),
+            youngs_modulus=_q("70 GPa"),
+            poissons_ratio=0.22,
+        )
+
+
 def test_acoustics_mass_law_transmission_loss():
     import math
 

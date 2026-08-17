@@ -33,6 +33,8 @@ __all__ = [
     "helmholtz_resonator_frequency",
     "inverse_square_attenuation",
     "mach_cone_angle",
+    "coincidence_critical_frequency",
+    "composite_transmission_loss",
     "mass_law_transmission_loss",
     "room_constant",
     "critical_distance",
@@ -85,6 +87,107 @@ def inverse_square_attenuation(
     if r1 <= 0 or r2 <= 0:
         raise ValueError("reference_distance and distance must be positive")
     return reference_level - 20.0 * log10(r2 / r1)
+
+
+def composite_transmission_loss(
+    *,
+    areas: Sequence[Quantity],
+    transmission_losses: Sequence[float],
+) -> float:
+    """The transmission loss of a partition made of several elements, weighted by area.
+
+    :func:`mass_law_transmission_loss` describes one uniform leaf. Real partitions have a door, a
+    window, a duct penetration — and sound leaks through the weakest element far out of
+    proportion to its area, because the elements combine by *transmitted energy*, not by their
+    decibel ratings:
+
+        TL_c = 10·log₁₀( ΣSᵢ / Σ(Sᵢ·10^(−TLᵢ/10)) )
+
+    This is the single most common mistake in noise-control layout. An 18 m² wall rated 50 dB with
+    2 m² of 25 dB glazing — a tenth of the area — delivers **34.9 dB**, not 50: the glazing passes
+    about 30 times the energy the wall does. Worse, a small hole is effectively TL = 0: a 1% open
+    gap caps the whole partition near 20 dB no matter what the wall is made of. The practical rule
+    falls straight out of the formula — improving the *best* element buys nothing until the worst
+    one is fixed.
+
+    ``areas`` and ``transmission_losses`` are parallel sequences of equal length: each element's
+    area as a Quantity and its transmission loss in dB. Returns the composite TL in dB as a plain
+    float.
+    """
+    if len(areas) != len(transmission_losses):
+        raise ValueError(
+            f"areas and transmission_losses must be the same length; got {len(areas)} and "
+            f"{len(transmission_losses)}"
+        )
+    if len(areas) == 0:
+        raise ValueError("areas must contain at least one element")
+    total_area = 0.0
+    transmitted = 0.0
+    for area, loss in zip(areas, transmission_losses, strict=True):
+        _check(area, "[area]", "areas entry")
+        square_metres = area.to("m**2").magnitude
+        if square_metres <= 0:
+            raise ValueError(f"each area must be positive; got {area}")
+        if loss < 0:
+            raise ValueError(f"each transmission loss must be non-negative; got {loss} dB")
+        total_area += square_metres
+        transmitted += square_metres * 10.0 ** (-loss / 10.0)
+    return 10.0 * log10(total_area / transmitted)
+
+
+def coincidence_critical_frequency(
+    *,
+    thickness: Quantity,
+    density: Quantity,
+    youngs_modulus: Quantity,
+    poissons_ratio: float,
+    sound_speed: Quantity | None = None,
+) -> Quantity:
+    """The coincidence critical frequency, f_c = (c²/2π)·√(m″/D).
+
+    :func:`mass_law_transmission_loss` says in its own docstring that real partitions dip at their
+    coincidence frequency, and then gives no way to find it. This does.
+
+    Above f_c the bending wavelength in the panel can match the trace wavelength of sound arriving
+    at some angle. When they coincide the panel couples to the air almost perfectly and radiates
+    the sound straight through, so the transmission loss collapses 10–15 dB below the mass law in
+    a band around f_c. The frequency follows from the surface density m″ = ρ·t and the bending
+    stiffness D = E·t³/(12(1−ν²)) — note the stiffness rises as t³ while the mass rises as t, so a
+    *thicker* panel of the same material has a *lower* critical frequency.
+
+    That inverse dependence is the design lever and the trap. 6 mm float glass dips at 1993 Hz and
+    12.7 mm gypsum board at 2578 Hz — both squarely in the speech band, which is why a window or a
+    stud wall measured in the field underperforms the mass law exactly where it matters most. The
+    fix is a thinner leaf, a limp one, or two dissimilar leaves so the dips do not align.
+
+    ``sound_speed`` in air defaults to 343 m/s. Returns the critical frequency in Hz.
+    """
+    _check(thickness, "[length]", "thickness")
+    _check(density, "[mass]/[length]**3", "density")
+    _check(youngs_modulus, "[pressure]", "youngs_modulus")
+    t_m = thickness.to("m").magnitude
+    rho = density.to("kg/m**3").magnitude
+    e_pa = youngs_modulus.to("Pa").magnitude
+    if t_m <= 0:
+        raise ValueError(f"thickness must be positive; got {thickness}")
+    if rho <= 0:
+        raise ValueError(f"density must be positive; got {density}")
+    if e_pa <= 0:
+        raise ValueError(f"youngs_modulus must be positive; got {youngs_modulus}")
+    if not -1.0 < poissons_ratio < 0.5:
+        raise ValueError(f"poissons_ratio must lie in (-1, 0.5); got {poissons_ratio}")
+    if sound_speed is None:
+        c = 343.0
+    else:
+        _check(sound_speed, "[length]/[time]", "sound_speed")
+        c = sound_speed.to("m/s").magnitude
+        if c <= 0:
+            raise ValueError(f"sound_speed must be positive; got {sound_speed}")
+    surface_density = rho * t_m
+    bending_stiffness = e_pa * t_m**3 / (12.0 * (1.0 - poissons_ratio**2))
+    return Quantity(
+        magnitude=c * c / (2.0 * pi) * sqrt(surface_density / bending_stiffness), unit="Hz"
+    )
 
 
 def mass_law_transmission_loss(*, frequency: Quantity, surface_density: Quantity) -> float:

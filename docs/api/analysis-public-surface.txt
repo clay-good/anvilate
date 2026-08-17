@@ -11,6 +11,8 @@ acid_base.henderson_hasselbalch_ph
 acid_base.buffer_ratio_for_ph
 acoustics.inverse_square_attenuation
 acoustics.mass_law_transmission_loss
+acoustics.composite_transmission_loss
+acoustics.coincidence_critical_frequency
 acoustics.acoustic_impedance
 acoustics.acoustic_reflection_coefficient
 acoustics.acoustic_transmission_coefficient
