@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from anvilate.scorecard import (
     CheckStatus,
     Direction,
@@ -22,6 +24,32 @@ def test_safety_factor_pass_and_fail():
     assert bad.status is CheckStatus.FAIL
     assert not bad.passed
     assert bad.evaluated  # it ran; it just failed
+
+
+def test_utilization_pins_its_documented_one_point_zero_threshold():
+    # utilization is public and its docstring says "1.0 sits exactly at the limit, above 1.0 is a
+    # failure" -- but it was consumed only as a max() ordering key and rendered into strings whose
+    # NAMES are asserted. A common scale changes no ordering and no name, so the 1.0 threshold
+    # that is the property's entire meaning was pinned nowhere.
+    comfortable = ScorecardEntry.from_safety_factor("bearing", computed=1.8, required=1.5)
+    assert comfortable.utilization == pytest.approx(0.8333333333333334, rel=1e-12)
+    assert comfortable.utilization < 1.0
+
+    at_limit = ScorecardEntry.from_safety_factor("axial", computed=1.5, required=1.5)
+    assert at_limit.utilization == pytest.approx(1.0, rel=1e-12)
+    assert at_limit.passed
+
+    over = ScorecardEntry.from_safety_factor("shear", computed=1.0, required=1.5)
+    assert over.utilization == pytest.approx(1.5, rel=1e-12)
+    assert over.utilization > 1.0
+    assert not over.passed
+
+    # A zero safety factor is infinite utilization, not a division error.
+    assert ScorecardEntry.from_safety_factor("x", computed=0.0, required=1.5).utilization == float(
+        "inf"
+    )
+    # A check that never ran has no utilization -- it must not read as a comfortable 0.
+    assert ScorecardEntry.from_safety_factor("y", computed=None, required=1.5).utilization is None
 
 
 def test_boundary_equal_to_required_passes():

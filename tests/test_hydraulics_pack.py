@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from anvilate.analysis import darcy_friction_factor
 from anvilate.packs.hydraulics import (
     PipeRun,
     PumpDuty,
@@ -73,3 +76,18 @@ def test_pipe_run_passes_with_enough_head_fails_without():
     assert entry.reference is not None
     short = screen_pipe_run(_pipe(available_head=_q("5 m")))
     assert short.status is CheckStatus.FAIL
+
+    # Absolute pin. The relative-roughness term reaches the friction factor through Colebrook,
+    # which is barely sensitive to eps/D in this turbulent regime -- inflating eps/D five-fold
+    # only moves the factor from 1.5268 to 1.2298, still a PASS. A verdict-only test therefore
+    # left that line free, and it is exactly the line that invites reading mm as m.
+    # v = 2.8294 m/s, Re = 424413, eps/D = 3.0e-4, f = 0.016569, losses 6.5495 m of 10 m.
+    assert entry.safety_factor == pytest.approx(1.5268255805433, rel=1e-9)
+    assert darcy_friction_factor(reynolds=424413.1815993, relative_roughness=3.0e-4) == (
+        pytest.approx(0.016568958219220213, rel=1e-9)
+    )
+    # The units slip this guards against: roughness in metres rather than millimetres is a 1000x
+    # error on eps/D and turns the PASS into a hard FAIL, which the pin above catches.
+    slipped = screen_pipe_run(_pipe(roughness=_q("0.045 m")))
+    assert slipped.entries[0].safety_factor == pytest.approx(0.16887957550413993, rel=1e-9)
+    assert slipped.status is CheckStatus.FAIL

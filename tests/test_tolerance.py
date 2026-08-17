@@ -1053,6 +1053,27 @@ def test_monte_carlo_uniform_spreads_wider_than_normal() -> None:
     )
 
 
+def test_monte_carlo_shares_pin_both_distribution_variances() -> None:
+    # The variance shares NORMALIZE to 1, so an all-normal stack (or a single-contributor uniform
+    # one) cancels any common scale on _variance_mm2 -- both branches could be scaled, or swapped
+    # with each other, invisibly. Mixing the two at EQUAL half-width separates them: normal reads
+    # the half-width as sigma_level sigmas (variance h^2/9 at sigma_level 3) while uniform spreads
+    # flat (h^2/3), exactly 3x more, so the shares are a fixed 0.25 / 0.75 regardless of h.
+    resolved = SymmetricTolerance(plus_minus=_mm(0.05)).resolve(_mm(10.0))
+    stack = StackUp(
+        contributors=(
+            StackContributor(name="normal pin", tolerance=resolved, distribution="normal"),
+            StackContributor(name="uniform pin", tolerance=resolved, distribution="uniform"),
+        )
+    )
+    mc = stack.monte_carlo(2000, seed=7)
+    shares = {c.name: c.share for c in mc.contributions}
+    assert shares["uniform pin"] == pytest.approx(0.75, rel=1e-12)
+    assert shares["normal pin"] == pytest.approx(0.25, rel=1e-12)
+    assert mc.contributions[0].name == "uniform pin"
+    assert sum(c.share for c in mc.contributions) == pytest.approx(1.0, rel=1e-12)
+
+
 def test_monte_carlo_contributions_rank_by_variance() -> None:
     mc = _interface_stack().monte_carlo(2000, seed=1)
     # Variance shares match RSS's squared-half-width split (sigma_level cancels).

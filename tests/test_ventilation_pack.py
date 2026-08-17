@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from anvilate.packs.ventilation import VentilationZone, screen_ventilation
 from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
@@ -32,6 +34,13 @@ def test_adequate_zone_passes_both_checks():
     names = {e.name: e for e in card.entries}
     assert set(names) == {"outdoor air", "air changes per hour"}
     assert all(e.status is CheckStatus.PASS for e in card.entries)
+
+    # Absolute pins. Verdicts alone left both factors scalable -- the PASS case sits at 1.92 and
+    # the FAIL case at 0.48, so inflating the air-change factor by half flips neither.
+    # 800 cfm * 60 / 50,000 ft^3 = 0.96 ACH against 0.5 required = 1.92; outdoor air is
+    # 800/(Voz = 550/0.8 = 687.5) = 1.1636.
+    assert names["air changes per hour"].safety_factor == pytest.approx(1.92, rel=1e-12)
+    assert names["outdoor air"].safety_factor == pytest.approx(1.163636363636364, rel=1e-12)
 
 
 def test_low_outdoor_air_fails_the_ashrae_check():

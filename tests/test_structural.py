@@ -1716,14 +1716,25 @@ def test_shear_plate_screens_yield_and_rupture():
     assert card.status is CheckStatus.PASS
     assert [e.name for e in card.entries] == ["tab shear yielding", "tab shear rupture"]
     assert all(e.reference == "AISC 360-16 §J4.2" for e in card.entries)
-    assert "1.50" in card.entries[0].detail
-    assert "1.80" in card.entries[1].detail
+    # Pin the computed factors directly. The substring check that used to stand here --
+    # `"1.50" in card.entries[0].detail` -- only LOOKED like a pin: the detail reads "safety
+    # factor 2.25 vs required minimum 1.50", so the match landed on the required minimum the
+    # test itself passed in, and the computed factor was never read at all.
+    assert card.entries[0].safety_factor == pytest.approx(1.50, rel=1e-12)
+    assert card.entries[1].safety_factor == pytest.approx(1.80, rel=1e-12)
 
 
 def test_overloaded_shear_plate_yields():
-    # 250 kN: yield SF 300/250 = 1.2 < 1.5 -> FAIL.
-    card = screen_shear_plate(_shear_plate(load="250 kN"), required_safety_factor=1.5)
+    # 210 kN isolates YIELDING, which is what this test is named for: yield SF 300/210 = 1.4286
+    # fails while rupture SF 360/210 = 1.7143 still passes, so the card's FAIL can only come from
+    # the yield path. At the previous 250 kN both checks failed (1.20 and 1.44), so an inflated
+    # yield factor was carried to FAIL by rupture regardless and the yield path went unpinned.
+    card = screen_shear_plate(_shear_plate(load="210 kN"), required_safety_factor=1.5)
     assert card.status is CheckStatus.FAIL
+    assert card.entries[0].status is CheckStatus.FAIL
+    assert card.entries[1].status is CheckStatus.PASS
+    assert card.entries[0].safety_factor == pytest.approx(300.0 / 210.0, rel=1e-12)
+    assert card.entries[1].safety_factor == pytest.approx(360.0 / 210.0, rel=1e-12)
 
 
 def test_shear_plate_rejects_net_above_gross():

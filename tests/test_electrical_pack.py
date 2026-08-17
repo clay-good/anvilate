@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from anvilate.packs.electrical import Feeder, screen_feeder
 from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
@@ -31,6 +33,13 @@ def test_adequate_feeder_passes_both_checks():
     names = {e.name: e for e in card.entries}
     assert set(names) == {"voltage drop", "conductor ampacity"}
     assert all(e.status is CheckStatus.PASS for e in card.entries)
+
+    # Absolute pins, not just verdicts. Verdict-only assertions left the whole voltage-drop chain
+    # scalable -- even the percent conversion could be wrong by half -- because the PASS cases
+    # only get safer under an inflated factor and the FAIL case fails too hard to be rescued.
+    # I = 37000/(sqrt(3)*480*0.85) = 52.358 A, dV = 3.700 V, drop = 0.7708%, 3%/0.7708% = 3.8919.
+    assert names["voltage drop"].safety_factor == pytest.approx(3.891891891891891, rel=1e-9)
+    assert names["conductor ampacity"].safety_factor == pytest.approx(2.1964276727332894, rel=1e-9)
 
 
 def test_long_thin_run_fails_on_voltage_drop_not_ampacity():
