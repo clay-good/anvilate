@@ -24,6 +24,7 @@ from ..units import Quantity
 __all__ = [
     "bar_wave_speed",
     "bulk_longitudinal_wave_speed",
+    "rayleigh_wave_speed",
     "shear_wave_speed",
 ]
 
@@ -89,6 +90,45 @@ def bulk_longitudinal_wave_speed(
     if rho <= 0:
         raise ValueError("density must be positive")
     return Quantity(magnitude=sqrt((k + 4.0 * g / 3.0) / rho), unit="m/s")
+
+
+def rayleigh_wave_speed(
+    *,
+    shear_modulus: Quantity,
+    density: Quantity,
+    poissons_ratio: float,
+) -> Quantity:
+    """The Rayleigh surface-wave speed, c_R ≈ c_s·(0.862 + 1.14·ν)/(1 + ν).
+
+    The module covered the bar, shear, and bulk-longitudinal modes but not the *surface* wave —
+    the mode used to inspect for surface and near-surface cracks, and the one that carries most
+    of the destructive energy in an earthquake.
+
+    A Rayleigh wave runs along a free surface with an elliptical particle motion that dies away
+    within about a wavelength of depth. Its exact speed is the root of a cubic secular equation,
+    but Bergmann's rational approximation is within 0.1% over the whole physical range
+    0 ≤ ν ≤ 0.5, so the closed form is the honest one to use here. It is always slightly slower
+    than the shear wave — 0.9245·c_s in steel at ν = 0.29 — and, uniquely among the modes, its
+    speed depends only on the ratio, never rising above 0.955·c_s.
+
+    That 7.5% gap is the practical point: time-gating a surface-wave inspection with the shear
+    speed misplaces a flaw by 8% of the standoff. ``shear_modulus`` G and ``density`` ρ set the
+    shear speed √(G/ρ); ``poissons_ratio`` ν is a plain float in (−1, 0.5). Returns the speed in
+    m/s.
+    """
+    _check(shear_modulus, "[pressure]", "shear_modulus")
+    _check(density, "[mass]/[length]**3", "density")
+    g = shear_modulus.to("Pa").magnitude
+    rho = density.to("kg/m**3").magnitude
+    if g <= 0:
+        raise ValueError(f"shear_modulus must be positive; got {shear_modulus}")
+    if rho <= 0:
+        raise ValueError(f"density must be positive; got {density}")
+    if not -1.0 < poissons_ratio < 0.5:
+        raise ValueError(f"poissons_ratio must lie in (-1, 0.5); got {poissons_ratio}")
+    shear_speed = sqrt(g / rho)
+    ratio = (0.862 + 1.14 * poissons_ratio) / (1.0 + poissons_ratio)
+    return Quantity(magnitude=shear_speed * ratio, unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

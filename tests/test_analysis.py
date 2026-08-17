@@ -14964,6 +14964,68 @@ def test_wind_shear_speed():
         )
 
 
+def test_actuator_disc_derives_the_betz_limit_and_the_thrust_that_comes_with_it():
+    from anvilate.analysis import (
+        BETZ_LIMIT,
+        actuator_disc_power_coefficient,
+        actuator_disc_thrust_coefficient,
+        wind_turbine_rotor_thrust,
+    )
+
+    # The module states Betz's law in prose and takes the cap on faith. C_P = 4a(1-a)^2 DERIVES
+    # it: the maximum sits at a = 1/3 and equals 16/27 exactly -- the module's own BETZ_LIMIT,
+    # recovered rather than asserted. That agreement is the whole check on this formula.
+    assert actuator_disc_power_coefficient(axial_induction_factor=1.0 / 3.0) == pytest.approx(
+        BETZ_LIMIT, rel=1e-12
+    )
+    assert actuator_disc_power_coefficient(axial_induction_factor=1.0 / 3.0) == pytest.approx(
+        16.0 / 27.0, rel=1e-12
+    )
+    # It really is a maximum -- either side of a = 1/3 gives less.
+    for a in (0.2, 0.28, 0.40, 0.5):
+        assert actuator_disc_power_coefficient(axial_induction_factor=a) < BETZ_LIMIT
+    # Extracting nothing extracts nothing, at both ends of the range.
+    assert actuator_disc_power_coefficient(axial_induction_factor=0.0) == 0.0
+
+    # C_T does NOT peak inside the range -- it climbs monotonically to 1.0 at a = 0.5. So the
+    # operating point for peak power is not the one for peak load: at the Betz point the rotor
+    # still pushes with 8/9 of the full stagnation load.
+    assert actuator_disc_thrust_coefficient(axial_induction_factor=1.0 / 3.0) == pytest.approx(
+        8.0 / 9.0, rel=1e-12
+    )
+    assert actuator_disc_thrust_coefficient(axial_induction_factor=0.5) == pytest.approx(1.0)
+    previous = -1.0
+    for a in (0.0, 0.1, 1.0 / 3.0, 0.45, 0.5):
+        value = actuator_disc_thrust_coefficient(axial_induction_factor=a)
+        assert value > previous
+        previous = value
+
+    # The load that sizes the tower: a 100 m rotor at 12 m/s carries 554 kN, i.e. 49.9 MN*m of
+    # overturning at a 90 m hub -- the governing structural case, previously unreachable here.
+    thrust = wind_turbine_rotor_thrust(
+        air_density=_q("1.225 kg/m**3"),
+        rotor_diameter=_q("100 m"),
+        wind_speed=_q("12 m/s"),
+        thrust_coefficient=0.80,
+    )
+    assert thrust.to("kN").magnitude == pytest.approx(554.1769440932395, rel=1e-9)
+    assert thrust.to("kN").magnitude * 90.0 / 1000.0 == pytest.approx(49.8759, rel=1e-4)
+
+    # Thrust goes as V^2 while power goes as V^3, so loads and energy do NOT scale together --
+    # doubling the wind quadruples the thrust but octuples the power.
+    doubled = wind_turbine_rotor_thrust(
+        air_density=_q("1.225 kg/m**3"),
+        rotor_diameter=_q("100 m"),
+        wind_speed=_q("24 m/s"),
+        thrust_coefficient=0.80,
+    )
+    assert doubled.to("kN").magnitude / thrust.to("kN").magnitude == pytest.approx(4.0, rel=1e-12)
+
+    # Above a = 0.5 momentum theory predicts a reversed wake and stops being valid.
+    with pytest.raises(ValueError, match="reversed wake"):
+        actuator_disc_power_coefficient(axial_induction_factor=0.6)
+
+
 def test_wind_power_density_turbine_power_and_betz_limit():
     import math
 
@@ -26148,6 +26210,52 @@ def test_elastic_constants_bulk_lame_and_youngs_conversions():
         youngs_modulus_from_bulk_shear(bulk_modulus=_q("0 GPa"), shear_modulus=g)
     with pytest.raises(ValueError, match="elastic_modulus must be a"):
         bulk_modulus_from_youngs_poisson(elastic_modulus=_q("200 kg"), poisson_ratio=0.3)
+
+
+def test_rayleigh_wave_runs_slower_than_shear_and_never_catches_it():
+    from anvilate.analysis import rayleigh_wave_speed, shear_wave_speed
+
+    shear_modulus, density = _q("79.3 GPa"), _q("7850 kg/m**3")
+    c_s = shear_wave_speed(shear_modulus=shear_modulus, density=density).to("m/s").magnitude
+    c_r = (
+        rayleigh_wave_speed(shear_modulus=shear_modulus, density=density, poissons_ratio=0.29)
+        .to("m/s")
+        .magnitude
+    )
+    assert c_s == pytest.approx(3178.350331229312, rel=1e-9)
+    assert c_r == pytest.approx(2938.3725620341684, rel=1e-9)
+
+    # The surface wave is ALWAYS slower than the shear wave, and by enough to matter: 7.5% in
+    # steel. Gating a surface-wave inspection with the shear speed misplaces a flaw by that much
+    # of the standoff -- the reason the mode needed its own function.
+    assert c_r / c_s == pytest.approx(0.9244961240310077, rel=1e-9)
+    assert c_r < c_s
+
+    # The ratio depends ONLY on Poisson's ratio, never on G or rho -- doubling the modulus moves
+    # both speeds together. It rises monotonically with nu and stays below 0.955 everywhere.
+    stiffer = (
+        rayleigh_wave_speed(shear_modulus=_q("158.6 GPa"), density=density, poissons_ratio=0.29)
+        .to("m/s")
+        .magnitude
+    )
+    assert stiffer / c_r == pytest.approx(math.sqrt(2.0), rel=1e-12)
+    previous = 0.0
+    for nu in (0.0, 0.1, 0.25, 0.33, 0.49):
+        ratio = (
+            rayleigh_wave_speed(shear_modulus=shear_modulus, density=density, poissons_ratio=nu)
+            .to("m/s")
+            .magnitude
+            / c_s
+        )
+        assert previous < ratio < 0.955
+        previous = ratio
+    # At nu = 0 the approximation gives 0.862 exactly, the classic textbook value.
+    assert rayleigh_wave_speed(shear_modulus=shear_modulus, density=density, poissons_ratio=0.0).to(
+        "m/s"
+    ).magnitude / c_s == pytest.approx(0.862, rel=1e-12)
+
+    with pytest.raises(ValueError, match="poissons_ratio must lie"):
+        rayleigh_wave_speed(shear_modulus=shear_modulus, density=density, poissons_ratio=0.5)
 
 
 def test_elastic_wave_speeds_bar_shear_and_bulk():

@@ -675,6 +675,7 @@ elastic_constants.youngs_modulus_from_bulk_shear
 elastic_waves.bar_wave_speed
 elastic_waves.bulk_longitudinal_wave_speed
 elastic_waves.shear_wave_speed
+elastic_waves.rayleigh_wave_speed
 fastener.NUT_FACTOR_AS_RECEIVED
 fastener.aisc_tension_member_design_strength
 fastener.block_shear_strength
@@ -1698,6 +1699,9 @@ wind_power.wind_power_density
 wind_power.wind_shear_speed
 wind_power.capacity_factor
 wind_power.wind_turbine_power
+wind_power.wind_turbine_rotor_thrust
+wind_power.actuator_disc_power_coefficient
+wind_power.actuator_disc_thrust_coefficient
 wind_power.wind_turbine_tip_speed_ratio
 wing_aerodynamics.lift_force
 wing_aerodynamics.lift_coefficient_required

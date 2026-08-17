@@ -1718,6 +1718,7 @@ from .elastic_constants import (
 from .elastic_waves import (
     bar_wave_speed,
     bulk_longitudinal_wave_speed,
+    rayleigh_wave_speed,
     shear_wave_speed,
 )
 from .electrical import (
@@ -3181,10 +3182,13 @@ from .winch import (
 )
 from .wind_power import (
     BETZ_LIMIT,
+    actuator_disc_power_coefficient,
+    actuator_disc_thrust_coefficient,
     capacity_factor,
     wind_power_density,
     wind_shear_speed,
     wind_turbine_power,
+    wind_turbine_rotor_thrust,
     wind_turbine_tip_speed_ratio,
 )
 from .wing_aerodynamics import (
@@ -4298,6 +4302,7 @@ __all__ = [
     "lame_first_parameter",
     "youngs_modulus_from_bulk_shear",
     "bar_wave_speed",
+    "rayleigh_wave_speed",
     "shear_wave_speed",
     "bulk_longitudinal_wave_speed",
     "angular_acceleration_from_torque",
@@ -4930,7 +4935,10 @@ __all__ = [
     "BETZ_LIMIT",
     "wind_power_density",
     "wind_shear_speed",
+    "actuator_disc_power_coefficient",
+    "actuator_disc_thrust_coefficient",
     "wind_turbine_power",
+    "wind_turbine_rotor_thrust",
     "wind_turbine_tip_speed_ratio",
     "capacity_factor",
     "lift_force",
