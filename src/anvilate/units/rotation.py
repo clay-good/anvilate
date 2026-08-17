@@ -23,9 +23,9 @@ from .quantity import Quantity, UnitError
 from .registry import UREG
 
 __all__ = [
+    "AmbiguousCountRateError",
     "AmbiguousRotationalSpeedError",
     "angular_speed_rad_per_s",
-    "revolutions_per_minute",
     "count_rate_per_second",
     "revolutions_per_minute",
     "revolutions_per_second",

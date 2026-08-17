@@ -10186,6 +10186,25 @@ def test_involute_function_and_base_tangent_length():
         involute_function(pressure_angle=95.0)
 
 
+def test_involute_angle_stays_inside_the_first_quadrant():
+    from anvilate.analysis import involute_angle, involute_function
+
+    # tan(phi) has a pole at pi/2, so a bare Newton step can throw the iterate past it and then
+    # converge happily onto a branch that is not a pressure angle at all. inv = 4.0 used to
+    # return 6.04e34 degrees; the true root is 79.48427.
+    assert involute_angle(involute_value=4.0) == pytest.approx(79.48426933359225, rel=1e-9)
+
+    # Every root round-trips through the forward function, across the whole first quadrant --
+    # the check the old loop skipped by breaking on a small step without testing the residual.
+    for value in (1e-6, 0.014904, 0.1, 0.5, 1.0, 3.0, 4.0, 10.0):
+        angle = involute_angle(involute_value=value)
+        assert 0.0 < angle < 90.0
+        assert involute_function(pressure_angle=angle) == pytest.approx(value, rel=1e-9)
+
+    # The standard 20-degree pressure angle is the case gear work actually uses.
+    assert involute_angle(involute_value=0.0149044) == pytest.approx(20.0, abs=1e-3)
+
+
 def test_involute_angle_inverts_the_involute_function():
     # The Newton inverse recovers the angle to machine precision across the range.
     for deg in (10.0, 20.0, 25.0, 30.0, 45.0):
@@ -23158,6 +23177,46 @@ def test_bearing_shape_factors_vesic():
             friction_angle=30.0,
             bearing_factor_nq=n["N_q"],
             bearing_factor_nc=n["N_c"],
+        )
+
+
+def test_bearing_depth_factors_refuse_a_footing_deeper_than_it_is_wide():
+    from anvilate.analysis import bearing_depth_factors
+
+    # The docstring scopes this to a SHALLOW footing (D <= B), and the linear D/B form grows
+    # without bound -- at D/B = 5, phi = 30 it used to reach d_q = 2.443 against a defensible
+    # 1.397, a 69% optimistic q_ult straight into the allowable pressure and the footing area.
+    shallow = bearing_depth_factors(
+        friction_angle=30.0, footing_width=_q("1 m"), embedment_depth=_q("1 m")
+    )
+    assert shallow["d_q"] == pytest.approx(1.2886751345948129, rel=1e-9)
+
+    # Rises monotonically across the whole valid range, and D = B is accepted as its top end.
+    previous = 1.0
+    for depth in (0.0, 0.25, 0.5, 0.75, 1.0):
+        value = bearing_depth_factors(
+            friction_angle=30.0,
+            footing_width=_q("1 m"),
+            embedment_depth=Quantity(magnitude=depth, unit="m"),
+        )["d_q"]
+        assert value >= previous
+        previous = value
+
+    # Beyond D = B it refuses rather than extrapolating. Hansen's deep form exists, but it is
+    # DISCONTINUOUS across the seam (D/B = 1 gives 1.0 on the shallow branch against
+    # arctan(1) = 0.785 on the deep one), so switching branches silently would trade an
+    # unconservative extrapolation for a step change in the answer.
+    for depth in (1.01, 2.0, 5.0, 10.0):
+        with pytest.raises(ValueError, match="shallow-footing form"):
+            bearing_depth_factors(
+                friction_angle=30.0,
+                footing_width=_q("1 m"),
+                embedment_depth=Quantity(magnitude=depth, unit="m"),
+            )
+    # The phi = 0 branch is scoped the same way -- it shares the same D/B term.
+    with pytest.raises(ValueError, match="shallow-footing form"):
+        bearing_depth_factors(
+            friction_angle=0.0, footing_width=_q("1 m"), embedment_depth=_q("3 m")
         )
 
 

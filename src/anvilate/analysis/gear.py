@@ -721,14 +721,32 @@ def involute_angle(*, involute_value: float) -> float:
         raise ValueError(f"involute_value must be non-negative; got {involute_value}")
     if involute_value == 0:
         return 0.0
+    # Newton alone is not safe here: tan(phi) has a pole at pi/2, so a step can throw the iterate
+    # past it and the loop then converges happily onto a branch that is not a pressure angle at
+    # all. inv(phi) = 4.0 used to return 6.04e34 degrees. Bracketing keeps every iterate inside
+    # (0, pi/2), and the residual is checked at the end rather than trusting a small step.
+    low, high = 0.0, 0.5 * pi - 1.0e-12
     phi = (3.0 * involute_value) ** (1.0 / 3.0)  # small-angle initial guess
-    for _ in range(60):
+    if not low < phi < high:
+        phi = 0.5 * (low + high)
+    for _ in range(200):
         residual = tan(phi) - phi - involute_value
+        if residual > 0.0:
+            high = phi
+        else:
+            low = phi
         slope = tan(phi) ** 2  # d/dφ (tan φ − φ) = sec²φ − 1 = tan²φ
-        step = residual / slope
-        phi -= step
-        if abs(step) < 1e-14:
+        step = residual / slope if slope > 0.0 else 0.0
+        candidate = phi - step
+        # Fall back to bisection whenever Newton would leave the bracket.
+        phi = candidate if low < candidate < high else 0.5 * (low + high)
+        if abs(step) < 1e-15 and abs(tan(phi) - phi - involute_value) < 1e-14:
             break
+    if abs(tan(phi) - phi - involute_value) > 1e-9 * max(1.0, involute_value):
+        raise ValueError(
+            f"could not invert the involute function for involute_value={involute_value}; the "
+            f"root does not lie in (0, 90) degrees"
+        )
     return degrees(phi)
 
 

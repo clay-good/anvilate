@@ -4,7 +4,7 @@ Whether a manufacturing process can hold a tolerance is a statistics question: h
 output compares to the width of the specification. The capability indices Cp and Cpk quantify that,
 and — assuming a normal distribution — translate directly into an expected defect rate. These screen
 whether a process is capable before it runs, complementing the dimensional stackups of
-:mod:`anvilate.analysis.tolerance`.
+:mod:`anvilate.analysis.tolerance_stack`.
 
 The potential capability Cp = (USL − LSL)/(6σ) compares the spec width to the natural ±3σ spread of
 a process of standard deviation σ; Cp = 1 just fits, and the usual target is 1.33 or better. But Cp

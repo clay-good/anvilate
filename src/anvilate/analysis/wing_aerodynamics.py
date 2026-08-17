@@ -221,9 +221,9 @@ def finite_wing_lift_curve_slope(
     overpredicts lift by 29% at a given angle, which puts the stall angle and the wing incidence
     badly wrong in the unconservative direction.
 
-    ``section_lift_curve_slope`` a₀ is per radian, ``aspect_ratio`` AR = b²/S (see
-    :func:`aspect_ratio`), and ``oswald_efficiency`` e defaults to the 0.85 used elsewhere in this
-    module. Returns the finite-wing slope per radian as a plain float.
+    ``section_lift_curve_slope`` a₀ is per radian, ``aspect_ratio`` AR = b²/S (span squared over
+    wing area), and ``oswald_efficiency`` e is the span efficiency, defaulting to 0.85 for a
+    typical straight wing. Returns the finite-wing slope per radian as a plain float.
     """
     if section_lift_curve_slope <= 0:
         raise ValueError(

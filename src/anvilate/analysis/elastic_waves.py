@@ -118,8 +118,7 @@ def rayleigh_wave_speed(
 
     That 7.5% gap is the practical point: time-gating a surface-wave inspection with the shear
     speed misplaces a flaw by 8% of the standoff. ``shear_modulus`` G and ``density`` ρ set the
-    shear speed √(G/ρ); ``poissons_ratio`` ν is a plain float in (−1, 0.5). Returns the speed in
-    m/s.
+    shear speed √(G/ρ); ``poissons_ratio`` ν is a plain float in [0, 0.5). Returns the speed in m/s.
     """
     _check(shear_modulus, "[pressure]", "shear_modulus")
     _check(density, "[mass]/[length]**3", "density")

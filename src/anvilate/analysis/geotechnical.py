@@ -123,9 +123,12 @@ def coulomb_active_earth_pressure_coefficient(
     company in both directions, and the direction matters: wall friction *reduces* the thrust
     (0.25492 at δ = 20°, 10% below Rankine, so Rankine is the conservative choice there), while a
     battered stem behind sloped fill *raises* it sharply — φ = 34°, δ = 20°, θ = 10°, β = 15° gives
-    0.41223, 46% above the only coefficient the module previously offered. Since this feeds
-    :func:`rankine_lateral_thrust` and through it the overturning and sliding checks, that 46% is
-    an unconservative error in a wall's safety factor. Returns the dimensionless coefficient.
+    0.41223, 46% above the only coefficient the module previously offered — so a wall checked with
+    Rankine alone is short of that much lateral thrust.
+
+    Note that :func:`rankine_lateral_thrust` takes a friction angle and computes its own Rankine
+    coefficient internally, so it cannot consume this one: apply the correction yourself as
+    P = ½·K_a·γ·H² (plus K_a·q·H for a surcharge). Returns the dimensionless coefficient.
     """
     _check_friction_angle(friction_angle)
     phi = radians(friction_angle)
@@ -421,6 +424,20 @@ def bearing_depth_factors(
     d = embedment_depth.to("m").magnitude
     if b <= 0 or d < 0:
         raise ValueError("footing_width must be positive and embedment_depth non-negative")
+    # This linear form is the SHALLOW branch only and grows without bound: at D/B = 5, phi = 30
+    # it reaches d_q = 2.443, a 69% optimistic q_ult straight into the allowable pressure.
+    # Hansen's deep form replaces D/B with arctan(D/B) beyond D = B, but it is discontinuous
+    # across that seam (1.0 against arctan(1) = 0.785), so silently switching branches would
+    # trade an unconservative extrapolation for a step change in the answer. The function is
+    # scoped to what it can actually support and refuses the rest.
+    if d > b:
+        raise ValueError(
+            f"these depth factors are the shallow-footing form and require embedment_depth <= "
+            f"footing_width; got {embedment_depth} against {footing_width} (D/B = {d / b:.2f}). "
+            f"Extrapolating gives an unconservative bearing capacity -- at D/B = 5 the depth "
+            f"bonus is 75% too large. A deep foundation needs Hansen's arctan(D/B) form or a "
+            f"pile analysis."
+        )
     ratio = d / b
     phi = radians(friction_angle)
     if friction_angle == 0.0:

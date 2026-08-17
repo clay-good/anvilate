@@ -143,13 +143,25 @@ def sphere_drag_coefficient(*, reynolds_number: float) -> float:
     0.155 m/s at Re = 155: Stokes overpredicts the settling velocity **5.8-fold**, and a clarifier
     or cyclone sized on it is wrong by that factor.
 
-    Valid to Re ≈ 800, which spans the sand-and-grit range most separation work lives in. Above
-    that the drag crisis and the Newton-regime plateau take over and a table is the honest answer.
+    Valid to Re ≈ 800, which spans the sand-and-grit range most separation work lives in, and
+    guarded there. Above it the correlation keeps decaying toward zero while a real sphere levels
+    off near C_d = 0.44, so it would understate drag without limit — at Re = 10⁵ it gives 0.098
+    against a true 0.47, and since v_t ∝ 1/√C_d that is a terminal velocity 2.2× too fast, in the
+    optimistic direction. A table is the honest answer there, so the function refuses rather than
+    extrapolating.
     ``reynolds_number`` is the particle Reynolds number ρ·v·d/μ, a plain float. Returns the drag
     coefficient as a plain float.
     """
     if reynolds_number <= 0:
         raise ValueError(f"reynolds_number must be positive; got {reynolds_number}")
+    if reynolds_number > 800.0:
+        raise ValueError(
+            f"reynolds_number must not exceed 800, where the Schiller-Naumann fit ends; got "
+            f"{reynolds_number}. Above it the correlation decays toward zero while the real "
+            f"sphere levels off near C_d = 0.44 in the Newton regime -- at Re = 1e5 it returns "
+            f"0.098 against a true 0.47, which overstates a terminal velocity 2.2-fold. Use a "
+            f"drag-coefficient table there."
+        )
     return (24.0 / reynolds_number) * (1.0 + 0.15 * reynolds_number**0.687)
 
 
