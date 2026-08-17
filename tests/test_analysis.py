@@ -16410,13 +16410,15 @@ def test_nds_bearing_stress_and_scorecard():
     assert unset.status is CheckStatus.NOT_EVALUATED
     assert unset.safety_factor is None
 
-    # A zero reaction does not bear at all: an infinite factor, not a divide-by-zero.
+    # A zero reaction is a bearing check with nothing to evaluate, not one that passed at
+    # an infinite safety factor — the same doctrine loads.combination_scorecard states.
     zero = nds_bearing_scorecard(
         "end bearing",
         bearing_stress=Quantity(magnitude=0.0, unit="MPa"),
         adjusted_bearing_value=adjusted,
     )
-    assert zero.status is CheckStatus.PASS
+    assert zero.status is CheckStatus.NOT_EVALUATED
+    assert zero.safety_factor is None
 
     # The required factor is honoured, not decorative.
     assert (
@@ -16454,6 +16456,107 @@ def test_nds_bearing_stress_and_scorecard():
         )
     with pytest.raises(ValueError, match="end_distance must be a"):
         nds_bearing_area_factor(bearing_length=_q("1.5 inch"), end_distance=_q("2 kN"))
+
+
+def test_a_zero_demand_is_not_evaluated_across_every_analysis_layer_screen():
+    """The analysis layer spelled zero demand ``float("inf")``; the packs layer spells it
+    ``None``. Both reach the same ``from_safety_factor`` funnel, so the library gave two
+    different verdicts — PASS and NOT_EVALUATED — to the same question, and
+    ``loads.combination_scorecard`` states in prose which one is right.
+
+    An infinite safety factor is the strongest possible PASS. With an ``upper`` band it was
+    worse still: the detail line read "safety factor inf exceeds target band 2.00-4.00 by
+    inf — over-engineered", an over-engineering flag on a check that never ran.
+    """
+    from anvilate.analysis import (
+        junction_temperature_scorecard,
+        nds_bearing_scorecard,
+        nds_bending_scorecard,
+        nds_compression_scorecard,
+        nds_shear_scorecard,
+        strength_scorecard,
+        weld_fatigue_scorecard,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    zero_stress = Quantity(magnitude=0.0, unit="MPa")
+    allowable = _q("250 MPa")
+
+    # The general strength screen — 15 internal call sites feed this one funnel.
+    zero = strength_scorecard("bending", stress=zero_stress, allowable=allowable, required=1.5)
+    assert zero.status is CheckStatus.NOT_EVALUATED
+    assert zero.safety_factor is None
+    # And with a two-sided band it no longer flags an unevaluated check as over-engineered.
+    banded = strength_scorecard(
+        "bending", stress=zero_stress, allowable=allowable, required=1.5, upper=4.0
+    )
+    assert banded.status is CheckStatus.NOT_EVALUATED
+    assert "over-engineered" not in banded.detail
+    # A real demand still answers: 250/100 = 2.5.
+    assert strength_scorecard(
+        "bending", stress=_q("100 MPa"), allowable=allowable, required=1.5
+    ).safety_factor == pytest.approx(2.5, rel=1e-9)
+
+    # The four NDS screens, all reached through a zero applied stress.
+    for screen, kwarg in (
+        (nds_bending_scorecard, "adjusted_bending_value"),
+        (nds_shear_scorecard, "adjusted_shear_value"),
+        (nds_bearing_scorecard, "adjusted_bearing_value"),
+        (nds_compression_scorecard, "adjusted_compression_value"),
+    ):
+        stress_kwarg = {
+            nds_bending_scorecard: "bending_stress",
+            nds_shear_scorecard: "shear_stress",
+            nds_bearing_scorecard: "bearing_stress",
+            nds_compression_scorecard: "compression_stress",
+        }[screen]
+        entry = screen("t", **{stress_kwarg: zero_stress, kwarg: _q("10 MPa")})
+        assert entry.status is CheckStatus.NOT_EVALUATED, screen.__name__
+        assert entry.safety_factor is None, screen.__name__
+        # The same screen with a real stress still answers.
+        assert (
+            screen("t", **{stress_kwarg: _q("5 MPa"), kwarg: _q("10 MPa")}).safety_factor
+            is not None
+        )
+
+    # The thermal junction screen: a zero rise means zero dissipated power.
+    cold = junction_temperature_scorecard(
+        "junction",
+        power=_q("0 W"),
+        thermal_resistance=_q("2 K/W"),
+        allowable_temperature_rise=_q("85 K"),
+    )
+    assert cold.status is CheckStatus.NOT_EVALUATED
+    assert junction_temperature_scorecard(
+        "junction",
+        power=_q("30 W"),
+        thermal_resistance=_q("2 K/W"),
+        allowable_temperature_rise=_q("85 K"),
+    ).safety_factor == pytest.approx(85.0 / 60.0, rel=1e-9)
+
+    # Weld fatigue: a spectrum applying no cycles is not evaluated...
+    empty = weld_fatigue_scorecard(
+        "weld",
+        applied_cycles=[0.0, 0.0],
+        stress_ranges=[_q("80 MPa"), _q("60 MPa")],
+        detail_category=_q("90 MPa"),
+    )
+    assert empty.status is CheckStatus.NOT_EVALUATED
+    assert (
+        weld_fatigue_scorecard(
+            "weld", applied_cycles=[], stress_ranges=[], detail_category=_q("90 MPa")
+        ).status
+        is CheckStatus.NOT_EVALUATED
+    )
+    # ...but zero damage because every range sits below the CUTOFF is a real EN 1993-1-9
+    # conclusion of infinite life, and that still passes. The two must not be conflated.
+    below_cutoff = weld_fatigue_scorecard(
+        "weld",
+        applied_cycles=[1.0e6],
+        stress_ranges=[_q("10 MPa")],  # under the 36.4 MPa cutoff for category 90
+        detail_category=_q("90 MPa"),
+    )
+    assert below_cutoff.status is CheckStatus.PASS
 
 
 def test_composite_rule_of_mixtures_cfrp():

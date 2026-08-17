@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from anvilate.packs.noise_exposure import WorkerNoiseExposure, screen_noise_exposure
 from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
@@ -51,3 +53,19 @@ def test_empty_machine_levels_raises():
         assert "at least one" in str(exc)
     else:
         raise AssertionError("expected ValueError for empty machine_levels")
+
+
+def test_the_default_required_safety_factor_is_the_osha_dose_of_one():
+    # A mutation moving this default from 1.0 to 1.5 left the whole suite green. The 1.0 is
+    # the OSHA 1910.95 criterion itself — a dose of exactly 1 is the permissible limit, and
+    # screening it at 1.5 would silently impose a stricter rule than the one cited.
+    exposure = WorkerNoiseExposure(machine_levels=(90.0,), exposure_duration=_q("7 hour"))
+    card = screen_noise_exposure(exposure)
+    entry = card.entries[0]
+    # 90 dBA permits 8 h, so a 7 h shift runs at 8/7 = 1.143 — between 1.0 and 1.5, so the
+    # verdict flips if the default moves.
+    assert entry.safety_factor == pytest.approx(8.0 / 7.0, rel=1e-6)
+    assert entry.required_safety_factor == pytest.approx(1.0, rel=1e-12)
+    assert card.status is CheckStatus.PASS
+    # And the argument is honoured, not decorative.
+    assert screen_noise_exposure(exposure, required_safety_factor=1.5).status is CheckStatus.FAIL

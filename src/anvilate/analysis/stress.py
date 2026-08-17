@@ -439,7 +439,9 @@ def strength_scorecard(
     treated alike), judged against the ``required`` minimum. When ``allowable`` is
     ``None`` — a material property that is not in the database, such as an
     unlisted endurance limit — the entry is ``NOT_EVALUATED`` rather than a silent
-    pass, honouring the No-silent-green rule. ``stress`` (and ``allowable`` when
+    pass, honouring the No-silent-green rule. A zero ``stress`` is ``NOT_EVALUATED``
+    for the same reason: there was no demand to check, which is not the same as a
+    demand that was checked and cleared. ``stress`` (and ``allowable`` when
     given) must be stresses.
 
     ``upper`` opts into a two-sided band: a safety factor above it is
@@ -451,7 +453,11 @@ def strength_scorecard(
         computed = None
     else:
         strength = _require_stress(allowable, "allowable")
-        computed = float("inf") if sigma == 0 else strength / sigma
+        # A zero applied stress is not a check that passed — it is a check with nothing to
+        # evaluate. Dividing by it gave an infinite safety factor, i.e. the strongest
+        # possible PASS, and with an `upper` band it read 'exceeds target band by inf —
+        # over-engineered'. `None` -> NOT_EVALUATED, matching loads.combination_scorecard.
+        computed = None if sigma == 0 else strength / sigma
     return ScorecardEntry.from_safety_factor(
         name, computed=computed, required=required, upper=upper
     )

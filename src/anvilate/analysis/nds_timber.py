@@ -143,7 +143,8 @@ def nds_bending_scorecard(
         )
     fb = abs(bending_stress.to("MPa").magnitude)
     fb_allow = adjusted_bending_value.to("MPa").magnitude
-    computed = float("inf") if fb == 0 else fb_allow / fb
+    # Zero applied stress is a check with nothing to evaluate, not one that passed.
+    computed = None if fb == 0 else fb_allow / fb
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
         update={"reference": "NDS"}
     )
@@ -204,7 +205,8 @@ def nds_shear_scorecard(
         )
     fv = abs(shear_stress.to("MPa").magnitude)
     fv_allow = adjusted_shear_value.to("MPa").magnitude
-    computed = float("inf") if fv == 0 else fv_allow / fv
+    # Zero applied stress is a check with nothing to evaluate, not one that passed.
+    computed = None if fv == 0 else fv_allow / fv
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
         update={"reference": "NDS"}
     )
@@ -313,7 +315,8 @@ def nds_bearing_scorecard(
         )
     fc = abs(bearing_stress.to("MPa").magnitude)
     fc_allow = adjusted_bearing_value.to("MPa").magnitude
-    computed = float("inf") if fc == 0 else fc_allow / fc
+    # Zero applied stress is a check with nothing to evaluate, not one that passed.
+    computed = None if fc == 0 else fc_allow / fc
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
         update={"reference": "NDS"}
     )
@@ -390,7 +393,8 @@ def nds_compression_scorecard(
         )
     fc = abs(compression_stress.to("MPa").magnitude)
     fc_allow = adjusted_compression_value.to("MPa").magnitude
-    computed = float("inf") if fc == 0 else fc_allow / fc
+    # Zero applied stress is a check with nothing to evaluate, not one that passed.
+    computed = None if fc == 0 else fc_allow / fc
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
         update={"reference": "NDS"}
     )

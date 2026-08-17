@@ -1099,7 +1099,10 @@ def junction_temperature_scorecard(
             f"allowable_temperature_rise must be positive; got {allowable_temperature_rise}"
         )
     rise = temperature_rise(power=power, thermal_resistance=thermal_resistance).to("K").magnitude
-    computed = float("inf") if rise == 0 else allowable / rise
+    # A zero rise means zero dissipated power (or zero resistance): there was no thermal
+    # demand to screen. An infinite safety factor reported that as the strongest possible
+    # PASS; `None` -> NOT_EVALUATED says what actually happened.
+    computed = None if rise == 0 else allowable / rise
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
     detail = f"junction rise {rise:.1f} K vs {allowable:.1f} K allowable"
     return entry.model_copy(update={"detail": detail})

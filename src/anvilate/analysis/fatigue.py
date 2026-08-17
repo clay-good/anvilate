@@ -1023,6 +1023,17 @@ def weld_fatigue_scorecard(
         )
         for sr in stress_ranges
     ]
+    # An empty spectrum, or one whose every block applies zero cycles, is a check with
+    # nothing to evaluate — the `inf` it used to divide out to read as the strongest
+    # possible PASS. Zero damage from ranges that all sit *below the cutoff* is different:
+    # that is an evaluated EN 1993-1-9 conclusion of infinite life, and it still passes.
+    if not applied_cycles or sum(applied_cycles) == 0:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — the spectrum applies no cycles",
+            reference="EN 1993-1-9",
+        )
     damage = miner_cumulative_damage(applied_cycles=applied_cycles, cycles_to_failure=lives)
     computed = inf if damage == 0 else 1.0 / damage
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
