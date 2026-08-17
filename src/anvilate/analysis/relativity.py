@@ -24,6 +24,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 
@@ -134,7 +135,7 @@ def relativistic_doppler_frequency(
     """
     _check(source_frequency, "1/[time]", "source_frequency")
     _check(velocity, "[length]/[time]", "velocity")
-    f0 = source_frequency.to("Hz").magnitude
+    f0 = count_rate_per_second(source_frequency, name="source_frequency")
     v = velocity.to("m/s").magnitude
     if f0 <= 0:
         raise ValueError("source_frequency must be positive")

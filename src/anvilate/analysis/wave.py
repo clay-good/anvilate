@@ -16,6 +16,7 @@ dimension-checked :class:`~anvilate.units.Quantity` values.
 from __future__ import annotations
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "frequency_from_wavelength",
@@ -33,7 +34,7 @@ def wave_speed(*, frequency: Quantity, wavelength: Quantity) -> Quantity:
     """
     _check(frequency, "1/[time]", "frequency")
     _check(wavelength, "[length]", "wavelength")
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     lam = wavelength.to("m").magnitude
     if f <= 0:
         raise ValueError("frequency must be positive")
@@ -51,7 +52,7 @@ def wavelength_from_frequency(*, frequency: Quantity, wave_speed: Quantity) -> Q
     """
     _check(frequency, "1/[time]", "frequency")
     _check(wave_speed, "[velocity]", "wave_speed")
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     v = wave_speed.to("m/s").magnitude
     if f <= 0:
         raise ValueError("frequency must be positive")

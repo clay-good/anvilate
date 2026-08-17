@@ -24,6 +24,7 @@ uncertainties at the equality (best case).
 from __future__ import annotations
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 _PLANCK_CONSTANT = 6.62607015e-34  # J*s
 _HBAR = 1.054571817e-34  # J*s, reduced Planck constant
@@ -51,7 +52,7 @@ def photoelectric_max_kinetic_energy(*, frequency: Quantity, work_function: Quan
     """
     _check(frequency, "1/[time]", "frequency")
     _check(work_function, "[energy]", "work_function")
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     phi = work_function.to("J").magnitude
     if f <= 0:
         raise ValueError("frequency must be positive")

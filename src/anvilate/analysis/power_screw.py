@@ -62,6 +62,23 @@ def _geometry(
     return dm, ell, friction_coefficient
 
 
+def _reject_beyond_square_thread_range(dm: float, ell: float, mu: float) -> None:
+    """Refuse the regime where the raising expressions change sign.
+
+    Every raising form shares the denominator π·d_m − μ·l = π·d_m·(1 − μ·tan λ). Past
+    μ·tan λ = 1 it turns negative, and the torque to raise a positive load comes back
+    negative — the same sign-flip shape as the worm_gear_efficiency bug of session 25. The
+    screw has not become a generator; the square-thread model has left its range.
+    """
+    tan_lambda = ell / (pi * dm)
+    if mu * tan_lambda >= 1.0:
+        raise ValueError(
+            f"friction_coefficient * tan(lead angle) = {mu * tan_lambda:.4f} >= 1, where the "
+            f"square-thread expressions turn negative and stop describing a screw. "
+            f"Check the friction coefficient ({mu}) and the lead-to-diameter ratio."
+        )
+
+
 def lead_angle(*, mean_diameter: Quantity, lead: Quantity) -> Quantity:
     """The lead (helix) angle λ of a screw thread, tan λ = l/(π·d_m).
 
@@ -90,6 +107,7 @@ def power_screw_raise_torque(
     """
     _require(load, "[force]", "load")
     dm, ell, mu = _geometry(mean_diameter, lead, friction_coefficient)
+    _reject_beyond_square_thread_range(dm, ell, mu)
     f = load.to("N").magnitude
     dm_m = dm / 1000.0
     ell_m = ell / 1000.0
@@ -115,6 +133,7 @@ def power_screw_raise_load(
     """
     _require(torque, "[force] * [length]", "torque")
     dm, ell, mu = _geometry(mean_diameter, lead, friction_coefficient)
+    _reject_beyond_square_thread_range(dm, ell, mu)
     t = torque.to("N*m").magnitude
     dm_m = dm / 1000.0
     ell_m = ell / 1000.0
@@ -164,16 +183,7 @@ def power_screw_efficiency(
     tan_lambda = ell / (pi * dm)
     if mu == 0:
         return 1.0
-    # Past mu*tan(lambda) = 1 the numerator turns negative and the expression returns a NEGATIVE
-    # efficiency, which power_screw_raise_torque then propagates as a sign-flipped torque -- the
-    # same shape as the worm_gear_efficiency bug fixed in session 25. The screw has not become a
-    # generator; the square-thread model has simply left its range.
-    if mu * tan_lambda >= 1.0:
-        raise ValueError(
-            f"friction_coefficient * tan(lead angle) = {mu * tan_lambda:.4f} >= 1, where the "
-            f"square-thread efficiency expression turns negative and stops describing a screw. "
-            f"Check the friction coefficient ({mu}) and the lead-to-diameter ratio."
-        )
+    _reject_beyond_square_thread_range(dm, ell, mu)
     return tan_lambda * (1.0 - mu * tan_lambda) / (tan_lambda + mu)
 
 

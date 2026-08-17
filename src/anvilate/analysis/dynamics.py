@@ -466,7 +466,7 @@ def quality_factor_from_half_power_bandwidth(
     _require(resonant_frequency, "[frequency]", "resonant_frequency")
     _require(half_power_bandwidth, "[frequency]", "half_power_bandwidth")
     f_n = count_rate_per_second(resonant_frequency, name="resonant_frequency")
-    delta_f = half_power_bandwidth.to("Hz").magnitude
+    delta_f = count_rate_per_second(half_power_bandwidth, name="half_power_bandwidth")
     if f_n <= 0:
         raise ValueError("resonant_frequency must be positive")
     if delta_f <= 0:
@@ -490,7 +490,7 @@ def damping_ratio_from_half_power_bandwidth(
     _require(resonant_frequency, "[frequency]", "resonant_frequency")
     _require(half_power_bandwidth, "[frequency]", "half_power_bandwidth")
     f_n = count_rate_per_second(resonant_frequency, name="resonant_frequency")
-    delta_f = half_power_bandwidth.to("Hz").magnitude
+    delta_f = count_rate_per_second(half_power_bandwidth, name="half_power_bandwidth")
     if f_n <= 0:
         raise ValueError("resonant_frequency must be positive")
     if delta_f <= 0:
@@ -869,7 +869,7 @@ def dunkerley_fundamental_frequency(individual_frequencies: list[Quantity]) -> Q
     inverse_squares = 0.0
     for i, freq in enumerate(individual_frequencies):
         _require(freq, "[frequency]", f"individual_frequencies[{i}]")
-        f = freq.to("Hz").magnitude
+        f = count_rate_per_second(freq, name=f"individual_frequencies[{i}]")
         if f <= 0:
             raise ValueError(f"each individual frequency must be positive; got {freq}")
         inverse_squares += 1.0 / f**2

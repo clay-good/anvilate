@@ -19,6 +19,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "gain_bandwidth_limited_bandwidth",
@@ -76,7 +77,7 @@ def gain_bandwidth_limited_bandwidth(
     Returns the bandwidth in Hz.
     """
     _check(gain_bandwidth_product, "1/[time]", "gain_bandwidth_product")
-    gbw = gain_bandwidth_product.to("Hz").magnitude
+    gbw = count_rate_per_second(gain_bandwidth_product, name="gain_bandwidth_product")
     if gbw <= 0:
         raise ValueError("gain_bandwidth_product must be positive")
     if closed_loop_gain == 0:
@@ -118,7 +119,7 @@ def rise_time_from_bandwidth(*, bandwidth: Quantity) -> Quantity:
     Gaussian/single-pole value. Returns the rise time in seconds.
     """
     _check(bandwidth, "1/[time]", "bandwidth")
-    f = bandwidth.to("Hz").magnitude
+    f = count_rate_per_second(bandwidth, name="bandwidth")
     if f <= 0:
         raise ValueError("bandwidth must be positive")
     return Quantity(magnitude=0.35 / f, unit="s")

@@ -22,6 +22,7 @@ from __future__ import annotations
 from math import asin, degrees
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "near_field_length",
@@ -46,7 +47,7 @@ def near_field_length(
     _check(frequency, "1/[time]", "frequency")
     _check(sound_speed, "[velocity]", "sound_speed")
     d = transducer_diameter.to("m").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     c = sound_speed.to("m/s").magnitude
     if d <= 0:
         raise ValueError("transducer_diameter must be positive")
@@ -74,7 +75,7 @@ def ultrasonic_beam_divergence(
     _check(frequency, "1/[time]", "frequency")
     _check(sound_speed, "[velocity]", "sound_speed")
     d = transducer_diameter.to("m").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     c = sound_speed.to("m/s").magnitude
     if d <= 0:
         raise ValueError("transducer_diameter must be positive")

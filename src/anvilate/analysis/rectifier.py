@@ -24,6 +24,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "capacitor_filter_dc_voltage",
@@ -53,7 +54,7 @@ def capacitor_filter_ripple_voltage(
     _check(frequency, "1/[time]", "frequency")
     _check(capacitance, "[capacitance]", "capacitance")
     i = load_current.to("A").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     c = capacitance.to("F").magnitude
     if i <= 0:
         raise ValueError("load_current must be positive")
@@ -81,7 +82,7 @@ def filter_capacitance_for_ripple(
     _check(frequency, "1/[time]", "frequency")
     _check(ripple_voltage, "[electric_potential]", "ripple_voltage")
     i = load_current.to("A").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     v_r = ripple_voltage.to("V").magnitude
     if i <= 0:
         raise ValueError("load_current must be positive")
@@ -115,7 +116,7 @@ def capacitor_filter_dc_voltage(
     _check(capacitance, "[capacitance]", "capacitance")
     v_pk = peak_voltage.to("V").magnitude
     i = load_current.to("A").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     c = capacitance.to("F").magnitude
     if v_pk <= 0:
         raise ValueError("peak_voltage must be positive")
@@ -152,7 +153,7 @@ def capacitor_filter_ripple_factor(
     _check(frequency, "1/[time]", "frequency")
     _check(load_resistance, "[resistance]", "load_resistance")
     _check(capacitance, "[capacitance]", "capacitance")
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     r = load_resistance.to("ohm").magnitude
     c = capacitance.to("F").magnitude
     if f <= 0:

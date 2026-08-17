@@ -19,6 +19,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 _FREE_SPACE_IMPEDANCE = 376.730313668  # ohm, eta_0
@@ -61,8 +62,8 @@ def waveguide_guide_wavelength(
     """
     _check(operating_frequency, "1/[time]", "operating_frequency")
     _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
-    f = operating_frequency.to("Hz").magnitude
-    f_c = cutoff_frequency.to("Hz").magnitude
+    f = count_rate_per_second(operating_frequency, name="operating_frequency")
+    f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f <= 0:
         raise ValueError("operating_frequency must be positive")
     if f_c <= 0:
@@ -85,8 +86,8 @@ def waveguide_phase_velocity(
     """
     _check(operating_frequency, "1/[time]", "operating_frequency")
     _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
-    f = operating_frequency.to("Hz").magnitude
-    f_c = cutoff_frequency.to("Hz").magnitude
+    f = count_rate_per_second(operating_frequency, name="operating_frequency")
+    f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f <= 0:
         raise ValueError("operating_frequency must be positive")
     if f_c <= 0:
@@ -110,8 +111,8 @@ def waveguide_group_velocity(
     """
     _check(operating_frequency, "1/[time]", "operating_frequency")
     _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
-    f = operating_frequency.to("Hz").magnitude
-    f_c = cutoff_frequency.to("Hz").magnitude
+    f = count_rate_per_second(operating_frequency, name="operating_frequency")
+    f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f <= 0:
         raise ValueError("operating_frequency must be positive")
     if f_c <= 0:
@@ -135,8 +136,8 @@ def waveguide_te_wave_impedance(
     """
     _check(operating_frequency, "1/[time]", "operating_frequency")
     _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
-    f = operating_frequency.to("Hz").magnitude
-    f_c = cutoff_frequency.to("Hz").magnitude
+    f = count_rate_per_second(operating_frequency, name="operating_frequency")
+    f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f <= 0:
         raise ValueError("operating_frequency must be positive")
     if f_c <= 0:
@@ -214,8 +215,8 @@ def waveguide_tm_wave_impedance(
     """
     _check(operating_frequency, "[frequency]", "operating_frequency")
     _check(cutoff_frequency, "[frequency]", "cutoff_frequency")
-    f = operating_frequency.to("Hz").magnitude
-    f_c = cutoff_frequency.to("Hz").magnitude
+    f = count_rate_per_second(operating_frequency, name="operating_frequency")
+    f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f_c <= 0:
         raise ValueError("cutoff_frequency must be positive")
     if f <= f_c:

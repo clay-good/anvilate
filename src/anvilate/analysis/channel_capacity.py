@@ -22,6 +22,7 @@ from __future__ import annotations
 from math import log2
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "nyquist_channel_capacity",
@@ -41,7 +42,7 @@ def shannon_capacity(*, bandwidth: Quantity, signal_to_noise_ratio: float) -> fl
     logarithmically. Returns the capacity as a plain float in bit/s.
     """
     _check(bandwidth, "1/[time]", "bandwidth")
-    b = bandwidth.to("Hz").magnitude
+    b = count_rate_per_second(bandwidth, name="bandwidth")
     if b < 0:
         raise ValueError("bandwidth must be non-negative")
     if signal_to_noise_ratio < 0:
@@ -73,7 +74,7 @@ def nyquist_channel_capacity(*, bandwidth: Quantity, signal_levels: int) -> floa
     Shannon limit of :func:`shannon_capacity` takes over. Returns the capacity as a float in bit/s.
     """
     _check(bandwidth, "1/[time]", "bandwidth")
-    b = bandwidth.to("Hz").magnitude
+    b = count_rate_per_second(bandwidth, name="bandwidth")
     if b < 0:
         raise ValueError("bandwidth must be non-negative")
     if signal_levels < 2:

@@ -21,6 +21,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 
@@ -46,7 +47,7 @@ def radar_doppler_shift(*, transmit_frequency: Quantity, radial_velocity: Quanti
     """
     _check(transmit_frequency, "1/[time]", "transmit_frequency")
     _check(radial_velocity, "[length]/[time]", "radial_velocity")
-    f0 = transmit_frequency.to("Hz").magnitude
+    f0 = count_rate_per_second(transmit_frequency, name="transmit_frequency")
     v = radial_velocity.to("m/s").magnitude
     if f0 <= 0:
         raise ValueError("transmit_frequency must be positive")
@@ -66,8 +67,8 @@ def radial_velocity_from_doppler(
     """
     _check(transmit_frequency, "1/[time]", "transmit_frequency")
     _check(doppler_shift, "1/[time]", "doppler_shift")
-    f0 = transmit_frequency.to("Hz").magnitude
-    fd = doppler_shift.to("Hz").magnitude
+    f0 = count_rate_per_second(transmit_frequency, name="transmit_frequency")
+    fd = count_rate_per_second(doppler_shift, name="doppler_shift")
     if f0 <= 0:
         raise ValueError("transmit_frequency must be positive")
     if fd < 0:
@@ -87,8 +88,8 @@ def max_unambiguous_velocity(
     """
     _check(transmit_frequency, "1/[time]", "transmit_frequency")
     _check(pulse_repetition_frequency, "1/[time]", "pulse_repetition_frequency")
-    f0 = transmit_frequency.to("Hz").magnitude
-    prf = pulse_repetition_frequency.to("Hz").magnitude
+    f0 = count_rate_per_second(transmit_frequency, name="transmit_frequency")
+    prf = count_rate_per_second(pulse_repetition_frequency, name="pulse_repetition_frequency")
     if f0 <= 0:
         raise ValueError("transmit_frequency must be positive")
     if prf <= 0:
@@ -105,7 +106,7 @@ def max_unambiguous_range(*, pulse_repetition_frequency: Quantity) -> Quantity:
     fundamental range-velocity trade of pulse-Doppler radar. Returns R_u in m.
     """
     _check(pulse_repetition_frequency, "1/[time]", "pulse_repetition_frequency")
-    prf = pulse_repetition_frequency.to("Hz").magnitude
+    prf = count_rate_per_second(pulse_repetition_frequency, name="pulse_repetition_frequency")
     if prf <= 0:
         raise ValueError("pulse_repetition_frequency must be positive")
     return Quantity(magnitude=_SPEED_OF_LIGHT / (2.0 * prf), unit="m")
@@ -236,7 +237,7 @@ def radar_average_power(
     _check(pulse_repetition_frequency, "[frequency]", "pulse_repetition_frequency")
     p_t = peak_power.to("W").magnitude
     tau = pulse_width.to("s").magnitude
-    prf = pulse_repetition_frequency.to("Hz").magnitude
+    prf = count_rate_per_second(pulse_repetition_frequency, name="pulse_repetition_frequency")
     if p_t <= 0:
         raise ValueError("peak_power must be positive")
     if tau <= 0:

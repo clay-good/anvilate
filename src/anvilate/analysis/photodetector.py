@@ -22,6 +22,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
 _PLANCK = 6.62607015e-34  # J*s
@@ -85,7 +86,7 @@ def shot_noise_current(*, current: Quantity, bandwidth: Quantity) -> Quantity:
     _check(current, "[current]", "current")
     _check(bandwidth, "[frequency]", "bandwidth")
     i = current.to("A").magnitude
-    b = bandwidth.to("Hz").magnitude
+    b = count_rate_per_second(bandwidth, name="bandwidth")
     if i < 0:
         raise ValueError("current must be non-negative")
     if b < 0:
@@ -154,7 +155,7 @@ def specific_detectivity(
     _check(bandwidth, "[frequency]", "bandwidth")
     nep = noise_equivalent_power.to("W").magnitude
     area_cm2 = active_area.to("cm**2").magnitude
-    b = bandwidth.to("Hz").magnitude
+    b = count_rate_per_second(bandwidth, name="bandwidth")
     if nep <= 0:
         raise ValueError("noise_equivalent_power must be positive")
     if area_cm2 <= 0:

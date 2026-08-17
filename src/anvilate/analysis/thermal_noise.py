@@ -18,6 +18,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 _BOLTZMANN = 1.380649e-23  # J/K
 
@@ -43,7 +44,7 @@ def johnson_noise_voltage(
     _check(bandwidth, "1/[time]", "bandwidth")
     r = resistance.to("ohm").magnitude
     t = temperature.to("K").magnitude
-    b = bandwidth.to("Hz").magnitude
+    b = count_rate_per_second(bandwidth, name="bandwidth")
     if r <= 0:
         raise ValueError("resistance must be positive")
     if t <= 0:
@@ -63,7 +64,7 @@ def johnson_noise_power(*, temperature: Quantity, bandwidth: Quantity) -> Quanti
     _check(temperature, "[temperature]", "temperature")
     _check(bandwidth, "1/[time]", "bandwidth")
     t = temperature.to("K").magnitude
-    b = bandwidth.to("Hz").magnitude
+    b = count_rate_per_second(bandwidth, name="bandwidth")
     if t <= 0:
         raise ValueError("temperature must be positive (absolute temperature)")
     if b < 0:
@@ -86,7 +87,7 @@ def johnson_noise_current(
     _check(bandwidth, "1/[time]", "bandwidth")
     r = resistance.to("ohm").magnitude
     t = temperature.to("K").magnitude
-    b = bandwidth.to("Hz").magnitude
+    b = count_rate_per_second(bandwidth, name="bandwidth")
     if r <= 0:
         raise ValueError("resistance must be positive")
     if t <= 0:

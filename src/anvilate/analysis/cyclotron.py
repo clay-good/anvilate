@@ -20,6 +20,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "cyclotron_frequency",
@@ -99,7 +100,7 @@ def cyclotron_mass_from_frequency(
     _check(frequency, "1/[time]", "frequency")
     q = charge.to("C").magnitude
     b = magnetic_flux_density.to("T").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     if q <= 0:
         raise ValueError("charge must be positive")
     if b <= 0:

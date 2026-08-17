@@ -24,6 +24,7 @@ from __future__ import annotations
 from math import log10, pi, sqrt
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "effective_number_of_bits",
@@ -121,7 +122,7 @@ def aperture_jitter_snr_limit(*, input_frequency: Quantity, rms_jitter: Quantity
     """
     _check(input_frequency, "1/[time]", "input_frequency")
     _check(rms_jitter, "[time]", "rms_jitter")
-    f_in = input_frequency.to("Hz").magnitude
+    f_in = count_rate_per_second(input_frequency, name="input_frequency")
     t_j = rms_jitter.to("s").magnitude
     if f_in <= 0:
         raise ValueError("input_frequency must be positive")

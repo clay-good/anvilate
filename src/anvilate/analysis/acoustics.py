@@ -20,6 +20,7 @@ from collections.abc import Sequence
 from math import asin, degrees, log, log10, pi, sqrt
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "eyring_reverberation_time",
@@ -203,7 +204,7 @@ def mass_law_transmission_loss(*, frequency: Quantity, surface_density: Quantity
     """
     _check(frequency, "1/[time]", "frequency")
     _check(surface_density, "[mass]/[length]**2", "surface_density")
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     m_s = surface_density.to("kg/m**2").magnitude
     if f <= 0 or m_s <= 0:
         raise ValueError("frequency and surface_density must be positive")
@@ -522,7 +523,7 @@ def doppler_shifted_frequency(
     _check(speed_of_sound, "[length]/[time]", "speed_of_sound")
     _check(source_velocity, "[length]/[time]", "source_velocity")
     _check(observer_velocity, "[length]/[time]", "observer_velocity")
-    f = source_frequency.to("Hz").magnitude
+    f = count_rate_per_second(source_frequency, name="source_frequency")
     c = speed_of_sound.to("m/s").magnitude
     v_s = source_velocity.to("m/s").magnitude
     v_o = observer_velocity.to("m/s").magnitude
@@ -552,8 +553,8 @@ def doppler_velocity_from_shift(
     _check(source_frequency, "1/[time]", "source_frequency")
     _check(observed_frequency, "1/[time]", "observed_frequency")
     _check(speed_of_sound, "[length]/[time]", "speed_of_sound")
-    f = source_frequency.to("Hz").magnitude
-    f_obs = observed_frequency.to("Hz").magnitude
+    f = count_rate_per_second(source_frequency, name="source_frequency")
+    f_obs = count_rate_per_second(observed_frequency, name="observed_frequency")
     c = speed_of_sound.to("m/s").magnitude
     if f <= 0:
         raise ValueError("source_frequency must be positive")
@@ -575,8 +576,8 @@ def beat_frequency(*, frequency_1: Quantity, frequency_2: Quantity) -> Quantity:
     """
     _check(frequency_1, "1/[time]", "frequency_1")
     _check(frequency_2, "1/[time]", "frequency_2")
-    f1 = frequency_1.to("Hz").magnitude
-    f2 = frequency_2.to("Hz").magnitude
+    f1 = count_rate_per_second(frequency_1, name="frequency_1")
+    f2 = count_rate_per_second(frequency_2, name="frequency_2")
     if f1 <= 0 or f2 <= 0:
         raise ValueError("frequencies must be positive")
     return Quantity(magnitude=abs(f1 - f2), unit="Hz")

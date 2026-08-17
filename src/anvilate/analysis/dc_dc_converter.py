@@ -18,6 +18,7 @@ target output needs.
 from __future__ import annotations
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "boost_duty_cycle_for_output",
@@ -167,7 +168,7 @@ def buck_inductor_ripple_current(
     v_in = input_voltage.to("V").magnitude
     v_out = output_voltage.to("V").magnitude
     ind = inductance.to("H").magnitude
-    f_s = switching_frequency.to("Hz").magnitude
+    f_s = count_rate_per_second(switching_frequency, name="switching_frequency")
     if v_in <= 0:
         raise ValueError("input_voltage must be positive")
     if not 0.0 < v_out <= v_in:
@@ -228,7 +229,7 @@ def buck_output_voltage_ripple(
     _check(switching_frequency, "1/[time]", "switching_frequency")
     d_il = inductor_ripple_current.to("A").magnitude
     cap = output_capacitance.to("F").magnitude
-    f_s = switching_frequency.to("Hz").magnitude
+    f_s = count_rate_per_second(switching_frequency, name="switching_frequency")
     if d_il < 0:
         raise ValueError("inductor_ripple_current must be non-negative")
     if cap <= 0:
@@ -259,7 +260,7 @@ def buck_minimum_inductance_for_ccm(
     _check(switching_frequency, "1/[time]", "switching_frequency")
     v_out = output_voltage.to("V").magnitude
     i_out = load_current.to("A").magnitude
-    f_s = switching_frequency.to("Hz").magnitude
+    f_s = count_rate_per_second(switching_frequency, name="switching_frequency")
     if not 0.0 < duty_cycle < 1.0:
         raise ValueError("duty_cycle must be in (0, 1)")
     if v_out <= 0:

@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 _REFERENCE_TEMPERATURE = 290.0  # K (IEEE standard reference)
 
@@ -137,7 +138,7 @@ def receiver_minimum_detectable_signal(
     if noise_temperature is not None:
         _check(noise_temperature, "[temperature]", "noise_temperature")
         t0 = noise_temperature.to("K").magnitude
-    b = bandwidth.to("Hz").magnitude
+    b = count_rate_per_second(bandwidth, name="bandwidth")
     if noise_factor < 1.0:
         raise ValueError(
             f"noise_factor is a LINEAR factor and cannot be below 1 (0 dB); got {noise_factor}"

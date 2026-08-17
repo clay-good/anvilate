@@ -22,7 +22,7 @@ from __future__ import annotations
 from math import acos, log, pi, sqrt, tan
 
 from ..units import Quantity
-from ..units.rotation import revolutions_per_minute
+from ..units.rotation import count_rate_per_second, revolutions_per_minute
 
 __all__ = [
     "apparent_power_three_phase",
@@ -144,7 +144,7 @@ def motor_synchronous_speed(*, line_frequency: Quantity, poles: int) -> Quantity
     speed in rpm.
     """
     _check(line_frequency, "1/[time]", "line_frequency")
-    f = line_frequency.to("Hz").magnitude
+    f = count_rate_per_second(line_frequency, name="line_frequency")
     if f <= 0:
         raise ValueError("line_frequency must be positive")
     if poles <= 0 or poles % 2 != 0:
@@ -187,7 +187,7 @@ def motor_slip_frequency(*, slip: float, line_frequency: Quantity) -> Quantity:
     _check(line_frequency, "1/[time]", "line_frequency")
     if not 0.0 <= slip <= 1.0:
         raise ValueError(f"slip must be in [0, 1]; got {slip}")
-    f = line_frequency.to("Hz").magnitude
+    f = count_rate_per_second(line_frequency, name="line_frequency")
     if f <= 0:
         raise ValueError("line_frequency must be positive")
     return Quantity(magnitude=slip * f, unit="Hz")
@@ -403,7 +403,7 @@ def capacitance_for_reactive_power(
     _check(frequency, "1/[time]", "frequency")
     q_c = reactive_power.to("VA").magnitude
     v = voltage.to("V").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     if q_c <= 0:
         raise ValueError("reactive_power must be positive")
     if v <= 0:
@@ -649,7 +649,7 @@ def skin_depth(
     _check(resistivity, "[resistance]*[length]", "resistivity")
     _check(frequency, "1/[time]", "frequency")
     rho = resistivity.to("ohm*m").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     if rho <= 0:
         raise ValueError("resistivity must be positive")
     if f <= 0:

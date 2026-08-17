@@ -25,6 +25,7 @@ from __future__ import annotations
 from math import exp, pi, sqrt
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 _VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m
 
@@ -140,7 +141,7 @@ def resonator_bandwidth(*, resonant_frequency: Quantity, quality_factor: float) 
     bandwidth in hertz.
     """
     _check(resonant_frequency, "1/[time]", "resonant_frequency")
-    f0 = resonant_frequency.to("Hz").magnitude
+    f0 = count_rate_per_second(resonant_frequency, name="resonant_frequency")
     if f0 <= 0:
         raise ValueError("resonant_frequency must be positive")
     if quality_factor <= 0:
@@ -159,7 +160,7 @@ def capacitive_reactance(*, capacitance: Quantity, frequency: Quantity) -> Quant
     _check(capacitance, "[capacitance]", "capacitance")
     _check(frequency, "1/[time]", "frequency")
     c = capacitance.to("F").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     if c <= 0:
         raise ValueError("capacitance must be positive")
     if f <= 0:
@@ -178,7 +179,7 @@ def inductive_reactance(*, inductance: Quantity, frequency: Quantity) -> Quantit
     _check(inductance, "[inductance]", "inductance")
     _check(frequency, "1/[time]", "frequency")
     length = inductance.to("H").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     if length <= 0:
         raise ValueError("inductance must be positive")
     if f <= 0:
@@ -198,7 +199,7 @@ def capacitance_for_reactance(*, reactance: Quantity, frequency: Quantity) -> Qu
     _check(reactance, "[resistance]", "reactance")
     _check(frequency, "1/[time]", "frequency")
     x = reactance.to("ohm").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     if x <= 0:
         raise ValueError("reactance must be positive")
     if f <= 0:
@@ -217,7 +218,7 @@ def inductance_for_reactance(*, reactance: Quantity, frequency: Quantity) -> Qua
     _check(reactance, "[resistance]", "reactance")
     _check(frequency, "1/[time]", "frequency")
     x = reactance.to("ohm").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     if x <= 0:
         raise ValueError("reactance must be positive")
     if f <= 0:
@@ -320,8 +321,8 @@ def first_order_lowpass_gain(*, frequency: Quantity, cutoff_frequency: Quantity)
     """
     _check(frequency, "1/[time]", "frequency")
     _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
-    f = frequency.to("Hz").magnitude
-    f_c = cutoff_frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
+    f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f < 0:
         raise ValueError("frequency must be non-negative")
     if f_c <= 0:
@@ -341,8 +342,8 @@ def first_order_highpass_gain(*, frequency: Quantity, cutoff_frequency: Quantity
     """
     _check(frequency, "1/[time]", "frequency")
     _check(cutoff_frequency, "1/[time]", "cutoff_frequency")
-    f = frequency.to("Hz").magnitude
-    f_c = cutoff_frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
+    f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f < 0:
         raise ValueError("frequency must be non-negative")
     if f_c <= 0:

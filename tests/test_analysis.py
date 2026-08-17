@@ -37032,3 +37032,124 @@ def test_radar_average_power_duty_cycle_matches_the_two_existing_functions():
         )
     with pytest.raises(ValueError):
         radar_average_power(peak_power=_q("1 kg"), **pulse)
+
+
+def test_cyclic_frequency_inputs_refuse_an_angle_carrying_unit() -> None:
+    """The 2*pi trap, swept across every module that takes a cyclic frequency.
+
+    ``cycle/s`` is the most natural way to spell a frequency, and it is the one spelling
+    that is wrong: pint canonicalises cycle to turn = 2*pi radian, so ``500 cycle/s``
+    converted straight with ``.to("Hz")`` reads 3141.6 Hz. Twenty modules did that. The
+    error is silent, dimensionally legal, and unconservative -- mass-law transmission loss
+    came out 16 dB optimistic, which is the whole partition.
+    """
+    from anvilate.analysis.acoustics import (
+        beat_frequency,
+        doppler_shifted_frequency,
+        mass_law_transmission_loss,
+    )
+    from anvilate.analysis.radar import radar_doppler_shift
+    from anvilate.analysis.reactive_circuit import capacitive_reactance
+    from anvilate.analysis.thermal_noise import johnson_noise_voltage
+    from anvilate.analysis.waveguide import waveguide_guide_wavelength
+    from anvilate.units.rotation import AmbiguousCountRateError
+
+    for unit in ("cycle/s", "rpm", "turn/s"):
+        with pytest.raises(AmbiguousCountRateError):
+            mass_law_transmission_loss(
+                frequency=Quantity(magnitude=500.0, unit=unit),
+                surface_density=_q("20 kg/m**2"),
+            )
+    # Spelled in hertz the same partition gives 33 dB, not the 48.96 the cycle/s path
+    # used to return -- a 16 dB error, on the unconservative side.
+    assert mass_law_transmission_loss(
+        frequency=_q("500 Hz"), surface_density=_q("20 kg/m**2")
+    ) == pytest.approx(33.0, rel=1e-12)
+
+    # A beat frequency is a difference, so the 2*pi scaled the answer bodily: two strings
+    # 3 Hz apart read as 18.85 Hz of beating.
+    with pytest.raises(AmbiguousCountRateError):
+        beat_frequency(
+            frequency_1=Quantity(magnitude=440.0, unit="cycle/s"),
+            frequency_2=Quantity(magnitude=443.0, unit="cycle/s"),
+        )
+    assert beat_frequency(frequency_1=_q("440 Hz"), frequency_2=_q("443 Hz")).to(
+        "Hz"
+    ).magnitude == pytest.approx(3.0, rel=1e-12)
+
+    # The Doppler ratio is not scale-free either, because c sets the scale.
+    doppler = {
+        "speed_of_sound": _q("343 m/s"),
+        "source_velocity": _q("30 m/s"),
+        "observer_velocity": _q("0 m/s"),
+    }
+    with pytest.raises(AmbiguousCountRateError):
+        doppler_shifted_frequency(
+            source_frequency=Quantity(magnitude=1000.0, unit="cycle/s"), **doppler
+        )
+    assert doppler_shifted_frequency(source_frequency=_q("1 kHz"), **doppler).to(
+        "Hz"
+    ).magnitude == pytest.approx(1000.0 * 343.0 / 313.0, rel=1e-12)
+
+    # The same hole in the RF, noise, and waveguide modules.
+    with pytest.raises(AmbiguousCountRateError):
+        capacitive_reactance(
+            frequency=Quantity(magnitude=60.0, unit="cycle/s"), capacitance=_q("10 uF")
+        )
+    with pytest.raises(AmbiguousCountRateError):
+        johnson_noise_voltage(
+            resistance=_q("1 kohm"),
+            temperature=_q("290 K"),
+            bandwidth=Quantity(magnitude=1e6, unit="cycle/s"),
+        )
+    with pytest.raises(AmbiguousCountRateError):
+        waveguide_guide_wavelength(
+            operating_frequency=Quantity(magnitude=10e9, unit="cycle/s"),
+            cutoff_frequency=_q("6.557 GHz"),
+        )
+    with pytest.raises(AmbiguousCountRateError):
+        radar_doppler_shift(
+            transmit_frequency=Quantity(magnitude=10e9, unit="cycle/s"),
+            radial_velocity=_q("100 m/s"),
+        )
+
+
+def test_power_screw_refuses_the_regime_where_its_torque_turns_negative() -> None:
+    """Past mu*tan(lambda) = 1 the raising denominator changes sign.
+
+    ``power_screw_efficiency`` already guarded this, and its comment claimed the torque
+    function propagated the sign flip -- but the torque and load functions carried no guard
+    of their own, so a coarse high-friction screw returned a NEGATIVE torque to raise a
+    positive load. The screw has not become a generator.
+    """
+    from anvilate.analysis.power_screw import (
+        power_screw_efficiency,
+        power_screw_raise_load,
+        power_screw_raise_torque,
+    )
+
+    beyond = {
+        "mean_diameter": _q("10 mm"),
+        "lead": _q("100 mm"),
+        "friction_coefficient": 0.5,
+    }
+    for call in (
+        lambda: power_screw_raise_torque(load=_q("1000 N"), **beyond),
+        lambda: power_screw_raise_load(torque=_q("10 N*m"), **beyond),
+        lambda: power_screw_efficiency(**beyond),
+    ):
+        with pytest.raises(ValueError, match="stop describing a screw"):
+            call()
+
+    # A real jack screw is nowhere near the limit and still answers, with the raise
+    # torque and its inverse round-tripping.
+    jack = {
+        "mean_diameter": _q("32 mm"),
+        "lead": _q("6 mm"),
+        "friction_coefficient": 0.15,
+    }
+    torque = power_screw_raise_torque(load=_q("10 kN"), **jack)
+    assert torque.to("N*m").magnitude == pytest.approx(33.85235866016853, rel=1e-9)
+    assert power_screw_raise_load(torque=torque, **jack).to("N").magnitude == pytest.approx(
+        10000.0, rel=1e-9
+    )
