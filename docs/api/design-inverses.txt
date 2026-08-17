@@ -1,0 +1,182 @@
+# Design inverses and the forward check each one inverts.
+#
+# The contract: an inverse's answer, fed back into its forward check, lands EXACTLY at
+# the required margin. Not "better than", not "close to" — an inverse that overshoots is
+# a silent cost and one that undershoots is a silent failure. Every pair marked
+# round-tripped below has a test in tests/test_design_inverses.py that proves it.
+#
+# Pairs are hand-verified, never inferred. The library's naming conventions are varied
+# enough that automatic pairing resolved only 14 of 156 candidates, and a wrong pairing
+# tested automatically would be worse than no test at all.
+#
+# The gate in tests/test_contract.py requires every public symbol whose name matches the
+# inverse-shaped pattern (required_/minimum_/min_/max_/size_ prefix, or _for_/_from_/
+# _needed/_to_reach in the name) to appear in this file — either paired and round-tripped,
+# or listed as unpaired. A new inverse cannot ship without a decision being recorded.
+#
+# Format: "<inverse> -> <forward>" for a paired inverse, "<symbol>" alone for one not yet
+# paired. Moving a line from the second group to the first means writing its round-trip
+# test; that is the whole point of the list.
+
+## round-tripped
+
+axial.required_axial_area -> axial.axial_stress
+column.euler_second_moment_for_load -> column.euler_buckling_load
+control_valve.required_flow_coefficient -> control_valve.valve_flow_rate
+dynamics.isolator_static_deflection_for_transmissibility -> dynamics.transmissibility
+dynamics.natural_frequency_from_deflection -> dynamics.natural_frequency
+fastener.bolt_diameter_for_shear -> fastener.bolt_shear_stress
+fastener.thread_engagement_for_load -> fastener.thread_stripping_stress
+keys.key_length_for_torque -> keys.key_shear_stress
+machining.spindle_speed_for_cutting_speed -> machining.cutting_speed
+pressure_vessel.asme_b313_pipe_wall_thickness -> pressure_vessel.asme_b313_pipe_pressure
+pressure_vessel.thin_wall_thickness_for_pressure -> pressure_vessel.thin_wall_cylinder
+section.required_section_modulus -> section.bending_stress
+thermal.fin_array_count_for_resistance -> thermal.fin_array_count_for_resistance
+torsion.shaft_diameter_for_torque -> torsion.shaft_torsional_stress
+wire_rope.minimum_sheave_diameter_for_bending_stress -> wire_rope.wire_rope_bending_stress
+
+## not yet paired (each is a candidate by name; some are conversions, not design inverses)
+
+accumulator.accumulator_size_for_volume
+acid_base.buffer_ratio_for_ph
+acoustics.doppler_velocity_from_shift
+acoustics.sound_power_level_from_intensity
+acoustics.sound_pressure_from_power_level
+antenna.dish_diameter_for_gain
+antenna.max_line_of_sight_range
+battery_peukert.peukert_exponent_from_two_rates
+beam.aisc_bearing_length_for_web_yielding
+beam.fastener_spacing_for_shear_flow
+beam.max_transverse_shear_stress
+bearing.bearing_rating_for_life
+belt.belt_speed_for_max_power
+belt.belt_tight_tension_for_power
+boiling.minimum_film_boiling_heat_flux
+brake.band_brake_tight_tension_for_torque
+bulk_solids.beverloo_orifice_for_rate
+cam.cam_base_circle_for_pressure_angle
+casting.riser_modulus_for_feeding
+centrifugal_casting.centrifugal_speed_for_g_factor
+chain.minimum_sprocket_teeth_for_chordal_variation
+clutch.disc_clutch_force_for_torque
+combustion.equivalence_ratio_from_excess_air
+combustion.excess_air_from_flue_oxygen
+composite.fiber_volume_fraction_from_weight_fraction
+conveyor.belt_speed_for_capacity
+cyclotron.cyclotron_mass_from_frequency
+data_converter.oversampling_ratio_for_bits
+dc_dc_converter.boost_duty_cycle_for_output
+dc_dc_converter.buck_boost_duty_cycle_for_output
+dc_dc_converter.buck_duty_cycle_for_output
+dc_dc_converter.buck_minimum_inductance_for_ccm
+drilling.drilling_feed_for_torque_limit
+dynamics.angular_acceleration_from_torque
+dynamics.damping_ratio_from_half_power_bandwidth
+dynamics.damping_ratio_from_log_decrement
+dynamics.isolator_natural_frequency_for_transmissibility
+dynamics.quality_factor_from_half_power_bandwidth
+elastic_constants.bulk_modulus_from_youngs_poisson
+elastic_constants.youngs_modulus_from_bulk_shear
+electrical.capacitance_for_reactive_power
+electrical.line_current_for_power
+electroplating.electroplating_time_for_thickness
+energy_storage.current_from_c_rate
+energy_storage.discharge_time_from_c_rate
+exergy.irreversibility_from_entropy_generation
+fastener.bolt_preload_from_torque
+fastener.torque_for_preload
+fatigue.basquin_stress_for_life
+fire_protection.sprinkler_pressure_for_flow
+flow_measurement.differential_pressure_for_flow
+flywheel.flywheel_inertia_for_fluctuation
+gaussian_beam.beam_waist_for_divergence
+gear.agma_module_for_bending_stress
+gear.gear_module_for_center_distance
+gear.lewis_module_for_bending_stress
+gear.minimum_teeth_to_avoid_undercut
+gear.profile_shift_sum_for_center_distance
+geotechnical.allowable_bearing_from_ultimate
+geotechnical.required_spread_footing_area
+hall_effect.hall_flux_density_from_voltage
+hall_petch.hall_petch_grain_diameter_for_yield
+hydro_power.hydro_flow_for_power
+illumination.illuminance_for_target_luminance
+injection_molding.max_projected_area_for_clamp
+interference.interference_for_contact_pressure
+isentropic_efficiency.compressor_isentropic_from_polytropic
+isentropic_efficiency.turbine_isentropic_from_polytropic
+level_turn.bank_angle_for_load_factor
+level_turn.bank_angle_for_turn_rate
+level_turn.load_factor_from_bank_angle
+living_hinge.living_hinge_web_length_for_strain
+machining.feed_for_surface_roughness
+mass_energy.mass_from_energy
+momentum.coefficient_of_restitution_from_rebound
+noise_figure.noise_factor_from_figure
+op_amp.rise_time_from_bandwidth
+open_channel.minimum_specific_energy_rectangular
+optical_interference.wavelength_from_fringe_spacing
+orbital_mechanics.semi_major_axis_from_apsides
+packed_bed.minimum_fluidization_velocity
+photometry.luminous_flux_from_power
+photon.photon_wavelength_from_energy
+piezoelectric.piezoelectric_force_from_charge
+pipe_flow.hagen_poiseuille_radius_for_flow
+plate.base_plate_thickness_for_bearing
+plate.clamped_circular_plate_thickness_for_pressure
+pneumatics.air_receiver_volume_for_demand
+polarization.malus_angle_for_intensity
+projectile.projectile_launch_angle_for_range
+projectile.projectile_range_from_height
+quantum.minimum_energy_uncertainty
+quantum.minimum_momentum_uncertainty
+quantum.minimum_position_uncertainty
+radar.max_unambiguous_range
+radar.max_unambiguous_velocity
+radar.radial_velocity_from_doppler
+radiation_pressure.radiation_pressure_from_intensity
+radiation_shielding.shield_thickness_for_transmission
+radioactivity.decay_constant_from_half_life
+radioactivity.time_for_activity_decay
+reaction_kinetics.first_order_time_for_conversion
+reactive_circuit.capacitance_for_reactance
+reactive_circuit.inductance_for_reactance
+rectifier.filter_capacitance_for_ripple
+reinforced_concrete.rc_stirrup_spacing_for_shear
+reinforced_concrete.rc_tension_steel_for_moment
+reliability.weibull_life_for_reliability
+resistance_welding.spot_weld_current_for_heat
+road_curve.minimum_curve_radius
+rocket_propulsion.thrust_from_coefficient
+screw_conveyor.screw_conveyor_speed_for_capacity
+shear_spinning.shear_spinning_half_angle_for_thickness
+sheetmetal.minimum_bend_radius
+shot_peening.peening_time_for_coverage
+solar_pv.pv_array_size_for_load
+spectroscopy.concentration_from_absorbance
+spectroscopy.transmittance_from_absorbance
+spring.helical_spring_active_coils_for_rate
+strain_gauge.gauge_strain_from_resistance
+strain_gauge.strain_from_bridge_output
+stress.max_shear_stress_plane
+temperature_sensor.thermocouple_temperature_from_voltage
+thermal.counterflow_ntu_for_effectiveness
+thermal.fouling_factor_from_coefficients
+thermal.heat_exchanger_area_for_duty
+thermal.heat_exchanger_effectiveness_from_temperatures
+thermal.parallel_flow_ntu_for_effectiveness
+thermal.shell_and_tube_ntu_for_effectiveness
+thermal.wien_temperature_from_peak
+thermoforming.thermoforming_sheet_gauge_for_wall
+torsion.hollow_shaft_diameter_for_bending_torsion
+torsion.power_from_torque
+torsion.shaft_diameter_for_bending_torsion
+torsion.torque_from_power
+transmission_line.reflection_coefficient_from_vswr
+ventilation.airflow_for_air_changes
+wave.frequency_from_wavelength
+wave.wavelength_from_frequency
+wear.sliding_distance_for_wear_depth
+weld.fillet_weld_leg_for_load
+welding_heat.weld_travel_speed_for_heat_input

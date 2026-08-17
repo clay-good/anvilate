@@ -520,3 +520,78 @@ def test_the_citation_gate_can_actually_detect_a_missing_source():
         "familiar that nobody writes down where it comes from."
     )
     assert not cited("")
+
+
+_INVERSE_NAME = re.compile(
+    r"(^)(required_|minimum_|min_|max_|size_)|_for_|_from_|_needed|_to_reach"
+)
+
+
+def _inverse_inventory() -> tuple[dict[str, str], set[str]]:
+    """The recorded (inverse -> forward) pairs, and the symbols recorded as unpaired."""
+    path = _REPO / "docs" / "api" / "design-inverses.txt"
+    paired: dict[str, str] = {}
+    unpaired: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if " -> " in line:
+            inverse, forward = line.split(" -> ", 1)
+            paired[inverse.strip()] = forward.strip()
+        else:
+            unpaired.add(line)
+    return paired, unpaired
+
+
+def test_every_inverse_shaped_symbol_has_a_recorded_pairing_decision():
+    """A design inverse must not ship without a decision about what it inverts.
+
+    The contract is that an inverse lands its forward check at exactly the required
+    margin — an overshoot is a silent cost, an undershoot a silent failure. The pairs are
+    hand-verified because automatic pairing resolved only 14 of 156 candidates here, and
+    a wrong pairing tested automatically would be worse than no test. So the inventory is
+    a declaration, and this gate only insists that the declaration is complete: every
+    inverse-shaped public symbol is either paired and round-tripped, or recorded as not
+    yet paired.
+    """
+    paired, unpaired = _inverse_inventory()
+    recorded = set(paired) | unpaired
+    candidates = {
+        entry for entry in _manifest_surface() if _INVERSE_NAME.search(entry.split(".", 1)[1])
+    }
+
+    unrecorded = sorted(candidates - recorded)
+    assert not unrecorded, (
+        "inverse-shaped public symbols with no entry in docs/api/design-inverses.txt. "
+        "Add each one: '<inverse> -> <forward>' with a round-trip test in "
+        "tests/test_design_inverses.py, or the bare name if it is a conversion rather "
+        "than a design inverse:\n  " + "\n  ".join(unrecorded)
+    )
+
+    # The name pattern is a discovery heuristic, not the definition: a pair recorded
+    # deliberately may not look inverse-shaped (asme_b313_pipe_wall_thickness is the
+    # rating inverse of asme_b313_pipe_pressure and matches nothing). So staleness is
+    # checked against the public surface, not against the heuristic.
+    stale = sorted(recorded - _manifest_surface())
+    assert not stale, (
+        "docs/api/design-inverses.txt names symbols that are no longer on the public "
+        "surface:\n  " + "\n  ".join(stale)
+    )
+
+
+def test_every_recorded_inverse_pairing_resolves_and_is_round_tripped():
+    paired, _ = _inverse_inventory()
+    surface = _manifest_surface()
+    for inverse, forward in sorted(paired.items()):
+        assert inverse in surface, f"{inverse} is paired but is not on the public surface"
+        assert forward in surface, f"{inverse} is paired to {forward}, which is not public"
+
+    # Every paired inverse must actually be exercised by the round-trip suite, or the
+    # pairing is a claim nobody checks.
+    round_trips = (_TESTS / "test_design_inverses.py").read_text(encoding="utf-8")
+    untested = sorted(inverse for inverse in paired if inverse.split(".", 1)[1] not in round_trips)
+    assert not untested, (
+        "these inverses are recorded as paired but no round-trip test names them:\n  "
+        + "\n  ".join(untested)
+    )
