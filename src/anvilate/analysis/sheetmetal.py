@@ -397,10 +397,19 @@ def springback_factor(
     if y <= 0 or e <= 0:
         raise ValueError("yield_strength and elastic_modulus must be positive")
     x = r * y / (e * t)
-    k_s = 4.0 * x**3 - 3.0 * x + 1.0
-    if k_s <= 0:
-        raise ValueError("inputs give a non-physical springback factor (R_i·Y/E·t too large)")
-    return k_s
+    # The cubic factors exactly as 4x^3 - 3x + 1 = (2x - 1)^2*(x + 1), which is non-negative for
+    # every x > 0 -- so a "k_s <= 0" test was dead code, reachable only at the single point
+    # x = 0.5. The real limit is that the cubic falls monotonically only on 0 < x < 0.5; past
+    # its root it RISES, so K_s grew with resilience (backwards), crossed 1 at x = sqrt(3)/2,
+    # and returned 39.2 for a spring-steel strip -- a part springing TIGHTER than it was formed.
+    if x >= 0.5:
+        raise ValueError(
+            f"R_i*Y/(E*t) = {x:.4f} is at or past 0.5, where the springback cubic turns back "
+            f"upward and stops describing springback (it would report less recovery for a more "
+            f"resilient material, and K_s > 1 past 0.866). Check the bend radius, thickness, "
+            f"and Y/E ratio."
+        )
+    return 4.0 * x**3 - 3.0 * x + 1.0
 
 
 def sprung_bend_radius(*, initial_bend_radius: Quantity, springback_factor: float) -> Quantity:

@@ -37343,3 +37343,43 @@ def test_inputs_that_produced_a_plausible_number_instead_of_a_refusal() -> None:
     assert bearing_equivalent_dynamic_load(
         radial_load=_q("5 kN"), axial_load=_q("0 N"), radial_factor=1.0, axial_factor=0.0
     ).to("kN").magnitude == pytest.approx(5.0, rel=1e-12)
+
+
+def test_springback_factor_refuses_the_branch_where_its_cubic_turns_back_upward() -> None:
+    """The old guard was dead code: the cubic is non-negative everywhere it could fire.
+
+    4x^3 - 3x + 1 factors exactly as (2x - 1)^2*(x + 1), so a ``k_s <= 0`` test can only
+    fire at the single point x = 0.5. The real failure was unguarded -- past its root the
+    cubic RISES, so K_s grew with resilience (backwards from the docstring) and crossed 1
+    at x = sqrt(3)/2, reporting a part that springs tighter than it was formed.
+    """
+    from anvilate.analysis.sheetmetal import springback_factor, sprung_bend_radius
+
+    strip = {
+        "yield_strength": _q("1600 MPa"),
+        "elastic_modulus": _q("200 GPa"),
+        "thickness": _q("0.5 mm"),
+    }
+    # x = 1.12 for this spring-steel strip; it used to return K_s = 39.24, implying a
+    # 140 mm formed bend relaxes to 3.57 mm.
+    with pytest.raises(ValueError, match="turns back upward"):
+        springback_factor(initial_bend_radius=_q("140 mm"), **strip)
+    # The factorisation is exact, which is why the old test could never fire.
+    for x in (0.2, 0.4, 0.6, 0.9):
+        assert 4.0 * x**3 - 3.0 * x + 1.0 == pytest.approx((2 * x - 1) ** 2 * (x + 1), rel=1e-12)
+
+    # Inside the model's range the factor is unchanged, falls with x, and stays in (0, 1]
+    # -- the band sprung_bend_radius accepts.
+    mild = {
+        "yield_strength": _q("250 MPa"),
+        "elastic_modulus": _q("200 GPa"),
+        "thickness": _q("2 mm"),
+    }
+    tight = springback_factor(initial_bend_radius=_q("10 mm"), **mild)
+    loose = springback_factor(initial_bend_radius=_q("40 mm"), **mild)
+    assert tight == pytest.approx(0.9812509765625, rel=1e-12)
+    assert loose == pytest.approx(0.9250625, rel=1e-12)
+    assert 0.0 < loose < tight <= 1.0
+    assert sprung_bend_radius(initial_bend_radius=_q("40 mm"), springback_factor=loose).to(
+        "mm"
+    ).magnitude == pytest.approx(43.2403215998919, rel=1e-9)
