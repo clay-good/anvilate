@@ -152,6 +152,7 @@ mass_transfer.mass_peclet_number
 mass_transfer.stanton_number
 mass_transfer.colburn_j_factor
 mass_transfer.chilton_colburn_mass_transfer_coefficient
+mass_transfer.overall_mass_transfer_coefficient
 measurement_uncertainty.standard_uncertainty_of_mean
 measurement_uncertainty.combined_standard_uncertainty
 measurement_uncertainty.expanded_uncertainty
@@ -263,6 +264,7 @@ bearing.bearing_basic_rating_life
 bearing.bearing_equivalent_dynamic_load
 bearing.bearing_equivalent_static_load
 bearing.bearing_life_hours
+bearing.bearing_cubic_mean_load
 bearing.bearing_rating_for_life
 bearing.bearing_reliability_life_factor
 bearing.bearing_ball_pass_frequency_outer

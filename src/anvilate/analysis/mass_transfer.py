@@ -37,6 +37,7 @@ __all__ = [
     "stanton_number",
     "colburn_j_factor",
     "chilton_colburn_mass_transfer_coefficient",
+    "overall_mass_transfer_coefficient",
 ]
 
 
@@ -209,6 +210,44 @@ def chilton_colburn_mass_transfer_coefficient(
         raise ValueError("lewis_number must be positive")
     kc = h / (rho * cp * lewis_number ** (2.0 / 3.0))
     return Quantity(magnitude=kc, unit="m/s")
+
+
+def overall_mass_transfer_coefficient(
+    *,
+    gas_film_coefficient: Quantity,
+    liquid_film_coefficient: Quantity,
+    equilibrium_slope: float,
+) -> Quantity:
+    """The overall gas-phase coefficient, 1/K_OG = 1/k_G + m/k_L (two-film theory).
+
+    The module produced single-film coefficients — :func:`sherwood_number`,
+    :func:`chilton_colburn_mass_transfer_coefficient` — and nothing combined them. The exact
+    mirror of :func:`anvilate.analysis.thermal.overall_heat_transfer_coefficient`: two
+    resistances in series, one either side of the interface.
+
+    Solute crossing from gas to liquid must diffuse through the gas film and then the liquid
+    film, and the resistances add — but the liquid-side one is weighted by the ``equilibrium_slope``
+    m (the local dy/dx of the equilibrium line, Henry's constant in mole-fraction form), because a
+    steep equilibrium line means a small liquid concentration supports a large gas partial
+    pressure and the liquid film has to work that much harder.
+
+    The weighting is the whole point, and it is easy to get badly wrong. For a sparingly soluble
+    solute — oxygen or CO₂ in water, where m is large — the m/k_L term swamps everything: at
+    k_G = 0.02 m/s, k_L = 1e-4 m/s and m = 30, the gas film contributes 0.0167% of the total
+    resistance and K_OG is 3.333e-6 m/s. Sizing on the gas-film coefficient alone would overstate
+    the flux by about 6,000-fold. The system is then "liquid-film controlled", and only agitation
+    of the liquid helps; a soluble solute (small m) is gas-film controlled and only gas velocity
+    helps. Returns the overall coefficient in m/s.
+    """
+    _check(gas_film_coefficient, "[length]/[time]", "gas_film_coefficient")
+    _check(liquid_film_coefficient, "[length]/[time]", "liquid_film_coefficient")
+    k_g = gas_film_coefficient.to("m/s").magnitude
+    k_l = liquid_film_coefficient.to("m/s").magnitude
+    if k_g <= 0 or k_l <= 0:
+        raise ValueError("gas_film_coefficient and liquid_film_coefficient must be positive")
+    if equilibrium_slope <= 0:
+        raise ValueError(f"equilibrium_slope must be positive; got {equilibrium_slope}")
+    return Quantity(magnitude=1.0 / (1.0 / k_g + equilibrium_slope / k_l), unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

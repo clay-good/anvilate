@@ -4508,6 +4508,51 @@ def test_bearing_life_hours_converts_revolutions_at_speed():
     assert faster.to("hour").magnitude == pytest.approx(hours.to("hour").magnitude / 2, rel=1e-9)
 
 
+def test_bearing_cubic_mean_load_beats_the_linear_average_that_overstates_life():
+    from anvilate.analysis import (
+        ROLLER_BEARING_LIFE_EXPONENT,
+        bearing_basic_rating_life,
+        bearing_cubic_mean_load,
+    )
+
+    duty = [(0.5, _q("4 kN")), (0.3, _q("8 kN")), (0.2, _q("12 kN"))]
+    cubic = bearing_cubic_mean_load(duty_cycle=duty).to("kN").magnitude
+    assert cubic == pytest.approx(8.098775408021824, rel=1e-12)
+
+    # The natural shortcut -- average the loads -- gives 6.800 kN. Life goes as P^-3, so that
+    # shortcut predicts 1.689x the true L10 life. Unsafe, and the gap widens with load spread.
+    linear = 0.5 * 4.0 + 0.3 * 8.0 + 0.2 * 12.0
+    assert linear == pytest.approx(6.8, rel=1e-12)
+    assert cubic > linear
+    assert (cubic / linear) ** 3 == pytest.approx(1.6893954813759386, rel=1e-9)
+    # Confirmed against the life function itself, not just the arithmetic.
+    capacity = _q("60 kN")
+    life_cubic = bearing_basic_rating_life(
+        dynamic_load_rating=capacity, equivalent_load=Quantity(magnitude=cubic, unit="kN")
+    )
+    life_linear = bearing_basic_rating_life(
+        dynamic_load_rating=capacity, equivalent_load=Quantity(magnitude=linear, unit="kN")
+    )
+    assert life_linear / life_cubic == pytest.approx(1.68939548, rel=1e-6)
+
+    # A constant duty must return that constant exactly -- the degenerate case.
+    assert bearing_cubic_mean_load(duty_cycle=[(1.0, _q("7 kN"))]).to("kN").magnitude == (
+        pytest.approx(7.0, rel=1e-12)
+    )
+    # A roller bearing weights the heavy blocks even harder (p = 10/3 > 3).
+    roller = (
+        bearing_cubic_mean_load(duty_cycle=duty, life_exponent=ROLLER_BEARING_LIFE_EXPONENT)
+        .to("kN")
+        .magnitude
+    )
+    assert roller > cubic
+
+    with pytest.raises(ValueError, match="must sum to 1"):
+        bearing_cubic_mean_load(duty_cycle=[(0.5, _q("4 kN")), (0.3, _q("8 kN"))])
+    with pytest.raises(ValueError, match="at least one block"):
+        bearing_cubic_mean_load(duty_cycle=[])
+
+
 def test_bearing_life_rejects_bad_inputs():
     with pytest.raises(ValueError, match="dynamic_load_rating must be a"):
         bearing_basic_rating_life(dynamic_load_rating=_q("14 mm"), equivalent_load=_q("2 kN"))
@@ -21824,6 +21869,63 @@ def test_sutherland_transport_properties_and_prandtl_number():
             reference_viscosity=_q("5 kg"),
             reference_temperature=t_ref,
             sutherland_constant=_q("110.4 K"),
+        )
+
+
+def test_overall_mass_transfer_coefficient_is_dominated_by_the_liquid_film():
+    from anvilate.analysis import overall_mass_transfer_coefficient
+
+    # Two resistances in series, the liquid one weighted by the equilibrium slope m. For a
+    # sparingly soluble solute (large m -- oxygen or CO2 in water) the m/k_L term swamps
+    # everything: the gas film supplies 0.0167% of the total resistance here.
+    k_og = (
+        overall_mass_transfer_coefficient(
+            gas_film_coefficient=_q("0.02 m/s"),
+            liquid_film_coefficient=_q("1e-4 m/s"),
+            equilibrium_slope=30.0,
+        )
+        .to("m/s")
+        .magnitude
+    )
+    assert k_og == pytest.approx(3.3327778703549408e-06, rel=1e-12)
+    gas_share = (1.0 / 0.02) / (1.0 / 0.02 + 30.0 / 1e-4)
+    assert gas_share == pytest.approx(1.6663889351774704e-4, rel=1e-9)
+    # Sizing on the gas film alone would overstate the flux ~6000-fold: the classic trap.
+    assert 0.02 / k_og == pytest.approx(6001.0, rel=1e-3)
+
+    # It can never exceed either film acting alone -- resistances add, so the overall is bounded
+    # by the smaller of k_G and k_L/m. That bound is the structural check on the formula.
+    assert k_og < 0.02
+    assert k_og < 1e-4 / 30.0
+
+    # The limits: as m -> 0 the liquid film stops mattering and K_OG -> k_G (gas-film
+    # controlled, a soluble solute); as m grows the liquid film takes over entirely.
+    nearly_gas = (
+        overall_mass_transfer_coefficient(
+            gas_film_coefficient=_q("0.02 m/s"),
+            liquid_film_coefficient=_q("1e-4 m/s"),
+            equilibrium_slope=1e-8,
+        )
+        .to("m/s")
+        .magnitude
+    )
+    assert nearly_gas == pytest.approx(0.02, rel=1e-3)
+    liquid_controlled = (
+        overall_mass_transfer_coefficient(
+            gas_film_coefficient=_q("0.02 m/s"),
+            liquid_film_coefficient=_q("1e-4 m/s"),
+            equilibrium_slope=3000.0,
+        )
+        .to("m/s")
+        .magnitude
+    )
+    assert liquid_controlled == pytest.approx(1e-4 / 3000.0, rel=1e-2)
+
+    with pytest.raises(ValueError, match="equilibrium_slope must be positive"):
+        overall_mass_transfer_coefficient(
+            gas_film_coefficient=_q("0.02 m/s"),
+            liquid_film_coefficient=_q("1e-4 m/s"),
+            equilibrium_slope=0.0,
         )
 
 

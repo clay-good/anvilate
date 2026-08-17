@@ -21,6 +21,7 @@ dimensions). As with the other checks, force and speed inputs are dimension-chec
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import log
 
 from ..units import Quantity
@@ -38,6 +39,7 @@ BEARING_WEIBULL_SLOPE = 1.5
 __all__ = [
     "BALL_BEARING_LIFE_EXPONENT",
     "ROLLER_BEARING_LIFE_EXPONENT",
+    "bearing_cubic_mean_load",
     "BEARING_WEIBULL_SLOPE",
     "bearing_basic_rating_life",
     "bearing_rating_for_life",
@@ -51,6 +53,48 @@ __all__ = [
     "bearing_fundamental_train_frequency",
     "bearing_ball_spin_frequency",
 ]
+
+
+def bearing_cubic_mean_load(
+    *,
+    duty_cycle: Sequence[tuple[float, Quantity]],
+    life_exponent: float = BALL_BEARING_LIFE_EXPONENT,
+) -> Quantity:
+    """The equivalent constant load of a varying duty, P_m = (Σ f_i·P_iᵖ)^(1/p).
+
+    :func:`bearing_life_hours` and :func:`bearing_basic_rating_life` take a single equivalent
+    load, but real machines run a duty cycle — a press that idles, forms, and returns. The
+    natural shortcut is to average the loads, and it is wrong in the unsafe direction.
+
+    Life goes as P^−p, so damage accumulates with the p-th power of load and the heavy blocks
+    dominate far beyond their share of the time. Weighting by time in that same power gives the
+    constant load that does equal damage. For a duty of 50% at 4 kN, 30% at 8 kN and 20% at
+    12 kN, the cubic mean is 8.099 kN against a linear mean of 6.800 kN — and since life goes as
+    the cube, the linear mean predicts **1.69× the true L10 life**. The gap widens as the load
+    spread grows.
+
+    ``duty_cycle`` is a sequence of (time_fraction, load) pairs whose fractions sum to 1.
+    ``life_exponent`` p is 3 for ball bearings (the default) and 10/3 for roller bearings — use
+    :data:`ROLLER_BEARING_LIFE_EXPONENT`. Returns the equivalent load as a force.
+    """
+    if len(duty_cycle) == 0:
+        raise ValueError("duty_cycle must contain at least one block")
+    if life_exponent <= 0:
+        raise ValueError(f"life_exponent must be positive; got {life_exponent}")
+    total_fraction = 0.0
+    accumulated = 0.0
+    for fraction, load in duty_cycle:
+        _require(load, "[force]", "duty_cycle load")
+        newtons = load.to("N").magnitude
+        if fraction < 0:
+            raise ValueError(f"duty_cycle time fractions must be non-negative; got {fraction}")
+        if newtons < 0:
+            raise ValueError(f"duty_cycle loads must be non-negative; got {load}")
+        total_fraction += fraction
+        accumulated += fraction * newtons**life_exponent
+    if abs(total_fraction - 1.0) > 1.0e-9:
+        raise ValueError(f"duty_cycle time fractions must sum to 1; they sum to {total_fraction}")
+    return Quantity(magnitude=accumulated ** (1.0 / life_exponent), unit="N")
 
 
 def _require(value: Quantity, expected: str, name: str) -> None:
