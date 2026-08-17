@@ -136,3 +136,15 @@ c_p = nds_column_stability_factor(euler_buckling_stress=f_cE, reference_compress
   bearing on a 1.5 in wall plate crushes at 0.96. Landing it on a 3.5 in post takes
   bearing to 2.24 and leaves the other two untouched: the repair is the detail, not a
   deeper beam.
+
+## Worked-example anchors
+
+Three textbook problems are pinned end to end in `tests/test_analysis.py`
+(`test_nds_worked_example_*`) against numbers worked by hand, not re-derived from the
+code. They are the pack's regression floor, and each carries a lesson:
+
+| Anchor | Problem | Result | What it pins |
+| --- | --- | --- | --- |
+| Floor joist | 2x10, 15 ft, 16 in o.c., 50 psf | bending SF 1.08, shear SF 3.33 | On a long span bending governs, and tightly — the "passing" joist has 8% in hand. |
+| Post | 6x6, 12 ft, 12,000 lb | compression SF 1.40, bearing SF 1.58 | C_P is the design: skipping it reports 2.52 on the same post. |
+| Beam-column | the same post plus 30 plf of wind | interaction 0.79 | Wind's C_D 1.6 lifts F*_c by 60% but F'_c by only 11% — a higher F*_c lowers C_P, so the duration bonus does not arrive intact. |

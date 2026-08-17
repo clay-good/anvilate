@@ -25649,6 +25649,227 @@ def test_nds_combined_bending_compression_interaction_and_amplification():
         nds_combined_bending_compression(**{**kw, "compression_stress": _q("1000 psi")})
 
 
+def test_nds_worked_example_floor_joist_bending_governs_over_shear():
+    """Anchor: the textbook 2x10 joist problem, worked end to end by hand.
+
+    A 2x10 (1.5 x 9.25 in) floor joist spans 15 ft at 16 in on centre under 10 psf dead
+    plus 40 psf live. The published solution runs:
+
+        w  = 50 psf x (16/12) ft            = 66.67 plf
+        M  = w·L²/8 = 66.67 x 15²/8         = 1875 ft-lb = 22,500 in-lb
+        S  = b·d²/6 = 1.5 x 9.25²/6         = 21.39 in³
+        f_b = M/S                           = 1052 psi
+        F'_b = 900 x C_D 1.0 x C_F 1.1 x C_M 1.0 x C_r 1.15 = 1138.5 psi   -> SF 1.08
+        V  = w·L/2                          = 500 lb
+        f_v = 1.5·V/(b·d)                   = 54.1 psi
+        F'_v = 180 x C_D 1.0                = 180 psi                      -> SF 3.33
+
+    Bending governs by a factor of three, and it governs *tightly* — the joist that
+    "passes" has 8% in hand. The numbers below are the hand solution, not a re-derivation.
+    """
+    from anvilate.analysis import (
+        CrossSection,
+        LoadDuration,
+        nds_adjusted_design_value,
+        nds_bending_scorecard,
+        nds_load_duration_factor,
+        nds_shear_scorecard,
+        nds_shear_stress,
+        simply_supported_uniform_load,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    section = CrossSection.rectangular(width=_q("1.5 inch"), height=_q("9.25 inch"))
+    assert section.section_modulus.to("inch**3").magnitude == pytest.approx(21.39, abs=0.01)
+
+    bending = simply_supported_uniform_load(
+        distributed_load=_q("66.6667 lbf/ft"),
+        length=_q("15 ft"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("1600000 psi"),  # E only moves the deflection, not the stresses
+    )
+    assert bending.max_moment.to("ft*lbf").magnitude == pytest.approx(1875.0, rel=1e-4)
+    assert bending.max_bending_stress.to("psi").magnitude == pytest.approx(1052.0, abs=1.0)
+
+    # C_D = 1.0 for the ten-year occupancy live load — the reference duration.
+    c_d = nds_load_duration_factor(LoadDuration.TEN_YEAR)
+    assert c_d == pytest.approx(1.0)
+    fb_allow = nds_adjusted_design_value(
+        reference_value=_q("900 psi"),
+        factors={"C_D": c_d, "C_F": 1.1, "C_M": 1.0, "C_r": 1.15},
+    )
+    assert fb_allow.to("psi").magnitude == pytest.approx(1138.5, abs=0.1)
+
+    bend = nds_bending_scorecard(
+        "joist bending",
+        bending_stress=bending.max_bending_stress,
+        adjusted_bending_value=fb_allow,
+    )
+    assert bend.status is CheckStatus.PASS
+    assert bend.safety_factor == pytest.approx(1.082, abs=0.002)
+
+    shear_stress = nds_shear_stress(
+        shear_force=_q("500 lbf"), width=_q("1.5 inch"), depth=_q("9.25 inch")
+    )
+    assert shear_stress.to("psi").magnitude == pytest.approx(54.05, abs=0.05)
+    shear = nds_shear_scorecard(
+        "joist shear",
+        shear_stress=shear_stress,
+        adjusted_shear_value=nds_adjusted_design_value(
+            reference_value=_q("180 psi"), factors={"C_D": c_d}
+        ),
+    )
+    assert shear.status is CheckStatus.PASS
+    assert shear.safety_factor == pytest.approx(3.330, abs=0.005)
+    # The point of the published example: on a long span bending governs, and not narrowly.
+    assert bend.safety_factor < shear.safety_factor / 3
+
+
+def test_nds_worked_example_post_column_and_its_bearing_at_the_base():
+    """Anchor: the textbook 6x6 post problem — buckling first, then crushing at the plate.
+
+    A 6x6 (5.5 x 5.5 in) post, 12 ft long, pinned both ends, carries 12,000 lb of
+    ten-year load. The published solution runs:
+
+        l_e/d = 144/5.5                     = 26.18
+        F_cE  = 0.822 x 580,000/26.18²      = 695.5 psi
+        F*_c  = 1000 x C_D 1.0              = 1000 psi
+        alpha = 0.6955, C_P (Ylinen, c=0.8) = 0.5561
+        F'_c  = 1000 x 0.5561               = 556.1 psi
+        f_c   = 12,000/30.25                = 396.7 psi   -> SF 1.40
+        f_c-perp at the base = same 396.7 psi vs F'_c-perp 625 psi -> SF 1.58
+
+    The buckling penalty is the whole design: ignoring C_P would read a 2.52 safety
+    factor on the same post.
+    """
+    from anvilate.analysis import (
+        nds_adjusted_design_value,
+        nds_bearing_scorecard,
+        nds_bearing_stress,
+        nds_column_stability_factor,
+        nds_compression_scorecard,
+        nds_euler_buckling_stress,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    slenderness = (12 * 12) / 5.5
+    assert slenderness == pytest.approx(26.18, abs=0.01)
+    fce = nds_euler_buckling_stress(min_modulus=_q("580000 psi"), slenderness_ratio=slenderness)
+    assert fce.to("psi").magnitude == pytest.approx(695.5, abs=0.5)
+
+    f_star = nds_adjusted_design_value(reference_value=_q("1000 psi"), factors={"C_D": 1.0})
+    c_p = nds_column_stability_factor(euler_buckling_stress=fce, reference_compression=f_star)
+    assert c_p == pytest.approx(0.5561, abs=0.001)
+    adjusted = nds_adjusted_design_value(reference_value=f_star, factors={"C_P": c_p})
+    assert adjusted.to("psi").magnitude == pytest.approx(556.1, abs=0.5)
+
+    f_c = _q("396.69 psi")  # 12,000 lb / 30.25 in²
+    compression = nds_compression_scorecard(
+        "post compression", compression_stress=f_c, adjusted_compression_value=adjusted
+    )
+    assert compression.status is CheckStatus.PASS
+    assert compression.safety_factor == pytest.approx(1.402, abs=0.003)
+    # Skipping C_P would report 2.52 on the identical post — the whole margin, invented.
+    unbuckled = nds_compression_scorecard(
+        "post compression", compression_stress=f_c, adjusted_compression_value=f_star
+    )
+    assert unbuckled.safety_factor == pytest.approx(2.521, abs=0.005)
+
+    # The base plate: the same 12,000 lb delivered across the grain over the 5.5 x 5.5 patch.
+    bearing_stress = nds_bearing_stress(
+        bearing_force=_q("12000 lbf"), width=_q("5.5 inch"), bearing_length=_q("5.5 inch")
+    )
+    assert bearing_stress.to("psi").magnitude == pytest.approx(396.69, abs=0.1)
+    bearing = nds_bearing_scorecard(
+        "post bearing",
+        bearing_stress=bearing_stress,
+        # C_D never applies to compression perpendicular to grain (NDS 2.3.2), and the
+        # 5.5 in bearing is under the 6 in C_b window but takes no bonus at a full-width
+        # patch the caller has not qualified with an end distance.
+        adjusted_bearing_value=nds_adjusted_design_value(
+            reference_value=_q("625 psi"), factors={"C_M": 1.0}
+        ),
+    )
+    assert bearing.status is CheckStatus.PASS
+    assert bearing.safety_factor == pytest.approx(1.576, abs=0.003)
+    # Buckling governs over crushing on a post this slender — but not by much.
+    assert compression.safety_factor < bearing.safety_factor
+
+
+def test_nds_worked_example_beam_column_wind_duration_bonus_is_eaten_by_buckling():
+    """Anchor: the 6x6 post of the previous example with 30 plf of wind across it.
+
+    Wind raises C_D from 1.0 to 1.6, so F*_c goes 1000 -> 1600 psi. The trap the published
+    beam-column example exists to teach is that C_P *falls* when F*_c rises (alpha = F_cE/F*_c
+    drops), so the duration bonus does not arrive intact:
+
+        F*_c = 1600 psi, alpha = 695.5/1600 = 0.4347, C_P = 0.3861
+        F'_c = 617.8 psi        (only +11% for a +60% duration factor)
+        M    = 30 x 12²/8 = 540 ft-lb, S = 27.73 in³, f_b = 233.7 psi
+        F'_b = 900 x 1.6 = 1440 psi
+        1 - f_c/F_cE = 0.4296   (the moment amplification, and it is severe)
+        (396.7/617.8)² + 233.7/(1440 x 0.4296) = 0.412 + 0.378 = 0.790 <= 1  -> passes
+    """
+    from anvilate.analysis import (
+        CrossSection,
+        LoadDuration,
+        nds_adjusted_design_value,
+        nds_column_stability_factor,
+        nds_combined_bending_compression,
+        nds_euler_buckling_stress,
+        nds_load_duration_factor,
+        simply_supported_uniform_load,
+    )
+
+    c_d = nds_load_duration_factor(LoadDuration.TEN_MINUTE)
+    assert c_d == pytest.approx(1.6)
+
+    fce = nds_euler_buckling_stress(min_modulus=_q("580000 psi"), slenderness_ratio=(12 * 12) / 5.5)
+    f_star = nds_adjusted_design_value(reference_value=_q("1000 psi"), factors={"C_D": c_d})
+    c_p = nds_column_stability_factor(euler_buckling_stress=fce, reference_compression=f_star)
+    assert c_p == pytest.approx(0.3861, abs=0.001)
+    adjusted_c = nds_adjusted_design_value(reference_value=f_star, factors={"C_P": c_p})
+    assert adjusted_c.to("psi").magnitude == pytest.approx(617.8, abs=0.5)
+    # The 60% duration bonus arrives as 11%: C_P ate the rest. This is the whole lesson.
+    assert adjusted_c.to("psi").magnitude / 556.1 == pytest.approx(1.111, abs=0.005)
+
+    section = CrossSection.rectangular(width=_q("5.5 inch"), height=_q("5.5 inch"))
+    assert section.section_modulus.to("inch**3").magnitude == pytest.approx(27.73, abs=0.01)
+    bending = simply_supported_uniform_load(
+        distributed_load=_q("30 lbf/ft"),
+        length=_q("12 ft"),
+        second_moment=section.second_moment,
+        extreme_fibre=section.extreme_fibre,
+        elastic_modulus=_q("1600000 psi"),
+    )
+    assert bending.max_moment.to("ft*lbf").magnitude == pytest.approx(540.0, rel=1e-6)
+    assert bending.max_bending_stress.to("psi").magnitude == pytest.approx(233.7, abs=0.2)
+
+    interaction = nds_combined_bending_compression(
+        compression_stress=_q("396.69 psi"),
+        adjusted_compression=adjusted_c,
+        bending_stress=bending.max_bending_stress,
+        adjusted_bending=nds_adjusted_design_value(
+            reference_value=_q("900 psi"), factors={"C_D": c_d}
+        ),
+        euler_buckling_stress=fce,
+    )
+    assert interaction == pytest.approx(0.790, abs=0.003)
+    assert interaction <= 1.0
+    # Doubling the wind moment pushes the same post past the interaction limit.
+    over = nds_combined_bending_compression(
+        compression_stress=_q("396.69 psi"),
+        adjusted_compression=adjusted_c,
+        bending_stress=_q("467.4 psi"),
+        adjusted_bending=nds_adjusted_design_value(
+            reference_value=_q("900 psi"), factors={"C_D": c_d}
+        ),
+        euler_buckling_stress=fce,
+    )
+    assert over > 1.0
+
+
 def test_flat_plate_turbulent_convection_and_its_validity_window():
     from anvilate.analysis import (
         flat_plate_forced_convection_coefficient,

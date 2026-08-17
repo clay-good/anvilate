@@ -36,7 +36,14 @@
 
 ## 3. Tests & examples
 
-- [ ] 3.1 Worked-example anchors from published NDS example problems
+- [x] 3.1 Worked-example anchors from published NDS example problems — three textbook
+      problems worked by hand and pinned end to end (`test_nds_worked_example_*` in
+      `tests/test_analysis.py`): the 2x10/15 ft floor joist (bending SF 1.08 governs
+      over shear 3.33), the 6x6/12 ft post (compression 1.40, bearing 1.58, and the
+      2.52 that skipping C_P would invent), and the same post as a beam-column under
+      wind (interaction 0.79, where C_D 1.6 lifts F*_c by 60% but F'_c by only 11%
+      because a higher F*_c lowers C_P). The asserted values are the hand solution,
+      not a re-derivation from the code.
 - [x] 3.2 Example: floor joist screened wet vs. dry — the wet-service factor C_M flips
       the verdict (`examples/floor_joist_wet_service.py`).
 - [x] 3.3 Not-evaluated behavior without reference values — `nds_bending_scorecard`
