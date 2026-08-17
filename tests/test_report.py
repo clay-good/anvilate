@@ -706,12 +706,65 @@ def test_the_calc_record_is_strict_json_even_with_an_infinite_safety_factor():
         raise AssertionError(f"strict JSON reader rejects the bare token {token}")
 
     reloaded = json.loads(text, parse_constant=_reject)
-    assert reloaded["report"]["sections"][0]["entry"]["safety_factor"] is None
-    # The verdict and the detail line still say what happened — nothing a QA script needs
-    # is lost by recording the non-finite value as null.
+    # The non-finite value is spelled as a token, not dropped. Nulling it lost the value:
+    # `SymbolValue.value` is `Quantity | float` and `Quantity.magnitude` is `float`, so a
+    # nulled record failed this build's own loader — the archived evidence for exactly the
+    # strongest-passing checks was unrecoverable.
+    assert reloaded["report"]["sections"][0]["entry"]["safety_factor"] == "__nonfinite:inf__"
     assert reloaded["report"]["sections"][0]["entry"]["status"] == "pass"
     assert "inf" in reloaded["report"]["sections"][0]["entry"]["detail"]
+
+    # And it round-trips: the loaded report is the report that was written.
+    restored = report_from_record(json.loads(text, parse_constant=_reject))
+    assert restored.sections[0].entry.safety_factor == float("inf")
+    assert restored.to_text() == report.to_text()
 
     # A finite record is untouched: full computed precision, not display precision.
     plain = json.loads(json.dumps(_report().to_record()), parse_constant=_reject)
     assert plain["report"]["sections"][0]["entry"]["safety_factor"] == pytest.approx(1.85, abs=0.01)
+
+
+def test_a_record_carrying_an_infinite_derivation_value_reloads():
+    # The nulling this replaced was undetectable on a safety factor alone (declared
+    # `float | None`); it only bit on a Derivation, whose `value` has no None member.
+    from anvilate.derivation import Derivation, SymbolValue
+
+    derivation = Derivation(
+        symbolic="n = N_R / N_E",
+        inputs=(
+            SymbolValue(symbol="N_R", description="cycles to failure", value=float("inf")),
+            SymbolValue(symbol="N_E", description="applied cycles", value=2.0e6),
+        ),
+        result=SymbolValue(symbol="n", description="fatigue safety factor", value=float("inf")),
+        citation="EN 1993-1-9",
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        "weld fatigue", computed=float("inf"), required=1.0
+    ).model_copy(update={"derivation": derivation})
+    base = _report()
+    report = base.model_copy(
+        update={"sections": (base.sections[0].model_copy(update={"entry": entry}),)}
+    )
+    record = json.loads(json.dumps(report.to_record()))
+    restored = report_from_record(record)
+    assert restored.sections[0].entry.derivation is not None
+    assert restored.sections[0].entry.derivation.result.value == float("inf")
+    assert restored.to_text() == report.to_text()
+
+
+def test_the_governing_row_is_marked_by_position_not_by_name():
+    # Two checks can share a name in a real submittal — the same detail screened at two
+    # locations. Marking the governing row by name bolded both, presenting a PASSING row
+    # as the controlling check of a FAILING card.
+    failing = ScorecardEntry.from_safety_factor("bolt shear", computed=0.5, required=1.5)
+    passing = ScorecardEntry.from_safety_factor("bolt shear", computed=4.0, required=1.5)
+    report = CalculationReport(
+        title="Duplicate names",
+        sections=(ReportSection(entry=failing), ReportSection(entry=passing)),
+    )
+    assert report.status is CheckStatus.FAIL
+    governing_rows = [
+        line for line in report.to_html().splitlines() if 'tr class="governing"' in line
+    ]
+    assert len(governing_rows) == 1
+    assert "FAIL" in governing_rows[0] and "0.50" in governing_rows[0]

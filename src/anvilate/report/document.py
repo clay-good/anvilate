@@ -61,19 +61,46 @@ _STATUS_LABEL = {
 _FALLBACK_LABEL = "derivation not rendered"
 
 
-def _json_safe(value: object) -> object:
-    """Replace non-finite floats with ``None`` so the record is strict-JSON valid.
+# Non-finite floats spelled as JSON strings. Python's ``json`` writes ``Infinity`` and
+# ``NaN`` as bare tokens that are not in the JSON grammar — JavaScript, Go, and most
+# schema validators reject them — and the calc record exists for another firm's QA script
+# to read. Nulling them instead loses the value: a `SymbolValue.value` is `Quantity |
+# float` and a `Quantity.magnitude` is `float`, neither of which admits `None`, so a
+# nulled record failed this build's own loader. These tokens are deliberately unlovely so
+# no real string field can collide with one.
+_NONFINITE_TOKENS: dict[str, float] = {
+    "__nonfinite:inf__": float("inf"),
+    "__nonfinite:-inf__": float("-inf"),
+    "__nonfinite:nan__": float("nan"),
+}
+_NONFINITE_SPELLING = {"inf": "__nonfinite:inf__", "-inf": "__nonfinite:-inf__"}
 
-    Python's ``json`` writes ``Infinity`` and ``NaN`` as bare tokens that are not in the
-    JSON grammar; JavaScript, Go, and most schema validators reject them. The calc record
-    exists for another firm's QA script to read, so it must survive that trip.
+
+def _json_safe(value: object) -> object:
+    """Encode non-finite floats as string tokens so the record is strict-JSON valid.
+
+    Round-trips through :func:`_json_revive`, which is what separates this from simply
+    dropping the value: an infinite safety factor is a real result (a weld range below the
+    fatigue cutoff does no damage), and the archived evidence for exactly the
+    strongest-passing checks has to be loadable again.
     """
     if isinstance(value, dict):
         return {k: _json_safe(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_json_safe(v) for v in value]
     if isinstance(value, float) and not isfinite(value):
-        return None
+        return _NONFINITE_SPELLING.get(repr(value), "__nonfinite:nan__")
+    return value
+
+
+def _json_revive(value: object) -> object:
+    """Turn the tokens :func:`_json_safe` wrote back into their non-finite floats."""
+    if isinstance(value, dict):
+        return {k: _json_revive(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_revive(v) for v in value]
+    if isinstance(value, str) and value in _NONFINITE_TOKENS:
+        return _NONFINITE_TOKENS[value]
     return value
 
 
@@ -278,6 +305,21 @@ class CalculationReport(BaseModel):
         )
         return tuple((label, value) for label, value in rows if value)
 
+    def _governing_index(self) -> int | None:
+        """Which *row* governs, by position — two checks can share a name.
+
+        Marking the governing row by name bolded every row that shared it, so a passing
+        duplicate was presented as the controlling check of a failing card. Nothing stops
+        a real submittal from screening the same detail at two locations.
+        """
+        governing = self.governing()
+        if governing is None:
+            return None
+        for index, section in enumerate(self.sections):
+            if section.entry is governing:
+                return index
+        return None
+
     def _summary_rows(self) -> tuple[tuple[str, str, str, str], ...]:
         rows = []
         for section in self.sections:
@@ -355,8 +397,9 @@ class CalculationReport(BaseModel):
         out = ["<h2>Margin summary</h2>", '<table class="summary">']
         out.append("<tr><th>Check</th><th>Safety factor</th><th>Required</th><th>Result</th></tr>")
         governing = self.governing()
-        for name, factor, required, verdict in self._summary_rows():
-            row_class = ' class="governing"' if governing and name == governing.name else ""
+        governing_index = self._governing_index()
+        for index, (name, factor, required, verdict) in enumerate(self._summary_rows()):
+            row_class = ' class="governing"' if index == governing_index else ""
             out.append(
                 f"<tr{row_class}><td>{escape(name)}</td><td>{escape(factor)}</td>"
                 f"<td>{escape(required)}</td><td>{escape(verdict)}</td></tr>"
@@ -384,7 +427,7 @@ def report_from_record(record: dict) -> CalculationReport:
             f"calc record schema version {version} is not readable by this build "
             f"(expects {expected_major}.x)"
         )
-    return CalculationReport.model_validate(record["report"])
+    return CalculationReport.model_validate(_json_revive(record["report"]))
 
 
 _STYLESHEET = """

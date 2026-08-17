@@ -281,6 +281,16 @@ def sample_margin(
             "Restrict the input distributions to the response's valid domain, or have the "
             "response raise on inputs it cannot evaluate."
         )
+    # Guard the OTHER operand of the same comparison. A NaN `required` makes every
+    # `r < required` False, so the shortfall probability comes back a confident 0.0% and
+    # `is_fragile()` reports False — the silent green this function's response guard above
+    # exists to prevent, arriving through the door it left open.
+    if not isfinite(required):
+        raise ValueError(
+            f"required must be a finite number; got {required}. A non-finite requirement "
+            "makes every `r < required` comparison False, which reads as a 0% chance of "
+            "falling short rather than as a comparison that was never made."
+        )
     responses = sorted(drawn)
     mean = sum(responses) / samples
     variance = sum((r - mean) ** 2 for r in responses) / (samples - 1)

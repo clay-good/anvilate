@@ -51,7 +51,15 @@ def _is_symbol_char(char: str) -> bool:
 
 # Mathematical constants a formula may name without them being inputs: they carry
 # no value the caller supplies, so they are not missing when left unsubstituted.
-_CONSTANTS = frozenset({"π", "e"})
+#
+# `e` is deliberately NOT in this set. In engineering formulas `e` is the eccentricity far
+# more often than it is Euler's number (σ = P/A + P·e/S), and excusing it meant a
+# derivation that forgot to declare its eccentricity reported zero unresolved symbols,
+# rendered as a complete worked calculation with a bare `e` where a dimensioned number
+# belongs, and was counted by `derivation_coverage()` as covered. A formula that really
+# does use Euler's number declares it as an input like any other value; a false gap is a
+# nuisance, a hidden one is the failure `is_worked` exists to prevent.
+_CONSTANTS = frozenset({"π"})
 
 
 class SymbolValue(BaseModel):

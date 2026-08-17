@@ -234,3 +234,18 @@ def test_sample_margin_refuses_a_non_finite_response() -> None:
     )
     assert ok.shortfall_probability == 0.0
     assert ok.mean == pytest.approx(5.0, rel=0.02)
+
+
+def test_sample_margin_refuses_a_non_finite_requirement():
+    # The response guard exists because a NaN sorts as neither above nor below `required`.
+    # The same is true of a NaN `required` — every comparison goes False, and the shortfall
+    # probability reads a confident 0.0% for a comparison that was never made.
+    for bad in (float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="required must be a finite number"):
+            sample_margin(
+                lambda values: values["x"],
+                {"x": Normal(mean=1.0, std=0.5)},
+                required=bad,
+                seed=1,
+                samples=200,
+            )
