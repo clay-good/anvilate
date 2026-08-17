@@ -39008,3 +39008,198 @@ def test_miter_bend_rates_below_the_pipe_it_is_made_from():
     for bad in (0.0, 90.0, -10.0):
         with pytest.raises(ValueError, match="cut angle in degrees"):
             asme_b313_miter_bend_pressure(miter_angle=bad, **common)
+
+
+def test_dsm_compression_anchors_to_the_hand_worked_curves():
+    """Every DSM branch, worked by hand from AISI S100 Appendix 1 and pinned.
+
+    P_y = 245 kN, P_crl = 120, P_crd = 155, P_cre = 900:
+        λ_c = √(245/900) = 0.5217 ≤ 1.5  ->  P_ne = 0.658^0.27222 · 245 = 218.6 kN
+        λ_l = √(218.6/120) = 1.3497 > 0.776
+              (P_crl/P_ne)^0.4 = 0.78671
+              P_nl = (1 − 0.15·0.78671)·0.78671·218.6 = 151.7 kN
+        λ_d = √(245/155) = 1.2572 > 0.561
+              (P_crd/P_y)^0.6 = 0.75984
+              P_nd = (1 − 0.25·0.75984)·0.75984·245 = 150.8 kN
+    """
+    from anvilate.analysis import DSMLimitState, ElasticBuckling, dsm_compression_strength
+
+    buckling = ElasticBuckling(
+        local=_q("120 kN"),
+        distortional=_q("155 kN"),
+        global_=_q("900 kN"),
+        source="hand-worked anchor",
+    )
+    s = dsm_compression_strength(yield_load=_q("245 kN"), elastic_buckling=buckling)
+    assert s.global_strength.to("kN").magnitude == pytest.approx(218.6, abs=0.1)
+    assert s.local_strength.to("kN").magnitude == pytest.approx(151.7, abs=0.1)
+    assert s.distortional_strength.to("kN").magnitude == pytest.approx(150.8, abs=0.1)
+    assert s.nominal.to("kN").magnitude == pytest.approx(150.8, abs=0.1)
+    assert s.governing is DSMLimitState.DISTORTIONAL
+
+    # The local curve is anchored on P_ne, not P_y — local buckling interacts with the
+    # global mode, so the SAME section with a longer unbraced length gets a lower local
+    # strength even though P_crl never moved. This is the trap the anchoring prevents.
+    longer = dsm_compression_strength(
+        yield_load=_q("245 kN"),
+        elastic_buckling=buckling.model_copy(update={"global_": _q("100 kN")}),
+    )
+    assert longer.local_strength.to("kN").magnitude < s.local_strength.to("kN").magnitude
+    # The distortional curve is anchored on P_y, so it does NOT move with length.
+    assert longer.distortional_strength.to("kN").magnitude == pytest.approx(
+        s.distortional_strength.to("kN").magnitude, rel=1e-12
+    )
+    assert longer.governing is DSMLimitState.LOCAL
+
+    # Past λ_c = 1.5 the column curve changes branch to the elastic 0.877/λ_c².
+    slender = dsm_compression_strength(
+        yield_load=_q("245 kN"),
+        elastic_buckling=buckling.model_copy(update={"global_": _q("25 kN")}),
+    )
+    lam = (245 / 25) ** 0.5
+    assert lam > 1.5
+    assert slender.global_strength.to("kN").magnitude == pytest.approx(
+        0.877 / lam**2 * 245, rel=1e-9
+    )
+    assert slender.governing is DSMLimitState.GLOBAL
+
+
+def test_dsm_flexure_walks_all_three_branches_of_the_lateral_torsional_curve():
+    from anvilate.analysis import DSMLimitState, ElasticBuckling, dsm_flexural_strength
+
+    my = _q("18 kN*m")
+    common = {"local": _q("22 kN*m"), "distortional": _q("14 kN*m"), "source": "anchor"}
+
+    # M_cre < 0.56·M_y: fully elastic LTB, M_ne = M_cre.
+    elastic = dsm_flexural_strength(
+        yield_moment=my, elastic_buckling=ElasticBuckling(global_=_q("6 kN*m"), **common)
+    )
+    assert elastic.global_strength.to("kN*m").magnitude == pytest.approx(6.0, rel=1e-9)
+
+    # M_cre > 2.78·M_y: LTB does not govern, M_ne = M_y.
+    braced = dsm_flexural_strength(
+        yield_moment=my, elastic_buckling=ElasticBuckling(global_=_q("80 kN*m"), **common)
+    )
+    assert braced.global_strength.to("kN*m").magnitude == pytest.approx(18.0, rel=1e-9)
+
+    # Between them, the inelastic transition (10/9)·M_y·(1 − 10·M_y/(36·M_cre)).
+    mid = dsm_flexural_strength(
+        yield_moment=my, elastic_buckling=ElasticBuckling(global_=_q("30 kN*m"), **common)
+    )
+    assert mid.global_strength.to("kN*m").magnitude == pytest.approx(
+        (10 / 9) * 18.0 * (1 - 10 * 18.0 / (36 * 30.0)), rel=1e-9
+    )
+    # The transition is continuous with both branches it joins.
+    for edge in (0.56 * 18.0, 2.78 * 18.0):
+        near = (
+            dsm_flexural_strength(
+                yield_moment=my,
+                elastic_buckling=ElasticBuckling(global_=_q(f"{edge} kN*m"), **common),
+            )
+            .global_strength.to("kN*m")
+            .magnitude
+        )
+        just_out = (
+            dsm_flexural_strength(
+                yield_moment=my,
+                elastic_buckling=ElasticBuckling(global_=_q(f"{edge * 0.999} kN*m"), **common),
+            )
+            .global_strength.to("kN*m")
+            .magnitude
+        )
+        assert near == pytest.approx(just_out, rel=5e-3), edge
+
+    assert mid.governing is DSMLimitState.DISTORTIONAL
+    # The flexural distortional curve has its OWN constants (0.673 / 0.22 / 0.5), not the
+    # compression ones — separate fits, not one curve reused.
+    ratio = (14.0 / 18.0) ** 0.5
+    assert mid.distortional_strength.to("kN*m").magnitude == pytest.approx(
+        (1 - 0.22 * ratio) * ratio * 18.0, rel=1e-9
+    )
+
+
+def test_dsm_refuses_to_run_on_the_wrong_kind_of_buckling_value():
+    from anvilate.analysis import ElasticBuckling, dsm_compression_strength, dsm_flexural_strength
+
+    forces = ElasticBuckling(local=_q("120 kN"), global_=_q("900 kN"), source="x")
+    moments = ElasticBuckling(local=_q("22 kN*m"), global_=_q("30 kN*m"), source="x")
+    with pytest.raises(ValueError, match="compression check needs"):
+        dsm_compression_strength(yield_load=_q("245 kN"), elastic_buckling=moments)
+    with pytest.raises(ValueError, match="flexural check needs"):
+        dsm_flexural_strength(yield_moment=_q("18 kN*m"), elastic_buckling=forces)
+
+    # A section with no distortional mode declares it, and the mode leaves the governing
+    # set rather than being treated as infinitely strong by accident.
+    no_dist = dsm_compression_strength(yield_load=_q("245 kN"), elastic_buckling=forces)
+    assert no_dist.distortional_strength is None
+    assert forces.distortional is None
+    from pydantic import ValidationError
+
+    for bad in ({"local": _q("0 kN")}, {"source": "   "}):
+        with pytest.raises(ValidationError):
+            ElasticBuckling(
+                **{"local": _q("120 kN"), "global_": _q("900 kN"), "source": "x", **bad}
+            )
+
+
+def test_dsm_scorecard_will_not_pass_a_section_it_cannot_stand_behind():
+    from anvilate.analysis import (
+        PREQUALIFIED_LIPPED_CHANNEL,
+        ElasticBuckling,
+        dsm_compression_strength,
+        dsm_scorecard,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    strength = dsm_compression_strength(
+        yield_load=_q("245 kN"),
+        elastic_buckling=ElasticBuckling(
+            local=_q("120 kN"), distortional=_q("155 kN"), global_=_q("900 kN"), source="CUFSM"
+        ),
+    )
+    ok = dsm_scorecard("column", demand=_q("60 kN"), strength=strength)
+    assert ok.status is CheckStatus.PASS
+    assert "distortional buckling governs" in ok.detail
+    assert ok.safety_factor == pytest.approx(150.8 / 60.0, abs=0.01)
+
+    # No buckling analysis: DSM cannot run, and this says so instead of passing.
+    assert (
+        dsm_scorecard("column", demand=_q("60 kN"), strength=None).status
+        is CheckStatus.NOT_EVALUATED
+    )
+
+    # Outside the prequalified geometry a PASS is downgraded — AISI permits the section
+    # with a more conservative resistance factor, so it is neither a failure nor a green.
+    outside = PREQUALIFIED_LIPPED_CHANNEL.check(
+        web_flat_to_thickness=600.0,
+        flange_flat_to_thickness=37.0,
+        lip_flat_to_thickness=10.0,
+        web_to_flange=2.7,
+        lip_to_flange=0.05,
+    )
+    assert len(outside) == 2
+    downgraded = dsm_scorecard(
+        "column", demand=_q("60 kN"), strength=strength, outside_prequalified=outside
+    )
+    assert downgraded.status is CheckStatus.NOT_EVALUATED
+    assert downgraded.safety_factor is None
+    assert "prequalified" in downgraded.detail and "web h/t" in downgraded.detail
+
+    # A section that FAILS stays a failure whether it is prequalified or not — the
+    # downgrade only ever removes a green, never a red.
+    failing = dsm_scorecard(
+        "column", demand=_q("400 kN"), strength=strength, outside_prequalified=outside
+    )
+    assert failing.status is CheckStatus.FAIL
+
+    # An inside-the-limits section reports nothing extra.
+    assert (
+        PREQUALIFIED_LIPPED_CHANNEL.check(
+            web_flat_to_thickness=98.0,
+            flange_flat_to_thickness=37.5,
+            lip_flat_to_thickness=10.0,
+            web_to_flange=2.67,
+            lip_to_flange=0.27,
+        )
+        == ()
+    )

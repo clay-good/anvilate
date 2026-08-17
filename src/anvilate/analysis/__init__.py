@@ -1410,8 +1410,16 @@ from .coating import (
     coating_wet_film_thickness,
 )
 from .cold_formed_steel import (
+    PREQUALIFIED_LIPPED_CHANNEL,
+    DSMLimitState,
+    DSMStrength,
+    ElasticBuckling,
+    PrequalifiedLimits,
     aisi_effective_width,
     aisi_plate_slenderness,
+    dsm_compression_strength,
+    dsm_flexural_strength,
+    dsm_scorecard,
 )
 from .colligative import (
     boiling_point_elevation,
@@ -4763,6 +4771,14 @@ __all__ = [
     "hertz_effective_modulus",
     "aisi_plate_slenderness",
     "aisi_effective_width",
+    "DSMLimitState",
+    "DSMStrength",
+    "ElasticBuckling",
+    "PREQUALIFIED_LIPPED_CHANNEL",
+    "PrequalifiedLimits",
+    "dsm_compression_strength",
+    "dsm_flexural_strength",
+    "dsm_scorecard",
     "HertzContact",
     "hertz_sphere_contact",
     "hertz_sphere_approach",

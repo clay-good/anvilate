@@ -5659,3 +5659,18 @@ def test_isolator_amplifies_example_flips_between_vibration_and_shock():
         shock["300 Hz (near-rigid)"].safety_factor
         > shock["73 Hz (the spectrum peak)"].safety_factor
     )
+
+
+def test_lipped_channel_dsm_example_shifts_its_governing_mode_with_length():
+    namespace = runpy.run_path(str(_EXAMPLES / "lipped_channel_dsm.py"))
+    card = namespace["screen_column_lengths"]()
+    by_name = {e.name: e for e in card.entries}
+    # Three lengths, three different governing modes — the whole point of the example.
+    assert "distortional buckling governs" in by_name["lipped channel at 1 m"].detail
+    assert "local buckling governs" in by_name["lipped channel at 3 m"].detail
+    assert "global buckling governs" in by_name["lipped channel at 6 m"].detail
+    assert by_name["lipped channel at 1 m"].status is CheckStatus.PASS
+    assert by_name["lipped channel at 6 m"].status is CheckStatus.FAIL
+    # Without a finite-strip run there is nothing to screen against.
+    (unrun,) = namespace["screen_without_a_buckling_analysis"]().entries
+    assert unrun.status is CheckStatus.NOT_EVALUATED
