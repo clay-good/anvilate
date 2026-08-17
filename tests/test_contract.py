@@ -845,7 +845,19 @@ def _sample_derivations() -> list[tuple[str, object]]:
             out.append((f"structural {entry.name}", entry.derivation))
     # Both sides of every branch that changes the formula. A capped confinement factor
     # evaluates a DIFFERENT expression from an uncapped one, so rendering only the
-    # uncapped case leaves the capped one unwatched.
+    # uncapped case leaves the capped one unwatched. The same goes for the two AISC E3
+    # branches, whose formulas share no term at all.
+    for label, length in (("slender", "3 m"), ("stocky", "500 mm")):
+        column = structural.ColumnMember(
+            name="post",
+            section=section,
+            length=q(length),
+            axial_load=q("40 kN"),
+            material="ASTM-A36",
+        )
+        for entry in structural.screen_column_member(column, required_safety_factor=2.0).entries:
+            if entry.derivation is not None:
+                out.append((f"column {label} {entry.name}", entry.derivation))
     for label, support_area in (("capped", "250000 mm**2"), ("uncapped", "90000 mm**2")):
         bearing = structural.ConcreteBearing(
             name="pedestal",

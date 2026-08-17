@@ -523,17 +523,18 @@ def test_column_derivation_names_the_regime_that_actually_governed():
         return screen_column_member(member, required_safety_factor=2.0).entries[0]
 
     slender = screen("3000 mm")
-    # A slender column buckles elastically: the formula shown must be Euler's, and
-    # the yield strength must not appear in it.
-    assert "Euler" in slender.name
-    assert slender.derivation.symbolic == "σ_cr = π² · E / λ²"
-    assert "S_y" not in slender.derivation.substituted()
+    # A slender column is on the AISC E3 elastic branch, F_cr = 0.877*F_e: the yield
+    # strength is what decides WHICH branch, and does not appear in the branch itself.
+    assert "AISC E3 elastic" in slender.name
+    assert slender.derivation.symbolic == "F_cr = 0.877 * F_e"
+    assert "F_y" not in slender.derivation.substituted()
 
     stocky = screen("500 mm")
-    # A stocky one is inelastic, and the Johnson parabola does use the yield strength.
-    assert "Johnson" in stocky.name
-    assert "S_y" in stocky.derivation.symbolic
-    assert any(item.symbol == "S_y" for item in stocky.derivation.inputs)
+    # A stocky one is on the inelastic branch, and there the yield strength is in the
+    # formula twice — as the exponent's numerator and as the multiplier.
+    assert "AISC E3 inelastic" in stocky.name
+    assert stocky.derivation.symbolic == "F_cr = 0.658 ** (F_y / F_e) * F_y"
+    assert any(item.symbol == "F_y" for item in stocky.derivation.inputs)
 
 
 def test_mathematical_constants_are_not_missing_inputs():

@@ -187,6 +187,12 @@ about which convention the library adopts, not a bug fix.
   SF 2.856 where §E3 gives 2.504, so at `required_safety_factor = 2.6` the pack **passes**
   and AISC **fails** — a flipped verdict, not a rounding difference. The same P_c feeds
   the §H1.1 axial term in `screen_beam_column`.
-  The choice: adopt §E3 in the pack (and re-baseline every column and beam-column number
-  in the suite and the examples), or keep Euler/Johnson and stop citing AISC for it. The
-  citation is the part that is indefensible either way.
+  **RESOLVED 2026-08-17: §E3 adopted.** The correct curve already shipped in
+  `analysis/column.aisc_flexural_buckling_stress`; the pack simply was not using it. Both
+  `screen_column_member` and the `screen_beam_column` axial term now take it, the entry
+  names say which branch governed (`AISC E3 inelastic` / `AISC E3 elastic`), and the
+  rendered derivation is the branch that was actually evaluated. The suite, the examples
+  and their prose were re-baselined: the 3 m post moves 2.856 -> 2.504, the beam-column
+  interaction 1.57 -> 1.55 / 1.35 -> 1.30 / 0.98 -> 0.97, and the flat-bar strut
+  4.6 -> 4.3 and 1.6 -> 1.4. Every move is downward, which is what adopting the real
+  curve should do.

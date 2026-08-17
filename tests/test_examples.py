@@ -3262,8 +3262,8 @@ def test_flat_bar_strut_example_buckles_about_the_weak_axis():
     # honestly; only a hand-built raw section (no transverse I) can still
     # produce the false strong-axis green.
     by_name = {e.name: e for e in card.entries}
-    assert by_name["as-drawn (guarded) buckling (Euler)"].status is CheckStatus.FAIL
-    assert by_name["raw strong-axis section buckling (Johnson)"].passed
+    assert by_name["as-drawn (guarded) buckling (AISC E3 elastic)"].status is CheckStatus.FAIL
+    assert by_name["raw strong-axis section buckling (AISC E3 inelastic)"].passed
     assert card.status is CheckStatus.FAIL
 
 

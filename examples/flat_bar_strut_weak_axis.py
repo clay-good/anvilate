@@ -2,14 +2,14 @@
 
 Declares a 20 x 60 mm A36 flat bar bracing a machine frame — 900 mm pin-ended,
 carrying 60 kN of compression — drawn with its bending stiffness through the
-60 mm depth (r = 17.3 mm, λ = 52, a stocky Johnson column at SF 4.6). But a
-pin-ended column is free to bow whichever way is easiest, and about the 20 mm
-direction r is only 5.8 mm: λ = 156 is deep in the Euler regime, where the
-critical stress collapses to 81 MPa and the same load FAILs at SF 1.6. The
+60 mm depth (r = 17.3 mm, λ = 52, on the AISC §E3 inelastic branch at SF 4.3).
+But a pin-ended column is free to bow whichever way is easiest, and about the
+20 mm direction r is only 5.8 mm: λ = 156 puts it on the §E3 elastic branch,
+where the critical stress collapses and the same load FAILs at SF 1.4. The
 pack guards this automatically: every builder section carries both second
 moments, and the buckling screen takes ``least_radius_of_gyration``, so the
-as-drawn declaration screens at the honest 1.6 — a strong-axis declaration
-cannot inflate capacity. The false 4.6 can only be produced by a hand-built
+as-drawn declaration screens at the honest 1.4 — a strong-axis declaration
+cannot inflate capacity. The false 4.3 can only be produced by a hand-built
 raw :class:`CrossSection`, which records no transverse second moment and so
 leaves the weak-axis choice with the caller.
 

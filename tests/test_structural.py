@@ -993,14 +993,14 @@ def test_slender_column_uses_the_euler_regime():
     # sigma_cr ~ 65.8 MPa vs 25 MPa applied (5 kN / 200 mm^2) -> SF ~ 2.6 -> PASS.
     card = screen_column_member(_column("500 mm"), required_safety_factor=2.0)
     assert card.status is CheckStatus.PASS
-    assert "Euler" in card.entries[0].name
+    assert "AISC E3 elastic" in card.entries[0].name
 
 
 def test_stubby_column_uses_the_johnson_regime():
     # 200 mm pinned column -> lambda = 69 < lambda_1 -> Johnson (inelastic).
     card = screen_column_member(_column("200 mm"), required_safety_factor=2.0)
     assert card.status is CheckStatus.PASS
-    assert "Johnson" in card.entries[0].name
+    assert "AISC E3 inelastic" in card.entries[0].name
 
 
 def test_column_screen_ignores_which_axis_was_declared():
@@ -1026,7 +1026,7 @@ def test_column_screen_ignores_which_axis_was_declared():
         required_safety_factor=2.0,
     )
     assert strong.entries[0].detail == weak.entries[0].detail
-    assert "Euler" in strong.entries[0].name
+    assert "AISC E3 elastic" in strong.entries[0].name
 
 
 def test_column_screen_falls_back_to_the_declared_axis_without_transverse_i():
@@ -1051,7 +1051,7 @@ def test_column_screen_falls_back_to_the_declared_axis_without_transverse_i():
     )
     guarded = screen_column_member(_column("500 mm"), required_safety_factor=2.0)
     assert card.entries[0].detail != guarded.entries[0].detail
-    assert "Johnson" in card.entries[0].name  # strong-axis lambda = 86.6 < lambda_1
+    assert "AISC E3 inelastic" in card.entries[0].name  # strong-axis lambda = 86.6 < lambda_1
 
 
 def test_overloaded_column_fails():
@@ -1608,35 +1608,37 @@ def _beam_column(axial: str = "200 kN", moment: str = "20 kN*m") -> BeamColumnMe
 def test_beam_column_interaction_low_axial_branch():
     # A992: E=200 GPa, Fy=345. Section 60x100 bends about its strong axis
     # (S=100000) but buckles about its weak one: r=60/sqrt(12)=17.32,
-    # lambda=2000/17.32=115.5 >= lambda1=107 -> Euler sigma_cr=148.0 MPa;
-    # Pc=888.3 kN, Mc=Fy*S=34.5 kN*m. Pr/Pc=0.113 < 0.2 so H1.1(b):
-    # ratio = 0.113/2 + 20/34.5 = 0.0563 + 0.5797 = 0.636 -> SF 1/ratio = 1.57.
+    # lambda=2000/17.32=115.5 -> F_e=148.0 MPa. F_y/F_e = 345/148.0 = 2.33 > 2.25, so
+    # AISC E3 takes its elastic branch: F_cr = 0.877*148.0 = 129.8 MPa (the old
+    # Euler/Johnson screen used the un-knocked-down 148.0 and ran 14% high here).
+    # Pc=778.6 kN, Mc=Fy*S=34.5 kN*m. Pr/Pc=0.128 < 0.2 so H1.1(b):
+    # ratio = 0.128/2 + 20/34.5 = 0.0642 + 0.5797 = 0.644 -> SF 1/ratio = 1.55.
     card = screen_beam_column(_beam_column(axial="100 kN"), required_safety_factor=1.5)
     assert card.status is CheckStatus.PASS
     by_name = {e.name: e for e in card.entries}
     assert by_name["bc interaction"].reference == "AISC 360-16 §H1.1"
-    assert "1.57" in by_name["bc interaction"].detail
+    assert "1.55" in by_name["bc interaction"].detail
     # H1-1b halves the axial term and is only allowed to because Chapter E caps
     # P_r <= P_c on its own, so the card carries that check too — without it the card
     # reported exactly twice the buckling safety factor screen_column_member gives.
     assert by_name["bc axial capacity"].reference == "AISC 360-16 Ch. E"
-    assert by_name["bc axial capacity"].safety_factor == pytest.approx(888.3 / 100.0, rel=0.02)
+    assert by_name["bc axial capacity"].safety_factor == pytest.approx(778.6 / 100.0, rel=0.02)
 
 
 def test_beam_column_interaction_high_axial_branch_uses_8_9_form():
-    # Pr=200 kN against the weak-axis Pc=888.3 kN -> Pr/Pc=0.225 >= 0.2 so
-    # H1.1(a): ratio = 0.225 + (8/9)*0.5797 = 0.7405 -> SF 1.35 (this member
-    # screened 1.56 when the axial term trusted the declared strong axis —
+    # Pr=200 kN against the weak-axis Pc=778.6 kN -> Pr/Pc=0.257 >= 0.2 so
+    # H1.1(a): ratio = 0.257 + (8/9)*0.5797 = 0.772 -> SF 1.30 (this member
+    # screened well above 1.5 when the axial term trusted the declared strong axis —
     # the flip is the point of the least-radius screen).
     card = screen_beam_column(_beam_column(), required_safety_factor=1.5)
     assert card.status is CheckStatus.FAIL  # 1.35 < 1.5
-    assert "1.35" in next(e for e in card.entries if e.name == "bc interaction").detail
+    assert "1.30" in next(e for e in card.entries if e.name == "bc interaction").detail
 
 
 def test_beam_column_flexural_term_keeps_the_declared_axis():
     # Swapping the declared bending axis (60x100 -> 100x60) leaves the axial
     # term alone (least r either way) but drops S from 100000 to 60000, so the
-    # interaction worsens: ratio = 0.0563 + 20/20.7 = 1.0225 -> SF 0.98.
+    # interaction worsens: ratio = 0.0642 + 20/20.7 = 1.0304 -> SF 0.97.
     member = BeamColumnMember(
         name="bc",
         section=CrossSection.rectangular(width=_q("100 mm"), height=_q("60 mm")),
@@ -1647,7 +1649,7 @@ def test_beam_column_flexural_term_keeps_the_declared_axis():
         end_condition=ColumnEnd.PINNED_PINNED,
     )
     card = screen_beam_column(member, required_safety_factor=1.5)
-    assert "0.98" in next(e for e in card.entries if e.name == "bc interaction").detail
+    assert "0.97" in next(e for e in card.entries if e.name == "bc interaction").detail
 
 
 def test_beam_column_rejects_non_moment():
@@ -1901,7 +1903,7 @@ def test_column_screen_applies_the_effective_length_factor() -> None:
     pinned = screen(ColumnEnd.PINNED_PINNED)
     # Both are in the Euler range, where sigma_cr goes as 1/(K*L)**2 -- so halving K from
     # 2.0 to 1.0 must multiply the safety factor by exactly 4.
-    assert "Euler" in free.name and "Euler" in pinned.name
+    assert "AISC E3 elastic" in free.name and "AISC E3 elastic" in pinned.name
     assert pinned.safety_factor == pytest.approx(4.0 * free.safety_factor)
     # And the factor of 4 is the difference between failing and passing.
     assert free.status is CheckStatus.FAIL

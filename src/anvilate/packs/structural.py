@@ -23,6 +23,7 @@ from pydantic import ConfigDict, model_validator
 from ..analysis import (
     ColumnEnd,
     CrossSection,
+    aisc_flexural_buckling_stress,
     axial_stress,
     bearing_stress,
     bolt_shear_stress,
@@ -57,7 +58,6 @@ from ..analysis import (
     fixed_pinned_triangular_load_peak_at_prop,
     fixed_pinned_uniform_load,
     frequency_scorecard,
-    johnson_critical_stress,
     max_transverse_shear_stress,
     overhang_tip_load,
     overhang_uniform_load,
@@ -73,7 +73,6 @@ from ..analysis import (
     simply_supported_uniform_load,
     slenderness_ratio,
     strength_scorecard,
-    transition_slenderness,
     von_mises_plane_stress,
 )
 from ..derivation import Derivation, SymbolValue
@@ -772,11 +771,19 @@ def screen_column_member(
 ) -> Scorecard:
     """Screen a :class:`ColumnMember` for buckling and return its scorecard.
 
-    Computes the slenderness λ = K·L/r and picks the regime automatically: the
-    Euler elastic-buckling stress above the transition slenderness λ₁, the Johnson
-    parabola below it. The critical stress is screened against the applied axial
-    stress (load/area) at ``required_safety_factor``. ``materials`` defaults to the
-    bundled database.
+    Computes the slenderness λ = K·L/r about the section's LEAST radius of gyration —
+    a pin-ended column bows whichever way is easiest, whatever axis was declared — and
+    takes the AISC 360 §E3 flexural buckling stress from it: F_cr = 0.658^(F_y/F_e)·F_y
+    while F_y/F_e ≤ 2.25, and 0.877·F_e above it. The critical stress is screened against
+    the applied axial stress (load/area) at ``required_safety_factor``. ``materials``
+    defaults to the bundled database.
+
+    This screen used to compute Euler above a transition slenderness and the J. B.
+    Johnson parabola below it, while citing §E either way. Those are different curves:
+    the old pair ran 9-14% HIGH for a small A36 section, which was enough to flip a
+    verdict at a required safety factor of 2.6. The §E3 curve is the one the citation
+    names, and its elastic branch carries the 0.877 out-of-straightness knockdown the
+    bare Euler stress does not.
     """
     materials = materials or default_materials_db()
     record = materials.get(member.material)
@@ -791,45 +798,53 @@ def screen_column_member(
         effective_length=effective_length,
         radius_of_gyration=member.section.least_radius_of_gyration,
     )
-    lam_1 = transition_slenderness(yield_strength=yield_strength, elastic_modulus=modulus)
-    if lam >= lam_1:
-        critical = euler_critical_stress(elastic_modulus=modulus, slenderness_ratio=lam)
-        regime = "Euler"
-    else:
-        critical = johnson_critical_stress(
-            yield_strength=yield_strength, elastic_modulus=modulus, slenderness_ratio=lam
-        )
-        regime = "Johnson"
+    # AISC 360 §E3, which is what this entry cites. It used to compute Euler above the
+    # transition slenderness and the Johnson parabola below it, and stamp the §E citation
+    # on the result anyway. The two curves are not the same: for a 50 x 50 mm A36 section
+    # the old one ran 9-14% HIGH, which was enough to flip a verdict (a 3 m post at
+    # required_safety_factor = 2.6 passed at 2.856 and fails at 2.504 on the real curve).
+    # §E3 is the modern column curve and it is the one the reference names.
+    euler = euler_critical_stress(elastic_modulus=modulus, slenderness_ratio=lam)
+    critical = aisc_flexural_buckling_stress(yield_strength=yield_strength, euler_stress=euler)
+    inelastic = yield_strength.to("MPa").magnitude / euler.to("MPa").magnitude <= 2.25
+    regime = "AISC E3 inelastic" if inelastic else "AISC E3 elastic"
 
     applied = axial_stress(force=member.axial_load, area=member.section.area)
-    slenderness_symbol = SymbolValue(
-        symbol="λ", description="slenderness ratio K·L/r about the least axis", value=lam
+    yield_symbol = SymbolValue(
+        symbol="F_y", description="material yield strength", value=yield_strength
     )
-    modulus_symbol = SymbolValue(symbol="E", description="elastic modulus", value=modulus)
-    if regime == "Euler":
-        # Above the transition slenderness the column buckles elastically, and the
-        # yield strength never enters the capacity.
+    euler_symbol = SymbolValue(
+        symbol="F_e",
+        description="elastic (Euler) buckling stress π²·E/λ²",
+        value=euler,
+    )
+    if inelastic:
         derivation = Derivation(
-            symbolic="σ_cr = π² · E / λ²",
-            inputs=(modulus_symbol, slenderness_symbol),
+            symbolic="F_cr = 0.658 ** (F_y / F_e) * F_y",
+            inputs=(yield_symbol, euler_symbol),
             result=SymbolValue(
-                symbol="σ_cr", description="elastic (Euler) critical stress", value=critical
+                symbol="F_cr",
+                description=(
+                    f"inelastic flexural buckling stress (F_y/F_e = "
+                    f"{yield_strength.to('MPa').magnitude / euler.to('MPa').magnitude:.3g} "
+                    f"≤ 2.25), at λ = {lam:.3g}"
+                ),
+                value=critical,
             ),
             citation=_CLAUSE_COMPRESSION,
         )
     else:
         derivation = Derivation(
-            symbolic="σ_cr = S_y · [1 − S_y · λ² / (4 · π² · E)]",
-            inputs=(
-                SymbolValue(
-                    symbol="S_y", description="material yield strength", value=yield_strength
-                ),
-                slenderness_symbol,
-                modulus_symbol,
-            ),
+            symbolic="F_cr = 0.877 * F_e",
+            inputs=(euler_symbol,),
             result=SymbolValue(
-                symbol="σ_cr",
-                description="inelastic (J. B. Johnson parabola) critical stress",
+                symbol="F_cr",
+                description=(
+                    f"elastic flexural buckling stress (F_y/F_e = "
+                    f"{yield_strength.to('MPa').magnitude / euler.to('MPa').magnitude:.3g} "
+                    f"> 2.25), the Euler stress with the §E3 out-of-straightness "
+                    f"knockdown, at λ = {lam:.3g}"
+                ),
                 value=critical,
             ),
             citation=_CLAUSE_COMPRESSION,
@@ -1777,13 +1792,13 @@ def screen_beam_column(
         effective_length=effective_length,
         radius_of_gyration=member.section.least_radius_of_gyration,
     )
-    lam_1 = transition_slenderness(yield_strength=yield_strength, elastic_modulus=modulus)
-    if lam >= lam_1:
-        critical = euler_critical_stress(elastic_modulus=modulus, slenderness_ratio=lam)
-    else:
-        critical = johnson_critical_stress(
-            yield_strength=yield_strength, elastic_modulus=modulus, slenderness_ratio=lam
-        )
+    # The §H1.1 axial term P_r/P_c consumes the SAME capacity as screen_column_member, so
+    # it moves to §E3 with it. Leaving the two on different curves is how one quantity
+    # ends up computed two ways in one library.
+    critical = aisc_flexural_buckling_stress(
+        yield_strength=yield_strength,
+        euler_stress=euler_critical_stress(elastic_modulus=modulus, slenderness_ratio=lam),
+    )
 
     axial_capacity = critical.to("MPa").magnitude * member.section.area.to("mm**2").magnitude
     flexural_capacity = (
