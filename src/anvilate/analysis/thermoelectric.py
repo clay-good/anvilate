@@ -22,6 +22,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
     "peltier_cooling_rate",
@@ -45,7 +46,7 @@ def seebeck_voltage(*, seebeck_coefficient: Quantity, temperature_difference: Qu
     _check(seebeck_coefficient, "[electric_potential]/[temperature]", "seebeck_coefficient")
     _check(temperature_difference, "[temperature]", "temperature_difference")
     alpha = seebeck_coefficient.to("V/K").magnitude
-    dt = temperature_difference.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if alpha <= 0:
         raise ValueError("seebeck_coefficient must be positive")
     if dt <= 0:
@@ -83,7 +84,7 @@ def peltier_cooling_rate(
     t_c = cold_temperature.to("K").magnitude
     r = electrical_resistance.to("ohm").magnitude
     k = thermal_conductance.to("W/K").magnitude
-    dt = temperature_difference.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if alpha <= 0:
         raise ValueError("seebeck_coefficient must be positive")
     if i <= 0:

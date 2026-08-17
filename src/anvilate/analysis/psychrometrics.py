@@ -20,6 +20,7 @@ from __future__ import annotations
 from math import atan, exp, log, sqrt
 
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
     "wet_bulb_temperature",
@@ -342,7 +343,7 @@ def sensible_heat_load(
     _check(dry_air_mass_flow, "[mass]/[time]", "dry_air_mass_flow")
     _check(temperature_change, "[temperature]", "temperature_change")
     m = dry_air_mass_flow.to("kg/s").magnitude
-    dt = temperature_change.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_change, name="temperature_change")
     if m <= 0:
         raise ValueError("dry_air_mass_flow must be positive")
     if humidity_ratio < 0:

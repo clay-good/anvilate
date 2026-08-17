@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..scorecard import ScorecardEntry
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
     "confined_liquid_thermal_pressure",
@@ -151,7 +152,7 @@ def confined_liquid_thermal_pressure(
         )
     beta = volumetric_expansion_coefficient.to("1/K").magnitude
     k = bulk_modulus.to("Pa").magnitude
-    dt = temperature_change.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_change, name="temperature_change")
     if beta <= 0 or k <= 0:
         raise ValueError("volumetric_expansion_coefficient and bulk_modulus must be positive")
     return Quantity(magnitude=beta * k * dt / 1.0e6, unit="MPa")
@@ -186,7 +187,7 @@ def constrained_thermal_stress(
         )
     e = elastic_modulus.to("MPa").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
-    delta_t = temperature_change.to("K").magnitude
+    delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
     return Quantity(magnitude=abs(e * alpha * delta_t), unit="MPa")
 
 
@@ -229,7 +230,7 @@ def thermal_shock_stress(
         raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
     e = elastic_modulus.to("MPa").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
-    delta_t = temperature_change.to("K").magnitude
+    delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
     return Quantity(magnitude=abs(e * alpha * delta_t) / (1.0 - poisson), unit="MPa")
 
 
@@ -314,7 +315,7 @@ def triaxial_constrained_thermal_stress(
         raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
     e = elastic_modulus.to("MPa").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
-    delta_t = temperature_change.to("K").magnitude
+    delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
     return Quantity(magnitude=abs(e * alpha * delta_t) / (1.0 - 2.0 * poisson), unit="MPa")
 
 
@@ -361,7 +362,7 @@ def through_wall_gradient_thermal_stress(
         raise ValueError(f"poisson must lie in [0, 0.5); got {poisson}")
     e = elastic_modulus.to("MPa").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
-    delta_t = temperature_difference.to("K").magnitude
+    delta_t = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     return Quantity(magnitude=abs(e * alpha * delta_t) / (2.0 * (1.0 - poisson)), unit="MPa")
 
 
@@ -396,7 +397,7 @@ def free_thermal_expansion(
     if size <= 0:
         raise ValueError(f"length must be positive; got {length}")
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
-    delta_t = temperature_change.to("K").magnitude
+    delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
     return Quantity(magnitude=alpha * size * delta_t, unit="mm")
 
 
@@ -539,7 +540,7 @@ def differential_thermal_stress(
     _require(elastic_modulus_2, "[pressure]", "elastic_modulus_2")
     _require(area_1, "[length]**2", "area_1")
     _require(area_2, "[length]**2", "area_2")
-    delta_t = temperature_change.to("K").magnitude
+    delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
     a1 = thermal_expansion_coefficient_1.to("1/K").magnitude
     a2 = thermal_expansion_coefficient_2.to("1/K").magnitude
     ea1 = elastic_modulus_1.to("MPa").magnitude * area_1.to("mm**2").magnitude  # N
@@ -645,7 +646,7 @@ def bimetallic_strip_curvature(
             f"temperature_change must be a temperature difference; got "
             f"{temperature_change.dimensionality}"
         )
-    delta_t = temperature_change.to("K").magnitude
+    delta_t = temperature_difference_kelvin(temperature_change, name="temperature_change")
     m = t1 / t2
     n = e1 / e2
     h = t1 + t2
@@ -950,7 +951,9 @@ def heatsink_thermal_resistance_required(
     _require(power, "[power]", "power")
     _require(allowable_temperature_rise, "[temperature]", "allowable_temperature_rise")
     q = power.to("W").magnitude
-    delta_t = allowable_temperature_rise.to("K").magnitude
+    delta_t = temperature_difference_kelvin(
+        allowable_temperature_rise, name="allowable_temperature_rise"
+    )
     if q <= 0:
         raise ValueError("power must be positive")
     if delta_t <= 0:
@@ -1088,7 +1091,9 @@ def junction_temperature_scorecard(
     ``[temperature]`` quantity.
     """
     _require(allowable_temperature_rise, "[temperature]", "allowable_temperature_rise")
-    allowable = allowable_temperature_rise.to("K").magnitude
+    allowable = temperature_difference_kelvin(
+        allowable_temperature_rise, name="allowable_temperature_rise"
+    )
     if allowable <= 0:
         raise ValueError(
             f"allowable_temperature_rise must be positive; got {allowable_temperature_rise}"
@@ -1365,7 +1370,7 @@ def grashof_number(
     _require(characteristic_length, "[length]", "characteristic_length")
     _require(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
     beta = thermal_expansion_coefficient.to("1/K").magnitude
-    dt = abs(temperature_difference.to("K").magnitude)
+    dt = abs(temperature_difference_kelvin(temperature_difference, name="temperature_difference"))
     length = characteristic_length.to("m").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if length <= 0:
@@ -1415,7 +1420,7 @@ def richardson_number(
     _require(characteristic_length, "[length]", "characteristic_length")
     _require(velocity, "[length]/[time]", "velocity")
     beta = thermal_expansion_coefficient.to("1/K").magnitude
-    dt = abs(temperature_difference.to("K").magnitude)
+    dt = abs(temperature_difference_kelvin(temperature_difference, name="temperature_difference"))
     length = characteristic_length.to("m").magnitude
     v = velocity.to("m/s").magnitude
     if length <= 0:
@@ -1455,7 +1460,7 @@ def marangoni_number(
     _require(dynamic_viscosity, "[pressure]*[time]", "dynamic_viscosity")
     _require(thermal_diffusivity, "[length]**2/[time]", "thermal_diffusivity")
     dsigma_dt = abs(surface_tension_temperature_gradient.to("N/(m*K)").magnitude)
-    dt = abs(temperature_difference.to("K").magnitude)
+    dt = abs(temperature_difference_kelvin(temperature_difference, name="temperature_difference"))
     length = characteristic_length.to("m").magnitude
     mu = dynamic_viscosity.to("Pa*s").magnitude
     alpha = thermal_diffusivity.to("m**2/s").magnitude
@@ -1498,7 +1503,9 @@ def vertical_plate_natural_convection_coefficient(
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
     _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
     _require(thermal_expansion_coefficient, "1 / [temperature]", "thermal_expansion_coefficient")
-    dt = surface_temperature_difference.to("K").magnitude
+    dt = temperature_difference_kelvin(
+        surface_temperature_difference, name="surface_temperature_difference"
+    )
     length_m = plate_height.to("m").magnitude
     k = thermal_conductivity.to("W/(m*K)").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
@@ -1548,7 +1555,9 @@ def horizontal_cylinder_natural_convection_coefficient(
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
     _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
     _require(thermal_expansion_coefficient, "1 / [temperature]", "thermal_expansion_coefficient")
-    dt = surface_temperature_difference.to("K").magnitude
+    dt = temperature_difference_kelvin(
+        surface_temperature_difference, name="surface_temperature_difference"
+    )
     d = diameter.to("m").magnitude
     k = thermal_conductivity.to("W/(m*K)").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
@@ -1600,7 +1609,9 @@ def horizontal_plate_natural_convection_coefficient(
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
     _require(kinematic_viscosity, "[length]**2 / [time]", "kinematic_viscosity")
     _require(thermal_expansion_coefficient, "1 / [temperature]", "thermal_expansion_coefficient")
-    dt = surface_temperature_difference.to("K").magnitude
+    dt = temperature_difference_kelvin(
+        surface_temperature_difference, name="surface_temperature_difference"
+    )
     length_m = characteristic_length.to("m").magnitude
     k = thermal_conductivity.to("W/(m*K)").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
@@ -1884,8 +1895,8 @@ def log_mean_temperature_difference(
     """
     _require(delta_t_1, "[temperature]", "delta_t_1")
     _require(delta_t_2, "[temperature]", "delta_t_2")
-    dt1 = delta_t_1.to("K").magnitude
-    dt2 = delta_t_2.to("K").magnitude
+    dt1 = temperature_difference_kelvin(delta_t_1, name="delta_t_1")
+    dt2 = temperature_difference_kelvin(delta_t_2, name="delta_t_2")
     if dt1 <= 0 or dt2 <= 0:
         raise ValueError("delta_t_1 and delta_t_2 must be positive temperature differences")
     if dt1 == dt2:
@@ -1912,7 +1923,9 @@ def heat_exchanger_area_for_duty(
     _require(log_mean_temperature_difference, "[temperature]", "log_mean_temperature_difference")
     q = duty.to("W").magnitude
     u = overall_coefficient.to("W/(m**2*K)").magnitude
-    lmtd = log_mean_temperature_difference.to("K").magnitude
+    lmtd = temperature_difference_kelvin(
+        log_mean_temperature_difference, name="log_mean_temperature_difference"
+    )
     if q <= 0 or u <= 0 or lmtd <= 0:
         raise ValueError("duty, overall_coefficient, and the LMTD must be positive")
     return Quantity(magnitude=q / (u * lmtd), unit="m**2")
@@ -1935,7 +1948,9 @@ def heat_exchanger_duty(
     _require(log_mean_temperature_difference, "[temperature]", "log_mean_temperature_difference")
     u = overall_coefficient.to("W/(m**2*K)").magnitude
     a = area.to("m**2").magnitude
-    lmtd = log_mean_temperature_difference.to("K").magnitude
+    lmtd = temperature_difference_kelvin(
+        log_mean_temperature_difference, name="log_mean_temperature_difference"
+    )
     if u <= 0 or a <= 0 or lmtd <= 0:
         raise ValueError("overall_coefficient, area, and the LMTD must be positive")
     return Quantity(magnitude=u * a * lmtd, unit="W")
@@ -2334,7 +2349,7 @@ def brinkman_number(
     mu = dynamic_viscosity.to("Pa*s").magnitude
     v = velocity.to("m/s").magnitude
     k = thermal_conductivity.to("W/(m*K)").magnitude
-    delta_t = temperature_difference.to("K").magnitude
+    delta_t = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if mu <= 0:
         raise ValueError("dynamic_viscosity must be positive")
     if k <= 0:
@@ -2471,7 +2486,7 @@ def semi_infinite_solid_temperature_rise(
             f"thermal_diffusivity must be a [length]**2/[time] quantity; got "
             f"{thermal_diffusivity.dimensionality}"
         )
-    delta_ts = surface_step_change.to("K").magnitude
+    delta_ts = temperature_difference_kelvin(surface_step_change, name="surface_step_change")
     x = depth.to("m").magnitude
     t = time.to("s").magnitude
     alpha = thermal_diffusivity.to("m**2/s").magnitude
@@ -2512,7 +2527,7 @@ def semi_infinite_solid_surface_flux(
             f"thermal_diffusivity must be a [length]**2/[time] quantity; got "
             f"{thermal_diffusivity.dimensionality}"
         )
-    delta_ts = abs(surface_step_change.to("K").magnitude)
+    delta_ts = abs(temperature_difference_kelvin(surface_step_change, name="surface_step_change"))
     t = time.to("s").magnitude
     k = thermal_conductivity.to("W/(m*K)").magnitude
     alpha = thermal_diffusivity.to("m**2/s").magnitude

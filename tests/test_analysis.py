@@ -12133,6 +12133,57 @@ def test_fin_effectiveness_and_resistance_beyond_efficiency():
         )
 
 
+def test_temperature_budgets_refuse_an_offset_scale_that_would_pass_an_overheat():
+    from anvilate.analysis import (
+        heatsink_thermal_resistance_required,
+        junction_temperature_scorecard,
+    )
+    from anvilate.scorecard import CheckStatus
+    from anvilate.units.temperature import OffsetTemperatureError
+
+    # A temperature DIFFERENCE and a point on a scale share a dimensionality, so "85 degC" of
+    # allowable rise passed every dimension check and converted to 358.15 K. The junction's real
+    # 120 K rise was then compared against 358 K and the scorecard returned PASS on a genuine
+    # overheat; the matching heat sink came out 6x too small. Nothing about the input looks wrong,
+    # which is why this had to become a refusal rather than a correction.
+    for unit in ("degC", "degF"):
+        with pytest.raises(OffsetTemperatureError, match="temperature DIFFERENCE"):
+            junction_temperature_scorecard(
+                name="driver",
+                power=_q("20 W"),
+                thermal_resistance=_q("6 K/W"),
+                allowable_temperature_rise=Quantity(magnitude=85.0, unit=unit),
+            )
+        with pytest.raises(OffsetTemperatureError, match="temperature DIFFERENCE"):
+            heatsink_thermal_resistance_required(
+                power=_q("20 W"),
+                allowable_temperature_rise=Quantity(magnitude=85.0, unit=unit),
+                internal_thermal_resistance=_q("1.5 K/W"),
+            )
+
+    # Spelled as a genuine difference the answer is the correct one, and it FAILS: 20 W across
+    # 6 K/W is a 120 K rise against an 85 K budget.
+    card = junction_temperature_scorecard(
+        name="driver",
+        power=_q("20 W"),
+        thermal_resistance=_q("6 K/W"),
+        allowable_temperature_rise=_q("85 K"),
+    )
+    assert card.status is CheckStatus.FAIL
+    # And the sink it needs is 2.75 K/W, not the 16.41 K/W the offset unit used to imply.
+    assert heatsink_thermal_resistance_required(
+        power=_q("20 W"),
+        allowable_temperature_rise=_q("85 K"),
+        internal_thermal_resistance=_q("1.5 K/W"),
+    ).to("K/W").magnitude == pytest.approx(2.75, rel=1e-9)
+    # delta_degC is the other correct spelling and agrees exactly.
+    assert heatsink_thermal_resistance_required(
+        power=_q("20 W"),
+        allowable_temperature_rise=Quantity(magnitude=85.0, unit="delta_degC"),
+        internal_thermal_resistance=_q("1.5 K/W"),
+    ).to("K/W").magnitude == pytest.approx(2.75, rel=1e-9)
+
+
 def test_junction_temperature_scorecard_screens_the_rise_against_a_budget():
     from anvilate.analysis import junction_temperature_scorecard
     from anvilate.scorecard import CheckStatus

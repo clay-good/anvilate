@@ -21,6 +21,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
     "spot_weld_current_for_heat",
@@ -109,7 +110,7 @@ def spot_weld_nugget_melting_energy(
     vol = nugget_volume.to("m**3").magnitude
     rho = density.to("kg/m**3").magnitude
     c = specific_heat.to("J/(kg*K)").magnitude
-    dt = temperature_rise.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_rise, name="temperature_rise")
     lf = latent_heat_of_fusion.to("J/kg").magnitude
     if vol <= 0:
         raise ValueError("nugget_volume must be positive")

@@ -19,6 +19,7 @@ rate a condenser must drain away.
 from __future__ import annotations
 
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
@@ -51,7 +52,7 @@ def _nusselt_coefficient(
     k = liquid_thermal_conductivity.to("W/(m*K)").magnitude
     mu = liquid_viscosity.to("Pa*s").magnitude
     h_fg = latent_heat.to("J/kg").magnitude
-    dt = temperature_difference.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     length = characteristic_length.to("m").magnitude
     if rho_l <= 0:
         raise ValueError("liquid_density must be positive")
@@ -158,7 +159,7 @@ def condensation_rate(
     _check(latent_heat, "[energy]/[mass]", "latent_heat")
     h = heat_transfer_coefficient.to("W/(m**2*K)").magnitude
     a = area.to("m**2").magnitude
-    dt = temperature_difference.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     h_fg = latent_heat.to("J/kg").magnitude
     if h <= 0:
         raise ValueError("heat_transfer_coefficient must be positive")
@@ -188,7 +189,7 @@ def jakob_number(
     _check(temperature_difference, "[temperature]", "temperature_difference")
     _check(latent_heat, "[energy]/[mass]", "latent_heat")
     cp = specific_heat.to("J/(kg*K)").magnitude
-    dt = temperature_difference.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     h_fg = latent_heat.to("J/kg").magnitude
     if cp <= 0:
         raise ValueError("specific_heat must be positive")
@@ -241,7 +242,7 @@ def condensation_modified_latent_heat(
     _check(temperature_difference, "[temperature]", "temperature_difference")
     h_fg = latent_heat.to("J/kg").magnitude
     c_p = specific_heat.to("J/(kg*K)").magnitude
-    delta_t = temperature_difference.to("K").magnitude
+    delta_t = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if h_fg <= 0:
         raise ValueError("latent_heat must be positive")
     if c_p <= 0:

@@ -21,6 +21,7 @@ and the air-side loads) and :mod:`anvilate.analysis.refrigeration` (whose conden
 from __future__ import annotations
 
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
     "cooling_tower_approach",
@@ -93,8 +94,8 @@ def cooling_tower_effectiveness(*, range_: Quantity, approach: Quantity) -> floa
     """
     _check(range_, "[temperature]", "range_")
     _check(approach, "[temperature]", "approach")
-    r = range_.to("K").magnitude
-    a = approach.to("K").magnitude
+    r = temperature_difference_kelvin(range_, name="range_")
+    a = temperature_difference_kelvin(approach, name="approach")
     if r <= 0:
         raise ValueError("range_ must be a positive temperature difference")
     if a < 0:
@@ -156,20 +157,9 @@ def cooling_tower_evaporation_rate(
     _check(specific_heat, "[energy]/[mass]/[temperature]", "specific_heat")
     _check(latent_heat, "[energy]/[mass]", "latent_heat")
     v = circulating_flow.to("m**3/s").magnitude
-    # A range is a temperature DIFFERENCE. Converting "5.5 degC" to kelvin would add 273.15 and
-    # turn a 5.5 K range into a 278.65 K one. What separates a difference from a point on a scale
-    # is whether the conversion is multiplicative, so that is what gets tested -- doubling the
-    # magnitude must double the kelvin value. A blacklist of unit spellings would only ever be as
-    # complete as the last name someone remembered to add.
-    one = Quantity(magnitude=1.0, unit=cooling_range.unit).to("K").magnitude
-    two = Quantity(magnitude=2.0, unit=cooling_range.unit).to("K").magnitude
-    if abs(two - 2.0 * one) > 1.0e-9 * abs(one):
-        raise ValueError(
-            f"cooling_range is a temperature DIFFERENCE, not a point on a scale; got "
-            f"{cooling_range} in an offset unit, which would convert to {cooling_range.to('K')}. "
-            f"Use 'K' (what cooling_tower_range returns), 'delta_degC', or 'delta_degF'."
-        )
-    r = cooling_range.to("K").magnitude
+    # A range is a temperature DIFFERENCE: "5.5 degC" would convert to 278.65 K. That check now
+    # lives in units.temperature, which every difference-taking function in the library shares.
+    r = temperature_difference_kelvin(cooling_range, name="cooling_range")
     c = specific_heat.to("J/kg/K").magnitude
     h_fg = latent_heat.to("J/kg").magnitude
     if v < 0:

@@ -20,6 +20,7 @@ from __future__ import annotations
 from math import asin, atan, degrees, sqrt
 
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
     "choked_mass_flow_rate",
@@ -104,7 +105,7 @@ def eckert_number(
     _check(temperature_difference, "[temperature]", "temperature_difference")
     v = velocity.to("m/s").magnitude
     cp = specific_heat.to("J/(kg*K)").magnitude
-    dt = temperature_difference.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if v < 0:
         raise ValueError("velocity must be non-negative")
     if cp <= 0:

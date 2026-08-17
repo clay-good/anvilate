@@ -19,6 +19,7 @@ absolute (K); inputs and outputs are dimension-checked :class:`~anvilate.units.Q
 from __future__ import annotations
 
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
     "flash_steam_fraction",
@@ -43,7 +44,7 @@ def sensible_heat(
     _check(temperature_change, "[temperature]", "temperature_change")
     m = mass.to("kg").magnitude
     c = specific_heat.to("J/(kg*K)").magnitude
-    dt = temperature_change.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_change, name="temperature_change")
     if m <= 0:
         raise ValueError("mass must be positive")
     if c <= 0:

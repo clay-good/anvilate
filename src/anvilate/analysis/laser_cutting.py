@@ -19,6 +19,7 @@ at a chosen speed — the number that decides whether a job fits the machine.
 from __future__ import annotations
 
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
     "laser_cutting_speed",
@@ -43,7 +44,7 @@ def laser_specific_removal_energy(
     _check(temperature_rise, "[temperature]", "temperature_rise")
     _check(latent_heat_of_fusion, "[energy]/[mass]", "latent_heat_of_fusion")
     c = specific_heat.to("J/(kg*K)").magnitude
-    dt = temperature_rise.to("K").magnitude
+    dt = temperature_difference_kelvin(temperature_rise, name="temperature_rise")
     lf = latent_heat_of_fusion.to("J/kg").magnitude
     if c <= 0:
         raise ValueError("specific_heat must be positive")

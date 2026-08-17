@@ -24,6 +24,10 @@ from anvilate.units.rotation import (
     revolutions_per_minute,
     revolutions_per_second,
 )
+from anvilate.units.temperature import (
+    OffsetTemperatureError,
+    temperature_difference_kelvin,
+)
 
 # --- Requirement: Mixed-unit input is accepted everywhere ---
 
@@ -203,3 +207,36 @@ def test_angle_tokens_match_pints_canonical_spelling_not_the_one_written():
     for unit in ("count/s", "Hz", "1/s"):
         with pytest.raises(AmbiguousRotationalSpeedError):
             angular_speed_rad_per_s(Quantity(magnitude=1.0, unit=unit), name="s")
+
+
+def test_temperature_difference_refuses_an_offset_scale():
+    # A difference and a point on a scale share a dimensionality, so [temperature] accepts both
+    # and no dimension check separates them. The conversion is where they part: 5 K is a 5 K
+    # rise, but "5 degC" converts to 278.15 K -- the same rise multiplied by fifty-five.
+    assert Quantity(magnitude=5.0, unit="degC").to("K").magnitude == pytest.approx(278.15)
+    for unit in ("degC", "degF", "degree_Celsius", "degree_Fahrenheit"):
+        with pytest.raises(OffsetTemperatureError, match="temperature DIFFERENCE"):
+            temperature_difference_kelvin(
+                Quantity(magnitude=5.0, unit=unit), name="allowable_temperature_rise"
+            )
+
+    # The units that genuinely express a difference all pass, and convert by scale alone.
+    assert temperature_difference_kelvin(
+        Quantity(magnitude=5.0, unit="K"), name="d"
+    ) == pytest.approx(5.0, rel=1e-12)
+    assert temperature_difference_kelvin(
+        Quantity(magnitude=5.0, unit="delta_degC"), name="d"
+    ) == pytest.approx(5.0, rel=1e-12)
+    # delta_degF and degR are the same size: 5/9 of a kelvin.
+    assert temperature_difference_kelvin(
+        Quantity(magnitude=9.0, unit="delta_degF"), name="d"
+    ) == pytest.approx(5.0, rel=1e-12)
+    assert temperature_difference_kelvin(
+        Quantity(magnitude=9.0, unit="degR"), name="d"
+    ) == pytest.approx(5.0, rel=1e-12)
+
+    # The guard tests the CONVERSION, not a list of unit names, so it catches spellings nobody
+    # enumerated -- which is exactly how "degree_Fahrenheit" slipped through an earlier version.
+    assert temperature_difference_kelvin(
+        Quantity(magnitude=-5.0, unit="K"), name="d"
+    ) == pytest.approx(-5.0, rel=1e-12)
