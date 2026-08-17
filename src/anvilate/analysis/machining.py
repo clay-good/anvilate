@@ -16,6 +16,9 @@ life T = (C/V)^(1/n) falls steeply with speed, where C (a speed, the cutting spe
 life) and the exponent n (~0.1–0.2 for high-speed steel, ~0.2–0.4 for carbide) are the tool's, from
 test data. It is the trade at the heart of choosing a cutting speed — faster cuts, sooner-dulled
 tools.
+
+Sources: *Machinery's Handbook* and Kalpakjian, *Manufacturing Engineering and
+Technology*, for the cutting-speed, feed, power and tool-life (Taylor) relations.
 """
 
 from __future__ import annotations

@@ -11,6 +11,9 @@ A turbine cannot take all of it: slowing the air too much would dam the flow, so
 extractable fraction at 16/27 ≈ 0.593 of the incident power. Real rotors reach a power coefficient
 C_p of ~0.35–0.45. The power a rotor of swept area A = π·D²/4 delivers is then P = ½·ρ·A·V³·C_p,
 with C_p the caller's value (bounded by the Betz limit).
+
+Sources: Manwell, *Wind Energy Explained*, and Burton, *Wind Energy Handbook*,
+for the power-coefficient, Betz-limit and rotor relations.
 """
 
 from __future__ import annotations

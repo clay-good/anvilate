@@ -8,6 +8,33 @@
 # Add a token when you cite a source the list does not yet name. Do not add a token to
 # make a gate failure go away: the failure means a function does not say where its
 # formula comes from, and the fix is to say.
+#
+# BEFORE adding a token, check it cannot be satisfied by accident. A short or
+# ordinary-looking token will match prose that is not a citation: "Turns" was on this
+# list for its combustion text and matched "Turns the lumen method around ...", and
+# "Hazen" matched an analogy ("like Hazen-Williams in hydraulics") in a module that
+# cites neither. Both were caught by listing, for every token, the symbols it is the
+# ONLY citation for and reading them:
+#
+#     python - <<'EOF'
+#     import inspect, importlib, collections
+#     auth=[l.strip() for l in open("docs/api/citation-authorities.txt")
+#           if l.strip() and not l.startswith("#")]
+#     manifest=[l.strip() for l in open("docs/api/analysis-public-surface.txt")
+#               if l.strip() and not l.startswith("#")]
+#     sole=collections.Counter(); eg={}
+#     for e in manifest:
+#         mod,_,name=e.partition(".")
+#         m=importlib.import_module(f"anvilate.analysis.{mod}"); o=getattr(m,name)
+#         text=(inspect.getdoc(o) or "")+"\n"+(inspect.getdoc(m) or "")
+#         hits=[a for a in auth if a in text]
+#         if len(hits)==1: sole[hits[0]]+=1; eg.setdefault(hits[0], e)
+#     for tok,n in sole.most_common(): print(f"{tok!r}: {n} (e.g. {eg[tok]})")
+#     EOF
+#
+# An eponym IS a citation here — naming von Mises, Carnot, Rayleigh or the
+# Paris-Erdogan law tells a reader exactly which relation was implemented. A passing
+# mention of someone else's method is not.
 
 # --- Codes and standards bodies
 AASHTO
@@ -43,6 +70,54 @@ SAE
 TMS
 
 # --- Handbooks and texts
+Wills
+Agrawal
+Anderson
+Balanis
+Beranek
+Biblarz
+Blank
+Burton
+Callendar
+Cimbala
+Curtis
+Daniel
+Duffie
+Erickson
+Franklin
+Griffiths
+GPSA
+Hamrock
+Hydraulic Institute
+ITU-R
+ITU-T
+Irwin
+Jones
+Kalpakjian
+Karassik
+Kester
+Kleyner
+Maksimovic
+Manwell
+McLyman
+MIL-HDBK
+NACA
+Newnan
+Nilsson
+O'Connor
+Ogata
+Peng-Robinson
+Pozar
+Raimondi
+Redlich-Kwong
+Riedel
+Shapiro
+Sutton
+Tarquin
+Vallado
+Ver
+Van Dusen
+White
 Bergman
 Blevins
 Crane TP

@@ -12,6 +12,9 @@ E = C·V·DoD·η, and the time it can carry a load is that energy over the load
 
 Depth of discharge and efficiency are the caller's values, read from the battery datasheet and the
 system design; the sizing here is the arithmetic that ties them to a runtime.
+
+Sources: IEC 61427 and standard battery-engineering practice (Peukert's
+relation, C-rate and round-trip efficiency) as given in Linden's *Handbook of Batteries*.
 """
 
 from __future__ import annotations

@@ -9,6 +9,9 @@ to any check. :func:`bending_stress` computes the stress a moment makes on a
 section (σ = M/Z), and :func:`required_section_modulus` runs the sizing the other
 way: the minimum section modulus a bending moment needs to stay within an
 allowable stress.
+
+Sources: Roark's *Formulas for Stress and Strain* and the AISC *Steel
+Construction Manual* for the section-property and shear-centre relations.
 """
 
 from __future__ import annotations

@@ -9,8 +9,20 @@
       giving each module docstring a real `Sources:` attribution (thermal, electrical,
       reactive_circuit, acoustics, sheetmetal, compressible_flow, psychrometrics,
       fluid_statics, engineering_economics, orbital_mechanics, antenna, combustion,
-      reliability, dc_dc_converter), which took the gap to 36%. The remaining 630 are
-      enumerated in `docs/api/uncited-symbols.txt` and held by the ratchet gate (2.1).
+      reliability, dc_dc_converter) and then twenty-six more (section, composite, pump,
+      rocket_propulsion, wind_power, machining, quantum, wing_aerodynamics,
+      data_converter, fiber_optics, gas_compression, journal_bearing, magnetics,
+      real_gas, servo, solar_pv, temperature_sensor, transmission_line, waveguide,
+      hydraulic_cylinder, curved_beam, cooling_tower, energy_storage, hydro_power,
+      chain, cable, comminution). **47% -> 22.8%.** The remaining 398 are enumerated in
+      `docs/api/uncited-symbols.txt` and held by the ratchet gate (2.1).
+      **Two false positives were caught and fixed before shipping**, which is the part
+      worth keeping: `Turns` (a combustion text) matched "Turns the lumen method
+      around..." and `Hazen` matched an analogy, "like Hazen-Williams in hydraulics", in
+      a module citing neither. Found by listing, for every authority token, the symbols
+      it is the ONLY citation for and reading them — that audit is now written into the
+      header of `citation-authorities.txt` with the command to repeat it, and it must be
+      run whenever a token is added.
       **Deliberately not backfilled wholesale:** attaching a source to a formula nobody
       re-read would be a citation that means nothing, which is worse than an honest gap.
       Pay the list down module by module as each is next touched.

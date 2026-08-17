@@ -19,6 +19,10 @@ why its retract stroke is quicker — the fact behind the regeneration circuit a
 a cylinder for the direction that actually pushes the load. These are exact for a frictionless
 cylinder; a real one loses a few percent to seal friction. Pressure, diameters, and flow are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: ISO 6020/6022 for the cylinder series, and standard
+fluid-power relations (force = pressure x area, speed = flow / area) as given in the
+*Fluid Power Handbook*.
 """
 
 from __future__ import annotations

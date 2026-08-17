@@ -13,6 +13,9 @@ match, +/-1 for an open or short. The voltage standing-wave ratio VSWR = (1 + |G
 measures the resulting ripple (1 is perfect, higher is worse). The return loss RL = -20*log10|Gamma|
 expresses the same match in decibels of reflected power (higher dB is a better match). These treat
 real (resistive) impedances; a complex load needs the full phasor form.
+
+Sources: Pozar, *Microwave Engineering*, for the characteristic-impedance,
+reflection and standing-wave relations.
 """
 
 from __future__ import annotations

@@ -16,6 +16,9 @@ Together they give the tower *effectiveness* ε = R/(R + A): the fraction of the
 cooling — the full drop from the hot water down to the wet-bulb, R + A = T_hot − T_wb — that the
 tower achieves. It pairs with :mod:`anvilate.analysis.psychrometrics` (which supplies the wet-bulb
 and the air-side loads) and :mod:`anvilate.analysis.refrigeration` (whose condensers it cools).
+
+Sources: ASHRAE *Handbook - HVAC Systems and Equipment* and the Cooling
+Technology Institute practice for the range, approach and evaporation relations.
 """
 
 from __future__ import annotations

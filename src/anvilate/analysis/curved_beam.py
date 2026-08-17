@@ -38,6 +38,9 @@ strips, and its integral is just the sum of the rectangular ones —
 ∫(dA/r) = Σ b_k·ln(r_o,k/r_i,k) — which the composite section handles directly.
 
 Inputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Roark's *Formulas for Stress and Strain* for the Winkler-Bach
+curved-beam stress and neutral-axis-shift relations.
 """
 
 from __future__ import annotations

@@ -18,6 +18,9 @@ tooth count, which is why small sprockets run rough and 17+ teeth are preferred.
 
 Lengths are dimension-checked :class:`~anvilate.units.Quantity` values; tooth
 counts are positive whole numbers.
+
+Sources: ANSI/ASME B29.1 roller-chain dimensions and the standard chain-drive
+rating practice given in *Machinery's Handbook*.
 """
 
 from __future__ import annotations

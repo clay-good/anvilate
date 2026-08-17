@@ -20,6 +20,9 @@ always larger than H. For a cable that sags too deeply for the parabola, the exa
 catenary y = a·cosh(x/a) (a = H/w) gives the sag, arc length, and peak tension in
 hyperbolic form, collapsing to the parabolic values in the shallow-sag limit. Loads,
 spans, and tensions are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: the catenary relations as given in Roark's *Formulas for Stress and
+Strain*; NFPA 70 (NEC) for conductor ampacity conventions.
 """
 
 from __future__ import annotations

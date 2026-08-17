@@ -15,6 +15,9 @@ energy demand needs is P = E/(PSH·D).
 
 Peak sun hours, module efficiency, and the derate factor are the caller's site and equipment values;
 the sizing arithmetic is here.
+
+Sources: Duffie & Beckman, *Solar Engineering of Thermal Processes*, and
+IEC 61215, for the irradiance, cell-temperature and array-yield relations.
 """
 
 from __future__ import annotations

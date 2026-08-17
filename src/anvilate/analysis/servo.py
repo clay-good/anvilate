@@ -32,6 +32,10 @@ These are exact rigid-body results — friction, gearbox inertia, and load torqu
 on top, and the gearbox's own inertia is best lumped into ``motor_inertia``. Inertias
 are dimension-checked :class:`~anvilate.units.Quantity` values (kg·m²); the gear
 ratio is a plain positive float.
+
+Sources: Franklin, Powell & Emami-Naeini, *Feedback Control of Dynamic Systems*,
+and Ogata, *Modern Control Engineering*, for the second-order response, bandwidth and
+stability-margin relations.
 """
 
 from __future__ import annotations

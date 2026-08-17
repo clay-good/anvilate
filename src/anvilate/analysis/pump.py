@@ -16,6 +16,9 @@ flow scales with the speed ratio, head with its square, and power with its cube.
 why trimming speed with a variable-frequency drive saves so much energy — a 20% speed cut nearly
 halves the power. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Karassik, *Pump Handbook*, and the Hydraulic Institute standards for the
+pump-power, efficiency and affinity relations.
 """
 
 from __future__ import annotations

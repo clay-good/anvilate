@@ -16,6 +16,9 @@ Rittinger's and Kick's constants carry their own units so those two are dimensio
 law is the empirical micrometre/kWh-per-tonne convention (like Hazen-Williams in hydraulics), so its
 sizes are taken in µm and its work index and result in kWh/tonne. All are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Wills, *Mineral Processing Technology*, for the Rittinger, Kick and Bond
+comminution-energy laws and the work-index convention.
 """
 
 from __future__ import annotations

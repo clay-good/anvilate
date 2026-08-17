@@ -12,6 +12,9 @@ broad inside dimension a — a wider guide passes lower frequencies. Above f_c t
 lambda_g = (c/f) / sqrt(1 - (f_c/f)^2), always longer than the free-space c/f, and the phase
 velocity is v_p = c / sqrt(1 - (f_c/f)^2), greater than c. Both diverge as the operating frequency
 nears cutoff, which is why a guide is run well above f_c. Air-filled guide is assumed (speed c).
+
+Sources: Pozar, *Microwave Engineering*, and Balanis, *Advanced Engineering
+Electromagnetics*, for the cutoff-frequency and mode relations.
 """
 
 from __future__ import annotations

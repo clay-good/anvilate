@@ -21,6 +21,9 @@ while the thrust coefficient C_F = F/(p_c·A_t) measures the nozzle's conversion
 into thrust. Their product is the effective exhaust velocity (c* · C_F = I_sp · g₀), so a test
 firing that measures thrust, chamber pressure, and flow can attribute a shortfall to the chamber or
 the nozzle.
+
+Sources: Sutton & Biblarz, *Rocket Propulsion Elements*, for the
+thrust, specific-impulse, nozzle and mass-ratio relations.
 """
 
 from __future__ import annotations

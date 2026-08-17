@@ -14,6 +14,10 @@ The Van der Waals equation P = R·T/(v̄ − b) − a/v̄² predicts the pressur
 instead: the covolume b shrinks the space the molecules move in, and the cohesion term a/v̄² is the
 inward pull that lowers the wall pressure. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values; temperatures must be absolute.
+
+Sources: Perry's *Chemical Engineers' Handbook* and Cengel & Boles,
+*Thermodynamics*, for the compressibility-factor and Redlich-Kwong / Peng-Robinson
+equation-of-state relations.
 """
 
 from __future__ import annotations

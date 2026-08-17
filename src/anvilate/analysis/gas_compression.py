@@ -12,6 +12,9 @@ runs, T₂ = T₁·r^((k−1)/k) — the number that decides intercooling and lu
 The gas's own density follows the ideal-gas law, ρ = p/(R·T), from the specific gas constant R.
 The gas constant R and the specific-heat ratio k are properties the caller supplies. Inputs and
 outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: the GPSA *Engineering Data Book* and Cengel & Boles,
+*Thermodynamics*, for the polytropic and isentropic compression relations.
 """
 
 from __future__ import annotations

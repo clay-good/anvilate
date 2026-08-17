@@ -15,6 +15,9 @@ Q = P/(ρ·g·H·η) — the sizing inverse that sets the intake and penstock.
 
 Unlike wind's cube law, hydro power is linear in both flow and head, which is why a modest head over
 a steady flow is such a dependable resource: the power is there whenever the water is.
+
+Sources: Cengel & Cimbala, *Fluid Mechanics*, and the standard hydro-turbine
+specific-speed relations as given in Karassik, *Pump Handbook*.
 """
 
 from __future__ import annotations

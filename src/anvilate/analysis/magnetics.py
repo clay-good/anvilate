@@ -18,6 +18,9 @@ The field a real core carries follows the *magnetic circuit* — the magnetic an
 opposes flux with a reluctance R = l/(μ·A) (the "resistance"), and the flux that results is
 Φ = MMF/R (the "current"). A high-permeability iron path has low reluctance, so a modest coil drives
 a large flux — which is why transformers, motors, and relays are built around iron cores.
+
+Sources: McLyman, *Transformer and Inductor Design Handbook*, for the
+magnetic-circuit, core-loss and winding relations.
 """
 
 from __future__ import annotations

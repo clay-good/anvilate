@@ -13,6 +13,9 @@ ratio AR and the Oswald efficiency e — the penalty for a stubby, low-aspect wi
 lift equation for the speed that just carries the weight at maximum lift gives the stall speed,
 V_stall = √(2·W/(ρ·S·C_L,max)), the slowest the aircraft can fly. Inputs and outputs are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Anderson, *Fundamentals of Aerodynamics*, for the lift, induced
+drag, aspect-ratio and finite-wing relations.
 """
 
 from __future__ import annotations

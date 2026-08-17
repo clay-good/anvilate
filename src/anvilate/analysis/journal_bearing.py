@@ -16,6 +16,10 @@ the running friction, good for a first screen of viscous drag and heat generatio
 (a loaded bearing sits eccentric and needs the Sommerfeld/Raimondi-Boyd solution
 for the film thickness and the true friction). Viscosity, speed, and geometry are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Hamrock, *Fundamentals of Fluid Film Lubrication*, and the
+Raimondi & Boyd design charts as reproduced in Shigley, for the Sommerfeld number and
+film-thickness relations.
 """
 
 from __future__ import annotations

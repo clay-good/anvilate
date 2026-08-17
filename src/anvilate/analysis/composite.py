@@ -18,6 +18,10 @@ gives a much lower, matrix-dominated modulus. The longitudinal strength follows 
 same parallel rule. The fiber and matrix properties and V_f are the caller's inputs;
 this module evaluates the closed forms. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values (V_f is a plain fraction in [0, 1]).
+
+Sources: Jones, *Mechanics of Composite Materials*, and Daniel & Ishai,
+*Engineering Mechanics of Composite Materials*, for the rule-of-mixtures and
+lamina-stiffness relations.
 """
 
 from __future__ import annotations

@@ -15,6 +15,9 @@ the β-parameter model, the same 1/T law as an Arrhenius rate, so its resistance
 of magnitude across a modest span. Temperatures must be absolute; the coefficient α is a plain float
 (per kelvin) and β a temperature. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: IEC 60751 (the Callendar-Van Dusen platinum RTD relation)
+and ASTM E230 for the thermocouple reference tables.
 """
 
 from __future__ import annotations

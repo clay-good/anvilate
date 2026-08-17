@@ -17,6 +17,9 @@ width Δλ. Keeping the spread within a bit slot caps the bit rate at roughly B 
 inverting that gives the dispersion-limited reach L = 1/(4·B·D·Δλ) for a target bit rate — the span
 beyond which a link needs dispersion compensation or a narrower source. Inputs and outputs are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Agrawal, *Fiber-Optic Communication Systems*, and ITU-T G.652, for
+the numerical-aperture, dispersion and link-budget relations.
 """
 
 from __future__ import annotations

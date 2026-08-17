@@ -19,6 +19,9 @@ Heisenberg's uncertainty principle, Δx·Δp ≥ ℏ/2 for position and momentum
 energy and time). Confining a particle to a small Δx forces a large momentum spread, and a
 short-lived state has a correspondingly broad energy (its natural linewidth). These give the minimum
 uncertainties at the equality (best case).
+
+Sources: Griffiths, *Introduction to Quantum Mechanics*, for the de Broglie,
+particle-in-a-box and photon-energy relations.
 """
 
 from __future__ import annotations

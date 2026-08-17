@@ -17,6 +17,9 @@ spreads it over a wider band and recovers 10·log10(OSR) dB (half a bit per doub
 fast input with a jittery clock caps the SNR at −20·log10(2π·f·t_j) regardless of resolution. Bit
 counts and dB figures are plain floats; the full-scale voltage, step, and noise are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Kester, *The Data Conversion Handbook* (Analog Devices), and IEEE
+Std 1241, for the resolution, SNR, ENOB and sampling relations.
 """
 
 from __future__ import annotations
