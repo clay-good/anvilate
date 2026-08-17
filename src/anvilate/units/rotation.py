@@ -26,6 +26,8 @@ __all__ = [
     "AmbiguousRotationalSpeedError",
     "angular_speed_rad_per_s",
     "revolutions_per_minute",
+    "count_rate_per_second",
+    "revolutions_per_minute",
     "revolutions_per_second",
 ]
 
@@ -92,3 +94,27 @@ def revolutions_per_minute(speed: Quantity, *, name: str) -> float:
     than 1800.
     """
     return angular_speed_rad_per_s(speed, name=name) * 60.0 / (2.0 * pi)
+
+
+class AmbiguousCountRateError(UnitError):
+    """A count-per-time rate was given in a unit that names an angle."""
+
+
+def count_rate_per_second(rate: Quantity, *, name: str) -> float:
+    """A plain count-per-time rate in 1/s, refusing a unit that names an angle.
+
+    The mirror image of :func:`angular_speed_rad_per_s`, for the quantities that count *events*
+    rather than turns — cylinder cycles, strokes, pulses. The same 2π sits under it, pointing the
+    other way: pint canonicalises ``cycle`` to ``turn`` = 2π radian, so the most natural spelling
+    of a cycle rate, ``30 cycle/min``, converts to 188.5 per minute rather than 30. An
+    angle-carrying unit is therefore refused here exactly as a bare inverse time is refused for a
+    rotational speed. Use ``1/min``, ``1/s``, or ``Hz``.
+    """
+    unit_text = str(UREG.Unit(rate.unit))
+    if any(token in unit_text for token in _ANGLE_TOKENS):
+        raise AmbiguousCountRateError(
+            f"{name} counts events per unit time, but was given as {rate} — a unit that names an "
+            f"angle. Pint treats one cycle/turn/revolution as 2*pi radian, so this would be read "
+            f"{2.0 * pi:.4f} times too high. Use '1/min', '1/s', or 'Hz'."
+        )
+    return rate.to("1/s").magnitude

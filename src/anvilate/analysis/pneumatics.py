@@ -19,6 +19,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 _STANDARD_ATMOSPHERE_PA = 101325.0
 
@@ -162,7 +163,7 @@ def cylinder_free_air_demand(
         atmospheric_pressure=atmospheric_pressure,
     )
     _check(cycle_rate, "1/[time]", "cycle_rate")
-    f = cycle_rate.to("1/min").magnitude
+    f = 60.0 * count_rate_per_second(cycle_rate, name="cycle_rate")
     if f <= 0:
         raise ValueError("cycle_rate must be positive")
     strokes_per_cycle = 2.0 if double_acting else 1.0

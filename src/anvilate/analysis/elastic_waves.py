@@ -105,11 +105,16 @@ def rayleigh_wave_speed(
     of the destructive energy in an earthquake.
 
     A Rayleigh wave runs along a free surface with an elliptical particle motion that dies away
-    within about a wavelength of depth. Its exact speed is the root of a cubic secular equation,
-    but Bergmann's rational approximation is within 0.1% over the whole physical range
-    0 ≤ ν ≤ 0.5, so the closed form is the honest one to use here. It is always slightly slower
+    within about a wavelength of depth. Its exact speed is the root of a cubic secular equation;
+    Bergmann's rational approximation stands in for it, and its error is worth knowing: about
+    1.4% low at ν = 0, 0.15% low at ν = 0.29, and under 0.1% only above ν ≈ 0.35. That is fine
+    for a T1 screen and too coarse to time-gate a precision inspection with. It is always slower
     than the shear wave — 0.9245·c_s in steel at ν = 0.29 — and, uniquely among the modes, its
     speed depends only on the ratio, never rising above 0.955·c_s.
+
+    Restricted to 0 ≤ ν < 0.5, which is the domain Bergmann fitted. The approximation is not
+    merely inaccurate outside it — its numerator changes sign at ν = −0.756 and it returns a
+    NEGATIVE wave speed below that, so auxetic materials need the exact secular root instead.
 
     That 7.5% gap is the practical point: time-gating a surface-wave inspection with the shear
     speed misplaces a flaw by 8% of the standoff. ``shear_modulus`` G and ``density`` ρ set the
@@ -124,8 +129,13 @@ def rayleigh_wave_speed(
         raise ValueError(f"shear_modulus must be positive; got {shear_modulus}")
     if rho <= 0:
         raise ValueError(f"density must be positive; got {density}")
-    if not -1.0 < poissons_ratio < 0.5:
-        raise ValueError(f"poissons_ratio must lie in (-1, 0.5); got {poissons_ratio}")
+    if not 0.0 <= poissons_ratio < 0.5:
+        raise ValueError(
+            f"poissons_ratio must lie in [0, 0.5) — the domain Bergmann's approximation was "
+            f"fitted to. Below nu = -0.756 its numerator changes sign and it returns a negative "
+            f"wave speed, so an auxetic material needs the exact secular root. "
+            f"Got {poissons_ratio}"
+        )
     shear_speed = sqrt(g / rho)
     ratio = (0.862 + 1.14 * poissons_ratio) / (1.0 + poissons_ratio)
     return Quantity(magnitude=shear_speed * ratio, unit="m/s")

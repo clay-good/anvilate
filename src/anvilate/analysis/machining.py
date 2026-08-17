@@ -23,6 +23,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import revolutions_per_minute
 
 __all__ = [
     "cutting_power",
@@ -48,7 +49,7 @@ def cutting_speed(*, diameter: Quantity, spindle_speed: Quantity) -> Quantity:
     _check(diameter, "[length]", "diameter")
     _check(spindle_speed, "1/[time]", "spindle_speed")
     d = diameter.to("m").magnitude
-    n = spindle_speed.to("revolution/minute").magnitude
+    n = revolutions_per_minute(spindle_speed, name="spindle_speed")
     if d <= 0:
         raise ValueError("diameter must be positive")
     if n < 0:

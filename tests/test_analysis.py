@@ -14833,6 +14833,59 @@ def test_rpm_consuming_functions_refuse_an_angle_free_speed():
     ) == pytest.approx(1.0 / 30.0, rel=1e-9)
 
 
+def test_spindle_and_cycle_rates_refuse_the_wrong_side_of_the_same_2pi():
+    from anvilate.analysis import (
+        cutting_speed,
+        cylinder_free_air_demand,
+        drilling_material_removal_rate,
+    )
+    from anvilate.units.rotation import AmbiguousCountRateError, AmbiguousRotationalSpeedError
+
+    # THIRD spelling of the rotation trap. Two earlier passes closed .to("rad/s") and .to("rpm");
+    # machining and drilling used .to("revolution/minute"), which is the same unit to pint and so
+    # carried the same 2*pi. A spindle speed written "1000 1/min" read as 159 rpm, giving
+    # 25.0 m/min instead of 157.1 -- 6.28x LOW, i.e. understated tool wear, power and temperature.
+    assert cutting_speed(
+        diameter=_q("50 mm"), spindle_speed=Quantity(magnitude=1000.0, unit="rpm")
+    ).to("m/min").magnitude == pytest.approx(157.07963267948966, rel=1e-9)
+    for unit in ("1/min", "Hz", "1/s"):
+        with pytest.raises(AmbiguousRotationalSpeedError):
+            cutting_speed(diameter=_q("50 mm"), spindle_speed=Quantity(magnitude=1000.0, unit=unit))
+        with pytest.raises(AmbiguousRotationalSpeedError):
+            drilling_material_removal_rate(
+                drill_diameter=_q("10 mm"),
+                feed_per_revolution=_q("0.2 mm"),
+                spindle_speed=Quantity(magnitude=1000.0, unit=unit),
+            )
+
+    # The MIRROR trap, pointing the other way. A cylinder cycle rate counts events, not turns, so
+    # it must be a plain inverse time -- but pint canonicalises "cycle" to "turn" = 2*pi radian,
+    # so the most natural spelling "30 cycle/min" read as 188.5 per minute and overstated the air
+    # demand 6.28x. An angle-carrying unit is refused here exactly as a bare inverse time is
+    # refused for a rotational speed.
+    demand = (
+        cylinder_free_air_demand(
+            bore_diameter=_q("50 mm"),
+            stroke=_q("200 mm"),
+            gauge_supply_pressure=_q("6 bar"),
+            cycle_rate=Quantity(magnitude=30.0, unit="1/min"),
+            double_acting=True,
+        )
+        .to("liter/min")
+        .magnitude
+    )
+    assert demand == pytest.approx(163.08493469865743, rel=1e-9)
+    for unit in ("cycle/min", "rpm", "turn/min"):
+        with pytest.raises(AmbiguousCountRateError):
+            cylinder_free_air_demand(
+                bore_diameter=_q("50 mm"),
+                stroke=_q("200 mm"),
+                gauge_supply_pressure=_q("6 bar"),
+                cycle_rate=Quantity(magnitude=30.0, unit=unit),
+                double_acting=True,
+            )
+
+
 def test_stokes_settling_velocity_and_drag_are_consistent():
     import math
 
@@ -26351,13 +26404,22 @@ def test_rayleigh_wave_runs_slower_than_shear_and_never_catches_it():
         )
         assert previous < ratio < 0.955
         previous = ratio
-    # At nu = 0 the approximation gives 0.862 exactly, the classic textbook value.
+    # At nu = 0 the approximation gives exactly 0.862. That is the APPROXIMATION's value, not the
+    # textbook one -- the exact secular root there is 0.8740, so Bergmann reads 1.38% low. This is
+    # its worst point on [0, 0.5); the error falls to 0.15% at nu = 0.29 and under 0.1% only above
+    # nu ~ 0.35, which is why the docstring quotes those figures rather than a flat "0.1%".
     assert rayleigh_wave_speed(shear_modulus=shear_modulus, density=density, poissons_ratio=0.0).to(
         "m/s"
     ).magnitude / c_s == pytest.approx(0.862, rel=1e-12)
+    assert 0.862 / 0.874032 == pytest.approx(0.98623, rel=1e-4)
 
-    with pytest.raises(ValueError, match="poissons_ratio must lie"):
-        rayleigh_wave_speed(shear_modulus=shear_modulus, density=density, poissons_ratio=0.5)
+    # Guarded to Bergmann's own fitted domain. Outside it the approximation does not merely lose
+    # accuracy: its numerator 0.862 + 1.14*nu changes sign at nu = -0.756, so an auxetic material
+    # came back with a NEGATIVE wave speed (-794.6 m/s at nu = -0.8) rather than the true
+    # +2344 m/s. A negative speed is worse than no answer, so the range is refused.
+    for nu in (0.5, 0.6, -0.1, -0.756, -0.8, -0.99):
+        with pytest.raises(ValueError, match="poissons_ratio must lie"):
+            rayleigh_wave_speed(shear_modulus=shear_modulus, density=density, poissons_ratio=nu)
 
 
 def test_elastic_wave_speeds_bar_shear_and_bulk():

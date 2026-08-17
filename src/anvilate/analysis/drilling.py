@@ -21,6 +21,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import revolutions_per_minute
 
 __all__ = [
     "drilling_feed_for_torque_limit",
@@ -44,7 +45,7 @@ def drilling_material_removal_rate(
     _check(spindle_speed, "1/[time]", "spindle_speed")
     d = drill_diameter.to("mm").magnitude
     f = feed_per_revolution.to("mm").magnitude
-    n = spindle_speed.to("revolution/minute").magnitude
+    n = revolutions_per_minute(spindle_speed, name="spindle_speed")
     if d <= 0:
         raise ValueError("drill_diameter must be positive")
     if f <= 0:
