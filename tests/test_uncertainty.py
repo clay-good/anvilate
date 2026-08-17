@@ -66,9 +66,12 @@ def test_symmetric_actually_draws_from_the_distribution_it_names():
 
     # Zero spread collapses to the nominal on both branches, exactly.
     for distribution in ("normal", "uniform"):
-        assert Symmetric(
-            nominal=100.0, half_width=0.0, distribution=distribution
-        ).sample(random.Random(0)) == 100.0
+        assert (
+            Symmetric(nominal=100.0, half_width=0.0, distribution=distribution).sample(
+                random.Random(0)
+            )
+            == 100.0
+        )
 
 
 def test_zero_spread_inputs_sample_their_center():
