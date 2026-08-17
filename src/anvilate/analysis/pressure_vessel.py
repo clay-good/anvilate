@@ -60,6 +60,12 @@ __all__ = [
     "cylinder_external_pressure_buckling",
     "sphere_external_pressure_buckling",
     "cylinder_axial_buckling_stress",
+    "NozzleReinforcement",
+    "FlangeGasketGeometry",
+    "asme_ug37_nozzle_reinforcement",
+    "asme_ug37_reinforcement_scorecard",
+    "asme_appendix_2_gasket_geometry",
+    "asme_appendix_2_required_bolt_area",
 ]
 
 
@@ -1546,3 +1552,315 @@ def asme_b313_miter_bend_pressure(
         )
     tight = base * (r1 - r2) / (r1 - 0.5 * r2)
     return Quantity(magnitude=min(shallow, tight), unit="MPa")
+
+
+# --- ASME VIII Div 1 openings and flanges ------------------------------------
+#
+# The shell, head and cone screens above answer "is the wall thick enough". A real
+# vessel then has holes cut in it and joints bolted to it, and both are governed by
+# their own rules. UG-37 is an accounting problem: metal removed for an opening must
+# be replaced within a defined zone around it. Appendix 2 is a two-load problem: a
+# flange's bolts must both crush the gasket cold and hold the joint under pressure,
+# and which of the two governs decides the bolt size.
+#
+# Sources: ASME BPVC Section VIII Division 1, UG-37 (reinforcement of openings) and
+# Mandatory Appendix 2 (rules for bolted flange connections with ring-type gaskets),
+# with the gasket factors m and y from Table 2-5.1 supplied by the caller.
+
+_CLAUSE_UG37 = "ASME VIII Div 1 UG-37 (reinforcement of openings)"
+_CLAUSE_APPENDIX_2 = "ASME VIII Div 1 Mandatory Appendix 2 (bolted flange connections)"
+
+# Appendix 2 Table 2-5.2: below this basic seating width the effective width IS the
+# basic width; above it the effective width grows as the square root instead, because
+# a wide gasket does not seat uniformly across its whole face.
+_APPENDIX_2_WIDTH_LIMIT_MM = 6.35  # 1/4 inch
+_APPENDIX_2_WIDE_COEFFICIENT_MM = 2.52  # b = 2.52*sqrt(b_0) in mm; 0.5*sqrt(b_0) in inches
+
+
+class NozzleReinforcement(BaseModel):
+    """The ASME VIII Div 1 UG-37 opening area accounting: what was removed, and what replaces it.
+
+    ``required`` A is the area the opening removed from the pressure boundary.
+    ``shell_excess`` A_1 is the shell metal available beyond what pressure needs,
+    ``nozzle_excess`` A_2 the same for the nozzle neck, and ``weld_area`` A_41 the
+    attachment fillet. ``available`` is their sum.
+
+    ``adequate`` is available ≥ required. The ``deficit`` is what a reinforcing pad
+    would have to supply — the number that actually sizes the pad, which is why it is
+    reported rather than left to the reader to subtract.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    required: Quantity
+    shell_excess: Quantity
+    nozzle_excess: Quantity
+    weld_area: Quantity
+    available: Quantity
+    adequate: bool
+    deficit: Quantity
+
+    def __str__(self) -> str:
+        verdict = "adequate" if self.adequate else f"short by {self.deficit}"
+        return f"UG-37 reinforcement {verdict}: {self.available} available against {self.required}"
+
+
+def asme_ug37_nozzle_reinforcement(
+    *,
+    shell_thickness: Quantity,
+    shell_required_thickness: Quantity,
+    nozzle_outside_diameter: Quantity,
+    nozzle_thickness: Quantity,
+    nozzle_required_thickness: Quantity,
+    corrosion_allowance: Quantity,
+    weld_leg: Quantity,
+    strength_reduction_factor: float = 1.0,
+) -> NozzleReinforcement:
+    """The ASME VIII Div 1 UG-37 reinforcement accounting for a radial opening.
+
+    Cutting a hole in a shell removes pressure-carrying metal, and UG-37 requires it to
+    be replaced within a zone around the opening. The required area is A = d·t_r·F,
+    where d is the finished opening diameter in the corroded condition and t_r the
+    shell's *required* thickness — not its actual one, because only the metal pressure
+    needs is what the hole took away.
+
+    The replacement comes from three places here:
+
+    * **A_1, excess shell** — the larger of d·(t − t_r) and 2·(t + t_n)·(t − t_r): the
+      shell is usually thicker than pressure demands, and that surplus counts.
+    * **A_2, excess nozzle** — the smaller of 5·(t_n − t_rn)·t and 5·(t_n − t_rn)·t_n,
+      the neck's own surplus within the reinforcement zone.
+    * **A_41, weld** — the attachment fillet, ``weld_leg``².
+
+    ``strength_reduction_factor`` f_r is the nozzle-to-shell allowable stress ratio,
+    capped at 1.0: a nozzle of weaker material contributes proportionally less. The
+    corrosion allowance is stripped from every wall first, because the reinforcement has
+    to still be there at the end of life.
+
+    Two things this deliberately does not do. It does not credit an inward-projecting
+    nozzle (A_3) or a reinforcing pad (A_5) — supply those separately if the design has
+    them, and add them to ``available``. And it is the *radial-nozzle-in-a-cylinder*
+    case: a hillside or an oblique nozzle opens a longer hole and takes UG-37's F factor,
+    which is 1.0 only for the radial case this screens.
+
+    Returns a :class:`NozzleReinforcement` naming the deficit, since that is what sizes
+    a pad.
+    """
+    for value, name in (
+        (shell_thickness, "shell_thickness"),
+        (shell_required_thickness, "shell_required_thickness"),
+        (nozzle_outside_diameter, "nozzle_outside_diameter"),
+        (nozzle_thickness, "nozzle_thickness"),
+        (nozzle_required_thickness, "nozzle_required_thickness"),
+        (corrosion_allowance, "corrosion_allowance"),
+        (weld_leg, "weld_leg"),
+    ):
+        _require(value, "[length]", name)
+    if not 0 < strength_reduction_factor <= 1.0:
+        raise ValueError(
+            f"strength_reduction_factor f_r must lie in (0, 1]; got "
+            f"{strength_reduction_factor}. It is the nozzle's allowable stress over the "
+            f"shell's, and UG-37 caps it at 1 — a stronger nozzle earns no bonus."
+        )
+    c = corrosion_allowance.to("mm").magnitude
+    t = shell_thickness.to("mm").magnitude - c
+    tr = shell_required_thickness.to("mm").magnitude
+    tn = nozzle_thickness.to("mm").magnitude - c
+    trn = nozzle_required_thickness.to("mm").magnitude
+    weld = weld_leg.to("mm").magnitude
+    if c < 0 or weld < 0:
+        raise ValueError("corrosion_allowance and weld_leg must be non-negative")
+    if t <= 0 or tn <= 0:
+        raise ValueError(
+            f"the corrosion allowance ({corrosion_allowance}) consumes the whole shell or "
+            f"nozzle wall; there is nothing left to reinforce with"
+        )
+    if tr <= 0 or trn < 0:
+        raise ValueError("shell_required_thickness must be positive and the nozzle's non-negative")
+    # The finished opening in the corroded condition: the neck's bore, both walls gone.
+    d = nozzle_outside_diameter.to("mm").magnitude - 2.0 * tn
+    if d <= 0:
+        raise ValueError(
+            f"the nozzle wall consumes the whole opening (bore {d:.4g} mm); check "
+            f"nozzle_outside_diameter against nozzle_thickness"
+        )
+    if t < tr:
+        raise ValueError(
+            f"the corroded shell ({t:.4g} mm) is thinner than pressure requires "
+            f"({tr:.4g} mm), so the shell fails before the opening is reached — there is "
+            f"no reinforcement question to answer yet"
+        )
+
+    required = d * tr
+    shell_excess = max(d * (t - tr), 2.0 * (t + tn) * (t - tr))
+    nozzle_surplus = max(tn - trn, 0.0) * strength_reduction_factor
+    nozzle_excess = 5.0 * nozzle_surplus * min(t, tn)
+    weld_area = weld**2 * strength_reduction_factor
+    available = shell_excess + nozzle_excess + weld_area
+    return NozzleReinforcement(
+        required=Quantity(magnitude=required, unit="mm**2"),
+        shell_excess=Quantity(magnitude=shell_excess, unit="mm**2"),
+        nozzle_excess=Quantity(magnitude=nozzle_excess, unit="mm**2"),
+        weld_area=Quantity(magnitude=weld_area, unit="mm**2"),
+        available=Quantity(magnitude=available, unit="mm**2"),
+        adequate=available >= required,
+        deficit=Quantity(magnitude=max(required - available, 0.0), unit="mm**2"),
+    )
+
+
+def asme_ug37_reinforcement_scorecard(
+    name: str,
+    *,
+    reinforcement: NozzleReinforcement | None,
+    required: float = 1.0,
+    missing: str = "",
+) -> ScorecardEntry:
+    """Screen an ASME VIII Div 1 UG-37 area accounting into a :class:`ScorecardEntry`.
+
+    The safety factor is available area over required area, judged against ``required``
+    (1.0 = exactly UG-37's rule, which carries no margin of its own). The detail names
+    the deficit when there is one, because that is the pad the design needs.
+
+    ``reinforcement`` of ``None`` is ``NOT_EVALUATED``: an opening whose required shell
+    thickness was never computed has not been screened, and ``missing`` says so.
+    """
+    if reinforcement is None:
+        detail = "not evaluated"
+        if missing.strip():
+            detail = f"{detail} — {missing.strip()}"
+        else:
+            detail = f"{detail} — the UG-37 area accounting could not be run"
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=detail,
+            reference=_CLAUSE_UG37,
+        )
+    have = reinforcement.available.to("mm**2").magnitude
+    need = reinforcement.required.to("mm**2").magnitude
+    computed = None if need == 0 else have / need
+    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    detail = (
+        f"{have:.4g} mm² available against {need:.4g} mm² required "
+        f"(shell {reinforcement.shell_excess.magnitude:.4g}, nozzle "
+        f"{reinforcement.nozzle_excess.magnitude:.4g}, weld "
+        f"{reinforcement.weld_area.magnitude:.4g})"
+    )
+    if not reinforcement.adequate:
+        detail = (
+            f"{detail}; short by {reinforcement.deficit.magnitude:.4g} mm², which is the "
+            f"area a reinforcing pad has to supply"
+        )
+    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_UG37})
+
+
+class FlangeGasketGeometry(BaseModel):
+    """The Appendix 2 gasket geometry the bolt-load formulas actually run on.
+
+    ``basic_width`` b_0 and ``effective_width`` b are not the same thing, and the
+    difference is the part that gets fumbled: a *wide* gasket does not seat uniformly
+    across its face, so above a basic width of 6.35 mm the effective width stops growing
+    linearly and goes as 2.52·√b_0 instead. ``diameter`` G moves with it — it is the
+    gasket's mean diameter for a narrow gasket, but the OD less 2b for a wide one,
+    because the seating load has migrated to the outer edge.
+
+    Getting either wrong scales the bolt load directly, and both are silent errors: the
+    numbers stay plausible.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    basic_width: Quantity
+    effective_width: Quantity
+    diameter: Quantity
+    is_wide: bool
+
+
+def asme_appendix_2_gasket_geometry(
+    *, contact_width: Quantity, outside_diameter: Quantity
+) -> FlangeGasketGeometry:
+    """The Appendix 2 effective seating width b and diameter G of a flat ring gasket.
+
+    For the flat-face, sheet-gasket column of Table 2-5.2 the basic seating width is
+    b_0 = N/2, half the gasket's ``contact_width``. Then:
+
+    * **b_0 ≤ 6.35 mm (¼ in)** — b = b_0, and G is the gasket's *mean* diameter
+      (OD − N), because a narrow gasket seats evenly across its face.
+    * **b_0 > 6.35 mm** — b = 2.52·√b_0 (in mm; the Code writes 0.5·√b_0 in inches), and
+      G = OD − 2b. A wide gasket seats hardest near its outer edge, so the effective
+      width grows only as the square root and the load acts further out.
+
+    That discontinuity is deliberate in the Code and it bites: a gasket a millimetre
+    wider than the limit does not give a proportionally larger b, and using b_0 above the
+    limit overstates both the seating and the operating bolt load.
+
+    Feed the results to :func:`~anvilate.analysis.governing_gasket_bolt_load`. Returns a
+    :class:`FlangeGasketGeometry` with all three lengths and which branch applied.
+    """
+    _require(contact_width, "[length]", "contact_width")
+    _require(outside_diameter, "[length]", "outside_diameter")
+    n = contact_width.to("mm").magnitude
+    od = outside_diameter.to("mm").magnitude
+    if n <= 0 or od <= 0:
+        raise ValueError("contact_width and outside_diameter must be positive")
+    if n >= od / 2.0:
+        raise ValueError(
+            f"a contact width of {contact_width} leaves no bore inside an outside "
+            f"diameter of {outside_diameter}; check they are not swapped"
+        )
+    b0 = n / 2.0
+    if b0 <= _APPENDIX_2_WIDTH_LIMIT_MM:
+        b = b0
+        g = od - n  # the mean diameter
+        wide = False
+    else:
+        b = _APPENDIX_2_WIDE_COEFFICIENT_MM * sqrt(b0)
+        g = od - 2.0 * b
+        wide = True
+    return FlangeGasketGeometry(
+        basic_width=Quantity(magnitude=b0, unit="mm"),
+        effective_width=Quantity(magnitude=b, unit="mm"),
+        diameter=Quantity(magnitude=g, unit="mm"),
+        is_wide=wide,
+    )
+
+
+def asme_appendix_2_required_bolt_area(
+    *,
+    operating_bolt_load: Quantity,
+    seating_bolt_load: Quantity,
+    operating_allowable: Quantity,
+    seating_allowable: Quantity,
+) -> Quantity:
+    """The Appendix 2 required bolt area A_m = max(W_m1/S_b, W_m2/S_a), in mm².
+
+    The two conditions are checked against *different* allowables and neither result
+    substitutes for the other: the operating load W_m1 is carried at design temperature
+    against S_b, while the seating load W_m2 is applied cold against the ambient
+    allowable S_a. A hot joint can be seating-governed purely because its hot allowable
+    has fallen away, which is invisible if both loads are divided by one number.
+
+    ``operating_bolt_load`` and ``seating_bolt_load`` come from
+    :func:`~anvilate.analysis.gasket_operating_load` and
+    :func:`~anvilate.analysis.gasket_seating_load` on the geometry
+    :func:`asme_appendix_2_gasket_geometry` returns. Returns the required total bolt
+    root area; compare it against the area the chosen bolt count and size actually
+    provide.
+    """
+    for value, name in (
+        (operating_bolt_load, "operating_bolt_load"),
+        (seating_bolt_load, "seating_bolt_load"),
+    ):
+        _require(value, "[force]", name)
+        if value.magnitude <= 0:
+            raise ValueError(f"{name} must be positive; got {value}")
+    for value, name in (
+        (operating_allowable, "operating_allowable"),
+        (seating_allowable, "seating_allowable"),
+    ):
+        _require(value, "[pressure]", name)
+        if value.magnitude <= 0:
+            raise ValueError(f"{name} must be positive; got {value}")
+    operating = operating_bolt_load.to("N").magnitude / operating_allowable.to("MPa").magnitude
+    seating = seating_bolt_load.to("N").magnitude / seating_allowable.to("MPa").magnitude
+    return Quantity(magnitude=max(operating, seating), unit="mm**2")

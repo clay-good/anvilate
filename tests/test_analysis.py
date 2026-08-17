@@ -40390,3 +40390,225 @@ def test_an_unloaded_bay_is_nothing_to_evaluate_not_a_division_by_zero():
         simply_supported_partial_uniform_load(distributed_load=_q("0 N/mm"), **kwargs)
     loaded = simply_supported_partial_uniform_load(distributed_load=_q("2 N/mm"), **kwargs)
     assert loaded.max_bending_stress.to("MPa").magnitude > 0
+
+
+# --- ASME VIII Div 1 openings and flanges ------------------------------------
+
+
+def test_ug37_replaces_the_metal_the_opening_actually_removed():
+    """The required area is d·t_r on the REQUIRED wall, not the actual one.
+
+    That is the part worth pinning: the hole takes away metal, but only the metal
+    pressure needed counts as lost. Using the actual thickness would demand more
+    reinforcement than the Code does, and using the actual thickness in A_1 as well —
+    forgetting to subtract t_r — would demand none at all.
+    """
+    from anvilate.analysis import asme_ug37_nozzle_reinforcement
+
+    kwargs = {
+        "shell_thickness": _q("14 mm"),
+        "shell_required_thickness": _q("9.5 mm"),
+        "nozzle_outside_diameter": _q("168.3 mm"),
+        "nozzle_thickness": _q("10.97 mm"),
+        "nozzle_required_thickness": _q("2.4 mm"),
+        "corrosion_allowance": _q("1.5 mm"),
+        "weld_leg": _q("8 mm"),
+    }
+    r = asme_ug37_nozzle_reinforcement(**kwargs)
+    # Every wall is stripped of the corrosion allowance first: t = 12.5, t_n = 9.47,
+    # so the corroded bore is d = 168.3 - 2(9.47) = 149.36 mm.
+    assert r.required.magnitude == pytest.approx(149.36 * 9.5, rel=1e-3)
+    assert r.shell_excess.magnitude == pytest.approx(149.36 * (12.5 - 9.5), rel=1e-3)
+    assert r.nozzle_excess.magnitude == pytest.approx(5 * (9.47 - 2.4) * 9.47, rel=1e-3)
+    assert r.weld_area.magnitude == pytest.approx(64.0, rel=1e-9)
+    assert r.available.magnitude == pytest.approx(
+        r.shell_excess.magnitude + r.nozzle_excess.magnitude + r.weld_area.magnitude, rel=1e-12
+    )
+    assert r.adequate is False
+    assert r.deficit.magnitude == pytest.approx(
+        r.required.magnitude - r.available.magnitude, rel=1e-9
+    )
+
+    # A thicker shell earns its whole surplus, and past a point the opening pays for
+    # itself: the deficit is monotone in the shell thickness and reaches zero.
+    deficits = [
+        asme_ug37_nozzle_reinforcement(
+            **{**kwargs, "shell_thickness": _q(f"{t} mm")}
+        ).deficit.magnitude
+        for t in (14, 16, 18, 22, 30)
+    ]
+    assert deficits == sorted(deficits, reverse=True)
+    assert deficits[-1] == 0.0
+    assert (
+        asme_ug37_nozzle_reinforcement(**{**kwargs, "shell_thickness": _q("30 mm")}).adequate
+        is True
+    )
+
+    # A weaker nozzle contributes proportionally less, and never more than its own metal.
+    weak = asme_ug37_nozzle_reinforcement(**{**kwargs, "strength_reduction_factor": 0.7})
+    assert weak.nozzle_excess.magnitude == pytest.approx(0.7 * r.nozzle_excess.magnitude, rel=1e-12)
+    assert weak.weld_area.magnitude == pytest.approx(0.7 * r.weld_area.magnitude, rel=1e-12)
+    assert weak.shell_excess.magnitude == pytest.approx(r.shell_excess.magnitude, rel=1e-12)
+    with pytest.raises(ValueError, match="caps it at 1"):
+        asme_ug37_nozzle_reinforcement(**{**kwargs, "strength_reduction_factor": 1.2})
+
+
+def test_ug37_refuses_the_cases_where_there_is_no_question_to_answer():
+    """A corroded-away wall, a bore the neck consumes, and a shell already too thin."""
+    from anvilate.analysis import asme_ug37_nozzle_reinforcement
+
+    base = {
+        "shell_thickness": _q("14 mm"),
+        "shell_required_thickness": _q("9.5 mm"),
+        "nozzle_outside_diameter": _q("168.3 mm"),
+        "nozzle_thickness": _q("10.97 mm"),
+        "nozzle_required_thickness": _q("2.4 mm"),
+        "corrosion_allowance": _q("1.5 mm"),
+        "weld_leg": _q("8 mm"),
+    }
+    with pytest.raises(ValueError, match="consumes the whole shell"):
+        asme_ug37_nozzle_reinforcement(**{**base, "corrosion_allowance": _q("15 mm")})
+    with pytest.raises(ValueError, match="consumes the whole opening"):
+        asme_ug37_nozzle_reinforcement(
+            **{**base, "nozzle_thickness": _q("90 mm"), "corrosion_allowance": _q("0 mm")}
+        )
+    # A shell thinner than pressure requires fails before the opening is reached, and
+    # saying "the reinforcement is short" there would name the wrong problem.
+    with pytest.raises(ValueError, match="fails before the opening"):
+        asme_ug37_nozzle_reinforcement(**{**base, "shell_required_thickness": _q("13 mm")})
+
+
+def test_the_ug37_scorecard_names_the_pad_the_design_needs():
+    from anvilate.analysis import asme_ug37_nozzle_reinforcement, asme_ug37_reinforcement_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    kwargs = {
+        "shell_required_thickness": _q("9.5 mm"),
+        "nozzle_outside_diameter": _q("168.3 mm"),
+        "nozzle_thickness": _q("10.97 mm"),
+        "nozzle_required_thickness": _q("2.4 mm"),
+        "corrosion_allowance": _q("1.5 mm"),
+        "weld_leg": _q("8 mm"),
+    }
+    short = asme_ug37_nozzle_reinforcement(shell_thickness=_q("14 mm"), **kwargs)
+    entry = asme_ug37_reinforcement_scorecard("6in nozzle", reinforcement=short)
+    assert entry.status is CheckStatus.FAIL
+    assert "short by" in entry.detail and "reinforcing pad" in entry.detail
+    assert entry.reference is not None and "UG-37" in entry.reference
+
+    ample = asme_ug37_nozzle_reinforcement(shell_thickness=_q("30 mm"), **kwargs)
+    assert asme_ug37_reinforcement_scorecard("6in nozzle", reinforcement=ample).status is (
+        CheckStatus.PASS
+    )
+    unrun = asme_ug37_reinforcement_scorecard(
+        "6in nozzle", reinforcement=None, missing="the shell's required thickness was not computed"
+    )
+    assert unrun.status is CheckStatus.NOT_EVALUATED
+    assert "required thickness" in unrun.detail
+
+
+def test_the_appendix_2_effective_width_stops_growing_linearly_at_the_quarter_inch():
+    """b = b_0 up to 6.35 mm and 2.52·√b_0 above it, and G moves with the branch.
+
+    The discontinuity is deliberate: a wide gasket does not seat evenly across its face,
+    so past the limit the effective width grows only as the square root and the load
+    migrates to the outer edge. Using b_0 above the limit overstates BOTH bolt loads, and
+    both stay plausible, which is what makes it a silent error.
+    """
+    from anvilate.analysis import asme_appendix_2_gasket_geometry
+
+    def geom(width: float, od: float = 200.0):
+        return asme_appendix_2_gasket_geometry(
+            contact_width=_q(f"{width} mm"), outside_diameter=_q(f"{od} mm")
+        )
+
+    narrow = geom(6.0)  # b_0 = 3.0, inside the limit
+    assert narrow.is_wide is False
+    assert narrow.basic_width.magnitude == pytest.approx(3.0)
+    assert narrow.effective_width.magnitude == pytest.approx(3.0)
+    assert narrow.diameter.magnitude == pytest.approx(200.0 - 6.0)  # the MEAN diameter
+
+    wide = geom(20.0)  # b_0 = 10.0, past the limit
+    assert wide.is_wide is True
+    assert wide.effective_width.magnitude == pytest.approx(2.52 * math.sqrt(10.0), rel=1e-9)
+    assert wide.diameter.magnitude == pytest.approx(200.0 - 2 * wide.effective_width.magnitude)
+
+    # Exactly at the seam the narrow branch still applies, and just past it the wide one
+    # gives a SMALLER effective width than b_0 would have — the whole point of the rule.
+    at_seam = geom(2 * 6.35)
+    assert at_seam.is_wide is False
+    assert at_seam.effective_width.magnitude == pytest.approx(6.35)
+    just_past = geom(2 * 6.36)
+    assert just_past.is_wide is True
+    assert just_past.effective_width.magnitude < just_past.basic_width.magnitude
+
+    with pytest.raises(ValueError, match="not swapped"):
+        geom(200.0, od=20.0)
+
+
+def test_the_required_bolt_area_checks_two_loads_against_two_allowables():
+    """W_m1/S_b and W_m2/S_a — and a hot joint can be seating-governed for that reason.
+
+    The seating load is applied cold, against the ambient allowable; the operating load
+    at temperature, against the derated one. Dividing both by a single allowable hides
+    the case where a joint that looks operation-governed is really limited by a cold
+    seating load its hot allowable never sees.
+    """
+    from anvilate.analysis import (
+        asme_appendix_2_gasket_geometry,
+        asme_appendix_2_required_bolt_area,
+        gasket_operating_load,
+        gasket_seating_load,
+    )
+
+    geometry = asme_appendix_2_gasket_geometry(
+        contact_width=_q("12 mm"), outside_diameter=_q("320 mm")
+    )
+    seating = gasket_seating_load(
+        gasket_mean_diameter=geometry.diameter,
+        effective_seating_width=geometry.effective_width,
+        seating_stress=_q("25.5 MPa"),  # spiral wound, ASME Table 2-5.1 y
+    )
+    operating = gasket_operating_load(
+        gasket_mean_diameter=geometry.diameter,
+        effective_seating_width=geometry.effective_width,
+        gasket_factor=3.0,
+        pressure=_q("2 MPa"),
+    )
+    ambient, hot = _q("138 MPa"), _q("138 MPa")
+    area = asme_appendix_2_required_bolt_area(
+        operating_bolt_load=operating,
+        seating_bolt_load=seating,
+        operating_allowable=hot,
+        seating_allowable=ambient,
+    )
+    assert area.magnitude == pytest.approx(
+        max(operating.magnitude / 138.0, seating.magnitude / 138.0), rel=1e-12
+    )
+
+    # Derate the hot allowable and the operating condition takes over; derate nothing
+    # and the same joint can be seating-governed. Both must be reachable, or the max()
+    # is decorative.
+    hot_governed = asme_appendix_2_required_bolt_area(
+        operating_bolt_load=operating,
+        seating_bolt_load=seating,
+        operating_allowable=_q("60 MPa"),
+        seating_allowable=ambient,
+    )
+    assert hot_governed.magnitude == pytest.approx(operating.magnitude / 60.0, rel=1e-12)
+    assert hot_governed.magnitude > area.magnitude
+    seating_governed = asme_appendix_2_required_bolt_area(
+        operating_bolt_load=operating,
+        seating_bolt_load=seating,
+        operating_allowable=_q("400 MPa"),
+        seating_allowable=_q("50 MPa"),
+    )
+    assert seating_governed.magnitude == pytest.approx(seating.magnitude / 50.0, rel=1e-12)
+
+    with pytest.raises(ValueError, match="must be positive"):
+        asme_appendix_2_required_bolt_area(
+            operating_bolt_load=operating,
+            seating_bolt_load=seating,
+            operating_allowable=_q("0 MPa"),
+            seating_allowable=ambient,
+        )

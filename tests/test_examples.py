@@ -5724,3 +5724,36 @@ def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition
     for entry in card.entries[:2]:
         assert "screening margin" in entry.detail
         assert "qualified assessor" in entry.detail
+
+
+def test_pressure_vessel_example_fails_at_the_opening_before_it_fails_at_the_wall():
+    namespace = runpy.run_path(str(_EXAMPLES / "pressure_vessel_nozzle_and_flange.py"))
+    Quantity_ = namespace["Quantity"]
+    thick = namespace["screen_vessel"](Quantity_.parse("14 mm"))
+    thin = namespace["screen_vessel"](Quantity_.parse("8 mm"))
+
+    assert thick.status is CheckStatus.PASS
+    assert thin.status is CheckStatus.FAIL
+    by_thin = {e.name: e for e in thin.entries}
+    # The wall is still adequate for pressure; the hole in it is not. That gap is the
+    # whole example, and it is the component nobody re-checks after trimming a wall.
+    assert by_thin["shell wall (UG-27)"].status is CheckStatus.PASS
+    assert by_thin["6 in nozzle opening"].status is CheckStatus.FAIL
+    assert by_thin["6 in nozzle opening"].safety_factor is not None
+    assert by_thin["6 in nozzle opening"].safety_factor == pytest.approx(0.49, abs=0.02)
+    # Reinforcement depends on the wall's EXCESS, so it degrades far faster than the
+    # wall does: 1.9x thinner shell, 3.4x worse opening.
+    by_thick = {e.name: e for e in thick.entries}
+    shell_ratio = (
+        by_thick["shell wall (UG-27)"].safety_factor / by_thin["shell wall (UG-27)"].safety_factor
+    )
+    opening_ratio = (
+        by_thick["6 in nozzle opening"].safety_factor / by_thin["6 in nozzle opening"].safety_factor
+    )
+    assert opening_ratio > shell_ratio
+
+    seating, operating, area = namespace["flange_bolt_area"]()
+    # Seating governs at this pressure — sizing bolts on the operating load alone would
+    # undersize them by nearly half.
+    assert seating.to("kN").magnitude > operating.to("kN").magnitude
+    assert area.to("mm**2").magnitude == pytest.approx(seating.to("N").magnitude / 138.0, rel=1e-9)
