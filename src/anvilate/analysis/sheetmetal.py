@@ -187,8 +187,8 @@ def minimum_bend_radius(*, thickness: Quantity, reduction_of_area_percent: float
     cracks. The empirical screen (Kalpakjian) ties the minimum radius to the tensile
     ``reduction_of_area_percent`` r: R_min = t·(50/r − 1). A very ductile metal
     (r = 50 %) bends dead sharp (R_min = 0); a marginal one (r = 10 %) needs 4·t.
-    ``thickness`` t must be positive and r in (0, 50] %. Returns R_min in mm
-    (clamped at 0 for r ≥ 50 %).
+    ``thickness`` t must be positive and r in (0, 100] %. Returns R_min in mm,
+    clamped at 0 for r ≥ 50 % (where the expression would go negative).
     """
     _require(thickness, "[length]", "thickness")
     t = thickness.to("mm").magnitude

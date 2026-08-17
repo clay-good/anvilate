@@ -129,7 +129,9 @@ def elliptical_hole_stress_concentration(
     gives the familiar K_t = 3; a hole stretched across the load raises it without
     limit, so a crack-like slit (b → 0) is why sharp flaws are so dangerous. Feed
     the result to :func:`concentrated_stress`. Both semi-axes are positive lengths.
-    Returns the dimensionless K_t (≥ 3, and = 3 only for a circular hole).
+    Returns the dimensionless K_t, which is 3 for a circular hole, above 3 for an
+    ellipse stretched across the load, and *below* 3 (down toward 1) for one
+    elongated along it — a hole aligned with the load concentrates less, not more.
     """
     if not semi_axis_across_load.has_dimension("[length]"):
         raise ValueError(
