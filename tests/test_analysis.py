@@ -15375,20 +15375,24 @@ def test_sphere_drag_coefficient_bounds_where_stokes_law_stops_being_true():
     assert previous > 0.4
 
     # The point of the function: a 1 mm quartz grain in water is NOT in creeping flow, and
-    # stokes_settling_velocity carries no Reynolds guard to say so. Its answer implies Re = 898.
+    # stokes_settling_velocity now refuses to answer rather than returning the 0.900 m/s its
+    # formula gives at an implied Re of 898.
     rho, mu, rho_p, d = 998.0, 1e-3, 2650.0, 1e-3
-    v_stokes = (
-        stokes_settling_velocity(
-            particle_diameter=_q("1 mm"),
-            particle_density=_q("2650 kg/m**3"),
-            fluid_density=_q("998 kg/m**3"),
-            fluid_viscosity=_q("1e-3 Pa*s"),
-        )
-        .to("m/s")
-        .magnitude
-    )
-    assert v_stokes == pytest.approx(0.9000325444444441, rel=1e-9)
+    quartz = {
+        "particle_diameter": _q("1 mm"),
+        "particle_density": _q("2650 kg/m**3"),
+        "fluid_density": _q("998 kg/m**3"),
+        "fluid_viscosity": _q("1e-3 Pa*s"),
+    }
+    with pytest.raises(ValueError, match="Reynolds number of 898"):
+        stokes_settling_velocity(**quartz)
+    v_stokes = 0.9000325444444441  # what the unguarded formula gave
     assert rho * v_stokes * d / mu == pytest.approx(898.2324793555553, rel=1e-9)
+
+    # Inside the creeping-flow limit it answers normally: 50 um silt settles at Re = 0.11.
+    silt = stokes_settling_velocity(**{**quartz, "particle_diameter": _q("50 um")})
+    assert silt.to("m/s").magnitude == pytest.approx(0.9000325444444441 * (0.05**2), rel=1e-9)
+    assert rho * silt.to("m/s").magnitude * 50e-6 / mu < 1.0
 
     # Iterating the balance weight = drag with a real C_d converges to 0.1553 m/s at Re = 155:
     # Stokes overpredicts the settling velocity 5.8-fold, and a clarifier sized on it is wrong
@@ -38721,3 +38725,129 @@ def test_beam_bending_cases_refuse_the_section_their_slope_siblings_always_did()
         beam_module.cantilever_end_load(force=_q("-1 kN"), **good).max_moment.magnitude
         != beam_module.cantilever_end_load(force=_q("1 kN"), **good).max_moment.magnitude
     )
+
+
+def test_documented_validity_limits_are_enforced_not_just_stated():
+    """Each of these docstrings named a limit the code did not check. Past it the number
+    stayed entirely plausible, which is the whole problem."""
+    from anvilate.analysis import (
+        asme_b313_pipe_pressure,
+        asme_b313_pipe_wall_thickness,
+        lapse_rate_pressure,
+        minimum_fluidization_velocity,
+        molecular_flow_tube_conductance,
+        thin_open_strip_torsion_constant,
+    )
+
+    # ASME B31.3 304.1.2 scopes the straight-pipe formula to t < D/6, which is exactly
+    # where it flips from conservative to unconservative against the Lamé requirement.
+    thin = asme_b313_pipe_wall_thickness(
+        pressure=_q("5 MPa"), outside_diameter=_q("300 mm"), allowable_stress=_q("138 MPa")
+    )
+    assert thin.to("mm").magnitude / 300 < 1 / 6
+    with pytest.raises(ValueError, match=r"t < D/6"):
+        asme_b313_pipe_wall_thickness(
+            pressure=_q("60 MPa"), outside_diameter=_q("300 mm"), allowable_stress=_q("138 MPa")
+        )
+    with pytest.raises(ValueError, match=r"t < D/6"):
+        asme_b313_pipe_pressure(
+            wall_thickness=_q("60 mm"),
+            outside_diameter=_q("300 mm"),
+            allowable_stress=_q("138 MPa"),
+        )
+
+    # The thin-open torsion form wants b/t ≳ 10; a square bar was accepted and came back
+    # 2.37x too stiff. The exact rectangular_bar_* functions cover anything stubbier.
+    assert thin_open_strip_torsion_constant(width=_q("100 mm"), thickness=_q("5 mm")) is not None
+    with pytest.raises(ValueError, match="below the b/t = 5"):
+        thin_open_strip_torsion_constant(width=_q("10 mm"), thickness=_q("10 mm"))
+
+    # The long-tube molecular conductance exceeds the aperture ceiling below L/d = 1.33 —
+    # more throughput than an open hole of the same area can pass.
+    assert (
+        molecular_flow_tube_conductance(
+            mean_molecular_speed=_q("470 m/s"), tube_diameter=_q("50 mm"), tube_length=_q("1 m")
+        )
+        is not None
+    )
+    with pytest.raises(ValueError, match="below the L/d = 3"):
+        molecular_flow_tube_conductance(
+            mean_molecular_speed=_q("470 m/s"), tube_diameter=_q("50 mm"), tube_length=_q("5 mm")
+        )
+
+    # The viscous-only Ergun branch is a laminar result; 3 mm sand in air ran 6.3x high.
+    fine = minimum_fluidization_velocity(
+        particle_diameter=_q("0.2 mm"),
+        particle_density=_q("2650 kg/m**3"),
+        fluid_density=_q("1.2 kg/m**3"),
+        fluid_viscosity=_q("1.8e-5 Pa*s"),
+        void_fraction=0.4,
+    )
+    assert fine.to("m/s").magnitude > 0
+    with pytest.raises(ValueError, match="particle Reynolds number"):
+        minimum_fluidization_velocity(
+            particle_diameter=_q("3 mm"),
+            particle_density=_q("2650 kg/m**3"),
+            fluid_density=_q("1.2 kg/m**3"),
+            fluid_viscosity=_q("1.8e-5 Pa*s"),
+            void_fraction=0.4,
+        )
+
+    # Two limits were documented and only the weak one (T0/L ≈ 44 km) enforced, so the
+    # accepted range ran four times past the real 11 km tropopause.
+    at_tropopause = lapse_rate_pressure(
+        sea_level_pressure=_q("101325 Pa"),
+        altitude=_q("11 km"),
+        sea_level_temperature=_q("288.15 K"),
+    )
+    assert at_tropopause.to("Pa").magnitude == pytest.approx(22632.0, rel=1e-3)
+    with pytest.raises(ValueError, match="above the 11 km ISA tropopause"):
+        lapse_rate_pressure(
+            sea_level_pressure=_q("101325 Pa"),
+            altitude=_q("30 km"),
+            sea_level_temperature=_q("288.15 K"),
+        )
+    # A caller who supplies their own lapse rate is describing their own layer and owns
+    # its extent — the tropopause bound is on the ISA default only.
+    assert (
+        lapse_rate_pressure(
+            sea_level_pressure=_q("101325 Pa"),
+            altitude=_q("30 km"),
+            sea_level_temperature=_q("288.15 K"),
+            lapse_rate=_q("0.002 K/m"),
+        )
+        .to("Pa")
+        .magnitude
+        > 0
+    )
+
+
+def test_plate_results_report_whether_small_deflection_theory_applied():
+    from anvilate.analysis import clamped_circular_plate_uniform_load
+
+    common = {
+        "diameter": _q("1 m"),
+        "thickness": _q("6 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    # A light load stays inside w ≲ t/2 and says so.
+    light = clamped_circular_plate_uniform_load(pressure=_q("5 kPa"), **common)
+    assert light.small_deflection_ratio is not None
+    assert light.small_deflection_ratio <= 0.5
+    assert light.is_small_deflection is True
+
+    # Half a bar on an ordinary cover reaches w/t ≈ 2, well past the module's scope. The
+    # error is CONSERVATIVE — linear theory misses the membrane stiffening — so the result
+    # is reported with the ratio rather than refused, and __str__ says it out loud.
+    heavy = clamped_circular_plate_uniform_load(pressure=_q("50 kPa"), **common)
+    assert heavy.small_deflection_ratio > 2.0
+    assert heavy.is_small_deflection is False
+    assert "BEYOND small-deflection" in str(heavy)
+    # The passing case reports its ratio too, without the warning.
+    assert "w/t" in str(light) and "BEYOND" not in str(light)
+
+    # A result built without the ratio answers None, never a bare True.
+    from anvilate.analysis.plate import PlateBendingResult
+
+    bare = PlateBendingResult(max_bending_stress=_q("100 MPa"), max_deflection=_q("1 mm"))
+    assert bare.is_small_deflection is None

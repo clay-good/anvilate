@@ -99,6 +99,10 @@ def packed_bed_void_fraction(*, bulk_density: Quantity, particle_density: Quanti
     return 1.0 - rho_bulk / rho_p
 
 
+# The Ergun viscous-only branch is a laminar result; Re_mf ≈ 20 is the usual seam.
+_LAMINAR_FLUIDIZATION_REYNOLDS_LIMIT = 20.0
+
+
 def minimum_fluidization_velocity(
     *,
     particle_diameter: Quantity,
@@ -137,6 +141,21 @@ def minimum_fluidization_velocity(
         raise ValueError("particle_density must exceed fluid_density for the bed to fluidize")
     eps = void_fraction
     u_mf = dp**2 * (rho_p - rho) * _GRAVITY * eps**3 / (150.0 * mu * (1.0 - eps))
+    # This is the LAMINAR limit of the Ergun equation — the docstring says so — and the
+    # particle Reynolds number that decides whether that limit applies is computable from
+    # the arguments already passed. Past it the answer runs high without bound: 1 mm sand
+    # in air is already 1.8x over Wen-Yu, 3 mm is 6.3x, and 5 mm returns 25.7 m/s, above
+    # the particle's own terminal velocity — a bed that would be conveyed away rather than
+    # fluidized. The inertial (Ergun/Wen-Yu) form is needed there.
+    reynolds = rho * u_mf * dp / mu
+    if reynolds > _LAMINAR_FLUIDIZATION_REYNOLDS_LIMIT:
+        raise ValueError(
+            f"the result implies a particle Reynolds number of {reynolds:.4g}, past the "
+            f"~{_LAMINAR_FLUIDIZATION_REYNOLDS_LIMIT:.0f} where this laminar limit of the "
+            f"Ergun equation holds. Above it the viscous-only form overpredicts without "
+            f"bound (6.3x for 3 mm sand in air); use the full Ergun or the Wen-Yu "
+            f"correlation for coarse particles."
+        )
     return Quantity(magnitude=u_mf, unit="m/s")
 
 

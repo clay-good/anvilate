@@ -90,6 +90,10 @@ def vacuum_throughput(*, pumping_speed: Quantity, pressure: Quantity) -> Quantit
     return Quantity(magnitude=s * p, unit="Pa*m**3/s")
 
 
+# Below this the Clausing/long-tube form outruns the aperture conductance; see the guard.
+_LONG_TUBE_RATIO_LIMIT = 3.0
+
+
 def molecular_flow_tube_conductance(
     *,
     mean_molecular_speed: Quantity,
@@ -119,6 +123,21 @@ def molecular_flow_tube_conductance(
         raise ValueError("mean_molecular_speed must be positive")
     if d <= 0 or length <= 0:
         raise ValueError("tube_diameter and tube_length must be positive")
+    # The docstring's "valid for L ≫ d" is computable here and the extrapolation is not
+    # merely inaccurate, it is impossible: the long-tube form grows without bound as L
+    # shrinks, and at L/d = 1.33 it already crosses the aperture conductance — the
+    # kinetic-theory ceiling on what a hole of that area can pass at all. At L/d = 0.1 it
+    # returns 3076 L/s where the ceiling is 231. Dushman's short-tube correction is the
+    # right tool below this seam; refusing is the honest stand-in for not having it.
+    if length / d < _LONG_TUBE_RATIO_LIMIT:
+        raise ValueError(
+            f"tube_length/tube_diameter = {length / d:.4g} is below the L/d = "
+            f"{_LONG_TUBE_RATIO_LIMIT:.0f} this long-tube form needs (it assumes L ≫ d). "
+            f"Below it the formula exceeds the aperture conductance — more throughput than "
+            f"an open hole of the same area can pass — crossing that ceiling at L/d = 1.33. "
+            f"Use Dushman's short-tube correction, or the aperture conductance for a "
+            f"near-zero-length opening."
+        )
     return Quantity(magnitude=pi / 12.0 * v_bar * d**3 / length, unit="m**3/s")
 
 

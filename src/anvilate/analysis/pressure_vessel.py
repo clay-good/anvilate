@@ -614,7 +614,30 @@ def asme_b313_pipe_wall_thickness(
     s = allowable_stress.to("MPa").magnitude
     if p <= 0 or d <= 0 or s <= 0:
         raise ValueError("pressure, outside_diameter, and allowable_stress must be positive")
-    return Quantity(magnitude=p * d / (2.0 * (s * quality_factor + p * coefficient_y)), unit="mm")
+    thickness = p * d / (2.0 * (s * quality_factor + p * coefficient_y))
+    _check_b313_thin_wall(thickness, d, "the thickness this pressure requires")
+    return Quantity(magnitude=thickness, unit="mm")
+
+
+# ASME B31.3 304.1.2 scopes the straight-pipe formula to t < D/6. It is not a soft seam:
+# it is exactly where the formula crosses from conservative to unconservative against the
+# Lamé thick-wall requirement (14% short at t/D = 0.32), and at P >= S it keeps returning a
+# confident number for a pressure no monobloc wall can hold to the allowable. The sibling
+# ASME VIII functions in this module already enforce their analogous limits.
+_B313_THICKNESS_RATIO_LIMIT = 1.0 / 6.0
+
+
+def _check_b313_thin_wall(thickness_mm: float, diameter_mm: float, label: str) -> None:
+    """Refuse a t/D past the ASME B31.3 304.1.2 scope of the straight-pipe formula."""
+    ratio = thickness_mm / diameter_mm
+    if ratio >= _B313_THICKNESS_RATIO_LIMIT:
+        raise ValueError(
+            f"{label} gives t/D = {ratio:.4g}, at or past the t < D/6 = "
+            f"{_B313_THICKNESS_RATIO_LIMIT:.4g} that ASME B31.3 304.1.2 scopes this "
+            f"formula to. Past it the straight-pipe form runs UNconservative against the "
+            f"thick-wall (Lame) requirement — 14% short at t/D = 0.32 — so B31.3 304.1.2(b) "
+            f"requires a thick-wall analysis instead."
+        )
 
 
 def asme_b313_pipe_pressure(
@@ -650,6 +673,7 @@ def asme_b313_pipe_pressure(
         raise ValueError(
             f"outside_diameter ({d:.4g} mm) must exceed 2·Y·t ({2.0 * coefficient_y * t:.4g} mm)"
         )
+    _check_b313_thin_wall(t, d, "wall_thickness")
     return Quantity(magnitude=2.0 * t * s * quality_factor / denominator, unit="MPa")
 
 

@@ -87,6 +87,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         )
 
 
+# This module's linear (small-deflection) plate theory is scoped to w ≲ t/2; past it a
+# real plate stiffens in membrane action and this result overstates both w and sigma.
+_SMALL_DEFLECTION_RATIO_LIMIT = 0.5
+
+
 class PlateBendingResult(BaseModel):
     """The result of a closed-form plate bending check.
 
@@ -95,17 +100,40 @@ class PlateBendingResult(BaseModel):
     — both at the plate centre for a simply-supported rectangle under uniform
     pressure. Screening estimates for a thin linear-elastic plate under small
     deflections.
+
+    ``small_deflection_ratio`` is w/t, the centre deflection over the thickness, and it
+    is the number that says whether small-deflection theory applied at all: this module
+    is scoped to w ≲ t/2, and an ordinary 1 m clamped cover under half a bar reaches
+    w/t = 2.06 with nothing in the result to say so. It is reported rather than refused
+    because the error runs the CONSERVATIVE way — linear theory ignores the membrane
+    stiffening a deflected plate develops, so it overstates both the deflection and the
+    stress (1.7x to 5.4x over the range checked). :attr:`is_small_deflection` is the
+    predicate. This mirrors ``ThinWallStress.thin_wall_ratio`` in
+    :mod:`anvilate.analysis.pressure_vessel`, which already surfaces its own seam
+    the same way.
     """
 
     model_config = ConfigDict(frozen=True)
 
     max_bending_stress: Quantity
     max_deflection: Quantity
+    small_deflection_ratio: float | None = None
     # The closed-form peak-stress expression for this case, when it has one a
     # reviewer can follow in a line. The rectangular and patch cases sum a Navier
     # series and the annular cases search the radius numerically, so they declare
     # none rather than a tidy formula that is not what was computed.
     stress_formula: str | None = None
+
+    @property
+    def is_small_deflection(self) -> bool | None:
+        """Whether w/t is inside the w ≲ t/2 scope of this module's linear theory.
+
+        ``None`` when the ratio was not recorded — never a bare ``True``, which would be
+        the silent green this attribute exists to prevent.
+        """
+        if self.small_deflection_ratio is None:
+            return None
+        return self.small_deflection_ratio <= _SMALL_DEFLECTION_RATIO_LIMIT
 
     def bending_safety_factor(self, yield_strength: Quantity) -> float:
         """The factor of safety against surface yielding: yield / peak stress."""
@@ -115,9 +143,15 @@ class PlateBendingResult(BaseModel):
         return sy / sigma
 
     def __str__(self) -> str:
+        beyond = "" if self.is_small_deflection is not False else " — BEYOND small-deflection"
+        ratio = (
+            ""
+            if self.small_deflection_ratio is None
+            else f" (w/t {self.small_deflection_ratio:.2f}{beyond})"
+        )
         return (
             f"plate: sigma_max {self.max_bending_stress.to('MPa')}, "
-            f"delta_max {self.max_deflection.to('mm')}"
+            f"delta_max {self.max_deflection.to('mm')}{ratio}"
         )
 
 
@@ -195,6 +229,7 @@ def simply_supported_plate_center_patch_load(
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
+        small_deflection_ratio=deflection / t,
     )
 
 
@@ -254,6 +289,7 @@ def clamped_plate_uniform_load(
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
+        small_deflection_ratio=deflection / t,
     )
 
 
@@ -308,6 +344,7 @@ def simply_supported_circular_plate_uniform_load(
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
+        small_deflection_ratio=deflection / t,
         stress_formula="σ = 3·(3 + ν)·q·R²/(8·t²)",
     )
 
@@ -340,6 +377,7 @@ def clamped_circular_plate_uniform_load(
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
+        small_deflection_ratio=deflection / t,
         stress_formula="σ = 3·q·R²/(4·t²)",
     )
 
@@ -571,6 +609,7 @@ def _annular_plate_uniform_load(
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
+        small_deflection_ratio=deflection / t,
     )
 
 
@@ -702,6 +741,7 @@ def simply_supported_plate_uniform_load(
     return PlateBendingResult(
         max_bending_stress=Quantity(magnitude=stress, unit="MPa"),
         max_deflection=Quantity(magnitude=deflection, unit="mm"),
+        small_deflection_ratio=deflection / t,
     )
 
 

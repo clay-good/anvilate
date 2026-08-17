@@ -31,6 +31,8 @@ __all__ = [
 ]
 
 _GRAVITY = 9.80665  # m/s², standard gravity
+# Stokes' law is the creeping-flow limit; its own docstring puts the seam at Re ≈ 1.
+_STOKES_REYNOLDS_LIMIT = 1.0
 
 
 def drag_force(
@@ -196,6 +198,20 @@ def stokes_settling_velocity(
     if mu <= 0:
         raise ValueError("fluid_viscosity must be positive")
     v = (rho_p - rho_f) * _GRAVITY * d**2 / (18.0 * mu)
+    # The docstring's "below ~1" is computable from the arguments already passed, and past
+    # it the answer is unconservative by a lot: 1 mm quartz in water returns 0.900 m/s at
+    # an implied Re of 898, against 0.155 m/s from an iterated Schiller-Naumann solve —
+    # 5.8x too fast. `sphere_drag_coefficient` in this same file already refuses past its
+    # own fit's end, and its message names this hole. This closes it.
+    reynolds = rho_f * abs(v) * d / mu
+    if reynolds > _STOKES_REYNOLDS_LIMIT:
+        raise ValueError(
+            f"Stokes' law is the creeping-flow limit and the result implies a particle "
+            f"Reynolds number of {reynolds:.4g}, past the ~{_STOKES_REYNOLDS_LIMIT:.0f} "
+            f"where it holds: the flow separates and this velocity is an overprediction "
+            f"(5.8x for 1 mm quartz in water). Use terminal_velocity with a drag "
+            f"coefficient, or iterate on sphere_drag_coefficient."
+        )
     return Quantity(magnitude=v, unit="m/s")
 
 

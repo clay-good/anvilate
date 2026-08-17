@@ -25,6 +25,7 @@ _UNIVERSAL_GAS_CONSTANT = 8.314462618  # J/(mol*K)
 _STANDARD_GRAVITY = 9.80665  # m/s**2
 _MOLAR_MASS_AIR = 0.0289647  # kg/mol, dry air
 _ISA_LAPSE_RATE = 0.0065  # K/m, the ISA troposphere temperature gradient
+_ISA_TROPOPAUSE_ALTITUDE = 11000.0  # m, where the ISA troposphere ends and the lapse stops
 
 __all__ = [
     "barometric_altitude",
@@ -154,6 +155,21 @@ def lapse_rate_pressure(
     if h >= t0 / rate:
         raise ValueError(
             "altitude is at or above T0/L, where the lapse-rate model reaches absolute zero"
+        )
+    # Two limits are documented and only the weak one (T0/L ≈ 44.3 km) was enforced, so
+    # the accepted range ran four times past the real one. The 11 km tropopause is not a
+    # fuzzy seam — it is a defined constant of the standard atmosphere, above which the
+    # temperature stops falling and the model's premise is simply false. Extrapolating is
+    # optimistic in every case: 21% low at 20 km, 4.2x low at 30 km, 470x low at 40 km.
+    # Only the ISA lapse rate is bounded here; a caller supplying their own rate is
+    # describing their own layer and owns its extent.
+    if lapse_rate is None and h > _ISA_TROPOPAUSE_ALTITUDE:
+        raise ValueError(
+            f"altitude {altitude} is above the {_ISA_TROPOPAUSE_ALTITUDE / 1000:.0f} km ISA "
+            f"tropopause, where the temperature stops falling and this constant-lapse-rate "
+            f"form no longer describes the atmosphere. Extrapolating understates the "
+            f"pressure — 4.2x at 30 km. Use the isothermal stratosphere relation above the "
+            f"tropopause, or pass an explicit lapse_rate for the layer you mean."
         )
     m = _molar_mass_value(molar_mass)
     exponent = _STANDARD_GRAVITY * m / (_UNIVERSAL_GAS_CONSTANT * rate)

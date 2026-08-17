@@ -586,6 +586,10 @@ def rectangular_tube_twist_angle(
     return _as_quantity(angle, "degree")
 
 
+# Below this the thin-open series is no longer the right model; see _thin_open_strip_dims.
+_THIN_OPEN_STRIP_RATIO_LIMIT = 5.0
+
+
 def _thin_open_strip_dims(width: Quantity, thickness: Quantity):
     """Validate a thin open strip and return its ``(width, thickness)`` in mm.
 
@@ -602,6 +606,20 @@ def _thin_open_strip_dims(width: Quantity, thickness: Quantity):
         raise ValueError(
             f"width ({width}) is the long dimension and must be at least the "
             f"thickness ({thickness})"
+        )
+    # The docstrings ask for b/t ≳ 10 and the validator only enforced b ≥ t, so a square
+    # bar was accepted: J came back 2.37x too STIFF, the twist 2.37x understated (216.8°
+    # reported against a true 513.0°), and the peak shear 37.5% low — all in the
+    # unconservative direction, and J feeds the lateral-torsional-buckling checks. The
+    # limit here is 5, not 10, because the 5-7% error over b/t = 5 to 10 is the legitimate
+    # seam of a series solution; `rectangular_bar_torsion_constant` in this same file is
+    # the exact form for anything stubbier.
+    if b / t < _THIN_OPEN_STRIP_RATIO_LIMIT:
+        raise ValueError(
+            f"width/thickness = {b / t:.4g} is below the b/t = "
+            f"{_THIN_OPEN_STRIP_RATIO_LIMIT:.0f} this thin-open form holds to (it wants "
+            f"b/t ≳ 10). At b/t = 1 it reports a section 2.37x too stiff and a peak shear "
+            f"37.5% low, both unconservative. Use the exact rectangular_bar_* functions."
         )
     return b, t
 
