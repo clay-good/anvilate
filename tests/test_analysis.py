@@ -40258,3 +40258,91 @@ def test_the_zero_approach_point_of_the_lmtd_correction_raises_like_its_neighbou
         f(81.0, 80.0)
     # And an ordinary exchanger still returns a correction factor just under 1.
     assert 0.5 < f(120.0, 40.0) <= 1.0
+
+
+def test_the_hertz_and_gear_producers_no_longer_hand_out_complex_numbers():
+    """A sign-reversed load reached a square root and came back with an imaginary part.
+
+    Both were the same shape: every operand checked except the one under the radical.
+    `hertz_cylinder_contact` returned a complex half-width out of a function annotated to
+    return a real quantity. `gear_tangential_load` handed a negative W_t to three
+    consumers in its own module and got three different answers back — a complex stress
+    from `agma_contact_stress`, a bare math domain error from `gear_contact_stress`, and
+    a quietly negative one from `lewis_bending_stress`.
+    """
+    from anvilate.analysis import (
+        agma_contact_stress,
+        gear_tangential_load,
+        hertz_cylinder_contact,
+    )
+
+    steel = {
+        "modulus1": _q("207 GPa"),
+        "poisson1": 0.3,
+        "modulus2": _q("207 GPa"),
+        "poisson2": 0.3,
+    }
+    with pytest.raises(ValueError, match="force must be positive"):
+        hertz_cylinder_contact(
+            force=_q("-500 N"), length=_q("25 mm"), diameter1=_q("60 mm"), **steel
+        )
+    with pytest.raises(ValueError, match="force must be positive"):
+        hertz_cylinder_contact(force=_q("0 N"), length=_q("25 mm"), diameter1=_q("60 mm"), **steel)
+    ok = hertz_cylinder_contact(
+        force=_q("500 N"), length=_q("25 mm"), diameter1=_q("60 mm"), **steel
+    )
+    assert ok.max_contact_pressure.magnitude > 0
+
+    # A reversing mesh torque is a real load and its magnitude is what the tooth carries.
+    forward = gear_tangential_load(torque=_q("300 N*m"), pitch_diameter=_q("60 mm"))
+    reversed_ = gear_tangential_load(torque=_q("-300 N*m"), pitch_diameter=_q("60 mm"))
+    assert reversed_.magnitude == pytest.approx(forward.magnitude, rel=1e-12)
+    assert reversed_.magnitude > 0
+    with pytest.raises(ValueError, match="nothing to evaluate"):
+        gear_tangential_load(torque=_q("0 N*m"), pitch_diameter=_q("60 mm"))
+    # And the consumer that used to return a complex number now gets a real one.
+    stress = agma_contact_stress(
+        tangential_load=reversed_,
+        pinion_pitch_diameter=_q("60 mm"),
+        face_width=_q("25 mm"),
+        geometry_factor=0.11,
+        modulus_pinion=_q("207 GPa"),
+        modulus_gear=_q("207 GPa"),
+    )
+    assert isinstance(stress.magnitude, float) and stress.magnitude > 0
+
+
+def test_the_circular_shaft_torsion_functions_guard_like_the_rest_of_their_module():
+    """Eight of thirty public functions checked dimensions and never values.
+
+    The tell was uniformity: `shaft_diameter_for_torque` — the inverse of the first of
+    these — already rejected the analogous input with a clean message, while the forward
+    functions came back with a bare ZeroDivisionError. A materials lookup returning G = 0
+    for a missing record lands exactly here.
+    """
+    from anvilate.analysis import (
+        polar_second_moment_solid,
+        shaft_torsional_stiffness,
+        shaft_torsional_stress,
+        shaft_twist_angle,
+    )
+
+    with pytest.raises(ValueError, match="diameter must be positive"):
+        shaft_torsional_stress(torque=_q("500 N*m"), diameter=_q("0 mm"))
+    with pytest.raises(ValueError, match="diameter must be positive"):
+        polar_second_moment_solid(_q("0 mm"))
+    with pytest.raises(ValueError, match="shear_modulus must be positive"):
+        shaft_twist_angle(
+            torque=_q("500 N*m"),
+            length=_q("1 m"),
+            diameter=_q("40 mm"),
+            shear_modulus=_q("0 GPa"),
+        )
+    with pytest.raises(ValueError, match="length must be positive"):
+        shaft_torsional_stiffness(
+            polar_second_moment=_q("251327 mm**4"),
+            length=_q("0 m"),
+            shear_modulus=_q("79 GPa"),
+        )
+    # The ordinary case is untouched.
+    assert shaft_torsional_stress(torque=_q("500 N*m"), diameter=_q("40 mm")).magnitude > 0

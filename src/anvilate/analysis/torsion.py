@@ -68,6 +68,33 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         )
 
 
+def _require_positive(value: Quantity, name: str) -> None:
+    """A geometry or material operand that divides, or that a magnitude depends on.
+
+    Keyed on the parameter NAME so a new call site inherits it, following the fix beam.py
+    took for the same gap. Twenty-two of this module's thirty public functions already
+    checked their values; the eight circular-shaft ones checked only dimensions, so a
+    zero diameter or a materials lookup returning G = 0 came back as a bare
+    ZeroDivisionError rather than a message naming the operand.
+    """
+    if value.magnitude <= 0:
+        raise ValueError(f"{name} must be positive; got {value}")
+
+
+def _require_torque_magnitude(torque: Quantity) -> None:
+    """A sign-reversed torque is a magnitude here, and the module's inverses say so.
+
+    `shaft_diameter_for_torque` rejects a negative torque outright; the forward functions
+    accepted it and returned a negative stress or a negative twist. A reversing or
+    back-driving torque is a real load, and its magnitude is what the shaft feels.
+    """
+    if torque.magnitude == 0:
+        raise ValueError(
+            "torque is zero: there is no torsional stress or twist to report. A load case "
+            "that does not twist the shaft has nothing to evaluate."
+        )
+
+
 def _as_quantity(pint_value, unit: str) -> Quantity:
     converted = pint_value.to(unit)
     return Quantity(magnitude=float(converted.magnitude), unit=unit)
@@ -116,6 +143,7 @@ def power_from_torque(*, torque: Quantity, rotational_speed: Quantity) -> Quanti
 def polar_second_moment_solid(diameter: Quantity) -> Quantity:
     """The polar second moment J = π·d⁴/32 of a solid circular section."""
     _require(diameter, "[length]", "diameter")
+    _require_positive(diameter, "diameter")
     return _as_quantity(pi * diameter.pint**4 / 32, "mm**4")
 
 
@@ -143,6 +171,7 @@ def shaft_torsional_stress(*, torque: Quantity, diameter: Quantity) -> Quantity:
     """
     _require(torque, "[force] * [length]", "torque")
     _require(diameter, "[length]", "diameter")
+    _require_positive(diameter, "diameter")
     d = diameter.pint
     j = pi * d**4 / 32
     r = d / 2
@@ -449,6 +478,12 @@ def shaft_twist_angle(
     _require(length, "[length]", "length")
     _require(diameter, "[length]", "diameter")
     _require(shear_modulus, "[pressure]", "shear_modulus")
+    for value, name in (
+        (length, "length"),
+        (diameter, "diameter"),
+        (shear_modulus, "shear_modulus"),
+    ):
+        _require_positive(value, name)
     j = pi * diameter.pint**4 / 32
     angle = torque.pint * length.pint / (shear_modulus.pint * j)
     return _as_quantity(angle, "degree")
@@ -472,6 +507,12 @@ def shaft_torsional_stiffness(
     _require(polar_second_moment, "[length]**4", "polar_second_moment")
     _require(length, "[length]", "length")
     _require(shear_modulus, "[pressure]", "shear_modulus")
+    for value, name in (
+        (polar_second_moment, "polar_second_moment"),
+        (length, "length"),
+        (shear_modulus, "shear_modulus"),
+    ):
+        _require_positive(value, name)
     stiffness = shear_modulus.pint * polar_second_moment.pint / length.pint
     return _as_quantity(stiffness, "N*m")
 
@@ -493,6 +534,8 @@ def hollow_shaft_twist_angle(
     _require(torque, "[force] * [length]", "torque")
     _require(length, "[length]", "length")
     _require(shear_modulus, "[pressure]", "shear_modulus")
+    _require_positive(length, "length")
+    _require_positive(shear_modulus, "shear_modulus")
     j = polar_second_moment_hollow(
         outer_diameter=outer_diameter, inner_diameter=inner_diameter
     ).pint

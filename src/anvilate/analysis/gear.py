@@ -110,6 +110,17 @@ def gear_tangential_load(*, torque: Quantity, pitch_diameter: Quantity) -> Quant
     _require(pitch_diameter, "[length]", "pitch_diameter")
     if pitch_diameter.to("mm").magnitude <= 0:
         raise ValueError(f"pitch_diameter must be positive; got {pitch_diameter}")
+    if torque.magnitude == 0:
+        raise ValueError(
+            "torque is zero: a gear transmitting no torque has no tangential load to "
+            "screen. That is nothing to evaluate, not a mesh at zero margin."
+        )
+    # A reversing or back-driving mesh torque is real, and its magnitude is the load the
+    # tooth carries. Left signed, this producer handed a negative W_t to three consumers
+    # in this module and got three different answers out: a COMPLEX contact stress from
+    # agma_contact_stress, a bare math domain error from gear_contact_stress, and a
+    # quietly negative bending stress from lewis_bending_stress.
+    torque = Quantity(magnitude=abs(torque.magnitude), unit=torque.unit)
     force = 2.0 * torque.pint / pitch_diameter.pint
     return Quantity(magnitude=float(force.to("N").magnitude), unit="N")
 

@@ -333,6 +333,15 @@ def hertz_cylinder_contact(
     _require(force, "[force]", "force")
     _require(length, "[length]", "length")
     _require(diameter1, "[length]", "diameter1")
+    # Every other operand here was checked and this one, the value under the square
+    # root, was not: a negative force returned a COMPLEX half-width out of a function
+    # annotated to return a real quantity, and zero divided by zero.
+    if force.to("N").magnitude <= 0:
+        raise ValueError(
+            f"force must be positive; got {force}. A Hertz contact is a compressive "
+            f"contact — bodies that are not pressed together are not in contact, and a "
+            f"sign-reversed load produced a complex contact half-width."
+        )
 
     d1 = diameter1.to("mm").magnitude
     length_mm = length.to("mm").magnitude
