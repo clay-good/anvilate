@@ -194,3 +194,43 @@ def test_margin_uncertainty_is_frozen_and_renders():
     assert result.dominant().name == "load"
     with pytest.raises(ValidationError):
         result.mean = 3.0  # frozen
+
+
+def test_sample_margin_refuses_a_non_finite_response() -> None:
+    """NaN samples were counted as passes -- NaN compares False against everything.
+
+    ``below = sum(1 for r in responses if r < required)`` silently put every NaN on the
+    passing side, so a response going non-finite over part of its input range reported a
+    confident low shortfall probability while its mean and coverage band came back NaN.
+    This is the same trap the scorecard already guards in ``from_safety_factor``.
+    """
+
+    def goes_nan(x):
+        t = x["t"]
+        return sqrt(t) * 10.0 / x["P"] if t >= 0 else float("nan")
+
+    with pytest.raises(ValueError, match="non-finite"):
+        sample_margin(
+            goes_nan,
+            {"t": Normal(mean=0.5, std=0.5), "P": Normal(mean=2.0, std=0.1)},
+            required=1.5,
+            seed=7,
+            samples=2000,
+        )
+
+    def goes_inf(x):
+        return float("inf") if x["P"] > 0 else 1.0
+
+    with pytest.raises(ValueError, match="non-finite"):
+        sample_margin(goes_inf, {"P": Normal(mean=2.0, std=0.1)}, required=1.5, seed=3, samples=100)
+
+    # A response that stays finite over the sampled range is unaffected.
+    ok = sample_margin(
+        lambda x: 10.0 / x["P"],
+        {"P": Normal(mean=2.0, std=0.1)},
+        required=1.5,
+        seed=7,
+        samples=2000,
+    )
+    assert ok.shortfall_probability == 0.0
+    assert ok.mean == pytest.approx(5.0, rel=0.02)

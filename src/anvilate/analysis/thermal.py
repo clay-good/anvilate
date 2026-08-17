@@ -2009,12 +2009,32 @@ def heat_exchanger_effectiveness_from_temperatures(
     t_in = minimum_capacity_inlet_temperature.to("K").magnitude
     t_out = minimum_capacity_outlet_temperature.to("K").magnitude
     t_other = opposite_inlet_temperature.to("K").magnitude
-    max_difference = abs(t_other - t_in)
+    max_difference = t_other - t_in
     if max_difference == 0:
         raise ValueError(
             "the two inlet temperatures are equal, so no heat can transfer (undefined ε)"
         )
-    return abs(t_out - t_in) / max_difference
+    # Signed, not absolute, on both halves. ε = q/q_max against q_max = C_min·(T_other,in − T_in)
+    # is a second-law bound, so the honest value lies in [0, 1]. Taking the numerator's magnitude
+    # discarded the direction of heat flow: a stream measured leaving COLDER than it entered while
+    # sitting next to a hotter one folded onto the positive side and read back as a plausible
+    # "16.7% effective, badly fouled" instead of the impossible measurement it is. The signed
+    # ratio puts that case below zero and an outlet overshooting the opposite inlet above one,
+    # and both are refused here rather than left for a downstream ε-NTU inverse to reject.
+    effectiveness = (t_out - t_in) / max_difference
+    if effectiveness < 0.0:
+        raise ValueError(
+            f"the C_min stream leaves at {t_out:g} K, moving AWAY from the opposite inlet at "
+            f"{t_other:g} K rather than toward it (it entered at {t_in:g} K); heat cannot flow "
+            "that way, so check which stream is which and the sign of the measurement"
+        )
+    if effectiveness > 1.0:
+        raise ValueError(
+            f"effectiveness came to {effectiveness:g}, above the second-law maximum of 1: the "
+            f"C_min outlet ({t_out:g} K) has passed the opposite inlet ({t_other:g} K), which no "
+            "heat exchanger can do; check the measured temperatures"
+        )
+    return effectiveness
 
 
 def counterflow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:

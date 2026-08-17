@@ -584,19 +584,23 @@ class DesignSpec(_Base):
     def combination_loads(self) -> dict[LoadNature, float]:
         """Aggregate the classified load cases into a per-nature demand mapping (N).
 
-        Sums the force magnitude of every load case that declares a ``nature`` into
+        Sums the *effective* force of every load case that declares a ``nature`` into
         a ``{LoadNature: newtons}`` mapping — the input the ASCE 7 combination
-        generators in :mod:`anvilate.loads` consume. A case with no ``nature`` (or no
-        force, such as a remote-mass case) is skipped: only classified force cases
-        enter a load combination. Force signs carry through, so a case tagged as a
-        wind uplift contributes a negative magnitude and drives the counteracting
-        combinations.
+        generators in :mod:`anvilate.loads` consume. A quasi-static case contributes
+        ``force * quasi_static_factor``: the factor is the dynamic amplification the
+        schema obliges that case to declare, so dropping it here would discard a
+        declared amplification and under-state the demand by exactly that factor.
+        A case with no ``nature`` (or no force, such as a remote-mass case) is
+        skipped: only classified force cases enter a load combination. Force signs
+        carry through, so a case tagged as a wind uplift contributes a negative
+        magnitude and drives the counteracting combinations.
         """
         loads: dict[LoadNature, float] = {}
         for case in self.load_cases:
             if case.nature is None or case.force is None:
                 continue
-            loads[case.nature] = loads.get(case.nature, 0.0) + case.force.to("N").magnitude
+            effective = case.force.to("N").magnitude * (case.quasi_static_factor or 1.0)
+            loads[case.nature] = loads.get(case.nature, 0.0) + effective
         return loads
 
     def analyze_chains(self) -> list[ChainAnalysis]:

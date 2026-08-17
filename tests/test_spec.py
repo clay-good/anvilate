@@ -1036,3 +1036,39 @@ def _line_diff(a: str, b: str) -> list[str]:
     import difflib
 
     return list(difflib.unified_diff(a.splitlines(), b.splitlines(), lineterm=""))
+
+
+def test_combination_loads_applies_the_quasi_static_factor():
+    """The factor the schema forces a quasi-static case to declare was never read.
+
+    ``combination_loads`` summed the raw force, so a declared dynamic amplification was
+    discarded and the demand came out low by exactly that factor -- turning a genuine
+    FAIL into a PASS with no sign that anything had been dropped.
+    """
+    from anvilate.loads import LoadNature
+
+    spec = golden_bracket().model_copy(
+        update={
+            "combination_basis": "asce7_lrfd",
+            "load_cases": [
+                LoadCase(
+                    name="shock",
+                    kind=LoadKind.QUASI_STATIC,
+                    applied_to="tip",
+                    force=Quantity.parse("1 kN"),
+                    quasi_static_factor=3.0,
+                    nature=LoadNature.LIVE,
+                ),
+                LoadCase(
+                    name="self_weight",
+                    kind=LoadKind.STATIC,
+                    applied_to="tip",
+                    force=Quantity.parse("400 N"),
+                    nature=LoadNature.DEAD,
+                ),
+            ],
+        }
+    )
+    loads = spec.combination_loads()
+    assert loads[LoadNature.LIVE] == pytest.approx(3000.0)  # 1 kN x 3.0, not 1 kN
+    assert loads[LoadNature.DEAD] == pytest.approx(400.0)  # a static case is untouched

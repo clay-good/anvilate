@@ -990,7 +990,7 @@ def screen_bolted_connection(
         deformation_cap = _TEAROUT_BEARING_CAP_FRACTION * d_mm * t_mm * fu
         capacity = min(tear_capacity, deformation_cap)
         load_n = connection.load.to("N").magnitude
-        tearout_sf = capacity / load_n if load_n > 0 else float("inf")
+        tearout_sf = capacity / load_n if load_n > 0 else None
         ultimate_symbol = SymbolValue(
             symbol="F_u",
             description="plate ultimate tensile strength",
@@ -1528,7 +1528,7 @@ def screen_gusset_plate(
     tension_area = gusset.net_tension_area.to("mm**2").magnitude
     capacity_n = ultimate * (_BLOCK_SHEAR_SHEAR_FRACTION * shear_area + tension_area)
     load_n = gusset.load.to("N").magnitude
-    safety = capacity_n / load_n if load_n > 0 else float("inf")
+    safety = capacity_n / load_n if load_n > 0 else None
     derivation = Derivation(
         # Block shear tears a wedge out: the shear planes carry 0.6·Fu, the tension
         # plane the full Fu.
@@ -1878,7 +1878,7 @@ def screen_concrete_bearing(
 
     confinement = min((a2 / a1) ** 0.5, _ACI_CONFINEMENT_CAP)
     capacity_n = _ACI_BEARING_FRACTION * fc * a1 * confinement
-    safety = capacity_n / load_n if load_n > 0 else float("inf")
+    safety = capacity_n / load_n if load_n > 0 else None
     derivation = Derivation(
         symbolic="B_n = 0.85 · f′c · A₁ · √(A₂/A₁)",
         inputs=(
@@ -1976,8 +1976,8 @@ def screen_shear_plate(
 
     yield_capacity = _SHEAR_STRENGTH_FRACTION * fy * gross
     rupture_capacity = _SHEAR_STRENGTH_FRACTION * fu * net
-    yield_sf = yield_capacity / load_n if load_n > 0 else float("inf")
-    rupture_sf = rupture_capacity / load_n if load_n > 0 else float("inf")
+    yield_sf = yield_capacity / load_n if load_n > 0 else None
+    rupture_sf = rupture_capacity / load_n if load_n > 0 else None
     return Scorecard(
         entries=(
             ScorecardEntry.from_safety_factor(

@@ -206,7 +206,12 @@ def gilliland_actual_stages(
     (:func:`underwood_minimum_reflux`) to the stage count N a real column needs at an operating
     ``reflux_ratio`` R. With X = (R − R_min)/(R + 1), the Molokanov fit gives
     Y = 1 − exp{[(1 + 54.4·X)/(11 + 117.2·X)]·(X − 1)/√X} and N = (N_min + Y)/(1 − Y).
-    ``reflux_ratio`` must exceed ``minimum_reflux_ratio`` (below R_min the split is unreachable).
+    ``reflux_ratio`` must exceed ``minimum_reflux_ratio`` (below R_min the split is unreachable),
+    and must clear it by enough for the correlation to resolve a finite column: the stage count
+    diverges as R → R_min, and once the operating point is within roughly 1e-5 of the pinch the
+    exponential underflows, Y rounds to exactly 1, and N = (N_min + Y)/(1 − Y) divides by zero.
+    That band is refused by name rather than raised as a bare ``ZeroDivisionError``, because the
+    physics there is a reflux pinch — an infinitely tall column — not an arithmetic accident.
     Returns the number of theoretical stages as a plain float.
     """
     if minimum_stages <= 0.0:
@@ -220,6 +225,13 @@ def gilliland_actual_stages(
         )
     x = (reflux_ratio - minimum_reflux_ratio) / (reflux_ratio + 1.0)
     y = 1.0 - exp((1.0 + 54.4 * x) / (11.0 + 117.2 * x) * (x - 1.0) / sqrt(x))
+    if y >= 1.0:
+        raise ValueError(
+            "reflux_ratio is too close to minimum_reflux_ratio for a finite stage count; got "
+            f"reflux_ratio={reflux_ratio}, minimum_reflux_ratio={minimum_reflux_ratio} "
+            f"(R − R_min = {reflux_ratio - minimum_reflux_ratio:g}). The column is at the reflux "
+            "pinch, where the Gilliland correlation diverges; raise the reflux ratio"
+        )
     return (minimum_stages + y) / (1.0 - y)
 
 

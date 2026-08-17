@@ -514,7 +514,15 @@ def gerber_safety_factor(
         return su / sm
     a = sa / se
     b = sm / su
-    return (a / (2 * b * b)) * (-1 + sqrt(1 + (2 * b / a) ** 2))
+    # The textbook root is (a/2b²)·(√(1+z²) − 1) with z = 2b/a, but √(1+z²) − 1 loses every
+    # significant digit as the mean stress falls: below z² ≈ 2e-16 it evaluates to exactly 0
+    # and the factor collapses to 0.0 — a hard FAIL for a component that is fine, reached just
+    # by spelling a small mean in Pa instead of MPa. Multiplying through by the conjugate,
+    # √(1+z²) − 1 = z²/(√(1+z²) + 1), cancels the subtraction analytically and leaves
+    # n = 2/(a·(√(1+z²) + 1)), which is exact for every z and tends continuously to the
+    # σ_m → 0 limit S_e/σ_a that the branch above returns.
+    z = 2 * b / a
+    return 2.0 / (a * (sqrt(1 + z * z) + 1))
 
 
 def gerber_scorecard(

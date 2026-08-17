@@ -21,6 +21,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..units import Quantity
+from ..units.temperature import temperature_difference_kelvin
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
@@ -99,7 +100,7 @@ def nucleate_boiling_heat_flux(
     _check(liquid_specific_heat, "[energy]/([mass]*[temperature])", "liquid_specific_heat")
     _check(excess_temperature, "[temperature]", "excess_temperature")
     c_pl = liquid_specific_heat.to("J/(kg*K)").magnitude
-    dte = excess_temperature.to("K").magnitude
+    dte = temperature_difference_kelvin(excess_temperature, name="excess_temperature")
     if c_pl <= 0:
         raise ValueError("liquid_specific_heat must be positive")
     if dte <= 0:
@@ -281,7 +282,7 @@ def film_boiling_coefficient(
     c_pv = vapor_specific_heat.to("J/(kg*K)").magnitude
     mu_v = vapor_viscosity.to("Pa*s").magnitude
     d = cylinder_diameter.to("m").magnitude
-    dte = excess_temperature.to("K").magnitude
+    dte = temperature_difference_kelvin(excess_temperature, name="excess_temperature")
     if k_v <= 0:
         raise ValueError("vapor_conductivity must be positive")
     if rho_v <= 0:

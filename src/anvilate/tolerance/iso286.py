@@ -97,9 +97,9 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
         )
     it = _parse_grade(grade)
     doc = _table()
-    magnitude = abs(nominal.to("mm").magnitude)
+    magnitude = nominal.to("mm").magnitude
     if magnitude <= 0:
-        raise ToleranceRangeError("basic size must be greater than 0 mm")
+        raise ToleranceRangeError(f"basic size must be greater than 0 mm; got {nominal}")
     low = 0.0
     for index, row in enumerate(doc["ranges"]):
         up_to = float(row["up_to_mm"])
@@ -326,7 +326,7 @@ def zone_limits(designation: str, nominal: Quantity) -> LimitDeviations:
     grade_tol = standard_tolerance(nominal, grade)
     hole = letter.isupper()
     it = grade_tol.width.to("mm").magnitude
-    nominal_mm = abs(nominal.to("mm").magnitude)
+    nominal_mm = nominal.to("mm").magnitude
     if base in _SYMMETRIC_LETTERS:
         # js/JS: the zone straddles the basic size, es = +IT/2, ei = -IT/2.
         upper_mm, lower_mm = it / 2.0, -it / 2.0

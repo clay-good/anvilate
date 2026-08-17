@@ -164,7 +164,7 @@ def general_tolerance(
         else ToleranceClass.parse(tolerance_class)
     )
     table = _table()
-    magnitude = abs(nominal.to("mm").magnitude)
+    magnitude = nominal.to("mm").magnitude
     if magnitude < table.min_nominal_mm:
         raise ToleranceRangeError(
             f"{nominal} is below ISO 2768-1's {table.min_nominal_mm:g} mm minimum; "
@@ -251,7 +251,10 @@ def general_angular_tolerance(
     """Resolve the ISO 2768-1 general angular tolerance for an angle whose
     shorter leg is ``shorter_leg`` long, under a class (default medium).
 
-    The deviation is returned in arcminutes. ``shorter_leg`` must be a length.
+    The deviation is returned in arcminutes. ``shorter_leg`` must be a length
+    greater than zero — a leg at or below zero is not a shorter side of an angle,
+    and the table's first range is open at the bottom, so it would otherwise
+    resolve to the tightest class instead of being refused.
     """
     if not shorter_leg.has_dimension("[length]"):
         raise ToleranceRangeError(
@@ -264,7 +267,9 @@ def general_angular_tolerance(
         else ToleranceClass.parse(tolerance_class)
     )
     doc = _angular_table()
-    magnitude = abs(shorter_leg.to("mm").magnitude)
+    magnitude = shorter_leg.to("mm").magnitude
+    if magnitude <= 0:
+        raise ToleranceRangeError(f"shorter leg must be greater than 0 mm; got {shorter_leg}")
     low = 0.0
     for index, row in enumerate(doc["ranges"]):
         up_to = row["leg_up_to_mm"]

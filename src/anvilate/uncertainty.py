@@ -21,7 +21,7 @@ response is locally smooth. Full FORM/SORM treatment stays out of scope.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from math import sqrt
+from math import isfinite, sqrt
 from random import Random
 from typing import Literal
 
@@ -251,6 +251,15 @@ def sample_margin(
 
     ``seed`` is required so a run is reproducible; input names are drawn in sorted
     order so the result is independent of the mapping's construction order.
+
+    A response that returns NaN or infinity for some samples is refused outright.
+    Refusing matters because NaN compares ``False`` against everything, so a NaN
+    sample would silently fall on the *passing* side of ``r < required`` — the same
+    trap :meth:`ScorecardEntry.from_safety_factor` already guards. It is easy to hit:
+    a response taking ``sqrt`` of a sampled thickness, or dividing by a sampled load,
+    goes non-finite as soon as the tail of the distribution crosses zero, and the run
+    would report a confident low shortfall probability computed from the finite
+    samples alone while ``mean`` and the coverage band come back NaN.
     """
     if samples < 2:
         raise ValueError(f"a Monte Carlo run needs at least 2 samples; got {samples}")
@@ -263,9 +272,16 @@ def sample_margin(
     names = sorted(dists)
     rng = Random(seed)
 
-    responses = sorted(
-        response({name: dists[name].sample(rng) for name in names}) for _ in range(samples)
-    )
+    drawn = [response({name: dists[name].sample(rng) for name in names}) for _ in range(samples)]
+    nonfinite = sum(1 for r in drawn if not isfinite(r))
+    if nonfinite:
+        raise ValueError(
+            f"the response returned a non-finite value on {nonfinite} of {samples} samples; "
+            "a NaN sorts as neither above nor below `required` and would be counted as a pass. "
+            "Restrict the input distributions to the response's valid domain, or have the "
+            "response raise on inputs it cannot evaluate."
+        )
+    responses = sorted(drawn)
     mean = sum(responses) / samples
     variance = sum((r - mean) ** 2 for r in responses) / (samples - 1)
     below = sum(1 for r in responses if r < required)

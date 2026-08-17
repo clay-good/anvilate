@@ -249,3 +249,33 @@ def test_combination_scorecard_governs_by_magnitude_not_by_sign() -> None:
     assert combinations.governing(uplift_loads, by_magnitude=True)[1] == pytest.approx(
         -420_000.0, rel=1e-9
     )
+
+
+def test_a_zero_demand_is_not_evaluated_rather_than_an_infinite_pass() -> None:
+    """A demand of zero used to short-circuit to an INFINITE safety factor, i.e. PASS.
+
+    ``LoadNature`` is optional on a load case, so a spec that declares a real load and
+    forgets to classify it arrives here with an empty mapping; every combination then
+    sums to zero and the division returned inf. That is not a criterion that was
+    evaluated and passed -- it is one with nothing to evaluate.
+    """
+    combos = asce7_lrfd_basic()
+    for loads in ({}, {D: 0.0}, {D: 0.0, L: 0.0}):
+        entry = combination_scorecard(
+            "lug", combinations=combos, loads=loads, capacity=1000.0, required=2.0
+        )
+        assert entry.status is CheckStatus.NOT_EVALUATED
+        assert not entry.passed
+        assert entry.safety_factor is None
+        assert "nature" in entry.detail
+    # A real classified load still screens normally, in both directions.
+    fails = combination_scorecard(
+        "lug", combinations=combos, loads={D: 50_000.0}, capacity=1000.0, required=2.0
+    )
+    assert fails.status is CheckStatus.FAIL
+    assert fails.safety_factor == pytest.approx(1000.0 / (1.4 * 50_000.0))
+    passes = combination_scorecard(
+        "lug", combinations=combos, loads={D: 100.0}, capacity=1000.0, required=2.0
+    )
+    assert passes.status is CheckStatus.PASS
+    assert passes.safety_factor == pytest.approx(1000.0 / (1.4 * 100.0))

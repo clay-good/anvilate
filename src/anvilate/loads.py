@@ -23,7 +23,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from .scorecard import ScorecardEntry
+from .scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
     "LoadNature",
@@ -206,6 +206,15 @@ def combination_scorecard(
     picked one of them, and a zero demand short-circuited to an *infinite* safety
     factor, so the check passed without the criterion ever being evaluated.
 
+    Selecting by magnitude fixed only half of that. A demand of exactly zero is still
+    not a criterion that was evaluated and passed — it is a criterion with nothing to
+    evaluate, and dividing by it yields an *infinite* safety factor that reads as the
+    strongest possible PASS. It arises from ordinary input: ``LoadNature`` is optional
+    on a load case, so a spec that declares a 50 kN load and forgets to classify it
+    reaches here with an empty ``loads`` mapping and every combination summing to 0.
+    Such a check is reported ``NOT_EVALUATED``, which the roll-up in
+    :class:`~anvilate.scorecard.Scorecard` refuses to treat as a pass.
+
     ``minimize=True`` still forces the counteracting side explicitly, for a caller who
     wants that combination named whatever its magnitude. The safety factor is judged
     against ``required``. The entry names which combination governed in its detail and
@@ -214,7 +223,18 @@ def combination_scorecard(
     """
     governing, demand = combinations.governing(loads, minimize=minimize, by_magnitude=not minimize)
     magnitude = abs(demand)
-    computed = float("inf") if magnitude == 0 else capacity / magnitude
+    if magnitude == 0:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "no load to check: every combination in "
+                f"{combinations.basis} sums to zero demand. Classify each load case with a "
+                "`nature` so it enters a combination."
+            ),
+            reference=reference or governing.citation,
+        )
+    computed = capacity / magnitude
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
     detail = f"{entry.detail}; demand {demand:g} from {governing}"
     return entry.model_copy(update={"detail": detail, "reference": reference or governing.citation})

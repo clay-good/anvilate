@@ -132,6 +132,7 @@ from anvilate.analysis import (
     fatigue_notch_factor,
     fillet_weld_leg_for_load,
     fillet_weld_throat_stress,
+    film_boiling_coefficient,
     fixed_fixed_center_load,
     fixed_fixed_center_mass_frequency,
     fixed_fixed_center_patch_load,
@@ -174,9 +175,11 @@ from anvilate.analysis import (
     geneva_index_angle,
     gerber_safety_factor,
     gerber_scorecard,
+    gilliland_actual_stages,
     goodman_equivalent_reversed_stress,
     goodman_safety_factor,
     goodman_scorecard,
+    heat_exchanger_effectiveness_from_temperatures,
     helical_gear_axial_thrust,
     helical_gear_radial_load,
     helical_spring_active_coils_for_rate,
@@ -234,6 +237,7 @@ from anvilate.analysis import (
     natural_frequency,
     natural_frequency_from_deflection,
     neuber_notch_sensitivity,
+    nucleate_boiling_heat_flux,
     octahedral_shear_stress,
     operating_pressure_angle,
     overhang_tip_load,
@@ -284,6 +288,7 @@ from anvilate.analysis import (
     rectangular_tube_second_moment,
     rectangular_tube_torsional_stress,
     rectangular_tube_twist_angle,
+    relative_humidity,
     required_axial_area,
     resonance_phase_angle,
     reverted_train_is_coaxial,
@@ -297,6 +302,7 @@ from anvilate.analysis import (
     rotating_solid_disc_max_stress,
     rotating_solid_disc_radial_stress,
     rotating_solid_disc_tangential_stress,
+    saturation_vapor_pressure,
     scotch_yoke_acceleration,
     scotch_yoke_displacement,
     scotch_yoke_velocity,
@@ -6411,6 +6417,27 @@ def test_goodman_scorecard_uses_db_endurance_and_honours_no_silent_green():
     assert gap.status is CheckStatus.NOT_EVALUATED
     assert not gap.passed
 
+    # The EVALUATED branch had no coverage at all -- only the None early-out above was
+    # ever reached, so swapping the two stress arguments inside the wrapper (Gerber is
+    # NOT symmetric in them: sigma_a is divided by S_e and sigma_m by S_u) left the whole
+    # suite green while inflating the factor 41%. Its two siblings are already pinned by
+    # value for exactly this reason; Gerber was missed in that sweep.
+    # a = 50/200 = 0.25, z = 2b/a with b = 20/400 = 0.05, so n = 2/(a*(sqrt(1+z**2)+1)).
+    evaluated = gerber_scorecard(
+        "fatigue",
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q("20 MPa"),
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        required=1.5,
+    )
+    a, z = 50.0 / 200.0, 2.0 * (20.0 / 400.0) / (50.0 / 200.0)
+    assert evaluated.status is CheckStatus.PASS
+    assert evaluated.safety_factor == pytest.approx(2.0 / (a * (math.sqrt(1 + z * z) + 1)))
+    # The Gerber parabola bulges above the Goodman line, so it is the less conservative
+    # of the two on the same inputs -- a wrapper that quietly swapped curves would show up.
+    assert evaluated.safety_factor > 200.0 / (50.0 + 20.0 * 200.0 / 400.0)
+
 
 def test_goodman_rejects_negative_amplitude():
     with pytest.raises(ValueError, match="amplitude"):
@@ -6498,6 +6525,27 @@ def test_soderberg_scorecard_honours_no_silent_green():
     assert gap.status is CheckStatus.NOT_EVALUATED
     assert not gap.passed
 
+    # The EVALUATED branch had no coverage at all -- only the None early-out above was
+    # ever reached, so swapping the two stress arguments inside the wrapper (Gerber is
+    # NOT symmetric in them: sigma_a is divided by S_e and sigma_m by S_u) left the whole
+    # suite green while inflating the factor 41%. Its two siblings are already pinned by
+    # value for exactly this reason; Gerber was missed in that sweep.
+    # a = 50/200 = 0.25, z = 2b/a with b = 20/400 = 0.05, so n = 2/(a*(sqrt(1+z**2)+1)).
+    evaluated = gerber_scorecard(
+        "fatigue",
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q("20 MPa"),
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        required=1.5,
+    )
+    a, z = 50.0 / 200.0, 2.0 * (20.0 / 400.0) / (50.0 / 200.0)
+    assert evaluated.status is CheckStatus.PASS
+    assert evaluated.safety_factor == pytest.approx(2.0 / (a * (math.sqrt(1 + z * z) + 1)))
+    # The Gerber parabola bulges above the Goodman line, so it is the less conservative
+    # of the two on the same inputs -- a wrapper that quietly swapped curves would show up.
+    assert evaluated.safety_factor > 200.0 / (50.0 + 20.0 * 200.0 / 400.0)
+
 
 def test_soderberg_rejects_negative_amplitude():
     with pytest.raises(ValueError, match="amplitude"):
@@ -6568,6 +6616,27 @@ def test_gerber_scorecard_honours_no_silent_green():
     )
     assert gap.status is CheckStatus.NOT_EVALUATED
     assert not gap.passed
+
+    # The EVALUATED branch had no coverage at all -- only the None early-out above was
+    # ever reached, so swapping the two stress arguments inside the wrapper (Gerber is
+    # NOT symmetric in them: sigma_a is divided by S_e and sigma_m by S_u) left the whole
+    # suite green while inflating the factor 41%. Its two siblings are already pinned by
+    # value for exactly this reason; Gerber was missed in that sweep.
+    # a = 50/200 = 0.25, z = 2b/a with b = 20/400 = 0.05, so n = 2/(a*(sqrt(1+z**2)+1)).
+    evaluated = gerber_scorecard(
+        "fatigue",
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q("20 MPa"),
+        endurance_limit=_q("200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        required=1.5,
+    )
+    a, z = 50.0 / 200.0, 2.0 * (20.0 / 400.0) / (50.0 / 200.0)
+    assert evaluated.status is CheckStatus.PASS
+    assert evaluated.safety_factor == pytest.approx(2.0 / (a * (math.sqrt(1 + z * z) + 1)))
+    # The Gerber parabola bulges above the Goodman line, so it is the less conservative
+    # of the two on the same inputs -- a wrapper that quietly swapped curves would show up.
+    assert evaluated.safety_factor > 200.0 / (50.0 + 20.0 * 200.0 / 400.0)
 
 
 def test_coffin_manson_and_strain_life():
@@ -37415,3 +37484,220 @@ def test_two_producers_that_emitted_what_their_own_consumers_reject() -> None:
     assert radiation_resistance_short_dipole(length=_q("0.1 m"), wavelength=_q("1 m")).to(
         "ohm"
     ).magnitude == pytest.approx(80.0 * pi**2 * 0.01, rel=1e-12)
+
+
+def test_boiling_refuses_an_offset_scale_excess_temperature() -> None:
+    """ΔT_e is a temperature DIFFERENCE, and the raw .to("K") added 273.15 to it.
+
+    Rohsenow is CUBIC in the excess temperature, so writing a 10 K superheat the natural
+    way -- Quantity(10, "degC") -- over-predicted the flux by (283.15/10)**3 = 22,703x
+    and sailed straight past the critical-heat-flux ceiling the module exists to screen.
+    """
+    from anvilate.units.temperature import OffsetTemperatureError
+
+    water = {
+        "liquid_viscosity": Quantity(magnitude=2.79e-4, unit="Pa*s"),
+        "latent_heat": Quantity(magnitude=2257e3, unit="J/kg"),
+        "liquid_density": Quantity(magnitude=957.9, unit="kg/m**3"),
+        "vapor_density": Quantity(magnitude=0.5956, unit="kg/m**3"),
+        "surface_tension": Quantity(magnitude=0.0589, unit="N/m"),
+        "liquid_specific_heat": Quantity(magnitude=4217.0, unit="J/(kg*K)"),
+        "surface_fluid_coefficient": 0.0130,
+        "prandtl_number": 1.76,
+        "fluid_exponent": 1.0,
+    }
+    for unit in ("degC", "degF"):
+        with pytest.raises(OffsetTemperatureError, match="excess_temperature"):
+            nucleate_boiling_heat_flux(
+                excess_temperature=Quantity(magnitude=10.0, unit=unit), **water
+            )
+    # The spellings that genuinely express a difference agree with each other.
+    in_kelvin = nucleate_boiling_heat_flux(
+        excess_temperature=Quantity(magnitude=10.0, unit="K"), **water
+    )
+    in_delta_c = nucleate_boiling_heat_flux(
+        excess_temperature=Quantity(magnitude=10.0, unit="delta_degC"), **water
+    )
+    assert in_delta_c.to("W/m**2").magnitude == pytest.approx(in_kelvin.to("W/m**2").magnitude)
+    # Cubic in ΔT_e: doubling the superheat multiplies the flux by 8.
+    doubled = nucleate_boiling_heat_flux(
+        excess_temperature=Quantity(magnitude=20.0, unit="K"), **water
+    )
+    assert doubled.to("W/m**2").magnitude == pytest.approx(8.0 * in_kelvin.to("W/m**2").magnitude)
+
+    film = {
+        "vapor_conductivity": Quantity(magnitude=0.0331, unit="W/(m*K)"),
+        "vapor_density": Quantity(magnitude=0.5956, unit="kg/m**3"),
+        "liquid_density": Quantity(magnitude=957.9, unit="kg/m**3"),
+        "latent_heat": Quantity(magnitude=2257e3, unit="J/kg"),
+        "vapor_specific_heat": Quantity(magnitude=2030.0, unit="J/(kg*K)"),
+        "vapor_viscosity": Quantity(magnitude=1.26e-5, unit="Pa*s"),
+        "cylinder_diameter": Quantity(magnitude=6.0, unit="mm"),
+    }
+    with pytest.raises(OffsetTemperatureError, match="excess_temperature"):
+        film_boiling_coefficient(excess_temperature=Quantity(magnitude=250.0, unit="degC"), **film)
+    assert film_boiling_coefficient(
+        excess_temperature=Quantity(magnitude=250.0, unit="delta_degC"), **film
+    ).to("W/(m**2*K)").magnitude == pytest.approx(
+        film_boiling_coefficient(excess_temperature=Quantity(magnitude=250.0, unit="K"), **film)
+        .to("W/(m**2*K)")
+        .magnitude
+    )
+
+
+def test_gerber_stays_accurate_as_the_mean_stress_approaches_zero() -> None:
+    """sqrt(1 + x) - 1 lost every digit for a small mean and collapsed to exactly 0.0.
+
+    A safety factor of zero is a hard FAIL for a component that is fine, and it was
+    reached just by spelling a small mean stress in Pa instead of MPa. The limit as the
+    mean vanishes is the endurance ratio S_e/sigma_a, which the sigma_m <= 0 branch
+    already returns -- so the function was discontinuous at its own boundary.
+    """
+    fixed = {
+        "alternating_stress": Quantity(magnitude=100.0, unit="MPa"),
+        "endurance_limit": Quantity(magnitude=250.0, unit="MPa"),
+        "ultimate_strength": Quantity(magnitude=600.0, unit="MPa"),
+    }
+    limit = 250.0 / 100.0  # S_e / sigma_a
+    assert gerber_safety_factor(mean_stress=Quantity(magnitude=0.0, unit="MPa"), **fixed) == limit
+    for mean_mpa in (1e-2, 1e-4, 1e-6, 1e-9):
+        got = gerber_safety_factor(mean_stress=Quantity(magnitude=mean_mpa, unit="MPa"), **fixed)
+        assert got == pytest.approx(limit, rel=1e-6)
+    # 1 Pa is 1e-6 MPa -- the unit choice that used to return 0.0.
+    assert gerber_safety_factor(
+        mean_stress=Quantity(magnitude=1.0, unit="Pa"), **fixed
+    ) == pytest.approx(limit, rel=1e-6)
+    # A mean that actually bites still reduces the factor, below the Goodman line.
+    real = gerber_safety_factor(mean_stress=Quantity(magnitude=200.0, unit="MPa"), **fixed)
+    assert 0.0 < real < limit
+
+
+def test_gilliland_refuses_the_reflux_pinch_instead_of_dividing_by_zero() -> None:
+    """As R -> R_min the exponential underflows, Y rounds to 1, and N divides by zero.
+
+    The stage count genuinely diverges at the pinch, so the honest answer is a refusal
+    naming the reflux ratio -- not a bare ZeroDivisionError from inside the correlation,
+    which is not the library's error contract and points at nothing actionable.
+    """
+    with pytest.raises(ValueError, match="reflux pinch"):
+        gilliland_actual_stages(minimum_stages=8.0, minimum_reflux_ratio=1.5, reflux_ratio=1.50001)
+    # Comfortably above the pinch the correlation still answers, and monotonically:
+    # more reflux buys fewer stages.
+    loose = gilliland_actual_stages(
+        minimum_stages=8.0, minimum_reflux_ratio=1.5, reflux_ratio=1.501
+    )
+    looser = gilliland_actual_stages(minimum_stages=8.0, minimum_reflux_ratio=1.5, reflux_ratio=2.0)
+    assert loose > looser > 8.0
+
+
+def test_heat_exchanger_effectiveness_refuses_an_impossible_measurement() -> None:
+    """Both halves of the ratio were absolute, so heat flowing the wrong way looked fine.
+
+    A C_min stream measured leaving COLDER than it entered, next to an 80 C stream, folded
+    onto the positive side and read back as a plausible "16.7% effective, badly fouled"
+    instead of an impossible measurement. epsilon = q/q_max is a second-law bound, and the
+    module's own ε-NTU inverses enforce (0, 1).
+    """
+    cold_in = Quantity(magnitude=293.15, unit="K")
+    hot_in = Quantity(magnitude=353.15, unit="K")
+    with pytest.raises(ValueError, match="cannot flow"):
+        heat_exchanger_effectiveness_from_temperatures(
+            minimum_capacity_inlet_temperature=cold_in,
+            minimum_capacity_outlet_temperature=Quantity(magnitude=283.15, unit="K"),
+            opposite_inlet_temperature=hot_in,
+        )
+    with pytest.raises(ValueError, match="second-law"):
+        heat_exchanger_effectiveness_from_temperatures(
+            minimum_capacity_inlet_temperature=cold_in,
+            minimum_capacity_outlet_temperature=Quantity(magnitude=363.15, unit="K"),
+            opposite_inlet_temperature=hot_in,
+        )
+    # A physical measurement still answers: (313.15 - 293.15)/(353.15 - 293.15).
+    assert heat_exchanger_effectiveness_from_temperatures(
+        minimum_capacity_inlet_temperature=cold_in,
+        minimum_capacity_outlet_temperature=Quantity(magnitude=313.15, unit="K"),
+        opposite_inlet_temperature=hot_in,
+    ) == pytest.approx(20.0 / 60.0)
+    # And so does the mirror case, where C_min is the HOT stream and cools toward the cold inlet.
+    assert heat_exchanger_effectiveness_from_temperatures(
+        minimum_capacity_inlet_temperature=hot_in,
+        minimum_capacity_outlet_temperature=Quantity(magnitude=333.15, unit="K"),
+        opposite_inlet_temperature=cold_in,
+    ) == pytest.approx(20.0 / 60.0)
+
+
+def test_relative_humidity_refuses_a_vapor_pressure_above_saturation() -> None:
+    """The producer emitted phi > 1 into consumers that enforce (0, 1].
+
+    wet_bulb_temperature rejects it one step later, pointing at the wrong argument; the
+    docstring already promised a 0-to-1 fraction.
+    """
+    saturation = saturation_vapor_pressure(temperature=Quantity(magnitude=20.0, unit="degC"))
+    with pytest.raises(ValueError, match="above saturation"):
+        relative_humidity(
+            vapor_pressure=Quantity(magnitude=3000.0, unit="Pa"), saturation_pressure=saturation
+        )
+    # Exactly saturated is the top of the range and still valid.
+    assert relative_humidity(
+        vapor_pressure=saturation, saturation_pressure=saturation
+    ) == pytest.approx(1.0)
+    half = Quantity(magnitude=0.5 * saturation.to("Pa").magnitude, unit="Pa")
+    assert relative_humidity(vapor_pressure=half, saturation_pressure=saturation) == pytest.approx(
+        0.5
+    )
+
+
+def test_deflection_scorecard_screens_the_magnitude_not_the_sign() -> None:
+    """Dropping the abs() left the suite green -- a silent green on every downward span.
+
+    Every deflection the existing tests pass is positive, and they assert only the
+    status, so the magnitude promise in the docstring was unenforced. The library itself
+    produces signed deflections a caller would feed straight in: on heating,
+    ``bimetallic_strip_tip_deflection`` returns about -6.124 mm.
+    """
+    from anvilate.scorecard import CheckStatus
+
+    over = deflection_scorecard("strip", deflection=_q("-6.124 mm"), limit=_q("1 mm"))
+    assert over.status is CheckStatus.FAIL
+    assert over.detail == "deflection 6.124 mm vs limit 1.000 mm"
+    # The sign must not change the verdict or the reported number.
+    assert (
+        deflection_scorecard("strip", deflection=_q("6.124 mm"), limit=_q("1 mm")).detail
+        == over.detail
+    )
+    under = deflection_scorecard("strip", deflection=_q("-0.5 mm"), limit=_q("1 mm"))
+    assert under.status is CheckStatus.PASS
+    assert under.detail == "deflection 0.500 mm vs limit 1.000 mm"
+
+
+def test_two_way_shear_alpha_s_governs_on_a_long_critical_perimeter() -> None:
+    """The alpha_s limit was structurally unobservable at the only geometry tested.
+
+    ACI 318-19 §22.6.5.2 takes the least of three limits; the existing test uses
+    bo = 1600 mm, d = 200 mm, where the first limit always wins, so the third is dead
+    code as far as the suite is concerned -- alpha_s could be changed from 40 to 60 and
+    nothing failed. At a long perimeter the third limit governs and the column position
+    becomes visible. Punching shear is brittle and progressive, and a corner column is
+    its worst case, so the position factor is the last thing that should go unpinned.
+    """
+    from anvilate.analysis import rc_two_way_shear_strength
+
+    geometry = {
+        "concrete_strength": _q("30 MPa"),
+        "critical_perimeter": _q("8000 mm"),
+        "effective_depth": _q("200 mm"),
+    }
+    d_over_bo = 200.0 / 8000.0
+
+    def expected(alpha_s: float) -> float:
+        # 0.083 * (2 + alpha_s*d/bo) * sqrt(f'c) * bo * d, in kN
+        return 0.083 * (2 + alpha_s * d_over_bo) * math.sqrt(30.0) * 8000.0 * 200.0 / 1000.0
+
+    interior = rc_two_way_shear_strength(**geometry)  # alpha_s defaults to 40 (interior)
+    edge = rc_two_way_shear_strength(column_position_factor=30.0, **geometry)
+    corner = rc_two_way_shear_strength(column_position_factor=20.0, **geometry)
+    assert interior.to("kN").magnitude == pytest.approx(expected(40.0), rel=1e-12)
+    assert edge.to("kN").magnitude == pytest.approx(expected(30.0), rel=1e-12)
+    assert corner.to("kN").magnitude == pytest.approx(expected(20.0), rel=1e-12)
+    # A corner column is the weakest position, an interior one the strongest.
+    assert corner.to("kN").magnitude < edge.to("kN").magnitude < interior.to("kN").magnitude

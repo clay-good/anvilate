@@ -1107,3 +1107,31 @@ def test_monte_carlo_yield_rejects_non_length_requirement() -> None:
 def test_monte_carlo_rejects_bad_arguments(kwargs: dict) -> None:
     with pytest.raises(ValueError):
         _interface_stack().monte_carlo(**kwargs)
+
+
+def test_a_negative_nominal_is_refused_rather_than_silently_absolved() -> None:
+    """abs() ran before the lower-bound guard, so the guard could never fire on a negative.
+
+    ``standard_tolerance``'s own docstring promises to raise "if the nominal is at or
+    below zero", but it took the magnitude first -- so a -20 mm basic size resolved to a
+    confident IT7 width and ``zone_limits`` reported a permitted feature size of
+    -20.000/-19.979 mm. There is no negative basic size; refusing is the documented
+    behavior.
+    """
+    negative = Quantity(magnitude=-20.0, unit="mm")
+    with pytest.raises(ToleranceRangeError, match="greater than 0"):
+        standard_tolerance(negative, 7)
+    with pytest.raises(ToleranceRangeError, match="greater than 0"):
+        zone_limits("H7", negative)
+    with pytest.raises(ToleranceRangeError, match="explicit tolerance"):
+        general_tolerance(negative, "m")
+    with pytest.raises(ToleranceRangeError, match="greater than 0"):
+        general_angular_tolerance(negative, "m")
+    with pytest.raises(ToleranceRangeError, match="greater than 0"):
+        general_angular_tolerance(_mm(0), "m")
+
+    # The positive counterparts still answer, unchanged.
+    assert standard_tolerance(_mm(20), 7).width == standard_tolerance(_mm(20), "IT7").width
+    assert zone_limits("H7", _mm(20)).min_size.to("mm").magnitude == pytest.approx(20.0)
+    assert general_tolerance(_mm(20), "m").deviation.to("mm").magnitude > 0
+    assert general_angular_tolerance(_mm(20), "m").deviation.to("arcminute").magnitude > 0

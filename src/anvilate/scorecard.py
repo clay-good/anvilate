@@ -47,6 +47,19 @@ class CheckStatus(StrEnum):
     NOT_EVALUATED = "not_evaluated"
 
 
+def _blocking_rank(status: CheckStatus) -> int:
+    """How much a status blocks, for ordering: failed > could-not-run > passed.
+
+    Mirrors the precedence :attr:`Scorecard.status` rolls up with, so a ranking
+    built on it can never place a passing check above a blocking one.
+    """
+    if status is CheckStatus.FAIL:
+        return 2
+    if status is CheckStatus.NOT_EVALUATED:
+        return 1
+    return 0
+
+
 class Direction(StrEnum):
     """Which way a parameter has to move to improve a check's margin."""
 
@@ -337,14 +350,20 @@ class Scorecard(BaseModel):
     def governing(self) -> ScorecardEntry | None:
         """The check running closest to (or furthest past) its limit.
 
-        The entry with the largest :attr:`ScorecardEntry.utilization` — the one a
-        reviewer reads first, and the one that has to move before anything else
-        matters. ``None`` when no check carries a safety factor.
+        Blocking status outranks utilization, so the governing check honours the
+        same precedence as the roll-up in :attr:`status` — a failing check, then
+        one that could not run, then the largest
+        :attr:`ScorecardEntry.utilization`. Without that ordering a card can fail
+        on a check carrying no safety factor (every deflection and serviceability
+        check is built that way) and still name a *passing* check as governing,
+        pointing the reviewer away from the one thing that blocks.
+
+        ``None`` only when nothing blocks and no check carries a safety factor.
         """
-        ranked = [e for e in self.entries if e.utilization is not None]
+        ranked = [e for e in self.entries if e.utilization is not None or _blocking_rank(e.status)]
         if not ranked:
             return None
-        return max(ranked, key=lambda e: e.utilization)
+        return max(ranked, key=lambda e: (_blocking_rank(e.status), e.utilization or 0.0))
 
     def governing_shift(self, previous: Scorecard) -> GoverningChange | None:
         """How the governing check moved since ``previous``, or ``None``.

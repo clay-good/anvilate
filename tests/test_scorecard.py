@@ -395,3 +395,37 @@ def test_a_negative_safety_factor_governs_instead_of_ranking_below_every_pass() 
     )
     tight = ScorecardEntry.from_safety_factor("tight", computed=1.6, required=2.0)
     assert Scorecard(entries=(fine, tight)).governing().name == "tight"
+
+
+def test_a_failing_check_without_a_safety_factor_still_governs() -> None:
+    """governing() ranked only entries carrying a safety factor, and dropped the rest.
+
+    A deflection or serviceability check is built as a bare entry with no safety factor,
+    so its utilization is None and it fell out of the ranking entirely. A card could then
+    FAIL on a beam 5x over its deflection limit and name a *passing* strength check as
+    governing -- the same misdirection as the negative-safety-factor door above, through
+    the wider of the two openings.
+    """
+    over = ScorecardEntry(
+        name="deflection",
+        status=CheckStatus.FAIL,
+        detail="50.000 mm vs limit 10.000 mm",
+    )
+    fine = ScorecardEntry.from_safety_factor("bending", computed=3.0, required=1.5)
+    card = Scorecard(entries=(over, fine))
+    assert card.status is CheckStatus.FAIL
+    assert over.utilization is None
+    assert card.governing().name == "deflection"
+
+    # A check that could not run outranks a pass for the same reason, and a card with
+    # nothing blocking still ranks purely by utilization.
+    unrun = ScorecardEntry(name="weld", status=CheckStatus.NOT_EVALUATED, detail="no throat given")
+    assert Scorecard(entries=(unrun, fine)).governing().name == "weld"
+    tight = ScorecardEntry.from_safety_factor("tight", computed=1.6, required=1.5)
+    assert Scorecard(entries=(fine, tight)).governing().name == "tight"
+    # Among failures, the one furthest past its limit still wins.
+    worst = ScorecardEntry.from_safety_factor("worst", computed=0.2, required=1.5)
+    assert Scorecard(entries=(over, worst)).governing().name == "worst"
+    # Nothing blocking and no safety factor anywhere is still None.
+    clean = ScorecardEntry(name="note", status=CheckStatus.PASS, detail="informational")
+    assert Scorecard(entries=(clean,)).governing() is None

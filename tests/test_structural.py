@@ -1232,11 +1232,20 @@ def test_welded_connection_screens_throat_shear():
     assert card.status is CheckStatus.PASS
     assert card.entries[0].name == "fillet weld shear"
     assert card.entries[0].reference == "AISC 360-16 §J2.4"
+    # Pin the number, not just the verdict. The 0.6 of AISC 360-16 §J2.4 lives in a
+    # private pack constant that nothing else guards -- inflating it to 0.9 (a 50%
+    # rise in every fillet-weld allowable) left the whole suite green, because both
+    # this verdict and the overload one below sit far from the 2.0 threshold.
+    throat_mm2 = 0.707 * 6.0 * 100.0
+    assert card.entries[0].safety_factor == pytest.approx(0.6 * 483.0 / (20_000.0 / throat_mm2))
 
 
 def test_overloaded_weld_fails():
     card = screen_welded_connection(_weld(load="150 kN"), required_safety_factor=2.0)
     assert card.status is CheckStatus.FAIL
+    assert card.entries[0].safety_factor == pytest.approx(
+        0.6 * 483.0 / (150_000.0 / (0.707 * 6.0 * 100.0))
+    )
 
 
 def test_weld_rejects_non_pressure_electrode_strength():
@@ -1857,3 +1866,76 @@ def test_overhang_shear_sees_the_back_span_when_the_overhang_is_long() -> None:
     assert _shear_safety_factor(udl("2000 mm")) == pytest.approx(24.041666666666668, rel=1e-9)
     # w = 10 N/mm over c = 3000 mm against L = 1000: V = 10*3000^2/(2*1000) = 45 kN.
     assert _shear_safety_factor(udl("3000 mm")) == pytest.approx(10.685185185185187, rel=1e-9)
+
+
+def test_column_screen_applies_the_effective_length_factor() -> None:
+    """No screen test ever passed an end condition other than PINNED_PINNED (K = 1.0).
+
+    Deleting the ``end_condition.factor() *`` from both column screens left the whole
+    suite green, so the entire end-restraint model was unpinned. K enters the slenderness
+    linearly and the Euler stress as K**2, so a cantilever column (FIXED_FREE, K = 2)
+    would have had its capacity over-predicted fourfold -- a buckling-unsafe column
+    reported as passing, in exactly the case the library exists to catch.
+    """
+
+    def screen(end_condition):
+        card = screen_column_member(
+            ColumnMember(
+                name="col",
+                section=CrossSection.rectangular(width=_q("20 mm"), height=_q("10 mm")),
+                length=_q("500 mm"),
+                end_condition=end_condition,
+                axial_load=_q("5 kN"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=2.0,
+        )
+        return card.entries[0]
+
+    free = screen(ColumnEnd.FIXED_FREE)
+    pinned = screen(ColumnEnd.PINNED_PINNED)
+    # Both are in the Euler range, where sigma_cr goes as 1/(K*L)**2 -- so halving K from
+    # 2.0 to 1.0 must multiply the safety factor by exactly 4.
+    assert "Euler" in free.name and "Euler" in pinned.name
+    assert pinned.safety_factor == pytest.approx(4.0 * free.safety_factor)
+    # And the factor of 4 is the difference between failing and passing.
+    assert free.status is CheckStatus.FAIL
+    assert pinned.status is CheckStatus.PASS
+    # A stiffer restraint is monotonically better.
+    assert screen(ColumnEnd.FIXED_PINNED).safety_factor > pinned.safety_factor
+    assert (
+        screen(ColumnEnd.FIXED_FIXED).safety_factor > screen(ColumnEnd.FIXED_PINNED).safety_factor
+    )
+
+
+def test_a_non_positive_demand_is_not_evaluated_rather_than_an_infinite_pass() -> None:
+    """Five structural screens returned float("inf") for a non-positive load, i.e. PASS.
+
+    Every other pack in the library spells the same degenerate case ``else None``, which
+    ``from_safety_factor`` reports as NOT_EVALUATED; these five were the only ``inf``.
+    The effect is visible within a single card: on a sign flip, edge tear-out went from
+    FAIL at 0.35 to an infinite PASS while its two neighbours kept failing.
+    """
+
+    def bolted(load: str):
+        return screen_bolted_connection(
+            BoltedConnection(
+                name="bc",
+                bolt_diameter=_q("16 mm"),
+                plate_thickness=_q("10 mm"),
+                load=_q(load),
+                bolt_material="ASTM-A36",
+                plate_material="ASTM-A36",
+                edge_distance=_q("30 mm"),
+            ),
+            required_safety_factor=1.5,
+        )
+
+    tearout = {e.name: e for e in bolted("300 kN").entries}["bc edge tear-out"]
+    assert tearout.status is CheckStatus.FAIL
+    for degenerate in ("-300 kN", "0 kN"):
+        entry = {e.name: e for e in bolted(degenerate).entries}["bc edge tear-out"]
+        assert entry.status is CheckStatus.NOT_EVALUATED
+        assert entry.safety_factor is None
+        # And the card as a whole is never a clean pass on a demand that was not evaluated.
+        assert not bolted(degenerate).passed

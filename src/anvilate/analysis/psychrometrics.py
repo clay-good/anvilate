@@ -101,6 +101,12 @@ def relative_humidity(*, vapor_pressure: Quantity, saturation_pressure: Quantity
     ``saturation_pressure`` p_ws at the same temperature (from
     :func:`saturation_vapor_pressure`). Returns φ as a fraction from 0 (bone dry) to 1 (saturated);
     multiply by 100 for a percentage.
+
+    A vapor pressure above saturation is refused rather than returned as φ > 1. Air at the stated
+    temperature cannot hold it, so the pair almost always means the two pressures were read at
+    different temperatures — and every consumer of φ in this module (:func:`wet_bulb_temperature`
+    among them) enforces the (0, 1] range anyway, so returning it here only moves the error
+    downstream where it points at the wrong argument.
     """
     _check(vapor_pressure, "[pressure]", "vapor_pressure")
     _check(saturation_pressure, "[pressure]", "saturation_pressure")
@@ -108,6 +114,12 @@ def relative_humidity(*, vapor_pressure: Quantity, saturation_pressure: Quantity
     p_ws = saturation_pressure.to("Pa").magnitude
     if p_w < 0 or p_ws <= 0:
         raise ValueError("vapor_pressure must be non-negative and saturation_pressure positive")
+    if p_w > p_ws:
+        raise ValueError(
+            f"vapor_pressure ({p_w:g} Pa) exceeds saturation_pressure ({p_ws:g} Pa), which would "
+            f"make the relative humidity {p_w / p_ws:g} — above saturation. Check that both "
+            "pressures are stated at the same temperature"
+        )
     return p_w / p_ws
 
 
