@@ -16137,6 +16137,105 @@ def test_nds_shear_stress_scorecard_and_bearing_area_factor():
         nds_shear_stress(shear_force=_q("5 MPa"), width=_q("38 mm"), depth=_q("235 mm"))
 
 
+def test_nds_bearing_stress_and_scorecard():
+    from anvilate.analysis import (
+        nds_adjusted_design_value,
+        nds_bearing_area_factor,
+        nds_bearing_scorecard,
+        nds_bearing_stress,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    # f_c_perp = P/(b*l_b); a 9 kN reaction on a 38 mm joist over a 38 mm plate.
+    fc = nds_bearing_stress(bearing_force=_q("9 kN"), width=_q("38 mm"), bearing_length=_q("38 mm"))
+    assert fc.to("MPa").magnitude == pytest.approx(9000 / (0.038 * 0.038) / 1e6, rel=1e-9)
+    # It is P/A, not the 1.5x peak of the shear formula — a doubled bearing length halves it.
+    assert nds_bearing_stress(
+        bearing_force=_q("9 kN"), width=_q("38 mm"), bearing_length=_q("76 mm")
+    ).to("MPa").magnitude == pytest.approx(fc.to("MPa").magnitude / 2, rel=1e-9)
+    # Sign-agnostic: a reaction pushing the other way bears just as hard.
+    assert nds_bearing_stress(
+        bearing_force=_q("-9 kN"), width=_q("38 mm"), bearing_length=_q("38 mm")
+    ).to("MPa").magnitude == pytest.approx(fc.to("MPa").magnitude, rel=1e-9)
+
+    # F'_c_perp = F_c_perp * C_M * C_b (no C_D: NDS 2.3.2 does not apply it across the grain).
+    adjusted = nds_adjusted_design_value(
+        reference_value=_q("625 psi"),
+        factors={"C_b": nds_bearing_area_factor(bearing_length=_q("1.5 inch"))},
+    )
+    assert adjusted.to("psi").magnitude == pytest.approx(625 * 1.25, rel=1e-9)
+
+    entry = nds_bearing_scorecard("end bearing", bearing_stress=fc, adjusted_bearing_value=adjusted)
+    assert entry.safety_factor == pytest.approx(
+        adjusted.to("MPa").magnitude / fc.to("MPa").magnitude, rel=1e-9
+    )
+    # 6.23 MPa applied against a 5.39 MPa allowable: the joist crushes at its support.
+    assert entry.status is CheckStatus.FAIL
+    assert fc.to("psi").magnitude > adjusted.to("psi").magnitude
+    assert entry.reference == "NDS"
+
+    # A longer bearing plate drops the stress and flips the verdict — the bearing length is the fix.
+    wide = nds_bearing_stress(
+        bearing_force=_q("9 kN"), width=_q("38 mm"), bearing_length=_q("140 mm")
+    )
+    assert (
+        nds_bearing_scorecard(
+            "end bearing", bearing_stress=wide, adjusted_bearing_value=adjusted
+        ).status
+        is CheckStatus.PASS
+    )
+
+    # No reference value -> NOT_EVALUATED, never a silent pass.
+    unset = nds_bearing_scorecard("end bearing", bearing_stress=fc, adjusted_bearing_value=None)
+    assert unset.status is CheckStatus.NOT_EVALUATED
+    assert unset.safety_factor is None
+
+    # A zero reaction does not bear at all: an infinite factor, not a divide-by-zero.
+    zero = nds_bearing_scorecard(
+        "end bearing",
+        bearing_stress=Quantity(magnitude=0.0, unit="MPa"),
+        adjusted_bearing_value=adjusted,
+    )
+    assert zero.status is CheckStatus.PASS
+
+    # The required factor is honoured, not decorative.
+    assert (
+        nds_bearing_scorecard(
+            "end bearing", bearing_stress=wide, adjusted_bearing_value=adjusted, required=5.0
+        ).status
+        is CheckStatus.FAIL
+    )
+
+    # NDS 3.10.4 grants C_b only to a bearing at least 3 in from the member end. A 1.5 in bearing
+    # sitting 2 in from the end gets no bonus; the same bearing 4 in in keeps the full 1.25.
+    assert nds_bearing_area_factor(
+        bearing_length=_q("1.5 inch"), end_distance=_q("2 inch")
+    ) == pytest.approx(1.0, rel=1e-12)
+    assert nds_bearing_area_factor(
+        bearing_length=_q("1.5 inch"), end_distance=_q("4 inch")
+    ) == pytest.approx(1.25, rel=1e-9)
+    # Exactly 3 in qualifies ("at least"), and an omitted end distance keeps the interior default.
+    assert nds_bearing_area_factor(
+        bearing_length=_q("1.5 inch"), end_distance=_q("3 inch")
+    ) == pytest.approx(1.25, rel=1e-9)
+    assert nds_bearing_area_factor(bearing_length=_q("1.5 inch")) == pytest.approx(1.25, rel=1e-9)
+
+    with pytest.raises(ValueError, match="bearing_force must be a"):
+        nds_bearing_stress(bearing_force=_q("9 MPa"), width=_q("38 mm"), bearing_length=_q("38 mm"))
+    with pytest.raises(ValueError, match="must be positive"):
+        nds_bearing_stress(
+            bearing_force=_q("9 kN"),
+            width=_q("38 mm"),
+            bearing_length=Quantity(magnitude=0.0, unit="mm"),
+        )
+    with pytest.raises(ValueError, match="bearing_stress must be a"):
+        nds_bearing_scorecard(
+            "end bearing", bearing_stress=_q("9 kN"), adjusted_bearing_value=adjusted
+        )
+    with pytest.raises(ValueError, match="end_distance must be a"):
+        nds_bearing_area_factor(bearing_length=_q("1.5 inch"), end_distance=_q("2 kN"))
+
+
 def test_composite_rule_of_mixtures_cfrp():
     from anvilate.analysis import (
         rule_of_mixtures_modulus,

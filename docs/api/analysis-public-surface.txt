@@ -993,6 +993,8 @@ naval_architecture.ittc_friction_coefficient
 nds_timber.LoadDuration
 nds_timber.nds_adjusted_design_value
 nds_timber.nds_bearing_area_factor
+nds_timber.nds_bearing_scorecard
+nds_timber.nds_bearing_stress
 nds_timber.nds_bending_scorecard
 nds_timber.nds_shear_scorecard
 nds_timber.nds_shear_stress

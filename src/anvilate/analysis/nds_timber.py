@@ -28,6 +28,8 @@ __all__ = [
     "nds_load_duration_factor",
     "nds_adjusted_design_value",
     "nds_bearing_area_factor",
+    "nds_bearing_scorecard",
+    "nds_bearing_stress",
     "nds_bending_scorecard",
     "nds_euler_buckling_stress",
     "nds_column_stability_factor",
@@ -202,15 +204,25 @@ def nds_shear_scorecard(
     )
 
 
-def nds_bearing_area_factor(*, bearing_length: Quantity) -> float:
+def nds_bearing_area_factor(
+    *,
+    bearing_length: Quantity,
+    end_distance: Quantity | None = None,
+) -> float:
     """The NDS §3.10.4 bearing area factor C_b = (l_b + 0.375 in)/l_b.
 
     A short bearing perpendicular to the grain carries a little more than its nominal area because
     the fibres just past each end share the load: C_b = (l_b + 0.375 in)/l_b, from the
     ``bearing_length`` l_b measured along the grain. The 0.375-inch bonus is fixed, so the factor is
     largest for short bearings (1.25 at 1.5 in) and fades toward 1.0 as the bearing lengthens. It
-    applies only to bearings under 6 in long and at least 3 in from the member end; otherwise C_b is
-    1.0. Returns the dimensionless factor.
+    applies only to bearings under 6 in long and at least 3 in from the member end; outside that
+    C_b is 1.0.
+
+    ``end_distance`` is the distance from the member end to the near edge of the bearing. Supply it
+    and a bearing nearer than 3 in to the end returns C_b = 1.0 (there is no fibre past the end to
+    share the load). Left ``None`` the end distance is taken as satisfied — the common interior
+    bearing — so a support *at* a member end must pass its own end distance to be screened
+    correctly. Returns the dimensionless factor.
     """
     if not bearing_length.has_dimension("[length]"):
         raise ValueError(
@@ -219,12 +231,86 @@ def nds_bearing_area_factor(*, bearing_length: Quantity) -> float:
     lb = bearing_length.to("inch").magnitude
     if lb <= 0:
         raise ValueError("bearing_length must be positive")
+    if end_distance is not None:
+        if not end_distance.has_dimension("[length]"):
+            raise ValueError(
+                f"end_distance must be a [length] quantity; got {end_distance.dimensionality}"
+            )
+        if end_distance.to("inch").magnitude < 0:
+            raise ValueError("end_distance must not be negative")
+        # NDS 3.10.4 grants C_b only to a bearing at least 3 in from the member end.
+        if end_distance.to("inch").magnitude < 3.0:
+            return 1.0
     # NDS 3.10.4 scopes C_b to bearings shorter than 6 in and not nearer than 3 in to the member
     # end; outside that C_b is 1.0. Without the check a 10 in bearing collected a 3.75% capacity
     # bonus the docstring explicitly says it should not get.
     if lb >= 6.0:
         return 1.0
     return (lb + 0.375) / lb
+
+
+def nds_bearing_stress(
+    *,
+    bearing_force: Quantity,
+    width: Quantity,
+    bearing_length: Quantity,
+) -> Quantity:
+    """The compression-perpendicular-to-grain bearing stress f_c⊥ = P/(b·l_b) (NDS §3.10.2).
+
+    Where a joist sits on a plate or a beam lands on a post, the reaction is delivered across the
+    grain over the contact patch: f_c⊥ = P/(b·l_b), from the ``bearing_force`` P (the reaction),
+    the member ``width`` b, and the ``bearing_length`` l_b measured along the grain. Wood is far
+    weaker across the grain than along it — a species with a 900 psi bending value may carry only
+    a few hundred psi perpendicular — so a member that passes bending and shear can still crush at
+    its support. Returns the bearing stress in the force/area kind (a stress in psi or MPa).
+    """
+    if not bearing_force.has_dimension("[force]"):
+        raise ValueError(
+            f"bearing_force must be a [force] quantity; got {bearing_force.dimensionality}"
+        )
+    if not width.has_dimension("[length]") or not bearing_length.has_dimension("[length]"):
+        raise ValueError("width and bearing_length must be [length] quantities")
+    b = width.to("m").magnitude
+    lb = bearing_length.to("m").magnitude
+    if b <= 0 or lb <= 0:
+        raise ValueError("width and bearing_length must be positive")
+    return Quantity(magnitude=abs(bearing_force.to("N").magnitude) / (b * lb) / 1e6, unit="MPa")
+
+
+def nds_bearing_scorecard(
+    name: str,
+    *,
+    bearing_stress: Quantity,
+    adjusted_bearing_value: Quantity | None,
+    required: float = 1.0,
+) -> ScorecardEntry:
+    """Screen a bearing stress against the adjusted compression-perpendicular value → an entry.
+
+    The safety factor is the adjusted design value F'_c⊥ over the applied ``bearing_stress`` f_c⊥,
+    judged against ``required`` (1.0 = exactly the NDS allowable). F'_c⊥ is the reference F_c⊥
+    times its own chain — C_M, C_t, C_i, and the bearing area factor C_b from
+    :func:`nds_bearing_area_factor` — and notably *not* the load-duration factor C_D, which NDS
+    §2.3.2 does not apply to compression perpendicular to grain. When ``adjusted_bearing_value`` is
+    ``None`` — no reference F_c⊥ was supplied — the entry is ``NOT_EVALUATED`` rather than a silent
+    pass, mirroring :func:`nds_bending_scorecard`.
+    """
+    if adjusted_bearing_value is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — no NDS reference bearing value supplied",
+            reference="NDS",
+        )
+    if not bearing_stress.has_dimension("[pressure]"):
+        raise ValueError(
+            f"bearing_stress must be a [pressure] quantity; got {bearing_stress.dimensionality}"
+        )
+    fc = abs(bearing_stress.to("MPa").magnitude)
+    fc_allow = adjusted_bearing_value.to("MPa").magnitude
+    computed = float("inf") if fc == 0 else fc_allow / fc
+    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
+        update={"reference": "NDS"}
+    )
 
 
 def nds_euler_buckling_stress(

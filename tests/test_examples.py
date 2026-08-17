@@ -5345,6 +5345,29 @@ def test_floor_joist_wet_service_example_factor_chain_flips_the_verdict():
     assert wet.entries[0].safety_factor == pytest.approx(0.97, abs=0.01)
 
 
+def test_timber_header_bearing_governs_example_fails_at_the_support():
+    namespace = runpy.run_path(str(_EXAMPLES / "timber_header_bearing_governs.py"))
+    # On a 1.5 in wall plate the beam itself is fine and the bearing crushes: the
+    # governing check is at the support, where a bending-only screen never looks.
+    plate = namespace["screen_on_wall_plate"]()
+    assert plate.status is CheckStatus.FAIL
+    by_name = {e.name: e for e in plate.entries}
+    assert by_name["header bending"].safety_factor == pytest.approx(1.25, abs=0.01)
+    assert by_name["horizontal shear"].safety_factor == pytest.approx(1.14, abs=0.01)
+    assert by_name["end bearing"].safety_factor == pytest.approx(0.96, abs=0.01)
+    assert by_name["end bearing"].status is CheckStatus.FAIL
+    # A 3.5 in post more than doubles the bearing area; bending and shear do not move,
+    # so the repair is the bearing detail rather than a deeper member.
+    post = namespace["screen_on_post"]()
+    assert post.status is CheckStatus.PASS
+    post_by_name = {e.name: e for e in post.entries}
+    assert post_by_name["end bearing"].safety_factor == pytest.approx(2.24, abs=0.01)
+    for check in ("header bending", "horizontal shear"):
+        assert post_by_name[check].safety_factor == pytest.approx(
+            by_name[check].safety_factor, rel=1e-9
+        )
+
+
 def test_process_pipe_schedule_example_rates_the_available_wall():
     namespace = runpy.run_path(str(_EXAMPLES / "process_pipe_schedule.py"))
     # Schedule 10 looks like plenty at 3.05 mm, but mill tolerance and corrosion leave

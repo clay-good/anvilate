@@ -16,7 +16,13 @@
       adjusted bending value (No-silent-green NOT_EVALUATED without a reference value);
       the beam-stability C_L and size C_F factors enter through the caller's chain.
       Dedicated C_L/C_F derivations are a follow-up.
-- [ ] 2.2 Shear and bearing
+- [x] 2.2 Shear and bearing — `nds_shear_stress` (§3.4.2, f_v = 1.5·V/(b·d)) and
+      `nds_bearing_stress` (§3.10.2, f_c⊥ = P/(b·l_b)) with `nds_shear_scorecard` and
+      `nds_bearing_scorecard` screening each against its adjusted value (NOT_EVALUATED
+      without one). `nds_bearing_area_factor` supplies the §3.10.4 C_b, now scoped to
+      bearings under 6 in *and* at least 3 in from the member end (`end_distance`).
+      `examples/timber_header_bearing_governs.py` is the anchor: a short header whose
+      bending and shear pass while it crushes at its support.
 - [~] 2.3 Compression with column stability factor — `nds_euler_buckling_stress`
       (F_cE = 0.822·E'_min/(l_e/d)²) and `nds_column_stability_factor` (the Ylinen C_P,
       §3.7.1) compose into the adjusted compression value F'_c = F*_c·C_P. The l_e/d
