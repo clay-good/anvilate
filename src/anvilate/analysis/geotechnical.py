@@ -57,6 +57,7 @@ __all__ = [
     "overconsolidated_at_rest_coefficient",
     "pile_skin_friction_capacity",
     "rankine_active_pressure_cohesive",
+    "coulomb_active_earth_pressure_coefficient",
     "rankine_earth_pressure_coefficient",
     "rankine_passive_pressure_cohesive",
     "rankine_lateral_thrust",
@@ -95,6 +96,63 @@ def rankine_earth_pressure_coefficient(*, friction_angle: float, passive: bool =
     if passive:
         return tan(radians(45.0 + friction_angle / 2.0)) ** 2
     return tan(radians(45.0 - friction_angle / 2.0)) ** 2
+
+
+def coulomb_active_earth_pressure_coefficient(
+    *,
+    friction_angle: float,
+    wall_friction_angle: float = 0.0,
+    wall_batter_angle: float = 0.0,
+    backfill_slope_angle: float = 0.0,
+) -> float:
+    """The Coulomb active earth-pressure coefficient for a real wall.
+
+    :func:`rankine_earth_pressure_coefficient` assumes the wall is smooth, vertical, and retains
+    level ground. Real walls are none of those: concrete against granular fill develops wall
+    friction δ of roughly ⅔φ, stems are often battered, and backfill is frequently sloped. Coulomb's
+    wedge solution carries all three:
+
+        K_a = cos²(φ−θ) / [cos²θ·cos(δ+θ)·(1 + √( sin(φ+δ)·sin(φ−β) / (cos(δ+θ)·cos(θ−β)) ))²]
+
+    with ``friction_angle`` φ, ``wall_friction_angle`` δ, ``wall_batter_angle`` θ measured from
+    vertical, and ``backfill_slope_angle`` β from horizontal — all plain floats in degrees, and all
+    but φ defaulting to zero.
+
+    Setting δ = θ = β = 0 reproduces the Rankine coefficient exactly (both give 0.28271 at φ = 34°),
+    which is the check that the terms are assembled right. Away from that corner the two part
+    company in both directions, and the direction matters: wall friction *reduces* the thrust
+    (0.25492 at δ = 20°, 10% below Rankine, so Rankine is the conservative choice there), while a
+    battered stem behind sloped fill *raises* it sharply — φ = 34°, δ = 20°, θ = 10°, β = 15° gives
+    0.41223, 46% above the only coefficient the module previously offered. Since this feeds
+    :func:`rankine_lateral_thrust` and through it the overturning and sliding checks, that 46% is
+    an unconservative error in a wall's safety factor. Returns the dimensionless coefficient.
+    """
+    _check_friction_angle(friction_angle)
+    phi = radians(friction_angle)
+    delta = radians(wall_friction_angle)
+    theta = radians(wall_batter_angle)
+    beta = radians(backfill_slope_angle)
+    if not 0.0 <= wall_friction_angle <= friction_angle:
+        raise ValueError(
+            f"wall_friction_angle must lie in [0, friction_angle]; got {wall_friction_angle} "
+            f"against a friction angle of {friction_angle}"
+        )
+    if not -45.0 < wall_batter_angle < 45.0:
+        raise ValueError(
+            f"wall_batter_angle must lie in (-45, 45) degrees; got {wall_batter_angle}"
+        )
+    # The wedge cannot form if the backfill stands steeper than the soil can hold itself, which is
+    # exactly where the sin(phi - beta) term goes negative and the square root fails.
+    if backfill_slope_angle >= friction_angle:
+        raise ValueError(
+            f"backfill_slope_angle must be below friction_angle for an active wedge to form; "
+            f"got {backfill_slope_angle} against {friction_angle}"
+        )
+    if backfill_slope_angle < 0.0:
+        raise ValueError(f"backfill_slope_angle must be non-negative; got {backfill_slope_angle}")
+    root = sqrt(sin(phi + delta) * sin(phi - beta) / (cos(delta + theta) * cos(theta - beta)))
+    denominator = cos(theta) ** 2 * cos(delta + theta) * (1.0 + root) ** 2
+    return cos(phi - theta) ** 2 / denominator
 
 
 def at_rest_earth_pressure_coefficient(*, friction_angle: float) -> float:

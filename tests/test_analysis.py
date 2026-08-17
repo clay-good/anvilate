@@ -22012,6 +22012,76 @@ def test_rankine_passive_pressure_cohesive():
     assert surface.to("kPa").magnitude == pytest.approx(2 * 15 * math.sqrt(k_p), rel=1e-9)
 
 
+def test_coulomb_active_coefficient_reduces_to_rankine_and_departs_where_it_should():
+    from anvilate.analysis import (
+        coulomb_active_earth_pressure_coefficient,
+        rankine_earth_pressure_coefficient,
+        rankine_lateral_thrust,
+    )
+
+    # With no wall friction, no batter and level fill, Coulomb's wedge solution MUST collapse onto
+    # Rankine. Machine-precision agreement across the practical range of phi is the check that
+    # every term is assembled correctly -- a misplaced factor would break here first.
+    for phi in (20.0, 28.0, 34.0, 40.0, 45.0):
+        assert coulomb_active_earth_pressure_coefficient(friction_angle=phi) == pytest.approx(
+            rankine_earth_pressure_coefficient(friction_angle=phi), rel=1e-12
+        )
+    assert coulomb_active_earth_pressure_coefficient(friction_angle=34.0) == pytest.approx(
+        0.28271491971777274, rel=1e-12
+    )
+
+    # Wall friction REDUCES the thrust: part of the wedge's weight hangs on the wall face. So
+    # Rankine is the conservative choice when the only departure is delta, and the sign of that
+    # gap is the physics check.
+    with_delta = coulomb_active_earth_pressure_coefficient(
+        friction_angle=34.0, wall_friction_angle=20.0
+    )
+    assert with_delta == pytest.approx(0.25492461607303496, rel=1e-12)
+    assert with_delta < rankine_earth_pressure_coefficient(friction_angle=34.0)
+
+    # A battered stem behind sloped fill goes the other way, and hard: 0.41223 against Rankine's
+    # 0.28271 is 46% more lateral thrust than the only coefficient the module used to offer.
+    battered = coulomb_active_earth_pressure_coefficient(
+        friction_angle=34.0,
+        wall_friction_angle=20.0,
+        wall_batter_angle=10.0,
+        backfill_slope_angle=15.0,
+    )
+    assert battered == pytest.approx(0.4122324304401054, rel=1e-12)
+    assert battered / rankine_earth_pressure_coefficient(friction_angle=34.0) == pytest.approx(
+        1.4581, rel=1e-3
+    )
+    # That gap is not academic -- the thrust is 1/2*K*gamma*H^2, linear in K, so the 46% carries
+    # straight through to the number the overturning and sliding checks consume. Anchored against
+    # the library's own Rankine thrust so the hand arithmetic is not taken on trust.
+    thrust_rankine = rankine_lateral_thrust(
+        unit_weight=_q("19 kN/m**3"), height=_q("4 m"), friction_angle=34.0
+    )
+    assert thrust_rankine.to("kN/m").magnitude == pytest.approx(42.97266779710146, rel=1e-9)
+    thrust_coulomb_kn = 0.5 * battered * 19.0 * 4.0**2
+    assert thrust_coulomb_kn == pytest.approx(62.6593, rel=1e-4)
+    assert thrust_coulomb_kn - thrust_rankine.to("kN/m").magnitude == pytest.approx(19.67, rel=1e-2)
+
+    # Steeper fill raises the coefficient monotonically, and it diverges as the slope approaches
+    # the friction angle -- the wedge stops existing when the fill cannot stand on its own.
+    previous = 0.0
+    for beta in (0.0, 5.0, 15.0, 25.0, 33.0):
+        value = coulomb_active_earth_pressure_coefficient(
+            friction_angle=34.0, backfill_slope_angle=beta
+        )
+        assert value > previous
+        previous = value
+
+    # Guardrails: the fill cannot stand steeper than the soil's own friction angle, and wall
+    # friction cannot exceed it either.
+    with pytest.raises(ValueError, match="backfill_slope_angle must be below friction_angle"):
+        coulomb_active_earth_pressure_coefficient(friction_angle=34.0, backfill_slope_angle=34.0)
+    with pytest.raises(ValueError, match="wall_friction_angle must lie"):
+        coulomb_active_earth_pressure_coefficient(friction_angle=34.0, wall_friction_angle=40.0)
+    with pytest.raises(ValueError, match="wall_batter_angle must lie"):
+        coulomb_active_earth_pressure_coefficient(friction_angle=34.0, wall_batter_angle=50.0)
+
+
 def test_rankine_sloped_backfill_coefficient():
     import math
 
