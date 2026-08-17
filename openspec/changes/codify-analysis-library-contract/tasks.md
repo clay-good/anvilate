@@ -171,3 +171,22 @@
   now pinned explicitly. Also open and low-value: the three `_engineering_order` guard
   clauses (label-only, no number changes) and four assertions over currently-empty sets.
 
+
+## Cross-module disagreements recorded 2026-08-17 (second audit wave)
+
+Reproduced by execution, recorded rather than rushed because the fix is a judgment call
+about which convention the library adopts, not a bug fix.
+
+- **6. The structural pack's column curve is not the AISC curve it cites.**
+  `packs/structural.screen_column_member` and `screen_beam_column` compute buckling by
+  Euler/Johnson and stamp the entry `reference = "AISC 360-16 Ch. E"`, while
+  `analysis/column.aisc_flexural_buckling_stress` — the real §E3 curve — ships in the
+  same library. For a 50 x 50 mm A36 section at K = 1, pack/AISC = 1.0937 at L = 1000 mm
+  and 1.1403 at L >= 2000 mm: **9-14% unconservative**. On the contract suite's own
+  fixture (`_structural_entries`, "post", L = 3000 mm, P = 40 kN) the pack reports
+  SF 2.856 where §E3 gives 2.504, so at `required_safety_factor = 2.6` the pack **passes**
+  and AISC **fails** — a flipped verdict, not a rounding difference. The same P_c feeds
+  the §H1.1 axial term in `screen_beam_column`.
+  The choice: adopt §E3 in the pack (and re-baseline every column and beam-column number
+  in the suite and the examples), or keep Euler/Johnson and stop citing AISC for it. The
+  citation is the part that is indefensible either way.

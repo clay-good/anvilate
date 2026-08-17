@@ -39289,10 +39289,19 @@ def test_adm_local_buckling_matches_the_published_flange_and_web_curves():
     """The one-edge and both-edges curves against the ADM's own I 6 x 4.03 example.
 
     For 6061-T6 the ADM gives the outstanding flange (one edge supported, k = 5.0)
-    F_c/Omega = 27.3 - 0.910(b/t) between b/t = 6.7 and 12, then 2417/(b/t)^2; and the
-    web (both edges, k = 1.6) F_c/Omega = 27.3 - 0.291(b/t) between 20.8 and 33. The
-    ratio of the two slopes is exactly 5.0/1.6, which is what makes a single wrong
+    F_c/Omega = 27.3 - 0.910(b/t) between b/t = 6.7 and 10.5, then the postbuckling
+    branch 186/(b/t); and the web (both edges, k = 1.6) F_c/Omega = 27.3 - 0.291(b/t)
+    between 20.8 and 33, then the same postbuckling branch at 3.125x, the ratio of the
+    two k values. That slope ratio 0.910/0.291 = 5.0/1.6 is what makes a single wrong
     edge-support coefficient visible here rather than absorbed into the constants.
+
+    Both support conditions get the postbuckling branch, and this is the part that is
+    easy to get backwards: a one-edge element having postbuckling reserve sounds wrong,
+    and the ADM's 6061-T6 tables also print an ELASTIC curve for the same flange,
+    2417/(b/t)^2 past b/t = 12.3. That elastic curve is not the strength — it is the
+    §B.5.6 stress F_e at which the element first buckles, which exists to answer the
+    §E.4 interaction question. Reading it as the strength discards the postbuckling
+    reserve and is conservative by up to 2.3x; the last block below pins the two apart.
     """
     from anvilate.analysis import EdgeSupport, aluminum_local_buckling_stress
 
@@ -39545,7 +39554,7 @@ def test_the_aluminum_compression_screen_names_the_limit_state_that_governed():
     thin_leg = aluminum_compression_strength(
         properties=props,
         slenderness=5.0,
-        flat_width=_q("120 mm"),
+        flat_width=_q("48 mm"),
         thickness=_q("3 mm"),
         edge_support=EdgeSupport.ONE_EDGE,
     )
@@ -39554,6 +39563,58 @@ def test_the_aluminum_compression_screen_names_the_limit_state_that_governed():
     assert slender_column.governing is AluminumLimitState.MEMBER_BUCKLING
     assert thin_leg.governing is AluminumLimitState.LOCAL_BUCKLING
     assert stocky.nominal.magnitude == pytest.approx(stocky.yielding.magnitude, rel=1e-9)
+
+
+def test_the_e4_interaction_reduction_fires_on_stiffness_not_on_slenderness():
+    """ADM §E.4 compares F_e against the member buckling STRENGTH, not the elastic stress.
+
+    The distinction is invisible above C_c, where the two coincide — which is why the
+    ADM's own worked example does not draw it — and decisive below, where the elastic
+    stress 0.85·pi^2·E/lambda^2 runs away as 1/lambda^2. Comparing against that makes the
+    condition fire on essentially every stocky member and tells you nothing. The stocky
+    member below is the case: at kL/r = 5 the elastic member buckling stress is 23,000
+    MPa, so an elastic-stress comparison would flag it; the strength is F_cy = 241 MPa
+    and the flag stays down.
+    """
+    from anvilate.analysis import (
+        AluminumLimitState,
+        EdgeSupport,
+        aluminum_compression_scorecard,
+        aluminum_compression_strength,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    props = _al_6061_t6(welded=False)
+
+    def screen(slenderness: float, ratio: float):
+        return aluminum_compression_strength(
+            properties=props,
+            slenderness=slenderness,
+            flat_width=_q(f"{ratio} mm"),
+            thickness=_q("1 mm"),
+            edge_support=EdgeSupport.ONE_EDGE,
+        )
+
+    # A stocky member with a sturdy element: F_e is well above the strength, no reduction.
+    sturdy = screen(5.0, 6.0)
+    assert sturdy is not None and sturdy.local_member_interaction is False
+    assert sturdy.governing is AluminumLimitState.YIELDING
+
+    # The same member with a slender leg: F_e drops below the strength, the reduction
+    # applies, and the reduced member buckling stress lands just under the element's own
+    # local buckling strength — which is what says the reduction is the right size rather
+    # than merely present.
+    slender = screen(5.0, 20.0)
+    assert slender is not None and slender.local_member_interaction is True
+    assert slender.member_buckling.magnitude < slender.local_buckling.magnitude
+    assert slender.member_buckling.magnitude > 0.9 * slender.local_buckling.magnitude
+    unreduced = props.compressive_yield.to("MPa").magnitude
+    assert slender.member_buckling.magnitude < 0.5 * unreduced
+
+    # Applying the reduction COMPLETES the check — the entry is a verdict, not a refusal.
+    entry = aluminum_compression_scorecard("leg", demand_stress=_q("60 MPa"), strength=slender)
+    assert entry.status is CheckStatus.PASS
+    assert "E.4" in entry.detail and "has been applied" in entry.detail
 
 
 def test_zero_demand_on_an_aluminum_screen_is_not_a_pass():
@@ -39620,3 +39681,580 @@ def test_alloy_properties_will_not_accept_a_set_with_no_provenance():
         build(tension_coefficient=0.9)
     with pytest.raises(ValueError, match="already the reduced material"):
         build(weld_affected=build(weld_affected=build()))
+
+
+# --- Fitness-for-service screening: SIF, reference stress, FAD ---------------
+
+
+def test_newman_raju_reduces_to_the_penny_crack_times_the_free_surface_factor():
+    """The anchor that says the whole polynomial was transcribed right.
+
+    For a semi-circular flaw (a/c = 1) in a wide, thick plate the Newman-Raju equation
+    must return 1.04·(2/π)·σ√(πa) at the deepest point — the embedded penny-shaped crack
+    solution times the free-surface magnification M1 — and 0.728·σ√(πa) at the surface
+    point, the value quoted in the handbooks. Both fall out of separate parts of the fit
+    (M1 from one, g from another), so matching both at once is a strong check.
+    """
+    from anvilate.analysis import SurfaceFlaw, newman_raju_surface_flaw_sif
+
+    flaw = SurfaceFlaw(depth=_q("0.1 mm"), half_length=_q("0.1 mm"), thickness=_q("1000 mm"))
+    reference = 100.0 * math.sqrt(math.pi * 0.0001)  # sigma*sqrt(pi*a) in MPa*sqrt(m)
+    deepest = newman_raju_surface_flaw_sif(flaw=flaw, membrane_stress=_q("100 MPa"))
+    surface = newman_raju_surface_flaw_sif(
+        flaw=flaw, membrane_stress=_q("100 MPa"), parametric_angle=0.0
+    )
+    assert deepest.magnitude / reference == pytest.approx(1.04 * 2 / math.pi, rel=2e-3)
+    assert surface.magnitude / reference == pytest.approx(0.728, rel=2e-3)
+    # The surface point governs for a semi-circular flaw; that is why a flaw front
+    # changes shape as it grows, and why one point is not enough.
+    assert surface.magnitude > deepest.magnitude
+
+    # K is linear in the applied stress and grows as sqrt(a).
+    doubled = newman_raju_surface_flaw_sif(flaw=flaw, membrane_stress=_q("200 MPa"))
+    assert doubled.magnitude == pytest.approx(2 * deepest.magnitude, rel=1e-12)
+    deeper = SurfaceFlaw(depth=_q("0.4 mm"), half_length=_q("0.4 mm"), thickness=_q("1000 mm"))
+    assert newman_raju_surface_flaw_sif(
+        flaw=deeper, membrane_stress=_q("100 MPa")
+    ).magnitude == pytest.approx(2 * deepest.magnitude, rel=2e-3)
+
+
+def test_the_newman_raju_solution_refuses_geometry_it_was_not_fitted_to():
+    """Past a/c = 1 the published solution uses different coefficients, not this fit.
+
+    This is the guard-the-domain case: extrapolating the a/c <= 1 polynomial to a long
+    shallow flaw returns a plausible number off the wrong fit, which is worse than an
+    error. The flaw type reports every limit it breaks so the message names them.
+    """
+    from anvilate.analysis import SurfaceFlaw, newman_raju_surface_flaw_sif
+
+    long_flaw = SurfaceFlaw(depth=_q("4 mm"), half_length=_q("2 mm"), thickness=_q("20 mm"))
+    assert long_flaw.aspect_ratio == pytest.approx(2.0)
+    assert any("a/c" in reason for reason in long_flaw.outside_validity())
+    with pytest.raises(ValueError, match="outside the Newman-Raju validity range"):
+        newman_raju_surface_flaw_sif(flaw=long_flaw, membrane_stress=_q("100 MPa"))
+
+    through = SurfaceFlaw(depth=_q("20 mm"), half_length=_q("40 mm"), thickness=_q("20 mm"))
+    assert any("far wall" in reason for reason in through.outside_validity())
+    narrow = SurfaceFlaw(
+        depth=_q("2 mm"), half_length=_q("10 mm"), thickness=_q("20 mm"), half_width=_q("15 mm")
+    )
+    assert any("c/b" in reason for reason in narrow.outside_validity())
+    # Inside every limit, nothing is reported and the solution runs.
+    fine = SurfaceFlaw(
+        depth=_q("2 mm"), half_length=_q("10 mm"), thickness=_q("20 mm"), half_width=_q("200 mm")
+    )
+    assert fine.outside_validity() == ()
+    assert newman_raju_surface_flaw_sif(flaw=fine, membrane_stress=_q("100 MPa")).magnitude > 0
+
+
+def test_the_reference_stress_passes_both_of_its_own_limiting_cases():
+    """Net-section stress with no bending, and the 1.5 shape factor with no flaw.
+
+    Two independent checks on one expression: strip the bending term and it must be the
+    plain net-section stress sigma_m/(1-alpha); strip the flaw and apply pure bending and
+    it must give 2/3 of the elastic bending stress, which is first yield divided by the
+    fully plastic hinge of a rectangular section. A transcription error survives at most
+    one of the two.
+    """
+    from anvilate.analysis import SurfaceFlaw, surface_flaw_reference_stress
+
+    flaw = SurfaceFlaw(depth=_q("5 mm"), half_length=_q("25 mm"), thickness=_q("20 mm"))
+    alpha = (5 / 20) / (1 + 20 / 25)
+    membrane_only = surface_flaw_reference_stress(flaw=flaw, membrane_stress=_q("200 MPa"))
+    assert membrane_only.magnitude == pytest.approx(200 / (1 - alpha), rel=1e-12)
+
+    unflawed = SurfaceFlaw(depth=_q("1e-9 mm"), half_length=_q("10 mm"), thickness=_q("20 mm"))
+    bending_only = surface_flaw_reference_stress(
+        flaw=unflawed, membrane_stress=_q("0 MPa"), bending_stress=_q("300 MPa")
+    )
+    assert bending_only.magnitude == pytest.approx(200.0, rel=1e-6)
+
+    # alpha uses (a/t)/(1 + t/c), not a/t: a SHORT flaw of the same depth takes far less
+    # of the ligament, because the material either side of it still carries load.
+    short = SurfaceFlaw(depth=_q("5 mm"), half_length=_q("5 mm"), thickness=_q("20 mm"))
+    assert (
+        surface_flaw_reference_stress(flaw=short, membrane_stress=_q("200 MPa")).magnitude
+        < membrane_only.magnitude
+    )
+    # A compressive primary stress is not netted off against a tensile one.
+    with pytest.raises(ValueError, match="non-negative"):
+        surface_flaw_reference_stress(flaw=flaw, membrane_stress=_q("-200 MPa"))
+
+
+def test_the_option_1_fad_curve_starts_at_one_and_falls_away():
+    """f(0) = 1, monotone decreasing, and mu is capped rather than running away."""
+    from anvilate.analysis import fad_limit_load_ratio, fad_option1_curve
+
+    sy, e = _q("350 MPa"), _q("207000 MPa")
+    assert fad_option1_curve(load_ratio=0.0, yield_strength=sy, elastic_modulus=e) == 1.0
+    values = [
+        fad_option1_curve(load_ratio=x, yield_strength=sy, elastic_modulus=e)
+        for x in (0.0, 0.2, 0.5, 0.8, 1.0, 1.2)
+    ]
+    assert values == sorted(values, reverse=True)
+    # mu = min(0.001*E/sigma_y, 0.6). At E/sigma_y = 591 the cap binds, so a still
+    # stiffer material cannot push the tail out any further. Without the cap the two
+    # below would differ.
+    stiff = fad_option1_curve(load_ratio=1.0, yield_strength=_q("200 MPa"), elastic_modulus=e)
+    stiffer = fad_option1_curve(
+        load_ratio=1.0, yield_strength=_q("200 MPa"), elastic_modulus=_q("400000 MPa")
+    )
+    assert stiff == pytest.approx(stiffer, rel=1e-12)
+    # A low-modulus, high-yield material is below the cap and its curve sits higher.
+    uncapped = fad_option1_curve(
+        load_ratio=1.0, yield_strength=_q("700 MPa"), elastic_modulus=_q("70000 MPa")
+    )
+    assert uncapped > stiff
+
+    # The cutoff is the flow stress over the yield: little hardening, little reserve.
+    assert fad_limit_load_ratio(
+        yield_strength=_q("350 MPa"), ultimate_strength=_q("500 MPa")
+    ) == pytest.approx(850 / 700)
+    assert fad_limit_load_ratio(
+        yield_strength=_q("500 MPa"), ultimate_strength=_q("510 MPa")
+    ) == pytest.approx(1.01)
+    with pytest.raises(ValueError, match="swapped"):
+        fad_limit_load_ratio(yield_strength=_q("500 MPa"), ultimate_strength=_q("400 MPa"))
+
+
+def test_the_load_line_margin_is_not_one_over_the_fracture_ratio():
+    """The FAD's whole point: the curve bends, so K_r alone does not say what is left.
+
+    A point at K_r = 0.5 has half the toughness unused, and a K-only check would call
+    that a safety factor of 2. Ride the load line out and it reaches the curve well
+    before doubling, because L_r doubles too and the curve has come down by then.
+    """
+    from anvilate.analysis import fad_assessment, fad_option1_curve
+
+    sy, su, e = _q("350 MPa"), _q("500 MPa"), _q("207000 MPa")
+    assessment = fad_assessment(
+        stress_intensity=_q("50 MPa*m**0.5"),
+        fracture_toughness=_q("100 MPa*m**0.5"),
+        reference_stress=_q("245 MPa"),
+        yield_strength=sy,
+        ultimate_strength=su,
+        elastic_modulus=e,
+    )
+    assert assessment.fracture_ratio == pytest.approx(0.5)
+    assert assessment.load_ratio == pytest.approx(0.7)
+    assert assessment.acceptable is True
+    assert 1.0 < assessment.load_line_margin < 2.0  # NOT 1/K_r = 2.0
+
+    # The margin lands exactly on the curve, which is what it claims to be.
+    s = assessment.load_line_margin
+    assert s * assessment.fracture_ratio == pytest.approx(
+        fad_option1_curve(
+            load_ratio=s * assessment.load_ratio, yield_strength=sy, elastic_modulus=e
+        ),
+        rel=1e-6,
+    )
+
+    # A point beyond the curve is not acceptable and its margin is below 1.
+    outside = fad_assessment(
+        stress_intensity=_q("95 MPa*m**0.5"),
+        fracture_toughness=_q("100 MPa*m**0.5"),
+        reference_stress=_q("340 MPa"),
+        yield_strength=sy,
+        ultimate_strength=su,
+        elastic_modulus=e,
+    )
+    assert outside.acceptable is False
+    assert outside.load_line_margin < 1.0
+
+
+def test_the_lr_cutoff_stops_the_assessment_rather_than_extending_the_curve():
+    """Past L_r,max the ligament is fully plastic and no toughness helps.
+
+    A point with almost no K_r at all but an L_r beyond the cutoff must come back
+    unacceptable: the failure mode there is collapse, and the curve does not continue.
+    """
+    from anvilate.analysis import fad_assessment
+
+    sy, su, e = _q("350 MPa"), _q("500 MPa"), _q("207000 MPa")
+    collapsed = fad_assessment(
+        stress_intensity=_q("1 MPa*m**0.5"),
+        fracture_toughness=_q("200 MPa*m**0.5"),
+        reference_stress=_q("500 MPa"),  # L_r = 1.43 against a cutoff of 1.214
+        yield_strength=sy,
+        ultimate_strength=su,
+        elastic_modulus=e,
+    )
+    assert collapsed.load_ratio > collapsed.limit_load_ratio
+    assert collapsed.acceptable is False
+    assert collapsed.acceptable_fracture_ratio == 0.0
+    assert collapsed.load_line_margin < 1.0
+    # A tiny K_r with L_r just inside the cutoff is margin-limited by the cutoff, not by
+    # the curve — the margin can never exceed L_r,max/L_r.
+    nearly = fad_assessment(
+        stress_intensity=_q("0.001 MPa*m**0.5"),
+        fracture_toughness=_q("200 MPa*m**0.5"),
+        reference_stress=_q("350 MPa"),
+        yield_strength=sy,
+        ultimate_strength=su,
+        elastic_modulus=e,
+    )
+    assert nearly.load_line_margin <= nearly.limit_load_ratio / nearly.load_ratio + 1e-9
+
+
+def test_a_charpy_correlated_toughness_never_reports_a_plain_pass():
+    """An estimate that scatters is a reason to test, not a result to lean on."""
+    from anvilate.analysis import charpy_toughness_estimate, fad_assessment, fad_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    kic = charpy_toughness_estimate(charpy_energy=_q("40 foot_pound"), yield_strength=_q("50 ksi"))
+    assert kic.to("MPa*m**0.5").magnitude == pytest.approx(106.4, rel=0.01)
+    # Below the 0.05*sigma_y floor the correlation is not defined and says so, rather
+    # than returning a small positive toughness off the bottom of its own fit.
+    with pytest.raises(ValueError, match="upper shelf"):
+        charpy_toughness_estimate(charpy_energy=_q("2 foot_pound"), yield_strength=_q("50 ksi"))
+
+    common = {
+        "stress_intensity": _q("30 MPa*m**0.5"),
+        "reference_stress": _q("200 MPa"),
+        "yield_strength": _q("350 MPa"),
+        "ultimate_strength": _q("500 MPa"),
+        "elastic_modulus": _q("207000 MPa"),
+    }
+    measured = fad_assessment(fracture_toughness=kic, **common)
+    estimated = fad_assessment(fracture_toughness=kic, toughness_is_estimate=True, **common)
+    # Same numbers, same point — only the provenance differs.
+    assert measured.load_line_margin == pytest.approx(estimated.load_line_margin, rel=1e-12)
+    assert measured.acceptable is True
+    assert fad_scorecard("flaw", assessment=measured).status is CheckStatus.PASS
+    downgraded = fad_scorecard("flaw", assessment=estimated)
+    assert downgraded.status is CheckStatus.NOT_EVALUATED
+    assert downgraded.safety_factor is None
+    assert "correlation" in downgraded.detail
+
+
+def test_the_fad_scorecard_says_screening_and_never_says_fit_for_service():
+    """The framing is a requirement, not a garnish — check it is actually in the text."""
+    from anvilate.analysis import fad_assessment, fad_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    assessment = fad_assessment(
+        stress_intensity=_q("30 MPa*m**0.5"),
+        fracture_toughness=_q("100 MPa*m**0.5"),
+        reference_stress=_q("200 MPa"),
+        yield_strength=_q("350 MPa"),
+        ultimate_strength=_q("500 MPa"),
+        elastic_modulus=_q("207000 MPa"),
+    )
+    entry = fad_scorecard("shell surface flaw", assessment=assessment)
+    assert "screening margin" in entry.detail
+    assert "qualified assessor" in entry.detail
+    assert "fit for continued service" not in entry.detail.lower()
+    assert entry.reference is not None and "BS 7910" in entry.reference
+
+    unassessed = fad_scorecard(
+        "shell surface flaw",
+        assessment=None,
+        missing="the flaw is longer than the SIF solution was fitted for",
+    )
+    assert unassessed.status is CheckStatus.NOT_EVALUATED
+    assert "SIF solution" in unassessed.detail
+
+
+def test_the_aluminum_constants_are_pinned_at_their_own_definitions_not_at_rounded_anchors():
+    """Three-figure ADM anchors cannot pin a constant tighter than a couple of percent.
+
+    A mutation pass moved `_BC_DENOMINATOR_KSI` from 2250 to 2200 and
+    `_INTERSECTION_FRACTION_AGED` from 0.41 to 0.4115 with the whole suite green, because
+    B_c enters as a square root (dB/B = 0.055·dD/D) and C_c was asserted against the ADM's
+    rounded 66 with 0.4 of slack, all of it on one side. The fix is to test each constant
+    where it is exactly determined rather than where it is nearly insensitive.
+    """
+    from anvilate.analysis import aluminum_buckling_constants
+
+    e = _q(_AL_6061_T6_E)
+    # Feed F_cy equal to the denominator itself: B_c = F_cy[1 + sqrt(F_cy/2250)] is then
+    # exactly 2*F_cy, and nothing else in the expression can absorb a moved denominator.
+    at_denominator = aluminum_buckling_constants(
+        compressive_yield=_q("2250 ksi"), elastic_modulus=_q("1e9 ksi")
+    )
+    assert at_denominator.intercept_member.to("ksi").magnitude == pytest.approx(
+        2 * 2250.0, rel=1e-12
+    )
+    # Same trick for B_p, whose denominator enters as a cube root.
+    at_plate_denominator = aluminum_buckling_constants(
+        compressive_yield=_q("1500 ksi"), elastic_modulus=_q("1e9 ksi")
+    )
+    assert at_plate_denominator.intercept_plate.to("ksi").magnitude == pytest.approx(
+        2 * 1500.0, rel=1e-12
+    )
+    # C = 0.41*B/D is an identity, so assert the identity rather than a rounded C_c.
+    c = aluminum_buckling_constants(compressive_yield=_q(_AL_6061_T6_FCY), elastic_modulus=e)
+    for intersection, intercept, slope in (
+        (c.intersection_member, c.intercept_member, c.slope_member),
+        (c.intersection_plate, c.intercept_plate, c.slope_plate),
+    ):
+        assert intersection * slope.magnitude / intercept.magnitude == pytest.approx(
+            0.41, rel=1e-12
+        )
+    # D = (B/10)*sqrt(B/E) is likewise an identity.
+    assert c.slope_member.to("ksi").magnitude == pytest.approx(
+        (c.intercept_member.to("ksi").magnitude / 10.0)
+        * math.sqrt(c.intercept_member.to("ksi").magnitude / 10100.0),
+        rel=1e-12,
+    )
+
+
+def test_the_aluminum_branch_points_are_probed_at_their_seams():
+    """A limit constant is only pinned by an input that lands just either side of it.
+
+    Three seams were bracketed so loosely that the constants behind them could move by
+    several percent unnoticed: the local-buckling lambda_1, the postbuckling start
+    lambda_2 = 0.35*B_p/(k*D_p), and the member-curve intersection C itself. Each pair
+    below straddles its seam by a fraction of a percent.
+    """
+    from anvilate.analysis import (
+        EdgeSupport,
+        aluminum_buckling_constants,
+        aluminum_buckling_stress,
+        aluminum_local_buckling_stress,
+    )
+
+    c = _al_constants()
+    fcy, e = _q(_AL_6061_T6_FCY), _q(_AL_6061_T6_E)
+
+    def local(ratio: float, support) -> float:
+        return (
+            aluminum_local_buckling_stress(
+                flat_width=_q(f"{ratio} mm"),
+                thickness=_q("1 mm"),
+                compressive_yield=fcy,
+                elastic_modulus=e,
+                constants=c,
+                edge_support=support,
+            )
+            .to("ksi")
+            .magnitude
+        )
+
+    one, both = EdgeSupport.ONE_EDGE, EdgeSupport.BOTH_EDGES
+    # lambda_1: yielding gives way to the inelastic line at 6.66 (one edge) and 20.81
+    # (both). Just inside, the answer is exactly F_cy; just outside it has left it.
+    assert local(6.5, one) == pytest.approx(35.0, rel=1e-9)
+    assert local(7.0, one) == pytest.approx(34.4879, rel=1e-4)
+    assert local(20.5, both) == pytest.approx(35.0, rel=1e-9)
+    assert local(21.0, both) == pytest.approx(34.9085, rel=1e-4)
+    # lambda_2: the inelastic line gives way to postbuckling at 10.487 (one edge). The
+    # two branches are nearly continuous there, so the tolerance has to be tight.
+    assert local(10.4, one) == pytest.approx(29.3814, rel=1e-4)
+    assert local(10.6, one) == pytest.approx(28.8751, rel=1e-4)
+
+    # The generic evaluator's own seam: AT lambda = C the inelastic line still applies,
+    # so the answer must be B - D*C, not the Euler value a `<` would give.
+    intercept, slope, intersection = _q("267 MPa"), _q("1.63 MPa"), 66.0
+    at_seam = aluminum_buckling_stress(
+        slenderness=intersection,
+        intercept=intercept,
+        slope=slope,
+        intersection_slenderness=intersection,
+        elastic_modulus=_q("69600 MPa"),
+    )
+    assert at_seam.magnitude == pytest.approx(267.0 - 1.63 * 66.0, rel=1e-12)
+    just_past = aluminum_buckling_stress(
+        slenderness=intersection + 1e-9,
+        intercept=intercept,
+        slope=slope,
+        intersection_slenderness=intersection,
+        elastic_modulus=_q("69600 MPa"),
+    )
+    assert just_past.magnitude == pytest.approx(math.pi**2 * 69600 / 66.0**2, rel=1e-6)
+    assert at_seam.magnitude != pytest.approx(just_past.magnitude, rel=1e-3)
+    # And the two constants behind the identity C = 0.41*B/D are not interchangeable
+    # with the ones behind the plate curve.
+    fresh = aluminum_buckling_constants(compressive_yield=fcy, elastic_modulus=e)
+    assert fresh.intersection_member != pytest.approx(fresh.intersection_plate, rel=1e-3)
+
+
+def test_a_non_aged_weld_affected_set_is_refused_even_when_the_parent_is_aged():
+    """The temper check has to look at BOTH property sets, not just the parent's.
+
+    A mutation turned `any(... for _, p in sets)` into `all(...)` and survived, because
+    no test ever built an aged parent with a non-aged weld-affected set. Under `all`, that
+    member would be screened with Table B.4.2 constants evaluated on a heat-affected zone
+    the table does not cover — the plausible number off the wrong curve this module
+    exists to refuse.
+    """
+    from anvilate.analysis import AlloyProperties, TemperGroup, aluminum_compression_strength
+
+    haz = AlloyProperties(
+        name="6061-T6 (weld-affected, declared non-aged)",
+        compressive_yield=_q("15 ksi"),
+        tensile_yield=_q("15 ksi"),
+        tensile_ultimate=_q("24 ksi"),
+        elastic_modulus=_q(_AL_6061_T6_E),
+        temper_group=TemperGroup.NON_AGED,
+        source="ADM Table A.3.5, read by the user",
+    )
+    props = _al_6061_t6().model_copy(update={"weld_affected": haz})
+    common = {
+        "properties": props,
+        "slenderness": 40.0,
+        "flat_width": _q("60 mm"),
+        "thickness": _q("4 mm"),
+    }
+    # Unwelded, only the (aged) parent is consulted and the screen runs.
+    assert aluminum_compression_strength(**common) is not None
+    # Declared welded, the non-aged HAZ is in the set and the whole screen refuses.
+    assert aluminum_compression_strength(welded=True, **common) is None
+
+
+def test_the_aluminum_scorecard_default_margin_and_sign_handling_are_pinned():
+    """Two mutations survived here: the default `required` and the abs() on the demand."""
+    from anvilate.analysis import aluminum_compression_scorecard, aluminum_compression_strength
+    from anvilate.scorecard import CheckStatus
+
+    strength = aluminum_compression_strength(
+        properties=_al_6061_t6(welded=False),
+        slenderness=40.0,
+        flat_width=_q("60 mm"),
+        thickness=_q("4 mm"),
+    )
+    assert strength is not None
+    nominal = strength.nominal.to("MPa").magnitude
+    # The default required safety factor is exactly 1.0: a demand just above the nominal
+    # must FAIL, which a default of 0.9 would let pass.
+    just_over = aluminum_compression_scorecard(
+        "c", demand_stress=_q(f"{nominal * 1.02} MPa"), strength=strength
+    )
+    just_under = aluminum_compression_scorecard(
+        "c", demand_stress=_q(f"{nominal * 0.98} MPa"), strength=strength
+    )
+    assert just_over.status is CheckStatus.FAIL
+    assert just_under.status is CheckStatus.PASS
+    assert just_over.safety_factor is not None
+    assert just_over.safety_factor == pytest.approx(1 / 1.02, rel=1e-6)
+    # A compression demand entered with a negative sign is a magnitude, not a credit.
+    signed = aluminum_compression_scorecard("c", demand_stress=_q("-60 MPa"), strength=strength)
+    unsigned = aluminum_compression_scorecard("c", demand_stress=_q("60 MPa"), strength=strength)
+    assert signed.safety_factor == pytest.approx(unsigned.safety_factor)
+    assert signed.safety_factor is not None and signed.safety_factor > 0
+
+
+# --- degenerate inputs a four-agent audit found reaching public results -----
+
+
+def test_a_slope_drowned_by_pore_pressure_reports_zero_friction_not_a_negative_margin():
+    """u above the overburden floats the grains apart; effective stress is 0, not negative.
+
+    18 kN/m^3 sand, a 3 m failure plane, a 20 deg slope and a 60 kPa head — artesian or
+    rapid-drawdown numbers, all of them ordinary — returned FS = -0.41. A negative factor
+    of safety is not a reading a slope can have; it reads as worse-than-failed rather than
+    as a slope that has lost all of its friction. The guard covered u < 0 only, which is
+    one operand of the subtraction and not the pair.
+    """
+    from anvilate.analysis import infinite_slope_factor_of_safety
+
+    def fs(u_kpa: float, cohesion: str = "0 kPa") -> float:
+        return infinite_slope_factor_of_safety(
+            cohesion=_q(cohesion),
+            friction_angle=30.0,
+            unit_weight=_q("18 kN/m**3"),
+            depth=_q("3 m"),
+            slope_angle=20.0,
+            pore_pressure=_q(f"{u_kpa} kPa"),
+        )
+
+    # The overburden on the plane is gamma*z*cos^2(beta) = 47.7 kPa.
+    assert fs(0.0) == pytest.approx(math.tan(math.radians(30)) / math.tan(math.radians(20)))
+    assert fs(40.0) > 0.0
+    drowned = fs(60.0)
+    assert drowned == 0.0  # cohesionless: no friction left, and nothing else holding it
+    # With cohesion the slope still has that, and only that.
+    assert fs(60.0, cohesion="5 kPa") == pytest.approx(
+        5.0 / (18 * 3 * math.sin(math.radians(20)) * math.cos(math.radians(20)))
+    )
+    # Monotone: more water never helps.
+    values = [fs(u) for u in (0.0, 20.0, 40.0, 47.7, 60.0, 200.0)]
+    assert values == sorted(values, reverse=True)
+    assert min(values) >= 0.0
+
+
+def test_the_four_sizing_inverses_refuse_the_sign_their_forward_checks_refuse():
+    """A producer looser than its own consumer is how a negative number gets downstream.
+
+    Each of these returned a plausible-looking negative or crashed bare on an input its
+    own forward check rejects outright. `euler_second_moment_for_load` was the worst: a
+    negative required I flows straight into `euler_buckling_load`, so two public calls
+    produced a negative buckling load with no exception anywhere.
+    """
+    from anvilate.analysis import (
+        bolt_diameter_for_shear,
+        euler_buckling_load,
+        euler_second_moment_for_load,
+        fillet_weld_leg_for_load,
+        fillet_weld_throat_stress,
+        yield_safety_factor,
+    )
+
+    with pytest.raises(ValueError, match="must be positive to size a weld"):
+        fillet_weld_leg_for_load(
+            force=_q("-85 kN"),
+            length=_q("200 mm"),
+            allowable_shear=_q("120 MPa"),
+        )
+    # Zero sized a weld of no size at all, which is not a size.
+    with pytest.raises(ValueError, match="must be positive to size a weld"):
+        fillet_weld_leg_for_load(
+            force=_q("0 kN"), length=_q("200 mm"), allowable_shear=_q("120 MPa")
+        )
+    # The forward check has always refused what the inverse used to return.
+    with pytest.raises(ValueError):
+        fillet_weld_throat_stress(force=_q("85 kN"), leg_size=_q("-5 mm"), length=_q("200 mm"))
+
+    with pytest.raises(ValueError, match="must be positive to size a fastener"):
+        bolt_diameter_for_shear(shear_load=_q("-25 kN"), allowable_shear=_q("250 MPa"))
+
+    with pytest.raises(ValueError, match="must be positive to size a strut"):
+        euler_second_moment_for_load(
+            design_load=_q("-40 kN"),
+            length=_q("3 m"),
+            elastic_modulus=_q("200 GPa"),
+            required_safety_factor=2.0,
+        )
+    # The round trip the guard protects: a positive load sizes an I whose buckling load
+    # is exactly the required margin above it.
+    inertia = euler_second_moment_for_load(
+        design_load=_q("40 kN"),
+        length=_q("3 m"),
+        elastic_modulus=_q("200 GPa"),
+        required_safety_factor=2.0,
+    )
+    assert euler_buckling_load(
+        second_moment=inertia, length=_q("3 m"), elastic_modulus=_q("200 GPa")
+    ).to("kN").magnitude == pytest.approx(80.0, rel=1e-9)
+
+    with pytest.raises(ValueError, match="nothing to divide"):
+        yield_safety_factor(_q("0 MPa"), _q("250 MPa"))
+
+
+def test_the_zero_approach_point_of_the_lmtd_correction_raises_like_its_neighbours():
+    """The one input in a documented-raise neighbourhood that divided by zero instead.
+
+    P*R reduces exactly to (T_hi - T_ho)/(T_hi - T_ci), which is 1 when the hot outlet
+    meets the cold inlet. One kelvin either side of 200/80/80/140 already returned a
+    clean, informative ValueError; only the coincidence itself crashed — and round
+    numbers are exactly how an engineer lands on a coincidence.
+    """
+    from anvilate.analysis import shell_and_tube_lmtd_correction_factor
+
+    def f(hot_out: float, cold_in: float) -> float:
+        return shell_and_tube_lmtd_correction_factor(
+            hot_inlet_temperature=Quantity(magnitude=200.0, unit="degC"),
+            hot_outlet_temperature=Quantity(magnitude=hot_out, unit="degC"),
+            cold_inlet_temperature=Quantity(magnitude=cold_in, unit="degC"),
+            cold_outlet_temperature=Quantity(magnitude=140.0, unit="degC"),
+        )
+
+    with pytest.raises(ValueError, match="zero temperature approach"):
+        f(80.0, 80.0)
+    # The neighbourhood on both sides is unchanged: still a ValueError, still not a crash.
+    with pytest.raises(ValueError):
+        f(79.0, 80.0)
+    with pytest.raises(ValueError):
+        f(81.0, 80.0)
+    # And an ordinary exchanger still returns a correction factor just under 1.
+    assert 0.5 < f(120.0, 40.0) <= 1.0

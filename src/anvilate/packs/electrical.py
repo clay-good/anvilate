@@ -13,7 +13,7 @@ code-derived values; the arithmetic is the pack's.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
 from ..analysis import (
     conductor_resistance,
@@ -22,6 +22,7 @@ from ..analysis import (
 )
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
+from ._guarded import GuardedInputs
 
 __all__ = [
     "Feeder",
@@ -32,7 +33,7 @@ _DROP_REFERENCE = "NEC 210.19(A)/215.2 informational note — feeder voltage dro
 _AMPACITY_REFERENCE = "NEC 310.16 — conductor ampacity"
 
 
-class Feeder(BaseModel):
+class Feeder(GuardedInputs):
     """A three-phase feeder run and the two limits its screen checks.
 
     ``load_power`` P, ``power_factor`` cosφ, and ``line_voltage`` V_LL describe the load; the run is
@@ -43,6 +44,7 @@ class Feeder(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    signed_fields: tuple[str, ...] = ("load_power", "reactance")
 
     load_power: Quantity
     power_factor: float

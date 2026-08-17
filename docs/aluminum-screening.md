@@ -39,7 +39,7 @@ constants = aluminum_buckling_constants(          # ADM §B.4, from F_cy and E
 | --- | --- | --- |
 | `aluminum_buckling_constants` | §B.4 (Table B.4.2) | `B_c`, `D_c`, `C_c`, `B_p`, `D_p`, `C_p`, computed from the alloy's own `F_cy` and `E` |
 | `aluminum_member_buckling_stress` | §E.3 | The column curve: yielding, inelastic line, then `0.85·π²E/λ²` |
-| `aluminum_local_buckling_stress` | §B.5.4 | A flat element by edge support: yielding, inelastic, then postbuckling reserve |
+| `aluminum_local_buckling_stress` | §B.5.4 | A flat element by edge support: yielding, inelastic, then postbuckling reserve — **both** support conditions get the postbuckling branch; only `k` differs (1.6 held on both edges, 5.0 with one free) |
 | `aluminum_elastic_local_buckling_stress` | §B.5.6 | `F_e`, the stress at which the element *first* buckles — the §E.4 trigger |
 | `aluminum_lateral_torsional_moment` | §F.4.2 | The beam LTB moment, with **no** 0.85 knockdown |
 | `aluminum_combined_interaction` | §H.1 | The flat linear sum `P/P_c + M_x/M_cx + M_y/M_cy` |
@@ -89,12 +89,9 @@ does not quietly fall back to parent metal, and it does not pass. See
   Table B.4.2) are implemented. An -O, -H, -T1 through -T4 temper takes Table B.4.1,
   whose constants have a different form; declare it with `TemperGroup.NON_AGED` and the
   screen reports `NOT_EVALUATED` rather than evaluating the wrong table.
-- **The §E.4 local/member buckling interaction reduction.** When the element buckles
-  elastically below the elastic member buckling stress, §E.4 requires the member
-  buckling strength to come down. The screen detects that condition
-  (`local_member_interaction`), says so in the detail, and downgrades what would have
-  been a pass to `NOT_EVALUATED` — but it does not apply the reduction, because §E.4's
-  scope depends on the shape in ways a one-element screen cannot see.
+- **Multi-element sections.** The compression screen checks one element's local
+  buckling. For a real shape, run it per element and take the least, or compute the
+  ADM §E.3.1 weighted average yourself — the screen does not know the section.
 - **Alloy properties.** Following the user-supplied-allowables doctrine, `F_cy`, `F_ty`,
   `F_tu`, `E` and the weld-affected set are the caller's, with a `source` recording where
   they came from. `AlloyProperties` refuses a blank one.

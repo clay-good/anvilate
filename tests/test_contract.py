@@ -16,10 +16,13 @@ from __future__ import annotations
 
 import ast
 import importlib
+import math
 import pkgutil
 import re
 import types
 from pathlib import Path
+
+import pytest
 
 import anvilate.analysis as analysis_pkg
 
@@ -692,7 +695,76 @@ def _sample_derivations() -> list[tuple[str, object]]:
     for entry in industrial.screen_cover_plate(cover, required_safety_factor=1.5).entries:
         if entry.derivation is not None:
             out.append((f"cover {entry.name}", entry.derivation))
+    # Every structural screen, not a hand-picked few. The sample used to be three
+    # screens, and the one defect this gate has ever missed — a substituted line 25%
+    # high whenever the ACI §22.8.3 confinement cap bound — was in a screen the sample
+    # did not reach. A render-truth gate is only as wide as what it renders.
+    for entry in _structural_entries():
+        if entry.derivation is not None:
+            out.append((f"structural {entry.name}", entry.derivation))
+    # Both sides of every branch that changes the formula. A capped confinement factor
+    # evaluates a DIFFERENT expression from an uncapped one, so rendering only the
+    # uncapped case leaves the capped one unwatched.
+    for label, support_area in (("capped", "250000 mm**2"), ("uncapped", "90000 mm**2")):
+        bearing = structural.ConcreteBearing(
+            name="pedestal",
+            bearing_area=q("40000 mm**2"),
+            support_area=q(support_area),
+            concrete_strength=q("28 MPa"),
+            load=q("500 kN"),
+        )
+        for entry in structural.screen_concrete_bearing(
+            bearing, required_safety_factor=1.5
+        ).entries:
+            if entry.derivation is not None:
+                out.append((f"bearing {label} {entry.name}", entry.derivation))
     return out
+
+
+def _expand_roots(expression: str) -> str:
+    """Rewrite every \u221a(...) in a substituted line as (...)**0.5, matching parentheses.
+
+    Without this, pint parses "\u221a(A\u2082/A\u2081)" by quietly discarding the radical and using
+    the ratio itself — so a line with a square root in it evaluated to the wrong number
+    and the gate compared that wrong number against the printed result. It happened to
+    agree often enough to look fine, which is the worst way for a checker to be broken.
+    """
+    while (start := expression.find("\u221a(")) != -1:
+        depth = 0
+        for i in range(start + 1, len(expression)):
+            if expression[i] == "(":
+                depth += 1
+            elif expression[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    inner = expression[start + 2 : i]
+                    expression = f"{expression[:start]}(({inner})**0.5){expression[i + 1 :]}"
+                    break
+        else:  # pragma: no cover - an unbalanced radical is not a derivation we build
+            return expression.replace("\u221a", "", 1)
+    return expression
+
+
+def test_the_render_truth_gate_can_actually_see_a_square_root():
+    """The checker has to evaluate what the line says, radicals included.
+
+    This is the gate-mechanism half of the render-truth check, and it is here because
+    the mechanism was broken: pint dropped the radical, so \u221a(4) evaluated as 4. Any
+    formula with a square root in it was being compared against a number the line does
+    not say, and the ACI confined-bearing derivation hid a 25% mismatch behind it.
+    """
+    assert _expand_roots("0.85 * (28 MPa) * \u221a((250000 mm**2)/(40000 mm**2))") == (
+        "0.85 * (28 MPa) * (((250000 mm**2)/(40000 mm**2))**0.5)"
+    )
+    assert _expand_roots("a * b") == "a * b"
+
+    from anvilate.units.registry import UREG
+
+    plain = UREG.parse_expression("\u221a((250000 mm**2)/(40000 mm**2))")
+    expanded = UREG.parse_expression(_expand_roots("\u221a((250000 mm**2)/(40000 mm**2))"))
+    # 6.25 before, 2.5 after: the radical was being thrown away.
+    assert math.isclose(float(plain), 6.25)
+    assert math.isclose(float(expanded), 2.5)
 
 
 def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
@@ -727,6 +799,7 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
             expression = rhs.replace("\u00b7", "*").replace("\u2212", "-")
             expression = expression.replace("\u00b2", "**2").replace("\u00b3", "**3")
             expression = expression.replace("\u2074", "**4")
+            expression = _expand_roots(expression)
             # Pint binds a bare "/ 4166666.67 mm**4" as a division by the NUMBER times
             # the unit, so each value-unit pair has to be parenthesised before parsing.
             expression = _VALUE_UNIT.sub(r"(\1 \2)", expression)
@@ -758,3 +831,108 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
         "substituted lines that do not evaluate to the result printed under them:\n  "
         + "\n  ".join(mismatches)
     )
+
+
+def test_every_pack_input_model_inherits_the_magnitude_guard():
+    """A pack model that validates dimensions and not magnitudes is a silent green waiting.
+
+    ``TensionMember`` bounded ``net_area`` against ``gross_area`` by their ordering and
+    never against zero. A net area of −500 mm² — what you get by deducting one bolt hole
+    too many — satisfies that ordering trivially and screened to a **passing** scorecard
+    on both AISC §D2 limit states. Twenty of the twenty-three pack input models had the
+    same shape: dimension checked, magnitude not.
+
+    So the guard lives in one place and this asserts nobody skipped it. A model that
+    genuinely needs a signed field declares it in ``signed_fields``, which is a
+    declaration a reader can see rather than an omission they cannot.
+    """
+    import importlib
+    import inspect
+    import pkgutil
+
+    from pydantic import BaseModel
+
+    import anvilate.packs as packs
+    from anvilate.packs._guarded import GuardedInputs
+    from anvilate.units import Quantity
+
+    unguarded: list[str] = []
+    guarded = 0
+    for module_info in pkgutil.iter_modules(packs.__path__):
+        module = importlib.import_module(f"anvilate.packs.{module_info.name}")
+        for name, obj in vars(module).items():
+            if not (inspect.isclass(obj) and issubclass(obj, BaseModel)):
+                continue
+            if obj.__module__ != module.__name__ or obj is GuardedInputs:
+                continue
+            carries_quantity = any(
+                info.annotation is Quantity or "Quantity" in str(info.annotation)
+                for field, info in obj.model_fields.items()
+                if field != "signed_fields"
+            )
+            if not carries_quantity:
+                continue
+            if issubclass(obj, GuardedInputs):
+                guarded += 1
+            else:
+                unguarded.append(f"{module_info.name}.{name}")
+
+    assert not unguarded, (
+        "pack input models carrying Quantity fields that do not inherit "
+        "anvilate.packs._guarded.GuardedInputs, so a negative or non-finite magnitude "
+        "reaches the screen unchecked:\n  " + "\n  ".join(sorted(unguarded))
+    )
+    assert guarded >= 20, (
+        f"only {guarded} guarded models found — the discoverer stopped discovering"
+    )
+
+
+def test_the_pack_magnitude_guard_actually_rejects_what_it_claims_to():
+    """A guard nobody has watched fail is a guard nobody knows works.
+
+    Including the two live defects that motivated it: the negative net area that screened
+    to a pass, and the negative bearing area that reached √(A₂/A₁) and came back complex.
+    """
+    from pydantic import ValidationError
+
+    from anvilate.packs.structural import ConcreteBearing, TensionMember
+    from anvilate.units import Quantity
+
+    def q(text: str) -> Quantity:
+        return Quantity.parse(text)
+
+    with pytest.raises(ValidationError, match="must not be negative"):
+        TensionMember(
+            name="t",
+            gross_area=q("2000 mm**2"),
+            net_area=q("-500 mm**2"),
+            load=q("50 kN"),
+            material="ASTM-A36",
+        )
+    with pytest.raises(ValidationError, match="must not be negative"):
+        ConcreteBearing(
+            name="p",
+            bearing_area=q("-250000 mm**2"),
+            support_area=q("250000 mm**2"),
+            concrete_strength=q("28 MPa"),
+            load=q("500 kN"),
+        )
+    with pytest.raises(ValidationError, match="must be a finite quantity"):
+        TensionMember(
+            name="t",
+            gross_area=q("2000 mm**2"),
+            net_area=Quantity(magnitude=float("nan"), unit="mm**2"),
+            load=q("50 kN"),
+            material="ASTM-A36",
+        )
+    # A declared signed field is exempt, and stays exempt: the library's contract is that
+    # a non-positive DEMAND screens to NOT_EVALUATED rather than raising at construction.
+    # Turning that into an exception would be the guard/scorecard pairing bug again.
+    member = TensionMember(
+        name="t",
+        gross_area=q("2000 mm**2"),
+        net_area=q("1500 mm**2"),
+        load=q("-50 kN"),
+        material="ASTM-A36",
+    )
+    assert member.load.magnitude == -50.0

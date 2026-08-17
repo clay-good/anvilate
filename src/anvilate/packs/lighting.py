@@ -13,11 +13,12 @@ the caller's cited values; the arithmetic is the pack's.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
 from ..analysis import lighting_power_density, lumen_method_illuminance
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
+from ._guarded import GuardedInputs
 
 __all__ = [
     "LightingInstallation",
@@ -28,7 +29,7 @@ _ILLUMINANCE_REFERENCE = "IES Lighting Handbook — recommended task illuminance
 _LPD_REFERENCE = "ASHRAE 90.1 / IECC — lighting power density allowance"
 
 
-class LightingInstallation(BaseModel):
+class LightingInstallation(GuardedInputs):
     """A luminaire layout for one space, with the two targets its screen checks.
 
     ``luminaire_count`` n fixtures each emit ``lumens_per_luminaire`` Φ and draw

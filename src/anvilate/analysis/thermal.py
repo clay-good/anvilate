@@ -1867,6 +1867,15 @@ def shell_and_tube_lmtd_correction_factor(
     if abs(r - 1.0) < 1.0e-9:
         numerator = p_eff * s / (1.0 - p_eff)
     else:
+        # P*R reduces exactly to (T_hot_in - T_hot_out)/(T_hot_in - T_cold_in), which is
+        # 1 whenever the hot outlet meets the cold inlet — the zero-approach limit an
+        # engineer types with round numbers. Only the numerator was guarded, so that one
+        # point divided by zero while 1 K either side of it raised a clean message.
+        if abs(1.0 - p_eff * r) < 1.0e-12:
+            raise ValueError(
+                "the hot outlet reaches the cold inlet (a zero temperature approach), "
+                "which needs infinite area: no correction factor exists there"
+            )
         inner = (1.0 - p_eff) / (1.0 - p_eff * r)
         if inner <= 0.0:
             raise ValueError(

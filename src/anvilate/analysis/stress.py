@@ -421,6 +421,13 @@ def yield_safety_factor(equivalent_stress: Quantity, yield_strength: Quantity) -
     """
     sigma = _require_stress(equivalent_stress, "equivalent_stress")
     sy = _require_stress(yield_strength, "yield_strength")
+    if sigma == 0:
+        raise ValueError(
+            "equivalent_stress is zero: there is no safety factor to report, because "
+            "there is nothing to divide. A load case that does not stress the member in "
+            "this direction is NOT_EVALUATED, not infinitely safe — strength_scorecard "
+            "in this module returns exactly that."
+        )
     return sy / sigma
 
 

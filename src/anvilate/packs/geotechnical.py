@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from math import cos, radians, sin, tan
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
 from ..analysis import (
     bearing_capacity_factors,
@@ -32,6 +32,7 @@ from ..analysis import (
 )
 from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
+from ._guarded import GuardedInputs
 
 __all__ = [
     "DrivenPile",
@@ -63,7 +64,7 @@ def _hinted(entry: ScorecardEntry, hint: RepairHint | None) -> ScorecardEntry:
     return entry.model_copy(update={"repair_hint": hint})
 
 
-class ShallowFooting(BaseModel):
+class ShallowFooting(GuardedInputs):
     """A rectangular shallow spread footing on c-φ soil, and what its bearing screen needs.
 
     ``width`` B (the shorter plan side) and ``length`` L set the footing plan; ``embedment_depth``
@@ -74,6 +75,7 @@ class ShallowFooting(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    signed_fields: tuple[str, ...] = ("applied_load",)
 
     width: Quantity
     length: Quantity
@@ -165,7 +167,7 @@ def screen_shallow_footing(
     return Scorecard(entries=(entry,))
 
 
-class RetainingWall(BaseModel):
+class RetainingWall(GuardedInputs):
     """A gravity/cantilever retaining wall and what its external-stability screen needs.
 
     The backfill is described by its ``retained_height`` H, ``backfill_unit_weight`` γ, and
@@ -176,6 +178,7 @@ class RetainingWall(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    signed_fields: tuple[str, ...] = ("vertical_load",)
 
     retained_height: Quantity
     backfill_unit_weight: Quantity
@@ -253,7 +256,7 @@ def screen_retaining_wall(
     return Scorecard(entries=(overturning, sliding))
 
 
-class InfiniteSlope(BaseModel):
+class InfiniteSlope(GuardedInputs):
     """A long, uniform (infinite) slope and what its stability screen needs.
 
     The failure plane runs parallel to the surface at ``depth`` z. The soil is described by its
@@ -345,7 +348,7 @@ def _slope_repair_hint(slope: InfiniteSlope, required: float) -> RepairHint | No
     return None
 
 
-class DrivenPile(BaseModel):
+class DrivenPile(GuardedInputs):
     """A single α-method pile in clay, its load, and what its capacity screen needs.
 
     ``diameter`` D and ``length`` L set the pile geometry. The clay is given by its
@@ -355,6 +358,7 @@ class DrivenPile(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    signed_fields: tuple[str, ...] = ("applied_load",)
 
     diameter: Quantity
     length: Quantity

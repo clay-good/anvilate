@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
 from ..analysis import (
     DEFAULT_POISSON_RATIO,
@@ -43,6 +43,7 @@ from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard
 from ..standards import MaterialsDatabase, default_materials_db
 from ..units import Quantity
+from ._guarded import GuardedInputs
 
 __all__ = [
     "PlateEdge",
@@ -104,7 +105,7 @@ _PLATE_MODAL_CHECKS = {
 }
 
 
-class CoverPlate(BaseModel):
+class CoverPlate(GuardedInputs):
     """A flat cover or panel under uniform pressure, and what its screen needs.
 
     Declare the plan geometry one way or the other: ``length`` and ``width``
@@ -127,6 +128,7 @@ class CoverPlate(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = ("pressure",)
 
     name: str
     pressure: Quantity

@@ -827,6 +827,15 @@ fracture.crack_tip_plastic_zone_size
 fracture.paris_law_cycles_to_failure
 fracture.plane_strain_thickness_requirement
 fracture.stress_intensity_factor
+fracture.SurfaceFlaw
+fracture.FADAssessment
+fracture.newman_raju_surface_flaw_sif
+fracture.surface_flaw_reference_stress
+fracture.fad_limit_load_ratio
+fracture.fad_option1_curve
+fracture.charpy_toughness_estimate
+fracture.fad_assessment
+fracture.fad_scorecard
 fresnel.brewster_angle
 fresnel.fresnel_normal_reflectance
 fresnel.slab_transmittance

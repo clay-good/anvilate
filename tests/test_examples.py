@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import runpy
 from pathlib import Path
 
@@ -210,8 +211,14 @@ def test_aluminum_ladder_rail_example_is_buckling_governed():
     # Aluminum's low modulus makes the slender strut buckle far below the material
     # strength it reaches in tension.
     assert r["buckling_stress_mpa"] < r["tension_stress_mpa"]
-    assert r["buckling_stress_mpa"] == pytest.approx(107, abs=3)
+    assert r["buckling_stress_mpa"] == pytest.approx(91.2, abs=0.5)
     assert r["tension_stress_mpa"] == pytest.approx(240, abs=1)
+    # kL/r = 80 is past C_c, so this is the elastic branch — and the branch carries the
+    # 0.85 out-of-straightness knockdown. Without it the answer would be 107 MPa, which
+    # is what the generic straight-line/Euler evaluator returns and what this example
+    # used to print: 17.6% unconservative on the number the prose quotes.
+    assert r["intersection_slenderness"] < 80.0
+    assert r["buckling_stress_mpa"] == pytest.approx(0.85 * math.pi**2 * 69600 / 80.0**2, rel=1e-9)
 
 
 def test_masonry_wall_slenderness_example_combined_check_governs():
@@ -5694,3 +5701,26 @@ def test_welded_aluminum_platform_beam_example_is_governed_by_the_weld():
     assert missing.status is CheckStatus.NOT_EVALUATED
     assert "F_cyw" in missing.detail
     assert card.status is CheckStatus.FAIL
+
+
+def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition():
+    namespace = runpy.run_path(str(_EXAMPLES / "vessel_surface_flaw_fad.py"))
+    card = namespace["screen_shell_flaw"]()
+    by_name = {e.name: e for e in card.entries}
+    service = by_name["service pressure, measured K_IC"]
+    over = by_name["overpressure, measured K_IC"]
+    estimated = by_name["service pressure, Charpy estimate"]
+
+    assert service.status is CheckStatus.PASS
+    assert service.safety_factor == pytest.approx(1.71, abs=0.02)
+    # The load-line margin is NOT one over the fracture ratio: L_r rides out with K_r and
+    # the curve has come down by the time the point reaches it.
+    assert service.safety_factor is not None and service.safety_factor < 2.0
+    assert over.status is CheckStatus.FAIL
+    # A verdict resting on a Charpy correlation is never reported as a plain pass.
+    assert estimated.status is CheckStatus.NOT_EVALUATED
+    assert "correlation" in estimated.detail
+    # The framing is part of the deliverable, not a garnish.
+    for entry in card.entries[:2]:
+        assert "screening margin" in entry.detail
+        assert "qualified assessor" in entry.detail

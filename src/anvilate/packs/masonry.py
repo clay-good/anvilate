@@ -12,7 +12,7 @@ the engineer of record owns the design.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
 from ..analysis import (
     masonry_allowable_axial_stress,
@@ -21,6 +21,7 @@ from ..analysis import (
 )
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
+from ._guarded import GuardedInputs
 
 __all__ = [
     "MasonryWall",
@@ -31,7 +32,7 @@ _AXIAL_REFERENCE = "TMS 402 §8.2.4 allowable axial stress"
 _COMBINED_REFERENCE = "TMS 402 §8.2.4.2 combined axial + flexure unity"
 
 
-class MasonryWall(BaseModel):
+class MasonryWall(GuardedInputs):
     """An unreinforced masonry wall under gravity plus out-of-plane bending, and its screen inputs.
 
     ``masonry_strength`` f'm is the specified compressive strength and ``slenderness_ratio`` h/r the
@@ -41,6 +42,7 @@ class MasonryWall(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    signed_fields: tuple[str, ...] = ("axial_stress", "flexural_stress")
 
     masonry_strength: Quantity
     slenderness_ratio: float

@@ -63,7 +63,10 @@ footing strong enough to bear that still settles 97 mm over years.
   heel-uplift form once the resultant leaves the kern.
 
 See [`examples/retaining_wall_stability.py`](../examples/retaining_wall_stability.py) —
-overturning and sliding pass, but the heel lifts and bearing governs.
+overturning (FS 5.00) and sliding (FS 2.08) both pass, but the resultant leaves the
+middle third, so the heel lifts and the toe pressure climbs to 148 kPa. Whether bearing
+*governs* depends on the allowable bearing pressure of the soil, which the example does
+not assume and the screen does not supply.
 
 ## Slopes, deep foundations, and seepage
 

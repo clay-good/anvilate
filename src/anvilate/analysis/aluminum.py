@@ -75,18 +75,20 @@ def aluminum_buckling_stress(
     intersection_slenderness: float,
     elastic_modulus: Quantity,
 ) -> Quantity:
-    """The Aluminum Design Manual buckling stress F from its straight-line/Euler curve.
+    """The bare Aluminum Design Manual straight-line/Euler form, for caller-supplied B, D, C.
 
-    The ADM's unified buckling form, used for a column (flexural buckling), a beam
-    (lateral-torsional buckling), or a thin element (local buckling) alike — only the
-    constants change. Below the intersection slenderness the strength falls on the inelastic
-    straight line F = B − D·λ; above it, it follows the Euler elastic curve F = π²·E/λ².
-    ``slenderness`` λ is the governing slenderness (k·L/r for a column, or the element b/t
-    for local buckling), ``intercept`` B and ``slope`` D the ADM buckling constants for the
-    alloy-temper and mode (both stresses, from the ADM tables), ``intersection_slenderness``
-    C the slenderness where the two curves meet, and ``elastic_modulus`` E (≈ 69 GPa for
-    aluminum). The result is the buckling stress alone — compare it against the yield/squash
-    limit F_cy for a very stocky member, which governs separately. Returns F in MPa.
+    F = B − D·λ below the intersection slenderness C, and π²·E/λ² above it. ``intercept``
+    B and ``slope`` D are stresses, ``intersection_slenderness`` C a slenderness, and
+    ``elastic_modulus`` E ≈ 69 GPa for aluminum. Returns F in MPa.
+
+    **This is the raw shape, not any one of the ADM's member checks**, and it is not
+    interchangeable with them. It does not cap the result at F_cy, so at a low slenderness
+    it returns a "buckling stress" above the alloy's own yield; and its elastic branch is
+    π²E/λ², without the 0.85 out-of-straightness knockdown §E.3 applies to a *column*.
+    Feeding it column constants therefore overstates a column by 17.6% on the elastic
+    branch — use :func:`aluminum_member_buckling_stress`, which computes B_c, D_c and C_c
+    from the alloy and applies both. This function is for a caller who has a set of
+    constants for some other mode and wants the curve evaluated, nothing more.
     """
     _require(intercept, "[pressure]", "intercept")
     _require(slope, "[pressure]", "slope")
@@ -609,13 +611,10 @@ class AluminumCompressionStrength(BaseModel):
 
     ``elastic_local_buckling`` is the §B.5.6 stress F_e at which the checked element first
     buckles, and ``local_member_interaction`` is True when it falls below the elastic
-    member buckling stress. That is the §E.4 trigger: the member has lost the stiffness
-    the column curve assumed, and its buckling strength must come down. This screen does
-    **not** apply that reduction — §E.4's scope depends on the shape in ways a
-    one-element screen cannot see — so it raises the flag instead, and
-    :func:`aluminum_compression_scorecard` refuses to report a plain pass while it is up.
-    A silent omission here would be unconservative in exactly the slender-element case
-    where the postbuckling branch is being leaned on hardest.
+    member buckling strength. That is the §E.4 trigger, and when it is up the reduction
+    F_rc = F_c^(1/3)·F_e^(2/3) **has been applied** to ``member_buckling`` — the flag says
+    the check was made, not that it was skipped. Omitting it would be unconservative in
+    exactly the slender-element case where the postbuckling branch is leaned on hardest.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -644,7 +643,18 @@ def _compression_limit_states(
     thickness: Quantity,
     edge_support: EdgeSupport,
 ) -> dict[AluminumLimitState, Quantity]:
-    """The three §B.5.4/§E.3 limit-state stresses for one property set."""
+    """The three §B.5.4/§E.3 limit-state stresses for one set, with §E.4 applied.
+
+    §E.4: when the element's elastic local buckling stress F_e falls below the member
+    buckling strength F_c, the member no longer has the stiffness the column curve
+    assumed, and its buckling strength drops to F_rc = F_c^(1/3)·F_e^(2/3).
+
+    F_c here is the §E.3 member buckling *strength*, not the elastic member buckling
+    stress. Those coincide above C_c, which is why the ADM's own worked example does not
+    distinguish them — but below C_c the elastic stress runs away as 1/λ², so comparing
+    against it makes the condition fire on essentially every stocky member and says
+    nothing. The strength is bounded by F_cy and the comparison stays meaningful.
+    """
     constants = aluminum_buckling_constants(
         compressive_yield=properties.compressive_yield,
         elastic_modulus=properties.elastic_modulus,
@@ -656,6 +666,15 @@ def _compression_limit_states(
         elastic_modulus=properties.elastic_modulus,
         constants=constants,
     )
+    fe = aluminum_elastic_local_buckling_stress(
+        flat_width=flat_width,
+        thickness=thickness,
+        elastic_modulus=properties.elastic_modulus,
+        edge_support=edge_support,
+    ).magnitude
+    fc = member.magnitude
+    if fe < fc:
+        member = Quantity(magnitude=fc ** (1.0 / 3.0) * fe ** (2.0 / 3.0), unit="MPa")
     return {
         AluminumLimitState.YIELDING: properties.compressive_yield.to("MPa"),
         AluminumLimitState.LOCAL_BUCKLING: aluminum_local_buckling_stress(
@@ -726,21 +745,23 @@ def aluminum_compression_strength(
             best = (value, is_haz, state, states)
     assert best is not None and parent_nominal is not None  # noqa: S101 - the loop always runs
     _, governed_by_haz, governing, states = best
-    # §E.4: F_e is a stiffness quantity and does not depend on the temper, so it is the
-    # same for both property sets. It is compared against the *elastic* member buckling
-    # stress, not the member's strength — the reduction is about the stiffness the column
-    # curve assumed, which is what buckles the element in the first place.
+    # §E.4: F_e is a stiffness quantity — it has no F_cy in it — so it is the same for
+    # the parent metal and the weld-affected zone, and only has to be computed once.
     elastic_local = aluminum_elastic_local_buckling_stress(
         flat_width=flat_width,
         thickness=thickness,
         elastic_modulus=properties.elastic_modulus,
         edge_support=edge_support,
     )
-    elastic_member = (
-        _OUT_OF_STRAIGHTNESS
-        * pi**2
-        * properties.elastic_modulus.to("MPa").magnitude
-        / slenderness**2
+    unreduced = aluminum_member_buckling_stress(
+        slenderness=slenderness,
+        compressive_yield=properties.compressive_yield,
+        elastic_modulus=properties.elastic_modulus,
+        constants=aluminum_buckling_constants(
+            compressive_yield=properties.compressive_yield,
+            elastic_modulus=properties.elastic_modulus,
+            temper_group=properties.temper_group,
+        ),
     )
     return AluminumCompressionStrength(
         yielding=states[AluminumLimitState.YIELDING],
@@ -750,7 +771,7 @@ def aluminum_compression_strength(
         governing=governing,
         parent_nominal=parent_nominal,
         elastic_local_buckling=elastic_local,
-        local_member_interaction=elastic_local.magnitude < elastic_member,
+        local_member_interaction=elastic_local.magnitude < unreduced.magnitude,
         weld_affected_governs=governed_by_haz,
         weld_affected_nominal=haz_nominal,
     )
@@ -813,19 +834,9 @@ def aluminum_compression_scorecard(
         )
     if strength.local_member_interaction:
         detail = (
-            f"the element buckles elastically at "
+            f"{detail}; the element buckles elastically at "
             f"{strength.elastic_local_buckling.to('MPa').magnitude:.4g} MPa, below the "
-            f"elastic member buckling stress, so ADM §E.4 requires the member buckling "
-            f"strength to be reduced for local/member interaction — a reduction this "
-            f"screen does not apply. {detail}"
+            f"member buckling strength, so the ADM §E.4 local/member interaction "
+            f"reduction F_rc = F_c^(1/3)·F_e^(2/3) has been applied"
         )
-        if entry.status is CheckStatus.PASS:
-            return entry.model_copy(
-                update={
-                    "status": CheckStatus.NOT_EVALUATED,
-                    "detail": detail,
-                    "reference": _CLAUSE_ADM,
-                    "safety_factor": None,
-                }
-            )
     return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_ADM})

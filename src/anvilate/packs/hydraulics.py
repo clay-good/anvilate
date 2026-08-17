@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from math import pi
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
 from ..analysis import (
     darcy_friction_factor,
@@ -26,6 +26,7 @@ from ..analysis import (
 )
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
+from ._guarded import GuardedInputs
 
 __all__ = [
     "PipeRun",
@@ -39,7 +40,7 @@ _NPSH_REFERENCE = "NPSH available vs required (cavitation margin)"
 _PIPE_REFERENCE = "Darcy-Weisbach friction + fitting minor losses"
 
 
-class PumpDuty(BaseModel):
+class PumpDuty(GuardedInputs):
     """A pumping duty and the selected equipment, and what its screen needs.
 
     ``flow_rate`` Q, ``total_head`` H, and ``fluid_density`` ρ set the hydraulic duty; the
@@ -94,7 +95,7 @@ def screen_pump_duty(
     return Scorecard(entries=(motor_entry, npsh_entry))
 
 
-class PipeRun(BaseModel):
+class PipeRun(GuardedInputs):
     """A pressurized pipe run and the head available to drive it, and its screen inputs.
 
     ``flow_rate`` Q, inside ``diameter`` D, ``length`` L, and wall ``roughness`` ε set the friction

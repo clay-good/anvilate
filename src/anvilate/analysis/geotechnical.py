@@ -848,7 +848,13 @@ def infinite_slope_factor_of_safety(
         u = pore_pressure.to("kPa").magnitude
         if u < 0:
             raise ValueError("pore_pressure must be non-negative")
-    normal = gamma * z * cos(beta) ** 2 - u
+    # A pore pressure above the total normal stress floats the grains apart: the
+    # effective stress is zero, not negative. Left unclamped this returns a NEGATIVE
+    # factor of safety (-0.41 for an ordinary 18 kN/m^3 sand at 3 m under a 60 kPa
+    # head), which reads as a slope that is worse than failed rather than one that has
+    # simply lost all its friction. The guard on `u` covered only u < 0 — one operand
+    # of the subtraction, not the pair.
+    normal = max(gamma * z * cos(beta) ** 2 - u, 0.0)
     resisting = c + normal * tan(phi)
     driving = gamma * z * sin(beta) * cos(beta)
     return resisting / driving

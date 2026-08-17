@@ -17,9 +17,10 @@ analysis, and it will not pick your allowable stress.
 | Miter-bend pressure, single and multiple | §304.2.3 | `asme_b313_miter_bend_pressure` |
 | Branch reinforcement area required | §304.3.3 | `asme_b313_branch_required_reinforcement_area` |
 | Allowable displacement stress range | §302.3.5 | `asme_b313_allowable_displacement_stress_range` |
+| Computed displacement stress range S_E | §319.4.4 | `asme_b313_displacement_stress` |
+| Bend stress intensification factor | §319.4.4 (Appendix D) | `asme_b313_bend_stress_intensification` |
 
-**Not screened, and needing a real pipe stress analysis:** the computed expansion
-stress range (§319 flexibility analysis — the demand side of §302.3.5), support spans
+**Not screened, and needing a real pipe stress analysis:** support spans
 and sustained-load stresses, occasional loads, nozzle and equipment allowables,
 supports and anchors, thermal transients, and every code case beyond Chapter II. A
 green scorecard here means the pressure design screens clean; it does not mean the

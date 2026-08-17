@@ -135,6 +135,14 @@ def euler_second_moment_for_load(
         raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
     if effective_length_factor <= 0:
         raise ValueError(f"effective_length_factor must be positive; got {effective_length_factor}")
+    if design_load.to("N").magnitude <= 0:
+        raise ValueError(
+            f"design_load must be positive to size a strut; got {design_load}. A "
+            f"sign-reversed load returned a NEGATIVE required second moment, which "
+            f"euler_buckling_load then accepts and turns into a negative buckling load — "
+            f"two public calls and no exception. The sibling inverse "
+            f"axial.required_axial_area takes the magnitude for exactly this reason."
+        )
     effective_length = effective_length_factor * length.pint
     inertia = (
         required_safety_factor

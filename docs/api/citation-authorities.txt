@@ -41,14 +41,29 @@
 # mention of someone else's method is not.
 
 # --- Codes and standards bodies
+#
+# 2026-08-17: eighteen tokens were struck and two tightened, after an auditor got three
+# fabricated public checks — no source of any kind — past this gate on one ordinary
+# English word each: "public API", "Table stakes", and "a whole Chapter". Changing "API"
+# to "interface" failed immediately, so that single word was the entire defence. Struck:
+# Table, §, API, Chapter, Ver (matched "Vertical"), Blank, White, Jones, Norton, Marks,
+# Perry, Curtis, Franklin, Burton, Wills, Bergman (matched "Bergmann"). Tightened:
+# Miner -> Miner's rule (was matching "Mineral"), IEC -> IEC 6 (was matching "IECC").
+# Each struck token was verified to be the SOLE citation for zero symbols first, so
+# nothing lost a source it was relying on. A bare surname or a bare common noun is not
+# a citation, and a gate that accepts one reports coverage the library does not have.
 AASHTO
 ACI
 AGMA
 AISC
 AISI
+BS 7910
+Newman & Raju
+Stanitz
+Rolfe
 Aluminum Design Manual
 ANSI
-API
+API 610
 ASCE
 ASHRAE
 ASME
@@ -60,7 +75,7 @@ DIN
 Eurocode
 EN 199
 EN ISO
-IEC
+IEC 6
 IEEE
 IES
 ISO
@@ -75,21 +90,16 @@ SAE
 TMS
 
 # --- Handbooks and texts
-Wills
 Agrawal
 Anderson
 Balanis
 Beranek
 Biblarz
-Blank
-Burton
 Callendar
 Cimbala
-Curtis
 Daniel
 Duffie
 Erickson
-Franklin
 Griffiths
 GPSA
 Hamrock
@@ -97,7 +107,6 @@ Hydraulic Institute
 ITU-R
 ITU-T
 Irwin
-Jones
 Kalpakjian
 Karassik
 Kester
@@ -120,19 +129,13 @@ Shapiro
 Sutton
 Tarquin
 Vallado
-Ver
 Van Dusen
-White
-Bergman
 Blevins
 Crane TP
 Cengel
 Incropera
 Machinery's Handbook
-Marks
 Mischke
-Norton
-Perry
 Peterson
 Roark
 Shigley
@@ -168,7 +171,7 @@ Lamé
 Lame
 Lewis
 Manning
-Miner
+Miner's rule
 Mises
 Mohr
 Navier
@@ -198,9 +201,6 @@ Ylinen
 Zuber
 
 # --- Clause and table references (a symbol that points at a numbered provision)
-§
 Annex
 Appendix
-Chapter
 Clause
-Table

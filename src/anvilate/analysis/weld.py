@@ -94,6 +94,13 @@ def fillet_weld_leg_for_load(
         raise ValueError(f"length must be positive; got {length}")
     if tau <= 0:
         raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
+    if force.to("N").magnitude <= 0:
+        raise ValueError(
+            f"force must be positive to size a weld; got {force}. A sign-reversed load "
+            f"returned a NEGATIVE leg, which fillet_weld_throat_stress — the forward "
+            f"check this function inverts — refuses outright, and a zero load sized a "
+            f"weld of no size at all."
+        )
     leg = (
         required_safety_factor * force.to("N").magnitude / (FILLET_THROAT_FACTOR * length_mm * tau)
     )

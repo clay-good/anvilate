@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
 from ..analysis import (
     ColumnEnd,
@@ -86,6 +86,7 @@ from ..scorecard import (
 )
 from ..standards import MaterialsDatabase, default_materials_db
 from ..units import Quantity
+from ._guarded import GuardedInputs
 
 __all__ = [
     "Support",
@@ -269,7 +270,7 @@ _MODAL_CHECKS = {
 }
 
 
-class BeamMember(BaseModel):
+class BeamMember(GuardedInputs):
     """A structural beam member and everything a T1 screen needs to check it.
 
     ``load`` is a force for a ``point`` member, a force-per-length for a
@@ -317,6 +318,11 @@ class BeamMember(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = (
+        "load",
+        "load_position",
+        "pair_offset",
+    )
 
     name: str
     section: CrossSection
@@ -727,7 +733,7 @@ def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntr
     ).model_copy(update={"reference": _CLAUSE_BEAM_SHEAR, "derivation": derivation})
 
 
-class ColumnMember(BaseModel):
+class ColumnMember(GuardedInputs):
     """A structural compression member and what a buckling screen needs.
 
     The screen buckles the member about the least axis ``section`` carries
@@ -740,6 +746,7 @@ class ColumnMember(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = ("axial_load",)
 
     name: str
     section: CrossSection
@@ -836,7 +843,7 @@ def screen_column_member(
     return Scorecard(entries=(entry,))
 
 
-class BoltedConnection(BaseModel):
+class BoltedConnection(GuardedInputs):
     """A bolted lap/clevis connection transferring a transverse load.
 
     ``bolt_diameter`` is the shank diameter, ``shear_planes`` 1 (single) or 2
@@ -850,6 +857,10 @@ class BoltedConnection(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = (
+        "load",
+        "tension",
+    )
 
     name: str
     bolt_diameter: Quantity
@@ -1097,7 +1108,7 @@ def screen_bolted_connection(
     return Scorecard(entries=tuple(entries))
 
 
-class WeldedConnection(BaseModel):
+class WeldedConnection(GuardedInputs):
     """A fillet-welded connection carrying a load in shear on the weld throat.
 
     ``leg_size`` is the fillet leg w (the effective throat is 0.707·w),
@@ -1107,6 +1118,7 @@ class WeldedConnection(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = ("load",)
 
     name: str
     leg_size: Quantity
@@ -1171,7 +1183,7 @@ def screen_welded_connection(
     return Scorecard(entries=(entry,))
 
 
-class BasePlate(BaseModel):
+class BasePlate(GuardedInputs):
     """A column base plate bearing on a concrete footing.
 
     ``width`` B and ``depth`` N are the plate's plan dimensions, ``axial_load`` P
@@ -1186,6 +1198,7 @@ class BasePlate(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = ("axial_load",)
 
     name: str
     width: Quantity
@@ -1336,7 +1349,7 @@ def screen_base_plate(
     return Scorecard(entries=tuple(entries))
 
 
-class LiftingLug(BaseModel):
+class LiftingLug(GuardedInputs):
     """A lifting lug (pad eye) loaded in tension through a pin hole.
 
     ``width`` is the lug width across the hole, ``hole_diameter`` the pin hole,
@@ -1346,6 +1359,7 @@ class LiftingLug(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = ("load",)
 
     name: str
     width: Quantity
@@ -1479,7 +1493,7 @@ def screen_lifting_lug(
     )
 
 
-class GussetPlate(BaseModel):
+class GussetPlate(GuardedInputs):
     """A gusset (or connection element) checked for block-shear rupture.
 
     ``net_shear_area`` A_nv and ``net_tension_area`` A_nt are the areas along the
@@ -1489,6 +1503,7 @@ class GussetPlate(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = ("load",)
 
     name: str
     net_shear_area: Quantity
@@ -1563,7 +1578,7 @@ def screen_gusset_plate(
     return Scorecard(entries=(entry,))
 
 
-class TensionMember(BaseModel):
+class TensionMember(GuardedInputs):
     """An axially loaded tension member checked for the two AISC §D2 limit states.
 
     A rod, angle, or plate carrying ``load`` in tension. ``gross_area`` A_g is the
@@ -1575,6 +1590,7 @@ class TensionMember(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = ("load",)
 
     name: str
     gross_area: Quantity
@@ -1692,7 +1708,7 @@ def screen_tension_member(
     )
 
 
-class BeamColumnMember(BaseModel):
+class BeamColumnMember(GuardedInputs):
     """A member carrying combined axial compression and bending (a beam-column).
 
     Screened by the AISC §H1.1 interaction equation. ``section``'s
@@ -1706,6 +1722,10 @@ class BeamColumnMember(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = (
+        "axial_load",
+        "moment",
+    )
 
     name: str
     section: CrossSection
@@ -1851,7 +1871,7 @@ def screen_beam_column(
     return Scorecard(entries=(axial_entry, entry))
 
 
-class ConcreteBearing(BaseModel):
+class ConcreteBearing(GuardedInputs):
     """A plate bearing on concrete, checked by the ACI 318 confined-bearing rule.
 
     When the loaded area ``bearing_area`` A₁ (a base plate or pedestal cap) is
@@ -1862,6 +1882,7 @@ class ConcreteBearing(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = ("load",)
 
     name: str
     bearing_area: Quantity
@@ -1907,36 +1928,47 @@ def screen_concrete_bearing(
     fc = bearing.concrete_strength.to("MPa").magnitude
     load_n = bearing.load.to("N").magnitude
 
-    confinement = min((a2 / a1) ** 0.5, _ACI_CONFINEMENT_CAP)
+    unconfined = (a2 / a1) ** 0.5
+    capped = unconfined > _ACI_CONFINEMENT_CAP
+    confinement = min(unconfined, _ACI_CONFINEMENT_CAP)
     capacity_n = _ACI_BEARING_FRACTION * fc * a1 * confinement
     safety = capacity_n / load_n if load_n > 0 else None
-    derivation = Derivation(
-        symbolic="B_n = 0.85 · f′c · A₁ · √(A₂/A₁)",
-        inputs=(
-            SymbolValue(
-                symbol="f′c",
-                description="concrete compressive strength",
-                value=bearing.concrete_strength,
-            ),
-            SymbolValue(
-                symbol="A₁", description="loaded (bearing) area", value=bearing.bearing_area
-            ),
+    # The rendered formula has to be the one that was actually evaluated. Writing
+    # √(A₂/A₁) while the §22.8.3 cap is binding prints a substituted line that does not
+    # multiply out to the result under it — 25% high whenever A₂ > 4·A₁ — in the one
+    # artifact whose whole purpose is being re-derivable by its reader. So the capped
+    # branch renders the cap, and drops A₂ from the inputs because the evaluated formula
+    # genuinely does not use it.
+    strength_inputs = [
+        SymbolValue(
+            symbol="f′c",
+            description="concrete compressive strength",
+            value=bearing.concrete_strength,
+        ),
+        SymbolValue(symbol="A₁", description="loaded (bearing) area", value=bearing.bearing_area),
+    ]
+    if capped:
+        symbolic = f"B_n = 0.85 · f′c · A₁ · {_ACI_CONFINEMENT_CAP:.0f}"
+        result_note = (
+            f", confinement factor √(A₂/A₁) = {unconfined:.2f} capped at "
+            f"{_ACI_CONFINEMENT_CAP:.0f} by ACI 318 §22.8.3"
+        )
+    else:
+        symbolic = "B_n = 0.85 · f′c · A₁ · √(A₂/A₁)"
+        result_note = f", confinement factor {confinement:.2f}"
+        strength_inputs.append(
             SymbolValue(
                 symbol="A₂",
                 description="supporting concrete area, confining the bearing zone",
                 value=bearing.support_area,
-            ),
-        ),
+            )
+        )
+    derivation = Derivation(
+        symbolic=symbolic,
+        inputs=tuple(strength_inputs),
         result=SymbolValue(
             symbol="B_n",
-            description=(
-                "nominal bearing strength"
-                + (
-                    f", confinement factor √(A₂/A₁) capped at {_ACI_CONFINEMENT_CAP:.0f}"
-                    if (a2 / a1) ** 0.5 > _ACI_CONFINEMENT_CAP
-                    else f", confinement factor {confinement:.2f}"
-                )
-            ),
+            description="nominal bearing strength" + result_note,
             value=Quantity(magnitude=capacity_n, unit="N"),
         ),
         citation=_CLAUSE_CONCRETE_BEARING_ACI,
@@ -1947,7 +1979,7 @@ def screen_concrete_bearing(
     return Scorecard(entries=(entry,))
 
 
-class ShearPlate(BaseModel):
+class ShearPlate(GuardedInputs):
     """A plate element loaded in direct shear (a shear tab, coped-beam web, bracket).
 
     Screened for the two AISC §J4.2 limit states: shear yielding on the gross shear
@@ -1959,6 +1991,7 @@ class ShearPlate(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
+    signed_fields: tuple[str, ...] = ("load",)
 
     name: str
     gross_shear_area: Quantity

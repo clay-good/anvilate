@@ -11,6 +11,12 @@
 #
 # A citation is any token in docs/api/citation-authorities.txt appearing in the symbol's
 # own docstring or its module's.
+# 2026-08-17: photodetector.specific_detectivity was ADDED to this list, which is
+# normally forbidden. It is not a new symbol and it did not lose a source: the
+# citation gate had been crediting it for the word 'Jones', which appears in its
+# docstring as the UNIT of D* (cm*sqrt(Hz)/W) and not as a reference. Striking the
+# weak token made an existing gap visible. Recording it is the honest move; the fix
+# is to name the source and strike the line again.
 accumulator.accumulator_size_for_volume
 accumulator.accumulator_usable_volume
 acid_base.buffer_ratio_for_ph
@@ -243,6 +249,7 @@ optical_interference.double_slit_fringe_angle
 optical_interference.double_slit_fringe_spacing
 optical_interference.single_slit_minimum_angle
 optical_interference.wavelength_from_fringe_spacing
+photodetector.specific_detectivity
 photometry.luminous_efficacy
 photometry.luminous_efficiency
 photometry.luminous_flux_from_power

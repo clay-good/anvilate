@@ -13,11 +13,12 @@ caller's cited values; the arithmetic is the pack's.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
 from ..analysis import air_changes_per_hour, breathing_zone_outdoor_airflow
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
+from ._guarded import GuardedInputs
 
 __all__ = [
     "VentilationZone",
@@ -28,7 +29,7 @@ _OUTDOOR_AIR_REFERENCE = "ASHRAE 62.1 ventilation-rate procedure (Voz)"
 _AIR_CHANGE_REFERENCE = "application minimum air changes per hour"
 
 
-class VentilationZone(BaseModel):
+class VentilationZone(GuardedInputs):
     """An occupied zone's ventilation demand and what it is actually given.
 
     ``people_outdoor_rate`` R_p (airflow per person) and ``occupancy`` P_z set the people demand;

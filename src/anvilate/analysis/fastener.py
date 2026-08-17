@@ -498,6 +498,13 @@ def bolt_diameter_for_shear(
     tau = allowable_shear.to("MPa").magnitude
     if tau <= 0:
         raise ValueError(f"allowable_shear must be positive; got {allowable_shear}")
+    if f <= 0:
+        raise ValueError(
+            f"shear_load must be positive to size a fastener; got {shear_load}. Every "
+            f"other operand here was checked and this one, the value under the square "
+            f"root, was not — a sign-reversed load reached math.sqrt and came back as a "
+            f"bare domain error."
+        )
     d_min = sqrt(4 * required_safety_factor * f / (pi * shear_planes * tau))
     return Quantity(magnitude=d_min, unit="mm")
 

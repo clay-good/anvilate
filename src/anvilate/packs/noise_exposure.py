@@ -14,7 +14,7 @@ owns the determination.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
 from ..analysis import (
     noise_dose_fraction,
@@ -23,6 +23,7 @@ from ..analysis import (
 )
 from ..scorecard import Scorecard, ScorecardEntry
 from ..units import Quantity
+from ._guarded import GuardedInputs
 
 __all__ = [
     "WorkerNoiseExposure",
@@ -32,7 +33,7 @@ __all__ = [
 _DEFAULT_CRITERION_DURATION = Quantity.parse("8 hour")
 
 
-class WorkerNoiseExposure(BaseModel):
+class WorkerNoiseExposure(GuardedInputs):
     """A worker's noise exposure over a shift, and the inputs its dose screen needs.
 
     ``machine_levels`` are the steady sound levels in dBA at the worker's position, one per source
