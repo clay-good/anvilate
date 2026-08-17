@@ -60,7 +60,7 @@ def render(
         target = _system_unit(quantity, system)
     shown = quantity if target is None else quantity.to(target)
     places = decimals_for(shown.unit)
-    label = f"{shown.pint.units:~P}" if pretty else shown.unit
+    label = _engineering_order(f"{shown.pint.units:~P}") if pretty else shown.unit
     return f"{shown.magnitude:.{places}f} {label}"
 
 
@@ -76,6 +76,48 @@ def render_dual(quantity: Quantity, *, primary: UnitSystem) -> str:
     return f"{render(quantity, system=primary)} [{render(quantity, system=secondary)}]"
 
 
+# Pint prints the factors of a compound unit alphabetically, so a moment comes out
+# "m·N" and "in·kip" where every engineering document writes "N·m" and "kip·in". The
+# values are right and only the label reads oddly, but a submittal is read by people
+# who will trust a familiar label and squint at an unfamiliar one. Force leads, then
+# length, then everything else in the order Pint gave — this reorders factors, it never
+# changes, drops, or invents one.
+_FACTOR_RANK = {
+    "N": 0,
+    "kN": 0,
+    "MN": 0,
+    "lbf": 0,
+    "kip": 0,
+    "kgf": 0,
+    "mm": 1,
+    "cm": 1,
+    "m": 1,
+    "km": 1,
+    "in": 1,
+    "ft": 1,
+    "yd": 1,
+}
+_MULTIPLY = "·"
+
+
+def _engineering_order(label: str) -> str:
+    """Reorder a compound unit label force-first, then length, then as given.
+
+    Only the numerator of a simple product is reordered. A label carrying a division or
+    an exponent on a reordered factor is left exactly as Pint wrote it — a wrong label is
+    worse than an unfamiliar one, and there is no engineering convention to appeal to for
+    those anyway.
+    """
+    if _MULTIPLY not in label or "/" in label:
+        return label
+    factors = label.split(_MULTIPLY)
+    if any(factor not in _FACTOR_RANK for factor in factors):
+        return label
+    if len({_FACTOR_RANK[f] for f in factors}) == 1:
+        return label
+    return _MULTIPLY.join(sorted(factors, key=lambda f: _FACTOR_RANK[f]))
+
+
 def _system_unit(quantity: Quantity, system: UnitSystem) -> str | None:
     """The conventional unit for ``quantity``'s dimension in ``system``."""
     dim = quantity.pint.dimensionality
@@ -84,6 +126,11 @@ def _system_unit(quantity: Quantity, system: UnitSystem) -> str | None:
         ("[force]", system.force_unit),
         ("[pressure]", system.stress_unit),
         ("[mass]", system.mass_unit),
+        # A moment and a second moment of area were unmapped, so a US-system derivation
+        # converted its lengths to inches and left M in N·m and I in mm⁴ beside them —
+        # a substituted line mixing two systems, which is worse than either.
+        ("[force] * [length]", system.moment_unit),
+        ("[length] ** 4", system.second_moment_unit),
     ]
     for token, unit in mapping:
         if dim == UREG.get_dimensionality(token):

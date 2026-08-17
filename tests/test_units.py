@@ -240,3 +240,53 @@ def test_temperature_difference_refuses_an_offset_scale():
     assert temperature_difference_kelvin(
         Quantity(magnitude=-5.0, unit="K"), name="d"
     ) == pytest.approx(-5.0, rel=1e-12)
+
+
+def test_a_moment_and_a_second_moment_follow_the_project_unit_system():
+    """They were unmapped, so a US derivation mixed inches with N·m and mm⁴ in one line."""
+    from anvilate.units.format import render
+
+    moment = Quantity.parse("1500 N*m")
+    assert render(moment, system=UnitSystem.SI, pretty=True) == "1500000.00 N·mm"
+    assert render(moment, system=UnitSystem.US, pretty=True) == "13.28 kip·in"
+
+    second_moment = Quantity.parse("2.1e6 mm**4")
+    assert render(second_moment, system=UnitSystem.SI, pretty=True) == "2100000.00 mm⁴"
+    assert render(second_moment, system=UnitSystem.US, pretty=True) == "5.05 in⁴"
+
+    # The point of choosing N·mm over N·m: σ = M·c/I evaluates as printed. The moment's
+    # length unit has to match the second moment's, or the substituted line a reviewer is
+    # meant to check by hand is out by a factor of a thousand.
+    for system, m, c, i, expected in (
+        (UnitSystem.SI, 1500000.00, 50.00, 2100000.00, 35.71),
+        (UnitSystem.US, 13.28, 1.969, 5.05, 5.18),
+    ):
+        assert m * c / i == pytest.approx(expected, rel=2e-3), system
+    # And both systems land on the same stress, which is the real check.
+    assert 5.18 == pytest.approx(Quantity.parse("35.71 MPa").to("ksi").magnitude, rel=2e-3)
+
+
+def test_compound_unit_labels_read_force_first():
+    """Pint sorts factors alphabetically; engineering documents put the force first."""
+    from anvilate.units.format import _engineering_order, render
+
+    assert render(Quantity.parse("1500 N*m"), unit="kip*in", pretty=True) == "13.28 kip·in"
+    assert render(Quantity.parse("1500 N*m"), unit="N*m", pretty=True) == "1500.00 N·m"
+    assert render(Quantity.parse("100 lbf*ft"), unit="lbf*ft", pretty=True) == "100.00 lbf·ft"
+
+    # It reorders factors and never changes, drops, or invents one — a label it cannot
+    # place is passed through exactly as Pint wrote it rather than guessed at.
+    for label in ("mm", "mm⁴", "N/mm", "m·N/s", "K·W", "kg·m²"):
+        assert _engineering_order(label) == label
+    assert _engineering_order("m·N") == "N·m"
+    assert _engineering_order("in·kip") == "kip·in"
+    # Two factors of the same rank keep their given order — there is no convention to
+    # appeal to between two lengths.
+    assert _engineering_order("in·mm") == "in·mm"
+    # Anything with a division is left alone: the numerator/denominator split matters
+    # more than the factor order, and a mangled one would be worse than an odd one.
+    assert _engineering_order("m·N/s") == "m·N/s"
+
+    # The unpretty (machine-readable) label is untouched — spec cards echo it verbatim,
+    # and the reordering is a document-rendering concern, not a data one.
+    assert render(Quantity.parse("1500 N*m"), unit="kip*in", pretty=False) == "13.28 in * kip"

@@ -81,13 +81,17 @@ def test_derivation_shows_formula_substitution_and_result():
     assert symbolic == "σ_b = M · c / I"
     # Every right-hand symbol becomes a value carrying its unit; the left-hand
     # symbol stays, because the reader is looking for what the formula produces.
-    assert substituted == "σ_b = 1500.00 m·N · 50.00 mm / 2100000.00 mm⁴"
+    assert substituted == "σ_b = 1500000.00 N·mm · 50.00 mm / 2100000.00 mm⁴"
     assert result == "σ_b = 35.7 MPa"
+    # And the substituted line EVALUATES to the result it is printed above. It did not
+    # before: the moment rendered in N·m beside a second moment in mm⁴, so the line a
+    # reviewer is meant to check by hand came out a thousandfold short of its own answer.
+    assert 1500000.00 * 50.00 / 2100000.00 == pytest.approx(35.7, abs=0.05)
 
 
 def test_substituted_values_always_carry_a_unit():
     substituted = BENDING.substituted(system=UnitSystem.SI)
-    for value in ("1500.00", "50.00", "2100000.00"):
+    for value in ("1500000.00", "50.00", "2100000.00"):
         position = substituted.index(value) + len(value)
         assert substituted[position] == " ", f"{value} rendered without a unit"
 
@@ -159,13 +163,17 @@ def test_symbol_can_pin_its_own_display_unit():
     # of area) keep their authored unit, and an author can pin any symbol's unit
     # explicitly — the report never silently converts to something it guessed.
     moment = SymbolValue(symbol="M", description="bending moment", value=Quantity.parse("1500 N*m"))
-    assert moment.rendered(system=UnitSystem.US) == moment.rendered(system=UnitSystem.SI)
+    # A moment now follows the project's unit system like everything else — N·mm in SI,
+    # kip·in in US — so a US derivation no longer mixes systems inside one line.
+    assert moment.rendered(system=UnitSystem.SI) == "1500000.00 N·mm"
+    assert moment.rendered(system=UnitSystem.US) == "13.28 kip·in"
     pinned = SymbolValue(
         symbol="M", description="bending moment", value=Quantity.parse("1500 N*m"), unit="kip*in"
     )
-    # 1500 N·m is 13.28 kip·in. Compound factors print in the unit registry's
-    # alphabetical order rather than the force-first convention.
-    assert pinned.rendered(system=UnitSystem.SI) == "13.28 in·kip"
+    # 1500 N·m is 13.28 kip·in, and the compound label reads force-first the way every
+    # engineering document writes it — Pint's own alphabetical "in·kip" is correct and
+    # unreadable.
+    assert pinned.rendered(system=UnitSystem.SI) == "13.28 kip·in"
 
 
 # -- document --------------------------------------------------------------

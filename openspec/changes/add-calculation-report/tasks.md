@@ -64,12 +64,18 @@
 
 ## 5. Follow-ups surfaced while building
 
-- [ ] 5.1 Unit-system conventions for moments and second moments of area. `_system_unit`
-      maps force, length, stress, and mass only, so a bending derivation in a US project
-      leaves `M` in N·m and `I` in mm⁴ while lengths convert to inches. Deliberately not
-      invented here: picking N·mm/kip·in (self-consistent with mm⁴/in⁴ and MPa/ksi) over
-      the more familiar N·m/kip·ft is a units-capability decision. Authors can pin a
-      symbol's unit explicitly in the meantime.
-- [ ] 5.2 Compound-unit ordering. Pint prints factors alphabetically ("in·kip", "m·N")
-      rather than the force-first engineering convention ("kip·in", "N·m"). Values are
-      correct; only the label order reads oddly in a submittal.
+- [x] 5.1 Unit-system conventions for moments and second moments of area —
+      `UnitSystem.moment_unit` (N·mm / kip·in) and `UnitSystem.second_moment_unit`
+      (mm⁴ / in⁴), both wired into `_system_unit`. **The decision went to the
+      self-consistent pair over the familiar one, and the reason turned out to be a
+      correctness one, not a taste one:** a report's substituted line has to evaluate
+      to the result printed under it, and `1500.00 m·N · 50.00 mm / 2100000.00 mm⁴`
+      did not — it was short by a factor of a thousand against its own stated 35.7 MPa.
+      In N·mm it checks by hand. The larger magnitudes are the price of arithmetic a
+      reviewer can verify. Authors still pin a symbol's unit where they want another.
+- [x] 5.2 Compound-unit ordering — `_engineering_order` reorders a pretty compound
+      label force-first, then length, then as Pint gave it. It reorders factors and
+      never changes, drops, or invents one: a label carrying a division, or one whose
+      factors it cannot rank, is passed through verbatim, because a mangled label is
+      worse than an unfamiliar one. The machine-readable (unpretty) label is untouched —
+      spec cards echo it verbatim, so this is a document-rendering concern only.

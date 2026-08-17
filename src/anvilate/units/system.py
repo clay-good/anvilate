@@ -35,6 +35,29 @@ class UnitSystem(StrEnum):
         return "kg" if self is UnitSystem.SI else "lb"
 
     @property
+    def moment_unit(self) -> str:
+        """The conventional unit for a moment or torque in a calculation report.
+
+        N·mm and kip·in, not N·m and kip·ft — deliberately the *self-consistent* pair
+        rather than the more familiar one. A report's whole job is a substituted line a
+        reviewer can follow, and σ = M/Z only reads right when the moment's length unit
+        matches the section modulus's: 1500000.00 N·mm / 42000.00 mm³ = 35.7 MPa checks
+        by hand, while 1500.00 N·m / 42000.00 mm³ does not. The magnitudes are larger and
+        that is the price of arithmetic a reader can verify. An author who wants N·m for
+        a particular symbol still pins it.
+        """
+        return "N*mm" if self is UnitSystem.SI else "kip*in"
+
+    @property
+    def second_moment_unit(self) -> str:
+        """The conventional unit for a second moment of area, mm⁴ or in⁴.
+
+        The fourth power of :attr:`length_unit`, which keeps M·c/I dimensionally legible
+        alongside :attr:`moment_unit` and :attr:`length_unit` in the same line.
+        """
+        return "mm**4" if self is UnitSystem.SI else "in**4"
+
+    @property
     def sheet_standard(self) -> str:
         """Default drawing-sheet series for this system."""
         return "ISO" if self is UnitSystem.SI else "ANSI"

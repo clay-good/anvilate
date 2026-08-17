@@ -122,8 +122,17 @@ build does not understand is rejected rather than misread.
 - **PDF** is not implemented. HTML and text ship today; the PDF route is still open
   (see `openspec/changes/add-calculation-report/`).
 - **Formulas render as plain text**, not MathML — readable, but not typeset.
-- **Moments and second moments of area keep their authored units** when a project
-  declares US units, because the unit system defines conventional units for force,
-  length, stress, and mass only. You can pin any symbol's display unit explicitly.
-- **Compound units print in registry order** (`in·kip`, `m·N`) rather than the
-  force-first convention. The values are correct; only the label order reads oddly.
+Two limits that used to be listed here are closed, and the first one mattered more
+than it read:
+
+- **Moments and second moments of area now follow the project's unit system** — N·mm
+  and mm⁴ in SI, kip·in and in⁴ in US. N·mm is deliberately chosen over the more
+  familiar N·m because it is *self-consistent with the section modulus*: the
+  substituted line has to evaluate to the result printed under it, and
+  `1500000.00 N·mm · 50.00 mm / 2100000.00 mm⁴ = 35.7 MPa` checks by hand while the
+  same line in N·m came out a thousandfold short of its own stated answer. An author
+  who wants a different unit for a particular symbol still pins it.
+- **Compound units read force-first** (`kip·in`, `N·m`) rather than the registry's
+  alphabetical order. The reordering never changes, drops, or invents a factor: a
+  label it cannot place — anything with a division, or two factors of the same kind —
+  is passed through exactly as written.
