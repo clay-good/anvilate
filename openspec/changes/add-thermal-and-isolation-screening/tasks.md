@@ -27,8 +27,23 @@
       a target and, below the r = √2 isolation onset, reports that the mount *amplifies*
       rather than a bare number (No-silent-green for the classic tuned-into-resonance
       error).
-- [ ] 2.2 Isolator selection margin composing the static-deflection inverse — follow-up.
-- [ ] 2.3 Half-sine shock response screen with regime identification — follow-up.
+- [x] 2.2 Isolator selection margin composing the static-deflection inverse —
+      `isolator_selection_scorecard` screens the mount actually picked (by its rated
+      static deflection) against the deflection
+      `isolator_static_deflection_for_transmissibility` demands for the target TR, so a
+      mount at exactly the required softness reads 1.00. A mount too stiff does not merely
+      isolate less: below f/√2 it amplifies, and the entry says so rather than reporting a
+      TR of 5.69 on the same scale as 0.02. No isolator picked is NOT_EVALUATED.
+- [x] 2.3 Half-sine shock response screen with regime identification —
+      `half_sine_shock_amplification` is the undamped maximax SRS from the exact Duhamel
+      solution (residual branch 4ρ|cos πρ|/|4ρ²−1|, primary branch as a finite max over
+      the stationary points, ρ = τ·f_n, with the removable singularity at ρ = 1/2 taken to
+      its π/2 limit), validated in the suite against direct numerical integration of the
+      ODE at seven ρ. `ShockRegime`/`half_sine_shock_regime` name the impulsive /
+      amplifying / quasi-static stretches and `half_sine_shock_scorecard` reports the label
+      beside the number — necessary because the spectrum is NOT monotonic in mount
+      stiffness: it peaks at 1.77 near ρ = 0.81, so softening a mount helps on one side of
+      the peak and hurts on the other.
 
 ## 3. Tests & examples
 
@@ -36,7 +51,10 @@
       efficiency anchored against hand calcs.
 - [x] 3.2 Example: an enclosure heat sink that passes with a fan but cooks in still air
       (`examples/power_device_heatsink.py`) — the convection to air governs.
-- [ ] 3.3 Example: isolator that amplifies at running speed — follow-up.
+- [x] 3.3 Example: isolator that amplifies at running speed
+      (`examples/isolator_amplifies_at_running_speed.py`) — a 1450 rpm pump whose 0.5 mm
+      "reassuringly firm" pad lands at f/f_n = 1.08 and passes 5.69x, while the same
+      machine's 11 ms transport shock inverts the softness question entirely.
 
 ## 4. Docs
 

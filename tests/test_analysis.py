@@ -11159,6 +11159,194 @@ def test_isolation_scorecard_flags_the_amplification_region():
         )
 
 
+def test_isolator_selection_screens_the_mount_against_the_softness_it_needs():
+    from anvilate.analysis import (
+        isolator_selection_scorecard,
+        isolator_static_deflection_for_transmissibility,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    running = _q("24.17 Hz")  # 1450 rpm
+    required = isolator_static_deflection_for_transmissibility(
+        forcing_frequency=running, transmissibility=0.1
+    )
+    assert required.to("mm").magnitude == pytest.approx(4.67735, abs=0.001)
+
+    # A mount at exactly the required softness reads 1.00 — the seam of the check.
+    at_seam = isolator_selection_scorecard(
+        "mount",
+        forcing_frequency=running,
+        target_transmissibility=0.1,
+        selected_static_deflection=required,
+    )
+    assert at_seam.status is CheckStatus.PASS
+    assert at_seam.safety_factor == pytest.approx(1.0, rel=1e-9)
+
+    soft = isolator_selection_scorecard(
+        "mount",
+        forcing_frequency=running,
+        target_transmissibility=0.1,
+        selected_static_deflection=_q("20 mm"),
+    )
+    assert soft.status is CheckStatus.PASS
+    assert soft.safety_factor == pytest.approx(20.0 / 4.67735, abs=0.001)
+    assert "TR 0.022" in soft.detail
+
+    # A hard pad does not merely isolate less — at f/f_n = 1.08 it is inside the
+    # amplification region, and the entry says so instead of reporting 5.69 as if it
+    # sat on the same scale as 0.022.
+    hard = isolator_selection_scorecard(
+        "mount",
+        forcing_frequency=running,
+        target_transmissibility=0.1,
+        selected_static_deflection=_q("0.5 mm"),
+    )
+    assert hard.status is CheckStatus.FAIL
+    assert "AMPLIFIES" in hard.detail and "√2" in hard.detail
+    assert "TR = 5.69" in hard.detail
+
+    # No isolator picked yet is not a pass.
+    unpicked = isolator_selection_scorecard(
+        "mount",
+        forcing_frequency=running,
+        target_transmissibility=0.1,
+        selected_static_deflection=None,
+    )
+    assert unpicked.status is CheckStatus.NOT_EVALUATED
+    with pytest.raises(ValueError, match="must be positive"):
+        isolator_selection_scorecard(
+            "mount",
+            forcing_frequency=running,
+            target_transmissibility=0.1,
+            selected_static_deflection=_q("0 mm"),
+        )
+
+
+def test_half_sine_shock_amplification_matches_a_direct_duhamel_integration():
+    """The closed form is a derivation, so check it against the ODE it claims to solve."""
+    import math
+
+    from anvilate.analysis import half_sine_shock_amplification
+
+    def integrated(rho: float) -> float:
+        # x'' + w^2*x = w^2*f(t), unit static deflection, T = 1 s so tau = rho.
+        w = 2 * math.pi
+        tau = rho
+        p = math.pi / tau
+        steps = 200_000
+        end = tau + 4.0
+        dt = end / steps
+        x = v = peak = 0.0
+        for i in range(steps):
+            t = i * dt
+            force = math.sin(p * t) if t <= tau else 0.0
+            v += w * w * (force - x) * dt
+            x += v * dt
+            peak = max(peak, abs(x))
+        return peak
+
+    for rho in (0.05, 0.25, 0.5, 0.8, 1.0, 2.0, 5.0):
+        closed = half_sine_shock_amplification(
+            pulse_duration=_q(f"{rho} s"), natural_frequency=_q("1 Hz")
+        )
+        assert closed == pytest.approx(integrated(rho), abs=0.002), f"at τ/T = {rho}"
+
+
+def test_half_sine_shock_spectrum_has_its_peak_where_the_textbook_puts_it():
+    from anvilate.analysis import ShockRegime, half_sine_shock_amplification, half_sine_shock_regime
+
+    def amplification(rho: float) -> float:
+        return half_sine_shock_amplification(
+            pulse_duration=_q(f"{rho} s"), natural_frequency=_q("1 Hz")
+        )
+
+    # The famous landmarks: 1.77 at τ/T ≈ 0.8, and π/2 exactly at τ/T = 0.5 where both
+    # branches meet at a removable singularity.
+    assert amplification(0.8) == pytest.approx(1.7683, abs=0.001)
+    assert amplification(0.5) == pytest.approx(math.pi / 2, rel=1e-12)
+    peak, argmax = max((amplification(r / 1000), r / 1000) for r in range(1, 4000))
+    assert peak == pytest.approx(1.76846, abs=1e-4)
+    assert argmax == pytest.approx(0.81, abs=0.005)
+    # Impulsive: A ≈ 4·τ/T, and the mount attenuates.
+    assert amplification(0.05) == pytest.approx(0.2, abs=0.001)
+    assert amplification(0.05) < 1.0
+    # Quasi-static: the mass follows the pulse.
+    assert amplification(10.0) == pytest.approx(1.05, abs=0.001)
+
+    # The regime labels sit where the constants say, and the two seams are the only
+    # transitions.
+    for rho, regime in (
+        (0.24, ShockRegime.IMPULSIVE),
+        (0.25, ShockRegime.AMPLIFYING),
+        (2.0, ShockRegime.AMPLIFYING),
+        (2.01, ShockRegime.QUASI_STATIC),
+    ):
+        assert (
+            half_sine_shock_regime(pulse_duration=_q(f"{rho} s"), natural_frequency=_q("1 Hz"))
+            is regime
+        ), rho
+
+    # Only the ratio matters — halving the pulse and doubling the frequency is the same shock.
+    assert half_sine_shock_amplification(
+        pulse_duration=_q("11 ms"), natural_frequency=_q("73 Hz")
+    ) == pytest.approx(
+        half_sine_shock_amplification(pulse_duration=_q("5.5 ms"), natural_frequency=_q("146 Hz")),
+        rel=1e-12,
+    )
+    for bad in ({"pulse_duration": _q("0 s")}, {"natural_frequency": _q("0 Hz")}):
+        with pytest.raises(ValueError, match="must be positive"):
+            half_sine_shock_amplification(
+                **{"pulse_duration": _q("11 ms"), "natural_frequency": _q("73 Hz"), **bad}
+            )
+
+
+def test_half_sine_shock_scorecard_names_the_regime_beside_the_number():
+    from anvilate.analysis import half_sine_shock_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    common = {
+        "peak_acceleration": _q("294.2 m/s**2"),  # 30 g
+        "pulse_duration": _q("11 ms"),
+        "allowable_acceleration": _q("147.1 m/s**2"),  # 15 g
+    }
+    # The soft mount is impulsive: 30 g arrives as 4.6 g and passes with room.
+    soft = half_sine_shock_scorecard("shock", natural_frequency=_q("3.5 Hz"), **common)
+    assert soft.status is CheckStatus.PASS
+    assert "impulsive" in soft.detail and "4.6 g" in soft.detail
+
+    # Stiffening it to the spectrum peak makes the SAME shock worse, not better —
+    # 53.1 g out of a 30 g pulse. This is the whole reason the regime is reported.
+    peak = half_sine_shock_scorecard("shock", natural_frequency=_q("73 Hz"), **common)
+    assert peak.status is CheckStatus.FAIL
+    assert "amplifying" in peak.detail and "53.1 g" in peak.detail
+    assert peak.safety_factor < soft.safety_factor
+
+    # Stiffening further, past the peak, improves it again — the non-monotonic middle.
+    rigid = half_sine_shock_scorecard("shock", natural_frequency=_q("300 Hz"), **common)
+    assert "quasi_static" in rigid.detail
+    assert rigid.safety_factor > peak.safety_factor
+
+    # No rating supplied is not a pass, and a zero pulse is not one either.
+    assert (
+        half_sine_shock_scorecard(
+            "shock",
+            peak_acceleration=_q("294.2 m/s**2"),
+            pulse_duration=_q("11 ms"),
+            natural_frequency=_q("73 Hz"),
+            allowable_acceleration=None,
+        ).status
+        is CheckStatus.NOT_EVALUATED
+    )
+    assert (
+        half_sine_shock_scorecard(
+            "shock",
+            natural_frequency=_q("73 Hz"),
+            **{**common, "peak_acceleration": _q("0 m/s**2")},
+        ).status
+        is CheckStatus.NOT_EVALUATED
+    )
+
+
 def test_dynamic_magnification_factor_peaks_near_resonance():
     # Quasi-static (r -> 0) the response equals the static deflection: M = 1.
     assert dynamic_magnification_factor(frequency_ratio=0.0, damping_ratio=0.05) == pytest.approx(

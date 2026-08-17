@@ -5634,3 +5634,28 @@ def test_ultrasonic_flaw_standoff_example_large_probe_buries_flaw():
     small = namespace["screen_small_probe"]()
     assert small.entries[0].passed
     assert small.status is CheckStatus.PASS
+
+
+def test_isolator_amplifies_example_flips_between_vibration_and_shock():
+    namespace = runpy.run_path(str(_EXAMPLES / "isolator_amplifies_at_running_speed.py"))
+    selection = namespace["screen_isolator_selection"]()
+    # The two soft pads clear the 10% target; the hard pad lands in the amplification
+    # region and the entry says so rather than reporting a bare 5.69.
+    by_name = {e.name: e for e in selection.entries}
+    assert by_name["20 mm neoprene"].status is CheckStatus.PASS
+    assert by_name["8 mm ribbed pad"].status is CheckStatus.PASS
+    hard = by_name["0.5 mm hard pad"]
+    assert hard.status is CheckStatus.FAIL
+    assert "AMPLIFIES" in hard.detail
+
+    # The same softness question inverts for shock: the vibration mount is impulsive and
+    # passes, while stiffening it to the spectrum peak makes the drop worse.
+    shock = {e.name: e for e in namespace["screen_transport_shock"]().entries}
+    assert shock["3.5 Hz (the vibration mount)"].status is CheckStatus.PASS
+    assert "impulsive" in shock["3.5 Hz (the vibration mount)"].detail
+    assert shock["73 Hz (the spectrum peak)"].status is CheckStatus.FAIL
+    assert "amplifying" in shock["73 Hz (the spectrum peak)"].detail
+    assert (
+        shock["300 Hz (near-rigid)"].safety_factor
+        > shock["73 Hz (the spectrum peak)"].safety_factor
+    )

@@ -24,6 +24,7 @@ returned in hertz.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
 from ..scorecard import CheckStatus, ScorecardEntry
@@ -53,6 +54,11 @@ __all__ = [
     "isolation_scorecard",
     "isolator_natural_frequency_for_transmissibility",
     "isolator_static_deflection_for_transmissibility",
+    "isolator_selection_scorecard",
+    "ShockRegime",
+    "half_sine_shock_amplification",
+    "half_sine_shock_regime",
+    "half_sine_shock_scorecard",
     "dynamic_magnification_factor",
     "resonance_phase_angle",
     "base_excitation_relative_transmissibility",
@@ -624,6 +630,225 @@ def isolator_static_deflection_for_transmissibility(
     omega_n = 2.0 * pi * fn
     deflection_m = g / omega_n**2
     return Quantity(magnitude=deflection_m, unit="m").to("mm")
+
+
+def isolator_selection_scorecard(
+    name: str,
+    *,
+    forcing_frequency: Quantity,
+    target_transmissibility: float,
+    selected_static_deflection: Quantity | None,
+    gravity: Quantity = STANDARD_GRAVITY,
+) -> ScorecardEntry:
+    """Screen a *selected* isolator against the softness its target isolation demands.
+
+    :func:`isolator_static_deflection_for_transmissibility` says how soft a mount has to
+    be; this says whether the one on the shelf is soft enough. ``selected_static_deflection``
+    δ is the mount's rated deflection under its share of the load — the number an isolator
+    is bought by — and the check is δ against δ_required for ``target_transmissibility`` TR
+    at ``forcing_frequency`` f. The safety factor is δ/δ_required, so a mount at exactly the
+    required softness reads 1.00.
+
+    Softness is the whole lever: f_n = (1/2π)·√(g/δ) falls as δ rises, and TR falls with
+    f_n. A mount half as soft as required does not deliver "half the isolation" — it can sit
+    the machine back inside the amplification region, which is why the detail reports the
+    natural frequency the selection actually buys alongside the transmissibility it reaches.
+
+    ``selected_static_deflection`` of ``None`` — no isolator picked yet — is
+    ``NOT_EVALUATED``, never a silent pass.
+    """
+    if selected_static_deflection is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — no isolator selected",
+        )
+    _require(selected_static_deflection, "[length]", "selected_static_deflection")
+    delta = selected_static_deflection.to("mm").magnitude
+    if delta <= 0:
+        raise ValueError(
+            f"selected_static_deflection must be positive; got {selected_static_deflection}"
+        )
+    required = isolator_static_deflection_for_transmissibility(
+        forcing_frequency=forcing_frequency,
+        transmissibility=target_transmissibility,
+        gravity=gravity,
+    ).to("mm")
+    achieved_fn = natural_frequency_from_deflection(selected_static_deflection, gravity=gravity)
+    f = count_rate_per_second(forcing_frequency, name="forcing_frequency")
+    fn = count_rate_per_second(achieved_fn, name="natural_frequency")
+    achieved_tr = transmissibility(frequency_ratio=f / fn, damping_ratio=0.0)
+    entry = ScorecardEntry.from_safety_factor(
+        name, computed=delta / required.magnitude, required=1.0
+    )
+    if f / fn < sqrt(2.0):
+        reached = (
+            f"the mount AMPLIFIES (f/f_n = {f / fn:.2f} < √2, TR = {achieved_tr:.2f}) — "
+            f"it is not an isolator at this speed"
+        )
+    else:
+        reached = f"reaching TR {achieved_tr:.3f} against a target of {target_transmissibility:.2f}"
+    return entry.model_copy(
+        update={
+            "detail": (
+                f"selected {delta:.1f} mm against {required.magnitude:.1f} mm required "
+                f"(f_n {fn:.1f} Hz), {reached}"
+            )
+        }
+    )
+
+
+class ShockRegime(StrEnum):
+    """Which part of the shock spectrum a pulse-to-period ratio τ/T falls in.
+
+    The half-sine shock response spectrum has three recognizable stretches, and which one
+    a mount sits in decides what a stiffer or softer mount would do to it — which is the
+    opposite thing in two of the three.
+    """
+
+    IMPULSIVE = "impulsive"  # τ/T < 0.25: pulse over before the mass responds; A < 1
+    AMPLIFYING = "amplifying"  # 0.25 ≤ τ/T ≤ 2: A > 1, peaking at 1.77 near τ/T = 0.8
+    QUASI_STATIC = "quasi_static"  # τ/T > 2: the mass follows the pulse, A → 1
+
+
+# The regime seams, in τ/T. Both are conventions on a smooth curve, not physical
+# discontinuities: the amplification passes 1.0 at τ/T ≈ 0.27 and decays as 1 + 1/(2·τ/T)
+# past the peak, reaching 1.27 at τ/T = 2 and 1.05 at τ/T = 10.
+_SHOCK_IMPULSIVE_LIMIT = 0.25
+_SHOCK_QUASI_STATIC_LIMIT = 2.0
+
+
+def half_sine_shock_regime(*, pulse_duration: Quantity, natural_frequency: Quantity) -> ShockRegime:
+    """Which shock regime a half-sine pulse of ``pulse_duration`` puts a mount in.
+
+    The ratio that decides everything is τ/T = τ·f_n — the pulse duration over the mount's
+    natural period. Below 0.25 the pulse is finished before the mass has moved and the mount
+    attenuates it; past 2 the mass simply follows the pulse; in between it amplifies. See
+    :func:`half_sine_shock_amplification` for the number, and :class:`ShockRegime` for what
+    each label means. Both arguments must be positive.
+    """
+    ratio = _shock_pulse_ratio(pulse_duration, natural_frequency)
+    if ratio < _SHOCK_IMPULSIVE_LIMIT:
+        return ShockRegime.IMPULSIVE
+    if ratio > _SHOCK_QUASI_STATIC_LIMIT:
+        return ShockRegime.QUASI_STATIC
+    return ShockRegime.AMPLIFYING
+
+
+def _shock_pulse_ratio(pulse_duration: Quantity, natural_frequency: Quantity) -> float:
+    """τ/T = τ·f_n, the one ratio the half-sine shock spectrum depends on."""
+    _require(pulse_duration, "[time]", "pulse_duration")
+    _require(natural_frequency, "[frequency]", "natural_frequency")
+    tau = pulse_duration.to("s").magnitude
+    # count_rate_per_second, not .to("Hz"): a natural frequency is a count rate, and the
+    # 2π between it and an angular rate is the trap this helper exists to close.
+    fn = count_rate_per_second(natural_frequency, name="natural_frequency")
+    if tau <= 0:
+        raise ValueError(f"pulse_duration must be positive; got {pulse_duration}")
+    if fn <= 0:
+        raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
+    return tau * fn
+
+
+def half_sine_shock_amplification(
+    *, pulse_duration: Quantity, natural_frequency: Quantity
+) -> float:
+    """The undamped maximax shock amplification A of a half-sine pulse (the SRS ordinate).
+
+    A drop test, a slam, a transport shock: the base delivers a half-sine acceleration pulse
+    of peak a₀ over ``pulse_duration`` τ, and an undamped mount of ``natural_frequency`` f_n
+    sees a peak response of A·a₀. Everything depends on the single ratio ρ = τ·f_n = τ/T:
+
+        residual (after the pulse)   A_res = 4ρ·|cos(πρ)| / |4ρ² − 1|
+        primary  (during the pulse)  A_pri = max_n |sin(2πn/(1 + β))| / (1 − β),  β = 1/(2ρ),
+                                     over the integers 1 ≤ n ≤ (1 + β)/(2β)
+
+    and A is the larger of the two (the primary branch is empty for ρ ≤ 0.5, where the pulse
+    ends before the response turns over, and ρ = 0.5 is the removable singularity at which
+    both branches meet at π/2). Both come from the exact Duhamel solution, not a table.
+
+    The shape is the useful part. A rises roughly as 4ρ through the impulsive regime, peaks at
+    **1.77 near ρ = 0.8**, and decays toward 1 — so softening a mount is the right move only
+    on the far side of the peak. Move a mount from ρ = 3 to ρ = 0.8 in the name of "more
+    isolation" and the shock it passes goes *up* by half. Undamped, which is the conservative
+    reading for a shock: damping trims the peak by a few percent and does nothing impulsive.
+
+    Returns the dimensionless amplification A (a factor on the pulse's peak, not a stress).
+    """
+    rho = _shock_pulse_ratio(pulse_duration, natural_frequency)
+    beta = 1.0 / (2.0 * rho)
+    # ρ = 1/2 is the resonant coincidence p = ω_n: both closed forms have a removable
+    # singularity there, and the limit — reached by L'Hôpital on either — is exactly π/2.
+    if abs(beta - 1.0) < 1e-12:
+        return pi / 2.0
+    residual = 4.0 * rho * abs(cos(pi * rho)) / abs(4.0 * rho**2 - 1.0)
+    if beta >= 1.0:
+        # ρ < 1/2: the pulse ends before the first stationary point, so nothing during it
+        # can exceed what rings out after — the residual branch is the whole spectrum.
+        return residual
+    turns = int((1.0 + beta) / (2.0 * beta))
+    primary = 0.0
+    if turns >= 1:
+        primary = max(abs(sin(2.0 * pi * n / (1.0 + beta))) for n in range(1, turns + 1)) / (
+            1.0 - beta
+        )
+    return max(primary, residual)
+
+
+def half_sine_shock_scorecard(
+    name: str,
+    *,
+    peak_acceleration: Quantity,
+    pulse_duration: Quantity,
+    natural_frequency: Quantity,
+    allowable_acceleration: Quantity | None,
+) -> ScorecardEntry:
+    """Screen a half-sine shock pulse against a mount's allowable acceleration → an entry.
+
+    Multiplies the pulse's ``peak_acceleration`` a₀ by the amplification A from
+    :func:`half_sine_shock_amplification` and screens the response A·a₀ against
+    ``allowable_acceleration``. The detail names the :class:`ShockRegime` alongside the
+    numbers, because the regime is what tells a reader which way to move the mount — the
+    same "make it softer" that fixes a quasi-static shock makes an amplifying one worse.
+
+    ``allowable_acceleration`` of ``None`` — no shock rating supplied — is ``NOT_EVALUATED``
+    rather than a silent pass.
+    """
+    if allowable_acceleration is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — no allowable shock acceleration supplied",
+            reference="half-sine shock response spectrum",
+        )
+    _require(peak_acceleration, "[acceleration]", "peak_acceleration")
+    _require(allowable_acceleration, "[acceleration]", "allowable_acceleration")
+    a0 = abs(peak_acceleration.to("m/s**2").magnitude)
+    allowable = allowable_acceleration.to("m/s**2").magnitude
+    if allowable <= 0:
+        raise ValueError(f"allowable_acceleration must be positive; got {allowable_acceleration}")
+    amplification = half_sine_shock_amplification(
+        pulse_duration=pulse_duration, natural_frequency=natural_frequency
+    )
+    regime = half_sine_shock_regime(
+        pulse_duration=pulse_duration, natural_frequency=natural_frequency
+    )
+    response = amplification * a0
+    # A zero pulse is a check with nothing to evaluate, not one that passed.
+    computed = None if response == 0 else allowable / response
+    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0)
+    ratio = _shock_pulse_ratio(pulse_duration, natural_frequency)
+    return entry.model_copy(
+        update={
+            "detail": (
+                f"{regime.value} (τ/T = {ratio:.2f}), amplification {amplification:.2f}: "
+                f"response {response / STANDARD_GRAVITY.to('m/s**2').magnitude:.1f} g "
+                f"vs allowable "
+                f"{allowable / STANDARD_GRAVITY.to('m/s**2').magnitude:.1f} g"
+            ),
+            "reference": "half-sine shock response spectrum",
+        }
+    )
 
 
 def dynamic_magnification_factor(*, frequency_ratio: float, damping_ratio: float) -> float:
