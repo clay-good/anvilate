@@ -14733,6 +14733,61 @@ def test_sphere_drag_coefficient_bounds_where_stokes_law_stops_being_true():
         sphere_drag_coefficient(reynolds_number=0.0)
 
 
+def test_rpm_consuming_functions_refuse_an_angle_free_speed():
+    from anvilate.analysis import (
+        bearing_ball_pass_frequency_outer,
+        bearing_life_hours,
+        gear_mesh_frequency,
+        motor_slip,
+        screw_conveyor_volumetric_capacity,
+    )
+    from anvilate.units.rotation import AmbiguousRotationalSpeedError
+
+    # These five converted their speed with .to("rpm"), which LOOKS like it sidesteps the radian
+    # problem and does not -- pint's revolution is 2*pi radian, so .to("rpm") applies the same
+    # 2*pi factor as .to("rad/s"). "30 Hz" became 286.5 rpm instead of 1800.
+    hz = Quantity(magnitude=30.0, unit="Hz")
+    rpm = Quantity(magnitude=1800.0, unit="rpm")
+
+    # bearing_life_hours was the worst of them: the old path returned 58177.6 h against the
+    # correct 9259.26 h -- 6.28x OVERSTATED life, the unconservative direction.
+    assert bearing_life_hours(
+        dynamic_load_rating=_q("30 kN"), equivalent_load=_q("3 kN"), speed=rpm
+    ).to("hour").magnitude == pytest.approx(9259.259259259259, rel=1e-9)
+    with pytest.raises(AmbiguousRotationalSpeedError):
+        bearing_life_hours(dynamic_load_rating=_q("30 kN"), equivalent_load=_q("3 kN"), speed=hz)
+
+    # gear_mesh_frequency: 20 teeth at 1800 rpm is 600 Hz, not the 95.5 Hz the old path gave.
+    assert gear_mesh_frequency(tooth_count=20, rotational_frequency=rpm).to(
+        "Hz"
+    ).magnitude == pytest.approx(600.0, rel=1e-9)
+    with pytest.raises(AmbiguousRotationalSpeedError):
+        gear_mesh_frequency(tooth_count=20, rotational_frequency=hz)
+
+    with pytest.raises(AmbiguousRotationalSpeedError):
+        bearing_ball_pass_frequency_outer(
+            rotational_frequency=hz,
+            number_of_rolling_elements=8,
+            rolling_element_diameter=_q("8 mm"),
+            pitch_diameter=_q("40 mm"),
+        )
+    with pytest.raises(AmbiguousRotationalSpeedError):
+        screw_conveyor_volumetric_capacity(
+            screw_diameter=_q("300 mm"),
+            shaft_diameter=_q("75 mm"),
+            pitch=_q("300 mm"),
+            rotational_speed=Quantity(magnitude=1.0, unit="Hz"),
+            fill_fraction=0.3,
+        )
+    # motor_slip survived a both-Hz call because it returns a ratio and both speeds took the same
+    # conversion -- but MIXING units silently broke it, so both arguments are now guarded.
+    with pytest.raises(AmbiguousRotationalSpeedError):
+        motor_slip(synchronous_speed=rpm, rotor_speed=Quantity(magnitude=29.0, unit="Hz"))
+    assert motor_slip(
+        synchronous_speed=rpm, rotor_speed=Quantity(magnitude=1740.0, unit="rpm")
+    ) == pytest.approx(1.0 / 30.0, rel=1e-9)
+
+
 def test_stokes_settling_velocity_and_drag_are_consistent():
     import math
 
@@ -20674,13 +20729,34 @@ def test_cooling_tower_evaporation_rate_starts_the_water_balance():
 
     # A range is a DIFFERENCE. "5.5 degC" would convert to 278.65 K and overstate the loss
     # 50-fold, so an absolute-scale unit is refused rather than silently converted.
-    with pytest.raises(ValueError, match="temperature DIFFERENCE"):
-        cooling_tower_evaporation_rate(
-            circulating_flow=circulating,
-            cooling_range=Quantity(magnitude=5.5, unit="degC"),
-            specific_heat=c_p,
-            latent_heat=h_fg,
+    # Every offset unit is refused, by testing the CONVERSION rather than blacklisting spellings
+    # -- "degree_Fahrenheit" is the canonical pint spelling and a name-based check missed it,
+    # letting a 5.5 delta-F range read as 466 K and overstate the loss 85-fold.
+    for unit in ("degC", "degF", "degree_Celsius", "degree_Fahrenheit"):
+        with pytest.raises(ValueError, match="temperature DIFFERENCE"):
+            cooling_tower_evaporation_rate(
+                circulating_flow=circulating,
+                cooling_range=Quantity(magnitude=5.5, unit=unit),
+                specific_heat=c_p,
+                latent_heat=h_fg,
+            )
+
+    # The genuine difference units all pass, and delta_degF is 5/9 of delta_degC as it must be.
+    def _evap(unit):
+        return (
+            cooling_tower_evaporation_rate(
+                circulating_flow=circulating,
+                cooling_range=Quantity(magnitude=5.5, unit=unit),
+                specific_heat=c_p,
+                latent_heat=h_fg,
+            )
+            .to("m**3/hour")
+            .magnitude
         )
+
+    assert _evap("delta_degC") == pytest.approx(_evap("K"), rel=1e-12)
+    assert _evap("delta_degF") == pytest.approx(_evap("K") * 5.0 / 9.0, rel=1e-12)
+    assert _evap("degR") == pytest.approx(_evap("delta_degF"), rel=1e-12)
 
 
 def test_psychrometric_moist_air_properties():
@@ -21233,6 +21309,27 @@ def test_nozzle_expansion_ratio_supplies_the_exit_area_thrust_consumes():
         nozzle_expansion_ratio(
             chamber_pressure=_q("7 MPa"), exit_pressure=_q("0.1 MPa"), heat_capacity_ratio=1.0
         )
+
+    # p_e < p_c is NOT enough. Above the critical pressure ratio the same algebra keeps returning
+    # finite, plausible numbers -- eps bottoms out at exactly 1 and climbs again toward infinity
+    # as p_e -> p_c -- but they describe a subsonic diffuser. A mistyped exit pressure of 6.93 MPa
+    # against a 7 MPa chamber used to return 4.61, indistinguishable from a real bell.
+    for exit_mpa in (6.93, 6.3, 5.0, 4.0):
+        with pytest.raises(ValueError, match="subsonic branch"):
+            nozzle_expansion_ratio(
+                chamber_pressure=_q("7 MPa"),
+                exit_pressure=Quantity(magnitude=exit_mpa, unit="MPa"),
+                heat_capacity_ratio=1.20,
+            )
+    # Just inside the critical ratio (0.56447 at gamma = 1.2) the nozzle is choked and valid,
+    # and the area ratio there is 1.0 -- the throat itself, which is the branch minimum.
+    critical = (2.0 / 2.2) ** (1.2 / 0.2)
+    assert critical == pytest.approx(0.5644739300537778, rel=1e-12)
+    assert nozzle_expansion_ratio(
+        chamber_pressure=_q("7 MPa"),
+        exit_pressure=Quantity(magnitude=7.0 * critical * 0.999999, unit="MPa"),
+        heat_capacity_ratio=1.20,
+    ) == pytest.approx(1.0, abs=1e-3)
 
 
 def test_rocket_delta_v_and_propellant_mass_fraction():
@@ -34916,9 +35013,20 @@ def test_wet_bulb_temperature_and_the_evaporative_cooler_it_feeds():
     # Ten degrees warmer the fit is back inside its range and the bound holds with room to spare.
     assert wb_c(-10.0, 0.05) == pytest.approx(-12.39609722129154, rel=1e-9)
     assert wb_c(-10.0, 0.05) < -10.0
-    # Saturation is the near-miss the 0.25 K allowance exists for: the fit reads a touch high
-    # without being wrong, so it must still return rather than raise.
+    # The allowance is granted ONLY as the air approaches saturation, which is the only place the
+    # overshoot is benign. A flat 0.25 K applied everywhere waved through most of the cold-dry
+    # band this check exists to catch -- the fit is not monotonic in RH there, so sampling a few
+    # humidities missed the points in between.
+    for dry_bulb_c, rh in ((-20.0, 0.13), (-20.0, 0.34), (-17.0, 0.25)):
+        with pytest.raises(ValueError, match="out of range"):
+            wet_bulb_temperature(
+                dry_bulb_temperature=Quantity(magnitude=dry_bulb_c + 273.15, unit="K"),
+                relative_humidity=rh,
+            )
+    # Saturation is the near-miss the allowance exists for: the fit reads a touch high without
+    # being wrong, so it must still return rather than raise.
     assert wb_c(30.0, 1.0) == pytest.approx(30.0, abs=0.25)
+    assert wb_c(30.0, 1.0) > 30.0
 
 
 def test_petroff_friction_coefficient_against_the_torque_and_sommerfeld_it_reduces_to():

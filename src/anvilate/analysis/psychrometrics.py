@@ -451,7 +451,12 @@ def wet_bulb_temperature(*, dry_bulb_temperature: Quantity, relative_humidity: f
     # The fit's own sanity check: evaporation cannot drive a thermometer above the dry bulb, so a
     # wet bulb over it means Stull's correlation has left its range (the cold, dry corner his
     # paper excludes). The 0.25 K allowance covers the documented overshoot near saturation.
-    if t_wb > t_c + 0.25:
+    # The overshoot the allowance exists for happens only as the air approaches saturation, so
+    # the allowance is granted only there. Applying a flat 0.25 K everywhere would wave through
+    # most of the cold-dry band this check is meant to catch: -20 degC at 13% RH overshoots by
+    # 0.22 K, under a flat allowance but still impossible.
+    allowance = 0.25 if relative_humidity > 0.95 else 0.0
+    if t_wb > t_c + allowance:
         raise ValueError(
             f"the Stull wet-bulb fit is out of range at {t_c:.1f} degC and "
             f"{100.0 * relative_humidity:.0f}% RH: it returns a wet bulb of {t_wb:.2f} degC, above "

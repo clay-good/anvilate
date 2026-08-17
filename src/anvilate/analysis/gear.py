@@ -34,7 +34,7 @@ from math import acos, atan2, ceil, cos, degrees, pi, prod, radians, sin, sqrt, 
 from pydantic import BaseModel, ConfigDict
 
 from ..units import Quantity
-from ..units.rotation import angular_speed_rad_per_s
+from ..units.rotation import angular_speed_rad_per_s, revolutions_per_minute, revolutions_per_second
 from .contact import hertz_cylinder_contact
 
 # Barth velocity-factor constants Kv = (A + f(V))/A, by tooth manufacturing quality:
@@ -1135,7 +1135,7 @@ def _check_speed(value: Quantity, name: str) -> float:
             f"{name} must be a rotational-speed ([frequency]) quantity; got "
             f"{value.dimensionality} ({value})"
         )
-    return value.to("rpm").magnitude
+    return revolutions_per_minute(value, name=name)
 
 
 def planetary_speed(
@@ -1264,8 +1264,7 @@ def gear_mesh_frequency(*, tooth_count: int, rotational_frequency: Quantity) -> 
     """
     n = _check_tooth_count(tooth_count, "tooth_count")
     _require(rotational_frequency, "[frequency]", "rotational_frequency")
-    # Shaft speed as a revolution count: rpm/60 → rev/s, avoiding pint's 2π Hz↔rpm mismatch.
-    fr = rotational_frequency.to("rpm").magnitude / 60.0
+    fr = revolutions_per_second(rotational_frequency, name="rotational_frequency")
     if fr < 0:
         raise ValueError("rotational_frequency must be non-negative")
     return Quantity(magnitude=n * fr, unit="Hz")
@@ -1292,7 +1291,7 @@ def gear_tooth_repeat_frequency(
     n_p = _check_tooth_count(pinion_teeth, "pinion_teeth")
     n_g = _check_tooth_count(gear_teeth, "gear_teeth")
     _require(pinion_rotational_frequency, "[frequency]", "pinion_rotational_frequency")
-    fr = pinion_rotational_frequency.to("rpm").magnitude / 60.0
+    fr = revolutions_per_second(pinion_rotational_frequency, name="pinion_rotational_frequency")
     if fr < 0:
         raise ValueError("pinion_rotational_frequency must be non-negative")
     gmf = n_p * fr

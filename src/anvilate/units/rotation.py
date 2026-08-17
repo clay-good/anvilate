@@ -17,19 +17,34 @@ dimension system, so a guess would be wrong 2π-fold half the time.
 
 from __future__ import annotations
 
+from math import pi
+
 from .quantity import Quantity, UnitError
 from .registry import UREG
 
 __all__ = [
     "AmbiguousRotationalSpeedError",
     "angular_speed_rad_per_s",
+    "revolutions_per_minute",
     "revolutions_per_second",
 ]
 
 # Unit-name fragments that mark a quantity as carrying a genuine angle. Pint spells
 # rpm as "revolutions_per_minute" and rev/min as "turn / minute", so matching on
 # fragments covers every spelling of the same physical unit.
-_ANGLE_TOKENS = ("radian", "degree", "gradian", "turn", "revolution")
+# Matched against pint's CANONICAL spelling of the unit, which is not always the one written:
+# "gradian" canonicalises to "grade" and "rpm" to "revolutions_per_minute", so the fragments have
+# to cover what pint prints, not what the caller typed.
+_ANGLE_TOKENS = (
+    "radian",
+    "degree",
+    "grade",
+    "turn",
+    "revolution",
+    "cycle",
+    "arcminute",
+    "arcsecond",
+)
 
 
 class AmbiguousRotationalSpeedError(UnitError):
@@ -64,6 +79,16 @@ def revolutions_per_second(speed: Quantity, *, name: str) -> float:
     revolutions rather than radians (Petroff's law, rolling-mill power, pump specific
     speed): n = ω/(2π), with the same refusal of an angle-free unit.
     """
-    from math import pi
-
     return angular_speed_rad_per_s(speed, name=name) / (2.0 * pi)
+
+
+def revolutions_per_minute(speed: Quantity, *, name: str) -> float:
+    """The rotational speed in rpm, guarded as in :func:`angular_speed_rad_per_s`.
+
+    The third face of the same conversion, for formulas and standards written in rpm — ISO 281
+    bearing life, induction-motor slip. Converting straight with ``.to("rpm")`` looks like it
+    sidesteps the radian problem and does not: pint's revolution is 2π radian, so ``.to("rpm")``
+    applies exactly the same 2π factor as ``.to("rad/s")`` and reads 30 Hz as 286.5 rpm rather
+    than 1800.
+    """
+    return angular_speed_rad_per_s(speed, name=name) * 60.0 / (2.0 * pi)

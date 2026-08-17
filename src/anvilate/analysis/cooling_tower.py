@@ -157,13 +157,17 @@ def cooling_tower_evaporation_rate(
     _check(latent_heat, "[energy]/[mass]", "latent_heat")
     v = circulating_flow.to("m**3/s").magnitude
     # A range is a temperature DIFFERENCE. Converting "5.5 degC" to kelvin would add 273.15 and
-    # turn a 5.5 K range into a 278.65 K one, so an absolute-scale unit is refused outright --
-    # the module's own cooling_tower_range returns kelvin, which is what belongs here.
-    if cooling_range.unit in ("degC", "degF", "celsius", "fahrenheit", "degree_Celsius"):
+    # turn a 5.5 K range into a 278.65 K one. What separates a difference from a point on a scale
+    # is whether the conversion is multiplicative, so that is what gets tested -- doubling the
+    # magnitude must double the kelvin value. A blacklist of unit spellings would only ever be as
+    # complete as the last name someone remembered to add.
+    one = Quantity(magnitude=1.0, unit=cooling_range.unit).to("K").magnitude
+    two = Quantity(magnitude=2.0, unit=cooling_range.unit).to("K").magnitude
+    if abs(two - 2.0 * one) > 1.0e-9 * abs(one):
         raise ValueError(
             f"cooling_range is a temperature DIFFERENCE, not a point on a scale; got "
-            f"{cooling_range}, which would convert to {cooling_range.to('K')}. Use 'K' (what "
-            f"cooling_tower_range returns) or 'delta_degC'."
+            f"{cooling_range} in an offset unit, which would convert to {cooling_range.to('K')}. "
+            f"Use 'K' (what cooling_tower_range returns), 'delta_degC', or 'delta_degF'."
         )
     r = cooling_range.to("K").magnitude
     c = specific_heat.to("J/kg/K").magnitude

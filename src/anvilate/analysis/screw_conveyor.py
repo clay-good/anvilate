@@ -18,6 +18,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import revolutions_per_second
 
 __all__ = [
     "screw_conveyor_mass_capacity",
@@ -49,10 +50,7 @@ def screw_conveyor_volumetric_capacity(
     big = screw_diameter.to("m").magnitude
     small = shaft_diameter.to("m").magnitude
     p = pitch.to("m").magnitude
-    # Each revolution advances one pitch, so N is a revolution count per time, not an angular
-    # rate. Convert via rpm (revolution is a real unit) to avoid the 2*pi rad-per-rev factor
-    # that .to("1/s") would apply; this also accepts a rad/s input correctly.
-    n = rotational_speed.to("rpm").magnitude / 60.0
+    n = revolutions_per_second(rotational_speed, name="rotational_speed")
     if big <= 0:
         raise ValueError("screw_diameter must be positive")
     if small < 0:

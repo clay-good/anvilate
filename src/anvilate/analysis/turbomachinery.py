@@ -21,6 +21,7 @@ from __future__ import annotations
 from math import pi, radians, tan
 
 from ..units import Quantity
+from ..units.rotation import revolutions_per_second
 
 _STANDARD_GRAVITY = Quantity(magnitude=9.80665, unit="m/s**2")
 
@@ -48,10 +49,7 @@ def blade_tip_speed(*, diameter: Quantity, rotational_speed: Quantity) -> Quanti
             f"{rotational_speed.dimensionality} ({rotational_speed})"
         )
     d = diameter.to("m").magnitude
-    # N is a revolution count per time, not an angular rate: convert via rpm (revolution is a real
-    # unit) so the 2*pi rad-per-revolution factor of .to("1/s") is not applied. A rad/s input still
-    # converts correctly.
-    n = rotational_speed.to("rpm").magnitude / 60.0
+    n = revolutions_per_second(rotational_speed, name="rotational_speed")
     if d <= 0:
         raise ValueError("diameter must be positive")
     if n <= 0:

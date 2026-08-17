@@ -125,6 +125,20 @@ def nozzle_expansion_ratio(
             f"got {exit_pressure} against {chamber_pressure}"
         )
     ratio = p_e / p_c
+    # Below the critical pressure ratio the flow chokes and the bell runs supersonic, which is the
+    # branch this expression describes. ABOVE it the same algebra keeps returning finite, plausible
+    # numbers -- eps has a minimum of exactly 1 at the critical ratio and climbs again toward
+    # infinity as p_e approaches p_c -- but they describe a subsonic diffuser, not a nozzle. An
+    # eps of 4.6 from a mistyped exit pressure is indistinguishable from a real bell, so the
+    # subsonic branch is refused rather than returned.
+    critical_ratio = (2.0 / (g + 1.0)) ** (g / (g - 1.0))
+    if ratio >= critical_ratio:
+        raise ValueError(
+            f"exit_pressure must be below the critical ratio {critical_ratio:.5f} of the chamber "
+            f"pressure ({critical_ratio * p_c / 1e6:.4f} MPa here) for the nozzle to run "
+            f"supersonic; got {exit_pressure}, a pressure ratio of {ratio:.5f}, which puts the "
+            f"flow on the subsonic branch where the area ratio describes a diffuser."
+        )
     denominator = (
         ((g + 1.0) / 2.0) ** (1.0 / (g - 1.0))
         * ratio ** (1.0 / g)

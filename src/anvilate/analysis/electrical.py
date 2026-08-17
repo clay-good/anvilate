@@ -22,6 +22,7 @@ from __future__ import annotations
 from math import acos, log, pi, sqrt, tan
 
 from ..units import Quantity
+from ..units.rotation import revolutions_per_minute
 
 __all__ = [
     "apparent_power_three_phase",
@@ -162,8 +163,8 @@ def motor_slip(*, synchronous_speed: Quantity, rotor_speed: Quantity) -> float:
     """
     _check(synchronous_speed, "1/[time]", "synchronous_speed")
     _check(rotor_speed, "1/[time]", "rotor_speed")
-    ns = synchronous_speed.to("rpm").magnitude
-    n = rotor_speed.to("rpm").magnitude
+    ns = revolutions_per_minute(synchronous_speed, name="synchronous_speed")
+    n = revolutions_per_minute(rotor_speed, name="rotor_speed")
     if ns <= 0:
         raise ValueError("synchronous_speed must be positive")
     if n < 0:

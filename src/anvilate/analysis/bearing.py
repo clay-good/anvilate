@@ -24,6 +24,7 @@ from __future__ import annotations
 from math import log
 
 from ..units import Quantity
+from ..units.rotation import revolutions_per_minute, revolutions_per_second
 
 # ISO 281 life exponents: the load-life power law L10 = (C/P)^p.
 BALL_BEARING_LIFE_EXPONENT = 3.0
@@ -72,8 +73,7 @@ def _defect_frequency_inputs(
     _require(rotational_frequency, "[frequency]", "rotational_frequency")
     _require(rolling_element_diameter, "[length]", "rolling_element_diameter")
     _require(pitch_diameter, "[length]", "pitch_diameter")
-    # Shaft speed as a revolution count: rpm/60 gives rev/s, avoiding pint's 2π Hz↔rpm mismatch.
-    fr = rotational_frequency.to("rpm").magnitude / 60.0
+    fr = revolutions_per_second(rotational_frequency, name="rotational_frequency")
     d = rolling_element_diameter.to("mm").magnitude
     pd = pitch_diameter.to("mm").magnitude
     if fr < 0:
@@ -167,7 +167,7 @@ def bearing_life_hours(
         life_exponent=life_exponent,
     )
     _require(speed, "[frequency]", "speed")
-    rpm = speed.to("rpm").magnitude
+    rpm = revolutions_per_minute(speed, name="speed")
     if rpm <= 0:
         raise ValueError(f"speed must be positive; got {speed}")
     hours = life_mrev * 1.0e6 / (60.0 * rpm)

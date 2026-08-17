@@ -21,6 +21,7 @@ from anvilate.units import (
 from anvilate.units.rotation import (
     AmbiguousRotationalSpeedError,
     angular_speed_rad_per_s,
+    revolutions_per_minute,
     revolutions_per_second,
 )
 
@@ -160,3 +161,45 @@ def test_angular_speed_refuses_a_bare_inverse_time(unit):
 def test_ambiguous_rotational_speed_error_names_the_parameter():
     with pytest.raises(AmbiguousRotationalSpeedError, match="roll_speed"):
         revolutions_per_second(Quantity(magnitude=100.0, unit="Hz"), name="roll_speed")
+
+
+def test_revolutions_per_minute_closes_the_to_rpm_version_of_the_same_trap():
+    # Converting straight with .to("rpm") LOOKS like it sidesteps the radian problem, and does
+    # not: pint's revolution is 2*pi radian, so .to("rpm") applies exactly the same 2*pi factor
+    # as .to("rad/s"). 30 Hz reads as 286.5 rpm rather than 1800 -- and 1800 is what a caller
+    # writing "30 Hz" means. The guard refuses rather than guessing.
+    assert Quantity(magnitude=30.0, unit="Hz").to("rpm").magnitude == pytest.approx(
+        286.4788975654116, rel=1e-9
+    )
+    with pytest.raises(AmbiguousRotationalSpeedError):
+        revolutions_per_minute(Quantity(magnitude=30.0, unit="Hz"), name="speed")
+
+    # Every spelling that names an angle agrees on 1800 rpm.
+    for unit, magnitude in (
+        ("rpm", 1800.0),
+        ("turn/s", 30.0),
+        ("rad/s", 1800.0 * 2.0 * math.pi / 60.0),
+        ("deg/s", 1800.0 * 360.0 / 60.0),
+    ):
+        speed = Quantity(magnitude=magnitude, unit=unit)
+        assert revolutions_per_minute(speed, name="speed") == pytest.approx(1800.0, rel=1e-9)
+    # The three conversions stay mutually consistent: rpm = 60*rev/s = 60*omega/(2*pi).
+    speed = Quantity(magnitude=1800.0, unit="rpm")
+    assert revolutions_per_minute(speed, name="s") == pytest.approx(
+        60.0 * revolutions_per_second(speed, name="s"), rel=1e-12
+    )
+    assert revolutions_per_minute(speed, name="s") == pytest.approx(
+        60.0 * angular_speed_rad_per_s(speed, name="s") / (2.0 * math.pi), rel=1e-12
+    )
+
+
+def test_angle_tokens_match_pints_canonical_spelling_not_the_one_written():
+    # The guard matches pint's CANONICAL unit string, which is not always what the caller types:
+    # "gradian" canonicalises to "grade" and "rpm" to "revolutions_per_minute". Matching the
+    # typed spelling would reject these legitimate angle rates.
+    for unit in ("gradian/s", "arcminute/s", "arcsecond/s", "cycle/s", "rps", "rad/min"):
+        assert angular_speed_rad_per_s(Quantity(magnitude=1.0, unit=unit), name="s") > 0.0
+    # A count per time still names no angle, so it is still refused.
+    for unit in ("count/s", "Hz", "1/s"):
+        with pytest.raises(AmbiguousRotationalSpeedError):
+            angular_speed_rad_per_s(Quantity(magnitude=1.0, unit=unit), name="s")
