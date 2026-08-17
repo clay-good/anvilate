@@ -34,6 +34,7 @@ __all__ = [
     "nds_euler_buckling_stress",
     "nds_column_stability_factor",
     "nds_combined_bending_compression",
+    "nds_compression_scorecard",
     "nds_shear_scorecard",
     "nds_shear_stress",
 ]
@@ -41,6 +42,11 @@ __all__ = [
 # NDS §3.7.1 buckling coefficient and the c parameter of the Ylinen column formula.
 _NDS_EULER_COEFFICIENT = 0.822
 _NDS_YLINEN_C_SAWN = 0.8  # sawn lumber (0.9 glulam, 0.85 round timber poles)
+# NDS §3.7.1.4 caps the column slenderness at l_e/d = 50 in service (75 is tolerated only
+# during construction). Past it the Ylinen curve still returns a number, but the member is
+# outside the standard and the number is not a design value.
+_NDS_MAX_SLENDERNESS = 50.0
+_NDS_MAX_SLENDERNESS_CONSTRUCTION = 75.0
 
 
 class LoadDuration(StrEnum):
@@ -317,6 +323,7 @@ def nds_euler_buckling_stress(
     *,
     min_modulus: Quantity,
     slenderness_ratio: float,
+    during_construction: bool = False,
 ) -> Quantity:
     """The NDS §3.7.1 column Euler critical buckling stress F_cE = 0.822·E'_min/(l_e/d)².
 
@@ -326,6 +333,12 @@ def nds_euler_buckling_stress(
     ``slenderness_ratio`` l_e/d is the effective length over the least cross-section
     dimension. A stubbier column (small l_e/d) buckles at a higher stress. Returns
     F_cE as a stress in the modulus's kind.
+
+    NDS §3.7.1.4 caps l_e/d at 50 for a column in service, and tolerates 75 only during
+    construction — set ``during_construction`` to screen against the looser cap. Past the
+    cap this refuses rather than returning the (very small, very plausible) stress the
+    formula would give: a column that slender is outside the standard, and the number is
+    not a design value.
     """
     if not min_modulus.has_dimension("[pressure]"):
         raise ValueError(
@@ -336,7 +349,51 @@ def nds_euler_buckling_stress(
         raise ValueError(f"min_modulus must be positive; got {min_modulus}")
     if slenderness_ratio <= 0:
         raise ValueError(f"slenderness_ratio must be positive; got {slenderness_ratio}")
+    limit = _NDS_MAX_SLENDERNESS_CONSTRUCTION if during_construction else _NDS_MAX_SLENDERNESS
+    if slenderness_ratio > limit:
+        where = "during construction" if during_construction else "in service"
+        raise ValueError(
+            f"slenderness_ratio l_e/d = {slenderness_ratio:.4g} exceeds the NDS 3.7.1.4 limit "
+            f"of {limit:.0f} {where}: the column is outside the standard"
+        )
     return Quantity(magnitude=_NDS_EULER_COEFFICIENT * e / slenderness_ratio**2, unit="MPa")
+
+
+def nds_compression_scorecard(
+    name: str,
+    *,
+    compression_stress: Quantity,
+    adjusted_compression_value: Quantity | None,
+    required: float = 1.0,
+) -> ScorecardEntry:
+    """Screen a compression-parallel stress against the adjusted design value → an entry.
+
+    The safety factor is the adjusted design value F'_c over the applied
+    ``compression_stress`` f_c, judged against ``required`` (1.0 = exactly the NDS
+    allowable). F'_c is F*_c — the compression-parallel value adjusted by every factor
+    except C_P — times the column stability factor C_P from
+    :func:`nds_column_stability_factor`, which is where the buckling penalty enters. When
+    ``adjusted_compression_value`` is ``None`` — no reference F_c was supplied — the entry
+    is ``NOT_EVALUATED`` rather than a silent pass, mirroring :func:`nds_bending_scorecard`.
+    """
+    if adjusted_compression_value is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — no NDS reference compression value supplied",
+            reference="NDS",
+        )
+    if not compression_stress.has_dimension("[pressure]"):
+        raise ValueError(
+            f"compression_stress must be a [pressure] quantity; got "
+            f"{compression_stress.dimensionality}"
+        )
+    fc = abs(compression_stress.to("MPa").magnitude)
+    fc_allow = adjusted_compression_value.to("MPa").magnitude
+    computed = float("inf") if fc == 0 else fc_allow / fc
+    return ScorecardEntry.from_safety_factor(name, computed=computed, required=required).model_copy(
+        update={"reference": "NDS"}
+    )
 
 
 def nds_column_stability_factor(

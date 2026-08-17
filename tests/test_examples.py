@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from anvilate.scorecard import CheckStatus
+from anvilate.units import Quantity
 
 _EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
@@ -5366,6 +5367,21 @@ def test_timber_header_bearing_governs_example_fails_at_the_support():
         assert post_by_name[check].safety_factor == pytest.approx(
             by_name[check].safety_factor, rel=1e-9
         )
+
+
+def test_timber_post_slenderness_example_shows_the_stability_factor_collapse():
+    namespace = runpy.run_path(str(_EXAMPLES / "timber_post_slenderness.py"))
+    short = namespace["screen_short_post"]()
+    assert short.status is CheckStatus.PASS
+    assert short.entries[0].safety_factor == pytest.approx(1.70, abs=0.01)
+    # Same post, same load, 50% more length -> C_P collapses and it fails.
+    long_post = namespace["screen_long_post"]()
+    assert long_post.status is CheckStatus.FAIL
+    assert long_post.entries[0].safety_factor == pytest.approx(0.82, abs=0.01)
+    assert namespace["stability_factor"](Quantity.parse("8 ft")) == pytest.approx(0.41, abs=0.01)
+    assert namespace["stability_factor"](Quantity.parse("12 ft")) == pytest.approx(0.20, abs=0.01)
+    # Past the NDS 3.7.1.4 cap the screen refuses rather than quoting a plausible number.
+    assert "exceeds the NDS 3.7.1.4 limit of 50" in namespace["refuse_over_slender_post"]()
 
 
 def test_process_pipe_schedule_example_rates_the_available_wall():

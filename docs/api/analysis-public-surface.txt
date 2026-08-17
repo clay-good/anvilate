@@ -999,6 +999,7 @@ nds_timber.nds_bending_scorecard
 nds_timber.nds_shear_scorecard
 nds_timber.nds_shear_stress
 nds_timber.nds_column_stability_factor
+nds_timber.nds_compression_scorecard
 nds_timber.nds_combined_bending_compression
 nds_timber.nds_euler_buckling_stress
 nds_timber.nds_load_duration_factor

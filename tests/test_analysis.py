@@ -14941,6 +14941,92 @@ def test_nds_column_stability_factor_ylinen_and_euler_stress():
             c=1.5,
         )
 
+    # NDS 3.7.1.4 caps l_e/d at 50 in service. Past it the formula still returns a small,
+    # entirely plausible stress — which is the trap: the column is outside the standard.
+    at_limit = nds_euler_buckling_stress(min_modulus=_q("580000 psi"), slenderness_ratio=50.0)
+    assert at_limit.to("psi").magnitude == pytest.approx(0.822 * 580000 / 2500, rel=1e-9)
+    with pytest.raises(ValueError, match=r"exceeds the NDS 3.7.1.4 limit of 50 in service"):
+        nds_euler_buckling_stress(min_modulus=_q("580000 psi"), slenderness_ratio=50.1)
+    # During construction the cap loosens to 75, and no further.
+    loose = nds_euler_buckling_stress(
+        min_modulus=_q("580000 psi"), slenderness_ratio=70.0, during_construction=True
+    )
+    assert loose.to("psi").magnitude == pytest.approx(0.822 * 580000 / 4900, rel=1e-9)
+    with pytest.raises(ValueError, match=r"limit of 75 during construction"):
+        nds_euler_buckling_stress(
+            min_modulus=_q("580000 psi"), slenderness_ratio=75.1, during_construction=True
+        )
+
+
+def test_nds_compression_scorecard():
+    from anvilate.analysis import (
+        nds_adjusted_design_value,
+        nds_column_stability_factor,
+        nds_compression_scorecard,
+        nds_euler_buckling_stress,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    # A 4x4 post (3.5 in) 8 ft long: l_e/d = 96/3.5 = 27.4.
+    fce = nds_euler_buckling_stress(min_modulus=_q("580000 psi"), slenderness_ratio=96 / 3.5)
+    f_star = nds_adjusted_design_value(reference_value=_q("1350 psi"), factors={"C_D": 1.0})
+    cp = nds_column_stability_factor(euler_buckling_stress=fce, reference_compression=f_star)
+    adjusted = nds_adjusted_design_value(reference_value=f_star, factors={"C_P": cp})
+
+    # C_P is where the buckling penalty enters: the adjusted value is F*_c times it.
+    assert adjusted.to("psi").magnitude == pytest.approx(1350 * cp, rel=1e-9)
+    assert 0 < cp < 1
+
+    entry = nds_compression_scorecard(
+        "post compression",
+        compression_stress=_q("500 psi"),
+        adjusted_compression_value=adjusted,
+    )
+    assert entry.safety_factor == pytest.approx(adjusted.to("psi").magnitude / 500, rel=1e-9)
+    assert entry.status is CheckStatus.PASS
+    assert entry.reference == "NDS"
+
+    # Ignoring C_P would read a 2.70 factor on the unreduced 1350 psi; the buckling penalty
+    # is the whole difference between the two numbers, and it is not small.
+    unreduced = nds_compression_scorecard(
+        "post compression", compression_stress=_q("500 psi"), adjusted_compression_value=f_star
+    )
+    assert unreduced.safety_factor > entry.safety_factor
+    assert entry.safety_factor == pytest.approx(unreduced.safety_factor * cp, rel=1e-9)
+
+    # A load past the adjusted value fails, and the required factor is honoured.
+    assert (
+        nds_compression_scorecard(
+            "post compression",
+            compression_stress=_q("1200 psi"),
+            adjusted_compression_value=adjusted,
+        ).status
+        is CheckStatus.FAIL
+    )
+    assert (
+        nds_compression_scorecard(
+            "post compression",
+            compression_stress=_q("500 psi"),
+            adjusted_compression_value=adjusted,
+            required=4.0,
+        ).status
+        is CheckStatus.FAIL
+    )
+
+    # No reference value -> NOT_EVALUATED, never a silent pass.
+    unset = nds_compression_scorecard(
+        "post compression", compression_stress=_q("500 psi"), adjusted_compression_value=None
+    )
+    assert unset.status is CheckStatus.NOT_EVALUATED
+    assert unset.safety_factor is None
+
+    with pytest.raises(ValueError, match="compression_stress must be a"):
+        nds_compression_scorecard(
+            "post compression",
+            compression_stress=_q("500 lbf"),
+            adjusted_compression_value=adjusted,
+        )
+
 
 def test_sphere_drag_coefficient_bounds_where_stokes_law_stops_being_true():
     from anvilate.analysis import sphere_drag_coefficient, stokes_settling_velocity

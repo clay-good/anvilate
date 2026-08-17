@@ -23,10 +23,13 @@
       bearings under 6 in *and* at least 3 in from the member end (`end_distance`).
       `examples/timber_header_bearing_governs.py` is the anchor: a short header whose
       bending and shear pass while it crushes at its support.
-- [~] 2.3 Compression with column stability factor — `nds_euler_buckling_stress`
+- [x] 2.3 Compression with column stability factor — `nds_euler_buckling_stress`
       (F_cE = 0.822·E'_min/(l_e/d)²) and `nds_column_stability_factor` (the Ylinen C_P,
-      §3.7.1) compose into the adjusted compression value F'_c = F*_c·C_P. The l_e/d
-      slenderness limit (≤ 50) guard and a compression scorecard are follow-ups.
+      §3.7.1) compose into the adjusted compression value F'_c = F*_c·C_P, screened by
+      `nds_compression_scorecard` (NOT_EVALUATED without a reference value). The §3.7.1.4
+      slenderness cap now refuses past l_e/d = 50 in service (75 with
+      `during_construction=True`) rather than quoting the plausible small stress the
+      formula still yields. `examples/timber_post_slenderness.py` is the anchor.
 - [x] 2.4 Combined bending + axial interaction — `nds_combined_bending_compression`
       (§3.9.2: (f_c/F'_c)² + f_b/[F'_b(1−f_c/F_cE)] ≤ 1) with the moment-amplification
       denominator guarded against buckling (f_c ≥ F_cE).
@@ -41,5 +44,9 @@
 
 ## 4. Docs
 
-- [ ] 4.1 Pack documentation: scope, where reference values legally come from, screening
-      disclaimer
+- [x] 4.1 Pack documentation: scope, where reference values legally come from, screening
+      disclaimer — [`docs/timber-screening.md`](../../../docs/timber-screening.md) opens
+      with a "Scope, and what it is not" section naming the five screened limit states,
+      the excluded ones (connections, glulam/CLT, fire, serviceability, C_L/C_F
+      derivations), the copyright position on the species/grade tables (C_D is the one
+      republishable list), and the T1-screen disclaimer.

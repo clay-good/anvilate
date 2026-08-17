@@ -6,6 +6,38 @@ species/grade tables, multiplied by a chain of adjustment factors for the real
 service conditions. Anvilate composes the chain and keeps every factor visible; the
 reference design values are the caller's, from the copyrighted NDS tables.
 
+## Scope, and what it is not
+
+**What is screened.** Sawn-lumber members under the allowable-stress design of the
+NDS: bending (§3.3), horizontal shear (§3.4), compression parallel to grain with the
+column stability factor (§3.7), bearing perpendicular to grain (§3.10), and the
+combined bending-plus-axial interaction (§3.9.2). Each is a closed-form screen against
+an adjusted design value you supply the reference for.
+
+**What is not.** Connections (bolts, nails, screws, shear plates — NDS Chapters 11-13),
+glulam and cross-laminated timber specifics, fire design, deflection and vibration
+serviceability, lateral-torsional beam stability C_L and the size factor C_F as
+derivations, and any diaphragm or shear-wall system behaviour. Those factors can still
+enter through the caller's chain; Anvilate just does not derive them.
+
+**Where the reference values come from.** The NDS species/grade design value tables are
+copyrighted, and Anvilate does not republish them. Every reference value — F_b, F_v,
+F_c, F_c⊥, E, E_min — enters as a `Quantity` you pass in, from your copy of the NDS
+Supplement or the grading agency's published values. The one exception is the load
+duration factor C_D (Table 2.3.2), a six-value list republished everywhere, which
+`nds_load_duration_factor` provides. Adjustment factors that depend on the member's
+size, moisture, temperature, or treatment are likewise yours to look up and pass in by
+name, which is why the factor chain is a name→value mapping rather than a black box.
+
+**Screening disclaimer.** These are T1 analytical screens for early design, not a
+substitute for a full code check by a licensed engineer. A screen that passes has
+passed the limit states listed above with the values you supplied; it says nothing
+about the ones not listed, and nothing about whether the values were the right ones.
+Anvilate is built so a green is never silent — an unsupplied reference value returns
+`NOT_EVALUATED`, and a member past a documented limit (the §3.7.1.4 slenderness cap,
+for one) raises rather than quoting a plausible number — but the responsible-charge
+review is still a person's.
+
 ## What you get
 
 ```python
@@ -67,8 +99,35 @@ f_c = nds_bearing_stress(bearing_force=reaction, width=b, bearing_length=l_b)  #
 - **`nds_shear_scorecard`** and **`nds_bearing_scorecard`** screen those stresses
   against their adjusted values, and return `NOT_EVALUATED` without one, like bending.
 
+## Compression — where the column stability factor enters
+
+```python
+from anvilate.analysis import (
+    nds_column_stability_factor, nds_compression_scorecard, nds_euler_buckling_stress,
+)
+
+f_cE = nds_euler_buckling_stress(min_modulus=e_min, slenderness_ratio=le_over_d)
+c_p = nds_column_stability_factor(euler_buckling_stress=f_cE, reference_compression=f_star_c)
+```
+
+- **`nds_euler_buckling_stress`** is F_cE = 0.822·E'_min/(l_e/d)². It refuses past the
+  NDS §3.7.1.4 slenderness cap — 50 in service, or 75 with `during_construction=True` —
+  because the formula would otherwise return a small, entirely plausible stress for a
+  column the standard does not permit.
+- **`nds_column_stability_factor`** is the Ylinen C_P of §3.7.1, taking F*_c (every
+  factor except C_P) to F'_c = F*_c·C_P. It falls fast: an 8 ft 4x4 sits at 0.41, the
+  same post at 12 ft at 0.20.
+- **`nds_compression_scorecard`** screens the applied f_c against F'_c, `NOT_EVALUATED`
+  without a reference value.
+- **`nds_combined_bending_compression`** is the §3.9.2 beam-column interaction
+  (f_c/F'_c)² + f_b/[F'_b(1 − f_c/F_cE)] ≤ 1, with the moment-amplification denominator
+  guarded against a member that has already buckled.
+
 ## Examples
 
+- [`examples/timber_post_slenderness.py`](../examples/timber_post_slenderness.py) — the
+  same 4x4 under the same 4,000 lb passes at 8 ft (SF 1.70) and fails at 12 ft (0.82);
+  at 16 ft the §3.7.1.4 cap makes the screen refuse outright.
 - [`examples/floor_joist_wet_service.py`](../examples/floor_joist_wet_service.py) — a
   joist that passes dry and fails wet; the wet-service factor C_M is the whole
   difference.
