@@ -1093,6 +1093,7 @@ radar.max_unambiguous_range
 radar.radar_received_power
 radar.radar_max_range
 radar.radar_range_resolution
+radar.radar_average_power
 radiation_pressure.photon_momentum
 radiation_pressure.radiation_pressure_from_intensity
 radiation_pressure.radiation_force
@@ -1347,6 +1348,7 @@ rocket_propulsion.thrust_from_coefficient
 rolling.maximum_draft
 rolling.rolling_contact_length
 rolling.rolling_force
+rolling.rolling_power
 rotor_momentum.hover_induced_velocity
 rotor_momentum.ideal_hover_power
 rotor_momentum.figure_of_merit
@@ -1410,6 +1412,7 @@ solar_cell.solar_cell_max_power
 solar_cell.solar_cell_open_circuit_voltage
 solar_geometry.solar_declination
 solar_geometry.solar_altitude_at_noon
+solar_geometry.solar_altitude_angle
 solar_geometry.sunset_hour_angle
 solar_geometry.daylight_hours
 solar_geometry.air_mass
@@ -1553,6 +1556,7 @@ thermal_noise.johnson_noise_current
 thermal_noise.johnson_noise_power
 thermal_noise.johnson_noise_voltage
 thin_film.optimal_ar_coating_index
+thin_film.single_layer_ar_reflectance
 thin_film.quarter_wave_thickness
 thin_film.thin_film_tuned_wavelength
 thermal.series_thermal_resistance
@@ -1630,6 +1634,7 @@ vacuum_electronics.schottky_barrier_lowering
 vacuum_electronics.child_langmuir_current_density
 vacuum_system.effective_pumping_speed
 vacuum_system.molecular_flow_tube_conductance
+vacuum_system.aperture_molecular_conductance
 vacuum_system.vacuum_pump_down_time
 vacuum_system.vacuum_throughput
 vapor_liquid_equilibrium.raoult_partial_pressure
@@ -1666,6 +1671,7 @@ waveguide.waveguide_guide_wavelength
 waveguide.waveguide_phase_velocity
 waveguide.waveguide_group_velocity
 waveguide.waveguide_te_wave_impedance
+waveguide.waveguide_tm_wave_impedance
 waveguide.rectangular_waveguide_mode_cutoff_frequency
 weld.FILLET_THROAT_FACTOR
 weld.eccentric_weld_group_peak_stress

@@ -24,6 +24,7 @@ _SPEED_OF_LIGHT = 299792458.0  # m/s
 _FREE_SPACE_IMPEDANCE = 376.730313668  # ohm, eta_0
 
 __all__ = [
+    "waveguide_tm_wave_impedance",
     "rectangular_waveguide_cutoff_frequency",
     "rectangular_waveguide_mode_cutoff_frequency",
     "waveguide_group_velocity",
@@ -189,3 +190,37 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def waveguide_tm_wave_impedance(
+    *, operating_frequency: Quantity, cutoff_frequency: Quantity
+) -> Quantity:
+    """The TM-mode wave impedance, Z_TM = η₀·sqrt(1 − (f_c/f)²).
+
+    The ratio of transverse electric to transverse magnetic field for a TM mode in a hollow
+    waveguide. :func:`waveguide_te_wave_impedance`'s own docstring refers to "the opposite of the
+    TM-mode impedance", which did not exist in the library, even though
+    :func:`rectangular_waveguide_mode_cutoff_frequency` already covers TM_mn cutoffs.
+
+    The two are reciprocal about the free-space impedance: a TE mode looks *inductive*, rising
+    above η₀ = 376.7 Ω and diverging at cutoff, while a TM mode looks *capacitive*, falling below
+    η₀ and going to zero at cutoff. In WR-90 (f_c = 6.557 GHz) at 10 GHz the TE impedance is 499 Ω
+    and the TM impedance 284 Ω — matching a TM-mode launcher or a dielectric window with the TE
+    number designs in a 1.75× mismatch, roughly VSWR 1.75, before anything is built.
+
+    The same square-root factor is the group-velocity ratio of :func:`waveguide_group_velocity`,
+    so Z_TM/η₀ and v_g/c are the same number. The operating frequency must exceed the cutoff, or
+    the mode is evanescent and carries no power. Returns the wave impedance in ohm.
+    """
+    _check(operating_frequency, "[frequency]", "operating_frequency")
+    _check(cutoff_frequency, "[frequency]", "cutoff_frequency")
+    f = operating_frequency.to("Hz").magnitude
+    f_c = cutoff_frequency.to("Hz").magnitude
+    if f_c <= 0:
+        raise ValueError("cutoff_frequency must be positive")
+    if f <= f_c:
+        raise ValueError(
+            f"operating_frequency {operating_frequency} must exceed cutoff_frequency "
+            f"{cutoff_frequency}; below cutoff the mode is evanescent"
+        )
+    return Quantity(magnitude=_FREE_SPACE_IMPEDANCE * sqrt(1.0 - (f_c / f) ** 2), unit="ohm")

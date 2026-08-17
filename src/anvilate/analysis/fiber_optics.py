@@ -1,10 +1,15 @@
-"""T1 analytical fiber-optic chromatic-dispersion checks (closed-form).
+"""T1 analytical fiber-optic dispersion and mode-structure checks (closed-form).
 
-An optical fiber carries different wavelengths at slightly different speeds, so a light pulse —
-never perfectly monochromatic — spreads out as it travels. This chromatic dispersion is what
-ultimately limits how fast and how far a fiber link can run: spread the pulses too much and adjacent
-bits blur into each other. It is the reach-limiting companion to the numerical aperture and
-acceptance angle of :mod:`anvilate.analysis.optics`, which govern getting light *into* the fiber.
+An optical fiber spreads a light pulse as it travels, and two distinct mechanisms do it. Different
+wavelengths move at slightly different speeds, so a source that is never perfectly monochromatic
+smears — chromatic dispersion. Separately, a fiber wide enough to guide many modes lets them take
+different path lengths, so the same pulse arrives spread by that too — modal dispersion, which on
+multimode fiber is the larger by three or four orders of magnitude. Either way, spread the pulses
+too much and adjacent bits blur into each other, which is what ultimately limits how fast and how
+far a link can run. The V-number decides which regime applies: below 2.405 the fiber guides one
+mode and only chromatic dispersion is left. These are the reach-limiting companions to the
+numerical aperture and acceptance angle of :mod:`anvilate.analysis.optics`, which govern getting
+light *into* the fiber.
 
 The pulse broadening over a link is Δτ = D·L·Δλ, from the fiber dispersion parameter D (about
 17 ps/(nm·km) for standard single-mode fiber at 1550 nm), the length L, and the source spectral

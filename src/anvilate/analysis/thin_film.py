@@ -21,6 +21,7 @@ from math import sqrt
 from ..units import Quantity
 
 __all__ = [
+    "single_layer_ar_reflectance",
     "optimal_ar_coating_index",
     "quarter_wave_thickness",
     "thin_film_tuned_wavelength",
@@ -81,3 +82,34 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def single_layer_ar_reflectance(
+    *, coating_index: float, substrate_index: float, medium_index: float = 1.0
+) -> float:
+    """The residual reflectance of a real quarter-wave AR coating,
+    R = ((n₀·n_s − n₁²)/(n₀·n_s + n₁²))².
+
+    :func:`optimal_ar_coating_index` gives the geometric-mean index at which a single quarter-wave
+    layer cancels the surface reflection completely, and notes that a real material is picked close
+    to that ideal — but the module never said how much reflection is left when it is only close.
+    This does, from the ``coating_index`` n₁ actually used, the ``substrate_index`` n_s, and the
+    ``medium_index`` n₀.
+
+    The answer is not zero and not negligible. Magnesium fluoride (n = 1.38) on crown glass
+    (n = 1.52) leaves 1.26% per surface against 4.26% bare — the textbook 3.4× reduction, not the
+    elimination the ideal-index function implies. In a ten-surface lens assembly that is the
+    difference between 12% and 35% of the light ending up as stray light and veiling glare, so a
+    transmission or stray-light budget built on "the coating removes it" is wrong by a wide margin.
+
+    Feeding it the module's own optimal index returns exactly zero, and setting n₁ = n₀ (no
+    coating) recovers the bare Fresnel reflectance of
+    :func:`anvilate.analysis.fresnel.fresnel_normal_reflectance`. This is normal incidence at the
+    design wavelength; away from either, the reflectance rises. Returns the reflectance as a plain
+    float in [0, 1).
+    """
+    if coating_index <= 0 or substrate_index <= 0 or medium_index <= 0:
+        raise ValueError("refractive indices must be positive")
+    numerator = medium_index * substrate_index - coating_index**2
+    denominator = medium_index * substrate_index + coating_index**2
+    return (numerator / denominator) ** 2

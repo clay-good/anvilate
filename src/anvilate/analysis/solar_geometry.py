@@ -17,11 +17,12 @@ computed angles are returned as dimension-checked :class:`~anvilate.units.Quanti
 
 from __future__ import annotations
 
-from math import acos, degrees, radians, sin, tan
+from math import acos, asin, cos, degrees, radians, sin, tan
 
 from ..units import Quantity
 
 __all__ = [
+    "solar_altitude_angle",
     "air_mass",
     "daylight_hours",
     "solar_altitude_at_noon",
@@ -113,3 +114,37 @@ def air_mass(*, solar_altitude: float) -> float:
     if not 0.0 < solar_altitude <= 90.0:
         raise ValueError(f"solar_altitude must be in (0, 90] degrees; got {solar_altitude}")
     return 1.0 / sin(radians(solar_altitude))
+
+
+def solar_altitude_angle(*, latitude: float, declination: float, hour_angle: float) -> Quantity:
+    """The solar altitude at any hour, sin α = sin φ·sin δ + cos φ·cos δ·cos ω.
+
+    How high the sun stands above the horizon at a given moment, from the ``latitude`` φ, the solar
+    ``declination`` δ (:func:`solar_declination`), and the ``hour_angle`` ω — all in degrees, with
+    ω measured from solar noon at 15° per hour, negative in the morning and positive in the
+    afternoon.
+
+    The module computed altitude only at solar noon, yet :func:`air_mass` takes an arbitrary
+    altitude, so there was no way to reach it at any other hour. That gap matters because the
+    atmospheric path length is strongly nonlinear in altitude: at 40°N with δ = 20°, the sun is
+    70° up at noon (air mass 1.06) but 46.8° up at 3 pm (air mass 1.37), a 29% longer path. An
+    hourly yield model that silently reuses the noon air mass over-predicts morning and afternoon
+    irradiance, which is where a fixed collector spends most of its day.
+
+    At ω = 0 this reduces exactly to :func:`solar_altitude_at_noon`, and at the sunset hour angle
+    (:func:`sunset_hour_angle`) it returns zero by construction. A negative result means the sun is
+    below the horizon — night, not an error — so it is returned rather than raised on. This is the
+    geometric altitude, before atmospheric refraction, which lifts the apparent sun by about half a
+    degree near the horizon. Returns the altitude in degrees.
+    """
+    if not -90.0 <= latitude <= 90.0:
+        raise ValueError(f"latitude (degrees) must lie in [-90, 90]; got {latitude}")
+    if not -90.0 <= declination <= 90.0:
+        raise ValueError(f"declination (degrees) must lie in [-90, 90]; got {declination}")
+    if not -180.0 <= hour_angle <= 180.0:
+        raise ValueError(f"hour_angle (degrees) must lie in [-180, 180]; got {hour_angle}")
+    phi = radians(latitude)
+    delta = radians(declination)
+    omega = radians(hour_angle)
+    sin_altitude = sin(phi) * sin(delta) + cos(phi) * cos(delta) * cos(omega)
+    return Quantity(magnitude=degrees(asin(max(-1.0, min(1.0, sin_altitude)))), unit="degree")

@@ -2579,6 +2579,7 @@ from .quantum import (
 from .radar import (
     max_unambiguous_range,
     max_unambiguous_velocity,
+    radar_average_power,
     radar_doppler_shift,
     radar_max_range,
     radar_range_resolution,
@@ -2744,6 +2745,7 @@ from .rolling import (
     maximum_draft,
     rolling_contact_length,
     rolling_force,
+    rolling_power,
 )
 from .rotor_momentum import (
     figure_of_merit,
@@ -2831,6 +2833,7 @@ from .solar_cell import (
 from .solar_geometry import (
     air_mass,
     daylight_hours,
+    solar_altitude_angle,
     solar_altitude_at_noon,
     solar_declination,
     sunset_hour_angle,
@@ -3020,6 +3023,7 @@ from .thermoforming import (
 from .thin_film import (
     optimal_ar_coating_index,
     quarter_wave_thickness,
+    single_layer_ar_reflectance,
     thin_film_tuned_wavelength,
 )
 from .tolerance_stack import (
@@ -3091,6 +3095,7 @@ from .vacuum_electronics import (
     thermionic_current_density,
 )
 from .vacuum_system import (
+    aperture_molecular_conductance,
     effective_pumping_speed,
     molecular_flow_tube_conductance,
     vacuum_pump_down_time,
@@ -3140,6 +3145,7 @@ from .waveguide import (
     waveguide_guide_wavelength,
     waveguide_phase_velocity,
     waveguide_te_wave_impedance,
+    waveguide_tm_wave_impedance,
 )
 from .wear import (
     archard_wear_depth,
@@ -3298,6 +3304,7 @@ __all__ = [
     "child_langmuir_current_density",
     "vacuum_pump_down_time",
     "molecular_flow_tube_conductance",
+    "aperture_molecular_conductance",
     "effective_pumping_speed",
     "vacuum_throughput",
     "raoult_partial_pressure",
@@ -3383,6 +3390,7 @@ __all__ = [
     "grating_angular_dispersion",
     "quarter_wave_thickness",
     "optimal_ar_coating_index",
+    "single_layer_ar_reflectance",
     "thin_film_tuned_wavelength",
     "rss_tolerance_stack",
     "worst_case_tolerance_stack",
@@ -3635,6 +3643,7 @@ __all__ = [
     "solar_declination",
     "daylight_hours",
     "solar_altitude_at_noon",
+    "solar_altitude_angle",
     "sunset_hour_angle",
     "air_mass",
     "pv_array_power",
@@ -3740,6 +3749,7 @@ __all__ = [
     "waveguide_phase_velocity",
     "waveguide_group_velocity",
     "waveguide_te_wave_impedance",
+    "waveguide_tm_wave_impedance",
     "plasma_frequency",
     "debye_length",
     "plasma_parameter",
@@ -3889,6 +3899,7 @@ __all__ = [
     "maximum_draft",
     "rolling_contact_length",
     "rolling_force",
+    "rolling_power",
     "hover_induced_velocity",
     "ideal_hover_power",
     "figure_of_merit",
@@ -4445,6 +4456,7 @@ __all__ = [
     "radar_received_power",
     "radar_max_range",
     "radar_range_resolution",
+    "radar_average_power",
     "SUDDENLY_APPLIED_FACTOR",
     "impact_factor",
     "impact_stress",

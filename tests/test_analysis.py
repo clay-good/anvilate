@@ -35283,3 +35283,278 @@ def test_modal_dispersion_dwarfs_the_chromatic_mechanism_on_multimode_fiber():
         modal_dispersion_broadening(core_index=1.46, cladding_index=1.48, length=_q("1 km"))
     with pytest.raises(ValueError):
         modal_dispersion_broadening(**fiber, length=_q("0 km"))
+
+
+def test_solar_altitude_angle_reduces_to_noon_and_vanishes_at_sunset():
+    from anvilate.analysis import (
+        air_mass,
+        solar_altitude_angle,
+        solar_altitude_at_noon,
+        sunset_hour_angle,
+    )
+
+    site = {"latitude": 40.0, "declination": 20.0}
+
+    # Identity 1: at omega = 0 it must reproduce the module's noon-only function exactly.
+    assert solar_altitude_angle(**site, hour_angle=0.0).to("degree").magnitude == pytest.approx(
+        solar_altitude_at_noon(**site).to("degree").magnitude, rel=1e-12
+    )
+    assert solar_altitude_at_noon(**site).to("degree").magnitude == pytest.approx(70.0, rel=1e-12)
+
+    # Identity 2: at the module's own sunset hour angle the sun is on the horizon, by definition.
+    omega_s = sunset_hour_angle(**site).to("degree").magnitude
+    assert omega_s == pytest.approx(107.78266907923793, rel=1e-9)
+    assert solar_altitude_angle(**site, hour_angle=omega_s).to("degree").magnitude == (
+        pytest.approx(0.0, abs=1e-9)
+    )
+
+    # The gap this closes: the atmospheric path is strongly nonlinear in altitude, so reusing the
+    # noon air mass all day over-predicts morning and afternoon irradiance by a wide margin.
+    afternoon = solar_altitude_angle(**site, hour_angle=45.0).to("degree").magnitude
+    assert afternoon == pytest.approx(46.79045001476868, rel=1e-9)
+    assert air_mass(solar_altitude=70.0) == pytest.approx(1.0641777724759123, rel=1e-9)
+    assert air_mass(solar_altitude=afternoon) == pytest.approx(1.372015917392244, rel=1e-9)
+    assert air_mass(solar_altitude=afternoon) / air_mass(solar_altitude=70.0) == pytest.approx(
+        1.2893, rel=1e-3
+    )
+
+    # Symmetric about solar noon, and highest there.
+    assert solar_altitude_angle(**site, hour_angle=-45.0).to("degree").magnitude == (
+        pytest.approx(afternoon, rel=1e-12)
+    )
+    for omega in (15.0, 30.0, 60.0, 90.0):
+        assert solar_altitude_angle(**site, hour_angle=omega).to("degree").magnitude < 70.0
+
+    # Past sunset the sun is below the horizon: a negative altitude is night, not an error.
+    assert solar_altitude_angle(**site, hour_angle=150.0).to("degree").magnitude < 0.0
+    # A high-latitude winter case: 51N at the winter solstice barely clears 15 degrees at noon.
+    assert solar_altitude_angle(latitude=51.0, declination=-23.45, hour_angle=0.0).to(
+        "degree"
+    ).magnitude == pytest.approx(15.55, rel=1e-3)
+
+    with pytest.raises(ValueError):
+        solar_altitude_angle(latitude=100.0, declination=20.0, hour_angle=0.0)
+    with pytest.raises(ValueError):
+        solar_altitude_angle(**site, hour_angle=200.0)
+
+
+def test_rolling_power_against_the_plastic_work_it_must_supply():
+    from anvilate.analysis import rolling_contact_length, rolling_force, rolling_power
+
+    contact = rolling_contact_length(roll_radius=_q("250 mm"), draft=_q("5 mm"))
+    force = rolling_force(
+        flow_stress=_q("200 MPa"), strip_width=_q("200 mm"), contact_length=contact
+    )
+    assert contact.to("mm").magnitude == pytest.approx(35.35533905932738, rel=1e-12)
+    assert force.to("kN").magnitude == pytest.approx(1414.2135623730949, rel=1e-12)
+
+    power = rolling_power(rolling_force=force, contact_length=contact, roll_speed=_q("100 rpm"))
+    assert power.to("kW").magnitude == pytest.approx(523.5987755982987, rel=1e-9)
+
+    # The cross-check that pins the 2*pi and the factor of two for the pair of rolls: an entirely
+    # independent plastic-work route. The specific energy Y*ln(h0/h1) times the volume rate is
+    # 452 kW against 524 -- the ~14% gap is exactly what the half-contact-length lever arm
+    # idealisation should produce, and this form is the larger, so the honest side.
+    plastic_kw = (
+        200e6
+        * math.log(20.0 / 15.0)
+        * 0.200
+        * 0.015
+        * (2.0 * math.pi * (100.0 / 60.0) * 0.250)
+        / 1e3
+    )
+    assert plastic_kw == pytest.approx(451.89, rel=1e-3)
+    assert power.to("kW").magnitude == pytest.approx(plastic_kw, rel=0.16)
+    assert power.to("kW").magnitude > plastic_kw
+
+    # Linear in force, contact length, and speed -- the pass schedule's three knobs.
+    assert rolling_power(rolling_force=force, contact_length=contact, roll_speed=_q("200 rpm")).to(
+        "kW"
+    ).magnitude == pytest.approx(2.0 * power.to("kW").magnitude, rel=1e-12)
+
+    with pytest.raises(ValueError):
+        rolling_power(rolling_force=force, contact_length=contact, roll_speed=_q("0 rpm"))
+    with pytest.raises(ValueError):
+        rolling_power(rolling_force=force, contact_length=contact, roll_speed=_q("100 N"))
+
+
+def test_single_layer_ar_reflectance_says_how_much_reflection_is_left():
+    from anvilate.analysis import (
+        fresnel_normal_reflectance,
+        optimal_ar_coating_index,
+        single_layer_ar_reflectance,
+    )
+
+    # MgF2 (n = 1.38) on crown glass (n = 1.52): 1.26% left, against 4.26% bare.
+    coated = single_layer_ar_reflectance(coating_index=1.38, substrate_index=1.52)
+    assert coated == pytest.approx(0.012600790214630288, rel=1e-12)
+    assert isinstance(coated, float)
+
+    # Identity 1: the module's own optimal index gives EXACTLY zero -- that is what "optimal"
+    # means, and it is the number the ideal function implies you get.
+    ideal = optimal_ar_coating_index(substrate_index=1.52)
+    assert ideal == pytest.approx(1.2328828005937952, rel=1e-9)
+    assert single_layer_ar_reflectance(coating_index=ideal, substrate_index=1.52) == (
+        pytest.approx(0.0, abs=1e-30)
+    )
+
+    # Identity 2: no coating at all (n1 = n0) must recover the bare Fresnel reflectance from the
+    # fresnel module, to machine precision.
+    bare = single_layer_ar_reflectance(coating_index=1.0, substrate_index=1.52)
+    assert bare == pytest.approx(
+        fresnel_normal_reflectance(incident_index=1.0, transmitted_index=1.52), rel=1e-12
+    )
+    assert bare == pytest.approx(0.042579994960947345, rel=1e-12)
+
+    # The point: a real coating cuts the reflection 3.4x, it does not remove it. Over the ten
+    # surfaces of a lens assembly that is 12% lost rather than 35% -- but not 0%.
+    assert bare / coated == pytest.approx(3.379, rel=1e-3)
+    assert (1.0 - coated) ** 10 == pytest.approx(0.8807, rel=1e-3)
+    assert (1.0 - bare) ** 10 == pytest.approx(0.6469, rel=1e-3)
+
+    # The reflectance is a minimum at the ideal index and rises on both sides of it.
+    for index in (1.10, 1.20, 1.30, 1.40, 1.60):
+        assert single_layer_ar_reflectance(coating_index=index, substrate_index=1.52) > 0.0
+
+    with pytest.raises(ValueError):
+        single_layer_ar_reflectance(coating_index=0.0, substrate_index=1.52)
+
+
+def test_aperture_molecular_conductance_and_the_short_tube_it_bounds():
+    from anvilate.analysis import (
+        aperture_molecular_conductance,
+        effective_pumping_speed,
+        mean_molecular_speed,
+        molecular_flow_tube_conductance,
+    )
+
+    # Nitrogen at 20 degC.
+    v_bar = mean_molecular_speed(
+        temperature=Quantity(magnitude=293.15, unit="K"), molar_mass=_q("28.014 g/mol")
+    )
+    assert v_bar.to("m/s").magnitude == pytest.approx(470.70036684642747, rel=1e-9)
+
+    area = Quantity(magnitude=math.pi * 0.05**2 / 4.0, unit="m**2")
+    aperture = aperture_molecular_conductance(mean_molecular_speed=v_bar, aperture_area=area)
+    assert aperture.to("L/s").magnitude == pytest.approx(231.05450226980582, rel=1e-9)
+
+    # The gap it closes: the same 50 mm bore as a 1 m tube conducts 15 times less. Treating a
+    # port as unrestricted is how a system pumps far below its nameplate speed.
+    tube = molecular_flow_tube_conductance(
+        mean_molecular_speed=v_bar, tube_diameter=_q("50 mm"), tube_length=_q("1 m")
+    )
+    assert tube.to("L/s").magnitude == pytest.approx(15.40363348465372, rel=1e-9)
+    assert aperture.to("L/s").magnitude / tube.to("L/s").magnitude == pytest.approx(15.0, rel=1e-9)
+    # That ratio is analytic: C_tube/C_aperture = (4/3)*(d/L) exactly, which pins both formulas
+    # against each other with no free constant.
+    assert tube.to("L/s").magnitude / aperture.to("L/s").magnitude == pytest.approx(
+        (4.0 / 3.0) * 0.05 / 1.0, rel=1e-12
+    )
+
+    # In series the two reproduce the Dushman short-tube form C_ap/(1 + 0.75*L/d) exactly.
+    series = effective_pumping_speed(pumping_speed=aperture, conductance=tube)
+    assert series.to("L/s").magnitude == pytest.approx(
+        aperture.to("L/s").magnitude / (1.0 + 0.75 * 1.0 / 0.05), rel=1e-12
+    )
+    assert series.to("L/s").magnitude == pytest.approx(14.440906391862864, rel=1e-9)
+    # The entrance is a real loss: the series result is below the tube alone.
+    assert series.to("L/s").magnitude < tube.to("L/s").magnitude
+
+    # Proportional to area and to speed, so lighter gases and bigger ports conduct more.
+    assert aperture_molecular_conductance(
+        mean_molecular_speed=v_bar,
+        aperture_area=Quantity(magnitude=2.0 * area.magnitude, unit="m**2"),
+    ).to("L/s").magnitude == pytest.approx(2.0 * aperture.to("L/s").magnitude, rel=1e-12)
+
+    with pytest.raises(ValueError):
+        aperture_molecular_conductance(
+            mean_molecular_speed=v_bar, aperture_area=Quantity(magnitude=0.0, unit="m**2")
+        )
+    with pytest.raises(ValueError):
+        aperture_molecular_conductance(mean_molecular_speed=_q("5 kg"), aperture_area=area)
+
+
+def test_waveguide_tm_impedance_is_the_reciprocal_of_the_te_one():
+    from anvilate.analysis import (
+        waveguide_group_velocity,
+        waveguide_te_wave_impedance,
+        waveguide_tm_wave_impedance,
+    )
+
+    band = {"operating_frequency": _q("10 GHz"), "cutoff_frequency": _q("6.557 GHz")}
+    z_te = waveguide_te_wave_impedance(**band)
+    z_tm = waveguide_tm_wave_impedance(**band)
+    assert z_te.to("ohm").magnitude == pytest.approx(498.9663194376699, rel=1e-9)
+    assert z_tm.to("ohm").magnitude == pytest.approx(284.4394976325027, rel=1e-9)
+
+    # Identity 1: the two are reciprocal about the free-space impedance -- Z_TE*Z_TM = eta_0^2
+    # exactly. TE looks inductive (above eta_0), TM capacitive (below).
+    eta_0 = 376.730313668
+    assert z_te.to("ohm").magnitude * z_tm.to("ohm").magnitude == pytest.approx(eta_0**2, rel=1e-12)
+    assert z_te.to("ohm").magnitude > eta_0 > z_tm.to("ohm").magnitude
+
+    # Identity 2: the same sqrt(1 - (fc/f)^2) factor is the group-velocity ratio, so Z_TM/eta_0
+    # and v_g/c are literally the same number.
+    v_g = waveguide_group_velocity(**band)
+    assert z_tm.to("ohm").magnitude / eta_0 == pytest.approx(
+        v_g.to("m/s").magnitude / 299792458.0, rel=1e-12
+    )
+
+    # Matching a TM launcher with the TE number designs in a 1.75x mismatch before anything is
+    # built.
+    assert z_te.to("ohm").magnitude / z_tm.to("ohm").magnitude == pytest.approx(1.754, rel=1e-3)
+
+    # Far above cutoff both tend to eta_0; approaching it, TM goes to zero and TE diverges.
+    far = {"operating_frequency": _q("100 GHz"), "cutoff_frequency": _q("6.557 GHz")}
+    assert waveguide_tm_wave_impedance(**far).to("ohm").magnitude == pytest.approx(eta_0, rel=1e-2)
+    near = {"operating_frequency": _q("6.6 GHz"), "cutoff_frequency": _q("6.557 GHz")}
+    assert waveguide_tm_wave_impedance(**near).to("ohm").magnitude < 0.12 * eta_0
+
+    # Below cutoff the mode is evanescent and carries no power.
+    with pytest.raises(ValueError):
+        waveguide_tm_wave_impedance(
+            operating_frequency=_q("5 GHz"), cutoff_frequency=_q("6.557 GHz")
+        )
+
+
+def test_radar_average_power_duty_cycle_matches_the_two_existing_functions():
+    from anvilate.analysis import (
+        max_unambiguous_range,
+        radar_average_power,
+        radar_range_resolution,
+    )
+
+    pulse = {"pulse_width": _q("1 us"), "pulse_repetition_frequency": _q("1 kHz")}
+    average = radar_average_power(peak_power=_q("1 MW"), **pulse)
+    assert average.to("kW").magnitude == pytest.approx(1.0, rel=1e-12)
+
+    # The identity that pins it entirely from functions already in the module: the duty cycle
+    # tau*PRF equals radar_range_resolution / max_unambiguous_range, because the speed of light
+    # and the factors of two cancel identically. This pins all three at once.
+    duty = radar_range_resolution(pulse_width=_q("1 us")).to("m").magnitude / (
+        max_unambiguous_range(pulse_repetition_frequency=_q("1 kHz")).to("m").magnitude
+    )
+    assert duty == pytest.approx(0.001, rel=1e-12)
+    assert average.to("W").magnitude == pytest.approx(1e6 * duty, rel=1e-12)
+
+    # Peak and average are three orders apart: size the thermal path from the peak and it is
+    # 1000x over; size the tube from the average and it fails on the first pulse.
+    assert 1e6 / average.to("W").magnitude == pytest.approx(1000.0, rel=1e-12)
+
+    # A low-peak, high-duty solid-state radar can match a magnetron on average power.
+    solid_state = radar_average_power(
+        peak_power=_q("10 kW"),
+        pulse_width=_q("100 us"),
+        pulse_repetition_frequency=_q("1 kHz"),
+    )
+    assert solid_state.to("kW").magnitude == pytest.approx(1.0, rel=1e-12)
+
+    # Overlapping pulses are not a radar.
+    with pytest.raises(ValueError):
+        radar_average_power(
+            peak_power=_q("1 MW"),
+            pulse_width=_q("1 ms"),
+            pulse_repetition_frequency=_q("1 kHz"),
+        )
+    with pytest.raises(ValueError):
+        radar_average_power(peak_power=_q("1 kg"), **pulse)

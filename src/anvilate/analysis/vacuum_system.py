@@ -27,6 +27,7 @@ from math import log, pi
 from ..units import Quantity
 
 __all__ = [
+    "aperture_molecular_conductance",
     "effective_pumping_speed",
     "molecular_flow_tube_conductance",
     "vacuum_pump_down_time",
@@ -147,3 +148,36 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def aperture_molecular_conductance(
+    *, mean_molecular_speed: Quantity, aperture_area: Quantity
+) -> Quantity:
+    """The molecular-flow aperture conductance, C = v̄·A/4.
+
+    The conductance of a thin opening — a chamber port, an orifice, the mouth of a tube — in
+    molecular flow. It is pure kinetic theory: molecules cross the plane at the wall-collision rate
+    n·v̄/4, so the volumetric conductance is a quarter of the ``mean_molecular_speed`` v̄ times the
+    ``aperture_area`` A, independent of pressure and of anything downstream.
+
+    :func:`molecular_flow_tube_conductance`'s docstring warns that "a short tube or an aperture
+    conducts more than this predicts" and gave no way to compute it. The two differ enormously:
+    nitrogen at room temperature through a 50 mm port conducts 231 L/s as a bare aperture but only
+    15.4 L/s through the same bore as a 1 m tube. Treating a port as unrestricted is how a system
+    ends up pumping at a small fraction of its nameplate speed for reasons the tube formula alone
+    does not explain — the entrance itself is a conductance in series.
+
+    Combine it with the tube in series through :func:`effective_pumping_speed`, which reproduces
+    the Dushman short-tube form C_ap/(1 + 0.75·L/d) exactly. Valid only in molecular flow, where
+    the mean free path exceeds the aperture — in viscous flow an orifice chokes instead and this
+    does not apply. Returns the conductance in m**3/s.
+    """
+    _check(mean_molecular_speed, "[length]/[time]", "mean_molecular_speed")
+    _check(aperture_area, "[area]", "aperture_area")
+    speed = mean_molecular_speed.to("m/s").magnitude
+    area = aperture_area.to("m**2").magnitude
+    if speed <= 0:
+        raise ValueError("mean_molecular_speed must be positive")
+    if area <= 0:
+        raise ValueError("aperture_area must be positive")
+    return Quantity(magnitude=speed * area / 4.0, unit="m**3/s")

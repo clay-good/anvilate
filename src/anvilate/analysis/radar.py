@@ -25,6 +25,7 @@ from ..units import Quantity
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 
 __all__ = [
+    "radar_average_power",
     "max_unambiguous_range",
     "max_unambiguous_velocity",
     "radar_doppler_shift",
@@ -207,3 +208,44 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def radar_average_power(
+    *, peak_power: Quantity, pulse_width: Quantity, pulse_repetition_frequency: Quantity
+) -> Quantity:
+    """The radar average power, P_avg = P_t·τ·PRF.
+
+    The transmitter's mean power output over many pulses: the ``peak_power`` P_t multiplied by the
+    duty cycle, which is the ``pulse_width`` τ times the ``pulse_repetition_frequency`` PRF. The
+    module already consumed τ (in :func:`radar_range_resolution`) and PRF (in
+    :func:`max_unambiguous_range`) but never formed the product, which is the quantity that sizes
+    the transmitter's cooling, its prime power, and its tube or solid-state amplifier rating.
+
+    Duty cycles are small and the two numbers are far apart: a 1 MW peak, 1 µs, 1 kHz radar has a
+    0.1% duty cycle and averages 1 kW. Size the thermal path from the peak and it is a thousandfold
+    over; size the tube from the average and it fails on the first pulse. Average power is also
+    what actually sets detection range on an integrated target, which is why a low-peak,
+    high-duty solid-state radar can match a magnetron it looks nothing like on the datasheet.
+
+    The duty cycle is exactly :func:`radar_range_resolution` divided by
+    :func:`max_unambiguous_range` — the speed of light cancels — so the two existing functions
+    already pin this one. Returns the average power in W.
+    """
+    _check(peak_power, "[power]", "peak_power")
+    _check(pulse_width, "[time]", "pulse_width")
+    _check(pulse_repetition_frequency, "[frequency]", "pulse_repetition_frequency")
+    p_t = peak_power.to("W").magnitude
+    tau = pulse_width.to("s").magnitude
+    prf = pulse_repetition_frequency.to("Hz").magnitude
+    if p_t <= 0:
+        raise ValueError("peak_power must be positive")
+    if tau <= 0:
+        raise ValueError("pulse_width must be positive")
+    if prf <= 0:
+        raise ValueError("pulse_repetition_frequency must be positive")
+    if tau * prf >= 1.0:
+        raise ValueError(
+            f"the duty cycle pulse_width*PRF = {tau * prf} must be below 1: the pulses would "
+            "overlap"
+        )
+    return Quantity(magnitude=p_t * tau * prf, unit="W")

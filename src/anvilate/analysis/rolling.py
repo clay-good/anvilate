@@ -20,11 +20,12 @@ heavier pass drives the force up — the reason heavy reductions need big, stiff
 
 from __future__ import annotations
 
-from math import sqrt
+from math import pi, sqrt
 
 from ..units import Quantity
 
 __all__ = [
+    "rolling_power",
     "maximum_draft",
     "rolling_contact_length",
     "rolling_force",
@@ -102,3 +103,42 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def rolling_power(
+    *, rolling_force: Quantity, contact_length: Quantity, roll_speed: Quantity
+) -> Quantity:
+    """The rolling mill power, P = 2·π·N·F·L.
+
+    The power the mill drive must deliver for one pass. The module sizes the separating *force*
+    (:func:`rolling_force`) but nothing sized the motor, which is the other half of a pass-schedule
+    check — and force alone carries no information about speed, so it cannot answer the question.
+
+    Each roll applies its share of the ``rolling_force`` F at a lever arm of about half the
+    ``contact_length`` L, giving a torque F·L/2 per roll; two rolls turning at ``roll_speed`` N
+    revolutions per unit time then take P = 2·(2π·N)·(F·L/2) = 2·π·N·F·L.
+
+    A 500 mm-diameter mill taking 5 mm off a 200 mm-wide strip at 200 MPa average flow stress and
+    100 rpm needs 524 kW. The half-contact-length lever arm is the idealisation here; an
+    independent plastic-work check — the specific energy Y·ln(h₀/h₁) times the volume rate — puts
+    the same pass at 467 kW, so treat this as accurate to roughly 10-15% and the honest side of
+    the two, since it is the larger. Excludes friction in the bearings and drive train. Returns
+    the power in W.
+    """
+    _check(rolling_force, "[force]", "rolling_force")
+    _check(contact_length, "[length]", "contact_length")
+    if not roll_speed.has_dimension("[frequency]"):
+        raise ValueError(
+            f"roll_speed must be a [frequency] quantity; got {roll_speed.dimensionality} "
+            f"({roll_speed})"
+        )
+    f = rolling_force.to("N").magnitude
+    length = contact_length.to("m").magnitude
+    n = roll_speed.to("rad/s").magnitude / (2.0 * pi)
+    if f <= 0:
+        raise ValueError("rolling_force must be positive")
+    if length <= 0:
+        raise ValueError("contact_length must be positive")
+    if n <= 0:
+        raise ValueError("roll_speed must be positive")
+    return Quantity(magnitude=2.0 * pi * n * f * length, unit="W")
