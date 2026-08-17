@@ -33,6 +33,7 @@ STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
 __all__ = [
     "characteristic_velocity",
+    "nozzle_expansion_ratio",
     "rocket_delta_v",
     "rocket_exhaust_velocity",
     "rocket_propellant_mass_fraction",
@@ -82,6 +83,54 @@ def rocket_exhaust_velocity(
     g = heat_capacity_ratio
     v_e = sqrt(2.0 * g / (g - 1.0) * r * t_c * (1.0 - (p_e / p_c) ** ((g - 1.0) / g)))
     return Quantity(magnitude=v_e, unit="m/s")
+
+
+def nozzle_expansion_ratio(
+    *,
+    chamber_pressure: Quantity,
+    exit_pressure: Quantity,
+    heat_capacity_ratio: float,
+) -> float:
+    """The nozzle area ratio ε = A_e/A_t for a given pressure expansion.
+
+    :func:`rocket_thrust` consumes an ``exit_area`` and nothing in the module produced one, so the
+    bell's geometry — the single most visible number about an engine — had to be guessed or found
+    by hand-inverting the isentropic Mach relation. This closes that:
+
+        ε = 1 / [ ((γ+1)/2)^(1/(γ−1)) · (p_e/p_c)^(1/γ) · √( ((γ+1)/(γ−1))·(1 − (p_e/p_c)^((γ−1)/γ)) ) ]
+
+    from the ``chamber_pressure`` p_c, the ``exit_pressure`` p_e the bell expands to, and the
+    ``heat_capacity_ratio`` γ. Multiply a chosen throat area by ε to get the exit area, or divide a
+    chosen exit area by it to get the throat.
+
+    The ratio is what makes vacuum engines look the way they do: expanding from 7 MPa to 0.1 MPa
+    (roughly sea level) at γ = 1.20 needs ε = 9.06, while expanding the same chamber to near
+    vacuum runs the bell out to ε in the hundreds. This is the same physics as
+    :func:`anvilate.analysis.compressible_flow.isentropic_area_ratio` reached from pressure rather
+    than Mach number, and agrees with it exactly at the implied exit Mach of 3.2095. Returns the
+    area ratio as a plain float.
+    """  # noqa: E501
+    _check(chamber_pressure, "[pressure]", "chamber_pressure")
+    _check(exit_pressure, "[pressure]", "exit_pressure")
+    p_c = chamber_pressure.to("Pa").magnitude
+    p_e = exit_pressure.to("Pa").magnitude
+    g = heat_capacity_ratio
+    if g <= 1.0:
+        raise ValueError(f"heat_capacity_ratio must exceed 1; got {g}")
+    if p_c <= 0 or p_e <= 0:
+        raise ValueError("chamber_pressure and exit_pressure must be positive")
+    if p_e >= p_c:
+        raise ValueError(
+            f"exit_pressure must be below chamber_pressure for the nozzle to expand; "
+            f"got {exit_pressure} against {chamber_pressure}"
+        )
+    ratio = p_e / p_c
+    denominator = (
+        ((g + 1.0) / 2.0) ** (1.0 / (g - 1.0))
+        * ratio ** (1.0 / g)
+        * sqrt(((g + 1.0) / (g - 1.0)) * (1.0 - ratio ** ((g - 1.0) / g)))
+    )
+    return 1.0 / denominator
 
 
 def rocket_thrust(

@@ -538,6 +538,7 @@ drag.archimedes_number
 drag.galilei_number
 drag.drag_force
 drag.jet_impact_force
+drag.sphere_drag_coefficient
 drag.stokes_drag_force
 drag.stokes_settling_velocity
 drag.terminal_velocity
@@ -1340,6 +1341,7 @@ road_curve.horizontal_curve_external_distance
 road_curve.horizontal_curve_middle_ordinate
 rocket_propulsion.rocket_exhaust_velocity
 rocket_propulsion.rocket_thrust
+rocket_propulsion.nozzle_expansion_ratio
 rocket_propulsion.rocket_specific_impulse
 rocket_propulsion.rocket_delta_v
 rocket_propulsion.rocket_propellant_mass_fraction

@@ -14677,6 +14677,62 @@ def test_nds_column_stability_factor_ylinen_and_euler_stress():
         )
 
 
+def test_sphere_drag_coefficient_bounds_where_stokes_law_stops_being_true():
+    from anvilate.analysis import sphere_drag_coefficient, stokes_settling_velocity
+
+    # Schiller-Naumann must collapse onto Stokes' 24/Re as Re -> 0: at Re = 1e-3 it reads 0.13%
+    # above, which is the correction term doing nothing, as it should.
+    assert sphere_drag_coefficient(reynolds_number=1e-3) == pytest.approx(
+        24031.282575454305, rel=1e-12
+    )
+    assert sphere_drag_coefficient(reynolds_number=1e-3) / (24.0 / 1e-3) == pytest.approx(
+        1.0, rel=2e-3
+    )
+    # By Re = 1 -- the usual "limit of creeping flow" -- it is already 15% above Stokes.
+    assert sphere_drag_coefficient(reynolds_number=1.0) == pytest.approx(27.6, rel=1e-12)
+    assert sphere_drag_coefficient(reynolds_number=155.0) == pytest.approx(
+        0.8973937994084373, rel=1e-12
+    )
+    # Falls monotonically across the covered range, and never below the Newton-regime floor.
+    previous = float("inf")
+    for re in (0.1, 1.0, 10.0, 100.0, 800.0):
+        value = sphere_drag_coefficient(reynolds_number=re)
+        assert value < previous
+        previous = value
+    assert previous > 0.4
+
+    # The point of the function: a 1 mm quartz grain in water is NOT in creeping flow, and
+    # stokes_settling_velocity carries no Reynolds guard to say so. Its answer implies Re = 898.
+    rho, mu, rho_p, d = 998.0, 1e-3, 2650.0, 1e-3
+    v_stokes = (
+        stokes_settling_velocity(
+            particle_diameter=_q("1 mm"),
+            particle_density=_q("2650 kg/m**3"),
+            fluid_density=_q("998 kg/m**3"),
+            fluid_viscosity=_q("1e-3 Pa*s"),
+        )
+        .to("m/s")
+        .magnitude
+    )
+    assert v_stokes == pytest.approx(0.9000325444444441, rel=1e-9)
+    assert rho * v_stokes * d / mu == pytest.approx(898.2324793555553, rel=1e-9)
+
+    # Iterating the balance weight = drag with a real C_d converges to 0.1553 m/s at Re = 155:
+    # Stokes overpredicts the settling velocity 5.8-fold, and a clarifier sized on it is wrong
+    # by that factor. This is the failure mode the correlation exists to prevent.
+    v = 0.01
+    for _ in range(200):
+        re = rho * v * d / mu
+        c_d = sphere_drag_coefficient(reynolds_number=re)
+        v = math.sqrt(4.0 * (rho_p - rho) * 9.80665 * d / (3.0 * rho * c_d))
+    assert v == pytest.approx(0.15530002753876543, rel=1e-9)
+    assert rho * v * d / mu == pytest.approx(154.9894274836879, rel=1e-9)
+    assert v_stokes / v == pytest.approx(5.795443559852436, rel=1e-9)
+
+    with pytest.raises(ValueError, match="must be positive"):
+        sphere_drag_coefficient(reynolds_number=0.0)
+
+
 def test_stokes_settling_velocity_and_drag_are_consistent():
     import math
 
@@ -21120,6 +21176,62 @@ def test_rocket_exhaust_velocity_thrust_and_specific_impulse():
             exit_pressure=_q("0.1 MPa"),
             ambient_pressure=_q("0 Pa"),
             exit_area=_q("0.3 m**2"),
+        )
+
+
+def test_nozzle_expansion_ratio_supplies_the_exit_area_thrust_consumes():
+    from math import sqrt
+
+    from anvilate.analysis import (
+        isentropic_area_ratio,
+        nozzle_expansion_ratio,
+        rocket_thrust,
+    )
+
+    # 7 MPa chamber expanded to 0.1 MPa (about sea level) at gamma = 1.20.
+    epsilon = nozzle_expansion_ratio(
+        chamber_pressure=_q("7 MPa"), exit_pressure=_q("0.1 MPa"), heat_capacity_ratio=1.20
+    )
+    assert isinstance(epsilon, float)
+    assert epsilon == pytest.approx(9.062363607677351, rel=1e-12)
+
+    # Same physics reached the other way: the pressure ratio implies an exit Mach of 3.2095, and
+    # the library's own Mach-based area ratio must land on the identical number. Two independent
+    # routes through the isentropic relations agreeing to 12 digits is the real check here.
+    mach_exit = sqrt(2.0 / 0.2 * ((7e6 / 0.1e6) ** (0.2 / 1.2) - 1.0))
+    assert mach_exit == pytest.approx(3.209509151276074, rel=1e-12)
+    assert isentropic_area_ratio(mach_number=mach_exit, heat_capacity_ratio=1.20) == pytest.approx(
+        epsilon, rel=1e-10
+    )
+
+    # Expanding deeper runs the bell out -- the reason vacuum engines carry enormous nozzles.
+    vacuum = nozzle_expansion_ratio(
+        chamber_pressure=_q("7 MPa"), exit_pressure=_q("5 kPa"), heat_capacity_ratio=1.20
+    )
+    assert vacuum > 10.0 * epsilon
+    assert vacuum == pytest.approx(93.59422891552916, rel=1e-12)
+
+    # It closes the loop with rocket_thrust, which consumes an exit area and had no producer:
+    # a 0.03310 m^2 throat opens to 0.30 m^2 at this ratio.
+    exit_area_m2 = 0.03310 * epsilon
+    assert exit_area_m2 == pytest.approx(0.29996, rel=1e-3)
+    thrust = rocket_thrust(
+        mass_flow_rate=_q("100 kg/s"),
+        exhaust_velocity=_q("2500 m/s"),
+        exit_pressure=_q("0.1 MPa"),
+        ambient_pressure=_q("0 Pa"),
+        exit_area=Quantity(magnitude=exit_area_m2, unit="m**2"),
+    )
+    assert thrust.to("kN").magnitude == pytest.approx(279.996, rel=1e-4)
+
+    # Guardrails: a nozzle expands, so the exit must be below the chamber, and gamma exceeds 1.
+    with pytest.raises(ValueError, match="must be below chamber_pressure"):
+        nozzle_expansion_ratio(
+            chamber_pressure=_q("7 MPa"), exit_pressure=_q("7 MPa"), heat_capacity_ratio=1.20
+        )
+    with pytest.raises(ValueError, match="heat_capacity_ratio must exceed 1"):
+        nozzle_expansion_ratio(
+            chamber_pressure=_q("7 MPa"), exit_pressure=_q("0.1 MPa"), heat_capacity_ratio=1.0
         )
 
 

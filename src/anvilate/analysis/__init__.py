@@ -1635,6 +1635,7 @@ from .drag import (
     drag_force,
     galilei_number,
     jet_impact_force,
+    sphere_drag_coefficient,
     stokes_drag_force,
     stokes_settling_velocity,
     terminal_velocity,
@@ -2734,6 +2735,7 @@ from .road_curve import (
 )
 from .rocket_propulsion import (
     characteristic_velocity,
+    nozzle_expansion_ratio,
     rocket_delta_v,
     rocket_exhaust_velocity,
     rocket_propellant_mass_fraction,
@@ -3532,6 +3534,7 @@ __all__ = [
     "galilei_number",
     "drag_force",
     "jet_impact_force",
+    "sphere_drag_coefficient",
     "stokes_settling_velocity",
     "stokes_drag_force",
     "terminal_velocity",
@@ -3896,6 +3899,7 @@ __all__ = [
     "rocket_delta_v",
     "rocket_propellant_mass_fraction",
     "characteristic_velocity",
+    "nozzle_expansion_ratio",
     "thrust_coefficient",
     "thrust_from_coefficient",
     "maximum_draft",

@@ -24,6 +24,7 @@ __all__ = [
     "galilei_number",
     "drag_force",
     "jet_impact_force",
+    "sphere_drag_coefficient",
     "stokes_drag_force",
     "stokes_settling_velocity",
     "terminal_velocity",
@@ -124,6 +125,32 @@ def jet_impact_force(
     if not 0.0 <= deflection_angle <= 180.0:
         raise ValueError(f"deflection_angle must be in [0, 180] degrees; got {deflection_angle}")
     return Quantity(magnitude=rho * q * v * (1.0 - cos(radians(deflection_angle))), unit="N")
+
+
+def sphere_drag_coefficient(*, reynolds_number: float) -> float:
+    """The sphere drag coefficient, C_d = (24/Re)·(1 + 0.15·Re^0.687) (Schiller–Naumann).
+
+    :func:`drag_force` and :func:`terminal_velocity` both take a drag coefficient and the module
+    computed none, so the caller had to bring one from a table. For the one shape that dominates
+    particle work — a sphere — the Schiller–Naumann correlation supplies it directly, and covers
+    the intermediate regime that :func:`stokes_settling_velocity` does not.
+
+    Stokes' law is the Re → 0 limit, C_d = 24/Re, and it stops being true remarkably early: at
+    Re = 1 this correlation already reads 27.6, 15% above Stokes. The consequence is easy to miss
+    because Stokes' law carries no Reynolds-number guard. A 1 mm quartz grain settling in water
+    comes out of :func:`stokes_settling_velocity` at 0.900 m/s — which implies Re = 898, far
+    outside the creeping flow the formula assumes. Iterating this correlation instead converges to
+    0.155 m/s at Re = 155: Stokes overpredicts the settling velocity **5.8-fold**, and a clarifier
+    or cyclone sized on it is wrong by that factor.
+
+    Valid to Re ≈ 800, which spans the sand-and-grit range most separation work lives in. Above
+    that the drag crisis and the Newton-regime plateau take over and a table is the honest answer.
+    ``reynolds_number`` is the particle Reynolds number ρ·v·d/μ, a plain float. Returns the drag
+    coefficient as a plain float.
+    """
+    if reynolds_number <= 0:
+        raise ValueError(f"reynolds_number must be positive; got {reynolds_number}")
+    return (24.0 / reynolds_number) * (1.0 + 0.15 * reynolds_number**0.687)
 
 
 def stokes_settling_velocity(
