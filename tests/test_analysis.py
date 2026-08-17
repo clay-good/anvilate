@@ -12280,7 +12280,10 @@ def test_junction_temperature_scorecard_screens_the_rise_against_a_budget():
     )
     assert ok.status is CheckStatus.PASS
     assert ok.safety_factor == pytest.approx(85.0 / 40.0, rel=1e-9)
-    assert "40.0 K" in ok.detail and "85.0 K" in ok.detail
+    # The whole line, not two substrings: asserting only that both numbers appear leaves the
+    # report free to swap them, printing the budget as the rise and the rise as the budget on
+    # the one line an engineer actually signs off.
+    assert ok.detail == "junction rise 40.0 K vs 85.0 K allowable"
 
     # The same device on a worse path (6 K/W -> 120 K rise) overruns the budget.
     hot = junction_temperature_scorecard(
@@ -37701,3 +37704,62 @@ def test_two_way_shear_alpha_s_governs_on_a_long_critical_perimeter() -> None:
     assert corner.to("kN").magnitude == pytest.approx(expected(20.0), rel=1e-12)
     # A corner column is the weakest position, an interior one the strongest.
     assert corner.to("kN").magnitude < edge.to("kN").magnitude < interior.to("kN").magnitude
+
+
+def test_ltb_input_guards_fire_on_a_single_bad_input() -> None:
+    """The `min(...) <= 0` guards were only ever tested with everything wrong at once.
+
+    Turning `min` into `max` at these three sites -- which weakens the guard to "refuse
+    only if EVERY input is non-positive" -- left the whole suite green. A single negative
+    section modulus then sails through and returns a plausible length instead of raising.
+    The sibling guard in `secant_column_max_stress` is already pinned this way.
+    """
+    from anvilate.analysis import (
+        aisc_elastic_ltb_stress,
+        aisc_inelastic_ltb_limit,
+        lateral_torsional_buckling_moment,
+    )
+
+    inelastic = {
+        "effective_radius_of_gyration": _q("50 mm"),
+        "torsion_constant": _q("500000 mm**4"),
+        "elastic_section_modulus": _q("1000000 mm**3"),
+        "flange_centroid_distance": _q("300 mm"),
+        "yield_strength": _q("345 MPa"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    assert aisc_inelastic_ltb_limit(**inelastic).to("mm").magnitude > 0
+    for bad in inelastic:
+        spoiled = dict(inelastic)
+        spoiled[bad] = Quantity(magnitude=-1.0, unit=inelastic[bad].unit)
+        with pytest.raises(ValueError, match="must be positive"):
+            aisc_inelastic_ltb_limit(**spoiled)
+
+    elastic = {
+        "unbraced_length": _q("4000 mm"),
+        "effective_radius_of_gyration": _q("50 mm"),
+        "torsion_constant": _q("500000 mm**4"),
+        "elastic_section_modulus": _q("1000000 mm**3"),
+        "flange_centroid_distance": _q("300 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    assert aisc_elastic_ltb_stress(**elastic).to("MPa").magnitude > 0
+    for bad in elastic:
+        spoiled = dict(elastic)
+        spoiled[bad] = Quantity(magnitude=-1.0, unit=elastic[bad].unit)
+        with pytest.raises(ValueError, match="must be positive"):
+            aisc_elastic_ltb_stress(**spoiled)
+
+    ltb = {
+        "unbraced_length": _q("4000 mm"),
+        "weak_axis_second_moment": _q("10000000 mm**4"),
+        "torsion_constant": _q("500000 mm**4"),
+        "elastic_modulus": _q("200 GPa"),
+        "shear_modulus": _q("77 GPa"),
+    }
+    assert lateral_torsional_buckling_moment(**ltb).to("N*m").magnitude > 0
+    for bad in ltb:
+        spoiled = dict(ltb)
+        spoiled[bad] = Quantity(magnitude=-1.0, unit=ltb[bad].unit)
+        with pytest.raises(ValueError, match="must be positive"):
+            lateral_torsional_buckling_moment(**spoiled)
