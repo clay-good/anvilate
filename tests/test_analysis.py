@@ -34719,13 +34719,15 @@ def test_photodetector_noise_equivalent_power_is_the_link_budget_floor():
     nep = noise_equivalent_power(noise_current=i_n, responsivity=r)
     assert nep.to("pW").magnitude == pytest.approx(0.566034, rel=1e-6)
     assert nep.unit == "W"
-    assert nep.to("W").magnitude == pytest.approx(
-        i_n.to("A").magnitude / r.to("A/W").magnitude, rel=1e-12
+    # Asserted in pW, not W: at 5.66e-13 W the rel=1e-12 would be swamped by approx's
+    # own default abs=1e-12 floor, and this identity would pass for any small number.
+    assert nep.to("pW").magnitude == pytest.approx(
+        1e12 * i_n.to("A").magnitude / r.to("A/W").magnitude, rel=1e-12
     )
 
     # The closing identity: a signal AT the NEP produces a photocurrent equal to the noise.
     at_floor = photodiode_current(responsivity=r, optical_power=nep)
-    assert at_floor.to("A").magnitude == pytest.approx(i_n.to("A").magnitude, rel=1e-12)
+    assert at_floor.to("pA").magnitude == pytest.approx(i_n.to("pA").magnitude, rel=1e-12)
 
     # NEP grows as sqrt(bandwidth), which is why a slower receiver sees further:
     # a 100x wider band costs exactly 10x the sensitivity floor.
@@ -34845,7 +34847,9 @@ def test_coriolis_ekman_number_and_reynolds_identity():
     ek_big = ekman_number(
         kinematic_viscosity=_q("1e-6 m**2/s"), coriolis_parameter=f, length_scale=_q("10000 m")
     )
-    assert ek_big == pytest.approx(ek / 100.0, rel=1e-9)
+    # The Ekman number is dimensionless and ~1e-11 here, so there is no scaled unit to
+    # move to — assert the RATIO, which is order-one and carries the whole claim.
+    assert ek / ek_big == pytest.approx(100.0, rel=1e-9)
 
     with pytest.raises(ValueError, match="coriolis_parameter must be a"):
         ekman_number(

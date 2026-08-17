@@ -1,0 +1,42 @@
+# Tests whose pytest.approx assertions are disarmed by the default abs=1e-12 floor.
+#
+# pytest.approx applies a DEFAULT abs=1e-12 alongside whatever rel= is written, and takes
+# whichever tolerance is LOOSER. On a sub-nanoscale quantity that floor is enormous
+# relative to the value — for a 1.67e-27 kg proton mass it is 1e15 times the number — so
+# the rel= does nothing and the assertion degenerates to "the answer is small".
+#
+# The static gate in tests/test_contract.py catches every form it can read out of the
+# source. It cannot read `approx(some_call().magnitude / other)`, where the value only
+# exists at run time, and that is the form this suite is full of. So tests/conftest.py
+# records them as they happen and holds this file as a RATCHET: a test not on this list
+# that records a disarmed assertion fails the run, and a test ON this list that no longer
+# records one must be struck off. The list can only shrink and cannot go stale.
+#
+# Every entry below has a sibling assertion in the same test that does the real pinning —
+# a scaled-unit comparison or an explicit abs= — which is why they are recorded rather
+# than failing. That was verified once, by mutation: a 1e5 error in photon_momentum is
+# caught by the scaled-unit assertion beside the disarmed one, not by the disarmed one.
+# It is not a reason to leave them: the sibling is load-bearing and nothing says so.
+#
+# To pay a line off: assert in a scaled unit (pm, ps, pW, pA) so the magnitude is
+# order-one, or pass an explicit abs= sized to the value, then delete the line. Three
+# entries were paid off the day this list was created — the three that had NO sibling
+# doing the pinning, and were therefore assertions in name only.
+test_analysis.py::test_bohr_energy_levels_orbit_radius_and_rydberg_wavelength
+test_analysis.py::test_compton_wavelength_shift_scattered_and_electron_energy
+test_analysis.py::test_diffusion_stokes_einstein_diffusivity
+test_analysis.py::test_electric_field_energy_density_and_coaxial_capacitance
+test_analysis.py::test_fiber_chromatic_dispersion_bit_rate_and_reach
+test_analysis.py::test_fluid_statics_morton_number_air_bubble_in_water
+test_analysis.py::test_heisenberg_uncertainty_minima
+test_analysis.py::test_mass_energy_equivalence_and_binding_energy_per_nucleon
+test_analysis.py::test_moseley_k_alpha_x_ray_wavelength
+test_analysis.py::test_parallel_plate_capacitance_charge_and_field
+test_analysis.py::test_particle_in_a_box_energy_levels_and_transition_wavelength
+test_analysis.py::test_photon_energy_wavelength_inverse_and_flux
+test_analysis.py::test_photon_momentum_radiation_pressure_and_force
+test_analysis.py::test_quantum_photoelectric_and_de_broglie
+test_analysis.py::test_radar_range_equation_received_power_and_unambiguous_range
+test_analysis.py::test_relativity_lorentz_time_dilation_and_kinetic_energy
+test_analysis.py::test_thermal_noise_voltage_power_and_current
+test_analysis.py::test_thermionic_schottky_and_child_langmuir_emission

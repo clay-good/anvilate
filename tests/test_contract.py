@@ -402,6 +402,80 @@ def test_declared_derivations_cite_their_source():
             assert entry.derivation.citation, f"{entry.name} has a derivation with no citation"
 
 
+def _fold(node: ast.AST, constants: dict[str, object]) -> object | None:
+    """The numeric value of an expected-value expression, or None if it is not one.
+
+    ``ast.literal_eval`` raises on anything that is not a bare literal, and the gate used
+    to swallow that and move on — so every expression-valued expectation was invisible.
+    This folds the arithmetic a test actually writes (a product, a power, a negation) and
+    resolves module-level constants defined in the same file.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value if isinstance(node.value, (int, float)) else None
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        inner = _fold(node.operand, constants)
+        if inner is None:
+            return None
+        return -inner if isinstance(node.op, ast.USub) else inner
+    if isinstance(node, ast.BinOp):
+        left, right = _fold(node.left, constants), _fold(node.right, constants)
+        if left is None or right is None:
+            return None
+        try:
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return left / right
+            if isinstance(node.op, ast.Pow):
+                return left**right
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+        except (ArithmeticError, TypeError, ValueError):  # pragma: no cover - not an expectation
+            return None
+    return None
+
+
+def _disarmed_approx_sites(root: Path | None = None) -> list[str]:
+    """Every pytest.approx call whose rel= is swamped by the default abs=1e-12 floor."""
+    offenders: list[str] = []
+    base = _TESTS if root is None else root
+    for path in sorted(base.rglob("test_*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        constants: dict[str, object] = {}
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target = node.targets[0]
+                if isinstance(target, ast.Name):
+                    value = _fold(node.value, {})
+                    if value is not None:
+                        constants[target.id] = value
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name != "approx":
+                continue
+            if any(keyword.arg == "abs" for keyword in node.keywords):
+                continue
+            # The keyword form has no positional args at all, so requiring one skipped it.
+            expected_node = (
+                node.args[0]
+                if node.args
+                else next((kw.value for kw in node.keywords if kw.arg == "expected"), None)
+            )
+            if expected_node is None:
+                continue
+            expected = _fold(expected_node, constants)
+            if isinstance(expected, (int, float)) and 0 < abs(expected) < 1e-9:
+                offenders.append(f"{path.name}:{node.lineno} approx({expected!r}) with no abs=")
+    return offenders
+
+
 def test_no_assertion_is_disarmed_by_the_approx_absolute_floor():
     # pytest.approx applies a DEFAULT abs=1e-12 alongside whatever rel= is written, and
     # takes whichever tolerance is looser. On a sub-nanoscale quantity that floor is
@@ -413,27 +487,53 @@ def test_no_assertion_is_disarmed_by_the_approx_absolute_floor():
     # Fix such a site by asserting in a scaled unit (pm, ps, pW, u) so the magnitude is
     # order-one, or by passing an explicit abs= sized to the value. Comparisons against
     # a literal zero are exempt: there the absolute floor is the whole point.
-    offenders = []
-    for path in sorted(_TESTS.glob("*.py")):
-        for node in ast.walk(ast.parse(path.read_text())):
-            if not isinstance(node, ast.Call):
-                continue
-            func = node.func
-            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
-            if name != "approx" or not node.args:
-                continue
-            if any(keyword.arg == "abs" for keyword in node.keywords):
-                continue
-            try:
-                expected = ast.literal_eval(node.args[0])
-            except ValueError:
-                continue
-            if isinstance(expected, (int, float)) and 0 < abs(expected) < 1e-9:
-                offenders.append(f"{path.name}:{node.lineno} approx({expected!r}) with no abs=")
+    offenders = sorted(_disarmed_approx_sites())
     assert not offenders, (
         "these assertions are swamped by pytest.approx's default abs=1e-12, so their rel= "
         f"tolerance does nothing; assert in a scaled unit or pass an explicit abs=: {offenders}"
     )
+
+
+def test_the_approx_gate_sees_the_forms_it_used_to_walk_past(tmp_path):
+    """The reader has to read what is written, not only what is spelled as a bare literal.
+
+    The gate resolved its expected value with ``ast.literal_eval`` and skipped anything
+    that raised — which is *every* expression. ``approx(1.67 * 1e-27)``, ``approx(10**-27)``
+    and ``approx(PROTON_MASS)`` all slipped through, as did the ``approx(expected=...)``
+    keyword form (no positional args at all) and every file in a ``tests/`` subdirectory.
+    An audit instrumented pytest.approx over the whole suite and found 38 live disarmed
+    sites, none of them visible to this gate, because each was written as an expression.
+
+    So the gate now folds constant arithmetic, resolves module-level constants in the same
+    file, and reads the keyword form. This test is the proof: each form below must be
+    caught, and the order-one control must not be.
+    """
+    sample = tmp_path / "test_sample.py"
+    sample.write_text(
+        "PROTON_MASS = 1.6726e-27\n"
+        "def test_a():\n"
+        "    assert x == pytest.approx(1.67e-27)\n"  # bare literal, caught before
+        "    assert x == pytest.approx(1.67 * 1e-27)\n"  # folded product
+        "    assert x == pytest.approx(10**-27)\n"  # folded power
+        "    assert x == pytest.approx(-1.67e-27)\n"  # folded unary minus
+        "    assert x == pytest.approx(PROTON_MASS)\n"  # module-level constant
+        "    assert x == pytest.approx(expected=1.67e-27)\n"  # keyword form
+        "    assert x == pytest.approx(1.67e-27, abs=1e-30)\n"  # armed: not an offender
+        "    assert x == pytest.approx(9.81)\n"  # order-one: not an offender
+        "    assert x == pytest.approx(0.0)\n"  # zero is exempt by design
+    )
+    caught = sorted(_disarmed_approx_sites(root=tmp_path))
+    assert len(caught) == 6, caught
+    for line in (3, 4, 5, 6, 7, 8):
+        assert any(f":{line} " in site for site in caught), (line, caught)
+    for line in (9, 10, 11):
+        assert not any(f":{line} " in site for site in caught), (line, caught)
+
+    # And a subdirectory is not a hiding place.
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    (nested / "test_deep.py").write_text("def test_b():\n    assert x == pytest.approx(1.67e-27)\n")
+    assert any("test_deep.py" in site for site in _disarmed_approx_sites(root=tmp_path))
 
 
 def _citation_authorities() -> list[str]:
