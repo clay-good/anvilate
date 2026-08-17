@@ -15086,6 +15086,123 @@ def test_cyclic_frequencies_refuse_an_angle_carrying_unit():
     ) == pytest.approx(56.04991216397929, rel=1e-9)
 
 
+def test_more_dead_branches_and_unused_defaults():
+    # Second batch from the coverage sweep. The shape repeats: an OPTIONAL argument that no test
+    # ever supplies, or a branch the tested inputs never reach. Each mutation below survived the
+    # whole suite before these assertions existed.
+    from anvilate.analysis import (
+        aisc_rectangular_hss_shear_strength,
+        horizontal_plate_natural_convection_coefficient,
+        larson_miller_parameter,
+        microscope_magnification,
+        rc_column_balanced_point,
+        receiver_minimum_detectable_signal,
+        shaft_diameter_de_gerber,
+        shaft_diameter_de_goodman,
+        simply_supported_plate_uniform_load,
+    )
+    from anvilate.analysis.creep import LARSON_MILLER_CONSTANT
+
+    # 1. HSS shear: the inelastic-buckling transition branch was dead, as in the plate girder.
+    hss = {"yield_strength": _q("345 MPa"), "elastic_modulus": _q("200000 MPa")}
+    assert aisc_rectangular_hss_shear_strength(
+        web_height=_q("300 mm"), thickness=_q("5 mm"), **hss
+    ).to("kN").magnitude == pytest.approx(612.94780, rel=1e-6)
+    assert aisc_rectangular_hss_shear_strength(
+        web_height=_q("300 mm"), thickness=_q("4.3 mm"), **hss
+    ).to("kN").magnitude == pytest.approx(453.33619, rel=1e-6)
+
+    # 2. Shaft sizing: mean_bending_moment and alternating_torque are optional and were ALWAYS
+    # left at None, so scaling either by 1.5x was invisible. A shaft with a steady bending
+    # component and a fluctuating torque is the ordinary case, not an exotic one.
+    shaft = {
+        "alternating_bending_moment": _q("120 N*m"),
+        "mean_torque": _q("80 N*m"),
+        "endurance_limit": _q("200 MPa"),
+        "ultimate_strength": _q("600 MPa"),
+    }
+    assert shaft_diameter_de_goodman(**shaft).to("mm").magnitude == pytest.approx(
+        19.387889, rel=1e-6
+    )
+    assert shaft_diameter_de_goodman(
+        mean_bending_moment=_q("90 N*m"), alternating_torque=_q("60 N*m"), **shaft
+    ).to("mm").magnitude == pytest.approx(20.478518, rel=1e-6)
+    assert shaft_diameter_de_gerber(
+        mean_bending_moment=_q("90 N*m"), alternating_torque=_q("60 N*m"), **shaft
+    ).to("mm").magnitude == pytest.approx(19.289990, rel=1e-6)
+
+    # 3. RC column: the branch where the compression steel sits BELOW the balanced neutral axis
+    # and therefore acts in tension. It flips the sign of C_s and so of P_b, and was never run.
+    column = {
+        "width": _q("400 mm"),
+        "total_depth": _q("600 mm"),
+        "tension_steel_depth": _q("540 mm"),
+        "tension_steel_area": _q("1600 mm**2"),
+        "compression_steel_area": _q("1600 mm**2"),
+        "concrete_strength": _q("30 MPa"),
+        "steel_yield": _q("420 MPa"),
+        "steel_modulus": _q("200000 MPa"),
+    }
+    axial, moment = rc_column_balanced_point(
+        compression_steel_depth=_q("380 mm"), **column
+    )  # d' = 380 > c_b = 317.6, so the compression steel is in tension
+    assert axial.to("kN").magnitude == pytest.approx(1847.2698, rel=1e-6)
+    assert moment.to("kN*m").magnitude == pytest.approx(629.2720, rel=1e-6)
+    shallow_axial, _ = rc_column_balanced_point(compression_steel_depth=_q("250 mm"), **column)
+    assert shallow_axial.to("kN").magnitude == pytest.approx(2240.1587, rel=1e-6)
+    assert shallow_axial.to("kN").magnitude > axial.to("kN").magnitude
+
+    # 4. Natural convection: the turbulent hot-face-up correlation. It sits within 1% of the
+    # laminar branch at these inputs, which is exactly why only an absolute pin catches a wrong
+    # leading coefficient.
+    plate_convection = {
+        "surface_temperature_difference": _q("50 K"),
+        "thermal_conductivity": _q("0.028 W/m/K"),
+        "kinematic_viscosity": _q("1.6e-5 m**2/s"),
+        "prandtl_number": 0.7,
+        "thermal_expansion_coefficient": Quantity(magnitude=1.0 / 320.0, unit="1/K"),
+        "hot_surface_facing_up": True,
+    }
+    assert horizontal_plate_natural_convection_coefficient(
+        characteristic_length=_q("1.0 m"), **plate_convection
+    ).to("W/m**2/K").magnitude == pytest.approx(6.7709360, rel=1e-6)
+
+    # 5. A sky-noise-limited receiver supplies its own noise temperature; every test used the
+    # implicit 290 K reference, so that whole path was dead.
+    assert receiver_minimum_detectable_signal(
+        noise_factor=2.0, bandwidth=_q("1 MHz"), required_snr=20.0, noise_temperature=_q("50 K")
+    ).to("W").magnitude * 1e15 == pytest.approx(27.61298, rel=1e-6)
+
+    # 6. Microscope with an explicit near point (the magnifier sibling is tested; this is not).
+    assert microscope_magnification(
+        tube_length=_q("160 mm"),
+        objective_focal_length=_q("4 mm"),
+        eyepiece_focal_length=_q("25 mm"),
+        near_point=_q("0.20 m"),
+    ) == pytest.approx(320.0, rel=1e-12)
+
+    # 7. An entire public method that nothing called.
+    result = simply_supported_plate_uniform_load(
+        pressure=_q("0.05 MPa"),
+        length=_q("600 mm"),
+        width=_q("400 mm"),
+        thickness=_q("8 mm"),
+        elastic_modulus=_q("200 GPa"),
+        poisson_ratio=0.3,
+    )
+    assert result.max_bending_stress.to("MPa").magnitude == pytest.approx(60.8701, rel=1e-5)
+    assert result.bending_safety_factor(yield_strength=_q("250 MPa")) == pytest.approx(
+        4.107108915163235, rel=1e-9
+    )
+
+    # 8. An exported default that every test overrode, so it was free to drift. C = 20 is the
+    # standard Larson-Miller constant and three public functions default to it.
+    assert LARSON_MILLER_CONSTANT == 20.0
+    assert larson_miller_parameter(
+        temperature=_q("810 K"), rupture_time=_q("1000 hour")
+    ) == pytest.approx(18630.0, rel=1e-12)
+
+
 def test_dead_branches_that_no_test_had_ever_entered():
     # A coverage sweep found 92 lines of live arithmetic that no test executes. A branch nobody
     # enters is unpinned by construction -- any mutation inside it survives, and whole-function
