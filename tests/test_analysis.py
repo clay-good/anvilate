@@ -24896,6 +24896,74 @@ def test_horizontal_plate_natural_convection_up_vs_down():
     )
 
 
+def test_shell_and_tube_correction_shrinks_the_counterflow_driving_force():
+    from anvilate.analysis import (
+        log_mean_temperature_difference,
+        shell_and_tube_lmtd_correction_factor,
+    )
+
+    def _k(celsius):
+        return Quantity(magnitude=celsius + 273.15, unit="K")
+
+    # 200 -> 100 degC shell side against 30 -> 80 degC tube side. R = 2.0, P = 0.294118.
+    factor = shell_and_tube_lmtd_correction_factor(
+        hot_inlet_temperature=_k(200.0),
+        hot_outlet_temperature=_k(100.0),
+        cold_inlet_temperature=_k(30.0),
+        cold_outlet_temperature=_k(80.0),
+    )
+    assert isinstance(factor, float)
+    assert factor == pytest.approx(0.8924017248033331, rel=1e-12)
+    assert 0.0 < factor <= 1.0
+
+    # The counterflow LMTD is the best any exchanger can do; a real 1-2 unit gets F times it.
+    # Sizing an area on the uncorrected value is 12% short.
+    lmtd = log_mean_temperature_difference(delta_t_1=_q("120 K"), delta_t_2=_q("70 K"))
+    assert lmtd.to("K").magnitude == pytest.approx(92.76498072256928, rel=1e-12)
+    assert factor * lmtd.to("K").magnitude == pytest.approx(82.78362879816878, rel=1e-12)
+    assert 1.0 / factor == pytest.approx(1.1205, rel=1e-3)
+
+    # F -> 1 as P -> 0: a vanishing tube-side rise approaches pure counterflow, where the
+    # correction must disappear. That limit is the structural check on the whole expression.
+    assert shell_and_tube_lmtd_correction_factor(
+        hot_inlet_temperature=_k(200.0),
+        hot_outlet_temperature=_k(199.99),
+        cold_inlet_temperature=_k(30.0),
+        cold_outlet_temperature=_k(30.005),
+    ) == pytest.approx(1.0, abs=1e-6)
+
+    # Squeezing the streams together drives F down monotonically -- the reason a close approach
+    # needs more shell passes rather than simply more area.
+    previous = 1.0
+    for cold_out in (50.0, 70.0, 90.0, 110.0):
+        value = shell_and_tube_lmtd_correction_factor(
+            hot_inlet_temperature=_k(200.0),
+            hot_outlet_temperature=_k(120.0),
+            cold_inlet_temperature=_k(30.0),
+            cold_outlet_temperature=_k(cold_out),
+        )
+        assert value < previous
+        previous = value
+
+    # A temperature CROSS is unreachable by a 1-2 exchanger at any area. The expression's
+    # logarithm has no real value there, so it raises rather than returning a plausible number --
+    # a design gate, not a math guard.
+    with pytest.raises(ValueError, match="unreachable by a 1-shell-pass exchanger"):
+        shell_and_tube_lmtd_correction_factor(
+            hot_inlet_temperature=_k(200.0),
+            hot_outlet_temperature=_k(100.0),
+            cold_inlet_temperature=_k(30.0),
+            cold_outlet_temperature=_k(140.0),
+        )
+    with pytest.raises(ValueError, match="must exceed cold_inlet_temperature"):
+        shell_and_tube_lmtd_correction_factor(
+            hot_inlet_temperature=_k(30.0),
+            hot_outlet_temperature=_k(25.0),
+            cold_inlet_temperature=_k(100.0),
+            cold_outlet_temperature=_k(110.0),
+        )
+
+
 def test_lmtd_and_heat_exchanger_sizing_round_trip():
     from anvilate.analysis import (
         heat_exchanger_area_for_duty,
@@ -32069,6 +32137,45 @@ def test_rotor_hover_induced_velocity_power_and_figure_of_merit():
         figure_of_merit(thrust=thrust, air_density=rho, disk_area=area, actual_power=_q("0 W"))
     with pytest.raises(ValueError, match="disk_area must be a"):
         ideal_hover_power(thrust=thrust, air_density=rho, disk_area=_q("12 m"))
+
+
+def test_finite_wing_lift_curve_slope_is_shallower_than_the_2d_section():
+    from anvilate.analysis import finite_wing_lift_curve_slope
+
+    # Thin-airfoil theory gives a0 = 2*pi per radian. A finite wing sheds tip vortices whose
+    # downwash tilts the local flow, so each section sees LESS effective incidence and the wing
+    # needs more geometric angle for the same lift -- a shallower slope.
+    slope = finite_wing_lift_curve_slope(
+        section_lift_curve_slope=2.0 * math.pi, aspect_ratio=8.0, oswald_efficiency=0.85
+    )
+    assert slope == pytest.approx(4.855188646456953, rel=1e-12)
+    # Using the 2D slope overpredicts lift 29% at a given angle -- unconservative for stall angle
+    # and wing incidence alike.
+    assert 2.0 * math.pi / slope == pytest.approx(1.2941176470588236, rel=1e-12)
+    assert slope < 2.0 * math.pi
+
+    # A long thin wing loses little, a stubby one loses a lot, and the slope approaches the 2D
+    # value only as AR -> infinity. That limit is the check that the correction term is right.
+    previous = 0.0
+    for aspect in (2.0, 5.0, 10.0, 30.0, 200.0):
+        value = finite_wing_lift_curve_slope(
+            section_lift_curve_slope=2.0 * math.pi, aspect_ratio=aspect, oswald_efficiency=0.85
+        )
+        assert value > previous
+        assert value < 2.0 * math.pi
+        previous = value
+    assert previous == pytest.approx(2.0 * math.pi, rel=0.02)
+
+    # Closed form check at AR = 8, e = 0.85: a = a0/(1 + a0/(pi*e*AR)).
+    expected = 2.0 * math.pi / (1.0 + 2.0 * math.pi / (math.pi * 0.85 * 8.0))
+    assert slope == pytest.approx(expected, rel=1e-12)
+
+    with pytest.raises(ValueError, match="aspect_ratio must be positive"):
+        finite_wing_lift_curve_slope(section_lift_curve_slope=2.0 * math.pi, aspect_ratio=0.0)
+    with pytest.raises(ValueError, match="oswald_efficiency must lie"):
+        finite_wing_lift_curve_slope(
+            section_lift_curve_slope=2.0 * math.pi, aspect_ratio=8.0, oswald_efficiency=1.5
+        )
 
 
 def test_wing_lift_induced_drag_and_stall_speed():

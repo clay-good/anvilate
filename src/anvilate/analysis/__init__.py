@@ -2995,6 +2995,7 @@ from .thermal import (
     semi_infinite_solid_temperature_rise,
     series_thermal_resistance,
     shell_and_tube_effectiveness,
+    shell_and_tube_lmtd_correction_factor,
     shell_and_tube_ntu_for_effectiveness,
     shrink_fit_assembly_temperature,
     sphere_crossflow_convection_coefficient,
@@ -3194,6 +3195,7 @@ from .wind_power import (
     wind_turbine_tip_speed_ratio,
 )
 from .wing_aerodynamics import (
+    finite_wing_lift_curve_slope,
     glide_range,
     induced_drag_coefficient,
     lift_coefficient_required,
@@ -4865,6 +4867,7 @@ __all__ = [
     "fouling_factor_from_coefficients",
     "cleanliness_factor",
     "log_mean_temperature_difference",
+    "shell_and_tube_lmtd_correction_factor",
     "heat_exchanger_area_for_duty",
     "heat_exchanger_duty",
     "heat_exchanger_ntu",
@@ -4950,6 +4953,7 @@ __all__ = [
     "induced_drag_coefficient",
     "stall_speed",
     "lift_to_drag_ratio",
+    "finite_wing_lift_curve_slope",
     "glide_range",
     "wing_loading",
     "wire_drawing_stress",

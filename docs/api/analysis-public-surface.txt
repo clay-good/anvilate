@@ -1519,6 +1519,7 @@ thermal.overall_heat_transfer_coefficient
 thermal.fouling_factor_from_coefficients
 thermal.cleanliness_factor
 thermal.log_mean_temperature_difference
+thermal.shell_and_tube_lmtd_correction_factor
 thermal.lumped_capacitance_cooling_time
 thermal.lumped_capacitance_excess_temperature
 thermal.semi_infinite_solid_surface_flux
@@ -1712,6 +1713,7 @@ wing_aerodynamics.stall_speed
 wing_aerodynamics.lift_to_drag_ratio
 wing_aerodynamics.glide_range
 wing_aerodynamics.wing_loading
+wing_aerodynamics.finite_wing_lift_curve_slope
 wire_drawing.wire_drawing_stress
 wire_drawing.wire_drawing_force
 wire_drawing.wire_drawing_max_reduction

@@ -22,6 +22,7 @@ from math import pi, sqrt
 from ..units import Quantity
 
 __all__ = [
+    "finite_wing_lift_curve_slope",
     "induced_drag_coefficient",
     "lift_coefficient_required",
     "lift_force",
@@ -195,6 +196,46 @@ def wing_loading(*, weight: Quantity, wing_area: Quantity) -> Quantity:
     if s <= 0:
         raise ValueError("wing_area must be positive")
     return Quantity(magnitude=w / s, unit="Pa")
+
+
+def finite_wing_lift_curve_slope(
+    *,
+    section_lift_curve_slope: float,
+    aspect_ratio: float,
+    oswald_efficiency: float = 0.85,
+) -> float:
+    """The 3D lift-curve slope, a = a₀/(1 + a₀/(π·e·AR)).
+
+    The module already carries the aspect ratio and Oswald efficiency for induced drag, but a user
+    converting an angle of attack into a lift coefficient had only the two-dimensional
+    (infinite-span) slope to work with — and that is not what a wing does.
+
+    A finite wing sheds tip vortices, and their downwash tilts the local flow so each section sees
+    a smaller effective angle of attack than the wing's geometric one. The wing therefore needs
+    *more* geometric incidence for the same lift, which is exactly a shallower slope. The
+    correction depends only on the aspect ratio and the span efficiency: a long thin wing loses
+    little, a short stubby one loses a lot.
+
+    Thin-airfoil theory gives a₀ = 2π ≈ 6.283 per radian. At AR = 8 and e = 0.85 the wing slope is
+    4.855 per radian — the 2D value overstates it by a factor of 1.294. Using the 2D slope
+    overpredicts lift by 29% at a given angle, which puts the stall angle and the wing incidence
+    badly wrong in the unconservative direction.
+
+    ``section_lift_curve_slope`` a₀ is per radian, ``aspect_ratio`` AR = b²/S (see
+    :func:`aspect_ratio`), and ``oswald_efficiency`` e defaults to the 0.85 used elsewhere in this
+    module. Returns the finite-wing slope per radian as a plain float.
+    """
+    if section_lift_curve_slope <= 0:
+        raise ValueError(
+            f"section_lift_curve_slope must be positive; got {section_lift_curve_slope}"
+        )
+    if aspect_ratio <= 0:
+        raise ValueError(f"aspect_ratio must be positive; got {aspect_ratio}")
+    if not 0.0 < oswald_efficiency <= 1.0:
+        raise ValueError(f"oswald_efficiency must lie in (0, 1]; got {oswald_efficiency}")
+    return section_lift_curve_slope / (
+        1.0 + section_lift_curve_slope / (pi * oswald_efficiency * aspect_ratio)
+    )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

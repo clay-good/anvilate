@@ -70,6 +70,7 @@ __all__ = [
     "fouling_factor_from_coefficients",
     "cleanliness_factor",
     "log_mean_temperature_difference",
+    "shell_and_tube_lmtd_correction_factor",
     "heat_exchanger_area_for_duty",
     "heat_exchanger_duty",
     "heat_exchanger_ntu",
@@ -1788,6 +1789,82 @@ def cleanliness_factor(
     if us > uc:
         raise ValueError("service_coefficient cannot exceed clean_coefficient")
     return us / uc
+
+
+def shell_and_tube_lmtd_correction_factor(
+    *,
+    hot_inlet_temperature: Quantity,
+    hot_outlet_temperature: Quantity,
+    cold_inlet_temperature: Quantity,
+    cold_outlet_temperature: Quantity,
+) -> float:
+    """The LMTD correction factor F for a 1-shell-pass, 2-tube-pass exchanger (Bowman/TEMA).
+
+    :func:`log_mean_temperature_difference` gives the *counterflow* driving force, which is the
+    best any exchanger can do. A real shell-and-tube unit does not achieve it: with two tube
+    passes, half the tube length runs counter to the shell flow and half runs with it, so the mean
+    driving force is smaller. F is the ratio, and the design ΔT is F·ΔT_lm.
+
+    With R = (T₁−T₂)/(t₂−t₁), P = (t₂−t₁)/(T₁−t₁) and s = √(R²+1):
+
+        F = [s/(R−1)]·ln[(1−P)/(1−P·R)] / ln[(2/P − 1 − R + s)/(2/P − 1 − R − s)]
+
+    F → 1 as P → 0 (a small temperature rise on the tube side approaches counterflow) and falls
+    away as the streams are pushed closer together. For 200→100 °C shell-side against 30→80 °C
+    tube-side it is 0.8924, so the counterflow ΔT_lm of 92.77 K is really 82.78 K and an area sized
+    on the uncorrected value is **12% short**.
+
+    The second failure it catches is worse than undersizing. Push the outlets into a temperature
+    *cross* — the cold stream leaving hotter than the hot stream leaves — and the logarithm's
+    argument goes negative: no 1-2 exchanger can meet that duty at any area, so the function
+    raises rather than returning a number. That is a real design gate, not a math guard; the
+    answer is more shell passes or a different configuration.
+
+    All four temperatures are absolute Quantities. Returns F as a plain float in (0, 1].
+    """
+    _require(hot_inlet_temperature, "[temperature]", "hot_inlet_temperature")
+    _require(hot_outlet_temperature, "[temperature]", "hot_outlet_temperature")
+    _require(cold_inlet_temperature, "[temperature]", "cold_inlet_temperature")
+    _require(cold_outlet_temperature, "[temperature]", "cold_outlet_temperature")
+    t_hot_in = hot_inlet_temperature.to("K").magnitude
+    t_hot_out = hot_outlet_temperature.to("K").magnitude
+    t_cold_in = cold_inlet_temperature.to("K").magnitude
+    t_cold_out = cold_outlet_temperature.to("K").magnitude
+    if t_hot_in <= t_cold_in:
+        raise ValueError(
+            f"hot_inlet_temperature must exceed cold_inlet_temperature; got "
+            f"{hot_inlet_temperature} against {cold_inlet_temperature}"
+        )
+    if t_hot_out > t_hot_in:
+        raise ValueError("the hot stream must cool: hot_outlet cannot exceed hot_inlet")
+    if t_cold_out < t_cold_in:
+        raise ValueError("the cold stream must warm: cold_outlet cannot be below cold_inlet")
+    if t_cold_out == t_cold_in:
+        raise ValueError("cold_outlet_temperature must exceed cold_inlet_temperature")
+    r = (t_hot_in - t_hot_out) / (t_cold_out - t_cold_in)
+    p_eff = (t_cold_out - t_cold_in) / (t_hot_in - t_cold_in)
+    s = sqrt(r * r + 1.0)
+    # R = 1 is the removable singularity of the bracket, not a real discontinuity; the limit form
+    # is the standard one and keeps a balanced exchanger (equal capacity rates) from dividing by 0.
+    if abs(r - 1.0) < 1.0e-9:
+        numerator = p_eff * s / (1.0 - p_eff)
+    else:
+        inner = (1.0 - p_eff) / (1.0 - p_eff * r)
+        if inner <= 0.0:
+            raise ValueError(
+                "these terminal temperatures are unreachable by a 1-shell-pass exchanger at any "
+                "area (the correction factor's logarithm has no real value there). Use more shell "
+                "passes or a different configuration."
+            )
+        numerator = (s / (r - 1.0)) * log(inner)
+    denominator_upper = 2.0 / p_eff - 1.0 - r + s
+    denominator_lower = 2.0 / p_eff - 1.0 - r - s
+    if denominator_lower <= 0.0 or denominator_upper <= 0.0:
+        raise ValueError(
+            "these terminal temperatures are unreachable by a 1-shell-pass exchanger at any area "
+            "(a temperature cross). Use more shell passes or a different configuration."
+        )
+    return numerator / log(denominator_upper / denominator_lower)
 
 
 def log_mean_temperature_difference(
