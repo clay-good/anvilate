@@ -1800,3 +1800,60 @@ def test_column_rejects_non_force_axial_load():
             axial_load=_q("5 MPa"),
             material="ASTM-A36",
         )
+
+
+def _shear_safety_factor(member: BeamMember) -> float:
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    (entry,) = [e for e in card.entries if e.name.endswith("shear")]
+    return entry.safety_factor
+
+
+def test_overhang_shear_sees_the_back_span_when_the_overhang_is_long() -> None:
+    """The overhang shear entry never looked at the overhang length. Unconservative.
+
+    The code took V = F at the inner support, which is the OVERHANG segment's shear. The
+    back span carries a constant |R_A| = F*c/L, and that overtakes F once c > L. Nothing
+    in the model constrains c against L, so a long overhang reported the short-overhang
+    shear: at c = 4L the safety factor came out 4x the true one.
+    """
+    section = CrossSection.rectangular(width=_q("50 mm"), height=_q("100 mm"))
+    common = {
+        "section": section,
+        "length": _q("1000 mm"),
+        "support": Support.OVERHANG,
+        "material": "ASTM-A36",
+    }
+
+    def tip_load(overhang: str) -> BeamMember:
+        return BeamMember(
+            name="ov",
+            load_type=LoadType.POINT,
+            load=_q("10 kN"),
+            overhang_length=_q(overhang),
+            **common,
+        )
+
+    # c < L: the overhang governs, and the answer is unchanged.
+    short = _shear_safety_factor(tip_load("500 mm"))
+    assert short == pytest.approx(48.083333333333336, rel=1e-9)
+    # c = 2L and c = 4L: the back span governs at F*c/L, so the factor halves and quarters.
+    assert _shear_safety_factor(tip_load("2000 mm")) == pytest.approx(short / 2.0, rel=1e-9)
+    assert _shear_safety_factor(tip_load("4000 mm")) == pytest.approx(short / 4.0, rel=1e-9)
+    # The seam is continuous: at c = L exactly the two expressions agree.
+    assert _shear_safety_factor(tip_load("1000 mm")) == pytest.approx(short, rel=1e-9)
+
+    def udl(overhang: str) -> BeamMember:
+        return BeamMember(
+            name="ov",
+            load_type=LoadType.DISTRIBUTED,
+            load=_q("10 N/mm"),
+            overhang_length=_q(overhang),
+            **common,
+        )
+
+    # For a UDL on the overhang the back-span shear is w*c^2/(2L), which overtakes w*c
+    # only at c > 2L -- so the crossover sits at twice the point-load one.
+    assert _shear_safety_factor(udl("1000 mm")) == pytest.approx(48.083333333333336, rel=1e-9)
+    assert _shear_safety_factor(udl("2000 mm")) == pytest.approx(24.041666666666668, rel=1e-9)
+    # w = 10 N/mm over c = 3000 mm against L = 1000: V = 10*3000^2/(2*1000) = 45 kN.
+    assert _shear_safety_factor(udl("3000 mm")) == pytest.approx(10.685185185185187, rel=1e-9)

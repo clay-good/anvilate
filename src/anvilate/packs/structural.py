@@ -657,9 +657,19 @@ def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntr
         or member.triangle_mirrored
     )
     if member.support is Support.OVERHANG:
-        # The overhang carries its whole load in shear at the inner support:
-        # V = F for a tip point load, w*c for an overhang-only UDL.
-        factor, shear_length = 1.0, member.overhang_length
+        # The overhang carries its whole load in shear at the inner support -- V = F for a tip
+        # point load, w*c for an overhang-only UDL -- but that is only the overhang segment.
+        # The BACK SPAN carries the constant shear |R_A| = F*c/L (point) or w*c^2/(2L) (UDL),
+        # which OVERTAKES the overhang value once c > L (or c > 2L). Nothing constrains c
+        # against L, so a long overhang used to report the short-overhang shear and pass:
+        # at c = 4L the reported safety factor was 4x the true one, unconservatively.
+        span_mm = member.length.to("mm").magnitude
+        overhang_mm = member.overhang_length.to("mm").magnitude
+        if member.load_type is LoadType.POINT:
+            factor = max(1.0, overhang_mm / span_mm)
+        else:
+            factor = max(1.0, overhang_mm / (2.0 * span_mm))
+        shear_length = member.overhang_length
     else:
         factor = _PEAK_SHEAR_FACTORS.get((member.support, member.load_type))
         shear_length = member.length
