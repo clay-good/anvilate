@@ -9,6 +9,10 @@
 # make a gate failure go away: the failure means a function does not say where its
 # formula comes from, and the fix is to say.
 #
+# `Young` was removed for exactly this reason after it shipped: it matched "Young's
+# modulus" and falsely credited three elastic-wave functions. Roark & Young's handbook is
+# covered by the `Roark` token, so nothing was lost.
+#
 # BEFORE adding a token, check it cannot be satisfied by accident. A short or
 # ordinary-looking token will match prose that is not a citation: "Turns" was on this
 # list for its combustion text and matched "Turns the lumen method around ...", and
@@ -132,7 +136,6 @@ Peterson
 Roark
 Shigley
 Timoshenko
-Young
 
 # --- Named methods, laws, and correlations
 Archard

@@ -587,6 +587,8 @@ def asme_conical_head_mawp(
 
 
 _CLAUSE_B313_PRESSURE_DESIGN = "ASME B31.3 §304.1.2 straight-pipe pressure design"
+# One row of the ASME B31.3 Table A-1 temperature grid, which is spaced 100 degF.
+_ALLOWABLE_TEMPERATURE_BAND_K = 56.0
 _CLAUSE_B313_MITER = "ASME B31.3 §304.2.3 miter bends"
 # B31.3 304.2.3 splits the single-miter formula at a 22.5 deg cut angle, and scopes the
 # multiple-miter treatment to cuts at or below it.
@@ -1318,9 +1320,25 @@ class AllowableStress(BaseModel):
             raise ValueError(
                 f"design_temperature must be a [temperature] quantity; got {design_temperature}"
             )
-        band = 25.0 if tolerance is None else tolerance.to("K").magnitude
-        if band < 0:
-            raise ValueError(f"tolerance must not be negative; got {tolerance}")
+        if tolerance is None:
+            band = _ALLOWABLE_TEMPERATURE_BAND_K
+        else:
+            # A tolerance is a band WIDTH, and pint converts a degC/degF quantity as an
+            # ABSOLUTE temperature: Quantity(25, "degC").to("K") is 298.15, not 25. Written
+            # in the same unit as the temperatures — the obvious thing to do — that
+            # silently widened the band twelvefold and disarmed the check.
+            unit = str(tolerance.unit)
+            if not tolerance.has_dimension("[temperature]"):
+                raise ValueError(f"tolerance must be a [temperature] quantity; got {tolerance}")
+            if "degree_Celsius" in unit or "degree_Fahrenheit" in unit or "deg" in unit.lower():
+                raise ValueError(
+                    f"tolerance is a band WIDTH, so it must be given in kelvin or "
+                    f"degree-Rankine, not {unit}: pint converts a degC/degF quantity as an "
+                    f"absolute temperature, and 25 degC would become a 298 K band."
+                )
+            band = tolerance.to("K").magnitude
+            if band < 0:
+                raise ValueError(f"tolerance must not be negative; got {tolerance}")
         read_at = self.temperature.to("K").magnitude
         design = design_temperature.to("K").magnitude
         return design <= read_at <= design + band
@@ -1400,13 +1418,26 @@ def asme_b313_pressure_scorecard(
             ),
             reference=_CLAUSE_B313_PRESSURE_DESIGN,
         )
-    rating = asme_b313_pipe_pressure(
-        wall_thickness=Quantity(magnitude=available, unit="mm"),
-        outside_diameter=outside_diameter,
-        allowable_stress=allowable.value,
-        quality_factor=quality_factor,
-        coefficient_y=coefficient_y,
-    )
+    try:
+        rating = asme_b313_pipe_pressure(
+            wall_thickness=Quantity(magnitude=available, unit="mm"),
+            outside_diameter=outside_diameter,
+            allowable_stress=allowable.value,
+            quality_factor=quality_factor,
+            coefficient_y=coefficient_y,
+        )
+    except ValueError as exc:
+        # The t < D/6 scope limit is a real refusal, but this entry point's contract is
+        # to turn "cannot evaluate" into a NOT_EVALUATED entry, not to raise out of a
+        # scorecard. NPS 1/2 and 3/4 Schedule 160 — ordinary purchasable pipe, and rows
+        # of this library's own B36.10M table — land past D/6, so a caller sweeping the
+        # schedule table got a traceback instead of a card.
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=f"not evaluated — {exc}",
+            reference=_CLAUSE_B313_PRESSURE_DESIGN,
+        )
     service = design_pressure.to("MPa").magnitude
     computed = None if service <= 0 else rating.to("MPa").magnitude / service
     return ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0).model_copy(

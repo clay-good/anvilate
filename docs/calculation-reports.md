@@ -122,8 +122,8 @@ build does not understand is rejected rather than misread.
 - **PDF** is not implemented. HTML and text ship today; the PDF route is still open
   (see `openspec/changes/add-calculation-report/`).
 - **Formulas render as plain text**, not MathML — readable, but not typeset.
-Two limits that used to be listed here are closed, and the first one mattered more
-than it read:
+Three limits that used to be listed here are closed, and the first mattered more than it
+read:
 
 - **Moments and second moments of area now follow the project's unit system** — N·mm
   and mm⁴ in SI, kip·in and in⁴ in US. N·mm is deliberately chosen over the more
@@ -131,7 +131,14 @@ than it read:
   substituted line has to evaluate to the result printed under it, and
   `1500000.00 N·mm · 50.00 mm / 2100000.00 mm⁴ = 35.7 MPa` checks by hand while the
   same line in N·m came out a thousandfold short of its own stated answer. An author
-  who wants a different unit for a particular symbol still pins it.
+  who wants a different unit for a particular symbol still pins it. Printed precision
+  now widens for small values as well: a stress of 0.087 ksi used to print as `0.1 ksi`,
+  a 15% error landing straight in the line a reviewer is told to check. The whole
+  property — every substituted line evaluating to its own printed result — is asserted
+  across every derivation the packs build, in both unit systems.
+- **Areas follow the unit system too** (mm² / in²). Until an audit caught it, a
+  US-system report printed `τ = 1.5 · 6.0 kN / 5000.00 mm²` above a result in ksi — SI
+  force over SI area against a US stress, inside one equals sign.
 - **Compound units read force-first** (`kip·in`, `N·m`) rather than the registry's
   alphabetical order. The reordering never changes, drops, or invents a factor: a
   label it cannot place — anything with a division, or two factors of the same kind —

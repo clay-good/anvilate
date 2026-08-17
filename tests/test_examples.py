@@ -3213,8 +3213,10 @@ def test_beam_column_example_passes_h1_interaction():
     card = namespace["screen_beam_column_post"]()
     # The pipe beam-column clears the AISC §H1.1 interaction (SF ~1.64 vs 1.5).
     assert card.status is CheckStatus.PASS
-    assert card.entries[0].name == "frame_post interaction"
-    assert card.entries[0].reference == "AISC 360-16 §H1.1"
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["frame_post interaction"].reference == "AISC 360-16 §H1.1"
+    # The Chapter E axial check the H1-1b halving rests on rides alongside it.
+    assert by_name["frame_post axial capacity"].reference == "AISC 360-16 Ch. E"
 
 
 def test_wheel_rail_contact_example_fails_on_soft_steel():

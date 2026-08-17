@@ -1821,7 +1821,34 @@ def screen_beam_column(
     entry = ScorecardEntry.from_safety_factor(
         f"{member.name} interaction", computed=safety, required=required_safety_factor
     ).model_copy(update={"reference": _CLAUSE_INTERACTION, "derivation": interaction_derivation})
-    return Scorecard(entries=(entry,))
+    # H1-1b HALVES the axial term, and it is only permitted to because Chapter E caps
+    # P_r <= P_c independently. Screening the interaction alone reported exactly TWICE the
+    # buckling safety factor `screen_column_member` gives for the same member, all through
+    # the P_r/P_c < 0.2 region — and it flipped verdicts: a column failing at 5.21 passed
+    # at 10.41. The axial check is not optional context for the interaction; it is the
+    # premise the interaction's own form rests on, so the card carries both.
+    pr = member.axial_load.to("N").magnitude
+    axial_safety = axial_capacity / pr if pr > 0 else None
+    axial_entry = ScorecardEntry.from_safety_factor(
+        f"{member.name} axial capacity", computed=axial_safety, required=required_safety_factor
+    ).model_copy(
+        update={
+            "reference": _CLAUSE_COMPRESSION,
+            "derivation": Derivation(
+                symbolic="n = P_c / P_r",
+                inputs=capacity_symbols[:2],
+                result=SymbolValue(
+                    symbol="n",
+                    description="axial safety factor against buckling (AISC Chapter E)",
+                    value=axial_safety if axial_safety is not None else 0.0,
+                ),
+                citation=_CLAUSE_COMPRESSION,
+            )
+            if axial_safety is not None
+            else None,
+        }
+    )
+    return Scorecard(entries=(axial_entry, entry))
 
 
 class ConcreteBearing(BaseModel):

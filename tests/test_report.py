@@ -669,7 +669,7 @@ def test_cover_plate_derivation_only_for_the_closed_form_cases():
 
     clamped = bending().derivation
     assert clamped.symbolic == "σ = 3·q·R²/(4·t²)"
-    assert clamped.substituted() == "σ = 3·0.4 MPa·(250.00 mm)²/(4·(12.00 mm)²)"
+    assert clamped.substituted() == "σ = 3·0.400 MPa·(250.00 mm)²/(4·(12.00 mm)²)"
 
     # The simply-supported form carries Poisson's ratio, so it declares it.
     supported = bending(edge=PlateEdge.SIMPLY_SUPPORTED).derivation

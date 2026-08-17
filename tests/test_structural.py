@@ -1613,9 +1613,14 @@ def test_beam_column_interaction_low_axial_branch():
     # ratio = 0.113/2 + 20/34.5 = 0.0563 + 0.5797 = 0.636 -> SF 1/ratio = 1.57.
     card = screen_beam_column(_beam_column(axial="100 kN"), required_safety_factor=1.5)
     assert card.status is CheckStatus.PASS
-    assert card.entries[0].name == "bc interaction"
-    assert card.entries[0].reference == "AISC 360-16 §H1.1"
-    assert "1.57" in card.entries[0].detail
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["bc interaction"].reference == "AISC 360-16 §H1.1"
+    assert "1.57" in by_name["bc interaction"].detail
+    # H1-1b halves the axial term and is only allowed to because Chapter E caps
+    # P_r <= P_c on its own, so the card carries that check too — without it the card
+    # reported exactly twice the buckling safety factor screen_column_member gives.
+    assert by_name["bc axial capacity"].reference == "AISC 360-16 Ch. E"
+    assert by_name["bc axial capacity"].safety_factor == pytest.approx(888.3 / 100.0, rel=0.02)
 
 
 def test_beam_column_interaction_high_axial_branch_uses_8_9_form():
@@ -1625,7 +1630,7 @@ def test_beam_column_interaction_high_axial_branch_uses_8_9_form():
     # the flip is the point of the least-radius screen).
     card = screen_beam_column(_beam_column(), required_safety_factor=1.5)
     assert card.status is CheckStatus.FAIL  # 1.35 < 1.5
-    assert "1.35" in card.entries[0].detail
+    assert "1.35" in next(e for e in card.entries if e.name == "bc interaction").detail
 
 
 def test_beam_column_flexural_term_keeps_the_declared_axis():
@@ -1642,7 +1647,7 @@ def test_beam_column_flexural_term_keeps_the_declared_axis():
         end_condition=ColumnEnd.PINNED_PINNED,
     )
     card = screen_beam_column(member, required_safety_factor=1.5)
-    assert "0.98" in card.entries[0].detail
+    assert "0.98" in next(e for e in card.entries if e.name == "bc interaction").detail
 
 
 def test_beam_column_rejects_non_moment():
@@ -1919,22 +1924,26 @@ def test_beam_column_with_no_demand_is_not_evaluated_rather_than_an_infinite_pas
     the thing to point the reviewer at.
     """
     loaded = screen_beam_column(_beam_column(), required_safety_factor=1.5)
-    assert loaded.entries[0].safety_factor is not None
+    assert all(e.safety_factor is not None for e in loaded.entries)
 
     for axial, moment in (("0 kN", "0 kN*m"), ("-200 kN", "0 kN*m")):
         card = screen_beam_column(
             _beam_column(axial=axial, moment=moment), required_safety_factor=1.5
         )
-        entry = card.entries[0]
-        assert entry.status is CheckStatus.NOT_EVALUATED
-        assert entry.safety_factor is None
+        for entry in card.entries:
+            assert entry.status is CheckStatus.NOT_EVALUATED
+            assert entry.safety_factor is None
         assert not card.passed
 
     # A member with only a moment, or only an axial load, still has a demand to evaluate.
     assert (
-        screen_beam_column(_beam_column(axial="0 kN", moment="20 kN*m"), required_safety_factor=1.5)
-        .entries[0]
-        .safety_factor
+        next(
+            e
+            for e in screen_beam_column(
+                _beam_column(axial="0 kN", moment="20 kN*m"), required_safety_factor=1.5
+            ).entries
+            if e.name == "bc interaction"
+        ).safety_factor
         is not None
     )
 

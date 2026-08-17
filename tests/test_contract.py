@@ -469,9 +469,27 @@ def _uncited_symbols() -> set[str]:
             obj = getattr(module, symbol)
         except (ImportError, AttributeError):  # pragma: no cover - the surface gate catches this
             continue
-        if not (cited(inspect.getdoc(obj) or "") or cited(inspect.getdoc(module) or "")):
-            missing.add(entry)
+        own = inspect.getdoc(obj) or ""
+        if cited(own):
+            continue
+        # A module-level `Sources:` line covers the symbols that were in the module when
+        # it was written, and those are enumerated. It must NOT silently cover a symbol
+        # added later — otherwise a new check ships uncited into any backfilled module,
+        # which is the opposite of what this gate is for.
+        if cited(inspect.getdoc(module) or "") and entry in _module_cited_manifest():
+            continue
+        missing.add(entry)
     return missing
+
+
+def _module_cited_manifest() -> set[str]:
+    """Symbols whose only citation is their module's docstring — the recorded baseline."""
+    path = _REPO / "docs" / "api" / "module-cited-symbols.txt"
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
 
 
 def test_every_new_public_check_names_its_source():
@@ -588,10 +606,138 @@ def test_every_recorded_inverse_pairing_resolves_and_is_round_tripped():
         assert forward in surface, f"{inverse} is paired to {forward}, which is not public"
 
     # Every paired inverse must actually be exercised by the round-trip suite, or the
-    # pairing is a claim nobody checks.
-    round_trips = (_TESTS / "test_design_inverses.py").read_text(encoding="utf-8")
-    untested = sorted(inverse for inverse in paired if inverse.split(".", 1)[1] not in round_trips)
+    # pairing is a claim nobody checks. This reads that suite's own DECLARATION rather
+    # than grepping its text: the text search was satisfied by a comment, and an audit
+    # slipped a nonsense pairing past it with a single "# TODO: round-trip ... someday".
+    import test_design_inverses
+
+    untested = sorted(set(paired) - test_design_inverses.ROUND_TRIPPED)
     assert not untested, (
         "these inverses are recorded as paired but no round-trip test names them:\n  "
         + "\n  ".join(untested)
+    )
+
+
+_VALUE_UNIT = re.compile(
+    r"(-?\d+\.?\d*(?:[eE][-+]?\d+)?)\s+([A-Za-z\u00b5\u03a9%][A-Za-z0-9_]*(?:\*\*\d+)?)"
+)
+
+
+def _sample_derivations() -> list[tuple[str, object]]:
+    """Derivations built by the packs, harvested from a representative set of screens."""
+    from anvilate.analysis import CrossSection
+    from anvilate.packs import industrial, structural
+    from anvilate.units import Quantity
+
+    def q(text: str) -> Quantity:
+        return Quantity.parse(text)
+
+    out: list[tuple[str, object]] = []
+    section = CrossSection.rectangular(width=q("50 mm"), height=q("100 mm"))
+    for support in structural.Support:
+        for load_type in (structural.LoadType.POINT, structural.LoadType.DISTRIBUTED):
+            kwargs = {}
+            if support is structural.Support.OVERHANG:
+                kwargs["overhang_length"] = q("0.5 m")
+            member = structural.BeamMember(
+                name="b",
+                section=section,
+                length=q("3 m"),
+                support=support,
+                load=q("6 kN") if load_type is structural.LoadType.POINT else q("2 N/mm"),
+                load_type=load_type,
+                material="ASTM-A36",
+                **kwargs,
+            )
+            for entry in structural.screen_beam_member(member, required_safety_factor=1.5).entries:
+                if entry.derivation is not None:
+                    out.append(
+                        (f"{support.value}/{load_type.value} {entry.name}", entry.derivation)
+                    )
+    lug = structural.LiftingLug(
+        name="lug",
+        width=q("80 mm"),
+        hole_diameter=q("25 mm"),
+        thickness=q("12 mm"),
+        load=q("50 kN"),
+        material="ASTM-A36",
+    )
+    for entry in structural.screen_lifting_lug(lug, required_safety_factor=2.0).entries:
+        if entry.derivation is not None:
+            out.append((f"lug {entry.name}", entry.derivation))
+    cover = industrial.CoverPlate(
+        name="c",
+        pressure=q("400 kPa"),
+        thickness=q("12 mm"),
+        material="ASTM-A36",
+        diameter=q("500 mm"),
+    )
+    for entry in industrial.screen_cover_plate(cover, required_safety_factor=1.5).entries:
+        if entry.derivation is not None:
+            out.append((f"cover {entry.name}", entry.derivation))
+    return out
+
+
+def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
+    """A substituted line must multiply out to the result printed under it.
+
+    The calculation report tells a reviewer to check the arithmetic by hand, and
+    docs/citations.md tells them a mismatch is a bug worth reporting. Until this test
+    existed the only assertion of that property was a hardcoded literal for one SI
+    fixture, so the claim was a claim. This walks every derivation the packs actually
+    build, in BOTH unit systems, and evaluates the substituted line with pint.
+
+    It was written because an audit found eighteen live mismatches, up to 13% off:
+    `decimals_for` fixed the printed precision per dimension rather than per value, so a
+    working stress of 0.087 ksi printed as "0.1 ksi" and the error landed in the very
+    line a reviewer is told to check.
+    """
+    from anvilate.units import UnitSystem
+    from anvilate.units.registry import UREG
+
+    derivations = _sample_derivations()
+    assert len(derivations) >= 10, "the sample got too small to be meaningful"
+
+    number = re.compile(r"(-?\d+\.?\d*(?:[eE][-+]?\d+)?)")
+    checked = 0
+    mismatches: list[str] = []
+    for label, derivation in derivations:
+        if derivation.unresolved_symbols():
+            continue
+        for system in (UnitSystem.SI, UnitSystem.US):
+            substituted = derivation.substituted(system=system)
+            _, _, rhs = substituted.partition(" = ")
+            expression = rhs.replace("\u00b7", "*").replace("\u2212", "-")
+            expression = expression.replace("\u00b2", "**2").replace("\u00b3", "**3")
+            expression = expression.replace("\u2074", "**4")
+            # Pint binds a bare "/ 4166666.67 mm**4" as a division by the NUMBER times
+            # the unit, so each value-unit pair has to be parenthesised before parsing.
+            expression = _VALUE_UNIT.sub(r"(\1 \2)", expression)
+            try:
+                value = UREG.parse_expression(expression)
+            except Exception:  # pragma: no cover - an unparsed line is not a mismatch
+                continue
+            printed = derivation.result.rendered(system=system)
+            match = number.match(printed)
+            if match is None:
+                continue
+            expected = float(match.group(1))
+            unit = printed[match.end() :].strip().replace("\u00b7", "*")
+            try:
+                actual = value.to(UREG.Unit(unit)).magnitude
+            except Exception:  # pragma: no cover - dimensionally odd lines are skipped
+                continue
+            checked += 1
+            # The printed result carries its own precision, so the tolerance is a little
+            # over its last place plus slack for the inputs' own rounding.
+            if abs(actual - expected) > max(abs(expected) * 0.01, 5e-4):
+                mismatches.append(
+                    f"{label} [{system.value}]: {substituted} -> printed {printed}, "
+                    f"line evaluates to {actual:.6g}"
+                )
+
+    assert checked >= 20, f"only {checked} substituted lines were checkable"
+    assert not mismatches, (
+        "substituted lines that do not evaluate to the result printed under them:\n  "
+        + "\n  ".join(mismatches)
     )

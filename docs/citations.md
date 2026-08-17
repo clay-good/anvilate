@@ -36,8 +36,7 @@ It means all three of these:
   provenance, separately.
 - **It does not mean every limit state was checked.** Each entry cites the check it *is*.
   Read the whole card, and read the pack's scope section for what it deliberately leaves
-  out. `screen_masonry_wall`, for instance, implements the compression half of
-  TMS 402 §8.2.4.2 and says so.
+  out — a pack screens the limit states it names and no others.
 - **It is not a promise of coverage.** About 23% of the public analysis surface does not
   yet name a source at all; that debt is enumerated in
   [`docs/api/uncited-symbols.txt`](api/uncited-symbols.txt) rather than hidden.
@@ -54,9 +53,11 @@ the result. Do the arithmetic:
 σ_b = 35.7 MPa
 ```
 
-That line is meant to multiply out to the number under it, and it is asserted to. If it
-does not for some check you are reading, that is a bug worth reporting — it was one once,
-and the units were the cause.
+That line multiplies out to the number under it, and every derivation the packs build is
+asserted to, in both unit systems, by
+`test_every_derivation_the_library_builds_evaluates_to_its_own_result`. If it does not for
+some check you are reading, that is a bug worth reporting — it has been one twice, and
+the units layer was the cause both times.
 
 **2. Check the glossary.** Every symbol in a derivation is defined in plain language with
 its value and unit. A symbol appearing bare in the substituted line means an input was

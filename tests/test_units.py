@@ -107,7 +107,7 @@ def test_plausible_units_offered_for_bare_load():
 
 
 def test_conventional_precision():
-    assert render(Quantity.parse("1.234 ksi")) == "1.2 ksi"
+    assert render(Quantity.parse("1.234 ksi")) == "1.23 ksi"
     assert render(Quantity.parse("3.14159 mm")) == "3.14 mm"
     assert render(Quantity.parse("2.0 in")) == "2.000 in"
 

@@ -49,6 +49,16 @@ class UnitSystem(StrEnum):
         return "N*mm" if self is UnitSystem.SI else "kip*in"
 
     @property
+    def area_unit(self) -> str:
+        """The conventional unit for an area, mm² or in² — the square of :attr:`length_unit`.
+
+        Unmapped until an audit found a US-system derivation printing "1.5 · 6.0 kN /
+        5000.00 mm²" above a result in ksi: SI force over SI area against a US stress, a
+        substituted line mixing two systems inside one equals sign.
+        """
+        return "mm**2" if self is UnitSystem.SI else "in**2"
+
+    @property
     def second_moment_unit(self) -> str:
         """The conventional unit for a second moment of area, mm⁴ or in⁴.
 

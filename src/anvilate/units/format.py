@@ -9,6 +9,8 @@ regenerations.
 
 from __future__ import annotations
 
+from math import isfinite
+
 from .quantity import Quantity
 from .registry import UREG
 from .system import UnitSystem
@@ -30,12 +32,41 @@ _UNIT_DECIMALS = {
 }
 
 
-def decimals_for(unit: str) -> int:
-    """Conventional decimal places for a unit."""
+# The most a fixed-decimal rendering may round a value by, as a fraction of the value.
+# The conventional decimal places above are fixed per unit and per dimension, which is
+# fine at everyday magnitudes and wrong at small ones: a stress of 0.087 ksi printed to
+# the pressure convention of one decimal reads "0.1 ksi", a 15% error — and that number
+# then appears in a calculation report's substituted line, which a reviewer is told to
+# check by hand. Below this bound the places are increased until the rounding is
+# negligible, so a printed line reproduces its own printed result.
+_MAX_RELATIVE_ROUNDING = 0.005
+
+# Units that share a moment's dimensionality but are energies; see _system_unit.
+_ENERGY_UNITS = frozenset(
+    {"J", "kJ", "MJ", "mJ", "Wh", "kWh", "MWh", "BTU", "Btu", "cal", "kcal", "eV", "keV", "MeV"}
+)
+
+
+def decimals_for(unit: str, magnitude: float | None = None) -> int:
+    """Conventional decimal places for a unit, widened when they would lose the value.
+
+    ``magnitude`` is optional and, when given, raises the precision for a value small
+    enough that the conventional places would round it by more than half a percent.
+    """
     if unit in _UNIT_DECIMALS:
-        return _UNIT_DECIMALS[unit]
-    dim = str(UREG.Unit(unit).dimensionality)
-    return _DIM_DECIMALS.get(dim, 2)
+        places = _UNIT_DECIMALS[unit]
+    else:
+        dim = str(UREG.Unit(unit).dimensionality)
+        places = _DIM_DECIMALS.get(dim, 2)
+    if magnitude is None:
+        return places
+    value = abs(magnitude)
+    if value == 0 or not isfinite(value):
+        return places
+    # Half a unit in the last printed place is the worst-case rounding.
+    while 0.5 * 10.0**-places > _MAX_RELATIVE_ROUNDING * value and places < 12:
+        places += 1
+    return places
 
 
 def render(
@@ -59,7 +90,7 @@ def render(
     if target is None and system is not None:
         target = _system_unit(quantity, system)
     shown = quantity if target is None else quantity.to(target)
-    places = decimals_for(shown.unit)
+    places = decimals_for(shown.unit, shown.magnitude)
     label = _engineering_order(f"{shown.pint.units:~P}") if pretty else shown.unit
     return f"{shown.magnitude:.{places}f} {label}"
 
@@ -121,6 +152,14 @@ def _engineering_order(label: str) -> str:
 def _system_unit(quantity: Quantity, system: UnitSystem) -> str | None:
     """The conventional unit for ``quantity``'s dimension in ``system``."""
     dim = quantity.pint.dimensionality
+    # Energy, work and torque are one dimensionality, and only one of them is a moment.
+    # Relabelling a strain energy or a heat duty as "9.34 kip·in" is arithmetically right
+    # and unreadable, so a quantity already written in an energy unit keeps it.
+    if str(quantity.unit) in _ENERGY_UNITS or any(
+        token in str(quantity.unit).lower()
+        for token in ("joule", "watt", "hour", "calorie", "btu", "erg", "therm", "electron_volt")
+    ):
+        return None
     mapping = [
         ("[length]", system.length_unit),
         ("[force]", system.force_unit),
@@ -131,6 +170,9 @@ def _system_unit(quantity: Quantity, system: UnitSystem) -> str | None:
         # a substituted line mixing two systems, which is worse than either.
         ("[force] * [length]", system.moment_unit),
         ("[length] ** 4", system.second_moment_unit),
+        # Areas were the remaining hole: a US-system line printed "1.5 · 6.0 kN /
+        # 5000.00 mm²" against a result in ksi — SI force over SI area, US stress.
+        ("[length] ** 2", system.area_unit),
     ]
     for token, unit in mapping:
         if dim == UREG.get_dimensionality(token):

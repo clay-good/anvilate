@@ -101,7 +101,7 @@ The shock spectrum is not monotonic in mount stiffness:
 | τ/T | Regime | Amplification | Softening the mount… |
 | --- | --- | --- | --- |
 | 0.04 | impulsive | 0.15 | …is already working; a 30 g pulse arrives as 4.6 g |
-| 0.81 | amplifying | **1.77** (the peak) | …helps; stiffening makes it worse |
+| 0.80 | amplifying | **1.77** (at the peak) | …helps; stiffening makes it worse |
 | 3.3 | quasi-static | 1.17 | …makes it *worse* until you clear the peak |
 
 Move a mount from τ/T = 3.3 to τ/T = 0.8 in the name of "more isolation" and the shock it

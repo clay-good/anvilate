@@ -24,6 +24,31 @@ def _q(text: str) -> Quantity:
     return Quantity.parse(text)
 
 
+# The inverses this module actually round-trips, declared rather than inferred. The gate
+# in tests/test_contract.py reads this set. It used to grep this file's text for the
+# inverse's name, which a COMMENT satisfied — an audit slipped a nonsense pairing past it
+# with a single "# TODO: round-trip ... someday" line.
+ROUND_TRIPPED = frozenset(
+    {
+        "section.required_section_modulus",
+        "axial.required_axial_area",
+        "column.euler_second_moment_for_load",
+        "torsion.shaft_diameter_for_torque",
+        "fastener.bolt_diameter_for_shear",
+        "pressure_vessel.thin_wall_thickness_for_pressure",
+        "pressure_vessel.asme_b313_pipe_wall_thickness",
+        "dynamics.isolator_static_deflection_for_transmissibility",
+        "wire_rope.minimum_sheave_diameter_for_bending_stress",
+        "fastener.thread_engagement_for_load",
+        "control_valve.required_flow_coefficient",
+        "machining.spindle_speed_for_cutting_speed",
+        "dynamics.natural_frequency_from_deflection",
+        "keys.key_length_for_torque",
+        "thermal.fin_array_count_for_resistance",
+    }
+)
+
+
 def test_required_section_modulus_lands_the_bending_stress_at_the_margin():
     from anvilate.analysis import bending_stress, required_section_modulus
 
