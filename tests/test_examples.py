@@ -5676,3 +5676,21 @@ def test_lipped_channel_dsm_example_shifts_its_governing_mode_with_length():
     # Without a finite-strip run there is nothing to screen against.
     (unrun,) = namespace["screen_without_a_buckling_analysis"]().entries
     assert unrun.status is CheckStatus.NOT_EVALUATED
+
+
+def test_welded_aluminum_platform_beam_example_is_governed_by_the_weld():
+    namespace = runpy.run_path(str(_EXAMPLES / "welded_aluminum_platform_beam.py"))
+    card = namespace["screen_platform_beam"]()
+    by_name = {e.name: e for e in card.entries}
+    unwelded = by_name["unwelded member"]
+    welded = by_name["welded at the connection"]
+    missing = by_name["welded, no HAZ data supplied"]
+    # The same beam under the same load: the weld is the whole difference.
+    assert unwelded.status is CheckStatus.PASS
+    assert welded.status is CheckStatus.FAIL
+    assert welded.safety_factor is not None and unwelded.safety_factor is not None
+    assert welded.safety_factor < unwelded.safety_factor / 2
+    # Declared welds with no weld-affected properties never fall back to parent metal.
+    assert missing.status is CheckStatus.NOT_EVALUATED
+    assert "F_cyw" in missing.detail
+    assert card.status is CheckStatus.FAIL

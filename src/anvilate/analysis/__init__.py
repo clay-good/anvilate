@@ -974,8 +974,12 @@ modules:
   fully effective, and the reduced effective width above the limit
 - :mod:`~anvilate.analysis.aluminum` — Aluminum Design Manual member checks: the
   unified straight-line/Euler buckling stress from the alloy-temper's buckling
-  constants (column, beam, or local buckling), and the tension stress F = min(F_ty,
-  F_tu/k_t)
+  constants (column, beam, or local buckling), the tension stress F = min(F_ty,
+  F_tu/k_t), and the ADM 2020 screens — the §B.4 buckling constants computed from the
+  alloy's own F_cy and E, local buckling of a flat element by edge support (§B.5.4),
+  member buckling (§E.3), lateral-torsional buckling (§F.4.2), the §H.1 combined
+  interaction, and a compression screen that runs the parent metal and the
+  weld-affected zone side by side and says which governed
 - :mod:`~anvilate.analysis.composite` — fiber-composite micromechanics (rule of
   mixtures): the longitudinal (iso-strain) modulus and strength, and the transverse
   (iso-stress inverse-rule) modulus of a unidirectional laminate from its fiber and
@@ -1082,7 +1086,21 @@ from .aisc_compactness import (
     flexural_web_slenderness_limits,
 )
 from .aluminum import (
+    AlloyProperties,
+    AluminumCompressionStrength,
+    AluminumLimitState,
+    BucklingConstants,
+    EdgeSupport,
+    TemperGroup,
+    aluminum_buckling_constants,
     aluminum_buckling_stress,
+    aluminum_combined_interaction,
+    aluminum_compression_scorecard,
+    aluminum_compression_strength,
+    aluminum_elastic_local_buckling_stress,
+    aluminum_lateral_torsional_moment,
+    aluminum_local_buckling_stress,
+    aluminum_member_buckling_stress,
     aluminum_tension_stress,
 )
 from .antenna import (
@@ -3259,7 +3277,21 @@ from .worm import (
 
 __all__ = [
     "DEFAULT_POISSON_RATIO",
+    "AlloyProperties",
+    "AluminumCompressionStrength",
+    "AluminumLimitState",
+    "BucklingConstants",
+    "EdgeSupport",
+    "TemperGroup",
+    "aluminum_buckling_constants",
     "aluminum_buckling_stress",
+    "aluminum_combined_interaction",
+    "aluminum_elastic_local_buckling_stress",
+    "aluminum_compression_scorecard",
+    "aluminum_compression_strength",
+    "aluminum_lateral_torsional_moment",
+    "aluminum_local_buckling_stress",
+    "aluminum_member_buckling_stress",
     "aluminum_tension_stress",
     "rule_of_mixtures_modulus",
     "rule_of_mixtures_strength",

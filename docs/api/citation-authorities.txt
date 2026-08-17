@@ -46,6 +46,7 @@ ACI
 AGMA
 AISC
 AISI
+Aluminum Design Manual
 ANSI
 API
 ASCE

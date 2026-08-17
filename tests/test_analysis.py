@@ -39203,3 +39203,420 @@ def test_dsm_scorecard_will_not_pass_a_section_it_cannot_stand_behind():
         )
         == ()
     )
+
+
+# --- ADM 2020 aluminum pack -------------------------------------------------
+#
+# Every anchor below is the Aluminum Design Manual's own published allowable stress for
+# 6061-T6 (Part VI Table 2-19 and the worked examples that go with it), divided back out
+# by the safety factor Omega = 1.65. That is the strongest anchor available for this
+# pack: it checks the buckling constants, the branch points, and every branch of every
+# curve against numbers the standard prints, rather than against a re-derivation of the
+# same algebra this module already contains.
+
+_AL_6061_T6_FCY = "35 ksi"
+_AL_6061_T6_E = "10100 ksi"
+_AL_OMEGA = 1.65  # ADM building-type safety factor on buckling
+
+
+def _al_constants():
+    from anvilate.analysis import aluminum_buckling_constants
+
+    return aluminum_buckling_constants(
+        compressive_yield=_q(_AL_6061_T6_FCY), elastic_modulus=_q(_AL_6061_T6_E)
+    )
+
+
+def test_adm_buckling_constants_reproduce_the_published_6061_t6_values():
+    """B_c, D_c and C_c against the ADM's own tabulated constants for 6061-T6.
+
+    The ADM prints B_c = 39.4 ksi, D_c = 0.246 ksi and C_c = 66 for 6061-T6, and this
+    module computes them from F_cy = 35 ksi and E = 10,100 ksi by the Table B.4.2
+    formulas. Agreement to three figures is what says the formulas were transcribed
+    right — a wrong exponent or denominator would land somewhere plausible but wrong.
+    """
+    c = _al_constants()
+    assert c.intercept_member.to("ksi").magnitude == pytest.approx(39.4, abs=0.05)
+    assert c.slope_member.to("ksi").magnitude == pytest.approx(0.246, abs=0.001)
+    assert c.intersection_member == pytest.approx(66.0, abs=0.4)
+    # Plate constants, from the same table's B_p/D_p/C_p row.
+    assert c.intercept_plate.to("ksi").magnitude == pytest.approx(45.0, abs=0.05)
+    assert c.slope_plate.to("ksi").magnitude == pytest.approx(0.300, abs=0.001)
+    assert c.intersection_plate == pytest.approx(61.4, abs=0.3)
+
+
+def test_adm_member_buckling_walks_all_three_branches_against_the_published_table():
+    """The ADM's published 6061-T6 column allowables, one point per branch.
+
+    Part VI Table 2-19 gives F_c/Omega = 21.2 ksi below kL/r = 17.8, then
+    25.2 - 0.232(kL/r) + 0.000465(kL/r)^2 up to 66, then 51,350/(kL/r)^2. Testing at
+    17.8, 40, 66 and 100 puts one point on each branch and one exactly on each branch
+    point — a wrong branch condition moves at least one of them.
+    """
+    from anvilate.analysis import aluminum_member_buckling_stress
+
+    c = _al_constants()
+
+    def allowable(lam: float) -> float:
+        return (
+            aluminum_member_buckling_stress(
+                slenderness=lam,
+                compressive_yield=_q(_AL_6061_T6_FCY),
+                elastic_modulus=_q(_AL_6061_T6_E),
+                constants=c,
+            )
+            .to("ksi")
+            .magnitude
+            / _AL_OMEGA
+        )
+
+    assert allowable(10.0) == pytest.approx(21.2, abs=0.05)  # yielding, F_cy/Omega
+    assert allowable(17.8) == pytest.approx(21.2, abs=0.05)  # at lambda_1
+    assert allowable(40.0) == pytest.approx(16.66, abs=0.05)  # inelastic
+    assert allowable(66.0) == pytest.approx(11.79, abs=0.05)  # at C_c
+    assert allowable(100.0) == pytest.approx(5.135, abs=0.02)  # elastic, the ADM's example
+
+    # The elastic branch carries the 0.85 out-of-straightness knockdown. Without it the
+    # allowable at kL/r = 100 would be 6.04 ksi, 18% unconservative, and every test above
+    # the branch point would still pass on a smooth-looking curve.
+    assert allowable(100.0) < 0.9 * (math.pi**2 * 10100 / 100.0**2) / _AL_OMEGA
+    # Monotone decreasing across the branch points: no step, no dip.
+    values = [allowable(x) for x in (5, 17.8, 30, 50, 65.9, 66.1, 90, 150)]
+    assert values == sorted(values, reverse=True)
+
+
+def test_adm_local_buckling_matches_the_published_flange_and_web_curves():
+    """The one-edge and both-edges curves against the ADM's own I 6 x 4.03 example.
+
+    For 6061-T6 the ADM gives the outstanding flange (one edge supported, k = 5.0)
+    F_c/Omega = 27.3 - 0.910(b/t) between b/t = 6.7 and 12, then 2417/(b/t)^2; and the
+    web (both edges, k = 1.6) F_c/Omega = 27.3 - 0.291(b/t) between 20.8 and 33. The
+    ratio of the two slopes is exactly 5.0/1.6, which is what makes a single wrong
+    edge-support coefficient visible here rather than absorbed into the constants.
+    """
+    from anvilate.analysis import EdgeSupport, aluminum_local_buckling_stress
+
+    c = _al_constants()
+
+    def allowable(ratio: float, support) -> float:
+        return (
+            aluminum_local_buckling_stress(
+                flat_width=_q(f"{ratio} mm"),
+                thickness=_q("1 mm"),
+                compressive_yield=_q(_AL_6061_T6_FCY),
+                elastic_modulus=_q(_AL_6061_T6_E),
+                constants=c,
+                edge_support=support,
+            )
+            .to("ksi")
+            .magnitude
+            / _AL_OMEGA
+        )
+
+    one = EdgeSupport.ONE_EDGE
+    both = EdgeSupport.BOTH_EDGES
+    assert allowable(6.6, one) == pytest.approx(21.2, abs=0.05)  # the example's flange
+    assert allowable(8.0, one) == pytest.approx(27.3 - 0.910 * 8.0, abs=0.05)
+    assert allowable(10.0, one) == pytest.approx(27.3 - 0.910 * 10.0, abs=0.05)
+    # lambda_2 = 10.5 for the one-edge flange, so b/t = 11 is already postbuckling.
+    assert allowable(11.0, one) == pytest.approx(186.0 / 11.0, abs=0.05)
+    assert allowable(20.0, both) == pytest.approx(21.2, abs=0.05)
+    assert allowable(28.5, both) == pytest.approx(19.0, abs=0.05)  # the example's web
+    # Past lambda_2 both conditions run on postbuckling reserve, 2.27*sqrt(B_p*E)/(k*b/t)
+    # — the ADM's 6061-T6 form is 186/(b/t) for the one-edge flange (lambda_2 = 10.5) and
+    # 3.125x that for the both-edges web (lambda_2 = 33), the ratio of the two k values.
+    assert allowable(15.0, one) == pytest.approx(186.0 / 15.0, abs=0.05)
+    assert allowable(40.0, both) == pytest.approx(186.0 * (5.0 / 1.6) / 40.0, abs=0.05)
+
+    # The two supports are not interchangeable: on the same branch at the same b/t, the
+    # free edge is worth exactly 1.6/5.0 of the held one, and a screen that used the wrong
+    # coefficient would be unconservative by 3.1x.
+    assert allowable(40.0, one) == pytest.approx(allowable(40.0, both) / (5.0 / 1.6), rel=1e-9)
+
+    # The elastic local buckling stress is a different quantity from the strength: it is
+    # the (lower) stress at which the element first buckles, 2417/(b/t)^2 allowable for
+    # the 6061-T6 flange. Confusing the two throws away the postbuckling reserve.
+    from anvilate.analysis import aluminum_elastic_local_buckling_stress
+
+    elastic = (
+        aluminum_elastic_local_buckling_stress(
+            flat_width=_q("15 mm"),
+            thickness=_q("1 mm"),
+            elastic_modulus=_q(_AL_6061_T6_E),
+            edge_support=one,
+        )
+        .to("ksi")
+        .magnitude
+        / _AL_OMEGA
+    )
+    assert elastic == pytest.approx(2417 / 15.0**2, abs=0.05)
+    assert elastic < allowable(15.0, one)
+
+
+def test_adm_lateral_torsional_moment_matches_the_published_worked_example():
+    """The ADM's I 12 x 14.3 LTB example: 845 in-kip allowable at lambda = 51.5.
+
+    M_np = 2043 in-kip, S_c = 52.89 in^3, no bracing over 86 inches, r_ye = 1.67 in.
+    The published answer uses C_c rounded to 66; this module carries 65.67, which is the
+    whole of the 0.4% difference.
+    """
+    from anvilate.analysis import aluminum_lateral_torsional_moment
+
+    c = _al_constants()
+    inelastic = aluminum_lateral_torsional_moment(
+        plastic_moment=_q("2043 inch*kip"),
+        section_modulus=_q("52.89 inch**3"),
+        slenderness=51.5,
+        elastic_modulus=_q(_AL_6061_T6_E),
+        constants=c,
+    )
+    assert inelastic.to("inch*kip").magnitude / _AL_OMEGA == pytest.approx(845.0, rel=0.006)
+
+    # Past C_c it is the plain elastic curve, 60,400*S_c/lambda^2 allowable for 6061-T6.
+    elastic = aluminum_lateral_torsional_moment(
+        plastic_moment=_q("2043 inch*kip"),
+        section_modulus=_q("52.89 inch**3"),
+        slenderness=120.0,
+        elastic_modulus=_q(_AL_6061_T6_E),
+        constants=c,
+    )
+    assert elastic.to("inch*kip").magnitude / _AL_OMEGA == pytest.approx(
+        60400 * 52.89 / 120.0**2, rel=0.005
+    )
+
+    # LTB carries NO out-of-straightness knockdown, unlike the column curve that shares
+    # its C_c. Borrowing the 0.85 across — the obvious mistake — would land here.
+    assert elastic.to("inch*kip").magnitude == pytest.approx(
+        math.pi**2 * 10100 * 52.89 / 120.0**2, rel=0.002
+    )
+
+
+def test_adm_refuses_the_temper_group_whose_table_it_does_not_have():
+    """A -H or -T4 temper takes ADM Table B.4.1, and this module says so instead of guessing.
+
+    Table B.4.2's constants evaluated on a non-aged temper would produce a number off the
+    wrong curve — plausible, unflagged, and wrong. The low-level function raises; the
+    screen reports it as not evaluated, which is the pairing a guard and a scorecard have
+    to have or the guard escapes as an exception through a contract that promises a verdict.
+    """
+    from anvilate.analysis import (
+        AlloyProperties,
+        TemperGroup,
+        aluminum_buckling_constants,
+        aluminum_compression_scorecard,
+        aluminum_compression_strength,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    with pytest.raises(ValueError, match="Table B.4.1"):
+        aluminum_buckling_constants(
+            compressive_yield=_q(_AL_6061_T6_FCY),
+            elastic_modulus=_q(_AL_6061_T6_E),
+            temper_group=TemperGroup.NON_AGED,
+        )
+
+    h34 = AlloyProperties(
+        name="5052-H34",
+        compressive_yield=_q("24 ksi"),
+        tensile_yield=_q("26 ksi"),
+        tensile_ultimate=_q("34 ksi"),
+        elastic_modulus=_q(_AL_6061_T6_E),
+        temper_group=TemperGroup.NON_AGED,
+        source="mill certificate",
+    )
+    strength = aluminum_compression_strength(
+        properties=h34, slenderness=60.0, flat_width=_q("50 mm"), thickness=_q("3 mm")
+    )
+    assert strength is None
+    entry = aluminum_compression_scorecard(
+        "column", demand_stress=_q("40 MPa"), strength=strength, missing="ADM Table B.4.1"
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "B.4.1" in entry.detail
+
+
+def _al_6061_t6(welded: bool = True):
+    from anvilate.analysis import AlloyProperties, TemperGroup
+
+    haz = AlloyProperties(
+        name="6061-T6 (weld-affected)",
+        compressive_yield=_q("15 ksi"),
+        tensile_yield=_q("15 ksi"),
+        tensile_ultimate=_q("24 ksi"),
+        elastic_modulus=_q(_AL_6061_T6_E),
+        temper_group=TemperGroup.ARTIFICIALLY_AGED,
+        source="ADM Table A.3.5, read by the user",
+    )
+    return AlloyProperties(
+        name="6061-T6",
+        compressive_yield=_q(_AL_6061_T6_FCY),
+        tensile_yield=_q("35 ksi"),
+        tensile_ultimate=_q("38 ksi"),
+        elastic_modulus=_q(_AL_6061_T6_E),
+        temper_group=TemperGroup.ARTIFICIALLY_AGED,
+        source="ADM Table A.3.4, read by the user",
+        weld_affected=haz if welded else None,
+    )
+
+
+def test_a_welded_aluminum_member_is_screened_on_both_property_sets():
+    """The whole point of the pack: the weld-affected zone is visible and it governs.
+
+    6061-T6 drops from F_cy = 35 ksi to 15 ksi within an inch of the arc. A screen that
+    quietly used the parent metal would report more than twice the capacity the welded
+    member has. Both numbers appear in the detail, and the one that governed is named.
+    """
+    from anvilate.analysis import aluminum_compression_scorecard, aluminum_compression_strength
+    from anvilate.scorecard import CheckStatus
+
+    props = _al_6061_t6()
+    unwelded = aluminum_compression_strength(
+        properties=props, slenderness=40.0, flat_width=_q("60 mm"), thickness=_q("4 mm")
+    )
+    welded = aluminum_compression_strength(
+        properties=props,
+        slenderness=40.0,
+        flat_width=_q("60 mm"),
+        thickness=_q("4 mm"),
+        welded=True,
+    )
+    assert unwelded is not None and welded is not None
+    assert unwelded.weld_affected_nominal is None
+    assert welded.weld_affected_governs is True
+    assert welded.nominal.magnitude < unwelded.nominal.magnitude
+    # Not a token reduction: the welded member is worth well under three quarters of the
+    # parent-metal one at this slenderness.
+    assert welded.nominal.magnitude < 0.75 * unwelded.nominal.magnitude
+
+    entry = aluminum_compression_scorecard(
+        "platform beam", demand_stress=_q("60 MPa"), strength=welded
+    )
+    assert entry.status in (CheckStatus.PASS, CheckStatus.FAIL)
+    assert "parent metal" in entry.detail and "weld-affected" in entry.detail
+    assert "weld-affected governs" in entry.detail
+    assert entry.reference is not None and "Aluminum Design Manual" in entry.reference
+
+
+def test_a_declared_weld_with_no_weld_affected_data_is_not_evaluated():
+    """Declared welds and no F_cyw is the case that must never come back a pass."""
+    from anvilate.analysis import aluminum_compression_scorecard, aluminum_compression_strength
+    from anvilate.scorecard import CheckStatus
+
+    bare = _al_6061_t6(welded=False)
+    assert (
+        aluminum_compression_strength(
+            properties=bare,
+            slenderness=40.0,
+            flat_width=_q("60 mm"),
+            thickness=_q("4 mm"),
+            welded=True,
+        )
+        is None
+    )
+    # Unwelded, the same properties screen fine — so the NOT_EVALUATED is about the
+    # declaration, not about the properties being unusable.
+    assert (
+        aluminum_compression_strength(
+            properties=bare, slenderness=40.0, flat_width=_q("60 mm"), thickness=_q("4 mm")
+        )
+        is not None
+    )
+    entry = aluminum_compression_scorecard(
+        "welded post",
+        demand_stress=_q("60 MPa"),
+        strength=None,
+        missing="weld-affected F_cyw was not supplied",
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "F_cyw" in entry.detail
+
+
+def test_the_aluminum_compression_screen_names_the_limit_state_that_governed():
+    """Three geometries, three different governing states — the number alone cannot say."""
+    from anvilate.analysis import AluminumLimitState, EdgeSupport, aluminum_compression_strength
+
+    props = _al_6061_t6(welded=False)
+    stocky = aluminum_compression_strength(
+        properties=props, slenderness=5.0, flat_width=_q("20 mm"), thickness=_q("6 mm")
+    )
+    slender_column = aluminum_compression_strength(
+        properties=props, slenderness=140.0, flat_width=_q("20 mm"), thickness=_q("6 mm")
+    )
+    thin_leg = aluminum_compression_strength(
+        properties=props,
+        slenderness=5.0,
+        flat_width=_q("120 mm"),
+        thickness=_q("3 mm"),
+        edge_support=EdgeSupport.ONE_EDGE,
+    )
+    assert stocky is not None and slender_column is not None and thin_leg is not None
+    assert stocky.governing is AluminumLimitState.YIELDING
+    assert slender_column.governing is AluminumLimitState.MEMBER_BUCKLING
+    assert thin_leg.governing is AluminumLimitState.LOCAL_BUCKLING
+    assert stocky.nominal.magnitude == pytest.approx(stocky.yielding.magnitude, rel=1e-9)
+
+
+def test_zero_demand_on_an_aluminum_screen_is_not_a_pass():
+    """Nothing to evaluate is NOT_EVALUATED, not a member exactly at its limit."""
+    from anvilate.analysis import aluminum_compression_scorecard, aluminum_compression_strength
+    from anvilate.scorecard import CheckStatus
+
+    strength = aluminum_compression_strength(
+        properties=_al_6061_t6(welded=False),
+        slenderness=40.0,
+        flat_width=_q("60 mm"),
+        thickness=_q("4 mm"),
+    )
+    entry = aluminum_compression_scorecard("idle", demand_stress=_q("0 MPa"), strength=strength)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.safety_factor is None
+
+
+def test_the_adm_interaction_is_linear_and_unlike_aisc_gives_no_low_axial_relief():
+    """ADM H.1 sums the three ratios flat; AISC H1-1b halves the axial term. Not the same.
+
+    A member at P_r/P_c = 0.15 with a major-axis ratio of 0.80 passes AISC's H1-1b
+    (0.15/2 + 0.80 = 0.875) and fails the ADM (0.95 + ... ), so borrowing the steel form
+    here would be unconservative in exactly the region where it is most tempting.
+    """
+    from anvilate.analysis import aluminum_combined_interaction
+
+    combined = aluminum_combined_interaction(axial_ratio=0.15, major_moment_ratio=0.80)
+    assert combined == pytest.approx(0.95)
+    assert aluminum_combined_interaction(
+        axial_ratio=0.4, major_moment_ratio=0.4, minor_moment_ratio=0.3
+    ) == pytest.approx(1.1)
+    # Ratios are magnitudes: a sign-reversed demand still consumes capacity, and letting
+    # a negative one cancel a positive one is how an interaction check goes silently green.
+    with pytest.raises(ValueError, match="non-negative"):
+        aluminum_combined_interaction(axial_ratio=-0.2, major_moment_ratio=0.8)
+
+
+def test_alloy_properties_will_not_accept_a_set_with_no_provenance():
+    """The user-supplied-allowables doctrine: a strength with no source is not a strength."""
+    from anvilate.analysis import AlloyProperties, TemperGroup
+
+    def build(**over):
+        kwargs = {
+            "name": "6061-T6",
+            "compressive_yield": _q("35 ksi"),
+            "tensile_yield": _q("35 ksi"),
+            "tensile_ultimate": _q("38 ksi"),
+            "elastic_modulus": _q(_AL_6061_T6_E),
+            "temper_group": TemperGroup.ARTIFICIALLY_AGED,
+            "source": "mill certificate",
+        }
+        kwargs.update(over)
+        return AlloyProperties(**kwargs)
+
+    build()  # the baseline is valid
+    with pytest.raises(ValueError, match="source must record"):
+        build(source="   ")
+    with pytest.raises(ValueError, match="must be positive"):
+        build(compressive_yield=_q("0 ksi"))
+    with pytest.raises(ValueError, match=r"\[pressure\]"):
+        build(elastic_modulus=_q("10100 mm"))
+    with pytest.raises(ValueError, match="k_t must be at least"):
+        build(tension_coefficient=0.9)
+    with pytest.raises(ValueError, match="already the reduced material"):
+        build(weld_affected=build(weld_affected=build()))

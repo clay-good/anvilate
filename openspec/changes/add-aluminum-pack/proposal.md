@@ -35,3 +35,19 @@ every cited clause.
 - Data: alloy/temper properties (Fcy, Ftu, kt, weld-affected values) user-supplied with
   provenance, or resolved from the curated materials DB where records carry a
   redistribution-clean source; the ADM's own property tables are never bundled.
+
+## Scope as shipped
+
+Two limits, both deliberate and both surfaced rather than silent:
+
+- **Temper groups.** Only the artificially aged tempers (-T5 through -T9, ADM
+  Table B.4.2) are implemented — the group 6061-T6 belongs to, which is the alloy the
+  named audience actually uses. Every implemented constant is anchored in the test suite
+  against the allowable stresses the ADM publishes for 6061-T6 in Part VI Table 2-19.
+  Table B.4.1's constants (-O, -H, -T1 through -T4) have a different form and no
+  comparable anchor was available; declaring `TemperGroup.NON_AGED` therefore reports
+  `NOT_EVALUATED` naming Table B.4.1 rather than evaluating the wrong table.
+- **§E.4 local/member buckling interaction.** The screen detects the condition (the
+  element buckles elastically below the elastic member buckling stress), states it, and
+  downgrades what would have been a pass to `NOT_EVALUATED` — but does not apply the
+  reduction, whose scope depends on the shape in ways a one-element screen cannot see.
