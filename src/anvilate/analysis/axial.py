@@ -38,8 +38,14 @@ def _as_quantity(pint_value, unit: str) -> Quantity:
 
 
 def circular_area(diameter: Quantity) -> Quantity:
-    """The area A = π·d²/4 of a solid circular section."""
+    """The area A = π·d²/4 of a solid circular section.
+
+    ``diameter`` must be positive: the square makes a negative one come back as a
+    perfectly ordinary positive area, and this feeds σ = F/A everywhere downstream.
+    """
     _require(diameter, "[length]", "diameter")
+    if diameter.to("mm").magnitude <= 0:
+        raise ValueError(f"diameter must be positive; got {diameter}")
     return _as_quantity(pi * diameter.pint**2 / 4, "mm**2")
 
 

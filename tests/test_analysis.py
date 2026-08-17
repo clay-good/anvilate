@@ -12604,13 +12604,22 @@ def test_bearing_equivalent_dynamic_load():
     # It feeds the L10 life directly.
     life = bearing_basic_rating_life(dynamic_load_rating=_q("40 kN"), equivalent_load=p)
     assert life > 0
-    # Pure radial (X=1, Y=0-ish) is just the radial load.
+    # Pure radial below the e threshold is X = 1, Y = 0, exactly as the docstring says --
+    # this used to raise, so the test had to fake it with Y = 1 against a zero thrust.
     assert bearing_equivalent_dynamic_load(
-        radial_load=_q("4000 N"), axial_load=_q("0 N"), radial_factor=1.0, axial_factor=1.0
+        radial_load=_q("4000 N"), axial_load=_q("0 N"), radial_factor=1.0, axial_factor=0.0
     ).to("N").magnitude == pytest.approx(4000.0, rel=1e-12)
-    with pytest.raises(ValueError, match="radial_factor and axial_factor must be positive"):
+    # Y = 0 still carries no thrust contribution when a thrust is present.
+    assert bearing_equivalent_dynamic_load(
+        radial_load=_q("4000 N"), axial_load=_q("2000 N"), radial_factor=1.0, axial_factor=0.0
+    ).to("N").magnitude == pytest.approx(4000.0, rel=1e-12)
+    with pytest.raises(ValueError, match="radial_factor must be positive"):
         bearing_equivalent_dynamic_load(
             radial_load=_q("4000 N"), axial_load=_q("2000 N"), radial_factor=0, axial_factor=1.6
+        )
+    with pytest.raises(ValueError, match="axial_factor must be non-negative"):
+        bearing_equivalent_dynamic_load(
+            radial_load=_q("4000 N"), axial_load=_q("2000 N"), radial_factor=0.56, axial_factor=-1
         )
 
 
@@ -37272,3 +37281,65 @@ def test_lumped_capacitance_refuses_an_excess_temperature_on_an_offset_scale() -
         time=_q("100 s"),
         time_constant=_q("100 s"),
     ).to("K").magnitude == pytest.approx(29.430355293715387, rel=1e-9)
+
+
+def test_inputs_that_produced_a_plausible_number_instead_of_a_refusal() -> None:
+    """Garbage in, plausible-looking number out -- the worst shape for a screening tool.
+
+    None of these is a wrong formula either. Each takes an input outside its stated
+    domain and returns something that reads as an ordinary answer, so nothing downstream
+    can tell it apart from a real one.
+    """
+    from anvilate.analysis.axial import circular_area
+    from anvilate.analysis.bearing import bearing_equivalent_dynamic_load
+    from anvilate.analysis.belt import belt_max_transmissible_force, belt_transmitted_power
+    from anvilate.analysis.brake import band_brake_torque
+    from anvilate.analysis.geotechnical import terzaghi_bearing_capacity
+
+    # A negative diameter squares away to a perfectly ordinary positive area, and area
+    # feeds sigma = F/A everywhere downstream.
+    with pytest.raises(ValueError, match="diameter must be positive"):
+        circular_area(diameter=_q("-10 mm"))
+    assert circular_area(diameter=_q("10 mm")).to("mm**2").magnitude == pytest.approx(
+        78.53981633974483, rel=1e-12
+    )
+
+    # A belt pushing on its own slack side widened the tension difference and reported
+    # MORE power than the drive can transmit.
+    with pytest.raises(ValueError, match="slack_tension must be non-negative"):
+        belt_transmitted_power(
+            tight_tension=_q("1000 N"), slack_tension=_q("-500 N"), belt_speed=_q("4 m/s")
+        )
+    assert belt_transmitted_power(
+        tight_tension=_q("1000 N"), slack_tension=_q("500 N"), belt_speed=_q("4 m/s")
+    ).to("W").magnitude == pytest.approx(2000.0, rel=1e-12)
+
+    # A negative tight tension scaled straight through, and the band brake delegates here,
+    # so it reported a negative braking torque.
+    wrap = {"friction_coefficient": 0.3, "wrap_angle": pi}
+    with pytest.raises(ValueError, match="tight_tension must be positive"):
+        belt_max_transmissible_force(tight_tension=_q("-1000 N"), **wrap)
+    with pytest.raises(ValueError, match="tight_tension must be positive"):
+        band_brake_torque(tight_tension=_q("-1000 N"), drum_diameter=_q("200 mm"), **wrap)
+    assert band_brake_torque(tight_tension=_q("1000 N"), drum_diameter=_q("200 mm"), **wrap).to(
+        "N*m"
+    ).magnitude == pytest.approx(61.03388626246532, rel=1e-9)
+
+    # Negative N factors gave a negative ultimate bearing pressure -- soil that pulls a
+    # footing down.
+    soil = {
+        "cohesion": _q("20 kPa"),
+        "surcharge": _q("18 kPa"),
+        "unit_weight": _q("18 kN/m**3"),
+        "width": _q("2 m"),
+    }
+    with pytest.raises(ValueError, match="must be non-negative"):
+        terzaghi_bearing_capacity(
+            bearing_factor_c=-10.0, bearing_factor_q=-5.0, bearing_factor_gamma=-3.0, **soil
+        )
+
+    # Y = 0 is the pure-radial row of the ISO 281 table, which the docstring named and the
+    # code rejected.
+    assert bearing_equivalent_dynamic_load(
+        radial_load=_q("5 kN"), axial_load=_q("0 N"), radial_factor=1.0, axial_factor=0.0
+    ).to("kN").magnitude == pytest.approx(5.0, rel=1e-12)

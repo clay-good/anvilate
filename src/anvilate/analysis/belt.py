@@ -113,6 +113,10 @@ def belt_max_transmissible_force(
     _require_force(tight_tension, "tight_tension")
     ratio = _ratio(friction_coefficient, wrap_angle)
     t1 = tight_tension.to("N").magnitude
+    # A negative tight tension scaled straight through to a negative transmissible force,
+    # and band_brake_torque delegates here, so it reported a negative braking torque.
+    if t1 <= 0:
+        raise ValueError(f"tight_tension must be positive; got {tight_tension}")
     return Quantity(magnitude=t1 * (1.0 - 1.0 / ratio), unit="N")
 
 
@@ -371,6 +375,11 @@ def belt_transmitted_power(
         raise ValueError(
             f"tight_tension ({tight_tension}) must exceed slack_tension ({slack_tension})"
         )
+    # The docstring said all three must be positive and only T1 > T2 was checked, so a
+    # negative slack tension -- a belt pushing on its own slack side -- widened the
+    # difference and reported MORE power than the drive can transmit.
+    if t2 < 0:
+        raise ValueError(f"slack_tension must be non-negative; got {slack_tension}")
     if v <= 0:
         raise ValueError(f"belt_speed must be positive; got {belt_speed}")
     return Quantity(magnitude=(t1 - t2) * v, unit="W")

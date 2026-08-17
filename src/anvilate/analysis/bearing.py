@@ -260,8 +260,9 @@ def bearing_equivalent_dynamic_load(
     the dimensionless ISO 281 combination factors, read from the bearing's table by
     the axial-to-radial ratio against its e value (supplied like any catalogue
     datum; a common pair is X = 0.56, Y ≈ 1.4–2). For pure radial load below the e
-    threshold X = 1, Y = 0 and P = F_r. Both loads must be non-negative and the
-    factors positive. Returns the equivalent load in newtons.
+    threshold X = 1, Y = 0 and P = F_r. Both loads must be non-negative, X positive,
+    and Y non-negative — Y = 0 is the pure-radial row of the table, not a bad input.
+    Returns the equivalent load in newtons.
     """
     _require(radial_load, "[force]", "radial_load")
     _require(axial_load, "[force]", "axial_load")
@@ -269,8 +270,10 @@ def bearing_equivalent_dynamic_load(
     fa = axial_load.to("N").magnitude
     if fr < 0 or fa < 0:
         raise ValueError("radial_load and axial_load must be non-negative")
-    if radial_factor <= 0 or axial_factor <= 0:
-        raise ValueError("radial_factor and axial_factor must be positive")
+    if radial_factor <= 0:
+        raise ValueError("radial_factor must be positive")
+    if axial_factor < 0:
+        raise ValueError("axial_factor must be non-negative")
     return Quantity(magnitude=radial_factor * fr + axial_factor * fa, unit="N")
 
 

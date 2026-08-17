@@ -528,6 +528,16 @@ def terzaghi_bearing_capacity(
         raise ValueError("cohesion and surcharge must be non-negative")
     if gamma <= 0 or b <= 0:
         raise ValueError("unit_weight and width must be positive")
+    # The three N factors were taken on trust. They come from bearing_capacity_factors, where
+    # every one is >= 1, but nothing stopped a hand-typed negative from producing a NEGATIVE
+    # ultimate bearing pressure -- soil that pulls a footing down.
+    for factor_name, factor in (
+        ("bearing_factor_c", bearing_factor_c),
+        ("bearing_factor_q", bearing_factor_q),
+        ("bearing_factor_gamma", bearing_factor_gamma),
+    ):
+        if factor < 0:
+            raise ValueError(f"{factor_name} must be non-negative; got {factor}")
     q_ult = c * bearing_factor_c + q * bearing_factor_q + 0.5 * gamma * b * bearing_factor_gamma
     return Quantity(magnitude=q_ult, unit="kPa")
 
