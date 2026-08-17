@@ -15,7 +15,7 @@ Hold the stress range fixed at 80 MPa and change only the category:
 
 | Detail category Δσ_C | Δσ_D | Δσ_L | Life at an 80 MPa range |
 |---|---|---|---|
-| 56 (a poor as-welded detail) | 41.3 MPa | 22.7 MPa | 690,000 cycles |
+| 56 (a poor as-welded detail) | 41.3 MPa | 22.7 MPa | 686,000 cycles |
 | 90 (a good one) | 66.3 MPa | 36.4 MPa | 2,850,000 cycles |
 | 160 (plain rolled material) | 117.9 MPa | 64.8 MPa | 34,700,000 cycles |
 

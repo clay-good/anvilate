@@ -11,7 +11,7 @@ Unlike a mass on a spring, both inertias move, so the mode is the free-free two-
 frequency (1/2pi)*sqrt(k*(I1+I2)/(I1*I2)), set by the *reduced* inertia I1*I2/(I1+I2).
 A soft 20 kN*m/rad coupling puts it at 35.6 Hz -- only 0.89 of the firing frequency,
 squarely in the danger band, so a 1.4x separation requirement fails it. Stiffening the
-coupling to 100 kN*m/rad lifts the mode to 79.6 Hz, twice the firing frequency (1.99),
+coupling to 100 kN*m/rad lifts the mode to 79.6 Hz, twice the firing frequency (SF 1.42),
 comfortably clear. Here the stiffer coupling is the safe one, because it carries the
 mode *up and over* the excitation rather than leaving it underneath.
 

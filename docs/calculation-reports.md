@@ -51,6 +51,7 @@ FAIL  padeye pin bearing
     t = 12.00 mm  (lug plate thickness)
     σ_p = 166.7 MPa  (pin bearing stress)
   safety factor 1.50 vs required minimum 2.00
+  repair: increase thickness to 16 mm
   source: ASME BTH-1 §3-3
 ```
 
@@ -91,8 +92,11 @@ otherwise show a bare symbol where a number belongs. The report never invents a
 formula to fill the space — an honest gap is worth more to a reviewer than a
 plausible fabrication.
 
-Today the whole structural pack declares derivations; beam deflection and the
-industrial pack are still to come.
+Today the structural pack declares derivations for bending, shear and deflection;
+the beam resonance check does not, and the industrial pack's cover-plate bending
+declares one only for the circular closed-form cases — the rectangular, patch and
+annular cases are series or numeric solutions, and they render an inputs table
+rather than a tidy expression that is not what was computed.
 
 ## Handing it to a reviewer
 
