@@ -36,6 +36,34 @@ from ..units import Quantity
 __all__ = ["GuardedInputs"]
 
 
+def _check_nested(model: BaseModel, prefix: str, _depth: int = 0) -> None:
+    """Reject a negative or non-finite Quantity anywhere inside a nested input model.
+
+    Nested models are geometry — a CrossSection, a section's properties — and geometry is
+    positive-definite throughout, so there is no signed-field exemption to honour here.
+    Depth is bounded because a self-referential model would otherwise recurse forever.
+    """
+    if _depth > 4:  # pragma: no cover - no input model nests this deep
+        return
+    for name in type(model).model_fields:
+        value = getattr(model, name, None)
+        # Quantity before BaseModel, always: Quantity IS a pydantic model, so testing for
+        # BaseModel first recurses into it and checks nothing. That ordering mistake made
+        # this whole guard silently inert once already.
+        if isinstance(value, Quantity):
+            if not isfinite(value.magnitude):
+                raise ValueError(f"{prefix}.{name} must be a finite quantity; got {value}")
+            if value.magnitude < 0:
+                raise ValueError(
+                    f"{prefix}.{name} must not be negative; got {value}. Nested input "
+                    f"models describe geometry, which is positive-definite — a negative "
+                    f"value here produces a negative section property that reads as extra "
+                    f"capacity downstream."
+                )
+        elif isinstance(value, BaseModel):
+            _check_nested(value, f"{prefix}.{name}", _depth + 1)
+
+
 class GuardedInputs(BaseModel):
     """Base class for pack input models: no negative or non-finite quantity magnitudes.
 
@@ -54,7 +82,17 @@ class GuardedInputs(BaseModel):
             if name == "signed_fields":
                 continue
             value = getattr(self, name, None)
+            # Quantity is ITSELF a pydantic model, so the nested-model branch has to come
+            # second or it swallows every quantity field and the guard checks nothing.
             if not isinstance(value, Quantity):
+                # A nested model is where the guard used to stop. Every member model
+                # carries a CrossSection, a plain BaseModel with no sign validation of its
+                # own, so an extreme_fibre of -25 mm produced a NEGATIVE section modulus
+                # and turned a beam-column FAIL at 1.19 into a PASS at 6.34 — the same
+                # silent green this guard was written for, one level down. A negative area
+                # on the same object reaches sqrt(I/A) and comes back complex.
+                if isinstance(value, BaseModel) and not isinstance(value, GuardedInputs):
+                    _check_nested(value, name)
                 continue
             if not isfinite(value.magnitude):
                 raise ValueError(

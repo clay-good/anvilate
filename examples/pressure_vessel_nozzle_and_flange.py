@@ -20,12 +20,19 @@ That is the whole lesson. A vessel trimmed to its pressure minimum has no
 reinforcement left over, and the component that fails first is the one nobody
 re-checked.
 
-The flange is screened separately, and makes a second point. 12 mm of spiral-wound
+The flange is screened separately, and makes a sharper point. 12 mm of spiral-wound
 gasket contact on a 320 mm OD gives b_0 = 6 mm, inside Appendix 2's ¼-inch limit, so
 b = b_0 and G is the mean diameter. The seating load is 400.0 kN and the operating
-load only 218.7 kN: this joint is **seating**-governed, not pressure-governed. A
-designer who sized the bolts on pressure alone would undersize them by nearly half,
-and nothing about the pressure says so.
+load only 218.7 kN, so comparing the two **loads** says the joint is seating-governed.
+
+It is not. The loads are carried against different allowables — seating cold against
+S_a = 172 MPa, operating at 400 °C against a derated S_b = 60 MPa — and once each is
+divided by its own allowable the required areas are 2,326 mm² for seating and
+**3,645 mm² for operating**. Operating governs, by 57%. Taking the larger *load* and
+dividing by one allowable gives 2,326 mm²: **36% short**, and it names the wrong
+condition while doing it. That is why `asme_appendix_2_required_bolt_area` takes both
+allowables and `governing_gasket_bolt_load` — which takes neither — is the wrong
+consumer for a flange.
 
 Screening scope, not Code design: this is UG-27/UG-32/UG-37 and the Appendix 2 bolt
 loads. It is not a U-stamp calculation. There is no flange stress analysis, no MDMT
@@ -68,8 +75,11 @@ GASKET_OD = Quantity.parse("320 mm")
 GASKET_CONTACT_WIDTH = Quantity.parse("12 mm")
 GASKET_M = 3.0  # spiral wound, ASME Table 2-5.1, user-supplied
 GASKET_Y = Quantity.parse("68.9 MPa")
-BOLT_ALLOWABLE_HOT = Quantity.parse("138 MPa")
-BOLT_ALLOWABLE_AMBIENT = Quantity.parse("138 MPa")
+# The two allowables are NOT the same number, and that is the point: the seating load is
+# applied cold against S_a, the operating load at temperature against the derated S_b.
+# SA-193-B7 bolting at 400 degC, user-supplied.
+BOLT_ALLOWABLE_AMBIENT = Quantity.parse("172 MPa")  # S_a, cold
+BOLT_ALLOWABLE_HOT = Quantity.parse("60 MPa")  # S_b, at design temperature
 
 
 def shell_required_thickness() -> Quantity:
@@ -168,12 +178,21 @@ def main() -> None:
             print(f"    {entry.name:<30} {entry.status.value:<6} SF {factor}")
 
     seating, operating, area = flange_bolt_area()
-    governs = "seating" if seating.magnitude >= operating.magnitude else "operating"
+    a_m2 = seating.to("N").magnitude / BOLT_ALLOWABLE_AMBIENT.to("MPa").magnitude
+    a_m1 = operating.to("N").magnitude / BOLT_ALLOWABLE_HOT.to("MPa").magnitude
     print(
-        f"\n  flange: seating {seating.to('kN').magnitude:.1f} kN, operating "
-        f"{operating.to('kN').magnitude:.1f} kN — {governs} governs"
+        f"\n  flange loads:  seating {seating.to('kN').magnitude:.1f} kN > operating "
+        f"{operating.to('kN').magnitude:.1f} kN — by LOAD, seating looks governing"
     )
-    print(f"  required bolt area: {area.to('mm**2').magnitude:.0f} mm²")
+    print(
+        f"  flange areas:  seating {a_m2:.0f} mm² (/{BOLT_ALLOWABLE_AMBIENT.magnitude:.0f} "
+        f"MPa cold) vs operating {a_m1:.0f} mm² (/{BOLT_ALLOWABLE_HOT.magnitude:.0f} MPa "
+        f"hot) — operating governs"
+    )
+    required_mm2 = area.to("mm**2").magnitude
+    short = 100 * (1 - a_m2 / required_mm2)
+    print(f"  required bolt area: {required_mm2:.0f} mm²", end="")
+    print(f"; the one-allowable shortcut would give {a_m2:.0f} mm², {short:.0f}% short")
 
 
 if __name__ == "__main__":

@@ -972,6 +972,11 @@ modules:
 - :mod:`~anvilate.analysis.cold_formed_steel` — the AISI S100 effective-width method
   (Winter): the plate slenderness λ that decides whether a thin compression element is
   fully effective, and the reduced effective width above the limit
+- :mod:`~anvilate.analysis.lifting_device` — ASME BTH-1 below-the-hook lifting
+  devices: the Design Category that sets the design factor N_d (2.00 vs 3.00 — a 50%
+  difference in every allowable), the Service Class that decides whether a fatigue
+  analysis is required at all, the §3-2/§3-3 allowable stresses, and screens that
+  report a Class 1+ device with no cycle data as NOT_EVALUATED rather than passing it
 - :mod:`~anvilate.analysis.aluminum` — Aluminum Design Manual member checks: the
   unified straight-line/Euler buckling stress from the alloy-temper's buckling
   constants (column, beam, or local buckling), the tension stress F = min(F_ty,
@@ -2254,6 +2259,15 @@ from .level_turn import (
     turn_radius,
     turn_rate,
 )
+from .lifting_device import (
+    BTH1Allowables,
+    DesignCategory,
+    ServiceClass,
+    bth1_allowable_stresses,
+    bth1_fatigue_scorecard,
+    bth1_member_scorecard,
+    service_class_for_cycles,
+)
 from .linear_regulator import (
     linear_regulator_dissipation,
     linear_regulator_efficiency,
@@ -3298,6 +3312,13 @@ __all__ = [
     "BucklingConstants",
     "EdgeSupport",
     "TemperGroup",
+    "DesignCategory",
+    "ServiceClass",
+    "BTH1Allowables",
+    "service_class_for_cycles",
+    "bth1_allowable_stresses",
+    "bth1_member_scorecard",
+    "bth1_fatigue_scorecard",
     "aluminum_buckling_constants",
     "aluminum_buckling_stress",
     "aluminum_combined_interaction",

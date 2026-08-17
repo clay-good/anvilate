@@ -779,8 +779,12 @@ def test_every_recorded_inverse_pairing_resolves_and_is_round_tripped():
     )
 
 
+_UNIT_TOKEN = r"[A-Za-z\u00b5\u03a9%][A-Za-z0-9_]*(?:\*\*\d+)?"
+# A compound unit is one token, not the first of several: "20.83 kN*m" and "5.2 kg/m**3"
+# have to be captured whole, or the tail migrates out of the parentheses and lands in
+# whatever operator follows.
 _VALUE_UNIT = re.compile(
-    r"(-?\d+\.?\d*(?:[eE][-+]?\d+)?)\s+([A-Za-z\u00b5\u03a9%][A-Za-z0-9_]*(?:\*\*\d+)?)"
+    r"(-?\d+\.?\d*(?:[eE][-+]?\d+)?)\s+(" + _UNIT_TOKEN + r"(?:\s*[*/]\s*" + _UNIT_TOKEN + r")*)"
 )
 
 
@@ -943,6 +947,7 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
     number = re.compile(r"(-?\d+\.?\d*(?:[eE][-+]?\d+)?)")
     checked = 0
     mismatches: list[str] = []
+    unparsed: list[str] = []
     for label, derivation in derivations:
         if derivation.unresolved_symbols():
             continue
@@ -958,7 +963,8 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
             expression = _VALUE_UNIT.sub(r"(\1 \2)", expression)
             try:
                 value = UREG.parse_expression(expression)
-            except Exception:  # pragma: no cover - an unparsed line is not a mismatch
+            except Exception as exc:
+                unparsed.append(f"{label} [{system.value}]: {substituted} ({exc})")
                 continue
             printed = derivation.result.rendered(system=system)
             match = number.match(printed)
@@ -979,6 +985,12 @@ def test_every_derivation_the_library_builds_evaluates_to_its_own_result():
                     f"line evaluates to {actual:.6g}"
                 )
 
+    assert not unparsed, (
+        "substituted lines the checker could not evaluate. A render-truth gate that "
+        "skips what it cannot read reports coverage it does not have — this is how both "
+        "§H1.1 derivations went unchecked in both unit systems while the gate still "
+        "cleared its floor:\n  " + "\n  ".join(unparsed)
+    )
     assert checked >= 20, f"only {checked} substituted lines were checkable"
     assert not mismatches, (
         "substituted lines that do not evaluate to the result printed under them:\n  "

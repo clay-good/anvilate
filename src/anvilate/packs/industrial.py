@@ -128,7 +128,6 @@ class CoverPlate(GuardedInputs):
     """
 
     model_config = ConfigDict(frozen=True)
-    signed_fields: tuple[str, ...] = ("pressure",)
 
     name: str
     pressure: Quantity

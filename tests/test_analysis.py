@@ -40444,11 +40444,30 @@ def test_ug37_replaces_the_metal_the_opening_actually_removed():
         is True
     )
 
-    # A weaker nozzle contributes proportionally less, and never more than its own metal.
+    # f_r appears in FOUR terms of Fig. UG-37.1, not two. A weaker nozzle contributes
+    # less to A_2 and A_41, and it also RAISES the required area and LOWERS A_1, because
+    # the nozzle wall standing inside the shell stops carrying its share. Dropping the
+    # last two looked right — they vanish at f_r = 1, the common case — and ran up to
+    # 9.7% unconservative at f_r = 0.5.
     weak = asme_ug37_nozzle_reinforcement(**{**kwargs, "strength_reduction_factor": 0.7})
     assert weak.nozzle_excess.magnitude == pytest.approx(0.7 * r.nozzle_excess.magnitude, rel=1e-12)
     assert weak.weld_area.magnitude == pytest.approx(0.7 * r.weld_area.magnitude, rel=1e-12)
-    assert weak.shell_excess.magnitude == pytest.approx(r.shell_excess.magnitude, rel=1e-12)
+    # t_n = 9.47, t_r = 9.5, t = 12.5, (1 - f_r) = 0.3
+    assert weak.required.magnitude == pytest.approx(
+        r.required.magnitude + 2 * 9.47 * 9.5 * 0.3, rel=1e-3
+    )
+    assert weak.shell_excess.magnitude == pytest.approx(
+        r.shell_excess.magnitude - 2 * 9.47 * (12.5 - 9.5) * 0.3, rel=1e-3
+    )
+    # Every extra term vanishes at f_r = 1, which is why they were easy to leave out.
+    same = asme_ug37_nozzle_reinforcement(**{**kwargs, "strength_reduction_factor": 1.0})
+    assert same.required.magnitude == pytest.approx(r.required.magnitude, rel=1e-12)
+    assert same.shell_excess.magnitude == pytest.approx(r.shell_excess.magnitude, rel=1e-12)
+    # And a weaker nozzle is strictly worse off on the ratio that decides adequacy.
+    assert (
+        weak.available.magnitude / weak.required.magnitude
+        < r.available.magnitude / r.required.magnitude
+    )
     with pytest.raises(ValueError, match="caps it at 1"):
         asme_ug37_nozzle_reinforcement(**{**kwargs, "strength_reduction_factor": 1.2})
 
@@ -40612,3 +40631,377 @@ def test_the_required_bolt_area_checks_two_loads_against_two_allowables():
             operating_allowable=_q("0 MPa"),
             seating_allowable=ambient,
         )
+
+
+# --- ASME BTH-1 below-the-hook lifting devices --------------------------------
+
+
+def test_the_bth1_design_category_is_exactly_a_fifty_percent_decision():
+    """Every allowable is a strength over the same N_d, so they all scale together.
+
+    That is the anchor: Category B over Category A must be exactly 2/3 for every limit
+    state, because the only thing that changed is the divisor. A coefficient transcribed
+    into the wrong allowable would break the ratio for that one and nothing else.
+    """
+    from anvilate.analysis import DesignCategory, bth1_allowable_stresses
+
+    sy, su = _q("248 MPa"), _q("400 MPa")
+    a = bth1_allowable_stresses(yield_strength=sy, ultimate_strength=su, category=DesignCategory.A)
+    b = bth1_allowable_stresses(yield_strength=sy, ultimate_strength=su, category=DesignCategory.B)
+    assert a.design_factor == 2.00
+    assert b.design_factor == 3.00
+    for field in ("tension_gross", "tension_net", "shear", "bending", "pin_bearing"):
+        low = getattr(b, field).to("MPa").magnitude
+        high = getattr(a, field).to("MPa").magnitude
+        assert low / high == pytest.approx(2.0 / 3.0, rel=1e-12), field
+
+    # Each allowable at its own definition, so a coefficient cannot drift behind a ratio.
+    assert a.tension_gross.magnitude == pytest.approx(248 / 2.0, rel=1e-12)
+    assert a.tension_net.magnitude == pytest.approx(400 / (1.20 * 2.0), rel=1e-12)
+    assert a.shear.magnitude == pytest.approx(0.60 * 248 / 2.0, rel=1e-12)
+    assert a.bending.magnitude == pytest.approx(248 / 2.0, rel=1e-12)
+    assert a.pin_bearing.magnitude == pytest.approx(1.25 * 248 / 2.0, rel=1e-12)
+    # BTH-1 does not use ONE factor per category. Yielding and buckling take N_d; fracture
+    # and connection design take 1.20·N_d, which the Code tabulates as 2.40 and 3.60. So
+    # the net-section allowable's effective factor must be exactly 1.20 times the gross
+    # one's, in BOTH categories — a property of the Code, not of the material.
+    for allowables, nd in ((a, 2.0), (b, 3.0)):
+        effective = 248 / allowables.tension_gross.magnitude
+        effective_net = 400 / allowables.tension_net.magnitude
+        assert effective == pytest.approx(nd, rel=1e-12)
+        assert effective_net == pytest.approx(1.20 * nd, rel=1e-12)
+    assert 400 / b.tension_net.magnitude == pytest.approx(3.60, rel=1e-12)
+    assert 400 / a.tension_net.magnitude == pytest.approx(2.40, rel=1e-12)
+
+    # Bending and gross tension are the SAME allowable for a compact braced member;
+    # asserting it stops one of them being edited without the other.
+    assert a.bending.magnitude == pytest.approx(a.tension_gross.magnitude, rel=1e-12)
+    # Shear is below tension and bearing above it — a swap would be silent otherwise.
+    assert a.shear.magnitude < a.tension_gross.magnitude < a.pin_bearing.magnitude
+
+    with pytest.raises(ValueError, match="not swapped"):
+        bth1_allowable_stresses(
+            yield_strength=_q("400 MPa"),
+            ultimate_strength=_q("248 MPa"),
+            category=DesignCategory.A,
+        )
+
+
+def test_the_service_class_boundary_that_decides_whether_fatigue_is_required_at_all():
+    """20,000 cycles is Class 0 and exempt; 20,001 is Class 1 and is not.
+
+    Every other boundary in the table moves a device between two classes that both
+    require a fatigue analysis. This one moves it between "no analysis required" and
+    "an analysis is required" — and a design life estimated as "about twenty thousand"
+    lands exactly on it.
+    """
+    from anvilate.analysis import ServiceClass, service_class_for_cycles
+
+    assert service_class_for_cycles(0) is ServiceClass.CLASS_0
+    assert service_class_for_cycles(20_000) is ServiceClass.CLASS_0
+    assert service_class_for_cycles(20_001) is ServiceClass.CLASS_1
+    assert service_class_for_cycles(100_000) is ServiceClass.CLASS_1
+    assert service_class_for_cycles(100_001) is ServiceClass.CLASS_2
+    assert service_class_for_cycles(500_000) is ServiceClass.CLASS_2
+    assert service_class_for_cycles(500_001) is ServiceClass.CLASS_3
+    assert service_class_for_cycles(2_000_000) is ServiceClass.CLASS_3
+    assert service_class_for_cycles(2_000_001) is ServiceClass.CLASS_4
+    assert service_class_for_cycles(10_000_000) is ServiceClass.CLASS_4
+
+    # Class 0 alone is exempt.
+    assert service_class_for_cycles(20_000).fatigue_required is False
+    assert all(
+        service_class_for_cycles(n).fatigue_required for n in (20_001, 100_001, 500_001, 2_000_001)
+    )
+    # The bands are contiguous: every cycle count lands in exactly one class.
+    bounds = [service_class_for_cycles(n).cycle_range for n in (0, 20_001, 100_001, 500_001)]
+    for (_, high), (low, _) in zip(bounds, bounds[1:], strict=False):
+        assert high is not None and low == high + 1
+    with pytest.raises(ValueError, match="non-negative"):
+        service_class_for_cycles(-1)
+
+
+def test_a_lifter_above_class_zero_with_no_cycle_data_is_not_evaluated():
+    """The Class 0 exemption is earned by cycle count, and does not transfer."""
+    from anvilate.analysis import ServiceClass, bth1_fatigue_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    exempt = bth1_fatigue_scorecard("fatigue", service_class=ServiceClass.CLASS_0)
+    assert exempt.status is CheckStatus.PASS
+    assert "no BTH-1 fatigue analysis requirement" in exempt.detail
+    assert "not a computed margin" in exempt.detail
+
+    for service in (ServiceClass.CLASS_1, ServiceClass.CLASS_3, ServiceClass.CLASS_4):
+        entry = bth1_fatigue_scorecard("fatigue", service_class=service)
+        assert entry.status is CheckStatus.NOT_EVALUATED, service
+        assert "Only Class 0 is exempt" in entry.detail
+    # Half the data is still no data.
+    half = bth1_fatigue_scorecard(
+        "fatigue", service_class=ServiceClass.CLASS_2, stress_range=_q("60 MPa")
+    )
+    assert half.status is CheckStatus.NOT_EVALUATED
+    assert "allowable stress range" in half.detail
+
+    ran = bth1_fatigue_scorecard(
+        "fatigue",
+        service_class=ServiceClass.CLASS_2,
+        stress_range=_q("60 MPa"),
+        allowable_stress_range=_q("90 MPa"),
+    )
+    assert ran.status is CheckStatus.PASS
+    assert ran.safety_factor == pytest.approx(1.5)
+    failed = bth1_fatigue_scorecard(
+        "fatigue",
+        service_class=ServiceClass.CLASS_2,
+        stress_range=_q("120 MPa"),
+        allowable_stress_range=_q("90 MPa"),
+    )
+    assert failed.status is CheckStatus.FAIL
+
+
+def test_the_bth1_member_screen_does_not_double_count_the_design_factor():
+    """N_d is already inside the allowable, so the screen judges against 1.0.
+
+    Requiring a further margin on top would apply the design factor twice and reject
+    lifters BTH-1 accepts. The category travels in the detail because the same geometry
+    at the same load gives margins 50% apart between A and B, and a bare number cannot
+    be checked against the Code without it.
+    """
+    from anvilate.analysis import DesignCategory, bth1_allowable_stresses, bth1_member_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    sy, su = _q("248 MPa"), _q("400 MPa")
+    stress = _q("100 MPa")
+    for category, expected in (
+        (DesignCategory.A, 124.0 / 100.0),
+        (DesignCategory.B, (248 / 3.0) / 100.0),
+    ):
+        allowables = bth1_allowable_stresses(
+            yield_strength=sy, ultimate_strength=su, category=category
+        )
+        entry = bth1_member_scorecard(
+            "main beam tension",
+            stress=stress,
+            allowable=allowables.tension_gross,
+            category=category,
+        )
+        assert entry.safety_factor == pytest.approx(expected, rel=1e-9)
+        assert f"Category {category.value}" in entry.detail
+        assert "already inside the allowable" in entry.detail
+
+    # The same member and the same load: Category A passes and Category B fails.
+    a = bth1_allowable_stresses(yield_strength=sy, ultimate_strength=su, category=DesignCategory.A)
+    b = bth1_allowable_stresses(yield_strength=sy, ultimate_strength=su, category=DesignCategory.B)
+    load = _q("100 MPa")
+    assert (
+        bth1_member_scorecard(
+            "m", stress=load, allowable=a.tension_gross, category=DesignCategory.A
+        ).status
+        is CheckStatus.PASS
+    )
+    assert (
+        bth1_member_scorecard(
+            "m", stress=load, allowable=b.tension_gross, category=DesignCategory.B
+        ).status
+        is CheckStatus.FAIL
+    )
+
+    # Zero demand is nothing to evaluate, not a member exactly at its limit.
+    idle = bth1_member_scorecard(
+        "m", stress=_q("0 MPa"), allowable=a.tension_gross, category=DesignCategory.A
+    )
+    assert idle.status is CheckStatus.NOT_EVALUATED
+    assert idle.safety_factor is None
+    # A sign-reversed stress is a magnitude.
+    signed = bth1_member_scorecard(
+        "m", stress=_q("-100 MPa"), allowable=a.tension_gross, category=DesignCategory.A
+    )
+    assert signed.safety_factor == pytest.approx(1.24, rel=1e-9)
+
+
+def test_the_two_bolt_area_forms_disagree_by_36_percent_on_a_hot_joint():
+    """Comparing the LOADS names the wrong governing condition, and undersizes the bolts.
+
+    `governing_gasket_bolt_load` takes max(W_m1, W_m2) with no allowables. That is only
+    equivalent when the ambient and design-temperature bolt allowables are equal, which
+    is exactly the case a worked example is tempted to set up. On a real hot joint the
+    seating load is larger and the operating condition still governs, because the
+    operating load is carried against an allowable that has fallen away.
+    """
+    from anvilate.analysis import (
+        asme_appendix_2_gasket_geometry,
+        asme_appendix_2_required_bolt_area,
+        gasket_operating_load,
+        gasket_seating_load,
+        governing_gasket_bolt_load,
+    )
+
+    geometry = asme_appendix_2_gasket_geometry(
+        contact_width=_q("12 mm"), outside_diameter=_q("320 mm")
+    )
+    shared = {
+        "gasket_mean_diameter": geometry.diameter,
+        "effective_seating_width": geometry.effective_width,
+    }
+    seating = gasket_seating_load(seating_stress=_q("68.9 MPa"), **shared)
+    operating = gasket_operating_load(gasket_factor=3.0, pressure=_q("2 MPa"), **shared)
+    ambient, hot = _q("172 MPa"), _q("60 MPa")
+
+    # By load alone, seating is the larger — and that is the wrong conclusion.
+    load_max = governing_gasket_bolt_load(
+        seating_stress=_q("68.9 MPa"), gasket_factor=3.0, pressure=_q("2 MPa"), **shared
+    )
+    assert load_max.to("N").magnitude == pytest.approx(seating.to("N").magnitude, rel=1e-12)
+    assert seating.to("N").magnitude > operating.to("N").magnitude
+
+    required = asme_appendix_2_required_bolt_area(
+        operating_bolt_load=operating,
+        seating_bolt_load=seating,
+        operating_allowable=hot,
+        seating_allowable=ambient,
+    )
+    # ...but per-allowable, operating governs, and by a lot.
+    a_m1 = operating.to("N").magnitude / 60.0
+    a_m2 = seating.to("N").magnitude / 172.0
+    assert a_m1 > a_m2
+    assert required.to("mm**2").magnitude == pytest.approx(a_m1, rel=1e-12)
+    naive = load_max.to("N").magnitude / 172.0
+    assert naive == pytest.approx(a_m2, rel=1e-12)
+    assert naive / required.to("mm**2").magnitude == pytest.approx(0.638, abs=0.01)
+
+
+def test_a_hogging_moment_no_longer_subtracts_from_the_h11_interaction():
+    """§H1.1 sums demand ratios; a sign-reversed demand still consumes capacity.
+
+    Left signed, a hogging moment SUBTRACTED from the sum and turned a FAIL at 1.19 into
+    a PASS at 6.34 on the same member. `moment` is declared signed on BeamColumnMember so
+    a real hogging moment can be expressed, which is precisely why the consumer has to
+    take the magnitude rather than trust the input's sign.
+
+    The axial load is a different matter and is NOT taken as a magnitude: its sign
+    changes which clause applies, and a net tension plus flexure is §H1.2 against the
+    tensile capacity rather than the buckling capacity this screen computed.
+    """
+    from anvilate.analysis import CrossSection
+    from anvilate.packs.structural import BeamColumnMember, screen_beam_column
+    from anvilate.scorecard import CheckStatus
+
+    section = CrossSection.rectangular(width=_q("50 mm"), height=_q("50 mm"))
+
+    def interaction(axial: str, moment: str):
+        member = BeamColumnMember(
+            name="bc",
+            section=section,
+            length=_q("3 m"),
+            axial_load=_q(axial),
+            moment=_q(moment),
+            material="ASTM-A36",
+        )
+        card = screen_beam_column(member, required_safety_factor=2.0)
+        return next(e for e in card.entries if e.name.endswith("interaction"))
+
+    sagging = interaction("50 kN", "2 kN*m")
+    hogging = interaction("50 kN", "-2 kN*m")
+    assert sagging.status is CheckStatus.FAIL
+    assert hogging.status is CheckStatus.FAIL
+    assert hogging.safety_factor == pytest.approx(sagging.safety_factor, rel=1e-12)
+
+    tension = interaction("-200 kN", "20 kN*m")
+    assert tension.status is CheckStatus.NOT_EVALUATED
+    assert "§H1.2" in tension.detail
+    assert tension.reference == "AISC 360-16 §H1.2"
+
+
+def test_the_pack_guard_reaches_into_a_nested_section():
+    """A negative section property reads as extra capacity, one level below the guard.
+
+    Every member model carries a CrossSection, a plain BaseModel with no sign validation
+    of its own. An extreme_fibre of −25 mm gives a NEGATIVE section modulus and turned
+    the same beam-column FAIL at 1.19 into a PASS at 6.34; a negative area reaches
+    sqrt(I/A) and comes back complex.
+
+    The ordering matters and is easy to get wrong: Quantity is ITSELF a pydantic model,
+    so testing BaseModel first recurses into every quantity and checks nothing. This
+    asserts the flat case still works, which is what that mistake breaks.
+    """
+    from pydantic import ValidationError
+
+    from anvilate.analysis import CrossSection
+    from anvilate.packs.structural import BeamColumnMember, TensionMember
+
+    good = CrossSection.rectangular(width=_q("50 mm"), height=_q("50 mm"))
+
+    def build(section):
+        return BeamColumnMember(
+            name="bc",
+            section=section,
+            length=_q("3 m"),
+            axial_load=_q("50 kN"),
+            moment=_q("2 kN*m"),
+            material="ASTM-A36",
+        )
+
+    build(good)  # the valid section is untouched
+    for field, bad in (
+        ("extreme_fibre", _q("-25 mm")),
+        ("area", _q("-2500 mm**2")),
+        ("second_moment", _q("-520833 mm**4")),
+    ):
+        with pytest.raises(ValidationError, match=f"section.{field} must not be negative"):
+            build(good.model_copy(update={field: bad}))
+
+    # The flat case still works — this is what the Quantity/BaseModel ordering breaks.
+    with pytest.raises(ValidationError, match="must not be negative"):
+        TensionMember(
+            name="t",
+            gross_area=_q("2000 mm**2"),
+            net_area=_q("-500 mm**2"),
+            load=_q("50 kN"),
+            material="ASTM-A36",
+        )
+    # And a declared signed field is still exempt.
+    TensionMember(
+        name="t",
+        gross_area=_q("2000 mm**2"),
+        net_area=_q("1500 mm**2"),
+        load=_q("-50 kN"),
+        material="ASTM-A36",
+    )
+
+
+def test_a_fad_point_with_no_demand_is_not_an_infinite_margin():
+    """The zero-demand idiom, in the one place it was still spelled `inf`.
+
+    An assessment point at the origin has no load line to ride out. Reporting an infinite
+    margin there is the silent green this library refuses everywhere else — and it is the
+    only way `fad_assessment` could emit a non-finite float, which no strict JSON encoder
+    accepts out the far side of a report.
+    """
+    import json
+
+    from anvilate.analysis import fad_assessment, fad_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    common = {
+        "fracture_toughness": _q("100 MPa*m**0.5"),
+        "yield_strength": _q("350 MPa"),
+        "ultimate_strength": _q("500 MPa"),
+        "elastic_modulus": _q("207000 MPa"),
+    }
+    idle = fad_assessment(
+        stress_intensity=_q("0 MPa*m**0.5"), reference_stress=_q("0 MPa"), **common
+    )
+    assert idle.load_line_margin is None
+    entry = fad_scorecard("flaw", assessment=idle, required=2.0)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.safety_factor is None
+    assert "not an infinite reserve" in entry.detail
+    assert "Infinity" not in json.dumps(entry.model_dump(mode="json"))
+    assert "NaN" not in json.dumps(entry.model_dump(mode="json"))
+
+    # A real point still reports a real margin, and it still lands on the curve.
+    live = fad_assessment(
+        stress_intensity=_q("50 MPa*m**0.5"), reference_stress=_q("245 MPa"), **common
+    )
+    assert live.load_line_margin is not None and math.isfinite(live.load_line_margin)
+    assert fad_scorecard("flaw", assessment=live).status is CheckStatus.PASS

@@ -725,7 +725,10 @@ class FADAssessment(BaseModel):
     says whether the point is under it and inside the L_r cutoff.
 
     ``load_line_margin`` is the useful number: the factor by which the primary load can
-    be scaled before the point reaches the curve. Both ratios are linear in load, so the
+    be scaled before the point reaches the curve. It is ``None`` when there is no primary
+    load to scale — a point at the origin has nothing to evaluate, and reporting an
+    infinite margin there is the zero-demand silent green this library refuses everywhere
+    else. Both ratios are linear in load, so the
     point travels out along a straight line from the origin and the margin is where that
     line crosses. It is the FAD's answer to "how much have I got left", and it is not
     1/K_r — the curve bends, so a point at K_r = 0.5 with L_r near the cutoff may have
@@ -743,14 +746,17 @@ class FADAssessment(BaseModel):
     acceptable_fracture_ratio: float
     limit_load_ratio: float
     acceptable: bool
-    load_line_margin: float
+    load_line_margin: float | None
     toughness_is_estimate: bool = False
 
     def __str__(self) -> str:
         verdict = "inside" if self.acceptable else "outside"
+        margin = (
+            "not evaluated" if self.load_line_margin is None else f"{self.load_line_margin:.3g}"
+        )
         return (
             f"FAD point (L_r {self.load_ratio:.3g}, K_r {self.fracture_ratio:.3g}) "
-            f"{verdict} the curve, load-line margin {self.load_line_margin:.3g}"
+            f"{verdict} the curve, load-line margin {margin}"
         )
 
 
@@ -811,26 +817,36 @@ def fad_assessment(
     # cutoff. Both ratios are linear in the primary load, so the point rides a ray from
     # the origin. Bisect on g(s) = s·K_r − f(s·L_r), which is negative inside and
     # positive outside, and cap s at the cutoff.
-    s_cutoff = lr_max / lr if lr > 0 else float("inf")
-    if kr == 0:
-        margin = s_cutoff
+    # No demand at all is nothing to evaluate, not a member with infinite reserve. It is
+    # also the only way this function could emit a non-finite float, which no strict JSON
+    # encoder will accept out the far side of a report.
+    def _gap(s: float, s_cutoff: float) -> float:
+        x = s * lr
+        return s * kr - (curve(x) if x <= lr_max else 0.0)
+
+    margin: float | None
+    if lr == 0:
+        # No primary load to scale. A point on the K_r axis does not ride out along a
+        # load line at all, and an infinite margin here is the zero-demand silent green
+        # this library refuses everywhere else — it is also the only way this function
+        # could emit a non-finite float, which no strict JSON encoder accepts.
+        margin = None
     else:
-
-        def gap(s: float) -> float:
-            x = s * lr
-            return s * kr - (curve(x) if x <= lr_max else 0.0)
-
-        low, high = 0.0, min(s_cutoff, 1e6)
-        if gap(high) <= 0:
-            margin = high
+        s_cutoff = lr_max / lr
+        if kr == 0:
+            margin = s_cutoff
         else:
-            for _ in range(200):
-                mid = 0.5 * (low + high)
-                if gap(mid) > 0:
-                    high = mid
-                else:
-                    low = mid
-            margin = 0.5 * (low + high)
+            low, high = 0.0, s_cutoff
+            if _gap(high, s_cutoff) <= 0:
+                margin = high
+            else:
+                for _ in range(200):
+                    mid = 0.5 * (low + high)
+                    if _gap(mid, s_cutoff) > 0:
+                        high = mid
+                    else:
+                        low = mid
+                margin = 0.5 * (low + high)
     return FADAssessment(
         fracture_ratio=kr,
         load_ratio=lr,
@@ -873,6 +889,17 @@ def fad_scorecard(
             name=name,
             status=CheckStatus.NOT_EVALUATED,
             detail=detail,
+            reference=_CLAUSE_FAD,
+        )
+    if assessment.load_line_margin is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "not evaluated — the assessment point carries no primary load, so there "
+                "is no load line to ride out and no margin to report. Nothing to "
+                "evaluate is not an infinite reserve."
+            ),
             reference=_CLAUSE_FAD,
         )
     mode = (

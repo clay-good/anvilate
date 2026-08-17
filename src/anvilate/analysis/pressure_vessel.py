@@ -1633,9 +1633,16 @@ def asme_ug37_nozzle_reinforcement(
     * **A_41, weld** — the attachment fillet, ``weld_leg``².
 
     ``strength_reduction_factor`` f_r is the nozzle-to-shell allowable stress ratio,
-    capped at 1.0: a nozzle of weaker material contributes proportionally less. The
-    corrosion allowance is stripped from every wall first, because the reinforcement has
-    to still be there at the end of life.
+    capped at 1.0, and it appears in four places rather than two: a weaker nozzle
+    contributes less to A_2 and A_41, and it also *raises* the required area by
+    2·t_n·t_r·(1 − f_r) and lowers A_1 by 2·t_n·(t − t_r)·(1 − f_r), because the nozzle
+    wall standing inside the shell no longer carries its share. All four terms collapse
+    to the familiar form when f_r = 1, which is the common case of a nozzle in the same
+    material — and is why the two extra terms are easy to leave out and worth up to 9.7%
+    at f_r = 0.5. The corrosion allowance is stripped from every wall first, because the
+    reinforcement has to still be there at the end of life.
+
+    This is the **abutting** nozzle (set-on): f_r1 and f_r2 are taken as the same ratio.
 
     Two things this deliberately does not do. It does not credit an inward-projecting
     nozzle (A_3) or a reinforcing pad (A_5) — supply those separately if the design has
@@ -1691,8 +1698,15 @@ def asme_ug37_nozzle_reinforcement(
             f"no reinforcement question to answer yet"
         )
 
-    required = d * tr
-    shell_excess = max(d * (t - tr), 2.0 * (t + tn) * (t - tr))
+    # Fig. UG-37.1 in full: the required area carries a second term for the nozzle wall
+    # inside the shell, and A_1 subtracts the same wall from the credit. Both are scaled
+    # by (1 - f_r1), so both vanish when the nozzle is the same material as the shell —
+    # which is why dropping them looked right on the common case and ran up to 9.7%
+    # unconservative at f_r = 0.5.
+    weaker = 1.0 - strength_reduction_factor
+    required = d * tr + 2.0 * tn * tr * weaker
+    shell_credit = 2.0 * tn * (t - tr) * weaker
+    shell_excess = max(d * (t - tr) - shell_credit, 2.0 * (t + tn) * (t - tr) - shell_credit)
     nozzle_surplus = max(tn - trn, 0.0) * strength_reduction_factor
     nozzle_excess = 5.0 * nozzle_surplus * min(t, tn)
     weld_area = weld**2 * strength_reduction_factor
@@ -1794,8 +1808,18 @@ def asme_appendix_2_gasket_geometry(
     wider than the limit does not give a proportionally larger b, and using b_0 above the
     limit overstates both the seating and the operating bolt load.
 
-    Feed the results to :func:`~anvilate.analysis.governing_gasket_bolt_load`. Returns a
-    :class:`FlangeGasketGeometry` with all three lengths and which branch applied.
+    Feed the results to :func:`~anvilate.analysis.gasket_seating_load` and
+    :func:`~anvilate.analysis.gasket_operating_load`, then to
+    :func:`asme_appendix_2_required_bolt_area` — **not** to
+    :func:`~anvilate.analysis.governing_gasket_bolt_load`. That one takes the larger of
+    the two loads with no allowables, which is only equivalent when the ambient and
+    design-temperature bolt allowables are equal. On a hot joint (S_a = 172 MPa,
+    S_b = 60 MPa) the load-max names seating as governing and gives a bolt area **36%
+    below** what Appendix 2 requires, because the operating load is carried against a
+    derated allowable the load comparison never sees.
+
+    Returns a :class:`FlangeGasketGeometry` with all three lengths and which branch
+    applied.
     """
     _require(contact_width, "[length]", "contact_width")
     _require(outside_diameter, "[length]", "outside_diameter")

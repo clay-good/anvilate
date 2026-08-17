@@ -51,12 +51,19 @@ face. The diameter `G` moves with it — the gasket's mean diameter for a narrow
 `OD − 2b` for a wide one, since the load has migrated to the outer edge. Using b₀ above
 the limit overstates both bolt loads, and both stay plausible.
 
-**The two loads are checked against two different allowables.** The operating load is
-carried at temperature against `S_b`; the seating load is applied cold against the
-ambient `S_a`. A hot joint can be seating-governed purely because its hot allowable has
-fallen away, and dividing both loads by one number hides it. The worked example is
-seating-governed at 400.0 kN against an operating 218.7 kN — a designer sizing bolts on
-pressure alone would undersize them by nearly half.
+**The two loads are checked against two different allowables, and comparing the loads
+alone gets the answer wrong.** The operating load is carried at temperature against
+`S_b`; the seating load is applied cold against the ambient `S_a`.
+
+In the worked example the seating load is 400.0 kN and the operating load 218.7 kN, so
+the *loads* say seating governs. Divide each by its own allowable — 172 MPa cold,
+60 MPa at 400 °C — and the required areas are 2,326 mm² and **3,645 mm²**: operating
+governs, by 57%. The one-number form (larger load ÷ one allowable) returns 2,326 mm²,
+**36% short of what Appendix 2 requires**, and names the wrong condition while doing it.
+
+`asme_appendix_2_required_bolt_area` is the correct consumer.
+`governing_gasket_bolt_load` takes the larger load with no allowables at all, and is
+only equivalent when `S_a == S_b`.
 
 ## What UG-37 here does not credit
 

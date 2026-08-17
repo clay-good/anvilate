@@ -42,7 +42,6 @@ class MasonryWall(GuardedInputs):
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
-    signed_fields: tuple[str, ...] = ("axial_stress", "flexural_stress")
 
     masonry_strength: Quantity
     slenderness_ratio: float

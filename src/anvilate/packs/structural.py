@@ -1804,8 +1804,19 @@ def screen_beam_column(
     flexural_capacity = (
         yield_strength.to("MPa").magnitude * member.section.section_modulus.to("mm**3").magnitude
     )
-    pr_pc = member.axial_load.to("N").magnitude / axial_capacity
-    mr_mc = member.moment.to("N*mm").magnitude / flexural_capacity
+    # The MOMENT is a magnitude. §H1.1 sums demand ratios, and a sign-reversed demand
+    # still consumes capacity — left signed, a hogging moment SUBTRACTED from the sum and
+    # flipped a FAIL at 1.19 into a PASS at 6.34 on the same member. `moment` is declared
+    # signed on BeamColumnMember precisely so a real hogging moment can be expressed,
+    # which is exactly why the consumer has to take the magnitude.
+    #
+    # The AXIAL load is NOT a magnitude, because its sign changes which clause applies: a
+    # net tension plus flexure is §H1.2, a different interaction with a different capacity
+    # on the axial term. Screening it as compression would be conservative but silent, so
+    # it is reported as not evaluated instead, naming the clause it needs.
+    axial_n = member.axial_load.to("N").magnitude
+    pr_pc = axial_n / axial_capacity
+    mr_mc = abs(member.moment.to("N*mm").magnitude) / flexural_capacity
     if pr_pc >= 0.2:
         interaction = pr_pc + (8.0 / 9.0) * mr_mc
     else:
@@ -1816,6 +1827,7 @@ def screen_beam_column(
     # evaluate, not a member with infinite reserve. `None` -> NOT_EVALUATED, matching the
     # 19 sibling screens and the doctrine loads.combination_scorecard spells out.
     safety = 1.0 / interaction if interaction > 0 else None
+    tension_governed = axial_n < 0
     capacity_symbols = (
         SymbolValue(symbol="P_r", description="required axial strength", value=member.axial_load),
         SymbolValue(
@@ -1828,7 +1840,6 @@ def screen_beam_column(
             symbol="M_c",
             description="available flexural strength, first yield F_y·S",
             value=Quantity(magnitude=flexural_capacity, unit="N*mm"),
-            unit="kN*m",
         ),
     )
     ratio_result = SymbolValue(
@@ -1853,9 +1864,28 @@ def screen_beam_column(
             citation=_CLAUSE_INTERACTION,
         )
     )
-    entry = ScorecardEntry.from_safety_factor(
-        f"{member.name} interaction", computed=safety, required=required_safety_factor
-    ).model_copy(update={"reference": _CLAUSE_INTERACTION, "derivation": interaction_derivation})
+    if tension_governed:
+        # A net tension plus flexure is §H1.2, not §H1.1: the axial term is checked
+        # against the tensile capacity, which is not the buckling capacity this screen
+        # computed. Screening it as compression would be conservative and silent; saying
+        # which clause it needs is neither.
+        entry = ScorecardEntry(
+            name=f"{member.name} interaction",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"not evaluated — the axial load is a net TENSION ({member.axial_load}), "
+                f"which takes AISC 360 §H1.2 (combined tension and flexure) against the "
+                f"tensile capacity, not the §H1.1 form this screen computes against the "
+                f"buckling capacity"
+            ),
+            reference="AISC 360-16 §H1.2",
+        )
+    else:
+        entry = ScorecardEntry.from_safety_factor(
+            f"{member.name} interaction", computed=safety, required=required_safety_factor
+        ).model_copy(
+            update={"reference": _CLAUSE_INTERACTION, "derivation": interaction_derivation}
+        )
     # H1-1b HALVES the axial term, and it is only permitted to because Chapter E caps
     # P_r <= P_c independently. Screening the interaction alone reported exactly TWICE the
     # buckling safety factor `screen_column_member` gives for the same member, all through

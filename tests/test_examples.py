@@ -5753,7 +5753,41 @@ def test_pressure_vessel_example_fails_at_the_opening_before_it_fails_at_the_wal
     assert opening_ratio > shell_ratio
 
     seating, operating, area = namespace["flange_bolt_area"]()
-    # Seating governs at this pressure — sizing bolts on the operating load alone would
-    # undersize them by nearly half.
+    # The LOADS say seating governs — and that is the wrong conclusion. Each is carried
+    # against its own allowable (172 MPa cold, 60 MPa hot), and per-allowable the
+    # operating condition governs by 57%. Taking the larger load and dividing by one
+    # allowable lands 36% short and names the wrong condition.
     assert seating.to("kN").magnitude > operating.to("kN").magnitude
-    assert area.to("mm**2").magnitude == pytest.approx(seating.to("N").magnitude / 138.0, rel=1e-9)
+    assert area.to("mm**2").magnitude == pytest.approx(operating.to("N").magnitude / 60.0, rel=1e-9)
+    naive = seating.to("N").magnitude / 172.0
+    assert naive < area.to("mm**2").magnitude
+    assert naive / area.to("mm**2").magnitude == pytest.approx(0.638, abs=0.01)
+
+
+def test_spreader_beam_example_passes_as_category_a_and_fails_as_category_b():
+    namespace = runpy.run_path(str(_EXAMPLES / "spreader_beam_bth1_category.py"))
+    DesignCategory = namespace["DesignCategory"]
+    a = namespace["screen_spreader_beam"](DesignCategory.A)
+    b = namespace["screen_spreader_beam"](DesignCategory.B)
+    by_a = {e.name: e for e in a.entries}
+    by_b = {e.name: e for e in b.entries}
+
+    # Identical steel, identical load, identical geometry — only the design factor moves.
+    assert by_a["beam bending"].status is CheckStatus.PASS
+    assert by_b["beam bending"].status is CheckStatus.FAIL
+    assert by_a["beam bending"].safety_factor == pytest.approx(1.15, abs=0.02)
+    assert by_b["beam bending"].safety_factor == pytest.approx(0.77, abs=0.02)
+    # Every allowable scales by exactly 2/3 between the categories, so every margin does.
+    for name in ("beam bending", "lug net tension"):
+        assert by_b[name].safety_factor == pytest.approx(
+            by_a[name].safety_factor * 2.0 / 3.0, rel=1e-9
+        )
+
+    # 50,000 lifts is Service Class 1, which is not exempt — and with no stress range
+    # supplied the fatigue row is NOT_EVALUATED, so even Category A does not roll up to
+    # a clean pass. That is the honest answer, not a gap in the example.
+    fatigue = next(e for e in a.entries if e.name.startswith("fatigue"))
+    assert fatigue.status is CheckStatus.NOT_EVALUATED
+    assert "Only Class 0 is exempt" in fatigue.detail
+    assert a.status is CheckStatus.NOT_EVALUATED
+    assert b.status is CheckStatus.FAIL
