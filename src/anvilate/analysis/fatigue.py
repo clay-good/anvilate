@@ -842,6 +842,13 @@ def weld_size_effect_factor(
     t = thickness.to("mm").magnitude
     if t <= 0:
         raise ValueError(f"thickness must be positive; got {thickness}")
+    # A negative exponent inverts the penalty: (t_ref/t)^n rises above 1 and the thick plate
+    # comes out STRONGER than the reference, against this function's own k_s <= 1 contract.
+    if exponent < 0:
+        raise ValueError(
+            f"exponent must be non-negative; got {exponent}, which turns the thickness "
+            f"penalty into a bonus (k_s > 1)"
+        )
     t_ref = (
         _WELD_SIZE_REFERENCE_MM
         if reference_thickness is None

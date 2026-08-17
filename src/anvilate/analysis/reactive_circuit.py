@@ -251,7 +251,7 @@ def rc_charging_voltage(
 
     The RC step response — the electrical twin of the lumped-capacitance thermal transient: a
     capacitor charged toward a ``supply_voltage`` V_s through a resistor rises as
-    V(t) = V_s·(1 − e^(−t/``time``)), from the ``time_constant`` τ = R·C (see
+    V(t) = V_s·(1 − e^(−t/τ)), from the ``time_constant`` τ = R·C (see
     :func:`rc_time_constant`). It reaches 63% of V_s after one τ, 95% after three, and ~99% after
     five (effectively settled). It sets when an RC delay crosses a logic threshold, how fast a
     sample-and-hold acquires, and the turn-on ramp of a soft-start — the discharge from an initial

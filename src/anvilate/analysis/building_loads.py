@@ -54,7 +54,7 @@ __all__ = [
     "rain_load",
 ]
 
-_LIVE_LOAD_REDUCTION_CONSTANT = 4.57  # ASCE 7 Eq 4.7-1 (SI), = 15/sqrt(0.0929 m^2/ft^2)
+_LIVE_LOAD_REDUCTION_CONSTANT = 4.57  # ASCE 7 Eq 4.7-1 (SI), = 15*sqrt(0.0929 m^2/ft^2)
 _LIVE_LOAD_REDUCTION_THRESHOLD = 37.16  # m^2 (= 400 ft^2); no reduction below this KLL*AT
 _RAIN_LOAD_CONSTANT = 0.0098  # ASCE 7 Eq 8.3-1 (SI): unit weight of water in kPa per mm of head
 

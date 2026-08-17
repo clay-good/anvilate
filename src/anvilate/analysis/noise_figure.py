@@ -125,10 +125,10 @@ def receiver_minimum_detectable_signal(
     290 K reference unless a ``noise_temperature`` is given — pass the real antenna temperature
     for a sky-noise-limited system, where 290 K is pessimistic.
 
-    A 3 dB receiver over 1 MHz needing 13 dB of SNR floors at 1.594e-13 W, or −98.0 dBm. Note
+    A 3 dB receiver over 1 MHz needing 13 dB of SNR floors at 1.602e-13 W, or −97.95 dBm. Note
     both dimensionless arguments are LINEAR ratios, not decibels. Passing 3 and 13 directly is a
     small error here only by coincidence — 3·13 = 39 against the correct 2·20 = 40, so the floor
-    comes out 0.089 dB low — but the coincidence does not survive other numbers: a 10 dB noise
+    comes out 0.110 dB low — but the coincidence does not survive other numbers: a 10 dB noise
     figure entered as 10 rather than 10.0 linear understates the floor by 10 dB.
 
     Returns the minimum detectable power in W.

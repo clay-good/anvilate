@@ -37153,3 +37153,77 @@ def test_power_screw_refuses_the_regime_where_its_torque_turns_negative() -> Non
     assert power_screw_raise_load(torque=torque, **jack).to("N").magnitude == pytest.approx(
         10000.0, rel=1e-9
     )
+
+
+def test_five_functions_that_returned_a_physically_impossible_number() -> None:
+    """Each of these ran past its own stated range and answered anyway.
+
+    None was a wrong formula -- every one is correct inside its domain. The defect is that
+    the domain was documented and not enforced, so the caller got a negative buckling
+    stress, more steam than water, or a size penalty that made a thick plate stronger.
+    """
+    from anvilate.analysis.battery_peukert import peukert_exponent_from_two_rates
+    from anvilate.analysis.calorimetry import flash_steam_fraction
+    from anvilate.analysis.column import euler_critical_stress, johnson_critical_stress
+    from anvilate.analysis.contact import hertz_effective_modulus
+    from anvilate.analysis.fatigue import weld_size_effect_factor
+
+    steel = {"yield_strength": _q("250 MPa"), "elastic_modulus": _q("207 GPa")}
+    # The Johnson parabola keeps falling past its tangent point and crosses zero, so a very
+    # slender column came back at -228 MPa -- it would have to be pulled to buckle.
+    with pytest.raises(ValueError, match="below zero"):
+        johnson_critical_stress(slenderness_ratio=250.0, **steel)
+    # Euler owns that column, and gives a sensible small positive stress.
+    assert euler_critical_stress(elastic_modulus=_q("207 GPa"), slenderness_ratio=250.0).to(
+        "MPa"
+    ).magnitude == pytest.approx(32.688129776407955, rel=1e-9)
+    # Inside its own range the parabola is untouched.
+    assert johnson_critical_stress(slenderness_ratio=50.0, **steel).to(
+        "MPa"
+    ).magnitude == pytest.approx(230.87990948778346, rel=1e-9)
+
+    # A vapour mass fraction above 1 is more steam than there was water: the lower bound was
+    # guarded, the upper one was not.
+    with pytest.raises(ValueError, match="more vapour"):
+        flash_steam_fraction(
+            initial_liquid_enthalpy=_q("3000 kJ/kg"),
+            final_liquid_enthalpy=_q("417 kJ/kg"),
+            final_latent_heat=_q("2258 kJ/kg"),
+        )
+    assert flash_steam_fraction(
+        initial_liquid_enthalpy=_q("763 kJ/kg"),
+        final_liquid_enthalpy=_q("417 kJ/kg"),
+        final_latent_heat=_q("2258 kJ/kg"),
+    ) == pytest.approx(0.15323294951284322, rel=1e-9)
+
+    # The fit handed back a k the module's own consumers refuse.
+    with pytest.raises(ValueError, match="below the k >= 1 floor"):
+        peukert_exponent_from_two_rates(
+            current_low=_q("5 A"),
+            runtime_low=_q("10 hr"),
+            current_high=_q("20 A"),
+            runtime_high=_q("5 hr"),
+        )
+    assert peukert_exponent_from_two_rates(
+        current_low=_q("5 A"),
+        runtime_low=_q("20 hr"),
+        current_high=_q("20 A"),
+        runtime_high=_q("3 hr"),
+    ) == pytest.approx(1.368482797083103, rel=1e-9)
+
+    # nu = 1 zeroed a body's compliance and nu > 1 made it negative, inverting E* and every
+    # Hertz patch riding on it.
+    steel_pair = {"modulus1": _q("200 GPa"), "poisson1": 0.3, "modulus2": _q("200 GPa")}
+    for bad in (1.0, 2.0, 0.5, -1.0):
+        with pytest.raises(ValueError, match="must lie in"):
+            hertz_effective_modulus(poisson2=bad, **steel_pair)
+    assert hertz_effective_modulus(poisson2=0.3, **steel_pair).to("GPa").magnitude == pytest.approx(
+        109.89010989010988, rel=1e-9
+    )
+
+    # A negative exponent turns the thickness penalty into a bonus, against k_s <= 1.
+    with pytest.raises(ValueError, match="non-negative"):
+        weld_size_effect_factor(thickness=_q("50 mm"), exponent=-0.2)
+    assert weld_size_effect_factor(thickness=_q("50 mm")) == pytest.approx(
+        0.8705505632961241, rel=1e-9
+    )

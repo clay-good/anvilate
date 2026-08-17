@@ -545,6 +545,15 @@ def johnson_critical_stress(
     sy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
     sigma = sy * (1 - sy * slenderness_ratio**2 / (4 * pi**2 * e))
+    # The parabola keeps falling past its tangent point and crosses zero at sqrt(2)*lambda_1,
+    # returning a NEGATIVE critical stress -- a column that must be pulled to make it buckle.
+    # The module's other branch-seam functions already refuse their far side; this one did not.
+    if sigma <= 0.0:
+        raise ValueError(
+            f"slenderness_ratio {slenderness_ratio} puts the Johnson parabola below zero "
+            f"(sigma_cr = {sigma:.4g} MPa), far past the transition slenderness where it is "
+            f"tangent to the Euler curve. Use euler_critical_stress for a column this slender."
+        )
     return Quantity(magnitude=sigma, unit="MPa")
 
 

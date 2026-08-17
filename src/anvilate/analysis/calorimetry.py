@@ -83,7 +83,17 @@ def flash_steam_fraction(
             "initial_liquid_enthalpy must be at least the final saturated-liquid enthalpy "
             "(a colder liquid does not flash)"
         )
-    return (h_f1 - h_f2) / h_fg2
+    fraction = (h_f1 - h_f2) / h_fg2
+    # The lower bound was guarded and the upper one was not, so an incoming enthalpy above the
+    # downstream saturated VAPOUR enthalpy returned a mass fraction over 1 -- more steam than
+    # there was water. That input is superheated vapour, not a flashing liquid.
+    if fraction > 1.0:
+        raise ValueError(
+            f"initial_liquid_enthalpy exceeds the downstream saturated-vapour enthalpy "
+            f"(h_f2 + h_fg2), so the flash fraction comes out {fraction:.4f} -- more vapour "
+            f"than there is liquid. That stream is superheated vapour, not a flashing liquid."
+        )
+    return fraction
 
 
 def latent_heat(*, mass: Quantity, specific_latent_heat: Quantity) -> Quantity:

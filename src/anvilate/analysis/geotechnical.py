@@ -412,7 +412,9 @@ def bearing_depth_factors(
     depth factors raise the capacity. For a shallow footing (D ≤ B) the Hansen/Vesić forms are
     d_q = 1 + 2·tanφ·(1 − sinφ)²·(D/B), d_c = d_q − (1 − d_q)/(N_c·tanφ) (or 1 + 0.4·(D/B) when
     φ = 0), and d_γ = 1. Because N_c = (N_q − 1)·cotφ, that denominator is identically N_q − 1,
-    and taking it to zero recovers the φ = 0 branch — the two forms agree in the limit.
+    and taking it to zero gives 1 + (2/(π+2))·(D/B) = 1 + 0.389·(D/B). That is close to but not
+    identical with the φ = 0 branch's empirical 1 + 0.4·(D/B), so the two forms leave a seam of
+    about 0.5% of d_c at D/B = 0.5 rather than meeting exactly.
     ``footing_width`` B, ``embedment_depth`` D (founding depth below grade),
     and ``friction_angle`` φ (degrees). Multiply each bearing-capacity term by its factor. Returns a
     dict with keys ``"d_c"``, ``"d_q"``, ``"d_gamma"``.

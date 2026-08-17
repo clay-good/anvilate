@@ -116,7 +116,18 @@ def peukert_exponent_from_two_rates(
         raise ValueError("runtimes must be positive")
     if i2 <= i1:
         raise ValueError("current_high must exceed current_low")
-    return log(t1 / t2) / log(i2 / i1)
+    exponent = log(t1 / t2) / log(i2 / i1)
+    # The two functions that CONSUME an exponent both refuse k < 1, but the one that fits it
+    # from measurements did not, so a mis-paired test (the higher current apparently lasting
+    # longer) handed back a k that the rest of the module rejects.
+    if exponent < 1.0:
+        raise ValueError(
+            f"the two tests fit a Peukert exponent of {exponent:.4f}, below the k >= 1 floor "
+            f"the rest of this module enforces: the higher current did not shorten the runtime "
+            f"enough. Check that runtime_low pairs with current_low and runtime_high with "
+            f"current_high."
+        )
+    return exponent
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

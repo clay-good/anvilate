@@ -136,6 +136,14 @@ def hertz_effective_modulus(
     _require(modulus2, "[pressure]", "modulus2")
     e1 = modulus1.to("MPa").magnitude
     e2 = modulus2.to("MPa").magnitude
+    if e1 <= 0 or e2 <= 0:
+        raise ValueError("both moduli must be positive")
+    # Unvalidated, nu = 1 zeroed a body's compliance term and nu > 1 made it negative, so E*
+    # came back negative and every Hertz patch built on it inverted. (-1, 0.5) is the
+    # isotropic thermodynamic range this library enforces everywhere else.
+    for name, nu in (("poisson1", poisson1), ("poisson2", poisson2)):
+        if not -1.0 < nu < 0.5:
+            raise ValueError(f"{name} must lie in (-1, 0.5); got {nu}")
     inv_e_star = (1.0 - poisson1**2) / e1 + (1.0 - poisson2**2) / e2
     return Quantity(magnitude=1.0 / inv_e_star, unit="MPa")
 
