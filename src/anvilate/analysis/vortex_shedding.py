@@ -30,6 +30,7 @@ from __future__ import annotations
 from math import pi
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "lock_in_velocity",
@@ -80,7 +81,7 @@ def lock_in_velocity(
     _check(characteristic_length, "[length]", "characteristic_length")
     if strouhal_number <= 0:
         raise ValueError("strouhal_number must be positive")
-    f_n = natural_frequency.to("Hz").magnitude
+    f_n = count_rate_per_second(natural_frequency, name="natural_frequency")
     d = characteristic_length.to("m").magnitude
     if f_n <= 0 or d <= 0:
         raise ValueError("natural_frequency and characteristic_length must be positive")
@@ -105,7 +106,7 @@ def reduced_velocity(
     _check(natural_frequency, "1/[time]", "natural_frequency")
     _check(characteristic_length, "[length]", "characteristic_length")
     v = velocity.to("m/s").magnitude
-    f_n = natural_frequency.to("Hz").magnitude
+    f_n = count_rate_per_second(natural_frequency, name="natural_frequency")
     d = characteristic_length.to("m").magnitude
     if v <= 0 or f_n <= 0 or d <= 0:
         raise ValueError("velocity, natural_frequency, and characteristic_length must be positive")

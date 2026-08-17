@@ -28,6 +28,7 @@ from __future__ import annotations
 from math import log10, pi, sqrt
 
 from ..units import Quantity
+from ..units.rotation import count_rate_per_second
 
 __all__ = [
     "cavitation_number",
@@ -167,7 +168,7 @@ def womersley_number(
     _check(frequency, "1/[time]", "frequency")
     _check(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
     r = radius.to("m").magnitude
-    f = frequency.to("Hz").magnitude
+    f = count_rate_per_second(frequency, name="frequency")
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if r <= 0:
         raise ValueError("radius must be positive")

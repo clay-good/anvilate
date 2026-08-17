@@ -28,7 +28,7 @@ from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
-from ..units.rotation import angular_speed_rad_per_s
+from ..units.rotation import angular_speed_rad_per_s, count_rate_per_second
 from .plate import DEFAULT_POISSON_RATIO
 
 __all__ = [
@@ -350,7 +350,7 @@ def damped_natural_frequency(*, natural_frequency: Quantity, damping_ratio: floa
     """
     _require(natural_frequency, "[frequency]", "natural_frequency")
     zeta = _check_damping_ratio(damping_ratio)
-    fn = natural_frequency.to("Hz").magnitude
+    fn = count_rate_per_second(natural_frequency, name="natural_frequency")
     if fn <= 0:
         raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
     return Quantity(magnitude=fn * sqrt(1.0 - zeta**2), unit="Hz")
@@ -380,7 +380,7 @@ def step_response_settling_time(*, natural_frequency: Quantity, damping_ratio: f
     """
     _require(natural_frequency, "[frequency]", "natural_frequency")
     zeta = _check_damping_ratio(damping_ratio)
-    fn = natural_frequency.to("Hz").magnitude
+    fn = count_rate_per_second(natural_frequency, name="natural_frequency")
     if fn <= 0:
         raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
     if zeta == 0.0:
@@ -398,7 +398,7 @@ def step_response_peak_time(*, natural_frequency: Quantity, damping_ratio: float
     """
     _require(natural_frequency, "[frequency]", "natural_frequency")
     zeta = _check_damping_ratio(damping_ratio)
-    fn = natural_frequency.to("Hz").magnitude
+    fn = count_rate_per_second(natural_frequency, name="natural_frequency")
     if fn <= 0:
         raise ValueError(f"natural_frequency must be positive; got {natural_frequency}")
     omega_n = 2.0 * pi * fn
@@ -465,7 +465,7 @@ def quality_factor_from_half_power_bandwidth(
     """
     _require(resonant_frequency, "[frequency]", "resonant_frequency")
     _require(half_power_bandwidth, "[frequency]", "half_power_bandwidth")
-    f_n = resonant_frequency.to("Hz").magnitude
+    f_n = count_rate_per_second(resonant_frequency, name="resonant_frequency")
     delta_f = half_power_bandwidth.to("Hz").magnitude
     if f_n <= 0:
         raise ValueError("resonant_frequency must be positive")
@@ -489,7 +489,7 @@ def damping_ratio_from_half_power_bandwidth(
     """
     _require(resonant_frequency, "[frequency]", "resonant_frequency")
     _require(half_power_bandwidth, "[frequency]", "half_power_bandwidth")
-    f_n = resonant_frequency.to("Hz").magnitude
+    f_n = count_rate_per_second(resonant_frequency, name="resonant_frequency")
     delta_f = half_power_bandwidth.to("Hz").magnitude
     if f_n <= 0:
         raise ValueError("resonant_frequency must be positive")
@@ -578,7 +578,7 @@ def isolator_natural_frequency_for_transmissibility(
         raise ValueError(
             f"transmissibility must be in (0, 1) for isolation; got {transmissibility}"
         )
-    f = forcing_frequency.to("Hz").magnitude
+    f = count_rate_per_second(forcing_frequency, name="forcing_frequency")
     if f <= 0:
         raise ValueError(f"forcing_frequency must be positive; got {forcing_frequency}")
     ratio = sqrt(1.0 + 1.0 / transmissibility)
@@ -607,7 +607,7 @@ def isolator_static_deflection_for_transmissibility(
         raise ValueError(
             f"gravity must be an [acceleration] quantity; got {gravity.dimensionality} ({gravity})"
         )
-    fn = natural_frequency.to("Hz").magnitude
+    fn = count_rate_per_second(natural_frequency, name="natural_frequency")
     g = gravity.to("m/s**2").magnitude
     omega_n = 2.0 * pi * fn
     deflection_m = g / omega_n**2
@@ -706,7 +706,7 @@ def floor_vibration_peak_acceleration_ratio(
     _require(fundamental_frequency, "1/[time]", "fundamental_frequency")
     _require(effective_panel_weight, "[force]", "effective_panel_weight")
     _require(constant_force, "[force]", "constant_force")
-    fn = fundamental_frequency.to("Hz").magnitude
+    fn = count_rate_per_second(fundamental_frequency, name="fundamental_frequency")
     w = effective_panel_weight.to("kN").magnitude
     p0 = constant_force.to("kN").magnitude
     if fn <= 0:
@@ -1617,8 +1617,8 @@ def frequency_scorecard(
             detail="not evaluated — minimum frequency unavailable",
         )
     _require(min_frequency, "[frequency]", "min_frequency")
-    fn = frequency.to("Hz").magnitude
-    floor = min_frequency.to("Hz").magnitude
+    fn = count_rate_per_second(frequency, name="frequency")
+    floor = count_rate_per_second(min_frequency, name="min_frequency")
     status = CheckStatus.PASS if fn >= floor else CheckStatus.FAIL
     return ScorecardEntry(
         name=name,

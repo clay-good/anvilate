@@ -15011,6 +15011,67 @@ def test_spindle_and_cycle_rates_refuse_the_wrong_side_of_the_same_2pi():
             )
 
 
+def test_cyclic_frequencies_refuse_an_angle_carrying_unit():
+    from anvilate.analysis import (
+        frequency_scorecard,
+        isolator_natural_frequency_for_transmissibility,
+        isolator_static_deflection_for_transmissibility,
+        womersley_number,
+    )
+    from anvilate.scorecard import CheckStatus
+    from anvilate.units.rotation import AmbiguousCountRateError
+
+    # The 2*pi trap pointing the OTHER way: these take a cyclic frequency in Hz, and an rpm-
+    # spelled speed converts through pint's revolution = 2*pi radian, so 20 rpm read as 2.1 Hz
+    # rather than 0.333 Hz. The scorecard returned PASS on a shaft running well below its floor.
+    with pytest.raises(AmbiguousCountRateError):
+        frequency_scorecard(
+            name="lineshaft",
+            frequency=Quantity(magnitude=20.0, unit="rpm"),
+            min_frequency=_q("1 Hz"),
+        )
+    # 20 rpm really is 0.333 Hz, which fails a 1 Hz floor as it should.
+    assert (
+        frequency_scorecard(
+            name="lineshaft",
+            frequency=Quantity(magnitude=20.0 / 60.0, unit="Hz"),
+            min_frequency=_q("1 Hz"),
+        ).status
+        is CheckStatus.FAIL
+    )
+
+    # The isolator pair was worse: the deflection goes as 1/f^2, so the same 2*pi became
+    # (2*pi)^2 = 39.5 and the mount came out that many times too stiff.
+    for unit in ("rpm", "turn/s", "cycle/s"):
+        with pytest.raises(AmbiguousCountRateError):
+            isolator_static_deflection_for_transmissibility(
+                forcing_frequency=Quantity(magnitude=3000.0, unit=unit), transmissibility=0.1
+            )
+        with pytest.raises(AmbiguousCountRateError):
+            isolator_natural_frequency_for_transmissibility(
+                forcing_frequency=Quantity(magnitude=3000.0, unit=unit), transmissibility=0.1
+            )
+    # 3000 rpm is 50 Hz, and spelled that way the mount needs 1.093 mm of static deflection --
+    # not the 0.0277 mm the rpm path used to return.
+    assert isolator_static_deflection_for_transmissibility(
+        forcing_frequency=_q("50 Hz"), transmissibility=0.1
+    ).to("mm").magnitude == pytest.approx(1.092983524122745, rel=1e-9)
+    assert isolator_natural_frequency_for_transmissibility(
+        forcing_frequency=_q("50 Hz"), transmissibility=0.1
+    ).to("Hz").magnitude == pytest.approx(15.075567228888181, rel=1e-9)
+
+    # Womersley takes a pulsation frequency; there the error is sqrt(2*pi).
+    with pytest.raises(AmbiguousCountRateError):
+        womersley_number(
+            radius=_q("10 mm"),
+            frequency=Quantity(magnitude=300.0, unit="rpm"),
+            kinematic_viscosity=_q("1e-6 m**2/s"),
+        )
+    assert womersley_number(
+        radius=_q("10 mm"), frequency=_q("5 Hz"), kinematic_viscosity=_q("1e-6 m**2/s")
+    ) == pytest.approx(56.04991216397929, rel=1e-9)
+
+
 def test_stokes_settling_velocity_and_drag_are_consistent():
     import math
 
