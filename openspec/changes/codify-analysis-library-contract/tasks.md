@@ -33,8 +33,15 @@
   a hard refusal at a fuzzy threshold would reject legitimate near-transition use, and it
   would break `test_turbulent_boundary_layer_...`, which deliberately evaluates both
   regimes at the same station (Re_x = 2.67e6) to show the turbulent layer is the thicker
-  one. `drag.stokes_settling_velocity` is the standing precedent: prose-only limit,
-  accepted deliberately, with a test that names the missing guard. **Open follow-up:** if
+  one. **Superseded note:** this decision previously cited
+  `drag.stokes_settling_velocity` as the standing precedent for leaving a prose-only
+  limit. It is no longer — that guard was added on 2026-08-17, and the two cases are not
+  alike. Stokes' seam is the *definition* of creeping flow (a single sharp Re ≈ 1, not a
+  transition band that moves with roughness), the Reynolds number is computable from the
+  function's own arguments, and past it the answer is 5.8x unconservative. The rule that
+  separates them: **enforce a limit that is sharp and whose error is unconservative;
+  leave one that is fuzzy, and surface a ratio where the error runs conservative** (see
+  `PlateBendingResult.small_deflection_ratio`). **Open follow-up:** if
   this is revisited, the shape to add is a public regime predicate (a named transition
   constant plus an `is_laminar(...)`-style check) the caller consults, not a raise inside
   the correlations.
@@ -44,3 +51,13 @@
   as a documented result. `isolation_scorecard`'s zero branch was left alone: it is
   unreachable (transmissibility overflows before it underflows) and would be an evaluated
   limiting result, not an absent demand.
+- **The zero-demand `else None` idiom is unpinned at twelve more sites.** A mutation pass
+  found `else None` -> `else 1.0` — "nothing to evaluate" silently becoming "exactly at
+  the limit, PASS" — surviving in the pump cavitation margin, the masonry combined-unity
+  check, the ASHRAE 62.1 outdoor-air check and the hearing-conservation dose. All four now
+  have tests in `tests/test_no_silent_green.py`. **Not yet run individually:**
+  `electrical.py:88,95`, `geotechnical.py:144,392`, `lighting.py:75,87`,
+  `hydraulics.py:83,153`, `ventilation.py:81`, and `structural.py:993,1531,1885,1983,1984`.
+  Given a four-for-four hit rate on the sites that were run, treat the whole family as
+  suspect until each has a zero-demand test. This is the library's signature invariant and
+  line coverage cannot see it — only mutation can.
