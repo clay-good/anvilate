@@ -310,6 +310,80 @@ def test_governing_shift_is_none_without_a_safety_factor_check():
     assert after.governing_shift(before) is None
 
 
+def test_a_nan_requirement_is_not_evaluated_rather_than_a_pass():
+    # The isnan guard covered `computed` only. A NaN *requirement* makes both `computed <
+    # required` and `computed > upper` False, so control fell to the PASS else-branch: a
+    # check judged against an unknown minimum reported green.
+    nan = float("nan")
+    entry = ScorecardEntry.from_safety_factor("bending", computed=2.0, required=nan)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert not entry.passed
+    assert "NaN" in entry.detail
+    # The computed number survives on the entry — it was the requirement that was unknown.
+    assert entry.safety_factor == 2.0
+
+    # Same trap on the upper band: a NaN upper silently disabled the OVER_MARGIN check.
+    banded = ScorecardEntry.from_safety_factor("bending", computed=9.0, required=1.5, upper=nan)
+    assert banded.status is CheckStatus.NOT_EVALUATED
+    assert "upper" in banded.detail
+
+    # An in-range call still answers normally — the guard did not swallow the good path.
+    assert (
+        ScorecardEntry.from_safety_factor("bending", computed=2.0, required=1.5).status
+        is CheckStatus.PASS
+    )
+    assert (
+        ScorecardEntry.from_safety_factor("bending", computed=9.0, required=1.5, upper=4.0).status
+        is CheckStatus.OVER_MARGIN
+    )
+
+
+def test_a_failing_check_outranks_a_check_that_could_not_run():
+    # The blocking precedence is FAIL > NOT_EVALUATED > PASS. Only the second half was
+    # pinned; swapping the FAIL and NOT_EVALUATED ranks left the whole suite green, and
+    # under that swap a card holding both points the reviewer at the gap instead of at the
+    # thing that blocks.
+    card = Scorecard(
+        entries=(
+            _entry("could not run", CheckStatus.NOT_EVALUATED),
+            _entry("bolt shear", CheckStatus.FAIL),
+        )
+    )
+    assert card.governing().name == "bolt shear"
+    assert card.governing().status is CheckStatus.FAIL
+    # And both still outrank a passing check carrying a real utilization.
+    with_pass = Scorecard(
+        entries=(_sf("bending", 1.51, 1.5), _entry("could not run", CheckStatus.NOT_EVALUATED))
+    )
+    assert with_pass.governing().name == "could not run"
+
+
+def test_governing_shift_reports_a_move_off_a_check_carrying_no_safety_factor():
+    # governing() is deliberately widened so a blocking check with no safety factor can
+    # govern; governing_shift fed that same None into a `float` field and raised a
+    # ValidationError on exactly the revision it exists to describe.
+    before = Scorecard(
+        entries=(_entry("floor deflection", CheckStatus.FAIL), _sf("bending", 2.0, 1.5))
+    )
+    after = Scorecard(
+        entries=(_entry("floor deflection", CheckStatus.PASS), _sf("bending", 1.6, 1.5))
+    )
+    shift = after.governing_shift(before)
+    assert isinstance(shift, GoverningChange)
+    assert shift.previous == "floor deflection"
+    assert shift.previous_utilization is None
+    assert shift.current == "bending"
+    assert shift.current_utilization == pytest.approx(1.5 / 1.6, rel=1e-9)
+    # It renders without crashing, and says the absence out loud rather than printing 0.00.
+    assert "util —" in str(shift)
+    assert "util 0.94" in str(shift)
+
+    # Symmetric case: the move is ONTO the factorless blocking check.
+    back = before.governing_shift(after)
+    assert back.current_utilization is None
+    assert "util —" in str(back)
+
+
 # -- uncertainty annotation and fragility --------------------------------------
 
 

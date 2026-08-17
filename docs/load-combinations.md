@@ -55,7 +55,7 @@ entry = combination_scorecard(
     capacity=130.0,
     required=1.5,
 )
-entry.detail      # "...; demand 111.5 from LRFD 2 [Lr]: 1.2D + 1.6L + 0.5Lr"
+entry.detail      # "...; demand 47.2 from LRFD 3 (+L) [Lr]: 1.2D + 1L + 1.6Lr"
 entry.reference   # "ASCE 7-22 §2.3.1"
 ```
 

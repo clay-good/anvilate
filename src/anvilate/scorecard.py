@@ -129,6 +129,11 @@ class RepairHint(BaseModel):
         return f"{self.direction.value} {self.parameter} to {self.corrective_value:.4g}{unit}"
 
 
+def _format_utilization(value: float | None) -> str:
+    """A utilization for display, or the no-safety-factor case said out loud."""
+    return "util —" if value is None else f"util {value:.2f}"
+
+
 class GoverningChange(BaseModel):
     """A shift in which check governs, reported across a revalidation.
 
@@ -141,14 +146,20 @@ class GoverningChange(BaseModel):
 
     previous: str
     current: str
-    previous_utilization: float
-    current_utilization: float
+    # `None` where the governing check carries no safety factor. `governing()` is
+    # deliberately widened to let a blocking check without one govern — every deflection
+    # and serviceability check is built that way — so these must admit the same absence
+    # its own `ScorecardEntry.utilization` does. Declared `float`, they raised a pydantic
+    # ValidationError on exactly the revision a shift report exists to describe.
+    previous_utilization: float | None = None
+    current_utilization: float | None = None
 
     def __str__(self) -> str:
+        previous = _format_utilization(self.previous_utilization)
+        current = _format_utilization(self.current_utilization)
         return (
             f"governing check changed: '{self.previous}' "
-            f"(util {self.previous_utilization:.2f}) → '{self.current}' "
-            f"(util {self.current_utilization:.2f})"
+            f"({previous}) → '{self.current}' ({current})"
         )
 
 
@@ -273,6 +284,26 @@ class ScorecardEntry(BaseModel):
                 detail="not evaluated — safety factor came out NaN",
                 required_safety_factor=required,
                 upper_safety_factor=upper,
+            )
+        # The same NaN trap on the other operands. A NaN *requirement* makes `computed <
+        # required` False and `computed > upper` False, so control fell through to the PASS
+        # else-branch: a check judged against an unknown minimum reported as green. An
+        # unknown requirement is a check that could not run, not one that passed.
+        if isnan(required):
+            return cls(
+                name=name,
+                status=CheckStatus.NOT_EVALUATED,
+                detail="not evaluated — the required safety factor came out NaN",
+                safety_factor=computed,
+                upper_safety_factor=upper,
+            )
+        if upper is not None and isnan(upper):
+            return cls(
+                name=name,
+                status=CheckStatus.NOT_EVALUATED,
+                detail="not evaluated — the upper safety-factor band came out NaN",
+                safety_factor=computed,
+                required_safety_factor=required,
             )
         if computed < required:
             status = CheckStatus.FAIL

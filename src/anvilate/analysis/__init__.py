@@ -1862,7 +1862,9 @@ from .fatigue import (
     weld_cutoff_limit,
     weld_detail_allowable_stress_range,
     weld_detail_endurance_cycles,
+    weld_effective_stress_range,
     weld_fatigue_scorecard,
+    weld_mean_stress_factor,
     weld_size_corrected_detail_category,
     weld_size_effect_factor,
 )
@@ -4376,6 +4378,8 @@ __all__ = [
     "weld_detail_allowable_stress_range",
     "weld_size_effect_factor",
     "weld_size_corrected_detail_category",
+    "weld_mean_stress_factor",
+    "weld_effective_stress_range",
     "weld_fatigue_scorecard",
     "CyclicStress",
     "cyclic_stress_components",

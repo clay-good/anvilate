@@ -1776,7 +1776,11 @@ def screen_beam_column(
     else:
         interaction = pr_pc / 2.0 + mr_mc
 
-    safety = float("inf") if interaction == 0 else 1.0 / interaction
+    # The 20th site of the zero-demand idiom, and the only one that spelled it `inf`. An
+    # interaction of zero means P_r = M_r = 0: the AISC H1.1 criterion had nothing to
+    # evaluate, not a member with infinite reserve. `None` -> NOT_EVALUATED, matching the
+    # 19 sibling screens and the doctrine loads.combination_scorecard spells out.
+    safety = 1.0 / interaction if interaction > 0 else None
     capacity_symbols = (
         SymbolValue(symbol="P_r", description="required axial strength", value=member.axial_load),
         SymbolValue(

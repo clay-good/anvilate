@@ -319,6 +319,42 @@ def test_html_is_self_contained_and_escapes_user_text():
         assert scheme not in html
 
 
+def test_margin_summary_states_the_computed_factor_before_the_required_minimum():
+    # The single most-read line of the submittal. Swapping the two columns left the whole
+    # suite green, so a report could render "1.50 vs 1.85 required" for a check that
+    # actually ran 1.85 against a 1.50 minimum — a PASS row whose own numbers say FAIL.
+    report = _report()
+    text = report.to_text()
+    # Bending runs 1.85 against a required 1.50; deflection 1.05 against 1.50.
+    assert "PASS           bending yield: 1.85 vs 1.50 required" in text
+    assert "FAIL           tip deflection: 1.05 vs 1.50 required" in text
+    # The two checks share a requirement but not a factor: an order swap cannot survive
+    # both rows, and the row's verdict must agree with its own numbers.
+    for line, verdict in (("bending yield", "PASS"), ("tip deflection", "FAIL")):
+        row = next(r for r in text.splitlines() if line in r and "required" in r)
+        factor, required = row.split(":")[1].split(" vs ")
+        computed = float(factor.strip())
+        minimum = float(required.replace("required", "").strip())
+        assert row.strip().startswith(verdict)
+        assert (computed >= minimum) is (verdict == "PASS")
+
+    # The HTML summary table is fed by the same rows and must carry the same order.
+    html = report.to_html()
+    assert html.index("1.85") < html.index("1.50")
+
+
+def test_margin_summary_holds_its_fixed_two_decimal_precision():
+    # The module promises a report renders byte-identically on every rebuild "so a diff
+    # between two reports is an engineering change, never rendering noise". The precision
+    # that promise rests on was itself unasserted, so a widening would dirty every
+    # historical report diff without failing a test.
+    rows = _report()._summary_rows()
+    assert rows == (
+        ("bending yield", "1.85", "1.50", "PASS"),
+        ("tip deflection", "1.05", "1.50", "FAIL"),
+    )
+
+
 def test_rendering_is_byte_identical_across_rebuilds():
     # Two independently constructed reports render identically — nothing inside the
     # document is timestamped or ordered by chance, so a diff is an engineering change.

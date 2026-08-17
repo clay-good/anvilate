@@ -80,10 +80,13 @@ def required_section_modulus(
 
     The inverse of the σ = M/Z bending check (and of
     :attr:`CrossSection.section_modulus`): demanding M/Z ≤ σ_allow/n gives
-    Z_min = n·M/σ_allow — the first sizing step for a beam, before a trial section
+    Z_min = n·|M|/σ_allow — the first sizing step for a beam, before a trial section
     is picked and its Z compared against this floor. ``bending_moment`` M is the
-    governing moment, ``allowable_stress`` σ_allow the material's allowable bending
-    stress, and ``required_safety_factor`` n the margin on it (default 1.0, i.e.
+    governing moment (magnitude; a hogging moment needs the same section modulus as
+    the sagging one, so the sign is irrelevant to the size — the same convention
+    :func:`~anvilate.analysis.axial.required_axial_area` uses), ``allowable_stress``
+    σ_allow the material's allowable bending stress, and ``required_safety_factor`` n
+    the margin on it (default 1.0, i.e.
     σ_allow already includes the margin). Returns the minimum Z in mm³; the moment
     and stress are dimension-checked and ``n`` / ``allowable_stress`` must be
     positive.
@@ -102,7 +105,10 @@ def required_section_modulus(
         raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
     if allowable_stress.to("MPa").magnitude <= 0:
         raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
-    z = required_safety_factor * bending_moment.pint / allowable_stress.pint
+    # Without abs() a routine hogging moment (a cantilever root, a continuous beam over a
+    # support) sized the beam at a NEGATIVE section modulus, which this module's own
+    # bending_stress then refuses.
+    z = required_safety_factor * abs(bending_moment.pint) / allowable_stress.pint
     converted = z.to("mm**3")
     return Quantity(magnitude=float(converted.magnitude), unit="mm**3")
 

@@ -1908,6 +1908,37 @@ def test_column_screen_applies_the_effective_length_factor() -> None:
     )
 
 
+def test_beam_column_with_no_demand_is_not_evaluated_rather_than_an_infinite_pass() -> None:
+    """The 20th site of the zero-demand idiom, and the last one still spelling it ``inf``.
+
+    An interaction of zero means P_r = M_r = 0: the AISC H1.1 criterion had nothing to
+    evaluate, not a member with infinite reserve. It is reachable from ordinary input —
+    an unclassified load case leaves both at zero — and the ``inf`` spelling made it
+    worse than a plain wrong pass: ``utilization`` for an infinite factor is 0.0, so the
+    unevaluated check sorted *below every passing check* when ``governing()`` looked for
+    the thing to point the reviewer at.
+    """
+    loaded = screen_beam_column(_beam_column(), required_safety_factor=1.5)
+    assert loaded.entries[0].safety_factor is not None
+
+    for axial, moment in (("0 kN", "0 kN*m"), ("-200 kN", "0 kN*m")):
+        card = screen_beam_column(
+            _beam_column(axial=axial, moment=moment), required_safety_factor=1.5
+        )
+        entry = card.entries[0]
+        assert entry.status is CheckStatus.NOT_EVALUATED
+        assert entry.safety_factor is None
+        assert not card.passed
+
+    # A member with only a moment, or only an axial load, still has a demand to evaluate.
+    assert (
+        screen_beam_column(_beam_column(axial="0 kN", moment="20 kN*m"), required_safety_factor=1.5)
+        .entries[0]
+        .safety_factor
+        is not None
+    )
+
+
 def test_a_non_positive_demand_is_not_evaluated_rather_than_an_infinite_pass() -> None:
     """Five structural screens returned float("inf") for a non-positive load, i.e. PASS.
 

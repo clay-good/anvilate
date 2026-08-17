@@ -138,7 +138,18 @@ def effective_number_of_bits(*, snr_db: float) -> float:
     ``snr_db`` in dB, by inverting the ideal SNR rule: ENOB = (SNR − 1.76)/6.02. A part quoted at N
     bits with an ENOB well below N is dominated by noise and distortion, not quantization. Returns
     the effective number of bits as a plain float.
+
+    The relation inverts SNR = 6.02·N + 1.76 over N > 0, so its domain is ``snr_db`` > 1.76 dB.
+    At 1.76 dB the converter resolves exactly one level; below it there is no physical inverse
+    and this refuses, rather than handing back a negative "resolution" that every consumer of a
+    bit count in this module (all three enforce bits > 0) would reject later under an unrelated
+    message.
     """
+    if snr_db <= 1.76:
+        raise ValueError(
+            f"snr_db must exceed 1.76 dB (one bit of resolution); got {snr_db} dB, which "
+            f"inverts to {(snr_db - 1.76) / 6.02:.4g} bits"
+        )
     return (snr_db - 1.76) / 6.02
 
 

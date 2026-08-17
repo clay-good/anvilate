@@ -738,6 +738,8 @@ fatigue.weld_detail_endurance_cycles
 fatigue.weld_fatigue_scorecard
 fatigue.weld_size_corrected_detail_category
 fatigue.weld_size_effect_factor
+fatigue.weld_mean_stress_factor
+fatigue.weld_effective_stress_range
 fiber_optics.chromatic_dispersion_broadening
 fiber_optics.modal_dispersion_broadening
 fiber_optics.dispersion_limited_bit_rate

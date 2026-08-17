@@ -241,6 +241,24 @@ def test_required_section_modulus_scales_with_the_margin():
     )
 
 
+def test_required_section_modulus_sizes_a_hogging_moment_by_magnitude():
+    # A negative (hogging) moment is routine — a cantilever root, a continuous beam over a
+    # support — and the sizer returned a NEGATIVE section modulus for it, a value its own
+    # bending_stress refuses. The section a hogging moment needs is the same as the sagging
+    # one, which is the convention required_axial_area already uses for a compressive load.
+    sagging = required_section_modulus(bending_moment=_q("40 kN*m"), allowable_stress=_q("160 MPa"))
+    hogging = required_section_modulus(
+        bending_moment=_q("-40 kN*m"), allowable_stress=_q("160 MPa")
+    )
+    assert hogging.to("mm**3").magnitude == pytest.approx(250000.0, rel=1e-9)
+    assert hogging.to("mm**3").magnitude == pytest.approx(sagging.to("mm**3").magnitude, rel=1e-12)
+    assert hogging.to("mm**3").magnitude > 0
+    # The safety factor still scales it, in both signs.
+    assert required_section_modulus(
+        bending_moment=_q("-40 kN*m"), allowable_stress=_q("160 MPa"), required_safety_factor=2.0
+    ).to("mm**3").magnitude == pytest.approx(500000.0, rel=1e-9)
+
+
 def test_required_section_modulus_rejects_bad_inputs():
     with pytest.raises(ValueError, match="bending_moment must be a"):
         required_section_modulus(bending_moment=_q("5 kN"), allowable_stress=_q("165 MPa"))

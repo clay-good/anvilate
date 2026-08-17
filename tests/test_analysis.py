@@ -2991,6 +2991,33 @@ def test_key_length_for_torque_inverts_the_stress_checks():
     assert sigma.to("MPa").magnitude == pytest.approx(100.0, rel=1e-6)
 
 
+def test_key_length_for_torque_sizes_a_reversing_drive_by_magnitude():
+    # On a negative torque the max(l_shear, l_bearing) selection INVERTED: both lengths came
+    # out negative, so max() picked the less negative one — the SHORTER key — and reported
+    # the wrong limit state with it. A key must carry the torque whichever way the shaft
+    # drives, so the answer must be identical for +/-T.
+    def size(torque: str):
+        return key_length_for_torque(
+            torque=_q(torque),
+            shaft_diameter=_q("40 mm"),
+            key_width=_q("12 mm"),
+            key_height=_q("8 mm"),
+            allowable_shear=_q("60 MPa"),
+            allowable_bearing=_q("100 MPa"),
+        )
+
+    forward, reverse = size("200 N*m"), size("-200 N*m")
+    assert reverse.required_length.to("mm").magnitude == pytest.approx(25.0, rel=1e-6)
+    assert reverse.governing_mode == "bearing"
+    assert reverse.required_length.to("mm").magnitude == pytest.approx(
+        forward.required_length.to("mm").magnitude, rel=1e-12
+    )
+    assert reverse.shear_length.to("mm").magnitude == pytest.approx(13.889, rel=1e-4)
+    # Not merely abs() of the old answer: that would have given 13.889 mm on the wrong mode,
+    # 44% short of the length the bearing limit state actually needs.
+    assert reverse.required_length.to("mm").magnitude > reverse.shear_length.to("mm").magnitude
+
+
 def test_key_length_rejects_bad_allowable():
     with pytest.raises(ValueError, match="must be positive"):
         key_length_for_torque(
@@ -5492,6 +5519,29 @@ def test_thin_wall_thickness_rejects_bad_inputs():
         )
 
 
+def test_thin_wall_thickness_refuses_external_pressure_and_a_zero_radius():
+    # A full-vacuum shell is a real duty, and the membrane sizer returned t = -0.362 mm for
+    # it — a negative wall its own thin_wall_cylinder refuses. External pressure is governed
+    # by buckling (ASME UG-28), which this module does not screen, so it must refuse. The
+    # sibling asme_cylinder_thickness in the same module already guarded both.
+    with pytest.raises(ValueError, match="positive internal gauge pressure"):
+        thin_wall_thickness_for_pressure(
+            pressure=_q("-0.1 MPa"), radius=_q("500 mm"), allowable_stress=_q("138 MPa")
+        )
+    with pytest.raises(ValueError, match="positive internal gauge pressure"):
+        thin_wall_thickness_for_pressure(
+            pressure=_q("0 MPa"), radius=_q("500 mm"), allowable_stress=_q("138 MPa")
+        )
+    with pytest.raises(ValueError, match="radius must be positive"):
+        thin_wall_thickness_for_pressure(
+            pressure=_q("2 MPa"), radius=_q("0 mm"), allowable_stress=_q("138 MPa")
+        )
+    # An in-range call still answers: t = 1.0 * 2 * 500 / 138 = 7.246 mm.
+    assert thin_wall_thickness_for_pressure(
+        pressure=_q("2 MPa"), radius=_q("500 mm"), allowable_stress=_q("138 MPa")
+    ).to("mm").magnitude == pytest.approx(2 * 500 / 138, rel=1e-9)
+
+
 def test_thick_wall_cylinder_matches_worked_example():
     # A O50 bore hydraulic barrel with a 10 mm wall (ri = 25, ro = 35) at
     # 60 MPa: bore hoop = p*(ro^2+ri^2)/(ro^2-ri^2) = 60*1850/600 = 185 MPa on
@@ -6811,6 +6861,90 @@ def test_weld_size_effect_penalizes_thick_plates_only():
     thin_life = weld_detail_endurance_cycles(stress_range=_q("70 MPa"), detail_category=category)
     thick_life = weld_detail_endurance_cycles(stress_range=_q("70 MPa"), detail_category=corrected)
     assert thick_life < thin_life
+
+
+def test_weld_mean_stress_correction_discounts_compression_only_when_relieved():
+    from anvilate.analysis import (
+        weld_detail_endurance_cycles,
+        weld_effective_stress_range,
+        weld_mean_stress_factor,
+    )
+
+    reversed_cycle = {"max_stress": _q("100 MPa"), "min_stress": _q("-100 MPa")}
+    # As-welded is the default and the conservative case: residual stress sits at yield, so
+    # the whole 200 MPa range does damage and the factor is exactly 1.
+    assert weld_effective_stress_range(**reversed_cycle).to("MPa").magnitude == pytest.approx(
+        200.0, rel=1e-12
+    )
+    assert weld_mean_stress_factor(**reversed_cycle) == pytest.approx(1.0, rel=1e-12)
+
+    # Stress-relieved: the compressive half counts at 0.6, so 100 + 0.6*100 = 160 MPa.
+    relieved = weld_effective_stress_range(**reversed_cycle, stress_relieved=True)
+    assert relieved.to("MPa").magnitude == pytest.approx(160.0, rel=1e-12)
+    assert weld_mean_stress_factor(**reversed_cycle, stress_relieved=True) == pytest.approx(
+        0.8, rel=1e-12
+    )
+
+    # A wholly tensile cycle has no compressive part to discount: the bonus is unavailable
+    # even when the detail is relieved, and the factor stays 1.
+    tensile = {"max_stress": _q("180 MPa"), "min_stress": _q("30 MPa")}
+    assert weld_effective_stress_range(**tensile, stress_relieved=True).to(
+        "MPa"
+    ).magnitude == pytest.approx(150.0, rel=1e-12)
+    assert weld_mean_stress_factor(**tensile, stress_relieved=True) == pytest.approx(1.0, rel=1e-12)
+
+    # A wholly compressive cycle reaches the floor: the factor is exactly the 0.6 itself.
+    compressive = {"max_stress": _q("-20 MPa"), "min_stress": _q("-120 MPa")}
+    assert weld_effective_stress_range(**compressive, stress_relieved=True).to(
+        "MPa"
+    ).magnitude == pytest.approx(60.0, rel=1e-12)
+    assert weld_mean_stress_factor(**compressive, stress_relieved=True) == pytest.approx(
+        0.6, rel=1e-12
+    )
+
+    # The correction is caller-tunable, and it moves the answer: a 0.4 convention discounts
+    # harder than the standard 0.6.
+    assert weld_effective_stress_range(
+        **reversed_cycle, stress_relieved=True, compression_factor=0.4
+    ).to("MPa").magnitude == pytest.approx(140.0, rel=1e-12)
+
+    # It buys real life: the relieved 160 MPa range outlives the as-welded 200 MPa one on
+    # the same detail category, which is the whole point of declaring the relief.
+    category = _q("90 MPa")
+    assert weld_detail_endurance_cycles(
+        stress_range=relieved, detail_category=category
+    ) > weld_detail_endurance_cycles(
+        stress_range=weld_effective_stress_range(**reversed_cycle), detail_category=category
+    )
+
+
+def test_weld_mean_stress_correction_rejects_bad_inputs():
+    from anvilate.analysis import weld_effective_stress_range, weld_mean_stress_factor
+
+    # Swapped algebraic extremes would otherwise return a negative "range" that the S-N
+    # curve happily consumes.
+    with pytest.raises(ValueError, match="are swapped"):
+        weld_effective_stress_range(max_stress=_q("-100 MPa"), min_stress=_q("100 MPa"))
+    # A compression factor above 1 would make compression MORE damaging than tension.
+    with pytest.raises(ValueError, match=r"compression_factor must lie in \(0, 1\]"):
+        weld_effective_stress_range(
+            max_stress=_q("100 MPa"),
+            min_stress=_q("-100 MPa"),
+            stress_relieved=True,
+            compression_factor=1.5,
+        )
+    with pytest.raises(ValueError, match=r"compression_factor must lie in \(0, 1\]"):
+        weld_effective_stress_range(
+            max_stress=_q("100 MPa"),
+            min_stress=_q("-100 MPa"),
+            stress_relieved=True,
+            compression_factor=0.0,
+        )
+    # A constant stress is not a cycle: the factor is undefined, not 1.
+    with pytest.raises(ValueError, match="there is no cycle to correct"):
+        weld_mean_stress_factor(max_stress=_q("50 MPa"), min_stress=_q("50 MPa"))
+    with pytest.raises(ValueError, match="max_stress must be a"):
+        weld_effective_stress_range(max_stress=_q("50 kN"), min_stress=_q("-50 MPa"))
 
 
 def test_weld_size_effect_rejects_bad_thickness():
@@ -32168,6 +32302,15 @@ def test_adc_quantization_snr_step_and_enob():
     # A real part measured below its nominal SNR delivers fewer effective bits.
     assert effective_number_of_bits(snr_db=68.0) == pytest.approx((68.0 - 1.76) / 6.02, rel=1e-12)
     assert effective_number_of_bits(snr_db=68.0) == pytest.approx(11.0, abs=0.02)
+    # ENOB inverts SNR = 6.02*N + 1.76 over N > 0, so its domain is snr_db > 1.76 dB. Below
+    # it the producer handed back a negative "resolution" (-3.61 bits at -20 dB) that all
+    # three bit-count consumers in this module reject under an unrelated message.
+    with pytest.raises(ValueError, match="must exceed 1.76 dB"):
+        effective_number_of_bits(snr_db=-20.0)
+    with pytest.raises(ValueError, match="must exceed 1.76 dB"):
+        effective_number_of_bits(snr_db=1.76)
+    # Just inside the domain it still answers, with a small positive resolution.
+    assert effective_number_of_bits(snr_db=1.77) == pytest.approx(0.01 / 6.02, rel=1e-9)
 
     # Guardrails: positive bits, dimensioned full-scale voltage.
     with pytest.raises(ValueError, match="bits must be positive"):

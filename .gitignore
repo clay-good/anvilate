@@ -41,3 +41,9 @@ Thumbs.db
 
 # openlore analysis artifacts
 .openlore/
+
+# Example output written to the repo root by examples/lug_drawing.py and
+# examples/lifting_lug_calc_report.py. These are regenerable artifacts, not sources —
+# tracked copies dirtied the working tree on every run of the examples.
+/padeye.dxf
+/padeye.html

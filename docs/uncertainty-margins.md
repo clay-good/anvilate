@@ -27,8 +27,8 @@ result = sample_margin(
     seed=20260803,
 )
 
-print(result)                       # margin 1.74 ± 0.29, P(below 1.50) = 20.6% over 20000 samples
-result.shortfall_probability        # 0.206 — the chance of falling short of 1.5
+print(result)                       # margin 1.74 ± 0.29, P(below 1.50) = 20.3% over 10000 samples
+result.shortfall_probability        # 0.203 — the chance of falling short of 1.5
 result.lower, result.upper          # the central 90% band of the safety factor
 result.is_fragile(threshold=0.05)   # True — a nominal pass with a material failure chance
 result.dominant().name              # "load" — the input driving the scatter

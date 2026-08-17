@@ -122,9 +122,10 @@ def key_length_for_torque(
     L_shear = F/(w·τ_allow) to keep the key shear within ``allowable_shear`` and
     L_bearing = F/((h/2)·σ_allow) to keep the side bearing within
     ``allowable_bearing``; the key must be at least the larger of the two.
-    ``key_width`` is w, ``key_height`` h. Returns a :class:`KeyLengthRequirement`
-    reporting both lengths, the governing one, and its mode. Every quantity is
-    dimension-checked and the allowables must be positive.
+    ``key_width`` is w, ``key_height`` h. The torque enters by magnitude — a reversing
+    drive needs the same key either way — so the answer is the same for ±T. Returns a
+    :class:`KeyLengthRequirement` reporting both lengths, the governing one, and its
+    mode. Every quantity is dimension-checked and the allowables must be positive.
     """
     _require(key_width, "[length]", "key_width")
     _require(key_height, "[length]", "key_height")
@@ -132,7 +133,11 @@ def key_length_for_torque(
     _require(allowable_bearing, "[pressure]", "allowable_bearing")
     if allowable_shear.to("MPa").magnitude <= 0 or allowable_bearing.to("MPa").magnitude <= 0:
         raise ValueError("allowable_shear and allowable_bearing must be positive")
-    force = key_tangential_force(torque=torque, shaft_diameter=shaft_diameter).pint
+    # abs(): the key must carry the torque whichever way the shaft drives, and the length it
+    # needs depends on the magnitude. Without it a reversing drive's negative torque flipped
+    # the max() below into picking the LESS negative length — the shorter key — and named the
+    # wrong limit state with it.
+    force = abs(key_tangential_force(torque=torque, shaft_diameter=shaft_diameter).pint)
     l_shear = (force / (key_width.pint * allowable_shear.pint)).to("mm").magnitude
     l_bearing = (force / ((key_height.pint / 2) * allowable_bearing.pint)).to("mm").magnitude
     governing = "shear" if l_shear >= l_bearing else "bearing"

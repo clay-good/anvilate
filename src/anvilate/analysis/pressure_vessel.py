@@ -196,6 +196,17 @@ def thin_wall_thickness_for_pressure(
         raise ValueError(f"required_safety_factor must be positive; got {required_safety_factor}")
     if allowable_stress.to("MPa").magnitude <= 0:
         raise ValueError(f"allowable_stress must be positive; got {allowable_stress}")
+    # An external (negative gauge) pressure is not a membrane-tension problem at all — the
+    # shell is governed by buckling, which this module does not screen — and the formula
+    # obligingly returned a negative thickness for it. The sibling ASME sizer in this module
+    # already guards both, so this matches it rather than inventing a new refusal.
+    if pressure.to("MPa").magnitude <= 0:
+        raise ValueError(
+            f"pressure must be a positive internal gauge pressure; got {pressure}. External "
+            f"pressure is a buckling problem (ASME UG-28), not a membrane one"
+        )
+    if radius.to("mm").magnitude <= 0:
+        raise ValueError(f"radius must be positive; got {radius}")
     thickness = required_safety_factor * pressure.pint * radius.pint / allowable_stress.pint
     return _as_quantity(thickness, "mm")
 

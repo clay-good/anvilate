@@ -60,6 +60,8 @@ __all__ = [
     "weld_detail_allowable_stress_range",
     "weld_size_effect_factor",
     "weld_size_corrected_detail_category",
+    "weld_mean_stress_factor",
+    "weld_effective_stress_range",
     "weld_fatigue_scorecard",
 ]
 
@@ -890,6 +892,88 @@ def weld_size_corrected_detail_category(
         thickness=thickness, reference_thickness=reference_thickness, exponent=exponent
     )
     return Quantity(magnitude=dsc * factor, unit="MPa")
+
+
+# EN 1993-1-9 §7.2.1: in a stress-relieved or non-welded detail the compressive part of
+# the range is only 60% as damaging, because there are no tensile residual stresses holding
+# the crack open through it. In an as-welded detail the residual stress sits at yield and
+# the whole range does damage, so the bonus does not apply.
+_WELD_COMPRESSION_FACTOR = 0.6
+
+
+def weld_effective_stress_range(
+    *,
+    max_stress: Quantity,
+    min_stress: Quantity,
+    stress_relieved: bool = False,
+    compression_factor: float = _WELD_COMPRESSION_FACTOR,
+) -> Quantity:
+    """The EN 1993-1-9 §7.2.1 effective stress range, with the compressive part discounted.
+
+    A fatigue crack grows while it is held open, so the compressive half of a cycle is less
+    damaging than the tensile half — but only if there is no tensile residual stress holding
+    the crack open anyway. In an *as-welded* detail the residual stress sits at yield and the
+    whole range does damage; in a *stress-relieved* or non-welded one the compressive part
+    counts at ``compression_factor`` (0.6 in the standard):
+
+        Δσ_eff = σ_max + factor·|σ_min|   when σ_min < 0 and the detail is stress-relieved,
+        Δσ_eff = σ_max − σ_min            otherwise.
+
+    ``max_stress`` and ``min_stress`` are the signed algebraic extremes of the cycle
+    (tension positive), so a fully reversed ±100 MPa cycle is max = +100, min = −100.
+    ``stress_relieved`` defaults to ``False`` — the conservative as-welded case — because
+    claiming the bonus is a statement about the fabrication, not about the geometry, and it
+    is the caller's to make. Returns Δσ_eff in MPa.
+    """
+    smax = _require_stress(max_stress, "max_stress")
+    smin = _require_stress(min_stress, "min_stress")
+    if smin > smax:
+        raise ValueError(
+            f"min_stress ({min_stress}) exceeds max_stress ({max_stress}): the algebraic "
+            f"extremes of the cycle are swapped"
+        )
+    if not 0 < compression_factor <= 1:
+        raise ValueError(
+            f"compression_factor must lie in (0, 1]; got {compression_factor}. Above 1 the "
+            f"compressive part would be more damaging than the tensile part"
+        )
+    if not stress_relieved or smin >= 0:
+        return Quantity(magnitude=smax - smin, unit="MPa")
+    # Wholly compressive cycles keep a discounted range too — the tensile part is simply zero.
+    tensile = max(smax, 0.0)
+    return Quantity(magnitude=tensile + compression_factor * (min(smax, 0.0) - smin), unit="MPa")
+
+
+def weld_mean_stress_factor(
+    *,
+    max_stress: Quantity,
+    min_stress: Quantity,
+    stress_relieved: bool = False,
+    compression_factor: float = _WELD_COMPRESSION_FACTOR,
+) -> float:
+    """The visible mean-stress correction factor Δσ_eff/Δσ ≤ 1 (EN 1993-1-9 §7.2.1).
+
+    The same correction as :func:`weld_effective_stress_range`, expressed as the factor it
+    applies, so it can sit beside the thickness factor k_s in a record that shows every
+    correction that moved the number. It is 1.0 for an as-welded detail and for any cycle
+    with no compressive part; it reaches its floor (``compression_factor``, 0.6) for a
+    fully compressive cycle on a stress-relieved detail. Returns the dimensionless factor.
+    """
+    smax = _require_stress(max_stress, "max_stress")
+    smin = _require_stress(min_stress, "min_stress")
+    full_range = smax - smin
+    if full_range <= 0:
+        raise ValueError(
+            f"max_stress ({max_stress}) and min_stress ({min_stress}) give a stress range of "
+            f"{full_range:.4g} MPa: there is no cycle to correct"
+        )
+    effective = weld_effective_stress_range(
+        max_stress=max_stress,
+        min_stress=min_stress,
+        stress_relieved=stress_relieved,
+        compression_factor=compression_factor,
+    )
+    return effective.to("MPa").magnitude / full_range
 
 
 def weld_fatigue_scorecard(
