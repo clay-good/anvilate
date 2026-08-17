@@ -37227,3 +37227,48 @@ def test_five_functions_that_returned_a_physically_impossible_number() -> None:
     assert weld_size_effect_factor(thickness=_q("50 mm")) == pytest.approx(
         0.8705505632961241, rel=1e-9
     )
+
+
+def test_lumped_capacitance_refuses_an_excess_temperature_on_an_offset_scale() -> None:
+    """Both functions take a temperature DIFFERENCE and converted it with a raw .to("K").
+
+    ``Quantity(80, "degC").to("K")`` is 353.15 because Celsius carries an offset, so an
+    80 K excess was read as 353.15. The cooling time came out 22.1 s against the correct
+    207.9 -- a factor of 9.4, under-predicting how long a body takes to cool. Every
+    sibling in the module already routed differences through the guard.
+    """
+    from anvilate.analysis.thermal import (
+        lumped_capacitance_cooling_time,
+        lumped_capacitance_excess_temperature,
+    )
+    from anvilate.units.temperature import OffsetTemperatureError
+
+    with pytest.raises(OffsetTemperatureError):
+        lumped_capacitance_cooling_time(
+            initial_excess_temperature=Quantity(magnitude=80.0, unit="degC"),
+            target_excess_temperature=Quantity(magnitude=10.0, unit="degC"),
+            time_constant=_q("100 s"),
+        )
+    with pytest.raises(OffsetTemperatureError):
+        lumped_capacitance_excess_temperature(
+            initial_excess_temperature=Quantity(magnitude=80.0, unit="degC"),
+            time=_q("100 s"),
+            time_constant=_q("100 s"),
+        )
+
+    # Spelled as the differences they are, both give the textbook answers, and the pair
+    # round-trips: after one time constant the excess is 1/e of its start.
+    assert lumped_capacitance_cooling_time(
+        initial_excess_temperature=_q("80 K"),
+        target_excess_temperature=_q("10 K"),
+        time_constant=_q("100 s"),
+    ).to("s").magnitude == pytest.approx(207.94415416798358, rel=1e-9)
+    assert lumped_capacitance_excess_temperature(
+        initial_excess_temperature=_q("80 K"), time=_q("100 s"), time_constant=_q("100 s")
+    ).to("K").magnitude == pytest.approx(29.430355293715387, rel=1e-9)
+    # delta_degC is a genuine difference and stays acceptable.
+    assert lumped_capacitance_excess_temperature(
+        initial_excess_temperature=Quantity(magnitude=80.0, unit="delta_degC"),
+        time=_q("100 s"),
+        time_constant=_q("100 s"),
+    ).to("K").magnitude == pytest.approx(29.430355293715387, rel=1e-9)

@@ -92,9 +92,11 @@ class CombinationSet(BaseModel):
     """A named set of load combinations — a code basis, or a custom list.
 
     ``evaluate_all`` returns every combination's demand; ``governing`` names the
-    combination with the largest demand (the strength envelope), and its
-    ``minimize`` form names the smallest — the counteracting case that governs
-    uplift and overturning, where wind or seismic relieves gravity.
+    combination with the largest demand (the strength envelope), its ``minimize``
+    form names the smallest — the counteracting case that governs uplift and
+    overturning, where wind or seismic relieves gravity — and its ``by_magnitude``
+    form names the largest regardless of sign, which is what a check judging
+    ``capacity/|demand|`` needs.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -107,18 +109,33 @@ class CombinationSet(BaseModel):
         return tuple((c.name, c.evaluate(loads)) for c in self.combinations)
 
     def governing(
-        self, loads: Mapping[LoadNature, float], *, minimize: bool = False
+        self,
+        loads: Mapping[LoadNature, float],
+        *,
+        minimize: bool = False,
+        by_magnitude: bool = False,
     ) -> tuple[LoadCombination, float]:
         """The governing combination and its demand.
 
         The largest demand by default — the strength envelope. ``minimize=True``
         returns the smallest, the counteracting combination that governs an uplift
         or overturning check (e.g. 0.9D + 1.0W netting upward).
+
+        ``by_magnitude=True`` ignores sign and returns the largest ``|demand|``,
+        which is what a check judging ``capacity/|demand|`` actually needs: a set
+        holding +100 kN of gravity and −420 kN of uplift is governed by the uplift,
+        and signed selection would hand back the 100 kN. The demand is returned
+        signed either way, so the caller still sees which direction governs.
         """
         if not self.combinations:
             raise ValueError("an empty combination set has no governing combination")
-        chooser = min if minimize else max
-        governing = chooser(self.combinations, key=lambda c: c.evaluate(loads))
+
+        def key(combination: LoadCombination) -> float:
+            value = combination.evaluate(loads)
+            return abs(value) if by_magnitude else value
+
+        chooser = min if minimize and not by_magnitude else max
+        governing = chooser(self.combinations, key=key)
         return governing, governing.evaluate(loads)
 
     def envelope(self, loads: Mapping[LoadNature, float]) -> float:
@@ -181,14 +198,21 @@ def combination_scorecard(
 ) -> ScorecardEntry:
     """Screen a ``capacity`` against the governing combination's demand.
 
-    The demand is the governing combination's factored sum — the strength envelope
-    by default, or the counteracting minimum when ``minimize=True`` (an uplift or
-    overturning check). The safety factor is ``capacity / |demand|``, judged against
-    ``required``. The entry names which combination governed in its detail and takes
-    that combination's citation as its reference, so the scorecard shows the
+    The demand is the governing combination's factored sum, chosen by *magnitude*
+    because the safety factor is ``capacity / |demand|``: selecting by signed value
+    while judging by magnitude is how a set holding +100 kN of gravity and −420 kN of
+    uplift used to return PASS on the 100 kN and never look at the uplift. Pure uplift
+    was worse — every gravity combination evaluated to exactly 0, the signed maximum
+    picked one of them, and a zero demand short-circuited to an *infinite* safety
+    factor, so the check passed without the criterion ever being evaluated.
+
+    ``minimize=True`` still forces the counteracting side explicitly, for a caller who
+    wants that combination named whatever its magnitude. The safety factor is judged
+    against ``required``. The entry names which combination governed in its detail and
+    takes that combination's citation as its reference, so the scorecard shows the
     controlling combination rather than silently reducing the set to one number.
     """
-    governing, demand = combinations.governing(loads, minimize=minimize)
+    governing, demand = combinations.governing(loads, minimize=minimize, by_magnitude=not minimize)
     magnitude = abs(demand)
     computed = float("inf") if magnitude == 0 else capacity / magnitude
     entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)

@@ -15,6 +15,7 @@ openspec/specs/validation-gauntlet/).
 from __future__ import annotations
 
 from enum import StrEnum
+from math import isnan
 
 from pydantic import BaseModel, ConfigDict
 
@@ -189,7 +190,11 @@ class ScorecardEntry(BaseModel):
         """
         if self.safety_factor is None or self.required_safety_factor is None:
             return None
-        if self.safety_factor == 0:
+        # A zero factor was already infinitely utilized; a NEGATIVE one is strictly worse
+        # (capacity exceeded, or a sign-flipped interaction ratio) and used to divide out to a
+        # negative utilization, which ranked BELOW every passing check. governing() then named
+        # a passing check as governing in a report whose overall status was FAIL.
+        if self.safety_factor <= 0:
             return float("inf")
         return self.required_safety_factor / self.safety_factor
 
@@ -243,6 +248,18 @@ class ScorecardEntry(BaseModel):
                 name=name,
                 status=CheckStatus.NOT_EVALUATED,
                 detail="not evaluated — safety factor unavailable",
+            )
+        # NaN compares False against every operand, so it used to fall past both the FAIL and
+        # the OVER_MARGIN branch and land on the PASS else -- a silent green for a check that
+        # never produced a number. This is the single funnel every screen puts its float
+        # through, so one NaN upstream turned into a clean pass anywhere in the library.
+        if isnan(computed):
+            return cls(
+                name=name,
+                status=CheckStatus.NOT_EVALUATED,
+                detail="not evaluated — safety factor came out NaN",
+                required_safety_factor=required,
+                upper_safety_factor=upper,
             )
         if computed < required:
             status = CheckStatus.FAIL

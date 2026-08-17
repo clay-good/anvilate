@@ -2416,8 +2416,12 @@ def lumped_capacitance_cooling_time(
     _require(initial_excess_temperature, "[temperature]", "initial_excess_temperature")
     _require(target_excess_temperature, "[temperature]", "target_excess_temperature")
     _require(time_constant, "[time]", "time_constant")
-    theta_0 = initial_excess_temperature.to("K").magnitude
-    theta = target_excess_temperature.to("K").magnitude
+    theta_0 = temperature_difference_kelvin(
+        initial_excess_temperature, name="initial_excess_temperature"
+    )
+    theta = temperature_difference_kelvin(
+        target_excess_temperature, name="target_excess_temperature"
+    )
     tau = time_constant.to("s").magnitude
     if theta_0 <= 0 or theta <= 0 or tau <= 0:
         raise ValueError("the excess temperatures and time constant must be positive")
@@ -2446,7 +2450,9 @@ def lumped_capacitance_excess_temperature(
     _require(initial_excess_temperature, "[temperature]", "initial_excess_temperature")
     _require(time, "[time]", "time")
     _require(time_constant, "[time]", "time_constant")
-    theta_0 = initial_excess_temperature.to("K").magnitude
+    theta_0 = temperature_difference_kelvin(
+        initial_excess_temperature, name="initial_excess_temperature"
+    )
     t = time.to("s").magnitude
     tau = time_constant.to("s").magnitude
     if theta_0 <= 0:

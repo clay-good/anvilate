@@ -360,3 +360,38 @@ def test_scorecard_collects_fragile_checks_without_changing_status():
     assert card.status is CheckStatus.PASS
     assert card.passed
     assert [e.name for e in card.fragile()] == ["fragile"]
+
+
+def test_a_nan_safety_factor_is_not_evaluated_rather_than_a_pass() -> None:
+    """NaN compares False against everything, so it fell through to the PASS branch.
+
+    ``from_safety_factor`` is the single funnel every screen in the library puts its
+    float through, so one NaN upstream became a clean green anywhere -- and it did not
+    even show up in ``not_evaluated()``, so nothing flagged the gap.
+    """
+    entry = ScorecardEntry.from_safety_factor("x", computed=float("nan"), required=2.0)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert not entry.passed
+    card = Scorecard(entries=(entry,))
+    assert card.status is CheckStatus.NOT_EVALUATED
+    assert [e.name for e in card.not_evaluated()] == ["x"]
+
+
+def test_a_negative_safety_factor_governs_instead_of_ranking_below_every_pass() -> None:
+    """utilization = required/computed went NEGATIVE for a negative safety factor.
+
+    That ranked the worst check below every passing one, so ``governing()`` named a
+    PASSING check as governing in a report whose overall status was FAIL -- pointing the
+    reviewer at the wrong row. A zero factor was already treated as infinitely utilized;
+    a negative one is strictly worse.
+    """
+    overstressed = ScorecardEntry.from_safety_factor("overstressed", computed=-0.5, required=2.0)
+    fine = ScorecardEntry.from_safety_factor("fine", computed=3.0, required=2.0)
+    assert overstressed.utilization == float("inf")
+    assert Scorecard(entries=(overstressed, fine)).governing().name == "overstressed"
+    # A zero factor keeps the behavior it already had, and ordinary ranking is untouched.
+    assert ScorecardEntry.from_safety_factor("z", computed=0.0, required=2.0).utilization == float(
+        "inf"
+    )
+    tight = ScorecardEntry.from_safety_factor("tight", computed=1.6, required=2.0)
+    assert Scorecard(entries=(fine, tight)).governing().name == "tight"

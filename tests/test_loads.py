@@ -193,3 +193,59 @@ def test_combination_scorecard_uplift_uses_the_counteracting_combination():
     assert entry.safety_factor == pytest.approx(80.0 / 60.0, rel=1e-9)
     assert entry.status is CheckStatus.FAIL
     assert "LRFD 5" in entry.detail
+
+
+def test_combination_scorecard_governs_by_magnitude_not_by_sign() -> None:
+    """Selection was signed while the safety factor was magnitude, and they disagreed.
+
+    A set holding gravity and a larger uplift picked the small positive demand and
+    reported PASS, never looking at the uplift. Pure uplift was worse: every gravity
+    combination evaluated to exactly 0, the signed maximum picked one, and a zero demand
+    short-circuited to an INFINITE safety factor -- a PASS produced without the criterion
+    being evaluated at all.
+    """
+    combinations = asce7_asd_basic()
+
+    # 100 kN of dead against 800 kN of wind uplift. ASD 7 (0.6D + 0.6W) reaches -420 kN
+    # against a 200 kN capacity; the old signed-max path reported the 100 kN and passed.
+    entry = combination_scorecard(
+        "holddown",
+        combinations=combinations,
+        loads={LoadNature.DEAD: 100_000.0, LoadNature.WIND: -800_000.0},
+        capacity=200_000.0,
+        required=1.5,
+    )
+    assert entry.status is CheckStatus.FAIL
+    assert entry.safety_factor == pytest.approx(200_000.0 / 420_000.0, rel=1e-9)
+    assert "ASD 7" in entry.detail
+    # The demand is still reported signed, so the direction that governs stays visible.
+    assert "-420000" in entry.detail
+
+    # Pure uplift, no dead load: the degenerate infinite-safety-factor pass.
+    anchor = combination_scorecard(
+        "anchor tension",
+        combinations=combinations,
+        loads={LoadNature.WIND: -500_000.0},
+        capacity=50_000.0,
+        required=2.0,
+    )
+    assert anchor.status is CheckStatus.FAIL
+    assert anchor.safety_factor == pytest.approx(50_000.0 / 300_000.0, rel=1e-9)
+
+    # Ordinary gravity is unchanged -- the magnitude and the signed maximum agree there.
+    gravity = combination_scorecard(
+        "beam",
+        combinations=combinations,
+        loads={LoadNature.DEAD: 100_000.0, LoadNature.LIVE: 200_000.0},
+        capacity=600_000.0,
+        required=1.5,
+    )
+    assert gravity.status is CheckStatus.PASS
+    assert gravity.safety_factor == pytest.approx(2.0, rel=1e-9)
+
+    # by_magnitude is opt-in on the set itself; the plain envelope keeps signed semantics.
+    uplift_loads = {LoadNature.DEAD: 100_000.0, LoadNature.WIND: -800_000.0}
+    assert combinations.governing(uplift_loads)[1] == pytest.approx(100_000.0, rel=1e-9)
+    assert combinations.governing(uplift_loads, by_magnitude=True)[1] == pytest.approx(
+        -420_000.0, rel=1e-9
+    )
