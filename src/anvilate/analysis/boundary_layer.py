@@ -1,4 +1,4 @@
-"""T1 analytical laminar flat-plate boundary-layer checks (Blasius, closed-form).
+"""T1 analytical flat-plate boundary-layer checks (Blasius and 1/7-power, closed-form).
 
 When a fluid streams over a solid surface, the no-slip condition drags a thin sheet of it to rest at
 the wall; the region where the velocity climbs back to the free stream is the *boundary layer*. For
@@ -11,13 +11,16 @@ U, the distance x from the leading edge, and the kinematic viscosity ν. The lay
 δ = 5·x/√Re_x — thickening downstream and thinning in faster or thinner flow. The local wall shear
 follows the skin-friction coefficient C_f = 0.664/√Re_x, and integrating it over a plate of length L
 gives the average drag coefficient C_D = 1.328/√Re_L. These hold while the layer stays laminar,
-roughly Re < 5×10⁵; beyond that the layer trips to turbulence and these relations no longer apply.
+roughly Re < 5×10⁵; beyond that the layer trips to turbulence and a separate set of relations
+applies, built on the empirical 1/7-power velocity profile rather than on Blasius:
+δ = 0.37·x/Re_x^0.2 and C_D = 0.074/Re_L^0.2, with the integral thicknesses fixed fractions of the
+layer itself (δ* = δ/8, θ = 7δ/72).
 
 The 99% thickness δ is a convenient edge but not a quantity that appears in any conservation law.
-The two *integral* thicknesses are: the displacement thickness δ\* = 1.721·x/√Re_x is how far the
+The two *integral* thicknesses are: the displacement thickness δ* = 1.721·x/√Re_x is how far the
 wall effectively moves out into the flow (the area correction a duct or nozzle needs), and the
 momentum thickness θ = 0.664·x/√Re_x carries the momentum deficit, so the drag on the plate is
-D = ρU²θ by von Kármán. Their ratio H = δ\*/θ is the shape factor — 2.59 laminar, about 1.3
+D = ρU²θ by von Kármán. Their ratio H = δ*/θ is the shape factor — 2.59 laminar, about 1.3
 turbulent — and a rising H is the standard warning that the layer is heading for separation.
 """
 
@@ -42,6 +45,8 @@ def _reynolds(velocity: Quantity, length: Quantity, kinematic_viscosity: Quantit
 
 
 __all__ = [
+    "turbulent_displacement_thickness",
+    "turbulent_momentum_thickness",
     "boundary_layer_shape_factor",
     "laminar_boundary_layer_thickness",
     "laminar_displacement_thickness",
@@ -251,3 +256,64 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def turbulent_displacement_thickness(
+    *, freestream_velocity: Quantity, distance: Quantity, kinematic_viscosity: Quantity
+) -> Quantity:
+    """The turbulent displacement thickness, δ* = δ/8 = 0.0463·x/Re_x^0.2.
+
+    The distance the outer flow is pushed away from the wall by the momentum deficit in the
+    boundary layer — the effective area loss a duct, a nozzle throat, or a wind-tunnel test
+    section suffers. The module covers δ, C_f, and C_D in the turbulent regime that real plates,
+    hulls, and fuselages actually run in, but δ* existed only for the laminar case.
+
+    From the 1/7-power velocity profile, δ* = δ/8 with δ from
+    :func:`turbulent_boundary_layer_thickness`. Applying the laminar coefficient at a turbulent
+    Reynolds number is not a small error: at Re_x = 4×10⁶ the laminar form understates δ* by a
+    factor of 2.6, and the gap widens with Reynolds number because the two carry different
+    exponents (x^0.8 against x^0.5). The usual alternative is to omit the correction entirely. The
+    1/7-power profile is an engineering fit valid for roughly 5×10⁵ < Re_x < 10⁷ and drifting
+    slowly outside it. Returns the displacement thickness in m.
+    """
+    return Quantity(
+        magnitude=turbulent_boundary_layer_thickness(
+            freestream_velocity=freestream_velocity,
+            distance=distance,
+            kinematic_viscosity=kinematic_viscosity,
+        )
+        .to("m")
+        .magnitude
+        / 8.0,
+        unit="m",
+    )
+
+
+def turbulent_momentum_thickness(
+    *, freestream_velocity: Quantity, distance: Quantity, kinematic_viscosity: Quantity
+) -> Quantity:
+    """The turbulent momentum thickness, θ = (7/72)·δ = 0.036·x/Re_x^0.2.
+
+    The thickness of freestream flow carrying the momentum the boundary layer has lost, and so —
+    through the von Karman momentum integral — the drag on the plate up to ``distance`` x. It is
+    the turbulent companion to :func:`laminar_momentum_thickness`, taken from the same 1/7-power
+    profile as :func:`turbulent_displacement_thickness`.
+
+    Two checks come for free. The shape factor δ*/θ = 72/56 = 1.286 reproduces the "about 1.3"
+    that :func:`boundary_layer_shape_factor`'s own docstring gives for a turbulent layer, against
+    2.59 for a laminar one — the single number that says which regime a profile is in. And the
+    momentum integral C_D = 2θ/L lands within 3% of
+    :func:`turbulent_plate_drag_coefficient`, the residual being the standard 1/7-power versus
+    Schlichting-fit artifact rather than an error in either. Returns the momentum thickness in m.
+    """
+    return Quantity(
+        magnitude=(7.0 / 72.0)
+        * turbulent_boundary_layer_thickness(
+            freestream_velocity=freestream_velocity,
+            distance=distance,
+            kinematic_viscosity=kinematic_viscosity,
+        )
+        .to("m")
+        .magnitude,
+        unit="m",
+    )

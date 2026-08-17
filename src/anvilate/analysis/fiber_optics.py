@@ -21,8 +21,10 @@ from math import pi
 from ..units import Quantity
 
 _SINGLE_MODE_CUTOFF_V = 2.405  # first zero of the Bessel function J0
+_SPEED_OF_LIGHT = 299792458.0  # m/s
 
 __all__ = [
+    "modal_dispersion_broadening",
     "chromatic_dispersion_broadening",
     "dispersion_limited_bit_rate",
     "dispersion_limited_distance",
@@ -166,3 +168,41 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def modal_dispersion_broadening(
+    *, core_index: float, cladding_index: float, length: Quantity
+) -> Quantity:
+    """The step-index modal dispersion, Δτ = n₁·L·Δ/c.
+
+    The pulse spreading caused by different guided modes taking different path lengths down a
+    step-index multimode fiber: the steepest ray zig-zags at the critical angle while the axial
+    ray goes straight, and they arrive apart. From the ``core_index`` n₁, the ``cladding_index``
+    n₂, and the fiber ``length`` L, with the relative index difference Δ = (n₁ − n₂)/n₁.
+
+    :func:`fiber_mode_count`'s docstring already warns that a large mode count "means strong
+    intermodal dispersion that limits the bandwidth", and the module then quantified only the
+    *chromatic* mechanism. On a 1 km fiber with n₁ = 1.48 and n₂ = 1.46 the modal broadening is
+    67 ns against roughly 17 ps of chromatic broadening — nearly four thousand times larger, and
+    with no unit or dimensional cue that the wrong mechanism was applied. Screening a multimode
+    link with :func:`chromatic_dispersion_broadening` alone is therefore wildly optimistic; feed
+    this into :func:`dispersion_limited_bit_rate` instead, which turns it into about 3.7 Mbit/s.
+
+    This is the step-index result and the worst case. A graded-index profile equalises the transit
+    times and cuts the broadening by roughly Δ/8, which is the entire reason graded-index fiber
+    exists; single-mode fiber removes the mechanism altogether by guiding one mode, at which point
+    chromatic dispersion is the right tool. Returns the pulse broadening in s.
+    """
+    _check(length, "[length]", "length")
+    if core_index <= 0 or cladding_index <= 0:
+        raise ValueError("core_index and cladding_index must be positive")
+    if cladding_index >= core_index:
+        raise ValueError(
+            f"core_index {core_index} must exceed cladding_index {cladding_index} for the fiber "
+            "to guide"
+        )
+    length_m = length.to("m").magnitude
+    if length_m <= 0:
+        raise ValueError("length must be positive")
+    delta = (core_index - cladding_index) / core_index
+    return Quantity(magnitude=core_index * length_m * delta / _SPEED_OF_LIGHT, unit="s")

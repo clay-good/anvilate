@@ -44,6 +44,7 @@ from math import pi, sqrt
 from ..units import Quantity
 
 __all__ = [
+    "crack_tip_opening_displacement",
     "stress_intensity_factor",
     "critical_crack_length",
     "critical_fracture_stress",
@@ -341,3 +342,46 @@ def plane_strain_thickness_requirement(
         raise ValueError(f"yield_strength must be positive; got {yield_strength}")
     b_m = 2.5 * (kic / sy) ** 2  # metres
     return Quantity(magnitude=b_m * 1000.0, unit="mm")
+
+
+def crack_tip_opening_displacement(
+    *,
+    stress_intensity: Quantity,
+    yield_strength: Quantity,
+    youngs_modulus: Quantity,
+    poisson_ratio: float = 0.0,
+    plane_strain: bool = False,
+) -> Quantity:
+    """The crack-tip opening displacement, δ_t = K²/(σ_y·E′).
+
+    How far the two crack faces separate at the tip — the elastic-plastic fracture parameter that
+    stays meaningful after linear-elastic fracture mechanics stops being valid.
+    :func:`crack_tip_plastic_zone_size`'s docstring ends by saying that when the plastic zone is no
+    longer small "an elastic-plastic (J-integral / CTOD) treatment is needed", and the module then
+    offered neither, leaving a user who discovers LEFM is invalid with no next step. CTOD is also
+    the parameter BS 7910 and API 579 fitness-for-service assessments are written in.
+
+    From the ``stress_intensity`` K, the ``yield_strength`` σ_y, and the effective modulus E′ — the
+    ``youngs_modulus`` E in plane stress, or E/(1 − ν²) in plane strain, matching the convention of
+    :func:`strain_energy_release_rate`. Equivalently δ_t = G/σ_y for a constraint factor of one,
+    which is the identity worth remembering: it ties CTOD directly to the energy release rate the
+    module already computes.
+
+    A 50 MPa·√m field in a 400 MPa steel of E = 200 GPa opens the tip 31 µm — small, but a
+    measurable and physically real crack mouth rather than the mathematical singularity LEFM
+    predicts. Plane strain constrains the tip and gives a smaller opening for the same K, so it is
+    the conservative choice. Returns the opening displacement in m.
+    """
+    _require(stress_intensity, "[pressure]*[length]**0.5", "stress_intensity")
+    _require(yield_strength, "[pressure]", "yield_strength")
+    _require(youngs_modulus, "[pressure]", "youngs_modulus")
+    sigma_y = yield_strength.to("Pa").magnitude
+    if sigma_y <= 0:
+        raise ValueError("yield_strength must be positive")
+    release_rate = strain_energy_release_rate(
+        stress_intensity=stress_intensity,
+        youngs_modulus=youngs_modulus,
+        poisson_ratio=poisson_ratio,
+        plane_strain=plane_strain,
+    )
+    return Quantity(magnitude=release_rate.to("J/m**2").magnitude / sigma_y, unit="m")

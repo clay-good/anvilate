@@ -1052,6 +1052,7 @@ from .acoustics import (
     critical_distance,
     doppler_shifted_frequency,
     doppler_velocity_from_shift,
+    eyring_reverberation_time,
     helmholtz_resonator_frequency,
     inverse_square_attenuation,
     mach_cone_angle,
@@ -1247,6 +1248,7 @@ from .belt import (
 from .boiling import (
     critical_heat_flux,
     film_boiling_coefficient,
+    film_boiling_total_coefficient,
     minimum_film_boiling_heat_flux,
     nucleate_boiling_excess_temperature,
     nucleate_boiling_heat_flux,
@@ -1259,6 +1261,8 @@ from .boundary_layer import (
     laminar_plate_drag_coefficient,
     laminar_skin_friction_coefficient,
     turbulent_boundary_layer_thickness,
+    turbulent_displacement_thickness,
+    turbulent_momentum_thickness,
     turbulent_plate_drag_coefficient,
     turbulent_skin_friction_coefficient,
 )
@@ -1862,6 +1866,7 @@ from .fiber_optics import (
     fiber_mode_count,
     fiber_single_mode_cutoff_wavelength,
     fiber_v_number,
+    modal_dispersion_broadening,
 )
 from .fire_protection import (
     hydrant_flow_test,
@@ -1919,6 +1924,7 @@ from .fourbar import (
     is_grashof,
 )
 from .fracture import (
+    crack_tip_opening_displacement,
     crack_tip_plastic_zone_size,
     critical_crack_length,
     critical_fracture_stress,
@@ -3670,6 +3676,7 @@ __all__ = [
     "noise_dose_fraction",
     "permissible_exposure_time",
     "sabine_reverberation_time",
+    "eyring_reverberation_time",
     "schroeder_frequency",
     "sound_level_sum",
     "sound_power_level_from_intensity",
@@ -3973,10 +3980,13 @@ __all__ = [
     "nucleate_boiling_excess_temperature",
     "critical_heat_flux",
     "film_boiling_coefficient",
+    "film_boiling_total_coefficient",
     "minimum_film_boiling_heat_flux",
     "laminar_boundary_layer_thickness",
     "laminar_displacement_thickness",
     "laminar_momentum_thickness",
+    "turbulent_displacement_thickness",
+    "turbulent_momentum_thickness",
     "boundary_layer_shape_factor",
     "laminar_skin_friction_coefficient",
     "laminar_plate_drag_coefficient",
@@ -4389,6 +4399,7 @@ __all__ = [
     "lens_power",
     "combined_thin_lens_focal_length",
     "chromatic_dispersion_broadening",
+    "modal_dispersion_broadening",
     "dispersion_limited_bit_rate",
     "dispersion_limited_distance",
     "fiber_mode_count",
@@ -4760,6 +4771,7 @@ __all__ = [
     "critical_fracture_stress",
     "griffith_fracture_stress",
     "strain_energy_release_rate",
+    "crack_tip_opening_displacement",
     "paris_law_crack_growth_rate",
     "paris_law_cycles_to_failure",
     "crack_tip_plastic_zone_size",

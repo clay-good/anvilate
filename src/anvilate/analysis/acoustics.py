@@ -17,11 +17,12 @@ decibel numbers (a dimensionless ratio); distances are dimension-checked
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import asin, degrees, log10, pi, sqrt
+from math import asin, degrees, log, log10, pi, sqrt
 
 from ..units import Quantity
 
 __all__ = [
+    "eyring_reverberation_time",
     "acoustic_impedance",
     "acoustic_reflection_coefficient",
     "acoustic_transmission_coefficient",
@@ -556,3 +557,43 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def eyring_reverberation_time(
+    *, volume: Quantity, total_surface_area: Quantity, average_absorption_coefficient: float
+) -> Quantity:
+    """The Eyring reverberation time, T₆₀ = 0.161·V/(−S·ln(1 − ᾱ)).
+
+    The time for sound to decay 60 dB in a room, computed the way that stays honest when the room
+    is absorptive. :func:`sabine_reverberation_time` is the module's only reverberation model and
+    it assumes each reflection removes a small fraction of the energy — fine in a live hall, badly
+    wrong in a treated one.
+
+    Eyring replaces Sabine's ᾱ with −ln(1 − ᾱ), the exact per-reflection energy loss, using the
+    ``volume`` V, the ``total_surface_area`` S, and the ``average_absorption_coefficient`` ᾱ.
+    The two converge as ᾱ → 0, since −ln(1 − ᾱ) → ᾱ, so this is a strict generalisation rather
+    than a competing model.
+
+    The divergence is large exactly where it matters: Sabine over-predicts by 39% at ᾱ = 0.50 and
+    by 101% at ᾱ = 0.80, and it never reaches zero even at ᾱ = 1 — it would have an anechoic
+    chamber ringing for a fifth of a second. Anyone sizing absorption for a studio, a control
+    room, or a lined plant room is in that regime, and Sabine tells them they are finished when
+    they are not. ᾱ is the area-weighted mean over all surfaces, in (0, 1). Returns the
+    reverberation time in s.
+    """
+    _check(volume, "[volume]", "volume")
+    _check(total_surface_area, "[area]", "total_surface_area")
+    if not 0.0 < average_absorption_coefficient < 1.0:
+        raise ValueError(
+            "average_absorption_coefficient must lie in (0, 1); got "
+            f"{average_absorption_coefficient}"
+        )
+    v = volume.to("m**3").magnitude
+    s = total_surface_area.to("m**2").magnitude
+    if v <= 0:
+        raise ValueError("volume must be positive")
+    if s <= 0:
+        raise ValueError("total_surface_area must be positive")
+    return Quantity(
+        magnitude=0.161 * v / (-s * log(1.0 - average_absorption_coefficient)), unit="s"
+    )

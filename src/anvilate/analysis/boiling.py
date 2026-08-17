@@ -24,7 +24,10 @@ from ..units import Quantity
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
+_STEFAN_BOLTZMANN = 5.670374419e-8  # W/(m**2*K**4)
+
 __all__ = [
+    "film_boiling_total_coefficient",
     "critical_heat_flux",
     "film_boiling_coefficient",
     "minimum_film_boiling_heat_flux",
@@ -307,3 +310,52 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def film_boiling_total_coefficient(
+    *,
+    convection_coefficient: Quantity,
+    surface_temperature: Quantity,
+    saturation_temperature: Quantity,
+    emissivity: float,
+) -> Quantity:
+    """The Bromley total film-boiling coefficient, h = h_conv + 0.75·h_rad.
+
+    :func:`film_boiling_coefficient`'s own docstring says radiation across the vapor film "matters
+    above roughly 300 °C of superheat and is not included here", and gave no way to include it.
+    This does. The film is transparent, so the hot surface radiates directly to the liquid
+    interface, and the equivalent radiation coefficient is
+
+        h_rad = ε·σ·(T_s⁴ − T_sat⁴)/(T_s − T_sat)
+
+    from the ``emissivity`` ε and the two absolute temperatures. The two mechanisms are not simply
+    additive — radiation thickens the vapor film and thereby weakens the convection it competes
+    with — and Bromley's implicit result h^(4/3) = h_conv^(4/3) + h_rad·h^(1/3) is well
+    approximated by the explicit 0.75 weighting used here, within about 1%.
+
+    It is worth including: water at 1 atm with the surface at 700 °C and ε = 0.8 gets
+    h_conv = 200 W/(m²·K) and h_rad = 66, so the total is 250 — omitting radiation understates
+    the coefficient by 1.25×, which is unconservative for quench-rate and post-burnout
+    surface-temperature predictions. The correction grows as the fourth power of surface
+    temperature, so it dominates in furnace and reactor-accident territory. Temperatures must be
+    absolute and the surface above saturation. Returns the total coefficient in W/(m**2*K).
+    """
+    _check(convection_coefficient, "[power]/([area]*[temperature])", "convection_coefficient")
+    _check(surface_temperature, "[temperature]", "surface_temperature")
+    _check(saturation_temperature, "[temperature]", "saturation_temperature")
+    if not 0.0 <= emissivity <= 1.0:
+        raise ValueError(f"emissivity must lie in [0, 1]; got {emissivity}")
+    h_conv = convection_coefficient.to("W/(m**2*K)").magnitude
+    t_s = surface_temperature.to("K").magnitude
+    t_sat = saturation_temperature.to("K").magnitude
+    if h_conv <= 0:
+        raise ValueError("convection_coefficient must be positive")
+    if t_sat <= 0:
+        raise ValueError("saturation_temperature must be a positive absolute temperature")
+    if t_s <= t_sat:
+        raise ValueError(
+            f"surface_temperature {surface_temperature} must exceed saturation_temperature "
+            f"{saturation_temperature} for film boiling"
+        )
+    h_rad = _STEFAN_BOLTZMANN * emissivity * (t_s**4 - t_sat**4) / (t_s - t_sat)
+    return Quantity(magnitude=h_conv + 0.75 * h_rad, unit="W/(m**2*K)")

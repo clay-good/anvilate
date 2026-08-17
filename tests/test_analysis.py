@@ -34996,3 +34996,290 @@ def test_fiber_volume_fraction_from_weight_fraction_closes_the_data_sheet_gap():
             fiber_density=_q("1800 kg"),
             matrix_density=Quantity(magnitude=1200.0, unit="kg/m**3"),
         )
+
+
+def test_eyring_reverberation_time_where_sabine_breaks_down():
+    from anvilate.analysis import eyring_reverberation_time, sabine_reverberation_time
+
+    room = {"volume": _q("200 m**3"), "total_surface_area": _q("220 m**2")}
+
+    # A heavily treated room: Sabine says 0.293 s, Eyring 0.211 s -- Sabine is 39% high.
+    eyring = eyring_reverberation_time(**room, average_absorption_coefficient=0.50)
+    sabine = sabine_reverberation_time(volume=_q("200 m**3"), total_absorption=_q("110 m**2"))
+    assert eyring.to("s").magnitude == pytest.approx(0.21115809234829377, rel=1e-12)
+    assert sabine.to("s").magnitude == pytest.approx(0.2927272727272728, rel=1e-12)
+    assert sabine.to("s").magnitude / eyring.to("s").magnitude == pytest.approx(1.3862, rel=1e-4)
+
+    # The limit identity that makes this a strict generalisation rather than a rival model:
+    # -ln(1 - a) -> a as a -> 0, so the two converge in a live room.
+    tiny = 1e-9
+    converged = eyring_reverberation_time(**room, average_absorption_coefficient=tiny)
+    sabine_tiny = sabine_reverberation_time(
+        volume=_q("200 m**3"), total_absorption=Quantity(magnitude=220.0 * tiny, unit="m**2")
+    )
+    assert converged.to("s").magnitude == pytest.approx(sabine_tiny.to("s").magnitude, rel=1e-6)
+
+    # And the divergence grows exactly where a designer is working. Sabine's error at a = 0.8 is
+    # over 100%, and it never reaches zero -- it has an anechoic chamber ringing for 0.18 s.
+    high = eyring_reverberation_time(**room, average_absorption_coefficient=0.80)
+    sabine_high = sabine_reverberation_time(volume=_q("200 m**3"), total_absorption=_q("176 m**2"))
+    assert sabine_high.to("s").magnitude / high.to("s").magnitude == pytest.approx(2.011, rel=1e-3)
+    assert sabine_reverberation_time(volume=_q("200 m**3"), total_absorption=_q("220 m**2")).to(
+        "s"
+    ).magnitude == pytest.approx(0.1464, rel=1e-3)
+    # Eyring, correctly, goes to zero as the room becomes fully absorptive.
+    assert (
+        eyring_reverberation_time(**room, average_absorption_coefficient=0.999999).to("s").magnitude
+        < 0.02
+    )
+
+    # Always shorter than Sabine, and monotonically decreasing in absorption.
+    previous = 1e9
+    for alpha in (0.05, 0.2, 0.4, 0.6, 0.9):
+        value = (
+            eyring_reverberation_time(**room, average_absorption_coefficient=alpha)
+            .to("s")
+            .magnitude
+        )
+        assert value < previous
+        previous = value
+
+    with pytest.raises(ValueError):
+        eyring_reverberation_time(**room, average_absorption_coefficient=1.0)
+    with pytest.raises(ValueError):
+        eyring_reverberation_time(**room, average_absorption_coefficient=0.0)
+
+
+def test_turbulent_displacement_and_momentum_thickness_close_the_regime():
+    from anvilate.analysis import (
+        boundary_layer_shape_factor,
+        laminar_displacement_thickness,
+        turbulent_boundary_layer_thickness,
+        turbulent_displacement_thickness,
+        turbulent_momentum_thickness,
+        turbulent_plate_drag_coefficient,
+    )
+
+    flow = {
+        "freestream_velocity": _q("30 m/s"),
+        "distance": _q("2 m"),
+        "kinematic_viscosity": Quantity(magnitude=1.5e-5, unit="m**2/s"),
+    }
+    delta = turbulent_boundary_layer_thickness(**flow)
+    d_star = turbulent_displacement_thickness(**flow)
+    theta = turbulent_momentum_thickness(**flow)
+    assert delta.to("mm").magnitude == pytest.approx(35.38504249223136, rel=1e-12)
+    assert d_star.to("mm").magnitude == pytest.approx(4.42313031152892, rel=1e-12)
+    assert theta.to("mm").magnitude == pytest.approx(3.440212464522493, rel=1e-12)
+
+    # The 1/7-power profile fixes both as exact fractions of delta.
+    assert d_star.to("m").magnitude == pytest.approx(delta.to("m").magnitude / 8.0, rel=1e-12)
+    assert theta.to("m").magnitude == pytest.approx(7.0 * delta.to("m").magnitude / 72.0, rel=1e-12)
+
+    # Cross-check 1: the shape factor is 72/56 = 1.2857 exactly, matching the "about 1.3" the
+    # module's own boundary_layer_shape_factor docstring gives for a turbulent layer -- against
+    # 2.59 for a laminar one. That ratio is the single number that names the regime.
+    shape = boundary_layer_shape_factor(displacement_thickness=d_star, momentum_thickness=theta)
+    assert shape == pytest.approx(72.0 / 56.0, rel=1e-12)
+    assert shape == pytest.approx(1.2857142857142858, rel=1e-12)
+
+    # Cross-check 2: the von Karman momentum integral. C_D = 2*theta/L must land on the module's
+    # own turbulent_plate_drag_coefficient -- within 3%, the standard 1/7-power vs Schlichting
+    # artifact rather than an error in either.
+    momentum_cd = 2.0 * theta.to("m").magnitude / 2.0
+    correlation_cd = turbulent_plate_drag_coefficient(
+        freestream_velocity=_q("30 m/s"),
+        plate_length=_q("2 m"),
+        kinematic_viscosity=Quantity(magnitude=1.5e-5, unit="m**2/s"),
+    )
+    assert momentum_cd == pytest.approx(correlation_cd, rel=0.03)
+    assert momentum_cd < correlation_cd
+
+    # The reason this had to exist: applying the laminar coefficient at a turbulent Reynolds
+    # number understates the displacement thickness by a factor of 2.6 here, and the gap widens
+    # with Reynolds number because the two have different exponents (x^0.8 against x^0.5).
+    laminar = laminar_displacement_thickness(**flow)
+    assert laminar.to("mm").magnitude == pytest.approx(1.721, rel=1e-3)
+    assert d_star.to("m").magnitude / laminar.to("m").magnitude == pytest.approx(2.570, rel=1e-3)
+
+    # Both scale as x^0.8 -- they grow faster than the laminar sqrt(x).
+    farther = {**flow, "distance": _q("4 m")}
+    assert turbulent_momentum_thickness(**farther).to("m").magnitude / theta.to(
+        "m"
+    ).magnitude == pytest.approx(2.0**0.8, rel=1e-12)
+
+    with pytest.raises(ValueError):
+        turbulent_momentum_thickness(**{**flow, "distance": _q("0 m")})
+
+
+def test_film_boiling_total_coefficient_adds_the_radiation_its_sibling_omits():
+    from anvilate.analysis import film_boiling_coefficient, film_boiling_total_coefficient
+
+    h_conv = film_boiling_coefficient(
+        vapor_conductivity=Quantity(magnitude=0.0538, unit="W/(m*K)"),
+        vapor_density=Quantity(magnitude=0.4, unit="kg/m**3"),
+        liquid_density=Quantity(magnitude=958.0, unit="kg/m**3"),
+        latent_heat=_q("2257 kJ/kg"),
+        vapor_specific_heat=Quantity(magnitude=2200.0, unit="J/(kg*K)"),
+        vapor_viscosity=Quantity(magnitude=1.75e-5, unit="Pa*s"),
+        cylinder_diameter=_q("10 mm"),
+        excess_temperature=_q("600 K"),
+    )
+    assert h_conv.to("W/(m**2*K)").magnitude == pytest.approx(228.5217975338354, rel=1e-9)
+
+    surface = {
+        "surface_temperature": Quantity(magnitude=973.15, unit="K"),
+        "saturation_temperature": Quantity(magnitude=373.15, unit="K"),
+    }
+    total = film_boiling_total_coefficient(convection_coefficient=h_conv, emissivity=0.8, **surface)
+    assert total.to("W/(m**2*K)").magnitude == pytest.approx(278.2770985448512, rel=1e-9)
+
+    # The radiation coefficient it adds, and the 0.75 weighting.
+    h_rad = 0.8 * 5.670374419e-8 * (973.15**4 - 373.15**4) / 600.0
+    assert h_rad == pytest.approx(66.340401348021, rel=1e-9)
+    assert total.to("W/(m**2*K)").magnitude == pytest.approx(
+        h_conv.to("W/(m**2*K)").magnitude + 0.75 * h_rad, rel=1e-12
+    )
+
+    # The check that pins the constant: Bromley's exact implicit relation
+    # h^(4/3) = h_conv^(4/3) + h_rad*h^(1/3), iterated to convergence. The explicit 0.75 rule
+    # must sit within about 1% of it.
+    implicit = 250.0
+    for _ in range(200):
+        implicit = (
+            h_conv.to("W/(m**2*K)").magnitude ** (4 / 3) + h_rad * implicit ** (1 / 3)
+        ) ** 0.75
+    assert implicit == pytest.approx(279.9196469316047, rel=1e-9)
+    assert total.to("W/(m**2*K)").magnitude == pytest.approx(implicit, rel=0.01)
+
+    # At 600 K of superheat radiation is 20% of the total -- omitting it understates the
+    # coefficient by 1.22x, unconservative for quench-rate predictions.
+    assert total.to("W/(m**2*K)").magnitude / h_conv.to("W/(m**2*K)").magnitude == pytest.approx(
+        1.2177, rel=1e-3
+    )
+    # A black surface radiates more than a shiny one; zero emissivity recovers convection alone.
+    assert film_boiling_total_coefficient(
+        convection_coefficient=h_conv, emissivity=0.0, **surface
+    ).to("W/(m**2*K)").magnitude == pytest.approx(h_conv.to("W/(m**2*K)").magnitude, rel=1e-12)
+    # The radiative part grows as the fourth power of surface temperature, so at 1200 degC it
+    # has gone from a 22% surcharge to a 63% one on the same convection coefficient.
+    hotter = film_boiling_total_coefficient(
+        convection_coefficient=h_conv,
+        emissivity=0.8,
+        surface_temperature=Quantity(magnitude=1473.15, unit="K"),
+        saturation_temperature=Quantity(magnitude=373.15, unit="K"),
+    )
+    assert hotter.to("W/(m**2*K)").magnitude / h_conv.to("W/(m**2*K)").magnitude == (
+        pytest.approx(1.6346, rel=1e-3)
+    )
+
+    with pytest.raises(ValueError):
+        film_boiling_total_coefficient(
+            convection_coefficient=h_conv,
+            emissivity=0.8,
+            surface_temperature=Quantity(magnitude=373.15, unit="K"),
+            saturation_temperature=Quantity(magnitude=373.15, unit="K"),
+        )
+    with pytest.raises(ValueError):
+        film_boiling_total_coefficient(convection_coefficient=h_conv, emissivity=1.5, **surface)
+
+
+def test_crack_tip_opening_displacement_equals_the_energy_release_rate_over_yield():
+    from anvilate.analysis import (
+        crack_tip_opening_displacement,
+        crack_tip_plastic_zone_size,
+        strain_energy_release_rate,
+    )
+
+    field = {
+        "stress_intensity": _q("50 MPa*m**0.5"),
+        "yield_strength": _q("400 MPa"),
+        "youngs_modulus": _q("200 GPa"),
+    }
+    ctod = crack_tip_opening_displacement(**field)
+    assert ctod.to("um").magnitude == pytest.approx(31.25, rel=1e-12)
+
+    # The identity: delta_t = G/sigma_y for a constraint factor of one, tying CTOD to the energy
+    # release rate the module already computes.
+    g = strain_energy_release_rate(
+        stress_intensity=_q("50 MPa*m**0.5"), youngs_modulus=_q("200 GPa")
+    )
+    assert g.to("J/m**2").magnitude == pytest.approx(12500.0, rel=1e-12)
+    assert ctod.to("m").magnitude == pytest.approx(g.to("J/m**2").magnitude / 400e6, rel=1e-12)
+
+    # Second relation, against the plastic zone the module already sizes:
+    # delta_t/r_p = 2*pi*sigma_y/E in plane stress.
+    r_p = crack_tip_plastic_zone_size(
+        stress_intensity=_q("50 MPa*m**0.5"), yield_strength=_q("400 MPa")
+    )
+    assert r_p.to("mm").magnitude == pytest.approx(2.486795985810865, rel=1e-9)
+    assert ctod.to("m").magnitude / r_p.to("m").magnitude == pytest.approx(
+        2.0 * math.pi * 400e6 / 200e9, rel=1e-9
+    )
+
+    # Plane strain constrains the tip, so the same K opens it less -- the conservative choice,
+    # smaller by exactly (1 - nu^2).
+    constrained = crack_tip_opening_displacement(**field, poisson_ratio=0.3, plane_strain=True)
+    assert constrained.to("m").magnitude < ctod.to("m").magnitude
+    assert constrained.to("m").magnitude == pytest.approx(
+        ctod.to("m").magnitude * (1.0 - 0.3**2), rel=1e-12
+    )
+
+    # Quadratic in K, inverse in yield strength.
+    assert crack_tip_opening_displacement(**{**field, "stress_intensity": _q("100 MPa*m**0.5")}).to(
+        "m"
+    ).magnitude == pytest.approx(4.0 * ctod.to("m").magnitude, rel=1e-12)
+    assert crack_tip_opening_displacement(**{**field, "yield_strength": _q("800 MPa")}).to(
+        "m"
+    ).magnitude == pytest.approx(ctod.to("m").magnitude / 2.0, rel=1e-12)
+
+    with pytest.raises(ValueError):
+        crack_tip_opening_displacement(**{**field, "yield_strength": _q("0 MPa")})
+
+
+def test_modal_dispersion_dwarfs_the_chromatic_mechanism_on_multimode_fiber():
+    from anvilate.analysis import (
+        chromatic_dispersion_broadening,
+        dispersion_limited_bit_rate,
+        fiber_numerical_aperture,
+        modal_dispersion_broadening,
+    )
+
+    fiber = {"core_index": 1.48, "cladding_index": 1.46}
+    modal = modal_dispersion_broadening(**fiber, length=_q("1 km"))
+    assert modal.to("ns").magnitude == pytest.approx(66.71281903963046, rel=1e-9)
+
+    # Delta = (n1 - n2)/n1, and the same number by the numerical-aperture route the module
+    # already provides: L*NA^2/(2*n1*c), which agrees to within the standard Delta approximation.
+    delta = (1.48 - 1.46) / 1.48
+    assert delta == pytest.approx(0.013513513513513514, rel=1e-12)
+    na = fiber_numerical_aperture(**fiber)
+    assert na == pytest.approx(0.2424871130596432, rel=1e-9)
+    approximate_ns = 1000.0 * na**2 / (2.0 * 1.48 * 299792458.0) * 1e9
+    assert modal.to("ns").magnitude == pytest.approx(approximate_ns, rel=0.01)
+
+    # The headline: screening this link with the chromatic function alone -- the module's only
+    # broadening mechanism before now -- is optimistic by nearly four thousand times.
+    chromatic = chromatic_dispersion_broadening(
+        dispersion_parameter=Quantity(magnitude=17.0, unit="ps/(nm*km)"),
+        length=_q("1 km"),
+        spectral_width=_q("1 nm"),
+    )
+    assert chromatic.to("ps").magnitude == pytest.approx(17.0, rel=1e-12)
+    assert modal.to("s").magnitude / chromatic.to("s").magnitude == pytest.approx(3924.3, rel=1e-3)
+
+    # It feeds the module's existing bit-rate limit unchanged: 3.7 Mbit/s over 1 km.
+    rate = dispersion_limited_bit_rate(pulse_broadening=modal)
+    assert rate.to("Mbit/s").magnitude == pytest.approx(3.7474, rel=1e-3)
+
+    # Linear in length and in the index difference; zero difference cannot guide.
+    assert modal_dispersion_broadening(**fiber, length=_q("2 km")).to("ns").magnitude == (
+        pytest.approx(2.0 * modal.to("ns").magnitude, rel=1e-12)
+    )
+    tighter = modal_dispersion_broadening(core_index=1.48, cladding_index=1.47, length=_q("1 km"))
+    assert tighter.to("ns").magnitude == pytest.approx(modal.to("ns").magnitude / 2.0, rel=1e-9)
+
+    with pytest.raises(ValueError):
+        modal_dispersion_broadening(core_index=1.46, cladding_index=1.48, length=_q("1 km"))
+    with pytest.raises(ValueError):
+        modal_dispersion_broadening(**fiber, length=_q("0 km"))
