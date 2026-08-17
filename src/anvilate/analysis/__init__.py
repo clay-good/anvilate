@@ -2305,6 +2305,7 @@ from .noise_figure import (
     cascade_noise_factor,
     equivalent_noise_temperature,
     noise_factor_from_figure,
+    receiver_minimum_detectable_signal,
 )
 from .o_ring import (
     o_ring_gland_fill_fraction,
@@ -2697,6 +2698,7 @@ from .relativity import (
 )
 from .reliability import (
     k_out_of_n_reliability,
+    parallel_system_mtbf,
     parallel_system_reliability,
     series_system_mtbf,
     series_system_reliability,
@@ -3742,6 +3744,7 @@ __all__ = [
     "clausius_clapeyron_enthalpy_of_vaporization",
     "clausius_clapeyron_boiling_temperature",
     "noise_factor_from_figure",
+    "receiver_minimum_detectable_signal",
     "cascade_noise_factor",
     "equivalent_noise_temperature",
     "reflection_coefficient",
@@ -4456,6 +4459,7 @@ __all__ = [
     "series_system_reliability",
     "parallel_system_reliability",
     "k_out_of_n_reliability",
+    "parallel_system_mtbf",
     "series_system_mtbf",
     "radar_doppler_shift",
     "radial_velocity_from_doppler",

@@ -27,7 +27,10 @@ __all__ = [
     "cascade_noise_factor",
     "equivalent_noise_temperature",
     "noise_factor_from_figure",
+    "receiver_minimum_detectable_signal",
 ]
+
+BOLTZMANN_J_PER_K = 1.380649e-23
 
 
 def noise_factor_from_figure(*, noise_figure_db: float) -> float:
@@ -99,3 +102,46 @@ def _check(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+
+
+def receiver_minimum_detectable_signal(
+    *,
+    noise_factor: float,
+    bandwidth: Quantity,
+    required_snr: float,
+    noise_temperature: Quantity | None = None,
+) -> Quantity:
+    """The receiver sensitivity floor, P_min = k·T₀·B·F·SNR_min.
+
+    :func:`anvilate.analysis.radar.radar_max_range` requires a minimum detectable power and
+    nothing in the library computed one, so the user had to hand-derive kTBF·SNR — where a
+    forgotten noise figure or a dB/linear mix-up moves the range by the fourth root of a large
+    factor.
+
+    The thermal noise floor in a bandwidth B is k·T₀·B; the receiver's own ``noise_factor`` F (the
+    linear form, from :func:`noise_factor_from_figure` or :func:`cascade_noise_factor`) raises it,
+    and detection needs the signal a factor ``required_snr`` above what is left. T₀ is the IEEE
+    290 K reference unless a ``noise_temperature`` is given — pass the real antenna temperature
+    for a sky-noise-limited system, where 290 K is pessimistic.
+
+    A 3 dB receiver over 1 MHz needing 13 dB of SNR floors at 1.594e-13 W, or −98.0 dBm. Note
+    both dimensionless arguments are LINEAR ratios, not decibels: passing 3 and 13 directly
+    understates the floor by 8.7 dB. Returns the minimum detectable power in W.
+    """
+    _check(bandwidth, "1/[time]", "bandwidth")
+    t0 = _REFERENCE_TEMPERATURE
+    if noise_temperature is not None:
+        _check(noise_temperature, "[temperature]", "noise_temperature")
+        t0 = noise_temperature.to("K").magnitude
+    b = bandwidth.to("Hz").magnitude
+    if noise_factor < 1.0:
+        raise ValueError(
+            f"noise_factor is a LINEAR factor and cannot be below 1 (0 dB); got {noise_factor}"
+        )
+    if b <= 0:
+        raise ValueError(f"bandwidth must be positive; got {bandwidth}")
+    if required_snr <= 0:
+        raise ValueError(f"required_snr must be positive; got {required_snr}")
+    if t0 <= 0:
+        raise ValueError("noise_temperature must be above absolute zero")
+    return Quantity(magnitude=BOLTZMANN_J_PER_K * t0 * b * noise_factor * required_snr, unit="W")

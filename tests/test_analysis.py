@@ -26989,6 +26989,69 @@ def test_transmission_line_mismatch_loss_vswr_inverse_and_quarter_wave():
         )
 
 
+def test_receiver_minimum_detectable_signal_feeds_the_radar_range_equation():
+    import math
+
+    from anvilate.analysis import (
+        cascade_noise_factor,
+        radar_max_range,
+        receiver_minimum_detectable_signal,
+    )
+
+    # 3 dB receiver, 1 MHz bandwidth, 13 dB required SNR -> kT0BF*SNR.
+    floor = receiver_minimum_detectable_signal(
+        noise_factor=2.0, bandwidth=_q("1 MHz"), required_snr=20.0
+    )
+    assert floor.to("pW").magnitude == pytest.approx(0.160155284, rel=1e-9)
+    assert 10.0 * math.log10(floor.to("W").magnitude * 1000.0) == pytest.approx(-97.9546, abs=1e-3)
+
+    # Linear in every argument -- doubling the bandwidth or the noise factor doubles the floor,
+    # which is the whole reason a wideband or noisy receiver costs range.
+    wider = receiver_minimum_detectable_signal(
+        noise_factor=2.0, bandwidth=_q("2 MHz"), required_snr=20.0
+    )
+    assert wider.to("pW").magnitude == pytest.approx(2.0 * floor.to("pW").magnitude, rel=1e-12)
+
+    # It closes the gap radar_max_range had: that function REQUIRES a minimum detectable power
+    # and nothing produced one. Range goes as the fourth root, so a 3 dB sensitivity slip costs
+    # only 16% of range -- which is exactly why the error is easy to miss.
+    kwargs = {
+        "transmit_power": _q("10 kW"),
+        "antenna_gain": 10.0**3.5,
+        "wavelength": _q("0.03 m"),
+        "target_cross_section": _q("1 m**2"),
+    }
+    reach = radar_max_range(min_detectable_power=floor, **kwargs).to("km").magnitude
+    assert reach == pytest.approx(23.068423265796252, rel=1e-9)
+    degraded = (
+        radar_max_range(
+            min_detectable_power=receiver_minimum_detectable_signal(
+                noise_factor=4.0, bandwidth=_q("1 MHz"), required_snr=20.0
+            ),
+            **kwargs,
+        )
+        .to("km")
+        .magnitude
+    )
+    assert degraded / reach == pytest.approx(2.0**-0.25, rel=1e-9)
+
+    # Both dimensionless arguments are LINEAR ratios. A decibel value passed by mistake is not
+    # detectable dimensionally, but a noise factor below 1 (0 dB) is unphysical and is refused.
+    with pytest.raises(ValueError, match="LINEAR factor"):
+        receiver_minimum_detectable_signal(
+            noise_factor=0.5, bandwidth=_q("1 MHz"), required_snr=20.0
+        )
+    # A cascade factor feeds straight in.
+    cascaded = cascade_noise_factor(
+        stage_noise_factors=[1.5, 4.0, 10.0], stage_gains=[100.0, 10.0, 1.0]
+    )
+    assert receiver_minimum_detectable_signal(
+        noise_factor=cascaded, bandwidth=_q("1 MHz"), required_snr=20.0
+    ).to("pW").magnitude == pytest.approx(
+        1.380649e-23 * 290.0 * 1e6 * cascaded * 20.0 * 1e12, rel=1e-12
+    )
+
+
 def test_noise_figure_factor_cascade_and_temperature():
     from anvilate.analysis import (
         cascade_noise_factor,
@@ -31603,6 +31666,40 @@ def test_reliability_availability_and_series_parallel_systems():
         series_system_reliability(component_reliabilities=[0.95, 1.2])
     with pytest.raises(ValueError, match="at least one component"):
         parallel_system_reliability(component_reliabilities=[])
+
+
+def test_parallel_system_mtbf_pays_diminishing_returns():
+    from anvilate.analysis import parallel_system_mtbf, series_system_mtbf
+
+    rate = _q("1e-4 1/hour")  # a 10,000 h unit
+
+    # One unit is just 1/lambda -- the degenerate case the harmonic series must reproduce.
+    assert parallel_system_mtbf(failure_rate=rate, unit_count=1).to("hour").magnitude == (
+        pytest.approx(10000.0, rel=1e-12)
+    )
+    # Two units give 15,000 h, NOT the intuitive 20,000: early on there are two units failing at
+    # twice the rate, so the first failure arrives in 5,000 h on average. Three give 18,333.
+    assert parallel_system_mtbf(failure_rate=rate, unit_count=2).to("hour").magnitude == (
+        pytest.approx(15000.0, rel=1e-12)
+    )
+    assert parallel_system_mtbf(failure_rate=rate, unit_count=3).to("hour").magnitude == (
+        pytest.approx(18333.333333333332, rel=1e-12)
+    )
+    # The shortfall against the naive n*MTBF widens with n -- the point of the function.
+    for n, naive_fraction in ((2, 0.75), (3, 0.6111), (4, 0.5208)):
+        got = parallel_system_mtbf(failure_rate=rate, unit_count=n).to("hour").magnitude
+        assert got / (n * 10000.0) == pytest.approx(naive_fraction, rel=1e-3)
+
+    # Parallel always beats series for the same parts, and by a wide margin: two units in series
+    # give 5,000 h against the parallel pair's 15,000 -- a factor of 3.
+    assert series_system_mtbf(failure_rates=[rate, rate]).to("hour").magnitude == (
+        pytest.approx(5000.0, rel=1e-12)
+    )
+
+    with pytest.raises(ValueError, match="unit_count must be at least 1"):
+        parallel_system_mtbf(failure_rate=rate, unit_count=0)
+    with pytest.raises(ValueError, match="failure_rate must be positive"):
+        parallel_system_mtbf(failure_rate=_q("0 1/hour"), unit_count=2)
 
 
 def test_reliability_k_out_of_n_redundancy_and_series_mtbf():

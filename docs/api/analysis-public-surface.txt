@@ -998,6 +998,7 @@ nernst.nernst_potential
 nernst.nernst_reaction_quotient
 nernst.nernst_slope
 noise_figure.cascade_noise_factor
+noise_figure.receiver_minimum_detectable_signal
 noise_figure.equivalent_noise_temperature
 noise_figure.noise_factor_from_figure
 o_ring.o_ring_gland_fill_fraction
@@ -1324,6 +1325,7 @@ reliability.series_system_reliability
 reliability.parallel_system_reliability
 reliability.k_out_of_n_reliability
 reliability.series_system_mtbf
+reliability.parallel_system_mtbf
 reliability.weibull_life_for_reliability
 resistance_welding.spot_weld_heat_generated
 resistance_welding.spot_weld_current_for_heat

@@ -25,6 +25,7 @@ from ..units import Quantity
 __all__ = [
     "k_out_of_n_reliability",
     "parallel_system_reliability",
+    "parallel_system_mtbf",
     "series_system_mtbf",
     "series_system_reliability",
     "steady_state_availability",
@@ -208,6 +209,34 @@ def k_out_of_n_reliability(
         comb(total_units, i) * r**i * (1.0 - r) ** (total_units - i)
         for i in range(required_units, total_units + 1)
     )
+
+
+def parallel_system_mtbf(*, failure_rate: Quantity, unit_count: int) -> Quantity:
+    """The MTBF of n identical active-redundant units, MTBF = (1/λ)·Σ(1/k) for k = 1..n.
+
+    The mirror of :func:`series_system_mtbf`, which the module had without its redundant
+    counterpart. In a parallel (active-redundant) set the system survives until the LAST unit
+    fails, so the expected time is the sum of the waiting times for each successive failure: with
+    n units running, failures arrive at n·λ, then (n−1)·λ, and so on — a harmonic series.
+
+    The intuitive answer is wrong in the unsafe direction. Two units of 10,000 h MTBF do not give
+    20,000 h; they give 15,000 h, because early on there are two units failing at twice the rate.
+    Three give 18,333 h, not 30,000. Redundancy pays diminishing returns and the shortfall against
+    the naive n·MTBF grows with n.
+
+    Assumes constant hazard (exponential life), units that are truly independent, and no repair —
+    so this is an upper bound on any real redundant set, which shares a power supply or an
+    environment. ``failure_rate`` λ is the per-unit rate (1/time) and ``unit_count`` n the number
+    of units. Returns the system MTBF as a time.
+    """
+    _check(failure_rate, "1/[time]", "failure_rate")
+    rate = failure_rate.to("1/hour").magnitude
+    if rate <= 0:
+        raise ValueError(f"failure_rate must be positive; got {failure_rate}")
+    if unit_count < 1:
+        raise ValueError(f"unit_count must be at least 1; got {unit_count}")
+    harmonic = sum(1.0 / k for k in range(1, unit_count + 1))
+    return Quantity(magnitude=harmonic / rate, unit="hour")
 
 
 def series_system_mtbf(*, failure_rates: Sequence[Quantity]) -> Quantity:
