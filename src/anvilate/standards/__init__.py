@@ -7,7 +7,7 @@ ISO 273 clearance-hole and ISO 261/724 metric-thread tables, the ISO 15 ball
 bearing boundary-dimension table, the ISO 2338 dowel-pin table, the ISO 4762
 socket-head cap screw head-geometry table, the ISO 7089 plain-washer table, the
 ISO 4032 hex-nut table, the ISO 4014/4017 hex-bolt table, the T-slot extrusion
-profile table, and the DB-backed reference resolver. Further
+profile table, the ASME B36.10M pipe schedule table, and the DB-backed reference resolver. Further
 component families land here as they are built out (see
 openspec/specs/standards-data/).
 """
@@ -63,6 +63,12 @@ from .materials import (
     UnknownMaterialError,
     default_materials_db,
 )
+from .pipe import (
+    PipeDimensions,
+    PipeScheduleTable,
+    UnknownPipeError,
+    default_pipe_schedule_table,
+)
 from .records import PropertyCitation, QuantityProperty, ScalarProperty
 from .resolver import StandardsResolver, default_standards_resolver
 from .threads import (
@@ -102,6 +108,10 @@ __all__ = [
     "DowelPinTable",
     "UnknownDowelPinError",
     "default_dowel_pin_table",
+    "PipeDimensions",
+    "PipeScheduleTable",
+    "UnknownPipeError",
+    "default_pipe_schedule_table",
     "SocketHeadCapScrew",
     "CapScrewTable",
     "UnknownCapScrewError",

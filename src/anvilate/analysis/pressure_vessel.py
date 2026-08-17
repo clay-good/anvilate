@@ -17,10 +17,11 @@ checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from math import cos, radians, sin, sqrt
+from math import cos, radians, sin, sqrt, tan
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
+from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 from .stress import von_mises_principal
 
@@ -41,6 +42,9 @@ __all__ = [
     "asme_spherical_shell_mawp",
     "asme_conical_head_thickness",
     "asme_conical_head_mawp",
+    "AllowableStress",
+    "asme_b313_miter_bend_pressure",
+    "asme_b313_pressure_scorecard",
     "asme_b313_pipe_wall_thickness",
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
@@ -580,6 +584,13 @@ def asme_conical_head_mawp(
     cos_alpha = cos(radians(half_apex_angle_deg))
     numerator = 2.0 * cos_alpha * s * joint_efficiency * t
     return Quantity(magnitude=numerator / (d + 1.2 * cos_alpha * t), unit="MPa")
+
+
+_CLAUSE_B313_PRESSURE_DESIGN = "ASME B31.3 §304.1.2 straight-pipe pressure design"
+_CLAUSE_B313_MITER = "ASME B31.3 §304.2.3 miter bends"
+# B31.3 304.2.3 splits the single-miter formula at a 22.5 deg cut angle, and scopes the
+# multiple-miter treatment to cuts at or below it.
+_MITER_ANGLE_SPLIT_DEG = 22.5
 
 
 def asme_b313_pipe_wall_thickness(
@@ -1246,3 +1257,254 @@ def cylinder_axial_buckling_stress(
         raise ValueError(f"mean_radius must be positive; got {mean_radius}")
     sigma_cr = e * (t / r) / sqrt(3.0 * (1.0 - poisson**2))
     return Quantity(magnitude=sigma_cr, unit="MPa")
+
+
+class AllowableStress(BaseModel):
+    """A code allowable stress, the temperature it was read at, and where it came from.
+
+    The B31.3 allowable stress tables are copyrighted, so the value is always the
+    caller's to supply — but a bare number is not enough to review. An allowable is
+    only meaningful *at a temperature*: A106-B is 138 MPa at 200 °C and 110 MPa at
+    400 °C, and a screen handed the first number for a line running at the second is
+    wrong by 25% with nothing to show for it.
+
+    ``value`` S is the allowable stress, ``temperature`` the design temperature the
+    table was read at, ``material`` the material designation, and ``source`` where the
+    number came from (the table and edition, a datasheet, a client specification) so
+    the report can cite it rather than presenting it as Anvilate's own.
+
+    :meth:`is_valid_at` is the guard this type exists for: it says whether the
+    allowable was read close enough to a stated design temperature to be used, and it
+    answers ``False`` rather than interpolating between table rows Anvilate does not
+    have.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    value: Quantity
+    temperature: Quantity
+    material: str
+    source: str
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> AllowableStress:
+        if not self.value.has_dimension("[pressure]"):
+            raise ValueError(f"value must be a [pressure] quantity; got {self.value}")
+        if self.value.to("MPa").magnitude <= 0:
+            raise ValueError(f"value must be positive; got {self.value}")
+        if not self.temperature.has_dimension("[temperature]"):
+            raise ValueError(
+                f"temperature must be a [temperature] quantity; got {self.temperature}"
+            )
+        if not self.material.strip():
+            raise ValueError("material must name the material the allowable belongs to")
+        if not self.source.strip():
+            raise ValueError("source must record where the allowable was read from")
+        return self
+
+    def is_valid_at(
+        self, design_temperature: Quantity, *, tolerance: Quantity | None = None
+    ) -> bool:
+        """Whether this allowable may be used at ``design_temperature``.
+
+        The allowable must have been read at or above the design temperature — code
+        allowables fall with temperature, so a value read cooler is unconservative —
+        and within ``tolerance`` of it (25 K by default), because the table rows are
+        spaced and Anvilate does not have the rows to interpolate between. A value read
+        far *hotter* than the service is safe but is not the number the code wants, so
+        it fails too and the caller is told to read the right row.
+        """
+        if not design_temperature.has_dimension("[temperature]"):
+            raise ValueError(
+                f"design_temperature must be a [temperature] quantity; got {design_temperature}"
+            )
+        band = 25.0 if tolerance is None else tolerance.to("K").magnitude
+        if band < 0:
+            raise ValueError(f"tolerance must not be negative; got {tolerance}")
+        read_at = self.temperature.to("K").magnitude
+        design = design_temperature.to("K").magnitude
+        return design <= read_at <= design + band
+
+    def __str__(self) -> str:
+        return f"{self.value.to('MPa')} for {self.material} at {self.temperature} [{self.source}]"
+
+
+def asme_b313_pressure_scorecard(
+    name: str,
+    *,
+    design_pressure: Quantity,
+    design_temperature: Quantity,
+    outside_diameter: Quantity,
+    nominal_wall: Quantity,
+    allowable: AllowableStress | None,
+    quality_factor: float = 1.0,
+    coefficient_y: float = 0.4,
+    mill_tolerance_fraction: float = 0.125,
+    corrosion_allowance: Quantity | None = None,
+) -> ScorecardEntry:
+    """Screen a straight pipe's pressure rating against its service → a scorecard entry.
+
+    Rates the wall the pipe can be *relied on* to have — ``nominal_wall`` less the mill
+    under-tolerance and the ``corrosion_allowance`` — through
+    :func:`asme_b313_pipe_pressure`, and judges that rating against ``design_pressure``.
+    The safety factor is rating over service, and the target is 1.0 because the B31.3
+    allowable already carries the code margin.
+
+    Two ways this reports ``NOT_EVALUATED`` rather than a number, and both are the
+    point of the check:
+
+    * ``allowable`` is ``None`` — no allowable stress was supplied. The B31.3 tables are
+      the caller's to provide, and a pressure check without one has not been made.
+    * the allowable was read at a temperature that does not match ``design_temperature``
+      (see :meth:`AllowableStress.is_valid_at`). A 200 °C allowable on a 400 °C line is
+      a quarter too high, and the arithmetic cannot tell.
+
+    A wall entirely consumed by its allowances is ``NOT_EVALUATED`` too: there is no
+    pressure-carrying wall left to rate, which is not the same as a rating of zero.
+    """
+    if allowable is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail="not evaluated — no B31.3 allowable stress supplied",
+            reference=_CLAUSE_B313_PRESSURE_DESIGN,
+        )
+    if not allowable.is_valid_at(design_temperature):
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"not evaluated — the allowable was read at {allowable.temperature} but the "
+                f"design temperature is {design_temperature}; read the allowable at the "
+                f"design temperature rather than interpolating"
+            ),
+            reference=_CLAUSE_B313_PRESSURE_DESIGN,
+        )
+    _require(design_pressure, "[pressure]", "design_pressure")
+    _require(nominal_wall, "[length]", "nominal_wall")
+    if not 0.0 <= mill_tolerance_fraction < 1.0:
+        raise ValueError(
+            f"mill_tolerance_fraction must lie in [0, 1); got {mill_tolerance_fraction}"
+        )
+    available = nominal_wall.to("mm").magnitude * (1.0 - mill_tolerance_fraction)
+    if corrosion_allowance is not None:
+        _require(corrosion_allowance, "[length]", "corrosion_allowance")
+        available -= corrosion_allowance.to("mm").magnitude
+    if available <= 0:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "not evaluated — the mill tolerance and corrosion allowance consume the "
+                "whole nominal wall, so there is none left to carry pressure"
+            ),
+            reference=_CLAUSE_B313_PRESSURE_DESIGN,
+        )
+    rating = asme_b313_pipe_pressure(
+        wall_thickness=Quantity(magnitude=available, unit="mm"),
+        outside_diameter=outside_diameter,
+        allowable_stress=allowable.value,
+        quality_factor=quality_factor,
+        coefficient_y=coefficient_y,
+    )
+    service = design_pressure.to("MPa").magnitude
+    computed = None if service <= 0 else rating.to("MPa").magnitude / service
+    return ScorecardEntry.from_safety_factor(name, computed=computed, required=1.0).model_copy(
+        update={
+            "reference": _CLAUSE_B313_PRESSURE_DESIGN,
+            "detail": (
+                f"{available:.2f} mm available wall rates {rating.to('MPa').magnitude:.2f} MPa "
+                f"against a {service:.2f} MPa service ({allowable})"
+            )
+            if computed is not None
+            else "not evaluated — no design pressure",
+        }
+    )
+
+
+def asme_b313_miter_bend_pressure(
+    *,
+    allowable_stress: Quantity,
+    wall_thickness: Quantity,
+    mean_radius: Quantity,
+    miter_angle: float,
+    effective_bend_radius: Quantity | None = None,
+    quality_factor: float = 1.0,
+) -> Quantity:
+    """The ASME B31.3 §304.2.3 maximum internal pressure of a miter bend.
+
+    A miter bend turns a line by welding straight pipe segments at an angle instead of
+    using a formed elbow. It is cheaper and it is weaker: the cut leaves the wall
+    carrying a bending moment the straight-pipe hoop formula knows nothing about, so a
+    miter rates well below the pipe it is made from. §304.2.3 gives the rating.
+
+    ``wall_thickness`` T is the pressure-carrying wall (nominal less the mill tolerance
+    and allowances — see :meth:`AllowableStress` and the straight-pipe check),
+    ``mean_radius`` r₂ the mean radius of the pipe, ``miter_angle`` θ the *cut* angle in
+    degrees (half the change of direction the joint makes, so a 90° elbow built from
+    two cuts has θ = 22.5°), and ``allowable_stress`` S and ``quality_factor`` E as in
+    :func:`asme_b313_pipe_wall_thickness`.
+
+    Two treatments, and which applies depends on the geometry:
+
+    * **Single miter** (``effective_bend_radius`` left ``None``) —
+
+          θ ≤ 22.5°:  P = (S·E·T/r₂)·[ T / (T + 0.643·tan θ·√(r₂·T)) ]
+          θ > 22.5°:  P = (S·E·T/r₂)·[ 1 / (1 + 1.25·tan θ·√(r₂/T)) ]
+
+    * **Multiple miter** (``effective_bend_radius`` R₁ supplied) — the lesser of the
+      first expression above and
+
+          P = (S·E·T/r₂)·(R₁ − r₂)/(R₁ − 0.5·r₂),
+
+      because a closely-spaced set of cuts is also limited by how tight the bend is.
+
+    The cut angle is capped at 22.5° for the multiple-miter case, which the code scopes
+    there; past it a multiple miter is outside §304.2.3 and this refuses rather than
+    evaluating the first expression alone and reporting a number the code does not
+    sanction. ``effective_bend_radius`` must also exceed the mean radius — at R₁ = r₂
+    the bend closes on itself and the second expression goes to zero.
+
+    Returns the maximum allowable internal pressure in MPa.
+    """
+    _require(allowable_stress, "[pressure]", "allowable_stress")
+    _require(wall_thickness, "[length]", "wall_thickness")
+    _require(mean_radius, "[length]", "mean_radius")
+    if not 0 < quality_factor <= 1:
+        raise ValueError(f"quality_factor must lie in (0, 1]; got {quality_factor}")
+    s = allowable_stress.to("MPa").magnitude
+    t = wall_thickness.to("mm").magnitude
+    r2 = mean_radius.to("mm").magnitude
+    if s <= 0 or t <= 0 or r2 <= 0:
+        raise ValueError("allowable_stress, wall_thickness, and mean_radius must be positive")
+    if not 0 < miter_angle < 90:
+        raise ValueError(
+            f"miter_angle is the cut angle in degrees and must lie in (0, 90); got {miter_angle}"
+        )
+    base = s * quality_factor * t / r2
+    tan_theta = tan(radians(miter_angle))
+    # The θ ≤ 22.5° expression, which is also the first of the two multiple-miter limits.
+    shallow = base * t / (t + 0.643 * tan_theta * sqrt(r2 * t))
+
+    if effective_bend_radius is None:
+        if miter_angle <= _MITER_ANGLE_SPLIT_DEG:
+            return Quantity(magnitude=shallow, unit="MPa")
+        steep = base / (1.0 + 1.25 * tan_theta * sqrt(r2 / t))
+        return Quantity(magnitude=steep, unit="MPa")
+
+    _require(effective_bend_radius, "[length]", "effective_bend_radius")
+    if miter_angle > _MITER_ANGLE_SPLIT_DEG:
+        raise ValueError(
+            f"a multiple miter bend is scoped by ASME B31.3 §304.2.3 to a cut angle of "
+            f"{_MITER_ANGLE_SPLIT_DEG}° or less; got {miter_angle}°. Past it the code gives no "
+            f"multiple-miter rating — screen each cut as a single miter, or use a formed elbow."
+        )
+    r1 = effective_bend_radius.to("mm").magnitude
+    if r1 <= r2:
+        raise ValueError(
+            f"effective_bend_radius ({effective_bend_radius}) must exceed the mean radius "
+            f"({mean_radius}): at or below it the bend closes on itself and §304.2.3's "
+            f"(R₁ − r₂)/(R₁ − 0.5·r₂) term is not positive"
+        )
+    tight = base * (r1 - r2) / (r1 - 0.5 * r2)
+    return Quantity(magnitude=min(shallow, tight), unit="MPa")

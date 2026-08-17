@@ -1279,3 +1279,105 @@ def test_m27_and_m30_sizes_resolved(clearance, threads) -> None:
     assert m30.pitch.quantity.to("mm").magnitude == pytest.approx(3.5)
     assert m30.tap_drill.quantity.to("mm").magnitude == pytest.approx(26.5)  # 30 - 3.5
     assert threads.get("M27").tap_drill.quantity.to("mm").magnitude == pytest.approx(24.0)
+
+
+# --- ASME B36.10M pipe schedules ------------------------------------------
+
+
+def test_pipe_schedule_table_is_internally_consistent():
+    """A transcribed dimension table's own arithmetic is the cheapest guard on it."""
+    from anvilate.standards import default_pipe_schedule_table
+
+    table = default_pipe_schedule_table()
+    assert len(table) == 108
+    assert table.nominal_sizes()[:4] == ["1/2", "3/4", "1", "1-1/4"]
+    assert table.nominal_sizes()[-3:] == ["18", "20", "24"]
+
+    # Every schedule of a given NPS shares one outside diameter — that is the point of
+    # the schedule system, and a transcription slip would break it.
+    for nps in table.nominal_sizes():
+        diameters = {
+            table.get(nps, schedule).outside_diameter.quantity.to("mm").magnitude
+            for schedule in table.schedules(nps)
+        }
+        assert len(diameters) == 1, (nps, diameters)
+
+    for designation in table.designations():
+        nps, schedule = designation.removeprefix("NPS ").split(" SCH ")
+        pipe = table.get(nps, schedule)
+        od = pipe.outside_diameter.quantity.to("mm").magnitude
+        wall = pipe.wall_thickness.quantity.to("mm").magnitude
+        # A wall over half the outside diameter would close the bore.
+        assert 0 < wall < od / 2, designation
+        assert pipe.inside_diameter.to("mm").magnitude == pytest.approx(od - 2 * wall)
+        assert pipe.flow_area.to("mm**2").magnitude > 0
+        assert pipe.citations()["wall_thickness"].source.startswith("ASME B36.10M")
+
+    # Wall thickness rises monotonically with schedule at every size.
+    for nps in table.nominal_sizes():
+        walls = [
+            table.get(nps, schedule).wall_thickness.quantity.to("mm").magnitude
+            for schedule in ("10", "40", "80", "160")
+        ]
+        assert walls == sorted(walls), (nps, walls)
+        # And the outside diameter rises with nominal size.
+    diameters = [
+        table.get(nps, "40").outside_diameter.quantity.to("mm").magnitude
+        for nps in table.nominal_sizes()
+    ]
+    assert diameters == sorted(diameters)
+
+
+def test_std_and_xs_are_not_aliases_for_schedule_40_and_80():
+    """They coincide in small bore and diverge in large — the error a screen would make."""
+    from anvilate.standards import default_pipe_schedule_table
+
+    table = default_pipe_schedule_table()
+
+    def wall(nps: str, schedule: str) -> float:
+        return table.get(nps, schedule).wall_thickness.quantity.to("mm").magnitude
+
+    # STD tracks Schedule 40 through NPS 10, then holds while 40 keeps thickening.
+    for nps in ("1/2", "2", "4", "10"):
+        assert wall(nps, "STD") == wall(nps, "40"), nps
+    assert wall("24", "STD") == pytest.approx(9.53)
+    assert wall("24", "40") == pytest.approx(17.48)
+    # XS tracks Schedule 80 through NPS 8.
+    for nps in ("1/2", "2", "8"):
+        assert wall(nps, "XS") == wall(nps, "80"), nps
+    assert wall("24", "XS") == pytest.approx(12.70)
+    assert wall("24", "80") == pytest.approx(30.96)
+
+
+def test_pipe_table_anchors_the_sizes_the_piping_example_already_uses():
+    from anvilate.standards import UnknownPipeError, default_pipe_schedule_table
+    from anvilate.units import Quantity
+
+    table = default_pipe_schedule_table()
+    nps4 = table.get("4", "40")
+    assert nps4.outside_diameter.quantity.to("mm").magnitude == pytest.approx(114.3)
+    assert nps4.wall_thickness.quantity.to("mm").magnitude == pytest.approx(6.02)
+    assert table.get("4", "10").wall_thickness.quantity.to("mm").magnitude == pytest.approx(3.05)
+
+    # The wall a pressure check may rely on: nominal less mill tolerance and corrosion.
+    available = nps4.available_wall(corrosion_allowance=Quantity.parse("1.5 mm"))
+    assert available.to("mm").magnitude == pytest.approx(6.02 * 0.875 - 1.5, rel=1e-9)
+    # A wall wholly consumed by its allowances is zero, never negative — a negative
+    # thickness flows straight into a pressure rating as a plausible number.
+    assert (
+        table.get("4", "10")
+        .available_wall(corrosion_allowance=Quantity.parse("6 mm"))
+        .to("mm")
+        .magnitude
+        == 0.0
+    )
+    with pytest.raises(ValueError, match="must not be negative"):
+        nps4.available_wall(corrosion_allowance=Quantity.parse("-1 mm"))
+
+    # An untabled combination is refused, not interpolated: a wall between two rows is
+    # not a pipe anybody can buy.
+    with pytest.raises(UnknownPipeError, match="no record for pipe"):
+        table.get("5", "40")
+    with pytest.raises(UnknownPipeError):
+        table.get("4", "120")
+    assert table.has_pipe("4", "40") and not table.has_pipe("4", "120")

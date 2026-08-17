@@ -38851,3 +38851,160 @@ def test_plate_results_report_whether_small_deflection_theory_applied():
 
     bare = PlateBendingResult(max_bending_stress=_q("100 MPa"), max_deflection=_q("1 mm"))
     assert bare.is_small_deflection is None
+
+
+def test_allowable_stress_carries_the_temperature_it_was_read_at():
+    from pydantic import ValidationError
+
+    from anvilate.analysis import AllowableStress
+
+    allowable = AllowableStress(
+        value=_q("138 MPa"),
+        temperature=_q("473.15 K"),
+        material="ASTM A106-B",
+        source="ASME B31.3 Table A-1",
+    )
+    assert "138" in str(allowable) and "A106-B" in str(allowable)
+
+    # Read AT the design temperature, or within a table row of it above.
+    assert allowable.is_valid_at(_q("473.15 K"))
+    assert allowable.is_valid_at(_q("460 K"))
+    # Read COOLER than the service is unconservative — allowables fall with temperature.
+    assert not allowable.is_valid_at(_q("673.15 K"))
+    # Read far hotter is safe but is not the row the code wants, so it is refused too.
+    assert not allowable.is_valid_at(_q("300 K"))
+    assert allowable.is_valid_at(_q("300 K"), tolerance=_q("200 K"))
+
+    for bad in (
+        {"value": _q("-138 MPa")},
+        {"value": _q("138 mm")},
+        {"material": "  "},
+        {"source": ""},
+    ):
+        with pytest.raises(ValidationError):
+            AllowableStress(
+                **{
+                    "value": _q("138 MPa"),
+                    "temperature": _q("473.15 K"),
+                    "material": "ASTM A106-B",
+                    "source": "ASME B31.3 Table A-1",
+                    **bad,
+                }
+            )
+
+
+def test_b313_pressure_scorecard_will_not_rate_a_line_it_cannot_evaluate():
+    from anvilate.analysis import AllowableStress, asme_b313_pressure_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    allowable = AllowableStress(
+        value=_q("138 MPa"),
+        temperature=_q("473.15 K"),
+        material="ASTM A106-B",
+        source="ASME B31.3 Table A-1",
+    )
+    common = {
+        "design_pressure": _q("5 MPa"),
+        "design_temperature": _q("473.15 K"),
+        "outside_diameter": _q("114.3 mm"),
+        "nominal_wall": _q("6.02 mm"),
+        "corrosion_allowance": _q("1.5 mm"),
+    }
+    ok = asme_b313_pressure_scorecard("line", allowable=allowable, **common)
+    assert ok.status is CheckStatus.PASS
+    assert ok.safety_factor == pytest.approx(9.34 / 5.0, abs=0.02)
+    assert "ASTM A106-B" in ok.detail and "3.77 mm" in ok.detail
+
+    # No allowable supplied: the B31.3 tables are the caller's to provide.
+    assert (
+        asme_b313_pressure_scorecard("line", allowable=None, **common).status
+        is CheckStatus.NOT_EVALUATED
+    )
+
+    # An allowable read at the WRONG temperature is the silent green this type exists to
+    # stop: 138 MPa is the 200 °C row, and a 400 °C line rated on it is a quarter high.
+    hot = asme_b313_pressure_scorecard(
+        "line", allowable=allowable, **{**common, "design_temperature": _q("673.15 K")}
+    )
+    assert hot.status is CheckStatus.NOT_EVALUATED
+    assert "read at" in hot.detail
+
+    # A wall wholly eaten by its allowances has none left to rate — not a rating of zero.
+    consumed = asme_b313_pressure_scorecard(
+        "line", allowable=allowable, **{**common, "corrosion_allowance": _q("6 mm")}
+    )
+    assert consumed.status is CheckStatus.NOT_EVALUATED
+    assert "whole nominal wall" in consumed.detail
+
+    # A thinner schedule on the same service fails rather than quietly passing.
+    thin = asme_b313_pressure_scorecard(
+        "line", allowable=allowable, **{**common, "nominal_wall": _q("3.05 mm")}
+    )
+    assert thin.status is CheckStatus.FAIL
+
+
+def test_miter_bend_rates_below_the_pipe_it_is_made_from():
+    from anvilate.analysis import asme_b313_miter_bend_pressure, asme_b313_pipe_pressure
+
+    common = {
+        "allowable_stress": _q("138 MPa"),
+        "wall_thickness": _q("6.02 mm"),
+        "mean_radius": _q("54.14 mm"),  # (114.3 - 6.02)/2
+    }
+    straight = (
+        asme_b313_pipe_pressure(
+            wall_thickness=_q("6.02 mm"),
+            outside_diameter=_q("114.3 mm"),
+            allowable_stress=_q("138 MPa"),
+        )
+        .to("MPa")
+        .magnitude
+    )
+    assert straight == pytest.approx(15.18, abs=0.02)
+
+    # Every miter rates below the straight pipe, and a steeper cut rates lower still.
+    ratings = [
+        asme_b313_miter_bend_pressure(miter_angle=angle, **common).to("MPa").magnitude
+        for angle in (10.0, 22.5, 30.0, 45.0)
+    ]
+    assert all(r < straight for r in ratings)
+    assert ratings == sorted(ratings, reverse=True)
+    assert ratings[0] == pytest.approx(11.45, abs=0.02)
+    assert ratings[1] == pytest.approx(8.53, abs=0.02)
+
+    # The §304.2.3 split at 22.5° is a genuine change of formula, and it is a step down:
+    # the steep branch is the more severe of the two where they meet.
+    just_over = asme_b313_miter_bend_pressure(miter_angle=22.6, **common).to("MPa").magnitude
+    assert just_over < ratings[1]
+
+    # A multiple miter takes the LESSER of the two limits, so a tight effective radius
+    # governs over the cut angle.
+    wide = (
+        asme_b313_miter_bend_pressure(
+            miter_angle=22.5, effective_bend_radius=_q("228 mm"), **common
+        )
+        .to("MPa")
+        .magnitude
+    )
+    tight = (
+        asme_b313_miter_bend_pressure(miter_angle=22.5, effective_bend_radius=_q("80 mm"), **common)
+        .to("MPa")
+        .magnitude
+    )
+    assert wide == pytest.approx(ratings[1], rel=1e-9)  # the cut angle still governs
+    assert tight < wide
+
+    # Past 22.5° the code gives no multiple-miter rating, and this refuses rather than
+    # quoting the single-miter number as though it were one.
+    with pytest.raises(ValueError, match="scoped by ASME B31.3"):
+        asme_b313_miter_bend_pressure(
+            miter_angle=30.0, effective_bend_radius=_q("228 mm"), **common
+        )
+    # A bend radius at or inside the pipe's own mean radius is not a bend.
+    with pytest.raises(ValueError, match="must exceed the mean radius"):
+        asme_b313_miter_bend_pressure(
+            miter_angle=22.5, effective_bend_radius=_q("54.14 mm"), **common
+        )
+    for bad in (0.0, 90.0, -10.0):
+        with pytest.raises(ValueError, match="cut angle in degrees"):
+            asme_b313_miter_bend_pressure(miter_angle=bad, **common)
