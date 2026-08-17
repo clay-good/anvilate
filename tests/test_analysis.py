@@ -37383,3 +37383,35 @@ def test_springback_factor_refuses_the_branch_where_its_cubic_turns_back_upward(
     assert sprung_bend_radius(initial_bend_radius=_q("40 mm"), springback_factor=loose).to(
         "mm"
     ).magnitude == pytest.approx(43.2403215998919, rel=1e-9)
+
+
+def test_two_producers_that_emitted_what_their_own_consumers_reject() -> None:
+    """Both docstrings state a limit; neither enforced it, and both feed a stricter consumer.
+
+    This is the shape the Peukert fit had: the function that PRODUCES a value was looser
+    than every function that consumes it.
+    """
+    from anvilate.analysis.antenna import radiation_resistance_short_dipole
+    from anvilate.analysis.dynamics import damping_ratio_from_half_power_bandwidth
+
+    # dynamics' own _check_damping_ratio requires an underdamped [0, 1), but the half-power
+    # identification could hand back 5.0 -- a bandwidth wider than the resonance it measures.
+    with pytest.raises(ValueError, match="not the underdamped"):
+        damping_ratio_from_half_power_bandwidth(
+            resonant_frequency=_q("10 Hz"), half_power_bandwidth=_q("100 Hz")
+        )
+    # A real modal test is far inside the range and is untouched.
+    assert damping_ratio_from_half_power_bandwidth(
+        resonant_frequency=_q("50 Hz"), half_power_bandwidth=_q("2 Hz")
+    ) == pytest.approx(0.02, rel=1e-12)
+
+    # The short-dipole form runs away as L approaches lambda; at L = lambda it returned
+    # 790 ohm, against the ~73 ohm its own docstring quotes for a half-wave dipole.
+    with pytest.raises(ValueError, match="past the short-dipole limit"):
+        radiation_resistance_short_dipole(length=_q("1 m"), wavelength=_q("1 m"))
+    with pytest.raises(ValueError, match="past the short-dipole limit"):
+        radiation_resistance_short_dipole(length=_q("0.5 m"), wavelength=_q("1 m"))
+    # L = lambda/10 is the stated edge and still answers: 80*pi^2*0.01 = 7.8957 ohm.
+    assert radiation_resistance_short_dipole(length=_q("0.1 m"), wavelength=_q("1 m")).to(
+        "ohm"
+    ).magnitude == pytest.approx(80.0 * pi**2 * 0.01, rel=1e-12)

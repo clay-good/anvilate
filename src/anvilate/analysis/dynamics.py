@@ -495,7 +495,19 @@ def damping_ratio_from_half_power_bandwidth(
         raise ValueError("resonant_frequency must be positive")
     if delta_f <= 0:
         raise ValueError("half_power_bandwidth must be positive")
-    return delta_f / (2.0 * f_n)
+    zeta = delta_f / (2.0 * f_n)
+    # This function PRODUCES a damping ratio that the rest of the module then consumes through
+    # _check_damping_ratio, which requires an underdamped [0, 1). Unguarded it could hand back
+    # zeta = 5.0 -- a bandwidth wider than the resonance it is measuring, which every sibling
+    # refuses. The half-power approximation itself only holds for zeta <~ 0.1.
+    if zeta >= 1.0:
+        raise ValueError(
+            f"half_power_bandwidth {half_power_bandwidth} against resonant_frequency "
+            f"{resonant_frequency} gives a damping ratio of {zeta:.4f}, not the underdamped "
+            f"[0, 1) the rest of this module accepts. The half-power method assumes a lightly "
+            f"damped peak (zeta <~ 0.1); check that the bandwidth is the -3 dB width."
+        )
+    return zeta
 
 
 def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:

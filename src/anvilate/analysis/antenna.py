@@ -294,7 +294,17 @@ def radiation_resistance_short_dipole(*, length: Quantity, wavelength: Quantity)
         raise ValueError("length must be positive")
     if lam <= 0:
         raise ValueError("wavelength must be positive")
-    return Quantity(magnitude=80.0 * pi**2 * (ell / lam) ** 2, unit="ohm")
+    # The docstring's own limit, enforced: the short-dipole form assumes a uniform current and
+    # runs away as L approaches lambda. At L = lambda it returned 790 ohm, and the same
+    # paragraph names the half-wave dipole's ~73 ohm as "outside this short-dipole form".
+    ratio = ell / lam
+    if ratio > 0.1:
+        raise ValueError(
+            f"length/wavelength = {ratio:.4f} is past the short-dipole limit of about 0.1, "
+            f"where R_r = 80*pi^2*(L/lambda)^2 stops describing the antenna (it would return "
+            f"{80.0 * pi**2 * ratio**2:.1f} ohm against a half-wave dipole's ~73 ohm)."
+        )
+    return Quantity(magnitude=80.0 * pi**2 * ratio**2, unit="ohm")
 
 
 def antenna_far_field_distance(*, aperture_diameter: Quantity, wavelength: Quantity) -> Quantity:
