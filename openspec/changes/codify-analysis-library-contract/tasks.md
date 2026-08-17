@@ -130,3 +130,33 @@
   later audit does not re-file them as findings and a later refactor does not delete them
   as dead. This is the library's signature invariant and line coverage cannot see it —
   only mutation can.
+- **Cross-module disagreements found 2026-08-17, recorded and NOT yet fixed.** Each was
+  confirmed by execution; the beam-column one from the same sweep was fixed immediately
+  because it was unconservative and flipped verdicts.
+  - `acoustics` defaults the directivity factor Q two ways for the same free-field term:
+    `sound_pressure_from_power_level` uses 2.0, `room_sound_pressure_level` and
+    `critical_distance` use 1.0. The first is exactly the R->inf limit of the second, so a
+    caller letting both default gets 80.998 dB and 77.987 dB for the same source — exactly
+    10*log10(2) apart. 3 dB is not cosmetic when the docstring says to feed the result to
+    the noise-exposure screen. The two docstrings also disagree on whether Q = 4 is a
+    corner or a wall. Needs one default and one table across the three functions.
+  - `packs/hydraulics.screen_pump_duty` screens NPSHa/NPSHr >= 1.1 and names the entry
+    "NPSH margin", while `analysis/pump.npsh_margin` returns NPSHa - NPSHr in metres and
+    says 0.5-1 m is usual. The pack never imports it. They disagree in both directions and
+    unboundedly: the pack FAILs a 1.00 m cushion at 21/20 m and PASSes a 0.05 m one at
+    0.55/0.5 m. Pump practice uses both a ratio floor AND an absolute-head floor; a single
+    ratio silently greens the 50 mm case.
+  - `beam.fixed_pinned_uniform_load` uses the rounded L^4/185 table coefficient where the
+    partial-UDL and centre-patch forms (which ARE the same beam at loaded_length = L)
+    root-find the true peak: 0.43784 mm vs 0.43871 mm, 0.198% apart with the special case
+    LOW. The exact coefficient is 0.0054158; 1/185 = 0.0054054. Only outlier among 22
+    degenerate-limit reductions swept.
+  - `packs/structural` uses 0.577 for the shear-yield fraction where `analysis/stress`
+    uses exact 1/sqrt(3), so two entries of ONE scorecard screening the same state at
+    zero tension return 1.5117909 and 1.5127087 (0.061% apart). Tiny, and unreconcilable
+    by a reader.
+  - `psychrometrics.wet_bulb_temperature` guards T_wb <= T_db and not T_wb >= T_dp; 67 of
+    a swept grid return a wet bulb below the module's own exact dew point, worst 0.198 K.
+    Inside the declared +/-0.3 K fit accuracy, so the reportable part is the asymmetry: the
+    module decided impossible answers should raise and guarded only one bound.
+
