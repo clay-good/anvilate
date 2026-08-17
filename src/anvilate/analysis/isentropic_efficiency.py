@@ -94,11 +94,30 @@ def turbine_isentropic_efficiency(
     t2s = isentropic_outlet_temperature.to("K").magnitude
     if t1 <= 0 or t2a <= 0 or t2s <= 0:
         raise ValueError("temperatures must be positive absolute (kelvin) values")
-    if t2s > t1:
-        raise ValueError("isentropic_outlet_temperature must be at most inlet_temperature")
+    # The compressor sibling guards its DENOMINATOR strictly and its numerator loosely;
+    # this guarded the mirror image, leaving (T₁ − T₂ₛ) — its own denominator — free to
+    # reach zero. T₂ₛ = T₁ was a bare ZeroDivisionError, and T₂ₛ a ten-thousandth of a
+    # kelvin below it returned an isentropic efficiency of 3,000,000 against a docstring
+    # that says η_t ≤ 1. Guard the denominator, and then honour the ceiling the same way
+    # `heat_exchanger_effectiveness_from_temperatures` already does.
+    if t2s >= t1:
+        raise ValueError(
+            f"isentropic_outlet_temperature ({isentropic_outlet_temperature}) must be "
+            f"below inlet_temperature ({inlet_temperature}): an ideal expansion that "
+            f"drops no temperature does no work, and there is no efficiency to take a "
+            f"ratio against."
+        )
     if t2a >= t1:
         raise ValueError("actual_outlet_temperature must be below inlet_temperature")
-    return (t1 - t2a) / (t1 - t2s)
+    efficiency = (t1 - t2a) / (t1 - t2s)
+    if efficiency > 1.0:
+        raise ValueError(
+            f"the temperatures give an isentropic efficiency of {efficiency:.4g}: the "
+            f"actual outlet ({actual_outlet_temperature}) is BELOW the isentropic one "
+            f"({isentropic_outlet_temperature}), so the turbine extracted more work than "
+            f"the reversible ideal. Check which outlet is which."
+        )
+    return efficiency
 
 
 def compressor_actual_discharge_temperature(

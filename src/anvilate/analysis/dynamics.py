@@ -516,6 +516,29 @@ def damping_ratio_from_half_power_bandwidth(
     return zeta
 
 
+def _steady_state_denominator(frequency_ratio: float, damping_ratio: float, formula: str) -> float:
+    """√((1 − r²)² + (2ζr)²) — the denominator every steady-state SDOF response shares.
+
+    It is exactly zero at undamped resonance (r = 1, ζ = 0), and both values are
+    in-domain: ζ = 0 is accepted, r only has to be non-negative, and r = 1 with ζ = 0 is
+    the single most likely pair an engineer types when screening a mount they suspect is
+    tuned into resonance. Left unguarded this was a bare ``ZeroDivisionError`` escaping
+    through :func:`isolation_scorecard`, a user-facing entry point. The response really is
+    unbounded there, so this refuses with the reason rather than inventing a number —
+    an undamped system at resonance has no steady state to report.
+    """
+    r = frequency_ratio
+    denominator = (1.0 - r**2) ** 2 + (2.0 * damping_ratio * r) ** 2
+    if denominator == 0.0:
+        raise ValueError(
+            f"{formula} is unbounded at undamped resonance (frequency_ratio = "
+            f"{frequency_ratio}, damping_ratio = {damping_ratio}): with no damping the "
+            f"amplitude grows without limit and there is no steady-state response to "
+            f"report. Supply the real damping ratio, however small."
+        )
+    return sqrt(denominator)
+
+
 def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
     """The vibration transmissibility TR of a single-degree-of-freedom isolator.
 
@@ -536,8 +559,7 @@ def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
         raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
     r = frequency_ratio
     numerator = sqrt(1.0 + (2.0 * zeta * r) ** 2)
-    denominator = sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
-    return numerator / denominator
+    return numerator / _steady_state_denominator(r, zeta, "transmissibility")
 
 
 def isolation_scorecard(
@@ -561,6 +583,20 @@ def isolation_scorecard(
     if not 0 < required_transmissibility < 1:
         raise ValueError(
             f"required_transmissibility must be in (0, 1); got {required_transmissibility}"
+        )
+    # Undamped resonance is the very error this screen exists to catch, so it is reported
+    # as the worst possible verdict rather than raised: a mount at r = 1 with no damping
+    # has an unbounded response, which is a FAIL with a reason, not an exception a caller
+    # has to catch to find out their mount is the textbook mistake.
+    if frequency_ratio == 1.0 and damping_ratio == 0.0:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.FAIL,
+            detail=(
+                "mount is AT undamped resonance (r = 1.00, ζ = 0): the response is "
+                "unbounded, there is no transmissibility to report. Supply the real "
+                "damping ratio, however small, or move the mount off the forcing frequency."
+            ),
         )
     tr = transmissibility(frequency_ratio=frequency_ratio, damping_ratio=damping_ratio)
     computed = float("inf") if tr == 0 else required_transmissibility / tr
@@ -677,6 +713,21 @@ def isolator_selection_scorecard(
     achieved_fn = natural_frequency_from_deflection(selected_static_deflection, gravity=gravity)
     f = count_rate_per_second(forcing_frequency, name="forcing_frequency")
     fn = count_rate_per_second(achieved_fn, name="natural_frequency")
+    # The undamped TR below is unbounded when the mount lands exactly on the forcing
+    # frequency — a real selection outcome, and the worst one, so it is reported rather
+    # than raised. The deflection margin is still meaningful and still says FAIL.
+    if f == fn:
+        return ScorecardEntry.from_safety_factor(
+            name, computed=delta / required.magnitude, required=1.0
+        ).model_copy(
+            update={
+                "detail": (
+                    f"selected {delta:.1f} mm against {required.magnitude:.1f} mm required "
+                    f"(f_n {fn:.1f} Hz): the mount is tuned EXACTLY to the forcing "
+                    f"frequency — undamped, its response is unbounded"
+                )
+            }
+        )
     achieved_tr = transmissibility(frequency_ratio=f / fn, damping_ratio=0.0)
     entry = ScorecardEntry.from_safety_factor(
         name, computed=delta / required.magnitude, required=1.0
@@ -871,7 +922,7 @@ def dynamic_magnification_factor(*, frequency_ratio: float, damping_ratio: float
     if frequency_ratio < 0:
         raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
     r = frequency_ratio
-    return 1.0 / sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
+    return 1.0 / _steady_state_denominator(r, zeta, "dynamic_magnification_factor")
 
 
 def resonance_phase_angle(*, frequency_ratio: float, damping_ratio: float) -> float:
@@ -918,7 +969,7 @@ def base_excitation_relative_transmissibility(
     if frequency_ratio < 0:
         raise ValueError(f"frequency_ratio must be non-negative; got {frequency_ratio}")
     r = frequency_ratio
-    return r**2 / sqrt((1.0 - r**2) ** 2 + (2.0 * zeta * r) ** 2)
+    return r**2 / _steady_state_denominator(r, zeta, "base_excitation_relative_transmissibility")
 
 
 def floor_vibration_peak_acceleration_ratio(

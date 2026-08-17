@@ -107,11 +107,24 @@ SHEAR_FORM_RECTANGULAR = 1.5
 SHEAR_FORM_CIRCULAR = 4.0 / 3.0
 
 
+# Section and material properties that cannot be zero or negative in any beam formula:
+# a span, a second moment, a distance to the extreme fibre, a modulus. The slope family
+# has always enforced this through `_slope_inputs`; the ~30 bending-case functions only
+# dimension-checked, so I = 0 was a bare ZeroDivisionError and I = −1e6 mm⁴ came back as a
+# quietly negative stress and deflection — a wrong number with no signal, which is worse.
+# Enforcing by name here means a new call site inherits the guard instead of forgetting it.
+# Loads, moments and offsets are deliberately absent: a hogging moment and an uplift force
+# are signed on purpose.
+_POSITIVE_DEFINITE = frozenset({"length", "second_moment", "extreme_fibre", "elastic_modulus"})
+
+
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not value.has_dimension(expected):
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    if name in _POSITIVE_DEFINITE and value.magnitude <= 0:
+        raise ValueError(f"{name} must be positive; got {value}")
 
 
 def _as_quantity(pint_value, unit: str) -> Quantity:

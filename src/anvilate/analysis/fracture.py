@@ -271,6 +271,18 @@ def paris_law_cycles_to_failure(
     if paris_exponent == 2:
         raise ValueError("paris_exponent must differ from 2 (the m = 2 case is not covered)")
     delta_sigma = stress_range.to("MPa").magnitude
+    # The sibling `paris_law_crack_growth_rate` rejects a non-positive stress range; this
+    # one validated five other arguments and not the one sitting in the denominator under
+    # a fractional power. Δσ = 0 was a bare ZeroDivisionError, Δσ = −100 MPa with an even m
+    # erased the sign and returned the tensile answer, an odd m returned a NEGATIVE life,
+    # and m = 2.5 — inside this docstring's own "typically 2.5–4 for steels" — returned a
+    # complex number from a function annotated `-> float`.
+    if delta_sigma <= 0:
+        raise ValueError(
+            f"stress_range must be positive; got {stress_range}. A crack grows under a "
+            f"tensile stress range, and a non-positive one raised to the Paris exponent "
+            f"is not a life."
+        )
     a_i = initial_crack_length.to("m").magnitude
     a_f = final_crack_length.to("m").magnitude
     if a_i <= 0 or a_f <= 0:

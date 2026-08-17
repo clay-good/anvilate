@@ -38603,3 +38603,121 @@ def test_ltb_input_guards_fire_on_a_single_bad_input() -> None:
         spoiled[bad] = Quantity(magnitude=-1.0, unit=ltb[bad].unit)
         with pytest.raises(ValueError, match="must be positive"):
             lateral_torsional_buckling_moment(**spoiled)
+
+
+def test_undamped_resonance_is_refused_by_every_steady_state_response():
+    """r = 1 with ζ = 0 is in-domain for both arguments, and the response is unbounded."""
+    from anvilate.analysis import (
+        base_excitation_relative_transmissibility,
+        dynamic_magnification_factor,
+        isolation_scorecard,
+        transmissibility,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    for function in (
+        transmissibility,
+        dynamic_magnification_factor,
+        base_excitation_relative_transmissibility,
+    ):
+        with pytest.raises(ValueError, match="unbounded at undamped resonance"):
+            function(frequency_ratio=1.0, damping_ratio=0.0)
+        # The smallest real damping is enough — the guard is on the exact zero, not a band.
+        assert function(frequency_ratio=1.0, damping_ratio=1e-6) > 1.0
+
+    # The user-facing screen reports it instead of raising: a mount tuned into resonance
+    # is the classic error this entry exists to catch, so it is a FAIL with a reason.
+    entry = isolation_scorecard(
+        "mount", frequency_ratio=1.0, damping_ratio=0.0, required_transmissibility=0.2
+    )
+    assert entry.status is CheckStatus.FAIL
+    assert "AT undamped resonance" in entry.detail
+
+
+def test_paris_law_life_refuses_the_stress_range_its_sibling_already_refused():
+    from anvilate.analysis import paris_law_cycles_to_failure
+
+    common = {
+        "initial_crack_length": _q("1 mm"),
+        "final_crack_length": _q("10 mm"),
+        "paris_coefficient": 1e-12,
+        "paris_exponent": 3.0,
+    }
+    life = paris_law_cycles_to_failure(stress_range=_q("100 MPa"), **common)
+    assert life > 0
+    # Zero was a ZeroDivisionError; a negative range with an odd m returned a negative
+    # life, and with m = 2.5 — inside this function's own quoted range for steels — it
+    # returned a complex number from a `-> float`.
+    for bad in ("0 MPa", "-100 MPa"):
+        with pytest.raises(ValueError, match="stress_range must be positive"):
+            paris_law_cycles_to_failure(stress_range=_q(bad), **common)
+    with pytest.raises(ValueError, match="stress_range must be positive"):
+        paris_law_cycles_to_failure(
+            stress_range=_q("-100 MPa"), **{**common, "paris_exponent": 2.5}
+        )
+
+
+def test_turbine_efficiency_guards_its_denominator_and_honours_its_own_ceiling():
+    from anvilate.analysis import turbine_isentropic_efficiency
+
+    ok = turbine_isentropic_efficiency(
+        inlet_temperature=_q("1200 K"),
+        actual_outlet_temperature=_q("900 K"),
+        isentropic_outlet_temperature=_q("850 K"),
+    )
+    assert ok == pytest.approx(300 / 350, rel=1e-12)
+
+    # An ideal expansion that drops no temperature: the compressor sibling guards exactly
+    # this operand, and this one did not — it was a ZeroDivisionError, and a ten-thousandth
+    # of a kelvin off it returned an efficiency of 3,000,000.
+    with pytest.raises(ValueError, match="must be below inlet_temperature"):
+        turbine_isentropic_efficiency(
+            inlet_temperature=_q("1200 K"),
+            actual_outlet_temperature=_q("900 K"),
+            isentropic_outlet_temperature=_q("1200 K"),
+        )
+    with pytest.raises(ValueError, match="isentropic efficiency of"):
+        turbine_isentropic_efficiency(
+            inlet_temperature=_q("1200 K"),
+            actual_outlet_temperature=_q("900 K"),
+            isentropic_outlet_temperature=_q("1199.9999 K"),
+        )
+
+
+def test_beam_bending_cases_refuse_the_section_their_slope_siblings_always_did():
+    from anvilate.analysis import beam as beam_module
+
+    good = {
+        "length": _q("2 m"),
+        "second_moment": _q("1e6 mm**4"),
+        "extreme_fibre": _q("50 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    assert beam_module.cantilever_end_load(force=_q("1 kN"), **good).max_bending_stress is not None
+
+    # A zero second moment was a bare ZeroDivisionError; a NEGATIVE one silently returned
+    # a negative stress and a negative deflection, which is the worse of the two.
+    for name, bad in (
+        ("second_moment", _q("0 mm**4")),
+        ("second_moment", _q("-1e6 mm**4")),
+        ("length", _q("0 m")),
+        ("extreme_fibre", _q("-50 mm")),
+        ("elastic_modulus", _q("0 GPa")),
+    ):
+        with pytest.raises(ValueError, match=f"{name} must be positive"):
+            beam_module.cantilever_end_load(force=_q("1 kN"), **{**good, name: bad})
+
+    # The guard reaches the whole bending family, not just the one case.
+    for case in (
+        beam_module.simply_supported_center_load,
+        beam_module.fixed_fixed_center_load,
+        beam_module.fixed_pinned_center_load,
+    ):
+        with pytest.raises(ValueError, match="second_moment must be positive"):
+            case(force=_q("1 kN"), **{**good, "second_moment": _q("-1e6 mm**4")})
+
+    # And a signed load is still signed — uplift and hogging are on purpose.
+    assert (
+        beam_module.cantilever_end_load(force=_q("-1 kN"), **good).max_moment.magnitude
+        != beam_module.cantilever_end_load(force=_q("1 kN"), **good).max_moment.magnitude
+    )
