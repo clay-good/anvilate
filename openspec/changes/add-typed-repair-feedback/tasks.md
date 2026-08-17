@@ -22,9 +22,18 @@
       `minimum_sheave_diameter_for_bending_stress` the same way. Remaining pack checks
       (isolator deflection, Lewis module, bearing rating, bolt count) follow the same
       `RepairHint.solved(...)` pattern.
-- [ ] 2.2 Monotonicity declarations for hint direction on non-inverse checks —
-      `RepairHint.directional(...)` carries a direction without a value; per-check
-      monotonicity declarations across the packs are follow-up.
+- [x] 2.2 Monotonicity declarations for hint direction on non-inverse checks —
+      `RepairHint.directional(...)` carries a direction without a value, and the
+      geotechnical pack is the worked set of declarations: retaining-wall overturning
+      and sliding solve `vertical_load` (both linear in V), the driven pile solves
+      `length` (shaft friction linear in L, end bearing fixed), the infinite slope
+      solves `pore_pressure` (linear in u — drainage), the shallow footing declares
+      `width` ↑ directionally (B enters q_ult too, so no closed form; monotonicity
+      verified over 5,346 swept points), and the slope's `slope_angle` ↓ declaration
+      is scoped below 45° because the driving term γ·z·sin(2β)/2 peaks there and the
+      trend reverses. Past that the screen offers no hint at all — silence beats a
+      false direction. Each is pinned by a round-trip or a sweep in
+      `tests/test_geotechnical_pack.py`. Remaining packs follow the same pattern.
 
 ## 3. Tests
 

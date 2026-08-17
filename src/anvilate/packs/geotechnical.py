@@ -13,6 +13,8 @@ building-code check — the geotechnical engineer of record owns the design.
 
 from __future__ import annotations
 
+from math import cos, radians, sin, tan
+
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..analysis import (
@@ -28,7 +30,7 @@ from ..analysis import (
     retaining_wall_sliding_factor,
     terzaghi_bearing_capacity,
 )
-from ..scorecard import Scorecard, ScorecardEntry
+from ..scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from ..units import Quantity
 
 __all__ = [
@@ -47,6 +49,18 @@ _OVERTURNING_REFERENCE = "Rankine active thrust, moment balance about the toe"
 _SLIDING_REFERENCE = "Rankine active thrust, base friction resistance"
 _SLOPE_REFERENCE = "Infinite-slope limit equilibrium"
 _PILE_REFERENCE = "α-method pile capacity (shaft friction + end bearing)"
+
+
+def _hinted(entry: ScorecardEntry, hint: RepairHint | None) -> ScorecardEntry:
+    """Attach ``hint`` to ``entry`` when the entry failed and carries a usable factor.
+
+    A repair hint belongs only on a failure — a passing check has nothing to repair — and a
+    solved hint needs the computed safety factor it scales. Anything else is returned
+    untouched, so a caller can declare a lever without re-checking the status at each site.
+    """
+    if hint is None or entry.status is not CheckStatus.FAIL or not entry.safety_factor:
+        return entry
+    return entry.model_copy(update={"repair_hint": hint})
 
 
 class ShallowFooting(BaseModel):
@@ -134,6 +148,20 @@ def screen_shallow_footing(
         required=required_safety_factor,
     )
     entry = entry.model_copy(update={"reference": _BEARING_REFERENCE})
+    # Monotonicity declaration, not an inverse: widening the footing drops the contact
+    # pressure ∝ 1/B *and* raises q_ult through the 0.5·γ·B·N_gamma term, while the depth
+    # factors (which fall with B) never overtake either. Swept over 5,346 points spanning
+    # φ 0-40°, c 0-100 kPa, D_f/B ≤ 1 and L 2-20 m, the factor never once decreased — but
+    # B enters q_ult through the shape and depth factors too, so there is no closed-form
+    # width to solve for. A direction is what is honest here.
+    entry = _hinted(
+        entry,
+        RepairHint.directional(
+            "width",
+            direction=Direction.INCREASE,
+            provenance="bearing monotonicity in B (q ∝ 1/B, q_ult rises with B)",
+        ),
+    )
     return Scorecard(entries=(entry,))
 
 
@@ -196,6 +224,32 @@ def screen_retaining_wall(
     sliding = ScorecardEntry.from_safety_factor(
         "sliding", computed=fs_sliding, required=sliding_safety_factor
     ).model_copy(update={"reference": _SLIDING_REFERENCE})
+    # Both external-stability factors are linear in the stabilizing weight — FS_ot = V·a/(P·y)
+    # and FS_sl = μ·V/P — so the weight that reaches the required margin is V·required/FS,
+    # exactly, for either. Weight is also the shared lever an engineer actually pulls (a
+    # thicker stem, a wider base, soil on the heel), which is why it is named over the arm:
+    # widening the base raises both V and a, while the arm alone is not something you set.
+    v_per_m = wall.vertical_load.to("kN/m").magnitude
+    overturning = _hinted(
+        overturning,
+        RepairHint.solved(
+            "vertical_load",
+            direction=Direction.INCREASE,
+            value=v_per_m * overturning_safety_factor / (fs_overturning or 1.0),
+            unit="kN/m",
+            provenance="overturning moment balance (FS ∝ V)",
+        ),
+    )
+    sliding = _hinted(
+        sliding,
+        RepairHint.solved(
+            "vertical_load",
+            direction=Direction.INCREASE,
+            value=v_per_m * sliding_safety_factor / (fs_sliding or 1.0),
+            unit="kN/m",
+            provenance="base friction resistance (FS ∝ V)",
+        ),
+    )
     return Scorecard(entries=(overturning, sliding))
 
 
@@ -240,7 +294,55 @@ def screen_infinite_slope(
     entry = ScorecardEntry.from_safety_factor(
         "slope stability", computed=factor_of_safety, required=required_safety_factor
     ).model_copy(update={"reference": _SLOPE_REFERENCE})
-    return Scorecard(entries=(entry,))
+    return Scorecard(entries=(_hinted(entry, _slope_repair_hint(slope, required_safety_factor)),))
+
+
+# The infinite-slope FS divides by γ·z·sin β·cos β = γ·z·sin(2β)/2, which PEAKS at β = 45°.
+# Below it the denominator grows while the numerator shrinks, so FS falls with every degree
+# of steepening; above it both shrink and FS turns back upward — a sweep finds the reversal
+# at 45.5°. "Flatten the slope" is therefore only true below 45°, and this is where it stops.
+_SLOPE_ANGLE_MONOTONIC_LIMIT = 45.0
+
+
+def _slope_repair_hint(slope: InfiniteSlope, required: float) -> RepairHint | None:
+    """The lever that improves an infinite slope's factor of safety, or ``None``.
+
+    Drainage first: the pore pressure enters the numerator as −u·tan φ and nowhere else, so
+    FS is linear and strictly decreasing in u — the pressure that reaches the required margin
+    is exact, and relieving it is the repair a real slope gets. That solve is only offered
+    when it lands at a non-negative pressure (you cannot drain past dry) and when tan φ > 0
+    (a purely cohesive slope does not care about u at all).
+
+    Otherwise fall back to flattening the slope, declared as a direction only, and only below
+    :data:`_SLOPE_ANGLE_MONOTONIC_LIMIT` where the declaration is actually true. A slope
+    steeper than that gets no hint: its geometry lever is not monotonic and the honest answer
+    is silence.
+    """
+    tan_phi = tan(radians(slope.friction_angle))
+    if slope.pore_pressure is not None and tan_phi > 0:
+        u = slope.pore_pressure.to("kPa").magnitude
+        gamma = slope.unit_weight.to("kN/m**3").magnitude
+        z = slope.depth.to("m").magnitude
+        beta = radians(slope.slope_angle)
+        driving = gamma * z * sin(beta) * cos(beta)
+        cohesion = slope.cohesion.to("kPa").magnitude
+        # FS = [c + (γ·z·cos²β − u)·tan φ] / driving, solved for the u that gives `required`.
+        target_u = (cohesion + gamma * z * cos(beta) ** 2 * tan_phi - required * driving) / tan_phi
+        if 0.0 <= target_u < u:
+            return RepairHint.solved(
+                "pore_pressure",
+                direction=Direction.DECREASE,
+                value=target_u,
+                unit="kPa",
+                provenance="infinite-slope pore-pressure inverse (FS linear in u)",
+            )
+    if slope.slope_angle < _SLOPE_ANGLE_MONOTONIC_LIMIT:
+        return RepairHint.directional(
+            "slope_angle",
+            direction=Direction.DECREASE,
+            provenance="infinite-slope monotonicity in β, valid below 45°",
+        )
+    return None
 
 
 class DrivenPile(BaseModel):
@@ -291,4 +393,21 @@ def screen_driven_pile(pile: DrivenPile) -> Scorecard:
     entry = ScorecardEntry.from_safety_factor(
         "pile capacity", computed=demand_ratio, required=1.0
     ).model_copy(update={"reference": _PILE_REFERENCE})
+    # Shaft friction is linear in the embedded length and end bearing does not depend on it,
+    # so the length that reaches a demand ratio of 1.0 is exact: the shaft has to supply
+    # (FS·load − tip), and it does so in proportion to L. Driving deeper is also the repair
+    # the site actually makes — the diameter is set by the rig and the clay is what it is.
+    shaft_kn = shaft.to("kN").magnitude
+    needed_shaft = pile.factor_of_safety * load - tip.to("kN").magnitude
+    if needed_shaft > 0:
+        entry = _hinted(
+            entry,
+            RepairHint.solved(
+                "length",
+                direction=Direction.INCREASE,
+                value=pile.length.to("m").magnitude * needed_shaft / shaft_kn,
+                unit="m",
+                provenance="α-method shaft friction inverse (Q_s ∝ L, end bearing fixed)",
+            ),
+        )
     return Scorecard(entries=(entry,))

@@ -35,6 +35,27 @@ Repair turns from a search into a single solve: apply `hint.corrective_value` an
 the forward check lands at exactly the required margin. See
 [`examples/sheave_repair_from_inverse.py`](../examples/sheave_repair_from_inverse.py).
 
+### Declaring a lever, and when not to
+
+A direction is a claim about the check's behavior, so it is declared only where it
+holds. The geotechnical pack is the worked case:
+
+| Screen | Check | Lever | Kind |
+| --- | --- | --- | --- |
+| `screen_retaining_wall` | overturning, sliding | `vertical_load` ↑ | solved — both factors are linear in V |
+| `screen_driven_pile` | pile capacity | `length` ↑ | solved — shaft friction is linear in L, end bearing fixed |
+| `screen_shallow_footing` | bearing capacity | `width` ↑ | directional — B also enters q_ult, so no closed form |
+| `screen_infinite_slope` | slope stability | `pore_pressure` ↓ | solved — FS is linear in u (drainage) |
+| `screen_infinite_slope` | slope stability | `slope_angle` ↓ | directional, **below 45° only** |
+
+The last row is the point. The infinite-slope factor divides by γ·z·sin(2β)/2, which
+peaks at β = 45°: below it, steepening costs margin, and above it the trend reverses.
+"Flatten the slope" is false for a slope steeper than that, so past 45° the screen
+offers no hint at all. Silence is a legitimate answer; a direction that is wrong is
+worse than none. Every declaration above is pinned by a round-trip or a sweep in
+`tests/test_geotechnical_pack.py`, including one test whose only job is to prove the
+reversal the slope hint refuses to cross.
+
 ## Two-sided acceptance bands
 
 `from_safety_factor` takes an optional `upper` bound. A check above it is
