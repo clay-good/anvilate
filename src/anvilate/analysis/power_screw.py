@@ -164,6 +164,16 @@ def power_screw_efficiency(
     tan_lambda = ell / (pi * dm)
     if mu == 0:
         return 1.0
+    # Past mu*tan(lambda) = 1 the numerator turns negative and the expression returns a NEGATIVE
+    # efficiency, which power_screw_raise_torque then propagates as a sign-flipped torque -- the
+    # same shape as the worm_gear_efficiency bug fixed in session 25. The screw has not become a
+    # generator; the square-thread model has simply left its range.
+    if mu * tan_lambda >= 1.0:
+        raise ValueError(
+            f"friction_coefficient * tan(lead angle) = {mu * tan_lambda:.4f} >= 1, where the "
+            f"square-thread efficiency expression turns negative and stops describing a screw. "
+            f"Check the friction coefficient ({mu}) and the lead-to-diameter ratio."
+        )
     return tan_lambda * (1.0 - mu * tan_lambda) / (tan_lambda + mu)
 
 

@@ -219,6 +219,11 @@ def nds_bearing_area_factor(*, bearing_length: Quantity) -> float:
     lb = bearing_length.to("inch").magnitude
     if lb <= 0:
         raise ValueError("bearing_length must be positive")
+    # NDS 3.10.4 scopes C_b to bearings shorter than 6 in and not nearer than 3 in to the member
+    # end; outside that C_b is 1.0. Without the check a 10 in bearing collected a 3.75% capacity
+    # bonus the docstring explicitly says it should not get.
+    if lb >= 6.0:
+        return 1.0
     return (lb + 0.375) / lb
 
 

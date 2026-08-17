@@ -3729,6 +3729,20 @@ def test_power_screw_self_locking_boundary():
     # Self-locking screws pay for it with efficiency below 50%.
     assert power_screw_efficiency(friction_coefficient=0.08, **geom) < 0.5
 
+    # Past mu*tan(lambda) = 1 the numerator turns negative and the expression used to return a
+    # NEGATIVE efficiency, which power_screw_raise_torque then propagated as a sign-flipped
+    # torque -- the same shape as the worm_gear_efficiency bug. A screw is not a generator.
+    with pytest.raises(ValueError, match=r"tan\(lead angle\)"):
+        power_screw_efficiency(
+            mean_diameter=_q("20 mm"), lead=_q("200 mm"), friction_coefficient=0.5
+        )
+    # Efficiency stays strictly inside (0, 1) everywhere the model is valid.
+    for mu in (0.02, 0.08, 0.15, 0.30):
+        value = power_screw_efficiency(
+            mean_diameter=_q("25 mm"), lead=_q("5 mm"), friction_coefficient=mu
+        )
+        assert 0.0 < value < 1.0
+
 
 def test_power_screw_rejects_bad_inputs():
     kw = {"mean_diameter": _q("25 mm"), "lead": _q("5 mm")}
@@ -15818,6 +15832,14 @@ def test_nds_shear_stress_scorecard_and_bearing_area_factor():
 
     # Bearing area factor C_b = (l_b + 0.375)/l_b; 1.5 in -> 1.25, fading toward 1.0.
     assert nds_bearing_area_factor(bearing_length=_q("1.5 inch")) == pytest.approx(1.25, rel=1e-9)
+    # NDS 3.10.4 scopes C_b to bearings shorter than 6 in; the docstring said so and the code
+    # applied the formula at any length, handing a 10 in bearing a 3.75% capacity bonus the
+    # standard forbids. C_b is 1.0 from 6 in up, and continuous into it.
+    assert nds_bearing_area_factor(bearing_length=_q("5.9 inch")) == pytest.approx(
+        1.0635593220338984, rel=1e-9
+    )
+    assert nds_bearing_area_factor(bearing_length=_q("6 inch")) == pytest.approx(1.0, rel=1e-12)
+    assert nds_bearing_area_factor(bearing_length=_q("10 inch")) == pytest.approx(1.0, rel=1e-12)
     assert nds_bearing_area_factor(bearing_length=_q("3.5 inch")) == pytest.approx(
         (3.5 + 0.375) / 3.5, rel=1e-9
     )
@@ -25900,10 +25922,31 @@ def test_rc_beam_moment_and_steel_inverse_round_trip():
     as_back = rc_tension_steel_for_moment(required_moment=mn, effective_depth=_q("550 mm"), **kw)
     assert as_back.to("mm**2").magnitude == pytest.approx(1500.0, rel=1e-6)
     # A moment beyond the section's capacity is rejected, not silently returned.
-    with pytest.raises(ValueError, match="exceeds the section"):
+    with pytest.raises(ValueError, match="exceeds the section|balance ductilely"):
         rc_tension_steel_for_moment(
             required_moment=_q("5000 kN*m"), effective_depth=_q("550 mm"), **kw
         )
+
+    # The docstring promised a raise at BALANCED conditions, but the only guard was the
+    # quadratic's discriminant, which runs out at the parabola vertex (a = d) about a third
+    # higher. In between the function quietly returned compression-controlled steel: more than
+    # the concrete can balance ductilely, failing by crushing with no warning and at phi = 0.65
+    # rather than 0.90. For b = 300, d = 500, f'c = 28, f_y = 420 the balanced moment is
+    # 669 kN*m and the old guard did not fire until ~892.
+    beam = {
+        "steel_yield": _q("420 MPa"),
+        "concrete_strength": _q("28 MPa"),
+        "beam_width": _q("300 mm"),
+        "effective_depth": _q("500 mm"),
+    }
+    assert rc_tension_steel_for_moment(required_moment=_q("600 kN*m"), **beam).to(
+        "mm**2"
+    ).magnitude == pytest.approx(3633.9, rel=1e-4)
+    for moment_kn_m in (700.0, 800.0, 850.0):
+        with pytest.raises(ValueError, match="balance ductilely"):
+            rc_tension_steel_for_moment(
+                required_moment=Quantity(magnitude=moment_kn_m, unit="kN*m"), **beam
+            )
 
 
 def test_rc_concrete_shear_strength_aci():

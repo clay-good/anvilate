@@ -279,8 +279,10 @@ def rc_tension_steel_for_moment(
     the steel force T = A_s·f_y; the under-reinforced (smaller) root gives the least
     reinforcement that reaches ``required_moment`` M_n. The arguments are as in
     :func:`rc_beam_nominal_moment`. Raises when the moment exceeds what the section can
-    develop even at balanced conditions (a deeper or wider beam is needed). Returns the
-    required steel area in mm².
+    develop even at balanced conditions (a deeper or wider beam is needed) — checked against the
+    balanced neutral axis c_b, not merely against where the quadratic runs out of discriminant,
+    which sits about a third higher and would quietly hand back a brittle compression-controlled
+    section. Returns the required steel area in mm².
     """
     _require(required_moment, "[force] * [length]", "required_moment")
     _require(steel_yield, "[pressure]", "steel_yield")
@@ -303,6 +305,26 @@ def rc_tension_steel_for_moment(
             "widen the beam (or use compression steel)"
         )
     tension_force = (coeff * d - sqrt(discriminant)) / 2.0
+    # The discriminant only runs out at the parabola's vertex (a = d), which is about a third
+    # above the balanced point -- so between the two the quadratic happily returned a
+    # COMPRESSION-CONTROLLED answer: more steel than the concrete can balance ductilely, failing
+    # by concrete crushing with no warning and at phi = 0.65 rather than 0.90. The docstring
+    # promised a raise at balanced conditions, so check there.
+    beta1 = rc_beta1(concrete_strength=concrete_strength)
+    a_depth = tension_force / (_ACI_STRESS_BLOCK_FACTOR * fc * b)
+    neutral_axis = a_depth / beta1
+    balanced_c = (
+        _ACI_CONCRETE_ULTIMATE_STRAIN
+        * d
+        / (_ACI_CONCRETE_ULTIMATE_STRAIN + fy / _ACI_STEEL_MODULUS_MPA)
+    )
+    if neutral_axis > balanced_c:
+        raise ValueError(
+            f"the required moment needs more steel than the section can balance ductilely: the "
+            f"neutral axis lands at c = {neutral_axis:.1f} mm against a balanced c_b = "
+            f"{balanced_c:.1f} mm, so the beam would fail by concrete crushing before the steel "
+            f"yields. Deepen or widen it, or add compression steel."
+        )
     return Quantity(magnitude=tension_force / fy, unit="mm**2")
 
 
