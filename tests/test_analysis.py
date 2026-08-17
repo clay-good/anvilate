@@ -15086,6 +15086,95 @@ def test_cyclic_frequencies_refuse_an_angle_carrying_unit():
     ) == pytest.approx(56.04991216397929, rel=1e-9)
 
 
+def test_dead_branches_that_no_test_had_ever_entered():
+    # A coverage sweep found 92 lines of live arithmetic that no test executes. A branch nobody
+    # enters is unpinned by construction -- any mutation inside it survives, and whole-function
+    # mutation testing cannot see it, because the tested path masks the untested one. These are
+    # the eight worth pinning; each assertion below is the first to enter its branch.
+    import math
+
+    from anvilate.analysis import (
+        aisc_tension_field_shear_strength,
+        bearing_inclination_factors,
+        cyclic_stress_components,
+        hertz_sphere_approach,
+        maximum_cornering_speed,
+        power_screw_efficiency,
+        spur_gear_contact_ratio,
+    )
+
+    # 1. Plate-girder shear: only the SLENDER web was tested, so the stocky (fully-yielding) and
+    # transition (inelastic-buckling) webs -- the two most common real girders -- were unchecked.
+    girder = {
+        "web_depth": _q("600 mm"),
+        "stiffener_spacing": _q("900 mm"),
+        "yield_strength": _q("345 MPa"),
+        "elastic_modulus": _q("200000 MPa"),
+    }
+    assert aisc_tension_field_shear_strength(
+        web_area=_q("12000 mm**2"), web_thickness=_q("20 mm"), **girder
+    ).to("kN").magnitude == pytest.approx(2484.0, rel=1e-9)  # h/tw = 30, C_v2 = 1.0
+    assert aisc_tension_field_shear_strength(
+        web_area=_q("4800 mm**2"), web_thickness=_q("8 mm"), **girder
+    ).to("kN").magnitude == pytest.approx(967.3755465021211, rel=1e-9)  # h/tw = 75, transition
+
+    # 2. Cornering with an explicitly supplied gravity: every test used the default, so the whole
+    # validate-and-use path was dead. Lunar gravity is a value the default path cannot produce.
+    assert maximum_cornering_speed(
+        radius=_q("50 m"), friction_coefficient=0.7, gravity=_q("9.81 m/s**2")
+    ).to("m/s").magnitude == pytest.approx(18.52970588001871, rel=1e-9)
+    assert maximum_cornering_speed(
+        radius=_q("50 m"), friction_coefficient=0.7, gravity=_q("1.62 m/s**2")
+    ).to("m/s").magnitude == pytest.approx(7.52994023880668, rel=1e-9)
+
+    # 3. Hertz sphere-on-SPHERE: only sphere-on-flat was tested, so the two-body effective-radius
+    # term never ran. The absolute value is the pin -- "bigger than the flat case" would pass
+    # even with the second term dropped.
+    pair = {
+        "force": _q("500 N"),
+        "modulus1": _q("200 GPa"),
+        "modulus2": _q("200 GPa"),
+        "poisson1": 0.3,
+        "poisson2": 0.3,
+    }
+    assert hertz_sphere_approach(diameter1=_q("20 mm"), diameter2=_q("30 mm"), **pair).to(
+        "um"
+    ).magnitude == pytest.approx(12.473778365868155, rel=1e-9)
+
+    # 4. Fully compressive fatigue cycle: R = -inf is a branch of its own.
+    fully_compressive = cyclic_stress_components(max_stress=_q("0 MPa"), min_stress=_q("-120 MPa"))
+    assert fully_compressive.alternating_stress.to("MPa").magnitude == pytest.approx(60.0)
+    assert fully_compressive.mean_stress.to("MPa").magnitude == pytest.approx(-60.0)
+    assert fully_compressive.stress_ratio == -math.inf
+
+    # 5. A stub-tooth gear supplies its own addendum; the default full-depth path masked it.
+    assert spur_gear_contact_ratio(
+        module=_q("4 mm"),
+        pinion_teeth=20,
+        gear_teeth=40,
+        pressure_angle=20.0,
+        addendum=_q("3.2 mm"),
+    ) == pytest.approx(1.346529809581855, rel=1e-9)
+
+    # 6. Undrained clay (phi = 0) is the standard total-stress footing case, and its i_gamma
+    # branch was dead. Swapping the arms would be unconservative.
+    inclined = bearing_inclination_factors(
+        vertical_load=_q("500 kN"), horizontal_load=_q("100 kN"), friction_angle=0.0
+    )
+    assert inclined["i_c"] == pytest.approx(0.7644600897831183, rel=1e-9)
+    assert inclined["i_gamma"] == 0.0
+    level = bearing_inclination_factors(
+        vertical_load=_q("500 kN"), horizontal_load=_q("0 kN"), friction_angle=0.0
+    )
+    assert level["i_c"] == pytest.approx(1.0) and level["i_gamma"] == pytest.approx(1.0)
+
+    # 7. The frictionless short-circuit returns exactly 1.0 and nothing entered it.
+    assert (
+        power_screw_efficiency(mean_diameter=_q("22 mm"), lead=_q("5 mm"), friction_coefficient=0.0)
+        == 1.0
+    )
+
+
 def test_stokes_settling_velocity_and_drag_are_consistent():
     import math
 
