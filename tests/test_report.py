@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import socket
 
 import pytest
@@ -674,3 +675,43 @@ def test_cover_plate_derivation_only_for_the_closed_form_cases():
         diameter=None, length=Quantity.parse("600 mm"), width=Quantity.parse("400 mm")
     )
     assert rectangular.derivation is None
+
+
+def test_the_calc_record_is_strict_json_even_with_an_infinite_safety_factor():
+    # to_record exists so another firm's QA script can re-verify the numbers. Python's json
+    # writes Infinity and NaN as bare tokens that are not in the JSON grammar, so a
+    # JavaScript, Go, or schema-validating reader rejects the file. It is reachable through
+    # an ordinary PASSING check: an EN 1993-1-9 weld range below the cutoff does no damage,
+    # so its safety factor is genuinely infinite.
+    from anvilate.analysis import weld_fatigue_scorecard
+
+    entry = weld_fatigue_scorecard(
+        "weld fatigue",
+        applied_cycles=[1.0e6],
+        stress_ranges=[Quantity.parse("10 MPa")],
+        detail_category=Quantity.parse("90 MPa"),
+    )
+    assert entry.status is CheckStatus.PASS
+    assert entry.safety_factor == float("inf")
+
+    base = _report()
+    report = base.model_copy(
+        update={"sections": (base.sections[0].model_copy(update={"entry": entry}),)}
+    )
+    text = json.dumps(report.to_record())
+    assert "Infinity" not in text and "NaN" not in text
+
+    # A strict reader (the JSON grammar has no constants beyond true/false/null) round-trips.
+    def _reject(token):
+        raise AssertionError(f"strict JSON reader rejects the bare token {token}")
+
+    reloaded = json.loads(text, parse_constant=_reject)
+    assert reloaded["report"]["sections"][0]["entry"]["safety_factor"] is None
+    # The verdict and the detail line still say what happened — nothing a QA script needs
+    # is lost by recording the non-finite value as null.
+    assert reloaded["report"]["sections"][0]["entry"]["status"] == "pass"
+    assert "inf" in reloaded["report"]["sections"][0]["entry"]["detail"]
+
+    # A finite record is untouched: full computed precision, not display precision.
+    plain = json.loads(json.dumps(_report().to_record()), parse_constant=_reject)
+    assert plain["report"]["sections"][0]["entry"]["safety_factor"] == pytest.approx(1.85, abs=0.01)

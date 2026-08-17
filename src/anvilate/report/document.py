@@ -22,6 +22,7 @@ diff between two reports is an engineering change, never rendering noise.
 from __future__ import annotations
 
 from html import escape
+from math import isfinite
 
 from pydantic import BaseModel, ConfigDict
 
@@ -58,6 +59,22 @@ _STATUS_LABEL = {
 }
 
 _FALLBACK_LABEL = "derivation not rendered"
+
+
+def _json_safe(value: object) -> object:
+    """Replace non-finite floats with ``None`` so the record is strict-JSON valid.
+
+    Python's ``json`` writes ``Infinity`` and ``NaN`` as bare tokens that are not in the
+    JSON grammar; JavaScript, Go, and most schema validators reject them. The calc record
+    exists for another firm's QA script to read, so it must survive that trip.
+    """
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, float) and not isfinite(value):
+        return None
+    return value
 
 
 class ReportSection(BaseModel):
@@ -237,10 +254,17 @@ class CalculationReport(BaseModel):
         Values are carried in full canonical precision (as the quantities were
         computed), not at display precision, so an external verifier recomputing a
         check matches the recorded result exactly.
+
+        The record is valid JSON in the strict sense — no bare ``Infinity`` or ``NaN``
+        tokens, which Python emits happily and most other languages' parsers reject.
+        A non-finite float is recorded as ``null``; the check's ``detail`` line still
+        says what it was, so nothing is lost that a QA script needed. It is reachable
+        through an ordinary passing check: an EN 1993-1-9 weld range below the cutoff
+        does no damage, so its safety factor is genuinely infinite.
         """
         return {
             "schema_version": CALC_RECORD_SCHEMA_VERSION,
-            "report": self.model_dump(mode="json"),
+            "report": _json_safe(self.model_dump(mode="json")),
         }
 
     # -- internals ---------------------------------------------------------
