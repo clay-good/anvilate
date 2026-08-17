@@ -20568,6 +20568,65 @@ def test_cooling_tower_blowdown_and_makeup_water_balance():
         cooling_tower_blowdown_rate(evaporation_rate=e, cycles_of_concentration=1.0)
 
 
+def test_cooling_tower_evaporation_rate_starts_the_water_balance():
+    from anvilate.analysis import (
+        cooling_tower_blowdown_rate,
+        cooling_tower_evaporation_rate,
+        cooling_tower_makeup_rate,
+        cooling_tower_range,
+    )
+
+    circulating = _q("500 m**3/hour")
+    c_p = _q("4.184 kJ/kg/K")
+    h_fg = _q("2430 kJ/kg")
+    # The range comes from the module's own function, so the two are wired the way a caller
+    # would wire them: 35 degC in, 29.5 degC out -> a 5.5 K range.
+    cooling_range = cooling_tower_range(
+        hot_water_temperature=_q("308.15 K"), cold_water_temperature=_q("302.65 K")
+    )
+    assert cooling_range.to("K").magnitude == pytest.approx(5.5, rel=1e-9)
+
+    evaporation = cooling_tower_evaporation_rate(
+        circulating_flow=circulating,
+        cooling_range=cooling_range,
+        specific_heat=c_p,
+        latent_heat=h_fg,
+    )
+    e_m3h = evaporation.to("m**3/hour").magnitude
+    assert e_m3h == pytest.approx(4.734979423868313, rel=1e-12)
+    # The vendor rule of thumb is ~1% of circulating flow per 10 degF (5.56 K) of range. At a
+    # 5.5 K range this says 0.947%, which lands on the rule within 3% -- the independent check
+    # that the density really does cancel and no factor is missing.
+    assert e_m3h / 500.0 * 100.0 == pytest.approx(0.9469958847736626, rel=1e-12)
+
+    # Linear in flow and in range, inverse in latent heat -- the three ways the balance moves.
+    doubled = cooling_tower_evaporation_rate(
+        circulating_flow=_q("1000 m**3/hour"),
+        cooling_range=cooling_range,
+        specific_heat=c_p,
+        latent_heat=h_fg,
+    )
+    assert doubled.to("m**3/hour").magnitude == pytest.approx(2.0 * e_m3h, rel=1e-12)
+
+    # It closes the chain the module could not previously start: E -> B -> M.
+    blowdown = cooling_tower_blowdown_rate(
+        evaporation_rate=evaporation, cycles_of_concentration=4.0
+    )
+    makeup = cooling_tower_makeup_rate(evaporation_rate=evaporation, blowdown_rate=blowdown)
+    assert blowdown.to("m**3/hour").magnitude == pytest.approx(1.578326474622771, rel=1e-12)
+    assert makeup.to("m**3/hour").magnitude == pytest.approx(6.313305898491084, rel=1e-12)
+
+    # A range is a DIFFERENCE. "5.5 degC" would convert to 278.65 K and overstate the loss
+    # 50-fold, so an absolute-scale unit is refused rather than silently converted.
+    with pytest.raises(ValueError, match="temperature DIFFERENCE"):
+        cooling_tower_evaporation_rate(
+            circulating_flow=circulating,
+            cooling_range=Quantity(magnitude=5.5, unit="degC"),
+            specific_heat=c_p,
+            latent_heat=h_fg,
+        )
+
+
 def test_psychrometric_moist_air_properties():
     import math
 

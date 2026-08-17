@@ -26,6 +26,7 @@ __all__ = [
     "cooling_tower_approach",
     "cooling_tower_blowdown_rate",
     "cooling_tower_effectiveness",
+    "cooling_tower_evaporation_rate",
     "cooling_tower_makeup_rate",
     "cooling_tower_range",
 ]
@@ -124,6 +125,56 @@ def cooling_tower_blowdown_rate(
     if cycles_of_concentration <= 1.0:
         raise ValueError("cycles_of_concentration must be greater than 1")
     return Quantity(magnitude=e / (cycles_of_concentration - 1.0), unit="m**3/s")
+
+
+def cooling_tower_evaporation_rate(
+    *,
+    circulating_flow: Quantity,
+    cooling_range: Quantity,
+    specific_heat: Quantity,
+    latent_heat: Quantity,
+) -> Quantity:
+    """The evaporation loss that does the cooling, E = V·c·R/h_fg.
+
+    The first term of the whole water balance, and the one the module could not previously
+    produce: both :func:`cooling_tower_blowdown_rate` and :func:`cooling_tower_makeup_rate`
+    *consume* an evaporation rate, so without this the chain had to start with a guess.
+
+    A tower cools by boiling off a little of what it circulates. Setting the heat removed equal to
+    the latent heat carried away, ṁ_water·c·R = ṁ_evap·h_fg, and dividing through by the water
+    density — which cancels, since both flows are the same liquid — gives E = V·c·R/h_fg from the
+    ``circulating_flow`` V, the ``cooling_range`` R (see :func:`cooling_tower_range`), the water
+    ``specific_heat`` c, and the ``latent_heat`` of vaporisation h_fg at the operating temperature.
+
+    500 m³/h over a 5.5 K range loses 4.735 m³/h, or 0.95% of the circulating flow — the origin of
+    the "about 1% per 10 °F of range" rule of thumb every tower vendor quotes. Using the rule
+    directly bakes in a fixed c and h_fg, which is why this takes both as inputs rather than
+    assuming ambient water. Returns the evaporation rate in m³/s.
+    """
+    _check(circulating_flow, "[volume]/[time]", "circulating_flow")
+    _check(cooling_range, "[temperature]", "cooling_range")
+    _check(specific_heat, "[energy]/[mass]/[temperature]", "specific_heat")
+    _check(latent_heat, "[energy]/[mass]", "latent_heat")
+    v = circulating_flow.to("m**3/s").magnitude
+    # A range is a temperature DIFFERENCE. Converting "5.5 degC" to kelvin would add 273.15 and
+    # turn a 5.5 K range into a 278.65 K one, so an absolute-scale unit is refused outright --
+    # the module's own cooling_tower_range returns kelvin, which is what belongs here.
+    if cooling_range.unit in ("degC", "degF", "celsius", "fahrenheit", "degree_Celsius"):
+        raise ValueError(
+            f"cooling_range is a temperature DIFFERENCE, not a point on a scale; got "
+            f"{cooling_range}, which would convert to {cooling_range.to('K')}. Use 'K' (what "
+            f"cooling_tower_range returns) or 'delta_degC'."
+        )
+    r = cooling_range.to("K").magnitude
+    c = specific_heat.to("J/kg/K").magnitude
+    h_fg = latent_heat.to("J/kg").magnitude
+    if v < 0:
+        raise ValueError(f"circulating_flow must be non-negative; got {circulating_flow}")
+    if r < 0:
+        raise ValueError(f"cooling_range must be non-negative; got {cooling_range}")
+    if c <= 0 or h_fg <= 0:
+        raise ValueError("specific_heat and latent_heat must be positive")
+    return Quantity(magnitude=v * c * r / h_fg, unit="m**3/s")
 
 
 def cooling_tower_makeup_rate(

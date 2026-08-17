@@ -1524,6 +1524,7 @@ from .cooling_tower import (
     cooling_tower_approach,
     cooling_tower_blowdown_rate,
     cooling_tower_effectiveness,
+    cooling_tower_evaporation_rate,
     cooling_tower_makeup_rate,
     cooling_tower_range,
 )
@@ -3516,6 +3517,7 @@ __all__ = [
     "cooling_tower_range",
     "cooling_tower_approach",
     "cooling_tower_blowdown_rate",
+    "cooling_tower_evaporation_rate",
     "cooling_tower_makeup_rate",
     "cooling_tower_effectiveness",
     "coriolis_acceleration",
