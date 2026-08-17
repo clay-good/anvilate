@@ -637,6 +637,47 @@ def test_every_recorded_inverse_pairing_resolves_and_is_round_tripped():
         + "\n  ".join(untested)
     )
 
+    # ...and the DECLARATION itself has to correspond to tests that exist and exercise
+    # the recorded PAIR. Two holes were walked through before this existed: a brand-new
+    # public inverse with no round-trip test at all passed every gate on one line in
+    # design-inverses.txt plus one string in ROUND_TRIPPED; and rewriting a pairing to an
+    # unrelated forward (`required_section_modulus -> fin_array_count_for_resistance`)
+    # stayed green, because the round-trip tests hardcode their own pairs and never read
+    # the file the gate is checking. So this reads the suite's actual test bodies and
+    # requires some single test to name BOTH halves of each recorded pair.
+    import ast
+
+    tree = ast.parse((_REPO / "tests" / "test_design_inverses.py").read_text(encoding="utf-8"))
+    per_test: list[set[str]] = []
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("test_"):
+            names = {
+                child.id if isinstance(child, ast.Name) else child.attr
+                for child in ast.walk(node)
+                if isinstance(child, (ast.Name, ast.Attribute))
+            }
+            per_test.append(names)
+
+    unexercised: list[str] = []
+    for inverse, forward in sorted(paired.items()):
+        if inverse not in test_design_inverses.ROUND_TRIPPED:
+            continue
+        inverse_symbol = inverse.split(".", 1)[1]
+        forward_symbol = forward.split(".", 1)[1]
+        if not any(inverse_symbol in names and forward_symbol in names for names in per_test):
+            unexercised.append(f"{inverse} -> {forward}")
+    assert not unexercised, (
+        "these pairings are declared in ROUND_TRIPPED but no single test in "
+        "tests/test_design_inverses.py calls both halves, so the pairing recorded in "
+        "docs/api/design-inverses.txt is a claim nobody checks:\n  " + "\n  ".join(unexercised)
+    )
+    # And the reader itself has to keep reading: if the AST walk stopped finding tests,
+    # every pairing above would pass vacuously.
+    assert len(per_test) >= 12, (
+        f"only {len(per_test)} round-trip tests were discovered — the reader has stopped "
+        f"reading, and the pairing check above is passing on an empty set"
+    )
+
 
 _VALUE_UNIT = re.compile(
     r"(-?\d+\.?\d*(?:[eE][-+]?\d+)?)\s+([A-Za-z\u00b5\u03a9%][A-Za-z0-9_]*(?:\*\*\d+)?)"

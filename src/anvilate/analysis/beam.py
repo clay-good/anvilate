@@ -2133,6 +2133,14 @@ def simply_supported_partial_uniform_load(
     e = elastic_modulus.pint
 
     reaction = w * loaded * (2 * length_p - loaded) / (2 * length_p)
+    if distributed_load.magnitude == 0:
+        raise ValueError(
+            "distributed_load is zero: the peak moment of a partial uniform load is "
+            "located by R/w, which has no location on an unloaded span. An unloaded bay "
+            "in a pattern-loading sweep is a span with nothing to evaluate, not a span "
+            "at zero stress — every other load case in this module returns zeros for it, "
+            "and this one divided by zero instead."
+        )
     moment = reaction**2 / (2 * w)
     stress = moment * c / inertia
 

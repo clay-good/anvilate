@@ -40346,3 +40346,43 @@ def test_the_circular_shaft_torsion_functions_guard_like_the_rest_of_their_modul
         )
     # The ordinary case is untouched.
     assert shaft_torsional_stress(torque=_q("500 N*m"), diameter=_q("40 mm")).magnitude > 0
+
+
+def test_a_thin_wall_shell_refuses_a_vacuum_because_buckling_is_the_limit_state():
+    """A negative membrane stress is not the answer to "what does external pressure do".
+
+    A shell under external pressure fails by buckling, and p·r/t says nothing about it.
+    Every other function in pressure_vessel.py already refused a non-positive pressure;
+    this one returned a quietly negative hoop stress that reads like a valid result.
+    """
+    from anvilate.analysis import thin_wall_cylinder
+
+    with pytest.raises(ValueError, match="fails by buckling"):
+        thin_wall_cylinder(pressure=_q("-90 kPa"), radius=_q("300 mm"), wall_thickness=_q("6 mm"))
+    with pytest.raises(ValueError, match="fails by buckling"):
+        thin_wall_cylinder(pressure=_q("0 kPa"), radius=_q("300 mm"), wall_thickness=_q("6 mm"))
+    ok = thin_wall_cylinder(pressure=_q("1.5 MPa"), radius=_q("300 mm"), wall_thickness=_q("6 mm"))
+    assert ok.hoop_stress.to("MPa").magnitude == pytest.approx(75.0, rel=1e-9)
+    assert ok.longitudinal_stress.to("MPa").magnitude == pytest.approx(37.5, rel=1e-9)
+
+
+def test_an_unloaded_bay_is_nothing_to_evaluate_not_a_division_by_zero():
+    """The three partial-uniform cases were the only load cases that crashed at w = 0.
+
+    Their peak moment is located by R/w, which has no location on an unloaded span.
+    An unloaded bay is exactly what a pattern-loading sweep produces, and every sibling
+    load case in the module returns zeros for it rather than dividing by zero.
+    """
+    from anvilate.analysis import simply_supported_partial_uniform_load
+
+    kwargs = {
+        "length": _q("6 m"),
+        "loaded_length": _q("3 m"),
+        "second_moment": _q("4166666 mm**4"),
+        "extreme_fibre": _q("50 mm"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    with pytest.raises(ValueError, match="nothing to evaluate"):
+        simply_supported_partial_uniform_load(distributed_load=_q("0 N/mm"), **kwargs)
+    loaded = simply_supported_partial_uniform_load(distributed_load=_q("2 N/mm"), **kwargs)
+    assert loaded.max_bending_stress.to("MPa").magnitude > 0

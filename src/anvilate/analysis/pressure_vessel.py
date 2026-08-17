@@ -122,6 +122,13 @@ def thin_wall_cylinder(
     _require(wall_thickness, "[length]", "wall_thickness")
     if wall_thickness.to("mm").magnitude <= 0:
         raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
+    if pressure.magnitude <= 0:
+        raise ValueError(
+            f"pressure must be positive; got {pressure}. A negative (external) pressure "
+            f"returns a NEGATIVE membrane stress here, which is not the limit state: a "
+            f"shell under external pressure fails by buckling, and the membrane formula "
+            f"says nothing about it. Every other function in this module refuses it."
+        )
 
     p = pressure.pint
     r = radius.pint
