@@ -234,6 +234,24 @@ def test_seismic_combination_basis_resolves_with_its_parameters():
     governing, _ = combos.governing(spec.combination_loads(), minimize=True)
     assert governing.name.startswith("LRFD 7")  # the reduced-dead reversal case
 
+    # The ASD-seismic dispatch was dead: asce7_asd_seismic is tested directly in test_loads, but
+    # the SPEC wiring to it never ran, so returning the LRFD set instead left the suite green --
+    # a spec asking for allowable-stress combinations would have silently received strength ones.
+    asd = base.model_copy(
+        update={
+            "combination_basis": "asce7_asd_seismic",
+            "seismic_design_acceleration": 0.9,
+            "seismic_redundancy_factor": 1.3,
+        }
+    ).combination_set()
+    assert asd is not None
+    assert asd.basis == "ASCE 7-22 ASD (seismic)"
+    # Ten ASD combinations, not the four LRFD ones -- the count alone separates the two sets.
+    names = [c.name for c in asd.combinations]
+    assert len(names) == 10
+    assert all(name.startswith("ASD") for name in names)
+    assert "ASD 8 (+E)" in names and "ASD 8 (-E)" in names
+
 
 def test_load_case_nature_is_optional_and_classifies_by_asce_symbol():
     from anvilate.loads import LoadNature

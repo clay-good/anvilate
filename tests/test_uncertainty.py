@@ -44,6 +44,33 @@ def test_symmetric_reads_half_width_as_three_sigma_by_default():
     assert flat.std == pytest.approx(6.0 / sqrt(3.0))
 
 
+def test_symmetric_actually_draws_from_the_distribution_it_names():
+    # Only Symmetric's .std was ever exercised. Neither sampling branch ran, so a Monte Carlo
+    # over a Symmetric input was entirely unpinned -- inflating the drawn variance 3x left the
+    # whole suite green. Seeded draws pin the branch AND the spread it uses.
+    import random
+
+    normal = Symmetric(nominal=100.0, half_width=9.0, distribution="normal", sigma_level=3.0)
+    assert normal.std == pytest.approx(3.0)
+    assert normal.sample(random.Random(0)) == pytest.approx(102.825146214042, rel=1e-12)
+
+    uniform = Symmetric(nominal=100.0, half_width=9.0, distribution="uniform")
+    assert uniform.std == pytest.approx(5.196152422706632, rel=1e-12)
+    assert uniform.sample(random.Random(0)) == pytest.approx(106.19959332745087, rel=1e-12)
+    # The two branches must not coincide -- that is what distinguishes them.
+    assert normal.sample(random.Random(0)) != uniform.sample(random.Random(0))
+
+    # A uniform draw is hard-bounded by the half width; a normal one is not.
+    draws = [uniform.sample(random.Random(seed)) for seed in range(200)]
+    assert all(91.0 <= value <= 109.0 for value in draws)
+
+    # Zero spread collapses to the nominal on both branches, exactly.
+    for distribution in ("normal", "uniform"):
+        assert Symmetric(
+            nominal=100.0, half_width=0.0, distribution=distribution
+        ).sample(random.Random(0)) == 100.0
+
+
 def test_zero_spread_inputs_sample_their_center():
     import random
 
