@@ -209,3 +209,175 @@ def test_the_slope_drainage_hint_never_points_at_a_wetter_slope():
                 offered += 1
                 assert 0.0 <= drainage.corrective_value < u, (u, beta)
     assert offered, "the sweep never reached the drainage branch, so it pinned nothing"
+
+
+# --- the rest of the zero-demand family -----------------------------------
+#
+# A mutation pass ran four of these `else None` sites and all four survived; the rest
+# were recorded as suspect rather than assumed clean. These are the rest. Each drives its
+# screen to a demand of zero and asserts NOT_EVALUATED — never "exactly at the limit".
+
+
+def test_lighting_install_with_no_requirement_is_not_evaluated():
+    from anvilate.packs.lighting import LightingInstallation, screen_lighting
+
+    # A zero luminaire count is rejected upstream; the branch is reached through a task
+    # with no stated illuminance requirement.
+    install = LightingInstallation(
+        luminaire_count=12,
+        lumens_per_luminaire=_q("4000 lumen"),
+        input_watts_per_luminaire=_q("30 W"),
+        coefficient_of_utilization=0.7,
+        light_loss_factor=0.8,
+        floor_area=_q("100 m**2"),
+        required_illuminance=_q("0 lux"),
+        allowable_power_density=_q("8 W/m**2"),
+    )
+    entry = next(e for e in screen_lighting(install).entries if "illuminance" in e.name.lower())
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.safety_factor is None
+
+
+# Five of the fourteen sites are NOT reachable, and saying so is the point of writing it
+# down. `electrical.py`'s drop and ampacity guards, `hydraulics.py`'s motor and pipe-head
+# guards, and `lighting.py`'s power-density guard all sit downstream of validators that
+# already reject the only inputs that could reach them — `conductor_resistance` refuses a
+# zero length, `pump_hydraulic_power` and `reynolds_number` a zero flow, and a luminaire
+# count must be positive. Mutating those `else None` branches is EQUIVALENT, not a silent
+# green: they are defensive, not load-bearing. That is a different thing from unpinned,
+# and the distinction is worth recording so a later audit does not re-file them as
+# findings and a later refactor does not delete them as dead.
+
+
+def test_ventilation_zone_needing_no_air_changes_is_not_evaluated():
+    from anvilate.packs.ventilation import VentilationZone, screen_ventilation
+
+    zone = VentilationZone(
+        people_outdoor_rate=_q("2.5 L/s"),
+        occupancy=4.0,
+        area_outdoor_rate=_q("0.3 L/(s*m**2)"),
+        floor_area=_q("40 m**2"),
+        zone_air_distribution_effectiveness=1.0,
+        provided_outdoor_airflow=_q("100 L/s"),
+        room_volume=_q("200 m**3"),
+        required_air_changes=0.0,
+    )
+    entry = next(e for e in screen_ventilation(zone).entries if "air change" in e.name.lower())
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.safety_factor is None
+
+
+def test_an_unloaded_footing_and_an_unloaded_pile_are_not_evaluated():
+    from anvilate.packs.geotechnical import (
+        DrivenPile,
+        ShallowFooting,
+        screen_driven_pile,
+        screen_shallow_footing,
+    )
+
+    (footing,) = screen_shallow_footing(
+        ShallowFooting(
+            width=_q("2.5 m"),
+            length=_q("2.5 m"),
+            embedment_depth=_q("1.5 m"),
+            applied_load=_q("0 kN"),
+            friction_angle=30.0,
+            cohesion=_q("25 kPa"),
+            unit_weight=_q("18 kN/m**3"),
+        )
+    ).entries
+    assert footing.status is CheckStatus.NOT_EVALUATED
+    assert footing.safety_factor is None
+    # And no repair hint rides along on a check that was never made.
+    assert footing.repair_hint is None
+
+    (pile,) = screen_driven_pile(
+        DrivenPile(
+            diameter=_q("0.4 m"),
+            length=_q("15 m"),
+            undrained_shear_strength=_q("75 kPa"),
+            adhesion_factor=0.7,
+            applied_load=_q("0 kN"),
+        )
+    ).entries
+    assert pile.status is CheckStatus.NOT_EVALUATED
+    assert pile.repair_hint is None
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param("bolted", id="bolted connection tearout"),
+        pytest.param("gusset", id="gusset plate"),
+        pytest.param("bearing", id="concrete bearing"),
+        pytest.param("shear_plate", id="shear plate yield and rupture"),
+    ],
+)
+def test_unloaded_structural_connections_are_not_evaluated(build):
+    """Four more screens whose `else None` was executed by the suite and asserted by none."""
+    from anvilate.packs.structural import (
+        BoltedConnection,
+        ConcreteBearing,
+        GussetPlate,
+        ShearPlate,
+        screen_bolted_connection,
+        screen_concrete_bearing,
+        screen_gusset_plate,
+        screen_shear_plate,
+    )
+
+    if build == "bolted":
+        card = screen_bolted_connection(
+            BoltedConnection(
+                name="c",
+                bolt_diameter=_q("20 mm"),
+                plate_thickness=_q("10 mm"),
+                load=_q("0 kN"),
+                bolt_material="AISI-4140",
+                plate_material="ASTM-A36",
+                edge_distance=_q("40 mm"),
+            ),
+            required_safety_factor=1.5,
+        )
+    elif build == "gusset":
+        card = screen_gusset_plate(
+            GussetPlate(
+                name="g",
+                net_shear_area=_q("3000 mm**2"),
+                net_tension_area=_q("2000 mm**2"),
+                load=_q("0 kN"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=1.5,
+        )
+    elif build == "bearing":
+        card = screen_concrete_bearing(
+            ConcreteBearing(
+                name="b",
+                bearing_area=_q("40000 mm**2"),
+                support_area=_q("160000 mm**2"),
+                concrete_strength=_q("28 MPa"),
+                load=_q("0 kN"),
+            ),
+            required_safety_factor=1.5,
+        )
+    else:
+        card = screen_shear_plate(
+            ShearPlate(
+                name="s",
+                gross_shear_area=_q("3000 mm**2"),
+                net_shear_area=_q("2400 mm**2"),
+                load=_q("0 kN"),
+                material="ASTM-A36",
+            ),
+            required_safety_factor=1.5,
+        )
+
+    assert card.entries, "the screen produced no entries"
+    # EVERY entry must be NOT_EVALUATED. "No entry may PASS" is too weak to pin this: with
+    # the guard mutated to 1.0 and a 1.5 required factor the entry reads FAIL, which is
+    # still a verdict on a check that never ran.
+    assert all(e.status is CheckStatus.NOT_EVALUATED for e in card.entries), [
+        (e.name, e.status) for e in card.entries
+    ]
+    assert all(e.safety_factor is None for e in card.entries)

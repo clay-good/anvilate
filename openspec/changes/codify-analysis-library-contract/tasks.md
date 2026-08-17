@@ -58,6 +58,14 @@
   have tests in `tests/test_no_silent_green.py`. **Not yet run individually:**
   `electrical.py:88,95`, `geotechnical.py:144,392`, `lighting.py:75,87`,
   `hydraulics.py:83,153`, `ventilation.py:81`, and `structural.py:993,1531,1885,1983,1984`.
-  Given a four-for-four hit rate on the sites that were run, treat the whole family as
-  suspect until each has a zero-demand test. This is the library's signature invariant and
-  line coverage cannot see it — only mutation can.
+  **Swept and closed.** All fourteen sites were run individually. Nine are reachable and
+  every one is now pinned in `tests/test_no_silent_green.py`, each verified by re-applying
+  its mutation and watching the new test fail. **Five are unreachable by construction** —
+  `electrical.py:88,95`, `hydraulics.py:83,153`, `lighting.py:87` sit downstream of
+  validators that already reject the only inputs that could reach them
+  (`conductor_resistance` refuses a zero length, `pump_hydraulic_power` and
+  `reynolds_number` a zero flow, a luminaire count must be positive). Mutating those is
+  *equivalent*, not a silent green: they are defensive, not load-bearing. Recorded so a
+  later audit does not re-file them as findings and a later refactor does not delete them
+  as dead. This is the library's signature invariant and line coverage cannot see it —
+  only mutation can.
