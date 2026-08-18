@@ -5726,6 +5726,41 @@ def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition
         assert "qualified assessor" in entry.detail
 
 
+def test_lightest_bracket_example_shows_all_three_ways_a_sweep_lies():
+    namespace = runpy.run_path(str(_EXAMPLES / "lightest_passing_bracket.py"))
+    SamplingStrategy_ = namespace["SamplingStrategy"]
+
+    full = namespace["sweep"]()
+    assert len(full.points) == 81
+    assert len(full.feasible) == 26
+    assert len(full.front) == 5
+    assert full.provisional is False
+
+    # Lie 1: the lightest thing in the box fails, and is 3.75x lighter than the lightest
+    # thing that works. An optimiser that ranks by mass alone returns it.
+    lightest_evaluated = min(full.points, key=lambda p: p.objectives["mass"])
+    assert lightest_evaluated.feasible is False
+    assert lightest_evaluated.objectives["mass"] == pytest.approx(0.2512, rel=1e-3)
+    lightest_passing = full.best("mass")
+    assert lightest_passing.objectives["mass"] == pytest.approx(0.942, rel=1e-3)
+
+    # Lie 2: two thirds of the box is unbuildable, and those points are kept and labelled.
+    assert len(full.points) - len(full.feasible) == 55
+    assert all(p.governing_check for p in full.points)
+
+    # Lie 3: a truncated grid is the first rows, not a sample — 20 points, none feasible,
+    # and best() says None rather than naming one of them.
+    truncated = namespace["sweep"](budget=20)
+    assert truncated.provisional is True
+    assert truncated.coverage == pytest.approx(20 / 81)
+    assert truncated.feasible == ()
+    assert truncated.best("mass") is None
+    # The same budget spent on Halton finds the feasible region the grid never reached.
+    halton = namespace["sweep"](budget=20, strategy=SamplingStrategy_.HALTON)
+    assert len(halton.feasible) == 7
+    assert halton.best("mass").objectives["mass"] == pytest.approx(1.097, rel=1e-3)
+
+
 def test_spreader_beam_example_fails_only_once_the_device_weight_is_in_the_load():
     namespace = runpy.run_path(str(_EXAMPLES / "spreader_beam_device_screen.py"))
     Quantity_ = namespace["Quantity"]
