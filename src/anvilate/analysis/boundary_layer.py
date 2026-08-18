@@ -44,6 +44,47 @@ def _reynolds(velocity: Quantity, length: Quantity, kinematic_viscosity: Quantit
     return u * x / nu
 
 
+# The laminar-to-turbulent transition on a flat plate sits near Re = 5e5, and the 1/7-power
+# turbulent correlations are fitted only out to about 1e7. Both limits are stated in every
+# docstring below and both are computable from the arguments already passed, so they are
+# enforced rather than advised. Past the transition the laminar forms are wrong by close to
+# an order of magnitude in the unconservative direction: at Re_x = 1e7 the laminar thickness
+# reads 4.74 mm against the turbulent 44.2 mm (9.3x), and the laminar plate drag coefficient
+# 4.20e-4 against 2.95e-3 (7.0x low). The library already enforces this same transition in
+# `thermal.flat_plate_forced_convection_coefficient` and the same idea in
+# `pipe_flow.laminar_hydrodynamic_entry_length`; this module was the outlier.
+_TRANSITION_REYNOLDS = 5.0e5
+_TURBULENT_FIT_LIMIT = 1.0e7
+
+
+def _require_laminar(reynolds: float, symbol: str) -> float:
+    if reynolds > _TRANSITION_REYNOLDS:
+        raise ValueError(
+            f"the Blasius laminar forms hold below the transition at "
+            f"{_TRANSITION_REYNOLDS:.0e}, and {symbol} = {reynolds:.4g} is past it: the "
+            f"layer has tripped to turbulence and the laminar result understates the "
+            f"thickness and the drag by up to an order of magnitude. Use the "
+            f"turbulent_* form."
+        )
+    return reynolds
+
+
+def _require_turbulent(reynolds: float, symbol: str) -> float:
+    if reynolds < _TRANSITION_REYNOLDS:
+        raise ValueError(
+            f"the 1/7-power turbulent forms hold above the transition at "
+            f"{_TRANSITION_REYNOLDS:.0e}, and {symbol} = {reynolds:.4g} is below it: the "
+            f"layer is still laminar. Use the laminar_* form."
+        )
+    if reynolds > _TURBULENT_FIT_LIMIT:
+        raise ValueError(
+            f"the 1/7-power turbulent correlations are fitted to about "
+            f"{_TURBULENT_FIT_LIMIT:.0e}, and {symbol} = {reynolds:.4g} is past the end of "
+            f"the fit; use a log-law or Schlichting correlation instead of extrapolating."
+        )
+    return reynolds
+
+
 __all__ = [
     "turbulent_displacement_thickness",
     "turbulent_momentum_thickness",
@@ -73,7 +114,7 @@ def laminar_boundary_layer_thickness(
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
     _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
-    re_x = _reynolds(freestream_velocity, distance, kinematic_viscosity)
+    re_x = _require_laminar(_reynolds(freestream_velocity, distance, kinematic_viscosity), "Re_x")
     x = distance.to("m").magnitude
     return Quantity(magnitude=5.0 * x / sqrt(re_x), unit="m")
 
@@ -97,7 +138,7 @@ def laminar_displacement_thickness(
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
     _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
-    re_x = _reynolds(freestream_velocity, distance, kinematic_viscosity)
+    re_x = _require_laminar(_reynolds(freestream_velocity, distance, kinematic_viscosity), "Re_x")
     x = distance.to("m").magnitude
     return Quantity(magnitude=1.721 * x / sqrt(re_x), unit="m")
 
@@ -122,7 +163,7 @@ def laminar_momentum_thickness(
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
     _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
-    re_x = _reynolds(freestream_velocity, distance, kinematic_viscosity)
+    re_x = _require_laminar(_reynolds(freestream_velocity, distance, kinematic_viscosity), "Re_x")
     x = distance.to("m").magnitude
     return Quantity(magnitude=0.664 * x / sqrt(re_x), unit="m")
 
@@ -167,7 +208,7 @@ def laminar_skin_friction_coefficient(
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
     _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
-    re_x = _reynolds(freestream_velocity, distance, kinematic_viscosity)
+    re_x = _require_laminar(_reynolds(freestream_velocity, distance, kinematic_viscosity), "Re_x")
     return 0.664 / sqrt(re_x)
 
 
@@ -184,7 +225,9 @@ def laminar_plate_drag_coefficient(
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(plate_length, "[length]", "plate_length")
     _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
-    re_l = _reynolds(freestream_velocity, plate_length, kinematic_viscosity)
+    re_l = _require_laminar(
+        _reynolds(freestream_velocity, plate_length, kinematic_viscosity), "Re_L"
+    )
     return 1.328 / sqrt(re_l)
 
 
@@ -205,7 +248,7 @@ def turbulent_boundary_layer_thickness(
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
     _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
-    re_x = _reynolds(freestream_velocity, distance, kinematic_viscosity)
+    re_x = _require_turbulent(_reynolds(freestream_velocity, distance, kinematic_viscosity), "Re_x")
     x = distance.to("m").magnitude
     return Quantity(magnitude=0.37 * x / re_x**0.2, unit="m")
 
@@ -226,7 +269,7 @@ def turbulent_skin_friction_coefficient(
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(distance, "[length]", "distance")
     _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
-    re_x = _reynolds(freestream_velocity, distance, kinematic_viscosity)
+    re_x = _require_turbulent(_reynolds(freestream_velocity, distance, kinematic_viscosity), "Re_x")
     return 0.0592 / re_x**0.2
 
 
@@ -247,7 +290,9 @@ def turbulent_plate_drag_coefficient(
     _check(freestream_velocity, "[velocity]", "freestream_velocity")
     _check(plate_length, "[length]", "plate_length")
     _check(kinematic_viscosity, "[area]/[time]", "kinematic_viscosity")
-    re_l = _reynolds(freestream_velocity, plate_length, kinematic_viscosity)
+    re_l = _require_turbulent(
+        _reynolds(freestream_velocity, plate_length, kinematic_viscosity), "Re_L"
+    )
     return 0.074 / re_l**0.2
 
 

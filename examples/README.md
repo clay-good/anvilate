@@ -113,7 +113,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `flat_bar_torsion_penalty.py` | A 200 N·m torque member with 1000 mm² of steel to spend: a compact 31.6 mm square twists 1.0° (SF 1.97) but an equal-area 100 × 10 mm flat bar twists 4.6° (0.44, fails a 2° limit) — the rectangle's St. Venant constant collapses as it thins, so torsional stiffness is about how the area is arranged, not how much there is. |
 | `floor_beam_serviceability.py` | An office floor beam strong in bending (97 MPa, SF 1.7) that still fails L/360: it deflects ~18 mm past the 16.7 mm limit — floors are governed by stiffness, so the fix is a deeper section, not a stronger one. |
 | `fixture_clamp_washers.py` | A machining clamp losing 0.4 mm of grip per shift against a 10 % force-constancy spec: a shallow disc washer dumps 52 % of the clamp force (SF 0.19) while a disc coned to the Almen-Laszlo h/t = √2 plateau loses 2.3 % (4.34) — Bellevilles hold force while position drifts. |
-| `guide_spring_buckling.py` | A return spring restretched to a 280 mm free length for more stroke: the wire stress is fine (338 MPa, SF 2.0) but the coil is now a slender column that buckles past ~45 mm, so the 60 mm stroke folds it sideways — a longer stroke wants a guided or squatter spring. |
+| `guide_spring_buckling.py` | A return spring restretched to a 280 mm free length for more stroke: the wire stress is fine (350 MPa, SF 2.0) but the coil is now a slender column that buckles past ~45 mm, so the 60 mm stroke folds it sideways — a longer stroke wants a guided or squatter spring. |
 
 ## Power transmission, mechanisms & machine dynamics
 

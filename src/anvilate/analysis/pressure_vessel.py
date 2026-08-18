@@ -801,15 +801,26 @@ def asme_b313_allowable_displacement_stress_range(
     a fatigue question, not a pressure one. The allowable range is
     S_A = f·(1.25·S_c + 0.25·S_h), where ``cold_allowable`` S_c and ``hot_allowable``
     S_h are the basic allowable stresses at the cold (installed) and hot (operating)
-    conditions, and ``stress_range_factor`` f (the cyclic-reduction factor, ≤ 1,
+    conditions, and ``stress_range_factor`` f (the cyclic-reduction factor,
     from Table 302.3.5 — 1.0 up to 7,000 equivalent cycles, falling for more) accounts
-    for the number of thermal cycles. Compare the computed expansion stress range
-    against this. S_c, S_h, and f are user-supplied code inputs. Returns S_A in MPa.
+    for the number of thermal cycles. f is bounded to (0, 1] and enforced: it only ever
+    *reduces* the allowable, so a value above 1 is an input error, not a design choice.
+    Compare the computed expansion stress range against this. S_c, S_h, and f are
+    user-supplied code inputs. Returns S_A in MPa.
     """
     _require(cold_allowable, "[pressure]", "cold_allowable")
     _require(hot_allowable, "[pressure]", "hot_allowable")
-    if stress_range_factor <= 0:
-        raise ValueError(f"stress_range_factor must be positive; got {stress_range_factor}")
+    # f is a cyclic *reduction* factor: Table 302.3.5 tops out at 1.0 for 7,000 equivalent
+    # cycles or fewer and falls from there. Above 1.0 it inflates the allowable in the
+    # unconservative direction, and nothing downstream would notice — f = 3.0 on a
+    # 138/130 MPa pair returns 615 MPa where the ceiling is 205. Every other dimensionless
+    # factor in this module is bounded; this one was not.
+    if not 0 < stress_range_factor <= 1.0:
+        raise ValueError(
+            f"stress_range_factor must be in (0, 1]; got {stress_range_factor}. B31.3 "
+            f"Table 302.3.5 caps f at 1.0 (7,000 equivalent cycles or fewer) and it "
+            f"falls above that — a value over 1 inflates the allowable"
+        )
     sc = cold_allowable.to("MPa").magnitude
     sh = hot_allowable.to("MPa").magnitude
     if sc <= 0 or sh <= 0:
@@ -1947,7 +1958,8 @@ def asme_appendix_2_shape_factors(
 
     **Anchored, not recalled.** A published worked calculation (a 19 in bore, 26.9685 in
     OD integral flange, K = 1.41939) reports T = 1.74578 and Z = 2.97106; these
-    equations give 1.74572 and 2.97110, agreeing to 4×10⁻⁵ relative. Y and U are tied to
+    equations give 1.745783 and 2.971062, agreeing to 2×10⁻⁶ relative — both round to
+    the published five-figure values exactly. Y and U are tied to
     each other by an identity that falls out of the constants — U = Y/0.910 to five
     figures at every K — so reproducing one reproduces the other. The suite asserts all
     of it.

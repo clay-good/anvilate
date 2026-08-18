@@ -110,11 +110,12 @@ class ReviewPriority(IntEnum):
 
     NOT_EVALUATED = 0
     FAILING = 1
-    UNATTRIBUTED_ASSUMPTION = 2
-    MODEL_ASSUMPTION = 3
-    THIN_MARGIN = 4
-    OVER_MARGIN = 5
-    ROUTINE = 6
+    FRAGILE_MARGIN = 2
+    UNATTRIBUTED_ASSUMPTION = 3
+    MODEL_ASSUMPTION = 4
+    THIN_MARGIN = 5
+    OVER_MARGIN = 6
+    ROUTINE = 7
 
 
 def review_priority(entry: ScorecardEntry, *, origin: DecisionOrigin) -> ReviewPriority:
@@ -128,6 +129,15 @@ def review_priority(entry: ScorecardEntry, *, origin: DecisionOrigin) -> ReviewP
         return ReviewPriority.NOT_EVALUATED
     if entry.status is CheckStatus.FAIL:
         return ReviewPriority.FAILING
+    # A nominal PASS whose attached margin distribution shows a material shortfall
+    # probability is the dossier's whole reason for existing, and it used to sort as
+    # ROUTINE — headline "passes", absent from `attention_first`, and summarised as
+    # "nothing above routine" — because the only closeness test here was the NOMINAL
+    # ratio. A check at 1.6x its requirement on paper with a 46% chance of falling short
+    # under its own declared input scatter is not routine, and it is not thin either: the
+    # nominal margin looks ample, which is exactly what makes it worth a reviewer's eye.
+    if entry.is_fragile():
+        return ReviewPriority.FRAGILE_MARGIN
     if origin is DecisionOrigin.UNATTRIBUTED:
         return ReviewPriority.UNATTRIBUTED_ASSUMPTION
     if origin is DecisionOrigin.MODEL:
@@ -159,6 +169,9 @@ class ReviewItem(BaseModel):
             ReviewPriority.FAILING: "fails",
             ReviewPriority.UNATTRIBUTED_ASSUMPTION: "rests on an assumption nobody sourced",
             ReviewPriority.MODEL_ASSUMPTION: "rests on a value a model proposed",
+            ReviewPriority.FRAGILE_MARGIN: (
+                "passes nominally, but its input scatter fails it materially often"
+            ),
             ReviewPriority.THIN_MARGIN: "passes, but close to its requirement",
             ReviewPriority.OVER_MARGIN: "passes above its band — possibly over-designed",
             ReviewPriority.ROUTINE: "passes",

@@ -31,6 +31,35 @@ __all__ = [
     "centrifuge_settling_time",
 ]
 
+# Stokes' law is the creeping-flow limit, and past a particle Reynolds number of about 1 the
+# flow separates and the law overpredicts the velocity badly. :func:`drag.stokes_settling_velocity`
+# already refuses past this line for gravity settling; substituting omega^2*r for g does not
+# change the drag law, so the same limit applies here and is computable from the arguments.
+_STOKES_REYNOLDS_LIMIT = 1.0
+
+
+def _reject_beyond_stokes(
+    *, velocity: float, diameter: float, density_fluid: float, viscosity: float, where: str
+) -> None:
+    """Refuse a Stokes result whose own implied particle Reynolds number breaks Stokes.
+
+    The docstrings' "creeping-flow regime" is not advice — it is computable from the arguments
+    already passed, and past it the answer is unconservative in the direction that matters. A
+    100 um sand grain in water at 3,000 rpm and 150 mm returns 13.57 m/s at an implied Re of
+    1,357; an iterated Schiller-Naumann solve gives 2.01 m/s. The velocity is 6.7x too fast and
+    the settling time, which goes as 1/v, is 6.7x too short — so a centrifuge sized on it is
+    undersized in residence time by that factor.
+    """
+    reynolds = density_fluid * abs(velocity) * diameter / viscosity
+    if reynolds > _STOKES_REYNOLDS_LIMIT:
+        raise ValueError(
+            f"the centrifugal Stokes form is the creeping-flow limit and {where} implies a "
+            f"particle Reynolds number of {reynolds:.4g}, past the "
+            f"~{_STOKES_REYNOLDS_LIMIT:.0f} where it holds: the flow separates and this "
+            f"result is an overprediction (6.7x for 100 um sand in water at 3,000 rpm). "
+            f"Iterate on drag.sphere_drag_coefficient instead."
+        )
+
 
 def centrifugal_sedimentation_velocity(
     *,
@@ -46,8 +75,11 @@ def centrifugal_sedimentation_velocity(
     Stokes' law with the centrifugal acceleration omega^2 * r in place of gravity: the outward
     speed of a ``particle_diameter`` d particle of ``density_particle`` rho_p in a ``density_fluid``
     rho_f, ``viscosity`` mu fluid at ``radius`` r and ``rotational_speed`` omega. It assumes a
-    small, dilute, denser-than-fluid particle in the creeping-flow (low-Reynolds) regime. Returns
-    the velocity in m/s (positive, radially outward).
+    small, dilute, denser-than-fluid particle in the creeping-flow (low-Reynolds) regime — and
+    **enforces it**: the particle Reynolds number implied by the result is checked against ~1
+    and a result past it is refused rather than returned, because there it is an overprediction
+    (6.7x for 100 um sand in water at 3,000 rpm and 150 mm). Returns the velocity in m/s
+    (positive, radially outward).
     """
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(density_particle, "[mass]/[length]**3", "density_particle")
@@ -76,6 +108,13 @@ def centrifugal_sedimentation_velocity(
     if rho_p <= rho_f:
         raise ValueError("density_particle must exceed density_fluid for outward sedimentation")
     v = d * d * (rho_p - rho_f) * omega * omega * r / (18.0 * mu)
+    _reject_beyond_stokes(
+        velocity=v,
+        diameter=d,
+        density_fluid=rho_f,
+        viscosity=mu,
+        where="the sedimentation velocity",
+    )
     return Quantity(magnitude=v, unit="m/s")
 
 
@@ -95,8 +134,12 @@ def centrifuge_settling_time(
     liquid surface, where the field is weakest) out to the ``outer_radius`` r_o wall in a fluid of
     ``density_fluid`` rho_f, ``viscosity`` mu spun at ``rotational_speed`` omega. Because the field
     omega^2 * r grows with radius, the travel time is the integral of dr/v, giving the ln term — the
-    sizing relation for the residence time a tubular or decanter centrifuge must provide. Returns
-    the time in s.
+    sizing relation for the residence time a tubular or decanter centrifuge must provide.
+
+    Stokes' creeping-flow limit is enforced at the **outer** radius, where the field and so the
+    velocity are highest: a particle that leaves the Stokes regime anywhere leaves it there
+    first, and past it this time is short by the same factor the velocity is fast. Returns the
+    time in s.
     """
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(density_particle, "[mass]/[length]**3", "density_particle")
@@ -126,6 +169,13 @@ def centrifuge_settling_time(
         raise ValueError("rotational_speed must be positive")
     if rho_p <= rho_f:
         raise ValueError("density_particle must exceed density_fluid for outward sedimentation")
+    _reject_beyond_stokes(
+        velocity=d * d * (rho_p - rho_f) * omega * omega * r_o / (18.0 * mu),
+        diameter=d,
+        density_fluid=rho_f,
+        viscosity=mu,
+        where="the velocity at the outer radius",
+    )
     t = 18.0 * mu * log(r_o / r_i) / (omega * omega * d * d * (rho_p - rho_f))
     return Quantity(magnitude=t, unit="s")
 

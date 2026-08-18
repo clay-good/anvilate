@@ -267,6 +267,19 @@ class ScorecardEntry(BaseModel):
         move and, when a design inverse supplied it, to what value. It is dropped
         on a passing entry — a hint only belongs on a check that needs one.
         """
+        # A required factor of zero (or below) makes `computed < required` False for every
+        # finite result, so EVERY check on a screen built with one comes back PASS -- a
+        # member five times overstressed included. The design-inverse side of the library
+        # already refuses this in thirteen places ("required_safety_factor must be
+        # positive"); this is the same invariant on the screening side, where the silent
+        # green actually lands.
+        if required <= 0:
+            raise ValueError(
+                f"required_safety_factor must be positive; got {required}. A "
+                f"non-positive requirement passes every check, including a failing one"
+            )
+        if upper is not None and upper <= 0:
+            raise ValueError(f"the upper safety-factor band must be positive; got {upper}")
         if computed is None:
             return cls(
                 name=name,

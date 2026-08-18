@@ -5726,6 +5726,31 @@ def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition
         assert "qualified assessor" in entry.detail
 
 
+def test_spreader_beam_example_fails_only_once_the_device_weight_is_in_the_load():
+    namespace = runpy.run_path(str(_EXAMPLES / "spreader_beam_device_screen.py"))
+    Quantity_ = namespace["Quantity"]
+    DesignCategory_ = namespace["DesignCategory"]
+
+    lifter = namespace["device"]()
+    assert lifter.design_load.to("kN").magnitude == pytest.approx(108.0, rel=1e-12)
+
+    rated = namespace["screen_bail"](Quantity_.parse("100 kN")).entries[1]
+    designed = namespace["screen_bail"](lifter.design_load).entries[1]
+    # 8% more load against a 6% margin: the omission is small and the margin is smaller.
+    assert rated.status is CheckStatus.PASS
+    assert designed.status is CheckStatus.FAIL
+    assert designed.safety_factor == pytest.approx(0.98, abs=0.01)
+    # The category is worth 50% of every allowable and nothing in the geometry says which.
+    as_a = namespace["screen_bail"](lifter.design_load, category=DesignCategory_.A).entries[1]
+    assert as_a.status is CheckStatus.PASS
+    assert as_a.safety_factor == pytest.approx(1.48, abs=0.01)
+
+    card = namespace["screen_device"]()
+    assert card.status is CheckStatus.FAIL
+    # Class 2 with no cycle data is not screened, and NOT_EVALUATED is not a pass.
+    assert card.entries[-1].status is CheckStatus.NOT_EVALUATED
+
+
 def test_loose_ring_flange_example_is_governed_by_the_bolt_up_not_the_pressure():
     namespace = runpy.run_path(str(_EXAMPLES / "loose_ring_flange_stress.py"))
     Quantity_ = namespace["Quantity"]

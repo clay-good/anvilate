@@ -26237,7 +26237,7 @@ def test_asme_b313_allowable_displacement_stress_range():
         cold_allowable=_q("138 MPa"), hot_allowable=_q("130 MPa"), stress_range_factor=0.8
     )
     assert cyclic.to("MPa").magnitude == pytest.approx(0.8 * sa.to("MPa").magnitude, rel=1e-9)
-    with pytest.raises(ValueError, match="stress_range_factor must be positive"):
+    with pytest.raises(ValueError, match=r"stress_range_factor must be in \(0, 1\]"):
         asme_b313_allowable_displacement_stress_range(
             cold_allowable=_q("138 MPa"), hot_allowable=_q("130 MPa"), stress_range_factor=0.0
         )
@@ -33881,12 +33881,20 @@ def test_turbulent_boundary_layer_thickness_skin_friction_and_drag():
     assert c_d == pytest.approx(0.00383741, rel=1e-5)
     # Integrating x^(-1/5) puts C_D at exactly 1.25x the trailing-edge C_f (2x when laminar).
     assert c_d / c_f == pytest.approx(1.25, rel=1e-12)
-    # A turbulent layer is thicker and drags harder than the laminar solution at the same station.
+    # A turbulent layer is thicker and drags harder than the laminar solution at the same
+    # station — but the laminar form now REFUSES to be evaluated at Re_x = 2.667e6, which is
+    # the whole point of the transition guard. The comparison is made at the transition
+    # itself (x = 0.375 m gives Re_x = 5e5 exactly), where both forms are admissible.
+    with pytest.raises(ValueError, match="past it"):
+        laminar_boundary_layer_thickness(distance=_q("2 m"), **kwargs)
+    at_transition = _q("0.375 m")  # Re_x = 20*0.375/1.5e-5 = 5e5
     assert (
-        delta.to("m").magnitude
-        > laminar_boundary_layer_thickness(distance=_q("2 m"), **kwargs).to("m").magnitude
+        turbulent_boundary_layer_thickness(distance=at_transition, **kwargs).to("m").magnitude
+        > laminar_boundary_layer_thickness(distance=at_transition, **kwargs).to("m").magnitude
     )
-    assert c_f > laminar_skin_friction_coefficient(distance=_q("2 m"), **kwargs)
+    assert turbulent_skin_friction_coefficient(
+        distance=at_transition, **kwargs
+    ) > laminar_skin_friction_coefficient(distance=at_transition, **kwargs)
     # It grows as x^0.8, so doubling x thickens it by 2^0.8 = 1.741 (laminar would be 2^0.5).
     far = turbulent_boundary_layer_thickness(distance=_q("4 m"), **kwargs)
     assert far.to("m").magnitude / delta.to("m").magnitude == pytest.approx(2.0**0.8, rel=1e-12)
@@ -33945,9 +33953,11 @@ def test_boundary_layer_integral_thicknesses_and_shape_factor():
     assert h == pytest.approx(1.721 / 0.664, rel=1e-12)
     assert h == pytest.approx(2.5919, rel=1e-4)
     assert isinstance(h, float)
+    # 1.5 m at 5 m/s is Re_x = 5e5, the transition itself and the furthest station the
+    # laminar forms may be evaluated at — going further now raises rather than answering.
     far = {
-        "displacement_thickness": laminar_displacement_thickness(distance=_q("3 m"), **flow),
-        "momentum_thickness": laminar_momentum_thickness(distance=_q("3 m"), **flow),
+        "displacement_thickness": laminar_displacement_thickness(distance=_q("1.5 m"), **flow),
+        "momentum_thickness": laminar_momentum_thickness(distance=_q("1.5 m"), **flow),
     }
     assert boundary_layer_shape_factor(**far) == pytest.approx(h, rel=1e-12)
 
@@ -33990,11 +34000,13 @@ def test_laminar_boundary_layer_thickness_skin_friction_and_drag():
         freestream_velocity=u, distance=x, kinematic_viscosity=nu
     )
     assert delta.to("m").magnitude == pytest.approx(5.0 * 0.1 / sqrt(re_x), rel=1e-9)
-    # The layer thickens downstream as sqrt(x): 4x the distance -> 2x the thickness.
-    delta4 = laminar_boundary_layer_thickness(
-        freestream_velocity=u, distance=_q("0.4 m"), kinematic_viscosity=nu
+    # The layer thickens downstream as sqrt(x): a quarter of the distance -> half the
+    # thickness. Taken downstream rather than up, because 4x this station is Re_x = 5.3e5,
+    # past the transition, where the laminar form now refuses to answer.
+    delta_quarter = laminar_boundary_layer_thickness(
+        freestream_velocity=u, distance=_q("0.025 m"), kinematic_viscosity=nu
     )
-    assert delta4.to("m").magnitude == pytest.approx(2.0 * delta.to("m").magnitude, rel=1e-9)
+    assert delta_quarter.to("m").magnitude == pytest.approx(0.5 * delta.to("m").magnitude, rel=1e-9)
 
     # Local skin friction C_f = 0.664/sqrt(Re_x).
     cf = laminar_skin_friction_coefficient(
@@ -37512,11 +37524,18 @@ def test_turbulent_displacement_and_momentum_thickness_close_the_regime():
     assert momentum_cd < correlation_cd
 
     # The reason this had to exist: applying the laminar coefficient at a turbulent Reynolds
-    # number understates the displacement thickness by a factor of 2.6 here, and the gap widens
-    # with Reynolds number because the two have different exponents (x^0.8 against x^0.5).
-    laminar = laminar_displacement_thickness(**flow)
-    assert laminar.to("mm").magnitude == pytest.approx(1.721, rel=1e-3)
-    assert d_star.to("m").magnitude / laminar.to("m").magnitude == pytest.approx(2.570, rel=1e-3)
+    # number understated the displacement thickness by a factor of 2.6 here, and the gap
+    # widened with Reynolds number because the two have different exponents (x^0.8 against
+    # x^0.5). That mistake is no longer available — the laminar form refuses to answer past
+    # the transition rather than answering 2.6x low.
+    with pytest.raises(ValueError, match="past it"):
+        laminar_displacement_thickness(**flow)
+    # At the transition itself both are admissible and the turbulent layer is the thicker.
+    at_transition = {**flow, "distance": _q("0.25 m")}  # Re_x = 30*0.25/1.5e-5 = 5e5
+    assert (
+        turbulent_displacement_thickness(**at_transition).to("m").magnitude
+        > laminar_displacement_thickness(**at_transition).to("m").magnitude
+    )
 
     # Both scale as x^0.8 -- they grow faster than the laminar sqrt(x).
     farther = {**flow, "distance": _q("4 m")}
@@ -40912,6 +40931,193 @@ def test_the_ring_flange_scorecard_says_not_evaluated_for_a_hub_flange():
 
 
 # --- ASME BTH-1 below-the-hook lifting devices --------------------------------
+
+
+def test_the_lifter_design_load_carries_the_device_weight_and_the_rated_load_does_not():
+    """BTH-1 §3-1.2: the hook carries the lifter too, and self_weight has no default.
+
+    The omission this pins is not arithmetic, it is a missing term. A rated-load-only
+    bail check passes at 1.06 and the same plate on the design load fails at 0.98 — an
+    8% load increase against a 6% margin. Making ``self_weight`` a required field is
+    what makes forgetting it impossible rather than merely discouraged.
+    """
+    import pydantic
+
+    from anvilate.analysis import (
+        DesignCategory,
+        LifterDevice,
+        LifterPinPlate,
+        ServiceClass,
+        bth1_allowable_stresses,
+        bth1_pin_plate_scorecard,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    device = LifterDevice(
+        name="spreader",
+        rated_load=_q("100 kN"),
+        self_weight=_q("8 kN"),
+        category=DesignCategory.B,
+        service_class=ServiceClass.CLASS_2,
+    )
+    assert device.design_load.to("kN").magnitude == pytest.approx(108.0, rel=1e-12)
+    # There is no default: a device built without stating its own weight does not build.
+    with pytest.raises(pydantic.ValidationError):
+        LifterDevice(
+            name="spreader",
+            rated_load=_q("100 kN"),
+            category=DesignCategory.B,
+            service_class=ServiceClass.CLASS_2,
+        )
+
+    allowables = bth1_allowable_stresses(
+        yield_strength=_q("250 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        category=DesignCategory.B,
+    )
+
+    def bearing_at(load):
+        plate = LifterPinPlate(
+            name="bail",
+            width=_q("180 mm"),
+            hole_diameter=_q("60 mm"),
+            thickness=_q("17 mm"),
+            load=load,
+        )
+        return bth1_pin_plate_scorecard(plate, allowables=allowables)[1]
+
+    rated_only = bearing_at(device.rated_load)
+    with_weight = bearing_at(device.design_load)
+    assert rated_only.status is CheckStatus.PASS
+    assert rated_only.safety_factor == pytest.approx(1.0625, rel=1e-4)
+    assert with_weight.status is CheckStatus.FAIL
+    assert with_weight.safety_factor == pytest.approx(0.9838, rel=1e-4)
+
+
+def test_the_bth1_pin_plate_puts_the_net_section_against_ultimate_not_yield():
+    """The two pin-plate allowables come off different strengths, which is the trap.
+
+    Net section is S_u/(1.20·N_d) and bearing is 1.25·S_y/N_d. On A36 at Category B
+    that is 111.1 and 104.2 MPa — close enough to look interchangeable and derived from
+    different material properties, so a steel with a different S_u/S_y ratio moves them
+    apart. Pinning both against their own definitions is what stops one being used for
+    the other.
+    """
+    from anvilate.analysis import (
+        DesignCategory,
+        LifterPinPlate,
+        bth1_allowable_stresses,
+        bth1_pin_plate_scorecard,
+    )
+
+    allowables = bth1_allowable_stresses(
+        yield_strength=_q("250 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        category=DesignCategory.B,
+    )
+    assert allowables.tension_net.to("MPa").magnitude == pytest.approx(
+        400.0 / (1.20 * 3.00), rel=1e-12
+    )
+    assert allowables.pin_bearing.to("MPa").magnitude == pytest.approx(
+        1.25 * 250.0 / 3.00, rel=1e-12
+    )
+    plate = LifterPinPlate(
+        name="bail",
+        width=_q("180 mm"),
+        hole_diameter=_q("60 mm"),
+        thickness=_q("17 mm"),
+        load=_q("108 kN"),
+    )
+    tension, bearing = bth1_pin_plate_scorecard(plate, allowables=allowables)
+    # sigma_t = P/((W-d)*t) on 120 x 17 mm; sigma_p = P/(d*t) on 60 x 17 mm — exactly
+    # twice the tensile stress here, because the net width is twice the hole.
+    assert tension.safety_factor == pytest.approx(
+        (400.0 / 3.6) / (108e3 / (120.0 * 17.0)), rel=1e-9
+    )
+    assert bearing.safety_factor == pytest.approx(
+        (1.25 * 250.0 / 3.0) / (108e3 / (60.0 * 17.0)), rel=1e-9
+    )
+    # A hole wider than the plate is a transposition, not a negative net section.
+    with pytest.raises(ValueError, match="must be below the plate width"):
+        bth1_pin_plate_scorecard(
+            LifterPinPlate(
+                name="bail",
+                width=_q("60 mm"),
+                hole_diameter=_q("180 mm"),
+                thickness=_q("17 mm"),
+                load=_q("108 kN"),
+            ),
+            allowables=allowables,
+        )
+
+
+def test_the_lifter_limit_state_routing_cannot_be_screened_at_the_wrong_allowable():
+    """Naming the limit state routes the design factor; a mismatched category is refused.
+
+    Shear against the tension allowable would pass at 1/0.60 = 1.67x the margin it has
+    earned, so the routing is a safety property, not a convenience. And allowables built
+    for Category A on a device declaring B would compute every margin 50% high — that
+    combination is rejected rather than screened.
+    """
+    from anvilate.analysis import (
+        BTH1LimitState,
+        DesignCategory,
+        LifterDevice,
+        LifterMemberStress,
+        ServiceClass,
+        bth1_allowable_for,
+        bth1_allowable_stresses,
+        screen_lifter_device,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    allowables = bth1_allowable_stresses(
+        yield_strength=_q("250 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        category=DesignCategory.B,
+    )
+    shear = bth1_allowable_for(allowables, BTH1LimitState.SHEAR).to("MPa").magnitude
+    tension = bth1_allowable_for(allowables, BTH1LimitState.TENSION_GROSS).to("MPa").magnitude
+    assert shear / tension == pytest.approx(0.60, rel=1e-12)
+    # Every limit state resolves to its own allowable and none of them collide.
+    resolved = {
+        state: bth1_allowable_for(allowables, state).to("MPa").magnitude for state in BTH1LimitState
+    }
+    assert len(set(resolved.values())) == 4  # bending and tension_gross share S_y/N_d
+
+    device = LifterDevice(
+        name="spreader",
+        rated_load=_q("100 kN"),
+        self_weight=_q("8 kN"),
+        category=DesignCategory.B,
+        service_class=ServiceClass.CLASS_2,
+    )
+    entries = screen_lifter_device(
+        device,
+        allowables=allowables,
+        members=(
+            LifterMemberStress(
+                name="web shear", stress=_q("40 MPa"), limit_state=BTH1LimitState.SHEAR
+            ),
+        ),
+    )
+    # The identification entry carries the rated load, the design load and both typed
+    # judgements, so no margin below it is quotable without its context.
+    assert "rated load 100 kN" in entries[0].detail
+    assert "108 kN at the upper attachment" in entries[0].detail
+    assert "Category B" in entries[0].detail
+    assert "Service Class 2" in entries[0].detail
+    assert entries[1].safety_factor == pytest.approx(50.0 / 40.0, rel=1e-9)
+    # A Class 2 device with no cycle data is not screened, and is never a pass.
+    assert entries[-1].status is CheckStatus.NOT_EVALUATED
+
+    wrong_category = bth1_allowable_stresses(
+        yield_strength=_q("250 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        category=DesignCategory.A,
+    )
+    with pytest.raises(ValueError, match="wrong design factor"):
+        screen_lifter_device(device, allowables=wrong_category)
 
 
 def test_the_bth1_design_category_is_exactly_a_fifty_percent_decision():

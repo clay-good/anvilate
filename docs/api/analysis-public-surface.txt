@@ -48,6 +48,13 @@ lifting_device.service_class_for_cycles
 lifting_device.bth1_allowable_stresses
 lifting_device.bth1_member_scorecard
 lifting_device.bth1_fatigue_scorecard
+lifting_device.BTH1LimitState
+lifting_device.LifterMemberStress
+lifting_device.LifterPinPlate
+lifting_device.LifterDevice
+lifting_device.bth1_allowable_for
+lifting_device.bth1_pin_plate_scorecard
+lifting_device.screen_lifter_device
 aluminum.aluminum_buckling_stress
 aluminum.aluminum_tension_stress
 aluminum.TemperGroup

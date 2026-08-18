@@ -306,6 +306,21 @@ def design_basis_scorecard(
     project may deliberately assess an existing structure under the edition it was
     designed to, and the basis says which is which.
     """
+    # An empty reference list is a bundle whose citations were never collected, not a
+    # bundle whose citations all check out. Reporting PASS on it — with a detail line
+    # asserting "all 0 references name an edition" — is the same silent green
+    # `Scorecard.status` already refuses for an empty entry tuple.
+    if not references:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "not evaluated — no references were supplied, so there is nothing to "
+                "check against the design basis. An empty citation list is a bundle "
+                "whose citations were not collected, not one that agrees"
+            ),
+            reference="standards effectivity",
+        )
     citations = [parse_citation(text) for text in references]
     editionless = [text for text, c in zip(references, citations, strict=True) if c is None]
     conflicts = basis.conflicts(citations)

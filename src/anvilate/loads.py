@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
+from math import isfinite
 
 from pydantic import BaseModel, ConfigDict
 
@@ -80,7 +81,29 @@ class LoadCombination(BaseModel):
         A load the caller supplies whose nature this combination does not factor is
         simply not part of this sum; a nature the combination factors but the caller
         omits contributes zero.
+
+        **A non-finite load is rejected here rather than carried.** A NaN load poisons
+        only the combinations that factor its nature, and because ``max`` and ``min``
+        compare with ``>`` and ``<`` — both False against NaN — those combinations are
+        then silently *dropped* from the envelope instead of contaminating it. A single
+        NaN wind load removes every wind combination from an ASCE 7 set, including the
+        counteracting uplift case the check exists to catch, and the largest surviving
+        gravity demand is reported as governing with a comfortable PASS. Raising is the
+        only outcome that cannot be mistaken for an answer.
         """
+        for nature, factor in self.factors.items():
+            value = loads.get(nature, 0.0)
+            if not isfinite(value):
+                raise ValueError(
+                    f"the {nature.value} load is {value}, which is not a finite number; "
+                    f"combination {self.name} cannot be evaluated. A non-finite load "
+                    f"would be dropped from the envelope by max/min rather than "
+                    f"reported, so it is refused here"
+                )
+            if not isfinite(factor):
+                raise ValueError(
+                    f"combination {self.name} has a non-finite factor on {nature.value}"
+                )
         return sum(factor * loads.get(nature, 0.0) for nature, factor in self.factors.items())
 
     def __str__(self) -> str:

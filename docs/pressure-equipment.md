@@ -88,9 +88,9 @@ and a flange can fail either while its stresses pass.
 
 The `T`, `U`, `Y`, `Z` equations were **anchored before they were shipped**: a published
 worked calculation at `K = 1.41939` reports `T = 1.74578` and `Z = 2.97106`, and these
-give 1.74572 and 2.97110. `Y` and `U` are tied by an identity that falls out of the
-published constants (`U = Y/0.910` at every `K`), so reproducing one reproduces the
-other. All of it is asserted in the test suite.
+give 1.745783 and 2.971062 — both round to the published figures exactly. `Y` and `U`
+are tied by an identity that falls out of the published constants (`U = Y/0.910` at
+every `K`), so reproducing one reproduces the other. All of it is asserted in the test suite.
 
 ### The flange sized by the bolt-up, not the pressure
 

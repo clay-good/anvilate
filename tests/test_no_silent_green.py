@@ -565,3 +565,209 @@ def test_the_small_deflection_limit_sits_at_a_half_not_merely_below_five():
             small_deflection_ratio=ratio,
         )
         assert result.is_small_deflection is inside, ratio
+
+
+# --- Six defects a five-agent audit found, all silent greens or unenforced limits ------
+
+
+def test_a_non_finite_load_is_refused_rather_than_dropped_from_the_envelope():
+    """A NaN wind load used to remove every wind combination and report PASS on gravity.
+
+    This is the worst shape a silent green can take: the poison does not propagate, it
+    *deletes*. `max` and `min` compare with `>` and `<`, both False against NaN, so the
+    seven wind combinations of an ASCE 7 LRFD set — including the 0.9D + 1.0W uplift case
+    the check exists to catch — were silently discarded and the largest surviving gravity
+    demand was returned as governing, at a comfortable safety factor. Whether it read
+    PASS or NOT_EVALUATED depended on nothing but the declaration order of the list.
+    """
+    from anvilate.loads import LoadNature, asce7_lrfd_basic, combination_scorecard
+
+    combinations = asce7_lrfd_basic()
+    for poison in (math.nan, math.inf, -math.inf):
+        with pytest.raises(ValueError, match="not a finite number"):
+            combination_scorecard(
+                "uplift",
+                combinations=combinations,
+                loads={LoadNature.DEAD: 100.0, LoadNature.WIND: poison},
+                capacity=500.0,
+                required=1.5,
+            )
+        with pytest.raises(ValueError, match="not a finite number"):
+            combinations.envelope({LoadNature.DEAD: 100.0, LoadNature.WIND: poison})
+    # The finite case still finds the uplift combination it is supposed to find.
+    entry = combination_scorecard(
+        "uplift",
+        combinations=combinations,
+        loads={LoadNature.DEAD: 100.0, LoadNature.WIND: -420.0},
+        capacity=500.0,
+        required=1.5,
+    )
+    assert "0.9D" in entry.detail
+
+
+def test_a_non_positive_required_safety_factor_is_refused_not_passed():
+    """`required=0` made `computed < required` False for every result — every check green.
+
+    The invariant was already enforced in thirteen places on the design-*inverse* side of
+    the library and nowhere on the screening side, which is where the silent green
+    actually lands: a member five times overstressed came back PASS.
+    """
+    from anvilate.scorecard import ScorecardEntry
+
+    for bad in (0.0, -1.0):
+        with pytest.raises(ValueError, match="required_safety_factor must be positive"):
+            ScorecardEntry.from_safety_factor("overstressed", computed=0.2, required=bad)
+    with pytest.raises(ValueError, match="upper safety-factor band must be positive"):
+        ScorecardEntry.from_safety_factor("x", computed=2.0, required=1.5, upper=0.0)
+    # The ordinary case is untouched.
+    assert ScorecardEntry.from_safety_factor("x", computed=0.2, required=1.5).status is (
+        CheckStatus.FAIL
+    )
+
+
+def test_the_centrifuge_enforces_the_creeping_flow_limit_its_docstring_names():
+    """Stokes with omega^2*r for g is still Stokes, and past Re ~1 it is 6.7x too fast.
+
+    A 100 um sand grain in water at 3,000 rpm and 150 mm returned 13.57 m/s at an implied
+    particle Reynolds number of 1,357; an iterated Schiller-Naumann solve gives 2.01 m/s.
+    The settling time goes as 1/v, so a centrifuge sized on it was short on residence time
+    by the same 6.7x — in the optimistic direction. `drag.stokes_settling_velocity`
+    already refused past this line; the centrifugal form did not.
+    """
+    from anvilate.analysis import centrifugal_sedimentation_velocity, centrifuge_settling_time
+
+    slurry = {
+        "density_particle": Quantity(magnitude=2650, unit="kg/m**3"),
+        "density_fluid": Quantity(magnitude=1000, unit="kg/m**3"),
+        "viscosity": Quantity(magnitude=1e-3, unit="Pa*s"),
+        "rotational_speed": Quantity(magnitude=3000, unit="rpm"),
+    }
+    coarse = {"particle_diameter": Quantity(magnitude=100, unit="um"), **slurry}
+    with pytest.raises(ValueError, match="creeping-flow limit"):
+        centrifugal_sedimentation_velocity(radius=_q("0.15 m"), **coarse)
+    with pytest.raises(ValueError, match="creeping-flow limit"):
+        centrifuge_settling_time(inner_radius=_q("0.05 m"), outer_radius=_q("0.15 m"), **coarse)
+    # A 1 um particle is deep in the creeping-flow regime and still answers.
+    fine = {"particle_diameter": Quantity(magnitude=1, unit="um"), **slurry}
+    velocity = centrifugal_sedimentation_velocity(radius=_q("0.15 m"), **fine)
+    assert velocity.to("m/s").magnitude == pytest.approx(0.00135707, rel=1e-4)
+
+
+def test_the_boundary_layer_forms_refuse_the_regime_they_do_not_model():
+    """Eight functions documented a transition limit; every one computed Re and ignored it.
+
+    At Re_x = 1e7 the laminar thickness reads 4.74 mm against the turbulent 44.2 mm, and
+    the laminar plate drag coefficient 4.20e-4 against 2.95e-3 — a friction-drag estimate
+    7x low and entirely plausible-looking. The library already enforced this same
+    transition in `thermal.flat_plate_forced_convection_coefficient`; this module was the
+    outlier.
+    """
+    from anvilate.analysis import (
+        laminar_boundary_layer_thickness,
+        laminar_plate_drag_coefficient,
+        turbulent_boundary_layer_thickness,
+        turbulent_plate_drag_coefficient,
+    )
+
+    fast = {
+        "freestream_velocity": _q("50 m/s"),
+        "kinematic_viscosity": Quantity(magnitude=1.5e-5, unit="m**2/s"),
+    }
+    with pytest.raises(ValueError, match="laminar forms hold below the transition"):
+        laminar_boundary_layer_thickness(distance=_q("3 m"), **fast)
+    with pytest.raises(ValueError, match="laminar forms hold below the transition"):
+        laminar_plate_drag_coefficient(plate_length=_q("3 m"), **fast)
+    # The turbulent forms answer there, and they are the ones that were 7-9x apart.
+    assert turbulent_boundary_layer_thickness(distance=_q("3 m"), **fast).to(
+        "mm"
+    ).magnitude == pytest.approx(44.19, rel=1e-3)
+    assert turbulent_plate_drag_coefficient(plate_length=_q("3 m"), **fast) == pytest.approx(
+        2.946e-3, rel=1e-3
+    )
+    # And they refuse the laminar side, and past the end of their own 1e7 fit.
+    slow = {
+        "freestream_velocity": _q("2 m/s"),
+        "kinematic_viscosity": Quantity(magnitude=1.5e-5, unit="m**2/s"),
+    }
+    with pytest.raises(ValueError, match="turbulent forms hold above the transition"):
+        turbulent_boundary_layer_thickness(distance=_q("1 m"), **slow)
+    with pytest.raises(ValueError, match="past the end of"):
+        turbulent_boundary_layer_thickness(distance=_q("100 m"), **fast)
+
+
+def test_the_b313_cyclic_reduction_factor_cannot_inflate_the_allowable():
+    """f is a *reduction* factor capped at 1.0, and was unbounded above.
+
+    f = 3.0 on a 138/130 MPa pair returned 615 MPa where the documented ceiling is 205 —
+    a 3x-inflated allowable, in the unconservative direction, with nothing downstream to
+    notice. Every other dimensionless factor in the module is bounded.
+    """
+    from anvilate.analysis import asme_b313_allowable_displacement_stress_range
+
+    pair = {"cold_allowable": _q("138 MPa"), "hot_allowable": _q("130 MPa")}
+    with pytest.raises(ValueError, match=r"must be in \(0, 1\]"):
+        asme_b313_allowable_displacement_stress_range(stress_range_factor=3.0, **pair)
+    ceiling = asme_b313_allowable_displacement_stress_range(stress_range_factor=1.0, **pair)
+    assert ceiling.to("MPa").magnitude == pytest.approx(1.25 * 138 + 0.25 * 130, rel=1e-12)
+    reduced = asme_b313_allowable_displacement_stress_range(stress_range_factor=0.8, **pair)
+    assert reduced.to("MPa").magnitude < ceiling.to("MPa").magnitude
+
+
+def test_a_fragile_nominal_pass_is_not_routine_in_the_reviewer_dossier():
+    """A 46% shortfall probability used to headline as "passes" and summarise as routine.
+
+    `review_priority`'s only closeness test was the *nominal* ratio, so a check at 1.6x
+    its requirement on paper with a material chance of falling short under its own
+    declared input scatter sorted below every other band, stayed out of
+    ``attention_first``, and the dossier reported "nothing above routine". The nominal
+    margin looking ample is exactly what makes it worth a reviewer's eye.
+    """
+    from anvilate.review import DecisionOrigin, ReviewPriority, review_priority
+    from anvilate.scorecard import ScorecardEntry
+    from anvilate.uncertainty import MarginUncertainty
+
+    fragile = ScorecardEntry.from_safety_factor("beam bending", computed=2.4, required=1.5)
+    fragile = fragile.model_copy(
+        update={
+            "uncertainty": MarginUncertainty(
+                samples=20_000,
+                seed=7,
+                required=1.5,
+                mean=2.4,
+                std=1.4,
+                shortfall_probability=0.463,
+                lower=0.6,
+                upper=4.9,
+                coverage=0.90,
+                sensitivities=(),
+            )
+        }
+    )
+    assert fragile.status is CheckStatus.PASS
+    assert fragile.is_fragile() is True
+    priority = review_priority(fragile, origin=DecisionOrigin.USER)
+    assert priority is ReviewPriority.FRAGILE_MARGIN
+    assert priority < ReviewPriority.ROUTINE
+    # The same entry without a distribution is genuinely routine — nothing was flagged
+    # that was not declared.
+    plain = ScorecardEntry.from_safety_factor("beam bending", computed=2.4, required=1.5)
+    assert review_priority(plain, origin=DecisionOrigin.USER) is ReviewPriority.ROUTINE
+
+
+def test_an_empty_citation_list_is_not_a_bundle_that_agrees():
+    """`design_basis_scorecard(references=[])` reported PASS on nothing at all.
+
+    Its detail line asserted "all 0 references name an edition", which is true and
+    useless. `Scorecard.status` already returns NOT_EVALUATED for an empty entry tuple
+    for exactly this reason; the doctrine was not applied here.
+    """
+    from anvilate.standards.effectivity import DesignBasis, design_basis_scorecard
+
+    basis = DesignBasis(pins={"AISC 360": "16"})
+    empty = design_basis_scorecard("design basis", basis=basis, references=[])
+    assert empty.status is CheckStatus.NOT_EVALUATED
+    assert "no references were supplied" in empty.detail
+    populated = design_basis_scorecard(
+        "design basis", basis=basis, references=["AISC 360-16 §F2.1"]
+    )
+    assert populated.status is CheckStatus.PASS

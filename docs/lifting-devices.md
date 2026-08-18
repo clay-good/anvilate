@@ -2,8 +2,8 @@
 
 **Screening, not stamped design.** BTH-1 also governs the lifter's welds and
 connections, its stability under an off-centre pick, its proof test, and its marking.
-This screens member stresses against BTH-1 allowables and reports the fatigue
-obligation. A green scorecard does not make a lifter compliant, and does not replace a
+This screens member and pin-plate stresses against BTH-1 allowables and reports the
+fatigue obligation. A green scorecard does not make a lifter compliant, and does not replace a
 qualified engineer's stamp.
 
 Every custom lifter — spreader beam, lifting beam, plate-clamp frame — legally needs
@@ -83,6 +83,49 @@ Category A (N_d = 2.00) -> not_evaluated
 Both member checks pass and the card still does not. That is the honest roll-up — the
 exemption Class 0 earns does not transfer to a device that has not earned it. See
 [`examples/spreader_beam_bth1_category.py`](../examples/spreader_beam_bth1_category.py).
+
+## The device: rated load is not design load
+
+`LifterDevice` types the whole lifter — rated load, self weight, category and service
+class — and `screen_lifter_device` routes every check through it. Two properties of the
+model do real work:
+
+**`self_weight` has no default.** BTH-1 §3-1.2 has the design consider the device's own
+weight alongside the rated load, and the hook carries both. Requiring the field means
+the most common omission in lifter design cannot happen silently: a designer who has
+established it as negligible passes zero deliberately, and that shows on the card.
+
+**`design_load` = rated load + self weight, and it applies at the *upper* attachment.**
+A lug below the pickup point carries the rated load alone. The distinction is in the
+model's docstring because applying the device weight everywhere is as wrong as applying
+it nowhere.
+
+A 100 kN spreader beam weighing 8 kN, with a 17 mm upper bail plate (180 mm wide, 60 mm
+hole), A36, Category B:
+
+| Bail pin bearing, checked against | Stress | vs F_p = 104.2 MPa | Verdict |
+| --- | --- | --- | --- |
+| rated load, 100 kN | 98.0 MPa | SF 1.06 | PASS |
+| rated + self weight, 108 kN | 105.9 MPa | **SF 0.98** | **FAIL** |
+
+Eight percent more load turned a pass into a fail, because the margin was 6% to begin
+with. The same 108 kN bail as Category A passes at 1.48. See
+[`examples/spreader_beam_device_screen.py`](../examples/spreader_beam_device_screen.py).
+
+### The limit state is named, not the allowable
+
+`LifterMemberStress` carries a `BTH1LimitState` rather than an allowable, so the design
+factor reaches every check through the standard's own routing. A shear stress checked
+against the tension allowable would pass at 1/0.60 = **1.67x the margin it has earned**,
+and that is a typing decision, not a convenience one. `screen_lifter_device` also refuses
+allowables built for a different category than the device declares, rather than screening
+every member 50% high.
+
+`bth1_pin_plate_scorecard` screens a pin-connected plate's net-section tension against
+`S_u/(1.20·N_d)` and its pin bearing against `1.25·S_y/N_d`. Note the general
+`screen_lifting_lug` in the structural pack checks both states against **yield** at a
+caller-chosen margin — a reasonable generic check, but not the BTH-1 one. Use the
+BTH-1 form when the answer has to cite BTH-1.
 
 Yield and ultimate strengths, and any fatigue allowable stress range, follow the
 user-supplied-allowables doctrine: they are the caller's, read from the certificate or

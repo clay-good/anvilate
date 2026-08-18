@@ -50,6 +50,13 @@ __all__ = [
     "bth1_allowable_stresses",
     "bth1_member_scorecard",
     "bth1_fatigue_scorecard",
+    "BTH1LimitState",
+    "LifterMemberStress",
+    "LifterPinPlate",
+    "LifterDevice",
+    "bth1_allowable_for",
+    "bth1_pin_plate_scorecard",
+    "screen_lifter_device",
 ]
 
 _CLAUSE_CATEGORY = "ASME BTH-1 §3-1.3 (Design Category)"
@@ -318,3 +325,240 @@ def bth1_fatigue_scorecard(
         f"{applied:.4g} MPa against an allowable {limit:.4g} MPa"
     )
     return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_SERVICE})
+
+
+class BTH1LimitState(StrEnum):
+    """Which ASME BTH-1 allowable a member stress is judged against.
+
+    Naming the limit state rather than passing an allowable directly is the point: the
+    five allowables differ by a factor of more than two, they are *not* interchangeable,
+    and picking the wrong one is a silent error. A shear stress checked against the
+    tension allowable passes at 1.67x the margin it has earned.
+    """
+
+    TENSION_GROSS = "tension_gross"
+    TENSION_NET = "tension_net"
+    SHEAR = "shear"
+    BENDING = "bending"
+    PIN_BEARING = "pin_bearing"
+
+
+class LifterMemberStress(BaseModel):
+    """One computed stress in a lifter member, tagged with the limit state it belongs to.
+
+    Screened against the ASME BTH-1 §3-2/§3-3 allowable its limit state names.
+
+    ``stress`` is whatever the geometry produced — from the beam, column or
+    combined-stress functions elsewhere in the library, or from the caller's own
+    analysis. ``limit_state`` decides which BTH-1 allowable screens it, so the design
+    factor reaches the check through the standard's own routing rather than through a
+    number the caller chose.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    stress: Quantity
+    limit_state: BTH1LimitState
+
+
+class LifterPinPlate(BaseModel):
+    """A pin-connected plate in a lifter — a lug, a pad eye, a bail — and its load.
+
+    Screened against the ASME BTH-1 §3-2.1 net-section and §3-3.3 bearing allowables.
+
+    ``width`` W is the plate width across the hole, ``hole_diameter`` d the pin hole,
+    ``thickness`` t the plate, and ``load`` P the force through the pin. The hole must
+    fit inside the width, which is the one geometric transposition that would otherwise
+    produce a negative net section and a nonsense stress.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    width: Quantity
+    hole_diameter: Quantity
+    thickness: Quantity
+    load: Quantity
+
+
+class LifterDevice(BaseModel):
+    """A below-the-hook lifting device: what it is rated for, and what it is designed to.
+
+    ``rated_load`` is the load the device will be *marked* with, and ``self_weight`` is
+    the device's own weight. Both are required, and ``self_weight`` deliberately has no
+    default: ASME BTH-1 §3-1.2 has the design consider the device's own weight alongside the
+    rated load, and a spreader beam heavy enough to need a crane to fit is heavy enough
+    to matter at its own upper attachment. Defaulting it to zero would let the most
+    common omission in lifter design pass without anyone stating it. A designer who has
+    genuinely established it as negligible passes zero on purpose, and that shows in the
+    scorecard.
+
+    ``design_load`` is their sum — the load at the **upper attachment**, where the crane
+    hook carries the device as well as the lift. Members and attachments *below* the
+    load path carry the rated load alone; the self weight does not reach them, so do not
+    apply this to a lower lug.
+
+    ``category`` and ``service_class`` are the two typed judgements that set every
+    allowable and the fatigue obligation, and they travel into every entry of the
+    scorecard, because a BTH-1 margin quoted without them cannot be checked.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    rated_load: Quantity
+    self_weight: Quantity
+    category: DesignCategory
+    service_class: ServiceClass
+
+    @property
+    def design_load(self) -> Quantity:
+        """Rated load plus the device's own weight — the load at the upper attachment."""
+        return Quantity(
+            magnitude=self.rated_load.to("N").magnitude + self.self_weight.to("N").magnitude,
+            unit="N",
+        )
+
+    def __str__(self) -> str:
+        return (
+            f"{self.name}: rated {self.rated_load}, Category {self.category.value}, "
+            f"Service Class {self.service_class.value}"
+        )
+
+
+def bth1_allowable_for(allowables: BTH1Allowables, limit_state: BTH1LimitState) -> Quantity:
+    """The one of the five ASME BTH-1 allowables that ``limit_state`` names."""
+    return {
+        BTH1LimitState.TENSION_GROSS: allowables.tension_gross,
+        BTH1LimitState.TENSION_NET: allowables.tension_net,
+        BTH1LimitState.SHEAR: allowables.shear,
+        BTH1LimitState.BENDING: allowables.bending,
+        BTH1LimitState.PIN_BEARING: allowables.pin_bearing,
+    }[limit_state]
+
+
+def bth1_pin_plate_scorecard(
+    plate: LifterPinPlate, *, allowables: BTH1Allowables
+) -> tuple[ScorecardEntry, ScorecardEntry]:
+    """Screen a pin-connected plate's two ASME BTH-1 limit states.
+
+    Net-section tension P/((W − d)·t) against F_t = S_u/(1.20·N_d), and pin bearing
+    P/(d·t) against F_p = 1.25·S_y/N_d.
+
+    **The two allowables come off different strengths, and that is the part a generic
+    lug check gets wrong.** :func:`~anvilate.packs.screen_lifting_lug` screens both
+    states against *yield* at a caller-chosen margin, which is a reasonable general
+    check but is not this one: BTH-1 puts the net section against *ultimate* over
+    1.20·N_d, because a net section that has yielded has not failed — it tears. On
+    A36 (S_y 250, S_u 400 MPa) at Category B the net allowable here is 111 MPa where
+    yield over the same 3.00 gives 83 MPa, so the generic check is 33% conservative on
+    tension; on a high-yield low-ratio steel the sign of that gap reverses.
+
+    Returns the two entries in that order.
+    """
+    width = plate.width.to("mm").magnitude
+    hole = plate.hole_diameter.to("mm").magnitude
+    thickness = plate.thickness.to("mm").magnitude
+    for value, name in (
+        (width, "width"),
+        (hole, "hole_diameter"),
+        (thickness, "thickness"),
+    ):
+        if value <= 0:
+            raise ValueError(f"{plate.name}: {name} must be positive; got {value} mm")
+    if hole >= width:
+        raise ValueError(
+            f"{plate.name}: hole_diameter ({plate.hole_diameter}) must be below the "
+            f"plate width ({plate.width}); check they are not swapped"
+        )
+    if not plate.load.has_dimension("[force]"):
+        raise ValueError(f"{plate.name}: load must be a [force] quantity; got {plate.load}")
+    force = abs(plate.load.to("N").magnitude)
+    net_tension = Quantity(magnitude=force / ((width - hole) * thickness), unit="MPa")
+    bearing = Quantity(magnitude=force / (hole * thickness), unit="MPa")
+    return (
+        bth1_member_scorecard(
+            f"{plate.name} net tension",
+            stress=net_tension,
+            allowable=allowables.tension_net,
+            category=allowables.category,
+        ),
+        bth1_member_scorecard(
+            f"{plate.name} pin bearing",
+            stress=bearing,
+            allowable=allowables.pin_bearing,
+            category=allowables.category,
+        ),
+    )
+
+
+def screen_lifter_device(
+    device: LifterDevice,
+    *,
+    allowables: BTH1Allowables,
+    members: tuple[LifterMemberStress, ...] = (),
+    pin_plates: tuple[LifterPinPlate, ...] = (),
+    stress_range: Quantity | None = None,
+    allowable_stress_range: Quantity | None = None,
+) -> tuple[ScorecardEntry, ...]:
+    """Screen a whole lifter: its members, its pin plates, and its fatigue obligation.
+
+    Every entry is routed to its own ASME BTH-1 §3-2/§3-3 allowable through
+    :class:`BTH1LimitState`, so the design factor reaches every check from
+    ``device.category`` and cannot be quietly different in two places. The first entry
+    is the device's identification — rated load, design load, category and service
+    class — which is not a computed check but is the context every margin below it needs
+    in order to mean anything.
+
+    ``allowables`` must have been built for the same category the device declares;
+    a mismatch is rejected rather than silently screened at the wrong factor.
+
+    ``stress_range`` and ``allowable_stress_range`` feed
+    :func:`bth1_fatigue_scorecard`; omit them and a Class 1+ device reports
+    NOT_EVALUATED for fatigue, which is the honest answer and not a pass.
+
+    Returns the entries; wrap them in a :class:`~anvilate.scorecard.Scorecard` to roll
+    them up.
+    """
+    if allowables.category is not device.category:
+        raise ValueError(
+            f"the allowables were built for Category {allowables.category.value} but "
+            f"{device.name} declares Category {device.category.value}; every margin "
+            f"would be computed at the wrong design factor"
+        )
+    rated = device.rated_load.to("kN").magnitude
+    weight = device.self_weight.to("kN").magnitude
+    identification = ScorecardEntry(
+        name=f"{device.name} rating",
+        status=CheckStatus.PASS,
+        detail=(
+            f"rated load {rated:.4g} kN plus a device self weight of {weight:.4g} kN "
+            f"gives {device.design_load.to('kN').magnitude:.4g} kN at the upper "
+            f"attachment; Category {device.category.value} (N_d = "
+            f"{device.category.design_factor:.2f}), Service Class "
+            f"{device.service_class.value}"
+        ),
+        reference=_CLAUSE_CATEGORY,
+    )
+    entries: list[ScorecardEntry] = [identification]
+    for member in members:
+        entries.append(
+            bth1_member_scorecard(
+                member.name,
+                stress=member.stress,
+                allowable=bth1_allowable_for(allowables, member.limit_state),
+                category=device.category,
+            )
+        )
+    for plate in pin_plates:
+        entries.extend(bth1_pin_plate_scorecard(plate, allowables=allowables))
+    entries.append(
+        bth1_fatigue_scorecard(
+            f"{device.name} fatigue",
+            service_class=device.service_class,
+            stress_range=stress_range,
+            allowable_stress_range=allowable_stress_range,
+        )
+    )
+    return tuple(entries)

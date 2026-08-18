@@ -4,7 +4,7 @@ A machine's return spring got a redesign for more travel: same music wire
 (d = 4 mm on a 32 mm mean coil, C = 8) but stretched to a 280 mm free length
 with twenty soft active coils so it could give a 60 mm working stroke. The
 wire-stress screen is happy — at the working load the Wahl-corrected shear is
-~338 MPa against a 700 MPa allowable, a comfortable SF 2.0. What the stress
+~350 MPa against a 700 MPa allowable, a comfortable SF 2.0. What the stress
 screen cannot see is that the coil is now a slender column between its flat
 seats. On parallel plates the spring is only *absolutely* stable up to
 L₀ ≈ 2.63·D/α = 168 mm; at 280 mm it is well past that, and the Shigley
