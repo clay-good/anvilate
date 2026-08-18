@@ -95,6 +95,32 @@ def rc_stress_block_depth(
     return Quantity(magnitude=as_mm2 * fy / (_ACI_STRESS_BLOCK_FACTOR * fc * b), unit="mm")
 
 
+def _reject_beyond_the_steel(
+    *, block_depth: float, effective_depth: float, beta1: float, label: str
+) -> None:
+    """Refuse a section whose neutral axis has reached or passed the tension steel.
+
+    ``a = beta1*c``, so ``a >= beta1*d`` is ``c >= d``: the neutral axis has arrived at the
+    bars, the steel is no longer in tension, and ``M_n = A_s*f_y*(d - a/2)`` — which
+    *assumes* the steel has yielded in tension — has stopped meaning anything.
+
+    The guard used to sit at ``a >= 2*d``, which is not a physical or code boundary at all:
+    it is exactly where the lever arm ``(d - a/2)`` changes sign, so it caught the
+    arithmetic blow-up and waved through the whole band between. A 200x300 mm section with
+    4,047 mm2 of steel returns a confident 170.0 kN*m at ``c/d = 1.57`` — the neutral axis
+    57% below the bars — while :func:`rc_net_tensile_strain` refuses the identical section
+    for exactly this reason. Same module, same physics, two different answers.
+    """
+    if block_depth >= beta1 * effective_depth:
+        raise ValueError(
+            f"{label}: the stress block reaches the tension steel (a = {block_depth:.4g} mm "
+            f"against beta1*d = {beta1 * effective_depth:.4g} mm, so c >= d), and the "
+            f"steel is no longer in tension — the nominal-moment expression assumes it has "
+            f"yielded in tension. This is an over-reinforced or mis-entered section; "
+            f"screen it as such rather than reading a moment off it"
+        )
+
+
 def rc_beam_nominal_moment(
     *,
     steel_area: Quantity,
@@ -126,8 +152,12 @@ def rc_beam_nominal_moment(
     d = effective_depth.to("mm").magnitude
     if d <= 0:
         raise ValueError(f"effective_depth must be positive; got {effective_depth}")
-    if a >= 2.0 * d:
-        raise ValueError("the stress block exceeds the section; check the inputs")
+    _reject_beyond_the_steel(
+        block_depth=a,
+        effective_depth=d,
+        beta1=rc_beta1(concrete_strength=concrete_strength),
+        label="rc_beam_nominal_moment",
+    )
     as_mm2 = steel_area.to("mm**2").magnitude
     fy = steel_yield.to("MPa").magnitude
     moment_n_mm = as_mm2 * fy * (d - a / 2.0)
@@ -186,8 +216,12 @@ def rc_t_beam_moment(
     if a_sw <= 0:
         raise ValueError("the flange overhang alone balances the steel; check the geometry")
     a_w = a_sw * fy / (_ACI_STRESS_BLOCK_FACTOR * fc * bw)
-    if a_w >= 2.0 * d:
-        raise ValueError("the web stress block exceeds the section; check the inputs")
+    _reject_beyond_the_steel(
+        block_depth=a_w,
+        effective_depth=d,
+        beta1=rc_beta1(concrete_strength=concrete_strength),
+        label="rc_t_beam_moment",
+    )
     moment_web = a_sw * fy * (d - a_w / 2.0)
     return Quantity(magnitude=(moment_flange + moment_web) / 1.0e6, unit="kN*m")
 
@@ -258,8 +292,12 @@ def rc_doubly_reinforced_moment(
         a = beta1 * c
         stress_comp = min(ecu * (c - dp) / c * es, fy)
         force_comp = a_sp * stress_comp
-    if a >= 2.0 * d:
-        raise ValueError("the stress block exceeds the section; check the inputs")
+    _reject_beyond_the_steel(
+        block_depth=a,
+        effective_depth=d,
+        beta1=beta1,
+        label="rc_doubly_reinforced_moment",
+    )
     concrete_force = _ACI_STRESS_BLOCK_FACTOR * fc * a * b
     moment_n_mm = concrete_force * (d - a / 2.0) + force_comp * (d - dp)
     return Quantity(magnitude=moment_n_mm / 1.0e6, unit="kN*m")

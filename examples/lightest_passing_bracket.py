@@ -26,10 +26,10 @@ boundary is, which is the half of a sweep a designer actually uses. Infeasible p
 kept and labelled here, with the check that stopped each one named.
 
 **Lie 3: the truncated sweep that reports a front anyway.** Cap the budget at 20 of the
-81 points. A grid walks its first parameter slowest, so those 20 points are the three
-shallowest height rows — every one of them fails. The result reports 25% coverage,
-`provisional`, **zero feasible**, and `best("mass")` returns `None`. Not a front, not a
-recommendation, and not silence either.
+81 points. A grid walks its first parameter slowest, so those 20 points are the two
+shallowest height rows and a slice of the third — every one of them fails. The result
+reports 25% coverage, `provisional`, **zero feasible**, and `best("mass")` returns `None`.
+Not a front, not a recommendation, and not silence either.
 
 Spend the same 20-point budget on the Halton sequence instead and it finds 7 feasible
 designs and a 1.097 kg best. That is the argument for a low-discrepancy sequence in one
@@ -68,7 +68,7 @@ from anvilate.units import Quantity
 
 TIP_LOAD = Quantity.parse("1200 N")
 SPAN = Quantity.parse("400 mm")
-YIELD = Quantity.parse("250 MPa")  # S355 plate, user-supplied
+YIELD = Quantity.parse("250 MPa")  # S275 plate, user-supplied
 ELASTIC_MODULUS = Quantity.parse("200 GPa")
 DEFLECTION_LIMIT = Quantity.parse("2.0 mm")
 REQUIRED_SF = 1.5

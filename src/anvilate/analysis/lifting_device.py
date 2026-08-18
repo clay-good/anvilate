@@ -514,6 +514,10 @@ def screen_lifter_device(
     ``allowables`` must have been built for the same category the device declares;
     a mismatch is rejected rather than silently screened at the wrong factor.
 
+    At least one member or pin plate is required: a device with neither would produce a
+    scorecard whose only entries are the identification line and a Class 0 fatigue
+    exemption, and roll up green having screened nothing.
+
     ``stress_range`` and ``allowable_stress_range`` feed
     :func:`bth1_fatigue_scorecard`; omit them and a Class 1+ device reports
     NOT_EVALUATED for fatigue, which is the honest answer and not a pass.
@@ -526,6 +530,17 @@ def screen_lifter_device(
             f"the allowables were built for Category {allowables.category.value} but "
             f"{device.name} declares Category {device.category.value}; every margin "
             f"would be computed at the wrong design factor"
+        )
+    if not members and not pin_plates:
+        # The identification entry is context, not a computed check, and Class 0 fatigue
+        # is a legitimate exemption — so a device with neither members nor pin plates
+        # rolled up as a PASSING scorecard with two entries and nothing screened. That is
+        # the empty-card silent green `Scorecard` guards against, reached by walking in
+        # through the side door.
+        raise ValueError(
+            f"{device.name}: no members and no pin plates were given, so nothing would be "
+            f"screened — and the identification and fatigue entries alone roll up as a "
+            f"PASS. Supply the stresses to check, or do not call this a screen"
         )
     rated = device.rated_load.to("kN").magnitude
     weight = device.self_weight.to("kN").magnitude

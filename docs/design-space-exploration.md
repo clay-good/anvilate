@@ -30,6 +30,13 @@ print(result.summary())
 A 400 mm steel bracket carrying 1.2 kN, screened for bending yield at SF 1.5 and a 2.0 mm
 tip deflection. Eighty-one designs, evaluated in milliseconds.
 
+**0. A point that passes on paper may not pass.** `DesignPoint.fragile` marks a feasible
+point whose own declared input scatter fails it materially often, and `StudyResult.fragile`
+collects them. A front sits at the edge of feasibility, which is where fragility lives, so
+these are disproportionately the designs a sweep hands back — and the summary says how many
+there are rather than leaving "lightest passing design" to mean "lightest design that
+passes on paper".
+
 **1. The lightest design is not the lightest design.** The lightest thing in the box is
 0.251 kg and it fails bending. The lightest one that *works* is 0.942 kg — **3.75×
 heavier**. Feasibility is decided by the scorecard, and a point that did not pass is
@@ -47,8 +54,8 @@ a sweep — it is what tells you which way to move.
 
 **3. A truncated sweep still reports a front.** Cap the budget at 20 points and the
 result is `provisional`, reports 25% coverage, and finds **zero feasible designs** —
-because a grid walks its first parameter slowest, so those 20 points are the three
-shallowest height rows and every one of them fails.
+because a grid walks its first parameter slowest, so those 20 points are the two
+shallowest height rows plus a slice of the third, and every one of them fails.
 
 | 20-point budget | Feasible found | `best("mass")` |
 | --- | --- | --- |
@@ -71,6 +78,11 @@ numbers per dimension and reproducing those from memory is the kind of guess thi
 library's citation contract exists to prevent. Halton also degrades above about eight
 dimensions, where the high prime bases correlate and the points stripe rather than fill;
 past eight it raises and names the grid instead.
+
+**A Halton sweep is always provisional**, however many points it takes. It samples the box
+continuously and visits neither bound on any axis, so evaluating a grid's worth of points
+is not evaluating the grid — and for a Halton study `coverage` is a *budget* ratio rather
+than a coverage claim. Only an untruncated grid sweep reports `complete`.
 
 Neither sampler uses random state. Both are pure functions of the study declaration, so a
 study re-run returns the identical set in the identical order and the whole sweep fits in

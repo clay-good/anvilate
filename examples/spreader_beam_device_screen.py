@@ -33,9 +33,10 @@ applies — it is a judgement about supervision, environment and load predictabi
 it moves every allowable by 50%. That is why it is a typed input that travels into every
 entry's detail rather than a bare safety factor.
 
-The card as a whole comes back NOT_EVALUATED even when every stress check passes,
-because a Class 2 device with no cycle data has not been fatigue-screened. Only Class 0
-is exempt, and NOT_EVALUATED is not a pass.
+The card as a whole comes back FAIL here, on the bail — but note the fatigue entry:
+a Class 2 device with no cycle data has not been fatigue-screened, so with the bail
+fixed the card would still not read PASS. Only Class 0 is exempt, and NOT_EVALUATED is
+not a pass.
 
 Screening scope, not stamped design: BTH-1 §3-2/§3-3 allowable stresses on stresses the
 caller computed, plus the §3-1.4 fatigue obligation. There is no lateral-torsional

@@ -47,6 +47,9 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `lifting_padeye.py` | A welded lifting padeye assembly (lug + fillet weld) screened together; flags an under-sized pin against the rigging safety factor. |
 | `lug_drawing.py` | The full white-space vertical: code-check a lifting lug (ASME BTH-1), then export its plan outline to a fabrication DXF. |
 
+| `spreader_beam_device_screen.py` | The eight kilonewtons that were never in the load case: a 100 kN BTH-1 spreader beam whose upper bail passes at SF 1.06 on the rated load and fails at 0.98 once the device's own 8 kN is in it — and passes at 1.48 as Category A. |
+| `loose_ring_flange_stress.py` | A 30 mm ASME VIII Appendix 2 ring flange that passes on pressure at SF 1.20 and fails at 0.73 on the cold bolt-up, because sixteen M20 studs on a joint needing 1,873 mm² are 2.1x over-bolted and the Code charges the flange for it. |
+
 ## Mechanical — T1 analytical screens
 
 | Example | What it shows |
@@ -217,6 +220,15 @@ and reuse it. The DXF example additionally needs the `export` extra
 |---|---|
 | `tolerance_stackup.py` | A 1D assembly stack-up analyzed worst-case, RSS, and Monte Carlo: worst-case rejects the design, yet the predicted assembly yield is 99%+. |
 | `dfm_process_check.py` | A tolerance call-out screened against a process's capability floor — flags an unachievable band and suggests processes that can hold it. |
+
+## Cross-cutting layers — sweeps, verification, interop, GD&T
+
+| Example | What it shows |
+|---|---|
+| `lightest_passing_bracket.py` | Eighty-one brackets swept in milliseconds: the lightest one in the box fails and is 3.75x lighter than the lightest that passes, 55 infeasible points are kept and labelled, and a 20-point budget on a grid finds nothing where the same budget on a Halton sequence finds seven. |
+| `lifter_verification_matrix.py` | The calculation is not the evidence: a passing BTH-1 lifter's plan asks for a 125% proof load and a dimensional inspection, counts the check verified by analysis alone, names the one that did not run — and reports `not_evaluated` until a result is recorded. |
+| `frame_member_forces_to_checks.py` | A Pynite frame export screened by cited AISC checks, with the axis mapping and the axial sign convention declared rather than inferred — unflipped, a 180 kN compression reads as tension and the column is never checked for buckling. |
+| `feature_control_frame_legality.py` | Five drawing callouts that do not parse — flatness to a datum, perpendicularity to nothing, Ⓜ on a surface, symmetry on a 2018 drawing, a fourth datum — each refused with the reason, plus what a position tolerance contributes to a 1D stack. |
 
 ## Provenance
 

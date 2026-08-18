@@ -771,3 +771,422 @@ def test_an_empty_citation_list_is_not_a_bundle_that_agrees():
         "design basis", basis=basis, references=["AISC 360-16 §F2.1"]
     )
     assert populated.status is CheckStatus.PASS
+
+
+# --- Ten defects a second five-agent audit found, all in code written the same day ------
+
+
+def test_the_governing_station_is_chosen_in_one_unit_not_in_whatever_was_entered():
+    """A Quantity keeps the magnitude as entered, so the scan must convert before it compares.
+
+    A member reporting 500 kN·m at one station and 1000 N·m at another handed the 1000
+    downstream — a demand **500x too small**, in the unconservative direction, on a number
+    nothing further down re-checks. `ExternalSectionProperties` in the same file already
+    converted before comparing, which is what made this a slip rather than a design.
+    """
+    from anvilate.interop import (
+        AxisMapping,
+        ForceComponent,
+        ForceStation,
+        MemberForceRecord,
+        bind_demand,
+    )
+
+    record = MemberForceRecord(
+        member="C1",
+        tool="Solver",
+        tool_version="1",
+        load_case="LC1",
+        stations=(
+            ForceStation(
+                position=Quantity(magnitude=0, unit="m"),
+                components={"M3": Quantity(magnitude=500.0, unit="kN*m")},
+            ),
+            ForceStation(
+                position=Quantity(magnitude=3, unit="m"),
+                components={"M3": Quantity(magnitude=1000.0, unit="N*m")},
+            ),
+        ),
+    )
+    demand = bind_demand(
+        record,
+        AxisMapping(labels={ForceComponent.MAJOR_BENDING: "M3"}, axial_compression_positive=True),
+    )
+    governing = demand.components[ForceComponent.MAJOR_BENDING]
+    assert governing.to("N*mm").magnitude == pytest.approx(500e6, rel=1e-12)
+    assert demand.stations[ForceComponent.MAJOR_BENDING].to("m").magnitude == 0.0
+
+
+def test_an_axial_load_that_reverses_along_the_member_is_refused_not_reduced():
+    """+200 kN of tension and -180 kN of compression is two cases, and abs() picks the wrong one.
+
+    Bound by magnitude the member comes out as pure tension, which routes to AISC §H1.2
+    and never checks buckling — verbatim the failure the sign declaration exists to
+    prevent. Bending and shear are screened on magnitude and their sign carries no
+    capacity consequence, so only the axial case is refused.
+    """
+    from anvilate.interop import (
+        AxisMapping,
+        ForceComponent,
+        ForceStation,
+        MemberForceRecord,
+        bind_demand,
+    )
+
+    def record(*, axial: tuple[float, float], bending: tuple[float, float]):
+        return MemberForceRecord(
+            member="C2",
+            tool="Solver",
+            tool_version="1",
+            load_case="LC1",
+            stations=tuple(
+                ForceStation(
+                    position=Quantity(magnitude=position, unit="m"),
+                    components={
+                        "P": Quantity(magnitude=p, unit="kN"),
+                        "M3": Quantity(magnitude=m, unit="kN*m"),
+                    },
+                )
+                for position, p, m in ((0.0, axial[0], bending[0]), (3.0, axial[1], bending[1]))
+            ),
+        )
+
+    mapping = AxisMapping(
+        labels={ForceComponent.AXIAL: "P", ForceComponent.MAJOR_BENDING: "M3"},
+        axial_compression_positive=False,
+    )
+    with pytest.raises(ValueError, match="changes sign along the member"):
+        bind_demand(record(axial=(200.0, -180.0), bending=(10.0, 10.0)), mapping)
+    # A bending moment that reverses is ordinary and still binds by magnitude.
+    demand = bind_demand(record(axial=(-200.0, -180.0), bending=(-120.0, 148.0)), mapping)
+    assert demand.components[ForceComponent.AXIAL].to("kN").magnitude == pytest.approx(200.0)
+    assert demand.components[ForceComponent.MAJOR_BENDING].magnitude == pytest.approx(148.0)
+
+
+def test_an_ignored_component_reaches_the_report_even_with_no_reason_given():
+    """A dropped component no line mentions is indistinguishable from one never exported.
+
+    That defeats the rule the mapping exists to enforce — dropping a component is an act,
+    not an omission — and the original test only proved it by hand-passing an unrelated
+    `ignored` dict while the mapping's own was empty.
+    """
+    from anvilate.interop import (
+        AxisMapping,
+        ForceComponent,
+        ForceStation,
+        MemberForceRecord,
+        bind_demand,
+        provenance_lines,
+    )
+
+    record = MemberForceRecord(
+        member="C3",
+        tool="Solver",
+        tool_version="1",
+        load_case="LC1",
+        stations=(
+            ForceStation(
+                position=Quantity(magnitude=0, unit="m"),
+                components={
+                    "M3": Quantity(magnitude=500.0, unit="kN*m"),
+                    "M2": Quantity(magnitude=41.0, unit="kN*m"),
+                },
+            ),
+        ),
+    )
+    demand = bind_demand(
+        record,
+        AxisMapping(
+            labels={ForceComponent.MAJOR_BENDING: "M3"},
+            ignored=("M2",),
+            axial_compression_positive=True,
+        ),
+    )
+    assert demand.ignored == ("M2",)
+    lines = "\n".join(provenance_lines(demand=demand))
+    assert "not screened: M2" in lines
+    # A supplied reason wins over the placeholder.
+    with_reason = "\n".join(
+        provenance_lines(demand=demand, ignored={"M2": "carried by the slab diaphragm"})
+    )
+    assert "not screened: M2 — carried by the slab diaphragm" in with_reason
+
+
+def test_a_failing_check_is_not_verified_by_analysis():
+    """A FAIL routed to `analysis_only` printed as `complete` and let the plan roll up green.
+
+    A failing check is not verified by analysis — the analysis is what found it fails —
+    and no verification plan over a failing design should read as passed.
+    """
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+    from anvilate.verification import plan_verification
+
+    failing = ScorecardEntry.from_safety_factor(
+        "web crippling", computed=0.4, required=1.67
+    ).model_copy(update={"reference": "AISC 360-22 G3"})
+    plan = plan_verification(Scorecard(entries=(failing,)))
+    assert plan.failing_checks == ("web crippling",)
+    assert plan.analysis_only == ()
+    assert plan.status is CheckStatus.FAIL
+    assert "complete" not in plan.matrix()
+    assert "FAILED" in plan.matrix()
+    assert "1 failing" in plan.summary()
+    # A passing check with no archetype is still legitimately analysis-only.
+    passing = ScorecardEntry.from_safety_factor(
+        "web crippling", computed=2.4, required=1.67
+    ).model_copy(update={"reference": "AISC 360-22 G3"})
+    clean = plan_verification(Scorecard(entries=(passing,)))
+    assert clean.analysis_only == ("web crippling",)
+    assert clean.failing_checks == ()
+
+
+def test_a_recorded_failure_outranks_an_unevaluated_check_in_the_plan_roll_up():
+    """One unrelated check that never ran downgraded a proof test that physically cracked.
+
+    `Scorecard` already ranks FAIL above NOT_EVALUATED; the plan checked `unresolved`
+    first and inverted it, contradicting its own docstring.
+    """
+    from datetime import date
+
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+    from anvilate.verification import VerificationOutcome, plan_verification, record_outcome
+
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("bending", computed=1.2, required=1.0).model_copy(
+                update={"reference": "ASME BTH-1 §3-2"}
+            ),
+            ScorecardEntry(
+                name="fatigue",
+                status=CheckStatus.NOT_EVALUATED,
+                detail="no cycle data",
+                reference="ASME BTH-1 §3-1.4",
+            ),
+        )
+    )
+    plan = plan_verification(card, parameters={"rated_load": _q("100 kN")})
+    assert plan.unresolved  # the fatigue check
+    assert plan.status is CheckStatus.NOT_EVALUATED
+    cracked = record_outcome(
+        plan,
+        name="Proof load test",
+        outcome=VerificationOutcome(
+            passed=False,
+            measured="cracked at the bail at 118 kN",
+            performed_on=date(2026, 8, 18),
+            performed_by="M. Okonkwo",
+            instrument="Load cell LC-4471",
+        ),
+    )
+    assert cracked.status is CheckStatus.FAIL
+
+
+def test_a_halton_study_is_provisional_however_many_points_it_took():
+    """A continuous sample never visits a grid point, so it never completes the grid.
+
+    Unbudgeted, `count = grid_size` made `provisional` False and the summary say
+    "25 of 25 points evaluated (100%, complete)" while touching none of the 25 grid points
+    and neither bound on either axis — the one case where the front genuinely is
+    provisional.
+    """
+    from anvilate.explore import (
+        Objective,
+        Parameter,
+        SamplingStrategy,
+        Study,
+        StudyEvaluation,
+        run_study,
+    )
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+
+    def evaluate(parameters):
+        return StudyEvaluation(
+            objectives={"f": parameters["x"]},
+            scorecard=Scorecard(
+                entries=(ScorecardEntry.from_safety_factor("s", computed=2.0, required=1.0),)
+            ),
+        )
+
+    axes = (
+        Parameter(name="x", low=0.0, high=4.0, unit="mm"),
+        Parameter(name="y", low=0.0, high=4.0, unit="mm"),
+    )
+    halton = run_study(
+        Study(
+            name="h",
+            parameters=axes,
+            objectives=(Objective(name="f"),),
+            strategy=SamplingStrategy.HALTON,
+        ),
+        evaluate,
+    )
+    assert halton.provisional is True
+    assert "provisional" in halton.summary()
+    # It really did miss the grid: the sequence never visits either bound on either axis,
+    # so the corners a full-factorial sweep always evaluates are simply not in the set.
+    # (On a box whose grid step is dyadic some interior points do coincide, which is why
+    # the bounds are the honest test rather than a count of coincidences.)
+    for axis in ("x", "y"):
+        sampled = {point.parameters[axis] for point in halton.points}
+        assert 0.0 not in sampled and 4.0 not in sampled
+    # Coverage is a budget ratio for a Halton sweep and is capped rather than reported
+    # as 400% when the budget exceeds the grid.
+    over = run_study(
+        Study(
+            name="h",
+            parameters=axes,
+            objectives=(Objective(name="f"),),
+            strategy=SamplingStrategy.HALTON,
+            budget=100,
+        ),
+        evaluate,
+    )
+    assert over.coverage == pytest.approx(1.0)
+    assert over.provisional is True
+    # And an untruncated GRID sweep is the only thing that reports complete.
+    full = run_study(Study(name="g", parameters=axes, objectives=(Objective(name="f"),)), evaluate)
+    assert full.provisional is False
+    assert "complete" in full.summary()
+
+
+def test_a_fragile_point_is_marked_on_the_front():
+    """A front sits at the edge of feasibility, which is where fragility lives.
+
+    `best()` returned a design whose governing check falls short under its own declared
+    scatter with nothing said about it — the one new roll-up that dropped a signal
+    `review.py` and the report renderer both carry.
+    """
+    from anvilate.explore import (
+        Objective,
+        Parameter,
+        Study,
+        StudyEvaluation,
+        run_study,
+    )
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+    from anvilate.uncertainty import MarginUncertainty
+
+    def evaluate(parameters):
+        entry = ScorecardEntry.from_safety_factor("bending", computed=2.2, required=1.5)
+        if parameters["x"] < 1.5:  # the light end of the space is the fragile end
+            entry = entry.model_copy(
+                update={
+                    "uncertainty": MarginUncertainty(
+                        samples=20_000,
+                        seed=7,
+                        required=1.5,
+                        mean=2.2,
+                        std=1.4,
+                        shortfall_probability=0.46,
+                        lower=0.5,
+                        upper=4.6,
+                        coverage=0.90,
+                        sensitivities=(),
+                    )
+                }
+            )
+        return StudyEvaluation(
+            objectives={"mass": parameters["x"]}, scorecard=Scorecard(entries=(entry,))
+        )
+
+    result = run_study(
+        Study(
+            name="fragility",
+            parameters=(Parameter(name="x", low=0.0, high=4.0, unit="mm", steps=5),),
+            objectives=(Objective(name="mass"),),
+        ),
+        evaluate,
+    )
+    lightest = result.best("mass")
+    assert lightest.feasible is True
+    assert lightest.fragile is True
+    assert len(result.fragile) == 2  # x = 0 and 1
+    assert "fragile" in result.summary()
+    # A point with no distribution attached is never flagged.
+    assert all(not p.fragile for p in result.points if p.parameters["x"] >= 1.5)
+
+
+def test_a_lifter_with_nothing_to_screen_is_refused_rather_than_passed():
+    """The identification entry is context and Class 0 fatigue is an exemption.
+
+    With neither members nor pin plates those two were the only entries, so the card rolled
+    up PASS having screened nothing — the empty-card silent green `Scorecard` guards
+    against, reached through the side door. It also propagated into `run_study`, whose
+    feasibility rule is `card.passed`.
+    """
+    from anvilate.analysis import (
+        DesignCategory,
+        LifterDevice,
+        ServiceClass,
+        bth1_allowable_stresses,
+        screen_lifter_device,
+    )
+
+    device = LifterDevice(
+        name="spreader",
+        rated_load=_q("100 kN"),
+        self_weight=_q("8 kN"),
+        category=DesignCategory.B,
+        service_class=ServiceClass.CLASS_0,
+    )
+    allowables = bth1_allowable_stresses(
+        yield_strength=_q("250 MPa"),
+        ultimate_strength=_q("400 MPa"),
+        category=DesignCategory.B,
+    )
+    with pytest.raises(ValueError, match="nothing would be screened"):
+        screen_lifter_device(device, allowables=allowables)
+
+
+def test_the_stress_block_guard_is_at_the_tension_steel_not_at_twice_the_depth():
+    """`a >= 2*d` is where the lever arm changes sign, not where the physics stops.
+
+    `a = beta1*c`, so the boundary is `a >= beta1*d` — the neutral axis reaching the bars,
+    past which the steel is not in tension and `A_s*f_y*(d - a/2)` means nothing. The old
+    guard waved through the whole band between, and the module's own
+    `rc_net_tensile_strain` refused the identical section: same module, same physics, two
+    answers.
+    """
+    from anvilate.analysis import rc_beam_nominal_moment, rc_net_tensile_strain
+
+    over_reinforced = {
+        "steel_area": _q("4047.6 mm**2"),
+        "steel_yield": _q("420 MPa"),
+        "concrete_strength": _q("25 MPa"),
+        "beam_width": _q("200 mm"),
+        "effective_depth": _q("300 mm"),
+    }
+    # a = 400 mm on d = 300 mm: c/d = 1.57, the neutral axis 57% below the bars.
+    with pytest.raises(ValueError, match="reaches the tension steel"):
+        rc_beam_nominal_moment(**over_reinforced)
+    # The sibling that always refused it still does, and now they agree.
+    with pytest.raises(ValueError, match="neutral axis reaches the steel"):
+        rc_net_tensile_strain(
+            stress_block_depth=_q("400 mm"),
+            effective_depth=_q("300 mm"),
+            concrete_strength=_q("25 MPa"),
+        )
+    # An ordinary under-reinforced section is untouched.
+    ordinary = dict(over_reinforced, steel_area=_q("1200 mm**2"))
+    assert rc_beam_nominal_moment(**ordinary).to("kN*m").magnitude == pytest.approx(
+        121.316, rel=1e-4
+    )
+
+
+def test_a_non_finite_gdt_tolerance_cannot_build_a_frame():
+    """`<= 0` is False for NaN, so a NaN tolerance walked past the positivity guard.
+
+    Every downstream comparison then failed safe and silently, which is the quiet version
+    of the same problem: a frame that exists and means nothing.
+    """
+    import pydantic
+
+    from anvilate.gdt import Characteristic, FeatureControlFrame, FeatureType
+
+    for poison in (math.nan, math.inf, -math.inf, 0.0):
+        with pytest.raises(pydantic.ValidationError, match="positive, finite"):
+            FeatureControlFrame(
+                characteristic=Characteristic.FLATNESS,
+                tolerance=Quantity(magnitude=poison, unit="mm"),
+                feature_type=FeatureType.SURFACE,
+            )

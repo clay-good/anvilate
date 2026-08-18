@@ -48,6 +48,18 @@ __all__ = [
 
 # What each mapped component must be dimensionally. A moment read as a force, or a
 # kip-inch read as a kip-foot, dies here rather than three functions downstream.
+# The unit every component is compared in when scanning for its governing station. A
+# Quantity keeps the magnitude the caller entered, so the scan must convert before it
+# compares or a 1000 N*m station beats a 500 kN*m one.
+_CANONICAL_UNITS: dict[str, str] = {
+    "axial": "N",
+    "major_bending": "N*mm",
+    "minor_bending": "N*mm",
+    "major_shear": "N",
+    "minor_shear": "N",
+    "torsion": "N*mm",
+}
+
 _COMPONENT_DIMENSIONS: dict[str, str] = {
     "axial": "[force]",
     "major_bending": "[force]*[length]",
@@ -185,10 +197,14 @@ class MemberForceRecord(BaseModel):
 class MemberDemand(BaseModel):
     """The governing demand bound to Anvilate's quantities, and where it came from.
 
-    ``station`` is the position the governing value was found at. Screening the whole
+    ``stations`` gives each component its own governing position. Screening the whole
     member at one station is correct only when the same station governs every component,
-    which it usually does not — so each component carries its own governing station and
-    ``station`` is the one for the component that selected it.
+    which it usually does not.
+
+    ``ignored`` carries the exported labels the mapping deliberately dropped, so the
+    report can say what was *not* screened. Without it a reviewer's artifact is identical
+    whether a component was consciously excluded or never exported at all, which defeats
+    the rule the mapping exists to enforce.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -199,6 +215,7 @@ class MemberDemand(BaseModel):
     tool_version: str
     components: dict[ForceComponent, Quantity]
     stations: dict[ForceComponent, Quantity]
+    ignored: tuple[str, ...] = ()
 
     def get(self, component: ForceComponent) -> Quantity | None:
         """The governing magnitude of one component, or ``None`` if it was not imported."""
@@ -318,10 +335,14 @@ def bind_demand(record: MemberForceRecord, mapping: AxisMapping) -> MemberDemand
         )
     components: dict[ForceComponent, Quantity] = {}
     stations: dict[ForceComponent, Quantity] = {}
+    reversals: list[str] = []
     for component, label in mapping.labels.items():
         expected = _COMPONENT_DIMENSIONS[component.value]
+        canonical = _CANONICAL_UNITS[component.value]
         governing_station = None
         governing_value = None
+        governing_canonical = None
+        signs = set()
         for station in record.stations:
             value = station.components[label]
             if not value.has_dimension(expected):
@@ -329,17 +350,41 @@ def bind_demand(record: MemberForceRecord, mapping: AxisMapping) -> MemberDemand
                     f"{record.member}: {label} is mapped to {component.value}, which must "
                     f"be {expected}; got {value.dimensionality} ({value})"
                 )
-            magnitude = abs(value.magnitude)
-            if governing_value is None or magnitude > abs(governing_value.magnitude):
+            # Compare in ONE unit. A Quantity keeps the magnitude as entered, and stations
+            # are only validated to share component NAMES — so a member reporting 500 kN*m
+            # at one station and 1000 N*m at another would hand the 1000 downstream if the
+            # scan compared raw magnitudes. That is 500x low, in the unconservative
+            # direction, on a demand nothing downstream re-checks.
+            in_canonical = value.to(canonical).magnitude
+            if component is ForceComponent.AXIAL and in_canonical != 0.0:
+                signs.add(in_canonical > 0.0)
+            if governing_canonical is None or abs(in_canonical) > abs(governing_canonical):
+                governing_canonical = in_canonical
                 governing_value = value
                 governing_station = station.position
         assert governing_value is not None and governing_station is not None
+        if len(signs) > 1:
+            reversals.append(label)
         if component is ForceComponent.AXIAL and not mapping.axial_compression_positive:
             governing_value = Quantity(
                 magnitude=-governing_value.magnitude, unit=governing_value.unit
             )
         components[component] = governing_value
         stations[component] = governing_station
+    # An AXIAL load that changes sign along the member has two governing cases, not one,
+    # and the larger magnitude is not the worse one: a column with +200 kN of tension and
+    # -180 kN of compression binds to the tension, which routes to AISC §H1.2 and never
+    # checks buckling at all. Bending and shear are screened on magnitude and their sign
+    # carries no capacity consequence, so only the axial case is refused — and it is
+    # refused rather than resolved, because which sense governs is the caller's judgement.
+    if reversals:
+        raise ValueError(
+            f"{record.member}: the axial load ({reversals[0]}) changes sign along the "
+            f"member, so it has two governing cases and not one — and the larger "
+            f"magnitude is not necessarily the worse, since a member bound as pure "
+            f"tension is never screened for buckling. Split the record into the stations "
+            f"for each sense and bind them separately"
+        )
     return MemberDemand(
         member=record.member,
         load_case=record.load_case,
@@ -347,6 +392,7 @@ def bind_demand(record: MemberForceRecord, mapping: AxisMapping) -> MemberDemand
         tool_version=record.tool_version,
         components=components,
         stations=stations,
+        ignored=tuple(sorted(set(mapping.ignored) & exported)),
     )
 
 
@@ -383,6 +429,12 @@ def provenance_lines(
                 "  no shear form factor supplied — a transverse-shear screen reports "
                 "NOT_EVALUATED rather than assuming one"
             )
-    for label, reason in sorted((ignored or {}).items()):
+    reasons = dict(ignored or {})
+    # Every label the mapping dropped is reported, whether or not the caller supplied a
+    # reason — a dropped component that no line mentions is indistinguishable from one
+    # that was never exported.
+    for label in demand.ignored if demand is not None else ():
+        reasons.setdefault(label, "ignored by the axis mapping; no reason recorded")
+    for label, reason in sorted(reasons.items()):
         lines.append(f"not screened: {label} — {reason}")
     return tuple(lines)

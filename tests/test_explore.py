@@ -129,13 +129,17 @@ def test_the_front_matches_a_brute_force_reference_on_a_small_space():
     result = run_study(study, _analytic_evaluate)
     senses = {o.name: o.sense for o in study.objectives}
     assert result.front_indices == _brute_force_front(result.points, senses)
-    # No point on the front dominates another, which is what non-dominated means.
+    # No point on the front dominates another, which is what non-dominated means. Written
+    # as `and`, not `or`: with `or` the two clauses can never both be false at once — A
+    # and B together force the objective dicts equal, which the `!=` conjunct in each
+    # already excludes — so the assertion was a tautology and passed against anything.
     for left, right in combinations(result.front, 2):
         assert not (
             left.objectives["f"] <= right.objectives["f"]
             and left.objectives["g"] <= right.objectives["g"]
             and (left.objectives != right.objectives)
-        ) or not (
+        )
+        assert not (
             right.objectives["f"] <= left.objectives["f"]
             and right.objectives["g"] <= left.objectives["g"]
             and (left.objectives != right.objectives)

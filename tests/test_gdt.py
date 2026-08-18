@@ -235,5 +235,10 @@ def test_the_position_stack_contribution_is_half_the_zone_and_says_it_is_worst_c
 def test_a_tolerance_that_is_not_a_positive_length_is_refused():
     with pytest.raises(pydantic.ValidationError, match=r"must be a \[length\] quantity"):
         _position(tolerance=_q("0.2 kg"))
-    with pytest.raises(pydantic.ValidationError, match="must be positive"):
+    with pytest.raises(pydantic.ValidationError, match="positive, finite"):
         _position(tolerance=_q("0 mm"))
+    # `<= 0` is False for NaN, so a NaN tolerance used to walk past the positivity guard
+    # and build a frame whose every downstream comparison then failed safe and silently.
+    for poison in (float("nan"), float("inf")):
+        with pytest.raises(pydantic.ValidationError, match="positive, finite"):
+            _position(tolerance=Quantity(magnitude=poison, unit="mm"))

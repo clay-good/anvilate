@@ -91,7 +91,11 @@ plan = record_outcome(plan, name="Proof load test", outcome=VerificationOutcome(
 ```
 
 That item flips to `pass`. The plan stays `not_evaluated` while any other item is
-outstanding, and a single failed outcome fails the plan.
+outstanding, and **a single failed outcome fails the plan** — a recorded failure outranks
+anything unevaluated, the same precedence the scorecard uses. A check that *failed* is
+never counted as verified by analysis either: it appears as `FAILED` in the matrix and
+fails the plan, because a failing check is what the analysis found, not something the
+analysis verified.
 
 See [`examples/lifter_verification_matrix.py`](../examples/lifter_verification_matrix.py).
 

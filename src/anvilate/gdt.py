@@ -26,6 +26,7 @@ GD&T callout has to talk to the tolerance-stack layer.
 from __future__ import annotations
 
 from enum import StrEnum
+from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -265,8 +266,12 @@ class FeatureControlFrame(BaseModel):
     def _legal(self) -> FeatureControlFrame:
         if not self.tolerance.has_dimension("[length]"):
             raise ValueError(f"the tolerance must be a [length] quantity; got {self.tolerance}")
-        if self.tolerance.magnitude <= 0:
-            raise ValueError(f"the tolerance must be positive; got {self.tolerance}")
+        # `<= 0` is False for NaN, so a NaN tolerance walked past the positivity guard and
+        # built a frame whose every downstream comparison then silently failed safe.
+        if not isfinite(self.tolerance.magnitude) or self.tolerance.magnitude <= 0:
+            raise ValueError(
+                f"the tolerance must be a positive, finite length; got {self.tolerance}"
+            )
         family = self.characteristic.characteristic_class
         if self.edition is Y14Edition.Y14_5_2018 and self.characteristic in _REMOVED_IN_2018:
             raise ValueError(

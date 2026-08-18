@@ -216,8 +216,11 @@ _CLAUSE_ROUTES: tuple[tuple[str, str], ...] = (
 class VerificationPlan(BaseModel):
     """A scorecard's physical verification plan, with its coverage stated.
 
-    ``analysis_only`` names the checks that map to no physical test — verified by
-    analysis, which is a method, and counted so the matrix cannot imply otherwise.
+    ``analysis_only`` names the checks that map to no physical test **and passed** —
+    verified by analysis, which is a method, and counted so the matrix cannot imply
+    otherwise. ``failing_checks`` names the ones that failed: a failing check is not
+    verified by analysis, it is the thing the analysis found, and no verification plan
+    over a failing design rolls up green.
     ``unresolved`` names the checks that *should* have produced a test item and could
     not: a check that did not run, or one whose archetype needed a quantity nobody
     supplied. Both are listed rather than dropped.
@@ -228,6 +231,7 @@ class VerificationPlan(BaseModel):
     items: tuple[VerificationItem, ...]
     analysis_only: tuple[str, ...]
     unresolved: tuple[tuple[str, str], ...]
+    failing_checks: tuple[str, ...] = ()
 
     @property
     def status(self) -> CheckStatus:
@@ -236,13 +240,18 @@ class VerificationPlan(BaseModel):
         A plan is not evidence. This never reports PASS on intent — only on a full set of
         recorded outcomes, and a single failed outcome fails the plan.
         """
+        # A recorded failure outranks anything unevaluated, which is the precedence
+        # `Scorecard` already uses (FAIL blocks harder than NOT_EVALUATED). Checking
+        # `unresolved` first inverted it: one unrelated check that never ran downgraded a
+        # proof test that physically cracked the device to "not evaluated", which reads as
+        # an incomplete plan rather than a broken lifter.
+        if self.failing_checks or any(item.status is CheckStatus.FAIL for item in self.items):
+            return CheckStatus.FAIL
         if self.unresolved:
             return CheckStatus.NOT_EVALUATED
-        if any(item.status is CheckStatus.FAIL for item in self.items):
-            return CheckStatus.FAIL
-        if any(item.status is CheckStatus.NOT_EVALUATED for item in self.items):
-            return CheckStatus.NOT_EVALUATED
         if not self.items:
+            return CheckStatus.NOT_EVALUATED
+        if any(item.status is CheckStatus.NOT_EVALUATED for item in self.items):
             return CheckStatus.NOT_EVALUATED
         return CheckStatus.PASS
 
@@ -260,6 +269,8 @@ class VerificationPlan(BaseModel):
                 lines.append(f"{check:<30} {item.archetype.method.value:<13} {state}")
         for check in self.analysis_only:
             lines.append(f"{check:<30} {'analysis':<13} complete")
+        for check in self.failing_checks:
+            lines.append(f"{check:<30} {'analysis':<13} FAILED — the design does not pass")
         for check, reason in self.unresolved:
             lines.append(f"{check:<30} {'—':<13} unresolved: {reason}")
         return "\n".join(lines)
@@ -267,10 +278,11 @@ class VerificationPlan(BaseModel):
     def summary(self) -> str:
         """One line for a report pane. Never says 'verified' on an unexecuted plan."""
         covered = sum(len(item.driving_checks) for item in self.items)
+        failing = f", {len(self.failing_checks)} failing" if self.failing_checks else ""
         return (
             f"{covered} checks with a physical test ({len(self.verified)} of "
             f"{len(self.items)} performed), {len(self.analysis_only)} by analysis alone, "
-            f"{len(self.unresolved)} unresolved — plan status {self.status.value}"
+            f"{len(self.unresolved)} unresolved{failing} — plan status {self.status.value}"
         )
 
 
@@ -339,11 +351,19 @@ def plan_verification(
     unresolved: list[tuple[str, str]] = []
     lookup = {archetype.key: archetype for archetype in archetypes}
 
+    failing: list[str] = []
     for entry in scorecard.entries:
         if entry.status is CheckStatus.NOT_EVALUATED:
             unresolved.append(
                 (entry.name, "the check did not run, so there is nothing to verify against")
             )
+            continue
+        if entry.status is CheckStatus.FAIL:
+            # A failing check is not "verified by analysis" — the analysis is what says it
+            # does not pass. Routing it to `analysis_only` printed it in the matrix with
+            # the state `complete`, and let a plan whose every test was performed roll up
+            # green over a scorecard that failed.
+            failing.append(entry.name)
             continue
         key = _route(entry, lookup)
         if key is None:
@@ -375,6 +395,7 @@ def plan_verification(
         items=items,
         analysis_only=tuple(analysis_only),
         unresolved=tuple(unresolved),
+        failing_checks=tuple(failing),
     )
 
 

@@ -40,6 +40,18 @@ The axial peak is at the base, the major-axis moment at mid-height, the shear at
 station it came from, because collapsing a member to a single station screens every
 component at whichever one happened to win.
 
+The comparison runs in one canonical unit. A `Quantity` keeps the magnitude the caller
+entered and stations are validated only to share component *names*, so a member reporting
+500 kN·m at one station and 1000 N·m at another would otherwise hand the 1000 downstream —
+a demand 500× too small, on a number nothing further down re-checks.
+
+**An axial load that reverses sign along the member is refused, not reduced.** Bound by
+magnitude, a member with +200 kN of tension and −180 kN of compression comes out as pure
+tension, routes to AISC §H1.2 and is never checked for buckling — the exact failure the
+sign declaration exists to prevent. Which sense governs is the caller's judgement, so the
+two cases are bound separately. Bending and shear are screened on magnitude and their sign
+carries no capacity consequence, so they reverse freely.
+
 ## Imported section properties
 
 `ExternalSectionProperties` carries the tool, the version, and **how** — "warping

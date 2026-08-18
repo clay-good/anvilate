@@ -34,8 +34,8 @@ reviewer cannot trace — and why every scorecard detail names it.
 | --- | --- | --- |
 | Tension, gross section | §3-2.1 | `F_t = S_y / N_d` |
 | Tension, net section | §3-2.1 | `F_t = S_u / (1.20·N_d)` |
-| Shear | §3-2.3 | `F_v = 0.60·S_y / N_d` |
-| Bending, compact and braced | §3-2.3 | `F_b = S_y / N_d` |
+| Shear | §3-2 | `F_v = 0.60·S_y / N_d` |
+| Bending, compact and braced | §3-2 | `F_b = S_y / N_d` |
 | Pin bearing, clearance fit | §3-3.3 | `F_p = 1.25·S_y / N_d` |
 
 They all scale with the same category, so Category B is exactly 2/3 of Category A for

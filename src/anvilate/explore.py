@@ -289,6 +289,12 @@ class DesignPoint(BaseModel):
     ``governing_check`` names the check running closest to its limit, which is what tells
     a reader *why* a point is where it is — an infeasible point names what stopped it,
     and a feasible one names what it would hit first if pushed.
+
+    ``fragile`` is True when a check on this point carries a margin distribution showing a
+    material shortfall probability. Such a point is feasible — it passes nominally — and
+    it is exactly the design an optimiser will hand back, because the front is drawn at
+    the edge of feasibility where fragility lives. Reporting it is the difference between
+    "the lightest passing design" and "the lightest design that passes on paper".
     """
 
     model_config = ConfigDict(frozen=True)
@@ -298,6 +304,7 @@ class DesignPoint(BaseModel):
     objectives: dict[str, float]
     status: CheckStatus
     feasible: bool
+    fragile: bool = False
     governing_check: str | None = None
     governing_safety_factor: float | None = None
 
@@ -306,9 +313,11 @@ class StudyResult(BaseModel):
     """A completed study: every point evaluated, and the exact front over the feasible ones.
 
     ``front`` is the non-dominated subset of the *feasible* points — exact, not
-    approximate, because the whole evaluated set is in hand. ``provisional`` is True when
-    the sweep was truncated by its budget, and then the front is the best of what ran and
-    nothing stronger. Nothing here is described as optimal.
+    approximate, because the whole evaluated set is in hand. ``provisional`` is True
+    whenever the sweep did not exhaust the declared grid — because a budget truncated it,
+    or because it sampled continuously and never visited the grid at all — and then the
+    front is the best of what ran and nothing stronger. Only an untruncated grid sweep is
+    complete. Nothing here is described as optimal.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -331,9 +340,28 @@ class StudyResult(BaseModel):
         return tuple(point for point in self.points if point.feasible)
 
     @property
+    def fragile(self) -> tuple[DesignPoint, ...]:
+        """The feasible points whose own declared input scatter fails them materially often.
+
+        A front sits at the edge of feasibility, which is where fragility lives, so these
+        are disproportionately the points an optimiser returns. They are not excluded —
+        they do pass — but a sweep that does not name them hands back the lightest design
+        that passes *on paper*.
+        """
+        return tuple(point for point in self.feasible if point.fragile)
+
+    @property
     def coverage(self) -> float:
-        """The fraction of the full-factorial space this sweep actually evaluated."""
-        return len(self.points) / self.grid_size if self.grid_size else 0.0
+        """The fraction of the full-factorial space this sweep evaluated, at most 1.0.
+
+        For a Halton sweep this is a *budget* ratio, not a coverage claim: the sequence
+        samples the box continuously and lands on no grid point at all, so the number says
+        how much of a grid's worth of evaluation was spent rather than how much of the
+        grid was seen. :attr:`provisional` is True for every Halton study for that reason.
+        """
+        if not self.grid_size:
+            return 0.0
+        return min(len(self.points) / self.grid_size, 1.0)
 
     def best(self, objective: str) -> DesignPoint | None:
         """The feasible point that scores best on one objective, or ``None`` if none do.
@@ -355,9 +383,11 @@ class StudyResult(BaseModel):
         """One line for a report pane. Never says 'optimal'."""
         state = "provisional" if self.provisional else "complete"
         feasible = len(self.feasible)
+        fragile = len(self.fragile)
+        warning = f", {fragile} of them fragile" if fragile else ""
         return (
             f"{self.study.name}: {len(self.points)} of {self.grid_size} points evaluated "
-            f"({self.coverage:.0%}, {state}), {feasible} feasible, "
+            f"({self.coverage:.0%}, {state}), {feasible} feasible{warning}, "
             f"{len(self.front_indices)} on the front"
         )
 
@@ -429,6 +459,7 @@ def run_study(
                 # run has not been shown to work, and the front is "the best thing that
                 # works", not "the best thing we did not disprove".
                 feasible=card.passed,
+                fragile=bool(card.fragile()),
                 governing_check=governing.name if governing is not None else None,
                 governing_safety_factor=governing.safety_factor if governing is not None else None,
             )
@@ -444,10 +475,15 @@ def run_study(
         )
     ]
     grid_size = study.grid_size()
+    # A Halton sweep is ALWAYS provisional, however many points it took. It samples the
+    # box continuously and hits neither bound on any axis, so evaluating grid_size points
+    # is not evaluating the grid — a 5x5 study reporting "25 of 25 (100%, complete)" while
+    # touching none of the 25 grid points is the exact claim rule 2 exists to prevent.
+    exhaustive = study.strategy is SamplingStrategy.GRID and len(points) >= grid_size
     return StudyResult(
         study=study,
         points=tuple(points),
         front_indices=tuple(front),
         grid_size=grid_size,
-        provisional=len(points) < grid_size,
+        provisional=not exhaustive,
     )
