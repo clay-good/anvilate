@@ -1190,3 +1190,181 @@ def test_a_non_finite_gdt_tolerance_cannot_build_a_frame():
                 tolerance=Quantity(magnitude=poison, unit="mm"),
                 feature_type=FeatureType.SURFACE,
             )
+
+
+def test_every_bth1_limit_state_actually_travels_through_the_device_screen():
+    """Only SHEAR ever reached `screen_lifter_device`, so BENDING's routing was unpinned.
+
+    Routing a bending stress to the shear allowable passes it at 1/0.60 = 1.67x the
+    margin it earned, and the whole reason `BTH1LimitState` exists is to make that
+    impossible. A routing table is only as good as the rows something drives through it.
+    """
+    from anvilate.analysis import (
+        BTH1LimitState,
+        DesignCategory,
+        LifterDevice,
+        LifterMemberStress,
+        ServiceClass,
+        bth1_allowable_for,
+        bth1_allowable_stresses,
+        screen_lifter_device,
+    )
+
+    allowables = bth1_allowable_stresses(
+        yield_strength=_q("300 MPa"),
+        ultimate_strength=_q("450 MPa"),
+        category=DesignCategory.B,
+    )
+    device = LifterDevice(
+        name="spreader",
+        rated_load=_q("100 kN"),
+        self_weight=_q("8 kN"),
+        category=DesignCategory.B,
+        service_class=ServiceClass.CLASS_0,
+    )
+    stress = _q("40 MPa")
+    # Drive EVERY limit state through the screen and check each lands on its own
+    # allowable, not merely that the table maps them.
+    for state in BTH1LimitState:
+        entries = screen_lifter_device(
+            device,
+            allowables=allowables,
+            members=(LifterMemberStress(name=state.value, stress=stress, limit_state=state),),
+        )
+        entry = next(e for e in entries if e.name == state.value)
+        expected = bth1_allowable_for(allowables, state).to("MPa").magnitude
+        assert entry.safety_factor == pytest.approx(expected / 40.0, rel=1e-9)
+        assert f"{expected:.4g} MPa" in entry.detail
+    # And the two that must differ, do: bending is S_y/N_d and shear 0.60 of it, so a
+    # bending stress routed to the shear allowable would read 1.67x low.
+    bending = bth1_allowable_for(allowables, BTH1LimitState.BENDING).to("MPa").magnitude
+    shear = bth1_allowable_for(allowables, BTH1LimitState.SHEAR).to("MPa").magnitude
+    assert shear / bending == pytest.approx(0.60, rel=1e-12)
+
+
+def test_an_unresolved_check_holds_a_plan_open_even_when_every_test_passed():
+    """The plan's own rule 2, unenforced at the roll-up until something drove it.
+
+    No test built a plan with both a non-empty `unresolved` list and fully recorded
+    passing outcomes — the exact combination where deleting the unresolved branch lets a
+    plan report PASS over a check that was never screened.
+    """
+    from datetime import date
+
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+    from anvilate.verification import VerificationOutcome, plan_verification, record_outcome
+
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("bending", computed=1.4, required=1.0).model_copy(
+                update={"reference": "ASME BTH-1 §3-2"}
+            ),
+            ScorecardEntry(
+                name="fatigue",
+                status=CheckStatus.NOT_EVALUATED,
+                detail="no cycle data",
+                reference="ASME BTH-1 §3-1.4",
+            ),
+        )
+    )
+    plan = plan_verification(card, parameters={"rated_load": _q("100 kN")})
+    performed = record_outcome(
+        plan,
+        name="Proof load test",
+        outcome=VerificationOutcome(
+            passed=True,
+            measured="125.2 kN held, no permanent set",
+            performed_on=date(2026, 8, 18),
+            performed_by="M. Okonkwo",
+            instrument="Load cell LC-4471",
+        ),
+    )
+    # Every planned test performed and passed...
+    assert performed.verified == performed.items
+    assert all(item.status is CheckStatus.PASS for item in performed.items)
+    # ...and the plan is still open, because a check nobody screened is still unscreened.
+    assert performed.unresolved
+    assert performed.status is CheckStatus.NOT_EVALUATED
+
+
+def test_a_plan_with_no_items_at_all_is_not_a_passed_plan():
+    """A scorecard of purely analysis-verified checks produces zero items.
+
+    An empty plan reporting PASS is the vacuous green the module docstring warns about,
+    and it is reachable from an ordinary scorecard rather than a contrived one.
+    """
+    from anvilate.scorecard import Scorecard, ScorecardEntry
+    from anvilate.verification import plan_verification
+
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("weld throat", computed=1.4, required=1.0).model_copy(
+                update={"reference": "AWS D1.1 fillet weld"}
+            ),
+        )
+    )
+    plan = plan_verification(card)
+    assert plan.items == ()
+    assert plan.analysis_only == ("weld throat",)
+    assert plan.unresolved == ()
+    assert plan.failing_checks == ()
+    assert plan.status is CheckStatus.NOT_EVALUATED
+    assert plan.verified == ()
+
+
+def test_the_governing_station_scan_compares_magnitudes_not_signed_values():
+    """A wholly negative series never updated past its first station without the abs().
+
+    A compression axial series or a hogging moment run is entirely negative, so a signed
+    `>` comparison keeps the first station forever and `bind_demand` returns it instead of
+    the largest — understating the demand, in the unconservative direction.
+    """
+    from anvilate.interop import (
+        AxisMapping,
+        ForceComponent,
+        ForceStation,
+        MemberForceRecord,
+        bind_demand,
+    )
+
+    record = MemberForceRecord(
+        member="C4",
+        tool="Solver",
+        tool_version="1",
+        load_case="LC1",
+        stations=tuple(
+            ForceStation(
+                position=Quantity(magnitude=position, unit="m"),
+                components={"M3": Quantity(magnitude=moment, unit="kN*m")},
+            )
+            # Wholly hogging, and the LAST station governs — the case a signed comparison
+            # walks straight past.
+            for position, moment in ((0.0, -40.0), (3.0, -95.0), (6.0, -160.0))
+        ),
+    )
+    demand = bind_demand(
+        record,
+        AxisMapping(labels={ForceComponent.MAJOR_BENDING: "M3"}, axial_compression_positive=True),
+    )
+    assert demand.components[ForceComponent.MAJOR_BENDING].magnitude == pytest.approx(-160.0)
+    assert demand.stations[ForceComponent.MAJOR_BENDING].to("m").magnitude == 6.0
+    # A tie keeps the FIRST station it was found at, which is the documented order and the
+    # only thing that distinguishes `>` from `>=` here.
+    tied = MemberForceRecord(
+        member="C5",
+        tool="Solver",
+        tool_version="1",
+        load_case="LC1",
+        stations=tuple(
+            ForceStation(
+                position=Quantity(magnitude=position, unit="m"),
+                components={"M3": Quantity(magnitude=-100.0, unit="kN*m")},
+            )
+            for position in (0.0, 3.0, 6.0)
+        ),
+    )
+    tied_demand = bind_demand(
+        tied,
+        AxisMapping(labels={ForceComponent.MAJOR_BENDING: "M3"}, axial_compression_positive=True),
+    )
+    assert tied_demand.stations[ForceComponent.MAJOR_BENDING].to("m").magnitude == 0.0
