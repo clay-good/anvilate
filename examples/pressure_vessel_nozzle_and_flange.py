@@ -35,7 +35,9 @@ allowables and `governing_gasket_bolt_load` — which takes neither — is the w
 consumer for a flange.
 
 Screening scope, not Code design: this is UG-27/UG-32/UG-37 and the Appendix 2 bolt
-loads. It is not a U-stamp calculation. There is no flange stress analysis, no MDMT
+loads. It is not a U-stamp calculation. This flange's stress is not screened here — see
+``examples/loose_ring_flange_stress.py`` for the Appendix 2-7(b) ring-flange case, which
+is the only flange stress the library computes. There is no MDMT
 or impact-test assessment, no external-pressure or nozzle-load check, and no
 fabrication or NDE requirements. A green scorecard here means the pressure
 arithmetic screens clean; it does not mean the vessel is Code-compliant.

@@ -17,7 +17,7 @@ checks, inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from math import cos, radians, sin, sqrt, tan
+from math import cos, log10, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -66,6 +66,13 @@ __all__ = [
     "asme_ug37_reinforcement_scorecard",
     "asme_appendix_2_gasket_geometry",
     "asme_appendix_2_required_bolt_area",
+    "FlangeShapeFactors",
+    "FlangeMoments",
+    "LooseRingFlangeStress",
+    "asme_appendix_2_shape_factors",
+    "asme_appendix_2_flange_moments",
+    "asme_appendix_2_ring_flange_stress",
+    "asme_appendix_2_flange_stress_scorecard",
 ]
 
 
@@ -1888,3 +1895,363 @@ def asme_appendix_2_required_bolt_area(
     operating = operating_bolt_load.to("N").magnitude / operating_allowable.to("MPa").magnitude
     seating = seating_bolt_load.to("N").magnitude / seating_allowable.to("MPa").magnitude
     return Quantity(magnitude=max(operating, seating), unit="mm**2")
+
+
+class FlangeShapeFactors(BaseModel):
+    """The Appendix 2 shape factors T, U, Y and Z — functions of K = A/B and nothing else.
+
+    Every one of them is a pure function of the flange's outside-to-inside diameter
+    ratio, so a flange's *proportions* fix them before any load is known. ``y_factor``
+    is the one a ring flange's stress runs on; ``t_factor``, ``u_factor`` and
+    ``z_factor`` belong to the hub-flange equations this module does not implement, and
+    are reported because they are free and because a reader checking against the Code's
+    Table 2-7.1 will look for all four.
+
+    Y rises steeply as K approaches 1: a thin ring is a flexible ring, and the same
+    moment on it produces far more stress. That is real behaviour, not a numerical
+    artefact — but it means a flange whose outside diameter is barely larger than its
+    bore is governed by its proportions, not its thickness.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    ratio: float
+    t_factor: float
+    u_factor: float
+    y_factor: float
+    z_factor: float
+
+    def __str__(self) -> str:
+        return (
+            f"Appendix 2 shape factors at K={self.ratio:.4g}: "
+            f"T={self.t_factor:.4g}, U={self.u_factor:.4g}, "
+            f"Y={self.y_factor:.4g}, Z={self.z_factor:.4g}"
+        )
+
+
+def asme_appendix_2_shape_factors(
+    *, outside_diameter: Quantity, inside_diameter: Quantity
+) -> FlangeShapeFactors:
+    """The Appendix 2 flange shape factors T, U, Y, Z for the diameter ratio K = A/B.
+
+    These are the closed-form equations of Appendix 2-7.1, not the F/V/f *curves* of
+    Figures 2-7.2 through 2-7.6. That distinction is the whole reason this function
+    exists and the hub-stress functions do not: T, U, Y and Z are published algebra and
+    can be reproduced exactly, while F, V and f are digitised figures that would have to
+    be guessed at.
+
+        Z = (K² + 1) / (K² − 1)
+        Y = [0.66845 + 5.71690·K²·log₁₀K/(K² − 1)] / (K − 1)
+        T = [K²·(1 + 8.55246·log₁₀K) − 1] / [(1.04720 + 1.9448·K²)·(K − 1)]
+        U = [K²·(1 + 8.55246·log₁₀K) − 1] / [1.36136·(K² − 1)·(K − 1)]
+
+    **Anchored, not recalled.** A published worked calculation (a 19 in bore, 26.9685 in
+    OD integral flange, K = 1.41939) reports T = 1.74578 and Z = 2.97106; these
+    equations give 1.74572 and 2.97110, agreeing to 4×10⁻⁵ relative. Y and U are tied to
+    each other by an identity that falls out of the constants — U = Y/0.910 to five
+    figures at every K — so reproducing one reproduces the other. The suite asserts all
+    of it.
+
+    ``outside_diameter`` A is the flange OD and ``inside_diameter`` B its bore; A must
+    exceed B. Returns a :class:`FlangeShapeFactors`.
+    """
+    _require(outside_diameter, "[length]", "outside_diameter")
+    _require(inside_diameter, "[length]", "inside_diameter")
+    a = outside_diameter.to("mm").magnitude
+    b = inside_diameter.to("mm").magnitude
+    if b <= 0:
+        raise ValueError(f"inside_diameter must be positive; got {inside_diameter}")
+    if a <= b:
+        raise ValueError(
+            f"outside_diameter {outside_diameter} must exceed inside_diameter "
+            f"{inside_diameter}; K = A/B must be greater than 1"
+        )
+    k = a / b
+    k2 = k * k
+    log_k = log10(k)
+    hub_numerator = k2 * (1.0 + 8.55246 * log_k) - 1.0
+    return FlangeShapeFactors(
+        ratio=k,
+        t_factor=hub_numerator / ((1.04720 + 1.9448 * k2) * (k - 1.0)),
+        u_factor=hub_numerator / (1.36136 * (k2 - 1.0) * (k - 1.0)),
+        y_factor=(0.66845 + 5.71690 * k2 * log_k / (k2 - 1.0)) / (k - 1.0),
+        z_factor=(k2 + 1.0) / (k2 - 1.0),
+    )
+
+
+class FlangeMoments(BaseModel):
+    """The Appendix 2 flange moments, with every load and lever arm that built them.
+
+    The operating moment is three loads on three different lever arms about the bolt
+    circle, and they do not move together: ``end_force`` H_D acts at the bore,
+    ``face_force`` H_T on the annulus between the bore and the gasket reaction, and
+    ``gasket_force`` H_G out at the gasket. Pulling the bolt circle in toward the gasket
+    shortens h_G and lengthens nothing, which is why the Code recommends keeping h_G
+    small — and why the components are reported rather than only their sum.
+
+    ``seating_moment`` is a different loading entirely: the full bolt-up load W on the
+    gasket arm alone, cold, with no pressure anywhere in it. Neither moment substitutes
+    for the other and the flange has to survive both against their own allowables.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    end_force: Quantity
+    total_end_force: Quantity
+    face_force: Quantity
+    gasket_force: Quantity
+    end_arm: Quantity
+    face_arm: Quantity
+    gasket_arm: Quantity
+    operating_moment: Quantity
+    seating_moment: Quantity
+
+    def __str__(self) -> str:
+        return (
+            f"Appendix 2 flange moments: operating {self.operating_moment}, "
+            f"seating {self.seating_moment}"
+        )
+
+
+def asme_appendix_2_flange_moments(
+    *,
+    inside_diameter: Quantity,
+    bolt_circle_diameter: Quantity,
+    gasket_diameter: Quantity,
+    pressure: Quantity,
+    operating_bolt_load: Quantity,
+    seating_bolt_load: Quantity,
+) -> FlangeMoments:
+    """The Appendix 2 operating and seating moments of a **loose-type** flange.
+
+    The three operating loads are H_D = 0.785·B²·P at the bore, the total end force
+    H = 0.785·G²·P at the gasket reaction diameter, the annulus force H_T = H − H_D, and
+    the residual gasket load H_G = W_m1 − H. Their lever arms about the bolt circle C
+    are the **loose-type** row of Table 2-6:
+
+        h_D = (C − B)/2,  h_G = (C − G)/2,  h_T = (h_D + h_G)/2
+
+    and M_o = H_D·h_D + H_T·h_T + H_G·h_G. The seating moment is M_a = W·h_G.
+
+    **The moment arms are type-specific and this function only knows one type.** An
+    integral or optional-type flange takes h_D = R + g₁/2 and h_T = (R + g₁ + h_G)/2 off
+    the hub, which are different numbers; using these arms on a welding-neck flange
+    understates the moment. See :func:`asme_appendix_2_ring_flange_stress` for the
+    matching stress equation and the same restriction.
+
+    ``operating_bolt_load`` W_m1 comes from
+    :func:`~anvilate.analysis.gasket_operating_load`. ``seating_bolt_load`` W is the
+    flange *design* bolt load for gasket seating, W = (A_m + A_b)·S_a/2 — the mean of
+    the required and actual bolt areas against the ambient allowable, **not** the gasket
+    seating load W_m2 on its own. The Code deliberately charges the flange for the
+    over-bolting a fitter can apply at assembly, so passing W_m2 here understates the
+    seating moment whenever the chosen bolts exceed the required area, which they
+    essentially always do.
+
+    Diameters must satisfy C > G > B. Returns a :class:`FlangeMoments`.
+    """
+    _require(pressure, "[pressure]", "pressure")
+    if pressure.magnitude <= 0:
+        raise ValueError(f"pressure must be positive; got {pressure}")
+    lengths = {}
+    for value, name in (
+        (inside_diameter, "inside_diameter"),
+        (bolt_circle_diameter, "bolt_circle_diameter"),
+        (gasket_diameter, "gasket_diameter"),
+    ):
+        _require(value, "[length]", name)
+        magnitude = value.to("mm").magnitude
+        if magnitude <= 0:
+            raise ValueError(f"{name} must be positive; got {value}")
+        lengths[name] = magnitude
+    for value, name in (
+        (operating_bolt_load, "operating_bolt_load"),
+        (seating_bolt_load, "seating_bolt_load"),
+    ):
+        _require(value, "[force]", name)
+        if value.magnitude <= 0:
+            raise ValueError(f"{name} must be positive; got {value}")
+    b = lengths["inside_diameter"]
+    c = lengths["bolt_circle_diameter"]
+    g = lengths["gasket_diameter"]
+    if not b < g < c:
+        raise ValueError(
+            f"the diameters must nest as bore < gasket reaction < bolt circle; got "
+            f"B={inside_diameter}, G={gasket_diameter}, C={bolt_circle_diameter}"
+        )
+    p = pressure.to("MPa").magnitude
+    w_m1 = operating_bolt_load.to("N").magnitude
+    w_seat = seating_bolt_load.to("N").magnitude
+    h_d = 0.785 * b * b * p
+    h_total = 0.785 * g * g * p
+    if w_m1 <= h_total:
+        raise ValueError(
+            f"operating_bolt_load {operating_bolt_load} does not exceed the hydrostatic "
+            f"end force {h_total:.4g} N, so no gasket load survives pressurisation; it "
+            f"should be W_m1 from gasket_operating_load, which includes that end force"
+        )
+    h_t = h_total - h_d
+    h_g = w_m1 - h_total
+    arm_d = (c - b) / 2.0
+    arm_g = (c - g) / 2.0
+    arm_t = (arm_d + arm_g) / 2.0
+    return FlangeMoments(
+        end_force=Quantity(magnitude=h_d, unit="N"),
+        total_end_force=Quantity(magnitude=h_total, unit="N"),
+        face_force=Quantity(magnitude=h_t, unit="N"),
+        gasket_force=Quantity(magnitude=h_g, unit="N"),
+        end_arm=Quantity(magnitude=arm_d, unit="mm"),
+        face_arm=Quantity(magnitude=arm_t, unit="mm"),
+        gasket_arm=Quantity(magnitude=arm_g, unit="mm"),
+        operating_moment=Quantity(magnitude=h_d * arm_d + h_t * arm_t + h_g * arm_g, unit="N*mm"),
+        seating_moment=Quantity(magnitude=w_seat * arm_g, unit="N*mm"),
+    )
+
+
+class LooseRingFlangeStress(BaseModel):
+    """The Appendix 2 tangential stress in a loose ring flange, in both conditions.
+
+    For a loose-type flange with no hub the longitudinal hub stress S_H and the radial
+    stress S_R are both zero by definition, and the single tangential stress
+    S_T = Y·M_o/(t²·B) is the whole check. That is why this case can be shipped and the
+    hub cases cannot.
+
+    ``governing_condition`` names which of operating and seating produced the lower
+    safety factor, and it is genuinely not always operating: a cold bolt-up on a
+    generously bolted joint can out-moment the pressurised condition, and it is checked
+    against the *ambient* allowable, which is the higher of the two. Both stresses are
+    reported so the loser is visible.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    shape_factors: FlangeShapeFactors
+    operating_stress: Quantity
+    seating_stress: Quantity
+    operating_safety_factor: float
+    seating_safety_factor: float
+    governing_condition: str
+    safety_factor: float
+    adequate: bool
+
+    def __str__(self) -> str:
+        verdict = "adequate" if self.adequate else "overstressed"
+        return (
+            f"Appendix 2 ring flange {verdict}: {self.governing_condition} governs at "
+            f"SF {self.safety_factor:.3g}"
+        )
+
+
+def asme_appendix_2_ring_flange_stress(
+    *,
+    outside_diameter: Quantity,
+    inside_diameter: Quantity,
+    thickness: Quantity,
+    moments: FlangeMoments,
+    operating_allowable: Quantity,
+    seating_allowable: Quantity,
+) -> LooseRingFlangeStress:
+    """The Appendix 2 tangential stress S_T = Y·M/(t²·B) of a **loose ring flange**.
+
+    **Scope, stated up front because getting it wrong is silent.** This is Appendix
+    2-7(b): loose-type flanges *without* hubs, and loose or optional-type flanges the
+    designer chooses to calculate without crediting a hub (Figure 2-4 sketches 1, 1a, 2,
+    2a, 3, 3a, 4, 4a, 4b, 4c and the optional sketches taken as loose). For those,
+    S_H = 0 and S_R = 0 and S_T alone is the check. A **welding-neck or any
+    hub-credited flange is not covered**: its S_T carries a −Z·S_R term and its hub
+    stress S_H usually governs, both of which need the F, V and f *figures* of Appendix
+    2. Running a hub flange through here reports the no-hub number, which is
+    unconservative — the moment arms are wrong too, per
+    :func:`asme_appendix_2_flange_moments`.
+
+    Both conditions are screened, each against its own allowable: the operating moment
+    against the flange material's allowable at design temperature, the seating moment
+    against its allowable at ambient. The governing condition is whichever gives the
+    lower safety factor, which is not decided by the moments alone — the two allowables
+    differ, often by a lot, on a hot joint.
+
+    Also out of scope: the bolt-spacing correction factor B_sc, which multiplies M_o
+    when actual bolt spacing exceeds 2a + t, and the Appendix 2 rigidity index. Both are
+    separate criteria a flange can fail while its stresses pass.
+
+    Returns a :class:`LooseRingFlangeStress`; ``adequate`` is a safety factor of at
+    least 1.0 in *both* conditions.
+    """
+    _require(thickness, "[length]", "thickness")
+    t = thickness.to("mm").magnitude
+    if t <= 0:
+        raise ValueError(f"thickness must be positive; got {thickness}")
+    for value, name in (
+        (operating_allowable, "operating_allowable"),
+        (seating_allowable, "seating_allowable"),
+    ):
+        _require(value, "[pressure]", name)
+        if value.magnitude <= 0:
+            raise ValueError(f"{name} must be positive; got {value}")
+    factors = asme_appendix_2_shape_factors(
+        outside_diameter=outside_diameter, inside_diameter=inside_diameter
+    )
+    b = inside_diameter.to("mm").magnitude
+    denominator = t * t * b
+    operating = factors.y_factor * moments.operating_moment.to("N*mm").magnitude / denominator
+    seating = factors.y_factor * moments.seating_moment.to("N*mm").magnitude / denominator
+    operating_sf = operating_allowable.to("MPa").magnitude / operating
+    seating_sf = seating_allowable.to("MPa").magnitude / seating
+    if seating_sf < operating_sf:
+        condition, governing = "seating", seating_sf
+    else:
+        condition, governing = "operating", operating_sf
+    return LooseRingFlangeStress(
+        shape_factors=factors,
+        operating_stress=Quantity(magnitude=operating, unit="MPa"),
+        seating_stress=Quantity(magnitude=seating, unit="MPa"),
+        operating_safety_factor=operating_sf,
+        seating_safety_factor=seating_sf,
+        governing_condition=condition,
+        safety_factor=governing,
+        adequate=governing >= 1.0,
+    )
+
+
+def asme_appendix_2_flange_stress_scorecard(
+    name: str,
+    *,
+    stress: LooseRingFlangeStress | None,
+    required: float = 1.0,
+    missing: str = "",
+) -> ScorecardEntry:
+    """Screen an Appendix 2 ring-flange stress into a :class:`ScorecardEntry`.
+
+    The safety factor is the governing one of the two conditions — allowable over
+    S_T — judged against ``required`` (1.0 is exactly the Code's limit, which carries
+    no margin of its own). The detail names which condition governed and reports both
+    stresses, because a flange that passes operating and fails seating is a bolt-up
+    problem, not a pressure problem, and the two have different fixes.
+
+    ``stress`` of ``None`` is ``NOT_EVALUATED``, which is the honest answer for a
+    hub-credited flange: this module cannot screen one, and ``missing`` should say so
+    rather than leaving a reader to read the blank as a pass.
+    """
+    if stress is None:
+        detail = "not evaluated"
+        if missing.strip():
+            detail = f"{detail} — {missing.strip()}"
+        else:
+            detail = f"{detail} — the Appendix 2 flange stress could not be run"
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=detail,
+            reference=_CLAUSE_APPENDIX_2,
+        )
+    entry = ScorecardEntry.from_safety_factor(
+        name, computed=stress.safety_factor, required=required
+    )
+    detail = (
+        f"{stress.governing_condition} governs: S_T "
+        f"{stress.operating_stress.magnitude:.4g} MPa operating and "
+        f"{stress.seating_stress.magnitude:.4g} MPa seating, at "
+        f"Y={stress.shape_factors.y_factor:.4g} (K="
+        f"{stress.shape_factors.ratio:.4g})"
+    )
+    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_APPENDIX_2})

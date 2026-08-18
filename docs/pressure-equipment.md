@@ -1,7 +1,8 @@
 # Pressure equipment screening (ASME VIII Div 1)
 
 **Screening scope, not Code design.** These are UG-27, UG-32, UG-37 and the Appendix 2
-bolt loads. They are not a U-stamp calculation: there is no flange stress analysis, no
+bolt loads and ring-flange stress. They are not a U-stamp calculation: there is no
+hub-flange stress analysis (see [below](#the-flange-stress-that-ships-and-the-one-that-does-not)), no
 MDMT or impact-test assessment, no external-pressure or nozzle-load check, no fatigue
 screening, and no fabrication or NDE requirements. A green scorecard means the pressure
 arithmetic screens clean; it does not mean the vessel is Code-compliant, and it is not a
@@ -42,6 +43,10 @@ See [`examples/pressure_vessel_nozzle_and_flange.py`](../examples/pressure_vesse
 | `asme_appendix_2_gasket_geometry` | App. 2, Table 2-5.2 | Effective seating width `b` and diameter `G` |
 | `asme_appendix_2_required_bolt_area` | App. 2 | `A_m = max(W_m1/S_b, W_m2/S_a)` |
 | `gasket_seating_load` / `gasket_operating_load` | App. 2 | `W_m2` and `W_m1` from `m` and `y` |
+| `asme_appendix_2_shape_factors` | App. 2-7.1 | `T`, `U`, `Y`, `Z` from `K = A/B` |
+| `asme_appendix_2_flange_moments` | App. 2, Table 2-6 | Loose-type `M_o` and `M_a`, with every load and arm |
+| `asme_appendix_2_ring_flange_stress` | App. 2-7(b) | `S_T = Y·M/(t²·B)` in both conditions |
+| `asme_appendix_2_flange_stress_scorecard` | App. 2-7(b) | The same as a PASS/FAIL entry |
 
 ### The two Appendix 2 traps
 
@@ -64,6 +69,45 @@ governs, by 57%. The one-number form (larger load ÷ one allowable) returns 2,32
 `asme_appendix_2_required_bolt_area` is the correct consumer.
 `governing_gasket_bolt_load` takes the larger load with no allowables at all, and is
 only equivalent when `S_a == S_b`.
+
+## The flange stress that ships, and the one that does not
+
+**Loose-type flanges without a hub are screened. Hub-credited flanges are not.** For the
+no-hub case (Figure 2-4 sketches 1, 1a, 2, 2a, 3, 3a, 4, 4a, 4b, 4c, and optional-type
+flanges calculated as loose) Appendix 2-7(b) sets `S_H = 0` and `S_R = 0`, so the single
+tangential stress `S_T = Y·M_o/(t²·B)` is the whole check — closed-form, and shipped.
+
+A welding-neck or any hub-credited flange runs on the `F`, `V` and `f` factors, which are
+*figures* inside the Code, not equations. Implementing them from memory is exactly the
+guess this library's citation contract exists to prevent, so
+`asme_appendix_2_flange_stress_scorecard(..., stress=None, missing=...)` reports
+NOT_EVALUATED naming what is missing, rather than reporting the no-hub number — which
+would be unconservative, since a hub flange's moment arms come off the hub too. The
+bolt-spacing correction `B_sc` and the Appendix 2 rigidity index are also out of scope,
+and a flange can fail either while its stresses pass.
+
+The `T`, `U`, `Y`, `Z` equations were **anchored before they were shipped**: a published
+worked calculation at `K = 1.41939` reports `T = 1.74578` and `Z = 2.97106`, and these
+give 1.74572 and 2.97110. `Y` and `U` are tied by an identity that falls out of the
+published constants (`U = Y/0.910` at every `K`), so reproducing one reproduces the
+other. All of it is asserted in the test suite.
+
+### The flange sized by the bolt-up, not the pressure
+
+A 200 mm bore ring flange at 2 MPa and 400 °C, on a 290 mm bolt circle with 16 M20 studs:
+
+| Ring thickness | Operating `S_T` (vs 138 MPa hot) | Seating `S_T` (vs 172 MPa cold) | Verdict |
+| --- | --- | --- | --- |
+| 30 mm | 115 MPa — PASS, SF 1.20 | 235 MPa — **FAIL, SF 0.73** | FAIL |
+| 40 mm | 65 MPa — PASS, SF 2.13 | 132 MPa — PASS, SF 1.30 | PASS |
+
+Checked on pressure alone the 30 mm ring looks comfortable. It fails on a load with no
+pressure in it: the joint needs 1,873 mm² of bolt and sixteen M20 studs supply 3,920 mm²,
+and Appendix 2 charges the flange for that over-bolting through `W = (A_m + A_b)·S_a/2`.
+The seating moment comes out double the operating one and loses even against the *higher*
+ambient allowable. Choosing bolts by rounding the required area up is correct for the
+bolts and pushes the flange the wrong way. See
+[`examples/loose_ring_flange_stress.py`](../examples/loose_ring_flange_stress.py).
 
 ## What UG-37 here does not credit
 

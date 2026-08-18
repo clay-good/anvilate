@@ -40646,6 +40646,271 @@ def test_the_required_bolt_area_checks_two_loads_against_two_allowables():
         )
 
 
+def test_the_appendix_2_shape_factors_reproduce_a_published_flange_calculation():
+    """T and Z are anchored against a published worked Appendix 2 calculation.
+
+    A 19 in bore, 26.9685 in OD flange (K = 1.41939) is reported in a published
+    calculation as T = 1.74578 and Z = 2.97106. These are the equations of Appendix
+    2-7.1, so agreement is the check that the constants were transcribed correctly and
+    not recalled wrong — the exact failure mode the citation contract exists to prevent.
+    """
+    from anvilate.analysis import asme_appendix_2_shape_factors
+
+    factors = asme_appendix_2_shape_factors(
+        outside_diameter=_q("26.9685 in"), inside_diameter=_q("19 in")
+    )
+    assert factors.ratio == pytest.approx(1.41939, rel=1e-5)
+    assert factors.t_factor == pytest.approx(1.74578, rel=1e-4)
+    assert factors.z_factor == pytest.approx(2.97106, rel=1e-4)
+
+
+def test_the_appendix_2_y_and_u_factors_hold_their_identity_at_every_ratio():
+    """U = Y/0.910 falls out of the published constants, so it cross-checks both.
+
+    Y and U are written with different constants (0.66845/5.71690 against 1.36136 and
+    8.55246) and no published table was available for them, but the two expressions are
+    algebraically the same function scaled by 0.910. If either set of constants were
+    wrong the ratio would drift with K instead of holding flat, so this is a real
+    anchor and not a tautology.
+    """
+    from anvilate.analysis import asme_appendix_2_shape_factors
+
+    for ratio in (1.05, 1.2, 1.5, 2.0, 3.0, 5.0, 10.0):
+        factors = asme_appendix_2_shape_factors(
+            outside_diameter=Quantity(magnitude=100.0 * ratio, unit="mm"),
+            inside_diameter=_q("100 mm"),
+        )
+        assert factors.y_factor / factors.u_factor == pytest.approx(0.910, rel=1e-5)
+        # Z is elementary and pins the ratio itself.
+        k2 = ratio * ratio
+        assert factors.z_factor == pytest.approx((k2 + 1.0) / (k2 - 1.0), rel=1e-12)
+    # Pinned magnitudes, so a sign or constant slip cannot hide behind the ratio.
+    at_k_1_5 = asme_appendix_2_shape_factors(
+        outside_diameter=_q("150 mm"), inside_diameter=_q("100 mm")
+    )
+    assert at_k_1_5.y_factor == pytest.approx(4.96101, rel=1e-5)
+    assert at_k_1_5.u_factor == pytest.approx(5.45164, rel=1e-5)
+    # A narrow ring is a flexible ring: Y climbs steeply as K falls toward 1.
+    wide = asme_appendix_2_shape_factors(
+        outside_diameter=_q("300 mm"), inside_diameter=_q("100 mm")
+    )
+    assert at_k_1_5.y_factor > 2.5 * wide.y_factor
+
+
+def test_the_appendix_2_shape_factors_reject_a_ring_with_no_width():
+    from anvilate.analysis import asme_appendix_2_shape_factors
+
+    with pytest.raises(ValueError, match="must exceed inside_diameter"):
+        asme_appendix_2_shape_factors(outside_diameter=_q("100 mm"), inside_diameter=_q("100 mm"))
+    with pytest.raises(ValueError, match="must be positive"):
+        asme_appendix_2_shape_factors(outside_diameter=_q("100 mm"), inside_diameter=_q("0 mm"))
+    with pytest.raises(ValueError, match=r"\[length\]"):
+        asme_appendix_2_shape_factors(outside_diameter=_q("100 N"), inside_diameter=_q("50 mm"))
+
+
+def _flange_moments():
+    from anvilate.analysis import asme_appendix_2_flange_moments, gasket_operating_load
+
+    operating = gasket_operating_load(
+        gasket_mean_diameter=_q("248 mm"),
+        effective_seating_width=_q("6 mm"),
+        gasket_factor=3.0,
+        pressure=_q("2 MPa"),
+    )
+    return asme_appendix_2_flange_moments(
+        inside_diameter=_q("200 mm"),
+        bolt_circle_diameter=_q("290 mm"),
+        gasket_diameter=_q("248 mm"),
+        pressure=_q("2 MPa"),
+        operating_bolt_load=operating,
+        seating_bolt_load=_q("498163 N"),
+    )
+
+
+def test_the_appendix_2_operating_moment_is_its_three_loads_on_their_own_arms():
+    """Each load and arm is pinned, not just the sum, and the arms are the loose-type row.
+
+    A sum can be right for the wrong reasons — an overstated H_D on an understated h_D
+    lands in the same place. The Table 2-6 loose-type arms are h_D = (C-B)/2,
+    h_G = (C-G)/2 and h_T their mean, and h_T sitting exactly between the other two is
+    the structural signature that the loose-type row was used and not the integral one.
+    """
+    moments = _flange_moments()
+
+    assert moments.end_force.to("kN").magnitude == pytest.approx(62.8, rel=1e-3)
+    assert moments.total_end_force.to("kN").magnitude == pytest.approx(96.561, rel=1e-3)
+    assert moments.face_force.to("kN").magnitude == pytest.approx(33.761, rel=1e-3)
+    assert moments.gasket_force.to("kN").magnitude == pytest.approx(56.145, rel=1e-3)
+    # H_T is the annulus between the bore and the gasket reaction, so the three
+    # pressure loads have to close.
+    assert moments.total_end_force.to("N").magnitude == pytest.approx(
+        moments.end_force.to("N").magnitude + moments.face_force.to("N").magnitude, rel=1e-12
+    )
+    assert moments.end_arm.to("mm").magnitude == pytest.approx(45.0, rel=1e-12)
+    assert moments.gasket_arm.to("mm").magnitude == pytest.approx(21.0, rel=1e-12)
+    assert moments.face_arm.to("mm").magnitude == pytest.approx(33.0, rel=1e-12)
+    expected = 62.8e3 * 45.0 + 33.761e3 * 33.0 + 56.145e3 * 21.0
+    assert moments.operating_moment.to("N*mm").magnitude == pytest.approx(expected, rel=1e-3)
+    # Seating is W on the gasket arm alone — no pressure anywhere in it.
+    assert moments.seating_moment.to("N*mm").magnitude == pytest.approx(498163.0 * 21.0, rel=1e-12)
+
+
+def test_the_appendix_2_moments_reject_diameters_that_do_not_nest():
+    from anvilate.analysis import asme_appendix_2_flange_moments
+
+    def build(**overrides):
+        kwargs = {
+            "inside_diameter": _q("200 mm"),
+            "bolt_circle_diameter": _q("290 mm"),
+            "gasket_diameter": _q("248 mm"),
+            "pressure": _q("2 MPa"),
+            "operating_bolt_load": _q("152707 N"),
+            "seating_bolt_load": _q("498163 N"),
+        }
+        kwargs.update(overrides)
+        return asme_appendix_2_flange_moments(**kwargs)
+
+    # A gasket outside the bolt circle, or inside the bore, is a transcription error and
+    # would silently produce a negative lever arm.
+    with pytest.raises(ValueError, match="nest as bore"):
+        build(gasket_diameter=_q("300 mm"))
+    with pytest.raises(ValueError, match="nest as bore"):
+        build(gasket_diameter=_q("150 mm"))
+    # A bolt load that does not even hold the end force is W_m2 passed as W_m1.
+    with pytest.raises(ValueError, match="hydrostatic end force"):
+        build(operating_bolt_load=_q("50 kN"))
+    with pytest.raises(ValueError, match="must be positive"):
+        build(pressure=_q("0 MPa"))
+    with pytest.raises(ValueError, match=r"\[force\]"):
+        build(seating_bolt_load=_q("100 mm"))
+
+
+def test_the_ring_flange_that_passes_on_pressure_and_fails_on_bolt_up():
+    """The governing condition is the one with no pressure in it, and t^2 is the fix.
+
+    Sixteen M20 studs on a joint needing 1,873 mm2 of bolt is 2.1x over-bolted, and
+    Appendix 2 charges the flange for it through W = (A_m + A_b)*S_a/2. The seating
+    moment doubles the operating one and loses even against the higher ambient
+    allowable. Stress goes as 1/t^2, which is what the 30 -> 40 mm step has to show.
+    """
+    from anvilate.analysis import asme_appendix_2_ring_flange_stress
+
+    moments = _flange_moments()
+
+    def at(thickness: str):
+        return asme_appendix_2_ring_flange_stress(
+            outside_diameter=_q("330 mm"),
+            inside_diameter=_q("200 mm"),
+            thickness=_q(thickness),
+            moments=moments,
+            operating_allowable=_q("138 MPa"),
+            seating_allowable=_q("172 MPa"),
+        )
+
+    thin = at("30 mm")
+    assert thin.operating_stress.to("MPa").magnitude == pytest.approx(115.23, rel=1e-3)
+    assert thin.seating_stress.to("MPa").magnitude == pytest.approx(235.48, rel=1e-3)
+    # Operating passes on its own. The flange still fails, on the cold bolt-up.
+    assert thin.operating_safety_factor == pytest.approx(1.1976, rel=1e-3)
+    assert thin.seating_safety_factor == pytest.approx(0.7304, rel=1e-3)
+    assert thin.governing_condition == "seating"
+    assert thin.adequate is False
+
+    thick = at("40 mm")
+    assert thick.adequate is True
+    assert thick.safety_factor == pytest.approx(1.2985, rel=1e-3)
+    # S_T = Y*M/(t^2*B): the ratio is exactly the square of the thickness ratio.
+    ratio = thin.seating_stress.to("MPa").magnitude / thick.seating_stress.to("MPa").magnitude
+    assert ratio == pytest.approx((40.0 / 30.0) ** 2, rel=1e-9)
+    # And it is Y that scales it, so the shape factor travels with the result.
+    assert thick.shape_factors.y_factor == pytest.approx(4.0521, rel=1e-3)
+    assert "seating governs" in str(thick)
+
+
+def test_the_ring_flange_governing_condition_follows_the_allowables_not_the_moments():
+    """A bigger moment can still win, because the two conditions are judged separately.
+
+    On the same flange, raising the ambient allowable enough flips the governing
+    condition to operating even though the seating moment is unchanged and larger. A
+    screen that picked the governing condition by comparing moments would never do that.
+    """
+    from anvilate.analysis import asme_appendix_2_ring_flange_stress
+
+    moments = _flange_moments()
+    assert moments.seating_moment.to("N*mm").magnitude > (
+        moments.operating_moment.to("N*mm").magnitude
+    )
+    flipped = asme_appendix_2_ring_flange_stress(
+        outside_diameter=_q("330 mm"),
+        inside_diameter=_q("200 mm"),
+        thickness=_q("40 mm"),
+        moments=moments,
+        operating_allowable=_q("138 MPa"),
+        seating_allowable=_q("600 MPa"),
+    )
+    assert flipped.governing_condition == "operating"
+    assert flipped.safety_factor == pytest.approx(flipped.operating_safety_factor, rel=1e-12)
+
+
+def test_the_ring_flange_stress_rejects_a_zero_thickness_or_allowable():
+    from anvilate.analysis import asme_appendix_2_ring_flange_stress
+
+    moments = _flange_moments()
+
+    def build(**overrides):
+        kwargs = {
+            "outside_diameter": _q("330 mm"),
+            "inside_diameter": _q("200 mm"),
+            "thickness": _q("40 mm"),
+            "moments": moments,
+            "operating_allowable": _q("138 MPa"),
+            "seating_allowable": _q("172 MPa"),
+        }
+        kwargs.update(overrides)
+        return asme_appendix_2_ring_flange_stress(**kwargs)
+
+    with pytest.raises(ValueError, match="thickness must be positive"):
+        build(thickness=_q("0 mm"))
+    with pytest.raises(ValueError, match="must be positive"):
+        build(seating_allowable=_q("0 MPa"))
+    with pytest.raises(ValueError, match=r"\[pressure\]"):
+        build(operating_allowable=_q("138 N"))
+
+
+def test_the_ring_flange_scorecard_says_not_evaluated_for_a_hub_flange():
+    """A hub-credited flange is out of scope, and the honest answer is a blank, not a pass."""
+    from anvilate.analysis import (
+        asme_appendix_2_flange_stress_scorecard,
+        asme_appendix_2_ring_flange_stress,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    absent = asme_appendix_2_flange_stress_scorecard(
+        "welding-neck flange",
+        stress=None,
+        missing="hub-credited flange; Appendix 2 F/V/f figures are not implemented",
+    )
+    assert absent.status is CheckStatus.NOT_EVALUATED
+    assert absent.safety_factor is None
+    assert "F/V/f" in absent.detail
+    assert "Appendix 2" in absent.reference
+
+    stress = asme_appendix_2_ring_flange_stress(
+        outside_diameter=_q("330 mm"),
+        inside_diameter=_q("200 mm"),
+        thickness=_q("30 mm"),
+        moments=_flange_moments(),
+        operating_allowable=_q("138 MPa"),
+        seating_allowable=_q("172 MPa"),
+    )
+    entry = asme_appendix_2_flange_stress_scorecard("ring flange", stress=stress)
+    assert entry.status is CheckStatus.FAIL
+    assert entry.safety_factor == pytest.approx(0.7304, rel=1e-3)
+    # Both stresses are in the detail, so the condition that lost is visible.
+    assert "115.2 MPa operating" in entry.detail
+    assert "235.5 MPa seating" in entry.detail
+
+
 # --- ASME BTH-1 below-the-hook lifting devices --------------------------------
 
 

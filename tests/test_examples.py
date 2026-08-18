@@ -5726,6 +5726,28 @@ def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition
         assert "qualified assessor" in entry.detail
 
 
+def test_loose_ring_flange_example_is_governed_by_the_bolt_up_not_the_pressure():
+    namespace = runpy.run_path(str(_EXAMPLES / "loose_ring_flange_stress.py"))
+    Quantity_ = namespace["Quantity"]
+
+    loads = namespace["bolt_loads"]()
+    required = loads["required_bolt_area"].to("mm**2").magnitude
+    actual = loads["actual_bolt_area"].to("mm**2").magnitude
+    # Bolts come in sizes: the joint is over-bolted 2.1x, and Appendix 2 charges the
+    # flange for the bolt-up load a fitter can then actually apply.
+    assert actual / required == pytest.approx(2.09, abs=0.02)
+
+    thin = namespace["screen_flange"](Quantity_.parse("30 mm"))
+    thick = namespace["screen_flange"](Quantity_.parse("40 mm"))
+    assert thin.status is CheckStatus.FAIL
+    assert thick.status is CheckStatus.PASS
+    # The condition that decides the thickness has no pressure in it at all. Checked on
+    # pressure alone the 30 mm ring passes; it is the cold seating case that fails it.
+    assert thin.entries[0].safety_factor == pytest.approx(0.73, abs=0.01)
+    assert "seating governs" in thin.entries[0].detail
+    assert thick.entries[0].safety_factor == pytest.approx(1.30, abs=0.01)
+
+
 def test_pressure_vessel_example_fails_at_the_opening_before_it_fails_at_the_wall():
     namespace = runpy.run_path(str(_EXAMPLES / "pressure_vessel_nozzle_and_flange.py"))
     Quantity_ = namespace["Quantity"]
