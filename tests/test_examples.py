@@ -5833,3 +5833,22 @@ def test_retrofit_example_fails_the_bundle_until_the_mix_is_signed_for():
     # failure.
     for entry in (unwaived, waived):
         assert "AISC 360-16 against the pinned 22" in entry.detail
+
+
+def test_reviewer_dossier_example_puts_the_unevaluated_check_first():
+    namespace = runpy.run_path(str(_EXAMPLES / "bracket_reviewer_dossier.py"))
+    before, reviewed, after_change = namespace["review_the_bracket"]()
+    order = [item.entry.name for item in before.items]
+    # Ahead of the failure: a FAIL is already visible, a NOT_EVALUATED is the check that
+    # silently is not there.
+    assert order == ["fatigue", "deflection", "bending", "shear"]
+    # `bending` passes at SF 3.0 and is still surfaced, because nobody sourced its input.
+    assert before.items[2].entry.status is CheckStatus.PASS
+    assert "nobody sourced" in before.items[2].headline
+    # A recorded exception never changes the verdict.
+    assert reviewed.items[1].entry.status is CheckStatus.FAIL
+    assert reviewed.status is CheckStatus.FAIL
+    assert "A. Engineer, P.E." in reviewed.summary()
+    # And the review does not carry across a change to the design.
+    assert after_change.stale_record is True
+    assert "no longer applies" in after_change.summary()

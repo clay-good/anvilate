@@ -1205,3 +1205,42 @@ def test_the_effectivity_parser_knows_a_eurocode_number_from_a_year():
     assert names_a_standard("Timoshenko plate theory") is None
     assert names_a_standard("Roark's Formulas for Stress and Strain, Table 8.1") is None
     assert names_a_standard("ASME BTH-1 §3-3") == "ASME"
+
+
+def test_no_pack_ever_says_certified_about_a_user_s_design():
+    """A screening tool must not use the vocabulary of certification about its output.
+
+    This is the library-wide half of the check in tests/test_review.py, and it is here
+    rather than there because the risk is not confined to the review module: every
+    scorecard detail and every reference string is a statement about the user's design,
+    and any one of them can be pasted into an email and read as assurance.
+
+    Docstrings are out of scope for the same reason as in the review suite — prose about
+    the policy has to be able to name the thing it prohibits.
+    """
+    from anvilate.review import PROHIBITED_ASSURANCE_LANGUAGE
+
+    renderings: list[tuple[str, str]] = []
+    for entry in _structural_entries():
+        renderings.append((entry.name, entry.detail))
+        if entry.reference:
+            renderings.append((entry.name, entry.reference))
+    for label, derivation in _sample_derivations():
+        if derivation.citation:
+            renderings.append((label, derivation.citation))
+        renderings.append((label, derivation.result.description))
+
+    offenders = [
+        f"{where}: {phrase!r} in {text!r}"
+        for where, text in renderings
+        for phrase in PROHIBITED_ASSURANCE_LANGUAGE
+        if phrase in text.lower()
+    ]
+    assert not offenders, (
+        "these renderings use the language of certification about a user's design:\n  "
+        + "\n  ".join(offenders)
+    )
+    assert len(renderings) >= 30, (
+        f"only {len(renderings)} renderings were swept — the discoverer has stopped "
+        f"discovering and this gate is passing on an empty set"
+    )
