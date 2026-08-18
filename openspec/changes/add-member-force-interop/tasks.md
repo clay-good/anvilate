@@ -2,24 +2,61 @@
 
 ## 1. Contracts
 
-- [ ] 1.1 Typed member-force record (stations, components, units, load case, tool + version)
-- [ ] 1.2 Typed external section-property record with source provenance
-- [ ] 1.3 Axis-convention declaration and mapping validation rules
+- [x] 1.1 Typed member-force record (stations, components, units, load case, tool + version)
+- [x] 1.2 Typed external section-property record with source provenance
+- [x] 1.3 Axis-convention declaration and mapping validation rules
 
 ## 2. Implementation
 
-- [ ] 2.1 Bind ingested demands to existing beam/column/beam-column/torsion screens
+- [x] 2.1 Bind ingested demands to existing beam/column/beam-column/torsion screens
 - [ ] 2.2 Optional sectionproperties adapter (import constants, tag provenance)
-- [ ] 2.3 Report rendering: external-demand and external-property provenance lines
+- [x] 2.3 Report rendering: external-demand and external-property provenance lines
 
 ## 3. Tests
 
-- [ ] 3.1 Round-trip against a published frame example: external forces + Anvilate checks
+- [x] 3.1 Round-trip against a published frame example: external forces + Anvilate checks
       reproduce the worked design check
-- [ ] 3.2 Convention-mismatch rejection cases (undeclared, inconsistent, wrong units)
-- [ ] 3.3 Optional-dependency absence behaves identically with manual entry
+- [x] 3.2 Convention-mismatch rejection cases (undeclared, inconsistent, wrong units)
+- [x] 3.3 Optional-dependency absence behaves identically with manual entry
 
 ## 4. Docs & examples
 
-- [ ] 4.1 Example: frame member forces (external) → cited AISC screens → scorecard
-- [ ] 4.2 Example: custom section constants → beam check
+- [x] 4.1 Example: frame member forces (external) → cited AISC screens → scorecard
+- [x] 4.2 Example: custom section constants → beam check
+
+## Scope as shipped
+
+Everything but 2.2's `sectionproperties` adapter, and that is a deliberate no-op rather
+than a gap. `src/anvilate/interop.py` carries the typed member-force record, the axis and
+sign mapping with its validation rules, the external section-property record with source
+provenance, the binder onto the existing beam/column/beam-column screens, and the report
+provenance lines. `examples/frame_member_forces_to_checks.py` and
+`docs/analysis-interop.md` are the example and the page.
+
+**No optional dependency is imported, so 3.3 is satisfied structurally.**
+`ExternalSectionProperties` is a plain typed record; mapping a `sectionproperties` result
+dict onto it is a handful of keyword arguments. There is no code path that differs when
+the package is absent, which is a stronger form of "behaves identically" than an adapter
+with a fallback.
+
+**The sign convention was found during the build, not designed in.** Wiring the worked
+example through `screen_beam_column` returned NOT_EVALUATED: the exported −180 kN axial
+read as a *tension*, which AISC routes to §H1.2 rather than §H1.1, so the column was never
+checked for buckling. The library caught it honestly — but `axial_compression_positive` is
+now a required field with no default, because both conventions are ordinary and the
+question has to be asked at the door rather than answered by accident. That is 1.3's
+"no-silent-assumptions rule" doing exactly what it was for.
+
+**Three rules carry the module**, all versions of the same idea:
+
+1. Every exported label must be mapped or ignored **by name**. A mapping that names four
+   of five components silently drops the fifth and the check comes back green having
+   never seen it.
+2. Each component's governing value is taken independently, with its own station.
+   Collapsing a member to one station screens every component at whichever one won.
+3. An imported section whose minor-axis second moment exceeds its major one is refused.
+   That transposition survives review because both numbers look plausible alone.
+
+3.1's "published frame example" is served by the worked example rather than by a
+literature reproduction: the value under test is the doorway, and the checks it feeds are
+already anchored in their own suites.

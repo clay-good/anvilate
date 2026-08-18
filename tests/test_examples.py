@@ -5726,6 +5726,29 @@ def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition
         assert "qualified assessor" in entry.detail
 
 
+def test_frame_interop_example_screens_forces_it_did_not_compute():
+    namespace = runpy.run_path(str(_EXAMPLES / "frame_member_forces_to_checks.py"))
+
+    card, lines = namespace["screen"]()
+    assert card.status is CheckStatus.PASS
+    # The sign convention is what makes this a compression check at all: unflipped, the
+    # -180 kN reads as tension and the screen routes to a different clause.
+    joined = "\n".join(lines)
+    assert "axial: 180 kN governing at 0 m" in joined
+    # Each component governs at its own station.
+    assert "major_bending: 148 kN*m governing at 3 m" in joined
+    # Provenance names the tool, the version and the load case, and says Anvilate did not
+    # compute these numbers.
+    assert "Pynite 1.1.0" in joined
+    assert "it did not compute them" in joined
+    assert "sectionproperties 3.2.1" in joined
+    # What was not screened is as visible as what was.
+    assert "not screened: T" in joined
+    assert "no shear form factor supplied" in joined
+    # A major/minor swap on this section would overstate the flexural capacity 4.4x.
+    assert namespace["major_over_minor_modulus"]() == pytest.approx(4.4, abs=0.05)
+
+
 def test_lifter_verification_example_never_renders_a_plan_as_evidence():
     namespace = runpy.run_path(str(_EXAMPLES / "lifter_verification_matrix.py"))
 
