@@ -528,3 +528,185 @@ def test_the_solar_declination_guard_stops_at_the_earths_axial_tilt():
         solar_altitude_at_noon(latitude=51.5, declination=24.0)
     with pytest.raises(ValueError, match="23.45"):
         solar_altitude_at_noon(latitude=51.5, declination=-24.0)
+
+
+# --- More of the same class: physical bounds behind guards no test reached -------------
+
+
+def test_the_compressible_flow_family_refuses_a_heat_capacity_ratio_at_or_below_one():
+    """γ ≤ 1 means c_p ≤ c_v, which no gas does — and eleven functions guard it separately.
+
+    γ = c_p/c_v and c_p − c_v = R > 0, so γ > 1 for any real gas. Every isentropic and
+    normal-shock relation here divides by (γ − 1) or (γ + 1), so the guard is what stands
+    between a transposed argument and a division by zero or a negative square root.
+    Reaching a representative set pins the bound across the family.
+    """
+    from anvilate.analysis import (
+        normal_shock_downstream_mach,
+        prandtl_meyer_angle,
+        speed_of_sound,
+    )
+
+    # Air at 288 K: the familiar 340 m/s, which is what says the guard is not just
+    # refusing everything.
+    assert speed_of_sound(
+        temperature=_q("288.15 K"),
+        heat_capacity_ratio=1.4,
+        specific_gas_constant=_q("287 J/(kg*K)"),
+    ).to("m/s").magnitude == pytest.approx(340.3, rel=1e-3)
+    for gamma in (1.0, 0.9):
+        with pytest.raises(ValueError, match="heat_capacity_ratio"):
+            speed_of_sound(
+                temperature=_q("288.15 K"),
+                heat_capacity_ratio=gamma,
+                specific_gas_constant=_q("287 J/(kg*K)"),
+            )
+        with pytest.raises(ValueError, match="heat_capacity_ratio"):
+            normal_shock_downstream_mach(upstream_mach=2.0, heat_capacity_ratio=gamma)
+        with pytest.raises(ValueError, match="heat_capacity_ratio"):
+            prandtl_meyer_angle(mach_number=2.0, heat_capacity_ratio=gamma)
+
+
+def test_the_supersonic_only_relations_refuse_subsonic_flow():
+    """A normal shock cannot form in subsonic flow, and a Mach cone has no half-angle there.
+
+    Both relations return a real, plausible-looking number if the guard is relaxed —
+    the Prandtl-Meyer function evaluates to a complex-free value below M = 1 only by
+    accident of the algebra — so the physical bound is the whole check.
+    """
+    from anvilate.analysis import mach_angle, normal_shock_downstream_mach, prandtl_meyer_angle
+
+    # At M = 1 exactly the Mach angle is 90 degrees: the cone has degenerated to a plane.
+    assert mach_angle(mach_number=1.0).to("degree").magnitude == pytest.approx(90.0, rel=1e-9)
+    assert mach_angle(mach_number=2.0).to("degree").magnitude == pytest.approx(30.0, rel=1e-9)
+    with pytest.raises(ValueError, match="mach_number"):
+        mach_angle(mach_number=0.99)
+    with pytest.raises(ValueError, match="mach_number"):
+        prandtl_meyer_angle(mach_number=0.99, heat_capacity_ratio=1.4)
+    with pytest.raises(ValueError, match="upstream_mach"):
+        normal_shock_downstream_mach(upstream_mach=1.0, heat_capacity_ratio=1.4)
+
+
+def test_the_sphere_drag_correlation_refuses_past_the_end_of_its_own_fit():
+    """The Schiller-Naumann form is fitted to Re ≲ 800; past it the module says so.
+
+    This is the guard that `drag.stokes_settling_velocity` and the centrifuge screens
+    point at when they refuse — so its limit is load-bearing for three functions and was
+    reached by none.
+    """
+    from anvilate.analysis import sphere_drag_coefficient
+
+    # Deep in Stokes flow the correlation collapses to 24/Re, which is the exact result.
+    assert sphere_drag_coefficient(reynolds_number=0.1) == pytest.approx(24.0 / 0.1, rel=0.1)
+    assert sphere_drag_coefficient(reynolds_number=800.0) > 0
+    with pytest.raises(ValueError, match="800"):
+        sphere_drag_coefficient(reynolds_number=801.0)
+
+
+def test_the_geotechnical_bounds_are_the_ones_that_make_the_quantity_a_quantity():
+    """An OCR below 1, a resultant outside the middle third, and a soil lighter than water.
+
+    Each of these is a quantity that cannot take the value, not a correlation running out
+    of range: OCR is past-maximum over current stress and cannot be below 1; an
+    eccentricity of half the base width puts the resultant off the footing entirely; and
+    a critical hydraulic gradient needs solids denser than water or there is nothing to
+    lift.
+    """
+    # Normally consolidated is OCR = 1 exactly, and K0 there is Jaky's 1 - sin(phi).
+    from math import radians, sin
+
+    from anvilate.analysis import (
+        critical_hydraulic_gradient,
+        eccentric_base_pressure,
+        overconsolidated_at_rest_coefficient,
+    )
+
+    assert overconsolidated_at_rest_coefficient(
+        friction_angle=30.0, overconsolidation_ratio=1.0
+    ) == pytest.approx(1.0 - sin(radians(30.0)), rel=1e-9)
+    with pytest.raises(ValueError, match="overconsolidation_ratio"):
+        overconsolidated_at_rest_coefficient(friction_angle=30.0, overconsolidation_ratio=0.9)
+
+    # Quartz sand at G_s = 2.65: the classic i_cr near 1.
+    assert critical_hydraulic_gradient(specific_gravity=2.65, void_ratio=0.65) == pytest.approx(
+        (2.65 - 1.0) / (1.0 + 0.65), rel=1e-12
+    )
+    with pytest.raises(ValueError, match="specific_gravity"):
+        critical_hydraulic_gradient(specific_gravity=1.0, void_ratio=0.65)
+
+    # e = B/2 puts the resultant on the edge of the footing; past it there is no bearing
+    # area left to compute a pressure over.
+    inside = eccentric_base_pressure(
+        vertical_load=_q("500 kN/m"), base_width=_q("3 m"), eccentricity=_q("0.4 m")
+    )
+    assert inside["q_max"].to("kPa").magnitude > inside["q_min"].to("kPa").magnitude
+    # e = B/6 is the middle-third boundary where q_min reaches zero; 0.4 m on a 3 m base
+    # is past it in the trapezoidal-but-still-bearing range.
+    assert inside["q_min"].to("kPa").magnitude > 0
+    with pytest.raises(ValueError, match="eccentricity"):
+        eccentric_base_pressure(
+            vertical_load=_q("500 kN/m"), base_width=_q("3 m"), eccentricity=_q("1.5 m")
+        )
+
+
+def test_the_sheetmetal_bounds_hold_the_k_factor_inside_the_material():
+    """k ≤ 0.5 says the neutral axis cannot move past mid-thickness, which is physics.
+
+    Bending moves the neutral axis *toward the inside* of the bend, so k runs 0 to 0.5
+    and a k above 0.5 is a neutral axis outside the material on the tension side. A
+    bend angle outside (0, 180) and a reduction of area above 100% are the same kind of
+    bound: the quantity cannot take the value.
+    """
+    from anvilate.analysis import minimum_bend_radius, neutral_axis_radius
+
+    # k = 0.5 is the neutral axis exactly at mid-thickness — the undeformed limit.
+    assert neutral_axis_radius(inner_radius=_q("3 mm"), thickness=_q("2 mm"), k_factor=0.5).to(
+        "mm"
+    ).magnitude == pytest.approx(4.0, rel=1e-12)
+    with pytest.raises(ValueError, match="k_factor"):
+        neutral_axis_radius(inner_radius=_q("3 mm"), thickness=_q("2 mm"), k_factor=0.55)
+
+    # 100% reduction of area is a perfectly ductile material, and the minimum radius
+    # there is zero — the bound is reachable and meaningful, not merely defensive.
+    assert minimum_bend_radius(thickness=_q("2 mm"), reduction_of_area_percent=100.0).to(
+        "mm"
+    ).magnitude == pytest.approx(0.0, abs=1e-9)
+    with pytest.raises(ValueError, match="reduction_of_area_percent"):
+        minimum_bend_radius(thickness=_q("2 mm"), reduction_of_area_percent=101.0)
+
+
+def test_an_isentropic_efficiency_above_unity_is_refused_not_reported():
+    """An efficiency over 1 is a measurement error, and reporting it launders one.
+
+    The isentropic outlet temperature is the best a turbine can do, so an actual outlet
+    below it means the instrumentation disagrees with thermodynamics. Returning 1.04
+    would put that in a report as a very good turbine.
+    """
+    from anvilate.analysis import turbine_isentropic_efficiency
+
+    assert turbine_isentropic_efficiency(
+        inlet_temperature=_q("800 K"),
+        actual_outlet_temperature=_q("620 K"),
+        isentropic_outlet_temperature=_q("600 K"),
+    ) == pytest.approx(180.0 / 200.0, rel=1e-12)
+    with pytest.raises(ValueError, match="efficiency"):
+        turbine_isentropic_efficiency(
+            inlet_temperature=_q("800 K"),
+            actual_outlet_temperature=_q("590 K"),
+            isentropic_outlet_temperature=_q("600 K"),
+        )
+
+
+def test_the_motor_branch_circuit_sizing_factor_cannot_fall_below_the_code_minimum():
+    """NEC 430.22 sizes a motor branch circuit at 125% of full-load current, not less.
+
+    A sizing factor below 1.0 is a conductor smaller than the motor's own running
+    current, which is not a design choice at any level of aggression.
+    """
+    from anvilate.analysis import motor_branch_circuit_ampacity
+
+    assert motor_branch_circuit_ampacity(full_load_current=_q("28 A")).to(
+        "A"
+    ).magnitude == pytest.approx(35.0, rel=1e-12)
+    with pytest.raises(ValueError, match="sizing_factor"):
+        motor_branch_circuit_ampacity(full_load_current=_q("28 A"), sizing_factor=0.9)
