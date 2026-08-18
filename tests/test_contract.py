@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import inspect
 import math
 import pkgutil
 import re
@@ -24,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+import anvilate as anvilate_pkg
 import anvilate.analysis as analysis_pkg
 
 _REPO = Path(__file__).resolve().parent.parent
@@ -147,6 +149,115 @@ def test_no_exported_symbol_shadows_its_own_module():
         assert isinstance(attribute, types.ModuleType), (
             f"anvilate.analysis.{name} resolves to {attribute!r}, not the submodule"
         )
+
+
+# --- The same contract, for the cross-cutting layers ----------------------------------
+#
+# Every gate above scopes to ``anvilate.analysis``. That was right when the analysis
+# library was the whole shipped surface, and it stopped being right as the cross-cutting
+# layers grew: ten top-level modules now export 71 public symbols under no contract at
+# all. The practice had held anyway — all ten already declared ``__all__`` and documented
+# every callable — but nothing was enforcing it, and an unenforced convention is one
+# careless commit from being a former convention.
+
+_CORE_MANIFEST = _REPO / "docs" / "api" / "core-public-surface.txt"
+
+
+def _core_module_names() -> list[str]:
+    """The top-level, non-package modules of ``anvilate`` — the cross-cutting layers."""
+    return sorted(m.name for m in pkgutil.iter_modules(anvilate_pkg.__path__) if not m.ispkg)
+
+
+def _core_live_surface() -> set[str]:
+    surface = set()
+    for name in _core_module_names():
+        module = importlib.import_module(f"anvilate.{name}")
+        for symbol in module.__all__:
+            surface.add(f"{name}.{symbol}")
+    return surface
+
+
+def test_every_core_module_declares_its_public_surface():
+    for name in _core_module_names():
+        module = importlib.import_module(f"anvilate.{name}")
+        assert hasattr(module, "__all__"), (
+            f"anvilate.{name} has no __all__; every shipped module must declare its "
+            "public surface explicitly, not leave it to whatever happens to be importable"
+        )
+
+
+def test_the_core_public_surface_matches_its_manifest():
+    """Growing the top-level public surface is a deliberate act with a diff."""
+    live = _core_live_surface()
+    recorded = {
+        line.strip()
+        for line in _CORE_MANIFEST.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    added = sorted(live - recorded)
+    removed = sorted(recorded - live)
+    assert not added, (
+        "public symbols in a top-level module's __all__ with no line in "
+        f"docs/api/core-public-surface.txt: {added}"
+    )
+    assert not removed, (
+        f"docs/api/core-public-surface.txt names symbols that no longer exist: {removed}"
+    )
+
+
+def test_every_core_module_is_listed_in_the_package_docstring():
+    """The package docstring is the library's table of contents, and it was half a list.
+
+    Four modules shipped in one session without a bullet between them. The manifest gate
+    cannot see that omission — it compares symbols, and a module absent from the docstring
+    still exports its symbols correctly. This is the gate that sees it.
+    """
+    listed = set(re.findall(r"^- :mod:`anvilate\.(\w+)`", anvilate_pkg.__doc__ or "", re.M))
+    modules = set(_core_module_names())
+    unlisted = sorted(modules - listed)
+    assert not unlisted, (
+        "top-level modules with no ``- :mod:`` bullet in the anvilate package docstring: "
+        f"{unlisted}"
+    )
+
+
+def test_every_public_core_callable_has_a_docstring():
+    undocumented = []
+    for name in _core_module_names():
+        module = importlib.import_module(f"anvilate.{name}")
+        for symbol in module.__all__:
+            obj = getattr(module, symbol)
+            if not (inspect.isfunction(obj) or inspect.isclass(obj)):
+                continue
+            if not (obj.__doc__ or "").strip():
+                undocumented.append(f"{name}.{symbol}")
+    assert not undocumented, (
+        f"public callables in the cross-cutting layers with no docstring: {undocumented}"
+    )
+
+
+def test_the_core_surface_gates_can_actually_detect_what_they_claim_to():
+    """Prove the gates fail on a violation, rather than trusting that they would.
+
+    A manifest gate that compares two sets built from the same source passes forever.
+    These build the live side from the imported modules and the recorded side from the
+    file on disk, so the comparison is real — and this asserts that by perturbing each
+    side in turn.
+    """
+    live = _core_live_surface()
+    assert live, "the live core surface came back empty, so every comparison is vacuous"
+    recorded = {
+        line.strip()
+        for line in _CORE_MANIFEST.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    # An added symbol and a removed one are each visible from exactly one side.
+    assert sorted((live | {"explore.brand_new_symbol"}) - recorded) == ["explore.brand_new_symbol"]
+    assert sorted((recorded | {"explore.deleted_symbol"}) - live) == ["explore.deleted_symbol"]
+    # And the docstring gate reads a real table of contents, not an empty string.
+    listed = set(re.findall(r"^- :mod:`anvilate\.(\w+)`", anvilate_pkg.__doc__ or "", re.M))
+    assert "explore" in listed and "verification" in listed
+    assert "not_a_module" not in listed
 
 
 def test_every_public_callable_has_a_docstring():

@@ -13,6 +13,26 @@ implemented layers everything else builds on:
   torsion, pressure vessel, bolted joint, von Mises).
 - :mod:`anvilate.scorecard` — the tri-state check-result vocabulary
   (pass / fail / not-evaluated).
+
+On top of the scorecard sit the cross-cutting layers, each of which takes checks
+that already ran and does one more thing with them:
+
+- :mod:`anvilate.derivation` — a check's worked calculation: formula, substituted
+  values, result, and the clause it came from.
+- :mod:`anvilate.evidence` — the provenance roll-up: where every standards number
+  a spec references came from.
+- :mod:`anvilate.explore` — design-space sweeps and exact Pareto fronts over the
+  designs that actually pass.
+- :mod:`anvilate.gdt` — semantic GD&T: a feature control frame as data, with
+  Y14.5's grammar enforced at construction.
+- :mod:`anvilate.interop` — the typed doorway for member forces and section
+  properties computed by some other tool.
+- :mod:`anvilate.loads` — typed load combinations and the governing one, named.
+- :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
+- :mod:`anvilate.uncertainty` — input scatter propagated to a shortfall
+  probability and a sensitivity ranking.
+- :mod:`anvilate.verification` — the physical test each analytical check implies,
+  and the rule that a plan is never evidence.
 """
 
 from __future__ import annotations

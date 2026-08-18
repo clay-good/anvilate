@@ -1,0 +1,79 @@
+# The public surface of anvilate's top-level (non-analysis) modules, one
+# `module.symbol` line per exported name, in module then declaration order.
+#
+# The analysis library has `analysis-public-surface.txt`; this is the same contract for
+# the cross-cutting layers that sit on top of the scorecard. Both are gates in
+# tests/test_contract.py: a symbol added to a module's __all__ and not to its manifest
+# fails, and so does a manifest line whose symbol no longer exists. The point is that
+# growing the public surface is a deliberate act with a diff, not a side effect.
+derivation.SymbolValue
+derivation.Derivation
+evidence.SourceRecord
+evidence.collect_provenance
+explore.ObjectiveSense
+explore.SamplingStrategy
+explore.Parameter
+explore.Objective
+explore.Study
+explore.StudyEvaluation
+explore.DesignPoint
+explore.StudyResult
+explore.run_study
+explore.halton_sequence
+gdt.Y14Edition
+gdt.CharacteristicClass
+gdt.Characteristic
+gdt.FeatureType
+gdt.MaterialCondition
+gdt.DatumBoundary
+gdt.FrameModifier
+gdt.DatumReference
+gdt.FeatureControlFrame
+gdt.position_stack_contribution
+interop.ForceComponent
+interop.AxisMapping
+interop.ForceStation
+interop.MemberForceRecord
+interop.MemberDemand
+interop.ExternalSectionProperties
+interop.bind_demand
+interop.provenance_lines
+loads.LoadNature
+loads.LoadCombination
+loads.CombinationSet
+loads.asce7_lrfd_basic
+loads.asce7_asd_basic
+loads.asce7_lrfd_seismic
+loads.asce7_asd_seismic
+loads.combination_scorecard
+review.DecisionOrigin
+review.ReviewPriority
+review.ReviewItem
+review.ReviewRecord
+review.ReviewerDossier
+review.PROHIBITED_ASSURANCE_LANGUAGE
+review.review_priority
+review.artifact_digest
+review.build_dossier
+scorecard.CheckStatus
+scorecard.Direction
+scorecard.RepairHint
+scorecard.GoverningChange
+scorecard.ScorecardEntry
+scorecard.Scorecard
+uncertainty.Normal
+uncertainty.Uniform
+uncertainty.Symmetric
+uncertainty.InputDistribution
+uncertainty.Sensitivity
+uncertainty.MarginUncertainty
+uncertainty.sample_margin
+uncertainty.MONTE_CARLO_CITATION
+verification.VerificationMethod
+verification.VerificationArchetype
+verification.VerificationItem
+verification.VerificationOutcome
+verification.VerificationPlan
+verification.DEFAULT_ARCHETYPES
+verification.plan_verification
+verification.record_outcome

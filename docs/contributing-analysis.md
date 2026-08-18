@@ -101,10 +101,18 @@ The public API is enumerated in
 module declares `__all__`. Adding a symbol means adding a manifest line in the same
 commit; removing one is a breaking change.
 
+The cross-cutting layers that sit on top of the scorecard — `derivation`, `evidence`,
+`explore`, `gdt`, `interop`, `loads`, `review`, `uncertainty`, `verification` — keep the
+same contract against their own manifest,
+[`docs/api/core-public-surface.txt`](api/core-public-surface.txt), and each needs a
+`- :mod:` bullet in the `anvilate` package docstring the way an analysis module needs one
+in `anvilate.analysis`'s.
+
 **Gates:** `test_public_surface_matches_manifest`,
 `test_package_aggregate_matches_module_alls`, `test_every_module_declares_its_public_surface`,
 `test_no_exported_symbol_shadows_its_own_module` (a function named after its own module
-shadows it, and the other gates structurally cannot see that).
+shadows it, and the other gates structurally cannot see that), and the four `*_core_*`
+gates that hold the same line for the top-level modules.
 
 ## 7. Never bundle someone else's allowables
 
