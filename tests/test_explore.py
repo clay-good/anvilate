@@ -108,6 +108,26 @@ def test_the_halton_sequence_is_the_radical_inverse_it_claims_to_be():
         halton_sequence(dimensions=9, count=4)
 
 
+def test_an_unbudgeted_halton_study_takes_exactly_a_grids_worth_of_points():
+    """The sample size of an unbudgeted Halton sweep is a declared quantity, not a detail.
+
+    Nothing pinned it, so the count could drift by one and push `coverage` past 100% with
+    no test noticing. A grid's worth is the deliberate choice: it makes the two strategies
+    comparable at the same spend, which is the whole point of the grid-vs-Halton table in
+    the docs.
+    """
+    study = _analytic_study(strategy=SamplingStrategy.HALTON)
+    assert study.grid_size() == 25
+    assert len(study.sample()) == 25
+    # And the budget, when given, is exactly the count — a prefix of the same sequence.
+    budgeted = _analytic_study(strategy=SamplingStrategy.HALTON, budget=7)
+    assert len(budgeted.sample()) == 7
+    assert budgeted.sample() == study.sample()[:7]
+    # A grid sweep takes the grid, and a budget truncates it rather than resampling.
+    assert len(_analytic_study().sample()) == 25
+    assert _analytic_study(budget=7).sample() == _analytic_study().sample()[:7]
+
+
 def test_a_study_re_run_returns_the_identical_set_in_the_identical_order():
     study = _analytic_study()
     first = run_study(study, _analytic_evaluate)
