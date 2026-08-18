@@ -41018,3 +41018,182 @@ def test_a_fad_point_with_no_demand_is_not_an_infinite_margin():
     )
     assert live.load_line_margin is not None and math.isfinite(live.load_line_margin)
     assert fad_scorecard("flaw", assessment=live).status is CheckStatus.PASS
+
+
+# --- EN 15978 embodied carbon screening -------------------------------------
+
+
+def _carbon_factor(**over):
+    from anvilate.analysis import CarbonFactor, ModuleScope
+
+    kwargs = {
+        "material": "steel, hot-rolled section",
+        "value": 1.55,
+        "scope": ModuleScope.A1_A3,
+        "source": "generic federal dataset, cited by the engineer of record",
+        "band_low": 0.75,
+        "band_high": 1.50,
+    }
+    kwargs.update(over)
+    return CarbonFactor(**kwargs)
+
+
+def test_the_material_a_low_yield_throws_away_dominates_the_estimate():
+    """Counting only the finished mass is the standard way to understate a machined part.
+
+    A 12 kg part machined at a 35% yield starts as a 34.3 kg billet, and the 22.3 kg of
+    swarf was smelted, cast and rolled exactly like the part. The loss carries 65% of the
+    cradle-to-gate total here — more than the part itself — so an estimate built on
+    finished mass alone is out by 2.86x, in the flattering direction.
+    """
+    from anvilate.analysis import (
+        carbon_contribution,
+        embodied_carbon_estimate,
+        material_loss_mass,
+    )
+
+    factor = _carbon_factor()
+    finished = _q("12 kg")
+    loss = material_loss_mass(finished_mass=finished, yield_fraction=0.35)
+    assert loss.to("kg").magnitude == pytest.approx(12 * (1 / 0.35 - 1), rel=1e-12)
+    assert (finished.to("kg").magnitude + loss.to("kg").magnitude) == pytest.approx(
+        12 / 0.35, rel=1e-12
+    )
+
+    estimate = embodied_carbon_estimate(
+        [
+            carbon_contribution(label="finished part", mass=finished, factor=factor),
+            carbon_contribution(label="process loss", mass=loss, factor=factor),
+        ]
+    )
+    assert estimate.total.to("kg").magnitude == pytest.approx((12 / 0.35) * 1.55, rel=1e-12)
+    assert estimate.dominant.label == "process loss"
+    # The band is the factor's band, carried straight through a linear sum.
+    assert estimate.low.to("kg").magnitude == pytest.approx(
+        estimate.total.to("kg").magnitude * 0.75, rel=1e-12
+    )
+    assert estimate.high.to("kg").magnitude == pytest.approx(
+        estimate.total.to("kg").magnitude * 1.50, rel=1e-12
+    )
+
+    # A perfect yield loses nothing, and the two ends of the range behave.
+    assert material_loss_mass(finished_mass=finished, yield_fraction=1.0).magnitude == 0.0
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        material_loss_mass(finished_mass=finished, yield_fraction=1.2)
+    with pytest.raises(ValueError, match=r"\(0, 1\]"):
+        material_loss_mass(finished_mass=finished, yield_fraction=0.0)
+
+
+def test_factors_quoted_over_different_module_scopes_are_refused_not_added():
+    """A1-A3 plus A1-A5 is not an estimate of anything, and nothing downstream can tell.
+
+    This is the failure mode that survives every other check: the units agree, the
+    arithmetic is right, and the total is meaningless. The only place it can be caught is
+    where the two are summed.
+    """
+    from anvilate.analysis import (
+        ModuleScope,
+        carbon_contribution,
+        embodied_carbon_estimate,
+    )
+
+    gate = _carbon_factor()
+    site = _carbon_factor(scope=ModuleScope.A1_A5, value=1.72)
+    a = carbon_contribution(label="section steel", mass=_q("10 kg"), factor=gate)
+    b = carbon_contribution(label="delivered plate", mass=_q("4 kg"), factor=site)
+    with pytest.raises(ValueError, match="different EN 15978 module scopes"):
+        embodied_carbon_estimate([a, b])
+    # Each on its own is fine, and each carries its own scope out.
+    assert embodied_carbon_estimate([a]).scope is ModuleScope.A1_A3
+    assert embodied_carbon_estimate([b]).scope is ModuleScope.A1_A5
+    # An estimate over nothing is not zero carbon.
+    with pytest.raises(ValueError, match="estimate that was not made"):
+        embodied_carbon_estimate([])
+
+
+def test_a_missing_factor_is_not_evaluated_and_never_zero():
+    """The materials that happen to have factors do not add up to the design.
+
+    Silently dropping an unfactored material reports a total lower than the real one —
+    the most flattering possible error, in the one direction nobody audits.
+    """
+    from anvilate.analysis import (
+        carbon_contribution,
+        embodied_carbon_estimate,
+        embodied_carbon_scorecard,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    assert carbon_contribution(label="fasteners", mass=_q("0.6 kg"), factor=None) is None
+    entry = embodied_carbon_scorecard(
+        "assembly",
+        estimate=None,
+        budget=_q("40 kg"),
+        missing="no carbon factor was supplied for the fasteners",
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "fasteners" in entry.detail
+    assert entry.safety_factor is None
+
+    # With a budget and a complete estimate it is an ordinary verdict.
+    estimate = embodied_carbon_estimate(
+        [carbon_contribution(label="steel", mass=_q("10 kg"), factor=_carbon_factor())]
+    )
+    assert (
+        embodied_carbon_scorecard("assembly", estimate=estimate, budget=_q("40 kg")).status
+        is CheckStatus.PASS
+    )
+    assert (
+        embodied_carbon_scorecard("assembly", estimate=estimate, budget=_q("10 kg")).status
+        is CheckStatus.FAIL
+    )
+
+    # No budget is NOT_EVALUATED too — but a reporting one: the number is still shown.
+    no_budget = embodied_carbon_scorecard("assembly", estimate=estimate, budget=None)
+    assert no_budget.status is CheckStatus.NOT_EVALUATED
+    assert "15.5 kgCO2e" in no_budget.detail
+    assert "no carbon budget supplied" in no_budget.detail
+
+
+def test_a_carbon_factor_refuses_to_ship_without_provenance_or_a_band():
+    """A screening factor with no source cannot be checked, and one with no band asserts
+    a precision nobody has."""
+    from anvilate.analysis import ModuleScope
+
+    _carbon_factor()  # the baseline is valid
+    with pytest.raises(ValueError, match="source must record"):
+        _carbon_factor(source="   ")
+    with pytest.raises(ValueError, match="must be positive"):
+        _carbon_factor(value=0.0)
+    with pytest.raises(ValueError, match="band_low must be"):
+        _carbon_factor(band_low=1.2)  # a "low" above the central value
+    with pytest.raises(ValueError, match="band_low must be"):
+        _carbon_factor(band_high=0.9)  # a "high" below it
+    # The scope is part of what the factor is, and it prints where a reader looks.
+    assert ModuleScope.A1_A3.value.startswith("A1-A3")
+    assert "A1-A3" in str(_carbon_factor())
+
+
+def test_the_carbon_scorecard_always_says_screening_and_names_the_dominant_line():
+    """Two claims the detail has to keep: the scope, and where a redesign should start."""
+    from anvilate.analysis import (
+        carbon_contribution,
+        embodied_carbon_estimate,
+        embodied_carbon_scorecard,
+    )
+
+    factor = _carbon_factor()
+    estimate = embodied_carbon_estimate(
+        [
+            carbon_contribution(label="finished part", mass=_q("2 kg"), factor=factor),
+            carbon_contribution(label="process loss", mass=_q("18 kg"), factor=factor),
+        ]
+    )
+    entry = embodied_carbon_scorecard("bracket", estimate=estimate, budget=_q("100 kg"))
+    assert "screening estimate" in entry.detail
+    assert "not an EPD" in entry.detail
+    assert "A1-A3" in entry.detail
+    assert "process loss carries 90%" in entry.detail
+    assert entry.reference is not None and "EN 15978" in entry.reference
+    with pytest.raises(ValueError, match=r"\[mass\] quantity of CO2e"):
+        embodied_carbon_scorecard("bracket", estimate=estimate, budget=_q("100 MPa"))

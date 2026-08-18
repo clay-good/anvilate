@@ -5791,3 +5791,26 @@ def test_spreader_beam_example_passes_as_category_a_and_fails_as_category_b():
     assert "Only Class 0 is exempt" in fatigue.detail
     assert a.status is CheckStatus.NOT_EVALUATED
     assert b.status is CheckStatus.FAIL
+
+
+def test_bracket_redesign_example_is_dominated_by_the_material_the_yield_threw_away():
+    namespace = runpy.run_path(str(_EXAMPLES / "bracket_redesign_embodied_carbon.py"))
+    card = namespace["screen_bracket_variants"]()
+    by_name = {e.name: e for e in card.entries}
+    machined = by_name["machined from solid (35% yield)"]
+    stamped = by_name["near-net stamping (88% yield)"]
+    unsourced = by_name["stamping + unsourced fasteners"]
+
+    # The lighter part is not automatically the lower-carbon one — the yield decides.
+    assert machined.status is CheckStatus.FAIL
+    assert stamped.status is CheckStatus.PASS
+    assert machined.safety_factor is not None and stamped.safety_factor is not None
+    assert stamped.safety_factor > 3 * machined.safety_factor
+    assert "process loss carries 65%" in machined.detail
+    # A material with no factor is not zero carbon.
+    assert unsourced.status is CheckStatus.NOT_EVALUATED
+    assert "fasteners" in unsourced.detail
+    # Every line carries its scope and its screening label.
+    for entry in (machined, stamped):
+        assert "A1-A3" in entry.detail
+        assert "screening estimate" in entry.detail

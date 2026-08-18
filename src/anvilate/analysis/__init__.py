@@ -440,6 +440,12 @@ modules:
   capacity a load needs (C = P·t/(V·DoD·η)), a bank's usable energy, the runtime
   a given bank delivers, and the round-trip efficiency and the delivered energy
   it yields (E_out = E_stored·η)
+- :mod:`~anvilate.analysis.embodied_carbon` — cradle-to-gate embodied carbon at screening
+  grade: a mass-specific carbon factor carrying its EN 15978 module scope, source, dataset
+  identity and uncertainty band; the material a machining yield throws away but still
+  emitted; an itemised estimate that refuses to sum factors quoted over different module
+  scopes and names the contribution carrying the most; and a scorecard against a carbon
+  budget that reports NOT_EVALUATED rather than zero when a factor is missing
 - :mod:`~anvilate.analysis.engineering_economics` — time value of money for economic screening: the
   present value F/(1+i)^n of a future amount, the future value P·(1+i)^n of a present one, the
   present and future value of a uniform payment series, the level loan payment (capital recovery),
@@ -1806,6 +1812,16 @@ from .electrostatics import (
     electric_field_energy_density,
     electric_field_point_charge,
     electric_potential_point_charge,
+)
+from .embodied_carbon import (
+    CarbonContribution,
+    CarbonFactor,
+    EmbodiedCarbonEstimate,
+    ModuleScope,
+    carbon_contribution,
+    embodied_carbon_estimate,
+    embodied_carbon_scorecard,
+    material_loss_mass,
 )
 from .energy_storage import (
     battery_backup_time,
@@ -3715,6 +3731,14 @@ __all__ = [
     "coulomb_force",
     "electric_field_point_charge",
     "electric_potential_point_charge",
+    "ModuleScope",
+    "CarbonFactor",
+    "CarbonContribution",
+    "EmbodiedCarbonEstimate",
+    "material_loss_mass",
+    "carbon_contribution",
+    "embodied_carbon_estimate",
+    "embodied_carbon_scorecard",
     "electric_field_energy_density",
     "coaxial_capacitance",
     "coaxial_characteristic_impedance",
