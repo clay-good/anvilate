@@ -5726,6 +5726,30 @@ def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition
         assert "qualified assessor" in entry.detail
 
 
+def test_lifter_verification_example_never_renders_a_plan_as_evidence():
+    namespace = runpy.run_path(str(_EXAMPLES / "lifter_verification_matrix.py"))
+
+    plan = namespace["build_plan"]()
+    # Two physical items over three checks, one analysis-only, one unresolved.
+    assert [item.name for item in plan.items] == ["Proof load test", "Dimensional inspection"]
+    assert plan.analysis_only == ("weld throat",)
+    assert [name for name, _ in plan.unresolved] == ["fatigue"]
+    # The proof load is 1.25x rated and the acceptance line carries the 80% rating rule
+    # that is the same statement inverted.
+    proof = plan.items[0]
+    assert "125 kN" in proof.acceptance
+    assert "80% of the load sustained" in proof.acceptance
+    # Nothing performed: the plan is not_evaluated no matter how green the analysis is.
+    assert plan.status is CheckStatus.NOT_EVALUATED
+    assert plan.verified == ()
+
+    performed = namespace["after_proof_test"]()
+    proof = next(i for i in performed.items if i.name == "Proof load test")
+    assert proof.status is CheckStatus.PASS
+    # And the plan is still open, because the inspection has not been done.
+    assert performed.status is CheckStatus.NOT_EVALUATED
+
+
 def test_lightest_bracket_example_shows_all_three_ways_a_sweep_lies():
     namespace = runpy.run_path(str(_EXAMPLES / "lightest_passing_bracket.py"))
     SamplingStrategy_ = namespace["SamplingStrategy"]
