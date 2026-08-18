@@ -5814,3 +5814,22 @@ def test_bracket_redesign_example_is_dominated_by_the_material_the_yield_threw_a
     for entry in (machined, stamped):
         assert "A1-A3" in entry.detail
         assert "screening estimate" in entry.detail
+
+
+def test_retrofit_example_fails_the_bundle_until_the_mix_is_signed_for():
+    namespace = runpy.run_path(str(_EXAMPLES / "retrofit_two_code_editions.py"))
+    card = namespace["screen_retrofit_bundle"]()
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["new mezzanine only"].status is CheckStatus.PASS
+    unwaived = by_name["whole bundle, unwaived"]
+    waived = by_name["whole bundle, waived"]
+    # Nothing about the structural checks changed between these two — what failed is the
+    # claim the bundle was making about itself.
+    assert unwaived.status is CheckStatus.FAIL
+    assert "AISC 360 appears at editions 16, 22" in unwaived.detail
+    assert waived.status is CheckStatus.PASS
+    assert "engineer of record" in waived.detail
+    # An edition other than the pinned one is reported in both, never the reason for the
+    # failure.
+    for entry in (unwaived, waived):
+        assert "AISC 360-16 against the pinned 22" in entry.detail

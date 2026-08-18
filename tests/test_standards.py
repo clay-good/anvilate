@@ -1381,3 +1381,150 @@ def test_pipe_table_anchors_the_sizes_the_piping_example_already_uses():
     with pytest.raises(UnknownPipeError):
         table.get("4", "120")
     assert table.has_pipe("4", "40") and not table.has_pipe("4", "120")
+
+
+# --- standards effectivity ---------------------------------------------------
+
+
+def _basis(**over):
+    from anvilate.standards import DesignBasis
+
+    kwargs = {"pins": {"AISC 360": "16", "ACI 318": "19"}}
+    kwargs.update(over)
+    return DesignBasis(**kwargs)
+
+
+def _waiver(**over):
+    from datetime import date
+
+    from anvilate.standards import MixedEditionWaiver
+
+    kwargs = {
+        "standard": "AISC 360",
+        "editions": ("16", "22"),
+        "accepted_by": "the engineer of record",
+        "rationale": "the existing frame was designed to -16; new members follow -22",
+        "accepted_on": date(2026, 8, 17),
+    }
+    kwargs.update(over)
+    return MixedEditionWaiver(**kwargs)
+
+
+def test_one_bundle_spanning_two_editions_fails_until_someone_signs_for_it():
+    """Mixing is allowed. Mixing silently is not.
+
+    A structure designed to one code and retrofitted under another is ordinary practice,
+    so the answer is not to forbid it — it is to refuse to let the bundle read as though
+    every number came from one book when it did not.
+    """
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import design_basis_scorecard
+
+    split = ["AISC 360-16 §D2", "AISC 360-22 §E3", "ACI 318-19 §22.8.3"]
+    failed = design_basis_scorecard("bundle", basis=_basis(), references=split)
+    assert failed.status is CheckStatus.FAIL
+    assert "AISC 360 appears at editions 16, 22" in failed.detail
+
+    waived = design_basis_scorecard("bundle", basis=_basis(waivers=(_waiver(),)), references=split)
+    assert waived.status is CheckStatus.PASS
+    assert "the engineer of record" in waived.detail
+
+    # A waiver for the wrong standard does not cover it, and neither does one that
+    # names only one of the two editions in play.
+    for wrong in (_waiver(standard="ACI 318"), _waiver(editions=("16", "14"))):
+        still_failed = design_basis_scorecard(
+            "bundle", basis=_basis(waivers=(wrong,)), references=split
+        )
+        assert still_failed.status is CheckStatus.FAIL
+
+
+def test_a_waiver_with_nobody_s_name_on_it_is_a_suppressed_warning():
+    """The two required fields are the two that make it an accepted risk rather than a
+    silenced one."""
+    import pytest
+
+    with pytest.raises(ValueError, match="may not be blank"):
+        _waiver(accepted_by="   ")
+    with pytest.raises(ValueError, match="may not be blank"):
+        _waiver(rationale="")
+    with pytest.raises(ValueError, match="at least two editions"):
+        _waiver(editions=("16", "16"))
+
+
+def test_an_editionless_reference_is_not_evaluated_rather_than_passed():
+    """A clause with no edition cannot be checked against a basis, and reporting only the
+    ones that happen to carry editions would describe a bundle nobody assembled."""
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import EditionAgreement, design_basis_scorecard, parse_citation
+
+    mixed = ["AISC 360-16 §D2", "ASME BTH-1 §3-3"]
+    entry = design_basis_scorecard("bundle", basis=_basis(), references=mixed)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "1 of 2 references name no edition" in entry.detail
+    assert "BTH-1" in entry.detail
+
+    # Agreement against the basis, with the four states distinguished.
+    basis = _basis()
+    assert basis.agreement(parse_citation("AISC 360-16 §D2")) is EditionAgreement.MATCHES
+    assert basis.agreement(parse_citation("AISC 360-22 §E3")) is EditionAgreement.DIFFERS
+    assert basis.agreement(parse_citation("ASCE 7-22 §2.3")) is EditionAgreement.NOT_PINNED
+    assert basis.agreement(parse_citation("AISC §E3")) is EditionAgreement.NOT_RECORDED
+
+
+def test_a_pinned_edition_the_library_did_not_write_against_is_reported_not_failed():
+    """A project may deliberately assess an existing structure under its original code.
+
+    That is a real and correct thing to do, so it is reported rather than blocked — and
+    reporting it is the point, because the alternative is a bundle that looks like it was
+    checked against the project's own basis when it was not.
+    """
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import WRITTEN_AGAINST, design_basis_scorecard
+
+    # The library's checks are written against AISC 360-16; this project pins -22.
+    assert WRITTEN_AGAINST["AISC 360"] == "16"
+    entry = design_basis_scorecard(
+        "bundle",
+        basis=_basis(pins={"AISC 360": "22"}),
+        references=["AISC 360-16 §D2", "AISC 360-16 §H1.1"],
+    )
+    assert entry.status is CheckStatus.PASS
+    assert "cited at an edition other than the pinned one" in entry.detail
+    assert "AISC 360-16 against the pinned 22" in entry.detail
+
+
+def test_the_library_declares_the_editions_it_was_actually_written_against():
+    """WRITTEN_AGAINST is a fact about this repository, and the source has to agree.
+
+    It is not a claim about which edition is current or adopted anywhere — that is the
+    user's to declare, because adoption is a legal question that varies by jurisdiction
+    and being confidently wrong about it is the worst failure mode available here.
+    """
+    from anvilate.standards import WRITTEN_AGAINST, parse_citation
+
+    references = _evidence_reference_strings()
+    seen: dict[str, set[str]] = {}
+    for text in references:
+        citation = parse_citation(text)
+        if citation is not None:
+            seen.setdefault(citation.standard, set()).add(citation.edition)
+
+    for standard, editions in seen.items():
+        if standard not in WRITTEN_AGAINST:
+            continue
+        assert editions == {WRITTEN_AGAINST[standard]}, (
+            f"the source cites {standard} at {sorted(editions)} but WRITTEN_AGAINST "
+            f"declares {WRITTEN_AGAINST[standard]!r}; one of the two is wrong"
+        )
+    assert "AISC 360" in seen, "the sample stopped containing any AISC citation"
+
+
+def _evidence_reference_strings() -> set[str]:
+    """The reference strings the packs put into entries and derivations."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from test_contract import _evidence_references
+
+    return _evidence_references()

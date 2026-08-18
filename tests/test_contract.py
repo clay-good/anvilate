@@ -1101,3 +1101,107 @@ def test_the_pack_magnitude_guard_actually_rejects_what_it_claims_to():
         material="ASTM-A36",
     )
     assert member.load.magnitude == -50.0
+
+
+def _evidence_references() -> set[str]:
+    """Every reference string the packs put into a scorecard entry or a derivation.
+
+    These are the citations the evidence bundle actually carries — the ones a reviewer
+    reads — rather than the prose in a docstring. Effectivity is about what the bundle
+    claims, so this is the surface that has to carry an edition.
+    """
+    refs: set[str] = set()
+    for entry in _structural_entries():
+        if entry.reference:
+            refs.add(entry.reference)
+        if entry.derivation is not None and entry.derivation.citation:
+            refs.add(entry.derivation.citation)
+    for _, derivation in _sample_derivations():
+        if derivation.citation:
+            refs.add(derivation.citation)
+    return refs
+
+
+def _editionless_manifest() -> set[str]:
+    path = _REPO / "docs" / "api" / "editionless-citations.txt"
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
+def test_every_cited_standard_names_its_edition():
+    """The effectivity gate, held as a ratchet: the debt can only go down.
+
+    A clause without an edition identifies a paragraph in a book nobody named, and the
+    evidence bundle's entire claim rests on those clauses. Most of the pack references
+    already carry one; the outstanding few are enumerated, and this holds the line in
+    both directions so neither the list nor the silence can drift.
+    """
+    from anvilate.standards.effectivity import names_a_standard, parse_citation
+
+    references = _evidence_references()
+    editionless = {
+        ref
+        for ref in references
+        if names_a_standard(ref) is not None and parse_citation(ref) is None
+    }
+    recorded = _editionless_manifest()
+
+    new = sorted(editionless - recorded)
+    assert not new, (
+        "these references name a normative standard and not its edition. Add the edition "
+        "exactly as the standard spells it (AISC 360-16, ACI 318-19, EN 1993-1-9:2005) — "
+        "do NOT add the reference to docs/api/editionless-citations.txt:\n  " + "\n  ".join(new)
+    )
+
+    versioned = sorted(recorded - editionless)
+    assert not versioned, (
+        "these references are recorded as editionless but now name an edition. Strike "
+        "them from docs/api/editionless-citations.txt so the debt stays honest:\n  "
+        + "\n  ".join(versioned)
+    )
+
+    # The discoverer has to keep discovering. A parser that stopped parsing would make
+    # `editionless` the whole reference set (caught above), but one that stopped
+    # RECOGNISING standards would make it empty and the gate would go green for ever.
+    assert sum(1 for r in references if names_a_standard(r) is not None) >= 10, (
+        "names_a_standard has stopped recognising the references this suite builds, so "
+        "the effectivity gate is passing on an empty set"
+    )
+
+
+def test_the_effectivity_parser_knows_a_eurocode_number_from_a_year():
+    """The one place a year-shaped token is not an edition.
+
+    Eurocodes are EN 1990 through EN 1999 — document numbers that read exactly like
+    years. Reading "EN 1993-1-9" as the 1993 edition of something called EN would record
+    a wrong edition for every Eurocode citation in the library, silently and plausibly.
+    Their real edition is the colon suffix, ``EN 1993-1-9:2005``.
+    """
+    from anvilate.standards.effectivity import names_a_standard, parse_citation
+
+    assert parse_citation("EN 1993-1-9 Table 8.1") is None
+    versioned = parse_citation("EN 1993-1-9:2005 Table 8.1")
+    assert versioned is not None
+    assert versioned.standard == "EN 1993-1-9"
+    assert versioned.edition == "2005"
+    assert parse_citation("EN 1990:2002") == parse_citation("EN 1990:2002")
+
+    # The ordinary forms still work, and a part number is not an edition.
+    for text, standard, edition in (
+        ("AISC 360-16 Ch. E", "AISC 360", "16"),
+        ("ACI 318-19 §22.8.3", "ACI 318", "19"),
+        ("ASCE 7-22 §2.3.6", "ASCE 7", "22"),
+        ("Aluminum Design Manual 2020 Part I §B.4", "Aluminum Design Manual", "2020"),
+    ):
+        parsed = parse_citation(text)
+        assert parsed is not None and (parsed.standard, parsed.edition) == (standard, edition)
+    assert parse_citation("ISO 286-2") is None  # a part, not an edition
+    assert parse_citation("ASME B31.3") is None
+
+    # A textbook is a complete citation and is not effectivity debt.
+    assert names_a_standard("Timoshenko plate theory") is None
+    assert names_a_standard("Roark's Formulas for Stress and Strain, Table 8.1") is None
+    assert names_a_standard("ASME BTH-1 §3-3") == "ASME"

@@ -1,0 +1,23 @@
+# Citations that name a normative standard and not its edition (the effectivity debt).
+#
+# The evidence bundle's whole claim is "these numbers came from these clauses", and a
+# clause without an edition weakens it to the point of being unfalsifiable: AISC 360-16
+# and -22 both have a Chapter E, ACI 318-14 and -19 both have a §22.8, and they do not
+# always say the same thing. "AISC §E3" identifies a paragraph in a book nobody named.
+#
+# This file records where that is still true, and the gate in tests/test_contract.py
+# holds it as a RATCHET: a reference naming a standards body with no edition must either
+# name one or be on this list, and a listed reference that has since been versioned must
+# be struck off. The list can only shrink.
+#
+# Textbooks are NOT on this list and are not debt. "Roark Table 8.1" and "Timoshenko
+# plate theory" are complete citations as they stand — a textbook is cited by author and
+# its printing is not a normative parameter. The gate tells them apart with
+# anvilate.standards.effectivity.names_a_standard, which matches a curated list of
+# standards bodies rather than anything capitalised.
+#
+# To pay a line off: add the edition to the reference string, exactly as the standard
+# spells it (AISC 360-16, ACI 318-19, EN 1993-1-9:2005), then delete the line. Do NOT add
+# a line to silence a failure on a new check — a new check cites an edition.
+AISC Design Guide 1
+ASME BTH-1 §3-3

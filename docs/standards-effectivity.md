@@ -1,0 +1,82 @@
+# Standards effectivity (which edition a citation means)
+
+Every check here cites a clause, and the evidence bundle's whole claim is *these numbers
+came from these clauses*. A clause without an edition weakens that to the point of being
+unfalsifiable. AISC 360-16 and -22 both have a Chapter E. ACI 318-14 and -19 both have a
+§22.8. They do not always say the same thing. **"AISC §E3" identifies a paragraph in a
+book nobody named.**
+
+## Three separate questions, kept separate
+
+| Question | Who answers it | Where |
+| --- | --- | --- |
+| Which edition were the library's checks written against? | This repository, verifiably | `WRITTEN_AGAINST`, held against the source by a contract gate |
+| Which edition has this project adopted? | You | `DesignBasis(pins={...})` |
+| Which edition applies in this jurisdiction? | **Not this library** | see below |
+
+That third row is deliberate. Adoption is a legal question that varies by state, county
+and city, changes on schedules nobody publishes centrally, and being confidently wrong
+about it is the worst failure mode available here. You say what you have adopted; the
+library checks that the bundle is consistent with what you said.
+
+## Mixing editions is allowed. Mixing silently is not.
+
+A structure designed to one code and retrofitted under another is ordinary practice, so
+forbidding it would be wrong. What the screen refuses is a bundle that *reads* as though
+every number came from one book when it did not:
+
+```
+new mezzanine only         pass   all 3 references name an edition and no standard is split
+whole bundle, unwaived     fail   AISC 360 appears at editions 16, 22 with no recorded
+                                  waiver covering them
+whole bundle, waived       pass   ... recorded waivers: AISC 360 16/22 by
+                                  A. Engineer, P.E. (engineer of record)
+```
+
+A `MixedEditionWaiver` requires `accepted_by` and `rationale`, and refuses a blank one. A
+waiver with nobody's name on it is not an accepted risk, it is a suppressed warning. See
+[`examples/retrofit_two_code_editions.py`](../examples/retrofit_two_code_editions.py).
+
+A reference at an edition *other than the pinned one* is **reported, not failed** — a
+project may deliberately assess an existing structure under the code it was designed to,
+and the basis is what says which is which.
+
+## An editionless reference is NOT_EVALUATED, never a pass
+
+A clause with no edition cannot be checked against a basis at all. Reporting only the
+references that happen to carry editions would describe a bundle nobody assembled, so
+the screen reports `NOT_EVALUATED` and says how many were missing and which.
+
+The outstanding ones are enumerated in
+[`docs/api/editionless-citations.txt`](api/editionless-citations.txt) and held as a
+ratchet by `tests/test_contract.py`: a new editionless citation fails, and a listed one
+that has since been versioned must be struck off. The list can only shrink.
+
+## Textbooks are not debt
+
+`names_a_standard` matches a curated list of standards bodies, not "anything
+capitalised". `"Roark's Formulas for Stress and Strain, Table 8.1"` and `"Timoshenko
+plate theory"` are complete citations as they stand — a textbook is cited by author, and
+its printing is not a normative parameter. Counting them as missing editions would inflate
+the debt with entries that can never be paid, which is how a ratchet stops meaning
+anything.
+
+## The Eurocode trap
+
+Eurocodes are EN 1990 through EN 1999 — document numbers that read *exactly* like years.
+Reading `EN 1993-1-9` as "the 1993 edition of EN" would record a wrong edition for every
+Eurocode citation in the library, silently and plausibly. The parser knows the difference:
+`EN 1993-1-9` names a part at no edition, and its edition is the colon suffix,
+`EN 1993-1-9:2005`. A part number is not an edition either — `ISO 286-2` parses to no
+edition, not to edition "2".
+
+## What is deliberately not here
+
+- **No jurisdiction table.** The proposal allows an advisory offline mapping; shipping one
+  means shipping a staleness-dated claim about the law in every US jurisdiction, and an
+  advisory answer to a legal question is the kind of thing that gets quoted as an
+  authoritative one.
+- **No edition-difference registry entries.** The mechanism for "this provision changed
+  between editions, here is the result under each" is worth building; populating it needs
+  each difference verified against the publishers' own comparison documents, and an
+  unverified entry would be worse than an empty registry.
