@@ -6,6 +6,7 @@ import math
 import runpy
 from pathlib import Path
 
+import pydantic
 import pytest
 
 from anvilate.scorecard import CheckStatus
@@ -5724,6 +5725,31 @@ def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition
     for entry in card.entries[:2]:
         assert "screening margin" in entry.detail
         assert "qualified assessor" in entry.detail
+
+
+def test_feature_control_frame_example_refuses_the_five_illegal_callouts():
+    namespace = runpy.run_path(str(_EXAMPLES / "feature_control_frame_legality.py"))
+    FeatureControlFrame_ = namespace["FeatureControlFrame"]
+
+    legal = namespace["legal_frame"]()
+    assert legal.render() == "⌖ | Ø0.2 mm Ⓜ | A | B Ⓜ | C"
+
+    # Each of the five builds a frame a drawing can carry and this model will not.
+    illegal = namespace["illegal_frames"]()
+    assert len(illegal) == 5
+    for _label, kwargs in illegal:
+        with pytest.raises(pydantic.ValidationError):
+            FeatureControlFrame_(**kwargs)
+
+    # The same symmetry callout is legal on the edition that still has it.
+    assert namespace["legacy_symmetry"]().render() == "⌯ | 0.05 mm | A"
+
+    contribution = namespace["position_stack_contribution"]
+    Quantity_ = namespace["Quantity"]
+    assert contribution(legal).to("mm").magnitude == pytest.approx(0.1)
+    assert contribution(legal, bonus=Quantity_.parse("0.1 mm")).to("mm").magnitude == (
+        pytest.approx(0.15)
+    )
 
 
 def test_frame_interop_example_screens_forces_it_did_not_compute():
