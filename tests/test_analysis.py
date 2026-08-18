@@ -41163,7 +41163,7 @@ def test_a_carbon_factor_refuses_to_ship_without_provenance_or_a_band():
     _carbon_factor()  # the baseline is valid
     with pytest.raises(ValueError, match="source must record"):
         _carbon_factor(source="   ")
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(ValueError, match="must be a positive, finite"):
         _carbon_factor(value=0.0)
     with pytest.raises(ValueError, match="band_low must be"):
         _carbon_factor(band_low=1.2)  # a "low" above the central value
@@ -41197,3 +41197,99 @@ def test_the_carbon_scorecard_always_says_screening_and_names_the_dominant_line(
     assert entry.reference is not None and "EN 15978" in entry.reference
     with pytest.raises(ValueError, match=r"\[mass\] quantity of CO2e"):
         embodied_carbon_scorecard("bracket", estimate=estimate, budget=_q("100 MPa"))
+
+
+def test_the_carbon_screen_pins_its_threshold_its_units_and_its_degenerate_edges():
+    """Eleven mutations survived the whole suite here; this is what kills them.
+
+    The worst was the pass/fail threshold itself: `required=1.0` could be moved anywhere
+    in roughly (0.75, 2.39] with every test still green, because no test sat near the
+    boundary. The second-worst was the unit conversion — every existing test supplied
+    mass already in kg, so the module's entire `to("kg")` layer was unexercised and could
+    be deleted without a symptom.
+    """
+    from anvilate.analysis import (
+        carbon_contribution,
+        embodied_carbon_estimate,
+        embodied_carbon_scorecard,
+        material_loss_mass,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    factor = _carbon_factor()
+    estimate = embodied_carbon_estimate(
+        [carbon_contribution(label="steel", mass=_q("10 kg"), factor=factor)]
+    )
+    total = estimate.total.to("kg").magnitude
+    assert total == pytest.approx(15.5, rel=1e-12)
+
+    # The threshold is exactly 1.0: a budget equal to the total passes at SF 1.0, and a
+    # hair under it fails. Anything else lets `required` drift.
+    at_limit = embodied_carbon_scorecard("x", estimate=estimate, budget=_q(f"{total} kg"))
+    assert at_limit.status is CheckStatus.PASS
+    assert at_limit.safety_factor == pytest.approx(1.0, rel=1e-12)
+    assert (
+        embodied_carbon_scorecard("x", estimate=estimate, budget=_q(f"{total * 0.999} kg")).status
+        is CheckStatus.FAIL
+    )
+
+    # Units are converted, not assumed. 12 lb is 5.443 kg, and both entry points do it.
+    loss = material_loss_mass(finished_mass=_q("12 lb"), yield_fraction=0.5)
+    assert loss.unit == "kg"
+    assert loss.to("kg").magnitude == pytest.approx(12 * 0.45359237, rel=1e-9)
+    in_pounds = carbon_contribution(label="p", mass=_q("12 lb"), factor=factor)
+    assert in_pounds is not None
+    assert in_pounds.mass.unit == "kg"
+    assert in_pounds.emissions.to("kg").magnitude == pytest.approx(12 * 0.45359237 * 1.55, rel=1e-9)
+
+    # Zero is admissible on a mass and not on a budget, a factor, or a finished mass.
+    zero_line = carbon_contribution(label="none of it", mass=_q("0 kg"), factor=factor)
+    assert zero_line is not None and zero_line.emissions.magnitude == 0.0
+    zero_total = embodied_carbon_estimate([zero_line])
+    idle = embodied_carbon_scorecard("x", estimate=zero_total, budget=_q("40 kg"))
+    assert idle.status is CheckStatus.NOT_EVALUATED  # nothing to evaluate, not free
+    assert idle.safety_factor is None
+    with pytest.raises(ValueError, match="budget must be positive"):
+        embodied_carbon_scorecard("x", estimate=estimate, budget=_q("0 kg"))
+    with pytest.raises(ValueError, match="must be a positive, finite"):
+        material_loss_mass(finished_mass=_q("0 kg"), yield_fraction=0.5)
+
+    # The band bounds are inclusive at 1.0 on both sides and exclusive at zero below.
+    assert _carbon_factor(band_low=1.0, band_high=1.0).band_low == 1.0
+    with pytest.raises(ValueError, match="band_low must be"):
+        _carbon_factor(band_low=0.0)
+
+
+def test_a_non_finite_factor_or_mass_is_refused_rather_than_estimated():
+    """The recurring shape: a guard covering one operand of a comparison, not its sibling.
+
+    `value <= 0` is False for NaN, so a NaN factor constructed cleanly and produced a
+    total printing as 'nan kgCO2e (nan-nan)'. The sibling bound `0 < band_low` happened
+    to reject NaN, which is what made the gap look covered. `uncertainty.py` already
+    guards both operands of the same comparison, with a comment saying so; this module
+    now follows it.
+    """
+    from anvilate.analysis import carbon_contribution, material_loss_mass
+    from anvilate.units import Quantity
+
+    nan, inf = float("nan"), float("inf")
+    for bad, match in (
+        ({"value": nan}, "positive, finite"),
+        ({"value": inf}, "positive, finite"),
+        ({"band_high": inf}, "band_high must be finite"),
+        ({"band_low": nan}, "band_low must be"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            _carbon_factor(**bad)
+
+    for magnitude in (nan, inf):
+        with pytest.raises(ValueError, match="finite, non-negative"):
+            carbon_contribution(
+                label="x",
+                mass=Quantity(magnitude=magnitude, unit="kg"),
+                factor=_carbon_factor(),
+            )
+        with pytest.raises(ValueError, match="positive, finite"):
+            material_loss_mass(
+                finished_mass=Quantity(magnitude=magnitude, unit="kg"), yield_fraction=0.5
+            )

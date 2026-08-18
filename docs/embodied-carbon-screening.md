@@ -5,9 +5,10 @@ certification.** It is comparable against your own variants computed the same wa
 not quotable as an absolute figure in a disclosure. The point is to make mass reduction
 legible as a carbon decision while the design is still cheap to change.
 
-Anvilate already computes the two inputs a screening estimate needs — material and mass —
-and already reports screening-grade cost beside the physics verdict. This adds kgCO2e to
-the same row.
+Anvilate already computes the two inputs a screening estimate needs — material and mass.
+This turns them into kgCO2e beside the physics verdict. (There is no cost row to sit next
+to yet: `engineering_economics` returns bare numbers and does not produce a scorecard
+entry.)
 
 ## The arithmetic is trivial; the bookkeeping is the work
 

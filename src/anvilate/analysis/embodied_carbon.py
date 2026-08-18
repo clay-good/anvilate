@@ -33,6 +33,7 @@ cradle-to-gate boundary and the requirement that a scope be declared with any re
 from __future__ import annotations
 
 from enum import StrEnum
+from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -106,8 +107,15 @@ class CarbonFactor(BaseModel):
 
     @model_validator(mode="after")
     def _well_formed(self) -> CarbonFactor:
-        if self.value <= 0:
-            raise ValueError(f"value must be positive kgCO2e/kg; got {self.value}")
+        if not isfinite(self.value) or self.value <= 0:
+            raise ValueError(
+                f"value must be a positive, finite kgCO2e/kg; got {self.value}. A NaN "
+                f"slips past `value <= 0` — the comparison is False for it — and a NaN "
+                f"factor produces a NaN total that prints as 'nan kgCO2e (nan-nan)'."
+            )
+        for bound, bound_name in ((self.band_low, "band_low"), (self.band_high, "band_high")):
+            if not isfinite(bound):
+                raise ValueError(f"{bound_name} must be finite; got {bound}")
         if not self.source.strip():
             raise ValueError(
                 "source must record where this factor came from — the dataset and its "
@@ -191,8 +199,8 @@ def material_loss_mass(*, finished_mass: Quantity, yield_fraction: float) -> Qua
     """
     if not finished_mass.has_dimension("[mass]"):
         raise ValueError(f"finished_mass must be a [mass] quantity; got {finished_mass}")
-    if finished_mass.magnitude <= 0:
-        raise ValueError(f"finished_mass must be positive; got {finished_mass}")
+    if not isfinite(finished_mass.magnitude) or finished_mass.magnitude <= 0:
+        raise ValueError(f"finished_mass must be a positive, finite quantity; got {finished_mass}")
     if not 0 < yield_fraction <= 1.0:
         raise ValueError(
             f"yield_fraction is finished mass over input mass and must lie in (0, 1]; "
@@ -214,8 +222,11 @@ def carbon_contribution(
     """
     if not mass.has_dimension("[mass]"):
         raise ValueError(f"mass must be a [mass] quantity; got {mass}")
-    if mass.magnitude < 0:
-        raise ValueError(f"mass must be non-negative; got {mass}")
+    if not isfinite(mass.magnitude) or mass.magnitude < 0:
+        raise ValueError(
+            f"mass must be a finite, non-negative quantity; got {mass}. A NaN passes "
+            f"`< 0` and carries all the way to a NaN total."
+        )
     if factor is None:
         return None
     kg = mass.to("kg").magnitude
