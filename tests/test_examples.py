@@ -6026,3 +6026,30 @@ def test_attested_bundle_example_reproduces_its_digest_and_catches_the_tamper():
     assert "'lug.dxf' digest mismatch" in tampered.problems[0]
     # A signature nobody checked is not a checked signature.
     assert unkeyed.status is CheckStatus.NOT_EVALUATED
+
+
+def test_plated_shaft_callouts_example_turns_a_pass_into_a_fail():
+    namespace = runpy.run_path(str(_EXAMPLES / "plated_shaft_callouts_change_the_verdict.py"))
+    result = namespace["screen_the_shaft"]()
+    ignored, ignored_factor = result["ignored"]
+    as_drawn, as_drawn_factor = result["as_drawn"]
+    revised, revised_factor = result["revised"]
+    # Ignore the drawing and the journal screens as a polished laboratory specimen.
+    assert ignored_factor == 1.0
+    assert ignored.status is CheckStatus.PASS
+    # Read the as-forged finish and the same shaft fails.
+    assert as_drawn_factor == pytest.approx(0.429, rel=1e-2)
+    assert as_drawn.status is CheckStatus.FAIL
+    assert revised_factor == pytest.approx(0.809, rel=1e-2)
+    assert revised.status is CheckStatus.PASS
+    # The heat treatment names a condition no record backs: not evaluated, never assumed.
+    heat = next(e for e in result["consumption"].entries if "heat treatment" in e.name)
+    assert heat.status is CheckStatus.NOT_EVALUATED
+    assert "'QT'" in heat.detail
+    # The thread's pitch diameter moves four times the plating, not twice.
+    low, high = result["thread_shift"]
+    assert low.to("um").magnitude == pytest.approx(20.0)
+    assert high.to("um").magnitude == pytest.approx(52.0)
+    # And a revised value keeps its characteristic: one change, nothing added or removed.
+    assert result["diff"].unchanged_identity is True
+    assert len(result["diff"].changed) == 1
