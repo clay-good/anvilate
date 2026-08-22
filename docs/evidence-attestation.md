@@ -14,10 +14,10 @@ from anvilate.attestation import (
 )
 
 bundle = EvidenceBundle(subjects=(Subject.over("lug.dxf", dxf_bytes),), predicate=predicate)
-bundle.digest            # '475bf2ca…' — the same for every rebuild of the same inputs
+bundle.digest            # the content address — the same for every rebuild of the same inputs
 envelope = Attestation.signed_by(bundle, LocalHmacSigner(secret))
 verify_attestation(envelope, artifacts={"lug.dxf": dxf_bytes}, signer=signer)
-# [PASS] bundle 475bf2cadf8b: signature symmetric_verified
+# [PASS] bundle <first 12 hex>: signature symmetric_verified
 ```
 
 ## What the bundle claims
@@ -37,7 +37,10 @@ takes a new one — carries six things:
 | `aiDisclosure` | whether, where, and by which model an LLM participated |
 
 The envelope is [DSSE](https://github.com/secure-systems-lab/dsse): `payloadType`,
-base64 payload, signatures. Standard attestation tooling reads the subjects and skips a
+base64 payload, signatures. The canonicalisation is Anvilate's own and is written down in
+`canonical_json` — code-point key ordering and Python's shortest-round-trip float repr —
+**not** RFC 8785 JCS, so a third party re-hashing a bundle applies those rules rather than
+a standard the output does not actually follow. Standard attestation tooling reads the subjects and skips a
 predicate it does not recognize, so the bundle is useful to a verifier that has never
 heard of Anvilate.
 
@@ -46,8 +49,12 @@ heard of Anvilate.
 **No wall clock, anywhere.** CycloneDX's `metadata.timestamp` and `serialNumber` are both
 optional and both unique per emission, so both are omitted. One timestamp in the payload
 makes every rebuild a different document and the content address worth nothing. A gate in
-the suite greps the whole shipped package for `datetime.now`, `date.today`, `time.time`,
-and `uuid` — the determinism the digest rests on is enforced, not assumed.
+the suite greps the whole shipped package for wall-clock and random-identifier calls —
+`datetime.now`/`utcnow`, `date.today`, `time.time`/`time_ns`/`perf_counter`/`monotonic`,
+`uuid1`–`uuid5`, module-level `random.*`, `secrets.*`, and `os.urandom` — and a companion
+test proves the pattern fires on each of them, because a gate whose coverage is narrower
+than its claim is worse than no gate. The determinism the digest rests on is enforced,
+not assumed.
 
 **The environment is inside the address.** Bump `anvilate_materials` from 2026.03 to
 2026.09 and the digest moves, even with the spec untouched. The same spec screened against
@@ -60,7 +67,10 @@ the artifact digests, the statement type, the predicate type — and reports
 `signature unsigned` in plain words.
 
 **A signature nobody checked is not a checked signature.** Hand `verify_attestation` a
-signed envelope with no key and the report is `NOT_EVALUATED`, not `PASS`. It is the
+signed envelope with no key and the report is `NOT_EVALUATED`, not `PASS`. A DSSE envelope
+may legitimately carry several signatures, so one under a key you do not hold is not a
+failure — but it is not a check either, and it lands in `unverified_signatures` and pulls
+the report to `NOT_EVALUATED` rather than passing unmentioned. It is the
 scorecard's no-silent-green rule applied to the seal itself. Same for artifacts: a subject
 you did not supply comes back *unchecked*, never assumed intact, and an artifact you
 supplied that the bundle never covered is a **failure** — you believed it was covered and

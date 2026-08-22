@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -25,8 +28,10 @@ from anvilate.attestation import (
     EnvironmentBOM,
     EvidenceBundle,
     LocalHmacSigner,
+    Signature,
     SignatureState,
     Subject,
+    ValueOrigin,
     canonical_json,
     dsse_pae,
     sha256_hex,
@@ -154,8 +159,31 @@ def test_the_predicate_type_is_versioned_in_its_uri():
     assert re.search(r"/v\d+$", PREDICATE_TYPE)
 
 
-def test_identical_inputs_reproduce_the_identical_digest():
-    assert _bundle().digest == _bundle().digest
+def test_identical_inputs_reproduce_the_identical_digest_across_processes():
+    """Two builds agree — in separate interpreters, under different hash seeds.
+
+    Comparing two digests inside one process is nearly a tautology: it shares the module
+    state, the dict insertion orders, and one PYTHONHASHSEED. The reproducibility being
+    claimed is across runs, so this claims it across runs.
+    """
+    script = (
+        "import sys; sys.path.insert(0, 'tests');"
+        "from test_attestation import _bundle; print(_bundle().digest)"
+    )
+    digests = set()
+    for seed in ("0", "1", "12345"):
+        env = os.environ | {"PYTHONHASHSEED": seed, "PYTHONPATH": "src"}
+        out = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=str(Path(__file__).resolve().parent.parent),
+            env=env,
+        )
+        digests.add(out.stdout.strip())
+    assert len(digests) == 1, f"the digest depends on the interpreter's hash seed: {digests}"
+    assert digests == {_bundle().digest}
 
 
 def test_a_changed_database_version_changes_the_digest():
@@ -182,9 +210,14 @@ def test_a_changed_spec_changes_the_digest():
     assert _bundle(spec_digest=sha256_hex(b"a revised spec")).digest != _bundle().digest
 
 
-def test_the_digest_is_the_hash_of_the_canonical_payload():
-    bundle = _bundle()
-    assert bundle.digest == sha256_hex(canonical_json(bundle.statement()).encode("utf-8"))
+# The digest of the fixture bundle, pinned. Restating `sha256_hex(canonical_json(...))`
+# here would pass however the canonicalisation drifted -- it is the implementation with
+# the same words. A literal is the only form of this assertion that can fail.
+_GOLDEN_DIGEST = "6a9cc37ab1339673528ebda65c0cf7088929d28d02a7be860580fa487bc2a4eb"
+
+
+def test_the_fixture_bundle_hashes_to_its_pinned_digest():
+    assert _bundle().digest == _GOLDEN_DIGEST
 
 
 def test_a_bundle_with_no_subject_is_refused():
@@ -509,7 +542,19 @@ def test_no_shipped_module_reads_a_wall_clock_or_a_random_identifier():
     """
     source = Path(__file__).resolve().parent.parent / "src" / "anvilate"
     offenders = []
-    pattern = re.compile(r"\b(datetime\.now|date\.today|time\.time|time\.monotonic|uuid4?)\s*\(")
+    # Deliberately wide. The first version of this gate matched only `uuid4(` while the
+    # docs advertised it as catching "uuid", and it saw none of uuid1, time_ns,
+    # perf_counter, utcnow, secrets, or os.urandom. A gate whose coverage is narrower than
+    # its claim is worse than no gate: it is a claim nobody re-checks.
+    pattern = re.compile(
+        r"\b("
+        r"datetime\.now|datetime\.utcnow|date\.today|"
+        r"time\.time|time\.time_ns|time\.monotonic|time\.perf_counter|time\.process_time|"
+        r"uuid\.uuid\d|uuid[1345]|"
+        r"random\.(random|randint|choice|shuffle|uniform|gauss|seed)|"
+        r"secrets\.\w+|os\.urandom"
+        r")\s*\("
+    )
     for path in sorted(source.rglob("*.py")):
         for number, line in enumerate(path.read_text().splitlines(), start=1):
             if pattern.search(line):
@@ -518,3 +563,173 @@ def test_no_shipped_module_reads_a_wall_clock_or_a_random_identifier():
         "non-deterministic calls in shipped code — a wall clock or a random identifier "
         "in any writer destroys the reproducible bundle digest:\n" + "\n".join(offenders)
     )
+
+
+# --- what a five-agent audit found the day this module shipped ----------------------------
+#
+# Every test below is a defect that was live in the first commit of this module. They sit
+# together because the pattern is one pattern: `EvidenceBundle` refuses malformed bundles at
+# construction, and the verifier — the half that reads documents it did not build — trusted
+# that the thing in front of it had been built by the other half.
+
+
+def _envelope_over(statement: object) -> Attestation:
+    """An envelope carrying an arbitrary payload, bypassing the model that builds one."""
+    return Attestation(
+        payload=base64.b64encode(canonical_json(statement).encode("utf-8")).decode("ascii")
+    )
+
+
+def test_a_statement_with_no_subjects_cannot_verify():
+    # The strongest forgery was the simplest: drop the subject key and the envelope came
+    # back PASS while attesting to no artifact at all. With an asymmetric signer that was
+    # attested=True over nothing.
+    statement = _bundle().statement()
+    del statement["subject"]
+    report = verify_attestation(_envelope_over(statement))
+    assert report.status is CheckStatus.FAIL
+    assert any("attests to no artifact" in p for p in report.problems)
+
+
+def test_an_empty_subject_list_cannot_verify():
+    statement = _bundle().statement() | {"subject": []}
+    report = verify_attestation(_envelope_over(statement))
+    assert report.status is CheckStatus.FAIL
+    assert any("attests to no artifact" in p for p in report.problems)
+
+
+@pytest.mark.parametrize("payload", [[1, 2, 3], 5, None, "hi", True])
+def test_a_payload_that_is_not_a_statement_object_reports_rather_than_raises(payload):
+    report = verify_attestation(_envelope_over(payload))
+    assert report.status is CheckStatus.FAIL
+    assert any("not a statement object" in p for p in report.problems)
+
+
+@pytest.mark.parametrize("subject", ["abc", {"a": 1}, 3, ["a.dxf"], [None]])
+def test_a_malformed_subject_list_reports_rather_than_raises(subject):
+    report = verify_attestation(_envelope_over(_bundle().statement() | {"subject": subject}))
+    assert report.status is CheckStatus.FAIL
+    assert report.problems
+
+
+def test_a_subject_with_no_digest_is_a_problem_not_a_match():
+    statement = _bundle().statement() | {"subject": [{"name": "lug.dxf"}]}
+    report = verify_attestation(_envelope_over(statement), artifacts={"lug.dxf": b"anything"})
+    assert report.status is CheckStatus.FAIL
+    assert any("no sha256 digest" in p for p in report.problems)
+
+
+def test_a_payload_that_is_not_valid_base64_is_refused_at_the_door():
+    # The error path itself used to re-decode and raise binascii.Error out of a function
+    # whose contract is to report what did not match.
+    with pytest.raises(ValidationError, match="not valid base64"):
+        Attestation(payload="!!!!not base64!!!!")
+
+
+def test_junk_spliced_into_the_payload_cannot_ride_along():
+    # Non-strict b64decode DISCARDS characters outside the alphabet, so an envelope with
+    # junk in its payload string decoded to the same bytes, hashed to the same digest, and
+    # kept a valid signature: a tampered envelope that verified.
+    envelope = Attestation.signed_by(_bundle(), LocalHmacSigner(_SECRET))
+    spliced = envelope.payload[:8] + "!!" + envelope.payload[8:]
+    # Parsing a wire envelope goes through the constructor, which is where it is refused.
+    with pytest.raises(ValidationError, match="not valid base64"):
+        Attestation(payload=spliced, signatures=envelope.signatures)
+    # And the verifier reports it rather than raising, for an envelope built some other way.
+    report = verify_attestation(envelope.model_copy(update={"payload": spliced}))
+    assert report.status is CheckStatus.FAIL
+    assert any("not valid base64" in p for p in report.problems)
+
+
+def test_a_signature_that_is_not_valid_base64_is_refused():
+    with pytest.raises(ValidationError, match="not valid base64"):
+        Signature(keyid="k", algorithm="hmac-sha256", sig="not base64 ***")
+
+
+def test_a_signature_under_another_key_is_reported_not_ignored():
+    # DSSE envelopes are legitimately multi-signer, so a foreign signature is not a
+    # failure. It is also not a check, and the report used to come back PASS with no trace
+    # of the signature it could not evaluate.
+    signer = LocalHmacSigner(_SECRET)
+    envelope = Attestation.signed_by(_bundle(), signer)
+    with_extra = envelope.model_copy(
+        update={
+            "signatures": (
+                *envelope.signatures,
+                Signature(keyid="someone-elses-key", algorithm="ed25519", sig="AAAA"),
+            )
+        }
+    )
+    report = verify_attestation(with_extra, artifacts=_artifacts(), signer=signer)
+    assert report.unverified_signatures == ("someone-elses-key",)
+    assert report.status is CheckStatus.NOT_EVALUATED
+    assert "1 signature(s) under other keys" in str(report)
+
+
+def test_a_renamed_artifact_is_not_matched_on_its_bytes():
+    # The docstring used to claim the opposite. Verification looks the artifact up by
+    # name; the name is part of the claim, not a label on it.
+    report = verify_attestation(
+        Attestation.unsigned(_bundle()),
+        artifacts={"scorecard.json": b'{"status":"fail"}', "lug_rev_b.dxf": b"0\nSECTION\n"},
+    )
+    assert report.status is CheckStatus.FAIL
+    assert report.unchecked_subjects == ("bracket.dxf",)
+    assert any("not a subject of this bundle" in p for p in report.problems)
+
+
+def test_the_origin_map_cannot_be_written_to_after_validation():
+    # `frozen=True` does not reach inside a mutable field. As a plain dict, origins could
+    # be given a MODEL attribution after construction — defeating the one invariant the
+    # class exists for, and moving the digest of an already-signed statement.
+    disclosure = AIDisclosure.none(origins={"span": DecisionOrigin.USER})
+    assert disclosure.origin_map == {"span": DecisionOrigin.USER}
+    disclosure.origin_map["span"] = DecisionOrigin.MODEL  # a copy, by construction
+    assert disclosure.origin_map == {"span": DecisionOrigin.USER}
+    with pytest.raises(ValidationError):
+        disclosure.origins = ()
+
+
+def test_a_field_cannot_be_attributed_twice():
+    with pytest.raises(ValidationError, match="attributed twice"):
+        AIDisclosure(
+            participated=False,
+            origins=(
+                ValueOrigin(field="span", origin=DecisionOrigin.USER),
+                ValueOrigin(field="span", origin=DecisionOrigin.DETERMINISTIC),
+            ),
+        )
+
+
+def test_the_signature_binds_the_envelopes_own_payload_type():
+    # signed_by used to sign the module constant while verify read the envelope's field.
+    # Equivalent today, and a trap the moment a second payload type exists.
+    signer = LocalHmacSigner(_SECRET)
+    envelope = Attestation.signed_by(_bundle(), signer)
+    relabelled = envelope.model_copy(update={"payload_type": "application/vnd.other+json"})
+    assert verify_attestation(relabelled, artifacts=_artifacts(), signer=signer).status is (
+        CheckStatus.FAIL
+    )
+
+
+def test_the_determinism_gate_detects_what_its_docs_claim_it_detects():
+    """Prove the gate fires, rather than trusting a regex nobody ran against a violation."""
+    source = Path(__file__).read_text()
+    pattern_src = source[source.index('r"\\b("') : source.index('r")\\s*\\("') + len('r")\\s*\\("')]
+    pattern = re.compile("".join(eval(line.strip()) for line in pattern_src.splitlines()))
+    for offender in (
+        "x = datetime.now()",
+        "x = datetime.utcnow()",
+        "x = date.today()",
+        "x = time.time()",
+        "x = time.time_ns()",
+        "x = time.perf_counter()",
+        "x = uuid.uuid1()",
+        "x = uuid4()",
+        "x = random.random()",
+        "x = secrets.token_hex(8)",
+        "x = os.urandom(16)",
+    ):
+        assert pattern.search(offender), f"the determinism gate does not see {offender!r}"
+    for innocent in ("rng = Random(seed)", "self._rng.gauss(0, 1)", "# monotonic in r"):
+        assert not pattern.search(innocent), f"the determinism gate false-positives on {innocent!r}"

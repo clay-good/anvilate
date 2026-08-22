@@ -18,6 +18,7 @@ attestation.ComponentKind
 attestation.Component
 attestation.EnvironmentBOM
 attestation.AIEvent
+attestation.ValueOrigin
 attestation.AIDisclosure
 attestation.AnvilatePredicate
 attestation.EvidenceBundle

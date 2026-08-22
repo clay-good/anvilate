@@ -41,6 +41,7 @@ different bundle and the content address worthless.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -48,7 +49,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from .evidence import SourceRecord
 from .review import DecisionOrigin
@@ -67,6 +68,7 @@ __all__ = [
     "Component",
     "EnvironmentBOM",
     "AIEvent",
+    "ValueOrigin",
     "AIDisclosure",
     "AnvilatePredicate",
     "EvidenceBundle",
@@ -103,6 +105,13 @@ def canonical_json(value: object) -> str:
     separators are tight, and non-ASCII characters stay as themselves (the output is
     UTF-8, as JSON is defined to be) — so a citation containing "ø" hashes the same
     on every platform rather than depending on an escaping choice.
+
+    These are Anvilate's canonicalisation rules, not RFC 8785 (JCS): keys sort by Unicode
+    code point rather than UTF-16 code unit, and numbers are written by Python's
+    shortest-round-trip float repr rather than JCS's number grammar, so ``1.0`` stays
+    ``1.0``. Every Anvilate build reproduces the same bytes; a third party re-hashing a
+    bundle must apply *these* rules, which is why they are written down here rather than
+    named by reference to a standard the output does not actually follow.
 
     Non-finite floats are refused rather than emitted. ``json.dumps`` writes bare
     ``NaN`` and ``Infinity`` by default, which is not JSON at all: the document parses
@@ -155,9 +164,10 @@ class Subject(BaseModel):
     """One artifact an attestation is about: a name and its SHA-256.
 
     The name is how a verifier finds the file (``drawing.dxf``, ``scorecard.json``);
-    the digest is what it actually claims. A verifier matches on the digest, so a
-    renamed file with matching bytes still verifies and a same-named file with
-    different bytes does not.
+    the digest is what it actually claims. :func:`verify_attestation` looks the artifact
+    up **by name** and then compares digests, so a renamed file is reported as a subject
+    nobody supplied rather than silently matched on its bytes — the name is part of the
+    claim, not a label on it.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -302,6 +312,21 @@ class AIEvent(BaseModel):
         return bool(self.confirmed_by and self.confirmed_by.strip())
 
 
+class ValueOrigin(BaseModel):
+    """Where one spec field's value came from — one entry of a disclosure's origin map."""
+
+    model_config = ConfigDict(frozen=True)
+
+    field: str
+    origin: DecisionOrigin
+
+    @model_validator(mode="after")
+    def _named(self) -> ValueOrigin:
+        if not self.field.strip():
+            raise ValueError("a value origin must name the field it attributes")
+        return self
+
+
 class AIDisclosure(BaseModel):
     """Whether, where, and how a language model participated in producing the spec.
 
@@ -320,11 +345,31 @@ class AIDisclosure(BaseModel):
 
     participated: bool
     events: tuple[AIEvent, ...] = ()
-    origins: dict[str, DecisionOrigin] = {}
+    # A tuple of frozen pairs rather than a dict, because ``frozen=True`` does not reach
+    # inside a mutable field: a plain dict here could be written to after validation, which
+    # would defeat the participated/MODEL invariant below *and* move the bundle digest of an
+    # already-signed statement. A Mapping passed in is converted, so callers still write
+    # ``origins={"span": DecisionOrigin.USER}``.
+    origins: tuple[ValueOrigin, ...] = ()
+
+    @field_validator("origins", mode="before")
+    @classmethod
+    def _accept_a_mapping(cls, value: object) -> object:
+        if isinstance(value, Mapping):
+            return tuple(ValueOrigin(field=str(k), origin=v) for k, v in sorted(value.items()))
+        return value
+
+    @property
+    def origin_map(self) -> dict[str, DecisionOrigin]:
+        """The origins as a fresh mapping — a copy, so mutating it changes nothing."""
+        return {o.field: o.origin for o in self.origins}
 
     @model_validator(mode="after")
     def _consistent(self) -> AIDisclosure:
-        model_drafted = sorted(k for k, v in self.origins.items() if v is DecisionOrigin.MODEL)
+        seen = [o.field for o in self.origins]
+        if len(set(seen)) != len(seen):
+            raise ValueError(f"a field is attributed twice in the origin map: {sorted(seen)}")
+        model_drafted = sorted(o.field for o in self.origins if o.origin is DecisionOrigin.MODEL)
         if not self.participated:
             if self.events:
                 raise ValueError(
@@ -456,7 +501,7 @@ class AttestationSigner(Protocol):
     """What :func:`verify_attestation` and :meth:`Attestation.signed_by` need from a key.
 
     Implement it over ``cryptography``'s Ed25519, a hardware token, or a Sigstore
-    flow; nothing in this module assumes more than these four members. ``symmetric``
+    flow; nothing in this module assumes more than these five members. ``symmetric``
     is not a detail — it decides whether a successful check proves authorship or only
     that the verifier holds the same secret, and :class:`SignatureState` reports which.
     """
@@ -520,10 +565,20 @@ class Signature(BaseModel):
     algorithm: str
     sig: str  # base64, as DSSE requires
 
+    @model_validator(mode="after")
+    def _signature_is_base64(self) -> Signature:
+        try:
+            base64.b64decode(self.sig, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError(
+                f"signature for key {self.keyid!r} is not valid base64: {exc}"
+            ) from exc
+        return self
+
     @property
     def raw(self) -> bytes:
-        """The signature bytes, decoded from base64."""
-        return base64.b64decode(self.sig)
+        """The signature bytes, decoded from base64 (strictly — junk is not skipped)."""
+        return base64.b64decode(self.sig, validate=True)
 
 
 class Attestation(BaseModel):
@@ -548,18 +603,24 @@ class Attestation(BaseModel):
 
     @classmethod
     def signed_by(cls, bundle: EvidenceBundle, signer: AttestationSigner) -> Attestation:
-        """The envelope for ``bundle``, signed over the DSSE pre-authentication encoding."""
-        payload = bundle.payload()
-        sig = signer.sign(dsse_pae(DSSE_PAYLOAD_TYPE, payload))
-        return cls(
-            payload=base64.b64encode(payload).decode("ascii"),
-            signatures=(
-                Signature(
-                    keyid=signer.keyid,
-                    algorithm=signer.algorithm,
-                    sig=base64.b64encode(sig).decode("ascii"),
-                ),
-            ),
+        """The envelope for ``bundle``, signed over the DSSE pre-authentication encoding.
+
+        The PAE binds the envelope's *own* ``payload_type``, not the module constant, so
+        a subclass or a future second payload type cannot end up signed under one string
+        and verified under another.
+        """
+        unsigned = cls.unsigned(bundle)
+        sig = signer.sign(dsse_pae(unsigned.payload_type, bundle.payload()))
+        return unsigned.model_copy(
+            update={
+                "signatures": (
+                    Signature(
+                        keyid=signer.keyid,
+                        algorithm=signer.algorithm,
+                        sig=base64.b64encode(sig).decode("ascii"),
+                    ),
+                )
+            }
         )
 
     @property
@@ -567,9 +628,22 @@ class Attestation(BaseModel):
         """Whether the envelope carries any signature at all."""
         return bool(self.signatures)
 
+    @model_validator(mode="after")
+    def _payload_is_base64(self) -> Attestation:
+        # Without ``validate=True`` the decoder silently DISCARDS characters outside the
+        # base64 alphabet, so an envelope with junk spliced into its payload string decodes
+        # to the same bytes, hashes to the same digest, and keeps a valid signature -- a
+        # tampered envelope that verifies. Rejecting it at the door is the only place the
+        # check is cheap.
+        try:
+            base64.b64decode(self.payload, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError(f"the envelope payload is not valid base64: {exc}") from exc
+        return self
+
     def payload_bytes(self) -> bytes:
-        """The statement bytes carried by the envelope."""
-        return base64.b64decode(self.payload)
+        """The statement bytes carried by the envelope (strict base64)."""
+        return base64.b64decode(self.payload, validate=True)
 
     def statement(self) -> dict[str, object]:
         """The carried statement, parsed."""
@@ -618,13 +692,21 @@ class VerificationReport(BaseModel):
     predicate_type: str
     checked_subjects: tuple[str, ...] = ()
     unchecked_subjects: tuple[str, ...] = ()
+    # Signatures the envelope carries under a key this verification did not hold. DSSE
+    # envelopes are legitimately multi-signer, so one of these is not a failure -- but it
+    # is not a check either, and a report that counted only the one it could verify would
+    # present a partly-checked envelope as a fully-checked one.
+    unverified_signatures: tuple[str, ...] = ()
     problems: tuple[str, ...] = ()
 
     @property
     def status(self) -> CheckStatus:
         if self.problems:
             return CheckStatus.FAIL
-        if self.signature_state is SignatureState.NOT_CHECKED or self.unchecked_subjects:
+        unchecked_signature = (
+            self.signature_state is SignatureState.NOT_CHECKED or self.unverified_signatures
+        )
+        if unchecked_signature or self.unchecked_subjects:
             return CheckStatus.NOT_EVALUATED
         return CheckStatus.PASS
 
@@ -638,6 +720,8 @@ class VerificationReport(BaseModel):
         detail = f"signature {self.signature_state.value}"
         if self.unchecked_subjects:
             detail += f"; {len(self.unchecked_subjects)} subject(s) not supplied"
+        if self.unverified_signatures:
+            detail += f"; {len(self.unverified_signatures)} signature(s) under other keys"
         if self.problems:
             detail += "; " + "; ".join(self.problems)
         return f"{head}: {detail}"
@@ -662,14 +746,42 @@ def verify_attestation(
     predicate type — rather than returning a bare false.
     """
     problems: list[str] = []
+    # Decode once, and never inside an error path. The first version computed
+    # ``attestation.bundle_digest`` while *building* the failure report, which decodes the
+    # payload again -- so an envelope whose payload was not decodable raised out of the
+    # error handler instead of being reported by it.
     try:
-        statement = attestation.statement()
+        payload = attestation.payload_bytes()
+    except (ValueError, binascii.Error) as exc:
+        return VerificationReport(
+            bundle_digest="",
+            signature_state=SignatureState.NOT_CHECKED,
+            predicate_type="",
+            problems=(f"the envelope payload is not valid base64: {exc}",),
+        )
+    digest = sha256_hex(payload)
+    try:
+        statement = json.loads(payload.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as exc:
         return VerificationReport(
-            bundle_digest=attestation.bundle_digest,
+            bundle_digest=digest,
             signature_state=SignatureState.NOT_CHECKED,
             predicate_type="",
             problems=(f"the envelope payload is not readable JSON: {exc}",),
+        )
+    # An envelope arriving from somewhere else is untrusted input, and JSON that parses is
+    # not JSON that is shaped like a statement. Every field below is read defensively for
+    # that reason: a payload of ``[1,2,3]`` or a subject list of bare strings used to raise
+    # AttributeError out of a function whose whole contract is to report what did not match.
+    if not isinstance(statement, dict):
+        return VerificationReport(
+            bundle_digest=digest,
+            signature_state=SignatureState.NOT_CHECKED,
+            predicate_type="",
+            problems=(
+                f"the envelope payload is a JSON {type(statement).__name__}, not a statement "
+                "object",
+            ),
         )
 
     predicate_type = str(statement.get("predicateType", ""))
@@ -686,9 +798,29 @@ def verify_attestation(
     supplied = dict(artifacts or {})
     checked: list[str] = []
     unchecked: list[str] = []
-    for raw in statement.get("subject", []) or []:
+    subject_names: set[str] = set()
+    raw_subjects = statement.get("subject")
+    # EvidenceBundle refuses a subject-less bundle at construction, but the verifier is the
+    # half that reads documents it did not build. Without this the strongest forgery is the
+    # simplest one: drop the subject key and the envelope verifies PASS while attesting to
+    # nothing at all.
+    if not isinstance(raw_subjects, list) or not raw_subjects:
+        problems.append(
+            "the statement carries no subject list, so it attests to no artifact; an "
+            "attestation over nothing cannot verify"
+        )
+        raw_subjects = []
+    for raw in raw_subjects:
+        if not isinstance(raw, dict):
+            problems.append(f"a subject entry is a JSON {type(raw).__name__}, not an object")
+            continue
         name = str(raw.get("name", ""))
-        expected = str((raw.get("digest") or {}).get("sha256", ""))
+        subject_digest = raw.get("digest")
+        expected = str(subject_digest.get("sha256", "")) if isinstance(subject_digest, dict) else ""
+        subject_names.add(name)
+        if not expected:
+            problems.append(f"subject {name!r} carries no sha256 digest to check against")
+            continue
         if name not in supplied:
             unchecked.append(name)
             continue
@@ -699,25 +831,22 @@ def verify_attestation(
             checked.append(name)
     # An artifact handed in that the attestation never covered is not a mismatch, but it
     # is not covered either -- and the caller almost certainly believed it was.
-    for name in sorted(
-        set(supplied) - {str(s.get("name", "")) for s in statement.get("subject", [])}
-    ):
+    for name in sorted(set(supplied) - subject_names):
         problems.append(
             f"{name!r} was supplied for verification but is not a subject of this bundle"
         )
 
+    unverified: list[str] = []
     if not attestation.signatures:
         state = SignatureState.UNSIGNED
     elif signer is None:
         state = SignatureState.NOT_CHECKED
+        unverified = [s.keyid for s in attestation.signatures]
     else:
-        pae = dsse_pae(attestation.payload_type, attestation.payload_bytes())
-        matched = [
-            s
-            for s in attestation.signatures
-            if s.keyid == signer.keyid and signer.verify(pae, s.raw)
-        ]
-        if matched:
+        pae = dsse_pae(attestation.payload_type, payload)
+        addressed = [s for s in attestation.signatures if s.keyid == signer.keyid]
+        unverified = [s.keyid for s in attestation.signatures if s.keyid != signer.keyid]
+        if addressed and all(signer.verify(pae, s.raw) for s in addressed):
             state = (
                 SignatureState.SYMMETRIC_VERIFIED if signer.symmetric else SignatureState.VERIFIED
             )
@@ -729,10 +858,11 @@ def verify_attestation(
             )
 
     return VerificationReport(
-        bundle_digest=attestation.bundle_digest,
+        bundle_digest=digest,
         signature_state=state,
         predicate_type=predicate_type,
         checked_subjects=tuple(checked),
         unchecked_subjects=tuple(unchecked),
+        unverified_signatures=tuple(unverified),
         problems=tuple(problems),
     )
