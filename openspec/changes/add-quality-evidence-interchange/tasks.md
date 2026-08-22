@@ -15,13 +15,21 @@
 
 ## 2. DCC ingestion
 
-- [ ] 2.1 DCC XSD parser (open PTB schema), value + uncertainty + certificate identity
-- [ ] 2.2 Confirmation-flow integration and provenance record (issuer, id, signature
-      status)
-- [ ] 2.3 Uncertainty handoff to input distributions
+- [x] 2.1 DCC XSD parser (open PTB schema), value + uncertainty + certificate identity —
+      DCC v3.3.0 over D-SI v2.2.1. The D-SI unit vocabulary is a declared table, because
+      the published schema types a unit as an open string: an unknown token is recorded as
+      a value not taken, naming the token, never resolved to something plausible
+- [x] 2.2 Confirmation-flow integration and provenance record (issuer, id, signature
+      status) — `SignatureStatus` has two members and no `VERIFIED`: verifying an XML
+      signature needs a trust anchor an offline tool does not have, so a certificate is
+      unsigned or signed-and-unchecked, and the laboratory's own seal flag is carried
+      separately as a claim
+- [x] 2.3 Uncertainty handoff to input distributions — an expanded uncertainty *U* at
+      coverage factor *k* becomes `Symmetric(half_width=U, sigma_level=k)`; a certificate
+      that states no usable *k*, or declares a non-Gaussian distribution, hands over
+      nothing and says why
 
 ## 3. Docs
 
-- [ ] 3.1 Documentation: what QIF export contains; how to feed calibrated measurements in
-      — the QIF half shipped as `docs/quality-interchange.md` with a worked example; the
-      DCC half follows section 2
+- [x] 3.1 Documentation: what QIF export contains; how to feed calibrated measurements in
+      — `docs/quality-interchange.md`, with a worked example in each direction

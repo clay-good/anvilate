@@ -24,6 +24,9 @@ that already ran and does one more thing with them:
   document, with one roll-up that is never better than its worst section.
 - :mod:`anvilate.callouts` — typed MBD callouts: finish, coating, and heat treat
   as check inputs with persistent characteristic identity, not annotations.
+- :mod:`anvilate.dcc` — Digital Calibration Certificates read as measured inputs,
+  with the instrument's identity, its stated uncertainty, and an honest signature
+  status attached to every value.
 - :mod:`anvilate.derivation` — a check's worked calculation: formula, substituted
   values, result, and the clause it came from.
 - :mod:`anvilate.evidence` — the provenance roll-up: where every standards number

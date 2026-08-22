@@ -54,6 +54,12 @@ callouts.plated_inner_dimension
 callouts.plated_thread_pitch_diameter_shift
 callouts.heat_treated_material_id
 callouts.callout_scorecard
+dcc.DCC_NAMESPACE
+dcc.SI_NAMESPACE
+dcc.CalibratedValue
+dcc.CalibrationCertificate
+dcc.d_si_quantity
+dcc.parse_dcc
 derivation.SymbolValue
 derivation.Derivation
 evidence.SourceRecord
@@ -79,6 +85,8 @@ gdt.DatumReference
 gdt.FeatureControlFrame
 gdt.position_stack_contribution
 ingest.ConfirmationState
+ingest.SignatureStatus
+ingest.CertificateProvenance
 ingest.SourceLocation
 ingest.ExtractedValue
 ingest.UnparsedLine

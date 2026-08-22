@@ -53,6 +53,8 @@ from .units import Quantity, UnitError
 
 __all__ = [
     "ConfirmationState",
+    "SignatureStatus",
+    "CertificateProvenance",
     "SourceLocation",
     "ExtractedValue",
     "UnparsedLine",
@@ -153,6 +155,75 @@ class SourceLocation(BaseModel):
         return f"{where} — {self.excerpt.strip()!r}"
 
 
+class SignatureStatus(StrEnum):
+    """Whether a source document carried a cryptographic signature, and what we did about it.
+
+    There is no ``VERIFIED``, and its absence is the point. Verifying an XML digital
+    signature needs the issuer's certificate and a trust anchor, neither of which is in a
+    local, offline screening tool. So the two honest states are "there was no signature"
+    and "there was one and Anvilate did not check it" — the same rule the attestation layer
+    applies to its own seals, where a signature nobody checked reports ``not_evaluated``
+    rather than pass.
+    """
+
+    ABSENT = "absent"
+    PRESENT_UNVERIFIED = "present_unverified"
+
+
+class CertificateProvenance(BaseModel):
+    """Where a measured value's certificate came from, and what it does and does not claim.
+
+    The identifier and the issuing laboratory are what make a measured input traceable past
+    "somebody measured it" — the chain runs from the check, through this record, to a
+    calibrated instrument. ``signature_status`` is the honest half: a certificate is usable
+    after confirmation whether or not it is signed, and the record says which, so a value is
+    never silently presented as attested.
+
+    ``claims_electronic_seal`` is the issuing laboratory's own assertion, carried separately
+    because a document saying it is sealed is not evidence that it is. Two different facts,
+    two different fields.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    identifier: str  # the certificate's unique identifier
+    laboratory: str  # the issuing calibration laboratory
+    signature_status: SignatureStatus
+    claims_electronic_seal: bool = False
+    country: str | None = None
+    issue_date: str | None = None
+    performance_end_date: str | None = None
+    schema_version: str | None = None
+
+    @model_validator(mode="after")
+    def _identified(self) -> CertificateProvenance:
+        if not self.identifier.strip():
+            raise ValueError(
+                "a calibration certificate must carry its unique identifier; without it "
+                "the measured value is traceable to nothing in particular"
+            )
+        if not self.laboratory.strip():
+            raise ValueError("a calibration certificate must name the laboratory that issued it")
+        return self
+
+    def signature_line(self) -> str:
+        """The signature situation in one sentence, said the way it should be read."""
+        if self.signature_status is SignatureStatus.ABSENT:
+            claim = (
+                " (the certificate claims an electronic seal it does not carry)"
+                if (self.claims_electronic_seal)
+                else ""
+            )
+            return f"no signature on the certificate{claim}"
+        return "signature present and NOT verified by Anvilate — treat as unattested"
+
+    def __str__(self) -> str:
+        dated = f", issued {self.issue_date}" if self.issue_date else ""
+        return (
+            f"certificate {self.identifier} from {self.laboratory}{dated} — {self.signature_line()}"
+        )
+
+
 class ExtractedValue(BaseModel):
     """One candidate spec value, its source, and where it stands with a human.
 
@@ -169,6 +240,11 @@ class ExtractedValue(BaseModel):
     load_bearing: bool = True
     state: ConfirmationState = ConfirmationState.DRAFT
     confirmed_by: str | None = None
+    # Present when the value came from a calibration certificate rather than a requirement
+    # document. It travels with the value through confirmation and into the release, so a
+    # check consuming a measured input can say which instrument, on which certificate, and
+    # whether anybody verified the signature.
+    certificate: CertificateProvenance | None = None
 
     @model_validator(mode="after")
     def _state_and_signer_agree(self) -> ExtractedValue:
@@ -224,7 +300,8 @@ class ExtractedValue(BaseModel):
             ConfirmationState.REJECTED: f"rejected by {self.confirmed_by}",
         }[self.state]
         weight = "load-bearing" if self.load_bearing else "informational"
-        return f"{self.field} = {self.quantity} [{weight}, {mark}] {self.source}"
+        cert = f" | {self.certificate}" if self.certificate is not None else ""
+        return f"{self.field} = {self.quantity} [{weight}, {mark}] {self.source}{cert}"
 
 
 class UnparsedLine(BaseModel):

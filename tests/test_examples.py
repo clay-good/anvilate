@@ -6117,3 +6117,27 @@ def test_qif_export_example_carries_the_unevaluated_check_across():
     assert read["tip deflection"]["required"] is None
     # Same evidence, same bytes.
     assert namespace["lug_as_qif"]() == document
+
+
+def test_measured_shaft_example_fails_on_the_number_and_says_the_measurement_cannot_settle_it():
+    namespace = runpy.run_path(str(_EXAMPLES / "measured_shaft_from_certificate.py"))
+    result = namespace["screen_measured_shaft"]()
+    # The certificate is unsigned, and the provenance says so rather than saying nothing.
+    certificate = result["certificate"]
+    assert certificate.provenance.identifier == "CAL-2026-04711"
+    assert "no signature" in certificate.provenance.signature_line()
+    # A measured value is a draft: the release is refused before confirmation.
+    assert result["blocked"] is not None and "draft is not an input" in result["blocked"]
+    # And the confirmed value still names the certificate it came from.
+    assert result["confirmed"].certificate.identifier == "CAL-2026-04711"
+    # 25.0004 mm against an h6 upper limit of 25.0000 mm: a failure by 0.4 micrometres.
+    lower, upper = result["limits"]
+    assert upper == pytest.approx(25.0)
+    assert lower == pytest.approx(24.987)
+    entry = result["card"].entries[0]
+    assert entry.status is CheckStatus.FAIL
+    # The certificate's own uncertainty is three times the overshoot, so the measurement is
+    # consistent with an in-tolerance shaft about a quarter of the time. Reporting the FAIL
+    # without that is as misleading as reporting a pass without it.
+    assert entry.uncertainty is not None
+    assert entry.uncertainty.shortfall_probability == pytest.approx(0.75, abs=0.05)

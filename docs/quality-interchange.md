@@ -1,7 +1,8 @@
-# Quality-data interchange: the scorecard as QIF Results
+# Quality-data interchange: verdicts out, calibrated measurements in
 
-**Your CMM software can read Anvilate's verdicts. No translator, no licence fee, and the
-check that could not run still says so.**
+**Your CMM software can read Anvilate's verdicts, and a calibration certificate can feed
+Anvilate's checks. No translator, no licence fee, and the check that could not run still
+says so.**
 
 Anvilate's scorecard is structurally what the metrology world already exchanges: a set of
 characteristics, each with a requirement, an evaluated actual, and a status. That is
@@ -81,6 +82,62 @@ QIF requires is derived from the content rather than generated — a random one 
 destroyed exactly the reproducibility the [attestation layer](evidence-attestation.md)
 spends its effort preserving.
 
+## The other direction: calibrated measurements in
+
+The chain that ends in a QIF file starts somewhere too, and for a measured value the honest
+place to start it is a calibrated instrument. `parse_dcc` reads a Digital Calibration
+Certificate (the open PTB schema, DCC v3.3.0 over D-SI v2.2.1) and offers its measured
+values to the standard [confirmation flow](requirements-ingestion.md).
+
+```python
+from anvilate.dcc import parse_dcc
+
+certificate = parse_dcc(text, document="CAL-2026-04711.dcc.xml")
+measured = certificate.labelled("shaft diameter")
+draft = DraftSpec(values=(measured.as_extracted("shaft_diameter"),))
+```
+
+The worked example is
+[`examples/measured_shaft_from_certificate.py`](../examples/measured_shaft_from_certificate.py):
+a 25 mm shaft called to ISO 286 h6, measured at 25.0004 mm with an expanded uncertainty of
+±0.0012 mm at k = 2. The number fails by 0.4 µm. The certificate's own uncertainty is three
+times the overshoot, so the measurement is consistent with an in-tolerance shaft about a
+quarter of the time — and Anvilate reports the failure *and* that the measurement does not
+settle it.
+
+**A measured value is still a draft.** A calibration certificate is a better source than a
+customer's RFQ table; it is not a person deciding that this measurement is the one the
+design should use. `release()` refuses until somebody named confirms it, exactly as it does
+for an extracted requirement, and the certificate's identity travels with the value through
+confirmation and into the release.
+
+**There is no "signature verified".** Verifying an XML digital signature needs the issuer's
+certificate and a trust anchor, and a local offline tool has neither. `SignatureStatus` has
+two members — `absent` and `present_unverified` — and the value is usable after confirmation
+in both cases, with the provenance saying which. The laboratory's own `cryptElectronicSeal`
+flag is carried separately as a *claim*: a document asserting that it is sealed is not
+evidence that it is.
+
+**A unit outside the table is refused, not guessed at.** D-SI writes units as escape
+sequences (`\milli\metre`, `\kilo\gram\metre\tothe{2}\second\tothe{-2}`) over a
+vocabulary the published schema leaves as an open string. Every token Anvilate accepts is in
+a declared table; anything else is recorded as a value it did not take, naming the token.
+Resolving `\bar` to something plausible is how a pressure lands in a check three orders of
+magnitude out.
+
+**A stated uncertainty becomes a typed input distribution.** An expanded uncertainty *U* at
+coverage factor *k* is a standard uncertainty of *U/k*, which is what
+[`Symmetric`](uncertainty-margins.md) means by a half-width at a sigma level, so the
+laboratory's number reaches the margin sampler as data rather than as a footnote.
+
+| The certificate states | Anvilate hands over |
+| --- | --- |
+| expanded uncertainty *U* at *k* | `Symmetric(half_width=U, sigma_level=k)` |
+| standard uncertainty *u* | `Normal(std=u)` |
+| a coverage interval | `Normal(std=…)` from its stated standard uncertainty |
+| an expanded *U* with no usable *k* | nothing, and says why — k = 2 is a convention, not this certificate's statement |
+| a non-Gaussian distribution | nothing, and names it — a rectangular uncertainty and a normal one of the same width are different statements |
+
 ## Checking a document
 
 `qif_schema_issues(document)` does the structural checks that need nothing but the file:
@@ -88,12 +145,16 @@ root element and namespace, the `idMax` claim against the ids actually present, 
 uniqueness, every `n` count against what it counts, and every internal reference resolving.
 An empty list means the document is self-consistent — not that it is schema-valid.
 
-Schema validation is the real conformance check and it is opt-in, because the schemas are a
-separate (free) download and the parser is not a runtime dependency:
+Schema validation is the real conformance check and it is opt-in on both sides, because the
+schemas are separate (free) downloads and the parser is not a runtime dependency:
 
 ```bash
 ANVILATE_QIF_XSD=/path/to/QIF3.0/xsd pytest tests/test_qif.py -k schemas
 ```
 
-Without both, that test skips rather than passing — an unrunnable check is reported as not
-run, which is the same rule the scorecard follows.
+```bash
+ANVILATE_DCC_XSD=/path/to/dcc pytest tests/test_dcc.py -k schema
+```
+
+Without the schemas and `lxml`, those tests skip rather than passing — an unrunnable check is
+reported as not run, which is the same rule the scorecard follows.
