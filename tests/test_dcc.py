@@ -477,3 +477,343 @@ def test_the_fixture_validates_against_the_published_dcc_schema():
     schema = etree.XMLSchema(etree.parse(str(schema_file)))
     document = etree.fromstring(_certificate().encode("utf-8"))
     assert schema.validate(document), "\n".join(str(e) for e in schema.error_log)
+
+
+# --- what a five-agent audit found the day this module shipped --------------------------
+#
+# Every test below is a defect that was live in the first commit of this module. Two of them
+# were wrong *numbers* with the right dimension, which is the shape that gets past every
+# other guard in the library.
+
+
+def test_no_prefix_and_unit_pair_maps_to_a_different_unit():
+    """The one that mattered: gluing a prefix symbol onto a unit symbol builds tokens Pint
+    already owns. ``centi`` + ``t`` is ``ct``, a *carat* — so ``\\centi\\tonne`` came back
+    as 0.0002 kg where the certificate said 10 kg, and it stayed a mass, so nothing
+    downstream could notice. Eight of the 820 pairs collided (kt knot, ft foot, pt pint, at
+    technical atmosphere, dat, Tt tex, mcd microday).
+
+    This sweeps every pair against an independent registry and the prefix's own power of
+    ten, so a new unit added to the table cannot reintroduce the class.
+    """
+    pint = pytest.importorskip("pint")
+    from anvilate.dcc import _D_SI_PREFIXES, _D_SI_UNITS, _UNPREFIXABLE
+
+    # The SI definition of each token, spelled in long form so the comparison never routes
+    # through the same two-letter symbols the defect was made of.
+    long_form = {
+        "metre": "meter",
+        "kilogram": "kilogram",
+        "second": "second",
+        "ampere": "ampere",
+        "kelvin": "kelvin",
+        "mole": "mole",
+        "candela": "candela",
+        "gram": "gram",
+        "hertz": "hertz",
+        "newton": "newton",
+        "pascal": "pascal",
+        "joule": "joule",
+        "watt": "watt",
+        "coulomb": "coulomb",
+        "volt": "volt",
+        "farad": "farad",
+        "ohm": "ohm",
+        "siemens": "siemens",
+        "weber": "weber",
+        "tesla": "tesla",
+        "henry": "henry",
+        "lumen": "lumen",
+        "lux": "lux",
+        "becquerel": "becquerel",
+        "gray": "gray",
+        "sievert": "sievert",
+        "katal": "katal",
+        "radian": "radian",
+        "steradian": "steradian",
+        "degreecelsius": "degC",
+        "minute": "minute",
+        "hour": "hour",
+        "day": "day",
+        "degree": "degree",
+        "arcminute": "arcminute",
+        "arcsecond": "arcsecond",
+        "litre": "liter",
+        "tonne": "metric_ton",
+        "electronvolt": "electron_volt",
+        "dalton": "dalton",
+        "astronomicalunit": "astronomical_unit",
+    }
+    assert set(long_form) == set(_D_SI_UNITS), (
+        "a D-SI unit was added or removed without its independent reference; the sweep "
+        "below is the only thing standing between the table and a silent unit swap"
+    )
+    registry = pint.UnitRegistry()
+    wrong = []
+    for token, _symbol in _D_SI_UNITS.items():
+        reference = registry.Unit(long_form[token])
+        if token in _UNPREFIXABLE:
+            continue
+        for prefix, (_prefix_symbol, power) in _D_SI_PREFIXES.items():
+            got = d_si_quantity(1.0, f"\\{prefix}\\{token}").pint.to_base_units()
+            want = registry.Quantity(10.0**power, reference).to_base_units()
+            if got.dimensionality != want.dimensionality or not (
+                abs(got.magnitude - want.magnitude) <= 1e-9 * abs(want.magnitude)
+            ):
+                wrong.append(f"\\{prefix}\\{token} -> {got} (should be {want})")
+    assert not wrong, "prefix-unit pairs that map to the wrong unit:\n  " + "\n  ".join(wrong)
+
+
+def test_the_collision_case_that_started_it():
+    """A named regression: 10 centitonnes is 100 kg, not 2 grams of carat."""
+    assert d_si_quantity(10.0, "\\centi\\tonne").to("kg").magnitude == pytest.approx(100.0)
+    assert d_si_quantity(1.0, "\\milli\\candela").to("cd").magnitude == pytest.approx(1e-3)
+
+
+def test_a_measurements_line_is_not_displaced_by_an_influence_condition():
+    """`si:value` appears in influence conditions and item quantities too. Counting them
+    document-wide shifted every measured value's line onto somebody else's number, which
+    sends a reviewer checking a diameter to an ambient temperature."""
+    influence = """\
+              <dcc:influenceConditions>
+                <dcc:influenceCondition>
+                  <dcc:name><dcc:content lang="en">ambient</dcc:content></dcc:name>
+                  <dcc:data>
+                    <dcc:quantity>
+                      <si:real>
+                        <si:value>20.5</si:value>
+                        <si:unit>\\degreecelsius</si:unit>
+                      </si:real>
+                    </dcc:quantity>
+                  </dcc:data>
+                </dcc:influenceCondition>
+              </dcc:influenceConditions>
+"""
+    text = _certificate().replace("      <dcc:results>", influence + "      <dcc:results>", 1)
+    shaft = _parsed(text).labelled("shaft diameter")
+    assert "25.0004" in text.splitlines()[shaft.source.line_number - 1]
+
+
+def test_a_default_namespace_document_still_reports_real_lines():
+    """A certificate may bind D-SI as the default namespace. Scanning for `si:value` found
+    nothing and every value was reported at line 1, with nothing marking it as a guess."""
+    text = _certificate().replace('xmlns:si="https://ptb.de/si"', 'xmlns:d="https://ptb.de/si"')
+    text = text.replace("<si:", "<d:").replace("</si:", "</d:")
+    shaft = _parsed(text).labelled("shaft diameter")
+    assert shaft.source.line_number > 1
+    assert "25.0004" in text.splitlines()[shaft.source.line_number - 1]
+
+
+def test_a_quantity_in_another_d_si_form_is_recorded_not_dropped():
+    """D-SI offers seven quantity forms and this module reads one. The other six vanished
+    without an `unparsed` line, so a certificate could offer a value Anvilate neither took
+    nor mentioned while the summary said "0 not taken"."""
+    hybrid = """\
+            <dcc:quantity>
+              <dcc:name><dcc:content lang="en">bore diameter</dcc:content></dcc:name>
+              <si:hybrid>
+                <si:real><si:value>12.7</si:value><si:unit>\\milli\\metre</si:unit></si:real>
+                <si:real><si:value>0.5</si:value><si:unit>\\milli\\metre</si:unit></si:real>
+              </si:hybrid>
+            </dcc:quantity>
+"""
+    certificate = _parsed(_certificate(_SHAFT_QUANTITY + hybrid))
+    assert len(certificate.values) == 2
+    assert len(certificate.unparsed) == 1
+    assert "si:hybrid" in certificate.unparsed[0].reason
+    assert "bore diameter" in certificate.unparsed[0].source.excerpt
+    assert "1 not taken" in certificate.summary()
+
+
+def test_two_values_under_one_label_are_refused_rather_than_silently_first():
+    """`dcc:quantity/dcc:name` is optional, so a result reporting several readings labels
+    them all the same. Returning the first made the rest unreachable while looking like a
+    lookup that worked."""
+    second = _quantity_block("\\milli\\metre", value="18.2")
+    certificate = _parsed(_certificate(_SHAFT_QUANTITY + second))
+    assert len(certificate.values) == 3
+    with pytest.raises(KeyError, match="carries 2 values"):
+        certificate.labelled("shaft diameter")
+    # Still reachable by position — the refusal is about ambiguity, not about the data.
+    assert [v.quantity.magnitude for v in certificate.values if v.label == "shaft diameter"] == [
+        pytest.approx(25.0004),
+        pytest.approx(18.2),
+    ]
+
+
+def test_a_zeroth_power_is_refused_as_a_unit_not_as_a_crash():
+    """`Quantity` raises `UnitError` inside a pydantic validator, so pydantic wrapped it in
+    a ValidationError that `parse_dcc`'s `except UnitError` never saw — one malformed unit
+    took the whole certificate down instead of one line."""
+    with pytest.raises(UnitError, match="zeroth power"):
+        d_si_quantity(1.0, "\\metre\\tothe{0}")
+    certificate = _parsed(_certificate(_quantity_block("\\metre\\tothe{0}")))
+    assert certificate.values == ()
+    assert "zeroth power" in certificate.unparsed[0].reason
+
+
+def test_a_responsible_persons_seal_claim_is_carried_too():
+    """The schema lets the laboratory claim a seal and lets each responsible person claim
+    one separately. Reading only the laboratory's copy under-claimed."""
+    text = _certificate().replace(
+        "<dcc:mainSigner>true</dcc:mainSigner>",
+        "<dcc:mainSigner>true</dcc:mainSigner>"
+        "<dcc:cryptElectronicSeal>true</dcc:cryptElectronicSeal>",
+    )
+    assert _parsed(text).provenance.claims_electronic_seal is True
+
+
+def test_the_distribution_is_in_the_quantitys_own_unit_whatever_the_certificate_said():
+    """The same shaft in micrometres. `quantity` is unit-checked and `distribution` is bare
+    floats, so nothing else in the library can catch them drifting apart — and they did:
+    the uncertainty was built from the raw magnitude while the quantity had been converted,
+    so a micrometre certificate handed a 25000.4-centred distribution to a millimetre
+    limit. Wrong by 10^6, dimensionally invisible, no unit recorded anywhere."""
+    expanded = """\
+                <si:measurementUncertaintyUnivariate>
+                  <si:expandedMU>
+                    <si:valueExpandedMU>1.2</si:valueExpandedMU>
+                    <si:coverageFactor>2</si:coverageFactor>
+                    <si:coverageProbability>0.95</si:coverageProbability>
+                  </si:expandedMU>
+                </si:measurementUncertaintyUnivariate>
+"""
+    micro = _parsed(
+        _certificate(_quantity_block("\\micro\\metre", value="25000.4", uncertainty=expanded))
+    ).labelled("shaft diameter")
+    milli = _parsed().labelled("shaft diameter")
+
+    # Each distribution is centred on its own quantity, in its own unit.
+    assert micro.distribution_unit == "µm"
+    assert micro.distribution.mean == pytest.approx(micro.quantity.magnitude)
+    assert milli.distribution_unit == "mm"
+    assert milli.distribution.mean == pytest.approx(milli.quantity.magnitude)
+    # And converting both to one unit gives one physical statement.
+    for value in (micro, milli):
+        in_mm = value.distribution_in("mm")
+        assert in_mm.mean == pytest.approx(25.0004)
+        assert in_mm.std == pytest.approx(0.0006)
+
+
+def test_a_prefix_collisions_fallback_keeps_the_distribution_with_its_quantity():
+    """`\\centi\\tonne` falls back to the bare unit with a scaled magnitude. An uncertainty
+    left on the raw number would then be centred a hundredfold away from its own value."""
+    standard = """\
+                <si:measurementUncertaintyUnivariate>
+                  <si:standardMU><si:valueStandardMU>0.5</si:valueStandardMU></si:standardMU>
+                </si:measurementUncertaintyUnivariate>
+"""
+    value = _parsed(
+        _certificate(_quantity_block("\\centi\\tonne", value="10.0", uncertainty=standard))
+    ).labelled("shaft diameter")
+    assert value.quantity.to("kg").magnitude == pytest.approx(100.0)
+    assert value.distribution.mean == pytest.approx(value.quantity.magnitude)
+    in_kg = value.distribution_in("kg")
+    assert in_kg.mean == pytest.approx(100.0)
+    assert in_kg.std == pytest.approx(5.0)
+
+
+def test_a_distribution_that_is_not_its_own_quantity_is_refused_at_construction():
+    """The invariant is enforced where it can be, not only where it happened to hold."""
+    from anvilate.dcc import CalibratedValue
+    from anvilate.uncertainty import Normal
+
+    good = _parsed().labelled("shaft diameter")
+    with pytest.raises(ValueError, match="different unit from its own quantity"):
+        CalibratedValue(
+            label=good.label,
+            quantity=good.quantity,
+            source=good.source,
+            certificate=good.certificate,
+            distribution=Normal(mean=25000.4, std=0.6),
+        )
+
+
+def test_a_certificate_reporting_exactly_zero_still_scales_its_uncertainty():
+    """The conversion factor is taken from a unit magnitude, not from the measured value —
+    dividing by the value would make a zero reading a ZeroDivisionError."""
+    standard = """\
+                <si:measurementUncertaintyUnivariate>
+                  <si:standardMU><si:valueStandardMU>0.5</si:valueStandardMU></si:standardMU>
+                </si:measurementUncertaintyUnivariate>
+"""
+    value = _parsed(
+        _certificate(_quantity_block("\\micro\\metre", value="0.0", uncertainty=standard))
+    ).labelled("shaft diameter")
+    assert value.quantity.magnitude == pytest.approx(0.0)
+    assert value.distribution.std == pytest.approx(0.5)
+    assert value.distribution_in("mm").std == pytest.approx(0.0005)
+
+
+def test_a_table_of_points_in_a_dcc_list_is_read_not_skipped():
+    """`dcc:list` is the standard container for a table of readings. The recursion into it
+    had no test at all: deleting it left the suite green while every listed quantity
+    disappeared the same silent way a dropped quantity does."""
+    listed = """\
+            <dcc:list>
+              <dcc:name><dcc:content lang="en">run-out sweep</dcc:content></dcc:name>
+              <dcc:quantity>
+                <dcc:name><dcc:content lang="en">run-out at 0 deg</dcc:content></dcc:name>
+                <si:real><si:value>0.004</si:value><si:unit>\\milli\\metre</si:unit></si:real>
+              </dcc:quantity>
+              <dcc:quantity>
+                <dcc:name><dcc:content lang="en">run-out at 90 deg</dcc:content></dcc:name>
+                <si:real><si:value>0.006</si:value><si:unit>\\milli\\metre</si:unit></si:real>
+              </dcc:quantity>
+            </dcc:list>
+"""
+    certificate = _parsed(_certificate(_SHAFT_QUANTITY + listed))
+    assert [v.label for v in certificate.values] == [
+        "shaft diameter",
+        "ambient temperature",
+        "run-out at 0 deg",
+        "run-out at 90 deg",
+    ]
+    assert certificate.labelled("run-out at 90 deg").quantity.to("mm").magnitude == pytest.approx(
+        0.006
+    )
+
+
+def test_the_deprecated_expanded_spelling_also_refuses_a_non_gaussian_distribution():
+    uncertainty = """\
+                <si:expandedUnc>
+                  <si:uncertainty>0.004</si:uncertainty>
+                  <si:coverageFactor>2</si:coverageFactor>
+                  <si:coverageProbability>0.95</si:coverageProbability>
+                  <si:distribution>rectangular</si:distribution>
+                </si:expandedUnc>
+"""
+    value = _parsed(
+        _certificate(_quantity_block("\\milli\\metre", uncertainty=uncertainty))
+    ).labelled("shaft diameter")
+    assert value.distribution is None
+    assert "rectangular" in value.uncertainty_note
+
+
+@pytest.mark.parametrize("spelling", ["cryptElectronicSeal", "cryptElectronicSignature"])
+@pytest.mark.parametrize("truth", ["true", "1"])
+def test_every_spelling_of_the_seal_claim_is_read(spelling, truth):
+    text = _certificate().replace(
+        "<dcc:cryptElectronicSeal>false</dcc:cryptElectronicSeal>",
+        f"<dcc:{spelling}>{truth}</dcc:{spelling}>",
+    )
+    assert _parsed(text).provenance.claims_electronic_seal is True
+
+
+def test_the_extracted_value_keeps_the_certificates_own_source_line():
+    """`as_extracted` hands the measurement to the confirmation flow. If it invented a
+    location instead of passing the certificate's, the audit trail would end at the door."""
+    shaft = _parsed().labelled("shaft diameter")
+    extracted = shaft.as_extracted("shaft_diameter")
+    assert extracted.source == shaft.source
+    assert extracted.quantity == shaft.quantity
+    assert extracted.certificate == shaft.certificate
+
+
+def test_converting_an_uncertainty_across_an_offset_unit_keeps_it_a_width():
+    """A degree Celsius converts affinely and an uncertainty in it does not. Multiplying the
+    width by the value's own conversion would turn a 0.2 K uncertainty into 273.35."""
+    ambient = _parsed().labelled("ambient temperature")
+    in_kelvin = ambient.distribution_in("K")
+    assert in_kelvin.mean == pytest.approx(293.25)
+    assert in_kelvin.std == pytest.approx(0.2)

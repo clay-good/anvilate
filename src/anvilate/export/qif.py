@@ -52,7 +52,9 @@ schema test does the rest when a schema directory is pointed at it.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
+from decimal import Decimal
 from hashlib import sha256
 from math import isfinite
 from xml.etree import ElementTree as ET
@@ -135,16 +137,23 @@ _FAIL_VALUE = "fail"
 
 
 def _decimal(value: float) -> str:
-    """A float as an ``xs:decimal`` literal.
+    """A float as an ``xs:decimal`` literal, at the value's own precision.
 
     ``xs:decimal`` admits neither exponent notation nor the non-finite specials, so the
     ordinary ``repr`` of a small or huge float ("1e-05", "inf") is not a legal value.
     Callers filter non-finite values out before they reach here; this fixes the notation.
+
+    Fixed-point formatting at nine decimals looked like enough and was not. It rounded a
+    failing safety factor of 1.9999999996 to "2.0" — exactly its own ``MinValue``, so a
+    reader recomputing conformance from the limits called a FAIL conforming — and it wrote a
+    positive requirement of 1e-12 as ``MinValue 0.0``, a limit every value on earth
+    satisfies, which is the precise thing both ``_numeric_requirement`` and
+    ``from_safety_factor`` refuse to let through the front door. ``Decimal`` over the
+    float's own repr keeps every digit the float actually has, with no exponent.
     """
     if not isfinite(value):  # pragma: no cover - callers gate on _finite first
         raise ValueError(f"xs:decimal cannot represent {value!r}")
-    text = f"{value:.9f}".rstrip("0")
-    return text + "0" if text.endswith(".") else text
+    return format(Decimal(repr(value)), "f")
 
 
 def _finite(value: float | None) -> bool:
@@ -152,15 +161,26 @@ def _finite(value: float | None) -> bool:
     return value is not None and isfinite(value)
 
 
+# The characters XML 1.0 does not admit at all, even escaped. A check name carrying one
+# (from a pasted spreadsheet cell, say) produced a document no parser would open — and the
+# self-check raised on it instead of reporting it, so the failure surfaced at the reader.
+_ILLEGAL_XML = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _legal(text: str) -> str:
+    """``text`` with characters XML cannot carry replaced, rather than emitted and lost."""
+    return _ILLEGAL_XML.sub("\ufffd", text)
+
+
 def _sub(parent: ET.Element, tag: str, text: str | None = None, **attrs: str) -> ET.Element:
-    child = ET.SubElement(parent, tag, dict(attrs))
+    child = ET.SubElement(parent, tag, {k: _legal(v) for k, v in attrs.items()})
     if text is not None:
-        child.text = text
+        child.text = _legal(text)
     return child
 
 
-def _numeric_requirement(entry: ScorecardEntry) -> tuple[float, float | None] | None:
-    """The check's requirement as a QIF limit pair, or ``None`` if it has no numeric one.
+def _numeric_requirement(entry: ScorecardEntry) -> float | None:
+    """The check's required minimum as a QIF limit, or ``None`` if it has no numeric one.
 
     A QIF numeric nominal needs a target and at least one limit. That needs a required
     minimum that is a real, positive number: an absent one (a verdict-only check), a
@@ -168,16 +188,20 @@ def _numeric_requirement(entry: ScorecardEntry) -> tuple[float, float | None] | 
     non-positive one (which passes every check and which
     :meth:`ScorecardEntry.from_safety_factor` refuses at construction) cannot be written
     as a limit. Those checks cross as attribute characteristics instead, which is the
-    honest shape: a verdict with no fabricated nominal under it. The upper bound is
-    dropped rather than fabricated when it is not a usable number.
+    honest shape: a verdict with no fabricated nominal under it.
+
+    The declared **upper band is deliberately not exported as a QIF ``MaxValue``**. In QIF a
+    MaxValue is a conformance limit and a value past it is nonconforming; in Anvilate the
+    upper band is an over-engineering flag that never blocks anything. Writing one as the
+    other produced a document whose own numbers said out-of-tolerance next to a status that
+    said PASS, and a reader recomputing conformance from the limits would reject a part
+    Anvilate's doctrine says is fine. The band travels in the characteristic's Description
+    instead, where it cannot be mistaken for a tolerance.
     """
     required = entry.required_safety_factor
     if not _finite(required) or required <= 0:  # type: ignore[operator]
         return None
-    upper = entry.upper_safety_factor
-    if not _finite(upper) or upper <= required:  # type: ignore[operator]
-        return float(required), None  # type: ignore[arg-type]
-    return float(required), float(upper)  # type: ignore[arg-type]
+    return float(required)  # type: ignore[arg-type]
 
 
 def _description(entry: ScorecardEntry, layer: str) -> str:
@@ -188,6 +212,12 @@ def _description(entry: ScorecardEntry, layer: str) -> str:
     an attached margin distribution.
     """
     parts = [f"{layer}: {entry.detail}"]
+    if _finite(entry.upper_safety_factor):
+        parts.append(
+            f"target band {entry.required_safety_factor}-{entry.upper_safety_factor}: the "
+            "upper bound is an over-engineering flag, not a conformance limit, so it is "
+            "stated here rather than written as a QIF MaxValue"
+        )
     if entry.status is CheckStatus.OVER_MARGIN:
         parts.append(
             "over-margin: this check passed above its declared target band; QIF has no "
@@ -198,6 +228,28 @@ def _description(entry: ScorecardEntry, layer: str) -> str:
     if entry.is_fragile():
         parts.append("fragile under the declared input scatter")
     return " | ".join(parts)
+
+
+def _unique_names(names: Sequence[str]) -> list[str]:
+    """The same names, made unique within the document, in order.
+
+    A characteristic name is the key quality software joins on, and Anvilate's check names
+    are not unique: `screen_structure` merges every member into one card, so two beams both
+    contribute "B1 bending". The document itself stayed honest — distinct ids, distinct
+    descriptions, one of them FAIL — but a reader keying by name saw one characteristic and
+    kept whichever came last, which is how an overstressed member reads as passing.
+
+    A repeat is suffixed with its occurrence number rather than dropped or merged, and an
+    empty name gets a placeholder so the key exists at all. The original name stays in the
+    Description either way.
+    """
+    seen: dict[str, int] = {}
+    out: list[str] = []
+    for name in names:
+        base = name.strip() or "unnamed check"
+        seen[base] = seen.get(base, 0) + 1
+        out.append(base if seen[base] == 1 else f"{base} #{seen[base]}")
+    return out
 
 
 class _Ids:
@@ -237,7 +289,6 @@ def _numeric_nominal(
     definition_id: str,
     name: str,
     required: float,
-    upper: float | None,
 ) -> str:
     nominal_id = ids.take()
     nominal = _sub(parent, "UserDefinedUnitCharacteristicNominal", id=nominal_id)
@@ -247,11 +298,9 @@ def _numeric_nominal(
     # value the design is aimed at. Stating the upper band as the target instead would
     # report every compliant part as under-target.
     _sub(nominal, "TargetValue", _decimal(required), unitName=SAFETY_FACTOR_UNIT)
-    # The schema's choice: MaxValue (optionally followed by MinValue), or MinValue alone.
-    # Element order is the schema's, not ours — a MinValue written before a MaxValue is
-    # a different branch of the choice and does not validate.
-    if upper is not None:
-        _sub(nominal, "MaxValue", _decimal(upper), unitName=SAFETY_FACTOR_UNIT)
+    # The schema's choice is MaxValue (optionally followed by MinValue) or MinValue alone.
+    # This is always the second branch: the only real limit a screening check has is its
+    # minimum, and see `_numeric_requirement` for why the target band is not written here.
     _sub(nominal, "MinValue", _decimal(required), unitName=SAFETY_FACTOR_UNIT)
     # These are limits on the value, not a ± band around the target.
     _sub(nominal, "DefinedAsLimit", "true")
@@ -287,48 +336,45 @@ def _characteristics(
     nominals = ET.Element("CharacteristicNominals", {"n": str(len(entries))})
     items = ET.Element("CharacteristicItems", {"n": str(len(entries))})
     records: list[tuple[ScorecardEntry, str, str, bool]] = []
+    names = _unique_names([entry.name for entry, _layer in entries])
 
-    for entry, layer in entries:
-        limits = _numeric_requirement(entry)
-        numeric = limits is not None
+    for (entry, layer), name in zip(entries, names, strict=True):
+        required = _numeric_requirement(entry)
+        numeric = required is not None
         definition_id = ids.take()
         if numeric:
             definition = _sub(
                 definitions, "UserDefinedUnitCharacteristicDefinition", id=definition_id
             )
             _sub(definition, "Description", _description(entry, layer))
-            _sub(definition, "Name", entry.name)
+            _sub(definition, "Name", name)
         else:
             definition = _sub(
                 definitions, "UserDefinedAttributeCharacteristicDefinition", id=definition_id
             )
             _sub(definition, "Description", _description(entry, layer))
-            _sub(definition, "Name", entry.name)
+            _sub(definition, "Name", name)
             # WhatToMeasure follows the base type's elements in the schema sequence.
             _sub(definition, "WhatToMeasure", entry.reference or entry.name)
 
         if numeric:
-            required, upper = limits  # type: ignore[misc]
             nominal_id = _numeric_nominal(
                 nominals,
                 ids,
                 definition_id=definition_id,
-                name=entry.name,
-                required=required,
-                upper=upper,
+                name=name,
+                required=required,  # type: ignore[arg-type]
             )
             item_tag = "UserDefinedUnitCharacteristicItem"
         else:
-            nominal_id = _attribute_nominal(
-                nominals, ids, definition_id=definition_id, name=entry.name
-            )
+            nominal_id = _attribute_nominal(nominals, ids, definition_id=definition_id, name=name)
             item_tag = "UserDefinedAttributeCharacteristicItem"
 
         item_id = ids.take()
         item = _sub(items, item_tag, id=item_id)
         if entry.reference:
             _sub(item, "Description", f"cites {entry.reference}")
-        _sub(item, "Name", entry.name)
+        _sub(item, "Name", name)
         _sub(item, "CharacteristicNominalId", nominal_id)
         records.append((entry, layer, item_id, numeric))
 
@@ -370,24 +416,35 @@ def _measurements(
     return measured
 
 
-def _document_uuid(part_name: str, spec_digest: str, summary: str) -> str:
+def _document_uuid(content: bytes) -> str:
     """A deterministic document UUID, derived from the content it identifies.
 
-    QIF requires a UUID on every document. Generating a random one would make two exports
-    of the same evidence differ byte for byte, destroying exactly the property the
-    attestation layer spends its effort preserving — so this is a digest of the
-    identifying content, laid out in UUID form.
+    QIF requires a UUID on every document. Generating a random one would make two exports of
+    the same evidence differ byte for byte, destroying exactly the property the attestation
+    layer spends its effort preserving — so this is a digest of the document itself, laid
+    out in UUID form.
+
+    It is a digest of the *whole serialized document* and not of a few identifying fields.
+    Seeding it on the part name, the spec digest and the bundle's one-line summary looked
+    equivalent and was not: two bundles differing in every safety factor, every citation and
+    every BOM entry produced byte-different documents under one identifier — and the QPId is
+    the key a QIF archive stores them under.
 
     The version nibble is 8 (RFC 9562's custom form) and not 5, because 5 would claim the
     value came from the SHA-1 namespace scheme and it did not. The variant bits are set so
     the value is a well-formed UUID rather than 32 hex characters wearing hyphens.
     """
-    seed = f"urn:anvilate:qif:{part_name}:{spec_digest}:{summary}"
-    digest = bytearray(sha256(seed.encode()).digest()[:16])
+    digest = bytearray(sha256(content).digest()[:16])
     digest[6] = (digest[6] & 0x0F) | 0x80  # version 8: custom, derived by this scheme
     digest[8] = (digest[8] & 0x3F) | 0x80  # RFC 9562 variant
     hexed = digest.hex()
     return f"{hexed[:8]}-{hexed[8:12]}-{hexed[12:16]}-{hexed[16:20]}-{hexed[20:]}"
+
+
+# The placeholder the document carries while its own digest is being taken. It is a legal
+# QPId so the intermediate serialization is a legal document, and it is replaced before the
+# document is returned.
+_QPID_PLACEHOLDER = "00000000-0000-8000-8000-000000000000"
 
 
 def export_qif_results(
@@ -399,11 +456,15 @@ def export_qif_results(
 ) -> str:
     """Export an evidence bundle's checks as a QIF Results document (ISO 23952).
 
-    Every check in the bundle becomes a QIF characteristic: the analysis scorecard first,
-    then the typed-callout scorecard when the bundle carries callouts, each tagged in its
-    ``Description`` with the layer it came from. Nothing is filtered — a check that could
-    not run crosses as a ``NOT_ANALYZED`` characteristic with no value, so a reader
-    enumerating the file sees the same gaps the scorecard reports.
+    Every verdict in the bundle becomes a QIF characteristic: the analysis scorecard first,
+    then the typed-callout scorecard when the bundle carries callouts, then the verification
+    plan's items and the coverage it could not resolve — each tagged in its ``Description``
+    with the layer it came from. Nothing is filtered: a check that could not run crosses as a
+    ``NOT_ANALYZED`` characteristic with no value, so a reader enumerating the file sees the
+    same gaps the scorecard reports.
+
+    The layers that are *not* per-characteristic — the reviewer dossier, a design-space
+    sweep — are disclosed in the header rather than invented as characteristics.
 
     ``spec_digest`` and ``bom`` are the traceability the requirement asks for: the digest
     identifies the spec revision screened, and every BOM component is written as a QIF
@@ -427,6 +488,7 @@ def export_qif_results(
     callouts = sections.callout_card()
     if callouts is not None:
         layered.extend((entry, "callouts") for entry in callouts.entries)
+    layered.extend((entry, "verification") for entry in _verification_entries(sections))
 
     ids = _Ids()
     root = ET.Element(
@@ -438,17 +500,30 @@ def export_qif_results(
         },
     )
     summary = sections.summary()
-    _sub(root, "QPId", _document_uuid(part_name, spec_digest, summary))
+    qpid = _sub(root, "QPId", _QPID_PLACEHOLDER)
 
     header = _sub(root, "Header")
     application = _sub(header, "Application")
     _sub(application, "Name", bom.application.name)
     _sub(application, "Organization", "Anvilate")
-    _sub(
-        header,
-        "Description",
-        f"Analytical screening evidence for {part_name} (spec digest {spec_digest}). {summary}",
-    )
+    # The layers that are not per-characteristic are named here rather than left out. The
+    # bundle's own summary — which states what it does and does not cover — is the one
+    # sentence a reader has to be able to find, so it is not left to an f-string nobody
+    # asserts on: `test_the_header_discloses_the_layers_that_are_not_characteristics` reads
+    # it back.
+    disclosed = [
+        f"Analytical screening evidence for {part_name} (spec digest {spec_digest}).",
+        summary,
+    ]
+    if sections.review is not None:
+        disclosed.append(f"Reviewer dossier (not a characteristic): {sections.review.summary()}")
+    if sections.exploration is not None:
+        study = sections.exploration
+        disclosed.append(
+            "Design-space study (informational, not a characteristic): "
+            f"{len(study.points)} candidates, {len(study.feasible)} feasible."
+        )
+    _sub(header, "Description", " ".join(disclosed))
     _sub(
         header,
         "Scope",
@@ -503,7 +578,50 @@ def export_qif_results(
     _sub(inspection_status, "InspectionStatusEnum", _INSPECTION_STATUS[sections.status])
 
     root.set("idMax", str(ids.maximum))
+    # The identifier is a digest of everything else in the document, so it is taken from the
+    # serialization with the placeholder still in it and then substituted.
+    qpid.text = _document_uuid(ET.tostring(root, encoding="utf-8"))
     return ET.tostring(root, encoding="unicode", xml_declaration=True) + "\n"
+
+
+def _verification_entries(sections: BundleSections) -> list[ScorecardEntry]:
+    """The verification plan's items as scorecard entries, for the crossing.
+
+    A performed physical test is a verdict about the part, and it is characteristic-shaped:
+    a name, an acceptance criterion, and a result. Leaving the plan out of the characteristic
+    list produced the worst document this exporter can produce — a lifter whose proof test
+    cracked it at 108% exported one PASS characteristic and a document-level FAIL, with the
+    words "cracked" and "proof load" nowhere in the file. A reader recomputing the roll-up
+    from the characteristics got PASS.
+
+    Unresolved coverage crosses too, as a not-evaluated characteristic: a check that should
+    have produced a test and did not is a gap, and a gap that is not in the file is a gap the
+    file denies having.
+    """
+    plan = sections.verification
+    if plan is None:
+        return []
+    entries = [
+        ScorecardEntry(
+            name=item.name,
+            status=item.status,
+            detail=(
+                f"{item.archetype.title} — acceptance: {item.acceptance}"
+                + ("" if item.outcome is None else f"; recorded: {item.outcome.measured}")
+            ),
+            reference=item.archetype.citation,
+        )
+        for item in plan.items
+    ]
+    entries.extend(
+        ScorecardEntry(
+            name=f"verification coverage: {check}",
+            status=CheckStatus.NOT_EVALUATED,
+            detail=f"no physical test could be planned — {reason}",
+        )
+        for check, reason in plan.unresolved
+    )
+    return entries
 
 
 def _citation_sources(citations: Sequence[SourceRecord]) -> list[tuple[str, str]]:
@@ -524,32 +642,58 @@ def _citation_sources(citations: Sequence[SourceRecord]) -> list[tuple[str, str]
     return out
 
 
+# What each internal reference is allowed to point at, by the local name of its target
+# element. Checking only that a reference resolves to *some* id let a CharacteristicItemId
+# point at a Software entry and pass clean, silently orphaning a verdict — the published
+# schema catches that with a keyref, and a self-check that claims to check references has to
+# check the same thing.
+_REFERENCE_TARGETS: dict[str, str] = {
+    "CharacteristicItemId": "CharacteristicItem",
+    "CharacteristicNominalId": "CharacteristicNominal",
+    "CharacteristicDefinitionId": "CharacteristicDefinition",
+    "FormalStandardId": "Standard",
+}
+
+
 def qif_schema_issues(document: str) -> list[str]:
     """Structural problems in an emitted QIF document, as a list of complaints.
 
-    The checks that do not need the schema package: the root element and namespace, the
-    ``idMax`` claim against the ids actually present, uniqueness of those ids, every
-    ``n`` count against the children it counts, and every internal reference resolving to
-    an id in the file. An empty list means the document is self-consistent — not that it
-    is schema-valid, which requires the published XSDs and an XSD-capable parser.
+    The checks that do not need the schema package: the document parses at all, the root
+    element and namespace, the ``idMax`` claim against the ids actually present, uniqueness
+    of those ids, every ``n`` count against the children it counts, and every internal
+    reference resolving to an id **of the right kind**. An empty list means the document is
+    self-consistent — not that it is schema-valid, which requires the published XSDs and an
+    XSD-capable parser.
+
+    ``idMax`` is checked for equality rather than only for being large enough. The one-sided
+    version passed a document claiming 999 ids while carrying 25, which is the same class of
+    wrong as claiming too few and just as invisible to a reader.
+
+    A document this cannot parse is reported as a complaint, not raised. A self-check that
+    throws on the malformed input it exists to detect moves the failure to the reader.
     """
     issues: list[str] = []
-    root = ET.fromstring(document)
+    try:
+        root = ET.fromstring(document)
+    except ET.ParseError as exc:
+        return [f"the document is not well-formed XML: {exc}"]
     if root.tag != f"{{{QIF_NAMESPACE}}}QIFDocument":
         issues.append(f"root element is {root.tag!r}, not a QIF document")
         return issues
 
+    by_id: dict[str, str] = {}
     ids: list[str] = []
     for element in root.iter():
         identifier = element.get("id")
         if identifier is not None:
             ids.append(identifier)
+            by_id.setdefault(identifier, _local(element.tag))
     if len(set(ids)) != len(ids):
         issues.append("the document reuses a QIF id; ids must be unique across the file")
     declared = int(root.get("idMax", "0"))
     numeric = [int(i) for i in ids if i.isdigit()]
-    if numeric and max(numeric) > declared:
-        issues.append(f"idMax is {declared} but the document uses id {max(numeric)}")
+    if numeric and max(numeric) != declared:
+        issues.append(f"idMax is {declared} but the largest id in the document is {max(numeric)}")
 
     for element in root.iter():
         count = element.get("n")
@@ -560,17 +704,22 @@ def qif_schema_issues(document: str) -> list[str]:
                 f"{_local(element.tag)} declares n={count} but carries {len(element)} children"
             )
 
-    known = set(ids)
     for element in root.iter():
         tag = _local(element.tag)
         # QPId is the document's own UUID, not a reference to an id in the file. It ends
         # in "Id" and so was caught by the reference sweep, which reported every valid
         # document as broken.
-        if tag.endswith("Id") and not tag.endswith("QPId") and element.text:
-            if element.text.strip() not in known:
-                issues.append(
-                    f"{tag} references id {element.text.strip()!r}, which is not in the document"
-                )
+        if not tag.endswith("Id") or tag.endswith("QPId") or not element.text:
+            continue
+        target = element.text.strip()
+        if target not in by_id:
+            issues.append(f"{tag} references id {target!r}, which is not in the document")
+            continue
+        expected = _REFERENCE_TARGETS.get(tag)
+        if expected is not None and not by_id[target].endswith(expected):
+            issues.append(
+                f"{tag} references id {target!r}, which is a {by_id[target]} and not a {expected}"
+            )
     return issues
 
 

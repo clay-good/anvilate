@@ -149,9 +149,14 @@ def screen_measured_shaft() -> dict[str, object]:
 
     # Step 3: the certificate's own uncertainty, sampled. The margin is how far below the
     # upper limit the shaft sits, in micrometres; a margin below zero is out of tolerance.
+    # `distribution_in` is not decoration: the sampler works on bare floats, so the unit has
+    # to be settled while the value is still a Quantity. Reading `measured.distribution`
+    # directly works only for a certificate that happens to state millimetres — the same
+    # shaft in micrometres would be sampled a thousand times off against a millimetre limit,
+    # with nothing in the numbers to show it.
     scatter = sample_margin(
         lambda values: (upper - values["shaft_diameter"]) * 1000.0,
-        {"shaft_diameter": measured.distribution},
+        {"shaft_diameter": measured.distribution_in("mm")},
         required=0.0,
         seed=20260511,
     )

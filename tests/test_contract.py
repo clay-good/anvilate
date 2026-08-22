@@ -155,7 +155,7 @@ def test_no_exported_symbol_shadows_its_own_module():
 #
 # Every gate above scopes to ``anvilate.analysis``. That was right when the analysis
 # library was the whole shipped surface, and it stopped being right as the cross-cutting
-# layers grew: ten top-level modules now export 71 public symbols under no contract at
+# layers grew: fifteen top-level modules now export 134 public symbols under no contract at
 # all. The practice had held anyway — all ten already declared ``__all__`` and documented
 # every callable — but nothing was enforcing it, and an unenforced convention is one
 # careless commit from being a former convention.

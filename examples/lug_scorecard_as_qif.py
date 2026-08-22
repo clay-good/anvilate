@@ -14,9 +14,12 @@ computed, and a status. The point of the crossing is what happens to the fourth:
 * and the check that could not run crosses as ``NOT_ANALYZED`` — present, named, carrying
   the requirement it *would* have been judged against and no actual at all.
 
-An exporter that quietly omitted the fourth would produce a file in which three of three
-characteristics pass. That is the silent green this library exists to refuse, and it does
-not stop being one because it happened during a format conversion.
+An exporter that quietly omitted the fourth would produce a file of four characteristics
+in which every one had been evaluated — a part whose failure mode nobody looked at,
+presented as a part fully examined. The document would still carry the net-tension FAIL;
+what it would lose is the *gap*, which is the harder thing to notice missing. That is the
+silent green this library exists to refuse, and it does not stop being one because it
+happened during a format conversion.
 
 The verdict-only check is the second decision worth seeing: "tip deflection" has no safety
 factor, so there is no numeric nominal to write. It crosses as a QIF *attribute*
@@ -140,10 +143,13 @@ def main() -> None:
             f"{record['status']}"
         )
     print()
+    records = read_back(document)
+    evaluated = sum(1 for record in records if record["status"] != "NOT_ANALYZED")
     print("The tear-out row is the one that matters: a reader enumerating this file sees a")
     print("characteristic that was NOT_ANALYZED, with the requirement it would have been")
-    print("judged against and no actual. Omitting it would have made a 4-of-4 file read as")
-    print("3-of-3 clean.")
+    print(f"judged against and no actual. {evaluated} of {len(records)} characteristics were")
+    print(f"evaluated; omitting it would have made that {evaluated} of {evaluated} — a part")
+    print("whose failure mode nobody looked at, reported as one fully examined.")
     print()
     print("Deterministic:", lug_as_qif() == document)
 

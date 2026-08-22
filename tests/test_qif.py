@@ -15,6 +15,7 @@ reconstructs the verdicts from there.
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -127,6 +128,12 @@ def _read_characteristics(document: str) -> dict[str, dict[str, object]]:
         "/q:MeasuredCharacteristics/q:CharacteristicMeasurements/*",
         _NS,
     )
+    # The reader keys by name, which is what a quality package does — and which is exactly
+    # how a lost characteristic becomes invisible to the tests that exist to catch the loss.
+    # Refusing a collapse here means every test built on this reader sees one.
+    assert len(measurements) == len(by_item), (
+        f"{len(by_item)} characteristic items but {len(measurements)} measurements"
+    )
     for measurement in measurements:
         record = dict(by_item[measurement.findtext("q:CharacteristicItemId", namespaces=_NS)])
         record["status"] = measurement.findtext(
@@ -137,6 +144,9 @@ def _read_characteristics(document: str) -> dict[str, dict[str, object]]:
         record["unit"] = None if value is None else value.get("unitName")
         record["description"] = measurement.findtext("q:Description", namespaces=_NS)
         found[record["name"]] = record  # type: ignore[index]
+    assert len(found) == len(measurements), (
+        "two characteristics share a name, so reading by name lost one of them"
+    )
     return found
 
 
@@ -183,8 +193,20 @@ def test_over_margin_passes_but_says_so():
     over = read["weld shear"]
     assert over["status"] == "PASS"
     assert over["required"] == 2.0
-    assert over["upper"] == 4.0
     assert "over-margin" in over["description"]  # type: ignore[operator]
+
+
+def test_the_over_engineering_band_is_not_written_as_a_tolerance_limit():
+    """In QIF a MaxValue is a conformance limit and a value past it is nonconforming. In
+    Anvilate the upper band is an over-engineering flag that never blocks anything. Writing
+    one as the other produced a document whose own numbers said out-of-tolerance next to a
+    status that said PASS, and a reader recomputing conformance would have rejected a part
+    the doctrine calls fine."""
+    read = _read_characteristics(_export())
+    assert read["weld shear"]["upper"] is None
+    # It is not lost — it is stated where it cannot be mistaken for a limit.
+    assert "target band" in read["weld shear"]["description"]  # type: ignore[operator]
+    assert "not a conformance limit" in read["weld shear"]["description"]  # type: ignore[operator]
 
 
 def test_a_verdict_only_check_becomes_an_attribute_characteristic():
@@ -332,7 +354,10 @@ def test_the_self_check_catches_an_understated_idmax():
     [("", "sha256:abc"), ("   ", "sha256:abc"), ("lug", ""), ("lug", "  ")],
 )
 def test_the_export_refuses_to_be_anonymous(part_name, spec_digest):
-    with pytest.raises(ValueError):
+    # With no `match=`, any ValueError satisfied all four cases — including one raised for
+    # a completely different reason.
+    expected = "part it is about" if not part_name.strip() else "digest of the spec revision"
+    with pytest.raises(ValueError, match=expected):
         export_qif_results(_sections(), part_name=part_name, spec_digest=spec_digest, bom=_bom())
 
 
@@ -424,3 +449,217 @@ def test_the_document_validates_against_the_published_schemas():
     schema = etree.XMLSchema(etree.parse(str(schema_file)))
     document = etree.fromstring(_export().encode("utf-8"))
     assert schema.validate(document), "\n".join(str(e) for e in schema.error_log)
+
+
+# --- what a five-agent audit found the day this module shipped --------------------------
+#
+# Every test below is a defect that was live in the first commit of this module. Two of them
+# emitted a schema-valid document that a conformant reader would have read as passing.
+
+
+def test_two_checks_with_one_name_stay_two_characteristics():
+    """`screen_structure` merges every member into one card, so two beams both contribute
+    "B1 bending" — and a reader keying by characteristic name, which is what quality
+    software joins on, kept whichever came last. An overstressed member read as passing."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("bending", computed=1.17, required=1.5),
+            ScorecardEntry.from_safety_factor("bending", computed=46.9, required=1.5),
+        )
+    )
+    read = _read_characteristics(_export(_sections(card)))
+    assert len(read) == 2
+    assert set(read) == {"bending", "bending #2"}
+    assert read["bending"]["status"] == "FAIL"
+    assert read["bending #2"]["status"] == "PASS"
+
+
+def test_an_unnamed_check_still_gets_a_key():
+    card = Scorecard(entries=(ScorecardEntry(name="   ", status=CheckStatus.PASS, detail="x"),))
+    assert "unnamed check" in _read_characteristics(_export(_sections(card)))
+
+
+def test_a_failing_factor_is_not_rounded_up_onto_its_own_limit():
+    """Nine-decimal formatting rounded 1.9999999996 to "2.0" — exactly its own MinValue —
+    so a reader recomputing conformance from the limits called a FAIL conforming."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("interaction", computed=1.9999999996, required=2.0),
+        )
+    )
+    read = _read_characteristics(_export(_sections(card)))
+    assert read["interaction"]["status"] == "FAIL"
+    assert float(read["interaction"]["value"]) < read["interaction"]["required"]  # type: ignore[arg-type,operator]
+
+
+def test_a_tiny_requirement_is_not_written_as_a_limit_everything_meets():
+    """A positive requirement of 1e-12 came out as `MinValue 0.0` — a limit every value on
+    earth satisfies, which is the precise thing both `_numeric_requirement` and
+    `from_safety_factor` refuse at the front door."""
+    card = Scorecard(
+        entries=(ScorecardEntry.from_safety_factor("tiny", computed=2e-12, required=1e-12),)
+    )
+    read = _read_characteristics(_export(_sections(card)))
+    # Scaled, because approx's default abs=1e-12 would swamp a rel= at this magnitude and
+    # the assertion would degenerate to "the answer is small" — which is the bug.
+    assert read["tiny"]["required"] * 1e12 == pytest.approx(1.0)  # type: ignore[operator]
+    assert read["tiny"]["required"] > 0.0  # type: ignore[operator]
+    assert float(read["tiny"]["value"]) * 1e12 == pytest.approx(2.0)  # type: ignore[arg-type]
+
+
+def test_a_failing_verdict_only_check_reads_back_as_fail():
+    """The attribute characteristic's FAIL value was never exercised: every attribute entry
+    in the fixture passed, so `_PASS_VALUE if entry.passed else _FAIL_VALUE` could have been
+    written without its else half and nothing would have gone red."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry(name="tip deflection", status=CheckStatus.FAIL, detail="L/240 only"),
+        )
+    )
+    read = _read_characteristics(_export(_sections(card)))
+    assert read["tip deflection"]["attribute"] is True
+    assert read["tip deflection"]["status"] == "FAIL"
+    assert read["tip deflection"]["value"] == "fail"
+
+
+def test_a_control_character_does_not_produce_a_document_nobody_can_open():
+    """A check name carrying a character XML cannot represent produced a document no parser
+    would accept — and `qif_schema_issues` raised on it rather than reporting it, so the
+    failure surfaced at the reader instead of at the writer."""
+    card = Scorecard(
+        entries=(ScorecardEntry(name="bolt\x0bshear", status=CheckStatus.PASS, detail="ok"),)
+    )
+    document = _export(_sections(card))
+    assert qif_schema_issues(document) == []
+    assert len(_read_characteristics(document)) == 1
+
+
+def test_the_self_check_reports_an_unparseable_document_instead_of_raising():
+    issues = qif_schema_issues("<QIFDocument><unclosed>")
+    assert issues and "not well-formed" in issues[0]
+
+
+def test_the_self_check_catches_an_overstated_idmax():
+    """The one-sided version passed a document claiming 999 ids while carrying 25."""
+    broken = _export().replace('idMax="', 'idMax="999" oldIdMax="', 1)
+    assert any("idMax is 999" in issue for issue in qif_schema_issues(broken))
+
+
+def test_the_self_check_catches_a_reference_pointing_at_the_wrong_kind_of_thing():
+    """Checking only that a reference resolves to *some* id let a CharacteristicItemId point
+    at a Software entry and pass clean, silently orphaning a verdict."""
+    document = _export()
+    root = ET.fromstring(document)
+    software_id = root.find("./q:SoftwareDefinitions/q:Software", _NS).get("id")
+    original = root.find(
+        "./q:Results/q:MeasurementResultsSet/q:MeasurementResults"
+        "/q:MeasuredCharacteristics/q:CharacteristicMeasurements/*/q:CharacteristicItemId",
+        _NS,
+    ).text
+    broken = document.replace(
+        f"<CharacteristicItemId>{original}</CharacteristicItemId>",
+        f"<CharacteristicItemId>{software_id}</CharacteristicItemId>",
+        1,
+    )
+    assert any("is a Software and not a" in issue for issue in qif_schema_issues(broken))
+
+
+def test_the_qpid_moves_when_anything_in_the_document_moves():
+    """Seeding the identifier on the part name, the spec digest and the bundle's one-line
+    summary looked equivalent to seeding it on the content and was not: two bundles
+    differing in every safety factor, every citation and every BOM entry produced
+    byte-different documents under one identifier — and the QPId is the key a QIF archive
+    stores them under."""
+    other_bom = EnvironmentBOM(
+        application=Component(name="anvilate", version="9.9.9", kind=ComponentKind.APPLICATION)
+    )
+    variants = [
+        _export(),
+        export_qif_results(
+            _sections(), part_name="lug-01", spec_digest="sha256:abc123", bom=other_bom
+        ),
+        _export(
+            BundleSections(
+                scorecard=Scorecard(
+                    entries=(
+                        ScorecardEntry.from_safety_factor(
+                            "bearing stress", computed=2.5, required=2.0
+                        ),
+                    )
+                )
+            )
+        ),
+    ]
+    identifiers = [
+        ET.fromstring(document).findtext("q:QPId", namespaces=_NS) for document in variants
+    ]
+    assert len(set(identifiers)) == len(identifiers)
+    # And it is still deterministic: the same evidence keeps the same identifier.
+    assert identifiers[0] == ET.fromstring(_export()).findtext("q:QPId", namespaces=_NS)
+
+
+def test_a_failed_physical_test_is_in_the_characteristic_list():
+    """The worst document this exporter could produce: a lifter whose proof test cracked it
+    at 108% exported one PASS characteristic and a document-level FAIL, with the words
+    "cracked" and "proof load" nowhere in the file. A reader recomputing the roll-up from
+    the characteristics got PASS."""
+    from anvilate.verification import (
+        VerificationArchetype,
+        VerificationItem,
+        VerificationMethod,
+        VerificationOutcome,
+        VerificationPlan,
+    )
+
+    archetype = VerificationArchetype(
+        key="proof-load",
+        method=VerificationMethod.TEST,
+        title="Proof load test",
+        clause_token="ASME BTH-1",
+        acceptance_template="no permanent deformation at 125% of rated load",
+        citation="ASME B30.20",
+    )
+    plan = VerificationPlan(
+        items=(
+            VerificationItem(
+                name="proof load to 125%",
+                archetype=archetype,
+                driving_checks=("pin bearing",),
+                acceptance="no permanent deformation",
+                outcome=VerificationOutcome(
+                    passed=False,
+                    measured="lug cracked at 108% of rated load",
+                    instrument="load frame LF-2",
+                    performed_by="A. Technician",
+                    performed_on=date(2026, 5, 4),
+                ),
+            ),
+        ),
+        analysis_only=(),
+        unresolved=(("plate tear-out", "no dimension for the tear-out path"),),
+    )
+    sections = BundleSections(
+        scorecard=Scorecard(
+            entries=(ScorecardEntry.from_safety_factor("pin bearing", computed=2.7, required=2.0),)
+        ),
+        verification=plan,
+    )
+    read = _read_characteristics(_export(sections))
+    assert "proof load to 125%" in read
+    assert read["proof load to 125%"]["status"] == "FAIL"
+    assert "cracked at 108%" in read["proof load to 125%"]["description"]  # type: ignore[operator]
+    # And the coverage it could not resolve crosses as a gap rather than as an absence.
+    assert read["verification coverage: plate tear-out"]["status"] == "NOT_ANALYZED"
+    # A reader recomputing the roll-up from the characteristics now reaches the same verdict
+    # the document states.
+    assert any(record["status"] == "FAIL" for record in read.values())
+
+
+def test_the_header_discloses_the_layers_that_are_not_characteristics():
+    """The scope claim rested on one un-asserted f-string interpolation: dropping the
+    bundle summary from the header left the document mentioning the uncovered layers
+    nowhere, and the whole suite stayed green."""
+    description = ET.fromstring(_export()).findtext("./q:Header/q:Description", namespaces=_NS)
+    summary = _sections().summary()
+    assert summary in description
+    assert "not covered" in description

@@ -49,10 +49,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from math import isfinite
+from math import isclose, isfinite
 from xml.etree import ElementTree as ET
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from .ingest import (
     CertificateProvenance,
@@ -133,30 +133,32 @@ _D_SI_UNITS: dict[str, str] = {
     "astronomicalunit": "au",
 }
 
-# Decimal SI prefixes, token to Pint symbol. The binary prefixes (kibi, mebi, …) are
-# deliberately absent: they belong to information quantities, not to measurements a check
-# consumes, and admitting them would mean admitting the units they prefix.
-_D_SI_PREFIXES: dict[str, str] = {
-    "deca": "da",
-    "hecto": "h",
-    "kilo": "k",
-    "mega": "M",
-    "giga": "G",
-    "tera": "T",
-    "peta": "P",
-    "exa": "E",
-    "zetta": "Z",
-    "yotta": "Y",
-    "deci": "d",
-    "centi": "c",
-    "milli": "m",
-    "micro": "u",
-    "nano": "n",
-    "pico": "p",
-    "femto": "f",
-    "atto": "a",
-    "zepto": "z",
-    "yocto": "y",
+# Decimal SI prefixes: token to (Pint symbol, power of ten). The power is what makes the
+# concatenated symbol checkable — see `d_si_quantity`, where the prefixed spelling is only
+# used once it has been proved to mean prefix x unit. The binary prefixes (kibi, mebi, ...)
+# are deliberately absent: they belong to information quantities, not to measurements a
+# check consumes, and admitting them would mean admitting the units they prefix.
+_D_SI_PREFIXES: dict[str, tuple[str, int]] = {
+    "deca": ("da", 1),
+    "hecto": ("h", 2),
+    "kilo": ("k", 3),
+    "mega": ("M", 6),
+    "giga": ("G", 9),
+    "tera": ("T", 12),
+    "peta": ("P", 15),
+    "exa": ("E", 18),
+    "zetta": ("Z", 21),
+    "yotta": ("Y", 24),
+    "deci": ("d", -1),
+    "centi": ("c", -2),
+    "milli": ("m", -3),
+    "micro": ("u", -6),
+    "nano": ("n", -9),
+    "pico": ("p", -12),
+    "femto": ("f", -15),
+    "atto": ("a", -18),
+    "zepto": ("z", -21),
+    "yocto": ("y", -24),
 }
 
 # Units a prefix must not be attached to. Degrees Celsius is the one that matters: it is an
@@ -230,6 +232,16 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
     module's declared vocabulary; an unknown prefix or unit raises
     :class:`~anvilate.units.UnitError` naming the token, because the published schema types
     a unit as a free string and there is nothing to validate against but the table.
+
+    **The prefixed spelling is proved, not assumed.** Gluing a prefix symbol onto a unit
+    symbol produces a token Pint may already own as something else entirely: ``centi`` +
+    ``t`` is ``ct``, which is a *carat* — still a mass, so ``\\centi\\tonne`` came back as
+    0.0002 kg where the certificate said 10 kg and no downstream dimension check could
+    notice. Eight of the table's 820 prefix-unit pairs collide that way (``kt`` knot, ``ft``
+    foot, ``pt`` pint, ``at`` technical atmosphere, ``Tt`` tex, ``mcd`` microday …). So the
+    quantity is *computed* from the bare unit and the prefix's power of ten, and the
+    prefixed spelling is adopted only when it converts back to exactly that. A collision
+    falls back to the bare unit with the magnitude scaled — right answer, plainer rendering.
     """
     if not unit.strip():
         raise UnitError("a D-SI unit expression is empty; a measured value must state its unit")
@@ -239,8 +251,10 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
             "(for example '\\\\milli\\\\metre')"
         )
 
-    factors: list[str] = []
-    pending: str | None = None  # the prefix symbol waiting for its unit
+    # One entry per factor: its bare Pint symbol, its prefixed spelling, the prefix's power
+    # of ten, and the exponent. Kept apart so the two expressions can be built and compared.
+    factors: list[list] = []
+    pending: tuple[str, int] | None = None  # the prefix waiting for its unit
     pending_token: str | None = None
     named: list[str] = []
     for token in (t.strip() for t in unit.strip().split("\\")):
@@ -250,7 +264,15 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
         if exponent is not None:
             if not factors:
                 raise UnitError(f"{unit!r} applies an exponent before naming a unit")
-            factors[-1] = f"({factors[-1]}) ** {int(exponent.group('exponent'))}"
+            power = int(exponent.group("exponent"))
+            if power == 0:
+                # A unit to the zeroth power is dimensionless. Legal arithmetic, and a
+                # measured quantity that states it has said nothing about what it measured.
+                raise UnitError(
+                    f"{unit!r} raises a unit to the zeroth power, which leaves no unit at "
+                    "all; a measured value must state what it measures"
+                )
+            factors[-1][3] = power
             continue
         if token in _D_SI_PREFIXES:
             if pending is not None:
@@ -268,7 +290,9 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
                 f"{unit!r} prefixes {token!r}, which does not take one — "
                 "an offset or fixed-magnitude unit is not scaled by a prefix"
             )
-        factors.append(f"{pending or ''}{_D_SI_UNITS[token]}")
+        symbol = _D_SI_UNITS[token]
+        prefix_symbol, prefix_power = pending if pending is not None else ("", 0)
+        factors.append([symbol, f"{prefix_symbol}{symbol}", prefix_power, 1])
         named.append(token)
         pending, pending_token = None, None
 
@@ -283,22 +307,61 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
             f"{unit!r} multiplies degrees Celsius by another unit; an offset temperature has "
             "no meaning in a product — the certificate should state kelvin"
         )
-    expression = " * ".join(factors)
+
+    bare = _expression(factors, prefixed=False)
+    prefixed = _expression(factors, prefixed=True)
+    scale = 1.0
+    for _symbol, _spelled, power, exponent in factors:
+        scale *= 10.0 ** (power * exponent)
+
     try:
-        built = Quantity(magnitude=value, unit=expression)
-    except UnitError as exc:  # pragma: no cover - the table is what keeps this unreachable
-        raise UnitError(f"{unit!r} maps to {expression!r}, which is not a unit: {exc}") from exc
-    # Canonicalize the spelling. The assembled expression carries the parentheses the
-    # exponents needed ("kg * (m) ** 2 * (s) ** -2"), and a quantity that renders like that
-    # in a scorecard reads as a bug even though it is arithmetically identical.
-    return built.to(expression)
+        plain = Quantity(magnitude=value * scale, unit=bare).to(bare)
+    except Exception as exc:  # pragma: no cover - the table is what keeps this unreachable
+        raise UnitError(f"{unit!r} maps to {bare!r}, which is not a unit: {exc}") from exc
+    if prefixed == bare:
+        return plain
+    # The proof: the prefixed spelling has to be the same physical quantity. A collision
+    # either changes dimension (which raises here) or changes magnitude (which fails the
+    # comparison); both fall through to the bare form, which was computed from the powers
+    # of ten and cannot collide with anything.
+    try:
+        candidate = Quantity(magnitude=value, unit=prefixed)
+        converted = candidate.to(bare)
+    except Exception:
+        return plain
+    if plain.magnitude == 0.0 or isclose(converted.magnitude, plain.magnitude, rel_tol=1e-9):
+        return candidate.to(prefixed)
+    return plain
 
 
-def _distribution(real: ET.Element, nominal: float) -> tuple[InputDistribution | None, str | None]:
+def _expression(factors: list[list], *, prefixed: bool) -> str:
+    """The factor list as a Pint expression, in bare or prefixed spelling.
+
+    An exponent of 1 is written without parentheses so an ordinary single unit renders as
+    ``"mm"`` rather than ``"(mm) ** 1"`` — and so an offset unit like ``degC``, which Pint
+    will not raise to a power, stays writable.
+    """
+    parts = []
+    for symbol, spelled, _power, exponent in factors:
+        token = spelled if prefixed else symbol
+        parts.append(token if exponent == 1 else f"({token}) ** {exponent}")
+    return " * ".join(parts)
+
+
+def _distribution(
+    real: ET.Element, nominal: float, scale: float
+) -> tuple[InputDistribution | None, str | None]:
     """The certificate's stated uncertainty as an input distribution, or why there is none.
 
-    Returns ``(distribution, reason)`` with exactly one of them set. An expanded uncertainty
-    *U* at coverage factor *k* is a standard uncertainty of ``U/k``, which is what
+    Returns ``(distribution, reason)`` with exactly one of them set. ``nominal`` and the
+    uncertainties are expressed in the *converted* quantity's unit — ``scale`` is the factor
+    from the certificate's own unit to it — so the distribution and the quantity are always
+    two views of the same number. Without that they could differ by the whole prefix: a
+    shaft stated in micrometres gave a quantity of 25000.4 µm and a distribution nobody
+    could tell was not in millimetres.
+
+    An expanded uncertainty *U* at coverage factor *k* is a standard uncertainty of
+    ``U/k``, which is what
     :class:`~anvilate.uncertainty.Symmetric` means by a half-width at a sigma level, so the
     mapping is the definition rather than an approximation. The deprecated ``si:expandedUnc``
     and ``si:coverageInterval`` spellings are read as well, because certificates written
@@ -310,7 +373,7 @@ def _distribution(real: ET.Element, nominal: float) -> tuple[InputDistribution |
     if expanded is not None:
         return _expanded(
             nominal,
-            _decimal(_text(expanded.find("si:valueExpandedMU", _NS))),
+            _scaled(_decimal(_text(expanded.find("si:valueExpandedMU", _NS))), scale),
             _decimal(_text(expanded.find("si:coverageFactor", _NS))),
             _text(expanded.find("si:distribution", _NS)),
         )
@@ -323,7 +386,7 @@ def _distribution(real: ET.Element, nominal: float) -> tuple[InputDistribution |
     if standard is not None:
         return _standard(
             nominal,
-            _decimal(_text(standard.find("si:valueStandardMU", _NS))),
+            _scaled(_decimal(_text(standard.find("si:valueStandardMU", _NS))), scale),
             _text(standard.find("si:distribution", _NS)),
         )
 
@@ -331,7 +394,7 @@ def _distribution(real: ET.Element, nominal: float) -> tuple[InputDistribution |
     if deprecated is not None:
         return _expanded(
             nominal,
-            _decimal(_text(deprecated.find("si:uncertainty", _NS))),
+            _scaled(_decimal(_text(deprecated.find("si:uncertainty", _NS))), scale),
             _decimal(_text(deprecated.find("si:coverageFactor", _NS))),
             _text(deprecated.find("si:distribution", _NS)),
         )
@@ -340,11 +403,16 @@ def _distribution(real: ET.Element, nominal: float) -> tuple[InputDistribution |
     if interval is not None:
         return _standard(
             nominal,
-            _decimal(_text(interval.find("si:standardUnc", _NS))),
+            _scaled(_decimal(_text(interval.find("si:standardUnc", _NS))), scale),
             _text(interval.find("si:distribution", _NS)),
         )
 
     return None, "the certificate states no measurement uncertainty for this value"
+
+
+def _scaled(value: float | None, scale: float) -> float | None:
+    """An uncertainty in the certificate's unit, expressed in the converted one."""
+    return None if value is None else value * scale
 
 
 def _non_gaussian(declared: str | None) -> str | None:
@@ -407,9 +475,68 @@ class CalibratedValue(BaseModel):
     certificate: CertificateProvenance
     # The certificate's stated uncertainty as a typed input distribution, ready for the
     # margin sampler. ``None`` when the certificate stated none or stated one this module
-    # will not map, in which case ``uncertainty_note`` says which.
+    # will not map, in which case ``uncertainty_note`` says which. Its numbers are in
+    # :attr:`quantity`'s unit — always, by construction — which is the whole reason
+    # :meth:`distribution_in` exists rather than callers reading the floats raw.
     distribution: InputDistribution | None = None
     uncertainty_note: str | None = None
+
+    @model_validator(mode="after")
+    def _the_distribution_is_the_same_number(self) -> CalibratedValue:
+        """The distribution's centre must be the quantity, in the quantity's unit.
+
+        A distribution is bare floats and a quantity is unit-checked, so nothing else in the
+        library can catch them drifting apart. They did: the uncertainty was built from the
+        certificate's raw magnitude while the quantity had been converted, so a shaft stated
+        in micrometres carried a 25000.4-centred distribution against a millimetre limit —
+        wrong by 10^6, dimensionally invisible, and with no unit recorded anywhere for a
+        consumer to notice.
+        """
+        if self.distribution is None:
+            return self
+        centre = self.distribution.mean
+        if not isclose(centre, self.quantity.magnitude, rel_tol=1e-9, abs_tol=1e-12):
+            raise ValueError(
+                f"the uncertainty distribution for {self.label!r} is centred on {centre} "
+                f"but the measured value is {self.quantity}; a distribution in a different "
+                "unit from its own quantity is a factor nothing downstream can see"
+            )
+        return self
+
+    @property
+    def distribution_unit(self) -> str:
+        """The unit the distribution's numbers are in — the measured quantity's own."""
+        return self.quantity.unit
+
+    def distribution_in(self, unit: str) -> InputDistribution | None:
+        """The stated uncertainty as a distribution in ``unit``, or ``None`` if there is none.
+
+        The margin sampler works on bare floats, so the unit has to be settled *before* the
+        response function sees them. Ask for the unit the check works in and the conversion
+        happens here, where the quantity is still a :class:`~anvilate.units.Quantity`,
+        instead of in a caller that has only numbers left to reason about.
+        """
+        if self.distribution is None:
+            return None
+        # The centre converts with the full affine transform and the width with the scale
+        # alone, taken as the difference between two converted points. Dividing the
+        # converted value by the original would divide by zero on a certificate reporting
+        # exactly zero, and multiplying a width by an offset unit's conversion would add
+        # 273.15 to an uncertainty of 0.2 K.
+        centre = self.quantity.to(unit).magnitude
+        own = self.quantity.unit
+        factor = (
+            Quantity(magnitude=2.0, unit=own).to(unit).magnitude
+            - Quantity(magnitude=1.0, unit=own).to(unit).magnitude
+        )
+        if isinstance(self.distribution, Symmetric):
+            return self.distribution.model_copy(
+                update={
+                    "nominal": centre,
+                    "half_width": self.distribution.half_width * factor,
+                }
+            )
+        return Normal(mean=centre, std=self.distribution.std * factor)
 
     def as_extracted(self, field: str, *, load_bearing: bool = True) -> ExtractedValue:
         """This measurement as a draft input for the standard per-value confirmation flow.
@@ -444,13 +571,25 @@ class CalibrationCertificate(BaseModel):
     unparsed: tuple[UnparsedLine, ...] = ()
 
     def labelled(self, label: str) -> CalibratedValue:
-        """The offered value with this label, or a refusal naming what is on offer."""
-        for value in self.values:
-            if value.label == label:
-                return value
+        """The one offered value with this label, or a refusal naming what is on offer.
+
+        Ambiguity is refused rather than resolved. ``dcc:quantity/dcc:name`` is optional, so
+        a result reporting several readings gives them all the same fallback label — and
+        returning the first would make the others unreachable while looking like a lookup
+        that worked. Reach for :attr:`values` by position when a certificate does that.
+        """
+        matches = [value for value in self.values if value.label == label]
+        if len(matches) == 1:
+            return matches[0]
+        if not matches:
+            raise KeyError(
+                f"no measured value labelled {label!r} on certificate "
+                f"{self.provenance.identifier}; it offers {sorted(v.label for v in self.values)}"
+            )
         raise KeyError(
-            f"no measured value labelled {label!r} on certificate "
-            f"{self.provenance.identifier}; it offers {sorted(v.label for v in self.values)}"
+            f"certificate {self.provenance.identifier} carries {len(matches)} values "
+            f"labelled {label!r} ({', '.join(str(m.quantity) for m in matches)}); picking one "
+            "would make the rest unreachable — index into `values` instead"
         )
 
     def summary(self) -> str:
@@ -464,21 +603,66 @@ class CalibrationCertificate(BaseModel):
         )
 
 
-def _value_lines(text: str) -> list[int]:
-    """The source line of each D-SI quantity value element, in document order.
+# The element path a measured quantity sits on, innermost last. `dcc:list` may nest, so the
+# `data` end of the path is matched with the list levels skipped. Anchoring the line scan to
+# this exact path is what keeps it honest: `si:value` also appears under `influenceConditions`
+# and `itemQuantities`, both of which a plain document-order count would fold into the
+# sequence and shift every measured value's reported line onto somebody else's number.
+_QUANTITY_PATH = (
+    f"{{{DCC_NAMESPACE}}}result",
+    f"{{{DCC_NAMESPACE}}}data",
+    f"{{{DCC_NAMESPACE}}}quantity",
+)
 
-    Empty when the document does not bind the D-SI namespace to a prefix (it may use a
-    default namespace), in which case the caller falls back rather than guessing at lines.
+
+def _on_the_quantity_path(stack: list[str]) -> bool:
+    """Whether the open-element stack is exactly a measured quantity's own path."""
+    if len(stack) < 4 or stack[-1] != _QUANTITY_PATH[2]:
+        return False
+    depth = len(stack) - 2
+    while depth >= 0 and stack[depth] == f"{{{DCC_NAMESPACE}}}list":
+        depth -= 1
+    return (
+        depth >= 1 and stack[depth] == _QUANTITY_PATH[1] and stack[depth - 1] == _QUANTITY_PATH[0]
+    )
+
+
+def _quantity_lines(text: str) -> list[tuple[int, int | None]]:
+    """For each measured quantity in document order, ``(quantity line, value line)``.
+
+    ElementTree hands back no source lines, so the document is fed to a pull parser one line
+    at a time and the open-element stack is tracked: a start event that arrives while a line
+    is being consumed started on that line. The stack is what makes it exact — the path is
+    checked rather than the element name, so a `si:value` in an influence condition or an
+    item quantity cannot displace a measurement's line, and a certificate that binds D-SI to
+    a default namespace is read the same as one that uses a prefix.
+
+    The walk order here is the walk order of :func:`_quantities`, so the nth pair belongs to
+    the nth quantity — the same document, the same order, and no counting by hand.
     """
-    prefixes = set(_SI_PREFIX.findall(text))
-    if not prefixes:
-        return []
-    # `valueExpandedMU` and `valueStandardMU` do not match: the tag has to end at `value`.
-    tag = re.compile("|".join(f"<{re.escape(p)}:value>" for p in sorted(prefixes)))
-    lines: list[int] = []
-    for number, line in enumerate(text.splitlines(), start=1):
-        lines.extend(number for _ in tag.finditer(line))
-    return lines
+    parser = ET.XMLPullParser(events=("start", "end"))
+    stack: list[str] = []
+    found: list[tuple[int, int | None]] = []
+    value_tag = f"{{{SI_NAMESPACE}}}value"
+    real_tag = f"{{{SI_NAMESPACE}}}real"
+    for number, line in enumerate(text.splitlines(keepends=True), start=1):
+        parser.feed(line)
+        for event, element in parser.read_events():
+            if event == "start":
+                stack.append(element.tag)
+                if _on_the_quantity_path(stack):
+                    found.append((number, None))
+                elif (
+                    element.tag == value_tag
+                    and len(stack) >= 2
+                    and stack[-2] == real_tag
+                    and found
+                    and found[-1][1] is None
+                ):
+                    found[-1] = (found[-1][0], number)
+            elif stack:
+                stack.pop()
+    return found
 
 
 def _quantities(node: ET.Element) -> Iterator[ET.Element]:
@@ -504,17 +688,25 @@ def _provenance(root: ET.Element) -> CertificateProvenance:
         None if laboratory is None else laboratory.find("dcc:contact/dcc:name", _NS)
     )
     signed = root.find("ds:Signature", _NS) is not None
-    seal = (
-        None
-        if laboratory is None
-        else _text(laboratory.find("dcc:cryptElectronicSeal", _NS))
-        or _text(laboratory.find("dcc:cryptElectronicSignature", _NS))
+    # The schema lets the laboratory claim a seal and lets each responsible person claim one
+    # separately. Reading only the laboratory's copy under-claims, which is the safe
+    # direction but still a claim the certificate made and the provenance did not carry.
+    claim_paths = (
+        "dcc:calibrationLaboratory/dcc:cryptElectronicSeal",
+        "dcc:calibrationLaboratory/dcc:cryptElectronicSignature",
+        "dcc:respPersons/dcc:respPerson/dcc:cryptElectronicSeal",
+        "dcc:respPersons/dcc:respPerson/dcc:cryptElectronicSignature",
+    )
+    claimed = any(
+        (_text(found) or "").strip().lower() in {"true", "1"}
+        for path in claim_paths
+        for found in administrative.findall(path, _NS)
     )
     return CertificateProvenance(
         identifier=identifier or "",
         laboratory=lab_name or "",
         signature_status=(SignatureStatus.PRESENT_UNVERIFIED if signed else SignatureStatus.ABSENT),
-        claims_electronic_seal=(seal or "").strip().lower() in {"true", "1"},
+        claims_electronic_seal=claimed,
         country=_text(core.find("dcc:countryCodeISO3166_1", _NS)),
         issue_date=_text(core.find("dcc:issueDate", _NS)),
         performance_end_date=_text(core.find("dcc:endPerformanceDate", _NS)),
@@ -546,7 +738,7 @@ def parse_dcc(text: str, *, document: str) -> CalibrationCertificate:
         )
     provenance = _provenance(root)
 
-    lines = _value_lines(text)
+    lines = _quantity_lines(text)
     values: list[CalibratedValue] = []
     unparsed: list[UnparsedLine] = []
     seen = 0
@@ -562,20 +754,46 @@ def parse_dcc(text: str, *, document: str) -> CalibrationCertificate:
             if data is None:
                 continue
             for quantity in _quantities(data):
+                # The line scan and this walk cover the same path in the same order, so the
+                # nth pair belongs to the nth quantity. A malformed pairing degrades to the
+                # first line rather than inventing one; the excerpt still locates it.
+                quantity_line, value_line = lines[seen] if seen < len(lines) else (1, None)
+                seen += 1
+                label = _content(quantity.find("dcc:name", _NS)) or entry_name
                 real = quantity.find("si:real", _NS)
                 if real is None:
+                    # D-SI offers seven quantity forms and this module reads one. Dropping
+                    # the other six silently would let a certificate offer a value that
+                    # Anvilate neither takes nor mentions, while the summary reported
+                    # "0 not taken" — a gap in the evidence with nothing pointing at it.
+                    offered = [
+                        child.tag.rsplit("}", 1)[-1]
+                        for child in quantity
+                        if child.tag.startswith(f"{{{SI_NAMESPACE}}}")
+                    ]
+                    unparsed.append(
+                        UnparsedLine(
+                            source=SourceLocation(
+                                document=document,
+                                line_number=quantity_line,
+                                excerpt=f"{label}: {', '.join(offered) or 'no D-SI quantity'}",
+                            ),
+                            reason=(
+                                "the quantity is stated as "
+                                f"{', '.join(f'si:{o}' for o in offered) or 'no D-SI form'}; "
+                                "this module reads si:real, and converting another form would "
+                                "mean choosing which of its values the design should use"
+                            ),
+                        )
+                    )
                     continue
-                label = _content(quantity.find("dcc:name", _NS)) or entry_name
                 raw_value = _text(real.find("si:value", _NS))
                 raw_unit = _text(real.find("si:unit", _NS))
-                # The line scan and the parse walk the same document in the same order, so
-                # the nth value element is the nth quantity. A malformed pairing degrades to
-                # the first line rather than inventing one, and the excerpt still locates it.
-                line = lines[seen] if seen < len(lines) else 1
-                seen += 1
                 excerpt = f"{label}: {raw_value} {raw_unit}"
                 source = SourceLocation(
-                    document=document, line_number=line, excerpt=excerpt.strip()
+                    document=document,
+                    line_number=value_line or quantity_line,
+                    excerpt=excerpt.strip(),
                 )
                 magnitude = _decimal(raw_value)
                 if magnitude is None:
@@ -591,7 +809,11 @@ def parse_dcc(text: str, *, document: str) -> CalibrationCertificate:
                 except UnitError as exc:
                     unparsed.append(UnparsedLine(source=source, reason=str(exc)))
                     continue
-                distribution, note = _distribution(real, magnitude)
+                # The factor from the certificate's own unit to the one the quantity ended
+                # up in. Taken from a unit magnitude of 1 rather than from the measured
+                # value, so a certificate reporting exactly zero still scales correctly.
+                scale = d_si_quantity(1.0, raw_unit or "").magnitude
+                distribution, note = _distribution(real, measured.magnitude, scale)
                 values.append(
                     CalibratedValue(
                         label=label,

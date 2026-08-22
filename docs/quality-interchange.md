@@ -28,30 +28,37 @@ plate tear-out    numeric           2.0         —   NOT_ANALYZED
 tip deflection    attribute           —      pass   PASS
 ```
 
-## The four rows are four decisions
+## Four decisions in five rows
 
 **Not-evaluated survives the crossing.** QIF has an enumeration for exactly this state:
 `NOT_ANALYZED`. The tear-out check is written as a characteristic that exists, is named,
 carries the requirement it *would* have been judged against, and carries no actual. An
-exporter that omitted it would produce a file in which four of four characteristics pass.
-No-silent-green is a property of the interchange file too, or it was never a property at
-all — and it does not stop being a silent green because it happened during a format
-conversion.
+exporter that omitted it would produce a file of four characteristics in which every one
+had been evaluated — a part whose failure mode nobody looked at, presented as a part fully
+examined. (The net-tension FAIL would still be in the file; the *gap* is the harder thing
+to notice missing.) No-silent-green is a property of the interchange file too, or it was
+never a property at all — and it does not stop being a silent green because it happened
+during a format conversion.
 
 **A verdict-only check gets QIF's attribute gauge, not an invented number.** Tip deflection
 has no safety factor behind it, so there is no numeric nominal to write. It crosses as a
-`UserDefinedAttributeCharacteristic` with declared pass/fail values, rather than having a
-threshold made up to fill the slot.
+`UserDefinedAttributeCharacteristicNominal` (with its matching `…Definition`, `…Item`, and
+`…Measurement` — QIF names the four aspects separately) carrying declared pass/fail values,
+rather than having a threshold made up to fill the slot.
 
 **Over-margin is a pass, and says why.** QIF has no status for a check that passed too
 well. The weld-shear check maps to `PASS` — it *is* a pass — with the over-margin finding
 stated in the characteristic's `Description`, so the signal crosses even though the
 enumeration cannot carry it. Repair hints and fragility warnings ride the same way.
 
-**A numeric check keeps its band.** The required minimum is written as `MinValue`, a
-declared upper band as `MaxValue`, with `DefinedAsLimit` true because those are limits, not
-deviations. Safety factor is dimensionless, so it is declared once as a QIF user-defined
-unit rather than borrowed from a linear one.
+**A numeric check keeps its requirement, and only its requirement.** The required minimum
+is written as `MinValue` with `DefinedAsLimit` true, because that is a limit and not a
+deviation. A declared upper band is *not* written as a `MaxValue`: in QIF a MaxValue is a
+conformance limit and a value past it is nonconforming, while Anvilate's upper band is an
+over-engineering flag that never blocks anything. The band is stated in the
+characteristic's description instead, where it cannot be mistaken for a tolerance. Safety
+factor is dimensionless, so it is declared once as a QIF user-defined unit rather than
+borrowed from a linear one.
 
 | Anvilate | QIF characteristic status | Document `InspectionStatus` |
 | --- | --- | --- |
@@ -71,16 +78,23 @@ becomes a `Software` entry — so the file records which Anvilate, against which
 databases, screened which spec revision. The header's `Scope` line states plainly that
 these are T1 screening results and not a certified analysis or a physical inspection.
 
-Every check in the bundle crosses, including the [typed-callout](typed-callouts.md) layer's
-own scorecard, each tagged in its description with the layer it came from. Dropping a whole
-layer of verdicts on the way out is the same failure as dropping one check.
+Every verdict in the bundle crosses: the analysis scorecard, the
+[typed-callout](typed-callouts.md) layer's own scorecard, and the
+[verification plan](verification-planning.md)'s items and unresolved coverage — each tagged
+in its description with the layer it came from. Dropping a whole layer of verdicts on the
+way out is the same failure as dropping one check, and it is not hypothetical: leaving the
+plan out gave a lifter whose proof test cracked it at 108% a characteristic list reading
+`PASS`, with the word "cracked" nowhere in the file. The layers that are not
+per-characteristic — the reviewer dossier and a design-space sweep — are named in the
+header rather than invented as characteristics.
 
 ## Determinism
 
 The same evidence exports the same bytes. There are no timestamps, and the document UUID
-QIF requires is derived from the content rather than generated — a random one would have
-destroyed exactly the reproducibility the [attestation layer](evidence-attestation.md)
-spends its effort preserving.
+QIF requires is a digest of the serialized document itself rather than a generated value —
+a random one would have destroyed exactly the reproducibility the
+[attestation layer](evidence-attestation.md) spends its effort preserving, and a digest of
+a few identifying fields would have given two genuinely different documents one identifier.
 
 ## The other direction: calibrated measurements in
 
@@ -109,7 +123,8 @@ settle it.
 customer's RFQ table; it is not a person deciding that this measurement is the one the
 design should use. `release()` refuses until somebody named confirms it, exactly as it does
 for an extracted requirement, and the certificate's identity travels with the value through
-confirmation and into the release.
+confirmation — read it off the confirmed `ExtractedValue`, since `release()` hands back a
+plain field-to-`Quantity` mapping by design.
 
 **There is no "signature verified".** Verifying an XML digital signature needs the issuer's
 certificate and a trust anchor, and a local offline tool has neither. `SignatureStatus` has
@@ -128,12 +143,17 @@ magnitude out.
 **A stated uncertainty becomes a typed input distribution.** An expanded uncertainty *U* at
 coverage factor *k* is a standard uncertainty of *U/k*, which is what
 [`Symmetric`](uncertainty-margins.md) means by a half-width at a sigma level, so the
-laboratory's number reaches the margin sampler as data rather than as a footnote.
+laboratory's number reaches the margin sampler as data rather than as a footnote. The
+distribution is always centred on the measured quantity, in that quantity's own unit — ask
+for it in the unit your check works in with `distribution_in("mm")`. The sampler sees bare
+floats, so the unit has to be settled while the value is still a `Quantity`: the same shaft
+stated in micrometres, read raw, is sampled a thousandfold off against a millimetre limit
+with nothing in the numbers to show it.
 
 | The certificate states | Anvilate hands over |
 | --- | --- |
-| expanded uncertainty *U* at *k* | `Symmetric(half_width=U, sigma_level=k)` |
-| standard uncertainty *u* | `Normal(std=u)` |
+| expanded uncertainty *U* at *k* | `Symmetric(nominal=…, half_width=U, distribution="normal", sigma_level=k)` |
+| standard uncertainty *u* | `Normal(mean=…, std=u)` |
 | a coverage interval | `Normal(std=…)` from its stated standard uncertainty |
 | an expanded *U* with no usable *k* | nothing, and says why — k = 2 is a convention, not this certificate's statement |
 | a non-Gaussian distribution | nothing, and names it — a rectangular uncertainty and a normal one of the same width are different statements |
