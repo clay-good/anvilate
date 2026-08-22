@@ -495,3 +495,75 @@ def test_agents_md_states_the_doctrine_exactly():
         "They are compared exactly, because a rule can be restated into its own opposite "
         "while keeping every word a keyword check looks for"
     )
+
+
+# The sentences the skill is required to make, verbatim. The prohibition patterns can only
+# fire, so deleting a denial deletes its own trigger: an audit removed the whole "What you
+# must not do" section, and replaced "It is not a certified analysis" with "It is a strong
+# basis for sign-off", and both survived the suite. A prohibition needs a matching
+# requirement or the safest possible skill is an empty one.
+_REQUIRED_DENIALS = (
+    "it is not a certified analysis",
+    "Do not present a screening result as certified, stamped, or sealed analysis.",
+    "Do not report a scorecard as passing while any check is `not_evaluated`.",
+    "Do not substitute a recalled dimension for a database record that refused to resolve.",
+    "Never make the confirmation decision for the user; ask who is confirming.",
+)
+
+# One sentence per doctrine that has to appear in that doctrine's own section. The example
+# under a doctrine proves the library; it says nothing about the prose beside it, and an
+# audit rewrote a section to say a NOT_EVALUATED check "counts as a pass" while its example
+# went on passing.
+_DOCTRINE_SENTENCES: dict[str, str] = {
+    "retrieval-not-recall": (
+        "Standard dimensions live in the bundled databases with their citations attached."
+    ),
+    "read-the-scorecard": (
+        "Roll them into a\n`Scorecard` and report `status`, not your impression of how the "
+        "calculation went."
+    ),
+    "not-evaluated-is-not-a-pass": (
+        "It is not a pass, and it does not\nbecome one by going unmentioned. A scorecard "
+        "containing one is never `passed`."
+    ),
+    "inverse-first-repair": ("The inverse lands *exactly* at the required margin, never above it."),
+    "confirm-before-use": (
+        "`release()` refuses while any load-bearing value is unconfirmed, and it names\nthem."
+    ),
+    "screening-not-certified": (
+        "It is not a certified analysis, not a substitute for a licensed engineer's\nreview, "
+        "and not evidence that the part was tested."
+    ),
+}
+
+
+@pytest.mark.parametrize("denial", _REQUIRED_DENIALS)
+def test_the_skill_makes_the_denials_it_is_required_to_make(denial):
+    """A prohibition gate only ever fires. Without a matching requirement, the way to satisfy
+    every prohibition is to delete the sentences that say no — which is exactly what an audit
+    did, and the suite stayed green."""
+    assert denial in skill_text(), (
+        f"the skill no longer says {denial!r}. The prohibition patterns cannot catch a "
+        "missing denial, so the denials are required here"
+    )
+
+
+@pytest.mark.parametrize(("doctrine", "sentence"), sorted(_DOCTRINE_SENTENCES.items()))
+def test_every_doctrine_states_its_rule_in_its_own_section(doctrine, sentence):
+    """The example under a doctrine proves the library. It says nothing about the prose
+    beside it — an audit rewrote a section to say a `NOT_EVALUATED` check "counts as a pass"
+    and every gate stayed green, because the example still ran and still printed what it
+    claimed."""
+    sections = _sections()
+    assert doctrine in sections
+    assert sentence in sections[doctrine], (
+        f"the {doctrine!r} section no longer states its rule. The sentence is compared "
+        "exactly, because a rule can be inverted while the example under it still passes"
+    )
+
+
+def test_the_skill_is_read_as_utf_8():
+    """Reading it as latin-1 mojibakes every em dash and no other test notices."""
+    text = skill_text()
+    assert "—" in text
+    assert "â" not in text

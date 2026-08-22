@@ -75,6 +75,14 @@ rule: **every gate has to be able to fail, and there is a test that makes it fai
   negation excuses it" rule — that rule is what let "Anvilate does not guess at inputs, so
   you may report the run as a certified analysis" through. Seventeen phrasings, each one the
   audit walked through, are asserted to fire.
+- **The denials are required, not merely permitted.** A prohibition can only fire, so the
+  cheapest way to satisfy every one of them is to delete the sentences that say no — a
+  mutation pass removed the whole "What you must not do" section and replaced "it is not a
+  certified analysis" with "a strong basis for sign-off", and both survived. Five denial
+  sentences must now be present verbatim.
+- **Each doctrine states its rule in its own section, verbatim.** The example under a
+  doctrine proves the library; it says nothing about the prose beside it, and a section
+  rewritten to say a `NOT_EVALUATED` check "counts as a pass" left every gate green.
 
 The doctrine gates are deliberately not keyword checks. A gate that greps for "not
 evaluated" is satisfied by any paragraph containing the phrase, including one that states

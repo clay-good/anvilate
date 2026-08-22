@@ -1157,3 +1157,28 @@ def test_the_unparsed_reason_names_only_the_d_si_forms_it_found():
     reason = certificate.unparsed[0].reason
     assert "si:complex" in reason
     assert "si:name" not in reason
+
+
+def test_a_value_element_outside_si_real_cannot_take_a_measurements_line():
+    """`parse_dcc` reads well-formed XML; it does not validate. So a certificate that is not
+    schema-valid — and those exist — must still not misreport where a measurement was read.
+    The `si:real` parent check is what stops any stray `si:value` in the quantity's subtree
+    from claiming the line, and it had no test behind it."""
+    stray = """\
+            <dcc:quantity>
+              <dcc:name><dcc:content lang="en">shaft diameter</dcc:content></dcc:name>
+              <dcc:description>
+                <dcc:content lang="en">re-measured</dcc:content>
+                <si:value>99.9</si:value>
+              </dcc:description>
+              <si:real>
+                <si:value>25.0004</si:value>
+                <si:unit>\\milli\\metre</si:unit>
+              </si:real>
+            </dcc:quantity>
+"""
+    text = _certificate(stray)
+    shaft = _parsed(text).labelled("shaft diameter")
+    cited = text.split("\n")[shaft.source.line_number - 1]
+    assert "25.0004" in cited
+    assert "99.9" not in cited

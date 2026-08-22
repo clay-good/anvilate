@@ -31,6 +31,7 @@ from anvilate.export.qif import (
     qif_schema_issues,
 )
 from anvilate.scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+from anvilate.uncertainty import Symmetric
 
 _NS = {"q": QIF_NAMESPACE}
 
@@ -889,3 +890,67 @@ def test_a_verification_plan_that_carries_nothing_still_crosses_as_a_gap():
     assert read["verification plan"]["status"] == "NOT_ANALYZED"
     # And a reader recomputing from the characteristics reaches the document's own verdict.
     assert any(record["status"] == "NOT_ANALYZED" for record in read.values())
+
+
+@pytest.mark.parametrize("character", ["\x00", "\x08", "\x0b", "\x0c", "\x0e", "\x1f", "\x7f"])
+def test_every_character_xml_cannot_carry_is_replaced(character):
+    r"""One test pinned exactly one character. Dropping `\x0e-\x1f` from the pattern left the
+    whole range free, and a check named "bolt\x1fshear" emitted a document no parser will
+    open — which is the failure the replacement exists to prevent, for six of its seven
+    characters."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry(name=f"bolt{character}shear", status=CheckStatus.PASS, detail="ok"),
+        )
+    )
+    document = _export(_sections(card))
+    assert qif_schema_issues(document) == []
+    read = _read_characteristics(document)
+    # Replaced, not deleted. Dropping the character silently joins the words into a
+    # different key, and a characteristic name is what quality software joins on.
+    assert "bolt�shear" in read
+
+
+@pytest.mark.parametrize("character", ["\t", "\n", "\r"])
+def test_the_whitespace_xml_does_carry_is_left_alone(character):
+    from anvilate.export.qif import _legal
+
+    assert _legal(f"a{character}b") == f"a{character}b"
+
+
+def test_two_records_citing_one_standard_produce_one_standard_entry():
+    """The QIF standards list is meant to be a set of standards, not a set of lookups — a
+    materials handbook behind both the plate and the bolt is one citation. Without the
+    collapse the same standard is written several times under different ids."""
+    shared = "ASTM A36 specified minimum (specification minimum)"
+    sections = BundleSections(
+        scorecard=_card(),
+        citations=(
+            SourceRecord(ref="plate", kind="material", name="ASTM A36", sources=(shared,)),
+            SourceRecord(ref="bolt", kind="material", name="ASTM A36", sources=(shared,)),
+        ),
+    )
+    standards = ET.fromstring(_export(sections)).findall("./q:StandardsDefinitions/q:Standard", _NS)
+    # QIF itself, plus the one citation the two records share.
+    assert len(standards) == 2
+    assert qif_schema_issues(_export(sections)) == []
+
+
+def test_a_fragile_check_carries_its_warning_across():
+    """A nominal pass that the declared input scatter fails materially often crossed as a
+    plain PASS with the caveat silently dropped, and the document then says PASS with nothing
+    qualifying it."""
+    from anvilate.uncertainty import sample_margin
+
+    scatter = sample_margin(
+        lambda values: values["load"],
+        {"load": Symmetric(nominal=1.6, half_width=0.5, sigma_level=1.0)},
+        required=1.5,
+        seed=7,
+    )
+    assert scatter.is_fragile()
+    entry = ScorecardEntry.from_safety_factor("bearing", computed=1.6, required=1.5).model_copy(
+        update={"uncertainty": scatter}
+    )
+    read = _read_characteristics(_export(_sections(Scorecard(entries=(entry,)))))
+    assert "fragile under the declared input scatter" in read["bearing"]["description"]
