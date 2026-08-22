@@ -11,12 +11,17 @@ environments, and acceptance criteria the whole screening rests on.
 ```python
 from anvilate.ingest import extract_requirements
 
+sheet = Path("rfq-2026-114.txt").read_text()
 draft = extract_requirements(sheet, document="rfq-2026-114.txt")
 draft.release()
 # ValueError: 4 load-bearing value(s) are still drafts and nobody has confirmed them:
 #   ['bore_diameter', 'design_load', 'rated_capacity', 'service_temperature'].
 #   An extracted value is a draft, and a draft is not an input
 ```
+
+(The count is *values* and the list is *distinct fields*, so a sheet stating one field
+twice reports more values than names. That is deliberate: the count is how much is
+outstanding and the list is what to go and look at.)
 
 ## Four positions
 
@@ -51,6 +56,26 @@ values were reviewed" is not a claim anybody can act on.
 `REJECTED` earns its place: "somebody refused this" is different information from "nobody
 has looked at this yet", and collapsing them loses the audit trail on exactly the values
 somebody argued about.
+
+## What it declines, and why declining is the point
+
+A value the pass declines costs somebody a minute. A value it gets **wrong** is a load. So
+where a line could plausibly be read two ways, it is declined and recorded:
+
+| Line | Would have been | Now |
+| --- | --- | --- |
+| `Design load: 45–50 kN` | **2250 kN** — pint multiplied the range out | declined as a range |
+| `Bore: 25 ±0.1 mm` | **2.5 mm** | declined as a tolerance |
+| `Span: 1,5 m` | **15 m** — a tenfold error on a European sheet | declined as an ambiguous comma |
+| `Temp: 20 C` | 20 **coulomb** | declined; write `degC` |
+| `Grade: 8.8 min` | 8.8 **minutes** | declined; write `minute` if you mean time |
+| `Pressure: 5 bar g` | bar·**gram** | declined; a gauge marker is not a unit |
+
+The en dash matters more than it looks: it is what a word processor autocorrects `45-50`
+into, and the hyphen spelling was already being declined — so the defence was
+spelling-luck rather than a rule. The rule underneath all of these is one line: **if the
+parsed magnitude is not the magnitude the document stated, the unit half carried a number
+of its own**, whatever the punctuation was.
 
 ## What the pass reads
 

@@ -268,3 +268,195 @@ def test_the_summary_says_what_was_read_and_what_blocks():
     assert "4 values from 1 document(s)" in summary
     assert "0 confirmed" in summary
     assert "blocked:" in summary
+
+
+# --- what an adversarial review found the hour this shipped ---------------------------------
+#
+# Nine findings, three of them severe, and all three were the same failure: the pass
+# produced a confident WRONG number instead of declining. A value it declines is visible in
+# `unparsed` and costs somebody a minute. A value it gets wrong is a load.
+
+
+@pytest.mark.parametrize(
+    ("line", "was"),
+    [
+        ("Design load: 45–50 kN", "2250 kN — the en dash Word autocorrects a hyphen into"),
+        ("Design load: 45—50 kN", "an em-dash range"),
+        ("Bore: 25 ±0.1 mm", "2.5 mm — the tolerance multiplied in"),
+        ("Bore: 25 ± 0.1 mm", "the spaced tolerance"),
+        ("Load: 10 to 20 kN", "a written range"),
+        ("Load: ~50 kN", "an approximate value"),
+    ],
+)
+def test_a_range_or_a_tolerance_is_declined_rather_than_multiplied_out(line, was):
+    draft = extract_requirements(line + "\n", document="rfq.txt")
+    assert draft.values == (), f"took {was}"
+    assert len(draft.unparsed) == 1
+
+
+def test_the_general_net_catches_any_unit_half_carrying_its_own_number():
+    """The specific spellings above are a list; this is the property underneath them.
+
+    If the parsed magnitude is not the magnitude the line stated, pint multiplied something
+    in from the "unit" half — whatever the punctuation was.
+    """
+    draft = extract_requirements("Load: 45 50 kN\n", document="rfq.txt")
+    assert draft.values == ()
+    assert "carries a number of its own" in draft.unparsed[0].reason
+
+
+def test_a_decimal_comma_is_refused_rather_than_read_as_a_thousands_separator():
+    # "1,5 m" is one and a half metres in most of Europe — the sheets this module targets —
+    # and stripping the comma made it 15 m, a tenfold error.
+    draft = extract_requirements("Span: 1,5 m\n", document="rfq.txt")
+    assert draft.values == ()
+    assert "ambiguous" in draft.unparsed[0].reason
+    # Unambiguous thousands grouping still works.
+    grouped = extract_requirements("Proof load: 1,250,000 N\n", document="rfq.txt")
+    assert grouped.values[0].quantity.magnitude == pytest.approx(1_250_000.0)
+
+
+@pytest.mark.parametrize(
+    ("line", "was"),
+    [
+        ("Temp: 20 C", "20 coulomb"),
+        ("Temp: 20 F", "20 farad"),
+        ("Grade: 8.8 min", "8.8 minutes, for a bolt grade"),
+        ("Pressure: 5 bar g", "bar*gram"),
+        ("Torque: 40 N*m max", "the max qualifier read as a unit"),
+    ],
+)
+def test_a_unit_pint_accepts_but_nobody_meant_is_declined(line, was):
+    draft = extract_requirements(line + "\n", document="rfq.txt")
+    assert draft.values == (), f"took {was}"
+    assert len(draft.unparsed) == 1
+
+
+def test_a_labelled_line_never_vanishes_without_a_trace():
+    # An 81-character label matched no separator at all and disappeared — no value, no
+    # unparsed record — which defeats the auditable-by-subtraction property outright.
+    long_label = "L" * 200
+    draft = extract_requirements(f"{long_label}: 50 kN\n", document="rfq.txt")
+    assert len(draft.values) == 1
+    assert draft.values[0].field == long_label.lower()
+    # And a label that normalizes away to nothing is recorded rather than skipped.
+    punctuation = extract_requirements("***: 50 kN\n", document="rfq.txt")
+    assert punctuation.values == ()
+    assert "empty field name" in punctuation.unparsed[0].reason
+
+
+def test_a_colon_beats_a_column_gap_so_an_aligned_label_keeps_its_value():
+    # The stated use case is a flattened fixed-width table, which routinely has runs of
+    # spaces inside the label. Splitting on the gap first threw the value away.
+    draft = extract_requirements("Design load   (max):   50 kN\n", document="rfq.txt")
+    assert draft.values[0].field == "design_load_max"
+    assert draft.values[0].quantity.magnitude == pytest.approx(50.0)
+    spaced = extract_requirements("DESIGN  LOAD: 50 kN\n", document="rfq.txt")
+    assert spaced.values[0].field == "design_load"
+    # And a table with no punctuation at all still splits on the gap.
+    table = extract_requirements("Bore diameter        25 mm\n", document="rfq.txt")
+    assert table.values[0].field == "bore_diameter"
+
+
+def test_a_value_cannot_be_confirmed_by_nobody_through_the_public_api():
+    """`model_copy` does not re-run validators, and these two methods are public.
+
+    `v.confirmed("   ")` produced exactly the state the constructor refuses — CONFIRMED
+    with nobody named — and `DraftSpec.model_copy`, the idiom the shipped example uses to
+    resolve a conflict, carried it straight into `release()`.
+    """
+    draft = extract_requirements("Load: 50 kN\n", document="rfq.txt")
+    value = draft.values[0]
+    for blank in ("", "   ", "\t"):
+        with pytest.raises(ValueError, match="names the person"):
+            value.confirmed(blank)
+        with pytest.raises(ValueError, match="names the person"):
+            value.rejected(blank)
+    # And the name is stored stripped, so a stray space is not a different person.
+    assert value.confirmed("  A. Engineer  ").confirmed_by == "A. Engineer"
+
+
+def test_reversing_a_decision_has_to_be_deliberate():
+    # The membership test included rejected values, so a second confirmation flipped a
+    # REJECTED value to CONFIRMED and released it — overwriting the refusal in place, with
+    # nothing left to show it had ever been made.
+    draft = extract_requirements("Load: 50 kN\n", document="rfq.txt")
+    refused = draft.with_confirmation("load", by="A. Engineer", state=ConfirmationState.REJECTED)
+    with pytest.raises(ValueError, match="Reversing a decision is a new decision"):
+        refused.with_confirmation("load", by="B. Engineer")
+    reconsidered = refused.with_confirmation("load", by="B. Engineer", reconsider=True)
+    assert reconsidered.release() == {"load": Quantity(magnitude=50.0, unit="kN")}
+
+
+def test_agreement_is_relative_so_it_means_the_same_thing_at_every_scale():
+    # `round(..., 9)` was an absolute tolerance in whatever unit the first value used: at
+    # gigametres it swallowed a 0.4 m disagreement.
+    far = extract_requirements("Baseline: 1 Gm\nBaseline: 1.0000000004 Gm\n", document="rfq.txt")
+    assert len(far.conflicts()) == 1
+    # And a conversion's own float error is not a conflict.
+    same = extract_requirements("Load: 50 kN\nLoad: 50000 N\n", document="rfq.txt")
+    assert same.conflicts() == ()
+    # A real disagreement at any scale is one.
+    near = extract_requirements("Load: 50 kN\nLoad: 50.04 kN\n", document="rfq.txt")
+    assert len(near.conflicts()) == 1
+
+
+def test_releasing_nothing_is_not_releasing():
+    # Every value rejected: both gates pass, and handing the pipeline `{}` makes "there is
+    # nothing here" indistinguishable from "everything checked out".
+    draft = extract_requirements("Load: 50 kN\n", document="rfq.txt")
+    emptied = draft.with_confirmation("load", by="A. Engineer", state=ConfirmationState.REJECTED)
+    assert emptied.unconfirmed_load_bearing() == ()
+    assert emptied.conflicts() == ()
+    with pytest.raises(ValueError, match="nothing to release"):
+        emptied.release()
+
+
+# --- and what a mutation run left standing -----------------------------------------------
+
+
+def test_a_hand_built_value_is_load_bearing_unless_it_says_otherwise():
+    # `extract_requirements` always passes the flag explicitly, so the default itself —
+    # the "safe direction" the docstring claims — was pinned by nothing.
+    value = ExtractedValue(
+        field="load", quantity=Quantity(magnitude=5.0, unit="kN"), source=_location()
+    )
+    assert value.load_bearing is True
+    assert value.state is ConfirmationState.DRAFT
+
+
+def test_informational_fields_are_named_in_human_form():
+    # The documented behaviour is that you name them as they appear on the sheet; the
+    # normalization that makes that work was untested.
+    draft = extract_requirements(
+        "Part Number: 4471 dimensionless\nLoad: 5 kN\n",
+        document="rfq.txt",
+        informational_fields=("Part Number",),
+    )
+    assert {v.field for v in draft.unconfirmed_load_bearing()} == {"load"}
+
+
+def test_a_dimensionless_value_is_declined_because_parse_is_tried_first():
+    # `Quantity.parse` refuses a bare or dimensionless number; the direct-construction
+    # fallback does not. Dropping the parse call entirely left every test green while
+    # quietly admitting "12 %", "30 deg", and "3 dimensionless" as physical quantities.
+    for line in ("Utilisation: 12 %", "Fill: 3 dimensionless"):
+        draft = extract_requirements(line + "\n", document="rfq.txt")
+        assert draft.values == (), line
+
+
+def test_scientific_notation_survives_the_pass():
+    draft = extract_requirements("Modulus: 2.05e5 MPa\n", document="rfq.txt")
+    assert draft.values[0].quantity.magnitude == pytest.approx(205000.0)
+
+
+def test_the_document_name_is_stored_stripped():
+    draft = extract_requirements("Load: 5 kN\n", document="  rfq.txt  ")
+    assert draft.documents == ("rfq.txt",)
+
+
+def test_the_summary_counts_conflicts_as_well_as_drafts():
+    draft = extract_requirements("Load: 50 kN\nLoad: 45 kN\n", document="rfq.txt")
+    assert "1 conflicting" in draft.summary()
+    agreed = extract_requirements("Load: 50 kN\nLoad: 50 kN\n", document="rfq.txt")
+    assert "0 conflicting" in agreed.summary()

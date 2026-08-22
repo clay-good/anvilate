@@ -45,6 +45,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
+from math import isclose
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -60,16 +61,44 @@ __all__ = [
     "extract_requirements",
 ]
 
-# A requirement line is "<label><separator><value>", and the separator is a colon, an
-# equals sign, or a run of two or more spaces (which is how a fixed-width RFQ table reads
-# once its columns are flattened to text). A single space is deliberately not a separator:
-# "design load 50 kN" would split at the first space and label the field "design".
-_LINE = re.compile(r"^\s*(?P<label>[^:=]{1,80}?)\s*(?::|=|\s{2,})\s*(?P<value>\S.*?)\s*$")
+# A requirement line is "<label><separator><value>". The separators are tried in order and
+# the order matters: a colon or an equals sign beats a column gap, because a flattened
+# fixed-width table routinely has runs of spaces INSIDE the label. "Design load   (max):
+# 50 kN" split on the gap first, labelled the field "design_load", and threw the value
+# away. The column gap is still a separator, because that is how a table with no
+# punctuation reads once its columns are flattened.
+#
+# A single space is deliberately not a separator: "design load 50 kN" would split at the
+# first space and label the field "design". There is no length bound on the label either —
+# an 81-character label used to match nothing at all and vanish without a trace, which
+# defeats the "auditable by subtraction" property the whole pass rests on.
+_SEPARATORS = (
+    re.compile(r"^\s*(?P<label>[^:=]+?)\s*[:=]\s*(?P<value>\S.*?)\s*$"),
+    re.compile(r"^\s*(?P<label>\S.*?)\s{2,}(?P<value>\S.*?)\s*$"),
+)
+
+
+def _split(line: str) -> re.Match[str] | None:
+    """The first separator that splits ``line`` into a label and a value."""
+    for pattern in _SEPARATORS:
+        match = pattern.match(line)
+        if match is not None:
+            return match
+    return None
+
 
 # The value half of a line, when it is a magnitude and a unit. The unit is whatever
 # remains; `Quantity.parse` is the judge of whether it is one, so nothing here has to know
 # the unit vocabulary.
 _VALUE = re.compile(r"^(?P<magnitude>[-+]?\d[\d,]*\.?\d*(?:[eE][-+]?\d+)?)\s*(?P<unit>\S.*)$")
+
+
+# How close two extractions of one field have to be to count as the same requirement.
+# Relative, so it means the same thing in kilonewtons and in gigametres, and tight enough
+# that it only absorbs the float error of a unit conversion (~1e-15) — 50 kN and 50000 N
+# agree; 50 kN and 50.04 kN do not, and neither do two baselines 0.4 m apart in a
+# gigametre, which an absolute tolerance in the first value's unit used to swallow whole.
+_AGREEMENT_TOLERANCE = 1e-12
 
 
 def _normalize(label: str) -> str:
@@ -164,17 +193,29 @@ class ExtractedValue(BaseModel):
         """Whether a check may consume this value."""
         return self.state is ConfirmationState.CONFIRMED
 
+    def _decided(self, state: ConfirmationState, by: str) -> ExtractedValue:
+        """This value moved to ``state`` by ``by``, with the signer rule enforced here.
+
+        ``model_copy`` does not re-run validators, and these two methods are public — so
+        ``value.confirmed("   ")`` produced exactly the state the constructor refuses:
+        CONFIRMED with nobody named. It then reached ``release()`` and printed as
+        "confirmed by " with an empty name. The check has to live on this path too.
+        """
+        if not by.strip():
+            raise ValueError(
+                f"marking {self.field!r} {state.value} names the person making the "
+                f"decision; confirmation is per value and per person, and an unsigned one "
+                f"is the state this model exists to refuse"
+            )
+        return self.model_copy(update={"state": state, "confirmed_by": by.strip()})
+
     def confirmed(self, by: str) -> ExtractedValue:
         """This value, confirmed by ``by``."""
-        return self.model_copy(
-            update={"state": ConfirmationState.CONFIRMED, "confirmed_by": by.strip()}
-        )
+        return self._decided(ConfirmationState.CONFIRMED, by)
 
     def rejected(self, by: str) -> ExtractedValue:
         """This value, refused by ``by`` — a decision, not an absence."""
-        return self.model_copy(
-            update={"state": ConfirmationState.REJECTED, "confirmed_by": by.strip()}
-        )
+        return self._decided(ConfirmationState.REJECTED, by)
 
     def __str__(self) -> str:
         mark = {
@@ -251,14 +292,21 @@ class DraftSpec(BaseModel):
                 continue
             first = group[0].quantity
             try:
-                magnitudes = {round(v.quantity.to(first.unit).magnitude, 9) for v in group}
-                disagree = len(magnitudes) > 1
+                converted = [v.quantity.to(first.unit).magnitude for v in group]
             except Exception:
                 # Incommensurable units for one field — a load quoted in kN on one line and
                 # in mm on another — never agree, and the conversion failure IS the
                 # disagreement. Collapsing that to a one-element set read as "they match".
-                disagree = True
-            if disagree:
+                found.append(FieldConflict(field=field, values=tuple(group)))
+                continue
+            # Relative, not `round(..., 9)`. An absolute tolerance in whatever unit the
+            # first value happened to use floats in physical size with that unit: at
+            # gigametres it swallowed a 0.4 m disagreement, and at millimetres it is
+            # tighter than any requirement sheet ever written.
+            if not all(
+                isclose(converted[0], other, rel_tol=_AGREEMENT_TOLERANCE, abs_tol=0.0)
+                for other in converted[1:]
+            ):
                 found.append(FieldConflict(field=field, values=tuple(group)))
         return tuple(found)
 
@@ -273,7 +321,12 @@ class DraftSpec(BaseModel):
         return tuple(v for v in self.values if v.usable)
 
     def with_confirmation(
-        self, field: str, *, by: str, state: ConfirmationState = ConfirmationState.CONFIRMED
+        self,
+        field: str,
+        *,
+        by: str,
+        state: ConfirmationState = ConfirmationState.CONFIRMED,
+        reconsider: bool = False,
     ) -> DraftSpec:
         """This draft with every extraction of ``field`` moved to ``state`` by ``by``.
 
@@ -287,6 +340,18 @@ class DraftSpec(BaseModel):
             raise ValueError(
                 f"no extracted value for {field!r}; the draft carries "
                 f"{sorted({v.field for v in self.values})}"
+            )
+        already = [
+            v
+            for v in self.values
+            if v.field == field and v.state is not ConfirmationState.DRAFT and v.state is not state
+        ]
+        if already and not reconsider:
+            raise ValueError(
+                f"{field!r} already carries a decision "
+                f"({already[0].state.value} by {already[0].confirmed_by}) and this would "
+                f"overwrite it in place, leaving no trace that it was ever made. Reversing a "
+                f"decision is a new decision: pass reconsider=True to say so deliberately"
             )
 
         def _moved(value: ExtractedValue) -> ExtractedValue:
@@ -326,7 +391,17 @@ class DraftSpec(BaseModel):
                 f"{len(conflicts)} field(s) carry disagreeing values and no one has resolved "
                 f"them: {'; '.join(str(c) for c in conflicts)}"
             )
-        return {v.field: v.quantity for v in self.confirmed()}
+        released = {v.field: v.quantity for v in self.confirmed()}
+        if not released:
+            # Every value rejected, or every one informational and none confirmed. The two
+            # gates above both pass, and handing the pipeline an empty mapping makes "there
+            # is nothing here" indistinguishable from "everything checked out".
+            raise ValueError(
+                "nothing to release: the draft carries no confirmed value. That is not a "
+                "clean sheet, it is an empty one — a pipeline handed {} cannot tell the "
+                "difference"
+            )
+        return released
 
     def summary(self) -> str:
         """One line: what was read, what is outstanding, and whether it can be released."""
@@ -343,6 +418,95 @@ class DraftSpec(BaseModel):
         )
 
 
+# Trailing words that qualify a value rather than measure it. pint reads several of them
+# as units and produces a number with the wrong dimension and no complaint: "Grade: 8.8
+# min" becomes 8.8 MINUTES, and "Pressure: 5 bar g" becomes bar*gram. A qualifier is
+# information, but it is not part of the unit, and guessing which it was is exactly the
+# decision this module hands to a person.
+_QUALIFIERS = frozenset(
+    {
+        "min",
+        "max",
+        "nom",
+        "nominal",
+        "typ",
+        "typical",
+        "ref",
+        "abs",
+        "absolute",
+        "gauge",
+        "gage",
+        "g",
+        "a",
+        "approx",
+        "each",
+        "off",
+    }
+)
+
+# Single letters pint resolves to something a requirement sheet almost never means. "C" is
+# coulomb and "F" is farad; on a requirement sheet they are Celsius and Fahrenheit, and the
+# difference is a temperature check running on a charge.
+_AMBIGUOUS_UNITS = {
+    "C": "coulomb, and a requirement sheet means degC",
+    "F": "farad, and a requirement sheet means degF",
+    "min": "minutes, and on a requirement sheet 'min' is usually 'minimum' — write "
+    "'minute' if you mean the time unit",
+    "max": "a maximum qualifier rather than a unit",
+}
+
+# What a range or a tolerance looks like once the leading magnitude is taken off.
+_RANGE_START = re.compile(r"^[-–—±~]|^\+\s*/\s*-|^to\b", re.IGNORECASE)
+
+
+def _magnitude(text: str) -> str:
+    """The magnitude with thousands separators removed — or a refusal if it is ambiguous.
+
+    Stripping every comma unconditionally turned "1,5 m" into 15 m, a tenfold error on
+    exactly the European requirement sheets this module is aimed at. A comma is only
+    removed where it is unambiguously a thousands separator: digit groups of exactly three.
+    """
+    if "," not in text:
+        return text
+    if re.fullmatch(r"[-+]?\d{1,3}(,\d{3})+", text):
+        return text.replace(",", "")
+    raise ValueError(
+        f"the comma in {text!r} is ambiguous — it is a decimal point in most of Europe and "
+        f"a thousands separator elsewhere, and the two readings differ by a factor of ten. "
+        f"Write it with a point, or group thousands in threes"
+    )
+
+
+def _unit(text: str) -> str:
+    """The unit half, refused when it is a range, a tolerance, or a qualifier.
+
+    Each of these produced a confident wrong number rather than a refusal, which is worse
+    than anything the pass declines.
+    """
+    unit = text.strip()
+    if _RANGE_START.match(unit) or "±" in unit:
+        raise ValueError(
+            f"{text!r} looks like a range or a tolerance, not a single value. State which "
+            f"end of it the requirement means — a range multiplied out is not a number "
+            f"anybody wrote down"
+        )
+    tokens = unit.split()
+    if len(tokens) > 1 and tokens[-1].lower().strip(".") in _QUALIFIERS:
+        raise ValueError(
+            f"{tokens[-1]!r} in {text!r} is a qualifier, not part of the unit. pint reads "
+            f"several of them as units and returns the wrong dimension without complaint"
+        )
+    if unit in _AMBIGUOUS_UNITS:
+        raise ValueError(f"{unit!r} is ambiguous: it reads as {_AMBIGUOUS_UNITS[unit]}")
+    return unit
+
+
+# The offset temperature units pint can construct but not parse from text.
+_OFFSET_TEMPERATURE_UNITS = frozenset(
+    {"degc", "degf", "celsius", "fahrenheit", "degree_celsius", "degree_fahrenheit", "c", "f"}
+)
+
+
 def _quantity(magnitude: str, unit: str) -> Quantity:
     """A magnitude and a unit as a :class:`~anvilate.units.Quantity`.
 
@@ -354,9 +518,29 @@ def _quantity(magnitude: str, unit: str) -> Quantity:
     still raises on a unit that is not one.
     """
     try:
-        return Quantity.parse(f"{magnitude} {unit}")
+        quantity = Quantity.parse(f"{magnitude} {unit}")
     except (UnitError, ValueError):
-        return Quantity(magnitude=float(magnitude), unit=unit)
+        # Narrow on purpose. `Quantity.parse` is the library's front door and it refuses a
+        # dimensionless result, which is the behaviour this pass wants — "12 %" and "3
+        # dimensionless" are not physical values. The one thing it cannot do is an OFFSET
+        # temperature unit (pint will construct "-20 degC" but not parse it), and that is
+        # on every requirement sheet there is. So the fallback is for those units and
+        # nothing else; a general escape hatch here quietly re-admitted everything parse
+        # had just declined.
+        if unit.lower().lstrip("°") not in _OFFSET_TEMPERATURE_UNITS:
+            raise
+        quantity = Quantity(magnitude=float(magnitude), unit=unit)
+    # The general net under the specific ones. If the parsed magnitude is not the magnitude
+    # the line stated, the "unit" half contained a number and pint multiplied it in:
+    # "45–50 kN" came back as 2250 kN and "25 ±0.1 mm" as 2.5 mm. Whatever produced that,
+    # the answer is not what the document says.
+    if quantity.magnitude != float(magnitude):
+        raise ValueError(
+            f"{magnitude!r} in {unit!r} parsed to a magnitude of {quantity.magnitude:g}, so "
+            f"the unit half carries a number of its own — a range, a tolerance, or a second "
+            f"value. This is not one quantity"
+        )
+    return quantity
 
 
 def extract_requirements(
@@ -391,22 +575,28 @@ def extract_requirements(
     for number, raw in enumerate(text.splitlines(), start=1):
         if not raw.strip() or raw.strip().startswith("#"):
             continue
-        match = _LINE.match(raw)
+        match = _split(raw)
         if match is None:
-            continue
+            continue  # no separator at all: prose, not a labelled requirement
+        location = SourceLocation(document=document, line_number=number, excerpt=raw, page=page)
         field = _normalize(match.group("label"))
         if not field:
+            # A label of punctuation ("***: 50 kN") normalizes away to nothing. It used to
+            # `continue` and disappear; it is a labelled line the pass declined, so it is
+            # recorded as one.
+            unparsed.append(
+                UnparsedLine(source=location, reason="the label normalizes to an empty field name")
+            )
             continue
-        location = SourceLocation(document=document, line_number=number, excerpt=raw, page=page)
         value_match = _VALUE.match(match.group("value"))
         if value_match is None:
             unparsed.append(
                 UnparsedLine(source=location, reason="the value is not a number with a unit")
             )
             continue
-        magnitude = value_match.group("magnitude").replace(",", "")
-        unit = value_match.group("unit")
         try:
+            magnitude = _magnitude(value_match.group("magnitude"))
+            unit = _unit(value_match.group("unit"))
             quantity = _quantity(magnitude, unit)
         except (UnitError, ValueError) as exc:
             # A bare number is the important case: a requirements sheet says "quantity: 4"
