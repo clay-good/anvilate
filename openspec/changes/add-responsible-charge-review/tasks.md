@@ -12,7 +12,7 @@
 
 - [x] 2.1 Deterministic, documented review-priority ordering
 - [x] 2.2 Review record binding to content digest; invalidation on any change
-- [ ] 2.3 Report-pane and evidence-bundle rendering — PARTIAL: ReviewerDossier.summary()
+- [x] 2.3 Report-pane and evidence-bundle rendering — PARTIAL: ReviewerDossier.summary()
       and ReviewItem.headline are the renderings, and both are gated for prohibited
       language; wiring them into the HTML report pane is report-layer work
 - [x] 2.4 AI-involvement summary suitable for disclosure
@@ -47,3 +47,12 @@
 - **3.4's language gate landed twice**: once over every rendering the review module
   produces, and once in tests/test_contract.py over every scorecard detail and reference
   string the packs emit — because the risk is not confined to this module.
+
+## Evidence-bundle serialization — shipped 2026-08-22
+
+`src/anvilate/bundle.py` assembles this layer's output into `BundleSections` alongside the
+scorecard, the verification plan, the reviewer dossier, and the typed callouts, rolls the
+lot up under the scorecard's own precedence, and hands it to the attestation layer as the
+body of a content-addressed statement. Three changes carried this same open task in three
+different files; one module closed all three. See `docs/evidence-bundle.md` and
+`examples/lug_evidence_bundle_roll_up.py`.

@@ -179,7 +179,9 @@ def test_the_marin_constants_agree_with_their_own_kpsi_twins():
     """The published table gives both constant sets, and they are not independent.
 
     k_a is a pure number, so a_kpsi = a_MPa·(MPa per kpsi)^b must hold at every S_u. It
-    does, for all four rows, to the table's own rounding — which is the cheapest available
+    does to about 0.2% on every row — three of the four round to the published kpsi figure
+    exactly, and as-forged lands 0.17% low because b = -0.995 is quoted to three decimals
+    and a_kpsi is acutely sensitive to an exponent that close to -1. Cheapest available
     check that these were transcribed correctly, and it needs no external source.
     """
     mpa_per_kpsi = 6.894757
@@ -385,9 +387,14 @@ def test_a_typed_note_no_check_consumes_says_so_rather_than_passing():
     assert "no check in this library consumes this category yet" in entry.detail
 
 
-def test_a_coating_entry_states_both_dimensional_effects():
+def test_a_coating_entry_states_both_dimensional_effects_and_checks_neither():
+    # The entry reports what the coating does to the geometry. It checks that against
+    # nothing, because no fit or thread class is supplied here — so PASS would have said
+    # "coating checked, all good" for a check that never ran, and a set whose only member
+    # was a coating rolled up green on it.
     (entry,) = callout_scorecard(CalloutSet(callouts=(_coating(),))).entries
-    assert entry.status is CheckStatus.PASS
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "No fit or thread class was supplied" in entry.detail
     assert "10–26 µm on diameter" in entry.detail
     assert "20–52 µm" in entry.detail  # the 4t thread shift
 
@@ -404,3 +411,98 @@ def test_the_roughness_parameter_travels_with_the_callout():
     rz = _finish(parameter=RoughnessParameter.RZ, roughness=_q(1.6, "um"))
     assert "Rz" in str(rz)
     assert "Rz" in rz.value_signature()
+
+
+# --- what an adversarial review of this module found the hour it shipped -------------------
+
+
+def test_an_rz_value_is_not_graded_against_ra_bands():
+    """The bands are arithmetic-mean; Rz runs four to seven times Ra for the same surface.
+
+    Grading one against the other was wrong in both directions at once: an ordinary ground
+    surface at Rz 3.2 µm was reported as a contradiction, and an impossible as-forged
+    surface at Rz 6.3 µm passed. No Rz bands are published here, so the consistency check
+    does not run — and says so, rather than reporting a clean result it did not earn.
+    """
+    su = _q(800, "MPa")
+    ground_rz = _finish(parameter=RoughnessParameter.RZ, roughness=_q(3.2, "um"))
+    (entry,) = callout_scorecard(CalloutSet(callouts=(ground_rz,)), ultimate_strength=su).entries
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "consistency check did not run" in entry.detail
+    # The surface factor is still derived, because it comes from the method, not the Ra.
+    assert "k_a = 0.895" in entry.detail
+    # And the impossible one is not silently passed either.
+    forged_rz = _finish(
+        method=ProductionMethod.AS_FORGED, parameter=RoughnessParameter.RZ, roughness=_q(6.3, "um")
+    )
+    (entry,) = callout_scorecard(CalloutSet(callouts=(forged_rz,)), ultimate_strength=su).entries
+    assert entry.status is CheckStatus.NOT_EVALUATED
+
+
+def test_the_ra_bands_are_pinned_by_value_not_by_reading_the_table():
+    """Ten band edges, none of which any test could move.
+
+    The band test above iterates ``TYPICAL_ROUGHNESS_UM`` itself, so it passes for any
+    table at all — the manifest-gate mistake in miniature. These are literals.
+    """
+    assert TYPICAL_ROUGHNESS_UM == {
+        "polished": (0.025, 0.4),
+        "ground": (0.1, 1.6),
+        "machined": (0.4, 6.3),
+        "hot_rolled": (3.2, 25.0),
+        "as_forged": (6.3, 50.0),
+    }
+    # And each edge is live: just outside it is a contradiction, just inside it is not.
+    su = _q(800, "MPa")
+    for method, (low, high) in TYPICAL_ROUGHNESS_UM.items():
+        for value, contradicts in (
+            (low * 0.9, True),
+            (low, False),
+            (high, False),
+            (high * 1.1, True),
+        ):
+            finish = _finish(method=ProductionMethod(method), roughness=_q(value, "um"))
+            card = callout_scorecard(CalloutSet(callouts=(finish,)), ultimate_strength=su)
+            failed = card.status is CheckStatus.FAIL
+            assert failed is contradicts, (method, value)
+
+
+def test_two_distinct_characteristics_cannot_share_an_identifier_by_construction():
+    # A `"*part*"` sentinel collided with a face actually named `*part*`, and a NUL in a
+    # scope collided with a NUL in a category. The encoding is length-prefixed now.
+    assert _finish(scope=None).characteristic_id != _finish(scope="*part*").characteristic_id
+    CalloutSet(callouts=(_finish(scope=None), _finish(scope="*part*")))  # both, legally
+    with pytest.raises(ValidationError, match="NUL"):
+        ProcessNote(scope="bore\x00a", category="b")
+
+
+def test_a_scope_is_normalized_so_a_trailing_space_is_not_a_second_characteristic():
+    assert _finish(scope="  shaft_journal ").scope == "shaft_journal"
+    with pytest.raises(ValidationError, match="contradiction"):
+        CalloutSet(callouts=(_finish(), _finish(scope=" shaft_journal", roughness=_q(3.2, "um"))))
+
+
+def test_the_treated_record_beats_a_base_name_that_merely_ends_in_the_condition():
+    # `("X-1", "1")` used to return `X-1` while `X-1-1` existed — quietly screening the
+    # untreated row, which is the one thing this function exists to prevent.
+    treatment = HeatTreatment(specification="AMS 2759/1", condition="1")
+    assert heat_treated_material_id("X-1", treatment, known_materials=("X-1", "X-1-1")) == "X-1-1"
+    assert heat_treated_material_id("X-1", treatment, known_materials=("X-1",)) == "X-1"
+
+
+def test_material_resolution_folds_case_and_strips_on_both_sides():
+    treatment = HeatTreatment(specification="cold drawn", condition=" CD ")
+    for base in ("aisi-1018-cd", " AISI-1018 ", "AISI-1018-CD"):
+        assert heat_treated_material_id(base, treatment, known_materials=_STEELS) == "AISI-1018-CD"
+
+
+def test_a_callout_scoped_to_a_face_that_does_not_exist_fails_when_the_graph_is_supplied():
+    callouts = CalloutSet(callouts=(_finish(scope="ghost_face"),))
+    # Without the tag graph, resolution is not this call's job and nothing is claimed.
+    assert callout_scorecard(callouts, ultimate_strength=_q(800, "MPa")).status is CheckStatus.PASS
+    # With it, a comfortable k_a for a surface that does not exist is a failure.
+    card = callout_scorecard(
+        callouts, ultimate_strength=_q(800, "MPa"), known_tags={"shaft_journal"}
+    )
+    assert card.status is CheckStatus.FAIL
+    assert "the tag graph does not define" in card.entries[0].detail

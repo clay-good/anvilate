@@ -554,6 +554,17 @@ def transformer_maximum_efficiency_load_fraction(
         raise ValueError("core_loss must be non-negative")
     if p_cu <= 0:
         raise ValueError("rated_copper_loss must be positive")
+    # sqrt(P_fe/P_cu) is a load FRACTION, and the docstring's own return range says 0-1
+    # "for a transformer whose core loss is below its rated copper loss". Above it the
+    # answer is a load past nameplate — 1.41 for a 2:1 loss ratio — handed back as "the
+    # load at which this transformer is most efficient".
+    if p_fe > p_cu:
+        raise ValueError(
+            f"core_loss ({p_fe:.4g} W) exceeds rated_copper_loss ({p_cu:.4g} W), so the "
+            f"maximum-efficiency load fraction comes out at {(p_fe / p_cu) ** 0.5:.4g} — past "
+            f"nameplate, which is not a load fraction. Such a transformer is most efficient "
+            f"at full load; check whether the two losses are the right way round"
+        )
     return (p_fe / p_cu) ** 0.5
 
 

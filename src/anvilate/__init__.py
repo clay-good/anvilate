@@ -20,6 +20,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.attestation` — the evidence bundle as a content-addressed,
   envelope-wrapped claim: in-toto subjects, a versioned predicate, an environment
   BOM, and a verification that never calls an unchecked signature good.
+- :mod:`anvilate.bundle` — every layer's output assembled into one evidence
+  document, with one roll-up that is never better than its worst section.
 - :mod:`anvilate.callouts` — typed MBD callouts: finish, coating, and heat treat
   as check inputs with persistent characteristic identity, not annotations.
 - :mod:`anvilate.derivation` — a check's worked calculation: formula, substituted

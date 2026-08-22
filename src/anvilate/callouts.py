@@ -84,7 +84,9 @@ MARIN_SURFACE_CITATION = (
 #
 # The published table also gives the constants for S_u in kpsi, and the two sets are not
 # independent: k_a is a pure number, so a_kpsi = a_MPa * (MPa per kpsi)^b must hold at
-# every S_u. It does, to the table's own rounding, for all four rows — which is the
+# every S_u. It does to about 0.2% on every row (three of the four round to the published
+# kpsi figure exactly; as-forged lands 0.17% low, because b = -0.995 is quoted to three
+# decimals and a_kpsi is acutely sensitive to an exponent that close to -1). That is the
 # cheapest available check that these constants were transcribed correctly, and the suite
 # asserts it rather than trusting the transcription.
 MARIN_SURFACE_CONSTANTS_MPA: dict[str, tuple[float, float]] = {
@@ -143,8 +145,17 @@ def _characteristic_id(kind: str, scope: str | None, discriminator: str = "") ->
     Derived from *what the characteristic is* — kind, scope, and for a note its category
     — and deliberately not from its value, so a revised value keeps its identity and a
     diff can call it a change rather than a deletion plus an addition.
+
+    The encoding is length-prefixed rather than delimiter-joined, for the same reason DSSE
+    pre-authentication encoding is: a delimiter is only unambiguous while no field can
+    contain it. Joining on NUL let ``ProcessNote(scope="bore\x00a", category="b")`` and
+    ``ProcessNote(scope="bore", category="a\x00b")`` mint the same identifier, and a
+    ``"*part*"`` sentinel for the whole-part scope collided with a face actually named
+    ``*part*``. Scope presence is now a flag and every field carries its own length, so no
+    two distinct characteristics can encode identically.
     """
-    payload = "\x00".join((kind, scope or "*part*", discriminator))
+    parts = ["1" if scope is None else "0", kind, scope or "", discriminator]
+    payload = "".join(f"{len(part)}:{part}" for part in parts)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
@@ -158,11 +169,20 @@ class _Callout(BaseModel):
 
     @model_validator(mode="after")
     def _scope_is_named_or_absent(self) -> _Callout:
-        if self.scope is not None and not self.scope.strip():
+        if self.scope is None:
+            return self
+        if not self.scope.strip():
             raise ValueError(
                 "a callout's scope is a semantic tag or None for the whole part; an empty "
                 "string is neither"
             )
+        if "\x00" in self.scope:
+            raise ValueError("a semantic tag cannot contain a NUL character")
+        # Normalized, so `"  journal "` and `"journal"` are one characteristic rather than
+        # two — otherwise a trailing space walks straight past the one-value-per-
+        # characteristic rule the set enforces.
+        if self.scope != self.scope.strip():
+            object.__setattr__(self, "scope", self.scope.strip())
         return self
 
     @property
@@ -550,6 +570,19 @@ def _roughness_contradiction(finish: SurfaceFinish) -> str | None:
     )
 
 
+def _roughness_check_applies(finish: SurfaceFinish) -> bool:
+    """Whether the attainable-roughness bands can judge this callout's parameter.
+
+    :data:`TYPICAL_ROUGHNESS_UM` is an *arithmetic-mean* (Ra) table, and Rz runs roughly
+    four to seven times Ra for the same surface. Grading an Rz value against Ra bands is
+    wrong in both directions at once: an ordinary ground surface at Rz 3.2 µm was reported
+    as a contradiction, and an impossible as-forged surface at Rz 6.3 µm passed. No Rz
+    bands are published here, so the check does not run rather than running on the wrong
+    table — and the entry says so instead of quietly reporting a clean result.
+    """
+    return finish.parameter is RoughnessParameter.RA
+
+
 def plated_outer_dimension(nominal: Quantity, coating: Coating) -> tuple[Quantity, Quantity]:
     """An external diameter or width across the coating's declared thickness range.
 
@@ -627,15 +660,20 @@ def heat_treated_material_id(
     declaring "AISI-1018-CD, condition CD" is consistent rather than a miss.
     """
     known = set(known_materials)
-    condition = treatment.condition.strip()
-    if base_material in known and base_material.upper().endswith(f"-{condition.upper()}"):
-        return base_material
-    candidate = f"{base_material}-{condition}"
-    if candidate in known:
-        return candidate
-    # The database is keyed case-sensitively but a callout is written by a person.
+    # The database is keyed case-sensitively; a callout is written by a person.
     folded = {k.upper(): k for k in known}
-    return folded.get(candidate.upper())
+    condition = treatment.condition.strip()
+    base = base_material.strip()
+    # The explicit `base-condition` record is tried FIRST. Trying the self-match first let
+    # a base whose name merely ends in the condition win over a real treated record —
+    # `("X-1", "1")` returned `X-1` while `X-1-1` existed, which is precisely the "quietly
+    # screening the untreated row" this function exists to prevent.
+    resolved = folded.get(f"{base}-{condition}".upper())
+    if resolved is not None:
+        return resolved
+    if base.upper().endswith(f"-{condition.upper()}"):
+        return folded.get(base.upper())
+    return None
 
 
 def callout_scorecard(
@@ -644,6 +682,7 @@ def callout_scorecard(
     ultimate_strength: Quantity | None = None,
     base_material: str | None = None,
     known_materials: Iterable[str] = (),
+    known_tags: Iterable[str] | None = None,
 ) -> Scorecard:
     """What the declared callouts do to the checks, and where they contradict one.
 
@@ -654,14 +693,57 @@ def callout_scorecard(
     callout and what it would have to be true for is ``FAIL``, never resolved by
     preferring one side.
 
+    ``known_tags`` is the semantic tag graph, when the caller has it. A callout scoped to a
+    face nothing defines is never consumed by any check, so it fails here by name rather
+    than reporting a comfortable ``k_a`` for a surface that does not exist. Omit it and
+    resolution is simply not part of this call — :meth:`CalloutSet.resolved_against` is the
+    other place to do it, and the entry list says nothing either way.
+
     Free-text notes produce no entries at all: they are not consumable, and an entry for
     one would imply a check had read it.
     """
     entries: list[ScorecardEntry] = []
+    unresolvable: set[str] = set()
+    if known_tags is not None:
+        tags = set(known_tags)
+        unresolvable = {
+            c.scope for c in callouts.consumable() if c.scope is not None and c.scope not in tags
+        }
     for callout in callouts.consumable():
         marker = f"[{callout.characteristic_id}]"
+        if callout.scope in unresolvable:
+            entries.append(
+                ScorecardEntry(
+                    name=f"{callout.kind.replace('_', ' ')} at {callout.where}",
+                    status=CheckStatus.FAIL,
+                    detail=(
+                        f"{marker} {callout} is scoped to {callout.scope!r}, which the tag "
+                        f"graph does not define — so no check will ever consume it and the "
+                        f"part screens as though the callout were never written"
+                    ),
+                )
+            )
+            continue
         if isinstance(callout, SurfaceFinish):
-            contradiction = _roughness_contradiction(callout)
+            contradiction = (
+                _roughness_contradiction(callout) if _roughness_check_applies(callout) else None
+            )
+            if not _roughness_check_applies(callout) and ultimate_strength is not None:
+                factor = marin_surface_factor(callout, ultimate_strength=ultimate_strength)
+                entries.append(
+                    ScorecardEntry(
+                        name=f"surface finish at {callout.where}",
+                        status=CheckStatus.NOT_EVALUATED,
+                        detail=(
+                            f"{marker} {callout} → Marin surface factor k_a = {factor:.3f}; the "
+                            f"finish/method consistency check did not run, because the "
+                            f"attainable-roughness bands here are Ra and this callout states "
+                            f"{callout.parameter.value}"
+                        ),
+                        reference=MARIN_SURFACE_CITATION,
+                    )
+                )
+                continue
             if contradiction is not None:
                 entries.append(
                     ScorecardEntry(
@@ -700,15 +782,22 @@ def callout_scorecard(
             low, high = plated_thread_pitch_diameter_shift(callout)
             entries.append(
                 ScorecardEntry(
+                    # NOT_EVALUATED, not PASS. This entry states the dimensional effect the
+                    # coating has; it does not check the effect against anything, because no
+                    # fit, allowance, or thread class is supplied here. A PASS would have
+                    # said "coating checked, all good" for a check that never ran — and a
+                    # callout set whose only member was a coating rolled up green on it.
                     name=f"coating at {callout.where}",
-                    status=CheckStatus.PASS,
+                    status=CheckStatus.NOT_EVALUATED,
                     detail=(
                         f"{marker} {callout} → outside dimensions grow "
                         f"{2 * callout.minimum_thickness.to('um').magnitude:.3g}–"
                         f"{2 * callout.maximum_thickness.to('um').magnitude:.3g} µm on "
                         f"diameter, and a 60° thread's pitch diameter by "
-                        f"{low.to('um').magnitude:.3g}–{high.to('um').magnitude:.3g} µm"
+                        f"{low.to('um').magnitude:.3g}–{high.to('um').magnitude:.3g} µm. "
+                        f"No fit or thread class was supplied to check that against"
                     ),
+                    reference="the plated size is the size that has to fit",
                 )
             )
         elif isinstance(callout, HeatTreatment):

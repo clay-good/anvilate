@@ -116,7 +116,20 @@ def solar_cell_efficiency(
         raise ValueError("irradiance must be positive")
     if a <= 0:
         raise ValueError("cell_area must be positive")
-    return p / (g * a)
+    # The incident power is formed right here, so the first-law ceiling costs one
+    # comparison. Without it a transcription slip returned 50.0 — 5000% conversion — and
+    # the plausible-looking version, 1.2346, is a 123% cell reported as a bare float that
+    # downstream code reads as a fraction. The cross-module twin `pv_fill_factor` already
+    # applies exactly this ceiling.
+    incident = g * a
+    if p > incident:
+        raise ValueError(
+            f"max_power ({p:.4g} W) exceeds the incident power on the cell "
+            f"({incident:.4g} W = {g:.4g} W/m² x {a:.4g} m²), giving an efficiency of "
+            f"{p / incident:.4g}. A cell cannot deliver more than it receives; check the "
+            f"cell area and the units of the power figure"
+        )
+    return p / incident
 
 
 def solar_cell_open_circuit_voltage(

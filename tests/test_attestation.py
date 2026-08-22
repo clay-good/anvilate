@@ -32,6 +32,7 @@ from anvilate.attestation import (
     SignatureState,
     Subject,
     ValueOrigin,
+    VerificationReport,
     canonical_json,
     dsse_pae,
     sha256_hex,
@@ -40,6 +41,23 @@ from anvilate.attestation import (
 from anvilate.evidence import SourceRecord
 from anvilate.review import DecisionOrigin
 from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+# Deliberately wide. The first version of this gate matched only `uuid4(` while the docs
+# advertised it as catching "uuid", and it saw none of uuid1, time_ns, perf_counter,
+# utcnow, secrets, or os.urandom. The second named seven `random` functions while the docs
+# said "module-level random.*", leaving sample, randrange, choices, getrandbits, randbytes
+# and the whole distribution family uncovered. A gate narrower than its own claim is worse
+# than no gate, so this matches `random.<anything>` and the meta-test below proves it fires
+# on every construct the documentation names.
+_NONDETERMINISM = re.compile(
+    r"\b("
+    r"datetime\.now|datetime\.utcnow|date\.today|"
+    r"time\.time|time\.time_ns|time\.monotonic|time\.perf_counter|time\.process_time|"
+    r"uuid\.uuid\d|uuid[1345]|"
+    r"random\.\w+|"
+    r"secrets\.\w+|os\.urandom"
+    r")\s*\("
+)
 
 _SECRET = b"an unguessable local signing secret"
 
@@ -213,7 +231,7 @@ def test_a_changed_spec_changes_the_digest():
 # The digest of the fixture bundle, pinned. Restating `sha256_hex(canonical_json(...))`
 # here would pass however the canonicalisation drifted -- it is the implementation with
 # the same words. A literal is the only form of this assertion that can fail.
-_GOLDEN_DIGEST = "6a9cc37ab1339673528ebda65c0cf7088929d28d02a7be860580fa487bc2a4eb"
+_GOLDEN_DIGEST = "5c23d7d8baa00757ddac31823dfe4ddc46c49b8e33836ead23adcf4cd7a675a5"
 
 
 def test_the_fixture_bundle_hashes_to_its_pinned_digest():
@@ -542,19 +560,7 @@ def test_no_shipped_module_reads_a_wall_clock_or_a_random_identifier():
     """
     source = Path(__file__).resolve().parent.parent / "src" / "anvilate"
     offenders = []
-    # Deliberately wide. The first version of this gate matched only `uuid4(` while the
-    # docs advertised it as catching "uuid", and it saw none of uuid1, time_ns,
-    # perf_counter, utcnow, secrets, or os.urandom. A gate whose coverage is narrower than
-    # its claim is worse than no gate: it is a claim nobody re-checks.
-    pattern = re.compile(
-        r"\b("
-        r"datetime\.now|datetime\.utcnow|date\.today|"
-        r"time\.time|time\.time_ns|time\.monotonic|time\.perf_counter|time\.process_time|"
-        r"uuid\.uuid\d|uuid[1345]|"
-        r"random\.(random|randint|choice|shuffle|uniform|gauss|seed)|"
-        r"secrets\.\w+|os\.urandom"
-        r")\s*\("
-    )
+    pattern = _NONDETERMINISM
     for path in sorted(source.rglob("*.py")):
         for number, line in enumerate(path.read_text().splitlines(), start=1):
             if pattern.search(line):
@@ -714,22 +720,86 @@ def test_the_signature_binds_the_envelopes_own_payload_type():
 
 def test_the_determinism_gate_detects_what_its_docs_claim_it_detects():
     """Prove the gate fires, rather than trusting a regex nobody ran against a violation."""
-    source = Path(__file__).read_text()
-    pattern_src = source[source.index('r"\\b("') : source.index('r")\\s*\\("') + len('r")\\s*\\("')]
-    pattern = re.compile("".join(eval(line.strip()) for line in pattern_src.splitlines()))
     for offender in (
         "x = datetime.now()",
         "x = datetime.utcnow()",
         "x = date.today()",
         "x = time.time()",
         "x = time.time_ns()",
+        "x = time.monotonic()",
         "x = time.perf_counter()",
+        "x = time.process_time()",
         "x = uuid.uuid1()",
+        "x = uuid.uuid5(ns, name)",
         "x = uuid4()",
         "x = random.random()",
+        "x = random.sample(pool, 3)",
+        "x = random.getrandbits(32)",
         "x = secrets.token_hex(8)",
         "x = os.urandom(16)",
     ):
-        assert pattern.search(offender), f"the determinism gate does not see {offender!r}"
+        assert _NONDETERMINISM.search(offender), f"the determinism gate does not see {offender!r}"
     for innocent in ("rng = Random(seed)", "self._rng.gauss(0, 1)", "# monotonic in r"):
-        assert not pattern.search(innocent), f"the determinism gate false-positives on {innocent!r}"
+        assert not _NONDETERMINISM.search(innocent), (
+            f"the determinism gate false-positives on {innocent!r}"
+        )
+
+
+# --- what a re-audit of the fixes found ------------------------------------------------
+#
+# The patches above were themselves audited, and four of them had a second edge. Making
+# `origins` immutable is the instructive one: as a dict it was order-independent for free,
+# because `canonical_json` sorts keys. Moving to a tuple to stop post-validation mutation
+# handed that responsibility back to the model, and sorting only the Mapping path meant a
+# caller passing the field's own declared type got a different digest for the same content.
+
+
+def test_the_digest_does_not_depend_on_the_order_origins_were_declared_in():
+    forward = AIDisclosure.none(origins={"a": DecisionOrigin.USER, "b": DecisionOrigin.USER})
+    backward = AIDisclosure(
+        participated=False,
+        origins=(
+            ValueOrigin(field="b", origin=DecisionOrigin.USER),
+            ValueOrigin(field="a", origin=DecisionOrigin.USER),
+        ),
+    )
+    assert forward.origin_map == backward.origin_map
+    assert [o.field for o in backward.origins] == ["a", "b"]  # sorted by the model
+    assert _bundle(ai_disclosure=forward).digest == _bundle(ai_disclosure=backward).digest
+
+
+def test_the_v1_predicate_still_writes_origins_as_an_object():
+    # The in-memory shape moved from a dict to a tuple of pairs. That is an internal
+    # choice, and a consumer pinned to `.../screening/v1` must not see it: the URI carries
+    # the promise, and this module's own comment on PREDICATE_TYPE makes it.
+    body = _predicate(
+        ai_disclosure=AIDisclosure.none(origins={"span": DecisionOrigin.USER})
+    ).to_json_dict()
+    assert body["aiDisclosure"]["origins"] == {"span": "user"}
+    assert set(body["aiDisclosure"]) == {"participated", "events", "origins"}
+
+
+def test_a_junk_signature_is_reported_rather_than_raised_out_of_the_verifier():
+    # `Signature` validates its base64 at construction, but `model_copy` does not re-run
+    # validators — and this module uses `model_copy` itself.
+    signer = LocalHmacSigner(_SECRET)
+    envelope = Attestation.signed_by(_bundle(), signer)
+    junk = envelope.signatures[0].model_copy(update={"sig": "!!!not base64!!!"})
+    report = verify_attestation(
+        envelope.model_copy(update={"signatures": (junk,)}), artifacts=_artifacts(), signer=signer
+    )
+    assert report.signature_state is SignatureState.INVALID
+    assert report.status is CheckStatus.FAIL
+
+
+def test_an_invalid_signature_fails_the_report_even_with_no_prose_problem():
+    # The verifier always appends a sentence alongside INVALID, so reading only `problems`
+    # was right in practice and wrong in principle. VerificationReport is exported.
+    report = VerificationReport(
+        bundle_digest="0" * 64,
+        signature_state=SignatureState.INVALID,
+        predicate_type=PREDICATE_TYPE,
+        checked_subjects=("a.dxf",),
+    )
+    assert report.status is CheckStatus.FAIL
+    assert report.attested is False

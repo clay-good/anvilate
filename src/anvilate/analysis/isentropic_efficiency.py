@@ -68,6 +68,17 @@ def compressor_isentropic_efficiency(
         raise ValueError("isentropic_outlet_temperature must be at least inlet_temperature")
     if t2a <= t1:
         raise ValueError("actual_outlet_temperature must exceed inlet_temperature")
+    # A real compressor delivers the gas HOTTER than the ideal one, so T2a >= T2s and
+    # eta_c <= 1 — which this function's own docstring states and never checked, while its
+    # sibling `turbine_isentropic_efficiency` refuses the mirror case by name. Swapping the
+    # two outlet arguments is the obvious slip and it returned 15.0, then 1.5e6.
+    if t2a < t2s:
+        raise ValueError(
+            f"actual_outlet_temperature ({t2a:.4g} K) is below isentropic_outlet_temperature "
+            f"({t2s:.4g} K), giving an isentropic efficiency of {(t2s - t1) / (t2a - t1):.4g}. "
+            f"A real compressor delivers the gas hotter than the ideal one, so eta_c <= 1 — "
+            f"check whether the two outlet temperatures are the right way round"
+        )
     return (t2s - t1) / (t2a - t1)
 
 

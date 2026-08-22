@@ -87,14 +87,17 @@ bolt-spacing correction `B_sc` and the Appendix 2 rigidity index are also out of
 and a flange can fail either while its stresses pass.
 
 The `T`, `U`, `Y`, `Z` equations were **anchored before they were shipped**: a published
-worked calculation at `K = 1.41939` reports `T = 1.74578` and `Z = 2.97106`. The equations
-give **T = 1.7457849** and **Z = 2.9710881**. T reproduces the published figure exactly at
-six figures; Z agrees to 9 parts per million and rounds to 2.97109 rather than the
-published 2.97106 — a gap consistent with the rounding of the published calculation's own
-inputs, and small enough to confirm the transcription, but not the exact match an earlier
-version of this page claimed. `Y` and `U` are tied by an identity that falls out of the
+worked calculation for a 19 in bore, 26.9685 in OD flange (`K = 1.4193947`) reports
+`T = 1.74578` and `Z = 2.97106`. The equations give **T = 1.7457829** and
+**Z = 2.9710620** — 1.2 and 0.7 parts per million from the published figures, and both
+round to them exactly at five. `Y` and `U` are tied by an identity that falls out of the
 published constants (`U = Y/0.910` at every `K`), so reproducing one reproduces the other.
-All of it is asserted in the test suite, at the tolerance the anchor actually supports.
+All of it is asserted in the test suite.
+
+(Evaluate the same equations at the *rounded* `K = 1.41939` instead of the flange's actual
+dimensions and you get 1.7457849 and 2.9710881, which is a 9 ppm disagreement on Z and an
+earlier revision of this page reported it as one. The anchor is the flange, not the
+rounded ratio printed alongside it.)
 
 ### The flange sized by the bolt-up, not the pressure
 

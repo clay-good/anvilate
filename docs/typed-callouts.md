@@ -11,13 +11,15 @@ is the other half.
 
 ```python
 from anvilate.callouts import CalloutSet, ProductionMethod, SurfaceFinish, callout_scorecard
+from anvilate.units import Quantity
 
 finish = SurfaceFinish(
     scope="shaft_journal", roughness=Quantity.parse("12.5 um"), method=ProductionMethod.AS_FORGED
 )
-callout_scorecard(CalloutSet(callouts=(finish,)), ultimate_strength=Quantity.parse("655 MPa"))
+card = callout_scorecard(CalloutSet(callouts=(finish,)), ultimate_strength=Quantity.parse("655 MPa"))
+print(card.entries[0])
 # [PASS] surface finish at shaft_journal: [a8e65d1cd5a4243e] as forged, Ra 12.5 µm
-#        → Marin surface factor k_a = 0.429 at S_u = 655 MPa
+#        → Marin surface factor k_a = 0.429 at S_u = 655 MPa [Shigley's ... k_a = a·S_u^b ...]
 ```
 
 ## What each callout does to a check
@@ -25,15 +27,16 @@ callout_scorecard(CalloutSet(callouts=(finish,)), ultimate_strength=Quantity.par
 | Callout | The check it feeds | What it changes |
 | --- | --- | --- |
 | `SurfaceFinish` | fatigue | the Marin surface factor k_a, which the fatigue module takes as a bare float |
-| `Coating` | fits, thread engagement | outside dimensions grow 2t; a 60° thread's pitch diameter grows **4t** |
+| `Coating` | fits, thread engagement | states the effect — outside dimensions grow 2t, a 60° thread's pitch diameter grows **4t** — and reports NOT_EVALUATED, because no fit or thread class is supplied to check it against |
 | `HeatTreatment` | material resolution | which database record is legitimate — or NOT_EVALUATED when none is |
 | `ProcessNote` | nothing yet | typed and carried; the scorecard says plainly that no check reads it |
 | `FreeTextNote` | nothing, ever | stored, distinguishable, excluded from `consumable()` |
 
 ## Identity is what the characteristic *is*
 
-The persistent identifier is derived from the callout's kind, its scope tag, and (for a
-note) its category — **never from its value**. So:
+The persistent identifier is derived from the callout's kind, its scope tag, and what
+distinguishes two callouts of that kind at that scope — a structured note's category, a
+free-text note's sequence number — **never from its value**. So:
 
 - revising a finish from 12.5 to 3.2 µm Ra keeps the identifier, and the diff reports one
   *change* rather than a deletion plus an unrelated addition;
@@ -45,7 +48,15 @@ it name the same characteristic over revisions — the MBC-class property, witho
 registry.
 
 One characteristic carries one value. Two finishes on the same face is a construction
-error, not a refinement.
+error, not a refinement — and the scope is normalized, so a trailing space cannot walk one
+past that rule. The encoding behind the identifier is length-prefixed rather than
+delimiter-joined, for the same reason DSSE's pre-authentication encoding is: a delimiter is
+unambiguous only while no field can contain it.
+
+Resolution against the tag graph is separate and explicit. `CalloutSet.resolved_against`
+refuses a callout scoped to a face nothing defines, and `callout_scorecard` does the same
+when it is handed `known_tags` — because a callout nothing can consume screens exactly like
+a callout nobody wrote.
 
 ## Three positions worth stating
 
@@ -59,6 +70,13 @@ The Ra is not decoration either: it is checked against the range that method typ
 attains, so **"as-forged, 0.4 µm Ra" is surfaced as a contradiction** rather than averaged
 into something plausible. The bands overlap on purpose — the point is not to grade a
 surface but to catch a callout that cannot be both things at once.
+
+And the bands are Ra bands, so an **Rz** callout does not get graded against them. Rz runs
+roughly four to seven times Ra for the same surface, so the mismatch is wrong in both
+directions at once: an ordinary ground surface at Rz 3.2 µm reads as a contradiction, and
+an impossible as-forged surface at Rz 6.3 µm passes. No Rz bands are published here, so the
+consistency check does not run and the entry says so — the surface factor is still derived,
+because it comes from the method rather than the roughness.
 
 **The plated thread multiplier is four, and it is derived.** The coating is deposited
 normal to a flank inclined at 30° to the thread axis, so a radial thickness t displaces the
@@ -79,9 +97,20 @@ and the inspection, and is never converted into a strength.
 
 The published table gives the constants for S_u in MPa *and* in kpsi, and the two sets are
 not independent: k_a is a pure number, so `a_kpsi = a_MPa · (MPa per kpsi)^b` must hold at
-every S_u. It does, for all four rows, to the table's own rounding. That identity is the
-cheapest available check that the constants were transcribed correctly — no external
-source needed — and the suite asserts it rather than trusting the transcription.
+every S_u. It does, to about 0.2% on every row:
+
+| finish | derived a_kpsi | published |
+| --- | --- | --- |
+| ground | 1.34086 | 1.34 |
+| machined | 2.70377 | 2.70 |
+| hot-rolled | 14.42511 | 14.4 |
+| as-forged | 39.83296 | 39.9 |
+
+Three round to the published figure exactly; as-forged lands 0.17% low, which is the
+rounding of the published constants themselves (b = −0.995 is quoted to three decimals and
+the exponent is nearly −1, so a_kpsi is acutely sensitive to it). That identity is the
+cheapest available check that the constants were transcribed correctly — no external source
+needed — and the suite asserts it at 3e-3 rather than trusting the transcription.
 
 ## Scope
 

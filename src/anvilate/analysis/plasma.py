@@ -32,6 +32,7 @@ _VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m
 _ELECTRON_MASS = 9.1093837015e-31  # kg
 _BOLTZMANN = 1.380649e-23  # J/K
 _VACUUM_PERMEABILITY = 1.25663706212e-6  # H/m
+_SPEED_OF_LIGHT = 299792458.0  # m/s, exact by definition
 
 __all__ = [
     "alfven_speed",
@@ -161,4 +162,16 @@ def alfven_speed(*, magnetic_flux_density: Quantity, mass_density: Quantity) -> 
         raise ValueError("magnetic_flux_density must be non-negative")
     if rho <= 0:
         raise ValueError("mass_density must be positive")
-    return Quantity(magnitude=b / sqrt(_VACUUM_PERMEABILITY * rho), unit="m/s")
+    speed = b / sqrt(_VACUUM_PERMEABILITY * rho)
+    # The docstring says this form "overstates the speed once it approaches c", and the
+    # comparison is one line: both arguments are here. Unguarded it returned 8.9e16 m/s —
+    # 3e8 times the speed of light — for a pulsar-magnetosphere field and density, and a
+    # solar-corona case 1.37x over the relativistic v_A/sqrt(1 + v_A^2/c^2).
+    if speed >= _SPEED_OF_LIGHT:
+        raise ValueError(
+            f"the non-relativistic Alfven speed comes out at {speed:.4g} m/s, "
+            f"{speed / _SPEED_OF_LIGHT:.4g}x the speed of light. B/sqrt(mu0*rho) is the "
+            f"low-speed limit and it has no ceiling; in a plasma this tenuous the "
+            f"relativistic form v_A/sqrt(1 + v_A^2/c^2) governs"
+        )
+    return Quantity(magnitude=speed, unit="m/s")

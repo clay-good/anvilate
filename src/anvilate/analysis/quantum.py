@@ -26,6 +26,8 @@ particle-in-a-box and photon-energy relations.
 
 from __future__ import annotations
 
+from math import sqrt
+
 from ..units import Quantity
 from ..units.rotation import count_rate_per_second
 
@@ -85,6 +87,11 @@ def photoelectric_threshold_frequency(*, work_function: Quantity) -> Quantity:
     return Quantity(magnitude=phi / _PLANCK_CONSTANT, unit="Hz")
 
 
+# Past a tenth of c the Lorentz factor is over 1.005 and climbing quadratically, which is
+# where "well below c" stops being true for a wavelength quoted to three figures.
+_NONRELATIVISTIC_SPEED_FRACTION = 0.10
+
+
 def de_broglie_wavelength(*, mass: Quantity, velocity: Quantity) -> Quantity:
     """The de Broglie wavelength, lambda = h/(m*v).
 
@@ -101,6 +108,25 @@ def de_broglie_wavelength(*, mass: Quantity, velocity: Quantity) -> Quantity:
         raise ValueError("mass must be positive")
     if v <= 0:
         raise ValueError("velocity must be positive")
+    # h/(mv) is the non-relativistic form and the docstring says so. It has no ceiling: at
+    # v = c and beyond it kept returning a finite picometre wavelength. Even inside the
+    # range it drifts fast — at the docstring's own motivating case, a 200 kV TEM electron
+    # at beta = 0.695, it is 1.39x coarse against h/(gamma*m*v). _SPEED_OF_LIGHT is already
+    # defined in this module and was never consulted; `relativity.py` makes this same check.
+    if v >= _SPEED_OF_LIGHT:
+        raise ValueError(
+            f"velocity is {v:.6g} m/s, at or above the speed of light. The de Broglie form "
+            f"here is h/(m*v), which is non-relativistic and has no ceiling; use the "
+            f"relativistic h/(gamma*m*v)"
+        )
+    if v > _NONRELATIVISTIC_SPEED_FRACTION * _SPEED_OF_LIGHT:
+        beta = v / _SPEED_OF_LIGHT
+        gamma = 1.0 / sqrt(1.0 - beta**2)
+        raise ValueError(
+            f"velocity is {beta:.4g}c, past the non-relativistic range this form holds in. "
+            f"h/(m*v) runs {gamma:.4g}x long here against the relativistic h/(gamma*m*v); "
+            f"a 200 kV electron microscope already sits at 0.695c"
+        )
     return Quantity(magnitude=_PLANCK_CONSTANT / (m * v), unit="m")
 
 

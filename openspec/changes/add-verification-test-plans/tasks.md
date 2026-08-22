@@ -13,7 +13,7 @@
 - [x] 2.1 Plan emitter over scorecard entries via deterministic registry lookup
 - [x] 2.2 Acceptance criteria and required-accuracy derivation from check allowables
 - [x] 2.3 Verification matrix rendering with analysis-only coverage counts
-- [ ] 2.4 Evidence-bundle section; planned-vs-verified status rendering
+- [x] 2.4 Evidence-bundle section; planned-vs-verified status rendering
 
 ## 3. Tests
 
@@ -62,3 +62,12 @@ verification were considered and left out: their acceptance criteria are
 category-and-contract-specific, and an archetype that cannot state a criterion is a
 placeholder rather than a plan. Those checks report as analysis-only, and the count says
 so.
+
+## Evidence-bundle serialization — shipped 2026-08-22
+
+`src/anvilate/bundle.py` assembles this layer's output into `BundleSections` alongside the
+scorecard, the verification plan, the reviewer dossier, and the typed callouts, rolls the
+lot up under the scorecard's own precedence, and hands it to the attestation layer as the
+body of a content-addressed statement. Three changes carried this same open task in three
+different files; one module closed all three. See `docs/evidence-bundle.md` and
+`examples/lug_evidence_bundle_roll_up.py`.

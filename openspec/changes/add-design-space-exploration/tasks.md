@@ -13,7 +13,7 @@
 - [x] 2.2 Evaluation over registered checks with feasibility marking
 - [x] 2.3 Exact non-dominated sorting; governing-constraint attribution
 - [x] 2.4 Budget/time enforcement with coverage reporting
-- [ ] 2.5 Evidence-bundle serialization of the full sweep
+- [x] 2.5 Evidence-bundle serialization of the full sweep
 
 ## 3. Tests
 
@@ -57,3 +57,12 @@ library's silent-green doctrine:
    looks like the whole space.
 3. A truncated sweep reports `provisional` coverage and, if nothing feasible was reached,
    `best()` returns `None` rather than the best of the failures.
+
+## Evidence-bundle serialization — shipped 2026-08-22
+
+`src/anvilate/bundle.py` assembles this layer's output into `BundleSections` alongside the
+scorecard, the verification plan, the reviewer dossier, and the typed callouts, rolls the
+lot up under the scorecard's own precedence, and hands it to the attestation layer as the
+body of a content-addressed statement. Three changes carried this same open task in three
+different files; one module closed all three. See `docs/evidence-bundle.md` and
+`examples/lug_evidence_bundle_roll_up.py`.

@@ -51,7 +51,7 @@ optional and both unique per emission, so both are omitted. One timestamp in the
 makes every rebuild a different document and the content address worth nothing. A gate in
 the suite greps the whole shipped package for wall-clock and random-identifier calls —
 `datetime.now`/`utcnow`, `date.today`, `time.time`/`time_ns`/`perf_counter`/`monotonic`,
-`uuid1`–`uuid5`, module-level `random.*`, `secrets.*`, and `os.urandom` — and a companion
+`uuid1`/`uuid3`/`uuid4`/`uuid5`, any module-level `random.*`, `secrets.*`, and `os.urandom` — and a companion
 test proves the pattern fires on each of them, because a gate whose coverage is narrower
 than its claim is worse than no gate. The determinism the digest rests on is enforced,
 not assumed.

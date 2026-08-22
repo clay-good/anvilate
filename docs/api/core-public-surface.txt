@@ -29,6 +29,9 @@ attestation.Attestation
 attestation.SignatureState
 attestation.VerificationReport
 attestation.verify_attestation
+bundle.SectionStatus
+bundle.BundleSections
+bundle.assemble_evidence_bundle
 callouts.MARIN_SURFACE_CITATION
 callouts.MARIN_SURFACE_CONSTANTS_MPA
 callouts.TYPICAL_ROUGHNESS_UM

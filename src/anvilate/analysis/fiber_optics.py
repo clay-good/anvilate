@@ -145,6 +145,15 @@ def fiber_mode_count(*, v_number: float) -> float:
     """
     if v_number <= 0:
         raise ValueError("v_number must be positive")
+    # V is this function's only argument, so the 2.405 cutoff it names is trivially
+    # checkable. Below it the fiber is single-mode and M is 1 by definition, while V**2/2
+    # returned 0.125 — a fraction of a mode — and 2.89 at the cutoff itself.
+    if v_number <= _SINGLE_MODE_CUTOFF_V:
+        raise ValueError(
+            f"V = {v_number:.4g} is at or below the {_SINGLE_MODE_CUTOFF_V} single-mode "
+            f"cutoff, where the fiber carries exactly one mode. M = V²/2 is an asymptotic "
+            f"estimate for V well above cutoff and returns {v_number**2 / 2.0:.4g} here"
+        )
     return v_number**2 / 2.0
 
 

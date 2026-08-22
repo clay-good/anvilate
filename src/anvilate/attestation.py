@@ -356,7 +356,7 @@ class AIDisclosure(BaseModel):
     @classmethod
     def _accept_a_mapping(cls, value: object) -> object:
         if isinstance(value, Mapping):
-            return tuple(ValueOrigin(field=str(k), origin=v) for k, v in sorted(value.items()))
+            return tuple(ValueOrigin(field=str(k), origin=v) for k, v in value.items())
         return value
 
     @property
@@ -366,6 +366,15 @@ class AIDisclosure(BaseModel):
 
     @model_validator(mode="after")
     def _consistent(self) -> AIDisclosure:
+        # Sorted HERE rather than in the mapping converter, because the tuple form is the
+        # declared type and a caller may pass it directly. A dict field used to make the
+        # digest order-independent for free (canonical_json sorts keys); moving to a tuple
+        # to get immutability handed that responsibility back, and sorting only the Mapping
+        # path meant two disclosures with the same origin_map hashed differently — which
+        # contradicts the whole content-address claim.
+        ordered = tuple(sorted(self.origins, key=lambda o: o.field))
+        if ordered != self.origins:
+            object.__setattr__(self, "origins", ordered)
         seen = [o.field for o in self.origins]
         if len(set(seen)) != len(seen):
             raise ValueError(f"a field is attributed twice in the origin map: {sorted(seen)}")
@@ -407,6 +416,23 @@ class AIDisclosure(BaseModel):
         return f"{len(self.events)} model event(s) by {', '.join(models)}{tail}"
 
 
+def _disclosure_body(disclosure: AIDisclosure) -> dict[str, object]:
+    """The disclosure in the predicate's v1 wire shape.
+
+    ``origins`` is written as a JSON object keyed by field name, which is what v1 has
+    always emitted. The in-memory representation moved to a tuple of frozen pairs to stop
+    a dict field from being mutated after validation, and that is an internal choice: a
+    consumer pinned to ``.../screening/v1`` must not see the shape change under an
+    unbumped URI, which is exactly what this module's own comment on
+    :data:`PREDICATE_TYPE` promises.
+    """
+    return {
+        "participated": disclosure.participated,
+        "events": [event.model_dump(mode="json") for event in disclosure.events],
+        "origins": {origin.field: origin.origin.value for origin in disclosure.origins},
+    }
+
+
 class AnvilatePredicate(BaseModel):
     """The claim an Anvilate attestation makes, under :data:`PREDICATE_TYPE`.
 
@@ -423,6 +449,29 @@ class AnvilatePredicate(BaseModel):
     citations: tuple[SourceRecord, ...] = ()
     bom: EnvironmentBOM
     ai_disclosure: AIDisclosure
+    # The assembled cross-layer sections, carried as the canonical JSON *text* of
+    # :meth:`anvilate.bundle.BundleSections.to_json_dict`. Two reasons for a string rather
+    # than the obvious dict. It keeps this module at the bottom of the import graph, so the
+    # bundle layer can grow a section without the predicate learning about it. And a dict
+    # field on a frozen model is still mutable after validation — the exact trap that made
+    # `origins` a tuple of frozen pairs — and this one sits inside the digest, so a write
+    # to it would silently move the address of an already-signed statement. A str cannot be
+    # written to. Build it with :func:`canonical_json`; :meth:`to_json_dict` parses it back
+    # so the predicate body carries structure, not an escaped blob.
+    sections_json: str | None = None
+
+    @model_validator(mode="after")
+    def _sections_are_readable(self) -> AnvilatePredicate:
+        if self.sections_json is not None:
+            try:
+                parsed = json.loads(self.sections_json)
+            except ValueError as exc:
+                raise ValueError(f"sections_json is not readable JSON: {exc}") from exc
+            if not isinstance(parsed, dict):
+                raise ValueError(
+                    f"sections_json must encode an object; got a JSON {type(parsed).__name__}"
+                )
+        return self
 
     @model_validator(mode="after")
     def _identifies_what_was_screened(self) -> AnvilatePredicate:
@@ -440,14 +489,17 @@ class AnvilatePredicate(BaseModel):
 
     def to_json_dict(self) -> dict[str, object]:
         """The predicate body as JSON-safe primitives, ready for the statement."""
-        return {
+        body: dict[str, object] = {
             "specDigest": self.spec_digest,
             "status": self.status.value,
             "scorecard": self.scorecard.model_dump(mode="json"),
             "citations": [c.model_dump(mode="json") for c in self.citations],
             "bom": self.bom.to_cyclonedx(),
-            "aiDisclosure": self.ai_disclosure.model_dump(mode="json"),
+            "aiDisclosure": _disclosure_body(self.ai_disclosure),
         }
+        if self.sections_json is not None:
+            body["sections"] = json.loads(self.sections_json)
+        return body
 
 
 class EvidenceBundle(BaseModel):
@@ -701,7 +753,12 @@ class VerificationReport(BaseModel):
 
     @property
     def status(self) -> CheckStatus:
-        if self.problems:
+        # An INVALID signature is a failure whether or not anyone wrote a sentence about
+        # it. The verifier happens to always append a prose problem alongside INVALID, so
+        # reading only `problems` was correct in practice and wrong in principle: this is
+        # an exported model, and a report constructed anywhere else could print
+        # "[PASS] ... signature invalid".
+        if self.problems or self.signature_state is SignatureState.INVALID:
             return CheckStatus.FAIL
         unchecked_signature = (
             self.signature_state is SignatureState.NOT_CHECKED or self.unverified_signatures
@@ -846,7 +903,19 @@ def verify_attestation(
         pae = dsse_pae(attestation.payload_type, payload)
         addressed = [s for s in attestation.signatures if s.keyid == signer.keyid]
         unverified = [s.keyid for s in attestation.signatures if s.keyid != signer.keyid]
-        if addressed and all(signer.verify(pae, s.raw) for s in addressed):
+
+        def _valid(signature: Signature) -> bool:
+            # `Signature` validates its base64 at construction, but `model_copy` does not
+            # re-run validators and this module uses `model_copy` itself. A junk signature
+            # reaching `.raw` used to raise binascii.Error straight out of the verifier —
+            # the same failure the payload decode above was hardened against, one step
+            # further down.
+            try:
+                return signer.verify(pae, signature.raw)
+            except (ValueError, binascii.Error):
+                return False
+
+        if addressed and all(_valid(s) for s in addressed):
             state = (
                 SignatureState.SYMMETRIC_VERIFIED if signer.symmetric else SignatureState.VERIFIED
             )

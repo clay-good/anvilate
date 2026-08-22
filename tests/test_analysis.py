@@ -40678,9 +40678,13 @@ def test_the_appendix_2_shape_factors_reproduce_a_published_flange_calculation()
     factors = asme_appendix_2_shape_factors(
         outside_diameter=_q("26.9685 in"), inside_diameter=_q("19 in")
     )
+    # Tightened from 1e-4 to what the anchor actually supports: T agrees to 1.2 ppm and Z
+    # to 0.7 ppm at the flange's real dimensions. The looser tolerance tolerated a
+    # 9 ppm error, which is exactly the size of the discrepancy you get by evaluating at
+    # the rounded K = 1.41939 instead of the flange — so it could not tell the two apart.
     assert factors.ratio == pytest.approx(1.41939, rel=1e-5)
-    assert factors.t_factor == pytest.approx(1.74578, rel=1e-4)
-    assert factors.z_factor == pytest.approx(2.97106, rel=1e-4)
+    assert factors.t_factor == pytest.approx(1.74578, rel=1e-5)
+    assert factors.z_factor == pytest.approx(2.97106, rel=1e-5)
 
 
 def test_the_appendix_2_y_and_u_factors_hold_their_identity_at_every_ratio():

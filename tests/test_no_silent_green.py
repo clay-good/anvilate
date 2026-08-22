@@ -2013,3 +2013,87 @@ def test_the_road_geometry_rates_refuse_a_percent_where_a_decimal_belongs():
 def test_a_physical_domain_ceiling_actually_refuses(call, match):
     with pytest.raises(ValueError, match=match):
         call()
+
+
+# --- a second wave, over the modules the first one did not reach -----------------------------
+#
+# The same lens as above, run again after the first sweep's fixes landed. Six more, all in
+# modules the first pass never opened, and every one answered in the flattering direction.
+
+
+def test_the_alfven_speed_cannot_exceed_the_speed_of_light():
+    from anvilate.analysis.plasma import alfven_speed
+
+    # A fusion plasma: 5 T at 3.3e-7 kg/m³ runs at 7.76e6 m/s, well inside the form.
+    assert alfven_speed(
+        magnetic_flux_density=_qty(5, "T"), mass_density=_qty(3.3e-7, "kg/m**3")
+    ).to("m/s").magnitude == pytest.approx(7.7644e6, rel=1e-3)
+    # A pulsar magnetosphere returned 8.9e16 m/s — 3e8 times c — with no complaint.
+    with pytest.raises(ValueError, match="speed of light"):
+        alfven_speed(magnetic_flux_density=_qty(1e8, "T"), mass_density=_qty(1e-12, "kg/m**3"))
+
+
+def test_a_compressor_cannot_be_more_than_ideally_efficient():
+    from anvilate.analysis.isentropic_efficiency import compressor_isentropic_efficiency
+
+    kwargs = {"inlet_temperature": _qty(300, "K"), "isentropic_outlet_temperature": _qty(450, "K")}
+    assert compressor_isentropic_efficiency(
+        actual_outlet_temperature=_qty(480, "K"), **kwargs
+    ) == pytest.approx(150.0 / 180.0)
+    # Swapping the two outlet temperatures — the obvious slip — returned 15.0, then 1.5e6.
+    with pytest.raises(ValueError, match="hotter than the ideal"):
+        compressor_isentropic_efficiency(actual_outlet_temperature=_qty(310, "K"), **kwargs)
+
+
+def test_a_solar_cell_cannot_deliver_more_than_it_receives():
+    from anvilate.analysis.solar_cell import solar_cell_efficiency
+
+    kwargs = {"irradiance": _qty(1000, "W/m**2"), "cell_area": _qty(100, "cm**2")}
+    assert solar_cell_efficiency(max_power=_qty(2.0, "W"), **kwargs) == pytest.approx(0.20)
+    # 5 W from 1 cm² returned 50.0 — a 5000% cell, as a bare float a caller reads as a
+    # fraction. The plausible-looking version, 123%, is the transcription slip that bites.
+    with pytest.raises(ValueError, match="incident power"):
+        solar_cell_efficiency(
+            max_power=_qty(5, "W"), irradiance=_qty(1000, "W/m**2"), cell_area=_qty(1, "cm**2")
+        )
+
+
+def test_the_de_broglie_wavelength_refuses_a_relativistic_electron():
+    from anvilate.analysis.quantum import de_broglie_wavelength
+
+    electron = {"mass": _qty(9.1093837015e-31, "kg")}
+    # In nanometres, not metres: at 7e-10 m, approx's default abs=1e-12 swamps any rel=
+    # and the tolerance does nothing. The suite has a ratchet that catches exactly this.
+    assert de_broglie_wavelength(velocity=_qty(1e6, "m/s"), **electron).to(
+        "nm"
+    ).magnitude == pytest.approx(0.72742, rel=1e-4)
+    # A 200 kV electron microscope sits at 0.695c, where h/(m*v) is 1.39x long — and the
+    # docstring's own motivating example. At v >= c it still returned a finite wavelength.
+    with pytest.raises(ValueError, match="non-relativistic range"):
+        de_broglie_wavelength(velocity=_qty(2.08e8, "m/s"), **electron)
+    with pytest.raises(ValueError, match="speed of light"):
+        de_broglie_wavelength(velocity=_qty(3e8, "m/s"), **electron)
+
+
+def test_the_transformer_load_fraction_stays_a_fraction():
+    from anvilate.analysis.electrical import transformer_maximum_efficiency_load_fraction
+
+    assert transformer_maximum_efficiency_load_fraction(
+        core_loss=_qty(500, "W"), rated_copper_loss=_qty(1000, "W")
+    ) == pytest.approx(0.70711, rel=1e-4)
+    # A core loss above the rated copper loss returned 1.41 — a load past nameplate.
+    with pytest.raises(ValueError, match="past\\s+nameplate"):
+        transformer_maximum_efficiency_load_fraction(
+            core_loss=_qty(2000, "W"), rated_copper_loss=_qty(1000, "W")
+        )
+
+
+def test_the_fiber_mode_count_refuses_below_its_own_cutoff():
+    from anvilate.analysis.fiber_optics import fiber_mode_count
+
+    assert fiber_mode_count(v_number=10.0) == pytest.approx(50.0)
+    # V**2/2 returned 2.89 at the 2.405 cutoff (where M is 1) and 0.125 below it — a
+    # fraction of a mode, for a fiber that carries exactly one.
+    for v in (2.405, 0.5):
+        with pytest.raises(ValueError, match="cutoff"):
+            fiber_mode_count(v_number=v)

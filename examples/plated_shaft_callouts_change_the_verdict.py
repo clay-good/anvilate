@@ -10,7 +10,7 @@ given:
 
 1. **"AS FORGED, 12.5 µm Ra."** Shigley's Marin surface factor is indexed by production
    method, and an as-forged surface on this steel earns k_a = 0.429. That alone drops the
-   corrected endurance limit to 140 MPa and the safety factor from 2.52 to **1.08 — a
+   corrected endurance limit to 141 MPa and the safety factor from 2.52 to **1.08 — a
    FAIL** against the required 1.50. Same shaft, same load, same steel: the comfortable
    pass was an artifact of screening a polished laboratory specimen.
 2. **"ASTM B633 SC1, 5–13 µm."** Plating lands on both sides, so the journal grows 10 to

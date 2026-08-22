@@ -6053,3 +6053,23 @@ def test_plated_shaft_callouts_example_turns_a_pass_into_a_fail():
     # And a revised value keeps its characteristic: one change, nothing added or removed.
     assert result["diff"].unchanged_identity is True
     assert len(result["diff"].changed) == 1
+
+
+def test_lug_evidence_bundle_example_shows_a_plan_is_not_evidence():
+    namespace = runpy.run_path(str(_EXAMPLES / "lug_evidence_bundle_roll_up.py"))
+    result = namespace["roll_up_the_lug"]()
+    # A screening bundle passes and says what it does not cover.
+    assert result["checks_only"].status is CheckStatus.PASS
+    assert result["checks_only"].verified is False
+    assert "verification" in result["checks_only"].missing()
+    # The scorecard has not moved, and the bundle drops anyway.
+    assert result["planned"].scorecard.status is CheckStatus.PASS
+    assert result["planned"].status is CheckStatus.NOT_EVALUATED
+    # Only a performed, passing plan earns the phrase.
+    assert result["performed"].status is CheckStatus.PASS
+    assert result["performed"].verified is True
+    # And a review that no longer covers the artifact pulls it back down.
+    assert result["stale"].status is CheckStatus.NOT_EVALUATED
+    assert "no longer applies" in result["stale"].render()
+    # The address moves when a layer arrives, because the bundle claims more.
+    assert result["sealed"].digest != result["unsealed"].digest
