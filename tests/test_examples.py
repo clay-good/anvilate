@@ -6007,3 +6007,18 @@ def test_reviewer_dossier_example_puts_the_unevaluated_check_first():
     # And the review does not carry across a change to the design.
     assert after_change.stale_record is True
     assert "no longer applies" in after_change.summary()
+
+
+def test_attested_bundle_example_reproduces_its_digest_and_catches_the_tamper():
+    namespace = runpy.run_path(str(_EXAMPLES / "attested_evidence_bundle.py"))
+    bundle, rebuilt, bumped, verified, tampered, unkeyed = namespace["attest_the_lug"]()
+    # Same inputs, same address; a materials-database bump moves it.
+    assert bundle.digest == rebuilt.digest
+    assert bundle.digest != bumped.digest
+    assert verified.status is CheckStatus.PASS
+    # HMAC is symmetric: tamper-evident, but it does not establish authorship.
+    assert verified.attested is False
+    assert tampered.status is CheckStatus.FAIL
+    assert "'lug.dxf' digest mismatch" in tampered.problems[0]
+    # A signature nobody checked is not a checked signature.
+    assert unkeyed.status is CheckStatus.NOT_EVALUATED

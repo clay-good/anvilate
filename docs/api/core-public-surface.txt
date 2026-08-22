@@ -6,6 +6,28 @@
 # tests/test_contract.py: a symbol added to a module's __all__ and not to its manifest
 # fails, and so does a manifest line whose symbol no longer exists. The point is that
 # growing the public surface is a deliberate act with a diff, not a side effect.
+attestation.STATEMENT_TYPE
+attestation.PREDICATE_TYPE
+attestation.DSSE_PAYLOAD_TYPE
+attestation.CYCLONEDX_SPEC_VERSION
+attestation.canonical_json
+attestation.sha256_hex
+attestation.dsse_pae
+attestation.Subject
+attestation.ComponentKind
+attestation.Component
+attestation.EnvironmentBOM
+attestation.AIEvent
+attestation.AIDisclosure
+attestation.AnvilatePredicate
+attestation.EvidenceBundle
+attestation.AttestationSigner
+attestation.LocalHmacSigner
+attestation.Signature
+attestation.Attestation
+attestation.SignatureState
+attestation.VerificationReport
+attestation.verify_attestation
 derivation.SymbolValue
 derivation.Derivation
 evidence.SourceRecord

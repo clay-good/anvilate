@@ -1,0 +1,738 @@
+"""Attested evidence: a bundle you can re-hash, re-read, and re-verify.
+
+A scorecard is a claim. This module turns it into a claim with an identity: the
+screening result, its citations, the environment that produced it, and the digests
+of the artifacts it covers, serialised canonically and hashed. Two runs of the same
+inputs through the same toolchain produce the same digest, byte for byte; anything
+that moves the digest is a real input change, and the provenance in the predicate
+says which.
+
+The envelope is not invented here. An :data:`in-toto Statement v1 <STATEMENT_TYPE>`
+carries the artifact digests as subjects and Anvilate's own versioned predicate as
+the claim, and a `DSSE <https://github.com/secure-systems-lab/dsse>`_ envelope wraps
+the statement for signing. Standard attestation tooling can read the subjects and
+skip a predicate it does not know; nothing in the shape is Anvilate-specific except
+the predicate body.
+
+Three deliberate positions, because each is the kind of thing a verifier would
+otherwise have to assume:
+
+* **Unsigned is a state, not a gap.** Air-gapped runs produce bundles with no
+  signature at all, and :class:`Attestation` records that plainly. No surface here
+  calls an unsigned bundle attested — :attr:`VerificationReport.attested` is False
+  for one, and the report says why.
+* **The bundled signer is symmetric, and that is a weaker claim than a signature.**
+  Anvilate's runtime dependencies are pure-Python and deliberately few, so the
+  built-in :class:`LocalHmacSigner` is HMAC-SHA256 over the DSSE pre-authentication
+  encoding. Anyone who can verify an HMAC can also forge one: it proves possession
+  of the shared secret, not authorship. :class:`SignatureState` distinguishes that
+  from an asymmetric verification, and :class:`AttestationSigner` is the seam where
+  a real key (Ed25519 through ``cryptography``, a Sigstore keyless flow in CI) plugs
+  in without this module growing a dependency.
+* **A verification that could not check something reports NOT_EVALUATED.** The same
+  no-silent-green rule the scorecard runs on: a signed envelope handed to
+  :func:`verify_attestation` with no key comes back unevaluated, never verified.
+
+Timestamps are absent on purpose, everywhere — the CycloneDX BOM's optional
+``metadata.timestamp`` included. A wall clock in the payload makes every rebuild a
+different bundle and the content address worthless.
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import json
+from collections.abc import Mapping
+from enum import StrEnum
+from typing import Protocol, runtime_checkable
+
+from pydantic import BaseModel, ConfigDict, model_validator
+
+from .evidence import SourceRecord
+from .review import DecisionOrigin
+from .scorecard import CheckStatus, Scorecard
+
+__all__ = [
+    "STATEMENT_TYPE",
+    "PREDICATE_TYPE",
+    "DSSE_PAYLOAD_TYPE",
+    "CYCLONEDX_SPEC_VERSION",
+    "canonical_json",
+    "sha256_hex",
+    "dsse_pae",
+    "Subject",
+    "ComponentKind",
+    "Component",
+    "EnvironmentBOM",
+    "AIEvent",
+    "AIDisclosure",
+    "AnvilatePredicate",
+    "EvidenceBundle",
+    "AttestationSigner",
+    "LocalHmacSigner",
+    "Signature",
+    "Attestation",
+    "SignatureState",
+    "VerificationReport",
+    "verify_attestation",
+]
+
+# The in-toto Statement v1 type URI. Fixed by the specification, not by us: tooling
+# dispatches on this exact string.
+STATEMENT_TYPE = "https://in-toto.io/Statement/v1"
+
+# Anvilate's predicate type, versioned in the URI itself. A consumer pins the version
+# it understands; a breaking change to the predicate body takes a new URI rather than
+# silently changing the meaning of documents already signed under this one.
+PREDICATE_TYPE = "https://anvilate.dev/attestation/screening/v1"
+
+# The DSSE payloadType for an in-toto statement. Part of the signed pre-authentication
+# encoding, so it is not cosmetic: changing it invalidates every signature.
+DSSE_PAYLOAD_TYPE = "application/vnd.in-toto+json"
+
+# The CycloneDX JSON schema version the BOM declares.
+CYCLONEDX_SPEC_VERSION = "1.6"
+
+
+def canonical_json(value: object) -> str:
+    """``value`` as JSON in one canonical form: sorted keys, no incidental whitespace.
+
+    Content addressing needs one serialisation, not one of several. Keys are sorted,
+    separators are tight, and non-ASCII characters stay as themselves (the output is
+    UTF-8, as JSON is defined to be) — so a citation containing "ø" hashes the same
+    on every platform rather than depending on an escaping choice.
+
+    Non-finite floats are refused rather than emitted. ``json.dumps`` writes bare
+    ``NaN`` and ``Infinity`` by default, which is not JSON at all: the document parses
+    in Python and fails in every conformant reader, so a bundle carrying a NaN margin
+    would hash cleanly here and be unreadable to the tooling it was produced for.
+    """
+    try:
+        return json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+    except ValueError as exc:  # pragma: no cover - message varies by Python build
+        raise ValueError(
+            "a bundle payload contains a non-finite number (NaN or infinity), which "
+            "cannot be represented in JSON; the check that produced it should report "
+            f"NOT_EVALUATED rather than a number no reader can parse ({exc})"
+        ) from exc
+
+
+def sha256_hex(data: bytes) -> str:
+    """The SHA-256 of ``data`` as lowercase hex — the digest form in-toto subjects use."""
+    return hashlib.sha256(data).hexdigest()
+
+
+def dsse_pae(payload_type: str, payload: bytes) -> bytes:
+    """The DSSE pre-authentication encoding of ``payload`` under ``payload_type``.
+
+    ``PAE(t, b) = "DSSEv1" SP len(t) SP t SP len(b) SP b``, with the lengths written
+    as ASCII decimal byte counts. Signing this rather than the bare payload is what
+    stops a signature over one payload type from being replayed as a signature over
+    another, and what makes the encoding unambiguous regardless of what the payload
+    contains.
+    """
+    type_bytes = payload_type.encode("utf-8")
+    return b" ".join(
+        [
+            b"DSSEv1",
+            str(len(type_bytes)).encode("ascii"),
+            type_bytes,
+            str(len(payload)).encode("ascii"),
+            payload,
+        ]
+    )
+
+
+class Subject(BaseModel):
+    """One artifact an attestation is about: a name and its SHA-256.
+
+    The name is how a verifier finds the file (``drawing.dxf``, ``scorecard.json``);
+    the digest is what it actually claims. A verifier matches on the digest, so a
+    renamed file with matching bytes still verifies and a same-named file with
+    different bytes does not.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    sha256: str
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> Subject:
+        if not self.name.strip():
+            raise ValueError("a subject needs a name; a digest with nothing to find is not one")
+        if len(self.sha256) != 64 or any(c not in "0123456789abcdef" for c in self.sha256):
+            raise ValueError(
+                f"subject {self.name!r} carries {self.sha256!r}, which is not a lowercase "
+                "64-character hex SHA-256 digest"
+            )
+        return self
+
+    @classmethod
+    def over(cls, name: str, data: bytes) -> Subject:
+        """The subject for ``data`` written as ``name``."""
+        return cls(name=name, sha256=sha256_hex(data))
+
+    def as_intoto(self) -> dict[str, object]:
+        """The in-toto subject shape: ``{"name": ..., "digest": {"sha256": ...}}``."""
+        return {"name": self.name, "digest": {"sha256": self.sha256}}
+
+
+class ComponentKind(StrEnum):
+    """A BOM component's CycloneDX type — the values this module emits."""
+
+    APPLICATION = "application"
+    LIBRARY = "library"
+    DATA = "data"  # a standards or materials database, versioned like code
+
+
+class Component(BaseModel):
+    """One entry in the environment BOM: what it is, what it is called, what version.
+
+    ``version`` is required and must be non-empty. A BOM listing a component without
+    a version answers the auditor's question with the half that does not matter: the
+    point of the inventory is which version computed the result.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    version: str
+    kind: ComponentKind = ComponentKind.LIBRARY
+
+    @model_validator(mode="after")
+    def _named_and_versioned(self) -> Component:
+        if not self.name.strip():
+            raise ValueError("a BOM component needs a name")
+        if not self.version.strip():
+            raise ValueError(
+                f"BOM component {self.name!r} has no version; an unversioned inventory "
+                "cannot tell two builds apart, which is the only thing it is for"
+            )
+        return self
+
+    def as_cyclonedx(self) -> dict[str, object]:
+        return {"type": self.kind.value, "name": self.name, "version": self.version}
+
+
+class EnvironmentBOM(BaseModel):
+    """The software environment that produced a bundle, as a CycloneDX-shaped inventory.
+
+    ``application`` is Anvilate itself; ``components`` are the libraries, solvers, and
+    versioned databases it ran against. Both go into the bundle digest, so the same
+    spec screened after a materials-database bump is a different bundle — which is the
+    behaviour the provenance chain exists to give.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    application: Component
+    components: tuple[Component, ...] = ()
+
+    @model_validator(mode="after")
+    def _application_is_one(self) -> EnvironmentBOM:
+        if self.application.kind is not ComponentKind.APPLICATION:
+            raise ValueError(
+                "the BOM's application entry must be declared as an application, not "
+                f"{self.application.kind.value!r}"
+            )
+        names = [c.name for c in self.components]
+        if len(set(names)) != len(names):
+            raise ValueError(f"the BOM lists a component twice: {sorted(names)}")
+        return self
+
+    def to_cyclonedx(self) -> dict[str, object]:
+        """The BOM as a CycloneDX JSON document.
+
+        Deliberately without ``serialNumber`` or ``metadata.timestamp``: both are
+        optional in CycloneDX and both are unique per emission, so including either
+        would make two byte-identical builds produce two different BOMs and destroy
+        the content address that the BOM is part of.
+        """
+        return {
+            "bomFormat": "CycloneDX",
+            "specVersion": CYCLONEDX_SPEC_VERSION,
+            "version": 1,
+            "metadata": {"component": self.application.as_cyclonedx()},
+            "components": [c.as_cyclonedx() for c in self.components],
+        }
+
+
+class AIEvent(BaseModel):
+    """One point where a language model touched the spec, and who confirmed it.
+
+    ``stage`` names what the model did in Anvilate's own vocabulary — ``"intent
+    compilation"``, ``"critic edit"``. ``confirmed_by`` is the human who accepted the
+    result; ``None`` means nobody did, which is recorded rather than hidden, because
+    an unconfirmed model edit is exactly what a reviewer needs to see first.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    stage: str
+    model: str
+    backend: str
+    confirmed_by: str | None = None
+
+    @model_validator(mode="after")
+    def _identified(self) -> AIEvent:
+        for field, value in (
+            ("stage", self.stage),
+            ("model", self.model),
+            ("backend", self.backend),
+        ):
+            if not value.strip():
+                raise ValueError(
+                    f"an AI-involvement event needs a non-empty {field}; "
+                    "'a model was involved somewhere' is not a disclosure"
+                )
+        return self
+
+    @property
+    def confirmed(self) -> bool:
+        """Whether a named human accepted this event's output."""
+        return bool(self.confirmed_by and self.confirmed_by.strip())
+
+
+class AIDisclosure(BaseModel):
+    """Whether, where, and how a language model participated in producing the spec.
+
+    ``origins`` maps a spec field's stable name to where its value came from, using
+    the same :class:`~anvilate.review.DecisionOrigin` vocabulary the reviewer dossier
+    sorts on — so model-drafted, user-stated, and database-resolved values are
+    distinguishable in the bundle rather than only in the UI that produced it.
+
+    The invariant enforced here is the one the disclosure exists for: a bundle whose
+    origins name a model-drafted value cannot declare that no model participated.
+    Omission is the failure mode being designed against, so it is a construction
+    error rather than a lint.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    participated: bool
+    events: tuple[AIEvent, ...] = ()
+    origins: dict[str, DecisionOrigin] = {}
+
+    @model_validator(mode="after")
+    def _consistent(self) -> AIDisclosure:
+        model_drafted = sorted(k for k, v in self.origins.items() if v is DecisionOrigin.MODEL)
+        if not self.participated:
+            if self.events:
+                raise ValueError(
+                    "the disclosure says no model participated but lists "
+                    f"{len(self.events)} model event(s)"
+                )
+            if model_drafted:
+                raise ValueError(
+                    "the disclosure says no model participated, but these values are "
+                    f"attributed to a model: {model_drafted}"
+                )
+        elif not self.events:
+            raise ValueError(
+                "a disclosure that a model participated must say where: name at least "
+                "one event (stage, model, backend)"
+            )
+        return self
+
+    @classmethod
+    def none(cls, *, origins: Mapping[str, DecisionOrigin] | None = None) -> AIDisclosure:
+        """The disclosure for a spec authored entirely by hand: says so, explicitly."""
+        return cls(participated=False, origins=dict(origins or {}))
+
+    @property
+    def unconfirmed_events(self) -> tuple[AIEvent, ...]:
+        """The model events no human is recorded as having accepted."""
+        return tuple(e for e in self.events if not e.confirmed)
+
+    def __str__(self) -> str:
+        if not self.participated:
+            return "no language model participated in producing this spec"
+        models = sorted({e.model for e in self.events})
+        unconfirmed = len(self.unconfirmed_events)
+        tail = "" if not unconfirmed else f", {unconfirmed} unconfirmed"
+        return f"{len(self.events)} model event(s) by {', '.join(models)}{tail}"
+
+
+class AnvilatePredicate(BaseModel):
+    """The claim an Anvilate attestation makes, under :data:`PREDICATE_TYPE`.
+
+    Everything a second engineer needs to decide whether the verdict is still theirs:
+    the digest of the spec that was screened, the scorecard it produced, the standards
+    citations behind it, the environment that computed it, and the AI-involvement
+    disclosure. The predicate is data, not prose — the report layer renders it.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    spec_digest: str
+    scorecard: Scorecard
+    citations: tuple[SourceRecord, ...] = ()
+    bom: EnvironmentBOM
+    ai_disclosure: AIDisclosure
+
+    @model_validator(mode="after")
+    def _identifies_what_was_screened(self) -> AnvilatePredicate:
+        if not self.spec_digest.strip():
+            raise ValueError(
+                "a predicate must name the digest of the spec it screened; a scorecard "
+                "with no bound input is a result nobody can reproduce"
+            )
+        return self
+
+    @property
+    def status(self) -> CheckStatus:
+        """The screened verdict this predicate carries, rolled up by the scorecard."""
+        return self.scorecard.status
+
+    def to_json_dict(self) -> dict[str, object]:
+        """The predicate body as JSON-safe primitives, ready for the statement."""
+        return {
+            "specDigest": self.spec_digest,
+            "status": self.status.value,
+            "scorecard": self.scorecard.model_dump(mode="json"),
+            "citations": [c.model_dump(mode="json") for c in self.citations],
+            "bom": self.bom.to_cyclonedx(),
+            "aiDisclosure": self.ai_disclosure.model_dump(mode="json"),
+        }
+
+
+class EvidenceBundle(BaseModel):
+    """Subjects plus a predicate: the whole claim, and its content address.
+
+    :meth:`statement` is the in-toto document; :attr:`digest` is the SHA-256 of that
+    document in :func:`canonical_json` form. The digest covers the artifacts (through
+    their subject digests), the spec, the scorecard, the citations, and the BOM — so
+    a rebuild that changes any of them changes the address, and a rebuild that changes
+    none of them reproduces it exactly.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    subjects: tuple[Subject, ...]
+    predicate: AnvilatePredicate
+
+    @model_validator(mode="after")
+    def _has_subjects(self) -> EvidenceBundle:
+        if not self.subjects:
+            raise ValueError(
+                "an attestation with no subject attests to nothing; name at least the "
+                "artifact the screening covers"
+            )
+        names = [s.name for s in self.subjects]
+        if len(set(names)) != len(names):
+            raise ValueError(f"two subjects share a name: {sorted(names)}")
+        return self
+
+    def statement(self) -> dict[str, object]:
+        """The in-toto Statement v1 document for this bundle."""
+        return {
+            "_type": STATEMENT_TYPE,
+            "subject": [s.as_intoto() for s in self.subjects],
+            "predicateType": PREDICATE_TYPE,
+            "predicate": self.predicate.to_json_dict(),
+        }
+
+    def payload(self) -> bytes:
+        """The canonical UTF-8 bytes of :meth:`statement` — what gets hashed and signed."""
+        return canonical_json(self.statement()).encode("utf-8")
+
+    @property
+    def digest(self) -> str:
+        """The bundle's content address: SHA-256 of :meth:`payload`."""
+        return sha256_hex(self.payload())
+
+
+@runtime_checkable
+class AttestationSigner(Protocol):
+    """What :func:`verify_attestation` and :meth:`Attestation.signed_by` need from a key.
+
+    Implement it over ``cryptography``'s Ed25519, a hardware token, or a Sigstore
+    flow; nothing in this module assumes more than these four members. ``symmetric``
+    is not a detail — it decides whether a successful check proves authorship or only
+    that the verifier holds the same secret, and :class:`SignatureState` reports which.
+    """
+
+    keyid: str
+    algorithm: str
+    symmetric: bool
+
+    def sign(self, payload: bytes) -> bytes:
+        """The signature over ``payload`` (already PAE-encoded by the caller)."""
+        ...
+
+    def verify(self, payload: bytes, signature: bytes) -> bool:
+        """Whether ``signature`` is valid over ``payload``."""
+        ...
+
+
+class LocalHmacSigner:
+    """A local-key signer using HMAC-SHA256 — a shared secret, not a signature.
+
+    Present so that a local-key path exists with no dependency beyond the standard
+    library, and honest about what it buys: HMAC is symmetric, so the party who can
+    verify is exactly the party who could have produced it. It detects tampering by
+    anyone without the secret; it does not establish who authored the bundle. For
+    authorship, plug an asymmetric key into :class:`AttestationSigner`.
+
+    ``keyid`` is derived as an HMAC of a fixed label under the secret, so two bundles
+    signed with the same key are linkable without the key ever being recoverable from
+    the identifier.
+    """
+
+    algorithm = "hmac-sha256"
+    symmetric = True
+
+    _KEYID_LABEL = b"anvilate-attestation-keyid-v1"
+
+    def __init__(self, secret: bytes) -> None:
+        if len(secret) < 16:
+            raise ValueError(
+                f"a signing secret of {len(secret)} bytes is too short to be one; use at "
+                "least 16 bytes of unguessable material"
+            )
+        self._secret = bytes(secret)
+        self.keyid = hmac.new(self._secret, self._KEYID_LABEL, hashlib.sha256).hexdigest()[:32]
+
+    def sign(self, payload: bytes) -> bytes:
+        """The HMAC-SHA256 tag over ``payload``."""
+        return hmac.new(self._secret, payload, hashlib.sha256).digest()
+
+    def verify(self, payload: bytes, signature: bytes) -> bool:
+        """Whether ``signature`` is the tag for ``payload``, compared in constant time."""
+        return hmac.compare_digest(self.sign(payload), signature)
+
+
+class Signature(BaseModel):
+    """One DSSE signature: which key, which algorithm, and the base64 tag."""
+
+    model_config = ConfigDict(frozen=True)
+
+    keyid: str
+    algorithm: str
+    sig: str  # base64, as DSSE requires
+
+    @property
+    def raw(self) -> bytes:
+        """The signature bytes, decoded from base64."""
+        return base64.b64decode(self.sig)
+
+
+class Attestation(BaseModel):
+    """A DSSE envelope around a bundle's statement, signed or plainly not.
+
+    :meth:`unsigned` is a first-class construction, not a degenerate one: an
+    air-gapped run without a key produces exactly this, and :attr:`signed` is False
+    on it forever after. Nothing in this module upgrades an unsigned envelope's
+    standing by omission.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    payload_type: str = DSSE_PAYLOAD_TYPE
+    payload: str  # base64 of the canonical statement bytes, as DSSE requires
+    signatures: tuple[Signature, ...] = ()
+
+    @classmethod
+    def unsigned(cls, bundle: EvidenceBundle) -> Attestation:
+        """The envelope for ``bundle`` with no signature, recorded as such."""
+        return cls(payload=base64.b64encode(bundle.payload()).decode("ascii"))
+
+    @classmethod
+    def signed_by(cls, bundle: EvidenceBundle, signer: AttestationSigner) -> Attestation:
+        """The envelope for ``bundle``, signed over the DSSE pre-authentication encoding."""
+        payload = bundle.payload()
+        sig = signer.sign(dsse_pae(DSSE_PAYLOAD_TYPE, payload))
+        return cls(
+            payload=base64.b64encode(payload).decode("ascii"),
+            signatures=(
+                Signature(
+                    keyid=signer.keyid,
+                    algorithm=signer.algorithm,
+                    sig=base64.b64encode(sig).decode("ascii"),
+                ),
+            ),
+        )
+
+    @property
+    def signed(self) -> bool:
+        """Whether the envelope carries any signature at all."""
+        return bool(self.signatures)
+
+    def payload_bytes(self) -> bytes:
+        """The statement bytes carried by the envelope."""
+        return base64.b64decode(self.payload)
+
+    def statement(self) -> dict[str, object]:
+        """The carried statement, parsed."""
+        return json.loads(self.payload_bytes().decode("utf-8"))
+
+    @property
+    def bundle_digest(self) -> str:
+        """The content address of the carried statement."""
+        return sha256_hex(self.payload_bytes())
+
+    def to_envelope(self) -> dict[str, object]:
+        """The DSSE envelope as the wire shape standard tooling reads."""
+        return {
+            "payloadType": self.payload_type,
+            "payload": self.payload,
+            "signatures": [
+                {"keyid": s.keyid, "sig": s.sig, "algorithm": s.algorithm} for s in self.signatures
+            ],
+        }
+
+
+class SignatureState(StrEnum):
+    """What a verification was able to establish about the envelope's signature."""
+
+    UNSIGNED = "unsigned"  # no signature present; the bundle says so itself
+    NOT_CHECKED = "not_checked"  # a signature is present and nothing checked it
+    SYMMETRIC_VERIFIED = "symmetric_verified"  # a shared secret matched: tamper-evident only
+    VERIFIED = "verified"  # an asymmetric signature matched: authorship established
+    INVALID = "invalid"  # a signature is present and did not match
+
+
+class VerificationReport(BaseModel):
+    """What a verification found, in the library's own tri-state.
+
+    :attr:`status` is ``FAIL`` when something did not match, ``NOT_EVALUATED`` when a
+    signature went unchecked or an artifact was not supplied to compare, and ``PASS``
+    only when everything checkable was checked and matched. :attr:`attested` is
+    stricter still: it is True only for a signature that establishes authorship, so an
+    unsigned bundle and an HMAC-verified one are both honestly short of attested.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    bundle_digest: str
+    signature_state: SignatureState
+    predicate_type: str
+    checked_subjects: tuple[str, ...] = ()
+    unchecked_subjects: tuple[str, ...] = ()
+    problems: tuple[str, ...] = ()
+
+    @property
+    def status(self) -> CheckStatus:
+        if self.problems:
+            return CheckStatus.FAIL
+        if self.signature_state is SignatureState.NOT_CHECKED or self.unchecked_subjects:
+            return CheckStatus.NOT_EVALUATED
+        return CheckStatus.PASS
+
+    @property
+    def attested(self) -> bool:
+        """True only for a clean verification of an authorship-establishing signature."""
+        return self.status is CheckStatus.PASS and self.signature_state is SignatureState.VERIFIED
+
+    def __str__(self) -> str:
+        head = f"[{self.status.value.upper()}] bundle {self.bundle_digest[:12]}"
+        detail = f"signature {self.signature_state.value}"
+        if self.unchecked_subjects:
+            detail += f"; {len(self.unchecked_subjects)} subject(s) not supplied"
+        if self.problems:
+            detail += "; " + "; ".join(self.problems)
+        return f"{head}: {detail}"
+
+
+def verify_attestation(
+    attestation: Attestation,
+    *,
+    artifacts: Mapping[str, bytes] | None = None,
+    signer: AttestationSigner | None = None,
+) -> VerificationReport:
+    """Check an envelope offline: signature, subject digests, and predicate type.
+
+    Everything needed is in the envelope and the bytes on disk — no network, no
+    registry. ``artifacts`` maps subject name to content; a subject with no entry is
+    reported as unchecked rather than assumed intact, which is why a report over an
+    empty mapping comes back ``NOT_EVALUATED`` and not ``PASS``. ``signer`` supplies
+    the key material: without it a signed envelope's signature is
+    :attr:`~SignatureState.NOT_CHECKED`, again not assumed good.
+
+    A failure names what did not match — the subject, or the signature, or the
+    predicate type — rather than returning a bare false.
+    """
+    problems: list[str] = []
+    try:
+        statement = attestation.statement()
+    except (ValueError, UnicodeDecodeError) as exc:
+        return VerificationReport(
+            bundle_digest=attestation.bundle_digest,
+            signature_state=SignatureState.NOT_CHECKED,
+            predicate_type="",
+            problems=(f"the envelope payload is not readable JSON: {exc}",),
+        )
+
+    predicate_type = str(statement.get("predicateType", ""))
+    if statement.get("_type") != STATEMENT_TYPE:
+        problems.append(
+            f"statement type is {statement.get('_type')!r}, expected {STATEMENT_TYPE!r}"
+        )
+    if predicate_type != PREDICATE_TYPE:
+        problems.append(
+            f"predicate type is {predicate_type!r}, which this verifier does not know "
+            f"(it understands {PREDICATE_TYPE!r})"
+        )
+
+    supplied = dict(artifacts or {})
+    checked: list[str] = []
+    unchecked: list[str] = []
+    for raw in statement.get("subject", []) or []:
+        name = str(raw.get("name", ""))
+        expected = str((raw.get("digest") or {}).get("sha256", ""))
+        if name not in supplied:
+            unchecked.append(name)
+            continue
+        actual = sha256_hex(supplied[name])
+        if actual != expected:
+            problems.append(f"subject {name!r} digest mismatch: attested {expected}, got {actual}")
+        else:
+            checked.append(name)
+    # An artifact handed in that the attestation never covered is not a mismatch, but it
+    # is not covered either -- and the caller almost certainly believed it was.
+    for name in sorted(
+        set(supplied) - {str(s.get("name", "")) for s in statement.get("subject", [])}
+    ):
+        problems.append(
+            f"{name!r} was supplied for verification but is not a subject of this bundle"
+        )
+
+    if not attestation.signatures:
+        state = SignatureState.UNSIGNED
+    elif signer is None:
+        state = SignatureState.NOT_CHECKED
+    else:
+        pae = dsse_pae(attestation.payload_type, attestation.payload_bytes())
+        matched = [
+            s
+            for s in attestation.signatures
+            if s.keyid == signer.keyid and signer.verify(pae, s.raw)
+        ]
+        if matched:
+            state = (
+                SignatureState.SYMMETRIC_VERIFIED if signer.symmetric else SignatureState.VERIFIED
+            )
+        else:
+            state = SignatureState.INVALID
+            problems.append(
+                f"no signature verified under key {signer.keyid!r} "
+                f"(envelope carries {[s.keyid for s in attestation.signatures]})"
+            )
+
+    return VerificationReport(
+        bundle_digest=attestation.bundle_digest,
+        signature_state=state,
+        predicate_type=predicate_type,
+        checked_subjects=tuple(checked),
+        unchecked_subjects=tuple(unchecked),
+        problems=tuple(problems),
+    )

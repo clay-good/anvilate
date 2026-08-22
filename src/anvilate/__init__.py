@@ -17,6 +17,9 @@ implemented layers everything else builds on:
 On top of the scorecard sit the cross-cutting layers, each of which takes checks
 that already ran and does one more thing with them:
 
+- :mod:`anvilate.attestation` — the evidence bundle as a content-addressed,
+  envelope-wrapped claim: in-toto subjects, a versioned predicate, an environment
+  BOM, and a verification that never calls an unchecked signature good.
 - :mod:`anvilate.derivation` — a check's worked calculation: formula, substituted
   values, result, and the clause it came from.
 - :mod:`anvilate.evidence` — the provenance roll-up: where every standards number
