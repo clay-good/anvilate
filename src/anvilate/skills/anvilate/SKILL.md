@@ -2,7 +2,7 @@
 name: anvilate
 description: Screen a mechanical or structural part against cited engineering checks with Anvilate, and report the result the way an engineer would. Use when asked to size, check, or validate a part, joint, member, or vessel, or to interpret an Anvilate scorecard.
 version: 0.0.1
-tool-surface: anvilate Python API, verified in CI against docs/api/core-public-surface.txt and docs/api/analysis-public-surface.txt
+tool-surface: the anvilate Python API. Every symbol named below is resolved against the live importable surface in CI, so a renamed function fails the build rather than shipping as advice.
 license: MIT
 ---
 
@@ -77,30 +77,42 @@ Every check returns a `ScorecardEntry` with a tri-state status. Roll them into a
 
 ```python
 from anvilate.analysis import bolt_shear_stress, strength_scorecard
-from anvilate.scorecard import Scorecard
+from anvilate.scorecard import Scorecard, ScorecardEntry
 from anvilate.units import Quantity
 
 shear = bolt_shear_stress(force=Quantity.parse("8 kN"), diameter=Quantity.parse("8 mm"))
-entry = strength_scorecard(
+bolt = strength_scorecard(
     "bolt shear", stress=shear, allowable=Quantity.parse("380 MPa"), required=1.5
 )
-card = Scorecard(entries=(entry,))
-print(card.status.value, "|", card.governing().name, "|", entry.detail)
+tearout = ScorecardEntry.from_safety_factor("plate tear-out", computed=None, required=2.0)
+card = Scorecard(entries=(bolt, tearout))
+
+governing = card.governing()
+print(card.status.value, "|", "None" if governing is None else governing.name)
+print(bolt.detail)
 ```
 
 ```text
-pass | bolt shear | safety factor 2.39 vs required minimum 1.50
+not_evaluated | plate tear-out
+safety factor 2.39 vs required minimum 1.50
 ```
 
-`card.governing()` names the check running closest to its limit — that is the one to
-quote, not the first or the worst-sounding.
+`card.governing()` names the check to quote, and its ordering is **blocking status first,
+then highest utilization**: a failing check outranks one that could not run, which outranks
+every passing check however close to its limit. So the tear-out check governs here at a
+utilization of `None`, ahead of a bolt at 63% — pointing you at the thing that blocks rather
+than at the tightest number.
+
+It returns `None` when nothing blocks and no check carries a safety factor, which every
+deflection-only card looks like. Write `card.governing()` into a variable and check it;
+`card.governing().name` raises `AttributeError` on exactly those cards.
 
 ## 3. "Not evaluated" is not a pass
 
 <!-- doctrine: not-evaluated-is-not-a-pass -->
 
-A check that could not run reports `NOT_EVALUATED`. It is not a pass, it does not become
-one by being ignored, and a scorecard containing one is never `passed`.
+A check that could not run reports `NOT_EVALUATED`. It is not a pass, and it does not
+become one by going unmentioned. A scorecard containing one is never `passed`.
 
 ```python
 from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -221,7 +233,7 @@ whether the part is good, the honest answer names the layers nobody has run.
 - Do not present a screening result as certified, stamped, or sealed analysis.
 - Do not report a scorecard as passing while any check is `not_evaluated`.
 - Do not substitute a recalled dimension for a database record that refused to resolve.
-- Do not confirm a draft value on the user's behalf.
+- Never make the confirmation decision for the user; ask who is confirming.
 - Do not describe a check as citing a clause you did not read off the entry itself.
 
 ## Where to look next

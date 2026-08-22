@@ -708,7 +708,8 @@ def test_the_distribution_is_in_the_quantitys_own_unit_whatever_the_certificate_
     floats, so nothing else in the library can catch them drifting apart — and they did:
     the uncertainty was built from the raw magnitude while the quantity had been converted,
     so a micrometre certificate handed a 25000.4-centred distribution to a millimetre
-    limit. Wrong by 10^6, dimensionally invisible, no unit recorded anywhere."""
+    limit. Wrong by a factor of a thousand, dimensionally invisible, no unit recorded
+    anywhere."""
     expanded = """\
                 <si:measurementUncertaintyUnivariate>
                   <si:expandedMU>
@@ -766,6 +767,7 @@ def test_a_distribution_that_is_not_its_own_quantity_is_refused_at_construction(
             source=good.source,
             certificate=good.certificate,
             distribution=Normal(mean=25000.4, std=0.6),
+            distribution_unit=good.quantity.unit,
         )
 
 
@@ -984,3 +986,174 @@ def test_every_value_gets_its_own_line_not_just_the_first():
             f"{value.label} cites line {value.source.line_number}, which reads "
             f"{lines[value.source.line_number - 1].strip()!r}"
         )
+
+
+# --- what a second audit wave found in the first wave's fixes ---------------------------
+
+
+def test_a_prefixed_unit_with_an_exponent_scales_by_the_exponent_too():
+    r"""No test used a prefixed unit with a `tothe{}` exponent at all, so the whole
+    prefix-times-exponent path was unpinned: dropping the exponent from the scale gave
+    `\milli\metre\tothe{2}` as 0.001 m^2 instead of 1e-6 m^2 — a thousandfold error, and the
+    same factor reaches the uncertainty, which is scaled by the same number."""
+    assert d_si_quantity(1.0, "\\milli\\metre\\tothe{2}").to("m ** 2").magnitude == pytest.approx(
+        1e-6
+    )
+    assert d_si_quantity(1.0, "\\centi\\metre\\tothe{3}").to("m ** 3").magnitude == pytest.approx(
+        1e-6
+    )
+    assert d_si_quantity(1.0, "\\milli\\metre\\tothe{-1}").to("1/m").magnitude == pytest.approx(
+        1000.0
+    )
+    assert d_si_quantity(2.0, "\\kilo\\gram\\tothe{-1}").to("1/kg").magnitude == pytest.approx(2.0)
+
+
+def test_a_zero_reading_does_not_get_to_skip_the_prefix_proof():
+    r"""The proof was skipped whenever the computed magnitude was exactly 0.0 — 0.0 compared
+    equal to 0.0 — so a reading of zero adopted the colliding spelling unchallenged.
+    `\centi\tonne` came back as carats, and `parse_dcc` then scaled the certificate's
+    uncertainty into a unit five million times too small, while the neighbouring non-zero
+    reading on the same certificate was right."""
+    zero = d_si_quantity(0.0, "\\centi\\tonne")
+    nonzero = d_si_quantity(1.0, "\\centi\\tonne")
+    assert zero.unit == nonzero.unit == "t"
+    standard = """\
+                <si:measurementUncertaintyUnivariate>
+                  <si:standardMU><si:valueStandardMU>0.5</si:valueStandardMU></si:standardMU>
+                </si:measurementUncertaintyUnivariate>
+"""
+    for magnitude in ("0.0", "0.001"):
+        value = _parsed(
+            _certificate(_quantity_block("\\centi\\tonne", value=magnitude, uncertainty=standard))
+        ).labelled("shaft diameter")
+        # 0.5 centitonne is 5 kg whatever the reading itself was.
+        assert value.distribution_in("kg").std == pytest.approx(5.0)
+
+
+def test_the_prefix_proof_refuses_a_near_miss_not_just_an_order_of_magnitude():
+    """The only collisions the fixtures exercise are order-of-magnitude ones, so the proof's
+    tolerance could be loosened to 50% and nothing complained. A spelling within a factor of
+    1.5 of the truth is still the wrong unit."""
+    from anvilate.dcc import _spelling_holds
+
+    assert _spelling_holds("mm", "m", 1e-3)
+    assert not _spelling_holds("mm", "m", 1e-3 * 1.0001)
+    assert not _spelling_holds("mm", "m", 1e-3 * 1.5)
+    # A dimension mismatch is a refusal, not an exception.
+    assert not _spelling_holds("kn", "t", 1e3)
+
+
+def test_the_distribution_invariant_refuses_a_small_relative_drift():
+    """`rel_tol` was unpinned: the guard that exists to catch a distribution drifting from
+    its own quantity would have accepted a 10% mismatch."""
+    from anvilate.dcc import CalibratedValue
+    from anvilate.uncertainty import Normal
+
+    good = _parsed().labelled("shaft diameter")
+    with pytest.raises(ValueError, match="different unit from its own quantity"):
+        CalibratedValue(
+            label=good.label,
+            quantity=good.quantity,
+            source=good.source,
+            certificate=good.certificate,
+            distribution=Normal(mean=good.quantity.magnitude * 1.01, std=0.0006),
+            distribution_unit=good.quantity.unit,
+        )
+
+
+def test_the_distribution_invariant_is_not_disarmed_at_small_magnitudes():
+    """`abs_tol=1e-12` disarmed the relative tolerance exactly the way this repository's known
+    `pytest.approx` trap does: a 1e-13 m reading accepted a distribution centred anywhere up
+    to 1.1e-12 — a tenfold error — and accepted one centred on zero."""
+    from anvilate.dcc import CalibratedValue
+    from anvilate.uncertainty import Normal
+
+    good = _parsed().labelled("shaft diameter")
+    tiny = good.quantity.model_copy(update={"magnitude": 1e-13})
+    for wrong_centre in (1e-12, 5e-13, 0.0):
+        with pytest.raises(ValueError, match="different unit from its own quantity"):
+            CalibratedValue(
+                label=good.label,
+                quantity=tiny,
+                source=good.source,
+                certificate=good.certificate,
+                distribution=Normal(mean=wrong_centre, std=1e-15),
+                distribution_unit=tiny.unit,
+            )
+    # A genuine zero reading with a zero-centred distribution is still legitimate.
+    zero = good.quantity.model_copy(update={"magnitude": 0.0})
+    CalibratedValue(
+        label=good.label,
+        quantity=zero,
+        source=good.source,
+        certificate=good.certificate,
+        distribution=Normal(mean=0.0, std=1e-6),
+        distribution_unit=zero.unit,
+    )
+
+
+def test_the_distribution_invariant_survives_model_copy():
+    """`model_copy` does not run a `mode="after"` validator, so the only check in the library
+    that can catch these two drifting apart was one call away from being walked around."""
+    from anvilate.uncertainty import Normal
+
+    good = _parsed().labelled("shaft diameter")
+    with pytest.raises(ValueError, match="different unit from its own quantity"):
+        good.model_copy(update={"distribution": Normal(mean=99.0, std=0.01)})
+    with pytest.raises(ValueError, match="different unit from its own quantity"):
+        good.model_copy(update={"quantity": good.quantity.model_copy(update={"unit": "m"})})
+    # An unrelated copy still works, and keeps everything it carried.
+    relabelled = good.model_copy(update={"label": "journal diameter"})
+    assert relabelled.label == "journal diameter"
+    assert relabelled.distribution == good.distribution
+    assert relabelled.certificate == good.certificate
+
+
+@pytest.mark.parametrize("separator", ["", " ", " "])
+def test_a_unicode_line_separator_does_not_shift_every_reported_line(separator):
+    """`str.splitlines()` breaks on U+0085, U+2028 and U+2029, which XML 1.0 treats as
+    ordinary characters. Each one pushed every later quantity's reported line out by one, and
+    the shaft diameter ended up citing the ambient temperature's value — the exact failure
+    this scan was rewritten to prevent, coming back through the splitter."""
+    text = _certificate().replace(
+        "ground shaft, drive end", f"ground{separator}shaft,{separator}drive end"
+    )
+    certificate = _parsed(text)
+    lines = text.split("\n")
+    for value in certificate.values:
+        assert str(value.quantity.magnitude) in lines[value.source.line_number - 1]
+
+
+def test_a_stray_value_element_cannot_steal_a_measurements_line():
+    """The `si:real` parent check had no test behind it, so a `si:value` sitting anywhere
+    inside a quantity could take a measurement's line number."""
+    decoy = """\
+            <dcc:quantity>
+              <dcc:name><dcc:content lang="en">bore diameter</dcc:content></dcc:name>
+              <si:hybrid>
+                <si:real><si:value>99.9</si:value><si:unit>\\milli\\metre</si:unit></si:real>
+              </si:hybrid>
+            </dcc:quantity>
+"""
+    text = _certificate(decoy + _SHAFT_QUANTITY)
+    shaft = _parsed(text).labelled("shaft diameter")
+    assert "25.0004" in text.split("\n")[shaft.source.line_number - 1]
+
+
+def test_the_unparsed_reason_names_only_the_d_si_forms_it_found():
+    """Without the namespace filter the refusal listed the quantity's `dcc:name` too, so the
+    record a reader is meant to trust said "the quantity is stated as si:name" — an untrue
+    sentence in the one place the module puts what it declined."""
+    other = """\
+            <dcc:quantity>
+              <dcc:name><dcc:content lang="en">bore diameter</dcc:content></dcc:name>
+              <si:complex>
+                <si:real><si:value>1.0</si:value><si:unit>\\milli\\metre</si:unit></si:real>
+                <si:real><si:value>2.0</si:value><si:unit>\\milli\\metre</si:unit></si:real>
+              </si:complex>
+            </dcc:quantity>
+"""
+    certificate = _parsed(_certificate(_SHAFT_QUANTITY + other))
+    reason = certificate.unparsed[0].reason
+    assert "si:complex" in reason
+    assert "si:name" not in reason

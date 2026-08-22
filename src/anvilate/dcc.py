@@ -324,14 +324,28 @@ def d_si_quantity(value: float, unit: str) -> Quantity:
     # either changes dimension (which raises here) or changes magnitude (which fails the
     # comparison); both fall through to the bare form, which was computed from the powers
     # of ten and cannot collide with anything.
-    try:
-        candidate = Quantity(magnitude=value, unit=prefixed)
-        converted = candidate.to(bare)
-    except Exception:
+    #
+    # The proof runs on a magnitude of ONE, never on the measured value. Proving it on the
+    # value meant a reading of exactly zero compared 0.0 against 0.0 and adopted the
+    # colliding spelling unchallenged: `\centi\tonne` of 0.0 came back as `0 ct`, a carat,
+    # and the certificate's uncertainty was then scaled into a unit five million times too
+    # small — while the neighbouring non-zero reading on the same certificate was right.
+    if not _spelling_holds(prefixed, bare, scale):
         return plain
-    if plain.magnitude == 0.0 or isclose(converted.magnitude, plain.magnitude, rel_tol=1e-9):
-        return candidate.to(prefixed)
-    return plain
+    return Quantity(magnitude=value, unit=prefixed).to(prefixed)
+
+
+def _spelling_holds(prefixed: str, bare: str, scale: float) -> bool:
+    """Whether ``prefixed`` really means ``scale`` times ``bare``.
+
+    Independent of any measured value, so the answer is a property of the unit expression
+    rather than of the reading that happened to arrive.
+    """
+    try:
+        converted = Quantity(magnitude=1.0, unit=prefixed).to(bare)
+    except Exception:
+        return False
+    return isclose(converted.magnitude, scale, rel_tol=1e-9)
 
 
 def _expression(factors: list[list], *, prefixed: bool) -> str:
@@ -480,6 +494,12 @@ class CalibratedValue(BaseModel):
     # :meth:`distribution_in` exists rather than callers reading the floats raw.
     distribution: InputDistribution | None = None
     uncertainty_note: str | None = None
+    # The unit the distribution's numbers are in, stored rather than derived. Deriving it
+    # from `quantity.unit` made it true by definition and therefore unable to catch
+    # anything: a copy that changed the quantity's unit from mm to m kept the same
+    # magnitude, so the centre still matched and the thousandfold drift was invisible to a
+    # validator that could only compare numbers.
+    distribution_unit: str | None = None
 
     @model_validator(mode="after")
     def _the_distribution_is_the_same_number(self) -> CalibratedValue:
@@ -489,13 +509,33 @@ class CalibratedValue(BaseModel):
         library can catch them drifting apart. They did: the uncertainty was built from the
         certificate's raw magnitude while the quantity had been converted, so a shaft stated
         in micrometres carried a 25000.4-centred distribution against a millimetre limit —
-        wrong by 10^6, dimensionally invisible, and with no unit recorded anywhere for a
-        consumer to notice.
+        wrong by a factor of a thousand, dimensionally invisible, and with no unit recorded
+        anywhere for a consumer to notice.
         """
         if self.distribution is None:
             return self
         centre = self.distribution.mean
-        if not isclose(centre, self.quantity.magnitude, rel_tol=1e-9, abs_tol=1e-12):
+        # No absolute floor. `abs_tol=1e-12` disarmed the relative tolerance for small
+        # magnitudes exactly the way this repository's known `pytest.approx` trap does: a
+        # 1e-13 m reading accepted a distribution centred anywhere up to 1.1e-12 — a
+        # tenfold error — and accepted one centred on zero. Zero is handled as its own case
+        # because a relative tolerance against zero admits nothing else.
+        if self.distribution_unit is None:
+            raise ValueError(
+                f"the uncertainty distribution for {self.label!r} does not say what unit its "
+                "numbers are in; a distribution is bare floats, so the unit has to be stated "
+                "or it is not recoverable"
+            )
+        if self.distribution_unit != self.quantity.unit:
+            raise ValueError(
+                f"the uncertainty distribution for {self.label!r} is in "
+                f"{self.distribution_unit!r} but the measured value is in "
+                f"{self.quantity.unit!r}; a distribution in a different unit from its own "
+                "quantity is a factor nothing downstream can see"
+            )
+        magnitude = self.quantity.magnitude
+        exact_zero = magnitude == 0.0 and centre == 0.0
+        if not exact_zero and not isclose(centre, magnitude, rel_tol=1e-9):
             raise ValueError(
                 f"the uncertainty distribution for {self.label!r} is centred on {centre} "
                 f"but the measured value is {self.quantity}; a distribution in a different "
@@ -503,10 +543,16 @@ class CalibratedValue(BaseModel):
             )
         return self
 
-    @property
-    def distribution_unit(self) -> str:
-        """The unit the distribution's numbers are in — the measured quantity's own."""
-        return self.quantity.unit
+    def model_copy(self, **kwargs: object) -> CalibratedValue:
+        """A copy with the invariant re-checked, because ``model_copy`` skips validators.
+
+        Pydantic does not run a ``mode="after"`` validator on a copy, so the check that the
+        distribution and the quantity are the same number — the only thing in the library
+        that can catch those two drifting apart — was one call away from being bypassed.
+        Re-validating here puts it on the path that would otherwise walk around it.
+        """
+        copied = super().model_copy(**kwargs)  # type: ignore[arg-type]
+        return CalibratedValue.model_validate(copied.model_dump())
 
     def distribution_in(self, unit: str) -> InputDistribution | None:
         """The stated uncertainty as a distribution in ``unit``, or ``None`` if there is none.
@@ -627,6 +673,20 @@ def _on_the_quantity_path(stack: list[str]) -> bool:
     )
 
 
+def _xml_lines(text: str) -> list[str]:
+    """``text`` split the way XML counts lines, with the line ends kept.
+
+    ``str.splitlines`` also breaks on U+0085, U+2028 and U+2029, which XML 1.0 treats as
+    ordinary characters. Any of them anywhere in the document — a NEL inside an item name,
+    say — pushed every later quantity's reported line number out by one, and the shaft
+    diameter ended up citing the ambient temperature's value: exactly the failure this scan
+    was rewritten to prevent, coming back through the splitter instead of the element match.
+    """
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.split("\n")
+    return [line + "\n" for line in lines[:-1]] + ([lines[-1]] if lines[-1] else [])
+
+
 def _quantity_lines(text: str) -> list[tuple[int, int | None]]:
     """For each measured quantity in document order, ``(quantity line, value line)``.
 
@@ -645,7 +705,7 @@ def _quantity_lines(text: str) -> list[tuple[int, int | None]]:
     found: list[tuple[int, int | None]] = []
     value_tag = f"{{{SI_NAMESPACE}}}value"
     real_tag = f"{{{SI_NAMESPACE}}}real"
-    for number, line in enumerate(text.splitlines(keepends=True), start=1):
+    for number, line in enumerate(_xml_lines(text), start=1):
         parser.feed(line)
         for event, element in parser.read_events():
             if event == "start":
@@ -822,6 +882,7 @@ def parse_dcc(text: str, *, document: str) -> CalibrationCertificate:
                         certificate=provenance,
                         distribution=distribution,
                         uncertainty_note=note,
+                        distribution_unit=None if distribution is None else measured.unit,
                     )
                 )
     return CalibrationCertificate(

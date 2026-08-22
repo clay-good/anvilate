@@ -9,10 +9,12 @@ quality software without a licence fee and without a translator.
 The mapping has three decisions in it, and each one is where the honesty lives:
 
 **A check with a numeric requirement is a numeric characteristic.** A safety-factor check
-becomes a ``UserDefinedUnitCharacteristic`` whose nominal carries the required minimum as
-``MinValue`` and — when the spec declared a target band — the upper bound as ``MaxValue``,
-with ``DefinedAsLimit`` true because those are limits, not deviations. The measured value
-is the computed safety factor, in the user-defined dimensionless unit declared once in
+becomes a ``UserDefinedUnitCharacteristic`` quartet whose nominal carries the required
+minimum as ``MinValue`` with ``DefinedAsLimit`` true, because that is a limit and not a
+deviation. A declared upper band is deliberately *not* written as a ``MaxValue`` — see
+:func:`_numeric_requirement` — because in QIF a MaxValue is a conformance limit while
+Anvilate's band is an over-engineering flag that never blocks. The measured value is the
+computed safety factor, in the user-defined dimensionless unit declared once in
 ``FileUnits``.
 
 **A check without one is an attribute characteristic, not an invented number.** A
@@ -243,12 +245,24 @@ def _unique_names(names: Sequence[str]) -> list[str]:
     empty name gets a placeholder so the key exists at all. The original name stays in the
     Description either way.
     """
-    seen: dict[str, int] = {}
+    taken: set[str] = set()
     out: list[str] = []
     for name in names:
         base = name.strip() or "unnamed check"
-        seen[base] = seen.get(base, 0) + 1
-        out.append(base if seen[base] == 1 else f"{base} #{seen[base]}")
+        # The candidate is checked against what has actually been emitted, not counted. A
+        # card carrying "bending", "bending" and "bending #2" — which is what a re-import of
+        # a previous Anvilate export looks like — made a counting version generate
+        # "bending #2" twice, so the disambiguator produced the very collision it exists to
+        # prevent, and one of the two was the FAIL. The suffix stacks when an input name
+        # already looks like one ("bending #2 #2"); ugly, and unique, which is the property
+        # that matters.
+        candidate = base
+        occurrence = 1
+        while candidate in taken:
+            occurrence += 1
+            candidate = f"{base} #{occurrence}"
+        taken.add(candidate)
+        out.append(candidate)
     return out
 
 
@@ -601,7 +615,22 @@ def _verification_entries(sections: BundleSections) -> list[ScorecardEntry]:
     plan = sections.verification
     if plan is None:
         return []
+    # The plan's own roll-up, always. An empty plan produced no per-item entries at all, so
+    # the bundle's status went NOT_EVALUATED while the characteristic list held nothing but
+    # passes — a reader recomputing the roll-up from the characteristics got PASS, which is
+    # the same denial of a gap the per-item crossing was added to fix.
     entries = [
+        ScorecardEntry(
+            name="verification plan",
+            status=plan.status,
+            detail=(
+                f"{len(plan.verified)} of {len(plan.items)} planned tests performed, "
+                f"{len(plan.analysis_only)} verified by analysis, "
+                f"{len(plan.unresolved)} unresolved"
+            ),
+        )
+    ]
+    entries.extend(
         ScorecardEntry(
             name=item.name,
             status=item.status,
@@ -612,7 +641,7 @@ def _verification_entries(sections: BundleSections) -> list[ScorecardEntry]:
             reference=item.archetype.citation,
         )
         for item in plan.items
-    ]
+    )
     entries.extend(
         ScorecardEntry(
             name=f"verification coverage: {check}",
@@ -706,17 +735,21 @@ def qif_schema_issues(document: str) -> list[str]:
 
     for element in root.iter():
         tag = _local(element.tag)
-        # QPId is the document's own UUID, not a reference to an id in the file. It ends
-        # in "Id" and so was caught by the reference sweep, which reported every valid
-        # document as broken.
-        if not tag.endswith("Id") or tag.endswith("QPId") or not element.text:
+        # Only the declared references, not "every element whose name ends in Id". QIF has
+        # plenty of the latter that are free text: `EmployeeId` and `EntityId` are
+        # `xs:token`, and `EmployeeId` lives in a MeasurementResults traceability block —
+        # inside the document class this module emits. Sweeping by suffix reported a
+        # schema-valid document as broken, which is a self-check that cries wolf about the
+        # thing it is supposed to certify. The cost is that a reference this exporter does
+        # not write goes unchecked here; the XSD is what checks those.
+        if tag not in _REFERENCE_TARGETS or not element.text:
             continue
         target = element.text.strip()
         if target not in by_id:
             issues.append(f"{tag} references id {target!r}, which is not in the document")
             continue
-        expected = _REFERENCE_TARGETS.get(tag)
-        if expected is not None and not by_id[target].endswith(expected):
+        expected = _REFERENCE_TARGETS[tag]
+        if not by_id[target].endswith(expected):
             issues.append(
                 f"{tag} references id {target!r}, which is a {by_id[target]} and not a {expected}"
             )

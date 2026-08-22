@@ -1,29 +1,41 @@
 """The agent skill is checked against the library, not read as prose.
 
-A skill file is documentation, and documentation about a moving API goes stale silently.
-These gates are built so that it cannot: every ``anvilate`` symbol the skill names is
-imported, every worked example is executed, and every claimed output is compared byte for
-byte against what the example actually prints. A skill describing a function that no
-longer exists fails the build.
+An audit broke every gate in the first version of this file, and the failures were all the
+same failure: **a gate that looks like coverage and checks nothing.** The symbol-drift gate
+extracted zero symbols, because the skill names its functions in `from anvilate.x import y`
+lines rather than in backticks, and its own meta-test permitted that with an `or True`. The
+doctrine gate checked only that a marker was followed somewhere by a fence, so a doctrine
+could be deleted and its marker re-anchored to an unrelated example. The AGENTS.md gate
+squashed text to letters and looked for substrings, so six bullets stating every rule
+*backwards* satisfied it. Examples ran in one process, so one example could monkeypatch the
+library and make a later one print a sentence the library never says. A ```py fence was
+never executed at all, and an empty example paired with an empty output block counted as a
+verified worked example.
 
-The doctrine gates are deliberately *not* keyword checks. A gate that greps for the words
-"not evaluated" is satisfied by any paragraph containing them, including one that gets the
-rule backwards — this repository has been bitten by exactly that shape of gate before. So
-each doctrine section is anchored by an HTML comment marker and carries an executable
-example, and the example's own assertions are what prove the claim. The gate checks the
-markers are present and the examples run; the examples check the library behaves as the
-prose says.
+So the gates here are built to the opposite rule: **every one has to be able to fail, and
+there is a test that makes it fail.** Concretely —
 
-The prohibition gate is the one direction where text matching is sound: it can only ever
-fire, never be satisfied. Prose cannot talk its way past "this file must not contain an
-instruction to skip validation".
+* Symbols come from the AST of the code the skill ships, not from a regex over prose, and
+  the extraction is asserted to find a real number of them.
+* Every fence is accounted for. A language this file does not execute fails the build.
+* Every example runs in its own **subprocess**, so it cannot reach the next one.
+* Every example must print something, and its output is compared byte for byte.
+* Each doctrine is bound to substrings that must appear in its own example's source, so an
+  example about something else cannot stand in for it.
+* The prohibited-guidance patterns run against everything except an allowlist of the exact
+  denial sentences the skill is required to contain. There is no "a nearby *not* excuses it"
+  rule, because that rule was how a certification claim got through.
+* The AGENTS.md doctrine section is compared to a canonical block byte for byte, so prose
+  cannot restate a rule into its opposite and satisfy it.
 """
 
 from __future__ import annotations
 
-import io
+import ast
+import importlib
 import re
-from contextlib import redirect_stdout
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -33,74 +45,121 @@ from anvilate.skills import SKILL_NAME, SKILL_PATH, skill_text
 
 _REPO = Path(__file__).resolve().parent.parent
 _AGENTS = _REPO / "AGENTS.md"
+_SRC = _REPO / "src"
 
-# Every doctrine the skill is required to carry, by its in-file marker. Adding a claim to
-# the skill without an anchored, executing example is the failure this list prevents; so
-# is quietly dropping one.
-_REQUIRED_DOCTRINE = (
-    "retrieval-not-recall",
-    "read-the-scorecard",
-    "not-evaluated-is-not-a-pass",
-    "inverse-first-repair",
-    "confirm-before-use",
-    "screening-not-certified",
-)
-
-# Guidance that must never appear, as patterns over the normalized text. These are the
-# behaviors the spec forbids: bypassing a gate, exporting past a failing check, and
-# claiming a screening result is certified. This gate can only fire — no amount of
-# surrounding prose satisfies it.
-# Each entry is (pattern, complaint, negatable). ``negatable`` marks the two claims the
-# skill is *required* to deny — it has to say it is not a certified analysis and not
-# stamped by anybody — so for those, and only those, a sentence carrying a denial is
-# allowed. The other five are instructions: there is no sentence in which "skip the
-# validation" is acceptable guidance, and letting a stray "not" nearby excuse them is how
-# a prohibition gate quietly stops meaning anything. That is not hypothetical here: the
-# instruction patterns mention "not evaluated" by name, so a blanket negation allowance
-# suppressed them against text that contained the very instruction they forbid.
-_PROHIBITED = (
-    (r"\bskip (?:the )?validation\b", "instructs skipping validation", False),
-    (r"\bbypass(?:ing)? (?:the )?(?:gate|check|validation|sandbox)", "instructs a bypass", False),
-    (
-        r"\bignore (?:the )?(?:scorecard|not.?evaluated|failing)",
-        "instructs ignoring a verdict",
-        False,
+# Every doctrine the skill must carry, mapped to substrings that have to appear in *its own*
+# example's source. Binding the claim to the code that demonstrates it is what stops a
+# section borrowing an unrelated example — which is how a deleted doctrine passed.
+_REQUIRED_DOCTRINE: dict[str, tuple[str, ...]] = {
+    "retrieval-not-recall": ("default_hex_bolt_table", "citations()"),
+    "read-the-scorecard": ("Scorecard(", "governing()"),
+    "not-evaluated-is-not-a-pass": (
+        "CheckStatus.NOT_EVALUATED",
+        "assert card.passed is False",
     ),
-    (r"\bexport (?:it )?anyway\b", "instructs exporting past a gate", False),
-    (r"\btreat .{0,30}not.?evaluated.{0,20} as (?:a )?pass", "instructs a silent green", False),
-    (r"\bcertified (?:analysis|result|calculation)\b", "claims certification", True),
-    (r"\bstamped by\b", "claims a professional seal", True),
+    "inverse-first-repair": ("bolt_diameter_for_shear", "required_safety_factor"),
+    "confirm-before-use": ("release()", "with_confirmation"),
+    "screening-not-certified": ("BundleSections(", "assert bundle.verified is False"),
+}
+
+# The exact sentences the skill is *required* to contain, which happen to contain phrases the
+# prohibition patterns match. They are removed before the patterns run. An allowlist of
+# literal sentences cannot be widened by writing more prose — which is the property the
+# previous "any nearby negation excuses the match" rule lacked. It let "Anvilate does not
+# guess at inputs, so you may report the run as a certified analysis" straight through.
+_PERMITTED_DENIALS = (
+    "unit-checked, and fast — and it is not a certified analysis.",
+    "unit-checked, fast — and it is not a certified analysis.",
+    "Presenting a screening result as a certified analysis, which it is not.",
+    "It is not a certified analysis, not a substitute for a licensed engineer's",
+    "Do not present a screening result as certified, stamped, or sealed analysis.",
 )
 
-# Words that turn a claim into a denial of it. Applied only to the negatable patterns.
-_NEGATIONS = re.compile(r"\b(?:not|never|cannot)\b", re.IGNORECASE)
+# Guidance that must never appear. These fire and are never satisfied, so prose cannot talk
+# its way past them — but only if they cover how the thing is actually said. The first
+# version matched `ignore` and not `disregard`, `export it anyway` and not `export past a
+# failing check`, `stamped by` and not `equivalent to a stamped calculation`. An audit walked
+# through it with ordinary English.
+_PROHIBITED: tuple[tuple[str, str], ...] = (
+    (
+        r"\b(?:skip|skipping)\b[^.\n]{0,40}\b(?:validation|the gauntlet|the check)",
+        "instructs skipping validation",
+    ),
+    (
+        r"\bno need to\b[^.\n]{0,40}\b(?:run|validate|check|gauntlet)",
+        "says a check is unnecessary",
+    ),
+    (
+        r"\b(?:bypass|disregard|override|waive|force|suppress)\w*\b[^.\n]{0,40}"
+        r"\b(?:gate|check|validation|sandbox|scorecard|warning|verdict|result)",
+        "instructs overriding a verdict or a gate",
+    ),
+    (
+        r"\bignor\w+\b[^.\n]{0,30}\b(?:scorecard|not.?evaluated|failing|verdict)",
+        "instructs ignoring a verdict",
+    ),
+    (
+        r"\bexport\b[^.\n]{0,40}\b(?:anyway|past a fail\w*|despite|regardless)",
+        "instructs exporting past a gate",
+    ),
+    (
+        r"\b(?:treat|report|read)\b[^.\n]{0,40}not.?evaluated[^.\n]{0,30}\bas\b[^.\n]{0,15}pass",
+        "instructs a silent green",
+    ),
+    (
+        r"\bscorecard\b[^.\n]{0,30}\bis\b[^.\n]{0,15}\badvisory\b",
+        "calls the scorecard advisory",
+    ),
+    (r"\bcertified (?:analysis|result|calculation|report)\b", "claims certification"),
+    (r"\bcertification package\b", "claims certification"),
+    (
+        r"\b(?:stamped by|equivalent to a stamped|sealed and|signed off)\b",
+        "claims a professional seal",
+    ),
+    (
+        r"\bconfirm\w*\b[^.\n]{0,30}\b(?:yourself|on the user's behalf|as the agent)",
+        "instructs self-confirmation",
+    ),
+    (r"with_confirmation\(by=\"agent", "instructs self-confirmation"),
+    (
+        r"\brelax\b[^.\n]{0,40}\b(?:safety factor|requirement|margin)",
+        "instructs relaxing a requirement",
+    ),
+)
 
+# The doctrine section of AGENTS.md, verbatim. Compared byte for byte rather than searched,
+# because a substring search over squashed text is a grep — and six bullets stating every
+# rule backwards contain every keyword a grep looks for.
+_AGENTS_DOCTRINE = """\
+- **Retrieval, not recall.** Standard dimensions come from the bundled databases with
+  their citations attached. A refusal names the near misses; do not answer it with a
+  remembered number.
+- **Read the scorecard.** Report `Scorecard.status` and `governing()`, not an impression
+  of how the calculation went.
+- **Not evaluated is not a pass.** A check that could not run is `NOT_EVALUATED`, a card
+  containing one is never `passed`, and "two of three checks pass" is a true sentence that
+  reads as a passing part.
+- **Inverse first repair.** A failing check carries a repair hint; where a design inverse
+  exists it solves for the value that lands exactly at the required margin. Use it before
+  guessing sizes, and say out loud when you round to a stock size.
+- **Confirm before use.** Values read from a requirements document or a calibration
+  certificate are drafts. `release()` refuses until a named person confirms them — do not
+  read the drafts directly, and never make the confirmation decision for the user.
+- **Screening, not certified.** Say what a green scorecard is: the closed-form checks that
+  ran were satisfied by the inputs given. Report what the evidence bundle says it does not
+  cover.
+"""
 
-def _sentence_around(text: str, position: int) -> str:
-    start = max(text.rfind(".", 0, position), text.rfind("\n", 0, position)) + 1
-    end = min(
-        (i for i in (text.find(".", position), text.find("\n", position)) if i >= 0),
-        default=len(text),
-    )
-    return text[start : end if end >= 0 else len(text)]
-
-
-def _prohibited_hits(pattern: str, text: str, negatable: bool = False) -> list[str]:
-    """Matches of ``pattern``, minus the ones a denial in the same sentence excuses."""
-    hits = []
-    for found in re.finditer(pattern, text, re.IGNORECASE):
-        if negatable and _NEGATIONS.search(_sentence_around(text, found.start())):
-            continue
-        hits.append(found.group(0))
-    return hits
-
-
-# A dotted `anvilate...` reference inside backticks. Bare prose mentions are not checked —
-# only the ones the skill presents as code, which are the ones an agent will copy.
-_SYMBOL = re.compile(r"`(anvilate(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`")
+# Fence languages this file knows how to handle. Anything else fails the build rather than
+# being skipped: a ```py block renders exactly like a ```python block and was never executed.
+_KNOWN_FENCES = frozenset({"python", "text"})
 
 _FRONTMATTER = re.compile(r"\A---\n(?P<body>.*?)\n---\n", re.DOTALL)
-_BLOCK = re.compile(r"^```(?P<lang>[a-z]*)\n(?P<body>.*?)^```", re.MULTILINE | re.DOTALL)
+_FENCE = re.compile(r"^```(?P<lang>[^\n`]*)\n(?P<body>.*?)^```", re.MULTILINE | re.DOTALL)
+# A dotted `anvilate...` reference in prose, with an optional call suffix. The call form was
+# invisible to the first version, so `anvilate.units.Quantity.parse_strict("8 kN")` — a
+# method that does not exist — sailed through.
+_PROSE_SYMBOL = re.compile(r"`(anvilate(?:\.[A-Za-z_][A-Za-z0-9_]*)+)\s*(?:\([^`]*\))?`")
 
 
 def _frontmatter() -> dict[str, str]:
@@ -114,38 +173,112 @@ def _frontmatter() -> dict[str, str]:
     return fields
 
 
-def _examples() -> list[tuple[str, str | None]]:
-    """Every python block in the skill, paired with the output block that follows it."""
-    blocks = [(m.group("lang"), m.group("body")) for m in _BLOCK.finditer(skill_text())]
-    paired: list[tuple[str, str | None]] = []
-    for index, (lang, body) in enumerate(blocks):
+def _fences() -> list[tuple[str, str]]:
+    return [(m.group("lang").strip(), m.group("body")) for m in _FENCE.finditer(skill_text())]
+
+
+def _examples() -> list[tuple[str, str]]:
+    """Every python fence paired with the output fence after it.
+
+    Fails rather than skips when the pairing is wrong, so a python block with no claimed
+    output is a failure instead of an example nobody checks.
+    """
+    fences = _fences()
+    paired: list[tuple[str, str]] = []
+    for index, (lang, body) in enumerate(fences):
         if lang != "python":
             continue
-        following = blocks[index + 1] if index + 1 < len(blocks) else None
-        paired.append((body, following[1] if following and following[0] == "text" else None))
+        following = fences[index + 1] if index + 1 < len(fences) else None
+        assert following is not None and following[0] == "text", (
+            f"the python example at fence {index} has no ```text block after it, so nothing "
+            "compares what it prints against what the skill claims it prints"
+        )
+        paired.append((body, following[1]))
     return paired
+
+
+def _sections() -> dict[str, str]:
+    """Each doctrine marker mapped to the text of the section it heads.
+
+    Bounded by the next ``##`` heading, not by the next marker — otherwise a marker dropped
+    into somebody else's section inherits that section's example.
+    """
+    text = skill_text()
+    found: dict[str, str] = {}
+    for match in re.finditer(r"<!-- doctrine: (?P<slug>[a-z-]+) -->", text):
+        rest = text[match.end() :]
+        heading = re.search(r"^## ", rest, re.MULTILINE)
+        found[match.group("slug")] = rest if heading is None else rest[: heading.start()]
+    return found
+
+
+def _dotted(node: ast.AST) -> str | None:
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name):
+        return None
+    parts.append(node.id)
+    return ".".join(reversed(parts))
+
+
+def _skill_symbols() -> set[str]:
+    """Every ``anvilate`` symbol the skill names, from the AST of the code it ships.
+
+    A regex over backticked prose found **zero** symbols at the version an audit checked,
+    because the skill names its functions in `from anvilate.x import y` lines inside the
+    fences. The gate looped over an empty set and passed.
+    """
+    found: set[str] = set(_PROSE_SYMBOL.findall(skill_text()))
+    for source, _claimed in _examples():
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("anvilate"):
+                found.update(f"{node.module}.{alias.name}" for alias in node.names)
+            elif isinstance(node, ast.Attribute):
+                dotted = _dotted(node)
+                if dotted is not None and dotted.startswith("anvilate."):
+                    found.add(dotted)
+    return found
+
+
+def _resolve(symbol: str) -> bool:
+    parts = symbol.split(".")
+    for split in range(len(parts), 0, -1):
+        try:
+            module = importlib.import_module(".".join(parts[:split]))
+        except ImportError:
+            continue
+        target: object = module
+        for attribute in parts[split:]:
+            try:
+                target = getattr(target, attribute)
+            except AttributeError:
+                return False
+        return True
+    return False
+
+
+def _redacted(text: str) -> str:
+    """``text`` with the sentences the skill is required to contain removed."""
+    for denial in _PERMITTED_DENIALS:
+        text = text.replace(denial, " ")
+    return text
 
 
 # --- it ships, offline ------------------------------------------------------------------
 
 
 def test_the_skill_ships_inside_the_package():
-    """An agent that cannot find the skill is an agent operating without it. It has to be
-    in the installed package, not next to the repository."""
+    """An agent that cannot find the skill is an agent operating without it."""
     assert SKILL_PATH.exists()
     assert SKILL_PATH.name == "SKILL.md"
     assert SKILL_PATH.parent.name == SKILL_NAME
-    # Inside the distributed package directory, so the wheel carries it.
     package_root = Path(anvilate.__file__).resolve().parent
     assert package_root in SKILL_PATH.resolve().parents
 
 
-def test_the_skill_is_readable_without_touching_the_filesystem_directly():
-    assert skill_text().startswith("---\n")
-    assert len(skill_text()) > 1000
-
-
-def test_the_skill_states_its_version_and_the_surface_it_targets():
+def test_the_skill_states_its_version_and_what_it_was_checked_against():
     fields = _frontmatter()
     assert fields["name"] == SKILL_NAME
     assert fields["version"] == anvilate.__version__, (
@@ -153,11 +286,11 @@ def test_the_skill_states_its_version_and_the_surface_it_targets():
         "version is a skill nobody can tell is stale"
     )
     assert fields["description"].strip()
-    # The surface stamp has to name the manifests the drift gate below checks against,
-    # otherwise the stamp is a decoration rather than a claim.
-    surface = fields["tool-surface"]
-    assert "core-public-surface.txt" in surface
-    assert "analysis-public-surface.txt" in surface
+    # The stamp names the live importable surface, because that is what the drift gate below
+    # actually resolves against. It used to name two manifest files the gate never opened —
+    # and which do not contain the symbols of the skill's own first doctrine, since
+    # `anvilate.standards` is outside both of them.
+    assert "importable surface" in fields["tool-surface"]
 
 
 # --- it cannot go stale -----------------------------------------------------------------
@@ -165,26 +298,7 @@ def test_the_skill_states_its_version_and_the_surface_it_targets():
 
 def test_every_symbol_the_skill_names_actually_exists():
     """The drift gate: a renamed function must break the build, not ship as advice."""
-    import importlib
-
-    missing = []
-    for symbol in sorted(set(_SYMBOL.findall(skill_text()))):
-        parts = symbol.split(".")
-        for split in range(len(parts), 0, -1):
-            module_name = ".".join(parts[:split])
-            try:
-                module = importlib.import_module(module_name)
-            except ImportError:
-                continue
-            target: object = module
-            try:
-                for attribute in parts[split:]:
-                    target = getattr(target, attribute)
-            except AttributeError:
-                missing.append(symbol)
-            break
-        else:  # pragma: no cover - a symbol with no importable prefix at all
-            missing.append(symbol)
+    missing = sorted(symbol for symbol in _skill_symbols() if not _resolve(symbol))
     assert not missing, (
         f"the agent skill names anvilate symbols that do not exist: {missing}. "
         "A skill that describes a function nobody can call must fail the build rather "
@@ -192,32 +306,48 @@ def test_every_symbol_the_skill_names_actually_exists():
     )
 
 
-def test_the_drift_gate_can_actually_detect_what_it_claims_to():
-    """The gate above is the whole anti-staleness mechanism, so prove it fires."""
-    import importlib
+def test_the_drift_gate_is_actually_looking_at_something():
+    """The version this replaced extracted zero symbols and passed by finding nothing.
 
-    module = importlib.import_module("anvilate.scorecard")
-    assert not hasattr(module, "no_such_symbol_ever")
-    # And prove the extractor sees a backticked reference at all, so a gate that silently
-    # matched nothing could not pass by finding nothing to check.
-    assert _SYMBOL.findall("see `anvilate.scorecard.Scorecard` for the roll-up") == [
-        "anvilate.scorecard.Scorecard"
+    Its own meta-test permitted that with `assert ... or True`. So this asserts a real count,
+    names symbols the skill is known to use, and checks the resolver can say no.
+    """
+    symbols = _skill_symbols()
+    assert len(symbols) >= 12, f"only {len(symbols)} symbols extracted from the skill: {symbols}"
+    for expected in (
+        "anvilate.standards.default_hex_bolt_table",
+        "anvilate.scorecard.Scorecard",
+        "anvilate.ingest.extract_requirements",
+        "anvilate.bundle.BundleSections",
+    ):
+        assert expected in symbols, f"{expected} was not extracted from the skill"
+    assert _resolve("anvilate.scorecard.Scorecard")
+    assert not _resolve("anvilate.scorecard.no_such_symbol_ever")
+    assert not _resolve("anvilate.no_such_module.thing")
+    # The call form is what an agent copies, and it used to be invisible to the extractor.
+    assert _PROSE_SYMBOL.findall('see `anvilate.units.Quantity.parse("8 kN")` first') == [
+        "anvilate.units.Quantity.parse"
     ]
-    assert set(_SYMBOL.findall(skill_text())) or True  # prose-only references are allowed
+
+
+def test_every_code_fence_is_one_this_file_executes():
+    """A ```py block renders identically to a ```python block and was silently skipped, so
+    an example calling a method that does not exist counted as documentation nobody had to
+    check."""
+    unknown = sorted({lang for lang, _body in _fences()} - _KNOWN_FENCES)
+    assert not unknown, (
+        f"the skill uses code fences this file does not execute: {unknown}. Use ```python "
+        "for runnable examples and ```text for their output"
+    )
 
 
 # --- its examples are real --------------------------------------------------------------
 
 
 def test_the_skill_contains_worked_examples():
-    examples = _examples()
-    assert len(examples) >= len(_REQUIRED_DOCTRINE), (
+    assert len(_examples()) >= len(_REQUIRED_DOCTRINE), (
         "every doctrine section must carry an example that runs; prose alone is what this "
         "gate exists to refuse"
-    )
-    assert all(claimed is not None for _, claimed in examples), (
-        "every example must declare the output it claims, in a ```text block right after "
-        "it — an example with no claimed output cannot be checked against reality"
     )
 
 
@@ -228,81 +358,122 @@ def test_the_skill_contains_worked_examples():
 def test_each_example_runs_and_prints_what_the_skill_says_it_prints(index, source, claimed):
     """The documentation-examples harness, applied to the skill.
 
-    Each block runs in its own namespace — an agent reading one section does not have the
-    previous section's imports — and its stdout is compared to the claimed output exactly.
-    Assertions inside the example are the skill's own doctrine claims; a library change
-    that broke one would fail here rather than turn the skill into a lie.
+    Each block runs in **its own process**. A shared interpreter was not isolation: one
+    example could rebind a library attribute through `sys.modules` and a later one would then
+    print a sentence the library never says — an audit used it to make the skill teach that a
+    scorecard-only bundle reports "all layers clear", deleting the not-covered disclosure the
+    last doctrine exists to enforce.
+
+    An example must also print something. An empty block paired with an empty output block
+    compared "" to "" and counted as verified.
     """
-    captured = io.StringIO()
-    with redirect_stdout(captured):
-        exec(compile(source, f"SKILL.md::block{index}", "exec"), {"__name__": "__skill__"})
-    assert captured.getvalue() == claimed, (
-        f"example {index} in the agent skill printed:\n{captured.getvalue()}\n"
+    assert claimed.strip(), f"example {index} claims no output, so nothing is compared"
+    completed = subprocess.run(
+        [sys.executable, "-c", source],
+        capture_output=True,
+        text=True,
+        cwd=_REPO,
+        env={"PYTHONPATH": str(_SRC), "PATH": "/usr/bin:/bin"},
+        timeout=180,
+        check=False,
+    )
+    assert completed.returncode == 0, (
+        f"example {index} in the agent skill failed:\n{completed.stderr}"
+    )
+    assert completed.stdout == claimed, (
+        f"example {index} in the agent skill printed:\n{completed.stdout}\n"
         f"but the skill claims:\n{claimed}"
     )
 
 
-# --- its doctrine is present and its prohibitions hold ----------------------------------
+# --- its doctrine is present, and bound to its own example -------------------------------
 
 
-@pytest.mark.parametrize("doctrine", _REQUIRED_DOCTRINE)
-def test_every_required_doctrine_is_anchored_to_an_example(doctrine):
-    text = skill_text()
-    marker = f"<!-- doctrine: {doctrine} -->"
-    assert marker in text, (
-        f"the skill must carry the {doctrine!r} doctrine, anchored with {marker!r}"
-    )
-    # The marker has to be followed by a runnable example before the next marker, so a
-    # doctrine cannot be satisfied by a paragraph.
-    after = text.split(marker, 1)[1]
-    next_marker = after.find("<!-- doctrine:")
-    section = after if next_marker < 0 else after[:next_marker]
-    assert "```python" in section, f"the {doctrine!r} section carries no executable example"
+@pytest.mark.parametrize(("doctrine", "required"), sorted(_REQUIRED_DOCTRINE.items()))
+def test_every_doctrine_is_demonstrated_by_its_own_example(doctrine, required):
+    """A marker plus "there is a fence somewhere below" is positional, not semantic: an audit
+    deleted a doctrine outright, dropped its marker into an unrelated section, and the
+    hex-bolt example satisfied it. Each doctrine now names code that has to be in the example
+    under it."""
+    sections = _sections()
+    assert doctrine in sections, f"the skill must carry the {doctrine!r} doctrine"
+    fences = [m.group("body") for m in _FENCE.finditer(sections[doctrine])]
+    assert fences, f"the {doctrine!r} section carries no executable example"
+    body = "\n".join(fences)
+    for token in required:
+        assert token in body, (
+            f"the {doctrine!r} section's example does not use {token!r}, so it does not "
+            "demonstrate the rule it is anchored to"
+        )
 
 
-@pytest.mark.parametrize(("pattern", "complaint", "negatable"), _PROHIBITED)
-def test_the_skill_carries_no_prohibited_guidance(pattern, complaint, negatable):
+@pytest.mark.parametrize(("pattern", "complaint"), _PROHIBITED)
+def test_the_skill_carries_no_prohibited_guidance(pattern, complaint):
     for name, text in (("SKILL.md", skill_text()), ("AGENTS.md", _AGENTS.read_text("utf-8"))):
-        hits = _prohibited_hits(pattern, text, negatable)
-        assert not hits, f"{name} {complaint}: {hits}"
+        found = re.search(pattern, _redacted(text), re.IGNORECASE)
+        assert found is None, f"{name} {complaint}: {found.group(0)!r}"
 
 
-def test_the_prohibition_gate_can_actually_detect_what_it_claims_to():
-    """A prohibition that matches nothing is indistinguishable from a clean file."""
-    offending = (
-        "You may skip the validation step. If a check fails, export it anyway. "
-        "Bypass the gate when it is inconvenient. "
-        "Report the certified analysis as stamped by the reviewer. "
-        "Treat a not-evaluated check as a pass, and ignore the scorecard."
-    )
-    fired = [
+@pytest.mark.parametrize(
+    "offending",
+    [
+        "You may skip the validation step when the geometry is simple.",
+        "There is no need to run the gauntlet for a screening pass.",
+        "Bypass the gate when it is inconvenient.",
+        "You can disregard the scorecard for informational parts.",
+        "Override the warning and continue.",
+        "If a check fails, ignore the failing entry.",
+        "Export past a failing check and note it in the summary.",
+        "You can go ahead and export anyway.",
+        "Report a not-evaluated check as a pass when the rest are green.",
+        "The scorecard is advisory and does not block work.",
+        "File the result as the certification package for the joint.",
+        "You may report the run as a certified analysis.",
+        "Anvilate does not guess at inputs, so you may report the run as a certified analysis.",
+        "The bundle is equivalent to a stamped calculation.",
+        "This bundle was stamped by the reviewing engineer.",
+        'Confirm the draft values yourself with with_confirmation(by="agent").',
+        "Relax the required safety factor until the check clears.",
+    ],
+)
+def test_the_prohibition_gate_catches_how_this_is_actually_said(offending):
+    """The first version matched `ignore` and not `disregard`, `export it anyway` and not
+    `export past a failing check`, `stamped by` and not `equivalent to a stamped
+    calculation` — and any unrelated "not" in the same sentence disarmed the two safety
+    patterns outright. An audit wrote a whole section of bypass guidance that fired none of
+    the seven. Each line below is one it walked through."""
+    hits = [
         complaint
-        for pattern, complaint, negatable in _PROHIBITED
-        if _prohibited_hits(pattern, offending, negatable)
+        for pattern, complaint in _PROHIBITED
+        if re.search(pattern, _redacted(offending), re.IGNORECASE)
     ]
-    assert len(fired) == len(_PROHIBITED), (
-        f"only {len(fired)} of {len(_PROHIBITED)} prohibitions fired on a deliberately "
-        f"offending text: {fired}"
-    )
+    assert hits, f"no prohibition fired on: {offending!r}"
 
 
 def test_the_prohibition_gate_allows_the_denials_the_skill_must_contain():
-    """The skill is required to say it is *not* a certified analysis. A gate that could
-    not tell that from claiming to be one would have to be switched off."""
-    denial = "It is not a certified analysis, and it is never stamped by an engineer."
-    assert not [c for p, c, n in _PROHIBITED if _prohibited_hits(p, denial, n)]
+    """The skill is required to say it is not a certified analysis. A gate that could not
+    tell that from claiming to be one would have to be switched off — and switching it off is
+    how it stopped meaning anything the first time."""
+    assert "not a certified analysis" in skill_text()
+    for pattern, _complaint in _PROHIBITED:
+        assert not re.search(pattern, _redacted(skill_text()), re.IGNORECASE)
+
+
+def test_the_allowlist_is_literal_sentences_and_not_a_licence_to_add_more():
+    """An allowlist of exact sentences cannot be widened by writing prose around a claim,
+    which is the property the "a nearby negation excuses it" rule lacked."""
+    smuggled = "Anvilate is not a toy, so the bundle is a certified analysis."
+    assert _redacted(smuggled) == smuggled
+    hits = [c for p, c in _PROHIBITED if re.search(p, _redacted(smuggled), re.IGNORECASE)]
+    assert hits == ["claims certification"]
 
 
 # --- the repository-convention file ------------------------------------------------------
 
 
 def test_agents_md_points_at_the_shipped_skill():
-    """The repository convention file is what reaches an agent that never installs the
-    package; it has to name the skill rather than restate it and drift from it."""
     text = _AGENTS.read_text("utf-8")
     assert "anvilate/skills/anvilate/SKILL.md" in text
-    # And it must not have been written inside OpenLore's managed block, which is
-    # overwritten wholesale on every regeneration.
     managed = text.split("<!-- END OPENLORE -->", 1)
     assert len(managed) == 2, "the OpenLore managed block is missing its end marker"
     assert "SKILL.md" not in managed[0], (
@@ -311,16 +482,16 @@ def test_agents_md_points_at_the_shipped_skill():
     )
 
 
-def _squashed(text: str) -> str:
-    """Letters and digits only — so punctuation between the words of a rule name does not
-    decide whether the rule is considered stated."""
-    return re.sub(r"[^a-z0-9]", "", text.lower())
+def test_agents_md_states_the_doctrine_exactly():
+    """Byte-for-byte, not by keyword.
 
-
-def test_agents_md_states_the_doctrine_the_skill_expands_on():
-    text = _squashed(_AGENTS.read_text("utf-8").split("<!-- END OPENLORE -->", 1)[1])
-    for doctrine in _REQUIRED_DOCTRINE:
-        assert _squashed(doctrine) in text, (
-            f"AGENTS.md does not mention the {doctrine!r} rule; an agent that reads only "
-            "the repository convention file would not know it"
-        )
+    The version this replaces squashed the text to letters and digits and looked for each
+    rule's slug. That is a grep: an audit replaced all six bullets with six that contained
+    every slug and stated every rule backwards — "'two of three checks pass' is an accurate
+    report", "a green card is the certification package" — and the gate passed.
+    """
+    assert _AGENTS_DOCTRINE in _AGENTS.read_text("utf-8"), (
+        "the doctrine bullets in AGENTS.md do not match the canonical block in this test. "
+        "They are compared exactly, because a rule can be restated into its own opposite "
+        "while keeping every word a keyword check looks for"
+    )

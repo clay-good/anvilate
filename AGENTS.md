@@ -40,7 +40,7 @@ on, in short:
   guessing sizes, and say out loud when you round to a stock size.
 - **Confirm before use.** Values read from a requirements document or a calibration
   certificate are drafts. `release()` refuses until a named person confirms them — do not
-  read the drafts directly, and do not confirm on the user's behalf.
+  read the drafts directly, and never make the confirmation decision for the user.
 - **Screening, not certified.** Say what a green scorecard is: the closed-form checks that
   ran were satisfied by the inputs given. Report what the evidence bundle says it does not
   cover.
