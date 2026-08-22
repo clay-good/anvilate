@@ -1,0 +1,873 @@
+{
+  "$defs": {
+    "AcceptanceCriteria": {
+      "additionalProperties": false,
+      "description": "Which checks must run and the thresholds they are judged against.",
+      "properties": {
+        "fea_convergence_tol": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fea Convergence Tol"
+        },
+        "max_displacement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tiers": {
+          "items": {
+            "$ref": "#/$defs/ValidationTier"
+          },
+          "minItems": 1,
+          "title": "Tiers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tiers"
+      ],
+      "title": "AcceptanceCriteria",
+      "type": "object"
+    },
+    "ChainLink": {
+      "additionalProperties": false,
+      "description": "One dimension in a stack-up chain, referenced by its tag.\n\n``direction`` is ``+1`` when the dimension growing widens the resulting gap\nand ``-1`` when it narrows it.",
+      "properties": {
+        "dimension": {
+          "title": "Dimension",
+          "type": "string"
+        },
+        "direction": {
+          "default": 1,
+          "enum": [
+            1,
+            -1
+          ],
+          "title": "Direction",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dimension"
+      ],
+      "title": "ChainLink",
+      "type": "object"
+    },
+    "Constraints": {
+      "additionalProperties": false,
+      "description": "Bounds the design must satisfy.",
+      "properties": {
+        "envelope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Envelope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_cost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenanced_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_mass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenanced_Annotated_Quantity__AfterValidator__"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "min_safety_factor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenanced_float_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "Constraints",
+      "type": "object"
+    },
+    "DimensionChain": {
+      "additionalProperties": false,
+      "description": "A user-declared 1D stack-up chain and the clearance it must hold.\n\nThe chain names dimensions (by tag) and sums their directed sizes into a gap\nthat must land within ``required_min``..``required_max``. :meth:`build`\nresolves it against the spec's dimensions into a\n:class:`~anvilate.tolerance.StackUp` for worst-case / RSS analysis.",
+      "properties": {
+        "links": {
+          "items": {
+            "$ref": "#/$defs/ChainLink"
+          },
+          "minItems": 1,
+          "title": "Links",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "required_max": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "required_min": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "name",
+        "links",
+        "required_min",
+        "required_max"
+      ],
+      "title": "DimensionChain",
+      "type": "object"
+    },
+    "Envelope": {
+      "additionalProperties": false,
+      "description": "A bounding-box constraint.",
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "y": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "z": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "title": "Envelope",
+      "type": "object"
+    },
+    "FitTolerance": {
+      "additionalProperties": false,
+      "description": "An ISO 286 fit designation for a single feature, e.g. ``H7`` or ``g6``.",
+      "properties": {
+        "designation": {
+          "title": "Designation",
+          "type": "string"
+        },
+        "type": {
+          "const": "fit",
+          "default": "fit",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "designation"
+      ],
+      "title": "FitTolerance",
+      "type": "object"
+    },
+    "GeometricCharacteristic": {
+      "description": "The geometric characteristics this slice supports (ISO 1101 / ASME Y14.5).",
+      "enum": [
+        "flatness",
+        "straightness",
+        "circularity",
+        "cylindricity",
+        "perpendicularity",
+        "parallelism",
+        "angularity",
+        "position",
+        "circular_runout",
+        "total_runout"
+      ],
+      "title": "GeometricCharacteristic",
+      "type": "string"
+    },
+    "GeometricTolerance": {
+      "additionalProperties": false,
+      "description": "A geometric tolerance (GD&T feature control frame) on a tagged feature.\n\n``tolerance`` is the tolerance-zone width, or its diameter when ``diametral``\n(the ⌀ modifier, used for a hole axis under a position control). ``feature``\nis the semantic tag the control applies to; ``datums`` are the ordered datum\nreferences (primary, secondary, tertiary). Whether a ``feature`` or ``datum``\ntag names a real geometry feature is checked by the tag-graph layer, not here.",
+      "properties": {
+        "characteristic": {
+          "$ref": "#/$defs/GeometricCharacteristic"
+        },
+        "datums": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Datums",
+          "type": "array"
+        },
+        "diametral": {
+          "default": false,
+          "title": "Diametral",
+          "type": "boolean"
+        },
+        "feature": {
+          "title": "Feature",
+          "type": "string"
+        },
+        "tolerance": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "characteristic",
+        "tolerance",
+        "feature"
+      ],
+      "title": "GeometricTolerance",
+      "type": "object"
+    },
+    "HolePattern": {
+      "additionalProperties": false,
+      "description": "A bolt/hole pattern published as part of an interface contract.",
+      "properties": {
+        "diameter": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "hole_count": {
+          "minimum": 1,
+          "title": "Hole Count",
+          "type": "integer"
+        },
+        "hole_size": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "diameter",
+        "hole_count",
+        "hole_size"
+      ],
+      "title": "HolePattern",
+      "type": "object"
+    },
+    "ImportedInterface": {
+      "additionalProperties": false,
+      "description": "An interface imported from another spec's published contract.",
+      "properties": {
+        "contract": {
+          "title": "Contract",
+          "type": "string"
+        },
+        "source_spec": {
+          "title": "Source Spec",
+          "type": "string"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "type": {
+          "const": "imported",
+          "default": "imported",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_spec",
+        "contract",
+        "tag"
+      ],
+      "title": "ImportedInterface",
+      "type": "object"
+    },
+    "InterfaceContract": {
+      "additionalProperties": false,
+      "description": "A published, importable interface: the geometry a mating part designs against.",
+      "properties": {
+        "mating_plane": {
+          "title": "Mating Plane",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "pattern": {
+          "$ref": "#/$defs/HolePattern"
+        }
+      },
+      "required": [
+        "name",
+        "mating_plane",
+        "pattern"
+      ],
+      "title": "InterfaceContract",
+      "type": "object"
+    },
+    "LimitTolerance": {
+      "additionalProperties": false,
+      "description": "An asymmetric tolerance given as signed upper/lower limit deviations.",
+      "properties": {
+        "lower": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "type": {
+          "const": "limits",
+          "default": "limits",
+          "title": "Type",
+          "type": "string"
+        },
+        "upper": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "upper",
+        "lower"
+      ],
+      "title": "LimitTolerance",
+      "type": "object"
+    },
+    "LoadCase": {
+      "additionalProperties": false,
+      "description": "A single load condition the part must survive.\n\nEach ``kind`` carries its own magnitude: a ``static`` or ``quasi_static`` case\na ``force`` (quasi-static also a ``quasi_static_factor`` that scales it), a\n``remote_mass`` case an offset ``remote_mass``. A case missing its magnitude is\nrejected at construction — a downstream analysis can never be handed a load\nwith nothing to apply.\n\n``nature`` optionally classifies the case by its ASCE 7 load nature (dead, live,\nwind, seismic, …) so a declared combination set can factor it. It is orthogonal\nto ``kind`` (which is how the load is applied) and defaults to ``None`` — a spec\nthat does not use load combinations leaves it unset.",
+      "properties": {
+        "applied_to": {
+          "title": "Applied To",
+          "type": "string"
+        },
+        "force": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "$ref": "#/$defs/LoadKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "nature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LoadNature"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "quasi_static_factor": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quasi Static Factor"
+        },
+        "remote_mass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "applied_to"
+      ],
+      "title": "LoadCase",
+      "type": "object"
+    },
+    "LoadKind": {
+      "enum": [
+        "static",
+        "quasi_static",
+        "remote_mass"
+      ],
+      "title": "LoadKind",
+      "type": "string"
+    },
+    "LoadNature": {
+      "description": "The nature of a load case, by its ASCE 7 symbol.\n\nThe factor a combination applies depends on the load's nature, not its name —\ndead load is always factored as dead load. Seismic (``E``) carries the\nhorizontal earthquake effect ρ·Q_E; the vertical part folds into the dead factor.",
+      "enum": [
+        "D",
+        "L",
+        "Lr",
+        "S",
+        "R",
+        "W",
+        "E"
+      ],
+      "title": "LoadNature",
+      "type": "string"
+    },
+    "Manufacturing": {
+      "additionalProperties": false,
+      "description": "The manufacturing process and the DFM parameters it is checked against.",
+      "properties": {
+        "min_wall": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "process": {
+          "$ref": "#/$defs/ManufacturingProcess"
+        },
+        "tolerance_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tolerance Class"
+        }
+      },
+      "required": [
+        "process"
+      ],
+      "title": "Manufacturing",
+      "type": "object"
+    },
+    "ManufacturingProcess": {
+      "enum": [
+        "cnc_milling",
+        "cnc_turning",
+        "grinding",
+        "wire_edm",
+        "reaming",
+        "fdm",
+        "sls",
+        "sheet_metal",
+        "injection_molding",
+        "die_casting"
+      ],
+      "title": "ManufacturingProcess",
+      "type": "string"
+    },
+    "MaterialRef": {
+      "additionalProperties": false,
+      "description": "A database identifier for a material (e.g. ``AA-6061-T6``).",
+      "properties": {
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "title": "MaterialRef",
+      "type": "object"
+    },
+    "Origin": {
+      "description": "The source of a value in a compiled Design Spec.",
+      "enum": [
+        "user_stated",
+        "database_resolved",
+        "default"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "Provenanced_Annotated_Quantity__AfterValidator__": {
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "value",
+        "origin"
+      ],
+      "title": "Provenanced[Annotated[Quantity, AfterValidator]]",
+      "type": "object"
+    },
+    "Provenanced_UnitSystem_": {
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "value": {
+          "$ref": "#/$defs/UnitSystem"
+        }
+      },
+      "required": [
+        "value",
+        "origin"
+      ],
+      "title": "Provenanced[UnitSystem]",
+      "type": "object"
+    },
+    "Provenanced_float_": {
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rationale"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "origin"
+      ],
+      "title": "Provenanced[float]",
+      "type": "object"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "StandardComponentInterface": {
+      "additionalProperties": false,
+      "description": "An interface to a standard component, referenced by database ID.",
+      "properties": {
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "type": {
+          "const": "standard_component",
+          "default": "standard_component",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "tag"
+      ],
+      "title": "StandardComponentInterface",
+      "type": "object"
+    },
+    "SymmetricTolerance": {
+      "additionalProperties": false,
+      "description": "A symmetric ± tolerance, e.g. ``±0.1 mm``.",
+      "properties": {
+        "plus_minus": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "type": {
+          "const": "symmetric",
+          "default": "symmetric",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plus_minus"
+      ],
+      "title": "SymmetricTolerance",
+      "type": "object"
+    },
+    "ToleranceDimension": {
+      "additionalProperties": false,
+      "description": "An explicitly-toleranced dimension declared on the spec.\n\n``tolerance`` is the typed :data:`~anvilate.tolerance.Tolerance` union —\nsymmetric ±, asymmetric limits, or an ISO 286 fit — and overrides the general\nclass for the feature at ``tag``. :meth:`resolve` yields the common\n:class:`~anvilate.tolerance.ResolvedTolerance` band the drawing, DFM, and\nstack-up layers read.",
+      "properties": {
+        "nominal": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "tolerance": {
+          "discriminator": {
+            "mapping": {
+              "fit": "#/$defs/FitTolerance",
+              "limits": "#/$defs/LimitTolerance",
+              "symmetric": "#/$defs/SymmetricTolerance"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SymmetricTolerance"
+            },
+            {
+              "$ref": "#/$defs/LimitTolerance"
+            },
+            {
+              "$ref": "#/$defs/FitTolerance"
+            }
+          ],
+          "title": "Tolerance"
+        }
+      },
+      "required": [
+        "tag",
+        "nominal",
+        "tolerance"
+      ],
+      "title": "ToleranceDimension",
+      "type": "object"
+    },
+    "UnitSystem": {
+      "description": "The unit system a spec is authored and reported in.",
+      "enum": [
+        "SI",
+        "US"
+      ],
+      "title": "UnitSystem",
+      "type": "string"
+    },
+    "ValidationTier": {
+      "enum": [
+        "T0_geometry",
+        "T1_analytical",
+        "T2_dfm",
+        "T3_fea"
+      ],
+      "title": "ValidationTier",
+      "type": "string"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/design-spec/1.1.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A complete, typed statement of engineering intent for one part.",
+  "properties": {
+    "acceptance": {
+      "$ref": "#/$defs/AcceptanceCriteria"
+    },
+    "anvilate_spec": {
+      "default": "1.1.0",
+      "title": "Anvilate Spec",
+      "type": "string"
+    },
+    "chains": {
+      "items": {
+        "$ref": "#/$defs/DimensionChain"
+      },
+      "title": "Chains",
+      "type": "array"
+    },
+    "combination_basis": {
+      "anyOf": [
+        {
+          "enum": [
+            "asce7_lrfd",
+            "asce7_asd",
+            "asce7_lrfd_seismic",
+            "asce7_asd_seismic"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Combination Basis"
+    },
+    "constraints": {
+      "$ref": "#/$defs/Constraints"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "dimensions": {
+      "items": {
+        "$ref": "#/$defs/ToleranceDimension"
+      },
+      "title": "Dimensions",
+      "type": "array"
+    },
+    "exports": {
+      "items": {
+        "$ref": "#/$defs/InterfaceContract"
+      },
+      "title": "Exports",
+      "type": "array"
+    },
+    "geometric_tolerances": {
+      "items": {
+        "$ref": "#/$defs/GeometricTolerance"
+      },
+      "title": "Geometric Tolerances",
+      "type": "array"
+    },
+    "interfaces": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "imported": "#/$defs/ImportedInterface",
+            "standard_component": "#/$defs/StandardComponentInterface"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/StandardComponentInterface"
+          },
+          {
+            "$ref": "#/$defs/ImportedInterface"
+          }
+        ]
+      },
+      "title": "Interfaces",
+      "type": "array"
+    },
+    "load_cases": {
+      "items": {
+        "$ref": "#/$defs/LoadCase"
+      },
+      "title": "Load Cases",
+      "type": "array"
+    },
+    "manufacturing": {
+      "$ref": "#/$defs/Manufacturing"
+    },
+    "material": {
+      "$ref": "#/$defs/MaterialRef"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "seismic_design_acceleration": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Seismic Design Acceleration"
+    },
+    "seismic_redundancy_factor": {
+      "default": 1.0,
+      "exclusiveMinimum": 0,
+      "title": "Seismic Redundancy Factor",
+      "type": "number"
+    },
+    "units": {
+      "$ref": "#/$defs/Provenanced_UnitSystem_"
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "units",
+    "material",
+    "manufacturing",
+    "acceptance"
+  ],
+  "title": "DesignSpec",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

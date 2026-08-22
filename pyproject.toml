@@ -32,7 +32,10 @@ dependencies = [
 # DXF drawing export (ezdxf is MIT, pure-Python). The core stays dependency-light;
 # import anvilate.export.dxf only pulls ezdxf when this extra is installed.
 export = ["ezdxf>=1.1"]
-dev = ["pytest>=8.0", "ruff>=0.6", "ezdxf>=1.1"]
+# `jsonschema` is a dev dependency and not a runtime one: it validates the published
+# JSON Schema artifacts against the 2020-12 meta-schema in CI, which is a check about
+# what Anvilate emits rather than something anvilate needs to run.
+dev = ["pytest>=8.0", "ruff>=0.6", "ezdxf>=1.1", "jsonschema>=4.21"]
 
 [project.urls]
 Homepage = "https://github.com/clay-good/anvilate"

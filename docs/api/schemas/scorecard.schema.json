@@ -1,0 +1,383 @@
+{
+  "$defs": {
+    "CheckStatus": {
+      "description": "A check's outcome.\n\n``NOT_EVALUATED`` is never silently treated as a pass — a check that could\nnot run is reported as such. ``OVER_MARGIN`` is a passing check whose margin\nran past a declared upper band: acceptable, never blocking, but flagged so an\nover-engineered candidate is as visible as a failing one.",
+      "enum": [
+        "pass",
+        "fail",
+        "over_margin",
+        "not_evaluated"
+      ],
+      "title": "CheckStatus",
+      "type": "string"
+    },
+    "Derivation": {
+      "description": "A check's worked calculation: formula, substitution, result, citation.\n\n``symbolic`` is the governing formula written the way the source writes it\n(``\"σ_b = M · c / I\"``); ``inputs`` supply every symbol on its right-hand side;\n``result`` is the left-hand side with the computed value; and ``citation`` names\nthe handbook section or standard clause the formula comes from. Every symbol\nused carries its own glossary line, so the derivation is readable without the\nsource book open.",
+      "properties": {
+        "citation": {
+          "title": "Citation",
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/SymbolValue"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "result": {
+          "$ref": "#/$defs/SymbolValue"
+        },
+        "symbolic": {
+          "title": "Symbolic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbolic",
+        "inputs",
+        "result",
+        "citation"
+      ],
+      "title": "Derivation",
+      "type": "object"
+    },
+    "Direction": {
+      "description": "Which way a parameter has to move to improve a check's margin.",
+      "enum": [
+        "increase",
+        "decrease"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "MarginUncertainty": {
+      "description": "A sampled margin: the chance it falls short, its band, and what drives it.\n\n``shortfall_probability`` is the fraction of samples whose response fell below\n``required`` — the number a nominal pass can hide. ``lower`` and ``upper`` bound\nthe central ``coverage`` fraction of the sampled response. ``sensitivities``\nranks the inputs by their first-order share of the response variance, largest\nfirst. Everything is reproducible from ``seed``.",
+      "properties": {
+        "citation": {
+          "default": "Monte Carlo propagation of input distributions; first-order (Taylor) variance sensitivity. Screening only — not a certified reliability analysis.",
+          "title": "Citation",
+          "type": "string"
+        },
+        "coverage": {
+          "title": "Coverage",
+          "type": "number"
+        },
+        "lower": {
+          "title": "Lower",
+          "type": "number"
+        },
+        "mean": {
+          "title": "Mean",
+          "type": "number"
+        },
+        "method": {
+          "const": "monte_carlo",
+          "default": "monte_carlo",
+          "title": "Method",
+          "type": "string"
+        },
+        "required": {
+          "title": "Required",
+          "type": "number"
+        },
+        "samples": {
+          "title": "Samples",
+          "type": "integer"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "sensitivities": {
+          "items": {
+            "$ref": "#/$defs/Sensitivity"
+          },
+          "title": "Sensitivities",
+          "type": "array"
+        },
+        "shortfall_probability": {
+          "title": "Shortfall Probability",
+          "type": "number"
+        },
+        "std": {
+          "title": "Std",
+          "type": "number"
+        },
+        "upper": {
+          "title": "Upper",
+          "type": "number"
+        }
+      },
+      "required": [
+        "samples",
+        "seed",
+        "required",
+        "mean",
+        "std",
+        "shortfall_probability",
+        "lower",
+        "upper",
+        "coverage",
+        "sensitivities"
+      ],
+      "title": "MarginUncertainty",
+      "type": "object"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "RepairHint": {
+      "description": "How to move a failing check back into bounds.\n\nA failed check computes this deterministically — never an LLM guess. It names\nthe governing spec ``parameter`` by its stable name and the ``direction`` that\nimproves the margin. When a paired design inverse exists, ``corrective_value``\n(in ``unit``) is the value of that parameter which satisfies the check at the\nrequired margin — turning repair from a search into a single solve. Without an\ninverse the value is ``None``: a direction is still honest, an invented number\nis not. ``provenance`` records where the hint came from (the inverse function,\nor a monotonicity declaration).",
+      "properties": {
+        "corrective_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Corrective Value"
+        },
+        "direction": {
+          "$ref": "#/$defs/Direction"
+        },
+        "parameter": {
+          "title": "Parameter",
+          "type": "string"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provenance"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "required": [
+        "parameter",
+        "direction"
+      ],
+      "title": "RepairHint",
+      "type": "object"
+    },
+    "ScorecardEntry": {
+      "description": "One check's result: a name, a tri-state status, and a detail line.",
+      "properties": {
+        "derivation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Derivation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference"
+        },
+        "repair_hint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RepairHint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "required_safety_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Safety Factor"
+        },
+        "safety_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Safety Factor"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MarginUncertainty"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "upper_safety_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper Safety Factor"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "detail"
+      ],
+      "title": "ScorecardEntry",
+      "type": "object"
+    },
+    "Sensitivity": {
+      "description": "One input's share of the response variance, first-order (Taylor).",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "variance_share": {
+          "title": "Variance Share",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "variance_share"
+      ],
+      "title": "Sensitivity",
+      "type": "object"
+    },
+    "SymbolValue": {
+      "description": "One symbol in a derivation: its name, what it means, and its value.\n\n``symbol`` is the token as it appears in the symbolic formula (``\"M\"``,\n``\"σ_b\"``), ``description`` the plain-language gloss a reviewer unfamiliar with\nthe source text needs, and ``value`` either a :class:`~anvilate.units.Quantity`\nor a bare float for a genuinely dimensionless number (a friction coefficient, a\ncount). ``unit`` forces a display unit; without it the value renders in the\nreport's unit system.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "symbol",
+        "description",
+        "value"
+      ],
+      "title": "SymbolValue",
+      "type": "object"
+    }
+  },
+  "$id": "https://anvilate.dev/schemas/scorecard/1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A collection of check entries with a rolled-up overall status.\n\nThe roll-up honours No-silent-green: the scorecard :attr:`status` is ``FAIL``\nif any check failed, else ``NOT_EVALUATED`` if any check could not run (or\nthere are no checks at all), else ``OVER_MARGIN`` if any check passed above\nits band, and only ``PASS`` when every check ran and passed cleanly. So\n:attr:`passed` is never true while a check is unevaluated, and an\nover-engineered card is visible without being blocked.",
+  "properties": {
+    "entries": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ScorecardEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    }
+  },
+  "title": "Scorecard",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}
