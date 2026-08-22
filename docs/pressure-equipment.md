@@ -23,7 +23,7 @@ wall. The same 800 mm ID vessel at 2 MPa, at two shell thicknesses:
 | 2:1 ellipsoidal head (UG-32) | PASS, SF 2.15 | PASS, SF 1.12 |
 | 6 in nozzle opening (UG-37) | PASS, SF 1.66 | **FAIL, SF 0.49** |
 
-The shell got 1.9× thinner and the opening got 3.4× worse. UG-37 credits the shell's
+The shell got 1.75× thinner (14 mm to 8 mm) and the opening got 3.4× worse (SF 1.66 to 0.49). UG-37 credits the shell's
 *excess* wall as reinforcement (A₁), and excess falls away far faster than thickness
 does. A vessel trimmed to its pressure minimum has nothing left to reinforce its
 openings with — and the opening is the component nobody re-checks after trimming a wall.
@@ -87,10 +87,14 @@ bolt-spacing correction `B_sc` and the Appendix 2 rigidity index are also out of
 and a flange can fail either while its stresses pass.
 
 The `T`, `U`, `Y`, `Z` equations were **anchored before they were shipped**: a published
-worked calculation at `K = 1.41939` reports `T = 1.74578` and `Z = 2.97106`, and these
-give 1.745783 and 2.971062 — both round to the published figures exactly. `Y` and `U`
-are tied by an identity that falls out of the published constants (`U = Y/0.910` at
-every `K`), so reproducing one reproduces the other. All of it is asserted in the test suite.
+worked calculation at `K = 1.41939` reports `T = 1.74578` and `Z = 2.97106`. The equations
+give **T = 1.7457849** and **Z = 2.9710881**. T reproduces the published figure exactly at
+six figures; Z agrees to 9 parts per million and rounds to 2.97109 rather than the
+published 2.97106 — a gap consistent with the rounding of the published calculation's own
+inputs, and small enough to confirm the transcription, but not the exact match an earlier
+version of this page claimed. `Y` and `U` are tied by an identity that falls out of the
+published constants (`U = Y/0.910` at every `K`), so reproducing one reproduces the other.
+All of it is asserted in the test suite, at the tolerance the anchor actually supports.
 
 ### The flange sized by the bolt-up, not the pressure
 

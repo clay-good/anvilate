@@ -9,7 +9,7 @@ balance. The whole of flexural RC design turns on that one relation and its inve
 A 300 mm × 600 mm floor beam (effective depth 550 mm) in 30 MPa concrete with 420 MPa
 bars is reinforced with 1500 mm² of steel — about three No. 25 bars. That develops a
 nominal moment of 321 kN·m. Ask the section to carry a larger 400 kN·m demand and the
-design inverse says it needs 1914 mm² — roughly a fourth bar. Neither number was
+design inverse says it needs 1915 mm² — roughly a fourth bar. Neither number was
 guessed: the forward gives the capacity of a chosen bar layout, the inverse the steel
 a demand requires.
 

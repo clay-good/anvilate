@@ -43,7 +43,7 @@ Two traps this library has actually been bitten by, both worth knowing before yo
 your first conversion:
 
 - **`.to("K")` on a temperature *difference*** carries the 273.15 offset into a delta.
-  In a cubic correlation that was a factor of 22,703. Use the delta helpers.
+  In a cubic correlation that was a factor of 22,701. Use the delta helpers.
 - **`.to("Hz")` on an angular rate** silently drops the 2π. Rotational speeds go through
   `angular_speed_rad_per_s` / `count_rate_per_second`; no `.to("Hz")` survives outside
   `units/rotation.py`.

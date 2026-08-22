@@ -9,7 +9,7 @@ This example turns a 50 mm bar with a carbide insert (Taylor constant C = 400 m/
 n = 0.25) at a 0.2 mm/rev feed and a 2 mm depth. At a conservative 157 m/min the spindle runs 1000
 rpm, removes metal at about 63 cm³/min, and the edge lasts about 42 minutes. Push the surface speed
 to 250 m/min and the spindle jumps to about 1592 rpm, the removal rate climbs to about 100 cm³/min —
-a 60% faster cut — but the tool life collapses to about 6.5 minutes, more than six times shorter.
+a 60% faster cut — but the tool life collapses to about 6.6 minutes, more than six times shorter.
 The example computes the rpm, the removal rate, and the tool life at both speeds so the trade is
 explicit: the productivity gain is linear in speed, but the tool-life cost goes as speed to the
 fourth power, and somewhere between these two points sits the economical speed a shop actually runs.

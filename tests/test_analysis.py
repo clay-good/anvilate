@@ -38373,7 +38373,7 @@ def test_boiling_refuses_an_offset_scale_excess_temperature() -> None:
     """ΔT_e is a temperature DIFFERENCE, and the raw .to("K") added 273.15 to it.
 
     Rohsenow is CUBIC in the excess temperature, so writing a 10 K superheat the natural
-    way -- Quantity(10, "degC") -- over-predicted the flux by (283.15/10)**3 = 22,703x
+    way -- Quantity(10, "degC") -- over-predicted the flux by (283.15/10)**3 = 22,701x
     and sailed straight past the critical-heat-flux ceiling the module exists to screen.
     """
     from anvilate.units.temperature import OffsetTemperatureError

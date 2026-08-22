@@ -11,7 +11,7 @@ A 4x10 sawn header (3.5 x 9.25 in actual) spans 3.5 ft under 1,950 lb/ft and lan
 1.5 in onto a stud-wall plate at each end. Screened against the same species/grade
 reference values — F_b = 900 psi, F_v = 180 psi, F_c⊥ = 625 psi — the beam itself is
 fine: bending runs at a safety factor of 1.25 and horizontal shear at 1.14. The
-bearing does not. The 3,413 lb reaction spread over 3.5 x 1.5 in is 650 psi across
+bearing does not. The 3,412 lb reaction spread over 3.5 x 1.5 in is 650 psi across
 the grain against a 625 psi allowable, and the header fails at a detail no bending
 check can see.
 

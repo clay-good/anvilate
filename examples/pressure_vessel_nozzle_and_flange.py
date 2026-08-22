@@ -13,7 +13,7 @@ The same vessel at two shell thicknesses:
 * **Built at 8 mm.** The shell still passes at SF 1.11 and the head at 1.12 — the
   wall is genuinely adequate for pressure. The opening fails at **0.49**, less than
   half the area it needs, because the surplus that was reinforcing it is gone. The
-  shell got 1.9x thinner and the opening got 3.4x worse: reinforcement depends on
+  shell got 1.75x thinner and the opening got 3.4x worse: reinforcement depends on
   the wall's *excess*, not its thickness, and excess falls away much faster.
 
 That is the whole lesson. A vessel trimmed to its pressure minimum has no

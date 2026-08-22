@@ -53,9 +53,11 @@ long_flaw.outside_validity()
 ```
 
 The library's tests anchor the solution against its own limiting case: for a semi-circular
-flaw in a wide plate it must return 1.04·(2/π)·σ√(πa) at the deepest point — the embedded
-penny-shaped crack times the free-surface magnification — and 0.728·σ√(πa) at the surface
-point. The reference stress is checked the same way: strip the bending term and it must be
+flaw in a wide plate it must land within about 0.1% of 1.04·(2/π)·σ√(πa) at the deepest
+point — the embedded penny-shaped crack times the free-surface magnification — and of
+0.729·σ√(πa) at the surface point. Both are approximations to the Newman–Raju fit rather
+than identities it satisfies exactly (0.66254 against 0.66208, and 0.72880), which is why
+the suite asserts them at 2e-3 and this page says "about". The reference stress is checked the same way: strip the bending term and it must be
 the plain net-section stress; strip the flaw and apply pure bending and it must give
 two-thirds of the elastic bending stress, which is first yield over a fully plastic hinge.
 
