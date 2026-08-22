@@ -15,3 +15,35 @@ cached cross-module structure; otherwise carry on.
 For the MCP setup, ensure `openlore mcp` is configured as an MCP server.
 See https://github.com/clay-good/OpenLore for details.
 <!-- END OPENLORE -->
+
+## Using Anvilate correctly
+
+Anvilate turns a described part into a **scorecard**: one typed result per check, each
+citing the clause behind it. It is a T1 analytical screening library — closed-form,
+unit-checked, fast — and it is not a certified analysis.
+
+The full guidance, with a worked example for every rule, ships inside the package at
+`src/anvilate/skills/anvilate/SKILL.md` (installed as `anvilate/skills/anvilate/SKILL.md`,
+so it is available offline). Read it before driving the library. The six rules it expands
+on, in short:
+
+- **Retrieval, not recall.** Standard dimensions come from the bundled databases with
+  their citations attached. A refusal names the near misses; do not answer it with a
+  remembered number.
+- **Read the scorecard.** Report `Scorecard.status` and `governing()`, not an impression
+  of how the calculation went.
+- **Not evaluated is not a pass.** A check that could not run is `NOT_EVALUATED`, a card
+  containing one is never `passed`, and "two of three checks pass" is a true sentence that
+  reads as a passing part.
+- **Inverse first repair.** A failing check carries a repair hint; where a design inverse
+  exists it solves for the value that lands exactly at the required margin. Use it before
+  guessing sizes, and say out loud when you round to a stock size.
+- **Confirm before use.** Values read from a requirements document or a calibration
+  certificate are drafts. `release()` refuses until a named person confirms them — do not
+  read the drafts directly, and do not confirm on the user's behalf.
+- **Screening, not certified.** Say what a green scorecard is: the closed-form checks that
+  ran were satisfied by the inputs given. Report what the evidence bundle says it does not
+  cover.
+
+The skill is documentation. It grants nothing, loosens no gate, and changes no result;
+identical calls behave identically whether or not it was loaded.
