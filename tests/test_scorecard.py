@@ -503,3 +503,19 @@ def test_a_failing_check_without_a_safety_factor_still_governs() -> None:
     # Nothing blocking and no safety factor anywhere is still None.
     clean = ScorecardEntry(name="note", status=CheckStatus.PASS, detail="informational")
     assert Scorecard(entries=(clean,)).governing() is None
+
+
+def test_an_unavailable_factor_keeps_both_the_requirement_and_the_band():
+    """The ``computed is None`` branch used to drop both numbers, so a gap in an exported
+    scorecard could not say what it would have been judged against. A test that pinned only
+    the lower bound left the band half of the same regression free to come back: a
+    not-evaluated banded check would export its minimum and silently lose its target."""
+    entry = ScorecardEntry.from_safety_factor(
+        "plate tear-out", computed=None, required=2.0, upper=4.0
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.required_safety_factor == pytest.approx(2.0)
+    assert entry.upper_safety_factor == pytest.approx(4.0)
+    # And it is still not a pass, and still carries no factor of its own.
+    assert entry.passed is False
+    assert entry.safety_factor is None

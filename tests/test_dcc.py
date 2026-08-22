@@ -548,15 +548,55 @@ def test_no_prefix_and_unit_pair_maps_to_a_different_unit():
         "a D-SI unit was added or removed without its independent reference; the sweep "
         "below is the only thing standing between the table and a silent unit swap"
     )
+    # The prefixes' powers of ten, written out here rather than read from the module. Taking
+    # them from `_D_SI_PREFIXES` made the comparison circular: a prefix whose power drifted
+    # was checked against its own drifted value and the sweep stayed green.
+    powers = {
+        "deca": 1,
+        "hecto": 2,
+        "kilo": 3,
+        "mega": 6,
+        "giga": 9,
+        "tera": 12,
+        "peta": 15,
+        "exa": 18,
+        "zetta": 21,
+        "yotta": 24,
+        "deci": -1,
+        "centi": -2,
+        "milli": -3,
+        "micro": -6,
+        "nano": -9,
+        "pico": -12,
+        "femto": -15,
+        "atto": -18,
+        "zepto": -21,
+        "yocto": -24,
+    }
+    assert set(powers) == set(_D_SI_PREFIXES), (
+        "a D-SI prefix was added or removed without its independent power of ten"
+    )
     registry = pint.UnitRegistry()
     wrong = []
     for token, _symbol in _D_SI_UNITS.items():
         reference = registry.Unit(long_form[token])
+        # The bare token first. 34 of the 41 never appeared anywhere in this file, so a
+        # one-character slip in the table ("tonne": "kg") read a 1.2 tonne measurement as
+        # 1.2 kg — a thousandfold understatement with a valid dimension.
+        bare = d_si_quantity(1.0, f"\\{token}").pint
+        expected = registry.Quantity(1.0, reference)
+        if bare.dimensionality != expected.dimensionality:
+            wrong.append(f"\\{token} -> {bare} (should be {expected})")
+        elif token != "degreecelsius" and not (
+            abs(bare.to_base_units().magnitude - expected.to_base_units().magnitude)
+            <= 1e-9 * abs(expected.to_base_units().magnitude)
+        ):
+            wrong.append(f"\\{token} -> {bare} (should be {expected})")
         if token in _UNPREFIXABLE:
             continue
-        for prefix, (_prefix_symbol, power) in _D_SI_PREFIXES.items():
+        for prefix in _D_SI_PREFIXES:
             got = d_si_quantity(1.0, f"\\{prefix}\\{token}").pint.to_base_units()
-            want = registry.Quantity(10.0**power, reference).to_base_units()
+            want = registry.Quantity(10.0 ** powers[prefix], reference).to_base_units()
             if got.dimensionality != want.dimensionality or not (
                 abs(got.magnitude - want.magnitude) <= 1e-9 * abs(want.magnitude)
             ):
@@ -817,3 +857,130 @@ def test_converting_an_uncertainty_across_an_offset_unit_keeps_it_a_width():
     in_kelvin = ambient.distribution_in("K")
     assert in_kelvin.mean == pytest.approx(293.25)
     assert in_kelvin.std == pytest.approx(0.2)
+
+
+@pytest.mark.parametrize("token", sorted(__import__("anvilate.dcc", fromlist=["x"])._UNPREFIXABLE))
+def test_a_prefix_on_a_unit_that_does_not_take_one_is_refused(token):
+    """Only ``degreecelsius`` was tested. The other nine are the non-decimal and
+    fixed-magnitude units whose whole point is that a decimal prefix on them is meaningless
+    — under drift, Pint invents a magnitude for `\\milli\\hour` and nothing objects."""
+    with pytest.raises(UnitError, match="does not take one"):
+        d_si_quantity(1.0, f"\\milli\\{token}")
+
+
+def test_the_certificates_own_coverage_factor_is_what_is_used():
+    """Every fixture stated k=2, so `sigma_level=coverage_factor` could have been written
+    `sigma_level=2.0` and the suite would not have noticed. k=3 is ordinary on accredited
+    certificates, and reading it as 2 inflates the standard uncertainty by 50%."""
+    for factor, expected_std in ((1, 0.0012), (3, 0.0004), (4, 0.0003)):
+        uncertainty = f"""\
+                <si:measurementUncertaintyUnivariate>
+                  <si:expandedMU>
+                    <si:valueExpandedMU>0.0012</si:valueExpandedMU>
+                    <si:coverageFactor>{factor}</si:coverageFactor>
+                    <si:coverageProbability>0.95</si:coverageProbability>
+                  </si:expandedMU>
+                </si:measurementUncertaintyUnivariate>
+"""
+        value = _parsed(
+            _certificate(_quantity_block("\\milli\\metre", uncertainty=uncertainty))
+        ).labelled("shaft diameter")
+        assert value.distribution.sigma_level == pytest.approx(float(factor))
+        assert value.distribution.std == pytest.approx(expected_std)
+
+
+@pytest.mark.parametrize("spelling", ["normal", "Normal", "gaussian", " GAUSSIAN ", "  normal "])
+def test_every_accepted_spelling_of_a_gaussian_distribution_is_taken(spelling):
+    """`gaussian` is the commoner spelling on European accredited certificates. Losing it
+    does not produce a wrong number — it produces no distribution at all, so the sampler
+    treats a well-characterized measurement as having no scatter and the fragility verdict
+    goes quiet."""
+    uncertainty = f"""\
+                <si:measurementUncertaintyUnivariate>
+                  <si:standardMU>
+                    <si:valueStandardMU>0.0006</si:valueStandardMU>
+                    <si:distribution>{spelling}</si:distribution>
+                  </si:standardMU>
+                </si:measurementUncertaintyUnivariate>
+"""
+    value = _parsed(
+        _certificate(_quantity_block("\\milli\\metre", uncertainty=uncertainty))
+    ).labelled("shaft diameter")
+    assert value.distribution is not None
+    assert value.distribution.std == pytest.approx(0.0006)
+    assert value.uncertainty_note is None
+
+
+@pytest.mark.parametrize("factor", ["0", "0.0"])
+def test_a_non_positive_coverage_factor_degrades_visibly_rather_than_fatally(factor):
+    """The suite only ever reached the `None` arm of the guard. A certificate stating k=0
+    crashed `parse_dcc` with a pydantic traceback instead of recording a note — and this
+    module's whole contract is that a bad certificate degrades visibly, not fatally."""
+    uncertainty = f"""\
+                <si:expandedUnc>
+                  <si:uncertainty>0.0012</si:uncertainty>
+                  <si:coverageFactor>{factor}</si:coverageFactor>
+                  <si:coverageProbability>0.95</si:coverageProbability>
+                </si:expandedUnc>
+"""
+    value = _parsed(
+        _certificate(_quantity_block("\\milli\\metre", uncertainty=uncertainty))
+    ).labelled("shaft diameter")
+    assert value.distribution is None
+    assert "coverage factor" in value.uncertainty_note
+
+
+def test_a_backslash_with_no_token_after_it_is_refused():
+    """A guard the raise-site instrument found had never executed under the whole suite."""
+    with pytest.raises(UnitError, match="names no unit"):
+        d_si_quantity(1.0, "\\")
+
+
+def test_a_document_with_no_administrative_block_is_refused():
+    text = _certificate()
+    start = text.index("<dcc:administrativeData>")
+    end = text.index("</dcc:administrativeData>") + len("</dcc:administrativeData>")
+    with pytest.raises(ValueError, match="no administrativeData"):
+        _parsed(text[:start] + text[end:])
+
+
+def test_a_document_with_no_core_data_is_refused():
+    text = _certificate()
+    start = text.index("<dcc:coreData>")
+    end = text.index("</dcc:coreData>") + len("</dcc:coreData>")
+    with pytest.raises(ValueError, match="no coreData"):
+        _parsed(text[:start] + text[end:])
+
+
+def test_the_d_si_1_x_coverage_interval_spelling_is_read_too():
+    """The deprecated branch could be deleted whole and the suite stayed green — and a
+    certificate that states its uncertainty would come back reporting that it stated none,
+    which is a false statement about the document rather than a missing feature."""
+    uncertainty = """\
+                <si:coverageInterval>
+                  <si:standardUnc>0.0007</si:standardUnc>
+                  <si:intervalMin>24.9990</si:intervalMin>
+                  <si:intervalMax>25.0018</si:intervalMax>
+                  <si:coverageProbability>0.95</si:coverageProbability>
+                </si:coverageInterval>
+"""
+    value = _parsed(
+        _certificate(_quantity_block("\\milli\\metre", uncertainty=uncertainty))
+    ).labelled("shaft diameter")
+    assert value.distribution is not None
+    assert value.distribution.std == pytest.approx(0.0007)
+    assert value.uncertainty_note is None
+
+
+def test_every_value_gets_its_own_line_not_just_the_first():
+    """The line scan was pinned only for the first quantity: a scan returning four entries
+    where two were right left the shaft correct by being index 0 while every value after it
+    silently cited somebody else's number."""
+    text = _certificate()
+    certificate = _parsed(text)
+    lines = text.splitlines()
+    for value in certificate.values:
+        assert str(value.quantity.magnitude) in lines[value.source.line_number - 1], (
+            f"{value.label} cites line {value.source.line_number}, which reads "
+            f"{lines[value.source.line_number - 1].strip()!r}"
+        )

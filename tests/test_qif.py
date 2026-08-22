@@ -663,3 +663,161 @@ def test_the_header_discloses_the_layers_that_are_not_characteristics():
     summary = _sections().summary()
     assert summary in description
     assert "not covered" in description
+
+
+# --- survivors a mutation pass left standing ---------------------------------------------
+#
+# Each of these is a line the suite executed and never asserted. They are ordered by how bad
+# the undetected drift would be, and every one was demonstrated by mutating the source and
+# watching the whole suite stay green.
+
+
+def test_an_over_margin_bundle_exports_a_passing_document_status():
+    """`_INSPECTION_STATUS[OVER_MARGIN] = "PASS"` is an explicit design position stated in
+    the module docstring, and nothing tested it at the document level: flipping it to FAIL
+    made quality software reject a conforming part, silently."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("weld shear", computed=9.0, required=2.0, upper=4.0),
+        )
+    )
+    sections = _sections(card)
+    assert sections.status is CheckStatus.OVER_MARGIN
+    status = ET.fromstring(_export(sections)).findtext(
+        "./q:Results/q:MeasurementResultsSet/q:MeasurementResults"
+        "/q:InspectionStatus/q:InspectionStatusEnum",
+        namespaces=_NS,
+    )
+    assert status == "PASS"
+
+
+def test_the_numeric_nominal_declares_its_values_as_limits():
+    """`DefinedAsLimit` is the difference between "MinValue 2.0 is a lower limit" and
+    "MinValue 2.0 is a deviation from a target of 2.0", i.e. an acceptance band of 0 to 4.
+    Every numeric characteristic in the file changes meaning and no test saw it."""
+    nominal = ET.fromstring(_export()).find(
+        "./q:Characteristics/q:CharacteristicNominals/q:UserDefinedUnitCharacteristicNominal",
+        _NS,
+    )
+    assert nominal.findtext("q:DefinedAsLimit", namespaces=_NS) == "true"
+
+
+def test_the_numeric_nominals_children_are_in_the_schemas_own_order():
+    """The nominal's content model is a sequence with a choice in it; a member written out
+    of order is a document that does not validate, and `qif_schema_issues` checks ids,
+    counts and references — not sequence order."""
+    nominal = ET.fromstring(_export()).find(
+        "./q:Characteristics/q:CharacteristicNominals/q:UserDefinedUnitCharacteristicNominal",
+        _NS,
+    )
+    assert [child.tag.rsplit("}", 1)[-1] for child in nominal] == [
+        "CharacteristicDefinitionId",
+        "Name",
+        "TargetValue",
+        "MinValue",
+        "DefinedAsLimit",
+    ]
+
+
+def test_the_target_value_is_the_required_minimum_not_the_band_top():
+    """The code comment states the failure verbatim: stating the upper band as the target
+    would report every compliant part as under-target."""
+    nominal = ET.fromstring(_export()).find(
+        "./q:Characteristics/q:CharacteristicNominals/q:UserDefinedUnitCharacteristicNominal",
+        _NS,
+    )
+    target = nominal.findtext("q:TargetValue", namespaces=_NS)
+    assert float(target) == pytest.approx(2.0)
+    assert target == nominal.findtext("q:MinValue", namespaces=_NS)
+
+
+def test_the_document_identifier_is_a_well_formed_uuid_that_claims_what_it_is():
+    """The docstring makes an explicit correctness claim — version 8, RFC 9562's custom
+    form, and not version 5, which would say the value came from the SHA-1 namespace scheme
+    it did not come from. One assertion pins both nibbles and well-formedness."""
+    from uuid import UUID
+
+    identifier = UUID(ET.fromstring(_export()).findtext("q:QPId", namespaces=_NS))
+    assert identifier.version == 8
+    assert identifier.variant is not None
+    assert str(identifier) == ET.fromstring(_export()).findtext("q:QPId", namespaces=_NS)
+
+
+def test_a_not_evaluated_check_carrying_a_number_still_exports_no_value():
+    """A NOT_EVALUATED entry *can* carry a finite safety factor — a NaN upper band produces
+    exactly that. Without the `entry.evaluated` half of the gate, the characteristic
+    exported as NOT_ANALYZED with a Value in it, and a reader consuming values rather than
+    statuses picked up a number from a check that never ran."""
+    entry = ScorecardEntry.from_safety_factor(
+        "interaction", computed=2.0, required=1.5, upper=float("nan")
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.safety_factor == pytest.approx(2.0)
+    read = _read_characteristics(_export(_sections(Scorecard(entries=(entry,)))))
+    assert read["interaction"]["status"] == "NOT_ANALYZED"
+    assert read["interaction"]["value"] is None
+
+
+def test_the_self_check_catches_a_duplicated_id():
+    """The uniqueness check is the one structural gate on the emitted document that does not
+    need the XSD package, and deleting its body left the suite green."""
+    document = _export()
+    broken = document.replace('<Standard id="2">', '<Standard id="1">', 1)
+    assert any("reuses a QIF id" in issue for issue in qif_schema_issues(broken))
+
+
+def test_a_hyphenated_citation_still_finds_its_standards_body():
+    """ "ISO-286" is how the designator is commonly written, and the split-on-hyphen half of
+    the detection had no fixture: without it, every hyphenated ISO citation falls out of the
+    enumeration and a QIF consumer filtering by standards body stops seeing them."""
+    sections = BundleSections(
+        scorecard=_card(),
+        citations=(
+            SourceRecord(
+                ref="fit", kind="tolerance", name="ISO-286 H7/h6", sources=("ISO-286-2 fits",)
+            ),
+        ),
+    )
+    standards = ET.fromstring(_export(sections)).findall("./q:StandardsDefinitions/q:Standard", _NS)
+    assert (
+        standards[1].findtext("q:Organization/q:StandardsOrganizationEnum", namespaces=_NS) == "ISO"
+    )
+
+
+def test_a_verdict_only_characteristic_says_what_it_was_measured_against():
+    """`WhatToMeasure` is required by the schema and carries the clause reference — the only
+    place a verdict-only characteristic says what it was judged against. Dropping the line
+    entirely also left the suite green while the document stopped validating."""
+    definition = ET.fromstring(_export()).find(
+        "./q:Characteristics/q:CharacteristicDefinitions"
+        "/q:UserDefinedAttributeCharacteristicDefinition",
+        _NS,
+    )
+    assert definition.findtext("q:WhatToMeasure", namespaces=_NS) == "AISC 360-22 L3"
+
+
+def test_a_small_value_keeps_its_digits_rather_than_flattening_to_zero():
+    """A badly failing check is exactly the one whose number matters, and fixed-point
+    formatting flattened it. One assertion pins both the notation and the precision."""
+    from anvilate.export.qif import _decimal
+
+    assert _decimal(1.234567e-05) == "0.00001234567"
+    assert _decimal(4.2e6) == "4200000.0"
+    assert "e" not in _decimal(1e-30).lower()
+
+
+def test_the_declared_unit_is_the_one_every_value_references():
+    """The declaration side of the unit was loose while the reference side was pinned: the
+    `FileUnits` entry could be renamed and every `unitName=` would point at a unit the
+    document does not define."""
+    root = ET.fromstring(_export())
+    declared = root.findtext(
+        "./q:FileUnits/q:UserDefinedUnits/q:UserDefinedUnit/q:UnitName", namespaces=_NS
+    )
+    assert declared == SAFETY_FACTOR_UNIT
+    referenced = {
+        element.get("unitName") for element in root.iter() if element.get("unitName") is not None
+    }
+    assert referenced == {declared}, (
+        f"values reference {referenced} but FileUnits declares only {declared!r}"
+    )
