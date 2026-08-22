@@ -29,10 +29,10 @@ materials:
       citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 276.0, unit: MPa}
-      citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "T6 temper, 0.2% offset"}
+      citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "T6 temper, 0.2% offset", basis: typical}
     ultimate_strength:
       quantity: {magnitude: 310.0, unit: MPa}
-      citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "T6 temper"}
+      citation: {source: "ASM Aerospace Metals — 6061-T6", condition: "T6 temper", basis: typical}
 
   AA-7075-T6:
     name: "Aluminum 7075-T6"
@@ -48,10 +48,10 @@ materials:
       citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 503.0, unit: MPa}
-      citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "T6 temper, 0.2% offset"}
+      citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "T6 temper, 0.2% offset", basis: typical}
     ultimate_strength:
       quantity: {magnitude: 572.0, unit: MPa}
-      citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "T6 temper"}
+      citation: {source: "ASM Aerospace Metals — 7075-T6", condition: "T6 temper", basis: typical}
 
   AA-2024-T3:
     name: "Aluminum 2024-T3"
@@ -67,10 +67,10 @@ materials:
       citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 345.0, unit: MPa}
-      citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "T3 temper, 0.2% offset (50 ksi)"}
+      citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "T3 temper, 0.2% offset (50 ksi)", basis: typical}
     ultimate_strength:
       quantity: {magnitude: 483.0, unit: MPa}
-      citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "T3 temper (70 ksi)"}
+      citation: {source: "ASM Aerospace Metals — 2024-T3", condition: "T3 temper (70 ksi)", basis: typical}
 
   ASTM-A36:
     name: "ASTM A36 structural steel"
@@ -86,10 +86,10 @@ materials:
       citation: {source: "AISC Steel Construction Manual", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 250.0, unit: MPa}
-      citation: {source: "ASTM A36 specified minimum", condition: "as-rolled, min. specified yield"}
+      citation: {source: "ASTM A36 specified minimum", condition: "as-rolled, min. specified yield", basis: specification_minimum}
     ultimate_strength:
       quantity: {magnitude: 400.0, unit: MPa}
-      citation: {source: "ASTM A36 specified minimum", condition: "as-rolled, min. specified tensile"}
+      citation: {source: "ASTM A36 specified minimum", condition: "as-rolled, min. specified tensile", basis: specification_minimum}
     endurance_limit:
       quantity: {magnitude: 200.0, unit: MPa}
       citation:
@@ -112,10 +112,10 @@ materials:
       citation: {source: "AISC Steel Construction Manual", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 345.0, unit: MPa}
-      citation: {source: "ASTM A992 specified minimum", condition: "min. specified yield (50 ksi)"}
+      citation: {source: "ASTM A992 specified minimum", condition: "min. specified yield (50 ksi)", basis: specification_minimum}
     ultimate_strength:
       quantity: {magnitude: 450.0, unit: MPa}
-      citation: {source: "ASTM A992 specified minimum", condition: "min. specified tensile (65 ksi)"}
+      citation: {source: "ASTM A992 specified minimum", condition: "min. specified tensile (65 ksi)", basis: specification_minimum}
     endurance_limit:
       quantity: {magnitude: 225.0, unit: MPa}
       citation:
@@ -138,10 +138,10 @@ materials:
       citation: {source: "ASM — AISI 1018", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 370.0, unit: MPa}
-      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (54 kpsi)"}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (54 kpsi)", basis: specification_minimum}
     ultimate_strength:
       quantity: {magnitude: 440.0, unit: MPa}
-      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (64 kpsi)"}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (64 kpsi)", basis: specification_minimum}
     endurance_limit:
       quantity: {magnitude: 220.0, unit: MPa}
       citation:
@@ -164,10 +164,10 @@ materials:
       citation: {source: "ASM — AISI 1045", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 530.0, unit: MPa}
-      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (77 kpsi)"}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (77 kpsi)", basis: specification_minimum}
     ultimate_strength:
       quantity: {magnitude: 630.0, unit: MPa}
-      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (91 kpsi)"}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-20", condition: "cold-drawn (91 kpsi)", basis: specification_minimum}
     endurance_limit:
       quantity: {magnitude: 315.0, unit: MPa}
       citation:
@@ -190,10 +190,10 @@ materials:
       citation: {source: "ASM — AISI 4140", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 417.0, unit: MPa}
-      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 815 C (60.5 kpsi)"}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 815 C (60.5 kpsi)", basis: typical}
     ultimate_strength:
       quantity: {magnitude: 655.0, unit: MPa}
-      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 815 C (95 kpsi)"}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 815 C (95 kpsi)", basis: typical}
     endurance_limit:
       quantity: {magnitude: 327.5, unit: MPa}
       citation:
@@ -216,10 +216,10 @@ materials:
       citation: {source: "ASM — AISI 4340", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 470.0, unit: MPa}
-      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 810 C (68.5 kpsi)"}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 810 C (68.5 kpsi)", basis: typical}
     ultimate_strength:
       quantity: {magnitude: 745.0, unit: MPa}
-      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 810 C (108 kpsi)"}
+      citation: {source: "Shigley Mechanical Engineering Design, Table A-21", condition: "annealed at 810 C (108 kpsi)", basis: typical}
     endurance_limit:
       quantity: {magnitude: 372.5, unit: MPa}
       citation:
@@ -242,10 +242,10 @@ materials:
       citation: {source: "ASM — AISI 304 annealed", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 205.0, unit: MPa}
-      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified yield (30 ksi)"}
+      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified yield (30 ksi)", basis: specification_minimum}
     ultimate_strength:
       quantity: {magnitude: 515.0, unit: MPa}
-      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified tensile (75 ksi)"}
+      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified tensile (75 ksi)", basis: specification_minimum}
 
   SS-316:
     name: "Stainless steel 316 (annealed)"
@@ -261,10 +261,10 @@ materials:
       citation: {source: "ASM — AISI 316 annealed", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 205.0, unit: MPa}
-      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified yield (30 ksi)"}
+      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified yield (30 ksi)", basis: specification_minimum}
     ultimate_strength:
       quantity: {magnitude: 515.0, unit: MPa}
-      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified tensile (75 ksi)"}
+      citation: {source: "ASTM A240 specified minimum", condition: "annealed, min. specified tensile (75 ksi)", basis: specification_minimum}
 
   Ti-6Al-4V:
     name: "Titanium Ti-6Al-4V (Grade 5, annealed)"
@@ -280,10 +280,10 @@ materials:
       citation: {source: "ASM — Ti-6Al-4V annealed", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 880.0, unit: MPa}
-      citation: {source: "ASM — Ti-6Al-4V annealed", condition: "annealed, 0.2% offset"}
+      citation: {source: "ASM — Ti-6Al-4V annealed", condition: "annealed, 0.2% offset", basis: typical}
     ultimate_strength:
       quantity: {magnitude: 950.0, unit: MPa}
-      citation: {source: "ASM — Ti-6Al-4V annealed", condition: "annealed"}
+      citation: {source: "ASM — Ti-6Al-4V annealed", condition: "annealed", basis: typical}
 
   AA-A356-T6:
     name: "Cast aluminum A356.0-T6"
@@ -302,10 +302,10 @@ materials:
       citation: {source: "ASM — A356.0-T6", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 205.0, unit: MPa}
-      citation: {source: "ASM — A356.0-T6", condition: "T6, permanent mold, 0.2% offset (30 ksi)"}
+      citation: {source: "ASM — A356.0-T6", condition: "T6, permanent mold, 0.2% offset (30 ksi)", basis: typical}
     ultimate_strength:
       quantity: {magnitude: 283.0, unit: MPa}
-      citation: {source: "ASM — A356.0-T6", condition: "T6, permanent mold (41 ksi)"}
+      citation: {source: "ASM — A356.0-T6", condition: "T6, permanent mold (41 ksi)", basis: typical}
 
   C93200-SAE660:
     name: "Bearing bronze C93200 (SAE 660)"
@@ -324,10 +324,10 @@ materials:
       citation: {source: "Copper Development Association — C93200", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 125.0, unit: MPa}
-      citation: {source: "Copper Development Association — C93200", condition: "as-cast, 0.5% ext. under load (18 ksi)"}
+      citation: {source: "Copper Development Association — C93200", condition: "as-cast, 0.5% ext. under load (18 ksi)", basis: typical}
     ultimate_strength:
       quantity: {magnitude: 240.0, unit: MPa}
-      citation: {source: "Copper Development Association — C93200", condition: "as-cast (35 ksi)"}
+      citation: {source: "Copper Development Association — C93200", condition: "as-cast (35 ksi)", basis: typical}
 
   AA-6063-T6:
     name: "Aluminum 6063-T6"
@@ -343,10 +343,10 @@ materials:
       citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 214.0, unit: MPa}
-      citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "T6 temper, 0.2% offset"}
+      citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "T6 temper, 0.2% offset", basis: typical}
     ultimate_strength:
       quantity: {magnitude: 241.0, unit: MPa}
-      citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "T6 temper"}
+      citation: {source: "ASM Aerospace Metals — 6063-T6", condition: "T6 temper", basis: typical}
 
   AA-6082-T6:
     name: "Aluminum 6082-T6"
@@ -362,10 +362,10 @@ materials:
       citation: {source: "ASM — 6082-T6", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 250.0, unit: MPa}
-      citation: {source: "EN 755-2 — EN AW-6082-T6 extrusions (thickness ≤5 mm)", condition: "T6 temper, 0.2% proof, Rp0.2 minimum"}
+      citation: {source: "EN 755-2 — EN AW-6082-T6 extrusions (thickness ≤5 mm)", condition: "T6 temper, 0.2% proof, Rp0.2 minimum", basis: specification_minimum}
     ultimate_strength:
       quantity: {magnitude: 290.0, unit: MPa}
-      citation: {source: "EN 755-2 — EN AW-6082-T6 extrusions (thickness ≤5 mm)", condition: "T6 temper, Rm minimum"}
+      citation: {source: "EN 755-2 — EN AW-6082-T6 extrusions (thickness ≤5 mm)", condition: "T6 temper, Rm minimum", basis: specification_minimum}
 
   ASTM-A536-65-45-12:
     name: "Ductile iron 65-45-12 (ASTM A536)"
@@ -384,7 +384,7 @@ materials:
       citation: {source: "ASM — ductile iron", condition: "room temperature"}
     yield_strength:
       quantity: {magnitude: 310.0, unit: MPa}
-      citation: {source: "ASTM A536 specified minimum", condition: "grade 65-45-12, min. specified yield (45 ksi)"}
+      citation: {source: "ASTM A536 specified minimum", condition: "grade 65-45-12, min. specified yield (45 ksi)", basis: specification_minimum}
     ultimate_strength:
       quantity: {magnitude: 448.0, unit: MPa}
-      citation: {source: "ASTM A536 specified minimum", condition: "grade 65-45-12, min. specified tensile (65 ksi)"}
+      citation: {source: "ASTM A536 specified minimum", condition: "grade 65-45-12, min. specified tensile (65 ksi)", basis: specification_minimum}

@@ -89,6 +89,46 @@ Values *you* supply carry your provenance instead, which is the doctrine: Anvila
 bundles someone else's allowables, so where a number came from is a thing you assert and
 the report records.
 
+## A strength value also says how much of the population it covers
+
+A citation on a strength carries a `basis`, and it is the difference between a number you
+may use as a design allowable and one you may not:
+
+| `basis` | Means |
+| --- | --- |
+| `typical` | a handbook mean — roughly half the material is weaker than it |
+| `specification_minimum` | the floor the producer guarantees |
+| `b_basis` | 90% of the population exceeds it, at 95% confidence |
+| `a_basis` | 99% of the population exceeds it, at 95% confidence |
+| `None` | **unclassified** — satisfies no requirement at all |
+
+This distinction was always in the database. It was in *prose*, inside a source string
+that either said "specified minimum" or did not, so nothing could read it and a reviewer
+had to know which handbook table was a mean and which was a minimum. Now it is a field,
+the provenance roll-up prints it (`ASM — AISI 4140 (typical)` against `ASTM A36 specified
+minimum (specification minimum)`), and a check that needs a design allowable can demand
+one:
+
+```python
+from anvilate.standards import AllowableBasis, require_basis
+
+require_basis(record.yield_strength, AllowableBasis.SPECIFICATION_MINIMUM,
+              material_id="AISI-4140", name="yield strength")
+# InsufficientBasis: AISI-4140 yield strength is typical (Shigley ... Table A-21), and
+#   this check requires at least specification_minimum ...
+```
+
+Every bundled strength is classified from **its own cited source**, not in bulk, and a
+gate in the suite fails if a new record ships without one. Two records citing the same
+book get different answers: Shigley's Table A-20 is titled "Deterministic ASTM *Minimum*
+Tensile and Yield Strengths" and Table A-21 is "*Mean* Mechanical Properties of Some
+Heat-Treated Steels". Of the 17 bundled materials, 8 carry specification minima and 9
+carry typical values.
+
+**Unclassified is not typical.** A record nobody has looked at fails a basis requirement
+rather than passing as though somebody had — otherwise the requirement means nothing the
+first time a record is added carelessly.
+
 ## If a citation looks wrong
 
 Report it. A wrong citation is worse than none, because it converts an unverified number

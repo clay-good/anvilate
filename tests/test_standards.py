@@ -1528,3 +1528,101 @@ def _evidence_reference_strings() -> set[str]:
     from test_contract import _evidence_references
 
     return _evidence_references()
+
+
+# --- the allowable basis: a distinction that used to live only in prose --------------------
+
+
+def test_every_bundled_strength_declares_its_allowable_basis():
+    """The gate. An unclassified strength cannot satisfy any basis requirement, so a
+    record added without one silently fails every check that demands a minimum — which
+    reads as a data problem long after it is one."""
+    from anvilate.standards.materials import default_materials_db
+
+    database = default_materials_db()
+    unclassified = []
+    for material_id in sorted(database.known_materials()):
+        record = database.get(material_id)
+        for name in ("yield_strength", "ultimate_strength"):
+            citation = getattr(record, name).citation
+            if citation.basis is None:
+                unclassified.append(f"{material_id}.{name}")
+    assert not unclassified, (
+        "bundled strength values with no declared allowable basis — the distinction "
+        f"between a handbook mean and a specified minimum: {unclassified}"
+    )
+
+
+def test_the_basis_matches_what_each_record_cites():
+    """Classified from each record's own source, not assigned in bulk.
+
+    Two records citing the same book get different answers: Shigley's Table A-20 is
+    titled "Deterministic ASTM *Minimum* Tensile and Yield Strengths" and Table A-21 is
+    "*Mean* Mechanical Properties of Some Heat-Treated Steels".
+    """
+    from anvilate.standards.materials import default_materials_db
+    from anvilate.standards.records import AllowableBasis
+
+    database = default_materials_db()
+    expected = {
+        "ASTM-A36": AllowableBasis.SPECIFICATION_MINIMUM,  # "specified minimum", in the source
+        "ASTM-A992": AllowableBasis.SPECIFICATION_MINIMUM,
+        "AISI-1018-CD": AllowableBasis.SPECIFICATION_MINIMUM,  # Shigley Table A-20, minima
+        "AISI-4140": AllowableBasis.TYPICAL,  # Shigley Table A-21, means
+        "AA-6061-T6": AllowableBasis.TYPICAL,  # ASM handbook typicals
+        "AA-6082-T6": AllowableBasis.SPECIFICATION_MINIMUM,  # EN 755-2 Rp0.2 minimum
+    }
+    for material_id, basis in expected.items():
+        assert database.get(material_id).yield_strength.citation.basis is basis, material_id
+
+
+def test_a_basis_requirement_is_met_by_anything_at_or_above_it():
+    from anvilate.standards.records import AllowableBasis, PropertyCitation
+
+    def _cite(basis):
+        return PropertyCitation(
+            source="s", condition="c", license="l", retrieved="2026-01-01", basis=basis
+        )
+
+    assert _cite(AllowableBasis.A_BASIS).meets_basis(AllowableBasis.B_BASIS)
+    assert _cite(AllowableBasis.B_BASIS).meets_basis(AllowableBasis.SPECIFICATION_MINIMUM)
+    assert not _cite(AllowableBasis.TYPICAL).meets_basis(AllowableBasis.SPECIFICATION_MINIMUM)
+    assert _cite(AllowableBasis.TYPICAL).meets_basis(AllowableBasis.TYPICAL)
+    # Unclassified is not typical: it satisfies nothing, including the weakest claim.
+    assert not _cite(None).meets_basis(AllowableBasis.TYPICAL)
+
+
+def test_require_basis_refuses_a_typical_value_where_a_minimum_is_demanded():
+    from anvilate.standards.materials import default_materials_db
+    from anvilate.standards.records import AllowableBasis, InsufficientBasis, require_basis
+
+    database = default_materials_db()
+    minimum = AllowableBasis.SPECIFICATION_MINIMUM
+    allowed = require_basis(
+        database.get("ASTM-A36").yield_strength,
+        minimum,
+        material_id="ASTM-A36",
+        name="yield strength",
+    )
+    assert allowed.to("MPa").magnitude == pytest.approx(250.0)
+    with pytest.raises(InsufficientBasis, match="requires at least specification_minimum"):
+        require_basis(
+            database.get("AISI-4140").yield_strength,
+            minimum,
+            material_id="AISI-4140",
+            name="yield strength",
+        )
+
+
+def test_the_provenance_roll_up_states_the_basis_alongside_the_source():
+    from anvilate.evidence import _distinct_sources
+    from anvilate.standards.materials import default_materials_db
+
+    record = default_materials_db().get("AISI-4140")
+    sources = _distinct_sources({"yield_strength": record.yield_strength.citation})
+    assert any("(typical)" in s for s in sources)
+    minimum = default_materials_db().get("ASTM-A36")
+    assert any(
+        "(specification minimum)" in s
+        for s in _distinct_sources({"yield_strength": minimum.yield_strength.citation})
+    )

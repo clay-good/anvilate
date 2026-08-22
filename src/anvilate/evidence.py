@@ -62,7 +62,21 @@ _GEOMETRIC_TOLERANCE_SOURCE = (
 
 
 def _distinct_sources(citations: dict[str, PropertyCitation]) -> tuple[str, ...]:
-    return tuple(sorted({cite.source for cite in citations.values()}))
+    """Each distinct source, with a strength's allowable basis stated alongside it.
+
+    The basis was already in the provenance — as prose, inside a source string that said
+    "specified minimum" or did not. Nothing could read it, so a reviewer comparing two
+    records had to know which handbook table was a mean and which was a minimum. Now the
+    roll-up says it: "ASM — AISI 4140 (typical)" against "ASTM A36 specified minimum
+    (specification minimum)".
+    """
+    labelled = set()
+    for cite in citations.values():
+        if cite.basis is None:
+            labelled.add(cite.source)
+        else:
+            labelled.add(f"{cite.source} ({cite.basis.value.replace('_', ' ')})")
+    return tuple(sorted(labelled))
 
 
 def _component_providers(components: ComponentsDatabase, bearings: BearingTable) -> list[tuple]:

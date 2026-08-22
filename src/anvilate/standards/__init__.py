@@ -82,7 +82,14 @@ from .pipe import (
     UnknownPipeError,
     default_pipe_schedule_table,
 )
-from .records import PropertyCitation, QuantityProperty, ScalarProperty
+from .records import (
+    AllowableBasis,
+    InsufficientBasis,
+    PropertyCitation,
+    QuantityProperty,
+    ScalarProperty,
+    require_basis,
+)
 from .resolver import StandardsResolver, default_standards_resolver
 from .threads import (
     ClearanceHoleTable,
@@ -101,6 +108,9 @@ from .washers import (
 )
 
 __all__ = [
+    "require_basis",
+    "InsufficientBasis",
+    "AllowableBasis",
     "STANDARDS_BODIES",
     "Citation",
     "EditionAgreement",
