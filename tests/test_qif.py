@@ -1,0 +1,426 @@
+"""Tests for the QIF Results export (ISO 23952 / ANSI QIF 3.0).
+
+Two things are being pinned here. First, the mapping: every check crosses, with its
+requirement, its actual, and its status, and a check that could not run crosses as a
+characteristic that says so rather than vanishing. Second, the document itself: it is
+self-consistent, it is deterministic, and — when the published schema package is pointed
+at the suite — it validates.
+
+The round trip is done through QIF's own structure, not through the writer's memory of
+what it wrote: the reader walks Characteristics → Items → Measurements by
+``CharacteristicItemId``, the way a quality package reading the file would, and
+reconstructs the verdicts from there.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from xml.etree import ElementTree as ET
+
+import pytest
+
+from anvilate.attestation import Component, ComponentKind, EnvironmentBOM
+from anvilate.bundle import BundleSections
+from anvilate.evidence import SourceRecord
+from anvilate.export.qif import (
+    QIF_NAMESPACE,
+    SAFETY_FACTOR_UNIT,
+    export_qif_results,
+    qif_schema_issues,
+)
+from anvilate.scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
+
+_NS = {"q": QIF_NAMESPACE}
+
+
+def _bom() -> EnvironmentBOM:
+    return EnvironmentBOM(
+        application=Component(name="anvilate", version="0.0.1", kind=ComponentKind.APPLICATION),
+        components=(
+            Component(name="pint", version="0.24"),
+            Component(name="materials-db", version="2026.08", kind=ComponentKind.DATA),
+        ),
+    )
+
+
+def _card() -> Scorecard:
+    """One of each shape the mapping has to handle."""
+    return Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("bearing stress", computed=2.4, required=2.0),
+            ScorecardEntry.from_safety_factor(
+                "net section",
+                computed=1.2,
+                required=2.0,
+                repair_hint=RepairHint.directional("thickness", direction=Direction.INCREASE),
+            ),
+            ScorecardEntry.from_safety_factor("weld shear", computed=9.0, required=2.0, upper=4.0),
+            ScorecardEntry.from_safety_factor("plate tear-out", computed=None, required=2.0),
+            ScorecardEntry(
+                name="deflection",
+                status=CheckStatus.PASS,
+                detail="L/360 met",
+                reference="AISC 360-22 L3",
+            ),
+        )
+    )
+
+
+def _sections(card: Scorecard | None = None) -> BundleSections:
+    return BundleSections(
+        scorecard=card if card is not None else _card(),
+        citations=(
+            SourceRecord(
+                ref="A36",
+                kind="material",
+                name="ASTM A36",
+                sources=("ASTM A36 specified minimum (specification minimum)",),
+            ),
+            SourceRecord(
+                ref="general_tolerance",
+                kind="tolerance",
+                name="ISO 2768-m",
+                sources=("ISO 2768-1 general tolerances",),
+            ),
+        ),
+    )
+
+
+def _export(sections: BundleSections | None = None) -> str:
+    return export_qif_results(
+        sections if sections is not None else _sections(),
+        part_name="lug-01",
+        spec_digest="sha256:abc123",
+        bom=_bom(),
+    )
+
+
+def _read_characteristics(document: str) -> dict[str, dict[str, object]]:
+    """Read a QIF Results document the way a quality package would.
+
+    Walks the characteristic items, follows each to its nominal (for the requirement) and
+    from the measurements back by ``CharacteristicItemId`` (for the actual and status),
+    keyed by characteristic name. Nothing here knows what the writer intended — only what
+    QIF says these elements mean.
+    """
+    root = ET.fromstring(document)
+    nominals = {
+        nominal.get("id"): nominal
+        for nominal in root.findall("./q:Characteristics/q:CharacteristicNominals/*", _NS)
+    }
+    by_item: dict[str, dict[str, object]] = {}
+    for item in root.findall("./q:Characteristics/q:CharacteristicItems/*", _NS):
+        nominal = nominals[item.findtext("q:CharacteristicNominalId", namespaces=_NS)]
+        minimum = nominal.findtext("q:MinValue", namespaces=_NS)
+        maximum = nominal.findtext("q:MaxValue", namespaces=_NS)
+        by_item[item.get("id")] = {
+            "name": item.findtext("q:Name", namespaces=_NS),
+            "required": None if minimum is None else float(minimum),
+            "upper": None if maximum is None else float(maximum),
+            "attribute": "Attribute" in nominal.tag,
+        }
+
+    found: dict[str, dict[str, object]] = {}
+    measurements = root.findall(
+        "./q:Results/q:MeasurementResultsSet/q:MeasurementResults"
+        "/q:MeasuredCharacteristics/q:CharacteristicMeasurements/*",
+        _NS,
+    )
+    for measurement in measurements:
+        record = dict(by_item[measurement.findtext("q:CharacteristicItemId", namespaces=_NS)])
+        record["status"] = measurement.findtext(
+            "q:Status/q:CharacteristicStatusEnum", namespaces=_NS
+        )
+        value = measurement.find("q:Value", _NS)
+        record["value"] = None if value is None else value.text
+        record["unit"] = None if value is None else value.get("unitName")
+        record["description"] = measurement.findtext("q:Description", namespaces=_NS)
+        found[record["name"]] = record  # type: ignore[index]
+    return found
+
+
+def test_every_check_crosses_as_a_characteristic():
+    read = _read_characteristics(_export())
+    assert set(read) == {
+        "bearing stress",
+        "net section",
+        "weld shear",
+        "plate tear-out",
+        "deflection",
+    }
+
+
+def test_requirement_actual_and_status_survive_the_round_trip():
+    read = _read_characteristics(_export())
+    bearing = read["bearing stress"]
+    assert bearing["status"] == "PASS"
+    assert bearing["required"] == 2.0
+    assert float(bearing["value"]) == pytest.approx(2.4)  # type: ignore[arg-type]
+    assert bearing["unit"] == SAFETY_FACTOR_UNIT
+
+    failing = read["net section"]
+    assert failing["status"] == "FAIL"
+    assert float(failing["value"]) == pytest.approx(1.2)  # type: ignore[arg-type]
+    # The repair hint has no QIF slot; it crosses in the description rather than dying.
+    assert "increase thickness" in failing["description"]  # type: ignore[operator]
+
+
+def test_not_evaluated_survives_the_mapping():
+    """The no-silent-green property has to be a property of the interchange file too."""
+    read = _read_characteristics(_export())
+    gap = read["plate tear-out"]
+    assert gap["status"] == "NOT_ANALYZED"
+    # Present, named, requirement stated — and carrying no actual, because there is none.
+    assert gap["required"] == 2.0
+    assert gap["value"] is None
+    assert "not evaluated" in gap["description"]  # type: ignore[operator]
+
+
+def test_over_margin_passes_but_says_so():
+    """QIF has no 'passed too well'. It maps to PASS with the finding stated."""
+    read = _read_characteristics(_export())
+    over = read["weld shear"]
+    assert over["status"] == "PASS"
+    assert over["required"] == 2.0
+    assert over["upper"] == 4.0
+    assert "over-margin" in over["description"]  # type: ignore[operator]
+
+
+def test_a_verdict_only_check_becomes_an_attribute_characteristic():
+    """No numeric requirement means no invented nominal — QIF's attribute gauge instead."""
+    read = _read_characteristics(_export())
+    verdict = read["deflection"]
+    assert verdict["attribute"] is True
+    assert verdict["required"] is None
+    assert verdict["value"] == "pass"
+
+
+def test_attribute_nominal_declares_its_pass_and_fail_values():
+    root = ET.fromstring(_export())
+    nominal = root.find(
+        "./q:Characteristics/q:CharacteristicNominals/q:UserDefinedAttributeCharacteristicNominal",
+        _NS,
+    )
+    assert nominal is not None
+    assert nominal.findtext("q:PassValues/q:StringValue", namespaces=_NS) == "pass"
+    assert nominal.findtext("q:FailValues/q:StringValue", namespaces=_NS) == "fail"
+
+
+def test_traceability_names_the_spec_revision_and_the_toolchain():
+    root = ET.fromstring(_export())
+    description = root.findtext("./q:Header/q:Description", namespaces=_NS)
+    assert "lug-01" in description
+    assert "sha256:abc123" in description
+    software = {
+        entry.findtext("q:ApplicationName", namespaces=_NS): entry.findtext(
+            "q:Version", namespaces=_NS
+        )
+        for entry in root.findall("./q:SoftwareDefinitions/q:Software", _NS)
+    }
+    assert software == {"anvilate": "0.0.1", "pint": "0.24", "materials-db": "2026.08"}
+
+
+def test_the_scope_line_refuses_to_read_as_a_certified_inspection():
+    root = ET.fromstring(_export())
+    scope = root.findtext("./q:Header/q:Scope", namespaces=_NS)
+    assert "not a certified analysis" in scope
+    assert "NOT_ANALYZED" in scope
+
+
+def test_citations_become_standards_with_the_right_organization():
+    root = ET.fromstring(_export())
+    standards = root.findall("./q:StandardsDefinitions/q:Standard", _NS)
+    designators = [s.findtext("q:Designator", namespaces=_NS) for s in standards]
+    assert designators == ["ISO 23952", "ASTM A36", "ISO 2768-m"]
+    # ISO is one of the bodies QIF enumerates; ASTM is not, so it takes the "other" branch.
+    assert (
+        standards[0].findtext("q:Organization/q:StandardsOrganizationEnum", namespaces=_NS) == "ISO"
+    )
+    assert (
+        standards[1].findtext("q:Organization/q:OtherStandardsOrganization", namespaces=_NS)
+        is not None
+    )
+
+
+def test_the_document_status_rolls_up_at_the_bundles_precedence():
+    root = ET.fromstring(_export())
+    status = root.findtext(
+        "./q:Results/q:MeasurementResultsSet/q:MeasurementResults"
+        "/q:InspectionStatus/q:InspectionStatusEnum",
+        namespaces=_NS,
+    )
+    # The card has a failing check, so the document says FAIL — not the majority verdict.
+    assert status == "FAIL"
+
+
+def test_a_card_that_only_has_gaps_reports_not_calculated():
+    """The InspectionStatus enumeration spells this differently from the characteristic
+    one (NOT_CALCULATED, not NOT_ANALYZED); mapping one from the other by string would
+    have emitted an invalid document."""
+    card = Scorecard(
+        entries=(ScorecardEntry.from_safety_factor("shear", computed=None, required=2.0),)
+    )
+    root = ET.fromstring(_export(_sections(card)))
+    assert (
+        root.findtext(
+            "./q:Results/q:MeasurementResultsSet/q:MeasurementResults"
+            "/q:InspectionStatus/q:InspectionStatusEnum",
+            namespaces=_NS,
+        )
+        == "NOT_CALCULATED"
+    )
+
+
+def test_the_callout_layer_crosses_too():
+    """A layer of verdicts dropped from the interchange file is a silent green."""
+    from anvilate.callouts import CalloutSet, HeatTreatment
+
+    sections = BundleSections(
+        scorecard=_card(),
+        callouts=CalloutSet(
+            callouts=(
+                HeatTreatment(specification="AMS 2759/1", condition="QT", hardness="38-42 HRC"),
+            )
+        ),
+    )
+    read = _read_characteristics(
+        export_qif_results(sections, part_name="lug-01", spec_digest="sha256:abc123", bom=_bom())
+    )
+    layers = {record["description"].split(":", 1)[0] for record in read.values()}  # type: ignore[union-attr]
+    assert layers == {"analysis", "callouts"}
+    assert len(read) > len(_card().entries)
+
+
+def test_the_export_is_deterministic():
+    """Two exports of the same evidence are byte-identical — the property the content
+    address depends on, and the one a random document UUID would have destroyed."""
+    assert _export() == _export()
+
+
+def test_a_different_spec_digest_is_a_different_document():
+    other = export_qif_results(
+        _sections(), part_name="lug-01", spec_digest="sha256:def456", bom=_bom()
+    )
+    assert other != _export()
+
+
+def test_the_emitted_document_is_self_consistent():
+    assert qif_schema_issues(_export()) == []
+
+
+def test_the_self_check_catches_a_broken_reference():
+    broken = _export().replace("<CharacteristicItemId>", "<CharacteristicItemId>9", 1)
+    issues = qif_schema_issues(broken)
+    assert any("references id" in issue for issue in issues)
+
+
+def test_the_self_check_catches_a_miscounted_list():
+    broken = _export().replace('<SoftwareDefinitions n="3">', '<SoftwareDefinitions n="7">', 1)
+    issues = qif_schema_issues(broken)
+    assert any("declares n=7" in issue for issue in issues)
+
+
+def test_the_self_check_catches_an_understated_idmax():
+    broken = _export().replace('idMax="', 'idMax="0" oldIdMax="', 1)
+    issues = qif_schema_issues(broken)
+    assert any("idMax is 0" in issue for issue in issues)
+
+
+@pytest.mark.parametrize(
+    ("part_name", "spec_digest"),
+    [("", "sha256:abc"), ("   ", "sha256:abc"), ("lug", ""), ("lug", "  ")],
+)
+def test_the_export_refuses_to_be_anonymous(part_name, spec_digest):
+    with pytest.raises(ValueError):
+        export_qif_results(_sections(), part_name=part_name, spec_digest=spec_digest, bom=_bom())
+
+
+def test_no_value_is_written_in_exponent_notation():
+    """``xs:decimal`` has no exponent form, so a very small or very large safety factor
+    written through ``repr`` would be an invalid document that only shows up on the
+    reader's side."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("tiny", computed=1.5e-7, required=1e-8),
+            ScorecardEntry.from_safety_factor("huge", computed=4.2e6, required=2.0),
+        )
+    )
+    document = _export(_sections(card))
+    assert "e-" not in document.lower().split("<characteristics")[1]
+    read = _read_characteristics(document)
+    assert float(read["huge"]["value"]) == pytest.approx(4.2e6)  # type: ignore[arg-type]
+
+
+def test_a_non_finite_actual_leaves_the_value_out_rather_than_lying():
+    """An infinite safety factor (zero demand) has no ``xs:decimal`` spelling. The
+    characteristic still exists and still carries its status; it simply reports no
+    number, which is true."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("no demand", computed=float("inf"), required=2.0),
+        )
+    )
+    read = _read_characteristics(_export(_sections(card)))
+    assert read["no demand"]["status"] == "PASS"
+    assert read["no demand"]["value"] is None
+
+
+@pytest.mark.parametrize("required", [0.0, -1.0, float("nan")])
+def test_an_unusable_requirement_falls_back_to_a_verdict_not_a_fake_limit(required):
+    """A requirement that cannot be a QIF limit must not become one anyway. The check
+    crosses as an attribute characteristic — a verdict with no fabricated nominal."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry(
+                name="odd",
+                status=CheckStatus.PASS,
+                detail="constructed directly",
+                safety_factor=3.0,
+                required_safety_factor=required,
+            ),
+        )
+    )
+    read = _read_characteristics(_export(_sections(card)))
+    assert read["odd"]["attribute"] is True
+    assert read["odd"]["required"] is None
+
+
+def test_an_upper_band_at_or_below_the_minimum_is_dropped_not_emitted():
+    """QIF's nominal has no room for a max below its min, and emitting one produces a
+    document that reads as a requirement no part can meet."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry(
+                name="inverted band",
+                status=CheckStatus.PASS,
+                detail="constructed directly",
+                safety_factor=3.0,
+                required_safety_factor=2.0,
+                upper_safety_factor=1.0,
+            ),
+        )
+    )
+    read = _read_characteristics(_export(_sections(card)))
+    assert read["inverted band"]["required"] == 2.0
+    assert read["inverted band"]["upper"] is None
+
+
+def test_the_document_validates_against_the_published_schemas():
+    """The real conformance check, opt-in because the schemas are a separate download.
+
+    Point ``ANVILATE_QIF_XSD`` at the ``xsd`` directory of the QIF 3.0 schema package
+    (free, https://qifstandards.org/download/) with ``lxml`` installed and this validates
+    an emitted document against ``QIFApplications/QIFDocument.xsd``. Skipped otherwise —
+    an unrunnable check is reported as not run, never as a pass.
+    """
+    etree = pytest.importorskip("lxml.etree")
+    location = os.environ.get("ANVILATE_QIF_XSD")
+    if not location:
+        pytest.skip("set ANVILATE_QIF_XSD to the QIF 3.0 schema package's xsd directory")
+    schema_file = Path(location) / "QIFApplications" / "QIFDocument.xsd"
+    if not schema_file.exists():
+        pytest.skip(f"no QIFDocument.xsd under {location}")
+    schema = etree.XMLSchema(etree.parse(str(schema_file)))
+    document = etree.fromstring(_export().encode("utf-8"))
+    assert schema.validate(document), "\n".join(str(e) for e in schema.error_log)

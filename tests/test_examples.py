@@ -6097,3 +6097,23 @@ def test_rfq_ingestion_example_refuses_to_release_a_contradicted_sheet():
     }
     assert released["design_load"].magnitude == pytest.approx(50.0)
     assert any(v.state.value == "rejected" for v in resolved.values)
+
+
+def test_qif_export_example_carries_the_unevaluated_check_across():
+    namespace = runpy.run_path(str(_EXAMPLES / "lug_scorecard_as_qif.py"))
+    document = namespace["lug_as_qif"]()
+    read = {record["name"]: record for record in namespace["read_back"](document)}
+    # All five checks cross — nothing is filtered on the way out.
+    assert len(read) == 5
+    assert read["net tension"]["status"] == "FAIL"
+    # Over-margin has no QIF status of its own; it is a pass, and it is a pass here.
+    assert read["weld shear"]["status"] == "PASS"
+    # The one that matters: present, requirement stated, no actual, and not a pass.
+    assert read["plate tear-out"]["status"] == "NOT_ANALYZED"
+    assert read["plate tear-out"]["required"] == "2.0"
+    assert read["plate tear-out"]["actual"] is None
+    # A verdict-only check gets QIF's attribute gauge, not an invented threshold.
+    assert read["tip deflection"]["kind"] == "attribute"
+    assert read["tip deflection"]["required"] is None
+    # Same evidence, same bytes.
+    assert namespace["lug_as_qif"]() == document

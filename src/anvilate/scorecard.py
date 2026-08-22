@@ -281,10 +281,16 @@ class ScorecardEntry(BaseModel):
         if upper is not None and upper <= 0:
             raise ValueError(f"the upper safety-factor band must be positive; got {upper}")
         if computed is None:
+            # The requirement is still known even though the factor is not, and the three
+            # NaN branches below already keep what they know. This one used to drop both
+            # numbers, so a gap in an exported scorecard could not say what it would have
+            # been judged against — the reviewer saw "not evaluated" with no threshold.
             return cls(
                 name=name,
                 status=CheckStatus.NOT_EVALUATED,
                 detail="not evaluated — safety factor unavailable",
+                required_safety_factor=required,
+                upper_safety_factor=upper,
             )
         # NaN compares False against every operand, so it used to fall past both the FAIL and
         # the OVER_MARGIN branch and land on the PASS else -- a silent green for a check that
