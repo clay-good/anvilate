@@ -8,7 +8,8 @@
       match the model, **and** a changed artifact must carry a moved version, because a
       client pinned to a version fetching different content under the same `$id` is the
       silent breaking change this task exists to prevent. `jsonschema` is a dev dependency,
-      so the meta-schema check and a real-scorecard round trip run in CI on every push
+      so the meta-schema check and a real-scorecard round trip run in CI on every push to
+      `main` and every pull request, rather than skipping the way an opt-in check would
 - [ ] 1.2 Map pipeline operations to tool definitions with 2020-12 input/output schemas
 - [ ] 1.3 Define the task-exposed operation set (FEA-class) vs. synchronous set (T0–T2)
 

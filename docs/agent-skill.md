@@ -94,9 +94,10 @@ reads as coverage. That claim is now something this file demonstrates rather tha
 One content claim was wrong and no gate could reach it: the skill said `governing()` names
 "the check running closest to its limit". It does not — blocking status outranks
 utilization, so a check that could not run governs over one at 99.99% — and
-`card.governing()` returns `None` on any card whose checks carry no safety factor, which
-makes the copyable `card.governing().name` an `AttributeError`. Both are now stated in the
-skill and demonstrated by its example, which carries two entries instead of one.
+`card.governing()` returns `None` when nothing blocks *and* no check carries a safety
+factor, which makes the copyable `card.governing().name` an `AttributeError` on a card of
+passing deflection checks. Both are now stated in the skill and demonstrated by its example,
+which carries two entries instead of one.
 
 The skill targets the Python API, because that is the surface that exists today. When the
 CLI and the MCP server land ([`headless-automation`](../openspec/specs/headless-automation/spec.md)),

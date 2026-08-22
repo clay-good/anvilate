@@ -58,7 +58,8 @@ produces a document that looks complete and validates nothing.
 Meta-schema validation needs a validator, and `jsonschema` is a **dev** dependency rather
 than a runtime one, because it checks what Anvilate emits rather than anything Anvilate
 needs to run. CI installs it, so both the meta-schema check and a round trip — a scorecard
-the library actually produced, validated against the published contract — run on every push.
+the library actually produced, validated against the published contract — run on every push
+to `main` and on every pull request, rather than skipping the way an opt-in check would.
 
 ## What is not published yet
 

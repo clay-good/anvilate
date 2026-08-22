@@ -111,7 +111,7 @@ in `anvilate.analysis`'s.
 **Gates:** `test_public_surface_matches_manifest`,
 `test_package_aggregate_matches_module_alls`, `test_every_module_declares_its_public_surface`,
 `test_no_exported_symbol_shadows_its_own_module` (a function named after its own module
-shadows it, and the other gates structurally cannot see that), and the four `*_core_*`
+shadows it, and the other gates structurally cannot see that), and the five `*_core_*`
 gates that hold the same line for the top-level modules.
 
 ## 7. Never bundle someone else's allowables
