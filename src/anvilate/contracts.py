@@ -35,6 +35,9 @@ from .spec import SCHEMA_VERSION, DesignSpec
 
 __all__ = [
     "JSON_SCHEMA_DIALECT",
+    "RELEASED_DIRECTORY",
+    "freeze_release",
+    "released_path",
     "SCORECARD_SCHEMA_VERSION",
     "SPEC_SCHEMA_VERSION",
     "schema_artifacts",
@@ -49,6 +52,9 @@ __all__ = [
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
 _BASE_ID = "https://anvilate.dev/schemas"
+
+# Where a version's content is frozen once and never regenerated. See `freeze_release`.
+RELEASED_DIRECTORY = "released"
 
 # The Spec IR carries its own version already — it is the number a spec file states in its
 # `anvilate_spec` field — so the published artifact uses it rather than inventing a second
@@ -73,9 +79,14 @@ def _artifact(model: type, *, name: str, version: str, description: str) -> dict
         "$schema": JSON_SCHEMA_DIALECT,
         "$id": f"{_BASE_ID}/{name}/{version}.json",
         "title": schema.pop("title", name),
+        # Both are popped, not just the title. `**schema` re-introduced whatever pydantic
+        # put there, so the curated sentence was dead code and consumers received the
+        # class's raw docstring — unrendered reST markup, and without the two things the
+        # curated text exists to say: the plain-language tri-state warning and the line
+        # naming which model generated the document.
         "description": description,
         "x-anvilate-version": version,
-        **schema,
+        **{key: value for key, value in schema.items() if key != "description"},
     }
 
 
@@ -135,6 +146,43 @@ def write_schemas(directory: Path) -> list[Path]:
     for name, schema in schema_artifacts().items():
         path = directory / name
         path.write_text(_serialize(schema), encoding="utf-8")
+        written.append(path)
+    return written
+
+
+def released_path(directory: Path, name: str, version: str) -> Path:
+    """Where the frozen copy of one version of one schema lives."""
+    return directory / RELEASED_DIRECTORY / f"{name.removesuffix('.schema.json')}-{version}.json"
+
+
+def freeze_release(directory: Path) -> list[Path]:
+    """Freeze each schema's current version, and refuse to change a version already frozen.
+
+    This is the half that makes the version gate mean anything. Comparing the checked-in
+    artifact against a freshly generated one cannot detect a version that should have moved:
+    that comparison is *already* the drift check, and the moment an author does what the
+    drift failure tells them to do — regenerate — both halves go green with the version
+    untouched. A breaking change then ships under the old number.
+
+    So a released version's content is frozen once, in its own file, and never regenerated.
+    Changing what a version means requires deleting a frozen file, which is a deliberate act
+    visible in a diff rather than the natural consequence of following an error message.
+    """
+    written = []
+    for name, schema in schema_artifacts().items():
+        version = str(schema["x-anvilate-version"])
+        path = released_path(directory, name, version)
+        serialized = _serialize(schema)
+        if path.exists():
+            if path.read_text(encoding="utf-8") != serialized:
+                raise ValueError(
+                    f"{name} version {version} is already frozen with different content. "
+                    "Bump the schema version instead — a released version whose meaning "
+                    "changes is a breaking change no client can see"
+                )
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(serialized, encoding="utf-8")
         written.append(path)
     return written
 

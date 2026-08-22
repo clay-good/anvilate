@@ -22,6 +22,8 @@ from anvilate.contracts import (
     SCORECARD_SCHEMA_VERSION,
     SPEC_SCHEMA_VERSION,
     _serialize,
+    freeze_release,
+    released_path,
     schema_artifacts,
     schema_issues,
     scorecard_json_schema,
@@ -52,19 +54,70 @@ def test_the_published_schema_matches_the_model_that_generates_it(name):
 
 
 @pytest.mark.parametrize("name", sorted(schema_artifacts()))
-def test_a_changed_contract_cannot_keep_its_old_version(name):
-    """The half that matters. A published schema whose content moved under an unchanged
-    ``$id`` is a silent breaking change: the version is the only thing a consumer can pin,
-    and it is the only thing this can check without a network."""
-    published = _published(name)
-    generated = schema_artifacts()[name]
-    if published == generated:
-        return  # nothing changed; the version is free to stay put
-    assert published.get("x-anvilate-version") != generated.get("x-anvilate-version"), (
-        f"{name} changed but still declares version "
-        f"{generated.get('x-anvilate-version')!r}. Bump it — a client pinned to that "
-        "version would fetch a different document under the same identifier and have no "
-        "way to know"
+def test_a_released_version_still_means_what_it_meant(name):
+    """The half that matters, and the half the first version of this test did not do.
+
+    It compared the checked-in artifact against a freshly generated one — which is *already*
+    the drift check above, so the version assertion was only reachable from a state that was
+    red for another reason. The moment an author did what the drift failure told them to do
+    (regenerate), both halves went green with the version untouched, and a required property
+    deleted from the contract shipped under the same `$id`. An audit demonstrated exactly
+    that.
+
+    So the comparison is against content frozen when the version was cut, in its own file,
+    never regenerated. Changing what a released version means now requires deleting that
+    file — a deliberate act visible in a diff, rather than the natural consequence of
+    following an error message.
+    """
+    schema = schema_artifacts()[name]
+    version = str(schema["x-anvilate-version"])
+    frozen = released_path(_SCHEMAS, name, version)
+    assert frozen.exists(), (
+        f"{name} declares version {version} with no frozen release for it. Run "
+        "anvilate.contracts.freeze_release to cut it — a version nobody froze is a version "
+        "whose meaning can change without anyone noticing"
+    )
+    assert json.loads(frozen.read_text(encoding="utf-8")) == schema, (
+        f"{name} version {version} no longer matches what was released under that number. "
+        "Bump the version and freeze the new one; a client pinned to this version would "
+        "fetch different content under the same identifier and have no way to know"
+    )
+
+
+def test_the_release_freeze_refuses_to_launder_a_change(tmp_path):
+    """`freeze_release` must not be usable to overwrite a frozen version, or the gate above
+    has the same hole one function call further away."""
+    freeze_release(tmp_path)
+    name, schema = next(iter(schema_artifacts().items()))
+    frozen = released_path(tmp_path, name, str(schema["x-anvilate-version"]))
+    frozen.write_text(frozen.read_text(encoding="utf-8").replace('"type"', '"kind"', 1), "utf-8")
+    with pytest.raises(ValueError, match="already frozen with different content"):
+        freeze_release(tmp_path)
+
+
+def test_the_version_gate_catches_a_silently_changed_contract(tmp_path):
+    """The exact sequence that defeated the first version of this gate: change the schema,
+    regenerate the artifact as the drift failure instructs, leave the version alone.
+
+    The old comparison — checked-in artifact against freshly generated — went green at that
+    point, because regenerating is what makes those two agree. The frozen release does not
+    move, so it does not.
+    """
+    freeze_release(tmp_path)
+    name, schema = next(iter(schema_artifacts().items()))
+    version = str(schema["x-anvilate-version"])
+    frozen = json.loads(released_path(tmp_path, name, version).read_text(encoding="utf-8"))
+
+    # A property removed from the contract — the breaking change a pinned client cannot see.
+    changed = dict(schema)
+    properties = dict(schema["properties"])
+    properties.pop(next(iter(properties)))
+    changed["properties"] = properties
+
+    assert frozen == schema, "the freeze must record what is generated today"
+    assert frozen != changed, (
+        "the frozen release agreed with a contract that had a property removed, so the "
+        "gate would not fire on the change it exists to catch"
     )
 
 
@@ -149,3 +202,72 @@ def test_the_published_schemas_are_valid_2020_12_schemas():
     jsonschema = pytest.importorskip("jsonschema")
     for name in sorted(schema_artifacts()):
         jsonschema.Draft202012Validator.check_schema(_published(name))
+
+
+@pytest.mark.parametrize("name", sorted(schema_artifacts()))
+def test_the_curated_description_is_the_one_that_ships(name):
+    """`**schema` re-introduced pydantic's own key, so the curated sentence was dead code
+    and consumers received the class docstring instead — unrendered reST markup, and without
+    the two things the curated text exists to say."""
+    description = schema_artifacts()[name]["description"]
+    assert "Generated from anvilate." in description
+    assert ":attr:" not in description and "``" not in description
+
+
+def test_a_real_design_spec_validates_against_its_published_contract():
+    """The contract has to describe what Anvilate actually writes. A scorecard round trip
+    was pinned; the spec side was only ever checked by an auditor, which is not a gate."""
+    jsonschema = pytest.importorskip("jsonschema")
+    from anvilate.spec import (
+        AcceptanceCriteria,
+        Constraints,
+        DesignSpec,
+        LoadCase,
+        LoadKind,
+        Manufacturing,
+        ManufacturingProcess,
+        MaterialRef,
+        Provenanced,
+        StandardComponentInterface,
+        ValidationTier,
+    )
+    from anvilate.units import Quantity, UnitSystem
+
+    spec = DesignSpec(
+        name="nema23_bracket",
+        description="Aluminum bracket mounting a NEMA 23 stepper to a 4040 extrusion.",
+        units=Provenanced.stated(UnitSystem.SI),
+        material=MaterialRef(ref="AA-6061-T6"),
+        manufacturing=Manufacturing(
+            process=ManufacturingProcess.CNC_MILLING, tolerance_class="medium"
+        ),
+        interfaces=[StandardComponentInterface(ref="NEMA23", tag="motor_pilot_bore")],
+        load_cases=[
+            LoadCase(
+                name="cantilevered_motor",
+                kind=LoadKind.REMOTE_MASS,
+                applied_to="motor_pilot_bore",
+                remote_mass=Quantity.parse("1.1 kg"),
+            )
+        ],
+        constraints=Constraints(min_safety_factor=Provenanced.stated(2.0)),
+        acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+    )
+    schema = _published("design-spec.schema.json")
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.Draft202012Validator(schema).validate(spec.model_dump(mode="json"))
+
+
+def test_disambiguation_is_not_quadratic_in_the_size_of_a_duplicate_group():
+    """A structural card merges every member into one scorecard, so thousands of one name is
+    the shape this has to survive. Restarting the probe at 1 per name took six seconds for
+    eight thousand."""
+    import time
+
+    from anvilate.export.qif import _unique_names
+
+    start = time.perf_counter()
+    unique = _unique_names(["B1 bending"] * 8000)
+    elapsed = time.perf_counter() - start
+    assert len(set(unique)) == 8000
+    assert elapsed < 1.0, f"disambiguating 8000 identical names took {elapsed:.1f}s"

@@ -246,6 +246,11 @@ def _unique_names(names: Sequence[str]) -> list[str]:
     Description either way.
     """
     taken: set[str] = set()
+    # The next occurrence number worth trying for each base, so a card with many identical
+    # names does not restart the probe from 1 every time. Restarting made the pass quadratic
+    # in the size of the largest duplicate group — 6 seconds for 8,000 identical names — and
+    # a structural card is exactly where thousands of one name could arrive.
+    next_free: dict[str, int] = {}
     out: list[str] = []
     for name in names:
         base = name.strip() or "unnamed check"
@@ -256,11 +261,12 @@ def _unique_names(names: Sequence[str]) -> list[str]:
         # prevent, and one of the two was the FAIL. The suffix stacks when an input name
         # already looks like one ("bending #2 #2"); ugly, and unique, which is the property
         # that matters.
-        candidate = base
-        occurrence = 1
+        occurrence = next_free.get(base, 1)
+        candidate = base if occurrence == 1 else f"{base} #{occurrence}"
         while candidate in taken:
             occurrence += 1
             candidate = f"{base} #{occurrence}"
+        next_free[base] = occurrence + 1
         taken.add(candidate)
         out.append(candidate)
     return out

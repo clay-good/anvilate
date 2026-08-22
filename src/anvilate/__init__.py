@@ -24,6 +24,9 @@ that already ran and does one more thing with them:
   document, with one roll-up that is never better than its worst section.
 - :mod:`anvilate.callouts` — typed MBD callouts: finish, coating, and heat treat
   as check inputs with persistent characteristic identity, not annotations.
+- :mod:`anvilate.compilation` — scoring a compiled spec, with schema validity and
+  field correctness kept as separate numbers because constraint moves them in
+  opposite directions.
 - :mod:`anvilate.contracts` — the Spec IR and the scorecard published as versioned
   JSON Schema 2020-12 artifacts, generated from the models and held against them.
 - :mod:`anvilate.dcc` — Digital Calibration Certificates read as measured inputs,
