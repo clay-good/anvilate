@@ -14,8 +14,10 @@ anvilate.
 | [`docs/api/schemas/scorecard.schema.json`](api/schemas/scorecard.schema.json) | one typed result per check, with the rolled-up status | `1.0.0` |
 
 ```python
-from anvilate.contracts import scorecard_json_schema, write_schemas
+from anvilate.contracts import freeze_release, scorecard_json_schema, write_schemas
 ```
+
+`write_schemas` regenerates the published artifacts; `freeze_release` cuts a version, once.
 
 2020-12 specifically, because that is the dialect the MCP tool-schema contract expects —
 which is why these exist in this form rather than as an ad-hoc dump.
@@ -34,9 +36,23 @@ describes a document nobody produces. That half is a byte-for-byte comparison.
 
 The other half is invisible from outside. **A contract whose content changes while its
 version stays put is a silent breaking change**: a client pinned to `1.1.0` fetches a
-different document under the same identifier and has no way to know. So the gate is not "the
-artifact matches the model" — it is "the artifact matches the model **or** the version
-moved", and when it fails it names which of the two you owe.
+different document under the same identifier and has no way to know.
+
+The first attempt at that half did not work, and the way it failed is worth keeping. It
+compared the checked-in artifact against a freshly generated one — which is *already* the
+drift check, so the version assertion could only be reached from a state that was red for
+another reason. The moment an author did what the drift failure told them to do, both halves
+went green with the version untouched. An audit removed a required property from the
+scorecard contract, regenerated exactly as instructed, and shipped it under
+`.../scorecard/1.0.0.json` with the suite green.
+
+**A gate whose failing condition is already covered by another gate is not a gate.** So a
+released version's content is frozen once, in its own file under
+[`docs/api/schemas/released/`](api/schemas/released/), and never regenerated. The comparison
+is against that. Changing what a released version means now requires deleting a frozen file —
+a deliberate act visible in a diff, rather than the natural consequence of following an error
+message — and `freeze_release` refuses to overwrite a frozen version, so the hole cannot
+reappear one function call further away.
 
 `$id` carries the version, so the identifier and the document cannot disagree.
 
