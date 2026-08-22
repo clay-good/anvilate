@@ -6073,3 +6073,27 @@ def test_lug_evidence_bundle_example_shows_a_plan_is_not_evidence():
     assert "no longer applies" in result["stale"].render()
     # The address moves when a layer arrives, because the bundle claims more.
     assert result["sealed"].digest != result["unsealed"].digest
+
+
+def test_rfq_ingestion_example_refuses_to_release_a_contradicted_sheet():
+    namespace = runpy.run_path(str(_EXAMPLES / "rfq_sheet_to_confirmed_inputs.py"))
+    draft, conflicts, blocked_reason, resolved, released = namespace["ingest_the_rfq"]()
+    # Five quantities taken from eight labelled lines; the other three are recorded, not
+    # dropped — a part number, a finish, and a bare count.
+    assert len(draft.values) == 5
+    assert len(draft.unparsed) == 3
+    assert all(v.state.value == "draft" for v in draft.values)
+    # The sheet contradicts itself and both sides are kept.
+    assert len(conflicts) == 1
+    assert conflicts[0].field == "design_load"
+    # Confirming both sides does not unblock it: two values for one field is not a field.
+    assert blocked_reason is not None and "disagreeing values" in blocked_reason
+    # Resolved by rejecting one side, which stays in the record as a decision.
+    assert set(released) == {
+        "design_load",
+        "rated_capacity",
+        "service_temperature",
+        "bore_diameter",
+    }
+    assert released["design_load"].magnitude == pytest.approx(50.0)
+    assert any(v.state.value == "rejected" for v in resolved.values)

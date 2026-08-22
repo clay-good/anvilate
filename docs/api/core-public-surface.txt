@@ -78,6 +78,13 @@ gdt.FrameModifier
 gdt.DatumReference
 gdt.FeatureControlFrame
 gdt.position_stack_contribution
+ingest.ConfirmationState
+ingest.SourceLocation
+ingest.ExtractedValue
+ingest.UnparsedLine
+ingest.FieldConflict
+ingest.DraftSpec
+ingest.extract_requirements
 interop.ForceComponent
 interop.AxisMapping
 interop.ForceStation
