@@ -660,8 +660,12 @@ def heat_treated_material_id(
     declaring "AISI-1018-CD, condition CD" is consistent rather than a miss.
     """
     known = set(known_materials)
-    # The database is keyed case-sensitively; a callout is written by a person.
-    folded = {k.upper(): k for k in known}
+    # The database is keyed case-sensitively; a callout is written by a person. Built from
+    # a SORTED list, not from the set: two ids differing only by case (`X-1` and `x-1`)
+    # otherwise let iteration order pick which spelling wins, and that spelling reaches the
+    # scorecard detail, the bundle sections, and the content address — so the same inputs
+    # hashed differently under different PYTHONHASHSEEDs.
+    folded = {k.upper(): k for k in sorted(known)}
     condition = treatment.condition.strip()
     base = base_material.strip()
     # The explicit `base-condition` record is tried FIRST. Trying the self-match first let

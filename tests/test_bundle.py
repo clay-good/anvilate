@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from datetime import date
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -106,7 +110,13 @@ def test_a_bundle_needs_at_least_one_check():
 def test_a_scorecard_only_bundle_is_legitimate_and_says_what_it_is_not():
     sections = _sections()
     assert sections.covers() == ("checks",)
-    assert set(sections.missing()) == {"verification", "review", "exploration", "callouts"}
+    assert set(sections.missing()) == {
+        "verification",
+        "review",
+        "exploration",
+        "callouts",
+        "geometric tolerances",
+    }
     assert sections.status is CheckStatus.PASS
     # Passing the checks is not being verified, and the summary says both.
     assert sections.verified is False
@@ -215,7 +225,7 @@ def test_every_section_appears_in_the_rendering():
     for name in ("checks", "verification", "review", "callouts"):
         assert name in rendered
     assert sections.covers() == ("checks", "verification", "review", "callouts")
-    assert sections.missing() == ("exploration",)
+    assert sections.missing() == ("exploration", "geometric tolerances")
 
 
 def test_a_callout_section_with_no_strength_reports_not_evaluated_not_absent():
@@ -252,7 +262,12 @@ def test_the_assembled_bundle_carries_the_roll_up_into_the_predicate():
     assert body["sections"]["status"] == "pass"
     assert body["sections"]["testVerified"] is True
     assert body["sections"]["covers"] == ["checks", "verification"]
-    assert body["sections"]["missing"] == ["review", "exploration", "callouts"]
+    assert body["sections"]["missing"] == [
+        "review",
+        "exploration",
+        "callouts",
+        "geometric tolerances",
+    ]
     # A verifier reads the roll-up the reviewer saw rather than recomputing it.
     assert [s["name"] for s in body["sections"]["sections"]] == ["checks", "verification"]
 
@@ -310,3 +325,185 @@ def test_a_predicate_without_sections_is_unchanged():
         ai_disclosure=AIDisclosure.none(),
     )
     assert "sections" not in predicate.to_json_dict()
+
+
+# --- what a mutation run over this file left standing ------------------------------------
+#
+# Six mutants survived the first version of these tests, and the precedence one mattered
+# most: both the module docstring and the docs page stake the claim "identical to
+# `Scorecard` by construction", and the only pair that claim is really about — OVER_MARGIN
+# against NOT_EVALUATED — had no test. `test_an_over_margin_check_is_visible_without_
+# blocking` paired OVER_MARGIN with a *passing* plan, so swapping the two in `_PRECEDENCE`
+# changed nothing. Neither `exploration` nor `frames` was constructed by any test at all.
+
+
+def test_not_evaluated_outranks_over_margin_exactly_as_the_scorecard_orders_them():
+    over = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("pin bearing", computed=9.0, required=2.0, upper=4.0),
+        )
+    )
+    sections = _sections(scorecard=over, verification=_plan(performed=False))
+    assert over.status is CheckStatus.OVER_MARGIN
+    assert sections.verification.status is CheckStatus.NOT_EVALUATED
+    # A gap outranks an over-engineered pass, which is what Scorecard does too.
+    assert sections.status is CheckStatus.NOT_EVALUATED
+    # And prove the two orderings agree rather than asserting they were written to.
+    mixed = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("a", computed=9.0, required=2.0, upper=4.0),
+            ScorecardEntry(name="b", status=CheckStatus.NOT_EVALUATED, detail="no data"),
+        )
+    )
+    assert mixed.status is CheckStatus.NOT_EVALUATED
+
+
+def test_the_roll_up_refuses_a_section_set_with_nothing_to_judge():
+    from anvilate.bundle import _worst
+
+    with pytest.raises(ValueError, match="at least one section that is a verdict"):
+        _worst([])
+
+
+def test_an_exploration_section_is_carried_and_is_not_a_verdict_about_the_part():
+    """A sweep says what the design space contains, not whether this part is sound.
+
+    Letting it into the roll-up would mean an exhaustive sweep with nothing feasible in it
+    condemning a part that passes every check on its own drawing.
+    """
+    from anvilate.explore import (
+        Objective,
+        ObjectiveSense,
+        Parameter,
+        Study,
+        StudyEvaluation,
+        run_study,
+    )
+
+    study = Study(
+        name="wall thickness",
+        parameters=(Parameter(name="t", low=4.0, high=6.0, unit="mm", steps=2),),
+        objectives=(Objective(name="mass", sense=ObjectiveSense.MINIMIZE),),
+    )
+    infeasible = run_study(
+        study,
+        evaluate=lambda point: StudyEvaluation(
+            objectives={"mass": point["t"]},
+            scorecard=Scorecard(
+                entries=(ScorecardEntry.from_safety_factor("wall", computed=0.5, required=2.0),)
+            ),
+        ),
+    )
+    sections = _sections(exploration=infeasible)
+    section = next(s for s in sections.sections() if s.name == "exploration")
+    assert section.informational is True
+    assert section.status is CheckStatus.NOT_EVALUATED
+    assert "exploration" in sections.covers()
+    # Carried, rendered, and not dragging a passing part down with it.
+    assert sections.status is CheckStatus.PASS
+    assert "(informational)" in sections.render()
+
+
+def test_a_geometric_tolerance_section_is_carried_and_is_not_a_verdict_either():
+    from anvilate.gdt import Characteristic, FeatureControlFrame, FeatureType
+
+    frame = FeatureControlFrame(
+        characteristic=Characteristic.FLATNESS,
+        tolerance=_q(0.05, "mm"),
+        feature_type=FeatureType.SURFACE,
+    )
+    sections = _sections(frames=(frame,))
+    section = next(s for s in sections.sections() if s.name == "geometric tolerances")
+    assert section.informational is True
+    assert section.status is CheckStatus.PASS
+    assert "geometric tolerances" in sections.covers()
+    assert "geometric tolerances" not in sections.missing()
+
+
+def test_the_predicate_headline_verdict_is_the_roll_up_not_the_scorecard():
+    """One verdict in the statement, and it is the pessimistic one.
+
+    A signed document used to read ``"status": "pass"`` at the top with
+    ``"sections": {"status": "not_evaluated"}`` underneath. Standard attestation tooling
+    reads the top.
+    """
+    sections = _sections(verification=_plan(performed=False))
+    assert sections.scorecard.status is CheckStatus.PASS
+    assert sections.status is CheckStatus.NOT_EVALUATED
+    bundle = assemble_evidence_bundle(
+        sections,
+        subjects=(),
+        artifacts={"scorecard.json": b'{"status":"pass"}'},
+        spec_digest=sha256_hex(b"the spec"),
+        bom=_bom(),
+        ai_disclosure=AIDisclosure.none(),
+    )
+    body = bundle.statement()["predicate"]
+    assert body["status"] == "not_evaluated"
+    assert body["sections"]["status"] == "not_evaluated"
+
+
+def test_a_sections_payload_that_is_not_an_object_is_refused():
+    from anvilate.attestation import AnvilatePredicate
+
+    common = {
+        "spec_digest": sha256_hex(b"the spec"),
+        "scorecard": _card(),
+        "bom": _bom(),
+        "ai_disclosure": AIDisclosure.none(),
+    }
+    for payload, match in (
+        ("[1, 2, 3]", "must encode an object"),
+        ('"a string"', "must encode an object"),
+        ("not json", "not readable JSON"),
+        ('{"status": "probably fine"}', "not one of"),
+    ):
+        with pytest.raises(ValidationError, match=match):
+            AnvilatePredicate(sections_json=payload, **common)
+
+
+def test_the_bundle_digest_survives_a_material_database_that_differs_only_by_case():
+    """The case fold used to be built from a set, so which spelling won was hash order.
+
+    That spelling reaches the heat-treatment entry's detail, the sections payload, and the
+    content address — so the same inputs hashed differently between processes.
+    """
+    script = (
+        "import sys; sys.path.insert(0, 'tests');"
+        "from test_bundle import _case_folded_digest; print(_case_folded_digest())"
+    )
+    digests = set()
+    for seed in ("0", "2", "5"):
+        env = os.environ | {"PYTHONHASHSEED": seed, "PYTHONPATH": "src"}
+        out = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=str(Path(__file__).resolve().parent.parent),
+            env=env,
+        )
+        digests.add(out.stdout.strip())
+    assert len(digests) == 1, f"the digest depends on the interpreter's hash seed: {digests}"
+
+
+def _case_folded_digest() -> str:
+    """A bundle whose material lookup has to fold two ids differing only by case."""
+    from anvilate.callouts import HeatTreatment
+
+    sections = BundleSections(
+        scorecard=_card(),
+        callouts=CalloutSet(
+            callouts=(HeatTreatment(scope=None, specification="AMS 2759", condition="1"),)
+        ),
+        base_material="X-1",
+        known_materials=("X-1", "x-1"),
+    )
+    return assemble_evidence_bundle(
+        sections,
+        subjects=(),
+        artifacts={"scorecard.json": b'{"status":"pass"}'},
+        spec_digest=sha256_hex(b"the spec"),
+        bom=_bom(),
+        ai_disclosure=AIDisclosure.none(),
+    ).digest

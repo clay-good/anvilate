@@ -471,6 +471,13 @@ class AnvilatePredicate(BaseModel):
                 raise ValueError(
                     f"sections_json must encode an object; got a JSON {type(parsed).__name__}"
                 )
+            rolled = parsed.get("status")
+            if rolled is not None and rolled not in set(CheckStatus):
+                raise ValueError(
+                    f"sections_json carries status {rolled!r}, which is not one of "
+                    f"{sorted(s.value for s in CheckStatus)}. The statement's headline "
+                    f"verdict is read from it, so it cannot be an arbitrary string"
+                )
         return self
 
     @model_validator(mode="after")
@@ -484,7 +491,18 @@ class AnvilatePredicate(BaseModel):
 
     @property
     def status(self) -> CheckStatus:
-        """The screened verdict this predicate carries, rolled up by the scorecard."""
+        """The verdict this predicate carries — the bundle roll-up when there is one.
+
+        A predicate with assembled sections has two candidate verdicts: the scorecard's,
+        and the cross-layer roll-up that is never better than its worst layer. Writing the
+        scorecard's as the statement's headline ``status`` put the OPTIMISTIC one on the
+        outside — a signed document reading ``"status": "pass"`` at the top and
+        ``"sections": {"status": "fail"}`` underneath. Standard tooling reads the top.
+        """
+        if self.sections_json is not None:
+            rolled = json.loads(self.sections_json).get("status")
+            if rolled is not None:
+                return CheckStatus(rolled)
         return self.scorecard.status
 
     def to_json_dict(self) -> dict[str, object]:

@@ -76,21 +76,46 @@ _PRECEDENCE: tuple[CheckStatus, ...] = (
 
 
 def _worst(statuses: Iterable[CheckStatus]) -> CheckStatus:
-    """The most blocking of ``statuses``, or PASS over an empty set."""
-    return max(statuses, key=_PRECEDENCE.index, default=CheckStatus.PASS)
+    """The most blocking of ``statuses``.
+
+    The empty case cannot arise — ``BundleSections`` always carries a non-informational
+    ``checks`` section — and the default is PASS rather than NOT_EVALUATED so that the
+    identity holds: the worst of nothing does not make a bundle worse. The invariant is
+    asserted rather than assumed, because a future section that is informational by
+    default would otherwise silently empty this.
+    """
+    candidates = list(statuses)
+    if not candidates:
+        raise ValueError(
+            "a bundle roll-up needs at least one section that is a verdict about the part; "
+            "the checks section always is, so an empty set here means a caller built "
+            "BundleSections in a way its validator was supposed to refuse"
+        )
+    return max(candidates, key=_PRECEDENCE.index)
 
 
 class SectionStatus(BaseModel):
-    """One layer's contribution to the roll-up: what it is, and what it concluded."""
+    """One layer's contribution: what it is, what it concluded, and whether that is a verdict.
+
+    ``informational`` marks a layer whose conclusion is *about something other than this
+    part*. A design-space sweep says what the space contains; a set of feature control
+    frames says the callouts parse. Neither is a statement that the part is or is not
+    sound, so neither enters the roll-up — and letting them would mean an exhaustive sweep
+    with nothing feasible in it condemning a part that passes every check on its own
+    drawing. They are still carried, still rendered, and still counted in
+    :meth:`BundleSections.covers`.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     name: str
     status: CheckStatus
     detail: str
+    informational: bool = False
 
     def __str__(self) -> str:
-        return f"[{self.status.value.upper()}] {self.name}: {self.detail}"
+        mark = " (informational)" if self.informational else ""
+        return f"[{self.status.value.upper()}] {self.name}{mark}: {self.detail}"
 
 
 class BundleSections(BaseModel):
@@ -186,6 +211,7 @@ class BundleSections(BaseModel):
             found.append(
                 SectionStatus(
                     name="exploration",
+                    informational=True,
                     status=(CheckStatus.PASS if study.feasible else CheckStatus.NOT_EVALUATED),
                     detail=(
                         f"{len(study.points)} candidates evaluated, "
@@ -207,6 +233,7 @@ class BundleSections(BaseModel):
             found.append(
                 SectionStatus(
                     name="geometric tolerances",
+                    informational=True,
                     status=CheckStatus.PASS,
                     detail=(
                         f"{len(self.frames)} feature control frames, each legal at construction"
@@ -224,7 +251,13 @@ class BundleSections(BaseModel):
         present = set(self.covers())
         return tuple(
             name
-            for name in ("verification", "review", "exploration", "callouts")
+            for name in (
+                "verification",
+                "review",
+                "exploration",
+                "callouts",
+                "geometric tolerances",
+            )
             if name not in present
         )
 
@@ -236,7 +269,7 @@ class BundleSections(BaseModel):
         verification plan is ``NOT_EVALUATED``, because the plan is the layer that would
         have said otherwise and it has not said it yet.
         """
-        return _worst(section.status for section in self.sections())
+        return _worst(section.status for section in self.sections() if not section.informational)
 
     @property
     def verified(self) -> bool:
@@ -246,11 +279,9 @@ class BundleSections(BaseModel):
         present and every item in it has a recorded, passing outcome. A bundle with no plan
         is not verified, and neither is one whose plan is still intent.
         """
-        return (
-            self.verification is not None
-            and self.verification.status is CheckStatus.PASS
-            and bool(self.verification.items)
-        )
+        # `VerificationPlan.status` is already NOT_EVALUATED for an empty plan, so an
+        # `and self.verification.items` here was dead weight that read like a real guard.
+        return self.verification is not None and self.verification.status is CheckStatus.PASS
 
     def summary(self) -> str:
         """One line naming the roll-up, what is covered, and what is not."""
