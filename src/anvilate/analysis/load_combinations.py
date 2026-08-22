@@ -20,7 +20,7 @@ for forces, moments, or stresses alike.
 
 from __future__ import annotations
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "asce7_lrfd_factored_load",
@@ -39,7 +39,7 @@ def _effects(
     if not isinstance(dead, Quantity):
         raise TypeError("dead must be a Quantity load effect")
     unit = dead.unit
-    d = dead.to(unit).magnitude
+    d = require_finite(dead, name="dead")
     if d < 0:
         raise ValueError("dead must be non-negative (pass load effects in a consistent sense)")
 
@@ -51,6 +51,13 @@ def _effects(
                 f"{name} must share the dead load's dimensionality "
                 f"({dead.dimensionality}); got {value.dimensionality}"
             )
+        # A non-finite effect is refused here rather than carried. `max(combinations)`
+        # DROPS a NaN candidate instead of propagating it, so a single NaN wind load
+        # deletes every wind combination from the envelope and the governing effect is
+        # reported from the survivors -- 57% low, with a comfortable PASS. The sibling
+        # `anvilate.loads.LoadCombination.evaluate` has refused this from the start; this
+        # is the same rule where the analysis-layer version needed it.
+        require_finite(value, name=name)
         m = value.to(unit).magnitude
         if m < 0:
             raise ValueError(f"{name} must be non-negative (use a consistent sense)")

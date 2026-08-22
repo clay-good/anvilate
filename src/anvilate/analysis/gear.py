@@ -33,7 +33,7 @@ from math import acos, atan2, ceil, cos, degrees, pi, prod, radians, sin, sqrt, 
 
 from pydantic import BaseModel, ConfigDict
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s, revolutions_per_minute, revolutions_per_second
 from .contact import hertz_cylinder_contact
 
@@ -95,6 +95,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def gear_tangential_load(*, torque: Quantity, pitch_diameter: Quantity) -> Quantity:

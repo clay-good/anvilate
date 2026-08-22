@@ -1981,3 +1981,38 @@ def test_a_non_positive_demand_is_not_evaluated_rather_than_an_infinite_pass() -
         assert entry.safety_factor is None
         # And the card as a whole is never a clean pass on a demand that was not evaluated.
         assert not bolted(degenerate).passed
+
+
+def test_the_lifting_lug_allowable_is_the_yield_not_the_ultimate():
+    """Six lug tests, no numeric assertion between them.
+
+    Swapping the lug's allowable from A36's 250 MPa yield to its 400 MPa ultimate — a 60%
+    inflation of every lifting-lug capacity in the pack — left all 112 tests in this file
+    green. The verdicts did not move because the margins are wide on both sides, and the
+    repair round-trip asserts the *repaired* factor equals the requirement, which the
+    one-solve inverse produces by construction for any allowable. This pins the number.
+    """
+    card = screen_lifting_lug(_lug(), required_safety_factor=1.4)
+    by_name = {e.name: e for e in card.entries}
+    # 50 kN / (25 mm x 12 mm) = 166.67 MPa bearing against A36's 250 MPa yield.
+    assert by_name["pad_eye pin bearing"].safety_factor == pytest.approx(1.5, rel=1e-6)
+    # 50 kN / ((80 - 25) mm x 12 mm) = 75.76 MPa net tension against the same 250 MPa.
+    assert by_name["pad_eye net tension"].safety_factor == pytest.approx(3.3, rel=1e-6)
+    # Against the 400 MPa ultimate both would read 1.6x higher, which is the mutation.
+    assert by_name["pad_eye pin bearing"].safety_factor < 1.6 * 1.5
+
+
+def test_the_base_plate_concrete_bearing_fraction_is_pinned():
+    """0.85·f'c appeared in a comment and in no assertion.
+
+    Doubling ``_CONCRETE_BEARING_FRACTION`` to 1.70 left all 112 tests here green — the
+    overload case fails either way. The constant is used nowhere else in the pack, so
+    nothing else guards it; this is the same gap a previous audit closed on the weld 0.6.
+    """
+    from anvilate.packs.structural import _CONCRETE_BEARING_FRACTION
+
+    assert _CONCRETE_BEARING_FRACTION == pytest.approx(0.85)
+    card = screen_base_plate(_base_plate(), required_safety_factor=2.0)
+    bearing = next(e for e in card.entries if "bearing" in e.name)
+    # 200 kN / (300 x 300) mm² = 2.222 MPa against 0.85 x 25 = 21.25 MPa allowable.
+    assert bearing.safety_factor == pytest.approx(21.25 / 2.2222, rel=1e-4)

@@ -24,7 +24,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import log
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ..units.rotation import revolutions_per_minute, revolutions_per_second
 
 # ISO 281 life exponents: the load-life power law L10 = (C/P)^p.
@@ -102,6 +102,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def _defect_frequency_inputs(

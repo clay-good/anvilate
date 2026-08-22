@@ -23,7 +23,7 @@ from math import sqrt
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "aisi_plate_slenderness",
@@ -190,6 +190,11 @@ class ElasticBuckling(BaseModel):
         ):
             if value is None:
                 continue
+            # The DSM nominal is the minimum of three modes, and `min()` drops a NaN rather
+            # than propagating it: a non-finite distortional load left the nominal reported
+            # as LOCAL-governed with the distortional mode simply gone from the envelope.
+            # With one mode unknown there is no minimum.
+            require_finite(value, name=f"{name} elastic buckling value")
             if value.magnitude <= 0:
                 raise ValueError(f"{name} elastic buckling value must be positive; got {value}")
         if not self.source.strip():

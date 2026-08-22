@@ -22,7 +22,7 @@ from math import acos, atan2, cos, degrees, pi, radians, sin, sqrt
 from pydantic import BaseModel, ConfigDict
 
 from ..scorecard import ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "von_mises_plane_stress",
@@ -50,6 +50,10 @@ def _require_stress(value: Quantity, name: str) -> float:
         raise ValueError(
             f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
         )
+    # `tresca_principal` takes max() - min() over the three principals, and a NaN in the
+    # middle slot was DROPPED by both while a NaN in the first propagated -- the answer
+    # depended on argument order, which is itself the proof it was wrong.
+    require_finite(value, name=name)
     return value.to("MPa").magnitude
 
 

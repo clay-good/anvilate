@@ -297,3 +297,20 @@ def test_the_slope_angle_reversal_the_hint_refuses_to_cross_is_real():
     assert below == sorted(below, reverse=True)
     # Above it the trend reverses, which is exactly why no hint is offered there.
     assert fs(80.0) > fs(50.0)
+
+
+def test_the_pile_factor_of_safety_default_divides_the_capacity_it_is_supposed_to():
+    """2.5 could be raised to 3.0 and nothing noticed.
+
+    The scenario test asserts only the verdict, and the repair round-trip asserts the
+    *repaired* factor equals 1.0 — which the solver produces by construction for any factor
+    of safety, so it is self-consistent rather than a pin. The allowable is
+    (Q_s + Q_p)/FS, so the safety factor against a fixed load is inversely proportional to
+    FS: this asserts that relationship directly, which no single value can.
+    """
+    (at_default,) = screen_driven_pile(_pile()).entries
+    (at_three,) = screen_driven_pile(_pile(factor_of_safety=3.0)).entries
+    assert at_default.safety_factor == pytest.approx(1.2279, rel=1e-4)
+    assert at_default.safety_factor / at_three.safety_factor == pytest.approx(3.0 / 2.5, rel=1e-9)
+    # The ultimate capacity behind both: 350 kN x 1.2279 x 2.5 = 1074 kN.
+    assert at_default.safety_factor * 2.5 * 350.0 == pytest.approx(1074.4, rel=1e-3)

@@ -3629,10 +3629,11 @@ def test_hydraulic_cylinder_example_catches_the_misused_thin_wall_form():
     namespace = runpy.run_path(str(_EXAMPLES / "hydraulic_cylinder_wall.py"))
     card = namespace["screen_cylinder_barrel"]()
     by_name = {e.name: e for e in card.entries}
-    # The membrane shortcut at r/t = 2.5 reads 150 MPa and passes...
+    # The membrane shortcut at r/t = 2.5 used to read 150 MPa and pass. The scope is now
+    # enforced, so the example demonstrates the refusal instead of a number to distrust.
     thin = by_name["thin-wall membrane (r/t 2.5)"]
-    assert thin.passed
-    assert "safety factor 2.78" in thin.detail
+    assert thin.status is CheckStatus.NOT_EVALUATED
+    assert "below the r/t >= 10 scope" in thin.detail
     # ...but the exact Lame bore Tresca intensity (185 hoop on -60 radial)
     # works the bore at 245 MPa and fails the same screen.
     lame = by_name["Lame bore intensity"]
@@ -4558,9 +4559,12 @@ def test_transmission_line_clearance_example_parabola_hides_a_violation():
     namespace = runpy.run_path(str(_EXAMPLES / "transmission_line_clearance.py"))
     card = namespace["screen_line_clearance"]()
     by_name = {e.name: e for e in card.entries}
-    # The parabolic approximation says the line clears the sag limit...
-    assert by_name["parabolic-approximation sag"].passed
-    assert "safety factor 1.02" in by_name["parabolic-approximation sag"].detail
+    # The parabolic approximation used to say the line clears the sag limit. At d/L = 0.15
+    # it is outside its own scope and now refuses, which is the stronger version of the
+    # same lesson.
+    parabolic = by_name["parabolic-approximation sag"]
+    assert parabolic.status is CheckStatus.NOT_EVALUATED
+    assert "shallow-sag scope" in parabolic.detail
     # ...but the exact catenary (which sags ~3% more on a deep span) does not.
     assert by_name["exact catenary sag"].status is CheckStatus.FAIL
     assert "safety factor 0.99" in by_name["exact catenary sag"].detail

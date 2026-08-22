@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from math import sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "rc_stress_block_depth",
@@ -63,6 +63,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def rc_stress_block_depth(
@@ -430,6 +435,10 @@ def rc_shear_reinforcement_strength(
     return Quantity(magnitude=vs_n / 1000.0, unit="kN")
 
 
+# ACI 318 §9.7.6.2.2: stirrup spacing may not exceed d/2 nor 600 mm.
+_ACI_MAX_STIRRUP_SPACING_MM = 600.0
+
+
 def rc_stirrup_spacing_for_shear(
     *,
     required_shear_strength: Quantity,
@@ -444,9 +453,12 @@ def rc_stirrup_spacing_for_shear(
     V_s = V_u/φ − V_c, and rearranging V_s = A_v·f_yt·d/s gives the spacing
     s = A_v·f_yt·d/V_s for a chosen bar. ``required_shear_strength`` V_s is the shear the
     stirrups must carry, ``stirrup_area`` A_v the total leg area, ``stirrup_yield`` f_yt, and
-    ``effective_depth`` d. The result is the *maximum* spacing that satisfies strength; ACI
-    also caps the spacing at d/2 (≤ 600 mm), halved where V_s exceeds 0.33·√f'c·b_w·d, which
-    the caller applies on top. A higher demand or a smaller bar forces tighter stirrups.
+    ``effective_depth`` d. The result is the maximum spacing that satisfies **both** strength
+    and ACI's detailing cap of d/2 ≤ 600 mm, which is applied here rather than delegated —
+    at a light demand the strength spacing alone runs several times past it, and a spacing
+    that wide puts no stirrup across a diagonal crack. The further *halving* where V_s
+    exceeds 0.33·√f'c·b_w·d needs f'c and b_w, which this function does not take, so that
+    one remains the caller's. A higher demand or a smaller bar forces tighter stirrups.
     Returns the required spacing in mm.
     """
     _require(required_shear_strength, "[force]", "required_shear_strength")
@@ -459,7 +471,16 @@ def rc_stirrup_spacing_for_shear(
     d = effective_depth.to("mm").magnitude
     if vs <= 0 or av <= 0 or fyt <= 0 or d <= 0:
         raise ValueError("all inputs must be positive")
-    return Quantity(magnitude=av * fyt * d / vs, unit="mm")
+    # The strength spacing alone is unbounded as V_s falls, and at a wide spacing no stirrup
+    # crosses a 45° diagonal crack at all — which makes the V_s the companion function
+    # reports fictitious. ACI's d/2 ≤ 600 mm cap was documented here as the caller's job and
+    # no caller applied it, so a light demand returned 1491 mm where ACI permits 250 mm.
+    # Applying it is the code requirement and it is conservative; the *halving* clause
+    # genuinely needs f'c and b_w, which this function does not take, so it stays the
+    # caller's and is named in the docstring.
+    strength_spacing = av * fyt * d / vs
+    capped = min(strength_spacing, d / 2.0, _ACI_MAX_STIRRUP_SPACING_MM)
+    return Quantity(magnitude=capped, unit="mm")
 
 
 def rc_column_axial_strength(

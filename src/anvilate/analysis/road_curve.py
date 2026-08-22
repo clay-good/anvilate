@@ -44,6 +44,25 @@ __all__ = [
 _GRAVITY = 9.80665  # m/s²
 
 
+# e, f, and G are decimals here, and every one of them is quoted in percent in AASHTO's own
+# tables — e = 8%, f = 0.12, a 6% grade. Entering the percent is the single most likely slip
+# with these arguments, and it is unconservative in every case: e = 8.0 with f = 12.0 returns
+# a 3.93 m minimum radius where the correct answer is 393.5 m, and a grade of 6.0 instead of
+# 0.06 collapses the braking distance 15.5x. Nothing physical reaches 1.0 in any of the three
+# (a 100% cross-slope is a 45° bank), so the bound is a free catch.
+_DECIMAL_RATE_CEILING = 1.0
+
+
+def _check_decimal_rate(value: float, name: str) -> None:
+    """Refuse a rate given as a percent where a decimal fraction is required."""
+    if abs(value) >= _DECIMAL_RATE_CEILING:
+        raise ValueError(
+            f"{name} is {value:g}, which is not a decimal fraction — a value of 1.0 is a 45° "
+            f"slope and nothing in road geometry reaches it. AASHTO tabulates these in percent; "
+            f"pass {value / 100.0:g} rather than {value:g}"
+        )
+
+
 def minimum_curve_radius(
     *,
     design_speed: Quantity,
@@ -61,6 +80,8 @@ def minimum_curve_radius(
     v = design_speed.to("m/s").magnitude
     if v <= 0:
         raise ValueError("design_speed must be positive")
+    _check_decimal_rate(superelevation_rate, "superelevation_rate")
+    _check_decimal_rate(side_friction_factor, "side_friction_factor")
     combined = superelevation_rate + side_friction_factor
     if combined <= 0:
         raise ValueError("superelevation_rate + side_friction_factor must be positive")
@@ -139,6 +160,11 @@ def braking_distance(
         raise ValueError("speed must be non-negative")
     if a <= 0:
         raise ValueError("deceleration must be positive")
+    # The existing guard is one-sided: it catches the downgrade that would return a long
+    # distance and lets an arbitrarily large UPGRADE through, which is the direction that
+    # shortens the answer. A 6% upgrade entered as 6.0 returns a stopping sight distance
+    # 2.2x short.
+    _check_decimal_rate(grade, "grade")
     effective = a + _GRAVITY * grade
     if effective <= 0:
         raise ValueError("a + g·grade must be positive (the downgrade overwhelms the braking)")

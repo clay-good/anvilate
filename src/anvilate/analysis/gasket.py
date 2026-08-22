@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from math import pi
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "gasket_seating_load",
@@ -43,6 +43,7 @@ def _positive_mm(value: Quantity, name: str) -> float:
         raise ValueError(
             f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
         )
+    require_finite(value, name=name)
     magnitude = value.to("mm").magnitude
     if magnitude <= 0:
         raise ValueError(f"{name} must be positive; got {value}")
@@ -94,6 +95,7 @@ def gasket_operating_load(
         raise ValueError(
             f"pressure must be a [pressure] quantity; got {pressure.dimensionality} ({pressure})"
         )
+    require_finite(pressure, name="pressure")
     p = pressure.to("MPa").magnitude
     if p <= 0:
         raise ValueError(f"pressure must be positive; got {pressure}")

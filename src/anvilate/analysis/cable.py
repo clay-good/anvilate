@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from math import cosh, sinh, sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "parabolic_cable_sag",
@@ -46,6 +46,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def _inputs(weight_per_length: Quantity, span: Quantity) -> tuple[float, float]:
@@ -58,6 +63,29 @@ def _inputs(weight_per_length: Quantity, span: Quantity) -> tuple[float, float]:
     if length <= 0:
         raise ValueError(f"span must be positive; got {span}")
     return w, length
+
+
+# The parabola is the shallow-sag limit of the catenary, and the limit has a number. At
+# d/L = 0.10 the parabolic sag runs 1.3% under the exact catenary and T_max 0.4% under; at
+# d/L = 0.20 that is 5.2% and 4.3%, and at d/L = 0.40 it is 19% and 27%. Both errors are
+# unconservative at once -- the sag is the clearance-to-ground check and T_max sizes the
+# cable and its anchors. This module already exports the exact `catenary_sag` and
+# `catenary_max_tension` on the identical argument triple, so a refusal has somewhere to
+# send the caller.
+_SHALLOW_SAG_RATIO_LIMIT = 0.10
+
+
+def _check_shallow_sag(w: float, length: float, h: float) -> None:
+    """Refuse a sag ratio past the shallow-sag scope of the parabolic forms."""
+    ratio = w * length / (8.0 * h)
+    if ratio > _SHALLOW_SAG_RATIO_LIMIT:
+        raise ValueError(
+            f"the sag ratio d/L = {ratio:.4g} is past the shallow-sag scope of the parabolic "
+            f"forms (d/L <= {_SHALLOW_SAG_RATIO_LIMIT:g}, where the error is about 1%). Both the "
+            f"sag and the peak tension come out UNDER the exact values here, which overstates "
+            f"clearance and understates the anchor load. Use catenary_sag and "
+            f"catenary_max_tension, which take the same arguments and are exact."
+        )
 
 
 def parabolic_cable_sag(
@@ -77,6 +105,7 @@ def parabolic_cable_sag(
     h = horizontal_tension.to("N").magnitude
     if h <= 0:
         raise ValueError(f"horizontal_tension must be positive; got {horizontal_tension}")
+    _check_shallow_sag(w, length, h)
     return Quantity(magnitude=w * length**2 / (8.0 * h), unit="m")
 
 
@@ -97,6 +126,7 @@ def parabolic_cable_max_tension(
     h = horizontal_tension.to("N").magnitude
     if h <= 0:
         raise ValueError(f"horizontal_tension must be positive; got {horizontal_tension}")
+    _check_shallow_sag(w, length, h)
     vertical_reaction = w * length / 2.0
     return Quantity(magnitude=sqrt(h**2 + vertical_reaction**2), unit="N")
 

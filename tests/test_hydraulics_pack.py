@@ -91,3 +91,22 @@ def test_pipe_run_passes_with_enough_head_fails_without():
     slipped = screen_pipe_run(_pipe(roughness=_q("0.045 m")))
     assert slipped.entries[0].safety_factor == pytest.approx(0.16887957550413993, rel=1e-9)
     assert slipped.status is CheckStatus.FAIL
+
+
+def test_the_two_required_margins_are_pinned_not_merely_implied():
+    """Both defaults could be moved anywhere in (1.05, 1.40) and no test noticed.
+
+    The scenario tests assert the NPSH verdict and only the *computed* motor safety factor,
+    never the required one — so the 1.1 NPSH cushion, which is the cited engineering
+    criterion the check exists for, was unpinned. These assert the required factors
+    directly, and assert that raising them moves the verdict.
+    """
+    card = screen_pump_duty(_duty())
+    entries = {e.name: e for e in card.entries}
+    npsh = next(e for name, e in entries.items() if "npsh" in name.lower())
+    motor = next(e for name, e in entries.items() if "motor" in name.lower())
+    assert npsh.required_safety_factor == pytest.approx(1.1)
+    assert motor.required_safety_factor == pytest.approx(1.0)
+    # And they are live: a requirement above the computed factor flips the verdict.
+    tightened = screen_pump_duty(_duty(), npsh_margin_factor=10.0, motor_service_factor=10.0)
+    assert all(e.status is CheckStatus.FAIL for e in tightened.entries)

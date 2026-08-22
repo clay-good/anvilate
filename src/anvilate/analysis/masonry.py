@@ -18,7 +18,7 @@ below the gross. Inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "masonry_allowable_axial_stress",
@@ -33,6 +33,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def _slenderness_factor(slenderness_ratio: float) -> float:
@@ -66,6 +71,11 @@ def masonry_allowable_axial_stress(
     return Quantity(magnitude=0.25 * fm * _slenderness_factor(slenderness_ratio), unit="MPa")
 
 
+# TMS 402 allowable-stress design caps F_s at 165 MPa (24 ksi) regardless of grade. It is
+# quoted in this function's docstring and was enforced nowhere.
+_STEEL_ALLOWABLE_CAP_MPA = 165.0
+
+
 def masonry_column_axial_capacity(
     *,
     masonry_strength: Quantity,
@@ -81,7 +91,8 @@ def masonry_column_axial_capacity(
     where the masonry acts on its ``net_area`` A_n at 0.25·f'm and the longitudinal steel adds
     0.65·A_st·F_s, both cut by the same h/r slenderness factor as the stress. ``masonry_strength``
     f'm, ``net_area`` A_n, ``slenderness_ratio`` h/r, and — when reinforced — ``steel_area`` A_st
-    with its ``steel_allowable_stress`` F_s (0.6·f_y, capped at 165 MPa in the code). Omit the
+    with its ``steel_allowable_stress`` F_s (0.6·f_y, capped at 165 MPa by the code — a
+    value above the cap is refused, not quietly used). Omit the
     steel arguments for a plain masonry column (the 0.65·A_st·F_s term drops out). Returns P_a
     in kN.
     """
@@ -103,6 +114,17 @@ def masonry_column_axial_capacity(
         fs = steel_allowable_stress.to("MPa").magnitude
         if ast <= 0 or fs <= 0:
             raise ValueError("steel_area and steel_allowable_stress must be positive")
+        # The capacity is linear in F_s through the 0.65*A_st*F_s term, so an uncapped F_s
+        # buys unbounded phantom column capacity. The natural mistake is the one that costs
+        # the most: 0.6*f_y for Grade 60 steel is 248 MPa, and passing it instead of the
+        # code-capped 165 MPa reports 21% more column than TMS 402 allows.
+        if fs > _STEEL_ALLOWABLE_CAP_MPA:
+            raise ValueError(
+                f"steel_allowable_stress is {steel_allowable_stress}, above the TMS 402 cap of "
+                f"{_STEEL_ALLOWABLE_CAP_MPA:g} MPa on F_s. The capacity is linear in F_s, so the "
+                f"uncapped value overstates the column by {fs / _STEEL_ALLOWABLE_CAP_MPA:.2f}x on "
+                f"its steel term; pass min(0.6*f_y, {_STEEL_ALLOWABLE_CAP_MPA:g} MPa)"
+            )
         steel_term = 0.65 * ast * fs
     capacity = (0.25 * fm * an + steel_term) * _slenderness_factor(slenderness_ratio)
     return Quantity(magnitude=capacity / 1000.0, unit="kN")

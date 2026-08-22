@@ -299,6 +299,21 @@ def smith_watson_topper_stress(*, max_stress: Quantity, alternating_stress: Quan
         raise ValueError(
             f"max_stress must be positive for the SWT tensile-fatigue model; got {smax} MPa"
         )
+    # σ_max < σ_a is a COMPRESSIVE mean (σ_m = σ_max − σ_a < 0), and SWT is a tensile-mean
+    # model: the sign of the peak was checked and the mean never was, so the whole region
+    # 0 < σ_max < σ_a slid through returning √(σ_max·σ_a), which credits compression with a
+    # reduction in damaging stress. At σ_max = 1, σ_a = 100 that is 10 MPa against the 100
+    # MPa the amplitude alone justifies — a 10x understatement of the number the caller
+    # looks up on an S-N curve. This module's own Gerber check gives no credit for a
+    # non-positive mean; refusing here says the same thing without silently changing it.
+    if smax < sa:
+        raise ValueError(
+            f"max_stress {smax:.4g} MPa is below alternating_stress {sa:.4g} MPa, so the mean "
+            f"stress is {smax - sa:.4g} MPa — compressive. SWT is a tensile-mean model and "
+            f"returns a *lower* equivalent stress for a compressive mean, which is unconservative "
+            f"by {sa / sqrt(smax * sa):.3g}x here. For a non-positive mean the amplitude governs: "
+            f"use σ_a directly, as goodman_safety_factor does."
+        )
     return Quantity(magnitude=sqrt(smax * sa), unit="MPa")
 
 

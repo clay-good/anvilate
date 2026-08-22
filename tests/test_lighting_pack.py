@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from anvilate.packs.lighting import LightingInstallation, screen_lighting
 from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
@@ -58,3 +60,31 @@ def test_references_cite_the_governing_standards():
     refs = " ".join(e.reference or "" for e in card.entries)
     assert "IES" in refs
     assert "ASHRAE 90.1" in refs
+
+
+def test_the_light_loss_factor_actually_reaches_the_lumen_method():
+    """The number, not the verdict — the LLF could be dropped and every test still passed.
+
+    All three scenario tests above assert only a :class:`CheckStatus`, and the margins are
+    wide enough on both sides that deleting the light-loss factor from the lumen method
+    (inflating illuminance by 1/0.8 = 25%) moved no verdict. A maintained illuminance is
+    E = N·F·CU·LLF/A, so the safety factor against the requirement is linear in LLF: this
+    pins it at two values and asserts the ratio is exactly the ratio of the factors.
+    """
+    balanced = {e.name: e for e in screen_lighting(_install()).entries}["task illuminance"]
+    # 20 x 3400 lm x 0.62 x 0.80 / 80 m² = 421.6 lux against 400 required.
+    assert balanced.safety_factor == pytest.approx(421.6 / 400.0, rel=1e-6)
+    brighter = {e.name: e for e in screen_lighting(_install(light_loss_factor=1.0)).entries}
+    assert brighter["task illuminance"].safety_factor == pytest.approx(
+        balanced.safety_factor / 0.8, rel=1e-9
+    )
+    # And the under-lit case, which is the one that would have hidden the deletion: it fails
+    # at 0.74 and would still fail at 0.93 with the factor gone.
+    under = {e.name: e for e in screen_lighting(_install(luminaire_count=14)).entries}
+    assert under["task illuminance"].safety_factor == pytest.approx(295.12 / 400.0, rel=1e-4)
+
+
+def test_the_power_density_check_pins_its_own_number():
+    entries = {e.name: e for e in screen_lighting(_install()).entries}
+    # 20 x 30 W / 80 m² = 7.5 W/m² against the 8.8 W/m² cap.
+    assert entries["lighting power density"].safety_factor == pytest.approx(8.8 / 7.5, rel=1e-6)

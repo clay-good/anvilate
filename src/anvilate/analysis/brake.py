@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from math import exp
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from .belt import belt_max_transmissible_force, belt_slack_tension, capstan_tension_ratio
 
 __all__ = [
@@ -62,6 +62,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def _drum_radius_m(drum_diameter: Quantity) -> float:

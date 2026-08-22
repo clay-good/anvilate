@@ -22,7 +22,7 @@ from math import cos, log10, radians, sin, sqrt, tan
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from .stress import von_mises_principal
 
 __all__ = [
@@ -81,6 +81,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def _as_quantity(pint_value, unit: str) -> Quantity:
@@ -113,6 +118,29 @@ class ThinWallStress(BaseModel):
         return (
             f"thin-wall cylinder: hoop {self.hoop_stress.to('MPa')}, "
             f"long {self.longitudinal_stress.to('MPa')} (r/t {self.thin_wall_ratio:.1f})"
+        )
+
+
+# The membrane forms are the r/t -> infinity limit of Lame, and the module docstring puts
+# their floor at r/t ~ 10. Below it the error is not academic: at r/t = 2 the hoop is 23%
+# under the exact bore value and the Tresca-relevant number is 44% under, and the SIZING
+# inverse compounds it -- a wall sized by the thin form at p/S = 0.5 comes out 32% thin and
+# runs 30% over the allowable it was sized against. The exact `thick_wall_cylinder` takes
+# the same arguments and sits in this module, so the refusal has somewhere to send you.
+# The sibling ASME B31.3 pair already enforces its analogous t < D/6 scope.
+_THIN_WALL_RATIO_FLOOR = 10.0
+
+
+def _check_thin_wall_scope(radius_mm: float, thickness_mm: float, label: str) -> None:
+    """Refuse an r/t below the scope of the thin-wall membrane forms."""
+    ratio = radius_mm / thickness_mm
+    if ratio < _THIN_WALL_RATIO_FLOOR:
+        raise ValueError(
+            f"{label} gives r/t = {ratio:.4g}, below the r/t >= {_THIN_WALL_RATIO_FLOOR:g} "
+            f"scope of the thin-wall membrane forms. The membrane stress is the large-r/t "
+            f"limit of Lame and it understates the bore stress here (23% low at r/t = 2, and "
+            f"the Tresca value 44% low). Use thick_wall_cylinder, which takes the same "
+            f"arguments and is exact."
         )
 
 
@@ -149,6 +177,9 @@ def thin_wall_cylinder(
     hoop = p * r / t
     longitudinal = p * r / (2 * t)
     ratio = (radius.to("mm").magnitude) / (wall_thickness.to("mm").magnitude)
+    _check_thin_wall_scope(
+        radius.to("mm").magnitude, wall_thickness.to("mm").magnitude, "the geometry given"
+    )
     return ThinWallStress(
         hoop_stress=_as_quantity(hoop, "MPa"),
         longitudinal_stress=_as_quantity(longitudinal, "MPa"),
@@ -209,9 +240,10 @@ def thin_wall_thickness_for_pressure(
     minimum thickness in mm; the pressure/radius/stress are dimension-checked and
     ``n`` / ``allowable_stress`` must be positive.
 
-    A thin-wall (membrane) size — when the result gives r/t ≲ 10 the wall carries
-    a genuine gradient and the exact Lamé form (:func:`thick_wall_cylinder`)
-    governs, so re-check a thick result there.
+    A thin-wall (membrane) size, and the scope is enforced rather than delegated: when
+    the required wall gives r/t < 10 the wall carries a genuine gradient, the membrane
+    size comes out about 32% thin, and this raises naming the exact Lamé form
+    (:func:`thick_wall_cylinder`) instead of returning the number.
     """
     _require(pressure, "[pressure]", "pressure")
     _require(radius, "[length]", "radius")
@@ -232,7 +264,11 @@ def thin_wall_thickness_for_pressure(
     if radius.to("mm").magnitude <= 0:
         raise ValueError(f"radius must be positive; got {radius}")
     thickness = required_safety_factor * pressure.pint * radius.pint / allowable_stress.pint
-    return _as_quantity(thickness, "mm")
+    sized = _as_quantity(thickness, "mm")
+    _check_thin_wall_scope(
+        radius.to("mm").magnitude, sized.magnitude, "the thickness this pressure requires"
+    )
+    return sized
 
 
 def asme_cylinder_thickness(
@@ -1176,6 +1212,27 @@ def thick_wall_sphere(
     )
 
 
+# Classical shell buckling is a THIN-shell result: every one of these three formulas is
+# derived from membrane-plus-bending shell theory, which needs r/t large. Outside it there
+# is no upper bound at all -- at t/R = 1 the axial form returns 0.6*E, about 350x a
+# structural steel yield, as a "critical stress" for a stubby tube that is not a
+# shell-buckling problem in the first place. r/t >= 10 is the same floor the membrane
+# stress functions in this module use.
+_SHELL_BUCKLING_RATIO_FLOOR = 10.0
+
+
+def _check_shell_buckling_scope(radius_mm: float, thickness_mm: float, what: str) -> None:
+    """Refuse an r/t below the thin-shell scope of the classical buckling formulas."""
+    ratio = radius_mm / thickness_mm
+    if ratio < _SHELL_BUCKLING_RATIO_FLOOR:
+        raise ValueError(
+            f"r/t = {ratio:.4g} is below the r/t >= {_SHELL_BUCKLING_RATIO_FLOOR:g} thin-shell "
+            f"scope of the classical {what} formula, which has no upper bound outside it and "
+            f"returns critical values many times the material's yield. A wall this thick does "
+            f"not fail by shell buckling; screen it as a thick cylinder instead."
+        )
+
+
 def cylinder_external_pressure_buckling(
     *,
     elastic_modulus: Quantity,
@@ -1212,6 +1269,7 @@ def cylinder_external_pressure_buckling(
         raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
     if r <= 0:
         raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+    _check_shell_buckling_scope(r, t, "cylinder external-pressure buckling")
     p_cr = e * t**3 / (4.0 * r**3 * (1.0 - poisson**2))
     return Quantity(magnitude=p_cr, unit="MPa")
 
@@ -1250,6 +1308,7 @@ def sphere_external_pressure_buckling(
         raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
     if r <= 0:
         raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+    _check_shell_buckling_scope(r, t, "sphere external-pressure buckling")
     p_cr = 2.0 * e * (t / r) ** 2 / sqrt(3.0 * (1.0 - poisson**2))
     return Quantity(magnitude=p_cr, unit="MPa")
 
@@ -1288,6 +1347,7 @@ def cylinder_axial_buckling_stress(
         raise ValueError(f"wall_thickness must be positive; got {wall_thickness}")
     if r <= 0:
         raise ValueError(f"mean_radius must be positive; got {mean_radius}")
+    _check_shell_buckling_scope(r, t, "cylinder axial buckling")
     sigma_cr = e * (t / r) / sqrt(3.0 * (1.0 - poisson**2))
     return Quantity(magnitude=sigma_cr, unit="MPa")
 

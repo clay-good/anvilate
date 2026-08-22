@@ -9,6 +9,7 @@ and again wherever a field pins an expected dimension.
 
 from __future__ import annotations
 
+from math import isfinite
 from typing import Any
 
 import pint
@@ -128,6 +129,32 @@ class Quantity(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.magnitude:g} {self.unit}"
+
+
+def require_finite(value: Quantity | float, *, name: str) -> float:
+    """The magnitude of ``value``, having refused a non-finite one by name.
+
+    The guard shape ``if x <= 0: raise`` is a no-op against NaN, because every comparison
+    with NaN is False. That is not a curiosity: a NaN slides past the positivity check,
+    poisons one candidate in a governing scan, and ``max``/``min`` then *drop* the poisoned
+    candidate rather than propagating it — so the envelope comes back complete, smaller,
+    and green. A five-agent audit found thirteen instances of exactly that in this library,
+    two of which returned a peak force of ``0 N``, which downstream is an infinite safety
+    factor.
+
+    So a function whose result feeds a governing selection calls this instead of comparing.
+    It returns the magnitude so the caller can go on to bound it however it needs to; the
+    refusal here is only about the value being a number at all.
+    """
+    magnitude = value.magnitude if isinstance(value, Quantity) else float(value)
+    if not isfinite(magnitude):
+        raise ValueError(
+            f"{name} must be a finite quantity; got {value}. A non-finite value passes "
+            f"every `<= 0` guard (all comparisons with NaN are False) and is then silently "
+            f"dropped by the max()/min() that picks the governing case, which turns an "
+            f"unknown into a smaller, greener answer"
+        )
+    return magnitude
 
 
 def require_dimension(expected: str, *, name: str) -> Any:

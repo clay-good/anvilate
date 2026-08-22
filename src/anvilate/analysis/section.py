@@ -17,11 +17,11 @@ Construction Manual* for the section-property and shear-centre relations.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import pi
+from math import isfinite, pi
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "CrossSection",
@@ -69,6 +69,7 @@ def _mm(magnitude: float) -> Quantity:
 def _require_length(value: Quantity, name: str) -> float:
     if not value.has_dimension("[length]"):
         raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
+    require_finite(value, name=name)
     return value.to("mm").magnitude
 
 
@@ -141,6 +142,21 @@ class CrossSection(BaseModel):
     extreme_fibre: Quantity
     second_moment_transverse: Quantity | None = None
     shear_form_factor: float | None = None
+
+    @model_validator(mode="after")
+    def _every_property_is_a_number(self) -> CrossSection:
+        # A non-finite transverse I is the worst case this guards. It passes the builders'
+        # `<= 0` checks, and `least_radius_of_gyration` picks the smaller axis with `min()`,
+        # which DROPS the NaN — so the property documented as governing over both axes
+        # silently returns the STRONG-axis value. On an I-section that is 4.5x too large,
+        # and it divides straight into the column slenderness.
+        for name in ("area", "second_moment", "extreme_fibre", "second_moment_transverse"):
+            value = getattr(self, name)
+            if value is not None:
+                require_finite(value, name=name)
+        if self.shear_form_factor is not None and not isfinite(self.shear_form_factor):
+            raise ValueError(f"shear_form_factor must be finite; got {self.shear_form_factor}")
+        return self
 
     @property
     def section_modulus(self) -> Quantity:

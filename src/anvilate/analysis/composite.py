@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from math import cos, radians, sin
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "fiber_volume_fraction_from_weight_fraction",
@@ -49,6 +49,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def _fraction(fiber_fraction: float) -> float:

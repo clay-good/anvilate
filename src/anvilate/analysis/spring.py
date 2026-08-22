@@ -22,7 +22,7 @@ from math import log, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 # End-condition constant α relating a coil's free length to its effective column
 # length for the buckling screen (Shigley, Mechanical Engineering Design, Table
@@ -65,6 +65,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def spring_index(*, mean_coil_diameter: Quantity, wire_diameter: Quantity) -> float:

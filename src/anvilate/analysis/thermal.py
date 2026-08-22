@@ -24,7 +24,7 @@ from math import erf, exp, log, pi, sqrt, tanh
 from pydantic import BaseModel, ConfigDict
 
 from ..scorecard import ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
 
 __all__ = [
@@ -124,6 +124,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def confined_liquid_thermal_pressure(
@@ -1534,6 +1539,10 @@ def vertical_plate_natural_convection_coefficient(
     return Quantity(magnitude=nusselt * k / length_m, unit="W/(m**2*K)")
 
 
+# The stated upper bound of the Churchill-Chu horizontal-cylinder correlation.
+_CHURCHILL_CHU_RAYLEIGH_CEILING = 1.0e12
+
+
 def horizontal_cylinder_natural_convection_coefficient(
     *,
     surface_temperature_difference: Quantity,
@@ -1542,7 +1551,7 @@ def horizontal_cylinder_natural_convection_coefficient(
     kinematic_viscosity: Quantity,
     prandtl_number: float,
     thermal_expansion_coefficient: Quantity,
-) -> Quantity:
+) -> Quantity | None:
     """The average natural-convection coefficient h on a long horizontal cylinder.
 
     The Churchill–Chu correlation for a horizontal cylinder (a hot pipe or tube
@@ -1554,7 +1563,9 @@ def horizontal_cylinder_natural_convection_coefficient(
 
     The arguments mirror :func:`vertical_plate_natural_convection_coefficient` with
     ``diameter`` D in place of the plate height; it is a distinct correlation (the
-    cylinder's curvature changes the constants). Valid to Ra_D ≈ 10¹². Returns h in
+    cylinder's curvature changes the constants). Valid to Ra_D ≈ 10¹², and past that
+    ceiling this returns ``None`` — not evaluated — rather than an extrapolated
+    coefficient, matching the forced-convection functions in this module. Returns h in
     W/(m²·K).
     """
     _require(surface_temperature_difference, "[temperature]", "surface_temperature_difference")
@@ -1577,6 +1588,13 @@ def horizontal_cylinder_natural_convection_coefficient(
     if prandtl_number <= 0:
         raise ValueError(f"prandtl_number must be positive; got {prandtl_number}")
     rayleigh = _STANDARD_GRAVITY * beta * dt * d**3 * prandtl_number / nu**2
+    # Churchill-Chu is stated valid to Ra_D ~ 1e12 and this was the one natural-convection
+    # function in the module that named a ceiling and then ignored it. Past it the returned
+    # h overstates the coefficient, which understates a hot vessel's surface temperature and
+    # the insulation it needs. The forced-convection siblings return None outside their
+    # correlation's range; this now does the same.
+    if rayleigh > _CHURCHILL_CHU_RAYLEIGH_CEILING:
+        return None
     nusselt = (
         0.60
         + 0.387

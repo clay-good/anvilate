@@ -71,6 +71,35 @@ def _rohsenow_prefactor(
     return prefactor, h_fg
 
 
+def _check_below_critical_flux(
+    flux_w_m2: float,
+    latent_heat: Quantity,
+    liquid_density: Quantity,
+    vapor_density: Quantity,
+    surface_tension: Quantity,
+    label: str,
+) -> None:
+    """Refuse a nucleate-boiling flux at or past Zuber's hydrodynamic maximum."""
+    maximum = (
+        critical_heat_flux(
+            latent_heat=latent_heat,
+            liquid_density=liquid_density,
+            vapor_density=vapor_density,
+            surface_tension=surface_tension,
+        )
+        .to("W/m**2")
+        .magnitude
+    )
+    if flux_w_m2 > maximum:
+        raise ValueError(
+            f"{label} puts the nucleate-boiling flux at {flux_w_m2:.4g} W/m², "
+            f"{flux_w_m2 / maximum:.3g}x Zuber's critical heat flux of {maximum:.4g} W/m² for "
+            f"these fluid properties. Past the boiling crisis the surface is in transition or "
+            f"film boiling and the Rohsenow correlation does not apply — the real flux collapses "
+            f"rather than climbing. See critical_heat_flux and film_boiling_coefficient."
+        )
+
+
 def nucleate_boiling_heat_flux(
     *,
     liquid_viscosity: Quantity,
@@ -112,7 +141,17 @@ def nucleate_boiling_heat_flux(
     if fluid_exponent <= 0:
         raise ValueError("fluid_exponent must be positive")
     bracket = c_pl * dte / (surface_fluid_coefficient * h_fg * prandtl_number**fluid_exponent)
-    return Quantity(magnitude=prefactor * bracket**3, unit="W/m**2")
+    flux = prefactor * bracket**3
+    # Rohsenow's cube in ΔT_e climbs without limit, and the boiling curve does not: past the
+    # critical heat flux the surface enters transition/film boiling and the REAL flux
+    # collapses. Every argument Zuber's q″_max needs is already here, so the cap is
+    # computable in-function -- and past it Rohsenow is not the applicable model, which is
+    # why this refuses rather than clamps. For water at 1 atm the shipped version returned
+    # 109x the hydrodynamic maximum at ΔT_e = 100 K.
+    _check_below_critical_flux(
+        flux, latent_heat, liquid_density, vapor_density, surface_tension, "this excess temperature"
+    )
+    return Quantity(magnitude=flux, unit="W/m**2")
 
 
 def nucleate_boiling_excess_temperature(
@@ -155,6 +194,11 @@ def nucleate_boiling_excess_temperature(
         raise ValueError("prandtl_number must be positive")
     if fluid_exponent <= 0:
         raise ValueError("fluid_exponent must be positive")
+    # The same ceiling on the inverse. A duty above q″_max is not achievable at all, and the
+    # unguarded inversion answered it with a benign-looking 33 K of superheat.
+    _check_below_critical_flux(
+        q, latent_heat, liquid_density, vapor_density, surface_tension, "the requested heat flux"
+    )
     bracket = (q / prefactor) ** (1.0 / 3.0)
     dte = surface_fluid_coefficient * h_fg * prandtl_number**fluid_exponent / c_pl * bracket
     return Quantity(magnitude=dte, unit="K")

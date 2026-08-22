@@ -48,7 +48,8 @@ def wire_drawing_stress(
     ``flow_stress`` Y_avg of the
     (work-hardening) metal. The ln term is the ideal deformation work; the (1 + μ/tan α) term is the
     die friction. This stress is carried by the exit wire, so it must stay below the wire's flow
-    stress or the wire snaps (see :func:`wire_drawing_max_reduction`). Returns the stress in MPa.
+    stress or the wire snaps — a pass past :func:`wire_drawing_max_reduction` is refused here
+    rather than priced. Returns the stress in MPa.
     """
     _check(flow_stress, "[pressure]", "flow_stress")
     _check(initial_area, "[area]", "initial_area")
@@ -67,6 +68,20 @@ def wire_drawing_stress(
     if friction_coefficient < 0:
         raise ValueError("friction_coefficient must be non-negative")
     friction_factor = 1.0 + friction_coefficient / tan(radians(die_half_angle))
+    # The exit wire carries this stress, so a pass that drives it past the flow stress does
+    # not draw -- the wire yields at the exit and snaps. That is r > r_max, and r_max is
+    # this module's own `wire_drawing_max_reduction` from the same two die parameters. It
+    # was never called from here, so an infeasible pass returned a confident draw stress
+    # 2.4x the wire's own flow stress.
+    reduction = 1.0 - af / a0
+    max_reduction = 1.0 - exp(-1.0 / friction_factor)
+    if reduction > max_reduction:
+        raise ValueError(
+            f"the pass reduces area by {reduction:.3f}, past the r_max = {max_reduction:.3f} this "
+            f"die can take (die_half_angle {die_half_angle:g}°, mu {friction_coefficient:g}). The "
+            f"draw stress would exceed the wire's flow stress and the wire would yield at the exit "
+            f"instead of drawing; split the reduction across a train of dies"
+        )
     return Quantity(magnitude=y * log(a0 / af) * friction_factor, unit="MPa")
 
 

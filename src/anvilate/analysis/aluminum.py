@@ -33,12 +33,12 @@ both reported. A declared weld with no weld-affected properties supplied is
 from __future__ import annotations
 
 from enum import StrEnum
-from math import pi, sqrt
+from math import isfinite, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "aluminum_buckling_stress",
@@ -65,6 +65,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def aluminum_buckling_stress(
@@ -716,6 +721,17 @@ def aluminum_compression_strength(
     lie: a temper this module does not have the buckling table for, and a member declared
     welded whose weld-affected properties were not supplied.
     """
+    # `min(states, ...)` picks the governing limit state, and min() DROPS a NaN candidate
+    # rather than propagating it: a non-finite kL/r poisoned only the member-buckling state
+    # and the function reported yielding as governing -- turning a FAIL at 147.5 MPa into a
+    # PASS at 241 MPa, 63% above the real capacity, with `member_buckling = nan` sitting in
+    # the returned object.
+    if not isfinite(slenderness):
+        raise ValueError(
+            f"slenderness (kL/r) must be finite; got {slenderness}. A non-finite slenderness "
+            "poisons one limit state and is then dropped by the min() that picks the "
+            "governing one, so a buckling-governed member reports as yielding-governed"
+        )
     sets: list[tuple[bool, AlloyProperties]] = [(False, properties)]
     if welded:
         if properties.weld_affected is None:

@@ -76,6 +76,18 @@ def luminous_efficiency(*, luminous_efficacy: Quantity) -> float:
     eff = luminous_efficacy.to("lm/W").magnitude
     if eff < 0:
         raise ValueError("luminous_efficacy must be non-negative")
+    # 683 lm/W is the physical ceiling for any source, so the documented [0, 1] range and
+    # the efficacy bound are the same statement. Without the upper half this returned 1.46
+    # for a mis-scaled 1000 lm/W -- a source 46% better than ideal, reported as a bare
+    # float that downstream code reads as a fraction. Every sibling in the library that
+    # promises a bounded fraction enforces the bound.
+    if eff > _MAX_LUMINOUS_EFFICACY:
+        raise ValueError(
+            f"luminous_efficacy is {luminous_efficacy}, above the {_MAX_LUMINOUS_EFFICACY:g} lm/W "
+            f"of monochromatic 555 nm light — the physical maximum for any source. The efficiency "
+            f"would be {eff / _MAX_LUMINOUS_EFFICACY:.3f}, better than ideal; check whether the "
+            f"figure is a radiant-side or per-optical-watt efficacy"
+        )
     return eff / _MAX_LUMINOUS_EFFICACY
 
 

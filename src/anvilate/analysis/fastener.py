@@ -26,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import log, pi, sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from .fatigue import CyclicStress, cyclic_stress_components
 
 # ISO 898 tensile-stress-area factor: A_t = (pi/4)(d - 0.9382*P)^2, where the
@@ -92,6 +92,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def _positive_factor(nut_factor: float) -> None:
@@ -332,6 +337,8 @@ def aisc_tension_member_design_strength(
         raise ValueError("effective_net_area must be a [length]**2 quantity")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(ultimate_strength, "[pressure]", "ultimate_strength")
+    require_finite(gross_area, name="gross_area")
+    require_finite(effective_net_area, name="effective_net_area")
     ag = gross_area.to("mm**2").magnitude
     ae = effective_net_area.to("mm**2").magnitude
     fy = yield_strength.to("MPa").magnitude
@@ -846,6 +853,12 @@ def bolt_load_in_joint(
     _require(preload, "[force]", "preload")
     _require(external_load, "[force]", "external_load")
     _check_factor(stiffness_factor)
+    _check_joint_not_separated(
+        preload.to("N").magnitude,
+        external_load.to("N").magnitude,
+        stiffness_factor,
+        "external_load",
+    )
     fb = preload.to("N").magnitude + stiffness_factor * external_load.to("N").magnitude
     return Quantity(magnitude=fb, unit="N")
 
@@ -893,6 +906,29 @@ def _check_factor(stiffness_factor: float) -> None:
         )
 
 
+def _check_joint_not_separated(
+    preload_n: float, external_load_n: float, stiffness_factor: float, label: str
+) -> None:
+    """Refuse an external load past the separation load P₀ = F_i/(1 − C).
+
+    Beyond P₀ the members' clamp reaches zero, the joint opens, and the bolt takes the FULL
+    external load rather than the fraction C of it — which is the one thing the
+    load-sharing model these functions implement stops being true about. This module's own
+    :func:`joint_separation_load` states it and had no caller anywhere in the package: at
+    2.25x separation the bolt load came back 1.71x low and the alternating stress 2.67x
+    low, which through Goodman reported a safety factor of 0.97 against a true 0.44.
+    """
+    separation = preload_n / (1.0 - stiffness_factor)
+    if external_load_n > separation:
+        raise ValueError(
+            f"{label} is {external_load_n:.6g} N, past the joint separation load "
+            f"P₀ = F_i/(1 − C) = {separation:.6g} N. Beyond separation the members' clamp is "
+            f"gone and the bolt carries the whole external load, not the fraction C of it — "
+            f"so the load-sharing forms here understate the bolt load and the fatigue "
+            f"amplitude. Raise the preload or reduce the load; see joint_separation_load."
+        )
+
+
 def preloaded_bolt_cyclic_stress(
     *,
     preload: Quantity,
@@ -937,6 +973,7 @@ def preloaded_bolt_cyclic_stress(
     area = tensile_stress_area.to("mm**2").magnitude
     if area <= 0:
         raise ValueError(f"tensile_stress_area must be positive; got {tensile_stress_area}")
+    _check_joint_not_separated(fi, p_max, stiffness_factor, "max_external_load")
     stress_max = (fi + stiffness_factor * p_max) / area
     stress_min = (fi + stiffness_factor * p_min) / area
     return cyclic_stress_components(

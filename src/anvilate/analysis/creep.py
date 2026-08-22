@@ -24,7 +24,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import log10
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 # Typical Larson-Miller constant for steels; the caller overrides it to match the
 # material's own master-curve fit (it commonly runs from about 15 to 25).
@@ -44,6 +44,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def larson_miller_parameter(

@@ -1368,3 +1368,648 @@ def test_the_governing_station_scan_compares_magnitudes_not_signed_values():
         AxisMapping(labels={ForceComponent.MAJOR_BENDING: "M3"}, axial_compression_positive=True),
     )
     assert tied_demand.stations[ForceComponent.MAJOR_BENDING].to("m").magnitude == 0.0
+
+
+# --- the NaN family: a poisoned candidate is DROPPED by max()/min(), never propagated ------
+#
+# `if x <= 0: raise` is a no-op against NaN, because every comparison with NaN is False. On
+# its own that would leave a NaN in the answer, which is visible. What makes it a silent
+# green is the second half: `max()`/`min()` pick the governing case by comparison too, so
+# the poisoned candidate does not contaminate the envelope — it *disappears from it*, and
+# the result comes back smaller, complete-looking, and passing.
+#
+# A five-agent audit found thirteen instances. The fix is one shape: the shared `_require`
+# dimension helper in 48 analysis modules now also refuses a non-finite magnitude, and the
+# handful of modules with their own validators got the same rule. Each test below is one of
+# the thirteen, pinned by the number the old code returned.
+
+_NAN = float("nan")
+
+
+def _qty(magnitude: float, unit: str) -> Quantity:
+    return Quantity(magnitude=magnitude, unit=unit)
+
+
+def test_a_nan_fastener_coordinate_cannot_return_a_zero_peak_force():
+    # The worst of the thirteen: `peak = max(peak, ...)` seeded at 0.0 kept the seed when
+    # every candidate went NaN, and a zero peak force is an infinite safety factor.
+    from anvilate.analysis.fastener import eccentric_shear_group_peak_force
+
+    positions = [(_qty(-50, "mm"), _qty(0, "mm")), (_qty(50, "mm"), _qty(0, "mm"))]
+    good = [*positions, (_qty(0, "mm"), _qty(60, "mm"))]
+    poisoned = [*positions, (_qty(_NAN, "mm"), _qty(60, "mm"))]
+    kwargs = {"load": _qty(100, "kN"), "eccentricity": _qty(200, "mm")}
+    assert eccentric_shear_group_peak_force(positions=good, **kwargs).magnitude == pytest.approx(
+        149612, rel=1e-4
+    )
+    with pytest.raises(ValueError, match="finite"):
+        eccentric_shear_group_peak_force(positions=poisoned, **kwargs)
+
+
+def test_a_nan_weld_endpoint_cannot_return_a_zero_peak_stress():
+    from anvilate.analysis.weld import eccentric_weld_group_peak_stress
+
+    first = ((_qty(-100, "mm"), _qty(0, "mm")), (_qty(100, "mm"), _qty(0, "mm")))
+    good = [first, ((_qty(100, "mm"), _qty(0, "mm")), (_qty(100, "mm"), _qty(100, "mm")))]
+    poisoned = [first, ((_qty(100, "mm"), _qty(0, "mm")), (_qty(_NAN, "mm"), _qty(100, "mm")))]
+    kwargs = {"load": _qty(50, "kN"), "eccentricity": _qty(150, "mm"), "leg_size": _qty(8, "mm")}
+    assert eccentric_weld_group_peak_stress(segments=good, **kwargs).magnitude == pytest.approx(
+        110.213, rel=1e-4
+    )
+    with pytest.raises(ValueError, match="finite"):
+        eccentric_weld_group_peak_stress(segments=poisoned, **kwargs)
+
+
+def test_a_nan_slenderness_cannot_make_a_buckling_failure_report_as_yielding():
+    # The cleanest verdict flip in the set: FAIL at 147.5 MPa became PASS at 241 MPa, with
+    # `member_buckling = nan MPa` sitting in the returned object, ignored by min().
+    from anvilate.analysis.aluminum import (
+        AlloyProperties,
+        TemperGroup,
+        aluminum_compression_strength,
+    )
+
+    props = AlloyProperties(
+        name="6061-T6",
+        compressive_yield=_qty(241, "MPa"),
+        tensile_yield=_qty(241, "MPa"),
+        tensile_ultimate=_qty(290, "MPa"),
+        elastic_modulus=_qty(70000, "MPa"),
+        temper_group=TemperGroup.ARTIFICIALLY_AGED,
+        source="ADM 2020 Table A.3.4",
+    )
+    kwargs = {"flat_width": _qty(50, "mm"), "thickness": _qty(5, "mm")}
+    sound = aluminum_compression_strength(properties=props, slenderness=60.0, **kwargs)
+    assert sound is not None and sound.nominal.to("MPa").magnitude == pytest.approx(147.5, rel=1e-2)
+    with pytest.raises(ValueError, match="finite"):
+        aluminum_compression_strength(properties=props, slenderness=_NAN, **kwargs)
+
+
+def test_a_nan_wind_load_cannot_delete_the_wind_combinations():
+    # `max(combinations)` drops every combination containing the poisoned load, and the
+    # governing effect is reported from the survivors -- 470 kN became 200 kN.
+    from anvilate.analysis.load_combinations import (
+        asce7_asd_factored_load,
+        asce7_lrfd_factored_load,
+    )
+
+    assert asce7_lrfd_factored_load(
+        dead=_qty(100, "kN"), live=_qty(50, "kN"), wind=_qty(300, "kN")
+    ).magnitude == pytest.approx(470.0)
+    with pytest.raises(ValueError, match="finite"):
+        asce7_lrfd_factored_load(dead=_qty(100, "kN"), live=_qty(50, "kN"), wind=_qty(_NAN, "kN"))
+    with pytest.raises(ValueError, match="finite"):
+        asce7_asd_factored_load(dead=_qty(100, "kN"), live=_qty(50, "kN"), seismic=_qty(_NAN, "kN"))
+
+
+def test_a_nan_transverse_second_moment_cannot_hide_the_weak_axis():
+    # `least_radius_of_gyration` is documented as governing over both axes; min() dropped
+    # the poisoned axis and it returned the STRONG-axis value, 4.5x too large.
+    base = {
+        "area": _qty(5000, "mm**2"),
+        "second_moment": _qty(1e8, "mm**4"),
+        "extreme_fibre": _qty(150, "mm"),
+    }
+    sound = CrossSection(**base, second_moment_transverse=_qty(5e6, "mm**4"))
+    assert sound.least_radius_of_gyration.to("mm").magnitude == pytest.approx(31.6228, rel=1e-5)
+    with pytest.raises(ValueError, match="finite"):
+        CrossSection(**base, second_moment_transverse=_qty(_NAN, "mm**4"))
+
+
+def test_a_nan_principal_stress_cannot_depend_on_which_slot_it_lands_in():
+    # max() - min() dropped a NaN in the middle slot (a clean 150 MPa) and propagated one
+    # in the first (nan). The order-dependence was itself the proof it was wrong.
+    from anvilate.analysis.stress import tresca_principal
+
+    assert tresca_principal(
+        sigma_1=_qty(100, "MPa"), sigma_2=_qty(400, "MPa"), sigma_3=_qty(-50, "MPa")
+    ).magnitude == pytest.approx(450.0)
+    for slot in ("sigma_1", "sigma_2", "sigma_3"):
+        args = {
+            "sigma_1": _qty(100, "MPa"),
+            "sigma_2": _qty(400, "MPa"),
+            "sigma_3": _qty(-50, "MPa"),
+        }
+        args[slot] = _qty(_NAN, "MPa")
+        with pytest.raises(ValueError, match="finite"):
+            tresca_principal(**args)
+
+
+def test_a_nan_net_area_cannot_delete_the_rupture_limit_state():
+    from anvilate.analysis.fastener import aisc_tension_member_design_strength
+
+    kwargs = {
+        "gross_area": _qty(3000, "mm**2"),
+        "yield_strength": _qty(345, "MPa"),
+        "ultimate_strength": _qty(450, "MPa"),
+    }
+    assert aisc_tension_member_design_strength(
+        effective_net_area=_qty(1500, "mm**2"), **kwargs
+    ).magnitude == pytest.approx(506.25)
+    with pytest.raises(ValueError, match="finite"):
+        aisc_tension_member_design_strength(effective_net_area=_qty(_NAN, "mm**2"), **kwargs)
+
+
+def test_a_nan_bolt_diameter_cannot_delete_the_bearing_cap():
+    from anvilate.analysis.fastener import bolt_bearing_strength
+
+    kwargs = {
+        "clear_distance": _qty(60, "mm"),
+        "plate_thickness": _qty(10, "mm"),
+        "ultimate_strength": _qty(450, "MPa"),
+    }
+    assert bolt_bearing_strength(bolt_diameter=_qty(20, "mm"), **kwargs).magnitude == pytest.approx(
+        216.0
+    )
+    with pytest.raises(ValueError, match="finite"):
+        bolt_bearing_strength(bolt_diameter=_qty(_NAN, "mm"), **kwargs)
+
+
+def test_a_nan_thrust_cannot_delete_the_thrust_term_of_the_iso_76_load():
+    from anvilate.analysis.bearing import bearing_equivalent_static_load
+
+    kwargs = {"radial_load": _qty(2000, "N"), "radial_factor": 0.6, "axial_factor": 0.5}
+    assert bearing_equivalent_static_load(
+        axial_load=_qty(8000, "N"), **kwargs
+    ).magnitude == pytest.approx(5200.0)
+    with pytest.raises(ValueError, match="finite"):
+        bearing_equivalent_static_load(axial_load=_qty(_NAN, "N"), **kwargs)
+
+
+def test_a_nan_pressure_cannot_delete_the_operating_bolt_load():
+    from anvilate.analysis.gasket import governing_gasket_bolt_load
+
+    kwargs = {
+        "gasket_mean_diameter": _qty(300, "mm"),
+        "effective_seating_width": _qty(10, "mm"),
+        "seating_stress": _qty(25, "MPa"),
+        "gasket_factor": 3.0,
+    }
+    assert governing_gasket_bolt_load(pressure=_qty(5, "MPa"), **kwargs).magnitude == pytest.approx(
+        636173, rel=1e-4
+    )
+    with pytest.raises(ValueError, match="finite"):
+        governing_gasket_bolt_load(pressure=_qty(_NAN, "MPa"), **kwargs)
+
+
+def test_a_nan_allowable_cannot_leave_a_riveted_joint_with_a_governing_mode():
+    from anvilate.analysis.rivet import riveted_joint_efficiency
+
+    kwargs = {
+        "pitch": _qty(60, "mm"),
+        "rivet_diameter": _qty(20, "mm"),
+        "plate_thickness": _qty(10, "mm"),
+        "allowable_tension": _qty(100, "MPa"),
+        "allowable_bearing": _qty(200, "MPa"),
+    }
+    sound = riveted_joint_efficiency(allowable_shear=_qty(80, "MPa"), **kwargs)
+    assert sound.governing_mode in {"tearing", "shearing", "crushing"}
+    with pytest.raises(ValueError, match="finite"):
+        riveted_joint_efficiency(allowable_shear=_qty(_NAN, "MPa"), **kwargs)
+
+
+def test_a_nan_elastic_buckling_load_cannot_leave_the_dsm_nominal_defined():
+    # The DSM nominal is the minimum of three modes. With one unknown there is no minimum,
+    # and min() reported LOCAL as governing with the distortional mode simply absent.
+    from anvilate.analysis.cold_formed_steel import ElasticBuckling
+
+    with pytest.raises(ValueError, match="finite"):
+        ElasticBuckling(
+            local=_qty(500, "kN"),
+            global_=_qty(800, "kN"),
+            distortional=_qty(_NAN, "kN"),
+            source="CUFSM 5.01",
+        )
+
+
+def test_a_nan_flange_width_cannot_earn_the_unreduced_plastic_moment():
+    # Two families in one function: the NaN skipped the "slender flange, F7 not
+    # implemented" refusal AND the local-buckling reduction, returning M_p exactly.
+    from anvilate.analysis.beam import aisc_rectangular_hss_flexural_strength
+
+    kwargs = {
+        "web_flat_height": _qty(280, "mm"),
+        "wall_thickness": _qty(6, "mm"),
+        "yield_strength": _qty(345, "MPa"),
+        "elastic_modulus": _qty(200000, "MPa"),
+        "plastic_section_modulus": _qty(8e5, "mm**3"),
+        "elastic_section_modulus": _qty(7e5, "mm**3"),
+    }
+    assert aisc_rectangular_hss_flexural_strength(
+        flange_flat_width=_qty(180, "mm"), **kwargs
+    ).magnitude == pytest.approx(260.537, rel=1e-4)
+    with pytest.raises(ValueError, match="finite"):
+        aisc_rectangular_hss_flexural_strength(flange_flat_width=_qty(_NAN, "mm"), **kwargs)
+
+
+def test_the_shared_dimension_helper_refuses_non_finite_across_the_analysis_layer():
+    """The root-cause fix, asserted as one property rather than module by module.
+
+    Forty-eight analysis modules share the same private ``_require`` dimension helper. It
+    now refuses a non-finite magnitude, and this is what stops the next instance of this
+    family from shipping: a module that copies the helper without the finiteness line
+    fails here rather than in an audit six months later.
+    """
+    import importlib
+    import inspect
+    import pkgutil
+
+    import anvilate.analysis as analysis_pkg
+
+    unguarded = []
+    for module_info in pkgutil.iter_modules(analysis_pkg.__path__):
+        module = importlib.import_module(f"anvilate.analysis.{module_info.name}")
+        helper = getattr(module, "_require", None)
+        if helper is None or not inspect.isfunction(helper):
+            continue
+        source = inspect.getsource(helper)
+        if "require_finite" not in source:
+            unguarded.append(module_info.name)
+    assert not unguarded, (
+        "analysis modules whose _require helper checks dimension but not finiteness — a "
+        f"NaN through one of these is dropped by the next max()/min(): {unguarded}"
+    )
+    # And prove the helper actually refuses, rather than trusting the source scan.
+    from anvilate.analysis.fastener import _require
+
+    _require(Quantity(magnitude=1.0, unit="mm"), "[length]", "ok")
+    with pytest.raises(ValueError, match="finite"):
+        _require(Quantity(magnitude=_NAN, unit="mm"), "[length]", "poisoned")
+
+
+# --- the guard-the-domain family: a documented limit that nothing enforced ------------------
+#
+# The highest-yield defect class in this library is not a wrong formula. It is a *correct*
+# formula with a validity limit stated in its own docstring and checked nowhere — so the
+# function answers confidently outside the range it says it holds in, and every one of these
+# answered in the unconservative direction. Each test pins the number the unguarded version
+# returned, so the guard cannot be quietly widened back out.
+
+
+def test_the_thin_wall_forms_refuse_a_wall_they_do_not_describe():
+    from anvilate.analysis.pressure_vessel import (
+        thick_wall_cylinder,
+        thin_wall_cylinder,
+        thin_wall_thickness_for_pressure,
+    )
+
+    # r/t = 20: comfortably inside the membrane scope.
+    assert thin_wall_cylinder(
+        pressure=_qty(10, "MPa"), radius=_qty(500, "mm"), wall_thickness=_qty(25, "mm")
+    ).hoop_stress.to("MPa").magnitude == pytest.approx(200.0)
+    # r/t = 2: the membrane hoop was 20 MPa against the exact 26 MPa at the bore.
+    thick = thick_wall_cylinder(
+        pressure=_qty(10, "MPa"), radius=_qty(50, "mm"), wall_thickness=_qty(25, "mm")
+    )
+    assert thick.hoop_stress.to("MPa").magnitude == pytest.approx(26.0, rel=1e-3)
+    with pytest.raises(ValueError, match="thin-wall membrane"):
+        thin_wall_cylinder(
+            pressure=_qty(10, "MPa"), radius=_qty(50, "mm"), wall_thickness=_qty(25, "mm")
+        )
+    # And the sizing inverse, which is the worse half: it returned a 25 mm wall that runs
+    # 30% over the allowable it was sized against.
+    with pytest.raises(ValueError, match="thin-wall membrane"):
+        thin_wall_thickness_for_pressure(
+            pressure=_qty(100, "MPa"), radius=_qty(50, "mm"), allowable_stress=_qty(200, "MPa")
+        )
+
+
+def test_classical_shell_buckling_refuses_a_wall_that_is_not_a_shell():
+    from anvilate.analysis.pressure_vessel import (
+        cylinder_axial_buckling_stress,
+        cylinder_external_pressure_buckling,
+        sphere_external_pressure_buckling,
+    )
+
+    thin = {"wall_thickness": _qty(5, "mm"), "mean_radius": _qty(500, "mm")}
+    stubby = {"wall_thickness": _qty(50, "mm"), "mean_radius": _qty(50, "mm")}
+    common = {"elastic_modulus": _qty(200000, "MPa"), "poisson": 0.3}
+    assert cylinder_axial_buckling_stress(**thin, **common).to("MPa").magnitude == pytest.approx(
+        1210.46, rel=1e-4
+    )
+    # At t/R = 1 the axial form returned 121046 MPa — 0.6·E, ~350x a structural steel yield.
+    for function in (
+        cylinder_axial_buckling_stress,
+        cylinder_external_pressure_buckling,
+        sphere_external_pressure_buckling,
+    ):
+        with pytest.raises(ValueError, match="thin-shell scope"):
+            function(**stubby, **common)
+
+
+def test_the_masonry_steel_allowable_is_capped_by_the_code_it_cites():
+    from anvilate.analysis.masonry import masonry_column_axial_capacity
+
+    kwargs = {
+        "masonry_strength": _qty(13.8, "MPa"),
+        "net_area": _qty(90000, "mm**2"),
+        "slenderness_ratio": 30.0,
+        "steel_area": _qty(2000, "mm**2"),
+    }
+    assert masonry_column_axial_capacity(steel_allowable_stress=_qty(165, "MPa"), **kwargs).to(
+        "kN"
+    ).magnitude == pytest.approx(500.893, rel=1e-4)
+    # 0.6*f_y for Grade 60 is 248 MPa — the natural input, and 21% of phantom capacity.
+    with pytest.raises(ValueError, match="TMS 402 cap"):
+        masonry_column_axial_capacity(steel_allowable_stress=_qty(248, "MPa"), **kwargs)
+
+
+def test_tension_field_action_is_refused_where_aisc_does_not_permit_it():
+    from anvilate.analysis.beam import aisc_tension_field_shear_strength
+
+    kwargs = {
+        "web_area": _qty(12000, "mm**2"),
+        "web_depth": _qty(1500, "mm"),
+        "web_thickness": _qty(8, "mm"),
+        "yield_strength": _qty(345, "MPa"),
+        "elastic_modulus": _qty(200000, "MPa"),
+    }
+    # h/t_w = 187.5, so §G2.2(b) caps a/h at (260/187.5)² = 1.92.
+    assert aisc_tension_field_shear_strength(stiffener_spacing=_qty(1500, "mm"), **kwargs).to(
+        "kN"
+    ).magnitude == pytest.approx(1765.55, rel=1e-4)
+    for spacing, ratio in ((4500, 3), (7500, 5), (30000, 20)):
+        with pytest.raises(ValueError, match="G2.2"):
+            aisc_tension_field_shear_strength(stiffener_spacing=_qty(spacing, "mm"), **kwargs)
+        assert ratio > 1.92  # every one of these collected a bonus it was not entitled to
+
+
+def test_churchill_chu_reports_not_evaluated_past_its_stated_rayleigh_ceiling():
+    from anvilate.analysis.thermal import horizontal_cylinder_natural_convection_coefficient
+
+    air = {
+        "thermal_conductivity": _qty(0.03, "W/(m*K)"),
+        "kinematic_viscosity": _qty(1.6e-5, "m**2/s"),
+        "prandtl_number": 0.7,
+        "thermal_expansion_coefficient": _qty(1 / 300, "1/K"),
+    }
+    inside = horizontal_cylinder_natural_convection_coefficient(
+        surface_temperature_difference=_qty(20, "K"), diameter=_qty(0.1, "m"), **air
+    )
+    assert inside is not None
+    # Ra_D = 3.35e12, past the stated 1e12: None, matching the forced-convection siblings.
+    assert (
+        horizontal_cylinder_natural_convection_coefficient(
+            surface_temperature_difference=_qty(300, "K"), diameter=_qty(5, "m"), **air
+        )
+        is None
+    )
+
+
+def test_a_wire_drawing_pass_past_r_max_is_refused_not_priced():
+    from anvilate.analysis.wire_drawing import wire_drawing_max_reduction, wire_drawing_stress
+
+    die = {"die_half_angle": 6.0, "friction_coefficient": 0.05}
+    assert wire_drawing_max_reduction(**die) == pytest.approx(0.4924, rel=1e-3)
+    assert wire_drawing_stress(
+        flow_stress=_qty(400, "MPa"),
+        initial_area=_qty(100, "mm**2"),
+        final_area=_qty(70, "mm**2"),
+        **die,
+    ).to("MPa").magnitude == pytest.approx(210.54, rel=1e-4)
+    # An 80% reduction returned 950 MPa — 2.4x the wire's own flow stress.
+    with pytest.raises(ValueError, match="r_max"):
+        wire_drawing_stress(
+            flow_stress=_qty(400, "MPa"),
+            initial_area=_qty(100, "mm**2"),
+            final_area=_qty(20, "mm**2"),
+            **die,
+        )
+
+
+def test_the_parabolic_cable_forms_hand_off_to_the_catenary_outside_shallow_sag():
+    from anvilate.analysis.cable import (
+        catenary_max_tension,
+        catenary_sag,
+        parabolic_cable_max_tension,
+        parabolic_cable_sag,
+    )
+
+    cable = {"weight_per_length": _qty(10, "N/m"), "span": _qty(100, "m")}
+    shallow = {**cable, "horizontal_tension": _qty(1250, "N")}
+    # d/L = 0.10: the parabola is within about 1.3% of the exact catenary.
+    parabolic = parabolic_cable_sag(**shallow).to("m").magnitude
+    exact = catenary_sag(**shallow).to("m").magnitude
+    assert parabolic == pytest.approx(10.0)
+    assert abs(parabolic - exact) / exact < 0.02
+    # d/L = 0.20: sag 5.2% under and T_max 4.3% under, both unconservative, both refused.
+    deep = {**cable, "horizontal_tension": _qty(625, "N")}
+    for function in (parabolic_cable_sag, parabolic_cable_max_tension):
+        with pytest.raises(ValueError, match="shallow-sag"):
+            function(**deep)
+    assert catenary_sag(**deep).to("m").magnitude == pytest.approx(21.0897, rel=1e-4)
+    assert catenary_max_tension(**deep).to("N").magnitude == pytest.approx(835.897, rel=1e-4)
+
+
+def test_nucleate_boiling_refuses_a_flux_past_the_critical_heat_flux():
+    from anvilate.analysis.boiling import (
+        critical_heat_flux,
+        nucleate_boiling_excess_temperature,
+        nucleate_boiling_heat_flux,
+    )
+
+    water = {
+        "latent_heat": _qty(2257, "kJ/kg"),
+        "liquid_density": _qty(957.9, "kg/m**3"),
+        "vapor_density": _qty(0.5956, "kg/m**3"),
+        "surface_tension": _qty(0.0589, "N/m"),
+    }
+    rohsenow = {
+        "liquid_viscosity": _qty(2.79e-4, "Pa*s"),
+        "liquid_specific_heat": _qty(4217, "J/(kg*K)"),
+        "surface_fluid_coefficient": 0.0130,
+        "prandtl_number": 1.76,
+        "fluid_exponent": 1.0,
+        **water,
+    }
+    chf = critical_heat_flux(**water).to("W/m**2").magnitude
+    assert chf == pytest.approx(1.2585e6, rel=1e-3)
+    assert nucleate_boiling_heat_flux(excess_temperature=_qty(10, "K"), **rohsenow).to(
+        "W/m**2"
+    ).magnitude == pytest.approx(1.369e5, rel=1e-3)
+    # ΔT_e = 100 K returned 1.37e8 W/m², 109x the hydrodynamic maximum.
+    with pytest.raises(ValueError, match="critical heat flux"):
+        nucleate_boiling_heat_flux(excess_temperature=_qty(100, "K"), **rohsenow)
+    # And the inverse: a 5 MW/m² duty is unachievable, and answered with a benign 33 K.
+    with pytest.raises(ValueError, match="critical heat flux"):
+        nucleate_boiling_excess_temperature(heat_flux=_qty(5e6, "W/m**2"), **rohsenow)
+
+
+def test_luminous_efficiency_cannot_exceed_one():
+    from anvilate.analysis.photometry import luminous_efficiency
+
+    assert luminous_efficiency(luminous_efficacy=_qty(683, "lm/W")) == pytest.approx(1.0)
+    assert luminous_efficiency(luminous_efficacy=_qty(100, "lm/W")) == pytest.approx(
+        0.14641, rel=1e-4
+    )
+    # 1000 lm/W returned 1.464 — a source 46% better than the physical ideal.
+    for efficacy in (700, 1000, 5000):
+        with pytest.raises(ValueError, match="physical maximum"):
+            luminous_efficiency(luminous_efficacy=_qty(efficacy, "lm/W"))
+
+
+def test_the_half_power_method_refuses_damping_it_cannot_measure():
+    from anvilate.analysis.dynamics import damping_ratio_from_half_power_bandwidth
+
+    # ζ = 0.05: the approximation is good to 0.3%.
+    assert damping_ratio_from_half_power_bandwidth(
+        resonant_frequency=_qty(100, "Hz"), half_power_bandwidth=_qty(10.025, "Hz")
+    ) == pytest.approx(0.0501, rel=1e-2)
+    # A true ζ = 0.30 has Δf = 68.235 Hz and returned 0.341 — 14% high, and an overstated
+    # damping understates every resonant response computed from it.
+    with pytest.raises(ValueError, match="half-power"):
+        damping_ratio_from_half_power_bandwidth(
+            resonant_frequency=_qty(100, "Hz"), half_power_bandwidth=_qty(68.2354, "Hz")
+        )
+
+
+def test_swt_refuses_the_compressive_mean_it_is_not_a_model_for():
+    from anvilate.analysis.fatigue import smith_watson_topper_stress
+
+    # σ_max = σ_a is the fully-reversed edge of the domain: σ_ar = σ_a.
+    assert smith_watson_topper_stress(
+        max_stress=_qty(100, "MPa"), alternating_stress=_qty(100, "MPa")
+    ).to("MPa").magnitude == pytest.approx(100.0)
+    # σ_max = 20, σ_a = 100 is a −80 MPa mean, and returned 44.7 MPa: a 2.24x understatement
+    # of the stress the caller looks up on an S-N curve.
+    with pytest.raises(ValueError, match="compressive"):
+        smith_watson_topper_stress(max_stress=_qty(20, "MPa"), alternating_stress=_qty(100, "MPa"))
+
+
+def test_the_preloaded_bolt_forms_refuse_a_load_past_joint_separation():
+    from anvilate.analysis.fastener import (
+        bolt_load_in_joint,
+        joint_separation_load,
+        preloaded_bolt_cyclic_stress,
+    )
+
+    joint = {"preload": _qty(20, "kN"), "stiffness_factor": 0.25}
+    separation = joint_separation_load(**joint).to("kN").magnitude
+    assert separation == pytest.approx(26.667, rel=1e-3)
+    assert bolt_load_in_joint(external_load=_qty(20, "kN"), **joint).to(
+        "N"
+    ).magnitude == pytest.approx(25000.0)
+    # 60 kN is 2.25x separation: the bolt load came back 1.71x low, the alternating stress
+    # 2.67x low, and Goodman reported n = 0.97 against a true 0.44.
+    with pytest.raises(ValueError, match="separation"):
+        bolt_load_in_joint(external_load=_qty(60, "kN"), **joint)
+    with pytest.raises(ValueError, match="separation"):
+        preloaded_bolt_cyclic_stress(
+            min_external_load=_qty(0, "kN"),
+            max_external_load=_qty(60, "kN"),
+            tensile_stress_area=_qty(84.3, "mm**2"),
+            **joint,
+        )
+
+
+def test_the_stirrup_spacing_carries_the_aci_cap_it_used_to_delegate():
+    from anvilate.analysis.reinforced_concrete import rc_stirrup_spacing_for_shear
+
+    bar = {
+        "stirrup_area": _qty(142, "mm**2"),
+        "stirrup_yield": _qty(420, "MPa"),
+        "effective_depth": _qty(500, "mm"),
+    }
+    # A light demand: strength alone allowed 1491 mm, where ACI permits d/2 = 250 mm.
+    assert rc_stirrup_spacing_for_shear(required_shear_strength=_qty(20, "kN"), **bar).to(
+        "mm"
+    ).magnitude == pytest.approx(250.0)
+    # A heavy demand is strength-governed and the cap does not bind.
+    assert rc_stirrup_spacing_for_shear(required_shear_strength=_qty(300, "kN"), **bar).to(
+        "mm"
+    ).magnitude == pytest.approx(99.4, rel=1e-3)
+    # And the 600 mm ceiling binds where d/2 would not.
+    assert rc_stirrup_spacing_for_shear(
+        required_shear_strength=_qty(20, "kN"),
+        stirrup_area=_qty(142, "mm**2"),
+        stirrup_yield=_qty(420, "MPa"),
+        effective_depth=_qty(2000, "mm"),
+    ).to("mm").magnitude == pytest.approx(600.0)
+
+
+def test_the_road_geometry_rates_refuse_a_percent_where_a_decimal_belongs():
+    from anvilate.analysis.road_curve import minimum_curve_radius, stopping_sight_distance
+
+    assert minimum_curve_radius(
+        design_speed=_qty(100, "km/hr"), superelevation_rate=0.08, side_friction_factor=0.12
+    ).to("m").magnitude == pytest.approx(393.4, rel=1e-3)
+    # AASHTO tabulates e as 8%; entering 8.0 returned a 3.93 m minimum radius.
+    with pytest.raises(ValueError, match="decimal fraction"):
+        minimum_curve_radius(
+            design_speed=_qty(100, "km/hr"), superelevation_rate=8.0, side_friction_factor=12.0
+        )
+    drive = {"speed": _qty(100, "km/hr"), "deceleration": _qty(3.4, "m/s**2")}
+    reaction = {"reaction_time": _qty(2.5, "s")}
+    assert stopping_sight_distance(grade=0.06, **drive, **reaction).to(
+        "m"
+    ).magnitude == pytest.approx(166.2, rel=1e-3)
+    # The old guard was one-sided: it caught the downgrade and let a 6.0 upgrade through,
+    # which is the direction that SHORTENS the answer — 75.6 m against the true 166.2 m.
+    with pytest.raises(ValueError, match="decimal fraction"):
+        stopping_sight_distance(grade=6.0, **drive, **reaction)
+
+
+# --- guard bodies nothing had ever executed -------------------------------------------------
+#
+# A guard-coverage instrument over the whole package found that only 1,649 of 4,045
+# `raise ValueError(...)` refusals ever run under the suite. Most of the rest are bare
+# positivity checks, but 21 of them hold a real PHYSICAL domain limit — Poisson's ratio
+# below 0.5, an angle below 90°, a Compton scattering angle at or under 180° — and every
+# one of those constants was widened tenfold in one batched mutation run with the full
+# suite still green. The function bodies are exercised; only the refusals are not, so the
+# numbers in them were unpinned. These reach them.
+
+
+@pytest.mark.parametrize(
+    ("call", "match"),
+    [
+        pytest.param(
+            lambda: __import__(
+                "anvilate.analysis.elastic_constants", fromlist=["x"]
+            ).lame_first_parameter(
+                elastic_modulus=Quantity(magnitude=200000, unit="MPa"), poisson_ratio=0.5
+            ),
+            "0.5",
+            id="lame-poisson",
+        ),
+        pytest.param(
+            lambda: __import__(
+                "anvilate.analysis.acoustics", fromlist=["x"]
+            ).coincidence_critical_frequency(
+                thickness=Quantity(magnitude=10, unit="mm"),
+                youngs_modulus=Quantity(magnitude=70000, unit="MPa"),
+                density=Quantity(magnitude=2700, unit="kg/m**3"),
+                poissons_ratio=0.5,
+                sound_speed=Quantity(magnitude=343, unit="m/s"),
+            ),
+            "0.5",
+            id="acoustics-poisson",
+        ),
+        pytest.param(
+            lambda: __import__("anvilate.analysis.optics", fromlist=["x"]).snell_refraction_angle(
+                incident_angle=90.0, incident_index=1.0, refracted_index=1.5
+            ),
+            "90",
+            id="snell-angle",
+        ),
+        pytest.param(
+            lambda: __import__(
+                "anvilate.analysis.compton", fromlist=["x"]
+            ).compton_scattered_wavelength(
+                incident_wavelength=Quantity(magnitude=1, unit="pm"), scattering_angle=181.0
+            ),
+            "180",
+            id="compton-angle",
+        ),
+        pytest.param(
+            lambda: __import__(
+                "anvilate.analysis.solar_geometry", fromlist=["x"]
+            ).solar_altitude_angle(latitude=45.0, declination=91.0, hour_angle=0.0),
+            "90",
+            id="declination",
+        ),
+    ],
+)
+def test_a_physical_domain_ceiling_actually_refuses(call, match):
+    with pytest.raises(ValueError, match=match):
+        call()

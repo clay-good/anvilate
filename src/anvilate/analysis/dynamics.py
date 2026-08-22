@@ -28,7 +28,7 @@ from enum import StrEnum
 from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s, count_rate_per_second
 from .plate import DEFAULT_POISSON_RATIO
 
@@ -111,6 +111,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
 
 
 def natural_frequency(*, stiffness: Quantity, mass: Quantity) -> Quantity:
@@ -480,6 +485,10 @@ def quality_factor_from_half_power_bandwidth(
     return f_n / delta_f
 
 
+# The scope of the Δf/(2·f_n) half-power approximation, as its own docstring states it.
+_HALF_POWER_DAMPING_LIMIT = 0.10
+
+
 def damping_ratio_from_half_power_bandwidth(
     *, resonant_frequency: Quantity, half_power_bandwidth: Quantity
 ) -> float:
@@ -512,6 +521,21 @@ def damping_ratio_from_half_power_bandwidth(
             f"{resonant_frequency} gives a damping ratio of {zeta:.4f}, not the underdamped "
             f"[0, 1) the rest of this module accepts. The half-power method assumes a lightly "
             f"damped peak (zeta <~ 0.1); check that the bandwidth is the -3 dB width."
+        )
+    # And the approximation's OWN limit, which the docstring states and nothing enforced.
+    # Δf/(2·f_n) is only the damping ratio while ζ is small: the exact half-power points sit
+    # at r² = (1 − 2ζ²) ± 2ζ√(1 − ζ²), so past ζ ≈ 0.1 this OVERSTATES the damping, and
+    # overstated damping understates resonant demand everywhere it is consumed. At a true
+    # ζ = 0.30 it returns 0.341 and the implied peak magnification is 16% low; past
+    # ζ ≈ 0.3827 the lower half-power point does not exist at all, so no measurement can
+    # produce such a width.
+    if zeta > _HALF_POWER_DAMPING_LIMIT:
+        raise ValueError(
+            f"the half-power width gives zeta = {zeta:.4f}, past the zeta <= "
+            f"{_HALF_POWER_DAMPING_LIMIT:g} the approximation Δf/(2·f_n) holds for. Above it "
+            f"the estimate runs high — and an overstated damping understates the resonant "
+            f"response every consumer of it computes. Fit the exact half-power points, or "
+            f"measure the damping another way (log decrement, free decay)."
         )
     return zeta
 

@@ -18,7 +18,7 @@ from math import degrees, pi, sqrt
 from pydantic import BaseModel, ConfigDict
 
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "BeamBendingResult",
@@ -123,6 +123,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
         raise ValueError(
             f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
+    # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
+    # picks the governing case, so the answer comes back smaller, complete-looking, and
+    # green. See units.require_finite.
+    require_finite(value, name=name)
     if name in _POSITIVE_DEFINITE and value.magnitude <= 0:
         raise ValueError(f"{name} must be positive; got {value}")
 
@@ -1003,8 +1008,21 @@ def aisc_tension_field_shear_strength(
     if a_w <= 0 or h <= 0 or tw <= 0 or a <= 0 or fy <= 0 or e <= 0:
         raise ValueError("all inputs must be positive")
     aspect = a / h
-    kv = 5.0 + 5.0 / aspect**2
     h_tw = h / tw
+    # AISC 360 §G2.2(b) does not permit tension-field action when the panel is too long to
+    # anchor the field: a/h > 3.0, or a/h > [260/(h/t_w)]^2. Both are computable from the
+    # arguments already here, and neither was checked -- so a web with essentially no
+    # stiffeners still collected the tension-field bonus, 2.09x the §G2.1 strength at
+    # a/h = 5 and still 1.22x at a/h = 20.
+    aspect_limit = min(3.0, (260.0 / h_tw) ** 2)
+    if aspect > aspect_limit:
+        raise ValueError(
+            f"a/h = {aspect:.4g} exceeds the AISC 360 §G2.2(b) limit of {aspect_limit:.4g} "
+            f"(the smaller of 3.0 and [260/(h/t_w)]² = {(260.0 / h_tw) ** 2:.4g}), so tension-"
+            f"field action is not permitted for this panel. Use the §G2.1 shear strength, "
+            f"which takes no tension-field bonus"
+        )
+    kv = 5.0 + 5.0 / aspect**2
     limit_1 = 1.10 * (kv * e / fy) ** 0.5
     limit_2 = 1.37 * (kv * e / fy) ** 0.5
     if h_tw <= limit_1:

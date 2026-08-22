@@ -14,6 +14,7 @@ from .quantity import (
     Quantity,
     UnitError,
     require_dimension,
+    require_finite,
 )
 from .registry import UREG
 from .system import UnitSystem
@@ -24,6 +25,7 @@ __all__ = [
     "MissingUnitError",
     "DimensionError",
     "require_dimension",
+    "require_finite",
     "UnitSystem",
     "UREG",
     "render",
