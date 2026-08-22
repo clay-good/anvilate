@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly, so a schema republished upstream shows up as a failure here rather than as a
+    # surprise in somebody's quality software.
+    - cron: "17 5 * * 1"
 
 jobs:
   python:
@@ -21,3 +26,60 @@ jobs:
         run: ruff format --check src tests examples
       - name: Test
         run: pytest -q
+
+  # The two interchange formats ship free schemas, and the tests that validate against them
+  # skip unless the schemas are present — an honest default, and a weaker one than it needs
+  # to be, since CI can simply fetch them. This job does, on a schedule and on demand rather
+  # than on every push: it depends on two external hosts, and a flaky download should not
+  # block a pull request that has nothing to do with either format.
+  interchange-schemas:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e ".[dev]" lxml
+      - name: Fetch the QIF 3.0 schema package
+        run: |
+          curl -sSfL -o qif.zip \
+            https://qifstandards.org/wp-content/uploads/2014/08/QIF3.0-2018-ANSI.zip
+          unzip -q qif.zip -d qif
+          # The published QIFDocument.xsd imports xmldsig from w3.org over the network; the
+          # package bundles a local copy, and the schema itself documents this substitution.
+          sed -i 's#schemaLocation="http://www.w3.org/TR/2002/REC-xmldsig-core-20020212/xmldsig-core-schema.xsd"#schemaLocation="../QIFLibrary/xmldsig-core-schema.xsd"#' \
+            qif/xsd/QIFApplications/QIFDocument.xsd
+      - name: Fetch the PTB DCC and D-SI schemas
+        run: |
+          mkdir -p dcc
+          curl -sSfL -o dcc/dcc.xsd https://gitlab.com/ptb/dcc/xsd-dcc/-/raw/master/dcc.xsd
+          curl -sSfL -o dcc/SI_Format.xsd https://ptb.de/si/v2.2.1/SI_Format.xsd
+          curl -sSfL -o dcc/quantitykind.xsd https://www.ptb.de/si/v2.2.1/qudt/quantitykind.xsd
+          curl -sSfL -o dcc/xmldsig-core-schema.xsd \
+            https://www.ptb.de/dcc/d-sig/xmldsig-core-schema.xsd
+          # Point every import at the local copy so validation needs no network.
+          sed -i 's#https://ptb.de/si/v2.2.1/SI_Format.xsd#SI_Format.xsd#' dcc/dcc.xsd
+          sed -i 's#https://www.ptb.de/dcc/d-sig/xmldsig-core-schema.xsd#xmldsig-core-schema.xsd#' dcc/dcc.xsd
+          sed -i 's#https://www.ptb.de/si/v2.2.1/qudt/quantitykind.xsd#quantitykind.xsd#' dcc/SI_Format.xsd
+      - name: Validate emitted documents against the published schemas
+        env:
+          ANVILATE_QIF_XSD: qif/xsd
+          ANVILATE_DCC_XSD: dcc
+        run: |
+          set -o pipefail
+          # Named exactly, not selected by keyword: a `-k` expression that stops matching
+          # after a rename would run zero tests and report success.
+          pytest -rs \
+            "tests/test_qif.py::test_the_document_validates_against_the_published_schemas" \
+            "tests/test_dcc.py::test_the_fixture_validates_against_the_published_dcc_schema" \
+            | tee result.txt
+          # A skip here means the schemas did not arrive and nothing was validated, which is
+          # exactly the outcome this job exists to rule out. Passing on a skip would make the
+          # job a green light for a check that never ran.
+          grep -qE "^2 passed" result.txt
+          if grep -q skipped result.txt; then
+            echo "the schema tests skipped; nothing was validated"
+            exit 1
+          fi

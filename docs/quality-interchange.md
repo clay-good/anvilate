@@ -178,3 +178,11 @@ ANVILATE_DCC_XSD=/path/to/dcc pytest tests/test_dcc.py -k schema
 
 Without the schemas and `lxml`, those tests skip rather than passing — an unrunnable check is
 reported as not run, which is the same rule the scorecard follows.
+
+CI runs them for real. The `interchange-schemas` job fetches both schema packages, points
+their imports at the local copies, and runs the two validations by name — then **fails if
+either skipped**, because a job that goes green on a check that never ran is the same silent
+pass in a different costume. It runs weekly and on demand rather than on every push: it
+depends on two external hosts, and a flaky download should not block a pull request that has
+nothing to do with either format. A schema republished upstream shows up there as a failure
+rather than as a surprise in somebody's quality software.
