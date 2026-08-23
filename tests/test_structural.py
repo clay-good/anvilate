@@ -44,6 +44,7 @@ from anvilate.packs.structural import (
     screen_welded_connection,
 )
 from anvilate.scorecard import CheckStatus, Direction
+from anvilate.standards import AllowableBasis
 from anvilate.units import Quantity
 
 
@@ -1081,7 +1082,9 @@ def test_member_carried_deflection_limit_is_applied():
 def test_screen_structure_rolls_up_beams_and_columns():
     beam = _member(Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N")
     column = _column("500 mm")
-    card = screen_structure([beam, column], required_safety_factor=2.0)
+    card = screen_structure(
+        [beam, column], required_safety_factor=2.0, required_basis=AllowableBasis.TYPICAL
+    )
     # One card with entries from both members; both pass on A36 -> PASS.
     names = [e.name for e in card.entries]
     assert any("beam bending" == n for n in names)
@@ -1092,7 +1095,9 @@ def test_screen_structure_rolls_up_beams_and_columns():
 def test_screen_structure_fails_if_any_member_fails():
     beam = _member(Support.SIMPLY_SUPPORTED, LoadType.POINT, "100 N")
     overloaded_column = _column("500 mm", load="20 kN")
-    card = screen_structure([beam, overloaded_column], required_safety_factor=2.0)
+    card = screen_structure(
+        [beam, overloaded_column], required_safety_factor=2.0, required_basis=AllowableBasis.TYPICAL
+    )
     assert card.status is CheckStatus.FAIL
 
 
@@ -1114,13 +1119,17 @@ def _connection(
 def test_bolted_connection_screens_shear_and_bearing():
     # M8 single shear, 8 kN, 6 mm A36 plate, 4140 bolt: shear 159 MPa vs 0.577*417
     # = 241 (SF 1.51) and bearing 167 MPa vs 250 (SF 1.5) -> both just pass at 1.5.
-    card = screen_bolted_connection(_connection(), required_safety_factor=1.5)
+    card = screen_bolted_connection(
+        _connection(), required_safety_factor=1.5, required_basis=AllowableBasis.TYPICAL
+    )
     assert card.status is CheckStatus.PASS
     assert {e.name for e in card.entries} == {"splice bolt shear", "splice plate bearing"}
 
 
 def test_overloaded_bolted_connection_fails():
-    card = screen_bolted_connection(_connection(load="20 kN"), required_safety_factor=1.5)
+    card = screen_bolted_connection(
+        _connection(load="20 kN"), required_safety_factor=1.5, required_basis=AllowableBasis.TYPICAL
+    )
     assert card.status is CheckStatus.FAIL
 
 
@@ -1139,7 +1148,11 @@ def test_bolted_connection_rejects_non_force_load():
 def test_bolted_connection_tension_adds_tension_and_combined_checks():
     # 4 kN tension on the M8: sigma = 79.6 MPa (SF 5.24 vs 417) and the von Mises
     # combined sqrt(79.6^2 + 3*159.2^2) = 287 MPa (SF 1.45) -> all pass at 1.4.
-    card = screen_bolted_connection(_connection(tension="4 kN"), required_safety_factor=1.4)
+    card = screen_bolted_connection(
+        _connection(tension="4 kN"),
+        required_safety_factor=1.4,
+        required_basis=AllowableBasis.TYPICAL,
+    )
     assert card.status is CheckStatus.PASS
     by_name = {e.name: e for e in card.entries}
     assert set(by_name) == {
@@ -1156,7 +1169,11 @@ def test_bolted_connection_combined_interaction_governs():
     # At 1.5 every individual check passes (shear SF 1.51, bearing 1.50, tension
     # 5.24) but the combined tension+shear equivalent stress fails (SF 1.45) --
     # the interaction catches what the one-axis checks miss.
-    card = screen_bolted_connection(_connection(tension="4 kN"), required_safety_factor=1.5)
+    card = screen_bolted_connection(
+        _connection(tension="4 kN"),
+        required_safety_factor=1.5,
+        required_basis=AllowableBasis.TYPICAL,
+    )
     assert card.status is CheckStatus.FAIL
     by_name = {e.name: e for e in card.entries}
     assert by_name["splice bolt shear"].passed
@@ -1165,7 +1182,9 @@ def test_bolted_connection_combined_interaction_governs():
 
 
 def test_bolted_connection_without_tension_keeps_two_checks():
-    card = screen_bolted_connection(_connection(), required_safety_factor=1.5)
+    card = screen_bolted_connection(
+        _connection(), required_safety_factor=1.5, required_basis=AllowableBasis.TYPICAL
+    )
     assert len(card.entries) == 2
 
 
@@ -1179,7 +1198,11 @@ def test_bolted_connection_rejects_bad_tension():
 def test_bolted_connection_edge_distance_adds_tearout_check():
     # 12 mm edge on the M8 in 6 mm A36: l_c = 12 - 4 = 8 mm, R_n = 1.2*8*6*400
     # = 23.0 kN (SF 2.88 at 8 kN) -> passes at 1.5 alongside shear and bearing.
-    card = screen_bolted_connection(_connection(edge_distance="12 mm"), required_safety_factor=1.5)
+    card = screen_bolted_connection(
+        _connection(edge_distance="12 mm"),
+        required_safety_factor=1.5,
+        required_basis=AllowableBasis.TYPICAL,
+    )
     assert card.status is CheckStatus.PASS
     by_name = {e.name: e for e in card.entries}
     assert set(by_name) == {"splice bolt shear", "splice plate bearing", "splice edge tear-out"}
@@ -1189,7 +1212,11 @@ def test_bolted_connection_edge_distance_adds_tearout_check():
 def test_bolted_connection_tearout_governs_near_edge():
     # At 8 mm edge distance l_c = 4 mm, R_n = 1.2*4*6*400 = 11.5 kN (SF 1.44) --
     # tear-out fails at 1.5 while bolt shear (1.51) and bearing (1.50) still pass.
-    card = screen_bolted_connection(_connection(edge_distance="8 mm"), required_safety_factor=1.5)
+    card = screen_bolted_connection(
+        _connection(edge_distance="8 mm"),
+        required_safety_factor=1.5,
+        required_basis=AllowableBasis.TYPICAL,
+    )
     assert card.status is CheckStatus.FAIL
     by_name = {e.name: e for e in card.entries}
     assert by_name["splice bolt shear"].passed
@@ -1200,10 +1227,18 @@ def test_bolted_connection_tearout_governs_near_edge():
 def test_bolted_connection_tearout_capped_by_bearing_deformation():
     # A 30 mm edge gives 1.2*l_c*t*Fu = 74.9 kN, but the 2.4*d*t*Fu deformation
     # cap holds R_n at 46.1 kN (SF 5.76) -- uncapped the SF would be 9.36.
-    card = screen_bolted_connection(_connection(edge_distance="30 mm"), required_safety_factor=6.0)
+    card = screen_bolted_connection(
+        _connection(edge_distance="30 mm"),
+        required_safety_factor=6.0,
+        required_basis=AllowableBasis.TYPICAL,
+    )
     by_name = {e.name: e for e in card.entries}
     assert not by_name["splice edge tear-out"].passed
-    card = screen_bolted_connection(_connection(edge_distance="30 mm"), required_safety_factor=5.7)
+    card = screen_bolted_connection(
+        _connection(edge_distance="30 mm"),
+        required_safety_factor=5.7,
+        required_basis=AllowableBasis.TYPICAL,
+    )
     by_name = {e.name: e for e in card.entries}
     assert by_name["splice edge tear-out"].passed
 
@@ -1481,7 +1516,9 @@ def test_lug_rejects_hole_wider_than_lug():
 
 
 def test_screen_structure_includes_lugs():
-    card = screen_structure([_lug()], required_safety_factor=1.4)
+    card = screen_structure(
+        [_lug()], required_safety_factor=1.4, required_basis=AllowableBasis.TYPICAL
+    )
     assert {e.name for e in card.entries} == {"pad_eye net tension", "pad_eye pin bearing"}
     assert card.status is CheckStatus.PASS
 
@@ -1522,7 +1559,9 @@ def test_gusset_rejects_non_area_inputs():
 
 
 def test_screen_structure_includes_gussets():
-    card = screen_structure([_gusset()], required_safety_factor=2.0)
+    card = screen_structure(
+        [_gusset()], required_safety_factor=2.0, required_basis=AllowableBasis.TYPICAL
+    )
     assert any("block shear" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
@@ -1587,7 +1626,9 @@ def test_tension_member_rejects_out_of_range_shear_lag():
 
 
 def test_screen_structure_includes_tension_members():
-    card = screen_structure([_tension()], required_safety_factor=2.0)
+    card = screen_structure(
+        [_tension()], required_safety_factor=2.0, required_basis=AllowableBasis.TYPICAL
+    )
     assert any("gross yielding" in e.name for e in card.entries)
     assert any("net rupture" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
@@ -1665,7 +1706,11 @@ def test_beam_column_rejects_non_moment():
 
 
 def test_screen_structure_includes_beam_columns():
-    card = screen_structure([_beam_column(axial="100 kN")], required_safety_factor=1.5)
+    card = screen_structure(
+        [_beam_column(axial="100 kN")],
+        required_safety_factor=1.5,
+        required_basis=AllowableBasis.TYPICAL,
+    )
     assert any("interaction" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
@@ -1710,7 +1755,9 @@ def test_concrete_bearing_rejects_support_below_bearing_area():
 
 
 def test_screen_structure_includes_concrete_bearing():
-    card = screen_structure([_bearing()], required_safety_factor=2.0)
+    card = screen_structure(
+        [_bearing()], required_safety_factor=2.0, required_basis=AllowableBasis.TYPICAL
+    )
     assert any("concrete bearing" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
 
@@ -1765,7 +1812,9 @@ def test_shear_plate_rejects_net_above_gross():
 
 
 def test_screen_structure_includes_shear_plates():
-    card = screen_structure([_shear_plate()], required_safety_factor=1.5)
+    card = screen_structure(
+        [_shear_plate()], required_safety_factor=1.5, required_basis=AllowableBasis.TYPICAL
+    )
     assert any("shear yielding" in e.name for e in card.entries)
     assert any("shear rupture" in e.name for e in card.entries)
     assert card.status is CheckStatus.PASS
@@ -1785,7 +1834,9 @@ def test_checks_cite_the_governing_aisc_clause():
     column = screen_column_member(_column("500 mm"), required_safety_factor=2.0)
     assert column.entries[0].reference == "AISC 360-16 Ch. E"
 
-    conn = screen_bolted_connection(_connection(), required_safety_factor=1.5)
+    conn = screen_bolted_connection(
+        _connection(), required_safety_factor=1.5, required_basis=AllowableBasis.TYPICAL
+    )
     conn_refs = {e.name: e.reference for e in conn.entries}
     assert conn_refs["splice bolt shear"] == "AISC 360-16 §J3.6"
     assert conn_refs["splice plate bearing"] == "AISC 360-16 §J3.10"
@@ -1800,6 +1851,7 @@ def test_screen_structure_includes_connections():
             _connection(),
         ],
         required_safety_factor=1.5,
+        required_basis=AllowableBasis.TYPICAL,
     )
     names = [e.name for e in card.entries]
     assert any("bolt shear" in n for n in names)
@@ -2016,3 +2068,114 @@ def test_the_base_plate_concrete_bearing_fraction_is_pinned():
     bearing = next(e for e in card.entries if "bearing" in e.name)
     # 200 kN / (300 x 300) mm² = 2.222 MPa against 0.85 x 25 = 21.25 MPa allowable.
     assert bearing.safety_factor == pytest.approx(21.25 / 2.2222, rel=1e-4)
+
+
+# --- the design-allowable gate ------------------------------------------------------------
+#
+# `require_basis` shipped one session earlier with **no consumers at all**: every pack read
+# `record.yield_strength.quantity` directly, so a check citing a published clause consumed a
+# *typical* (mean) strength silently. For AA-6061-T6 that is 276 MPa where the specification
+# guarantees 240 — a 15% unconservative overstatement with a valid dimension and a clean
+# PASS, which no unit check and no scorecard can see. 8 of the 17 bundled materials carry a
+# typical basis.
+
+
+def test_a_code_cited_check_refuses_a_typical_basis_strength():
+    """A published clause is written on the strength the material is sold with, not the
+    middle of its scatter."""
+    member = TensionMember(
+        name="tie",
+        gross_area=_q("2000 mm**2"),
+        net_area=_q("1800 mm**2"),
+        load=_q("400 kN"),
+        material="AA-6061-T6",
+    )
+    card = screen_tension_member(member, required_safety_factor=1.67)
+    assert card.status is CheckStatus.NOT_EVALUATED
+    # Every check the screen would have produced is still named — a consumer looking for
+    # "gross yielding" must find it saying it could not run, not find nothing at all.
+    assert {e.name for e in card.entries} == {"tie gross yielding", "tie net rupture"}
+    for entry in card.entries:
+        assert entry.status is CheckStatus.NOT_EVALUATED
+        # And the refusal says what to do about it: which material, which property, what
+        # basis it carries, and what was asked for.
+        assert "AA-6061-T6" in entry.detail
+        assert "typical" in entry.detail
+        assert "specification_minimum" in entry.detail
+
+
+def test_a_specification_minimum_material_screens_as_before():
+    """The gate is a gate, not a wall: 9 of the 17 bundled materials carry a basis good
+    enough for a code-cited check, and nothing about them changed."""
+    member = TensionMember(
+        name="tie",
+        gross_area=_q("2000 mm**2"),
+        net_area=_q("1800 mm**2"),
+        load=_q("400 kN"),
+        material="ASTM-A36",
+    )
+    card = screen_tension_member(member, required_safety_factor=1.67)
+    assert card.status is CheckStatus.FAIL
+    yielding = next(e for e in card.entries if "gross yielding" in e.name)
+    # 400 kN / 2000 mm^2 = 200 MPa against the A36 specified minimum of 250.
+    assert yielding.safety_factor == pytest.approx(1.25, rel=1e-3)
+
+
+def test_the_opt_in_screens_a_typical_strength_and_says_so_on_every_entry():
+    """The escape hatch is a declaration, not a default. An opt-in that produced an ordinary
+    PASS would reintroduce exactly the silence the gate removed, so the disclosure lands on
+    every entry the screen produced — including the ones that passed."""
+    member = TensionMember(
+        name="tie",
+        gross_area=_q("2000 mm**2"),
+        net_area=_q("1800 mm**2"),
+        load=_q("200 kN"),
+        material="AA-6061-T6",
+    )
+    card = screen_tension_member(
+        member, required_safety_factor=1.2, required_basis=AllowableBasis.TYPICAL
+    )
+    assert card.status is CheckStatus.PASS
+    for entry in card.entries:
+        assert "typical strength for AA-6061-T6" in entry.detail
+        assert "which the caller declared" in entry.detail
+
+
+@pytest.mark.parametrize(
+    ("screen", "member_factory", "expected_names"),
+    [
+        (
+            screen_column_member,
+            lambda: ColumnMember(
+                name="post",
+                section=_section(),
+                length=_q("1000 mm"),
+                end_condition=ColumnEnd.PINNED_PINNED,
+                axial_load=_q("5 kN"),
+                material="AISI-4140",
+            ),
+            {"post buckling"},
+        ),
+        (
+            screen_tension_member,
+            lambda: TensionMember(
+                name="tie",
+                gross_area=_q("2000 mm**2"),
+                net_area=_q("1800 mm**2"),
+                load=_q("400 kN"),
+                material="AISI-4140",
+            ),
+            {"tie gross yielding", "tie net rupture"},
+        ),
+    ],
+)
+def test_every_wired_screen_refuses_and_keeps_its_check_names(
+    screen, member_factory, expected_names
+):
+    """A screen whose strength feeds a raw formula has no `allowable=None` to pass, so it
+    returns a refusal card built from the names it would have produced. Losing the names
+    would be its own kind of silence."""
+    card = screen(member_factory(), required_safety_factor=1.5)
+    assert card.status is CheckStatus.NOT_EVALUATED
+    assert {e.name for e in card.entries} == expected_names
+    assert all("AISI-4140" in e.detail for e in card.entries)

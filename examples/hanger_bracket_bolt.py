@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from anvilate.packs.structural import BoltedConnection, screen_structure
 from anvilate.scorecard import Scorecard
+from anvilate.standards import AllowableBasis
 from anvilate.units import Quantity
 
 SHEAR_LOAD = Quantity.parse("10 kN")  # gravity, carried in single shear
@@ -33,7 +34,9 @@ def screen_hanger_bolt() -> Scorecard:
         plate_material="ASTM-A36",
         tension=TENSION_LOAD,
     )
-    return screen_structure([bolt], required_safety_factor=2.0)
+    return screen_structure(
+        [bolt], required_safety_factor=2.0, required_basis=AllowableBasis.TYPICAL
+    )
 
 
 def main() -> None:

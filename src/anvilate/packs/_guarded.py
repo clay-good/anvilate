@@ -31,10 +31,17 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ..scorecard import Scorecard
 from ..standards import AllowableBasis, InsufficientBasis, require_basis
 from ..units import Quantity
 
-__all__ = ["DESIGN_BASIS", "DesignAllowable", "GuardedInputs", "design_allowable"]
+__all__ = [
+    "DESIGN_BASIS",
+    "DesignAllowable",
+    "GuardedInputs",
+    "design_allowable",
+    "disclosed",
+]
 
 
 def _check_nested(model: BaseModel, prefix: str, _depth: int = 0) -> None:
@@ -108,6 +115,7 @@ class GuardedInputs(BaseModel):
                 )
         return self
 
+
 # --- the design-allowable gate ------------------------------------------------------------
 #
 # A strength value carries a *basis*: a typical value sits in the middle of the scatter, a
@@ -145,6 +153,10 @@ class DesignAllowable(GuardedInputs):
 
     quantity: Quantity | None = None
     note: str | None = None
+    # Set when a caller deliberately relaxed the basis and got a value anyway. The opt-in
+    # cannot be silent, or it reintroduces exactly the silence the gate removed: a screen
+    # run against a mean strength has to say so on every entry it produced.
+    disclosure: str | None = None
 
 
 def design_allowable(
@@ -168,8 +180,34 @@ def design_allowable(
             note=f"not evaluated — {material_id} carries no {property_name.replace('_', ' ')}"
         )
     try:
-        return DesignAllowable(
-            quantity=require_basis(prop, basis, material_id=material_id, name=property_name)
-        )
+        quantity = require_basis(prop, basis, material_id=material_id, name=property_name)
     except InsufficientBasis as refusal:
         return DesignAllowable(note=f"not evaluated — {refusal}")
+    if basis is DESIGN_BASIS:
+        return DesignAllowable(quantity=quantity)
+    return DesignAllowable(
+        quantity=quantity,
+        disclosure=(
+            f"screened against a {basis.value.replace('_', ' ')} strength for "
+            f"{material_id}, which the caller declared"
+        ),
+    )
+
+
+def disclosed(card: Scorecard, *allowables: DesignAllowable) -> Scorecard:
+    """``card`` with every entry's detail carrying whatever the allowables disclosed.
+
+    Applied once at a screen's return rather than at each entry, because a relaxed basis is
+    a property of the whole screen: every number on that card came off the same record.
+    """
+    notes = sorted({a.disclosure for a in allowables if a.disclosure})
+    if not notes:
+        return card
+    suffix = " [" + "; ".join(notes) + "]"
+    return card.model_copy(
+        update={
+            "entries": tuple(
+                entry.model_copy(update={"detail": entry.detail + suffix}) for entry in card.entries
+            )
+        }
+    )

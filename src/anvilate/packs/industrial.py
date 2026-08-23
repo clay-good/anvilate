@@ -41,9 +41,9 @@ from ..analysis import (
 )
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import Scorecard
-from ..standards import MaterialsDatabase, default_materials_db
+from ..standards import AllowableBasis, MaterialsDatabase, default_materials_db
 from ..units import Quantity
-from ._guarded import GuardedInputs
+from ._guarded import DESIGN_BASIS, GuardedInputs, design_allowable, disclosed
 
 __all__ = [
     "PlateEdge",
@@ -190,6 +190,7 @@ def screen_cover_plate(
     *,
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`CoverPlate` and return its scorecard.
 
@@ -202,6 +203,9 @@ def screen_cover_plate(
     """
     materials = materials or default_materials_db()
     record = materials.get(plate.material)
+    plate_allowable = design_allowable(
+        record, "yield_strength", material_id=plate.material, basis=required_basis
+    )
 
     circular = plate.diameter is not None
     check, reference = _PLATE_CHECKS[(circular, plate.edge)]
@@ -267,8 +271,9 @@ def screen_cover_plate(
         strength_scorecard(
             f"{plate.name} plate bending",
             stress=result.max_bending_stress,
-            allowable=record.yield_strength.quantity,
+            allowable=plate_allowable.quantity,
             required=required_safety_factor,
+            unavailable_detail=plate_allowable.note,
         ).model_copy(update=bending_update)
     ]
     if plate.deflection_limit is not None:
@@ -312,4 +317,7 @@ def screen_cover_plate(
                 min_frequency=plate.min_frequency,
             ).model_copy(update={"reference": modal_reference})
         )
-    return Scorecard(entries=tuple(entries))
+    return disclosed(
+        Scorecard(entries=tuple(entries)),
+        plate_allowable,
+    )

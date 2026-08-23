@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from anvilate.packs.structural import BoltedConnection, screen_structure
 from anvilate.scorecard import Scorecard
+from anvilate.standards import AllowableBasis
 from anvilate.units import Quantity
 
 SHEAR_LOAD = Quantity.parse("12 kN")  # gravity, carried in single shear
@@ -36,7 +37,9 @@ def screen_clip_bolt() -> Scorecard:
     }
     as_detailed = BoltedConnection(name="as detailed", edge_distance=DETAILED_EDGE, **common)
     relocated = BoltedConnection(name="relocated", edge_distance=RELOCATED_EDGE, **common)
-    return screen_structure([as_detailed, relocated], required_safety_factor=1.5)
+    return screen_structure(
+        [as_detailed, relocated], required_safety_factor=1.5, required_basis=AllowableBasis.TYPICAL
+    )
 
 
 def main() -> None:

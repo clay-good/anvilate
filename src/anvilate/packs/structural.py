@@ -83,9 +83,37 @@ from ..scorecard import (
     Scorecard,
     ScorecardEntry,
 )
-from ..standards import MaterialsDatabase, default_materials_db
+from ..standards import AllowableBasis, MaterialsDatabase, default_materials_db
 from ..units import Quantity
-from ._guarded import GuardedInputs
+from ._guarded import (
+    DESIGN_BASIS,
+    DesignAllowable,
+    GuardedInputs,
+    design_allowable,
+    disclosed,
+)
+
+
+def _refused(names: tuple[str, ...], note: str, reference: str | None = None) -> Scorecard:
+    """A card of NOT_EVALUATED entries, one per check the screen would have produced.
+
+    Used where a strength feeds a raw formula rather than `strength_scorecard`, so there is
+    no `allowable=None` to pass. The check names are kept — a consumer looking for
+    "column buckling" must find it saying it could not run, not find nothing at all, which
+    is its own kind of silence.
+    """
+    return Scorecard(
+        entries=tuple(
+            ScorecardEntry(
+                name=name,
+                status=CheckStatus.NOT_EVALUATED,
+                detail=note,
+                reference=reference,
+            )
+            for name in names
+        )
+    )
+
 
 __all__ = [
     "Support",
@@ -473,6 +501,7 @@ def screen_beam_member(
     required_safety_factor: float,
     max_deflection: Quantity | None = None,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`BeamMember` and return its scorecard.
 
@@ -539,12 +568,16 @@ def screen_beam_member(
     else:
         result = _DISTRIBUTED_CHECKS[member.support](distributed_load=member.load, **common)
 
+    yield_allowable = design_allowable(
+        record, "yield_strength", material_id=member.material, basis=required_basis
+    )
     entries = [
         strength_scorecard(
             f"{member.name} bending",
             stress=result.max_bending_stress,
-            allowable=record.yield_strength.quantity,
+            allowable=yield_allowable.quantity,
             required=required_safety_factor,
+            unavailable_detail=yield_allowable.note,
         ).model_copy(
             update={
                 "reference": _CLAUSE_FLEXURE,
@@ -644,7 +677,10 @@ def screen_beam_member(
     shear_entry = _shear_entry(member, record, required_safety_factor)
     if shear_entry is not None:
         entries.append(shear_entry)
-    return Scorecard(entries=tuple(entries))
+    return disclosed(
+        Scorecard(entries=tuple(entries)),
+        yield_allowable,
+    )
 
 
 def _shear_entry(member, record, required_safety_factor: float) -> ScorecardEntry | None:
@@ -768,6 +804,7 @@ def screen_column_member(
     *,
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`ColumnMember` for buckling and return its scorecard.
 
@@ -788,7 +825,12 @@ def screen_column_member(
     materials = materials or default_materials_db()
     record = materials.get(member.material)
     modulus = record.elastic_modulus.quantity
-    yield_strength = record.yield_strength.quantity
+    column_allowable = design_allowable(
+        record, "yield_strength", material_id=member.material, basis=required_basis
+    )
+    if column_allowable.quantity is None:
+        return _refused((f"{member.name} buckling",), column_allowable.note)
+    yield_strength = column_allowable.quantity
 
     effective_length = Quantity(
         magnitude=member.end_condition.factor() * member.length.to("mm").magnitude,
@@ -855,7 +897,10 @@ def screen_column_member(
         allowable=critical,
         required=required_safety_factor,
     ).model_copy(update={"reference": _CLAUSE_COMPRESSION, "derivation": derivation})
-    return Scorecard(entries=(entry,))
+    return disclosed(
+        Scorecard(entries=(entry,)),
+        column_allowable,
+    )
 
 
 class BoltedConnection(GuardedInputs):
@@ -922,6 +967,7 @@ def screen_bolted_connection(
     *,
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`BoltedConnection`'s failure modes into a scorecard.
 
@@ -938,13 +984,31 @@ def screen_bolted_connection(
     materials = materials or default_materials_db()
     bolt = materials.get(connection.bolt_material)
     plate = materials.get(connection.plate_material)
+    bolt_allowable = design_allowable(
+        bolt, "yield_strength", material_id=connection.bolt_material, basis=required_basis
+    )
+    plate_allowable = design_allowable(
+        plate, "yield_strength", material_id=connection.plate_material, basis=required_basis
+    )
+    plate_ultimate = design_allowable(
+        plate, "ultimate_strength", material_id=connection.plate_material, basis=required_basis
+    )
+    if bolt_allowable.quantity is None or plate_allowable.quantity is None:
+        return _refused(
+            (
+                f"{connection.name} plate bearing",
+                f"{connection.name} bolt shear",
+                f"{connection.name} edge tear-out",
+            ),
+            bolt_allowable.note or plate_allowable.note,
+        )
 
     shear = bolt_shear_stress(
         force=connection.load,
         diameter=connection.bolt_diameter,
         shear_planes=connection.shear_planes,
     )
-    bolt_sy = bolt.yield_strength.quantity.to("MPa").magnitude
+    bolt_sy = bolt_allowable.quantity.to("MPa").magnitude
     shear_yield = Quantity(magnitude=_SHEAR_YIELD_FRACTION * bolt_sy, unit="MPa")
 
     bearing = bearing_stress(
@@ -989,7 +1053,7 @@ def screen_bolted_connection(
         strength_scorecard(
             f"{connection.name} plate bearing",
             stress=bearing,
-            allowable=plate.yield_strength.quantity,
+            allowable=plate_allowable.quantity,
             required=required_safety_factor,
         ).model_copy(
             update={
@@ -1010,7 +1074,7 @@ def screen_bolted_connection(
     if connection.edge_distance is not None:
         d_mm = connection.bolt_diameter.to("mm").magnitude
         t_mm = connection.plate_thickness.to("mm").magnitude
-        fu = plate.ultimate_strength.quantity.to("MPa").magnitude
+        fu = plate_ultimate.quantity.to("MPa").magnitude
         clear = connection.edge_distance.to("mm").magnitude - d_mm / 2
         tear_capacity = _TEAROUT_CLEAR_FRACTION * clear * t_mm * fu
         deformation_cap = _TEAROUT_BEARING_CAP_FRACTION * d_mm * t_mm * fu
@@ -1020,7 +1084,7 @@ def screen_bolted_connection(
         ultimate_symbol = SymbolValue(
             symbol="F_u",
             description="plate ultimate tensile strength",
-            value=plate.ultimate_strength.quantity,
+            value=plate_ultimate.quantity,
         )
         # §J3.10 takes the lesser of tear-out on the clear distance and the
         # bearing-deformation cap. Show the one that actually governed rather than
@@ -1082,7 +1146,7 @@ def screen_bolted_connection(
             strength_scorecard(
                 f"{connection.name} bolt tension",
                 stress=tensile,
-                allowable=bolt.yield_strength.quantity,
+                allowable=bolt_allowable.quantity,
                 required=required_safety_factor,
             ).model_copy(
                 update={
@@ -1100,7 +1164,7 @@ def screen_bolted_connection(
             strength_scorecard(
                 f"{connection.name} combined tension+shear",
                 stress=combined,
-                allowable=bolt.yield_strength.quantity,
+                allowable=bolt_allowable.quantity,
                 required=required_safety_factor,
             ).model_copy(
                 update={
@@ -1120,7 +1184,12 @@ def screen_bolted_connection(
                 }
             )
         )
-    return Scorecard(entries=tuple(entries))
+    return disclosed(
+        Scorecard(entries=tuple(entries)),
+        bolt_allowable,
+        plate_allowable,
+        plate_ultimate,
+    )
 
 
 class WeldedConnection(GuardedInputs):
@@ -1257,6 +1326,7 @@ def screen_base_plate(
     *,
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`BasePlate`'s concrete bearing (and plate bending) into a card.
 
@@ -1300,9 +1370,23 @@ def screen_base_plate(
             }
         )
     ]
+    # Declared before the branch: the plate-bending check is optional, and the disclosure at
+    # the return has to be reachable whether or not it ran.
+    base_allowable = DesignAllowable()
     if plate.plate_thickness is not None:
         materials = materials or default_materials_db()
-        plate_yield = materials.get(plate.plate_material).yield_strength.quantity
+        base_allowable = design_allowable(
+            materials.get(plate.plate_material),
+            "yield_strength",
+            material_id=plate.plate_material,
+            basis=required_basis,
+        )
+        if base_allowable.quantity is None:
+            return _refused(
+                (f"{plate.name} concrete bearing", f"{plate.name} plate bending"),
+                base_allowable.note,
+            )
+        plate_yield = base_allowable.quantity
         cantilever = plate.cantilever.to("mm").magnitude
         thickness = plate.plate_thickness.to("mm").magnitude
         plate_bending = Quantity(
@@ -1361,7 +1445,10 @@ def screen_base_plate(
                 }
             )
         entries.append(bending_entry)
-    return Scorecard(entries=tuple(entries))
+    return disclosed(
+        Scorecard(entries=tuple(entries)),
+        base_allowable,
+    )
 
 
 class LiftingLug(GuardedInputs):
@@ -1428,6 +1515,7 @@ def screen_lifting_lug(
     required_safety_factor: float,
     target_safety_factor: float | None = None,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`LiftingLug`'s tension and bearing limit states.
 
@@ -1444,7 +1532,12 @@ def screen_lifting_lug(
     """
     materials = materials or default_materials_db()
     record = materials.get(lug.material)
-    yield_strength = record.yield_strength.quantity
+    lug_allowable = design_allowable(
+        record, "yield_strength", material_id=lug.material, basis=required_basis
+    )
+    if lug_allowable.quantity is None:
+        return _refused((f"{lug.name} pin bearing", f"{lug.name} net tension"), lug_allowable.note)
+    yield_strength = lug_allowable.quantity
 
     width = lug.width.to("mm").magnitude
     hole = lug.hole_diameter.to("mm").magnitude
@@ -1488,23 +1581,26 @@ def screen_lifting_lug(
         required=required_safety_factor,
         upper=target_safety_factor,
     ).model_copy(update={"reference": _CLAUSE_LUG, "derivation": bearing_derivation})
-    return Scorecard(
-        entries=(
-            tension_entry.model_copy(
-                update={
-                    "repair_hint": _thickness_repair_hint(
-                        tension_entry, lug.thickness, required_safety_factor
-                    )
-                }
-            ),
-            bearing_entry.model_copy(
-                update={
-                    "repair_hint": _thickness_repair_hint(
-                        bearing_entry, lug.thickness, required_safety_factor
-                    )
-                }
-            ),
-        )
+    return disclosed(
+        Scorecard(
+            entries=(
+                tension_entry.model_copy(
+                    update={
+                        "repair_hint": _thickness_repair_hint(
+                            tension_entry, lug.thickness, required_safety_factor
+                        )
+                    }
+                ),
+                bearing_entry.model_copy(
+                    update={
+                        "repair_hint": _thickness_repair_hint(
+                            bearing_entry, lug.thickness, required_safety_factor
+                        )
+                    }
+                ),
+            )
+        ),
+        lug_allowable,
     )
 
 
@@ -1544,6 +1640,7 @@ def screen_gusset_plate(
     *,
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`GussetPlate` for block-shear rupture into a scorecard.
 
@@ -1553,7 +1650,15 @@ def screen_gusset_plate(
     database.
     """
     materials = materials or default_materials_db()
-    ultimate = materials.get(gusset.material).ultimate_strength.quantity.to("MPa").magnitude
+    gusset_allowable = design_allowable(
+        materials.get(gusset.material),
+        "ultimate_strength",
+        material_id=gusset.material,
+        basis=required_basis,
+    )
+    if gusset_allowable.quantity is None:
+        return _refused((f"{gusset.name} block shear",), gusset_allowable.note)
+    ultimate = gusset_allowable.quantity.to("MPa").magnitude
     shear_area = gusset.net_shear_area.to("mm**2").magnitude
     tension_area = gusset.net_tension_area.to("mm**2").magnitude
     capacity_n = ultimate * (_BLOCK_SHEAR_SHEAR_FRACTION * shear_area + tension_area)
@@ -1567,7 +1672,7 @@ def screen_gusset_plate(
             SymbolValue(
                 symbol="F_u",
                 description="plate ultimate tensile strength",
-                value=materials.get(gusset.material).ultimate_strength.quantity,
+                value=gusset_allowable.quantity,
             ),
             SymbolValue(
                 symbol="A_nv",
@@ -1590,7 +1695,10 @@ def screen_gusset_plate(
     entry = ScorecardEntry.from_safety_factor(
         f"{gusset.name} block shear", computed=safety, required=required_safety_factor
     ).model_copy(update={"reference": _CLAUSE_BLOCK_SHEAR, "derivation": derivation})
-    return Scorecard(entries=(entry,))
+    return disclosed(
+        Scorecard(entries=(entry,)),
+        gusset_allowable,
+    )
 
 
 class TensionMember(GuardedInputs):
@@ -1638,6 +1746,7 @@ def screen_tension_member(
     *,
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`TensionMember`'s gross-yield and net-rupture limit states.
 
@@ -1648,6 +1757,12 @@ def screen_tension_member(
     """
     materials = materials or default_materials_db()
     record = materials.get(member.material)
+    yield_allowable = design_allowable(
+        record, "yield_strength", material_id=member.material, basis=required_basis
+    )
+    ultimate_allowable = design_allowable(
+        record, "ultimate_strength", material_id=member.material, basis=required_basis
+    )
 
     force = member.load.to("N").magnitude
     gross = member.gross_area.to("mm**2").magnitude
@@ -1656,70 +1771,76 @@ def screen_tension_member(
     gross_stress = Quantity(magnitude=force / gross, unit="MPa")
     net_stress = Quantity(magnitude=force / effective_net, unit="MPa")
     load_symbol = SymbolValue(symbol="P", description="axial tension", value=member.load)
-    return Scorecard(
-        entries=(
-            strength_scorecard(
-                f"{member.name} gross yielding",
-                stress=gross_stress,
-                allowable=record.yield_strength.quantity,
-                required=required_safety_factor,
-            ).model_copy(
-                update={
-                    "reference": _CLAUSE_TENSION,
-                    "derivation": Derivation(
-                        symbolic="σ_g = P / A_g",
-                        inputs=(
-                            load_symbol,
-                            SymbolValue(
-                                symbol="A_g",
-                                description="gross cross-sectional area",
-                                value=member.gross_area,
+    return disclosed(
+        Scorecard(
+            entries=(
+                strength_scorecard(
+                    f"{member.name} gross yielding",
+                    stress=gross_stress,
+                    allowable=yield_allowable.quantity,
+                    required=required_safety_factor,
+                    unavailable_detail=yield_allowable.note,
+                ).model_copy(
+                    update={
+                        "reference": _CLAUSE_TENSION,
+                        "derivation": Derivation(
+                            symbolic="σ_g = P / A_g",
+                            inputs=(
+                                load_symbol,
+                                SymbolValue(
+                                    symbol="A_g",
+                                    description="gross cross-sectional area",
+                                    value=member.gross_area,
+                                ),
                             ),
-                        ),
-                        result=SymbolValue(
-                            symbol="σ_g",
-                            description="stress on the gross section",
-                            value=gross_stress,
-                        ),
-                        citation=_CLAUSE_TENSION,
-                    ),
-                }
-            ),
-            strength_scorecard(
-                f"{member.name} net rupture",
-                stress=net_stress,
-                allowable=record.ultimate_strength.quantity,
-                required=required_safety_factor,
-            ).model_copy(
-                update={
-                    "reference": _CLAUSE_TENSION,
-                    "derivation": Derivation(
-                        # The shear-lag factor U reduces the net area to the part of
-                        # the section the connection actually engages.
-                        symbolic="σ_n = P / (U · A_n)",
-                        inputs=(
-                            load_symbol,
-                            SymbolValue(
-                                symbol="U",
-                                description="shear-lag factor",
-                                value=member.shear_lag_factor,
+                            result=SymbolValue(
+                                symbol="σ_g",
+                                description="stress on the gross section",
+                                value=gross_stress,
                             ),
-                            SymbolValue(
-                                symbol="A_n",
-                                description="net area through the connection",
-                                value=member.net_area,
+                            citation=_CLAUSE_TENSION,
+                        ),
+                    }
+                ),
+                strength_scorecard(
+                    f"{member.name} net rupture",
+                    stress=net_stress,
+                    allowable=ultimate_allowable.quantity,
+                    required=required_safety_factor,
+                    unavailable_detail=ultimate_allowable.note,
+                ).model_copy(
+                    update={
+                        "reference": _CLAUSE_TENSION,
+                        "derivation": Derivation(
+                            # The shear-lag factor U reduces the net area to the part of
+                            # the section the connection actually engages.
+                            symbolic="σ_n = P / (U · A_n)",
+                            inputs=(
+                                load_symbol,
+                                SymbolValue(
+                                    symbol="U",
+                                    description="shear-lag factor",
+                                    value=member.shear_lag_factor,
+                                ),
+                                SymbolValue(
+                                    symbol="A_n",
+                                    description="net area through the connection",
+                                    value=member.net_area,
+                                ),
                             ),
+                            result=SymbolValue(
+                                symbol="σ_n",
+                                description="stress on the effective net section",
+                                value=net_stress,
+                            ),
+                            citation=_CLAUSE_TENSION,
                         ),
-                        result=SymbolValue(
-                            symbol="σ_n",
-                            description="stress on the effective net section",
-                            value=net_stress,
-                        ),
-                        citation=_CLAUSE_TENSION,
-                    ),
-                }
-            ),
-        )
+                    }
+                ),
+            )
+        ),
+        yield_allowable,
+        ultimate_allowable,
     )
 
 
@@ -1768,6 +1889,7 @@ def screen_beam_column(
     *,
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`BeamColumnMember` by the AISC §H1.1 interaction equation.
 
@@ -1782,7 +1904,15 @@ def screen_beam_column(
     materials = materials or default_materials_db()
     record = materials.get(member.material)
     modulus = record.elastic_modulus.quantity
-    yield_strength = record.yield_strength.quantity
+    beam_column_allowable = design_allowable(
+        record, "yield_strength", material_id=member.material, basis=required_basis
+    )
+    if beam_column_allowable.quantity is None:
+        return _refused(
+            (f"{member.name} axial", f"{member.name} interaction"),
+            beam_column_allowable.note,
+        )
+    yield_strength = beam_column_allowable.quantity
 
     effective_length = Quantity(
         magnitude=member.end_condition.factor() * member.length.to("mm").magnitude,
@@ -1913,7 +2043,10 @@ def screen_beam_column(
             else None,
         }
     )
-    return Scorecard(entries=(axial_entry, entry))
+    return disclosed(
+        Scorecard(entries=(axial_entry, entry)),
+        beam_column_allowable,
+    )
 
 
 class ConcreteBearing(GuardedInputs):
@@ -2067,6 +2200,7 @@ def screen_shear_plate(
     *,
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a :class:`ShearPlate`'s two AISC §J4.2 shear limit states.
 
@@ -2077,8 +2211,19 @@ def screen_shear_plate(
     """
     materials = materials or default_materials_db()
     record = materials.get(plate.material)
-    fy = record.yield_strength.quantity.to("MPa").magnitude
-    fu = record.ultimate_strength.quantity.to("MPa").magnitude
+    shear_yield = design_allowable(
+        record, "yield_strength", material_id=plate.material, basis=required_basis
+    )
+    shear_ultimate = design_allowable(
+        record, "ultimate_strength", material_id=plate.material, basis=required_basis
+    )
+    if shear_yield.quantity is None or shear_ultimate.quantity is None:
+        return _refused(
+            (f"{plate.name} shear yielding", f"{plate.name} shear rupture"),
+            shear_yield.note or shear_ultimate.note,
+        )
+    fy = shear_yield.quantity.to("MPa").magnitude
+    fu = shear_ultimate.quantity.to("MPa").magnitude
     gross = plate.gross_shear_area.to("mm**2").magnitude
     net = plate.net_shear_area.to("mm**2").magnitude
     load_n = plate.load.to("N").magnitude
@@ -2087,69 +2232,77 @@ def screen_shear_plate(
     rupture_capacity = _SHEAR_STRENGTH_FRACTION * fu * net
     yield_sf = yield_capacity / load_n if load_n > 0 else None
     rupture_sf = rupture_capacity / load_n if load_n > 0 else None
-    return Scorecard(
-        entries=(
-            ScorecardEntry.from_safety_factor(
-                f"{plate.name} shear yielding", computed=yield_sf, required=required_safety_factor
-            ).model_copy(
-                update={
-                    "reference": _CLAUSE_SHEAR,
-                    "derivation": Derivation(
-                        # Yielding is checked on the gross area: the whole section
-                        # has to go plastic before the plate deforms.
-                        symbolic="R_n = 0.60 · F_y · A_gv",
-                        inputs=(
-                            SymbolValue(
-                                symbol="F_y",
-                                description="plate yield strength",
-                                value=record.yield_strength.quantity,
+    return disclosed(
+        Scorecard(
+            entries=(
+                ScorecardEntry.from_safety_factor(
+                    f"{plate.name} shear yielding",
+                    computed=yield_sf,
+                    required=required_safety_factor,
+                ).model_copy(
+                    update={
+                        "reference": _CLAUSE_SHEAR,
+                        "derivation": Derivation(
+                            # Yielding is checked on the gross area: the whole section
+                            # has to go plastic before the plate deforms.
+                            symbolic="R_n = 0.60 · F_y · A_gv",
+                            inputs=(
+                                SymbolValue(
+                                    symbol="F_y",
+                                    description="plate yield strength",
+                                    value=shear_yield.quantity,
+                                ),
+                                SymbolValue(
+                                    symbol="A_gv",
+                                    description="gross area resisting shear",
+                                    value=plate.gross_shear_area,
+                                ),
                             ),
-                            SymbolValue(
-                                symbol="A_gv",
-                                description="gross area resisting shear",
-                                value=plate.gross_shear_area,
+                            result=SymbolValue(
+                                symbol="R_n",
+                                description="shear yielding capacity",
+                                value=Quantity(magnitude=yield_capacity, unit="N"),
                             ),
+                            citation=_CLAUSE_SHEAR,
                         ),
-                        result=SymbolValue(
-                            symbol="R_n",
-                            description="shear yielding capacity",
-                            value=Quantity(magnitude=yield_capacity, unit="N"),
-                        ),
-                        citation=_CLAUSE_SHEAR,
-                    ),
-                }
-            ),
-            ScorecardEntry.from_safety_factor(
-                f"{plate.name} shear rupture", computed=rupture_sf, required=required_safety_factor
-            ).model_copy(
-                update={
-                    "reference": _CLAUSE_SHEAR,
-                    "derivation": Derivation(
-                        # Rupture is checked on the net area, through the holes, and
-                        # against the ultimate rather than the yield strength.
-                        symbolic="R_n = 0.60 · F_u · A_nv",
-                        inputs=(
-                            SymbolValue(
-                                symbol="F_u",
-                                description="plate ultimate tensile strength",
-                                value=record.ultimate_strength.quantity,
+                    }
+                ),
+                ScorecardEntry.from_safety_factor(
+                    f"{plate.name} shear rupture",
+                    computed=rupture_sf,
+                    required=required_safety_factor,
+                ).model_copy(
+                    update={
+                        "reference": _CLAUSE_SHEAR,
+                        "derivation": Derivation(
+                            # Rupture is checked on the net area, through the holes, and
+                            # against the ultimate rather than the yield strength.
+                            symbolic="R_n = 0.60 · F_u · A_nv",
+                            inputs=(
+                                SymbolValue(
+                                    symbol="F_u",
+                                    description="plate ultimate tensile strength",
+                                    value=shear_ultimate.quantity,
+                                ),
+                                SymbolValue(
+                                    symbol="A_nv",
+                                    description="net area resisting shear, through the holes",
+                                    value=plate.net_shear_area,
+                                ),
                             ),
-                            SymbolValue(
-                                symbol="A_nv",
-                                description="net area resisting shear, through the holes",
-                                value=plate.net_shear_area,
+                            result=SymbolValue(
+                                symbol="R_n",
+                                description="shear rupture capacity",
+                                value=Quantity(magnitude=rupture_capacity, unit="N"),
                             ),
+                            citation=_CLAUSE_SHEAR,
                         ),
-                        result=SymbolValue(
-                            symbol="R_n",
-                            description="shear rupture capacity",
-                            value=Quantity(magnitude=rupture_capacity, unit="N"),
-                        ),
-                        citation=_CLAUSE_SHEAR,
-                    ),
-                }
-            ),
-        )
+                    }
+                ),
+            )
+        ),
+        shear_yield,
+        shear_ultimate,
     )
 
 
@@ -2173,6 +2326,7 @@ def screen_structure(
     *,
     required_safety_factor: float,
     materials: MaterialsDatabase | None = None,
+    required_basis: AllowableBasis = DESIGN_BASIS,
 ) -> Scorecard:
     """Screen a whole structure — beams, columns, and connections — into one card.
 
@@ -2188,43 +2342,70 @@ def screen_structure(
     for member in members:
         if isinstance(member, BeamMember):
             card = screen_beam_member(
-                member, required_safety_factor=required_safety_factor, materials=materials
+                member,
+                required_safety_factor=required_safety_factor,
+                materials=materials,
+                required_basis=required_basis,
             )
         elif isinstance(member, ColumnMember):
             card = screen_column_member(
-                member, required_safety_factor=required_safety_factor, materials=materials
+                member,
+                required_safety_factor=required_safety_factor,
+                materials=materials,
+                required_basis=required_basis,
             )
         elif isinstance(member, BoltedConnection):
             card = screen_bolted_connection(
-                member, required_safety_factor=required_safety_factor, materials=materials
+                member,
+                required_safety_factor=required_safety_factor,
+                materials=materials,
+                required_basis=required_basis,
             )
         elif isinstance(member, WeldedConnection):
             card = screen_welded_connection(member, required_safety_factor=required_safety_factor)
         elif isinstance(member, BasePlate):
             card = screen_base_plate(
-                member, required_safety_factor=required_safety_factor, materials=materials
+                member,
+                required_safety_factor=required_safety_factor,
+                materials=materials,
+                required_basis=required_basis,
             )
         elif isinstance(member, LiftingLug):
             card = screen_lifting_lug(
-                member, required_safety_factor=required_safety_factor, materials=materials
+                member,
+                required_safety_factor=required_safety_factor,
+                materials=materials,
+                required_basis=required_basis,
             )
         elif isinstance(member, GussetPlate):
             card = screen_gusset_plate(
-                member, required_safety_factor=required_safety_factor, materials=materials
+                member,
+                required_safety_factor=required_safety_factor,
+                materials=materials,
+                required_basis=required_basis,
             )
         elif isinstance(member, TensionMember):
             card = screen_tension_member(
-                member, required_safety_factor=required_safety_factor, materials=materials
+                member,
+                required_safety_factor=required_safety_factor,
+                materials=materials,
+                required_basis=required_basis,
             )
         elif isinstance(member, BeamColumnMember):
             card = screen_beam_column(
-                member, required_safety_factor=required_safety_factor, materials=materials
+                member,
+                required_safety_factor=required_safety_factor,
+                materials=materials,
+                required_basis=required_basis,
             )
         elif isinstance(member, ConcreteBearing):
             card = screen_concrete_bearing(member, required_safety_factor=required_safety_factor)
         else:
             card = screen_shear_plate(
-                member, required_safety_factor=required_safety_factor, materials=materials
+                member,
+                required_safety_factor=required_safety_factor,
+                materials=materials,
+                required_basis=required_basis,
             )
         entries.extend(card.entries)
     return Scorecard(entries=tuple(entries))

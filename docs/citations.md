@@ -134,3 +134,39 @@ first time a record is added carelessly.
 Report it. A wrong citation is worse than none, because it converts an unverified number
 into a confidently-sourced one — the exact failure this library treats as the serious
 kind.
+
+## The basis is enforced, not just recorded
+
+A strength value carries a **basis**: a typical value sits in the middle of the scatter —
+roughly half the material is weaker than it — while a specification minimum is the floor the
+producer guarantees. For 6061-T6 that is 276 MPa against 240.
+
+Recording the distinction was half the job, and for one release it was the only half: every
+pack check read `record.yield_strength.quantity` directly, so a check citing a published
+clause consumed a mean strength silently, and nothing downstream could tell. **A check that
+cites a clause now demands a design allowable**, because the clause is written on the
+strength the material is sold with:
+
+```python
+screen_tension_member(member, required_safety_factor=1.67)   # AA-6061-T6
+# [NOT_EVALUATED] tie gross yielding: not evaluated — AA-6061-T6 yield_strength is typical
+#   (ASM Aerospace Metals — 6061-T6), and this check requires at least specification_minimum
+```
+
+Every check the screen would have produced is still named. A consumer looking for "gross
+yielding" has to find it saying it could not run, rather than find nothing — which would be
+its own kind of silence.
+
+Nine of the seventeen bundled materials carry a specification minimum and screen exactly as
+before. The other eight — mostly the aluminum alloys and the heat-treated steels whose
+handbook tables are means — refuse until either the database gains a value on the right
+basis, or the caller declares that this screen accepts a typical one:
+
+```python
+screen_tension_member(member, required_safety_factor=1.2, required_basis=AllowableBasis.TYPICAL)
+# [PASS] tie gross yielding: safety factor 2.76 vs required minimum 1.20
+#   [screened against a typical strength for AA-6061-T6, which the caller declared]
+```
+
+The declaration lands on **every entry the screen produced**, including the ones that passed.
+An opt-in that produced an ordinary PASS would put back exactly the silence the gate removed.
