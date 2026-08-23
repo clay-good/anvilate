@@ -101,6 +101,12 @@ def aluminum_buckling_stress(
     b = intercept.to("MPa").magnitude
     d = slope.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
+    # A NaN intersection makes `slenderness <= intersection_slenderness` False, so the
+    # function silently takes the *elastic* Euler branch instead of the inelastic line and
+    # returned 2.13x the correct stress — above any aluminum yield strength. The branch is
+    # the answer here, so a non-finite comparand is not a detail.
+    require_finite(slenderness, name="slenderness")
+    require_finite(intersection_slenderness, name="intersection_slenderness")
     if slenderness <= 0:
         raise ValueError(f"slenderness must be positive; got {slenderness}")
     if intersection_slenderness <= 0:
@@ -144,6 +150,10 @@ def aluminum_tension_stress(
     ftu = ultimate_strength.to("MPa").magnitude
     if fty <= 0 or ftu <= 0:
         raise ValueError("yield_strength and ultimate_strength must be positive")
+    # NaN passes `< 1.0` and `min(fty, ftu/k_t)` then drops net-section rupture entirely:
+    # 240 MPa returned where the answer is 208, a 15.4% overstatement. k_t = 0.5 was already
+    # refused, which is the tell — the guard caught the wrong kind of bad value.
+    require_finite(tension_coefficient, name="tension_coefficient")
     if tension_coefficient < 1.0:
         raise ValueError(f"tension_coefficient must be at least 1.0; got {tension_coefficient}")
     return Quantity(magnitude=min(fty, ftu / tension_coefficient), unit="MPa")

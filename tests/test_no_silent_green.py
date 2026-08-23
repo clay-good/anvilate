@@ -2097,3 +2097,222 @@ def test_the_fiber_mode_count_refuses_below_its_own_cutoff():
     for v in (2.405, 0.5):
         with pytest.raises(ValueError, match="cutoff"):
             fiber_mode_count(v_number=v)
+
+
+# --- the NaN class, second wave: plain-float parameters -----------------------------------
+#
+# The first wave wired `units.require_finite` into the Quantity-validating helpers. A deep
+# audit replayed 21,901 recorded calls with one argument poisoned and found the class alive
+# in every parameter that is a *plain float* — resistance factors, m, X/Y, k_t, S_DS, spec
+# limits — where the guard is a bare `if x <= 0: raise` that NaN walks straight past. A
+# `min()`/`max()` then deletes the poisoned candidate instead of propagating it, so the
+# answer comes back complete-looking, smaller, and green.
+#
+# Every case below was demonstrated returning a *finite, wrong, unconservative* number.
+
+
+def test_a_non_finite_resistance_factor_cannot_delete_a_limit_state():
+    """`min(yielding, rupture)` dropped the rupture check when its factor was NaN, and the
+    capacity came back 53% higher — from a function that already refused 0.0."""
+    from anvilate.analysis.fastener import aisc_tension_member_design_strength
+
+    good = {
+        "gross_area": Quantity.parse("2000 mm**2"),
+        "effective_net_area": Quantity.parse("1200 mm**2"),
+        "yield_strength": Quantity.parse("345 MPa"),
+        "ultimate_strength": Quantity.parse("450 MPa"),
+    }
+    baseline = aisc_tension_member_design_strength(**good).to("kN").magnitude
+    for factor in ("yield_resistance_factor", "rupture_resistance_factor"):
+        with pytest.raises(ValueError, match="finite"):
+            aisc_tension_member_design_strength(**good, **{factor: math.nan})
+    # The rupture state is the one that governs here, so the guard is not cosmetic.
+    assert baseline == pytest.approx(405.0, rel=1e-3)
+
+
+def test_a_non_finite_aspect_ratio_cannot_delete_a_punching_shear_term():
+    """The three-way `min()` lost the 0.17(1+2/beta) term and the capacity rose 45.6% — on a
+    brittle failure mode."""
+    from anvilate.analysis.reinforced_concrete import rc_two_way_shear_strength
+
+    good = {
+        "concrete_strength": Quantity.parse("30 MPa"),
+        "critical_perimeter": Quantity.parse("1600 mm"),
+        "effective_depth": Quantity.parse("200 mm"),
+    }
+    with pytest.raises(ValueError, match="finite"):
+        rc_two_way_shear_strength(**good, column_aspect_ratio=math.nan)
+    # A legitimate ratio still selects the governing term.
+    assert (
+        rc_two_way_shear_strength(**good, column_aspect_ratio=6.0).to("kN").magnitude
+        < rc_two_way_shear_strength(**good, column_aspect_ratio=1.0).to("kN").magnitude
+    )
+
+
+def test_a_non_finite_intersection_slenderness_cannot_switch_the_buckling_branch():
+    """`slenderness <= intersection` is False against NaN, so the function silently took the
+    elastic branch and returned 2.13x the correct stress — above any aluminum yield."""
+    from anvilate.analysis.aluminum import aluminum_buckling_stress
+
+    good = {
+        "intercept": Quantity.parse("200 MPa"),
+        "slope": Quantity.parse("1 MPa"),
+        "elastic_modulus": Quantity.parse("70000 MPa"),
+        "slenderness": 60.0,
+    }
+    with pytest.raises(ValueError, match="finite"):
+        aluminum_buckling_stress(**good, intersection_slenderness=math.nan)
+    inelastic = aluminum_buckling_stress(**good, intersection_slenderness=80.0)
+    assert inelastic.to("MPa").magnitude == pytest.approx(140.0)
+
+
+def test_a_non_finite_bearing_factor_cannot_reduce_the_equivalent_load_to_the_radial_one():
+    """`max(fr, X*fr + Y*fa)` dropped the combined term: 1000 N where the answer is 3100 N,
+    a 3.1x understated demand."""
+    from anvilate.analysis.bearing import bearing_equivalent_static_load
+
+    good = {"radial_load": Quantity.parse("1000 N"), "axial_load": Quantity.parse("5000 N")}
+    for factor in ("radial_factor", "axial_factor"):
+        other = "axial_factor" if factor == "radial_factor" else "radial_factor"
+        with pytest.raises(ValueError, match="finite"):
+            bearing_equivalent_static_load(**good, **{factor: math.nan, other: 0.6})
+    assert bearing_equivalent_static_load(**good, radial_factor=0.6, axial_factor=0.5).to(
+        "N"
+    ).magnitude == pytest.approx(3100.0)
+
+
+def test_a_non_finite_gasket_factor_cannot_delete_the_operating_load():
+    """The operating load honestly returns NaN when m is NaN, and `max` deleted it: 138 kN
+    where the answer is 352 kN, on the joint the calculation exists to size."""
+    from anvilate.analysis.gasket import governing_gasket_bolt_load
+
+    good = {
+        "gasket_mean_diameter": Quantity.parse("300 mm"),
+        "effective_seating_width": Quantity.parse("10 mm"),
+        "seating_stress": Quantity.parse("11 MPa"),
+        "pressure": Quantity.parse("2 MPa"),
+    }
+    with pytest.raises(ValueError, match="finite"):
+        governing_gasket_bolt_load(**good, gasket_factor=math.nan)
+    assert governing_gasket_bolt_load(**good, gasket_factor=3.0).to("N").magnitude > 0
+
+
+def test_a_non_finite_seismic_input_cannot_delete_both_diaphragm_bounds():
+    """`min(max(proportional, lower), upper)` collapses to the middle term when a bound is
+    NaN, so the §12.10.1.1 floor *and* the cap vanished together and the force came back
+    37.5% light."""
+    from anvilate.analysis.building_loads import seismic_diaphragm_force
+
+    good = {
+        "story_forces_above": Quantity.parse("500 kN"),
+        "story_weights_above": Quantity.parse("5000 kN"),
+        "diaphragm_weight": Quantity.parse("2500 kN"),
+    }
+    with pytest.raises(ValueError, match="finite"):
+        seismic_diaphragm_force(**good, design_spectral_acceleration=math.nan)
+    with pytest.raises(ValueError, match="finite"):
+        seismic_diaphragm_force(
+            **good, design_spectral_acceleration=0.5, importance_factor=math.nan
+        )
+
+
+def test_a_non_finite_tension_coefficient_cannot_delete_net_section_rupture():
+    """`min(fty, ftu/k_t)` dropped rupture and returned 240 MPa where the answer is 208 — a
+    15.4% overstatement. k_t = 0.5 was already refused; the guard caught the wrong kind of
+    bad value."""
+    from anvilate.analysis.aluminum import aluminum_tension_stress
+
+    good = {
+        "yield_strength": Quantity.parse("240 MPa"),
+        "ultimate_strength": Quantity.parse("260 MPa"),
+    }
+    with pytest.raises(ValueError, match="finite"):
+        aluminum_tension_stress(**good, tension_coefficient=math.nan)
+    assert aluminum_tension_stress(**good, tension_coefficient=1.25).to(
+        "MPa"
+    ).magnitude == pytest.approx(208.0)
+
+
+def test_a_non_finite_specification_limit_cannot_produce_a_capable_process():
+    """`min(upper, lower)` deleted the missing arm and returned 1.3333 — the industry
+    "capable process" number — computed from a limit nobody supplied."""
+    from anvilate.analysis.process_capability import (
+        process_capability_index,
+        process_capability_ratio,
+    )
+
+    with pytest.raises(ValueError, match="finite"):
+        process_capability_ratio(
+            upper_spec_limit=10.0, lower_spec_limit=math.nan, process_mean=5.0, process_std_dev=1.0
+        )
+    with pytest.raises(ValueError, match="finite"):
+        process_capability_index(
+            upper_spec_limit=10.0, lower_spec_limit=math.nan, process_std_dev=1.0
+        )
+    assert process_capability_ratio(
+        upper_spec_limit=10.0, lower_spec_limit=0.0, process_mean=5.0, process_std_dev=1.0
+    ) == pytest.approx(5.0 / 3.0)
+
+
+def test_a_non_finite_involute_value_cannot_return_the_brackets_own_bound():
+    """The residual check that exists to stop the solver returning garbage was itself
+    NaN-blind — `max(1.0, nan)` is 1.0 and `nan > 1e-9` is False — so it returned 89.99999
+    degrees, literally the bracket's upper bound, as a pressure angle."""
+    from anvilate.analysis.gear import involute_angle
+
+    with pytest.raises(ValueError, match="finite"):
+        involute_angle(involute_value=math.nan)
+    assert involute_angle(involute_value=0.014904) == pytest.approx(20.0, rel=1e-3)
+
+
+@pytest.mark.parametrize(
+    "function_name",
+    [
+        "aisc_minor_axis_flexural_strength",
+        "aisc_rectangular_hss_flexural_strength",
+        "aisc_round_hss_flexural_strength",
+    ],
+)
+def test_a_non_finite_elastic_modulus_cannot_delete_the_flexural_cap(function_name):
+    """These three checked `elastic_section_modulus` with a raw `has_dimension` instead of
+    the module's own finite-checking `_require`, so `min(fy*Z, 1.6*fy*S)` deleted the §F6.1
+    cap and all three returned the *exact same number* as the all-valid call. S = 0 was
+    refused and S = NaN was not — and a NaN plastic modulus propagated correctly, which is
+    the asymmetry that gives it away."""
+    import anvilate.analysis.beam as beam
+
+    function = getattr(beam, function_name)
+    shared = {
+        "yield_strength": Quantity.parse("345 MPa"),
+        "elastic_modulus": Quantity.parse("200 GPa"),
+        "plastic_section_modulus": Quantity.parse("900000 mm**3"),
+    }
+    geometry = {
+        "aisc_minor_axis_flexural_strength": {
+            "flange_width": Quantity.parse("200 mm"),
+            "flange_thickness": Quantity.parse("12 mm"),
+        },
+        "aisc_rectangular_hss_flexural_strength": {
+            "flange_flat_width": Quantity.parse("180 mm"),
+            "web_flat_height": Quantity.parse("280 mm"),
+            "wall_thickness": Quantity.parse("10 mm"),
+        },
+        "aisc_round_hss_flexural_strength": {
+            "diameter": Quantity.parse("250 mm"),
+            "thickness": Quantity.parse("10 mm"),
+        },
+    }[function_name]
+
+    with pytest.raises(ValueError, match="finite"):
+        function(
+            **shared,
+            **geometry,
+            elastic_section_modulus=Quantity(magnitude=math.nan, unit="mm**3"),
+        )
+    # And the valid call still works, so the guard is a guard and not a wall.
+    assert (
+        function(**shared, **geometry, elastic_section_modulus=Quantity.parse("750000 mm**3"))
+        .to("kN*m")
+        .magnitude
+        > 0
+    )

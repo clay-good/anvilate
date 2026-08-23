@@ -810,8 +810,13 @@ def aisc_round_hss_flexural_strength(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not plastic_section_modulus.has_dimension("[length]**3"):
         raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
-    if not elastic_section_modulus.has_dimension("[length]**3"):
-        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+    # Through the module's own `_require`, which checks finiteness. Written as a raw
+    # `has_dimension` these three functions let a NaN elastic modulus past, and
+    # `min(fy*Z, 1.6*fy*S)` then deleted the §F6.1 (and local-buckling) cap: all three
+    # returned the *exact same number* as the all-valid call, with a limit state silently
+    # removed. S = 0 was refused and S = NaN was not, and a NaN plastic modulus propagated
+    # correctly — that asymmetry is the tell.
+    _require(elastic_section_modulus, "[length]**3", "elastic_section_modulus")
     d = diameter.to("mm").magnitude
     t = thickness.to("mm").magnitude
     fy = yield_strength.to("MPa").magnitude
@@ -875,8 +880,13 @@ def aisc_rectangular_hss_flexural_strength(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not plastic_section_modulus.has_dimension("[length]**3"):
         raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
-    if not elastic_section_modulus.has_dimension("[length]**3"):
-        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+    # Through the module's own `_require`, which checks finiteness. Written as a raw
+    # `has_dimension` these three functions let a NaN elastic modulus past, and
+    # `min(fy*Z, 1.6*fy*S)` then deleted the §F6.1 (and local-buckling) cap: all three
+    # returned the *exact same number* as the all-valid call, with a limit state silently
+    # removed. S = 0 was refused and S = NaN was not, and a NaN plastic modulus propagated
+    # correctly — that asymmetry is the tell.
+    _require(elastic_section_modulus, "[length]**3", "elastic_section_modulus")
     b = flange_flat_width.to("mm").magnitude
     h = web_flat_height.to("mm").magnitude
     t = wall_thickness.to("mm").magnitude
@@ -1115,8 +1125,13 @@ def aisc_minor_axis_flexural_strength(
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not plastic_section_modulus.has_dimension("[length]**3"):
         raise ValueError("plastic_section_modulus must be a [length]**3 quantity")
-    if not elastic_section_modulus.has_dimension("[length]**3"):
-        raise ValueError("elastic_section_modulus must be a [length]**3 quantity")
+    # Through the module's own `_require`, which checks finiteness. Written as a raw
+    # `has_dimension` these three functions let a NaN elastic modulus past, and
+    # `min(fy*Z, 1.6*fy*S)` then deleted the §F6.1 (and local-buckling) cap: all three
+    # returned the *exact same number* as the all-valid call, with a limit state silently
+    # removed. S = 0 was refused and S = NaN was not, and a NaN plastic modulus propagated
+    # correctly — that asymmetry is the tell.
+    _require(elastic_section_modulus, "[length]**3", "elastic_section_modulus")
     bf = flange_width.to("mm").magnitude
     tf = flange_thickness.to("mm").magnitude
     fy = yield_strength.to("MPa").magnitude

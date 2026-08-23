@@ -308,6 +308,11 @@ def bearing_equivalent_static_load(
     fa = axial_load.to("N").magnitude
     if fr < 0 or fa < 0:
         raise ValueError("radial_load and axial_load must be non-negative")
+    # `max(fr, X*fr + Y*fa)` drops the combined term when either factor is NaN, so the
+    # equivalent load came back as the bare radial load: 1000 N where the answer is 3100 N,
+    # a 3.1x understated demand and therefore a 3.1x overstated static capacity ratio.
+    require_finite(radial_factor, name="radial_factor")
+    require_finite(axial_factor, name="axial_factor")
     if radial_factor <= 0 or axial_factor <= 0:
         raise ValueError("radial_factor and axial_factor must be positive")
     return Quantity(magnitude=max(fr, radial_factor * fr + axial_factor * fa), unit="N")

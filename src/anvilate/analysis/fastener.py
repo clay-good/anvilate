@@ -347,6 +347,12 @@ def aisc_tension_member_design_strength(
         raise ValueError("the areas and strengths must be positive")
     if ae > ag:
         raise ValueError("effective_net_area cannot exceed gross_area")
+    # Through `require_finite` rather than a bare comparison: a NaN resistance factor walks
+    # past `<= 0` and then `min(yielding, rupture)` *deletes* the poisoned limit state
+    # instead of propagating it. With a NaN rupture factor the rupture check vanished and
+    # the capacity came back 53% higher, from a function that had raised on 0.0.
+    require_finite(yield_resistance_factor, name="yield_resistance_factor")
+    require_finite(rupture_resistance_factor, name="rupture_resistance_factor")
     if yield_resistance_factor <= 0 or rupture_resistance_factor <= 0:
         raise ValueError("the resistance factors must be positive")
     yielding = yield_resistance_factor * fy * ag

@@ -733,6 +733,11 @@ def involute_angle(*, involute_value: float) -> float:
     angle at which the flank sits. ``involute_value`` is inv(φ) and must be
     non-negative (0 gives φ = 0). Returns φ in degrees.
     """
+    # The residual check at the end exists to stop the solver returning garbage, and it was
+    # itself NaN-blind: `abs(residual) > 1e-9 * max(1.0, involute_value)` is False when the
+    # residual is NaN, and `max(1.0, nan)` is 1.0. A NaN input returned 89.99999 degrees —
+    # literally the bracket's upper bound — as a pressure angle.
+    require_finite(involute_value, name="involute_value")
     if involute_value < 0:
         raise ValueError(f"involute_value must be non-negative; got {involute_value}")
     if involute_value == 0:

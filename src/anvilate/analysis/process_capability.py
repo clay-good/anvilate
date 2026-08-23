@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from math import erf, sqrt
 
+from ..units import require_finite
+
 __all__ = [
     "expected_defect_rate_ppm",
     "process_capability_index",
@@ -36,6 +38,11 @@ def process_capability_index(
     Cp = (USL − LSL)/(6σ). Cp = 1 exactly fills the tolerance; 1.33 leaves a comfortable margin. It
     assumes the process is perfectly centered. Returns the index as a plain float.
     """
+    # A NaN limit passes `upper <= lower` — every comparison with NaN is False — and the
+    # subtraction below then carries it into a result nobody can tell from a real index.
+    require_finite(upper_spec_limit, name="upper_spec_limit")
+    require_finite(lower_spec_limit, name="lower_spec_limit")
+    require_finite(process_std_dev, name="process_std_dev")
     if upper_spec_limit <= lower_spec_limit:
         raise ValueError("upper_spec_limit must exceed lower_spec_limit")
     if process_std_dev <= 0:
@@ -57,6 +64,14 @@ def process_capability_ratio(
     σ: Cpk = min(USL − µ, µ − LSL)/(3σ). It equals Cp only when the process is centered and falls as
     the mean drifts toward a limit. Returns the index as a plain float.
     """
+    # A NaN limit passes the ordering check and `min(upper, lower)` then *deletes* it, so a
+    # missing lower specification returned 1.3333 — the industry "capable process" number —
+    # computed from a limit nobody supplied. A NaN mean or upper limit propagates correctly;
+    # only the arm the `min` can drop was silent, which is the tell.
+    require_finite(upper_spec_limit, name="upper_spec_limit")
+    require_finite(lower_spec_limit, name="lower_spec_limit")
+    require_finite(process_mean, name="process_mean")
+    require_finite(process_std_dev, name="process_std_dev")
     if upper_spec_limit <= lower_spec_limit:
         raise ValueError("upper_spec_limit must exceed lower_spec_limit")
     if process_std_dev <= 0:

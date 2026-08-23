@@ -48,7 +48,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
-from .units import Quantity
+from .units import Quantity, require_finite
 
 __all__ = [
     "MARIN_SURFACE_CITATION",
@@ -548,9 +548,14 @@ def marin_surface_factor(finish: SurfaceFinish, *, ultimate_strength: Quantity) 
             f"ultimate_strength must be a [pressure] quantity; got "
             f"{ultimate_strength.dimensionality} ({ultimate_strength})"
         )
-    su = ultimate_strength.to("MPa").magnitude
+    # `min(1.0, a*Su**b)` with a NaN strength returns 1.0 — the value reserved for a
+    # mirror-polished specimen — so a missing ultimate strength read as the *best possible*
+    # surface. For 1200 MPa machined steel the true k_a is 0.689, a 45% overstated endurance
+    # limit.
+    su = require_finite(ultimate_strength, name="ultimate_strength")
     if su <= 0:
         raise ValueError(f"ultimate_strength must be positive; got {ultimate_strength}")
+    su = ultimate_strength.to("MPa").magnitude
     if finish.method is ProductionMethod.POLISHED:
         return 1.0
     a, b = MARIN_SURFACE_CONSTANTS_MPA[finish.method.value]

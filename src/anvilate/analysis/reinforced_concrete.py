@@ -862,6 +862,12 @@ def rc_two_way_shear_strength(
         raise ValueError(
             "concrete_strength, critical_perimeter, and effective_depth must be positive"
         )
+    # A NaN aspect ratio passes `< 1.0` and then the three-way `min()` below drops the
+    # 0.17(1+2/beta) term entirely — the punching-shear capacity came back 45.6% higher on a
+    # brittle failure mode, with every guard satisfied.
+    require_finite(column_aspect_ratio, name="column_aspect_ratio")
+    require_finite(column_position_factor, name="column_position_factor")
+    require_finite(lightweight_factor, name="lightweight_factor")
     if column_aspect_ratio < 1.0:
         raise ValueError(f"column_aspect_ratio must be at least 1; got {column_aspect_ratio}")
     if column_position_factor <= 0 or lightweight_factor <= 0:

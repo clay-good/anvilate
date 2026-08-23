@@ -130,5 +130,11 @@ def governing_gasket_bolt_load(
         gasket_factor=gasket_factor,
         pressure=pressure,
     )
+    # Both candidates have to be numbers before `max` picks between them. The operating load
+    # honestly returns NaN when the gasket factor m is NaN — and `max` then deleted it,
+    # returning the seating load alone: 138 kN where the answer is 352 kN, a 2.55x
+    # understated bolt load on the joint the whole calculation exists to size.
+    require_finite(seating, name="the gasket seating load")
+    require_finite(operating, name="the gasket operating load")
     governing = max(seating.to("N").magnitude, operating.to("N").magnitude)
     return Quantity(magnitude=governing, unit="N")

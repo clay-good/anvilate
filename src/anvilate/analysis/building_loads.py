@@ -27,7 +27,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import sqrt
 
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "wind_velocity_pressure",
@@ -354,6 +354,11 @@ def seismic_diaphragm_force(
         raise ValueError(
             "story_weights_above and diaphragm_weight must be positive, story_forces_above ≥ 0"
         )
+    # `min(max(proportional, lower), upper)` collapses to the proportional value when either
+    # bound is NaN, so a non-finite SDS or Ie deleted BOTH the §12.10.1.1 floor and the cap
+    # and the force came back 37.5% light with every guard satisfied.
+    require_finite(design_spectral_acceleration, name="design_spectral_acceleration")
+    require_finite(importance_factor, name="importance_factor")
     if design_spectral_acceleration <= 0:
         raise ValueError("design_spectral_acceleration must be positive")
     if importance_factor <= 0:
