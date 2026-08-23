@@ -153,6 +153,12 @@ def components_cladding_net_pressure(
     return Quantity(magnitude=net, unit="Pa")
 
 
+# ASCE 7-16 Eq. 12.8-5: Cs >= max(0.044*SDS*Ie, 0.01). The 0.01 term is the one that binds
+# in practice — 0.044*SDS*Ie can only beat SDS*Ie/R when R > 22.7, and no system has that.
+_SEISMIC_CS_FLOOR_COEFFICIENT = 0.044
+_SEISMIC_CS_ABSOLUTE_FLOOR = 0.01
+
+
 def seismic_response_coefficient(
     *,
     design_spectral_acceleration: float,
@@ -165,9 +171,23 @@ def seismic_response_coefficient(
     ``design_spectral_acceleration`` SDS is the short-period design spectral acceleration (in g),
     ``response_modification_factor`` R the seismic system's ductility/overstrength factor (larger
     for a more ductile system, which is allowed to yield and so is designed for less force), and
-    ``importance_factor`` Ie the occupancy importance factor. This is the base value; ASCE 7 caps it
-    above (by SD1/(T·R/Ie)) and below (the 0.044·SDS·Ie floor), which need the building period and
-    are the caller's to apply. Returns the dimensionless Cs.
+    ``importance_factor`` Ie the occupancy importance factor.
+
+    **The §12.8.1.1 floor is applied here**, because it needs nothing this function does not
+    already have: Cs shall not be taken less than ``max(0.044·SDS·Ie, 0.01)``. The docstring
+    used to delegate it to "the caller" alongside the upper limit on the grounds that both
+    need the building period. That is true of the cap (Eq. 12.8-3, which needs T) and false
+    of the floor, and the delegation was to a caller that does not exist — no code in this
+    library applied it, and `0.044` appeared nowhere outside that sentence. Low-seismicity
+    sites are where it bites: at SDS = 0.05 g with R = 8 the unfloored value is 0.00625
+    against the 0.01 the code requires, so the base shear came out 1.6x light, and at
+    SDS = 0.02 g it came out 4x light.
+
+    The *upper* limit genuinely needs the period and stays with the caller — see
+    :func:`seismic_response_coefficient_upper_limit`. So does the additional floor for
+    S1 >= 0.6g (Eq. 12.8-6), which needs S1 and is not derivable from SDS.
+
+    Returns the dimensionless Cs.
     """
     if design_spectral_acceleration <= 0:
         raise ValueError("design_spectral_acceleration must be positive")
@@ -175,7 +195,12 @@ def seismic_response_coefficient(
         raise ValueError("response_modification_factor must be positive")
     if importance_factor <= 0:
         raise ValueError("importance_factor must be positive")
-    return design_spectral_acceleration * importance_factor / response_modification_factor
+    base = design_spectral_acceleration * importance_factor / response_modification_factor
+    floor = max(
+        _SEISMIC_CS_FLOOR_COEFFICIENT * design_spectral_acceleration * importance_factor,
+        _SEISMIC_CS_ABSOLUTE_FLOOR,
+    )
+    return max(base, floor)
 
 
 def approximate_fundamental_period(

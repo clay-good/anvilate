@@ -75,6 +75,17 @@ def diesel_cycle_efficiency(
         raise ValueError("cutoff_ratio must be greater than 1")
     if specific_heat_ratio <= 1:
         raise ValueError("specific_heat_ratio must be greater than 1")
+    # The geometry the cycle is drawn on: V3 = r_c*V2 is where combustion ends, and it
+    # cannot be past V1 = r*V2, which is bottom dead centre. Nothing enforced it, so a
+    # cutoff ratio above the compression ratio returned a plausible-looking 0.161 at
+    # (18, 25) and a *negative* efficiency at (18, 40) — a heat engine consuming work,
+    # from a formula whose every individual guard had passed.
+    if cutoff_ratio > compression_ratio:
+        raise ValueError(
+            f"cutoff_ratio ({cutoff_ratio}) cannot exceed compression_ratio "
+            f"({compression_ratio}): combustion would end past bottom dead centre, which "
+            "is not a cycle the air-standard analysis describes"
+        )
     g = specific_heat_ratio
     cutoff_term = (cutoff_ratio**g - 1.0) / (g * (cutoff_ratio - 1.0))
     return 1.0 - cutoff_term / compression_ratio ** (g - 1.0)

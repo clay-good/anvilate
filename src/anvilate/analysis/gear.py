@@ -842,6 +842,19 @@ def gear_tooth_thickness_at_radius(
         )
     phi_r = acos(r_b / r)
     thickness = 2.0 * r * (pi / (2.0 * z) + (tan(phi) - phi) - (tan(phi_r) - phi_r))
+    # Past the pointed radius the involutes have crossed and the formula returns a negative
+    # arc length — which is not a thin tooth, it is no tooth. The docstring delegated the
+    # "keep it above about 0.3*m" check to the caller, and a long addendum on a small pinion
+    # (the standard anti-undercut measure) reaches it from this module's own
+    # `gear_outside_diameter`: z=9 with h_a* = 1.4 gave -0.28 mm. Refusing here means the
+    # caller's own `> 0.3*m` comparison is never handed a number that would pass it by
+    # being nonsense.
+    if thickness <= 0:
+        raise ValueError(
+            f"radius ({radius}) is at or past the pointed radius of this tooth: the "
+            f"involutes meet before it and the arc thickness comes out {thickness:.4f} mm. "
+            "Reduce the addendum or use more teeth"
+        )
     return Quantity(magnitude=thickness, unit="mm")
 
 

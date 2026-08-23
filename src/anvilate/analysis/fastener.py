@@ -473,7 +473,14 @@ def net_width_staggered_holes(
             f"the holes remove the whole section (net width {net:.1f} mm <= 0); "
             "check hole_count and gross_width"
         )
-    return Quantity(magnitude=net, unit="mm")
+    # A net section cannot exceed the gross section. The s²/4g credit outruns the hole
+    # deduction as soon as s > 2*sqrt(g*d) — for a 22 mm hole on a 50 mm gauge that is a
+    # 66 mm pitch, which is AISC's ordinary 3d spacing — and the unclamped formula then
+    # returned 234 mm of net width on a 200 mm plate: 17% more steel than the plate has,
+    # straight into A_e = U*A_n and the tensile rupture capacity built on it. §B4.3b
+    # computes a path through the holes; the straight path across the gross width is always
+    # available, so the governing net width is the lesser of the two.
+    return Quantity(magnitude=min(net, w), unit="mm")
 
 
 def bolt_diameter_for_shear(

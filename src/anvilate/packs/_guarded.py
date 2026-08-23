@@ -29,11 +29,12 @@ from __future__ import annotations
 
 from math import isfinite
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
+from ..standards import AllowableBasis, InsufficientBasis, require_basis
 from ..units import Quantity
 
-__all__ = ["GuardedInputs"]
+__all__ = ["DESIGN_BASIS", "DesignAllowable", "GuardedInputs", "design_allowable"]
 
 
 def _check_nested(model: BaseModel, prefix: str, _depth: int = 0) -> None:
@@ -106,3 +107,69 @@ class GuardedInputs(BaseModel):
                     f"carry information, declare the field in this model's signed_fields."
                 )
         return self
+
+# --- the design-allowable gate ------------------------------------------------------------
+#
+# A strength value carries a *basis*: a typical value sits in the middle of the scatter, a
+# specification minimum is the floor the producer guarantees. `standards.require_basis` was
+# built to stop a code-cited check consuming the former where the latter is demanded — and
+# it shipped with **no consumers at all**. Every pack read `record.yield_strength.quantity`
+# directly, so a screen on a typical-basis material overstated the capacity silently, with a
+# valid dimension and a clean PASS. For 6061-T6 the ASM typical yield is 276 MPa against the
+# 240 MPa the specification guarantees: a 15% overstatement that nothing downstream can see.
+#
+# This is the gate, at the one place a pack turns a record into an allowable.
+
+DESIGN_BASIS = AllowableBasis.SPECIFICATION_MINIMUM
+"""The basis a code-cited check demands by default.
+
+A published clause is written on the strength the material is *sold with*, not on the middle
+of its scatter. A caller who deliberately wants to screen against typical values passes
+``AllowableBasis.TYPICAL`` and the decision is recorded in the entry that results.
+"""
+
+
+class DesignAllowable(GuardedInputs):
+    """A material strength offered to a code-cited check, or the reason it was refused.
+
+    Exactly one of the two is set. ``quantity`` ``None`` is what makes the check
+    ``NOT_EVALUATED`` rather than a quiet pass on a mean value, and ``note`` is what stops
+    "not evaluated" from being as opaque as the pass it replaced.
+
+    It inherits the magnitude guard rather than sidestepping it: a strength arriving here is
+    on its way to being divided into a stress, so a database record carrying a negative or
+    non-finite one should die at this door and not three functions downstream.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    quantity: Quantity | None = None
+    note: str | None = None
+
+
+def design_allowable(
+    record: object,
+    property_name: str,
+    *,
+    material_id: str,
+    basis: AllowableBasis = DESIGN_BASIS,
+) -> DesignAllowable:
+    """A material strength for a code-cited check, gated on its basis.
+
+    Returns the quantity when its basis is at least ``basis``, and otherwise no quantity
+    plus the sentence a reader needs: which material, which property, what basis it carries,
+    and what was asked for. The fix is a data decision — find a value on the right basis, or
+    declare that this screen accepts a typical one — and neither can be made from "safety
+    factor unavailable".
+    """
+    prop = getattr(record, property_name, None)
+    if prop is None:
+        return DesignAllowable(
+            note=f"not evaluated — {material_id} carries no {property_name.replace('_', ' ')}"
+        )
+    try:
+        return DesignAllowable(
+            quantity=require_basis(prop, basis, material_id=material_id, name=property_name)
+        )
+    except InsufficientBasis as refusal:
+        return DesignAllowable(note=f"not evaluated — {refusal}")

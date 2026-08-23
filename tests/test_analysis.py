@@ -41768,3 +41768,130 @@ def test_a_non_finite_factor_or_mass_is_refused_rather_than_estimated():
             material_loss_mass(
                 finished_mass=Quantity(magnitude=magnitude, unit="kg"), yield_fraction=0.5
             )
+
+
+# --- domain limits a five-agent deep audit found unenforced -------------------------------
+#
+# Every test below is a documented or code-imposed limit that nothing checked. The formula
+# was right in each case; the range it is valid over was not enforced, so a caller outside it
+# got a confident wrong number with a valid dimension — which no unit check and no scorecard
+# can catch. Three of the five were unconservative.
+
+
+def test_a_staggered_net_width_cannot_exceed_the_gross_width():
+    """AISC 360 §B4.3b adds s^2/4g back for each stagger leg, and the credit outruns the hole
+    deduction as soon as s > 2*sqrt(g*d) — for a 22 mm hole on a 50 mm gauge that is a 66 mm
+    pitch, the ordinary 3d spacing. Unclamped it returned 234 mm of net width on a 200 mm
+    plate: 17% more steel than the plate has, straight into A_e = U*A_n and the tensile
+    rupture capacity built on it."""
+    from anvilate.analysis.fastener import net_width_staggered_holes
+
+    gross = Quantity.parse("200 mm")
+    wide = net_width_staggered_holes(
+        gross_width=gross,
+        hole_diameter=Quantity.parse("22 mm"),
+        hole_count=3,
+        stagger_pitch_gauge=[
+            (Quantity.parse("100 mm"), Quantity.parse("50 mm")),
+            (Quantity.parse("100 mm"), Quantity.parse("50 mm")),
+        ],
+    )
+    assert wide.to("mm").magnitude <= gross.to("mm").magnitude
+    # A pitch inside the crossover still gets its credit — the cap is a ceiling, not a
+    # replacement for the clause.
+    tight = net_width_staggered_holes(
+        gross_width=gross,
+        hole_diameter=Quantity.parse("22 mm"),
+        hole_count=2,
+        stagger_pitch_gauge=[(Quantity.parse("66 mm"), Quantity.parse("50 mm"))],
+    )
+    straight = net_width_staggered_holes(
+        gross_width=gross, hole_diameter=Quantity.parse("22 mm"), hole_count=2
+    )
+    assert straight.to("mm").magnitude < tight.to("mm").magnitude < gross.to("mm").magnitude
+
+
+def test_development_length_caps_the_root_of_f_c_at_the_aci_limit():
+    """ACI 318 §25.4.1.4 caps sqrt(f'c) at 8.3 MPa (100 psi) for every development length,
+    with no exception. l_d goes as 1/sqrt(f'c), so without it high-strength concrete detailed
+    the bar short: 7% at 80 MPa, 17% at 100, 30% at 140 — all ordinary column concrete."""
+    from anvilate.analysis.reinforced_concrete import rc_development_length
+
+    def length(strength_mpa: float) -> float:
+        return (
+            rc_development_length(
+                bar_diameter=Quantity.parse("25 mm"),
+                steel_yield=Quantity.parse("420 MPa"),
+                concrete_strength=Quantity.parse(f"{strength_mpa} MPa"),
+                size_spacing_constant=1.7,
+            )
+            .to("mm")
+            .magnitude
+        )
+
+    at_cap = length(68.89)
+    for beyond in (80.0, 100.0, 140.0):
+        assert length(beyond) == pytest.approx(at_cap, rel=1e-3), (
+            f"f'c = {beyond} MPa shortened the development length past the §25.4.1.4 cap"
+        )
+    # Below the cap the root still governs, so a stronger concrete still develops sooner.
+    assert length(30.0) > length(50.0) > at_cap
+
+
+def test_the_seismic_response_coefficient_applies_its_own_floor():
+    """ASCE 7-16 Eq. 12.8-5, Cs >= max(0.044*SDS*Ie, 0.01), needs no building period — the
+    docstring delegated it to "the caller" alongside the period-dependent cap, and no caller
+    applied it. At SDS = 0.05 g with R = 8 the base shear came out 1.6x light; at 0.02 g,
+    4x light."""
+    from anvilate.analysis.building_loads import seismic_response_coefficient
+
+    for acceleration, expected in ((0.05, 0.01), (0.02, 0.01), (0.08, 0.01)):
+        assert seismic_response_coefficient(
+            design_spectral_acceleration=acceleration, response_modification_factor=8.0
+        ) == pytest.approx(expected)
+    # Above the floor the base value governs unchanged.
+    assert seismic_response_coefficient(
+        design_spectral_acceleration=1.0, response_modification_factor=8.0
+    ) == pytest.approx(0.125)
+    # And the importance factor scales the floor's first term, which is what it is for.
+    assert seismic_response_coefficient(
+        design_spectral_acceleration=0.2, response_modification_factor=30.0, importance_factor=1.5
+    ) == pytest.approx(max(0.044 * 0.2 * 1.5, 0.01))
+
+
+@pytest.mark.parametrize("cutoff", [25.0, 40.0, 64.0])
+def test_a_diesel_cutoff_ratio_past_bottom_dead_centre_is_refused(cutoff):
+    """V3 = r_c*V2 is where combustion ends and it cannot be past V1 = r*V2. Every individual
+    guard passed, and (18, 40) returned a *negative* efficiency — a heat engine consuming
+    work."""
+    from anvilate.analysis.power_cycles import diesel_cycle_efficiency
+
+    with pytest.raises(ValueError, match="cannot exceed compression_ratio"):
+        diesel_cycle_efficiency(compression_ratio=18.0, cutoff_ratio=cutoff)
+    # The legitimate range is untouched.
+    assert 0.0 < diesel_cycle_efficiency(compression_ratio=18.0, cutoff_ratio=2.0) < 1.0
+    assert 0.0 < diesel_cycle_efficiency(compression_ratio=18.0, cutoff_ratio=18.0) < 1.0
+
+
+def test_a_tooth_thinner_than_nothing_is_refused_rather_than_returned():
+    """Past the pointed radius the involutes have crossed and the arc thickness comes out
+    negative — which is not a thin tooth, it is no tooth. A long addendum on a small pinion
+    is the standard anti-undercut measure and reaches it from this module's own
+    `gear_outside_diameter`."""
+    from anvilate.analysis.gear import gear_tooth_thickness_at_radius
+
+    module = Quantity.parse("2 mm")
+    # A 7-tooth pinion at a 1.5 addendum factor: outside radius = m*(z/2 + h_a*), which is
+    # past where the involutes meet.
+    pointed = Quantity(magnitude=2.0 * (7 / 2 + 1.5), unit="mm")
+    with pytest.raises(ValueError, match="pointed radius"):
+        gear_tooth_thickness_at_radius(
+            module=module, teeth=7, pressure_angle=math.radians(20.0), radius=pointed
+        )
+    # A standard addendum on the same pinion is fine, and positive — the guard is a floor,
+    # not a rejection of small pinions.
+    standard = Quantity(magnitude=2.0 * (7 / 2 + 1.0), unit="mm")
+    thickness = gear_tooth_thickness_at_radius(
+        module=module, teeth=7, pressure_angle=math.radians(20.0), radius=standard
+    )
+    assert thickness.to("mm").magnitude > 0.0

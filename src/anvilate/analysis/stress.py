@@ -442,6 +442,7 @@ def strength_scorecard(
     allowable: Quantity | None,
     required: float,
     upper: float | None = None,
+    unavailable_detail: str | None = None,
 ) -> ScorecardEntry:
     """Screen a computed ``stress`` against a material ``allowable`` strength.
 
@@ -458,6 +459,12 @@ def strength_scorecard(
     ``upper`` opts into a two-sided band: a safety factor above it is
     ``OVER_MARGIN`` — a pass flagged as over-engineered, never blocking. Omit it
     and high margins pass silently.
+
+    ``unavailable_detail`` replaces the generic "safety factor unavailable" line when the
+    caller knows *why* there is no allowable. "Not evaluated" is only better than a silent
+    pass if it says what is missing: a check refused because the material carries a typical
+    strength where its clause demands a specification minimum is a data decision somebody can
+    act on, and "safety factor unavailable" is not.
     """
     sigma = abs(_require_stress(stress, "stress"))
     if allowable is None:
@@ -469,6 +476,9 @@ def strength_scorecard(
         # possible PASS, and with an `upper` band it read 'exceeds target band by inf —
         # over-engineered'. `None` -> NOT_EVALUATED, matching loads.combination_scorecard.
         computed = None if sigma == 0 else strength / sigma
-    return ScorecardEntry.from_safety_factor(
+    entry = ScorecardEntry.from_safety_factor(
         name, computed=computed, required=required, upper=upper
     )
+    if computed is None and unavailable_detail is not None:
+        return entry.model_copy(update={"detail": unavailable_detail})
+    return entry

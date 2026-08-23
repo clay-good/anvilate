@@ -680,6 +680,11 @@ def rc_strength_reduction_factor(
     )
 
 
+# ACI 318 §25.4.1.4 caps sqrt(f'c) at 100 psi for every development and splice length.
+# 100 psi = 0.6895 MPa/psi -> 8.3 MPa to the two figures the code states it in.
+_SQRT_FC_CAP_MPA = 8.3
+
+
 def rc_development_length(
     *,
     bar_diameter: Quantity,
@@ -718,8 +723,16 @@ def rc_development_length(
     ):
         if factor <= 0:
             raise ValueError(f"{label} must be positive; got {factor}")
+    # ACI 318 §25.4.1.4: the value of sqrt(f'c) used in a development-length calculation
+    # shall not exceed 8.3 MPa (100 psi). The clause has no exception, and it binds on
+    # ordinary high-strength column concrete: without it, f'c = 100 MPa detailed the bar
+    # 17% shorter than the code requires and f'c = 140 MPa 30% shorter, because l_d goes
+    # as 1/sqrt(f'c) and nothing stopped the root running away. The sibling `rc_beta1`
+    # already enforces its own f'c-keyed limit; this one delegated nothing and checked
+    # nothing.
+    root_fc = min(sqrt(fc), _SQRT_FC_CAP_MPA)
     ld = (fy * location_factor * coating_factor * db) / (
-        size_spacing_constant * lightweight_factor * sqrt(fc)
+        size_spacing_constant * lightweight_factor * root_fc
     )
     return Quantity(magnitude=ld, unit="mm")
 
