@@ -16,6 +16,11 @@ casting as it shrinks on freezing, so it must still be liquid *after* the castin
 which means its modulus must exceed the casting's. The usual rule of thumb sizes the riser to a
 modulus about 1.2× the casting's, so it freezes last and the shrinkage porosity ends up in the
 riser, not the part. This module gives the modulus, the Chvorinov time, and the riser-modulus goal.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (metal-casting
+processes) — the casting modulus V/A, Chvorinov's rule t = C·(V/A)^n for solidification time,
+and the riser modulus that must exceed the casting's for the riser to feed rather than freeze
+first.
 """
 
 from __future__ import annotations

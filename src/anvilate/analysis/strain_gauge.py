@@ -15,6 +15,10 @@ active arms give a larger, cleaner signal for the same strain.
 
 All quantities here are dimensionless ratios (strain, resistance change, output volts per excitation
 volt, gauge factor), so they are taken and returned as plain floats.
+
+Sources: Dally & Riley, *Experimental Stress Analysis* — the gauge factor relating fractional
+resistance change to strain, the quarter-bridge Wheatstone output that measures it, and the
+strain a measured bridge voltage infers.
 """
 
 from __future__ import annotations

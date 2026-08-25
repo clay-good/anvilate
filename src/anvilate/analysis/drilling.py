@@ -14,6 +14,10 @@ torque M = u·f·d²/8 follows from the metal's specific cutting energy u and th
 diameter; the d² is why torque, not speed, governs large drills. Inverting it gives the design
 limit: the largest feed per revolution f_max = 8·M_limit/(u·d²) a spindle of a given torque rating
 can pull without stalling — the number that sets how hard a hole can be pushed.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (drilling and boring) —
+the material removal rate of a drill at a feed and speed, the torque the specific cutting energy
+demands, and the feed a machine's torque limit allows.
 """
 
 from __future__ import annotations

@@ -14,6 +14,10 @@ beam power P buys once coupled at an efficiency η: the melt front consumes ρ·
 unit length of the kerf (thickness t, width w), so the speed is power over that. Inverting it gives
 the design limit: the greatest thickness t_max = η·P/(ρ·v·w·e_m) a laser of a given power can sever
 at a chosen speed — the number that decides whether a job fits the machine.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (advanced machining,
+laser-beam machining) — the specific removal energy of a cut, the cutting speed a beam power
+supports at a thickness, and the thickness a power can cut at a minimum usable speed.
 """
 
 from __future__ import annotations

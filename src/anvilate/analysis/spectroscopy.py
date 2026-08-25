@@ -13,6 +13,10 @@ base-10 logarithmic measure, so the transmittance — the fraction of light that
 T = 10^(-A): an absorbance of 1 passes 10%, of 2 passes 1%. Inverting the law turns a measured
 absorbance back into the concentration that produced it, c = A / (epsilon * l) — the working
 relation of quantitative absorption spectroscopy, valid in the dilute (linear) regime.
+
+Sources: Skoog, West & Holler, *Principles of Instrumental Analysis* (molecular absorption
+spectrometry) — the Beer-Lambert law A = eps·b·c, the transmittance it converts to and from, and
+the concentration a measured absorbance infers at a known path length and molar absorptivity.
 """
 
 from __future__ import annotations

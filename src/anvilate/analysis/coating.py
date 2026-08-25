@@ -12,6 +12,10 @@ is the volume-solids over the dry film thickness, and it sets the paint quantity
 the practical loss factor for overspray, thinning, and surface roughness). These are the numbers a
 coating spec and a paint take-off are built from; the film thicknesses are dimension-checked
 :class:`~anvilate.units.Quantity` lengths and the volume solids a fraction in (0, 1].
+
+Sources: ASTM D4414 (wet-film thickness by notch gage) with the volume-solids relation it is
+read against — the dry film a wet film leaves at a stated solids content, the wet film a target
+dry film needs, and the theoretical coverage a volume of coating gives.
 """
 
 from __future__ import annotations

@@ -14,6 +14,10 @@ of G). Inverting it gives the practical setting: the angular speed ω = √(G·g
 to reach a chosen G at a given radius. The rotation also pressurizes the melt against the wall, a
 metallostatic wall pressure p = ½·ρ·ω²·(r_o² − r_i²) that drives feeding and suppresses porosity —
 the mechanism behind the sound outer skin.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (centrifugal casting) —
+the G factor a spinning mould develops at radius and speed, the speed a target G factor needs,
+and the pressure the rotating melt puts on the mould wall.
 """
 
 from __future__ import annotations

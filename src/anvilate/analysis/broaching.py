@@ -14,6 +14,10 @@ the cut width w times the rise per tooth t, scaled by the specific cutting force
 The pull capacity F_max = σ_allow·A_root is the tension the broach's minimum root section can carry
 before it yields: the self-limit that caps how many teeth may cut at once and how deep each may
 bite, and the reason a broach is designed with generous roots and modest rise per tooth.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (broaching) — the teeth
+simultaneously in cut over a length, the cutting force they develop together, and the pull the
+broach itself can carry before it yields.
 """
 
 from __future__ import annotations

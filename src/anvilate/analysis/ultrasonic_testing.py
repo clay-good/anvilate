@@ -15,6 +15,10 @@ spread as an optical aperture. And a defect or back wall at depth d returns an e
 round-trip time t, so the pulse-echo depth is d = c·t/2. Diameters, frequencies, speeds, and times
 are dimension-checked :class:`~anvilate.units.Quantity` values; the divergence angle is a plain
 float in degrees.
+
+Sources: Krautkramer & Krautkramer, *Ultrasonic Testing of Materials* — the near-field length N
+= D²/(4·lambda) that bounds where an amplitude reading means anything, the far-field beam
+divergence, and the thickness a pulse-echo transit time gives.
 """
 
 from __future__ import annotations

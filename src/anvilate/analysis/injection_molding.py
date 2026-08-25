@@ -17,6 +17,10 @@ t = (s²/(π²·α))·ln[(4/π)·(T_melt − T_mould)/(T_eject − T_mould)], fr
 melt's thermal diffusivity α, and the melt, mould, and ejection temperatures. Because it goes as the
 *square* of wall thickness, a thick section dominates the cycle — the reason thin, uniform walls are
 the first rule of moulded-part design.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (processing of
+polymers, injection molding) — the clamp force a cavity pressure over a projected area demands,
+the area a given clamp allows, and the cooling time a wall thickness dictates.
 """
 
 from __future__ import annotations

@@ -14,6 +14,10 @@ coverage approaches totality exponentially, C = 1 − exp(−λ·t), and never q
 is why the industry defines "full coverage" as 98% and quotes heavier peening as a multiple of the
 time to reach it (200% is twice that time). Inverting the law gives the exposure a target needs,
 t = −ln(1 − C)/λ — the number that sets the cycle time of the operation.
+
+Sources: SAE J2277 and SAE J443 (shot peening coverage and Almen strip test) — the exponential
+Avrami approach to full coverage, the coverage a stated exposure reaches, and the time a target
+coverage requires.
 """
 
 from __future__ import annotations

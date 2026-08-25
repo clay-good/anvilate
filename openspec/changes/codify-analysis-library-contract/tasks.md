@@ -197,10 +197,10 @@ about which convention the library adopts, not a bug fix.
   4.6 -> 4.3 and 1.6 -> 1.4. Every move is downward, which is what adopting the real
   curve should do.
 
-## 2026-08-25 — 237 more symbols off the citation debt
+## 2026-08-25 — 302 more symbols off the citation debt
 
-The debt was 409 public analysis symbols naming no source; it is 172 — 9% of the surface,
-from 23%, and less than half what it was. Fifty-four modules paid off, each by giving its module docstring a real `Sources:`
+The debt was 409 public analysis symbols naming no source; it is 107 — 6% of the surface,
+from 23%, and a quarter of what it was. Seventy-five modules paid off, each by giving its module docstring a real `Sources:`
 attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 
 | Source | Modules |
@@ -244,6 +244,18 @@ attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 | Hecht (polarization) | `polarization` |
 | Griffiths, *Quantum Mechanics* / *Electrodynamics* | `photon`, `atomic_spectra`, `radiation_pressure` |
 | Sedra & Smith (pn junction, noise) | `pn_junction`, `thermal_noise` |
+| Hecht (wave motion) | `wave` |
+| Skoog, West & Holler, *Principles of Instrumental Analysis* | `spectroscopy` |
+| Dally & Riley, *Experimental Stress Analysis* | `strain_gauge` |
+| Krautkramer, *Ultrasonic Testing of Materials* | `ultrasonic_testing` |
+| SAE J2277 / J443 | `shot_peening` |
+| AWS C1.1M | `resistance_welding` |
+| Montgomery, *Statistical Quality Control* | `process_capability` |
+| IEEE 176 | `piezoelectric` |
+| Cengel & Boles (calorimetry) | `calorimetry` |
+| Sze & Ng, *Physics of Semiconductor Devices* | `solar_cell` |
+| Kalpakjian & Schmid (ten more processes) | `forging`, `extrusion`, `drilling`, `grinding`, `broaching`, `casting`, `centrifugal_casting`, `injection_molding`, `laser_cutting`, `edm` |
+| ASTM D4414 | `coating` |
 
 **Eighteen new authority tokens, each run through the file's own accident check before
 shipping.** For every one, the symbols it is the *sole* citation for are in the modules it
@@ -260,10 +272,12 @@ adopted:
 That is the same failure the file records for `Young`, `Turns` and `Hazen`, caught before
 it shipped rather than after.
 
-**The last thirteen modules needed no new token at all**, which is the vocabulary paying
-off: Norton now covers six mechanism modules, Sedra & Smith five circuit ones, Hecht five
-optics ones, Griffiths four, and *Machinery's Handbook* three. A curated list is worth
-having precisely because its second use costs nothing.
+**Twenty-four of the last twenty-four modules needed no new token**, which is the
+vocabulary paying off: Kalpakjian & Schmid is now the sole citation for **43 symbols across
+fourteen manufacturing modules**, Norton covers six mechanism ones, Sedra & Smith five
+circuit ones, Hecht six optics ones, Griffiths four. A curated list is worth having
+precisely because its second use costs nothing. Three more previously dead tokens — `AWS`,
+`SAE`, `ASTM` — are live for the same reason.
 
 **A gate that was considered and not written.** Requiring every module-docstring credit to
 sit in a `Sources:` line would catch the aside class structurally. It does not hold today:

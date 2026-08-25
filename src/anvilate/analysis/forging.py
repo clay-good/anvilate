@@ -18,6 +18,10 @@ pressure up toward the centre — the *friction hill* — so the average pressur
 radius r and height h upset with a friction coefficient μ is σ·(1 + 2μr/(3h)), and the press load is
 that pressure over the contact area. A flatter, wider forging (large r/h) fights more friction and
 needs a disproportionately bigger press.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (bulk deformation,
+forging) — the true strain a height reduction imposes, the power-law flow stress K·eps^n it
+develops, and the open-die forging load with its friction multiplier.
 """
 
 from __future__ import annotations

@@ -13,6 +13,10 @@ a voltage through the voltage coefficient g33 = d33 / epsilon, V = g33 * sigma *
 and the electrode gap (thickness) t; this is the volt-level signal an unloaded sensor produces and
 can reach tens of volts for a modest push. Reading the direct effect the other way, F = Q / d33 gets
 the force behind a measured charge — how a piezo load washer or force sensor is read out.
+
+Sources: IEEE 176 (standard on piezoelectricity) — the charge q = d33·F a force generates along
+the poling axis, the open-circuit voltage it develops across the element's capacitance, and the
+force a measured charge infers.
 """
 
 from __future__ import annotations

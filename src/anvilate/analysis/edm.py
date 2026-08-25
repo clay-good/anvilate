@@ -16,6 +16,10 @@ actually discharging, the rest spent flushing debris in the off time; it is the 
 material removal rate MRR = k·I·τ ties them to throughput through the metal's erosion coefficient k:
 the average current I·τ, times how much volume each ampere-second erodes. Raising I or τ speeds the
 cut but coarsens it — the roughing-versus-finishing choice made numerical.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (electrical-discharge
+machining) — the energy per discharge, the duty factor of the pulse train, and the material
+removal rate those give at a stated wear ratio.
 """
 
 from __future__ import annotations

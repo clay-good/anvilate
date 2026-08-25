@@ -16,6 +16,10 @@ actual ram pressure.
 That pressure acting on the billet cross-section is the ram force F = p·A₀ the press must supply.
 Because pressure climbs with ln(R), extreme ratios push the press hard — the reason extrusion runs
 hot, where the flow stress is low, for all but the softest metals.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (extrusion) — the
+extrusion ratio, the ideal-plus-friction extrusion pressure it implies, and the ram force that
+pressure needs over the billet area.
 """
 
 from __future__ import annotations

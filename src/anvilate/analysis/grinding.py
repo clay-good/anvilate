@@ -17,6 +17,10 @@ correlates directly with grain force, surface finish, and burn. The specific ene
 is the spindle power P spread over the removal rate — the quantity that, multiplied by throughput,
 sets how much heat the surface must shed, and the reason grinding is a finishing process, not a
 roughing one.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (abrasive machining and
+finishing) — the specific removal rate per unit width, the equivalent chip thickness that
+indexes wheel behaviour, and the specific energy a grind consumes.
 """
 
 from __future__ import annotations

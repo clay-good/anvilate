@@ -11,6 +11,10 @@ medium (the speed of sound in air, the speed of light in vacuum, the speed of a 
 the wavelength a frequency produces is λ = v/f, and the frequency a wavelength corresponds to is
 f = v/λ — shorter wavelengths mean higher frequencies at a fixed speed. Inputs and outputs are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Hecht, *Optics* (wave motion) — the relation v = f·lambda between a wave's speed,
+frequency and wavelength, and each of its three rearrangements. It holds for any wave, which is
+why the module carries no medium of its own.
 """
 
 from __future__ import annotations

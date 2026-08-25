@@ -13,6 +13,10 @@ which drops as the mean µ drifts off center. For a normal process the fraction 
 limit is Φ(−3·Cpk), so the expected defect rate is 10⁶·Φ(−3·Cpk) parts per million — Cpk = 1.33
 gives about 33 ppm. The characteristic and its limits are plain numbers in any consistent unit; the
 indices and rates are dimensionless plain floats.
+
+Sources: Montgomery, *Introduction to Statistical Quality Control* — the capability index C_pk
+that accounts for a mean off centre, the capability ratio C_p that does not, and the parts-per-
+million defect rate a normal process at a given index produces.
 """
 
 from __future__ import annotations

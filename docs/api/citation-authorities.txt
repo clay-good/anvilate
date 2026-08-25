@@ -237,3 +237,8 @@ Bayer
 Baker
 Esposito
 Gillespie
+Skoog
+Dally
+Krautkramer
+Montgomery
+Sze & Ng

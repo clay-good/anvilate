@@ -14,6 +14,10 @@ that heat ends up in the nugget; the rest conducts away into the sheets and the 
 electrodes. The energy the nugget itself demands is a melting balance, E = ρ·V·(c·ΔT + L_f) — its
 volume raised to the melting point and then melted — and comparing it to Q reveals the low thermal
 efficiency (often only a tenth or so) that forces resistance welding to run at thousands of amperes.
+
+Sources: AWS C1.1M (recommended practices for resistance welding) — the Joule heat Q = I²·R·t a
+spot weld generates, the current a target heat needs, and the energy to bring the nugget volume
+to melting.
 """
 
 from __future__ import annotations

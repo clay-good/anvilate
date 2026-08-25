@@ -14,6 +14,10 @@ fusion or vaporization, with no temperature change while it proceeds. When two b
 temperatures are mixed and left to equilibrate with no loss, the heat one gives up equals the heat
 the other takes in, so they meet at T = (m₁c₁T₁ + m₂c₂T₂)/(m₁c₁ + m₂c₂). Temperatures are taken as
 absolute (K); inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Cengel & Boles, *Thermodynamics: An Engineering Approach* — sensible heat m·c·dT,
+latent heat at a phase change, the flash-steam fraction a pressure drop produces, and the
+equilibrium temperature two mixed streams reach.
 """
 
 from __future__ import annotations

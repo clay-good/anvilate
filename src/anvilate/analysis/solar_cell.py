@@ -17,6 +17,11 @@ All three take V_oc as given. It follows in closed form from the cell's own diod
 the photocurrent recirculates through the junction, giving V_oc = (n*k*T/q)*ln(I_L/I_0 + 1) — a
 logarithm in the light and a falling function of temperature, which is why a panel loses voltage on
 a hot roof.
+
+Sources: Sze & Ng, *Physics of Semiconductor Devices* (solar cells) — the fill factor relating
+maximum power to the open-circuit voltage and short-circuit current, the conversion efficiency
+against incident irradiance, and the open-circuit voltage the diode equation gives at a
+photocurrent.
 """
 
 from __future__ import annotations
