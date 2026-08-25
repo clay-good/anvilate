@@ -689,24 +689,28 @@ def from_pycufsm(
         )
     modes.append(("global", _load_factor(global_factor, "global"), None))
 
+    # Any half-wavelength supplied is validated, whichever identification was declared.
+    # Validating only inside the SIGNATURE_MINIMUM branch left the cFSM path handing a NaN
+    # straight to the ordering check below, where `local >= distortional` is False for NaN
+    # and the two minima pass as correctly ordered — and a bad unit reached a pint
+    # conversion, which raises a dimensionality error naming millimetres instead of saying
+    # what was wrong with the input.
+    for mode, _factor, half_wavelength in modes:
+        if mode == "global" or half_wavelength is None:
+            continue
+        if not half_wavelength.has_dimension("[length]"):
+            raise ValueError(f"the {mode} half-wavelength must be a length; got {half_wavelength}")
+        require_finite(half_wavelength, name=f"{mode} half-wavelength")
+        if half_wavelength.magnitude <= 0:
+            raise ValueError(f"the {mode} half-wavelength must be positive; got {half_wavelength}")
+
     if identification is ModeIdentification.SIGNATURE_MINIMUM:
         for mode, _factor, half_wavelength in modes:
-            if mode == "global":
-                continue
-            if half_wavelength is None:
+            if mode != "global" and half_wavelength is None:
                 raise ValueError(
                     f"the {mode} mode was read as a signature-curve minimum but carries no "
                     "half-wavelength. A minimum nobody can locate is a minimum nobody can "
                     "check — record where on the curve it was read"
-                )
-            if not half_wavelength.has_dimension("[length]"):
-                raise ValueError(
-                    f"the {mode} half-wavelength must be a length; got {half_wavelength}"
-                )
-            require_finite(half_wavelength, name=f"{mode} half-wavelength")
-            if half_wavelength.magnitude <= 0:
-                raise ValueError(
-                    f"the {mode} half-wavelength must be positive; got {half_wavelength}"
                 )
 
     if local_half_wavelength is not None and distortional_half_wavelength is not None:

@@ -513,3 +513,28 @@ def test_the_source_line_says_what_was_run_and_what_the_factors_multiply():
     assert "signature-curve minimum" in source
     assert "245 kN" in source
     assert "at 120 mm" in source
+
+
+@pytest.mark.parametrize(
+    ("half_wavelength", "message"),
+    [
+        (Quantity(magnitude=float("nan"), unit="mm"), "finite"),
+        (Quantity(magnitude=0.0, unit="mm"), "positive"),
+        (Quantity(magnitude=600.0, unit="kN"), "must be a length"),
+    ],
+)
+def test_a_half_wavelength_is_validated_whichever_identification_was_declared(
+    half_wavelength, message
+):
+    """Validating only on the signature-minimum path left the cFSM path unguarded.
+
+    A NaN half-wavelength reached the ordering check, where `local >= distortional` is
+    False for NaN, so two minima in the wrong order passed as correctly ordered. A bad
+    unit reached a pint conversion and raised a dimensionality error naming millimetres
+    rather than saying what was wrong with the input.
+    """
+    with pytest.raises(ValueError, match=message):
+        _buckling(
+            identification=ModeIdentification.CONSTRAINED_MODAL,
+            local_half_wavelength=half_wavelength,
+        )

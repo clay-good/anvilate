@@ -84,3 +84,12 @@ nothing looking wrong. Scoped deliberately — a section that genuinely inverts 
 P_y 245 / P_crl 120 / P_crd 155 / P_cre 900 that Appendix 1 was worked by hand for arrives
 here as factors on a 245 kN reference and reproduces P_nd = 150.8 kN, distortional
 governing — a number nothing in the adapter's test file computed.
+
+**Audited immediately after, and the validation sat inside the wrong branch.** A supplied
+half-wavelength was only dimension- and finiteness-checked on the `SIGNATURE_MINIMUM` path,
+so a cFSM run that supplied one anyway handed a NaN straight to the ordering check — where
+`local >= distortional` is False for NaN, and two minima in the wrong order passed as
+correctly ordered. A wrong unit reached a pint conversion and raised a dimensionality error
+naming millimetres instead of saying what was wrong with the input. Any supplied
+half-wavelength is validated now; only the requirement that one be present is
+identification-dependent.
