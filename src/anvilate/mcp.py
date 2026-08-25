@@ -39,6 +39,7 @@ tolerance, and a convergence tolerance is not a bound on wall time.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from enum import StrEnum
 from typing import Any
@@ -55,6 +56,9 @@ __all__ = [
     "REQUIRED_OPERATIONS",
     "ToolDefinition",
     "catalog_issues",
+    "handle_request",
+    "stateless_gaps",
+    "PROTOCOL_REVISION",
     "tool_catalog",
     "wire_definitions",
 ]
@@ -167,11 +171,28 @@ class ToolDefinition(BaseModel):
     # operation is specified but not built. Resolved against the live surface in CI, so
     # this is a claim that can fail rather than a comment.
     backing: str | None = None
+    # The *required* input property that carries the thing this operation acts on — the
+    # document to compile, the spec to validate. ``None`` means the operation acts on
+    # something the caller does not hand it, which is server-side state. Declared rather
+    # than inferred, and cross-checked against the schema below so it cannot drift.
+    subject: str | None = None
 
     @property
     def dispatch(self) -> Dispatch:
         """Task or synchronous, decided by cost alone."""
         return Dispatch.TASK if self.cost is Cost.UNBOUNDED else Dispatch.SYNCHRONOUS
+
+    @property
+    def is_stateless(self) -> bool:
+        """Whether a server with no memory between calls can serve this operation.
+
+        True exactly when the tool names a :attr:`subject`: everything it acts on arrives
+        in the call. A tool without one is asking the server to remember what the last
+        call produced, which is a different server from the stateless skeleton the
+        headless-automation spec describes — and the difference is a design decision, not
+        an implementation detail.
+        """
+        return self.subject is not None
 
     @property
     def gates(self) -> frozenset[Gate]:
@@ -182,6 +203,26 @@ class ToolDefinition(BaseModel):
         if self.emits_artifacts:
             gates.update({Gate.VALIDATION, Gate.WATERMARK})
         return frozenset(gates)
+
+    @model_validator(mode="after")
+    def _subject_is_a_required_input(self) -> ToolDefinition:
+        if self.subject is None:
+            return self
+        properties = self.input_schema.get("properties", {})
+        if self.subject not in properties:
+            raise ValueError(
+                f"{self.name} declares {self.subject!r} as the thing it acts on, and its "
+                f"input schema has no such property. A subject the caller cannot send is "
+                f"state by another name"
+            )
+        if self.subject not in self.input_schema.get("required", []):
+            raise ValueError(
+                f"{self.name} declares {self.subject!r} as the thing it acts on, and its "
+                f"input schema does not require it. An optional subject is one the caller "
+                f"can omit, which puts the operation back on server-side state for exactly "
+                f"the calls that omit it"
+            )
+        return self
 
     @model_validator(mode="after")
     def _cost_matches_the_work(self) -> ToolDefinition:
@@ -220,6 +261,7 @@ class ToolDefinition(BaseModel):
                 "dev.anvilate/tiers": [tier.value for tier in self.tiers],
                 "dev.anvilate/gates": sorted(gate.value for gate in self.gates),
                 "dev.anvilate/backing": self.backing,
+                "dev.anvilate/subject": self.subject,
             },
         }
 
@@ -254,6 +296,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             ),
             cost=Cost.BOUNDED,
             backing="anvilate.spec:parse_spec",
+            subject="document",
         ),
         ToolDefinition(
             name="build_part",
@@ -277,6 +320,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             cost=Cost.UNBOUNDED,
             tiers=(ValidationTier.T0_GEOMETRY,),
             executes_caller_code=True,
+            subject="spec",
         ),
         ToolDefinition(
             name="render_viewport",
@@ -365,6 +409,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 ValidationTier.T2_DFM,
             ),
             backing="anvilate.bundle:assemble_evidence_bundle",
+            subject="spec",
         ),
         ToolDefinition(
             name="run_fea_validation",
@@ -389,6 +434,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             ),
             cost=Cost.UNBOUNDED,
             tiers=(ValidationTier.T3_FEA,),
+            subject="spec",
         ),
         ToolDefinition(
             name="read_scorecard",
@@ -545,3 +591,178 @@ def catalog_issues() -> list[str]:
                 "does not use is a contract the surface has paraphrased instead"
             )
     return issues
+
+
+# JSON-RPC 2.0 error codes the handler uses. -32601 and -32602 are the protocol's own;
+# -32000 is the reserved implementation-defined range, where a refusal that is about
+# Anvilate rather than about the request belongs.
+METHOD_NOT_FOUND = -32601
+INVALID_PARAMS = -32602
+TOOL_UNAVAILABLE = -32000
+
+PROTOCOL_REVISION = "2026-07-28"
+
+
+def stateless_gaps() -> tuple[str, ...]:
+    """The operations a server with no memory between calls cannot serve, in catalog order.
+
+    Derived from each tool's declared :attr:`ToolDefinition.subject` rather than listed, so
+    giving a tool an input that carries what it acts on takes it off this list and nothing
+    else has to be edited. The constructor already refuses a subject that is not a required
+    property of the input schema, which is what stops the declaration drifting from the
+    contract it describes.
+    """
+    return tuple(tool.name for tool in tool_catalog() if not tool.is_stateless)
+
+
+def _argument_issues(tool: ToolDefinition, arguments: Mapping[str, Any]) -> list[str]:
+    """What is wrong with ``arguments`` against ``tool``'s input schema.
+
+    **A deliberately partial check, and the docstring says which part.** It enforces the
+    three things the published schemas actually constrain at the top level: every
+    ``required`` property is present, no property outside ``properties`` is sent
+    (``additionalProperties`` is false on every one of them), and each value matches its
+    declared top-level ``type``. It does **not** resolve the ``$ref``s to the published
+    spec and scorecard schemas, so a structurally wrong spec passes here and is caught by
+    the operation itself.
+
+    That boundary is the point rather than an omission: a handler that reported "valid"
+    after checking three keys would be claiming the schema had been applied.
+    """
+    schema = tool.input_schema
+    properties: dict[str, Any] = schema.get("properties", {})
+    issues: list[str] = []
+    for name in schema.get("required", []):
+        if name not in arguments:
+            issues.append(f"{tool.name} requires {name!r}")
+    for name in arguments:
+        if name not in properties:
+            issues.append(f"{tool.name} takes no argument {name!r}")
+    for name, value in arguments.items():
+        declared = properties.get(name, {}).get("type")
+        if declared is None:
+            continue
+        expected = _JSON_TYPES.get(declared)
+        if expected is None:
+            continue
+        if declared in ("number", "integer") and isinstance(value, bool):
+            # `isinstance(True, int)` is True in Python and a boolean is not a number in
+            # JSON, so the generic check below would accept `width_px: true` as a pixel
+            # count. Both numeric type names need the exception, not just "number".
+            issues.append(f"{tool.name}.{name} must be a JSON {declared}; got a boolean")
+        elif not isinstance(value, expected):
+            issues.append(
+                f"{tool.name}.{name} must be a JSON {declared}; got {type(value).__name__}"
+            )
+    return issues
+
+
+# The JSON Schema type names the published tool schemas use, and what each admits in
+# Python. `integer` is not `int` alone because a bool is an int in Python and is not an
+# integer in JSON; the check above handles that pair explicitly.
+_JSON_TYPES: dict[str, Any] = {
+    "object": dict,
+    "array": list,
+    "string": str,
+    "number": (int, float),
+    "integer": int,
+    "boolean": bool,
+}
+
+
+def _error(request_id: Any, code: int, message: str, **data: Any) -> dict[str, Any]:
+    error: dict[str, Any] = {"code": code, "message": message}
+    if data:
+        error["data"] = data
+    return {"jsonrpc": "2.0", "id": request_id, "error": error}
+
+
+def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
+    """One JSON-RPC request to one JSON-RPC response, with no state between calls.
+
+    A pure function, not a server: it takes the decoded request object and returns the
+    object to encode back, so a stdio loop, an HTTP handler and a test all drive the same
+    code. ``None`` is returned for a notification (a request with no ``id``), which the
+    protocol says takes no response.
+
+    Three methods are served. ``initialize`` reports the protocol revision and the
+    capabilities this surface has. ``tools/list`` returns
+    :func:`wire_definitions`. ``tools/call`` validates the arguments against the tool's
+    published input schema and then refuses, because **no operation is dispatched here
+    yet** — the four bounded tools that are backed still need their handlers written, and
+    a handler that returned a plausible-looking result for an operation nobody had wired
+    would be the worst possible thing to ship behind a tool contract.
+
+    Two refusals are structural rather than "not built yet", and they are the ones worth
+    reading:
+
+    * **An unbounded tool cannot be called here at all.** ``build_part`` and
+      ``run_fea_validation`` are task-dispatched by declared cost; a synchronous
+      ``tools/call`` for one is refused with the reason rather than blocked on.
+    * **Four tools cannot be served by a stateless server.** ``render_viewport``,
+      ``measure_geometry``, ``read_scorecard`` and ``export_artifact`` name nothing in
+      their input to act on — see :func:`stateless_gaps`. That is a real contradiction
+      between the published contracts and the stateless skeleton the spec describes, and
+      it is surfaced here rather than resolved by inventing an argument.
+    """
+    if request.get("jsonrpc") != "2.0":
+        return _error(request.get("id"), INVALID_PARAMS, "not a JSON-RPC 2.0 request")
+    method = request.get("method")
+    request_id = request.get("id")
+    is_notification = "id" not in request
+    if is_notification:
+        # A notification takes no response, including no error response.
+        return None
+
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "protocolVersion": PROTOCOL_REVISION,
+                "capabilities": {"tools": {"listChanged": False}},
+                "serverInfo": {"name": "anvilate", "title": "Anvilate"},
+            },
+        }
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": wire_definitions()}}
+    if method != "tools/call":
+        return _error(request_id, METHOD_NOT_FOUND, f"unknown method {method!r}")
+
+    params = request.get("params") or {}
+    name = params.get("name")
+    tools = {tool.name: tool for tool in tool_catalog()}
+    tool = tools.get(name)
+    if tool is None:
+        return _error(request_id, METHOD_NOT_FOUND, f"unknown tool {name!r}")
+
+    arguments = params.get("arguments") or {}
+    if not isinstance(arguments, dict):
+        return _error(request_id, INVALID_PARAMS, "arguments must be a JSON object")
+    issues = _argument_issues(tool, arguments)
+    if issues:
+        return _error(request_id, INVALID_PARAMS, "; ".join(issues))
+
+    if tool.dispatch is Dispatch.TASK:
+        return _error(
+            request_id,
+            TOOL_UNAVAILABLE,
+            f"{tool.name} is task-dispatched because its cost is {tool.cost.value}; a "
+            f"synchronous tools/call cannot promise a reply for work bounded by a "
+            f"convergence criterion or by caller-supplied code",
+        )
+    if not tool.is_stateless:
+        return _error(
+            request_id,
+            TOOL_UNAVAILABLE,
+            f"{tool.name} names nothing in its input to act on, so a server with no memory "
+            f"between calls cannot serve it. Either the tool takes what it acts on as an "
+            f"argument or the server holds a session; the contract does not yet say which",
+        )
+    return _error(
+        request_id,
+        TOOL_UNAVAILABLE,
+        f"{tool.name} is not dispatched yet: the contract and this handler are built, the "
+        f"operation behind them is not. A result invented here would be indistinguishable "
+        f"from a real one",
+    )

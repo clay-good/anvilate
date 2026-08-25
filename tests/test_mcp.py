@@ -19,6 +19,7 @@ from anvilate.contracts import (
     spec_json_schema,
 )
 from anvilate.mcp import (
+    PROTOCOL_REVISION,
     REQUIRED_OPERATIONS,
     Cost,
     Dispatch,
@@ -26,6 +27,8 @@ from anvilate.mcp import (
     ToolDefinition,
     _schema_issues,
     catalog_issues,
+    handle_request,
+    stateless_gaps,
     tool_catalog,
     wire_definitions,
 )
@@ -296,3 +299,161 @@ def test_a_reference_below_the_top_level_is_still_checked(nesting):
     broken = {**tool.input_schema, "properties": {"a": {"type": "object", **nesting}}}
     issues = _schema_issues(tool, "input_schema", broken)
     assert any("example.invalid" in issue for issue in issues), issues
+
+
+# --- The stateless request handler ----------------------------------------------------
+#
+# What is being pinned is mostly what the handler *refuses*. Two of its refusals are
+# structural rather than "not built yet", and those are the ones that matter: an unbounded
+# tool cannot be called synchronously at all, and four of the eight published tools name
+# nothing in their input to act on, so a server with no memory between calls cannot serve
+# them however complete its implementation is.
+
+
+def _call(name: str, arguments: dict | None = None, request_id: int = 1) -> dict:
+    return handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments if arguments is not None else {}},
+        }
+    )
+
+
+def test_initialize_reports_the_revision_the_contracts_were_written_to():
+    result = handle_request({"jsonrpc": "2.0", "id": 1, "method": "initialize"})["result"]
+    assert result["protocolVersion"] == PROTOCOL_REVISION
+    assert result["capabilities"]["tools"]["listChanged"] is False, (
+        "a stateless surface cannot notify a client that its tool list moved"
+    )
+
+
+def test_tools_list_serves_the_published_catalog_and_nothing_else():
+    tools = handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]
+    assert [t["name"] for t in tools] == [t.name for t in tool_catalog()]
+    assert tools == wire_definitions()
+
+
+def test_a_notification_gets_no_response_at_all():
+    """Including no error response — the protocol says a request without an id takes none,
+    and an error is still a response."""
+    assert handle_request({"jsonrpc": "2.0", "method": "tools/list"}) is None
+    assert handle_request({"jsonrpc": "2.0", "method": "nonsense"}) is None
+
+
+def test_an_unknown_method_or_tool_is_a_method_not_found():
+    assert (
+        handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/run"})["error"]["code"]
+        == -32601
+    )
+    assert _call("polish_the_part")["error"]["code"] == -32601
+
+
+def test_arguments_are_checked_against_the_published_input_schema():
+    assert _call("compile_spec", {})["error"]["code"] == -32602
+    assert "requires 'document'" in _call("compile_spec", {})["error"]["message"]
+    assert (
+        "takes no argument"
+        in _call("compile_spec", {"document": {}, "extra": 1})["error"]["message"]
+    )
+    assert "JSON object" in _call("compile_spec", {"document": "a string"})["error"]["message"]
+    # A well-formed call gets past the schema check and fails for the honest reason.
+    assert _call("compile_spec", {"document": {}})["error"]["code"] == -32000
+
+
+def test_a_boolean_is_not_a_number():
+    """`isinstance(True, int)` is True in Python and a boolean is not a number in JSON, so
+    a bare isinstance check would accept `width_px: true` as a pixel count."""
+    message = _call("render_viewport", {"view": "iso", "width_px": True})["error"]["message"]
+    assert "must be a JSON integer" in message and "boolean" in message
+    # The argument check runs before the stateless refusal, so a bad argument is reported
+    # as a bad argument even on a tool the server could not serve anyway.
+    assert _call("render_viewport", {"view": "iso", "width_px": True})["error"]["code"] == -32602
+
+
+def test_an_unbounded_tool_is_refused_synchronously_rather_than_waited_on():
+    for name in ("build_part", "run_fea_validation"):
+        error = _call(name, {"spec": {}})["error"]
+        assert error["code"] == -32000
+        assert "task-dispatched" in error["message"]
+    # And the refusal follows the declared cost, not a list of names.
+    unbounded = {t.name for t in tool_catalog() if t.dispatch is Dispatch.TASK}
+    assert unbounded == {"build_part", "run_fea_validation"}
+
+
+def test_the_four_tools_a_stateless_server_cannot_serve_are_derived_not_listed():
+    """The finding this handler exists to surface.
+
+    Four published tools name nothing in their input to act on. That is a contradiction
+    between the contracts and the stateless skeleton the spec describes, and it shows up
+    the moment someone tries to serve them — which is the whole reason for publishing the
+    contracts before the server.
+    """
+    assert stateless_gaps() == (
+        "render_viewport",
+        "measure_geometry",
+        "read_scorecard",
+        "export_artifact",
+    )
+    for name in stateless_gaps():
+        error = _call(name, _minimum_arguments(name))["error"]
+        assert error["code"] == -32000
+        assert "no memory between calls" in error["message"]
+    # Derived from the declaration, not from the tuple above.
+    assert set(stateless_gaps()) == {t.name for t in tool_catalog() if t.subject is None}
+
+
+def _minimum_arguments(name: str) -> dict:
+    """The required arguments of a tool, filled with values of the declared type."""
+    tool = {t.name: t for t in tool_catalog()}[name]
+    filler = {
+        "object": {},
+        "array": [],
+        "string": "x",
+        "number": 1.0,
+        "integer": 1,
+        "boolean": True,
+    }
+    properties = tool.input_schema["properties"]
+    return {
+        key: filler[properties[key].get("type", "object")]
+        for key in tool.input_schema.get("required", [])
+    }
+
+
+def test_a_declared_subject_must_be_a_required_input():
+    """The cross-check that stops the declaration drifting from the contract: a subject the
+    caller cannot send, or can omit, is server-side state under another name."""
+    base = {t.name: t for t in tool_catalog()}["compile_spec"]
+    with pytest.raises(ValidationError, match="no such property"):
+        ToolDefinition(
+            **{**base.model_dump(), "subject": "blueprint"},
+        )
+    optional = {
+        "$schema": base.input_schema["$schema"],
+        "type": "object",
+        "properties": {"document": {"type": "object"}},
+        "required": [],
+        "additionalProperties": False,
+    }
+    with pytest.raises(ValidationError, match="does not require it"):
+        ToolDefinition(**{**base.model_dump(), "input_schema": optional})
+
+
+def test_nothing_is_dispatched_yet_and_the_handler_says_so():
+    """A handler that returned a plausible result for an operation nobody wired would be
+    indistinguishable from a real one, which is the failure mode a tool contract makes
+    most likely."""
+    error = _call("run_validation", {"spec": {}})["error"]
+    assert error["code"] == -32000
+    assert "not dispatched yet" in error["message"]
+    assert "invented" in error["message"]
+
+
+def test_a_request_that_is_not_json_rpc_2_is_refused():
+    assert handle_request({"id": 1, "method": "tools/list"})["error"]["code"] == -32602
+    assert (
+        handle_request({"jsonrpc": "1.0", "id": 1, "method": "tools/list"})["error"]["code"]
+        == -32602
+    )

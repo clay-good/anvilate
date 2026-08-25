@@ -22,7 +22,10 @@
 
 ## 2. Implementation (when the server is built)
 
-- [ ] 2.1 Stateless server skeleton on the 2026-07-28 revision
+- [~] 2.1 Stateless server skeleton on the 2026-07-28 revision — `handle_request` is
+      the transport-agnostic half: `initialize`, `tools/list` and a `tools/call` that
+      validates and refuses. The transport and the dispatch are still open, and four tools
+      cannot be served statelessly at all (below)
 - [ ] 2.2 structuredContent results + preview-image attachments
 - [ ] 2.3 Tasks extension: handles, progress, cancellation with subprocess cleanup
 - [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths
@@ -77,3 +80,40 @@ pydantic trap again: `frozen=True` does not reach inside a `dict` field, so a de
 schema dictionaries were writable and `to_wire` handed out the live ones. `to_wire`
 deep-copies now, and the docstring says what `frozen` does and does not cover instead of
 implying it covers everything.
+
+## 2026-08-25 — the request handler, and the four tools it cannot serve
+
+`handle_request`, `stateless_gaps` and `ToolDefinition.subject` in `src/anvilate/mcp.py`;
+`docs/mcp-tool-contracts.md`.
+
+**Publishing the contracts first paid, and the bill was bigger than expected.**
+`render_viewport`, `measure_geometry`, `read_scorecard` and `export_artifact` name nothing
+in their input to act on — `read_scorecard` takes no arguments at all and returns a
+scorecard. Each is asking the server to remember what the last call produced. That is a
+session, and 2.1 says stateless. **Which server Anvilate ships is a decision that had not
+been made, and it is cheaper to make it now than after a client integrates.**
+
+Surfaced rather than resolved by inventing arguments. `ToolDefinition.subject` names the
+required input property carrying what the operation acts on; the constructor refuses a
+subject that is not in the schema and refuses one the schema does not require, because an
+optional subject is state for exactly the calls that omit it. `stateless_gaps()` is derived
+from the declarations, so giving a tool its subject takes it off the list and nothing else
+is edited.
+
+**The handler dispatches nothing, and says so in the refusal.** A plausible-looking result
+from an operation nobody wired is indistinguishable from a real one, which is the failure a
+published tool contract makes most likely. Three refusal kinds are separated: a bad
+argument (-32602), task-dispatched by declared cost (-32000), and not servable statelessly
+(-32000).
+
+**The argument check is deliberately partial and the docstring says which part.** It does
+not resolve the `$ref`s to the published spec and scorecard schemas, so a structurally
+wrong spec passes it. Reporting "valid" after checking three keys would be claiming the
+schema had been applied.
+
+**`isinstance(True, int)` is True in Python and a boolean is not a number in JSON.** The
+first draft excepted `number` and not `integer`, so `width_px: true` would have been
+accepted as a pixel count on the only integer field in the surface.
+
+Still open in 2.1: the transport (stdio and HTTP), and the dispatch of the four backed
+operations — which waits on the session-versus-stateless decision above for three of them.

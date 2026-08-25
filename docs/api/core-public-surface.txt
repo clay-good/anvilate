@@ -146,6 +146,9 @@ mcp.Gate
 mcp.REQUIRED_OPERATIONS
 mcp.ToolDefinition
 mcp.catalog_issues
+mcp.handle_request
+mcp.stateless_gaps
+mcp.PROTOCOL_REVISION
 mcp.tool_catalog
 mcp.wire_definitions
 review.DecisionOrigin

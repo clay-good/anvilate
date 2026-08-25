@@ -92,3 +92,58 @@ the parity tests that hold the MCP paths to the same gating as the CLI. The clai
 deprecated protocol feature is used — server-initiated sampling — belongs there too: it is
 a property of what the server does, and a tool definition has no place to declare it, so
 asserting it here would be a check that reads prose rather than behavior.
+
+## Four tools a stateless server cannot serve
+
+The contracts were published before the server so that a mistake in the tool surface would
+be cheap to fix. Writing the request handler found one, and it is not small:
+**`render_viewport`, `measure_geometry`, `read_scorecard` and `export_artifact` name
+nothing in their input to act on.** `read_scorecard` takes no arguments at all and returns
+a scorecard; `export_artifact` takes a format and a destination and exports — what?
+
+Each of them is asking the server to remember what the last call produced. That is a
+session, and the headless-automation spec describes a **stateless** skeleton. The two are
+different servers, and which one Anvilate ships is a design decision that had not been
+made.
+
+It is surfaced rather than papered over. `ToolDefinition` now declares a **`subject`**: the
+required input property carrying the thing the operation acts on. The constructor refuses a
+subject that is not a property of the input schema, and refuses one the schema does not
+require — an optional subject is server-side state for exactly the calls that omit it.
+`stateless_gaps()` is then derived from the declarations rather than listed, so giving a
+tool an argument that carries its subject takes it off the list and nothing else changes.
+
+| Tool | Subject | Servable statelessly |
+| --- | --- | --- |
+| `compile_spec` | `document` | yes |
+| `build_part` | `spec` | yes (task-dispatched) |
+| `run_validation` | `spec` | yes |
+| `run_fea_validation` | `spec` | yes (task-dispatched) |
+| `render_viewport` | — | **no** |
+| `measure_geometry` | — | **no** |
+| `read_scorecard` | — | **no** |
+| `export_artifact` | — | **no** |
+
+## The request handler
+
+`handle_request()` is a pure function from a decoded JSON-RPC request to the object to
+encode back, so a stdio loop, an HTTP handler and a test drive the same code. It serves
+`initialize`, `tools/list` and `tools/call`, and returns `None` for a notification, which
+the protocol says takes no response — including no error response.
+
+**It dispatches nothing.** The contract and the handler are built; the operations behind
+them are not, and a result invented here would be indistinguishable from a real one. Every
+`tools/call` therefore ends in a refusal, and the three kinds are worth separating:
+
+- **`-32602`, a bad argument.** Checked against the published input schema — required
+  properties present, no property outside `properties`, and each value's top-level type.
+  Deliberately partial: the `$ref`s to the spec and scorecard schemas are **not** resolved,
+  so a structurally wrong spec passes here and is caught by the operation. A handler that
+  reported "valid" after checking three keys would be claiming the schema had been applied.
+- **`-32000`, task-dispatched.** An unbounded tool is refused synchronously rather than
+  waited on, by its declared cost rather than by name.
+- **`-32000`, stateless.** One of the four above.
+
+A boolean is not a number, and `isinstance(True, int)` is True in Python — so `width_px:
+true` would have been accepted as a pixel count by the obvious type check. Both `number`
+and `integer` carry the exception.
