@@ -785,6 +785,7 @@ fatigue.weld_cutoff_limit
 fatigue.weld_detail_allowable_stress_range
 fatigue.weld_detail_endurance_cycles
 fatigue.weld_fatigue_scorecard
+fatigue.weld_nominal_stress_range_limit
 fatigue.weld_size_corrected_detail_category
 fatigue.weld_size_effect_factor
 fatigue.weld_mean_stress_factor

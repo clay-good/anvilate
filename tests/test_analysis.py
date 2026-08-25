@@ -42352,3 +42352,108 @@ def test_the_stability_discriminant_never_goes_negative():
     swept = [discriminant(i / 1000.0) for i in range(1, 100_001)]
     assert min(swept) == pytest.approx(1.0 / 19.0, rel=1e-9)
     assert discriminant(0.9) == pytest.approx(1.0 / 19.0, rel=1e-12)
+
+
+# --- EN 1993-1-9 §8: the elastic limit on a nominal stress range -----------------------
+
+
+def test_the_weld_elastic_stress_range_limit():
+    from anvilate.analysis import weld_nominal_stress_range_limit
+
+    f_y = Quantity.parse("355 MPa")
+    assert weld_nominal_stress_range_limit(yield_strength=f_y).to("MPa").magnitude == pytest.approx(
+        1.5 * 355.0
+    )
+    assert weld_nominal_stress_range_limit(yield_strength=f_y, shear=True).to(
+        "MPa"
+    ).magnitude == pytest.approx(1.5 * 355.0 / 3**0.5)
+
+
+def test_the_sn_curve_answers_above_the_elastic_limit_without_complaint():
+    """Why the limit has to be checked at the screen rather than trusted to the formula.
+
+    The curve returns a finite, entirely ordinary-looking life for a range at which the
+    detail is yielding under the fatigue load — a regime the nominal-stress method is not
+    calibrated for and gives no sign of having left.
+    """
+    from anvilate.analysis import weld_detail_endurance_cycles
+
+    life = weld_detail_endurance_cycles(
+        stress_range=Quantity.parse("600 MPa"), detail_category=Quantity.parse("90 MPa")
+    )
+    assert 0 < life < 1e4, "a plausible number, from outside the method's range"
+
+
+def test_a_spectrum_above_the_elastic_limit_is_not_evaluated():
+    from anvilate.analysis import weld_fatigue_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    common = {
+        "applied_cycles": [1e5],
+        "detail_category": Quantity.parse("90 MPa"),
+    }
+    over = weld_fatigue_scorecard(
+        "weld",
+        stress_ranges=[Quantity.parse("600 MPa")],
+        yield_strength=Quantity.parse("355 MPa"),
+        **common,
+    )
+    assert over.status is CheckStatus.NOT_EVALUATED
+    assert over.safety_factor is None
+    assert "600 MPa" in over.detail and "§8" in over.reference
+
+    under = weld_fatigue_scorecard(
+        "weld",
+        stress_ranges=[Quantity.parse("100 MPa")],
+        yield_strength=Quantity.parse("355 MPa"),
+        **common,
+    )
+    assert under.status is CheckStatus.PASS
+
+    # Omitted, the limit is not applied — and the same spectrum then reports a verdict.
+    unguarded = weld_fatigue_scorecard("weld", stress_ranges=[Quantity.parse("600 MPa")], **common)
+    assert unguarded.status is CheckStatus.FAIL, "the silent answer the limit replaces"
+
+
+@pytest.mark.parametrize(
+    "kwargs,message",
+    [
+        ({"yield_strength": Quantity.parse("5 mm")}, "yield_strength"),
+        ({"yield_strength": Quantity.parse("0 MPa")}, "must be positive"),
+        ({"yield_strength": Quantity.parse("nan MPa")}, "yield_strength"),
+    ],
+)
+def test_the_elastic_limit_refuses_what_it_cannot_compute(kwargs, message):
+    from anvilate.analysis import weld_nominal_stress_range_limit
+
+    with pytest.raises(ValueError, match=message):
+        weld_nominal_stress_range_limit(**kwargs)
+
+
+def test_a_nan_stress_is_refused_across_the_fatigue_module():
+    """The elastic-range limit is what made this matter.
+
+    A NaN stress used to travel to a NaN safety factor, which the scorecard catches and
+    reports as NOT_EVALUATED. But ``range > nan`` is False for *every* range, so a NaN
+    yield strength turned the §8 limit off entirely instead of making it loud — a guard
+    that stops guarding, which is worse than a NaN answer. The refusal now sits in the
+    module's own stress check, so every entry point gets it.
+    """
+    from anvilate.analysis import (
+        goodman_safety_factor,
+        weld_detail_endurance_cycles,
+        weld_nominal_stress_range_limit,
+    )
+
+    nan = Quantity.parse("nan MPa")
+    with pytest.raises(ValueError, match="yield_strength"):
+        weld_nominal_stress_range_limit(yield_strength=nan)
+    with pytest.raises(ValueError, match="stress_range"):
+        weld_detail_endurance_cycles(stress_range=nan, detail_category=Quantity.parse("90 MPa"))
+    with pytest.raises(ValueError, match="endurance_limit"):
+        goodman_safety_factor(
+            alternating_stress=Quantity.parse("50 MPa"),
+            mean_stress=Quantity.parse("50 MPa"),
+            endurance_limit=nan,
+            ultimate_strength=Quantity.parse("400 MPa"),
+        )

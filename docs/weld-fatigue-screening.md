@@ -91,6 +91,50 @@ part was *fabricated*, not about its geometry, so it is yours to make deliberate
 factor is 1.0 whenever there is no compressive part to discount, and reaches its 0.6
 floor on a wholly compressive cycle.
 
+## The category is a record, not a number
+
+`WeldDetailCategory` ([`anvilate.standards.fatigue`](../src/anvilate/standards/fatigue.py))
+carries the number with the three things that decide whether it applies to this weld:
+
+```python
+WeldDetailCategory(
+    standard="EN 1993-1-9", edition="2005", table="Table 8.4",
+    description="transverse attachment, L <= 50 mm",
+    detail_category=Quantity.parse("80 MPa"),
+).curve()
+```
+
+- **The standard and edition.** EN 1993-1-9's category 90 and IIW's FAT 90 are the same
+  number and a different curve — the knee sits at 5 million cycles in one and 10 million
+  in the other — and AASHTO's letter categories are a third construction.
+- **Which stress it is a category for.** EN's direct-stress curves run m = 3 to the knee
+  then m = 5; **the shear curves run a single m = 5 throughout**, which the standard's own
+  combined-stress interaction repeats in its exponents, (Δσ/Δσ_C)³ + (Δτ/Δτ_C)⁵ ≤ 1. A
+  Δτ_C of 100 and a Δσ_C of 100 are the same label and different curves, so `curve()`
+  **refuses** on a shear category rather than returning the direct-stress construction.
+- **The detail and its table.** A category number is a verdict about a geometry — where
+  the crack starts, how the weld is finished, which way the stress runs. Recording only
+  the number is how a butt weld's category ends up on a fillet-welded attachment.
+
+**The EN ladder is discrete.** The standard tabulates details into 36, 40, 45, 50, 56, 63,
+71, 80, 90, 100, 112, 125, 140, 160 and defines no curve between the rungs, so a value off
+the ladder is refused with the two nearest named. Declare a different standard and the
+ladder does not apply — which is what makes an IIW FAT 85 expressible instead of an
+argument with a validator.
+
+## The elastic limit the S-N curve does not know about
+
+EN 1993-1-9 §8 caps the nominal range a fatigue assessment may be run on at **1.5·f_y**
+(1.5·f_y/√3 in shear). Above it the detail is yielding under the fatigue load and the
+nominal-stress method — an elastic one, calibrated on tests that stayed elastic — is not
+the applicable method.
+
+Nothing in an S-N formula enforces that. A 600 MPa range on a category-90 detail returns a
+life of a few thousand cycles: a finite, entirely ordinary-looking number from outside the
+range the tests behind the curve cover. Pass `yield_strength` to
+`weld_fatigue_scorecard` and a spectrum containing such a range is `NOT_EVALUATED` naming
+it; omit it and the limit is not applied and the entry claims nothing about it.
+
 ## Scope
 
 **Screened:** the EN 1993-1-9 nominal-stress trilinear curve from a declared category,
@@ -98,7 +142,8 @@ the constant-amplitude and cutoff knees, per-range endurance, Palmgren-Miner spe
 damage, the allowable-range design inverse, and the thickness and mean-stress
 corrections above.
 
-**Not screened:** choosing the category (yours), hot-spot and fracture-mechanics
+**Not screened:** choosing the category (yours), the shear-stress curve family and the
+combined direct-plus-shear interaction, hot-spot and fracture-mechanics
 methods, weld residual-stress fields, variable-amplitude sequence effects beyond linear
 Miner, environmental or corrosion-fatigue knockdowns, and any partial factor γ_Mf your
 national annex applies — apply it to `required` yourself. These are T1 screens for early

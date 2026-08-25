@@ -29,7 +29,7 @@ from math import inf, sqrt
 from pydantic import BaseModel, ConfigDict
 
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "CyclicStress",
@@ -62,6 +62,7 @@ __all__ = [
     "weld_size_corrected_detail_category",
     "weld_mean_stress_factor",
     "weld_effective_stress_range",
+    "weld_nominal_stress_range_limit",
     "weld_fatigue_scorecard",
 ]
 
@@ -86,6 +87,12 @@ def _require_stress(value: Quantity, name: str) -> float:
         raise ValueError(
             f"{name} must be a [pressure] quantity; got {value.dimensionality} ({value})"
         )
+    # Dimension is the easy half. A NaN stress used to travel all the way to a NaN safety
+    # factor, which the scorecard does catch — but the elastic-range limit below is a
+    # *guard*, and `range > nan` is False for every range, so a NaN yield strength turned
+    # it off entirely rather than making it loud. A guard that stops guarding is worse
+    # than a NaN answer.
+    require_finite(value, name=name)
     return value.to("MPa").magnitude
 
 
@@ -94,6 +101,7 @@ def _require_length(value: Quantity, name: str) -> None:
         raise ValueError(
             f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
         )
+    require_finite(value, name=name)
 
 
 class CyclicStress(BaseModel):
@@ -991,6 +999,34 @@ def weld_mean_stress_factor(
     return effective.to("MPa").magnitude / full_range
 
 
+# EN 1993-1-9 §8 limits the *nominal* stress range a fatigue assessment may be run on:
+# Δσ ≤ 1.5·f_y for direct stress and Δτ ≤ 1.5·f_y/√3 for shear. Above it the detail is
+# yielding under the fatigue load and the nominal-stress S-N method — which is elastic,
+# and calibrated on tests that stayed elastic — is not the applicable one.
+_WELD_ELASTIC_RANGE_FACTOR = 1.5
+
+
+def weld_nominal_stress_range_limit(*, yield_strength: Quantity, shear: bool = False) -> Quantity:
+    """The EN 1993-1-9 §8 upper limit on a nominal stress range: 1.5·f_y, or 1.5·f_y/√3.
+
+    A nominal-stress fatigue assessment is an elastic method calibrated on details that
+    stayed elastic. Above 1.5·f_y (1.5·f_y/√3 in shear, the von Mises equivalent) the
+    detail is yielding under the fatigue load itself, and the S-N curve is being read
+    outside the range the tests behind it cover. Returns the limiting range.
+
+    This is a limit the standard states in prose and that nothing in an S-N formula
+    enforces: the curve happily returns a life for any range you hand it, and the number
+    looks like every other number it returns.
+    """
+    stress = _require_stress(yield_strength, "yield_strength")
+    if stress <= 0:
+        raise ValueError(f"yield_strength must be positive; got {yield_strength}")
+    limit = _WELD_ELASTIC_RANGE_FACTOR * stress
+    if shear:
+        limit /= sqrt(3.0)
+    return Quantity(magnitude=limit, unit="MPa")
+
+
 def weld_fatigue_scorecard(
     name: str,
     *,
@@ -998,6 +1034,7 @@ def weld_fatigue_scorecard(
     stress_ranges: Sequence[Quantity],
     detail_category: Quantity | None,
     thickness: Quantity | None = None,
+    yield_strength: Quantity | None = None,
     variable_amplitude: bool = True,
     required: float = 1.0,
 ) -> ScorecardEntry:
@@ -1012,6 +1049,14 @@ def weld_fatigue_scorecard(
     silent pass: choosing and defending the detail category is the engineer's call,
     and a weld fatigue check without one has not been made. ``applied_cycles`` and
     ``stress_ranges`` must be the same length.
+
+    ``yield_strength`` enables the EN 1993-1-9 §8 elastic limit: a spectrum containing a
+    range above 1.5·f_y is reported ``NOT_EVALUATED`` naming it, because the detail is
+    yielding under the fatigue load and the nominal-stress method is an elastic one. The
+    S-N curve returns a life for such a range without complaint, and it looks like every
+    other life it returns — which is why the limit has to be checked here rather than
+    trusted to the formula. Omitted, the limit is not applied and the entry says nothing
+    about it either way.
     """
     if len(applied_cycles) != len(stress_ranges):
         raise ValueError(
@@ -1025,6 +1070,21 @@ def weld_fatigue_scorecard(
             detail="not evaluated — no EN 1993-1-9 detail category chosen",
             reference="EN 1993-1-9",
         )
+    if yield_strength is not None:
+        limit = weld_nominal_stress_range_limit(yield_strength=yield_strength)
+        over = [sr for sr in stress_ranges if _require_stress(sr, "stress_range") > limit.magnitude]
+        if over:
+            return ScorecardEntry(
+                name=name,
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"not evaluated — {len(over)} stress range(s) exceed the EN 1993-1-9 §8 "
+                    f"elastic limit of {limit}: {', '.join(str(sr) for sr in over)}. The "
+                    "detail is yielding under the fatigue load, and the nominal-stress S-N "
+                    "method does not cover it"
+                ),
+                reference="EN 1993-1-9 §8",
+            )
     category = (
         detail_category
         if thickness is None

@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from anvilate.analysis.fatigue import weld_detail_allowable_stress_range
 from anvilate.standards.fatigue import (
+    EN1993_NORMAL_DETAIL_CATEGORIES,
     CurveSurvival,
     DatasetProvenance,
     FatigueCurve,
@@ -22,6 +23,8 @@ from anvilate.standards.fatigue import (
     LoadingMode,
     SpecimenGeometry,
     SpecimenMetadata,
+    WeldDetailCategory,
+    WeldStressKind,
     en1993_detail_category_curve,
 )
 from anvilate.units import Quantity
@@ -288,3 +291,94 @@ def test_a_cutoff_that_is_not_a_positive_finite_stress_is_refused(cutoff):
             min_cycles=1.0e4,
             cutoff_stress_range=_q(cutoff, "MPa"),
         )
+
+
+# --- A weld detail category is a record, not a number ---------------------------------
+
+
+def _category(**kwargs) -> WeldDetailCategory:
+    defaults = {
+        "standard": "EN 1993-1-9",
+        "edition": "2005",
+        "table": "Table 8.4",
+        "description": "transverse attachment, L <= 50 mm",
+        "detail_category": Quantity.parse("80 MPa"),
+    }
+    return WeldDetailCategory(**{**defaults, **kwargs})
+
+
+@pytest.mark.parametrize("field", ["standard", "edition", "table", "description"])
+def test_a_detail_category_cannot_be_a_bare_number(field):
+    """The number is a curve label. Which standard drew the curve, and on what geometry,
+    is what decides whether it applies to this weld."""
+    with pytest.raises(ValidationError, match=f"must state its {field}"):
+        _category(**{field: "  "})
+
+
+def test_the_en1993_ladder_is_discrete_and_a_value_between_rungs_is_refused():
+    with pytest.raises(ValidationError, match="not an EN 1993-1-9 direct-stress"):
+        _category(detail_category=Quantity.parse("85 MPa"))
+    # The refusal names the near misses rather than leaving the caller to guess.
+    with pytest.raises(ValidationError, match=r"\[80, 90\]"):
+        _category(detail_category=Quantity.parse("85 MPa"))
+
+
+def test_every_rung_of_the_published_ladder_is_accepted():
+    assert len(EN1993_NORMAL_DETAIL_CATEGORIES) == 14, (
+        "the ladder read off the published curve legend has fourteen rungs; a gate over "
+        "an empty or truncated list would accept anything"
+    )
+    for value in EN1993_NORMAL_DETAIL_CATEGORIES:
+        record = _category(detail_category=Quantity(magnitude=float(value), unit="MPa"))
+        assert record.detail_category.to("MPa").magnitude == pytest.approx(value)
+
+
+def test_another_standards_category_is_not_held_to_the_en1993_ladder():
+    """IIW's FAT 85 exists and EN 1993-1-9's 85 does not. Declaring the standard is what
+    makes the difference legible instead of a refusal the caller has to argue with."""
+    record = _category(
+        standard="IIW Recommendations",
+        edition="2016",
+        table="Table 3.2",
+        detail_category=Quantity.parse("85 MPa"),
+    )
+    assert record.detail_category.to("MPa").magnitude == pytest.approx(85.0)
+
+
+def test_the_records_curve_is_the_standards_curve():
+    record = _category(detail_category=Quantity.parse("90 MPa"))
+    expected = en1993_detail_category_curve(Quantity.parse("90 MPa"))
+    assert record.curve().stress_range_at(2e6).to("MPa").magnitude == pytest.approx(
+        expected.stress_range_at(2e6).to("MPa").magnitude, rel=1e-12
+    )
+
+
+def test_a_shear_category_refuses_the_direct_stress_curve():
+    """Δτ_C = 100 and Δσ_C = 100 are the same label and different curves: the shear family
+    runs at a single m = 5 with no knee at 5 million cycles."""
+    shear = _category(
+        table="Table 8.5",
+        description="fillet weld, shear on the throat",
+        detail_category=Quantity.parse("100 MPa"),
+        stress_kind=WeldStressKind.SHEAR,
+    )
+    assert shear.detail_category.to("MPa").magnitude == pytest.approx(100.0)
+    with pytest.raises(ValueError, match="single slope of m = 5"):
+        shear.curve()
+    # And a shear category is not held to the direct-stress ladder.
+    assert (
+        _category(
+            detail_category=Quantity.parse("100 MPa"), stress_kind=WeldStressKind.SHEAR
+        ).stress_kind
+        is WeldStressKind.SHEAR
+    )
+
+
+def test_the_published_worked_endurance_is_reproduced():
+    """SCI's worked example: detail category 160, a 250 MPa nominal range, N = 5.243e5."""
+    from anvilate.analysis.fatigue import weld_detail_endurance_cycles
+
+    cycles = weld_detail_endurance_cycles(
+        stress_range=Quantity.parse("250 MPa"), detail_category=Quantity.parse("160 MPa")
+    )
+    assert cycles == pytest.approx(5.243e5, rel=1e-3)

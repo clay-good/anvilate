@@ -47,6 +47,9 @@ __all__ = [
     "LoadingMode",
     "SpecimenGeometry",
     "SpecimenMetadata",
+    "WeldDetailCategory",
+    "WeldStressKind",
+    "EN1993_NORMAL_DETAIL_CATEGORIES",
     "en1993_detail_category_curve",
 ]
 
@@ -397,6 +400,141 @@ _EN1993_SURVIVAL = CurveSurvival.P97_7
 # Below 10,000 cycles the nominal-stress method is outside its scope: that is low-cycle
 # territory, where the standard directs you to a strain-based assessment instead.
 _EN1993_MIN_CYCLES = 1.0e4
+
+
+class WeldStressKind(StrEnum):
+    """Which stress range a weld detail category is a category *for*.
+
+    EN 1993-1-9 draws two different families of curve. The direct-stress curves run at
+    m = 3 to the constant-amplitude limit at 5 million cycles and m = 5 from there to the
+    cutoff. **The shear curves run at a single slope of m = 5 throughout**, with no knee
+    at 5 million. The standard's combined-stress interaction says the same thing in its
+    exponents: (Δσ/Δσ_C)³ + (Δτ/Δτ_C)⁵ ≤ 1.
+
+    So the two are not interchangeable, and the number alone does not say which it is: a
+    Δτ_C of 100 and a Δσ_C of 100 are different curves with the same label.
+    """
+
+    NORMAL = "normal"
+    SHEAR = "shear"
+
+
+# The direct-stress detail categories of EN 1993-1-9, read off the published fatigue
+# strength curve legend (Figure 7.1; reproduced in SCI's "Introduction to fatigue design
+# to BS EN 1993-1-9", New Steel Construction, September 2018). The ladder is discrete:
+# the standard tabulates details into these categories and does not define curves between
+# them, so a value off the ladder is a transcription error or an interpolation nobody
+# published.
+EN1993_NORMAL_DETAIL_CATEGORIES: tuple[int, ...] = (
+    36,
+    40,
+    45,
+    50,
+    56,
+    63,
+    71,
+    80,
+    90,
+    100,
+    112,
+    125,
+    140,
+    160,
+)
+
+_EN1993_STANDARD_PREFIX = "EN 1993-1-9"
+
+
+class WeldDetailCategory(BaseModel):
+    """A weld detail category as a record: the standard, the detail, and which curve.
+
+    A detail category is published as a bare number — "90" — and that number is the
+    whole input to a weld fatigue screen. Three things have to travel with it or the
+    screen is being run on a coincidence:
+
+    * **The standard and its edition.** EN 1993-1-9's category 90 and IIW's FAT 90 are the
+      same number and a different curve (the knee sits at 5 million cycles in one and
+      10 million in the other), and AASHTO's letter categories are a third construction.
+    * **Which stress the category is for.** See :class:`WeldStressKind`: the direct-stress
+      and shear families have different slopes, and the label does not say which.
+    * **The detail itself, and the table it came from.** A category number is a *verdict*
+      about a geometry — where the crack starts, how the weld is finished, which direction
+      the stress runs. Recording only the number is how a butt weld's category ends up on
+      a fillet-welded attachment.
+
+    ``curve()`` hands back the :class:`FatigueCurve` for the record, and refuses on a
+    shear category rather than returning the direct-stress construction.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    standard: str
+    edition: str
+    table: str
+    description: str
+    detail_category: Quantity
+    stress_kind: WeldStressKind = WeldStressKind.NORMAL
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> WeldDetailCategory:
+        for field, value in (
+            ("standard", self.standard),
+            ("edition", self.edition),
+            ("table", self.table),
+            ("description", self.description),
+        ):
+            if not value.strip():
+                raise ValueError(
+                    f"a weld detail category must state its {field}; a bare number is a "
+                    "curve label, not a detail"
+                )
+        if not self.detail_category.has_dimension("[pressure]"):
+            raise ValueError(f"detail_category must be a stress range; got {self.detail_category}")
+        value = self.detail_category.to("MPa").magnitude
+        if not isfinite(value) or value <= 0:
+            raise ValueError(
+                f"detail_category must be a positive, finite stress range; got "
+                f"{self.detail_category}"
+            )
+        if (
+            self.standard.startswith(_EN1993_STANDARD_PREFIX)
+            and self.stress_kind is WeldStressKind.NORMAL
+        ):
+            ladder = EN1993_NORMAL_DETAIL_CATEGORIES
+            if not any(abs(value - c) < 1e-9 for c in ladder):
+                near = sorted(ladder, key=lambda c: abs(c - value))[:2]
+                raise ValueError(
+                    f"{value:g} MPa is not an {_EN1993_STANDARD_PREFIX} direct-stress "
+                    f"detail category. The standard tabulates details into a fixed ladder "
+                    f"and defines no curve between the rungs; the nearest are "
+                    f"{sorted(near)}. If this came from a National Annex or another "
+                    f"standard, declare that standard instead of interpolating this one"
+                )
+        return self
+
+    def curve(self) -> FatigueCurve:
+        """The record's S-N curve.
+
+        Refuses on a shear category rather than handing back the direct-stress
+        construction: the shear family is a single m = 5 slope with no constant-amplitude
+        knee, and evaluating Δτ_C on the m = 3 branch returns a life that is wrong in the
+        unconservative direction at every range above the knee.
+        """
+        if self.stress_kind is not WeldStressKind.NORMAL:
+            raise ValueError(
+                f"{self.description!r} is a {self.stress_kind.value}-stress category, and "
+                "this module builds the direct-stress curve only. The shear family runs at "
+                "a single slope of m = 5 with no knee at 5 million cycles, so the "
+                "direct-stress construction would over-state its life"
+            )
+        return en1993_detail_category_curve(self.detail_category)
+
+    def __str__(self) -> str:
+        symbol = "Δσ_C" if self.stress_kind is WeldStressKind.NORMAL else "Δτ_C"
+        return (
+            f"{self.standard}:{self.edition} {self.table} — {self.description} "
+            f"({self.stress_kind.value} {symbol} = {self.detail_category})"
+        )
 
 
 def en1993_detail_category_curve(detail_category: Quantity) -> FatigueCurve:
