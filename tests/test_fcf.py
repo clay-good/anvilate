@@ -339,6 +339,36 @@ def test_the_character_height_must_be_a_positive_length():
         frame_drawing(_frame(), text_height=Quantity(magnitude=0.0, unit="mm"))
 
 
+def test_a_datum_letter_the_layout_allowance_was_never_checked_for_is_refused():
+    """The model's datum-letter rule is ``isalpha() and isupper()``, which ``Ä`` satisfies.
+
+    That is right for the model — a drawing in another language carries the letters it
+    carries — and it means the drawing layer's closed character set is a guard that can
+    actually fire, not decoration. The width allowance was measured for ASCII digits and
+    letters; laying out a character it was never checked for is how text ends up across a
+    compartment divider.
+    """
+    exotic = DatumReference(letter="Ä")
+    assert exotic.letter == "Ä", "the model accepts it, which is what makes the guard live"
+    with pytest.raises(ValueError, match="width allowance was never checked"):
+        frame_drawing(_frame(datums=(exotic,)), text_height=H)
+
+
+def test_an_arc_survives_the_stroke_union():
+    """``Stroke`` is a pydantic union, and an Arc has every field a Circle has plus two.
+
+    A union that coerced the profile arc to a Circle would draw a full circle where the
+    symbol is an open one, and every extent assertion would still pass.
+    """
+    frame = _frame(
+        characteristic=Characteristic.PROFILE_OF_A_LINE,
+        feature_type=FeatureType.SURFACE,
+        datums=(),
+    )
+    kinds = {type(stroke).__name__ for stroke in frame_drawing(frame, text_height=H).strokes}
+    assert "Arc" in kinds
+
+
 # --- Propagation: one declaration, three consumers ------------------------------------
 
 
@@ -426,6 +456,22 @@ def test_the_dxf_carries_the_frame_on_its_own_layer(tmp_path):
     drawing = frame_drawing(frame, text_height=H)
     assert len(entities) == len(drawing.strokes) + len(drawing.labels)
     assert [e.dxf.text for e in entities if e.dxftype() == "TEXT"] == ["0.2", "M", "A"]
+
+
+def test_the_dxf_writes_an_arc_as_an_arc(tmp_path):
+    """The profile symbols are the only arcs in the set, so nothing else exercises the
+    branch that writes one."""
+    ezdxf = pytest.importorskip("ezdxf")
+    frame = _frame(
+        characteristic=Characteristic.PROFILE_OF_A_SURFACE,
+        feature_type=FeatureType.SURFACE,
+    )
+    path = export_feature_control_frame_dxf(
+        frame=frame, path=tmp_path / "profile.dxf", text_height=H
+    )
+    arcs = [e for e in ezdxf.readfile(path).modelspace() if e.dxftype() == "ARC"]
+    assert len(arcs) == 1
+    assert arcs[0].dxf.radius == pytest.approx(10.0), "a semicircle 2h across is h in radius"
 
 
 def test_the_dxf_places_the_frame_where_it_was_asked_to(tmp_path):
