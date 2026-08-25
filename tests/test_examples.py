@@ -5453,6 +5453,22 @@ def test_spec_load_combination_check_example_drives_loads_from_the_spec():
     assert "LRFD 5" in by_name["edge anchorage uplift"].detail
     assert card.governing().name == "deck strength"
 
+    # A 25 kN case nobody classified never enters the sum, so the check passes on a
+    # demand that never saw it — and the same check, told the case exists, refuses.
+    from anvilate.scorecard import CheckStatus
+
+    forgotten, classified, guarded = namespace["girder_checks"]()
+    assert forgotten.status is CheckStatus.PASS
+    assert forgotten.safety_factor == pytest.approx(1.52, abs=0.01)
+    assert classified.status is CheckStatus.FAIL
+    assert classified.safety_factor == pytest.approx(1.04, abs=0.01)
+    assert guarded.status is CheckStatus.NOT_EVALUATED
+    assert "conveyor_reaction" in guarded.detail
+
+    spec = namespace["partly_classified_spec"]()
+    assert spec.unclassified_force_cases() == ("conveyor_reaction",)
+    assert spec.combination_evidence().status is CheckStatus.NOT_EVALUATED
+
 
 def test_braced_frame_column_seismic_example_tension_reversal_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "braced_frame_column_seismic.py"))

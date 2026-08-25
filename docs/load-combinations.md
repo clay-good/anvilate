@@ -78,6 +78,45 @@ combination_scorecard("deck strength", combinations=asce7_lrfd_basic(),
 See [`examples/spec_load_combination_check.py`](../examples/spec_load_combination_check.py)
 for the full spec-to-scorecard flow.
 
+## A load case nobody classified is the quiet failure
+
+`combination_loads()` sums the cases that declare a `nature` and skips the ones that do
+not, and every combination treats a nature nobody supplied as **zero**. Those two together
+turn a forgotten classification into a smaller demand and a comfortable PASS, with nothing
+in the entry saying a load was left out — a spec declaring 10 kN of dead load and an
+unclassified 200 kN case screens its capacity against 14 kN.
+
+So the classification gap is a first-class output:
+
+```python
+spec.unclassified_force_cases()      # ('lateral_thrust',) — force declared, nature not
+spec.combination_evidence()          # NOT_EVALUATED, naming them
+```
+
+`combination_scorecard(..., unclassified=spec.unclassified_force_cases())` reports
+`NOT_EVALUATED` **before a number is computed**, and does so even when the subset demand
+would have failed: the number is not this part's demand either way, and a FAIL that is
+right by accident goes on being reported after the missing case turns it into a pass.
+
+A case with **no force** — a remote-mass case — is not listed. It has nothing to
+contribute to a factored sum, so leaving it unclassified costs nothing.
+
+`DesignSpec.combination_evidence()` is the short path and the safe one: it passes the
+unclassified list for you. Building the record from the mapping directly leaves that to
+the caller, which is exactly the step it exists so nobody has to remember.
+
+## The bundle records which combination the checks used
+
+`BundleSections.combinations` carries a `CombinationEvidence`: the basis, the governing
+combination, its clause, the demand, and the unclassified cases. It is a verdict about the
+part rather than information about the design space, so it enters the roll-up — **a green
+scorecard under a partially classified load set is a `NOT_EVALUATED` bundle.**
+
+The record and the check select the governing combination through one shared rule, so the
+bundle cannot cite a clause the check never used. That is not hypothetical: the check picks
+by magnitude, because a safety factor is `capacity / |demand|`, and on an uplift set signed
+selection and magnitude selection name different combinations.
+
 ## What Anvilate does and does not derive
 
 This is **combination factoring, not load derivation**. The generators apply the

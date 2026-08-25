@@ -20,10 +20,11 @@
       A spec declares its basis via `DesignSpec.combination_basis` and resolves it with
       `DesignSpec.combination_set()`, so the full flow is
       `spec.combination_set().governing(spec.combination_loads())`.
-- [~] 2.3 Scorecard and evidence-bundle surfacing of the governing combination —
-      `combination_scorecard` screens a capacity against the governing (or minimizing)
-      combination and names it in the entry detail + reference. Evidence-bundle
-      surfacing is the remaining part.
+- [x] 2.3 Scorecard and evidence-bundle surfacing of the governing combination —
+      `combination_scorecard` names the governing combination in the entry detail +
+      reference, and `CombinationEvidence` carries basis, combination, clause, demand and
+      the unclassified cases into `BundleSections.combinations`. Both select through one
+      shared rule, so the bundle cannot cite a clause the check never used.
 
 ## 3. Tests
 
@@ -31,8 +32,9 @@
       ASD (13 expanded) re-derived, spot-checked factors + citations.
 - [x] 3.2 Counteracting-combination governs in an uplift fixture — 0.9D + 1.0W with a
       negative (uplift) wind is the minimizing governing combination.
-- [ ] 3.3 Subset evaluation → "not evaluated"; undeclared case → rejection — belongs
-      with the gauntlet/spec-ir integration slice (2.3), not the standalone generator.
+- [x] 3.3 Subset evaluation → "not evaluated"; undeclared case → surfaced by name —
+      `DesignSpec.unclassified_force_cases()`, the `unclassified=` guard on
+      `combination_scorecard`, and the same list on `CombinationEvidence`.
 
 ## 4. Docs & examples
 
@@ -42,12 +44,43 @@
 - [x] 4.2 Explanation page (`docs/load-combinations.md`): LRFD vs ASD sets and the
       factoring-not-derivation boundary.
 
+## Shipped 2026-08-25 — the rest of 2.3 and 3.3
+
+`CombinationEvidence` / `combination_evidence` in `anvilate.loads`,
+`DesignSpec.unclassified_force_cases()` and `DesignSpec.combination_evidence()`, the
+`combinations` section on `BundleSections`, `docs/load-combinations.md`, and the extended
+`examples/spec_load_combination_check.py`.
+
+**A load case nobody classified made the demand smaller, and nothing said so.**
+`combination_loads()` skips a case that carries a force and no `nature`, and every
+combination treats a nature nobody supplied as zero. Those two together turn a forgotten
+classification into a smaller demand and a comfortable pass: in the worked example a 130 kN
+girder passes at 1.52 on a demand of 85.6 kN, and the same girder with the 25 kN conveyor
+reaction classified fails at 1.04 on 125.6 kN. The guard fires **before a number is
+computed**, and fires even when the subset demand would have failed — a FAIL that is right
+by accident goes on being reported after the missing case turns it into a pass.
+
+**A case with no force is not listed.** A remote-mass case has nothing to contribute to a
+factored sum, so leaving it unclassified costs nothing, and listing it would train a reader
+to ignore the list.
+
+**The safe path is the short one.** `DesignSpec.combination_evidence()` passes the
+unclassified list for you; building the record from the mapping directly leaves that to the
+caller, which is the step it exists so nobody has to remember. Both are asserted, including
+the mistake the short path removes.
+
+**One selection rule, not two.** The check picks the governing combination by magnitude
+(a safety factor is `capacity / |demand|`) and the bundle would have been free to pick by
+sign. On an uplift set those name different combinations, so the bundle would have cited a
+clause the check never used. `_governing_for_check` is shared, and the drift test asserts
+its own premise — that sign and magnitude genuinely disagree on the case it uses.
+
+**The bundle's roll-up sees it.** The combinations section is a verdict about the part, not
+information about the design space, so a green scorecard under a partially classified load
+set is a `NOT_EVALUATED` bundle.
+
 ## Deferred to later slices (recorded, not dropped)
 
-- Seismic combinations (§2.3.6 / §2.4.5) with E split into Ev/Eh from S_DS taken as
-  typed user inputs (rest of 2.1).
-- spec-ir load-nature classification on the Spec IR's load cases, and the gauntlet
-  expansion that evaluates a declared combination set and surfaces the governing
-  combination on the scorecard + evidence bundle (2.3, 3.3). This first slice is the
-  standalone combination engine, mirroring how `uncertainty.py` shipped before its
-  scorecard wiring.
+- The gauntlet expansion that evaluates a declared combination set as part of a full
+  screening run. The spec-to-scorecard-to-bundle flow is wired; what is left is the
+  gauntlet driving it rather than the caller.

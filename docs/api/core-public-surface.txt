@@ -138,6 +138,8 @@ loads.asce7_asd_basic
 loads.asce7_lrfd_seismic
 loads.asce7_asd_seismic
 loads.combination_scorecard
+loads.CombinationEvidence
+loads.combination_evidence
 mcp.Cost
 mcp.Dispatch
 mcp.Gate

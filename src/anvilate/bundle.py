@@ -52,6 +52,7 @@ from .callouts import CalloutSet, callout_scorecard
 from .evidence import SourceRecord
 from .explore import StudyResult
 from .gdt import FeatureControlFrame
+from .loads import CombinationEvidence
 from .review import ReviewerDossier
 from .scorecard import CheckStatus, Scorecard
 from .units import Quantity
@@ -136,6 +137,10 @@ class BundleSections(BaseModel):
     exploration: StudyResult | None = None
     callouts: CalloutSet | None = None
     frames: tuple[FeatureControlFrame, ...] = ()
+    # Which load combination the checks were screened against. Optional because a part
+    # screened per load case declares no combination basis; present, it is a verdict about
+    # this part, so it enters the roll-up rather than riding along as information.
+    combinations: CombinationEvidence | None = None
     # The strength the callout layer derives its surface factor against, when a callout
     # set is present. Without it the finish callouts report NOT_EVALUATED, which is the
     # honest outcome rather than a reason to omit the section.
@@ -229,6 +234,14 @@ class BundleSections(BaseModel):
                     detail=f"{len(card.entries)} typed callouts consumed",
                 )
             )
+        if self.combinations is not None:
+            found.append(
+                SectionStatus(
+                    name="load combinations",
+                    status=self.combinations.status,
+                    detail=self.combinations.detail(),
+                )
+            )
         if self.frames:
             found.append(
                 SectionStatus(
@@ -256,6 +269,7 @@ class BundleSections(BaseModel):
                 "review",
                 "exploration",
                 "callouts",
+                "load combinations",
                 "geometric tolerances",
             )
             if name not in present

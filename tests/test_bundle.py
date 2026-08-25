@@ -115,6 +115,7 @@ def test_a_scorecard_only_bundle_is_legitimate_and_says_what_it_is_not():
         "review",
         "exploration",
         "callouts",
+        "load combinations",
         "geometric tolerances",
     }
     assert sections.status is CheckStatus.PASS
@@ -225,7 +226,7 @@ def test_every_section_appears_in_the_rendering():
     for name in ("checks", "verification", "review", "callouts"):
         assert name in rendered
     assert sections.covers() == ("checks", "verification", "review", "callouts")
-    assert sections.missing() == ("exploration", "geometric tolerances")
+    assert sections.missing() == ("exploration", "load combinations", "geometric tolerances")
 
 
 def test_a_callout_section_with_no_strength_reports_not_evaluated_not_absent():
@@ -266,6 +267,7 @@ def test_the_assembled_bundle_carries_the_roll_up_into_the_predicate():
         "review",
         "exploration",
         "callouts",
+        "load combinations",
         "geometric tolerances",
     ]
     # A verifier reads the roll-up the reviewer saw rather than recomputing it.
@@ -507,3 +509,47 @@ def _case_folded_digest() -> str:
         bom=_bom(),
         ai_disclosure=AIDisclosure.none(),
     ).digest
+
+
+# --- the governing combination, carried into the bundle -------------------------------
+
+
+def _combination_evidence(**kwargs):
+    from anvilate.loads import LoadNature, asce7_lrfd_basic, combination_evidence
+
+    defaults = {"loads": {LoadNature.DEAD: 10_000.0}}
+    loads = kwargs.pop("loads", defaults["loads"])
+    return combination_evidence(asce7_lrfd_basic(), loads, **kwargs)
+
+
+def test_the_bundle_names_the_governing_combination():
+    sections = BundleSections(scorecard=_card(), combinations=_combination_evidence())
+    row = next(s for s in sections.sections() if s.name == "load combinations")
+    assert row.status is CheckStatus.PASS
+    assert "LRFD" in row.detail and "§2.3.1" in row.detail
+    assert not row.informational, (
+        "which combination the checks were screened against is a statement about this "
+        "part, so it belongs in the roll-up"
+    )
+    assert sections.status is CheckStatus.PASS
+
+
+def test_an_unclassified_load_case_drops_a_green_bundle_to_not_evaluated():
+    """The whole point of carrying it: the scorecard passes and the bundle does not.
+
+    The checks were screened against a demand summed from part of the declared loads, and
+    nothing in the scorecard says so — this is the layer that does.
+    """
+    sections = BundleSections(
+        scorecard=_card(),
+        combinations=_combination_evidence(unclassified=("lateral_thrust",)),
+    )
+    assert sections.scorecard.status is CheckStatus.PASS
+    assert sections.status is CheckStatus.NOT_EVALUATED
+    assert "lateral_thrust" in sections.render()
+
+
+def test_a_bundle_with_no_combination_basis_says_so_rather_than_implying_one():
+    sections = BundleSections(scorecard=_card())
+    assert "load combinations" in sections.missing()
+    assert "load combinations" not in sections.covers()

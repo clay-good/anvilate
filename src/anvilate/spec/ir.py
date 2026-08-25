@@ -15,12 +15,14 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from ..loads import (
+    CombinationEvidence,
     CombinationSet,
     LoadNature,
     asce7_asd_basic,
     asce7_asd_seismic,
     asce7_lrfd_basic,
     asce7_lrfd_seismic,
+    combination_evidence,
 )
 from ..tolerance import (
     AchievabilityCheck,
@@ -602,6 +604,44 @@ class DesignSpec(_Base):
             effective = case.force.to("N").magnitude * (case.quasi_static_factor or 1.0)
             loads[case.nature] = loads.get(case.nature, 0.0) + effective
         return loads
+
+    def combination_evidence(self, *, minimize: bool = False) -> CombinationEvidence | None:
+        """The governing combination for this spec, or ``None`` if no basis is declared.
+
+        The short path, and the safe one: it passes :meth:`unclassified_force_cases` for
+        you, so the evidence a bundle carries cannot forget the cases the factoring could
+        not see. Handing :func:`~anvilate.loads.combination_evidence` a mapping directly
+        works too and leaves that to the caller — which is exactly the step this exists so
+        nobody has to remember.
+        """
+        combinations = self.combination_set()
+        if combinations is None:
+            return None
+        return combination_evidence(
+            combinations,
+            self.combination_loads(),
+            unclassified=self.unclassified_force_cases(),
+            minimize=minimize,
+        )
+
+    def unclassified_force_cases(self) -> tuple[str, ...]:
+        """Load cases that carry a force and no ``nature``, in declaration order.
+
+        These are the cases :meth:`combination_loads` skips, and skipping them is only
+        safe if somebody looks at the list. A combination generator treats a nature nobody
+        supplied as zero, so a spec that declares a 200 kN case and forgets to classify it
+        produces a demand that never saw the 200 kN — and every capacity screened against
+        that demand passes. Hand this to
+        :func:`~anvilate.loads.combination_scorecard` or
+        :func:`~anvilate.loads.combination_evidence` and the result reports
+        ``NOT_EVALUATED`` instead.
+
+        A case with no force (a remote-mass case, say) is not listed: it has nothing to
+        contribute to a factored sum, so leaving it unclassified costs nothing.
+        """
+        return tuple(
+            case.name for case in self.load_cases if case.force is not None and case.nature is None
+        )
 
     def analyze_chains(self) -> list[ChainAnalysis]:
         """Analyze every declared stack-up chain against this spec's dimensions.

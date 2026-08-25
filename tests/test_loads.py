@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from anvilate.loads import (
+    CombinationEvidence,
     CombinationSet,
     LoadCombination,
     LoadNature,
@@ -12,6 +14,7 @@ from anvilate.loads import (
     asce7_asd_seismic,
     asce7_lrfd_basic,
     asce7_lrfd_seismic,
+    combination_evidence,
     combination_scorecard,
 )
 from anvilate.scorecard import CheckStatus
@@ -279,3 +282,145 @@ def test_a_zero_demand_is_not_evaluated_rather_than_an_infinite_pass() -> None:
     )
     assert passes.status is CheckStatus.PASS
     assert passes.safety_factor == pytest.approx(1000.0 / (1.4 * 100.0))
+
+
+# --- a demand summed from part of the declared loads ----------------------------------
+#
+# `combination_loads()` skips a load case that carries a force and no nature, and every
+# combination treats a nature nobody supplied as zero. Those two together turn a forgotten
+# classification into a smaller demand and a comfortable PASS, with nothing in the entry
+# saying a load was left out.
+
+
+def test_an_unclassified_load_case_stops_the_check_before_a_number_is_computed():
+    combos = asce7_lrfd_basic()
+    # 10 kN classified, 200 kN not. The subset demand is 14 kN against a 40 kN capacity.
+    subset = combination_scorecard(
+        "tie", combinations=combos, loads={D: 10_000.0}, capacity=40_000.0, required=2.0
+    )
+    assert subset.status is CheckStatus.PASS, "this is the silent green, shown before it is shut"
+
+    guarded = combination_scorecard(
+        "tie",
+        combinations=combos,
+        loads={D: 10_000.0},
+        capacity=40_000.0,
+        required=2.0,
+        unclassified=("lateral thrust",),
+    )
+    assert guarded.status is CheckStatus.NOT_EVALUATED
+    assert guarded.safety_factor is None
+    assert "lateral thrust" in guarded.detail
+
+
+def test_the_guard_fires_even_when_the_subset_demand_would_have_failed():
+    """The number is not this part's demand either way, so it is not reported as a verdict.
+
+    Reporting FAIL here would be right by accident, and would go on being reported after
+    the missing case turned it into a pass.
+    """
+    entry = combination_scorecard(
+        "tie",
+        combinations=asce7_lrfd_basic(),
+        loads={D: 100_000.0},
+        capacity=1_000.0,
+        required=2.0,
+        unclassified=("lateral thrust",),
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+
+
+def test_a_fully_classified_check_is_unaffected():
+    entry = combination_scorecard(
+        "tie",
+        combinations=asce7_lrfd_basic(),
+        loads={D: 10_000.0},
+        capacity=40_000.0,
+        required=2.0,
+        unclassified=(),
+    )
+    assert entry.status is CheckStatus.PASS
+    assert entry.safety_factor == pytest.approx(40_000.0 / (1.4 * 10_000.0))
+
+
+# --- the evidence names the combination the check screened against --------------------
+
+
+@pytest.mark.parametrize(
+    "loads",
+    [
+        {D: 10_000.0},
+        {D: 10_000.0, W: -60_000.0},  # uplift governs by magnitude, not by sign
+        {D: 10_000.0, L: 5_000.0, S: 2_000.0},
+        {D: 1.0, W: -1.0},
+    ],
+)
+@pytest.mark.parametrize("minimize", [False, True])
+def test_the_evidence_cannot_name_a_different_combination_from_the_one_screened(loads, minimize):
+    """Two copies of the selection rule would be two places for it to drift.
+
+    The scorecard picks by magnitude and the bundle would be free to pick by sign; on the
+    uplift case those are different combinations, and the bundle would then cite a clause
+    the check never used.
+    """
+    combos = asce7_lrfd_basic()
+    entry = combination_scorecard(
+        "tie",
+        combinations=combos,
+        loads=loads,
+        capacity=1e9,
+        required=2.0,
+        minimize=minimize,
+    )
+    evidence = combination_evidence(combos, loads, minimize=minimize)
+    assert evidence.governing in entry.detail
+    assert entry.reference == evidence.citation
+
+
+def test_the_drift_test_is_looking_at_a_case_where_sign_and_magnitude_disagree():
+    """Otherwise the parametrisation above would agree for a reason that is not the rule."""
+    combos = asce7_lrfd_basic()
+    loads = {D: 10_000.0, W: -60_000.0}
+    by_sign, _ = combos.governing(loads)
+    by_magnitude, _ = combos.governing(loads, by_magnitude=True)
+    assert by_sign.name != by_magnitude.name
+
+
+# --- the evidence record --------------------------------------------------------------
+
+
+def test_evidence_status_is_a_verdict_about_whether_a_combination_can_be_named():
+    combos = asce7_lrfd_basic()
+    named = combination_evidence(combos, {D: 10_000.0})
+    assert named.status is CheckStatus.PASS
+    assert named.governing in named.detail()
+
+    partial = combination_evidence(combos, {D: 10_000.0}, unclassified=("lateral thrust",))
+    assert partial.status is CheckStatus.NOT_EVALUATED
+    assert "lateral thrust" in partial.detail()
+
+    nothing = combination_evidence(combos, {})
+    assert nothing.status is CheckStatus.NOT_EVALUATED
+    assert "zero demand" in nothing.detail()
+
+
+def test_evidence_refuses_a_non_finite_demand():
+    with pytest.raises(ValidationError, match="not a finite"):
+        CombinationEvidence(
+            basis="ASCE 7-22 LRFD (strength)",
+            governing="LRFD 1",
+            citation="ASCE 7-22 §2.3.1",
+            demand_newtons=float("nan"),
+        )
+
+
+@pytest.mark.parametrize("field", ["basis", "governing", "citation"])
+def test_evidence_refuses_a_blank_identifier(field):
+    kwargs = {
+        "basis": "ASCE 7-22 LRFD (strength)",
+        "governing": "LRFD 1",
+        "citation": "ASCE 7-22 §2.3.1",
+        "demand_newtons": 14_000.0,
+    }
+    with pytest.raises(ValidationError, match=f"must state its {field}"):
+        CombinationEvidence(**{**kwargs, field: "  "})

@@ -18,11 +18,11 @@ case's magnitude.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from math import isfinite
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from .scorecard import CheckStatus, ScorecardEntry
 
@@ -35,6 +35,8 @@ __all__ = [
     "asce7_lrfd_seismic",
     "asce7_asd_seismic",
     "combination_scorecard",
+    "CombinationEvidence",
+    "combination_evidence",
 ]
 
 
@@ -217,9 +219,18 @@ def combination_scorecard(
     capacity: float,
     required: float,
     minimize: bool = False,
+    unclassified: Sequence[str] = (),
     reference: str | None = None,
 ) -> ScorecardEntry:
     """Screen a ``capacity`` against the governing combination's demand.
+
+    ``unclassified`` names load cases that carry a force and no ``nature`` — see
+    :meth:`~anvilate.spec.DesignSpec.unclassified_force_cases`. Any at all and the check
+    reports ``NOT_EVALUATED`` **before a number is computed**, because the combination
+    generators treat a nature nobody supplied as zero: a spec that declares a 200 kN case
+    and forgets to classify it otherwise screens its capacity against a demand that never
+    saw the 200 kN, and passes. That is a subset evaluation, and a subset evaluation is
+    not a smaller answer to the same question — it is an answer to a different one.
 
     The demand is the governing combination's factored sum, chosen by *magnitude*
     because the safety factor is ``capacity / |demand|``: selecting by signed value
@@ -244,7 +255,18 @@ def combination_scorecard(
     takes that combination's citation as its reference, so the scorecard shows the
     controlling combination rather than silently reducing the set to one number.
     """
-    governing, demand = combinations.governing(loads, minimize=minimize, by_magnitude=not minimize)
+    if unclassified:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"{len(unclassified)} load case(s) carry a force and no nature, so they "
+                f"enter no combination: {', '.join(unclassified)}. A demand summed from "
+                f"part of the declared loads is not this part's demand"
+            ),
+            reference=reference or combinations.basis,
+        )
+    governing, demand = _governing_for_check(combinations, loads, minimize=minimize)
     magnitude = abs(demand)
     if magnitude == 0:
         return ScorecardEntry(
@@ -342,3 +364,102 @@ def asce7_asd_basic() -> CombinationSet:
         _combo("ASD 7", clause, D=0.6, W=0.6),
     ]
     return CombinationSet(basis="ASCE 7-22 ASD (allowable stress)", combinations=tuple(combos))
+
+
+def _governing_for_check(
+    combinations: CombinationSet, loads: Mapping[LoadNature, float], *, minimize: bool
+) -> tuple[LoadCombination, float]:
+    """The combination a check screens against — one rule, used by every consumer.
+
+    Signed selection for an explicitly-requested counteracting case, by magnitude
+    otherwise, because a check judges ``capacity / |demand|``. It exists as one function
+    so the combination the evidence bundle *names* cannot drift from the one the scorecard
+    *screened against*; two copies of this rule would be two places for it to change.
+    """
+    return combinations.governing(loads, minimize=minimize, by_magnitude=not minimize)
+
+
+class CombinationEvidence(BaseModel):
+    """Which combination a part's checks were screened against, for the evidence bundle.
+
+    The scorecard entry names the governing combination in its detail, which a reader
+    sees and nothing consumes. This is the structured form: the basis, the combination,
+    its clause, the demand it produced, and — the part that decides the status — the load
+    cases that carried a force and entered no combination.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    basis: str
+    governing: str
+    citation: str
+    demand_newtons: float
+    # Load cases carrying a force with no declared nature. Any at all and the evidence is
+    # NOT_EVALUATED: the demand was summed from part of the declared loads.
+    unclassified: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> CombinationEvidence:
+        for field, value in (
+            ("basis", self.basis),
+            ("governing", self.governing),
+            ("citation", self.citation),
+        ):
+            if not value.strip():
+                raise ValueError(f"combination evidence must state its {field}")
+        if not isfinite(self.demand_newtons):
+            raise ValueError(
+                f"the governing demand is {self.demand_newtons}, which is not a finite "
+                "number; a non-finite demand is refused rather than recorded"
+            )
+        return self
+
+    @property
+    def status(self) -> CheckStatus:
+        """``NOT_EVALUATED`` when the demand was summed from part of the declared loads,
+        or when every combination summed to zero — otherwise ``PASS``, meaning the
+        governing combination is named and the checks were screened against it."""
+        if self.unclassified or self.demand_newtons == 0:
+            return CheckStatus.NOT_EVALUATED
+        return CheckStatus.PASS
+
+    def detail(self) -> str:
+        """One line: the combination that governed, or why none can be named."""
+        if self.unclassified:
+            return (
+                f"{len(self.unclassified)} load case(s) carry a force and no nature "
+                f"({', '.join(self.unclassified)}), so the {self.basis} demand was summed "
+                "from part of the declared loads"
+            )
+        if self.demand_newtons == 0:
+            return f"every combination in {self.basis} sums to zero demand; no load to check"
+        return (
+            f"{self.governing} governs under {self.basis} "
+            f"({self.demand_newtons:g} N, {self.citation})"
+        )
+
+    def __str__(self) -> str:
+        return self.detail()
+
+
+def combination_evidence(
+    combinations: CombinationSet,
+    loads: Mapping[LoadNature, float],
+    *,
+    unclassified: Sequence[str] = (),
+    minimize: bool = False,
+) -> CombinationEvidence:
+    """The governing combination as a bundle-ready record.
+
+    Selects the combination with :func:`_governing_for_check`, the same rule
+    :func:`combination_scorecard` screens with, so the bundle cannot name a different
+    combination from the one the checks used.
+    """
+    governing, demand = _governing_for_check(combinations, loads, minimize=minimize)
+    return CombinationEvidence(
+        basis=combinations.basis,
+        governing=governing.name,
+        citation=governing.citation,
+        demand_newtons=demand,
+        unclassified=tuple(unclassified),
+    )

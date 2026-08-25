@@ -1072,3 +1072,104 @@ def test_combination_loads_applies_the_quasi_static_factor():
     loads = spec.combination_loads()
     assert loads[LoadNature.LIVE] == pytest.approx(3000.0)  # 1 kN x 3.0, not 1 kN
     assert loads[LoadNature.DEAD] == pytest.approx(400.0)  # a static case is untouched
+
+
+def test_unclassified_force_cases_names_what_the_combination_engine_cannot_see():
+    """The list `combination_loads()` skips, made visible so somebody has to look at it.
+
+    A combination treats a nature nobody supplied as zero, so a forgotten classification
+    is a smaller demand and a comfortable pass. A case with no force is not listed: it has
+    nothing to contribute to a factored sum.
+    """
+    from anvilate.loads import LoadNature
+
+    spec = golden_bracket().model_copy(
+        update={
+            "load_cases": [
+                LoadCase(
+                    name="self_weight",
+                    kind=LoadKind.STATIC,
+                    applied_to="deck",
+                    force=Quantity.parse("10 kN"),
+                    nature=LoadNature.DEAD,
+                ),
+                LoadCase(
+                    name="lateral_thrust",
+                    kind=LoadKind.STATIC,
+                    applied_to="deck",
+                    force=Quantity.parse("200 kN"),
+                ),
+                LoadCase(
+                    name="motor",
+                    kind=LoadKind.REMOTE_MASS,
+                    applied_to="bore",
+                    remote_mass=Quantity.parse("12 kg"),
+                ),
+            ]
+        }
+    )
+    assert spec.unclassified_force_cases() == ("lateral_thrust",)
+    # And the reason it matters: the aggregated mapping is missing 200 kN of it.
+    assert sum(spec.combination_loads().values()) == pytest.approx(10_000.0)
+
+
+def test_a_fully_classified_spec_has_nothing_unclassified():
+    from anvilate.loads import LoadNature
+
+    spec = golden_bracket().model_copy(
+        update={
+            "load_cases": [
+                LoadCase(
+                    name="self_weight",
+                    kind=LoadKind.STATIC,
+                    applied_to="deck",
+                    force=Quantity.parse("10 kN"),
+                    nature=LoadNature.DEAD,
+                )
+            ]
+        }
+    )
+    assert spec.unclassified_force_cases() == ()
+
+
+def test_the_specs_own_combination_evidence_cannot_forget_the_unclassified_cases():
+    """The short path is the safe one, which is why it exists.
+
+    Building the evidence from the mapping directly leaves the unclassified list to the
+    caller — and a caller who forgets it gets a green record over a demand that never saw
+    the missing load.
+    """
+    from anvilate.loads import LoadNature, combination_evidence
+    from anvilate.scorecard import CheckStatus
+
+    spec = golden_bracket().model_copy(
+        update={
+            "combination_basis": "asce7_lrfd",
+            "load_cases": [
+                LoadCase(
+                    name="self_weight",
+                    kind=LoadKind.STATIC,
+                    applied_to="deck",
+                    force=Quantity.parse("10 kN"),
+                    nature=LoadNature.DEAD,
+                ),
+                LoadCase(
+                    name="lateral_thrust",
+                    kind=LoadKind.STATIC,
+                    applied_to="deck",
+                    force=Quantity.parse("200 kN"),
+                ),
+            ],
+        }
+    )
+    safe = spec.combination_evidence()
+    assert safe is not None
+    assert safe.status is CheckStatus.NOT_EVALUATED
+    assert safe.unclassified == ("lateral_thrust",)
+
+    forgotten = combination_evidence(spec.combination_set(), spec.combination_loads())
+    assert forgotten.status is CheckStatus.PASS, "the mistake the short path removes"
+
+
+def test_a_spec_with_no_combination_basis_has_no_combination_evidence():
+    assert golden_bracket().combination_evidence() is None
