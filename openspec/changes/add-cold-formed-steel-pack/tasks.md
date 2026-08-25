@@ -35,8 +35,10 @@
 
 ## 3. Interop
 
-- [ ] 3.1 Optional pyCUFSM adapter (buckling values in, provenance tagged), mirroring the
-      sectionproperties adapter pattern
+- [x] 3.1 Optional pyCUFSM adapter (buckling values in, provenance tagged), mirroring the
+      sectionproperties adapter pattern — `interop.from_pycufsm`. Values in, not the
+      package's objects: what an importer has to get right here is arithmetic and
+      judgement, not an API surface
 
 ## 4. Tests, examples, docs
 
@@ -55,3 +57,30 @@
       three-repairs table, why local strength falls with length when P_crl never moved,
       the prequalified-geometry third state, and the scope (shear, web crippling,
       combined actions and connections are NOT screened).
+
+## Scope as shipped (3.1)
+
+`from_pycufsm` takes the run's **load factors** and a required `reference_load`, not a
+pyCUFSM object. That is deliberate: what an importer has to get right about a signature
+curve is arithmetic and judgement, and neither lives in the package's API.
+
+**A load factor is not a load.** CUFSM's y-axis is a multiplier on the applied reference
+stress distribution. The DSM formulas take ratios, so a factor imported where a load belongs
+is wrong by the reference load and dimensionally unremarkable — no dimension check can see
+it. Hence `reference_load` is required and accepts a force or a moment.
+
+**Which minimum is which mode is a reading, not a lookup**, and it is the thing the analysis
+was run to determine. An importer assuming "first minimum local, second distortional" is
+guessing at it. `ModeIdentification` is a declared input; a `SIGNATURE_MINIMUM` reading must
+carry the half-wavelength each minimum was read at.
+
+**One physical invariant is checked**: local waves at about a plate width and distortional at
+several times that, so a pair in the other order is refused. Swapping them moves strength
+between a curve anchored on P_ne and one anchored on P_y, and the nominal changes with
+nothing looking wrong. Scoped deliberately — a section that genuinely inverts builds
+`ElasticBuckling` directly.
+
+**The anchor is the pack's own hand-worked example, reached the long way round.** The same
+P_y 245 / P_crl 120 / P_crd 155 / P_cre 900 that Appendix 1 was worked by hand for arrives
+here as factors on a 245 kN reference and reproduces P_nd = 150.8 kN, distortional
+governing — a number nothing in the adapter's test file computed.

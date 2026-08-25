@@ -34,8 +34,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .analysis.cold_formed_steel import ElasticBuckling
 from .analysis.section import CrossSection
-from .units import Quantity
+from .units import Quantity, require_finite
 
 __all__ = [
     "ForceComponent",
@@ -44,7 +45,9 @@ __all__ = [
     "MemberForceRecord",
     "MemberDemand",
     "ExternalSectionProperties",
+    "ModeIdentification",
     "bind_demand",
+    "from_pycufsm",
     "from_sectionproperties",
     "provenance_lines",
 ]
@@ -576,3 +579,174 @@ def _sectionproperties_version() -> str:
         return version("sectionproperties")
     except Exception:
         return "unknown (sectionproperties not installed as a distribution)"
+
+
+# --- the pyCUFSM adapter ------------------------------------------------------------------
+#
+# CUFSM and its Python port produce a *signature curve*: a load factor plotted against
+# half-wavelength. The elastic critical loads a DSM check runs on are minima of that curve,
+# and two things about that are easy to get wrong in an importer.
+#
+# The first is arithmetic. The curve's y-axis is a load *factor* on whatever reference
+# stress distribution was applied, not a load. A factor imported as a load is a units error
+# that no dimension check can see, because the factor is dimensionless and the DSM formulas
+# take a ratio.
+#
+# The second is judgement. Which minimum is the local mode and which the distortional is a
+# reading of the curve, and a section may have no distortional minimum at all. That is what
+# the constrained finite strip method (cFSM) exists to answer, and an importer that assumes
+# "first minimum is local, second is distortional" is guessing at the one thing the analysis
+# was run to determine. So the adapter takes the identification as a declared input and
+# checks the one physical invariant it can: the local minimum sits at a shorter
+# half-wavelength than the distortional one.
+
+
+class ModeIdentification(StrEnum):
+    """How each buckling mode was told apart from the others.
+
+    ``CONSTRAINED_MODAL`` means the constrained finite strip method decomposed the
+    solution, so the mode is identified by the method itself. ``SIGNATURE_MINIMUM`` means
+    somebody read a minimum off the signature curve, which is ordinary practice and is also
+    a judgement — so it has to carry the half-wavelength each minimum was read at, or the
+    reading cannot be checked by anyone downstream.
+    """
+
+    CONSTRAINED_MODAL = "cFSM constrained modal decomposition"
+    SIGNATURE_MINIMUM = "signature-curve minimum"
+
+
+def _load_factor(value: float, name: str) -> float:
+    if not isfinite(value) or value <= 0:
+        raise ValueError(
+            f"the {name} load factor must be positive and finite; got {value!r}. A "
+            "non-finite factor produces a buckling load that min() drops from the "
+            "governing set rather than propagating, so the nominal comes back "
+            "complete-looking and too high"
+        )
+    return value
+
+
+def from_pycufsm(
+    *,
+    reference_load: Quantity,
+    local_factor: float,
+    global_factor: float,
+    identification: ModeIdentification,
+    distortional_factor: float | None = None,
+    local_half_wavelength: Quantity | None = None,
+    distortional_half_wavelength: Quantity | None = None,
+) -> ElasticBuckling:
+    """A finite-strip run's load factors as the elastic buckling loads a DSM check consumes.
+
+    ``reference_load`` is required and is the load the factors multiply — the reference
+    stress distribution the finite-strip analysis was run under, times the area (or the
+    section modulus, for a flexural check). Without it the factors are dimensionless
+    numbers, and the DSM formulas take ratios, so importing a factor where a load belongs
+    produces a nominal strength that is wrong by the reference load and dimensionally
+    unremarkable.
+
+    ``distortional_factor`` is ``None`` for a section with no distortional mode — an
+    unlipped angle, a round tube. That is a declaration, and it removes the mode from the
+    governing set rather than letting a zero or a NaN quietly drop out of a ``min()``.
+
+    Two refusals beyond the arithmetic:
+
+    * **A signature-curve reading has to say where it read.** With
+      ``SIGNATURE_MINIMUM``, each supplied mode needs its half-wavelength, because a
+      minimum nobody can locate is a minimum nobody can check.
+    * **Local sits at a shorter half-wavelength than distortional.** Local buckling waves
+      at roughly the width of the widest plate element; the distortional mode waves at
+      several times that. A supplied pair in the other order is almost always the two
+      minima swapped, and swapping them moves strength between a curve anchored on P_ne and
+      one anchored on P_y. If you have a section where the ordering genuinely inverts,
+      build :class:`~anvilate.analysis.ElasticBuckling` directly and say so in its
+      ``source``.
+    """
+    if not reference_load.has_dimension("[force]") and not reference_load.has_dimension(
+        "[force]*[length]"
+    ):
+        raise ValueError(
+            f"reference_load must be a force (compression) or a moment (flexure); got "
+            f"{reference_load}"
+        )
+    require_finite(reference_load, name="reference_load")
+    if reference_load.magnitude <= 0:
+        raise ValueError(f"reference_load must be positive; got {reference_load}")
+
+    # (mode, factor, half-wavelength). The global mode is a column curve rather than a
+    # signature-curve minimum, so it carries no half-wavelength and the reading check
+    # below skips it.
+    modes: list[tuple[str, float, Quantity | None]] = [
+        ("local", _load_factor(local_factor, "local"), local_half_wavelength)
+    ]
+    if distortional_factor is not None:
+        modes.append(
+            (
+                "distortional",
+                _load_factor(distortional_factor, "distortional"),
+                distortional_half_wavelength,
+            )
+        )
+    modes.append(("global", _load_factor(global_factor, "global"), None))
+
+    if identification is ModeIdentification.SIGNATURE_MINIMUM:
+        for mode, _factor, half_wavelength in modes:
+            if mode == "global":
+                continue
+            if half_wavelength is None:
+                raise ValueError(
+                    f"the {mode} mode was read as a signature-curve minimum but carries no "
+                    "half-wavelength. A minimum nobody can locate is a minimum nobody can "
+                    "check — record where on the curve it was read"
+                )
+            if not half_wavelength.has_dimension("[length]"):
+                raise ValueError(
+                    f"the {mode} half-wavelength must be a length; got {half_wavelength}"
+                )
+            require_finite(half_wavelength, name=f"{mode} half-wavelength")
+            if half_wavelength.magnitude <= 0:
+                raise ValueError(
+                    f"the {mode} half-wavelength must be positive; got {half_wavelength}"
+                )
+
+    if local_half_wavelength is not None and distortional_half_wavelength is not None:
+        local_mm = local_half_wavelength.to("mm").magnitude
+        distortional_mm = distortional_half_wavelength.to("mm").magnitude
+        if local_mm >= distortional_mm:
+            raise ValueError(
+                f"the local minimum is given at {local_half_wavelength} and the "
+                f"distortional at {distortional_half_wavelength}, which is the wrong way "
+                "round: local buckling waves at about the width of the widest plate "
+                "element and the distortional mode waves at several times that. Swapping "
+                "them moves strength between a curve anchored on P_ne and one anchored on "
+                "P_y. If this section genuinely inverts, build ElasticBuckling directly"
+            )
+
+    where = ", ".join(
+        f"{mode} {factor:g}x" + (f" at {half_wavelength}" if half_wavelength is not None else "")
+        for mode, factor, half_wavelength in modes
+    )
+    by_mode = {mode: factor for mode, factor, _ in modes}
+
+    def _load(factor: float) -> Quantity:
+        return Quantity(magnitude=reference_load.magnitude * factor, unit=reference_load.unit)
+
+    return ElasticBuckling(
+        local=_load(by_mode["local"]),
+        global_=_load(by_mode["global"]),
+        distortional=_load(by_mode["distortional"]) if "distortional" in by_mode else None,
+        source=(
+            f"pyCUFSM {_pycufsm_version()} finite-strip analysis, {identification.value}; "
+            f"factors on a {reference_load} reference: {where}"
+        ),
+    )
+
+
+def _pycufsm_version() -> str:
+    """The installed package's version, or an explicit statement that it is unknown."""
+    try:
+        from importlib.metadata import version
+
+        return version("pycufsm")
+    except Exception:
+        return "(version unknown — pycufsm not installed as a distribution)"

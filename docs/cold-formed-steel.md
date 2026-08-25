@@ -112,3 +112,43 @@ prequalification check. Not screened: shear, web crippling, combined actions, co
 and the elastic buckling analysis itself.
 
 See [`examples/lipped_channel_dsm.py`](../examples/lipped_channel_dsm.py).
+
+## Bringing the buckling loads in from a finite-strip run
+
+The three elastic critical loads are not Anvilate's to compute, and inventing them would be
+the worst kind of silent green — a plausible capacity resting on a buckling analysis nobody
+ran. `from_pycufsm` turns a finite-strip run's output into the `ElasticBuckling` a DSM check
+consumes, with the provenance attached.
+
+```python
+from anvilate.interop import ModeIdentification, from_pycufsm
+```
+
+Two things about a signature curve are easy to get wrong on the way in, and the adapter
+refuses both.
+
+**A load factor is not a load.** CUFSM's y-axis is a multiplier on whatever reference stress
+distribution was applied. The DSM formulas take ratios, so a factor imported where a load
+belongs produces a nominal strength wrong by the reference load and dimensionally
+unremarkable — nothing downstream can see it. `reference_load` is required, and the imported
+loads are the factors times it.
+
+**Which minimum is which mode is a reading, not a lookup.** That is what the constrained
+finite strip method exists to answer, and an importer assuming "first minimum is local,
+second is distortional" is guessing at exactly the thing the analysis was run to determine.
+So the identification is a declared input. Declare `CONSTRAINED_MODAL` and the method
+identified the modes; declare `SIGNATURE_MINIMUM` and each mode has to carry the
+half-wavelength it was read at, because a minimum nobody can locate is a minimum nobody can
+check.
+
+And one physical invariant is checked when both half-wavelengths are present: **the local
+minimum sits at a shorter half-wavelength than the distortional one.** Local buckling waves
+at about the width of the widest plate element; the distortional mode waves at several times
+that. A pair in the other order is almost always the two minima swapped, and swapping them
+moves strength between a curve anchored on P_ne and one anchored on P_y — the nominal
+changes and nothing looks wrong. If a section genuinely inverts, build `ElasticBuckling`
+directly and say so in its `source`.
+
+A section with no distortional mode — an unlipped angle, a round tube — passes
+`distortional_factor=None`. That removes the mode from the governing set, rather than
+letting a zero or a NaN quietly drop out of a `min()`.

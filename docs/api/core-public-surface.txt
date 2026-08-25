@@ -121,6 +121,8 @@ interop.ExternalSectionProperties
 interop.bind_demand
 interop.provenance_lines
 interop.from_sectionproperties
+interop.ModeIdentification
+interop.from_pycufsm
 loads.LoadNature
 loads.LoadCombination
 loads.CombinationSet

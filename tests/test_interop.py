@@ -5,13 +5,16 @@ from __future__ import annotations
 import pydantic
 import pytest
 
+from anvilate.analysis.cold_formed_steel import dsm_compression_strength
 from anvilate.interop import (
     AxisMapping,
     ExternalSectionProperties,
     ForceComponent,
     ForceStation,
     MemberForceRecord,
+    ModeIdentification,
     bind_demand,
+    from_pycufsm,
     from_sectionproperties,
     provenance_lines,
 )
@@ -406,3 +409,107 @@ def test_the_major_axis_is_the_one_with_the_larger_second_moment_not_the_one_cal
         )
         # The extreme fibre follows the major axis too: half of 100, not half of 50.
         assert imported.extreme_fibre.to("mm").magnitude == pytest.approx(50.0)
+
+
+# --- the pyCUFSM adapter ------------------------------------------------------------------
+
+
+def _buckling(**overrides):
+    base = {
+        "reference_load": _q("245 kN"),
+        "local_factor": 120.0 / 245.0,
+        "distortional_factor": 155.0 / 245.0,
+        "global_factor": 900.0 / 245.0,
+        "identification": ModeIdentification.SIGNATURE_MINIMUM,
+        "local_half_wavelength": _q("120 mm"),
+        "distortional_half_wavelength": _q("600 mm"),
+    }
+    base.update(overrides)
+    return from_pycufsm(**base)
+
+
+def test_the_factors_times_the_reference_load_reproduce_the_hand_worked_dsm_anchor():
+    """The anchor is the pack's own hand-worked example, reached the long way round.
+
+    P_y 245 / P_crl 120 / P_crd 155 / P_cre 900 gives P_nd = 150.8 kN, distortional
+    governing — worked by hand from AISI S100 Appendix 1 and already pinned in the
+    cold-formed tests. Here the same three loads arrive as load factors on a 245 kN
+    reference, so the adapter's arithmetic is checked against a number nothing in this
+    file computed.
+    """
+    buckling = _buckling()
+    assert buckling.local.to("kN").magnitude == pytest.approx(120.0)
+    assert buckling.distortional is not None
+    assert buckling.distortional.to("kN").magnitude == pytest.approx(155.0)
+    assert buckling.global_.to("kN").magnitude == pytest.approx(900.0)
+    strength = dsm_compression_strength(yield_load=_q("245 kN"), elastic_buckling=buckling)
+    assert strength.nominal.to("kN").magnitude == pytest.approx(150.8, abs=0.1)
+
+
+def test_the_reference_load_is_required_because_a_factor_is_not_a_load():
+    # The whole units error the reference load exists to prevent: CUFSM's y-axis is a
+    # multiplier, and the DSM formulas take ratios, so a factor imported as a load is
+    # dimensionally unremarkable and wrong by the reference.
+    with pytest.raises(ValueError, match="force .* or a moment"):
+        _buckling(reference_load=_q("245 mm"))
+
+
+def test_a_moment_reference_works_for_the_flexural_case():
+    buckling = _buckling(reference_load=_q("10 kN*m"))
+    assert buckling.local.to("kN*m").magnitude == pytest.approx(10.0 * 120.0 / 245.0)
+
+
+@pytest.mark.parametrize("factor", [0.0, -1.0, float("nan"), float("inf")])
+def test_a_factor_that_is_not_positive_and_finite_is_refused(factor):
+    # NaN especially: min() drops a NaN candidate rather than propagating it, so the DSM
+    # nominal would come back governed by another mode and complete-looking.
+    with pytest.raises(ValueError, match="positive and finite"):
+        _buckling(local_factor=factor)
+
+
+def test_a_signature_curve_reading_has_to_say_where_it_read():
+    with pytest.raises(ValueError, match="no half-wavelength"):
+        _buckling(distortional_half_wavelength=None)
+
+
+def test_a_constrained_modal_decomposition_needs_no_half_wavelengths():
+    """The other half. cFSM identifies the mode by the method, so there is no reading to
+    record — and a check that demanded one anyway would make the honest path harder than
+    the judgement call."""
+    buckling = _buckling(
+        identification=ModeIdentification.CONSTRAINED_MODAL,
+        local_half_wavelength=None,
+        distortional_half_wavelength=None,
+    )
+    assert buckling.local.to("kN").magnitude == pytest.approx(120.0)
+    assert "constrained modal" in buckling.source
+
+
+def test_the_two_minima_in_the_wrong_order_are_refused():
+    """Local waves at about a plate width; distortional at several times that.
+
+    A pair in the other order is almost always the two minima swapped, and swapping them
+    moves strength between a curve anchored on P_ne and one anchored on P_y — the DSM
+    nominal changes without anything looking wrong.
+    """
+    with pytest.raises(ValueError, match="wrong way round"):
+        _buckling(local_half_wavelength=_q("600 mm"), distortional_half_wavelength=_q("120 mm"))
+
+
+def test_a_section_with_no_distortional_mode_declares_it_rather_than_dropping_it():
+    buckling = _buckling(distortional_factor=None, distortional_half_wavelength=None)
+    assert buckling.distortional is None
+    assert "distortional" not in buckling.source
+    # And the DSM check still runs, on the two modes that exist.
+    assert dsm_compression_strength(yield_load=_q("245 kN"), elastic_buckling=buckling)
+
+
+def test_the_source_line_says_what_was_run_and_what_the_factors_multiply():
+    # ElasticBuckling.source is what the report cites instead of presenting the numbers as
+    # Anvilate's own, so it has to carry the tool, the identification method, and the
+    # reference the factors were taken against.
+    source = _buckling().source
+    assert "pyCUFSM" in source
+    assert "signature-curve minimum" in source
+    assert "245 kN" in source
+    assert "at 120 mm" in source
