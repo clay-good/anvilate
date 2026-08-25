@@ -29,6 +29,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
+from math import isfinite
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -43,6 +45,7 @@ __all__ = [
     "MemberDemand",
     "ExternalSectionProperties",
     "bind_demand",
+    "from_sectionproperties",
     "provenance_lines",
 ]
 
@@ -438,3 +441,125 @@ def provenance_lines(
     for label, reason in sorted(reasons.items()):
         lines.append(f"not screened: {label} — {reason}")
     return tuple(lines)
+
+
+# --- the sectionproperties adapter -------------------------------------------------------
+#
+# `sectionproperties` meshes an arbitrary section and integrates it properly, which is
+# exactly the case `ExternalSectionProperties` exists for. The adapter is small; the
+# interesting part is the three things it refuses to do.
+#
+# Every getter name and return shape below was read from the package's published API
+# reference rather than recalled: `get_area()`, `get_ic()` -> (ixx_c, iyy_c, ixy_c),
+# `get_z()` -> (zxx_plus, zxx_minus, zyy_plus, zyy_minus), `get_j()`, `is_composite()`.
+
+# The sentinel `method` string for a section whose warping analysis was never run. It is a
+# string a reader sees, not a flag they have to know to look for.
+_NO_WARPING = "geometric analysis only (no warping analysis; torsion constant not imported)"
+
+
+def _positive(value: float, label: str, name: str) -> float:
+    if not isfinite(value) or value <= 0:
+        raise ValueError(
+            f"{name}: sectionproperties returned {label} = {value!r}, which is not a "
+            "positive finite number. Screening a section on it would produce a margin "
+            "that means nothing"
+        )
+    return value
+
+
+def from_sectionproperties(
+    section: Any,
+    *,
+    name: str,
+    length_unit: str,
+) -> ExternalSectionProperties:
+    """A meshed ``sectionproperties`` section as importable constants, with provenance.
+
+    ``length_unit`` is required and not defaulted, because ``sectionproperties`` is
+    unit-agnostic: it returns bare floats in whatever units the geometry was drawn in, and
+    it has no way to tell you which. A default here would be a guess about somebody else's
+    CAD file, and the failure is silent — millimetres read as inches understate a second
+    moment by a factor of 4.2 x 10^5 and the screen passes.
+
+    Three refusals, each a wrong number this would otherwise import:
+
+    * **A composite section is refused.** The geometric getters raise on one by design,
+      because the meaningful constants for a multi-material section are modulus-weighted;
+      reading ``EI`` where ``I`` belongs is a units error no dimension check downstream can
+      see, since the library's screens apply their own material.
+    * **The extreme fibre comes from the *smaller* section modulus.** ``get_z()`` returns
+      the top and bottom fibres separately, and for an asymmetric section they differ. The
+      governing fibre is the far one, ``c = I / min(z⁺, z⁻)``; taking the larger modulus
+      would put the smaller ``c`` into a bending check and overstate the capacity.
+    * **The shear form factor is left unset**, which is the one worth reading twice.
+      ``get_as()`` returns the *Timoshenko shear area*, and ``A / A_s`` is 1.2 for a
+      rectangle. :attr:`~anvilate.analysis.CrossSection.shear_form_factor` is the
+      *peak-over-average* ratio, which is 1.5 for a rectangle. They are different constants
+      that both look like "the shear factor for this shape", and substituting one for the
+      other understates the peak shear stress by 25%. Anvilate's shear screen reports
+      ``not_evaluated`` without a form factor, which is the honest outcome; supply it
+      explicitly if you have it from a source that means the same thing by it.
+
+    The torsion constant is imported only when a warping analysis was run. When it was not,
+    it comes back ``None`` and ``method`` says so in words.
+    """
+    if not length_unit.strip():
+        raise ValueError("length_unit is required: sectionproperties returns bare numbers")
+    if section.is_composite():
+        raise ValueError(
+            f"{name}: this section has materials assigned, so sectionproperties reports "
+            "modulus-weighted constants (EI, EA). Anvilate's screens apply their own "
+            "material to a geometric section, so importing EI as I would be wrong by a "
+            "factor of the modulus with nothing downstream able to see it"
+        )
+
+    area = _positive(section.get_area(), "area", name)
+    ixx_c, iyy_c, _ixy_c = section.get_ic()
+    zxx_plus, zxx_minus, _zyy_plus, _zyy_minus = section.get_z()
+    governing_modulus = _positive(min(zxx_plus, zxx_minus), "the elastic section modulus", name)
+    ixx_c = _positive(ixx_c, "ixx_c", name)
+
+    method = "sectionproperties finite-element warping analysis"
+    torsion_constant: Quantity | None = None
+    try:
+        j = section.get_j()
+    except (RuntimeError, AssertionError, AttributeError):
+        # The package raises when the warping analysis has not been run. Anything else is
+        # not this condition and is left to propagate.
+        method = _NO_WARPING
+    else:
+        torsion_constant = Quantity(
+            magnitude=_positive(j, "the torsion constant", name), unit=f"{length_unit}**4"
+        )
+
+    return ExternalSectionProperties(
+        name=name,
+        source="sectionproperties",
+        source_version=_sectionproperties_version(),
+        method=method,
+        area=Quantity(magnitude=area, unit=f"{length_unit}**2"),
+        second_moment=Quantity(magnitude=ixx_c, unit=f"{length_unit}**4"),
+        extreme_fibre=Quantity(magnitude=ixx_c / governing_modulus, unit=length_unit),
+        second_moment_transverse=Quantity(
+            magnitude=_positive(iyy_c, "iyy_c", name), unit=f"{length_unit}**4"
+        ),
+        torsion_constant=torsion_constant,
+        # Deliberately unset. See the docstring: get_as() means a different constant.
+        shear_form_factor=None,
+    )
+
+
+def _sectionproperties_version() -> str:
+    """The installed package's version, or an explicit statement that it is unknown.
+
+    A provenance line reading "sectionproperties" with no version is a record that cannot
+    be reproduced, so the unknown case says the word rather than leaving the field blank —
+    ``ExternalSectionProperties`` refuses a blank one anyway.
+    """
+    try:
+        from importlib.metadata import version
+
+        return version("sectionproperties")
+    except Exception:
+        return "unknown (sectionproperties not installed as a distribution)"

@@ -87,7 +87,46 @@ what was.
 
 See [`examples/frame_member_forces_to_checks.py`](../examples/frame_member_forces_to_checks.py).
 
-No optional dependency is imported. `ExternalSectionProperties` is a plain typed record,
-so the manual path and the "adapter" path are the same path — mapping a
-`sectionproperties` result dict onto it is a handful of keyword arguments, and there is no
-behaviour that differs when the package is absent.
+## The sectionproperties adapter
+
+`ExternalSectionProperties` is a plain typed record, so the manual path always worked and
+still does: filling it in by hand is a handful of keyword arguments, and nothing behaves
+differently when the package is absent. `from_sectionproperties(section, name=…,
+length_unit=…)` does the same filling in from a meshed section, and the value it adds is
+the three things it **refuses** to do.
+
+```python
+from anvilate.interop import from_sectionproperties
+```
+
+**`length_unit` is required and not defaulted.** `sectionproperties` is unit-agnostic — it
+returns bare floats in whatever units the geometry was drawn in, and has no way to tell you
+which. A default would be a guess about somebody else's CAD file, and the failure is
+silent: millimetres read as inches understate a second moment by a factor of 420,000 and
+the screen passes.
+
+**A composite section is refused.** Its meaningful constants are modulus-weighted, and
+reading `EI` where `I` belongs is a units error nothing downstream can see, because the
+library's screens apply their own material.
+
+**The extreme fibre comes from the smaller section modulus.** `get_z()` returns the top and
+bottom fibres separately, and for an asymmetric section they differ. The governing fibre is
+the far one, `c = I / min(z⁺, z⁻)`; taking the larger modulus would put a smaller `c` into
+a bending check and overstate the capacity.
+
+**The shear form factor is left unset, and this is the one to read twice.** `get_as()`
+returns the *Timoshenko shear area*, so `A / A_s` is 1.2 for a rectangle.
+`shear_form_factor` is the *peak-over-average* ratio, which is 1.5 for a rectangle. Both
+read as "the shear factor for this shape"; substituting one for the other understates the
+peak shear stress by 25%. Unset, the shear screen reports `not_evaluated` — the honest
+outcome, and the same rule the manual path already followed.
+
+The torsion constant is imported only when a warping analysis was run; when it was not, it
+comes back `None` and the `method` line says so in words rather than leaving the absence to
+be inferred from a null.
+
+**The adapter is tested twice.** Once against a stub, which proves the mapping decisions,
+and once against the real package, which proves the mapping is of the real API. A stub
+written by the same hand as the code it exercises agrees with that code and says nothing
+about the package — so the real test runs in CI, by name, on a job that fails if it
+skipped.

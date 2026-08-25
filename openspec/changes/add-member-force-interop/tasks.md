@@ -9,7 +9,9 @@
 ## 2. Implementation
 
 - [x] 2.1 Bind ingested demands to existing beam/column/beam-column/torsion screens
-- [ ] 2.2 Optional sectionproperties adapter (import constants, tag provenance)
+- [x] 2.2 Optional sectionproperties adapter (import constants, tag provenance) —
+      `interop.from_sectionproperties`. The mapping is small; the value is the three
+      refusals, and one of them is a constant that would have been wrong by 25%
 - [x] 2.3 Report rendering: external-demand and external-property provenance lines
 
 ## 3. Tests
@@ -60,3 +62,27 @@ question has to be asked at the door rather than answered by accident. That is 1
 3.1's "published frame example" is served by the worked example rather than by a
 literature reproduction: the value under test is the doorway, and the checks it feeds are
 already anchored in their own suites.
+
+## Scope as shipped (2.2)
+
+Every getter name and return shape was read from the package's published API reference
+rather than recalled: `get_area()`, `get_ic() -> (ixx_c, iyy_c, ixy_c)`,
+`get_z() -> (zxx_plus, zxx_minus, zyy_plus, zyy_minus)`, `get_j()`, `is_composite()`.
+
+**The defect the adapter exists to not commit: `get_as()` is not the shear form factor.**
+It returns the Timoshenko shear area, and `A / A_s` is 1.2 for a rectangle;
+`shear_form_factor` is the peak-over-average ratio, 1.5 for a rectangle. Both read as "the
+shear factor for this shape", and substituting one for the other understates the peak shear
+stress by 25% with every dimension check downstream satisfied. The adapter leaves it unset,
+so the shear screen reports `not_evaluated`.
+
+The other two refusals: `length_unit` is required, because the package returns bare floats
+and a default would be a guess about somebody else's CAD file; and a composite section is
+refused, because its constants are modulus-weighted and reading `EI` as `I` is invisible to
+a library that applies its own material.
+
+**Tested twice, on purpose.** A stub proves the mapping decisions and proves nothing about
+the package, because it was written by the same hand in the same hour as the code it
+exercises. The real test meshes a 50x100 rectangle, runs both analyses, and compares against
+closed-form values written out in the test file — not read back from the package. It is
+opt-in locally and runs by name in a scheduled CI job that fails if it skipped.

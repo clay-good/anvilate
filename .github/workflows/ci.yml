@@ -84,3 +84,33 @@ jobs:
             echo "the schema tests skipped; nothing was validated"
             exit 1
           fi
+
+  # The sectionproperties adapter is tested twice: against a stub, which proves the mapping
+  # decisions, and against the real package, which proves the mapping is of the real API. A
+  # stub written by the same hand as the code it exercises agrees with that code and says
+  # nothing about the package, so this job exists to keep the stub from being the only thing
+  # holding the adapter up. Optional dependency, so it runs on a schedule and on demand
+  # rather than taxing every pull request with a mesh library's install.
+  optional-adapters:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e ".[dev]" sectionproperties
+      - name: Read a real meshed section through the adapter
+        run: |
+          set -o pipefail
+          # Named exactly, not by keyword: a `-k` that stops matching after a rename runs
+          # zero tests and reports success.
+          pytest -rs \
+            "tests/test_interop.py::test_the_adapter_reads_a_real_sectionproperties_section" \
+            | tee result.txt
+          grep -qE "^1 passed" result.txt
+          if grep -q skipped result.txt; then
+            echo "sectionproperties did not import; the adapter was not exercised"
+            exit 1
+          fi

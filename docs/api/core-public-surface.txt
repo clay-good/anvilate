@@ -120,6 +120,7 @@ interop.MemberDemand
 interop.ExternalSectionProperties
 interop.bind_demand
 interop.provenance_lines
+interop.from_sectionproperties
 loads.LoadNature
 loads.LoadCombination
 loads.CombinationSet
