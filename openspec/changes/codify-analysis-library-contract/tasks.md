@@ -196,3 +196,56 @@ about which convention the library adopts, not a bug fix.
   interaction 1.57 -> 1.55 / 1.35 -> 1.30 / 0.98 -> 0.97, and the flat-bar strut
   4.6 -> 4.3 and 1.6 -> 1.4. Every move is downward, which is what adopting the real
   curve should do.
+
+## 2026-08-25 — 89 more symbols off the citation debt
+
+The debt was 409 public analysis symbols naming no source; it is 320. Fifteen modules
+paid off, each by giving its module docstring a real `Sources:` attribution and enumerating
+its symbols in `docs/api/module-cited-symbols.txt`:
+
+| Source | Modules |
+| --- | --- |
+| Duffie & Beckman, *Solar Engineering of Thermal Processes* | `solar_geometry` |
+| IES *Lighting Handbook* | `illumination` |
+| Anderson, *Introduction to Flight* | `level_turn` |
+| Hibbeler, *Engineering Mechanics: Dynamics* | `momentum`, `work_energy`, `projectile` |
+| Norton, *Design of Machinery* | `fourbar`, `slider_crank`, `geneva` |
+| Hecht, *Optics* | `diffraction`, `fresnel`, `optical_interference`, `thin_film` |
+| Sedra & Smith, *Microelectronic Circuits* | `op_amp`, `diode`, `rectifier` |
+| Nilsson, *Electric Circuits* | `dc_circuit` |
+| Proakis & Salehi, *Communication Systems Engineering* | `channel_capacity` |
+
+**Six new authority tokens, each run through the file's own accident check before
+shipping.** For every one, the symbols it is the *sole* citation for are in the modules it
+was added for and nothing else. Two candidates were rejected by that check rather than
+adopted:
+
+- **`Shannon`** would have been satisfied by an aside in `data_converter`'s docstring
+  ("(Nyquist and Shannon)"), which names two theorems in passing rather than citing a
+  source for those functions. `channel_capacity` cites Proakis instead.
+- **`Riedel`** was already on the list for the Riedel vapour-pressure correlation, so
+  `dc_circuit`'s source is written as "Nilsson" rather than "Nilsson & Riedel" — the latter
+  would have made a thermodynamics token the credit for Ohm's law.
+
+That is the same failure the file records for `Young`, `Turns` and `Hazen`, caught before
+it shipped rather than after.
+
+**A gate that was considered and not written.** Requiring every module-docstring credit to
+sit in a `Sources:` line would catch the aside class structurally. It does not hold today:
+467 of 974 module-cited symbols are credited by an inline mention in the module docstring
+rather than a `Sources:` line, and most of those are genuine. Asserting it would mean
+rewriting 467 docstrings to satisfy a gate rather than to say anything truer, so the
+listing audit stays manual and the rejection above is recorded instead.
+
+**The published figure is now gated.** `docs/citations.md` told a reader "about 23% of the
+public analysis surface does not yet name a source" and went on saying 23% after 89 symbols
+had been paid off. It is derived from the two manifests now, so paying the debt down
+without moving the sentence fails the build — the docs-truth lens applied to the one number
+this change is about.
+
+**Also observed, not acted on:** fifteen authority tokens match nothing anywhere in
+`anvilate.analysis` — `AWS`, `AWWA`, `CSA`, `DIN`, `Eurocode`, `EN ISO`, `JIS`, `SAE`,
+`Crane TP`, `Mischke`, `Miner's rule`, `Vesic`, `Wen-Yu`, `Annex`, `Clause`. Some are used
+by the packs, which this gate does not scan. `Annex` and `Clause` are the two worth a
+second look: both are short, ordinary words that would credit a docstring naming no
+standard at all.

@@ -13,6 +13,9 @@ experiment yields the wavelength, λ = Δy·d/L. A single slit of width a instea
 envelope whose dark fringes fall at sin θ = m·λ/a — the finite width that ultimately blurs the
 two-slit fringes. Wavelengths, slit dimensions, and fringe spacings are dimension-checked
 :class:`~anvilate.units.Quantity` values; angles are plain floats in degrees.
+
+Sources: Hecht, *Optics* (interference and single-slit diffraction) — the double-slit fringe
+spacing and angle, the single-slit minima, and the wavelength a measured fringe spacing infers.
 """
 
 from __future__ import annotations

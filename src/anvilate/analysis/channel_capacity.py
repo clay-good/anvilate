@@ -15,6 +15,11 @@ C = 2 * B * log2(M) — more levels pack more bits per symbol, but need a higher
 distinct, which is where the Shannon limit reasserts itself.
 
 Capacities are counts of bits per second, returned (and taken) as plain floats.
+
+Sources: Proakis & Salehi, *Communication Systems Engineering* (channel capacity) — the Shannon-
+Hartley capacity C = B·log2(1 + S/N) and the bandwidth it inverts to, the Nyquist capacity of a
+noiseless channel with M levels, spectral efficiency, and the minimum E_b/N_0 the Shannon limit
+sets.
 """
 
 from __future__ import annotations

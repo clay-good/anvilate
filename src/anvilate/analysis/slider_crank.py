@@ -24,6 +24,10 @@ finite-rod effect that a short rod (small L/r) exaggerates and an infinite rod
 The crank angle θ is a plain-float degrees value; the crank radius, rod length,
 and crank speed are dimension-checked :class:`~anvilate.units.Quantity` values,
 with L > r (the rod must be longer than the crank or the linkage jams).
+
+Sources: Norton, *Design of Machinery* (slider-crank kinematics) — the exact wrist-pin position
+s = r·cos θ + √(L² − r²·sin²θ) and the velocity and acceleration derived from it, the
+connecting-rod side thrust on the cylinder wall, and the crank torque from the gas force.
 """
 
 from __future__ import annotations

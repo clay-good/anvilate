@@ -12,6 +12,10 @@ V·I) — the Joule heating that sizes a resistor's wattage. Resistors wired in 
 current and present a combined resistance R = 1/Σ(1/Rᵢ), always smaller than the smallest branch,
 because adding a path only makes it easier for current to flow. Inputs and outputs are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Nilsson, *Electric Circuits* (resistive circuits) — Ohm's law, the power a resistance
+dissipates, the maximum-power-transfer condition R_L = R_th, and the parallel-resistance
+combination.
 """
 
 from __future__ import annotations

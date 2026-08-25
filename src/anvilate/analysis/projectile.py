@@ -11,6 +11,10 @@ For a launch over level ground at speed v and angle θ above horizontal, the hor
 R = v²·sin(2θ)/g, largest at 45°; the peak height is H = v²·sin²θ/(2·g); and the time aloft is
 t = 2·v·sin θ/g. Range peaks at 45° because sin(2θ) does, while height and flight time keep rising
 toward a vertical launch — the trade a designer balances when aiming a discharge or a jet.
+
+Sources: Hibbeler, *Engineering Mechanics: Dynamics* (curvilinear motion, projectile) — the
+drag-free range, peak height and time of flight of a launch over level ground, and the launch
+angle that reaches a required range.
 """
 
 from __future__ import annotations

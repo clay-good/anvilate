@@ -19,6 +19,9 @@ while R_p first dips to zero at Brewster and only then climbs. That split is the
 polarized sunglasses cut glare off a road or a lake, and why the incidence angle matters when an
 AR coating is specified. Angles are plain floats in degrees; indices and reflectances are plain
 floats.
+
+Sources: Hecht, *Optics* (the Fresnel equations) — the s- and p-polarised reflectance at an
+interface, the normal-incidence limit, Brewster's angle, and the two-surface slab transmittance.
 """
 
 from __future__ import annotations

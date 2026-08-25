@@ -17,6 +17,10 @@ distance c the crank radius and the driven engagement radius are
 
 An external Geneva needs at least three slots (n ≥ 3); below that the slot cannot
 close. Lengths are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Norton, *Design of Machinery* (intermittent-motion mechanisms) — the external Geneva's
+right-angle entry condition, the crank and driven radii it fixes, and the advance and dwell
+fractions of a cycle for an n-slot wheel.
 """
 
 from __future__ import annotations

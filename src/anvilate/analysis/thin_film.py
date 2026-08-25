@@ -12,6 +12,10 @@ anti-reflection coating. The cancellation is most complete when the coating's re
 the geometric mean of the two media it sits between, n = sqrt(n_medium * n_substrate) (why MgF2, n
 about 1.38, suits glass). Inverting the thickness relation gives the wavelength a coating is tuned
 to, lambda = 4*n*t — so a coating optimized for green light reflects more in the red and blue.
+
+Sources: Hecht, *Optics* (thin-film interference and antireflection coatings) — the quarter-wave
+optical thickness, the ideal single-layer index √(n_0·n_s), the wavelength a given layer is
+tuned to, and the residual reflectance when the index is not ideal.
 """
 
 from __future__ import annotations

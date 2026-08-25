@@ -13,6 +13,10 @@ the centripetal force, giving the turn radius R = V²/(g·tan φ) and the turn r
 a true airspeed V. Because the wing now works n times harder, it stalls sooner: the accelerated
 stall speed climbs to V_s·√n. Angles are plain floats in degrees, load factor is a dimensionless
 float, and speeds and rates are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Anderson, *Introduction to Flight* (turning flight and the V-n diagram) — the load
+factor n = 1/cos φ a bank angle forces, the coordinated level-turn radius V²/(g·tan φ) and rate
+g·tan φ/V, and the accelerated stall speed V_s·√n.
 """
 
 from __future__ import annotations

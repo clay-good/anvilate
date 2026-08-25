@@ -13,6 +13,16 @@
 # modulus" and falsely credited three elastic-wave functions. Roark & Young's handbook is
 # covered by the `Roark` token, so nothing was lost.
 #
+# The six tokens added on 2026-08-25 — Hibbeler, Norton, Hecht, Sedra, Nilsson,
+# Proakis — were each run through that listing before they shipped. Every symbol
+# each is the sole citation for is in the module the token was added for, and
+# nothing else. Two candidates were rejected by the same check: `Shannon` would
+# have been satisfiable by an aside in data_converter's docstring ("(Nyquist and
+# Shannon)"), so channel_capacity cites Proakis instead; and `Riedel` was already
+# on the list for the vapour-pressure correlation, so dc_circuit's source is
+# written as Nilsson rather than "Nilsson & Riedel", which would have made a
+# thermodynamics token the credit for Ohm's law.
+#
 # BEFORE adding a token, check it cannot be satisfied by accident. A short or
 # ordinary-looking token will match prose that is not a citation: "Turns" was on this
 # list for its combustion text and matched "Turns the lumen method around ...", and
@@ -206,3 +216,8 @@ Zuber
 Annex
 Appendix
 Clause
+Hibbeler
+Norton
+Hecht
+Sedra
+Proakis

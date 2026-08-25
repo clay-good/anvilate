@@ -18,6 +18,11 @@ inverse sizes the installation: how many luminaires a target illuminance needs.
 
 Angles are plain floats in radians (the units layer does not carry dimensionless angles), matching
 the convention elsewhere in the analysis package.
+
+Sources: the IES *Lighting Handbook* (Illuminating Engineering Society) — the room cavity ratio
+that indexes the coefficient-of-utilization tables, the lumen method and its light loss factor,
+the inverse-square cosine law for a point source, and the Lambertian relation L = ρ·E/π between
+a diffuse surface's illuminance and its luminance.
 """
 
 from __future__ import annotations

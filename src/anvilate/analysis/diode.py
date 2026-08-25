@@ -14,6 +14,10 @@ factor n (1 for an ideal junction, up to ~2 with recombination). Inverting it, t
 at a target current is V = n*V_T*ln(I/I_s + 1) — how the operating point of a diode or LED is found.
 
 Temperature is taken as an absolute temperature (kelvin); V_T is proportional to it.
+
+Sources: Sedra & Smith, *Microelectronic Circuits* (diodes) — the thermal voltage kT/q, the
+Shockley diode equation and its inverse, and the series resistor an LED needs with the power it
+dissipates.
 """
 
 from __future__ import annotations

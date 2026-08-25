@@ -13,6 +13,12 @@ the solstices and zero at the equinoxes. At solar noon the sun's altitude above 
 light then crosses an air mass AM = 1/sin(α) relative to a straight-down path — the AM1.5 standard
 (α ≈ 41.8°) that solar panels are rated against. Angles are taken as **plain floats in degrees**;
 computed angles are returned as dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Duffie & Beckman, *Solar Engineering of Thermal Processes*, Chapter 1 (available solar
+radiation) — Cooper's declination equation, the sunset hour angle from latitude and declination,
+the day-length relation N = (2/15)·ω_s, and the general solar-altitude relation are given there,
+along with the plane-parallel air mass AM = 1/sin α and the limits of that approximation near
+the horizon.
 """
 
 from __future__ import annotations

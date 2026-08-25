@@ -12,6 +12,10 @@ momentum, J = Δp. Turning it around, bringing a mass to rest (or changing its v
 time Δt takes an average force F = m·Δv/Δt — small when the stop is gradual, huge when it is abrupt,
 which is why a longer collision time is the whole point of safety cushioning. Inputs and outputs are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Hibbeler, *Engineering Mechanics: Dynamics* (impulse and momentum) — linear momentum p
+= m·v, the impulse-momentum theorem and its angular counterpart, the average impact force a
+stopping time develops, and the coefficient of restitution measured from a rebound height.
 """
 
 from __future__ import annotations

@@ -12,6 +12,10 @@ gravitational potential energy PE = m·g·h, released as it falls. A constant fo
 a distance d along its line does work W = F·d, the energy it transfers — positive when it drives the
 motion, and by the work-energy theorem equal to the change in kinetic energy. Inputs and outputs are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Hibbeler, *Engineering Mechanics: Dynamics* (work and energy) — kinetic energy ½·m·v²,
+gravitational potential energy m·g·h, the work a constant force does through a distance, and the
+work-energy theorem relating them.
 """
 
 from __future__ import annotations

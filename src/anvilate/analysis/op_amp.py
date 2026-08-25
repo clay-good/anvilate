@@ -12,6 +12,10 @@ the ground-leg resistor Rg (always at least one, and in phase with the input). A
 gives -Rf/Rin, from the feedback and input resistors (any magnitude, but phase-flipped). The
 gain-bandwidth product GBW then caps the usable bandwidth at f = GBW / |A| for a closed-loop gain A,
 so a 1 MHz-gain-bandwidth part run at a gain of 100 has only 10 kHz of bandwidth left.
+
+Sources: Sedra & Smith, *Microelectronic Circuits* (operational amplifiers) — the non-inverting
+and inverting closed-loop gains, the gain-bandwidth product that caps the small-signal
+bandwidth, the slew-rate-limited full-power bandwidth, and the rise-time-bandwidth relation.
 """
 
 from __future__ import annotations

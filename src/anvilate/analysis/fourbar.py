@@ -18,6 +18,10 @@ can flip branches, and when s + l > p + q no link rotates fully — a triple-roc
 The four lengths must also form a closable quadrilateral (the longest shorter than
 the sum of the other three). Lengths are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Norton, *Design of Machinery* (position analysis and the Grashof condition) — the s + l
+<= p + q criterion, the class of mechanism each ground link gives (crank-rocker, double-crank,
+double-rocker), and the Grashof-neutral case s + l = p + q.
 """
 
 from __future__ import annotations

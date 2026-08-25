@@ -13,6 +13,10 @@ measured reflection angle, which is how a diffractometer identifies a phase. The
 m*lambda = D*sin(theta), gives the angle a transmission grating of groove spacing D sends the m-th
 diffraction order to, spreading a spectrum by wavelength. A reflection or order exists only when the
 implied sine stays at or below one; beyond that the geometry forbids it.
+
+Sources: Hecht, *Optics* (diffraction and the diffraction grating) — Bragg's law and the plane
+spacing it inverts to, the grating equation d·sin θ = m·λ, and the resolving power R = m·N with
+the angular dispersion that goes with it.
 """
 
 from __future__ import annotations

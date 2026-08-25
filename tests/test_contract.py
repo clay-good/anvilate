@@ -1382,3 +1382,31 @@ def test_every_declared_derivation_typesets():
                 # Valid XML, or the report is not a document a browser can open.
                 ET.fromstring(math)
     assert not declined, "derivations the MathML renderer declined:\n" + "\n".join(declined)
+
+
+def test_the_published_citation_debt_percentage_is_the_real_one():
+    """A number that lives only in prose has no gate on it, and this one goes stale every
+    time the debt is paid down.
+
+    ``docs/citations.md`` tells a reader what fraction of the public analysis surface names
+    no source. It was written at 23% and read 23% after 89 symbols had been paid off. The
+    figure is now derived from the two manifests the gate above already holds, so paying
+    the debt down without moving the sentence fails here.
+    """
+    uncited = len(_uncited_manifest())
+    total = len(_manifest_surface())
+    assert total > 1000, "the surface came back implausibly small, so the ratio is vacuous"
+    actual = 100.0 * uncited / total
+    published = re.search(
+        r"About (\d+)% of the public analysis surface does not",
+        (_REPO / "docs" / "citations.md").read_text(),
+    )
+    assert published is not None, (
+        "docs/citations.md no longer states the citation debt as a percentage; either "
+        "restore the sentence or delete this test with it"
+    )
+    claimed = float(published.group(1))
+    assert abs(claimed - actual) < 1.0, (
+        f"docs/citations.md says {claimed:.0f}% of the analysis surface is uncited; it is "
+        f"{actual:.1f}% ({uncited} of {total}). Move the sentence when you move the debt"
+    )

@@ -17,6 +17,10 @@ supply is before any regulator.
 All are first-order design estimates: they assume a full-wave bridge, a large reservoir capacitor
 (ripple small compared with the peak, so the discharge is nearly linear), an ideal transformer and
 diodes, and a steady load current.
+
+Sources: Sedra & Smith, *Microelectronic Circuits* (rectifiers and peak rectifiers) — the
+capacitor-filter ripple voltage, the capacitance a ripple budget needs, the average DC output,
+and the ripple factor.
 """
 
 from __future__ import annotations
