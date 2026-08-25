@@ -21,6 +21,10 @@ strain ε is the material allowable the caller supplies (≈1–2 % for unfilled
 engineering thermoplastics, lower for glass-filled); the insertion angle is a plain-float
 degrees value; every length, modulus, and force is a dimension-checked
 :class:`~anvilate.units.Quantity`.
+
+Sources: Bayer, *Snap-Fit Joints for Plastics: A Design Manual* — the permissible deflection of
+a cantilever snap arm from the material's permissible strain, the strain a given deflection
+produces, and the deflection and mating forces the insertion angle and friction determine.
 """
 
 from __future__ import annotations

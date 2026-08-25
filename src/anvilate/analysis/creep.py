@@ -17,6 +17,10 @@ constant C are supplied by the caller, the same way a material allowable is, and
 inputs are dimension-checked :class:`~anvilate.units.Quantity` values. The
 temperature must be absolute (kelvin or rankine) — the parameter is meaningless
 on a Celsius scale.
+
+Sources: Dieter, *Mechanical Metallurgy* (creep and stress rupture) — the Larson-Miller
+parameter P = T·(C + log t), the rupture life and temperature limit it inverts to, and the life-
+fraction rule for accumulated creep damage.
 """
 
 from __future__ import annotations

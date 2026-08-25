@@ -13,6 +13,10 @@ the whole vessel sits at the low outlet concentration, gives X = Da/(1 + Da). Fo
 PFR always converts more, which is why it takes a larger CSTR to reach the same conversion — the
 classic sizing trade-off. Rate constant and residence time are dimension-checked
 :class:`~anvilate.units.Quantity` values; the Damköhler number and conversions are plain floats.
+
+Sources: Fogler, *Elements of Chemical Reaction Engineering* (isothermal reactor design) — the
+Damkohler number, the first-order conversion of a plug-flow reactor and of a single CSTR, and
+the conversion of CSTRs in series.
 """
 
 from __future__ import annotations

@@ -12,6 +12,10 @@ few thousandths for a car tyre on tarmac, more on soft ground). Grade resistance
 on a slope of angle θ, the pull that makes hills the hardest duty. Add these to the aerodynamic drag
 and the tractive power a steady speed needs is P = F·v — the number that sets the motor rating and,
 over a drive cycle, the fuel or battery draw.
+
+Sources: Gillespie, *Fundamentals of Vehicle Dynamics* — the rolling and grade resistances, the
+tractive power they demand at speed, and the Ackermann steer angle a wheelbase and turn radius
+set.
 """
 
 from __future__ import annotations

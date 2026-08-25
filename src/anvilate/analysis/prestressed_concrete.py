@@ -18,6 +18,10 @@ The cracking moment — the applied moment that first opens the bottom fibre —
 M_cr = f_r·S + P·(S/A + e), the prestress decompression plus the concrete's modulus of rupture. The
 effective prestress force, the section properties, and the modulus of rupture are the caller's; the
 balancing arithmetic is here.
+
+Sources: ACI 318 (prestressed concrete) with the PCI *Design Handbook* — the balanced load a
+draped tendon applies, the top and bottom fibre stresses at transfer and service, and the
+cracking moment from the modulus of rupture.
 """
 
 from __future__ import annotations

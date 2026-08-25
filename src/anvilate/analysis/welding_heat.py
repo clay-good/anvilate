@@ -13,6 +13,10 @@ I. Spread over the speed the torch travels, and scaled by the thermal efficiency
 submerged arc), it gives the heat input Q = η·U·I/v: energy per unit length of weld, conventionally
 kJ/mm. Turned around, the travel speed a target heat input needs is v = η·U·I/Q — the knob a welder
 actually turns to keep a run inside its qualified window.
+
+Sources: AWS D1.1 (structural welding) and the IIW carbon-equivalent formula — the arc power,
+the heat input per unit length it delivers at a travel speed, the travel speed a heat-input
+limit allows, and CE_IIW from the alloy composition.
 """
 
 from __future__ import annotations

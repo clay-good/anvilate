@@ -197,10 +197,10 @@ about which convention the library adopts, not a bug fix.
   4.6 -> 4.3 and 1.6 -> 1.4. Every move is downward, which is what adopting the real
   curve should do.
 
-## 2026-08-25 — 154 more symbols off the citation debt
+## 2026-08-25 — 196 more symbols off the citation debt
 
-The debt was 409 public analysis symbols naming no source; it is 255 — 14% of the surface,
-from 23%. Thirty-one modules paid off, each by giving its module docstring a real `Sources:`
+The debt was 409 public analysis symbols naming no source; it is 213 — 12% of the surface,
+from 23%. Forty-one modules paid off, each by giving its module docstring a real `Sources:`
 attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 
 | Source | Modules |
@@ -227,8 +227,17 @@ attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 | Tupper, *Introduction to Naval Architecture* | `naval_architecture` |
 | Anderson, *Introduction to Flight* (standard atmosphere) | `atmosphere` |
 | Cushman-Roisin & Beckers, *Introduction to Geophysical Fluid Dynamics* | `coriolis` |
+| Dieter, *Mechanical Metallurgy* | `creep` |
+| Bayer, *Snap-Fit Joints for Plastics* | `snapfit` |
+| Baker, *Membrane Technology and Applications* | `membrane` |
+| Esposito, *Fluid Power with Applications* | `pneumatics` |
+| ACI 318 with the PCI *Design Handbook* | `prestressed_concrete` |
+| Fogler (reactor design) | `reactor` |
+| Gillespie, *Fundamentals of Vehicle Dynamics* | `vehicle`, `vehicle_stability` |
+| ASME B30.9 and BTH-1 | `rigging` |
+| AWS D1.1 and the IIW carbon equivalent | `welding_heat` |
 
-**Thirteen new authority tokens, each run through the file's own accident check before
+**Eighteen new authority tokens, each run through the file's own accident check before
 shipping.** For every one, the symbols it is the *sole* citation for are in the modules it
 was added for and nothing else. Two candidates were rejected by that check rather than
 adopted:
@@ -262,9 +271,10 @@ had been paid off. It is derived from the two manifests now, so paying the debt 
 without moving the sentence fails the build — the docs-truth lens applied to the one number
 this change is about.
 
-**Also observed, not acted on:** fifteen authority tokens match nothing anywhere in
-`anvilate.analysis` — `AWS`, `AWWA`, `CSA`, `DIN`, `Eurocode`, `EN ISO`, `JIS`, `SAE`,
-`Crane TP`, `Mischke`, `Miner's rule`, `Vesic`, `Wen-Yu`, `Annex`, `Clause`. Some are used
+**Also observed, and one of them acted on:** fifteen authority tokens matched nothing
+anywhere in `anvilate.analysis` — `AWS`, `AWWA`, `CSA`, `DIN`, `Eurocode`, `EN ISO`, `JIS`,
+`SAE`, `Crane TP`, `Mischke`, `Miner's rule`, `Vesic`, `Wen-Yu`, `Annex`, `Clause`. `AWS`
+is live now, because `welding_heat` genuinely follows AWS D1.1. Some of the rest are used
 by the packs, which this gate does not scan. `Annex` and `Clause` are the two worth a
 second look: both are short, ordinary words that would credit a docstring naming no
 standard at all.

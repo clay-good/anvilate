@@ -36,6 +36,9 @@ sheave efficiency is the caller's per-sheave value (≈ 0.98 rolling-bearing, �
 plain-bearing sheaves); the load is a dimension-checked
 :class:`~anvilate.units.Quantity` and every force comes back in the same force
 dimension.
+
+Sources: ASME B30.9 (slings) and ASME BTH-1 — the sling tension factor from the included angle,
+the leg tension and horizontal force it produces, and the mechanical advantage of a tackle.
 """
 
 from __future__ import annotations

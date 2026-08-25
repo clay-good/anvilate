@@ -13,8 +13,9 @@
 # modulus" and falsely credited three elastic-wave functions. Roark & Young's handbook is
 # covered by the `Roark` token, so nothing was lost.
 #
-# The thirteen tokens added on 2026-08-25 — Hibbeler, Norton, Hecht, Sedra, Nilsson,
-# Proakis, Seader, Fogler, Krane, Chen, Goldsmid, Tupper, Cushman-Roisin — were each run through that listing before they shipped. Every symbol
+# The eighteen tokens added on 2026-08-25 — Hibbeler, Norton, Hecht, Sedra, Nilsson,
+# Proakis, Seader, Fogler, Krane, Chen, Goldsmid, Tupper, Cushman-Roisin, Dieter, Bayer,
+# Baker, Esposito, Gillespie — were each run through that listing before they shipped. Every symbol
 # each is the sole citation for is in the module the token was added for, and
 # nothing else. Two candidates were rejected by the same check: `Shannon` would
 # have been satisfiable by an aside in data_converter's docstring ("(Nyquist and
@@ -231,3 +232,8 @@ Chen
 Goldsmid
 Tupper
 Cushman-Roisin
+Dieter
+Bayer
+Baker
+Esposito
+Gillespie

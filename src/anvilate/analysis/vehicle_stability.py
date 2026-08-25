@@ -14,6 +14,10 @@ speed v = √(SSF·g·R), and in any turn of lateral acceleration a_y the outer 
 transfer ΔF = m·a_y·h/t off the inner ones — the shift that, once it equals the axle's static load,
 lifts the inside wheels. Masses, speeds, and forces are dimension-checked
 :class:`~anvilate.units.Quantity` values; the SSF is a plain float.
+
+Sources: Gillespie, *Fundamentals of Vehicle Dynamics* (rollover and steady-state cornering) —
+the static stability factor and the speed at which it is exceeded, the lateral load transfer in
+a turn, and the understeer gradient with the characteristic speed it defines.
 """
 
 from __future__ import annotations

@@ -15,6 +15,11 @@ but not the salt flux, more pressure both makes more permeate and dilutes it —
 concentration is C_p = J_s/J_w. The membrane's salt rejection is then R = 1 − C_p/C_f against the
 feed. Permeabilities, pressures, and concentrations are dimension-checked
 :class:`~anvilate.units.Quantity` values; rejection is a plain float.
+
+Sources: Baker, *Membrane Technology and Applications* (reverse osmosis) — the solution-
+diffusion water flux driven by the net pressure less the osmotic difference, the salt flux
+driven by concentration alone, the permeate concentration those imply, and the salt rejection
+that reports them together.
 """
 
 from __future__ import annotations

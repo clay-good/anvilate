@@ -12,6 +12,10 @@ falls from p_max to p_min is V·(p_max − p_min)/p_atm, so the time it can cove
 and inverting it sizes the receiver for a required hold-up. Pressures enter as a band, so gauge or
 absolute give the same result; the free-air flow and atmospheric pressure set the reference. Inputs
 and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Esposito, *Fluid Power with Applications* (pneumatics) — the holdup time an air
+receiver gives at a stated demand, the receiver volume a demand requires, and the free air a
+cylinder consumes per stroke and per minute.
 """
 
 from __future__ import annotations
