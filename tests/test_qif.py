@@ -25,13 +25,28 @@ from anvilate.attestation import Component, ComponentKind, EnvironmentBOM
 from anvilate.bundle import BundleSections
 from anvilate.evidence import SourceRecord
 from anvilate.export.qif import (
+    _QIF_DATUM_MODIFIER,
+    _QIF_DEFINITION_TYPE,
+    _QIF_MATERIAL_MODIFIER,
+    _ZONE_SHAPE,
     QIF_NAMESPACE,
     SAFETY_FACTOR_UNIT,
     export_qif_results,
+    qif_characteristic_mapping,
     qif_schema_issues,
+)
+from anvilate.gdt import (
+    Characteristic,
+    DatumBoundary,
+    DatumReference,
+    FeatureControlFrame,
+    FeatureType,
+    FrameModifier,
+    MaterialCondition,
 )
 from anvilate.scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from anvilate.uncertainty import Symmetric
+from anvilate.units import Quantity
 
 _NS = {"q": QIF_NAMESPACE}
 
@@ -954,3 +969,148 @@ def test_a_fragile_check_carries_its_warning_across():
     )
     read = _read_characteristics(_export(_sections(Scorecard(entries=(entry,)))))
     assert "fragile under the declared input scatter" in read["bearing"]["description"]
+
+
+# --- semantic GD&T as QIF characteristic definitions -------------------------------------
+
+
+def _frame(**overrides):
+    base = {
+        "characteristic": Characteristic.POSITION,
+        "tolerance": Quantity.parse("0.2 mm"),
+        "feature_type": FeatureType.FEATURE_OF_SIZE,
+        "datums": (DatumReference(letter="A"),),
+    }
+    base.update(overrides)
+    return FeatureControlFrame(**base)
+
+
+def test_a_position_frame_maps_to_qifs_own_vocabulary():
+    mapping = qif_characteristic_mapping(
+        _frame(
+            material_condition=MaterialCondition.MMC,
+            modifiers=(FrameModifier.DIAMETER,),
+            datums=(
+                DatumReference(letter="A"),
+                DatumReference(letter="B", boundary=DatumBoundary.MMB, is_feature_of_size=True),
+                DatumReference(letter="C"),
+            ),
+        )
+    )
+    assert mapping.definition_type == "PositionCharacteristicDefinitionType"
+    assert mapping.tolerance_mm == 0.2
+    # MAXIMUM, not MMC. The drawing abbreviation is not the schema token.
+    assert mapping.material_modifier == "MAXIMUM"
+    assert mapping.zone_shape == "DiametricalZone"
+    assert [d.letter for d in mapping.datums] == ["A", "B", "C"]
+    assert [d.material_modifier for d in mapping.datums] == ["REGARDLESS", "MAXIMUM", "REGARDLESS"]
+
+
+def test_the_datum_order_survives_the_mapping():
+    # A|B|C constrains a part differently from B|A|C, so a mapping that returns a set or
+    # sorts the letters has changed the inspection instruction.
+    mapping = qif_characteristic_mapping(
+        _frame(
+            datums=(
+                DatumReference(letter="B"),
+                DatumReference(letter="A"),
+                DatumReference(letter="C"),
+            )
+        )
+    )
+    assert [d.letter for d in mapping.datums] == ["B", "A", "C"]
+
+
+def test_the_orientation_characteristics_use_a_different_non_diametral_zone_name():
+    # PlanarZone for orientation, NonDiametricalZone for position. Reusing one name for
+    # both is the mistake a from-memory mapping makes, and it does not validate.
+    surface = {"feature_type": FeatureType.SURFACE, "datums": (DatumReference(letter="A"),)}
+    perpendicularity = qif_characteristic_mapping(
+        FeatureControlFrame(
+            characteristic=Characteristic.PERPENDICULARITY,
+            tolerance=Quantity.parse("0.05 mm"),
+            **surface,
+        )
+    )
+    assert perpendicularity.zone_shape == "PlanarZone"
+    assert qif_characteristic_mapping(_frame()).zone_shape == "NonDiametricalZone"
+
+
+def test_a_modifier_the_target_type_cannot_hold_is_refused_not_dropped():
+    """The silent-green shape in a format conversion.
+
+    A Ⓜ that vanishes on the way out crosses as a tighter requirement than the drawing
+    granted, and the receiving inspection program has no way to know it was ever there.
+    """
+    circularity = FeatureControlFrame(
+        characteristic=Characteristic.CIRCULARITY,
+        tolerance=Quantity.parse("0.02 mm"),
+        feature_type=FeatureType.FEATURE_OF_SIZE,
+        material_condition=MaterialCondition.MMC,
+    )
+    with pytest.raises(ValueError, match="no MaterialCondition element"):
+        qif_characteristic_mapping(circularity)
+
+
+def test_a_tangent_plane_outside_the_orientation_family_is_refused():
+    with pytest.raises(ValueError, match="no TangentPlane element"):
+        qif_characteristic_mapping(_frame(modifiers=(FrameModifier.TANGENT_PLANE,)))
+
+
+def test_what_the_frame_cannot_supply_is_named_rather_than_invented():
+    """QIF's DatumType requires a DatumDefinitionId anchored to a feature, and a feature
+    control frame knows only the letter. A datum reference frame invented by the exporter
+    is an inspection instruction nobody authored."""
+    mapping = qif_characteristic_mapping(
+        _frame(material_condition=MaterialCondition.MMC, modifiers=(FrameModifier.PROJECTED,))
+    )
+    joined = "\n".join(mapping.unresolved)
+    assert "DatumReferenceFrameId" in joined
+    assert "DatumDefinitionId and ReferencedComponent for datum A" in joined
+    assert "SizeCharacteristicDefinitionId" in joined
+    assert "ProjectedToleranceZoneValue" in joined
+
+
+def test_a_frame_that_needs_nothing_more_says_so():
+    # The other half: a check that always reports something missing is not a check.
+    flatness = FeatureControlFrame(
+        characteristic=Characteristic.FLATNESS,
+        tolerance=Quantity.parse("0.1 mm"),
+        feature_type=FeatureType.SURFACE,
+    )
+    assert qif_characteristic_mapping(flatness).unresolved == ()
+
+
+def test_every_characteristic_maps():
+    # All fourteen, so a characteristic added to the model without a QIF counterpart fails
+    # here with a KeyError rather than shipping as a gap.
+    for characteristic in Characteristic:
+        assert characteristic in _QIF_DEFINITION_TYPE
+
+
+def test_every_qif_name_this_module_emits_exists_in_the_published_schema():
+    """The anchor. Every type, enumeration token and element name checked against the XSD.
+
+    Point ``ANVILATE_QIF_XSD`` at the ``xsd`` directory of the QIF 3.0 schema package.
+    Skipped otherwise — an unrunnable check is reported as not run, never as a pass.
+    """
+    location = os.environ.get("ANVILATE_QIF_XSD")
+    if not location:
+        pytest.skip("set ANVILATE_QIF_XSD to the QIF 3.0 schema package's xsd directory")
+    library = Path(location) / "QIFLibrary"
+    if not library.exists():
+        pytest.skip(f"no QIFLibrary under {location}")
+    published = "".join(
+        path.read_text(encoding="utf-8", errors="replace") for path in library.glob("*.xsd")
+    )
+    assert published, "the schema directory read as empty, so every comparison below is vacuous"
+
+    for definition_type in _QIF_DEFINITION_TYPE.values():
+        assert f'name="{definition_type}"' in published, definition_type
+    for token in {*_QIF_MATERIAL_MODIFIER.values(), *_QIF_DATUM_MODIFIER.values()}:
+        assert f'<xs:enumeration value="{token}"/>' in published, token
+    for diametral, planar in _ZONE_SHAPE.values():
+        assert f'name="{diametral}"' in published
+        assert f'name="{planar}"' in published
+    for element in ("MaterialCondition", "ZoneShape", "TangentPlane", "FreeState"):
+        assert f'name="{element}"' in published, element

@@ -61,16 +61,28 @@ from hashlib import sha256
 from math import isfinite
 from xml.etree import ElementTree as ET
 
+from pydantic import BaseModel, ConfigDict
+
 from ..attestation import EnvironmentBOM
 from ..bundle import BundleSections
 from ..evidence import SourceRecord
+from ..gdt import (
+    Characteristic,
+    DatumBoundary,
+    FeatureControlFrame,
+    FrameModifier,
+    MaterialCondition,
+)
 from ..scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
     "QIF_NAMESPACE",
     "QIF_VERSION",
     "SAFETY_FACTOR_UNIT",
+    "QifCharacteristicMapping",
+    "QifDatumReference",
     "export_qif_results",
+    "qif_characteristic_mapping",
     "qif_schema_issues",
 ]
 
@@ -764,3 +776,186 @@ def qif_schema_issues(document: str) -> list[str]:
 
 def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
+
+
+# --- semantic GD&T as QIF characteristic definitions -------------------------------------
+#
+# A feature control frame and a QIF characteristic definition describe the same thing, and
+# the vocabulary is where a from-memory mapping goes wrong. Every name below was read out
+# of the published QIF 3.0 schema package rather than recalled, and three of them would
+# have been guessed incorrectly: QIF spells profile-of-a-line `LineProfile`, its material
+# modifier enumeration is REGARDLESS/MAXIMUM/LEAST rather than RFS/MMC/LMC, and the
+# non-diametral zone element is `NonDiametricalZone` for position but `PlanarZone` for the
+# orientation characteristics. `tests/test_qif.py` holds every one of these against the
+# schema itself.
+#
+# This is the **definition** mapping, not a document writer, and the difference is the
+# datum reference frame: QIF's `DatumType` requires a `DatumDefinitionId` pointing at a
+# datum definition anchored to a feature, and a feature control frame knows only the
+# letter. What a caller still owes is enumerated in `unresolved` rather than defaulted,
+# because a datum reference frame invented by the exporter is an inspection instruction
+# nobody authored.
+
+_QIF_DEFINITION_TYPE: dict[Characteristic, str] = {
+    Characteristic.STRAIGHTNESS: "StraightnessCharacteristicDefinitionType",
+    Characteristic.FLATNESS: "FlatnessCharacteristicDefinitionType",
+    Characteristic.CIRCULARITY: "CircularityCharacteristicDefinitionType",
+    Characteristic.CYLINDRICITY: "CylindricityCharacteristicDefinitionType",
+    Characteristic.PROFILE_OF_A_LINE: "LineProfileCharacteristicDefinitionType",
+    Characteristic.PROFILE_OF_A_SURFACE: "SurfaceProfileCharacteristicDefinitionType",
+    Characteristic.ANGULARITY: "AngularityCharacteristicDefinitionType",
+    Characteristic.PERPENDICULARITY: "PerpendicularityCharacteristicDefinitionType",
+    Characteristic.PARALLELISM: "ParallelismCharacteristicDefinitionType",
+    Characteristic.POSITION: "PositionCharacteristicDefinitionType",
+    Characteristic.CONCENTRICITY: "ConcentricityCharacteristicDefinitionType",
+    Characteristic.SYMMETRY: "SymmetryCharacteristicDefinitionType",
+    Characteristic.CIRCULAR_RUNOUT: "CircularRunoutCharacteristicDefinitionType",
+    Characteristic.TOTAL_RUNOUT: "TotalRunoutCharacteristicDefinitionType",
+}
+
+# QIF's `MaterialModifierEnumType`. The tokens are not the drawing abbreviations, and a
+# document emitting MMC where the schema says MAXIMUM does not validate.
+_QIF_MATERIAL_MODIFIER: dict[MaterialCondition, str] = {
+    MaterialCondition.RFS: "REGARDLESS",
+    MaterialCondition.MMC: "MAXIMUM",
+    MaterialCondition.LMC: "LEAST",
+}
+
+_QIF_DATUM_MODIFIER: dict[DatumBoundary, str] = {
+    DatumBoundary.RMB: "REGARDLESS",
+    DatumBoundary.MMB: "MAXIMUM",
+    DatumBoundary.LMB: "LEAST",
+}
+
+# Which definition types carry a `MaterialCondition` element at all. The rest have nowhere
+# to put one, which is why a non-RFS condition on those is refused rather than dropped:
+# a callout that silently loses its Ⓜ crosses as a tighter requirement than the drawing.
+_CARRIES_MATERIAL_CONDITION = frozenset(
+    {
+        Characteristic.STRAIGHTNESS,
+        Characteristic.FLATNESS,
+        Characteristic.ANGULARITY,
+        Characteristic.PERPENDICULARITY,
+        Characteristic.PARALLELISM,
+        Characteristic.POSITION,
+    }
+)
+
+# The zone-shape element name for the diametral and the non-diametral case, by
+# characteristic. A characteristic absent from this table has no `ZoneShape` element.
+_ZONE_SHAPE: dict[Characteristic, tuple[str, str]] = {
+    Characteristic.STRAIGHTNESS: ("DiametricalZone", "NonDiametricalZone"),
+    Characteristic.POSITION: ("DiametricalZone", "NonDiametricalZone"),
+    Characteristic.CONCENTRICITY: ("DiametricalZone", "NonDiametricalZone"),
+    Characteristic.ANGULARITY: ("DiametricalZone", "PlanarZone"),
+    Characteristic.PERPENDICULARITY: ("DiametricalZone", "PlanarZone"),
+    Characteristic.PARALLELISM: ("DiametricalZone", "PlanarZone"),
+}
+
+_CARRIES_TANGENT_PLANE = frozenset(
+    {
+        Characteristic.ANGULARITY,
+        Characteristic.PERPENDICULARITY,
+        Characteristic.PARALLELISM,
+    }
+)
+
+
+class QifDatumReference(BaseModel):
+    """One datum reference as QIF spells it: the letter, and the boundary condition."""
+
+    model_config = ConfigDict(frozen=True)
+
+    letter: str
+    material_modifier: str
+
+
+class QifCharacteristicMapping(BaseModel):
+    """A feature control frame in QIF's vocabulary, with what is still missing named.
+
+    ``tolerance_mm`` is a magnitude, because QIF's ``LinearValueType`` is a bare double
+    whose unit comes from the document's units section. Stating millimetres here rather
+    than carrying the frame's own unit means the caller writes one units declaration and
+    every value agrees with it.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    definition_type: str
+    tolerance_mm: float
+    material_modifier: str | None
+    zone_shape: str | None
+    tangent_plane: bool
+    free_state: bool
+    statistical: bool
+    datums: tuple[QifDatumReference, ...]
+    # Required QIF elements this mapping cannot supply from a feature control frame alone.
+    # Empty means the definition is complete as it stands.
+    unresolved: tuple[str, ...]
+
+
+def qif_characteristic_mapping(frame: FeatureControlFrame) -> QifCharacteristicMapping:
+    """One feature control frame as a QIF characteristic definition.
+
+    Refuses rather than drops. A modifier the target type has no element for is not a
+    conservative simplification — a Ⓜ that vanishes on the way out crosses as a tighter
+    requirement than the drawing granted, and the receiving inspection program has no way
+    to know a modifier was ever there.
+    """
+    characteristic = frame.characteristic
+    condition = frame.material_condition
+    if condition is not MaterialCondition.RFS and characteristic not in _CARRIES_MATERIAL_CONDITION:
+        raise ValueError(
+            f"{_QIF_DEFINITION_TYPE[characteristic]} has no MaterialCondition element, so "
+            f"{condition.value} on a {characteristic.value} callout cannot cross into QIF. "
+            "Dropping it would export a tighter requirement than the drawing states"
+        )
+    tangent_plane = FrameModifier.TANGENT_PLANE in frame.modifiers
+    if tangent_plane and characteristic not in _CARRIES_TANGENT_PLANE:
+        raise ValueError(
+            f"{_QIF_DEFINITION_TYPE[characteristic]} has no TangentPlane element; QIF "
+            "carries the tangent-plane modifier on the orientation characteristics only"
+        )
+
+    shapes = _ZONE_SHAPE.get(characteristic)
+    zone_shape = None
+    if shapes is not None:
+        diametral, planar = shapes
+        zone_shape = diametral if FrameModifier.DIAMETER in frame.modifiers else planar
+
+    unresolved: list[str] = []
+    if frame.datums:
+        unresolved.append("DatumReferenceFrameId (the frame this callout resolves against)")
+        for datum in frame.datums:
+            unresolved.append(f"DatumDefinitionId and ReferencedComponent for datum {datum.letter}")
+    if condition is not MaterialCondition.RFS:
+        unresolved.append(
+            "SizeCharacteristicDefinitionId (QIF derives the bonus tolerance from the "
+            "feature's size characteristic, which a feature control frame does not name)"
+        )
+    if FrameModifier.PROJECTED in frame.modifiers:
+        unresolved.append(
+            "ProjectedToleranceZoneValue (the zone's height above the surface, which the "
+            "frame declares as a modifier without a length)"
+        )
+
+    return QifCharacteristicMapping(
+        definition_type=_QIF_DEFINITION_TYPE[characteristic],
+        tolerance_mm=frame.tolerance.to("mm").magnitude,
+        material_modifier=(
+            _QIF_MATERIAL_MODIFIER[condition]
+            if characteristic in _CARRIES_MATERIAL_CONDITION
+            else None
+        ),
+        zone_shape=zone_shape,
+        tangent_plane=tangent_plane,
+        free_state=FrameModifier.FREE_STATE in frame.modifiers,
+        statistical=FrameModifier.STATISTICAL in frame.modifiers,
+        datums=tuple(
+            QifDatumReference(
+                letter=datum.letter, material_modifier=_QIF_DATUM_MODIFIER[datum.boundary]
+            )
+            for datum in frame.datums
+        ),
+        unresolved=tuple(unresolved),
+    )

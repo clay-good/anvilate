@@ -68,5 +68,7 @@ See [`examples/feature_control_frame_legality.py`](../examples/feature_control_f
 
 This models and validates the callout. It does **not** verify that a part meets it, resolve
 a datum reference frame into a coordinate system, or compute a virtual condition boundary.
-Drawing rendering beyond `render()`'s text form, AP242 semantic PMI population, and QIF
-characteristic mapping wait on the export layers they belong to.
+Drawing rendering beyond `render()`'s text form and AP242 semantic PMI population wait on
+the export layers they belong to. QIF characteristic mapping has landed in the layer that
+owns the QIF vocabulary — see
+[drawing callouts cross too](quality-interchange.md#drawing-callouts-cross-too-gdt-as-characteristic-definitions).

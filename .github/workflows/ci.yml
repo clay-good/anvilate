@@ -73,12 +73,13 @@ jobs:
           # after a rename would run zero tests and report success.
           pytest -rs \
             "tests/test_qif.py::test_the_document_validates_against_the_published_schemas" \
+            "tests/test_qif.py::test_every_qif_name_this_module_emits_exists_in_the_published_schema" \
             "tests/test_dcc.py::test_the_fixture_validates_against_the_published_dcc_schema" \
             | tee result.txt
           # A skip here means the schemas did not arrive and nothing was validated, which is
           # exactly the outcome this job exists to rule out. Passing on a skip would make the
           # job a green light for a check that never ran.
-          grep -qE "^2 passed" result.txt
+          grep -qE "^3 passed" result.txt
           if grep -q skipped result.txt; then
             echo "the schema tests skipped; nothing was validated"
             exit 1

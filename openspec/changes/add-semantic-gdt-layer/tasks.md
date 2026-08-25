@@ -13,7 +13,8 @@
 - [ ] 2.1 Drawing feature-control-frame rendering from the model
 - [ ] 2.2 AP242 semantic PMI population path (spec-level contract; implementation lands
       with STEP export)
-- [ ] 2.3 QIF characteristic definition mapping
+- [x] 2.3 QIF characteristic definition mapping — `qif_characteristic_mapping` in
+      `anvilate.export.qif`, the layer that owns the QIF vocabulary
 
 ## 3. Tests & docs
 
@@ -47,7 +48,18 @@ Still open, all three because they wait on a consumer that does not exist yet:
   (`⌖ | Ø0.2 mm Ⓜ | A | B Ⓜ | C`), which is the model half. Drawing it into a DXF belongs
   with the drawing-generation layer.
 - **2.2 AP242 semantic PMI population.** Waits on STEP export, as the task itself says.
-- **2.3 QIF characteristic definition mapping.** Belongs with
-  `add-quality-evidence-interchange`, which owns the QIF schema decisions.
+- **2.3 QIF characteristic definition mapping — done.** It landed in
+  `anvilate.export.qif`, which owns the QIF schema decisions, once that module existed.
+  Every name in the mapping was read out of the published QIF 3.0 XSD rather than
+  recalled, and **three would have been guessed wrong**: QIF spells profile-of-a-line
+  `LineProfile`, its material-modifier enumeration is REGARDLESS/MAXIMUM/LEAST rather than
+  the drawing abbreviations, and the non-diametral zone element is `NonDiametricalZone` for
+  position but `PlanarZone` for the orientation characteristics. A modifier the target type
+  has no element for is **refused**, not dropped — six of the fourteen definition types
+  carry `MaterialCondition` and the rest do not, and a Ⓜ that vanishes on the way out
+  crosses as a tighter requirement than the drawing granted. It is a definition mapping and
+  not a document writer, because QIF's `DatumType` requires a `DatumDefinitionId` anchored
+  to a feature and a frame knows only the letter; what a caller still owes comes back in
+  `unresolved` rather than defaulted.
 - **3.2 propagation test (one declaration, three consumers).** There are no three
   consumers yet; it lands with the first of them.

@@ -158,6 +158,46 @@ with nothing in the numbers to show it.
 | an expanded *U* with no usable *k* | nothing, and says why — k = 2 is a convention, not this certificate's statement |
 | a non-Gaussian distribution | nothing, and names it — a rectangular uncertainty and a normal one of the same width are different statements |
 
+## Drawing callouts cross too: GD&T as characteristic definitions
+
+A feature control frame and a QIF characteristic definition describe the same thing, so
+`qif_characteristic_mapping(frame)` puts one in the other's vocabulary.
+
+```python
+from anvilate.export.qif import qif_characteristic_mapping
+```
+
+```text
+⌖ | Ø0.2 mm Ⓜ | A | B Ⓜ | C
+
+definition_type   PositionCharacteristicDefinitionType
+tolerance_mm      0.2
+material_modifier MAXIMUM
+zone_shape        DiametricalZone
+datums            A REGARDLESS | B MAXIMUM | C REGARDLESS
+```
+
+**Every name there was read out of the published schema, and three of them would have been
+guessed wrong.** QIF spells profile-of-a-line `LineProfile`. Its material-modifier
+enumeration is `REGARDLESS` / `MAXIMUM` / `LEAST`, not the drawing abbreviations — a
+document emitting `MMC` does not validate. And the non-diametral zone element is
+`NonDiametricalZone` for position but `PlanarZone` for the orientation characteristics, so
+one name reused for both is a document that fails on the second callout. All of it is held
+against the XSD by a test that CI runs against the real download.
+
+**A modifier the target type cannot hold is refused, not dropped.** Six of the fourteen
+definition types carry a `MaterialCondition` element; the rest have nowhere to put one. A Ⓜ
+that vanishes on the way out crosses as a *tighter* requirement than the drawing granted,
+and the receiving inspection program has no way to know a modifier was ever there — the
+same silent-green shape the tri-state rule above exists to prevent, in the other direction.
+
+**This is the definition mapping, not a document writer.** QIF's `DatumType` requires a
+`DatumDefinitionId` pointing at a datum definition anchored to a feature, and a feature
+control frame knows only the letter. What a caller still owes comes back in `unresolved`,
+named one item at a time, rather than defaulted: a datum reference frame invented by the
+exporter is an inspection instruction nobody authored. A frame that needs nothing more —
+flatness on a surface, no datums, no modifiers — returns an empty tuple.
+
 ## Checking a document
 
 `qif_schema_issues(document)` does the structural checks that need nothing but the file:
