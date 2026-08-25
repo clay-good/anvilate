@@ -13,6 +13,10 @@ the pressure falls by a factor of e, about 8.4 km for air at 15 °C. Inverting t
 recovers the altitude from a measured pressure ratio, h = H·ln(p₀/p), which is how a barometric
 altimeter reads height. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Anderson, *Introduction to Flight* (the standard atmosphere) — the scale height, the
+isothermal barometric relation and its inversion to altitude, and the gradient-layer form for a
+constant lapse rate. The layer structure is that of the ISO 2533 / U.S. Standard Atmosphere.
 """
 
 from __future__ import annotations

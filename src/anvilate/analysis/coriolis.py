@@ -14,6 +14,10 @@ that governs geophysical flow. Whether rotation matters to a flow is measured by
 Ro = U / (f * L), the ratio of inertial to Coriolis forces over a length scale L: Ro much below 1
 means rotation dominates (large-scale weather), Ro much above 1 means it is negligible (a draining
 sink).
+
+Sources: Cushman-Roisin & Beckers, *Introduction to Geophysical Fluid Dynamics* — the Coriolis
+acceleration and its latitude parameter f = 2Ω·sin φ, the Foucault pendulum precession period,
+and the Rossby and Ekman numbers that say when rotation and viscosity matter.
 """
 
 from __future__ import annotations

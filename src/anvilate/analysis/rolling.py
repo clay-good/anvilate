@@ -16,6 +16,10 @@ of the arc of contact — and the rolls press on the strip across that length wi
 F = Y_avg·w·L, the average flow stress Y_avg of the (work-hardening) strip times its width w and the
 contact length. Because L grows with the square root of the draft and the radius, a bigger roll or a
 heavier pass drives the force up — the reason heavy reductions need big, stiff mills.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (flat rolling) — the
+maximum draft a friction coefficient and roll radius allow, the projected contact length, the
+roll separating force from the average flow stress, and the power that force needs.
 """
 
 from __future__ import annotations

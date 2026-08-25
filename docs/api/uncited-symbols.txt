@@ -27,10 +27,6 @@ adhesive.lap_joint_average_shear_stress
 arrhenius.arrhenius_activation_energy
 arrhenius.arrhenius_rate_constant
 arrhenius.arrhenius_rate_ratio
-atmosphere.barometric_altitude
-atmosphere.barometric_pressure
-atmosphere.lapse_rate_pressure
-atmosphere.scale_height
 atomic_spectra.bohr_energy_level
 atomic_spectra.bohr_orbit_radius
 atomic_spectra.moseley_k_alpha_wavelength
@@ -50,10 +46,6 @@ calorimetry.flash_steam_fraction
 calorimetry.latent_heat
 calorimetry.mixing_equilibrium_temperature
 calorimetry.sensible_heat
-cam.CamMotion
-cam.cam_base_circle_for_pressure_angle
-cam.cam_follower_motion
-cam.cam_pressure_angle
 capillary_flow.washburn_capillary_pressure
 capillary_flow.washburn_penetration_length
 capillary_flow.washburn_penetration_time
@@ -90,10 +82,6 @@ control_valve.valve_flow_rate
 conveyor.belt_speed_for_capacity
 conveyor.conveyor_lift_power
 conveyor.conveyor_mass_flow
-coriolis.coriolis_acceleration
-coriolis.coriolis_parameter
-coriolis.foucault_precession_period
-coriolis.rossby_number
 coupling.flange_coupling_bolt_count
 coupling.flange_coupling_bolt_force
 coupling.flange_coupling_torque
@@ -168,10 +156,6 @@ membrane.membrane_permeate_concentration
 membrane.membrane_salt_flux
 membrane.reverse_osmosis_water_flux
 membrane.salt_rejection
-naval_architecture.block_coefficient
-naval_architecture.hull_froude_number
-naval_architecture.hull_speed
-naval_architecture.roll_period
 noise_figure.cascade_noise_factor
 noise_figure.noise_factor_from_figure
 o_ring.o_ring_gland_fill_fraction
@@ -227,10 +211,6 @@ rigging.tackle_lead_line_tension
 rigging.tackle_mechanical_advantage
 rivet.RivetedJointStrength
 rivet.riveted_joint_efficiency
-rolling.maximum_draft
-rolling.rolling_contact_length
-rolling.rolling_force
-rolling.rolling_power
 rotor_momentum.figure_of_merit
 rotor_momentum.hover_induced_velocity
 rotor_momentum.ideal_hover_power
@@ -240,9 +220,6 @@ scotch_yoke.scotch_yoke_velocity
 screw_conveyor.screw_conveyor_mass_capacity
 screw_conveyor.screw_conveyor_speed_for_capacity
 screw_conveyor.screw_conveyor_volumetric_capacity
-shear_spinning.shear_spinning_half_angle_for_thickness
-shear_spinning.shear_spinning_reduction
-shear_spinning.shear_spinning_wall_thickness
 shot_peening.peening_coverage
 shot_peening.peening_impact_coverage_rate
 shot_peening.peening_time_for_coverage
@@ -264,9 +241,6 @@ tank_flow.tank_drain_time
 thermal_noise.johnson_noise_current
 thermal_noise.johnson_noise_power
 thermal_noise.johnson_noise_voltage
-thermoforming.thermoforming_areal_draw_ratio
-thermoforming.thermoforming_average_wall_thickness
-thermoforming.thermoforming_sheet_gauge_for_wall
 tolerance_stack.rss_tolerance_stack
 tolerance_stack.worst_case_tolerance_stack
 ultrasonic_testing.near_field_length
@@ -288,10 +262,6 @@ vehicle_stability.rollover_threshold_speed
 vehicle_stability.static_stability_factor
 vehicle_stability.understeer_gradient
 vehicle_stability.vehicle_characteristic_speed
-vortex_shedding.lock_in_velocity
-vortex_shedding.reduced_velocity
-vortex_shedding.scruton_number
-vortex_shedding.vortex_shedding_frequency
 wave.frequency_from_wavelength
 wave.wave_speed
 wave.wavelength_from_frequency
@@ -302,6 +272,3 @@ welding_heat.weld_travel_speed_for_heat_input
 winch.drum_line_pull
 winch.drum_rope_capacity
 winch.drum_working_radius
-wire_drawing.wire_drawing_force
-wire_drawing.wire_drawing_max_reduction
-wire_drawing.wire_drawing_stress

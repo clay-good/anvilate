@@ -28,6 +28,10 @@ with respect to time, which brings down one and two factors of the cam speed ω
 The cam angle θ and rise angle β are plain-float degrees (the units layer carries
 no angle); the lift is a length and the cam speed a rotational frequency —
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Norton, *Design of Machinery* (cam design) — the displacement, velocity and
+acceleration of the standard follower motions, the pressure angle that decides whether the
+follower jams, and the base circle a pressure-angle limit requires.
 """
 
 from __future__ import annotations

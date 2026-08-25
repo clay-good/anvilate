@@ -23,6 +23,10 @@ the structure's mass and damping measured against the fluid's density. A heavy, 
 air has a large Sc and barely responds even at resonance; a light or lightly damped one in water has
 a small Sc and can be shaken apart. The two together are the screen: reduced velocity for the speed,
 Scruton for the consequence.
+
+Sources: Blevins, *Flow-Induced Vibration* — the Strouhal shedding frequency, the velocity at
+which shedding locks in to a structural mode, the reduced velocity that indexes it, and the
+Scruton number that says whether the damping is enough.
 """
 
 from __future__ import annotations

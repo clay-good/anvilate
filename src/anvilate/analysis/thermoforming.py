@@ -13,6 +13,10 @@ more complex parts. Because the plastic volume is fixed, the average wall thins 
 t_avg = t_sheet/S: double the area and you halve the wall. Turning that around sizes the job, giving
 the starting sheet gauge t_sheet = t_min·S needed to leave a specified minimum wall after forming —
 the number that decides how thick a blank to buy for a given part depth.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (forming of plastics) —
+the areal draw ratio of a thermoformed part, the average wall thickness it leaves, and the sheet
+gauge a target wall requires.
 """
 
 from __future__ import annotations

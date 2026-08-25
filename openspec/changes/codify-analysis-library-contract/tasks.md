@@ -197,10 +197,10 @@ about which convention the library adopts, not a bug fix.
   4.6 -> 4.3 and 1.6 -> 1.4. Every move is downward, which is what adopting the real
   curve should do.
 
-## 2026-08-25 — 121 more symbols off the citation debt
+## 2026-08-25 — 154 more symbols off the citation debt
 
-The debt was 409 public analysis symbols naming no source; it is 288 — 16% of the surface,
-from 23%. Twenty-two modules paid off, each by giving its module docstring a real `Sources:`
+The debt was 409 public analysis symbols naming no source; it is 255 — 14% of the surface,
+from 23%. Thirty-one modules paid off, each by giving its module docstring a real `Sources:`
 attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 
 | Source | Modules |
@@ -221,8 +221,14 @@ attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 | Krane, *Introductory Nuclear Physics* | `radioactivity` |
 | Chen, *Introduction to Plasma Physics and Controlled Fusion* | `plasma` |
 | Goldsmid, *Introduction to Thermoelectricity* | `thermoelectric` |
+| Norton, *Design of Machinery* (cams) | `cam` |
+| Kalpakjian & Schmid, *Manufacturing Engineering and Technology* | `rolling`, `wire_drawing`, `shear_spinning`, `thermoforming` |
+| Blevins, *Flow-Induced Vibration* | `vortex_shedding` |
+| Tupper, *Introduction to Naval Architecture* | `naval_architecture` |
+| Anderson, *Introduction to Flight* (standard atmosphere) | `atmosphere` |
+| Cushman-Roisin & Beckers, *Introduction to Geophysical Fluid Dynamics* | `coriolis` |
 
-**Eleven new authority tokens, each run through the file's own accident check before
+**Thirteen new authority tokens, each run through the file's own accident check before
 shipping.** For every one, the symbols it is the *sole* citation for are in the modules it
 was added for and nothing else. Two candidates were rejected by that check rather than
 adopted:

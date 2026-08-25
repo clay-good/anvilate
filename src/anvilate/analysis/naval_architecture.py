@@ -13,6 +13,10 @@ is simply Fr ≈ 0.4. How full the underwater body is is the block coefficient C
 displaced volume over its bounding box — low for a fine, fast hull, high for a bluff, roomy one.
 Speeds, lengths, and volumes are dimension-checked :class:`~anvilate.units.Quantity` values; the
 Froude number and block coefficient are plain floats.
+
+Sources: Tupper, *Introduction to Naval Architecture* — the hull speed and Froude number of a
+displacement hull, the block coefficient, and the roll period from the metacentric height. The
+friction line is the ITTC-1957 model-ship correlation line, cited in the function that uses it.
 """
 
 from __future__ import annotations

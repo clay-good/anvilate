@@ -17,6 +17,10 @@ can only reduce so much before σ_d reaches the flow stress and the wire yields 
 maximum area reduction per pass is r_max = 1 − exp(−1/(1 + μ/tan α)), which for a frictionless die
 is the classic 1 − 1/e ≈ 0.63. Bigger reductions are split across many dies in a drawing train — the
 reason wire is drawn in successive passes, not one.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (rod and wire drawing)
+— the ideal drawing stress with its friction and redundant-work terms, the force that stress
+implies, and the maximum reduction per pass before the drawn wire yields.
 """
 
 from __future__ import annotations

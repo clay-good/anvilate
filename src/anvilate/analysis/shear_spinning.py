@@ -14,6 +14,10 @@ half-angle halves the wall in a single pass. That gives the reduction r = 1 − 
 inverting the law gives the half-angle a target wall needs, α = arcsin(t_f/t₀). The catch is
 spinnability: too steep a cone demands more reduction than the metal can take in one pass without
 tearing, so severe cones are shear-spun in stages.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (spinning) — the sine
+law t = t0·sin α that sets the wall thickness of a shear-spun cone, the reduction it represents,
+and the half angle a target thickness requires.
 """
 
 from __future__ import annotations
