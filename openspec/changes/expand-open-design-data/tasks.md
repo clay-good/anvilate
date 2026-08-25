@@ -4,8 +4,10 @@
 
 - [x] 1.1 Basis field (typical / A / B / spec-minimum) on strength properties, rendered
       in reports
-- [ ] 1.2 Fatigue-record schema (curve parameters, conditions, specimen metadata,
-      dataset provenance)
+- [x] 1.2 Fatigue-record schema (curve parameters, conditions, specimen metadata,
+      dataset provenance) — `anvilate.standards.fatigue`. Four required parts, two
+      refusals, and the schema anchored against a curve the library already computes
+      from the standard independently
 
 ## 2. Data packs & importers
 
@@ -49,6 +51,39 @@ than defaulted.
 so a record added without a basis fails a check that demands a minimum instead of passing
 as though somebody had classified it.
 
-Nothing else in this change is unblocked: 2.1-2.5 need external datasets (MIL-HDBK-5J,
-NIMS, the AISC xlsx) with fetch recipes and license review, and 3.x needs a separate
-published repo.
+2.1-2.5 need external datasets (MIL-HDBK-5J, NIMS, the AISC xlsx) with fetch recipes and
+license review, and 3.x needs a separate published repo.
+
+## Shipped 2026-08-25 — task 1.2
+
+`FatigueRecord` carries four parts and refuses to be built without any of them: the curve,
+its survival level, the specimen it was measured on, and the dataset it came from.
+
+**`CurveSurvival` is the fatigue analogue of `AllowableBasis`, and it bites harder.**
+Fatigue scatter is wide enough that a mean curve read as a design curve overstates life by
+roughly a factor of two at the same stress range, so a mean curve asked for a design answer
+returns `None` rather than the mean value with a caveat somewhere.
+
+**The specimen is required, because that is the half tables drop.** A polished
+rotating-beam curve and a welded-joint curve are both "steel fatigue data" and neither
+substitutes for the other. The stress ratio R is required in particular: the difference
+between R = 0 and R = −1 is the whole subject of mean-stress correction. A welded-joint
+curve that is genuinely R-independent says so with a flag; declaring both a flag and an R
+is refused, because guessing which was meant would put a mean-stress correction on a curve
+that already includes one.
+
+**The curve declines outside its method's scope rather than extrapolating.** The
+EN 1993-1-9 curve in this schema returns nothing below 10,000 cycles, where the standard
+sends you to a strain-based assessment — while the bare formula in
+`anvilate.analysis.fatigue` evaluates there quite happily. That difference is asserted as
+deliberate in the tests, not left to be discovered.
+
+**The anchor is a curve computed independently.** `en1993_detail_category_curve` expresses
+the standard's two branches in this schema; `weld_detail_allowable_stress_range` computes
+them straight from the standard, sharing no code. They agree to 1e-12 at forty
+(category, life) pairs, which is evidence a fixture written alongside the schema could
+never be.
+
+**`model_copy` is overridden**, because pydantic runs no after-validator on a copy and
+`curve.model_copy(update={"segments": ...})` was one call away from building the
+discontinuous curve the constructor refuses.

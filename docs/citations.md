@@ -129,6 +129,42 @@ carry typical values.
 rather than passing as though somebody had — otherwise the requirement means nothing the
 first time a record is added carelessly.
 
+## A fatigue curve says the same thing, and one more
+
+A fatigue curve carries its own version of the basis question, and it bites harder.
+`CurveSurvival` says whether a curve is a **mean fit through the data** or a **design
+curve** at a stated survival level — `95% survival`, or the mean-minus-two-standard-
+deviations convention EN 1993-1-9 and IIW curves are drawn at. Fatigue scatter is wide
+enough that reading a mean curve as a design curve overstates life by roughly a factor of
+two at the same stress range, so a mean curve asked for a design answer returns nothing:
+
+```python
+from anvilate.standards import CurveSurvival
+
+record.allowable_stress_range(cycles=2_000_000, required_survival=CurveSurvival.P97_7)
+# None — the curve is a mean fit
+```
+
+A record carries four things and cannot be built without any of them: the curve, the
+survival level, **what it was measured on**, and where it came from. The third is the one
+tables usually drop. A polished rotating-beam specimen and a welded joint are both "steel
+fatigue data" and neither substitutes for the other, so geometry, loading mode,
+environment, temperature and the stress ratio R are all required fields. R in particular:
+the difference between an R = 0 and an R = −1 curve is the entire subject of mean-stress
+correction, and a curve that does not say which it is cannot be corrected. A welded-joint
+curve that is genuinely R-independent — residual stresses dominate — says so with a flag
+rather than by inventing an R, and declaring both is refused, because guessing which one
+was meant would put a mean-stress correction on a curve that already includes one.
+
+And the curve declines outside the cycle range its method covers, rather than extrapolating.
+The EN 1993-1-9 nominal-stress curve expressed in this schema returns nothing below 10,000
+cycles, where the standard sends you to a strain-based assessment instead — while the bare
+formula will happily evaluate there. **A power law run past the end of its method returns a
+number that looks exactly like data.**
+
+The dataset half is a license record too: `DatasetProvenance` requires a DOI or a URL,
+because a fatigue curve nobody can retrieve is a number somebody typed.
+
 ## If a citation looks wrong
 
 Report it. A wrong citation is worse than none, because it converts an unverified number

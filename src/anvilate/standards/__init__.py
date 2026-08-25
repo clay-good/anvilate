@@ -57,6 +57,17 @@ from .extrusions import (
     UnknownExtrusionError,
     default_extrusion_table,
 )
+from .fatigue import (
+    CurveSurvival,
+    DatasetProvenance,
+    FatigueCurve,
+    FatigueRecord,
+    FatigueSegment,
+    LoadingMode,
+    SpecimenGeometry,
+    SpecimenMetadata,
+    en1993_detail_category_curve,
+)
 from .hexbolts import (
     HexBolt,
     HexBoltTable,
@@ -108,6 +119,15 @@ from .washers import (
 )
 
 __all__ = [
+    "CurveSurvival",
+    "DatasetProvenance",
+    "FatigueCurve",
+    "FatigueRecord",
+    "FatigueSegment",
+    "LoadingMode",
+    "SpecimenGeometry",
+    "SpecimenMetadata",
+    "en1993_detail_category_curve",
     "require_basis",
     "InsufficientBasis",
     "AllowableBasis",
