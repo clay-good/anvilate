@@ -16,6 +16,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from ..gdt import FeatureControlFrame
 from ..units import Quantity
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "plate_mass",
     "export_plate_dxf",
     "export_gear_blank_dxf",
+    "export_feature_control_frame_dxf",
 ]
 
 # A fabrication DXF separates the outer profile cut from the interior hole pierces
@@ -43,6 +45,9 @@ _LABEL_HEIGHT_FRACTION = 0.06
 # Reference circles (a gear's pitch and root) are construction geometry, not cuts, so
 # they go on their own layer for the machinist to see but not drive the tool path.
 _REFERENCE_LAYER = "REFERENCE"
+# A feature control frame is annotation, not geometry: it goes on its own layer so a
+# fabricator's tool path never picks it up, and so a drawing can turn the GD&T off.
+_GDT_LAYER = "GDT"
 
 # A DXF polyline bulge is tan(theta/4) of the arc it spans; every rounded plate
 # corner is a quarter circle.
@@ -475,6 +480,69 @@ def export_gear_blank_dxf(
         text_height = od * _LABEL_HEIGHT_FRACTION
         text = msp.add_text(label, height=text_height, dxfattribs={"layer": _TEXT_LAYER})
         text.set_placement((-od / 2, -od / 2 - 1.5 * text_height), align=TextEntityAlignment.LEFT)
+
+    out_path = Path(path)
+    doc.saveas(out_path)
+    return out_path
+
+
+def export_feature_control_frame_dxf(
+    *,
+    frame: FeatureControlFrame,
+    path: str | Path,
+    text_height: Quantity | None = None,
+    origin: tuple[Quantity, Quantity] | None = None,
+) -> Path:
+    """Write one feature control frame to a DXF, as the boxed callout a drawing carries.
+
+    The geometry comes from :func:`~anvilate.export.fcf.frame_drawing`; this function
+    only turns those primitives into DXF entities on the ``GDT`` layer. ``text_height``
+    is the drawing's predominant character height (3.5 mm by default, the usual ISO 3098
+    height) and everything in the frame is proportioned from it. ``origin`` places the
+    frame's lower-left corner, defaulting to (0, 0).
+
+    Every geometric symbol — the characteristic, Ø, Ⓜ, Ⓛ, Ⓟ, Ⓕ, Ⓣ and ⟨ST⟩ — is drawn
+    as lines and arcs rather than typeset, because a DXF viewer without a GD&T font
+    renders those characters as a missing glyph, and a callout that silently drops its
+    modifier crosses as a tighter requirement than the drawing states. Returns the path
+    written; raises :class:`ImportError` if ezdxf is unavailable.
+    """
+    ezdxf = _require_ezdxf()
+    from ezdxf.enums import TextEntityAlignment
+
+    from .fcf import DEFAULT_TEXT_HEIGHT, Arc, Circle, Polyline, frame_drawing
+
+    if text_height is None:
+        text_height = DEFAULT_TEXT_HEIGHT
+
+    start = (0.0, 0.0)
+    if origin is not None:
+        start = (_mm(origin[0], "origin x"), _mm(origin[1], "origin y"))
+    drawing = frame_drawing(frame, text_height=text_height, origin=start)
+
+    doc = ezdxf.new()
+    doc.units = ezdxf.units.MM
+    doc.layers.add(_GDT_LAYER, color=7)
+    msp = doc.modelspace()
+    attribs = {"layer": _GDT_LAYER}
+    for stroke in drawing.strokes:
+        if isinstance(stroke, Polyline):
+            msp.add_lwpolyline(stroke.points, close=stroke.closed, dxfattribs=attribs)
+        elif isinstance(stroke, Circle):
+            msp.add_circle(stroke.center, stroke.radius, dxfattribs=attribs)
+        elif isinstance(stroke, Arc):
+            msp.add_arc(
+                stroke.center,
+                stroke.radius,
+                stroke.start_angle,
+                stroke.end_angle,
+                dxfattribs=attribs,
+            )
+        else:  # pragma: no cover - the stroke union is closed
+            raise TypeError(f"unknown stroke primitive: {type(stroke).__name__}")
+    for text in drawing.labels:
+        entity = msp.add_text(text.text, height=text.height, dxfattribs=attribs)
+        entity.set_placement(text.center, align=TextEntityAlignment.MIDDLE_CENTER)
 
     out_path = Path(path)
     doc.saveas(out_path)

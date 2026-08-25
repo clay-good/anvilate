@@ -229,6 +229,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `lifter_verification_matrix.py` | The calculation is not the evidence: a passing BTH-1 lifter's plan asks for a 125% proof load and a dimensional inspection, counts the check verified by analysis alone, names the one that did not run — and reports `not_evaluated` until a result is recorded. |
 | `frame_member_forces_to_checks.py` | A Pynite frame export screened by cited AISC checks, with the axis mapping and the axial sign convention declared rather than inferred — unflipped, a 180 kN compression reads as tension and the column is never checked for buckling. |
 | `feature_control_frame_legality.py` | Five drawing callouts that do not parse — flatness to a datum, perpendicularity to nothing, Ⓜ on a surface, symmetry on a 2018 drawing, a fourth datum — each refused with the reason, plus what a position tolerance contributes to a 1D stack. |
+| `feature_control_frame_drawing.py` | One declaration, three consumers: the same feature control frame as text, as a QIF characteristic definition, and as DXF geometry. Every symbol is drawn as lines and arcs rather than typeset, because a viewer without a GD&T font renders a Ⓜ as a missing glyph — a callout that silently loses its modifier. |
 
 ## Provenance
 

@@ -64,11 +64,65 @@ simplification of anything: it is tolerance the drawing did not grant.
 
 See [`examples/feature_control_frame_legality.py`](../examples/feature_control_frame_legality.py).
 
+## One declaration, three consumers
+
+The same frame is read by three layers, and a declaration changed in the model has to
+reach all of them. A consumer that quietly ignores a modifier is not a rounding error: on
+a drawing it is a callout **looser** than the one declared, and in QIF it is one
+**tighter**.
+
+| Consumer | Where | What it produces |
+| --- | --- | --- |
+| Text | `FeatureControlFrame.render()` | `⌖ \| Ø0.2 mm Ⓜ \| A \| B Ⓜ \| C` |
+| Quality interchange | [`export.qif.qif_characteristic_mapping`](../src/anvilate/export/qif.py) | a QIF characteristic definition, with what it still owes named in `unresolved` |
+| Drawing | [`export.fcf.frame_drawing`](../src/anvilate/export/fcf.py) | the boxed, compartmented callout as lines, arcs and text |
+
+Propagation is tested rather than assumed: add the Ø, promote RFS to Ⓜ, add a datum, or
+change the characteristic, and each change is asserted to move all three.
+
+## The drawing, and why the symbols are geometry
+
+`frame_drawing()` returns primitives in millimetres — the frame box, its dividers, every
+symbol, and the two kinds of text a frame carries — and
+[`export_feature_control_frame_dxf`](../src/anvilate/export/dxf.py) writes them to a DXF on
+its own `GDT` annotation layer, so a fabricator's tool path never picks the callout up.
+
+**Every geometric symbol is drawn as lines and arcs, not typeset as a character.** A ⌖ or
+an Ⓜ written into a DXF as text renders correctly only where the viewer happens to have a
+font carrying the glyph; where it does not, the callout shows a missing-glyph box or
+silently loses its modifier, and the drawing then says something other than what the model
+declares. Only the digits of the tolerance and the datum letters are left as text, and the
+permitted character set is closed — the frame's width allowance was checked for those
+characters and nothing else, so anything outside the set is refused rather than laid out
+on an assumption nobody tested.
+
+The tolerance is **converted to millimetres**, because the DXF is a millimetre document. A
+frame declared in inches whose number crossed unchanged would read 25.4 times tighter than
+the one declared.
+
+**The proportions were read out of a published symbol chart, not recalled.** Every symbol
+is dimensioned as a multiple of the character height `h` in the Genium *Drafting Manual*
+Section 6.1 (February 1997, based on ASME Y14.5M-1994). Three would have been wrong from
+memory:
+
+- **Symmetry** is three horizontal lines of 2h, 1.2h and 2h at 0.5h spacing — the middle
+  one is the short one, and it is not an equals sign.
+- **Cylindricity's** two lines stand at 60° and are drawn *tangent* to its circle, which
+  is the property the test asserts rather than a bounding box the code produced.
+- **Ø's 1.5h is the symbol's height, not the slash's length.** Read as the length it draws
+  a Ø only 1.3h tall, barely taller than the circle it crosses — which is the defect
+  rendering a real frame caught and a unit test would not have.
+
+The frame stands 2h tall with each compartment padded 0.5h either side of its content, and
+nothing in a compartment may cross a divider — a glyph that straddles one is a modifier a
+reader assigns to the wrong compartment.
+
+See [`examples/feature_control_frame_drawing.py`](../examples/feature_control_frame_drawing.py).
+
 ## Scope
 
 This models and validates the callout. It does **not** verify that a part meets it, resolve
 a datum reference frame into a coordinate system, or compute a virtual condition boundary.
-Drawing rendering beyond `render()`'s text form and AP242 semantic PMI population wait on
-the export layers they belong to. QIF characteristic mapping has landed in the layer that
-owns the QIF vocabulary — see
-[drawing callouts cross too](quality-interchange.md#drawing-callouts-cross-too-gdt-as-characteristic-definitions).
+The drawing consumer renders the frame itself, not the leader, the datum feature symbol, or
+its placement on a part — those belong with the drawing-generation layer. AP242 semantic PMI
+population waits on the STEP export it belongs to.

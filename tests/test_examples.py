@@ -5756,6 +5756,21 @@ def test_feature_control_frame_example_refuses_the_five_illegal_callouts():
     )
 
 
+def test_feature_control_frame_drawing_example_moves_all_three_consumers(tmp_path):
+    namespace = runpy.run_path(str(_EXAMPLES / "feature_control_frame_drawing.py"))
+    frame = namespace["hole_position_frame"]()
+    text, definition_type, edges = namespace["three_consumers"](frame)
+
+    assert text == "⌖ | Ø0.2 mm Ⓜ | A | B Ⓜ | C"
+    assert definition_type == "PositionCharacteristicDefinitionType"
+    # Symbol, value, and one compartment per datum — edges bound them, so one more.
+    assert len(edges) == 3 + len(frame.datums)
+    assert list(edges) == sorted(edges)
+
+    path = namespace["draw"](tmp_path / "callout.dxf")
+    assert path.exists() and path.stat().st_size > 0
+
+
 def test_frame_interop_example_screens_forces_it_did_not_compute():
     namespace = runpy.run_path(str(_EXAMPLES / "frame_member_forces_to_checks.py"))
 
