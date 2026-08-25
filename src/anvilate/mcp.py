@@ -624,16 +624,21 @@ def stateless_gaps() -> tuple[str, ...]:
 def _argument_issues(tool: ToolDefinition, arguments: Mapping[str, Any]) -> list[str]:
     """What is wrong with ``arguments`` against ``tool``'s input schema.
 
-    **A deliberately partial check, and the docstring says which part.** It enforces the
-    three things the published schemas actually constrain at the top level: every
-    ``required`` property is present, no property outside ``properties`` is sent
-    (``additionalProperties`` is false on every one of them), and each value matches its
-    declared top-level ``type``. It does **not** resolve the ``$ref``s to the published
-    spec and scorecard schemas, so a structurally wrong spec passes here and is caught by
-    the operation itself.
+    **A deliberately partial check, and the docstring says which part.** It enforces
+    everything the published schemas constrain at the top level: every ``required``
+    property is present, no property outside ``properties`` is sent
+    (``additionalProperties`` is false on every one of them), each value matches its
+    declared ``type``, and where a property declares an ``enum`` or a numeric bound the
+    value is held to it, along with ``minLength`` and ``minItems``.
+
+    It does **not** resolve the ``$ref``s to the published spec and scorecard schemas, and
+    it does not descend into nested objects — so a structurally wrong spec passes here and
+    is caught by the operation, which is where the spec schema actually lives.
 
     That boundary is the point rather than an omission: a handler that reported "valid"
-    after checking three keys would be claiming the schema had been applied.
+    after checking three keys would be claiming the schema had been applied. The enum and
+    bound checks arrived after an audit found ``view: "sideways"`` and a ``width_px`` of 1
+    sailing through a surface whose own schema names four views and a floor of 64.
     """
     schema = tool.input_schema
     properties: dict[str, Any] = schema.get("properties", {})
@@ -660,6 +665,43 @@ def _argument_issues(tool: ToolDefinition, arguments: Mapping[str, Any]) -> list
             issues.append(
                 f"{tool.name}.{name} must be a JSON {declared}; got {type(value).__name__}"
             )
+        else:
+            issues.extend(_value_issues(f"{tool.name}.{name}", value, properties[name]))
+    return issues
+
+
+def _value_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str]:
+    """The ``enum``, length and numeric-bound constraints a single property declares.
+
+    Kept in step with the published schemas by a test that fails when a tool declares a
+    constraint this does not know — otherwise the docstring above would go on claiming
+    everything top-level is checked while a new ``pattern`` went unenforced.
+    """
+    issues: list[str] = []
+    allowed = schema.get("enum")
+    if allowed is not None and value not in allowed:
+        issues.append(f"{label} must be one of {sorted(allowed)}; got {value!r}")
+    if isinstance(value, str):
+        floor = schema.get("minLength")
+        if floor is not None and len(value) < floor:
+            issues.append(f"{label} must be at least {floor} character(s); got {value!r}")
+        return issues
+    if isinstance(value, list):
+        floor = schema.get("minItems")
+        if floor is not None and len(value) < floor:
+            issues.append(f"{label} must list at least {floor} item(s); got {len(value)}")
+        return issues
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return issues
+    for key, ok, wording in (
+        ("minimum", lambda v, b: v >= b, "at least"),
+        ("maximum", lambda v, b: v <= b, "at most"),
+        ("exclusiveMinimum", lambda v, b: v > b, "above"),
+        ("exclusiveMaximum", lambda v, b: v < b, "below"),
+    ):
+        bound = schema.get(key)
+        if bound is not None and not ok(value, bound):
+            issues.append(f"{label} must be {wording} {bound}; got {value}")
     return issues
 
 
@@ -711,14 +753,17 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
       between the published contracts and the stateless skeleton the spec describes, and
       it is surfaced here rather than resolved by inventing an argument.
     """
-    if request.get("jsonrpc") != "2.0":
-        return _error(request.get("id"), INVALID_PARAMS, "not a JSON-RPC 2.0 request")
-    method = request.get("method")
-    request_id = request.get("id")
-    is_notification = "id" not in request
-    if is_notification:
-        # A notification takes no response, including no error response.
+    # The notification check comes FIRST, before the version check, and the order is the
+    # point: a message with no `id` has nothing to answer to, so an error response would be
+    # a line the client is not expecting and cannot match to anything. The first draft
+    # validated the version first and emitted an error for a notification whose `jsonrpc`
+    # was missing or wrong — a spurious line in a stream a client reads one-for-one.
+    if "id" not in request:
         return None
+    request_id = request.get("id")
+    if request.get("jsonrpc") != "2.0":
+        return _error(request_id, INVALID_PARAMS, "not a JSON-RPC 2.0 request")
+    method = request.get("method")
 
     if method == "initialize":
         return {

@@ -143,10 +143,15 @@ verdict.
 Everything else ends in a refusal, and the kinds are worth separating:
 
 - **`-32602`, a bad argument.** Checked against the published input schema — required
-  properties present, no property outside `properties`, and each value's top-level type.
-  Deliberately partial: the `$ref`s to the spec and scorecard schemas are **not** resolved,
-  so a structurally wrong spec passes here and is caught by the operation. A handler that
-  reported "valid" after checking three keys would be claiming the schema had been applied.
+  properties present, no property outside `properties`, each value's type, and every
+  `enum`, numeric bound and length the schema declares. Deliberately partial: the `$ref`s
+  to the spec and scorecard schemas are **not** resolved and nested objects are not
+  descended, so a structurally wrong spec passes here and is caught by the operation. A
+  handler that reported "valid" after checking three keys would be claiming the schema had
+  been applied — which is what the first draft did, letting a `view` of `"sideways"` and a
+  `width_px` of 1 through a surface whose own schema names four views and a floor of 64. A
+  test now fails when a tool schema declares a constraint the check does not know, so the
+  claim above cannot outrun the code.
 - **`-32000`, task-dispatched.** An unbounded tool is refused synchronously rather than
   waited on, by its declared cost rather than by name.
 - **`-32000`, stateless.** One of the four above.

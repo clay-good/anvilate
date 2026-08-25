@@ -132,5 +132,19 @@ with `examples/mcp_server_session.py` driving it as a real subprocess — the on
 the repository that does not import the library, because a transport tested only through
 its own function is a transport nobody has run.
 
+**Audited an hour later, and both findings were in the handler's own edges.** The version
+check ran *before* the notification check, so a notification with a missing or wrong
+`jsonrpc` produced an error line — a spurious response in a stream a client reads one
+response per request. A message with no `id` has nothing to answer to, so that check has to
+come first; the half that must not be lost to the fix is that a request *with* an id and a
+bad version is still an error, and both are pinned.
+
+And the argument check enforced `type` and nothing else, so `view: "sideways"` and a
+`width_px` of 1 reached the stateless refusal — which reports the wrong problem entirely.
+`enum`, the four numeric bounds, `minLength` and `minItems` are checked now, and **a test
+fails when a tool schema declares a constraint the check does not know**, so the
+docstring's claim cannot outrun the code. That gate found two more constraints
+(`minLength`, `minItems`) the moment it was written.
+
 Still open in 2.1: an HTTP transport, and the dispatch of the three remaining backed
 operations — which waits on the session-versus-stateless decision above.

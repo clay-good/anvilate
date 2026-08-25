@@ -411,21 +411,30 @@ def test_the_four_tools_a_stateless_server_cannot_serve_are_derived_not_listed()
 
 
 def _minimum_arguments(name: str) -> dict:
-    """The required arguments of a tool, filled with values of the declared type."""
+    """The required arguments of a tool, filled with values its own schema accepts.
+
+    Enum-aware on purpose: a filler of "x" for an enum'd string is refused by the argument
+    check before the call can reach the refusal this helper exists to provoke, and the
+    test would then be asserting the wrong error.
+    """
     tool = {t.name: t for t in tool_catalog()}[name]
-    filler = {
-        "object": {},
-        "array": [],
-        "string": "x",
-        "number": 1.0,
-        "integer": 1,
-        "boolean": True,
-    }
     properties = tool.input_schema["properties"]
-    return {
-        key: filler[properties[key].get("type", "object")]
-        for key in tool.input_schema.get("required", [])
-    }
+
+    def value(key: str) -> object:
+        schema = properties[key]
+        if schema.get("enum"):
+            return schema["enum"][0]
+        filler = {
+            "object": {},
+            "array": [],
+            "string": "x",
+            "number": 1.0,
+            "integer": schema.get("minimum", 1),
+            "boolean": True,
+        }
+        return filler[schema.get("type", "object")]
+
+    return {key: value(key) for key in tool.input_schema.get("required", [])}
 
 
 def test_a_declared_subject_must_be_a_required_input():
@@ -585,3 +594,93 @@ def test_the_transport_carries_a_real_compile_end_to_end():
         )
     )
     assert responses[0]["result"]["structuredContent"]["spec"]["name"] == "deck_plate"
+
+
+# --- Found auditing the handler an hour after writing it ---------------------------------
+
+
+def test_a_notification_takes_no_response_however_malformed_it_is():
+    """The first draft validated the JSON-RPC version *before* noticing there was no id,
+    so a notification with a missing or wrong ``jsonrpc`` produced an error line — a
+    spurious response in a stream the client reads one response per request.
+
+    A message with no id has nothing to answer to, so the notification check has to come
+    first. A request *with* an id and a bad version is still an error, which is the half
+    that must not be lost to the fix.
+    """
+    for message in (
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "1.0", "method": "notifications/initialized"},
+        {"method": "notifications/initialized"},
+        {},
+    ):
+        assert handle_request(message) is None
+
+    assert (
+        handle_request({"jsonrpc": "1.0", "id": 5, "method": "tools/list"})["error"]["code"]
+        == -32602
+    )
+
+
+def test_a_value_outside_its_declared_enum_or_bounds_is_refused():
+    """``render_viewport``'s schema names four views and a width between 64 and 4096, and
+    the first draft of the argument check enforced none of it — a `view` of "sideways"
+    and a `width_px` of 1 both got as far as the stateless refusal, which reports the
+    wrong problem."""
+    enum_error = _call("render_viewport", {"view": "sideways"})["error"]
+    assert enum_error["code"] == -32602
+    assert "must be one of" in enum_error["message"]
+
+    for width, wording in ((1, "at least 64"), (9999, "at most 4096")):
+        error = _call("render_viewport", {"view": "iso", "width_px": width})["error"]
+        assert error["code"] == -32602
+        assert wording in error["message"]
+
+    # In range, the argument check passes and the honest refusal comes back instead.
+    assert _call("render_viewport", {"view": "iso", "width_px": 800})["error"]["code"] == -32000
+
+
+def test_an_exclusive_bound_is_exclusive():
+    """``convergence_tol`` declares ``exclusiveMinimum: 0``: a tolerance of exactly zero is
+    a solver that never converges, and ``>=`` would have accepted it."""
+    error = _call("run_fea_validation", {"spec": {}, "convergence_tol": 0})["error"]
+    assert error["code"] == -32602
+    assert "above 0" in error["message"]
+    # Above it, the call reaches the task-dispatch refusal.
+    assert (
+        _call("run_fea_validation", {"spec": {}, "convergence_tol": 1e-6})["error"]["code"]
+        == -32000
+    )
+
+
+def test_every_constraint_the_published_schemas_declare_is_one_the_check_knows():
+    """A gate on the gate: the argument check handles ``type``, ``enum`` and the four
+    numeric bounds. If a future tool schema declares something else — a ``pattern``, a
+    ``minLength`` — this fails rather than letting the constraint go unenforced while the
+    docstring says everything top-level is checked.
+    """
+    known = {
+        "type",
+        "description",
+        "enum",
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "$ref",
+        "items",
+        "minLength",
+        "minItems",
+    }
+    seen: set[str] = set()
+    for tool in tool_catalog():
+        for schema in tool.input_schema.get("properties", {}).values():
+            seen.update(schema)
+    unhandled = sorted(seen - known)
+    assert not unhandled, (
+        f"tool input schemas declare {unhandled}, which _argument_issues does not check. "
+        "Either check it or narrow the docstring's claim"
+    )
+    assert "enum" in seen and "minimum" in seen, (
+        "the gate is comparing against an empty set if no schema declares a constraint"
+    )
