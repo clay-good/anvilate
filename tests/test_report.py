@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import socket
+from xml.etree import ElementTree as ET
 
 import pytest
 
@@ -16,6 +17,7 @@ from anvilate.report import (
     SymbolValue,
     report_from_record,
 )
+from anvilate.report.mathml import formula_to_mathml
 from anvilate.scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
 from anvilate.units import Quantity, UnitSystem
 
@@ -777,3 +779,107 @@ def test_the_governing_row_is_marked_by_position_not_by_name():
     ]
     assert len(governing_rows) == 1
     assert "FAIL" in governing_rows[0] and "0.50" in governing_rows[0]
+
+
+# --- MathML typesetting -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("formula", "expected"),
+    [
+        ("σ_b = M · c / I", "<mfrac>"),
+        ("σ_vm = √(σ_t² + 3 · τ²)", "<msqrt>"),
+        ("F_cr = 0.658 ** (F_y / F_e) * F_y", "<msup>"),
+        ("τ = P / (n · π · d² / 4)", "<msup>"),
+        ("σ_b = M · c / I", "<msub><mi>σ</mi><mi>b</mi></msub>"),
+    ],
+)
+def test_the_structure_a_reviewer_reads_is_in_the_markup(formula, expected):
+    math = formula_to_mathml(formula)
+    assert math is not None
+    assert expected in math
+
+
+def test_the_emitted_element_is_well_formed_and_self_contained():
+    math = formula_to_mathml("σ_b = M · c / I")
+    assert math is not None
+    ET.fromstring(math)  # valid XML, or a browser will not render it
+    # No script, no stylesheet, no font, no fetch. MathML is laid out by the browser, which
+    # is the reason it was chosen over MathJax: the report stays one air-gapped file.
+    assert "script" not in math and "http" not in math.replace(
+        "http://www.w3.org/1998/Math/MathML", ""
+    )
+
+
+@pytest.mark.parametrize(
+    "formula",
+    [
+        "σ = ∑ F_i / A",  # a symbol outside the grammar
+        "a = b = c",  # two equals signs
+        "σ = M · / I",  # an operator with nothing to its right
+        "σ = (M · c / I",  # unbalanced
+        "σ = ",  # an empty side
+    ],
+)
+def test_a_formula_outside_the_grammar_is_declined_not_guessed(formula):
+    assert formula_to_mathml(formula) is None
+
+
+def test_the_round_trip_guard_is_what_stops_a_wrong_rendering(monkeypatch):
+    """Attack the guard: make the parse tree write back out as something else.
+
+    The grammar check alone would not catch a parser that builds a *valid* tree of the
+    wrong shape — a precedence bug reads `a / b · c` as `a / (b · c)` and emits a
+    perfectly well-formed fraction of a formula the check never cited. The round trip is
+    the only thing standing between that and a sealed document, so it is asserted to be
+    load-bearing rather than assumed to be.
+    """
+    import anvilate.report.mathml as mathml_module
+
+    assert formula_to_mathml("σ_b = M · c / I") is not None
+    monkeypatch.setattr(mathml_module, "_unparse", lambda node: "something else entirely")
+    assert formula_to_mathml("σ_b = M · c / I") is None
+
+
+def test_a_declined_formula_falls_back_to_the_plain_text_line():
+    # The report stays readable when the renderer declines, and the fallback carries the
+    # derivation's own text. Note the two lines are decided independently: the symbolic
+    # line here is outside the grammar, while the substituted line — where ∑F has become a
+    # number — typesets normally.
+    derivation = Derivation(
+        symbolic="σ = ∑F / A",
+        inputs=(
+            SymbolValue(symbol="∑F", description="summed force", value=Quantity.parse("1 kN")),
+            SymbolValue(symbol="A", description="area", value=Quantity.parse("10 mm**2")),
+        ),
+        result=SymbolValue(symbol="σ", description="stress", value=Quantity.parse("100 MPa")),
+        citation="a source",
+    )
+    section = ReportSection(
+        entry=ScorecardEntry.from_safety_factor("odd formula", computed=2.0, required=1.5),
+        derivation=derivation,
+    )
+    assert section.is_worked, "the fallback under test is the renderer's, not the report's"
+    html = CalculationReport(
+        title="t", project="p", date="2026-08-25", sections=(section,)
+    ).to_html()
+    assert "<p>σ = ∑F / A</p>" in html
+
+
+def test_a_unit_stays_with_its_number_across_a_division():
+    """The precedence bug the round trip cannot see, pinned.
+
+    A substituted line puts a value beside its unit with no operator. At the same
+    precedence as division, "1.00 kN / 10.00 mm²" reads left to right as
+    "(1.00 kN / 10.00) · mm²" — a stress drawn as a force over a number, times an area —
+    and it writes back out as the identical string, so the round trip passes it. The
+    numerator and denominator are asserted here by content, not by the emitted element
+    count, because the failing rendering had the right number of elements.
+    """
+    math = formula_to_mathml("σ = 1.00 kN / 10.00 mm²")
+    assert math is not None
+    fraction = ET.fromstring(math).find("{http://www.w3.org/1998/Math/MathML}mfrac")
+    assert fraction is not None
+    numerator, denominator = list(fraction)
+    assert "".join(numerator.itertext()) == "1.00kN"
+    assert "".join(denominator.itertext()) == "10.00mm2"

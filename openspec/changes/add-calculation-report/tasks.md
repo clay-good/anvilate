@@ -9,9 +9,10 @@
 - [x] 1.2 Design the calc-record JSON schema (versioned) and its relationship to the
       scorecard and evidence roll-up — `CalculationReport.to_record()` /
       `report_from_record()`, `CALC_RECORD_SCHEMA_VERSION`
-- [ ] 1.3 Decide the math-rendering route (HTML + MathML/MathJax-offline vs. drawn SVG)
-      and the PDF backend (no TeX dependency) — HTML/text ship now with plain-text
-      formulas; MathML and the PDF backend are still open
+- [x] 1.3 Decide the math-rendering route (HTML + MathML/MathJax-offline vs. drawn SVG)
+      and the PDF backend (no TeX dependency) — **MathML, laid out by the browser**
+      (`anvilate.report.mathml`), and **no PDF backend: the HTML prints**. Both decisions
+      turn on the same property, and section 6 records how they were checked
 
 ## 2. Implementation
 
@@ -57,7 +58,7 @@
 ## 4. Docs & examples
 
 - [x] 4.1 Example: lifting lug screening rendered to a submittal-shaped report
-      (`examples/lifting_lug_calc_report.py`, HTML output; PDF pending 1.3)
+      (`examples/lifting_lug_calc_report.py`, HTML output; printing it is the PDF route — see 6)
 - [x] 4.2 Documentation page: what the report contains, what "screening" means, how to
       hand it to a reviewer (`docs/calculation-reports.md`, with its code sample and
       quoted output verified against a real run)
@@ -79,3 +80,39 @@
       factors it cannot rank, is passed through verbatim, because a mangled label is
       worse than an unfamiliar one. The machine-readable (unpretty) label is untouched —
       spec cards echo it verbatim, so this is a document-rendering concern only.
+
+## 6. The math-rendering and PDF decisions (1.3)
+
+**MathML, because the air gap decides it.** MathML Core is laid out by the browser, so the
+report stays one self-contained file with no script, no external font and no network — the
+property the report's air-gapped render test already enforces. MathJax means bundling a
+JavaScript engine into a document an engineer of record may seal. Drawn SVG means shipping
+a layout engine and a math font inside this library. Both are larger commitments than
+stacking a fraction is worth. The one honest caveat: MathML layout quality depends on a
+math font being present (Windows ships Cambria Math, macOS 13+ ships STIX Two Math, per
+MDN's MathML font guide); the markup is correct regardless, and bundling a font would break
+the self-contained promise for a cosmetic gain.
+
+**The renderer declines rather than guesses.** It parses the restricted grammar the
+derivations are written in, writes the tree back out, and compares it to the input. A
+mismatch falls back to the plain-text line — the same rule the derivation layer already
+follows for a numerically solved result. CI typesets the whole declared corpus, so a
+formula written outside the grammar fails the build rather than degrading quietly.
+
+**The round trip is necessary and not sufficient, and the first draft proved it.**
+Juxtaposition parsed at the same precedence as division read a substituted
+`1.00 kN / 10.00 mm²` as `(1.00 kN / 10.00) · mm²` — a stress drawn as a force over a
+number, times an area. The wrong tree writes back out as exactly the string it came from,
+so the round trip passed it. **It was found by rendering a real report, not by a unit
+test**, which is the whole argument for typesetting the corpus in CI rather than a handful
+of examples.
+
+**No PDF backend, and that is a decision rather than a deferral.** Every non-TeX route costs
+either a browser dependency or a second math renderer. WeasyPrint — the obvious pure-Python
+choice — does not support MathML (Kozea/WeasyPrint#59, still open) and runs no JavaScript,
+so formulas would have to be pre-drawn as SVG by a separate tool: the drawn-SVG route
+rejected above, re-entering through the back door and bringing Pango and cairo with it.
+Headless Chromium renders MathML correctly, but it is the same browser already on the
+reviewer's desk, and `Ctrl+P` from the HTML produces the typeset PDF today with nothing
+added to this library. An unattended PDF is a shell out to a browser the caller already
+chose, not a rendering backend this library owns.

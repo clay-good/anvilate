@@ -117,13 +117,57 @@ are carried at full computed precision, not at display precision — the page ma
 `report_from_record(record)` loads one back. A record whose schema major version this
 build does not understand is rejected rather than misread.
 
+## Formulas are typeset, or they are not rendered at all
+
+Formulas render as **MathML**: fractions stacked, radicals drawn, exponents raised. The
+browser lays it out, so the report is still one file with no script, no external font and
+no network — the same air-gap property the section above promises. MathJax would have meant
+bundling a JavaScript engine into a document an engineer of record may seal; drawing the
+math as SVG would have meant shipping a layout engine and a math font inside this library.
+Both are larger commitments than stacking a fraction is worth.
+
+**A formula that does not round-trip is not typeset.** The renderer parses the restricted
+grammar the derivations are written in, writes the parse tree back out, and compares it to
+the string it was given. A mismatch means the parse is not the formula the check cited, and
+that line falls back to plain text — the same rule the derivation layer already follows for
+a numerically solved result. Every derivation the library declares is typeset in CI, so a
+new formula written outside the grammar fails the build where its author can see it rather
+than quietly degrading in somebody's report.
+
+**The round trip is necessary and it is not sufficient.** It catches a token dropped, added
+or reordered. It cannot catch a precedence error, because the wrong tree writes back out as
+exactly the string it came from — and one did: juxtaposition at the same precedence as
+division read a substituted `1.00 kN / 10.00 mm²` as `(1.00 kN / 10.00) · mm²`, a stress
+drawn as a force over a number times an area. What found it was rendering a real report, not
+a unit test. That is the argument for typesetting the whole corpus in CI.
+
+One caveat worth stating: MathML layout quality depends on a math font being present.
+Windows ships Cambria Math and macOS 13+ ships STIX Two Math; elsewhere the glyphs may be
+plainer. The markup is correct either way, and no font is bundled — a font in the document
+would break the self-contained promise for a cosmetic gain.
+
+## Print the HTML; there is no PDF backend
+
+**Decided, not deferred.** Every non-TeX PDF route costs either a browser dependency or a
+second math renderer, and the browser you would depend on is already on the reviewer's
+desk. `Ctrl+P` from the HTML produces a PDF with the math typeset, today, with no
+dependency added to this library.
+
+What ruled out the obvious alternative: [WeasyPrint does not support
+MathML](https://github.com/Kozea/WeasyPrint/issues/59), and it does not run JavaScript, so
+the formulas would have to be pre-converted to SVG by a separate tool. That is the drawn-SVG
+route rejected above, re-entering through the back door and bringing Pango and cairo with
+it. Headless Chromium renders MathML correctly, but "install a browser" is a heavier ask
+than "open the file and print", and it is the same browser either way.
+
+If a PDF is needed unattended — a CI job attaching one to a release — that is a shell out to
+a browser the caller already chose, not a rendering backend this library owns.
+
 ## Current limits
 
-- **PDF** is not implemented. HTML and text ship today; the PDF route is still open
-  (see `openspec/changes/add-calculation-report/`).
-- **Formulas render as plain text**, not MathML — readable, but not typeset.
-Three limits that used to be listed here are closed, and the first mattered more than it
-read:
+Five limits that used to be listed here are closed, and the first mattered more than it
+read (the other two are the two sections above: formulas are typeset now, and the PDF
+question is answered rather than open):
 
 - **Moments and second moments of area now follow the project's unit system** — N·mm
   and mm⁴ in SI, kip·in and in⁴ in US. N·mm is deliberately chosen over the more

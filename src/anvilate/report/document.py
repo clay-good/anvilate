@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
 from ..units import UnitSystem
+from .mathml import formula_to_mathml
 
 __all__ = [
     "CALC_RECORD_SCHEMA_VERSION",
@@ -353,7 +354,14 @@ class CalculationReport(BaseModel):
             assert derivation is not None  # guaranteed by is_worked
             out.append('<div class="derivation">')
             for line in derivation.lines(system=self.unit_system):
-                out.append(f"<p>{escape(line)}</p>")
+                # MathML where the formula round-trips, plain text where it does not. A
+                # stacked rendering of something other than what the check cited is worse
+                # than a line of text, so `formula_to_mathml` declines rather than guesses.
+                math = formula_to_mathml(line)
+                if math is None:
+                    out.append(f"<p>{escape(line)}</p>")
+                else:
+                    out.append(f'<p class="math">{math}</p>')
             out.append("</div>")
             out.append('<table class="glossary">')
             out.append("<tr><th>Symbol</th><th>Meaning</th><th>Value</th></tr>")

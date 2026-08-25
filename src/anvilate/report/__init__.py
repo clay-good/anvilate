@@ -22,6 +22,7 @@ from .document import (
     ReportSection,
     report_from_record,
 )
+from .mathml import formula_to_mathml
 
 __all__ = [
     "CALC_RECORD_SCHEMA_VERSION",
@@ -30,5 +31,6 @@ __all__ = [
     "Derivation",
     "ReportSection",
     "SymbolValue",
+    "formula_to_mathml",
     "report_from_record",
 ]

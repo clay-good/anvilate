@@ -1355,3 +1355,30 @@ def test_no_pack_ever_says_certified_about_a_user_s_design():
         f"only {len(renderings)} renderings were swept — the discoverer has stopped "
         f"discovering and this gate is passing on an empty set"
     )
+
+
+def test_every_declared_derivation_typesets():
+    """The MathML renderer, held against the corpus rather than against examples.
+
+    A formula the renderer declines falls back to plain text — honest, but it is a
+    submittal document losing its stacked fractions, so the library's own derivations are
+    required to typeset. A new one written outside the grammar fails here, where the author
+    can widen the grammar or reword the formula, rather than silently rendering as a line
+    of text in somebody's report.
+    """
+    from xml.etree import ElementTree as ET
+
+    from anvilate.report.mathml import formula_to_mathml
+
+    corpus = _sample_derivations()
+    assert len(corpus) >= 20, f"the derivation corpus came back with {len(corpus)}; too few"
+    declined = []
+    for label, derivation in corpus:
+        for line in derivation.lines():
+            math = formula_to_mathml(line)
+            if math is None:
+                declined.append(f"{label}: {line}")
+            else:
+                # Valid XML, or the report is not a document a browser can open.
+                ET.fromstring(math)
+    assert not declined, "derivations the MathML renderer declined:\n" + "\n".join(declined)
