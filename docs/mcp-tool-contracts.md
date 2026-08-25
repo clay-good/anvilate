@@ -168,6 +168,21 @@ Two behaviours a client depends on:
   client sending rubbish must not stop the server answering the message after it. The bad
   line gets a `-32700` with a null id and the loop continues.
 
+## Running it
+
+```bash
+anvilate-mcp
+```
+
+or `python -m anvilate.mcp`. There is nothing to configure: the surface is the published
+catalog, the transport is stdin and stdout, and there is no state to lose, so a client that
+restarts the process is exactly where it was.
+
+[`examples/mcp_server_session.py`](../examples/mcp_server_session.py) is the only example in
+the repository that does not import the library. It starts the server as a subprocess the
+way a client does and holds a short session with it — initialize, list, one real compile,
+one document that fails as a *result*, and the three different things the server refuses.
+
 A boolean is not a number, and `isinstance(True, int)` is True in Python — so `width_px:
 true` would have been accepted as a pixel count by the obvious type check. Both `number`
 and `integer` carry the exception.

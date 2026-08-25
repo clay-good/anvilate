@@ -60,6 +60,7 @@ __all__ = [
     "catalog_issues",
     "handle_request",
     "serve_stdio",
+    "main",
     "stateless_gaps",
     "PROTOCOL_REVISION",
     "tool_catalog",
@@ -849,3 +850,17 @@ def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> No
             continue
         sink.write(json.dumps(response) + "\n")
         sink.flush()
+
+
+def main() -> None:
+    """Run the server on stdio. The console-script and ``python -m`` entry point.
+
+    Nothing to configure: the surface is the published catalog, the transport is stdin and
+    stdout, and there is no state to lose, so a client that restarts the process is in
+    exactly the position it was in before.
+    """
+    serve_stdio()
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised as a subprocess in the tests
+    main()

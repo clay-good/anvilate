@@ -127,5 +127,10 @@ output line, because a client waiting for one response per request stalls otherw
 line that is not JSON gets a parse error and the loop continues, because a stream is not a
 session.
 
+**Runnable as a process**: `anvilate-mcp` (a console script) or `python -m anvilate.mcp`,
+with `examples/mcp_server_session.py` driving it as a real subprocess — the only example in
+the repository that does not import the library, because a transport tested only through
+its own function is a transport nobody has run.
+
 Still open in 2.1: an HTTP transport, and the dispatch of the three remaining backed
 operations — which waits on the session-versus-stateless decision above.

@@ -5772,6 +5772,29 @@ def test_feature_control_frame_example_refuses_the_five_illegal_callouts():
     )
 
 
+def test_mcp_server_session_example_drives_a_real_subprocess():
+    """The one example that does not import the library: it starts the server the way a
+    client does and reads its stdout."""
+    namespace = runpy.run_path(str(_EXAMPLES / "mcp_server_session.py"))
+    responses = namespace["session"]()
+    by_id = {r.get("id"): r for r in responses}
+
+    # Eight messages in, seven responses out — the notification takes none.
+    assert len(namespace["_requests"]()) == 8
+    assert len(responses) == 7
+    assert by_id[1]["result"]["protocolVersion"] == "2026-07-28"
+    assert len(by_id[2]["result"]["tools"]) == 8
+
+    assert by_id[3]["result"]["structuredContent"]["spec"]["name"] == "mezzanine_deck"
+    assert by_id[4]["result"]["isError"] is True
+    assert "error" not in by_id[4], "an invalid document is a result, not a transport error"
+
+    # Three refusals, each a different statement about why.
+    assert "task-dispatched" in by_id[5]["error"]["message"]
+    assert "no memory between calls" in by_id[6]["error"]["message"]
+    assert "not dispatched yet" in by_id[7]["error"]["message"]
+
+
 def test_timber_lateral_stability_example_fails_the_rafter_that_bending_stress_passes():
     namespace = runpy.run_path(str(_EXAMPLES / "timber_beam_lateral_stability.py"))
     from anvilate.scorecard import CheckStatus

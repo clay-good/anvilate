@@ -148,6 +148,7 @@ mcp.ToolDefinition
 mcp.catalog_issues
 mcp.handle_request
 mcp.serve_stdio
+mcp.main
 mcp.stateless_gaps
 mcp.PROTOCOL_REVISION
 mcp.tool_catalog

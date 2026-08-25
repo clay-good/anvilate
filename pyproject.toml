@@ -37,6 +37,11 @@ export = ["ezdxf>=1.1"]
 # what Anvilate emits rather than something anvilate needs to run.
 dev = ["pytest>=8.0", "ruff>=0.6", "ezdxf>=1.1", "jsonschema>=4.21"]
 
+[project.scripts]
+# The MCP server on stdio. No arguments and no configuration: the surface is the
+# published tool catalog and there is no state to lose across a restart.
+anvilate-mcp = "anvilate.mcp:main"
+
 [project.urls]
 Homepage = "https://github.com/clay-good/anvilate"
 Specification = "https://github.com/clay-good/anvilate/tree/main/openspec"
