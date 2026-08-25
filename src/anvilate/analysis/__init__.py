@@ -2580,6 +2580,7 @@ from .power_screw import (
 )
 from .pressure_vessel import (
     AllowableStress,
+    BranchReinforcement,
     FlangeGasketGeometry,
     FlangeMoments,
     FlangeShapeFactors,
@@ -2596,6 +2597,8 @@ from .pressure_vessel import (
     asme_appendix_2_shape_factors,
     asme_b313_allowable_displacement_stress_range,
     asme_b313_bend_stress_intensification,
+    asme_b313_branch_reinforcement,
+    asme_b313_branch_reinforcement_scorecard,
     asme_b313_branch_required_reinforcement_area,
     asme_b313_displacement_stress,
     asme_b313_minimum_ordered_wall,
@@ -4863,6 +4866,9 @@ __all__ = [
     "asme_b313_pressure_scorecard",
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
+    "BranchReinforcement",
+    "asme_b313_branch_reinforcement",
+    "asme_b313_branch_reinforcement_scorecard",
     "asme_b313_branch_required_reinforcement_area",
     "asme_b313_allowable_displacement_stress_range",
     "asme_b313_bend_stress_intensification",

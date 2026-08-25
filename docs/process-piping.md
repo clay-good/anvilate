@@ -16,6 +16,8 @@ analysis, and it will not pick your allowable stress.
 | A run's rating against its service, as a verdict | §304.1.2 | `asme_b313_pressure_scorecard` |
 | Miter-bend pressure, single and multiple | §304.2.3 | `asme_b313_miter_bend_pressure` |
 | Branch reinforcement area required | §304.3.3 | `asme_b313_branch_required_reinforcement_area` |
+| Branch reinforcement, required vs available | §304.3.3 | `asme_b313_branch_reinforcement` |
+| A branch's reinforcement as a verdict | §304.3.3 | `asme_b313_branch_reinforcement_scorecard` |
 | Allowable displacement stress range | §302.3.5 | `asme_b313_allowable_displacement_stress_range` |
 | Computed displacement stress range S_E | §319.4.4 | `asme_b313_displacement_stress` |
 | Bend stress intensification factor | §319.4.4 (Appendix D) | `asme_b313_bend_stress_intensification` |
@@ -106,6 +108,39 @@ multiple miter and the rating is the lesser of the cut-angle limit and the bend-
 limit — a tight bend governs over a shallow cut. Past 22.5° the code gives no
 multiple-miter rating at all, and the function refuses rather than quoting the
 single-miter number as though it were one.
+
+## A branch's reinforcement zone is set by both pipes, not by the run
+
+Cutting a hole in a run removes pressure-carrying metal, and §304.3.3 requires it back
+within a zone around the opening: **2·d2 wide and L4 tall**. Both limits are a
+"whichever is smaller/larger", and both mix the run with the branch — which is exactly
+where the accounting is fumbled by hand.
+
+| Quantity | Rule | Getting it wrong |
+| --- | --- | --- |
+| d1 | [D_b − 2(T_b − c)] / sin β | A skewed branch opens a longer hole; ignoring sin β under-states everything |
+| d2 (half width) | the **greater** of d1 and (T_b − c) + (T_h − c) + d1/2, capped at D_h | Taking d1 alone under-credits a thick-walled small branch |
+| L4 (height) | the **lesser** of 2.5(T_h − c) and 2.5(T_b − c) + T_r | Taking the run's term alone credits a thin branch with the run's zone height, which **over**-states A3 |
+| A2 | (2·d2 − d1)(T_h − t_h − c) | — |
+| A3 | 2·L4·(T_b − t_b − c) / sin β | — |
+| A4 | pad and weld metal inside the zone | Metal outside the zone is real metal that does not count |
+
+A reinforcing pad raises L4, so **it adds A3 as well as A4** — and stops adding once the
+run's 2.5(T_h − c) cap binds. Omit `pad_thickness` and the accounting credits no pad,
+which understates the available area rather than overstating it.
+
+`added_area` (A4) is taken as declared. The Code credits only metal inside the zone, and
+an area alone does not say where the metal is, so the function cannot check that and does
+not pretend to. Supply the portion of the pad and its welds that lies within 2·d2 by L4.
+
+**d2 is capped at the run's outside diameter.** A zone wider than the pipe it sits on is
+credit taken for metal that is not there; the returned record says when the cap bound.
+
+The accounting is anchored against three published calculation sheets. The imperial one
+(NPS 8 Sch 40 run, NPS 4 Sch 40 branch) reproduces exactly: A1 0.5918 in², A2 0.7046 in²,
+A3 0.1896 in². The two metric weldolet sheets agree inside 1%, and the residual is
+theirs: their L4 of 10.46 mm implies a run wall of 4.184 mm where the input table
+displays 4.18, and the two roundings bracket the sheet's own A2.
 
 ## Example
 

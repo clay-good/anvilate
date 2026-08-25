@@ -5772,6 +5772,31 @@ def test_feature_control_frame_example_refuses_the_five_illegal_callouts():
     )
 
 
+def test_branch_reinforcement_example_shows_the_zone_height_the_run_does_not_set():
+    namespace = runpy.run_path(str(_EXAMPLES / "branch_reinforcement_zone.py"))
+    from anvilate.scorecard import CheckStatus
+
+    bare = namespace["weldolet"]()
+    # L4 is the lesser of the two terms, and here the branch's is the smaller one.
+    assert bare.height.magnitude == pytest.approx(2.5 * 2.51, rel=1e-9)
+    assert bare.height.magnitude < 2.5 * 4.18
+
+    # Reading L4 as the run's term alone credits 67% more branch area than it earns.
+    naive = namespace["naive_branch_credit"]()
+    assert naive / bare.branch_excess.magnitude == pytest.approx(1.67, abs=0.01)
+    assert bare.available.magnitude == pytest.approx(37.03, abs=0.01)
+    assert bare.run_excess.magnitude + naive == pytest.approx(55.91, abs=0.01)
+    # Both are short of the 81.95 mm² required, which is the honest part of the example:
+    # the mistake does not flip this verdict, it flips how big a pad you go buy.
+    assert bare.required.magnitude == pytest.approx(81.95, abs=0.01)
+    assert namespace["verdict"]().status is CheckStatus.FAIL
+
+    # A pad lengthens the branch's zone until the run's cap binds, and no further.
+    padded = namespace["padded_weldolet"]()
+    assert padded.height.magnitude == pytest.approx(2.5 * 4.18, rel=1e-9)
+    assert padded.branch_excess.magnitude > bare.branch_excess.magnitude
+
+
 def test_agent_driving_eval_example_ranks_the_worse_model_ahead_on_the_naive_average():
     namespace = runpy.run_path(str(_EXAMPLES / "agent_driving_eval.py"))
     reports = namespace["reports"]()

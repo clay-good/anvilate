@@ -49,6 +49,9 @@ __all__ = [
     "asme_b313_pipe_pressure",
     "asme_b313_minimum_ordered_wall",
     "asme_b313_branch_required_reinforcement_area",
+    "BranchReinforcement",
+    "asme_b313_branch_reinforcement",
+    "asme_b313_branch_reinforcement_scorecard",
     "asme_b313_allowable_displacement_stress_range",
     "asme_b313_bend_stress_intensification",
     "asme_b313_displacement_stress",
@@ -821,6 +824,235 @@ def asme_b313_branch_required_reinforcement_area(
     if d1 <= 0:
         raise ValueError("the branch wall consumes the whole opening; check the inputs")
     return Quantity(magnitude=th * d1 * (2.0 - sin_beta), unit="mm**2")
+
+
+_CLAUSE_B313_BRANCH = "ASME B31.3 §304.3.3 (reinforcement of welded branch connections)"
+
+
+class BranchReinforcement(BaseModel):
+    """The ASME B31.3 §304.3.3 area accounting for a welded branch connection.
+
+    ``required`` A1 is the pressure-carrying metal the opening removed.
+    ``run_excess`` A2 is the run pipe's wall beyond what pressure needs, within the
+    reinforcement zone; ``branch_excess`` A3 the same for the branch; ``added`` A4 the
+    pad and weld metal the caller declares. ``available`` is their sum.
+
+    ``half_width`` d2 and ``height`` L4 are the zone the credit is taken over, reported
+    because they are where the accounting goes wrong: metal outside the zone is real
+    metal that does not count, and both limits move with the *branch* as well as the run.
+
+    ``adequate`` is available ≥ required, and ``deficit`` is what a pad still has to
+    supply — the number that actually sizes the pad.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    required: Quantity
+    run_excess: Quantity
+    branch_excess: Quantity
+    added: Quantity
+    available: Quantity
+    half_width: Quantity
+    height: Quantity
+    adequate: bool
+    deficit: Quantity
+    # True when d2 was cut back to the run's outside diameter, which is the branch being
+    # large enough relative to its run that the zone would otherwise leave the pipe.
+    zone_limited_by_run: bool
+
+    def __str__(self) -> str:
+        verdict = "adequate" if self.adequate else f"short by {self.deficit}"
+        return (
+            f"B31.3 branch reinforcement {verdict}: "
+            f"{self.available} available against {self.required}"
+        )
+
+
+def asme_b313_branch_reinforcement(
+    *,
+    run_outside_diameter: Quantity,
+    run_wall: Quantity,
+    run_pressure_design_thickness: Quantity,
+    branch_outside_diameter: Quantity,
+    branch_wall: Quantity,
+    branch_pressure_design_thickness: Quantity,
+    mechanical_allowance: Quantity,
+    branch_angle_deg: float = 90.0,
+    pad_thickness: Quantity | None = None,
+    added_area: Quantity | None = None,
+) -> BranchReinforcement:
+    """The ASME B31.3 §304.3.3 area accounting for a welded branch connection.
+
+    Cutting a hole in the run removes pressure-carrying metal that must be replaced
+    within a zone around the opening. The required area is
+    :func:`asme_b313_branch_required_reinforcement_area`'s A1 = t_h·d1·(2 − sin β); what
+    replaces it is A2 + A3 + A4 over a zone 2·d2 wide and L4 tall:
+
+    * **d1 = [D_b − 2(T_b − c)] / sin β**, the effective width the opening removed.
+    * **d2**, the zone's half width, is the *greater* of d1 and
+      (T_b − c) + (T_h − c) + d1/2.
+    * **L4**, the zone's height above the run, is the *lesser* of 2.5(T_h − c) and
+      2.5(T_b − c) + T_r.
+    * **A2 = (2·d2 − d1)(T_h − t_h − c)**, the run's excess wall inside the zone.
+    * **A3 = 2·L4·(T_b − t_b − c) / sin β**, the branch's excess wall inside the zone.
+    * **A4** is pad and weld metal, which only the caller knows.
+
+    **Both zone limits are "whichever is smaller/larger" and both mix the run with the
+    branch**, which is where this accounting is got wrong by hand: taking L4 as
+    2.5(T_h − c) alone credits a thin branch with the run's zone height, and taking d2 as
+    d1 alone under-credits a thick-walled small branch. Each is computed here from both
+    pipes.
+
+    ``pad_thickness`` T_r raises L4 and therefore **A3 as well as A4** — a reinforcing
+    pad lengthens the branch's zone. Omitted, it is zero: the accounting then credits no
+    pad, which understates the available area rather than overstating it.
+
+    ``added_area`` A4 is taken as declared. The Code credits only metal *inside* the
+    zone, and an area alone does not say where the metal is, so this function cannot
+    check that and does not pretend to: supply the portion of the pad and welds that lies
+    within 2·d2 by L4. Omitted, A4 is zero and the accounting is the conservative one.
+
+    Returns a :class:`BranchReinforcement`. Anchored against three published calculation
+    sheets — an NPS 8 × NPS 4 Schedule 40 example (A1 0.5918 in², A2 0.7046 in²,
+    A3 0.1896 in²) and two Keon Sae weldolet sheets in millimetres — each of which
+    reproduces d1, d2, L4, A1, A2 and A3 exactly.
+    """
+    for value, name in (
+        (run_outside_diameter, "run_outside_diameter"),
+        (run_wall, "run_wall"),
+        (run_pressure_design_thickness, "run_pressure_design_thickness"),
+        (branch_outside_diameter, "branch_outside_diameter"),
+        (branch_wall, "branch_wall"),
+        (branch_pressure_design_thickness, "branch_pressure_design_thickness"),
+        (mechanical_allowance, "mechanical_allowance"),
+    ):
+        _require(value, "[length]", name)
+    if not 0 < branch_angle_deg <= 90:
+        raise ValueError(f"branch_angle_deg must lie in (0, 90]; got {branch_angle_deg}")
+
+    dh = run_outside_diameter.to("mm").magnitude
+    th_actual = run_wall.to("mm").magnitude
+    th = run_pressure_design_thickness.to("mm").magnitude
+    db = branch_outside_diameter.to("mm").magnitude
+    tb_actual = branch_wall.to("mm").magnitude
+    tb = branch_pressure_design_thickness.to("mm").magnitude
+    c = mechanical_allowance.to("mm").magnitude
+    if pad_thickness is not None:
+        _require(pad_thickness, "[length]", "pad_thickness")
+    if added_area is not None:
+        _require(added_area, "[length]**2", "added_area")
+    tr = 0.0 if pad_thickness is None else pad_thickness.to("mm").magnitude
+    a4 = 0.0 if added_area is None else added_area.to("mm**2").magnitude
+
+    if min(dh, th_actual, th, db, tb_actual, tb) <= 0 or c < 0 or tr < 0 or a4 < 0:
+        raise ValueError(
+            "every diameter and thickness must be positive, and the mechanical "
+            "allowance, pad thickness and added area non-negative"
+        )
+    if db > dh:
+        raise ValueError(
+            f"the branch ({branch_outside_diameter}) is larger than the run "
+            f"({run_outside_diameter}); §304.3.3's area replacement is written for a "
+            "branch in a run, and a larger branch is a reducing tee or a header "
+            "transition rather than a reinforced opening"
+        )
+    if th_actual - th - c < 0 or tb_actual - tb - c < 0:
+        raise ValueError(
+            "a pipe whose wall is below its own pressure design thickness plus allowance "
+            "has no excess to credit and is not adequate for the pressure in the first "
+            "place; screen the straight-pipe wall before the branch"
+        )
+
+    sin_beta = sin(radians(branch_angle_deg))
+    d1 = (db - 2.0 * (tb_actual - c)) / sin_beta
+    if d1 <= 0:
+        raise ValueError("the branch wall consumes the whole opening; check the inputs")
+
+    # d2 is the greater of the two, capped at the run's outside diameter: a zone wider
+    # than the pipe it sits on is credit taken from metal that is not there.
+    d2_unlimited = max(d1, (tb_actual - c) + (th_actual - c) + d1 / 2.0)
+    d2 = min(d2_unlimited, dh)
+    l4 = min(2.5 * (th_actual - c), 2.5 * (tb_actual - c) + tr)
+
+    # A1 through the function that already publishes it, not a second copy of the
+    # formula. Two implementations of one Code expression are two places for it to
+    # change, and the one that moves is always the one nothing is anchored against.
+    a1 = (
+        asme_b313_branch_required_reinforcement_area(
+            header_pressure_design_thickness=run_pressure_design_thickness,
+            branch_outside_diameter=branch_outside_diameter,
+            branch_wall=branch_wall,
+            mechanical_allowance=mechanical_allowance,
+            branch_angle_deg=branch_angle_deg,
+        )
+        .to("mm**2")
+        .magnitude
+    )
+    a2 = (2.0 * d2 - d1) * (th_actual - th - c)
+    a3 = 2.0 * l4 * (tb_actual - tb - c) / sin_beta
+    available = a2 + a3 + a4
+    return BranchReinforcement(
+        required=Quantity(magnitude=a1, unit="mm**2"),
+        run_excess=Quantity(magnitude=a2, unit="mm**2"),
+        branch_excess=Quantity(magnitude=a3, unit="mm**2"),
+        added=Quantity(magnitude=a4, unit="mm**2"),
+        available=Quantity(magnitude=available, unit="mm**2"),
+        half_width=Quantity(magnitude=d2, unit="mm"),
+        height=Quantity(magnitude=l4, unit="mm"),
+        adequate=available >= a1,
+        deficit=Quantity(magnitude=max(0.0, a1 - available), unit="mm**2"),
+        zone_limited_by_run=d2_unlimited > dh,
+    )
+
+
+def asme_b313_branch_reinforcement_scorecard(
+    name: str,
+    *,
+    reinforcement: BranchReinforcement | None,
+    required: float = 1.0,
+    missing: str = "",
+) -> ScorecardEntry:
+    """Screen an ASME B31.3 §304.3.3 branch area accounting into a :class:`ScorecardEntry`.
+
+    The safety factor is available area over required area, judged against ``required``
+    (1.0 = exactly the Code's rule, which carries no margin of its own). The detail names
+    the deficit when there is one, because that is the pad the branch needs, and names
+    the zone the credit was taken over.
+
+    ``reinforcement`` of ``None`` is ``NOT_EVALUATED`` — a branch whose run pressure
+    design thickness was never computed has not been screened, and ``missing`` says so.
+    """
+    if reinforcement is None:
+        detail = "not evaluated"
+        detail += (
+            f" — {missing.strip()}"
+            if missing.strip()
+            else " — the §304.3.3 area accounting could not be run"
+        )
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=detail,
+            reference=_CLAUSE_B313_BRANCH,
+        )
+    have = reinforcement.available.to("mm**2").magnitude
+    need = reinforcement.required.to("mm**2").magnitude
+    computed = None if need == 0 else have / need
+    entry = ScorecardEntry.from_safety_factor(name, computed=computed, required=required)
+    detail = (
+        f"{have:.4g} mm² available against {need:.4g} mm² required "
+        f"(run {reinforcement.run_excess.magnitude:.4g}, branch "
+        f"{reinforcement.branch_excess.magnitude:.4g}, added "
+        f"{reinforcement.added.magnitude:.4g}) over a zone "
+        f"{2 * reinforcement.half_width.magnitude:.4g} mm wide by "
+        f"{reinforcement.height.magnitude:.4g} mm tall"
+    )
+    if not reinforcement.adequate:
+        detail = (
+            f"{detail}; short by {reinforcement.deficit.magnitude:.4g} mm², which is the "
+            f"area a reinforcing pad has to supply"
+        )
+    return entry.model_copy(update={"detail": detail, "reference": _CLAUSE_B313_BRANCH})
 
 
 def asme_b313_allowable_displacement_stress_range(

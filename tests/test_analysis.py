@@ -41916,3 +41916,239 @@ def test_a_tooth_thinner_than_nothing_is_refused_rather_than_returned():
         module=module, teeth=7, pressure_angle=math.radians(20.0), radius=standard
     )
     assert thickness.to("mm").magnitude > 0.0
+
+
+# --- ASME B31.3 §304.3.3 branch reinforcement -----------------------------------------
+#
+# Anchored against three published calculation sheets. The imperial one reproduces
+# exactly; the two Keon Sae weldolet sheets agree to within 1%, and the residual is
+# theirs rather than the formula's — their L4 of 10.46 mm implies a run wall of 4.184 mm
+# where the input table displays 4.18, so every derived area carries that rounding.
+
+_IN2 = 25.4**2  # mm² per in²
+
+
+def _branch(**kwargs):
+    from anvilate.analysis import asme_b313_branch_reinforcement
+
+    defaults = {
+        "run_outside_diameter": Quantity.parse("406.40 mm"),
+        "run_wall": Quantity.parse("4.18 mm"),
+        "run_pressure_design_thickness": Quantity.parse("3.78 mm"),
+        "branch_outside_diameter": Quantity.parse("26.7 mm"),
+        "branch_wall": Quantity.parse("2.51 mm"),
+        "branch_pressure_design_thickness": Quantity.parse("0.25 mm"),
+        "mechanical_allowance": Quantity.parse("0 mm"),
+    }
+    return asme_b313_branch_reinforcement(**{**defaults, **kwargs})
+
+
+def test_b313_branch_reinforcement_reproduces_the_imperial_worked_sheet():
+    """NPS 8 Sch 40 run, NPS 4 Sch 40 branch, 90°, no allowance."""
+    r = _branch(
+        run_outside_diameter=Quantity.parse("8.625 in"),
+        run_wall=Quantity.parse("0.322 in"),
+        run_pressure_design_thickness=Quantity.parse("0.147 in"),
+        branch_outside_diameter=Quantity.parse("4.5 in"),
+        branch_wall=Quantity.parse("0.237 in"),
+        branch_pressure_design_thickness=Quantity.parse("0.077 in"),
+    )
+    assert r.required.magnitude / _IN2 == pytest.approx(0.5918, abs=1e-4)
+    assert r.run_excess.magnitude / _IN2 == pytest.approx(0.7046, abs=1e-4)
+    assert r.branch_excess.magnitude / _IN2 == pytest.approx(0.1896, abs=1e-4)
+    assert r.half_width.magnitude / 25.4 == pytest.approx(4.026, abs=1e-3)
+    assert r.height.magnitude / 25.4 == pytest.approx(0.5925, abs=1e-4)
+    assert r.adequate
+
+
+@pytest.mark.parametrize(
+    "inputs,expected",
+    [
+        (
+            {
+                "run_outside_diameter": "406.40 mm",
+                "run_wall": "4.18 mm",
+                "run_pressure_design_thickness": "3.78 mm",
+                "branch_outside_diameter": "26.7 mm",
+                "branch_wall": "2.51 mm",
+                "branch_pressure_design_thickness": "0.25 mm",
+                "pad_thickness": "20.27 mm",
+            },
+            {"d2": 21.68, "l4": 10.46, "a1": 81.96, "a2": 8.71, "a3": 47.32},
+        ),
+        (
+            {
+                "run_outside_diameter": "60.30 mm",
+                "run_wall": "3.42 mm",
+                "run_pressure_design_thickness": "0.56 mm",
+                "branch_outside_diameter": "33.4 mm",
+                "branch_wall": "2.96 mm",
+                "branch_pressure_design_thickness": "0.31 mm",
+                "pad_thickness": "24.73 mm",
+            },
+            {"d2": 27.49, "l4": 8.55, "a1": 15.42, "a2": 78.61, "a3": 45.28},
+        ),
+    ],
+)
+def test_b313_branch_reinforcement_reproduces_the_metric_worked_sheets(inputs, expected):
+    r = _branch(**{k: Quantity.parse(v) for k, v in inputs.items()})
+    # The zone dimensions are structural and agree closely; the areas carry the sheets'
+    # two-decimal display rounding of the wall thicknesses.
+    assert r.half_width.magnitude == pytest.approx(expected["d2"], rel=1e-3)
+    assert r.height.magnitude == pytest.approx(expected["l4"], rel=2e-3)
+    assert r.required.magnitude == pytest.approx(expected["a1"], rel=3e-3)
+    assert r.run_excess.magnitude == pytest.approx(expected["a2"], rel=1e-2)
+    assert r.branch_excess.magnitude == pytest.approx(expected["a3"], rel=3e-3)
+
+
+def test_the_metric_anchor_tolerance_is_the_sheets_rounding_and_not_a_free_pass():
+    """The 1% rides on A2 alone, and A2 is where a two-decimal display bites hardest.
+
+    A2 is proportional to (T_h - t_h - c), a difference of two nearly equal thicknesses:
+    4.18 - 3.78 = 0.40, where a rounding of half a unit in the last displayed place is
+    already 2.5% of the answer. So the loose tolerance is *smaller* than the sheet's own
+    input uncertainty rather than larger, and everything else agrees inside 0.3%.
+
+    The sheet's own L4 of 10.46 mm says its run wall is nearer 4.184 than 4.18, and the
+    two roundings bracket the sheet's A2 of 8.71 from below and above — which is the
+    residual accounted for rather than tolerated.
+    """
+    pad = {"pad_thickness": Quantity.parse("20.27 mm")}
+    low = _branch(**pad)
+    high = _branch(run_wall=Quantity.parse("4.184 mm"), **pad)
+    assert low.run_excess.magnitude < 8.71 < high.run_excess.magnitude
+    assert 10.46 / 2.5 == pytest.approx(4.184), "L4 is what reveals the unrounded wall"
+    # Every other quantity is insensitive to that rounding and agrees far tighter.
+    assert low.required.magnitude == pytest.approx(81.96, rel=3e-3)
+    assert low.branch_excess.magnitude == pytest.approx(47.32, rel=3e-3)
+    assert low.half_width.magnitude == pytest.approx(21.68, rel=1e-3)
+
+
+def test_the_zone_height_is_governed_by_the_branch_when_the_branch_is_thin():
+    """L4 is the *lesser* of 2.5(T_h − c) and 2.5(T_b − c) + T_r, and taking the run's
+    term alone over-credits a thin branch — with a bigger A3 and a passing check."""
+    r = _branch()  # T_h 4.18, T_b 2.51, no pad
+    assert r.height.magnitude == pytest.approx(2.5 * 2.51, rel=1e-9)
+    naive = 2.5 * 4.18  # the run's term alone
+    assert naive > r.height.magnitude
+    naive_a3 = 2.0 * naive * (2.51 - 0.25)
+    assert naive_a3 > r.branch_excess.magnitude, "the mistake would credit more area"
+
+
+def test_a_pad_raises_the_zone_height_and_so_raises_the_branch_credit():
+    """A reinforcing pad lengthens the branch's zone, so it adds A3 as well as A4 — and
+    it stops adding once the run's cap binds."""
+    bare = _branch()
+    padded = _branch(pad_thickness=Quantity.parse("2 mm"))
+    capped = _branch(pad_thickness=Quantity.parse("500 mm"))
+    assert padded.height.magnitude > bare.height.magnitude
+    assert padded.branch_excess.magnitude > bare.branch_excess.magnitude
+    assert capped.height.magnitude == pytest.approx(2.5 * 4.18, rel=1e-9)
+
+
+def test_the_zone_half_width_is_the_greater_of_the_two_rules():
+    """A thick-walled small branch is the case where d1 is not the wider of the two."""
+    r = _branch(
+        branch_outside_diameter=Quantity.parse("26.7 mm"),
+        branch_wall=Quantity.parse("6 mm"),
+        run_wall=Quantity.parse("5 mm"),
+        run_pressure_design_thickness=Quantity.parse("3 mm"),
+        branch_pressure_design_thickness=Quantity.parse("1 mm"),
+    )
+    d1 = 26.7 - 12.0
+    alternative = 6.0 + 5.0 + d1 / 2.0
+    assert alternative > d1
+    assert r.half_width.magnitude == pytest.approx(alternative, rel=1e-9)
+
+
+def test_the_zone_cannot_be_wider_than_the_run_it_sits_on():
+    """A skewed branch opens a long hole, and d2 is capped at the run's outside diameter:
+    credit taken over a zone wider than the pipe is credit for metal that is not there."""
+    r = _branch(
+        run_outside_diameter=Quantity.parse("100 mm"),
+        branch_outside_diameter=Quantity.parse("90 mm"),
+        branch_wall=Quantity.parse("5 mm"),
+        run_wall=Quantity.parse("10 mm"),
+        run_pressure_design_thickness=Quantity.parse("2 mm"),
+        branch_pressure_design_thickness=Quantity.parse("1 mm"),
+        branch_angle_deg=30.0,
+    )
+    assert r.zone_limited_by_run
+    assert r.half_width.magnitude == pytest.approx(100.0)
+    assert not _branch().zone_limited_by_run
+
+
+def test_added_area_is_credited_only_when_it_is_declared():
+    bare = _branch()
+    with_pad = _branch(added_area=Quantity.parse("100 mm**2"))
+    assert bare.added.magnitude == 0.0
+    assert with_pad.available.magnitude == pytest.approx(bare.available.magnitude + 100.0)
+
+
+@pytest.mark.parametrize(
+    "kwargs,message",
+    [
+        ({"branch_outside_diameter": Quantity.parse("500 mm")}, "larger than the run"),
+        ({"run_wall": Quantity.parse("3 mm")}, "below its own pressure design thickness"),
+        ({"branch_angle_deg": 0.0}, "branch_angle_deg"),
+        ({"branch_angle_deg": 120.0}, "branch_angle_deg"),
+        ({"mechanical_allowance": Quantity.parse("-1 mm")}, "non-negative"),
+    ],
+)
+def test_b313_branch_reinforcement_refuses_what_it_cannot_screen(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        _branch(**kwargs)
+
+
+def test_b313_branch_reinforcement_scorecard_reports_the_deficit_and_the_zone():
+    from anvilate.analysis import asme_b313_branch_reinforcement_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    short = _branch(
+        run_wall=Quantity.parse("3.8 mm"),
+        branch_wall=Quantity.parse("0.3 mm"),
+        branch_pressure_design_thickness=Quantity.parse("0.25 mm"),
+    )
+    entry = asme_b313_branch_reinforcement_scorecard("branch", reinforcement=short)
+    assert entry.status is CheckStatus.FAIL
+    assert "short by" in entry.detail
+    assert "over a zone" in entry.detail
+    assert "B31.3" in entry.reference
+
+    missing = asme_b313_branch_reinforcement_scorecard(
+        "branch", reinforcement=None, missing="no run pressure design thickness"
+    )
+    assert missing.status is CheckStatus.NOT_EVALUATED
+    assert "no run pressure design thickness" in missing.detail
+    assert missing.safety_factor is None
+
+
+def test_b313_branch_reinforcement_takes_a1_from_the_function_that_publishes_it():
+    """One Code expression, one implementation. Two would be two places for it to move,
+    and the one that moves is the one nothing is anchored against."""
+    from anvilate.analysis import asme_b313_branch_required_reinforcement_area
+
+    r = _branch()
+    published = asme_b313_branch_required_reinforcement_area(
+        header_pressure_design_thickness=Quantity.parse("3.78 mm"),
+        branch_outside_diameter=Quantity.parse("26.7 mm"),
+        branch_wall=Quantity.parse("2.51 mm"),
+        mechanical_allowance=Quantity.parse("0 mm"),
+    )
+    assert r.required.magnitude == pytest.approx(published.to("mm**2").magnitude, rel=1e-12)
+
+
+@pytest.mark.parametrize(
+    "kwargs,message",
+    [
+        ({"added_area": Quantity.parse("100 mm")}, "added_area"),
+        ({"pad_thickness": Quantity.parse("5 kg")}, "pad_thickness"),
+        ({"run_wall": Quantity.parse("nan mm")}, "run_wall"),
+        ({"added_area": Quantity.parse("nan mm**2")}, "added_area"),
+    ],
+)
+def test_b313_branch_reinforcement_refuses_a_wrong_dimension_or_a_nan(kwargs, message):
+    """A NaN passes every ``<= 0`` guard and then reads as a zero deficit under a False
+    ``adequate``, which is a shortfall reported as none at all."""
+    with pytest.raises(ValueError, match=message):
+        _branch(**kwargs)
