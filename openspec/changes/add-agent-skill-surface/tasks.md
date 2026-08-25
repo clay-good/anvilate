@@ -42,5 +42,6 @@
 ## 4. Evaluation
 
 - [ ] 4.1 Measure the agent-driving funnel with and without the skill loaded; publish the
-      delta — blocked on `extend-benchmarking-agent-evals`, which has no harness yet. An
-      unmeasured delta is not published as one
+      delta — the scoring half now exists (`anvilate.agenteval`, from
+      `extend-benchmarking-agent-evals` 2.1-2.3), so what is still missing is the task
+      corpus and a server to drive. An unmeasured delta is not published as one

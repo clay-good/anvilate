@@ -230,6 +230,7 @@ and reuse it. The DXF example additionally needs the `export` extra
 | `frame_member_forces_to_checks.py` | A Pynite frame export screened by cited AISC checks, with the axis mapping and the axial sign convention declared rather than inferred — unflipped, a 180 kN compression reads as tension and the column is never checked for buckling. |
 | `feature_control_frame_legality.py` | Five drawing callouts that do not parse — flatness to a datum, perpendicularity to nothing, Ⓜ on a surface, symmetry on a 2018 drawing, a fourth datum — each refused with the reason, plus what a position tolerance contributes to a 1D stack. |
 | `feature_control_frame_drawing.py` | One declaration, three consumers: the same feature control frame as text, as a QIF characteristic definition, and as DXF geometry. Every symbol is drawn as lines and arcs rather than typeset, because a viewer without a GD&T font renders a Ⓜ as a missing glyph — a callout that silently loses its modifier. |
+| `agent_driving_eval.py` | Two models over the same tasks, and the one that looks better is worse: averaged over every run the model that gave up posts the lower iteration count, and only the completion rate says so. Iterations are reported over completed runs, and a run that made no call has no error rate rather than a clean one. |
 
 ## Provenance
 

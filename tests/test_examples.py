@@ -5756,6 +5756,28 @@ def test_feature_control_frame_example_refuses_the_five_illegal_callouts():
     )
 
 
+def test_agent_driving_eval_example_ranks_the_worse_model_ahead_on_the_naive_average():
+    namespace = runpy.run_path(str(_EXAMPLES / "agent_driving_eval.py"))
+    reports = namespace["reports"]()
+    a, b = reports["model-a"], reports["model-b"]
+
+    # The finding: averaged over every run, the model that gave up looks more efficient.
+    naive_a = sum(o.iterations for o in a.outcomes) / len(a.outcomes)
+    naive_b = sum(o.iterations for o in b.outcomes) / len(b.outcomes)
+    assert naive_b < naive_a
+    # Over completed runs, which is what the library reports, the order is honest.
+    assert a.mean_iterations == pytest.approx(2.0)
+    assert b.mean_iterations == pytest.approx(1.0)
+    assert (a.completion_rate, b.completion_rate) == (1.0, 0.5)
+
+    # An invented tool name is a different finding from a malformed argument.
+    assert [t for o in b.outcomes for t in o.unknown_tools] == ["fix_the_bracket"]
+
+    # The two-task set deliberately does not cover the surface, and the gate says so.
+    issues = namespace["task_set_issues"](namespace["tasks"]())
+    assert len(issues) == 1 and "never touched" in issues[0]
+
+
 def test_feature_control_frame_drawing_example_moves_all_three_consumers(tmp_path):
     namespace = runpy.run_path(str(_EXAMPLES / "feature_control_frame_drawing.py"))
     frame = namespace["hole_position_frame"]()
