@@ -5772,6 +5772,26 @@ def test_feature_control_frame_example_refuses_the_five_illegal_callouts():
     )
 
 
+def test_timber_lateral_stability_example_fails_the_rafter_that_bending_stress_passes():
+    namespace = runpy.run_path(str(_EXAMPLES / "timber_beam_lateral_stability.py"))
+    from anvilate.scorecard import CheckStatus
+
+    skipped = namespace["screen"]("bending (C_L skipped)", None)
+    assert skipped.status is CheckStatus.PASS
+    assert skipped.safety_factor == pytest.approx(1.42, abs=0.01)
+
+    study = namespace["bracing_study"]()
+    labels = [label for label, _, _ in study]
+    assert labels == ["supports only", "one strut at midspan", "struts at the third points"]
+    factors = [c_l for _, c_l, _ in study]
+    assert factors == pytest.approx([0.402, 0.683, 0.834], abs=0.001)
+    # One strut is not enough, which is the point of showing three.
+    statuses = [entry.status for _, _, entry in study]
+    assert statuses == [CheckStatus.FAIL, CheckStatus.FAIL, CheckStatus.PASS]
+    ratios = [entry.safety_factor for _, _, entry in study]
+    assert ratios == pytest.approx([0.57, 0.97, 1.18], abs=0.01)
+
+
 def test_branch_reinforcement_example_shows_the_zone_height_the_run_does_not_set():
     namespace = runpy.run_path(str(_EXAMPLES / "branch_reinforcement_zone.py"))
     from anvilate.scorecard import CheckStatus

@@ -18,10 +18,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
-from math import prod, sqrt
+from math import isfinite, prod, sqrt
 
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 __all__ = [
     "LoadDuration",
@@ -32,6 +32,9 @@ __all__ = [
     "nds_bearing_stress",
     "nds_bending_scorecard",
     "nds_euler_buckling_stress",
+    "nds_beam_slenderness_ratio",
+    "nds_bending_buckling_stress",
+    "nds_beam_stability_factor",
     "nds_column_stability_factor",
     "nds_combined_bending_compression",
     "nds_compression_scorecard",
@@ -360,6 +363,140 @@ def nds_euler_buckling_stress(
             f"of {limit:.0f} {where}: the column is outside the standard"
         )
     return Quantity(magnitude=_NDS_EULER_COEFFICIENT * e / slenderness_ratio**2, unit="MPa")
+
+
+# NDS §3.3.3 beam stability. F_bE = 1.20·E'_min/R_B², and the Ylinen-form C_L uses 1.9 and
+# 0.95 where the column's C_P uses 2c and c. The constants are not interchangeable: the
+# column's c is 0.8 for sawn lumber and varies by product, while the beam's are fixed.
+_NDS_BENDING_BUCKLING_COEFFICIENT = 1.20
+_NDS_BEAM_STABILITY_A = 1.9
+_NDS_BEAM_STABILITY_B = 0.95
+# NDS §3.3.3.7 caps the bending slenderness at R_B = 50. Past it the formula still returns
+# a plausible number and the beam is outside the standard.
+_NDS_MAX_BEAM_SLENDERNESS = 50.0
+
+
+def nds_beam_slenderness_ratio(
+    *, effective_length: Quantity, depth: Quantity, breadth: Quantity
+) -> float:
+    """The NDS §3.3.3.6 bending slenderness ratio R_B = √(l_e·d / b²).
+
+    ``effective_length`` l_e is the *effective* unbraced length from Table 3.3.3, not the
+    clear span: the table converts an unbraced length and a loading pattern into l_e, and
+    that conversion is the caller's — it depends on where the load acts and how the
+    compression edge is held, neither of which a section knows. ``depth`` d is the
+    dimension in the plane of bending and ``breadth`` b the one across it.
+
+    **R_B is capped at 50 by §3.3.3.7**, and this refuses past it rather than returning
+    the small, entirely plausible stability factor the formula would give: a beam that
+    slender is outside the standard, and the number is not a design value. There is no
+    construction-stage relief here, unlike the column's §3.7.1.4 cap which tolerates 75
+    while a frame is going up — the asymmetry is the standard's, not an omission.
+
+    A beam whose depth does not exceed its breadth needs no lateral support at all
+    (§3.3.3.1) and takes C_L = 1.0; :func:`nds_beam_stability_factor` is not the route to
+    that answer, and this returns the ratio regardless so a caller can see it.
+    """
+    for value, name in (
+        (effective_length, "effective_length"),
+        (depth, "depth"),
+        (breadth, "breadth"),
+    ):
+        if not value.has_dimension("[length]"):
+            raise ValueError(f"{name} must be a [length] quantity; got {value.dimensionality}")
+        require_finite(value, name=name)
+    le = effective_length.to("mm").magnitude
+    d = depth.to("mm").magnitude
+    b = breadth.to("mm").magnitude
+    if le <= 0 or d <= 0 or b <= 0:
+        raise ValueError(
+            f"the effective length, depth and breadth must all be positive; got "
+            f"{effective_length}, {depth}, {breadth}"
+        )
+    ratio = sqrt(le * d / (b * b))
+    if ratio > _NDS_MAX_BEAM_SLENDERNESS:
+        raise ValueError(
+            f"R_B = {ratio:.4g} exceeds the NDS 3.3.3.7 limit of "
+            f"{_NDS_MAX_BEAM_SLENDERNESS:.0f}: the beam is outside the standard, and the "
+            f"stability factor the formula would return is not a design value"
+        )
+    return ratio
+
+
+def nds_bending_buckling_stress(*, min_modulus: Quantity, slenderness_ratio: float) -> Quantity:
+    """The NDS §3.3.3.8 critical buckling design value F_bE = 1.20·E'_min/R_B².
+
+    The lateral-torsional buckling stress that sets the beam stability factor, in the
+    same shape as the column's :func:`nds_euler_buckling_stress` and with a **different
+    coefficient**: 1.20 here against 0.822 there. ``min_modulus`` E'_min is the adjusted
+    modulus for stability — the reduced 5th-percentile modulus times its own factor
+    chain, which the caller supplies — and ``slenderness_ratio`` is R_B from
+    :func:`nds_beam_slenderness_ratio`. Returns F_bE as a stress.
+    """
+    if not min_modulus.has_dimension("[pressure]"):
+        raise ValueError(
+            f"min_modulus must be a [pressure] quantity; got {min_modulus.dimensionality}"
+        )
+    require_finite(min_modulus, name="min_modulus")
+    e = min_modulus.to("MPa").magnitude
+    if e <= 0:
+        raise ValueError(f"min_modulus must be positive; got {min_modulus}")
+    if not isfinite(slenderness_ratio) or slenderness_ratio <= 0:
+        raise ValueError(
+            f"slenderness_ratio R_B must be a positive, finite number; got {slenderness_ratio}"
+        )
+    if slenderness_ratio > _NDS_MAX_BEAM_SLENDERNESS:
+        raise ValueError(
+            f"R_B = {slenderness_ratio:.4g} exceeds the NDS 3.3.3.7 limit of "
+            f"{_NDS_MAX_BEAM_SLENDERNESS:.0f}"
+        )
+    return Quantity(
+        magnitude=_NDS_BENDING_BUCKLING_COEFFICIENT * e / slenderness_ratio**2, unit="MPa"
+    )
+
+
+def nds_beam_stability_factor(
+    *, buckling_stress: Quantity, reference_bending_value: Quantity
+) -> float:
+    """The NDS §3.3.3.8 beam stability factor C_L, from F_bE and F_b*.
+
+    With x = F_bE/F_b*::
+
+        C_L = (1 + x)/1.9 − √( [(1 + x)/1.9]² − x/0.95 )
+
+    ``reference_bending_value`` is **F_b\***: the reference bending design value with
+    every adjustment applied *except* C_L itself, and except the volume factor C_V for
+    glulam. Passing the fully adjusted F'_b instead — the number a design summary
+    reports — overstates the denominator, and because C_L rises with x that returns a
+    stability factor **larger** than the beam has, which is the unconservative direction.
+
+    C_L rises monotonically with x and approaches but never reaches 1: a beam braced into
+    stiffness loses nothing, and one that buckles early loses in proportion. Both are
+    swept in the tests rather than asserted from the shape of the formula.
+
+    Multiply it into :func:`nds_adjusted_design_value`'s factor chain like any other C.
+    """
+    for value, name in (
+        (buckling_stress, "buckling_stress"),
+        (reference_bending_value, "reference_bending_value"),
+    ):
+        if not value.has_dimension("[pressure]"):
+            raise ValueError(f"{name} must be a [pressure] quantity; got {value.dimensionality}")
+        require_finite(value, name=name)
+    fbe = buckling_stress.to("MPa").magnitude
+    fb = reference_bending_value.to("MPa").magnitude
+    if fbe <= 0 or fb <= 0:
+        raise ValueError(
+            f"the buckling stress and the reference bending value must both be positive; "
+            f"got {buckling_stress} and {reference_bending_value}"
+        )
+    x = fbe / fb
+    a = (1.0 + x) / _NDS_BEAM_STABILITY_A
+    # No clamp on the square root. The discriminant [(1+x)/1.9]² − x/0.95 has its minimum
+    # at x = 0.9, where it is 1/19 ≈ 0.0526 — a long way from a floating-point sign flip,
+    # so a max(0, ...) here would be a guard that never fires and reads as though the
+    # expression could go negative. It cannot, for any positive x.
+    return a - sqrt(a * a - x / _NDS_BEAM_STABILITY_B)
 
 
 def nds_compression_scorecard(

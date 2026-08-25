@@ -42152,3 +42152,203 @@ def test_b313_branch_reinforcement_refuses_a_wrong_dimension_or_a_nan(kwargs, me
     ``adequate``, which is a shortfall reported as none at all."""
     with pytest.raises(ValueError, match=message):
         _branch(**kwargs)
+
+
+# --- NDS §3.3.3 beam stability --------------------------------------------------------
+#
+# Anchored on one fully self-consistent published worked example: le = 213 in,
+# d = 28.5 in, b = 6.75 in, E'_min = 850,000 psi -> R_B = 11.54, F_bE = 7,659 psi,
+# and F_bE/F_b* = 2.77 -> C_L = 0.974. Every constant in the chain is fixed by it,
+# including the 1.20 coefficient that is *not* the column formula's 0.822.
+
+
+def test_nds_beam_slenderness_reproduces_the_worked_example():
+    from anvilate.analysis import nds_beam_slenderness_ratio
+
+    rb = nds_beam_slenderness_ratio(
+        effective_length=Quantity.parse("213 in"),
+        depth=Quantity.parse("28.5 in"),
+        breadth=Quantity.parse("6.75 in"),
+    )
+    assert rb == pytest.approx(11.54, abs=0.01)
+    # A second geometry, from a different source, at the same tolerance.
+    assert nds_beam_slenderness_ratio(
+        effective_length=Quantity.parse("23.86 ft"),
+        depth=Quantity.parse("13.25 in"),
+        breadth=Quantity.parse("3.50 in"),
+    ) == pytest.approx(17.60, abs=0.01)
+
+
+def test_nds_bending_buckling_stress_reproduces_the_worked_example():
+    from anvilate.analysis import nds_bending_buckling_stress
+
+    fbe = nds_bending_buckling_stress(
+        min_modulus=Quantity.parse("850000 psi"), slenderness_ratio=11.54
+    )
+    assert fbe.to("psi").magnitude == pytest.approx(7659.0, rel=1e-3)
+
+
+def test_the_beam_coefficient_is_not_the_column_coefficient():
+    """1.20 for lateral-torsional buckling of a beam, 0.822 for Euler buckling of a
+    column. Same shape, same symbols, different numbers — and using the column's would
+    understate the beam's buckling stress by a third."""
+    from anvilate.analysis import nds_bending_buckling_stress, nds_euler_buckling_stress
+
+    modulus = Quantity.parse("850000 psi")
+    beam = nds_bending_buckling_stress(min_modulus=modulus, slenderness_ratio=11.54)
+    column = nds_euler_buckling_stress(min_modulus=modulus, slenderness_ratio=11.54)
+    assert beam.to("MPa").magnitude / column.to("MPa").magnitude == pytest.approx(
+        1.20 / 0.822, rel=1e-9
+    )
+
+
+def test_nds_beam_stability_factor_reproduces_both_worked_examples():
+    from anvilate.analysis import nds_beam_stability_factor
+
+    # F_bE/F_b* = 2.77 -> C_L = 0.974.
+    assert nds_beam_stability_factor(
+        buckling_stress=Quantity.parse("2.77 MPa"),
+        reference_bending_value=Quantity.parse("1 MPa"),
+    ) == pytest.approx(0.974, abs=5e-4)
+    # A second source's beam: F_bE 2539.39 psi against F_b* = F'_b / C_L.
+    assert nds_beam_stability_factor(
+        buckling_stress=Quantity.parse("2539.39 psi"),
+        reference_bending_value=Quantity(magnitude=1192.32 / 0.96, unit="psi"),
+    ) == pytest.approx(0.96, abs=5e-3)
+
+
+def test_the_stability_factor_rises_with_the_ratio_and_never_reaches_one():
+    """Swept rather than argued from the shape of the formula.
+
+    A beam braced into stiffness loses nothing and one that buckles early loses in
+    proportion, so C_L has to be monotone in F_bE/F_b* and bounded by 1. A factor above 1
+    would *raise* a design value, which is the failure this rules out.
+    """
+    from anvilate.analysis import nds_beam_stability_factor
+
+    ratios = [i / 100.0 for i in range(1, 5001)]
+    values = [
+        nds_beam_stability_factor(
+            buckling_stress=Quantity(magnitude=x, unit="MPa"),
+            reference_bending_value=Quantity.parse("1 MPa"),
+        )
+        for x in ratios
+    ]
+    assert all(b > a for a, b in zip(values, values[1:], strict=False))
+    assert max(values) < 1.0
+    assert values[-1] == pytest.approx(1.0, abs=2e-3)  # x = 50 is not yet the asymptote
+    assert values[0] == pytest.approx(0.01, abs=1e-3), "a beam that buckles first loses all of it"
+
+
+def test_passing_the_adjusted_value_instead_of_f_b_star_overstates_the_factor():
+    """F_b* carries every adjustment except C_L itself. Handing this the fully adjusted
+    F'_b — the number a design summary reports — shrinks the denominator's job and returns
+    a stability factor larger than the beam has."""
+    from anvilate.analysis import nds_beam_stability_factor
+
+    fbe = Quantity.parse("7659 psi")
+    f_b_star = Quantity.parse("2760 psi")
+    correct = nds_beam_stability_factor(buckling_stress=fbe, reference_bending_value=f_b_star)
+    adjusted = Quantity(magnitude=2760.0 * correct, unit="psi")
+    overstated = nds_beam_stability_factor(buckling_stress=fbe, reference_bending_value=adjusted)
+    assert overstated > correct, "the mistake moves the factor the unconservative way"
+
+
+def test_the_bending_slenderness_cap_is_the_standards_and_is_enforced_both_ways():
+    from anvilate.analysis import nds_beam_slenderness_ratio, nds_bending_buckling_stress
+
+    # R_B = sqrt(le*d/b^2); 51 needs le*d/b^2 = 2601.
+    with pytest.raises(ValueError, match="3.3.3.7"):
+        nds_beam_slenderness_ratio(
+            effective_length=Quantity.parse("2601 mm"),
+            depth=Quantity.parse("1 mm"),
+            breadth=Quantity.parse("1 mm"),
+        )
+    with pytest.raises(ValueError, match="3.3.3.7"):
+        nds_bending_buckling_stress(
+            min_modulus=Quantity.parse("850000 psi"), slenderness_ratio=50.1
+        )
+    # Exactly at the cap is inside the standard.
+    assert nds_beam_slenderness_ratio(
+        effective_length=Quantity.parse("2500 mm"),
+        depth=Quantity.parse("1 mm"),
+        breadth=Quantity.parse("1 mm"),
+    ) == pytest.approx(50.0)
+
+
+@pytest.mark.parametrize(
+    "call,kwargs,message",
+    [
+        ("slenderness", {"depth": Quantity.parse("0 in")}, "must all be positive"),
+        ("slenderness", {"breadth": Quantity.parse("5 kg")}, "breadth"),
+        ("slenderness", {"depth": Quantity.parse("nan in")}, "depth"),
+        ("buckling", {"min_modulus": Quantity.parse("5 mm")}, "min_modulus"),
+        ("buckling", {"slenderness_ratio": float("nan")}, "positive, finite"),
+        ("buckling", {"slenderness_ratio": 0.0}, "positive, finite"),
+        ("stability", {"buckling_stress": Quantity.parse("5 mm")}, "buckling_stress"),
+        ("stability", {"reference_bending_value": Quantity.parse("0 psi")}, "positive"),
+        ("stability", {"buckling_stress": Quantity.parse("nan psi")}, "buckling_stress"),
+    ],
+)
+def test_nds_beam_stability_refuses_what_it_cannot_screen(call, kwargs, message):
+    from anvilate.analysis import (
+        nds_beam_slenderness_ratio,
+        nds_beam_stability_factor,
+        nds_bending_buckling_stress,
+    )
+
+    defaults = {
+        "slenderness": (
+            nds_beam_slenderness_ratio,
+            {
+                "effective_length": Quantity.parse("213 in"),
+                "depth": Quantity.parse("28.5 in"),
+                "breadth": Quantity.parse("6.75 in"),
+            },
+        ),
+        "buckling": (
+            nds_bending_buckling_stress,
+            {"min_modulus": Quantity.parse("850000 psi"), "slenderness_ratio": 11.54},
+        ),
+        "stability": (
+            nds_beam_stability_factor,
+            {
+                "buckling_stress": Quantity.parse("7659 psi"),
+                "reference_bending_value": Quantity.parse("2760 psi"),
+            },
+        ),
+    }
+    fn, base = defaults[call]
+    with pytest.raises(ValueError, match=message):
+        fn(**{**base, **kwargs})
+
+
+def test_the_stability_factor_multiplies_into_the_adjustment_chain():
+    """C_L is a C like any other, which is the whole reason it is returned bare."""
+    from anvilate.analysis import nds_adjusted_design_value, nds_beam_stability_factor
+
+    c_l = nds_beam_stability_factor(
+        buckling_stress=Quantity.parse("7659 psi"),
+        reference_bending_value=Quantity.parse("2760 psi"),
+    )
+    adjusted = nds_adjusted_design_value(
+        reference_value=Quantity.parse("1000 psi"), factors={"C_D": 1.15, "C_L": c_l}
+    )
+    assert adjusted.to("psi").magnitude == pytest.approx(1000.0 * 1.15 * c_l, rel=1e-12)
+
+
+def test_the_stability_discriminant_never_goes_negative():
+    """Why the square root carries no clamp.
+
+    [(1+x)/1.9]² − x/0.95 has its minimum at x = 0.9, where it is exactly 1/19. A
+    max(0, ...) there would be a guard that cannot fire and would read as though the
+    expression could go negative — which would be a real thing to know about the formula,
+    and is not true of it.
+    """
+
+    def discriminant(x: float) -> float:
+        return ((1.0 + x) / 1.9) ** 2 - x / 0.95
+
+    swept = [discriminant(i / 1000.0) for i in range(1, 100_001)]
+    assert min(swept) == pytest.approx(1.0 / 19.0, rel=1e-9)
+    assert discriminant(0.9) == pytest.approx(1.0 / 19.0, rel=1e-12)

@@ -12,10 +12,12 @@
 
 ## 2. Checks
 
-- [~] 2.1 Bending — `nds_bending_scorecard` screens the applied stress against the
-      adjusted bending value (No-silent-green NOT_EVALUATED without a reference value);
-      the beam-stability C_L and size C_F factors enter through the caller's chain.
-      Dedicated C_L/C_F derivations are a follow-up.
+- [x] 2.1 Bending — `nds_bending_scorecard` screens the applied stress against the
+      adjusted bending value (no-silent-green NOT_EVALUATED without a reference value),
+      and the beam stability factor C_L is derived: `nds_beam_slenderness_ratio` (R_B),
+      `nds_bending_buckling_stress` (F_bE) and `nds_beam_stability_factor` (C_L). The
+      size factor C_F stays a caller-supplied factor — it is a species/grade *table*, not
+      a formula, and belongs with 1.1's typed reference record.
 - [x] 2.2 Shear and bearing — `nds_shear_stress` (§3.4.2, f_v = 1.5·V/(b·d)) and
       `nds_bearing_stress` (§3.10.2, f_c⊥ = P/(b·l_b)) with `nds_shear_scorecard` and
       `nds_bearing_scorecard` screening each against its adjusted value (NOT_EVALUATED
@@ -57,3 +59,41 @@
       the excluded ones (connections, glulam/CLT, fire, serviceability, C_L/C_F
       derivations), the copyright position on the species/grade tables (C_D is the one
       republishable list), and the T1-screen disclaimer.
+
+## Shipped 2026-08-25 — the C_L half of task 2.1
+
+`nds_beam_slenderness_ratio`, `nds_bending_buckling_stress` and
+`nds_beam_stability_factor` in `analysis/nds_timber.py`,
+`examples/timber_beam_lateral_stability.py`, and the bending section of
+`docs/timber-screening.md`.
+
+**Anchored on one fully self-consistent published worked example** before a line was
+written: l_e 213 in, d 28.5 in, b 6.75 in, E'_min 850,000 psi → R_B 11.54, F_bE 7,659 psi,
+and F_bE/F_b* = 2.77 → C_L 0.974. Every constant in the chain is fixed by it. A second
+source's geometry checks R_B independently (17.60) and its C_L end to end (0.96); that
+page's own F_bE does *not* reconcile with the E'_min it displays, so it anchors C_L and
+not the coefficient.
+
+**1.20, not 0.822.** The beam's F_bE and the column's F_cE have the same shape and the
+same symbols, and the coefficients differ by 46%. Likewise the Ylinen constants: the beam
+uses a fixed 1.9 and 0.95 where the column uses 2c and c with c varying by product. A test
+asserts the ratio of the two buckling stresses is exactly 1.20/0.822, so the confusion
+cannot be introduced quietly.
+
+**C_L takes F_b*, not F'_b**, and getting that wrong is unconservative. On the worked
+rafter, passing the fully adjusted value returns 0.830 where the rafter has 0.402 — more
+than double, and nothing about the number looks wrong. Pinned by direction rather than by
+value.
+
+**The R_B cap has no construction-stage relief**, unlike the column's §3.7.1.4 which
+tolerates 75 while a frame goes up. The asymmetry is the standard's; the docstring says so
+in the place a reader would otherwise take it for an omission.
+
+**One dead guard removed rather than left in.** The first draft clamped the square root at
+zero. The discriminant [(1+x)/1.9]² − x/0.95 has its minimum at x = 0.9 where it is exactly
+1/19, so the clamp could never fire and read as though the expression could go negative.
+Removed, with the minimum swept and pinned instead — a guard that cannot fire is a claim
+about the formula that is not true of it.
+
+**Monotonicity swept before it was declared**: C_L rises with F_bE/F_b* and stays under 1
+across 5,000 ratios, rather than being argued from the shape of the formula.

@@ -16,9 +16,12 @@ an adjusted design value you supply the reference for.
 
 **What is not.** Connections (bolts, nails, screws, shear plates — NDS Chapters 11-13),
 glulam and cross-laminated timber specifics, fire design, deflection and vibration
-serviceability, lateral-torsional beam stability C_L and the size factor C_F as
-derivations, and any diaphragm or shear-wall system behaviour. Those factors can still
-enter through the caller's chain; Anvilate just does not derive them.
+serviceability, the size factor C_F and the glulam volume factor C_V as derivations, and
+any diaphragm or shear-wall system behaviour. Those factors can still enter through the
+caller's chain; Anvilate just does not derive them. **The beam stability factor C_L is
+derived now** (§3.3.3) — see below; the Table 3.3.3 conversion from an unbraced length to
+an effective length l_e stays the caller's, because it depends on where the load acts and
+how the compression edge is held, neither of which a section knows.
 
 **Where the reference values come from.** The NDS species/grade design value tables are
 copyrighted, and Anvilate does not republish them. Every reference value — F_b, F_v,
@@ -99,6 +102,38 @@ f_c = nds_bearing_stress(bearing_force=reaction, width=b, bearing_length=l_b)  #
 - **`nds_shear_scorecard`** and **`nds_bearing_scorecard`** screen those stresses
   against their adjusted values, and return `NOT_EVALUATED` without one, like bending.
 
+## Bending — the beam stability factor, and the coefficient that is not the column's
+
+```python
+from anvilate.analysis import (
+    nds_beam_slenderness_ratio, nds_bending_buckling_stress, nds_beam_stability_factor,
+)
+
+r_b = nds_beam_slenderness_ratio(effective_length=l_e, depth=d, breadth=b)
+f_bE = nds_bending_buckling_stress(min_modulus=e_min, slenderness_ratio=r_b)
+c_l = nds_beam_stability_factor(buckling_stress=f_bE, reference_bending_value=f_b_star)
+```
+
+- **`nds_beam_slenderness_ratio`** is R_B = √(l_e·d/b²) (§3.3.3.6). It refuses past the
+  §3.3.3.7 cap of 50. There is **no construction-stage relief** here, unlike the column's
+  §3.7.1.4 cap which tolerates 75 while a frame goes up — the asymmetry is the standard's,
+  not an omission.
+- **`nds_bending_buckling_stress`** is F_bE = **1.20**·E'_min/R_B². The column's Euler
+  stress uses **0.822** in the identical shape, and swapping them understates the beam's
+  buckling stress by a third.
+- **`nds_beam_stability_factor`** is C_L = (1+x)/1.9 − √([(1+x)/1.9]² − x/0.95) with
+  x = F_bE/F_b*. The 1.9 and 0.95 are fixed; the column's C_P uses 2c and c, where c
+  varies by product (0.8 sawn, 0.9 glulam). Not interchangeable.
+
+**Pass F_b*, not F'_b.** F_b* is the reference bending value with every adjustment applied
+*except* C_L itself (and except C_V for glulam). Passing the fully adjusted value — the
+number a design summary reports — inflates the denominator's job, and because C_L rises
+with x that returns a stability factor **larger** than the beam has. The unconservative
+direction, and pinned as such.
+
+C_L rises monotonically with x and approaches but never reaches 1. Both are swept in the
+tests over 5,000 ratios rather than argued from the shape of the formula.
+
 ## Compression — where the column stability factor enters
 
 ```python
@@ -125,6 +160,12 @@ c_p = nds_column_stability_factor(euler_buckling_stress=f_cE, reference_compress
 
 ## Examples
 
+- [`examples/timber_beam_lateral_stability.py`](../examples/timber_beam_lateral_stability.py)
+  — a 2x12 rafter with 42% in hand on bending stress and C_L = 0.402 unbraced: it
+  fails at 0.57, still fails at 0.97 with one strut at midspan, and passes at 1.18
+  braced at the third points. Handing C_L the fully adjusted F'_b instead of F_b*
+  returns 0.830 on that same rafter.
+
 - [`examples/timber_post_slenderness.py`](../examples/timber_post_slenderness.py) — the
   same 4x4 under the same 4,000 lb passes at 8 ft (SF 1.70) and fails at 12 ft (0.82);
   at 16 ft the §3.7.1.4 cap makes the screen refuse outright.
@@ -147,4 +188,5 @@ code. They are the pack's regression floor, and each carries a lesson:
 | --- | --- | --- | --- |
 | Floor joist | 2x10, 15 ft, 16 in o.c., 50 psf | bending SF 1.08, shear SF 3.33 | On a long span bending governs, and tightly — the "passing" joist has 8% in hand. |
 | Post | 6x6, 12 ft, 12,000 lb | compression SF 1.40, bearing SF 1.58 | C_P is the design: skipping it reports 2.52 on the same post. |
+| Beam stability | l_e 213 in, 28.5 x 6.75 in, E'_min 850,000 psi | R_B 11.54, F_bE 7,659 psi, C_L 0.974 | One self-consistent published example fixes every constant in the chain, including the 1.20 that is not the column's 0.822. |
 | Beam-column | the same post plus 30 plf of wind | interaction 0.79 | Wind's C_D 1.6 lifts F*_c by 60% but F'_c by only 11% — a higher F*_c lowers C_P, so the duration bonus does not arrive intact. |
