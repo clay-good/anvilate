@@ -39,6 +39,7 @@ tolerance, and a convergence tolerance is not a bound on wall time.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from enum import StrEnum
 from typing import Any
 
@@ -142,8 +143,13 @@ def _object_schema(properties: dict[str, Any], *, required: list[str]) -> dict[s
 class ToolDefinition(BaseModel):
     """One pipeline operation as an MCP tool contract.
 
-    Frozen, because a catalog entry mutated after construction is a contract that differs
-    from the one the validators approved.
+    Frozen, so no field can be rebound after the validators approved it. That is not the
+    whole story and the honest version is worth writing down: pydantic's ``frozen`` does
+    not reach inside a mutable field, so the schema dictionaries themselves can still be
+    written to. Two things keep that from mattering. :func:`tool_catalog` builds fresh
+    definitions on every call, so a mutation cannot outlive the caller that made it and
+    cannot reach the gate; and :meth:`to_wire` deep-copies, so a client editing the payload
+    it was handed is editing its own copy.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -206,8 +212,8 @@ class ToolDefinition(BaseModel):
             "name": self.name,
             "title": self.title,
             "description": self.description,
-            "inputSchema": self.input_schema,
-            "outputSchema": self.output_schema,
+            "inputSchema": deepcopy(self.input_schema),
+            "outputSchema": deepcopy(self.output_schema),
             "_meta": {
                 "dev.anvilate/dispatch": self.dispatch.value,
                 "dev.anvilate/cost": self.cost.value,
@@ -441,6 +447,28 @@ def wire_definitions() -> list[dict[str, Any]]:
     return [tool.to_wire() for tool in tool_catalog()]
 
 
+def _refs(node: Any) -> set[str]:
+    """Every ``$ref`` anywhere in a schema, at any depth.
+
+    The first version of this walked only the top-level ``properties``, which is where
+    every reference in today's catalog happens to sit. That is a gate that agrees with the
+    catalog it shipped with: the moment a reference moves inside an ``items``, a
+    ``oneOf``, or a nested object — the ordinary way a tool schema grows — it stops being
+    checked, and the check goes on reporting clean.
+    """
+    found: set[str] = set()
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str):
+            found.add(ref)
+        for value in node.values():
+            found |= _refs(value)
+    elif isinstance(node, list):
+        for value in node:
+            found |= _refs(value)
+    return found
+
+
 def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> list[str]:
     issues: list[str] = []
     where = f"{tool.name}.{label}"
@@ -457,14 +485,11 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
     for required in schema.get("required", []):
         if required not in properties:
             issues.append(f"{where} requires {required!r}, which it does not define")
-    for name, subschema in properties.items():
-        ref = subschema.get("$ref") if isinstance(subschema, dict) else None
-        if ref is None:
-            continue
+    for ref in sorted(_refs(schema)):
         if ref not in {_SPEC_REF, _SCORECARD_REF}:
             issues.append(
-                f"{where}.{name} references {ref!r}, which is not a published anvilate "
-                "contract at its current version"
+                f"{where} references {ref!r}, which is not a published anvilate contract "
+                "at its current version"
             )
     return issues
 
@@ -512,10 +537,7 @@ def catalog_issues() -> list[str]:
     for tool in catalog:
         issues.extend(_schema_issues(tool, "input_schema", tool.input_schema))
         issues.extend(_schema_issues(tool, "output_schema", tool.output_schema))
-        for schema in (tool.input_schema, tool.output_schema):
-            for subschema in schema.get("properties", {}).values():
-                if isinstance(subschema, dict) and "$ref" in subschema:
-                    referenced.add(subschema["$ref"])
+        referenced |= _refs(tool.input_schema) | _refs(tool.output_schema)
     for contract in (_SPEC_REF, _SCORECARD_REF):
         if contract not in referenced:
             issues.append(

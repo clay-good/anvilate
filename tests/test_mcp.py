@@ -261,3 +261,38 @@ def test_the_wire_format_is_what_a_client_receives():
         assert definition["outputSchema"]["$schema"] == JSON_SCHEMA_DIALECT
         # Namespaced, so nothing here can collide with a protocol key of the same name.
         assert all(key.startswith("dev.anvilate/") for key in definition["_meta"])
+
+
+def test_the_wire_payload_is_the_clients_own_copy():
+    """What `frozen` does not cover, covered.
+
+    Pydantic's frozen reaches the fields, not inside them: a schema dictionary handed
+    straight to a client is one a client can write to, and the next reader of that
+    definition would get the edit. Two things stop it — a deep copy here, and a catalog
+    rebuilt on every call, so nothing a caller mutates survives to reach the gate.
+    """
+    definition = wire_definitions()[0]
+    definition["inputSchema"]["additionalProperties"] = True
+    assert tool_catalog()[0].input_schema["additionalProperties"] is False
+    assert catalog_issues() == []
+
+
+@pytest.mark.parametrize(
+    "nesting",
+    [
+        {"items": {"$ref": "https://example.invalid/other.json"}},
+        {"oneOf": [{"type": "null"}, {"$ref": "https://example.invalid/other.json"}]},
+        {"properties": {"inner": {"$ref": "https://example.invalid/other.json"}}},
+    ],
+)
+def test_a_reference_below_the_top_level_is_still_checked(nesting):
+    """The gate's own blind spot, closed.
+
+    Walking only the top-level properties agrees with the catalog it shipped with, because
+    that is where every reference in it happens to sit. A reference one level down — inside
+    an items, a oneOf, a nested object — is the ordinary way a tool schema grows.
+    """
+    tool = _tool()
+    broken = {**tool.input_schema, "properties": {"a": {"type": "object", **nesting}}}
+    issues = _schema_issues(tool, "input_schema", broken)
+    assert any("example.invalid" in issue for issue in issues), issues

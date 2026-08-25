@@ -66,3 +66,14 @@ grepped the rendered definitions for `sampling` matched the prose in `compile_sp
 description, which says the server initiates no sampling. A gate satisfiable — or breakable
 — by ordinary English is not a gate: the claim is about what the server does at run time,
 and it belongs with section 2.
+
+**Audited an hour later, and the gate had the blind spot the gate exists to prevent.**
+`_schema_issues` walked only a schema's top-level `properties` for contract references —
+which is where every reference in the shipped catalog happens to sit, so the check agreed
+with the catalog it was written against and would go on reporting clean the moment a
+reference moved inside an `items`, a `oneOf`, or a nested object. It walks the whole
+document now, with three nested mutations asserting it. Second finding, the documented
+pydantic trap again: `frozen=True` does not reach inside a `dict` field, so a definition's
+schema dictionaries were writable and `to_wire` handed out the live ones. `to_wire`
+deep-copies now, and the docstring says what `frozen` does and does not cover instead of
+implying it covers everything.
