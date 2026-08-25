@@ -12,6 +12,10 @@ densities N_A and N_D, the intrinsic carrier density n_i, and the absolute tempe
 W = sqrt(2*eps*V_bi/q*(1/N_A + 1/N_D)), set by the permittivity eps and the doping (a lightly-doped
 side depletes more). The junction stores charge like a parallel-plate capacitor of that gap,
 C/A = eps/W per unit area — the voltage-dependent capacitance that tunes a varactor.
+
+Sources: Sedra & Smith, *Microelectronic Circuits* (the pn junction) — the built-in potential
+from the doping levels, the depletion width under bias, the junction capacitance per unit area,
+and the peak field in the depletion region.
 """
 
 from __future__ import annotations

@@ -12,6 +12,10 @@ surface reflectivity R — a perfect absorber (R = 0)
 feels I/c, a perfect mirror (R = 1) feels twice that because it also recoils the reflected light.
 Multiplied by the illuminated area it becomes the radiation force F = (1 + R)·I·A/c that drives a
 solar sail. Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Griffiths, *Introduction to Electrodynamics* (momentum in electromagnetic fields) — the
+photon momentum p = E/c, the radiation pressure an intensity exerts on an absorbing or
+reflecting surface, and the force that pressure gives over an area.
 """
 
 from __future__ import annotations

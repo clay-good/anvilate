@@ -13,6 +13,10 @@ the basis of a variable optical attenuator. Unpolarized light is different: an i
 passes exactly half of it, I = I₀/2, regardless of orientation, because random polarization averages
 cos²θ to ½. The **angle is a plain float in radians**. Intensities are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Hecht, *Optics* (polarization) — Malus's law I = I0·cos²θ for light already polarized,
+the analyser angle a target transmission needs, and the one-half an ideal polarizer passes from
+unpolarized light.
 """
 
 from __future__ import annotations

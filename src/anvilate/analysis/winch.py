@@ -21,6 +21,9 @@ circumferences' arithmetic series gives the tight-wound capacity
 the ideal geometry; real-world loose spooling stores a few percent less, so treat the
 result as an upper bound and leave margin. All three forms are exact closed-form
 geometry on dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: *Machinery's Handbook* (hoisting drums and wire rope) — the working radius of a drum at
+a given wrap layer, the line pull a drum torque produces there, and the rope a drum will hold.
 """
 
 from __future__ import annotations

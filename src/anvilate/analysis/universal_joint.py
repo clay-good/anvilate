@@ -13,6 +13,10 @@ plane of the shafts) and a minimum of cosβ (a quarter-turn later), so the peak-
 fluctuation over a revolution is 1/cosβ − cosβ. The larger the joint angle, the worse the ripple —
 which is why single Cardan joints are kept to small angles. Angles are **plain floats in degrees**;
 the returned ratios are dimensionless plain floats.
+
+Sources: Norton, *Design of Machinery* (Hooke's coupling) — the non-constant output-to-input
+speed ratio of a single Cardan joint at an operating angle, its maximum, and the peak-to-peak
+fluctuation over a revolution.
 """
 
 from __future__ import annotations

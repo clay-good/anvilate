@@ -11,6 +11,10 @@ constant k, the absolute temperature T, and the resistance R — colder, lower-R
 front ends are quieter. The available noise power a source can deliver to a matched load is simply
 P = k*T*B, independent of R (about -174 dBm in a 1 Hz band at 290 K, the reference noise floor of RF
 engineering). The short-circuit noise current is the dual, I_rms = sqrt(4*k*T*B/R).
+
+Sources: Sedra & Smith, *Microelectronic Circuits* (noise) — the Johnson-Nyquist thermal noise
+voltage of a resistance in a bandwidth, the available noise power kTB, and the equivalent noise
+current.
 """
 
 from __future__ import annotations

@@ -197,10 +197,10 @@ about which convention the library adopts, not a bug fix.
   4.6 -> 4.3 and 1.6 -> 1.4. Every move is downward, which is what adopting the real
   curve should do.
 
-## 2026-08-25 — 196 more symbols off the citation debt
+## 2026-08-25 — 237 more symbols off the citation debt
 
-The debt was 409 public analysis symbols naming no source; it is 213 — 12% of the surface,
-from 23%. Forty-one modules paid off, each by giving its module docstring a real `Sources:`
+The debt was 409 public analysis symbols naming no source; it is 172 — 9% of the surface,
+from 23%, and less than half what it was. Fifty-four modules paid off, each by giving its module docstring a real `Sources:`
 attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 
 | Source | Modules |
@@ -236,6 +236,14 @@ attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 | Gillespie, *Fundamentals of Vehicle Dynamics* | `vehicle`, `vehicle_stability` |
 | ASME B30.9 and BTH-1 | `rigging` |
 | AWS D1.1 and the IIW carbon equivalent | `welding_heat` |
+| Dushman (vacuum technique) | `vacuum_system` |
+| Krane (radiation attenuation) | `radiation_shielding` |
+| Norton (Scotch yoke, Hooke's coupling) | `scotch_yoke`, `universal_joint` |
+| *Machinery's Handbook* | `screw_conveyor`, `winch` |
+| IES *Lighting Handbook* (photometry) | `photometry` |
+| Hecht (polarization) | `polarization` |
+| Griffiths, *Quantum Mechanics* / *Electrodynamics* | `photon`, `atomic_spectra`, `radiation_pressure` |
+| Sedra & Smith (pn junction, noise) | `pn_junction`, `thermal_noise` |
 
 **Eighteen new authority tokens, each run through the file's own accident check before
 shipping.** For every one, the symbols it is the *sole* citation for are in the modules it
@@ -251,6 +259,11 @@ adopted:
 
 That is the same failure the file records for `Young`, `Turns` and `Hazen`, caught before
 it shipped rather than after.
+
+**The last thirteen modules needed no new token at all**, which is the vocabulary paying
+off: Norton now covers six mechanism modules, Sedra & Smith five circuit ones, Hecht five
+optics ones, Griffiths four, and *Machinery's Handbook* three. A curated list is worth
+having precisely because its second use costs nothing.
 
 **A gate that was considered and not written.** Requiring every module-docstring credit to
 sit in a `Sources:` line would catch the aside class structurally. It does not hold today:

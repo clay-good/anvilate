@@ -11,6 +11,10 @@ incandescent lamp, 100+ lm/W for a modern LED. Multiplying a lamp's efficacy by 
 luminous flux it produces. Comparing the efficacy to the theoretical maximum of 683 lm/W — the
 luminous efficacy of monochromatic 555 nm light, the peak of human vision — gives the overall
 luminous efficiency, the fraction of the ideal a real source achieves.
+
+Sources: the IES *Lighting Handbook* (photometric quantities) — luminous efficacy as lumens per
+watt, the luminous flux a radiant power at a stated efficacy produces, and the luminous
+efficiency measured against the 683 lm/W peak of the photopic response.
 """
 
 from __future__ import annotations

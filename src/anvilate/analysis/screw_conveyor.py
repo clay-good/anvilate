@@ -11,6 +11,10 @@ Each revolution advances the material one pitch, so the volumetric capacity is Q
 rotational speed N, and a trough loading (fill) fraction f that is well below one because the flight
 cannot run full without flooding. Multiplying by the bulk density gives the mass throughput, and
 inverting the capacity gives the screw speed a target feed rate needs.
+
+Sources: *Machinery's Handbook* (screw conveyors) — the volumetric capacity of a screw at a
+trough loading, the mass capacity it carries at a bulk density, and the speed a required
+capacity needs.
 """
 
 from __future__ import annotations

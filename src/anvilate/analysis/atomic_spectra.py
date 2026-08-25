@@ -13,6 +13,10 @@ For a nucleus of charge Z with one electron, the orbit energy is E_n = −13.606
 between levels n₁ < n₂ emits a photon whose wavelength follows the Rydberg formula
 1/λ = R·Z²·(1/n₁² − 1/n₂²) — the 656 nm red line of hydrogen's Balmer series comes from 3 → 2.
 Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Griffiths, *Introduction to Quantum Mechanics* (the hydrogen atom) — the Bohr energy
+levels and orbit radii, the Rydberg formula for a transition wavelength, and Moseley's law for a
+K-alpha line.
 """
 
 from __future__ import annotations

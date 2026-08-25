@@ -12,6 +12,11 @@ Shielding is usually quoted as the half-value layer HVL = ln(2) / mu, the thickn
 beam in half; each added HVL halves it again. Designing a shield inverts the law: the thickness for
 a target transmission is x = -ln(T) / mu. These are narrow-beam values — they ignore the build-up
 from scattered photons, so a real broad-beam shield is somewhat thicker; this is a screening figure.
+
+Sources: Krane, *Introductory Nuclear Physics* (interaction of radiation with matter) — the
+exponential attenuation of a narrow beam, the half-value layer it implies, and the shield
+thickness a target transmission requires. Narrow-beam attenuation only: no build-up factor is
+applied.
 """
 
 from __future__ import annotations

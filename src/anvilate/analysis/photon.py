@@ -12,6 +12,9 @@ wavelength lambda — shorter wavelength, higher energy, so a blue photon carrie
 Inverting it, lambda = h*c/E gives the wavelength that matches an energy (e.g. a semiconductor band
 gap). Dividing an optical power by the per-photon energy gives the photon flux, Phi = P*lambda/
 (h*c) — the number of photons per second a beam or detector sees, the currency of low-light sensing.
+
+Sources: Griffiths, *Introduction to Quantum Mechanics* — the photon energy E = h·c/lambda, the
+wavelength an energy corresponds to, and the photon flux a radiant power at that energy carries.
 """
 
 from __future__ import annotations

@@ -15,6 +15,10 @@ extra friction of the sliding yoke.
 
 The crank angle θ is a plain-float degrees value; the crank radius and speed are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Norton, *Design of Machinery* (the Scotch yoke) — the exactly sinusoidal displacement,
+velocity and acceleration a crank and sliding yoke produce, which is what distinguishes it from
+the slider-crank's inertial harmonics.
 """
 
 from __future__ import annotations

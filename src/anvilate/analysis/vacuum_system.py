@@ -18,6 +18,11 @@ line between them throttles the flow: a tube of diameter d and length L has a mo
 conductance C = (pi/12)*v_bar*d**3/L, and pump and line act in series, S_eff = S*C/(S + C). Because
 the conductance goes as d**3, a modest line can cost most of the pump — and the pump-down time above
 scales on whatever speed actually reaches the chamber, not the one on the datasheet.
+
+Sources: Dushman, *Scientific Foundations of Vacuum Technique* — the pump-down time from a
+chamber volume and pumping speed, throughput as pressure times volumetric rate, the molecular-
+flow conductance of a long tube and of a thin aperture, and the effective pumping speed a
+conductance in series leaves.
 """
 
 from __future__ import annotations
