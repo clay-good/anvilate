@@ -87,3 +87,11 @@ never be.
 **`model_copy` is overridden**, because pydantic runs no after-validator on a copy and
 `curve.model_copy(update={"segments": ...})` was one call away from building the
 discontinuous curve the constructor refuses.
+
+**Audited an hour after shipping: three silent holes in one optional field.** The cutoff
+stress range was checked only for not sitting above the end of the curve. `cutoff > last`
+is False for NaN, so a NaN cutoff validated and the curve then answered NaN past its last
+segment — a stress range that compares False against every limit it meets, so the check
+consuming it passes. Zero and negative validated for the same reason and are worse for
+being plausible: a cutoff of zero says every stress range survives forever. All three are
+refused now.

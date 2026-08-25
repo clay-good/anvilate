@@ -268,3 +268,23 @@ def test_a_copy_cannot_smuggle_past_the_continuity_check():
         curve.model_copy(update={"segments": discontinuous})
     # And an ordinary copy still works, so the override did not break copying.
     assert curve.model_copy(update={"survival": CurveSurvival.MEAN}).survival is CurveSurvival.MEAN
+
+
+@pytest.mark.parametrize("cutoff", [float("nan"), 0.0, -5.0])
+def test_a_cutoff_that_is_not_a_positive_finite_stress_is_refused(cutoff):
+    """All three walked past the step-up check, and each one poisons the curve differently.
+
+    NaN because `cutoff > last` is False for NaN — the curve then answers NaN past its last
+    segment, and a NaN stress range compares False against every limit it meets, so the
+    check that consumes it passes. Zero and negative because they are *plausible* rather
+    than absurd: a cutoff of zero says every stress range survives forever, which is an
+    infinite fatigue life reported as an ordinary allowable.
+    """
+    segment = FatigueSegment(**_segment())
+    with pytest.raises(ValidationError, match="positive finite stress"):
+        FatigueCurve(
+            survival=CurveSurvival.P97_7,
+            segments=(segment,),
+            min_cycles=1.0e4,
+            cutoff_stress_range=_q(cutoff, "MPa"),
+        )

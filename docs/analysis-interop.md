@@ -109,6 +109,13 @@ the screen passes.
 reading `EI` where `I` belongs is a units error nothing downstream can see, because the
 library's screens apply their own material.
 
+**The major axis is the one with the larger second moment, not the one called x.**
+`sectionproperties` reports an x and a y; Anvilate screens a major and a minor, and for a
+section drawn wider than it is tall those are not the same axis. Mapping `ixx` to major
+regardless would build a record `ExternalSectionProperties` refuses — with a message about
+swapped axes that points at the record instead of at the mapping that made it. The same
+rectangle drawn both ways imports identically.
+
 **The extreme fibre comes from the smaller section modulus.** `get_z()` returns the top and
 bottom fibres separately, and for an asymmetric section they differ. The governing fibre is
 the far one, `c = I / min(z⁺, z⁻)`; taking the larger modulus would put a smaller `c` into

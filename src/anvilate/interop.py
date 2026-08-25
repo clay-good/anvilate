@@ -492,6 +492,11 @@ def from_sectionproperties(
       the top and bottom fibres separately, and for an asymmetric section they differ. The
       governing fibre is the far one, ``c = I / min(z⁺, z⁻)``; taking the larger modulus
       would put the smaller ``c`` into a bending check and overstate the capacity.
+    * **The major axis is the one with the larger second moment**, not the one called x.
+      ``sectionproperties`` reports an x and a y; Anvilate screens a major and a minor. For
+      a section drawn wider than it is tall those are not the same axis, and mapping ixx to
+      major would build a record ``ExternalSectionProperties`` refuses, with a message about
+      swapped axes that names the wrong culprit. The extreme fibre follows the same axis.
     * **The shear form factor is left unset**, which is the one worth reading twice.
       ``get_as()`` returns the *Timoshenko shear area*, and ``A / A_s`` is 1.2 for a
       rectangle. :attr:`~anvilate.analysis.CrossSection.shear_form_factor` is the
@@ -516,9 +521,19 @@ def from_sectionproperties(
 
     area = _positive(section.get_area(), "area", name)
     ixx_c, iyy_c, _ixy_c = section.get_ic()
-    zxx_plus, zxx_minus, _zyy_plus, _zyy_minus = section.get_z()
-    governing_modulus = _positive(min(zxx_plus, zxx_minus), "the elastic section modulus", name)
     ixx_c = _positive(ixx_c, "ixx_c", name)
+    iyy_c = _positive(iyy_c, "iyy_c", name)
+    zxx_plus, zxx_minus, zyy_plus, zyy_minus = section.get_z()
+    # Anvilate screens a major and a minor axis; sectionproperties reports an x and a y.
+    # The major axis is the one with the larger second moment, which for a section drawn
+    # wider than it is tall is y — so the mapping is by magnitude, not by name. Fixing
+    # ixx to major instead would hand `ExternalSectionProperties` a record its own
+    # validator refuses, with a message about swapped axes that names the wrong culprit.
+    if ixx_c >= iyy_c:
+        major, minor, moduli = ixx_c, iyy_c, (zxx_plus, zxx_minus)
+    else:
+        major, minor, moduli = iyy_c, ixx_c, (zyy_plus, zyy_minus)
+    governing_modulus = _positive(min(moduli), "the elastic section modulus", name)
 
     method = "sectionproperties finite-element warping analysis"
     torsion_constant: Quantity | None = None
@@ -539,11 +554,9 @@ def from_sectionproperties(
         source_version=_sectionproperties_version(),
         method=method,
         area=Quantity(magnitude=area, unit=f"{length_unit}**2"),
-        second_moment=Quantity(magnitude=ixx_c, unit=f"{length_unit}**4"),
-        extreme_fibre=Quantity(magnitude=ixx_c / governing_modulus, unit=length_unit),
-        second_moment_transverse=Quantity(
-            magnitude=_positive(iyy_c, "iyy_c", name), unit=f"{length_unit}**4"
-        ),
+        second_moment=Quantity(magnitude=major, unit=f"{length_unit}**4"),
+        extreme_fibre=Quantity(magnitude=major / governing_modulus, unit=length_unit),
+        second_moment_transverse=Quantity(magnitude=minor, unit=f"{length_unit}**4"),
         torsion_constant=torsion_constant,
         # Deliberately unset. See the docstring: get_as() means a different constant.
         shear_form_factor=None,

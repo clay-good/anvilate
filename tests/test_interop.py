@@ -382,3 +382,27 @@ def test_the_adapter_reads_a_real_sectionproperties_section():
     )
     assert imported.shear_form_factor is None
     assert "warping" in imported.method
+
+
+def test_the_major_axis_is_the_one_with_the_larger_second_moment_not_the_one_called_x():
+    """A section drawn wider than it is tall has its strong axis in y.
+
+    sectionproperties reports an x and a y; Anvilate screens a major and a minor. Mapping
+    ixx to major regardless builds a record `ExternalSectionProperties` refuses outright —
+    with a message about swapped axes that points at the record rather than at the mapping
+    that made it. The same rectangle, drawn both ways, has to import identically.
+    """
+    tall = from_sectionproperties(
+        _rectangle_stub(width=50.0, height=100.0), name="t", length_unit="mm"
+    )
+    wide = from_sectionproperties(
+        _rectangle_stub(width=100.0, height=50.0), name="w", length_unit="mm"
+    )
+    for imported in (tall, wide):
+        assert imported.second_moment.to("mm**4").magnitude == pytest.approx(50 * 100**3 / 12)
+        assert imported.second_moment_transverse is not None
+        assert imported.second_moment_transverse.to("mm**4").magnitude == pytest.approx(
+            100 * 50**3 / 12
+        )
+        # The extreme fibre follows the major axis too: half of 100, not half of 50.
+        assert imported.extreme_fibre.to("mm").magnitude == pytest.approx(50.0)

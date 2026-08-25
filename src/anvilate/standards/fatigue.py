@@ -294,6 +294,18 @@ class FatigueCurve(BaseModel):
                     f"cutoff_stress_range must be a stress; got {self.cutoff_stress_range}"
                 )
             cutoff = self.cutoff_stress_range.to("MPa").magnitude
+            if not isfinite(cutoff) or cutoff <= 0:
+                # `cutoff > last` is False for NaN, so the step-up check below waves a NaN
+                # through and the curve then answers NaN past its last segment — a stress
+                # range that compares False against every limit it meets. Zero and negative
+                # are worse for being plausible-looking: a cutoff of zero says every stress
+                # range survives forever.
+                raise ValueError(
+                    f"the cutoff must be a positive finite stress; got "
+                    f"{self.cutoff_stress_range}. A cutoff of zero says every stress range "
+                    "survives forever, and a NaN one compares False against every limit it "
+                    "is checked against"
+                )
             last = self.segments[-1].stress_range_at(self.segments[-1].max_cycles)
             if cutoff > last.to("MPa").magnitude * (1 + 1e-9):
                 raise ValueError(

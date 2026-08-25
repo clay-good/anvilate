@@ -86,3 +86,11 @@ the package, because it was written by the same hand in the same hour as the cod
 exercises. The real test meshes a 50x100 rectangle, runs both analyses, and compares against
 closed-form values written out in the test file — not read back from the package. It is
 opt-in locally and runs by name in a scheduled CI job that fails if it skipped.
+
+**Audited after shipping, and the adapter had a fourth decision it had not made.** It
+mapped `ixx` to the major axis unconditionally. For a section drawn wider than it is tall
+the strong axis is y, so the record came back with a transverse second moment larger than
+its major one — which `ExternalSectionProperties` refuses, correctly, with a message about
+swapped axes that points at the record rather than at the mapping that produced it. The
+major axis is now the one with the larger second moment, and the extreme fibre follows the
+same axis. A rectangle drawn 50x100 and one drawn 100x50 now import identically.
