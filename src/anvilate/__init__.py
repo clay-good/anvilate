@@ -45,6 +45,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.interop` — the typed doorway for member forces and section
   properties computed by some other tool.
 - :mod:`anvilate.loads` — typed load combinations and the governing one, named.
+- :mod:`anvilate.mcp` — the pipeline as MCP tool contracts, and the rule that
+  decides which operations are tasks rather than synchronous calls.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
 - :mod:`anvilate.uncertainty` — input scatter propagated to a shortfall
   probability and a sensitivity ranking.

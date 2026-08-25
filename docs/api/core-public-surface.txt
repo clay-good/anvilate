@@ -128,6 +128,14 @@ loads.asce7_asd_basic
 loads.asce7_lrfd_seismic
 loads.asce7_asd_seismic
 loads.combination_scorecard
+mcp.Cost
+mcp.Dispatch
+mcp.Gate
+mcp.REQUIRED_OPERATIONS
+mcp.ToolDefinition
+mcp.catalog_issues
+mcp.tool_catalog
+mcp.wire_definitions
 review.DecisionOrigin
 review.ReviewPriority
 review.ReviewItem

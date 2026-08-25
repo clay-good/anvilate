@@ -6141,3 +6141,18 @@ def test_measured_shaft_example_fails_on_the_number_and_says_the_measurement_can
     # without that is as misleading as reporting a pass without it.
     assert entry.uncertainty is not None
     assert entry.uncertainty.shortfall_probability == pytest.approx(0.75, abs=0.05)
+
+
+def test_mcp_tool_catalog_example_splits_the_surface_the_way_the_spec_states():
+    namespace = runpy.run_path(str(_EXAMPLES / "mcp_tool_catalog.py"))
+    lines = namespace["describe_tool_surface"]()
+    # One header plus one line per operation, and the header is not counted as a tool.
+    assert len(lines) == 9
+    assert lines[0].startswith("tool")
+    body = "\n".join(lines[1:])
+    # The two task-dispatched operations, and the gates each surface inherits.
+    assert "build_part          task" in body
+    assert "run_fea_validation  task" in body
+    assert "export_artifact     synchronous   validation,watermark" in body
+    # And the example's own assertions run, including the scorecard $ref.
+    namespace["main"]()
