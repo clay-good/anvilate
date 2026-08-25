@@ -174,3 +174,30 @@ sweep used a copy holding only `src/` and `tests/`, so 525 tests failed on the m
 `examples/` and `docs/` regardless of any mutation — every batch was "killed" and the sweep
 reported perfect coverage while measuring nothing. Copy the repo with `git archive HEAD`
 and run the suite once before mutating anything.
+
+## Finding the guards nothing has ever run
+
+A line-trace of the suite says **56% of the 4,300 `raise` sites in the imported modules
+never execute**. Most are dimension and positivity checks whose absence a reader would
+notice. The subset worth hunting is the one whose *condition carries a domain constant* —
+a Poisson's ratio that cannot reach 0.5, an angle range a formula's geometry requires, a
+correlation's validity floor. Those are the library's own statements about where a formula
+stops applying, and an inverted comparison in one reads exactly like a correct one.
+
+To run the instrument, append a `sys.settrace` line recorder to `tests/conftest.py`, run
+the suite once, then walk each module's AST for `ast.If` nodes whose body raises and whose
+test mentions a numeric literal other than 0 or 1, or an UPPER_CASE name. Anything whose
+`raise` line is not in the trace is unpinned.
+
+That sweep found 38 on 2026-08-25; `tests/test_domain_guards.py` took it to 2, and both
+survivors are safety nets that no input can reach (asserted as such rather than left as an
+unexplained gap). **Re-run the trace after writing the tests, not before.** Six of the
+first twelve survivors turned out to be reached through a *different* guard than intended —
+a bearing whose contact angle never got as far as its own check because the rotational
+speed was refused first, one malformed fastener position caught by the "at least two"
+rule. A guard reached through another guard is still unpinned, and only the second trace
+says so.
+
+One defect fell out of it: `eccentric_weld_group_peak_stress` checked that each segment was
+a pair and then indexed each *point* without checking, so a malformed endpoint raised
+`IndexError` — which a caller catching `ValueError` does not catch.
