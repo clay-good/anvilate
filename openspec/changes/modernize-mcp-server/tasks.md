@@ -22,10 +22,10 @@
 
 ## 2. Implementation (when the server is built)
 
-- [~] 2.1 Stateless server skeleton on the 2026-07-28 revision — `handle_request` is
-      the transport-agnostic half: `initialize`, `tools/list` and a `tools/call` that
-      validates and refuses. The transport and the dispatch are still open, and four tools
-      cannot be served statelessly at all (below)
+- [x] 2.1 Stateless server skeleton on the 2026-07-28 revision — `handle_request`
+      (transport-agnostic) and `serve_stdio` (newline-delimited JSON). `compile_spec` is
+      dispatched; the rest are refused with the reason, and four cannot be served
+      statelessly at all (below)
 - [ ] 2.2 structuredContent results + preview-image attachments
 - [ ] 2.3 Tasks extension: handles, progress, cancellation with subprocess cleanup
 - [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths
@@ -115,5 +115,17 @@ schema had been applied.
 first draft excepted `number` and not `integer`, so `width_px: true` would have been
 accepted as a pixel count on the only integer field in the surface.
 
-Still open in 2.1: the transport (stdio and HTTP), and the dispatch of the four backed
-operations — which waits on the session-versus-stateless decision above for three of them.
+**One operation is dispatched, and it is the honest one to start with.** `compile_spec` is
+the only tool that is backed, bounded *and* servable statelessly, so it is the first thing
+an agent can call over the wire and get an answer to. A document that does not validate
+comes back as a result with its error paths rather than a JSON-RPC error, because the
+request was fine and the document was not — and `isError` rides on that same list so the
+two cannot disagree.
+
+**The transport is nine lines and two of them are behavioural.** A notification produces no
+output line, because a client waiting for one response per request stalls otherwise; and a
+line that is not JSON gets a parse error and the loop continues, because a stream is not a
+session.
+
+Still open in 2.1: an HTTP transport, and the dispatch of the three remaining backed
+operations — which waits on the session-versus-stateless decision above.

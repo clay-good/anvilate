@@ -131,9 +131,16 @@ encode back, so a stdio loop, an HTTP handler and a test drive the same code. It
 `initialize`, `tools/list` and `tools/call`, and returns `None` for a notification, which
 the protocol says takes no response — including no error response.
 
-**It dispatches nothing.** The contract and the handler are built; the operations behind
-them are not, and a result invented here would be indistinguishable from a real one. Every
-`tools/call` therefore ends in a refusal, and the three kinds are worth separating:
+**One operation is dispatched: `compile_spec`.** It is the only tool that is backed, bounded
+and servable statelessly all at once, and it is the first thing an agent can call over the
+wire and get an answer to. A document that does not validate comes back as a **result**,
+not a transport error: the output schema requires `errors` and makes `spec` optional for
+exactly that, because a JSON-RPC error would tell the client its *request* was malformed
+when it was the document. `isError` on the result rides on `errors` being non-empty, so a
+client reading only the protocol flag and one reading the structured content reach the same
+verdict.
+
+Everything else ends in a refusal, and the kinds are worth separating:
 
 - **`-32602`, a bad argument.** Checked against the published input schema — required
   properties present, no property outside `properties`, and each value's top-level type.
@@ -143,6 +150,23 @@ them are not, and a result invented here would be indistinguishable from a real 
 - **`-32000`, task-dispatched.** An unbounded tool is refused synchronously rather than
   waited on, by its declared cost rather than by name.
 - **`-32000`, stateless.** One of the four above.
+- **`-32000`, not dispatched yet.** The contract and the handler exist; the operation does
+  not. A result invented here would be indistinguishable from a real one, which is the
+  failure a published tool contract makes most likely.
+
+## The transport
+
+`serve_stdio()` is the whole of it: newline-delimited JSON in, one line out per request,
+flushed each time so a client blocked on a read is not waiting on a buffer. It holds no
+state, so restarting it loses nothing.
+
+Two behaviours a client depends on:
+
+- **A notification produces no line at all.** A client waiting for one response per request
+  stalls if a notification produces one.
+- **A line that is not JSON does not take the stream down.** A stream is not a session: one
+  client sending rubbish must not stop the server answering the message after it. The bad
+  line gets a `-32700` with a null id and the loop continues.
 
 A boolean is not a number, and `isinstance(True, int)` is True in Python — so `width_px:
 true` would have been accepted as a pixel count by the obvious type check. Both `number`

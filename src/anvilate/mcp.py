@@ -39,10 +39,12 @@ tolerance, and a convergence tolerance is not a bound on wall time.
 
 from __future__ import annotations
 
+import json
+import sys
 from collections.abc import Mapping
 from copy import deepcopy
 from enum import StrEnum
-from typing import Any
+from typing import Any, TextIO
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -57,6 +59,7 @@ __all__ = [
     "ToolDefinition",
     "catalog_issues",
     "handle_request",
+    "serve_stdio",
     "stateless_gaps",
     "PROTOCOL_REVISION",
     "tool_catalog",
@@ -596,6 +599,8 @@ def catalog_issues() -> list[str]:
 # JSON-RPC 2.0 error codes the handler uses. -32601 and -32602 are the protocol's own;
 # -32000 is the reserved implementation-defined range, where a refusal that is about
 # Anvilate rather than about the request belongs.
+PARSE_ERROR = -32700
+INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 TOOL_UNAVAILABLE = -32000
@@ -759,10 +764,88 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             f"between calls cannot serve it. Either the tool takes what it acts on as an "
             f"argument or the server holds a session; the contract does not yet say which",
         )
-    return _error(
-        request_id,
-        TOOL_UNAVAILABLE,
-        f"{tool.name} is not dispatched yet: the contract and this handler are built, the "
-        f"operation behind them is not. A result invented here would be indistinguishable "
-        f"from a real one",
-    )
+    handler = _DISPATCH.get(tool.name)
+    if handler is None:
+        return _error(
+            request_id,
+            TOOL_UNAVAILABLE,
+            f"{tool.name} is not dispatched yet: the contract and this handler are built, "
+            f"the operation behind them is not. A result invented here would be "
+            f"indistinguishable from a real one",
+        )
+    structured = handler(arguments)
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "result": {
+            "content": [{"type": "text", "text": json.dumps(structured, sort_keys=True)}],
+            "structuredContent": structured,
+            "isError": bool(structured.get("errors")),
+        },
+    }
+
+
+def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``compile_spec``, dispatched to :func:`anvilate.spec.parse_spec`.
+
+    **A spec that does not validate is a result, not a transport error.** The output
+    schema requires ``errors`` and makes ``spec`` optional precisely so a refusal crosses
+    as a list of paths the caller can act on. Raising a JSON-RPC error instead would tell
+    a client its *request* was malformed, which it was not — the document was.
+
+    The spec crosses as its own model dump, in JSON mode, which is what the published
+    Design Spec schema describes. ``isError`` on the result rides on ``errors`` being
+    non-empty, so a client that reads only the protocol flag and a client that reads the
+    structured content reach the same verdict.
+    """
+    from .spec import SpecValidationError, parse_spec
+
+    document = arguments["document"]
+    try:
+        spec = parse_spec(dict(document))
+    except SpecValidationError as failure:
+        return {"errors": [f"{e['loc']}: {e['msg']}" for e in failure.errors]}
+    except (ValueError, TypeError, KeyError) as failure:
+        # parse_spec raises SpecValidationError for a schema failure; anything else is a
+        # document it could not even attempt, and it still belongs in `errors` rather than
+        # crashing the loop that called it.
+        return {"errors": [str(failure)]}
+    return {"spec": spec.model_dump(mode="json"), "errors": []}
+
+
+# The operations wired to real code today. A tool absent from this map is refused with the
+# reason rather than answered — see the refusal above.
+_DISPATCH: dict[str, Any] = {"compile_spec": _compile_spec}
+
+
+def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
+    """Read newline-delimited JSON-RPC from ``stdin`` and write responses to ``stdout``.
+
+    The whole transport: one message per line in, one per line out, flushed each time so a
+    client blocked on a read is not waiting on a buffer. Every message is handled by
+    :func:`handle_request`, which holds no state, so restarting this loop loses nothing.
+
+    A line that is not JSON is answered with a parse error and the loop continues, because
+    a stream is not a session: one client sending rubbish must not take the server down for
+    the message after it. A notification produces no line at all, which is what the
+    protocol requires and what a client waiting for one response per request depends on.
+    """
+    source = sys.stdin if stdin is None else stdin
+    sink = sys.stdout if stdout is None else stdout
+    for line in source:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            request = json.loads(line)
+        except json.JSONDecodeError as bad:
+            response: dict[str, Any] | None = _error(None, PARSE_ERROR, f"invalid JSON: {bad}")
+        else:
+            if not isinstance(request, dict):
+                response = _error(None, INVALID_REQUEST, "a JSON-RPC request is an object")
+            else:
+                response = handle_request(request)
+        if response is None:
+            continue
+        sink.write(json.dumps(response) + "\n")
+        sink.flush()

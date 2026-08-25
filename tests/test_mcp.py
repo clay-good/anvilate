@@ -9,6 +9,8 @@ each mutated deliberately, each asserted to produce a complaint naming it.
 from __future__ import annotations
 
 import importlib
+import io
+import json
 
 import pytest
 from pydantic import ValidationError
@@ -28,6 +30,7 @@ from anvilate.mcp import (
     _schema_issues,
     catalog_issues,
     handle_request,
+    serve_stdio,
     stateless_gaps,
     tool_catalog,
     wire_definitions,
@@ -358,8 +361,11 @@ def test_arguments_are_checked_against_the_published_input_schema():
         in _call("compile_spec", {"document": {}, "extra": 1})["error"]["message"]
     )
     assert "JSON object" in _call("compile_spec", {"document": "a string"})["error"]["message"]
-    # A well-formed call gets past the schema check and fails for the honest reason.
-    assert _call("compile_spec", {"document": {}})["error"]["code"] == -32000
+    # A well-formed call gets past the schema check and is dispatched — an empty document
+    # is a document, and its refusal comes back as a result rather than a transport error.
+    dispatched = _call("compile_spec", {"document": {}})
+    assert "error" not in dispatched
+    assert dispatched["result"]["isError"] is True
 
 
 def test_a_boolean_is_not_a_number():
@@ -457,3 +463,125 @@ def test_a_request_that_is_not_json_rpc_2_is_refused():
         handle_request({"jsonrpc": "1.0", "id": 1, "method": "tools/list"})["error"]["code"]
         == -32602
     )
+
+
+# --- The first operation an agent can actually call -------------------------------------
+
+
+def _spec_document() -> dict:
+    from anvilate.spec import (
+        AcceptanceCriteria,
+        DesignSpec,
+        Manufacturing,
+        ManufacturingProcess,
+        MaterialRef,
+        Provenanced,
+        ValidationTier,
+    )
+    from anvilate.units import UnitSystem
+
+    return DesignSpec(
+        name="deck_plate",
+        description="A mezzanine deck plate.",
+        units=Provenanced.stated(UnitSystem.SI),
+        material=MaterialRef(ref="ASTM-A36"),
+        manufacturing=Manufacturing(process=ManufacturingProcess.SHEET_METAL),
+        acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL]),
+    ).model_dump(mode="json")
+
+
+def test_compile_spec_round_trips_a_real_document():
+    result = _call("compile_spec", {"document": _spec_document()})["result"]
+    assert result["isError"] is False
+    structured = result["structuredContent"]
+    assert structured["errors"] == []
+    assert structured["spec"]["name"] == "deck_plate"
+    # The text content and the structured content are the same answer, not two answers.
+    assert json.loads(result["content"][0]["text"]) == structured
+
+
+def test_a_document_that_does_not_validate_is_a_result_and_not_a_transport_error():
+    """The output schema requires `errors` and makes `spec` optional for exactly this: a
+    refusal crosses as paths the caller can act on. A JSON-RPC error would tell the client
+    its *request* was malformed, which it was not — the document was."""
+    response = _call("compile_spec", {"document": {"name": "nameless"}})
+    assert "error" not in response
+    result = response["result"]
+    assert result["isError"] is True
+    errors = result["structuredContent"]["errors"]
+    assert errors and all(":" in e for e in errors), "each error names the path it is about"
+    assert "spec" not in result["structuredContent"]
+
+
+def test_is_error_and_the_error_list_cannot_disagree():
+    """A client that reads only the protocol flag and one that reads the structured content
+    have to reach the same verdict."""
+    for document, expected in ((_spec_document(), False), ({"name": "x"}, True)):
+        result = _call("compile_spec", {"document": document})["result"]
+        assert result["isError"] is expected
+        assert bool(result["structuredContent"]["errors"]) is expected
+
+
+def test_a_document_the_parser_cannot_even_attempt_is_still_a_result():
+    """`parse_spec` raises SpecValidationError for a schema failure; anything else would
+    otherwise escape into the transport loop and take the connection down with it."""
+    response = _call("compile_spec", {"document": {"anvilate_spec": "0.0.0"}})
+    assert "error" not in response
+    assert response["result"]["isError"] is True
+
+
+# --- The transport ----------------------------------------------------------------------
+
+
+def _serve(*messages: str) -> list[dict]:
+    out = io.StringIO()
+    serve_stdio(io.StringIO("\n".join(messages) + "\n"), out)
+    return [json.loads(line) for line in out.getvalue().splitlines()]
+
+
+def test_the_stdio_loop_answers_one_line_per_request_and_none_per_notification():
+    responses = _serve(
+        json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}),
+        json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+    )
+    assert [r["id"] for r in responses] == [1, 2], (
+        "a client waiting for one response per request stalls if a notification produces one"
+    )
+
+
+def test_a_line_that_is_not_json_does_not_take_the_stream_down():
+    """A stream is not a session: one client sending rubbish must not stop the server
+    answering the message after it."""
+    responses = _serve(
+        "{not json at all",
+        json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}),
+    )
+    assert responses[0]["error"]["code"] == -32700
+    assert responses[0]["id"] is None
+    assert responses[1]["id"] == 7 and "result" in responses[1]
+
+
+def test_a_json_value_that_is_not_an_object_is_an_invalid_request():
+    responses = _serve("[1, 2, 3]", "42")
+    assert [r["error"]["code"] for r in responses] == [-32600, -32600]
+
+
+def test_blank_lines_are_skipped_rather_than_answered():
+    responses = _serve("", "   ", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}))
+    assert len(responses) == 1
+
+
+def test_the_transport_carries_a_real_compile_end_to_end():
+    """The milestone: one operation an agent can call over the wire and get an answer to."""
+    responses = _serve(
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "compile_spec", "arguments": {"document": _spec_document()}},
+            }
+        )
+    )
+    assert responses[0]["result"]["structuredContent"]["spec"]["name"] == "deck_plate"
