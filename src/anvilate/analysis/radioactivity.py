@@ -10,6 +10,10 @@ fixes. The activity then follows A = A0 * exp(-lambda * t) = A0 * 2^(-t / T_half
 to half at one half-life, a quarter at two, and so on. Reading it the other way gives the wait, the
 time for a source to fall from an initial to a target activity, t = T_half * log2(A0 / A) — how long
 a source must be stored before it is weak enough to handle or ship.
+
+Sources: Krane, *Introductory Nuclear Physics* (radioactive decay) — the exponential decay law,
+the decay constant a half-life implies, the specific activity of a mass of nuclide, and the time
+a stated activity drop takes.
 """
 
 from __future__ import annotations

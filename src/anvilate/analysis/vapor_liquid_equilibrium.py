@@ -14,6 +14,12 @@ follows in closed form for a binary mixture: y = α·x/(1 + (α−1)·x), the x-
 McCabe-Thiele diagram steps off to count distillation stages. Mole fractions and the relative
 volatility are plain floats in [0, 1] and > 0; vapor pressures are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Seader & Henley, *Separation Process Principles* (the Fenske-Underwood-Gilliland
+shortcut) — the Fenske minimum stages at total reflux, Underwood's minimum reflux from the
+relative volatilities, and the Gilliland correlation between them. Raoult's and Henry's laws and
+the relative volatility follow Smith, Van Ness & Abbott, *Introduction to Chemical Engineering
+Thermodynamics*.
 """
 
 from __future__ import annotations

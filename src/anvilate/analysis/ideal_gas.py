@@ -12,6 +12,10 @@ in a fixed volume, the volume V = nRT/P it occupies at a set pressure, and the a
 measured pressure, volume, and temperature imply — how many moles a cylinder actually holds. The
 temperature is absolute (K), and the amount is in moles; inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Cengel & Boles, *Thermodynamics: An Engineering Approach* (the ideal-gas equation of
+state) — pV = nRT solved for each of its four variables, and the range over which a real gas
+follows it.
 """
 
 from __future__ import annotations

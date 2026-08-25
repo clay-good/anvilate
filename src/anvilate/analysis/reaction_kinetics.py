@@ -14,6 +14,10 @@ to half-convert. Turning the first-order law around gives the time to reach a ta
 conversion X, t = −ln(1 − X)/k — the number a batch schedule or a shelf-life is built on.
 Concentrations are dimension-checked :class:`~anvilate.units.Quantity` values (any [substance]/
 [volume] unit); rate constants carry the order-appropriate units; conversion is a plain fraction.
+
+Sources: Fogler, *Elements of Chemical Reaction Engineering* (rate laws and stoichiometry) — the
+integrated first- and second-order concentration histories, their half-lives, and the time a
+stated conversion takes.
 """
 
 from __future__ import annotations

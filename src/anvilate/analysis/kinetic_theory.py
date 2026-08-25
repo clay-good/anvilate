@@ -14,6 +14,11 @@ mean (average) speed is slightly lower, v_mean = sqrt(8*R*T/(pi*M)). The mean fr
 distance a molecule travels between collisions, is lambda = k*T/(sqrt(2)*pi*d^2*P), from the
 molecular diameter d and pressure P — about 68 nm for air at room conditions, growing without bound
 as the gas is pumped down toward vacuum.
+
+Sources: Dushman, *Scientific Foundations of Vacuum Technique* (kinetic theory of gases) — the
+Maxwell-Boltzmann root-mean-square, mean and most-probable molecular speeds, the mean free path
+from the collision cross-section, and the Knudsen number that decides whether a flow is
+continuum or molecular.
 """
 
 from __future__ import annotations

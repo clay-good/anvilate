@@ -15,6 +15,11 @@ that flows back to the cold side, less the conduction K·ΔT leaking down the gr
 term is why more current does not mean more cooling forever, and it sets a hard ceiling: the
 greatest temperature difference a single stage can hold, ΔT_max = ½·Z·T_c² with the figure of merit
 Z = α²/(R·K) — the coldest the module reaches with no heat load.
+
+Sources: Goldsmid, *Introduction to Thermoelectricity* — the Seebeck voltage from a junction
+temperature difference, the Peltier cooling rate, the figure of merit Z and the dimensionless
+ZT, and the maximum temperature difference, efficiency and coefficient of performance those
+imply.
 """
 
 from __future__ import annotations

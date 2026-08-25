@@ -13,15 +13,18 @@
 # modulus" and falsely credited three elastic-wave functions. Roark & Young's handbook is
 # covered by the `Roark` token, so nothing was lost.
 #
-# The six tokens added on 2026-08-25 — Hibbeler, Norton, Hecht, Sedra, Nilsson,
-# Proakis — were each run through that listing before they shipped. Every symbol
+# The eleven tokens added on 2026-08-25 — Hibbeler, Norton, Hecht, Sedra, Nilsson,
+# Proakis, Seader, Fogler, Krane, Chen, Goldsmid — were each run through that listing before they shipped. Every symbol
 # each is the sole citation for is in the module the token was added for, and
 # nothing else. Two candidates were rejected by the same check: `Shannon` would
 # have been satisfiable by an aside in data_converter's docstring ("(Nyquist and
 # Shannon)"), so channel_capacity cites Proakis instead; and `Riedel` was already
 # on the list for the vapour-pressure correlation, so dc_circuit's source is
 # written as Nilsson rather than "Nilsson & Riedel", which would have made a
-# thermodynamics token the credit for Ohm's law.
+# thermodynamics token the credit for Ohm's law. A third, `Nelson`, would have been
+# credited to solar_cell while already matching the Nelson-Obert compressibility charts
+# in real_gas, so solar_cell stays on the debt list rather than cite a token that reads
+# as the wrong source.
 #
 # BEFORE adding a token, check it cannot be satisfied by accident. A short or
 # ordinary-looking token will match prose that is not a citation: "Turns" was on this
@@ -221,3 +224,8 @@ Norton
 Hecht
 Sedra
 Proakis
+Seader
+Fogler
+Krane
+Chen
+Goldsmid

@@ -19,6 +19,10 @@ Confining a plasma magnetically adds a fourth number, the plasma beta: beta = 2*
 plasma's own pressure measured against the magnetic pressure holding it. It is the headline figure
 of merit of every tokamak and stellarator, because a magnetic bottle can only contain what it can
 out-push — beta above a few percent is hard, and beta of order one is the limit.
+
+Sources: Chen, *Introduction to Plasma Physics and Controlled Fusion* — the electron plasma
+frequency, the Debye length and the plasma parameter that counts particles inside it, the plasma
+beta, and the Alfven speed.
 """
 
 from __future__ import annotations

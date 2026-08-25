@@ -197,11 +197,11 @@ about which convention the library adopts, not a bug fix.
   4.6 -> 4.3 and 1.6 -> 1.4. Every move is downward, which is what adopting the real
   curve should do.
 
-## 2026-08-25 — 89 more symbols off the citation debt
+## 2026-08-25 — 121 more symbols off the citation debt
 
-The debt was 409 public analysis symbols naming no source; it is 320. Fifteen modules
-paid off, each by giving its module docstring a real `Sources:` attribution and enumerating
-its symbols in `docs/api/module-cited-symbols.txt`:
+The debt was 409 public analysis symbols naming no source; it is 288 — 16% of the surface,
+from 23%. Twenty-two modules paid off, each by giving its module docstring a real `Sources:`
+attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 
 | Source | Modules |
 | --- | --- |
@@ -214,8 +214,15 @@ its symbols in `docs/api/module-cited-symbols.txt`:
 | Sedra & Smith, *Microelectronic Circuits* | `op_amp`, `diode`, `rectifier` |
 | Nilsson, *Electric Circuits* | `dc_circuit` |
 | Proakis & Salehi, *Communication Systems Engineering* | `channel_capacity` |
+| Seader & Henley, *Separation Process Principles* (and Smith, Van Ness & Abbott) | `vapor_liquid_equilibrium` |
+| Fogler, *Elements of Chemical Reaction Engineering* | `reaction_kinetics` |
+| Cengel & Boles, *Thermodynamics* | `ideal_gas` |
+| Dushman, *Scientific Foundations of Vacuum Technique* | `kinetic_theory` |
+| Krane, *Introductory Nuclear Physics* | `radioactivity` |
+| Chen, *Introduction to Plasma Physics and Controlled Fusion* | `plasma` |
+| Goldsmid, *Introduction to Thermoelectricity* | `thermoelectric` |
 
-**Six new authority tokens, each run through the file's own accident check before
+**Eleven new authority tokens, each run through the file's own accident check before
 shipping.** For every one, the symbols it is the *sole* citation for are in the modules it
 was added for and nothing else. Two candidates were rejected by that check rather than
 adopted:
@@ -236,6 +243,12 @@ sit in a `Sources:` line would catch the aside class structurally. It does not h
 rather than a `Sources:` line, and most of those are genuine. Asserting it would mean
 rewriting 467 docstrings to satisfy a gate rather than to say anything truer, so the
 listing audit stays manual and the rejection above is recorded instead.
+
+**A third candidate was rejected the same way in the second batch.** `Nelson` would have
+been credited to `solar_cell`, but the token already matches the Nelson-Obert
+compressibility charts in `real_gas` — a real citation for a different subject. `solar_cell`
+is left on the debt list rather than cited through a token that would read as the wrong
+source.
 
 **The published figure is now gated.** `docs/citations.md` told a reader "about 23% of the
 public analysis surface does not yet name a source" and went on saying 23% after 89 symbols
