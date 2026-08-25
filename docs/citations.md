@@ -134,9 +134,10 @@ first time a record is added carelessly.
 A fatigue curve carries its own version of the basis question, and it bites harder.
 `CurveSurvival` says whether a curve is a **mean fit through the data** or a **design
 curve** at a stated survival level — `95% survival`, or the mean-minus-two-standard-
-deviations convention EN 1993-1-9 and IIW curves are drawn at. Fatigue scatter is wide
-enough that reading a mean curve as a design curve overstates life by roughly a factor of
-two at the same stress range, so a mean curve asked for a design answer returns nothing:
+deviations convention EN 1993-1-9 and IIW curves are drawn at. Reading the mean as the
+design curve hands back exactly the margin that offset was there to provide — how much life
+that is depends on the dataset's own scatter, which is why the curve says which it is
+instead of quoting a factor. A mean curve asked for a design answer returns nothing:
 
 ```python
 from anvilate.standards import CurveSurvival

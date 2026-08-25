@@ -482,8 +482,9 @@ def from_sectionproperties(
     ``length_unit`` is required and not defaulted, because ``sectionproperties`` is
     unit-agnostic: it returns bare floats in whatever units the geometry was drawn in, and
     it has no way to tell you which. A default here would be a guess about somebody else's
-    CAD file, and the failure is silent — millimetres read as inches understate a second
-    moment by a factor of 4.2 x 10^5 and the screen passes.
+    CAD file, and the failure is silent and unconservative in the direction that matters: a
+    section drawn in millimetres and declared as inches has its second moment read as
+    416,231 times larger (25.4^4), so the part screens as immensely stiffer than it is.
 
     Three refusals, each a wrong number this would otherwise import:
 
@@ -505,7 +506,8 @@ def from_sectionproperties(
       rectangle. :attr:`~anvilate.analysis.CrossSection.shear_form_factor` is the
       *peak-over-average* ratio, which is 1.5 for a rectangle. They are different constants
       that both look like "the shear factor for this shape", and substituting one for the
-      other understates the peak shear stress by 25%. Anvilate's shear screen reports
+      other reports 80% of the peak shear stress: a correct 1.5 is 25% above 1.2, which is
+      the same thing as 1.2 being 20% below 1.5. Anvilate's shear screen reports
       ``not_evaluated`` without a form factor, which is the honest outcome; supply it
       explicitly if you have it from a source that means the same thing by it.
 

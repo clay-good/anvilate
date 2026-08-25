@@ -60,9 +60,10 @@ license review, and 3.x needs a separate published repo.
 its survival level, the specimen it was measured on, and the dataset it came from.
 
 **`CurveSurvival` is the fatigue analogue of `AllowableBasis`, and it bites harder.**
-Fatigue scatter is wide enough that a mean curve read as a design curve overstates life by
-roughly a factor of two at the same stress range, so a mean curve asked for a design answer
-returns `None` rather than the mean value with a caveat somewhere.
+Design curves are drawn a stated number of standard deviations of log N below the mean, so
+reading the mean as the design curve hands back exactly the margin that offset was there to
+provide. A mean curve asked for a design answer returns `None` rather than the mean value
+with a caveat somewhere.
 
 **The specimen is required, because that is the half tables drop.** A polished
 rotating-beam curve and a welded-joint curve are both "steel fatigue data" and neither

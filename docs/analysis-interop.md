@@ -102,8 +102,9 @@ from anvilate.interop import from_sectionproperties
 **`length_unit` is required and not defaulted.** `sectionproperties` is unit-agnostic — it
 returns bare floats in whatever units the geometry was drawn in, and has no way to tell you
 which. A default would be a guess about somebody else's CAD file, and the failure is
-silent: millimetres read as inches understate a second moment by a factor of 420,000 and
-the screen passes.
+silent, and unconservative in the direction that matters: a section drawn in millimetres
+and declared as inches has its second moment read as 416,231 times larger (25.4⁴), so the
+part screens as immensely stiffer than it is.
 
 **A composite section is refused.** Its meaningful constants are modulus-weighted, and
 reading `EI` where `I` belongs is a units error nothing downstream can see, because the
@@ -125,7 +126,7 @@ a bending check and overstate the capacity.
 returns the *Timoshenko shear area*, so `A / A_s` is 1.2 for a rectangle.
 `shear_form_factor` is the *peak-over-average* ratio, which is 1.5 for a rectangle. Both
 read as "the shear factor for this shape"; substituting one for the other understates the
-peak shear stress by 25%. Unset, the shear screen reports `not_evaluated` — the honest
+peak shear stress by 20% — 1.2 against a correct 1.5. Unset, the shear screen reports `not_evaluated` — the honest
 outcome, and the same rule the manual path already followed.
 
 The torsion constant is imported only when a warping analysis was run; when it was not, it

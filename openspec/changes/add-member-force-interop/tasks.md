@@ -11,7 +11,7 @@
 - [x] 2.1 Bind ingested demands to existing beam/column/beam-column/torsion screens
 - [x] 2.2 Optional sectionproperties adapter (import constants, tag provenance) —
       `interop.from_sectionproperties`. The mapping is small; the value is the three
-      refusals, and one of them is a constant that would have been wrong by 25%
+      refusals, and one of them is a constant that would have been 20% low
 - [x] 2.3 Report rendering: external-demand and external-property provenance lines
 
 ## 3. Tests
@@ -73,7 +73,7 @@ rather than recalled: `get_area()`, `get_ic() -> (ixx_c, iyy_c, ixy_c)`,
 It returns the Timoshenko shear area, and `A / A_s` is 1.2 for a rectangle;
 `shear_form_factor` is the peak-over-average ratio, 1.5 for a rectangle. Both read as "the
 shear factor for this shape", and substituting one for the other understates the peak shear
-stress by 25% with every dimension check downstream satisfied. The adapter leaves it unset,
+stress by 20% — 1.2 against a correct 1.5 — with every dimension check satisfied. The adapter leaves it unset,
 so the shear screen reports `not_evaluated`.
 
 The other two refusals: `length_unit` is required, because the package returns bare floats
@@ -94,3 +94,11 @@ its major one — which `ExternalSectionProperties` refuses, correctly, with a m
 swapped axes that points at the record rather than at the mapping that produced it. The
 major axis is now the one with the larger second moment, and the extreme fibre follows the
 same axis. A rectangle drawn 50x100 and one drawn 100x50 now import identically.
+
+**Docs-truth pass over this session's own prose, and two numbers were wrong.** The unit
+error was stated backwards: a section drawn in millimetres and *declared* as inches has its
+second moment read as 416,231 times **larger** (25.4^4), not smaller — the same
+unconservative outcome, described the wrong way round. And "understates the peak shear
+stress by 25%" was the wrong arithmetic on the right pair: 1.5 is 25% above 1.2, which makes
+1.2 twenty percent below 1.5. Both numbers are pinned by a test now, so the prose rests on
+the library's own constant rather than on a line written from memory.

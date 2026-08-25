@@ -538,3 +538,22 @@ def test_a_half_wavelength_is_validated_whichever_identification_was_declared(
             identification=ModeIdentification.CONSTRAINED_MODAL,
             local_half_wavelength=half_wavelength,
         )
+
+
+def test_the_two_shear_constants_the_adapter_docstring_names_are_the_real_ones():
+    """The docstring's argument rests on two numbers, so both are pinned.
+
+    `shear_form_factor` is peak-over-average, 1.5 for a rectangle — that is the library's
+    own constant. `A / A_s` for the Timoshenko rectangle coefficient κ = 5/6 is 1.2. The
+    prose in the adapter and in docs/analysis-interop.md says importing one as the other
+    reports 80% of the peak shear stress; that is what these two produce.
+    """
+    from anvilate.analysis import CrossSection
+    from anvilate.analysis.beam import SHEAR_FORM_RECTANGULAR
+
+    rectangle = CrossSection.rectangular(width=_q("50 mm"), height=_q("100 mm"))
+    assert rectangle.shear_form_factor == pytest.approx(1.5)
+    assert SHEAR_FORM_RECTANGULAR == pytest.approx(1.5)
+    timoshenko_inverse = 1.0 / (5.0 / 6.0)
+    assert timoshenko_inverse == pytest.approx(1.2)
+    assert timoshenko_inverse / SHEAR_FORM_RECTANGULAR == pytest.approx(0.80)

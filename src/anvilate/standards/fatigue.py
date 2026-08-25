@@ -7,8 +7,9 @@ fatigue data is so easy to misuse:
 2. **The survival probability** — whether it is a mean fit through the data or a design
    curve at some survival level. This is the fatigue analogue of
    :class:`~anvilate.standards.records.AllowableBasis`, and it matters more here than it
-   does for a static strength: fatigue scatter is wide, and a mean curve used as a design
-   curve overstates life by roughly a factor of two at the same stress range.
+   does for a static strength: design curves are drawn a stated number of standard
+   deviations of log N below the mean, and reading the mean as the design curve hands back
+   exactly the margin that offset was there to provide.
 3. **The specimen** — geometry, surface, loading mode, R-ratio, thickness, environment,
    temperature. A curve measured on a polished rotating-beam specimen and a curve measured
    on a welded joint are both "steel fatigue data" and neither substitutes for the other.
