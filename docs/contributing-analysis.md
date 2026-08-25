@@ -153,3 +153,24 @@ Two corollaries worth internalizing:
   comparison and not the other.
 - **A sweep's own claim of completeness is the thing to re-verify.** "These five were the
   only sites" has been wrong more than once. Re-grep.
+
+## Finding a constant nothing pins
+
+A module-level constant can be correct, exported, documented, and still have nothing
+holding it to its value. The sweep that finds them: in a scratch copy, replace every
+`NAME = <number>` in `analysis/` with a `float` subclass that records its own reads, run
+the suite once, and list the constants no test ever read. Then mutate those individually
+and confirm the suite still passes.
+
+Run at 230 module-level constants, that sweep returned **one**:
+`impact.SUDDENLY_APPLIED_FACTOR`. The formula it summarizes was well covered — `h = 0`
+gives `K = 2` — but nothing tied the *public name* to the function, so the library could
+have exported a wrong constant with every function correct. It is pinned by the property
+now: the constant must equal what `impact_factor` returns at zero drop height, for any
+static deflection.
+
+**Check that the scratch copy is green before believing any of it.** The first run of this
+sweep used a copy holding only `src/` and `tests/`, so 525 tests failed on the missing
+`examples/` and `docs/` regardless of any mutation — every batch was "killed" and the sweep
+reported perfect coverage while measuring nothing. Copy the repo with `git archive HEAD`
+and run the suite once before mutating anything.

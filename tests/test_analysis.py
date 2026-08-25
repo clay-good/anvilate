@@ -13,6 +13,7 @@ from anvilate.analysis import (
     SHEAR_FORM_RECTANGULAR,
     SPRING_END_HINGED_HINGED,
     SPRING_END_PARALLEL_PLATES,
+    SUDDENLY_APPLIED_FACTOR,
     UNIFORM_PRESSURE,
     ColumnEnd,
     CrossSection,
@@ -3708,6 +3709,26 @@ def test_impact_factor_energy_method():
     # A stiffer target (smaller static deflection) amplifies a drop more.
     stiffer = impact_factor(drop_height=_q("100 mm"), static_deflection=_q("1 mm"))
     assert stiffer > dropped
+
+
+def test_the_exported_suddenly_applied_factor_is_what_the_formula_produces():
+    """The exported constant tied to the function that means the same thing.
+
+    A mutation sweep over every module-level constant in the analysis library found this
+    one — and only this one — unpinned: `SUDDENLY_APPLIED_FACTOR` could be changed to any
+    value and the whole suite still passed. The formula was well covered (h = 0 gives
+    K = 2 above); what nothing checked was that the *public name* still agreed with it, so
+    the library could have exported a wrong constant with every function correct.
+
+    Pinned by the property rather than by the number: K = 1 + sqrt(1 + 2h/delta) at h = 0
+    is 2 for every static deflection, so the constant has to equal the function's answer
+    whatever the member. A drift in either one now fails here.
+    """
+    assert SUDDENLY_APPLIED_FACTOR == pytest.approx(2.0, rel=1e-12)
+    for deflection in ("0.01 mm", "5 mm", "250 mm"):
+        assert impact_factor(
+            drop_height=_q("0 mm"), static_deflection=_q(deflection)
+        ) == pytest.approx(SUDDENLY_APPLIED_FACTOR, rel=1e-12)
 
 
 def test_impact_stress_scales_the_static_stress_by_the_factor():
