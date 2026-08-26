@@ -42457,3 +42457,49 @@ def test_a_nan_stress_is_refused_across_the_fatigue_module():
             endurance_limit=nan,
             ultimate_strength=Quantity.parse("400 MPa"),
         )
+
+
+def test_the_weld_fatigue_pages_category_table_is_what_the_curve_gives():
+    """The table `docs/weld-fatigue-screening.md` leads with, held against the code.
+
+    It is the page's whole argument — same load, same stress, same steel, and the detail
+    category alone spans a factor of 50 in life — and every number in it was prose nothing
+    computed. A plausible table beside a correct argument reads as verified and is not.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.analysis import (
+        weld_constant_amplitude_fatigue_limit,
+        weld_cutoff_limit,
+        weld_detail_endurance_cycles,
+    )
+
+    page = (
+        Path(__file__).resolve().parent.parent / "docs" / "weld-fatigue-screening.md"
+    ).read_text()
+    rows = re.findall(
+        r"\| (\d+) \([^)]*\) \| ([\d.]+) MPa \| ([\d.]+) MPa \| ([\d,]+) cycles \|", page
+    )
+    assert len(rows) == 3, "the category table in docs/weld-fatigue-screening.md has moved"
+
+    lives = []
+    for category, claimed_d, claimed_l, claimed_n in rows:
+        cat = Quantity(magnitude=float(category), unit="MPa")
+        assert weld_constant_amplitude_fatigue_limit(detail_category=cat).magnitude == (
+            pytest.approx(float(claimed_d), abs=0.05)
+        )
+        assert weld_cutoff_limit(detail_category=cat).magnitude == pytest.approx(
+            float(claimed_l), abs=0.05
+        )
+        life = weld_detail_endurance_cycles(
+            stress_range=Quantity(magnitude=80.0, unit="MPa"), detail_category=cat
+        )
+        lives.append(life)
+        claimed = float(claimed_n.replace(",", ""))
+        # The page rounds to three significant figures; the check allows exactly that.
+        assert life == pytest.approx(claimed, rel=5e-3)
+
+    assert lives[-1] / lives[0] == pytest.approx(50.0, abs=1.0), (
+        "the page claims the category alone spans a factor of 50 in life"
+    )

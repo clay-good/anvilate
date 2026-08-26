@@ -168,3 +168,38 @@ def test_the_test_count_is_the_suites_own(request):
     assert collected == claimed, (
         f"the README says {claimed:,} tests; this run collected {collected:,}"
     )
+
+
+def test_the_quickstart_block_is_what_the_quickstart_prints():
+    """The first thing a reader runs, held against the first thing they are shown.
+
+    The README's quickstart shows three lines of scorecard output for
+    ``examples/cantilever_bracket_check.py``. Nothing checked them: the numbers are printed
+    inside the example's ``main()``, which ``runpy.run_path`` does not execute, so the
+    existing example test asserts the statuses and never sees the text.
+
+    Compared byte for byte and run as a real subprocess, because the claim is about what
+    the command prints and not about what the library returns.
+    """
+    import subprocess
+    import sys
+
+    fence = re.search(
+        r"python examples/cantilever_bracket_check\.py\n```\n\n```text\n(.*?)```",
+        (_REPO / "README.md").read_text(),
+        re.S,
+    )
+    assert fence is not None, (
+        "the README's quickstart block has moved; restore it or drop this test with it"
+    )
+    completed = subprocess.run(  # noqa: S603 - our own example, fixed argv, no shell
+        [sys.executable, str(_REPO / "examples" / "cantilever_bracket_check.py")],
+        capture_output=True,
+        text=True,
+        env={"PYTHONPATH": str(_REPO / "src"), "PATH": "/usr/bin:/bin"},
+        check=True,
+    )
+    assert completed.stdout == fence.group(1), (
+        "the README's quickstart output is not what the quickstart prints:\n"
+        f"--- README ---\n{fence.group(1)}--- actual ---\n{completed.stdout}"
+    )
