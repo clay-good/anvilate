@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 import runpy
 from pathlib import Path
 
@@ -6101,6 +6102,39 @@ def test_bracket_redesign_example_is_dominated_by_the_material_the_yield_threw_a
     for entry in (machined, stamped):
         assert "A1-A3" in entry.detail
         assert "screening estimate" in entry.detail
+
+    # The block docs/embodied-carbon-screening.md prints, held against what the example
+    # computes. It is an abridged rendering rather than byte-for-byte output, so the
+    # numbers are extracted and compared — which is the part a reader would check.
+    page = (_EXAMPLES.parent / "docs" / "embodied-carbon-screening.md").read_text()
+    for entry, pattern in (
+        (
+            machined,
+            r"machined from solid \(35% yield\)\s+fail\s+([\d.]+) kgCO2e \(([\d.]+)-([\d.]+)\)",
+        ),
+        (
+            stamped,
+            r"near-net stamping \(88% yield\)\s+pass\s+([\d.]+) kgCO2e \(([\d.]+)-([\d.]+)\)",
+        ),
+    ):
+        claimed = re.search(pattern, page)
+        assert claimed is not None, f"the block for {entry.name!r} has moved in the docs"
+        for value in claimed.groups():
+            assert f"{float(value):g}" in entry.detail, (
+                f"docs/embodied-carbon-screening.md prints {value} for {entry.name!r}; "
+                f"the example says {entry.detail[:80]}"
+            )
+
+    saving = re.search(
+        r"takes ([\d.]+) kg off the part and ([\d.]+) kgCO2e off the estimate — (\d+)%", page
+    )
+    assert saving is not None, "the page no longer states the redesign saving"
+    machined_kg = float(re.search(r"([\d.]+) kgCO2e", machined.detail).group(1))
+    stamped_kg = float(re.search(r"([\d.]+) kgCO2e", stamped.detail).group(1))
+    assert machined_kg - stamped_kg == pytest.approx(float(saving.group(2)), abs=0.05)
+    assert 100 * (machined_kg - stamped_kg) / machined_kg == pytest.approx(
+        float(saving.group(3)), abs=0.5
+    )
 
 
 def test_retrofit_example_fails_the_bundle_until_the_mix_is_signed_for():
