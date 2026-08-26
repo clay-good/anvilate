@@ -5724,6 +5724,21 @@ def test_welded_aluminum_platform_beam_example_is_governed_by_the_weld():
     assert "F_cyw" in missing.detail
     assert card.status is CheckStatus.FAIL
 
+    # The allowables docs/aluminum-screening.md prints, and the example's own docstring
+    # quotes: the weld is the whole difference, and the two numbers are the difference.
+    page = (_EXAMPLES.parent / "docs" / "aluminum-screening.md").read_text()
+    parent, weld_affected = re.search(
+        r"parent metal ([\d.]+) MPa,\s*\n?\s*weld-affected ([\d.]+) MPa", page
+    ).groups()
+    assert f"{float(parent):g} MPa" in unwelded.detail
+    assert f"{float(weld_affected):g} MPa" in welded.detail
+    # The page shows both safety factors too, and they are the reason the verdict flips.
+    for entry, claimed in (
+        (unwelded, re.search(r"unwelded member\s+pass\s+SF ([\d.]+)", page).group(1)),
+        (welded, re.search(r"welded at the connection\s+fail\s+SF ([\d.]+)", page).group(1)),
+    ):
+        assert entry.safety_factor == pytest.approx(float(claimed), abs=0.005)
+
 
 def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition():
     namespace = runpy.run_path(str(_EXAMPLES / "vessel_surface_flaw_fad.py"))
