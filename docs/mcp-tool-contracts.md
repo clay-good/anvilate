@@ -104,7 +104,11 @@ a scorecard; `export_artifact` takes a format and a destination and exports — 
 Each of them is asking the server to remember what the last call produced. That is a
 session, and the headless-automation spec describes a **stateless** skeleton. The two are
 different servers, and which one Anvilate ships is a design decision that had not been
-made.
+made — so it is now written down as one:
+[`openspec/changes/resolve-mcp-tool-subjects`](../openspec/changes/resolve-mcp-tool-subjects/proposal.md)
+carries the three options and recommends content-addressed handles, which keep
+protocol-level statelessness (any instance serves any call; a reconnect loses nothing)
+while keeping whole geometries off the wire.
 
 It is surfaced rather than papered over. `ToolDefinition` now declares a **`subject`**: the
 required input property carrying the thing the operation acts on. The constructor refuses a

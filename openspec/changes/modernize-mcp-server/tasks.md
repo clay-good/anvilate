@@ -146,5 +146,13 @@ fails when a tool schema declares a constraint the check does not know**, so the
 docstring's claim cannot outrun the code. That gate found two more constraints
 (`minLength`, `minItems`) the moment it was written.
 
+**The decision this surfaced is now its own change.** `resolve-mcp-tool-subjects` carries
+the contradiction, the three options and a recommendation (content-addressed handles, which
+keep protocol-level statelessness while keeping payloads off the wire). It is a design
+choice about what Anvilate's MCP surface *is*, not an implementation detail, so it is
+proposed rather than decided here — and the enforcement lives in code meanwhile:
+`stateless_gaps()` derives the four and `handle_request` refuses them with the reason, so
+nothing can quietly serve one by guessing.
+
 Still open in 2.1: an HTTP transport, and the dispatch of the three remaining backed
 operations — which waits on the session-versus-stateless decision above.
