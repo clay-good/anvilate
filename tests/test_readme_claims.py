@@ -1,4 +1,8 @@
-"""The README's counts, derived from the code rather than trusted.
+"""What the docs claim, derived from the code rather than trusted.
+
+Named for the README because that is where it started; it now covers any page that states
+a number the library can compute.
+
 
 The README is the artifact a reader meets first and the one with the least gating: every
 other manifest in this repository is held against the code, and the page describing them
@@ -203,3 +207,45 @@ def test_the_quickstart_block_is_what_the_quickstart_prints():
         "the README's quickstart output is not what the quickstart prints:\n"
         f"--- README ---\n{fence.group(1)}--- actual ---\n{completed.stdout}"
     )
+
+
+def test_the_uncertainty_pages_worked_block_reproduces_its_own_comments():
+    """The page's code block, run, and its inline comments checked against the result.
+
+    Every figure in it is deterministic — ``sample_margin`` takes a seed and the page
+    passes one — so there is no reason for the comments beside the calls to be prose. The
+    margin, the shortfall probability, the fragility verdict and the dominant input are all
+    quoted there and were checked by nothing.
+    """
+    from anvilate.uncertainty import Normal, sample_margin
+
+    page = (_REPO / "docs" / "uncertainty-margins.md").read_text()
+
+    def safety_factor(v):
+        return (v["yield_strength"] * v["area"] / 1000.0) / v["load"]
+
+    result = sample_margin(
+        safety_factor,
+        {
+            "load": Normal(mean=29.4, std=0.15 * 29.4),
+            "yield_strength": Normal(mean=250.0, std=0.05 * 250),
+            "area": Normal(mean=200.0, std=0.0),
+        },
+        required=1.5,
+        seed=20260803,
+    )
+
+    printed = re.search(
+        r"# (margin [\d.]+ ± [\d.]+, P\(below [\d.]+\) = [\d.]+% over \d+ samples)", page
+    )
+    assert printed is not None, "the page no longer shows what `print(result)` gives"
+    assert str(result) == printed.group(1)
+
+    probability = re.search(r"shortfall_probability\s+# ([\d.]+) —", page)
+    assert probability is not None
+    assert result.shortfall_probability == pytest.approx(float(probability.group(1)), abs=5e-4)
+
+    assert re.search(r"is_fragile\(threshold=0\.05\)\s+# (\w+)", page).group(1) == str(
+        result.is_fragile(threshold=0.05)
+    )
+    assert re.search(r'dominant\(\)\.name\s+# "(\w+)"', page).group(1) == result.dominant().name
