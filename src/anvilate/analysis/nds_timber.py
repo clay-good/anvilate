@@ -85,8 +85,13 @@ def nds_load_duration_factor(duration: LoadDuration) -> float:
 
     C_D scales the reference design value for how long the load acts: 0.9 permanent,
     1.0 ten-year (occupancy live), 1.15 snow, 1.25 construction, 1.6 wind/earthquake,
-    2.0 impact. It does not apply to the compression-perpendicular-to-grain value or
-    the modulus of elasticity — those the caller simply omits from the chain.
+    2.0 impact.
+
+    **It does not apply to compression perpendicular to grain or to either modulus.**
+    Composing the chain by hand, the caller omits it — which is a rule stated in prose and
+    enforced by nobody. :meth:`~anvilate.standards.timber.TimberDesignValue.adjusted`
+    enforces NDS Table 4.3.1 instead, refusing a factor its property does not take; use it
+    where the reference value is a record rather than a bare number.
     """
     return _LOAD_DURATION_FACTORS[duration]
 
