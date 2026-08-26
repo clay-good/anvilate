@@ -15,6 +15,10 @@ The terminal voltage a driver must supply is V = E + I·R_a: the back-EMF plus t
 the ``armature_resistance``, so at stall (ω = 0) all of it drives current through R_a, while at
 speed the back-EMF takes most of it. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Fitzgerald, Kingsley & Umans, *Electric Machinery* — the back EMF of a DC machine at
+speed, the torque its armature current develops, and the terminal voltage those and the winding
+resistance require.
 """
 
 from __future__ import annotations

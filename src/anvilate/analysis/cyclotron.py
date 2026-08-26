@@ -13,6 +13,10 @@ cyclotron use a fixed drive frequency. The orbit radius (Larmor or gyro-radius) 
 growing with the particle's speed, so a faster particle spirals wider at the same frequency.
 Inverting the frequency relation recovers the mass from a measured cyclotron frequency,
 m = q*B/(2*pi*f_c) — the principle of the cyclotron-resonance mass spectrometer.
+
+Sources: Chen, *Introduction to Plasma Physics and Controlled Fusion* — the cyclotron frequency
+of a charged particle in a magnetic field, the Larmor radius of its gyration, and the mass a
+measured frequency implies.
 """
 
 from __future__ import annotations

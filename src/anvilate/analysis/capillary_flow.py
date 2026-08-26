@@ -14,6 +14,9 @@ starts fast and crawls later. Inverting it gives the time to reach a given dista
 t = 2μL²/(σ·r·cosθ), which rises with the square of the distance. The **contact angle is a plain
 float in degrees**; other inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Adamson & Gast, *Physical Chemistry of Surfaces* (capillarity) — the Laplace capillary
+pressure, and the Washburn penetration length and time for a liquid drawn into a capillary.
 """
 
 from __future__ import annotations

@@ -14,6 +14,10 @@ spinning the motor unless a brake holds it. The back-driving torque the load app
 T_b = F·L·η_b/(2π), with the back-drive efficiency η_b — the torque a holding brake (or the motor's
 detent) must resist to keep a suspended or preloaded axis from creeping. The efficiencies are the
 caller's from the screw's data; the torque balance is here.
+
+Sources: *Machinery's Handbook* (ball and lead screws) — the drive torque a thrust load needs at
+a lead and efficiency, and the back-drive torque the same load produces when the screw is not
+self-locking.
 """
 
 from __future__ import annotations

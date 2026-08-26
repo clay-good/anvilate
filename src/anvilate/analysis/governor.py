@@ -14,6 +14,9 @@ height, ω = √(g/h). Adding a central load turns it into a Porter governor, wh
 h = (g/ω²)·(m + M)/m is raised by the ratio of the central load M to the ball mass m — which makes
 the governor stiffer and usable at higher speeds. The **angular speed is taken in genuine angular
 units** (rad/s); inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Rattan, *Theory of Machines* (centrifugal governors) — the Watt governor's height-speed
+relation, the speed a height implies, and the Porter governor's height with its central load.
 """
 
 from __future__ import annotations

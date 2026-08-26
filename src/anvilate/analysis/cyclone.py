@@ -15,6 +15,10 @@ Around the cut, Lapple's fractional-efficiency curve gives the collection effici
 size, η = 1/(1 + (d_pc/d_p)²): particles at the cut are 50% collected, larger ones approach 100%,
 finer ones slip through. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values; the turn count and efficiency are plain floats.
+
+Sources: Perry's Chemical Engineers' Handbook (gas-solid separations) — the Lapple cut
+diameter of a cyclone, the grade efficiency curve it indexes, and the pressure drop in inlet
+velocity heads.
 """
 
 from __future__ import annotations

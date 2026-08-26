@@ -16,6 +16,10 @@ precess at a rate Ω (as a turning vehicle forces its rotor to turn with it) dem
 moment M = I·ω·Ω on the bearings, at right angles to both the spin and the turn — the gyroscopic
 couple a
 rotating machine's mounts are sized for.
+
+Sources: Hibbeler, *Engineering Mechanics: Dynamics* (gyroscopic motion) — the spin angular
+momentum of a rotor, the precession rate an applied moment produces, and the reaction moment a
+forced precession develops.
 """
 
 from __future__ import annotations

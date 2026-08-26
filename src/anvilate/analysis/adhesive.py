@@ -27,6 +27,10 @@ All three forms are exact geometry; the bond ``shear strength`` is the caller's
 datasheet value (typically 10–30 MPa cured for a retaining compound, derated per the
 datasheet for gap, temperature, and surface). Inputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (adhesive bonding) —
+the average shear stress of a single-lap joint, and the axial and torque capacity of a
+cylindrical bond at a stated bond strength.
 """
 
 from __future__ import annotations

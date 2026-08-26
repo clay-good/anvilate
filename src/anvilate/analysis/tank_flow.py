@@ -11,6 +11,10 @@ which stretches out because the last, low-head part of the drain trickles. ``C_d
 sharp orifice) accounts for the vena-contracta and friction. This sizes a drain valve, a spill-
 containment blowdown, or a process-vessel empty cycle. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Cengel & Cimbala, *Fluid Mechanics: Fundamentals and Applications* — Torricelli's
+efflux velocity from a head, and the time a tank takes to drain through an orifice of stated
+discharge coefficient.
 """
 
 from __future__ import annotations

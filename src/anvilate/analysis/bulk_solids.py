@@ -14,6 +14,10 @@ shape factor k (~1.4 for smooth grains, higher for angular). The (D_o − k·d_p
 opening near a few particle diameters arches and stops, and the 2.5 power is why a small change
 swings the rate hard. Inverting it sizes the orifice for a target feed. A heaped cone of base radius
 R at the angle of repose φ holds V = (π/3)·R³·tan φ — the stockpile-capacity relation.
+
+Sources: Schulze, *Powders and Bulk Solids* — the Beverloo correlation for gravity discharge
+through an orifice, the orifice a target rate needs, and the volume of a conical stockpile at
+its angle of repose.
 """
 
 from __future__ import annotations

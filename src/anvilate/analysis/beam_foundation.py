@@ -22,6 +22,10 @@ The stiffer the foundation (larger k, larger β) the more the load is felt local
 the deflection shrinks but so does the moment, as the near soil carries more of
 the load. As with the other checks, inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values and the arithmetic runs through Pint.
+
+Sources: Roark's *Formulas for Stress and Strain* (beams on elastic foundations) — the
+characteristic parameter beta = (k/(4EI))^(1/4) that sets the decay length, and the maximum
+deflection and moment of a point load on an infinite beam.
 """
 
 from __future__ import annotations

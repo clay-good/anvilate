@@ -13,6 +13,10 @@ why a large, lightly loaded rotor hovers far more efficiently than a small, high
 Comparing this ideal against the real shaft power gives the figure of merit FM = P_ideal/P_actual,
 the standard measure of hover efficiency (about 0.7-0.8 for a good rotor). Inputs and outputs are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Leishman, *Principles of Helicopter Aerodynamics* (momentum theory) — the induced
+velocity a rotor needs in hover, the ideal power that costs, and the figure of merit an actual
+rotor achieves against it.
 """
 
 from __future__ import annotations

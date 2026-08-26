@@ -16,6 +16,9 @@ tighter than the worst-case sum — the benefit of statistics — and is the rea
 capable process, but a small fraction of assemblies can fall outside it, so it is paired with a
 process-capability target (see :mod:`anvilate.analysis.process_capability`). Tolerances are
 dimension-checked :class:`~anvilate.units.Quantity` lengths; pass the ± half-tolerance of each part.
+
+Sources: Fischer, *Mechanical Tolerance Stackup and Analysis* — the worst-case sum of a chain's
+tolerances and the root-sum-square combination, with the assumptions each rests on.
 """
 
 from __future__ import annotations

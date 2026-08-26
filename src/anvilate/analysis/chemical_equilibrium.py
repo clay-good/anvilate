@@ -13,6 +13,10 @@ temperature T, and the reaction entropy ΔS. It ties to the equilibrium constant
 shifts with temperature follows the van 't Hoff equation, K₂/K₁ = exp(−(ΔH/R)·(1/T₂ − 1/T₁)):
 heating drives an endothermic reaction forward and an exothermic one back, as Le Chatelier's
 principle requires. Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity`.
+
+Sources: Smith, Van Ness & Abbott, *Introduction to Chemical Engineering Thermodynamics* — the
+Gibbs free-energy change of a reaction, the equilibrium constant K = exp(-dG/RT) it gives, and
+the van 't Hoff ratio between two temperatures.
 """
 
 from __future__ import annotations

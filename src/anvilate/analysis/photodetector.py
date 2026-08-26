@@ -15,6 +15,10 @@ power. The noise floor that current fights against is the shot noise i_n = √(2
 ``bandwidth`` B — the unavoidable Poisson graininess of counting discrete charges, which sets the
 best signal-to-noise a shot-noise-limited receiver can reach. Inputs and outputs are
 dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Sze & Ng, *Physics of Semiconductor Devices* (photodetectors) — the responsivity of a
+photodiode at a quantum efficiency and wavelength, the photocurrent an optical power gives, the
+shot-noise current, and the noise-equivalent power and specific detectivity those define.
 """
 
 from __future__ import annotations

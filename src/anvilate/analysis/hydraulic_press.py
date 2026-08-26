@@ -12,6 +12,10 @@ ratio. Because the fluid is incompressible, the swept volumes match (A_in·s_in 
 the input piston must travel s_in = s_out·(A_out/A_in), farther by the same ratio the force is
 multiplied. Force times distance is unchanged: the press trades stroke for force, never work. Inputs
 and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Esposito, *Fluid Power with Applications* (Pascal's law) — the pressure a small piston
+transmits, the force it develops on a large one, and the input stroke a given output stroke
+costs.
 """
 
 from __future__ import annotations

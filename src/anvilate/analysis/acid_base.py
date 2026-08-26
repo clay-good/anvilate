@@ -12,6 +12,10 @@ target pH. And inverting the relation gives the base-to-acid ratio a target pH d
 [A⁻]/[HA] = 10^(pH − pKa), the recipe for mixing a buffer. Concentrations are dimension-checked
 :class:`~anvilate.units.Quantity` values (only their ratio matters); pH, pKa, and the ratio are
 plain floats.
+
+Sources: Skoog, West & Holler, *Principles of Instrumental Analysis* (aqueous equilibria) — the
+Henderson-Hasselbalch relation pH = pKa + log([A-]/[HA]) and the buffer ratio a target pH
+requires.
 """
 
 from __future__ import annotations

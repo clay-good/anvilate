@@ -12,6 +12,9 @@ Inverting it, m = E/c^2 gives the mass equivalent of an energy (the tiny mass an
 reaction carries). Dividing a nucleus's total binding energy by its nucleon count gives the binding
 energy per nucleon, which peaks near iron at about 8.8 MeV: light nuclei release energy by fusing
 toward the peak, heavy ones by fissioning toward it.
+
+Sources: Krane, *Introductory Nuclear Physics* — the rest energy E = m·c², the mass an energy
+corresponds to, and the binding energy per nucleon a mass defect gives.
 """
 
 from __future__ import annotations

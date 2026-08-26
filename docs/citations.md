@@ -37,9 +37,11 @@ It means all three of these:
 - **It does not mean every limit state was checked.** Each entry cites the check it *is*.
   Read the whole card, and read the pack's scope section for what it deliberately leaves
   out — a pack screens the limit states it names and no others.
-- **It is not a promise of coverage.** About 6% of the public analysis surface does not
-  yet name a source at all; that debt is enumerated in
-  [`docs/api/uncited-symbols.txt`](api/uncited-symbols.txt) rather than hidden.
+- **It is not a promise of coverage.** Every one of the 1,818 public analysis symbols now
+  names a source — the debt in [`docs/api/uncited-symbols.txt`](api/uncited-symbols.txt) is
+  paid, and the file stays as a ratchet so a new check cannot ship without one. Naming a
+  source is not the same as having been checked against it: what a citation does and does
+  not claim is the whole of this page.
 
 ## How to verify one
 

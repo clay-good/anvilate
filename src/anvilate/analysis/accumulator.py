@@ -12,6 +12,10 @@ adiabatic one). The usable fluid volume is the difference in gas volume between 
 precharge pressure. The precharge is set below the minimum working pressure (typically ~0.9·P₁), or
 the accumulator empties before the system reaches P₁. All pressures are *absolute*; the polytropic
 exponent is the caller's from the duty cycle.
+
+Sources: Esposito, *Fluid Power with Applications* (accumulators) — the usable volume a gas-
+charged accumulator gives between its precharge and system pressures, and the size a required
+volume needs.
 """
 
 from __future__ import annotations

@@ -14,6 +14,10 @@ T — about 24.8 bar for a 1 mol/L ideal solute at 25 C, and the thermodynamic f
 membrane must exceed. The freezing-point depression is Delta_Tf = i * Kf * b and the boiling-point
 elevation Delta_Tb = i * Kb * b, both from the molality b and the solvent's cryoscopic (Kf) or
 ebullioscopic (Kb) constant — 1.86 and 0.512 K*kg/mol for water.
+
+Sources: Atkins & de Paula, *Physical Chemistry* (colligative properties) — the van 't Hoff
+osmotic pressure, and the freezing-point depression and boiling-point elevation a molality
+produces at the solvent's cryoscopic and ebullioscopic constants.
 """
 
 from __future__ import annotations

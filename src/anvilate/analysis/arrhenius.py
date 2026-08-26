@@ -14,6 +14,10 @@ the multiplier an accelerated test buys. Reading two measured rates the other wa
 activation energy, Ea = R * ln(k2/k1) / (1/T1 - 1/T2), the slope of an Arrhenius plot.
 
 Temperatures are absolute (kelvin); the exponential is meaningless for a Celsius value.
+
+Sources: Fogler, *Elements of Chemical Reaction Engineering* (the rate constant) — the Arrhenius
+form k = A·exp(-Ea/RT), the rate ratio between two temperatures, and the activation energy two
+measured rates imply.
 """
 
 from __future__ import annotations

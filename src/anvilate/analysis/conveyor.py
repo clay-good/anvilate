@@ -15,6 +15,9 @@ The power splits into moving the belt and load along (friction, which needs the 
 and a friction factor) and lifting the material through any rise. The lift term is the clean,
 dominant one on an inclined conveyor: P = ṁ·g·H raises a mass flow ṁ through a height H, and unlike
 the friction term it is irreducible — the rate of gaining potential energy, a floor on drive power.
+
+Sources: CEMA, *Belt Conveyors for Bulk Materials* — the mass flow a belt carries at a loading
+and speed, the speed a capacity requires, and the power the lift alone demands.
 """
 
 from __future__ import annotations

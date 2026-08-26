@@ -13,6 +13,10 @@ the field. A thin, lightly-doped (low-n) sample gives the largest signal, which 
 are thin semiconductors rather than metals. Reading the relation the other two ways gives the sensor
 and the lab use: the field from a measured voltage (a magnetometer), B = V_H * n * q * t / I, and
 the carrier density from a calibration measurement, n = I * B / (q * t * V_H).
+
+Sources: Sze & Ng, *Physics of Semiconductor Devices* — the Hall voltage a current develops
+across a conductor in a transverse field, the flux density a measured voltage infers, and the
+carrier density it implies.
 """
 
 from __future__ import annotations

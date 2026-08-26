@@ -14,6 +14,10 @@ strengthening routes that raises strength and toughness together. Inverting the 
 grain size a target yield strength requires, d = [k/(σ_y − σ_0)]². The friction stress and slope are
 caller-supplied material constants; all inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Dieter, *Mechanical Metallurgy* (strengthening mechanisms) — the Hall-Petch relation
+sigma_y = sigma_0 + k/sqrt(d) between grain size and yield strength, and the grain diameter a
+target yield requires.
 """
 
 from __future__ import annotations

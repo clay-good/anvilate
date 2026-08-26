@@ -13,6 +13,10 @@ string, the friction on a tire, the pull of a bearing. On a flat curve that forc
 friction, so the fastest a vehicle can round it without sliding is v_max = √(µ·g·r), from the
 friction coefficient µ and gravity g — which is why sharp bends carry low speed limits. Inputs and
 outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Hibbeler, *Engineering Mechanics: Dynamics* (curvilinear motion) — the centripetal
+acceleration v²/r, the force it demands of a mass, and the cornering speed a friction
+coefficient allows.
 """
 
 from __future__ import annotations

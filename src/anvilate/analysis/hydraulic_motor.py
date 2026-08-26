@@ -15,6 +15,9 @@ supply flow, the motor turns at N = Q·η_v/D — the flow it actually admits ov
 
 Displacement is entered as the volume swept per revolution (e.g. 50 cm³), speed as an angular rate
 (rpm or rad/s), and the efficiencies are the caller's, from the unit's curves.
+
+Sources: Esposito, *Fluid Power with Applications* — the flow a pump delivers at a displacement,
+speed and volumetric efficiency, and the torque and speed a motor produces from the same three.
 """
 
 from __future__ import annotations

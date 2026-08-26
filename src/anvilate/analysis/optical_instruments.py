@@ -13,6 +13,10 @@ relaxed eye gives M = D/f, the near-point distance D (about 250 mm for a normal 
 focal length f. A compound microscope multiplies the objective's linear magnification L/f_o (from
 the tube length L) by the eyepiece's angular magnification D/f_e, for M = (L/f_o)*(D/f_e). All three
 return a dimensionless magnification.
+
+Sources: Hecht, *Optics* (optical instruments) — the angular magnification of a telescope from
+its focal lengths, of a simple magnifier at the near point, and the compound-microscope product
+of objective and eyepiece.
 """
 
 from __future__ import annotations

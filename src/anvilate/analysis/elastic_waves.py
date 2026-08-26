@@ -13,6 +13,9 @@ direction of travel) goes at v_s = sqrt(G/rho) from the shear modulus G, always 
 longitudinal wave, which is why an S-wave arrives after the P-wave. In an extended (bulk) solid the
 P-wave is stiffened by the surrounding material to v_p = sqrt((K + 4G/3)/rho), from the bulk modulus
 K and shear modulus G — the fastest of the three.
+
+Sources: Graff, *Wave Motion in Elastic Solids* — the bar, shear, bulk-longitudinal and Rayleigh
+wave speeds of an isotropic solid, each from its density and two elastic constants.
 """
 
 from __future__ import annotations

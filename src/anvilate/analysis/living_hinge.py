@@ -18,6 +18,10 @@ under the material's permissible flexural strain? Inverting the same relation gi
 minimum web length a permissible strain demands. The fold angle is a plain-float degrees
 value (the units layer carries no angles); the web thickness and length are dimension-checked
 :class:`~anvilate.units.Quantity` values, and the strain is dimensionless.
+
+Sources: Kalpakjian & Schmid, *Manufacturing Engineering and Technology* (design for polymer
+processing) — the outer-fibre strain a folded hinge web sees, and the web length a strain limit
+requires.
 """
 
 from __future__ import annotations

@@ -12,6 +12,10 @@ electron Compton wavelength (2.426 pm) and theta is the scattering angle — zer
 photon, maximal for backscatter. Adding it to the incident wavelength gives the scattered photon
 wavelength lambda' = lambda + Delta_lambda, and the energy the photon loses,
 E_e = h*c*(1/lambda - 1/lambda'), is the recoil energy carried off by the electron.
+
+Sources: Krane, *Modern Physics* (the Compton effect) — the wavelength shift a photon suffers
+scattering off a free electron, the scattered wavelength, and the kinetic energy the electron
+takes away.
 """
 
 from __future__ import annotations

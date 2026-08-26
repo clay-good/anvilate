@@ -16,6 +16,9 @@ The design screen is simply: does the chosen groove put all three ratios in band
 are pure geometry — every input is a dimension-checked
 :class:`~anvilate.units.Quantity`, and every result is a dimensionless fraction (multiply
 by 100 for a percentage).
+
+Sources: the Parker *O-Ring Handbook* — the squeeze fraction a gland depth applies to a cord,
+the gland fill fraction the cord occupies, and the stretch fraction an inside diameter imposes.
 """
 
 from __future__ import annotations

@@ -2,7 +2,9 @@
 
 ## 1. Audit & codify
 
-- [~] 1.1 Citation coverage audit across the public surface; backfill gaps — audited all
+- [x] 1.1 Citation coverage audit across the public surface; backfill gaps — **the debt
+      is zero: every one of the 1,818 public analysis symbols names a source.** First,
+      audited all
       1,745 manifest symbols against a curated authority list
       (`docs/api/citation-authorities.txt`): **47% named no source**, in their own
       docstring or their module's. Backfilled the fourteen worst-covered modules by
@@ -197,10 +199,10 @@ about which convention the library adopts, not a bug fix.
   4.6 -> 4.3 and 1.6 -> 1.4. Every move is downward, which is what adopting the real
   curve should do.
 
-## 2026-08-25 — 302 more symbols off the citation debt
+## 2026-08-25 — the citation debt is paid
 
-The debt was 409 public analysis symbols naming no source; it is 107 — 6% of the surface,
-from 23%, and a quarter of what it was. Seventy-five modules paid off, each by giving its module docstring a real `Sources:`
+The debt was 409 public analysis symbols naming no source; **it is zero.** A hundred and
+sixteen modules paid off, each by giving its module docstring a real `Sources:`
 attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 
 | Source | Modules |
@@ -256,6 +258,37 @@ attribution and enumerating its symbols in `docs/api/module-cited-symbols.txt`:
 | Sze & Ng, *Physics of Semiconductor Devices* | `solar_cell` |
 | Kalpakjian & Schmid (ten more processes) | `forging`, `extrusion`, `drilling`, `grinding`, `broaching`, `casting`, `centrifugal_casting`, `injection_molding`, `laser_cutting`, `edm` |
 | ASTM D4414 | `coating` |
+| Esposito (fluid power) | `accumulator`, `hydraulic_motor`, `hydraulic_press` |
+| Skoog (aqueous equilibria) | `acid_base` |
+| Kalpakjian (bonding, polymer design) | `adhesive`, `living_hinge` |
+| Fogler (rate constant) | `arrhenius` |
+| *Machinery's Handbook* (screws) | `ball_screw` |
+| Roark (beams on elastic foundations) | `beam_foundation` |
+| Schulze, *Powders and Bulk Solids* | `bulk_solids` |
+| Adamson & Gast, *Physical Chemistry of Surfaces* | `capillary_flow` |
+| Smith, Van Ness & Abbott | `chemical_equilibrium` |
+| Hibbeler (curvilinear, gyroscopic) | `circular_motion`, `gyroscope` |
+| Metcalf & Eddy, *Wastewater Engineering* | `clarifier` |
+| Cengel & Boles / Cengel & Cimbala | `clausius_clapeyron`, `drag`, `tank_flow` |
+| Atkins & de Paula, *Physical Chemistry* | `colligative` |
+| Krane (Compton, mass-energy) | `compton`, `mass_energy` |
+| Crane TP-410 | `control_valve` |
+| CEMA, *Belt Conveyors for Bulk Materials* | `conveyor` |
+| Shigley (couplings, riveted joints) | `coupling`, `rivet` |
+| Perry's Chemical Engineers' Handbook | `cyclone` |
+| Chen (cyclotron motion) | `cyclotron` |
+| Fitzgerald, *Electric Machinery* | `dc_motor` |
+| Graff, *Wave Motion in Elastic Solids* | `elastic_waves` |
+| Rattan, *Theory of Machines* | `governor` |
+| Vallado (gravitation) | `gravitation` |
+| Sze & Ng (Hall effect, photodetectors) | `hall_effect`, `photodetector` |
+| Dieter (Hall-Petch) | `hall_petch` |
+| Sedra & Smith (regulators) | `linear_regulator` |
+| Pozar (noise) | `noise_figure` |
+| Parker *O-Ring Handbook* | `o_ring` |
+| Hecht (optical instruments) | `optical_instruments` |
+| Leishman, *Principles of Helicopter Aerodynamics* | `rotor_momentum` |
+| Fischer, *Mechanical Tolerance Stackup and Analysis* | `tolerance_stack` |
 
 **Eighteen new authority tokens, each run through the file's own accident check before
 shipping.** For every one, the symbols it is the *sole* citation for are in the modules it
@@ -272,7 +305,14 @@ adopted:
 That is the same failure the file records for `Young`, `Turns` and `Hazen`, caught before
 it shipped rather than after.
 
-**Twenty-four of the last twenty-four modules needed no new token**, which is the
+**Thirty-one new tokens over the whole run, and a token collision caught on the last
+batch.** `Perry` would have credited `column`'s **Perry-Robertson** imperfection formula —
+a different Perry entirely — to Perry's Chemical Engineers' Handbook, so the token is
+`Perry's Chemical` and the two citations that use it dropped the italics that were keeping
+the substring from matching. That is the fourth candidate rejected or reshaped by the
+accident check, after `Shannon`, `Riedel` and `Nelson`.
+
+**Twenty-four of one stretch of twenty-four modules needed no new token**, which is the
 vocabulary paying off: Kalpakjian & Schmid is now the sole citation for **43 symbols across
 fourteen manufacturing modules**, Norton covers six mechanism ones, Sedra & Smith five
 circuit ones, Hecht six optics ones, Griffiths four. A curated list is worth having

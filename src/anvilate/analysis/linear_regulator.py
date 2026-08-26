@@ -15,6 +15,9 @@ and whether the chosen package can shed the heat.
 
 The relations assume the regulator is in regulation (input above output plus dropout) and a steady
 load; they are the thermal-screening estimate, not a transient or startup analysis.
+
+Sources: Sedra & Smith, *Microelectronic Circuits* (voltage regulators) — the dissipation a
+linear regulator's dropout and load current impose, and the efficiency that leaves.
 """
 
 from __future__ import annotations

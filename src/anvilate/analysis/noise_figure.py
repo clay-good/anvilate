@@ -13,6 +13,10 @@ F = F1 + (F2-1)/G1 + (F3-1)/(G1*G2) + ..., so each later stage's contribution is
 ahead of it — a high-gain first stage swamps the rest. The equivalent noise temperature
 T_e = (F - 1) * T0 (with T0 = 290 K by convention) expresses the same noise as an added source
 temperature, the form used for antennas and low-noise receivers.
+
+Sources: Pozar, *Microwave Engineering* (noise in microwave circuits) — the noise factor a
+figure in decibels means, the Friis cascade formula, the equivalent noise temperature, and the
+minimum detectable signal a receiver's bandwidth and noise figure set.
 """
 
 from __future__ import annotations

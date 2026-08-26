@@ -11,6 +11,11 @@ When drag balances the driving force — a body falling under its own weight, a 
 a tank — the speed stops rising at the terminal velocity, V_t = √(2·W/(ρ·C_d·A)), found by setting
 the drag equal to the weight. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Cengel & Cimbala, *Fluid Mechanics: Fundamentals and Applications* (external flow) —
+the drag force at a coefficient and dynamic pressure, terminal velocity, the Stokes regime for a
+small sphere, the standard sphere drag curve, and the Archimedes and Galilei numbers that index
+a settling problem.
 """
 
 from __future__ import annotations

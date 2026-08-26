@@ -18,6 +18,9 @@ These are the classic riveted-joint forms (boiler/structural practice). The
 allowable stresses are supplied as arguments, the same as any material allowable.
 Geometry and stress inputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Shigley's *Mechanical Engineering Design* (riveted joints) — the joint efficiency as
+the least of the plate-tearing, rivet-shear and bearing capacities against the solid plate.
 """
 
 from __future__ import annotations

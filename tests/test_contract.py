@@ -1385,25 +1385,38 @@ def test_every_declared_derivation_typesets():
 
 
 def test_the_published_citation_debt_percentage_is_the_real_one():
-    """A number that lives only in prose has no gate on it, and this one goes stale every
-    time the debt is paid down.
+    """A number that lives only in prose has no gate on it, and this one went stale every
+    time the debt was paid down.
 
-    ``docs/citations.md`` tells a reader what fraction of the public analysis surface names
-    no source. It was written at 23% and read 23% after 89 symbols had been paid off. The
-    figure is now derived from the two manifests the gate above already holds, so paying
-    the debt down without moving the sentence fails here.
+    ``docs/citations.md`` told a reader what fraction of the public analysis surface named
+    no source. It was written at 23% and still read 23% after 89 symbols had been paid off,
+    then failed for real on the next four batches. The debt is now zero, so the claim the
+    page has to keep changed shape: it must say the surface is covered, and say it with the
+    count the manifest actually holds. If a symbol is ever uncited again the percentage
+    branch takes over, because a page that implies coverage the library does not have is
+    the failure this guards either way.
     """
     uncited = len(_uncited_manifest())
     total = len(_manifest_surface())
-    assert total > 1000, "the surface came back implausibly small, so the ratio is vacuous"
+    assert total > 1000, "the surface came back implausibly small, so the claim is vacuous"
+    page = (_REPO / "docs" / "citations.md").read_text()
+
+    if uncited == 0:
+        assert f"{total:,} public analysis symbols now" in page, (
+            "the debt is paid and docs/citations.md does not say so, or says it with a "
+            f"different count than the {total:,} symbols the manifest holds"
+        )
+        assert "does not\n  yet name a source" not in page, (
+            "docs/citations.md still describes an outstanding debt that is paid"
+        )
+        return
+
     actual = 100.0 * uncited / total
-    published = re.search(
-        r"About (\d+)% of the public analysis surface does not",
-        (_REPO / "docs" / "citations.md").read_text(),
-    )
+    published = re.search(r"About (\d+)% of the public analysis surface does not", page)
     assert published is not None, (
-        "docs/citations.md no longer states the citation debt as a percentage; either "
-        "restore the sentence or delete this test with it"
+        f"{uncited} symbols name no source and docs/citations.md no longer states the "
+        "debt as a percentage. Restore the sentence rather than letting the page imply "
+        "coverage the library does not have"
     )
     claimed = float(published.group(1))
     assert abs(claimed - actual) < 1.0, (

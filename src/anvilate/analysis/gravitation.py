@@ -14,6 +14,10 @@ a body of mass M and radius R the field strength is g = G·M/R² — 9.82 m/s² 
 precisely than G or M separately), and feeding it to the orbital-mechanics functions closes the loop
 from a body's mass to the motion around it. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Vallado, *Fundamentals of Astrodynamics and Applications* — Newton's law of universal
+gravitation, the surface gravity of a body from its mass and radius, and the standard
+gravitational parameter mu = G·M that orbital mechanics actually uses.
 """
 
 from __future__ import annotations

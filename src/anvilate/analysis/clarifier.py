@@ -14,6 +14,10 @@ of where it enters — the classic overflow-rate design principle. The weir load
 over the effluent ``weir_length`` L, must stay low enough that the upward pull near the outlet does
 not drag settled floc back over the weir. Inputs and outputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Metcalf & Eddy, *Wastewater Engineering: Treatment and Resource Recovery* — the
+hydraulic retention time of a basin, the surface overflow rate that sets its settling
+performance, and the weir loading rate at its outlet.
 """
 
 from __future__ import annotations

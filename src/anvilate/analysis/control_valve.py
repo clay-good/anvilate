@@ -15,6 +15,10 @@ Below about 0.25 the valve barely moves the flow over most of its travel and con
 well-controlled loop keeps N above ~0.5. Flows, pressures, and Cv follow the industry's US units
 (gpm, psi) through dimension-checked :class:`~anvilate.units.Quantity` values; Cv, SG, and authority
 are plain floats.
+
+Sources: Crane TP-410, *Flow of Fluids Through Valves, Fittings and Pipe* — the flow a valve
+passes at a flow coefficient and pressure drop, the coefficient a duty requires, and the valve
+authority that decides how linear the installed characteristic is.
 """
 
 from __future__ import annotations

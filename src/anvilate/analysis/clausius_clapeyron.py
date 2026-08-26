@@ -15,6 +15,10 @@ at a chosen pressure — why water boils below 100 °C up a mountain. And two me
 the vapor-pressure curve return the latent heat, ΔH_vap = −R·ln(P₂/P₁)/(1/T₂ − 1/T₁), the standard
 way a boiling-point experiment yields it. Temperatures must be absolute; the enthalpy is molar.
 Inputs and outputs are dimension-checked :class:`~anvilate.units.Quantity` values.
+
+Sources: Cengel & Boles, *Thermodynamics: An Engineering Approach* — the Clausius-Clapeyron
+relation between vapour pressure and temperature, the enthalpy of vaporisation two pressure-
+temperature pairs imply, and the boiling point at a stated pressure.
 """
 
 from __future__ import annotations

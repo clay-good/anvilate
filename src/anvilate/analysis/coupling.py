@@ -14,6 +14,10 @@ against that force.
 These are the rigid-coupling forms (the bolts share the torque equally on a true
 rigid flange). Force, torque, and radius inputs are dimension-checked
 :class:`~anvilate.units.Quantity` values.
+
+Sources: Shigley's *Mechanical Engineering Design* (rigid couplings) — the torque a flange
+coupling's bolt circle transmits, the shear force per bolt it implies, and the bolt count a
+torque requires.
 """
 
 from __future__ import annotations
