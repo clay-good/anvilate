@@ -506,3 +506,51 @@ def test_a_callout_scoped_to_a_face_that_does_not_exist_fails_when_the_graph_is_
     )
     assert card.status is CheckStatus.FAIL
     assert "the tag graph does not define" in card.entries[0].detail
+
+
+def test_the_typed_callouts_page_prints_the_constants_it_derives():
+    """The page's table, and the sentence about it, held against the arithmetic.
+
+    ``docs/typed-callouts.md`` prints a derived-a_kpsi column and then makes a specific
+    claim about it: three of the four round to the published figure exactly and as-forged
+    lands 0.17% low. The identity itself is asserted above at 3e-3; **the table and the
+    characterisation were prose**, and "three round exactly" is the part that would go
+    quietly wrong if a constant were re-transcribed.
+    """
+    import re
+    from pathlib import Path
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "typed-callouts.md").read_text()
+    rows = re.findall(r"\| (ground|machined|hot-rolled|as-forged) \| ([\d.]+) \| ([\d.]+) \|", page)
+    assert len(rows) == 4, "the derived-constant table in docs/typed-callouts.md has moved"
+
+    mpa_per_kpsi = 6.894757
+    exact = 0
+    for finish, claimed_derived, claimed_published in rows:
+        a_mpa, b = MARIN_SURFACE_CONSTANTS_MPA[finish.replace("-", "_")]
+        derived = a_mpa * mpa_per_kpsi**b
+        assert derived == pytest.approx(float(claimed_derived), abs=5e-5), finish
+        published = float(claimed_published)
+        # "Rounds to the published figure exactly" means at the published figure's own
+        # precision, which is what the sentence claims and what a reader would check.
+        places = len(claimed_published.split(".")[1])
+        if round(derived, places) == published:
+            exact += 1
+    # Read the count out of the sentence rather than hard-coding it: asserting `exact == 3`
+    # holds the arithmetic and lets the *sentence* say anything, which is the half of a
+    # docs-truth gate that is easy to leave out.
+    words = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "All four": 4}
+    claimed = re.search(
+        r"(One|Two|Three|Four|All four) round to the published figure exactly", page
+    )
+    assert claimed is not None, "the page no longer states how many round exactly"
+    assert words[claimed.group(1)] == exact, (
+        f"the page says {claimed.group(1).lower()} round to the published figure exactly; "
+        f"{exact} do"
+    )
+
+    shortfall = re.search(r"as-forged lands ([\d.]+)% low", page)
+    assert shortfall is not None, "the page no longer states the as-forged shortfall"
+    a_mpa, b = MARIN_SURFACE_CONSTANTS_MPA["as_forged"]
+    actual = 100.0 * (1.0 - (a_mpa * mpa_per_kpsi**b) / 39.9)
+    assert actual == pytest.approx(float(shortfall.group(1)), abs=0.005)
