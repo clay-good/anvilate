@@ -89,7 +89,7 @@ and a flange can fail either while its stresses pass.
 The `T`, `U`, `Y`, `Z` equations were **anchored before they were shipped**: a published
 worked calculation for a 19 in bore, 26.9685 in OD flange (`K = 1.4193947`) reports
 `T = 1.74578` and `Z = 2.97106`. The equations give **T = 1.7457829** and
-**Z = 2.9710620** — 1.2 and 0.7 parts per million from the published figures, and both
+**Z = 2.9710620** — 1.6 and 0.7 parts per million from the published figures, and both
 round to them exactly at five. `Y` and `U` are tied by an identity that falls out of the
 published constants (`U = Y/0.910` at every `K`), so reproducing one reproduces the other.
 All of it is asserted in the test suite.

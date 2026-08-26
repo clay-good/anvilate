@@ -40699,13 +40699,27 @@ def test_the_appendix_2_shape_factors_reproduce_a_published_flange_calculation()
     factors = asme_appendix_2_shape_factors(
         outside_diameter=_q("26.9685 in"), inside_diameter=_q("19 in")
     )
-    # Tightened from 1e-4 to what the anchor actually supports: T agrees to 1.2 ppm and Z
-    # to 0.7 ppm at the flange's real dimensions. The looser tolerance tolerated a
-    # 9 ppm error, which is exactly the size of the discrepancy you get by evaluating at
-    # the rounded K = 1.41939 instead of the flange — so it could not tell the two apart.
-    assert factors.ratio == pytest.approx(1.41939, rel=1e-5)
+    # The tolerance is 3 ppm, and the number matters. T agrees to 1.6 ppm and Z to 0.7 ppm
+    # at the flange's real dimensions; evaluating at the *rounded* K = 1.41939 instead puts
+    # Z 9.4 ppm out. A previous revision said it had been tightened to tell those apart and
+    # left the assertion at 1e-5 — 10 ppm, which admits the 9.4 ppm error the comment says
+    # it excludes. The discriminating case is asserted below rather than described.
+    assert factors.ratio == pytest.approx(1.4193947, rel=1e-7)
     assert factors.t_factor == pytest.approx(1.74578, rel=1e-5)
     assert factors.z_factor == pytest.approx(2.97106, rel=1e-5)
+
+    # The flange is the anchor, not the rounded ratio printed alongside it. Evaluating at
+    # the rounded K reproduces the published figures to five places and misses at six —
+    # which is the whole reason the anchor has to be the dimensions.
+    rounded = asme_appendix_2_shape_factors(
+        outside_diameter=_q("26.96841 in"), inside_diameter=_q("19 in")
+    )
+    assert rounded.ratio == pytest.approx(1.41939, rel=1e-6)
+    assert rounded.z_factor != pytest.approx(2.97106, rel=3e-6), (
+        "at 3 ppm the rounded-K evaluation must fail; a tolerance that admits it cannot "
+        "tell the anchor from the ratio printed next to it"
+    )
+    assert abs(rounded.z_factor - 2.97106) / 2.97106 == pytest.approx(9.4e-6, abs=5e-7)
 
 
 def test_the_appendix_2_y_and_u_factors_hold_their_identity_at_every_ratio():
@@ -42502,4 +42516,48 @@ def test_the_weld_fatigue_pages_category_table_is_what_the_curve_gives():
 
     assert lives[-1] / lives[0] == pytest.approx(50.0, abs=1.0), (
         "the page claims the category alone spans a factor of 50 in life"
+    )
+
+
+def test_the_pressure_equipment_pages_flange_anchor_numbers_are_the_computed_ones():
+    """The page prints the shape factors to seven places and quotes the agreement in ppm.
+
+    Both were prose. The ppm figures are the point of the paragraph — they are what makes
+    "anchored before it was shipped" a claim rather than a mood — and one of them was
+    wrong: T agrees to 1.6 ppm, not the 1.2 the page reported.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.analysis import asme_appendix_2_shape_factors
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "pressure-equipment.md").read_text()
+    factors = asme_appendix_2_shape_factors(
+        outside_diameter=_q("26.9685 in"), inside_diameter=_q("19 in")
+    )
+    for symbol, value in (("T", factors.t_factor), ("Z", factors.z_factor)):
+        claimed = re.search(rf"\*\*{symbol} = ([\d.]+)\*\*", page)
+        assert claimed is not None, f"the page no longer prints {symbol} to full precision"
+        assert value == pytest.approx(float(claimed.group(1)), abs=5e-8)
+
+    ppm = re.search(r"— ([\d.]+) and ([\d.]+) parts per million", page)
+    assert ppm is not None, "the page no longer quotes the agreement in ppm"
+    for claimed, value, published in (
+        (ppm.group(1), factors.t_factor, 1.74578),
+        (ppm.group(2), factors.z_factor, 2.97106),
+    ):
+        actual = 1e6 * abs(value - published) / published
+        assert actual == pytest.approx(float(claimed), abs=0.05)
+
+    # And the parenthetical about the rounded ratio, which is the reason the anchor is the
+    # flange's dimensions rather than the K printed beside them.
+    rounded = re.search(r"you get ([\d.]+) and ([\d.]+), which is a (\d+) ppm", page)
+    assert rounded is not None, "the page no longer carries the rounded-K comparison"
+    at_rounded = asme_appendix_2_shape_factors(
+        outside_diameter=_q("26.96841 in"), inside_diameter=_q("19 in")
+    )
+    assert at_rounded.t_factor == pytest.approx(float(rounded.group(1)), abs=5e-7)
+    assert at_rounded.z_factor == pytest.approx(float(rounded.group(2)), abs=5e-7)
+    assert 1e6 * abs(at_rounded.z_factor - 2.97106) / 2.97106 == pytest.approx(
+        float(rounded.group(3)), abs=0.5
     )
