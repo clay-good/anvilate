@@ -42561,3 +42561,31 @@ def test_the_pressure_equipment_pages_flange_anchor_numbers_are_the_computed_one
     assert 1e6 * abs(at_rounded.z_factor - 2.97106) / 2.97106 == pytest.approx(
         float(rounded.group(3)), abs=0.5
     )
+
+
+def test_the_weld_fatigue_pages_thickness_numbers_are_the_functions_own():
+    """The size-effect figures the page quotes twice — once as a percentage in prose and
+    once as a value in a code comment — held against ``weld_size_effect_factor``."""
+    import re
+    from pathlib import Path
+
+    from anvilate.analysis import weld_size_effect_factor
+
+    page = (
+        Path(__file__).resolve().parent.parent / "docs" / "weld-fatigue-screening.md"
+    ).read_text()
+    percents = re.search(
+        r"A 40 mm plate keeps ([\d.]+)% of its\ncategory; a 50 mm plate ([\d.]+)%", page
+    )
+    assert percents is not None, "the page no longer states the thickness percentages"
+    for thickness, claimed in ((40, percents.group(1)), (50, percents.group(2))):
+        factor = weld_size_effect_factor(thickness=Quantity(magnitude=float(thickness), unit="mm"))
+        assert 100.0 * factor == pytest.approx(float(claimed), abs=0.05)
+
+    comment = re.search(
+        r'weld_size_effect_factor\(thickness=Quantity\.parse\("40 mm"\)\)\s*# ([\d.]+)', page
+    )
+    assert comment is not None, "the page no longer shows the factor beside the call"
+    assert weld_size_effect_factor(thickness=Quantity(magnitude=40.0, unit="mm")) == pytest.approx(
+        float(comment.group(1)), abs=5e-5
+    )
