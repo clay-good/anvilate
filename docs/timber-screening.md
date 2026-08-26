@@ -102,6 +102,52 @@ f_c = nds_bearing_stress(bearing_force=reaction, width=b, bearing_length=l_b)  #
 - **`nds_shear_scorecard`** and **`nds_bearing_scorecard`** screen those stresses
   against their adjusted values, and return `NOT_EVALUATED` without one, like bending.
 
+## The reference value is a record, and the chain it takes is the standard's
+
+`TimberDesignValue` ([`anvilate.standards.timber`](../src/anvilate/standards/timber.py))
+carries the number with the four things that decide whether it applies here:
+
+```python
+TimberDesignValue(
+    standard="NDS", edition="2018", table="Table 4A",
+    species="Douglas Fir-Larch", grade="No. 2",
+    size_classification=SizeClassification.DIMENSION_LUMBER,
+    property=TimberProperty.BENDING, value=Quantity.parse("900 psi"),
+).adjusted({"C_D": 1.15, "C_F": 1.1})
+```
+
+- **Which property it is.** F_b, F_t, F_v, F_c, F_c⊥, E and E_min are seven different
+  numbers for the same piece of wood, and a stress and a modulus are both `[pressure]` —
+  which is exactly why the property is declared rather than inferred from the unit.
+- **Species and grade**, because Southern Pine No. 2 and Douglas Fir-Larch No. 2 are
+  different values from different tables.
+- **The size classification.** Dimension lumber, beams and stringers, and posts and
+  timbers are graded to different rules and the size factor works differently for each.
+- **The standard and edition**, because reference values move between them.
+
+**`adjusted()` enforces NDS Table 4.3.1.** The page above has always said the caller
+"simply omits" the factors that do not apply — a rule stated in prose and enforced by
+nobody. Now a factor the table does not list for that property is refused, naming both:
+
+| Value | Factors NDS Table 4.3.1 lists |
+| --- | --- |
+| F_b | C_D, C_M, C_t, C_L, C_F, C_fu, C_i, C_r |
+| F_t | C_D, C_M, C_t, C_F, C_i |
+| F_v | C_D, C_M, C_t, C_i |
+| F_c⊥ | C_M, C_t, C_i, C_b |
+| F_c | C_D, C_M, C_t, C_F, C_i, C_P |
+| E | C_M, C_t, C_i |
+| E_min | C_M, C_t, C_i, C_T |
+
+The two absences that catch people: **C_D applies to neither modulus nor to F_c⊥**, and
+**C_F applies to neither modulus nor to F_v**. Applying C_D to a modulus at a snow load is
+a beam 15% stiffer than the standard allows, on exactly the deflection check that usually
+governs a timber beam — so the mistake shows up as a member passing the check it was about
+to fail.
+
+`nds_adjusted_design_value` still multiplies whatever it is handed, which is right for a
+caller composing a chain by hand. The record is the path that checks.
+
 ## Bending — the beam stability factor, and the coefficient that is not the column's
 
 ```python

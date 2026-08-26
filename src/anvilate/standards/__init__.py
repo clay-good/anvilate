@@ -111,6 +111,12 @@ from .threads import (
     default_clearance_table,
     default_thread_table,
 )
+from .timber import (
+    NDS_APPLICABLE_FACTORS,
+    SizeClassification,
+    TimberDesignValue,
+    TimberProperty,
+)
 from .washers import (
     PlainWasher,
     UnknownWasherError,
@@ -119,6 +125,10 @@ from .washers import (
 )
 
 __all__ = [
+    "NDS_APPLICABLE_FACTORS",
+    "SizeClassification",
+    "TimberDesignValue",
+    "TimberProperty",
     "CurveSurvival",
     "DatasetProvenance",
     "FatigueCurve",

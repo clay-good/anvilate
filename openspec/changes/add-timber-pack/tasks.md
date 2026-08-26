@@ -2,9 +2,11 @@
 
 ## 1. Contracts
 
-- [~] 1.1 User-supplied reference design value — the reference value enters as a
-      caller-supplied `Quantity` (a design stress) into `nds_adjusted_design_value`; a
-      richer typed record (species/grade label, provenance) is a follow-up.
+- [x] 1.1 User-supplied reference design value — `TimberDesignValue` in
+      `anvilate.standards.timber` carries the standard, edition, table, species, grade,
+      size classification and *which property* the number is, and enforces NDS Table
+      4.3.1 on the factor chain. The bare `Quantity` still works for
+      `nds_adjusted_design_value`.
 - [x] 1.2 Adjustment-factor chain with per-factor visibility — `nds_adjusted_design_value`
       takes the factors as a name→value mapping (F' = F·∏Cᵢ) so every factor stays
       visible, and `nds_load_duration_factor` supplies the Table 2.3.2 C_D (the one
@@ -97,3 +99,31 @@ about the formula that is not true of it.
 
 **Monotonicity swept before it was declared**: C_L rises with F_bE/F_b* and stays under 1
 across 5,000 ratios, rather than being argued from the shape of the formula.
+
+## 2026-08-25 — task 1.1, and a table the docstring described and nothing enforced
+
+`TimberDesignValue`, `TimberProperty`, `SizeClassification` and `NDS_APPLICABLE_FACTORS`
+in `anvilate.standards.timber`; the reference-value section of `docs/timber-screening.md`.
+
+**A reference design value is a number with four things attached.** Which property it is
+(F_b, F_t, F_v, F_c, F_c⊥, E, E_min are seven different numbers for the same wood, and a
+stress and a modulus are both `[pressure]`, so the unit cannot tell them apart), the
+species and grade, the size classification (dimension lumber and timbers are graded to
+different rules and take different size factors), and the standard's edition.
+
+**NDS Table 4.3.1 was in the docstring and enforced by nobody.** The module has always
+said the caller "simply omits" the factors that do not apply to a value; `adjusted()`
+refuses them instead. The two absences that catch people are **C_D on either modulus or on
+F_c⊥** and **C_F on either modulus or on F_v**. Neither is a conservative extra: applying
+C_D to a modulus at a snow load makes the beam 15% stiffer than the standard allows, on
+exactly the deflection check that usually governs a timber beam — the mistake shows up as a
+member passing the check it was about to fail.
+
+**The applicability table was read off the published per-property equations**, not
+recalled: F'_b, F'_t, F'_v, F'_c⊥, F'_c, E' and E'_min each written out with their own
+chain. A gate asserts the table is the published one and not an empty set — an emptied
+table refuses every factor, and every refusal test in the file would still pass.
+
+**The safe path is the record's.** `nds_adjusted_design_value` still multiplies whatever it
+is handed, which is right for a caller composing a chain by hand and wrong for one who has
+a record that says what the number is a value of.
