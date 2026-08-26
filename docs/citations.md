@@ -196,10 +196,11 @@ Every check the screen would have produced is still named. A consumer looking fo
 yielding" has to find it saying it could not run, rather than find nothing — which would be
 its own kind of silence.
 
-Nine of the seventeen bundled materials carry a specification minimum and screen exactly as
-before. The other eight — mostly the aluminum alloys and the heat-treated steels whose
-handbook tables are means — refuse until either the database gains a value on the right
-basis, or the caller declares that this screen accepts a typical one:
+Eight of the seventeen bundled materials carry a specification minimum and screen exactly as
+before. The other nine — five of the six aluminium alloys, both heat-treated steels, the
+bearing bronze and the titanium, whose handbook tables are means — refuse until either the
+database gains a value on the right basis, or the caller declares that this screen accepts a
+typical one:
 
 ```python
 screen_tension_member(member, required_safety_factor=1.2, required_basis=AllowableBasis.TYPICAL)

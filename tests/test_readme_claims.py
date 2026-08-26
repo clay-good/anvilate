@@ -59,14 +59,8 @@ def test_the_public_symbol_count_is_the_manifests_own():
     )
 
 
-def test_the_materials_basis_split_is_not_backwards():
-    """The one that was actually wrong, and wrong in the direction that matters.
-
-    The README said nine of seventeen materials carry a specification minimum. Eight do —
-    so the sentence reversed which half of the database screens unchanged and which half
-    reports ``not_evaluated`` until the caller accepts a typical value. A reader counting
-    on it would have expected the wrong nine materials to work.
-    """
+def _basis_split() -> tuple[int, int, int]:
+    """(materials, specification-minimum count, typical count), from the database itself."""
     db = default_materials_db()
     materials = [db.get(ref) for ref in db.known_materials()]
     bases = []
@@ -78,31 +72,68 @@ def test_the_materials_basis_split_is_not_backwards():
                 bases.append(citation.basis)
                 break
     assert len(bases) == len(materials), "a material with no strength citation to classify"
-
     minimum = sum(1 for b in bases if b is AllowableBasis.SPECIFICATION_MINIMUM)
-    typical = len(bases) - minimum
+    return len(materials), minimum, len(materials) - minimum
+
+
+_WORDS = {
+    "Seven": 7,
+    "seven": 7,
+    "Eight": 8,
+    "eight": 8,
+    "Nine": 9,
+    "nine": 9,
+    "Ten": 10,
+    "ten": 10,
+    "Eleven": 11,
+    "eleven": 11,
+}
+
+
+@pytest.mark.parametrize(
+    "page,tail",
+    [
+        ("README.md", r"the other (\w+) report `not_evaluated`"),
+        ("docs/citations.md", r"The other (\w+) —"),
+    ],
+)
+def test_the_materials_basis_split_is_not_backwards(page, tail):
+    """The one that was actually wrong, and wrong in the direction that matters.
+
+    The README said nine of seventeen materials carry a specification minimum. Eight do —
+    so the sentence reversed which half of the database screens unchanged and which half
+    reports ``not_evaluated`` until the caller accepts a typical value. A reader counting
+    on it would have expected the wrong nine materials to work.
+
+    ``docs/citations.md`` carried the same sentence and **contradicted itself seventy lines
+    earlier**, where the summary reads "8 carry specification minima and 9 carry typical
+    values". Both pages are gated, because one page holding both answers is what a claim
+    with no gate eventually looks like.
+    """
+    materials, minimum, typical = _basis_split()
     assert minimum and typical, "one side of the split is empty, so the claim is vacuous"
 
-    total = int(_claimed(r"of the (seventeen|\d+) bundled materials").replace("seventeen", "17"))
-    assert total == len(materials)
-    words = {
-        "Eight": 8,
-        "Nine": 9,
-        "Ten": 10,
-        "eight": 8,
-        "nine": 9,
-        "ten": 10,
-        "Seven": 7,
-        "seven": 7,
-        "Eleven": 11,
-        "eleven": 11,
-    }
-    claimed_minimum = words[_claimed(r"(\w+) of the (?:seventeen|\d+) bundled materials")]
-    claimed_typical = words[_claimed(r"the other (\w+) report `not_evaluated`")]
+    total = int(
+        _claimed(r"of the (seventeen|\d+) bundled materials", page=page).replace("seventeen", "17")
+    )
+    assert total == materials
+    claimed_minimum = _WORDS[
+        _claimed(r"(\w+) of the (?:seventeen|\d+) bundled materials", page=page)
+    ]
+    claimed_typical = _WORDS[_claimed(tail, page=page)]
     assert claimed_minimum == minimum, (
-        f"the README says {claimed_minimum} materials carry a specification minimum; {minimum} do"
+        f"{page} says {claimed_minimum} materials carry a specification minimum; {minimum} do"
     )
     assert claimed_typical == typical
+
+
+def test_the_citations_page_does_not_state_the_split_twice_with_two_answers():
+    """It did: the summary line and the prose sentence disagreed by a swap."""
+    _, minimum, typical = _basis_split()
+    page = (_REPO / "docs" / "citations.md").read_text()
+    summary = re.search(r"(\d+) carry specification minima and (\d+)\s+carry typical values", page)
+    assert summary is not None, "the summary line in docs/citations.md has moved or gone"
+    assert (int(summary.group(1)), int(summary.group(2))) == (minimum, typical)
 
 
 def test_the_tool_surface_count_is_the_catalogs_own():
