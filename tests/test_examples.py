@@ -6001,6 +6001,18 @@ def test_spreader_beam_example_fails_only_once_the_device_weight_is_in_the_load(
     assert as_a.status is CheckStatus.PASS
     assert as_a.safety_factor == pytest.approx(1.48, abs=0.01)
 
+    # The bail table in docs/lifting-devices.md: the allowable, both stresses, and the
+    # rated-load safety factor. Only the two failing figures were pinned before.
+    page = (_EXAMPLES.parent / "docs" / "lifting-devices.md").read_text()
+    allowable = float(re.search(r"vs F_p = ([\d.]+) MPa", page).group(1))
+    rows = re.findall(r"\| rated[^|]*?(\d+) kN \| ([\d.]+) MPa \| \*{0,2}SF ([\d.]+)", page)
+    assert len(rows) == 2, "the bail table has moved"
+    for load, claimed_stress, claimed_sf in rows:
+        entry = namespace["screen_bail"](Quantity_(magnitude=float(load), unit="kN")).entries[1]
+        assert entry.safety_factor == pytest.approx(float(claimed_sf), abs=0.01)
+        # The stress is the allowable over the factor, which is what the table shows.
+        assert allowable / entry.safety_factor == pytest.approx(float(claimed_stress), abs=0.2)
+
     card = namespace["screen_device"]()
     assert card.status is CheckStatus.FAIL
     # Class 2 with no cycle data is not screened, and NOT_EVALUATED is not a pass.
@@ -6080,6 +6092,28 @@ def test_spreader_beam_example_passes_as_category_a_and_fails_as_category_b():
     assert by_b["beam bending"].status is CheckStatus.FAIL
     assert by_a["beam bending"].safety_factor == pytest.approx(1.15, abs=0.02)
     assert by_b["beam bending"].safety_factor == pytest.approx(0.77, abs=0.02)
+
+    # docs/lifting-devices.md narrates this example: the bending stress, both allowables,
+    # and the Category A output block it prints. Those were prose — the assertions above
+    # hold the two safety factors and nothing holds the numbers they come from.
+    page = (_EXAMPLES.parent / "docs" / "lifting-devices.md").read_text()
+    narrative = re.search(
+        r"running ([\d.]+) MPa in bending: the allowable is ([\d.]+) MPa as Category A and\s*\n?"
+        r"([\d.]+) MPa as\s*\n?Category B",
+        page,
+    )
+    assert narrative is not None, "the category narrative in docs/lifting-devices.md has moved"
+    stress = namespace["beam_bending_stress"]().to("MPa").magnitude
+    assert stress == pytest.approx(float(narrative.group(1)), abs=0.05)
+    for allowable, entry in (
+        (narrative.group(2), by_a["beam bending"]),
+        (narrative.group(3), by_b["beam bending"]),
+    ):
+        assert entry.safety_factor * stress == pytest.approx(float(allowable), abs=0.1)
+
+    block = re.search(r"lug net tension\s+pass\s+SF ([\d.]+)", page)
+    assert block is not None, "the Category A output block has moved"
+    assert by_a["lug net tension"].safety_factor == pytest.approx(float(block.group(1)), abs=0.02)
     # Every allowable scales by exactly 2/3 between the categories, so every margin does.
     for name in ("beam bending", "lug net tension"):
         assert by_b[name].safety_factor == pytest.approx(
