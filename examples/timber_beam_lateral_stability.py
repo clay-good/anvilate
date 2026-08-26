@@ -24,8 +24,8 @@ Two ways the factor gets away from you, both shown:
    double, in the unconservative direction, and nothing about the number looks wrong.
 
 Run it directly (``python examples/timber_beam_lateral_stability.py``);
-:func:`stability_factor`, :func:`screen` and :func:`bracing_study` are exercised in the
-test suite.
+:func:`stability_factor`, :func:`screen`, :func:`bracing_study` and
+:func:`stability_factor_given_the_adjusted_value` are exercised in the test suite.
 """
 
 from __future__ import annotations
@@ -88,6 +88,26 @@ def screen(name: str, c_l: float | None) -> ScorecardEntry:
     )
 
 
+def stability_factor_given_the_adjusted_value() -> float:
+    """C_L computed against F'_b instead of F_b* — the mistake, as a number.
+
+    Exposed rather than printed, so the test can hold the docstring's claim about it. A
+    number that appears only in prose is a number nothing checks.
+    """
+    correct = stability_factor(SPAN)
+    return nds_beam_stability_factor(
+        buckling_stress=nds_bending_buckling_stress(
+            min_modulus=E_MIN,
+            slenderness_ratio=nds_beam_slenderness_ratio(
+                effective_length=effective_length(SPAN), depth=DEPTH, breadth=BREADTH
+            ),
+        ),
+        reference_bending_value=Quantity(
+            magnitude=F_B_STAR.to("psi").magnitude * correct, unit="psi"
+        ),
+    )
+
+
 def bracing_study() -> list[tuple[str, float, ScorecardEntry]]:
     """The same rafter at three bracing intervals, plus the check that skips C_L."""
     out: list[tuple[str, float, ScorecardEntry]] = []
@@ -110,15 +130,7 @@ def main() -> None:
         print(f"      {entry}")
 
     full = stability_factor(SPAN)
-    overstated = nds_beam_stability_factor(
-        buckling_stress=nds_bending_buckling_stress(
-            min_modulus=E_MIN,
-            slenderness_ratio=nds_beam_slenderness_ratio(
-                effective_length=effective_length(SPAN), depth=DEPTH, breadth=BREADTH
-            ),
-        ),
-        reference_bending_value=Quantity(magnitude=F_B_STAR.to("psi").magnitude * full, unit="psi"),
-    )
+    overstated = stability_factor_given_the_adjusted_value()
     print(f"\n  C_L given F'_b instead of F_b*: {overstated:.3f} against the correct {full:.3f}")
     print("  — larger than the rafter has, which is the unconservative direction")
 

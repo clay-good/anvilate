@@ -5814,6 +5814,13 @@ def test_timber_lateral_stability_example_fails_the_rafter_that_bending_stress_p
     ratios = [entry.safety_factor for _, _, entry in study]
     assert ratios == pytest.approx([0.57, 0.97, 1.18], abs=0.01)
 
+    # The number the example's docstring and docs/timber-screening.md both quote for the
+    # F'_b mistake, which nothing checked until now: a plausible figure beside a correct
+    # mechanism reads as verified and is not.
+    overstated = namespace["stability_factor_given_the_adjusted_value"]()
+    assert overstated == pytest.approx(0.830, abs=0.001)
+    assert overstated / factors[0] == pytest.approx(2.07, abs=0.01), "more than double"
+
 
 def test_branch_reinforcement_example_shows_the_zone_height_the_run_does_not_set():
     namespace = runpy.run_path(str(_EXAMPLES / "branch_reinforcement_zone.py"))
