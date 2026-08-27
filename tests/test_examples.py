@@ -195,15 +195,9 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "lifter_verification_matrix.py",
         "lifting_lug_calc_report.py",
         "lightest_passing_bracket.py",
-        "living_hinge_flip_cap.py",
-        "machine_vibration_isolation.py",
-        "masonry_wall_slenderness.py",
         "measured_shaft_from_certificate.py",
-        "motor_branch_circuit.py",
         "off_center_post_load.py",
-        "office_floor_vibration.py",
         "pallet_bay_floor_beam.py",
-        "ph_electrode_nernst.py",
         "plated_shaft_callouts_change_the_verdict.py",
         "pressure_vessel_nozzle_and_flange.py",
         "project_appraisal.py",
@@ -512,6 +506,18 @@ def test_masonry_wall_slenderness_example_combined_check_governs():
     assert a["axial_utilization"] < 0.6
     assert a["combined_unity"] > 1.0
     assert a["combined_unity"] == pytest.approx(1.01, abs=0.02)
+    # The 0.25·f'm the allowable starts from, recovered at zero slenderness.
+    from anvilate.analysis import masonry_allowable_axial_stress
+
+    strength = Quantity.parse("10 MPa")
+    _assert_narrates(
+        "masonry_wall_slenderness.py",
+        masonry_allowable_axial_stress(masonry_strength=strength, slenderness_ratio=1e-9)
+        .to("MPa")
+        .magnitude
+        / strength.to("MPa").magnitude,
+        a["axial_utilization"],
+    )
 
 
 def test_clay_backfill_tension_crack_example():
@@ -2555,6 +2561,11 @@ def test_ph_electrode_nernst_example_slope_and_ph():
     # 25 C, one electron: ~59.2 mV/decade; -0.1775 V reads pH ~3.
     assert d["nernst_slope_mv_per_decade"] == pytest.approx(59.159, abs=0.05)
     assert d["implied_ph"] == pytest.approx(3.0, abs=0.05)
+    # The electrode reading the docstring quotes, in volts.
+    _assert_narrates(
+        "ph_electrode_nernst.py",
+        abs(namespace["MEASURED_POTENTIAL"].to("V").magnitude),
+    )
 
 
 def test_accelerated_life_test_example_factor_and_activation_energy():
@@ -3224,6 +3235,26 @@ def test_office_floor_vibration_example_springy_bay_fails():
     assert r["springy_ratio"] > 0.005
     assert r["stiff_ratio"] < 0.005
     assert r["springy_ratio"] > r["stiff_ratio"]
+    # The 0.35 in the Design Guide 11 exponent, recovered from the ratio of the same
+    # floor evaluated at two frequencies — the constant the docstring writes out.
+    from anvilate.analysis import floor_vibration_peak_acceleration_ratio
+
+    common = {
+        "effective_panel_weight": Quantity.parse("400 kN"),
+        "damping_ratio": 0.03,
+        "constant_force": namespace["OFFICE_WALKING_FORCE"],
+    }
+    low, high = 4.0, 6.0
+    ratios = [
+        floor_vibration_peak_acceleration_ratio(
+            fundamental_frequency=Quantity(magnitude=frequency, unit="Hz"), **common
+        )
+        for frequency in (low, high)
+    ]
+    _assert_narrates(
+        "office_floor_vibration.py",
+        math.log(ratios[0] / ratios[1]) / (high - low),
+    )
 
 
 def test_spread_footing_sizing_example_overburden_grows_the_footing():
@@ -3481,6 +3512,15 @@ def test_motor_branch_circuit_example_efficiency_and_nec_factor():
     assert m["full_load_a"] > m["naive_a"]
     # ...and the branch circuit is 125% of it.
     assert m["branch_ampacity_a"] == pytest.approx(1.25 * m["full_load_a"], rel=1e-6)
+    # The code sizing factor the docstring writes into its arithmetic, from the function.
+    import inspect as _inspect
+
+    from anvilate.analysis import motor_branch_circuit_ampacity
+
+    _assert_narrates(
+        "motor_branch_circuit.py",
+        _inspect.signature(motor_branch_circuit_ampacity).parameters["sizing_factor"].default,
+    )
 
 
 def test_dc_low_voltage_run_example_small_cable_browns_out():
@@ -5120,6 +5160,14 @@ def test_machine_isolation_example_needs_a_soft_mount():
     stiff = by_name["stiff mount (20 Hz)"]
     assert stiff.status is CheckStatus.FAIL
     assert "safety factor 0.11" in stiff.detail
+    # The forcing ratio the stiff mount sits at, which is what puts it in the band.
+    _assert_narrates(
+        "machine_vibration_isolation.py",
+        namespace["FORCING"].to("Hz").magnitude
+        / namespace["MOUNTS"]["stiff mount (20 Hz)"].to("Hz").magnitude,
+        stiff.safety_factor,
+        by_name["medium mount (12 Hz)"].safety_factor,
+    )
     # The medium mount isolates a little but falls short of the target.
     assert by_name["medium mount (12 Hz)"].status is CheckStatus.FAIL
     # Only the soft mount clears the isolation target with margin.
@@ -5865,6 +5913,17 @@ def test_living_hinge_flip_cap_example_lengthening_fixes_it():
     fixed = namespace["screen_redesigned_hinge"]()
     assert fixed.entries[0].passed
     assert "safety factor 1.05" in fixed.entries[0].detail
+
+    # The web length the strain relation inverts to for the permissible strain — the
+    # docstring's own inverse, and nothing computed it.
+    _assert_narrates(
+        "living_hinge_flip_cap.py",
+        math.pi
+        * namespace["WEB_THICKNESS"].to("mm").magnitude
+        / (2.0 * namespace["PERMISSIBLE_STRAIN"]),
+        drawn.entries[0].safety_factor,
+        fixed.entries[0].safety_factor,
+    )
     assert fixed.status is CheckStatus.PASS
 
 
