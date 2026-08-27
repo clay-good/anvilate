@@ -213,12 +213,7 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "guide_spring_buckling.py",
         "highway_cruise_power.py",
         "hydraulic_cylinder_wall.py",
-        "hydrogen_balmer_line.py",
-        "indexing_table_stations.py",
-        "jacketed_reactor_vacuum.py",
-        "journal_bearing_film_regime.py",
         "lab_ventilation_air_changes.py",
-        "laboratory_plasma.py",
         "lifter_verification_matrix.py",
         "lifting_lug_calc_report.py",
         "lifting_magnet_holding_force.py",
@@ -2094,6 +2089,12 @@ def test_hydrogen_balmer_line_example():
     assert d["energy_n2_ev"] == pytest.approx(-3.401, abs=0.005)
     assert d["radius_n2_pm"] == pytest.approx(211.7, abs=0.5)
     assert d["balmer_alpha_nm"] == pytest.approx(656.1, abs=0.5)
+    # The two levels the docstring names and the photon between them.
+    levels = [
+        namespace["bohr_energy_level"](principal_quantum_number=n).to("eV").magnitude
+        for n in (2, 3)
+    ]
+    _assert_narrates("hydrogen_balmer_line.py", -levels[0], -levels[1], levels[1] - levels[0])
 
 
 def test_relativistic_spaceship_example():
@@ -2354,6 +2355,8 @@ def test_laboratory_plasma_example():
     assert d["plasma_frequency_ghz"] == pytest.approx(8.979, abs=0.01)
     assert d["debye_length_um"] == pytest.approx(7.434, abs=0.01)
     assert d["plasma_parameter"] == pytest.approx(1720.9, abs=1.0)
+    # The electron temperature in kelvin the docstring glosses "1 eV" as.
+    _assert_narrates("laboratory_plasma.py", namespace["ELECTRON_TEMPERATURE"].to("K").magnitude)
 
 
 def test_led_vs_incandescent_efficacy_example():
@@ -4961,6 +4964,15 @@ def test_indexing_table_example_runs_out_of_dwell():
     # ...but adding stations steals dwell until the operation no longer fits.
     assert by_name["8 stations"].status is CheckStatus.FAIL
     twelve = by_name["12 stations"]
+    # The dwell each station count leaves, in seconds — what the argument is made of.
+    _assert_narrates(
+        "indexing_table_stations.py",
+        *(
+            namespace["dwell_time"](count)
+            for count in list(namespace["STATION_COUNTS"].values())[1:]
+        ),
+        *(entry.safety_factor for entry in card.entries),
+    )
     assert twelve.status is CheckStatus.FAIL
     assert "safety factor 0.92" in twelve.detail
     assert card.status is CheckStatus.FAIL
@@ -4977,6 +4989,25 @@ def test_jacketed_reactor_example_is_governed_by_vacuum():
     # ...but the vacuum buckling governs: thin walls fail it.
     assert by_name["3 mm wall: external vacuum (buckling)"].status is CheckStatus.FAIL
     assert by_name["6 mm wall: external vacuum (buckling)"].status is CheckStatus.FAIL
+    # The collapse pressure each wall reaches, which is the number the argument turns on.
+    _assert_narrates(
+        "jacketed_reactor_vacuum.py",
+        *(
+            namespace["cylinder_external_pressure_buckling"](
+                wall_thickness=thickness,
+                mean_radius=namespace["MEAN_RADIUS"],
+                elastic_modulus=namespace["ELASTIC_MODULUS"],
+            )
+            .to("MPa")
+            .magnitude
+            for thickness in list(namespace["WALL_THICKNESSES"].values())[:2]
+        ),
+        *(
+            entry.safety_factor
+            for entry in card.entries
+            if "vacuum" in entry.name or entry.name.startswith("3 mm")
+        ),
+    )
     thick_vac = by_name["12 mm wall: external vacuum (buckling)"]
     assert thick_vac.passed
     assert "safety factor 2.53" in thick_vac.detail
@@ -6108,6 +6139,25 @@ def test_journal_bearing_example_finish_decides_the_regime():
     turned = namespace["screen_turned_finishes"]()
     assert turned.status is CheckStatus.FAIL
     assert "safety factor 0.59" in turned.entries[0].detail
+
+    # The Sommerfeld number the docstring quotes for this operating point.
+    unit_load = namespace["journal_bearing_unit_load"](
+        radial_load=namespace["RADIAL_LOAD"],
+        journal_diameter=Quantity(
+            magnitude=2 * namespace["JOURNAL_RADIUS"].to("mm").magnitude, unit="mm"
+        ),
+        bearing_length=namespace["BEARING_LENGTH"],
+    )
+    _assert_narrates(
+        "journal_bearing_film_regime.py",
+        namespace["sommerfeld_number"](
+            journal_radius=namespace["JOURNAL_RADIUS"],
+            radial_clearance=namespace["RADIAL_CLEARANCE"],
+            viscosity=namespace["VISCOSITY"],
+            speed=namespace["SPEED"],
+            unit_load=unit_load,
+        ),
+    )
 
 
 def test_riveted_lap_joint_example_second_row_balances_the_modes():

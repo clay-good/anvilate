@@ -4,7 +4,7 @@ Hydrogen glows red in a discharge tube because its electron, dropping from the t
 the second, emits light at a single sharp wavelength. The Bohr model gives the whole picture: the
 energy of each level, how far out the electron orbits, and the wavelength of the jump between them.
 
-For the n = 3 -> 2 transition (the Balmer-alpha line), the electron falls from -1.511 eV to
+For the n = 3 -> 2 transition (the Balmer-alpha line), the electron falls from -1.512 eV to
 -3.401 eV, releasing about 1.89 eV. That photon has a wavelength of about 656 nm — the deep red line
 that gives hydrogen discharge tubes and many nebulae their color. The n = 2 orbit sits about 212 pm
 from the nucleus. This example reports the n = 2 energy level, the n = 2 orbit radius, and the
