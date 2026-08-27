@@ -227,22 +227,17 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "office_floor_vibration.py",
         "pallet_bay_floor_beam.py",
         "ph_electrode_nernst.py",
-        "pipe_expansion_loop.py",
         "plated_shaft_callouts_change_the_verdict.py",
-        "press_brake_springback.py",
         "pressure_vessel_nozzle_and_flange.py",
         "project_appraisal.py",
         "pv_summer_derating.py",
         "rc_floor_beam.py",
         "rc_t_beam_floor.py",
-        "receiver_noise_figure.py",
         "relativistic_spaceship.py",
-        "roof_rack_rollover.py",
         "roof_step_snow_drift.py",
         "rotor_unbalance_response.py",
         "satellite_dish_antenna.py",
         "seismic_accidental_torsion.py",
-        "seismic_cs_period_cap.py",
         "seismic_elf_design.py",
         "servo_duty_cycle_thermal.py",
         "servo_inertia_matching.py",
@@ -1415,6 +1410,15 @@ def test_press_brake_springback_example_spring_steel_recovers_more():
     # The resilient alloy springs back much more, and its factor is further from 1.
     assert spring["overbend_deg"] > mild["overbend_deg"]
     assert spring["springback_factor"] < mild["springback_factor"]
+    # The springback factors and sprung radii the docstring quotes for both materials.
+    _assert_narrates(
+        "press_brake_springback.py",
+        *(
+            value
+            for material in (mild, spring)
+            for value in (material["springback_factor"], material["sprung_radius_mm"])
+        ),
+    )
     # Both sprung radii open up past the formed 4 mm.
     assert spring["sprung_radius_mm"] > mild["sprung_radius_mm"] > 4.0
 
@@ -2418,6 +2422,15 @@ def test_receiver_noise_figure_example():
     assert d["lna_first_nf_db"] == pytest.approx(1.3, abs=0.1)
     assert d["lna_first_noise_temp_k"] == pytest.approx(101.0, abs=2.0)
     assert d["mixer_first_nf_db"] == pytest.approx(10.0, abs=0.1)
+    # The LNA's noise factor and the cascade the docstring adds up in words.
+    _assert_narrates(
+        "receiver_noise_figure.py",
+        namespace["LNA_NOISE_FACTOR"],
+        namespace["cascade_noise_factor"](
+            stage_noise_factors=(namespace["LNA_NOISE_FACTOR"], namespace["MIXER_NOISE_FACTOR"]),
+            stage_gains=(namespace["LNA_GAIN"], namespace["MIXER_GAIN"]),
+        ),
+    )
 
 
 def test_satellite_dish_antenna_example():
@@ -3364,6 +3377,13 @@ def test_seismic_cs_period_cap_example_tall_building_capped():
     assert r["tall"]["governing"] == pytest.approx(r["tall"]["cap"], rel=1e-9)
     assert r["tall"]["governing"] < r["squat"]["governing"]
     assert r["tall"]["period_s"] > r["squat"]["period_s"]
+    # The plateau, the squat building's period, and the cap that bites on the tall one.
+    _assert_narrates(
+        "seismic_cs_period_cap.py",
+        r["squat"]["plateau"],
+        r["squat"]["period_s"],
+        r["tall"]["cap"],
+    )
 
 
 def test_wind_vs_seismic_base_shear_example_seismic_governs():
@@ -3539,6 +3559,17 @@ def test_pipe_expansion_loop_example_shows_the_sif_governs():
     assert utils["at_the_elbow"] > utils["straight_pipe"]
     assert utils["at_the_elbow"] < 1.0
     assert utils["at_the_elbow"] == pytest.approx(0.84, abs=0.03)
+    # The two stress-intensification factors the docstring quotes for the elbow.
+    _assert_narrates(
+        "pipe_expansion_loop.py",
+        *namespace["asme_b313_bend_stress_intensification"](
+            wall_thickness=namespace["WALL"],
+            bend_radius=namespace["BEND_RADIUS"],
+            mean_radius=namespace["MEAN_RADIUS"],
+        ),
+        utils["straight_pipe"],
+        utils["at_the_elbow"],
+    )
 
 
 def test_spur_gear_agma_example_is_governed_by_pitting():
@@ -6537,6 +6568,27 @@ def test_roof_rack_rollover_example_raised_cg_tips_it():
     empty = namespace["screen_empty"]()
     assert empty.entries[0].passed
     assert empty.status is CheckStatus.PASS
+
+    # The empty stability factor and the lateral acceleration the ramp demands, which
+    # is the comparison the whole example makes.
+    from anvilate.analysis import STANDARD_GRAVITY
+
+    speed = namespace["RAMP_SPEED"].to("m/s").magnitude
+    _assert_narrates(
+        "roof_rack_rollover.py",
+        namespace["static_stability_factor"](
+            track_width=namespace["TRACK_WIDTH"],
+            center_of_gravity_height=namespace["EMPTY_CG_HEIGHT"],
+        ),
+        namespace["static_stability_factor"](
+            track_width=namespace["TRACK_WIDTH"],
+            center_of_gravity_height=namespace["ROOF_LOADED_CG_HEIGHT"],
+        ),
+        speed**2
+        / (namespace["RAMP_RADIUS"].to("m").magnitude * STANDARD_GRAVITY.to("m/s**2").magnitude),
+        loaded.entries[0].safety_factor,
+        empty.entries[0].safety_factor,
+    )
 
 
 def test_laser_cutter_beam_expander_example_widening_tightens_focus():
