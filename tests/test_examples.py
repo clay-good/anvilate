@@ -6080,6 +6080,81 @@ def test_lightest_bracket_example_shows_all_three_ways_a_sweep_lies():
     assert halton.best("mass").objectives["mass"] == pytest.approx(1.097, rel=1e-3)
 
 
+def test_the_exploration_pages_numbers_are_the_sweeps_own():
+    """`docs/design-space-exploration.md` argues from one bracket sweep, unopened.
+
+    The summary line it prints, the three masses its "the lightest design is not the
+    lightest design" claim turns on, the infeasible count, the truncated-budget row and
+    the Halton row that is the page's whole argument for a low-discrepancy sequence.
+    """
+    from anvilate.explore import halton_sequence
+
+    page = " ".join(
+        (Path(__file__).resolve().parent.parent / "docs" / "design-space-exploration.md")
+        .read_text()
+        .split()
+    )
+    namespace = runpy.run_path(str(_EXAMPLES / "lightest_passing_bracket.py"))
+    full = namespace["sweep"]()
+
+    summary = re.search(
+        r"# cantilever bracket: (\d+) of (\d+) points evaluated \((\d+)%, (\w+)\), "
+        r"(\d+) feasible, (\d+) on the front",
+        page,
+    )
+    assert summary is not None, "the summary line on the exploration page has moved"
+    assert full.summary() == summary.group(0).lstrip("# ")
+
+    masses = re.search(
+        r"lightest thing in the box is ([\d.]+) kg and it fails bending\. "
+        r"The lightest one that \*works\* is ([\d.]+) kg — \*\*([\d.]+)×",
+        page,
+    )
+    assert masses is not None, "the page no longer contrasts the two lightest designs"
+    lightest = min(full.points, key=lambda p: p.objectives["mass"])
+    assert lightest.feasible is False
+    assert lightest.objectives["mass"] == pytest.approx(float(masses.group(1)), abs=5e-4)
+    passing = full.best("mass").objectives["mass"]
+    assert passing == pytest.approx(float(masses.group(2)), abs=5e-4)
+    assert passing / lightest.objectives["mass"] == pytest.approx(float(masses.group(3)), abs=5e-3)
+
+    infeasible = re.search(r"(\w+)-five of the\s+eighty-one points are infeasible", page)
+    assert infeasible is not None, "the page no longer counts the infeasible points"
+    assert len(full.points) - len(full.feasible) == {"Fifty": 55}[infeasible.group(1)]
+
+    # The truncated sweep: the budget, the coverage it reports, and the two strategies.
+    truncated = re.search(
+        r"Cap the budget at (\d+) points and the result is `provisional`, reports (\d+)% "
+        r"coverage, and finds \*\*zero feasible designs\*\*",
+        page,
+    )
+    assert truncated is not None, "the truncated-sweep paragraph has moved"
+    budget = int(truncated.group(1))
+    grid = namespace["sweep"](budget=budget)
+    assert grid.provisional is True
+    assert 100.0 * grid.coverage == pytest.approx(float(truncated.group(2)), abs=0.5)
+    assert grid.feasible == ()
+
+    row = re.search(r"\| Halton \| (\d+) \| ([\d.]+) kg \|", page)
+    assert row is not None, "the Halton row of the budget table has moved"
+    halton = namespace["sweep"](budget=budget, strategy=namespace["SamplingStrategy"].HALTON)
+    assert len(halton.feasible) == int(row.group(1))
+    assert halton.best("mass").objectives["mass"] == pytest.approx(float(row.group(2)), abs=5e-4)
+    assert grid.best("mass") is None, "the page's grid row says `None`"
+
+    # The radical inverse the page writes out by hand, in both bases.
+    bases = re.findall(r"base (\d) gives ([\d/, ]+?)(?: and|\.)", page)
+    assert len(bases) == 2, "the page no longer writes out the radical inverse in both bases"
+    for base, claimed in bases:
+        wanted = []
+        for term in claimed.split(", "):
+            numerator, denominator = term.split("/")
+            wanted.append(int(numerator) / int(denominator))
+        dimension = [2, 3].index(int(base))
+        drawn = [point[dimension] for point in halton_sequence(count=len(wanted), dimensions=2)]
+        assert drawn == pytest.approx(wanted)
+
+
 def test_spreader_beam_example_fails_only_once_the_device_weight_is_in_the_load():
     namespace = runpy.run_path(str(_EXAMPLES / "spreader_beam_device_screen.py"))
     Quantity_ = namespace["Quantity"]
