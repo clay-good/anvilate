@@ -1514,10 +1514,20 @@ def test_every_docs_page_that_argues_from_a_number_is_opened_by_a_test():
     or more fraction digits or a comma-grouped integer — enough to be a claim and not a
     section number — and a page counts as opened when some test names its filename.
     """
+    import ast
     import re
 
     root = Path(__file__).resolve().parent.parent
-    suite = "\n".join(p.read_text() for p in (root / "tests").glob("*.py"))
+    # A page counts as opened only when a test names it in a *string literal*. The first
+    # version of this gate searched the raw source, and `timber-screening.md` — the page
+    # carrying more numbers than any other — passed it on a mention inside a comment.
+    # A gate satisfiable by a comment is the substring-gate failure one level up.
+    suite = "\n".join(
+        literal.value
+        for module in (root / "tests").glob("*.py")
+        for literal in ast.walk(ast.parse(module.read_text()))
+        if isinstance(literal, ast.Constant) and isinstance(literal.value, str)
+    )
     distinctive = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+\.\d{2,})(?![\w])")
 
     for name in _PAGES_WHOSE_NUMBERS_ARE_EXTERNAL:

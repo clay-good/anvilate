@@ -226,9 +226,10 @@ c_p = nds_column_stability_factor(euler_buckling_stress=f_cE, reference_compress
 
 ## Worked-example anchors
 
-Three textbook problems are pinned end to end in `tests/test_analysis.py`
-(`test_nds_worked_example_*`) against numbers worked by hand, not re-derived from the
-code. They are the pack's regression floor, and each carries a lesson:
+Four textbook problems are pinned end to end in `tests/test_analysis.py` against numbers
+worked by hand, not re-derived from the code — three of them as `test_nds_worked_example_*`
+and the beam-stability chain across the `test_nds_beam_*` tests. They are the pack's
+regression floor, and each carries a lesson:
 
 | Anchor | Problem | Result | What it pins |
 | --- | --- | --- | --- |

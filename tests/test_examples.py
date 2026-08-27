@@ -6786,3 +6786,177 @@ def test_mcp_tool_catalog_example_splits_the_surface_the_way_the_spec_states():
     assert "export_artifact     synchronous   validation,watermark" in body
     # And the example's own assertions run, including the scorecard $ref.
     namespace["main"]()
+
+
+def test_the_timber_pages_figures_are_the_packs_own():
+    """`docs/timber-screening.md` carries more numbers than any other page, and the only
+    test that named it named it in a comment — so the ratchet counted it opened and
+    nothing read it.
+
+    Three bullets narrate examples, two constants separate the beam's buckling stress from
+    the column's, and a four-row table claims its anchors are pinned by name.
+    """
+    import ast
+
+    from anvilate.analysis import (
+        nds_beam_stability_factor,
+        nds_bending_buckling_stress,
+        nds_euler_buckling_stress,
+    )
+
+    root = Path(__file__).resolve().parent.parent
+    page = " ".join((root / "docs" / "timber-screening.md").read_text().split())
+
+    # The two coefficients in the identical shape, derived rather than restated.
+    coefficients = re.search(
+        r"F_bE = \*\*([\d.]+)\*\*·E'_min/R_B²\. The column's Euler stress uses \*\*([\d.]+)\*\*",
+        page,
+    )
+    assert coefficients is not None, "the timber page no longer contrasts the two coefficients"
+    modulus = Quantity.parse("850000 psi")
+    slenderness = 11.54
+    for claimed, stress in (
+        (coefficients.group(1), nds_bending_buckling_stress),
+        (coefficients.group(2), nds_euler_buckling_stress),
+    ):
+        value = stress(min_modulus=modulus, slenderness_ratio=slenderness).to("psi").magnitude
+        assert value * slenderness**2 / modulus.to("psi").magnitude == pytest.approx(
+            float(claimed), abs=5e-4
+        )
+    understatement = float(coefficients.group(2)) / float(coefficients.group(1))
+    assert understatement == pytest.approx(2.0 / 3.0, abs=0.02), (
+        "the page says swapping them understates the beam's buckling stress by a third"
+    )
+
+    # C_L's two fixed constants, checked by evaluating the page's own formula.
+    stability = re.search(
+        r"C_L = \(1\+x\)/([\d.]+) − √\(\[\(1\+x\)/([\d.]+)\]² − x/([\d.]+)\)", page
+    )
+    assert stability is not None, "the C_L formula on the timber page has moved"
+    assert stability.group(1) == stability.group(2), "the page writes two different denominators"
+    first, _, second = (float(g) for g in stability.groups())
+    x = 2.77
+    expected = (1 + x) / first - math.sqrt(((1 + x) / first) ** 2 - x / second)
+    assert nds_beam_stability_factor(
+        buckling_stress=Quantity.parse("7659 psi"),
+        reference_bending_value=Quantity.parse(f"{7659 / x} psi"),
+    ) == pytest.approx(expected, abs=5e-4)
+
+    # The rafter bullet: the margin bending alone reports, the three braced cases, and
+    # the factor the F'_b mistake returns.
+    rafter = re.search(
+        r"a 2x12 rafter with (\d+)% in hand on bending stress and C_L = ([\d.]+) unbraced: it "
+        r"fails at ([\d.]+), still fails at ([\d.]+) with one strut at midspan, and passes at "
+        r"([\d.]+) braced at the third points\. Handing C_L the fully adjusted F'_b instead of "
+        r"F_b\* returns ([\d.]+)",
+        page,
+    )
+    assert rafter is not None, "the rafter bullet on the timber page has moved"
+    beam = runpy.run_path(str(_EXAMPLES / "timber_beam_lateral_stability.py"))
+    skipped = beam["screen"]("bending (C_L skipped)", None)
+    assert 100.0 * (skipped.safety_factor - 1.0) == pytest.approx(float(rafter.group(1)), abs=0.5)
+    study = beam["bracing_study"]()
+    assert [c_l for _label, c_l, _entry in study][0] == pytest.approx(
+        float(rafter.group(2)), abs=5e-4
+    )
+    assert [entry.safety_factor for _label, _c_l, entry in study] == pytest.approx(
+        [float(rafter.group(i)) for i in (3, 4, 5)], abs=0.005
+    )
+    assert beam["stability_factor_given_the_adjusted_value"]() == pytest.approx(
+        float(rafter.group(6)), abs=5e-4
+    )
+
+    # The post bullet, and the two C_P values quoted a section earlier.
+    post = re.search(
+        r"the same 4x4 under the same ([\d,]+) lb passes at (\d+) ft \(SF ([\d.]+)\) and fails "
+        r"at (\d+) ft \(([\d.]+)\)",
+        page,
+    )
+    assert post is not None, "the post bullet on the timber page has moved"
+    posts = runpy.run_path(str(_EXAMPLES / "timber_post_slenderness.py"))
+    assert posts["screen_short_post"]().entries[0].safety_factor == pytest.approx(
+        float(post.group(3)), abs=0.01
+    )
+    assert posts["screen_long_post"]().entries[0].safety_factor == pytest.approx(
+        float(post.group(5)), abs=0.01
+    )
+    collapse = re.search(
+        r"an (\d+) ft 4x4 sits at (\d+\.\d+), the same post at (\d+) ft at (\d+\.\d+)", page
+    )
+    assert collapse is not None, "the C_P collapse sentence on the timber page has moved"
+    for length, claimed in (
+        (collapse.group(1), collapse.group(2)),
+        (collapse.group(3), collapse.group(4)),
+    ):
+        assert posts["stability_factor"](Quantity.parse(f"{length} ft")) == pytest.approx(
+            float(claimed), abs=0.005
+        )
+
+    # The header bullet: three checks on a wall plate and the one that moves on a post.
+    header = re.search(
+        r"whose bending \(SF ([\d.]+)\) and shear \(([\d.]+)\) both pass while the bearing on a "
+        r"([\d.]+) in wall plate crushes at ([\d.]+)\. Landing it on a ([\d.]+) in post takes "
+        r"bearing to ([\d.]+)",
+        page,
+    )
+    assert header is not None, "the header bullet on the timber page has moved"
+    headers = runpy.run_path(str(_EXAMPLES / "timber_header_bearing_governs.py"))
+    plate = {e.name: e for e in headers["screen_on_wall_plate"]().entries}
+    on_post = {e.name: e for e in headers["screen_on_post"]().entries}
+    for name, claimed in (
+        ("header bending", header.group(1)),
+        ("horizontal shear", header.group(2)),
+        ("end bearing", header.group(4)),
+    ):
+        assert plate[name].safety_factor == pytest.approx(float(claimed), abs=0.01)
+    assert on_post["end bearing"].safety_factor == pytest.approx(float(header.group(6)), abs=0.01)
+    for name in ("header bending", "horizontal shear"):
+        assert on_post[name].safety_factor == pytest.approx(plate[name].safety_factor, rel=1e-9)
+
+    # The anchor table's claim about where its own numbers are pinned.
+    anchors = re.search(
+        r"(\w+) textbook problems are pinned end to end in `tests/([\w.]+)` against numbers "
+        r"worked by hand.*?three of them as `(\w+)\*`",
+        page,
+    )
+    assert anchors is not None, "the worked-anchor sentence on the timber page has moved"
+    suite = (root / "tests" / anchors.group(2)).read_text()
+    named = re.findall(rf"^def ({re.escape(anchors.group(3))}\w*)\(", suite, re.MULTILINE)
+    assert len(named) == 3, f"the page names three {anchors.group(3)}* tests and there are {named}"
+
+    rows = re.findall(
+        r"\| (Floor joist|Post|Beam stability|Beam-column) \| [^|]+ \| ([^|]+) \| ([^|]+) \|",
+        page,
+    )
+    assert len(rows) == {"Four": 4}[anchors.group(1)], "the anchor table and its count disagree"
+
+    # Every figure the table quotes has to be a value one of the pack's own tests asserts,
+    # to the digits the page prints. Searching the whole suite is not the same check: a
+    # 40,000-line file carries a near-miss for almost any number, and the first version of
+    # this loop passed a mutated 1.08 -> 1.09 on an unrelated test's 1.0929.
+    pinned = [
+        float(call.args[0].value)
+        for function in ast.walk(ast.parse(suite))
+        if isinstance(function, ast.FunctionDef) and function.name.startswith("test_nds_")
+        for call in ast.walk(function)
+        if isinstance(call, ast.Call)
+        and getattr(call.func, "attr", None) == "approx"
+        and call.args
+        and isinstance(call.args[0], ast.Constant)
+        and isinstance(call.args[0].value, float)
+    ]
+    assert len(pinned) > 20, "the NDS tests assert fewer values than this check assumes"
+    for _label, result, lesson in rows:
+        result = f"{result} {lesson}"
+        # Both the result and the lesson beside it: the lesson column is where "skipping
+        # C_P reports 2.52 on the same post" lives, which is a computed number too.
+        quoted = re.findall(r"(?<![\w.])(\d+\.\d+|\d{1,3},\d{3})(?![\w])", result)
+        assert quoted, f"the {_label} row quotes no figure"
+        for number in quoted:
+            value = float(number.replace(",", ""))
+            if value in {float(coefficients.group(1)), float(coefficients.group(2))}:
+                continue  # the two coefficients, already derived from the functions above
+            rounding = 0.5 * 10 ** -len(number.partition(".")[2])
+            assert any(abs(value - p) <= rounding for p in pinned), (
+                f"the page quotes {number} for {_label} and no NDS test asserts it"
+            )
