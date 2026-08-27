@@ -175,6 +175,20 @@ sweep used a copy holding only `src/` and `tests/`, so 525 tests failed on the m
 reported perfect coverage while measuring nothing. Copy the repo with `git archive HEAD`
 and run the suite once before mutating anything.
 
+## A skipped gate is a gate that did not run
+
+Several tests skip when an optional package is absent — `jsonschema` for the published
+contracts, `ezdxf` for the DXF export, `lxml` for the two interchange schemas. Locally
+that is the point: the packages are optional. In CI they are not, because the dev extra
+installs them, so a skip there means a check quietly stopped running while the build
+stayed green.
+
+`tests/conftest.py` fails a CI run (anything with `CI` set) that skips a test for a
+missing import, unless the package is one only the *scheduled* jobs install. That
+allow-list is held against the workflow itself by
+`test_the_ci_skip_gate_allows_exactly_what_the_scheduled_jobs_install`, so an entry no
+job backs — which would excuse a skip forever — fails the build instead.
+
 ## Finding the guards nothing has ever run
 
 A line-trace of the suite says **around 56% of the roughly 4,300 `raise` sites in the imported modules

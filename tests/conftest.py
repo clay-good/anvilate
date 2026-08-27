@@ -26,6 +26,8 @@ zero are exempt — there the absolute floor is the whole point.
 from __future__ import annotations
 
 import inspect
+import os
+import re
 from pathlib import Path
 
 import pytest
@@ -79,12 +81,52 @@ def _manifest() -> set[str]:
     }
 
 
+# Packages only the scheduled CI jobs install: the interchange-schema job adds lxml, the
+# optional-adapter job adds the finite-element packages. Every *other* import a test can
+# skip on is promised by the dev extra, and a skip for one of those in CI means the gate
+# did not run and the build went green anyway — the quietest silent green there is.
+# `lxml.etree` is listed beside `lxml` because that is the name a test imports.
+# `tests/test_contract.py` holds this set against what the workflow's scheduled jobs
+# actually install, so it cannot quietly grow an entry no job backs.
+_SCHEDULED_ONLY_IMPORTS = frozenset({"lxml", "lxml.etree", "sectionproperties"})
+
+_import_skips: set[str] = set()
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    """Record which module each skipped test could not import."""
+    if report.skipped and isinstance(report.longrepr, tuple):
+        _, _, reason = report.longrepr
+        missing = re.search(r"could not import '([^']+)'", reason)
+        if missing is not None:
+            _import_skips.add(f"{missing.group(1)}|{report.nodeid}")
+
+
 def pytest_configure(config: pytest.Config) -> None:
     pytest.approx = _recording_approx
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     pytest.approx = _real_approx
+
+    # A gate that skips is a gate that did not run. Locally that is fine — the optional
+    # packages are optional. In CI the dev extra is installed, so a skip for anything but
+    # the scheduled-job packages means a dependency quietly went missing.
+    if os.environ.get("CI"):
+        unexpected = sorted(
+            entry
+            for entry in _import_skips
+            if entry.split("|", 1)[0] not in _SCHEDULED_ONLY_IMPORTS
+        )
+        if unexpected:
+            print(
+                "\nGATES SKIPPED IN CI: these tests skipped because a package the dev "
+                "extra promises is missing, so the checks they carry did not run:\n  "
+                + "\n  ".join(unexpected)
+            )
+            session.exitstatus = 1
+            return
+
     recorded, known = _recorded, _manifest()
 
     new = sorted(recorded - known)

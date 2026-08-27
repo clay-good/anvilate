@@ -1612,3 +1612,42 @@ def test_the_package_docstrings_quoted_constants_are_the_functions_own():
     assert impedance * math.sqrt(2.25) / math.log(3.0) == pytest.approx(
         _quoted(r"Z_0 = \(([\d.]+)/√ε_r\)"), abs=5e-3
     )
+
+
+def test_the_ci_skip_gate_allows_exactly_what_the_scheduled_jobs_install():
+    """`tests/conftest.py` fails a CI run that skips a gate for a missing package.
+
+    Its allow-list is the packages only the scheduled jobs install, and an entry no job
+    backs would excuse a skip forever. So the list is held against the workflow: every
+    allowed import is installed by a scheduled job, and every package those jobs install
+    is allowed. `lxml.etree` is the import name beside the distribution's own.
+    """
+    import re
+
+    root = Path(__file__).resolve().parent.parent
+    workflow = (root / ".github" / "workflows" / "ci.yml").read_text()
+    conftest = (root / "tests" / "conftest.py").read_text()
+
+    allowed = set(
+        re.findall(
+            r'"([\w.]+)"',
+            re.search(r"_SCHEDULED_ONLY_IMPORTS = frozenset\(\{([^}]*)\}", conftest).group(1),
+        )
+    )
+    assert allowed, "the conftest gate no longer declares an allow-list"
+
+    # Every extra package a scheduled job installs, from its own install step.
+    scheduled = set()
+    for job in re.split(r"\n  (?=\w[\w-]*:)", workflow)[1:]:
+        if "github.event_name == 'schedule'" not in job:
+            continue
+        for install in re.findall(r'pip install -e "\.\[dev\]"([^\n]*)', job):
+            scheduled.update(install.split())
+    assert scheduled, "no scheduled job installs an extra package any more"
+
+    aliases = {"lxml": {"lxml", "lxml.etree"}}
+    expected = {name for package in scheduled for name in aliases.get(package, {package})}
+    assert allowed == expected, (
+        f"the conftest allow-list is {sorted(allowed)} and the scheduled jobs install "
+        f"{sorted(scheduled)}; an allowed import no job installs excuses a skip forever"
+    )
