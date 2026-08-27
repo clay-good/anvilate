@@ -575,6 +575,7 @@ def test_mass_transfer_wet_bulb_example_lewis_near_one():
     assert g["lewis"] == pytest.approx(g["lewis_via_sc_over_pr"], rel=2e-3)
     # The Sherwood number is the dimensionless mass-transfer coefficient for the plate.
     assert g["sherwood"] == pytest.approx(42.3, abs=0.5)
+    _assert_narrates_computed("mass_transfer_wet_bulb.py", namespace)
 
 
 def test_isentropic_efficiency_compressor_example_real_stage_costs_more():
@@ -623,6 +624,7 @@ def test_real_gas_co2_cylinder_example_shows_the_deviation():
     assert d["compressibility_factor"] < 1.0
     # The real molar volume it implies is smaller than the ideal one.
     assert d["real_molar_volume_l_mol"] < d["ideal_molar_volume_l_mol"]
+    _assert_narrates_computed("real_gas_co2_cylinder.py", namespace)
 
 
 def test_vacuum_chamber_pump_down_example():
@@ -641,6 +643,7 @@ def test_acetate_buffer_ph_example():
     assert d["buffer_ph"] == pytest.approx(5.061, abs=0.005)
     # ratio for pH 5.00 = 10^(5.00-4.76) ~ 1.74.
     assert d["ratio_for_target_ph"] == pytest.approx(1.738, abs=0.01)
+    _assert_narrates_computed("acetate_buffer_ph.py", namespace)
 
 
 def test_hall_petch_grain_refinement_example():
@@ -660,6 +663,7 @@ def test_reverse_osmosis_seawater_flux_example():
     # C_p = J_s/J_w ~ 1.97 kg/m3; rejection ~0.944.
     assert d["permeate_concentration_kg_m3"] == pytest.approx(1.97, abs=0.02)
     assert d["salt_rejection"] == pytest.approx(0.944, abs=0.005)
+    _assert_narrates_computed("reverse_osmosis_seawater_flux.py", namespace)
 
 
 def test_cyclone_dust_collector_cut_size_example():
@@ -698,6 +702,7 @@ def test_spacer_stack_tolerance_example():
     assert d["worst_case_mm"] == pytest.approx(0.25, rel=1e-9)
     assert d["rss_mm"] == pytest.approx(5**0.5 * 0.05, rel=1e-9)
     assert d["rss_mm"] < d["worst_case_mm"]
+    _assert_narrates_computed("spacer_stack_tolerance.py", namespace)
 
 
 def test_linear_regulator_heatsink_screen_example():
@@ -707,6 +712,7 @@ def test_linear_regulator_heatsink_screen_example():
     assert d["dissipation_W"] == pytest.approx(7.06, rel=1e-9)
     assert d["efficiency"] == pytest.approx(5 / (12 * 1.005), rel=1e-9)
     assert d["efficiency"] < 5 / 12
+    _assert_narrates_computed("linear_regulator_heatsink_screen.py", namespace)
 
 
 def test_bench_supply_reservoir_capacitor_example():
@@ -718,6 +724,7 @@ def test_bench_supply_reservoir_capacitor_example():
     assert d["ripple_pp_V"] == pytest.approx(0.833, abs=1e-3)
     assert d["dc_output_V"] == pytest.approx(16.58, abs=0.05)
     assert d["ripple_factor"] == pytest.approx(0.02, abs=0.001)
+    _assert_narrates_computed("bench_supply_reservoir_capacitor.py", namespace)
 
 
 def test_comminution_ball_mill_energy_example():
@@ -741,6 +748,7 @@ def test_fuel_cell_hydrogen_efficiency_example():
     assert d["overall_efficiency"] == pytest.approx(
         d["thermodynamic_efficiency"] * d["voltage_efficiency"], rel=1e-9
     )
+    _assert_narrates_computed("fuel_cell_hydrogen_efficiency.py", namespace)
 
 
 def test_distillation_benzene_toluene_equilibrium_example():
@@ -753,6 +761,7 @@ def test_distillation_benzene_toluene_equilibrium_example():
     # Vapor is richer in benzene than the 0.40 liquid.
     assert d["vapor_benzene_fraction"] == pytest.approx(0.616, abs=0.01)
     assert d["vapor_benzene_fraction"] > 0.40
+    _assert_narrates_computed("distillation_benzene_toluene_equilibrium.py", namespace)
 
 
 def test_packed_bed_reactor_pressure_drop_example():
@@ -762,6 +771,7 @@ def test_packed_bed_reactor_pressure_drop_example():
     assert d["void_fraction"] == pytest.approx(0.40, rel=1e-9)
     # Ergun drop over the 2 m bed is ~1.07 kPa.
     assert d["pressure_drop_kpa"] == pytest.approx(1.07, abs=0.05)
+    _assert_narrates_computed("packed_bed_reactor_pressure_drop.py", namespace)
 
 
 def test_reactor_pfr_vs_cstr_conversion_example():
@@ -807,6 +817,7 @@ def test_measurement_uncertainty_gauge_block_example():
     assert b["combined_um"] > b["type_a_um"]
     # Expanded at k=2 is twice the combined -> ~0.35 um.
     assert b["expanded_um"] == pytest.approx(2 * b["combined_um"], rel=1e-6)
+    _assert_narrates_computed("measurement_uncertainty_gauge_block.py", namespace)
 
 
 def test_photodetector_receiver_snr_example():
@@ -831,6 +842,7 @@ def test_clarifier_primary_sizing_example():
     assert c["overflow_rate_mm_s"] == pytest.approx(50000.0 / 86400.0, rel=1e-6)
     # Weir loading 12000/50 = 240 m3/m.day, within the usual 250 limit.
     assert c["weir_loading_m2_day"] == pytest.approx(240.0, rel=1e-6)
+    _assert_narrates_computed("clarifier_primary_sizing.py", namespace)
 
 
 def test_friction_pile_capacity_example_shaft_carries_the_load():
@@ -892,6 +904,7 @@ def test_relief_valve_choked_flow_example_is_choked():
     assert r["critical_ratio"] == pytest.approx(0.528, abs=0.002)
     # It relieves a substantial mass flow, capped by the upstream conditions.
     assert r["mass_flow_kgs"] == pytest.approx(0.595, abs=0.02)
+    _assert_narrates_computed("relief_valve_choked_flow.py", namespace)
 
 
 def test_air_compressor_duty_example_brackets_power_and_heat():
@@ -933,6 +946,7 @@ def test_chiller_second_law_efficiency_example_ranking_flips():
     assert g["hard_eta2"] > g["easy_eta2"]
     assert g["easy_eta2"] == pytest.approx(0.40, abs=0.01)
     assert g["hard_eta2"] == pytest.approx(0.55, abs=0.01)
+    _assert_narrates_computed("chiller_second_law_efficiency.py", namespace)
 
 
 def test_heat_pump_cold_day_example_cop_collapses():
@@ -1092,6 +1106,7 @@ def test_compressible_pitot_stagnation_example_bernoulli_undercounts():
     assert r["pressure_ratio"] == pytest.approx(
         r["density_ratio"] * r["temperature_ratio"], rel=1e-9
     )
+    _assert_narrates_computed("compressible_pitot_stagnation.py", namespace)
 
 
 def test_rocket_nozzle_area_ratio_example_two_roots():
@@ -1166,6 +1181,7 @@ def test_generator_capacity_factor_example():
     assert c["wind_cf"] == pytest.approx(0.342, abs=0.005)
     assert c["solar_cf"] == pytest.approx(0.20, abs=0.005)
     assert c["gas_cf"] > c["wind_cf"] > c["solar_cf"]
+    _assert_narrates_computed("generator_capacity_factor.py", namespace)
 
 
 def test_wind_turbine_power_curve_example_cube_law():
@@ -1237,6 +1253,7 @@ def test_surface_grinding_specific_energy_example_governs_on_heat():
     # u = P/(b*Q'_w) = 2400/(20*4) = 30 J/mm^3 — an order of magnitude above a turning cut.
     assert d["specific_energy_j_mm3"] == pytest.approx(30.0, abs=0.1)
     assert d["specific_energy_j_mm3"] > 10.0
+    _assert_narrates_computed("surface_grinding_specific_energy.py", namespace)
 
 
 def test_broach_pull_force_margin_example_tension_governs():
@@ -1262,6 +1279,7 @@ def test_drill_press_torque_limit_example_torque_governs():
     # Feed ceiling at 10 N*m: 8*10/(2000*144) = 0.278 mm/rev; the 0.2 used sits inside it.
     assert d["feed_ceiling_mm"] == pytest.approx(0.2778, abs=0.001)
     assert d["feed_used_mm"] < d["feed_ceiling_mm"]
+    _assert_narrates_computed("drill_press_torque_limit.py", namespace)
 
 
 def test_ecm_gap_regulation_example_gap_self_regulates():
@@ -1274,6 +1292,7 @@ def test_ecm_gap_regulation_example_gap_self_regulates():
     assert d["gap_mm"] == pytest.approx(0.3, abs=0.005)
     assert d["gap_double_feed_mm"] == pytest.approx(0.15, abs=0.005)
     assert d["gap_double_feed_mm"] < d["gap_mm"]
+    _assert_narrates_computed("ecm_gap_regulation.py", namespace)
 
 
 def test_laser_cut_thickness_limit_example_power_governs():
@@ -1286,6 +1305,7 @@ def test_laser_cut_thickness_limit_example_power_governs():
     # At a reliable 2 m/min the ceiling is ~10 mm; slower reaches thicker plate than the 5 mm cut.
     assert d["max_thickness_at_2m_min_mm"] == pytest.approx(10.09, abs=0.05)
     assert d["max_thickness_at_2m_min_mm"] > 5.0
+    _assert_narrates_computed("laser_cut_thickness_limit.py", namespace)
 
 
 def test_edm_roughing_vs_finishing_example_energy_trades_off():
@@ -1313,6 +1333,7 @@ def test_centrifugal_cast_pipe_speed_example_g_factor_sets_speed():
     assert d["achieved_g_factor"] == pytest.approx(90.0, rel=1e-6)
     # Metallostatic wall pressure ~0.10 MPa.
     assert d["wall_pressure_mpa"] == pytest.approx(0.10, abs=0.01)
+    _assert_narrates_computed("centrifugal_cast_pipe_speed.py", namespace)
 
 
 def test_shot_peening_coverage_time_example_saturates_toward_full():
@@ -1349,6 +1370,7 @@ def test_thermoforming_wall_thinning_example_deeper_draw_needs_thicker_blank():
     # To leave a 0.5 mm wall the blank must start at ~1.11 mm — thicker than the wall.
     assert d["gauge_for_half_mm_wall_mm"] == pytest.approx(1.111, abs=0.005)
     assert d["gauge_for_half_mm_wall_mm"] > 0.5
+    _assert_narrates_computed("thermoforming_wall_thinning.py", namespace)
 
 
 def test_nickel_plating_time_example_faraday_sets_tank_time():
@@ -1396,6 +1418,7 @@ def test_steam_condenser_coefficient_example_tube_beats_plate():
     assert d["tube_coefficient"] > d["plate_coefficient"]
     # Condensate rate over 2 m^2 at the tube coefficient ~0.15 kg/s.
     assert d["condensate_rate_kg_s"] == pytest.approx(0.148, abs=0.005)
+    _assert_narrates_computed("steam_condenser_coefficient.py", namespace)
 
 
 def test_boiling_burnout_margin_example_runs_below_critical_heat_flux():
@@ -1429,6 +1452,7 @@ def test_normal_shock_inlet_loss_example_static_up_total_lost():
     assert d["static_pressure_ratio"] == pytest.approx(4.5, abs=0.01)
     assert d["stagnation_pressure_recovery"] == pytest.approx(0.7209, abs=0.001)
     assert d["stagnation_pressure_recovery"] < 1.0  # total pressure is destroyed
+    _assert_narrates_computed("normal_shock_inlet_loss.py", namespace)
 
 
 def test_rocket_engine_thrust_example_vacuum_beats_sea_level():
@@ -1463,6 +1487,7 @@ def test_leo_orbit_and_escape_example_escape_is_sqrt2_times_orbital():
     assert d["escape_velocity_km_s"] == pytest.approx(10.851, abs=0.005)
     # Escape is exactly sqrt(2) times the circular speed.
     assert d["escape_velocity_km_s"] == pytest.approx(2**0.5 * d["orbital_speed_km_s"], rel=1e-9)
+    _assert_narrates_computed("leo_orbit_and_escape.py", namespace)
 
 
 def test_leo_to_geo_hohmann_example_total_delta_v():
@@ -1474,6 +1499,7 @@ def test_leo_to_geo_hohmann_example_total_delta_v():
     assert d["total_delta_v_km_s"] == pytest.approx(3.857, abs=0.005)
     # Coast time ~5.3 hours.
     assert d["transfer_time_hours"] == pytest.approx(5.29, abs=0.02)
+    _assert_narrates_computed("leo_to_geo_hohmann.py", namespace)
 
 
 def test_gto_vis_viva_example_perigee_faster_than_apogee():
@@ -1487,6 +1513,7 @@ def test_gto_vis_viva_example_perigee_faster_than_apogee():
     # Specific energy negative -> bound orbit.
     assert d["specific_energy_mj_kg"] == pytest.approx(-8.15, abs=0.05)
     assert d["specific_energy_mj_kg"] < 0
+    _assert_narrates_computed("gto_vis_viva.py", namespace)
 
 
 def test_ship_turbine_gyroscopic_load_example_couple_in_a_turn():
@@ -1555,6 +1582,7 @@ def test_fiber_optic_acceptance_example_refraction_and_trapping():
     # Fibre NA ~0.24, acceptance half-angle ~14 deg.
     assert d["fiber_numerical_aperture"] == pytest.approx(0.2425, abs=0.001)
     assert d["acceptance_half_angle_deg"] == pytest.approx(14.03, abs=0.05)
+    _assert_narrates_computed("fiber_optic_acceptance.py", namespace)
 
 
 def test_lifting_magnet_holding_force_example_coil_to_clamp():
@@ -1573,6 +1601,7 @@ def test_conveyor_discharge_trajectory_example_places_the_chute():
     assert d["range_m"] == pytest.approx(0.590, abs=0.005)
     assert d["peak_height_m"] == pytest.approx(0.0537, abs=0.001)
     assert d["time_of_flight_s"] == pytest.approx(0.209, abs=0.002)
+    _assert_narrates_computed("conveyor_discharge_trajectory.py", namespace)
 
 
 def test_highway_cruise_power_example_hills_dominate():
@@ -1594,6 +1623,7 @@ def test_radiation_shield_and_view_factor_example():
     assert d["view_factor_1_to_2"] == pytest.approx(0.4142, abs=0.001)
     assert d["reciprocity_view_factor_2_to_1"] == pytest.approx(0.2071, abs=0.001)
     assert d["shield_reduction_factor"] == pytest.approx(0.25, rel=1e-9)
+    _assert_narrates_computed("radiation_shield_and_view_factor.py", namespace)
 
 
 def test_hopper_feed_and_stockpile_example_sizes_outlet_and_pile():
@@ -1632,6 +1662,7 @@ def test_amplifier_noise_floor_example():
     assert d["room_noise_voltage_uv"] == pytest.approx(0.4002, abs=0.002)
     assert d["noise_power_dbm"] == pytest.approx(-134.0, abs=0.3)
     assert d["cryo_noise_voltage_uv"] == pytest.approx(0.2063, abs=0.002)
+    _assert_narrates_computed("amplifier_noise_floor.py", namespace)
 
 
 def test_police_radar_speed_gun_example():
@@ -1650,6 +1681,7 @@ def test_silicon_pn_junction_example():
     assert d["built_in_potential_v"] == pytest.approx(0.7143, abs=0.001)
     assert d["depletion_width_um"] == pytest.approx(0.4298, abs=0.001)
     assert d["capacitance_nf_cm2"] == pytest.approx(24.10, abs=0.05)
+    _assert_narrates_computed("silicon_pn_junction.py", namespace)
 
 
 def test_hydraulic_press_lift_example():
@@ -1686,6 +1718,7 @@ def test_machining_process_capability_example():
     assert d["cp"] == pytest.approx(1.6667, abs=0.001)
     assert d["cpk"] == pytest.approx(1.3333, abs=0.001)
     assert d["defect_rate_ppm"] == pytest.approx(31.67, abs=0.5)
+    _assert_narrates_computed("machining_process_capability.py", namespace)
 
 
 def test_project_appraisal_example():
@@ -1704,6 +1737,7 @@ def test_equipment_financing_example():
     assert d["annual_loan_payment_usd"] == pytest.approx(1490.29, abs=0.01)
     assert d["savings_future_value_usd"] == pytest.approx(14486.56, abs=0.01)
     assert d["payback_period_years"] == pytest.approx(6.25, rel=1e-9)
+    _assert_narrates_computed("equipment_financing.py", namespace)
 
 
 def test_project_economics_example():
@@ -1713,6 +1747,7 @@ def test_project_economics_example():
     assert d["present_value_usd"] == pytest.approx(6805.83, abs=0.01)
     assert d["future_value_usd"] == pytest.approx(10000.0, rel=1e-9)
     assert d["annuity_present_value_usd"] == pytest.approx(6710.08, abs=0.01)
+    _assert_narrates_computed("project_economics.py", namespace)
 
 
 def test_wave_relation_example():
@@ -1731,6 +1766,7 @@ def test_car_cornering_example():
     assert d["centripetal_acceleration_m_s2"] == pytest.approx(12.5, rel=1e-9)
     assert d["centripetal_force_n"] == pytest.approx(12500.0, rel=1e-9)
     assert d["max_cornering_speed_m_s"] == pytest.approx(19.81, abs=0.01)
+    _assert_narrates_computed("car_cornering.py", namespace)
 
 
 def test_car_crash_impulse_example():
@@ -1740,6 +1776,7 @@ def test_car_crash_impulse_example():
     assert d["momentum_kg_m_s"] == pytest.approx(20000.0, rel=1e-9)
     assert d["impulse_n_s"] == pytest.approx(1500.0, rel=1e-9)
     assert d["crash_force_kn"] == pytest.approx(200.0, rel=1e-9)
+    _assert_narrates_computed("car_crash_impulse.py", namespace)
 
 
 def test_roller_coaster_energy_example():
@@ -1758,6 +1795,7 @@ def test_resistor_network_example():
     assert d["voltage_v"] == pytest.approx(20.0, rel=1e-9)
     assert d["power_w"] == pytest.approx(40.0, rel=1e-9)
     assert d["parallel_resistance_ohm"] == pytest.approx(6.6667, abs=0.001)
+    _assert_narrates_computed("resistor_network.py", namespace)
 
 
 def test_parallel_plate_capacitor_example():
@@ -1767,6 +1805,7 @@ def test_parallel_plate_capacitor_example():
     assert d["capacitance_pf"] == pytest.approx(88.54, abs=0.05)
     assert d["charge_nc"] == pytest.approx(8.854, abs=0.005)
     assert d["field_kv_m"] == pytest.approx(100.0, rel=1e-9)
+    _assert_narrates_computed("parallel_plate_capacitor.py", namespace)
 
 
 def test_biconvex_lens_design_example():
@@ -1855,6 +1894,7 @@ def test_rocket_engine_performance_example():
     assert d["characteristic_velocity_m_s"] == pytest.approx(1750.0, rel=1e-9)
     assert d["thrust_coefficient"] == pytest.approx(1.42857, abs=1e-4)
     assert d["thrust_kn"] == pytest.approx(100.0, rel=1e-9)
+    _assert_narrates_computed("rocket_engine_performance.py", namespace)
 
 
 def test_hydrogen_balmer_line_example():
@@ -1909,6 +1949,7 @@ def test_summer_solar_position_example():
     assert d["declination_deg"] == pytest.approx(23.45, abs=0.02)
     assert d["noon_altitude_deg"] == pytest.approx(73.45, abs=0.02)
     assert d["air_mass"] == pytest.approx(1.043, abs=0.005)
+    _assert_narrates_computed("summer_solar_position.py", namespace)
 
 
 def test_adc_resolution_example():
@@ -1918,6 +1959,7 @@ def test_adc_resolution_example():
     assert d["ideal_snr_db"] == pytest.approx(74.0, abs=0.01)
     assert d["quantization_step_mv"] == pytest.approx(2.4414, abs=1e-3)
     assert d["effective_number_of_bits"] == pytest.approx(11.0, abs=0.02)
+    _assert_narrates_computed("adc_resolution.py", namespace)
 
 
 def test_singlemode_fiber_link_example():
@@ -1927,6 +1969,7 @@ def test_singlemode_fiber_link_example():
     assert d["pulse_broadening_ps"] == pytest.approx(170.0, rel=1e-6)
     assert d["bit_rate_gbit_s"] == pytest.approx(1.4706, abs=0.001)
     assert d["reach_at_2p5g_km"] == pytest.approx(58.82, abs=0.05)
+    _assert_narrates_computed("singlemode_fiber_link.py", namespace)
 
 
 def test_paper_towel_wicking_example():
@@ -1945,6 +1988,7 @@ def test_iron_core_magnetic_circuit_example():
     assert d["mmf_ampere_turns"] == pytest.approx(450.0, rel=1e-12)
     assert d["reluctance_per_henry"] == pytest.approx(596831.0, abs=5.0)
     assert d["flux_mwb"] == pytest.approx(0.7540, rel=1e-3)
+    _assert_narrates_computed("iron_core_magnetic_circuit.py", namespace)
 
 
 def test_polarizer_attenuator_example():
@@ -1972,6 +2016,7 @@ def test_pump_bearing_reliability_example():
     assert d["reliability_at_500h"] == pytest.approx(0.7788, abs=0.0005)
     assert d["hazard_rate_per_hour"] == pytest.approx(0.001, rel=1e-6)
     assert d["mean_time_to_failure_h"] == pytest.approx(886.23, abs=0.01)
+    _assert_narrates_computed("pump_bearing_reliability.py", namespace)
 
 
 def test_helicopter_hover_example():
@@ -1981,6 +2026,7 @@ def test_helicopter_hover_example():
     assert d["induced_velocity_m_s"] == pytest.approx(12.74, abs=0.01)
     assert d["ideal_hover_power_kw"] == pytest.approx(63.719, abs=0.01)
     assert d["figure_of_merit"] == pytest.approx(0.7496, abs=0.001)
+    _assert_narrates_computed("helicopter_hover.py", namespace)
 
 
 def test_light_aircraft_wing_example():
@@ -1990,6 +2036,7 @@ def test_light_aircraft_wing_example():
     assert d["lift_force_n"] == pytest.approx(12250.0, rel=1e-6)
     assert d["induced_drag_coefficient"] == pytest.approx(0.013263, abs=1e-5)
     assert d["stall_speed_m_s"] == pytest.approx(28.57, abs=0.01)
+    _assert_narrates_computed("light_aircraft_wing.py", namespace)
 
 
 def test_tungsten_cathode_emission_example():
@@ -2005,6 +2052,7 @@ def test_tungsten_cathode_emission_example():
         d["child_langmuir_current_a_m2"],
         d["schottky_lowering_ev"],
     )
+    _assert_narrates_computed("tungsten_cathode_emission.py", namespace)
 
 
 def test_flat_plate_boundary_layer_example():
@@ -2014,6 +2062,7 @@ def test_flat_plate_boundary_layer_example():
     assert d["boundary_layer_thickness_mm"] == pytest.approx(1.369, abs=0.005)
     assert d["skin_friction_coefficient"] == pytest.approx(0.001818, abs=1e-5)
     assert d["plate_drag_coefficient"] == pytest.approx(0.003636, abs=1e-5)
+    _assert_narrates_computed("flat_plate_boundary_layer.py", namespace)
 
 
 def test_barometric_altimeter_example():
@@ -2023,6 +2072,7 @@ def test_barometric_altimeter_example():
     assert d["scale_height_km"] == pytest.approx(8.4346, abs=0.001)
     assert d["pressure_at_2km_pa"] == pytest.approx(79935.0, abs=1.0)
     assert d["altitude_for_90kpa_m"] == pytest.approx(999.9, abs=1.0)
+    _assert_narrates_computed("barometric_altimeter.py", namespace)
 
 
 def test_supersonic_expansion_fan_example():
@@ -2068,6 +2118,7 @@ def test_compton_gamma_scatter_example():
     assert d["wavelength_shift_pm"] == pytest.approx(2.426, abs=0.005)
     assert d["scattered_wavelength_pm"] == pytest.approx(12.426, abs=0.01)
     assert d["electron_energy_kev"] == pytest.approx(24.21, abs=0.1)
+    _assert_narrates_computed("compton_gamma_scatter.py", namespace)
 
 
 def test_nuclear_mass_energy_example():
@@ -2095,6 +2146,7 @@ def test_cyclotron_mass_spectrometer_example():
     assert d["cyclotron_frequency_mhz"] == pytest.approx(15.245, abs=0.01)
     assert d["larmor_radius_cm"] == pytest.approx(1.044, abs=0.005)
     assert d["recovered_mass_kg"] * 1e27 == pytest.approx(1.6726, rel=1e-4)
+    _assert_narrates_computed("cyclotron_mass_spectrometer.py", namespace)
 
 
 def test_laboratory_plasma_example():
@@ -2122,6 +2174,7 @@ def test_battery_fast_discharge_example():
     assert d["runtime_at_20a_hr"] == pytest.approx(3.789, abs=0.01)
     assert d["delivered_capacity_ah"] == pytest.approx(75.79, abs=0.1)
     assert d["recovered_exponent"] == pytest.approx(1.2, rel=1e-9)
+    _assert_narrates_computed("battery_fast_discharge.py", namespace)
 
 
 def test_solar_cell_iv_example():
@@ -2140,6 +2193,7 @@ def test_wr90_waveguide_example():
     assert d["cutoff_frequency_ghz"] == pytest.approx(6.557, abs=0.005)
     assert d["guide_wavelength_mm"] == pytest.approx(39.707, abs=0.05)
     assert d["phase_velocity_over_c"] == pytest.approx(1.3245, abs=0.001)
+    _assert_narrates_computed("wr90_waveguide.py", namespace)
 
 
 def test_antenna_feedline_match_example():
@@ -2185,6 +2239,7 @@ def test_lens_ar_coating_example_index_thickness_and_tuned():
     assert d["ideal_coating_index"] == pytest.approx(1.233, abs=0.005)
     assert d["mgf2_thickness_nm"] == pytest.approx(99.64, abs=0.1)
     assert d["tuned_wavelength_nm"] == pytest.approx(550.0, rel=1e-9)
+    _assert_narrates_computed("lens_ar_coating.py", namespace)
 
 
 def test_xrd_and_grating_example_angles_and_spacing():
@@ -2212,6 +2267,7 @@ def test_photocathode_electron_wavelength_example():
     assert d["threshold_frequency_thz"] == pytest.approx(483.6, abs=0.5)
     assert d["photoelectron_energy_ev"] == pytest.approx(2.1357, abs=0.001)
     assert d["electron_wavelength_nm"] == pytest.approx(0.7274, abs=0.001)
+    _assert_narrates_computed("photocathode_and_electron_wavelength.py", namespace)
 
 
 def test_microchannel_laminar_flow_example_flow_pressure_radius():
@@ -2306,6 +2362,7 @@ def test_led_operating_point_example_thermal_voltage_and_current():
     assert d["thermal_voltage_mv"] == pytest.approx(25.852, abs=0.01)
     assert d["forward_voltage_for_1ma_v"] == pytest.approx(0.536, abs=0.001)
     assert d["current_at_0p6v_ma"] == pytest.approx(12.01, abs=0.05)
+    _assert_narrates_computed("led_operating_point.py", namespace)
 
 
 def test_photodiode_photon_budget_example_energy_flux_and_cutoff():
@@ -2315,6 +2372,7 @@ def test_photodiode_photon_budget_example_energy_flux_and_cutoff():
     assert d["green_photon_energy_ev"] == pytest.approx(2.4797, abs=0.001)
     assert d["photon_flux_per_s"] == pytest.approx(2.517e15, rel=1e-3)
     assert d["silicon_cutoff_nm"] == pytest.approx(1107.0, abs=1.0)
+    _assert_narrates_computed("photodiode_photon_budget.py", namespace)
 
 
 def test_coriolis_weather_scale_example_parameter_and_rossby():
@@ -2324,6 +2382,7 @@ def test_coriolis_weather_scale_example_parameter_and_rossby():
     assert d["coriolis_parameter_per_s"] == pytest.approx(1.031e-4, abs=0.005e-4)
     assert d["weather_rossby"] == pytest.approx(0.097, abs=0.005)
     assert d["sink_rossby"] == pytest.approx(1e6 * d["weather_rossby"], rel=1e-9)
+    _assert_narrates_computed("coriolis_weather_scale.py", namespace)
 
 
 def test_gamma_shield_thickness_example_hvl_transmission_and_thickness():
@@ -2342,6 +2401,7 @@ def test_cobalt60_source_decay_example_constant_activity_and_time():
     assert d["decay_constant_per_year"] == pytest.approx(0.1315, abs=0.001)
     assert d["activity_after_10yr_gbq"] == pytest.approx(26.84, abs=0.05)
     assert d["time_to_10pct_yr"] == pytest.approx(17.51, abs=0.05)
+    _assert_narrates_computed("cobalt60_source_decay.py", namespace)
 
 
 def test_piezo_force_sensor_example_charge_voltage_and_force():
@@ -2360,6 +2420,7 @@ def test_hall_sensor_example_voltage_field_and_carrier_density():
     assert d["hall_voltage_mv"] == pytest.approx(0.1248, abs=0.0005)
     assert d["recovered_field_t"] == pytest.approx(0.1, rel=1e-9)
     assert d["recovered_carrier_density"] == pytest.approx(1e22, rel=1e-9)
+    _assert_narrates_computed("hall_sensor_and_characterization.py", namespace)
 
 
 def test_strain_gauge_load_cell_example_bridge_output_and_stress():
@@ -2380,6 +2441,7 @@ def test_centrifuge_clarification_example_velocity_and_time():
     assert d["wall_velocity_mm_s"] == pytest.approx(0.305, abs=0.005)
     # Surface (50 mm) to wall (100 mm) in ~228 s.
     assert d["settling_time_s"] == pytest.approx(227.5, abs=1.0)
+    _assert_narrates_computed("centrifuge_clarification.py", namespace)
 
 
 def test_impeller_euler_head_example_tip_speed_and_vane_penalty():
@@ -2404,6 +2466,7 @@ def test_aluminium_extrusion_press_example_ratio_pressure_force():
     assert e["real_pressure_mpa"] > e["ideal_pressure_mpa"]
     # Ram force over the big billet is enormous, ~10,500 kN.
     assert e["ram_force_kn"] == pytest.approx(10467.7, abs=5.0)
+    _assert_narrates_computed("aluminium_extrusion_press.py", namespace)
 
 
 def test_rolling_pass_schedule_example_bite_limit_and_force():
@@ -2417,6 +2480,7 @@ def test_rolling_pass_schedule_example_bite_limit_and_force():
     # 5 mm fits the bite limit; a greedy 30 mm does not.
     assert p["wanted_feasible"] is True
     assert p["greedy_feasible"] is False
+    _assert_narrates_computed("rolling_pass_schedule.py", namespace)
 
 
 def test_forging_press_sizing_example_friction_hill_dominates():
@@ -2454,6 +2518,7 @@ def test_casting_riser_sizing_example_riser_outlasts_the_casting():
     # The riser modulus target is 1.2x the casting's, so it freezes last.
     assert s["riser_modulus_cm"] == pytest.approx(1.2 * s["casting_modulus_cm"], rel=1e-9)
     assert s["riser_modulus_cm"] > s["casting_modulus_cm"]
+    _assert_narrates_computed("casting_riser_sizing.py", namespace)
 
 
 def test_turning_speed_and_tool_life_example_trades_speed_for_life():
@@ -2526,6 +2591,7 @@ def test_carnot_ceiling_engine_grade_example_ranks_by_second_law():
     assert g["combined_second_law"] == pytest.approx(0.725, abs=0.005)
     assert g["combined_second_law"] > g["simple_second_law"]
     assert g["combined_second_law"] < 1.0
+    _assert_narrates_computed("carnot_ceiling_engine_grade.py", namespace)
 
 
 def test_micro_hydro_sizing_example_penstock_loss_costs_power():
@@ -2609,6 +2675,7 @@ def test_cooling_coil_bypass_factor_example_deep_vs_shallow():
     assert c["deep_bf"] == pytest.approx(0.09375, abs=0.001)
     assert c["shallow_bf"] == pytest.approx(0.375, abs=0.001)
     assert c["shallow_bf"] > c["deep_bf"]
+    _assert_narrates_computed("cooling_coil_bypass_factor.py", namespace)
 
 
 def test_evaporative_cooler_climate_example_dry_beats_humid():
