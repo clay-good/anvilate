@@ -8188,11 +8188,7 @@ def test_reviewer_dossier_example_puts_the_unevaluated_check_first():
     # The requirement the shear entry sits close to, from the card the example declares.
     _assert_narrates(
         "bracket_reviewer_dossier.py",
-        *{
-            entry.required_safety_factor
-            for entry in namespace["BRACKET"].entries
-            if entry.required_safety_factor is not None
-        },
+        namespace["BRACKET"].entries[1].required_safety_factor,
     )
     # `bending` passes at SF 3.0 and is still surfaced, because nobody sourced its input.
     assert before.items[2].entry.status is CheckStatus.PASS
