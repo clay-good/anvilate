@@ -6637,6 +6637,142 @@ def test_measured_shaft_example_fails_on_the_number_and_says_the_measurement_can
     assert entry.uncertainty.shortfall_probability == pytest.approx(0.75, abs=0.05)
 
 
+def test_the_quality_repair_and_verification_pages_numbers_are_the_librarys_own():
+    """Three more pages nothing opened, each arguing from a number in prose.
+
+    The measured shaft's overshoot and the uncertainty around it; the repair line a
+    solved inverse prints and the governing-shift line beside it; and the proof-load
+    identity the verification page says the suite asserts.
+    """
+    from anvilate import verification
+    from anvilate.scorecard import Direction, RepairHint, Scorecard, ScorecardEntry
+    from anvilate.verification import DEFAULT_ARCHETYPES
+
+    docs = Path(__file__).resolve().parent.parent / "docs"
+
+    # --- quality interchange: the shaft the certificate measures ---------------------
+    page = " ".join((docs / "quality-interchange.md").read_text().split())
+    claim = re.search(
+        r"a (\d+) mm shaft called to ISO 286 h6, measured at ([\d.]+) mm with an expanded "
+        r"uncertainty of ±([\d.]+) mm at k = (\d+)\. The number fails by ([\d.]+) µm\. "
+        r"The certificate's own uncertainty is (\w+) times the overshoot, so the measurement "
+        r"is consistent with an in-tolerance shaft about a (\w+) of the time",
+        page,
+    )
+    assert claim is not None, "the measured-shaft paragraph on the quality page has moved"
+    result = runpy.run_path(str(_EXAMPLES / "measured_shaft_from_certificate.py"))[
+        "screen_measured_shaft"
+    ]()
+    measured = result["measured"].quantity.to("mm").magnitude
+    _lower, upper = result["limits"]
+    assert measured == pytest.approx(float(claim.group(2)), abs=5e-5)
+    assert upper == pytest.approx(float(claim.group(1)), abs=5e-4)
+    overshoot_um = 1000.0 * (measured - upper)
+    assert overshoot_um == pytest.approx(float(claim.group(5)), abs=0.05)
+
+    distribution = result["measured"].distribution
+    assert distribution.sigma_level == float(claim.group(4))
+    assert distribution.half_width == pytest.approx(float(claim.group(3)), abs=5e-6)
+    multiple = {"three": 3.0}[claim.group(6)]
+    assert distribution.half_width * 1000.0 / overshoot_um == pytest.approx(multiple, abs=0.05)
+    fraction = {"quarter": 0.25}[claim.group(7)]
+    inside = 1.0 - result["card"].entries[0].uncertainty.shortfall_probability
+    assert inside == pytest.approx(fraction, abs=0.05)
+
+    # --- repair feedback: the two lines the page prints ------------------------------
+    page = " ".join((docs / "repair-feedback.md").read_text().split())
+    block = re.search(
+        r'RepairHint\.solved\( "(\w+)", direction=Direction\.(\w+), value=([\d.]+), '
+        r'unit="(\w+)", provenance="(\w+)", \).*?'
+        r"computed=([\d.]+), required=([\d.]+), repair_hint=hint, \) "
+        r"print\(entry\.repair_hint\) # ([^`]+?) ```",
+        page,
+    )
+    assert block is not None, "the repair-hint block on the repair page has moved"
+    entry = ScorecardEntry.from_safety_factor(
+        "wire bending over the sheave",
+        computed=float(block.group(6)),
+        required=float(block.group(7)),
+        repair_hint=RepairHint.solved(
+            block.group(1),
+            direction=getattr(Direction, block.group(2)),
+            value=float(block.group(3)),
+            unit=block.group(4),
+            provenance=block.group(5),
+        ),
+    )
+    assert entry.status is CheckStatus.FAIL, "the page's own point is that a hint rides a FAIL"
+    assert str(entry.repair_hint) == block.group(8).strip()
+    # The block's numbers are the example's, not a plausible failing pair: same check,
+    # same required factor, and the solved diameter the inverse actually returns.
+    sheave = runpy.run_path(str(_EXAMPLES / "sheave_repair_from_inverse.py"))
+    bending = {e.name: e for e in sheave["screen_on_compact_sheave"]().entries}[
+        "wire bending over the sheave"
+    ]
+    assert bending.safety_factor == pytest.approx(float(block.group(6)), abs=5e-3)
+    assert bending.required_safety_factor == pytest.approx(float(block.group(7)), abs=1e-12)
+    assert sheave["corrective_sheave_diameter"]().to("mm").magnitude == pytest.approx(
+        float(block.group(3)), abs=0.05
+    )
+
+    shift = re.search(
+        r"governing check changed: '(\w+)' \(util ([\d.]+)\) → '([\w ]+)' \(util ([\d.]+)\)",
+        page,
+    )
+    assert shift is not None, "the governing-shift line on the repair page has moved"
+    before = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor(
+                shift.group(1), computed=1.0, required=float(shift.group(2))
+            ),
+            ScorecardEntry.from_safety_factor(
+                shift.group(3), computed=1.0, required=float(shift.group(4))
+            ),
+        )
+    )
+    # The utilizations the line prints are required ÷ computed, and the larger governs.
+    assert before.governing().name == shift.group(1)
+    assert float(shift.group(2)) > float(shift.group(4))
+
+    # --- verification planning: the archetype table and the proof identity -----------
+    page = " ".join((docs / "verification-planning.md").read_text().split())
+    identity = re.search(r"1/([\d.]+) = ([\d.]+) exactly", page)
+    assert identity is not None, "the verification page no longer states the proof identity"
+    assert 1.0 / float(identity.group(1)) == pytest.approx(float(identity.group(2)), abs=1e-12)
+
+    rows = re.findall(
+        r"\| (Proof load|Hydrostatic|Dimensional) \| (\w+) \| ([^|]+?) \| ([^|]+?) \|", page
+    )
+    assert len(rows) == 3, "the archetype table on the verification page has moved"
+    by_title = {a.title.split()[0]: a for a in DEFAULT_ARCHETYPES}
+    for title, method, criterion, source in rows:
+        archetype = by_title[title.split()[0]]
+        assert archetype.method.value == method.lower()
+        if "practice default" in source:
+            assert archetype.practice_default, "the page marks a cited archetype as practice"
+        else:
+            assert not archetype.practice_default
+            assert archetype.citation.startswith(source.split(" with ")[0].strip())
+        # Each row's criterion carries the constant the module applies for it.
+        factors = {
+            "Proof load": verification._PROOF_LOAD_FACTOR,
+            "Hydrostatic": verification._HYDROSTATIC_FACTOR,
+            "Dimensional": verification._TEST_ACCURACY_RATIO,
+        }
+        if title == "Dimensional":
+            assert "a tenth" in criterion
+            assert factors[title] == pytest.approx(0.1, abs=1e-12)
+        else:
+            stated = re.match(r"([\d.]+) ×", criterion)
+            assert stated is not None, f"the {title} row no longer states its factor"
+            assert float(stated.group(1)) == pytest.approx(factors[title], abs=1e-12)
+    # The proof identity is about that same constant, not a number the page picked.
+    assert float(identity.group(1)) == pytest.approx(verification._PROOF_LOAD_FACTOR, abs=1e-12)
+    assert float(identity.group(2)) == pytest.approx(
+        verification._RATED_LOAD_FRACTION_OF_TEST, abs=1e-12
+    )
+
+
 def test_mcp_tool_catalog_example_splits_the_surface_the_way_the_spec_states():
     namespace = runpy.run_path(str(_EXAMPLES / "mcp_tool_catalog.py"))
     lines = namespace["describe_tool_surface"]()
