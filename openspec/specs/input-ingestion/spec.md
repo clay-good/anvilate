@@ -3,9 +3,7 @@
 ## Purpose
 
 Input ingestion turns engineering source documents — mating STEP files, DXF drawings, datasheet PDFs, and (roadmap) raster drawings — into confirmed, typed interface data for the Design Spec. The governing rule: extracted dimensions are drafts until the user confirms them; no extracted value silently becomes load-bearing.
-
 ## Requirements
-
 ### Requirement: Mating STEP import with deterministic feature detection
 
 The system SHALL import STEP files of mating parts and deterministically detect interface candidates — planar mating faces, holes and their patterns (coaxial cylinder grouping, bolt-circle fitting), bosses and pilot bores — without LLM involvement; STEP mate/constraint semantics MUST NOT be relied upon, as real-world exports do not carry them.
@@ -66,3 +64,18 @@ Imported CAD payloads and documents SHALL be processed locally; no binary input 
 
 - **WHEN** a user with a cloud LLM configured drops a proprietary STEP file
 - **THEN** the file is processed by local deterministic code and its geometry is never uploaded unless the user opts in for that file
+
+### Requirement: Calibrated measurements as input sources
+
+The system SHALL accept Digital Calibration Certificate (DCC) files as sources for measured input quantities: parsed locally against the open schema, each offered value presented with its measurement uncertainty and certificate identity for the standard per-value confirmation flow; provenance for a confirmed value SHALL record the certificate identifier, issuer, and signature status, and a stated measurement uncertainty SHALL be available to the uncertainty-quantification capability as a typed input distribution.
+
+#### Scenario: Measured shaft feeds a fit check
+
+- **WHEN** the user supplies a DCC for a measured shaft diameter and confirms the value
+- **THEN** the interference-fit check consumes the measured value with certificate provenance recorded, and the certificate's stated uncertainty is available as a declared input distribution
+
+#### Scenario: Signature status is honest
+
+- **WHEN** a DCC lacks a verifiable signature
+- **THEN** the value is still usable after confirmation, with provenance plainly recording the unverified signature status — never silently presented as attested
+

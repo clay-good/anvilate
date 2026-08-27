@@ -3,9 +3,7 @@
 ## Purpose
 
 The validation engine runs every candidate part through a tiered, deterministic gauntlet — geometry checks, closed-form analytical checks, DFM rules, and finite-element analysis — and produces the scorecard: the machine-readable contract between validation and the repair loop, and the human-readable report in the UI. Cheap checks run first so FEA compute is never wasted on invalid geometry. Validation is screening-level and says so.
-
 ## Requirements
-
 ### Requirement: Tiered execution, cheapest first
 
 Validation SHALL execute in tiers — T0 geometry, T1 analytical, T2 DFM, T3 FEA — in ascending cost order, and a tier MUST NOT run while a prior tier has unresolved hard failures.
@@ -132,3 +130,110 @@ Additional analysis types — thermal steady-state, linear buckling, fatigue scr
 
 - **WHEN** linear buckling analysis ships
 - **THEN** its results appear as scorecard checks with thresholds, convergence status, and stated assumptions identical in structure to existing checks
+
+### Requirement: Combination-aware evaluation with a named governing combination
+
+When a spec declares a combination set, the gauntlet SHALL evaluate applicable checks
+under every combination in the set, report the enveloped (worst-case) result per check,
+and name the governing combination in the scorecard entry and evidence bundle; results
+under non-governing combinations SHALL remain retrievable. Evaluating a subset of the
+declared combinations SHALL render the affected checks "not evaluated" for the skipped
+combinations — never a pass computed from a silent subset. When no combination set is
+declared, per-load-case evaluation proceeds exactly as today.
+
+#### Scenario: Governing combination named
+
+- **WHEN** a beam check runs under a declared LRFD set where 1.2D + 1.6L governs
+- **THEN** the scorecard entry reports the enveloped margin and names 1.2D + 1.6L as
+  governing, with the per-combination results retrievable
+
+#### Scenario: Counteracting combination catches uplift
+
+- **WHEN** a wind case opposes gravity and the 0.9D + 1.0W combination produces the
+  worst margin
+- **THEN** the envelope reflects it — minimum-load combinations are evaluated, not only
+  additive maxima
+
+#### Scenario: No silent subset
+
+- **WHEN** a run evaluates only 3 of 7 declared combinations
+- **THEN** affected checks show "not evaluated" for the remainder and cannot render an
+  unqualified pass
+
+### Requirement: Declared callouts reach the checks that depend on them
+
+A check whose method depends on a characteristic a declared callout provides SHALL
+consume the declared value and SHALL state the value used and its effect on the result.
+When a declared callout contradicts an assumption a check would otherwise make,
+the contradiction SHALL be reported rather than silently resolved. A check whose method
+depends on such a characteristic that is undeclared SHALL state the assumption it used,
+per the existing stated-assumptions requirement.
+
+#### Scenario: Finish drives the fatigue factor
+
+- **WHEN** a fatigue check runs on a feature carrying a surface-finish callout
+- **THEN** the check uses the surface factor derived from the declared finish, cites the
+  derivation, and states both the finish consumed and the factor applied
+
+#### Scenario: Plating thickness reaches the fit
+
+- **WHEN** an interference-fit check runs on a shaft carrying a plating callout with a
+  thickness range
+- **THEN** the check evaluates over the plated dimensions across the declared range and
+  reports the range used
+
+#### Scenario: Heat-treat condition governs properties
+
+- **WHEN** a heat-treatment callout declares a condition and the material database
+  distinguishes properties by condition
+- **THEN** the check resolves properties for the declared condition and names it; if the
+  declared condition has no record, the check reports "not evaluated" naming it
+
+#### Scenario: Contradiction surfaced
+
+- **WHEN** a declared callout is inconsistent with a check's method assumption
+- **THEN** the scorecard reports the conflict naming the callout, its characteristic
+  identifier, and the assumption — never a result computed by quietly preferring one
+
+### Requirement: Repair hints on failed checks
+
+A failed check record MAY carry typed repair hints — the governing input parameter, the direction of change that improves the margin, and, where a paired design inverse exists, the corrective value that would satisfy the check — computed deterministically, never by an LLM; hints SHALL name spec parameters by their stable names.
+
+#### Scenario: Inverse supplies the corrective value
+
+- **WHEN** a bending check fails and a design inverse exists for the section dimension
+- **THEN** the check record includes the parameter name, the direction, and the computed dimension that would pass at the required margin
+
+#### Scenario: No inverse, still a direction
+
+- **WHEN** a check with no paired inverse fails but is monotonic in a known parameter
+- **THEN** the record names the parameter and direction, and omits the corrective value rather than estimating one
+
+### Requirement: Two-sided acceptance bands
+
+Acceptance criteria SHALL support an optional upper margin bound in addition to the required minimum; a check whose margin exceeds the declared upper bound SHALL report a distinct over-margin warning (never a failure) with the excess quantified, so over-engineered candidates are visible without blocking export.
+
+#### Scenario: Over-engineering surfaced
+
+- **WHEN** a spec declares a target safety-factor band of 2.0–3.0 and a check computes SF 8.7
+- **THEN** the check passes with an over-margin warning stating the band and the excess
+
+#### Scenario: No band declared, no noise
+
+- **WHEN** a spec declares only a minimum safety factor
+- **THEN** high margins produce no warning — the band is strictly opt-in
+
+### Requirement: Governing check identification
+
+Every scorecard SHALL identify the governing check — the smallest-margin check among those evaluated — and revalidation after a spec change SHALL report when the governing check has changed, naming the previous and new governing checks.
+
+#### Scenario: Governing check named
+
+- **WHEN** a scorecard with multiple passing checks is rendered
+- **THEN** the governing check and its margin are identified in the scorecard and report
+
+#### Scenario: Governing change on revision
+
+- **WHEN** a revision thickens a flange and the governing check moves from bending to bolt bearing
+- **THEN** the revalidation output states the governing-check change explicitly
+

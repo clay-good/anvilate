@@ -3,9 +3,7 @@
 ## Purpose
 
 The export layer turns a validated part into the artifacts engineers actually consume: STEP AP242 with embedded validation properties and semantic PMI, dimensioned 2D drawings, STL/3MF for printing, URDF for robotics, the generating source code, and the evidence bundle. Export is gated on validation; nothing unvalidated leaves the tool unmarked.
-
 ## Requirements
-
 ### Requirement: Validation-gated export
 
 Export of CAD artifacts SHALL be enabled only when the part's acceptance checks pass; the user MAY explicitly export an unvalidated part, in which case the exported file metadata and evidence bundle MUST be watermarked as unvalidated.
@@ -88,3 +86,18 @@ Every validated export SHALL include an evidence bundle (HTML, optionally PDF) c
 
 - **WHEN** any evidence bundle is generated
 - **THEN** it carries the non-dismissable screening-analysis disclaimer and the list of modeling assumptions
+
+### Requirement: QIF results export
+
+The export layer SHALL export a validated part's scorecard and evidence as a QIF Results document (ISO 23952): each check maps to a characteristic with its requirement (threshold and units), evaluated actual, pass/fail status, and traceability to the spec revision and toolchain versions; the export SHALL validate against the QIF schemas, and checks that were not evaluated SHALL be represented as unevaluated characteristics, never omitted.
+
+#### Scenario: Quality software reads the verdicts
+
+- **WHEN** a validated part's evidence is exported as QIF Results
+- **THEN** standard QIF-conformant quality software can enumerate every check as a characteristic with its requirement, actual, and status, and the document validates against the published schemas
+
+#### Scenario: Not-evaluated survives the mapping
+
+- **WHEN** a scorecard containing not-evaluated checks is exported
+- **THEN** those checks appear as unevaluated characteristics with their reason, preserving the no-silent-green property in the interchange format
+

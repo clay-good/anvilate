@@ -3,9 +3,7 @@
 ## Purpose
 
 The agent loop reads the validation scorecard and drives the part toward a fully passing state: a deterministic Planner handles most repairs through bounded parameter search; an LLM Critic is invoked only for non-trivial failures and only emits structured edits. The loop converges, or it honestly surfaces the trade-off to the user. It is the second and last subsystem permitted to call an LLM.
-
 ## Requirements
-
 ### Requirement: Deterministic planner first
 
 Scorecard failures SHALL first be mapped by a deterministic planner to a repair strategy ordered by cost — parameter nudge, pattern feature addition (rib, gusset), pattern swap, then give-up-and-surface; when a failure is monotonic in a single parameter, the planner MUST repair it with bounded numeric search (bisection/golden-section) without any LLM call.
@@ -67,3 +65,18 @@ Every iteration SHALL be snapshotted — spec delta, code delta, scorecard — a
 
 - **WHEN** the user scrubs from v3 back to v1
 - **THEN** the viewport and report pane show iteration v1's exact geometry and scorecard, regenerated or restored deterministically
+
+### Requirement: Inverse-first repair
+
+When a failed check carries a repair hint with a corrective value from a design inverse, the deterministic planner SHALL apply that value directly (clamped to pattern parameter bounds) and revalidate, before any bounded numeric search and before any LLM involvement; hint-driven repairs SHALL be recorded in iteration provenance as inverse-solved.
+
+#### Scenario: One-solve repair
+
+- **WHEN** the only failure carries a corrective thickness from a design inverse within pattern bounds
+- **THEN** the planner applies it and revalidates in a single iteration, with no search and no LLM call
+
+#### Scenario: Hint out of bounds escalates honestly
+
+- **WHEN** a corrective value falls outside the pattern's declared parameter bounds
+- **THEN** the planner escalates per the existing cost-ordered strategy and the iteration record states that the inverse solution was infeasible within bounds
+

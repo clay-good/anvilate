@@ -3,9 +3,7 @@
 ## Purpose
 
 The Design Spec IR is Anvilate's typed, versioned intermediate representation of engineering intent: part identity, material, manufacturing method, interfaces, load cases, constraints, and acceptance criteria. Every downstream subsystem consumes the Spec IR, never raw prose. It is the durable, diffable, auditable artifact of the product — the spec is the product, not the chat.
-
 ## Requirements
-
 ### Requirement: Typed, schema-validated document
 
 The Spec IR SHALL be a JSON-Schema-validated document (serialized as YAML or JSON) with a declared schema version (`anvilate_spec: "<semver>"`), and the system SHALL reject any spec that fails schema validation before any downstream processing occurs.
@@ -95,3 +93,67 @@ The Spec IR schema SHALL be versioned with semantic versioning, and Anvilate SHA
 - **WHEN** a spec written against schema 1.0 is opened by an Anvilate release whose current schema is 1.3
 - **THEN** the spec loads with migrations applied
 - **AND** the user is offered a one-click rewrite of the file to the current schema version
+
+### Requirement: Typed load combinations
+
+The Spec IR SHALL allow load cases to carry a load-nature classification (at minimum
+dead, live, roof live, snow, wind, seismic, thermal, fluid/other) and SHALL allow a spec
+to declare a combination set: named combinations, each a factored sum over declared load
+cases. A combination set MAY be generated from a named code basis — at minimum ASCE 7-22
+strength (LRFD) and allowable-stress (ASD) combinations, with seismic system parameters
+(redundancy, overstrength, vertical component) as typed user inputs — or authored fully
+custom; generated sets SHALL cite the code clause per combination and record the
+generator inputs. A combination referencing an undeclared load case or a case with no
+nature classification where the basis requires one SHALL be rejected naming the gap.
+
+#### Scenario: Generated LRFD set
+
+- **WHEN** a spec declares dead, live, and wind cases and requests ASCE 7-22 LRFD
+  combinations
+- **THEN** the standard combinations over those natures are generated with per-combination
+  clause citations, including both maximum and counteracting (0.9D) forms, and appear in
+  the spec as ordinary typed data the user can inspect and edit
+
+#### Scenario: Custom combination is first-class
+
+- **WHEN** a user authors a custom combination 1.0D + 1.5L_test for a proof condition
+- **THEN** it is stored, cited as user-defined, and evaluated identically to generated
+  combinations
+
+#### Scenario: Unclassified case rejected
+
+- **WHEN** generation from a code basis is requested but a declared load case has no
+  nature classification
+- **THEN** generation is rejected naming the case — natures are never guessed from case
+  names
+
+### Requirement: Typed non-geometric callouts with persistent identity
+
+The Spec IR SHALL support typed non-geometric callouts — at minimum surface finish
+(roughness value, parameter, and production method), coating or plating (specification,
+class or type, and thickness range), heat treatment (specification and resulting
+condition or hardness range), and structured process notes with a category and typed
+parameters — each scoped to the whole part or resolved against semantic tags, and each
+rejected with a named field when its specification reference or units are invalid. Every
+callout SHALL carry a persistent characteristic identifier that survives geometry
+regeneration and spec revision, so a callout, the checks that consume it, and any
+inspection or test that verifies it refer to the same characteristic over time.
+
+#### Scenario: Finish scoped to a face
+
+- **WHEN** a finish callout is applied to the `bearing_bore` tag
+- **THEN** it resolves against the semantic tag graph, stores its roughness parameter and
+  value with units, and is rejected naming the tag if that tag does not exist
+
+#### Scenario: Identity survives regeneration
+
+- **WHEN** geometry is regenerated from scratch and the spec is revised elsewhere
+- **THEN** each existing callout keeps its characteristic identifier, and a diff can
+  report which characteristics changed, were added, or were removed
+
+#### Scenario: Free text stays free text
+
+- **WHEN** a note carries no recognized category or typed parameters
+- **THEN** it is stored as an unstructured note, clearly distinguished from typed
+  callouts, and no check may consume it
+
