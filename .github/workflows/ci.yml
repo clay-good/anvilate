@@ -63,6 +63,22 @@ jobs:
           sed -i 's#https://ptb.de/si/v2.2.1/SI_Format.xsd#SI_Format.xsd#' dcc/dcc.xsd
           sed -i 's#https://www.ptb.de/dcc/d-sig/xmldsig-core-schema.xsd#xmldsig-core-schema.xsd#' dcc/dcc.xsd
           sed -i 's#https://www.ptb.de/si/v2.2.1/qudt/quantitykind.xsd#quantitykind.xsd#' dcc/SI_Format.xsd
+      - name: Fetch one of those schemas through the fetch-on-first-use flow
+        # The offline tests inject the transport, so the one line that opens a socket is
+        # only ever exercised here — and this doubles as a live check of the recipe's
+        # pinned digest against what PTB serves today.
+        env:
+          ANVILATE_ALLOW_NETWORK: "1"
+        run: |
+          set -o pipefail
+          pytest -rs \
+            "tests/test_fetch.py::test_the_default_transport_fetches_and_verifies_a_real_document" \
+            | tee fetch.txt
+          grep -qE "^1 passed" fetch.txt
+          if grep -q skipped fetch.txt; then
+            echo "the network transport was not exercised"
+            exit 1
+          fi
       - name: Validate emitted documents against the published schemas
         env:
           ANVILATE_QIF_XSD: qif/xsd

@@ -226,3 +226,49 @@ def test_an_empty_cache_path_is_a_mistake_rather_than_the_current_directory():
     # whatever directory the process happens to be in.
     with pytest.raises(ValueError, match="empty cache path"):
         cache_root("")
+
+
+# --- the default transport, over the network, opt-in ------------------------------------
+
+
+_D_SI_FORMAT = DatasetRecipe(
+    name="SI_Format.xsd",
+    # The version is in the path, so this URL is a fixed document rather than a moving
+    # "latest" — which is what makes a pinned digest a check rather than a nuisance.
+    url="https://ptb.de/si/v2.2.1/SI_Format.xsd",
+    sha256="a6483bc3f22b7a5193912d4699ec2462de4ca3f069762300e4f749e54653a2e8",
+    license="PTB, published for use with the DCC schema",
+    source="PTB D-SI unit format schema v2.2.1",
+    redistributable=False,
+)
+
+
+def test_the_default_transport_fetches_and_verifies_a_real_document(tmp_path):
+    """Every other test here injects the transport, which is what keeps them offline —
+    and leaves the one line that actually opens a socket unexercised.
+
+    So this is the QIF/DCC pattern: opt-in, skipped unless the network is allowed, and
+    run by the scheduled CI job that already downloads this exact schema. It is also a
+    live check of the recipe's own claim — if PTB republishes v2.2.1 with different
+    bytes, the digest here says so.
+    """
+    import os
+
+    if not os.environ.get("ANVILATE_ALLOW_NETWORK"):
+        pytest.skip("set ANVILATE_ALLOW_NETWORK=1 to exercise the real transport")
+
+    path, provenance = fetch_dataset(
+        _D_SI_FORMAT, retrieved="2026-08-27", consent=True, cache_dir=tmp_path
+    )
+    assert path.read_bytes().startswith(b"<?xml")
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == _D_SI_FORMAT.sha256
+    assert "not redistributable" in attribution(provenance)
+
+    # And the second call is a read: the transport would raise if it were used again.
+    def _refuse(url: str) -> bytes:
+        raise AssertionError("the cached schema was fetched again")
+
+    again, _ = fetch_dataset(
+        _D_SI_FORMAT, retrieved="2026-08-27", cache_dir=tmp_path, opener=_refuse
+    )
+    assert again == path
