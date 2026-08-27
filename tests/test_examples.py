@@ -140,6 +140,174 @@ def _assert_narrates(example: str, *computed: float) -> None:
     assert not unused, f"{example}: no docstring figure uses {unused}"
 
 
+# Examples whose docstring narrates a figure nothing yet recomputes. Each is a claim
+# with no gate — the same debt the `docs/` sweep worked through — and this list is the
+# backlog, not an exemption: it only ever gets shorter. Gate one by calling
+# `_assert_narrates` (naming the computed values) or `_assert_narrates_computed` (for an
+# example whose entry points return them) and deleting its line.
+_EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
+    {
+        "accelerated_life_test.py",
+        "access_cover_sizing.py",
+        "antenna_feedline_match.py",
+        "base_to_final_turn.py",
+        "batch_reactor_conversion.py",
+        "biconvex_lens_design.py",
+        "boiling_burnout_margin.py",
+        "bolt_tension_thread_area.py",
+        "bracket_reviewer_dossier.py",
+        "bracket_weld_sizing.py",
+        "branch_reinforcement_zone.py",
+        "bushing_wear_life.py",
+        "camera_lens_and_resolution.py",
+        "canopy_snow_drift.py",
+        "cladding_internal_pressure.py",
+        "cold_formed_stud_flange.py",
+        "column_base_plate.py",
+        "column_live_load_reduction.py",
+        "control_valve_sizing.py",
+        "conveyor_bearing_life.py",
+        "coped_beam_web_shear.py",
+        "cover_plate_edge_fixity.py",
+        "crack_growth_inspection_interval.py",
+        "davit_sheave_overhang.py",
+        "dfm_process_check.py",
+        "dock_edge_overhang.py",
+        "double_slit_wavelength_bench.py",
+        "driveshaft_universal_joint.py",
+        "drivetrain_shaft_twist.py",
+        "drivetrain_torsional_mode.py",
+        "fan_deck_resonance.py",
+        "feature_control_frame_legality.py",
+        "flange_coupling_bolt_pattern.py",
+        "flat_roof_rain_vs_snow.py",
+        "flood_barrier_stiffener.py",
+        "flywheel_torsional_mode.py",
+        "forging_press_sizing.py",
+        "fracture_toughness_screen.py",
+        "gamma_shield_thickness.py",
+        "gear_nonstandard_center.py",
+        "gearbox_output_shaft.py",
+        "genset_on_two_rails.py",
+        "gps_and_accelerator_relativity.py",
+        "guide_spring_buckling.py",
+        "helical_gear_thrust_bearing.py",
+        "highway_cruise_power.py",
+        "hoist_sheave_bending.py",
+        "hydraulic_cylinder_wall.py",
+        "hydraulic_meter_out_intensification.py",
+        "hydrogen_balmer_line.py",
+        "indexing_table_stations.py",
+        "isolator_amplifies_at_running_speed.py",
+        "jacketed_reactor_vacuum.py",
+        "journal_bearing_film_regime.py",
+        "key_vs_spline.py",
+        "lab_ventilation_air_changes.py",
+        "laboratory_plasma.py",
+        "lifter_verification_matrix.py",
+        "lifting_lug_calc_report.py",
+        "lifting_magnet_holding_force.py",
+        "lightest_passing_bracket.py",
+        "living_hinge_flip_cap.py",
+        "loose_ring_flange_stress.py",
+        "machine_foot_on_panel.py",
+        "machine_skid_end_fixity.py",
+        "machine_vibration_isolation.py",
+        "manway_lid_fixity.py",
+        "masonry_wall_slenderness.py",
+        "measured_shaft_from_certificate.py",
+        "motor_branch_circuit.py",
+        "noncompact_flange_beam_strength.py",
+        "off_center_post_load.py",
+        "office_floor_vibration.py",
+        "pallet_bay_floor_beam.py",
+        "ph_electrode_nernst.py",
+        "pipe_expansion_loop.py",
+        "plated_shaft_callouts_change_the_verdict.py",
+        "plenum_access_panel.py",
+        "press_brake_springback.py",
+        "pressure_vessel_nozzle_and_flange.py",
+        "project_appraisal.py",
+        "pv_summer_derating.py",
+        "rc_floor_beam.py",
+        "rc_t_beam_floor.py",
+        "receiver_noise_figure.py",
+        "relativistic_spaceship.py",
+        "roof_rack_rollover.py",
+        "roof_step_snow_drift.py",
+        "rotor_unbalance_response.py",
+        "satellite_dish_antenna.py",
+        "seismic_accidental_torsion.py",
+        "seismic_cs_period_cap.py",
+        "seismic_elf_design.py",
+        "servo_duty_cycle_thermal.py",
+        "servo_inertia_matching.py",
+        "servo_step_response.py",
+        "shaft_bearing_misalignment.py",
+        "shot_peening_coverage_time.py",
+        "shrink_fit_at_speed.py",
+        "sight_port_blind.py",
+        "single_cylinder_flywheel.py",
+        "skid_position_on_platform.py",
+        "sling_angle_overload.py",
+        "solar_cell_iv.py",
+        "solar_collector_stagnation.py",
+        "spec_load_combination_check.py",
+        "spread_footing_sizing.py",
+        "spreader_beam_bth1_category.py",
+        "spreader_beam_device_screen.py",
+        "stiffener_weld_end.py",
+        "tank_baffle_end_fixity.py",
+        "tapped_hole_engagement.py",
+        "temperature_sensor_pt100_vs_thermistor.py",
+        "test_blind_sizing.py",
+        "timber_beam_lateral_stability.py",
+        "timber_header_bearing_governs.py",
+        "timber_header_shear_governs.py",
+        "tolerance_stackup.py",
+        "transmission_line_clearance.py",
+        "vacuum_vessel_buckling.py",
+        "vessel_surface_flaw_fad.py",
+        "welded_bracket_fatigue.py",
+        "wheel_rail_contact.py",
+        "wifi_link_budget.py",
+        "winch_band_brake.py",
+        "winch_tackle_friction.py",
+        "workshop_hoist_system.py",
+        "xrd_and_grating.py",
+    }
+)
+
+
+def test_the_narration_backlog_is_exactly_what_is_left():
+    """The ratchet: an example either checks the figures its prose quotes, or is listed.
+
+    A new example that narrates a result and checks none of it fails here, and an entry
+    that has since been gated fails here too, so the list cannot drift into an excuse.
+    """
+    gated = {
+        call.args[0].value
+        for call in ast.walk(ast.parse(Path(__file__).read_text()))
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Name)
+        and call.func.id in ("_assert_narrates", "_assert_narrates_computed")
+        and call.args
+        and isinstance(call.args[0], ast.Constant)
+    }
+    ungated = sorted(
+        example.name
+        for example in _EXAMPLES.glob("*.py")
+        if _narrated_numbers(example.name) and example.name not in gated
+    )
+    stale = sorted(_EXAMPLES_AWAITING_A_NARRATION_GATE - set(ungated))
+    assert not stale, f"these are gated now and can leave the backlog: {stale}"
+    new = sorted(set(ungated) - _EXAMPLES_AWAITING_A_NARRATION_GATE)
+    assert not new, (
+        f"these examples narrate a figure nothing recomputes: {new}. Call "
+        "_assert_narrates (or _assert_narrates_computed) in the test that runs each."
+    )
+
+
 def test_every_example_is_executed_by_this_file():
     # An example nobody runs is an example nobody notices breaking. The contract
     # gate only requires each analysis module to be *mentioned* somewhere under
@@ -345,6 +513,19 @@ def test_aluminum_ladder_rail_example_is_buckling_governed():
     # used to print: 17.6% unconservative on the number the prose quotes.
     assert r["intersection_slenderness"] < 80.0
     assert r["buckling_stress_mpa"] == pytest.approx(0.85 * math.pi**2 * 69600 / 80.0**2, rel=1e-9)
+
+    # The ADM constants the docstring reads out and the knockdown its last paragraph is
+    # about — none of which the summary dict returns.
+    from anvilate.analysis import aluminum as _aluminum
+
+    constants = namespace["aluminum_buckling_constants"](
+        compressive_yield=namespace["COMPRESSIVE_YIELD"], elastic_modulus=namespace["MODULUS"]
+    )
+    _assert_narrates(
+        "aluminum_ladder_rail.py",
+        constants.slope_member.to("MPa").magnitude,
+        _aluminum._OUT_OF_STRAIGHTNESS,
+    )
 
 
 def test_masonry_wall_slenderness_example_combined_check_governs():
@@ -4064,6 +4245,16 @@ def test_beam_section_sizing_example_picks_the_section_above_the_floor():
     assert "safety factor 2.21" in large.detail
     assert card.status is CheckStatus.FAIL
 
+    # The floor and both candidates' section moduli, which are the docstring's argument.
+    _assert_narrates(
+        "beam_section_sizing.py",
+        floor.to("mm**3").magnitude,
+        *(
+            section.section_modulus.to("mm**3").magnitude
+            for section in namespace["CANDIDATES"].values()
+        ),
+    )
+
 
 def test_drive_shaft_sizing_example_fails_when_sized_on_the_mean_torque():
     namespace = runpy.run_path(str(_EXAMPLES / "drive_shaft_sizing.py"))
@@ -4844,6 +5035,14 @@ def test_bimetal_thermostat_blade_example_length_is_the_lever():
     assert by_name["60 mm blade"].passed
     assert "safety factor 1.59" in by_name["60 mm blade"].detail
     assert card.status is CheckStatus.FAIL
+
+    # The three tip deflections in millimetres the docstring quotes: each is the entry's
+    # safety factor times the contact gap it is screened against.
+    gap = namespace["CONTACT_GAP"].to("mm").magnitude
+    _assert_narrates(
+        "bimetal_thermostat_blade.py",
+        *(entry.safety_factor * gap for entry in card.entries),
+    )
 
 
 def test_transmission_line_clearance_example_parabola_hides_a_violation():
