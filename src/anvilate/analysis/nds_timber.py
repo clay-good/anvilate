@@ -463,7 +463,7 @@ def nds_bending_buckling_stress(*, min_modulus: Quantity, slenderness_ratio: flo
 def nds_beam_stability_factor(
     *, buckling_stress: Quantity, reference_bending_value: Quantity
 ) -> float:
-    """The NDS §3.3.3.8 beam stability factor C_L, from F_bE and F_b*.
+    r"""The NDS §3.3.3.8 beam stability factor C_L, from F_bE and F_b*.
 
     With x = F_bE/F_b*::
 

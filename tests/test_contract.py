@@ -1423,3 +1423,72 @@ def test_the_published_citation_debt_percentage_is_the_real_one():
         f"docs/citations.md says {claimed:.0f}% of the analysis surface is uncited; it is "
         f"{actual:.1f}% ({uncited} of {total}). Move the sentence when you move the debt"
     )
+
+
+def test_the_contributing_pages_two_traps_are_arithmetic_it_can_check():
+    """`docs/contributing-analysis.md` teaches two conversion traps and a survey number.
+
+    The temperature one carries its own worked factor — a delta read through the absolute
+    scale, cubed — and the raise-site survey is a count of the shipped tree that drifts
+    every time a guard is added. Neither had a gate.
+    """
+    import ast
+    import re
+
+    page = " ".join(
+        (Path(__file__).resolve().parent.parent / "docs" / "contributing-analysis.md")
+        .read_text()
+        .split()
+    )
+
+    trap = re.search(
+        r"carries the ([\d.]+) offset into a delta\. In a cubic correlation that was a "
+        r"factor of ([\d,]+)",
+        page,
+    )
+    assert trap is not None, "the temperature trap on the contributing page has moved"
+    offset = float(trap.group(1))
+    claimed = float(trap.group(2).replace(",", ""))
+    # The factor is exact for one delta, and the page's own arithmetic names which:
+    # ((ΔT + offset)/ΔT)³ = claimed has a single positive root.
+    delta = offset / (claimed ** (1.0 / 3.0) - 1.0)
+    assert ((delta + offset) / delta) ** 3 == pytest.approx(claimed, rel=1e-4)
+    assert delta == pytest.approx(10.0, abs=0.05), (
+        "the page's factor no longer corresponds to a round temperature difference"
+    )
+    from anvilate.units import Quantity
+
+    assert Quantity(magnitude=delta, unit="degC").to("K").magnitude == pytest.approx(
+        delta + offset, abs=1e-9
+    ), "the offset the page names is not the one the registry applies"
+
+    survey = re.search(r"around (\d+)% of the roughly ([\d,]+) `raise` sites", page)
+    assert survey is not None, "the raise-site survey on the contributing page has moved"
+    sites = 0
+    for module in (Path(__file__).resolve().parent.parent / "src" / "anvilate").rglob("*.py"):
+        sites += sum(
+            isinstance(node, ast.Raise) for node in ast.walk(ast.parse(module.read_text()))
+        )
+    stated = float(survey.group(2).replace(",", ""))
+    assert sites == pytest.approx(stated, rel=0.05), (
+        f"the page says roughly {stated:.0f} raise sites and the tree has {sites}"
+    )
+
+
+def test_no_shipped_module_carries_an_invalid_escape_sequence():
+    """A docstring with `\\*` in it is a non-raw string Python is deprecating.
+
+    Found by a page gate that walks the tree with `ast.parse`: `nds_timber` wrote F_b\\*
+    in a plain docstring, which is a `SyntaxWarning` today and a `SyntaxError` later. The
+    fix is one `r` prefix, and this is the check that says when another appears.
+    """
+    import ast
+    import warnings
+
+    offenders: list[str] = []
+    for module in (Path(__file__).resolve().parent.parent / "src" / "anvilate").rglob("*.py"):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            ast.parse(module.read_text())
+        offenders += [f"{module.name}: {w.message}" for w in caught]
+    assert not offenders, f"modules parse with warnings: {offenders}"

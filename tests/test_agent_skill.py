@@ -567,3 +567,50 @@ def test_the_skill_is_read_as_utf_8():
     text = skill_text()
     assert "—" in text
     assert "â" not in text
+
+
+def test_the_agent_skill_pages_governing_claim_is_the_scorecards_own():
+    """`docs/agent-skill.md` states the correction it made to the skill's own text.
+
+    The claim is that blocking status outranks utilization — a check that could not run
+    governs over one at the utilization the page names — and that `governing()` answers
+    `None` on a card where nothing blocks and nothing carries a safety factor. Both are
+    the reason the skill was changed, and neither was checked.
+    """
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    page = " ".join(
+        (Path(__file__).resolve().parent.parent / "docs" / "agent-skill.md").read_text().split()
+    )
+    claim = re.search(
+        r"a check that could not run governs over one at ([\d.]+)% — and `card\.governing\(\)` "
+        r"returns `(\w+)` when nothing blocks \*and\* no check carries a safety factor",
+        page,
+    )
+    assert claim is not None, "the governing-check paragraph on the agent-skill page has moved"
+
+    utilization = float(claim.group(1)) / 100.0
+    tight = ScorecardEntry.from_safety_factor(
+        "bolt shear", computed=1.0 / utilization, required=1.0
+    )
+    assert tight.status is CheckStatus.PASS
+    assert tight.utilization == pytest.approx(utilization, rel=1e-9)
+    blocked = ScorecardEntry(
+        name="beam resonance",
+        status=CheckStatus.NOT_EVALUATED,
+        detail="no forcing frequency supplied",
+    )
+    # The percentage has to be one a check passes at, or "outranks" is not what is being
+    # shown: at 100% the tight check fails and would outrank on status alone.
+    assert utilization < 1.0
+    assert Scorecard(entries=(tight,)).governing().name == tight.name
+    assert Scorecard(entries=(tight, blocked)).governing().name == blocked.name, (
+        "the page says a blocking status outranks utilization"
+    )
+
+    passing = Scorecard(
+        entries=(
+            ScorecardEntry(name="tip deflection", status=CheckStatus.PASS, detail="within limit"),
+        )
+    )
+    assert repr(passing.governing()) == claim.group(2)

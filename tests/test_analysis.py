@@ -42995,3 +42995,59 @@ def test_the_cold_formed_pages_dsm_table_is_the_curves_own():
         lip_to_flange=sum(PREQUALIFIED_LIPPED_CHANNEL.lip_to_flange_ratio_range) / 2.0,
     )
     assert inside == ()
+
+
+def test_the_reinforced_concrete_pages_block_and_constants_are_the_modules_own():
+    """The RC page's two printed results, and the 0.85 its first sentence turns on."""
+    import re
+    from pathlib import Path
+
+    from anvilate.analysis import (
+        rc_beam_nominal_moment,
+        rc_stress_block_depth,
+        rc_tension_steel_for_moment,
+    )
+
+    page = " ".join(
+        (Path(__file__).resolve().parent.parent / "docs" / "reinforced-concrete.md")
+        .read_text()
+        .split()
+    )
+    inputs = {
+        "steel_area": _q("1500 mm**2"),
+        "steel_yield": _q("420 MPa"),
+        "concrete_strength": _q("30 MPa"),
+        "beam_width": _q("300 mm"),
+        "effective_depth": _q("550 mm"),
+    }
+    moment = re.search(r"effective_depth=Quantity\.parse\(\"550 mm\"\), \) # ([\d.]+) kN·m", page)
+    assert moment is not None, "the nominal-moment block on the RC page has moved"
+    assert rc_beam_nominal_moment(**inputs).to("kN*m").magnitude == pytest.approx(
+        float(moment.group(1)), abs=0.05
+    )
+
+    steel = re.search(
+        r"rc_tension_steel_for_moment\(required_moment=Quantity\.parse\(\"(\d+) kN\*m\"\), "
+        r"\.\.\.\) # (\d+) mm²",
+        page,
+    )
+    assert steel is not None, "the design-inverse line on the RC page has moved"
+    required = rc_tension_steel_for_moment(
+        required_moment=_q(f"{steel.group(1)} kN*m"),
+        **{k: v for k, v in inputs.items() if k != "steel_area"},
+    )
+    assert required.to("mm**2").magnitude == pytest.approx(float(steel.group(2)), abs=1.0)
+
+    # The stress-block intensity the page states twice, checked through the depth it sets.
+    intensity = set(re.findall(r"([\d.]+)·f'c", page))
+    assert intensity == {"0.85"}, "the page states more than one stress-block intensity"
+    factor = float(intensity.pop())
+    depth = rc_stress_block_depth(
+        steel_area=inputs["steel_area"],
+        steel_yield=inputs["steel_yield"],
+        concrete_strength=inputs["concrete_strength"],
+        beam_width=inputs["beam_width"],
+    )
+    assert depth.to("mm").magnitude == pytest.approx(
+        1500.0 * 420.0 / (factor * 30.0 * 300.0), rel=1e-9
+    )

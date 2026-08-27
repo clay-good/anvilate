@@ -803,3 +803,37 @@ def test_an_invalid_signature_fails_the_report_even_with_no_prose_problem():
     )
     assert report.status is CheckStatus.FAIL
     assert report.attested is False
+
+
+def test_the_attestation_pages_database_bump_is_the_one_the_digest_sees():
+    """`docs/evidence-attestation.md` names two versions and says the digest moves.
+
+    The versions are the page's, read out of the sentence rather than restated here, so
+    a page that names a bump the bundle does not carry stops matching.
+    """
+    page = " ".join(
+        (Path(__file__).resolve().parent.parent / "docs" / "evidence-attestation.md")
+        .read_text()
+        .split()
+    )
+    claim = re.search(
+        r"Bump `(\w+)` from ([\d.]+) to ([\d.]+) and the digest moves, even with the spec "
+        r"untouched",
+        page,
+    )
+    assert claim is not None, "the database-bump sentence on the attestation page has moved"
+
+    name, before, after = claim.groups()
+    baseline = _bom()
+    assert any(c.name == name and c.version == before for c in baseline.components), (
+        f"the page bumps {name} from {before}, which is not the version the bundle carries"
+    )
+    bumped = baseline.model_copy(
+        update={
+            "components": tuple(
+                c.model_copy(update={"version": after}) if c.name == name else c
+                for c in baseline.components
+            )
+        }
+    )
+    assert _bundle(bom=bumped).digest != _bundle().digest
