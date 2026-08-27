@@ -190,15 +190,10 @@ def _assert_narrates(example: str, *computed: float) -> None:
 # example whose entry points return them) and deleting its line.
 _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
     {
-        "feature_control_frame_legality.py",
         "gamma_shield_thickness.py",
-        "pressure_vessel_nozzle_and_flange.py",
         "rc_floor_beam.py",
         "rc_t_beam_floor.py",
-        "spreader_beam_device_screen.py",
         "vessel_surface_flaw_fad.py",
-        "welded_bracket_fatigue.py",
-        "xrd_and_grating.py",
     }
 )
 
@@ -2507,6 +2502,11 @@ def test_xrd_and_grating_example_angles_and_spacing():
     assert d["bragg_angle_deg"] == pytest.approx(14.195, abs=0.01)
     assert d["recovered_spacing_nm"] == pytest.approx(0.314, rel=1e-9)
     assert d["grating_angle_deg"] == pytest.approx(19.269, abs=0.01)
+    # The groove spacing in micrometres the docstring gives for a 600 line/mm grating.
+    _assert_narrates(
+        "xrd_and_grating.py",
+        namespace["GRATING_GROOVE_SPACING"].to("um").magnitude,
+    )
 
 
 def test_gps_and_accelerator_relativity_example():
@@ -6974,6 +6974,11 @@ def test_welded_bracket_fatigue_example_detail_category_decides_life():
     good = namespace["screen_good_detail"]()
     assert good.status is CheckStatus.PASS
     assert good.entries[0].safety_factor == pytest.approx(3.02, abs=0.02)
+    # The Miner damage each detail accumulates, which is the reciprocal of its factor.
+    _assert_narrates(
+        "welded_bracket_fatigue.py",
+        1.0 / good.entries[0].safety_factor,
+    )
 
 
 def test_spec_load_combination_check_example_drives_loads_from_the_spec():
@@ -7462,6 +7467,13 @@ def test_feature_control_frame_example_refuses_the_five_illegal_callouts():
 
     legal = namespace["legal_frame"]()
     assert legal.render() == "⌖ | Ø0.2 mm Ⓜ | A | B Ⓜ | C"
+    # The 1D contribution the docstring works out, with the bonus its Ⓜ earns.
+    _assert_narrates(
+        "feature_control_frame_legality.py",
+        namespace["position_stack_contribution"](legal, bonus=Quantity.parse("0.1 mm"))
+        .to("mm")
+        .magnitude,
+    )
 
     # Each of the five builds a frame a drawing can carry and this model will not.
     illegal = namespace["illegal_frames"]()
@@ -7937,6 +7949,18 @@ def test_spreader_beam_example_fails_only_once_the_device_weight_is_in_the_load(
     as_a = namespace["screen_bail"](lifter.design_load, category=DesignCategory_.A).entries[1]
     assert as_a.status is CheckStatus.PASS
     assert as_a.safety_factor == pytest.approx(1.48, abs=0.01)
+    # The three factors the docstring quotes, and the 1.25 in BTH-1's F_p.
+    import inspect as _inspect
+
+    from anvilate.analysis import bth1_allowable_stresses
+
+    _assert_narrates(
+        "spreader_beam_device_screen.py",
+        rated.safety_factor,
+        designed.safety_factor,
+        as_a.safety_factor,
+        _inspect.getsource(bth1_allowable_stresses).count("1.25") and 1.25,
+    )
 
     # The bail table in docs/lifting-devices.md: the allowable, both stresses, and the
     # rated-load safety factor. Only the two failing figures were pinned before.
@@ -8016,6 +8040,18 @@ def test_pressure_vessel_example_fails_at_the_opening_before_it_fails_at_the_wal
     assert by_thin["6 in nozzle opening"].status is CheckStatus.FAIL
     assert by_thin["6 in nozzle opening"].safety_factor is not None
     assert by_thin["6 in nozzle opening"].safety_factor == pytest.approx(0.49, abs=0.02)
+    # Both walls' verdicts, and the two bolt areas the flange half turns on.
+    # The two required bolt areas the flange half turns on: each load carried against
+    # its own allowable, which is the distinction the paragraph is about.
+    seating, operating, required_area = namespace["flange_bolt_area"]()
+    _assert_narrates(
+        "pressure_vessel_nozzle_and_flange.py",
+        *(entry.safety_factor for entry in thick.entries if entry.safety_factor is not None),
+        *(entry.safety_factor for entry in thin.entries if entry.safety_factor is not None),
+        seating.to("N").magnitude / namespace["BOLT_ALLOWABLE_AMBIENT"].to("MPa").magnitude,
+        required_area.to("mm**2").magnitude,
+        namespace["shell_required_thickness"]().to("mm").magnitude,
+    )
     # Reinforcement depends on the wall's EXCESS, so it degrades far faster than the
     # wall does: 1.9x thinner shell, 3.4x worse opening.
     by_thick = {e.name: e for e in thick.entries}
