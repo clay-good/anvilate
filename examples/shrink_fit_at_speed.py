@@ -8,7 +8,7 @@ and it passes with a 1.67 margin.
 But the hub spins, and a spinning rim grows. Centrifugal loading stretches the
 hub radially by delta = rho*omega^2*r^3/E, and that growth eats straight into the
 interference: the bore pulls away from the shaft and the squeeze bleeds off. At
-6000 rpm the hub has grown 0.016 mm and the remaining interference (0.035 mm)
+6000 rpm the hub has grown 0.015 mm and the remaining interference (0.035 mm)
 still clears the 0.03 mm minimum, just. Double the speed to 12000 rpm and the
 growth quadruples to 0.062 mm — more than the whole 0.05 mm interference — so the
 fit is not merely weakened but *gone*: the hub is running loose on its shaft.

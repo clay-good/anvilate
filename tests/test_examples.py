@@ -237,12 +237,8 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "roof_step_snow_drift.py",
         "satellite_dish_antenna.py",
         "servo_step_response.py",
-        "shaft_bearing_misalignment.py",
         "shot_peening_coverage_time.py",
-        "shrink_fit_at_speed.py",
-        "sight_port_blind.py",
         "single_cylinder_flywheel.py",
-        "sling_angle_overload.py",
         "solar_cell_iv.py",
         "solar_collector_stagnation.py",
         "spec_load_combination_check.py",
@@ -4274,6 +4270,18 @@ def test_sight_port_blind_example_fails_the_passing_blind_on_the_declared_hole()
     ported = by_name["16 mm blind with port plate bending"]
     assert ported.status is CheckStatus.FAIL
     assert "safety factor 1.22" in ported.detail
+    # The stress concentration the free hole edge produces, which is the ratio of the
+    # two bending factors — the page's "1.77x" and nothing computed it.
+    _assert_narrates(
+        "sight_port_blind.py",
+        by_name["16 mm solid blind plate bending"].safety_factor / ported.safety_factor,
+        *(entry.safety_factor for entry in card.entries if entry.safety_factor is not None),
+        *(
+            float(re.search(r"deflection ([\d.]+)", entry.detail).group(1))
+            for entry in card.entries
+            if entry.safety_factor is None
+        ),
+    )
     assert by_name["16 mm blind with port flatness"].passed
     # One size up clears both screens again.
     assert by_name["20 mm blind with port plate bending"].passed
@@ -4872,6 +4880,19 @@ def test_shrink_fit_at_speed_example_loses_grip_at_high_speed():
     assert "safety factor 1.15" in by_name["at 6000 rpm"].detail
     # ...but the rim growth exceeds the interference at high speed: fit lost.
     fast = by_name["at 12000 rpm"]
+    # The rim growth at each speed and the interference it leaves, in millimetres.
+    assembly = namespace["ASSEMBLY_INTERFERENCE"].to("mm").magnitude
+    remaining = {
+        label: namespace["remaining_interference"](speed)
+        for label, speed in namespace["SPEEDS"].items()
+    }
+    _assert_narrates(
+        "shrink_fit_at_speed.py",
+        assembly - remaining["at 6000 rpm"],
+        assembly - remaining["at 12000 rpm"],
+        remaining["at 6000 rpm"],
+        at_rest.safety_factor,
+    )
     assert fast.status is CheckStatus.FAIL
     assert "safety factor -0.40" in fast.detail
     assert card.status is CheckStatus.FAIL
@@ -5549,6 +5570,17 @@ def test_shaft_bearing_misalignment_example_slope_governs():
     assert "safety factor 0.79" in by_name["bearing misalignment slope"].detail
     assert card.status is CheckStatus.FAIL
 
+    # The slope in radians and the midspan deflection in millimetres: each is its own
+    # limit over the factor the screen reports.
+    _assert_narrates(
+        "shaft_bearing_misalignment.py",
+        namespace["BEARING_MISALIGNMENT_TOLERANCE_RAD"]
+        / by_name["bearing misalignment slope"].safety_factor,
+        namespace["DEFLECTION_LIMIT"].to("mm").magnitude
+        / by_name["midspan deflection"].safety_factor,
+        by_name["bearing misalignment slope"].safety_factor,
+    )
+
 
 def test_sheet_metal_bend_radius_example_ductility_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "sheet_metal_bend_radius.py"))
@@ -5621,6 +5653,19 @@ def test_sling_angle_overload_example_capacity_is_an_angle_problem():
     assert steep.entries[0].passed
     assert "safety factor 1.15" in steep.entries[0].detail
     assert steep.status is CheckStatus.PASS
+
+    # The two factors the docstring quotes outside the screens: straight down, and the
+    # 45-degree rigging between the two it does screen.
+    rating = namespace["LEG_RATING"].to("kN").magnitude
+    legs = namespace["NUMBER_OF_LEGS"]
+    load = namespace["LOAD"].to("kN").magnitude
+    _assert_narrates(
+        "sling_angle_overload.py",
+        rating / (load / legs),
+        rating / (load / legs / math.sin(math.radians(45.0))),
+        entry.safety_factor,
+        steep.entries[0].safety_factor,
+    )
 
 
 def test_gasket_flange_leak_example_tightness_governs():
