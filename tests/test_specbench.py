@@ -212,3 +212,58 @@ def test_the_real_index_is_the_106_cases_the_review_counted(tmp_path):
     cases = [json.loads(line) for line in payload.decode().splitlines() if line.strip()]
     assert len(cases) == 106
     assert {"case_id", "design_description", "evaluation_rubric"} <= set(cases[0])
+
+
+# Two real cases at the same pinned revision, one from each side of the census: a timber
+# assembly and a single-part PLA print. Fetched rather than vendored, like the index.
+_REAL_CASES = (
+    (
+        "bookshelf",
+        "0959cb0af9d1d269afaa546e06987144522c39e7cb0b07cb7d64d75bd1a7dcc3",
+        "an assembly of 44 parts",
+    ),
+    (
+        "vase_teardrop",
+        "400cad236d7c5a194e8b42658ac334237103f3f4d60ba00103611acc5df40fda",
+        "the material 'PLA' has no record",
+    ),
+)
+
+
+@pytest.mark.parametrize("case_id,digest,expected_reason", _REAL_CASES)
+def test_the_parser_reads_the_suites_own_prose_not_only_this_files(
+    case_id, digest, expected_reason, tmp_path
+):
+    """The antidote to a fixture agreeing with the parser that was written beside it.
+
+    Every other test here writes its case in the suite's format from memory of the
+    format. This one reads two real ones — a timber assembly and a single-part PLA print,
+    one from each side of the census — and asserts the verdict each earns. Opt-in and run
+    by the scheduled job, like the index check above.
+    """
+    if not os.environ.get("ANVILATE_ALLOW_NETWORK"):
+        pytest.skip("set ANVILATE_ALLOW_NETWORK=1 to fetch real suite cases")
+
+    from anvilate.fetch import DatasetRecipe
+    from anvilate.standards import default_materials_db
+
+    recipe = DatasetRecipe(
+        name=f"muse-{case_id}.md",
+        url=(
+            "https://huggingface.co/datasets/dongxiaoyu/MUSE/resolve/"
+            f"f8a1dc45d1ea73df4161e8a1caf1d503c5358c30/cases/{case_id}/design_description.md"
+        ),
+        sha256=digest,
+        license="CC-BY-4.0",
+        source=f"MUSE case {case_id}",
+        redistributable=False,
+    )
+    path, _provenance = fetch_dataset(
+        recipe, retrieved="2026-08-27", consent=True, cache_dir=tmp_path
+    )
+    case = parse_case_specification(case_id, path.read_text(encoding="utf-8"))
+    verdict = scope_verdict(
+        case, known_materials=frozenset(default_materials_db().known_materials())
+    )
+    assert verdict.in_scope is False
+    assert expected_reason in verdict.reason
