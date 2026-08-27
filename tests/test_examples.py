@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import math
 import re
 import runpy
@@ -14,6 +15,59 @@ from anvilate.scorecard import CheckStatus
 from anvilate.units import Quantity
 
 _EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
+
+
+def _narrated_numbers(example: str) -> list[str]:
+    """Distinctive numbers an example's docstring quotes and its own code does not carry.
+
+    A figure written into the source is an input a reader can see; a figure that appears
+    only in the prose is a *result*, and until something recomputes it, it is a claim with
+    no gate — the same lens `tests/test_contract.py` applies to `docs/`, one level down.
+    """
+    source = (_EXAMPLES / example).read_text()
+    docstring = ast.get_docstring(ast.parse(source)) or ""
+    # Digit separators differ between prose and code — 27,000 in a docstring is 27_000.0
+    # in the source — so both sides are compared with their separators removed.
+    body = re.sub(r"(?<=\d)[_,](?=\d)", "", source.replace(docstring, "", 1))
+    distinctive = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+\.\d{2,})(?![\w])")
+    return [
+        number
+        for number in sorted(set(distinctive.findall(docstring)))
+        if number.replace(",", "") not in body
+    ]
+
+
+def _rounding_of(number: str) -> float:
+    """Half of the last place the figure is written to.
+
+    A decimal says its own precision. A grouped integer says it in trailing zeros:
+    28,500 is quoted to the hundred and 7,673 to the unit, and holding the first to the
+    unit would fail a correct value while holding the second to the hundred would pass a
+    wrong one.
+    """
+    whole, _, fraction = number.replace(",", "").partition(".")
+    if fraction:
+        return 0.5 * 10 ** -len(fraction)
+    zeros = len(whole) - len(whole.rstrip("0"))
+    return 0.5 * 10**zeros
+
+
+def _assert_narrates(example: str, *computed: float) -> None:
+    """Every number the docstring narrates is one of ``computed``, to its own precision.
+
+    Both directions are checked: a quoted figure with no computed value behind it fails,
+    and a computed value no figure uses fails too — a list that has drifted past what the
+    prose actually claims is a gate reporting coverage it does not have.
+    """
+    used = set()
+    for number in _narrated_numbers(example):
+        value = float(number.replace(",", ""))
+        rounding = _rounding_of(number)
+        matches = [c for c in computed if abs(value - c) <= rounding]
+        assert matches, f"{example}'s docstring quotes {number} and nothing computes it"
+        used.update(matches)
+    unused = [c for c in computed if c not in used]
+    assert not unused, f"{example}: no docstring figure uses {unused}"
 
 
 def test_every_example_is_executed_by_this_file():
@@ -1705,6 +1759,14 @@ def test_earth_gravitation_example():
     assert d["surface_gravity_m_s2"] == pytest.approx(9.82, abs=0.01)
     assert d["gravitational_parameter_m3_s2"] == pytest.approx(3.9859e14, rel=1e-3)
     assert d["low_orbit_speed_m_s"] == pytest.approx(7672.0, abs=2.0)
+    # The orbital radius and the speed the docstring quotes, at the digits it prints.
+    assert d["everyday_pull_n"] == pytest.approx(6.674e-5, rel=1e-3)
+    _assert_narrates(
+        "earth_gravitation.py",
+        (namespace["ORBIT_RADIUS"].to("km").magnitude),
+        d["low_orbit_speed_m_s"],
+        d["surface_gravity_m_s2"],
+    )
 
 
 def test_solar_sail_thrust_example():
@@ -1867,6 +1929,12 @@ def test_tungsten_cathode_emission_example():
     assert d["richardson_current_a_m2"] == pytest.approx(6369.2, abs=1.0)
     assert d["schottky_lowering_ev"] == pytest.approx(0.1200, abs=0.001)
     assert d["child_langmuir_current_a_m2"] == pytest.approx(73806.0, abs=1.0)
+    _assert_narrates(
+        "tungsten_cathode_emission.py",
+        d["richardson_current_a_m2"],
+        d["child_langmuir_current_a_m2"],
+        d["schottky_lowering_ev"],
+    )
 
 
 def test_flat_plate_boundary_layer_example():
@@ -2784,6 +2852,17 @@ def test_building_column_load_path_capstone_reduction_decides():
     assert unreduced.status is CheckStatus.FAIL
     assert "safety factor 0.90" in unreduced.detail
 
+    # The three loads the docstring's argument is made of: the reduced demand, the
+    # capacity it clears, and the unreduced demand that does not.
+    capacity = namespace["_design_strength_kn"]()
+    _assert_narrates(
+        "building_column_load_path.py",
+        capacity,
+        capacity / reduced.safety_factor,
+        capacity / unreduced.safety_factor,
+        reduced.safety_factor,
+    )
+
 
 def test_flat_roof_rain_vs_snow_example_rain_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "flat_roof_rain_vs_snow.py"))
@@ -3057,6 +3136,12 @@ def test_turbine_blade_creep_example_shows_temperature_sensitivity():
     assert summary["excursion_life_hours"] < summary["design_life_hours"] / 100
     # The temperature limit for a 100,000 h life sits between the two service points.
     assert 1050 < summary["temperature_limit_K"] < 1150
+    # The two lives the docstring quotes, at the digits it quotes them to.
+    _assert_narrates(
+        "turbine_blade_creep_life.py",
+        summary["design_life_hours"],
+        summary["excursion_life_hours"],
+    )
 
 
 def test_pipe_expansion_loop_example_shows_the_sif_governs():
@@ -3176,6 +3261,24 @@ def test_i_beam_same_steel_example_shows_shape_beats_area():
     by_name = {e.name: e for e in card.entries}
     assert not by_name["square bar bending"].passed
     assert by_name["I-beam bending"].passed
+
+    # The two section moduli and the steel area the docstring's argument rests on.
+    section = namespace["CrossSection"]
+    square = section.rectangular(width=Quantity.parse("55.5 mm"), height=Quantity.parse("55.5 mm"))
+    i_shape = section.i_section(
+        depth=Quantity.parse("200 mm"),
+        flange_width=Quantity.parse("100 mm"),
+        flange_thickness=Quantity.parse("10 mm"),
+        web_thickness=Quantity.parse("6 mm"),
+    )
+    _assert_narrates(
+        "i_beam_same_steel.py",
+        square.section_modulus.to("mm**3").magnitude,
+        i_shape.section_modulus.to("mm**3").magnitude,
+        square.area.to("mm**2").magnitude,
+        by_name["square bar bending"].safety_factor,
+        by_name["I-beam bending"].safety_factor,
+    )
 
 
 def test_monorail_trolley_example_fails_only_at_the_true_worst_spot():
@@ -4524,6 +4627,14 @@ def test_bearing_reliability_life_example_higher_reliability_costs_life():
     assert "safety factor 0.39" in by_name["life at 99% reliability"].detail
     assert card.status is CheckStatus.FAIL
 
+    # The three lives in hours the docstring quotes, which are the safety factors times
+    # the service life they are screened against.
+    service = namespace["REQUIRED_SERVICE_LIFE"].to("hour").magnitude
+    _assert_narrates(
+        "bearing_reliability_life.py",
+        *(entry.safety_factor * service for entry in card.entries),
+    )
+
 
 def test_steam_pipe_thermal_gradient_example_thermal_governs_not_pressure():
     namespace = runpy.run_path(str(_EXAMPLES / "steam_pipe_thermal_gradient.py"))
@@ -4967,6 +5078,39 @@ def test_thermal_clearance_seizure_example_thermal_closure_governs():
     assert opened.entries[0].passed
     assert "safety factor 1.22" in opened.entries[0].detail
     assert opened.status is CheckStatus.PASS
+
+    # The four dimensions the docstring's argument turns on: each part's free growth,
+    # the closure that is their difference, and the cold clearance it takes to survive.
+    grow = namespace["free_thermal_expansion"]
+    rise = namespace["TEMPERATURE_RISE"]
+    piston = (
+        grow(
+            length=namespace["PISTON_DIAMETER"],
+            thermal_expansion_coefficient=namespace["PISTON_CTE"],
+            temperature_change=rise,
+        )
+        .to("mm")
+        .magnitude
+    )
+    bore = (
+        grow(
+            length=namespace["PISTON_DIAMETER"],
+            thermal_expansion_coefficient=namespace["BORE_CTE"],
+            temperature_change=rise,
+        )
+        .to("mm")
+        .magnitude
+    )
+    closure = namespace["_thermal_closure"]()
+    _assert_narrates(
+        "thermal_clearance_seizure.py",
+        piston,
+        bore,
+        closure,
+        closure + namespace["MINIMUM_FILM"].to("mm").magnitude,
+        tight.entries[0].safety_factor,
+        opened.entries[0].safety_factor,
+    )
     # The closure itself exceeds the tight cold clearance (why it seizes).
     assert namespace["_thermal_closure"]() > 0.10
 
@@ -5117,6 +5261,20 @@ def test_winch_full_drum_stall_example_top_layer_governs():
     wide_by_name = {e.name: e for e in wide.entries}
     assert "safety factor 1.02" in wide_by_name["line pull at full drum vs load"].detail
     assert wide.status is CheckStatus.PASS
+
+    # The pulls the docstring narrates layer by layer, which nothing recomputed.
+    pull = namespace["drum_line_pull"]
+    common = {
+        "torque": namespace["DRUM_TORQUE"],
+        "core_diameter": namespace["CORE_DIAMETER"],
+        "rope_diameter": namespace["ROPE_DIAMETER"],
+    }
+    _assert_narrates(
+        "winch_full_drum_stall.py",
+        *(pull(layer=layer, **common).to("kN").magnitude for layer in (1, 2, 4)),
+        *(entry.safety_factor for entry in narrow.entries),
+        *(entry.safety_factor for entry in wide.entries),
+    )
 
 
 def test_winch_tackle_friction_example_friction_governs():
