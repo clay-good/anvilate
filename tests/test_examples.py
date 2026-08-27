@@ -204,15 +204,11 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "dfm_process_check.py",
         "double_slit_wavelength_bench.py",
         "drivetrain_torsional_mode.py",
-        "fan_deck_resonance.py",
         "feature_control_frame_legality.py",
-        "flange_coupling_bolt_pattern.py",
         "flat_roof_rain_vs_snow.py",
-        "flywheel_torsional_mode.py",
         "forging_press_sizing.py",
         "fracture_toughness_screen.py",
         "gamma_shield_thickness.py",
-        "gear_nonstandard_center.py",
         "gearbox_output_shaft.py",
         "gps_and_accelerator_relativity.py",
         "guide_spring_buckling.py",
@@ -4054,6 +4050,21 @@ def test_flywheel_example_moves_the_twist_mode_with_shaft_diameter():
     assert "fundamental 78.8 Hz" in by_name["Ø25 shaft upsized"].detail
     assert card.status is CheckStatus.FAIL
 
+    # The flywheel inertia, and the two ratios the upsize buys: J goes as d⁴ and the
+    # frequency as its root, which is the sentence the example exists to make.
+    polar = [
+        namespace["polar_second_moment_solid"](diameter=Quantity.parse(diameter))
+        .to("mm**4")
+        .magnitude
+        for _label, diameter in namespace["_SHAFTS"]
+    ]
+    _assert_narrates(
+        "flywheel_torsional_mode.py",
+        namespace["FLYWHEEL"].to("kg*m**2").magnitude,
+        polar[1] / polar[0],
+        math.sqrt(polar[1] / polar[0]),
+    )
+
 
 def test_pump_beam_example_fails_only_the_modal_dimension():
     namespace = runpy.run_path(str(_EXAMPLES / "pump_mezzanine_beam.py"))
@@ -4084,6 +4095,16 @@ def test_fan_deck_example_rescues_resonance_with_end_fixity():
     assert by_name["ends welded to headers (fixed-fixed)"].passed
     assert "fundamental 38.6 Hz" in by_name["ends welded to headers (fixed-fixed)"].detail
     assert card.status is CheckStatus.FAIL
+
+    # The eigenvalue the docstring names and the jump it buys, both from the module's
+    # own constants rather than from the two frequencies printed above.
+    from anvilate.analysis import dynamics as _dynamics
+
+    _assert_narrates(
+        "fan_deck_resonance.py",
+        _dynamics._LAMBDA_SQ_FIXED_FIXED,
+        _dynamics._LAMBDA_SQ_FIXED_FIXED / _dynamics._LAMBDA_SQ_SIMPLY_SUPPORTED,
+    )
 
 
 def test_retaining_wall_example_catches_the_unconservative_shortcut():
@@ -5311,6 +5332,17 @@ def test_gear_nonstandard_center_example_operating_angle_caps_the_stretch():
     assert "safety factor 0.94" in by_name["63 mm centre"].detail
     assert card.status is CheckStatus.FAIL
 
+    # The total profile shift each centre demands — the cost the docstring is quoting.
+    _assert_narrates(
+        "gear_nonstandard_center.py",
+        *(
+            namespace["profile_shift_sum_for_center_distance"](
+                operating_center_distance=centre, **namespace["PAIR"]
+            )
+            for centre in namespace["CANDIDATE_CENTERS"]
+        ),
+    )
+
 
 def test_bracket_weld_group_eccentric_example_direct_shear_underestimates():
     namespace = runpy.run_path(str(_EXAMPLES / "bracket_weld_group_eccentric.py"))
@@ -5977,6 +6009,23 @@ def test_flange_coupling_example_adds_bolts_not_diameter():
     six = namespace["screen_six_bolt_coupling"]()
     assert six.status is CheckStatus.PASS
     assert "safety factor 1.26" in six.entries[0].detail
+
+    # The per-bolt shear each pattern carries, which is what the argument is about.
+    _assert_narrates(
+        "flange_coupling_bolt_pattern.py",
+        *(
+            namespace["flange_coupling_bolt_force"](
+                torque=namespace["DESIGN_TORQUE"],
+                num_bolts=count,
+                bolt_circle_radius=namespace["BOLT_CIRCLE_RADIUS"],
+            )
+            .to("N")
+            .magnitude
+            for count in (4, 6)
+        ),
+        four.entries[0].safety_factor,
+        six.entries[0].safety_factor,
+    )
 
 
 def test_hoist_hook_example_static_pass_fails_on_impact():
