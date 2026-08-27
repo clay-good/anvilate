@@ -10,7 +10,14 @@
       bundled** — the cases are drawings and rubrics rather than values, a leaderboard
       benchmark's version is what a published score must name, and the fetch-on-first-use
       flow already carries the checksum and the attribution CC BY 4.0 requires.
-- [ ] 1.2 Spec-format adapter (benchmark spec → Anvilate Spec IR where in-scope)
+- [ ] 1.2 Spec-format adapter (benchmark spec → Anvilate Spec IR where in-scope) —
+      anchored 2026-08-27, see `design.md`: the case format is Markdown under fixed
+      headings (Design Goal / Geometry and Dimensions / Material / Manufacturing Method /
+      Connection Method / Mechanical Condition / Structural Features / Special
+      Requirements / Planned Component Quantity / Component Names), indexed by a
+      106-line `metadata.jsonl`, so the adapter is a heading-to-field map. The open work
+      is the mapping and the refusal path, which is also how the in-scope subset gets
+      measured rather than guessed.
 - [ ] 1.3 Funnel-stage scoring and out-of-scope accounting
 
 ## 2. Agent-driving suite

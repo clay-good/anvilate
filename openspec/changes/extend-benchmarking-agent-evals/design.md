@@ -46,8 +46,41 @@ the cache; and a run that has not fetched reports *not evaluated* rather than a 
 thin adapter may depend on or copy from it with attribution if that turns out cheaper than
 re-implementing the funnel's three stages.
 
+## The layout, fetched and read (the anchor for task 1.2)
+
+`metadata.jsonl` is one JSON object per line, 106 of them, each naming four paths:
+
+```
+{"case_id": "bookshelf",
+ "design_description": "cases/bookshelf/design_description.md",
+ "svg_png":            "cases/bookshelf/bookshelf.png",
+ "stp_render":         "cases/bookshelf/bookshelf_stp_render.png",
+ "evaluation_rubric":  "cases/bookshelf/evaluation_rubric.md", ...}
+```
+
+The specification itself is **Markdown under fixed headings** — `Design Goal`, `Geometry
+and Dimensions`, `Material`, `Manufacturing Method`, `Connection Method (Joint Type)`,
+`Mechanical Condition`, `Structural Features`, `Special Requirements`, `Planned Component
+Quantity`, `Component Names`. So the adapter is a heading-to-field mapping and a quantity
+parser, not a parser of prose; the rubric beside it is judge instructions in Markdown, for
+a model, and nothing Anvilate evaluates.
+
+**What that means for scope, and it is the important half.** A sample of fourteen cases
+read in full (2026-08-27) splits two ways: PLA parts for 3D printing with a *Planned
+Component Quantity* of 1, and timber parts for CNC milling with quantities of 2 to 23 —
+the `bookshelf` case names 44. Anvilate screens a declared element against a cited clause;
+it does not compile a 44-part joined assembly, and the rubric's own criteria are assembly
+readiness, joint design and manufacturability rather than a margin against an allowable.
+
+So the comparison this change promises is **not** "Anvilate scores MUSE". It is the
+funnel's first stages over the subset that is in scope at all, with the out-of-scope count
+published beside it — which is what task 1.3 means by out-of-scope accounting, and why the
+number that matters is how many of the 106 a spec-compiled pipeline can even accept. A
+single scalar over the whole set would be the same mistake this change already refuses in
+its agent-driving half.
+
 ## What is still open
 
-The dataset's *records* are file paths into the published archive, so the adapter cannot
-be written against the card alone — it needs one fetched case to know the on-disk layout.
-That is task 1.2's first step, not this review's.
+The subset question is a measurement, not an opinion: task 1.2's adapter answers it by
+attempting all 106 and reporting what it refuses, with the reason. Nothing about the
+in-scope count should be published before that runs.
