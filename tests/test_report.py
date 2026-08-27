@@ -19,7 +19,7 @@ from anvilate.report import (
 )
 from anvilate.report.mathml import formula_to_mathml
 from anvilate.scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
-from anvilate.units import Quantity, UnitSystem
+from anvilate.units import Quantity, UnitSystem, render
 
 BENDING = Derivation(
     symbolic="σ_b = M · c / I",
@@ -883,3 +883,72 @@ def test_a_unit_stays_with_its_number_across_a_division():
     numerator, denominator = list(fraction)
     assert "".join(numerator.itertext()) == "1.00kN"
     assert "".join(denominator.itertext()) == "10.00mm2"
+
+
+def test_the_calculation_report_pages_rendered_block_is_the_reports_own():
+    """`docs/calculation-reports.md` shows a rendered check, and nothing opened the page.
+
+    The block is the page's whole claim — that a report shows the formula, the numbers
+    put into it, the answer and the clause — so it is compared against the text the
+    page's own worked block renders, line for line rather than by spot-checking numbers.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.packs.structural import LiftingLug, screen_lifting_lug
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "calculation-reports.md").read_text()
+
+    lug = LiftingLug(
+        name="padeye",
+        width=Quantity.parse("80 mm"),
+        hole_diameter=Quantity.parse("25 mm"),
+        thickness=Quantity.parse("12 mm"),
+        load=Quantity.parse("50 kN"),
+        material="ASTM-A36",
+    )
+    card = screen_lifting_lug(lug, required_safety_factor=2.0)
+    report = CalculationReport(
+        title="Lifting padeye — screening calculations",
+        project="Shop crane padeye, 50 kN",
+        date="2026-07-27",
+        unit_system=UnitSystem.SI,
+        standards=("ASME BTH-1 — Design of Below-the-Hook Lifting Devices",),
+        assumptions=("Static lift; no impact or side-load factor applied.",),
+        sections=tuple(ReportSection(entry=entry) for entry in card.entries),
+    )
+
+    shown = re.search(r"```\n(FAIL  padeye pin bearing\n(?:.|\n)*?)```", page)
+    assert shown is not None, "the rendered check in docs/calculation-reports.md has moved"
+    text = report.to_text()
+    start = text.index("FAIL  padeye pin bearing")
+    rendered = text[start : text.index("\n\n", start)]
+    # Equality, not containment: a page that drops the trailing citation line, or the
+    # repair hint, is still a substring of the rendering and is no longer the rendering.
+    assert shown.group(1).rstrip("\n") == rendered
+
+    # The unit-system argument the page makes in prose: the substituted line has to
+    # evaluate to the result printed under it, which is why moments are in N·mm.
+    line = re.search(
+        r"`([\d.]+) N·mm · ([\d.]+) mm / ([\d.]+) mm⁴ = ([\d.]+) MPa`",
+        page,
+    )
+    assert line is not None, "the page no longer shows the N·mm substituted line"
+    moment, fibre, second_moment, stress = (float(g) for g in line.groups())
+    assert moment * fibre / second_moment == pytest.approx(stress, abs=0.05)
+    # And the same line in N·m, which is the mistake the sentence beside it describes.
+    in_newton_metres = (moment / 1000.0) * fibre / second_moment
+    assert stress / in_newton_metres == pytest.approx(1000.0, rel=1e-3)
+
+    # The precision claim: 0.087 ksi displayed as 0.1 ksi is the percentage the page names.
+    precision = re.search(
+        r"a stress of ([\d.]+) ksi used to print as `([\d.]+) ksi`,\s+a (\d+)% error", page
+    )
+    assert precision is not None, "the page no longer states the small-value precision error"
+    actual, displayed, claimed = precision.groups()
+    error = 100.0 * abs(float(displayed) - float(actual)) / float(actual)
+    assert error == pytest.approx(float(claimed), abs=0.5)
+    # And the widening itself: that stress renders to a figure a reviewer can check
+    # against, not to the one-decimal form the sentence describes as the old behavior.
+    shown = render(Quantity.parse("0.6 MPa"), unit="ksi", pretty=True)
+    assert float(shown.split()[0]) == pytest.approx(float(actual), abs=5e-4)
