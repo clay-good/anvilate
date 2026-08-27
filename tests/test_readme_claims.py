@@ -249,3 +249,28 @@ def test_the_uncertainty_pages_worked_block_reproduces_its_own_comments():
         result.is_fragile(threshold=0.05)
     )
     assert re.search(r'dominant\(\)\.name\s+# "(\w+)"', page).group(1) == result.dominant().name
+
+
+def test_every_docs_page_is_reachable_from_the_readme():
+    """A page nobody links is a page nobody reads.
+
+    Thirty-eight pages under `docs/` carry the arguments the README summarises, and the
+    only route to them is a link. This is the ratchet: a new page that nothing points at
+    fails here, as does a link to a page that has been renamed or removed — which is the
+    other way the set drifts, and the one a reader meets as a 404.
+    """
+    import re
+
+    root = Path(__file__).resolve().parent.parent
+    readme = (root / "README.md").read_text()
+    pages = {page.name for page in (root / "docs").glob("*.md")}
+    assert len(pages) > 30, f"the docs directory has only {len(pages)} pages"
+
+    linked = set(re.findall(r"docs/([a-z0-9-]+\.md)", readme))
+    unreachable = sorted(pages - linked)
+    assert not unreachable, (
+        f"these pages are linked from nowhere in the README: {unreachable}. A reader "
+        "meets the README first; a page it does not point at is not in the documentation."
+    )
+    dangling = sorted(linked - pages)
+    assert not dangling, f"the README links pages that do not exist: {dangling}"
