@@ -1552,3 +1552,63 @@ def test_every_docs_page_that_argues_from_a_number_is_opened_by_a_test():
         assert distinctive.search((root / "docs" / name).read_text()), (
             f"{name} is excused from the sweep and carries no number to excuse"
         )
+
+
+def test_the_package_docstrings_quoted_constants_are_the_functions_own():
+    """`anvilate.analysis`'s docstring writes four coefficients out in full.
+
+    They belong to functions in other modules, so nothing tied the summary to the code:
+    the same lens as the docs and example sweeps, one level in. Each is recovered from
+    the function that applies it rather than compared against a literal.
+    """
+    import math
+    import re
+
+    from anvilate import analysis
+    from anvilate.units import Quantity
+
+    prose = " ".join((analysis.__doc__ or "").split())
+
+    def _quoted(pattern: str) -> float:
+        match = re.search(pattern, prose)
+        assert match is not None, f"the analysis docstring no longer states {pattern}"
+        return float(match.group(1))
+
+    # The two 1/7-power-law plate coefficients: C = value·Re^-0.2, so the coefficient is
+    # the returned number times Re^0.2.
+    flow = {
+        "freestream_velocity": Quantity.parse("10 m/s"),
+        "kinematic_viscosity": Quantity.parse("1.5e-5 m**2/s"),
+    }
+    reynolds = 10.0 * 2.0 / 1.5e-5
+    local = analysis.turbulent_skin_friction_coefficient(distance=Quantity.parse("2 m"), **flow)
+    average = analysis.turbulent_plate_drag_coefficient(plate_length=Quantity.parse("2 m"), **flow)
+    assert local * reynolds**0.2 == pytest.approx(
+        _quoted(r"C_f = ([\d.]+)/Re_x\^\(1/5\)"), rel=1e-9
+    )
+    assert average * reynolds**0.2 == pytest.approx(
+        _quoted(r"C_D = ([\d.]+)/Re_L\^\(1/5\)"), rel=1e-9
+    )
+
+    # The moist-air humidity coefficient: v grows linearly in W, so two humidity ratios
+    # give the slope, and the coefficient is the slope over the dry-air intercept.
+    air = {"temperature": Quantity.parse("293.15 K"), "pressure": Quantity.parse("101325 Pa")}
+    dry = analysis.moist_air_specific_volume(humidity_ratio=0.0, **air).to("m**3/kg").magnitude
+    humid = analysis.moist_air_specific_volume(humidity_ratio=0.01, **air).to("m**3/kg").magnitude
+    # The docstring rounds the molar-mass ratio to three places; the module carries it
+    # in full, so the check is to the digits the summary prints.
+    assert (humid - dry) / (0.01 * dry) == pytest.approx(_quoted(r"\(1 \+ ([\d.]+)·W\)"), abs=5e-4)
+
+    # The coaxial constant: Z_0·√ε_r/ln(b/a) is it, by construction of the formula.
+    impedance = (
+        analysis.coaxial_characteristic_impedance(
+            inner_radius=Quantity.parse("1 mm"),
+            outer_radius=Quantity.parse("3 mm"),
+            relative_permittivity=2.25,
+        )
+        .to("ohm")
+        .magnitude
+    )
+    assert impedance * math.sqrt(2.25) / math.log(3.0) == pytest.approx(
+        _quoted(r"Z_0 = \(([\d.]+)/√ε_r\)"), abs=5e-3
+    )
