@@ -5799,6 +5799,47 @@ def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition
         assert "qualified assessor" in entry.detail
 
 
+def test_the_fitness_for_service_pages_three_rows_are_the_examples_scorecard():
+    """The page prints a three-row scorecard and the sentence its argument turns on.
+
+    The rows are the example's own entries — same flaw, three provenances — and the
+    sentence is the page's whole reason for a FAD: K_r = 0.367 looks like 2.73 in hand
+    and the load-line margin is 1.71, because riding the load line out raises L_r too.
+    """
+    page = (
+        Path(__file__).resolve().parent.parent / "docs" / "fitness-for-service-screening.md"
+    ).read_text()
+    namespace = runpy.run_path(str(_EXAMPLES / "vessel_surface_flaw_fad.py"))
+    by_name = {e.name: e for e in namespace["screen_shell_flaw"]().entries}
+
+    rows = re.findall(
+        r"\n([a-z][^\n]*?)\s{2,}(pass|fail|not_evaluated)\s+margin\s+([\d.]+|—)", page
+    )
+    assert len(rows) == 3, "the scorecard block on the fitness-for-service page has moved"
+    for name, status, margin in rows:
+        entry = by_name[name]
+        assert entry.status.value == status
+        if margin == "—":
+            assert entry.safety_factor is None
+        else:
+            assert entry.safety_factor == pytest.approx(float(margin), abs=5e-3)
+
+    # The sentence: the fracture ratio, the margin a reader would infer from it, and the
+    # margin the diagram actually gives.
+    sentence = re.search(
+        r"K_r = (\d+\.\d+) would suggest (\d+\.\d+) in hand; the real margin\s+is (\d+\.\d+)", page
+    )
+    assert sentence is not None, "the page no longer contrasts 1/K_r against the load-line margin"
+    fracture_ratio, naive, real = (float(g) for g in sentence.groups())
+    assessment = namespace["_assess"](
+        namespace["SERVICE_HOOP"], namespace["TOUGHNESS"], estimate=False
+    )
+    assert assessment.fracture_ratio == pytest.approx(fracture_ratio, abs=5e-4)
+    assert 1.0 / assessment.fracture_ratio == pytest.approx(naive, abs=5e-3)
+    assert assessment.load_line_margin == pytest.approx(real, abs=5e-3)
+    assert real < naive, "the page's contrast is the point of the paragraph"
+
+
 def test_feature_control_frame_example_refuses_the_five_illegal_callouts():
     namespace = runpy.run_path(str(_EXAMPLES / "feature_control_frame_legality.py"))
     FeatureControlFrame_ = namespace["FeatureControlFrame"]

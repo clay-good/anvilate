@@ -42833,3 +42833,62 @@ def test_the_thermal_pages_isolation_numbers_are_the_screens_own():
         )
         is None
     )
+
+
+def test_the_fitness_for_service_pages_anchor_figures_are_the_solutions_own():
+    """The page quotes the Newman–Raju limiting case to five places and names its tolerance.
+
+    Both reference constants, both computed values, and the tolerance the sentence says
+    the suite asserts them at — which is the sentence's actual claim, since "about 0.1%"
+    is a statement about how far the fit sits from the closed forms it approaches.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.analysis import SurfaceFlaw, newman_raju_surface_flaw_sif
+
+    page = (
+        Path(__file__).resolve().parent.parent / "docs" / "fitness-for-service-screening.md"
+    ).read_text()
+    prose = " ".join(page.split())  # the sentence spans five wrapped lines
+    claim = re.search(
+        r"within about ([\d.]+)% of ([\d.]+)·\(2/π\)·σ√\(πa\) at the deepest point.*?"
+        r"and of ([\d.]+)·σ√\(πa\) at the surface point.*?"
+        r"\(([\d.]+) against ([\d.]+), and ([\d.]+)\).*?"
+        r"the suite asserts them at (\S+) and",
+        prose,
+    )
+    assert claim is not None, "the anchor sentence on the fitness-for-service page has moved"
+    (
+        about,
+        deepest_constant,
+        surface_constant,
+        deepest_shown,
+        target_shown,
+        surface_shown,
+        tolerance,
+    ) = claim.groups()
+
+    flaw = SurfaceFlaw(depth=_q("0.1 mm"), half_length=_q("0.1 mm"), thickness=_q("1000 mm"))
+    reference = 100.0 * math.sqrt(math.pi * 0.0001)  # σ√(πa) in MPa·√m
+    deepest = (
+        newman_raju_surface_flaw_sif(flaw=flaw, membrane_stress=_q("100 MPa")).magnitude / reference
+    )
+    surface = (
+        newman_raju_surface_flaw_sif(
+            flaw=flaw, membrane_stress=_q("100 MPa"), parametric_angle=0.0
+        ).magnitude
+        / reference
+    )
+    target = float(deepest_constant) * 2.0 / math.pi
+
+    assert deepest == pytest.approx(float(deepest_shown), abs=5e-6)
+    assert target == pytest.approx(float(target_shown), abs=5e-6)
+    assert surface == pytest.approx(float(surface_shown), abs=5e-6)
+
+    # Neither is an identity, and the page says so: both sit inside the tolerance the
+    # suite uses and outside the one an identity would allow.
+    for value, closed_form in ((deepest, target), (surface, float(surface_constant))):
+        deviation = abs(value - closed_form) / closed_form
+        assert 0.0 < deviation <= float(tolerance)
+        assert deviation < 1.5 * float(about) / 100.0, "the page's 'about 0.1%' has drifted"
