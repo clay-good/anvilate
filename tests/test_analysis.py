@@ -42589,3 +42589,167 @@ def test_the_weld_fatigue_pages_thickness_numbers_are_the_functions_own():
     assert weld_size_effect_factor(thickness=Quantity(magnitude=40.0, unit="mm")) == pytest.approx(
         float(comment.group(1)), abs=5e-5
     )
+
+
+def test_the_process_piping_pages_numbers_are_the_librarys_own():
+    """`docs/process-piping.md` argues from eighteen numbers and no test opened the page.
+
+    The three that matter most are the ones a reader would copy: the wall left after the
+    mill tolerance and the corrosion allowance, the miter table (whose whole point is the
+    step down at 22.5°), and the imperial branch sheet the accounting is anchored to.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.analysis import (
+        asme_b313_branch_reinforcement,
+        asme_b313_miter_bend_pressure,
+        asme_b313_pipe_pressure,
+    )
+    from anvilate.standards import default_pipe_schedule_table
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "process-piping.md").read_text()
+    table = default_pipe_schedule_table()
+
+    # The worked block: the three values quoted beside the calls that produce them.
+    pipe = table.get("4", "40")
+    block = re.search(
+        r"outside_diameter\.quantity\s*# ([\d.]+) mm.*?"
+        r"wall_thickness\.quantity\s*# ([\d.]+) mm nominal.*?"
+        r'available_wall\(corrosion_allowance=Quantity\.parse\("1\.5 mm"\)\)\s*# ([\d.]+) mm',
+        page,
+        re.DOTALL,
+    )
+    assert block is not None, "the NPS 4 block in docs/process-piping.md has moved"
+    assert pipe.outside_diameter.quantity.to("mm").magnitude == pytest.approx(
+        float(block.group(1)), abs=5e-3
+    )
+    assert pipe.wall_thickness.quantity.to("mm").magnitude == pytest.approx(
+        float(block.group(2)), abs=5e-3
+    )
+    assert pipe.available_wall(corrosion_allowance=_q("1.5 mm")).to(
+        "mm"
+    ).magnitude == pytest.approx(float(block.group(3)), abs=5e-3)
+
+    # The mill under-tolerance the page names, which is the default the block above runs
+    # on: a reader who quotes the page is quoting `available_wall`'s own fraction.
+    mill = re.search(r"ship up to ([\d.]+)%\s+under nominal", page)
+    assert mill is not None, "the page no longer states the mill under-tolerance"
+    fraction = float(mill.group(1)) / 100.0
+    assert pipe.available_wall(mill_tolerance_fraction=fraction).to(
+        "mm"
+    ).magnitude == pytest.approx(pipe.available_wall().to("mm").magnitude, rel=1e-12)
+
+    # The size of the table itself, which the page states three ways in one sentence.
+    extent = re.search(
+        r"(\d+) rows over (\d+) nominal sizes and (\w+) schedules",
+        page,
+    )
+    assert extent is not None, "the page no longer states the size of the pipe table"
+    assert len(table) == int(extent.group(1))
+    assert len(table.nominal_sizes()) == int(extent.group(2))
+    assert len(table.schedules()) == {"six": 6}[extent.group(3)]
+
+    # STD is not an alias for Schedule 40, and the page names where they part company.
+    split = re.search(
+        r"STD tracks Schedule 40 through NPS (\S+) and then holds at ([\d.]+) mm while "
+        r"Schedule\n40 keeps thickening to ([\d.]+) mm at NPS (\d+)",
+        page,
+    )
+    assert split is not None, "the page no longer states where STD and Schedule 40 part"
+    sizes = table.nominal_sizes()
+    parting = sizes.index(split.group(1))
+    for nps in sizes[: parting + 1]:
+        assert (
+            table.get(nps, "STD").wall_thickness.quantity
+            == table.get(nps, "40").wall_thickness.quantity
+        ), f"STD and Schedule 40 differ at NPS {nps}"
+    for nps in sizes[parting + 1 :]:
+        std = table.get(nps, "STD").wall_thickness.quantity.to("mm").magnitude
+        assert std == pytest.approx(float(split.group(2)), abs=5e-3)
+        assert table.get(nps, "40").wall_thickness.quantity.to("mm").magnitude > std
+    assert table.get(split.group(4), "40").wall_thickness.quantity.to(
+        "mm"
+    ).magnitude == pytest.approx(float(split.group(3)), abs=5e-3)
+
+    # The miter table: four ratings and four percentages against the straight-pipe rating
+    # the sentence above it quotes.
+    claimed_straight = re.search(r"rating ([\d.]+) MPa straight", page)
+    assert claimed_straight is not None, "the page no longer quotes the straight-pipe rating"
+    straight = (
+        asme_b313_pipe_pressure(
+            wall_thickness=pipe.wall_thickness.quantity,
+            outside_diameter=pipe.outside_diameter.quantity,
+            allowable_stress=_q("138 MPa"),
+        )
+        .to("MPa")
+        .magnitude
+    )
+    assert straight == pytest.approx(float(claimed_straight.group(1)), abs=5e-3)
+
+    rows = re.findall(r"\| ([\d.]+)° \| ([\d.]+) MPa \| (\d+)%", page)
+    assert len(rows) == 4, "the miter table in docs/process-piping.md has moved"
+    mean_radius = Quantity(
+        magnitude=(
+            pipe.outside_diameter.quantity.to("mm").magnitude
+            - pipe.wall_thickness.quantity.to("mm").magnitude
+        )
+        / 2.0,
+        unit="mm",
+    )
+    ratings = []
+    for angle, claimed_rating, claimed_percent in rows:
+        rating = (
+            asme_b313_miter_bend_pressure(
+                miter_angle=float(angle),
+                allowable_stress=_q("138 MPa"),
+                wall_thickness=pipe.wall_thickness.quantity,
+                mean_radius=mean_radius,
+            )
+            .to("MPa")
+            .magnitude
+        )
+        ratings.append(rating)
+        assert rating == pytest.approx(float(claimed_rating), abs=5e-3)
+        # The page rounds the percentage to the nearest point.
+        assert round(100.0 * rating / straight) == int(claimed_percent)
+    assert ratings == sorted(ratings, reverse=True)
+
+    # The imperial branch sheet, and the pipes the sentence names as its inputs.
+    anchor = re.search(
+        r"NPS (\d+) Sch (\d+) run, NPS (\d+) Sch (\d+) branch.*?"
+        r"A1 ([\d.]+) in², A2 ([\d.]+) in²,\nA3 ([\d.]+) in²",
+        page,
+        re.DOTALL,
+    )
+    assert anchor is not None, "the page no longer states the imperial anchor sheet"
+    run = table.get(anchor.group(1), anchor.group(2))
+    branch = table.get(anchor.group(3), anchor.group(4))
+    # The sheet's own dimensions, within the thousandth of an inch B36.10M's metric
+    # rounding costs: 219.08 mm is 8.62598 in where the sheet prints 8.625.
+    for tabled, sheet in (
+        (run.outside_diameter, 8.625),
+        (run.wall_thickness, 0.322),
+        (branch.outside_diameter, 4.5),
+        (branch.wall_thickness, 0.237),
+    ):
+        assert tabled.quantity.to("in").magnitude == pytest.approx(sheet, abs=1.5e-3)
+
+    # "Reproduces exactly" is a claim about the sheet's own inch dimensions, so the
+    # anchor runs on those: the metric table's 219.08 mm moves A2 by 1.4e-4 in², which
+    # is larger than the last digit the page prints.
+    reinforcement = asme_b313_branch_reinforcement(
+        run_outside_diameter=_q("8.625 in"),
+        run_wall=_q("0.322 in"),
+        run_pressure_design_thickness=_q("0.147 in"),
+        branch_outside_diameter=_q("4.5 in"),
+        branch_wall=_q("0.237 in"),
+        branch_pressure_design_thickness=_q("0.077 in"),
+        mechanical_allowance=_q("0 mm"),
+    )
+    for claimed, area in (
+        (anchor.group(5), reinforcement.required),
+        (anchor.group(6), reinforcement.run_excess),
+        (anchor.group(7), reinforcement.branch_excess),
+    ):
+        assert area.to("in**2").magnitude == pytest.approx(float(claimed), abs=5e-5)
