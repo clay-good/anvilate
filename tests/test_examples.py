@@ -187,12 +187,6 @@ def _assert_narrates(example: str, *computed: float) -> None:
 # example whose entry points return them) and deleting its line.
 _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
     {
-        "accelerated_life_test.py",
-        "antenna_feedline_match.py",
-        "base_to_final_turn.py",
-        "biconvex_lens_design.py",
-        "boiling_burnout_margin.py",
-        "bolt_tension_thread_area.py",
         "bracket_reviewer_dossier.py",
         "bracket_weld_sizing.py",
         "branch_reinforcement_zone.py",
@@ -1616,6 +1610,12 @@ def test_boiling_burnout_margin_example_runs_below_critical_heat_flux():
     # Running at ~11% of burnout — a comfortable margin.
     assert d["fraction_of_burnout"] == pytest.approx(0.109, abs=0.005)
     assert d["fraction_of_burnout"] < 1.0
+    # The vapour density the property list quotes, rounded from the example's own input.
+    _assert_narrates(
+        "boiling_burnout_margin.py",
+        namespace["VAPOR_DENSITY"].to("kg/m**3").magnitude,
+        d["critical_heat_flux_mw_m2"],
+    )
 
 
 def test_tec_cooler_limit_example_joule_heat_caps_cooling():
@@ -2000,6 +2000,8 @@ def test_biconvex_lens_design_example():
     assert d["focal_length_mm"] == pytest.approx(100.0, rel=1e-9)
     assert d["power_diopters"] == pytest.approx(10.0, rel=1e-9)
     assert d["combined_focal_length_mm"] == pytest.approx(66.67, abs=0.05)
+    # The combined focal length in metres, as the docstring quotes it.
+    _assert_narrates("biconvex_lens_design.py", d["combined_focal_length_mm"] / 1000.0)
 
 
 def test_generator_induction_example():
@@ -2404,6 +2406,15 @@ def test_antenna_feedline_match_example():
     assert d["reflection_coefficient"] == pytest.approx(0.2, rel=1e-9)
     assert d["vswr"] == pytest.approx(1.5, rel=1e-9)
     assert d["return_loss_db"] == pytest.approx(13.979, abs=0.02)
+    # The comparison case the docstring quotes but the example does not run: a 52 ohm
+    # antenna on the same line, whose VSWR the prose gives as 1.04.
+    matched = namespace["voltage_standing_wave_ratio"](
+        reflection_coefficient=namespace["reflection_coefficient"](
+            load_impedance=Quantity.parse("52 ohm"),
+            characteristic_impedance=namespace["LINE_IMPEDANCE"],
+        )
+    )
+    _assert_narrates("antenna_feedline_match.py", matched)
 
 
 def test_receiver_noise_figure_example():
@@ -2550,6 +2561,8 @@ def test_accelerated_life_test_example_factor_and_activation_energy():
     # 80 kJ/mol, 55 C -> 85 C: ~11.7x acceleration; Ea recovers to 80 kJ/mol.
     assert d["acceleration_factor"] == pytest.approx(11.7, abs=0.2)
     assert d["recovered_activation_energy_kj_mol"] == pytest.approx(80.0, rel=1e-6)
+    # The field hours a 1000-hour oven run stands in for, at the computed factor.
+    _assert_narrates("accelerated_life_test.py", 1000.0 * d["acceleration_factor"])
 
 
 def test_dc_dc_converter_topologies_example_outputs():
@@ -4397,6 +4410,15 @@ def test_bolt_tension_thread_area_example_fails_on_the_real_area():
     assert "safety factor 1.73" in shank.detail
     # ...but on the ISO 898 tensile stress area through the threads -- where the
     # bolt actually fails -- the same load is under the 1.5 requirement (SF 1.29).
+    # The ISO 898 pitch factor the docstring writes into its formula, from the module
+    # that applies it.
+    from anvilate.analysis import fastener as _fastener
+
+    _assert_narrates(
+        "bolt_tension_thread_area.py",
+        _fastener._TENSILE_AREA_PITCH_FACTOR,
+        by_name["tensile-area tension (threads)"].safety_factor,
+    )
     thread = by_name["tensile-area tension (threads)"]
     assert thread.status is CheckStatus.FAIL
     assert "safety factor 1.29" in thread.detail
@@ -6685,6 +6707,12 @@ def test_base_to_final_turn_example_bank_governs_the_stall():
     shallow = namespace["screen_disciplined_turn"]()
     assert shallow.entries[0].passed
     assert shallow.status is CheckStatus.PASS
+
+    # The load factor a 30-degree bank pulls — the secant the docstring names.
+    _assert_narrates(
+        "base_to_final_turn.py",
+        1.0 / math.cos(math.radians(namespace["SHALLOW_BANK"])),
+    )
 
 
 def test_roof_rack_rollover_example_raised_cg_tips_it():
