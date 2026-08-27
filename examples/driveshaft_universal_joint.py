@@ -8,7 +8,7 @@ given joint angle.
 At a 20-degree shaft misalignment, the output speed swings from a peak of about 1.064 times the
 input (when the driving fork lies in the plane of the shafts) down to about 0.940 a quarter-turn
 later — a
-peak-to-peak fluctuation of about 0.125, or 12.5% of the input speed. That ripple is why drivelines
+peak-to-peak fluctuation of about 0.124, or 12.4% of the input speed. That ripple is why drivelines
 pair two joints out of phase or use constant-velocity joints. This example reports the instantaneous
 ratio at the peak, the maximum ratio, and the peak-to-peak speed fluctuation.
 

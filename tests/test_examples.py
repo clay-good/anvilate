@@ -201,12 +201,8 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "column_base_plate.py",
         "control_valve_sizing.py",
         "coped_beam_web_shear.py",
-        "davit_sheave_overhang.py",
         "dfm_process_check.py",
-        "dock_edge_overhang.py",
         "double_slit_wavelength_bench.py",
-        "driveshaft_universal_joint.py",
-        "drivetrain_shaft_twist.py",
         "drivetrain_torsional_mode.py",
         "fan_deck_resonance.py",
         "feature_control_frame_legality.py",
@@ -2142,6 +2138,14 @@ def test_driveshaft_universal_joint_example():
     assert d["ratio_at_input_0deg"] == pytest.approx(1.0642, abs=0.001)
     assert d["max_speed_ratio"] == pytest.approx(1.0642, abs=0.001)
     assert d["peak_to_peak_fluctuation"] == pytest.approx(0.1245, abs=0.001)
+    # The trough the docstring quotes a quarter-turn later is the reciprocal of the
+    # peak — cos β — and the fluctuation is the difference between them.
+    _assert_narrates(
+        "driveshaft_universal_joint.py",
+        d["max_speed_ratio"],
+        1.0 / d["max_speed_ratio"],
+        d["peak_to_peak_fluctuation"],
+    )
 
 
 def test_summer_solar_position_example():
@@ -3900,6 +3904,27 @@ def test_davit_example_flips_on_the_sheave_overhang_couple():
     assert by_name["boom (sheave overhang) bending"].status is CheckStatus.FAIL
     assert "safety factor 1.64" in by_name["boom (sheave overhang) bending"].detail
     assert by_name["boom (sheave overhang) deflection"].status is CheckStatus.FAIL
+    # Both deflections the docstring quotes, and the couple's contribution — which is
+    # the difference between them and is the sentence's whole point.
+    tip = float(
+        re.search(r"deflection ([\d.]+)", by_name["boom (load at tip) deflection"].detail).group(1)
+    )
+    overhung = float(
+        re.search(
+            r"deflection ([\d.]+)", by_name["boom (sheave overhang) deflection"].detail
+        ).group(1)
+    )
+    _assert_narrates(
+        "davit_sheave_overhang.py",
+        tip,
+        overhung,
+        overhung - tip,
+        by_name["boom (load at tip) bending"].safety_factor,
+        by_name["boom (sheave overhang) bending"].safety_factor,
+        float(
+            re.search(r"limit ([\d.]+)", by_name["boom (load at tip) deflection"].detail).group(1)
+        ),
+    )
     assert "deflection 8.071" in by_name["boom (sheave overhang) deflection"].detail
     assert card.status is CheckStatus.FAIL
 
@@ -3934,6 +3959,36 @@ def test_dock_edge_example_is_governed_by_back_span_uplift():
     assert by_name["dock edge deflection"].status is CheckStatus.FAIL
     assert "deflection 4.203" in by_name["dock edge deflection"].detail
     assert card.status is CheckStatus.FAIL
+
+    # The two deflection extremes Roark gives for this load case, as the docstring
+    # states them: the screen reports the uplift because at c = 0.15·L it is the larger.
+    member_section = namespace["CrossSection"].hollow_rectangular(
+        width=Quantity.parse("80 mm"),
+        height=Quantity.parse("120 mm"),
+        wall_thickness=Quantity.parse("4 mm"),
+    )
+    from anvilate.standards import default_materials_db
+
+    stiffness = (
+        default_materials_db().get("ASTM-A36").elastic_modulus.quantity.to("MPa").magnitude
+        * member_section.second_moment.to("mm**4").magnitude
+    )
+    load = namespace["PALLET"].to("N").magnitude
+    span = namespace["BACK_SPAN"].to("mm").magnitude
+    overhang = namespace["OVERHANG"].to("mm").magnitude
+    tip_drop = load * overhang**2 * (span + overhang) / (3.0 * stiffness)
+    uplift = load * overhang * span**2 / (9.0 * math.sqrt(3.0) * stiffness)
+    assert uplift > tip_drop, "the page's point is that the back span wins at this overhang"
+    reported = float(
+        re.search(r"deflection ([\d.]+)", by_name["dock edge deflection"].detail).group(1)
+    )
+    assert reported == pytest.approx(uplift, abs=0.005)
+    _assert_narrates(
+        "dock_edge_overhang.py",
+        tip_drop,
+        uplift,
+        by_name["dock edge bending"].safety_factor,
+    )
 
 
 def test_machine_foot_example_catches_the_smeared_footprint():
@@ -4397,6 +4452,16 @@ def test_drivetrain_shaft_twist_example_is_governed_by_stiffness():
     assert twist.status is CheckStatus.FAIL
     assert "safety factor 0.73" in twist.detail
     assert card.status is CheckStatus.FAIL
+
+    # The twist and the limit it is judged against, in degrees: the safety factor is
+    # their ratio and neither number is written down anywhere else.
+    limit = namespace["TWIST_LIMIT_PER_FOOT"] * namespace["LENGTH"].to("ft").magnitude
+    _assert_narrates(
+        "drivetrain_shaft_twist.py",
+        limit,
+        limit / twist.safety_factor,
+        twist.safety_factor,
+    )
 
 
 def test_winch_band_brake_example_is_sized_by_lining_pressure():
