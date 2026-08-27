@@ -210,13 +210,9 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "fracture_toughness_screen.py",
         "gamma_shield_thickness.py",
         "gearbox_output_shaft.py",
-        "gps_and_accelerator_relativity.py",
         "guide_spring_buckling.py",
-        "helical_gear_thrust_bearing.py",
         "highway_cruise_power.py",
-        "hoist_sheave_bending.py",
         "hydraulic_cylinder_wall.py",
-        "hydraulic_meter_out_intensification.py",
         "hydrogen_balmer_line.py",
         "indexing_table_stations.py",
         "jacketed_reactor_vacuum.py",
@@ -2460,6 +2456,19 @@ def test_gps_and_accelerator_relativity_example():
     assert d["electron_kinetic_energy_mev"] == pytest.approx(0.6613, abs=0.002)
     assert d["muon_lorentz_factor"] == pytest.approx(7.089, abs=0.01)
     assert d["muon_dilated_lifetime_us"] == pytest.approx(15.6, abs=0.1)
+    # The electron's Lorentz factor and the classical ½mv² estimate the docstring
+    # contrasts its energy against — the second was wrong at 0.13 MeV, which is the
+    # figure for a slower electron, not this one at 0.9c.
+    mass = namespace["ELECTRON_MASS"].to("kg").magnitude
+    speed = namespace["ELECTRON_SPEED"].to("m/s").magnitude
+    joules_per_mev = 1.602176634e-13
+    _assert_narrates(
+        "gps_and_accelerator_relativity.py",
+        namespace["lorentz_factor"](velocity=namespace["ELECTRON_SPEED"]),
+        0.5 * mass * speed**2 / joules_per_mev,
+        d["electron_kinetic_energy_mev"],
+        d["muon_lorentz_factor"],
+    )
 
 
 def test_photocathode_electron_wavelength_example():
@@ -4805,6 +4814,21 @@ def test_helical_thrust_example_lands_on_the_bearing():
     assert "safety factor 0.60" in steep.detail
     assert card.status is CheckStatus.FAIL
 
+    # The thrust each helix throws, in kilonewtons — the quantity the whole example is
+    # about, and none of it appears in the entries.
+    _assert_narrates(
+        "helical_gear_thrust_bearing.py",
+        *(
+            namespace["helical_gear_axial_thrust"](
+                tangential_load=namespace["TANGENTIAL_LOAD"], helix_angle=angle
+            )
+            .to("kN")
+            .magnitude
+            for angle in list(namespace["HELIX_ANGLES"].values())[:2]
+        ),
+        *(entry.safety_factor for entry in card.entries),
+    )
+
 
 def test_cable_resonance_example_tunes_off_the_forcing():
     namespace = runpy.run_path(str(_EXAMPLES / "cable_resonance_tuning.py"))
@@ -5910,6 +5934,23 @@ def test_hoist_sheave_bending_example_sheave_governs():
     recovered = generous_by_name["tension plus sheave bending vs breaking strength"]
     assert "safety factor 5.18" in recovered.detail
     assert "safety factor 2.11" in generous_by_name["sheave bearing pressure vs allowable"].detail
+
+    # The groove pressures both sheaves develop, which the docstring quotes in MPa.
+    _assert_narrates(
+        "hoist_sheave_bending.py",
+        *(
+            namespace["wire_rope_sheave_pressure"](
+                tension=namespace["HOIST_LOAD"],
+                rope_diameter=namespace["ROPE_DIAMETER"],
+                sheave_diameter=namespace[sheave],
+            )
+            .to("MPa")
+            .magnitude
+            for sheave in ("COMPACT_SHEAVE", "GENEROUS_SHEAVE")
+        ),
+        *(entry.safety_factor for entry in compact.entries),
+        *(entry.safety_factor for entry in generous.entries),
+    )
     assert generous.status is CheckStatus.PASS
 
 
@@ -5944,6 +5985,18 @@ def test_hydraulic_meter_out_intensification_example_rod_ratio_governs():
     assert thin.entries[0].passed
     assert "safety factor 1.12" in thin.entries[0].detail
     assert thin.status is CheckStatus.PASS
+
+    # The area ratio each rod produces — the mechanism the example is named for.
+    bore = namespace["BORE_DIAMETER"].to("mm").magnitude
+    _assert_narrates(
+        "hydraulic_meter_out_intensification.py",
+        *(
+            bore**2 / (bore**2 - namespace[rod].to("mm").magnitude ** 2)
+            for rod in ("FAT_ROD_DIAMETER", "THIN_ROD_DIAMETER")
+        ),
+        fat.entries[0].safety_factor,
+        thin.entries[0].safety_factor,
+    )
 
 
 def test_cylinder_regeneration_circuit_example_trades_force_for_speed():

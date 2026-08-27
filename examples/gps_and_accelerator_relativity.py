@@ -6,7 +6,7 @@ Lorentz factor — the single number that scales every relativistic effect. It c
 accelerator must give a fast electron, and how much longer a fast muon's clock runs.
 
 An electron driven to 0.9c has a Lorentz factor of about 2.29. Its kinetic energy is then about
-0.66 MeV — far above the 0.13 MeV a classical (½mv²) estimate would give, because the relativistic
+0.66 MeV — far above the 0.21 MeV a classical (½mv²) estimate would give, because the relativistic
 energy diverges near c. A muon streaking through the atmosphere at 0.99c has a Lorentz factor of
 about 7.09, so its 2.2 microsecond proper lifetime is stretched to about 15.6 microseconds in ground
 frame — long enough to reach the surface, which is how cosmic-ray muons are detected at all. The
