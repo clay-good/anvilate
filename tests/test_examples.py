@@ -188,13 +188,7 @@ def _assert_narrates(example: str, *computed: float) -> None:
 _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
     {
         "bracket_reviewer_dossier.py",
-        "bracket_weld_sizing.py",
         "branch_reinforcement_zone.py",
-        "camera_lens_and_resolution.py",
-        "cold_formed_stud_flange.py",
-        "column_base_plate.py",
-        "control_valve_sizing.py",
-        "coped_beam_web_shear.py",
         "dfm_process_check.py",
         "double_slit_wavelength_bench.py",
         "drivetrain_torsional_mode.py",
@@ -416,6 +410,10 @@ def test_column_base_plate_example_governed_by_plate_bending():
     by_name = {e.name: e for e in card.entries}
     assert by_name["col_base concrete bearing"].passed
     assert not by_name["col_base plate bending"].passed
+    # The concrete bearing fraction the docstring names, from the pack that applies it.
+    from anvilate.packs import structural as _structural
+
+    _assert_narrates("column_base_plate.py", _structural._CONCRETE_BEARING_FRACTION)
 
 
 def test_coped_beam_web_example_is_governed_by_shear_rupture():
@@ -427,7 +425,12 @@ def test_coped_beam_web_example_is_governed_by_shear_rupture():
     assert card.status is CheckStatus.PASS
     by_name = {e.name: e for e in card.entries}
     yielding = by_name["coped web shear yielding"]
-    rupture = by_name["coped web shear rupture"]
+    rupture = by_name[
+        "coped web shear rupture"
+    ]  # The 0.60 both §J4.2 limit states share, from the pack that applies it.
+    from anvilate.packs import structural as _structural
+
+    _assert_narrates("coped_beam_web_shear.py", _structural._SHEAR_STRENGTH_FRACTION)
     assert yielding.passed and rupture.passed
 
     def _sf(entry) -> float:
@@ -1747,6 +1750,8 @@ def test_camera_lens_and_resolution_example_image_and_diffraction_limit():
     assert d["magnification"] < 0
     # Diffraction limit at 550 nm, 25 mm aperture ~5.5 arcsec.
     assert d["resolution_arcsec"] == pytest.approx(5.54, abs=0.05)
+    # The magnification the docstring quotes, in magnitude.
+    _assert_narrates("camera_lens_and_resolution.py", abs(d["magnification"]))
 
 
 def test_lens_speed_and_depth_example_f_number_trade():
@@ -4609,6 +4614,16 @@ def test_bracket_weld_sizing_example_fails_the_default_fillet():
     assert "safety factor 2.46" in revised.detail
     assert card.status is CheckStatus.FAIL
 
+    # The throat factor the docstring writes into its arithmetic, from the module.
+    from anvilate.analysis.weld import FILLET_THROAT_FACTOR
+
+    _assert_narrates(
+        "bracket_weld_sizing.py",
+        FILLET_THROAT_FACTOR,
+        drawn.safety_factor,
+        revised.safety_factor,
+    )
+
 
 def test_drivetrain_shaft_twist_example_is_governed_by_stiffness():
     namespace = runpy.run_path(str(_EXAMPLES / "drivetrain_shaft_twist.py"))
@@ -6469,6 +6484,21 @@ def test_cold_formed_stud_flange_example_slender_element_is_reduced():
             f"the page sends a reader here for {thickness} mm and the example never runs it"
         )
 
+    # The slenderness the thin flange reaches, and the limit the docstring names twice.
+    from anvilate.analysis import aisi_plate_slenderness
+    from anvilate.analysis.cold_formed_steel import _AISI_SLENDERNESS_LIMIT
+
+    _assert_narrates(
+        "cold_formed_stud_flange.py",
+        aisi_plate_slenderness(
+            flat_width=namespace["FLANGE_WIDTH"],
+            thickness=Quantity.parse("1.5 mm"),
+            stress=namespace["YIELD_STRESS"],
+            elastic_modulus=namespace["MODULUS"],
+        ),
+        _AISI_SLENDERNESS_LIMIT,
+    )
+
 
 def test_floor_joist_wet_service_example_factor_chain_flips_the_verdict():
     namespace = runpy.run_path(str(_EXAMPLES / "floor_joist_wet_service.py"))
@@ -6771,6 +6801,13 @@ def test_control_valve_sizing_example_undersized_valve_fails():
     selected = namespace["screen_selected_valve"]()
     assert selected.entries[0].passed
     assert selected.status is CheckStatus.PASS
+
+    # Both margins the docstring quotes against the required Cv.
+    _assert_narrates(
+        "control_valve_sizing.py",
+        undersized.entries[0].safety_factor,
+        selected.entries[0].safety_factor,
+    )
 
 
 def test_batch_reactor_conversion_example_slow_batch_misses_spec():

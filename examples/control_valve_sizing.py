@@ -10,7 +10,7 @@ which
 is the tell that the valve is undersized before it is ever installed.
 
 Stepping up to a 3-inch valve rated Cv 80 clears it: 80 vs the 63.2 required is a safety factor of
-1.27, so the valve passes the flow with travel to spare and room to throttle. It is not oversized to
+1.26, so the valve passes the flow with travel to spare and room to throttle. It is not oversized to
 waste -- a valve that must sit near wide open has no control authority left, and one with a little
 margin can modulate.
 
