@@ -202,11 +202,6 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "spreader_beam_device_screen.py",
         "vessel_surface_flaw_fad.py",
         "welded_bracket_fatigue.py",
-        "wheel_rail_contact.py",
-        "wifi_link_budget.py",
-        "winch_band_brake.py",
-        "winch_tackle_friction.py",
-        "workshop_hoist_system.py",
         "xrd_and_grating.py",
     }
 )
@@ -2635,6 +2630,8 @@ def test_wifi_link_budget_example_received_power_and_range():
     # 2.4 GHz, 100 mW, 1.64 gains: ~-55.8 dBm at 100 m; ~2.9 km to a -85 dBm receiver.
     assert d["received_power_dbm_at_100m"] == pytest.approx(-55.8, abs=0.2)
     assert d["max_range_km"] == pytest.approx(2.9, abs=0.1)
+    # The wavelength the docstring rounds for 2.4 GHz.
+    _assert_narrates("wifi_link_budget.py", namespace["WAVELENGTH"].to("m").magnitude)
 
 
 def test_led_operating_point_example_thermal_voltage_and_current():
@@ -3959,6 +3956,10 @@ def test_wheel_rail_contact_example_fails_on_soft_steel():
     # -> FAIL, the lesson that rolling-contact parts must be surface-hardened.
     assert card.status is CheckStatus.FAIL
     assert [e.name for e in card.entries] == ["wheel/rail surface contact"]
+    # The subsurface-shear fraction the docstring names, from the module's constant.
+    from anvilate.analysis import contact as _contact
+
+    _assert_narrates("wheel_rail_contact.py", _contact._LINE_SUBSURFACE_SHEAR_COEFF)
 
 
 def test_shrink_fit_example_passes_hub_yield():
@@ -4903,6 +4904,18 @@ def test_winch_band_brake_example_is_sized_by_lining_pressure():
     wide = by_name["lining pressure (60 mm band)"]
     assert wide.passed
     assert "safety factor 1.12" in wide.detail
+
+    # The lining pressure each band width develops, in MPa.
+    allowable = namespace["LINING_ALLOWABLE"].to("MPa").magnitude
+    _assert_narrates(
+        "winch_band_brake.py",
+        *(
+            allowable / entry.safety_factor
+            for entry in card.entries
+            if entry.name.startswith("lining pressure")
+        ),
+        torque.safety_factor,
+    )
 
 
 def test_high_speed_belt_drive_example_hits_the_power_ceiling():
@@ -6436,6 +6449,27 @@ def test_workshop_hoist_system_capstone_full_drum_governs():
     assert "safety factor 1.14" in upgraded_by_name["full-drum line pull vs lead line"].detail
     assert upgraded.status is CheckStatus.PASS
 
+    # The chain of tensions the capstone narrates: the tackle's real advantage, the
+    # lead line it leaves, and the drum pull at each end of the lift.
+    lead = namespace["lead_line_tension"]().to("kN").magnitude
+    _assert_narrates(
+        "workshop_hoist_system.py",
+        namespace["LOAD"].to("kN").magnitude / lead,
+        lead,
+        lead * by_name["bare-drum line pull vs lead line"].safety_factor,
+        lead * full.safety_factor,
+        namespace["wire_rope_equivalent_bending_load"](
+            wire_diameter=namespace["OUTER_WIRE_DIAMETER"],
+            sheave_diameter=namespace["HEAD_SHEAVE_DIAMETER"],
+            rope_modulus=namespace["ROPE_MODULUS"],
+            metal_area=namespace["METAL_AREA"],
+        )
+        .to("kN")
+        .magnitude,
+        *(entry.safety_factor for entry in naive.entries),
+        *(entry.safety_factor for entry in upgraded.entries),
+    )
+
 
 def test_winch_full_drum_stall_example_top_layer_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "winch_full_drum_stall.py"))
@@ -6489,6 +6523,29 @@ def test_winch_tackle_friction_example_friction_governs():
     rolling_by_name = {e.name: e for e in rolling.entries}
     assert "safety factor 1.12" in rolling_by_name["actual lead line vs winch rating"].detail
     assert rolling.status is CheckStatus.PASS
+
+    # The mechanical advantage each sheave type actually delivers, and the lead line
+    # tension it leaves the winch — the four figures the docstring argues from.
+    rating = namespace["WINCH_LINE_PULL_RATING"].to("kN").magnitude
+    _assert_narrates(
+        "winch_tackle_friction.py",
+        *(
+            namespace["tackle_mechanical_advantage"](
+                supporting_parts=namespace["SUPPORTING_PARTS"],
+                sheave_efficiency=efficiency,
+                lead_sheaves=namespace["LEAD_SHEAVES"],
+            )
+            for efficiency in (
+                namespace["PLAIN_BUSHING_EFFICIENCY"],
+                namespace["ROLLING_BEARING_EFFICIENCY"],
+            )
+        ),
+        rating / actual.safety_factor,
+        rating / rolling_by_name["actual lead line vs winch rating"].safety_factor,
+        actual.safety_factor,
+        rolling_by_name["actual lead line vs winch rating"].safety_factor,
+        by_name["frictionless lead line vs winch rating"].safety_factor,
+    )
 
 
 def test_hoist_sheave_bending_example_sheave_governs():
