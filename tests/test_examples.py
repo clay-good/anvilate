@@ -6155,6 +6155,116 @@ def test_the_exploration_pages_numbers_are_the_sweeps_own():
         assert drawn == pytest.approx(wanted)
 
 
+def test_the_geotechnical_hydraulics_and_masonry_pages_worked_blocks_run():
+    """Three screening pages whose worked blocks print values nothing recomputed.
+
+    Each block is executed as written and its inline comments asserted, and the sentence
+    each page uses to narrate its example is checked against the example's own result —
+    a wall's two stability factors and its toe pressure, and a masonry wall whose gravity
+    utilization is comfortable while the combined ratio is not.
+    """
+    from anvilate.analysis import (
+        darcy_friction_factor,
+        darcy_weisbach_head_loss,
+        masonry_allowable_axial_stress,
+        masonry_allowable_flexural_stress,
+        masonry_combined_stress_ratio,
+        rankine_earth_pressure_coefficient,
+        rankine_lateral_thrust,
+        reynolds_number,
+    )
+
+    docs = Path(__file__).resolve().parent.parent / "docs"
+
+    # --- geotechnical: the Rankine block, and the retaining-wall sentence -------------
+    page = " ".join((docs / "geotechnical-screening.md").read_text().split())
+    coefficient = re.search(
+        r"rankine_earth_pressure_coefficient\(friction_angle=(\d+)\) # ([\d.]+) \(active\)", page
+    )
+    assert coefficient is not None, "the Rankine block on the geotechnical page has moved"
+    angle = float(coefficient.group(1))
+    assert rankine_earth_pressure_coefficient(friction_angle=angle) == pytest.approx(
+        float(coefficient.group(2)), abs=5e-4
+    )
+    thrust = re.search(r"# (\d+) kN/m, acting at H/(\d)", page)
+    assert thrust is not None, "the Rankine thrust comment has moved"
+    resultant = rankine_lateral_thrust(
+        unit_weight=Quantity.parse("18 kN/m**3"),
+        height=Quantity.parse("4 m"),
+        friction_angle=angle,
+    )
+    assert resultant.to("kN/m").magnitude == pytest.approx(float(thrust.group(1)), abs=0.5)
+
+    wall = re.search(
+        r"overturning \(FS ([\d.]+)\) and sliding \(FS ([\d.]+)\) both pass.*?"
+        r"toe pressure climbs to (\d+) kPa",
+        page,
+    )
+    assert wall is not None, "the retaining-wall sentence on the geotechnical page has moved"
+    stability = runpy.run_path(str(_EXAMPLES / "retaining_wall_stability.py"))["wall_stability"]()
+    assert stability["fs_overturning"] == pytest.approx(float(wall.group(1)), abs=5e-3)
+    assert stability["fs_sliding"] == pytest.approx(float(wall.group(2)), abs=5e-3)
+    assert stability["q_max_kpa"] == pytest.approx(float(wall.group(3)), abs=0.5)
+    assert stability["q_min_kpa"] == 0.0, "the page says the heel lifts"
+
+    # --- hydraulics: Reynolds, Swamee-Jain, and the head it produces -----------------
+    page = " ".join((docs / "hydraulics-screening.md").read_text().split())
+    block = re.search(
+        r'kinematic_viscosity=Quantity\.parse\("(\S+) m\*\*2/s"\), \) # ([\d,]+) \(turbulent\) '
+        r"f = darcy_friction_factor\(reynolds=re, relative_roughness=(\S+)\) # ([\d.]+) "
+        r"\(Swamee-Jain\)(?:.|\n)*?# ([\d.]+) m",
+        page,
+    )
+    assert block is not None, "the pipe-flow block on the hydraulics page has moved"
+    reynolds = reynolds_number(
+        velocity=Quantity.parse("2 m/s"),
+        diameter=Quantity.parse("0.1 m"),
+        kinematic_viscosity=Quantity.parse(f"{block.group(1)} m**2/s"),
+    )
+    assert reynolds == pytest.approx(float(block.group(2).replace(",", "")), rel=1e-9)
+    friction = darcy_friction_factor(reynolds=reynolds, relative_roughness=float(block.group(3)))
+    assert friction == pytest.approx(float(block.group(4)), abs=5e-5)
+    head = darcy_weisbach_head_loss(
+        friction_factor=friction,
+        length=Quantity.parse("100 m"),
+        diameter=Quantity.parse("0.1 m"),
+        velocity=Quantity.parse("2 m/s"),
+    )
+    assert head.to("m").magnitude == pytest.approx(float(block.group(5)), abs=0.05)
+
+    # --- masonry: the allowables block, and the utilization sentence -----------------
+    page = " ".join((docs / "masonry-screening.md").read_text().split())
+    flexural = re.search(
+        r'masonry_allowable_flexural_stress\(masonry_strength=Quantity\.parse\("(\d+) MPa"\)\) '
+        r"# ([\d.]+)\*f'm",
+        page,
+    )
+    assert flexural is not None, "the masonry allowables block has moved"
+    strength = Quantity.parse(f"{flexural.group(1)} MPa")
+    assert masonry_allowable_flexural_stress(masonry_strength=strength).to(
+        "MPa"
+    ).magnitude == pytest.approx(float(flexural.group(2)) * strength.to("MPa").magnitude, rel=1e-9)
+    unity = masonry_combined_stress_ratio(
+        axial_stress=Quantity.parse("1.2 MPa"),
+        allowable_axial_stress=masonry_allowable_axial_stress(
+            masonry_strength=strength, slenderness_ratio=40
+        ),
+        flexural_stress=Quantity.parse("2.2 MPa"),
+        allowable_flexural_stress=masonry_allowable_flexural_stress(masonry_strength=strength),
+    )
+    assert unity > 1.0, "the block's own numbers are the page's point"
+
+    sentence = re.search(
+        r"gravity utilization is a comfortable ([\d.]+) but whose combined ratio "
+        r"climbs past ([\d.]+)",
+        page,
+    )
+    assert sentence is not None, "the masonry page no longer narrates its example"
+    check = runpy.run_path(str(_EXAMPLES / "masonry_wall_slenderness.py"))["wall_check"]()
+    assert check["axial_utilization"] == pytest.approx(float(sentence.group(1)), abs=5e-3)
+    assert check["axial_utilization"] < float(sentence.group(2)) < check["combined_unity"]
+
+
 def test_spreader_beam_example_fails_only_once_the_device_weight_is_in_the_load():
     namespace = runpy.run_path(str(_EXAMPLES / "spreader_beam_device_screen.py"))
     Quantity_ = namespace["Quantity"]
