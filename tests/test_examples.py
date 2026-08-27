@@ -199,12 +199,6 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "pressure_vessel_nozzle_and_flange.py",
         "rc_floor_beam.py",
         "rc_t_beam_floor.py",
-        "relativistic_spaceship.py",
-        "roof_step_snow_drift.py",
-        "satellite_dish_antenna.py",
-        "servo_step_response.py",
-        "shot_peening_coverage_time.py",
-        "single_cylinder_flywheel.py",
         "solar_cell_iv.py",
         "solar_collector_stagnation.py",
         "spec_load_combination_check.py",
@@ -1519,6 +1513,12 @@ def test_shot_peening_coverage_time_example_saturates_toward_full():
     assert d["full_coverage_time_s"] == pytest.approx(0.1107, abs=0.001)
     # Doubling exposure (200%) reaches ~99.96%, showing the diminishing return.
     assert d["coverage_at_200_percent"] == pytest.approx(0.9996, abs=1e-4)
+    # The coverage the docstring quotes as a percentage.
+    _assert_narrates(
+        "shot_peening_coverage_time.py",
+        100.0 * d["coverage_at_200_percent"],
+        d["full_coverage_time_s"],
+    )
     assert d["coverage_at_200_percent"] < 1.0
 
 
@@ -1899,6 +1899,13 @@ def test_servo_step_response_example():
     assert d["percent_overshoot"] == pytest.approx(16.30, abs=0.05)
     assert d["peak_time_s"] == pytest.approx(0.3628, abs=0.001)
     assert d["settling_time_s"] == pytest.approx(0.8, rel=1e-6)
+    # The natural frequency in hertz the docstring gives for its 10 rad/s tuning.
+    _assert_narrates(
+        "servo_step_response.py",
+        namespace["NATURAL_FREQUENCY"].to("Hz").magnitude,
+        d["peak_time_s"],
+        d["settling_time_s"],
+    )
 
 
 def test_machining_process_capability_example():
@@ -2118,6 +2125,10 @@ def test_relativistic_spaceship_example():
     assert d["contracted_length_m"] == pytest.approx(80.0, rel=1e-9)
     assert d["momentum_kg_m_s"] == pytest.approx(1.25 * 1000.0 * 0.6 * 299792458.0, rel=1e-9)
     assert d["received_frequency_mhz"] == pytest.approx(50.0, rel=1e-9)
+    # The Lorentz factor at 0.6c, from the library rather than the docstring's arithmetic.
+    from anvilate.analysis import lorentz_factor
+
+    _assert_narrates("relativistic_spaceship.py", lorentz_factor(velocity=namespace["VELOCITY"]))
 
 
 def test_flyball_governor_example():
@@ -2454,6 +2465,12 @@ def test_satellite_dish_antenna_example():
     assert d["dish_gain_dbi"] == pytest.approx(47.7, abs=0.3)
     assert d["beamwidth_deg"] == pytest.approx(0.7, abs=0.01)
     assert d["diameter_for_45dbi_m"] == pytest.approx(2.19, abs=0.05)
+    # The effective aperture the docstring quotes: the dish's circle at its efficiency.
+    diameter = namespace["DISH_DIAMETER"].to("m").magnitude
+    _assert_narrates(
+        "satellite_dish_antenna.py",
+        namespace["EFFICIENCY"] * math.pi * diameter**2 / 4.0,
+    )
 
 
 def test_wifi_channel_capacity_example():
@@ -3202,6 +3219,37 @@ def test_roof_step_snow_drift_example_drift_dwarfs_balanced():
     assert d["drift_height_m"] == pytest.approx(1.16, abs=0.02)
     # The peak drift surcharge is several times the balanced snow load.
     assert d["drift_surcharge_kpa"] > 3 * d["balanced_kpa"]
+    # The three constants of the ASCE drift-height fit the docstring writes out,
+    # recovered from the function itself: hd = A·lu^(1/3)·(pg + C)^(1/4) − B is linear
+    # in lu^(1/3) at fixed pg, so two fetches give a slope and an intercept, and two
+    # ground loads give two slopes whose ratio fixes C.
+    from anvilate.analysis import leeward_snow_drift_height
+
+    def _height(fetch: float, ground: float) -> float:
+        return (
+            leeward_snow_drift_height(
+                upwind_fetch=Quantity(magnitude=fetch, unit="m"),
+                ground_snow_load=Quantity(magnitude=ground, unit="kPa"),
+            )
+            .to("m")
+            .magnitude
+        )
+
+    def _slope_and_intercept(ground: float) -> tuple[float, float]:
+        one, eight = _height(1.0, ground), _height(8.0, ground)
+        slope = (eight - one) / (8.0 ** (1.0 / 3.0) - 1.0)
+        return slope, one - slope
+
+    slope_low, intercept = _slope_and_intercept(1.0)
+    slope_high, _ = _slope_and_intercept(3.0)
+    offset = (3.0 - 1.0 * (slope_high / slope_low) ** 4) / ((slope_high / slope_low) ** 4 - 1.0)
+    _assert_narrates(
+        "roof_step_snow_drift.py",
+        slope_low / (1.0 + offset) ** 0.25,
+        -intercept,
+        offset,
+        d["balanced_kpa"],
+    )
 
 
 def test_cold_storage_roof_snow_example_freezer_carries_more():
@@ -6162,6 +6210,15 @@ def test_single_cylinder_flywheel_example_sizes_from_energy_fluctuation():
     light = namespace["screen_undersized_flywheel"]()
     assert light.entries[0].status is CheckStatus.FAIL
     assert "safety factor 0.79" in light.entries[0].detail
+
+    # The inertia the fluctuation actually demands, which is the wheel it is screened
+    # against over the factor the screen reports.
+    _assert_narrates(
+        "single_cylinder_flywheel.py",
+        namespace["ADEQUATE_INERTIA"].to("kg*m**2").magnitude / adequate.entries[0].safety_factor,
+        adequate.entries[0].safety_factor,
+        light.entries[0].safety_factor,
+    )
 
 
 def test_bushing_wear_life_example_lubrication_governs():
