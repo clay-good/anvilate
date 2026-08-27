@@ -90,6 +90,13 @@ derivation.SymbolValue
 derivation.Derivation
 evidence.SourceRecord
 evidence.collect_provenance
+fetch.ConsentRequired
+fetch.DatasetRecipe
+fetch.FetchProvenance
+fetch.IntegrityError
+fetch.cache_root
+fetch.cached_dataset
+fetch.fetch_dataset
 explore.ObjectiveSense
 explore.SamplingStrategy
 explore.Parameter

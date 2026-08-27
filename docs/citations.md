@@ -183,6 +183,32 @@ version — with a companion test that mutates a dataset each of those ways and 
 gate to catch it. A dataset with no source at the dataset level (the materials table, whose
 properties each cite a different publication) has to carry one on every record instead.
 
+## Data this library may read and may not ship
+
+Not every useful table is redistributable. A publisher's section database, a benchmark's
+case archive, a registration-gated materials set: free to download, not free to bundle.
+Those are fetched to your own machine once and read offline from then on, and
+`anvilate.fetch` is that flow with three refusals in it.
+
+**Consent is an argument, not a default.** A library cannot ask, so it does not guess: a
+fetch happens only when the caller states that the user agreed, and otherwise the refusal
+names the URL, the source and the licence — which is what somebody needs in order to be
+asked.
+
+**A payload that is not its digest is not the dataset.** The checksum is verified before
+anything is cached and again on every read, so a truncated download, a mirror serving
+something else and a file edited in the cache are all refused rather than parsed. A failed
+fetch leaves nothing behind.
+
+**The cache says where its contents came from.** Beside each payload sits a provenance
+record — the URL, the digest, the licence, whether it is redistributable at all, and the
+retrieval date. The date is the caller's to state: nothing in the package reads the clock,
+because an evidence bundle's digest has to rebuild identically. A payload whose provenance
+sidecar is missing is refused too; data whose origin the cache cannot state is data nothing
+should cite.
+
+Releases carry the recipe and the digest, never the payload.
+
 ## If a citation looks wrong
 
 Report it. A wrong citation is worse than none, because it converts an unverified number

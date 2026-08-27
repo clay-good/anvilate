@@ -39,6 +39,8 @@ that already ran and does one more thing with them:
   values, result, and the clause it came from.
 - :mod:`anvilate.evidence` — the provenance roll-up: where every standards number
   a spec references came from.
+- :mod:`anvilate.fetch` — fetch-on-first-use for data this library may read and must
+  not redistribute: consent, checksum, cached provenance, offline after.
 - :mod:`anvilate.explore` — design-space sweeps and exact Pareto fronts over the
   designs that actually pass.
 - :mod:`anvilate.gdt` — semantic GD&T: a feature control frame as data, with
