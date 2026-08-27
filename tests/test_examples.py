@@ -219,14 +219,10 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "lifting_magnet_holding_force.py",
         "lightest_passing_bracket.py",
         "living_hinge_flip_cap.py",
-        "loose_ring_flange_stress.py",
-        "machine_foot_on_panel.py",
         "machine_vibration_isolation.py",
-        "manway_lid_fixity.py",
         "masonry_wall_slenderness.py",
         "measured_shaft_from_certificate.py",
         "motor_branch_circuit.py",
-        "noncompact_flange_beam_strength.py",
         "off_center_post_load.py",
         "office_floor_vibration.py",
         "pallet_bay_floor_beam.py",
@@ -1179,6 +1175,15 @@ def test_noncompact_flange_beam_strength_example_penalizes_below_mp():
     # The noncompact flange knocks the plastic moment down (~16%).
     assert r["nominal_moment_kip_in"] < r["plastic_moment_kip_in"]
     assert r["reduction_percent"] == pytest.approx(16.0, abs=1.0)
+    # The two §B4.1 slenderness limits the docstring puts the flange between.
+    _assert_narrates(
+        "noncompact_flange_beam_strength.py",
+        *namespace["flexural_flange_slenderness_limits"](
+            elastic_modulus=namespace["ELASTIC_MODULUS"],
+            yield_strength=namespace["YIELD_STRENGTH"],
+        ),
+        r["nominal_moment_kip_in"],
+    )
 
 
 def test_beam_flexural_compactness_example_slender_web_reclassifies():
@@ -4010,6 +4015,24 @@ def test_machine_foot_example_catches_the_smeared_footprint():
     assert by_name["smeared over the panel deflection"].passed
     assert by_name["declared 100 mm pad bending"].status is CheckStatus.FAIL
     assert "safety factor 1.41" in by_name["declared 100 mm pad bending"].detail
+    # The smeared pressure the docstring quotes, and both bending factors.
+    panel = namespace["PANEL"].to("mm").magnitude
+    _assert_narrates(
+        "machine_foot_on_panel.py",
+        by_name["smeared over the panel bending"].safety_factor,
+        by_name["declared 100 mm pad bending"].safety_factor,
+        float(
+            re.search(
+                r"deflection ([\d.]+)", by_name["smeared over the panel deflection"].detail
+            ).group(1)
+        ),
+        float(
+            re.search(
+                r"deflection ([\d.]+)", by_name["declared 100 mm pad deflection"].detail
+            ).group(1)
+        ),
+        namespace["FOOT_LOAD"] / panel**2,
+    )
     assert by_name["declared 100 mm pad deflection"].status is CheckStatus.FAIL
     assert "deflection 3.433" in by_name["declared 100 mm pad deflection"].detail
     assert card.status is CheckStatus.FAIL
@@ -4026,6 +4049,26 @@ def test_manway_lid_example_flips_on_the_edge_fixity_assumption():
     assert "safety factor 3.84" in by_name["welded rim (clamped) bending"].detail
     assert by_name["welded rim (clamped) flatness"].passed
     assert "deflection 0.771" in by_name["welded rim (clamped) flatness"].detail
+    # The two ratios between the edge conditions that the docstring writes as closed
+    # forms in Poisson's ratio, computed from the two screens themselves.
+    clamped_bow = float(
+        re.search(r"deflection ([\d.]+)", by_name["welded rim (clamped) flatness"].detail).group(1)
+    )
+    gasketed_bow = float(
+        re.search(
+            r"deflection ([\d.]+)", by_name["gasketed rim (simply supported) flatness"].detail
+        ).group(1)
+    )
+    _assert_narrates(
+        "manway_lid_fixity.py",
+        clamped_bow,
+        gasketed_bow,
+        gasketed_bow / clamped_bow,
+        by_name["welded rim (clamped) bending"].safety_factor
+        / by_name["gasketed rim (simply supported) bending"].safety_factor,
+        by_name["welded rim (clamped) bending"].safety_factor,
+        by_name["gasketed rim (simply supported) bending"].safety_factor,
+    )
     assert by_name["gasketed rim (simply supported) bending"].passed
     assert "safety factor 2.33" in by_name["gasketed rim (simply supported) bending"].detail
     assert by_name["gasketed rim (simply supported) flatness"].status is CheckStatus.FAIL
@@ -7206,6 +7249,29 @@ def test_loose_ring_flange_example_is_governed_by_the_bolt_up_not_the_pressure()
     # Bolts come in sizes: the joint is over-bolted 2.1x, and Appendix 2 charges the
     # flange for the bolt-up load a fitter can then actually apply.
     assert actual / required == pytest.approx(2.09, abs=0.02)
+
+    # The two rings the docstring compares, on both conditions: the pressure-only
+    # margin that looks comfortable, the seating margin that governs, and the 1/t²
+    # the thicker ring buys.
+    cards = {
+        thickness: namespace["screen_flange"](Quantity.parse(f"{thickness} mm"))
+        for thickness in (30, 40)
+    }
+    operating = {
+        thickness: float(re.search(r"S_T ([\d.]+) MPa operating", card.entries[0].detail).group(1))
+        for thickness, card in cards.items()
+    }
+    hot_allowable = namespace["FLANGE_ALLOWABLE_HOT"].to("MPa").magnitude
+    _assert_narrates(
+        "loose_ring_flange_stress.py",
+        cards[30].entries[0].safety_factor,
+        cards[40].entries[0].safety_factor,
+        hot_allowable / operating[30],
+        hot_allowable / operating[40],
+        (40.0 / 30.0) ** 2,
+        loads["required_bolt_area"].to("mm**2").magnitude,
+        loads["actual_bolt_area"].to("mm**2").magnitude,
+    )
 
     thin = namespace["screen_flange"](Quantity_.parse("30 mm"))
     thick = namespace["screen_flange"](Quantity_.parse("40 mm"))

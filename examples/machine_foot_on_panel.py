@@ -2,7 +2,7 @@
 
 A 5 kN machine foot lands on a 100 x 100 mm pad in the middle of a
 500 x 500 x 6 mm simply-supported A36 panel. Smeared over the whole panel
-(0.02 MPa) the screen looks comfortable: 39.9 MPa (SF 6.27) and 1.28 mm,
+(0.02 MPa) the screen looks comfortable: 39.9 MPa (SF 6.26) and 1.28 mm,
 inside a b/250 = 2 mm limit. Declared on its true footprint
 (``simply_supported_plate_center_patch_load``, 0.5 MPa over the pad) the same
 5 kN concentrates 4.4x the bending — 177 MPa, SF 1.41, FAIL — and 3.43 mm of
