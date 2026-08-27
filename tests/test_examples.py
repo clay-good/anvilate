@@ -200,12 +200,6 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "rc_floor_beam.py",
         "rc_t_beam_floor.py",
         "spreader_beam_device_screen.py",
-        "temperature_sensor_pt100_vs_thermistor.py",
-        "timber_beam_lateral_stability.py",
-        "timber_header_bearing_governs.py",
-        "timber_header_shear_governs.py",
-        "tolerance_stackup.py",
-        "vacuum_vessel_buckling.py",
         "vessel_surface_flaw_fad.py",
         "welded_bracket_fatigue.py",
         "wheel_rail_contact.py",
@@ -365,6 +359,11 @@ def test_tolerance_stackup_example_worst_case_fails_but_yield_is_high():
     assert result["worst_case"].nominal.to("mm").magnitude == pytest.approx(0.3)
     assert result["worst_case_ok"] is False
     assert 0.98 < result["predicted_yield"] < 1.0
+    # The worst-case floor the docstring quotes, in millimetres.
+    _assert_narrates(
+        "tolerance_stackup.py",
+        result["worst_case"].lower.to("mm").magnitude,
+    )
 
 
 def test_column_base_plate_example_governed_by_plate_bending():
@@ -947,6 +946,18 @@ def test_temperature_sensor_pt100_vs_thermistor_example():
     assert s["thermistor_kohm"] < 10.0
     # The Pt100 resistance converts back to 60 C.
     assert s["pt100_temperature_c"] == pytest.approx(60.0, abs=0.05)
+    # The Ω/°C the docstring quotes: the RTD's own slope, from two readings.
+    warm = (
+        namespace["rtd_resistance"](
+            temperature=Quantity(magnitude=334.15, unit="K"),
+            reference_resistance=namespace["PT100_R0"],
+            reference_temperature=namespace["PT100_T0"],
+            temperature_coefficient=namespace["PT100_ALPHA"],
+        )
+        .to("ohm")
+        .magnitude
+    )
+    _assert_narrates("temperature_sensor_pt100_vs_thermistor.py", warm - s["pt100_ohm"])
 
 
 def test_measurement_uncertainty_gauge_block_example():
@@ -2934,6 +2945,14 @@ def test_timber_header_shear_governs_example_shear_beats_bending():
     assert names["header shear"].status is CheckStatus.FAIL
     # The bearing check clears with the C_b bonus.
     assert namespace["bearing_margin"]() > 1.5
+    # The same C_b bonus, quoted in this docstring too.
+    from anvilate.analysis import nds_bearing_area_factor as _bearing_factor
+
+    length = Quantity.parse("2 in")
+    _assert_narrates(
+        "timber_header_shear_governs.py",
+        length.to("in").magnitude * (_bearing_factor(bearing_length=length) - 1.0),
+    )
 
 
 def test_pyrometer_color_temperature_example_peak_shifts_and_inverts():
@@ -5194,6 +5213,23 @@ def test_vacuum_vessel_example_buckles_before_it_bursts():
     thick = by_name["12 mm wall"]
     assert thick.passed
     assert "safety factor 2.53" in thick.detail
+
+    # The collapse pressure each wall reaches, in MPa.
+    _assert_narrates(
+        "vacuum_vessel_buckling.py",
+        *(
+            namespace["cylinder_external_pressure_buckling"](
+                wall_thickness=thickness,
+                mean_radius=namespace["MEAN_RADIUS"],
+                elastic_modulus=namespace["ELASTIC_MODULUS"],
+            )
+            .to("MPa")
+            .magnitude
+            for thickness in namespace["WALL_THICKNESSES"].values()
+        ),
+        by_name["8 mm wall"].safety_factor,
+        thick.safety_factor,
+    )
     assert card.status is CheckStatus.FAIL
 
 
@@ -6806,6 +6842,21 @@ def test_timber_header_bearing_governs_example_fails_at_the_support():
             by_name[check].safety_factor, rel=1e-9
         )
 
+    # The NDS bearing-area bonus the docstring writes into C_b, recovered from the
+    # factor itself: C_b = (l_b + bonus)/l_b, so the bonus is l_b·(C_b − 1).
+    from anvilate.analysis import nds_bearing_area_factor
+
+    length = Quantity.parse("2 in")
+    bonus = length.to("in").magnitude * (nds_bearing_area_factor(bearing_length=length) - 1.0)
+    _assert_narrates(
+        "timber_header_bearing_governs.py",
+        bonus,
+        namespace["_reaction"]().to("lbf").magnitude,
+        by_name["header bending"].safety_factor,
+        by_name["horizontal shear"].safety_factor,
+        post_by_name["end bearing"].safety_factor,
+    )
+
 
 def test_timber_post_slenderness_example_shows_the_stability_factor_collapse():
     namespace = runpy.run_path(str(_EXAMPLES / "timber_post_slenderness.py"))
@@ -7407,6 +7458,25 @@ def test_timber_lateral_stability_example_fails_the_rafter_that_bending_stress_p
     assert statuses == [CheckStatus.FAIL, CheckStatus.FAIL, CheckStatus.PASS]
     ratios = [entry.safety_factor for _, _, entry in study]
     assert ratios == pytest.approx([0.57, 0.97, 1.18], abs=0.01)
+
+    # The docstring's own figures: the three stability factors, the three margins, the
+    # F'_b mistake, and the two coefficients it contrasts.
+    from anvilate.analysis import nds_bending_buckling_stress, nds_euler_buckling_stress
+
+    modulus = namespace["E_MIN"]
+    coefficients = [
+        stress(min_modulus=modulus, slenderness_ratio=10.0).to("psi").magnitude
+        * 100.0
+        / modulus.to("psi").magnitude
+        for stress in (nds_bending_buckling_stress, nds_euler_buckling_stress)
+    ]
+    _assert_narrates(
+        "timber_beam_lateral_stability.py",
+        *factors,
+        *ratios,
+        namespace["stability_factor_given_the_adjusted_value"](),
+        *coefficients,
+    )
 
     # The number the example's docstring and docs/timber-screening.md both quote for the
     # F'_b mistake, which nothing checked until now: a plausible figure beside a correct
