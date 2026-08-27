@@ -235,12 +235,7 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "rc_t_beam_floor.py",
         "relativistic_spaceship.py",
         "roof_step_snow_drift.py",
-        "rotor_unbalance_response.py",
         "satellite_dish_antenna.py",
-        "seismic_accidental_torsion.py",
-        "seismic_elf_design.py",
-        "servo_duty_cycle_thermal.py",
-        "servo_inertia_matching.py",
         "servo_step_response.py",
         "shaft_bearing_misalignment.py",
         "shot_peening_coverage_time.py",
@@ -3315,6 +3310,31 @@ def test_seismic_elf_design_capstone_drift_governs():
     # The long-period cap pulls the governing Cs below the 0.125 SDS/R plateau.
     assert namespace["_governing_cs"]() < 0.125
 
+    # The plateau the cap pulls Cs down from, and the P-delta pair the prose quotes.
+    drift = namespace["seismic_design_story_drift"](
+        elastic_story_drift=namespace["ELASTIC_STORY_DRIFT"],
+        deflection_amplification_factor=namespace["DEFLECTION_AMPLIFICATION"],
+    )
+    _assert_narrates(
+        "seismic_elf_design.py",
+        namespace["seismic_response_coefficient"](
+            design_spectral_acceleration=namespace["SDS"],
+            response_modification_factor=namespace["RESPONSE_MODIFICATION"],
+        ),
+        namespace["_governing_cs"](),
+        namespace["seismic_stability_coefficient"](
+            story_gravity_load=namespace["STORY_GRAVITY_LOAD"],
+            design_story_drift=drift,
+            story_shear=namespace["STORY_SHEAR"],
+            story_height=namespace["STORY_HEIGHT"],
+            deflection_amplification_factor=namespace["DEFLECTION_AMPLIFICATION"],
+        ),
+        namespace["seismic_stability_coefficient_limit"](
+            deflection_amplification_factor=namespace["DEFLECTION_AMPLIFICATION"]
+        ),
+        drift_sf,
+    )
+
 
 def test_seismic_story_drift_check_example_amplification_matters():
     namespace = runpy.run_path(str(_EXAMPLES / "seismic_story_drift_check.py"))
@@ -3335,6 +3355,20 @@ def test_seismic_accidental_torsion_example_irregular_amplifies():
     # The irregular building's amplified torsion is larger than the symmetric baseline.
     assert t["irregular_knm"] == pytest.approx(1875.0, abs=1.0)
     assert t["irregular_knm"] > t["symmetric_knm"]
+    # The 5% accidental eccentricity the docstring writes into its formula.
+    import inspect as _inspect
+
+    from anvilate.analysis import seismic_accidental_torsional_moment
+
+    _assert_narrates(
+        "seismic_accidental_torsion.py",
+        _inspect.signature(seismic_accidental_torsional_moment)
+        .parameters["eccentricity_ratio"]
+        .default,
+        t["symmetric_knm"],
+        t["irregular_knm"],
+        t["amplification"],
+    )
 
 
 def test_seismic_diaphragm_force_example_roof_floored():
@@ -5421,6 +5455,20 @@ def test_rotor_unbalance_response_example_resonance_amplifies_the_shake():
     assert "safety factor 0.68" in by_name["just under critical (r = 0.95)"].detail
     assert card.status is CheckStatus.FAIL
 
+    # The magnification at each speed ratio and the shake it turns the unbalance into.
+    static = namespace["STATIC_UNBALANCE_DEFLECTION"].to("mm").magnitude
+    factors = [
+        namespace["dynamic_magnification_factor"](
+            frequency_ratio=ratio, damping_ratio=namespace["DAMPING_RATIO"]
+        )
+        for ratio in namespace["SPEED_RATIOS"].values()
+    ]
+    _assert_narrates(
+        "rotor_unbalance_response.py",
+        *factors,
+        *(static * factor for factor in factors[:2]),
+    )
+
 
 def test_flat_bar_torsion_penalty_example_thin_section_twists_far_more():
     namespace = runpy.run_path(str(_EXAMPLES / "flat_bar_torsion_penalty.py"))
@@ -5900,6 +5948,24 @@ def test_servo_duty_cycle_thermal_example_rms_governs():
     assert "safety factor 1.12" in relaxed_by_name["continuous rating vs cycle RMS torque"].detail
     assert relaxed.status is CheckStatus.PASS
 
+    # The RMS torque each cycle produces — the quantity the example is named for.
+    zero = Quantity.parse("0 N*m")
+    _assert_narrates(
+        "servo_duty_cycle_thermal.py",
+        *(
+            namespace["rms_torque_over_cycle"](
+                torques=(namespace["ACCEL_TORQUE"], namespace["ACCEL_TORQUE"], zero),
+                durations=(namespace["ACCEL_TIME"], namespace["BRAKE_TIME"], namespace[dwell]),
+            )
+            .to("N*m")
+            .magnitude
+            for dwell in ("FAST_DWELL", "RELAXED_DWELL")
+        ),
+        by_name["continuous rating vs cycle RMS torque"].safety_factor,
+        relaxed_by_name["continuous rating vs cycle RMS torque"].safety_factor,
+        by_name["peak rating vs hardest instant"].safety_factor,
+    )
+
 
 def test_servo_inertia_matching_example_ratio_governs():
     namespace = runpy.run_path(str(_EXAMPLES / "servo_inertia_matching.py"))
@@ -5923,6 +5989,24 @@ def test_servo_inertia_matching_example_ratio_governs():
         in matched_by_name["drive inertia-ratio bound vs reflected load"].detail
     )
     assert matched.status is CheckStatus.PASS
+
+    # The closed-form minimum torque the matched ratio reaches, and the ratio it leaves.
+    _assert_narrates(
+        "servo_inertia_matching.py",
+        by_name["motor peak torque vs acceleration demand"].safety_factor,
+        matched_by_name["motor peak torque vs acceleration demand"].safety_factor,
+        2.0
+        * namespace["LOAD_ACCELERATION"].to("rad/s**2").magnitude
+        * math.sqrt(
+            namespace["MOTOR_INERTIA"].to("kg*m**2").magnitude
+            * namespace["TABLE_INERTIA"].to("kg*m**2").magnitude
+        ),
+        namespace["reflected_inertia_ratio"](
+            load_inertia=namespace["TABLE_INERTIA"],
+            motor_inertia=namespace["MOTOR_INERTIA"],
+            gear_ratio=namespace["matched_ratio"](),
+        ),
+    )
 
 
 def test_retaining_compound_hub_example_bond_beats_friction():
