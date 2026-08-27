@@ -30,10 +30,13 @@ def _narrated_numbers(example: str) -> list[str]:
     # in the source — so both sides are compared with their separators removed.
     body = re.sub(r"(?<=\d)[_,](?=\d)", "", source.replace(docstring, "", 1))
     distinctive = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+\.\d{2,})(?![\w])")
+    # A clause number is a citation, not a quantity: "29 CFR 1926.251(a)(4)" is the
+    # rule's name and there is nothing to recompute about it.
+    cited = set(re.findall(r"(?:CFR|§|Part)\s+(\S+)", docstring))
     return [
         number
         for number in sorted(set(distinctive.findall(docstring)))
-        if number.replace(",", "") not in body
+        if number.replace(",", "") not in body and not any(number in citation for citation in cited)
     ]
 
 
@@ -187,15 +190,8 @@ def _assert_narrates(example: str, *computed: float) -> None:
 # example whose entry points return them) and deleting its line.
 _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
     {
-        "bracket_reviewer_dossier.py",
-        "dfm_process_check.py",
         "feature_control_frame_legality.py",
         "gamma_shield_thickness.py",
-        "lifter_verification_matrix.py",
-        "lifting_lug_calc_report.py",
-        "lightest_passing_bracket.py",
-        "measured_shaft_from_certificate.py",
-        "plated_shaft_callouts_change_the_verdict.py",
         "pressure_vessel_nozzle_and_flange.py",
         "rc_floor_beam.py",
         "rc_t_beam_floor.py",
@@ -343,6 +339,11 @@ def test_dfm_process_example_flags_and_suggests():
     assert result["check"].achievable is False
     assert result["alternatives"]  # non-empty
     assert "grinding" in result["alternatives"]
+    # The FDM floor the docstring quotes, from the process table itself.
+    _assert_narrates(
+        "dfm_process_check.py",
+        result["check"].finest.to("mm").magnitude,
+    )
 
 
 def test_tolerance_stackup_example_worst_case_fails_but_yield_is_high():
@@ -6798,6 +6799,12 @@ def test_lifting_lug_calc_report_example_shows_its_work():
     assert "σ_p = P / (d · t)" in text
     assert "σ_p = 50.0 kN / (25.00 mm · 12.00 mm)" in text
     assert "σ_p = 166.7 MPa" in text
+    # The rigging factor the docstring names as the requirement the padeye is held to.
+    _assert_narrates(
+        "lifting_lug_calc_report.py",
+        namespace["RIGGING_FACTOR"],
+        namespace["_screen"]().entries[1].safety_factor,
+    )
     assert "ASME BTH-1 §3-3" in text
     # All three checks declare their own work, so nothing falls back.
     assert report.derivation_coverage() == (3, 3)
@@ -7652,6 +7659,16 @@ def test_lifter_verification_example_never_renders_a_plan_as_evidence():
     proof = plan.items[0]
     assert "125 kN" in proof.acceptance
     assert "80% of the load sustained" in proof.acceptance
+    # The three figures the acceptance line rests on: the proof factor, its inverse,
+    # and the instrument accuracy a tenth of the pin tolerance demands.
+    from anvilate import verification as _verification
+
+    _assert_narrates(
+        "lifter_verification_matrix.py",
+        _verification._PROOF_LOAD_FACTOR,
+        _verification._RATED_LOAD_FRACTION_OF_TEST,
+        _verification._TEST_ACCURACY_RATIO * namespace["PIN_TOLERANCE"].to("mm").magnitude,
+    )
     # Nothing performed: the plan is not_evaluated no matter how green the analysis is.
     assert plan.status is CheckStatus.NOT_EVALUATED
     assert plan.verified == ()
@@ -7714,6 +7731,25 @@ def test_the_exploration_pages_numbers_are_the_sweeps_own():
     )
     namespace = runpy.run_path(str(_EXAMPLES / "lightest_passing_bracket.py"))
     full = namespace["sweep"]()
+
+    # The example's own docstring tabulates the five front designs and the lightest
+    # infeasible one; every figure in it comes from the sweep.
+    front = sorted(full.front, key=lambda point: -point.objectives["mass"])
+    lightest_point = min(full.points, key=lambda point: point.objectives["mass"])
+    _assert_narrates(
+        "lightest_passing_bracket.py",
+        *(point.objectives["mass"] for point in front),
+        *(point.governing_safety_factor for point in front),
+        lightest_point.objectives["mass"],
+        front[-1].objectives["mass"] / lightest_point.objectives["mass"],
+        # The Halton row of the budget table, and the front's two ends as the "Lie 2"
+        # paragraph rounds them.
+        namespace["sweep"](budget=20, strategy=namespace["SamplingStrategy"].HALTON)
+        .best("mass")
+        .objectives["mass"],
+        front[-1].objectives["mass"],
+        front[0].objectives["mass"],
+    )
 
     summary = re.search(
         r"# cantilever bracket: (\d+) of (\d+) points evaluated \((\d+)%, (\w+)\), "
@@ -8149,6 +8185,15 @@ def test_reviewer_dossier_example_puts_the_unevaluated_check_first():
     # Ahead of the failure: a FAIL is already visible, a NOT_EVALUATED is the check that
     # silently is not there.
     assert order == ["fatigue", "deflection", "bending", "shear"]
+    # The requirement the shear entry sits close to, from the card the example declares.
+    _assert_narrates(
+        "bracket_reviewer_dossier.py",
+        *{
+            entry.required_safety_factor
+            for entry in namespace["BRACKET"].entries
+            if entry.required_safety_factor is not None
+        },
+    )
     # `bending` passes at SF 3.0 and is still surfaced, because nobody sourced its input.
     assert before.items[2].entry.status is CheckStatus.PASS
     assert "nobody sourced" in before.items[2].headline
@@ -8201,6 +8246,17 @@ def test_plated_shaft_callouts_example_turns_a_pass_into_a_fail():
     # And a revised value keeps its characteristic: one change, nothing added or removed.
     assert result["diff"].unchanged_identity is True
     assert len(result["diff"].changed) == 1
+
+    # The three verdicts and the two Marin factors the docstring narrates.
+    _assert_narrates(
+        "plated_shaft_callouts_change_the_verdict.py",
+        ignored.entries[0].safety_factor,
+        as_drawn.entries[0].safety_factor,
+        revised.entries[0].safety_factor,
+        as_drawn_factor,
+        revised_factor,
+        as_drawn.entries[0].required_safety_factor,
+    )
 
 
 def test_lug_evidence_bundle_example_shows_a_plan_is_not_evidence():
@@ -8320,6 +8376,8 @@ def test_the_quality_repair_and_verification_pages_numbers_are_the_librarys_own(
     measured = result["measured"].quantity.to("mm").magnitude
     _lower, upper = result["limits"]
     assert measured == pytest.approx(float(claim.group(2)), abs=5e-5)
+    # The h6 zone the drawing calls, both limits, as the docstring prints them.
+    _assert_narrates("measured_shaft_from_certificate.py", *(limit for limit in result["limits"]))
     assert upper == pytest.approx(float(claim.group(1)), abs=5e-4)
     overshoot_um = 1000.0 * (measured - upper)
     assert overshoot_um == pytest.approx(float(claim.group(5)), abs=0.05)
