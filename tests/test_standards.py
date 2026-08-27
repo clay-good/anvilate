@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 
 from anvilate.standards import (
@@ -1626,3 +1629,142 @@ def test_the_provenance_roll_up_states_the_basis_alongside_the_source():
         "(specification minimum)" in s
         for s in _distinct_sources({"yield_strength": minimum.yield_strength.citation})
     )
+
+
+# --- The license gate over every bundled dataset ---------------------------------------
+#
+# Anvilate is MIT, and a bundled table travels with the package: whatever its data is
+# under, a redistributor inherits. The allow-list is therefore licenses that permit
+# redistribution inside an MIT package without adding a copyleft or a share-alike term.
+# CC0-1.0 is what everything here is (values only, source standards not redistributed);
+# the rest are listed because the open-data changes will bring them, and a gate written
+# for exactly today's one entry is a gate nobody can add a dataset through.
+_REDISTRIBUTABLE_LICENSES = frozenset(
+    {"CC0-1.0", "CC-BY-4.0", "ODC-By-1.0", "MIT", "Apache-2.0", "Unlicense"}
+)
+
+_DATASET_ROOT_MODULES = ("standards", "tolerance")
+
+
+def _bundled_datasets() -> list[tuple[str, dict]]:
+    import yaml
+
+    root = Path(__file__).resolve().parent.parent / "src" / "anvilate"
+    found = []
+    for module in _DATASET_ROOT_MODULES:
+        for path in sorted((root / module / "data").glob("*.yaml")):
+            found.append((f"{module}/data/{path.name}", yaml.safe_load(path.read_text())))
+    return found
+
+
+def _citation_sources(node: object) -> list[object]:
+    """Every ``citation.source`` anywhere in a loaded document."""
+    if isinstance(node, dict):
+        found = []
+        citation = node.get("citation")
+        if isinstance(citation, dict):
+            found.append(citation.get("source"))
+        for value in node.values():
+            found += _citation_sources(value)
+        return found
+    if isinstance(node, list):
+        return [source for item in node for source in _citation_sources(item)]
+    return []
+
+
+def test_every_bundled_dataset_records_a_redistributable_license():
+    """A bundled table travels with the package, so its license is a shipping condition.
+
+    Every dataset states an SPDX identifier this project can redistribute under, the date
+    it was retrieved, and where it came from — at the dataset level, or on every record
+    for a table (the materials database) whose values each cite a different source.
+    """
+    datasets = _bundled_datasets()
+    assert len(datasets) >= 17, f"the sweep found only {len(datasets)} datasets"
+
+    for name, document in datasets:
+        dataset = document.get("dataset")
+        assert isinstance(dataset, dict), f"{name} ships no dataset block"
+        for field in ("name", "version", "license", "retrieved"):
+            assert dataset.get(field), f"{name} declares no dataset {field}"
+
+        spdx = str(dataset["license"]).split()[0]
+        assert spdx in _REDISTRIBUTABLE_LICENSES, (
+            f"{name} is under {spdx!r}, which is not on the redistributable list "
+            f"{sorted(_REDISTRIBUTABLE_LICENSES)}"
+        )
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(dataset["retrieved"])), (
+            f"{name} records {dataset['retrieved']!r} as its retrieval date, not an ISO date"
+        )
+
+        if not dataset.get("source"):
+            # No dataset-level source: then every record has to carry its own, which is
+            # what the materials table does — each property cites a different publication.
+            sources = _citation_sources(document)
+            assert sources, f"{name} names no source at either the dataset or the record level"
+            assert all(sources), f"{name} has a record citation with an empty source"
+
+    # docs/citations.md counts them and states what they are all under; both are claims
+    # about this sweep's result, so they are checked against it rather than reviewed.
+    page = " ".join(
+        (Path(__file__).resolve().parent.parent / "docs" / "citations.md").read_text().split()
+    )
+    claim = re.search(r"Each of the (\w+) bundled datasets .*? All (\w+) are ([\w.-]+) today", page)
+    assert claim is not None, "the bundled-dataset paragraph in docs/citations.md has moved"
+    counted = {"seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20}
+    assert counted[claim.group(1)] == len(datasets)
+    assert claim.group(2) == claim.group(1), "the page counts the datasets twice, differently"
+    assert {str(d["dataset"]["license"]).split()[0] for _n, d in datasets} == {claim.group(3)}
+
+
+def test_the_license_gate_sees_what_it_claims_to(tmp_path, monkeypatch):
+    """The gate's own adversary: each way a dataset can fail it, tried.
+
+    A gate over data nobody has broken yet is a gate nobody has run. These are the four
+    mutations that matter — an absent license, a copyleft one, a missing retrieval date
+    and one that is not a date — plus a source declared nowhere.
+    """
+    import yaml
+
+    good = {
+        "dataset": {
+            "name": "anvilate-test-seed",
+            "version": "0.1.0",
+            "source": "a published table",
+            "license": "CC0-1.0 (values only)",
+            "retrieved": "2026-08-27",
+        },
+        "rows": {"1": 2.0},
+    }
+
+    def _run(document: dict) -> None:
+        path = tmp_path / "candidate.yaml"
+        path.write_text(yaml.safe_dump(document))
+        monkeypatch.setattr(
+            f"{__name__}._bundled_datasets",
+            lambda: [("candidate.yaml", yaml.safe_load(path.read_text()))] * 17,
+        )
+        test_every_bundled_dataset_records_a_redistributable_license()
+
+    _run(good)  # the shape the gate is written for
+
+    for mutation in (
+        {"license": None},
+        {"license": "GPL-3.0-or-later (a copyleft table)"},
+        {"license": "CC-BY-SA-4.0 (share-alike)"},
+        {"retrieved": None},
+        {"retrieved": "August 2026"},
+        {"name": None},
+        {"version": None},
+    ):
+        broken = {"dataset": {**good["dataset"], **mutation}, "rows": good["rows"]}
+        with pytest.raises(AssertionError):
+            _run(broken)
+
+    # A dataset with no source at all, and one whose records carry theirs.
+    sourceless = {"dataset": {k: v for k, v in good["dataset"].items() if k != "source"}}
+    with pytest.raises(AssertionError):
+        _run({**sourceless, "rows": good["rows"]})
+    _run({**sourceless, "rows": {"1": {"citation": {"source": "a published table"}}}})
+    with pytest.raises(AssertionError):
+        _run({**sourceless, "rows": {"1": {"citation": {"source": ""}}}})

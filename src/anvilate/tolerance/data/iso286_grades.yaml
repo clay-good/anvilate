@@ -10,6 +10,8 @@
 # recomputed from the tolerance-factor formula. The source standard is not
 # redistributed — only the tolerance table.
 dataset:
+  name: "anvilate-iso286-grades-seed"
+  version: "0.1.0"
   source: "ISO 286-1 standard tolerance grades (IT grades)"
   license: "CC0-1.0 (tolerance values only; source standard not redistributed)"
   retrieved: "2026-07-08"

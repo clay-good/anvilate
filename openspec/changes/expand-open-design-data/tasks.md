@@ -26,7 +26,11 @@
 ## 4. Tests & docs
 
 - [ ] 4.1 License gate: every ingested source carries a recorded compatible license or
-      fetch recipe
+      fetch recipe — the BUNDLED half is done (2026-08-27): every dataset under
+      `standards/data` and `tolerance/data` declares name, version, source, an SPDX
+      identifier on a redistributable allow-list, and an ISO retrieval date, enforced by
+      `test_every_bundled_dataset_records_a_redistributable_license` with an adversary
+      test beside it. The fetch-recipe half follows the importers in 2.2 and 2.4.
 - [ ] 4.2 Named-section resolution tests (offline post-fetch; bundled EN data)
 - [ ] 4.3 Docs: where each data class comes from, its basis, and its legal status
 

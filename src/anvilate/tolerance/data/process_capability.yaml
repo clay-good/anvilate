@@ -9,6 +9,8 @@
 # (finest achievable, not typical) so the check only fails clearly-unachievable
 # tolerances rather than raising false alarms.
 dataset:
+  name: "anvilate-process-capability-seed"
+  version: "0.1.0"
   source: "DFM screening estimates (typical finest achievable tolerances)"
   license: "CC0-1.0 (screening estimates; no standard redistributed)"
   retrieved: "2026-07-08"

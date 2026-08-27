@@ -168,6 +168,21 @@ number that looks exactly like data.**
 The dataset half is a license record too: `DatasetProvenance` requires a DOI or a URL,
 because a fatigue curve nobody can retrieve is a number somebody typed.
 
+## Every bundled table says what it may be redistributed under
+
+A table bundled in the package travels with it, so whatever the data is licensed under, a
+redistributor inherits. Each of the seventeen bundled datasets — the dimension tables, the
+materials seed, the ISO 286 and ISO 2768 tolerance tables, the process-capability
+estimates — declares a name, a version, the source it was read from, an SPDX licence
+identifier, and the date it was retrieved. All seventeen are CC0-1.0 today: the *values*
+are facts, and no source standard is redistributed.
+
+A gate in the suite reads every one of them and fails the build on a licence that is not
+redistributable inside an MIT package, a retrieval date that is not a date, or a missing
+version — with a companion test that mutates a dataset each of those ways and requires the
+gate to catch it. A dataset with no source at the dataset level (the materials table, whose
+properties each cite a different publication) has to carry one on every record instead.
+
 ## If a citation looks wrong
 
 Report it. A wrong citation is worse than none, because it converts an unverified number

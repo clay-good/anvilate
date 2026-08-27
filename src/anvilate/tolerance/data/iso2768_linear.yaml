@@ -6,6 +6,8 @@
 # covered by ISO 2768 and require an explicit tolerance. The source standard is
 # not redistributed — only the tolerance table.
 dataset:
+  name: "anvilate-iso2768-linear-seed"
+  version: "0.1.0"
   source: "ISO 2768-1 general tolerances (linear dimensions)"
   license: "CC0-1.0 (tolerance values only; source standard not redistributed)"
   retrieved: "2026-07-08"

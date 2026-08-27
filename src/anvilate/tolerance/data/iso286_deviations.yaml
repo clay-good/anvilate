@@ -29,6 +29,8 @@
 # Diameter steps match the IT-grade table so a zone's width and deviation share
 # one range. Values are exact tabulated integers. The source is not redistributed.
 dataset:
+  name: "anvilate-iso286-deviations-seed"
+  version: "0.1.0"
   source: "ISO 286-1 fundamental deviations (shaft letters d/e/f/g, k, m/n/p, r/s <= 50 mm, u <= 18 mm)"
   license: "CC0-1.0 (deviation values only; source standard not redistributed)"
   retrieved: "2026-07-08"
