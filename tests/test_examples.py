@@ -192,14 +192,8 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "feature_control_frame_legality.py",
         "flat_roof_rain_vs_snow.py",
         "gamma_shield_thickness.py",
-        "gearbox_output_shaft.py",
-        "guide_spring_buckling.py",
-        "highway_cruise_power.py",
-        "hydraulic_cylinder_wall.py",
-        "lab_ventilation_air_changes.py",
         "lifter_verification_matrix.py",
         "lifting_lug_calc_report.py",
-        "lifting_magnet_holding_force.py",
         "lightest_passing_bracket.py",
         "living_hinge_flip_cap.py",
         "machine_vibration_isolation.py",
@@ -1777,6 +1771,12 @@ def test_lifting_magnet_holding_force_example_coil_to_clamp():
     assert d["coil_field_mt"] == pytest.approx(2.513, abs=0.005)
     assert d["pole_pressure_mpa"] == pytest.approx(0.398, abs=0.002)
     assert d["holding_force_kn"] == pytest.approx(3.979, abs=0.01)
+    # The pole area in square metres the docstring glosses its 100 cm² as.
+    _assert_narrates(
+        "lifting_magnet_holding_force.py",
+        namespace["POLE_AREA"].to("m**2").magnitude,
+        d["pole_pressure_mpa"],
+    )
 
 
 def test_conveyor_discharge_trajectory_example_places_the_chute():
@@ -1799,6 +1799,8 @@ def test_highway_cruise_power_example_hills_dominate():
     # A 5% grade more than doubles the power.
     assert d["grade_power_kw"] == pytest.approx(34.0, abs=0.5)
     assert d["grade_power_kw"] > 2 * d["flat_power_kw"]
+    # The grade the docstring gives in degrees for its "5%" slope.
+    _assert_narrates("highway_cruise_power.py", namespace["GRADE_ANGLE"])
 
 
 def test_radiation_shield_and_view_factor_example():
@@ -3097,6 +3099,13 @@ def test_lab_ventilation_air_changes_example():
     assert f["lab_flow_m3s"] == pytest.approx(0.40, abs=0.005)
     assert f["office_flow_m3s"] == pytest.approx(0.10, abs=0.005)
     assert f["recovered_ach"] == pytest.approx(8.0, rel=1e-6)
+    # The flow in m³/h the docstring works in before converting to m³/s.
+    _assert_narrates(
+        "lab_ventilation_air_changes.py",
+        f["lab_flow_m3s"] * 3600.0,
+        f["lab_flow_m3s"],
+        f["office_flow_m3s"],
+    )
 
 
 def test_office_ventilation_scorecard_example_lab_fails_on_air_changes():
@@ -4352,6 +4361,23 @@ def test_hydraulic_cylinder_example_catches_the_misused_thin_wall_form():
     thin = by_name["thin-wall membrane (r/t 2.5)"]
     assert thin.status is CheckStatus.NOT_EVALUATED
     assert "below the r/t >= 10 scope" in thin.detail
+    # The margin the membrane formula used to report, which is the docstring's whole
+    # point: the number that looked comfortable before the scope guard existed.
+    from anvilate.standards import default_materials_db
+
+    yield_strength = (
+        default_materials_db().get(namespace["STEEL"]).yield_strength.quantity.to("MPa").magnitude
+    )
+    membrane = (
+        namespace["PRESSURE"].to("MPa").magnitude
+        * namespace["BORE_RADIUS"].to("mm").magnitude
+        / namespace["WALL"].to("mm").magnitude
+    )
+    _assert_narrates(
+        "hydraulic_cylinder_wall.py",
+        yield_strength / membrane,
+        by_name["Lame bore intensity"].safety_factor,
+    )
     # ...but the exact Lame bore Tresca intensity (185 hoop on -60 radial)
     # works the bore at 245 MPa and fails the same screen.
     lame = by_name["Lame bore intensity"]
@@ -4386,6 +4412,28 @@ def test_guide_spring_buckling_example_folds_past_the_working_stroke():
     assert "safety factor 2.00" in shear.detail
     # ...but the 60 mm stroke drives the slender coil past its 45 mm critical
     # buckling deflection, so it folds sideways and the screen FAILs.
+    # The Shigley threshold √C₂′ the docstring writes as 2.63, recovered from the
+    # library's own criterion: it is the effective slenderness at which a coil stops
+    # being absolutely stable, so bisecting on free length finds it.
+    from anvilate.analysis import helical_spring_buckling
+
+    end_factor = namespace["SPRING_END_PARALLEL_PLATES"]
+    coil = namespace["COIL"].to("mm").magnitude
+    low, high = 10.0, 1000.0
+    for _ in range(200):
+        middle = 0.5 * (low + high)
+        stable = (
+            helical_spring_buckling(
+                free_length=Quantity(magnitude=middle, unit="mm"),
+                mean_coil_diameter=namespace["COIL"],
+                end_condition_constant=end_factor,
+                elastic_modulus=namespace["ELASTIC_MODULUS"],
+                shear_modulus=namespace["SHEAR_MODULUS"],
+            ).critical_deflection
+            is None
+        )
+        low, high = (middle, high) if stable else (low, middle)
+    _assert_narrates("guide_spring_buckling.py", end_factor * low / coil)
     buckling = by_name["guide spring buckling"]
     assert buckling.status is CheckStatus.FAIL
     assert "60.000 mm vs limit 45.418 mm" in buckling.detail
@@ -5090,6 +5138,13 @@ def test_gearbox_output_shaft_example_passes_all_three_modes():
     assert shaft.passed
     assert "safety factor 2.98" in shaft.detail
     assert by_name["key, shear"].passed
+    # The L10 life in hours the docstring quotes, which is the factor times the target.
+    _assert_narrates(
+        "gearbox_output_shaft.py",
+        by_name["bearings, L10 fatigue life"].safety_factor
+        * namespace["BEARING_LIFE_TARGET"].to("hour").magnitude,
+        *(entry.safety_factor for entry in card.entries),
+    )
     # ...and the bearing fatigue life is the governing (tightest) check.
     bearing = by_name["bearings, L10 fatigue life"]
     assert bearing.passed
