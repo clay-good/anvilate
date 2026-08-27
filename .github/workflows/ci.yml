@@ -73,8 +73,9 @@ jobs:
           set -o pipefail
           pytest -rs \
             "tests/test_fetch.py::test_the_default_transport_fetches_and_verifies_a_real_document" \
+            "tests/test_specbench.py::test_the_real_index_is_the_106_cases_the_review_counted" \
             | tee fetch.txt
-          grep -qE "^1 passed" fetch.txt
+          grep -qE "^2 passed" fetch.txt
           if grep -q skipped fetch.txt; then
             echo "the network transport was not exercised"
             exit 1

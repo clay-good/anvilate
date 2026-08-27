@@ -13,6 +13,8 @@ implemented layers everything else builds on:
   torsion, pressure vessel, bolted joint, von Mises).
 - :mod:`anvilate.scorecard` — the tri-state check-result vocabulary
   (pass / fail / not-evaluated).
+- :mod:`anvilate.specbench` — an external structured-spec suite read case by case,
+  with the cases nothing could compile named rather than counted as failures.
 
 On top of the scorecard sit the cross-cutting layers, each of which takes checks
 that already ran and does one more thing with them:

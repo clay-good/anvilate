@@ -176,6 +176,13 @@ scorecard.RepairHint
 scorecard.GoverningChange
 scorecard.ScorecardEntry
 scorecard.Scorecard
+specbench.MUSE_CASE_INDEX
+specbench.CaseSpecification
+specbench.ScopeVerdict
+specbench.SuiteAccounting
+specbench.parse_case_specification
+specbench.scope_verdict
+specbench.suite_accounting
 uncertainty.Normal
 uncertainty.Uniform
 uncertainty.Symmetric

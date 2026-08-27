@@ -17,7 +17,12 @@
       Requirements / Planned Component Quantity / Component Names), indexed by a
       106-line `metadata.jsonl`, so the adapter is a heading-to-field map. The open work
       is the mapping and the refusal path, which is also how the in-scope subset gets
-      measured rather than guessed.
+      measured rather than guessed. **The reading half shipped 2026-08-27**:
+      `anvilate.specbench` parses a case into a typed `CaseSpecification` and returns a
+      `ScopeVerdict` that names its refusal; the index is fetched through
+      `anvilate.fetch`, pinned to a commit. What is left of 1.2 is the translation of an
+      in-scope case into a `DesignSpec`, which nothing can exercise until a material path
+      exists.
 - [ ] 1.3 Funnel-stage scoring and out-of-scope accounting — the accounting has its first
       answer, from a census of all 106 cases on 2026-08-27 (`design.md`): 69 are
       assemblies, which a one-part `DesignSpec` cannot express, and all 37 single-part
@@ -25,6 +30,8 @@
       materials database. **0 of 106 compile today**, and the binding constraint is the
       material path, not the format. The six single-part timber cases are the nearest
       family, since timber screens through NDS reference values rather than the database.
+      `specbench.suite_accounting` is that census in code, so the count moves on its own
+      as materials land rather than going stale in a document.
 
 ## 2. Agent-driving suite
 
