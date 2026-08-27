@@ -52,6 +52,76 @@ def _rounding_of(number: str) -> float:
     return 0.5 * 10**zeros
 
 
+def _computed_values(namespace: dict) -> dict[str, float]:
+    """Every number an example's own zero-argument entry points produce.
+
+    Scorecard safety factors and the floats (or magnitudes) a summary dict returns —
+    the values an example's docstring narrates. Callables that need arguments are the
+    example's building blocks rather than its results, and are left alone.
+    """
+    import contextlib
+    import io
+
+    pool: dict[str, float] = {}
+    for name, value in list(namespace.items()):
+        if name.startswith("_") or name == "main" or not callable(value):
+            continue
+        code = getattr(value, "__code__", None)
+        if code is None or code.co_argcount or code.co_kwonlyargcount:
+            continue
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = value()
+        except Exception:  # noqa: BLE001 — a helper that needs a live resource, not a result
+            continue
+        for key, number in _numbers_in(result):
+            pool[f"{name}:{key}"] = number
+    return pool
+
+
+def _numbers_in(result: object) -> list[tuple[str, float]]:
+    if hasattr(result, "entries"):
+        return [
+            (entry.name, entry.safety_factor)
+            for entry in result.entries
+            if entry.safety_factor is not None
+        ]
+    if isinstance(result, dict):
+        found = []
+        for key, value in result.items():
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, (int, float)):
+                found.append((key, float(value)))
+            elif hasattr(value, "magnitude") and isinstance(value.magnitude, (int, float)):
+                found.append((key, float(value.magnitude)))
+        return found
+    if isinstance(result, (int, float)) and not isinstance(result, bool):
+        return [("", float(result))]
+    if hasattr(result, "magnitude") and isinstance(result.magnitude, (int, float)):
+        return [("", float(result.magnitude))]
+    return []
+
+
+def _assert_narrates_computed(example: str, namespace: dict) -> None:
+    """Every figure the docstring narrates is one the example itself computes.
+
+    The batch form of :func:`_assert_narrates`, for an example whose results all come
+    back from its own entry points: it does not say *which* value a figure is, but a
+    quoted number that matches none of them is a claim the example does not support,
+    which is the drift this is here to catch.
+    """
+    pool = _computed_values(namespace)
+    assert pool, f"{example} exposes no computed values to check its docstring against"
+    for number in _narrated_numbers(example):
+        value = float(number.replace(",", ""))
+        rounding = _rounding_of(number)
+        assert any(abs(value - computed) <= rounding for computed in pool.values()), (
+            f"{example}'s docstring quotes {number} and the example computes no such value "
+            f"(it computes {sorted(pool.items())})"
+        )
+
+
 def _assert_narrates(example: str, *computed: float) -> None:
     """Every number the docstring narrates is one of ``computed``, to its own precision.
 
@@ -2557,6 +2627,7 @@ def test_ahu_mixed_air_example():
     # The mix is mass-weighted toward the larger return stream.
     assert m["mixed_temperature_c"] == pytest.approx(26.75, rel=1e-6)
     assert m["mixed_humidity_ratio"] == pytest.approx(0.012, rel=1e-6)
+    _assert_narrates_computed("ahu_mixed_air.py", namespace)
 
 
 def test_cooling_coil_sensible_latent_split_example_typical_shr():
@@ -2577,6 +2648,7 @@ def test_home_heating_degree_days_example_heat_pump_cuts_energy():
     # The COP-3 heat pump delivers the same heat for a third of the furnace's fuel.
     assert s["heat_pump_kwh"] == pytest.approx(6000.0, rel=1e-6)
     assert s["furnace_kwh"] / s["heat_pump_kwh"] == pytest.approx(3.0 / 0.9, rel=1e-6)
+    _assert_narrates_computed("home_heating_degree_days.py", namespace)
 
 
 def test_quenched_billet_transient_example_biot_and_fourier():
@@ -2587,6 +2659,7 @@ def test_quenched_billet_transient_example_biot_and_fourier():
     assert q["biot"] > 0.1
     assert q["fourier"] == pytest.approx(1.25, abs=0.02)
     assert q["fourier"] > 0.2
+    _assert_narrates_computed("quenched_billet_transient.py", namespace)
 
 
 def test_heated_panel_convection_regime_example_height_flips_regime():
@@ -2667,6 +2740,7 @@ def test_busbar_skin_effect_example_depth_falls_with_frequency():
     assert d["depth_mm_60hz"] > d["depth_mm_10khz"] > d["depth_mm_1mhz"]
     assert d["depth_mm_60hz"] == pytest.approx(8.42, abs=0.05)
     assert d["depth_mm_1mhz"] == pytest.approx(0.065, abs=0.002)
+    _assert_narrates_computed("busbar_skin_effect.py", namespace)
 
 
 def test_ground_electrode_sizing_example_soil_dominates():
@@ -2752,6 +2826,7 @@ def test_office_lighting_cavity_ratio_example_tall_room_needs_more():
     assert f["low_rcr"] == pytest.approx(1.75, abs=0.01)
     assert f["tall_rcr"] == pytest.approx(3.5, abs=0.01)
     assert f["tall_fixtures"] > f["low_fixtures"]
+    _assert_narrates_computed("office_lighting_cavity_ratio.py", namespace)
 
 
 def test_office_lighting_layout_example_installed_grid_clears_target():
@@ -2803,6 +2878,7 @@ def test_cold_storage_roof_snow_example_freezer_carries_more():
     assert r["freezer_flat_kpa"] > r["heated_flat_kpa"]
     # ...and the pitch sheds part of the freezer load back off.
     assert r["freezer_sloped_kpa"] < r["freezer_flat_kpa"]
+    _assert_narrates_computed("cold_storage_roof_snow.py", namespace)
 
 
 def test_floor_beam_vibration_governs_capstone():
@@ -2818,6 +2894,7 @@ def test_floor_beam_vibration_governs_capstone():
     assert vibration.status is CheckStatus.FAIL
     assert "safety factor 0.47" in vibration.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("floor_beam_vibration_governs.py", namespace)
 
 
 def test_office_floor_vibration_example_springy_bay_fails():
@@ -2902,6 +2979,7 @@ def test_seismic_p_delta_stability_example_soft_story_amplifies():
     # The soft story is still under the stability ceiling (stable, but must be amplified).
     assert 0.10 <= s["soft_theta"] < s["theta_max"]
     assert s["theta_max"] == pytest.approx(0.125, rel=1e-6)
+    _assert_narrates_computed("seismic_p_delta_stability.py", namespace)
 
 
 def test_seismic_elf_design_capstone_drift_governs():
@@ -3142,6 +3220,7 @@ def test_turbine_blade_creep_example_shows_temperature_sensitivity():
         summary["design_life_hours"],
         summary["excursion_life_hours"],
     )
+    _assert_narrates_computed("turbine_blade_creep_life.py", namespace)
 
 
 def test_pipe_expansion_loop_example_shows_the_sif_governs():
@@ -3162,6 +3241,7 @@ def test_spur_gear_agma_example_is_governed_by_pitting():
     assert utils["pitting"] > utils["bending"]
     assert utils["bending"] < 1.0 and utils["pitting"] < 1.0
     assert utils["pitting"] == pytest.approx(0.69, abs=0.03)
+    _assert_narrates_computed("spur_gear_agma_check.py", namespace)
 
 
 def test_plate_girder_design_example_shows_web_penalty_and_shear_reserve():
@@ -3175,6 +3255,7 @@ def test_plate_girder_design_example_shows_web_penalty_and_shear_reserve():
     stiffened = caps["stiffened_shear"].to("kN").magnitude
     unstiffened = caps["unstiffened_shear"].to("kN").magnitude
     assert stiffened > 1.5 * unstiffened
+    _assert_narrates_computed("plate_girder_design.py", namespace)
 
 
 def test_bolted_tension_splice_example_is_governed_by_block_shear():
@@ -3212,6 +3293,7 @@ def test_machine_on_floor_beam_example_recovers_margin_from_the_real_position():
     by_name = {e.name: e for e in card.entries}
     assert not by_name["assumed mid-span bending"].passed
     assert by_name["actual position bending"].passed
+    _assert_narrates_computed("machine_on_floor_beam.py", namespace)
 
 
 def test_jib_boom_example_recovers_margin_from_the_end_stop():
@@ -3224,6 +3306,7 @@ def test_jib_boom_example_recovers_margin_from_the_end_stop():
     by_name = {e.name: e for e in card.entries}
     assert not by_name["assumed at tip bending"].passed
     assert by_name["at end stop bending"].passed
+    _assert_narrates_computed("jib_boom_trolley.py", namespace)
 
 
 def test_press_on_clamped_beam_example_shows_mid_span_is_unconservative():
@@ -3236,6 +3319,7 @@ def test_press_on_clamped_beam_example_shows_mid_span_is_unconservative():
     by_name = {e.name: e for e in card.entries}
     assert by_name["assumed mid-span bending"].passed
     assert not by_name["at third point bending"].passed
+    _assert_narrates_computed("press_on_clamped_beam.py", namespace)
 
 
 def test_walkway_beam_example_recovers_deflection_margin_from_end_fixity():
@@ -3292,6 +3376,7 @@ def test_monorail_trolley_example_fails_only_at_the_true_worst_spot():
     assert by_name["trolley at quarter point bending"].passed
     assert by_name["trolley at mid-span bending"].passed
     assert not by_name["trolley at worst spot bending"].passed
+    _assert_narrates_computed("monorail_trolley_sweep.py", namespace)
 
 
 def test_clip_angle_example_fails_only_the_relocated_tearout():
@@ -3305,6 +3390,7 @@ def test_clip_angle_example_fails_only_the_relocated_tearout():
     assert by_name["relocated bolt shear"].passed
     assert by_name["relocated plate bearing"].passed
     assert not by_name["relocated edge tear-out"].passed
+    _assert_narrates_computed("clip_angle_edge_tearout.py", namespace)
 
 
 def test_hanger_bracket_example_fails_only_the_combined_interaction():
@@ -3628,6 +3714,7 @@ def test_pump_beam_example_fails_only_the_modal_dimension():
     assert by_name["pump beam resonance"].status is CheckStatus.FAIL
     assert "fundamental 23.9 Hz" in by_name["pump beam resonance"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("pump_mezzanine_beam.py", namespace)
 
 
 def test_fan_deck_example_rescues_resonance_with_end_fixity():
@@ -3657,6 +3744,7 @@ def test_retaining_wall_example_catches_the_unconservative_shortcut():
     assert by_name["resultant-at-centroid deflection"].passed
     assert by_name["soldier post deflection"].status is CheckStatus.FAIL
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("retaining_wall_post.py", namespace)
 
 
 def test_plenum_panel_example_hears_the_blower_only_through_the_modal_screen():
@@ -3849,6 +3937,7 @@ def test_geared_shaft_example_fails_on_combined_loading():
     # The combined sizing inverse names the ~31.3 mm floor between them.
     floor = namespace["combined_diameter_floor"]()
     assert floor.to("mm").magnitude == pytest.approx(31.30, rel=1e-3)
+    _assert_narrates_computed("geared_shaft_sizing.py", namespace)
 
 
 def test_tapped_hole_engagement_example_strips_the_soft_threads():
@@ -3926,6 +4015,7 @@ def test_drive_shaft_sizing_example_fails_when_sized_on_the_mean_torque():
     assert design.passed
     assert "safety factor 2.32" in design.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("drive_shaft_sizing.py", namespace)
 
 
 def test_lineshaft_critical_speed_example_resonates_only_when_combined():
@@ -4067,6 +4157,7 @@ def test_crane_hook_example_fails_the_straight_beam_screen_honestly():
     deeper = by_name["bore, Winkler curved-beam (h=60)"]
     assert deeper.passed
     assert "safety factor 2.14" in deeper.detail
+    _assert_narrates_computed("crane_hook_shank.py", namespace)
 
 
 def test_fixture_clamp_example_rides_the_belleville_plateau():
@@ -4130,6 +4221,7 @@ def test_worm_hoist_example_must_self_lock_before_it_is_efficient():
     assert "efficiency 69%" in triple.detail
     # A hoist that only self-locks one way overall fails the safe-hold screen.
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("worm_hoist_selflock.py", namespace)
 
 
 def test_conveyor_chain_example_rejects_the_rough_small_sprocket():
@@ -4147,6 +4239,7 @@ def test_conveyor_chain_example_rejects_the_rough_small_sprocket():
     assert "safety factor 1.17" in good.detail
     # A drive that offers a failing sprocket overall fails.
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("conveyor_chain_drive.py", namespace)
 
 
 def test_highspeed_cam_example_is_a_speed_squared_problem():
@@ -4167,6 +4260,7 @@ def test_highspeed_cam_example_is_a_speed_squared_problem():
     assert cyc.status is CheckStatus.FAIL
     assert "safety factor 0.65" in cyc.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("highspeed_cam_follower.py", namespace)
 
 
 def test_engine_shaking_force_example_turns_on_the_rod_ratio():
@@ -4185,6 +4279,7 @@ def test_engine_shaking_force_example_turns_on_the_rod_ratio():
     assert "safety factor 1.06" in long.detail
     # One failing option makes the overall screen fail.
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("engine_shaking_force.py", namespace)
 
 
 def test_fourbar_linkage_example_needs_a_healthy_transmission_angle():
@@ -4201,6 +4296,7 @@ def test_fourbar_linkage_example_needs_a_healthy_transmission_angle():
     assert good.passed
     assert "safety factor 1.07" in good.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("fourbar_linkage_design.py", namespace)
 
 
 def test_multistage_reducer_example_sizes_on_delivered_torque():
@@ -4216,6 +4312,7 @@ def test_multistage_reducer_example_sizes_on_delivered_torque():
     assert real.status is CheckStatus.FAIL
     assert "safety factor 0.97" in real.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("multistage_reducer_efficiency.py", namespace)
 
 
 def test_spanning_cable_example_has_no_tension_that_passes_both():
@@ -4318,6 +4415,7 @@ def test_cable_resonance_example_tunes_off_the_forcing():
     assert "safety factor 1.32" in high.detail
     # With a resonant option present, the overall screen fails.
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("cable_resonance_tuning.py", namespace)
 
 
 def test_imperfect_column_example_fails_where_euler_passes():
@@ -4333,6 +4431,7 @@ def test_imperfect_column_example_fails_where_euler_passes():
     assert real.status is CheckStatus.FAIL
     assert "safety factor 0.87" in real.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("imperfect_column_capacity.py", namespace)
 
 
 def test_glass_thermal_shock_example_favors_low_expansion():
@@ -4348,6 +4447,7 @@ def test_glass_thermal_shock_example_favors_low_expansion():
     assert boro.passed
     assert "safety factor 1.26" in boro.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("glass_thermal_shock.py", namespace)
 
 
 def test_machine_isolation_example_needs_a_soft_mount():
@@ -4400,6 +4500,7 @@ def test_spring_buckling_example_folds_the_tall_spring():
     assert tall.status is CheckStatus.FAIL
     assert "safety factor 0.92" in tall.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("spring_buckling_freelength.py", namespace)
 
 
 def test_bevel_gear_thrust_example_loads_the_gear_shaft_harder():
@@ -4416,6 +4517,7 @@ def test_bevel_gear_thrust_example_loads_the_gear_shaft_harder():
     assert gear.status is CheckStatus.FAIL
     assert "safety factor 0.92" in gear.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("bevel_gear_thrust.py", namespace)
 
 
 def test_indexing_table_example_runs_out_of_dwell():
@@ -4466,6 +4568,7 @@ def test_bolted_cover_flange_example_counts_bolts_for_the_end_force():
     assert "safety factor 2.59" in six.detail
     assert by_name["8 bolts"].passed
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("bolted_cover_flange.py", namespace)
 
 
 def test_flywheel_speed_limits_example_whirls_though_it_holds():
@@ -4483,6 +4586,7 @@ def test_flywheel_speed_limits_example_whirls_though_it_holds():
     assert whirl.status is CheckStatus.FAIL
     assert "safety factor 0.86" in whirl.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("flywheel_speed_limits.py", namespace)
 
 
 def test_fatigue_link_example_passes_static_but_fails_fatigue():
@@ -4498,6 +4602,7 @@ def test_fatigue_link_example_passes_static_but_fails_fatigue():
     assert fatigue.status is CheckStatus.FAIL
     assert "safety factor 0.84" in fatigue.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("fatigue_link_stress_riser.py", namespace)
 
 
 def test_crack_growth_inspection_interval_example_fails_at_heavy_duty():
@@ -4529,6 +4634,7 @@ def test_crane_rail_on_foundation_example_the_soft_pad_fails():
     assert soft.status is CheckStatus.FAIL
     assert "safety factor 1.26" in soft.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("crane_rail_on_foundation.py", namespace)
 
 
 def test_section_shape_factor_example_ranks_reserve_by_shape():
@@ -4546,6 +4652,7 @@ def test_section_shape_factor_example_ranks_reserve_by_shape():
     assert i_beam.status is CheckStatus.FAIL
     assert "safety factor 1.17" in i_beam.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("section_shape_factor.py", namespace)
 
 
 def test_plastic_collapse_reserve_example_elastic_fails_plastic_passes():
@@ -4563,6 +4670,7 @@ def test_plastic_collapse_reserve_example_elastic_fails_plastic_passes():
     assert "safety factor 2.50" in plastic.detail
     # The overall card is FAIL because the elastic entry fails (No silent green).
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("plastic_collapse_reserve.py", namespace)
 
 
 def test_support_beam_resonance_example_beam_mass_moves_it_onto_the_peak():
@@ -4579,6 +4687,7 @@ def test_support_beam_resonance_example_beam_mass_moves_it_onto_the_peak():
     assert included.status is CheckStatus.FAIL
     assert "safety factor 0.99" in included.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("support_beam_resonance.py", namespace)
 
 
 def test_fatigue_criteria_compared_example_three_verdicts():
@@ -4595,6 +4704,7 @@ def test_fatigue_criteria_compared_example_three_verdicts():
     assert "safety factor 1.70" in by_name["Gerber (parabola)"].detail
     # No-silent-green: any failing entry makes the whole card FAIL.
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("fatigue_criteria_compared.py", namespace)
 
 
 def test_flywheel_bore_stress_example_the_shaft_hole_doubles_the_stress():
@@ -4610,6 +4720,7 @@ def test_flywheel_bore_stress_example_the_shaft_hole_doubles_the_stress():
     assert bored.status is CheckStatus.FAIL
     assert "safety factor 1.12" in bored.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("flywheel_bore_stress.py", namespace)
 
 
 def test_bearing_reliability_life_example_higher_reliability_costs_life():
@@ -4650,6 +4761,7 @@ def test_steam_pipe_thermal_gradient_example_thermal_governs_not_pressure():
     assert thermal.status is CheckStatus.FAIL
     assert "safety factor 0.97" in thermal.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("steam_pipe_thermal_gradient.py", namespace)
 
 
 def test_bimetal_thermostat_blade_example_length_is_the_lever():
@@ -4733,6 +4845,7 @@ def test_bracket_bolt_group_eccentric_example_direct_shear_underestimates():
     assert by_name["true peak (eccentric)"].status is CheckStatus.FAIL
     assert "safety factor 0.90" in by_name["true peak (eccentric)"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("bracket_bolt_group_eccentric.py", namespace)
 
 
 def test_rotor_unbalance_response_example_resonance_amplifies_the_shake():
@@ -4774,6 +4887,7 @@ def test_thin_tube_shell_buckling_example_shell_governs_not_column():
     assert by_name["shell (local wall) buckling"].status is CheckStatus.FAIL
     assert "safety factor 0.91" in by_name["shell (local wall) buckling"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("thin_tube_shell_buckling.py", namespace)
 
 
 def test_gear_nonstandard_center_example_operating_angle_caps_the_stretch():
@@ -4800,6 +4914,7 @@ def test_bracket_weld_group_eccentric_example_direct_shear_underestimates():
     assert by_name["true peak (eccentric)"].status is CheckStatus.FAIL
     assert "safety factor 0.90" in by_name["true peak (eccentric)"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("bracket_weld_group_eccentric.py", namespace)
 
 
 def test_shaft_bearing_misalignment_example_slope_governs():
@@ -4832,6 +4947,7 @@ def test_sheet_metal_bend_radius_example_ductility_governs():
     flat = namespace["flat_blank_length"]().to("mm").magnitude
     assert flat == pytest.approx(104.52, abs=0.01)
     assert flat > 100.0  # the naive 40+60 flange sum would misplace every downstream hole
+    _assert_narrates_computed("sheet_metal_bend_radius.py", namespace)
 
 
 def test_snap_fit_latch_example_strain_governs_not_force():
@@ -4871,6 +4987,7 @@ def test_o_ring_gland_fill_example_width_and_depth_are_independent():
     assert "safety factor 1.21" in wide_by_name["gland fill vs 90% ceiling"].detail
     assert wide_by_name["squeeze vs 15% floor"].detail == by_name["squeeze vs 15% floor"].detail
     assert wide.status is CheckStatus.PASS
+    _assert_narrates_computed("o_ring_gland_fill.py", namespace)
 
 
 def test_sling_angle_overload_example_capacity_is_an_angle_problem():
@@ -4901,6 +5018,7 @@ def test_gasket_flange_leak_example_tightness_governs():
     assert by_name["stay tight under pressure"].status is CheckStatus.FAIL
     assert "safety factor 0.85" in by_name["stay tight under pressure"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_computed("gasket_flange_leak.py", namespace)
 
 
 def test_pump_station_electromechanical_capstone_feeder_governs():
@@ -4921,6 +5039,7 @@ def test_pump_station_electromechanical_capstone_feeder_governs():
     assert card.status is CheckStatus.FAIL
     # The feeder is the single binding constraint -- every other check passes.
     assert sum(1 for e in card.entries if not e.passed) == 1
+    _assert_narrates_computed("pump_station_electromechanical.py", namespace)
 
 
 def test_hydraulic_cylinder_cap_capstone_seal_governs():
@@ -4955,6 +5074,7 @@ def test_isolator_mount_selection_example_softer_is_better():
     assert soft.entries[0].passed
     assert "safety factor 1.01" in soft.entries[0].detail
     assert soft.status is CheckStatus.PASS
+    _assert_narrates_computed("isolator_mount_selection.py", namespace)
 
 
 def test_living_hinge_flip_cap_example_lengthening_fixes_it():
@@ -4984,6 +5104,7 @@ def test_flip_top_closure_capstone_hinge_governs():
         card.entries, key=lambda e: float(e.detail.split("safety factor ")[1].split(" ")[0])
     )
     assert tightest.name == "hinge fold strain"
+    _assert_narrates_computed("flip_top_closure.py", namespace)
 
 
 def test_v_belt_drive_capstone_traction_governs():
@@ -5005,6 +5126,7 @@ def test_v_belt_drive_capstone_traction_governs():
     assert two_by_name["belt grip (slip)"].passed
     assert "safety factor 1.65" in two_by_name["belt grip (slip)"].detail
     assert two.status is CheckStatus.PASS
+    _assert_narrates_computed("v_belt_drive.py", namespace)
 
 
 def test_spreader_beam_buckling_capstone_column_governs():
@@ -5024,6 +5146,7 @@ def test_spreader_beam_buckling_capstone_column_governs():
     assert stubby_by_name["spreader column buckling"].passed
     assert "safety factor 1.80" in stubby_by_name["spreader column buckling"].detail
     assert stubby.status is CheckStatus.PASS
+    _assert_narrates_computed("spreader_beam_buckling.py", namespace)
 
 
 def test_press_fit_gear_capstone_grip_governs():
@@ -5045,6 +5168,7 @@ def test_press_fit_gear_capstone_grip_governs():
     assert longer_by_name["fit grip (slip) vs required torque"].passed
     assert "safety factor 1.40" in longer_by_name["fit grip (slip) vs required torque"].detail
     assert longer.status is CheckStatus.PASS
+    _assert_narrates_computed("press_fit_gear.py", namespace)
 
 
 def test_rotating_shaft_fatigue_capstone_fatigue_governs():
@@ -5065,6 +5189,7 @@ def test_rotating_shaft_fatigue_capstone_fatigue_governs():
         by_name["fatigue (Goodman, fully reversed)"].detail.split("safety factor ")[1].split(" ")[0]
     )
     assert fatigue_sf < static_sf / 2
+    _assert_narrates_computed("rotating_shaft_fatigue.py", namespace)
 
 
 def test_thermal_clearance_seizure_example_thermal_closure_governs():
@@ -5132,6 +5257,7 @@ def test_overhung_fan_resonance_capstone_critical_speed_governs():
     assert stiffer_by_name["critical-speed separation"].passed
     assert "safety factor 1.71" in stiffer_by_name["critical-speed separation"].detail
     assert stiffer.status is CheckStatus.PASS
+    _assert_narrates_computed("overhung_fan_resonance.py", namespace)
 
 
 def test_single_cylinder_flywheel_example_sizes_from_energy_fluctuation():
@@ -5215,6 +5341,7 @@ def test_retaining_compound_hub_example_bond_beats_friction():
     bonded = namespace["screen_bonded_hub"]()
     assert bonded.status is CheckStatus.PASS
     assert "safety factor 1.57" in bonded.entries[0].detail
+    _assert_narrates_computed("retaining_compound_hub.py", namespace)
 
 
 def test_workshop_hoist_system_capstone_full_drum_governs():
@@ -5338,6 +5465,7 @@ def test_hydraulic_rod_buckling_capstone_rod_governs():
     assert stout_by_name["rod column buckling at full stroke"].passed
     assert "safety factor 1.41" in stout_by_name["rod column buckling at full stroke"].detail
     assert stout.status is CheckStatus.PASS
+    _assert_narrates_computed("hydraulic_rod_buckling.py", namespace)
 
 
 def test_hydraulic_meter_out_intensification_example_rod_ratio_governs():
@@ -5376,6 +5504,7 @@ def test_gear_pair_layout_example_undercut_governs_the_pinion():
     assert fine.entries[0].passed
     assert "safety factor 1.11" in fine.entries[0].detail
     assert fine.status is CheckStatus.PASS
+    _assert_narrates_computed("gear_pair_layout.py", namespace)
 
 
 def test_key_vs_spline_example_spline_shares_what_a_key_concentrates():
@@ -5400,6 +5529,7 @@ def test_multi_plate_clutch_example_stacks_surfaces_not_spring_force():
     stacked = namespace["screen_stacked_clutch"]()
     assert stacked.status is CheckStatus.PASS
     assert "safety factor 1.60" in stacked.entries[0].detail
+    _assert_narrates_computed("multi_plate_clutch_stack.py", namespace)
 
 
 def test_flange_coupling_example_adds_bolts_not_diameter():
@@ -5429,6 +5559,7 @@ def test_hoist_hook_example_static_pass_fails_on_impact():
     snatch = namespace["screen_snatch_drop"]()
     assert snatch.status is CheckStatus.FAIL
     assert "safety factor 0.58" in snatch.entries[0].detail
+    _assert_narrates_computed("hoist_hook_sudden_load.py", namespace)
 
 
 def test_journal_bearing_example_finish_decides_the_regime():
@@ -5576,6 +5707,7 @@ def test_timber_post_slenderness_example_shows_the_stability_factor_collapse():
     assert namespace["stability_factor"](Quantity.parse("12 ft")) == pytest.approx(0.20, abs=0.01)
     # Past the NDS 3.7.1.4 cap the screen refuses rather than quoting a plausible number.
     assert "exceeds the NDS 3.7.1.4 limit of 50" in namespace["refuse_over_slender_post"]()
+    _assert_narrates_computed("timber_post_slenderness.py", namespace)
 
 
 def test_process_pipe_schedule_example_rates_the_available_wall():
@@ -5665,6 +5797,7 @@ def test_braced_frame_column_seismic_example_tension_reversal_governs():
     assert tension.safety_factor == pytest.approx(220.0 / 192.0, rel=1e-6)
     assert "LRFD 7 (-E)" in tension.detail
     assert card.governing().name == "base connection tension (seismic reversal)"
+    _assert_narrates_computed("braced_frame_column_seismic.py", namespace)
 
 
 def test_canopy_beam_load_combinations_example_uplift_is_hidden():
@@ -5694,6 +5827,7 @@ def test_bracket_load_scatter_fragility_example_flags_a_nominal_pass():
     # The load is the input to pin down first, by a wide margin.
     assert result.dominant().name == "load"
     assert result.dominant().variance_share > 0.8
+    _assert_narrates_computed("bracket_load_scatter_fragility.py", namespace)
 
 
 def test_base_plate_revision_governing_shift_moves_the_governing_check():
@@ -5715,6 +5849,7 @@ def test_base_plate_revision_governing_shift_moves_the_governing_check():
     assert shift is not None
     assert shift.previous == "col_base plate bending"
     assert shift.current == "col_base concrete bearing"
+    _assert_narrates_computed("base_plate_revision_governing_shift.py", namespace)
 
 
 def test_sheave_repair_from_inverse_example_repairs_in_one_solve():
@@ -5748,6 +5883,7 @@ def test_sheave_repair_from_inverse_example_repairs_in_one_solve():
     assert "safety factor 1.50" in repaired_bending.detail
     assert after.status is CheckStatus.OVER_MARGIN  # only the over-heavy rope remains
     assert after.passed
+    _assert_narrates_computed("sheave_repair_from_inverse.py", namespace)
 
 
 def test_base_to_final_turn_example_bank_governs_the_stall():
@@ -5784,6 +5920,7 @@ def test_laser_cutter_beam_expander_example_widening_tightens_focus():
     expanded = namespace["screen_expanded_beam"]()
     assert expanded.entries[0].passed
     assert expanded.status is CheckStatus.PASS
+    _assert_narrates_computed("laser_cutter_beam_expander.py", namespace)
 
 
 def test_control_valve_sizing_example_undersized_valve_fails():
@@ -5832,6 +5969,7 @@ def test_trawler_hull_speed_example_short_hull_falls_short():
     long_hull = namespace["screen_long_hull"]()
     assert long_hull.entries[0].passed
     assert long_hull.status is CheckStatus.PASS
+    _assert_narrates_computed("trawler_hull_speed.py", namespace)
 
 
 def test_ultrasonic_flaw_standoff_example_large_probe_buries_flaw():
@@ -5844,6 +5982,7 @@ def test_ultrasonic_flaw_standoff_example_large_probe_buries_flaw():
     small = namespace["screen_small_probe"]()
     assert small.entries[0].passed
     assert small.status is CheckStatus.PASS
+    _assert_narrates_computed("ultrasonic_flaw_standoff.py", namespace)
 
 
 def test_isolator_amplifies_example_flips_between_vibration_and_shock():
@@ -5953,6 +6092,7 @@ def test_welded_aluminum_platform_beam_example_is_governed_by_the_weld():
         (welded, re.search(r"welded at the connection\s+fail\s+SF ([\d.]+)", page).group(1)),
     ):
         assert entry.safety_factor == pytest.approx(float(claimed), abs=0.005)
+    _assert_narrates_computed("welded_aluminum_platform_beam.py", namespace)
 
 
 def test_vessel_surface_flaw_fad_example_is_a_screening_margin_not_a_disposition():
