@@ -557,3 +557,74 @@ def test_the_two_shear_constants_the_adapter_docstring_names_are_the_real_ones()
     timoshenko_inverse = 1.0 / (5.0 / 6.0)
     assert timoshenko_inverse == pytest.approx(1.2)
     assert timoshenko_inverse / SHEAR_FORM_RECTANGULAR == pytest.approx(0.80)
+
+
+def test_the_adapter_reads_a_real_pycufsm_signature_curve():
+    """The pyCUFSM half of the interop layer, against the package itself.
+
+    Every other test here builds the load factors by hand, which proves the adapter's
+    arithmetic and nothing about the shape pyCUFSM actually returns. This runs the
+    package's own bundled example — a lipped Cee in compression — reads the two signature
+    minima and the long-column tail off the returned curve, and hands those to the
+    adapter, so the *reading* is exercised too: which array is the half-wavelength, which
+    is the load factor, and that a factor is dimensionless and needs a reference load.
+
+    Opt-in, because pyCUFSM is not a runtime dependency. Skipped when absent — an
+    unrunnable check is reported as not run, never as a pass — and CI installs it and
+    runs this by name.
+    """
+    pytest.importorskip("pycufsm")
+    import numpy as np
+    from pycufsm.examples import example_1
+
+    curve = example_1.__main__()
+    half_wavelengths = np.asarray(curve["X_values"], dtype=float)
+    factors = np.asarray(curve["Y_values"], dtype=float)
+    assert half_wavelengths.shape == factors.shape
+
+    # The signature curve's interior minima, in the order the package returns them.
+    minima = [
+        index
+        for index in range(1, len(factors) - 1)
+        if factors[index] < factors[index - 1] and factors[index] < factors[index + 1]
+    ]
+    assert len(minima) == 2, (
+        "the bundled Cee is meant to show a local and a distortional minimum; "
+        f"this curve has {len(minima)}"
+    )
+    local, distortional = minima
+    assert half_wavelengths[local] < half_wavelengths[distortional]
+
+    reference = _q("100 kip")
+    buckling = from_pycufsm(
+        reference_load=reference,
+        local_factor=float(factors[local]),
+        distortional_factor=float(factors[distortional]),
+        # The long-column end of the curve: the column mode this run reaches.
+        global_factor=float(factors[-1]),
+        identification=ModeIdentification.SIGNATURE_MINIMUM,
+        local_half_wavelength=_q(f"{half_wavelengths[local]} in"),
+        distortional_half_wavelength=_q(f"{half_wavelengths[distortional]} in"),
+    )
+    for factor, load in (
+        (factors[local], buckling.local),
+        (factors[distortional], buckling.distortional),
+        (factors[-1], buckling.global_),
+    ):
+        assert load is not None
+        assert load.to("kip").magnitude == pytest.approx(
+            float(factor) * reference.to("kip").magnitude, rel=1e-9
+        )
+
+    # And the invariant fires on real data, not only on hand-made numbers: swapping the
+    # two readings is the mistake the half-wavelengths exist to catch.
+    with pytest.raises(ValueError, match="the wrong way round"):
+        from_pycufsm(
+            reference_load=reference,
+            local_factor=float(factors[distortional]),
+            distortional_factor=float(factors[local]),
+            global_factor=float(factors[-1]),
+            identification=ModeIdentification.SIGNATURE_MINIMUM,
+            local_half_wavelength=_q(f"{half_wavelengths[distortional]} in"),
+            distortional_half_wavelength=_q(f"{half_wavelengths[local]} in"),
+        )

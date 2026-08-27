@@ -88,7 +88,7 @@ def _manifest() -> set[str]:
 # `lxml.etree` is listed beside `lxml` because that is the name a test imports.
 # `tests/test_contract.py` holds this set against what the workflow's scheduled jobs
 # actually install, so it cannot quietly grow an entry no job backs.
-_SCHEDULED_ONLY_IMPORTS = frozenset({"lxml", "lxml.etree", "sectionproperties"})
+_SCHEDULED_ONLY_IMPORTS = frozenset({"lxml", "lxml.etree", "sectionproperties", "pycufsm"})
 
 _import_skips: set[str] = set()
 

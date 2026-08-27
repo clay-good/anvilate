@@ -1642,7 +1642,12 @@ def test_the_ci_skip_gate_allows_exactly_what_the_scheduled_jobs_install():
         if "github.event_name == 'schedule'" not in job:
             continue
         for install in re.findall(r'pip install -e "\.\[dev\]"([^\n]*)', job):
-            scheduled.update(install.split())
+            for token in install.split():
+                requirement = token.strip('"')
+                # A version pin ("numpy<2") constrains a package something else already
+                # pulls in; it adds no import a test could skip on.
+                if not any(char in requirement for char in "<>=!~"):
+                    scheduled.add(requirement)
     assert scheduled, "no scheduled job installs an extra package any more"
 
     aliases = {"lxml": {"lxml", "lxml.etree"}}

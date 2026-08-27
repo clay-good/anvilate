@@ -100,7 +100,10 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install
-        run: pip install -e ".[dev]" sectionproperties
+        # pyCUFSM 0.2.0's Cython solver passes arrays where NumPy 2 wants scalars, and
+        # its own bundled example raises on the way through; pinning below 2 is what
+        # makes the package runnable at all. When it ships a NumPy 2 build, drop the pin.
+        run: pip install -e ".[dev]" sectionproperties pycufsm "numpy<2"
       - name: Read a real meshed section through the adapter
         run: |
           set -o pipefail
@@ -112,5 +115,16 @@ jobs:
           grep -qE "^1 passed" result.txt
           if grep -q skipped result.txt; then
             echo "sectionproperties did not import; the adapter was not exercised"
+            exit 1
+          fi
+      - name: Read a real pyCUFSM signature curve through the adapter
+        run: |
+          set -o pipefail
+          pytest -rs \
+            "tests/test_interop.py::test_the_adapter_reads_a_real_pycufsm_signature_curve" \
+            | tee cufsm.txt
+          grep -qE "^1 passed" cufsm.txt
+          if grep -q skipped cufsm.txt; then
+            echo "pyCUFSM did not import; the adapter was not exercised"
             exit 1
           fi
