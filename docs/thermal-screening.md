@@ -78,7 +78,8 @@ pick = isolator_selection_scorecard(
     "pump mounts", forcing_frequency=Quantity.parse("24.17 Hz"),
     target_transmissibility=0.10, selected_static_deflection=Quantity.parse("0.5 mm"),
 )
-# [FAIL] the mount AMPLIFIES (f/f_n = 1.08 < √2, TR = 5.69) — it is not an isolator here
+# [FAIL] selected 0.5 mm against 4.7 mm required (f_n 22.3 Hz), the mount AMPLIFIES
+#        (f/f_n = 1.08 < √2, TR = 5.69) — it is not an isolator at this speed
 ```
 
 - **`isolator_selection_scorecard`** screens the mount you actually picked, by its rated
@@ -100,7 +101,7 @@ The shock spectrum is not monotonic in mount stiffness:
 
 | τ/T | Regime | Amplification | Softening the mount… |
 | --- | --- | --- | --- |
-| 0.04 | impulsive | 0.15 | …is already working; a 30 g pulse arrives as 4.6 g |
+| 0.04 | impulsive | 0.16 | …is already working; a 30 g pulse arrives as 4.8 g |
 | 0.80 | amplifying | **1.77** (at the peak) | …helps; stiffening makes it worse |
 | 3.3 | quasi-static | 1.17 | …makes it *worse* until you clear the peak |
 

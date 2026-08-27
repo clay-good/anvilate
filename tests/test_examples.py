@@ -5692,6 +5692,42 @@ def test_isolator_amplifies_example_flips_between_vibration_and_shock():
     )
 
 
+def test_the_isolator_examples_docstring_numbers_are_its_own_spectrum():
+    """The three mounts the docstring narrates: its ratio, its amplification, its g.
+
+    The statuses the test above asserts are true of a great many triples. These are the
+    numbers the example argues from — that the same softening helps on one side of the
+    spectrum's peak and hurts on the other — and each is derived here from the mount
+    frequency the sentence names rather than from the ratio it rounds to.
+    """
+    from anvilate.analysis import half_sine_shock_amplification
+
+    source = (_EXAMPLES / "isolator_amplifies_at_running_speed.py").read_text()
+    docstring = source.split('"""')[1]
+    pulse = Quantity.parse("11 ms")
+    clauses = [part for part in docstring.split("\n- ") if "τ/T = " in part]
+    assert len(clauses) == 3, "the shock narrative in the example's docstring has moved"
+
+    for clause in clauses:
+        stated = re.search(r"(\d+(?:\.\d+)?) Hz\D+τ/T = ([\d.]+)", clause)
+        assert stated is not None, f"a mount clause no longer names its frequency: {clause!r}"
+        frequency = Quantity(magnitude=float(stated.group(1)), unit="Hz")
+        # The ratio is τ·f_n, and the docstring rounds it to the digits it prints.
+        digits = len(stated.group(2).split(".")[1])
+        ratio = pulse.to("s").magnitude * frequency.magnitude
+        assert round(ratio, digits) == pytest.approx(float(stated.group(2)), abs=1e-12)
+
+        amplification = half_sine_shock_amplification(
+            pulse_duration=pulse, natural_frequency=frequency
+        )
+        claimed = re.search(r"amplification(?: is)? (\d+\.\d+)", clause)
+        if claimed is not None:
+            assert amplification == pytest.approx(float(claimed.group(1)), abs=5e-3)
+        arrives = re.search(r"(?:it |30 g drop )?arrives\s+as ([\d.]+) g", clause)
+        assert arrives is not None, f"a mount clause no longer says what arrives: {clause!r}"
+        assert 30.0 * amplification == pytest.approx(float(arrives.group(1)), abs=0.5)
+
+
 def test_lipped_channel_dsm_example_shifts_its_governing_mode_with_length():
     namespace = runpy.run_path(str(_EXAMPLES / "lipped_channel_dsm.py"))
     card = namespace["screen_column_lengths"]()

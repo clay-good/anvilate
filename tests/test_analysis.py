@@ -42753,3 +42753,83 @@ def test_the_process_piping_pages_numbers_are_the_librarys_own():
         (anchor.group(7), reinforcement.branch_excess),
     ):
         assert area.to("in**2").magnitude == pytest.approx(float(claimed), abs=5e-5)
+
+
+def test_the_thermal_pages_isolation_numbers_are_the_screens_own():
+    """`docs/thermal-screening.md` prints a scorecard line and a three-row shock table.
+
+    The table is the page's argument — that the shock spectrum is not monotonic in mount
+    stiffness, so "softer" is the right move on one side of the peak and the wrong one on
+    the other — and every figure in it was prose. Two were wrong: the impulsive row read
+    0.15 where the spectrum gives 0.1598, and the 30 g pulse it passes arrives at 4.8 g,
+    not 4.6.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.analysis import (
+        flat_plate_forced_convection_coefficient,
+        half_sine_shock_amplification,
+        half_sine_shock_regime,
+        isolator_selection_scorecard,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "thermal-screening.md").read_text()
+
+    # The scorecard line, byte for byte against the entry the block above it builds.
+    quoted = re.search(r"# \[FAIL\] (.+)\n#\s+(.+)\n```", page)
+    assert quoted is not None, "the isolator output in docs/thermal-screening.md has moved"
+    entry = isolator_selection_scorecard(
+        "pump mounts",
+        forcing_frequency=_q("24.17 Hz"),
+        target_transmissibility=0.10,
+        selected_static_deflection=_q("0.5 mm"),
+    )
+    assert entry.status is CheckStatus.FAIL
+    assert entry.detail == f"{quoted.group(1)} {quoted.group(2)}"
+
+    # The shock table, at f_n = 1 Hz so that τ/T is the pulse duration in seconds.
+    rows = re.findall(r"\| ([\d.]+) \| ([a-z-]+) \| \*{0,2}([\d.]+)\*{0,2}[^|]*\|([^|]*)\|", page)
+    assert len(rows) == 3, "the shock-regime table in docs/thermal-screening.md has moved"
+    amplifications = []
+    for ratio, regime, claimed, remark in rows:
+        pulse = {"pulse_duration": _q(f"{ratio} s"), "natural_frequency": _q("1 Hz")}
+        amplification = half_sine_shock_amplification(**pulse)
+        amplifications.append(amplification)
+        assert amplification == pytest.approx(float(claimed), abs=5e-3)
+        assert half_sine_shock_regime(**pulse).value == regime.replace("-", "_")
+        # The impulsive row carries the arithmetic in words: what a 30 g pulse arrives as.
+        arrives = re.search(r"a (\d+) g pulse arrives as ([\d.]+) g", remark)
+        if arrives is not None:
+            assert float(arrives.group(1)) * amplification == pytest.approx(
+                float(arrives.group(2)), abs=5e-2
+            )
+
+    # "Goes up by half" moving from the quasi-static row to the peak, which is the
+    # sentence the whole table exists to support.
+    assert amplifications[1] / amplifications[2] == pytest.approx(1.5, abs=0.05)
+
+    # The laminar limit the page quotes, either side of it.
+    limit = re.search(r"laminar limit \(Re ≈ ([\d.]+)×10⁵\)", page)
+    assert limit is not None, "the page no longer quotes the laminar limit"
+    reynolds = float(limit.group(1)) * 1e5
+    fluid = {
+        "plate_length": _q("1 m"),
+        "thermal_conductivity": _q("0.026 W/(m*K)"),
+        "kinematic_viscosity": _q("1e-5 m**2/s"),
+        "prandtl_number": 0.7,
+    }
+    velocity = reynolds * 1e-5  # V = Re·ν/L
+    assert (
+        flat_plate_forced_convection_coefficient(
+            fluid_velocity=Quantity(magnitude=velocity * 0.99, unit="m/s"), **fluid
+        )
+        is not None
+    )
+    assert (
+        flat_plate_forced_convection_coefficient(
+            fluid_velocity=Quantity(magnitude=velocity * 1.01, unit="m/s"), **fluid
+        )
+        is None
+    )
