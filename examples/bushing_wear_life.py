@@ -5,7 +5,7 @@ it must last an 8,000-hour maintenance interval before the wear opens its cleara
 0.25 mm the machine tolerates. Nothing about this is a strength problem -- the bearing
 pressure is a gentle 1.1 MPa, nowhere near crushing the bronze. It is a *wear* problem, and
 wear answers to Archard's law: the depth worn is K·p·s/H, driven by how far the surfaces
-slide (2,800 km over 8,000 hours here) and, above all, by the wear coefficient K that lumps
+slide (1,885 km over 8,000 hours here) and, above all, by the wear coefficient K that lumps
 in the lubrication.
 
 At a marginal boundary-lubricated K of 1e-7 the bushing reaches its 0.25 mm wear allowance

@@ -137,7 +137,7 @@ def _assert_narrates_rendered(example: str, namespace: dict) -> None:
     for number in _narrated_numbers(example):
         value_ = float(number.replace(",", ""))
         rounding = _rounding_of(number)
-        assert any(abs(value_ - computed) <= rounding for computed in pool.values()), (
+        assert any(abs(value_ - computed) <= rounding * (1 + 1e-9) for computed in pool.values()), (
             f"{example}'s docstring quotes {number} and the example neither computes "
             "nor prints such a value"
         )
@@ -156,7 +156,7 @@ def _assert_narrates_computed(example: str, namespace: dict) -> None:
     for number in _narrated_numbers(example):
         value = float(number.replace(",", ""))
         rounding = _rounding_of(number)
-        assert any(abs(value - computed) <= rounding for computed in pool.values()), (
+        assert any(abs(value - computed) <= rounding * (1 + 1e-9) for computed in pool.values()), (
             f"{example}'s docstring quotes {number} and the example computes no such value "
             f"(it computes {sorted(pool.items())})"
         )
@@ -173,7 +173,7 @@ def _assert_narrates(example: str, *computed: float) -> None:
     for number in _narrated_numbers(example):
         value = float(number.replace(",", ""))
         rounding = _rounding_of(number)
-        matches = [c for c in computed if abs(value - c) <= rounding]
+        matches = [c for c in computed if abs(value - c) <= rounding * (1 + 1e-9)]
         assert matches, f"{example}'s docstring quotes {number} and nothing computes it"
         used.update(matches)
     unused = [c for c in computed if c not in used]
@@ -190,24 +190,17 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "accelerated_life_test.py",
         "antenna_feedline_match.py",
         "base_to_final_turn.py",
-        "batch_reactor_conversion.py",
         "biconvex_lens_design.py",
         "boiling_burnout_margin.py",
         "bolt_tension_thread_area.py",
         "bracket_reviewer_dossier.py",
         "bracket_weld_sizing.py",
         "branch_reinforcement_zone.py",
-        "bushing_wear_life.py",
         "camera_lens_and_resolution.py",
-        "cladding_internal_pressure.py",
         "cold_formed_stud_flange.py",
         "column_base_plate.py",
-        "column_live_load_reduction.py",
         "control_valve_sizing.py",
-        "conveyor_bearing_life.py",
         "coped_beam_web_shear.py",
-        "cover_plate_edge_fixity.py",
-        "crack_growth_inspection_interval.py",
         "davit_sheave_overhang.py",
         "dfm_process_check.py",
         "dock_edge_overhang.py",
@@ -3235,6 +3228,26 @@ def test_column_live_load_reduction_example_cuts_the_demand():
     # The reduction carries through the LRFD combination to a smaller factored demand.
     assert c["lrfd_reduced_kpa"] < c["lrfd_unreduced_kpa"]
 
+    # The two constants of L = L0·(a + b/√(KLL·AT)) the docstring writes out, solved
+    # from the function itself at two influence areas above the threshold and below the
+    # floor — so a changed constant fails here rather than only in the prose.
+    reduce_live = namespace["reduced_live_load"]
+    base = Quantity.parse("2.4 kPa")
+    ratios = [
+        reduce_live(
+            unreduced_live_load=base,
+            live_load_element_factor=1.0,
+            tributary_area=Quantity(magnitude=area, unit="m**2"),
+        )
+        .to("kPa")
+        .magnitude
+        / base.to("kPa").magnitude
+        for area in (50.0, 200.0)
+    ]
+    slope = (ratios[0] - ratios[1]) / (1 / math.sqrt(50.0) - 1 / math.sqrt(200.0))
+    intercept = ratios[1] - slope / math.sqrt(200.0)
+    _assert_narrates("column_live_load_reduction.py", slope, intercept)
+
 
 def test_seismic_load_effect_combination_example_grows_the_demand():
     namespace = runpy.run_path(str(_EXAMPLES / "seismic_load_effect_combination.py"))
@@ -3322,6 +3335,8 @@ def test_cladding_internal_pressure_example_breach_worsens_suction():
     assert s["enclosed_kpa"] == pytest.approx(-2.05, abs=0.01)
     assert s["breached_kpa"] == pytest.approx(-2.54, abs=0.01)
     assert s["breached_kpa"] < s["enclosed_kpa"] < 0
+    # Both net pressures as the docstring quotes them, in magnitude.
+    _assert_narrates("cladding_internal_pressure.py", *(abs(value) for value in s.values()))
 
 
 def test_seismic_cs_period_cap_example_tall_building_capped():
@@ -4202,6 +4217,15 @@ def test_conveyor_bearing_life_example_needs_the_heavy_bearing():
     assert heavy.passed
     assert "safety factor 2.28" in heavy.detail
 
+    # The lives in hours the docstring quotes for the light and medium bearings.
+    _assert_narrates(
+        "conveyor_bearing_life.py",
+        *(
+            namespace["life_hours"](rating).to("hour").magnitude
+            for _designation, rating in namespace["CANDIDATES"][:2]
+        ),
+    )
+
 
 def test_geared_shaft_example_fails_on_combined_loading():
     namespace = runpy.run_path(str(_EXAMPLES / "geared_shaft_sizing.py"))
@@ -4916,6 +4940,14 @@ def test_crack_growth_inspection_interval_example_fails_at_heavy_duty():
     assert "safety factor 0.60" in heavy.detail
     assert card.status is CheckStatus.FAIL
 
+    # The two propagation lives in cycles the docstring quotes: each factor times the
+    # interval-and-margin it is screened against.
+    demand = namespace["INSPECTION_INTERVAL"] * namespace["MARGIN"]
+    _assert_narrates(
+        "crack_growth_inspection_interval.py",
+        *(entry.safety_factor * demand for entry in card.entries),
+    )
+
 
 def test_crane_rail_on_foundation_example_the_soft_pad_fails():
     namespace = runpy.run_path(str(_EXAMPLES / "crane_rail_on_foundation.py"))
@@ -5137,6 +5169,13 @@ def test_cover_plate_edge_fixity_example_clamped_edge_passes():
     assert by_name["clamped edge"].passed
     assert "safety factor 1.47" in by_name["clamped edge"].detail
     assert card.status is CheckStatus.FAIL
+
+    # The two centre deflections in millimetres: each is the limit over its factor.
+    limit = namespace["DEFLECTION_LIMIT"].to("mm").magnitude
+    _assert_narrates(
+        "cover_plate_edge_fixity.py",
+        *(limit / entry.safety_factor for entry in card.entries),
+    )
 
 
 def test_bracket_bolt_group_eccentric_example_direct_shear_underestimates():
@@ -5591,6 +5630,30 @@ def test_bushing_wear_life_example_lubrication_governs():
     assert improved.entries[0].passed
     assert "safety factor 1.49" in improved.entries[0].detail
     assert improved.status is CheckStatus.PASS
+
+    # The three distances the docstring argues from: the sliding the service interval
+    # demands, and the sliding each wear coefficient buys before the allowance is gone.
+    life = namespace["sliding_distance_for_wear_depth"]
+    _assert_narrates(
+        "bushing_wear_life.py",
+        namespace["_required_sliding_distance"]() / 1000.0,
+        marginal.entries[0].safety_factor,
+        improved.entries[0].safety_factor,
+        *(
+            life(
+                wear_coefficient=coefficient,
+                contact_pressure=namespace["_bearing_pressure"](),
+                hardness=namespace["HARDNESS"],
+                allowable_depth=namespace["ALLOWABLE_WEAR"],
+            )
+            .to("km")
+            .magnitude
+            for coefficient in (
+                namespace["MARGINAL_WEAR_COEFFICIENT"],
+                namespace["IMPROVED_WEAR_COEFFICIENT"],
+            )
+        ),
+    )
 
 
 def test_servo_duty_cycle_thermal_example_rms_governs():
@@ -6251,6 +6314,15 @@ def test_batch_reactor_conversion_example_slow_batch_misses_spec():
     hot = namespace["screen_hot_batch"]()
     assert hot.entries[0].passed
     assert hot.status is CheckStatus.PASS
+
+    # The unconverted fraction the docstring's arithmetic runs on, and the hot batch's
+    # margin — neither is written in the code.
+    _assert_narrates(
+        "batch_reactor_conversion.py",
+        1.0 - namespace["TARGET_CONVERSION"],
+        slow.entries[0].safety_factor,
+        hot.entries[0].safety_factor,
+    )
 
 
 def test_double_slit_wavelength_bench_example_short_bench_fails():

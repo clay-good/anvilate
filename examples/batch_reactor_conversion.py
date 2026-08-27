@@ -9,7 +9,7 @@ kinetics, not the mixing, set the clock, and the exponential tail means the last
 conversion cost as much time as the first ninety.
 
 Raising the temperature to lift the rate constant to 2.0 /hr (an Arrhenius effect) cuts the 95%
-conversion time to 1.5 hours -- a safety factor of 1.33 -- so the same 2-hour hold now clears the
+conversion time to 1.5 hours -- a safety factor of 1.34 -- so the same 2-hour hold now clears the
 target with margin. The reaction, not the schedule, moved.
 
 The lesson is that batch time is spent against the reaction's own clock: size the hold to
