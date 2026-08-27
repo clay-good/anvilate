@@ -1492,3 +1492,53 @@ def test_no_shipped_module_carries_an_invalid_escape_sequence():
             ast.parse(module.read_text())
         offenders += [f"{module.name}: {w.message}" for w in caught]
     assert not offenders, f"modules parse with warnings: {offenders}"
+
+
+# The two pages whose distinctive numbers are facts about the world rather than about
+# this library: published package versions verified against PyPI on a stated date, and a
+# paper's reported results. Nothing here can recompute either, and a gate that pretended
+# to would be checking that a literal equals itself.
+_PAGES_WHOSE_NUMBERS_ARE_EXTERNAL = frozenset(
+    {
+        "export-targets.md",  # dependency versions, re-verified against PyPI by hand
+        "valid-is-not-correct.md",  # an arXiv identifier and that paper's own figures
+    }
+)
+
+
+def test_every_docs_page_that_argues_from_a_number_is_opened_by_a_test():
+    """The ratchet under this session's sweep: a page's numbers need a test that reads it.
+
+    A number quoted only in prose has no gate on it, and the sweep that found nineteen
+    such pages is worth keeping rather than repeating. "Distinctive" is a decimal with two
+    or more fraction digits or a comma-grouped integer — enough to be a claim and not a
+    section number — and a page counts as opened when some test names its filename.
+    """
+    import re
+
+    root = Path(__file__).resolve().parent.parent
+    suite = "\n".join(p.read_text() for p in (root / "tests").glob("*.py"))
+    distinctive = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+\.\d{2,})(?![\w])")
+
+    for name in _PAGES_WHOSE_NUMBERS_ARE_EXTERNAL:
+        assert (root / "docs" / name).exists(), f"the allow-list names {name}, which is gone"
+
+    ungated = sorted(
+        page.name
+        for page in (root / "docs").glob("*.md")
+        if page.name not in suite
+        and distinctive.search(page.read_text())
+        and page.name not in _PAGES_WHOSE_NUMBERS_ARE_EXTERNAL
+    )
+    assert not ungated, (
+        f"these pages argue from numbers no test reads: {ungated}. Open the page in a test "
+        "and hold its figures against what the library computes, or add it to "
+        "_PAGES_WHOSE_NUMBERS_ARE_EXTERNAL with the reason."
+    )
+
+    # The allow-list earns its place: both pages really do carry such numbers, so an entry
+    # cannot sit there excusing a page that has nothing to excuse.
+    for name in _PAGES_WHOSE_NUMBERS_ARE_EXTERNAL:
+        assert distinctive.search((root / "docs" / name).read_text()), (
+            f"{name} is excused from the sweep and carries no number to excuse"
+        )
