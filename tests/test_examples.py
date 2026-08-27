@@ -199,13 +199,7 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "pressure_vessel_nozzle_and_flange.py",
         "rc_floor_beam.py",
         "rc_t_beam_floor.py",
-        "solar_cell_iv.py",
-        "solar_collector_stagnation.py",
-        "spec_load_combination_check.py",
-        "spread_footing_sizing.py",
-        "spreader_beam_bth1_category.py",
         "spreader_beam_device_screen.py",
-        "tapped_hole_engagement.py",
         "temperature_sensor_pt100_vs_thermistor.py",
         "timber_beam_lateral_stability.py",
         "timber_header_bearing_governs.py",
@@ -2410,6 +2404,13 @@ def test_solar_cell_iv_example():
     assert d["fill_factor"] == pytest.approx(0.7853, abs=0.001)
     assert d["max_power_w"] == pytest.approx(5.073, abs=0.01)
     assert d["efficiency_percent"] == pytest.approx(20.85, abs=0.1)
+    # The cell area the efficiency is taken over, in m².
+    _assert_narrates(
+        "solar_cell_iv.py",
+        namespace["CELL_AREA"].to("m**2").magnitude,
+        d["fill_factor"],
+        d["max_power_w"],
+    )
 
 
 def test_wr90_waveguide_example():
@@ -2894,6 +2895,13 @@ def test_solar_collector_stagnation_example_hot_fluid_bleeds_efficiency():
     assert p["morning_efficiency"] == pytest.approx(0.772, abs=0.01)
     assert p["afternoon_efficiency"] < p["morning_efficiency"]
     assert p["afternoon_efficiency"] == pytest.approx(0.584, abs=0.01)
+    # The morning efficiency as a fraction of the optical ceiling η₀.
+    _assert_narrates(
+        "solar_collector_stagnation.py",
+        p["morning_efficiency"] / namespace["OPTICAL_EFFICIENCY"],
+        p["morning_efficiency"],
+        p["afternoon_efficiency"],
+    )
     # No-flow stagnation on a 35 C day at full sun climbs to ~181 C.
     assert p["stagnation_c"] == pytest.approx(180.8, abs=1.0)
     assert p["stagnation_c"] > 150.0
@@ -3317,6 +3325,14 @@ def test_spread_footing_sizing_example_overburden_grows_the_footing():
     assert f["gross_area_m2"] == pytest.approx(4.0, rel=1e-9)
     assert f["net_area_m2"] == pytest.approx(4.571, abs=0.01)
     assert f["net_area_m2"] > f["gross_area_m2"]
+    # The two square footings those areas imply, in metres a side.
+    _assert_narrates(
+        "spread_footing_sizing.py",
+        math.sqrt(f["gross_area_m2"]),
+        math.sqrt(f["net_area_m2"]),
+        f["gross_area_m2"],
+        f["net_area_m2"],
+    )
 
 
 def test_building_column_load_path_capstone_reduction_decides():
@@ -4680,6 +4696,16 @@ def test_tapped_hole_engagement_example_strips_the_soft_threads():
     steel = by_name["steel bolt threads @ 1*d"]
     assert steel.passed
     assert "safety factor 2.16" in steel.detail
+    # The two thread-strip coefficients the docstring writes into its areas.
+    from anvilate.analysis import fastener as _fastener
+
+    _assert_narrates(
+        "tapped_hole_engagement.py",
+        _fastener._EXTERNAL_STRIP_COEFFICIENT,
+        _fastener._INTERNAL_STRIP_COEFFICIENT,
+        steel.safety_factor,
+        *(entry.safety_factor for entry in card.entries if entry.name.startswith("aluminium")),
+    )
     # ...but the soft aluminium tapped hole strips first -- one diameter busts the
     # 2.0 requirement (SF 1.29) -> the joint FAILs.
     alum_short = by_name["aluminium hole threads @ 1*d"]
@@ -6860,6 +6886,11 @@ def test_spec_load_combination_check_example_drives_loads_from_the_spec():
     assert forgotten.status is CheckStatus.PASS
     assert forgotten.safety_factor == pytest.approx(1.52, abs=0.01)
     assert classified.status is CheckStatus.FAIL
+    _assert_narrates(
+        "spec_load_combination_check.py",
+        forgotten.safety_factor,
+        classified.safety_factor,
+    )
     assert classified.safety_factor == pytest.approx(1.04, abs=0.01)
     assert guarded.status is CheckStatus.NOT_EVALUATED
     assert "conveyor_reaction" in guarded.detail
@@ -7881,6 +7912,19 @@ def test_spreader_beam_example_passes_as_category_a_and_fails_as_category_b():
     assert block is not None, "the Category A output block has moved"
     assert by_a["lug net tension"].safety_factor == pytest.approx(float(block.group(1)), abs=0.02)
     # Every allowable scales by exactly 2/3 between the categories, so every margin does.
+    # The two design factors the docstring names, and the Service Class 0 boundary,
+    # from the enumerations that define them.
+    from anvilate.analysis.lifting_device import DesignCategory, ServiceClass
+
+    _assert_narrates(
+        "spreader_beam_bth1_category.py",
+        DesignCategory.A.design_factor,
+        DesignCategory.B.design_factor,
+        float(ServiceClass.CLASS_0.cycle_range[1]),
+        by_a["beam bending"].safety_factor,
+        by_b["beam bending"].safety_factor,
+    )
+
     for name in ("beam bending", "lug net tension"):
         assert by_b[name].safety_factor == pytest.approx(
             by_a[name].safety_factor * 2.0 / 3.0, rel=1e-9
