@@ -42892,3 +42892,106 @@ def test_the_fitness_for_service_pages_anchor_figures_are_the_solutions_own():
         deviation = abs(value - closed_form) / closed_form
         assert 0.0 < deviation <= float(tolerance)
         assert deviation < 1.5 * float(about) / 100.0, "the page's 'about 0.1%' has drifted"
+
+
+def test_the_cold_formed_pages_dsm_table_is_the_curves_own():
+    """The three-length table on `docs/cold-formed-steel.md`, recomputed from its inputs.
+
+    The table is the page's argument that the governing mode has to be reported beside
+    the number: a thicker web fixes the 1 m row and does nothing for the 6 m one. Every
+    figure in it was prose, including the two the paragraph below it explains — local
+    strength falling with length while P_crl never moves, and distortional strength
+    holding constant, which is the DSM anchoring the page calls the classic error.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.analysis import ElasticBuckling, dsm_compression_strength
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "cold-formed-steel.md").read_text()
+    section = re.search(
+        r"\(P_y = (\d+) kN, P_crl =\s*\n?(\d+) kN, P_crd = (\d+) kN\)",
+        page,
+    )
+    assert section is not None, "the DSM section's inputs on the cold-formed page have moved"
+    yield_load = _q(f"{section.group(1)} kN")
+    local_load = _q(f"{section.group(2)} kN")
+    distortional_load = _q(f"{section.group(3)} kN")
+
+    rows = re.findall(
+        r"\| (\d+) m \| (\d+) kN \| ([\d.]+) \| ([\d.]+) \| ([\d.]+) \| "
+        r"\*\*([\d.]+) kN\*\* \| (\w+) \|",
+        page,
+    )
+    assert len(rows) == 3, "the DSM table in docs/cold-formed-steel.md has moved"
+
+    strengths = []
+    for _length, global_load, over_global, over_local, over_distortional, nominal, governs in rows:
+        strength = dsm_compression_strength(
+            yield_load=yield_load,
+            elastic_buckling=ElasticBuckling(
+                local=local_load,
+                distortional=distortional_load,
+                global_=_q(f"{global_load} kN"),
+                source="the page's stated finite-strip run",
+            ),
+        )
+        strengths.append(strength)
+        for claimed, value in (
+            (over_global, strength.global_strength),
+            (over_local, strength.local_strength),
+            (over_distortional, strength.distortional_strength),
+            (nominal, strength.nominal),
+        ):
+            assert value.to("kN").magnitude == pytest.approx(float(claimed), abs=0.05)
+        assert strength.governing.value == governs
+
+    # The two claims the paragraph under the table makes about those columns.
+    local_strengths = [s.local_strength.to("kN").magnitude for s in strengths]
+    assert local_strengths == sorted(local_strengths, reverse=True), (
+        "the page says local strength falls with length because it is anchored on P_ne"
+    )
+    distortional = {round(s.distortional_strength.to("kN").magnitude, 6) for s in strengths}
+    assert len(distortional) == 1, "the page says the distortional column is constant"
+
+    # The prequalification block, which is a rendered entry rather than an illustration.
+    from anvilate.analysis import PREQUALIFIED_LIPPED_CHANNEL, dsm_scorecard
+    from anvilate.scorecard import CheckStatus
+
+    block = re.search(
+        r"```\n\[NOT_EVALUATED\] ((?:.|\n)*?required\.)\n```",
+        page,
+    )
+    assert block is not None, "the prequalification block on the cold-formed page has moved"
+    named = re.findall(
+        r"([\w/ ]+) = ([\d.]+) (?:exceeds ([\d.]+)|outside \[([\d.]+), ([\d.]+)\])", block.group(1)
+    )
+    assert len(named) == 2, "the block no longer names both offending dimensions"
+    outside = PREQUALIFIED_LIPPED_CHANNEL.check(
+        web_flat_to_thickness=float(named[0][1]),
+        flange_flat_to_thickness=100.0,
+        lip_flat_to_thickness=20.0,
+        web_to_flange=6.0,
+        lip_to_flange=float(named[1][1]),
+    )
+    entry = dsm_scorecard(
+        "lipped channel",
+        demand=_q("50 kN"),
+        strength=strengths[0],
+        outside_prequalified=outside,
+    )
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert entry.detail.startswith(" ".join(block.group(1).split())), (
+        "the page quotes a downgrade the scorecard does not produce"
+    )
+    # Both named dimensions are genuinely outside — a page free to print any ratio
+    # beside a limit would satisfy the check above with a geometry that qualifies.
+    assert len(outside) == 2
+    inside = PREQUALIFIED_LIPPED_CHANNEL.check(
+        web_flat_to_thickness=PREQUALIFIED_LIPPED_CHANNEL.web_flat_to_thickness_max,
+        flange_flat_to_thickness=100.0,
+        lip_flat_to_thickness=20.0,
+        web_to_flange=6.0,
+        lip_to_flange=sum(PREQUALIFIED_LIPPED_CHANNEL.lip_to_flange_ratio_range) / 2.0,
+    )
+    assert inside == ()

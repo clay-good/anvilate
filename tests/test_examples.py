@@ -5348,6 +5348,27 @@ def test_cold_formed_stud_flange_example_slender_element_is_reduced():
     thick = namespace["effective_flange_width"](Quantity.parse("3.5 mm"))
     assert thick.to("mm").magnitude == pytest.approx(100.0, rel=1e-9)
 
+    # docs/cold-formed-steel.md sends a reader here for those two thicknesses, and
+    # quotes the reduction as a percentage nothing computed.
+    page = (Path(__file__).resolve().parent.parent / "docs" / "cold-formed-steel.md").read_text()
+    claim = re.search(
+        r"flange that is (\d+)% effective at ([\d.]+) mm and fully effective at ([\d.]+) mm",
+        " ".join(page.split()),
+    )
+    assert claim is not None, "the cold-formed page no longer quotes the example's reduction"
+    reduced = namespace["effective_flange_width"](Quantity.parse(f"{claim.group(2)} mm"))
+    full = namespace["effective_flange_width"](Quantity.parse(f"{claim.group(3)} mm"))
+    assert 100.0 * reduced.to("mm").magnitude / full.to("mm").magnitude == pytest.approx(
+        float(claim.group(1)), abs=0.5
+    )
+    # And the two thicknesses are the ones the example actually walks, not a pair the
+    # sentence could name freely and still be true of.
+    source = (_EXAMPLES / "cold_formed_stud_flange.py").read_text()
+    for thickness in claim.groups()[1:]:
+        assert f'"{thickness} mm"' in source, (
+            f"the page sends a reader here for {thickness} mm and the example never runs it"
+        )
+
 
 def test_floor_joist_wet_service_example_factor_chain_flips_the_verdict():
     namespace = runpy.run_path(str(_EXAMPLES / "floor_joist_wet_service.py"))
