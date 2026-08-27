@@ -40,6 +40,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 __all__ = [
     "ConsentRequired",
+    "attribution",
     "DatasetRecipe",
     "FetchProvenance",
     "IntegrityError",
@@ -146,6 +147,27 @@ class FetchProvenance(BaseModel):
         return value
 
 
+def attribution(provenance: FetchProvenance) -> str:
+    """The credit line a fetched dataset has to be cited with.
+
+    An attribution licence is a condition, not a formality: CC BY 4.0 permits the use in
+    exchange for the credit, so the flow that fetches the data is the one that has to be
+    able to state it. The line names the source, where it came from, the licence and the
+    date the caller recorded — and, for a source we may read but not ship, says so, since
+    that is the fact a reader of an evidence bundle most needs and the recipe's
+    ``redistributable`` flag is otherwise a field nothing consumes.
+    """
+    shipping = (
+        "redistributable"
+        if provenance.redistributable
+        else "not redistributable: fetched to this machine, never shipped"
+    )
+    return (
+        f"{provenance.source} — {provenance.url}, {provenance.license}, "
+        f"retrieved {provenance.retrieved} ({shipping})"
+    )
+
+
 def cache_root(explicit: str | Path | None = None) -> Path:
     """Where fetched datasets live: ``explicit``, else ``$ANVILATE_DATA_HOME``, else
     ``~/.cache/anvilate/datasets``.
@@ -155,6 +177,11 @@ def cache_root(explicit: str | Path | None = None) -> Path:
     never touch the user's own cache.
     """
     if explicit is not None:
+        if str(explicit) == "":
+            raise ValueError(
+                "an empty cache path is not the current directory: pass a real path, or "
+                "None to use $ANVILATE_DATA_HOME or the default cache."
+            )
         return Path(explicit)
     from_env = os.environ.get("ANVILATE_DATA_HOME")
     if from_env:
@@ -176,7 +203,8 @@ def _verify(payload: bytes, recipe: DatasetRecipe, *, where: str) -> None:
         raise IntegrityError(
             f"{recipe.name} {where} hashes to {digest}, and its recipe declares "
             f"{recipe.sha256}. Refusing it: a payload that is not the one the digest "
-            "names is not the dataset, whether it was truncated, mirrored or edited."
+            "names is not the dataset — truncated, mirrored, edited in the cache, or "
+            "left over from a recipe that has since been pointed at a new version."
         )
 
 

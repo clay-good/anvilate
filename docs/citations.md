@@ -207,7 +207,11 @@ because an evidence bundle's digest has to rebuild identically. A payload whose 
 sidecar is missing is refused too; data whose origin the cache cannot state is data nothing
 should cite.
 
-Releases carry the recipe and the digest, never the payload.
+**An attribution licence is a condition, not a formality.** CC BY 4.0 grants the use in
+exchange for the credit, so the flow that fetches the data is the one that can state it:
+`attribution()` turns a provenance record into the credit line — source, URL, licence,
+retrieval date — and says outright when a source is one this project may read and not
+ship. Releases carry the recipe and the digest, never the payload.
 
 ## If a citation looks wrong
 

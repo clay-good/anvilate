@@ -94,6 +94,7 @@ fetch.ConsentRequired
 fetch.DatasetRecipe
 fetch.FetchProvenance
 fetch.IntegrityError
+fetch.attribution
 fetch.cache_root
 fetch.cached_dataset
 fetch.fetch_dataset

@@ -17,6 +17,7 @@ from anvilate.fetch import (
     DatasetRecipe,
     FetchProvenance,
     IntegrityError,
+    attribution,
     cache_root,
     cached_dataset,
     fetch_dataset,
@@ -176,3 +177,52 @@ def test_nothing_in_the_module_reads_the_clock_or_the_network_by_default():
     # using it with an injected opener — pulls in no network stack at all.
     assert "from urllib.request import urlopen" in source
     assert source.index("def _https_get") < source.index("from urllib.request import urlopen")
+
+
+def test_a_recipe_pointed_at_a_new_version_refuses_the_stale_cache(tmp_path):
+    """The likeliest integrity failure is not tampering, it is a bumped recipe.
+
+    The cache is keyed by name, so a recipe that has been re-pointed at a new release
+    with the same filename must not read the old payload back as though it were the new
+    one — and the message has to say that, because that is the case a caller will hit.
+    """
+    fetch_dataset(
+        _recipe(),
+        retrieved="2026-08-27",
+        consent=True,
+        cache_dir=tmp_path,
+        opener=lambda url: _PAYLOAD,
+    )
+    bumped = _recipe(sha256=hashlib.sha256(_PAYLOAD + b"v2\n").hexdigest())
+    with pytest.raises(IntegrityError, match="pointed at a new version"):
+        cached_dataset(bumped, cache_dir=tmp_path)
+
+
+def test_the_attribution_line_carries_the_credit_the_licence_asks_for(tmp_path):
+    _path, provenance = fetch_dataset(
+        _recipe(),
+        retrieved="2026-08-27",
+        consent=True,
+        cache_dir=tmp_path,
+        opener=lambda url: _PAYLOAD,
+    )
+    line = attribution(provenance)
+    for expected in (
+        "The example benchmark's case index",
+        "https://example.invalid/cases.csv",
+        "CC-BY-4.0",
+        "2026-08-27",
+    ):
+        assert expected in line
+    # And the fact a bundle's reader most needs about a source we may read and not ship.
+    assert "never shipped" in line
+    shippable = FetchProvenance(**{**provenance.model_dump(), "redistributable": True})
+    assert "never shipped" not in attribution(shippable)
+    assert "redistributable" in attribution(shippable)
+
+
+def test_an_empty_cache_path_is_a_mistake_rather_than_the_current_directory():
+    # `Path("")` is `.`, so a caller who computed a path badly would write the cache into
+    # whatever directory the process happens to be in.
+    with pytest.raises(ValueError, match="empty cache path"):
+        cache_root("")
