@@ -188,14 +188,9 @@ def _assert_narrates(example: str, *computed: float) -> None:
 _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
     {
         "bracket_reviewer_dossier.py",
-        "branch_reinforcement_zone.py",
         "dfm_process_check.py",
-        "double_slit_wavelength_bench.py",
-        "drivetrain_torsional_mode.py",
         "feature_control_frame_legality.py",
         "flat_roof_rain_vs_snow.py",
-        "forging_press_sizing.py",
-        "fracture_toughness_screen.py",
         "gamma_shield_thickness.py",
         "gearbox_output_shaft.py",
         "guide_spring_buckling.py",
@@ -2734,6 +2729,14 @@ def test_forging_press_sizing_example_friction_hill_dominates():
     assert p["frictionless_kn"] == pytest.approx(3991.2, abs=1.0)
     assert p["load_kn"] == pytest.approx(5055.5, abs=1.0)
     assert p["load_kn"] > p["frictionless_kn"]
+    # The friction-hill multiplier the docstring quotes is the ratio of the two loads.
+    _assert_narrates(
+        "forging_press_sizing.py",
+        p["load_kn"] / p["frictionless_kn"],
+        p["frictionless_kn"],
+        p["load_kn"],
+        p["true_strain"],
+    )
 
 
 def test_injection_molding_machine_pick_example_clamp_and_cooling():
@@ -4947,6 +4950,18 @@ def test_fracture_toughness_example_favors_toughness_over_strength():
     # The tougher steel tolerates a comfortably inspectable crack.
     tough = by_name["tough steel (K_IC 100)"]
     assert tough.passed
+    # The critical crack length the brittle steel tolerates, in millimetres.
+    _assert_narrates(
+        "fracture_toughness_screen.py",
+        namespace["critical_crack_length"](
+            fracture_toughness=namespace["MATERIALS"]["high-strength steel (K_IC 50)"],
+            remote_stress=namespace["OPERATING_STRESS"],
+        )
+        .to("mm")
+        .magnitude,
+        brittle.safety_factor,
+        tough.safety_factor,
+    )
     assert "safety factor 1.99" in tough.detail
     assert card.status is CheckStatus.FAIL
 
@@ -5463,6 +5478,14 @@ def test_drivetrain_torsional_mode_example_stiffer_coupling_clears_the_firing_fr
     assert by_name["stiff coupling (100 kN*m/rad)"].passed
     assert "safety factor 1.42" in by_name["stiff coupling (100 kN*m/rad)"].detail
     assert card.status is CheckStatus.FAIL
+
+    # Both couplings' separation from the firing frequency, which the docstring quotes
+    # for the soft one as a fraction rather than as a mode in hertz.
+    _assert_narrates(
+        "drivetrain_torsional_mode.py",
+        by_name["soft coupling (20 kN*m/rad)"].safety_factor * namespace["REQUIRED_SEPARATION"],
+        by_name["stiff coupling (100 kN*m/rad)"].safety_factor,
+    )
 
 
 def test_cover_plate_edge_fixity_example_clamped_edge_passes():
@@ -6842,6 +6865,26 @@ def test_double_slit_wavelength_bench_example_short_bench_fails():
     assert long_bench.entries[0].passed
     assert long_bench.status is CheckStatus.PASS
 
+    # The fringe spacing at each screen distance, in millimetres.
+    _assert_narrates(
+        "double_slit_wavelength_bench.py",
+        *(
+            namespace["double_slit_fringe_spacing"](
+                wavelength=namespace["WAVELENGTH"],
+                slit_separation=namespace["SLIT_SEPARATION"],
+                screen_distance=distance,
+            )
+            .to("mm")
+            .magnitude
+            for distance in (
+                namespace["SHORT_SCREEN_DISTANCE"],
+                namespace["LONG_SCREEN_DISTANCE"],
+            )
+        ),
+        long_bench.entries[0].safety_factor,
+        short.entries[0].safety_factor,
+    )
+
 
 def test_trawler_hull_speed_example_short_hull_falls_short():
     namespace = runpy.run_path(str(_EXAMPLES / "trawler_hull_speed.py"))
@@ -7131,6 +7174,17 @@ def test_branch_reinforcement_example_shows_the_zone_height_the_run_does_not_set
     # Reading L4 as the run's term alone credits 67% more branch area than it earns.
     naive = namespace["naive_branch_credit"]()
     assert naive / bare.branch_excess.magnitude == pytest.approx(1.67, abs=0.01)
+
+    # The five areas and zone heights the docstring argues from, in mm and mm².
+    padded = namespace["padded_weldolet"]()
+    _assert_narrates(
+        "branch_reinforcement_zone.py",
+        bare.height.magnitude,
+        padded.height.magnitude,
+        bare.available.magnitude,
+        padded.available.magnitude,
+        bare.required.magnitude,
+    )
     assert bare.available.magnitude == pytest.approx(37.03, abs=0.01)
     assert bare.run_excess.magnitude + naive == pytest.approx(55.91, abs=0.01)
     # Both are short of the 81.95 mm² required, which is the honest part of the example:

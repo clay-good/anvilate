@@ -9,7 +9,7 @@ run with the branch**, which is where the accounting is fumbled by hand:
   alone — the obvious reading, since the zone sits on the run — credits a thin branch
   with the run's zone height. Here that is 10.45 mm against the correct 6.275 mm, and A3
   comes out 67% larger than the branch actually earns — a 37.03 mm² available area
-  read as 55.90, against a required 81.95 that neither of them meets.
+  read as 55.91, against a required 81.95 that neither of them meets.
 * **d2 is the greater** of d1 and (T_b − c) + (T_h − c) + d1/2. Taking d1 alone
   under-credits a thick-walled small branch, which is conservative but can fail a branch
   that passes.
