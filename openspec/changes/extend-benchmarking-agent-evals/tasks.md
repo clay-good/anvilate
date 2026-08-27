@@ -2,8 +2,14 @@
 
 ## 1. Structured-spec benchmarks
 
-- [ ] 1.1 License review of MUSE-class suites (bundle vs. reference-only per the
-      dataset-licensing requirement)
+- [x] 1.1 License review of MUSE-class suites (bundle vs. reference-only per the
+      dataset-licensing requirement) — done 2026-08-27, written up in `design.md`: the
+      code is MIT and the dataset CC BY 4.0 (verified from the repository README and,
+      independently, the project site and the Hugging Face card), so neither is excluded
+      by the non-commercial rule. The decision is **reference-only, fetched, never
+      bundled** — the cases are drawings and rubrics rather than values, a leaderboard
+      benchmark's version is what a published score must name, and the fetch-on-first-use
+      flow already carries the checksum and the attribution CC BY 4.0 requires.
 - [ ] 1.2 Spec-format adapter (benchmark spec → Anvilate Spec IR where in-scope)
 - [ ] 1.3 Funnel-stage scoring and out-of-scope accounting
 

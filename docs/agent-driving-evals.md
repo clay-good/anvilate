@@ -66,4 +66,21 @@ Nothing here runs a model. It scores a transcript, which is what makes it testab
 and what keeps the published recommendation gated on a measurement rather than an
 impression.
 
+## The other half: external suites, referenced rather than bundled
+
+This page is the agent-driving eval. Its sibling is the structured-spec comparison —
+scoring Anvilate against a public text-to-CAD benchmark so a claim about it is comparable
+with the wider field. The licence question that gates *that* work is settled: MUSE's code
+is MIT and its 106-case dataset is CC BY 4.0, verified from the repository, the project
+site and the dataset card independently, so neither is excluded by the non-commercial rule
+the benchmarking spec sets.
+
+The data is still not vendored. Those cases are drawings, renders and rubric prose rather
+than values, a benchmark with a leaderboard moves under its own version, and the
+fetch-on-first-use flow this repository already uses for license-restricted tables records
+the checksum, the version and the attribution CC BY 4.0 asks for. A run that has not
+fetched reports `not_evaluated`, not a score. The full review, with what was checked and
+how, is in
+[`openspec/changes/extend-benchmarking-agent-evals/design.md`](../openspec/changes/extend-benchmarking-agent-evals/design.md).
+
 See [`examples/agent_driving_eval.py`](../examples/agent_driving_eval.py).
