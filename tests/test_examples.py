@@ -190,18 +190,13 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "bracket_reviewer_dossier.py",
         "dfm_process_check.py",
         "feature_control_frame_legality.py",
-        "flat_roof_rain_vs_snow.py",
         "gamma_shield_thickness.py",
         "lifter_verification_matrix.py",
         "lifting_lug_calc_report.py",
         "lightest_passing_bracket.py",
         "measured_shaft_from_certificate.py",
-        "off_center_post_load.py",
-        "pallet_bay_floor_beam.py",
         "plated_shaft_callouts_change_the_verdict.py",
         "pressure_vessel_nozzle_and_flange.py",
-        "project_appraisal.py",
-        "pv_summer_derating.py",
         "rc_floor_beam.py",
         "rc_t_beam_floor.py",
         "relativistic_spaceship.py",
@@ -1368,6 +1363,8 @@ def test_pv_summer_derating_example_hot_cell_loses_power():
     assert m["summer_cell_c"] == pytest.approx(63.1, abs=0.2)
     assert m["summer_power_w"] < m["spring_power_w"]
     assert m["summer_power_w"] < 400.0
+    # The temperature coefficient the docstring gives as a percentage per degree.
+    _assert_narrates("pv_summer_derating.py", abs(namespace["TEMPERATURE_COEFFICIENT"]) * 100.0)
 
 
 def test_incline_conveyor_sizing_example_throughput_and_lift():
@@ -1921,6 +1918,13 @@ def test_project_appraisal_example():
     assert d["net_present_value_usd"] == pytest.approx(6861.80, abs=0.01)
     assert d["benefit_cost_ratio"] == pytest.approx(1.1372, abs=0.001)
     assert d["annual_depreciation_usd"] == pytest.approx(5000.0, rel=1e-9)
+    # The discounted benefits the docstring quotes: the NPV plus the outlay it cleared.
+    _assert_narrates(
+        "project_appraisal.py",
+        namespace["annuity_present_value"](payment=15000.0, rate=namespace["RATE"], periods=5),
+        d["net_present_value_usd"],
+        d["benefit_cost_ratio"],
+    )
 
 
 def test_equipment_financing_example():
@@ -3299,6 +3303,15 @@ def test_flat_roof_rain_vs_snow_example_rain_governs():
     assert r["snow_kpa"] == pytest.approx(0.84, abs=0.01)
     assert r["rain_kpa"] == pytest.approx(0.88, abs=0.01)
     assert r["rain_kpa"] > r["snow_kpa"]
+    # The ASCE rain constant the docstring writes into its formula, from the module.
+    from anvilate.analysis import building_loads as _building_loads
+
+    _assert_narrates(
+        "flat_roof_rain_vs_snow.py",
+        _building_loads._RAIN_LOAD_CONSTANT,
+        r["rain_kpa"],
+        r["snow_kpa"],
+    )
 
 
 def test_column_live_load_reduction_example_cuts_the_demand():
@@ -3920,6 +3933,16 @@ def test_pallet_bay_example_brackets_the_patch_between_the_shortcuts():
     # ...while smearing the intensity over the span fails (over-conservative) and
     # spreading the total over the span reports margin that isn't there (2.61).
     assert by_name["intensity smeared over the span bending"].status is CheckStatus.FAIL
+    # The patch's own peak moment in kN·m, which is the number the argument turns on.
+    load = namespace["PATCH_LOAD"].to("N/mm").magnitude
+    patch = namespace["PATCH_LENGTH"].to("mm").magnitude
+    span = namespace["SPAN"].to("mm").magnitude
+    reaction = load * patch * (span - patch / 2.0) / span
+    _assert_narrates(
+        "pallet_bay_floor_beam.py",
+        reaction**2 / (2.0 * load) / 1e6,
+        *(entry.safety_factor for entry in card.entries if entry.safety_factor is not None),
+    )
     assert by_name["total spread over the span bending"].passed
     assert "safety factor 2.61" in by_name["total spread over the span bending"].detail
 
@@ -4436,6 +4459,35 @@ def test_off_center_post_example_catches_the_p_delta_feedback():
     assert "safety factor 2.03" in naive.detail
     # ...but at 60% of Euler the P-delta feedback amplifies the bending 2.88x
     # and the exact secant stress nearly reaches yield.
+    # The amplification itself: the bending term of the secant stress over the bending
+    # term of the superposition stress, both from the library rather than the formula.
+    axial = namespace["LOAD"].to("N").magnitude / namespace["AREA"].to("mm**2").magnitude
+    modulus = namespace["default_materials_db"]().get(namespace["STEEL"]).elastic_modulus.quantity
+    exact = (
+        namespace["secant_column_max_stress"](
+            load=namespace["LOAD"],
+            eccentricity=namespace["ECCENTRICITY"],
+            area=namespace["AREA"],
+            second_moment=namespace["SECOND_MOMENT"],
+            extreme_fiber=namespace["EXTREME_FIBER"],
+            length=namespace["LENGTH"],
+            elastic_modulus=modulus,
+        )
+        .to("MPa")
+        .magnitude
+    )
+    bending = (
+        namespace["LOAD"].to("N").magnitude
+        * namespace["ECCENTRICITY"].to("mm").magnitude
+        * namespace["EXTREME_FIBER"].to("mm").magnitude
+        / namespace["SECOND_MOMENT"].to("mm**4").magnitude
+    )
+    _assert_narrates(
+        "off_center_post_load.py",
+        (exact - axial) / bending,
+        naive.safety_factor,
+        by_name["secant formula (exact)"].safety_factor,
+    )
     secant = by_name["secant formula (exact)"]
     assert secant.status is CheckStatus.FAIL
     assert "safety factor 1.04" in secant.detail
