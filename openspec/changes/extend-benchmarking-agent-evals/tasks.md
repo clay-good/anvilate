@@ -18,7 +18,13 @@
       106-line `metadata.jsonl`, so the adapter is a heading-to-field map. The open work
       is the mapping and the refusal path, which is also how the in-scope subset gets
       measured rather than guessed.
-- [ ] 1.3 Funnel-stage scoring and out-of-scope accounting
+- [ ] 1.3 Funnel-stage scoring and out-of-scope accounting — the accounting has its first
+      answer, from a census of all 106 cases on 2026-08-27 (`design.md`): 69 are
+      assemblies, which a one-part `DesignSpec` cannot express, and all 37 single-part
+      cases are PLA, timber, resin, sheet metal or ABS — none of them in the bundled
+      materials database. **0 of 106 compile today**, and the binding constraint is the
+      material path, not the format. The six single-part timber cases are the nearest
+      family, since timber screens through NDS reference values rather than the database.
 
 ## 2. Agent-driving suite
 

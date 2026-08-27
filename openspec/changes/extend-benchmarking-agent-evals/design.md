@@ -65,22 +65,48 @@ Quantity`, `Component Names`. So the adapter is a heading-to-field mapping and a
 parser, not a parser of prose; the rubric beside it is judge instructions in Markdown, for
 a model, and nothing Anvilate evaluates.
 
-**What that means for scope, and it is the important half.** A sample of fourteen cases
-read in full (2026-08-27) splits two ways: PLA parts for 3D printing with a *Planned
-Component Quantity* of 1, and timber parts for CNC milling with quantities of 2 to 23 —
-the `bookshelf` case names 44. Anvilate screens a declared element against a cited clause;
-it does not compile a 44-part joined assembly, and the rubric's own criteria are assembly
-readiness, joint design and manufacturability rather than a margin against an allowable.
+All ten headings above appear in all 106 cases; two more do (`Adjustable Parameters`,
+`Component Details`) and one appears in 105 (`Component Assembly Graph (Textual)`), so an
+adapter may rely on the first twelve and must not require the last.
+
+## The scope census, and it is the important half
+
+Every one of the 106 descriptions was fetched and parsed on 2026-08-27. This is a census,
+not a sample:
+
+| Field | Distribution |
+| --- | --- |
+| Material | Timber 69, PLA 28, ABS 3, Resin 2, Acrylic 2, Sheet Metal 1, Aluminum 1 |
+| Manufacturing Method | CNC Milling 65, 3D Printing 28, Laser Cutting 8, FDM 3D Printing 5 |
+| Planned Component Quantity | 1 for 37 cases; 2–36 for the other 69 (the `bookshelf` case names 44 parts in its component list) |
+
+A `DesignSpec` is a typed statement of intent for **one part**, so the 69 assemblies are
+out of scope by construction — and the rubric grades assembly readiness, joint design and
+manufacturability, which are not margins against an allowable.
+
+Of the 37 single-part cases: PLA 27, Timber 6, Resin 2, Sheet Metal 1, ABS 1. **None of
+those materials is in the bundled materials database** (seventeen aluminium, steel,
+stainless, titanium and bronze grades). So today the count is **0 of 106 compilable**, and
+the binding constraint is the material path rather than the format: the format parses,
+the geometry is stated, and the material has nowhere to resolve to.
+
+The nearest family is the six single-part timber cases: timber is screened here through
+NDS reference design values rather than the materials database, so those become reachable
+the moment a spec can name a timber design value instead of a database key. The polymers
+need a materials-database entry that does not exist and should not be invented — a PLA
+modulus recalled rather than cited is the failure this library is built to refuse.
 
 So the comparison this change promises is **not** "Anvilate scores MUSE". It is the
 funnel's first stages over the subset that is in scope at all, with the out-of-scope count
 published beside it — which is what task 1.3 means by out-of-scope accounting, and why the
-number that matters is how many of the 106 a spec-compiled pipeline can even accept. A
-single scalar over the whole set would be the same mistake this change already refuses in
-its agent-driving half.
+first number to publish is 0 of 106 with the reason, not a percentage. A single scalar
+over the whole set would be the same mistake this change already refuses in its
+agent-driving half.
 
 ## What is still open
 
-The subset question is a measurement, not an opinion: task 1.2's adapter answers it by
-attempting all 106 and reporting what it refuses, with the reason. Nothing about the
-in-scope count should be published before that runs.
+The census above answers the subset question by hand; the adapter's job is to keep
+answering it — attempting every case and reporting each refusal with its reason, so the
+count moves on its own when a material path lands rather than going stale in this file.
+Until then there is nothing to score, and a benchmark comparison published against zero
+compilable cases would be a number about the benchmark rather than about Anvilate.

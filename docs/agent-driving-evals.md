@@ -75,6 +75,14 @@ is MIT and its 106-case dataset is CC BY 4.0, verified from the repository, the 
 site and the dataset card independently, so neither is excluded by the non-commercial rule
 the benchmarking spec sets.
 
+All 106 case descriptions were then fetched and parsed, which answers the scope question
+with a census rather than an impression: 69 of them are assemblies of 2 to 36 components,
+which a one-part Design Spec cannot express, and all 37 single-part cases are PLA, timber,
+resin, sheet metal or ABS — none of those materials is in the bundled database. **0 of 106
+compile today**, and what binds is the material path rather than the format. That is the
+out-of-scope accounting this comparison owes, published as the count and the reason rather
+than as a percentage of a set the pipeline cannot accept.
+
 The data is still not vendored. Those cases are drawings, renders and rubric prose rather
 than values, a benchmark with a leaderboard moves under its own version, and the
 fetch-on-first-use flow this repository already uses for license-restricted tables records
