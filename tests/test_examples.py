@@ -103,6 +103,46 @@ def _numbers_in(result: object) -> list[tuple[str, float]]:
     return []
 
 
+def _assert_narrates_rendered(example: str, namespace: dict) -> None:
+    """As :func:`_assert_narrates_computed`, but reading the entries' rendered detail too.
+
+    Some figures a docstring quotes are printed by the check rather than returned by it —
+    a deflection against its limit, a stress against an allowable. Those lines are the
+    example's own output, so they count; they are a wider pool than the safety factors
+    alone, which is why this is a separate helper rather than the default.
+    """
+    pool = dict(_computed_values(namespace))
+    for name, value in list(namespace.items()):
+        if name.startswith("_") or name == "main" or not callable(value):
+            continue
+        code = getattr(value, "__code__", None)
+        if code is None or code.co_argcount or code.co_kwonlyargcount:
+            continue
+        try:
+            import contextlib
+            import io
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = value()
+        except Exception:  # noqa: BLE001 — a helper that needs a live resource
+            continue
+        for entry in getattr(result, "entries", ()):
+            # Everything the line states except the required safety factor: a limit the
+            # prose quotes ("L/360 = 6.94 mm") is a real figure, while "required minimum
+            # 1.50" is a threshold that let a mutated figure match by coincidence.
+            stated = re.sub(r"required minimum [\d.]+", "", entry.detail or "")
+            for token in re.findall(r"-?\d+(?:\.\d+)?", stated):
+                pool[f"{name}:{entry.name}:{token}"] = float(token)
+    assert pool, f"{example} renders no values to check its docstring against"
+    for number in _narrated_numbers(example):
+        value_ = float(number.replace(",", ""))
+        rounding = _rounding_of(number)
+        assert any(abs(value_ - computed) <= rounding for computed in pool.values()), (
+            f"{example}'s docstring quotes {number} and the example neither computes "
+            "nor prints such a value"
+        )
+
+
 def _assert_narrates_computed(example: str, namespace: dict) -> None:
     """Every figure the docstring narrates is one the example itself computes.
 
@@ -148,7 +188,6 @@ def _assert_narrates(example: str, *computed: float) -> None:
 _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
     {
         "accelerated_life_test.py",
-        "access_cover_sizing.py",
         "antenna_feedline_match.py",
         "base_to_final_turn.py",
         "batch_reactor_conversion.py",
@@ -160,7 +199,6 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "branch_reinforcement_zone.py",
         "bushing_wear_life.py",
         "camera_lens_and_resolution.py",
-        "canopy_snow_drift.py",
         "cladding_internal_pressure.py",
         "cold_formed_stud_flange.py",
         "column_base_plate.py",
@@ -181,14 +219,12 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "feature_control_frame_legality.py",
         "flange_coupling_bolt_pattern.py",
         "flat_roof_rain_vs_snow.py",
-        "flood_barrier_stiffener.py",
         "flywheel_torsional_mode.py",
         "forging_press_sizing.py",
         "fracture_toughness_screen.py",
         "gamma_shield_thickness.py",
         "gear_nonstandard_center.py",
         "gearbox_output_shaft.py",
-        "genset_on_two_rails.py",
         "gps_and_accelerator_relativity.py",
         "guide_spring_buckling.py",
         "helical_gear_thrust_bearing.py",
@@ -198,10 +234,8 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "hydraulic_meter_out_intensification.py",
         "hydrogen_balmer_line.py",
         "indexing_table_stations.py",
-        "isolator_amplifies_at_running_speed.py",
         "jacketed_reactor_vacuum.py",
         "journal_bearing_film_regime.py",
-        "key_vs_spline.py",
         "lab_ventilation_air_changes.py",
         "laboratory_plasma.py",
         "lifter_verification_matrix.py",
@@ -211,7 +245,6 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "living_hinge_flip_cap.py",
         "loose_ring_flange_stress.py",
         "machine_foot_on_panel.py",
-        "machine_skid_end_fixity.py",
         "machine_vibration_isolation.py",
         "manway_lid_fixity.py",
         "masonry_wall_slenderness.py",
@@ -224,7 +257,6 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "ph_electrode_nernst.py",
         "pipe_expansion_loop.py",
         "plated_shaft_callouts_change_the_verdict.py",
-        "plenum_access_panel.py",
         "press_brake_springback.py",
         "pressure_vessel_nozzle_and_flange.py",
         "project_appraisal.py",
@@ -248,7 +280,6 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "shrink_fit_at_speed.py",
         "sight_port_blind.py",
         "single_cylinder_flywheel.py",
-        "skid_position_on_platform.py",
         "sling_angle_overload.py",
         "solar_cell_iv.py",
         "solar_collector_stagnation.py",
@@ -256,16 +287,12 @@ _EXAMPLES_AWAITING_A_NARRATION_GATE = frozenset(
         "spread_footing_sizing.py",
         "spreader_beam_bth1_category.py",
         "spreader_beam_device_screen.py",
-        "stiffener_weld_end.py",
-        "tank_baffle_end_fixity.py",
         "tapped_hole_engagement.py",
         "temperature_sensor_pt100_vs_thermistor.py",
-        "test_blind_sizing.py",
         "timber_beam_lateral_stability.py",
         "timber_header_bearing_governs.py",
         "timber_header_shear_governs.py",
         "tolerance_stackup.py",
-        "transmission_line_clearance.py",
         "vacuum_vessel_buckling.py",
         "vessel_surface_flaw_fad.py",
         "welded_bracket_fatigue.py",
@@ -290,7 +317,8 @@ def test_the_narration_backlog_is_exactly_what_is_left():
         for call in ast.walk(ast.parse(Path(__file__).read_text()))
         if isinstance(call, ast.Call)
         and isinstance(call.func, ast.Name)
-        and call.func.id in ("_assert_narrates", "_assert_narrates_computed")
+        and call.func.id
+        in ("_assert_narrates", "_assert_narrates_computed", "_assert_narrates_rendered")
         and call.args
         and isinstance(call.args[0], ast.Constant)
     }
@@ -3716,6 +3744,7 @@ def test_flood_barrier_example_recovers_margin_from_the_true_load_shape():
     assert by_name["peak smeared as UDL deflection"].status is CheckStatus.FAIL
     assert by_name["actual hydrostatic triangle bending"].passed
     assert by_name["actual hydrostatic triangle deflection"].passed
+    _assert_narrates_rendered("flood_barrier_stiffener.py", namespace)
 
 
 def test_pallet_bay_example_brackets_the_patch_between_the_shortcuts():
@@ -3746,6 +3775,7 @@ def test_tank_baffle_example_shows_partial_fixity_raising_the_stress():
     assert "deflection 4.986" in by_name["pinned both ends deflection"].detail
     assert "deflection 1.823" in by_name["welded floor seam only deflection"].detail
     assert "deflection 1.000" in by_name["welded both ends deflection"].detail
+    _assert_narrates_rendered("tank_baffle_end_fixity.py", namespace)
 
 
 def test_machine_skid_example_shows_the_stress_neutral_fixity_win():
@@ -3763,6 +3793,7 @@ def test_machine_skid_example_shows_the_stress_neutral_fixity_win():
     assert "deflection 1.398" in by_name["pinned both ends deflection"].detail
     assert "deflection 0.451" in by_name["welded at the skid end deflection"].detail
     assert "deflection 0.285" in by_name["welded both ends deflection"].detail
+    _assert_narrates_rendered("machine_skid_end_fixity.py", namespace)
 
 
 def test_skid_position_example_fails_the_mid_platform_placement():
@@ -3779,6 +3810,7 @@ def test_skid_position_example_fails_the_mid_platform_placement():
     assert by_name["parked mid-platform deflection"].status is CheckStatus.FAIL
     assert "deflection 11.649" in by_name["parked mid-platform deflection"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_rendered("skid_position_on_platform.py", namespace)
 
 
 def test_stiffener_weld_end_example_fails_opposite_criteria():
@@ -3798,6 +3830,7 @@ def test_stiffener_weld_end_example_fails_opposite_criteria():
     assert by_name["welded at the waler (peak at the prop) deflection"].status is CheckStatus.FAIL
     assert "deflection 3.155" in by_name["welded at the waler (peak at the prop) deflection"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_rendered("stiffener_weld_end.py", namespace)
 
 
 def test_genset_example_recovers_margin_from_the_declared_rails():
@@ -3816,6 +3849,7 @@ def test_genset_example_recovers_margin_from_the_declared_rails():
     assert by_name["declared skid rails deflection"].passed
     assert "deflection 11.650" in by_name["declared skid rails deflection"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_rendered("genset_on_two_rails.py", namespace)
 
 
 def test_canopy_snow_drift_example_flips_on_the_drift_orientation():
@@ -3834,6 +3868,7 @@ def test_canopy_snow_drift_example_flips_on_the_drift_orientation():
     assert by_name["drift against the edge fascia deflection"].status is CheckStatus.FAIL
     assert "deflection 24.350" in by_name["drift against the edge fascia deflection"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_rendered("canopy_snow_drift.py", namespace)
 
 
 def test_davit_example_flips_on_the_sheave_overhang_couple():
@@ -3869,6 +3904,7 @@ def test_test_blind_example_sizes_the_plate_through_the_pack():
     assert by_name["16 mm blind flatness"].passed
     assert by_name["16 mm blind flatness"].reference == "Timoshenko plate theory"
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_rendered("test_blind_sizing.py", namespace)
 
 
 def test_dock_edge_example_is_governed_by_back_span_uplift():
@@ -3933,6 +3969,7 @@ def test_access_cover_example_is_governed_by_stiffness_not_strength():
     assert by_name["8 mm cover flatness"].passed
     assert "deflection 1.054" in by_name["8 mm cover flatness"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_rendered("access_cover_sizing.py", namespace)
 
 
 def test_flywheel_example_moves_the_twist_mode_with_shaft_diameter():
@@ -4011,6 +4048,7 @@ def test_plenum_panel_example_hears_the_blower_only_through_the_modal_screen():
     assert welded.passed
     assert "fundamental 205.5 Hz" in welded.detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_rendered("plenum_access_panel.py", namespace)
 
 
 def test_sight_port_blind_example_fails_the_passing_blind_on_the_declared_hole():
@@ -5059,6 +5097,7 @@ def test_transmission_line_clearance_example_parabola_hides_a_violation():
     assert by_name["exact catenary sag"].status is CheckStatus.FAIL
     assert "safety factor 0.99" in by_name["exact catenary sag"].detail
     assert card.status is CheckStatus.FAIL
+    _assert_narrates_rendered("transmission_line_clearance.py", namespace)
 
 
 def test_cam_base_circle_pressure_angle_example_bigger_base_circle_fixes_jamming():
@@ -5783,6 +5822,7 @@ def test_key_vs_spline_example_spline_shares_what_a_key_concentrates():
     # A 10-tooth spline carries the same torque in the same length.
     assert by_name["spline: capacity vs torque"].passed
     assert "safety factor 1.06" in by_name["spline: capacity vs torque"].detail
+    _assert_narrates_rendered("key_vs_spline.py", namespace)
 
 
 def test_multi_plate_clutch_example_stacks_surfaces_not_spring_force():
@@ -6274,6 +6314,7 @@ def test_isolator_amplifies_example_flips_between_vibration_and_shock():
         shock["300 Hz (near-rigid)"].safety_factor
         > shock["73 Hz (the spectrum peak)"].safety_factor
     )
+    _assert_narrates_rendered("isolator_amplifies_at_running_speed.py", namespace)
 
 
 def test_the_isolator_examples_docstring_numbers_are_its_own_spectrum():
