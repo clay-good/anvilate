@@ -101,7 +101,11 @@ rather than a tidy expression that is not what was computed.
 ## Handing it to a reviewer
 
 The HTML is self-contained: no external stylesheets, scripts, fonts, or images, so
-it opens on an air-gapped machine and survives being emailed. Rendering is pure
+it opens on an air-gapped machine and survives being emailed. It also declares its own
+surface — white paper, dark ink, `color-scheme: light` — because a document that names
+a text colour and leaves the background to the viewer renders near-black on near-black
+for a reviewer whose browser is in dark mode, which is a blank page rather than a
+report. That was true here until someone opened one and looked. Rendering is pure
 Python — no TeX, no browser, no network — and it is deterministic. The same inputs
 produce byte-identical HTML on every rebuild, which means a diff between two reports
 is an engineering change and never rendering noise.

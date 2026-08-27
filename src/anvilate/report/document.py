@@ -438,8 +438,16 @@ def report_from_record(record: dict) -> CalculationReport:
     return CalculationReport.model_validate(_json_revive(record["report"]))
 
 
+# The document declares its own surface. It sets a text colour, and every status colour
+# in it (#a00 failing, #060 passing, #444 for a note) is chosen against paper — so a
+# viewer whose browser is in dark mode and a stylesheet that names no background renders
+# near-black text on near-black, which is a blank page to a reviewer and looked fine in
+# every test the suite had. `color-scheme: light` also keeps the UA's own furniture —
+# scrollbars, form controls — on the same footing as the print it is a stand-in for.
 _STYLESHEET = """
-body { font-family: Georgia, serif; max-width: 46em; margin: 2em auto; color: #111; }
+html { color-scheme: light; background: #fff; }
+body { font-family: Georgia, serif; max-width: 46em; margin: 2em auto; color: #111;
+       background: #fff; }
 h1 { border-bottom: 2px solid #111; padding-bottom: 0.2em; }
 h2 { margin-top: 1.6em; font-size: 1.1em; }
 table { border-collapse: collapse; margin: 0.6em 0; }

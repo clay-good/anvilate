@@ -952,3 +952,45 @@ def test_the_calculation_report_pages_rendered_block_is_the_reports_own():
     # against, not to the one-decimal form the sentence describes as the old behavior.
     shown = render(Quantity.parse("0.6 MPa"), unit="ksi", pretty=True)
     assert float(shown.split()[0]) == pytest.approx(float(actual), abs=5e-4)
+
+
+def test_the_report_declares_its_own_surface_rather_than_inheriting_the_viewers():
+    """A sealed document cannot depend on the reviewer's browser theme.
+
+    Found by rendering a report and looking at it: the stylesheet set a text colour and
+    no background, so in a dark-mode browser the whole document came out near-black on
+    near-black — a blank page to a checker, and green in every test here, because every
+    assertion was about the markup. Every colour in the sheet (a failing red, a passing
+    green, a grey note) is chosen against paper, so the sheet has to say so.
+    """
+    import re
+
+    html = _report().to_html()
+    style = re.search(r"<style>(.*?)</style>", html, re.DOTALL)
+    assert style is not None, "the report no longer carries a stylesheet"
+    sheet = style.group(1)
+
+    def _declarations(selector: str) -> str:
+        rule = re.search(rf"(?m)^{re.escape(selector)} \{{(.*?)\}}", sheet, re.DOTALL)
+        return "" if rule is None else rule.group(1)
+
+    root, body = _declarations("html"), _declarations("body")
+    assert "color-scheme: light" in root, (
+        "the document renders as print: it must declare the scheme, or the browser's "
+        "furniture and its own colours disagree"
+    )
+    # On the root, not merely on the body: the canvas outside a max-width column is the
+    # root's, so a background set only on `body` still paints a white page onto whatever
+    # the viewer's theme puts behind it.
+    assert re.search(r"background:\s*#fff", root), (
+        "the stylesheet sets a text colour and no root background, so the page inherits "
+        "the viewer's — which is how a dark-mode reviewer gets a blank document"
+    )
+    # And the text colour it is chosen against is still a dark one, so the pair is a
+    # readable document rather than two settings that happen to be present.
+    text_colour = re.search(r"color:\s*#([0-9a-f]{3,6})", body)
+    assert text_colour is not None, "the body no longer sets a text colour"
+    channels = text_colour.group(1)
+    if len(channels) == 3:
+        channels = "".join(char * 2 for char in channels)
+    assert max(int(channels[index : index + 2], 16) for index in (0, 2, 4)) < 0x80
