@@ -38,7 +38,18 @@
       stated by the caller, since nothing in the package may read the clock. The transport
       is injectable, so the whole flow is tested offline.
 - [ ] 4.2 Named-section resolution tests (offline post-fetch; bundled EN data)
-- [ ] 4.3 Docs: where each data class comes from, its basis, and its legal status
+- [x] 4.3 Docs: where each data class comes from, its basis, and its legal status —
+      `docs/citations.md`, completed 2026-08-28. The three classes are each answered on
+      that page: the **bundled** tables now by name rather than by count, in a table whose
+      every cell (source, version, SPDX identifier, retrieval date) is read back out of the
+      dataset blocks by `test_the_dataset_table_is_the_datasets_own_metadata` — in both
+      directions, since a row for a file that no longer ships is as wrong as a shipped file
+      with no row; the **fetched** class by the `anvilate.fetch` section, which states that
+      what ships is the recipe and the digest and never the payload; and the **basis** by
+      the allowable-basis and fatigue-survival sections, which say what a value covers and
+      what refusing to answer looks like. A count was the weakest true thing the page could
+      say about seventeen files — it survives a version bump, a changed licence, and one
+      dataset swapped for another.
 
 ## Partially shipped 2026-08-22 — task 1.1
 

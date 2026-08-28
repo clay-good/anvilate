@@ -1672,6 +1672,49 @@ def _citation_sources(node: object) -> list[object]:
     return []
 
 
+def test_the_dataset_table_is_the_datasets_own_metadata():
+    """`docs/citations.md` lists every bundled dataset; every cell is read back here.
+
+    The page already stated a count and a licence, both gated. A count is the weakest true
+    thing a page can say about seventeen files: it survives a version bump, a changed
+    licence, and a dataset swapped for another one. So the page carries the table, and the
+    table is compared row for row against the `dataset` blocks it describes — in both
+    directions, because a row for a file that no longer ships is exactly as wrong as a
+    shipped file with no row.
+    """
+    page = (Path(__file__).resolve().parent.parent / "docs" / "citations.md").read_text()
+    rows = {}
+    for line in page.splitlines():
+        if not line.startswith("| `") or "/data/" not in line:
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        rows[cells[0].strip("`")] = cells[1:]
+    assert rows, "the dataset table in docs/citations.md has moved or lost its rows"
+
+    expected = {}
+    for name, document in _bundled_datasets():
+        dataset = document["dataset"]
+        source = dataset.get("source") or (
+            "per-record citations — every property cites its own publication"
+        )
+        expected[name] = [
+            str(source),
+            str(dataset["version"]),
+            str(dataset["license"]).split()[0],
+            str(dataset["retrieved"]),
+        ]
+
+    assert set(rows) == set(expected), (
+        "the table and the shipped datasets disagree about which files exist: "
+        f"only on the page {sorted(set(rows) - set(expected))}, "
+        f"only in the package {sorted(set(expected) - set(rows))}"
+    )
+    for name, cells in expected.items():
+        assert rows[name] == cells, (
+            f"the row for {name} says {rows[name]} and its dataset block says {cells}"
+        )
+
+
 def test_every_bundled_dataset_records_a_redistributable_license():
     """A bundled table travels with the package, so its license is a shipping condition.
 

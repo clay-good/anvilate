@@ -183,6 +183,37 @@ version — with a companion test that mutates a dataset each of those ways and 
 gate to catch it. A dataset with no source at the dataset level (the materials table, whose
 properties each cite a different publication) has to carry one on every record instead.
 
+Here they are, so that "what is in this package and under what terms" is a question you
+answer by reading rather than by grepping. Every cell is read back out of the dataset
+blocks themselves by `test_the_dataset_table_is_the_datasets_own_metadata`, so a table that
+drifts from the files — a version bumped, a dataset added, a licence changed — fails the
+build rather than going stale in a document.
+
+| File | What it is | Version | Licence | Retrieved |
+| --- | --- | --- | --- | --- |
+| `standards/data/bearings.yaml` | ISO 15 deep-groove ball bearing boundary dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/cap_screws.yaml` | ISO 4762 (DIN 912) socket-head cap screw head dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/dowel_pins.yaml` | ISO 2338 parallel-pin dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/extrusions.yaml` | T-slot profile geometry (Bosch Rexroth / Misumi HFS common metric convention) | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/hex_bolts.yaml` | ISO 4014 / ISO 4017 hexagon-head bolt and screw head dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/hex_nuts.yaml` | ISO 4032 style-1 hexagon nut dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/materials.yaml` | per-record citations — every property cites its own publication | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/metric_clearance.yaml` | ISO 273 metric clearance holes | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/metric_thread.yaml` | ISO 261 / ISO 724 metric threads | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/nema_frames.yaml` | NEMA ICS 16 stepper frame mounting dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/pipe_schedules.yaml` | ASME B36.10M welded and seamless wrought steel pipe dimensions | 0.1.0 | CC0-1.0 | 2026-08-17 |
+| `standards/data/washers.yaml` | ISO 7089 plain washer dimensions (normal series, 200 HV) | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `tolerance/data/iso2768_angular.yaml` | ISO 2768-1 general tolerances (angular dimensions) | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `tolerance/data/iso2768_linear.yaml` | ISO 2768-1 general tolerances (linear dimensions) | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `tolerance/data/iso286_deviations.yaml` | ISO 286-1 fundamental deviations (shaft letters d/e/f/g, k, m/n/p, r/s <= 50 mm, u <= 18 mm) | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `tolerance/data/iso286_grades.yaml` | ISO 286-1 standard tolerance grades (IT grades) | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `tolerance/data/process_capability.yaml` | DFM screening estimates (typical finest achievable tolerances) | 0.1.0 | CC0-1.0 | 2026-07-08 |
+
+Fetched data is not in that table, because none of it is in the package. One recipe ships
+today — the MUSE benchmark's case index (CC BY 4.0, pinned to a commit rather than a
+branch, since a leaderboard benchmark moves and a published score has to name the version
+it was measured against) — and what ships is the URL and the digest, never the payload.
+
 ## Data this library may read and may not ship
 
 Not every useful table is redistributable. A publisher's section database, a benchmark's
