@@ -20,7 +20,7 @@ print(sections.render())
 #     analysis, 0 unresolved
 ```
 
-## Three rules, and each is a judgement
+## Four rules, and each is a judgement
 
 **A layer that is absent is not a layer that passed.** `missing()` names what is not there
 and `covers()` names what is, so "we did not test it" and "we tested it and it held" are
@@ -32,6 +32,13 @@ performed is `NOT_EVALUATED` in its own layer, and it pulls the bundle down with
 when every check passed. The physics passing is the *reason* to test, not a substitute for
 having tested. `verified` is stricter than `status`: it is True only when a plan is present
 and every item in it has a recorded, passing outcome.
+
+**An artifact that left unvalidated is disclosed here, not only in its own header.** The
+[export gate](export-gating.md) watermarks the file it writes. The fact the *bundle* adds is
+that the artifact exists in the world carrying that mark. So a bundle whose checks all pass
+and whose drawing was exported under an override is `NOT_EVALUATED`: nothing failed, and
+something left the tool with no verdict behind it. An empty `exports` is not "nothing was
+exported" — it is "this bundle does not say", and `missing()` names it.
 
 **A review that no longer applies is not a review.** The dossier already detects that the
 artifact moved under a review record. Here that degrades the bundle rather than sitting as
@@ -52,6 +59,7 @@ blocking failure to hide behind another layer's gap.
 | `review` | the dossier's status, or NOT_EVALUATED if the record is stale | |
 | `exploration` | **nothing** — informational | a sweep says what the *space* contains, not whether this part is sound |
 | `callouts` | the callout scorecard | see [typed callouts](typed-callouts.md) |
+| `export` | PASS only when every emitted artifact left validated | an unvalidated one is NOT_EVALUATED, and the artifact is named; see [the export gate](export-gating.md) |
 | `geometric tolerances` | **nothing** — informational | that the callouts parse is not a verdict on the part; see [semantic GD&T](semantic-gdt.md) |
 
 An **informational** section is carried, rendered, and counted in `covers()`, and it does

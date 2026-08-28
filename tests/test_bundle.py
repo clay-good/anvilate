@@ -116,6 +116,7 @@ def test_a_scorecard_only_bundle_is_legitimate_and_says_what_it_is_not():
         "exploration",
         "callouts",
         "load combinations",
+        "export",
         "geometric tolerances",
     }
     assert sections.status is CheckStatus.PASS
@@ -226,7 +227,12 @@ def test_every_section_appears_in_the_rendering():
     for name in ("checks", "verification", "review", "callouts"):
         assert name in rendered
     assert sections.covers() == ("checks", "verification", "review", "callouts")
-    assert sections.missing() == ("exploration", "load combinations", "geometric tolerances")
+    assert sections.missing() == (
+        "exploration",
+        "load combinations",
+        "export",
+        "geometric tolerances",
+    )
 
 
 def test_a_callout_section_with_no_strength_reports_not_evaluated_not_absent():
@@ -268,6 +274,7 @@ def test_the_assembled_bundle_carries_the_roll_up_into_the_predicate():
         "exploration",
         "callouts",
         "load combinations",
+        "export",
         "geometric tolerances",
     ]
     # A verifier reads the roll-up the reviewer saw rather than recomputing it.

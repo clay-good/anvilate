@@ -490,3 +490,86 @@ def test_no_exporter_module_writes_a_file_outside_a_gated_entry_point():
             assert "authorization" in names, (
                 f"{path.name}:{node.name} writes a file and takes no authorization"
             )
+
+
+# ------------------------------------------------------- the other half of the watermark
+
+
+def test_an_export_record_needs_the_artifact_it_is_about():
+    from anvilate.export.gate import ExportRecord
+
+    with pytest.raises(ValueError, match="needs the artifact"):
+        ExportRecord(artifact="   ", authorization=authorize_export(_passing()))
+
+
+def test_a_bundle_that_says_nothing_about_exports_says_so():
+    """Empty is "this bundle does not say", not "nothing was exported".
+
+    The bundle's own rule is that an absent layer is not a layer that passed, and
+    ``missing()`` is where it says which. An export section that simply vanished when no
+    artifact was recorded would read, to anyone holding the bundle, as a part nothing was
+    emitted for.
+    """
+    sections = BundleSections(scorecard=_passing())
+    assert "export" not in sections.covers()
+    assert "export" in sections.missing()
+
+
+def test_an_unvalidated_artifact_drags_a_passing_bundle_down():
+    """The fact the bundle adds: a file exists in the world with no verdict behind it.
+
+    Every check on this card passed. The artifact was authorized from no card at all — the
+    callout-drawing case — so the bundle cannot say the part's artifacts are validated, and
+    ``NOT_EVALUATED`` is what this library calls a verdict that was never established.
+    """
+    from anvilate.export.gate import ExportRecord
+
+    sections = BundleSections(
+        scorecard=_passing(),
+        exports=(
+            ExportRecord(
+                artifact="callout.dxf", authorization=authorize_export(None, override=True)
+            ),
+        ),
+    )
+    assert _passing().status is CheckStatus.PASS
+    assert sections.status is CheckStatus.NOT_EVALUATED
+    assert "callout.dxf" in sections.render()
+    assert "UNVALIDATED" in sections.render()
+
+
+def test_a_validated_artifact_leaves_the_roll_up_where_it_was():
+    from anvilate.export.gate import ExportRecord
+
+    sections = BundleSections(
+        scorecard=_passing(),
+        exports=(ExportRecord(artifact="padeye.dxf", authorization=authorize_export(_passing())),),
+    )
+    assert sections.status is CheckStatus.PASS
+    assert "export" in sections.covers()
+
+
+def test_the_disclosure_reaches_the_attestation_predicate():
+    """A watermark only somebody's terminal saw is not a watermark.
+
+    ``to_json_dict`` is the body of the content-addressed predicate, so this is what makes
+    the disclosure travel with the sealed bundle rather than with the run that produced it.
+    """
+    from anvilate.export.gate import ExportRecord
+
+    sections = BundleSections(
+        scorecard=_passing(),
+        exports=(
+            ExportRecord(
+                artifact="callout.dxf", authorization=authorize_export(None, override=True)
+            ),
+        ),
+    )
+    body = sections.to_json_dict()
+    assert body["status"] == "not_evaluated"
+    assert body["exports"] == [
+        {
+            "artifact": "callout.dxf",
+            "authorization": {"validated": False, "overridden": True, "blocking": []},
+        }
+    ]

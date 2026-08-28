@@ -32,6 +32,7 @@ from ..scorecard import Scorecard
 
 __all__ = [
     "ExportAuthorization",
+    "ExportRecord",
     "ExportRefused",
     "SCREENING_NOTICE",
     "authorize_export",
@@ -192,3 +193,41 @@ def authorize_export(scorecard: Scorecard | None, *, override: bool = False) -> 
     if not override:
         raise ExportRefused(blocking)
     return ExportAuthorization(validated=False, overridden=True, blocking=blocking)
+
+
+class ExportRecord(BaseModel):
+    """One artifact that was emitted, and the authorization it left under.
+
+    The requirement watermarks two things, not one: the exported file's own metadata *and*
+    the evidence bundle. The file half is :meth:`ExportAuthorization.metadata`, written by
+    each exporter. This is the bundle half — the disclosure that an artifact exists in the
+    world, named, with the verdict it carries.
+
+    It is deliberately a *record of what happened* rather than a permission: nothing
+    consults it before writing. A bundle that carries none of these is not a bundle that
+    exported nothing; it is one that does not say, and
+    :meth:`~anvilate.bundle.BundleSections.missing` names it as such.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    # What was written — a filename, a format name, whatever identifies the artifact to
+    # someone holding the bundle. Non-empty, because an unnamed artifact is a disclosure
+    # nobody can act on.
+    artifact: str
+    authorization: ExportAuthorization
+
+    @model_validator(mode="after")
+    def _the_artifact_is_named(self) -> ExportRecord:
+        if not self.artifact.strip():
+            raise ValueError(
+                "an export record needs the artifact it is about; an unnamed artifact is a "
+                "disclosure that an unvalidated file exists somewhere"
+            )
+        return self
+
+    def __str__(self) -> str:
+        if self.authorization.validated:
+            return f"{self.artifact}: VALIDATED"
+        named = ", ".join(self.authorization.blocking) or "no checks were run at all"
+        return f"{self.artifact}: UNVALIDATED, exported past {named}"

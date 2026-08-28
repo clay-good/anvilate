@@ -24,6 +24,12 @@ legitimate screening bundle — it simply says so.
 performed is ``NOT_EVALUATED`` in its own layer, and it pulls the bundle down with it even
 when every check passed. The physics passing is the reason to test, not a substitute.
 
+**An artifact that left unvalidated is disclosed here, not only in its own header.** The
+export gate watermarks the file it writes; the requirement watermarks the bundle too, and
+the fact the bundle adds is that an artifact *exists in the world* carrying that mark. A
+bundle whose checks all pass and whose drawing was exported under an override is
+``NOT_EVALUATED``, because something left the tool with no verdict behind it.
+
 **A review that no longer applies is not a review.** The dossier already detects that the
 artifact moved under a review record; here it degrades the bundle rather than sitting as a
 flag somebody has to notice. That state looks identical to "reviewed" from the outside,
@@ -51,6 +57,7 @@ from .attestation import (
 from .callouts import CalloutSet, callout_scorecard
 from .evidence import SourceRecord
 from .explore import StudyResult
+from .export.gate import ExportRecord
 from .gdt import FeatureControlFrame
 from .loads import CombinationEvidence
 from .review import ReviewerDossier
@@ -147,6 +154,10 @@ class BundleSections(BaseModel):
     ultimate_strength: Quantity | None = None
     base_material: str | None = None
     known_materials: tuple[str, ...] = ()
+    # The artifacts emitted for this part and the authorization each left under. Empty is
+    # not "nothing was exported" — it is "this bundle does not say", which `missing()`
+    # reports rather than smoothing over.
+    exports: tuple[ExportRecord, ...] = ()
 
     @model_validator(mode="after")
     def _the_scorecard_is_the_floor(self) -> BundleSections:
@@ -242,6 +253,27 @@ class BundleSections(BaseModel):
                     detail=self.combinations.detail(),
                 )
             )
+        if self.exports:
+            unvalidated = [record for record in self.exports if not record.authorization.validated]
+            found.append(
+                SectionStatus(
+                    name="export",
+                    # PASS only when every artifact left validated. An unvalidated artifact
+                    # is not a failing check — nothing here failed — it is a file in the
+                    # world whose verdict was never established, which is what
+                    # NOT_EVALUATED means everywhere else in this library.
+                    status=(CheckStatus.NOT_EVALUATED if unvalidated else CheckStatus.PASS),
+                    detail=(
+                        f"{len(self.exports)} artifact(s) emitted, "
+                        f"{len(unvalidated)} unvalidated"
+                        + (
+                            ""
+                            if not unvalidated
+                            else ": " + "; ".join(str(record) for record in unvalidated)
+                        )
+                    ),
+                )
+            )
         if self.frames:
             found.append(
                 SectionStatus(
@@ -270,6 +302,7 @@ class BundleSections(BaseModel):
                 "exploration",
                 "callouts",
                 "load combinations",
+                "export",
                 "geometric tolerances",
             )
             if name not in present
@@ -331,6 +364,8 @@ class BundleSections(BaseModel):
         if self.callouts is not None:
             body["callouts"] = self.callouts.model_dump(mode="json")
             body["calloutScorecard"] = None if card is None else card.model_dump(mode="json")
+        if self.exports:
+            body["exports"] = [record.model_dump(mode="json") for record in self.exports]
         if self.frames:
             body["geometricTolerances"] = [frame.render() for frame in self.frames]
         return body

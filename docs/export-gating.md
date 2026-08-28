@@ -7,8 +7,8 @@ height and a list of holes, wrote the file, and returned the path.
 
 The `artifact-export` requirement had said otherwise from the start — export is enabled only
 when the acceptance checks pass; a caller *may* export an unvalidated part, and then the
-file's metadata must be watermarked as unvalidated. `anvilate.export.gate` is that sentence
-as code.
+file's metadata *and the evidence bundle* must be watermarked as unvalidated.
+`anvilate.export.gate` is that sentence as code.
 
 ## What a caller does
 
@@ -56,6 +56,24 @@ for application metadata, shown by CAD packages under drawing properties, and re
 `ezdxf.readfile`. It goes in the header rather than on a `TEXT` layer because a layer can be
 switched off. QIF gets the same lines at the front of the header `Scope`.
 
+## The bundle half
+
+The requirement watermarks two things: the exported file's own metadata *and* the evidence
+bundle. `ExportRecord(artifact=..., authorization=...)` is the second half — a record of
+what was emitted and the verdict it carries, collected on `BundleSections.exports`.
+
+It changes the roll-up. Every check on a card can pass and the bundle still read
+`NOT_EVALUATED`, because a drawing authorized from no card at all — a callout drawing, say —
+is a file in the world with no verdict behind it. Nothing failed; something left unproven.
+That disclosure rides into `to_json_dict`, which is the body of the content-addressed
+attestation predicate, so it travels with the sealed bundle rather than with the terminal
+that produced it. And an empty `exports` is not "nothing was exported": `missing()` names
+`export` as a layer the bundle does not speak to, the same way it names an absent
+verification plan.
+
+Nothing consults these records before writing a file. They are a disclosure, not a second
+permission — the permission is the `authorization` the exporter already required.
+
 ## What keeps it there
 
 Four ratchets, each written so that a plausible way around the gate fails the build rather
@@ -76,11 +94,14 @@ than passing quietly:
   sandbox. The day an implementation lands, that test fails and somebody has to decide what
   discharges it, rather than the tool quietly acquiring code with no sandbox behind it.
 
-Eight mutations were run against the gate in a scratch copy — dropping the unevaluated
+Twelve mutations were run against the gate in a scratch copy — dropping the unevaluated
 checks from the blocking set, treating a missing card as a pass, making `_stamp` a no-op,
 freezing the watermark at its clean form, making the authorization optional with a clean
 default, removing QIF's cross-check, removing the `model_copy` override, and moving the file
-write into a private helper. All eight were killed.
+write into a private helper, plus four on the bundle half — the unvalidated artifact no
+longer degrading the roll-up, the export section turned informational, the records dropped
+from the predicate body, and the absent layer no longer named as missing. All twelve were
+killed.
 
 ## What is not gated
 
