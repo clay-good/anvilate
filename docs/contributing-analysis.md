@@ -198,10 +198,26 @@ a Poisson's ratio that cannot reach 0.5, an angle range a formula's geometry req
 correlation's validity floor. Those are the library's own statements about where a formula
 stops applying, and an inverted comparison in one reads exactly like a correct one.
 
-To run the instrument, append a `sys.settrace` line recorder to `tests/conftest.py`, run
-the suite once, then walk each module's AST for `ast.If` nodes whose body raises and whose
-test mentions a numeric literal other than 0 or 1, or an UPPER_CASE name. Anything whose
-`raise` line is not in the trace is unpinned.
+To run the instrument, measure once with `coverage` and then read the AST:
+
+```bash
+coverage run --source=src/anvilate -m pytest -q
+```
+
+Load the run with `coverage.Coverage(); cov.load(); cov.get_data().lines(path)` for the
+reached set, then walk each module for `ast.Raise` nodes whose line is not in it, keeping
+the ones whose nearest enclosing `if` compares against a numeric literal other than 0 or 1,
+or against an UPPER_CASE name. That is the unpinned set. (An earlier version of this page
+described rewriting every raise site through a `sys.settrace` recorder; the coverage run
+gives the same answer in one command and without a scratch copy of the tree.)
+
+Two things will otherwise fill the result with false positives, and both were learned by
+getting them wrong. **Follow the call that validates.** Ten modules check a fraction
+through a private `_fraction(value, name)`, so a scan that stops at the function body
+reports every one of them as unguarded — 48 hits, 44 of them false, with the one real hole
+buried in the middle. **And accept any bound, not just the one you expected**: a correct
+`0 < accel_fraction <= 0.5` reads as a hole to a scan that only recognises a comparison
+against 1.
 
 That sweep found 38 on 2026-08-25; `tests/test_domain_guards.py` took it to 2, and both
 survivors are safety nets that no input can reach (asserted as such rather than left as an
