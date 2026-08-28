@@ -152,9 +152,10 @@ allowable = Quantity.parse("380 MPa")
 needed = bolt_diameter_for_shear(
     shear_load=load, allowable_shear=allowable, required_safety_factor=2.0
 )
-achieved = allowable.to("MPa").magnitude / bolt_shear_stress(
-    force=load, diameter=needed
-).to("MPa").magnitude
+achieved = (
+    allowable.to("MPa").magnitude
+    / bolt_shear_stress(force=load, diameter=needed).to("MPa").magnitude
+)
 print(f"{needed.to('mm').magnitude:.3f} mm gives SF {achieved:.3f}")
 ```
 
@@ -182,9 +183,11 @@ try:
     draft.release()
 except ValueError as exc:
     print("blocked:", str(exc).split(".")[0])
-released = draft.with_confirmation("design_load", by="R. Engineer").with_confirmation(
-    "bore_diameter", by="R. Engineer"
-).release()
+released = (
+    draft.with_confirmation("design_load", by="R. Engineer")
+    .with_confirmation("bore_diameter", by="R. Engineer")
+    .release()
+)
 print(sorted(released), released["design_load"])
 ```
 
