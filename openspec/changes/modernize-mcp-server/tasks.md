@@ -23,9 +23,12 @@
 ## 2. Implementation (when the server is built)
 
 - [x] 2.1 Stateless server skeleton on the 2026-07-28 revision — `handle_request`
-      (transport-agnostic) and `serve_stdio` (newline-delimited JSON). `compile_spec` is
-      dispatched; the rest are refused with the reason, and four cannot be served
-      statelessly at all (below)
+      (transport-agnostic) and `serve_stdio` (newline-delimited JSON). **Both servable
+      operations are now dispatched**: `compile_spec`, and `run_validation` over
+      `anvilate.screening.screen_spec`. The other six are refused for a structural reason
+      rather than for want of a handler — two are task-dispatched by declared cost and four
+      cannot be served statelessly at all (below). The "not dispatched yet" refusal is
+      unreached by any catalogued tool and asserted so in both directions.
 - [ ] 2.2 structuredContent results + preview-image attachments
 - [ ] 2.3 Tasks extension: handles, progress, cancellation with subprocess cleanup
 - [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — the export

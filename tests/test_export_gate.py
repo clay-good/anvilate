@@ -643,3 +643,25 @@ def test_the_report_never_drops_an_empty_heading():
     # The standards heading is still there and still says it is empty — one empty list
     # filling in for the other is exactly what an omitted heading used to allow.
     assert "none declared" in stated.to_html()
+
+
+# --------------------------------------------------------------- the gate's negative space
+
+
+def test_the_spec_is_exportable_while_the_part_is_red():
+    """``artifact-export``: the source and the spec export regardless of validation state.
+
+    They are the editable model, not a claimed-valid artifact, so gating them would lock an
+    engineer out of their own inputs at exactly the moment the checks are failing. This is
+    the requirement's own scenario, and it is pinned here rather than left implicit —
+    because the obvious next move after building an export gate is to apply it to
+    everything that writes a file.
+    """
+    from anvilate.spec.validate import dump_spec_yaml
+
+    assert "authorization" not in inspect.signature(dump_spec_yaml).parameters
+    assert not any(
+        "authorization" in inspect.signature(fn).parameters
+        for name, fn in _export_entry_points().items()
+        if not _writes_a_file_or_document(fn)
+    ), "a function that emits nothing has acquired a gate it has no artifact to watermark"

@@ -3,9 +3,9 @@
 Everything else in this repository imports the library. This one starts the server the way
 a client does — ``python -m anvilate.mcp``, newline-delimited JSON over its stdin and
 stdout — and holds a short session with it: initialize, list the tools, compile a spec,
-and try the three things it refuses.
+run a validation, and try the two things it refuses.
 
-The refusals are the interesting half, and they are three different statements:
+The refusals are the interesting half, and they are two different statements:
 
 1. **``build_part`` is task-dispatched.** Its cost is unbounded because it executes
    caller-supplied code, so a synchronous call cannot promise a reply and is refused
@@ -14,9 +14,11 @@ The refusals are the interesting half, and they are three different statements:
    scorecard, so it is asking the server to remember what the last call produced — and
    this server has no memory between calls. Four of the eight published tools are in that
    position, and it is a contract question rather than a missing feature.
-3. **``run_validation`` is not dispatched yet.** Contract and handler exist, the operation
-   behind them does not, and a plausible-looking result invented here would be
-   indistinguishable from a real one.
+Both operations that are servable at all — bounded, backed, and naming what they act on —
+are dispatched, and the session calls both. ``run_validation``'s answer is the shape worth
+looking at: the scorecard comes back with the analytical tier ``not_evaluated``, because a
+Design Spec declares no structural element type and no discipline-pack screen can be
+selected from one. That is a named gap, which is the only kind this library ships.
 
 And one thing that is *not* a refusal: a spec document that fails validation comes back as
 a **result** carrying its error paths. The request was well formed; the document was not,
@@ -37,7 +39,7 @@ _SRC = str(Path(__file__).resolve().parent.parent / "src")
 
 
 def _requests() -> list[dict]:
-    """The session, in order: handshake, catalog, one real call, three refusals."""
+    """The session, in order: handshake, catalog, three real calls, two refusals."""
     from anvilate.spec import (
         AcceptanceCriteria,
         DesignSpec,
@@ -72,9 +74,9 @@ def _requests() -> list[dict]:
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
         call(3, "compile_spec", {"document": document}),
         call(4, "compile_spec", {"document": {"name": "nameless"}}),
-        call(5, "build_part", {"spec": document}),
-        call(6, "read_scorecard", {}),
-        call(7, "run_validation", {"spec": document}),
+        call(5, "run_validation", {"spec": document}),
+        call(6, "build_part", {"spec": document}),
+        call(7, "read_scorecard", {}),
     ]
 
 
@@ -110,8 +112,13 @@ def main() -> None:
     for message in bad["structuredContent"]["errors"][:3]:
         print(f"    {message}")
 
-    print("\nand the three refusals, each saying a different thing:")
-    for request_id in (5, 6, 7):
+    card = by_id[5]["result"]["structuredContent"]["scorecard"]
+    print("\nrun_validation -> a scorecard, with the tier it cannot run named:")
+    for entry in card["entries"]:
+        print(f"    [{entry['status'].upper()}] {entry['name']}: {entry['detail'][:72]}")
+
+    print("\nand the two refusals, each saying a different thing:")
+    for request_id in (6, 7):
         error = by_id[request_id]["error"]
         print(f"  {error['code']}  {error['message'][:96]}")
 

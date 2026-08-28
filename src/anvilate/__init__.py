@@ -55,6 +55,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.mcp` — the pipeline as MCP tool contracts, and the rule that
   decides which operations are tasks rather than synchronous calls.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
+- :mod:`anvilate.screening` — a Design Spec screened on the checks the document
+  itself supports, with the tier no spec can run named rather than dropped.
 - :mod:`anvilate.uncertainty` — input scatter propagated to a shortfall
   probability and a sensitivity ranking.
 - :mod:`anvilate.verification` — the physical test each analytical check implies,

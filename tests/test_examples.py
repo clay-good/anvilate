@@ -7526,10 +7526,15 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     assert by_id[4]["result"]["isError"] is True
     assert "error" not in by_id[4], "an invalid document is a result, not a transport error"
 
-    # Three refusals, each a different statement about why.
-    assert "task-dispatched" in by_id[5]["error"]["message"]
-    assert "no memory between calls" in by_id[6]["error"]["message"]
-    assert "not dispatched yet" in by_id[7]["error"]["message"]
+    # The second real call: a scorecard, whose analytical tier is a named gap rather than
+    # an absent entry — a Design Spec declares no element type for a pack screen to select.
+    card = by_id[5]["result"]["structuredContent"]["scorecard"]
+    assert [entry["status"] for entry in card["entries"]] == ["not_evaluated"]
+    assert "declares no structural element type" in card["entries"][0]["detail"]
+
+    # Two refusals, each a different statement about why.
+    assert "task-dispatched" in by_id[6]["error"]["message"]
+    assert "no memory between calls" in by_id[7]["error"]["message"]
 
 
 def test_timber_lateral_stability_example_fails_the_rafter_that_bending_stress_passes():

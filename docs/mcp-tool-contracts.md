@@ -144,14 +144,29 @@ encode back, so a stdio loop, an HTTP handler and a test drive the same code. It
 `initialize`, `tools/list` and `tools/call`, and returns `None` for a notification, which
 the protocol says takes no response — including no error response.
 
-**One operation is dispatched: `compile_spec`.** It is the only tool that is backed, bounded
-and servable statelessly all at once, and it is the first thing an agent can call over the
-wire and get an answer to. A document that does not validate comes back as a **result**,
-not a transport error: the output schema requires `errors` and makes `spec` optional for
-exactly that, because a JSON-RPC error would tell the client its *request* was malformed
-when it was the document. `isError` on the result rides on `errors` being non-empty, so a
-client reading only the protocol flag and one reading the structured content reach the same
-verdict.
+**Every operation that is servable at all is dispatched: `compile_spec` and
+`run_validation`.** Those are the two tools that are backed, bounded and servable
+statelessly all at once; the other six are refused for a structural reason rather than for
+want of a handler.
+
+`compile_spec` answers with a spec or with the paths that stopped it. A document that does
+not validate comes back as a **result**, not a transport error: the output schema requires
+`errors` and makes `spec` optional for exactly that, because a JSON-RPC error would tell the
+client its *request* was malformed when it was the document. `isError` rides on `errors`
+being non-empty, so a client reading only the protocol flag and one reading the structured
+content reach the same verdict.
+
+`run_validation` answers with a scorecard — see [screening a spec](spec-screening.md) for
+what a Design Spec can and cannot be screened on. Two of its decisions differ from
+`compile_spec`'s and the difference is the point:
+
+- **A document that is not a Design Spec is a malformed request here.** Its input property
+  is declared as the *published Design Spec schema*, not as "a candidate document", so a
+  document that does not match it fails the contract the client was handed. `-32602` with
+  the paths is where that client should look.
+- **`tiers` replaces the spec's own acceptance tiers rather than intersecting them.** A
+  caller asking for a tier the document did not demand is asking a question, and today's
+  answer for T0 and T1 — a named gap — is more useful than a silent omission.
 
 Everything else ends in a refusal, and the kinds are worth separating:
 
@@ -170,7 +185,10 @@ Everything else ends in a refusal, and the kinds are worth separating:
 - **`-32000`, stateless.** One of the four above.
 - **`-32000`, not dispatched yet.** The contract and the handler exist; the operation does
   not. A result invented here would be indistinguishable from a real one, which is the
-  failure a published tool contract makes most likely.
+  failure a published tool contract makes most likely. **No tool in today's catalog reaches
+  this branch** — every servable one is wired. It stays as the net for the next tool that
+  becomes servable before it is built, and a test asserts both halves: that no catalogued
+  tool hits it, and that the branch itself still refuses when it is hit.
 
 ## The transport
 

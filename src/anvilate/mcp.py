@@ -718,6 +718,20 @@ _JSON_TYPES: dict[str, Any] = {
 }
 
 
+class _InvalidArguments(ValueError):
+    """A handler's own refusal of arguments the published schema could not check itself.
+
+    :func:`_argument_issues` validates what a tool's input schema states inline — types,
+    enums, bounds. It does not follow a ``$ref``, so a property declared as "a Design Spec"
+    is checked by the handler that has to parse one, and this is how that refusal reaches
+    the client as INVALID_PARAMS rather than as a traceback.
+    """
+
+    def __init__(self, issues: list[str]) -> None:
+        self.issues = issues
+        super().__init__("; ".join(issues))
+
+
 def _error(request_id: Any, code: int, message: str, **data: Any) -> dict[str, Any]:
     error: dict[str, Any] = {"code": code, "message": message}
     if data:
@@ -819,7 +833,10 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             f"the operation behind them is not. A result invented here would be "
             f"indistinguishable from a real one",
         )
-    structured = handler(arguments)
+    try:
+        structured = handler(arguments)
+    except _InvalidArguments as refusal:
+        return _error(request_id, INVALID_PARAMS, str(refusal))
     return {
         "jsonrpc": "2.0",
         "id": request_id,
@@ -859,9 +876,49 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
     return {"spec": spec.model_dump(mode="json"), "errors": []}
 
 
+def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``run_validation``, dispatched to :func:`anvilate.screening.screen_spec`.
+
+    **A document that is not a Design Spec is a malformed request here, unlike in
+    ``compile_spec``.** That tool's input property is declared as "a candidate spec
+    document, YAML- or JSON-derived", so a document that fails validation is the answer it
+    exists to give. This tool's input property is declared as the published Design Spec
+    schema, so a document that does not match it does not satisfy the contract the client
+    was handed — and the honest code for that is INVALID_PARAMS with the paths.
+
+    ``tiers`` **replaces** the spec's own acceptance tiers rather than intersecting them. A
+    caller asking for a tier the document did not demand is asking a question, and the
+    answer — for T0 and T1 today, a named gap — is more useful than a silent omission. It
+    is applied by re-validating the whole document, because ``model_copy`` does not re-run
+    validators and the tier list has one.
+    """
+    from .screening import screen_spec
+    from .spec import SpecValidationError, parse_spec
+
+    document = dict(arguments["spec"])
+    requested = arguments.get("tiers")
+    if requested is not None:
+        document = {
+            **document,
+            "acceptance": {**dict(document.get("acceptance") or {}), "tiers": list(requested)},
+        }
+    try:
+        spec = parse_spec(document)
+    except SpecValidationError as failure:
+        raise _InvalidArguments(
+            [f"spec.{e['loc']}: {e['msg']}" for e in failure.errors]
+        ) from failure
+    except (ValueError, TypeError, KeyError) as failure:
+        raise _InvalidArguments([f"spec: {failure}"]) from failure
+    return {"scorecard": screen_spec(spec).model_dump(mode="json")}
+
+
 # The operations wired to real code today. A tool absent from this map is refused with the
 # reason rather than answered — see the refusal above.
-_DISPATCH: dict[str, Any] = {"compile_spec": _compile_spec}
+_DISPATCH: dict[str, Any] = {
+    "compile_spec": _compile_spec,
+    "run_validation": _run_validation,
+}
 
 
 def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:

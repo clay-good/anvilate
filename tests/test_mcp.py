@@ -456,11 +456,37 @@ def test_a_declared_subject_must_be_a_required_input():
         ToolDefinition(**{**base.model_dump(), "input_schema": optional})
 
 
-def test_nothing_is_dispatched_yet_and_the_handler_says_so():
-    """A handler that returned a plausible result for an operation nobody wired would be
-    indistinguishable from a real one, which is the failure mode a tool contract makes
-    most likely."""
-    error = _call("run_validation", {"spec": {}})["error"]
+def test_every_servable_tool_is_dispatched_and_the_refusal_stays_as_a_net():
+    """The "not dispatched yet" branch is now unreachable by any tool in the catalog.
+
+    That is worth asserting in both directions. A handler returning a plausible result for
+    an operation nobody wired would be indistinguishable from a real one, so the refusal
+    stays — and a tool that becomes servable without a handler must hit it rather than
+    404. But an unreachable branch nobody notices is the dead guard this library hunts
+    everywhere else, so the reachable half is exercised directly, on a tool the catalog
+    does not contain.
+    """
+    from anvilate import mcp
+
+    servable = [
+        tool
+        for tool in tool_catalog()
+        if tool.dispatch is mcp.Dispatch.SYNCHRONOUS and tool.is_stateless
+    ]
+    assert servable, "the catalog has no servable tool at all"
+    undispatched = [tool.name for tool in servable if tool.name not in mcp._DISPATCH]
+    assert undispatched == [], f"servable and unwired: {undispatched}"
+
+    # The branch itself, reached by removing the handler for a tool that has one. Patching
+    # the map rather than the catalog keeps the tool's published contract untouched, which
+    # is the state a half-shipped operation would actually be in.
+    original = dict(mcp._DISPATCH)
+    try:
+        del mcp._DISPATCH["run_validation"]
+        error = _call("run_validation", {"spec": _spec_document()})["error"]
+    finally:
+        mcp._DISPATCH.clear()
+        mcp._DISPATCH.update(original)
     assert error["code"] == -32000
     assert "not dispatched yet" in error["message"]
     assert "invented" in error["message"]
