@@ -125,7 +125,8 @@ def fillet_weld_design_strength(
     the weld-metal shear strength 0.6·F_EXX acts over the effective throat area
     0.707·w·L. ``leg_size`` w is the fillet leg, ``length`` L the weld length,
     ``electrode_strength`` F_EXX the electrode's tensile strength (e.g. 490 MPa for an
-    E70 electrode), and ``weld_metal_shear_fraction`` the 0.6 factor (caller-tunable).
+    E70 electrode), and ``weld_metal_shear_fraction`` the 0.6 factor (caller-tunable, in (0, 1] — it
+    is a shear-to-tensile ratio).
     This is the capacity (a force) to compare against the load, the rating complement
     to :func:`fillet_weld_throat_stress`; a real check also verifies the base-metal
     strength at the weld. Returns the nominal strength in kN.
@@ -133,9 +134,13 @@ def fillet_weld_design_strength(
     _require(leg_size, "[length]", "leg_size")
     _require(length, "[length]", "length")
     _require(electrode_strength, "[pressure]", "electrode_strength")
-    if weld_metal_shear_fraction <= 0:
+    if not 0 < weld_metal_shear_fraction <= 1:
         raise ValueError(
-            f"weld_metal_shear_fraction must be positive; got {weld_metal_shear_fraction}"
+            f"weld_metal_shear_fraction must lie in (0, 1]; got "
+            f"{weld_metal_shear_fraction}. It is the ratio of the weld metal's shear "
+            f"strength to its tensile strength (0.6 in J2.4), and a ratio above 1 is not "
+            f"a material — the likeliest way to reach one is a decimal slip, which "
+            f"multiplies the reported capacity."
         )
     w = leg_size.to("mm").magnitude
     length_mm = length.to("mm").magnitude
@@ -164,16 +169,20 @@ def fillet_weld_directional_strength(
     exactly :func:`fillet_weld_design_strength` — while one loaded square across it
     (θ = π/2, transverse) is 50% stronger. ``leg_size`` w, ``length`` L, and
     ``electrode_strength`` F_EXX as in the base check; ``load_angle`` θ **in radians**
-    (0 to π/2); ``weld_metal_shear_fraction`` the 0.6 factor. Use the base longitudinal
+    (0 to π/2); ``weld_metal_shear_fraction`` the 0.6 factor, in (0, 1]. Use the base longitudinal
     strength for a weld group unless every segment shares one load angle. Returns the
     nominal strength in kN.
     """
     _require(leg_size, "[length]", "leg_size")
     _require(length, "[length]", "length")
     _require(electrode_strength, "[pressure]", "electrode_strength")
-    if weld_metal_shear_fraction <= 0:
+    if not 0 < weld_metal_shear_fraction <= 1:
         raise ValueError(
-            f"weld_metal_shear_fraction must be positive; got {weld_metal_shear_fraction}"
+            f"weld_metal_shear_fraction must lie in (0, 1]; got "
+            f"{weld_metal_shear_fraction}. It is the ratio of the weld metal's shear "
+            f"strength to its tensile strength (0.6 in J2.4), and a ratio above 1 is not "
+            f"a material — the likeliest way to reach one is a decimal slip, which "
+            f"multiplies the reported capacity."
         )
     if not 0.0 <= load_angle <= pi / 2:
         raise ValueError(f"load_angle must be between 0 and pi/2 radians; got {load_angle}")
@@ -203,7 +212,7 @@ def weld_base_metal_shear_strength(
     the weld line: R_n = 0.6·F_u·A_BM, with A_BM = t·L the base-metal area (the connected
     element's thickness through its length). ``base_thickness`` t is the thickness of the
     part the weld tears out of, ``length`` L the weld length, ``base_ultimate_strength``
-    F_u the base metal's tensile strength, and ``shear_fraction`` the 0.6 rupture factor.
+    F_u the base metal's tensile strength, and ``shear_fraction`` the 0.6 rupture factor, in (0, 1].
     Compare the lesser of this and the weld-metal :func:`fillet_weld_design_strength`: a
     heavy weld on a thin plate is base-metal-limited, a light weld on thick plate
     weld-metal-limited. Returns R_n in kN.
@@ -211,8 +220,12 @@ def weld_base_metal_shear_strength(
     _require(base_thickness, "[length]", "base_thickness")
     _require(length, "[length]", "length")
     _require(base_ultimate_strength, "[pressure]", "base_ultimate_strength")
-    if shear_fraction <= 0:
-        raise ValueError(f"shear_fraction must be positive; got {shear_fraction}")
+    if not 0 < shear_fraction <= 1:
+        raise ValueError(
+            f"shear_fraction must lie in (0, 1]; got {shear_fraction}. It is the ratio "
+            f"of the base metal's shear rupture strength to its tensile strength (0.6 in "
+            f"J4.2), and a ratio above 1 is not a material."
+        )
     t = base_thickness.to("mm").magnitude
     length_mm = length.to("mm").magnitude
     fu = base_ultimate_strength.to("MPa").magnitude

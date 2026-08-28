@@ -215,3 +215,33 @@ says so.
 One defect fell out of it: `eccentric_weld_group_peak_stress` checked that each segment was
 a pair and then indexed each *point* without checking, so a malformed endpoint raised
 `IndexError` — which a caller catching `ValueError` does not catch.
+
+## The bound a parameter's own name fixes
+
+Re-measuring in August 2026 with a coverage run rather than a trace put 129 of the
+still-unreached guards in a single family: a parameter whose *name* already fixes its
+range — an efficiency, a mole fraction, a coefficient of utilization, a heat-capacity
+ratio, a count of shear planes. They all exist for the same mistake, and it is one
+keystroke: a percentage where a fraction belongs. `0.85` typed as `85`, the 0.6 weld
+factor typed as `6`. The value is a well-formed float in the right units, so without the
+guard it travels straight through the formula and comes back as a capacity a hundred
+times too large.
+
+So: **if a parameter is named for a bounded quantity, bound it.** Ten modules already
+carry a private `_fraction(value, name)` for the (0, 1] case; use it, or write the
+comparison inline. `tests/test_fraction_guards.py` trips 32 of these guards one at a time
+and then passes a value just inside each bound, because a guard that refuses everything
+passes a refusal test exactly as well as a correct one.
+
+That file is also the ratchet. It re-derives the census from the source — following a
+parameter into the helper it is validated by, which is the whole difference between a
+census and a list of false positives — so a new function taking one of these parameters
+without a guard fails there rather than shipping. **5 parameters are exempt**, each with
+the reason its name lies about its range: a spectral efficiency is bits per second per
+hertz, a molar absorptivity (in two functions) is tens of thousands, a heat pump's
+seasonal efficiency is its COP of 3 to 4, and excess air routinely runs past 100%. An exemption that turns out to be
+guarded after all fails as stale.
+
+Writing it found one hole: the AISC J2.4 weld shear fraction guarded positivity and not
+its upper bound, so `6` for `0.6` returned ten times the weld capacity with every other
+check satisfied — the unsafe direction for a screen to be wrong in.
