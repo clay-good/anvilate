@@ -37,6 +37,7 @@ from xml.etree import ElementTree as ET
 from anvilate.attestation import Component, ComponentKind, EnvironmentBOM
 from anvilate.bundle import BundleSections
 from anvilate.evidence import SourceRecord
+from anvilate.export.gate import authorize_export
 from anvilate.export.qif import QIF_NAMESPACE, export_qif_results
 from anvilate.scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 
@@ -87,9 +88,19 @@ SECTIONS = BundleSections(
 
 
 def lug_as_qif() -> str:
-    """The lug's evidence as a QIF Results document."""
+    """The lug's evidence as a QIF Results document.
+
+    This card fails and this export happens anyway, which is the requirement's own second
+    scenario rather than an oversight: evidence of a failing screen is exactly what a
+    quality package wants to receive. The override is explicit, and the document's header
+    says UNVALIDATED and names the checks it was exported past.
+    """
     return export_qif_results(
-        SECTIONS, part_name="lifting-lug-01", spec_digest=SPEC_DIGEST, bom=BOM
+        SECTIONS,
+        part_name="lifting-lug-01",
+        spec_digest=SPEC_DIGEST,
+        bom=BOM,
+        authorization=authorize_export(SECTIONS.scorecard, override=True),
     )
 
 

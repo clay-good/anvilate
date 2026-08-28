@@ -10,12 +10,25 @@ characteristics, each with a requirement, an evaluated actual, and a status. Tha
 free of charge. `export_qif_results` writes the evidence bundle out in it.
 
 ```python
+from anvilate.export.gate import authorize_export
 from anvilate.export.qif import export_qif_results
 
 document = export_qif_results(
-    sections, part_name="lifting-lug-01", spec_digest=spec_digest, bom=bom
+    sections,
+    part_name="lifting-lug-01",
+    spec_digest=spec_digest,
+    bom=bom,
+    # This card fails, so the export is an explicit override and the header says so.
+    authorization=authorize_export(sections.scorecard, override=True),
 )
 ```
+
+The `authorization` is the [export gate](../src/anvilate/export/gate.py): a passing card
+authorizes itself, a failing one refuses until the caller overrides, and the header `Scope`
+carries the screening notice either way plus an `UNVALIDATED EXPORT` line naming the
+blocking checks when it was overridden. This is the one exporter that can see the card it is
+exporting — it is in the bundle — so it also refuses an authorization obtained from a
+different, passing card.
 
 The worked example is [`examples/lug_scorecard_as_qif.py`](../examples/lug_scorecard_as_qif.py):
 

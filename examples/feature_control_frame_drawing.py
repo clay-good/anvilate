@@ -34,6 +34,7 @@ from pathlib import Path
 
 from anvilate.export.dxf import export_feature_control_frame_dxf
 from anvilate.export.fcf import frame_drawing
+from anvilate.export.gate import authorize_export
 from anvilate.export.qif import qif_characteristic_mapping
 from anvilate.gdt import (
     Characteristic,
@@ -73,9 +74,17 @@ def three_consumers(frame: FeatureControlFrame) -> tuple[str, str, tuple[float, 
 
 
 def draw(dxf_path: str | Path) -> Path:
-    """Write the callout to a DXF, on its own ``GDT`` annotation layer."""
+    """Write the callout to a DXF, on its own ``GDT`` annotation layer.
+
+    A callout is a requirement, not a checked part, so there is no acceptance card to
+    authorize it — and the honest form of that is an explicit override, which stamps the
+    drawing UNVALIDATED rather than letting it leave looking released.
+    """
     return export_feature_control_frame_dxf(
-        frame=hole_position_frame(), path=dxf_path, text_height=TEXT_HEIGHT
+        frame=hole_position_frame(),
+        path=dxf_path,
+        authorization=authorize_export(None, override=True),
+        text_height=TEXT_HEIGHT,
     )
 
 

@@ -24,6 +24,7 @@ import pytest
 from anvilate.attestation import Component, ComponentKind, EnvironmentBOM
 from anvilate.bundle import BundleSections
 from anvilate.evidence import SourceRecord
+from anvilate.export.gate import authorize_export
 from anvilate.export.qif import (
     _QIF_DATUM_MODIFIER,
     _QIF_DEFINITION_TYPE,
@@ -104,12 +105,26 @@ def _sections(card: Scorecard | None = None) -> BundleSections:
     )
 
 
+def _auth(sections: BundleSections):
+    """The authorization this bundle's own card supports.
+
+    These tests are about what a QIF document says, not about the export gate — that is
+    `tests/test_export_gate.py`. Deriving the override from the card rather than always
+    passing one keeps the gate honest here too: a fixture card that starts passing stops
+    being exported under an override.
+    """
+    card = sections.scorecard
+    return authorize_export(card, override=not card.passed)
+
+
 def _export(sections: BundleSections | None = None) -> str:
+    sections = sections if sections is not None else _sections()
     return export_qif_results(
-        sections if sections is not None else _sections(),
+        sections,
         part_name="lug-01",
         spec_digest="sha256:abc123",
         bom=_bom(),
+        authorization=_auth(sections),
     )
 
 
@@ -323,7 +338,13 @@ def test_the_callout_layer_crosses_too():
         ),
     )
     read = _read_characteristics(
-        export_qif_results(sections, part_name="lug-01", spec_digest="sha256:abc123", bom=_bom())
+        export_qif_results(
+            sections,
+            part_name="lug-01",
+            spec_digest="sha256:abc123",
+            bom=_bom(),
+            authorization=_auth(sections),
+        )
     )
     layers = {record["description"].split(":", 1)[0] for record in read.values()}  # type: ignore[union-attr]
     assert layers == {"analysis", "callouts"}
@@ -338,7 +359,11 @@ def test_the_export_is_deterministic():
 
 def test_a_different_spec_digest_is_a_different_document():
     other = export_qif_results(
-        _sections(), part_name="lug-01", spec_digest="sha256:def456", bom=_bom()
+        _sections(),
+        part_name="lug-01",
+        spec_digest="sha256:def456",
+        bom=_bom(),
+        authorization=_auth(_sections()),
     )
     assert other != _export()
 
@@ -374,7 +399,13 @@ def test_the_export_refuses_to_be_anonymous(part_name, spec_digest):
     # a completely different reason.
     expected = "part it is about" if not part_name.strip() else "digest of the spec revision"
     with pytest.raises(ValueError, match=expected):
-        export_qif_results(_sections(), part_name=part_name, spec_digest=spec_digest, bom=_bom())
+        export_qif_results(
+            _sections(),
+            part_name=part_name,
+            spec_digest=spec_digest,
+            bom=_bom(),
+            authorization=_auth(_sections()),
+        )
 
 
 def test_no_value_is_written_in_exponent_notation():
@@ -592,7 +623,11 @@ def test_the_qpid_moves_when_anything_in_the_document_moves():
     variants = [
         _export(),
         export_qif_results(
-            _sections(), part_name="lug-01", spec_digest="sha256:abc123", bom=other_bom
+            _sections(),
+            part_name="lug-01",
+            spec_digest="sha256:abc123",
+            bom=other_bom,
+            authorization=_auth(_sections()),
         ),
         _export(
             BundleSections(

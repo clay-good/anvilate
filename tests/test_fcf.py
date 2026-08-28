@@ -30,6 +30,7 @@ from anvilate.export.fcf import (
     characteristic_symbol,
     frame_drawing,
 )
+from anvilate.export.gate import authorize_export
 from anvilate.export.qif import qif_characteristic_mapping
 from anvilate.gdt import (
     Characteristic,
@@ -44,6 +45,10 @@ from anvilate.gdt import (
 from anvilate.units import Quantity
 
 H = Quantity(magnitude=10.0, unit="mm")  # a round character height, so h and mm coincide
+
+# A callout is a requirement, not a checked part: there is no acceptance card to authorize
+# it, so an explicit override is what these drawings are written under.
+_AUTH = authorize_export(None, override=True)
 
 
 def _points(strokes) -> list[tuple[float, float]]:
@@ -446,7 +451,12 @@ def test_a_legacy_characteristic_still_draws_on_the_edition_that_has_it():
 def test_the_dxf_carries_the_frame_on_its_own_layer(tmp_path):
     ezdxf = pytest.importorskip("ezdxf")
     frame = _frame(material_condition=MaterialCondition.MMC, modifiers=(FrameModifier.DIAMETER,))
-    path = export_feature_control_frame_dxf(frame=frame, path=tmp_path / "fcf.dxf", text_height=H)
+    path = export_feature_control_frame_dxf(
+        frame=frame,
+        path=tmp_path / "fcf.dxf",
+        authorization=_AUTH,
+        text_height=H,
+    )
     doc = ezdxf.readfile(path)
     entities = list(doc.modelspace())
     assert entities, "the DXF came back empty"
@@ -467,7 +477,7 @@ def test_the_dxf_writes_an_arc_as_an_arc(tmp_path):
         feature_type=FeatureType.SURFACE,
     )
     path = export_feature_control_frame_dxf(
-        frame=frame, path=tmp_path / "profile.dxf", text_height=H
+        authorization=_AUTH, frame=frame, path=tmp_path / "profile.dxf", text_height=H
     )
     arcs = [e for e in ezdxf.readfile(path).modelspace() if e.dxftype() == "ARC"]
     assert len(arcs) == 1
@@ -478,7 +488,11 @@ def test_the_dxf_places_the_frame_where_it_was_asked_to(tmp_path):
     ezdxf = pytest.importorskip("ezdxf")
     origin = (Quantity(magnitude=50.0, unit="mm"), Quantity(magnitude=25.0, unit="mm"))
     path = export_feature_control_frame_dxf(
-        frame=_frame(), path=tmp_path / "placed.dxf", text_height=H, origin=origin
+        authorization=_AUTH,
+        frame=_frame(),
+        path=tmp_path / "placed.dxf",
+        text_height=H,
+        origin=origin,
     )
     doc = ezdxf.readfile(path)
     boxes = [e for e in doc.modelspace() if e.dxftype() == "LWPOLYLINE" and e.closed]

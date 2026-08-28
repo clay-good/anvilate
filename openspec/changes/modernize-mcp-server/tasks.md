@@ -28,7 +28,17 @@
       statelessly at all (below)
 - [ ] 2.2 structuredContent results + preview-image attachments
 - [ ] 2.3 Tasks extension: handles, progress, cancellation with subprocess cleanup
-- [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths
+- [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — the export
+      half is **done**, the sandbox half cannot be done yet. Writing the parity test found
+      that the validation and watermark gates had no implementation on *either* side to be
+      compared: `Gate.WATERMARK` appeared nowhere outside `mcp.py`, and the DXF exporters
+      wrote a cuttable file from a width, a height and a list of holes. `anvilate.export.gate`
+      is that gate, every artifact-emitting export entry point now requires an
+      `ExportAuthorization`, and `tests/test_export_gate.py` resolves `export_artifact`'s
+      `backing` symbol and requires it to take one — so "the MCP surface grants no bypass"
+      is a claim that can fail. The sandbox gate is declared by `build_part`, which names no
+      backing symbol because the operation is unbuilt; a test asserts it stays undischarged,
+      so an implementation cannot land without someone deciding what discharges it.
 
 ## 3. Release
 

@@ -5,6 +5,11 @@ a gusset, a base plate — into a DXF drawing a fabricator can cut from. The pla
 is a closed rectangular outline; each hole is a circle. Dimensions are
 :class:`~anvilate.units.Quantity` lengths, written to the DXF in millimetres.
 
+Every entry point here takes an :class:`~anvilate.export.gate.ExportAuthorization` as a
+required keyword and stamps its watermark into the DXF header. That is not decoration: a
+DXF is the file a fabricator cuts from, and one that does not say it came out of a T1
+screen is indistinguishable from a released drawing. See :mod:`anvilate.export.gate`.
+
 Requires ``ezdxf`` (the ``export`` extra); importing this module without it raises
 a clear :class:`ImportError`.
 """
@@ -18,6 +23,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..gdt import FeatureControlFrame
 from ..units import Quantity
+from .gate import ExportAuthorization
 
 __all__ = [
     "Hole",
@@ -77,6 +83,20 @@ def _require_ezdxf():
             "DXF export needs ezdxf; install the export extra: pip install 'anvilate[export]'"
         ) from exc
     return ezdxf
+
+
+def _stamp(doc, authorization: ExportAuthorization) -> None:
+    """Write the export watermark into the DXF header as custom document properties.
+
+    ``$CUSTOMPROPERTYTAG``/``$CUSTOMPROPERTY`` pairs are the DXF header's own place for
+    application metadata, they survive a round trip through ``ezdxf.readfile``, and a CAD
+    package shows them under the drawing's properties — so the watermark travels with the
+    file rather than with the email it was attached to. It goes in the header rather than
+    on a TEXT layer because a layer can be switched off, and
+    :mod:`~anvilate.export.gate` promises the requirement's "exported file metadata".
+    """
+    for tag, value in authorization.metadata():
+        doc.header.custom_vars.append(tag, value)
 
 
 class Hole(BaseModel):
@@ -332,6 +352,7 @@ def export_plate_dxf(
     height: Quantity,
     holes: list[Hole],
     path: str | Path,
+    authorization: ExportAuthorization,
     slots: list[Slot] | None = None,
     label: str | None = None,
     corner_radius: Quantity | None = None,
@@ -345,7 +366,9 @@ def export_plate_dxf(
     cut plate — and must be under half the shorter side; omitted, the corners are
     sharp. An optional ``label`` (e.g. a part mark and material) is written as text
     just below the plate on a separate ``TEXT`` layer. All lengths are written in
-    millimetres. Returns the path written. Raises :class:`ValueError` for a
+    millimetres. ``authorization`` comes from
+    :func:`~anvilate.export.gate.authorize_export` and its watermark is written into the
+    DXF header. Returns the path written. Raises :class:`ValueError` for a
     non-positive plate or a feature that falls outside it (features are checked
     against the full rectangle, not the corner cut-offs), and :class:`ImportError`
     if ezdxf is unavailable.
@@ -361,6 +384,7 @@ def export_plate_dxf(
 
     doc = ezdxf.new()
     doc.units = ezdxf.units.MM
+    _stamp(doc, authorization)
     doc.layers.add(_OUTLINE_LAYER, color=7)  # white/black — the profile cut
     doc.layers.add(_HOLE_LAYER, color=1)  # red — the interior pierces
     msp = doc.modelspace()
@@ -436,6 +460,7 @@ def export_gear_blank_dxf(
     root_diameter: Quantity,
     bore_diameter: Quantity,
     path: str | Path,
+    authorization: ExportAuthorization,
     label: str | None = None,
 ) -> Path:
     """Write a spur-gear blank (outside profile, bore, and reference circles) to a DXF.
@@ -447,7 +472,9 @@ def export_gear_blank_dxf(
     central pierce, and the ``pitch_diameter`` and ``root_diameter`` are drawn as reference
     circles on a separate layer so the machinist sees where the teeth land without the tool
     path following them. An optional ``label`` (part mark, module × teeth) goes below the
-    blank. The diameters must satisfy outside > pitch > root > bore > 0. Returns the path
+    blank. The diameters must satisfy outside > pitch > root > bore > 0.
+    ``authorization`` comes from :func:`~anvilate.export.gate.authorize_export` and its
+    watermark is written into the DXF header. Returns the path
     written; raises :class:`ValueError` on a bad diameter order and :class:`ImportError` if
     ezdxf is unavailable.
     """
@@ -466,6 +493,7 @@ def export_gear_blank_dxf(
 
     doc = ezdxf.new()
     doc.units = ezdxf.units.MM
+    _stamp(doc, authorization)
     doc.layers.add(_OUTLINE_LAYER, color=7)  # the outer profile cut
     doc.layers.add(_HOLE_LAYER, color=1)  # the bore pierce
     doc.layers.add(_REFERENCE_LAYER, color=4)  # cyan — pitch/root reference circles
@@ -490,6 +518,7 @@ def export_feature_control_frame_dxf(
     *,
     frame: FeatureControlFrame,
     path: str | Path,
+    authorization: ExportAuthorization,
     text_height: Quantity | None = None,
     origin: tuple[Quantity, Quantity] | None = None,
 ) -> Path:
@@ -504,7 +533,9 @@ def export_feature_control_frame_dxf(
     Every geometric symbol — the characteristic, Ø, Ⓜ, Ⓛ, Ⓟ, Ⓕ, Ⓣ and ⟨ST⟩ — is drawn
     as lines and arcs rather than typeset, because a DXF viewer without a GD&T font
     renders those characters as a missing glyph, and a callout that silently drops its
-    modifier crosses as a tighter requirement than the drawing states. Returns the path
+    modifier crosses as a tighter requirement than the drawing states. ``authorization``
+    comes from :func:`~anvilate.export.gate.authorize_export` and its watermark is written
+    into the DXF header. Returns the path
     written; raises :class:`ImportError` if ezdxf is unavailable.
     """
     ezdxf = _require_ezdxf()
@@ -522,6 +553,7 @@ def export_feature_control_frame_dxf(
 
     doc = ezdxf.new()
     doc.units = ezdxf.units.MM
+    _stamp(doc, authorization)
     doc.layers.add(_GDT_LAYER, color=7)
     msp = doc.modelspace()
     attribs = {"layer": _GDT_LAYER}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from anvilate.export.dxf import Hole, Slot, export_plate_dxf
+from anvilate.export.gate import authorize_export
 from anvilate.units import Quantity
 
 
@@ -12,10 +13,17 @@ def _q(text: str) -> Quantity:
     return Quantity.parse(text)
 
 
+# These tests are about geometry, not about the export gate — `tests/test_export_gate.py`
+# owns that. An explicit override is the authorization a caller with no acceptance card
+# can obtain, so it is the one that keeps this file's subject unchanged.
+_AUTH = authorize_export(None, override=True)
+
+
 def test_export_lug_outline_round_trips(tmp_path):
     ezdxf = pytest.importorskip("ezdxf")
     # An 80 x 120 mm lug plate with a 25 mm pin hole 90 mm up, centred.
     out = export_plate_dxf(
+        authorization=_AUTH,
         width=_q("80 mm"),
         height=_q("120 mm"),
         holes=[Hole(x=_q("40 mm"), y=_q("90 mm"), diameter=_q("25 mm"))],
@@ -44,6 +52,7 @@ def test_export_lug_outline_round_trips(tmp_path):
 def test_export_writes_an_optional_part_label(tmp_path):
     ezdxf = pytest.importorskip("ezdxf")
     out = export_plate_dxf(
+        authorization=_AUTH,
         width=_q("80 mm"),
         height=_q("120 mm"),
         holes=[],
@@ -60,6 +69,7 @@ def test_export_writes_an_optional_part_label(tmp_path):
 def test_export_omits_text_when_no_label(tmp_path):
     ezdxf = pytest.importorskip("ezdxf")
     out = export_plate_dxf(
+        authorization=_AUTH,
         width=_q("80 mm"),
         height=_q("120 mm"),
         holes=[],
@@ -73,6 +83,7 @@ def test_export_draws_a_slotted_hole_as_an_obround(tmp_path):
     ezdxf = pytest.importorskip("ezdxf")
     # A 40 mm-long, 16 mm-wide horizontal slot centred at (40, 60).
     out = export_plate_dxf(
+        authorization=_AUTH,
         width=_q("80 mm"),
         height=_q("120 mm"),
         holes=[],
@@ -95,6 +106,7 @@ def test_export_rejects_slot_outside_the_plate(tmp_path):
     pytest.importorskip("ezdxf")
     with pytest.raises(ValueError, match="falls outside"):
         export_plate_dxf(
+            authorization=_AUTH,
             width=_q("80 mm"),
             height=_q("120 mm"),
             holes=[],
@@ -107,6 +119,7 @@ def test_export_rejects_slot_length_not_over_width(tmp_path):
     pytest.importorskip("ezdxf")
     with pytest.raises(ValueError, match="length > width"):
         export_plate_dxf(
+            authorization=_AUTH,
             width=_q("80 mm"),
             height=_q("120 mm"),
             holes=[],
@@ -119,6 +132,7 @@ def test_export_rejects_hole_outside_the_plate(tmp_path):
     pytest.importorskip("ezdxf")
     with pytest.raises(ValueError, match="falls outside"):
         export_plate_dxf(
+            authorization=_AUTH,
             width=_q("80 mm"),
             height=_q("120 mm"),
             holes=[Hole(x=_q("75 mm"), y=_q("90 mm"), diameter=_q("25 mm"))],
@@ -130,6 +144,7 @@ def test_export_rejects_non_positive_plate(tmp_path):
     pytest.importorskip("ezdxf")
     with pytest.raises(ValueError, match="must be positive"):
         export_plate_dxf(
+            authorization=_AUTH,
             width=_q("0 mm"),
             height=_q("120 mm"),
             holes=[],
@@ -192,7 +207,11 @@ def test_bolt_circle_holes_feed_the_plate_export(tmp_path):
         count=8,
     )
     out = export_plate_dxf(
-        width=_q("200 mm"), height=_q("200 mm"), holes=holes, path=tmp_path / "flange.dxf"
+        authorization=_AUTH,
+        width=_q("200 mm"),
+        height=_q("200 mm"),
+        holes=holes,
+        path=tmp_path / "flange.dxf",
     )
     doc = ezdxf.readfile(out)
     circles = list(doc.modelspace().query("CIRCLE"))
@@ -324,6 +343,7 @@ def test_export_gear_blank_dxf_draws_the_reference_circles(tmp_path):
 
     # A module-2, 20-tooth gear blank with a 12 mm bore.
     out = export_gear_blank_dxf(
+        authorization=_AUTH,
         outside_diameter=gear_outside_diameter(module=_q("2 mm"), teeth=20),
         pitch_diameter=gear_pitch_diameter(module=_q("2 mm"), teeth=20),
         root_diameter=gear_root_diameter(module=_q("2 mm"), teeth=20),
@@ -347,6 +367,7 @@ def test_export_gear_blank_dxf_rejects_bad_diameter_order(tmp_path):
 
     with pytest.raises(ValueError, match="outside > pitch > root > bore"):
         export_gear_blank_dxf(
+            authorization=_AUTH,
             outside_diameter=_q("40 mm"),
             pitch_diameter=_q("44 mm"),  # pitch above outside -> invalid
             root_diameter=_q("35 mm"),
@@ -360,6 +381,7 @@ def test_export_rounds_the_plate_corners_with_quarter_arcs(tmp_path):
     from math import pi, tan
 
     out = export_plate_dxf(
+        authorization=_AUTH,
         width=_q("80 mm"),
         height=_q("120 mm"),
         holes=[],
@@ -393,6 +415,7 @@ def test_export_rejects_an_oversized_corner_radius(tmp_path):
     pytest.importorskip("ezdxf")
     with pytest.raises(ValueError, match="corner_radius .* under half the shorter"):
         export_plate_dxf(
+            authorization=_AUTH,
             width=_q("80 mm"),
             height=_q("120 mm"),
             holes=[],

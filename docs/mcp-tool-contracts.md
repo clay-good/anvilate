@@ -84,11 +84,20 @@ validation gate and the watermark. A tool cannot acquire a capability and forget
 that goes with it, and CI asserts that every gate is still carried by at least one tool — a
 gate no tool declares is a rule the surface has quietly stopped inheriting.
 
+Two of the three gates now have code behind the declaration, and the parity is tested rather
+than described. `export_artifact` declares validation and watermark; its `backing` symbol is
+resolved and required to take a mandatory `authorization`, so the tool cannot declare a gate
+its implementation does not have — see [the export gate](export-gating.md). The sandbox gate
+is the honest exception: `build_part` declares it, names no backing symbol because the
+operation is unbuilt, and a test asserts it stays that way, so the day an implementation
+lands somebody has to decide what discharges it.
+
 ## Still open
 
 The server: the stateless skeleton on the 2026-07-28 revision, `structuredContent` results
-with preview-image attachments, the Tasks extension wired to real subprocess cleanup, and
-the parity tests that hold the MCP paths to the same gating as the CLI. The claim that no
+with preview-image attachments, and the Tasks extension wired to real subprocess cleanup.
+Gate parity is closed for the validation and watermark halves and open for the sandbox,
+which has no implementation to be held to anything yet. The claim that no
 deprecated protocol feature is used — server-initiated sampling — belongs there too: it is
 a property of what the server does, and a tool definition has no place to declare it, so
 asserting it here would be a check that reads prose rather than behavior.

@@ -4,6 +4,7 @@ Declares a lifting lug, code-checks it with the structural pack (ASME BTH-1 net
 tension and pin bearing), and exports its plan outline to a DXF a fabricator can
 cut from. This is the project's competitive white space realized end to end: plain
 inputs -> code-checked plate geometry -> DXF output, all deterministic and LLM-free.
+The scorecard is what authorizes the export, so a failing lug produces no drawing.
 
 Run it directly (``python examples/lug_drawing.py``) to write ``padeye.dxf`` and
 print the scorecard; :func:`check_and_draw_lug` is also exercised in the test suite.
@@ -14,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from anvilate.export.dxf import Hole, export_plate_dxf
+from anvilate.export.gate import authorize_export
 from anvilate.packs.structural import LiftingLug, screen_lifting_lug
 from anvilate.scorecard import Scorecard
 from anvilate.units import Quantity
@@ -36,11 +38,15 @@ def check_and_draw_lug(dxf_path: str | Path) -> tuple[Scorecard, Path]:
         material="ASTM-A36",
     )
     card = screen_lifting_lug(lug, required_safety_factor=1.5)
+    # The gate, in the position it is meant to occupy: the card decides whether there is a
+    # drawing at all. A lug that failed its checks raises here rather than reaching a
+    # fabricator, and the file this writes carries the screening watermark in its header.
     path = export_plate_dxf(
         width=WIDTH,
         height=HEIGHT,
         holes=[HOLE],
         path=dxf_path,
+        authorization=authorize_export(card),
         label=f"{lug.name.upper()}  {lug.material}",
     )
     return card, path

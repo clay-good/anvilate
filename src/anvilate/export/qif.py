@@ -74,6 +74,7 @@ from ..gdt import (
     MaterialCondition,
 )
 from ..scorecard import CheckStatus, ScorecardEntry
+from .gate import ExportAuthorization
 
 __all__ = [
     "QIF_NAMESPACE",
@@ -485,6 +486,7 @@ def export_qif_results(
     part_name: str,
     spec_digest: str,
     bom: EnvironmentBOM,
+    authorization: ExportAuthorization,
 ) -> str:
     """Export an evidence bundle's checks as a QIF Results document (ISO 23952).
 
@@ -503,6 +505,13 @@ def export_qif_results(
     ``Software`` entry, so the file records which toolchain and which versioned databases
     produced the verdicts. The bundle's citations become ``StandardsDefinitions``.
 
+    ``authorization`` comes from :func:`~anvilate.export.gate.authorize_export` and its
+    watermark opens the header ``Scope``. Unlike the DXF exporters, this one can see the
+    card it is exporting — it is in ``sections`` — so it re-derives the verdict and refuses
+    an authorization that claims VALIDATED for a bundle whose scorecard does not pass. An
+    authorization obtained from a *different*, passing card is the one way to walk around
+    the gate, and this is the one exporter positioned to catch it.
+
     Returns the document as XML text. It is deterministic — the same bundle exports the
     same bytes.
     """
@@ -512,6 +521,13 @@ def export_qif_results(
         raise ValueError(
             "a QIF export needs the digest of the spec revision it screened; without it "
             "the document says what passed but not what was checked"
+        )
+
+    if authorization.validated and not sections.scorecard.passed:
+        raise ValueError(
+            "the authorization says VALIDATED and this bundle's scorecard reads "
+            f"{sections.scorecard.status.value}; authorize the export from the card that "
+            "is being exported, not from another one"
         )
 
     layered: list[tuple[ScorecardEntry, str]] = [
@@ -559,9 +575,14 @@ def export_qif_results(
     _sub(
         header,
         "Scope",
-        "T1 analytical screening. These characteristics are screening results, not a "
-        "certified analysis and not a physical inspection; a characteristic reported as "
-        "NOT_ANALYZED was not evaluated and must not be read as conforming.",
+        " ".join(
+            (
+                *authorization.watermark(),
+                "These characteristics are not a physical inspection; a characteristic "
+                "reported as NOT_ANALYZED was not evaluated and must not be read as "
+                "conforming.",
+            )
+        ),
     )
 
     # Standards: the formal standard the characteristics are evaluated against is QIF
