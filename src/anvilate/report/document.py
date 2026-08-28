@@ -52,6 +52,10 @@ SCREENING_DISCLAIMER = (
     "sign-off remains with a qualified engineer."
 )
 
+# What an empty standards or assumptions list renders as. Never an omitted heading: a
+# reviewer cannot tell a section that was left empty on purpose from one nobody wrote.
+_NONE_DECLARED = "none declared"
+
 _STATUS_LABEL = {
     CheckStatus.PASS: "PASS",
     CheckStatus.FAIL: "FAIL",
@@ -190,14 +194,13 @@ class CalculationReport(BaseModel):
         out: list[str] = [self.title, "=" * len(self.title)]
         for label, value in self._header_rows():
             out.append(f"{label}: {value}")
-        if self.standards:
+        for heading, items in (
+            ("Standards relied upon", self.standards),
+            ("Assumptions", self.assumptions),
+        ):
             out.append("")
-            out.append("Standards relied upon:")
-            out.extend(f"  - {item}" for item in self.standards)
-        if self.assumptions:
-            out.append("")
-            out.append("Assumptions:")
-            out.extend(f"  - {item}" for item in self.assumptions)
+            out.append(f"{heading}:")
+            out.extend(f"  - {item}" for item in items or (_NONE_DECLARED,))
         for section in self.sections:
             out.append("")
             heading = f"{_STATUS_LABEL[section.entry.status]}  {section.entry.name}"
@@ -335,8 +338,15 @@ class CalculationReport(BaseModel):
         return tuple(rows)
 
     def _html_list(self, heading: str, items: tuple[str, ...]) -> list[str]:
+        """A headed list, or the heading with ``none declared`` under it.
+
+        An empty list used to render as nothing at all, which made a report whose author
+        declared no assumptions and one whose author forgot the section look identical to
+        the reviewer the document exists for. The heading is always emitted; what changes
+        is whether there is anything under it.
+        """
         if not items:
-            return []
+            return [f"<h2>{escape(heading)}</h2>", f'<p class="none">{_NONE_DECLARED}</p>']
         out = [f"<h2>{escape(heading)}</h2>", "<ul>"]
         out.extend(f"<li>{escape(item)}</li>" for item in items)
         out.append("</ul>")

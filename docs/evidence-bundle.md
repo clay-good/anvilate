@@ -20,7 +20,7 @@ print(sections.render())
 #     analysis, 0 unresolved
 ```
 
-## Four rules, and each is a judgement
+## Five rules, and each is a judgement
 
 **A layer that is absent is not a layer that passed.** `missing()` names what is not there
 and `covers()` names what is, so "we did not test it" and "we tested it and it held" are
@@ -39,6 +39,13 @@ that the artifact exists in the world carrying that mark. So a bundle whose chec
 and whose drawing was exported under an override is `NOT_EVALUATED`: nothing failed, and
 something left the tool with no verdict behind it. An empty `exports` is not "nothing was
 exported" — it is "this bundle does not say", and `missing()` names it.
+
+**The screening label is not a field a caller can leave out.** Every rendered bundle carries
+the screening disclaimer and an assumptions heading, and the disclaimer is a constant rather
+than an argument — in a library, "non-dismissable" can only mean that there is no call that
+renders a bundle without it. The assumptions are the caller's, and an empty list renders as
+`none declared`, because a bundle that declared none and a bundle whose author forgot must
+not look the same. Both travel in the attestation predicate, not only in the rendering.
 
 **A review that no longer applies is not a review.** The dossier already detects that the
 artifact moved under a review record. Here that degrades the bundle rather than sitting as

@@ -573,3 +573,73 @@ def test_the_disclosure_reaches_the_attestation_predicate():
             "authorization": {"validated": False, "overridden": True, "blocking": []},
         }
     ]
+
+
+# ------------------------------------------------------ the screening label on the bundle
+
+
+def test_the_bundle_carries_the_disclaimer_with_no_way_to_omit_it():
+    """``artifact-export``: every evidence bundle carries the screening disclaimer.
+
+    It is a constant on the rendering rather than a field, because "non-dismissable" in a
+    library can only mean that no call renders a bundle without it. The identity check is
+    what keeps the bundle's copy from drifting from the report's.
+    """
+    from anvilate.bundle import BundleSections
+    from anvilate.report.document import SCREENING_DISCLAIMER
+
+    sections = BundleSections(scorecard=_passing())
+    assert SCREENING_DISCLAIMER in sections.render()
+    assert sections.to_json_dict()["disclaimer"] == SCREENING_DISCLAIMER
+    assert "disclaimer" not in BundleSections.model_fields
+
+
+def test_a_bundle_with_no_assumptions_says_none_declared():
+    """The other half of the same scenario, and the reason it is not just a field.
+
+    A bundle whose author declared no modelling assumptions and one whose author forgot
+    the section rendered identically — as nothing — which is the shape this library refuses
+    everywhere else.
+    """
+    from anvilate.bundle import BundleSections
+
+    bare = BundleSections(scorecard=_passing())
+    assert bare.assumptions_block() == ("assumptions: none declared",)
+    assert "none declared" in bare.render()
+
+    stated = BundleSections(
+        scorecard=_passing(), assumptions=("pin is a close fit", "no impact factor applied")
+    )
+    assert "no impact factor applied" in stated.render()
+    assert "none declared" not in stated.render()
+    assert stated.to_json_dict()["assumptions"] == [
+        "pin is a close fit",
+        "no impact factor applied",
+    ]
+
+
+def test_a_blank_assumption_is_refused():
+    from anvilate.bundle import BundleSections
+
+    with pytest.raises(ValueError, match="blank modelling assumption"):
+        BundleSections(scorecard=_passing(), assumptions=("   ",))
+
+
+def test_the_report_never_drops_an_empty_heading():
+    """The same defect one layer down, in the document a reviewer actually reads."""
+    from anvilate.report.document import CalculationReport, ReportSection
+
+    report = CalculationReport(
+        title="Lifting lug screening",
+        sections=tuple(ReportSection(entry=entry) for entry in _passing().entries),
+    )
+    for rendered in (report.to_html(), report.to_text()):
+        assert "Assumptions" in rendered
+        assert "Standards relied upon" in rendered
+        assert "none declared" in rendered
+
+    stated = report.model_copy(update={"assumptions": ("pin is a close fit",)})
+    assert "pin is a close fit" in stated.to_html()
+    # The standards heading is still there and still says it is empty — one empty list
+    # filling in for the other is exactly what an omitted heading used to allow.
+    assert "none declared" in stated.to_html()

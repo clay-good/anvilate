@@ -94,14 +94,16 @@ than passing quietly:
   sandbox. The day an implementation lands, that test fails and somebody has to decide what
   discharges it, rather than the tool quietly acquiring code with no sandbox behind it.
 
-Twelve mutations were run against the gate in a scratch copy — dropping the unevaluated
+Seventeen mutations were run against the gate in a scratch copy — dropping the unevaluated
 checks from the blocking set, treating a missing card as a pass, making `_stamp` a no-op,
 freezing the watermark at its clean form, making the authorization optional with a clean
 default, removing QIF's cross-check, removing the `model_copy` override, and moving the file
 write into a private helper, plus four on the bundle half — the unvalidated artifact no
 longer degrading the roll-up, the export section turned informational, the records dropped
-from the predicate body, and the absent layer no longer named as missing. All twelve were
-killed.
+from the predicate body, and the absent layer no longer named as missing, and five on the screening
+label — the disclaimer dropped from the rendering and from the predicate body, the empty
+assumptions list vanishing again in the bundle and in the report, and a blank assumption
+accepted. All seventeen were killed.
 
 ## What is not gated
 

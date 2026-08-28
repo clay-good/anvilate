@@ -30,6 +30,14 @@ the fact the bundle adds is that an artifact *exists in the world* carrying that
 bundle whose checks all pass and whose drawing was exported under an override is
 ``NOT_EVALUATED``, because something left the tool with no verdict behind it.
 
+**The screening label is not a field a caller can leave out.** ``artifact-export`` requires
+every evidence bundle to carry the screening-analysis disclaimer and the list of modelling
+assumptions. The disclaimer is therefore a constant on the rendered bundle rather than a
+field: there is no argument that omits it, which is what "non-dismissable" has to mean in a
+library. The assumptions *are* the caller's, and an empty list renders as "none declared"
+rather than as no heading at all — a bundle that declared no assumptions and one whose
+author forgot the section must not look identical.
+
 **A review that no longer applies is not a review.** The dossier already detects that the
 artifact moved under a review record; here it degrades the bundle rather than sitting as a
 flag somebody has to notice. That state looks identical to "reviewed" from the outside,
@@ -60,6 +68,7 @@ from .explore import StudyResult
 from .export.gate import ExportRecord
 from .gdt import FeatureControlFrame
 from .loads import CombinationEvidence
+from .report.document import SCREENING_DISCLAIMER
 from .review import ReviewerDossier
 from .scorecard import CheckStatus, Scorecard
 from .units import Quantity
@@ -158,6 +167,19 @@ class BundleSections(BaseModel):
     # not "nothing was exported" — it is "this bundle does not say", which `missing()`
     # reports rather than smoothing over.
     exports: tuple[ExportRecord, ...] = ()
+    # The modelling assumptions the screening ran under, in the caller's own words. Empty
+    # renders as "none declared" rather than vanishing: see the module docstring.
+    assumptions: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _an_assumption_says_something(self) -> BundleSections:
+        for assumption in self.assumptions:
+            if not assumption.strip():
+                raise ValueError(
+                    "a blank modelling assumption is a line that reads as a declared one; "
+                    "state it or leave it out"
+                )
+        return self
 
     @model_validator(mode="after")
     def _the_scorecard_is_the_floor(self) -> BundleSections:
@@ -341,14 +363,36 @@ class BundleSections(BaseModel):
             f"{'test-verified' if self.verified else 'not test-verified'}"
         )
 
+    def assumptions_block(self) -> tuple[str, ...]:
+        """The assumptions as rendered lines — never empty, so the heading never vanishes."""
+        if not self.assumptions:
+            return ("assumptions: none declared",)
+        return ("assumptions:", *(f"  - {item}" for item in self.assumptions))
+
     def render(self) -> str:
-        """The bundle as a readable block: the roll-up, then every section under it."""
-        return "\n".join([self.summary(), *(f"  {section}" for section in self.sections())])
+        """The bundle as a readable block: the roll-up, every section, the screening label.
+
+        The disclaimer is appended here rather than passed in, so there is no call that
+        renders a bundle without it.
+        """
+        return "\n".join(
+            [
+                self.summary(),
+                *(f"  {section}" for section in self.sections()),
+                *self.assumptions_block(),
+                SCREENING_DISCLAIMER,
+            ]
+        )
 
     def to_json_dict(self) -> dict[str, object]:
         """The sections as JSON-safe primitives, for the attestation predicate."""
         card = self.callout_card()
         body: dict[str, object] = {
+            # Always present, in both the rendered block and the predicate body: a label a
+            # caller could omit is one that is missing from exactly the bundles that most
+            # need it.
+            "disclaimer": SCREENING_DISCLAIMER,
+            "assumptions": list(self.assumptions),
             "status": self.status.value,
             "covers": list(self.covers()),
             "missing": list(self.missing()),
