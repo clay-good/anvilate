@@ -476,3 +476,116 @@ def test_every_exit_code_a_verdict_can_produce_has_a_severity():
     assert set(EXIT_CODES.values()) <= set(_EXIT_SEVERITY)
     assert _EXIT_SEVERITY.index(EXIT_FAILED) > _EXIT_SEVERITY.index(EXIT_NOT_EVALUATED)
     assert _EXIT_SEVERITY.index(EXIT_NOT_EVALUATED) > _EXIT_SEVERITY.index(EXIT_OK)
+
+
+# --- verify, the command the attestation capability names ---------------------------------
+
+
+@pytest.fixture
+def envelope(tmp_path):
+    """A signed attestation on disk, with its subjects and its key beside it."""
+    import json
+    import runpy
+
+    from anvilate.attestation import Attestation, LocalHmacSigner
+
+    namespace = runpy.run_path(str(_REPO / "examples" / "attested_evidence_bundle.py"))
+    key = b"a-local-key-for-the-tests"
+    signed = Attestation.signed_by(namespace["_bundle"](), LocalHmacSigner(key))
+    path = tmp_path / "attestation.json"
+    path.write_text(json.dumps(signed.to_envelope()), encoding="utf-8")
+    (tmp_path / "key.bin").write_bytes(key)
+    (tmp_path / "scorecard.json").write_bytes(namespace["SCORECARD_JSON"])
+    (tmp_path / "lug.dxf").write_bytes(namespace["DRAWING_DXF"])
+    return path
+
+
+def _verify_args(envelope, *, key=True, artifacts=("scorecard.json", "lug.dxf")):
+    directory = envelope.parent
+    argv = ["verify", str(envelope)]
+    if key:
+        argv += ["--hmac-key-file", str(directory / "key.bin")]
+    for name in artifacts:
+        argv += ["--artifact", f"{name}={directory / name}"]
+    return argv
+
+
+def test_verify_passes_only_when_the_signature_and_every_subject_were_checked(envelope):
+    code, out, err = _run(*_verify_args(envelope))
+    assert code == EXIT_OK
+    assert out.startswith("PASS")
+    assert "symmetric_verified" in out
+    assert "unchecked   none" in out
+    assert err == ""
+
+
+def test_a_signature_nobody_checked_is_not_a_pass(envelope):
+    """The rule the whole library follows about a check that could not run, at the shell.
+
+    Without a key there is nothing to verify the signature against, and reporting that as
+    success would be the single worst thing this command could do.
+    """
+    code, out, _err = _run(*_verify_args(envelope, key=False))
+    assert code == EXIT_NOT_EVALUATED
+    assert out.startswith("NOT_EVALUATED")
+    assert "not_checked" in out
+
+
+def test_a_subject_with_no_file_is_reported_unchecked_rather_than_assumed(envelope):
+    code, out, _err = _run(*_verify_args(envelope, artifacts=("scorecard.json",)))
+    assert code == EXIT_NOT_EVALUATED
+    assert "unchecked   lug.dxf" in out
+    assert "checked     scorecard.json" in out
+
+
+def test_a_tampered_subject_fails_and_names_what_did_not_match(envelope):
+    (envelope.parent / "lug.dxf").write_bytes(b"not the drawing that was attested")
+    code, out, err = _run(*_verify_args(envelope))
+    assert code == EXIT_FAILED
+    assert out.startswith("FAIL")
+    assert "lug.dxf" in err and "digest mismatch" in err
+
+
+def test_a_symmetric_signature_is_not_reported_as_attestation(envelope):
+    """`attested` is True only for an authorship-establishing signature.
+
+    A shared secret proves the envelope was not altered by anyone without the key and
+    proves nothing about who made it. A fully checked symmetric envelope therefore reads
+    PASS with `attested=False`, and printing that pair without the reason invites exactly
+    the wrong conclusion — so the reason is printed.
+    """
+    _code, out, _err = _run(*_verify_args(envelope))
+    assert "attested=False" in out
+    assert "not who made it" in out
+    assert "anyone holding the key could have" in out
+
+
+def test_verify_refuses_what_is_not_an_envelope(tmp_path):
+    for content, expected in (
+        ("not json at all", "not JSON"),
+        ('{"payload": "!!!"}', "not a DSSE envelope"),
+    ):
+        path = tmp_path / "bad.json"
+        path.write_text(content, encoding="utf-8")
+        code, out, err = _run("verify", str(path))
+        assert (code, out) == (EXIT_BAD_REQUEST, "")
+        assert expected in err
+
+    code, _out, err = _run("verify", str(tmp_path / "absent.json"))
+    assert code == EXIT_BAD_REQUEST and "No such file" in err
+
+
+def test_a_malformed_artifact_pair_is_a_bad_request(envelope):
+    code, _out, err = _run("verify", str(envelope), "--artifact", "no-equals-sign")
+    assert code == EXIT_BAD_REQUEST
+    assert "NAME=PATH" in err
+
+
+def test_verify_json_is_the_report(envelope):
+    import json as json_module
+
+    code, out, _err = _run(*_verify_args(envelope), "--format", "json")
+    report = json_module.loads(out)
+    assert report["signature_state"] == "symmetric_verified"
+    assert sorted(report["checked_subjects"]) == ["lug.dxf", "scorecard.json"]
+    assert code == EXIT_OK

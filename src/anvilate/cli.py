@@ -6,7 +6,8 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Two of the four are backed today.** ``check`` compiles a spec document and screens it,
+**Two of the four are backed today**, and a fifth command the attestation capability names
+is backed as well. ``check`` compiles a spec document and screens it,
 which is exactly the path :func:`anvilate.screening.screen_spec` already serves over MCP.
 ``export`` serves the one artifact that needs no geometry — the evidence bundle, which is
 assembled from a scorecard — and refuses the two that do.
@@ -183,6 +184,28 @@ def _build_parser() -> argparse.ArgumentParser:
         default="text",
         help="text for a person, json for a script that wants the whole card",
     )
+    verify = commands.add_parser(
+        "verify", help="verify an attestation envelope and report what was checked"
+    )
+    verify.add_argument("envelope", type=Path, help="a DSSE envelope, as JSON")
+    verify.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help="an attested subject and the file to hash against it; repeatable. A subject "
+        "with no file is reported unchecked, never assumed to match",
+    )
+    verify.add_argument(
+        "--hmac-key-file",
+        type=Path,
+        help="a local symmetric signing key. Without it the signature is reported "
+        "not_checked, which is not a pass",
+    )
+    verify.add_argument(
+        "--format", choices=("text", "json"), default="text", help="how to render the report"
+    )
+
     export = commands.add_parser("export", help="write a downstream artifact from a screened spec")
     export.add_argument("spec", type=Path, help="a Design Spec document, YAML or JSON")
     export.add_argument(
@@ -216,7 +239,108 @@ def run(argv: list[str] | None = None, *, stdout=None, stderr=None) -> int:
         return EXIT_UNBUILT
     if args.command == "export":
         return _export(args, out=out, err=err)
+    if args.command == "verify":
+        return _verify(args, out=out, err=err)
     return _check(args, out=out, err=err)
+
+
+def _verify(args: argparse.Namespace, *, out, err) -> int:
+    """``verify``, the command `evidence-attestation` names.
+
+    "Anvilate SHALL provide a verification command that checks signature, subject digests,
+    and predicate schema." The library has done all three since the attestation layer
+    shipped; nothing at the shell called it.
+
+    **Three states, and the middle one is why this is not a boolean.** A signature nobody
+    could check is `not_checked` and is *not* a pass — the same rule the whole library
+    follows about a check that could not run, and the reason the exit code is 2 rather than
+    0 when no key is supplied. An unsigned envelope says unsigned. A subject with no file
+    given is reported unchecked rather than assumed to match.
+
+    **Only local symmetric keys.** `LocalHmacSigner` is what this package ships, so
+    `--hmac-key-file` is a shared secret and not public material. Keyless and asymmetric
+    verification are unimplemented, and saying "verified" for a signature nothing could
+    check is exactly the claim this command exists to avoid making.
+    """
+    from .attestation import Attestation, LocalHmacSigner, verify_attestation
+
+    try:
+        envelope = json.loads(args.envelope.read_text(encoding="utf-8"))
+    except OSError as failure:
+        print(f"anvilate verify: {failure}", file=err)
+        return EXIT_BAD_REQUEST
+    except json.JSONDecodeError as failure:
+        print(f"anvilate verify: {args.envelope}: not JSON: {failure}", file=err)
+        return EXIT_BAD_REQUEST
+    try:
+        attestation = Attestation.model_validate(envelope)
+    except ValueError as failure:
+        print(f"anvilate verify: {args.envelope}: not a DSSE envelope: {failure}", file=err)
+        return EXIT_BAD_REQUEST
+
+    artifacts: dict[str, bytes] = {}
+    for pair in args.artifact:
+        name, separator, path = pair.partition("=")
+        if not separator or not name:
+            print(f"anvilate verify: --artifact takes NAME=PATH; got {pair!r}", file=err)
+            return EXIT_BAD_REQUEST
+        try:
+            artifacts[name] = Path(path).read_bytes()
+        except OSError as failure:
+            print(f"anvilate verify: {failure}", file=err)
+            return EXIT_BAD_REQUEST
+
+    signer = None
+    if args.hmac_key_file is not None:
+        try:
+            signer = LocalHmacSigner(args.hmac_key_file.read_bytes())
+        except OSError as failure:
+            print(f"anvilate verify: {failure}", file=err)
+            return EXIT_BAD_REQUEST
+
+    report = verify_attestation(attestation, artifacts=artifacts or None, signer=signer)
+    if args.format == "json":
+        print(json.dumps(report.model_dump(mode="json"), indent=2, sort_keys=True), file=out)
+    else:
+        print(_render_verification(report), file=out)
+    for problem in report.problems:
+        print(f"anvilate verify: {problem}", file=err)
+    return EXIT_CODES[report.status]
+
+
+def _render_verification(report) -> str:
+    """The report as a person reads it, with `attested` explained where it would mislead.
+
+    `attested` is True only for a clean verification of an **authorship-establishing**
+    signature. A local HMAC is a shared secret: it proves the envelope was not altered by
+    anyone without the key, and it proves nothing about who made it, because everybody
+    holding the key could have. So a fully checked symmetric envelope reads PASS with
+    `attested=False`, and printing that pair without the reason invites exactly the wrong
+    conclusion.
+    """
+    from .attestation import SignatureState
+
+    lines = [
+        f"{report.status.value.upper()}  attested={report.attested}",
+        f"  signature   {report.signature_state.value}",
+        f"  bundle      {report.bundle_digest}",
+        f"  predicate   {report.predicate_type}",
+    ]
+    for label, subjects in (
+        ("checked", report.checked_subjects),
+        ("unchecked", report.unchecked_subjects),
+    ):
+        # Both lists always render. A run that checked nothing and one whose subjects all
+        # matched must not look the same.
+        lines.append(f"  {label:11} {', '.join(subjects) or 'none'}")
+    for problem in report.problems:
+        lines.append(f"  problem     {problem}")
+    if not report.attested and report.signature_state is SignatureState.SYMMETRIC_VERIFIED:
+        lines.append(
+            "  note        a symmetric key proves the envelope was not altered, not who "
+            "made it — anyone holding the key could have, so this is not attestation"
+        )
+    return "\n".join(lines)
 
 
 def _export(args: argparse.Namespace, *, out, err) -> int:

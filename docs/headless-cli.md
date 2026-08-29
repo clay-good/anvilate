@@ -1,7 +1,8 @@
 # `anvilate` on the command line
 
-Two of the four commands the spec names are backed. The other two are refused by name, with
-what each is waiting on.
+Two of the four commands `headless-automation` names are backed, and a fifth that
+`evidence-attestation` names is backed too. The other two are refused by name, with what
+each is waiting on.
 
 ```bash
 anvilate check part.yaml
@@ -107,6 +108,47 @@ and there is no bundle *writer* behind that gate. Printing is not emitting — a
 redirecting the output is doing their own act — and a file-writing path here would be the
 first one outside `anvilate.export`, which is exactly the bypass the gate exists to prevent.
 A test asserts the command creates no file anywhere.
+
+## `anvilate verify`
+
+`evidence-attestation` requires "a verification command that checks signature, subject
+digests, and predicate schema". The library has done all three since the attestation layer
+shipped; nothing at the shell called it.
+
+```bash
+anvilate verify attestation.json \
+  --hmac-key-file key.bin \
+  --artifact scorecard.json=out/scorecard.json \
+  --artifact lug.dxf=out/lug.dxf
+```
+
+```text
+PASS  attested=False
+  signature   symmetric_verified
+  bundle      46802dedaa2fe2a7ac0e3628221fb482b08da7f5d7b996a0ccfd8de975f3cf63
+  predicate   https://anvilate.dev/attestation/screening/v1
+  checked     scorecard.json, lug.dxf
+  unchecked   none
+  note        a symmetric key proves the envelope was not altered, not who made it — anyone holding the key could have, so this is not attestation
+```
+
+Three things this command will not do, and they are the reasons it exists:
+
+- **A signature nobody could check is not a pass.** Without `--hmac-key-file` the state is
+  `not_checked` and the exit code is 2. Reporting that as success is the single worst thing
+  this command could do.
+- **A subject with no file is reported unchecked, never assumed to match.** The `checked`
+  and `unchecked` lists both always render, because a run that checked nothing and one
+  whose subjects all matched must not look the same.
+- **A symmetric signature is not attestation.** `attested` is True only for an
+  authorship-establishing signature. A shared secret proves the envelope was not altered by
+  anyone without the key and proves nothing about who made it, so a fully checked symmetric
+  envelope reads PASS with `attested=False` — and the reason is printed, because that pair
+  without it invites exactly the wrong conclusion.
+
+Only local symmetric keys are supported: `LocalHmacSigner` is what this package ships.
+Keyless and asymmetric verification are unimplemented, and the command says `not_checked`
+rather than pretending otherwise.
 
 ## The two that are refused
 
