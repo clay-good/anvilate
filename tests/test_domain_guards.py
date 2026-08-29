@@ -299,6 +299,39 @@ def test_an_involute_value_no_angle_produces_is_refused():
     assert involute_angle(involute_value=0.014904) == pytest.approx(20.0, abs=1e-3)
 
 
+def test_involute_angle_refuses_a_root_it_cannot_certify_rather_than_returning_ninety():
+    """The residual check is reachable, and was recorded below as unreachable for a year.
+
+    The excuse was that it "fires only if Newton fails to converge". The solver is a
+    *bracketed* Newton on (0, pi/2 - 1e-12), so it cannot fail to converge — it converges
+    onto whatever the bracket allows, and past a certain argument that is the bracket's own
+    top end, 89.9999999999427 degrees: the same answer for every such argument, which is a
+    property of the bracket rather than of the input. The residual check is what turns that
+    into a refusal, and its tolerance was unpinned because nothing reached the branch.
+
+    Where it stops is fixed by the arithmetic, not chosen. Near the pole one ulp of phi
+    (2.2e-16) moves tan(phi) by sec^2(phi) times that, so the finest residual a double can
+    express grows with the argument and crosses the 1e-9 relative tolerance around
+    inv ~ 5e6. That makes a *band*, not an edge — measured on 2026-08-29, everything below
+    4.7e6 inverts, everything above 1e9 refuses, and in between it depends on where the
+    iterates happen to land. The anchors below sit outside the band on purpose; do not
+    tighten them into it.
+
+    The pair is the test. A refusal alone would also pass if the function simply declined
+    large arguments — a different and wrong gate — so a value below the band is asserted to
+    still invert and round-trip.
+    """
+    from anvilate.analysis import involute_function
+
+    inverted = involute_angle(involute_value=1.0e6)
+    assert 0.0 < inverted < 90.0
+    assert involute_function(pressure_angle=inverted) == pytest.approx(1.0e6, rel=1e-9)
+
+    for beyond in (1.0e10, 1.0e12, 1.0e20):
+        with pytest.raises(ValueError, match="does not lie in"):
+            involute_angle(involute_value=beyond)
+
+
 def test_a_fourbar_whose_advance_stroke_is_the_whole_revolution_is_refused():
     """A time ratio needs an advance stroke under 180 deg; at or past it the mechanism is
     not a crank-rocker and the ratio is not defined."""
@@ -531,23 +564,25 @@ def test_an_incompressible_material_has_no_bulk_modulus():
         incompressible.bulk_modulus()
 
 
-def test_the_two_guards_left_unpinned_are_unreachable_by_construction():
+def test_the_one_guard_left_unpinned_is_unreachable_by_construction():
     """Recorded rather than left as an unexplained gap in the trace.
 
-    Two of the original thirty-eight cannot be reached from any input, and both are
-    deliberate safety nets rather than domain limits:
+    ``fourbar_time_ratio``'s ``advance >= 180`` cannot be reached from any input, and is a
+    deliberate safety net rather than a domain limit: ``advance`` is the absolute
+    difference of two toggle angles, each returned by ``acos`` and therefore in [0, 180],
+    so it reaches 180 only when one is exactly 0 and the other exactly 180 — a degenerate
+    linkage the Grashof check refuses first.
 
-    * ``fourbar_time_ratio``'s ``advance >= 180``. ``advance`` is the absolute difference
-      of two toggle angles, each returned by ``acos`` and therefore in [0, 180]. The
-      difference reaches 180 only when one is exactly 0 and the other exactly 180, which
-      is a degenerate linkage the Grashof check refuses first.
-    * ``involute_angle``'s residual check. It fires only if Newton fails to converge, and
-      the one input that used to make it fail — a NaN — is refused by a finiteness check
-      ahead of it.
-
-    This asserts the first of those, because it is the one an input could plausibly reach:
-    a whole family of Grashof linkages returns a defined time ratio and none of them
-    approaches the bound.
+    **This said "the two guards" and named ``involute_angle``'s residual check as the
+    second, on the grounds that it fires only when Newton fails and the one input that
+    made it fail (a NaN) is refused ahead of it. That was wrong, and the reasoning stopped
+    one step early.** The solver is a *bracketed* Newton, so it cannot fail to converge —
+    it converges onto the bracket's own top end, 89.99999999999999 degrees, for any
+    argument whose root lies above it. ``involute_value = 1e12`` is finite, non-negative,
+    and reaches the check;
+    ``test_involute_angle_refuses_a_root_outside_its_bracket_rather_than_returning_ninety``
+    pins it. An "unreachable by construction" claim is a claim, and it is worth the same
+    scrutiny as the code it excuses.
     """
     from anvilate.analysis import fourbar_time_ratio, is_grashof
 

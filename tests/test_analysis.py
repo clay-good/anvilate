@@ -7680,6 +7680,35 @@ def test_clamped_circular_eigenvalue_is_poisson_independent():
     assert ratio == pytest.approx(((1 - 0.2**2) / (1 - 0.4**2)) ** 0.5, rel=1e-9)
 
 
+def test_the_simply_supported_circular_bracket_holds_across_every_poisson_ratio():
+    """A bisection's assumption is its bracket, and this one was stated in a comment only.
+
+    The simply-supported root solves J1/J0 + I1/I0 = 2*lambda/(1-nu) on (0, 2.4048), the
+    fixed bracket ending at J0's first zero. The bisection runs a fixed 100 halvings and
+    checks nothing afterwards, so a bracket that failed to contain the root would not
+    raise — it would return the bracket's own end, gamma = 2.4048^2 = 5.7831, for every
+    input. `poisson_ratio` is admitted anywhere in (0, 0.5) and only nu = 0.3 was pinned.
+
+    Two properties hold it: every gamma stays strictly below the bracket's end (a returned
+    5.7831 is exactly the failure), and gamma rises strictly with nu, which a run that
+    fell onto the end would flatten.
+    """
+    radius, mu, thickness, modulus = 0.25, 47.1, 0.006, 200e9
+
+    def gamma(nu):
+        frequency = simply_supported_circular_plate_fundamental_frequency(
+            diameter=_q("500 mm"), poisson_ratio=nu, **_PLATE_MODAL_KW
+        )
+        rigidity = modulus * thickness**3 / (12 * (1 - nu**2))
+        return frequency.to("Hz").magnitude * 2 * pi * radius**2 * (mu / rigidity) ** 0.5
+
+    ratios = [0.001, 0.05, 0.1, 0.2, 0.3, 0.4, 0.45, 0.499]
+    gammas = [gamma(nu) for nu in ratios]
+    assert all(g < 5.78 for g in gammas), gammas
+    assert all(b > a for a, b in zip(gammas, gammas[1:], strict=False)), gammas
+    assert gammas[ratios.index(0.3)] == pytest.approx(4.935149, rel=1e-5)
+
+
 def test_plate_fundamental_rejects_bad_inputs():
     good = dict(length=_q("500 mm"), width=_q("500 mm"), **_PLATE_MODAL_KW)
     with pytest.raises(ValueError, match="mass_per_area must be a"):

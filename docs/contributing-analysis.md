@@ -220,8 +220,18 @@ buried in the middle. **And accept any bound, not just the one you expected**: a
 against 1.
 
 That sweep found 38 on 2026-08-25; `tests/test_domain_guards.py` took it to 2, and both
-survivors are safety nets that no input can reach (asserted as such rather than left as an
-unexplained gap). **Re-run the trace after writing the tests, not before.** Six of the
+survivors were recorded as safety nets no input can reach, asserted as such rather than
+left as an unexplained gap. **One of the two was mis-declared, and re-measuring on
+2026-08-29 is what found it.** `involute_angle`'s residual check was excused because it
+"fires only if Newton fails to converge", and the solver is a *bracketed* Newton — it
+cannot fail to converge. It converges onto whatever the bracket allows, and past a certain
+argument that is the bracket's own top end: 89.9999999999427 degrees, the same answer for
+every such argument. What actually stops it is the residual check, at a threshold the
+arithmetic fixes rather than the author — one ulp of φ near the pole moves tan(φ) by sec²φ
+times that, so the finest residual a double can express crosses the 1e-9 relative tolerance
+around inv ≈ 5e6. A finite, non-negative argument reached the guard the whole time. **An unreachable-by-construction claim is a claim**, and the reason
+it survived a year is that it reads as the conclusion of the analysis rather than as part
+of it. One survivor is left. **Re-run the trace after writing the tests, not before.** Six of the
 first twelve survivors turned out to be reached through a *different* guard than intended —
 a bearing whose contact angle never got as far as its own check because the rotational
 speed was refused first, one malformed fastener position caught by the "at least two"
