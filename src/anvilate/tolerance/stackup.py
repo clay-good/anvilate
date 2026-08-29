@@ -155,9 +155,17 @@ class StackResult(BaseModel):
         return min_required.to("mm").magnitude <= lo and hi <= max_required.to("mm").magnitude
 
     def __str__(self) -> str:
+        """The gap and its bounds, all three at the same precision.
+
+        The nominal used to come through ``Quantity.__str__``, which drops trailing zeros,
+        so a 212 mm gap read ``gap 212 mm (+211.948 to +212.052 mm)`` — three numbers meant
+        to be compared, one of them rendered by a different rule. A nominal that happened to
+        carry four decimals showed *more* precision than the bounds it sits between.
+        """
+        nominal = self.nominal.to("mm").magnitude
         lo = self.lower.to("mm").magnitude
         hi = self.upper.to("mm").magnitude
-        return f"{self.method} gap {self.nominal} ({lo:+.3f} to {hi:+.3f} mm)"
+        return f"{self.method} gap {nominal:.3f} mm ({lo:+.3f} to {hi:+.3f} mm)"
 
 
 class MonteCarloResult(BaseModel):
@@ -212,7 +220,8 @@ class MonteCarloResult(BaseModel):
         lo = self.lower.to("mm").magnitude
         hi = self.upper.to("mm").magnitude
         pct = self.coverage * 100.0
-        return f"{self.method} gap {self.nominal} ({lo:+.3f} to {hi:+.3f} mm @ {pct:.2f}%)"
+        nominal = self.nominal.to("mm").magnitude
+        return f"{self.method} gap {nominal:.3f} mm ({lo:+.3f} to {hi:+.3f} mm @ {pct:.2f}%)"
 
 
 class StackUp(BaseModel):

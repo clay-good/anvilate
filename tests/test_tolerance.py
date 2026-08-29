@@ -1135,3 +1135,32 @@ def test_a_negative_nominal_is_refused_rather_than_silently_absolved() -> None:
     assert zone_limits("H7", _mm(20)).min_size.to("mm").magnitude == pytest.approx(20.0)
     assert general_tolerance(_mm(20), "m").deviation.to("mm").magnitude > 0
     assert general_angular_tolerance(_mm(20), "m").deviation.to("arcminute").magnitude > 0
+
+
+def test_a_stack_result_renders_its_three_numbers_at_one_precision():
+    """The gap and its bounds are read together, so they are rendered by one rule.
+
+    The nominal came through `Quantity.__str__`, which drops trailing zeros, so a 212 mm
+    gap read `gap 212 mm (+211.948 to +212.052 mm)` — three numbers meant to be compared,
+    one of them formatted differently. A nominal carrying four decimals showed *more*
+    precision than the bounds it sits between.
+    """
+    import re
+
+    stack = StackUp(contributors=(_contributor("a", 200.0, 0.05), _contributor("b", 12.0, 0.002)))
+    # All three renderings, Monte Carlo included — it carries the same nominal through a
+    # different `__str__`, so fixing one and not the other is the obvious half-fix.
+    renderings = (
+        str(stack.worst_case()),
+        str(stack.rss()),
+        str(stack.monte_carlo(2000, seed=20260829)),
+    )
+    for rendered in renderings:
+        numbers = re.findall(r"[-+]?\d+\.\d+", rendered)
+        assert len(numbers) >= 3, rendered
+        places = {len(number.split(".")[1]) for number in numbers[:3]}
+        assert places == {3}, f"{rendered} mixes precisions {places}"
+        assert " gap 212.000 mm " in rendered, rendered
+    # And the nominal really is the gap, not a rounding of a bound.
+    worst = stack.worst_case()
+    assert f"{worst.nominal.to('mm').magnitude:.3f}" in str(worst)
