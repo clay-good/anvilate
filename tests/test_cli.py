@@ -363,7 +363,8 @@ def spec_tree(tmp_path):
 def test_check_screens_every_spec_under_a_directory(spec_tree):
     """`headless-automation` asks for revalidating *all specs in a repository* on push."""
     code, out, err = _run("check", str(spec_tree))
-    assert "deck_plate:" in out and "beam_a:" in out
+    # Name and path, because two parts in a repository can share a name.
+    assert "deck_plate  (" in out and "beam_a  (" in out
     assert "2 specs: NOT_EVALUATED" in out
     assert code == EXIT_NOT_EVALUATED
     # Found by searching, carries no `anvilate_spec`: skipped, and *said* to be skipped.
@@ -442,3 +443,36 @@ def test_a_passing_card_writes_nothing_to_stderr(spec_file, monkeypatch):
     code, out, err = _run("check", str(spec_file))
     assert (code, err) == (EXIT_OK, "")
     assert "PASS" in out
+
+
+def test_a_run_over_many_specs_says_which_file_each_came_from(spec_tree, tmp_path):
+    """Two parts in a repository can share a name — a `bracket.yaml` under two assemblies.
+
+    The first version printed the spec's name alone, so a repo-wide run over two files with
+    the same name produced two identical blocks and no way to tell which was which. The
+    single-spec case is left alone: the caller named the file.
+    """
+    same = tmp_path / "same"
+    (same / "a").mkdir(parents=True)
+    (same / "b").mkdir(parents=True)
+    for side in ("a", "b"):
+        (same / side / "part.yaml").write_text(_SPEC, encoding="utf-8")
+
+    _code, out, _err = _run("check", str(same))
+    assert out.count("deck_plate") == 2
+    assert str(same / "a" / "part.yaml") in out
+    assert str(same / "b" / "part.yaml") in out
+
+    # One spec keeps the bare name: the caller named the file, so repeating it is noise.
+    _code, single, _err = _run("check", str(spec_tree / "deck.yaml"))
+    assert single.startswith("deck_plate: ")
+
+
+def test_every_exit_code_a_verdict_can_produce_has_a_severity():
+    """The roll-up over many specs orders codes by `_EXIT_SEVERITY.index`, which raises on a
+    code that is not in the list. A fifth status with a new code would reach it."""
+    from anvilate.cli import _EXIT_SEVERITY
+
+    assert set(EXIT_CODES.values()) <= set(_EXIT_SEVERITY)
+    assert _EXIT_SEVERITY.index(EXIT_FAILED) > _EXIT_SEVERITY.index(EXIT_NOT_EVALUATED)
+    assert _EXIT_SEVERITY.index(EXIT_NOT_EVALUATED) > _EXIT_SEVERITY.index(EXIT_OK)

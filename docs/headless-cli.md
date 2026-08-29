@@ -22,7 +22,7 @@ silently. One you *named* is an error: you said it was a spec and it is not. An 
 search is a bad request rather than a pass, because "nothing found, nothing failed, exit 0"
 is the silent green this command exists to avoid.
 
-Over many specs the exit code is the worst verdict found, so one failing part fails the
+Over many specs each block carries its path as well as its name — two parts in a repository can share one, and a run that printed the name alone gave two identical blocks and no way to tell which was which. A single named spec keeps the bare name, since the caller supplied the path. Over many specs the exit code is the worst verdict found, so one failing part fails the
 run — what a merge gate needs.
 
 **Every blocking check goes to stderr**, with the spec it came from, which is what a CI log

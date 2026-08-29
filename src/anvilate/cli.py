@@ -305,10 +305,15 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
         }
         print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
-        for index, (_path, spec, card) in enumerate(results):
+        # The path is printed alongside the name whenever more than one spec ran. Two
+        # parts in a repository can share a name — a `bracket.yaml` under two assemblies —
+        # and the first version printed the name alone, so a repo-wide run produced two
+        # identical blocks and no way to tell which was which.
+        for index, (path, spec, card) in enumerate(results):
             if index:
                 print("", file=out)
-            print(_render(spec.name, card), file=out)
+            heading = spec.name if len(results) == 1 else f"{spec.name}  ({path})"
+            print(_render(heading, card), file=out)
         if len(results) > 1:
             worst = max((card.status for _p, _s, card in results), key=_BLOCKING_ORDER.index)
             print(f"\n{len(results)} specs: {worst.value.upper()}", file=out)
