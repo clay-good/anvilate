@@ -10,6 +10,7 @@ from anvilate.ingest import (
     DraftSpec,
     ExtractedValue,
     SourceLocation,
+    UnparsedLine,
     extract_requirements,
 )
 from anvilate.units import Quantity
@@ -460,3 +461,164 @@ def test_the_summary_counts_conflicts_as_well_as_drafts():
     assert "1 conflicting" in draft.summary()
     agreed = extract_requirements("Load: 50 kN\nLoad: 50 kN\n", document="rfq.txt")
     assert "0 conflicting" in agreed.summary()
+
+
+# --- the confirmation checklist -----------------------------------------------------------
+#
+# `input-ingestion` requires that extracted values "appear as a confirmation checklist, each
+# linked to its page location". `summary()` counts them — "2 unconfirmed" — which is the one
+# thing the confirmer already knows. Every value carried a SourceLocation the whole time and
+# nothing rendered it.
+
+
+def _located(field, quantity, *, line, page=None, excerpt=None, load_bearing=True):
+    return ExtractedValue(
+        field=field,
+        quantity=Quantity.parse(quantity),
+        load_bearing=load_bearing,
+        source=SourceLocation(
+            document="rfq.pdf",
+            page=page,
+            line_number=line,
+            excerpt=excerpt or f"{field}: {quantity}",
+        ),
+    )
+
+
+def _mixed_draft():
+    return DraftSpec(
+        values=(
+            _located("design_load", "50 kN", line=14, page=2),
+            _located("design_load", "60 kN", line=3, page=5),
+            _located("finish_area", "0.5 m**2", line=2, page=4, load_bearing=False),
+            _located("material_yield", "250 MPa", line=9, page=1).confirmed("A. Engineer"),
+        ),
+        unparsed=(
+            UnparsedLine(
+                source=SourceLocation(
+                    document="rfq.pdf", page=6, line_number=22, excerpt="approx 3/8 in stock"
+                ),
+                reason="no parseable quantity",
+            ),
+        ),
+        documents=("rfq.pdf",),
+    )
+
+
+def test_every_extracted_value_appears_with_where_it_came_from():
+    """Derived from the draft, not compared against a fixture: a value whose location the
+    renderer drops fails here, and so does one the renderer forgets entirely."""
+    draft = _mixed_draft()
+    checklist = draft.checklist()
+    for value in draft.values:
+        assert value.field in checklist
+        assert str(value.source) in checklist, f"{value.field} is listed without its location"
+        assert value.source.excerpt in checklist, "the excerpt is what makes it checkable"
+        assert str(value.source.line_number) in checklist
+    for line in draft.unparsed:
+        assert line.reason in checklist
+        assert str(line.source) in checklist
+
+
+def test_the_checklist_separates_what_blocks_release_from_what_does_not():
+    """A confirmer works the blocking list first, so "2 unconfirmed" is not enough — and a
+    non-load-bearing draft value is still a draft, so it cannot be silently dropped."""
+    checklist = _mixed_draft().checklist()
+    blocking = checklist.index("TO CONFIRM — load-bearing")
+    advisory = checklist.index("TO CONFIRM — not load-bearing")
+    confirmed = checklist.index("CONFIRMED")
+    assert blocking < advisory < confirmed
+    load_bearing_block = checklist[blocking:advisory]
+    assert "design_load" in load_bearing_block
+    assert "finish_area" not in load_bearing_block
+    assert "finish_area" in checklist[advisory:confirmed]
+    assert "confirmed by A. Engineer" in checklist
+
+
+def test_a_conflict_shows_both_readings_rather_than_naming_the_field():
+    """The one case where a reader needs both excerpts side by side to decide which line is
+    right. Naming the field tells them there is a problem and nothing about it."""
+    checklist = _mixed_draft().checklist()
+    section = checklist[checklist.index("CONFLICTS") :]
+    assert "design_load disagrees" in section
+    assert "50.0 kN" in section and "60.0 kN" in section
+    # Both excerpts, not just both magnitudes: the excerpt is the line the reader goes back to.
+    assert "design_load: 50 kN" in section and "design_load: 60 kN" in section
+
+
+def test_every_heading_is_present_even_when_its_section_is_empty():
+    """The calculation report's rule, one layer over: a draft with no conflicts and one
+    whose conflicts nobody looked for must not render the same document."""
+    clean = DraftSpec(
+        values=(_located("bore", "25 mm", line=6).confirmed("A. Engineer"),),
+        documents=("rfq.pdf",),
+    )
+    checklist = clean.checklist()
+    for heading in ("TO CONFIRM", "CONFIRMED", "CONFLICTS", "NOT EXTRACTED"):
+        assert heading in checklist
+    assert checklist.count("none") >= 3
+
+
+def test_the_checklist_of_a_real_extraction_lists_what_the_extractor_found():
+    """Against the extractor rather than a hand-built draft, so the two cannot drift."""
+    draft = extract_requirements(SHEET, document="rfq.txt")
+    checklist = draft.checklist()
+    assert draft.values, "the extractor found nothing, so this checked nothing"
+    for value in draft.values:
+        assert str(value.source) in checklist
+    # No page in a text document, and it must not print as "p. None".
+    assert "p. None" not in checklist
+
+
+def _documented_draft() -> DraftSpec:
+    """The draft the docs page walks through, as inputs rather than as rendered output."""
+    return DraftSpec(
+        values=(
+            _located("design_load", "50 kN", line=14, page=2, excerpt="Design load: 50 kN"),
+            _located("plate_thickness", "12 mm", line=7, page=3, excerpt="Plate 12 mm"),
+            _located("design_load", "60 kN", line=3, page=5, excerpt="Load shall be 60 kN"),
+            _located(
+                "finish_area",
+                "0.5 m**2",
+                line=2,
+                page=4,
+                excerpt="Painted area 0.5 m2",
+                load_bearing=False,
+            ),
+            _located("material_yield", "250 MPa", line=9, page=1, excerpt="A36").confirmed(
+                "A. Engineer"
+            ),
+        ),
+        unparsed=(
+            UnparsedLine(
+                source=SourceLocation(
+                    document="rfq.pdf", page=6, line_number=22, excerpt="approx 3/8 in stock"
+                ),
+                reason="no parseable quantity",
+            ),
+        ),
+        documents=("rfq.pdf",),
+    )
+
+
+def test_the_checklist_on_the_docs_page_is_the_one_the_library_renders():
+    """The page shows a worked checklist, so the page's block is the library's own output.
+
+    The first version of this read the *values* back out of the rendered block and rebuilt
+    the draft from them — which is a test whose expected output comes from the thing under
+    test. Changing `50.0 kN` to `55.0 kN` on the page passed, because the page was feeding
+    itself. The inputs are stated here and the rendering is compared; a drifting page and a
+    drifting renderer each fail.
+    """
+    import re
+    from pathlib import Path
+
+    page = (
+        Path(__file__).resolve().parent.parent / "docs" / "requirements-ingestion.md"
+    ).read_text(encoding="utf-8")
+    block = re.search(r"```text\n(\d+ values from(?:.|\n)*?)```", page)
+    assert block is not None, "the worked checklist on requirements-ingestion.md has moved"
+    assert _documented_draft().checklist() == block.group(1), (
+        f"the page shows:\n{block.group(1)}\n"
+        f"the library renders:\n{_documented_draft().checklist()}"
+    )

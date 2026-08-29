@@ -45,6 +45,49 @@ larger is a silent decision about the design.
 `CONFIRMED` or `REJECTED` state with nobody named is refused at construction, because "the
 values were reviewed" is not a claim anybody can act on.
 
+## The checklist is what you actually work from
+
+`draft.checklist()` lists every value with the line it came from, because confirming an
+extracted number means opening the sheet and reading that line:
+
+```text
+5 values from 1 document(s), 1 confirmed, 1 lines not extracted — blocked: 3 unconfirmed, 1 conflicting
+
+TO CONFIRM — load-bearing, blocking release
+  [ ] design_load = 50.0 kN    rfq.pdf:14 (p. 2) — 'Design load: 50 kN'
+  [ ] plate_thickness = 12.00 mm    rfq.pdf:7 (p. 3) — 'Plate 12 mm'
+  [ ] design_load = 60.0 kN    rfq.pdf:3 (p. 5) — 'Load shall be 60 kN'
+
+TO CONFIRM — not load-bearing
+  [ ] finish_area = 0.500 m ** 2    rfq.pdf:2 (p. 4) — 'Painted area 0.5 m2'
+
+CONFIRMED
+  [x] material_yield = 250.0 MPa    rfq.pdf:9 (p. 1) — 'A36' — confirmed by A. Engineer
+
+CONFLICTS
+  !   design_load disagrees:
+        design_load = 50.0 kN    rfq.pdf:14 (p. 2) — 'Design load: 50 kN'
+        design_load = 60.0 kN    rfq.pdf:3 (p. 5) — 'Load shall be 60 kN'
+
+NOT EXTRACTED
+  ?   rfq.pdf:22 (p. 6) — 'approx 3/8 in stock' — no parseable quantity
+```
+
+`summary()` gave the counts — "3 unconfirmed" — which is the one thing the confirmer
+already knows. Every value carried its `SourceLocation` from the first release and nothing
+rendered it.
+
+Three things about the shape:
+
+- **The excerpt is part of the reference, not an extra.** A reader holding the sheet open
+  matches on the text faster than on a line number, and a line number alone is wrong the
+  moment the document is re-exported.
+- **A conflict shows both readings.** Naming the field tells you there is a problem and
+  nothing about it; the two excerpts side by side are what decide which line is right.
+- **Every heading appears even when its section is empty**, for the same reason the
+  [calculation report](calculation-reports.md)'s do: a draft with no conflicts and one whose
+  conflicts nobody looked for must not render the same document.
+
 ## Three states, not a boolean
 
 | State | Means |

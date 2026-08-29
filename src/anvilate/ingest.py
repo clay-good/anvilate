@@ -50,7 +50,7 @@ from math import isclose
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ._models import RevalidatedModel
-from .units import Quantity, UnitError
+from .units import Quantity, UnitError, render
 
 __all__ = [
     "ConfirmationState",
@@ -223,6 +223,19 @@ class CertificateProvenance(RevalidatedModel):
         return (
             f"certificate {self.identifier} from {self.laboratory}{dated} — {self.signature_line()}"
         )
+
+
+def _checklist_section(heading: str, entries: list[str]) -> list[str]:
+    """A heading and its entries, or the heading and ``none``.
+
+    Never an omitted heading. A draft with no conflicts and one whose conflicts nobody
+    looked for are different documents, and they used to be the same one.
+    """
+    return [heading, *(f"  {entry}" for entry in entries or ("none",)), ""]
+
+
+def _value_line(value: ExtractedValue) -> str:
+    return f"{value.field} = {render(value.quantity)}    {value.source}"
 
 
 class ExtractedValue(RevalidatedModel):
@@ -480,6 +493,69 @@ class DraftSpec(BaseModel):
                 "difference"
             )
         return released
+
+    def checklist(self) -> str:
+        """Every value a confirmer has to act on, each linked to where it came from.
+
+        `input-ingestion` requires that extracted values "appear as a confirmation
+        checklist, each linked to its page location". :meth:`summary` counts them — "2
+        unconfirmed" — which is the one thing a confirmer already knows. What they need is
+        *which* two, and where each came from, because confirming an extracted number means
+        going back to the sheet and reading the line it was taken from.
+
+        The location was on every value the whole time and nothing rendered it. So the
+        excerpt is here as well as the page and the line: a reader holding the document open
+        matches on the text far faster than on a line number, and a line number alone is
+        wrong the moment the document is re-exported.
+
+        Four sections, and each is present even when empty, for the reason the calculation
+        report's headings are: a draft with no conflicts and one whose conflicts nobody
+        looked for must not render the same.
+        """
+        outstanding = self.unconfirmed_load_bearing()
+        blocking = {id(value) for value in outstanding}
+        advisory = [
+            value
+            for value in self.values
+            if value.state is ConfirmationState.DRAFT and id(value) not in blocking
+        ]
+        lines = [self.summary(), ""]
+        lines.extend(
+            _checklist_section(
+                "TO CONFIRM — load-bearing, blocking release",
+                [f"[ ] {_value_line(value)}" for value in outstanding],
+            )
+        )
+        lines.extend(
+            _checklist_section(
+                "TO CONFIRM — not load-bearing",
+                [f"[ ] {_value_line(value)}" for value in advisory],
+            )
+        )
+        lines.extend(
+            _checklist_section(
+                "CONFIRMED",
+                [
+                    f"[x] {_value_line(value)} — confirmed by {value.confirmed_by}"
+                    for value in self.confirmed()
+                ],
+            )
+        )
+        # One line per reading rather than one per conflict: a conflict is the case where a
+        # reader most needs both excerpts side by side to decide which line is right, and
+        # nesting two of them inside one sentence makes that harder rather than shorter.
+        conflicts: list[str] = []
+        for conflict in self.conflicts():
+            conflicts.append(f"!   {conflict.field} disagrees:")
+            conflicts.extend(f"      {_value_line(value)}" for value in conflict.values)
+        lines.extend(_checklist_section("CONFLICTS", conflicts))
+        lines.extend(
+            _checklist_section(
+                "NOT EXTRACTED",
+                [f"?   {line.source} — {line.reason}" for line in self.unparsed],
+            )
+        )
+        return "\n".join(lines).rstrip() + "\n"
 
     def summary(self) -> str:
         """One line: what was read, what is outstanding, and whether it can be released."""
