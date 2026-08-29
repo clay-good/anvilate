@@ -852,3 +852,104 @@ def test_the_attestation_pages_database_bump_is_the_one_the_digest_sees():
         }
     )
     assert _bundle(bom=bumped).digest != _bundle().digest
+
+
+# --- the BOM is read, not typed -----------------------------------------------------------
+
+
+def test_the_environment_bom_reports_the_versions_that_are_installed():
+    """The one part of an attestation nobody can check by reading it.
+
+    Every caller in this repository used to hand-write the inventory, and two of them
+    attested `pint 0.24.4` and `pydantic 2.9.2` against an environment running 0.25.3 and
+    2.13.5. A bill of materials whose versions are whatever the author last typed is a
+    provenance record that cannot be wrong out loud.
+    """
+    from importlib.metadata import version
+
+    from anvilate.attestation import EnvironmentBOM
+
+    bom = EnvironmentBOM.of_this_environment()
+    assert bom.application.name == "anvilate"
+    assert bom.application.version == version("anvilate")
+    reported = {component.name: component.version for component in bom.components}
+    assert reported, "the BOM found no components at all"
+    for name, stated in reported.items():
+        assert stated == version(name), f"{name} attested as {stated}, installed {version(name)}"
+
+
+def test_the_bom_is_derived_from_the_declared_dependencies():
+    """A dependency added to the project appears without anybody remembering to add it here,
+    which is the only reason this is derived rather than a list."""
+    from importlib.metadata import requires
+
+    from anvilate.attestation import EnvironmentBOM
+
+    declared = {
+        re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0].strip()
+        for requirement in requires("anvilate") or ()
+    }
+    reported = {component.name for component in EnvironmentBOM.of_this_environment().components}
+    assert "pint" in declared and "pydantic" in declared
+    assert reported <= declared, f"the BOM invents {sorted(reported - declared)}"
+
+
+def test_dev_tooling_is_not_reported_as_having_produced_the_bundle():
+    """pytest and ruff are installed in a contributor's environment and had no part in
+    producing a bundle. A BOM listing them is claiming they did."""
+    from anvilate.attestation import EnvironmentBOM
+
+    reported = {component.name for component in EnvironmentBOM.of_this_environment().components}
+    assert not reported & {"pytest", "ruff", "jsonschema"}, sorted(reported)
+    # And the rule is "the dev extra", not "these three names": `export`'s ezdxf really does
+    # write the DXF, so it belongs in the inventory when it is installed.
+    pytest.importorskip("ezdxf")
+    assert "ezdxf" in reported
+
+
+def test_a_declared_dependency_that_is_not_installed_is_left_out(monkeypatch):
+    """Not recorded at a placeholder version. An optional extra nobody installed contributed
+    nothing to this bundle, and saying it did is the same lie in the other direction."""
+    from importlib.metadata import PackageNotFoundError
+
+    from anvilate.attestation import EnvironmentBOM
+
+    def _absent(name):
+        if name == "pint":
+            raise PackageNotFoundError(name)
+        return _real_version(name)
+
+    from importlib import metadata
+
+    _real_version = metadata.version
+    monkeypatch.setattr(metadata, "version", _absent)
+    reported = {component.name for component in EnvironmentBOM.of_this_environment().components}
+    assert "pint" not in reported, "an uninstalled dependency was reported anyway"
+    assert "pydantic" in reported, "the whole inventory vanished, so this proved nothing"
+
+
+def test_no_example_hardcodes_a_version_that_has_drifted():
+    """The examples are how a reader learns to build a bundle, so a stale literal there
+    teaches the defect. Any version literal an example states for a package that is actually
+    installed must match what is installed."""
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as installed_version
+
+    examples = Path(__file__).resolve().parent.parent / "examples"
+    pattern = re.compile(r'Component\(\s*name="([a-z0-9_-]+)",\s*version="([^"]+)"')
+    checked = 0
+    for path in sorted(examples.glob("*.py")):
+        for name, stated in pattern.findall(path.read_text()):
+            try:
+                real = installed_version(name)
+            except PackageNotFoundError:
+                continue  # a versioned dataset, which no package index knows
+            checked += 1
+            assert stated == real, (
+                f"{path.name} attests {name} {stated}; this environment has {real}. "
+                "Use EnvironmentBOM.of_this_environment() rather than a literal"
+            )
+    assert checked == 0, (
+        "an example still states a version for an installed package; the point is that "
+        "none of them do"
+    )

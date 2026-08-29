@@ -88,17 +88,21 @@ DISCLOSURE = AIDisclosure(
 
 
 def _bom(materials_version: str) -> EnvironmentBOM:
-    return EnvironmentBOM(
-        application=Component(name="anvilate", version="0.0.1", kind=ComponentKind.APPLICATION),
-        components=(
-            Component(name="pint", version="0.24.4"),
-            Component(name="pydantic", version="2.9.2"),
+    """The libraries read from the environment; the materials version stated.
+
+    No package index knows a materials-database version, so that one the caller does have
+    to say. Everything else was typed out and had drifted: `pint 0.24.4` and
+    `pydantic 2.9.2` against an environment running 0.25.3 and 2.13.5, inside the document
+    whose whole purpose is provenance.
+    """
+    return EnvironmentBOM.of_this_environment(
+        extra=(
             Component(
                 name="anvilate_materials",
                 version=materials_version,
                 kind=ComponentKind.DATA,
             ),
-        ),
+        )
     )
 
 

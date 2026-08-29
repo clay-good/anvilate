@@ -44,6 +44,30 @@ a standard the output does not actually follow. Standard attestation tooling rea
 predicate it does not recognize, so the bundle is useful to a verifier that has never
 heard of Anvilate.
 
+## The inventory is read, not typed
+
+`EnvironmentBOM.of_this_environment()` builds the bill of materials from what is actually
+installed. Every caller used to hand-write it, and two attested `pint 0.24.4` and
+`pydantic 2.9.2` against an environment running 0.25.3 and 2.13.5 — a false toolchain
+record inside the document whose entire purpose is provenance, and the one part of an
+attestation nobody can catch by reading it.
+
+The component list is derived from Anvilate's own declared dependencies, so a dependency
+added to the project appears without anybody remembering. Three rules make it honest:
+
+- **A declared dependency that is not installed is left out**, not recorded at a
+  placeholder version. An optional extra nobody installed contributed nothing to this
+  bundle, and saying it did is the same lie in the other direction.
+- **Dev tooling is excluded.** pytest and ruff are installed in a contributor's environment
+  and had no part in producing a bundle. The rule is the `dev` extra rather than a list of
+  names, so `export`'s ezdxf — which really does write the DXF — stays in.
+- **A versioned dataset is stated by the caller**, because no package index knows a
+  materials-database version and nothing here can read one off a table it was not handed.
+
+A test requires every version the BOM reports to equal what `importlib.metadata` says, and
+another requires that no example anywhere states a version literal for an installed
+package — a stale literal in an example teaches the defect.
+
 ## Four things that are deliberate
 
 **No wall clock, anywhere.** CycloneDX's `metadata.timestamp` and `serialNumber` are both

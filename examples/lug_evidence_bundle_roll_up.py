@@ -35,8 +35,6 @@ from datetime import date
 
 from anvilate.attestation import (
     AIDisclosure,
-    Component,
-    ComponentKind,
     EnvironmentBOM,
     sha256_hex,
 )
@@ -97,13 +95,10 @@ def _plan(*, performed: bool) -> VerificationPlan:
 
 
 def _bom() -> EnvironmentBOM:
-    return EnvironmentBOM(
-        application=Component(name="anvilate", version="0.0.1", kind=ComponentKind.APPLICATION),
-        components=(
-            Component(name="pint", version="0.24.4"),
-            Component(name="pydantic", version="2.9.2"),
-        ),
-    )
+    """Read from the environment, not typed. This example declared `pint 0.24.4` and
+    `pydantic 2.9.2` while running against 0.25.3 and 2.13.5 — a false toolchain record
+    inside the document whose whole purpose is provenance."""
+    return EnvironmentBOM.of_this_environment()
 
 
 def roll_up_the_lug():

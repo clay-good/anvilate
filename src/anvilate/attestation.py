@@ -45,7 +45,8 @@ import binascii
 import hashlib
 import hmac
 import json
-from collections.abc import Mapping
+import re
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
@@ -55,6 +56,14 @@ from ._models import RevalidatedModel
 from .evidence import SourceRecord
 from .review import DecisionOrigin
 from .scorecard import CheckStatus, Scorecard
+
+#: The `dev` extra's marker, as `importlib.metadata.requires` writes it. Reading the extra's
+#: name is not guessing: it is this project's own declaration in its own pyproject.
+_DEV_EXTRA = re.compile(r"""extra\s*==\s*['"]dev['"]""")
+
+#: The installed distribution this package ships as. One place, so the BOM's application
+#: entry and its dependency lookup cannot name two different things.
+_DISTRIBUTION = "anvilate"
 
 __all__ = [
     "STATEMENT_TYPE",
@@ -259,6 +268,61 @@ class EnvironmentBOM(RevalidatedModel):
         if len(set(names)) != len(names):
             raise ValueError(f"the BOM lists a component twice: {sorted(names)}")
         return self
+
+    @classmethod
+    def of_this_environment(cls, *, extra: Iterable[Component] = ()) -> EnvironmentBOM:
+        """The BOM of the environment this is running in, **read rather than stated**.
+
+        Every caller in this repository used to hand-write the inventory, and two of them
+        attested ``pint 0.24.4`` and ``pydantic 2.9.2`` against an environment running
+        0.25.3 and 2.13.5. A bill of materials whose versions are whatever the author last
+        typed is the one part of an attestation that cannot be checked by reading it, and it
+        is the part the whole provenance chain rests on.
+
+        The component list is derived from Anvilate's own declared dependencies via
+        :func:`importlib.metadata.requires`, so a dependency added to the project appears
+        here without anybody remembering to add it. A declared dependency that is **not
+        installed** is left out rather than recorded at some placeholder version: an
+        optional extra nobody installed contributed nothing to this bundle, and saying it
+        did would be the same lie in the other direction.
+
+        ``extra`` is for the components no package index knows about — a versioned
+        materials or standards database — which the caller does have to state, because
+        nothing here can read a version off a table it was not handed.
+        """
+        from importlib.metadata import PackageNotFoundError, requires, version
+
+        def _installed(name: str) -> str | None:
+            try:
+                return version(name)
+            except PackageNotFoundError:
+                return None
+
+        seen: dict[str, Component] = {}
+        for requirement in requires(_DISTRIBUTION) or ():
+            # Skipped: anything required only by the `dev` extra. pytest and ruff are
+            # installed in a contributor's environment and had no part in producing a
+            # bundle, and a BOM that lists them is claiming they did. Every other
+            # requirement — unconditional, or from an extra like `export` whose package
+            # really does write the artifact — is included when it is installed.
+            if _DEV_EXTRA.search(requirement):
+                continue
+            name = re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0].strip()
+            if not name or name in seen:
+                continue
+            found = _installed(name)
+            if found is not None:
+                seen[name] = Component(name=name, version=found)
+        for component in extra:
+            seen[component.name] = component
+        return cls(
+            application=Component(
+                name=_DISTRIBUTION,
+                version=_installed(_DISTRIBUTION) or "0+unknown",
+                kind=ComponentKind.APPLICATION,
+            ),
+            components=tuple(seen[name] for name in sorted(seen)),
+        )
 
     def to_cyclonedx(self) -> dict[str, object]:
         """The BOM as a CycloneDX JSON document.

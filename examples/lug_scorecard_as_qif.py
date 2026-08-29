@@ -66,12 +66,8 @@ LUG = Scorecard(
     )
 )
 
-BOM = EnvironmentBOM(
-    application=Component(name="anvilate", version="0.0.1", kind=ComponentKind.APPLICATION),
-    components=(
-        Component(name="pint", version="0.24"),
-        Component(name="anvilate_materials", version="2026.03", kind=ComponentKind.DATA),
-    ),
+BOM = EnvironmentBOM.of_this_environment(
+    extra=(Component(name="anvilate_materials", version="2026.03", kind=ComponentKind.DATA),)
 )
 
 SECTIONS = BundleSections(
