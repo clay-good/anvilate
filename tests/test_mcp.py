@@ -933,3 +933,44 @@ def test_the_tiers_argument_is_held_to_the_enum_its_own_schema_declares():
         assert expected in error["message"], error["message"]
     accepted = _call("run_validation", {"spec": document, "tiers": ["T1_analytical"]})
     assert "error" not in accepted
+
+
+# --- The check that lived in one transport ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "not_an_object",
+    [1.0, None, [], ["jsonrpc", "2.0"], "tools/list", True],
+)
+def test_a_request_that_is_not_an_object_is_answered_rather_than_dropped(not_an_object):
+    """`handle_request` is documented as the one place every transport drives, and the
+    "is this an object" check lived in the stdio loop instead — so the guarantee held for
+    exactly the caller that had written it out.
+
+    The two failures were different and both silent from the client's side. A list or a
+    string reached `"id" not in request`, which is a membership test that happens to be
+    True for both, so the message returned `None` and a client waiting on it waited
+    forever. A number or `None` raised `TypeError` out of the handler.
+
+    JSON-RPC 2.0 §5: an Invalid Request is `-32600` with `"id": null`. There is no `id`
+    member to be missing here, so this is the one id-less case this handler answers — see
+    the divergence stated in its docstring for the case it does not.
+    """
+    response = handle_request(not_an_object)
+    assert response is not None, "a message that is not a request object was dropped"
+    assert response["error"]["code"] == -32600
+    assert response["id"] is None
+    assert response["jsonrpc"] == "2.0"
+
+
+def test_the_stdio_loop_and_the_handler_agree_on_a_non_object():
+    """The parity the move was for, asserted rather than assumed.
+
+    Before it, the loop answered `-32600` and a direct call did not — two transports, two
+    behaviours, one documented contract. This fails if the check moves back into a caller.
+    """
+    responses = _serve(json.dumps([1, 2, 3]), json.dumps({"jsonrpc": "2.0", "id": 9}))
+    assert responses[0] == handle_request([1, 2, 3])
+    assert responses[0]["error"]["code"] == -32600
+    # And the loop still serves the message after it, which is the reason it catches at all.
+    assert responses[1]["id"] == 9

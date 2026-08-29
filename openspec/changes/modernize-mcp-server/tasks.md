@@ -76,7 +76,15 @@
 ## 3. Release
 
 - [ ] 3.1 Registry publication automation per release
-- [ ] 3.2 Conformance run against the protocol test suite
+- [ ] 3.2 Conformance run against the protocol test suite — one divergence is known and
+      now *stated* rather than assumed, so a conformance run does not discover it as a
+      surprise: JSON-RPC 2.0 §5 answers an Invalid Request with `-32600` and `"id": null`,
+      and its §7 example does so for a message that has no `id` at all. `handle_request`
+      answers nothing to any message without an `id`, malformed or not, because a spurious
+      line desynchronizes a client reading one-for-one while a dropped error for a message
+      nobody awaited costs nothing. A message that is not an object has no `id` member to
+      be missing, and that case is now answered (it used to either vanish or raise
+      `TypeError`, depending on which non-object it was)
 
 ## 4. Docs
 

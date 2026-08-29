@@ -810,6 +810,15 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     code. ``None`` is returned for a notification (a request with no ``id``), which the
     protocol says takes no response.
 
+    **A stated divergence, not an oversight.** JSON-RPC 2.0 §5 says an *Invalid Request* is
+    answered with a ``-32600`` error carrying ``"id": null``, and the spec's own §7 example
+    does exactly that for ``{"jsonrpc": "2.0", "method": 1, "params": "bar"}`` — a message
+    with no ``id``. This handler answers nothing to *any* message that has no ``id``,
+    malformed or not, because the two mistakes do not cost the same: a spurious line in a
+    stream a client reads one-for-one desynchronizes it, and an error dropped for a message
+    the client was never waiting on does not. A message that is not an object at all has no
+    ``id`` member to be missing, so that one is answered rather than dropped.
+
     Three methods are served. ``initialize`` reports the protocol revision and the
     capabilities this surface has. ``tools/list`` returns :func:`wire_definitions`.
     ``tools/call`` validates the arguments against the tool's published input schema,
@@ -835,11 +844,19 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
       between the published contracts and the stateless skeleton the spec describes, and
       it is surfaced here rather than resolved by inventing an argument.
     """
-    # The notification check comes FIRST, before the version check, and the order is the
-    # point: a message with no `id` has nothing to answer to, so an error response would be
-    # a line the client is not expecting and cannot match to anything. The first draft
-    # validated the version first and emitted an error for a notification whose `jsonrpc`
-    # was missing or wrong — a spurious line in a stream a client reads one-for-one.
+    # "Is this an object at all" comes first, and it belongs HERE rather than in the stdio
+    # loop that used to hold it. This function is documented as the one place every
+    # transport drives, and the check living in one caller made that false: called with a
+    # list or a string, `"id" not in request` is a membership test that happens to be True,
+    # so the message vanished and the client waited forever; called with a number or None
+    # it raised TypeError out of the handler.
+    if not isinstance(request, Mapping):
+        return _error(None, INVALID_REQUEST, "a JSON-RPC request is an object")
+    # The notification check comes before the version check, and the order is the point: a
+    # message with no `id` has nothing to answer to, so an error response would be a line
+    # the client is not expecting and cannot match to anything. The first draft validated
+    # the version first and emitted an error for a notification whose `jsonrpc` was missing
+    # or wrong — a spurious line in a stream a client reads one-for-one.
     if "id" not in request:
         return None
     request_id = request.get("id")
@@ -1020,10 +1037,9 @@ def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> No
         except json.JSONDecodeError as bad:
             response: dict[str, Any] | None = _error(None, PARSE_ERROR, f"invalid JSON: {bad}")
         else:
-            if not isinstance(request, dict):
-                response = _error(None, INVALID_REQUEST, "a JSON-RPC request is an object")
-            else:
-                response = handle_request(request)
+            # No non-object check here any more: `handle_request` holds it, so every
+            # transport gets it rather than only the one that remembered to write it.
+            response = handle_request(request)
         if response is None:
             continue
         sink.write(json.dumps(response) + "\n")
