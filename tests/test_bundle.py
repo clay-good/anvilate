@@ -111,6 +111,7 @@ def test_a_scorecard_only_bundle_is_legitimate_and_says_what_it_is_not():
     sections = _sections()
     assert sections.covers() == ("checks",)
     assert set(sections.missing()) == {
+        "design basis",
         "verification",
         "review",
         "exploration",
@@ -228,6 +229,7 @@ def test_every_section_appears_in_the_rendering():
         assert name in rendered
     assert sections.covers() == ("checks", "verification", "review", "callouts")
     assert sections.missing() == (
+        "design basis",
         "exploration",
         "load combinations",
         "export",
@@ -270,6 +272,7 @@ def test_the_assembled_bundle_carries_the_roll_up_into_the_predicate():
     assert body["sections"]["testVerified"] is True
     assert body["sections"]["covers"] == ["checks", "verification"]
     assert body["sections"]["missing"] == [
+        "design basis",
         "review",
         "exploration",
         "callouts",
@@ -560,3 +563,80 @@ def test_a_bundle_with_no_combination_basis_says_so_rather_than_implying_one():
     sections = BundleSections(scorecard=_card())
     assert "load combinations" in sections.missing()
     assert "load combinations" not in sections.covers()
+
+
+# --- The design basis: absent is named, and a real split blocks -------------------------
+
+
+def _cited(*references: str) -> Scorecard:
+    return Scorecard(
+        entries=tuple(
+            ScorecardEntry(
+                name=f"check {index}",
+                status=CheckStatus.PASS,
+                detail="ok",
+                reference=reference,
+            )
+            for index, reference in enumerate(references)
+        )
+    )
+
+
+def test_a_bundle_with_no_design_basis_says_so_rather_than_omitting_the_idea():
+    """`missing()` is what a reviewer reads to find out what was *not* looked at.
+
+    Before this, "design basis" appeared in neither `covers()` nor `missing()`, so a
+    bundle whose citations nobody checked against an adopted edition and one whose
+    citations check out rendered identically. The concept was not absent from the answer —
+    it was absent from the question.
+    """
+    sections = BundleSections(scorecard=_cited("AISC 360-16 §J4.1"))
+    assert "design basis" in sections.missing()
+    assert "design basis" not in sections.covers()
+
+
+def test_citations_at_two_editions_fail_the_bundle_rather_than_riding_along():
+    """A FAIL here is evidence that misrepresents itself, so it enters the roll-up.
+
+    The bundle reads as though every number came from one book, and it did not. A roll-up
+    reporting PASS over that would be doing the same thing one level up.
+    """
+    from anvilate.standards import DesignBasis
+
+    sections = BundleSections(
+        scorecard=_cited("AISC 360-16 §J4.1", "AISC 360-22 §J4.3"),
+        design_basis=DesignBasis(),
+    )
+    assert "design basis" in sections.covers()
+    assert sections.status is CheckStatus.FAIL
+    rendered = sections.render()
+    assert "editions 16, 22" in rendered
+    assert "(informational)" not in rendered.split("design basis")[1].split("\n")[0]
+
+
+def test_unversioned_citations_do_not_degrade_a_bundle_whose_checks_ran():
+    """The ordinary case, and the reason this section is informational until it fails.
+
+    Most references in this library name a clause and no edition — `ASME BTH-1 §3-3` names
+    a paragraph in a book nobody dated. Letting that NOT_EVALUATED into the roll-up would
+    put nearly every bundle at NOT_EVALUATED over checks that ran and passed, which teaches
+    a reader to ignore the status line. It is reported, in full, and marked informational.
+    """
+    from anvilate.standards import DesignBasis
+
+    sections = BundleSections(scorecard=_cited("ASME BTH-1 §3-3"), design_basis=DesignBasis())
+    assert sections.status is CheckStatus.PASS
+    rendered = sections.render()
+    assert "design basis (informational)" in rendered
+    assert "name no edition" in rendered
+
+
+def test_a_consistent_basis_passes_and_says_what_it_checked():
+    from anvilate.standards import DesignBasis
+
+    sections = BundleSections(
+        scorecard=_cited("AISC 360-16 §J4.1", "AISC 360-16 §J4.3"),
+        design_basis=DesignBasis(),
+    )
+    assert sections.status is CheckStatus.PASS
+    assert "all 2 references name an edition" in sections.render()

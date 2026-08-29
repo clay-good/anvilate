@@ -70,6 +70,36 @@ Eurocode citation in the library, silently and plausibly. The parser knows the d
 `EN 1993-1-9:2005`. A part number is not an edition either — `ISO 286-2` parses to no
 edition, not to edition "2".
 
+## The same trap, in ASME's spelling
+
+The Eurocode guard was written for one shape of the problem and the other shape was live:
+ASME Section VIII numbers its clauses `UG-37`, `UG-99(b)`, `UW-12`, and the two-digit suffix
+parsed as an **edition**. Both of those citations are emitted by this library — the UG-37
+reinforcement check and the UG-99 hydrostatic verification — so an ordinary pressure-vessel
+bundle failed with "ASME VIII Div 1 UG appears at editions 37, 99". A gate that cries wolf
+on the ordinary case is a gate that gets turned off.
+
+What separates the two spellings is the character before the hyphen. A designation ending
+in a **digit** takes an edition suffix — `AISC 360-16`, `ACI 318-19`, `AISI S100-16`. One
+ending in a **letter** is a clause prefix, and the number after it is the clause. The
+four-digit form needs no such test and is now read wherever it appears: `ASME B31.3-2022`,
+`AWS D1.1-2020` and `ASME B36.10M-2018` used to parse as naming no edition at all, because
+the year branch demanded a space or a colon in front of it.
+
+## Where a bundle says it
+
+`BundleSections.design_basis` is the adopted-editions record for a bundle, and it is
+optional — but its *absence* is named by `missing()`, so a bundle whose citations nobody
+checked and one whose citations check out no longer render identically.
+
+The section is informational until it fails, and the split is deliberate. Most references
+in this library name a clause and no edition, so `NOT_EVALUATED` is the ordinary answer;
+letting it into the roll-up would put nearly every bundle at `NOT_EVALUATED` over checks
+that ran and passed, which teaches a reader to skip the status line. A `FAIL` is different
+in kind — the citations contradict each other, so the bundle reads as though every number
+came from one book and did not. That is evidence misrepresenting itself, and a roll-up
+saying `PASS` over it would be doing the same thing one level up.
+
 ## What is deliberately not here
 
 - **No jurisdiction table.** The proposal allows an advisory offline mapping; shipping one

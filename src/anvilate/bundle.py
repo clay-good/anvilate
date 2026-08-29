@@ -72,6 +72,7 @@ from .loads import CombinationEvidence
 from .report.document import SCREENING_DISCLAIMER
 from .review import ReviewerDossier
 from .scorecard import CheckStatus, Scorecard
+from .standards.effectivity import DesignBasis, design_basis_scorecard
 from .units import Quantity
 from .verification import VerificationPlan
 
@@ -171,6 +172,11 @@ class BundleSections(RevalidatedModel):
     # The modelling assumptions the screening ran under, in the caller's own words. Empty
     # renders as "none declared" rather than vanishing: see the module docstring.
     assumptions: tuple[str, ...] = ()
+    # The editions this project designs to. Optional, and its absence is *named* by
+    # `missing()` rather than left out: a bundle whose citations nobody checked against a
+    # basis and one whose citations check out are different documents, and without this
+    # field a reader could not tell which they were holding — the concept did not appear.
+    design_basis: DesignBasis | None = None
 
     @model_validator(mode="after")
     def _an_assumption_says_something(self) -> BundleSections:
@@ -228,6 +234,29 @@ class BundleSections(RevalidatedModel):
                         f"{len(plan.analysis_only)} verified by analysis, "
                         f"{len(plan.unresolved)} unresolved"
                     ),
+                )
+            )
+        if self.design_basis is not None:
+            entry = design_basis_scorecard(
+                "design basis",
+                basis=self.design_basis,
+                references=[e.reference for e in self.scorecard.entries if e.reference],
+            )
+            found.append(
+                SectionStatus(
+                    name="design basis",
+                    status=entry.status,
+                    detail=entry.detail,
+                    # Informational except when it FAILs, and the split is the point.
+                    # Most references in this library name no edition, so a
+                    # NOT_EVALUATED here is the ordinary case; letting it into the roll-up
+                    # would mean nearly every bundle reporting NOT_EVALUATED over checks
+                    # that ran and passed, which teaches a reader to ignore the status.
+                    # A FAIL is different in kind: the citations contradict each other, so
+                    # the bundle reads as though every number came from one book and did
+                    # not. That is evidence misrepresenting itself, and a roll-up that
+                    # said PASS over it would be doing the same thing one level up.
+                    informational=entry.status is not CheckStatus.FAIL,
                 )
             )
         if self.review is not None:
@@ -320,6 +349,7 @@ class BundleSections(RevalidatedModel):
         return tuple(
             name
             for name in (
+                "design basis",
                 "verification",
                 "review",
                 "exploration",

@@ -225,7 +225,7 @@ print(bundle.summary())
 ```
 
 ```text
-bundle PASS over 1 layer (checks); not covered: verification, review, exploration, callouts, load combinations, export, geometric tolerances; not test-verified
+bundle PASS over 1 layer (checks); not covered: design basis, verification, review, exploration, callouts, load combinations, export, geometric tolerances; not test-verified
 ```
 
 Report the bundle's own sentence, including what it does not cover. When you are asked
