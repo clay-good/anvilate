@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, model_validator
+from pydantic import AfterValidator, ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..units import DimensionError, Quantity
 
 __all__ = [
@@ -27,7 +28,7 @@ __all__ = [
 ]
 
 
-class _Base(BaseModel):
+class _Base(RevalidatedModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

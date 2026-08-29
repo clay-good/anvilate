@@ -21,6 +21,7 @@ from math import cos, log10, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 from .stress import von_mises_principal
@@ -1584,7 +1585,7 @@ def cylinder_axial_buckling_stress(
     return Quantity(magnitude=sigma_cr, unit="MPa")
 
 
-class AllowableStress(BaseModel):
+class AllowableStress(RevalidatedModel):
     """A code allowable stress, the temperature it was read at, and where it came from.
 
     The B31.3 allowable stress tables are copyrighted, so the value is always the

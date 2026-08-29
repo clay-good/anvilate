@@ -12,8 +12,9 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, model_validator
 
+from .._models import RevalidatedModel
 from ..loads import (
     CombinationEvidence,
     CombinationSet,
@@ -71,7 +72,7 @@ Length = Annotated[Quantity, AfterValidator(require_dimension("[length]", name="
 Force = Annotated[Quantity, AfterValidator(require_dimension("[force]", name="force"))]
 
 
-class _Base(BaseModel):
+class _Base(RevalidatedModel):
     model_config = ConfigDict(extra="forbid")  # unknown keys are rejected
 
 

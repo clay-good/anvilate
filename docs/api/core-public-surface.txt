@@ -6,6 +6,7 @@
 # tests/test_contract.py: a symbol added to a module's __all__ and not to its manifest
 # fails, and so does a manifest line whose symbol no longer exists. The point is that
 # growing the public surface is a deliberate act with a diff, not a side effect.
+_models.RevalidatedModel
 agenteval.AgentEvalReport
 agenteval.AgentRunOutcome
 agenteval.AgentTask

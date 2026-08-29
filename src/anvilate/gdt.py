@@ -28,8 +28,9 @@ from __future__ import annotations
 from enum import StrEnum
 from math import isfinite
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .units import Quantity
 
 __all__ = [
@@ -196,7 +197,7 @@ class FrameModifier(StrEnum):
     STATISTICAL = "statistical"
 
 
-class DatumReference(BaseModel):
+class DatumReference(RevalidatedModel):
     """One datum feature reference in the frame's ordered datum reference frame.
 
     Order carries meaning and is not cosmetic: the primary datum takes precedence, and
@@ -230,7 +231,7 @@ class DatumReference(BaseModel):
         return f"{self.letter}{suffix}"
 
 
-class FeatureControlFrame(BaseModel):
+class FeatureControlFrame(RevalidatedModel):
     """A feature control frame, with Y14.5's grammar enforced at construction.
 
     The legality rules, each of which is a real drawing error this refuses to represent:

@@ -38,6 +38,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
@@ -197,7 +198,7 @@ def parse_citation(text: str) -> Citation | None:
     return None
 
 
-class MixedEditionWaiver(BaseModel):
+class MixedEditionWaiver(RevalidatedModel):
     """A recorded acceptance that one bundle spans more than one edition of a standard.
 
     Mixing is not forbidden — it is what real projects do, where a structure was designed

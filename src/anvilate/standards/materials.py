@@ -14,8 +14,9 @@ import difflib
 from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from .._models import RevalidatedModel
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, ScalarProperty, dimensioned
 
@@ -31,7 +32,7 @@ __all__ = [
 ]
 
 
-class _Base(BaseModel):
+class _Base(RevalidatedModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

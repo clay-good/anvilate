@@ -54,6 +54,7 @@ from collections.abc import Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .attestation import (
     AIDisclosure,
     AnvilatePredicate,
@@ -135,7 +136,7 @@ class SectionStatus(BaseModel):
         return f"[{self.status.value.upper()}] {self.name}{mark}: {self.detail}"
 
 
-class BundleSections(BaseModel):
+class BundleSections(RevalidatedModel):
     """What each layer produced for one part, and the one status over all of them.
 
     ``scorecard`` is the only required section — a bundle with no checks in it is not a

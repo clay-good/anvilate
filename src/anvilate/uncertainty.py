@@ -27,6 +27,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
+
 __all__ = [
     "Normal",
     "Uniform",
@@ -44,7 +46,7 @@ MONTE_CARLO_CITATION = (
 )
 
 
-class Normal(BaseModel):
+class Normal(RevalidatedModel):
     """A Gaussian input: a mean and a standard deviation (``std`` ≥ 0)."""
 
     model_config = ConfigDict(frozen=True)
@@ -62,7 +64,7 @@ class Normal(BaseModel):
         return self.mean if self.std == 0 else rng.gauss(self.mean, self.std)
 
 
-class Uniform(BaseModel):
+class Uniform(RevalidatedModel):
     """A flat input spread evenly across ``[low, high]`` (``low`` ≤ ``high``)."""
 
     model_config = ConfigDict(frozen=True)
@@ -89,7 +91,7 @@ class Uniform(BaseModel):
         return self.low if self.low == self.high else rng.uniform(self.low, self.high)
 
 
-class Symmetric(BaseModel):
+class Symmetric(RevalidatedModel):
     """A ± input, the tolerance-style vocabulary: a nominal and a half-width.
 
     ``distribution`` sets how the half-width is read: ``"normal"`` (default) treats

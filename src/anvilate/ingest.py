@@ -49,6 +49,7 @@ from math import isclose
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .units import Quantity, UnitError
 
 __all__ = [
@@ -123,7 +124,7 @@ class ConfirmationState(StrEnum):
     REJECTED = "rejected"
 
 
-class SourceLocation(BaseModel):
+class SourceLocation(RevalidatedModel):
     """Where in the document a value came from, precisely enough to go and look."""
 
     model_config = ConfigDict(frozen=True)
@@ -170,7 +171,7 @@ class SignatureStatus(StrEnum):
     PRESENT_UNVERIFIED = "present_unverified"
 
 
-class CertificateProvenance(BaseModel):
+class CertificateProvenance(RevalidatedModel):
     """Where a measured value's certificate came from, and what it does and does not claim.
 
     The identifier and the issuing laboratory are what make a measured input traceable past
@@ -224,7 +225,7 @@ class CertificateProvenance(BaseModel):
         )
 
 
-class ExtractedValue(BaseModel):
+class ExtractedValue(RevalidatedModel):
     """One candidate spec value, its source, and where it stands with a human.
 
     ``load_bearing`` marks a value the screening would actually consume. It defaults to
@@ -316,7 +317,7 @@ class UnparsedLine(BaseModel):
         return f"not extracted ({self.reason}): {self.source}"
 
 
-class FieldConflict(BaseModel):
+class FieldConflict(RevalidatedModel):
     """Two or more extractions for one field that do not agree.
 
     Kept whole. A conflict is a question for a person — the table says 50 kN and the notes

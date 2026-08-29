@@ -299,10 +299,12 @@ def test_renaming_every_operation_breaks_the_task_set():
     )
 
 
-def test_an_outcome_copied_past_its_validators_does_not_hang():
-    """``model_copy`` does not run validators, and an empty requirement is reached
-    vacuously at every position — which is an infinite loop, not a wrong number."""
+def test_an_outcome_cannot_be_copied_past_its_validators():
+    """An empty requirement is reached vacuously at every position, which is an infinite
+    loop rather than a wrong number — so the defence used to be that the copy *degrades*
+    safely. It is now that the copy does not happen: `AgentRunOutcome` inherits
+    `RevalidatedModel`, so the update is refused by the same validator the constructor ran.
+    """
     run = score_transcript(_task(), _calls("compile_spec", *LOOP))
-    stripped = run.model_copy(update={"required_tools": ()})
-    assert stripped.iterations == 0
-    assert not stripped.completed
+    with pytest.raises(ValidationError, match="no required operations"):
+        run.model_copy(update={"required_tools": ()})

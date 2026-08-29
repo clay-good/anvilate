@@ -43,6 +43,7 @@ from math import cos, exp, pi, sin, sqrt
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -455,7 +456,7 @@ _FAD_MU_CAP = 0.6
 _FAD_MU_COEFFICIENT = 0.001
 
 
-class SurfaceFlaw(BaseModel):
+class SurfaceFlaw(RevalidatedModel):
     """A semi-elliptical surface flaw in a plate, and the geometry K depends on.
 
     ``depth`` a is the flaw's depth into the wall, ``half_length`` c half its length

@@ -11,7 +11,9 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel, model_validator
+from pydantic import model_validator
+
+from .._models import RevalidatedModel
 
 __all__ = ["Origin", "Provenanced"]
 
@@ -26,7 +28,7 @@ class Origin(StrEnum):
     DEFAULT = "default"
 
 
-class Provenanced(BaseModel, Generic[T]):
+class Provenanced(RevalidatedModel, Generic[T]):
     """A value tagged with its origin, and a rationale when it is a default."""
 
     value: T

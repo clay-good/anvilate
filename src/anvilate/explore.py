@@ -38,6 +38,7 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .scorecard import CheckStatus, Scorecard
 
 __all__ = [
@@ -128,7 +129,7 @@ def halton_sequence(*, dimensions: int, count: int, skip: int = 1) -> tuple[tupl
     return tuple(points)
 
 
-class Parameter(BaseModel):
+class Parameter(RevalidatedModel):
     """One swept design variable: its name, its bounds, its unit, and its resolution.
 
     ``steps`` is how many values a :attr:`SamplingStrategy.GRID` sweep takes across
@@ -181,7 +182,7 @@ class Objective(BaseModel):
     sense: ObjectiveSense = ObjectiveSense.MINIMIZE
 
 
-class Study(BaseModel):
+class Study(RevalidatedModel):
     """A declared design-space study: what to sweep, what to rank by, and how far to go.
 
     ``budget`` caps how many points are evaluated. A grid larger than the budget is

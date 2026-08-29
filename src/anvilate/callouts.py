@@ -47,6 +47,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity, require_finite
 
@@ -159,7 +160,7 @@ def _characteristic_id(kind: str, scope: str | None, discriminator: str = "") ->
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
-class _Callout(BaseModel):
+class _Callout(RevalidatedModel):
     """Shared shape: a scope, a kind, and an identity derived from the two."""
 
     model_config = ConfigDict(frozen=True)
@@ -396,7 +397,7 @@ class FreeTextNote(_Callout):
 Callout = SurfaceFinish | Coating | HeatTreatment | ProcessNote | FreeTextNote
 
 
-class CalloutSet(BaseModel):
+class CalloutSet(RevalidatedModel):
     """The callouts declared on a part, addressable by characteristic and by tag."""
 
     model_config = ConfigDict(frozen=True)

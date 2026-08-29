@@ -47,8 +47,9 @@ from copy import deepcopy
 from enum import StrEnum
 from typing import Any, TextIO
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from ._models import RevalidatedModel
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .spec import ValidationTier
 
@@ -150,7 +151,7 @@ def _object_schema(properties: dict[str, Any], *, required: list[str]) -> dict[s
     }
 
 
-class ToolDefinition(BaseModel):
+class ToolDefinition(RevalidatedModel):
     """One pipeline operation as an MCP tool contract.
 
     Frozen, so no field can be rebound after the validators approved it. That is not the

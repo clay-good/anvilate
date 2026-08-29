@@ -37,6 +37,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity
 
@@ -117,7 +118,7 @@ class VerificationArchetype(BaseModel):
     practice_default: bool = False
 
 
-class VerificationOutcome(BaseModel):
+class VerificationOutcome(RevalidatedModel):
     """A recorded result: what was measured, when, by whom, and on what instrument.
 
     All four are required. An outcome without an instrument identity or a performer is

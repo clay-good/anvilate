@@ -31,6 +31,7 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..scorecard import Scorecard
 from ..standards import AllowableBasis, InsufficientBasis, require_basis
 from ..units import Quantity
@@ -72,7 +73,7 @@ def _check_nested(model: BaseModel, prefix: str, _depth: int = 0) -> None:
             _check_nested(value, f"{prefix}.{name}", _depth + 1)
 
 
-class GuardedInputs(BaseModel):
+class GuardedInputs(RevalidatedModel):
     """Base class for pack input models: no negative or non-finite quantity magnitudes.
 
     Subclasses list any genuinely signed field in :attr:`signed_fields`, which is checked

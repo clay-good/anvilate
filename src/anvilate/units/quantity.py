@@ -13,8 +13,9 @@ from math import isfinite
 from typing import Any
 
 import pint
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from .registry import UREG
 
 __all__ = [
@@ -66,7 +67,7 @@ def _dimensionality_str(units: str) -> str:
     return _friendly_dimension(UREG.Unit(units).dimensionality)
 
 
-class Quantity(BaseModel):
+class Quantity(RevalidatedModel):
     """A physical value: a magnitude and the unit it was expressed in.
 
     Construct directly (``Quantity(magnitude=75, unit="kip")``) or parse from

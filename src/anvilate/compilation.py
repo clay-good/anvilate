@@ -44,6 +44,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .units import Quantity, UnitError
 
 __all__ = [
@@ -91,7 +92,7 @@ class FieldOutcome(BaseModel):
         return f"[{mark}] {self.path}: expected {self.expected}, got {self.actual or '—'}"
 
 
-class CompilationOutcome(BaseModel):
+class CompilationOutcome(RevalidatedModel):
     """One task's result: whether the output parsed, and how each field fared.
 
     ``schema_valid`` and the field outcomes are deliberately independent. The combination
@@ -155,7 +156,7 @@ class CompilationOutcome(BaseModel):
         )
 
 
-class CompilationTask(BaseModel):
+class CompilationTask(RevalidatedModel):
     """One prompt and the spec fields a correct compilation of it must carry.
 
     ``reference`` maps a dotted path into the spec to the value expected there. It is
@@ -313,7 +314,7 @@ def score_candidate(
     )
 
 
-class CompilationReport(BaseModel):
+class CompilationReport(RevalidatedModel):
     """Three numbers over a task set, and deliberately not a fourth that averages them.
 
     There is no ``score``, no ``success_rate``, and no ``passed``. Every one of those would

@@ -24,6 +24,7 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
@@ -379,7 +380,7 @@ def _governing_for_check(
     return combinations.governing(loads, minimize=minimize, by_magnitude=not minimize)
 
 
-class CombinationEvidence(BaseModel):
+class CombinationEvidence(RevalidatedModel):
     """Which combination a part's checks were screened against, for the evidence bundle.
 
     The scorecard entry names the governing combination in its detail, which a reader

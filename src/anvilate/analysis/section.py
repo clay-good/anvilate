@@ -21,6 +21,7 @@ from math import isfinite, pi
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..units import Quantity, require_finite
 
 __all__ = [
@@ -117,7 +118,7 @@ def required_section_modulus(
     return Quantity(magnitude=float(converted.magnitude), unit="mm**3")
 
 
-class CrossSection(BaseModel):
+class CrossSection(RevalidatedModel):
     """A prismatic cross-section's properties, all about the bending neutral axis.
 
     ``area`` A, ``second_moment`` I, and ``extreme_fibre`` c (neutral axis to the

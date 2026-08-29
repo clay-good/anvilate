@@ -44,6 +44,7 @@ from enum import IntEnum, StrEnum
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 
 __all__ = [
@@ -199,7 +200,7 @@ def artifact_digest(scorecard: Scorecard, *, toolchain: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-class ReviewRecord(BaseModel):
+class ReviewRecord(RevalidatedModel):
     """A licensed engineer's record that they reviewed a specific artifact.
 
     ``covers_digest`` is the :func:`artifact_digest` of what was reviewed.

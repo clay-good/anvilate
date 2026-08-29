@@ -18,6 +18,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from .._models import RevalidatedModel
 from ..units import Quantity, require_dimension
 from .iso286 import zone_limits
 
@@ -32,7 +33,7 @@ __all__ = [
 _Length = Annotated[Quantity, AfterValidator(require_dimension("[length]", name="tolerance"))]
 
 
-class _Base(BaseModel):
+class _Base(RevalidatedModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

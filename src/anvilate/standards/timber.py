@@ -36,8 +36,9 @@ from collections.abc import Mapping
 from enum import StrEnum
 from math import isfinite
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..units import Quantity
 
 __all__ = [
@@ -108,7 +109,7 @@ NDS_APPLICABLE_FACTORS: dict[TimberProperty, frozenset[str]] = {
 _MODULI = (TimberProperty.MODULUS, TimberProperty.MODULUS_MIN)
 
 
-class TimberDesignValue(BaseModel):
+class TimberDesignValue(RevalidatedModel):
     """One NDS reference design value, with what it is a value *of*.
 
     ``value`` is the tabulated reference number — before any adjustment. What it becomes

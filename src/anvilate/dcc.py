@@ -54,6 +54,7 @@ from xml.etree import ElementTree as ET
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .ingest import (
     CertificateProvenance,
     ExtractedValue,
@@ -478,7 +479,7 @@ def _standard(
     return Normal(mean=nominal, std=uncertainty), None
 
 
-class CalibratedValue(BaseModel):
+class CalibratedValue(RevalidatedModel):
     """One measured quantity a certificate offers, with its uncertainty and its origin."""
 
     model_config = ConfigDict(frozen=True)
@@ -542,17 +543,6 @@ class CalibratedValue(BaseModel):
                 "unit from its own quantity is a factor nothing downstream can see"
             )
         return self
-
-    def model_copy(self, **kwargs: object) -> CalibratedValue:
-        """A copy with the invariant re-checked, because ``model_copy`` skips validators.
-
-        Pydantic does not run a ``mode="after"`` validator on a copy, so the check that the
-        distribution and the quantity are the same number — the only thing in the library
-        that can catch those two drifting apart — was one call away from being bypassed.
-        Re-validating here puts it on the path that would otherwise walk around it.
-        """
-        copied = super().model_copy(**kwargs)  # type: ignore[arg-type]
-        return CalibratedValue.model_validate(copied.model_dump())
 
     def distribution_in(self, unit: str) -> InputDistribution | None:
         """The stated uncertainty as a distribution in ``unit``, or ``None`` if there is none.

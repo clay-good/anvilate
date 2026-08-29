@@ -641,8 +641,17 @@ def test_junk_spliced_into_the_payload_cannot_ride_along():
     # Parsing a wire envelope goes through the constructor, which is where it is refused.
     with pytest.raises(ValidationError, match="not valid base64"):
         Attestation(payload=spliced, signatures=envelope.signatures)
-    # And the verifier reports it rather than raising, for an envelope built some other way.
-    report = verify_attestation(envelope.model_copy(update={"payload": spliced}))
+    # `model_copy` is refused too, since `Attestation` re-validates a copy — so the
+    # tampered envelope is built with `model_construct`, which is pydantic's documented
+    # bypass and the only remaining way such an object comes into existence.
+    with pytest.raises(ValidationError, match="not valid base64"):
+        envelope.model_copy(update={"payload": spliced})
+    # The verifier still has to report rather than raise: defence in depth, because the
+    # constructor is not the only door an object arrives through.
+    smuggled = Attestation.model_construct(
+        payload_type=envelope.payload_type, payload=spliced, signatures=envelope.signatures
+    )
+    report = verify_attestation(smuggled)
     assert report.status is CheckStatus.FAIL
     assert any("not valid base64" in p for p in report.problems)
 
@@ -780,14 +789,20 @@ def test_the_v1_predicate_still_writes_origins_as_an_object():
 
 
 def test_a_junk_signature_is_reported_rather_than_raised_out_of_the_verifier():
-    # `Signature` validates its base64 at construction, but `model_copy` does not re-run
-    # validators — and this module uses `model_copy` itself.
+    # `Signature` validates its base64 at construction, and a copy is re-validated now, so
+    # both of those doors are shut. The verifier is still required to report rather than
+    # raise on one that got in some other way — `model_construct` is that way.
     signer = LocalHmacSigner(_SECRET)
     envelope = Attestation.signed_by(_bundle(), signer)
-    junk = envelope.signatures[0].model_copy(update={"sig": "!!!not base64!!!"})
-    report = verify_attestation(
-        envelope.model_copy(update={"signatures": (junk,)}), artifacts=_artifacts(), signer=signer
+    with pytest.raises(ValidationError, match="not valid base64"):
+        envelope.signatures[0].model_copy(update={"sig": "!!!not base64!!!"})
+    junk = Signature.model_construct(
+        keyid=envelope.signatures[0].keyid, algorithm="hmac-sha256", sig="!!!not base64!!!"
     )
+    smuggled = Attestation.model_construct(
+        payload_type=envelope.payload_type, payload=envelope.payload, signatures=(junk,)
+    )
+    report = verify_attestation(smuggled, artifacts=_artifacts(), signer=signer)
     assert report.signature_state is SignatureState.INVALID
     assert report.status is CheckStatus.FAIL
 

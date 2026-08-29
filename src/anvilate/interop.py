@@ -34,6 +34,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .analysis.cold_formed_steel import ElasticBuckling
 from .analysis.section import CrossSection
 from .units import Quantity, require_finite
@@ -92,7 +93,7 @@ class ForceComponent(StrEnum):
     TORSION = "torsion"
 
 
-class AxisMapping(BaseModel):
+class AxisMapping(RevalidatedModel):
     """Which of the caller's component labels is which Anvilate quantity.
 
     ``labels`` maps a :class:`ForceComponent` to the label the exporting tool used —
@@ -137,7 +138,7 @@ class AxisMapping(BaseModel):
         return self
 
 
-class ForceStation(BaseModel):
+class ForceStation(RevalidatedModel):
     """One station along a member: where it is, and what the analysis reported there."""
 
     model_config = ConfigDict(frozen=True)
@@ -154,7 +155,7 @@ class ForceStation(BaseModel):
         return self
 
 
-class MemberForceRecord(BaseModel):
+class MemberForceRecord(RevalidatedModel):
     """Member forces from an external analysis, with the tool and load case that made them.
 
     ``tool`` and ``tool_version`` are required, and so is ``load_case``. A demand without
@@ -228,7 +229,7 @@ class MemberDemand(BaseModel):
         return self.components.get(component)
 
 
-class ExternalSectionProperties(BaseModel):
+class ExternalSectionProperties(RevalidatedModel):
     """Cross-section constants computed elsewhere, with the source that computed them.
 
     Built for the ``sectionproperties``-class case: an arbitrary section meshed and

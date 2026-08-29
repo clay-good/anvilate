@@ -22,6 +22,7 @@ from math import sqrt
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -158,7 +159,7 @@ class DSMLimitState(StrEnum):
     GLOBAL = "global"
 
 
-class ElasticBuckling(BaseModel):
+class ElasticBuckling(RevalidatedModel):
     """The elastic buckling loads a DSM check runs on, and where they came from.
 
     ``local``, ``distortional`` and ``global_`` are the elastic critical loads (for a

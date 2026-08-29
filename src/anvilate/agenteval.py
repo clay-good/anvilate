@@ -50,8 +50,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
+from ._models import RevalidatedModel
 from .mcp import REQUIRED_OPERATIONS, tool_catalog
 
 __all__ = [
@@ -65,7 +66,7 @@ __all__ = [
 ]
 
 
-class ToolCall(BaseModel):
+class ToolCall(RevalidatedModel):
     """One call an agent made, and whether the call itself was well formed.
 
     ``failed`` is about the *call*, not about the answer. A ``run_validation`` that comes
@@ -102,7 +103,7 @@ class ToolCall(BaseModel):
         return f"{self.tool}" + (f" — FAILED: {self.error}" if self.failed else "")
 
 
-class AgentTask(BaseModel):
+class AgentTask(RevalidatedModel):
     """One prompt and the ordered operations a run that solved it must have reached.
 
     The two sequences are what make ``iterations`` mean something. ``prelude`` is the
@@ -183,7 +184,7 @@ def _passes(required: Sequence[str], reached: Sequence[str], start: int) -> int:
     return passes
 
 
-class AgentRunOutcome(BaseModel):
+class AgentRunOutcome(RevalidatedModel):
     """One (task, run) result: the calls made, in the order they were made.
 
     Every metric below is derived from ``calls`` rather than declared, so a transcript
@@ -249,7 +250,7 @@ class AgentRunOutcome(BaseModel):
         )
 
 
-class AgentEvalReport(BaseModel):
+class AgentEvalReport(RevalidatedModel):
     """One model+client combination over a task set, with its harness written down.
 
     There is no ``score``, no ``success_rate`` and no ``passed``. A single figure over

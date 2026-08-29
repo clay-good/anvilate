@@ -34,8 +34,9 @@ from __future__ import annotations
 from enum import StrEnum
 from math import isfinite
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..units import Quantity
 
 __all__ = [
@@ -97,7 +98,7 @@ class SpecimenGeometry(StrEnum):
     COMPONENT = "component or assembly"
 
 
-class DatasetProvenance(BaseModel):
+class DatasetProvenance(RevalidatedModel):
     """Where a curve came from, and under what terms it may be redistributed.
 
     ``doi`` or ``url`` is required — not both, but not neither. A fatigue curve with no
@@ -137,7 +138,7 @@ class DatasetProvenance(BaseModel):
         return self
 
 
-class SpecimenMetadata(BaseModel):
+class SpecimenMetadata(RevalidatedModel):
     """What the curve was measured on.
 
     ``stress_ratio`` R = σ_min/σ_max is the one field most likely to be missing from a
@@ -199,7 +200,7 @@ class SpecimenMetadata(BaseModel):
         return self
 
 
-class FatigueSegment(BaseModel):
+class FatigueSegment(RevalidatedModel):
     """One power-law branch: Δσ = Δσ_ref · (N_ref / N)^(1/m), valid up to ``max_cycles``.
 
     ``slope`` is the S-N exponent m in the ``N · Δσ^m = constant`` form the fatigue
@@ -245,7 +246,7 @@ class FatigueSegment(BaseModel):
         )
 
 
-class FatigueCurve(BaseModel):
+class FatigueCurve(RevalidatedModel):
     """A piecewise S-N curve with a stated validity range and a survival probability.
 
     Segments run in ascending ``max_cycles`` order and must be continuous where they meet:
@@ -318,17 +319,6 @@ class FatigueCurve(BaseModel):
                 )
         return self
 
-    def model_copy(self, **kwargs: object) -> FatigueCurve:
-        """A copy with the invariants re-checked, because ``model_copy`` skips validators.
-
-        Pydantic runs no ``mode="after"`` validator on a copy, so
-        ``curve.model_copy(update={"segments": ...})`` was one call away from producing a
-        discontinuous curve — the exact thing this class refuses to be constructed as.
-        Re-validating here puts the check on the path that would otherwise walk around it.
-        """
-        copied = super().model_copy(**kwargs)  # type: ignore[arg-type]
-        return FatigueCurve.model_validate(copied.model_dump())
-
     @property
     def max_cycles(self) -> float:
         """The last cycle count the curve's segments cover."""
@@ -355,7 +345,7 @@ class FatigueCurve(BaseModel):
         return self.cutoff_stress_range
 
 
-class FatigueRecord(BaseModel):
+class FatigueRecord(RevalidatedModel):
     """One fatigue curve, what it was measured on, and where it came from."""
 
     model_config = ConfigDict(frozen=True)
@@ -445,7 +435,7 @@ EN1993_NORMAL_DETAIL_CATEGORIES: tuple[int, ...] = (
 _EN1993_STANDARD_PREFIX = "EN 1993-1-9"
 
 
-class WeldDetailCategory(BaseModel):
+class WeldDetailCategory(RevalidatedModel):
     """A weld detail category as a record: the standard, the detail, and which curve.
 
     A detail category is published as a bare number — "90" — and that number is the

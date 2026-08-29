@@ -37,6 +37,7 @@ from math import isfinite, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity, require_finite
 
@@ -246,7 +247,7 @@ class AluminumLimitState(StrEnum):
     LATERAL_TORSIONAL_BUCKLING = "lateral-torsional buckling"
 
 
-class AlloyProperties(BaseModel):
+class AlloyProperties(RevalidatedModel):
     """An alloy-temper's mechanical properties, and where they came from.
 
     Following the library's user-supplied-allowables doctrine: Anvilate ships no alloy

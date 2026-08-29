@@ -26,8 +26,9 @@ The shape of the fix is the whole point:
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..scorecard import Scorecard
 
 __all__ = [
@@ -76,7 +77,7 @@ class ExportRefused(RuntimeError):
         )
 
 
-class ExportAuthorization(BaseModel):
+class ExportAuthorization(RevalidatedModel):
     """Permission to write one artifact, and the watermark that goes into it.
 
     Constructed by :func:`authorize_export` and not usefully by hand: the validator below
@@ -195,7 +196,7 @@ def authorize_export(scorecard: Scorecard | None, *, override: bool = False) -> 
     return ExportAuthorization(validated=False, overridden=True, blocking=blocking)
 
 
-class ExportRecord(BaseModel):
+class ExportRecord(RevalidatedModel):
     """One artifact that was emitted, and the authorization it left under.
 
     The requirement watermarks two things, not one: the exported file's own metadata *and*

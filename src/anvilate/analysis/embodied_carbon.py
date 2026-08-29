@@ -37,6 +37,7 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .._models import RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 from ..units import Quantity
 
@@ -74,7 +75,7 @@ class ModuleScope(StrEnum):
     A1_A5 = "A1-A5 (cradle to practical completion)"
 
 
-class CarbonFactor(BaseModel):
+class CarbonFactor(RevalidatedModel):
     """An EN 15978 mass-specific carbon factor, and what is needed to know what it means.
 
     ``value`` is kgCO2e per kg of material — dimensionless, because CO2-equivalent is

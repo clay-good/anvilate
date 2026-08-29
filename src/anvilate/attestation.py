@@ -51,6 +51,7 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from ._models import RevalidatedModel
 from .evidence import SourceRecord
 from .review import DecisionOrigin
 from .scorecard import CheckStatus, Scorecard
@@ -160,7 +161,7 @@ def dsse_pae(payload_type: str, payload: bytes) -> bytes:
     )
 
 
-class Subject(BaseModel):
+class Subject(RevalidatedModel):
     """One artifact an attestation is about: a name and its SHA-256.
 
     The name is how a verifier finds the file (``drawing.dxf``, ``scorecard.json``);
@@ -204,7 +205,7 @@ class ComponentKind(StrEnum):
     DATA = "data"  # a standards or materials database, versioned like code
 
 
-class Component(BaseModel):
+class Component(RevalidatedModel):
     """One entry in the environment BOM: what it is, what it is called, what version.
 
     ``version`` is required and must be non-empty. A BOM listing a component without
@@ -233,7 +234,7 @@ class Component(BaseModel):
         return {"type": self.kind.value, "name": self.name, "version": self.version}
 
 
-class EnvironmentBOM(BaseModel):
+class EnvironmentBOM(RevalidatedModel):
     """The software environment that produced a bundle, as a CycloneDX-shaped inventory.
 
     ``application`` is Anvilate itself; ``components`` are the libraries, solvers, and
@@ -276,7 +277,7 @@ class EnvironmentBOM(BaseModel):
         }
 
 
-class AIEvent(BaseModel):
+class AIEvent(RevalidatedModel):
     """One point where a language model touched the spec, and who confirmed it.
 
     ``stage`` names what the model did in Anvilate's own vocabulary — ``"intent
@@ -312,7 +313,7 @@ class AIEvent(BaseModel):
         return bool(self.confirmed_by and self.confirmed_by.strip())
 
 
-class ValueOrigin(BaseModel):
+class ValueOrigin(RevalidatedModel):
     """Where one spec field's value came from — one entry of a disclosure's origin map."""
 
     model_config = ConfigDict(frozen=True)
@@ -327,7 +328,7 @@ class ValueOrigin(BaseModel):
         return self
 
 
-class AIDisclosure(BaseModel):
+class AIDisclosure(RevalidatedModel):
     """Whether, where, and how a language model participated in producing the spec.
 
     ``origins`` maps a spec field's stable name to where its value came from, using
@@ -433,7 +434,7 @@ def _disclosure_body(disclosure: AIDisclosure) -> dict[str, object]:
     }
 
 
-class AnvilatePredicate(BaseModel):
+class AnvilatePredicate(RevalidatedModel):
     """The claim an Anvilate attestation makes, under :data:`PREDICATE_TYPE`.
 
     Everything a second engineer needs to decide whether the verdict is still theirs:
@@ -520,7 +521,7 @@ class AnvilatePredicate(BaseModel):
         return body
 
 
-class EvidenceBundle(BaseModel):
+class EvidenceBundle(RevalidatedModel):
     """Subjects plus a predicate: the whole claim, and its content address.
 
     :meth:`statement` is the in-toto document; :attr:`digest` is the SHA-256 of that
@@ -626,7 +627,7 @@ class LocalHmacSigner:
         return hmac.compare_digest(self.sign(payload), signature)
 
 
-class Signature(BaseModel):
+class Signature(RevalidatedModel):
     """One DSSE signature: which key, which algorithm, and the base64 tag."""
 
     model_config = ConfigDict(frozen=True)
@@ -651,7 +652,7 @@ class Signature(BaseModel):
         return base64.b64decode(self.sig, validate=True)
 
 
-class Attestation(BaseModel):
+class Attestation(RevalidatedModel):
     """A DSSE envelope around a bundle's statement, signed or plainly not.
 
     :meth:`unsigned` is a first-class construction, not a degenerate one: an

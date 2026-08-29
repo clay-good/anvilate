@@ -54,6 +54,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.loads` — typed load combinations and the governing one, named.
 - :mod:`anvilate.mcp` — the pipeline as MCP tool contracts, and the rule that
   decides which operations are tasks rather than synchronous calls.
+- :mod:`anvilate._models` — the base class that makes a model's invariants
+  survive ``model_copy``, which runs no validators.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.
 - :mod:`anvilate.screening` — a Design Spec screened on the checks the document
   itself supports, with the tier no spec can run named rather than dropped.
