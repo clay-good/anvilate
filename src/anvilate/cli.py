@@ -302,14 +302,21 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
     if args.format == "json":
         print(json.dumps(report.model_dump(mode="json"), indent=2, sort_keys=True), file=out)
     else:
-        print(_render_verification(report), file=out)
+        print(_render_verification(report, attestation.statement()), file=out)
     for problem in report.problems:
         print(f"anvilate verify: {problem}", file=err)
     return EXIT_CODES[report.status]
 
 
-def _render_verification(report) -> str:
+def _render_verification(report, statement: dict) -> str:
     """The report as a person reads it, with `attested` explained where it would mislead.
+
+    The toolchain the envelope attests is printed too, because the requirement's own
+    scenario says an engineer running this "confirms the signature, that artifact digests
+    match, **and reports the toolchain versions attested**" — and the first version showed
+    the first two. It is read out of the verified statement rather than out of the
+    environment: what a verifier wants to know is what produced the artifact, not what is
+    installed on the machine reading it.
 
     `attested` is True only for a clean verification of an **authorship-establishing**
     signature. A local HMAC is a shared secret: it proves the envelope was not altered by
@@ -333,6 +340,17 @@ def _render_verification(report) -> str:
         # Both lists always render. A run that checked nothing and one whose subjects all
         # matched must not look the same.
         lines.append(f"  {label:11} {', '.join(subjects) or 'none'}")
+    bom = (statement.get("predicate") or {}).get("bom") or {}
+    components = bom.get("components") or []
+    metadata = (bom.get("metadata") or {}).get("component") or {}
+    if metadata:
+        lines.append(f"  produced by {metadata.get('name')} {metadata.get('version')}")
+    # Always rendered, `none` included: a bundle attesting no toolchain and one whose
+    # toolchain nobody printed must not read the same.
+    listed = ", ".join(
+        f"{component.get('name')} {component.get('version')}" for component in components
+    )
+    lines.append(f"  toolchain   {listed or 'none attested'}")
     for problem in report.problems:
         lines.append(f"  problem     {problem}")
     if not report.attested and report.signature_state is SignatureState.SYMMETRIC_VERIFIED:

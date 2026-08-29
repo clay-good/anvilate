@@ -129,8 +129,17 @@ PASS  attested=False
   predicate   https://anvilate.dev/attestation/screening/v1
   checked     scorecard.json, lug.dxf
   unchecked   none
+  produced by anvilate 0.0.1
+  toolchain   anvilate_materials 2026.03, ezdxf 1.4.4, pint 0.25.3, pydantic 2.13.5, pyyaml 6.0.3
   note        a symmetric key proves the envelope was not altered, not who made it — anyone holding the key could have, so this is not attestation
 ```
+
+**The toolchain is read out of the envelope, not out of the machine.** The requirement's
+own scenario says an engineer running this "confirms the signature, that artifact digests
+match, and reports the toolchain versions attested" — and a verifier on a different machine
+with different versions installed must still be told what *produced* the artifact. An
+envelope attesting no toolchain reads `none attested`, for the same reason the report's
+headings never vanish.
 
 Three things this command will not do, and they are the reasons it exists:
 

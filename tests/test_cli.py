@@ -589,3 +589,71 @@ def test_verify_json_is_the_report(envelope):
     assert report["signature_state"] == "symmetric_verified"
     assert sorted(report["checked_subjects"]) == ["lug.dxf", "scorecard.json"]
     assert code == EXIT_OK
+
+
+def test_verify_reports_the_toolchain_the_envelope_attests(envelope):
+    """`evidence-attestation`'s own scenario: an engineer running the verification command
+    "confirms the signature, that artifact digests match, **and reports the toolchain
+    versions attested**". The first version showed the first two.
+
+    Read out of the verified statement, not out of the environment: what a verifier wants
+    to know is what produced the artifact, not what is installed on the machine reading it.
+    """
+    import json as json_module
+
+    from anvilate.attestation import Attestation
+
+    statement = Attestation.model_validate(
+        json_module.loads(envelope.read_text(encoding="utf-8"))
+    ).statement()
+    components = statement["predicate"]["bom"]["components"]
+    assert components, "the fixture attests no toolchain, so this checked nothing"
+
+    _code, out, _err = _run(*_verify_args(envelope))
+    for component in components:
+        assert f"{component['name']} {component['version']}" in out
+    assert "produced by anvilate" in out
+
+
+def test_a_toolchain_read_from_the_machine_would_be_the_wrong_answer(envelope, monkeypatch):
+    """The distinction that makes the line worth printing.
+
+    A verifier on a different machine, with different versions installed, must still be
+    told what produced the artifact. So the versions shown come from the envelope, and a
+    changed local environment does not move them.
+    """
+    import json as json_module
+    from importlib import metadata
+
+    monkeypatch.setattr(metadata, "version", lambda name: "99.99.99-local")
+    _code, out, _err = _run(*_verify_args(envelope))
+    assert "99.99.99-local" not in out
+    statement = json_module.loads(envelope.read_text(encoding="utf-8"))
+    assert statement, "the envelope is empty"
+
+
+def test_an_envelope_attesting_no_toolchain_says_so(tmp_path):
+    """A bundle attesting no toolchain and one whose toolchain nobody printed must not read
+    the same — the vanishing-heading rule, one surface over."""
+    import json as json_module
+    import runpy
+
+    from anvilate.attestation import Attestation, EnvironmentBOM
+
+    namespace = runpy.run_path(str(_REPO / "examples" / "attested_evidence_bundle.py"))
+    bundle = namespace["_bundle"]()
+    bare = bundle.model_copy(
+        update={
+            "predicate": bundle.predicate.model_copy(
+                update={
+                    "bom": EnvironmentBOM(
+                        application=bundle.predicate.bom.application, components=()
+                    )
+                }
+            )
+        }
+    )
+    path = tmp_path / "bare.json"
+    path.write_text(json_module.dumps(Attestation.unsigned(bare).to_envelope()), encoding="utf-8")
+    _code, out, _err = _run("verify", str(path))
+    assert "toolchain   none attested" in out
