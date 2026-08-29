@@ -312,6 +312,24 @@ twice — while the example asserted only its own Marin factors, so the two numb
 takes away were joined to nothing. `analysis-interop.md` quotes "416,231 times larger
 (25.4⁴)", which is not a fixture at all but a conversion the unit layer can do.
 
+### Where it stands
+
+Run at HEAD: **25 of 33 pages caught, 8 missed, and all eight are accounted for.** Before
+re-running it in the hope of finding work, read this list:
+
+| Missed | Why it is not a defect |
+| --- | --- |
+| `export-targets.md`, `valid-is-not-correct.md`, `research/*` (2) | External figures — package versions verified by hand, a paper's own results. On the allow-list in `test_contract.py`. |
+| `agent-skill.md` | "governs over one at 99.99%" is rhetoric. Blocking outranks utilization at *every* utilization, so the figure carries no claim; the ordering is gated instead, and the test says why the number is not. |
+| `evidence-attestation.md` | The prose quotes `pint 0.24.4` as the stale version a hand-written BOM once attested. A historical example, not a live claim. |
+| `thermal-screening.md` | The block states inputs with no computed result beside them, so there is nothing on the page to disagree with the library about. |
+| `timber-screening.md` | "§3.10" is a clause number. The number pattern cannot tell one from a value; two-decimal clause references are the sweep's standing false positive. |
+
+Two limits to hold in mind when reading a CAUGHT: the sweep perturbs each page's **first**
+distinctive number only, so a page it clears may still carry unguarded figures further down;
+and it runs only the test files that name the page, so a gate living elsewhere is invisible
+to it.
+
 Both are gated now, and both gates read the page rather than a copy of it. Where a page
 states inputs *and* a result, rebuild the case from the page's inputs. Where the page's
 block *is* the output, state the inputs in the test and compare — reading the values back
