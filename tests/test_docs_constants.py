@@ -140,3 +140,112 @@ def test_the_gdt_page_quotes_the_half_band_the_converter_produces():
         _frame(MaterialCondition.MMC), bonus=Quantity.parse(f"{bonus} mm")
     )
     assert at_mmc.to("mm").magnitude == pytest.approx(mmc_band)
+
+
+def test_the_uncertainty_page_rebuilds_from_its_own_inputs():
+    """The page shows a runnable block and its outputs in comments beside it.
+
+    Both halves are read off the page — the distributions in, the figures out — and the
+    sampler is run between them. That is the right shape here *because the page states
+    inputs and results*: reading only the results back and rebuilding from them would make
+    the page its own fixture, which agrees with itself however far it drifts.
+    """
+    from anvilate.uncertainty import Normal, sample_margin
+
+    page = _page("uncertainty-margins.md")
+    inputs = dict(re.findall(r'"(\w+)": Normal\(mean=([\d.]+), std=', page))
+    assert set(inputs) == {"load", "yield_strength", "area"}, inputs
+    covs = dict(re.findall(r'"(\w+)": Normal\(mean=[\d.]+, std=([\d.]+) \* ', page))
+    required = float(re.search(r"required=([\d.]+),", page).group(1))
+    seed = int(re.search(r"seed=(\d+),", page).group(1))
+
+    def response(values):
+        return (values["yield_strength"] * values["area"] / 1000.0) / values["load"]
+
+    result = sample_margin(
+        response,
+        {
+            name: Normal(mean=float(mean), std=float(covs.get(name, 0.0)) * float(mean))
+            for name, mean in inputs.items()
+        },
+        required=required,
+        seed=seed,
+    )
+
+    printed = re.search(
+        r"# (margin [\d.]+ ± [\d.]+, P\(below [\d.]+\) = [\d.]+% over \d+ samples)", page
+    )
+    assert printed is not None, "the printed line on uncertainty-margins.md has moved"
+    assert str(result) == printed.group(1)
+
+    stated_probability = float(
+        re.search(r"# ([\d.]+) — the chance of falling short", page).group(1)
+    )
+    assert result.shortfall_probability == pytest.approx(stated_probability, abs=5e-4)
+    dominant = re.search(r'# "(\w+)" — the input driving the scatter', page)
+    assert dominant is not None and result.dominant().name == dominant.group(1)
+    # The page says `is_fragile(threshold=0.05)` is True, which is the whole argument: a
+    # nominal pass with a material chance of falling short.
+    threshold = float(re.search(r"is_fragile\(threshold=([\d.]+)\)", page).group(1))
+    assert result.is_fragile(threshold=threshold) is True
+    assert result.shortfall_probability > threshold
+
+
+def test_the_pressure_equipment_page_quotes_the_verdicts_the_example_computes():
+    """A 3x2 table of safety factors, and the two ratios the prose draws from it.
+
+    The ratios are the argument — the shell got 1.75x thinner and the opening 3.4x worse —
+    so they are recomputed from the table rather than trusted, and the table from the run.
+    """
+    page = _page("pressure-equipment.md")
+    rows = re.findall(
+        r"\| ([^|]*?\([A-Z]+-\d+\)) "
+        r"\| \*{0,2}\w+, SF ([\d.]+)\*{0,2} "
+        r"\| \*{0,2}\w+, SF ([\d.]+)\*{0,2} \|",
+        page,
+    )
+    assert len(rows) == 3, f"the two-thickness table on pressure-equipment.md has moved: {rows}"
+
+    # The table's own values against the run, not merely against the prose beside them.
+    # A coordinated edit — a cell and the ratio moved together — leaves the page internally
+    # consistent and wrong, which is the whole failure mode a self-referential gate has.
+    import runpy
+
+    example = _DOCS.parent / "examples" / "pressure_vessel_nozzle_and_flange.py"
+    namespace = runpy.run_path(str(example))
+    screened = {
+        column: {
+            entry.name: entry.safety_factor
+            for entry in namespace["screen_vessel"](
+                namespace["Quantity"].parse(f"{millimetres} mm")
+            ).entries
+        }
+        for column, millimetres in ((1, 14), (2, 8))
+    }
+    for name, thick_cell, thin_cell in rows:
+        # The page writes "Shell wall (UG-27)" and "6 in nozzle opening (UG-37)"; the
+        # entries are "shell wall (UG-27)" and "6 in nozzle opening" — different case, and
+        # one carries the clause and one does not. Matched on the base name, and required
+        # to be unambiguous rather than taken as the first hit.
+        matches = [k for k in screened[1] if name.lower().startswith(k.split(" (")[0].lower())]
+        assert len(matches) == 1, f"{name!r} matches {matches} in the run"
+        key = matches[0]
+        for column, cell in ((1, thick_cell), (2, thin_cell)):
+            assert screened[column][key] == pytest.approx(float(cell), abs=5e-3), (
+                f"the page says {name} is SF {cell} in column {column}; the run gives "
+                f"{screened[column][key]:.3f}"
+            )
+
+    thick, thin = (float(v) for v in rows[2][1:])
+    thick_shell, thin_shell = (float(v) for v in rows[0][1:])
+    # The prose's two ratios, recomputed from the table above them.
+    stated = re.search(
+        r"got ([\d.]+)× thinner \((\d+) mm to (\d+) mm\) and the opening got ([\d.]+)× worse", page
+    )
+    assert stated is not None, "the ratio sentence on pressure-equipment.md has moved"
+    assert float(stated.group(2)) / float(stated.group(3)) == pytest.approx(
+        float(stated.group(1)), abs=5e-3
+    )
+    assert thick / thin == pytest.approx(float(stated.group(4)), abs=5e-2)
+    # And the argument itself: the opening degrades faster than the wall it sits in.
+    assert thick / thin > thick_shell / thin_shell
