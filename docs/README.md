@@ -9,6 +9,7 @@ You have a part and you want a verdict.
 
 | | |
 | --- | --- |
+| [Quickstart](quickstart.md) | Install, screen a lifting lug, read the verdict. Ten minutes, no network, no CAD. |
 | [`anvilate` on the command line](headless-cli.md) | Screen a spec, export its bundle, verify an attestation, diff two revisions. The exit codes are the interface, and **2 is not a pass**. |
 | [Screening a Design Spec](spec-screening.md) | What a spec document alone can be screened on, and the tier that has to name a gap rather than run. |
 | [Calculation reports](calculation-reports.md) | The submittal a reviewer reads: formula, substitution, result, clause. |
