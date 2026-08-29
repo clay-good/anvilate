@@ -140,3 +140,121 @@ def test_the_base_is_not_paid_for_by_models_with_no_invariant():
     from anvilate.scorecard import ScorecardEntry
 
     assert not issubclass(ScorecardEntry, RevalidatedModel)
+
+
+# --- frozen means frozen ------------------------------------------------------------------
+#
+# `ConfigDict(frozen=True)` stops a field being *rebound*. It does not reach inside the
+# value, so a `dict` field on a frozen model is writable by anyone holding the model, and
+# the writes land after every validator has run.
+
+
+def test_a_frozen_models_mapping_field_refuses_writes():
+    """The defect that motivated `FrozenMap`, in the module where it did real damage.
+
+    `CompilationTask.reference` names the spec fields a correct compilation must carry. Its
+    constructor refuses a task naming none — the whole point, since every output including
+    an empty one would then score fully correct. But `del task.reference["material"]` on a
+    *frozen* task turned a compilation that got the material wrong into one scoring 1 of 1
+    fields, which is the wrong-but-valid case the module exists to report.
+    """
+    from anvilate.compilation import CompilationTask, score_candidate
+
+    task = CompilationTask(
+        task_id="lug", prompt="a lug", reference={"name": "lug", "material": "ASTM-A36"}
+    )
+    honest = score_candidate(task, {"name": "lug", "material": "wrong"})
+    assert (honest.correct_fields, len(honest.fields)) == (1, 2)
+    assert honest.wrong_but_valid
+
+    # A mappingproxy has no `__delitem__` or `clear` at all, and refuses `__setitem__` with
+    # a TypeError. All three are the same answer for a caller: the write does not happen.
+    for attack in (
+        lambda: task.reference.__delitem__("material"),
+        lambda: task.reference.__setitem__("material", "wrong"),
+        lambda: task.reference.clear(),
+        lambda: task.reference.update({"material": "wrong"}),
+    ):
+        with pytest.raises((TypeError, AttributeError)):
+            attack()
+    assert len(score_candidate(task, {"name": "lug", "material": "wrong"}).fields) == 2
+
+
+def _frozen_models_with_a_mapping_field():
+    """Every frozen model in the package carrying a mapping-shaped field."""
+    import importlib
+    import pkgutil
+
+    from pydantic import BaseModel
+
+    import anvilate
+
+    found: list[tuple[type, str]] = []
+    seen: set[type] = set()
+    for info in pkgutil.walk_packages(anvilate.__path__, "anvilate."):
+        try:
+            module = importlib.import_module(info.name)
+        except Exception:  # pragma: no cover - an optional dependency is absent
+            continue
+        for value in vars(module).values():
+            if not (isinstance(value, type) and issubclass(value, BaseModel)):
+                continue
+            if value in seen or not value.model_config.get("frozen"):
+                continue
+            seen.add(value)
+            for name, field in value.model_fields.items():
+                annotation = str(field.annotation)
+                if annotation.startswith(("dict[", "Mapping[", "collections.abc.Mapping[")):
+                    found.append((value, name))
+    assert seen, "the walk imported no models, so this gate checked nothing"
+    return found
+
+
+@pytest.mark.parametrize(
+    ("model", "field"),
+    [(model, field) for model, field in _frozen_models_with_a_mapping_field()],
+)
+def test_every_frozen_mapping_field_is_a_frozen_mapping(model, field):
+    """The census, so a new `dict` field on a frozen model cannot land unfrozen.
+
+    `anvilate.mcp.ToolDefinition` is the one exemption and it is a real one: its two fields
+    hold arbitrarily nested JSON Schema documents, where freezing the top level would read
+    as a guarantee it does not make. That module holds them a different way — a fresh
+    catalog per call, and a deep copy on the way out — and its docstring says so.
+    """
+    from types import MappingProxyType
+
+    if model.__module__ == "anvilate.mcp":
+        pytest.skip("nested JSON documents; see the docstring above and mcp.ToolDefinition")
+    built = model.model_construct()
+    example = getattr(built, field, None)
+    annotation = str(model.model_fields[field].annotation)
+    assert annotation.startswith(("Mapping[", "collections.abc.Mapping[")), (
+        f"{model.__module__}.{model.__name__}.{field} is a bare dict on a frozen model, so "
+        f"anyone holding the model can write to it after every validator has run. Use "
+        f"FrozenMap from anvilate._models"
+    )
+    assert example is None or isinstance(example, MappingProxyType)
+
+
+def test_the_frozen_mapping_census_is_looking_at_something():
+    found = _frozen_models_with_a_mapping_field()
+    assert len(found) >= 9, found
+    assert any(model.__module__ == "anvilate.interop" for model, _ in found)
+
+
+def test_a_frozen_mapping_still_serializes_as_a_plain_object():
+    """The freeze must be invisible downstream, or it is a breaking change wearing a fix."""
+    import json
+
+    from anvilate.compilation import CompilationTask
+
+    task = CompilationTask(task_id="t", prompt="p", reference={"name": "x"})
+    assert task.model_dump() == {
+        "task_id": "t",
+        "prompt": "p",
+        "reference": {"name": "x"},
+        "notes": None,
+    }
+    assert json.loads(task.model_dump_json())["reference"] == {"name": "x"}
+    assert CompilationTask.model_validate(task.model_dump()) == task

@@ -1,4 +1,4 @@
-"""One base class for models whose invariants must survive a copy.
+"""Model plumbing: a copy that re-validates, and a mapping field that is really frozen.
 
 **Pydantic runs no ``mode="after"`` validator on ``model_copy``.** So a model that refuses
 to be *constructed* in a broken state can still be *copied* into one, and the copy is a
@@ -20,11 +20,13 @@ to every model in the library.
 
 from __future__ import annotations
 
-from typing import Any, Self
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Annotated, Any, Self, TypeVar
 
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel, PlainSerializer
 
-__all__ = ["RevalidatedModel"]
+__all__ = ["EMPTY_MAP", "FrozenMap", "RevalidatedModel"]
 
 
 class RevalidatedModel(BaseModel):
@@ -47,3 +49,31 @@ class RevalidatedModel(BaseModel):
         if update is None:
             return copied
         return type(self).model_validate(dict(copied.__dict__))
+
+
+_K = TypeVar("_K")
+_V = TypeVar("_V")
+
+#: The shared empty mapping, for a ``FrozenMap`` field's ``default_factory``. A literal
+#: ``{}`` default cannot be used: pydantic deep-copies defaults and a ``mappingproxy`` does
+#: not pickle. It is safe to share because nothing can write to it.
+EMPTY_MAP: Mapping[Any, Any] = MappingProxyType({})
+
+#: A mapping field on a frozen model that the frozen model actually owns.
+#:
+#: ``model_config = ConfigDict(frozen=True)`` stops a field being *rebound*. It does not
+#: reach inside the value, so a ``dict`` field on a frozen model is writable by anyone
+#: holding the model — and the writes land after every validator has run. That is not a
+#: theoretical gap: ``CompilationTask.reference`` names the spec fields a correct
+#: compilation must carry, its constructor refuses a task that names none, and
+#: ``del task.reference["material"]`` turned a compilation that got the material wrong into
+#: one scoring 1 of 1 fields correct — defeating the wrong-but-valid metric the module
+#: exists to report.
+#:
+#: The value is a ``MappingProxyType``, so it reads exactly like a dict and refuses every
+#: write. It serializes as a plain object, so nothing downstream sees the difference.
+FrozenMap = Annotated[
+    Mapping[_K, _V],
+    AfterValidator(lambda mapping: MappingProxyType(dict(mapping))),
+    PlainSerializer(dict, return_type=dict),
+]

@@ -45,9 +45,9 @@ from enum import StrEnum
 from math import radians, sin
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ._models import RevalidatedModel
+from ._models import EMPTY_MAP, FrozenMap, RevalidatedModel
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity, require_finite
 
@@ -340,7 +340,7 @@ class ProcessNote(_Callout):
 
     kind: Literal["process_note"] = "process_note"
     category: str  # e.g. "deburr", "shot_peen", "stress_relieve"
-    parameters: dict[str, Quantity] = {}
+    parameters: FrozenMap[str, Quantity] = Field(default_factory=lambda: EMPTY_MAP)
 
     @model_validator(mode="after")
     def _categorized(self) -> ProcessNote:

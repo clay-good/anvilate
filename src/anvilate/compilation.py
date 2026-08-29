@@ -44,7 +44,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import RevalidatedModel
+from ._models import FrozenMap, RevalidatedModel
 from .units import Quantity, UnitError
 
 __all__ = [
@@ -169,7 +169,7 @@ class CompilationTask(RevalidatedModel):
 
     task_id: str
     prompt: str
-    reference: dict[str, Any]
+    reference: FrozenMap[str, Any]
     notes: str | None = None
 
     @model_validator(mode="after")

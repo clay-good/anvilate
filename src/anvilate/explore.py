@@ -38,7 +38,7 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import RevalidatedModel
+from ._models import FrozenMap, RevalidatedModel
 from .scorecard import CheckStatus, Scorecard
 
 __all__ = [
@@ -278,7 +278,7 @@ class StudyEvaluation(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    objectives: dict[str, float]
+    objectives: FrozenMap[str, float]
     scorecard: Scorecard
 
 
@@ -301,8 +301,8 @@ class DesignPoint(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     index: int
-    parameters: dict[str, float]
-    objectives: dict[str, float]
+    parameters: FrozenMap[str, float]
+    objectives: FrozenMap[str, float]
     status: CheckStatus
     feasible: bool
     fragile: bool = False

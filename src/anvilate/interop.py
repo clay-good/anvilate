@@ -34,7 +34,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import RevalidatedModel
+from ._models import FrozenMap, RevalidatedModel
 from .analysis.cold_formed_steel import ElasticBuckling
 from .analysis.section import CrossSection
 from .units import Quantity, require_finite
@@ -116,7 +116,7 @@ class AxisMapping(RevalidatedModel):
 
     model_config = ConfigDict(frozen=True)
 
-    labels: dict[ForceComponent, str]
+    labels: FrozenMap[ForceComponent, str]
     axial_compression_positive: bool
     ignored: tuple[str, ...] = ()
 
@@ -144,7 +144,7 @@ class ForceStation(RevalidatedModel):
     model_config = ConfigDict(frozen=True)
 
     position: Quantity
-    components: dict[str, Quantity]
+    components: FrozenMap[str, Quantity]
 
     @model_validator(mode="after")
     def _well_formed(self) -> ForceStation:
@@ -220,8 +220,8 @@ class MemberDemand(BaseModel):
     load_case: str
     tool: str
     tool_version: str
-    components: dict[ForceComponent, Quantity]
-    stations: dict[ForceComponent, Quantity]
+    components: FrozenMap[ForceComponent, Quantity]
+    stations: FrozenMap[ForceComponent, Quantity]
     ignored: tuple[str, ...] = ()
 
     def get(self, component: ForceComponent) -> Quantity | None:

@@ -36,9 +36,9 @@ import re
 from datetime import date
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .._models import RevalidatedModel
+from .._models import EMPTY_MAP, FrozenMap, RevalidatedModel
 from ..scorecard import CheckStatus, ScorecardEntry
 
 __all__ = [
@@ -243,7 +243,7 @@ class DesignBasis(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    pins: dict[str, str] = {}
+    pins: FrozenMap[str, str] = Field(default_factory=lambda: EMPTY_MAP)
     waivers: tuple[MixedEditionWaiver, ...] = ()
 
     def agreement(self, citation: Citation | None) -> EditionAgreement:
