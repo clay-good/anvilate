@@ -59,5 +59,17 @@ assumes the response is locally smooth. It answers "given these input spreads, h
 often does the margin fall short?" — a design question — not "what is the certified
 failure rate of this part?" Full FORM/SORM-class methods stay out of scope.
 
+**The label travels with the number.** A rendered annotation names the sampling method,
+the sample count *and* the screening label — the report says
+`P(below 2.00) = 3.1% over 4096 samples by monte_carlo` and prints
+`Monte Carlo propagation of input distributions; first-order (Taylor) variance
+sensitivity. Screening only — not a certified reliability analysis.` beneath it. Both
+renderings dropped the method and the label for a release: `MarginUncertainty` carried
+them and nothing consumed either, so the one place a reviewer actually meets the
+probability — the document they sign — showed it bare. What holds it now is a gate that
+replaces the method and the citation with sentinel strings and requires the renderings to
+show *those*, because a hardcoded "Monte Carlo, screening only" line satisfies every
+naive check and becomes a lie the day a second method exists.
+
 See [`examples/bracket_load_scatter_fragility.py`](../examples/bracket_load_scatter_fragility.py)
 for a nominally passing bracket flagged fragile under load scatter.

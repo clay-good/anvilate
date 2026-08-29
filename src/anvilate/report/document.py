@@ -229,8 +229,10 @@ class CalculationReport(BaseModel):
                 flag = " — FRAGILE" if section.entry.is_fragile() else ""
                 out.append(
                     f"  uncertainty: P(below {unc.required:.2f}) = "
-                    f"{unc.shortfall_probability * 100:.1f}% over {unc.samples} samples{flag}"
+                    f"{unc.shortfall_probability * 100:.1f}% over {unc.samples} samples "
+                    f"by {unc.method}{flag}"
                 )
+                out.append(f"    {unc.citation}")
             if section.citation:
                 out.append(f"  source: {section.citation}")
         out.append("")
@@ -403,9 +405,11 @@ class CalculationReport(BaseModel):
             cls = "uncertainty fragile" if fragile else "uncertainty"
             message = (
                 f"Uncertainty: P(below {unc.required:.2f}) = "
-                f"{unc.shortfall_probability * 100:.1f}% over {unc.samples} samples{flag}"
+                f"{unc.shortfall_probability * 100:.1f}% over {unc.samples} samples "
+                f"by {unc.method}{flag}"
             )
             out.append(f'<p class="{cls}">{escape(message)}</p>')
+            out.append(f'<p class="uncertainty-method">{escape(unc.citation)}</p>')
         if section.citation:
             out.append(f'<p class="source">Source: {escape(section.citation)}</p>')
         out.append("</section>")
@@ -472,6 +476,7 @@ section.check { page-break-inside: avoid; }
 .over_margin .status { color: #b60; }
 .repair { font-size: 0.9em; color: #a00; }
 .uncertainty { font-size: 0.9em; color: #444; }
+.uncertainty-method { font-size: 0.85em; color: #666; margin-top: -0.4em; }
 .uncertainty.fragile { color: #a00; font-weight: bold; }
 .fallback { font-style: italic; color: #666; }
 .source { font-size: 0.9em; color: #444; }

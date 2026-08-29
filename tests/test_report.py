@@ -278,10 +278,14 @@ def test_report_renders_a_fragility_warning_on_an_annotated_check():
     )
     text = report.to_text()
     # A nominal pass that the distribution fails 21% of the time is flagged FRAGILE.
-    assert "uncertainty: P(below 1.50) = 21.0% over 20000 samples — FRAGILE" in text
+    assert "uncertainty: P(below 1.50) = 21.0% over 20000 samples by monte_carlo — FRAGILE" in text
+    # The method and the screening label ride with the number, never a bare probability.
+    assert "Screening only — not a certified reliability analysis." in text
     assert report.status is CheckStatus.PASS  # deterministic verdict unchanged
     html = report.to_html()
     assert 'class="uncertainty fragile"' in html
+    assert 'class="uncertainty-method"' in html
+    assert "by monte_carlo" in html
 
 
 def test_over_margin_only_report_is_not_blocked():
@@ -994,3 +998,90 @@ def test_the_report_declares_its_own_surface_rather_than_inheriting_the_viewers(
     if len(channels) == 3:
         channels = "".join(char * 2 for char in channels)
     assert max(int(channels[index : index + 2], 16) for index in (0, 2, 4)) < 0x80
+
+
+# --- a probability never travels without its method and its label -------------------------
+
+
+def _annotated_report(**overrides):
+    from anvilate.uncertainty import MarginUncertainty, Sensitivity
+
+    fields = {
+        "samples": 4096,
+        "seed": 7,
+        "required": 2.0,
+        "mean": 2.4,
+        "std": 0.2,
+        "shortfall_probability": 0.031,
+        "lower": 2.0,
+        "upper": 2.8,
+        "coverage": 0.9,
+        "sensitivities": (Sensitivity(name="load", variance_share=1.0),),
+        **overrides,
+    }
+    return CalculationReport(
+        title="Annotated",
+        sections=(
+            ReportSection(
+                entry=ScorecardEntry.from_safety_factor(
+                    "tension", computed=2.4, required=2.0
+                ).model_copy(update={"uncertainty": MarginUncertainty(**fields)}),
+            ),
+        ),
+    )
+
+
+def test_no_rendering_shows_a_probability_without_its_method_and_screening_label():
+    """`uncertainty-quantification`'s "Method visible" scenario, held to both renderings.
+
+    The requirement is that an annotation names the sampling method, the sample count and
+    the screening label — "never a bare probability presented as a certified reliability
+    figure". Both renderings printed the probability and the sample count and dropped the
+    other two, while `MarginUncertainty` had carried `method` and `citation` all along with
+    nothing consuming either. The sole place a reviewer meets the number is the document
+    they sign.
+    """
+    report = _annotated_report()
+    unc = report.sections[0].entry.uncertainty
+    assert unc is not None
+    for rendering in (report.to_text(), report.to_html()):
+        assert "3.1%" in rendering, "the probability is not being rendered at all"
+        assert unc.method in rendering
+        assert "4096 samples" in rendering
+        assert unc.citation in rendering
+
+
+def test_the_label_a_rendering_shows_is_the_annotations_own():
+    """A hardcoded "Monte Carlo, screening only" line passes the test above and becomes a lie
+    the moment a second method exists — which is exactly what the requirement anticipates
+    when it says FORM/SORM-class methods plug into the same contract. So the values are
+    replaced with sentinels no source file contains and the renderings have to show those.
+
+    `method` is a single-valued `Literal` today, so a sentinel cannot be constructed through
+    the constructor; `model_construct` is pydantic's documented bypass and is the honest way
+    to stand in for the second method that does not exist yet.
+    """
+    from anvilate.uncertainty import MarginUncertainty
+
+    report = _annotated_report(citation="SENTINEL LABEL TEXT")
+    entry = report.sections[0].entry
+    annotated = MarginUncertainty.model_construct(
+        **{**entry.uncertainty.__dict__, "method": "sentinel_method"}
+    )
+    report = CalculationReport(
+        title=report.title,
+        sections=(ReportSection(entry=entry.model_copy(update={"uncertainty": annotated})),),
+    )
+    for rendering in (report.to_text(), report.to_html()):
+        assert "sentinel_method" in rendering
+        assert "SENTINEL LABEL TEXT" in rendering
+        assert "monte_carlo" not in rendering
+
+
+def test_the_calc_record_carries_the_method_and_the_label_too():
+    """An external verifier reads the record, not the rendering — the requirement's
+    "sufficient to re-verify every number without parsing the rendered document"."""
+    record = _annotated_report().to_record()
+    annotation = record["report"]["sections"][0]["entry"]["uncertainty"]
+    assert annotation["method"] == "monte_carlo"
+    assert "Screening only" in annotation["citation"]
