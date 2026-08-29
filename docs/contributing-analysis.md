@@ -289,14 +289,18 @@ for page in sorted(DOCS.rglob("*.md")):
         run = subprocess.run([".venv/bin/python", "-m", "pytest", *files, "-q", "-x",
                               "-p", "no:randomly"], capture_output=True, timeout=600)
     finally:
-        page.write_text(original)
+        # `git checkout`, not the cached text. Restoring from a variable restores to
+        # whatever the file said when this run started — and if a previous run was killed
+        # mid-page, that is a mutation. The first version did exactly that, took a stale
+        # mutation as the original, and left fifteen pages dirty.
+        subprocess.run(["git", "checkout", "--", str(page)], check=True)
     print(f"{'CAUGHT' if run.returncode else 'MISSED'}  {page.name}: {old} -> {new}")
 PY
 ```
 
 It runs the suite once per page, so it is a sweep you run deliberately rather than a gate
-in CI. **Restore the tree afterwards** — a killed run leaves a page mutated, which is how
-this one was first noticed:
+in CI. Start from a clean tree and check it afterwards, because a killed run still leaves
+one page mutated — the one it was on:
 
 ```bash
 git status --short docs/
