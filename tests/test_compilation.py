@@ -356,8 +356,15 @@ def test_a_field_that_was_never_compared_does_not_read_like_one_that_was_wrong()
     )
     assert str(wrong) == "[MISS] load.magnitude: expected 50 kN, got 50 kip — units differ"
 
-    # A match needs no reason, and does not carry one.
+    # A match needs no reason, and `_compare` gives every match the detail "agreed" — so
+    # this has to be asserted against a *populated* detail, not an empty one. With an empty
+    # one the mutation that shows detail on every outcome survives, and every matched line
+    # in a report picks up a trailing "— agreed".
     ok = FieldOutcome(
-        path="material.ref", expected="ASTM-A36", actual="ASTM-A36", matched=True, detail=""
+        path="material.ref",
+        expected="ASTM-A36",
+        actual="ASTM-A36",
+        matched=True,
+        detail="agreed",
     )
     assert str(ok) == "[match] material.ref: expected ASTM-A36, got ASTM-A36"
