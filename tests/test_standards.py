@@ -1643,18 +1643,43 @@ _REDISTRIBUTABLE_LICENSES = frozenset(
     {"CC0-1.0", "CC-BY-4.0", "ODC-By-1.0", "MIT", "Apache-2.0", "Unlicense"}
 )
 
-_DATASET_ROOT_MODULES = ("standards", "tolerance")
+_PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "src" / "anvilate"
+
+# Files that ship inside the package and are not datasets, each with the reason it is not
+# one. Everything else that is not Python must carry a licensed dataset block. Listing the
+# exemptions rather than the datasets is the direction that survives: a gate naming the two
+# directories datasets happen to live in today cannot see the third.
+_NOT_A_DATASET = {
+    "skills/anvilate/SKILL.md": (
+        "the agent skill — instructions this project wrote about its own library, "
+        "under the project's own licence, not third-party data"
+    ),
+}
+
+
+def _shipped_non_python_files() -> list[str]:
+    """Every non-Python file the wheel carries, package-relative.
+
+    `[tool.hatch.build.targets.wheel] packages = ["src/anvilate"]` ships the directory, so
+    this is what gets distributed. `__pycache__` is a build artifact of the checkout and is
+    not in the wheel.
+    """
+    return sorted(
+        str(path.relative_to(_PACKAGE_ROOT))
+        for path in _PACKAGE_ROOT.rglob("*")
+        if path.is_file() and path.suffix != ".py" and "__pycache__" not in path.parts
+    )
 
 
 def _bundled_datasets() -> list[tuple[str, dict]]:
+    """Every YAML dataset anywhere in the package, not only under two known directories."""
     import yaml
 
-    root = Path(__file__).resolve().parent.parent / "src" / "anvilate"
-    found = []
-    for module in _DATASET_ROOT_MODULES:
-        for path in sorted((root / module / "data").glob("*.yaml")):
-            found.append((f"{module}/data/{path.name}", yaml.safe_load(path.read_text())))
-    return found
+    return [
+        (name, yaml.safe_load((_PACKAGE_ROOT / name).read_text()))
+        for name in _shipped_non_python_files()
+        if name.endswith(".yaml")
+    ]
 
 
 def _citation_sources(node: object) -> list[object]:
@@ -1811,3 +1836,44 @@ def test_the_license_gate_sees_what_it_claims_to(tmp_path, monkeypatch):
     _run({**sourceless, "rows": {"1": {"citation": {"source": "a published table"}}}})
     with pytest.raises(AssertionError):
         _run({**sourceless, "rows": {"1": {"citation": {"source": ""}}}})
+
+
+def test_nothing_ships_inside_the_package_that_is_not_code_a_dataset_or_a_named_exemption():
+    """`standards-data`: a release "contains no non-redistributable dataset content — only
+    the fetch recipes and checksums".
+
+    The licence gate above used to sweep `standards/data` and `tolerance/data` — the two
+    directories every dataset happens to live in today. A `.csv` beside a module, a `.json`
+    payload, or the allowables pack `expand-open-design-data` will add under `analysis/data`
+    would ship with no licence record and nothing would notice, because the gate was looking
+    at where the files are rather than at what the wheel contains.
+
+    So the sweep is inverted: everything that is not Python must be a dataset with a
+    redistributable licence, or an exemption with a written reason.
+    """
+    shipped = _shipped_non_python_files()
+    assert shipped, "the sweep found no shipped files at all, so it is checking nothing"
+    licensed = {name for name, _document in _bundled_datasets()}
+    unaccounted = [name for name in shipped if name not in licensed and name not in _NOT_A_DATASET]
+    assert not unaccounted, (
+        f"these ship inside the package with no licence record: {unaccounted}. Either give "
+        f"each a dataset block with a redistributable SPDX identifier, or add it to "
+        f"_NOT_A_DATASET with the reason it is not third-party data"
+    )
+    for name, reason in _NOT_A_DATASET.items():
+        assert name in shipped, f"{name} is exempt and no longer ships; strike it off"
+        assert len(reason.split()) >= 6, f"{name} is exempt for no stated reason"
+
+
+def test_the_shipped_file_sweep_would_see_a_new_data_file(tmp_path, monkeypatch):
+    """The adversary. A sweep that returns a fixed list passes the test above forever."""
+    import anvilate
+
+    package = Path(anvilate.__file__).resolve().parent
+    intruder = package / "analysis" / "smuggled_allowables.csv"
+    intruder.write_text("a,b\n1,2\n", encoding="utf-8")
+    try:
+        assert "analysis/smuggled_allowables.csv" in _shipped_non_python_files()
+    finally:
+        intruder.unlink()
+    assert "analysis/smuggled_allowables.csv" not in _shipped_non_python_files()

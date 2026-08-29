@@ -183,6 +183,16 @@ version — with a companion test that mutates a dataset each of those ways and 
 gate to catch it. A dataset with no source at the dataset level (the materials table, whose
 properties each cite a different publication) has to carry one on every record instead.
 
+**The sweep is over what the wheel ships, not over where datasets live.** It used to walk
+`standards/data` and `tolerance/data` — the two directories every dataset happens to sit in
+today — so a `.csv` beside a module, a `.json` payload, or the allowables pack that
+`expand-open-design-data` will add under `analysis/data` would have shipped with no licence
+record and nothing would have noticed. Now every file inside the package that is not Python
+must be a dataset with a redistributable licence or an exemption with a written reason, and
+there is exactly one exemption: the agent skill, which is this project's own prose about its
+own library. An adversary test writes an unlicensed data file into the installed package and
+requires the sweep to see it.
+
 Here they are, so that "what is in this package and under what terms" is a question you
 answer by reading rather than by grepping. Every cell is read back out of the dataset
 blocks themselves by `test_the_dataset_table_is_the_datasets_own_metadata`, so a table that
