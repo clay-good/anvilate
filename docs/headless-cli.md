@@ -26,7 +26,7 @@ than collapsing to pass/fail:
 | 0 | every check passed (or passed with margin to spare) |
 | 1 | a check failed |
 | 2 | the card could not be fully evaluated — **not a pass**, and not a failure |
-| 3 | the request was wrong: a missing file, a document that is not a valid spec |
+| 3 | the request was wrong: a usage error, a missing file, a document that is not a spec |
 | 4 | the operation is specified but unbuilt |
 
 **Code 2 is the one that matters and No-silent-green settles it.** A screen that could not
@@ -37,6 +37,12 @@ deliberately, in one place, rather than getting it by accident everywhere:
 ```bash
 anvilate check part.yaml || [ $? -eq 2 ]   # accept a not-evaluated card, on purpose
 ```
+
+**A usage error is a bad request, not a verdict.** `ArgumentParser.error` exits 2,
+hardcoded — so for one commit `anvilate frobnicate`, `anvilate` with no command, and
+`anvilate check` with no file all came back with the code the line above tells a CI job it
+may accept, and a typo read as a screen that ran and could not conclude. Every usage error
+is 3 now. `--help` still exits 0, because asking for help is not a failure.
 
 The mapping is a total map over the four scorecard statuses, so a fifth status is a
 decision somebody has to make rather than a silent zero.

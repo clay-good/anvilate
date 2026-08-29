@@ -23,7 +23,7 @@ rather than collapsing to pass/fail:
 0    every check passed
 1    a check failed
 2    the card could not be fully evaluated — **not a pass**, and not a failure
-3    the request was wrong: a missing file, a document that is not a valid spec
+3    the request was wrong: a usage error, a missing file, a document that is not a spec
 4    the operation is specified but unbuilt
 ===  ===========================================================================
 
@@ -80,12 +80,36 @@ _UNBUILT = {
 }
 
 
+class _Parser(argparse.ArgumentParser):
+    """An ``ArgumentParser`` whose usage errors are bad requests, not verdicts.
+
+    ``ArgumentParser.error`` exits **2**, hardcoded — and 2 is this CLI's code for "the card
+    could not be evaluated". So `anvilate frobnicate`, `anvilate` with no command, and
+    `anvilate check` with no file all exited with the code the docs tell a CI job it may
+    accept: ``anvilate check part.yaml || [ $? -eq 2 ]`` treated a typo as a successfully
+    not-evaluated screen. A silent green produced by the very feature that exists to stop
+    silent greens.
+
+    A usage error is a bad request, which is what code 3 already means — the same bucket as
+    a missing file or a document that is not a spec. ``--help`` is unaffected: that goes
+    through ``exit()`` rather than ``error()`` and still leaves 0.
+    """
+
+    def error(self, message: str) -> None:  # type: ignore[override]
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_BAD_REQUEST, f"{self.prog}: error: {message}\n")
+
+
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _Parser(
         prog="anvilate",
         description="Screen a Design Spec without a UI. Exit code 0 only when every "
         "check passed; 2 means the card could not be evaluated, which is not a pass.",
     )
+    # Subcommands inherit `_Parser`: `add_subparsers` defaults `parser_class` to the parent's
+    # own type, so "check: the following arguments are required: spec" lands on the same code
+    # as a top-level usage error. Passing it explicitly changed nothing and killed no
+    # mutation, which is how that was established rather than assumed.
     commands = parser.add_subparsers(dest="command", required=True)
 
     check = commands.add_parser(

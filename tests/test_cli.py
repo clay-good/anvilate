@@ -164,3 +164,36 @@ def test_the_console_script_is_declared():
     """A module nothing installs as a command is not a CLI."""
     text = (_REPO / "pyproject.toml").read_text(encoding="utf-8")
     assert 'anvilate = "anvilate.cli:main"' in text
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        pytest.param([], id="no command"),
+        pytest.param(["check"], id="check with no file"),
+        pytest.param(["frobnicate"], id="unknown command"),
+        pytest.param(["check", "a.yaml", "--format", "xml"], id="bad option value"),
+        pytest.param(["check", "a.yaml", "--nonsense"], id="unknown option"),
+    ],
+)
+def test_a_usage_error_can_never_be_read_as_a_verdict(argv):
+    """`ArgumentParser.error` exits **2**, hardcoded, and 2 is this CLI's "could not be
+    evaluated". So every usage error came back with the code the docs tell a CI job it may
+    accept — `anvilate check part.yaml || [ $? -eq 2 ]` read a typo as a screen that ran and
+    could not conclude. A silent green produced by the feature that exists to stop them.
+
+    A usage error is a bad request, which is what 3 already means.
+    """
+    with pytest.raises(SystemExit) as exit_info:
+        _run(*argv)
+    code = exit_info.value.code
+    assert code == EXIT_BAD_REQUEST, argv
+    assert code not in (EXIT_OK, EXIT_FAILED, EXIT_NOT_EVALUATED, EXIT_UNBUILT)
+
+
+def test_help_still_exits_zero():
+    """`--help` goes through `exit()` rather than `error()`; asking for help is not a
+    failure, and moving the error code must not have moved this one."""
+    with pytest.raises(SystemExit) as exit_info:
+        _run("--help")
+    assert exit_info.value.code == EXIT_OK
