@@ -456,4 +456,24 @@ class Scorecard(BaseModel):
         return tuple(e for e in self.entries if e.is_fragile(threshold))
 
     def __str__(self) -> str:
-        return f"scorecard {self.status.value.upper()} ({len(self.entries)} checks)"
+        """One line, carrying the two facts this library asks a reader to report.
+
+        The rule for using a scorecard is "report :attr:`status` and :meth:`governing`, not
+        an impression of how the calculation went" — and the lazy path, ``print(card)``,
+        used to give the first and drop the second. A reader who sees ``scorecard FAIL
+        (2 checks)`` knows something failed and not which check to fix, which is the whole
+        of what the card was assembled to tell them.
+
+        The not-evaluated count is here for the other half of the doctrine. "2 checks" over
+        a card where one of them could not run is a true sentence that reads as a part
+        screened twice.
+        """
+        counts = f"{len(self.entries)} checks"
+        unrun = len(self.not_evaluated())
+        if unrun:
+            counts += f", {unrun} not evaluated"
+        governing = self.governing()
+        # Named on a passing card too: there it is the tightest check, which is the one a
+        # reader is about to ask about anyway.
+        tail = f"; governing: {governing.name}" if governing is not None else ""
+        return f"scorecard {self.status.value.upper()} ({counts}){tail}"

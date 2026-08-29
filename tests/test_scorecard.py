@@ -519,3 +519,52 @@ def test_an_unavailable_factor_keeps_both_the_requirement_and_the_band():
     # And it is still not a pass, and still carries no factor of its own.
     assert entry.passed is False
     assert entry.safety_factor is None
+
+
+# --- The one-line rendering, which had no test at all ----------------------------------
+
+
+def test_the_card_prints_the_two_facts_it_asks_a_reader_to_report():
+    """`print(card)` is the lazy path, and it dropped half the answer.
+
+    The rule for using a scorecard is "report `status` and `governing()`, not an impression
+    of how the calculation went". The one-liner gave the first and not the second, so a
+    reader doing the obvious thing learned that something failed and not which check to fix
+    — the whole of what the card was assembled to tell them. Nothing asserted this string
+    before, which is how it stayed half an answer.
+    """
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("net tension", computed=3.3, required=2.0),
+            ScorecardEntry.from_safety_factor("pin bearing", computed=1.5, required=2.0),
+        )
+    )
+    assert str(card) == "scorecard FAIL (2 checks); governing: pin bearing"
+
+
+def test_a_passing_card_names_its_tightest_check_too():
+    """On a pass the governing entry is the tightest one, which is the next question."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry.from_safety_factor("net tension", computed=3.3, required=2.0),
+            ScorecardEntry.from_safety_factor("pin bearing", computed=2.1, required=2.0),
+        )
+    )
+    assert str(card) == "scorecard PASS (2 checks); governing: pin bearing"
+
+
+def test_a_check_that_could_not_run_is_counted_in_the_one_liner():
+    """ "2 checks" over a card where one of them did not run is a true sentence that reads
+    as a part screened twice."""
+    card = Scorecard(
+        entries=(
+            ScorecardEntry(name="T0 geometry", status=CheckStatus.NOT_EVALUATED, detail="none"),
+            ScorecardEntry.from_safety_factor("pin bearing", computed=2.1, required=2.0),
+        )
+    )
+    rendered = str(card)
+    assert rendered == "scorecard NOT_EVALUATED (2 checks, 1 not evaluated); governing: T0 geometry"
+
+
+def test_an_empty_card_names_no_governing_check_rather_than_inventing_one():
+    assert str(Scorecard()) == "scorecard NOT_EVALUATED (0 checks)"
