@@ -259,6 +259,8 @@ Two behaviours a client depends on:
   client sending rubbish must not stop the server answering the message after it. The bad
   line gets a `-32700` with a null id and the loop continues.
 
+[The headless CLI](headless-cli.md) follows the same rule at the shell — one backed command, three refused by name — and its exit codes are the interface a CI job reads.
+
 [Driving Anvilate from a coding agent](agent-mcp-integration.md) is the operator's half of this page: the two-call loop that works today, the two steps of the obvious four-step loop that are not callable, and how to tell the three refusals apart.
 
 ## Running it

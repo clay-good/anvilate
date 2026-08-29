@@ -54,6 +54,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.loads` — typed load combinations and the governing one, named.
 - :mod:`anvilate.mcp` — the pipeline as MCP tool contracts, and the rule that
   decides which operations are tasks rather than synchronous calls.
+- :mod:`anvilate.cli` — the headless command line: one command that is
+  backed, three refused by name with what each is waiting on.
 - :mod:`anvilate._models` — the base class that makes a model's invariants
   survive ``model_copy``, which runs no validators.
 - :mod:`anvilate.review` — the dossier a licensed engineer needs before sealing.

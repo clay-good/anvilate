@@ -64,6 +64,9 @@ callouts.plated_inner_dimension
 callouts.plated_thread_pitch_diameter_shift
 callouts.heat_treated_material_id
 callouts.callout_scorecard
+cli.EXIT_CODES
+cli.main
+cli.run
 compilation.CONSTRAINT_TAX_CITATION
 compilation.CompilationOutcome
 compilation.CompilationReport
