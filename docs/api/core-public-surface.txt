@@ -124,6 +124,7 @@ gdt.FrameModifier
 gdt.DatumReference
 gdt.FeatureControlFrame
 gdt.position_stack_contribution
+ingest.Bound
 ingest.ConfirmationState
 ingest.SignatureStatus
 ingest.CertificateProvenance

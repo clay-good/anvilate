@@ -3,7 +3,14 @@
 ## 1. Extraction
 
 - [ ] 1.1 Requirements-oriented extraction pass over the local PDF stack (quantities with
-      units, constraint phrases, environment statements)
+      units, constraint phrases, environment statements) — the **constraint-phrase half is
+      done** and needed no document stack: `Bound` records which end of a range a line
+      states, from the label (`maximum operating pressure`, `not to exceed`) or from the
+      trailing qualifier (`50 kN max` — a line the pass used to decline *whole*, because
+      `max` is a qualifier and refusing the qualifier refused the quantity with it). The
+      requirement already names "constraints" among what is extracted, so this discharges
+      published language rather than adding any. What is still open is the PDF stack and
+      environment statements
 - [x] 1.2 Draft-spec assembly with per-value source locations and document provenance
 
 ## 2. Confirmation flow
@@ -31,6 +38,19 @@ extraction pass ships over plain text; the PDF half needs the local document sta
 (Docling/pdfplumber) that the project does not yet carry. The state machine is the part
 that matters and it does not change when that lands — `SourceLocation` already carries a
 page number, and `extract_requirements` takes one.
+
+**A number that has lost which end of a range it is reads as a design value.** `Bound`
+(2026-08-29) is carried on every `ExtractedValue`, and three choices in it are worth
+stating. The field *name* is not rewritten — `maximum_operating_pressure` stays that
+rather than becoming `operating_pressure` with a bound beside it, because a rename asserts
+that two lines are about one thing and that is the decision this module hands to a person.
+Label phrases match whole tokens and never substrings: `min` is a substring of `nominal`,
+and a nominal dimension read as a floor is exactly the confident wrong answer the module
+exists to refuse. And two bounds on one field are **not** a conflict — they are the two
+ends of one range, and calling them disagreeing sends somebody to reject a requirement the
+sheet meant — but they still cannot both be released, because the released mapping has one
+slot per field. That refusal is `split_bounds()`, and `summary()` counts it rather than
+printing `releasable` over a draft the gate will refuse.
 
 **No confidence scores, deliberately.** A number between 0 and 1 on an extraction invites
 a threshold and is not a measurement of anything — it is the extractor grading its own

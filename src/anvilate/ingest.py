@@ -31,6 +31,15 @@ the table says 50 kN and the notes say 45 kN. Both are kept, both are reported, 
 neither is confirmed until somebody decides. Picking the first, the last, or the larger is
 a silent decision about the design.
 
+**A limit keeps the direction it was written with.** "Maximum operating pressure: 5 bar"
+and "minimum yield: 250 MPa" are not the same kind of statement, and a number that has
+lost which end of a range it is is worse than no number: it reads as a design value.
+:class:`Bound` records the constraint phrase the line carried — from the label ("maximum
+operating pressure") or from the trailing qualifier ("50 kN max", a line the pass used to
+decline whole). The field *name* is left exactly as the document wrote it, because
+rewriting ``maximum_operating_pressure`` to ``operating_pressure`` merges two fields on the
+extractor's own authority, which is the decision this module hands to a person.
+
 **Confirmation is per value and names a person.** Not per document, not per session. The
 provenance records who confirmed what, because "the values were reviewed" is not a claim
 anybody can act on.
@@ -53,6 +62,7 @@ from ._models import RevalidatedModel
 from .units import Quantity, UnitError, render
 
 __all__ = [
+    "Bound",
     "ConfirmationState",
     "SignatureStatus",
     "CertificateProvenance",
@@ -108,6 +118,34 @@ def _normalize(label: str) -> str:
     """A label as a stable field name: lowercased, punctuation dropped, spaces to under."""
     cleaned = re.sub(r"[^0-9a-z]+", "_", label.strip().lower())
     return cleaned.strip("_")
+
+
+class Bound(StrEnum):
+    """Which end of a range a requirement states, when it says.
+
+    A requirement sheet almost never states a bare design value: it states a ceiling
+    ("maximum operating pressure: 5 bar") or a floor ("minimum yield: 250 MPa"). Dropping
+    that direction leaves a number that reads as a design value and is not one, and no
+    later stage can recover it — which is why this is recorded at extraction rather than
+    inferred from the field name downstream.
+
+    ``UNSTATED`` is the honest default and is not a synonym for "nominal". It means the
+    line carried no constraint phrase, so nobody has said which end this is; a consumer
+    that needs to know has to ask the person confirming, exactly as it would for any other
+    unstated fact.
+    """
+
+    MAXIMUM = "maximum"
+    MINIMUM = "minimum"
+    UNSTATED = "unstated"
+
+    def phrase(self) -> str:
+        """How to say this bound in a sentence a confirmer reads."""
+        return {
+            Bound.MAXIMUM: "a maximum",
+            Bound.MINIMUM: "a minimum",
+            Bound.UNSTATED: "no stated bound",
+        }[self]
 
 
 class ConfirmationState(StrEnum):
@@ -235,7 +273,12 @@ def _checklist_section(heading: str, entries: list[str]) -> list[str]:
 
 
 def _value_line(value: ExtractedValue) -> str:
-    return f"{value.field} = {render(value.quantity)}    {value.source}"
+    # The bound is rendered next to the number rather than left to the field name. A
+    # confirmer reading "50 kN" decides whether the sheet says 50; reading "50 kN
+    # (a maximum)" they also decide whether it is a ceiling, which is the half a lost
+    # constraint phrase takes with it.
+    limit = "" if value.bound is Bound.UNSTATED else f" ({value.bound.phrase()})"
+    return f"{value.field} = {render(value.quantity)}{limit}    {value.source}"
 
 
 class ExtractedValue(RevalidatedModel):
@@ -252,6 +295,10 @@ class ExtractedValue(RevalidatedModel):
     quantity: Quantity
     source: SourceLocation
     load_bearing: bool = True
+    # Which end of a range the document said this is. Defaulting to UNSTATED is the honest
+    # direction and the opposite of ``load_bearing``'s: a value nobody classified must
+    # block the release, and a bound nobody stated must not be invented.
+    bound: Bound = Bound.UNSTATED
     state: ConfirmationState = ConfirmationState.DRAFT
     confirmed_by: str | None = None
     # Present when the value came from a calibration certificate rather than a requirement
@@ -315,7 +362,8 @@ class ExtractedValue(RevalidatedModel):
         }[self.state]
         weight = "load-bearing" if self.load_bearing else "informational"
         cert = f" | {self.certificate}" if self.certificate is not None else ""
-        return f"{self.field} = {self.quantity} [{weight}, {mark}] {self.source}{cert}"
+        limit = "" if self.bound is Bound.UNSTATED else f", {self.bound.phrase()}"
+        return f"{self.field} = {self.quantity} [{weight}{limit}, {mark}] {self.source}{cert}"
 
 
 class UnparsedLine(BaseModel):
@@ -371,14 +419,20 @@ class DraftSpec(BaseModel):
         Two extractions of the *same* value are not a conflict — a requirement stated
         twice consistently is just stated twice. Comparison is by converted magnitude, so
         "50 kN" in the table and "50000 N" in the notes agree.
+
+        Grouping is by field **and bound**, because "design load: 50 kN max" and "design
+        load: 20 kN min" are the two ends of one range, not two answers to one question.
+        Reporting them as a conflict would send somebody to reject a requirement the sheet
+        meant. They still cannot both be released — :meth:`release` says why.
         """
-        by_field: dict[str, list[ExtractedValue]] = {}
+        by_field: dict[tuple[str, Bound], list[ExtractedValue]] = {}
         for value in self.values:
             if value.state is not ConfirmationState.REJECTED:
-                by_field.setdefault(value.field, []).append(value)
+                by_field.setdefault((value.field, value.bound), []).append(value)
         found = []
-        for field in sorted(by_field):
-            group = by_field[field]
+        for key in sorted(by_field):
+            field = key[0]
+            group = by_field[key]
             if len(group) < 2:
                 continue
             first = group[0].quantity
@@ -410,6 +464,18 @@ class DraftSpec(BaseModel):
     def confirmed(self) -> tuple[ExtractedValue, ...]:
         """The values a person has accepted — the only ones a check may consume."""
         return tuple(v for v in self.values if v.usable)
+
+    def split_bounds(self) -> tuple[str, ...]:
+        """Confirmed fields carrying more than one bound — a range where a slot is wanted.
+
+        Not a conflict: the sheet is consistent and both readings are true. It still blocks
+        :meth:`release`, because the released mapping has one slot per field, so it is
+        reported by :meth:`summary` rather than left to surface as a refusal at the gate.
+        """
+        bounds: dict[str, set[Bound]] = {}
+        for value in self.confirmed():
+            bounds.setdefault(value.field, set()).add(value.bound)
+        return tuple(sorted(field for field, ends in bounds.items() if len(ends) > 1))
 
     def with_confirmation(
         self,
@@ -481,6 +547,27 @@ class DraftSpec(BaseModel):
             raise ValueError(
                 f"{len(conflicts)} field(s) carry disagreeing values and no one has resolved "
                 f"them: {'; '.join(str(c) for c in conflicts)}"
+            )
+        split = self.split_bounds()
+        if split:
+            # Not a conflict — the sheet is consistent and both readings are true — and
+            # exactly for that reason the mapping cannot carry them: it has one slot per
+            # field, and filling it twice drops one end without saying so. The resolution
+            # is the one this module already has: reject the end the pipeline is not
+            # consuming, which leaves a record that somebody chose.
+            bounds: dict[str, set[Bound]] = {}
+            for value in self.confirmed():
+                bounds.setdefault(value.field, set()).add(value.bound)
+            raise ValueError(
+                f"{len(split)} field(s) carry more than one bound and this mapping has one "
+                f"slot per field: "
+                + "; ".join(
+                    f"{field} ({', '.join(sorted(b.value for b in bounds[field]))})"
+                    for field in split
+                )
+                + ". Both readings are true, so nothing here can choose between them — "
+                "reject the end the check does not consume, or extract them under separate "
+                "field names"
             )
         released = {v.field: v.quantity for v in self.confirmed()}
         if not released:
@@ -561,10 +648,17 @@ class DraftSpec(BaseModel):
         """One line: what was read, what is outstanding, and whether it can be released."""
         outstanding = len(self.unconfirmed_load_bearing())
         conflicts = len(self.conflicts())
+        # The third gate is here for the same reason the other two are: `summary` printing
+        # "releasable" over a draft `release` refuses is a worse answer than either the
+        # summary or the refusal alone, because the reader believes the cheap one.
+        split = len(self.split_bounds())
         gate = (
             "releasable"
-            if not outstanding and not conflicts
-            else f"blocked: {outstanding} unconfirmed, {conflicts} conflicting"
+            if not outstanding and not conflicts and not split
+            else (
+                f"blocked: {outstanding} unconfirmed, {conflicts} conflicting, "
+                f"{split} split across two bounds"
+            )
         )
         return (
             f"{len(self.values)} values from {len(self.documents)} document(s), "
@@ -597,6 +691,60 @@ _QUALIFIERS = frozenset(
         "off",
     }
 )
+
+# The qualifiers that state a *direction* rather than merely qualify. They are why
+# "Design load: 50 kN max" — a line on every requirement sheet there is — used to be
+# declined whole: `max` is in `_QUALIFIERS`, and refusing the qualifier refused the
+# quantity with it. Stripped and recorded as a `Bound` instead, so the value survives
+# carrying the constraint it was written under.
+_DIRECTIONAL_QUALIFIERS = {
+    "min": Bound.MINIMUM,
+    "minimum": Bound.MINIMUM,
+    "max": Bound.MAXIMUM,
+    "maximum": Bound.MAXIMUM,
+}
+
+# Constraint phrases as they read once a label is normalized to underscore-separated
+# tokens. Matched as a contiguous run of whole tokens, never as a substring: "min" is a
+# substring of "nominal", and a nominal dimension read as a floor is exactly the confident
+# wrong answer the rest of this module exists to refuse.
+_LABEL_BOUND_PHRASES: tuple[tuple[tuple[str, ...], Bound], ...] = (
+    (("not", "to", "exceed"), Bound.MAXIMUM),
+    (("not", "exceeding"), Bound.MAXIMUM),
+    (("no", "more", "than"), Bound.MAXIMUM),
+    (("at", "most"), Bound.MAXIMUM),
+    (("up", "to"), Bound.MAXIMUM),
+    (("maximum",), Bound.MAXIMUM),
+    (("max",), Bound.MAXIMUM),
+    (("no", "less", "than"), Bound.MINIMUM),
+    (("not", "less", "than"), Bound.MINIMUM),
+    (("at", "least"), Bound.MINIMUM),
+    (("minimum",), Bound.MINIMUM),
+    (("min",), Bound.MINIMUM),
+)
+
+
+def _bound_from_label(field: str) -> Bound:
+    """The constraint the label states, or ``UNSTATED`` — refusing a label that states both.
+
+    A label carrying both directions ("minimum and maximum pressure") names two
+    requirements in one field, and picking either end of it is the silent decision this
+    module hands to a person. The line is declined with the reason instead.
+    """
+    tokens = field.split("_")
+    found = {
+        bound
+        for phrase, bound in _LABEL_BOUND_PHRASES
+        if any(tuple(tokens[i : i + len(phrase)]) == phrase for i in range(len(tokens)))
+    }
+    if len(found) > 1:
+        raise ValueError(
+            f"the label {field!r} states both a maximum and a minimum, so it names two "
+            f"requirements in one field. Split them into two lines — which end this value "
+            f"is is not something the pass may choose"
+        )
+    return found.pop() if found else Bound.UNSTATED
+
 
 # Single letters pint resolves to something a requirement sheet almost never means. "C" is
 # coulomb and "F" is farad; on a requirement sheet they are Celsius and Fahrenheit, and the
@@ -631,11 +779,14 @@ def _magnitude(text: str) -> str:
     )
 
 
-def _unit(text: str) -> str:
-    """The unit half, refused when it is a range, a tolerance, or a qualifier.
+def _unit(text: str) -> tuple[str, Bound]:
+    """The unit half and the bound its trailing qualifier states, if it states one.
 
-    Each of these produced a confident wrong number rather than a refusal, which is worse
-    than anything the pass declines.
+    Refused when it is a range, a tolerance, or a qualifier that is not directional — each
+    of those produced a confident wrong number rather than a refusal, which is worse than
+    anything the pass declines. A *directional* qualifier is taken rather than refused:
+    "50 kN max" is a quantity and a constraint, not a broken unit, and declining it lost
+    the most common line on any requirement sheet.
     """
     unit = text.strip()
     if _RANGE_START.match(unit) or "±" in unit:
@@ -645,6 +796,14 @@ def _unit(text: str) -> str:
             f"anybody wrote down"
         )
     tokens = unit.split()
+    bound = Bound.UNSTATED
+    if len(tokens) > 1 and tokens[-1].lower().strip(".") in _DIRECTIONAL_QUALIFIERS:
+        # Only when something is left to be a unit. "Grade: 8.8 min" strips to a bare
+        # number, and a bare number is not a quantity however it was qualified — it falls
+        # through to the ambiguity refusal below, which says so in those words.
+        bound = _DIRECTIONAL_QUALIFIERS[tokens[-1].lower().strip(".")]
+        tokens = tokens[:-1]
+        unit = " ".join(tokens)
     if len(tokens) > 1 and tokens[-1].lower().strip(".") in _QUALIFIERS:
         raise ValueError(
             f"{tokens[-1]!r} in {text!r} is a qualifier, not part of the unit. pint reads "
@@ -652,7 +811,7 @@ def _unit(text: str) -> str:
         )
     if unit in _AMBIGUOUS_UNITS:
         raise ValueError(f"{unit!r} is ambiguous: it reads as {_AMBIGUOUS_UNITS[unit]}")
-    return unit
+    return unit, bound
 
 
 # The offset temperature units pint can construct but not parse from text.
@@ -695,6 +854,21 @@ def _quantity(magnitude: str, unit: str) -> Quantity:
             f"value. This is not one quantity"
         )
     return quantity
+
+
+def _combined_bound(field: str, from_label: Bound, from_qualifier: Bound) -> Bound:
+    """The one bound a line states, refusing a line whose two halves state opposite ends.
+
+    "Minimum bore: 25 mm max" is not a requirement anybody can act on, and taking either
+    half of it means preferring one of two things the document says with equal authority.
+    """
+    if from_label is from_qualifier or Bound.UNSTATED in (from_label, from_qualifier):
+        return from_label if from_qualifier is Bound.UNSTATED else from_qualifier
+    raise ValueError(
+        f"the label {field!r} states {from_label.phrase()} and the value states "
+        f"{from_qualifier.phrase()}; one line cannot be both ends of a range, and choosing "
+        f"between them is a decision about the design"
+    )
 
 
 def extract_requirements(
@@ -750,8 +924,9 @@ def extract_requirements(
             continue
         try:
             magnitude = _magnitude(value_match.group("magnitude"))
-            unit = _unit(value_match.group("unit"))
+            unit, qualifier_bound = _unit(value_match.group("unit"))
             quantity = _quantity(magnitude, unit)
+            bound = _combined_bound(field, _bound_from_label(field), qualifier_bound)
         except (UnitError, ValueError) as exc:
             # A bare number is the important case: a requirements sheet says "quantity: 4"
             # as often as it says "design load: 50 kN", and no amount of context turns an
@@ -764,6 +939,7 @@ def extract_requirements(
                 quantity=quantity,
                 source=location,
                 load_bearing=field not in informational,
+                bound=bound,
             )
         )
     return DraftSpec(values=tuple(values), unparsed=tuple(unparsed), documents=(document.strip(),))

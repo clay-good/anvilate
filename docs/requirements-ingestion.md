@@ -23,7 +23,7 @@ draft.release()
 twice reports more values than names. That is deliberate: the count is how much is
 outstanding and the list is what to go and look at.)
 
-## Four positions
+## Five positions
 
 **No confidence scores.** A number between 0 and 1 on an extraction invites somebody to
 set a threshold and stop reading, and it is not a measurement of anything — it is the
@@ -41,6 +41,13 @@ Both are kept, both are reported, and the release stays blocked **even if both s
 confirmed** — two values for one field is not a field. Picking the first, the last, or the
 larger is a silent decision about the design.
 
+**A limit keeps the direction it was written with.** `Maximum operating pressure: 5 bar`
+and `minimum yield: 250 MPa` are not the same kind of statement, and a number that has lost
+which end of a range it is reads as a design value when it is a ceiling. Every
+`ExtractedValue` carries a `Bound` — `maximum`, `minimum`, or `unstated` — taken from the
+label or from the trailing qualifier. `unstated` is the honest default and does not mean
+"nominal": it means nobody said.
+
 **Confirmation is per value and names a person.** Not per document, not per session. A
 `CONFIRMED` or `REJECTED` state with nobody named is refused at construction, because "the
 values were reviewed" is not a claim anybody can act on.
@@ -51,7 +58,7 @@ values were reviewed" is not a claim anybody can act on.
 extracted number means opening the sheet and reading that line:
 
 ```text
-5 values from 1 document(s), 1 confirmed, 1 lines not extracted — blocked: 3 unconfirmed, 1 conflicting
+5 values from 1 document(s), 1 confirmed, 1 lines not extracted — blocked: 3 unconfirmed, 1 conflicting, 0 split across two bounds
 
 TO CONFIRM — load-bearing, blocking release
   [ ] design_load = 50.0 kN    rfq.pdf:14 (p. 2) — 'Design load: 50 kN'
@@ -112,6 +119,7 @@ where a line could plausibly be read two ways, it is declined and recorded:
 | `Span: 1,5 m` | **15 m** — a tenfold error on a European sheet | declined as an ambiguous comma |
 | `Temp: 20 C` | 20 **coulomb** | declined; write `degC` |
 | `Grade: 8.8 min` | 8.8 **minutes** | declined; write `minute` if you mean time |
+| `Minimum bore: 30 mm max` | 30 mm, one end silently chosen | declined; the line states both ends |
 | `Pressure: 5 bar g` | bar·**gram** | declined; a gauge marker is not a unit |
 
 The en dash matters more than it looks: it is what a word processor autocorrects `45-50`
@@ -119,6 +127,38 @@ into, and the hyphen spelling was already being declined — so the defence was
 spelling-luck rather than a rule. The rule underneath all of these is one line: **if the
 parsed magnitude is not the magnitude the document stated, the unit half carried a number
 of its own**, whatever the punctuation was.
+
+## Which end of the range it is
+
+A requirement sheet states ceilings and floors, not design values, and the direction is
+carried on the value rather than left in the field name:
+
+| Line | Field | Bound |
+| --- | --- | --- |
+| `Design load: 50 kN max` | `design_load` | `maximum` |
+| `Maximum operating pressure: 5 bar` | `maximum_operating_pressure` | `maximum` |
+| `Bore: 25 mm` | `bore` | `unstated` |
+
+`Design load: 50 kN max` used to be declined whole — `max` is a qualifier, and refusing the
+qualifier refused the quantity with it. It is now the most common line the pass takes.
+
+The label phrases are matched as whole words (`maximum`, `max`, `not to exceed`, `no more
+than`, `at most`, `up to`, and their minimum counterparts), never as substrings: `min` is a
+substring of `nominal`, and a nominal dimension read as a floor is exactly the confident
+wrong answer everything else here refuses. A line whose label and value state *opposite*
+ends (`Minimum bore: 30 mm max`) is declined rather than resolved.
+
+**The field name is not rewritten.** `maximum_operating_pressure` stays that, rather than
+becoming `operating_pressure` with a bound beside it. Renaming would merge two fields on
+the extractor's own authority, and merging is the decision this module hands to a person.
+
+Two bounds on one field are **not a conflict** — `design load: 50 kN max` and `design load:
+20 kN min` are the two ends of one range, and reporting them as disagreeing sends somebody
+to reject a requirement the sheet meant. They still cannot both be released: the released
+mapping has one slot per field, so `release()` refuses and names the field, and
+`summary()` counts it rather than printing `releasable` over a draft the gate will refuse.
+Resolve it the way this module resolves everything — reject the end the check does not
+consume, which leaves a record that somebody chose.
 
 ## What the pass reads
 

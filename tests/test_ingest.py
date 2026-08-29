@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from anvilate.ingest import (
+    Bound,
     ConfirmationState,
     DraftSpec,
     ExtractedValue,
@@ -324,7 +325,7 @@ def test_a_decimal_comma_is_refused_rather_than_read_as_a_thousands_separator():
         ("Temp: 20 F", "20 farad"),
         ("Grade: 8.8 min", "8.8 minutes, for a bolt grade"),
         ("Pressure: 5 bar g", "bar*gram"),
-        ("Torque: 40 N*m max", "the max qualifier read as a unit"),
+        ("Torque: 40 N*m nom", "the nom qualifier read as a unit"),
     ],
 )
 def test_a_unit_pint_accepts_but_nobody_meant_is_declined(line, was):
@@ -622,3 +623,144 @@ def test_the_checklist_on_the_docs_page_is_the_one_the_library_renders():
         f"the page shows:\n{block.group(1)}\n"
         f"the library renders:\n{_documented_draft().checklist()}"
     )
+
+
+# --- Which end of the range a requirement states ---------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("line", "bound"),
+    [
+        ("Design load: 50 kN max", Bound.MAXIMUM),
+        ("Design load: 50 kN maximum", Bound.MAXIMUM),
+        ("Design load: 50 kN max.", Bound.MAXIMUM),
+        ("Design load: 50 kN min", Bound.MINIMUM),
+        ("Design load: 50 kN minimum", Bound.MINIMUM),
+    ],
+)
+def test_a_directional_qualifier_is_taken_with_its_bound_rather_than_declined(line, bound):
+    """`max` is a qualifier, and refusing the qualifier used to refuse the quantity with it.
+
+    "Design load: 50 kN max" is on every requirement sheet there is and the pass took
+    nothing from it. The value is the same value; what the qualifier adds is the direction.
+    """
+    draft = extract_requirements(line + "\n", document="rfq.txt")
+    assert draft.unparsed == (), draft.unparsed
+    (value,) = draft.values
+    assert value.field == "design_load"
+    assert value.quantity.magnitude == pytest.approx(50.0)
+    assert value.quantity.unit == "kN"
+    assert value.bound is bound
+
+
+@pytest.mark.parametrize(
+    ("line", "bound"),
+    [
+        ("Maximum operating pressure: 5 bar", Bound.MAXIMUM),
+        ("Max operating pressure: 5 bar", Bound.MAXIMUM),
+        ("Operating pressure (max): 5 bar", Bound.MAXIMUM),
+        ("Pressure not to exceed: 5 bar", Bound.MAXIMUM),
+        ("Pressure no more than: 5 bar", Bound.MAXIMUM),
+        ("Pressure at most: 5 bar", Bound.MAXIMUM),
+        ("Minimum yield: 250 MPa", Bound.MINIMUM),
+        ("Yield at least: 250 MPa", Bound.MINIMUM),
+        ("Yield no less than: 250 MPa", Bound.MINIMUM),
+        # The trap this is guarded against: "min" is a substring of "nominal", and a
+        # nominal dimension read as a floor is a confident wrong answer. Whole tokens only.
+        ("Nominal bore: 25 mm", Bound.UNSTATED),
+        ("Maximal bore: 25 mm", Bound.UNSTATED),
+        ("Bore: 25 mm", Bound.UNSTATED),
+    ],
+)
+def test_the_label_states_the_bound_by_whole_words_not_by_substring(line, bound):
+    draft = extract_requirements(line + "\n", document="rfq.txt")
+    assert draft.unparsed == (), draft.unparsed
+    (value,) = draft.values
+    assert value.bound is bound
+
+
+def test_the_field_name_is_not_rewritten_when_the_label_states_a_bound():
+    """Renaming `maximum_operating_pressure` to `operating_pressure` merges two fields.
+
+    The bound is recorded *in addition to* the name the document used, because a rename is
+    a decision that two lines are about one thing, and this pass does not make those.
+    """
+    draft = extract_requirements("Maximum operating pressure: 5 bar\n", document="rfq.txt")
+    (value,) = draft.values
+    assert value.field == "maximum_operating_pressure"
+    assert value.bound is Bound.MAXIMUM
+
+
+def test_a_line_stating_both_ends_is_declined_naming_both():
+    both_halves = extract_requirements("Minimum bore: 30 mm max\n", document="rfq.txt")
+    assert both_halves.values == ()
+    assert "states a minimum and the value states a maximum" in both_halves.unparsed[0].reason
+    one_label = extract_requirements("Minimum and maximum bore: 30 mm\n", document="rfq.txt")
+    assert one_label.values == ()
+    assert "both a maximum and a minimum" in one_label.unparsed[0].reason
+
+
+def test_a_bare_number_stays_declined_however_it_was_qualified():
+    """Stripping the qualifier must not manufacture a quantity out of what is left.
+
+    "Grade: 8.8 min" is a bolt grade, not 8.8 of anything, and the whole "a bare number is
+    not a quantity" position rests on the qualifier strip not being an escape hatch.
+    """
+    draft = extract_requirements("Grade: 8.8 min\n", document="rfq.txt")
+    assert draft.values == ()
+    assert len(draft.unparsed) == 1
+
+
+def test_two_bounds_on_one_field_are_a_range_not_a_conflict():
+    """Reporting them as disagreeing sends somebody to reject a requirement the sheet meant.
+
+    They still cannot both be released — one slot per field — so the refusal moves to the
+    gate, where it names the field rather than accusing the document of contradicting
+    itself.
+    """
+    draft = extract_requirements(
+        "Design load: 50 kN max\nDesign load: 20 kN min\n", document="rfq.txt"
+    )
+    assert len(draft.values) == 2
+    assert draft.conflicts() == ()
+    confirmed = draft.with_confirmation("design_load", by="A. Engineer")
+    assert confirmed.split_bounds() == ("design_load",)
+    # The summary must not read "releasable" over a draft the gate refuses: the reader
+    # believes the cheap answer.
+    assert "releasable" not in confirmed.summary()
+    assert "1 split across two bounds" in confirmed.summary()
+    with pytest.raises(ValueError, match="one slot per field"):
+        confirmed.release()
+    # And the resolution this module already has: reject the end the check does not take.
+    resolved = confirmed.with_confirmation(
+        "design_load", by="A. Engineer", state=ConfirmationState.REJECTED, reconsider=True
+    )
+    assert resolved.split_bounds() == ()
+
+
+def test_two_values_for_one_field_and_one_bound_are_still_a_conflict():
+    """The bound narrows the grouping; it must not dissolve it."""
+    draft = extract_requirements(
+        "Design load: 50 kN max\nDesign load: 60 kN max\n", document="rfq.txt"
+    )
+    (conflict,) = draft.conflicts()
+    assert conflict.field == "design_load"
+    assert len(conflict.values) == 2
+
+
+def test_the_checklist_shows_the_bound_next_to_the_number():
+    """A confirmer decides whether the sheet says 50 *and* whether 50 is a ceiling."""
+    draft = extract_requirements("Design load: 50 kN max\nBore: 25 mm\n", document="rfq.txt")
+    checklist = draft.checklist()
+    assert "design_load = 50.0 kN (a maximum)" in checklist
+    # An unstated bound renders as nothing rather than as a third word nobody can act on.
+    assert "bore = 25.00 mm    " in checklist
+
+
+def test_every_bound_says_itself_in_a_sentence():
+    """Looped over the enum, not a representative: an unphrased member raises at render."""
+    phrases = {member: member.phrase() for member in Bound}
+    assert all(phrase.strip() for phrase in phrases.values())
+    # Distinct, because a phrase shared by two members is a rendering that cannot tell
+    # a ceiling from a floor — which is the whole point of carrying the bound.
+    assert len(set(phrases.values())) == len(Bound)
