@@ -89,7 +89,19 @@ class FieldOutcome(BaseModel):
 
     def __str__(self) -> str:
         mark = "match" if self.matched else "MISS"
-        return f"[{mark}] {self.path}: expected {self.expected}, got {self.actual or '—'}"
+        line = f"[{mark}] {self.path}: expected {self.expected}"
+        # An absent field has nothing to report as "got", and the `got —` it used to print
+        # said only that something was missing, not what.
+        if self.actual is not None:
+            line += f", got {self.actual}"
+        # `detail` is the whole of the distinction this class exists to keep. Without it,
+        # "not compared — the candidate did not parse" and "the candidate does not carry
+        # this field" rendered identically: a compiler that never ran reading exactly like
+        # one that omitted the field, which the docstring above says must not happen. A
+        # match needs no reason; every other outcome carries its own.
+        if not self.matched and self.detail.strip():
+            line += f" — {self.detail}"
+        return line
 
 
 class CompilationOutcome(RevalidatedModel):

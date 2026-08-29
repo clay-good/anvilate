@@ -1164,3 +1164,22 @@ def test_a_stack_result_renders_its_three_numbers_at_one_precision():
     # And the nominal really is the gap, not a rounding of a bound.
     worst = stack.worst_case()
     assert f"{worst.nominal.to('mm').magnitude:.3f}" in str(worst)
+
+
+def test_an_angular_general_tolerance_names_the_leg_that_selected_it():
+    """ISO 2768-1 bands the angular tolerance *by the shorter leg*, and the rendering
+    dropped it — so two angular tolerances from different legs printed identically, and
+    neither could be checked against the table. The linear sibling leads with its nominal
+    for exactly this reason; the field was carried all along with nothing consuming it.
+    """
+    from anvilate.tolerance.general import ToleranceClass, general_angular_tolerance
+
+    short = general_angular_tolerance(Quantity.parse("60 mm"), ToleranceClass.MEDIUM)
+    long = general_angular_tolerance(Quantity.parse("200 mm"), ToleranceClass.MEDIUM)
+    assert "60 mm" in str(short) and "200 mm" in str(long)
+    assert str(short) != str(long), (
+        "two angular tolerances from different legs must not render identically"
+    )
+    # And the deviation really does differ, so the rendering is carrying a real distinction
+    # rather than decorating two equal values.
+    assert short.deviation != long.deviation

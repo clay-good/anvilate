@@ -221,7 +221,15 @@ class AngularTolerance(BaseModel):
     source: str
 
     def __str__(self) -> str:
-        return f"±{self.deviation} (ISO 2768 {self.tolerance_class.letter})"
+        # The shorter leg is *why* this deviation and not another one: ISO 2768-1 bands the
+        # angular tolerance by it, so a reader shown two angular tolerances and no legs
+        # cannot tell which is which, or check either. The linear sibling above leads with
+        # its nominal for the same reason; this dropped the equivalent and carried the
+        # field all along with nothing consuming it.
+        return (
+            f"±{self.deviation} over a {self.shorter_leg} shorter leg "
+            f"(ISO 2768 {self.tolerance_class.letter})"
+        )
 
 
 _ANGULAR_TABLE: dict | None = None

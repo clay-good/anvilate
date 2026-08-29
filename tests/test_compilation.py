@@ -318,3 +318,46 @@ def test_the_render_puts_the_worst_task_first():
     lines = report.render().splitlines()
     assert lines[1].strip().startswith("t2:")
     assert lines[-1].strip().startswith("t0:")
+
+
+def test_a_field_that_was_never_compared_does_not_read_like_one_that_was_wrong():
+    """`FieldOutcome`'s docstring makes this the point of carrying `detail`: "a compiler
+    that omits fields must not look like one that gets them wrong". The rendering dropped
+    it, so "not compared — the candidate did not parse" and "the candidate does not carry
+    this field" both printed as `expected X, got —`.
+    """
+    from anvilate.compilation import FieldOutcome
+
+    unparsed = FieldOutcome(
+        path="material.ref",
+        expected="ASTM-A36",
+        actual=None,
+        matched=False,
+        detail="not compared — the candidate did not parse",
+    )
+    absent = FieldOutcome(
+        path="material.ref",
+        expected="ASTM-A36",
+        actual=None,
+        matched=False,
+        detail="the candidate does not carry this field",
+    )
+    assert str(unparsed) != str(absent)
+    assert "did not parse" in str(unparsed)
+    assert "does not carry this field" in str(absent)
+
+    # A wrong value still shows what was produced, and says why it missed.
+    wrong = FieldOutcome(
+        path="load.magnitude",
+        expected="50 kN",
+        actual="50 kip",
+        matched=False,
+        detail="units differ",
+    )
+    assert str(wrong) == "[MISS] load.magnitude: expected 50 kN, got 50 kip — units differ"
+
+    # A match needs no reason, and does not carry one.
+    ok = FieldOutcome(
+        path="material.ref", expected="ASTM-A36", actual="ASTM-A36", matched=True, detail=""
+    )
+    assert str(ok) == "[match] material.ref: expected ASTM-A36, got ASTM-A36"
