@@ -35,6 +35,7 @@ from __future__ import annotations
 import re
 from datetime import date
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -175,10 +176,16 @@ class Citation(BaseModel):
     standard: str
     edition: str
     clause: str = ""
+    # How the source joined the designation to the edition, kept because it cannot be
+    # derived. All three conventions are in daily use — `AISC 360-16`, `Aluminum Design
+    # Manual 2020`, `ISO 286-2:2010` — and which one a standard uses is a fact about that
+    # standard, not about the shape of its edition. The renderer guessed from the edition's
+    # *length* (two digits meant a hyphen), which was right only while four-digit editions
+    # could reach it in one spelling: it rendered `ASME B31.3-2022` as `ASME B31.3 2022`.
+    separator: Literal["-", " ", ":"] = "-"
 
     def __str__(self) -> str:
-        joiner = "-" if len(self.edition) == 2 else " "
-        base = f"{self.standard}{joiner}{self.edition}"
+        base = f"{self.standard}{self.separator}{self.edition}"
         return f"{base} {self.clause}".rstrip()
 
 
@@ -206,6 +213,7 @@ def parse_citation(text: str) -> Citation | None:
             standard=designation,
             edition=edition,
             clause=text[eurocode.end() :].strip(" ,;:"),
+            separator=":",  # a Eurocode's edition is always the colon suffix
         )
     for match in _CITATION.finditer(text):
         standard = match.group("standard").strip()
@@ -213,8 +221,21 @@ def parse_citation(text: str) -> Citation | None:
         # "EN 1993" is Eurocode 3, not the 1993 edition of something called EN.
         if standard == "EN" and edition in _EUROCODE_NUMBERS:
             continue
+        # "29 CFR 1926" is OSHA's construction part, not the 1926 edition of the Code of
+        # Federal Regulations. This library cites it beside a B30.20 proof test, and it
+        # parsed as `OSHA 29 CFR` at edition `1926` — so a bundle citing 29 CFR 1926 and
+        # 29 CFR 1910 would have read as one regulation at two editions. Third spelling of
+        # the same trap: a document number that looks like a year or an edition suffix.
+        if standard.endswith("CFR"):
+            continue
         clause = text[match.end() :].strip(" ,;:")
-        return Citation(standard=standard, edition=edition, clause=clause)
+        # The separator the source used, read off the branch that matched rather than
+        # guessed from the edition afterwards.
+        if match.group("long") is not None:
+            separator = text[match.start("long") - 1]
+        else:
+            separator = "-"
+        return Citation(standard=standard, edition=edition, clause=clause, separator=separator)
     return None
 
 

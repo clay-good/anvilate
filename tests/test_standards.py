@@ -1973,6 +1973,12 @@ def test_a_citation_that_names_an_edition_parses_to_that_edition(text, standard,
         "ASME VIII Div 1 UCS-56",
         # A part number, not an edition — the Eurocode case, which was already guarded.
         "EN 1993-1-9 §8",
+        # And the third spelling of the same trap: `29 CFR 1926` is OSHA's construction
+        # part, not the 1926 edition of the Code of Federal Regulations. This library
+        # cites it beside a B30.20 proof test, so a bundle carrying 29 CFR 1926 and
+        # 29 CFR 1910 would have read as one regulation at two editions.
+        "ASME B30.20 (proof test) with OSHA 29 CFR 1926.251(a)(4)",
+        "OSHA 29 CFR 1910.184",
         # One digit is not an edition suffix.
         "ASME BTH-1 §3-3",
         # No number at all.
@@ -2067,3 +2073,69 @@ def test_no_standard_this_library_cites_appears_at_two_editions():
         f"standards this library cites at more than one edition: {split}. Either the "
         "citations really are mixed, or a clause number is being read as an edition"
     )
+
+
+def test_a_parsed_citation_renders_back_as_the_text_it_came_from():
+    """The renderer guessed the separator from the edition's *length*, and it cannot be.
+
+    All three conventions are in daily use — `AISC 360-16`, `Aluminum Design Manual 2020`,
+    `ISO 286-2:2010` — and which one a standard uses is a fact about that standard, not
+    about the shape of its edition. Two digits meant a hyphen and everything else a space,
+    which was right only while a four-digit edition could reach the renderer in one
+    spelling. Once `ASME B31.3-2022` parsed at all, it rendered as `ASME B31.3 2022`.
+
+    The round trip is the assertion, over the library's own citation strings, because a
+    hand-written expectation here is a second place for the convention to be wrong.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.standards import parse_citation
+
+    pattern = re.compile(
+        r'reference\s*=\s*"([^"]{4,90})"'
+        r'|citation\s*=\s*"([^"]{4,90})"'
+        r'|^_[A-Z_]*CLAUSE[A-Z_]*\s*=\s*"([^"]{4,90})"',
+        re.M,
+    )
+    references = set()
+    for path in (Path(__file__).resolve().parent.parent / "src" / "anvilate").rglob("*.py"):
+        for groups in pattern.findall(path.read_text(encoding="utf-8")):
+            references.add(next(g for g in groups if g))
+
+    round_tripped = [
+        text for text in sorted(references) if (c := parse_citation(text)) and str(c) == text
+    ]
+    drifted = [
+        f"{text!r} renders as {str(parse_citation(text))!r}"
+        for text in sorted(references)
+        if (c := parse_citation(text)) and str(c) != text
+    ]
+    assert not drifted, "citations that do not render back as themselves:\n  " + "\n  ".join(
+        drifted
+    )
+    assert len(round_tripped) > 10, (
+        f"only {len(round_tripped)} citations round-tripped; if the parser stopped parsing "
+        "them this assertion would pass on an empty set"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "AISC 360-16 §J4.1",
+        "ASME B31.3-2022 §304.1.2",
+        "AWS D1.1-2020",
+        "ASME B36.10M-2018",
+        "Aluminum Design Manual 2020 Part I",
+        "ISO 286-2:2010",
+        "EN 1993-1-1:2005 §6.2",
+    ],
+)
+def test_each_separator_convention_survives_the_round_trip(text):
+    """One case per convention, so a fix for one cannot quietly break another."""
+    from anvilate.standards import parse_citation
+
+    citation = parse_citation(text)
+    assert citation is not None, f"{text!r} names an edition"
+    assert str(citation) == text

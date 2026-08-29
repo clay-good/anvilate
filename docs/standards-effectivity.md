@@ -86,6 +86,20 @@ four-digit form needs no such test and is now read wherever it appears: `ASME B3
 `AWS D1.1-2020` and `ASME B36.10M-2018` used to parse as naming no edition at all, because
 the year branch demanded a space or a colon in front of it.
 
+### A third spelling, found by making the parser round-trip
+
+`29 CFR 1926` is OSHA's construction part, and the year branch read it as the **1926
+edition** of something called `OSHA 29 CFR`. This library cites it beside a B30.20 proof
+test, so a bundle carrying `29 CFR 1926` and `29 CFR 1910` would have read as one
+regulation at two editions.
+
+Three spellings of one trap now: a Eurocode part that reads like a year, an ASME clause
+that reads like a two-digit edition, and a CFR part that reads like a year. **The gate that
+finds them is the round trip** — parse every citation the library emits and render it back.
+A document number swallowed as an edition changes the rendering, which is how `29 CFR 1926`
+surfaced as `OSHA 29 CFR 1926 .251(a)(4)`. A hand-written expectation would not have found
+it, because nobody writes down the citation they were not thinking about.
+
 ## Where a bundle says it
 
 `BundleSections.design_basis` is the adopted-editions record for a bundle, and it is
