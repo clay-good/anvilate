@@ -259,6 +259,9 @@ _PAGES_THE_README_DOES_NOT_INDEX = frozenset(
     {
         "research/2026-07-27-capability-research.md",
         "research/2026-07-27-capability-research-wave-2.md",
+        # The index itself. The README links it, and it links everything else; requiring it
+        # to be reachable by the same rule as a content page would be circular.
+        "README.md",
     }
 )
 
@@ -295,3 +298,56 @@ def test_every_docs_page_is_reachable_from_the_readme():
     )
     dangling = sorted(linked - pages)
     assert not dangling, f"the README links pages that do not exist: {dangling}"
+
+
+def test_every_docs_page_is_in_the_docs_index():
+    """`documentation` asks for docs "organized around user tasks, not internal
+    architecture". Forty-four pages and no index is an alphabetical file listing, which is
+    the architecture the requirement says not to organize around.
+
+    `docs/README.md` is that index, and this is the ratchet: a new page absent from it fails
+    here, and an index entry pointing at a page that has moved fails too — which is the way
+    the set drifts that a reader meets as a 404.
+    """
+    import re
+
+    root = Path(__file__).resolve().parent.parent
+    index_path = root / "docs" / "README.md"
+    index = index_path.read_text(encoding="utf-8")
+    pages = {path.name for path in (root / "docs").glob("*.md") if path.name != "README.md"}
+    assert len(pages) > 40, f"the docs directory has only {len(pages)} pages"
+
+    linked = set(re.findall(r"\]\(([a-z0-9-]+\.md)\)", index))
+    unindexed = sorted(pages - linked)
+    assert not unindexed, (
+        f"these pages are in no section of docs/README.md: {unindexed}. Put each under the "
+        "task it serves, or the index is a file listing with headings on it."
+    )
+    dangling = sorted(linked - pages)
+    assert not dangling, f"the index links pages that do not exist: {dangling}"
+
+
+def test_the_docs_index_is_sections_not_one_list():
+    """An index that is one flat list is the alphabetical listing again with a title.
+
+    The requirement is task organization, so the shape is asserted: several sections, each
+    with a heading a reader can scan, and no section holding nearly everything.
+    """
+    import re
+
+    index = (Path(__file__).resolve().parent.parent / "docs" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    sections = re.split(r"^## ", index, flags=re.MULTILINE)[1:]
+    assert len(sections) >= 5, f"the index has {len(sections)} sections"
+    counts = [len(re.findall(r"\]\(([a-z0-9-]+\.md)\)", section)) for section in sections]
+    assert all(counts), "a section links nothing"
+    assert max(counts) <= sum(counts) * 0.5, (
+        f"one section holds {max(counts)} of {sum(counts)} pages; that is a list with a "
+        "heading on it rather than an organization"
+    )
+
+
+def test_the_docs_index_is_reachable_from_the_readme():
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
+    assert "docs/README.md" in readme, "the index nothing links is the index nobody finds"
