@@ -262,6 +262,41 @@ Writing it found one hole: the AISC J2.4 weld shear fraction guarded positivity 
 its upper bound, so `6` for `0.6` returned ten times the weld capacity with every other
 check satisfied — the unsafe direction for a screen to be wrong in.
 
+## Finding a capability nobody can discover
+
+A capability that ships, is tested, and appears in no documentation fails no test — every
+test passes. Only a contract gate over the *component list* finds it.
+
+`tests/test_building_services_docs.py` holds the pack half permanently: every module under
+`anvilate/packs` must have a documentation page and a test file, with the missing items
+enumerated, which is what `discipline-packs` asks for in as many words. It found four —
+`noise_exposure`, `lighting`, `ventilation` and `electrical` — all shipping and cited and
+none of them mentioned anywhere a user would look.
+
+The same question for top-level modules is a manual sweep, because the signal is weaker:
+
+```bash
+python - <<'PY'
+import pathlib, pkgutil
+import anvilate
+docs = " ".join(p.read_text(errors="ignore") for p in pathlib.Path("docs").rglob("*.md"))
+readme = pathlib.Path("README.md").read_text()
+for info in pkgutil.iter_modules(anvilate.__path__):
+    name = info.name
+    if name.startswith("_"):
+        continue
+    if f"anvilate.{name}" in docs or f"anvilate.{name}" in readme or f"`{name}`" in readme:
+        continue
+    print(name)
+PY
+```
+
+Run at HEAD it named six and five were false positives — `cli`, `derivation`, `evidence`,
+`review` and `tolerance` are all documented, by pages that describe the capability without
+importing the module by path. The sixth, `anvilate.specbench`, was real and is documented
+now. **Read the output as a list to check by hand, not as a list of gaps**, which is why
+this one is not a test.
+
 ## Two sweeps that came back clean
 
 Both were run at HEAD and found nothing. Recorded so the next person spends the afternoon
