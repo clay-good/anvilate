@@ -1877,3 +1877,53 @@ def test_the_shipped_file_sweep_would_see_a_new_data_file(tmp_path, monkeypatch)
     finally:
         intruder.unlink()
     assert "analysis/smuggled_allowables.csv" not in _shipped_non_python_files()
+
+
+# --- the data has to survive packaging, not just exist in the tree --------------------------
+
+
+def test_every_bundled_dataset_lives_where_the_wheel_will_carry_it():
+    """The licence gate reads the source tree. Nothing read what gets *shipped*.
+
+    Every test in this suite runs against `src/`, so a dataset that stopped being packaged
+    would keep passing here and fail for the first person who `pip install`ed it — the
+    materials database would raise on a lookup that works for every contributor. The
+    mechanism that ships it is one line of `pyproject.toml`, and this asserts that line
+    still means what it means.
+
+    **A structural check, not a build.** Building a wheel fetches the backend, and this
+    suite runs with the socket layer closed. The fresh-install verification is a manual
+    procedure, written down in `docs/contributing-analysis.md`; what runs here is the part
+    that can.
+    """
+    import tomllib
+
+    repo = _PACKAGE_ROOT.parents[1]
+    config = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))
+    wheel = config["tool"]["hatch"]["build"]["targets"]["wheel"]
+
+    packages = wheel.get("packages")
+    assert packages == ["src/anvilate"], (
+        f"the wheel ships {packages}; this gate understands one whole-package entry and "
+        "would not notice data dropped from any other arrangement"
+    )
+    shipped_root = repo / packages[0]
+
+    # Hatchling ships that directory whole. Anything narrowing it can drop a data file
+    # silently, so a narrowing key is a failure here rather than something to interpret.
+    for key in ("exclude", "only-include", "artifacts", "force-include", "sources"):
+        assert key not in wheel, (
+            f"the wheel target declares {key!r}; this gate cannot tell whether the bundled "
+            "datasets survive it, and a dataset dropped from a wheel fails for a user and "
+            "for nobody else"
+        )
+
+    shipped = _shipped_non_python_files()
+    assert shipped, "the sweep found no shipped files"
+    for name in shipped:
+        assert (shipped_root / name).is_file(), f"{name} is not under {packages[0]}"
+
+    # The two gates reinforce each other: every licensed dataset is a file the wheel takes.
+    licensed = {name for name, _document in _bundled_datasets()}
+    assert licensed <= set(shipped)
+    assert len(licensed) >= 17, licensed

@@ -262,6 +262,36 @@ Writing it found one hole: the AISC J2.4 weld shear fraction guarded positivity 
 its upper bound, so `6` for `0.6` returned ten times the weld capacity with every other
 check satisfied — the unsafe direction for a screen to be wrong in.
 
+## Verifying the install, which no test can do
+
+Every test in this suite runs against `src/`. So does every example. A dataset that stopped
+being *packaged* would keep passing here and fail for the first person who `pip install`ed
+it — the materials database raising on a lookup that works for every contributor.
+
+`test_every_bundled_dataset_lives_where_the_wheel_will_carry_it` holds the mechanism: the
+wheel target ships one whole package directory, every dataset is under it, and any key that
+could narrow it (`exclude`, `only-include`, `artifacts`, `force-include`, `sources`) is a
+failure rather than something to interpret. That is structural, and it is as far as an
+offline suite can go: building a wheel fetches the backend, and this suite runs with the
+socket layer closed.
+
+The rest is a manual check, worth running before a release and after any change to
+`pyproject.toml`:
+
+```bash
+python3.11 -m venv /tmp/fresh && /tmp/fresh/bin/pip install .
+/tmp/fresh/bin/anvilate --version
+/tmp/fresh/bin/anvilate check path/to/spec.yaml
+/tmp/fresh/bin/python -c "
+from anvilate.standards import default_materials_db
+print(default_materials_db().get('ASTM-A36').name)"
+```
+
+The third line is the one that matters: it resolves a material out of a bundled YAML file,
+which is the thing an editable install and a source-tree test run both hide. Run at HEAD it
+returns `ASTM A36 structural steel`, the twelve `standards/data` and five `tolerance/data`
+files are present in `site-packages`, and a pack screen runs on the installed wheel.
+
 ## Finding a capability nobody can discover
 
 A capability that ships, is tested, and appears in no documentation fails no test — every
