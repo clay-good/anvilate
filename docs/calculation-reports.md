@@ -10,6 +10,7 @@ reviews, and it is what this page is about.
 ```python
 from anvilate.packs.structural import LiftingLug, screen_lifting_lug
 from anvilate.report import CalculationReport, ReportSection
+from anvilate.spec import Provenanced
 from anvilate.units import Quantity, UnitSystem
 
 lug = LiftingLug(
@@ -28,7 +29,7 @@ report = CalculationReport(
     date="2026-07-27",                       # you supply it; the report never stamps itself
     unit_system=UnitSystem.SI,
     standards=("ASME BTH-1 — Design of Below-the-Hook Lifting Devices",),
-    assumptions=("Static lift; no impact or side-load factor applied.",),
+    assumptions=(Provenanced.stated("Static lift; no impact or side-load factor applied."),),
     sections=tuple(ReportSection(entry=entry) for entry in card.entries),
 )
 
@@ -69,6 +70,16 @@ summary naming the governing check, and the screening disclaimer.
 empty** — an empty list renders as `none declared`. It used to render as nothing at all,
 which meant a report whose author deliberately declared no assumptions and one whose author
 forgot the section were the same document to the reviewer it exists for.
+
+**Every assumption carries who put it there.** An assumption is a `Provenanced` string,
+so it renders with an origin tag — `[engineer stated]`, `[resolved from bundled data]`, or
+`[library default: <reason>]` — and a defaulted one cannot be declared without the reason
+it was chosen, because `Provenanced` already requires that. The field was a plain
+`tuple[str, ...]` while the model's own docstring said "with their origin": an assumption
+the engineer asserted and one the library supplied were the same bullet in a document
+somebody signs. A bare string is refused rather than tagged with a guess, since defaulting
+an untagged assumption to "engineer stated" would put a claim about provenance into a
+signed document on nobody's authority.
 
 The **governing check** is the one running closest to its limit — the largest
 required-over-computed ratio, not simply the lowest safety factor. A check at 3.0

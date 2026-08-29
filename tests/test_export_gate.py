@@ -628,6 +628,7 @@ def test_a_blank_assumption_is_refused():
 def test_the_report_never_drops_an_empty_heading():
     """The same defect one layer down, in the document a reviewer actually reads."""
     from anvilate.report.document import CalculationReport, ReportSection
+    from anvilate.spec import Provenanced
 
     report = CalculationReport(
         title="Lifting lug screening",
@@ -638,7 +639,14 @@ def test_the_report_never_drops_an_empty_heading():
         assert "Standards relied upon" in rendered
         assert "none declared" in rendered
 
-    stated = report.model_copy(update={"assumptions": ("pin is a close fit",)})
+    # Rebuilt rather than `model_copy`d: `model_copy` runs no field validation either, so an
+    # update carrying bare strings would put a type the model refuses into the assumptions
+    # tuple and the renderer would fail on it rather than on the thing under test.
+    stated = CalculationReport(
+        title=report.title,
+        sections=report.sections,
+        assumptions=(Provenanced.stated("pin is a close fit"),),
+    )
     assert "pin is a close fit" in stated.to_html()
     # The standards heading is still there and still says it is empty — one empty list
     # filling in for the other is exactly what an omitted heading used to allow.

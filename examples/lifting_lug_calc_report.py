@@ -36,6 +36,7 @@ from pathlib import Path
 
 from anvilate.packs.structural import LiftingLug, WeldedConnection, screen_structure
 from anvilate.report import CalculationReport, ReportSection
+from anvilate.spec import Provenanced
 from anvilate.units import Quantity, UnitSystem
 
 LIFT_LOAD = Quantity.parse("50 kN")
@@ -86,11 +87,19 @@ def build_report() -> CalculationReport:
             "AISC 360-16 — Specification for Structural Steel Buildings",
             "Material: ASTM A36, yield 250 MPa (bundled standards data)",
         ),
+        # Each assumption carries who put it there. The three below are all the engineer's
+        # own; a `Provenanced.default(..., rationale=...)` entry would read "library
+        # default: <why>" in the document, which is the distinction a reviewer needs and
+        # could not make while these were bare strings.
         assumptions=(
-            f"Rigging safety factor of {RIGGING_FACTOR:.1f} on the lifted load "
-            "(user-supplied design category).",
-            "Static lift; no impact or side-load factor applied.",
-            "Pin fits the hole; bearing taken over the full projected area d·t.",
+            Provenanced.stated(
+                f"Rigging safety factor of {RIGGING_FACTOR:.1f} on the lifted load "
+                "(design category)."
+            ),
+            Provenanced.stated("Static lift; no impact or side-load factor applied."),
+            Provenanced.stated(
+                "Pin fits the hole; bearing taken over the full projected area d·t."
+            ),
         ),
         sections=sections,
     )

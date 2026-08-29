@@ -28,6 +28,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
+from ..spec.provenance import Origin, Provenanced
 from ..units import UnitSystem
 from .mathml import formula_to_mathml
 
@@ -55,6 +56,14 @@ SCREENING_DISCLAIMER = (
 # What an empty standards or assumptions list renders as. Never an omitted heading: a
 # reviewer cannot tell a section that was left empty on purpose from one nobody wrote.
 _NONE_DECLARED = "none declared"
+
+# How an assumption's origin reads to a reviewer. Spelled out rather than shown as the enum
+# value, because `database_resolved` is a field name and this is a document someone signs.
+_ORIGIN_LABEL = {
+    Origin.USER_STATED: "engineer stated",
+    Origin.DATABASE_RESOLVED: "resolved from bundled data",
+    Origin.DEFAULT: "library default",
+}
 
 _STATUS_LABEL = {
     CheckStatus.PASS: "PASS",
@@ -154,8 +163,16 @@ class CalculationReport(BaseModel):
     """A set of checks assembled into a document a reviewer can act on.
 
     ``standards`` lists the code and standard editions relied upon, ``assumptions``
-    the defaults in force with their origin, and ``sections`` the checks in the
-    order they should be read. ``date`` is a caller-supplied string so the document
+    the defaults in force **with their origin**, and ``sections`` the checks in the
+    order they should be read.
+
+    An assumption is a :class:`~anvilate.spec.provenance.Provenanced` string rather than a
+    bare one, because "the engineer asserted this" and "the library chose this for you" are
+    different facts about a document someone signs, and they rendered as the same bullet.
+    A bare string is refused rather than tagged with a guess — the docstring said "with
+    their origin" for a release while the type was ``tuple[str, ...]``. ``Provenanced``
+    already requires a defaulted value to carry its rationale, so an untraceable default
+    cannot be declared at all. ``date`` is a caller-supplied string so the document
     never stamps itself and rebuilds stay byte-identical.
     """
 
@@ -167,7 +184,7 @@ class CalculationReport(BaseModel):
     date: str | None = None
     unit_system: UnitSystem | None = None
     standards: tuple[str, ...] = ()
-    assumptions: tuple[str, ...] = ()
+    assumptions: tuple[Provenanced[str], ...] = ()
     sections: tuple[ReportSection, ...] = ()
 
     def scorecard(self) -> Scorecard:
@@ -194,13 +211,12 @@ class CalculationReport(BaseModel):
         out: list[str] = [self.title, "=" * len(self.title)]
         for label, value in self._header_rows():
             out.append(f"{label}: {value}")
-        for heading, items in (
-            ("Standards relied upon", self.standards),
-            ("Assumptions", self.assumptions),
-        ):
-            out.append("")
-            out.append(f"{heading}:")
-            out.extend(f"  - {item}" for item in items or (_NONE_DECLARED,))
+        out.append("")
+        out.append("Standards relied upon:")
+        out.extend(f"  - {item}" for item in self.standards or (_NONE_DECLARED,))
+        out.append("")
+        out.append("Assumptions:")
+        out.extend(f"  - {line}" for line in self._assumption_lines())
         for section in self.sections:
             out.append("")
             heading = f"{_STATUS_LABEL[section.entry.status]}  {section.entry.name}"
@@ -270,7 +286,7 @@ class CalculationReport(BaseModel):
                 out.append(f"<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>")
             out.append("</table>")
         out.extend(self._html_list("Standards relied upon", self.standards))
-        out.extend(self._html_list("Assumptions", self.assumptions))
+        out.extend(self._html_list("Assumptions", tuple(self._assumption_lines())))
         for section in self.sections:
             out.extend(self._html_section(section))
         out.extend(self._html_summary())
@@ -338,6 +354,23 @@ class CalculationReport(BaseModel):
             )
             rows.append((entry.name, factor, required, _STATUS_LABEL[entry.status]))
         return tuple(rows)
+
+    def _assumption_lines(self) -> tuple[str, ...]:
+        """Each assumption with its origin tag, or ``none declared``.
+
+        The tag is the point of the field: a reviewer reading only this document has to be
+        able to tell the value the engineer asserted from the one the library supplied, and
+        a defaulted assumption shows the rationale ``Provenanced`` already makes it carry.
+        """
+        if not self.assumptions:
+            return (_NONE_DECLARED,)
+        lines = []
+        for assumption in self.assumptions:
+            tag = _ORIGIN_LABEL[assumption.origin]
+            if assumption.origin is Origin.DEFAULT:
+                tag = f"{tag}: {assumption.rationale}"
+            lines.append(f"{assumption.value} [{tag}]")
+        return tuple(lines)
 
     def _html_list(self, heading: str, items: tuple[str, ...]) -> list[str]:
         """A headed list, or the heading with ``none declared`` under it.

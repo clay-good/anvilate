@@ -7,6 +7,7 @@ import socket
 from xml.etree import ElementTree as ET
 
 import pytest
+from pydantic import ValidationError
 
 from anvilate.report import (
     CALC_RECORD_SCHEMA_VERSION,
@@ -19,6 +20,7 @@ from anvilate.report import (
 )
 from anvilate.report.mathml import formula_to_mathml
 from anvilate.scorecard import CheckStatus, Direction, RepairHint, ScorecardEntry
+from anvilate.spec import Provenanced
 from anvilate.units import Quantity, UnitSystem, render
 
 BENDING = Derivation(
@@ -53,7 +55,7 @@ def _report() -> CalculationReport:
         date="2026-07-27",
         unit_system=UnitSystem.SI,
         standards=("AISC 360-22",),
-        assumptions=("Static load; no impact factor applied (user-supplied).",),
+        assumptions=(Provenanced.stated("Static load; no impact factor applied."),),
         sections=(
             ReportSection(
                 entry=ScorecardEntry.from_safety_factor(
@@ -187,7 +189,9 @@ def test_report_carries_the_basis_of_design():
         "Conveyor bracket screening",
         "Line 4 conveyor",
         "AISC 360-22",
-        "Static load; no impact factor applied (user-supplied).",
+        # The origin tag rides with the assumption; "(user-supplied)" used to be prose in
+        # the sentence, which a reviewer could not distinguish from a library default.
+        "Static load; no impact factor applied. [engineer stated]",
         "Shigley, Mechanical Engineering Design, 10th ed., Eq. 3-24",
     ):
         assert expected in text
@@ -918,7 +922,7 @@ def test_the_calculation_report_pages_rendered_block_is_the_reports_own():
         date="2026-07-27",
         unit_system=UnitSystem.SI,
         standards=("ASME BTH-1 — Design of Below-the-Hook Lifting Devices",),
-        assumptions=("Static lift; no impact or side-load factor applied.",),
+        assumptions=(Provenanced.stated("Static lift; no impact or side-load factor applied."),),
         sections=tuple(ReportSection(entry=entry) for entry in card.entries),
     )
 
@@ -1085,3 +1089,58 @@ def test_the_calc_record_carries_the_method_and_the_label_too():
     annotation = record["report"]["sections"][0]["entry"]["uncertainty"]
     assert annotation["method"] == "monte_carlo"
     assert "Screening only" in annotation["citation"]
+
+
+def test_an_assumption_shows_who_put_it_there():
+    """`calculation-report`'s "assumptions and defaults in force (with origin tags)".
+
+    The field was `tuple[str, ...]` while the model's own docstring said "with their
+    origin", so an assumption the engineer asserted and one the library supplied rendered
+    as the same bullet in the document that gets signed. `Provenanced[str]` was already the
+    exact type — value, origin, and a rationale a default cannot omit.
+    """
+    report = CalculationReport(
+        title="Mixed basis",
+        assumptions=(
+            Provenanced.stated("Static lift; no impact factor."),
+            Provenanced.resolved("Yield 250 MPa for ASTM A36."),
+            Provenanced.default(
+                "Required safety factor 2.0.", rationale="ASME BTH-1 Design Category B"
+            ),
+        ),
+        sections=(
+            ReportSection(
+                entry=ScorecardEntry.from_safety_factor("tension", computed=3.0, required=2.0)
+            ),
+        ),
+    )
+    for rendering in (report.to_text(), report.to_html()):
+        assert "Static lift; no impact factor. [engineer stated]" in rendering
+        assert "Yield 250 MPa for ASTM A36. [resolved from bundled data]" in rendering
+        # A default shows the reason it was chosen, which `Provenanced` already requires.
+        assert (
+            "Required safety factor 2.0. [library default: ASME BTH-1 Design Category B]"
+            in rendering
+        )
+    # The three read differently, which is the whole point of the tag.
+    assert len(set(report._assumption_lines())) == 3
+
+
+def test_a_bare_string_assumption_is_refused_rather_than_tagged_with_a_guess():
+    """Defaulting an untagged assumption to "engineer stated" would put a claim about
+    provenance into a signed document on nobody's authority."""
+    with pytest.raises(ValidationError):
+        CalculationReport(title="Untagged", assumptions=("no impact factor",))
+
+
+def test_an_empty_assumptions_list_still_names_the_heading():
+    """The tagging must not have reintroduced the vanishing-heading defect: a report whose
+    author declared none and one whose author forgot the section were the same document."""
+    # Standards are declared so that "none declared" can only have come from the
+    # assumptions. The first draft left both empty, and dropping the assumptions filler
+    # entirely still passed — the standards heading was answering for it.
+    report = CalculationReport(title="Nothing declared", standards=("AISC 360-22",))
+    for rendering in (report.to_text(), report.to_html()):
+        assert "Assumptions" in rendering
+        assert "none declared" in rendering
+    assert report._assumption_lines() == ("none declared",)
