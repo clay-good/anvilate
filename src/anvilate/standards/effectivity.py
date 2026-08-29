@@ -119,9 +119,29 @@ WRITTEN_AGAINST: dict[str, str] = {
 # A standard designation followed by its edition: "AISC 360-16", "ASCE 7-22",
 # "Aluminum Design Manual 2020", "EN 1993-1-9:2005". The edition is a trailing year —
 # two-digit after a hyphen, four-digit after a space or a colon.
+# Three ways an edition is written, and one shape that is not an edition at all.
+#
+# `-YYYY` is unambiguous: "ASME B31.3-2022", "AWS D1.1-2020", "ASME B36.10M-2018". These
+# used to parse as no edition, because the four-digit branch required a space or a colon in
+# front of the year — so a code that names its edition in the ordinary way was recorded as
+# naming none, and a bundle citing it reported NOT_EVALUATED.
+#
+# `-NN` is the ambiguous one, and the ambiguity is not hypothetical: ASME Section VIII's
+# clauses are "UG-37", "UG-99(b)", "UW-12", and this library cites two of them. They parsed
+# as the standard "ASME VIII Div 1 UG" at editions 37 and 99, so a bundle carrying a UG-37
+# reinforcement check and a UG-99 hydrostatic test FAILED `design_basis_scorecard` with
+# "ASME VIII Div 1 UG appears at editions 37, 99" — one code, two clauses, read as a mixed
+# edition. What separates the two cases is the character in front of the hyphen: a
+# designation ending in a digit ("AISC 360", "ACI 318", "AISI S100") takes an edition
+# suffix; one ending in a letter is a clause prefix and the number after it is the clause.
+# This is the same trap the Eurocode pattern below already guards, in its other spelling.
 _CITATION = re.compile(
     r"(?P<standard>[A-Z][A-Za-z0-9 .&/-]*?[A-Za-z0-9])"
-    r"(?:-(?P<short>\d{2})(?![\d-])|[\s:](?P<long>(?:19|20)\d{2})\b)"
+    r"(?:"
+    r"-(?P<hyphenated>(?:19|20)\d{2})\b"
+    r"|(?<=\d)-(?P<short>\d{2})(?![\d-])"
+    r"|[\s:](?P<long>(?:19|20)\d{2})\b"
+    r")"
 )
 # Eurocode designations are EN 1990 through EN 1999 — document numbers that read exactly
 # like years, and the one place a year-shaped token is not an edition. "EN 1993-1-9" names
@@ -189,7 +209,7 @@ def parse_citation(text: str) -> Citation | None:
         )
     for match in _CITATION.finditer(text):
         standard = match.group("standard").strip()
-        edition = match.group("short") or match.group("long")
+        edition = match.group("hyphenated") or match.group("short") or match.group("long")
         # "EN 1993" is Eurocode 3, not the 1993 edition of something called EN.
         if standard == "EN" and edition in _EUROCODE_NUMBERS:
             continue

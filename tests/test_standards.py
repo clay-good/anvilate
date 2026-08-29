@@ -1927,3 +1927,143 @@ def test_every_bundled_dataset_lives_where_the_wheel_will_carry_it():
     licensed = {name for name, _document in _bundled_datasets()}
     assert licensed <= set(shipped)
     assert len(licensed) >= 17, licensed
+
+
+# --- A clause number is not an edition --------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "standard", "edition"),
+    [
+        # The designation ends in a digit, so the two-digit suffix is the edition.
+        ("AISC 360-16 §J3.6", "AISC 360", "16"),
+        ("ACI 318-19 §22.8.3", "ACI 318", "19"),
+        ("AISI S100-16 Appendix 1", "AISI S100", "16"),
+        ("ASCE 7-22 §2.3", "ASCE 7", "22"),
+        # A hyphen-joined four-digit year. These used to parse as *no edition at all*,
+        # because the four-digit branch demanded a space or a colon in front of the year —
+        # so a code naming its edition in the ordinary way was recorded as naming none, and
+        # any bundle citing it degraded to NOT_EVALUATED.
+        ("ASME B31.3-2022 §304.1.2", "ASME B31.3", "2022"),
+        ("ASME B36.10M-2018", "ASME B36.10M", "2018"),
+        ("AWS D1.1-2020 §2.4", "AWS D1.1", "2020"),
+        # The space and colon spellings still work.
+        ("Aluminum Design Manual 2020 Part I §B.4", "Aluminum Design Manual", "2020"),
+        ("ISO 286-2:2010", "ISO 286-2", "2010"),
+        ("EN 1993-1-1:2005 §6.2", "EN 1993-1-1", "2005"),
+    ],
+)
+def test_a_citation_that_names_an_edition_parses_to_that_edition(text, standard, edition):
+    from anvilate.standards import parse_citation
+
+    citation = parse_citation(text)
+    assert citation is not None, f"{text!r} names an edition and parsed to none"
+    assert (citation.standard, citation.edition) == (standard, edition)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # ASME Section VIII numbers its clauses UG-37, UG-99, UW-12. The designation in
+        # front of the hyphen ends in a *letter*, which is what separates a clause prefix
+        # from a standard number. This library cites two of these itself.
+        "ASME VIII Div 1 UG-37 (reinforcement of openings)",
+        "ASME VIII Div 1 UG-99(b)",
+        "ASME VIII Div 1 UW-12",
+        "ASME VIII Div 1 UCS-56",
+        # A part number, not an edition — the Eurocode case, which was already guarded.
+        "EN 1993-1-9 §8",
+        # One digit is not an edition suffix.
+        "ASME BTH-1 §3-3",
+        # No number at all.
+        "AISC Design Guide 1",
+    ],
+)
+def test_a_clause_number_is_not_read_as_an_edition(text):
+    from anvilate.standards import parse_citation
+
+    citation = parse_citation(text)
+    assert citation is None, (
+        f"{text!r} names no edition, and reading one out of it is worse than reading none: "
+        f"got {citation}"
+    )
+
+
+def test_two_clauses_of_one_code_are_not_a_mixed_edition():
+    """The end-to-end consequence, which is what makes this a defect and not a nit.
+
+    `design_basis_scorecard` FAILs a bundle whose citations put one standard at two
+    editions — a real and serious finding, since such a bundle reads as though every number
+    came from one book. With `UG-37` and `UG-99(b)` parsing as editions 37 and 99, a
+    perfectly ordinary pressure-vessel bundle — a UG-37 reinforcement check and the UG-99
+    hydrostatic test, both of which this library emits — failed with
+
+        ASME VIII Div 1 UG appears at editions 37, 99 with no recorded waiver
+
+    A gate that cries wolf on the ordinary case is a gate that gets turned off.
+    """
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import DesignBasis, design_basis_scorecard
+
+    entry = design_basis_scorecard(
+        "design basis",
+        basis=DesignBasis(),
+        references=[
+            "ASME VIII Div 1 UG-37 (reinforcement of openings)",
+            "ASME VIII Div 1 UG-99(b)",
+        ],
+    )
+    assert entry.status is not CheckStatus.FAIL, entry.detail
+    # NOT_EVALUATED, not PASS: the two references genuinely name no edition, and the whole
+    # rule is that an unversioned clause cannot be checked against a basis.
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "name no edition" in entry.detail
+    # And a real split is still caught, so the fix did not disarm the check.
+    split = design_basis_scorecard(
+        "design basis",
+        basis=DesignBasis(),
+        references=["AISC 360-16 §J3.6", "AISC 360-22 §J3.6"],
+    )
+    assert split.status is CheckStatus.FAIL
+    assert "16, 22" in split.detail
+
+
+def test_no_standard_this_library_cites_appears_at_two_editions():
+    """The library-scale form of the same property, over its own emitted citations.
+
+    Every `reference=` string and clause constant in the package, grouped by the standard
+    it parses to. A standard at two editions here is either a real mixed-edition citation
+    in the library — which is a finding — or a parser reading a clause number as an
+    edition, which is the defect above. Either way somebody has to look.
+    """
+    import re
+    from collections import defaultdict
+    from pathlib import Path
+
+    from anvilate.standards import parse_citation
+
+    pattern = re.compile(
+        r'reference\s*=\s*"([^"]{4,90})"'
+        r'|citation\s*=\s*"([^"]{4,90})"'
+        r'|^_[A-Z_]*CLAUSE[A-Z_]*\s*=\s*"([^"]{4,90})"',
+        re.M,
+    )
+    references = set()
+    for path in (Path(__file__).resolve().parent.parent / "src" / "anvilate").rglob("*.py"):
+        for groups in pattern.findall(path.read_text(encoding="utf-8")):
+            references.add(next(g for g in groups if g))
+    assert len(references) > 20, (
+        f"only {len(references)} citation strings found; the scan stopped matching the "
+        "way this library writes them, and a gate over nothing reports green"
+    )
+
+    editions = defaultdict(set)
+    for text in references:
+        citation = parse_citation(text)
+        if citation is not None:
+            editions[citation.standard].add(citation.edition)
+    split = {name: sorted(eds) for name, eds in editions.items() if len(eds) > 1}
+    assert not split, (
+        f"standards this library cites at more than one edition: {split}. Either the "
+        "citations really are mixed, or a clause number is being read as an edition"
+    )
