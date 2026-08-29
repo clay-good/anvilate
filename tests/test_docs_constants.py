@@ -249,3 +249,60 @@ def test_the_pressure_equipment_page_quotes_the_verdicts_the_example_computes():
     assert thick / thin == pytest.approx(float(stated.group(4)), abs=5e-2)
     # And the argument itself: the opening degrades faster than the wall it sits in.
     assert thick / thin > thick_shell / thin_shell
+
+
+def test_the_agent_skill_page_quotes_a_governing_rule_the_scorecard_really_has():
+    """ "A check that could not run governs over one at 99.99%" is a claim about
+    `Scorecard.governing()`, not a figure of speech.
+
+    The page's "what is not claimed" section exists because the skill originally said
+    `governing()` names the check running closest to its limit and it does not — blocking
+    status outranks utilization. The correction was prose, and prose is what goes quietly
+    wrong.
+
+    **The percentage itself is rhetoric and is not pinned, deliberately.** Blocking outranks
+    utilization at *every* utilization, so an entry built at whatever figure the page names
+    tests the same thing — editing 99.99 to 97.99 changes nothing, and asserting otherwise
+    would claim a coverage this cannot have. What is pinned is the ordering, and the two
+    properties that make the sentence apt at all: the figure has to be a utilization that
+    still *passes*, and it has to be tight enough that "closest to its limit" would have
+    picked it.
+    """
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    page = _page("agent-skill.md")
+    claim = re.search(r"governs over one at ([\d.]+)%", page)
+    assert claim is not None, "the governing-order sentence on agent-skill.md has moved"
+    utilization = float(claim.group(1)) / 100.0
+
+    required = 1.5
+    tight = ScorecardEntry.from_safety_factor(
+        "tight", computed=required / utilization, required=required
+    )
+    assert tight.utilization == pytest.approx(utilization, abs=5e-6)
+    assert tight.status is CheckStatus.PASS, "the page's example is a *passing* check"
+    assert 0.9 < utilization < 1.0, (
+        f"the page names {claim.group(1)}% — the sentence only lands on a check that is "
+        "passing and running very close to its limit"
+    )
+
+    blocked = ScorecardEntry(
+        name="unrunnable", status=CheckStatus.NOT_EVALUATED, detail="no element type"
+    )
+    for entries in ((tight, blocked), (blocked, tight)):
+        governing = Scorecard(entries=entries).governing()
+        assert governing is not None and governing.name == "unrunnable", (
+            "a check that could not run must outrank one at "
+            f"{claim.group(1)}% utilization, in either order"
+        )
+
+    # The page's second correction, in the same paragraph: `governing()` is None when
+    # nothing blocks and no check carries a safety factor, which is what makes the
+    # copyable `card.governing().name` an AttributeError.
+    assert "returns `None`" in page
+    passing = Scorecard(
+        entries=(ScorecardEntry(name="deflection", status=CheckStatus.PASS, detail="ok"),)
+    )
+    assert passing.governing() is None
+    with pytest.raises(AttributeError):
+        _ = passing.governing().name
