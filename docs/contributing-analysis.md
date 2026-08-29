@@ -262,6 +262,48 @@ Writing it found one hole: the AISC J2.4 weld shear fraction guarded positivity 
 its upper bound, so `6` for `0.6` returned ten times the weld capacity with every other
 check satisfied — the unsafe direction for a screen to be wrong in.
 
+## Finding a published constant nothing pins
+
+The public-surface manifests say a symbol exists. They do not say anything exercises it.
+Cross the manifests against every identifier appearing in `tests/` and `examples/`:
+
+```bash
+python - <<'PY'
+import pathlib, re
+symbols = [
+    line.strip()
+    for manifest in ("core", "analysis")
+    for line in pathlib.Path(f"docs/api/{manifest}-public-surface.txt").read_text().splitlines()
+    if line.strip() and not line.startswith("#")
+]
+named = set(
+    re.findall(
+        r"[A-Za-z_][A-Za-z0-9_]*",
+        "\n".join(f.read_text() for d in ("tests", "examples")
+                  for f in pathlib.Path(d).rglob("*.py")),
+    )
+)
+for symbol in symbols:
+    if symbol.split(".")[-1] not in named:
+        print(symbol)
+PY
+```
+
+At HEAD that is 54 of 2,019. **Most are not defects**: a result type like `HertzContact` is
+returned by a tested function and reached by attribute access, never by name. The subset
+worth reading is the **constants**, and the way to settle one is to change it and run the
+tests — indirect coverage through a caller counts, and only a mutation tells you whether
+there is any.
+
+Doing that at HEAD found one: `BELLEVILLE_PLATEAU_RATIO`, √2, published and used nowhere
+but its own module's prose. Changing it to √2.2 failed nothing.
+
+**Pin a constant by its property, not its digits.** Its docstring already said what it is —
+"dF/dy = 0 first acquires real roots there" — so the test samples the load-deflection curve
+either side: rising everywhere below the ratio, touching zero at it, turning over above.
+That reads as an argument rather than as a magic number, and it also catches a change to the
+curve the constant describes, which asserting √2 never would.
+
 ## Finding a docs page whose numbers nothing checks
 
 The existing ratchet asks whether a page's *filename* appears in a test. That is a

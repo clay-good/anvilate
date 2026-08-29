@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import math
-from math import pi, sin
+from math import pi, sin, sqrt
 
 import pytest
 
 from anvilate.analysis import (
+    BELLEVILLE_PLATEAU_RATIO,
     ROLLER_BEARING_LIFE_EXPONENT,
     SHEAR_FORM_CIRCULAR,
     SHEAR_FORM_RECTANGULAR,
@@ -8803,6 +8804,71 @@ def test_differential_band_brake_lever_force_and_self_locking():
             friction_coefficient=0.25,
             wrap_angle=wrap,
         )
+
+
+def _belleville_minimum_slope(ratio: float, *, thickness: float = 1.0, steps: int = 100) -> float:
+    """The smallest dF/dy anywhere on a Belleville washer's stroke, at cone ratio h/t.
+
+    Computed from `belleville_washer_force` itself rather than from the algebra, so the
+    test cannot agree with a re-derivation of the same expression it is checking. A hundred
+    samples: the residual at the plateau falls as the step does (0.08 at 100 samples, 0.005
+    at 400) while the neighbours a percent either side sit at ±16, so the separation is three
+    orders of magnitude and paying for more samples buys nothing.
+    """
+    height = ratio * thickness
+    step = height / steps
+
+    def force(deflection: float) -> float:
+        return (
+            belleville_washer_force(
+                deflection=Quantity(magnitude=deflection, unit="mm"),
+                thickness=Quantity(magnitude=thickness, unit="mm"),
+                cone_height=Quantity(magnitude=height, unit="mm"),
+                outer_diameter=Quantity.parse("40 mm"),
+                inner_diameter=Quantity.parse("20 mm"),
+                elastic_modulus=Quantity.parse("206 GPa"),
+            )
+            .to("N")
+            .magnitude
+        )
+
+    return min(
+        (force(min(index * step + step, height)) - force(index * step)) / step
+        for index in range(steps)
+    )
+
+
+def test_the_belleville_plateau_ratio_is_where_the_curve_stops_rising():
+    """`BELLEVILLE_PLATEAU_RATIO` is on the public surface and nothing pinned its value.
+
+    A mutation sweep over the published constants found it: changing √2 to √2.2 failed no
+    test, because every caller of the spring module uses the *number* and none of them uses
+    the constant. Pinned by its property rather than by its digits, which is the only thing
+    that makes it a constant rather than a magic number — its own docstring says dF/dy "first
+    acquires real roots there", so:
+
+    * below the ratio the load-deflection curve rises everywhere;
+    * at the ratio the slope reaches zero and does not go under — the plateau opening;
+    * above it the slope goes negative, which is the snap-through disc springs are chosen for.
+
+    The slopes are sampled from `belleville_washer_force`, not from the closed form, so this
+    cannot agree with a re-derivation of the expression it is checking.
+    """
+    assert BELLEVILLE_PLATEAU_RATIO == pytest.approx(sqrt(2.0))
+    plateau = BELLEVILLE_PLATEAU_RATIO
+
+    # Comfortably below: a stiff, monotonic washer-spring.
+    assert _belleville_minimum_slope(plateau * 0.7) > 0.0
+    # Just below, and the margin is shrinking towards zero rather than jumping across it.
+    just_under = _belleville_minimum_slope(plateau * 0.99)
+    assert 0.0 < just_under
+    assert just_under < _belleville_minimum_slope(plateau * 0.9)
+    # At the ratio: zero, to the resolution of the sampling.
+    at_plateau = _belleville_minimum_slope(plateau)
+    assert at_plateau == pytest.approx(0.0, abs=just_under / 10.0)
+    # Above: the curve turns over.
+    assert _belleville_minimum_slope(plateau * 1.01) < 0.0
+    assert _belleville_minimum_slope(plateau * 1.3) < _belleville_minimum_slope(plateau * 1.01)
 
 
 def test_belleville_washer_almen_laszlo_curve():
