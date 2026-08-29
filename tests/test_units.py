@@ -519,15 +519,29 @@ def test_a_case_variant_that_keeps_the_dimension_and_changes_the_scale_is_refuse
         Quantity.parse(text)
 
 
-def test_the_remedy_the_refusal_names_actually_works():
+@pytest.mark.parametrize("trap", ["Mm", "ML", "Ml"])
+def test_the_remedy_the_refusal_names_is_arithmetic_it_can_check(trap):
     """A refusal naming a remedy that does not work is worse than one naming none.
 
     The first version told the reader to write the unit out in full. `megameter`
-    canonicalises to `Mm` and lands on the same check, so the sentence was false. These
-    are the conversions the message now names, executed rather than quoted.
+    canonicalises to `Mm` and lands on the same check, so the sentence was false.
+
+    And the first version of *this test* executed two conversions with the numbers typed
+    into it, which is not the same as checking the message: changing the message to claim
+    `1 Mm is 1e9 m` left it passing. The factor is now read back out of the refusal and
+    held against the registry, so the sentence is checked rather than accompanied.
     """
-    assert Quantity(magnitude=80e6, unit="m").to("m").magnitude == pytest.approx(80e6)
-    assert Quantity(magnitude=1e3, unit="m**3").to("m**3").magnitude == pytest.approx(1e3)
+    import re as _re
+
+    from anvilate.units import UREG
+
+    with pytest.raises(ValueError) as refusal:
+        Quantity(magnitude=1.0, unit=trap)
+    # No $ anchor: pydantic appends its documentation URL to a validator's message.
+    stated = _re.search(rf"1 {trap} is ([\d.e+]+) (\S+)", str(refusal.value))
+    assert stated is not None, f"the refusal no longer names a conversion: {refusal.value}"
+    factor, unit = float(stated.group(1)), stated.group(2)
+    assert UREG.Quantity(1.0, trap).to(unit).magnitude == pytest.approx(factor, rel=1e-12)
 
 
 def test_the_ordinary_spellings_are_untouched():
