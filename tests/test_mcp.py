@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib
 import io
 import json
+import pathlib
 
 import pytest
 from pydantic import ValidationError
@@ -710,3 +711,184 @@ def test_every_constraint_the_published_schemas_declare_is_one_the_check_knows()
     assert "enum" in seen and "minimum" in seen, (
         "the gate is comparing against an empty set if no schema declares a constraint"
     )
+
+
+# --- The result half of the contract -----------------------------------------------
+#
+# A published `outputSchema` is a promise about what comes back. Until `result_issues`
+# existed the server made that promise and checked nothing, so these tests are written
+# from the client's side: what a client pinned to the artifact would do with the payload.
+
+
+def _released(name: str) -> dict:
+    path = pathlib.Path(__file__).resolve().parents[1] / "docs/api/schemas/released" / name
+    return json.loads(path.read_text())
+
+
+def _released_registry():
+    """The two published artifacts, addressable by the ``$id`` the tool schemas ``$ref``.
+
+    Deliberately the **released files**, not `spec_json_schema()`. A client resolves the
+    versioned URL, which is what those files are; validating against the live model instead
+    would check the result against the same code that produced it and agree by construction.
+    """
+    from referencing import Registry, Resource
+
+    return Registry().with_resources(
+        [
+            (document["$id"], Resource.from_contents(document))
+            for document in (
+                _released("design-spec-1.1.0.json"),
+                _released("scorecard-1.0.0.json"),
+            )
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("compile_spec", {"document": None}),
+        ("run_validation", {"spec": None}),
+    ],
+)
+def test_a_dispatched_result_validates_against_the_released_schemas(tool_name, arguments):
+    """The full check the runtime gate deliberately is not: ``$ref``s resolved.
+
+    :func:`result_issues` stops at the envelope, so a scorecard that had drifted from the
+    published document would cross an in-process check untouched and be rejected by the
+    first client that validated it. Here the references are resolved against the released
+    artifacts and a real result of every dispatched tool is validated whole.
+    """
+    jsonschema = pytest.importorskip("jsonschema")
+    document = _spec_document()
+    arguments = dict.fromkeys(arguments, document)
+    result = _call(tool_name, arguments)["result"]
+    tool = {tool.name: tool for tool in tool_catalog()}[tool_name]
+    registry = _released_registry()
+    validator = jsonschema.Draft202012Validator(tool.output_schema, registry=registry)
+    errors = [
+        f"{list(error.absolute_path)}: {error.message}"
+        for error in validator.iter_errors(result["structuredContent"])
+    ]
+    assert not errors, errors
+    # The reference has to actually be followed, or this passes on an envelope check.
+    assert "$ref" in json.dumps(tool.output_schema)
+
+
+def test_the_result_gate_refuses_what_the_published_output_schema_rejects(monkeypatch):
+    """Three shapes a handler could return, each one the published schema forbids.
+
+    The mutations are the point: `result_issues` was written while both handlers already
+    conformed, so without an adversary it would be a function nobody has seen say no.
+    """
+    from anvilate import mcp
+
+    document = _spec_document()
+    for returned, expected in (
+        ({"errors": [], "surprise": 1}, "takes no result property 'surprise'"),
+        ({"spec": {}}, "requires 'errors'"),
+        ({"errors": "not a list"}, "must be a JSON array"),
+    ):
+        monkeypatch.setitem(mcp._DISPATCH, "compile_spec", lambda _arguments, out=returned: out)
+        error = _call("compile_spec", {"document": document})["error"]
+        assert error["code"] == mcp.INTERNAL_ERROR
+        assert "its own published outputSchema rejects" in error["message"]
+        assert expected in error["message"], error["message"]
+
+
+def test_the_result_gate_passes_what_the_handlers_really_return():
+    """The other half of the mutation test: the gate is not refusing everything."""
+    from anvilate.mcp import result_issues
+
+    tools = {tool.name: tool for tool in tool_catalog()}
+    document = _spec_document()
+    for name, arguments in (
+        ("compile_spec", {"document": document}),
+        ("compile_spec", {"document": {"name": "nameless"}}),
+        ("run_validation", {"spec": document}),
+    ):
+        structured = _call(name, arguments)["result"]["structuredContent"]
+        assert result_issues(tools[name], structured) == []
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "module_name", "attribute"),
+    [
+        ("compile_spec", "document", "anvilate.spec", "parse_spec"),
+        ("run_validation", "spec", "anvilate.screening", "screen_spec"),
+    ],
+)
+def test_a_dispatched_tool_calls_the_symbol_it_names(
+    monkeypatch, tool_name, arguments, module_name, attribute
+):
+    """``backing`` resolving is not evidence the handler goes anywhere near it.
+
+    `run_validation` named `anvilate.bundle:assemble_evidence_bundle` for as long as
+    nothing was dispatched, and went on resolving after the handler was wired to
+    `anvilate.screening:screen_spec` — the import check cannot see the difference. So the
+    named symbol is replaced with one that raises, and the call has to raise through it.
+    """
+
+    class _Reached(Exception):
+        pass
+
+    def _raise(*_args, **_kwargs):
+        raise _Reached
+
+    tool = {tool.name: tool for tool in tool_catalog()}[tool_name]
+    assert tool.backing == f"{module_name}:{attribute}"
+    monkeypatch.setattr(importlib.import_module(module_name), attribute, _raise)
+    with pytest.raises(_Reached):
+        _call(tool_name, {arguments: _spec_document()})
+
+
+def test_output_schemas_declare_no_constraint_the_result_gate_ignores():
+    """The input-side coverage gate, pointed at the output schemas.
+
+    Written and it immediately found one: `export_artifact` publishes a `pattern` on its
+    sha256 digest that `_value_issues` did not know, so a handler returning "deadbeef" as a
+    64-hex digest would have passed a check whose docstring says the constraints are
+    enforced.
+    """
+    known = {
+        "type",
+        "description",
+        "enum",
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "$ref",
+        "items",
+        "minLength",
+        "minItems",
+        "pattern",
+    }
+    seen: set[str] = set()
+    for tool in tool_catalog():
+        for schema in tool.output_schema.get("properties", {}).values():
+            seen.update(schema)
+    unhandled = sorted(seen - known)
+    assert not unhandled, (
+        f"tool output schemas declare {unhandled}, which result_issues does not check"
+    )
+    assert "pattern" in seen, "the gate is comparing against a set with nothing in it"
+
+
+def test_the_result_gate_enforces_the_digest_pattern_it_claims_to_know():
+    """The keyword-coverage test above is a claim about a *set*, and that is not enough.
+
+    Adding `"pattern"` to the known set satisfied it while `_value_issues` still ignored
+    every pattern — the mutation that deleted the check killed nothing. `export_artifact`
+    is not dispatched, so its schema is exercised directly: a digest of the wrong length,
+    the wrong alphabet, or the right shape buried in a longer string.
+    """
+    from anvilate.mcp import result_issues
+
+    tool = {tool.name: tool for tool in tool_catalog()}["export_artifact"]
+    good = "a" * 64
+    assert result_issues(tool, {"format": "dxf", "path": "part.dxf", "sha256": good}) == []
+    for bad in ("deadbeef", "A" * 64, "g" * 64, f"sha256:{good}"):
+        issues = result_issues(tool, {"format": "dxf", "path": "part.dxf", "sha256": bad})
+        assert any("must match" in issue for issue in issues), (bad, issues)

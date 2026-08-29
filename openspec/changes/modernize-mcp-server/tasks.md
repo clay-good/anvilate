@@ -29,7 +29,25 @@
       rather than for want of a handler — two are task-dispatched by declared cost and four
       cannot be served statelessly at all (below). The "not dispatched yet" refusal is
       unreached by any catalogued tool and asserted so in both directions.
-- [ ] 2.2 structuredContent results + preview-image attachments
+- [x] 2.2 structuredContent results — **done**; preview-image attachments are blocked on
+      `render_viewport`, which is one of the four operations a stateless server cannot serve
+      (see 2.1), so there is nothing to attach an image to yet. Both dispatched tools return
+      `structuredContent` beside the text content, and `result_issues` now holds it to the
+      tool's own published `outputSchema` before it goes on the wire: a non-conforming result
+      is `-32603` naming the property rather than a payload a client validating against the
+      contract would reject without knowing which side was wrong. The gate was written while
+      both handlers already conformed — the only state in which one can be added and stay
+      green — so the evidence it can say no is three mutated handlers, one per forbidden
+      shape. The in-process check stops at the envelope for the same reason the argument
+      check does; CI resolves the spec and scorecard `$ref`s against the **released
+      artifacts** (not `spec_json_schema()`, which would agree by construction) and validates
+      a real result of every dispatched tool whole. Two findings fell out of writing it: the
+      constraint checker did not know `pattern`, so `export_artifact` could have returned
+      `"deadbeef"` as a 64-hex digest; and `run_validation` still declared
+      `anvilate.bundle:assemble_evidence_bundle` as its `backing` after being dispatched to
+      `anvilate.screening:screen_spec`, because an import check cannot tell a symbol a
+      handler calls from one it merely resolves. The declaration is corrected and the named
+      symbol is now replaced with one that raises, so the call has to raise through it
 - [ ] 2.3 Tasks extension: handles, progress, cancellation with subprocess cleanup
 - [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — the export
       half is **done**, the sandbox half cannot be done yet. Writing the parity test found

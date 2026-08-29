@@ -190,6 +190,48 @@ Everything else ends in a refusal, and the kinds are worth separating:
   becomes servable before it is built, and a test asserts both halves: that no catalogued
   tool hits it, and that the branch itself still refuses when it is hit.
 
+## The result is held to the same contract as the request
+
+A published `outputSchema` is a promise about what comes back, and until `result_issues()`
+existed the server made that promise and checked nothing. Now a call is checked at both
+ends against the same document the client was handed: arguments in, `structuredContent`
+out.
+
+**A non-conforming result is refused, not sent.** It comes back as `-32603` naming the
+offending property. A client that validates against the published `outputSchema` — which is
+the entire point of publishing one — would reject the payload anyway, and it would reject it
+without knowing whether the server was wrong or its own pin was.
+
+Both dispatched handlers already conformed when the gate was written, which is the only
+state in which a gate like this can be added and stay green. The evidence that it can say
+no is three mutated handlers, one per shape the schema forbids: an extra property, a missing
+required one, and a value of the wrong type.
+
+The in-process check stops at the envelope, for the same reason the argument check does: it
+does not resolve the `$ref`s to the spec and scorecard schemas, so a scorecard that had
+drifted from the published document would cross it untouched. That half runs in CI, where
+`jsonschema` resolves both references against the **released artifacts** under
+`docs/api/schemas/released/` — not against `spec_json_schema()`, which is the same code that
+produced the result and would agree by construction — and validates a real result of every
+dispatched tool whole.
+
+Writing the gate found a hole it was not looking for. `export_artifact` publishes a
+`pattern` on its sha256 digest that the constraint checker did not know, so `"deadbeef"`
+would have passed as a 64-hex digest. `pattern` is enforced now, with `re.search` rather
+than `re.fullmatch`, because JSON Schema's `pattern` is an unanchored match and the one
+pattern in the surface anchors itself.
+
+### A backing symbol that resolves is not a handler that calls it
+
+`ToolDefinition.backing` names the symbol implementing an operation, and CI has always
+imported it. That check cannot see the difference between a symbol a handler calls and one
+it does not: `run_validation` declared `anvilate.bundle:assemble_evidence_bundle` for as
+long as nothing was dispatched, and went on resolving perfectly well after the handler was
+wired to `anvilate.screening:screen_spec`. The declaration is corrected, and what holds it
+now is a test that replaces the named symbol with one that raises and requires the call to
+raise through it.
+
+
 ## The transport
 
 `serve_stdio()` is the whole of it: newline-delimited JSON in, one line out per request,

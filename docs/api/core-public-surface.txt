@@ -155,6 +155,7 @@ mcp.REQUIRED_OPERATIONS
 mcp.ToolDefinition
 mcp.catalog_issues
 mcp.handle_request
+mcp.result_issues
 mcp.serve_stdio
 mcp.main
 mcp.stateless_gaps

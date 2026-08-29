@@ -40,6 +40,7 @@ tolerance, and a convergence tolerance is not a bound on wall time.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections.abc import Mapping
 from copy import deepcopy
@@ -59,6 +60,7 @@ __all__ = [
     "ToolDefinition",
     "catalog_issues",
     "handle_request",
+    "result_issues",
     "serve_stdio",
     "main",
     "stateless_gaps",
@@ -412,7 +414,13 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 ValidationTier.T1_ANALYTICAL,
                 ValidationTier.T2_DFM,
             ),
-            backing="anvilate.bundle:assemble_evidence_bundle",
+            # The screen, not the bundle assembler: `backing` names what implements the
+            # operation, and this one is dispatched to `screen_spec`. It read
+            # `anvilate.bundle:assemble_evidence_bundle` while nothing was wired, and a
+            # symbol that merely resolves goes on resolving after the handler calls
+            # something else — so `test_a_dispatched_tool_calls_the_symbol_it_names`
+            # replaces the named symbol and requires the call to go through it.
+            backing="anvilate.screening:screen_spec",
             subject="spec",
         ),
         ToolDefinition(
@@ -604,6 +612,7 @@ PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
+INTERNAL_ERROR = -32603
 TOOL_UNAVAILABLE = -32000
 
 PROTOCOL_REVISION = "2026-07-28"
@@ -640,16 +649,51 @@ def _argument_issues(tool: ToolDefinition, arguments: Mapping[str, Any]) -> list
     bound checks arrived after an audit found ``view: "sideways"`` and a ``width_px`` of 1
     sailing through a surface whose own schema names four views and a floor of 64.
     """
-    schema = tool.input_schema
+    return _object_issues(tool.name, arguments, tool.input_schema, noun="argument")
+
+
+def result_issues(tool: ToolDefinition, structured: Mapping[str, Any]) -> list[str]:
+    """What is wrong with a handler's ``structuredContent`` against its *output* schema.
+
+    The mirror of :func:`_argument_issues`, pointed the other way. The 2026-07-28 revision
+    says a tool that publishes an ``outputSchema`` returns structured content conforming to
+    it, and until this existed nothing in the server held a result to the document the
+    catalog hands every client. The two dispatched handlers happened to conform; a gate that
+    is written while it is already green is the only kind that can stay green.
+
+    **A non-conforming result is refused rather than sent.** A client that validates against
+    the published ``outputSchema`` — which is the point of publishing one — would reject the
+    payload anyway, and it would reject it without knowing whether the server or its own
+    pin was wrong. INTERNAL_ERROR naming the offending property says which.
+
+    The same deliberate boundary as the input check applies, and for the same reason: this
+    does not resolve the ``$ref``s to the published spec and scorecard schemas, so a
+    malformed scorecard *inside* a conforming envelope passes here. That half is checked in
+    CI, where ``jsonschema`` resolves both references against the released artifacts and
+    validates a real result of every dispatched tool — a check with a network-shaped
+    dependency does not belong on the path a caller waits on.
+    """
+    return _object_issues(tool.name, structured, tool.output_schema, noun="result property")
+
+
+def _object_issues(
+    label: str, document: Mapping[str, Any], schema: Mapping[str, Any], *, noun: str
+) -> list[str]:
+    """One JSON object against one closed 2020-12 object schema, top level only.
+
+    Shared by the input and output checks so a constraint taught to one is understood by
+    the other; ``noun`` is what an unexpected property is called in the message, because
+    "takes no argument" is wrong about something the server sent.
+    """
     properties: dict[str, Any] = schema.get("properties", {})
     issues: list[str] = []
     for name in schema.get("required", []):
-        if name not in arguments:
-            issues.append(f"{tool.name} requires {name!r}")
-    for name in arguments:
+        if name not in document:
+            issues.append(f"{label} requires {name!r}")
+    for name in document:
         if name not in properties:
-            issues.append(f"{tool.name} takes no argument {name!r}")
-    for name, value in arguments.items():
+            issues.append(f"{label} takes no {noun} {name!r}")
+    for name, value in document.items():
         declared = properties.get(name, {}).get("type")
         if declared is None:
             continue
@@ -660,13 +704,11 @@ def _argument_issues(tool: ToolDefinition, arguments: Mapping[str, Any]) -> list
             # `isinstance(True, int)` is True in Python and a boolean is not a number in
             # JSON, so the generic check below would accept `width_px: true` as a pixel
             # count. Both numeric type names need the exception, not just "number".
-            issues.append(f"{tool.name}.{name} must be a JSON {declared}; got a boolean")
+            issues.append(f"{label}.{name} must be a JSON {declared}; got a boolean")
         elif not isinstance(value, expected):
-            issues.append(
-                f"{tool.name}.{name} must be a JSON {declared}; got {type(value).__name__}"
-            )
+            issues.append(f"{label}.{name} must be a JSON {declared}; got {type(value).__name__}")
         else:
-            issues.extend(_value_issues(f"{tool.name}.{name}", value, properties[name]))
+            issues.extend(_value_issues(f"{label}.{name}", value, properties[name]))
     return issues
 
 
@@ -685,6 +727,13 @@ def _value_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str
         floor = schema.get("minLength")
         if floor is not None and len(value) < floor:
             issues.append(f"{label} must be at least {floor} character(s); got {value!r}")
+        expression = schema.get("pattern")
+        # `search`, not `fullmatch`: JSON Schema's `pattern` is an unanchored match, and
+        # treating it as anchored would reject values the published schema accepts. The
+        # one pattern in the surface anchors itself with ^ and $, which is the reason to
+        # get this right rather than a reason it does not matter.
+        if expression is not None and re.search(expression, value) is None:
+            issues.append(f"{label} must match {expression!r}; got {value!r}")
         return issues
     if isinstance(value, list):
         floor = schema.get("minItems")
@@ -748,15 +797,20 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     protocol says takes no response.
 
     Three methods are served. ``initialize`` reports the protocol revision and the
-    capabilities this surface has. ``tools/list`` returns
-    :func:`wire_definitions`. ``tools/call`` validates the arguments against the tool's
-    published input schema and then refuses, because **no operation is dispatched here
-    yet** — the four bounded tools that are backed still need their handlers written, and
-    a handler that returned a plausible-looking result for an operation nobody had wired
-    would be the worst possible thing to ship behind a tool contract.
+    capabilities this surface has. ``tools/list`` returns :func:`wire_definitions`.
+    ``tools/call`` validates the arguments against the tool's published input schema,
+    dispatches the two operations that are wired — ``compile_spec`` and ``run_validation``
+    — and holds what comes back to the tool's published *output* schema before sending it.
 
-    Two refusals are structural rather than "not built yet", and they are the ones worth
-    reading:
+    **A call is checked at both ends against the same document the client was handed.**
+    Arguments in by :func:`_argument_issues`, structured content out by
+    :func:`result_issues`; a result the published ``outputSchema`` rejects is an
+    INTERNAL_ERROR naming the property, not a payload sent for the client to choke on.
+
+    An operation with no handler is refused with that reason rather than answered, because
+    a plausible-looking result for something nobody wired is indistinguishable from a real
+    one. Two further refusals are structural rather than "not built yet", and they are the
+    ones worth reading:
 
     * **An unbounded tool cannot be called here at all.** ``build_part`` and
       ``run_fea_validation`` are task-dispatched by declared cost; a synchronous
@@ -837,6 +891,14 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
         structured = handler(arguments)
     except _InvalidArguments as refusal:
         return _error(request_id, INVALID_PARAMS, str(refusal))
+    wrong = result_issues(tool, structured)
+    if wrong:
+        return _error(
+            request_id,
+            INTERNAL_ERROR,
+            f"{tool.name} produced a result its own published outputSchema rejects: "
+            + "; ".join(wrong),
+        )
     return {
         "jsonrpc": "2.0",
         "id": request_id,
