@@ -475,7 +475,7 @@ importing the module by path. The sixth, `anvilate.specbench`, was real and is d
 now. **Read the output as a list to check by hand, not as a list of gaps**, which is why
 this one is not a test.
 
-## Two sweeps that came back clean
+## Three sweeps that came back clean
 
 Both were run at HEAD and found nothing. Recorded so the next person spends the afternoon
 somewhere else.
@@ -485,6 +485,15 @@ every example quoting a figure to call `_assert_narrates`, which checks each nar
 against a computed value **in both directions** — a quoted figure with nothing behind it
 fails, and a computed value no figure uses fails too. Confirmed behaviourally rather than
 read: a sampled docstring number perturbed in four examples failed the suite every time.
+
+**Every example's printed output, not just its exit status.** `test_examples.py` runs all
+490 and asserts they exit zero, and `_assert_narrates` checks the figures a docstring
+quotes — but nothing looked at the rest of what they print. Run them all and grep the
+output for `nan`, `inf`, `None`, and exponents past 1e15: ten lines matched and every one
+is legitimate — a carrier density of 1e22 /m³, a photon flux of 2.5e15 /s, the
+Prandtl-Meyer angle at infinite Mach, and prose containing the word "none". The one bare
+`None` is `best('mass')` on a 20-point grid budget that finds nothing feasible, which is
+the point that example is making.
 
 **Numbers quoted in `src/` docstrings.** 720 distinctive figures in function docstrings; 39
 are neither a numeric literal in their own module nor named anywhere in `tests/` or
