@@ -231,9 +231,13 @@ def test_export_renders_the_evidence_bundle_from_a_spec_alone(spec_file):
 
 def test_export_json_is_the_bundle_document(spec_file):
     code, out, _err = _run("export", "--format", "json", str(spec_file))
-    bundle = json.loads(out)
-    assert bundle["status"] == "not_evaluated"
-    assert "checks" in bundle["covers"]
+    payload = json.loads(out)
+    # A list whatever the count, the same shape `check --format json` uses.
+    assert list(payload) == ["bundles"] and len(payload["bundles"]) == 1
+    entry = payload["bundles"][0]
+    assert entry["path"] == str(spec_file) and entry["name"] == "deck_plate"
+    assert entry["bundle"]["status"] == "not_evaluated"
+    assert "checks" in entry["bundle"]["covers"]
     assert code == EXIT_NOT_EVALUATED
 
 
@@ -818,3 +822,54 @@ def test_the_diff_is_of_the_spec_not_of_the_file(tmp_path):
     assert code == EXIT_OK and err == ""
     assert "no change" in out
     assert "no verdict changed" in out
+
+
+def test_export_bundles_every_spec_under_a_directory(spec_tree):
+    """`headless-automation` asks CI to publish evidence bundles for a repository, and a
+    command taking one file at a time makes that a shell loop in a script nothing
+    type-checks. `export` takes the same paths `check` does, and says so the same way."""
+    code, out, err = _run("export", str(spec_tree))
+    assert out.count("bundle NOT_EVALUATED") == 2
+    assert str(spec_tree / "deck.yaml") in out
+    assert str(spec_tree / "nested" / "beam.yaml") in out
+    assert "ci-config.yaml: not a Design Spec, skipped" in err
+    assert "anvilate export:" in err, "the skip line names the command that skipped it"
+    assert code == EXIT_NOT_EVALUATED
+
+
+def test_export_json_over_a_tree_is_one_entry_per_spec(spec_tree):
+    _code, out, _err = _run("export", "--format", "json", str(spec_tree))
+    bundles = json.loads(out)["bundles"]
+    assert sorted(entry["name"] for entry in bundles) == ["beam_a", "deck_plate"]
+    assert all(
+        "scorecard" in entry["bundle"]["covers"] or entry["bundle"]["covers"] for entry in bundles
+    )
+
+
+def test_a_single_exported_bundle_carries_no_path_header(spec_file):
+    """The same rule `check` follows: one named spec keeps the bare rendering, because the
+    caller supplied the path and repeating it is noise."""
+    _code, out, _err = _run("export", str(spec_file))
+    assert not out.startswith("# ")
+    assert out.startswith("bundle ")
+
+
+def test_export_over_an_empty_directory_is_a_bad_request(tmp_path):
+    empty = tmp_path / "nothing"
+    empty.mkdir()
+    code, out, err = _run("export", str(empty))
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "anvilate export: no Design Spec found" in err
+
+
+def test_export_reports_the_worst_bundle_status_over_a_tree(spec_tree, monkeypatch):
+    from anvilate import screening
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+
+    def _screen(spec):
+        status = CheckStatus.FAIL if spec.name == "beam_a" else CheckStatus.PASS
+        return Scorecard(entries=(ScorecardEntry(name="bending", status=status, detail="d"),))
+
+    monkeypatch.setattr(screening, "screen_spec", _screen)
+    code, _out, _err = _run("export", str(spec_tree))
+    assert code == EXIT_FAILED, "one failing bundle fails the run"

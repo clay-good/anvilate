@@ -26,7 +26,15 @@ inputs:
     required: false
     default: "false"
   report:
-    description: "Where to write the JSON report, or empty to write none."
+    description: "Where to write the JSON scorecard report, or empty to write none."
+    required: false
+    default: ""
+  bundles:
+    description: >-
+      Where to write the JSON evidence bundles, or empty to write none.
+      `headless-automation` asks CI to publish evidence bundles as outputs, and the
+      bundle roll-up is never better than its worst section — so this is the artifact a
+      reviewer reads when the run fails, not a nicety.
     required: false
     default: ""
 
@@ -45,10 +53,14 @@ runs:
         ANVILATE_PATH: ${{ inputs.path }}
         ANVILATE_ALLOW_NOT_EVALUATED: ${{ inputs.allow-not-evaluated }}
         ANVILATE_REPORT: ${{ inputs.report }}
+        ANVILATE_BUNDLES: ${{ inputs.bundles }}
       run: |
         set -uo pipefail
         if [ -n "$ANVILATE_REPORT" ]; then
           anvilate check "$ANVILATE_PATH" --format json > "$ANVILATE_REPORT"
+        fi
+        if [ -n "$ANVILATE_BUNDLES" ]; then
+          anvilate export "$ANVILATE_PATH" --format json > "$ANVILATE_BUNDLES"
         fi
         anvilate check "$ANVILATE_PATH"
         status=$?

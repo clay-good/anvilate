@@ -113,3 +113,25 @@ def test_the_docs_page_documents_the_action_and_says_what_is_not_shipped():
     for name in yaml.safe_load(_ACTION.read_text(encoding="utf-8"))["inputs"]:
         assert f"`{name}`" in page, f"the action takes {name} and the page does not say so"
     assert "container image" in page, "the half that is not shipped has to say so"
+
+
+def test_every_input_the_action_declares_is_wired_into_a_step(action):
+    """An input declared and never read is a promise the action does not keep.
+
+    Removing the step that writes the evidence bundles left `bundles` declared, documented
+    and inert, and every other gate in this file still passed: the env block still bound it,
+    and a subset check cannot see a binding nothing reads.
+    """
+    import yaml as yaml_module
+
+    rendered = yaml_module.dump(action["runs"])
+    for name in action["inputs"]:
+        assert f"inputs.{name}" in rendered, f"the action declares {name!r} and no step reads it"
+
+
+def test_each_optional_output_file_is_written_by_its_own_command(action):
+    """`report` and `bundles` are different artifacts and must come from different commands
+    — writing the scorecard twice under two names would satisfy a mention check."""
+    script = _script(action)
+    assert 'anvilate check "$ANVILATE_PATH" --format json > "$ANVILATE_REPORT"' in script
+    assert 'anvilate export "$ANVILATE_PATH" --format json > "$ANVILATE_BUNDLES"' in script

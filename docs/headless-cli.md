@@ -83,10 +83,10 @@ decision somebody has to make rather than a silent zero.
 
 ```bash
 anvilate export part.yaml              # the evidence bundle, rendered
-anvilate export part.yaml --format json
+anvilate export parts/ --format json   # one bundle per spec in the tree
 ```
 
-The evidence bundle is assembled from a scorecard, so it needs no geometry — and the exit
+`export` takes the same paths `check` does — a file, several files, or a directory searched recursively — because CI publishing bundles for a repository should not be a shell loop in a script nothing type-checks. The evidence bundle is assembled from a scorecard, so it needs no geometry — and the exit
 code is the bundle's own roll-up, which is never better than its worst section. A DXF or a
 QIF results file does need a built part, and each is refused by name:
 
@@ -229,6 +229,7 @@ repository:
   with:
     path: parts/
     report: anvilate-report.json
+    bundles: anvilate-bundles.json
 ```
 
 | Input | Default | What it does |
@@ -236,15 +237,19 @@ repository:
 | `path` | `.` | The file or directory to screen. A directory is searched recursively. |
 | `python-version` | `3.11` | The Python to install Anvilate under. |
 | `allow-not-evaluated` | `false` | Accept exit code 2 as a pass. |
-| `report` | (none) | Where to write the JSON report. |
+| `report` | (none) | Where to write the JSON scorecard report. |
+| `bundles` | (none) | Where to write the JSON evidence bundles. |
 
 **`allow-not-evaluated` is off by default and that is the whole point.** A screen that
 could not run is not a screen that passed, and a merge gate treating the two alike is the
 silent green this tool exists to avoid. Turn it on only while a known gap is being closed,
 and the action prints a warning annotation when it fires.
 
-The report is written *before* the verdict is decided, so a failing run still leaves one —
-a CI job that fails and produces no artifact is a job somebody has to re-run to understand.
+The report and the bundles are written *before* the verdict is decided, so a failing run
+still leaves both — a CI job that fails and produces no artifact is a job somebody has to
+re-run to understand. `headless-automation` asks CI to publish evidence bundles as outputs,
+and the bundle roll-up is never better than its worst section, so it is the artifact a
+reviewer reads when the run fails rather than a nicety.
 
 The action's script is the least-tested code in most repositories: nothing imports it,
 nothing type-checks it, and it runs for the first time on somebody else's pull request. So

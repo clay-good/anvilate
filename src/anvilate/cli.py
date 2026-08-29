@@ -215,7 +215,12 @@ def _build_parser() -> argparse.ArgumentParser:
     diff.add_argument("after", type=Path, help="the spec as it is")
 
     export = commands.add_parser("export", help="write a downstream artifact from a screened spec")
-    export.add_argument("spec", type=Path, help="a Design Spec document, YAML or JSON")
+    export.add_argument(
+        "spec",
+        type=Path,
+        nargs="+",
+        help="Design Spec documents, or directories to search for them",
+    )
     export.add_argument(
         "--artifact",
         choices=_ARTIFACTS,
@@ -476,17 +481,41 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
             file=err,
         )
         return EXIT_UNBUILT
-    loaded = _load(args.spec, err=err, command="export")
-    if isinstance(loaded, int):
-        return loaded
+
     from .screening import screen_spec
 
-    sections = BundleSections(scorecard=screen_spec(loaded))
+    # The same path handling `check` has, for the same reason: `headless-automation` asks
+    # CI to publish evidence bundles for a repository, and a command taking one file at a
+    # time makes that a shell loop in a script nothing type-checks.
+    paths = _resolve(args.spec, err=err, command="export")
+    if isinstance(paths, int):
+        return paths
+    results = []
+    for path in paths:
+        spec = _load(path, err=err, command="export")
+        if isinstance(spec, int):
+            return spec
+        results.append((path, spec, BundleSections(scorecard=screen_spec(spec))))
+
     if args.format == "json":
-        print(json.dumps(sections.to_json_dict(), indent=2, sort_keys=True), file=out)
+        payload = {
+            "bundles": [
+                {"path": str(path), "name": spec.name, "bundle": sections.to_json_dict()}
+                for path, spec, sections in results
+            ]
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True), file=out)
     else:
-        print(sections.render(), file=out)
-    return EXIT_CODES[sections.status]
+        for index, (path, _spec, sections) in enumerate(results):
+            if index:
+                print("", file=out)
+            if len(results) > 1:
+                print(f"# {path}", file=out)
+            print(sections.render(), file=out)
+    return max(
+        (EXIT_CODES[sections.status] for _p, _s, sections in results),
+        key=_EXIT_SEVERITY.index,
+    )
 
 
 def _load(path: Path, *, err, command: str):
@@ -581,7 +610,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     )
 
 
-def _resolve(paths: list[Path], *, err) -> list[Path] | int:
+def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | int:
     """The spec documents behind the arguments, in a stable order.
 
     A directory is searched; a file named on the command line is taken at its word. The
@@ -607,12 +636,16 @@ def _resolve(paths: list[Path], *, err) -> list[Path] | int:
                 if isinstance(document, dict) and "anvilate_spec" in document:
                     found.append(candidate)
                 else:
-                    print(f"anvilate check: {candidate}: not a Design Spec, skipped", file=err)
+                    print(
+                        f"anvilate {command}: {candidate}: not a Design Spec, skipped",
+                        file=err,
+                    )
             continue
         found.append(path)
     if not found:
         print(
-            "anvilate check: no Design Spec found in " + ", ".join(str(p) for p in paths), file=err
+            f"anvilate {command}: no Design Spec found in " + ", ".join(str(p) for p in paths),
+            file=err,
         )
         return EXIT_BAD_REQUEST
     return found
