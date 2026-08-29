@@ -310,6 +310,27 @@ every function added — only the property and a *floor* on how many functions i
 because the third way a gate like this goes wrong is covering nothing and saying so in
 green.
 
+### The same probe, pointed the other way
+
+Bind every required parameter to a `Quantity` with an absurd dimension instead of a bare
+number, and the mirror mistake shows up: a caller told that everything here is a `Quantity`
+wraps the parameters that are *not* quantities — a ratio, a count, an angle in degrees.
+**213 functions answered with the interpreter's own sentence**, `'<' not supported between
+instances of 'Quantity' and 'int'`.
+
+Those were not 213 defects. `Quantity` defined no ordering, no arithmetic and no numeric
+conversions at all, so the interpreter was answering for it every time — and the throwing
+sites were a 170-way long tail with no dominant shape, so the mechanical pass that fixed the
+bare-number families would not have worked here. Defining the operators to refuse, in one
+file, fixed all 213 and could regress nothing: every one of them raised before.
+
+The trade is real and is stated in the gate: an operator does not know the parameter it was
+reached through, so it names the mistake and the number to pass instead rather than the
+argument. Requiring a parameter name would have been requiring the 170 call sites.
+
+**Measure the shapes before choosing the repair.** The same census that made 212 files a
+boring number here said the opposite, and both answers came from the same five-line script.
+
 ## The bound a parameter's own name fixes
 
 Re-measuring in August 2026 with a coverage run rather than a trace put 129 of the

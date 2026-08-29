@@ -131,6 +131,89 @@ class Quantity(RevalidatedModel):
     def __str__(self) -> str:
         return f"{self.magnitude:g} {self.unit}"
 
+    # --- The operations this type deliberately does not support, saying which ----------
+    #
+    # A Quantity is a value object: arithmetic and ordering go through `.pint`, or through
+    # `.to(unit).magnitude` where the caller has said which unit the comparison is in. None
+    # of these operators existed, so every one of them raised
+    #
+    #     TypeError: '<' not supported between instances of 'Quantity' and 'int'
+    #
+    # which names neither the parameter nor the mistake. And the mistake is a common one in
+    # exactly this library: a caller told that everything is a Quantity wraps a *ratio*, a
+    # *count* or an *angle in degrees* — 213 public analysis functions took a plain number
+    # for one of those and answered a wrapped one with that sentence. Defining the operators
+    # to refuse is what lets the refusal say what happened; it can regress nothing, because
+    # every one of these raised before.
+
+    def _unsupported(self, operation: str, other: object) -> ValueError:
+        if isinstance(other, Quantity):
+            return ValueError(
+                f"{operation} is not defined between two quantities ({self} and {other}); "
+                f"convert both to one unit and compare the magnitudes, which is where the "
+                f"unit you are comparing in gets written down"
+            )
+        return ValueError(
+            f"{operation} is not defined between a quantity ({self}) and {other!r}. A "
+            f"parameter taking a plain number — a ratio, a count, an angle in degrees — was "
+            f"given a Quantity; pass {self.magnitude:g} if that is the number you meant"
+        )
+
+    def __lt__(self, other: object) -> bool:
+        raise self._unsupported("<", other)
+
+    def __le__(self, other: object) -> bool:
+        raise self._unsupported("<=", other)
+
+    def __gt__(self, other: object) -> bool:
+        raise self._unsupported(">", other)
+
+    def __ge__(self, other: object) -> bool:
+        raise self._unsupported(">=", other)
+
+    # Arithmetic goes through `.pint`, which is where the unit algebra lives. Refusing here
+    # by name beats "unsupported operand type(s) for -: 'Quantity' and 'Quantity'", and the
+    # reflected forms are defined too — otherwise `2 * q` and `q * 2` answer differently.
+    def __add__(self, other: object) -> Quantity:
+        raise self._unsupported("+", other)
+
+    __radd__ = __add__
+
+    def __sub__(self, other: object) -> Quantity:
+        raise self._unsupported("-", other)
+
+    __rsub__ = __sub__
+
+    def __mul__(self, other: object) -> Quantity:
+        raise self._unsupported("*", other)
+
+    __rmul__ = __mul__
+
+    def __truediv__(self, other: object) -> Quantity:
+        raise self._unsupported("/", other)
+
+    __rtruediv__ = __truediv__
+
+    def __abs__(self) -> Quantity:
+        raise ValueError(
+            f"abs() is not defined on a quantity ({self}); a parameter taking a plain "
+            f"number was given one. Pass {abs(self.magnitude):g}, or "
+            f"abs(q.to(unit).magnitude) where the unit matters"
+        )
+
+    def __int__(self) -> int:
+        raise ValueError(
+            f"int() is not defined on a quantity ({self}); a parameter taking a count was "
+            f"given one. A count has no unit — pass {int(self.magnitude)}"
+        )
+
+    def __float__(self) -> float:
+        raise ValueError(
+            f"float() is not defined on a quantity ({self}); a parameter taking a plain "
+            f"number was given one. Pass {self.magnitude:g}, or q.to(unit).magnitude where "
+            f"the unit matters"
+        )
+
 
 def require_finite(value: Quantity | float, *, name: str) -> float:
     """The magnitude of ``value``, having refused a non-finite one by name.

@@ -1735,3 +1735,60 @@ def test_every_public_analysis_function_refuses_a_bare_number_by_name():
         f"{len(failures)} public function(s) answer a bare number with something other "
         "than a ValueError naming the parameter:\n  " + "\n  ".join(sorted(failures)[:25])
     )
+
+
+def test_every_public_analysis_function_refuses_a_wrapped_number_by_naming_the_mistake():
+    """The mirror of the sweep above, and in this library the likelier mistake of the two.
+
+    A caller told that everything here is a `Quantity` wraps the parameters that are *not*
+    quantities — a ratio, a count, an angle in degrees. Every required parameter is bound to
+    a quantity with an absurd dimension and the call made; 213 functions answered with the
+    interpreter's own sentence, `'<' not supported between instances of 'Quantity' and
+    'int'`, which names neither the parameter nor the mistake.
+
+    They were not 213 separate defects. `Quantity` defined no ordering, no arithmetic and no
+    numeric conversions at all, so the interpreter was answering for it in every one of
+    them; defining those operators to refuse fixed all 213 in one file and could regress
+    nothing, because each of them raised before.
+
+    The assertion here is weaker than the bare-number gate's on purpose, and the reason is
+    worth stating: an operator does not know the parameter it was reached through, so it
+    cannot name one. It names the mistake and the number to pass instead. Requiring a
+    parameter name here would be requiring the 170 call sites the one-file fix replaced.
+    """
+    from anvilate.units import Quantity
+
+    absurd = Quantity(magnitude=1.0, unit="candela")
+    probed, failures = [], []
+    for name in sorted(analysis_pkg.__all__):
+        function = getattr(analysis_pkg, name, None)
+        if not inspect.isfunction(function):
+            continue
+        try:
+            signature = inspect.signature(function)
+        except (TypeError, ValueError):  # pragma: no cover - every signature resolves today
+            continue
+        parameters = [
+            p.name
+            for p in signature.parameters.values()
+            if p.default is inspect.Parameter.empty
+            and p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+        ]
+        if not parameters:
+            continue
+        probed.append(name)
+        try:
+            function(**dict.fromkeys(parameters, absurd))
+        except ValueError:
+            continue
+        except Exception as slip:  # noqa: BLE001 - the class is the thing under test
+            failures.append(f"{name}: {type(slip).__name__}: {slip}")
+
+    assert len(probed) > 1500, (
+        f"only {len(probed)} public analysis functions were probed; this gate covers the "
+        "surface or it covers nothing"
+    )
+    assert not failures, (
+        f"{len(failures)} public function(s) answer a quantity where a plain number belongs "
+        "with something other than a ValueError:\n  " + "\n  ".join(sorted(failures)[:25])
+    )

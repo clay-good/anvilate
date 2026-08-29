@@ -406,3 +406,87 @@ def test_the_places_it_returns_really_do_separate_the_two():
         assert f"{value:.{places}f}" != f"{reference:.{places}f}", (value, reference)
         if places > 1:
             assert f"{value:.{places - 1}f}" == f"{reference:.{places - 1}f}"
+
+
+# --- The operations a Quantity does not support, and what they say --------------------
+
+
+@pytest.mark.parametrize(
+    ("operation", "call"),
+    [
+        ("<", lambda q: q < 1),
+        ("<=", lambda q: q <= 1),
+        (">", lambda q: q > 1),
+        (">=", lambda q: q >= 1),
+        # The reflected forms: `1 < q` falls through int.__lt__ to Quantity.__gt__, and a
+        # library that answers `q < 1` and `1 < q` differently is one nobody can reason
+        # about.
+        ("<", lambda q: 1 > q),
+        (">", lambda q: 1 < q),
+        ("+", lambda q: q + 1),
+        ("+", lambda q: 1 + q),
+        ("-", lambda q: q - 1),
+        ("*", lambda q: q * 2),
+        ("*", lambda q: 2 * q),
+        ("/", lambda q: q / 2),
+    ],
+)
+def test_a_quantity_against_a_plain_number_refuses_by_naming_the_mistake(operation, call):
+    """213 public analysis functions used to answer this with the interpreter's sentence.
+
+    A caller told that everything in this library is a `Quantity` wraps a *ratio*, a
+    *count* or an *angle in degrees* — parameters that take a plain number — and got
+
+        TypeError: '<' not supported between instances of 'Quantity' and 'int'
+
+    which names neither the parameter nor the mistake. `Quantity` defined none of these
+    operators, which is why the interpreter was answering; defining them to refuse could
+    regress nothing and fixes every one of those functions at once.
+
+    The trade is stated rather than hidden: the operator cannot name the *parameter*,
+    because it does not know one. It names the mistake and the number to pass instead,
+    which is the half a reader cannot work out for themselves.
+    """
+    quantity = Quantity(magnitude=2.5, unit="mm")
+    with pytest.raises(ValueError, match="not defined") as refusal:
+        call(quantity)
+    message = str(refusal.value)
+    assert operation in message
+    # `pass 2.5`, not `2.5` — the quantity renders as "2.5 mm", so asserting the bare
+    # number is satisfied by the rendering and passes with the suggestion deleted. That
+    # mutation survived the first version of this test.
+    assert "pass 2.5" in message, "the refusal must say which number to pass instead"
+
+
+def test_two_quantities_refuse_with_the_other_reason():
+    """Comparing two quantities is not the same mistake, and must not read as it.
+
+    It is a missing conversion, not a wrapped number, and the message says which unit the
+    comparison has to be written in.
+    """
+    with pytest.raises(ValueError, match="between two quantities") as refusal:
+        _ = Quantity(magnitude=1.0, unit="mm") < Quantity(magnitude=1.0, unit="m")
+    assert "compare the magnitudes" in str(refusal.value)
+
+
+@pytest.mark.parametrize(
+    ("call", "wanted"),
+    [
+        (abs, "abs()"),
+        (int, "int()"),
+        (float, "float()"),
+    ],
+)
+def test_the_builtin_conversions_refuse_by_name(call, wanted):
+    quantity = Quantity(magnitude=-3.0, unit="mm")
+    with pytest.raises(ValueError, match="not defined") as refusal:
+        call(quantity)
+    assert wanted in str(refusal.value)
+
+
+def test_equality_still_works_because_it_always_did():
+    """The refusals are for operators that did not exist. Equality did, and is untouched:
+    turning a working comparison into a refusal would be a regression dressed as a fix."""
+    assert Quantity(magnitude=1.0, unit="mm") == Quantity(magnitude=1.0, unit="mm")
+    assert Quantity(magnitude=1.0, unit="mm") != Quantity(magnitude=2.0, unit="mm")
+    assert Quantity(magnitude=1.0, unit="mm") != 1.0
