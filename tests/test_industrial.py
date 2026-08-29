@@ -218,3 +218,133 @@ def test_holed_cover_resonance_uses_the_annular_eigenvalue():
     resonance = next(e for e in clamped.entries if "resonance" in e.name)
     assert resonance.status is CheckStatus.PASS
     assert "fundamental 266.6 Hz" in resonance.detail
+
+
+# --- the page that documents this pack ------------------------------------------------------
+
+
+def _covers_page() -> str:
+    from pathlib import Path
+
+    return (Path(__file__).resolve().parent.parent / "docs" / "industrial-covers.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def _page_cover(edge: PlateEdge) -> CoverPlate:
+    """The page's own declared cover, read out of its code block."""
+    import re
+
+    page = _covers_page()
+    block = page[page.index("```python") : page.index("```", page.index("```python") + 9)]
+
+    def quantity(field: str) -> Quantity:
+        found = re.search(rf'{field}=Quantity\.parse\("([^"]+)"\)', block)
+        assert found is not None, f"{field} has moved on the covers page"
+        return Quantity.parse(found.group(1))
+
+    return CoverPlate(
+        name=re.search(r'name="([^"]+)"', block).group(1),
+        pressure=quantity("pressure"),
+        thickness=quantity("thickness"),
+        material=re.search(r'material="([^"]+)"', block).group(1),
+        edge=edge,
+        length=quantity("length"),
+        width=quantity("width"),
+        deflection_limit=quantity("deflection_limit"),
+    )
+
+
+def test_the_covers_page_quotes_the_packs_own_verdicts():
+    """`industrial` shipped with no page, and was excused from the pack-documentation gate
+    with a reason that was not true. Every figure on its page is now recomputed."""
+    import re
+
+    page = _covers_page()
+    required = float(re.search(r"required_safety_factor=([\d.]+)", page).group(1))
+
+    supported = screen_cover_plate(
+        _page_cover(PlateEdge.SIMPLY_SUPPORTED), required_safety_factor=required
+    )
+    clamped = screen_cover_plate(_page_cover(PlateEdge.CLAMPED), required_safety_factor=required)
+
+    quoted = re.findall(r"safety factor ([\d.]+) vs required minimum ([\d.]+)", page)
+    assert len(quoted) == 2, quoted
+    for card, (factor, minimum) in zip((supported, clamped), quoted, strict=True):
+        bending = next(e for e in card.entries if "bending" in e.name)
+        assert bending.safety_factor == pytest.approx(float(factor), abs=5e-3)
+        assert float(minimum) == pytest.approx(required)
+
+    deflections = re.findall(r"deflection ([\d.]+) mm vs limit ([\d.]+) mm", page)
+    assert len(deflections) == 2, deflections
+    for card, (shown, limit) in zip((supported, clamped), deflections, strict=True):
+        flatness = next(e for e in card.entries if "flatness" in e.name)
+        assert shown in flatness.detail and limit in flatness.detail, flatness.detail
+
+    # The page's argument, not just its numbers: the cover passes on stress and fails on
+    # stiffness, and clamping the rim fixes it.
+    assert supported.status is CheckStatus.FAIL
+    assert clamped.status is CheckStatus.PASS
+    assert next(e for e in supported.entries if "bending" in e.name).status is CheckStatus.PASS
+
+
+def test_clamping_cuts_the_deflection_by_the_factor_the_page_claims():
+    """ "Clamping cuts the deflection by more than a factor of three" — the largest single
+    lever on the page, so it is the one asserted rather than described."""
+    import re
+
+    page = _covers_page()
+    claimed = re.search(r"by more than a factor of (\w+)", page).group(1)
+    assert claimed == "three", claimed
+
+    def deflection(edge: PlateEdge) -> float:
+        card = screen_cover_plate(_page_cover(edge), required_safety_factor=2.0)
+        entry = next(e for e in card.entries if "flatness" in e.name)
+        return float(re.search(r"deflection ([\d.]+) mm", entry.detail).group(1))
+
+    ratio = deflection(PlateEdge.SIMPLY_SUPPORTED) / deflection(PlateEdge.CLAMPED)
+    assert ratio > 3.0, ratio
+
+
+def test_the_citation_changes_with_the_edge_as_the_page_says():
+    """Navier series for the simply supported case, Roark's table for the clamped one — and
+    the page names both, so an entry citing something else fails here."""
+    import re
+    from collections import Counter
+
+    page = _covers_page()
+    # Per output block, not per page. The page shows the citation twice — once under each
+    # edge condition — so "the reference appears somewhere" passes while one of the two is
+    # wrong, which is exactly what the first version of this let through.
+    blocks = re.findall(r"```text\n((?:.|\n)*?)```", page)
+    assert len(blocks) == 2, f"the covers page has {len(blocks)} output blocks"
+
+    cards = [
+        screen_cover_plate(_page_cover(edge), required_safety_factor=2.0)
+        for edge in (PlateEdge.SIMPLY_SUPPORTED, PlateEdge.CLAMPED)
+    ]
+    for card, block in zip(cards, blocks, strict=True):
+        # Counted, not merely present: this block shows the same citation under both of its
+        # entries, so "the reference appears in the block" passes while one of the two lines
+        # is wrong — which is what the previous two versions of this let through.
+        for entry in card.entries:
+            assert entry.reference, f"{entry.name} names no source"
+        wanted = Counter(entry.reference for entry in card.entries)
+        for reference, count in wanted.items():
+            assert block.count(reference) == count, (
+                f"{reference!r} appears {block.count(reference)} times in its block; "
+                f"{count} entries cite it"
+            )
+    assert cards[0].entries[0].reference != cards[1].entries[0].reference
+
+
+def test_a_cover_with_no_deflection_limit_carries_no_flatness_entry():
+    """ "a plate with no stated flatness requirement genuinely has none to screen against" —
+    the card carries the bending check alone rather than an entry with a made-up threshold.
+    """
+    page = _covers_page()
+    assert "made-up threshold" in page
+    bare = _page_cover(PlateEdge.SIMPLY_SUPPORTED).model_copy(update={"deflection_limit": None})
+    card = screen_cover_plate(bare, required_safety_factor=2.0)
+    assert not any("flatness" in entry.name for entry in card.entries)
+    assert any("bending" in entry.name for entry in card.entries)

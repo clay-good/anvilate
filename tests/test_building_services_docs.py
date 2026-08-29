@@ -12,6 +12,7 @@ cannot drift from the library and a fixture cannot drift from the page.
 
 from __future__ import annotations
 
+import importlib
 import pkgutil
 import re
 from pathlib import Path
@@ -193,14 +194,17 @@ def _pack_modules() -> list[str]:
     )
 
 
-# Packs documented on a page that does not carry their module name, with where to look.
-# Listing the exceptions rather than the pages is the direction that survives a rename.
+# Packs documented on pages that do not carry their module name: the page(s) to look at,
+# and the reason. Listing the exceptions rather than the pages is the direction that
+# survives a rename — and each exemption is *verified* rather than believed, because the
+# first version of this list excused `industrial` with "pressure-equipment.md covers the
+# pressure-loaded cover plate it screens" and that page never mentions a cover plate. An
+# exemption whose reason nothing checks is a hole with a sentence in front of it.
 _DOCUMENTED_ELSEWHERE = {
     "structural": (
-        "documented across hot-rolled-steel.md, lifting-devices.md and "
-        "load-combinations.md rather than on one page of its own"
+        ("hot-rolled-steel.md", "lifting-devices.md", "load-combinations.md"),
+        "documented across three pages by member rather than on one page of its own",
     ),
-    "industrial": "pressure-equipment.md covers the pressure-loaded cover plate it screens",
 }
 
 
@@ -235,9 +239,28 @@ def test_every_discipline_pack_has_a_documentation_page_and_a_test_file():
             missing.append(f"{name}: no test file names it")
     assert not missing, "packs missing contract items:\n  " + "\n  ".join(missing)
 
-    for name, reason in _DOCUMENTED_ELSEWHERE.items():
+    # An exemption has to be true. Each names its pages, every page must exist, and their
+    # text must name at least one symbol the pack exports — otherwise the entry is a
+    # sentence in front of a hole, which is exactly what `industrial`'s first entry was.
+    for name, (pages, reason) in _DOCUMENTED_ELSEWHERE.items():
         assert name in modules, f"{name} is excused and is no longer a pack"
         assert len(reason.split()) >= 5, f"{name} is excused without a reason"
+        module = importlib.import_module(f"anvilate.packs.{name}")
+        exported = {
+            symbol
+            for symbol in dir(module)
+            if not symbol.startswith("_") and (symbol[0].isupper() or symbol.startswith("screen"))
+        }
+        text = ""
+        for page in pages:
+            path = _REPO / "docs" / page
+            assert path.exists(), f"{name} is excused to {page}, which does not exist"
+            text += path.read_text(encoding="utf-8")
+        named = sorted(symbol for symbol in exported if symbol in text)
+        assert named, (
+            f"{name} is excused to {list(pages)}, and none of its {len(exported)} exported "
+            f"symbols appears there — the exemption is not true"
+        )
 
 
 def test_every_check_in_these_packs_cites_its_clause():
