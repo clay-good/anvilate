@@ -245,8 +245,8 @@ a pair and then indexed each *point* without checking, so a malformed endpoint r
 ## The refusal a bare number gets
 
 The library's whole premise is that it takes dimensioned quantities. So the single most
-likely way to call it wrong is to pass a number — and until 2026-08-29, **1,524 of about
-1,740 public analysis functions answered that with**
+likely way to call it wrong is to pass a number — and until 2026-08-29, **1,524 of the
+1,741 public analysis functions probed answered that with**
 
 ```text
 AttributeError: 'float' object has no attribute 'has_dimension'
@@ -271,10 +271,16 @@ families, each one a different guard written a different way:
 
 | Family | Count | What it looked like |
 | --- | --- | --- |
-| The dimension guard | 1,524 | `AttributeError: no attribute 'has_dimension'` |
+| The dimension guard | 1,509 | `AttributeError: no attribute 'has_dimension'` |
 | A sequence parameter given a scalar | 26 | `TypeError: object of type 'float' has no len()` |
 | A model parameter given a scalar | 15 | `AttributeError: no attribute 'safety_factor'` |
+| A `TypeError` where every sibling guard raises `ValueError` | 3 | `dead must be a Quantity load effect` |
+| A count given a float | 1 | `'float' object cannot be interpreted as an integer` |
 | A table lookup on a caller's key | 1 | `KeyError: 1.0` |
+
+1,555 of the 1,741 functions probed. The other 186 were already right: 113 returned a
+result (a dimensionless correlation legitimately takes plain floats) and 73 already refused
+with a `ValueError` naming the parameter.
 
 Two of those families were already known one layer down: `eccentric_weld_group_peak_stress`
 was fixed in an earlier sweep for raising `IndexError` on a malformed endpoint, for exactly
@@ -297,10 +303,12 @@ formula uses, rather than `v_number`, the argument.
 ### Where it stands
 
 `tests/test_contract.py::test_every_public_analysis_function_refuses_a_bare_number_by_name`
-runs the sweep over the whole public surface on every CI run: 1,628 functions refuse, 113
-return a result, and none raises anything but a `ValueError` naming a parameter. The gate
-has a floor on how many functions it probes, because the third way a gate like this goes
-wrong is covering nothing and saying so in green.
+runs the sweep over the whole public surface on every CI run, and none of it raises anything
+but a `ValueError` naming a parameter. The split on 2026-08-29 was 1,628 refusing and 113
+returning a result; the gate deliberately does not pin those two counts — they move with
+every function added — only the property and a *floor* on how many functions it probed,
+because the third way a gate like this goes wrong is covering nothing and saying so in
+green.
 
 ## The bound a parameter's own name fixes
 
