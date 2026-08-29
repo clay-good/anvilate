@@ -764,9 +764,19 @@ class FADAssessment(BaseModel):
         margin = (
             "not evaluated" if self.load_line_margin is None else f"{self.load_line_margin:.3g}"
         )
+        # The estimate flag is not decoration here: `fad_scorecard` downgrades a PASS to
+        # NOT_EVALUATED when it is set, and this module's own docstring says "a verdict
+        # resting on a Charpy correlation cannot be mistaken for one resting on a measured
+        # K_IC". Printing the assessment was the path on which it could be — the same
+        # point, the same margin, the same sentence, whichever the toughness was.
+        estimated = (
+            " — toughness is a Charpy correlation, not a measurement"
+            if self.toughness_is_estimate
+            else ""
+        )
         return (
             f"FAD point (L_r {self.load_ratio:.3g}, K_r {self.fracture_ratio:.3g}) "
-            f"{verdict} the curve, load-line margin {margin}"
+            f"{verdict} the curve, load-line margin {margin}{estimated}"
         )
 
 

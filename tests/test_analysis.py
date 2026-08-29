@@ -43217,3 +43217,32 @@ def test_the_isolating_side_of_the_boundary_is_unchanged():
     )
     assert "amplifies" in below.detail
     assert "amplifies" not in at_or_above.detail
+
+
+def test_a_fad_assessment_says_when_its_toughness_was_estimated():
+    """`fad_scorecard` downgrades a PASS to NOT_EVALUATED when the toughness is a Charpy
+    correlation, and the module docstring says why: "a verdict resting on a Charpy
+    correlation cannot be mistaken for one resting on a measured K_IC".
+
+    Printing the assessment was the path on which it could be. The same point, the same
+    margin, the same sentence, whichever the toughness was — an invariant enforced on one
+    path and absent from the other.
+    """
+    from anvilate.analysis import fad_assessment
+
+    common = {
+        "stress_intensity": _q("30 MPa*m**0.5"),
+        "fracture_toughness": _q("90 MPa*m**0.5"),
+        "reference_stress": _q("180 MPa"),
+        "yield_strength": _q("350 MPa"),
+        "ultimate_strength": _q("500 MPa"),
+        "elastic_modulus": _q("200 GPa"),
+    }
+    measured = fad_assessment(**common)
+    estimated = fad_assessment(**common, toughness_is_estimate=True)
+
+    # The numbers are identical — which is exactly why the rendering has to differ.
+    assert measured.load_line_margin == estimated.load_line_margin
+    assert str(measured) != str(estimated)
+    assert "Charpy correlation" in str(estimated)
+    assert "Charpy" not in str(measured)
