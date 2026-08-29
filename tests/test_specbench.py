@@ -267,3 +267,62 @@ def test_the_parser_reads_the_suites_own_prose_not_only_this_files(
     )
     assert verdict.in_scope is False
     assert expected_reason in verdict.reason
+
+
+# --- the page that documents this module --------------------------------------------------
+
+
+def _benchmark_page() -> str:
+    from pathlib import Path
+
+    return (Path(__file__).resolve().parent.parent / "docs" / "agent-driving-evals.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_the_page_quotes_the_reasons_the_module_produces():
+    """`anvilate.specbench` shipped and appeared on no page. The three refusals the page
+    describes are its own output, so they are read off the page and reproduced."""
+    page = _benchmark_page()
+    case = parse_case_specification("demo-1", _case())
+
+    material = scope_verdict(case, known_materials=frozenset({"AA-6061-T6"}))
+    assert not material.in_scope
+    assert material.reason in page, material.reason
+
+    assembly = scope_verdict(
+        parse_case_specification("demo-2", _case(quantity="7")),
+        known_materials=frozenset({"ASTM-A36"}),
+    )
+    assert not assembly.in_scope
+    assert assembly.reason in page, assembly.reason
+
+    accepted = scope_verdict(case, known_materials=frozenset({"ASTM-A36"}))
+    assert accepted.in_scope and accepted.reason == ""
+
+
+def test_part_count_binds_before_material_as_the_page_says():
+    """ "A 44-part PLA bookshelf is not a materials problem" — a case failing both must be
+    reported as the assembly, or adding the material would look like the fix."""
+    verdict = scope_verdict(
+        parse_case_specification("demo-3", _case(quantity="44")),
+        known_materials=frozenset({"AA-6061-T6"}),
+    )
+    assert "assembly" in verdict.reason and "material" not in verdict.reason
+    assert "binds before material" in _benchmark_page()
+
+
+def test_the_accounting_the_page_describes_is_derived_from_the_verdicts():
+    page = _benchmark_page()
+    assert "suite_accounting" in page
+    case = parse_case_specification("demo-1", _case())
+    verdicts = [
+        scope_verdict(case, known_materials=frozenset({"ASTM-A36"})),
+        scope_verdict(case, known_materials=frozenset({"AA-6061-T6"})),
+    ]
+    accounting = suite_accounting(verdicts)
+    assert (accounting.total, accounting.in_scope, accounting.out_of_scope) == (2, 1, 1)
+    # `reasons` is a tuple of (reason, count) pairs, not a mapping — an ordered census
+    # rather than something a caller can reorder into a different-looking report.
+    assert sum(count for _reason, count in accounting.reasons) == accounting.out_of_scope
+    assert all(reason.strip() for reason, _count in accounting.reasons)

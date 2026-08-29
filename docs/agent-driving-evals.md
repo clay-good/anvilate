@@ -83,6 +83,40 @@ compile today**, and what binds is the material path rather than the format. Tha
 out-of-scope accounting this comparison owes, published as the count and the reason rather
 than as a percentage of a set the pipeline cannot accept.
 
+### `anvilate.specbench` — the reader, and the denominator
+
+The module that does that census ships and until now appeared on no page. Its whole subject
+is the denominator: **a benchmark score over a set the pipeline cannot accept is a number
+about the benchmark**, so every case is read into a typed `CaseSpecification` and then
+screened for scope before anything is compiled.
+
+```python
+from anvilate.specbench import parse_case_specification, scope_verdict, suite_accounting
+
+case = parse_case_specification("demo-1", markdown)          # the suite's twelve headings
+verdict = scope_verdict(case, known_materials=frozenset({"ASTM-A36"}))
+```
+
+```text
+in_scope=True   reason=''
+in_scope=False  reason="the material 'ASTM-A36' has no record in the database"
+in_scope=False  reason='an assembly of 7 parts; a Design Spec states intent for one part'
+```
+
+Three things it refuses to do, each of which would have produced a better-looking number:
+
+- **A refusal names itself.** `ScopeVerdict` cannot be built out-of-scope with an empty
+  reason, so "0 of 106 compile" comes with 106 reasons rather than a count.
+- **Part count binds before material.** A 44-part PLA bookshelf is not a materials problem,
+  and reporting it as one would suggest that adding PLA to the database fixes it.
+- **A document missing a heading is refused rather than parsed.** The suite's format carries
+  all twelve in every case, so a document without them is a different document, and reading
+  it leniently would silently score against something else.
+
+`suite_accounting` is the census a published score has to sit beside: the total, the
+in-scope count, and every reason with how many cases it took out. It is derived from the
+verdicts, so the number moves when materials land rather than going stale in a document.
+
 The data is still not vendored. Those cases are drawings, renders and rubric prose rather
 than values, a benchmark with a leaderboard moves under its own version, and the
 fetch-on-first-use flow this repository already uses for license-restricted tables records

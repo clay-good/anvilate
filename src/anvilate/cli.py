@@ -1,4 +1,4 @@
-"""The headless command line: ``anvilate check``, and the three commands it refuses.
+"""The headless command line: four commands that are backed, and the one that is not.
 
 `headless-automation` requires the CLI to expose every pipeline capability — "at minimum
 ``anvilate build``, ``anvilate check``, ``anvilate export``, ``anvilate diff`` — operating on
