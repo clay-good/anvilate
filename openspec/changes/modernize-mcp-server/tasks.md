@@ -49,7 +49,19 @@
       handler calls from one it merely resolves. The declaration is corrected and the named
       symbol is now replaced with one that raises, so the call has to raise through it
 - [ ] 2.3 Tasks extension: handles, progress, cancellation with subprocess cleanup
-- [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — the export
+- [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — **the parity
+      half is now testable and tested** (`tests/test_surface_parity.py`), because there is
+      a CLI: this task was written when there was not, so "identical to CLI paths" named a
+      comparison with nothing on the other side. One spec screened over MCP and at the
+      shell must produce the same scorecard *document*, not the same status — two cards
+      agreeing on PASS and differing on which checks ran is the drift a status comparison
+      cannot see. The one divergence is recorded rather than smoothed: the CLI exports an
+      evidence bundle from a spec file and MCP refuses `export_artifact`, and the cause is
+      the whole content of `resolve-mcp-tool-subjects` — the tool names nothing in its
+      input to act on while the shell command takes the path of what it exports. The test
+      asserts the divergence *and* its cause, so it fails the day the tool is given a
+      subject, which is exactly when it should be revisited. The sandbox half is still
+      undischargeable. The export
       half is **done**, the sandbox half cannot be done yet. Writing the parity test found
       that the validation and watermark gates had no implementation on *either* side to be
       compared: `Gate.WATERMARK` appeared nowhere outside `mcp.py`, and the DXF exporters
