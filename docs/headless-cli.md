@@ -186,6 +186,11 @@ the parenthesis is the whole of what is possible without a geometry kernel — a
 merge gate reads, since the scenario is a commit that changes a shared pattern and makes a
 downstream part fail.
 
+**The diff is of the spec, not of the file.** Two documents that differ textually and
+compile to the same IR are *no change* — a reordered mapping, a comment, a requoted string
+are edits to a file and not to a design, and a review comment that reports them buries the
+change that matters. `git diff` is the tool for the other question.
+
 **The exit code is about what got worse, not about the new card.** A part that was already
 failing and still fails has not regressed, and a diff that failed the build for it would
 fail every build until somebody fixed an unrelated part. So the code is the worst *new*

@@ -795,3 +795,26 @@ def test_diff_is_no_longer_on_the_unbuilt_list():
 
     assert set(_UNBUILT) == {"build"}
     assert "geometry-generation" in _DIFF_NEEDS_GEOMETRY
+
+
+def test_the_diff_is_of_the_spec_not_of_the_file(tmp_path):
+    """Two files that differ textually and compile to the same spec are *no change*.
+
+    That is the whole reason to diff the typed IR rather than the bytes: a reordered
+    mapping, a comment, a requoted string are edits to a file and not to a design, and a
+    review comment that reports them buries the change that matters. `git diff` is the tool
+    for the other question.
+    """
+    before = tmp_path / "before.yaml"
+    after = tmp_path / "after.yaml"
+    before.write_text(_SPEC, encoding="utf-8")
+    lines = [line for line in _SPEC.splitlines() if line.strip()]
+    after.write_text(
+        "# a comment the parser drops\n" + "\n".join(reversed(lines)) + "\n", encoding="utf-8"
+    )
+    assert before.read_text() != after.read_text(), "the two files are identical"
+
+    code, out, err = _run("diff", str(before), str(after))
+    assert code == EXIT_OK and err == ""
+    assert "no change" in out
+    assert "no verdict changed" in out
