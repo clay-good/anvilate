@@ -331,6 +331,46 @@ argument. Requiring a parameter name would have been requiring the 170 call site
 **Measure the shapes before choosing the repair.** The same census that made 212 files a
 boring number here said the opposite, and both answers came from the same five-line script.
 
+## Finding a rendering nobody has looked at
+
+A `__str__` is what a user sees when they print an object, and it is the easiest thing in
+the package to write and never check. The instrument is the coverage run again, pointed at
+a different node type:
+
+```bash
+coverage run --source=src/anvilate -m pytest -q
+```
+
+then walk each class for a `__str__`, `render` or `summary` and ask whether **any** line of
+its body appears in the reached set. On 2026-08-29 that was **34 of 80 never executed** —
+strings shipped to users that no test, example or doc block has ever printed.
+
+Rendering them by hand found four defects in the twenty-five that were cheap to construct,
+and they are one family: **the rendering drops the field that tells two different objects
+apart.**
+
+| Rendering | What it dropped | Why it mattered |
+| --- | --- | --- |
+| `AngularTolerance` | the shorter leg | ISO 2768-1 bands the tolerance *by* it, so two tolerances from different legs printed identically |
+| `FieldOutcome` | `detail` | "the candidate did not parse" and "does not carry this field" both printed `expected X, got —` |
+| `FADAssessment` | `toughness_is_estimate` | the scorecard downgrades a PASS to NOT_EVALUATED on that flag; printing the assessment showed the same margin either way |
+| `Citation` | the separator it was parsed with | guessed from the edition's *length*, so `ASME B31.3-2022` rendered as `ASME B31.3 2022` |
+
+**Two ways to narrow the search, and both need eyes at the end.** Grep for a `__str__` that
+omits a boolean field the class declares — six hits, one real. The other five encode the
+flag where the reader already sees it: an ISO 286 deviation renders its designation, whose
+*case* is the hole/shaft flag; a datum renders the Ⓜ that `is_feature_of_size` gates; a
+certificate reaches its flag through `signature_line()`, which a source scan cannot see.
+And for a parse result, **make the round trip the assertion** — `str(parse(text)) == text`
+over the library's own strings. That one found a defect nobody would have written a case
+for: `29 CFR 1926` read as the year 1926.
+
+### Where it stands
+
+Twenty-five of the thirty-four were inspected and the four above fixed. The rest need
+construction fixtures nobody has written — a flange-moment set, a lifter device, an
+embodied-carbon estimate. If you build one for another reason, print it once and look.
+
 ## The bound a parameter's own name fixes
 
 Re-measuring in August 2026 with a coverage run rather than a trace put 129 of the
