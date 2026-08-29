@@ -97,13 +97,24 @@ def test_a_document_that_is_not_a_spec_is_refused_with_the_same_paths(tmp_path):
     code, out, err = _cli("check", str(bad))
     assert code == EXIT_BAD_REQUEST and out == ""
 
-    fields = {line.split(":")[0].strip() for line in error["message"].split(";")}
-    fields = {name.removeprefix("spec.") for name in fields}
-    at_the_shell = {
-        line.split(": ")[1] for line in err.strip().splitlines() if line.count(": ") >= 2
-    }
-    assert fields <= at_the_shell or at_the_shell <= fields, (fields, at_the_shell)
-    assert "description" in " ".join(at_the_shell)
+    def _paths(problems: list[str]) -> dict[str, str]:
+        found = {}
+        for problem in problems:
+            field, _, reason = problem.partition(": ")
+            found[field.strip().removeprefix("spec.")] = reason.strip()
+        return found
+
+    over_the_wire = _paths(error["message"].split(";"))
+    at_the_shell = _paths(
+        [line.split(": ", 1)[1] for line in err.strip().splitlines() if ": " in line]
+    )
+    # Equality, not "one is a subset of the other" — which the first draft asserted, and
+    # which is satisfied by either side being empty.
+    assert over_the_wire and at_the_shell
+    assert over_the_wire == at_the_shell, (over_the_wire, at_the_shell)
+    # And the reasons travel with the paths, not just the field names.
+    assert set(over_the_wire.values()) == {"Field required"}
+    assert "description" in over_the_wire
 
 
 def test_neither_surface_serves_an_operation_the_other_would_refuse_for_being_unbuilt():
