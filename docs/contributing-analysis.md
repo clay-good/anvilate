@@ -285,12 +285,21 @@ python3.11 -m venv /tmp/fresh && /tmp/fresh/bin/pip install .
 /tmp/fresh/bin/python -c "
 from anvilate.standards import default_materials_db
 print(default_materials_db().get('ASTM-A36').name)"
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | /tmp/fresh/bin/anvilate-mcp
 ```
 
-The third line is the one that matters: it resolves a material out of a bundled YAML file,
-which is the thing an editable install and a source-tree test run both hide. Run at HEAD it
-returns `ASTM A36 structural steel`, the twelve `standards/data` and five `tolerance/data`
-files are present in `site-packages`, and a pack screen runs on the installed wheel.
+The material lookup is the line that matters: it reads a bundled YAML file, which is the
+thing an editable install and a source-tree test run both hide. The last line covers the
+*other* console script, which is a second delivery path with its own way to break. Run at
+HEAD the lookup returns `ASTM A36 structural steel`, the twelve `standards/data` and five
+`tolerance/data` files are present in `site-packages`, a pack screen runs on the installed
+wheel, and the MCP server answers `initialize` with the 2026-07-28 revision.
+
+Both console-script *targets* are resolved in the suite —
+`test_every_declared_console_script_resolves_to_a_callable` imports each module and requires
+the attribute to be callable — so a renamed entry point fails here rather than at a user's
+first run. What the manual pass adds is that the command is actually on `PATH` and that the
+data it reaches for is actually in the wheel.
 
 ## Finding a capability nobody can discover
 

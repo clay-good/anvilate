@@ -178,10 +178,34 @@ def test_the_command_runs_as_a_real_process(spec_file):
     assert "deck_plate: NOT_EVALUATED" in completed.stdout
 
 
-def test_the_console_script_is_declared():
-    """A module nothing installs as a command is not a CLI."""
-    text = (_REPO / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'anvilate = "anvilate.cli:main"' in text
+def test_every_declared_console_script_resolves_to_a_callable():
+    """A module nothing installs as a command is not a CLI, and a command pointing at a
+    symbol that has moved is worse — it installs fine and fails the first time it is run.
+
+    The first version of this asserted one substring of `pyproject.toml`, which covers one
+    of the two scripts and resolves neither. This is the rule `ToolDefinition.backing`
+    follows, pointed at the entry points a user actually receives: import the module, get
+    the attribute, require it to be callable.
+    """
+    import importlib
+    import tomllib
+
+    config = tomllib.loads((_REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    scripts = config["project"]["scripts"]
+    assert set(scripts) == {"anvilate", "anvilate-mcp"}, scripts
+
+    for name, target in scripts.items():
+        module_name, separator, attribute = target.partition(":")
+        assert separator, f"{name} declares {target!r}, which names no attribute"
+        module = importlib.import_module(module_name)
+        entry = getattr(module, attribute, None)
+        assert callable(entry), f"{name} points at {target}, which is not callable"
+
+    # And the one this file exercises really is the one installed.
+    assert scripts["anvilate"] == "anvilate.cli:main"
+    from anvilate.cli import main
+
+    assert importlib.import_module("anvilate.cli").main is main
 
 
 @pytest.mark.parametrize(
