@@ -63,10 +63,41 @@ passed. Every tier the caller asked about is answered, and a tier the spec did n
 not screened and not reported — the acceptance criteria are the contract for which tiers
 must run.
 
+## References resolve, and the answer is a verdict
+
+A spec names its material and its standard components as *identifiers* — `AA-6061-T6`,
+`NEMA23` — and every property the screens use is retrieved from those. So an identifier the
+databases do not carry is not a detail: it is the point at which nothing downstream can run.
+
+This page used to say interfaces "resolve at reference validation, which is
+`validate_references`, not a check with a verdict". `validate_references` existed, and
+**nothing on any shipped path called it** — a spec naming `NOT-A-REAL-ALLOY` screened
+identically to one naming `AA-6061-T6`, all the way through `anvilate check`. The two halves
+of the resolution, the spec layer's `ReferenceResolver` protocol and
+`anvilate.standards.StandardsResolver` which was written to satisfy it, had never been wired
+together.
+
+They are wired in `screen_spec`, and the answer is a scorecard entry: PASS naming what
+resolved, FAIL naming the near misses.
+
+```text
+fail           material resolution
+               unknown material 'AA-6061-T61' — did you mean AA-6061-T6, AA-6063-T6,
+               AA-6082-T6? Every property the screens use is retrieved from this
+               identifier, so nothing downstream can run on it.
+```
+
+The near misses are the half that matters: "unknown material" invites the reader to supply a
+remembered number, which is the one thing this library exists to stop.
+
+A team whose alloy is not one of the bundled records passes their own resolver —
+`screen_spec(spec, resolver=...)`, built from `MaterialsDatabase.extended` — rather than
+losing the check. One entry per standard-component interface, named by its tag; a spec that
+declares none gets no interface entry, because nothing to resolve is not a check that ran.
+
 ## What is not screened
 
 Geometric tolerances declared on the spec are legal at construction — the
 [semantic GD&T layer](semantic-gdt.md) enforces Y14.5's grammar in the constructor — so
 there is nothing left for a screen to catch, and a section that only ever passes is a
-section a reader learns to skip. Interfaces resolve at reference validation, which is
-`validate_references`, not a check with a verdict.
+section a reader learns to skip.

@@ -23,6 +23,7 @@ from anvilate.spec import (
     ManufacturingProcess,
     MaterialRef,
     Provenanced,
+    StandardComponentInterface,
     ToleranceDimension,
     ValidationTier,
 )
@@ -70,7 +71,9 @@ def _by_name(spec: DesignSpec) -> dict[str, CheckStatus]:
 )
 def test_a_demanded_tier_this_screen_cannot_run_is_named_not_dropped(tier, name):
     card = screen_spec(_spec(acceptance=AcceptanceCriteria(tiers=[tier])))
-    assert [entry.name for entry in card.entries] == [name]
+    # The material entry is not tier-gated: a spec declares a material whatever tiers it
+    # asks for, so it rides alongside every one of these.
+    assert [entry.name for entry in card.entries] == [name, "material resolution"]
     assert card.status is CheckStatus.NOT_EVALUATED
     assert not card.passed
 
@@ -83,7 +86,7 @@ def test_the_analytical_gap_says_what_is_missing_from_the_document():
     writing more analysis code.
     """
     card = screen_spec(_spec(acceptance=AcceptanceCriteria(tiers=[ValidationTier.T1_ANALYTICAL])))
-    detail = card.entries[0].detail
+    detail = next(e for e in card.entries if e.name == "T1 analytical").detail
     assert "declares no structural element type" in detail
     assert "discipline-pack" in detail
 
@@ -99,7 +102,7 @@ def test_a_tier_the_spec_does_not_demand_produces_nothing():
 
 def test_a_tolerance_the_process_cannot_hold_fails_with_its_source():
     card = screen_spec(_spec(dimensions=[_dimension("bore", "25 mm", "0.001 mm")]))
-    entry = card.entries[0]
+    entry = card.entries[0]  # the T2 entries come first, before the document-level ones
     assert entry.status is CheckStatus.FAIL
     assert "UNACHIEVABLE" in entry.detail
     # A screening floor stated without its source reads as a hard limit.
@@ -120,7 +123,10 @@ def test_a_demanded_dfm_tier_with_nothing_toleranced_is_a_gap_not_a_pass():
     green on zero checks.
     """
     card = screen_spec(_spec())
-    assert len(card.entries) == 1
+    assert [entry.name for entry in card.entries] == [
+        "tolerance achievability",
+        "material resolution",
+    ]
     assert card.entries[0].status is CheckStatus.NOT_EVALUATED
     assert "nothing to screen" in card.entries[0].detail
     assert not card.passed
@@ -297,7 +303,7 @@ def test_run_validation_lets_the_caller_ask_for_a_tier_the_spec_did_not_demand()
         {"spec": spec.model_dump(mode="json"), "tiers": [ValidationTier.T1_ANALYTICAL.value]},
     )["result"]
     names = [entry["name"] for entry in result["structuredContent"]["scorecard"]["entries"]]
-    assert names == ["T1 analytical"]
+    assert names == ["T1 analytical", "material resolution"]
 
 
 def test_a_document_that_is_not_a_design_spec_is_a_malformed_request_here():
@@ -373,3 +379,99 @@ def test_the_docs_page_quotes_the_bounds_this_module_actually_computes():
     # And the property the illustration exists to show, so the numbers cannot be swapped
     # for a pair where the rule does not bite.
     assert analysis.rss_passes and not analysis.worst_case_passes
+
+
+# ------------------------------------------------------- references resolve, or they fail
+
+
+def test_a_material_the_databases_do_not_carry_fails_and_names_the_near_misses():
+    """The retrieval rule, on the path a user actually takes.
+
+    `validate_references` could always check this and nothing on any shipped path called
+    it: a spec naming `NOT-A-REAL-ALLOY` screened *identically* to one naming `ASTM-A36`,
+    all the way through `anvilate check`. The two halves — the spec layer's
+    `ReferenceResolver` protocol and `anvilate.standards.StandardsResolver`, which was
+    written to satisfy it — were wired to nothing.
+
+    The near misses are the half that matters. "Unknown material" invites the reader to
+    supply a remembered number, which is the one thing this library exists to stop.
+    """
+    card = screen_spec(_spec(material=MaterialRef(ref="ASTM-A366")))
+    entry = next(e for e in card.entries if e.name == "material resolution")
+    assert entry.status is CheckStatus.FAIL
+    assert "ASTM-A36" in entry.detail and "did you mean" in entry.detail
+    assert not card.passed
+    assert card.governing().name == "material resolution"
+
+
+def test_a_material_with_no_near_miss_says_how_many_it_looked_through():
+    """A refusal with no suggestion must still say what it searched, or it reads as a bug."""
+    card = screen_spec(_spec(material=MaterialRef(ref="ZZZZZZZZ")))
+    entry = next(e for e in card.entries if e.name == "material resolution")
+    assert entry.status is CheckStatus.FAIL
+    assert "known identifiers" in entry.detail
+
+
+def test_a_resolvable_material_passes_naming_what_it_resolved():
+    card = screen_spec(_spec())
+    entry = next(e for e in card.entries if e.name == "material resolution")
+    assert entry.status is CheckStatus.PASS
+    assert "ASTM-A36" in entry.detail
+
+
+def test_a_spec_with_no_standard_component_gets_no_interface_entry():
+    """Nothing to resolve is not a check that ran, and an entry saying so reads as one."""
+    card = screen_spec(_spec())
+    assert not any(e.name.startswith("interface resolution") for e in card.entries)
+
+
+def test_each_standard_component_interface_resolves_on_its_own_tag():
+    """One entry per interface, named by tag — two bad refs must not collapse into one."""
+    spec = _spec(
+        interfaces=[
+            StandardComponentInterface(ref="NEMA23", tag="motor_face"),
+            StandardComponentInterface(ref="EXT-9999", tag="rail"),
+        ]
+    )
+    card = screen_spec(spec)
+    by_name = {e.name: e for e in card.entries}
+    assert by_name["interface resolution: motor_face"].status is CheckStatus.PASS
+    bad = by_name["interface resolution: rail"]
+    assert bad.status is CheckStatus.FAIL
+    assert "EXT-9999" in bad.detail
+
+
+def test_an_injected_resolver_screens_a_team_local_material():
+    """A house alloy is an extended database, not a reason to skip the check.
+
+    This is the escape hatch that makes the FAIL above safe to ship: a team whose material
+    is not one of the bundled records passes their own resolver rather than losing the
+    check, and the check is the same check.
+    """
+
+    class _Extended:
+        def has_material(self, ref):
+            return ref == "HOUSE-ALLOY-1"
+
+        def has_component(self, ref):
+            return False
+
+        def known_materials(self):
+            return ["HOUSE-ALLOY-1"]
+
+        def known_components(self):
+            return []
+
+    spec = _spec(material=MaterialRef(ref="HOUSE-ALLOY-1"))
+    entry = next(
+        e
+        for e in screen_spec(spec, resolver=_Extended()).entries
+        if e.name == "material resolution"
+    )
+    assert entry.status is CheckStatus.PASS
+    # And the same spec against the bundled databases is a FAIL, so the injection is what
+    # made the difference rather than the identifier happening to be acceptable.
+    assert (
+        next(e for e in screen_spec(spec).entries if e.name == "material resolution").status
+        is CheckStatus.FAIL
+    )

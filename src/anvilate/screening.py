@@ -15,6 +15,21 @@ required clearance band; and the load cases against the classification the ASCE 
 combination generators need. All three are already implemented elsewhere — this is the
 dispatcher, not new analysis.
 
+**A reference the databases do not carry is a verdict, not an exception.** A spec names its
+material and its standard components as *identifiers* — `AA-6061-T6`, `NEMA23` — and the
+whole retrieval doctrine rests on those resolving to a record with a citation behind it.
+`anvilate.spec.validate_references` has always been able to check that, and nothing on any
+shipped path called it: a spec naming `NOT-A-REAL-ALLOY` screened exactly like one naming
+`AA-6061-T6`, because the two halves of the resolution — the spec layer's
+`ReferenceResolver` protocol and `anvilate.standards.StandardsResolver`, which satisfies it
+— were built to meet and never wired together. They are wired here, and the answer is a
+scorecard entry rather than a raised exception, because "this document names a material the
+library cannot retrieve" is a fact about the part, and the card is where facts about the
+part go. The refusal names the near misses, which is the whole of the retrieval rule.
+
+Pass ``resolver=`` to screen against extended databases — a team's own alloy is a
+`MaterialsDatabase.extended` overlay, not a reason to skip the check.
+
 **What the spec does not carry is named, not skipped.** A ``DesignSpec`` states a
 material, a process, interfaces, dimensions, tolerances and loads. It does *not* state what
 kind of structural element the part is, so no pack screen can be selected from it, and the
@@ -33,8 +48,11 @@ that happened to exist.
 
 from __future__ import annotations
 
+import difflib
+
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
-from .spec import DesignSpec, ValidationTier
+from .spec import DesignSpec, ReferenceResolver, ValidationTier
+from .standards import default_standards_resolver
 from .tolerance.general import ToleranceRangeError
 from .tolerance.process import tolerance_is_achievable
 
@@ -154,13 +172,89 @@ def _load_entry(spec: DesignSpec) -> ScorecardEntry | None:
     )
 
 
-def screen_spec(spec: DesignSpec) -> Scorecard:
+_DEFAULT_RESOLVER: ReferenceResolver | None = None
+
+
+def _default_resolver() -> ReferenceResolver:
+    """The standards-backed resolver, built once.
+
+    Building it reads nine bundled tables. A repo-wide ``anvilate check`` screens every spec
+    it finds, and rebuilding the databases per document is work nobody asked for.
+    """
+    global _DEFAULT_RESOLVER
+    if _DEFAULT_RESOLVER is None:
+        _DEFAULT_RESOLVER = default_standards_resolver()
+    return _DEFAULT_RESOLVER
+
+
+def _near_misses(ref: str, known: list[str]) -> str:
+    """The closest identifiers to ``ref``, said the way the retrieval rule requires.
+
+    A refusal that only says "unknown" invites the reader to supply a remembered number
+    instead, which is the one thing this library is built to stop.
+    """
+    close = difflib.get_close_matches(ref, known, n=3)
+    if close:
+        return f"did you mean {', '.join(close)}?"
+    return f"nothing among the {len(known)} known identifiers is close to it."
+
+
+def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[ScorecardEntry]:
+    """One entry for the material, one per standard-component interface.
+
+    A spec with no standard-component interface gets no interface entry — there is nothing
+    to resolve, and an entry saying so would read as a check that ran. The material is
+    different: every spec declares one, so its entry is always present.
+    """
+    entries = [
+        ScorecardEntry(
+            name="material resolution",
+            status=CheckStatus.PASS,
+            detail=f"{spec.material.ref} resolves in the bundled materials database",
+        )
+        if resolver.has_material(spec.material.ref)
+        else ScorecardEntry(
+            name="material resolution",
+            status=CheckStatus.FAIL,
+            detail=(
+                f"unknown material {spec.material.ref!r} — "
+                f"{_near_misses(spec.material.ref, resolver.known_materials())} "
+                f"Every property the screens use is retrieved from this identifier, so "
+                f"nothing downstream can run on it."
+            ),
+        )
+    ]
+    for interface in spec.interfaces:
+        if interface.type != "standard_component":
+            continue
+        resolved = resolver.has_component(interface.ref)
+        entries.append(
+            ScorecardEntry(
+                name=f"interface resolution: {interface.tag}",
+                status=CheckStatus.PASS if resolved else CheckStatus.FAIL,
+                detail=(
+                    f"{interface.ref} resolves in the bundled component tables"
+                    if resolved
+                    else f"unknown standard component {interface.ref!r} — "
+                    f"{_near_misses(interface.ref, resolver.known_components())}"
+                ),
+            )
+        )
+    return entries
+
+
+def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) -> Scorecard:
     """Screen ``spec`` on the tiers its acceptance criteria demand.
 
     Returns a :class:`~anvilate.scorecard.Scorecard` carrying one entry per check the
     document supports, and one ``NOT_EVALUATED`` entry per demanded tier this screen cannot
     run. The card is never empty: every spec declares at least one tier, and every tier
     produces at least one entry.
+
+    ``resolver`` is where the material and component identifiers are looked up; the default
+    is the bundled standards databases. Pass one built from
+    :meth:`~anvilate.standards.MaterialsDatabase.extended` to screen a spec that names a
+    team-local alloy.
 
     See the module docstring for what is and is not screened, and why the T1 analytical
     tier reports a gap on every spec.
@@ -201,8 +295,10 @@ def screen_spec(spec: DesignSpec) -> Scorecard:
             )
         )
 
-    # Not gated on a tier: a chain and a load case are things the *document* declares, and
-    # a spec that declares them has asked for them to be looked at whatever tiers it names.
+    # Not gated on a tier: a reference, a chain and a load case are things the *document*
+    # declares, and a spec that declares them has asked for them to be looked at whatever
+    # tiers it names.
+    entries.extend(_reference_entries(spec, resolver or _default_resolver()))
     entries.extend(_chain_entries(spec))
     load = _load_entry(spec)
     if load is not None:

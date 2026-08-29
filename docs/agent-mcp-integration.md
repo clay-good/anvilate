@@ -154,8 +154,10 @@ print("statuses present:", sorted(statuses))
 ```text
 not_evaluated  T1 analytical
                the Design Spec declares no structural element type, so no discipline-pack screen can be selected from it; build the pack's element and screen that
+pass           material resolution
+               ASTM-A36 resolves in the bundled materials database
 passed: False
-statuses present: ['not_evaluated']
+statuses present: ['not_evaluated', 'pass']
 ```
 
 **This is the answer most agents will get today, and it is the honest one.** A Design Spec
@@ -165,9 +167,11 @@ the analytical tier reports `not_evaluated` naming that gap rather than reportin
 checks it never ran. See [screening a spec](spec-screening.md); closing it is a change to a
 published schema, not more analysis code.
 
-The line to copy is the status handling, not the verdict. `not_evaluated` is a fourth
-value, and `status != "fail"` is the wrong test: it reads a check that could not run as one
-that passed.
+**And this card is the exact shape the trap has.** One entry passed and one could not run:
+`all(e["status"] == "pass")` is False, `not any(e["status"] == "fail")` is True, and only
+one of those two readings is right. The line to copy is the status handling, not the
+verdict — `not_evaluated` is a fourth value, and `status != "fail"` reads a check that could
+not run as one that passed.
 
 ## The three refusals, and how to tell them apart
 

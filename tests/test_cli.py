@@ -105,7 +105,7 @@ def test_json_output_is_the_whole_card_not_a_summary(spec_file):
     assert list(payload) == ["specs"] and len(payload["specs"]) == 1
     entry = payload["specs"][0]
     assert entry["path"] == str(spec_file) and entry["name"] == "deck_plate"
-    assert [e["status"] for e in entry["scorecard"]["entries"]] == ["not_evaluated"]
+    assert [e["status"] for e in entry["scorecard"]["entries"]] == ["not_evaluated", "pass"]
     assert code == EXIT_NOT_EVALUATED
 
 

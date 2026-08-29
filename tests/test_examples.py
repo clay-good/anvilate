@@ -7528,8 +7528,10 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
 
     # The second real call: a scorecard, whose analytical tier is a named gap rather than
     # an absent entry — a Design Spec declares no element type for a pack screen to select.
+    # The material resolves, so the card mixes a pass with a gap: the exact shape in which
+    # "nothing failed" and "everything passed" are different sentences.
     card = by_id[5]["result"]["structuredContent"]["scorecard"]
-    assert [entry["status"] for entry in card["entries"]] == ["not_evaluated"]
+    assert [entry["status"] for entry in card["entries"]] == ["not_evaluated", "pass"]
     assert "declares no structural element type" in card["entries"][0]["detail"]
 
     # Two refusals, each a different statement about why.
