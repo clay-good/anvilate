@@ -50,7 +50,7 @@ from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
 from ._models import RevalidatedModel
 from .evidence import SourceRecord
@@ -98,6 +98,20 @@ STATEMENT_TYPE = "https://in-toto.io/Statement/v1"
 # Anvilate's predicate type, versioned in the URI itself. A consumer pins the version
 # it understands; a breaking change to the predicate body takes a new URI rather than
 # silently changing the meaning of documents already signed under this one.
+#: The keys `AnvilatePredicate.to_json_dict` always writes. Spelled out rather than read
+#: back from that method: deriving them from the writer would make the check agree with
+#: whatever the writer currently emits, including the version where it stopped emitting one.
+#: `test_the_predicate_schema_check_knows_every_key_the_writer_emits` holds the two together
+#: in the direction that matters — a new required key must be added here to be checked.
+_PREDICATE_REQUIRED_KEYS = (
+    "specDigest",
+    "status",
+    "scorecard",
+    "citations",
+    "bom",
+    "aiDisclosure",
+)
+
 PREDICATE_TYPE = "https://anvilate.dev/attestation/screening/v1"
 
 # The DSSE payloadType for an in-toto statement. Part of the signed pre-authentication
@@ -867,13 +881,78 @@ class VerificationReport(BaseModel):
         return f"{head}: {detail}"
 
 
+def _predicate_schema_problems(predicate: object) -> list[str]:
+    """What is wrong with a wire predicate, against the shape ``to_json_dict`` writes.
+
+    The producing side cannot emit a malformed predicate — the model refuses to be built —
+    so this is entirely about the half that reads documents it did not write.
+
+    **Checked against the wire form, not against the model.** `to_json_dict` renames and
+    reshapes (``specDigest``, a CycloneDX ``bom``, an ``aiDisclosure`` body), so handing the
+    wire predicate to ``AnvilatePredicate.model_validate`` reports every field as missing —
+    including for an honest envelope, which is how that first draft was caught. Each part is
+    validated by the model that owns it instead.
+    """
+    if not isinstance(predicate, dict):
+        return [
+            f"the predicate is a JSON {type(predicate).__name__}, not an object; a "
+            f"{PREDICATE_TYPE} predicate carries the scorecard, the citations and the "
+            "environment this was produced in"
+        ]
+
+    problems: list[str] = []
+    for key in _PREDICATE_REQUIRED_KEYS:
+        if key not in predicate:
+            problems.append(f"predicate carries no {key!r}, which its own type requires")
+    if problems:
+        return problems
+
+    digest = predicate.get("specDigest")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        problems.append(f"predicate specDigest is not a sha256 hex digest: {digest!r}")
+    status = predicate.get("status")
+    if status not in {member.value for member in CheckStatus}:
+        problems.append(f"predicate status is {status!r}, which is not a scorecard status")
+    try:
+        Scorecard.model_validate(predicate["scorecard"])
+    except (ValidationError, TypeError) as failure:
+        problems.append(f"predicate scorecard does not validate: {_first_paths(failure)}")
+    citations = predicate.get("citations")
+    if not isinstance(citations, list):
+        problems.append(f"predicate citations is a {type(citations).__name__}, not a list")
+    else:
+        for index, citation in enumerate(citations):
+            try:
+                SourceRecord.model_validate(citation)
+            except (ValidationError, TypeError) as failure:
+                problems.append(
+                    f"predicate citation {index} does not validate: {_first_paths(failure)}"
+                )
+                break
+    bom = predicate.get("bom")
+    if not isinstance(bom, dict) or bom.get("bomFormat") != "CycloneDX":
+        problems.append("predicate bom is not a CycloneDX document")
+    elif not isinstance(bom.get("components"), list):
+        problems.append("predicate bom lists no components array")
+    if not isinstance(predicate.get("aiDisclosure"), dict):
+        problems.append("predicate aiDisclosure is not an object")
+    return problems
+
+
+def _first_paths(failure: ValidationError) -> str:
+    return "; ".join(
+        f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+        for error in failure.errors()[:3]
+    )
+
+
 def verify_attestation(
     attestation: Attestation,
     *,
     artifacts: Mapping[str, bytes] | None = None,
     signer: AttestationSigner | None = None,
 ) -> VerificationReport:
-    """Check an envelope offline: signature, subject digests, and predicate type.
+    """Check an envelope offline: signature, subject digests, and predicate schema.
 
     Everything needed is in the envelope and the bytes on disk — no network, no
     registry. ``artifacts`` maps subject name to content; a subject with no entry is
@@ -882,8 +961,14 @@ def verify_attestation(
     the key material: without it a signed envelope's signature is
     :attr:`~SignatureState.NOT_CHECKED`, again not assumed good.
 
-    A failure names what did not match — the subject, or the signature, or the
-    predicate type — rather than returning a bare false.
+    A failure names what did not match — the subject, or the signature, or the predicate —
+    rather than returning a bare false.
+
+    **The predicate is checked against its schema, not only against its type label.** Until
+    that was added, a predicate of ``{"anything": "at all"}`` verified PASS whenever the
+    type string matched and the subject digests did: an envelope carrying no scorecard, no
+    citations and no bill of materials came back clean. The requirement has always named
+    three checks and this was the third.
     """
     problems: list[str] = []
     # Decode once, and never inside an error path. The first version computed
@@ -934,6 +1019,17 @@ def verify_attestation(
             f"predicate type is {predicate_type!r}, which this verifier does not know "
             f"(it understands {PREDICATE_TYPE!r})"
         )
+    else:
+        # The predicate's **schema**, not only its type label. Until this was here a
+        # predicate of ``{"anything": "at all"}`` verified PASS: the type string matched,
+        # the subject digests matched, and nothing looked inside. So an envelope carrying
+        # no scorecard, no citations and no bill of materials — no evidence of any kind —
+        # came back clean, which is the one answer a verifier must never give.
+        #
+        # Checked only when the type is the one this verifier claims to understand: an
+        # unknown type is already refused above, and validating a predicate written to
+        # somebody else's schema against this one would report the wrong thing.
+        problems.extend(_predicate_schema_problems(statement.get("predicate")))
 
     supplied = dict(artifacts or {})
     checked: list[str] = []

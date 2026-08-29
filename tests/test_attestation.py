@@ -958,3 +958,119 @@ def test_no_example_hardcodes_a_version_that_has_drifted():
         "an example still states a version for an installed package; the point is that "
         "none of them do"
     )
+
+
+# --- the predicate's schema, not only its type label --------------------------------------
+
+
+def _wire(predicate) -> Attestation:
+    """The example bundle's envelope with `predicate` swapped in, unsigned."""
+    import base64
+
+    envelope = Attestation.unsigned(_bundle()).to_envelope()
+    statement = json.loads(base64.b64decode(envelope["payload"]))
+    statement["predicate"] = predicate
+    payload = json.dumps(statement, sort_keys=True, separators=(",", ":")).encode()
+    return Attestation.model_validate({**envelope, "payload": base64.b64encode(payload).decode()})
+
+
+def _honest_predicate() -> dict:
+    return _bundle().predicate.to_json_dict()
+
+
+def test_a_predicate_that_is_not_the_shape_its_type_declares_fails_verification():
+    """`evidence-attestation` names three checks: signature, subject digests, **and
+    predicate schema**. Two were implemented.
+
+    A predicate of `{"anything": "at all"}` verified PASS whenever the type string matched
+    and the subject digests did — an envelope carrying no scorecard, no citations and no
+    bill of materials came back clean, which is the one answer a verifier must never give.
+    """
+    artifacts = _artifacts()
+    honest = verify_attestation(_wire(_honest_predicate()), artifacts=artifacts)
+    assert honest.status is CheckStatus.PASS and not honest.problems
+
+    for predicate in ({}, {"anything": "at all"}):
+        report = verify_attestation(_wire(predicate), artifacts=artifacts)
+        assert report.status is CheckStatus.FAIL, predicate
+        assert "which its own type requires" in " ".join(report.problems), predicate
+
+    # A predicate that is not an object at all says *that*, rather than reporting six
+    # missing keys — which is what a key check alone produces for a list, since every key
+    # is missing from it. The message is the difference and so it is what is asserted.
+    for predicate in ([1, 2, 3], "a string", 7):
+        report = verify_attestation(_wire(predicate), artifacts=artifacts)
+        assert report.status is CheckStatus.FAIL, predicate
+        assert "not an object" in " ".join(report.problems), (predicate, report.problems)
+
+
+@pytest.mark.parametrize(
+    "key", ["specDigest", "status", "scorecard", "citations", "bom", "aiDisclosure"]
+)
+def test_every_key_the_predicate_writer_emits_is_one_the_verifier_requires(key):
+    """Parametrised over the keys, and the writer's own output is the source of the list.
+
+    A required key the checker forgot would show up here as a removal that verifies clean.
+    """
+    assert key in _honest_predicate(), f"the writer no longer emits {key!r}"
+    stripped = {k: v for k, v in _honest_predicate().items() if k != key}
+    report = verify_attestation(_wire(stripped), artifacts=_artifacts())
+    assert report.status is CheckStatus.FAIL
+    assert key in " ".join(report.problems)
+
+
+def test_the_verifier_requires_every_key_the_writer_emits():
+    """The other direction, and the one a per-key test cannot give.
+
+    `to_json_dict` gaining a field that the verifier does not require would leave a hole no
+    parametrised list notices, because the list is written by hand. `sections` is optional
+    on the writer's side and is exempt for that reason.
+    """
+    from anvilate.attestation import _PREDICATE_REQUIRED_KEYS
+
+    emitted = set(_honest_predicate()) - {"sections"}
+    assert emitted == set(_PREDICATE_REQUIRED_KEYS), (
+        f"the writer emits {sorted(emitted)}; the verifier requires "
+        f"{sorted(_PREDICATE_REQUIRED_KEYS)}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected"),
+    [
+        ("specDigest", "nope", "not a sha256 hex digest"),
+        ("status", "maybe", "not a scorecard status"),
+        ("scorecard", {"entries": [{"nope": 1}]}, "scorecard does not validate"),
+        ("bom", {"x": 1}, "not a CycloneDX document"),
+        ("citations", "not a list", "not a list"),
+        ("aiDisclosure", "not an object", "not an object"),
+    ],
+)
+def test_a_present_but_wrong_predicate_field_is_named(field, value, expected):
+    """Present-and-wrong is the case a required-keys check alone cannot see."""
+    report = verify_attestation(
+        _wire({**_honest_predicate(), field: value}), artifacts=_artifacts()
+    )
+    assert report.status is CheckStatus.FAIL
+    assert expected in " ".join(report.problems), report.problems
+
+
+def test_the_schema_check_runs_only_for_the_type_this_verifier_understands():
+    """An unknown predicate type is already refused; validating a foreign predicate against
+    this schema would report the wrong thing about it."""
+    import base64
+
+    envelope = Attestation.unsigned(_bundle()).to_envelope()
+    statement = json.loads(base64.b64decode(envelope["payload"]))
+    statement["predicateType"] = "https://example.com/other/v1"
+    statement["predicate"] = {"whatever": "that schema says"}
+    payload = json.dumps(statement, sort_keys=True, separators=(",", ":")).encode()
+    foreign = Attestation.model_validate(
+        {**envelope, "payload": base64.b64encode(payload).decode()}
+    )
+    reported = verify_attestation(foreign, artifacts=_artifacts()).problems
+    # Exactly one complaint, and it is about the type. Asserting that some *phrase* is
+    # absent is weaker than it looks — the schema check's messages talk about missing keys,
+    # so a negative on the word "schema" passes while every key is being reported.
+    assert len(reported) == 1, reported
+    assert "which this verifier does not know" in reported[0]

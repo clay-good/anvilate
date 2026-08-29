@@ -44,6 +44,29 @@ a standard the output does not actually follow. Standard attestation tooling rea
 predicate it does not recognize, so the bundle is useful to a verifier that has never
 heard of Anvilate.
 
+## The predicate is checked against its schema, not only its type label
+
+`verify_attestation` makes three checks, and the third was missing for a release. A
+predicate of `{"anything": "at all"}` verified **PASS** whenever the type string matched
+and the subject digests did — an envelope carrying no scorecard, no citations and no bill
+of materials came back clean, which is the one answer a verifier must never give.
+
+Checked against the **wire** shape rather than the model. `to_json_dict` renames and
+reshapes on the way out (`specDigest`, a CycloneDX `bom`, an `aiDisclosure` body), so
+handing the wire predicate to `AnvilatePredicate.model_validate` reports every field as
+missing — including for an honest envelope, which is how the first draft was caught. Each
+part is validated by the model that owns it instead: the scorecard as a `Scorecard`, each
+citation as a `SourceRecord`, the digest as sha256 hex, the status as a scorecard status.
+
+Two directions are held. Every key the writer emits must be one the verifier requires —
+otherwise a field could be dropped from an envelope unnoticed — and every key the verifier
+requires must be one the writer emits, or the list drifts into requiring something nobody
+sends. `sections` is optional on the writer's side and exempt.
+
+The check runs only for the predicate type this verifier claims to understand. An unknown
+type is already refused, and validating a predicate written to somebody else's schema
+against this one would report the wrong thing about it.
+
 ## The inventory is read, not typed
 
 `EnvironmentBOM.of_this_environment()` builds the bill of materials from what is actually
