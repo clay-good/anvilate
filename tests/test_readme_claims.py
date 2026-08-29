@@ -251,6 +251,18 @@ def test_the_uncertainty_pages_worked_block_reproduces_its_own_comments():
     assert re.search(r'dominant\(\)\.name\s+# "(\w+)"', page).group(1) == result.dominant().name
 
 
+# Pages that are records rather than documentation: dated research write-ups, kept for the
+# audit trail of what was checked and when. The README indexes what a reader should read,
+# and a link to every past investigation would make it a worse index rather than a fuller
+# one. Everything else under `docs/` — at any depth — has to be reachable.
+_PAGES_THE_README_DOES_NOT_INDEX = frozenset(
+    {
+        "research/2026-07-27-capability-research.md",
+        "research/2026-07-27-capability-research-wave-2.md",
+    }
+)
+
+
 def test_every_docs_page_is_reachable_from_the_readme():
     """A page nobody links is a page nobody reads.
 
@@ -263,8 +275,17 @@ def test_every_docs_page_is_reachable_from_the_readme():
 
     root = Path(__file__).resolve().parent.parent
     readme = (root / "README.md").read_text()
-    pages = {page.name for page in (root / "docs").glob("*.md")}
+    # `rglob`, not `glob`. The non-recursive version could not see `docs/research/`, so two
+    # write-ups sat below the level it looked at — neither linked nor excused, which is the
+    # state a ratchet exists to make impossible.
+    pages = {
+        str(page.relative_to(root / "docs"))
+        for page in (root / "docs").rglob("*.md")
+        if str(page.relative_to(root / "docs")) not in _PAGES_THE_README_DOES_NOT_INDEX
+    }
     assert len(pages) > 30, f"the docs directory has only {len(pages)} pages"
+    for name in _PAGES_THE_README_DOES_NOT_INDEX:
+        assert (root / "docs" / name).exists(), f"the allow-list names {name}, which is gone"
 
     linked = set(re.findall(r"docs/([a-z0-9-]+\.md)", readme))
     unreachable = sorted(pages - linked)

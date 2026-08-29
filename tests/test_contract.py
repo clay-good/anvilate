@@ -1494,14 +1494,21 @@ def test_no_shipped_module_carries_an_invalid_escape_sequence():
     assert not offenders, f"modules parse with warnings: {offenders}"
 
 
-# The two pages whose distinctive numbers are facts about the world rather than about
-# this library: published package versions verified against PyPI on a stated date, and a
-# paper's reported results. Nothing here can recompute either, and a gate that pretended
-# to would be checking that a literal equals itself.
+# The pages whose distinctive numbers are facts about the world rather than about this
+# library: published package versions verified against PyPI on a stated date, a paper's
+# reported results, and dated research write-ups quoting other people's published figures.
+# Nothing here can recompute any of them, and a gate that pretended to would be checking
+# that a literal equals itself.
+#
+# Paths are relative to `docs/`, because the sweep below is **recursive**. It was not, and
+# `docs/research/` — two write-ups denser in numbers than most of the library's own pages —
+# was invisible to it: not gated, not excused, just below the level the glob looked at.
 _PAGES_WHOSE_NUMBERS_ARE_EXTERNAL = frozenset(
     {
         "export-targets.md",  # dependency versions, re-verified against PyPI by hand
         "valid-is-not-correct.md",  # an arXiv identifier and that paper's own figures
+        "research/2026-07-27-capability-research.md",  # other projects' published figures
+        "research/2026-07-27-capability-research-wave-2.md",  # likewise
     }
 )
 
@@ -1534,11 +1541,11 @@ def test_every_docs_page_that_argues_from_a_number_is_opened_by_a_test():
         assert (root / "docs" / name).exists(), f"the allow-list names {name}, which is gone"
 
     ungated = sorted(
-        page.name
-        for page in (root / "docs").glob("*.md")
+        str(page.relative_to(root / "docs"))
+        for page in (root / "docs").rglob("*.md")
         if page.name not in suite
         and distinctive.search(page.read_text())
-        and page.name not in _PAGES_WHOSE_NUMBERS_ARE_EXTERNAL
+        and str(page.relative_to(root / "docs")) not in _PAGES_WHOSE_NUMBERS_ARE_EXTERNAL
     )
     assert not ungated, (
         f"these pages argue from numbers no test reads: {ungated}. Open the page in a test "
