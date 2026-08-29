@@ -705,10 +705,16 @@ def test_a_bare_number_stays_declined_however_it_was_qualified():
 
     "Grade: 8.8 min" is a bolt grade, not 8.8 of anything, and the whole "a bare number is
     not a quantity" position rests on the qualifier strip not being an escape hatch.
+
+    The *reason* is asserted, not just the refusal. Stripping the qualifier with nothing
+    left behind still declines the line — a bare number is refused further down — but it
+    declines it with a parse error instead of the sentence that tells the author to write
+    `minute` if they meant the time unit. That mutation survived a count-only assertion.
     """
     draft = extract_requirements("Grade: 8.8 min\n", document="rfq.txt")
     assert draft.values == ()
     assert len(draft.unparsed) == 1
+    assert "usually 'minimum'" in draft.unparsed[0].reason
 
 
 def test_two_bounds_on_one_field_are_a_range_not_a_conflict():
