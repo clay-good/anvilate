@@ -1,7 +1,7 @@
 # `anvilate` on the command line
 
-One command is backed today. The other three the spec names are refused by name, with what
-each is waiting on.
+Two of the four commands the spec names are backed. The other two are refused by name, with
+what each is waiting on.
 
 ```bash
 anvilate check part.yaml
@@ -47,10 +47,40 @@ is 3 now. `--help` still exits 0, because asking for help is not a failure.
 The mapping is a total map over the four scorecard statuses, so a fifth status is a
 decision somebody has to make rather than a silent zero.
 
-## The three that are refused
+## `anvilate export`
 
-`build`, `export` and `diff` all need a built part, and the geometry kernel is not in this
-package. Each is a named subcommand that exits 4 and says what it is waiting on:
+```bash
+anvilate export part.yaml              # the evidence bundle, rendered
+anvilate export part.yaml --format json
+```
+
+The evidence bundle is assembled from a scorecard, so it needs no geometry — and the exit
+code is the bundle's own roll-up, which is never better than its worst section. A DXF or a
+QIF results file does need a built part, and each is refused by name:
+
+```text
+anvilate export --artifact dxf: a DXF is drawn from built geometry, and there is no built
+part to draw. See openspec/specs/geometry-generation.
+```
+
+The three artifact names are the same three `export_artifact`'s published MCP schema
+declares, held equal by a test — a CLI offering a fourth, or silently dropping one, is a
+surface saying something different from the contract. Dropping one is how this went wrong
+the first time: `export` was refused whole on the reasoning that it "writes a downstream
+artifact from a built part", which is true of a DXF and false of the bundle. A refusal wide
+enough to cover something that works is as misleading as a missing one.
+
+**The bundle goes to stdout, and that is deliberate.** Every artifact-emitting entry point
+in the package takes a mandatory `ExportAuthorization` ([export gating](export-gating.md)),
+and there is no bundle *writer* behind that gate. Printing is not emitting — a caller
+redirecting the output is doing their own act — and a file-writing path here would be the
+first one outside `anvilate.export`, which is exactly the bypass the gate exists to prevent.
+A test asserts the command creates no file anywhere.
+
+## The two that are refused
+
+`build` and `diff` need a built part, and the geometry kernel is not in this package. Each
+is a named subcommand that exits 4 and says what it is waiting on:
 
 ```text
 anvilate build: build runs the part's generating program, which needs a geometry kernel
@@ -62,6 +92,4 @@ tells a script author they typed it wrong. They did not; the operation is specif
 unbuilt, and that is a different thing to be told. It is the same rule the
 [MCP surface](mcp-tool-contracts.md) follows for the operations it cannot serve.
 
-`export` is the one worth reading twice: the export gate and the writers *do* exist
-([export gating](export-gating.md)), and what is missing is a built part to hand them from
-a spec file alone.
+

@@ -22,7 +22,9 @@ from pathlib import Path
 import pytest
 
 from anvilate.cli import (
+    _ARTIFACTS,
     _UNBUILT,
+    _UNBUILT_ARTIFACTS,
     EXIT_BAD_REQUEST,
     EXIT_CODES,
     EXIT_FAILED,
@@ -112,11 +114,17 @@ def test_an_unbuilt_command_is_refused_by_name_with_what_it_waits_on(command):
     )
 
 
-def test_the_unbuilt_list_is_the_specs_own_minimum_and_check_is_not_on_it():
-    """The four commands the requirement names, split into the one that is backed and the
-    three that are not — so shipping `export` means deleting its entry here."""
+def test_the_unbuilt_list_is_the_specs_own_minimum_minus_what_is_backed():
+    """The four commands the requirement names, split into what is backed and what is not.
+
+    `export` was on this list for one commit, refused whole because it "writes a downstream
+    artifact from a built part". True of a DXF and of QIF results, false of the evidence
+    bundle, which is assembled from a scorecard and which the MCP tool's own format
+    enumeration has always listed beside them. A refusal wide enough to cover something that
+    works is as misleading as a missing one.
+    """
     required = {"build", "check", "export", "diff"}
-    assert set(_UNBUILT) == required - {"check"}
+    assert set(_UNBUILT) == required - {"check", "export"}
 
 
 def test_a_missing_file_and_an_invalid_document_are_both_bad_requests(tmp_path):
@@ -197,3 +205,68 @@ def test_help_still_exits_zero():
     with pytest.raises(SystemExit) as exit_info:
         _run("--help")
     assert exit_info.value.code == EXIT_OK
+
+
+# --- export, and the artifact that needs no geometry -------------------------------------
+
+
+def test_export_renders_the_evidence_bundle_from_a_spec_alone(spec_file):
+    code, out, err = _run("export", str(spec_file))
+    assert "bundle NOT_EVALUATED" in out
+    # The disclaimer is a constant on the rendering, so it cannot be forgotten here.
+    assert "not a substitute for detailed analysis" in out
+    assert code == EXIT_NOT_EVALUATED
+    assert err == ""
+
+
+def test_export_json_is_the_bundle_document(spec_file):
+    code, out, _err = _run("export", "--format", "json", str(spec_file))
+    bundle = json.loads(out)
+    assert bundle["status"] == "not_evaluated"
+    assert "checks" in bundle["covers"]
+    assert code == EXIT_NOT_EVALUATED
+
+
+@pytest.mark.parametrize("artifact", sorted(_UNBUILT_ARTIFACTS))
+def test_an_artifact_that_needs_geometry_is_refused_by_name(spec_file, artifact):
+    code, out, err = _run("export", "--artifact", artifact, str(spec_file))
+    assert code == EXIT_UNBUILT
+    assert out == ""
+    assert artifact in err and "openspec/specs/" in err
+
+
+def test_the_artifact_list_is_the_mcp_tools_own():
+    """`export_artifact`'s published input schema names the three formats. The CLI offering
+    a fourth, or silently dropping one, is a surface saying something different from the
+    contract — and dropping one is how "refused whole" happened in the first place."""
+    from anvilate.mcp import tool_catalog
+
+    tool = {tool.name: tool for tool in tool_catalog()}["export_artifact"]
+    published = set(tool.input_schema["properties"]["format"]["enum"])
+    offered = {name.replace("-", "_") for name in _ARTIFACTS}
+    assert offered == published, (offered, published)
+    assert set(_UNBUILT_ARTIFACTS) < offered, "an unbuilt artifact is not even offered"
+
+
+def test_the_cli_writes_no_artifact_file_anywhere(spec_file, tmp_path, monkeypatch):
+    """The bundle goes to stdout because every artifact-emitting entry point in the package
+    takes a mandatory `ExportAuthorization`, and there is no bundle writer behind that gate.
+
+    A file-writing path here would be the first one outside `anvilate.export` — exactly the
+    bypass the gate exists to prevent — so this asserts the export command creates nothing.
+    """
+    monkeypatch.chdir(tmp_path)
+    before = set(tmp_path.rglob("*"))
+    _run("export", str(spec_file))
+    _run("export", "--format", "json", str(spec_file))
+    assert set(tmp_path.rglob("*")) == before, "the CLI wrote a file"
+
+
+def test_export_reports_a_bad_spec_the_same_way_check_does(tmp_path):
+    """One loader for both commands, so a missing file cannot be reported two ways."""
+    missing = str(tmp_path / "nope.yaml")
+    check_code, _out, check_err = _run("check", missing)
+    export_code, _out, export_err = _run("export", missing)
+    assert check_code == export_code == EXIT_BAD_REQUEST
+    assert check_err.startswith("anvilate check: ") and export_err.startswith("anvilate export: ")
+    assert check_err.split(": ", 1)[1] == export_err.split(": ", 1)[1]

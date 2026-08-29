@@ -6,13 +6,29 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**One of the four is backed today and it is the one shipped.** ``check`` compiles a spec
-document and screens it, which is exactly the path :func:`anvilate.screening.screen_spec`
-already serves over MCP. ``build``, ``export`` and ``diff`` all need a built part — a
-geometry kernel that is not in this package — so each is refused *by name, with the reason*
+**Two of the four are backed today.** ``check`` compiles a spec document and screens it,
+which is exactly the path :func:`anvilate.screening.screen_spec` already serves over MCP.
+``export`` serves the one artifact that needs no geometry — the evidence bundle, which is
+assembled from a scorecard — and refuses the two that do.
+
+That split was got wrong first: ``export`` was refused whole, on the reasoning that it
+"writes a downstream artifact from a built part". True of a DXF and of QIF results, false of
+the evidence bundle, which the MCP tool's own format enumeration has always listed beside
+them. A refusal wide enough to cover something that works is as misleading as a missing one.
+
+``build`` and ``diff`` do need a built part, so each is refused *by name, with the reason*
 rather than left as an unknown command. A CLI that answers "unknown command: build" tells a
 script author they typed it wrong; the honest answer is that the operation is specified,
 unbuilt, and here is what it is waiting on.
+
+**The bundle goes to stdout, and that is not an oversight.** Every artifact-emitting entry
+point in this package takes a mandatory ``ExportAuthorization`` (see
+:mod:`anvilate.export.gate`), and there is no bundle *writer* behind that gate. Printing is
+not emitting: a caller redirecting the output is doing their own act, the same as
+``check --format json``, and the screening disclaimer is a constant on the rendering rather
+than something a writer would have had to remember. Adding a file-writing path here would
+be the first one outside :mod:`anvilate.export`, which is exactly the bypass the gate
+exists to prevent.
 
 ## The exit codes are the interface
 
@@ -68,16 +84,26 @@ _UNBUILT = {
         "build runs the part's generating program, which needs a geometry kernel this "
         "package does not ship. See openspec/specs/geometry-generation."
     ),
-    "export": (
-        "export writes a downstream artifact from a built part. The export gate and the "
-        "writers exist (anvilate.export), but there is no built part to hand them from a "
-        "spec file alone. See openspec/specs/geometry-generation."
-    ),
     "diff": (
         "diff compares two builds and reports mass, dimension and verdict deltas; two "
         "builds is what it does not have. See openspec/specs/geometry-generation."
     ),
 }
+
+# The artifacts `export` knows about, and which of them a spec file alone can produce. The
+# two that cannot each say what they are waiting on, in the same words `_UNBUILT` uses,
+# because a caller asking for a DXF is owed the same answer as one asking for a build.
+_UNBUILT_ARTIFACTS = {
+    "dxf": (
+        "a DXF is drawn from built geometry, and there is no built part to draw. "
+        "See openspec/specs/geometry-generation."
+    ),
+    "qif": (
+        "QIF results carry measured characteristics against a built part. "
+        "See openspec/specs/geometry-generation."
+    ),
+}
+_ARTIFACTS = ("evidence-bundle", *sorted(_UNBUILT_ARTIFACTS))
 
 
 class _Parser(argparse.ArgumentParser):
@@ -122,6 +148,18 @@ def _build_parser() -> argparse.ArgumentParser:
         default="text",
         help="text for a person, json for a script that wants the whole card",
     )
+    export = commands.add_parser("export", help="write a downstream artifact from a screened spec")
+    export.add_argument("spec", type=Path, help="a Design Spec document, YAML or JSON")
+    export.add_argument(
+        "--artifact",
+        choices=_ARTIFACTS,
+        default="evidence-bundle",
+        help="which artifact; only the evidence bundle needs no geometry",
+    )
+    export.add_argument(
+        "--format", choices=("text", "json"), default="text", help="how to render it"
+    )
+
     for name, reason in _UNBUILT.items():
         commands.add_parser(name, help=f"specified, unbuilt — {reason.split('.')[0]}")
     return parser
@@ -141,30 +179,66 @@ def run(argv: list[str] | None = None, *, stdout=None, stderr=None) -> int:
     if args.command in _UNBUILT:
         print(f"anvilate {args.command}: {_UNBUILT[args.command]}", file=err)
         return EXIT_UNBUILT
-
+    if args.command == "export":
+        return _export(args, out=out, err=err)
     return _check(args, out=out, err=err)
 
 
-def _check(args: argparse.Namespace, *, out, err) -> int:
+def _export(args: argparse.Namespace, *, out, err) -> int:
+    """``export``, for the one artifact a spec file alone can produce."""
+    from .bundle import BundleSections
+
+    if args.artifact in _UNBUILT_ARTIFACTS:
+        print(
+            f"anvilate export --artifact {args.artifact}: {_UNBUILT_ARTIFACTS[args.artifact]}",
+            file=err,
+        )
+        return EXIT_UNBUILT
+    loaded = _load(args.spec, err=err, command="export")
+    if isinstance(loaded, int):
+        return loaded
     from .screening import screen_spec
+
+    sections = BundleSections(scorecard=screen_spec(loaded))
+    if args.format == "json":
+        print(json.dumps(sections.to_json_dict(), indent=2, sort_keys=True), file=out)
+    else:
+        print(sections.render(), file=out)
+    return EXIT_CODES[sections.status]
+
+
+def _load(path: Path, *, err, command: str):
+    """The spec at ``path``, or the exit code that says why not.
+
+    Shared by every command that takes a spec file, so a second one cannot report a missing
+    file differently from the first.
+    """
     from .spec import SpecValidationError, load_spec_yaml
 
     try:
-        document = args.spec.read_text(encoding="utf-8")
+        document = path.read_text(encoding="utf-8")
     except OSError as failure:
-        print(f"anvilate check: {failure}", file=err)
+        print(f"anvilate {command}: {failure}", file=err)
         return EXIT_BAD_REQUEST
     try:
-        spec = load_spec_yaml(document)
+        return load_spec_yaml(document)
     except SpecValidationError as failure:
         # Every path, not the first one: a script author fixing a spec one error per run is
         # the experience this avoids, and the paths are what the loader already produced.
         for problem in failure.errors:
-            print(f"anvilate check: {problem['loc']}: {problem['msg']}", file=err)
+            print(f"anvilate {command}: {problem['loc']}: {problem['msg']}", file=err)
         return EXIT_BAD_REQUEST
     except (ValueError, TypeError, KeyError) as failure:
-        print(f"anvilate check: {failure}", file=err)
+        print(f"anvilate {command}: {failure}", file=err)
         return EXIT_BAD_REQUEST
+
+
+def _check(args: argparse.Namespace, *, out, err) -> int:
+    from .screening import screen_spec
+
+    spec = _load(args.spec, err=err, command="check")
+    if isinstance(spec, int):
+        return spec
 
     card = screen_spec(spec)
     if args.format == "json":
