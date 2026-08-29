@@ -628,3 +628,29 @@ def test_the_adapter_reads_a_real_pycufsm_signature_curve():
             local_half_wavelength=_q(f"{half_wavelengths[distortional]} in"),
             distortional_half_wavelength=_q(f"{half_wavelengths[local]} in"),
         )
+
+
+def test_the_interop_page_quotes_the_ratio_the_unit_layer_produces():
+    """ "416,231 times larger (25.4⁴)" is the page's whole argument for requiring a unit.
+
+    A mutation sweep found the figure changeable with nothing failing. It is not a fixture
+    to be looked up — it is a conversion the library can do — so it is recomputed here, and
+    the parenthetical is checked to be the *same* power the sentence claims rather than a
+    number that happens to sit beside it.
+    """
+    import re
+    from pathlib import Path
+
+    from anvilate.units import Quantity
+
+    page = (Path(__file__).resolve().parent.parent / "docs" / "analysis-interop.md").read_text()
+    claim = re.search(r"read as ([\d,]+) times larger \(25\.4(⁴|\^4)\)", page)
+    assert claim is not None, "the unit-confusion claim on docs/analysis-interop.md has moved"
+
+    # A second moment of 1 in⁴ read where 1 mm⁴ was meant: the ratio is the conversion.
+    ratio = Quantity(magnitude=1.0, unit="in**4").to("mm**4").magnitude
+    assert int(claim.group(1).replace(",", "")) == int(ratio), (
+        f"the page says {claim.group(1)}; 1 in**4 is {ratio:,.4f} mm**4"
+    )
+    # And the parenthetical is the fourth power of the inch, not a coincidence.
+    assert ratio == pytest.approx(25.4**4)

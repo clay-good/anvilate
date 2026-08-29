@@ -554,3 +554,46 @@ def test_the_typed_callouts_page_prints_the_constants_it_derives():
     a_mpa, b = MARIN_SURFACE_CONSTANTS_MPA["as_forged"]
     actual = 100.0 * (1.0 - (a_mpa * mpa_per_kpsi**b) / 39.9)
     assert actual == pytest.approx(float(shortfall.group(1)), abs=0.005)
+
+
+def test_the_typed_callouts_page_quotes_the_verdicts_the_example_computes():
+    """The page's headline claim, held against the run rather than against nobody.
+
+    "On a 25 mm AISI 4140 journal it is a safety factor of 2.52 against 1.08" is the whole
+    argument of the page, stated twice, and a mutation sweep found that changing either
+    number failed no test: the example asserts its own Marin factors, the page quotes the
+    *safety factors*, and nothing joined the two. The numbers are read out of both sentences
+    so a page that says one thing in the summary and another in the worked-example section
+    fails as well.
+    """
+    import re
+    import runpy
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    page = (root / "docs" / "typed-callouts.md").read_text()
+    headline = re.search(r"safety factor of (\d+\.\d+) against (\d+\.\d+)", page)
+    assert headline is not None, "the headline claim on docs/typed-callouts.md has moved"
+    worked = re.search(
+        r"passing at\s+([\d.]+) with the drawing ignored, failing at ([\d.]+) once the "
+        r"as-forged finish is read, back to\s+([\d.]+) after",
+        page,
+    )
+    assert worked is not None, "the worked-example paragraph on that page has moved"
+
+    namespace = runpy.run_path(
+        str(root / "examples" / "plated_shaft_callouts_change_the_verdict.py")
+    )
+    result = namespace["screen_the_shaft"]()
+    entries = {key: result[key][0].entries[0] for key in ("ignored", "as_drawn", "revised")}
+    computed = {key: round(entry.safety_factor, 2) for key, entry in entries.items()}
+    assert computed["ignored"] == pytest.approx(float(headline.group(1)))
+    assert computed["as_drawn"] == pytest.approx(float(headline.group(2)))
+    assert computed["ignored"] == pytest.approx(float(worked.group(1)))
+    assert computed["as_drawn"] == pytest.approx(float(worked.group(2)))
+    assert computed["revised"] == pytest.approx(float(worked.group(3)))
+    # The page's argument is that reading the drawing flips the verdict, so the two figures
+    # must actually straddle the required minimum. A page quoting two passing numbers would
+    # satisfy every equality above.
+    required = entries["ignored"].required_safety_factor
+    assert computed["as_drawn"] < required < computed["ignored"]

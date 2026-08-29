@@ -261,3 +261,55 @@ guarded after all fails as stale.
 Writing it found one hole: the AISC J2.4 weld shear fraction guarded positivity and not
 its upper bound, so `6` for `0.6` returned ten times the weld capacity with every other
 check satisfied — the unsafe direction for a screen to be wrong in.
+
+## Finding a docs page whose numbers nothing checks
+
+The existing ratchet asks whether a page's *filename* appears in a test. That is a
+substring gate: a page can be named in a test that never reads a number off it. The
+stronger question is behavioural — **change a number on the page; does anything fail?**
+
+Re-runnable sweep, one page at a time:
+
+```bash
+python - <<'PY'
+import re, subprocess, pathlib
+DOCS, TESTS = pathlib.Path("docs"), pathlib.Path("tests")
+DISTINCTIVE = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+\.\d{2,})(?![\w])")
+text = {p: p.read_text() for p in sorted(TESTS.glob("*.py"))}
+for page in sorted(DOCS.rglob("*.md")):
+    files = [str(p) for p, t in text.items() if page.name in t]
+    original = page.read_text()
+    match = DISTINCTIVE.search(original)
+    if not files or not match:
+        continue
+    old = match.group(0)
+    new = old[:-1] + ("7" if old[-1] != "7" else "3")
+    page.write_text(original[: match.start()] + new + original[match.end() :])
+    try:
+        run = subprocess.run([".venv/bin/python", "-m", "pytest", *files, "-q", "-x",
+                              "-p", "no:randomly"], capture_output=True, timeout=600)
+    finally:
+        page.write_text(original)
+    print(f"{'CAUGHT' if run.returncode else 'MISSED'}  {page.name}: {old} -> {new}")
+PY
+```
+
+It runs the suite once per page, so it is a sweep you run deliberately rather than a gate
+in CI. **Restore the tree afterwards** — a killed run leaves a page mutated, which is how
+this one was first noticed:
+
+```bash
+git status --short docs/
+```
+
+Run at HEAD it found two pages arguing from figures nothing checked. `typed-callouts.md`
+quotes "a safety factor of 2.52 against 1.08" — the whole argument of the page, stated
+twice — while the example asserted only its own Marin factors, so the two numbers a reader
+takes away were joined to nothing. `analysis-interop.md` quotes "416,231 times larger
+(25.4⁴)", which is not a fixture at all but a conversion the unit layer can do.
+
+Both are gated now, and both gates read the page rather than a copy of it. Where a page
+states inputs *and* a result, rebuild the case from the page's inputs. Where the page's
+block *is* the output, state the inputs in the test and compare — reading the values back
+out of the rendered block makes the page its own fixture, and it will then agree with
+itself however far it drifts.
