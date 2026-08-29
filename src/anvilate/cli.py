@@ -156,10 +156,18 @@ def _installed_version() -> str:
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    # The description says what is true of *every* command. An earlier version stated
+    # `check`'s rule — "exit 0 only when every check passed" — as though it were the
+    # program's, and it is false for `diff`, whose 0 means nothing got worse and which
+    # says so on a run where every check fails. The first thing a user reads was
+    # contradicted by a command in the same help output.
     parser = _Parser(
         prog="anvilate",
-        description="Screen a Design Spec without a UI. Exit code 0 only when every "
-        "check passed; 2 means the card could not be evaluated, which is not a pass.",
+        description="Screen Design Specs without a UI. Exit code 0 is the only success; "
+        "1 means something failed, 2 that something could not be evaluated — which is "
+        "never a pass — 3 a bad request, 4 an operation that is specified and unbuilt. "
+        "What counts as failure differs per command; each says so in its own help.",
+        epilog="Run `anvilate <command> --help` for the exit codes that command uses.",
     )
     # Subcommands inherit `_Parser`: `add_subparsers` defaults `parser_class` to the parent's
     # own type, so "check: the following arguments are required: spec" lands on the same code
@@ -172,7 +180,11 @@ def _build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     check = commands.add_parser(
-        "check", help="compile a spec document and screen it, printing the scorecard"
+        "check",
+        help="compile a spec document and screen it, printing the scorecard",
+        description="Screen every spec given, or every spec under a directory. Exit 0 "
+        "only when every check passed, 1 if one failed, 2 if a card could not be fully "
+        "evaluated. Blocking checks are listed on stderr with the spec they came from.",
     )
     check.add_argument(
         "spec",
@@ -187,7 +199,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="text for a person, json for a script that wants the whole card",
     )
     verify = commands.add_parser(
-        "verify", help="verify an attestation envelope and report what was checked"
+        "verify",
+        help="verify an attestation envelope and report what was checked",
+        description="Check an envelope's signature, its subject digests and its predicate "
+        "schema, offline. Exit 0 only when all three checked clean; 2 when something could "
+        "not be checked at all — a signature with no key, a subject with no file — which is "
+        "not a pass.",
     )
     verify.add_argument("envelope", type=Path, help="a DSSE envelope, as JSON")
     verify.add_argument(
@@ -209,12 +226,24 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     diff = commands.add_parser(
-        "diff", help="compare two spec documents and the verdicts they screen to"
+        "diff",
+        help="compare two spec documents and the verdicts they screen to",
+        description="Report the spec change and every check whose verdict moved. The exit "
+        "code is about what got WORSE, not about the new card: 0 when nothing regressed, "
+        "even on a run where every check fails, because a part that was already failing "
+        "has not got worse.",
     )
     diff.add_argument("before", type=Path, help="the spec as it was")
     diff.add_argument("after", type=Path, help="the spec as it is")
 
-    export = commands.add_parser("export", help="write a downstream artifact from a screened spec")
+    export = commands.add_parser(
+        "export",
+        help="write a downstream artifact from a screened spec",
+        description="Render the evidence bundle for every spec given, or every spec under "
+        "a directory. The exit code is the bundle roll-up, which is never better than its "
+        "worst section: 0 when every section passed, 1 when one failed, 2 when one could "
+        "not be evaluated. An artifact needing a built part is refused with 4.",
+    )
     export.add_argument(
         "spec",
         type=Path,

@@ -70,6 +70,12 @@ deliberately, in one place, rather than getting it by accident everywhere:
 anvilate check part.yaml || [ $? -eq 2 ]   # accept a not-evaluated card, on purpose
 ```
 
+**What counts as failure differs per command, and each `--help` says so.** The program's
+own description used to state `check`'s rule — "exit 0 only when every check passed" — as
+though it were the program's, and it is false for `diff`, whose 0 means nothing got worse
+and which returns it on a run where every check fails. The first thing a user reads was
+contradicted by a command in the same help output.
+
 **A usage error is a bad request, not a verdict.** `ArgumentParser.error` exits 2,
 hardcoded — so for one commit `anvilate frobnicate`, `anvilate` with no command, and
 `anvilate check` with no file all came back with the code the line above tells a CI job it

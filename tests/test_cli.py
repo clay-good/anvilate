@@ -873,3 +873,56 @@ def test_export_reports_the_worst_bundle_status_over_a_tree(spec_tree, monkeypat
     monkeypatch.setattr(screening, "screen_spec", _screen)
     code, _out, _err = _run("export", str(spec_tree))
     assert code == EXIT_FAILED, "one failing bundle fails the run"
+
+
+# --- the help text is output too, and it can be wrong -------------------------------------
+
+
+def _help(*argv) -> str:
+    """`--help` goes through argparse's own printing, which writes to the real stdout
+    rather than to the streams `run` is handed — so it is redirected rather than passed."""
+    import contextlib
+
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured), pytest.raises(SystemExit):
+        run([*argv, "--help"])
+    # Whitespace-normalised: argparse rewraps to the terminal width, so a phrase this file
+    # asserts can be split across lines by nothing more than a longer command name.
+    return " ".join(captured.getvalue().split())
+
+
+def test_the_program_help_states_no_rule_a_command_breaks():
+    """The first thing a user reads, contradicted by a command in the same output.
+
+    It used to say "Exit code 0 only when every check passed" — `check`'s rule stated as
+    the program's, and false for `diff`, whose 0 means nothing got worse and which returns
+    it on a run where every check fails.
+    """
+    text = _help()
+    assert "only when every check passed" not in text
+    # It states the codes, which *are* shared, and defers what counts as failure.
+    for code in ("0", "1", "2", "3", "4"):
+        assert code in text
+    assert "differs per command" in text
+    assert "never a pass" in text, "code 2 must not be described as a kind of success"
+
+
+@pytest.mark.parametrize("command", ["check", "diff", "verify", "export"])
+def test_every_backed_command_explains_its_own_exit_code(command):
+    """The program help defers to these, so they have to say something."""
+    text = _help(command)
+    assert "xit" in text, f"{command} --help says nothing about its exit code"
+    assert "0" in text
+
+
+def test_diff_help_says_its_zero_is_not_the_same_zero():
+    """The specific confusion this exists to prevent: a reader assuming `diff` exiting 0
+    means the part passes."""
+    text = _help("diff")
+    assert "got WORSE" in text or "got worse" in text
+    assert "already failing" in text
+
+
+def test_the_unbuilt_command_still_says_what_it_waits_on_in_help():
+    text = _help()
+    assert "geometry kernel" in text
