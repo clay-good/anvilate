@@ -43117,3 +43117,74 @@ def test_the_reinforced_concrete_pages_block_and_constants_are_the_modules_own()
     assert depth.to("mm").magnitude == pytest.approx(
         1500.0 * 420.0 / (factor * 30.0 * 300.0), rel=1e-9
     )
+
+
+def test_the_isolator_detail_never_contradicts_its_own_number():
+    """A rendered scorecard detail that argues from a figure it then rounds away.
+
+    `analysis-library` asks the isolator screen to report the frequency ratio, the
+    transmissibility, the margin, and to fail an amplifying mount "with that condition
+    named". It did all four — and printed "transmissibility 1.00 > 1" while doing it, for
+    every mount just under the isolation onset and every one tuned far below the forcing
+    frequency. TR is exactly 1 at r = √2 and approaches 1 from above as r falls to 0, so
+    two decimal places lose precisely the thing the sentence is about.
+    """
+    import re
+
+    from anvilate.analysis.dynamics import isolation_scorecard, transmissibility
+
+    for ratio in (0.02, 0.05, 0.5, 1.0, 1.3, 1.4142, 1.414213):
+        entry = isolation_scorecard(
+            "mount", frequency_ratio=ratio, damping_ratio=0.05, required_transmissibility=0.2
+        )
+        detail = entry.detail
+        assert "amplifies" in detail, ratio
+        rendered = re.search(r"transmissibility ([\d.]+) > 1", detail).group(1)
+        # The number the reader sees has to support the claim standing next to it.
+        assert float(rendered) > 1.0, f"r={ratio} renders {rendered} and claims it is above 1"
+        # And it is the real value at the precision shown, not a value nudged to fit.
+        exact = transmissibility(frequency_ratio=ratio, damping_ratio=0.05)
+        places = len(rendered.split(".")[1])
+        assert float(rendered) == round(exact, places), (ratio, rendered, exact)
+
+
+def test_a_mount_at_zero_frequency_ratio_is_not_called_amplifying():
+    """TR is exactly 1 at r = 0: a static load passes straight through, and the mount does
+    nothing. That is the one point below √2 where "amplifies" is false, and it used to say
+    so anyway — with "1.00 > 1" as its evidence."""
+    from anvilate.analysis.dynamics import isolation_scorecard, transmissibility
+    from anvilate.scorecard import CheckStatus
+
+    assert transmissibility(frequency_ratio=0.0, damping_ratio=0.05) == pytest.approx(1.0)
+    entry = isolation_scorecard(
+        "mount", frequency_ratio=0.0, damping_ratio=0.05, required_transmissibility=0.2
+    )
+    assert "amplifies" not in entry.detail or "neither" in entry.detail
+    assert "neither isolates nor amplifies" in entry.detail
+    assert "passes through undiminished" in entry.detail
+    # Still a failure: transmitting the disturbance whole is not meeting a target of 0.2.
+    assert entry.status is CheckStatus.FAIL
+
+
+def test_the_isolating_side_of_the_boundary_is_unchanged():
+    """The fix must not have moved the onset. TR is exactly 1 at r = √2 for every damping
+    ratio, so the boundary is where the wording flips and nowhere else."""
+    from math import sqrt
+
+    from anvilate.analysis.dynamics import isolation_scorecard, transmissibility
+
+    for damping in (0.0, 0.05, 0.3):
+        assert transmissibility(frequency_ratio=sqrt(2.0), damping_ratio=damping) == pytest.approx(
+            1.0
+        )
+    below = isolation_scorecard(
+        "mount",
+        frequency_ratio=sqrt(2.0) * 0.999,
+        damping_ratio=0.05,
+        required_transmissibility=0.2,
+    )
+    at_or_above = isolation_scorecard(
+        "mount", frequency_ratio=sqrt(2.0), damping_ratio=0.05, required_transmissibility=0.2
+    )
+    assert "amplifies" in below.detail
+    assert "amplifies" not in at_or_above.detail
