@@ -15,7 +15,7 @@ from .quantity import Quantity
 from .registry import UREG
 from .system import UnitSystem
 
-__all__ = ["render", "render_dual", "decimals_for"]
+__all__ = ["render", "render_dual", "decimals_for", "decimals_distinguishing"]
 
 # Decimals by dimensionality string. Falls through to a per-unit override below
 # and then to a default.
@@ -65,6 +65,32 @@ def decimals_for(unit: str, magnitude: float | None = None) -> int:
         return places
     # Half a unit in the last printed place is the worst-case rounding.
     while 0.5 * 10.0**-places > _MAX_RELATIVE_ROUNDING * value and places < 12:
+        places += 1
+    return places
+
+
+def decimals_distinguishing(value: float, reference: float, *, minimum: int = 2) -> int:
+    """Decimal places at which ``value`` does not print identically to ``reference``.
+
+    For a sentence that argues from a comparison — "exceeds the band by", "transmissibility
+    above 1" — the figure it prints has to still be on the right side of the boundary after
+    rounding. It was not, in the two places this was written for:
+
+    * ``safety factor 2.50 exceeds target band 1.50–2.50 by 0.00 — over-engineered``
+    * ``mount amplifies: transmissibility 1.00 > 1``
+
+    Both are contradicted by the numbers inside them. This is the same widening rule
+    :func:`decimals_for` applies to a magnitude small enough that conventional precision
+    would round it away, pointed at a *difference* rather than at a value.
+
+    Capped at twelve places, and ``minimum`` is the conventional precision to start from. A
+    value genuinely equal to the reference gets ``minimum`` back rather than twelve, because
+    no number of places separates them and the caller has a different sentence to write.
+    """
+    if value == reference or not isfinite(value) or not isfinite(reference):
+        return minimum
+    places = minimum
+    while places < 12 and f"{value:.{places}f}" == f"{reference:.{places}f}":
         places += 1
     return places
 

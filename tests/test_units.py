@@ -378,3 +378,31 @@ def test_every_dimension_the_units_requirement_names_is_converted_by_system():
     for family, (entered, expected_unit) in entered_us.items():
         shown = render(Quantity.parse(entered), system=UnitSystem.SI)
         assert shown.endswith(expected_unit), f"{family}: {entered} rendered SI as {shown}"
+
+
+def test_decimals_distinguishing_widens_until_the_two_values_differ():
+    from anvilate.units import decimals_distinguishing
+
+    assert decimals_distinguishing(2.6, 2.5) == 2
+    assert decimals_distinguishing(2.5005, 2.5) == 3
+    assert decimals_distinguishing(1.00004, 1.0, minimum=3) == 5
+    # A value genuinely equal to the reference gets the conventional precision back rather
+    # than twelve places: no number of places separates them, and the caller has a
+    # different sentence to write.
+    assert decimals_distinguishing(1.0, 1.0) == 2
+    assert decimals_distinguishing(float("nan"), 1.0) == 2
+    assert decimals_distinguishing(float("inf"), 1.0) == 2
+    # And it is bounded, so a difference below float resolution cannot loop.
+    assert decimals_distinguishing(1.0 + 1e-15, 1.0) <= 12
+
+
+def test_the_places_it_returns_really_do_separate_the_two():
+    """The property, not the numbers: at the returned precision the two must not print the
+    same, and one place fewer must not have separated them."""
+    from anvilate.units import decimals_distinguishing
+
+    for value, reference in ((2.5005, 2.5), (1.00004, 1.0), (0.10001, 0.1), (3.0, 2.5)):
+        places = decimals_distinguishing(value, reference, minimum=1)
+        assert f"{value:.{places}f}" != f"{reference:.{places}f}", (value, reference)
+        if places > 1:
+            assert f"{value:.{places - 1}f}" == f"{reference:.{places - 1}f}"

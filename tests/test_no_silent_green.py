@@ -2316,3 +2316,30 @@ def test_a_non_finite_elastic_modulus_cannot_delete_the_flexural_cap(function_na
         .magnitude
         > 0
     )
+
+
+def test_the_over_margin_detail_never_reports_an_excess_of_zero():
+    """The central rendering of the library, contradicting itself in three places at once.
+
+    `safety factor 2.50 exceeds target band 1.50–2.50 by 0.00 — over-engineered` was what a
+    reviewer read for any factor a hair above the band, and OVER_MARGIN is the status the
+    repair loop acts on. The precision widens until the excess is visible.
+    """
+    import re
+
+    from anvilate.scorecard import CheckStatus, ScorecardEntry
+
+    for computed in (2.5005, 2.501, 2.51, 2.6, 4.0):
+        entry = ScorecardEntry.from_safety_factor(
+            "band", computed=computed, required=1.5, upper=2.5
+        )
+        assert entry.status is CheckStatus.OVER_MARGIN, computed
+        shown = re.search(
+            r"factor ([\d.]+) exceeds target band ([\d.]+)–([\d.]+) by ([\d.]+)", entry.detail
+        )
+        assert shown is not None, entry.detail
+        factor, _lower, upper, excess = (float(value) for value in shown.groups())
+        assert excess > 0.0, f"{entry.detail!r} claims an excess of zero"
+        assert factor > upper, f"{entry.detail!r} shows a factor that does not exceed the band"
+        # The three numbers on the page agree with each other, not merely with the truth.
+        assert factor - upper == pytest.approx(excess, abs=10 ** -len(shown.group(4).split(".")[1]))

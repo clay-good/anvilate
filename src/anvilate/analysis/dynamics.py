@@ -28,7 +28,7 @@ from enum import StrEnum
 from math import atan2, cos, degrees, exp, pi, radians, sin, sqrt, tan
 
 from ..scorecard import CheckStatus, ScorecardEntry
-from ..units import Quantity, require_finite
+from ..units import Quantity, decimals_distinguishing, require_finite
 from ..units.rotation import angular_speed_rad_per_s, count_rate_per_second
 from .plate import DEFAULT_POISSON_RATIO
 
@@ -586,22 +586,6 @@ def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
     return numerator / _steady_state_denominator(r, zeta, "transmissibility")
 
 
-def _above_one(value: float) -> str:
-    """``value`` at enough decimal places that it does not render as 1.
-
-    TR is exactly 1 at r = √2 and approaches 1 from above as r falls towards 0, so a fixed
-    two places printed "transmissibility 1.00 > 1" — a sentence contradicted by the number
-    inside it — for every mount just below the isolation onset and for every one tuned far
-    below the forcing frequency. The same rule the unit layer applies to a stress of
-    0.087 ksi: widen the precision rather than print a figure that has lost the thing the
-    line is about.
-    """
-    places = 3
-    while places < 9 and f"{value:.{places}f}" == f"{1.0:.{places}f}":
-        places += 1
-    return f"{value:.{places}f}"
-
-
 def isolation_scorecard(
     name: str,
     *,
@@ -653,7 +637,8 @@ def isolation_scorecard(
     elif frequency_ratio < sqrt(2.0):
         detail = (
             f"mount amplifies (r = {frequency_ratio:.2f} < √2): transmissibility "
-            f"{_above_one(tr)} > 1, target {required_transmissibility:.2f}"
+            f"{tr:.{decimals_distinguishing(tr, 1.0, minimum=3)}f} > 1, "
+            f"target {required_transmissibility:.2f}"
         )
     else:
         detail = f"transmissibility {tr:.3f} vs target {required_transmissibility:.2f}"

@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .derivation import Derivation
 from .uncertainty import MarginUncertainty
+from .units import decimals_distinguishing
 
 __all__ = [
     "CheckStatus",
@@ -329,9 +330,15 @@ class ScorecardEntry(BaseModel):
             detail = f"safety factor {computed:.2f} vs required minimum {required:.2f}"
         elif upper is not None and computed > upper:
             status = CheckStatus.OVER_MARGIN
+            # The excess is printed at whatever precision keeps it off zero. At two places
+            # this read "safety factor 2.50 exceeds target band 1.50–2.50 by 0.00 —
+            # over-engineered": three contradictions in one sentence, in the central
+            # rendering of the library, on the status a repair loop acts on.
+            places = decimals_distinguishing(computed, upper)
             detail = (
-                f"safety factor {computed:.2f} exceeds target band "
-                f"{required:.2f}–{upper:.2f} by {computed - upper:.2f} — over-engineered"
+                f"safety factor {computed:.{places}f} exceeds target band "
+                f"{required:.{places}f}–{upper:.{places}f} by "
+                f"{computed - upper:.{places}f} — over-engineered"
             )
         else:
             status = CheckStatus.PASS
